@@ -6,18 +6,33 @@ import { z } from 'zod';
  *
  * Les champs requis bloquent le démarrage si absents.
  * Les champs optionnels seront resserrés au fur et à mesure des jalons.
+ *
+ * IMPORTANT : ce module ne doit JAMAIS être importé côté client. Il lit
+ * `process.env` qui contient des secrets serveur. L'import depuis un composant
+ * `'use client'` ferait fuiter les valeurs dans le bundle.
  */
+
+const isProd = process.env.NODE_ENV === 'production';
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  // Jalon 0
-  DATABASE_URL: z.string().url('DATABASE_URL doit être une URL Postgres valide'),
+  // Jalon 0 — Database
+  DATABASE_URL: z
+    .string()
+    .regex(/^postgres(ql)?:\/\//, 'DATABASE_URL doit commencer par postgres:// ou postgresql://'),
 
   // Jalon 1 — Auth.js v5
   AUTH_SECRET: z
     .string()
     .min(32, 'AUTH_SECRET doit faire au moins 32 caractères (openssl rand -base64 32)'),
-  AUTH_URL: z.string().url(),
+  AUTH_URL: z
+    .string()
+    .url()
+    .refine(
+      (v) => !isProd || v.startsWith('https://'),
+      'AUTH_URL doit être en HTTPS en production',
+    ),
 
   // Jalon 1+ — Resend
   RESEND_API_KEY: z.string().optional(),
@@ -51,7 +66,7 @@ if (!parsed.success) {
   for (const issue of parsed.error.issues) {
     console.error(`  - ${issue.path.join('.')}: ${issue.message}`);
   }
-  throw new Error('Configuration invalide. Voir .env.example.');
+  throw new Error('Configuration invalide. Voir docs/env-template.md.');
 }
 
 export const env = parsed.data;

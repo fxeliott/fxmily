@@ -11,11 +11,21 @@ build/
 *.tsbuildinfo
 next-env.d.ts
 
-# Env files (NEVER commit)
+# Env files (NEVER commit secrets) — allowlist .env.example/.env.template explicitly
 .env
-.env.local
-.env.*.local
-.env.production
+.env.*
+!.env.example
+!.env.template
+
+# Secrets / keys (defense in depth)
+*.pem
+*.key
+*.cer
+*.crt
+*.p12
+*.pfx
+.ssh/
+.gnupg/
 
 # Logs
 npm-debug.log*

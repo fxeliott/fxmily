@@ -1,12 +1,12 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalDependencies": [".env.example", "tsconfig.base.json"],
+  "globalDependencies": ["tsconfig.base.json"],
   "globalEnv": ["NODE_ENV"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
-      "env": ["DATABASE_URL", "NEXTAUTH_SECRET", "NEXTAUTH_URL"]
+      "env": ["DATABASE_URL", "AUTH_SECRET", "AUTH_URL"]
     },
     "dev": {
       "cache": false,
@@ -24,7 +24,6 @@
       "cache": false
     },
     "type-check": {
-      "dependsOn": ["^build"],
       "outputs": []
     },
     "test": {

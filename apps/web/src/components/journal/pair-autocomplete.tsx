@@ -2,7 +2,7 @@
 
 import { useId } from 'react';
 
-import { TRADING_PAIRS, assetClassOf, type TradingPair } from '@/lib/trading/pairs';
+import { TRADING_PAIRS, assetClassOf, isTradingPair, type TradingPair } from '@/lib/trading/pairs';
 
 interface PairAutocompleteProps {
   value: string;
@@ -58,6 +58,9 @@ export function PairAutocomplete({
     onChange(raw.toUpperCase().trim());
   };
 
+  const isValid = isTradingPair(value);
+  const showSoftWarning = !error && value.length > 0 && !isValid;
+
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={inputId} className="text-foreground text-sm font-medium">
@@ -77,10 +80,17 @@ export function PairAutocomplete({
         placeholder="EURUSD, XAUUSD, US30…"
         disabled={disabled}
         autoFocus={autoFocus}
-        aria-invalid={error ? 'true' : undefined}
+        aria-invalid={error || (value.length > 0 && !isValid) ? 'true' : undefined}
         aria-describedby={errorId}
         onChange={(e) => handleChange(e.target.value)}
-        className="bg-card text-foreground focus-visible:border-accent focus-visible:ring-accent/40 placeholder:text-muted/70 rounded-md border border-[var(--border)] px-3 py-2 font-mono text-sm uppercase tracking-wide outline-none focus-visible:ring-2 disabled:opacity-60"
+        className={[
+          'bg-card text-foreground focus-visible:ring-accent/40 placeholder:text-muted/70 rounded-md border px-3 py-2 font-mono text-sm uppercase tracking-wide outline-none focus-visible:ring-2 disabled:opacity-60',
+          error || (value.length > 0 && !isValid)
+            ? 'border-warning/60 focus-visible:border-warning'
+            : isValid
+              ? 'border-success/40 focus-visible:border-accent'
+              : 'focus-visible:border-accent border-[var(--border)]',
+        ].join(' ')}
       />
       <datalist id={listId}>
         {(Object.keys(GROUPED_PAIRS) as ReturnType<typeof assetClassOf>[]).map((klass) => (
@@ -94,6 +104,10 @@ export function PairAutocomplete({
       {error ? (
         <p id={errorId} className="text-danger text-xs" role="alert">
           {error}
+        </p>
+      ) : showSoftWarning ? (
+        <p className="text-warning text-xs">
+          Paire non reconnue. Choisis dans la liste des 12 paires autorisées.
         </p>
       ) : (
         <p className="text-muted text-xs">12 paires autorisées (forex / métaux / indices).</p>

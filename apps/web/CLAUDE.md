@@ -284,8 +284,15 @@ User-scoped uniquement. Pour l'admin (J3+), on créera un `lib/trades/admin-serv
 
 ### TODO J2 → J3+
 
-- **R2 wiring** (dès qu'Eliot a les keys) : `pnpm add @aws-sdk/client-s3 @aws-sdk/s3-request-presigner` + impl `R2StorageAdapter` (checklist dans `r2.ts`). Update CSP `img-src` pour autoriser le custom domain R2 (J10).
+- **R2 wiring** (dès qu'Eliot a les keys) : `pnpm add @aws-sdk/client-s3 @aws-sdk/s3-request-presigner` + impl `R2StorageAdapter` (checklist dans `r2.ts`). Update CSP `img-src` pour autoriser le custom domain R2 (J10). À noter : si seulement 1–3 des 4 vars R2\_\* sont set, `selectStorage()` log un warning au boot et retombe sur le local FS.
 - **J3** (espace admin & vue membre) : `lib/trades/admin-service.ts`, route `/admin/members/[id]/trades`, middleware `requireAdmin` réutilise le pattern `auth.config.ts`.
 - **J4** (workflow d'annotation) : table `TradeAnnotation` + upload vidéo (limit 500 MiB côté client, retry stratégie côté UI), notification queue.
 - **J6** (track record analytics) : exclude `realizedRSource = 'estimated'` des aggregats expectancy / R-distribution. Garder dans win-rate (le sample reste un win).
-- **J10** (prod hardening) : CSP nonces, rate limiting `/api/auth/*` + `/api/uploads`, Sentry, RGPD endpoints (`/api/account/export`, `/api/account/delete`).
+- **J10** (prod hardening) — checklist enrichie post-audit J2 :
+  - CSP nonces (remplacer `'unsafe-inline'`).
+  - Rate limiting `/api/auth/*` + `/api/uploads` (probablement `@upstash/ratelimit` + Redis).
+  - Body streaming pour `/api/uploads` au lieu de `req.formData()` (qui buffer 8 MiB en RAM avant validation taille). Vérifier `client_max_body_size` du reverse-proxy (Caddy/nginx) ≥ 10 MiB.
+  - `trustHost: true` à reconsidérer en prod si pas derrière un proxy strict.
+  - Sentry (client + serveur).
+  - RGPD endpoints (`/api/account/export`, `/api/account/delete`) + cron purge des `.uploads/` orphelins (J2 pre-R2).
+  - TOCTOU `Content-Length` dans GET stream — refactor pour fstat sur le fd plutôt que stat avant ouverture.

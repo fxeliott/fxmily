@@ -27,8 +27,23 @@ function isR2Configured(): boolean {
   );
 }
 
+function isR2PartiallyConfigured(): boolean {
+  const some = Boolean(
+    env.R2_ACCOUNT_ID || env.R2_ACCESS_KEY_ID || env.R2_SECRET_ACCESS_KEY || env.R2_BUCKET,
+  );
+  return some && !isR2Configured();
+}
+
 export function selectStorage(): StorageAdapter {
   if (cached) return cached;
+  if (isR2PartiallyConfigured()) {
+    // Loud signal at boot — easier to spot than a runtime 500 on first upload.
+    console.warn(
+      '[storage] R2_* env vars are partially set; falling back to local FS. ' +
+        'Either provide all four (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET) ' +
+        'or none.',
+    );
+  }
   cached = isR2Configured() ? new R2StorageAdapter() : new LocalStorageAdapter();
   return cached;
 }

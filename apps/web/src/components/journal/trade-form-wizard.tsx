@@ -481,7 +481,8 @@ function StepWhenAndWhat({
           </p>
         ) : (
           <p className="text-muted text-xs">
-            Pré-rempli à maintenant — la session se devine à l&apos;étape suivante.
+            Heure locale (Europe/Paris). Pré-rempli à maintenant — la session se devine à
+            l&apos;étape suivante.
           </p>
         )}
       </div>

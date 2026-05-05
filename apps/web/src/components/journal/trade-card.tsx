@@ -96,21 +96,21 @@ export function TradeCard({ trade }: TradeCardProps) {
       </div>
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <dt className="text-muted">Entrée</dt>
-          <dd className="text-foreground font-mono tabular-nums">
+          <dd className="text-foreground truncate font-mono tabular-nums">
             {NUMBER_FMT.format(Number(trade.entryPrice))}
           </dd>
         </div>
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <dt className="text-muted">Lot</dt>
-          <dd className="text-foreground font-mono tabular-nums">
+          <dd className="text-foreground truncate font-mono tabular-nums">
             {NUMBER_FMT.format(Number(trade.lotSize))}
           </dd>
         </div>
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <dt className="text-muted">R:R prévu</dt>
-          <dd className="text-foreground font-mono tabular-nums">
+          <dd className="text-foreground truncate font-mono tabular-nums">
             {Number(trade.plannedRR).toFixed(2)}
           </dd>
         </div>

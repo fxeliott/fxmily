@@ -110,7 +110,7 @@ export default async function TradeDetailPage({ params }: DetailPageProps) {
               <span className="text-muted text-sm">R réalisé</span>
               <span
                 className={[
-                  'font-mono text-3xl font-semibold tabular-nums',
+                  'font-mono text-2xl font-semibold tabular-nums sm:text-3xl',
                   realizedR > 0 ? 'text-success' : realizedR < 0 ? 'text-danger' : 'text-muted',
                 ].join(' ')}
               >

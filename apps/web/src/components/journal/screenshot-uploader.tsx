@@ -94,12 +94,17 @@ export function ScreenshotUploader({
   const [isDragOver, setIsDragOver] = useState(false);
 
   // Notify parent on first mount if we already had an initialKey, so the
-  // wizard step validation passes without a useless re-upload.
+  // wizard step validation passes without a useless re-upload. The
+  // `notifiedRef` guard ensures we don't fire twice in StrictMode dev nor
+  // re-fire if the parent re-renders us with a new (unmemoised) callback.
+  const notifiedRef = useRef(false);
   useEffect(() => {
+    if (notifiedRef.current) return;
     if (initialKey && initialReadUrl && onUploaded) {
+      notifiedRef.current = true;
       onUploaded({ key: initialKey, readUrl: initialReadUrl });
     }
-    // intentionally empty deps — this is a one-shot mount sync.
+    // intentionally empty deps — one-shot mount sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

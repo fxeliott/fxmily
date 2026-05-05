@@ -1,11 +1,10 @@
-// Fxmily — schéma Prisma
-// Source de vérité du modèle de données. Les entités sont ajoutées
-// progressivement, jalon par jalon, conformément à SPEC.md §6.
+// Fxmily — Prisma schema.
+// Source of truth for the data model. Entities are added milestone by milestone
+// per SPEC.md §6. Database connection lives in `prisma.config.ts` (Prisma 7+).
 //
-// Jalon 0 (présent) : datasource + generator uniquement.
-// Jalon 1+ : User, Session, Invitation, Trade, etc.
-//
-// La connexion DB est configurée dans `apps/web/prisma.config.ts` (Prisma 7+).
+// J0 — datasource + generator only.
+// J1 (this file) — User, Account, Session, VerificationToken, Invitation, AuditLog.
+// J2+ — Trade, TradeAnnotation, DailyCheckin, etc.
 
 generator client {
   provider = "prisma-client"
@@ -14,4 +13,145 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+enum UserRole {
+  member
+  admin
+}
+
+enum UserStatus {
+  active
+  suspended
+  deleted
+}
+
+// =============================================================================
+// Auth.js v5 core models (PrismaAdapter contract)
+// https://authjs.dev/getting-started/adapters/prisma
+// =============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+
+  // Profile (filled at onboarding completion)
+  firstName String? @map("first_name")
+  lastName  String? @map("last_name")
+  image     String?
+
+  // Authentication
+  passwordHash String? @map("password_hash") // argon2id, optional (magic-link-only users have null)
+
+  // Authorization & lifecycle
+  role   UserRole   @default(member)
+  status UserStatus @default(active)
+
+  // SPEC §6.1 — behavioral profile fields
+  timezone         String    @default("Europe/Paris")
+  pushSubscription Json?     @map("push_subscription") // J9
+  consentRgpdAt    DateTime? @map("consent_rgpd_at")
+
+  // Lifecycle timestamps
+  joinedAt   DateTime  @default(now()) @map("joined_at")
+  lastSeenAt DateTime? @map("last_seen_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  accounts        Account[]
+  sessions        Session[]
+  invitationsSent Invitation[] @relation("InvitationsSent")
+  auditLogs       AuditLog[]
+
+  @@index([status])
+  @@index([role])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// =============================================================================
+// Fxmily-specific models
+// =============================================================================
+
+/// Admin invitation flow (SPEC §6.9, §7.1).
+/// Token is generated as a 32-byte random string (nanoid), only its SHA-256 hash
+/// is stored. The plain token is sent in the email link and never persisted.
+model Invitation {
+  id        String    @id @default(cuid())
+  email     String
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+
+  invitedById String @map("invited_by_id")
+  invitedBy   User   @relation("InvitationsSent", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email])
+  @@index([expiresAt])
+  @@map("invitations")
+}
+
+/// RGPD-friendly audit log (SPEC §6.8, §9.2).
+/// IPs are SHA-256-hashed before storage. Never log plaintext PII in `metadata`.
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  metadata  Json?
+  ipHash    String?  @map("ip_hash")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
 }

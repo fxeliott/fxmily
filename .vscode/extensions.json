@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "Prisma.prisma",
+    "ms-azuretools.vscode-docker",
+    "github.vscode-github-actions",
+    "mikestead.dotenv",
+    "EditorConfig.EditorConfig",
+    "yoavbls.pretty-ts-errors",
+    "Anthropic.claude-code"
+  ],
+  "unwantedRecommendations": ["dsznajder.es7-react-js-snippets", "msjsdiag.vscode-react-native"]
+}

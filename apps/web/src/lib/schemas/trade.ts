@@ -1,0 +1,191 @@
+import { z } from 'zod';
+
+import { EMOTION_MAX_PER_MOMENT, isEmotionSlug } from '@/lib/trading/emotions';
+import { TRADING_PAIRS } from '@/lib/trading/pairs';
+
+/**
+ * Shared trade-form schemas (J2, SPEC §7.3).
+ *
+ * Single source of truth for both the wizard's per-step `methods.trigger()`
+ * validation (RHF + zodResolver) and the Server Action re-validation. The
+ * server is the only authority — the wizard's "step OK" UX is best-effort.
+ *
+ * Numeric inputs come from the form as strings (`type="number"` does NOT
+ * coerce in HTML form data); we use `z.coerce.number()` and clamp at the
+ * application boundary.
+ */
+
+const SESSIONS = ['asia', 'london', 'newyork', 'overlap'] as const;
+const DIRECTIONS = ['long', 'short'] as const;
+const OUTCOMES = ['win', 'loss', 'break_even'] as const;
+
+const positivePrice = z.coerce
+  .number({ message: 'Prix invalide.' })
+  .positive('Le prix doit être positif.')
+  .lt(10_000_000, 'Prix improbable.');
+
+const lotSize = z.coerce
+  .number({ message: 'Taille invalide.' })
+  .positive('La taille doit être positive.')
+  .lte(1000, 'Taille trop élevée (max 1000 lots).');
+
+const plannedRR = z.coerce
+  .number({ message: 'R:R invalide.' })
+  .gte(0.25, 'Le R:R minimum est 0.25.')
+  .lte(20, 'Le R:R maximum est 20.');
+
+const pairSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .refine(
+    (v): v is (typeof TRADING_PAIRS)[number] => (TRADING_PAIRS as readonly string[]).includes(v),
+    {
+      message: 'Paire non autorisée.',
+    },
+  );
+
+/** Pre-entry emotions: at least 1 — SPEC §7.3 makes the tag mandatory. */
+const emotionTagsRequired = z
+  .array(z.string())
+  .min(1, 'Choisis au moins une émotion.')
+  .max(EMOTION_MAX_PER_MOMENT, `Maximum ${EMOTION_MAX_PER_MOMENT} émotions.`)
+  .refine((tags) => tags.every(isEmotionSlug), { message: 'Émotion inconnue.' })
+  .refine((tags) => new Set(tags).size === tags.length, { message: 'Doublons interdits.' });
+
+const notesSchema = z.string().trim().max(2000, 'Note trop longue (2000 max).').optional();
+
+/**
+ * Storage key. Server-issued, NEVER trusted from the client without rechecking
+ * ownership. Format documented in `lib/storage/keys.ts`.
+ *   trades/{userId}/{nanoid32}.{jpg|jpeg|png|webp}
+ */
+const storageKey = z
+  .string()
+  .regex(/^trades\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/, 'Clé fichier invalide.');
+
+/**
+ * Pre-entry block (steps 1–6 of the wizard).
+ *
+ * The screenshot is mandatory by SPEC §7.3 ("Screen avant entrée — upload
+ * obligatoire") but submitted as an already-uploaded storage key, NOT a
+ * file blob — the wizard uploads through `lib/storage` first.
+ */
+export const tradeOpenSchema = z
+  .object({
+    pair: pairSchema,
+    direction: z.enum(DIRECTIONS, { message: 'Direction invalide.' }),
+    session: z.enum(SESSIONS, { message: 'Session invalide.' }),
+    enteredAt: z.coerce
+      .date({ message: 'Date invalide.' })
+      .min(new Date('2000-01-01'), { message: 'Date trop ancienne.' })
+      // Re-evaluated on every parse — `Date.now()` captured here is fixed at
+      // module-load time otherwise, which would make a long-running server
+      // reject increasingly old "now" timestamps.
+      .refine((d) => d.getTime() <= Date.now() + 60 * 60 * 1000, {
+        message: 'Date dans le futur.',
+      }),
+    entryPrice: positivePrice,
+    lotSize,
+    stopLossPrice: positivePrice.optional().nullable(),
+    plannedRR,
+    emotionBefore: emotionTagsRequired,
+    planRespected: z.coerce.boolean(),
+    /** Tri-state: true / false / null (= N/A). The form sends `'na'` for N/A. */
+    hedgeRespected: z
+      .union([z.boolean(), z.literal('na'), z.literal('true'), z.literal('false')])
+      .transform((v) => {
+        if (v === 'na') return null;
+        if (typeof v === 'string') return v === 'true';
+        return v;
+      }),
+    notes: notesSchema,
+    screenshotEntryKey: storageKey,
+  })
+  .superRefine((data, ctx) => {
+    // Sanity check stopLossPrice direction relative to entry. We don't reject
+    // here (computeRealizedR falls back to estimated) — just warn at the
+    // form level so the user knows the SL won't help precision.
+    // Soft-validation lives in the UI; the server accepts both sides because
+    // some users genuinely log "trailing-stop above entry" on a long.
+    if (data.stopLossPrice == null) return;
+    if (data.direction === 'long' && data.stopLossPrice >= data.entryPrice) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['stopLossPrice'],
+        message: 'Pour un long, le stop-loss doit être inférieur au prix d’entrée.',
+      });
+    }
+    if (data.direction === 'short' && data.stopLossPrice <= data.entryPrice) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['stopLossPrice'],
+        message: 'Pour un short, le stop-loss doit être supérieur au prix d’entrée.',
+      });
+    }
+  });
+
+export type TradeOpenInput = z.infer<typeof tradeOpenSchema>;
+
+/**
+ * Post-exit block (step 7, or close-out flow on /journal/[id]/close).
+ */
+export const tradeCloseSchema = z.object({
+  exitedAt: z.coerce
+    .date({ message: 'Date de sortie invalide.' })
+    .refine((d) => d.getTime() <= Date.now() + 60 * 60 * 1000, {
+      message: 'Date dans le futur.',
+    }),
+  exitPrice: positivePrice,
+  outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }),
+  emotionAfter: emotionTagsRequired,
+  notes: notesSchema,
+  screenshotExitKey: storageKey,
+});
+
+export type TradeCloseInput = z.infer<typeof tradeCloseSchema>;
+
+/**
+ * Combined schema for the "fill everything in one go" path.
+ * Used by the wizard's final submit when the user filled the post-exit block
+ * directly (vs saving the open trade and closing it later).
+ */
+export const tradeFullSchema = z
+  .object({
+    open: tradeOpenSchema,
+    close: tradeCloseSchema.optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.close && data.close.exitedAt < data.open.enteredAt) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['close', 'exitedAt'],
+        message: 'La sortie doit être après l’entrée.',
+      });
+    }
+  });
+
+export type TradeFullInput = z.infer<typeof tradeFullSchema>;
+
+/**
+ * Per-step field lists used by `methods.trigger(stepFields)` in the wizard.
+ * Step indices are 0-based, matching `?step=N` in the URL.
+ */
+export const WIZARD_STEPS = [
+  // 0 — when & what
+  ['pair', 'enteredAt'],
+  // 1 — direction & session
+  ['direction', 'session'],
+  // 2 — prices & sizing
+  ['entryPrice', 'lotSize', 'stopLossPrice'],
+  // 3 — risk plan
+  ['plannedRR'],
+  // 4 — discipline & emotion before
+  ['planRespected', 'hedgeRespected', 'emotionBefore'],
+  // 5 — entry screenshot
+  ['screenshotEntryKey'],
+  // 6 — outcome (optional, can be skipped to "save as open")
+  ['exitedAt', 'exitPrice', 'outcome', 'emotionAfter', 'screenshotExitKey', 'notes'],
+] as const;
+
+export const WIZARD_TOTAL_STEPS = WIZARD_STEPS.length;

@@ -45,6 +45,10 @@ const envSchema = z.object({
   R2_BUCKET: z.string().optional(),
   R2_PUBLIC_URL: z.string().url().optional(),
 
+  // Jalon 2 — local upload root (used only when R2 is not configured).
+  // Resolved relative to `process.cwd()` if non-absolute.
+  UPLOADS_DIR: z.string().optional(),
+
   // Jalon 8 — Anthropic
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),

@@ -3,8 +3,9 @@
 // per SPEC.md §6. Database connection lives in `prisma.config.ts` (Prisma 7+).
 //
 // J0 — datasource + generator only.
-// J1 (this file) — User, Account, Session, VerificationToken, Invitation, AuditLog.
-// J2+ — Trade, TradeAnnotation, DailyCheckin, etc.
+// J1 — User, Account, Session, VerificationToken, Invitation, AuditLog.
+// J2 (this file) — Trade + enums (TradeDirection, TradeSession, TradeOutcome, RealizedRSource).
+// J3+ — TradeAnnotation, DailyCheckin, MarkDouglasCard, etc.
 
 generator client {
   provider = "prisma-client"
@@ -28,6 +29,46 @@ enum UserStatus {
   active
   suspended
   deleted
+}
+
+/// Trade direction (J2). Long = buy, short = sell.
+enum TradeDirection {
+  long
+  short
+}
+
+/// Trading session (J2). Auto-derived from `enteredAt` UTC at form-fill time
+/// but persisted explicitly so the user's manual override survives DST shifts.
+/// Plage UTC indicatives (DST géré côté code) :
+///   asia    : 00:00–07:00 UTC
+///   london  : 07:00–12:00 UTC
+///   overlap : 12:00–16:00 UTC (London/NY)
+///   newyork : 16:00–21:00 UTC
+enum TradeSession {
+  asia
+  london
+  newyork
+  overlap
+}
+
+/// Outcome reported at trade close (J2). `break_even` covers both flat exits
+/// and exits within ±0.1R of entry — the wizard maps the user-friendly "BE"
+/// button to this value.
+enum TradeOutcome {
+  win
+  loss
+  break_even
+}
+
+/// Provenance of `realizedR` (J2).
+///   computed  : derived from entry/exit/stopLoss with the canonical
+///               (exit-entry)/(entry-stopLoss) formula. Reliable for analytics.
+///   estimated : fallback when no stopLoss was provided. Equals `plannedRR` on
+///               win, -1 on loss, 0 on break_even. Excluded from precision-
+///               sensitive aggregates (expectancy, R-distribution).
+enum RealizedRSource {
+  computed
+  estimated
 }
 
 // =============================================================================
@@ -68,6 +109,7 @@ model User {
   sessions        Session[]
   invitationsSent Invitation[] @relation("InvitationsSent")
   auditLogs       AuditLog[]
+  trades          Trade[]
 
   @@index([status])
   @@index([role])
@@ -154,4 +196,87 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([action, createdAt])
   @@map("audit_logs")
+}
+
+// =============================================================================
+// J2 — Trading journal
+// =============================================================================
+
+/// Trade journal entry (SPEC §6.2, §7.3).
+///
+/// Lifecycle: a trade is created in "open" state with the pre-entry fields
+/// (everything before the `--- post-exit ---` block). The user can finalize it
+/// later — either right away in a single wizard run, or asynchronously after
+/// the trade closes — by filling the post-exit block via /journal/[id]/close.
+/// The `closedAt` timestamp marks the transition; both screenshots are
+/// mandatory at their respective phases (SPEC §7.3 "upload obligatoire").
+///
+/// `realizedR` precision: the canonical formula `(exit - entry) / (entry - SL)`
+/// (signed by direction) is used when `stopLossPrice` is provided
+/// (`realizedRSource = computed`). When the user skipped the SL, we fall back
+/// to `plannedRR | -1 | 0` based on outcome (`realizedRSource = estimated`).
+/// See `lib/trading/calculations.ts` for the implementation.
+model Trade {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // ----- Pre-entry block (mandatory at trade creation) -----
+
+  /// One of the 12 allowlisted symbols (see lib/trading/pairs.ts). Stored as
+  /// uppercase string rather than an enum so adding pairs doesn't require a
+  /// DB migration — the allowlist is enforced at the Zod / Server Action edge.
+  pair          String
+  direction     TradeDirection
+  session       TradeSession
+  /// User-provided trade entry timestamp, persisted in UTC. The wizard
+  /// pre-fills this from `Date.now()` but the user can override (useful when
+  /// logging trades retroactively).
+  enteredAt     DateTime       @map("entered_at")
+  entryPrice    Decimal        @map("entry_price") @db.Decimal(20, 8)
+  /// Position size in lots (forex/metals) or contracts (indices). Decimal(12,4)
+  /// covers micro-lots (0.01) up to institutional sizes.
+  lotSize       Decimal        @map("lot_size") @db.Decimal(12, 4)
+  /// Optional stop-loss price. Strongly encouraged: enables exact `realizedR`.
+  stopLossPrice Decimal?       @map("stop_loss_price") @db.Decimal(20, 8)
+  /// Planned reward-to-risk ratio (e.g. 2.5 means "risk 1 to make 2.5").
+  /// Slider in the UI clamps to [0.5, 10] with 0.25 step.
+  plannedRR     Decimal        @map("planned_rr") @db.Decimal(6, 2)
+  /// Multi-select tag slugs (FR labels, EN slugs). See lib/trading/emotions.ts.
+  /// UI caps the selection at 3 tags; we don't enforce in DB to allow future
+  /// expansion without a migration.
+  emotionBefore String[]       @map("emotion_before")
+  planRespected Boolean        @map("plan_respected")
+  /// `null` = N/A (no hedge applicable on this trade). Tri-state per SPEC §7.3.
+  hedgeRespected Boolean?      @map("hedge_respected")
+  notes          String?       @db.Text
+
+  /// Storage key for the pre-entry screenshot (mandatory at creation, but the
+  /// column is nullable to allow administrative repairs). Format follows
+  /// `lib/storage` conventions: `trades/{userId}/{nanoid}.{ext}`.
+  screenshotEntryKey String? @map("screenshot_entry_key")
+
+  // ----- Post-exit block (filled at close) -----
+
+  exitedAt          DateTime?        @map("exited_at")
+  exitPrice         Decimal?         @map("exit_price") @db.Decimal(20, 8)
+  outcome           TradeOutcome?
+  realizedR         Decimal?         @map("realized_r") @db.Decimal(6, 2)
+  realizedRSource   RealizedRSource? @map("realized_r_source")
+  emotionAfter      String[]         @map("emotion_after")
+  screenshotExitKey String?          @map("screenshot_exit_key")
+
+  /// Set when the post-exit block is filled. A trade is "open" iff this is
+  /// null — used by /journal queries to split the list visually.
+  closedAt DateTime? @map("closed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Indexes — userId-leading because every member-facing query is
+  // user-scoped, and the secondary order is the dominant sort key in the UI.
+  @@index([userId, enteredAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, closedAt])
+  @@map("trades")
 }

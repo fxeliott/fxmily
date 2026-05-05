@@ -17,13 +17,14 @@ export default auth;
 
 export const config = {
   // Match every path EXCEPT:
-  //   - `/api/auth/*`         → Auth.js handlers (own auth)
+  //   - `/api/*`              → owned by their route handlers (each one calls
+  //                              `auth()` itself). The proxy emits a 307
+  //                              redirect to `/login`, which is wrong for
+  //                              JSON APIs — clients expect a 401 JSON body.
   //   - `/_next/static/*`, `/_next/image/*` → Next runtime
   //   - common static files (favicon, logo, *.svg)
   //
-  // Crucially, `/api/admin/*`, `/api/journal/*` etc. ARE matched by the
-  // proxy so the `authorized()` callback gates them. Each future API route
-  // handler must still call `await auth()` itself (defense in depth) since
-  // the proxy can be bypassed in some Next.js edge cases.
-  matcher: ['/((?!api/auth|_next/static|_next/image|favicon.ico|logo.png|.*\\.svg).*)'],
+  // Defense in depth: every `/api/*` handler MUST verify `await auth()`
+  // before doing anything privileged. See `app/api/uploads/*` for the pattern.
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|logo.png|.*\\.svg).*)'],
 };

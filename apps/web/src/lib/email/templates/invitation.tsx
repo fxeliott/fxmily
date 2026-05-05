@@ -23,7 +23,9 @@ export function InvitationEmail({ inviteUrl, invitedByName, expiresInDays }: Inv
 
   return (
     <Html lang="fr">
-      <Head />
+      <Head>
+        <title>Activer ton compte Fxmily</title>
+      </Head>
       <Preview>Tu es invité·e à rejoindre Fxmily</Preview>
       <Body style={body}>
         <Container style={container}>
@@ -140,7 +142,10 @@ const hr: React.CSSProperties = {
 };
 
 const footer: React.CSSProperties = {
-  color: '#64748b',
+  // #94a3b8 mirrors web `--muted`, which was bumped from #64748b for WCAG AA.
+  // On the email container (#101826), #64748b → 2.61:1 (fails AA),
+  // #94a3b8 → 6.04:1 (passes AA).
+  color: '#94a3b8',
   fontSize: 12,
   lineHeight: '18px',
   margin: '0 0 8px 0',

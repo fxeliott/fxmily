@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import Link from 'next/link';
 
 import { completeOnboardingAction, type OnboardingActionState } from './actions';
 
@@ -47,10 +48,19 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
       ) : null}
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-[var(--foreground)]">Email</span>
-        <p className="rounded-md border border-[var(--border)] bg-[color:rgb(15_22_38)] px-3 py-2 text-sm text-[var(--muted)]">
-          {email}
-        </p>
+        <label htmlFor="onboarding-email" className="text-sm font-medium text-[var(--foreground)]">
+          Email
+        </label>
+        <input
+          id="onboarding-email"
+          name="email"
+          type="email"
+          value={email}
+          readOnly
+          aria-readonly="true"
+          tabIndex={-1}
+          className="rounded-md border border-[var(--border)] bg-[color:rgb(15_22_38)] px-3 py-2 text-sm text-[var(--muted)]"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -91,37 +101,43 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
         disabled={pending}
       />
 
-      <label className="flex cursor-pointer items-start gap-3 text-sm text-[var(--muted)]">
-        <input
-          type="checkbox"
-          name="consentRgpd"
-          required
-          disabled={pending}
-          className="mt-1 size-4 cursor-pointer accent-[var(--primary)]"
-          aria-describedby={state.fieldErrors?.consentRgpd ? 'consent-error' : undefined}
-        />
-        <span>
-          J&apos;accepte la{' '}
-          <a href="/legal/privacy" className="text-[var(--accent)] underline">
-            politique de confidentialité
-          </a>{' '}
-          et les{' '}
-          <a href="/legal/terms" className="text-[var(--accent)] underline">
-            conditions d&apos;utilisation
-          </a>
-          .
-        </span>
-      </label>
-      {state.fieldErrors?.consentRgpd ? (
-        <p id="consent-error" className="text-xs text-red-300">
-          {state.fieldErrors.consentRgpd}
+      <div className="flex flex-col gap-1.5">
+        <label className="flex cursor-pointer items-start gap-3 text-sm text-[var(--muted)]">
+          <input
+            type="checkbox"
+            name="consentRgpd"
+            required
+            disabled={pending}
+            className="mt-1 size-5 cursor-pointer accent-[var(--primary)]"
+            aria-invalid={state.fieldErrors?.consentRgpd ? 'true' : undefined}
+            aria-describedby={state.fieldErrors?.consentRgpd ? 'consent-error' : undefined}
+          />
+          <span>
+            J&apos;accepte la{' '}
+            <Link href="/legal/privacy" className="text-[var(--accent)] underline">
+              politique de confidentialité
+            </Link>{' '}
+            et les{' '}
+            <Link href="/legal/terms" className="text-[var(--accent)] underline">
+              conditions d&apos;utilisation
+            </Link>
+            .
+          </span>
+        </label>
+        <p
+          id="consent-error"
+          role="alert"
+          aria-live="polite"
+          className="min-h-4 text-xs text-red-300"
+        >
+          {state.fieldErrors?.consentRgpd ?? ''}
         </p>
-      ) : null}
+      </div>
 
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="min-h-11 rounded-md bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {pending ? 'Création du compte…' : 'Créer mon compte'}
       </button>

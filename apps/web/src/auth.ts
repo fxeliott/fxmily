@@ -5,10 +5,26 @@ import Credentials from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 
 import { db } from '@/lib/db';
-import { verifyPassword } from '@/lib/auth/password';
+import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { signInSchema } from '@/lib/schemas/auth';
 import authConfig from '@/auth.config';
 import type { UserRole, UserStatus } from '@/generated/prisma/client';
+
+/**
+ * Lazily-computed dummy argon2id hash used to keep the timing of a missing
+ * user identical to a wrong password. Computing at module-eval time would
+ * delay the cold start by ~150 ms; a memoized Promise is amortized to zero
+ * after the first login attempt.
+ *
+ * IMPORTANT: a previously-pinned static placeholder string was NOT a valid
+ * PHC argon2 encoding, so `verify()` would early-return in microseconds and
+ * defeat the very mitigation. Always go through the real hash function.
+ */
+let dummyHashPromise: Promise<string> | null = null;
+function getDummyHash(): Promise<string> {
+  dummyHashPromise ??= hashPassword('dummy-password-for-timing-defense');
+  return dummyHashPromise;
+}
 
 /**
  * Auth.js v5 root configuration.
@@ -55,12 +71,11 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         });
 
         // Constant-ish behavior: always run argon2 verify against either the
-        // real hash or a known dummy. This is mostly to avoid a trivial timing
-        // signal that distinguishes "user exists" from "user does not".
+        // real hash or a runtime-computed dummy. The dummy uses real argon2
+        // parameters so timing matches a successful verify path.
         if (!user || !user.passwordHash) {
-          // Run a dummy verify so timing matches the real path. We don't care
-          // about the result.
-          await verifyPassword(password, DUMMY_ARGON2_HASH).catch(() => false);
+          const dummyHash = await getDummyHash();
+          await verifyPassword(password, dummyHash).catch(() => false);
           return null;
         }
 
@@ -88,15 +103,3 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     }),
   ],
 });
-
-/**
- * Pre-computed argon2id hash of an empty string. Used to keep the timing of
- * "no such user" identical to "wrong password". Generated once with:
- *   `node -e "import('@node-rs/argon2').then(a => a.hash('').then(console.log))"`
- * and pinned here so the constant doesn't depend on argon2 install behavior.
- *
- * The actual value isn't sensitive: this is a hash of an empty string. An
- * attacker discovering it learns nothing.
- */
-const DUMMY_ARGON2_HASH =
-  '$argon2id$v=19$m=19456,t=2,p=1$bm9uY2VfZHVtbXk$fakeplaceholderfakeplaceholderfakeplaceholderfakeplaceholderfak';

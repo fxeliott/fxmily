@@ -1,0 +1,18 @@
+# Code owners — Fxmily
+# Cf. https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+
+# Default — Eliot owns everything until V2 onboarding
+*                              @fxeliott
+
+# Critical paths — explicit (redondant avec le default mais protégé)
+/SPEC.md                       @fxeliott
+/CLAUDE.md                     @fxeliott
+/SECURITY.md                   @fxeliott
+/.github/                      @fxeliott
+/.husky/                       @fxeliott
+/apps/web/prisma/              @fxeliott
+/apps/web/prisma.config.ts     @fxeliott
+/apps/web/src/lib/env.ts       @fxeliott
+/apps/web/src/lib/db.ts        @fxeliott
+/apps/web/src/instrumentation.ts @fxeliott
+/apps/web/next.config.ts       @fxeliott

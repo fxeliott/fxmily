@@ -6,14 +6,15 @@ export default function HomePage() {
       role="main"
       className="bg-background flex flex-1 flex-col items-center justify-center px-6 py-20"
     >
-      <div className="flex flex-col items-center gap-7">
+      <div className="flex flex-col items-center gap-6">
         <Image
-          src="/logo.svg"
+          src="/logo.png"
           alt=""
-          width={96}
-          height={134}
+          width={1920}
+          height={1080}
           priority
-          className="select-none sm:[height:168px] sm:[width:120px]"
+          sizes="(max-width: 640px) 280px, 420px"
+          className="h-auto w-[280px] select-none sm:w-[420px]"
         />
         <div className="flex flex-col items-center gap-3 text-center">
           <h1 className="text-foreground text-5xl font-semibold tracking-tight sm:text-6xl">

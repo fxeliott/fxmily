@@ -2,6 +2,9 @@
 
 import { useActionState, useEffect, useRef } from 'react';
 
+import { Alert } from '@/components/alert';
+import { Spinner } from '@/components/spinner';
+
 import { createInvitationAction, type InviteActionState } from './actions';
 
 const initialState: InviteActionState = { ok: false };
@@ -24,7 +27,7 @@ export function InviteForm() {
       aria-describedby="invite-status"
     >
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="invite-email" className="text-sm font-medium text-[var(--foreground)]">
+        <label htmlFor="invite-email" className="text-foreground text-sm font-medium">
           Email du nouveau membre
         </label>
         <input
@@ -36,10 +39,10 @@ export function InviteForm() {
           disabled={pending}
           aria-invalid={state.fieldErrors?.email ? 'true' : undefined}
           aria-describedby={state.fieldErrors?.email ? 'invite-email-error' : undefined}
-          className="focus-visible:ring-[var(--accent)]/40 rounded-md border border-[var(--border)] bg-[color:rgb(15_22_38)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus-visible:border-[var(--accent)] focus-visible:ring-2 disabled:opacity-60"
+          className="bg-card text-foreground focus-visible:border-accent focus-visible:ring-accent/40 rounded-md border border-[var(--border)] px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
         />
         {state.fieldErrors?.email ? (
-          <p id="invite-email-error" className="text-xs text-red-300">
+          <p id="invite-email-error" className="text-danger text-xs">
             {state.fieldErrors.email}
           </p>
         ) : null}
@@ -48,19 +51,50 @@ export function InviteForm() {
       <button
         type="submit"
         disabled={pending}
-        className="min-h-11 rounded-md bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="bg-primary text-primary-foreground focus-visible:outline-accent inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? 'Envoi…' : "Envoyer l'invitation"}
+        {pending ? (
+          <>
+            <Spinner />
+            <span>Envoi…</span>
+          </>
+        ) : (
+          <span>Envoyer l&apos;invitation</span>
+        )}
       </button>
 
-      <div id="invite-status" role="status" aria-live="polite" className="min-h-5">
+      <div id="invite-status" className="min-h-5">
         {state.ok && state.message ? (
-          <p className="text-sm text-emerald-300">{state.message}</p>
+          <Alert tone="success">
+            <span className="inline-flex items-center gap-2">
+              <CheckIcon />
+              <span>{state.message}</span>
+            </span>
+          </Alert>
         ) : null}
-        {!state.ok && state.message ? (
-          <p className="text-sm text-red-300">{state.message}</p>
-        ) : null}
+        {!state.ok && state.message ? <Alert tone="danger">{state.message}</Alert> : null}
       </div>
     </form>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M20 6 9 17l-5-5"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

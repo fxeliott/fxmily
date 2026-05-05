@@ -3,6 +3,9 @@
 import { useActionState } from 'react';
 import Link from 'next/link';
 
+import { Alert } from '@/components/alert';
+import { Spinner } from '@/components/spinner';
+
 import { completeOnboardingAction, type OnboardingActionState } from './actions';
 
 const initialState: OnboardingActionState = { ok: false };
@@ -37,18 +40,10 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
     <form action={formAction} className="flex flex-col gap-5" noValidate>
       <input type="hidden" name="token" value={token} />
 
-      {topError ? (
-        <div
-          role="alert"
-          aria-live="polite"
-          className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300"
-        >
-          {topError}
-        </div>
-      ) : null}
+      {topError ? <Alert tone="danger">{topError}</Alert> : null}
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="onboarding-email" className="text-sm font-medium text-[var(--foreground)]">
+        <label htmlFor="onboarding-email" className="text-foreground text-sm font-medium">
           Email
         </label>
         <input
@@ -59,7 +54,7 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
           readOnly
           aria-readonly="true"
           tabIndex={-1}
-          className="rounded-md border border-[var(--border)] bg-[color:rgb(15_22_38)] px-3 py-2 text-sm text-[var(--muted)]"
+          className="bg-card text-muted rounded-md border border-[var(--border)] px-3 py-2 text-sm"
         />
       </div>
 
@@ -85,11 +80,12 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
       <Field
         name="password"
         type="password"
-        label="Mot de passe (12 caractères min)"
+        label="Mot de passe"
         required
         autoComplete="new-password"
         error={state.fieldErrors?.password}
         disabled={pending}
+        hint="12 caractères minimum, évite les mots de passe trop courants."
       />
       <Field
         name="passwordConfirm"
@@ -102,7 +98,7 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
       />
 
       <div className="flex flex-col gap-1.5">
-        <label className="flex cursor-pointer items-start gap-3 text-sm text-[var(--muted)]">
+        <label className="text-muted flex cursor-pointer items-start gap-3 text-sm">
           <input
             type="checkbox"
             name="consentRgpd"
@@ -110,26 +106,21 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
             disabled={pending}
             className="mt-1 size-5 cursor-pointer accent-[var(--primary)]"
             aria-invalid={state.fieldErrors?.consentRgpd ? 'true' : undefined}
-            aria-describedby={state.fieldErrors?.consentRgpd ? 'consent-error' : undefined}
+            aria-describedby="consent-error"
           />
           <span>
             J&apos;accepte la{' '}
-            <Link href="/legal/privacy" className="text-[var(--accent)] underline">
+            <Link href="/legal/privacy" className="text-accent underline">
               politique de confidentialité
             </Link>{' '}
             et les{' '}
-            <Link href="/legal/terms" className="text-[var(--accent)] underline">
+            <Link href="/legal/terms" className="text-accent underline">
               conditions d&apos;utilisation
             </Link>
             .
           </span>
         </label>
-        <p
-          id="consent-error"
-          role="alert"
-          aria-live="polite"
-          className="min-h-4 text-xs text-red-300"
-        >
+        <p id="consent-error" role="alert" className="text-danger min-h-4 text-xs">
           {state.fieldErrors?.consentRgpd ?? ''}
         </p>
       </div>
@@ -137,9 +128,16 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
       <button
         type="submit"
         disabled={pending}
-        className="min-h-11 rounded-md bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="bg-primary text-primary-foreground focus-visible:outline-accent inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? 'Création du compte…' : 'Créer mon compte'}
+        {pending ? (
+          <>
+            <Spinner />
+            <span>Création du compte…</span>
+          </>
+        ) : (
+          <span>Créer mon compte</span>
+        )}
       </button>
     </form>
   );
@@ -153,6 +151,7 @@ function Field({
   required,
   error,
   disabled,
+  hint,
 }: {
   name: string;
   type?: 'text' | 'password' | undefined;
@@ -161,12 +160,20 @@ function Field({
   required?: boolean | undefined;
   error?: string | undefined;
   disabled?: boolean | undefined;
+  /** Optional persistent helper text shown below the input. */
+  hint?: string | undefined;
 }) {
   const id = `onboarding-${name}`;
   const errorId = error ? `${id}-error` : undefined;
+  const hintId = hint ? `${id}-hint` : undefined;
+  // Ordering: error message takes precedence over hint when both are wired,
+  // but we still let `aria-describedby` reference the hint so screen readers
+  // can announce both — the visual error replaces the hint text below.
+  const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
+
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-[var(--foreground)]">
+      <label htmlFor={id} className="text-foreground text-sm font-medium">
         {label}
       </label>
       <input
@@ -177,12 +184,16 @@ function Field({
         autoComplete={autoComplete}
         disabled={disabled}
         aria-invalid={error ? 'true' : undefined}
-        aria-describedby={errorId}
-        className="focus-visible:ring-[var(--accent)]/40 rounded-md border border-[var(--border)] bg-[color:rgb(15_22_38)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus-visible:border-[var(--accent)] focus-visible:ring-2 disabled:opacity-60"
+        aria-describedby={describedBy}
+        className="bg-card text-foreground focus-visible:border-accent focus-visible:ring-accent/40 rounded-md border border-[var(--border)] px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
       />
       {error ? (
-        <p id={errorId} className="text-xs text-red-300">
+        <p id={errorId} className="text-danger text-xs">
           {error}
+        </p>
+      ) : hint ? (
+        <p id={hintId} className="text-muted text-xs">
+          {hint}
         </p>
       ) : null}
     </div>

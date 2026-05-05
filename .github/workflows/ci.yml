@@ -45,9 +45,17 @@ jobs:
       - name: Type check
         run: pnpm type-check
 
-      - name: Build
+      - name: Generate Prisma client (pre-build)
         env:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+        run: pnpm --filter @fxmily/web prisma:generate
+
+      - name: Build
+        env:
+          # `next build` runs with NODE_ENV=production. Our env validation
+          # (apps/web/src/lib/env.ts) requires HTTPS for AUTH_URL in prod, so
+          # the placeholder must use https:// even in CI.
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
           AUTH_SECRET: ci_placeholder_secret_must_be_at_least_32_characters_long
-          AUTH_URL: http://localhost:3000
+          AUTH_URL: https://ci.fxmily.invalid
         run: pnpm build

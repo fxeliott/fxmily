@@ -7,6 +7,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
+      // Next.js's `server-only` guard package isn't installed (Next bundler
+      // shims it at build time). Under Vitest we route the import to a
+      // no-op so tests can transitively import server-side libs.
+      'server-only': path.resolve(import.meta.dirname, 'src/test/server-only.shim.ts'),
     },
   },
   test: {

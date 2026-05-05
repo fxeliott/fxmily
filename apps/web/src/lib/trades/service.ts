@@ -12,6 +12,8 @@ import type { TradeModel } from '@/generated/prisma/models/Trade';
 import { db } from '@/lib/db';
 import { computeRealizedR } from '@/lib/trading/calculations';
 
+import { mergeNotes } from './notes';
+
 /**
  * Trade journal service layer (J2).
  *
@@ -242,12 +244,6 @@ export async function closeTrade(
   });
 
   return toSerialized(updated);
-}
-
-function mergeNotes(prior: string | null, addition: string | undefined): string | null {
-  if (!addition || addition.length === 0) return prior;
-  if (!prior || prior.length === 0) return addition;
-  return `${prior}\n\n--- Sortie ---\n${addition}`;
 }
 
 export async function getTradeById(

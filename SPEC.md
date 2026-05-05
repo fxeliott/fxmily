@@ -121,18 +121,29 @@ Ce principe guide toutes les décisions de design : si une feature ne contribue 
 - `consentRgpdAt` (date acceptation politique)
 
 ### 6.2. `Trade`
+
+> **Note J2 (2026-05-05)** — Le modèle livré ajoute `stopLossPrice`,
+> `realizedRSource`, `enteredAt`/`exitedAt`/`closedAt` et remplace `screenshots[]`
+> par deux colonnes nullable (`screenshotEntryKey`, `screenshotExitKey`)
+> pour aligner avec les 2 phases du wizard (avant entrée / après sortie).
+> Cf. `docs/jalon-2-prep.md` → "Décisions produit prises pendant la session J2"
+> et `apps/web/prisma/schema.prisma` (modèle `Trade`).
+
 - `id`, `userId`
-- `pair` (ex: "EURUSD", "XAUUSD")
+- `pair` (ex: "EURUSD", "XAUUSD") — validation contre allowlist 12 paires
 - `direction` : `'long'` | `'short'`
 - `session` : `'asia'` | `'london'` | `'newyork'` | `'overlap'`
+- `enteredAt` (UTC), `exitedAt` (UTC, null tant que ouvert)
 - `entryPrice`, `exitPrice`, `lotSize`
+- `stopLossPrice` (optionnel, recommandé) — sans lui, `realizedR` est estimé
 - `plannedRR` (decimal), `realizedR` (decimal)
-- `outcome` : `'win'` | `'loss'` | `'break_even'`
-- `screenshots` : array de R2 keys (avant entrée, sortie, etc.)
-- `emotionBefore`, `emotionAfter` (tags)
-- `planRespected` (bool), `hedgeRespected` (bool)
-- `notes` (texte libre)
-- `createdAt`, `updatedAt`
+- `realizedRSource` : `'computed'` | `'estimated'` — provenance du R réalisé
+- `outcome` : `'win'` | `'loss'` | `'break_even'` (null tant que ouvert)
+- `screenshotEntryKey`, `screenshotExitKey` (R2 keys nullable)
+- `emotionBefore`, `emotionAfter` (tag slugs, max 3 par moment, min 1 obligatoire — voir `lib/trading/emotions.ts`)
+- `planRespected` (bool), `hedgeRespected` (bool | null = N/A)
+- `notes` (texte libre, append-only au close via `lib/trades/notes.ts`)
+- `closedAt` (null tant que ouvert), `createdAt`, `updatedAt`
 
 ### 6.3. `TradeAnnotation` (correction admin)
 - `id`, `tradeId`, `adminId`

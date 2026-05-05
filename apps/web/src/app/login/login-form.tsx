@@ -2,6 +2,9 @@
 
 import { useActionState } from 'react';
 
+import { Alert } from '@/components/alert';
+import { Spinner } from '@/components/spinner';
+
 import { signInAction, type SignInActionState } from './actions';
 
 const initialState: SignInActionState = { ok: false };
@@ -18,15 +21,7 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-5" noValidate>
-      {topError ? (
-        <div
-          role="alert"
-          aria-live="polite"
-          className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300"
-        >
-          {topError}
-        </div>
-      ) : null}
+      {topError ? <Alert tone="danger">{topError}</Alert> : null}
 
       <Field
         name="email"
@@ -50,9 +45,16 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={pending}
-        className="min-h-11 rounded-md bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="bg-primary text-primary-foreground focus-visible:outline-accent inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? 'Connexion…' : 'Se connecter'}
+        {pending ? (
+          <>
+            <Spinner />
+            <span>Connexion…</span>
+          </>
+        ) : (
+          <span>Se connecter</span>
+        )}
       </button>
     </form>
   );
@@ -79,7 +81,7 @@ function Field({
   const errorId = error ? `${id}-error` : undefined;
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-[var(--foreground)]">
+      <label htmlFor={id} className="text-foreground text-sm font-medium">
         {label}
       </label>
       <input
@@ -91,10 +93,10 @@ function Field({
         disabled={disabled}
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={errorId}
-        className="focus-visible:ring-[var(--accent)]/40 rounded-md border border-[var(--border)] bg-[color:rgb(15_22_38)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus-visible:border-[var(--accent)] focus-visible:ring-2 disabled:opacity-60"
+        className="bg-card text-foreground focus-visible:border-accent focus-visible:ring-accent/40 rounded-md border border-[var(--border)] px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
       />
       {error ? (
-        <p id={errorId} className="text-xs text-red-300">
+        <p id={errorId} className="text-danger text-xs">
           {error}
         </p>
       ) : null}

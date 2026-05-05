@@ -7,6 +7,18 @@
 
 > Eliot peut inviter un faux email, recevoir le mail, créer le compte et logger.
 
+## Statut Docker (héritage J0)
+
+WSL2 installé ✅ (commande `wsl --install --no-distribution` réussie le 2026-05-05).
+**Docker Desktop : install non finalisée** — UAC refusé 2 fois lors des tentatives automatiques. À régler manuellement avant J1 :
+
+1. Double-clique `Docker Desktop Installer.exe` dans Téléchargements (ou re-télécharge sur https://www.docker.com/products/docker-desktop/).
+2. Accepte UAC. Choix d'install : "Use WSL 2 instead of Hyper-V" (par défaut, garde-le).
+3. Une fois installé, lance Docker Desktop. Attends qu'il dise "Engine running".
+4. Vérifie côté terminal : `docker --version` et `docker info`.
+5. Lance le compose : `docker compose -f docker-compose.dev.yml up -d`.
+6. Vérifie : `docker ps` doit montrer `fxmily-postgres-dev` healthy.
+
 ## Décisions à prendre AVANT la session
 
 ### 1. Identité Git (en suspens depuis le J0)

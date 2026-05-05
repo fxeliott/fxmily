@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { customAlphabet } from 'nanoid';
 
 import { db } from '@/lib/db';
@@ -140,12 +140,4 @@ export async function consumeInvitation(invitationId: string): Promise<boolean> 
     data: { usedAt: new Date() },
   });
   return result.count === 1;
-}
-
-/**
- * Cryptographically random byte sequence — exposed for tests and for code
- * paths that need extra entropy beyond an invitation token.
- */
-export function randomTokenBytes(byteLength = 32): Buffer {
-  return randomBytes(byteLength);
 }

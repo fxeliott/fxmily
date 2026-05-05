@@ -7,6 +7,8 @@
 
 Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — front + API + service worker (PWA, Jalon 9).
 
+État au 2026-05-05 : **J0 + J1 + J2 livrés**.
+
 ## Aliases d'import
 
 - `@/*` → `./src/*` (configuré dans `tsconfig.json` + `components.json`)
@@ -21,16 +23,21 @@ Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — fro
 
 ## Routes connues (à compléter par jalon)
 
-| Route                         | Méthode  | Fichier                                       | Statut                              |
-| ----------------------------- | -------- | --------------------------------------------- | ----------------------------------- |
-| `/`                           | GET      | `src/app/page.tsx`                            | J0 — splash placeholder             |
-| `/api/health`                 | GET      | `src/app/api/health/route.ts`                 | J0 — env + DB ping                  |
-| `/api/auth/[...nextauth]`     | GET/POST | `src/app/api/auth/[...nextauth]/route.ts`     | J1 — Auth.js v5 handlers (Node)     |
-| `/login`                      | GET/POST | `src/app/login/{page,login-form,actions}.tsx` | J1 — Credentials login              |
-| `/onboarding/welcome?token=…` | GET/POST | `src/app/onboarding/welcome/*`                | J1 — invitation consume + autologin |
-| `/admin/invite`               | GET/POST | `src/app/admin/invite/*`                      | J1 — admin-only invite form         |
-| `/dashboard`                  | GET      | `src/app/dashboard/page.tsx`                  | J1 — placeholder, requires session  |
-| `/journal/*`                  | various  | (J2)                                          | À venir J2                          |
+| Route                         | Méthode  | Fichier                                       | Statut                                         |
+| ----------------------------- | -------- | --------------------------------------------- | ---------------------------------------------- |
+| `/`                           | GET      | `src/app/page.tsx`                            | J0 — splash placeholder                        |
+| `/api/health`                 | GET      | `src/app/api/health/route.ts`                 | J0 — env + DB ping                             |
+| `/api/auth/[...nextauth]`     | GET/POST | `src/app/api/auth/[...nextauth]/route.ts`     | J1 — Auth.js v5 handlers (Node)                |
+| `/login`                      | GET/POST | `src/app/login/{page,login-form,actions}.tsx` | J1 — Credentials login                         |
+| `/onboarding/welcome?token=…` | GET/POST | `src/app/onboarding/welcome/*`                | J1 — invitation consume + autologin            |
+| `/admin/invite`               | GET/POST | `src/app/admin/invite/*`                      | J1 — admin-only invite form                    |
+| `/dashboard`                  | GET      | `src/app/dashboard/page.tsx`                  | J1 — landing post-login (links to journal)     |
+| `/journal`                    | GET      | `src/app/journal/page.tsx`                    | J2 — list, status filter (all/open/closed)     |
+| `/journal/new`                | GET      | `src/app/journal/new/page.tsx`                | J2 — wizard mobile-first 6 étapes              |
+| `/journal/[id]`               | GET      | `src/app/journal/[id]/page.tsx`               | J2 — détail + delete + close CTA               |
+| `/journal/[id]/close`         | GET/POST | `src/app/journal/[id]/close/page.tsx`         | J2 — formulaire de clôture                     |
+| `/api/uploads`                | POST     | `src/app/api/uploads/route.ts`                | J2 — multipart, magic-byte, audit              |
+| `/api/uploads/[...key]`       | GET      | `src/app/api/uploads/[...key]/route.ts`       | J2 — stream local FS (dev), R2 redirect (prod) |
 
 ## Auth.js v5 (J1)
 
@@ -54,6 +61,8 @@ Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — fro
 ### Public routes (whitelistées dans `authConfig.authorized`)
 
 `/`, `/login`, `/forgot-password`, `/onboarding/*`, `/reset-password*`, `/api/auth/*`, `/legal/*`, `/_next/*`, `/favicon`.
+
+**Note J2** : `/api/uploads` ET `/api/uploads/[...key]` sont matchés par le proxy (pas dans la whitelist) — donc auth required par défaut. Les route handlers re-vérifient `auth()` (defense in depth) avant de toucher le storage. Le GET vérifie en plus l'ownership : la `userId` segment de la storage key DOIT matcher la session, sauf admin.
 
 ### Mot de passe (argon2id)
 
@@ -95,11 +104,13 @@ Si une intégration externe ou un script CLI demande une API REST, ajouter une r
 - `src/lib/email/send.ts` — helpers haut-niveau (`sendInvitationEmail`).
 - `RESEND_FROM` par défaut = `Fxmily <onboarding@resend.dev>` (utilisable sans domaine vérifié, avec rate limit Resend free tier).
 
-## Audit log (J1 minimal)
+## Audit log
 
 - `src/lib/auth/audit.ts` — `logAudit(...)` best-effort, jamais bloquant.
 - IPs hashées SHA-256 avec sel `AUTH_SECRET`. Aucun PII en clair.
-- Actions wired J1 : `auth.login.success/failure`, `auth.logout`, `invitation.created/consumed`, `onboarding.completed`.
+- Actions wired :
+  - **J1** : `auth.login.success/failure`, `auth.logout`, `invitation.created/consumed`, `onboarding.completed`.
+  - **J2** : `trade.created`, `trade.closed`, `trade.deleted`, `trade.screenshot.uploaded` (metadata = `{ kind, key, mime, size, adapter }`, pas le contenu).
 
 ## Headers de sécurité
 
@@ -145,19 +156,24 @@ Variables CSS dans `src/app/globals.css` (palette SPEC §8.1). Mode sombre uniqu
 - Singleton avec adapter-pg : `src/lib/db.ts`.
 - Migrations : `pnpm --filter @fxmily/web prisma:migrate` (besoin du `.env` worktree avec `DATABASE_URL`).
 - Migration `init` (J1) : `prisma/migrations/20260505152759_init/` — User/Account/Session/VerificationToken/Invitation/AuditLog + enums UserRole, UserStatus + indexes.
+- Migration `j2_trade` (J2) : `prisma/migrations/20260505160000_j2_trade/` — Trade table + 4 enums (TradeDirection, TradeSession, TradeOutcome, RealizedRSource) + composite indexes user-scoped.
 - **Naming convention DB** : tables et colonnes en `snake_case` via `@map`, modèles Prisma en PascalCase / camelCase. C'est la convention Auth.js officielle.
+- **Decimal** : `Prisma.Decimal` exporté via `@/generated/prisma/client`. Au write, on passe `new Prisma.Decimal(numericValue)` (Prisma 7 accepte aussi un number, mais on est explicite). Au read, `.toNumber()` ou `.toString()` selon le cas. Pour passer aux client components, **toujours sérialiser en string** (`SerializedTrade` dans `lib/trades/service.ts`).
 
-## Tests (J1 wired)
+## Tests
 
 - **Vitest** (`pnpm --filter @fxmily/web test`) — unit tests purs (pas de DB) :
-  - `src/lib/auth/password.test.ts`
-  - `src/lib/auth/invitations.test.ts` (token gen, hash, safeCompareHex, TTL)
-  - `src/lib/schemas/auth.test.ts` (Zod)
+  - **J1** : `src/lib/auth/{password,invitations,audit}.test.ts`, `src/lib/schemas/auth.test.ts`, `src/lib/email/send.test.ts`
+  - **J2** : `src/lib/trading/{pairs,emotions,sessions,calculations}.test.ts`, `src/lib/schemas/trade.test.ts`, `src/lib/storage/keys.test.ts`
+  - **159 tests verts au close-out J2** (vs 38 au close-out J1).
 - **Vitest setup** : `src/test/setup.ts` charge `@testing-library/jest-dom/vitest`. `vitest.config.ts` stub `DATABASE_URL`/`AUTH_SECRET`/`AUTH_URL` pour permettre les imports transitifs sans crash Zod.
-- **Playwright** (`pnpm --filter @fxmily/web test:e2e`) — `tests/e2e/auth-invitation.spec.ts`. Couvre le surface publique (login form rendu, onboarding sans token, redirect dashboard/admin). Le full happy-path avec round-trip email arrive en J1.5 / J2 (helper de capture d'URL via fallback console + DB seed admin).
+- **Playwright** (`pnpm --filter @fxmily/web test:e2e`) :
+  - `tests/e2e/auth-invitation.spec.ts` (J1) — surface publique auth.
+  - `tests/e2e/journal.spec.ts` (J2) — auth gates `/journal/*` + 401 sur `/api/uploads*` non-auth.
+  - Le full happy-path member (login → create → close → list) attend le helper de seed Postgres (cross-jalon).
 - Postgres réel attendu (testcontainers ou compose dédié `docker-compose.test.yml` à wirer plus tard).
-- Mock R2 : MinIO (J2+).
-- Mock Resend : pour J1 le fallback `console.log` du wrapper suffit.
+- Mock storage : pas besoin — `LocalStorageAdapter` écrit dans `<UPLOADS_DIR>` qu'on peut router vers un répertoire temporaire dans les tests E2E.
+- Mock Resend : pour J1+ le fallback `console.log` du wrapper suffit.
 
 ## Pièges Next 16
 
@@ -200,8 +216,76 @@ pnpm dev   # http://localhost:3000
 pnpm format:check && pnpm lint && pnpm type-check && pnpm --filter @fxmily/web test && pnpm build
 ```
 
-## TODO J1 → J2
+## J2 — Journal de trading (livré 2026-05-05)
 
-- **J1.5** (avant J2 si demandé par Eliot) : magic link "forgot password" custom, seed admin script (`scripts/seed-admin.ts`), Playwright happy-path E2E avec capture URL invitation depuis console fallback.
-- **J2** (journal de trading) : modèles `Trade`, `TradeAnnotation`, upload screens R2 (presigned URL), wizard mobile-first.
-- **J10** (prod hardening) : CSP nonces dans `proxy.ts`, rate limiting `/api/auth/*` (probablement `@upstash/ratelimit` + Redis), Sentry, RGPD endpoints (`/api/account/export`, `/api/account/delete`).
+### Modèle de données
+
+- `Trade` (table `trades`) — voir `prisma/schema.prisma` + migration `20260505160000_j2_trade`. Enums Postgres : `TradeDirection`, `TradeSession`, `TradeOutcome`, `RealizedRSource`. Indexes `userId`-leading (composite avec `enteredAt DESC`, `createdAt DESC`, `closedAt`).
+- Lifecycle : créé en open (`closedAt = NULL`), clôturé via `/journal/[id]/close` (single transaction qui calcule `realizedR`).
+- `realizedR` est calculé en `lib/trading/calculations.ts` : si `stopLossPrice` valide → `(exit-entry)/(entry-SL)` signé, source `computed` ; sinon fallback `plannedRR | -1 | 0` selon outcome, source `estimated`.
+- **Déviation contrôlée du SPEC §6.2** : ajout des champs `stopLossPrice` (optionnel, recommandé) et `realizedRSource`. Permet un R réalisé exact quand le stop-loss est saisi, et un fallback intelligent sinon.
+- **Screens** : 2 colonnes nullable `screenshotEntryKey` / `screenshotExitKey` plutôt qu'un array (KISS — V1 a 2 instances connues, on monte une `TradeScreenshot` table en V2 si plus besoin).
+
+### Storage abstraction (`lib/storage/`)
+
+Interface unifiée `StorageAdapter` (`put`, `getReadUrl`, `delete`) avec 2 implémentations :
+
+- `LocalStorageAdapter` (J2 — utilisé tant que R2 pas configuré) : écrit dans `<UPLOADS_DIR>` (default `<cwd>/.uploads`, gitignored). Reads via le route handler GET `/api/uploads/[...key]` qui re-vérifie l'auth + ownership avant de stream.
+- `R2StorageAdapter` (stub J2, à wirer quand Eliot a les keys) : voir checklist détaillée dans `lib/storage/r2.ts`. Le SDK AWS n'est PAS installé en J2 — éviter le bloat avant d'en avoir besoin.
+
+Sélection : `selectStorage()` lit l'env. Si `R2_ACCOUNT_ID` + 3 autres R2\_\* sont set → R2, sinon → local.
+
+**Sécurité couches obligatoires** (cf. CVE-2025-27210 + OWASP path traversal) :
+
+1. Allowlist regex stricte sur la storage key : `trades/{userId-cuid}/{nanoid32}.{jpg|png|webp}`. `parseTradeKey` rejette `..`, `/`, control chars.
+2. `path.normalize` + `startsWith(root + sep)` check + reject Windows device names (`CON`, `AUX`, `NUL`, `COM1…`, `LPT1…`).
+3. Server-issued filenames via `nanoid(32)` — clients ne contrôlent jamais le nom.
+4. MIME validation 2 couches : header `Content-Type` allowlist + magic-byte sniff (`sniffImageMime` — JPEG/PNG/WebP only). Détecte les renames d'extension + spoof Content-Type.
+5. Taille max 8 MiB par image (`MAX_SCREENSHOT_BYTES`).
+6. Auth gate dans `POST /api/uploads` ET `GET /api/uploads/[...key]` (defense in depth — le proxy gate l'a déjà fait).
+7. GET enforce ownership : userId dans la key doit matcher la session, sauf admin (admins voient les screens des membres pour annoter en J4).
+
+**Bypass NFT** : `local.ts` utilise `path.resolve(/* turbopackIgnore: true */ process.cwd(), '.uploads')` pour empêcher Next File Trace de drag tout le repo dans le bundle.
+
+### Wizard mobile-first (`components/journal/trade-form-wizard.tsx`)
+
+6 étapes, animation slide horizontal via `framer-motion` `<AnimatePresence mode="wait">` :
+
+1. Quand & quelle paire (datetime-local + datalist 12 paires)
+2. Direction + Session (radio cards, session auto-détectée + override)
+3. Prix entrée + Lot + Stop-loss (optionnel)
+4. R:R prévu (slider 0.5–10, step 0.25)
+5. Discipline (plan + hedge tri-state) + Émotion(s) avant (max 3 tags)
+6. Capture avant entrée (drag & drop + magic-byte client check + serveur revalide)
+
+State management : `useState` pur (pas RHF — wizard simple, RHF apporterait du bloat ici). Brouillon persisté dans `localStorage` (key `fxmily:journal:draft:v1`) — re-hydration au mount, sync à chaque change. Le brouillon est vidé au submit réussi.
+
+**Validation** : `tradeOpenSchema.safeParse` à chaque `next()` sur les champs de l'étape uniquement (pas un coup global, pour pas afficher les erreurs des steps non encore visités). Le serveur re-valide tout (`createTradeAction`).
+
+**Pourquoi pas de step 7 "outcome" dans le wizard** : SPEC §7.3 décrit 2 phases (avant/après). Côté UX, mélanger les deux dans 1 wizard force le user à attendre la sortie de trade avant de logger l'entrée. On créé en open au step 6 → /journal/[id] → "Clôturer maintenant" ouvre /journal/[id]/close (formulaire dédié non-wizard, plus simple, pré-rempli).
+
+### Constantes (`lib/trading/`)
+
+- `pairs.ts` — 12 paires validées par Eliot 2026-05-05 (forex majors + métaux + indices US). Helpers `assetClassOf`, `pricePrecisionOf`, `isTradingPair`.
+- `emotions.ts` — 15 tags FR (slugs EN), 3 clusters (Douglas-fears + states + biases). `EMOTION_MAX_PER_MOMENT = 3` cap UI.
+- `sessions.ts` — bands UTC simples (00–07 asia, 07–12 london, 12–16 overlap, 16–21 newyork). Pas de DST hardcodé — `Intl.DateTimeFormat`/`Date` natif gère via les offsets ISO. Pour finer: pivot vers `@js-joda/core` au J6 si analytics le réclame.
+
+### Server Actions (`app/journal/actions.ts`)
+
+- `createTradeAction` — Zod re-parse FormData, `createTrade` (service), audit, `revalidatePath('/journal')`, `redirect`.
+- `closeTradeAction(tradeId)` — bound action (curry). Calcule `realizedR` dans le service. Refuse si déjà clôturé (`TradeAlreadyClosedError`).
+- `deleteTradeAction(tradeId)` — soft check via `deleteMany({ where: { id, userId } })` qui n'efface que si owner.
+
+Tous re-throw `NEXT_REDIRECT` (pattern J1).
+
+### Service layer (`lib/trades/service.ts`)
+
+User-scoped uniquement. Pour l'admin (J3+), on créera un `lib/trades/admin-service.ts` séparé. Expose `SerializedTrade` (Decimal → string, Date → ISO) pour passer aux client components — RSC ne peut pas serialize `Decimal` nativement.
+
+### TODO J2 → J3+
+
+- **R2 wiring** (dès qu'Eliot a les keys) : `pnpm add @aws-sdk/client-s3 @aws-sdk/s3-request-presigner` + impl `R2StorageAdapter` (checklist dans `r2.ts`). Update CSP `img-src` pour autoriser le custom domain R2 (J10).
+- **J3** (espace admin & vue membre) : `lib/trades/admin-service.ts`, route `/admin/members/[id]/trades`, middleware `requireAdmin` réutilise le pattern `auth.config.ts`.
+- **J4** (workflow d'annotation) : table `TradeAnnotation` + upload vidéo (limit 500 MiB côté client, retry stratégie côté UI), notification queue.
+- **J6** (track record analytics) : exclude `realizedRSource = 'estimated'` des aggregats expectancy / R-distribution. Garder dans win-rate (le sample reste un win).
+- **J10** (prod hardening) : CSP nonces, rate limiting `/api/auth/*` + `/api/uploads`, Sentry, RGPD endpoints (`/api/account/export`, `/api/account/delete`).

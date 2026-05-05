@@ -70,3 +70,6 @@ playwright/.cache/
 .eslintcache
 .stylelintcache
 *.local
+
+# Local upload store (J2 — replaced by R2 in prod)
+.uploads/

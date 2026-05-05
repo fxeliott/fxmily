@@ -71,12 +71,20 @@ export default async function DashboardPage() {
             Voir mes trades
           </Link>
           {session.user.role === 'admin' ? (
-            <Link
-              href="/admin/invite"
-              className="text-foreground hover:border-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md border border-[var(--border)] px-4 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              Inviter un membre
-            </Link>
+            <>
+              <Link
+                href="/admin/members"
+                className="text-foreground hover:border-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md border border-[var(--border)] px-4 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Membres
+              </Link>
+              <Link
+                href="/admin/invite"
+                className="text-foreground hover:border-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md border border-[var(--border)] px-4 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Inviter un membre
+              </Link>
+            </>
           ) : null}
         </div>
       </section>

@@ -7,7 +7,7 @@
 
 Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — front + API + service worker (PWA, Jalon 9).
 
-État au 2026-05-05 : **J0 + J1 + J2 livrés**.
+État au 2026-05-05 : **J0 + J1 + J2 + J3 livrés**.
 
 ## Aliases d'import
 
@@ -23,21 +23,24 @@ Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — fro
 
 ## Routes connues (à compléter par jalon)
 
-| Route                         | Méthode  | Fichier                                       | Statut                                         |
-| ----------------------------- | -------- | --------------------------------------------- | ---------------------------------------------- |
-| `/`                           | GET      | `src/app/page.tsx`                            | J0 — splash placeholder                        |
-| `/api/health`                 | GET      | `src/app/api/health/route.ts`                 | J0 — env + DB ping                             |
-| `/api/auth/[...nextauth]`     | GET/POST | `src/app/api/auth/[...nextauth]/route.ts`     | J1 — Auth.js v5 handlers (Node)                |
-| `/login`                      | GET/POST | `src/app/login/{page,login-form,actions}.tsx` | J1 — Credentials login                         |
-| `/onboarding/welcome?token=…` | GET/POST | `src/app/onboarding/welcome/*`                | J1 — invitation consume + autologin            |
-| `/admin/invite`               | GET/POST | `src/app/admin/invite/*`                      | J1 — admin-only invite form                    |
-| `/dashboard`                  | GET      | `src/app/dashboard/page.tsx`                  | J1 — landing post-login (links to journal)     |
-| `/journal`                    | GET      | `src/app/journal/page.tsx`                    | J2 — list, status filter (all/open/closed)     |
-| `/journal/new`                | GET      | `src/app/journal/new/page.tsx`                | J2 — wizard mobile-first 6 étapes              |
-| `/journal/[id]`               | GET      | `src/app/journal/[id]/page.tsx`               | J2 — détail + delete + close CTA               |
-| `/journal/[id]/close`         | GET/POST | `src/app/journal/[id]/close/page.tsx`         | J2 — formulaire de clôture                     |
-| `/api/uploads`                | POST     | `src/app/api/uploads/route.ts`                | J2 — multipart, magic-byte, audit              |
-| `/api/uploads/[...key]`       | GET      | `src/app/api/uploads/[...key]/route.ts`       | J2 — stream local FS (dev), R2 redirect (prod) |
+| Route                                  | Méthode  | Fichier                                                | Statut                                                        |
+| -------------------------------------- | -------- | ------------------------------------------------------ | ------------------------------------------------------------- |
+| `/`                                    | GET      | `src/app/page.tsx`                                     | J0 — splash placeholder                                       |
+| `/api/health`                          | GET      | `src/app/api/health/route.ts`                          | J0 — env + DB ping                                            |
+| `/api/auth/[...nextauth]`              | GET/POST | `src/app/api/auth/[...nextauth]/route.ts`              | J1 — Auth.js v5 handlers (Node)                               |
+| `/login`                               | GET/POST | `src/app/login/{page,login-form,actions}.tsx`          | J1 — Credentials login                                        |
+| `/onboarding/welcome?token=…`          | GET/POST | `src/app/onboarding/welcome/*`                         | J1 — invitation consume + autologin                           |
+| `/admin/invite`                        | GET/POST | `src/app/admin/invite/*`                               | J1 — admin-only invite form                                   |
+| `/dashboard`                           | GET      | `src/app/dashboard/page.tsx`                           | J1 — landing post-login (links to journal)                    |
+| `/journal`                             | GET      | `src/app/journal/page.tsx`                             | J2 — list, status filter (all/open/closed)                    |
+| `/journal/new`                         | GET      | `src/app/journal/new/page.tsx`                         | J2 — wizard mobile-first 6 étapes                             |
+| `/journal/[id]`                        | GET      | `src/app/journal/[id]/page.tsx`                        | J2 — détail + delete + close CTA                              |
+| `/journal/[id]/close`                  | GET/POST | `src/app/journal/[id]/close/page.tsx`                  | J2 — formulaire de clôture                                    |
+| `/api/uploads`                         | POST     | `src/app/api/uploads/route.ts`                         | J2 — multipart, magic-byte, audit                             |
+| `/api/uploads/[...key]`                | GET      | `src/app/api/uploads/[...key]/route.ts`                | J2 — stream local FS (dev), R2 redirect (prod)                |
+| `/admin/members`                       | GET      | `src/app/admin/members/page.tsx`                       | J3 — admin-only members list                                  |
+| `/admin/members/[id]`                  | GET      | `src/app/admin/members/[id]/page.tsx`                  | J3 — overview + trades tab (?tab=trades)                      |
+| `/admin/members/[id]/trades/[tradeId]` | GET      | `src/app/admin/members/[id]/trades/[tradeId]/page.tsx` | J3 — admin-scoped trade detail (shared `<TradeDetailView />`) |
 
 ## Auth.js v5 (J1)
 
@@ -111,6 +114,7 @@ Si une intégration externe ou un script CLI demande une API REST, ajouter une r
 - Actions wired :
   - **J1** : `auth.login.success/failure`, `auth.logout`, `invitation.created/consumed`, `onboarding.completed`.
   - **J2** : `trade.created`, `trade.closed`, `trade.deleted`, `trade.screenshot.uploaded` (metadata = `{ kind, key, mime, size, adapter }`, pas le contenu).
+  - **J3** : `admin.members.listed`, `admin.member.viewed` (metadata `{ memberId, tab }`), `admin.trade.viewed` (metadata `{ memberId, tradeId, isClosed }`).
 
 ## Headers de sécurité
 

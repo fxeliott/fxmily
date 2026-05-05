@@ -26,7 +26,10 @@ export type AuditAction =
   | 'trade.created'
   | 'trade.closed'
   | 'trade.deleted'
-  | 'trade.screenshot.uploaded';
+  | 'trade.screenshot.uploaded'
+  | 'admin.members.listed'
+  | 'admin.member.viewed'
+  | 'admin.trade.viewed';
 
 export interface LogAuditParams {
   action: AuditAction;

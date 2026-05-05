@@ -51,19 +51,34 @@ export default async function DashboardPage() {
         </form>
       </header>
 
-      <section className="bg-card rounded-lg border border-[var(--border)] p-6">
-        <h2 className="text-foreground text-base font-semibold">Bienvenue dans ton espace</h2>
-        <p className="text-muted mt-2 text-sm">
-          Le journal de trading et le suivi quotidien arrivent au prochain jalon.
+      <section className="bg-card flex flex-col gap-3 rounded-lg border border-[var(--border)] p-6">
+        <h2 className="text-foreground text-base font-semibold">Journal de trading</h2>
+        <p className="text-muted text-sm">
+          Logge chaque trade : capture avant entrée, plan, R:R prévu. Au moment de la sortie,
+          renseigne le résultat et l&apos;émotion.
         </p>
-        {session.user.role === 'admin' ? (
+        <div className="flex flex-wrap gap-2 pt-1">
           <Link
-            href="/admin/invite"
-            className="bg-primary text-primary-foreground focus-visible:outline-accent mt-4 inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            href="/journal/new"
+            className="bg-primary text-primary-foreground focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
           >
-            Inviter un membre
+            + Nouveau trade
           </Link>
-        ) : null}
+          <Link
+            href="/journal"
+            className="text-foreground hover:border-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md border border-[var(--border)] px-4 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            Voir mes trades
+          </Link>
+          {session.user.role === 'admin' ? (
+            <Link
+              href="/admin/invite"
+              className="text-foreground hover:border-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md border border-[var(--border)] px-4 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              Inviter un membre
+            </Link>
+          ) : null}
+        </div>
       </section>
     </main>
   );

@@ -22,7 +22,11 @@ export type AuditAction =
   | 'auth.logout'
   | 'invitation.created'
   | 'invitation.consumed'
-  | 'onboarding.completed';
+  | 'onboarding.completed'
+  | 'trade.created'
+  | 'trade.closed'
+  | 'trade.deleted'
+  | 'trade.screenshot.uploaded';
 
 export interface LogAuditParams {
   action: AuditAction;

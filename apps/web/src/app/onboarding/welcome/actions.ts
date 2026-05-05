@@ -1,6 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 import { onboardingSchema } from '@/lib/schemas/auth';
 import { completeOnboarding } from '@/lib/auth/onboarding';
@@ -88,8 +89,10 @@ export async function completeOnboardingAction(
     ) {
       throw err;
     }
-    // Onboarding succeeded but auto-login failed — surface a soft error,
-    // the user can still log in manually.
-    return { ok: false, error: 'unknown' };
+    // Account was created but auto-login failed (rare: env mismatch, DB
+    // hiccup). Don't tell the user "unknown" — the account exists. Send
+    // them to /login with a notice instead. `redirect()` throws its own
+    // NEXT_REDIRECT digest, propagated by Next to perform the navigation.
+    redirect('/login?onboarding=success');
   }
 }

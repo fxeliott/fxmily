@@ -16,7 +16,14 @@ const { auth } = NextAuth(authConfig);
 export default auth;
 
 export const config = {
-  // Match every path EXCEPT static assets, the Next internal endpoints, and
-  // common static files. Auth.js v5 docs ship this exact regex.
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|logo.png|.*\\.svg).*)'],
+  // Match every path EXCEPT:
+  //   - `/api/auth/*`         → Auth.js handlers (own auth)
+  //   - `/_next/static/*`, `/_next/image/*` → Next runtime
+  //   - common static files (favicon, logo, *.svg)
+  //
+  // Crucially, `/api/admin/*`, `/api/journal/*` etc. ARE matched by the
+  // proxy so the `authorized()` callback gates them. Each future API route
+  // handler must still call `await auth()` itself (defense in depth) since
+  // the proxy can be bypassed in some Next.js edge cases.
+  matcher: ['/((?!api/auth|_next/static|_next/image|favicon.ico|logo.png|.*\\.svg).*)'],
 };

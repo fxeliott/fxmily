@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth, signOut } from '@/auth';
@@ -33,7 +34,7 @@ export default async function DashboardPage() {
         >
           <button
             type="submit"
-            className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--foreground)] transition-colors hover:border-[var(--accent)]"
+            className="min-h-11 rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--foreground)] transition-colors hover:border-[var(--accent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
           >
             Se déconnecter
           </button>
@@ -48,12 +49,12 @@ export default async function DashboardPage() {
           Le journal de trading et le suivi quotidien arrivent au prochain jalon.
         </p>
         {session.user.role === 'admin' ? (
-          <a
+          <Link
             href="/admin/invite"
-            className="mt-4 inline-block rounded-md bg-[var(--primary)] px-3 py-2 text-sm font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90"
+            className="mt-4 inline-flex min-h-11 items-center rounded-md bg-[var(--primary)] px-3 py-2 text-sm font-semibold text-[var(--primary-foreground)] transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
           >
             Inviter un membre
-          </a>
+          </Link>
         ) : null}
       </section>
     </main>

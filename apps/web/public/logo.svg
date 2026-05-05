@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 140" fill="none" aria-label="Fxmily logo">
+  <title>Fxmily</title>
+  <!-- Placeholder monogramme FM. À remplacer par le fichier original (apps/web/public/logo.svg ou .png). -->
+  <g fill="#ffffff">
+    <!-- F -->
+    <path d="M10 10 L62 10 L52 26 L26 26 L26 56 L48 56 L40 72 L26 72 L26 96 L10 96 Z" />
+    <!-- M -->
+    <path d="M38 44 L54 44 L66 80 L78 44 L94 44 L94 130 L80 130 L80 76 L70 108 L62 108 L52 76 L52 130 L38 130 Z" />
+  </g>
+</svg>

@@ -1,0 +1,17 @@
+// Fxmily — schéma Prisma
+// Source de vérité du modèle de données. Les entités sont ajoutées
+// progressivement, jalon par jalon, conformément à SPEC.md §6.
+//
+// Jalon 0 (présent) : datasource + generator uniquement.
+// Jalon 1+ : User, Session, Invitation, Trade, etc.
+//
+// La connexion DB est configurée dans `apps/web/prisma.config.ts` (Prisma 7+).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

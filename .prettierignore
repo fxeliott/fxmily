@@ -1,0 +1,19 @@
+node_modules
+.next
+.turbo
+dist
+build
+out
+coverage
+pnpm-lock.yaml
+*.lockb
+prisma/migrations
+.env*
+public
+
+# Generated code (Prisma 7+ client output)
+**/generated/**
+apps/*/src/generated
+
+# Spec & docs (preserve original formatting)
+SPEC.md

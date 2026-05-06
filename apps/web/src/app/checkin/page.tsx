@@ -144,9 +144,14 @@ function SlotCard({
 
 function DoneBanner({ slot, streak }: { slot: 'morning' | 'evening'; streak: number }) {
   const word = slot === 'morning' ? 'matin' : 'soir';
-  const next = slot === 'morning' ? 'soir' : 'matin (demain)';
+  // Fixed broken sentence ("À ce soir pour le matin (demain) check-in.") flagged
+  // by the J5 content audit. Now grammatically clean and slot-aware.
+  const followUp = slot === 'morning' ? 'On se retrouve ce soir.' : 'On se retrouve demain matin.';
   return (
-    <div className="confirm-flash rounded-card border border-[var(--b-acc-strong)] bg-[var(--acc-dim)] px-4 py-3">
+    <div
+      role="status"
+      className="confirm-flash rounded-card border border-[var(--b-acc-strong)] bg-[var(--acc-dim)] px-4 py-3"
+    >
       <div className="flex items-center gap-2.5">
         <span
           aria-hidden
@@ -158,7 +163,7 @@ function DoneBanner({ slot, streak }: { slot: 'morning' | 'evening'; streak: num
           <span className="text-[13px] font-semibold text-[var(--t-1)]">
             Check-in {word} enregistré · streak {streak} jour{streak > 1 ? 's' : ''}
           </span>
-          <span className="t-cap text-[var(--t-3)]">À ce soir pour le {next} check-in.</span>
+          <span className="t-cap text-[var(--t-3)]">{followUp}</span>
         </div>
       </div>
     </div>

@@ -52,6 +52,12 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [mediaKey, setMediaKey] = useState<string | null>(null);
+  /** Tracks the MediaUploader's in-flight upload so we can block submit
+   * between the moment a file is dropped and the moment /api/uploads has
+   * answered with a key. Without this, an admin who clicks Submit while
+   * the upload is mid-flight would create a comment-only annotation and
+   * leave an orphan file in storage. */
+  const [isUploading, setIsUploading] = useState(false);
 
   // Wrap the Server Action so the Sheet closes + form resets on success
   // without touching `useEffect` (React 19 + react-hooks/set-state-in-effect).
@@ -66,6 +72,7 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
       setOpen(false);
       setComment('');
       setMediaKey(null);
+      setIsUploading(false);
       formRef.current?.reset();
     }
     return result;
@@ -85,6 +92,7 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
 
       <SheetContent
         side="bottom"
+        showCloseButton={false}
         className="rounded-t-card max-h-[90dvh] overflow-y-auto border-x-0 border-b-0 border-t border-[var(--b-default)] bg-[var(--bg-1)] sm:max-h-[80dvh]"
       >
         <SheetHeader>
@@ -122,7 +130,7 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
               onChange={(e) => setComment(e.target.value)}
               maxLength={ANNOTATION_COMMENT_MAX + 256 /* let server enforce hard cap */}
               placeholder="Ex. Plan respecté à 100%, mais entrée à contre-tendance — revois le check de structure avant le tap."
-              className="rounded-card resize-y border border-[var(--b-default)] bg-[var(--bg-0)] px-3 py-2.5 font-sans text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              className="rounded-card resize-y border border-[var(--b-default)] bg-[var(--bg)] px-3 py-2.5 font-sans text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
               aria-invalid={state?.fieldErrors?.comment ? 'true' : undefined}
             />
             {state?.fieldErrors?.comment ? (
@@ -148,6 +156,7 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
               error={state?.fieldErrors?.mediaKey}
               onUploaded={({ key }) => setMediaKey(key)}
               onCleared={() => setMediaKey(null)}
+              onStatusChange={(status) => setIsUploading(status === 'uploading')}
             />
             <span className="t-cap text-[var(--t-4)]">
               Vidéo Zoom (jusqu&apos;à 500 Mo) — prochain jalon, dès que R2 sera configuré.
@@ -177,11 +186,26 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
               kind="primary"
               size="m"
               loading={isPending}
-              disabled={isPending || comment.trim().length === 0}
+              disabled={isPending || isUploading || comment.trim().length === 0}
+              aria-describedby={isUploading ? `${formId}-upload-blocking` : undefined}
             >
               <Send className="h-4 w-4" strokeWidth={1.75} />
-              {mediaKey ? 'Envoyer correction + capture' : 'Envoyer correction'}
+              {isUploading
+                ? 'Upload en cours…'
+                : mediaKey
+                  ? 'Envoyer correction + capture'
+                  : 'Envoyer correction'}
             </Btn>
+            {isUploading ? (
+              <span
+                id={`${formId}-upload-blocking`}
+                role="status"
+                aria-live="polite"
+                className="t-cap text-[var(--t-4)] sm:hidden"
+              >
+                Patiente, la capture s&apos;envoie.
+              </span>
+            ) : null}
           </div>
         </form>
       </SheetContent>

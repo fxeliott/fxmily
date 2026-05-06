@@ -54,17 +54,26 @@ export function DeleteAnnotationButton({ annotationId }: DeleteAnnotationButtonP
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="rounded-control inline-flex items-center gap-1 px-2 py-1 text-[11px] text-[var(--t-3)] transition-colors hover:bg-[var(--bad-dim)] hover:text-[var(--bad)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+        className="rounded-control inline-flex h-11 min-w-[44px] items-center gap-1.5 px-3 text-[12px] text-[var(--t-3)] transition-colors hover:bg-[var(--bad-dim)] hover:text-[var(--bad)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
       >
-        <Trash2 className="h-3 w-3" strokeWidth={1.75} />
+        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
         Supprimer
       </button>
     );
   }
 
+  // Confirm dialog: alertdialog role + describedby pin the question to the
+  // focused button so screen readers announce the consequence right away.
+  const promptId = `delete-annotation-${annotationId}-prompt`;
+
   return (
-    <div className="rounded-control flex w-full flex-col gap-2 border border-[oklch(0.7_0.165_22_/_0.30)] bg-[var(--bad-dim)] p-2.5">
-      <p className="t-cap text-[var(--t-2)]">
+    <div
+      role="alertdialog"
+      aria-labelledby={promptId}
+      aria-describedby={promptId}
+      className="rounded-control flex w-full flex-col gap-2 border border-[oklch(0.7_0.165_22_/_0.30)] bg-[var(--bad-dim)] p-3"
+    >
+      <p id={promptId} className="t-cap text-[var(--t-2)]">
         Supprimer cette correction définitivement ? Le membre ne la verra plus.
       </p>
       {error ? (
@@ -77,7 +86,7 @@ export function DeleteAnnotationButton({ annotationId }: DeleteAnnotationButtonP
           type="button"
           onClick={() => setConfirming(false)}
           disabled={pending}
-          className="rounded-control inline-flex h-8 items-center px-2.5 text-[11px] text-[var(--t-3)] transition-colors hover:bg-[var(--bg-2)] hover:text-[var(--t-1)] disabled:opacity-50"
+          className="rounded-control inline-flex h-11 min-w-[44px] items-center px-3 text-[12px] text-[var(--t-3)] transition-colors hover:bg-[var(--bg-2)] hover:text-[var(--t-1)] disabled:opacity-50"
         >
           Annuler
         </button>
@@ -86,7 +95,8 @@ export function DeleteAnnotationButton({ annotationId }: DeleteAnnotationButtonP
           type="button"
           onClick={onDelete}
           disabled={pending}
-          className="rounded-control inline-flex h-8 items-center gap-1.5 bg-[var(--bad)] px-3 text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          aria-busy={pending || undefined}
+          className="rounded-control inline-flex h-11 items-center gap-1.5 bg-[var(--bad)] px-4 text-[12px] font-semibold text-[var(--acc-fg)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? <Spinner size={12} /> : null}
           {pending ? 'Suppression…' : 'Confirmer'}

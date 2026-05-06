@@ -25,6 +25,15 @@ const KEY_REGEX_TRADE = /^trades\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg
 const KEY_REGEX_ANNOTATION =
   /^annotations\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
 
+/**
+ * Single-source-of-truth pattern for annotation keys, exported for the Zod
+ * schema in `lib/schemas/annotation.ts`. The capturing groups in
+ * `KEY_REGEX_ANNOTATION` are kept private (used by `parseAnnotationKey`);
+ * this anchored variant is the right shape for `z.string().regex()`.
+ */
+export const ANNOTATION_KEY_PATTERN =
+  /^annotations\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/;
+
 const MIME_TO_EXT: Record<AllowedImageMime, 'jpg' | 'png' | 'webp'> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',

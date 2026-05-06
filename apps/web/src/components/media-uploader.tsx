@@ -58,6 +58,11 @@ interface MediaUploaderProps {
   /** Notify parent on success/clear — used for wizard step validation. */
   onUploaded?: ((args: { key: string; readUrl: string }) => void) | undefined;
   onCleared?: (() => void) | undefined;
+  /** Notify parent of every status transition. Used by the annotation Sheet
+   * to block submit while an upload is in flight (otherwise the user can
+   * submit between drop and POST completion → annotation row created with
+   * mediaKey='' and an orphan file lands 200ms later). */
+  onStatusChange?: ((status: 'idle' | 'uploading' | 'success' | 'error') => void) | undefined;
 }
 
 interface UploadState {
@@ -115,6 +120,7 @@ export function MediaUploader({
   removable = true,
   onUploaded,
   onCleared,
+  onStatusChange,
 }: MediaUploaderProps) {
   const id = useId();
   const errorId = `${id}-error`;
@@ -148,6 +154,7 @@ export function MediaUploader({
 
       if (file.size === 0) {
         setState({ key: null, readUrl: null, status: 'error', message: errorLabel('empty_file') });
+        onStatusChange?.('error');
         return;
       }
       if (file.size > maxBytes) {
@@ -157,6 +164,7 @@ export function MediaUploader({
           status: 'error',
           message: `Fichier trop lourd (${bytesToMo(maxBytes)}).`,
         });
+        onStatusChange?.('error');
         return;
       }
       if (!acceptMime.includes(file.type)) {
@@ -166,10 +174,12 @@ export function MediaUploader({
           status: 'error',
           message: errorLabel('invalid_mime'),
         });
+        onStatusChange?.('error');
         return;
       }
 
       setState((s) => ({ ...s, status: 'uploading', message: null }));
+      onStatusChange?.('uploading');
 
       const fd = new FormData();
       fd.append('file', file);
@@ -190,6 +200,7 @@ export function MediaUploader({
             status: 'error',
             message: errorLabel(payload.error),
           });
+          onStatusChange?.('error');
           return;
         }
         setState({
@@ -198,6 +209,7 @@ export function MediaUploader({
           status: 'success',
           message: null,
         });
+        onStatusChange?.('success');
         onUploaded?.({ key: payload.key, readUrl: payload.readUrl });
       } catch (err) {
         console.error('[MediaUploader] fetch failed', err);
@@ -207,15 +219,17 @@ export function MediaUploader({
           status: 'error',
           message: 'Erreur réseau. Réessaie.',
         });
+        onStatusChange?.('error');
       }
     },
-    [acceptMime, disabled, kind, maxBytes, onUploaded, tradeId],
+    [acceptMime, disabled, kind, maxBytes, onUploaded, onStatusChange, tradeId],
   );
 
   const clear = () => {
     setState({ key: null, readUrl: null, status: 'idle', message: null });
     if (inputRef.current) inputRef.current.value = '';
     onCleared?.();
+    onStatusChange?.('idle');
   };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -324,7 +338,7 @@ export function MediaUploader({
           type="button"
           onClick={clear}
           disabled={disabled}
-          className="rounded-control inline-flex h-9 items-center gap-1.5 self-start border border-transparent px-2 text-[11px] text-[var(--t-3)] transition-colors hover:border-[oklch(0.7_0.165_22_/_0.35)] hover:bg-[var(--bad-dim)] hover:text-[var(--bad)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          className="rounded-control inline-flex h-11 min-w-[44px] items-center gap-1.5 self-start border border-transparent px-3 text-[12px] text-[var(--t-3)] transition-colors hover:border-[oklch(0.7_0.165_22_/_0.35)] hover:bg-[var(--bad-dim)] hover:text-[var(--bad)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
         >
           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
           Retirer

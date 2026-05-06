@@ -7,7 +7,6 @@ import {
   AnnotationNotFoundError,
   createAnnotation,
   deleteAnnotation,
-  findTradeOwnerForAnnotation,
   getAnnotationById,
 } from '@/lib/admin/annotations-service';
 import { logAudit } from '@/lib/auth/audit';
@@ -126,25 +125,18 @@ export async function createAnnotationAction(
     }
   }
 
-  // Confirm the trade exists AND belongs to the declared member. Surfacing
-  // a typo in the URL as `trade_not_found` rather than 500-ing later.
-  const owner = await findTradeOwnerForAnnotation(tradeId);
-  if (!owner || owner.userId !== memberId) {
-    return { ok: false, error: 'trade_not_found' };
-  }
-
-  // Need the recipient's email + first name for the notification email,
-  // plus the trade pair for the subject. Single round-trip query.
+  // Single round-trip: confirm the trade exists, belongs to the declared
+  // member, and pre-fetch the data the email helper needs. Failing fast on
+  // a URL typo surfaces as `trade_not_found` rather than a 500 later.
   const tradeRow = await db.trade.findUnique({
     where: { id: tradeId },
     select: {
       pair: true,
+      userId: true,
       user: { select: { email: true, firstName: true } },
     },
   });
-  if (!tradeRow) {
-    // Race: row vanished between findTradeOwnerForAnnotation and now. Treat
-    // as not found rather than 500.
+  if (!tradeRow || tradeRow.userId !== memberId) {
     return { ok: false, error: 'trade_not_found' };
   }
 
@@ -202,18 +194,16 @@ export async function createAnnotationAction(
   });
 
   // Refresh both admin and member surfaces so the Sheet close + member
-  // navigation see the new row.
+  // navigation see the new row. The /admin/members/[id] overview tab
+  // doesn't yet show annotations counts, so we omit it here.
   revalidatePath(`/admin/members/${memberId}/trades/${tradeId}`);
-  revalidatePath(`/admin/members/${memberId}`);
   revalidatePath(`/journal/${tradeId}`);
   revalidatePath('/journal');
 
   return {
     ok: true,
     annotationId,
-    message: tradeRow.user.email
-      ? `Correction envoyée à ${tradeRow.user.email}.`
-      : 'Correction enregistrée.',
+    message: `Correction envoyée à ${tradeRow.user.email}.`,
   };
 }
 

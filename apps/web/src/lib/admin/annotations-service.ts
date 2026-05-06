@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
-import type { Prisma } from '@/generated/prisma/client';
 import type { AnnotationMediaType } from '@/generated/prisma/enums';
 import type { TradeAnnotationModel } from '@/generated/prisma/models/TradeAnnotation';
 
@@ -135,17 +134,3 @@ export async function getAnnotationById(id: string): Promise<SerializedAnnotatio
   const row = await db.tradeAnnotation.findUnique({ where: { id } });
   return row ? serializeAnnotation(row) : null;
 }
-
-/** Trade lookup helper used by the Server Action to confirm the targeted
- * trade really belongs to the declared member before we create the row. */
-export async function findTradeOwnerForAnnotation(
-  tradeId: string,
-): Promise<{ userId: string } | null> {
-  return db.trade.findUnique({
-    where: { id: tradeId },
-    select: { userId: true },
-  });
-}
-
-/** Internal type alias to keep Prisma-only typings out of public exports. */
-export type _CreateInput = Prisma.TradeAnnotationCreateInput;

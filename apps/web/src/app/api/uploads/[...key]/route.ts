@@ -66,15 +66,15 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
       return new Response('Forbidden', { status: 403 });
     }
   } else {
-    // annotation key — lookup the parent trade owner.
+    // annotation key — lookup the parent trade owner. We collapse the
+    // "trade absent" and "trade present but not owner" branches into a
+    // single Forbidden so a member can't oracle whether a given tradeId
+    // exists by probing /api/uploads/annotations/<id>/<random>.jpg.
     const trade = await db.trade.findUnique({
       where: { id: parsed.tradeId },
       select: { userId: true },
     });
-    if (!trade) {
-      return new Response('Not found', { status: 404 });
-    }
-    if (!isAdmin && trade.userId !== session.user.id) {
+    if (!trade || (!isAdmin && trade.userId !== session.user.id)) {
       return new Response('Forbidden', { status: 403 });
     }
   }

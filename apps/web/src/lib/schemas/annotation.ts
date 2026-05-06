@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { ANNOTATION_KEY_PATTERN } from '@/lib/storage/keys';
+
 /**
  * Trade annotation schemas (J4, SPEC §6.3, §7.8).
  *
@@ -8,24 +10,18 @@ import { z } from 'zod';
  *
  * V1 supports image media only (8 MiB cap, JPEG/PNG/WebP). The 500 MiB
  * Zoom-video upload path is deferred to J4.5 once R2 is wired — when ready,
- * extend `mediaTypeSchema` with `'video'` and the storage key alternation.
+ * extend `mediaTypeSchema` with `'video'` and the storage key alternation
+ * inside `lib/storage/keys.ts`.
  */
 
 /** Hard upper bound on the markdown comment. 5 000 chars covers a long
  * paragraph block; we don't want a runaway paste destroying perf. */
 export const ANNOTATION_COMMENT_MAX = 5000;
 
-/** Storage key for annotation image media (J4).
- *
- *   annotations/{tradeId}/{nanoid32}.{jpg|png|webp}
- *
- * Mirrors the trade screenshot key shape — see `lib/storage/keys.ts`. */
-const annotationImageKeySchema = z
-  .string()
-  .regex(
-    /^annotations\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/,
-    'Clé fichier invalide.',
-  );
+/** Storage key for annotation image media (J4). Pattern is sourced from
+ * `lib/storage/keys` so the validation layer and the path-generation layer
+ * never drift. */
+const annotationImageKeySchema = z.string().regex(ANNOTATION_KEY_PATTERN, 'Clé fichier invalide.');
 
 const commentSchema = z
   .string()

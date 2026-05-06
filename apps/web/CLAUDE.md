@@ -112,7 +112,7 @@ Si une intégration externe ou un script CLI demande une API REST, ajouter une r
 - `src/lib/auth/audit.ts` — `logAudit(...)` best-effort, jamais bloquant.
 - IPs hashées SHA-256 avec sel `AUTH_SECRET`. Aucun PII en clair.
 - Actions wired :
-  - **J1** : `auth.login.success/failure`, `auth.logout`, `invitation.created/consumed`, `onboarding.completed`.
+  - **J1** : `invitation.created/consumed`, `onboarding.completed`. **PHASE 1 fixes** (post-J4): `auth.login.success` (event `signIn`), `auth.login.failure` inline dans `authorize()` avec metadata `reason: 'unknown_or_no_password' | 'inactive' | 'bad_password'` (jamais l'email en clair — anti-énumération), `auth.logout` (event `signOut`).
   - **J2** : `trade.created`, `trade.closed`, `trade.deleted`, `trade.screenshot.uploaded` (metadata = `{ kind, key, mime, size, adapter }`, pas le contenu).
   - **J3** : `admin.members.listed`, `admin.member.viewed` (metadata `{ memberId, tab }`), `admin.trade.viewed` (metadata `{ memberId, tradeId, isClosed, annotationsCount }` — J4 ajoute le compteur).
   - **J4** : `admin.annotation.created` (metadata `{ annotationId, tradeId, memberId, hasMedia, mediaType }`), `admin.annotation.deleted` (metadata `{ annotationId, tradeId, memberId }`), `admin.annotation.media.uploaded` (metadata `{ kind, key, mime, size, adapter, tradeId }`), `member.annotations.viewed` (metadata `{ tradeId, markedCount }` — émis seulement si `markedCount > 0` pour ne pas spammer le log à chaque ouverture de trade), `notification.enqueued` (metadata `{ notificationId, type, tradeId, annotationId }`).

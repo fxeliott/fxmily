@@ -35,7 +35,11 @@ export type AuditAction =
   | 'admin.annotation.deleted'
   | 'admin.annotation.media.uploaded'
   | 'member.annotations.viewed'
-  | 'notification.enqueued';
+  | 'notification.enqueued'
+  // J5 — daily check-ins
+  | 'checkin.morning.submitted'
+  | 'checkin.evening.submitted'
+  | 'checkin.reminder.scan';
 
 export interface LogAuditParams {
   action: AuditAction;

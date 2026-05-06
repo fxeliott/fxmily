@@ -1,9 +1,11 @@
 import { ArrowLeft, ShieldCheck, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 
+import { AnnotationsSection } from '@/components/journal/annotations-section';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import type { SerializedAnnotation } from '@/lib/admin/annotations-service';
 import { selectStorage } from '@/lib/storage';
 import type { SerializedTrade } from '@/lib/trades/service';
 import { emotionLabel } from '@/lib/trading/emotions';
@@ -34,6 +36,11 @@ interface TradeDetailViewProps {
   closeHref: string | null;
   contextBadge?: string;
   footerSlot?: React.ReactNode;
+  /** J4 — annotations attached to this trade. Empty array hides the section. */
+  annotations?: SerializedAnnotation[];
+  /** Identifier of the currently-authenticated user. Drives the admin
+   * delete-CTA gate inside `<AnnotationsSection />`. */
+  currentUserId?: string | null;
 }
 
 export function TradeDetailView({
@@ -43,6 +50,8 @@ export function TradeDetailView({
   closeHref,
   contextBadge,
   footerSlot,
+  annotations = [],
+  currentUserId = null,
 }: TradeDetailViewProps) {
   const storage = selectStorage();
   const entryUrl = trade.screenshotEntryKey ? storage.getReadUrl(trade.screenshotEntryKey) : null;
@@ -265,19 +274,17 @@ export function TradeDetailView({
         </Card>
       ) : null}
 
+      {/* J4 — annotations list (admin sees "Corrections envoyées" with delete
+          + non-lue badges; member sees "Corrections reçues" read-only). */}
+      <AnnotationsSection
+        annotations={annotations}
+        isAdmin={isAdmin}
+        currentUserId={currentUserId}
+      />
+
       {/* Footer admin/member-specific slot */}
       {footerSlot ? (
         <footer className="border-t border-[var(--b-default)] pt-4">{footerSlot}</footer>
-      ) : null}
-
-      {/* Admin watermark hint (J4 annotate placeholder) */}
-      {isAdmin ? (
-        <div className="rounded-control border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] px-3 py-2.5">
-          <p className="t-cap text-[var(--t-2)]">
-            <span className="font-medium text-[var(--cy)]">Vue admin · J4</span> — l&apos;outil
-            d&apos;annotation (texte + vidéo Zoom) arrive au prochain jalon.
-          </p>
-        </div>
       ) : null}
     </main>
   );

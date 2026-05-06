@@ -11,6 +11,11 @@ prisma/migrations
 .env*
 public
 
+# Materialized git worktrees under .claude/worktrees/ contain a full repo
+# checkout often stale relative to main; format-checking them produces
+# hundreds of false positives and they're never committed from there.
+.claude/worktrees
+
 # Generated code (Prisma 7+ client output)
 **/generated/**
 apps/*/src/generated

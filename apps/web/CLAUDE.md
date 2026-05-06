@@ -7,7 +7,7 @@
 
 Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — front + API + service worker (PWA, Jalon 9).
 
-État au 2026-05-06 : **J0 + J1 + J2 + J3 + J4 livrés**.
+État au 2026-05-06 : **J0 + J1 + J2 + J3 + J4 + J5 livrés**.
 
 ## Aliases d'import
 
@@ -23,24 +23,28 @@ Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — fro
 
 ## Routes connues (à compléter par jalon)
 
-| Route                                  | Méthode  | Fichier                                                | Statut                                                         |
-| -------------------------------------- | -------- | ------------------------------------------------------ | -------------------------------------------------------------- |
-| `/`                                    | GET      | `src/app/page.tsx`                                     | J0 — splash placeholder                                        |
-| `/api/health`                          | GET      | `src/app/api/health/route.ts`                          | J0 — env + DB ping                                             |
-| `/api/auth/[...nextauth]`              | GET/POST | `src/app/api/auth/[...nextauth]/route.ts`              | J1 — Auth.js v5 handlers (Node)                                |
-| `/login`                               | GET/POST | `src/app/login/{page,login-form,actions}.tsx`          | J1 — Credentials login                                         |
-| `/onboarding/welcome?token=…`          | GET/POST | `src/app/onboarding/welcome/*`                         | J1 — invitation consume + autologin                            |
-| `/admin/invite`                        | GET/POST | `src/app/admin/invite/*`                               | J1 — admin-only invite form                                    |
-| `/dashboard`                           | GET      | `src/app/dashboard/page.tsx`                           | J1 — landing post-login (links to journal)                     |
-| `/journal`                             | GET      | `src/app/journal/page.tsx`                             | J2 — list, status filter (all/open/closed)                     |
-| `/journal/new`                         | GET      | `src/app/journal/new/page.tsx`                         | J2 — wizard mobile-first 6 étapes                              |
-| `/journal/[id]`                        | GET      | `src/app/journal/[id]/page.tsx`                        | J2 — détail + delete + close CTA                               |
-| `/journal/[id]/close`                  | GET/POST | `src/app/journal/[id]/close/page.tsx`                  | J2 — formulaire de clôture                                     |
-| `/api/uploads`                         | POST     | `src/app/api/uploads/route.ts`                         | J2 — multipart, magic-byte, audit                              |
-| `/api/uploads/[...key]`                | GET      | `src/app/api/uploads/[...key]/route.ts`                | J2 — stream local FS (dev), R2 redirect (prod)                 |
-| `/admin/members`                       | GET      | `src/app/admin/members/page.tsx`                       | J3 — admin-only members list                                   |
-| `/admin/members/[id]`                  | GET      | `src/app/admin/members/[id]/page.tsx`                  | J3 — overview + trades tab (?tab=trades)                       |
-| `/admin/members/[id]/trades/[tradeId]` | GET      | `src/app/admin/members/[id]/trades/[tradeId]/page.tsx` | J3 — admin-scoped trade detail; J4 — annotate + delete actions |
+| Route                                  | Méthode  | Fichier                                                | Statut                                                                        |
+| -------------------------------------- | -------- | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `/`                                    | GET      | `src/app/page.tsx`                                     | J0 — splash placeholder                                                       |
+| `/api/health`                          | GET      | `src/app/api/health/route.ts`                          | J0 — env + DB ping                                                            |
+| `/api/auth/[...nextauth]`              | GET/POST | `src/app/api/auth/[...nextauth]/route.ts`              | J1 — Auth.js v5 handlers (Node)                                               |
+| `/login`                               | GET/POST | `src/app/login/{page,login-form,actions}.tsx`          | J1 — Credentials login                                                        |
+| `/onboarding/welcome?token=…`          | GET/POST | `src/app/onboarding/welcome/*`                         | J1 — invitation consume + autologin                                           |
+| `/admin/invite`                        | GET/POST | `src/app/admin/invite/*`                               | J1 — admin-only invite form                                                   |
+| `/dashboard`                           | GET      | `src/app/dashboard/page.tsx`                           | J1 — landing post-login (links to journal)                                    |
+| `/journal`                             | GET      | `src/app/journal/page.tsx`                             | J2 — list, status filter (all/open/closed)                                    |
+| `/journal/new`                         | GET      | `src/app/journal/new/page.tsx`                         | J2 — wizard mobile-first 6 étapes                                             |
+| `/journal/[id]`                        | GET      | `src/app/journal/[id]/page.tsx`                        | J2 — détail + delete + close CTA                                              |
+| `/journal/[id]/close`                  | GET/POST | `src/app/journal/[id]/close/page.tsx`                  | J2 — formulaire de clôture                                                    |
+| `/api/uploads`                         | POST     | `src/app/api/uploads/route.ts`                         | J2 — multipart, magic-byte, audit                                             |
+| `/api/uploads/[...key]`                | GET      | `src/app/api/uploads/[...key]/route.ts`                | J2 — stream local FS (dev), R2 redirect (prod)                                |
+| `/admin/members`                       | GET      | `src/app/admin/members/page.tsx`                       | J3 — admin-only members list                                                  |
+| `/admin/members/[id]`                  | GET      | `src/app/admin/members/[id]/page.tsx`                  | J3 — overview + trades tab (?tab=trades)                                      |
+| `/admin/members/[id]/trades/[tradeId]` | GET      | `src/app/admin/members/[id]/trades/[tradeId]/page.tsx` | J3 — admin-scoped trade detail; J4 — annotate + delete actions                |
+| `/checkin`                             | GET      | `src/app/checkin/page.tsx`                             | J5 — landing : streak + status matin/soir                                     |
+| `/checkin/morning`                     | GET      | `src/app/checkin/morning/page.tsx`                     | J5 — wizard 5 étapes (sleep → routine → body → mind → intention)              |
+| `/checkin/evening`                     | GET      | `src/app/checkin/evening/page.tsx`                     | J5 — wizard 5 étapes (discipline → hydratation → stress → mental → réflexion) |
+| `/api/cron/checkin-reminders`          | POST     | `src/app/api/cron/checkin-reminders/route.ts`          | J5 — scan reminders (X-Cron-Secret gate)                                      |
 
 ## Auth.js v5 (J1)
 
@@ -116,6 +120,7 @@ Si une intégration externe ou un script CLI demande une API REST, ajouter une r
   - **J2** : `trade.created`, `trade.closed`, `trade.deleted`, `trade.screenshot.uploaded` (metadata = `{ kind, key, mime, size, adapter }`, pas le contenu).
   - **J3** : `admin.members.listed`, `admin.member.viewed` (metadata `{ memberId, tab }`), `admin.trade.viewed` (metadata `{ memberId, tradeId, isClosed, annotationsCount }` — J4 ajoute le compteur).
   - **J4** : `admin.annotation.created` (metadata `{ annotationId, tradeId, memberId, hasMedia, mediaType }`), `admin.annotation.deleted` (metadata `{ annotationId, tradeId, memberId }`), `admin.annotation.media.uploaded` (metadata `{ kind, key, mime, size, adapter, tradeId }`), `member.annotations.viewed` (metadata `{ tradeId, markedCount }` — émis seulement si `markedCount > 0` pour ne pas spammer le log à chaque ouverture de trade), `notification.enqueued` (metadata `{ notificationId, type, tradeId, annotationId }`).
+  - **J5** : `checkin.morning.submitted` (metadata `{ checkinId, date, moodScore, sleepQuality }`), `checkin.evening.submitted` (metadata `{ checkinId, date, moodScore, stressScore, planRespected }`), `checkin.reminder.scan` (metadata `{ scannedUsers, enqueuedMorning, enqueuedEvening, skipped, ranAt }` — 1 row par run cron, pas par user). Le helper `enqueueCheckinReminder` ne loggue PAS d'audit (idempotent + bulk run, on track le scan global plutôt).
 
 ## Headers de sécurité
 
@@ -162,6 +167,8 @@ Variables CSS dans `src/app/globals.css` (palette SPEC §8.1). Mode sombre uniqu
 - Migrations : `pnpm --filter @fxmily/web prisma:migrate` (besoin du `.env` worktree avec `DATABASE_URL`).
 - Migration `init` (J1) : `prisma/migrations/20260505152759_init/` — User/Account/Session/VerificationToken/Invitation/AuditLog + enums UserRole, UserStatus + indexes.
 - Migration `j2_trade` (J2) : `prisma/migrations/20260505160000_j2_trade/` — Trade table + 4 enums (TradeDirection, TradeSession, TradeOutcome, RealizedRSource) + composite indexes user-scoped.
+- Migration `j4_trade_annotation` (J4) : `prisma/migrations/20260506100000_j4_trade_annotation/` — TradeAnnotation + NotificationQueue + 3 enums (AnnotationMediaType, NotificationType, NotificationStatus).
+- Migration `j5_daily_checkin` (J5) : `prisma/migrations/20260506200000_j5_daily_checkin/` — `daily_checkins` table + enum `CheckinSlot` + 2 nouvelles values pour `NotificationType` (`checkin_morning_reminder`, `checkin_evening_reminder`). Note : `ALTER TYPE ADD VALUE IF NOT EXISTS` cohabite avec d'autres DDL dans la même transaction tant qu'on n'utilise pas la nouvelle valeur (ce qui est le cas ici).
 - **Naming convention DB** : tables et colonnes en `snake_case` via `@map`, modèles Prisma en PascalCase / camelCase. C'est la convention Auth.js officielle.
 - **Decimal** : `Prisma.Decimal` exporté via `@/generated/prisma/client`. Au write, on passe `new Prisma.Decimal(numericValue)` (Prisma 7 accepte aussi un number, mais on est explicite). Au read, `.toNumber()` ou `.toString()` selon le cas. Pour passer aux client components, **toujours sérialiser en string** (`SerializedTrade` dans `lib/trades/service.ts`).
 
@@ -170,12 +177,15 @@ Variables CSS dans `src/app/globals.css` (palette SPEC §8.1). Mode sombre uniqu
 - **Vitest** (`pnpm --filter @fxmily/web test`) — unit tests purs (pas de DB) :
   - **J1** : `src/lib/auth/{password,invitations,audit}.test.ts`, `src/lib/schemas/auth.test.ts`, `src/lib/email/send.test.ts`
   - **J2** : `src/lib/trading/{pairs,emotions,sessions,calculations}.test.ts`, `src/lib/schemas/trade.test.ts`, `src/lib/storage/keys.test.ts`
-  - **159 tests verts au close-out J2** (vs 38 au close-out J1).
+  - **J5** : `src/lib/checkin/{streak,timezone}.test.ts`, `src/lib/schemas/checkin.test.ts`
+  - **274 tests verts au close-out J5** (vs 199 au close-out J4, 159 au close-out J2, 38 au close-out J1).
 - **Vitest setup** : `src/test/setup.ts` charge `@testing-library/jest-dom/vitest`. `vitest.config.ts` stub `DATABASE_URL`/`AUTH_SECRET`/`AUTH_URL` pour permettre les imports transitifs sans crash Zod.
 - **Playwright** (`pnpm --filter @fxmily/web test:e2e`) :
   - `tests/e2e/auth-invitation.spec.ts` (J1) — surface publique auth.
   - `tests/e2e/journal.spec.ts` (J2) — auth gates `/journal/*` + 401 sur `/api/uploads*` non-auth.
-  - Le full happy-path member (login → create → close → list) attend le helper de seed Postgres (cross-jalon).
+  - `tests/e2e/admin-annotation.spec.ts` (J4) — auth gates admin annotation routes + uploads.
+  - `tests/e2e/checkin.spec.ts` (J5) — auth gates `/checkin/*` + 401/503 sur cron sans secret + 405 sur GET cron.
+  - Le full happy-path member (login → create → close → list / login → checkin → streak++) attend le helper de seed Postgres (cross-jalon).
 - Postgres réel attendu (testcontainers ou compose dédié `docker-compose.test.yml` à wirer plus tard).
 - Mock storage : pas besoin — `LocalStorageAdapter` écrit dans `<UPLOADS_DIR>` qu'on peut router vers un répertoire temporaire dans les tests E2E.
 - Mock Resend : pour J1+ le fallback `console.log` du wrapper suffit.
@@ -342,3 +352,84 @@ Préfixe ajouté : `annotations/{tradeId}/{nanoid32}.{jpg|png|webp}`. Le path-ow
 - **J4.5** (vidéo Zoom 500 MiB) : presigned PUT R2 (bypass streaming serveur) OU refactor body-streaming via `req.body` Web Streams. Activer `video/mp4` dans `ALLOWED_*_MIME_TYPES`, `MAX_VIDEO_BYTES = 500 MiB`, magic-byte `ftyp` box (offset 4–7 = `66 74 79 70`). Étendre `KEY_REGEX_ANNOTATION` pour `.{mp4|webm}`. CSP `media-src` avec custom domain R2.
 - **J9** (web-push dispatcher) : worker qui consomme `NotificationQueue` (status=pending, scheduledFor null/elapsed) → `web-push` lib + VAPID. Marquer `sent` ou `failed` + retry budget.
 - **J10** : delete cascade audit log → V2 multi-admin necessite `onDelete: SetNull` + `adminId` nullable côté `TradeAnnotation`.
+
+## J5 — Tracking quotidien (livré 2026-05-06)
+
+### Modèle de données
+
+- `DailyCheckin` (table `daily_checkins`) — voir `prisma/schema.prisma` + migration `20260506200000_j5_daily_checkin`. Enum Postgres `CheckinSlot` (`morning` | `evening`). Cascade sur `User` delete (RGPD : data minimisation).
+- **Single-table-per-slot** : un seul modèle pour matin + soir avec `slot` discriminant. La majorité des colonnes sont nullable côté DB, les schémas Zod (`lib/schemas/checkin.ts`) imposent les contraintes par slot. Choix : permet aux V2 ("backfill partiel", "remplis ce que tu te souviens") de réutiliser la même table sans migration.
+- **Date locale** : `date` est `@db.Date` (pas timestamp), anchored au calendrier local du membre via `User.timezone` (default `Europe/Paris` per SPEC §6.1). Tous les helpers de conversion vivent dans `lib/checkin/timezone.ts`.
+- **Unique** : `(userId, date, slot)` — fillage matin 2× le même jour = upsert sur la même row, jamais de duplicates.
+- **Indexes** : `(userId, date DESC)` pour le streak walker / dashboard, `(userId, slot, date DESC)` pour le weekly report J8.
+- `NotificationType` étendu avec `checkin_morning_reminder` + `checkin_evening_reminder` (J4 avait juste `annotation_received`). Ajout via `ALTER TYPE ADD VALUE IF NOT EXISTS` dans la migration.
+
+### Constantes (`lib/checkin/`)
+
+- `emotions.ts` — 14 tags FR (slugs EN), 3 clusters (vitality / mood / pressure). Distinct du set trade : on tracke "rested", "tired", "foggy" (pertinent au matin) plutôt que les "fears Mark Douglas" (pertinents pour un trade). Cap à 3 tags par slot. **Sélection optionnelle** (vs trade où ≥1 obligatoire) — mood score reste le signal requis.
+- `routine.ts` — 5 suggestions affichées en lecture sur le step "Routine" du wizard matin. V1 ship un seul booléen `morningRoutineCompleted` ; V2 prévue pour passer à un schéma `MorningRoutineItem` configurable par membre.
+- `timezone.ts` — helpers Intl.DateTimeFormat (Node 22 ICU full) : `localDateOf` (UTC instant → YYYY-MM-DD local), `parseLocalDate` (YYYY-MM-DD → UTC midnight Date pour Postgres `@db.Date`), `shiftLocalDate` (±N jours), `formatLocalDate` (FR human "lundi 6 mai 2026"), `isMorningReminderDue` / `isEveningReminderDue` (windows 07:30–09:00 / 20:30–22:00 local). 21 unit tests.
+- `streak.ts` — algo pure : streak = jours consécutifs avec ≥1 check-in (matin OU soir), walking back depuis `today`. Today inclus seulement si déjà filled — un membre qui n'a pas check-in à 14h conserve le streak d'hier. **13 unit tests TDD-first** (gaps, month/year boundaries, future-dated rows).
+
+### Schemas Zod (`lib/schemas/checkin.ts`)
+
+- `morningCheckinSchema` : sleep + sleepQuality + routine + meditation + sport (paire ou rien) + mood + intention + emotionTags. **Footgun évité** : `z.coerce.boolean()` est cassé (`Boolean('false')` = true), on utilise un `formBoolean` explicite (`z.union([z.boolean(), z.literal('true'), z.literal('false')])`).
+- `eveningCheckinSchema` : planRespected (formBoolean) + hedgeRespected (tri-state via `triStateBoolean` qui mappe `'na'` → null) + caffeineMl (optional 0-2000) + waterLiters (optional Decimal 0-10) + stressScore (1-10) + mood + emotionTags + journalNote (max 4000) + gratitudeItems (≤3, ≤200 chars chacun, empties dropped via transform).
+- `localDateSchema` : YYYY-MM-DD avec calendar validity check (rejette 2026-13-01, 2026-02-30).
+- `dateInWindow` : ≥ 2020-01-01, ≤ TODAY+1 UTC (drift Tokyo↔NY), ≥ TODAY-60 (backfill cap).
+- **29 unit tests** dans `checkin.test.ts`.
+
+### Service layer (`lib/checkin/service.ts`)
+
+User-scoped strict. Fonctions :
+
+- `submitMorningCheckin(userId, input)` / `submitEveningCheckin(userId, input)` — `upsert` keyed sur `(userId, date, slot)`. Idempotent : 2 submit du matin updates, ne stack pas.
+- `getCheckinStatus(userId, timezone, now?)` → `{ today, morningSubmitted, eveningSubmitted }` pour la landing /checkin et le dashboard.
+- `getStreak(userId, timezone, now?)` → `{ current, todayFilled, today }`. Lit les 60 derniers jours, collapse à un Set de dates, feed `computeStreak`.
+- `listRecentCheckinDays(userId, today, windowDays=60)` → CheckinDay[] pour streak + weekly report.
+- `getCheckin(userId, date, slot)` → SerializedCheckin | null pour édition future.
+- Expose `SerializedCheckin` : Decimal → string, Date → ISO/YYYY-MM-DD pour client components.
+
+### Server Actions (`app/checkin/actions.ts`)
+
+- `submitMorningCheckinAction` / `submitEveningCheckinAction` (pattern J1 : auth() re-check, Zod parse, service call, audit, revalidatePath, redirect re-throw NEXT_REDIRECT).
+- Redirection sur `/checkin?slot=morning&done=1` après submit pour afficher la confirm-flash banner sur la landing.
+
+### Wizards mobile-first
+
+`<MorningCheckinWizard>` (5 étapes : Sommeil / Routine / Corps / Mental / Intention) et `<EveningCheckinWizard>` (5 étapes : Discipline / Hydratation / Stress / Mental / Réflexion). Pattern identique au trade wizard (`useState` + localStorage draft + Framer Motion `<AnimatePresence mode="wait">`). Drafts persistés sous `fxmily:checkin:{morning|evening}:draft:v1`, vidés au submit réussi.
+
+### Dashboard intégration (`app/dashboard/page.tsx`)
+
+- KPI strip : "Discipline" remplacé par "Streak" (jours consécutifs, tone acc/warn/mute selon état).
+- Nouvelle section "Check-in du jour" : 2 chips compactes (Matin / Soir) + StreakCard à droite.
+- "Bientôt" — la card "J5 check-ins" retirée puisque livrée ; ajout "Rapport hebdo IA J8" pour garder 3 cards.
+
+### Composants (`components/checkin/`)
+
+- `<ScoreSlider>` — slider 1-10 réutilisable (mood, sleep quality, stress) avec gradient track (cyan→lime ou vert→jaune→rouge) + describeAt() callback pour le label sémantique.
+- `<EmotionCheckinPicker>` — multi-select grid type EmotionPicker du J2, mais sur le set checkin (vitality / mood / pressure) et avec sélection optionnelle.
+- `<StreakCard>` — props `streak`, `todayFilled`, `compact?`. Compact pour le dashboard, full pour la landing /checkin. Flame intensifie au-delà de 7 jours (warn tone + drop-shadow).
+- `<MorningCheckinWizard>` / `<EveningCheckinWizard>` — 5 steps each.
+
+### Cron reminders (`api/cron/checkin-reminders` + `lib/checkin/reminders.ts`)
+
+- POST `/api/cron/checkin-reminders` protégé par header `X-Cron-Secret`. Sans `CRON_SECRET` configuré → 503 (refuse-by-default, pas de fallback unsafe). Header invalide → 401. GET → 405.
+- `runCheckinReminderScan(now?, options?)` : pour chaque user `active`+`member`, vérifie si on est dans la window matin (07:30–09:00 local) ou soir (20:30–22:00 local), si oui et si pas déjà filled → enqueue. Idempotent (deuxième passage dans la même window ne duplique pas).
+- 1 audit row par scan (`checkin.reminder.scan` + metadata counts), pas par user — heartbeat propre dans `audit_logs`.
+- **Wiring prod attendu** : `*/15 7-22 * * *` sur Hetzner → curl avec `X-Cron-Secret`. Le dispatch Web Push reste J9 ; à J5 on enqueue, le worker walk les rows `pending` plus tard.
+- `enqueueCheckinReminder(userId, payload)` dans `lib/notifications/enqueue.ts` : findFirst pending pour `(user, type)` puis filter en mémoire sur `payload.date` pour idempotency. Pas d'index JSON, mais le user queue est petite donc OK.
+
+### Env (`lib/env.ts`)
+
+Nouvelle var `CRON_SECRET` (optionnelle) min 24 chars. Pas de default — l'endpoint 503 en absence.
+
+### TODO J5 → J5.5+ / J6 / J9
+
+- **J5.5** (timezone par membre) : actuellement le service hardcode `Europe/Paris` dans `dashboard/page.tsx`, `checkin/page.tsx`, `checkin/{morning,evening}/page.tsx`. À refactor : exposer `User.timezone` dans le JWT (callback `jwt`/`session` dans `auth.config.ts`) ou re-fetch depuis `db.user.findUnique` dans la page Server Component. La pickline en V1 tient parce que tous les members sont en France.
+- **J5.5** (édition d'un check-in déjà soumis) : actuellement le wizard upsert mais charge un draft localStorage neuf. Pour permettre d'éditer un check-in déjà submit, charger via `getCheckin(userId, today, slot)` au mount et hydrater le draft avec.
+- **J5.5** (routine personnalisable) : remplacer `morningRoutineCompleted` boolean par une table `MorningRoutineItem` + checklist multi-choix. Stocker l'historique `MorningRoutineCompletion(userId, date, itemId)`. Surface admin `/admin/settings/routines`.
+- **J6** (scoring engagement) : utiliser `getStreak` + `listRecentCheckinDays` pour la fenêtre 30j. Composante "engagement score" = (jours filled / 30) × 100, pondéré par le ratio matin+soir vs single-slot.
+- **J6** (analytics croisés) : `DailyCheckin.sleepHours × Trade.realizedR` sur 30j → corrélation. `DailyCheckin.stressScore × Trade.outcome` → tendance. Tout déterministe en `lib/scoring/*`.
+- **J8** (weekly report builder) : agréger morning + evening de la semaine pour le prompt Claude. Index `(userId, slot, date DESC)` est là pour ça.
+- **J9** (web-push dispatcher) : pour `checkin_*_reminder`, payload `{ slot, date }` + URL `/checkin/{slot}`. Snooze button = mark `dispatched_at` mais pas `sent`.

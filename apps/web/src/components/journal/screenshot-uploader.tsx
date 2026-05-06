@@ -1,10 +1,12 @@
 'use client';
 
+import { Image as ImageIcon, Trash2, Upload } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { Spinner } from '@/components/spinner';
 import { ALLOWED_IMAGE_MIME_TYPES, MAX_SCREENSHOT_BYTES } from '@/lib/storage/types';
 import type { ScreenshotKind } from '@/lib/storage/types';
+import { cn } from '@/lib/utils';
 
 interface ScreenshotUploaderProps {
   /** Storage kind — drives audit metadata and future routing. */
@@ -215,11 +217,14 @@ export function ScreenshotUploader({
         }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={onDrop}
-        className={[
-          'focus-within:border-accent group flex min-h-44 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-6 text-center transition-colors',
-          isDragOver ? 'border-accent bg-accent/10' : 'hover:border-accent border-[var(--border)]',
-          disabled ? 'cursor-not-allowed opacity-60' : '',
-        ].join(' ')}
+        className={cn(
+          'rounded-card group flex min-h-44 cursor-pointer flex-col items-center justify-center gap-3 border border-dashed px-4 py-6 text-center transition-all',
+          'focus-within:border-[var(--acc)] focus-within:bg-[var(--acc-dim-2)] focus-within:shadow-[0_0_0_4px_oklch(0.879_0.231_130_/_0.18)]',
+          isDragOver
+            ? 'border-[var(--acc)] bg-[var(--acc-dim)] shadow-[0_0_24px_-4px_oklch(0.879_0.231_130_/_0.45)]'
+            : 'border-[var(--b-strong)] bg-[var(--bg-1)] hover:border-[var(--b-acc)] hover:bg-[var(--bg-2)]',
+          disabled && 'cursor-not-allowed opacity-60',
+        )}
       >
         <input
           ref={inputRef}
@@ -235,8 +240,13 @@ export function ScreenshotUploader({
 
         {state.status === 'uploading' ? (
           <>
-            <Spinner size={20} label="Envoi en cours" />
-            <span className="text-muted text-sm">Envoi en cours…</span>
+            <div className="grid h-12 w-12 place-items-center rounded-full border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+              <Spinner size={20} label="Envoi en cours" />
+            </div>
+            <span className="t-body text-[var(--t-2)]">Envoi en cours…</span>
+            <span className="t-cap text-[var(--t-4)]">
+              Validation magic-byte serveur après upload
+            </span>
           </>
         ) : showPreview ? (
           <div className="flex w-full flex-col items-center gap-2">
@@ -245,18 +255,33 @@ export function ScreenshotUploader({
               src={state.readUrl ?? ''}
               alt={kind === 'trade-entry' ? 'Capture avant entrée' : 'Capture après sortie'}
               loading="lazy"
-              className="aspect-[16/9] max-h-44 w-auto rounded-md border border-[var(--border)] object-contain"
+              className="rounded-card aspect-[16/9] max-h-44 w-auto border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
             />
-            <span className="text-muted text-xs">Cliquer pour remplacer.</span>
+            <span className="t-cap inline-flex items-center gap-1 text-[var(--t-4)]">
+              <ImageIcon className="h-3 w-3" strokeWidth={1.75} />
+              Cliquer pour remplacer
+            </span>
           </div>
         ) : (
           <>
-            <span className="text-foreground text-sm font-medium">
-              Glisse une image ici ou clique pour choisir
-            </span>
-            <span id={hintId} className="text-muted text-xs">
-              JPG, PNG ou WebP — 8 Mo max
-            </span>
+            <div
+              className={cn(
+                'grid h-12 w-12 place-items-center rounded-full border transition-all',
+                isDragOver
+                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)]'
+                  : 'border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-3)]',
+              )}
+            >
+              <Upload className="h-5 w-5" strokeWidth={1.75} />
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <span className="t-h3 text-[var(--t-1)]">
+                {isDragOver ? 'Lâche pour envoyer' : 'Glisse ou clique pour choisir'}
+              </span>
+              <span id={hintId} className="t-cap text-[var(--t-4)]">
+                JPG · PNG · WebP — 8 Mo max
+              </span>
+            </div>
           </>
         )}
       </label>
@@ -269,14 +294,19 @@ export function ScreenshotUploader({
           type="button"
           onClick={clear}
           disabled={disabled}
-          className="text-muted hover:text-foreground focus-visible:outline-accent inline-flex min-h-11 items-center self-start rounded-md px-1 py-2 text-xs underline underline-offset-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="rounded-control inline-flex h-9 items-center gap-1.5 self-start border border-transparent px-2 text-[11px] text-[var(--t-3)] transition-colors hover:border-[oklch(0.7_0.165_22_/_0.35)] hover:bg-[var(--bad-dim)] hover:text-[var(--bad)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
         >
+          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
           Retirer la capture
         </button>
       ) : null}
 
       {message ? (
-        <p id={errorId} role="alert" className="text-danger text-xs">
+        <p
+          id={errorId}
+          role="alert"
+          className="inline-flex items-center gap-1.5 text-[11px] text-[var(--bad)]"
+        >
           {message}
         </p>
       ) : null}

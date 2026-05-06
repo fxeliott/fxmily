@@ -1,8 +1,10 @@
 'use client';
 
+import { Check, Search } from 'lucide-react';
 import { useId } from 'react';
 
 import { TRADING_PAIRS, assetClassOf, isTradingPair, type TradingPair } from '@/lib/trading/pairs';
+import { cn } from '@/lib/utils';
 
 interface PairAutocompleteProps {
   value: string;
@@ -10,7 +12,6 @@ interface PairAutocompleteProps {
   name?: string;
   error?: string | undefined;
   disabled?: boolean | undefined;
-  /** Auto-focus when the wizard reveals this step on mobile. */
   autoFocus?: boolean | undefined;
 }
 
@@ -30,16 +31,14 @@ const GROUPED_PAIRS: Record<string, TradingPair[]> = TRADING_PAIRS.reduce<
 }, {});
 
 /**
- * Pair input with native HTML5 datalist (J2, SPEC §7.3).
+ * Pair input avec native HTML5 datalist (J2, SPEC §7.3).
  *
- * Native `<datalist>` is the simplest accessible combobox in 2026 — it ships
- * with built-in keyboard nav, screen-reader announcements, and consistent
- * mobile rendering. Custom comboboxes are tempting visually but expensive
- * to keep WAI-ARIA-compliant; we re-evaluate at J3 if real members ask for
- * fuzzy search across more symbols.
+ * Native `<datalist>` = simplest accessible combobox 2026 (built-in keyboard
+ * nav, screen-reader, mobile rendering). Re-évalué J3+ pour fuzzy search.
  *
- * The visible options are grouped by asset class for skim-readability; the
- * grouping is purely cosmetic (datalist option groups aren't standardised).
+ * Élévation Sprint 1C : icon Search en prefix, valid Check icon en suffix
+ * (visual cue), border tonalisée selon état (default/valid/error/warn),
+ * input mono uppercase tracking pour signature trader pro.
  */
 export function PairAutocomplete({
   value,
@@ -54,44 +53,68 @@ export function PairAutocomplete({
   const errorId = error ? `${inputId}-error` : undefined;
 
   const handleChange = (raw: string) => {
-    // Normalise: uppercase + trim, but allow partial matches while typing.
     onChange(raw.toUpperCase().trim());
   };
 
   const isValid = isTradingPair(value);
   const showSoftWarning = !error && value.length > 0 && !isValid;
+  const hasError = Boolean(error || (value.length > 0 && !isValid));
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={inputId} className="text-foreground text-sm font-medium">
+      <label
+        htmlFor={inputId}
+        className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+      >
         Paire
       </label>
-      <input
-        id={inputId}
-        name={name}
-        type="text"
-        value={value}
-        list={listId}
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="characters"
-        spellCheck={false}
-        inputMode="text"
-        placeholder="EURUSD, XAUUSD, US30…"
-        disabled={disabled}
-        autoFocus={autoFocus}
-        aria-invalid={error || (value.length > 0 && !isValid) ? 'true' : undefined}
-        aria-describedby={errorId}
-        onChange={(e) => handleChange(e.target.value)}
-        className={[
-          'bg-card text-foreground focus-visible:ring-accent/40 placeholder:text-muted/70 rounded-md border px-3 py-2 font-mono text-sm uppercase tracking-wide outline-none focus-visible:ring-2 disabled:opacity-60',
-          error || (value.length > 0 && !isValid)
-            ? 'border-warning/60 focus-visible:border-warning'
-            : isValid
-              ? 'border-success/40 focus-visible:border-accent'
-              : 'focus-visible:border-accent border-[var(--border)]',
-        ].join(' ')}
-      />
+      <div className="relative">
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--t-4)]"
+        >
+          <Search className="h-4 w-4" strokeWidth={1.75} />
+        </span>
+        <input
+          id={inputId}
+          name={name}
+          type="text"
+          value={value}
+          list={listId}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          inputMode="text"
+          placeholder="EURUSD, XAUUSD, US30…"
+          disabled={disabled}
+          autoFocus={autoFocus}
+          aria-invalid={hasError ? 'true' : undefined}
+          aria-describedby={errorId}
+          onChange={(e) => handleChange(e.target.value)}
+          className={cn(
+            'f-mono rounded-input h-11 w-full border bg-[var(--bg-1)] py-2 pl-10 pr-10 text-[14px] uppercase tracking-[0.06em] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            'placeholder:normal-case placeholder:tracking-normal placeholder:text-[var(--t-4)]',
+            hasError
+              ? error
+                ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+                : 'border-[oklch(0.834_0.158_80_/_0.50)] focus-visible:border-[var(--warn)]'
+              : isValid
+                ? 'border-[oklch(0.804_0.181_145_/_0.50)] focus-visible:border-[var(--ok)]'
+                : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+            'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+            'disabled:cursor-not-allowed disabled:opacity-60',
+          )}
+        />
+        {isValid ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ok)]"
+          >
+            <Check className="h-4 w-4" strokeWidth={2.5} />
+          </span>
+        ) : null}
+      </div>
       <datalist id={listId}>
         {(Object.keys(GROUPED_PAIRS) as ReturnType<typeof assetClassOf>[]).map((klass) => (
           <optgroup key={klass} label={ASSET_LABEL[klass]}>
@@ -102,15 +125,17 @@ export function PairAutocomplete({
         ))}
       </datalist>
       {error ? (
-        <p id={errorId} className="text-danger text-xs" role="alert">
+        <p id={errorId} className="text-[11px] text-[var(--bad)]" role="alert">
           {error}
         </p>
       ) : showSoftWarning ? (
-        <p className="text-warning text-xs">
+        <p className="text-[11px] text-[var(--warn)]">
           Paire non reconnue. Choisis dans la liste des 12 paires autorisées.
         </p>
       ) : (
-        <p className="text-muted text-xs">12 paires autorisées (forex / métaux / indices).</p>
+        <p className="t-cap text-[var(--t-4)]">
+          12 paires autorisées (forex / métaux / indices US).
+        </p>
       )}
     </div>
   );

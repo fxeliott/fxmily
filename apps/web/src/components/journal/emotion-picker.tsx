@@ -1,8 +1,10 @@
 'use client';
 
+import { Check } from 'lucide-react';
 import { useId } from 'react';
 
 import { EMOTION_MAX_PER_MOMENT, EMOTION_TAGS, type EmotionCluster } from '@/lib/trading/emotions';
+import { cn } from '@/lib/utils';
 
 const CLUSTER_LABEL: Record<EmotionCluster, string> = {
   'douglas-fears': 'Peurs (Mark Douglas)',
@@ -11,29 +13,22 @@ const CLUSTER_LABEL: Record<EmotionCluster, string> = {
 };
 
 interface EmotionPickerProps {
-  /**
-   * Selected slugs. Keep a stable reference outside this component (e.g. via
-   * RHF `watch()` + `setValue()`) so we don't re-render on every parent tick.
-   */
   value: string[];
   onChange: (next: string[]) => void;
-  /** Form field name. Each chip ends up as a separate `<input type="hidden">`. */
   name: string;
-  /** Used to render the "Émotion avant" / "Émotion après" headline. */
   label: string;
-  /** Wired to `aria-describedby` for screen-reader feedback. */
   hintId?: string;
-  /** Disabled state during pending submissions. */
   disabled?: boolean | undefined;
 }
 
 /**
  * Multi-select grid for the 15 curated emotion tags (J2, SPEC §6.2).
  *
- * Caps the selection at `EMOTION_MAX_PER_MOMENT` (3) — once the cap is hit,
- * unchecked chips become inert. Hidden `<input>`s mirror the selection so
- * the form's `FormData` carries a `name=slug` entry per selected tag, ready
- * for `formData.getAll(name)` on the server.
+ * Cap = 3 (`EMOTION_MAX_PER_MOMENT`). Une fois atteint, les tags non-sélectionnés
+ * deviennent inert (visuel hatch + aria-disabled="true").
+ *
+ * Élévation Sprint 1C : chips lime accent quand sélectionné, hover lift + check
+ * icon, cluster headlines en eyebrow, counter live avec tone warn quand cap.
  */
 export function EmotionPicker({
   value,
@@ -69,15 +64,22 @@ export function EmotionPicker({
       className="flex flex-col gap-3"
       aria-describedby={`${counterId}${hintId ? ` ${hintId}` : ''}`}
     >
-      <legend className="text-foreground flex w-full items-center justify-between text-sm font-medium">
-        <span>{label}</span>
+      <legend className="flex w-full items-center justify-between">
+        <span className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+          {label}
+        </span>
         <span
           id={counterId}
-          className={['text-xs', atCap ? 'text-warning' : 'text-muted'].join(' ')}
+          className={cn(
+            'inline-flex items-center gap-1 font-mono text-[11px] tabular-nums',
+            atCap ? 'text-[var(--warn)]' : 'text-[var(--t-4)]',
+          )}
           aria-live="polite"
         >
-          {value.length}/{EMOTION_MAX_PER_MOMENT}
-          {atCap ? ' · limite atteinte' : ''}
+          <span className={cn(atCap && 'font-semibold')}>{value.length}</span>
+          <span className="text-[var(--t-4)]">/</span>
+          <span>{EMOTION_MAX_PER_MOMENT}</span>
+          {atCap ? <span className="ml-1 text-[10px]">· limite</span> : null}
         </span>
       </legend>
 
@@ -86,17 +88,11 @@ export function EmotionPicker({
         if (tags.length === 0) return null;
         return (
           <div key={cluster} className="flex flex-col gap-1.5">
-            <span className="text-muted text-xs uppercase tracking-wider">
-              {CLUSTER_LABEL[cluster]}
-            </span>
-            <div className="flex flex-wrap gap-2">
+            <span className="t-eyebrow">{CLUSTER_LABEL[cluster]}</span>
+            <div className="flex flex-wrap gap-1.5">
               {tags.map((tag) => {
                 const isSelected = selectedSet.has(tag.slug);
                 const inert = !isSelected && atCap;
-                // We split `disabled` (form pending) from `aria-disabled` (cap
-                // reached): the latter keeps the button in the tab order so
-                // screen-reader users hear "limite atteinte" via the
-                // `aria-describedby` on the counter.
                 const isFormDisabled = Boolean(disabled);
                 return (
                   <button
@@ -111,13 +107,17 @@ export function EmotionPicker({
                     aria-disabled={inert ? 'true' : undefined}
                     aria-label={tag.hint ? `${tag.label} — ${tag.hint}` : tag.label}
                     title={tag.hint}
-                    className={[
-                      'focus-visible:outline-accent inline-flex min-h-11 items-center rounded-full border px-3 py-1.5 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed',
+                    className={cn(
+                      'rounded-pill inline-flex min-h-9 items-center gap-1.5 border px-3 py-1.5 text-[12px] font-medium transition-all',
+                      'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                       isSelected
-                        ? 'border-accent bg-accent/15 text-foreground hover:bg-accent/25'
-                        : 'text-muted hover:text-foreground hover:border-accent border-[var(--border)] disabled:opacity-40 aria-disabled:cursor-not-allowed aria-disabled:opacity-40',
-                    ].join(' ')}
+                        ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_2px_oklch(0.879_0.231_130_/_0.10)]'
+                        : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]',
+                      'disabled:cursor-not-allowed disabled:opacity-40',
+                      'aria-disabled:hatch-disabled aria-disabled:cursor-not-allowed aria-disabled:opacity-40',
+                    )}
                   >
+                    {isSelected ? <Check className="h-3 w-3" strokeWidth={2.5} /> : null}
                     {tag.label}
                   </button>
                 );
@@ -127,7 +127,7 @@ export function EmotionPicker({
         );
       })}
 
-      {/* Hidden inputs — one per selected tag — drive FormData.getAll(name). */}
+      {/* Hidden inputs — drive FormData.getAll(name). */}
       {value.map((slug) => (
         <input key={slug} type="hidden" name={name} value={slug} />
       ))}

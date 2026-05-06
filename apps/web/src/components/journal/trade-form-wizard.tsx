@@ -1,36 +1,49 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Calendar,
+  Camera,
+  Heart,
+  Info,
+  Sliders,
+  Target,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState, useTransition } from 'react';
 
+import { createTradeAction, type CreateTradeActionState } from '@/app/journal/actions';
 import { Alert } from '@/components/alert';
-import { Spinner } from '@/components/spinner';
 import { EmotionPicker } from '@/components/journal/emotion-picker';
 import { PairAutocomplete } from '@/components/journal/pair-autocomplete';
 import { ScreenshotUploader } from '@/components/journal/screenshot-uploader';
+import { Btn } from '@/components/ui/btn';
+import { Card } from '@/components/ui/card';
+import { Kbd } from '@/components/ui/kbd';
+import { Pill } from '@/components/ui/pill';
+import { clamp } from '@/lib/hooks';
 import { tradeOpenSchema, WIZARD_STEPS } from '@/lib/schemas/trade';
 import { TRADING_PAIRS, type TradingPair } from '@/lib/trading/pairs';
 import { detectSession, SESSION_HINT, SESSION_LABEL, SESSIONS } from '@/lib/trading/sessions';
-import { createTradeAction, type CreateTradeActionState } from '@/app/journal/actions';
+import { cn } from '@/lib/utils';
 
 /**
  * Mobile-first wizard for opening a trade (J2, SPEC §7.3).
+ * Élévation Sprint 1C — design system v2 lime + slider custom + breakeven
+ * probability ladder + Framer Motion direction-aware transitions.
  *
- * Flow:
- *   step 0  When + what       (date, pair)
- *   step 1  Direction + session (radio cards)
- *   step 2  Prices + sizing  (entry, lot, stop-loss)
- *   step 3  R:R planned      (slider)
- *   step 4  Discipline + emotions before
- *   step 5  Entry screenshot (mandatory upload)
- *   submit  → /journal/[id]
+ * Logique métier préservée à 100% : DraftState + localStorage draft +
+ * Server Action createTradeAction + validateStep partial Zod parse.
  *
- * After submit the user lands on the trade detail page where they can
- * "Clôturer maintenant" to fill the post-exit block. We deliberately don't
- * cram the close into this wizard — separating the lifecycles avoids
- * partial drafts and matches how members actually work (open the trade,
- * then come back hours later).
+ * Différenciants pédago Douglas appliqués au step R:R :
+ *   - Live breakeven win rate (1/(1+R)) avec threshold pulse aux entiers
+ *   - Ratio bar split rouge/lime proportionnel au R:R
+ *   - Ladder 9-cells (R = 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5) avec WR requis
+ *   - Anti-pattern warning si R<1 (EV négatif)
  */
 
 const STEP_TITLES = [
@@ -42,13 +55,15 @@ const STEP_TITLES = [
   'Capture avant entrée',
 ] as const;
 
+const STEP_ICONS = [Calendar, TrendingUp, Sliders, Target, Heart, Camera] as const;
+
 type StepIndex = 0 | 1 | 2 | 3 | 4 | 5;
 
 interface DraftState {
   pair: string;
   direction: 'long' | 'short' | '';
   session: 'asia' | 'london' | 'newyork' | 'overlap' | '';
-  enteredAt: string; // ISO local datetime-friendly (no timezone)
+  enteredAt: string;
   entryPrice: string;
   lotSize: string;
   stopLossPrice: string;
@@ -64,8 +79,6 @@ interface DraftState {
 const DRAFT_STORAGE_KEY = 'fxmily:journal:draft:v1';
 
 function nowIsoLocal(): string {
-  // Format `YYYY-MM-DDTHH:mm` for `<input type="datetime-local">`. Uses local
-  // timezone (the user's). The Server Action converts to UTC via Date parser.
   const d = new Date();
   const pad = (n: number) => `${n}`.padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -131,13 +144,8 @@ export function TradeFormWizard() {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const prefersReducedMotion = useReducedMotion();
 
-  // Hydrate the draft on the client only — avoids SSR/CSR mismatch from
-  // reading `localStorage` during render. The setState here intentionally
-  // triggers a one-time re-render with the persisted draft; this is the
-  // documented escape hatch for "sync from external store on mount".
   useEffect(() => {
     const restored = loadDraft();
-    // Auto-detect session at hydration time too if the user never overrode.
     if (!restored.session) {
       restored.session = detectSession(new Date(restored.enteredAt));
     }
@@ -146,7 +154,6 @@ export function TradeFormWizard() {
     setHydrated(true);
   }, []);
 
-  // Persist on every change once hydrated.
   useEffect(() => {
     if (hydrated) persistDraft(draft);
   }, [draft, hydrated]);
@@ -155,9 +162,6 @@ export function TradeFormWizard() {
     setDraft((d) => ({ ...d, [key]: value }));
   };
 
-  // Update the entered timestamp AND auto-fill the session in the same render —
-  // avoids a setState-in-effect cascade. We only auto-fill if the user hasn't
-  // explicitly chosen a session yet.
   const updateEnteredAt = (value: string) => {
     setDraft((d) => ({
       ...d,
@@ -175,9 +179,6 @@ export function TradeFormWizard() {
     }
   };
 
-  // Focus the step heading after each transition so screen-reader users hear
-  // the new title and keyboard users land at the top of the new content
-  // (rather than staying on the now-disabled "Suivant" button).
   useEffect(() => {
     if (!hydrated) return;
     headingRef.current?.focus();
@@ -200,12 +201,9 @@ export function TradeFormWizard() {
       notes: draft.notes,
       screenshotEntryKey: draft.screenshotEntryKey,
     };
-    // Use a partial parse — only check the fields the current step submitted.
     const result = tradeOpenSchema.safeParse(candidate);
     if (result.success) return true;
 
-    // Surface only issues on the current step's fields. Other-step issues
-    // bubble up at the final submit.
     const errs: Record<string, string> = {};
     let stepHasIssue = false;
     for (const issue of result.error.issues) {
@@ -220,9 +218,10 @@ export function TradeFormWizard() {
     return !stepHasIssue;
   };
 
+  const planChosen = draft.planRespected !== null;
+  const hedgeChosen = draft.hedgeRespected !== '';
+
   const next = () => {
-    // Step 4 has client-only invariants (radio cards) that the Zod-based
-    // validateStep can't catch — enforce them inline.
     if (step === 4 && (!planChosen || !hedgeChosen)) {
       setFieldErrors({
         ...(planChosen ? {} : { planRespected: 'Réponds avant de continuer.' }),
@@ -236,10 +235,6 @@ export function TradeFormWizard() {
   const prev = () => {
     if (step > 0) goToStep((step - 1) as StepIndex);
   };
-
-  // Step 4 quick check — discipline radios must both be set.
-  const planChosen = draft.planRespected !== null;
-  const hedgeChosen = draft.hedgeRespected !== '';
 
   const submit = () => {
     if (pending) return;
@@ -273,8 +268,6 @@ export function TradeFormWizard() {
       const result: CreateTradeActionState = await createTradeAction(null, fd);
       if (result.ok) {
         clearDraft();
-        // Navigation is handled server-side via redirect(); this branch is
-        // only hit in the unusual case where the redirect was suppressed.
         return;
       }
       if (result.fieldErrors) setFieldErrors(result.fieldErrors);
@@ -282,38 +275,53 @@ export function TradeFormWizard() {
     });
   };
 
-  const progressPercent = Math.round(((step + 1) / 6) * 100);
+  const StepIcon = STEP_ICONS[step];
 
   return (
     <section
       aria-labelledby="wizard-heading"
       className="mx-auto flex w-full max-w-xl flex-col gap-5"
     >
+      {/* Header */}
       <header className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <Link
             href="/journal"
-            className="text-muted hover:text-foreground focus-visible:outline-accent rounded text-sm underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="inline-flex items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
           >
-            ← Retour au journal
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Retour
           </Link>
-          <span className="text-muted text-xs uppercase tracking-widest" aria-live="polite">
-            Étape {step + 1} / 6
+          <span className="font-mono text-[11px] tabular-nums text-[var(--t-3)]" aria-live="polite">
+            Étape{' '}
+            <span className="font-semibold text-[var(--acc)]">
+              {String(step + 1).padStart(2, '0')}
+            </span>
+            <span className="text-[var(--t-4)]"> / 06</span>
           </span>
         </div>
-        <h1
-          id="wizard-heading"
-          ref={headingRef}
-          tabIndex={-1}
-          className="text-foreground focus-visible:outline-accent rounded text-2xl font-semibold tracking-tight focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
-        >
-          {STEP_TITLES[step]}
-        </h1>
+
+        <div className="flex items-center gap-2.5">
+          <div className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+            <StepIcon className="h-4 w-4" strokeWidth={1.75} />
+          </div>
+          <h1
+            id="wizard-heading"
+            ref={headingRef}
+            tabIndex={-1}
+            className="f-display text-[22px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--t-1)] sm:text-[26px]"
+            style={{ fontFeatureSettings: '"ss01" 1' }}
+          >
+            {STEP_TITLES[step]}
+          </h1>
+        </div>
+
+        {/* Progress bar 6 segments lime accent */}
         <div
           role="progressbar"
-          aria-valuenow={progressPercent}
-          aria-valuemin={0}
-          aria-valuemax={100}
+          aria-valuenow={step + 1}
+          aria-valuemin={1}
+          aria-valuemax={6}
           aria-valuetext={`Étape ${step + 1} sur 6`}
           aria-label="Progression de la saisie"
           className="flex w-full gap-1"
@@ -321,11 +329,15 @@ export function TradeFormWizard() {
           {Array.from({ length: 6 }).map((_, i) => (
             <span
               key={i}
-              aria-hidden="true"
-              className={[
-                'h-1.5 flex-1 rounded-full transition-colors',
-                i <= step ? 'bg-primary' : 'bg-secondary/60',
-              ].join(' ')}
+              aria-hidden
+              className={cn(
+                'rounded-pill h-1 flex-1 transition-all duration-300',
+                i < step
+                  ? 'bg-[var(--acc)]'
+                  : i === step
+                    ? 'bg-[var(--acc)] shadow-[0_0_8px_oklch(0.879_0.231_130_/_0.55)]'
+                    : 'bg-[var(--b-default)]',
+              )}
             />
           ))}
         </div>
@@ -333,17 +345,21 @@ export function TradeFormWizard() {
 
       {serverError ? <Alert tone="danger">{serverError}</Alert> : null}
 
+      {/* Step content with direction-aware Framer transition */}
       <div className="relative min-h-[24rem]">
         <AnimatePresence mode="wait" custom={direction} initial={false}>
           <motion.div
             key={step}
             custom={direction}
             initial={
-              prefersReducedMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: direction * 24 }
+              prefersReducedMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: direction * 28 }
             }
             animate={{ opacity: 1, x: 0 }}
-            exit={prefersReducedMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: direction * -24 }}
-            transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: 'easeOut' }}
+            exit={prefersReducedMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: direction * -28 }}
+            transition={{
+              duration: prefersReducedMotion ? 0 : 0.3,
+              ease: [0.22, 1, 0.36, 1],
+            }}
             className="flex flex-col gap-5"
           >
             {step === 0 ? (
@@ -392,50 +408,45 @@ export function TradeFormWizard() {
         </AnimatePresence>
       </div>
 
+      {/* Sticky bottom nav with Btn primitives + kbd hints */}
       <nav
         aria-label="Navigation du formulaire"
-        className="bg-[var(--background)]/95 supports-[backdrop-filter]:bg-[var(--background)]/80 sticky bottom-0 -mx-4 flex flex-col gap-1 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur"
+        className="bg-[var(--bg)]/95 supports-[backdrop-filter]:bg-[var(--bg)]/80 sticky bottom-0 -mx-4 flex flex-col gap-1 border-t border-[var(--b-default)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur"
       >
         <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
+          <Btn
+            kind="secondary"
+            size="m"
             onClick={prev}
             disabled={step === 0 || pending}
-            className="text-foreground hover:border-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md border border-[var(--border)] px-4 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            type="button"
           >
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
             Précédent
-          </button>
+          </Btn>
 
           {step < 5 ? (
-            <button
-              type="button"
-              onClick={next}
-              disabled={pending}
-              className="bg-primary text-primary-foreground focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-            >
+            <Btn kind="primary" size="m" onClick={next} disabled={pending} kbd="↵" type="button">
               Suivant
-            </button>
+              <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
+            </Btn>
           ) : (
-            <button
-              type="button"
+            <Btn
+              kind="primary"
+              size="m"
               onClick={submit}
               disabled={pending || !draft.screenshotEntryKey}
+              loading={pending}
+              kbd={pending || !draft.screenshotEntryKey ? undefined : '↵'}
               aria-describedby={!draft.screenshotEntryKey ? 'submit-hint' : undefined}
-              className="bg-primary text-primary-foreground focus-visible:outline-accent inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
             >
-              {pending ? (
-                <>
-                  <Spinner />
-                  <span>Enregistrement…</span>
-                </>
-              ) : (
-                <span>Sauvegarder le trade</span>
-              )}
-            </button>
+              {pending ? 'Enregistrement…' : 'Sauvegarder le trade'}
+            </Btn>
           )}
         </div>
         {step === 5 && !draft.screenshotEntryKey ? (
-          <p id="submit-hint" className="text-muted text-right text-xs">
+          <p id="submit-hint" className="text-right text-[11px] tabular-nums text-[var(--t-4)]">
             Ajoute la capture pour activer la sauvegarde.
           </p>
         ) : null}
@@ -444,7 +455,9 @@ export function TradeFormWizard() {
   );
 }
 
-// ----- Steps -----------------------------------------------------------------
+// ============================================================
+// STEPS
+// ============================================================
 
 interface StepProps {
   draft: DraftState;
@@ -463,7 +476,10 @@ function StepWhenAndWhat({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="enteredAt" className="text-foreground text-sm font-medium">
+        <label
+          htmlFor="enteredAt"
+          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+        >
           Date et heure d&apos;entrée
         </label>
         <input
@@ -473,14 +489,21 @@ function StepWhenAndWhat({
           onChange={(e) => onEnteredAtChange(e.target.value)}
           disabled={disabled}
           aria-invalid={fieldErrors.enteredAt ? 'true' : undefined}
-          className="bg-card text-foreground focus-visible:border-accent focus-visible:ring-accent/40 rounded-md border border-[var(--border)] px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
+          className={cn(
+            'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            fieldErrors.enteredAt
+              ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+              : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+            'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+            'disabled:cursor-not-allowed disabled:opacity-60',
+          )}
         />
         {fieldErrors.enteredAt ? (
-          <p className="text-danger text-xs" role="alert">
+          <p className="text-[11px] text-[var(--bad)]" role="alert">
             {fieldErrors.enteredAt}
           </p>
         ) : (
-          <p className="text-muted text-xs">
+          <p className="t-cap text-[var(--t-4)]">
             Heure locale (Europe/Paris). Pré-rempli à maintenant — la session se devine à
             l&apos;étape suivante.
           </p>
@@ -501,10 +524,13 @@ function StepDirectionSession({ draft, update, fieldErrors, disabled }: StepProp
   return (
     <div className="flex flex-col gap-5">
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-foreground mb-1 text-sm font-medium">Direction</legend>
+        <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+          Direction
+        </legend>
         <div role="radiogroup" aria-label="Direction du trade" className="grid grid-cols-2 gap-2">
           {(['long', 'short'] as const).map((d) => {
             const active = draft.direction === d;
+            const Icon = d === 'long' ? TrendingUp : TrendingDown;
             return (
               <button
                 key={d}
@@ -513,29 +539,34 @@ function StepDirectionSession({ draft, update, fieldErrors, disabled }: StepProp
                 aria-checked={active}
                 onClick={() => update('direction', d)}
                 disabled={disabled}
-                className={[
-                  'focus-visible:outline-accent flex min-h-14 flex-col items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
+                className={cn(
+                  'rounded-card flex min-h-16 flex-col items-center justify-center gap-1.5 border bg-[var(--bg-1)] px-3 py-3 text-[13px] font-semibold uppercase tracking-[0.08em] transition-all',
+                  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                   active
                     ? d === 'long'
-                      ? 'border-success bg-success/15 text-success'
-                      : 'border-danger bg-danger/15 text-danger'
-                    : 'text-muted hover:text-foreground hover:border-accent border-[var(--border)]',
-                ].join(' ')}
+                      ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)] shadow-[0_0_0_3px_oklch(0.804_0.181_145_/_0.10)]'
+                      : 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)] shadow-[0_0_0_3px_oklch(0.7_0.165_22_/_0.10)]'
+                    : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
+                  disabled && 'cursor-not-allowed opacity-60',
+                )}
               >
-                {d === 'long' ? 'Long ↗︎' : 'Short ↘︎'}
+                <Icon className="h-5 w-5" strokeWidth={2} />
+                {d === 'long' ? 'Long' : 'Short'}
               </button>
             );
           })}
         </div>
         {fieldErrors.direction ? (
-          <p className="text-danger text-xs" role="alert">
+          <p className="text-[11px] text-[var(--bad)]" role="alert">
             {fieldErrors.direction}
           </p>
         ) : null}
       </fieldset>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-foreground mb-1 text-sm font-medium">Session</legend>
+        <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+          Session
+        </legend>
         <div
           role="radiogroup"
           aria-label="Session de trading"
@@ -551,23 +582,34 @@ function StepDirectionSession({ draft, update, fieldErrors, disabled }: StepProp
                 aria-checked={active}
                 onClick={() => update('session', s)}
                 disabled={disabled}
-                className={[
-                  'focus-visible:outline-accent flex min-h-14 flex-col items-start justify-center rounded-lg border px-3 py-2 text-left text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
+                className={cn(
+                  'rounded-card flex min-h-16 flex-col items-start justify-center gap-0.5 border bg-[var(--bg-1)] px-3 py-2.5 text-left transition-all',
+                  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                   active
-                    ? 'border-accent bg-accent/15 text-foreground'
-                    : 'text-muted hover:text-foreground hover:border-accent border-[var(--border)]',
-                ].join(' ')}
+                    ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] shadow-[var(--sh-card-selected)]'
+                    : 'border-[var(--b-default)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
+                  disabled && 'cursor-not-allowed opacity-60',
+                )}
               >
-                <span className="font-semibold">{SESSION_LABEL[s]}</span>
-                <span className="text-muted text-xs">{SESSION_HINT[s]}</span>
+                <span
+                  className={cn(
+                    't-h3 leading-tight',
+                    active ? 'text-[var(--acc)]' : 'text-[var(--t-1)]',
+                  )}
+                >
+                  {SESSION_LABEL[s]}
+                </span>
+                <span className="t-cap text-[var(--t-4)]">{SESSION_HINT[s]}</span>
               </button>
             );
           })}
         </div>
-        <p className="text-muted text-xs">
+        <p className="t-cap text-[var(--t-4)]">
           Pré-sélection :{' '}
-          {draft.session ? SESSION_LABEL[draft.session as keyof typeof SESSION_LABEL] : '—'}. Tu
-          peux corriger.
+          <span className="font-mono text-[var(--t-2)]">
+            {draft.session ? SESSION_LABEL[draft.session as keyof typeof SESSION_LABEL] : '—'}
+          </span>
+          . Tu peux corriger.
         </p>
       </fieldset>
     </div>
@@ -610,12 +652,23 @@ function StepPricesSizing({ draft, update, fieldErrors, disabled }: StepProps) {
         step="any"
         inputMode="decimal"
         placeholder="—"
-        hint="Sans stop-loss, le R réalisé sera estimé."
+        hint="Sans stop-loss, le R réalisé sera estimé (computed → estimated fallback)."
       />
     </div>
   );
 }
 
+/**
+ * StepPlannedRR — Le step pédagogique stratégique du wizard.
+ *
+ * Implémente les différenciants Mark Douglas + Van Tharp :
+ *   1. Slider lime custom (track gradient cyan→lime, thumb halo)
+ *   2. Big number 1:R.RR avec drop-shadow lime + threshold-pulse aux entiers
+ *   3. Live ratio bar split rouge/lime (proportionnel à 1/(1+R) et R/(1+R))
+ *   4. Breakeven probability ladder 9-cells (R = 1, 1.5, 2, ..., 5)
+ *   5. EV warning si R<1 (anti-pattern "moving the stop")
+ *   6. Keyboard nav ←/→ pour fine-tune ±0.25, Shift+ pour ±0.5
+ */
 function StepPlannedRR({
   draft,
   update,
@@ -625,35 +678,266 @@ function StepPlannedRR({
   update: StepProps['update'];
   disabled?: boolean | undefined;
 }) {
+  const rr = draft.plannedRR;
+  const isLowRR = rr < 1;
+  const breakeven = (1 / (1 + rr)) * 100;
+  const [pulse, setPulse] = useState(false);
+  const lastIntRef = useRef(Math.floor(rr));
+
+  // Threshold pulse animation when crossing integer thresholds (1, 2, 3, 4, 5)
+  // Use ref instead of state to track lastInt → no setState cascade in useEffect.
+  useEffect(() => {
+    const f = Math.floor(rr);
+    if (f !== lastIntRef.current) {
+      lastIntRef.current = f;
+      setPulse(true);
+      const t = setTimeout(() => setPulse(false), 600);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [rr]);
+
+  // Keyboard nav : ←/→ ±0.25, Shift+←/→ ±0.5
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (disabled) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        update('plannedRR', Math.round(clamp(rr - (e.shiftKey ? 0.5 : 0.25), 0.5, 10) * 4) / 4);
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        update('plannedRR', Math.round(clamp(rr + (e.shiftKey ? 0.5 : 0.25), 0.5, 10) * 4) / 4);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [rr, disabled, update]);
+
+  const pct = ((rr - 0.5) / (10 - 0.5)) * 100;
+
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-end justify-between">
-          <label htmlFor="plannedRR" className="text-foreground text-sm font-medium">
-            R:R prévu
-          </label>
-          <span className="text-foreground font-mono text-2xl">{draft.plannedRR.toFixed(2)}</span>
+      {/* Big number + EV pill */}
+      <Card primary className="p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="t-eyebrow">R:R prévu</span>
+          <Pill tone={isLowRR ? 'bad' : 'acc'}>
+            EV {isLowRR ? 'NÉGATIF' : 'POSITIF'} si WR&gt;{breakeven.toFixed(0)}%
+          </Pill>
         </div>
-        <input
-          id="plannedRR"
-          type="range"
-          min={0.5}
-          max={10}
-          step={0.25}
-          value={draft.plannedRR}
-          onChange={(e) => update('plannedRR', Number(e.target.value))}
-          disabled={disabled}
-          aria-valuetext={`R:R ${draft.plannedRR.toFixed(2)} pour 1`}
-          className="accent-[var(--primary)]"
-        />
-        <div className="text-muted flex justify-between text-xs">
+
+        <div className="mb-4 flex items-baseline gap-3">
+          <span
+            className={cn(
+              'f-mono text-[48px] font-bold tabular-nums leading-none tracking-[-0.04em] sm:text-[56px]',
+              isLowRR ? 'text-[var(--bad)]' : 'text-[var(--acc)]',
+              pulse && 'threshold-pulse',
+            )}
+            style={{
+              filter: isLowRR
+                ? 'drop-shadow(0 0 14px oklch(0.7 0.165 22 / 0.32))'
+                : 'drop-shadow(0 0 14px oklch(0.879 0.231 130 / 0.40))',
+            }}
+          >
+            1:{rr.toFixed(2)}
+          </span>
+        </div>
+
+        {/* Live ratio bar split rouge/lime */}
+        <div
+          className="rounded-input relative flex h-10 overflow-hidden border border-[var(--b-default)] shadow-[inset_0_1px_0_oklch(1_0_0_/_0.04)]"
+          aria-hidden
+        >
+          <div
+            className="grid place-items-center border-r border-[var(--b-default)] bg-gradient-to-r from-[oklch(0.7_0.165_22_/_0.20)] to-[oklch(0.7_0.165_22_/_0.10)] font-mono text-[11px] font-semibold tabular-nums text-[var(--bad)] transition-[flex-basis]"
+            style={{ flexBasis: `${100 / (1 + rr)}%`, transitionDuration: '120ms' }}
+          >
+            −1R
+          </div>
+          <div
+            className="grid place-items-center bg-gradient-to-r from-[oklch(0.879_0.231_130_/_0.10)] to-[oklch(0.879_0.231_130_/_0.22)] font-mono text-[11px] font-semibold tabular-nums text-[var(--acc)] transition-[flex-basis]"
+            style={{ flexBasis: `${(rr * 100) / (1 + rr)}%`, transitionDuration: '120ms' }}
+          >
+            +{rr.toFixed(1)}R
+          </div>
+        </div>
+
+        {/* Custom slider — track gradient cyan→lime, thumb lime halo */}
+        <div className="relative mt-5 h-6">
+          {/* Track background */}
+          <div
+            aria-hidden
+            className="rounded-pill absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 border border-[var(--b-subtle)] bg-[var(--bg-2)]"
+          />
+          {/* Track filled — gradient */}
+          <div
+            aria-hidden
+            className="rounded-pill absolute left-0 top-1/2 h-1.5 -translate-y-1/2"
+            style={{
+              width: `${pct}%`,
+              background: 'linear-gradient(90deg, var(--cy) 0%, var(--acc) 80%)',
+              boxShadow: '0 0 10px -2px oklch(0.879 0.231 130 / 0.50)',
+              transition: 'width 80ms cubic-bezier(0.4,0,0.2,1)',
+            }}
+          />
+          {/* Tick marks (visible at 1, 2, 3, 4, 5) */}
+          {[1, 2, 3, 4, 5].map((t) => (
+            <div
+              key={t}
+              aria-hidden
+              className="absolute top-1/2 h-3 w-px -translate-y-1/2 bg-[var(--b-strong)]"
+              style={{ left: `${((t - 0.5) / 9.5) * 100}%` }}
+            />
+          ))}
+          {/* Native range input on top, opacity 0 for accessibility */}
+          <input
+            id="plannedRR"
+            type="range"
+            min={0.5}
+            max={10}
+            step={0.25}
+            value={rr}
+            onChange={(e) => update('plannedRR', Number(e.target.value))}
+            disabled={disabled}
+            aria-label="Risk Reward ratio"
+            aria-valuetext={`R:R 1 pour ${rr.toFixed(2)}`}
+            className="absolute inset-0 w-full cursor-grab opacity-0 active:cursor-grabbing disabled:cursor-not-allowed"
+          />
+          {/* Custom thumb */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--bg)] bg-[var(--acc)] transition-shadow"
+            style={{
+              left: `${pct}%`,
+              boxShadow: '0 0 0 4px oklch(0.879 0.231 130 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)',
+              transition: 'left 80ms cubic-bezier(0.4,0,0.2,1)',
+            }}
+          >
+            <div className="absolute inset-1 rounded-full bg-gradient-to-br from-[var(--acc-hi)] to-[var(--acc)]" />
+          </div>
+        </div>
+
+        {/* Tick labels */}
+        <div className="mt-2 flex justify-between font-mono text-[10px] tabular-nums text-[var(--t-4)]">
           <span>0.5</span>
+          <span>1.0</span>
+          <span>2.0</span>
+          <span className={cn(rr >= 2.4 && rr <= 2.6 && 'text-[var(--acc)]')}>2.5</span>
+          <span>3.0</span>
+          <span>5.0</span>
           <span>10</span>
         </div>
-        <p className="text-muted text-xs">
-          R:R 2 = tu risques 1 pour viser 2. Glisser pour ajuster.
+
+        {/* Keyboard hint */}
+        <p className="t-cap mt-3 inline-flex items-center gap-1.5 text-[var(--t-4)]">
+          <Kbd>←</Kbd>
+          <Kbd>→</Kbd>
+          ±0.25 ·{' '}
+          <span className="inline-flex items-center gap-1">
+            <Kbd>⇧</Kbd>+<Kbd>←</Kbd>
+            <Kbd>→</Kbd>
+            ±0.5
+          </span>
         </p>
-      </div>
+      </Card>
+
+      {/* Inline EV warning si R<1 */}
+      {isLowRR ? (
+        <div className="confirm-flash rounded-control flex items-start gap-2 border border-[var(--b-danger)] bg-[var(--bad-dim)] px-3 py-2.5">
+          <Info
+            aria-hidden
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--bad)]"
+            strokeWidth={2}
+          />
+          <div className="flex-1">
+            <div className="text-[12px] font-medium text-[var(--bad-hi)]">EV négatif sous 1:1</div>
+            <p className="t-cap mt-0.5 text-[var(--t-2)]">
+              Avec R:R 1:{rr.toFixed(2)}, ton win rate doit dépasser{' '}
+              <span className="font-mono font-semibold tabular-nums text-[var(--bad-hi)]">
+                {breakeven.toFixed(0)}%
+              </span>{' '}
+              pour ne pas perdre. Vérifie que ton plan est cohérent — ne déplace pas le stop pour
+              forcer un meilleur ratio.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Breakeven probability ladder 9-cells */}
+      <Card className="p-4">
+        <div className="mb-3 flex items-start justify-between">
+          <div className="flex flex-col gap-1">
+            <span className="t-eyebrow">Breakeven probability</span>
+            <p className="t-cap text-[var(--t-3)]">Win rate minimum pour ne pas perdre, par R:R.</p>
+          </div>
+          <Pill tone="cy" dot="live">
+            CALCULÉ LIVE
+          </Pill>
+        </div>
+
+        <div className="flex items-baseline gap-2">
+          <span
+            className={cn(
+              'f-mono text-[24px] font-bold tabular-nums leading-none tracking-[-0.02em]',
+              isLowRR ? 'text-[var(--bad)]' : 'text-[var(--acc)]',
+              pulse && !isLowRR && 'threshold-pulse',
+            )}
+          >
+            {breakeven.toFixed(0)}%
+          </span>
+          <span className="t-eyebrow">win rate requis</span>
+        </div>
+
+        <p className="t-body mt-2 text-[var(--t-3)]">
+          Avec 1:{rr.toFixed(2)} il te faut{' '}
+          <span className="font-mono tabular-nums text-[var(--t-1)]">{breakeven.toFixed(0)}%</span>{' '}
+          de wins pour être à zéro. Au-dessus = EV positif sur le long terme.
+        </p>
+
+        {/* Ladder 9-cells */}
+        <div className="mt-4 grid grid-cols-5 gap-1.5 border-t border-[var(--b-subtle)] pt-4 sm:grid-cols-9">
+          {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map((R) => {
+            const active = Math.abs(R - rr) < 0.13;
+            const close = Math.abs(R - rr) < 0.5;
+            const wr = Math.round((1 / (1 + R)) * 100);
+            return (
+              <button
+                key={R}
+                type="button"
+                onClick={() => update('plannedRR', R)}
+                disabled={disabled}
+                className={cn(
+                  'rounded-control p-1.5 text-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
+                  active
+                    ? 'border border-[var(--b-acc-strong)] bg-[var(--acc-dim)] shadow-[0_0_0_3px_oklch(0.879_0.231_130_/_0.10)]'
+                    : close
+                      ? 'border border-[var(--b-acc)] bg-[var(--acc-dim-2)]'
+                      : 'border border-[var(--b-subtle)] hover:border-[var(--b-default)]',
+                  disabled && 'cursor-not-allowed opacity-60',
+                )}
+              >
+                <div className="font-mono text-[10px] tabular-nums text-[var(--t-4)]">
+                  1:{R.toFixed(R % 1 === 0 ? 0 : 1)}
+                </div>
+                <div
+                  className={cn(
+                    'mt-0.5 font-mono text-[12px] font-semibold tabular-nums',
+                    active ? 'text-[var(--acc)]' : 'text-[var(--t-2)]',
+                  )}
+                >
+                  {wr}%
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <p className="t-foot mt-3 text-[var(--t-4)]">
+          EV = (WR × R) − (1 − WR). Hors frais &amp; swap.
+        </p>
+      </Card>
     </div>
   );
 }
@@ -694,13 +978,16 @@ function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepPr
         disabled={disabled}
       />
       {fieldErrors.emotionBefore ? (
-        <p className="text-danger text-xs" role="alert">
+        <p className="text-[11px] text-[var(--bad)]" role="alert">
           {fieldErrors.emotionBefore}
         </p>
       ) : null}
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="notes" className="text-foreground text-sm font-medium">
+        <label
+          htmlFor="notes"
+          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+        >
           Notes (optionnel)
         </label>
         <textarea
@@ -711,7 +998,13 @@ function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepPr
           rows={3}
           maxLength={2000}
           placeholder="Setup, contexte, déclencheur…"
-          className="bg-card text-foreground focus-visible:border-accent focus-visible:ring-accent/40 placeholder:text-muted/70 rounded-md border border-[var(--border)] px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
+          className={cn(
+            'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            'placeholder:text-[var(--t-4)]',
+            'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+            'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+            'disabled:cursor-not-allowed disabled:opacity-60',
+          )}
         />
       </div>
     </div>
@@ -721,8 +1014,9 @@ function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepPr
 function StepEntryScreenshot({ draft, update, fieldErrors, disabled }: StepProps) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-foreground text-sm">
-        Capture obligatoire avant entrée — preuve que tu as analysé le setup.
+      <p className="t-body text-[var(--t-2)]">
+        Capture obligatoire avant entrée — preuve que tu as analysé le setup. C&apos;est la couche
+        d&apos;audit comportemental la plus solide.
       </p>
       <ScreenshotUploader
         kind="trade-entry"
@@ -744,7 +1038,9 @@ function StepEntryScreenshot({ draft, update, fieldErrors, disabled }: StepProps
   );
 }
 
-// ----- Building blocks --------------------------------------------------------
+// ============================================================
+// BUILDING BLOCKS
+// ============================================================
 
 function NumericField({
   id,
@@ -776,7 +1072,10 @@ function NumericField({
   const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-foreground text-sm font-medium">
+      <label
+        htmlFor={id}
+        className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+      >
         {label}
       </label>
       <input
@@ -791,14 +1090,22 @@ function NumericField({
         placeholder={placeholder}
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={describedBy}
-        className="bg-card text-foreground focus-visible:border-accent focus-visible:ring-accent/40 placeholder:text-muted/70 rounded-md border border-[var(--border)] px-3 py-2 font-mono text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
+        className={cn(
+          'f-mono rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] tabular-nums text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+          'placeholder:text-[var(--t-4)]',
+          error
+            ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+            : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+          'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+          'disabled:cursor-not-allowed disabled:opacity-60',
+        )}
       />
       {error ? (
-        <p id={errorId} className="text-danger text-xs" role="alert">
+        <p id={errorId} className="text-[11px] text-[var(--bad)]" role="alert">
           {error}
         </p>
       ) : hint ? (
-        <p id={hintId} className="text-muted text-xs">
+        <p id={hintId} className="t-cap text-[var(--t-4)]">
           {hint}
         </p>
       ) : null}
@@ -823,16 +1130,14 @@ function RadioGroup({
   disabled?: boolean | undefined;
   error?: string | undefined;
 }) {
-  // Roving tabindex: with no value selected yet, the first option is the
-  // tab-stop so a keyboard user has a discoverable entry point. Once an
-  // option is checked, only the checked one is tabbable (native radio
-  // behaviour, see WAI-ARIA Radio Group pattern).
   const firstValue = options[0]?.value ?? '';
   const errorId = error ? `${name}-error` : undefined;
 
   return (
     <fieldset className="flex flex-col gap-2" aria-describedby={errorId}>
-      <legend className="text-foreground mb-1 text-sm font-medium">{legend}</legend>
+      <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+        {legend}
+      </legend>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
           const active = value === opt.value;
@@ -840,13 +1145,14 @@ function RadioGroup({
           return (
             <label
               key={opt.value}
-              className={[
-                'focus-within:outline-accent inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-offset-2',
+              className={cn(
+                'rounded-pill inline-flex min-h-11 cursor-pointer items-center gap-2 border px-4 py-2 text-[13px] font-medium transition-all',
+                'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--acc)]',
                 active
-                  ? 'border-accent bg-accent/15 text-foreground'
-                  : 'text-muted hover:text-foreground hover:border-accent border-[var(--border)]',
-                disabled ? 'cursor-not-allowed opacity-60' : '',
-              ].join(' ')}
+                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_3px_oklch(0.879_0.231_130_/_0.10)]'
+                  : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]',
+                disabled && 'cursor-not-allowed opacity-60',
+              )}
             >
               <input
                 type="radio"
@@ -864,7 +1170,7 @@ function RadioGroup({
         })}
       </div>
       {error ? (
-        <p id={errorId} role="alert" className="text-danger text-xs">
+        <p id={errorId} role="alert" className="text-[11px] text-[var(--bad)]">
           {error}
         </p>
       ) : null}
@@ -872,7 +1178,9 @@ function RadioGroup({
   );
 }
 
-// ----- Helpers ----------------------------------------------------------------
+// ============================================================
+// HELPERS
+// ============================================================
 
 function pairExamplePrice(pair: TradingPair | ''): string {
   if (pair === 'USDJPY') return '152.000';

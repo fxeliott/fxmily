@@ -3,31 +3,35 @@ import { nanoid } from 'nanoid';
 import { ALLOWED_IMAGE_MIME_TYPES, type AllowedImageMime, StorageError } from './types';
 
 /**
- * Storage-key helpers (J2).
+ * Storage-key helpers (J2 + J4).
  *
- * Canonical form:
- *   trades/{userId}/{nanoid32}.{jpg|png|webp}
+ * Two key shapes share the same alphabet/length budget:
+ *
+ *   trades/{userId}/{nanoid32}.{jpg|png|webp}            ← J2 trade screenshots
+ *   annotations/{tradeId}/{nanoid32}.{jpg|png|webp}      ← J4 admin annotations
  *
  * Where:
- *   - `userId` is a CUID (lowercase alnum, 25 chars) — directly mapped to
- *     `User.id`. The user-scoped path provides natural ownership lookup
- *     (route handlers can grep the prefix without parsing the trade record).
+ *   - `userId` and `tradeId` are CUIDs (lowercase alnum, 25 chars). We allow
+ *     8–40 to absorb future id generators (e.g. uuid v7 hex = 32) and shorter
+ *     test fixtures. ReDoS-safe — every class has bounded length and bounded
+ *     character set.
  *   - `nanoid32` is a fresh server-side identifier. Never derived from the
  *     user's filename.
- *   - The extension matches the validated MIME — we don't trust the original
+ *   - The extension matches the validated MIME — we never trust the original
  *     filename's extension.
  */
 
-// CUIDs from Prisma are 25 chars; we allow 8–40 to absorb future id generators
-// (e.g. uuid v7 hex = 32) and shorter test fixtures. ReDoS-safe — every class
-// has both bounded length and bounded character set.
-const KEY_REGEX = /^trades\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
+const KEY_REGEX_TRADE = /^trades\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
+const KEY_REGEX_ANNOTATION =
+  /^annotations\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
 
 const MIME_TO_EXT: Record<AllowedImageMime, 'jpg' | 'png' | 'webp'> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
 };
+
+const CUID_REGEX = /^[a-z0-9]{8,40}$/;
 
 export function isAllowedMime(value: string): value is AllowedImageMime {
   return (ALLOWED_IMAGE_MIME_TYPES as readonly string[]).includes(value);
@@ -38,31 +42,83 @@ export function extensionForMime(mime: AllowedImageMime): 'jpg' | 'png' | 'webp'
 }
 
 export function generateTradeKey(userId: string, mime: AllowedImageMime): string {
-  if (!/^[a-z0-9]+$/.test(userId)) {
+  if (!CUID_REGEX.test(userId)) {
     // Defensive: CUIDs from Prisma are alnum-only. If we ever change the id
-    // generator (uuid?) update this regex AND `KEY_REGEX` together.
+    // generator (uuid?) update this regex AND `KEY_REGEX_TRADE` together.
     throw new StorageError('userId is not safe for storage key', 'invalid_key');
   }
   const id = nanoid(32);
   return `trades/${userId}/${id}.${MIME_TO_EXT[mime]}`;
 }
 
-export interface ParsedKey {
+/**
+ * J4 — annotation media key. The path component is the parent trade id rather
+ * than the admin id: ownership checks resolve via a single
+ * `db.trade.findUnique({ where: { id }, select: { userId } })` lookup, no
+ * extra join needed.
+ */
+export function generateAnnotationKey(tradeId: string, mime: AllowedImageMime): string {
+  if (!CUID_REGEX.test(tradeId)) {
+    throw new StorageError('tradeId is not safe for storage key', 'invalid_key');
+  }
+  const id = nanoid(32);
+  return `annotations/${tradeId}/${id}.${MIME_TO_EXT[mime]}`;
+}
+
+export interface ParsedTradeKey {
+  kind: 'trade';
   userId: string;
   filename: string;
   ext: 'jpg' | 'png' | 'webp';
 }
 
-export function parseTradeKey(key: string): ParsedKey {
-  const match = KEY_REGEX.exec(key);
+export interface ParsedAnnotationKey {
+  kind: 'annotation';
+  tradeId: string;
+  filename: string;
+  ext: 'jpg' | 'png' | 'webp';
+}
+
+export type ParsedStorageKey = ParsedTradeKey | ParsedAnnotationKey;
+
+export function parseTradeKey(key: string): ParsedTradeKey {
+  const match = KEY_REGEX_TRADE.exec(key);
   if (!match) {
     throw new StorageError(`malformed storage key: ${key.slice(0, 80)}`, 'invalid_key');
   }
   return {
+    kind: 'trade',
     userId: match[1] as string,
     filename: match[2] as string,
     ext: match[3] as 'jpg' | 'png' | 'webp',
   };
+}
+
+/**
+ * J4 — parse an annotation key. Mirror of `parseTradeKey` for the alternative
+ * prefix. Throws `StorageError('invalid_key')` on mismatch.
+ */
+export function parseAnnotationKey(key: string): ParsedAnnotationKey {
+  const match = KEY_REGEX_ANNOTATION.exec(key);
+  if (!match) {
+    throw new StorageError(`malformed annotation key: ${key.slice(0, 80)}`, 'invalid_key');
+  }
+  return {
+    kind: 'annotation',
+    tradeId: match[1] as string,
+    filename: match[2] as string,
+    ext: match[3] as 'jpg' | 'png' | 'webp',
+  };
+}
+
+/**
+ * Unified parser used by route handlers that accept either prefix. Returns a
+ * discriminated union so the caller can dispatch on `parsed.kind`.
+ */
+export function parseStorageKey(key: string): ParsedStorageKey {
+  if (key.startsWith('trades/')) return parseTradeKey(key);
+  if (key.startsWith('annotations/')) return parseAnnotationKey(key);
+  throw new StorageError(`unknown storage key prefix: ${key.slice(0, 80)}`, 'invalid_key');
 }
 
 /**

@@ -48,7 +48,24 @@ export function selectStorage(): StorageAdapter {
   return cached;
 }
 
-export type { StorageAdapter, ScreenshotKind, UploadInput } from './types';
-export { ALLOWED_IMAGE_MIME_TYPES, MAX_SCREENSHOT_BYTES, StorageError } from './types';
-export { generateTradeKey, parseTradeKey, sniffImageMime } from './keys';
+export type { StorageAdapter, ScreenshotKind, UploadInput, UploadKind } from './types';
+export {
+  ALLOWED_IMAGE_MIME_TYPES,
+  ALL_UPLOAD_KINDS,
+  ANNOTATION_UPLOAD_KINDS,
+  MAX_SCREENSHOT_BYTES,
+  StorageError,
+  TRADE_UPLOAD_KINDS,
+  isAnnotationUploadKind,
+  isTradeUploadKind,
+} from './types';
+export type { ParsedStorageKey, ParsedTradeKey, ParsedAnnotationKey } from './keys';
+export {
+  generateAnnotationKey,
+  generateTradeKey,
+  parseAnnotationKey,
+  parseStorageKey,
+  parseTradeKey,
+  sniffImageMime,
+} from './keys';
 export { keyBelongsTo, openLocalReadStream } from './local';

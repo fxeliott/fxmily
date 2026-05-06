@@ -1,28 +1,29 @@
 import { Readable } from 'node:stream';
 
 import { auth } from '@/auth';
-import { keyBelongsTo, openLocalReadStream } from '@/lib/storage/local';
-import { selectStorage, StorageError } from '@/lib/storage';
+import { db } from '@/lib/db';
+import { openLocalReadStream } from '@/lib/storage/local';
+import { selectStorage, StorageError, parseStorageKey } from '@/lib/storage';
 
 /**
  * GET /api/uploads/[...key]
  *
- * Serve a screenshot (J2). Streaming endpoint backed by the local storage
- * adapter in dev / pre-R2; in prod (when R2 is wired) this same path will
- * 302-redirect to the CDN.
+ * Serve a stored asset (J2 trade screenshots, J4 annotation media). Streaming
+ * endpoint backed by the local storage adapter in dev / pre-R2; in prod
+ * (when R2 is wired) this same path will 302-redirect to the CDN.
  *
  * Auth gates:
- *   1. Authenticated session.
- *   2. Either:
- *      - the requesting user owns the key (the `userId` segment matches
- *        their session id), OR
- *      - the requesting user has role=admin (admins need to view annotated
- *        trades for any member, SPEC §7.7).
+ *   1. Authenticated session, status='active'.
+ *   2. Per-prefix ownership check:
+ *      - `trades/{userId}/...` — userId must match the session, OR the
+ *        requester is admin (admins read members' screenshots to annotate).
+ *      - `annotations/{tradeId}/...` — the trade row must belong to the
+ *        session user, OR the requester is admin.
  *
  * Caching:
- *   - `Cache-Control: private, max-age=86400, immutable` because keys are
- *     content-addressable (the nanoid never reuses), but we keep the cache
- *     scoped to the user via `private` to avoid leaks behind shared proxies.
+ *   - `Cache-Control: private, max-age=86400, immutable` — the nanoid keys
+ *     are content-addressable; we keep the cache scoped to the user via
+ *     `private` to avoid leaks behind shared proxies.
  */
 
 export const runtime = 'nodejs';
@@ -50,9 +51,32 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
   const { key: segments } = await params;
   const key = segments.join('/');
 
+  let parsed;
+  try {
+    parsed = parseStorageKey(key);
+  } catch {
+    return new Response('Bad request', { status: 400 });
+  }
+
   const isAdmin = session.user.role === 'admin';
-  if (!isAdmin && !keyBelongsTo(key, session.user.id)) {
-    return new Response('Forbidden', { status: 403 });
+
+  // Per-prefix ownership check.
+  if (parsed.kind === 'trade') {
+    if (!isAdmin && parsed.userId !== session.user.id) {
+      return new Response('Forbidden', { status: 403 });
+    }
+  } else {
+    // annotation key — lookup the parent trade owner.
+    const trade = await db.trade.findUnique({
+      where: { id: parsed.tradeId },
+      select: { userId: true },
+    });
+    if (!trade) {
+      return new Response('Not found', { status: 404 });
+    }
+    if (!isAdmin && trade.userId !== session.user.id) {
+      return new Response('Forbidden', { status: 403 });
+    }
   }
 
   const storage = selectStorage();

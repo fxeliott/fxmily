@@ -29,7 +29,13 @@ export type AuditAction =
   | 'trade.screenshot.uploaded'
   | 'admin.members.listed'
   | 'admin.member.viewed'
-  | 'admin.trade.viewed';
+  | 'admin.trade.viewed'
+  // J4 — annotation workflow
+  | 'admin.annotation.created'
+  | 'admin.annotation.deleted'
+  | 'admin.annotation.media.uploaded'
+  | 'member.annotations.viewed'
+  | 'notification.enqueued';
 
 export interface LogAuditParams {
   action: AuditAction;

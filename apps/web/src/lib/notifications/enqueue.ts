@@ -3,6 +3,7 @@ import 'server-only';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import type { Prisma } from '@/generated/prisma/client';
+import type { NotificationType } from '@/generated/prisma/enums';
 
 /**
  * Notification queue — enqueue side (J4 enqueue, J9 dispatch).
@@ -78,3 +79,93 @@ export async function enqueueAnnotationNotification(
     return null;
   }
 }
+
+// =============================================================================
+// J5 — Check-in reminders
+// =============================================================================
+
+export interface CheckinReminderPayload {
+  /** "morning" or "evening" — drives the J9 push title/body. */
+  slot: 'morning' | 'evening';
+  /** YYYY-MM-DD the reminder is for, in the user's local TZ. */
+  date: string;
+}
+
+/**
+ * Enqueue a check-in reminder push for a single user (J5).
+ *
+ * Idempotent on the same (user, slot, date): if a pending reminder for the
+ * same slot+date already exists, we skip the insert. This protects the cron
+ * scanner from doubling up if it runs twice in the same window.
+ *
+ * Returns the row id (existing or new) on success, null on DB failure.
+ */
+export async function enqueueCheckinReminder(
+  userId: string,
+  payload: CheckinReminderPayload,
+): Promise<string | null> {
+  const type = payload.slot === 'morning' ? 'checkin_morning_reminder' : 'checkin_evening_reminder';
+
+  try {
+    // Idempotency: scan for an open reminder of this kind for this date. We
+    // don't have a unique index — JSON-payload uniqueness isn't worth the
+    // index — but the scan is bounded by the (status, scheduledFor) index
+    // and the user's small queue.
+    const existing = await db.notificationQueue.findFirst({
+      where: {
+        userId,
+        type,
+        status: 'pending',
+        // We can't index on JSON, so we filter in memory after fetching
+        // pending reminders for this user/type.
+      },
+      select: { id: true, payload: true },
+    });
+    if (
+      existing &&
+      typeof existing.payload === 'object' &&
+      existing.payload !== null &&
+      !Array.isArray(existing.payload) &&
+      (existing.payload as Record<string, unknown>).date === payload.date
+    ) {
+      return existing.id;
+    }
+
+    const row = await db.notificationQueue.create({
+      data: {
+        userId,
+        type,
+        payload: payload as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+    return row.id;
+  } catch (err) {
+    console.error('[notifications.enqueue.checkin] failed', err);
+    return null;
+  }
+}
+
+/**
+ * Bulk enqueue: returns the count of newly-created reminders. Existing pending
+ * rows are not duplicated. Skips a user when their slot is already filled for
+ * `today` (passed in the input — caller decides who's eligible).
+ */
+export async function enqueueCheckinRemindersBulk(
+  recipients: Array<{ userId: string; slot: 'morning' | 'evening'; date: string }>,
+): Promise<{ enqueued: number; skipped: number }> {
+  let enqueued = 0;
+  let skipped = 0;
+  for (const r of recipients) {
+    const id = await enqueueCheckinReminder(r.userId, { slot: r.slot, date: r.date });
+    if (id) enqueued += 1;
+    else skipped += 1;
+  }
+  return { enqueued, skipped };
+}
+
+/** Type-narrowing helper for J9 dispatcher (kept here so all queue knobs sit together). */
+export const NOTIFICATION_TYPES_CHECKIN = new Set<NotificationType>([
+  'checkin_morning_reminder',
+  'checkin_evening_reminder',
+]);

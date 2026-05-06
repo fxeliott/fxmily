@@ -12,7 +12,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from 'react';
 
 import { submitEveningCheckinAction, type CheckinActionState } from '@/app/checkin/actions';
 import { Alert } from '@/components/alert';
@@ -182,23 +182,26 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
     setServerError(null);
   };
 
+  // FR decimal-comma support — see morning wizard for rationale (audit J5 H6).
+  const parseLocaleNumber = (raw: string): number => Number(raw.replace(',', '.'));
+
   const validateStep = (s: StepIndex): boolean => {
     const errs: Record<string, string> = {};
     if (s === 0) {
       if (draft.planRespectedToday === null) {
-        errs.planRespectedToday = 'Réponds avant de continuer.';
+        errs.planRespectedToday = 'Sélection requise.';
       }
       if (draft.hedgeRespectedToday === '') {
-        errs.hedgeRespectedToday = 'Réponds avant de continuer.';
+        errs.hedgeRespectedToday = 'Sélection requise.';
       }
     }
     if (s === 1) {
       if (draft.caffeineMl !== '') {
-        const n = Number(draft.caffeineMl);
+        const n = parseLocaleNumber(draft.caffeineMl);
         if (Number.isNaN(n) || n < 0 || n > 2000) errs.caffeineMl = 'Entre 0 et 2000 mL.';
       }
       if (draft.waterLiters !== '') {
-        const n = Number(draft.waterLiters);
+        const n = parseLocaleNumber(draft.waterLiters);
         if (Number.isNaN(n) || n < 0 || n > 10) errs.waterLiters = 'Entre 0 et 10 L.';
       }
     }
@@ -216,24 +219,34 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
 
   const submit = () => {
     if (pending) return;
-    if (!validateStep(0) || !validateStep(1)) {
-      setServerError('Certains champs sont incomplets — reviens en arrière.');
+    // Find the first invalid step and jump to it (a11y H2 audit fix).
+    const invalidStep = ([0, 1] as const).find((stepIndex) => !validateStep(stepIndex));
+    if (invalidStep !== undefined) {
+      setServerError('Certains champs sont incomplets — utilise « Précédent » pour les compléter.');
+      goToStep(invalidStep as StepIndex);
       return;
     }
 
     const fd = new FormData();
     fd.set('date', draft.date);
-    fd.set('planRespectedToday', String(draft.planRespectedToday ?? false));
+    // Critical for plan/hedge: send empty string (not "false") if user
+    // hasn't answered — Zod schema rejects empty, server returns 400.
+    // Defense in depth on top of validateStep above (audit L3).
+    fd.set(
+      'planRespectedToday',
+      draft.planRespectedToday === null ? '' : String(draft.planRespectedToday),
+    );
     fd.set('hedgeRespectedToday', draft.hedgeRespectedToday);
-    fd.set('caffeineMl', draft.caffeineMl);
-    fd.set('waterLiters', draft.waterLiters);
+    fd.set('caffeineMl', draft.caffeineMl.replace(',', '.'));
+    fd.set('waterLiters', draft.waterLiters.replace(',', '.'));
     fd.set('stressScore', String(draft.stressScore));
     fd.set('moodScore', String(draft.moodScore));
     fd.set('journalNote', draft.journalNote.trim());
     for (const slug of draft.emotionTags) fd.append('emotionTags', slug);
+    // Drop empties client-side too (was already done server-side, but reduces payload).
     for (const item of draft.gratitudeItems) {
-      // Always send all 3 slots (empties dropped server-side).
-      fd.append('gratitudeItems', item);
+      const trimmed = item.trim();
+      if (trimmed.length > 0) fd.append('gratitudeItems', trimmed);
     }
 
     startTransition(async () => {
@@ -361,7 +374,7 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
                 describeAt={STRESS_LABEL}
                 tone="warn"
                 disabled={pending}
-                hint="1 = très calme, 10 = sous tension constante."
+                hint="1 = très calme, 10 = sous tension constante. Un signal pour ton futur toi."
               />
             ) : null}
             {step === 3 ? (
@@ -515,7 +528,7 @@ function StepMind({ draft, update, disabled }: StepProps) {
         describeAt={MOOD_LABEL}
         tone="acc"
         disabled={disabled}
-        hint="Sur la journée entière, pas le sentiment de l’instant."
+        hint="Moyenne sur la journée — pas un score à gonfler ni à minimiser, juste un signal."
       />
       <EmotionCheckinPicker
         value={draft.emotionTags}
@@ -538,6 +551,7 @@ function StepReflection({
   updateGratitude: (idx: 0 | 1 | 2, value: string) => void;
 }) {
   const journalChars = draft.journalNote.length;
+  const isCharLimitNear = journalChars > 3500;
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
@@ -546,16 +560,20 @@ function StepReflection({
             htmlFor="journalNote"
             className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
           >
-            Journal libre (optionnel)
+            Réflexion libre (optionnel)
           </label>
+          {/* Counter — silent for SR until ~10% headroom remains. Audit B4. */}
           <span
             className={cn(
               'font-mono text-[11px] tabular-nums',
-              journalChars > 3500 ? 'text-[var(--warn)]' : 'text-[var(--t-4)]',
+              isCharLimitNear ? 'text-[var(--warn)]' : 'text-[var(--t-3)]',
             )}
-            aria-live="polite"
+            aria-hidden
           >
             {journalChars}/4000
+          </span>
+          <span className="sr-only" aria-live="polite">
+            {isCharLimitNear ? `Limite proche, ${4000 - journalChars} caractères restants.` : ''}
           </span>
         </div>
         <textarea
@@ -570,7 +588,7 @@ function StepReflection({
           aria-invalid={fieldErrors.journalNote ? 'true' : undefined}
           className={cn(
             'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
-            'placeholder:text-[var(--t-4)]',
+            'placeholder:text-[var(--t-3)]',
             fieldErrors.journalNote
               ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
               : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
@@ -585,25 +603,34 @@ function StepReflection({
           3 gratitudes (optionnel)
         </legend>
         {([0, 1, 2] as const).map((i) => (
-          <input
-            key={i}
-            type="text"
-            value={draft.gratitudeItems[i]}
-            onChange={(e) => updateGratitude(i, e.target.value)}
-            disabled={disabled}
-            placeholder={`Gratitude ${i + 1}`}
-            maxLength={200}
-            aria-label={`Gratitude ${i + 1}`}
-            className={cn(
-              'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
-              'placeholder:text-[var(--t-4)]',
-              'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
-              'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
-              'disabled:cursor-not-allowed disabled:opacity-60',
-            )}
-          />
+          <div key={i} className="flex items-center gap-2.5">
+            {/* Numérotation décorative — donne du rythme visuel sans
+                bruit pour le SR (audit UI H4). */}
+            <span
+              aria-hidden
+              className="w-3 shrink-0 font-mono text-[11px] tabular-nums text-[var(--t-3)]"
+            >
+              {i + 1}.
+            </span>
+            <input
+              type="text"
+              value={draft.gratitudeItems[i]}
+              onChange={(e) => updateGratitude(i, e.target.value)}
+              disabled={disabled}
+              placeholder={`Gratitude ${i + 1}`}
+              maxLength={200}
+              aria-label={`Gratitude ${i + 1}`}
+              className={cn(
+                'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+                'placeholder:text-[var(--t-3)]',
+                'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+                'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+                'disabled:cursor-not-allowed disabled:opacity-60',
+              )}
+            />
+          </div>
         ))}
-        <p className="t-cap text-[var(--t-4)]">
+        <p className="t-cap text-[var(--t-3)]">
           Trois choses pour lesquelles tu es reconnaissant aujourd’hui. Petites ou grandes.
         </p>
       </fieldset>
@@ -703,8 +730,37 @@ function RadioGroup({
 }) {
   const firstValue = options[0]?.value ?? '';
   const errorId = error ? `${name}-error` : undefined;
+
+  // Roving tabindex needs Arrow/Home/End keys (ARIA APG, audit B5).
+  const handleKeyDown = (e: KeyboardEvent<HTMLFieldSetElement>) => {
+    if (disabled) return;
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+      return;
+    }
+    e.preventDefault();
+    const currentIndex = options.findIndex((o) => o.value === (value || firstValue));
+    const lastIndex = options.length - 1;
+    let nextIndex = currentIndex;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      nextIndex = currentIndex <= 0 ? lastIndex : currentIndex - 1;
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      nextIndex = currentIndex >= lastIndex ? 0 : currentIndex + 1;
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      nextIndex = lastIndex;
+    }
+    const target = options[nextIndex];
+    if (!target) return;
+    onChange(target.value);
+    const input = e.currentTarget.querySelector<HTMLInputElement>(
+      `input[name="${name}"][value="${target.value}"]`,
+    );
+    input?.focus();
+  };
+
   return (
-    <fieldset className="flex flex-col gap-2" aria-describedby={errorId}>
+    <fieldset className="flex flex-col gap-2" aria-describedby={errorId} onKeyDown={handleKeyDown}>
       <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
         {legend}
       </legend>

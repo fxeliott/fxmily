@@ -13,7 +13,7 @@ import {
   Target,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from 'react';
 
 import { submitMorningCheckinAction, type CheckinActionState } from '@/app/checkin/actions';
 import { Alert } from '@/components/alert';
@@ -172,20 +172,24 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
     setServerError(null);
   };
 
+  // Normalize FR decimal comma — `<input type="number" inputMode="decimal">`
+  // accepts "7,5" on iOS Safari FR but Number("7,5") is NaN. Audit J5 (code H6).
+  const parseLocaleNumber = (raw: string): number => Number(raw.replace(',', '.'));
+
   const validateStep = (s: StepIndex): boolean => {
     const errs: Record<string, string> = {};
     if (s === 0) {
       if (draft.sleepHours === '') errs.sleepHours = 'Indique tes heures de sommeil.';
       else {
-        const n = Number(draft.sleepHours);
+        const n = parseLocaleNumber(draft.sleepHours);
         if (Number.isNaN(n) || n < 0 || n > 24) errs.sleepHours = 'Entre 0 et 24h.';
       }
     }
     if (s === 1 && draft.morningRoutineCompleted === null) {
-      errs.morningRoutineCompleted = 'Réponds avant de continuer.';
+      errs.morningRoutineCompleted = 'Sélection requise.';
     }
     if (s === 2) {
-      const med = Number(draft.meditationMin);
+      const med = parseLocaleNumber(draft.meditationMin);
       if (Number.isNaN(med) || med < 0 || med > 240) {
         errs.meditationMin = 'Entre 0 et 240 min.';
       }
@@ -208,19 +212,23 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
 
   const submit = () => {
     if (pending) return;
-    if (!validateStep(0) || !validateStep(1) || !validateStep(2)) {
-      setServerError('Certains champs sont incomplets — reviens en arrière.');
+    // Find the first invalid step and jump to it (a11y H2 audit fix).
+    const invalidStep = ([0, 1, 2] as const).find((stepIndex) => !validateStep(stepIndex));
+    if (invalidStep !== undefined) {
+      setServerError('Certains champs sont incomplets — utilise « Précédent » pour les compléter.');
+      goToStep(invalidStep as StepIndex);
       return;
     }
 
     const fd = new FormData();
     fd.set('date', draft.date);
-    fd.set('sleepHours', draft.sleepHours);
+    // Normalize FR comma → dot before sending to the server (Zod parses as number).
+    fd.set('sleepHours', draft.sleepHours.replace(',', '.'));
     fd.set('sleepQuality', String(draft.sleepQuality));
     fd.set('morningRoutineCompleted', String(draft.morningRoutineCompleted ?? false));
-    fd.set('meditationMin', draft.meditationMin || '0');
+    fd.set('meditationMin', (draft.meditationMin || '0').replace(',', '.'));
     fd.set('sportType', draft.sportType.trim());
-    fd.set('sportDurationMin', draft.sportDurationMin);
+    fd.set('sportDurationMin', draft.sportDurationMin.replace(',', '.'));
     fd.set('moodScore', String(draft.moodScore));
     fd.set('intention', draft.intention.trim());
     for (const slug of draft.emotionTags) fd.append('emotionTags', slug);
@@ -442,7 +450,7 @@ function StepSleep({ draft, update, fieldErrors, disabled }: StepProps) {
         describeAt={SLEEP_QUALITY_LABEL}
         tone="acc"
         disabled={disabled}
-        hint="Sensation au réveil — pas une note neurologique."
+        hint="Comment tu te sens au réveil."
       />
     </div>
   );
@@ -578,11 +586,11 @@ function StepMind({ draft, update, disabled }: StepProps) {
         name="moodScore"
         value={draft.moodScore}
         onChange={(v) => update('moodScore', v)}
-        label="Mon humeur ce matin"
+        label="Humeur ce matin"
         describeAt={MOOD_LABEL}
         tone="acc"
         disabled={disabled}
-        hint="Comment je me sens, là, maintenant."
+        hint="Sensation présente — ni anticipation, ni rétrospective."
       />
 
       <EmotionCheckinPicker
@@ -598,13 +606,17 @@ function StepMind({ draft, update, disabled }: StepProps) {
 
 function StepIntention({ draft, update, fieldErrors, disabled }: StepProps) {
   const charCount = draft.intention.length;
+  const isCharLimitNear = charCount > 180;
   const hint = 'Une phrase courte. Ex: "Trader uniquement à Londres", "Pas de revenge trade".';
   return (
     <div className="flex flex-col gap-3">
       <Card className="flex items-start gap-2.5 p-4">
         <Coffee className="mt-0.5 h-4 w-4 shrink-0 text-[var(--cy)]" strokeWidth={1.75} />
+        {/* Paraphrase Mark Douglas — pas de citation directe (pas de
+            formulation sourçable telle quelle dans Trading in the Zone). On
+            référence l'auteur sans fabriquer une citation à guillemets. */}
         <p className="t-body text-[var(--t-2)]">
-          Mark Douglas appelle ça «&nbsp;définir le brief avant de regarder l’écran&nbsp;». Une
+          Dans l’esprit de Mark Douglas : définis tes règles <em>avant</em> de regarder l’écran. Une
           phrase courte qui te ramène à ton plan dès qu’elle se rappelle à toi.
         </p>
       </Card>
@@ -617,14 +629,20 @@ function StepIntention({ draft, update, fieldErrors, disabled }: StepProps) {
           >
             Intention du jour (optionnel)
           </label>
+          {/* Counter — silent for SR until ~10% headroom remains, then announces
+              a single threshold message (a11y B4 audit fix: drop per-keystroke
+              "polite" announcements that overwhelm dictation). */}
           <span
             className={cn(
               'font-mono text-[11px] tabular-nums',
-              charCount > 180 ? 'text-[var(--warn)]' : 'text-[var(--t-4)]',
+              isCharLimitNear ? 'text-[var(--warn)]' : 'text-[var(--t-3)]',
             )}
-            aria-live="polite"
+            aria-hidden
           >
             {charCount}/200
+          </span>
+          <span className="sr-only" aria-live="polite">
+            {isCharLimitNear ? `Limite proche, ${200 - charCount} caractères restants.` : ''}
           </span>
         </div>
         <textarea
@@ -639,7 +657,7 @@ function StepIntention({ draft, update, fieldErrors, disabled }: StepProps) {
           aria-invalid={fieldErrors.intention ? 'true' : undefined}
           className={cn(
             'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
-            'placeholder:text-[var(--t-4)]',
+            'placeholder:text-[var(--t-3)]',
             fieldErrors.intention
               ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
               : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
@@ -657,11 +675,11 @@ function StepIntention({ draft, update, fieldErrors, disabled }: StepProps) {
       <Card primary className="flex items-start gap-2.5 p-4">
         <Brain className="mt-0.5 h-4 w-4 shrink-0 text-[var(--acc)]" strokeWidth={1.75} />
         <div className="flex flex-1 flex-col gap-1">
-          <span className="t-eyebrow">Tu es prêt</span>
+          <span className="t-eyebrow">Récap</span>
           <p className="t-body text-[var(--t-2)]">
             Clique sur{' '}
             <span className="font-semibold text-[var(--t-1)]">Enregistrer mon matin</span> pour
-            valider. Ton check-in du soir t’attendra ce soir.
+            valider. Le check-in soir s’ouvrira ce soir.
           </p>
         </div>
       </Card>
@@ -764,8 +782,42 @@ function RadioGroup({
 }) {
   const firstValue = options[0]?.value ?? '';
   const errorId = error ? `${name}-error` : undefined;
+
+  // ARIA Authoring Practices roving tabindex needs Arrow/Home/End keys to be
+  // operable by keyboard (a11y B5 audit fix). The native <input type="radio">
+  // arrow handling is broken when the inputs are sr-only AND we apply our own
+  // tabindex(-1) on non-active siblings — so we wire the keyboard handler
+  // explicitly on the fieldset.
+  const handleKeyDown = (e: KeyboardEvent<HTMLFieldSetElement>) => {
+    if (disabled) return;
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+      return;
+    }
+    e.preventDefault();
+    const currentIndex = options.findIndex((o) => o.value === (value || firstValue));
+    const lastIndex = options.length - 1;
+    let nextIndex = currentIndex;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      nextIndex = currentIndex <= 0 ? lastIndex : currentIndex - 1;
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      nextIndex = currentIndex >= lastIndex ? 0 : currentIndex + 1;
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      nextIndex = lastIndex;
+    }
+    const target = options[nextIndex];
+    if (!target) return;
+    onChange(target.value);
+    // Focus the new option's input so the SR announces the selection change.
+    const input = e.currentTarget.querySelector<HTMLInputElement>(
+      `input[name="${name}"][value="${target.value}"]`,
+    );
+    input?.focus();
+  };
+
   return (
-    <fieldset className="flex flex-col gap-2" aria-describedby={errorId}>
+    <fieldset className="flex flex-col gap-2" aria-describedby={errorId} onKeyDown={handleKeyDown}>
       <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
         {legend}
       </legend>

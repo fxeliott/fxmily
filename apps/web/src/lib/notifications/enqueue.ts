@@ -94,11 +94,14 @@ export interface CheckinReminderPayload {
 /**
  * Enqueue a check-in reminder push for a single user (J5).
  *
- * Idempotent on the same (user, slot, date): if a pending reminder for the
- * same slot+date already exists, we skip the insert. This protects the cron
- * scanner from doubling up if it runs twice in the same window.
+ * Race-safe idempotency keyed on (userId, type, payload.date) via a unique
+ * partial index `notification_queue_pending_checkin_dedup` (see migration
+ * 20260507100000_j5_notification_dedup). Two concurrent calls with the same
+ * payload result in one row — the second `INSERT` raises Prisma's P2002 which
+ * we catch and resolve to a no-op "already enqueued" result.
  *
- * Returns the row id (existing or new) on success, null on DB failure.
+ * Returns the row id (existing or new) on success, null on a non-recoverable
+ * DB failure (logged, never thrown — best-effort by design).
  */
 export async function enqueueCheckinReminder(
   userId: string,
@@ -107,30 +110,6 @@ export async function enqueueCheckinReminder(
   const type = payload.slot === 'morning' ? 'checkin_morning_reminder' : 'checkin_evening_reminder';
 
   try {
-    // Idempotency: scan for an open reminder of this kind for this date. We
-    // don't have a unique index — JSON-payload uniqueness isn't worth the
-    // index — but the scan is bounded by the (status, scheduledFor) index
-    // and the user's small queue.
-    const existing = await db.notificationQueue.findFirst({
-      where: {
-        userId,
-        type,
-        status: 'pending',
-        // We can't index on JSON, so we filter in memory after fetching
-        // pending reminders for this user/type.
-      },
-      select: { id: true, payload: true },
-    });
-    if (
-      existing &&
-      typeof existing.payload === 'object' &&
-      existing.payload !== null &&
-      !Array.isArray(existing.payload) &&
-      (existing.payload as Record<string, unknown>).date === payload.date
-    ) {
-      return existing.id;
-    }
-
     const row = await db.notificationQueue.create({
       data: {
         userId,
@@ -141,7 +120,42 @@ export async function enqueueCheckinReminder(
     });
     return row.id;
   } catch (err) {
-    console.error('[notifications.enqueue.checkin] failed', err);
+    // P2002 unique-violation on the partial index → an enqueue won the race.
+    // Look up the existing row (we still want to return its id) and return.
+    if (
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      (err as { code?: string }).code === 'P2002'
+    ) {
+      const existing = await db.notificationQueue.findFirst({
+        where: { userId, type, status: 'pending' },
+        select: { id: true, payload: true },
+      });
+      if (
+        existing &&
+        typeof existing.payload === 'object' &&
+        existing.payload !== null &&
+        !Array.isArray(existing.payload) &&
+        (existing.payload as Record<string, unknown>).date === payload.date
+      ) {
+        return existing.id;
+      }
+      // The conflict was on a different date in the same (user, type) slot —
+      // shouldn't happen because the index is keyed on date too, but
+      // defensive: log and bail.
+      console.warn('[notifications.enqueue.checkin] P2002 with unmatched date', {
+        userId,
+        type,
+        date: payload.date,
+      });
+      return null;
+    }
+    const code =
+      err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
+        ? err.code
+        : 'unknown';
+    console.error('[notifications.enqueue.checkin] failed', { code });
     return null;
   }
 }

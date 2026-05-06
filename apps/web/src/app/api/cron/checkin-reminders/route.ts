@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
+
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { runCheckinReminderScan } from '@/lib/checkin/reminders';
@@ -19,6 +21,10 @@ import { env } from '@/lib/env';
  * Auth: header `X-Cron-Secret` must match `env.CRON_SECRET`. If `CRON_SECRET`
  * is not set, the endpoint returns 503 — refuses to run unauthenticated, even
  * in dev. To run a local test, set `CRON_SECRET=…` in the worktree `.env`.
+ * The comparison is **constant-time** (CWE-208 mitigation): both sides are
+ * SHA-256 hashed first to guarantee equal byte length, then `timingSafeEqual`
+ * walks every byte. Without this, a network-level adversary could byte-by-byte
+ * reconstruct CRON_SECRET via timing differences.
  *
  * Response: JSON summary of the scan (always small, no PII).
  */
@@ -26,6 +32,17 @@ import { env } from '@/lib/env';
 // Reads env + DB → must run on Node.js, never Edge.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+/**
+ * Constant-time secret comparison. Both inputs are SHA-256 hashed so they
+ * always have the same length (32 bytes), which sidesteps the
+ * length-leak pitfall flagged by Cloudflare in their `timingSafeEqual` guide.
+ */
+function verifyCronSecret(provided: string, expected: string): boolean {
+  const a = createHash('sha256').update(provided, 'utf8').digest();
+  const b = createHash('sha256').update(expected, 'utf8').digest();
+  return timingSafeEqual(a, b);
+}
 
 export async function POST(req: NextRequest) {
   if (!env.CRON_SECRET) {
@@ -36,16 +53,19 @@ export async function POST(req: NextRequest) {
   }
 
   const provided = req.headers.get('x-cron-secret');
-  if (!provided || provided !== env.CRON_SECRET) {
+  if (!provided || !verifyCronSecret(provided, env.CRON_SECRET)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  // Optional ?at=ISO query param to back-test a specific instant. Ignored
-  // outside development to keep prod deterministic.
+  // Optional ?at=ISO query param to back-test a specific instant. Gated on
+  // BOTH NODE_ENV !== production AND AUTH_URL not being HTTPS prod-style —
+  // belt + braces against a misconfigured systemd service that drops
+  // NODE_ENV (Zod default falls back to 'development' otherwise).
+  const isProdRuntime = env.NODE_ENV === 'production' || env.AUTH_URL.startsWith('https://');
   const url = new URL(req.url);
   const atParam = url.searchParams.get('at');
   let now: Date | undefined;
-  if (env.NODE_ENV !== 'production' && atParam) {
+  if (!isProdRuntime && atParam) {
     const parsed = new Date(atParam);
     if (!Number.isNaN(parsed.getTime())) now = parsed;
   }
@@ -54,7 +74,13 @@ export async function POST(req: NextRequest) {
     const result = await runCheckinReminderScan(now);
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    console.error('[cron.checkin-reminders] scan failed', err);
+    // Don't leak the error stack — keep the message plain so logs stay tidy
+    // and Sentry (J10) doesn't accidentally surface DB internals.
+    const code =
+      err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
+        ? err.code
+        : 'unknown';
+    console.error('[cron.checkin-reminders] scan failed', { code });
     return NextResponse.json({ ok: false, error: 'scan_failed' }, { status: 500 });
   }
 }

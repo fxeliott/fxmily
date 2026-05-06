@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Fxmily">
+  <rect width="64" height="64" rx="14" fill="#07090f"/>
+  <g fill="#a3e635" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Inter, sans-serif" font-weight="700" font-size="34" text-anchor="middle">
+    <text x="32" y="42" letter-spacing="-2">FM</text>
+  </g>
+</svg>

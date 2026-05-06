@@ -1,12 +1,14 @@
-import { ArrowRight, BookOpen, LogOut, Plus, Shield, Users } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, LogOut, Moon, Plus, Shield, Sun, Users } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth, signOut } from '@/auth';
+import { StreakCard } from '@/components/checkin/streak-card';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Kbd } from '@/components/ui/kbd';
 import { Pill } from '@/components/ui/pill';
+import { getCheckinStatus, getStreak } from '@/lib/checkin/service';
 import { countTradesByStatus } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
 
@@ -58,7 +60,18 @@ export default async function DashboardPage() {
   if (!session?.user) redirect('/login');
 
   const userId = session.user.id;
-  const counts = userId ? await countTradesByStatus(userId) : { open: 0, closed: 0 };
+  const timezone = 'Europe/Paris'; // TODO J5.5: read from session.user.timezone
+  const [counts, checkinStatus, streak] = userId
+    ? await Promise.all([
+        countTradesByStatus(userId),
+        getCheckinStatus(userId, timezone),
+        getStreak(userId, timezone),
+      ])
+    : [
+        { open: 0, closed: 0 },
+        { today: '', morningSubmitted: false, eveningSubmitted: false },
+        { current: 0, todayFilled: false, today: '' },
+      ];
 
   const fullName = session.user.name?.trim() || session.user.email?.split('@')[0] || 'Membre';
   const firstName = fullName.split(' ')[0]!;
@@ -134,8 +147,54 @@ export default async function DashboardPage() {
               hint="ce mois"
               tone={counts.closed > 0 ? 'ok' : 'mute'}
             />
-            <KpiCell label="Discipline" value="—" hint="dispo J6" tone="mute" soon />
+            <KpiCell
+              label="Streak"
+              value={streak.current.toString()}
+              hint={
+                streak.current === 0
+                  ? 'à démarrer'
+                  : streak.todayFilled
+                    ? 'jours d’affilée'
+                    : 'à confirmer'
+              }
+              tone={streak.current === 0 ? 'mute' : streak.todayFilled ? 'acc' : 'warn'}
+            />
           </div>
+        </section>
+
+        {/* J5 — Check-in du jour */}
+        <section className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+          <Card primary className="flex flex-col gap-4 p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="t-eyebrow">Check-in du jour</span>
+                <Pill tone="acc" dot="live">
+                  ACTIF
+                </Pill>
+              </div>
+              <Link
+                href="/checkin"
+                className="inline-flex items-center gap-1 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
+              >
+                Tout voir
+                <ArrowRight className="h-3 w-3" strokeWidth={1.75} />
+              </Link>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <CheckinSlotChip
+                slot="morning"
+                submitted={checkinStatus.morningSubmitted}
+                href="/checkin/morning"
+              />
+              <CheckinSlotChip
+                slot="evening"
+                submitted={checkinStatus.eveningSubmitted}
+                href="/checkin/evening"
+              />
+            </div>
+          </Card>
+
+          <StreakCard streak={streak.current} todayFilled={streak.todayFilled} />
         </section>
 
         {/* 2-col layout : Quick actions + Mark Douglas */}
@@ -227,11 +286,6 @@ export default async function DashboardPage() {
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <ComingSoonCard
-              title="Check-ins quotidiens"
-              jalon="J5"
-              desc="Mental matin/soir, streak discipline."
-            />
-            <ComingSoonCard
               title="Track record"
               jalon="J6"
               desc="4 scores, R cumulé, patterns émotion×perf."
@@ -240,6 +294,11 @@ export default async function DashboardPage() {
               title="Bibliothèque MD"
               jalon="J7"
               desc="~50 fiches Mark Douglas + déclencheurs."
+            />
+            <ComingSoonCard
+              title="Rapport hebdo IA"
+              jalon="J8"
+              desc="Analyse Claude livrée chaque dimanche."
             />
           </div>
         </section>
@@ -311,5 +370,56 @@ function ComingSoonCard({ title, jalon, desc }: { title: string; jalon: string; 
       </div>
       <p className="t-cap text-[var(--t-4)]">{desc}</p>
     </Card>
+  );
+}
+
+function CheckinSlotChip({
+  slot,
+  submitted,
+  href,
+}: {
+  slot: 'morning' | 'evening';
+  submitted: boolean;
+  href: '/checkin/morning' | '/checkin/evening';
+}) {
+  const isMorning = slot === 'morning';
+  const Icon = isMorning ? Sun : Moon;
+  const label = isMorning ? 'Matin' : 'Soir';
+  const sub = isMorning ? 'Sommeil · routine' : 'Discipline · stress';
+  return (
+    <Link href={href} className="block">
+      <div
+        className={cn(
+          'rounded-control flex items-center gap-3 border bg-[var(--bg-1)] px-3 py-2.5 transition-all',
+          submitted
+            ? 'border-[var(--b-acc)] bg-[var(--acc-dim-2)]'
+            : 'border-[var(--b-default)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
+        )}
+      >
+        <div
+          className={cn(
+            'rounded-control grid h-8 w-8 shrink-0 place-items-center border',
+            submitted
+              ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)]'
+              : 'border-[var(--b-default)] text-[var(--t-3)]',
+          )}
+        >
+          <Icon className="h-4 w-4" strokeWidth={1.75} />
+        </div>
+        <div className="flex flex-1 flex-col leading-tight">
+          <span className="text-[13px] font-semibold text-[var(--t-1)]">{label}</span>
+          <span className="t-cap text-[var(--t-4)]">{sub}</span>
+        </div>
+        {submitted ? (
+          <Check className="h-4 w-4 text-[var(--acc)]" strokeWidth={2} aria-label="fait" />
+        ) : (
+          <ArrowRight
+            className="h-3.5 w-3.5 text-[var(--t-4)]"
+            strokeWidth={1.75}
+            aria-label="à faire"
+          />
+        )}
+      </div>
+    </Link>
   );
 }

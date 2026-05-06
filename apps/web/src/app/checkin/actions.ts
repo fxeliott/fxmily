@@ -1,0 +1,175 @@
+'use server';
+
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import type { ZodError } from 'zod';
+
+import { auth } from '@/auth';
+import { logAudit } from '@/lib/auth/audit';
+import { submitEveningCheckin, submitMorningCheckin } from '@/lib/checkin/service';
+import { eveningCheckinSchema, morningCheckinSchema } from '@/lib/schemas/checkin';
+
+/**
+ * Server Actions for the daily check-in flows (J5, SPEC §7.4).
+ *
+ * Pattern recap (matches J1+J2 conventions):
+ *   - Re-call `auth()` at the top — defence in depth.
+ *   - Re-validate `FormData` with the Zod schemas.
+ *   - Return a discriminated `ActionState` for `useActionState`.
+ *   - Re-throw `NEXT_REDIRECT` so navigation isn't swallowed.
+ */
+
+export interface CheckinActionState {
+  ok: boolean;
+  error?: 'unauthorized' | 'invalid_input' | 'unknown';
+  fieldErrors?: Record<string, string>;
+}
+
+function flattenFieldErrors(error: ZodError): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const key = issue.path.join('.') || '_';
+    out[key] ??= issue.message;
+  }
+  return out;
+}
+
+function isNextRedirect(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'digest' in err &&
+    typeof (err as { digest?: unknown }).digest === 'string' &&
+    (err as { digest: string }).digest.startsWith('NEXT_REDIRECT')
+  );
+}
+
+function getString(formData: FormData, key: string): string {
+  const v = formData.get(key);
+  return typeof v === 'string' ? v : '';
+}
+
+function getStringArray(formData: FormData, key: string): string[] {
+  return formData.getAll(key).filter((v): v is string => typeof v === 'string');
+}
+
+export async function submitMorningCheckinAction(
+  _prev: CheckinActionState | null,
+  formData: FormData,
+): Promise<CheckinActionState> {
+  const session = await auth();
+  if (!session?.user?.id || session.user.status !== 'active') {
+    return { ok: false, error: 'unauthorized' };
+  }
+
+  const raw = {
+    date: getString(formData, 'date'),
+    sleepHours: getString(formData, 'sleepHours'),
+    sleepQuality: getString(formData, 'sleepQuality'),
+    morningRoutineCompleted: getString(formData, 'morningRoutineCompleted'),
+    meditationMin: getString(formData, 'meditationMin'),
+    sportType: getString(formData, 'sportType'),
+    sportDurationMin: getString(formData, 'sportDurationMin'),
+    moodScore: getString(formData, 'moodScore'),
+    intention: getString(formData, 'intention'),
+    emotionTags: getStringArray(formData, 'emotionTags'),
+  };
+
+  const parsed = morningCheckinSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: 'invalid_input',
+      fieldErrors: flattenFieldErrors(parsed.error),
+    };
+  }
+
+  try {
+    const row = await submitMorningCheckin(session.user.id, parsed.data);
+    await logAudit({
+      action: 'checkin.morning.submitted',
+      userId: session.user.id,
+      metadata: {
+        checkinId: row.id,
+        date: row.date,
+        moodScore: row.moodScore,
+        sleepQuality: row.sleepQuality,
+      },
+    });
+  } catch (err) {
+    console.error('[checkin.morning] submit failed', err);
+    return { ok: false, error: 'unknown' };
+  }
+
+  revalidatePath('/checkin');
+  revalidatePath('/dashboard');
+
+  try {
+    redirect('/checkin?slot=morning&done=1');
+  } catch (err) {
+    if (isNextRedirect(err)) throw err;
+    console.error('[checkin.morning] redirect failed', err);
+  }
+  return { ok: true };
+}
+
+export async function submitEveningCheckinAction(
+  _prev: CheckinActionState | null,
+  formData: FormData,
+): Promise<CheckinActionState> {
+  const session = await auth();
+  if (!session?.user?.id || session.user.status !== 'active') {
+    return { ok: false, error: 'unauthorized' };
+  }
+
+  const raw = {
+    date: getString(formData, 'date'),
+    planRespectedToday: getString(formData, 'planRespectedToday'),
+    hedgeRespectedToday: getString(formData, 'hedgeRespectedToday'),
+    caffeineMl: getString(formData, 'caffeineMl'),
+    waterLiters: getString(formData, 'waterLiters'),
+    stressScore: getString(formData, 'stressScore'),
+    moodScore: getString(formData, 'moodScore'),
+    emotionTags: getStringArray(formData, 'emotionTags'),
+    journalNote: getString(formData, 'journalNote'),
+    gratitudeItems: getStringArray(formData, 'gratitudeItems'),
+  };
+
+  const parsed = eveningCheckinSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: 'invalid_input',
+      fieldErrors: flattenFieldErrors(parsed.error),
+    };
+  }
+
+  try {
+    const row = await submitEveningCheckin(session.user.id, parsed.data);
+    await logAudit({
+      action: 'checkin.evening.submitted',
+      userId: session.user.id,
+      metadata: {
+        checkinId: row.id,
+        date: row.date,
+        moodScore: row.moodScore,
+        stressScore: row.stressScore,
+        planRespected: row.planRespectedToday,
+      },
+    });
+  } catch (err) {
+    console.error('[checkin.evening] submit failed', err);
+    return { ok: false, error: 'unknown' };
+  }
+
+  revalidatePath('/checkin');
+  revalidatePath('/dashboard');
+
+  try {
+    redirect('/checkin?slot=evening&done=1');
+  } catch (err) {
+    if (isNextRedirect(err)) throw err;
+    console.error('[checkin.evening] redirect failed', err);
+  }
+  return { ok: true };
+}

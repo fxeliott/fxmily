@@ -1,17 +1,18 @@
 'use client';
 
+import { Check, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useActionState, useState } from 'react';
 
+import { closeTradeAction, type CloseTradeActionState } from '@/app/journal/actions';
 import { Alert } from '@/components/alert';
-import { Spinner } from '@/components/spinner';
 import { EmotionPicker } from '@/components/journal/emotion-picker';
 import { ScreenshotUploader } from '@/components/journal/screenshot-uploader';
-import { closeTradeAction, type CloseTradeActionState } from '@/app/journal/actions';
+import { Btn, btnVariants } from '@/components/ui/btn';
+import { cn } from '@/lib/utils';
 
 interface CloseTradeFormProps {
   tradeId: string;
-  /** Pre-filled with the entry timestamp + 1h for convenience. */
   defaultExitedAt: string;
 }
 
@@ -37,12 +38,18 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
               ? 'Erreur inattendue, réessaie.'
               : null;
 
+  const submitDisabled = pending || screenshotKey.length === 0 || emotionAfter.length === 0;
+
   return (
     <form action={formAction} className="flex flex-col gap-5" noValidate>
       {topError ? <Alert tone="danger">{topError}</Alert> : null}
 
+      {/* Date sortie */}
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="exitedAt" className="text-foreground text-sm font-medium">
+        <label
+          htmlFor="exitedAt"
+          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+        >
           Date et heure de sortie
         </label>
         <input
@@ -53,17 +60,28 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
           required
           disabled={pending}
           aria-invalid={state.fieldErrors?.exitedAt ? 'true' : undefined}
-          className="bg-card text-foreground focus-visible:border-accent focus-visible:ring-accent/40 rounded-md border border-[var(--border)] px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
+          className={cn(
+            'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            state.fieldErrors?.exitedAt
+              ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+              : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+            'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+            'disabled:cursor-not-allowed disabled:opacity-60',
+          )}
         />
         {state.fieldErrors?.exitedAt ? (
-          <p className="text-danger text-xs" role="alert">
+          <p className="text-[11px] text-[var(--bad)]" role="alert">
             {state.fieldErrors.exitedAt}
           </p>
         ) : null}
       </div>
 
+      {/* Prix sortie */}
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="exitPrice" className="text-foreground text-sm font-medium">
+        <label
+          htmlFor="exitPrice"
+          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+        >
           Prix de sortie
         </label>
         <input
@@ -74,68 +92,43 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
           inputMode="decimal"
           required
           disabled={pending}
+          placeholder="0.00000"
           aria-invalid={state.fieldErrors?.exitPrice ? 'true' : undefined}
-          className="bg-card text-foreground focus-visible:border-accent focus-visible:ring-accent/40 rounded-md border border-[var(--border)] px-3 py-2 font-mono text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
+          className={cn(
+            'f-mono rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] tabular-nums text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            'placeholder:text-[var(--t-4)]',
+            state.fieldErrors?.exitPrice
+              ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+              : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+            'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+            'disabled:cursor-not-allowed disabled:opacity-60',
+          )}
         />
         {state.fieldErrors?.exitPrice ? (
-          <p className="text-danger text-xs" role="alert">
+          <p className="text-[11px] text-[var(--bad)]" role="alert">
             {state.fieldErrors.exitPrice}
           </p>
         ) : null}
       </div>
 
+      {/* Outcome — 3 cards radio */}
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-foreground mb-1 text-sm font-medium">Résultat</legend>
+        <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+          Résultat
+        </legend>
         <div role="radiogroup" aria-label="Résultat du trade" className="grid grid-cols-3 gap-2">
-          {(
-            [
-              {
-                value: 'win',
-                label: 'Gain',
-                tone: 'has-[:checked]:bg-success/15 has-[:checked]:border-success has-[:checked]:text-success',
-              },
-              {
-                value: 'loss',
-                label: 'Perte',
-                tone: 'has-[:checked]:bg-danger/15 has-[:checked]:border-danger has-[:checked]:text-danger',
-              },
-              {
-                value: 'break_even',
-                label: 'Break-even',
-                tone: 'has-[:checked]:bg-accent/15 has-[:checked]:border-accent has-[:checked]:text-foreground',
-              },
-            ] as const
-          ).map((opt, i) => (
-            <label
-              key={opt.value}
-              className={[
-                'bg-card focus-within:outline-accent flex min-h-12 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-2 text-sm transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-offset-2',
-                opt.tone,
-              ].join(' ')}
-            >
-              <input
-                type="radio"
-                name="outcome"
-                value={opt.value}
-                required
-                disabled={pending}
-                tabIndex={i === 0 ? 0 : -1}
-                className="peer sr-only"
-              />
-              <span aria-hidden="true" className="hidden peer-checked:inline">
-                ✓
-              </span>
-              {opt.label}
-            </label>
-          ))}
+          <OutcomeCard value="win" label="Gain" icon="up" tone="ok" disabled={pending} />
+          <OutcomeCard value="loss" label="Perte" icon="down" tone="bad" disabled={pending} />
+          <OutcomeCard value="break_even" label="BE" icon="flat" tone="mute" disabled={pending} />
         </div>
         {state.fieldErrors?.outcome ? (
-          <p className="text-danger text-xs" role="alert">
+          <p className="text-[11px] text-[var(--bad)]" role="alert">
             {state.fieldErrors.outcome}
           </p>
         ) : null}
       </fieldset>
 
+      {/* Emotion */}
       <EmotionPicker
         value={emotionAfter}
         onChange={setEmotionAfter}
@@ -144,13 +137,17 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
         disabled={pending}
       />
       {state.fieldErrors?.emotionAfter ? (
-        <p className="text-danger text-xs" role="alert">
+        <p className="text-[11px] text-[var(--bad)]" role="alert">
           {state.fieldErrors.emotionAfter}
         </p>
       ) : null}
 
+      {/* Notes */}
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="notes" className="text-foreground text-sm font-medium">
+        <label
+          htmlFor="notes"
+          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+        >
           Notes (optionnel)
         </label>
         <textarea
@@ -159,13 +156,22 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
           rows={3}
           maxLength={2000}
           disabled={pending}
-          placeholder="Comment tu t’es senti ? Ce qui a marché / pas marché ?"
-          className="bg-card text-foreground focus-visible:border-accent focus-visible:ring-accent/40 placeholder:text-muted/70 rounded-md border border-[var(--border)] px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
+          placeholder="Comment tu t'es senti ? Ce qui a marché / pas marché ?"
+          className={cn(
+            'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            'placeholder:text-[var(--t-4)]',
+            'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+            'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+            'disabled:cursor-not-allowed disabled:opacity-60',
+          )}
         />
       </div>
 
+      {/* Screenshot exit */}
       <div className="flex flex-col gap-2">
-        <span className="text-foreground text-sm font-medium">Capture après sortie</span>
+        <span className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+          Capture après sortie
+        </span>
         <ScreenshotUploader
           kind="trade-exit"
           name="screenshotExitKey"
@@ -176,39 +182,85 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
         />
       </div>
 
-      {screenshotKey.length === 0 || emotionAfter.length === 0 ? (
-        <p id="close-submit-hint" className="text-muted text-right text-xs">
-          Capture après sortie et au moins une émotion sont nécessaires.
+      {/* Submit gate hint */}
+      {submitDisabled && !pending ? (
+        <p id="close-submit-hint" className="text-right text-[11px] tabular-nums text-[var(--t-4)]">
+          Capture {screenshotKey.length === 0 ? '✗' : '✓'} · Émotion(s){' '}
+          {emotionAfter.length === 0 ? '✗' : '✓'}
         </p>
       ) : null}
 
-      <div className="flex items-center justify-between gap-2">
+      {/* Actions */}
+      <div className="flex items-center justify-between gap-2 border-t border-[var(--b-subtle)] pt-4">
         <Link
           href={`/journal/${tradeId}`}
-          className="text-muted hover:text-foreground focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md border border-[var(--border)] px-4 py-2 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          className={cn(btnVariants({ kind: 'ghost', size: 'm' }))}
         >
           Annuler
         </Link>
-        <button
+        <Btn
           type="submit"
-          disabled={pending || screenshotKey.length === 0 || emotionAfter.length === 0}
-          aria-describedby={
-            screenshotKey.length === 0 || emotionAfter.length === 0
-              ? 'close-submit-hint'
-              : undefined
-          }
-          className="bg-primary text-primary-foreground focus-visible:outline-accent inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          kind="primary"
+          size="m"
+          loading={pending}
+          disabled={submitDisabled}
+          kbd={pending || submitDisabled ? undefined : '↵'}
+          aria-describedby={submitDisabled ? 'close-submit-hint' : undefined}
         >
-          {pending ? (
-            <>
-              <Spinner />
-              <span>Clôture en cours…</span>
-            </>
-          ) : (
-            <span>Clôturer le trade</span>
-          )}
-        </button>
+          {pending ? 'Clôture en cours…' : 'Clôturer le trade'}
+        </Btn>
       </div>
     </form>
+  );
+}
+
+function OutcomeCard({
+  value,
+  label,
+  icon,
+  tone,
+  disabled,
+}: {
+  value: 'win' | 'loss' | 'break_even';
+  label: string;
+  icon: 'up' | 'down' | 'flat';
+  tone: 'ok' | 'bad' | 'mute';
+  disabled?: boolean;
+}) {
+  const Icon = icon === 'up' ? TrendingUp : icon === 'down' ? TrendingDown : null;
+
+  // Tailwind 4 has-[:checked] : when the radio inside is checked, apply
+  // the tone-specific colors. Fallback states for disabled/hover.
+  const toneChecked =
+    tone === 'ok'
+      ? 'has-[:checked]:border-[var(--ok)] has-[:checked]:bg-[var(--ok-dim-2)] has-[:checked]:text-[var(--ok)]'
+      : tone === 'bad'
+        ? 'has-[:checked]:border-[var(--bad)] has-[:checked]:bg-[var(--bad-dim-2)] has-[:checked]:text-[var(--bad)]'
+        : 'has-[:checked]:border-[var(--b-acc)] has-[:checked]:bg-[var(--acc-dim)] has-[:checked]:text-[var(--t-1)]';
+
+  return (
+    <label
+      className={cn(
+        'rounded-card relative flex min-h-12 cursor-pointer flex-col items-center justify-center gap-1 border bg-[var(--bg-1)] px-3 py-3 text-[12px] font-semibold uppercase tracking-[0.10em] text-[var(--t-3)] transition-all',
+        'border-[var(--b-default)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
+        'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--acc)]',
+        toneChecked,
+        disabled && 'cursor-not-allowed opacity-60',
+      )}
+    >
+      <input
+        type="radio"
+        name="outcome"
+        value={value}
+        required
+        disabled={disabled}
+        className="peer sr-only"
+      />
+      <span aria-hidden className="absolute right-2 top-2 hidden peer-checked:inline">
+        <Check className="h-3 w-3" strokeWidth={2.5} />
+      </span>
+      {Icon ? <Icon className="h-4 w-4" strokeWidth={1.75} /> : <span>—</span>}
+      <span>{label}</span>
+    </label>
   );
 }

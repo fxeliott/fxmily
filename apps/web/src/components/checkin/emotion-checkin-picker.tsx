@@ -64,18 +64,23 @@ export function EmotionCheckinPicker({
         <span className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
           {label}
         </span>
+        {/* Visual counter — silent for SR. Only the cap-reached transition
+            is announced once via the sr-only block below (audit B4). */}
         <span
           id={counterId}
           className={cn(
             'inline-flex items-center gap-1 font-mono text-[11px] tabular-nums',
-            atCap ? 'text-[var(--warn)]' : 'text-[var(--t-4)]',
+            atCap ? 'text-[var(--warn)]' : 'text-[var(--t-3)]',
           )}
-          aria-live="polite"
+          aria-hidden
         >
           <span className={cn(atCap && 'font-semibold')}>{value.length}</span>
-          <span className="text-[var(--t-4)]">/</span>
+          <span className="text-[var(--t-3)]">/</span>
           <span>{CHECKIN_EMOTION_MAX_PER_SLOT}</span>
           {atCap ? <span className="ml-1 text-[10px]">· limite</span> : null}
+        </span>
+        <span className="sr-only" aria-live="polite">
+          {atCap ? `Limite ${CHECKIN_EMOTION_MAX_PER_SLOT} émotions atteinte.` : ''}
         </span>
       </legend>
 

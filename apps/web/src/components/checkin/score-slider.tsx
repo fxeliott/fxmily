@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -13,7 +13,8 @@ interface ScoreSliderProps {
   unit?: string;
   /**
    * Mapping value → semantic word, e.g. for mood "Bof", "Calme", "Excellent".
-   * Optional. Use `null` for the default numeric-only readout.
+   * Optional. The word is rendered visually AND injected into `aria-valuetext`
+   * so screen-reader users hear "7 sur 10, Calme" instead of "7".
    */
   describeAt?: (value: number) => string;
   /** Helper text rendered below the slider. */
@@ -29,10 +30,23 @@ interface ScoreSliderProps {
 /**
  * 1–10 slider used by the check-in wizards (mood, stress, sleep quality).
  *
- * Shares the visual language of the trade wizard's R:R slider but simplified:
- * fixed 1–10 range, integer step, lime track. Native `<input type="range">`
- * stays the source of truth so keyboard nav (arrow keys, home/end) and
- * accessibility come for free.
+ * J5 audit fixes (BLOCKER B1, B2 + UI H1, H2):
+ *   - `aria-valuetext` reads "N sur 10, Word" so SR users hear the semantic
+ *     band, not just the number (WCAG 4.1.2 + 1.3.1).
+ *   - The custom thumb is `peer-focus-visible`-styled so the focus ring is
+ *     visible even though the underlying `<input type="range">` is opacity-0
+ *     (WCAG 2.4.7 — fix for a regression first introduced in the J2 trade
+ *     wizard's R:R slider).
+ *   - Track fill + thumb halo follow `tone` instead of being lime-hardcoded
+ *     (UI H1 — was visually incoherent on `tone="warn"` for the stress slider).
+ *   - `threshold-pulse` (defined in globals.css) fires when the semantic band
+ *     changes (e.g. mood crossing from "Neutre" to "Calme") — keeps the
+ *     visual feedback Mark Douglas would call "self-aware reinforcement"
+ *     without spamming the SR.
+ *
+ * Native `<input type="range">` stays the source of truth: keyboard nav
+ * (arrow keys, home/end, page up/down), touch dragging on mobile, and
+ * accessibility tree all come for free from the browser.
  */
 export function ScoreSlider({
   value,
@@ -51,6 +65,22 @@ export function ScoreSlider({
   const errorId = error ? `${id}-error` : undefined;
   const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
   const pct = ((value - 1) / 9) * 100;
+  const semanticBand = describeAt ? describeAt(value) : null;
+  const valueText = semanticBand ? `${value} sur 10, ${semanticBand}` : `${value} sur 10`;
+
+  // Threshold pulse on semantic-band transition (e.g. "Bof" → "Neutre").
+  // Tracked via ref so we don't re-render the slider on every band change.
+  const lastBandRef = useRef(semanticBand);
+  const [pulse, setPulse] = useState(false);
+  useEffect(() => {
+    if (semanticBand !== lastBandRef.current) {
+      lastBandRef.current = semanticBand;
+      setPulse(true);
+      const t = setTimeout(() => setPulse(false), 600);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [semanticBand]);
 
   const valColor =
     tone === 'warn'
@@ -66,6 +96,24 @@ export function ScoreSlider({
         ? 'linear-gradient(90deg, var(--cy) 0%, var(--acc) 100%)'
         : 'linear-gradient(90deg, var(--cy) 0%, var(--acc) 80%)';
 
+  // Tone-aware glow / thumb halo (replaces hardcoded lime values from pre-J5-fix).
+  const trackGlow =
+    tone === 'warn'
+      ? '0 0 10px -2px oklch(0.834 0.158 80 / 0.45)'
+      : tone === 'cy'
+        ? '0 0 10px -2px oklch(0.789 0.139 217 / 0.45)'
+        : '0 0 10px -2px oklch(0.879 0.231 130 / 0.45)';
+
+  const thumbBg =
+    tone === 'warn' ? 'bg-[var(--warn)]' : tone === 'cy' ? 'bg-[var(--cy)]' : 'bg-[var(--acc)]';
+
+  const thumbHalo =
+    tone === 'warn'
+      ? '0 0 0 4px oklch(0.834 0.158 80 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)'
+      : tone === 'cy'
+        ? '0 0 0 4px oklch(0.789 0.139 217 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)'
+        : '0 0 0 4px oklch(0.879 0.231 130 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)';
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between">
@@ -75,11 +123,17 @@ export function ScoreSlider({
         >
           {label}
         </label>
-        <span className="font-mono text-[11px] tabular-nums text-[var(--t-4)]">
-          <span className={cn('font-semibold tabular-nums', valColor)}>{value}</span>
+        {/* Visual readout — NOT aria-live (the slider's own aria-valuetext
+            handles SR announcement, double-channel would be noise). */}
+        <span className="font-mono text-[11px] tabular-nums text-[var(--t-3)]">
+          <span className={cn('font-semibold tabular-nums', valColor, pulse && 'threshold-pulse')}>
+            {value}
+          </span>
           {unit}
-          {describeAt ? (
-            <span className="ml-2 normal-case text-[var(--t-3)]">{describeAt(value)}</span>
+          {semanticBand ? (
+            <span className={cn('ml-2 normal-case', pulse ? valColor : 'text-[var(--t-3)]')}>
+              {semanticBand}
+            </span>
           ) : null}
         </span>
       </div>
@@ -97,7 +151,7 @@ export function ScoreSlider({
           style={{
             width: `${pct}%`,
             background: fillStyle,
-            boxShadow: '0 0 10px -2px oklch(0.879 0.231 130 / 0.45)',
+            boxShadow: trackGlow,
             transition: 'width 80ms cubic-bezier(0.4,0,0.2,1)',
           }}
         />
@@ -110,7 +164,7 @@ export function ScoreSlider({
             style={{ left: `${(i / 9) * 100}%` }}
           />
         ))}
-        {/* Native input on top, opacity 0 for accessibility */}
+        {/* Native range input — `peer` lets the custom thumb mirror its focus state. */}
         <input
           id={id}
           name={name}
@@ -123,22 +177,30 @@ export function ScoreSlider({
           disabled={disabled}
           aria-describedby={describedBy}
           aria-invalid={error ? 'true' : undefined}
-          className="absolute inset-0 w-full cursor-grab opacity-0 active:cursor-grabbing disabled:cursor-not-allowed"
+          aria-valuetext={valueText}
+          className="peer absolute inset-0 w-full cursor-grab opacity-0 active:cursor-grabbing disabled:cursor-not-allowed"
         />
-        {/* Custom thumb */}
+        {/* Custom thumb — picks up focus state from the peer input.
+            Touch target 24×24 (WCAG 2.5.8 AA): the visible thumb is 20×20 but
+            the underlying input.range covers the full bar. Arrow/Home/End
+            keyboard control comes from the native <input>. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--bg)] bg-[var(--acc)] transition-shadow"
+          className={cn(
+            'pointer-events-none absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--bg)] transition-shadow',
+            thumbBg,
+            'peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--acc)] peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-[var(--bg)]',
+          )}
           style={{
             left: `${pct}%`,
-            boxShadow: '0 0 0 4px oklch(0.879 0.231 130 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)',
+            boxShadow: thumbHalo,
             transition: 'left 80ms cubic-bezier(0.4,0,0.2,1)',
           }}
         />
       </div>
 
-      {/* Tick labels: 1 / 5 / 10 */}
-      <div className="flex justify-between font-mono text-[10px] tabular-nums text-[var(--t-4)]">
+      {/* Tick labels: 1 / 5 / 10 (decoratifs, --t-3 instead of --t-4 for AA contrast). */}
+      <div className="flex justify-between font-mono text-[10px] tabular-nums text-[var(--t-3)]">
         <span>1</span>
         <span>5</span>
         <span>10</span>
@@ -149,7 +211,7 @@ export function ScoreSlider({
           {error}
         </p>
       ) : hint ? (
-        <p className="t-cap text-[var(--t-4)]">{hint}</p>
+        <p className="t-cap text-[var(--t-3)]">{hint}</p>
       ) : null}
     </div>
   );

@@ -41,7 +41,7 @@ Ce principe guide toutes les décisions de design : si une feature ne contribue 
 
 | Couche | Choix | Rationale |
 |---|---|---|
-| **Frontend / Backend** | Next.js 15 (App Router) + React 19 + TypeScript strict | Un seul codebase web + mobile (via PWA puis Capacitor), énorme écosystème, support IA optimal |
+| **Frontend / Backend** | Next.js 16 (App Router) + React 19 + TypeScript strict | Un seul codebase web + mobile (via PWA puis Capacitor), énorme écosystème, support IA optimal. Note J0 : la majeure 16 (sortie 21 oct 2025) renomme `middleware.ts` → `proxy.ts`, Turbopack devient stable par défaut. Version installée : 16.2.4. |
 | **CSS** | Tailwind CSS 4 | Standard 2026, parfait pour thème custom bleu/noir |
 | **Composants UI** | shadcn/ui | Open-source, ownership total du code, customisable, accessible |
 | **Animations** | Framer Motion | Standard React, courbes premium, faciles à orchestrer |
@@ -795,7 +795,7 @@ Pour cadrer le projet, voici ce qui est **explicitement EXCLU** de la V1 :
 
 | Sujet | Décision | Rationale |
 |---|---|---|
-| Stack frontend | Next.js 15 + Capacitor (V2) | Eliot a délégué, c'est le meilleur ratio qualité/effort pour un débutant |
+| Stack frontend | Next.js 16 + Capacitor (V2) | Eliot a délégué, c'est le meilleur ratio qualité/effort pour un débutant. ⚠️ Capacitor V2 wrapping exige `output: 'export'` (incompatible avec les Server Actions utilisés en J1+). Refactor REST custom à planifier au moment du wrapping App Store. |
 | Database | PostgreSQL self-hosted | Eliot a choisi, robuste et scale naturel |
 | Médias | Cloudflare R2 | Eliot a choisi, gratuit jusqu'à 10 Go, pas de frais sortie |
 | Auth | Email + password + magic link | Standard, pas de OAuth pour simplifier V1 |

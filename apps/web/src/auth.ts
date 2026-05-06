@@ -5,6 +5,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 
 import { db } from '@/lib/db';
+import { logAudit } from '@/lib/auth/audit';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { signInSchema } from '@/lib/schemas/auth';
 import authConfig from '@/auth.config';
@@ -76,15 +77,35 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         if (!user || !user.passwordHash) {
           const dummyHash = await getDummyHash();
           await verifyPassword(password, dummyHash).catch(() => false);
+          // Audit failure without leaking which guard caught the attempt.
+          // userId stays null because we deliberately don't tie a failed
+          // login to a known account (would create an enumeration oracle).
+          await logAudit({
+            action: 'auth.login.failure',
+            userId: null,
+            metadata: { reason: 'unknown_or_no_password' },
+          });
           return null;
         }
 
         if (user.status !== 'active') {
+          await logAudit({
+            action: 'auth.login.failure',
+            userId: user.id,
+            metadata: { reason: 'inactive', status: user.status },
+          });
           return null;
         }
 
         const ok = await verifyPassword(password, user.passwordHash);
-        if (!ok) return null;
+        if (!ok) {
+          await logAudit({
+            action: 'auth.login.failure',
+            userId: user.id,
+            metadata: { reason: 'bad_password' },
+          });
+          return null;
+        }
 
         // Touch lastSeenAt; failures here should not block the login.
         await db.user
@@ -102,4 +123,26 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       },
     }),
   ],
+  events: {
+    // Auth.js v5 fires `signIn` after authorize() returns a user object —
+    // success path only. Failure paths are logged inline above so we don't
+    // miss them.
+    async signIn({ user }) {
+      if (!user?.id) return;
+      await logAudit({
+        action: 'auth.login.success',
+        userId: user.id,
+      });
+    },
+    async signOut(message) {
+      // Auth.js v5 signOut event payload is a discriminated union: with the
+      // JWT strategy we get `{ token }`, with the database strategy `{ session }`.
+      const userId =
+        'token' in message ? (message.token?.sub ?? null) : (message.session?.userId ?? null);
+      await logAudit({
+        action: 'auth.logout',
+        userId,
+      });
+    },
+  },
 });

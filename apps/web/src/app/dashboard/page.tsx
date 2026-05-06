@@ -18,37 +18,39 @@ export const metadata = {
   title: 'Tableau de bord · Fxmily',
 };
 
-const FRENCH_DAYS = [
-  'Dimanche',
-  'Lundi',
-  'Mardi',
-  'Mercredi',
-  'Jeudi',
-  'Vendredi',
-  'Samedi',
-] as const;
+const PARIS_TZ = 'Europe/Paris';
 
-const FRENCH_MONTHS = [
-  'Janvier',
-  'Février',
-  'Mars',
-  'Avril',
-  'Mai',
-  'Juin',
-  'Juillet',
-  'Août',
-  'Septembre',
-  'Octobre',
-  'Novembre',
-  'Décembre',
-] as const;
-
+/**
+ * Renders today's date in French anchored to Europe/Paris — NOT to the
+ * server's wall clock. The Hetzner host runs in UTC, so a naive
+ * `now.getDay()` would tell Eliot it's already tomorrow during the 22h-00h
+ * window. Audit J5 H4 fix.
+ */
 function frenchToday(now = new Date()): string {
-  return `${FRENCH_DAYS[now.getDay()]!} ${now.getDate()} ${FRENCH_MONTHS[now.getMonth()]!} ${now.getFullYear()}`;
+  const fmt = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: PARIS_TZ,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  // Capitalize the leading weekday for visual rhythm.
+  const raw = fmt.format(now);
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
+/**
+ * Time-of-day greeting computed in Europe/Paris (same rationale as
+ * `frenchToday`): a member opening the dashboard at 22h Paris should see
+ * "Bonsoir", not whatever the Hetzner UTC clock thinks.
+ */
 function greeting(now = new Date()): string {
-  const h = now.getHours();
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: PARIS_TZ,
+    hour: '2-digit',
+    hour12: false,
+  });
+  const h = Number(fmt.format(now));
   if (h < 6) return 'Bonne nuit';
   if (h < 12) return 'Bonjour';
   if (h < 18) return 'Bon après-midi';

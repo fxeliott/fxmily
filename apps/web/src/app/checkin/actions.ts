@@ -34,16 +34,6 @@ function flattenFieldErrors(error: ZodError): Record<string, string> {
   return out;
 }
 
-function isNextRedirect(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'digest' in err &&
-    typeof (err as { digest?: unknown }).digest === 'string' &&
-    (err as { digest: string }).digest.startsWith('NEXT_REDIRECT')
-  );
-}
-
 function getString(formData: FormData, key: string): string {
   const v = formData.get(key);
   return typeof v === 'string' ? v : '';
@@ -104,13 +94,11 @@ export async function submitMorningCheckinAction(
   revalidatePath('/checkin');
   revalidatePath('/dashboard');
 
-  try {
-    redirect('/checkin?slot=morning&done=1');
-  } catch (err) {
-    if (isNextRedirect(err)) throw err;
-    console.error('[checkin.morning] redirect failed', err);
-  }
-  return { ok: true };
+  // `redirect()` always throws (NEXT_REDIRECT). No try/catch: if it ever
+  // doesn't throw (Next bug), letting the bug surface is preferable to
+  // silently returning `{ ok: true }` and leaving the wizard hanging.
+  // Audit J5 H2 fix.
+  redirect('/checkin?slot=morning&done=1');
 }
 
 export async function submitEveningCheckinAction(
@@ -165,11 +153,6 @@ export async function submitEveningCheckinAction(
   revalidatePath('/checkin');
   revalidatePath('/dashboard');
 
-  try {
-    redirect('/checkin?slot=evening&done=1');
-  } catch (err) {
-    if (isNextRedirect(err)) throw err;
-    console.error('[checkin.evening] redirect failed', err);
-  }
-  return { ok: true };
+  // See morning action — `redirect()` always throws, no try/catch needed.
+  redirect('/checkin?slot=evening&done=1');
 }

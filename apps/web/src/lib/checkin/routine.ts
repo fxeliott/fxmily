@@ -9,14 +9,17 @@
  * suggestion list as informational anchor and lets the member tick a single
  * "yes I did them" master toggle — captured as `morningRoutineCompleted`.
  *
- * The suggestion list lives here so the UI and weekly-report builder share
- * the same anchor when J6/J8 land.
+ * The suggestion list is **trader-anchored** (J5 audit content review): a
+ * member's morning routine for a high-stakes session day matters more than
+ * a generic wellness checklist. We keep two body items (movement + light)
+ * so the routine doesn't feel purely cerebral, but the four trader-anchored
+ * items lead.
  */
 
 export const MORNING_ROUTINE_SUGGESTIONS = [
-  'Boire un grand verre d’eau',
-  'Bouger 10 minutes (étirements, marche)',
-  'Lumière naturelle 5 minutes',
-  'Lire le plan du jour',
-  'Méditation / respiration courte',
+  'Lire ton plan du jour (setups, paires, sessions)',
+  'Vérifier le calendrier macro (news à risque)',
+  'Définir ton plafond de risque (trades max, % max)',
+  'Méditation ou respiration courte',
+  'Bouger 10 minutes + lumière naturelle',
 ] as const;

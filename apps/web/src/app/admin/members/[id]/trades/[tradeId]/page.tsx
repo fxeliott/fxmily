@@ -1,9 +1,11 @@
 import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { AnnotateTradeButton } from '@/components/admin/annotate-trade-button';
 import { TradeDetailView } from '@/components/journal/trade-detail-view';
-import { logAudit } from '@/lib/auth/audit';
+import { listAnnotationsForTrade } from '@/lib/admin/annotations-service';
 import { getMemberTradeAsAdmin } from '@/lib/admin/trades-service';
+import { logAudit } from '@/lib/auth/audit';
 
 export const metadata = {
   title: 'Trade — vue admin',
@@ -24,10 +26,12 @@ export default async function AdminTradeDetailPage({ params }: AdminTradeDetailP
   const trade = await getMemberTradeAsAdmin(memberId, tradeId);
   if (!trade) notFound();
 
+  const annotations = await listAnnotationsForTrade(tradeId);
+
   await logAudit({
     action: 'admin.trade.viewed',
     userId: session.user.id,
-    metadata: { memberId, tradeId, isClosed: trade.isClosed },
+    metadata: { memberId, tradeId, isClosed: trade.isClosed, annotationsCount: annotations.length },
   });
 
   return (
@@ -39,7 +43,9 @@ export default async function AdminTradeDetailPage({ params }: AdminTradeDetailP
       // the member's reflection moment. Hide the CTA in admin view.
       closeHref={null}
       contextBadge="Vue admin"
-      // Footer slot reserved for the J4 annotate-trade action.
+      annotations={annotations}
+      currentUserId={session.user.id}
+      footerSlot={<AnnotateTradeButton memberId={memberId} tradeId={tradeId} />}
     />
   );
 }

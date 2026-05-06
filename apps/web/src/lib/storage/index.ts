@@ -52,15 +52,14 @@ export type { StorageAdapter, ScreenshotKind, UploadInput, UploadKind } from './
 export {
   ALLOWED_IMAGE_MIME_TYPES,
   ALL_UPLOAD_KINDS,
-  ANNOTATION_UPLOAD_KINDS,
   MAX_SCREENSHOT_BYTES,
   StorageError,
-  TRADE_UPLOAD_KINDS,
   isAnnotationUploadKind,
   isTradeUploadKind,
 } from './types';
 export type { ParsedStorageKey, ParsedTradeKey, ParsedAnnotationKey } from './keys';
 export {
+  ANNOTATION_KEY_PATTERN,
   generateAnnotationKey,
   generateTradeKey,
   parseAnnotationKey,

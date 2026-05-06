@@ -59,12 +59,24 @@ export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps)
         : 'bg-[var(--t-4)]'
     : 'bg-[var(--warn)]';
 
+  // Build an enriched aria-label so screen-reader users browsing the list hear
+  // the trade status + any unread annotation count without entering the card.
+  const statusLabel = !isClosed
+    ? 'ouvert'
+    : trade.outcome === 'win'
+      ? 'gain'
+      : trade.outcome === 'loss'
+        ? 'perte'
+        : trade.outcome === 'break_even'
+          ? 'break-even'
+          : '';
+  const unseenLabel = hasUnseen
+    ? `, ${unseenAnnotationsCount} correction${unseenAnnotationsCount > 1 ? 's' : ''} non lue${unseenAnnotationsCount > 1 ? 's' : ''}`
+    : '';
+  const ariaLabel = `Trade ${trade.pair} ${trade.direction} du ${DATETIME_FMT.format(new Date(trade.enteredAt))}, ${statusLabel}${unseenLabel}`;
+
   return (
-    <Link
-      href={`/journal/${trade.id}`}
-      aria-label={`Trade ${trade.pair} ${trade.direction} du ${DATETIME_FMT.format(new Date(trade.enteredAt))}`}
-      className="block"
-    >
+    <Link href={`/journal/${trade.id}`} aria-label={ariaLabel} className="block">
       <Card interactive className="row-hover relative overflow-hidden p-0">
         <div className="grid grid-cols-[3px_1fr_auto] items-stretch gap-0">
           {/* Status bar left edge */}
@@ -97,11 +109,16 @@ export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps)
                 <Pill tone={OUTCOME_TONE[trade.outcome]}>{OUTCOME_LABEL[trade.outcome]}</Pill>
               ) : null}
               {hasUnseen ? (
+                // Mobile-first copy: short uppercase pill avoids wrapping the
+                // trade card top row at iPhone SE width when N is large.
+                // Singular keeps "nouvelle" for clarity; plural compresses
+                // to "+N CORRECTIONS" since the lime tone + live dot already
+                // signal "fresh, requires attention".
                 <Pill tone="acc" dot="live">
                   <MessageSquare className="h-2.5 w-2.5" strokeWidth={2} />
                   {unseenAnnotationsCount === 1
                     ? '1 nouvelle correction'
-                    : `${unseenAnnotationsCount} nouvelles corrections`}
+                    : `+${unseenAnnotationsCount} corrections`}
                 </Pill>
               ) : null}
             </div>

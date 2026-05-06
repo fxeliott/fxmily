@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ANNOTATION_KEY_PATTERN,
   extensionForMime,
   generateAnnotationKey,
   generateTradeKey,
@@ -10,6 +11,7 @@ import {
   parseTradeKey,
   sniffImageMime,
 } from './keys';
+import { keyBelongsTo } from './local';
 
 describe('isAllowedMime', () => {
   it.each(['image/jpeg', 'image/png', 'image/webp'])('accepts %s', (mime) => {
@@ -143,6 +145,46 @@ describe('parseStorageKey (J4)', () => {
 
   it('rejects an empty string', () => {
     expect(() => parseStorageKey('')).toThrow();
+  });
+});
+
+describe('ANNOTATION_KEY_PATTERN (J4 SSOT regex)', () => {
+  it('matches a canonical annotation key', () => {
+    expect(
+      ANNOTATION_KEY_PATTERN.test('annotations/clx0trade1/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg'),
+    ).toBe(true);
+  });
+
+  it('rejects a trade-prefixed key', () => {
+    expect(
+      ANNOTATION_KEY_PATTERN.test('trades/clx0abc123/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg'),
+    ).toBe(false);
+  });
+
+  it('rejects a path traversal attempt', () => {
+    expect(ANNOTATION_KEY_PATTERN.test('annotations/../escape/aaaaaaaaaaaa.jpg')).toBe(false);
+  });
+});
+
+describe('keyBelongsTo (J4 — guards against annotation key reuse)', () => {
+  it('returns true for a trade key whose userId matches the session', () => {
+    expect(
+      keyBelongsTo('trades/clx0abc123/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg', 'clx0abc123'),
+    ).toBe(true);
+  });
+
+  it('returns false for an annotation key — annotation ownership goes through DB', () => {
+    // This guards against a future "improvement" that would silently treat
+    // annotations/{tradeId}/... as if `tradeId` were the userId. Such a
+    // change would BOLA the trade-screenshot route into accepting any
+    // member's annotation key.
+    expect(
+      keyBelongsTo('annotations/clx0trade1/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg', 'clx0trade1'),
+    ).toBe(false);
+  });
+
+  it('returns false on malformed keys', () => {
+    expect(keyBelongsTo('not-a-key', 'clx0abc123')).toBe(false);
   });
 });
 

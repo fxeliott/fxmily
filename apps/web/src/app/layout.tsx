@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
+import { GeistSans } from 'geist/font/sans';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import './globals.css';
 
 const inter = Inter({
@@ -35,7 +37,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0a0e1a',
+  themeColor: '#07090f',
   width: 'device-width',
   initialScale: 1,
   colorScheme: 'dark',
@@ -47,9 +49,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}>
+    <html
+      lang="fr"
+      className={`${GeistSans.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+    >
       <body className="bg-background text-foreground flex min-h-full flex-col font-sans">
-        {children}
+        <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>
   );

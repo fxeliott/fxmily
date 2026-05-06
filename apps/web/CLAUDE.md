@@ -7,7 +7,7 @@
 
 Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — front + API + service worker (PWA, Jalon 9).
 
-État au 2026-05-05 : **J0 + J1 + J2 + J3 livrés**.
+État au 2026-05-06 : **J0 + J1 + J2 + J3 + J4 livrés**.
 
 ## Aliases d'import
 
@@ -23,24 +23,24 @@ Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — fro
 
 ## Routes connues (à compléter par jalon)
 
-| Route                                  | Méthode  | Fichier                                                | Statut                                                        |
-| -------------------------------------- | -------- | ------------------------------------------------------ | ------------------------------------------------------------- |
-| `/`                                    | GET      | `src/app/page.tsx`                                     | J0 — splash placeholder                                       |
-| `/api/health`                          | GET      | `src/app/api/health/route.ts`                          | J0 — env + DB ping                                            |
-| `/api/auth/[...nextauth]`              | GET/POST | `src/app/api/auth/[...nextauth]/route.ts`              | J1 — Auth.js v5 handlers (Node)                               |
-| `/login`                               | GET/POST | `src/app/login/{page,login-form,actions}.tsx`          | J1 — Credentials login                                        |
-| `/onboarding/welcome?token=…`          | GET/POST | `src/app/onboarding/welcome/*`                         | J1 — invitation consume + autologin                           |
-| `/admin/invite`                        | GET/POST | `src/app/admin/invite/*`                               | J1 — admin-only invite form                                   |
-| `/dashboard`                           | GET      | `src/app/dashboard/page.tsx`                           | J1 — landing post-login (links to journal)                    |
-| `/journal`                             | GET      | `src/app/journal/page.tsx`                             | J2 — list, status filter (all/open/closed)                    |
-| `/journal/new`                         | GET      | `src/app/journal/new/page.tsx`                         | J2 — wizard mobile-first 6 étapes                             |
-| `/journal/[id]`                        | GET      | `src/app/journal/[id]/page.tsx`                        | J2 — détail + delete + close CTA                              |
-| `/journal/[id]/close`                  | GET/POST | `src/app/journal/[id]/close/page.tsx`                  | J2 — formulaire de clôture                                    |
-| `/api/uploads`                         | POST     | `src/app/api/uploads/route.ts`                         | J2 — multipart, magic-byte, audit                             |
-| `/api/uploads/[...key]`                | GET      | `src/app/api/uploads/[...key]/route.ts`                | J2 — stream local FS (dev), R2 redirect (prod)                |
-| `/admin/members`                       | GET      | `src/app/admin/members/page.tsx`                       | J3 — admin-only members list                                  |
-| `/admin/members/[id]`                  | GET      | `src/app/admin/members/[id]/page.tsx`                  | J3 — overview + trades tab (?tab=trades)                      |
-| `/admin/members/[id]/trades/[tradeId]` | GET      | `src/app/admin/members/[id]/trades/[tradeId]/page.tsx` | J3 — admin-scoped trade detail (shared `<TradeDetailView />`) |
+| Route                                  | Méthode  | Fichier                                                | Statut                                                         |
+| -------------------------------------- | -------- | ------------------------------------------------------ | -------------------------------------------------------------- |
+| `/`                                    | GET      | `src/app/page.tsx`                                     | J0 — splash placeholder                                        |
+| `/api/health`                          | GET      | `src/app/api/health/route.ts`                          | J0 — env + DB ping                                             |
+| `/api/auth/[...nextauth]`              | GET/POST | `src/app/api/auth/[...nextauth]/route.ts`              | J1 — Auth.js v5 handlers (Node)                                |
+| `/login`                               | GET/POST | `src/app/login/{page,login-form,actions}.tsx`          | J1 — Credentials login                                         |
+| `/onboarding/welcome?token=…`          | GET/POST | `src/app/onboarding/welcome/*`                         | J1 — invitation consume + autologin                            |
+| `/admin/invite`                        | GET/POST | `src/app/admin/invite/*`                               | J1 — admin-only invite form                                    |
+| `/dashboard`                           | GET      | `src/app/dashboard/page.tsx`                           | J1 — landing post-login (links to journal)                     |
+| `/journal`                             | GET      | `src/app/journal/page.tsx`                             | J2 — list, status filter (all/open/closed)                     |
+| `/journal/new`                         | GET      | `src/app/journal/new/page.tsx`                         | J2 — wizard mobile-first 6 étapes                              |
+| `/journal/[id]`                        | GET      | `src/app/journal/[id]/page.tsx`                        | J2 — détail + delete + close CTA                               |
+| `/journal/[id]/close`                  | GET/POST | `src/app/journal/[id]/close/page.tsx`                  | J2 — formulaire de clôture                                     |
+| `/api/uploads`                         | POST     | `src/app/api/uploads/route.ts`                         | J2 — multipart, magic-byte, audit                              |
+| `/api/uploads/[...key]`                | GET      | `src/app/api/uploads/[...key]/route.ts`                | J2 — stream local FS (dev), R2 redirect (prod)                 |
+| `/admin/members`                       | GET      | `src/app/admin/members/page.tsx`                       | J3 — admin-only members list                                   |
+| `/admin/members/[id]`                  | GET      | `src/app/admin/members/[id]/page.tsx`                  | J3 — overview + trades tab (?tab=trades)                       |
+| `/admin/members/[id]/trades/[tradeId]` | GET      | `src/app/admin/members/[id]/trades/[tradeId]/page.tsx` | J3 — admin-scoped trade detail; J4 — annotate + delete actions |
 
 ## Auth.js v5 (J1)
 
@@ -114,7 +114,8 @@ Si une intégration externe ou un script CLI demande une API REST, ajouter une r
 - Actions wired :
   - **J1** : `auth.login.success/failure`, `auth.logout`, `invitation.created/consumed`, `onboarding.completed`.
   - **J2** : `trade.created`, `trade.closed`, `trade.deleted`, `trade.screenshot.uploaded` (metadata = `{ kind, key, mime, size, adapter }`, pas le contenu).
-  - **J3** : `admin.members.listed`, `admin.member.viewed` (metadata `{ memberId, tab }`), `admin.trade.viewed` (metadata `{ memberId, tradeId, isClosed }`).
+  - **J3** : `admin.members.listed`, `admin.member.viewed` (metadata `{ memberId, tab }`), `admin.trade.viewed` (metadata `{ memberId, tradeId, isClosed, annotationsCount }` — J4 ajoute le compteur).
+  - **J4** : `admin.annotation.created` (metadata `{ annotationId, tradeId, memberId, hasMedia, mediaType }`), `admin.annotation.deleted` (metadata `{ annotationId, tradeId, memberId }`), `admin.annotation.media.uploaded` (metadata `{ kind, key, mime, size, adapter, tradeId }`), `member.annotations.viewed` (metadata `{ tradeId, markedCount }` — émis seulement si `markedCount > 0` pour ne pas spammer le log à chaque ouverture de trade), `notification.enqueued` (metadata `{ notificationId, type, tradeId, annotationId }`).
 
 ## Headers de sécurité
 
@@ -300,3 +301,44 @@ User-scoped uniquement. Pour l'admin (J3+), on créera un `lib/trades/admin-serv
   - Sentry (client + serveur).
   - RGPD endpoints (`/api/account/export`, `/api/account/delete`) + cron purge des `.uploads/` orphelins (J2 pre-R2).
   - TOCTOU `Content-Length` dans GET stream — refactor pour fstat sur le fd plutôt que stat avant ouverture.
+
+## J4 — Workflow d'annotation admin (livré 2026-05-06)
+
+### Modèle de données
+
+- `TradeAnnotation` (table `trade_annotations`) — voir `prisma/schema.prisma` + migration `20260506100000_j4_trade_annotation`. Enum Postgres `AnnotationMediaType` (`image` | `video`). Cascade sur `Trade` ET sur `User` (V1 = solo admin Eliot ; V2 multi-admin → switcher en `SetNull` + `adminId` nullable). Indexes `(tradeId, createdAt DESC)`, `(tradeId, seenByMemberAt)`, `(adminId, createdAt DESC)`.
+- `NotificationQueue` (table `notification_queue`) — enums `NotificationType` (`annotation_received` à J4, extensible) + `NotificationStatus` (`pending` | `sent` | `failed`). Indexes `(status, scheduledFor)` (worker hot-path J9), `(userId, createdAt DESC)`. À J4 on persiste l'intention ; le dispatcher Web Push est J9.
+- **Déviation contrôlée** : V1 J4 ship **image-only** (8 MiB). La vidéo Zoom 500 MiB du SPEC §7.8 est repoussée à **J4.5** car le path `req.formData()` actuel buffer-tout-en-RAM (incompatible 500 MiB) + R2 pas wired. UI prête (slot vidéo désactivé avec libellé J4.5 explicite).
+
+### Storage
+
+Préfixe ajouté : `annotations/{tradeId}/{nanoid32}.{jpg|png|webp}`. Le path-owner est le **trade id**, pas le user id : ownership member-side se résout via un seul `db.trade.findUnique({ select: { userId } })`. Helpers : `generateAnnotationKey`, `parseAnnotationKey`, `parseStorageKey` (discriminated union sur `kind: 'trade' | 'annotation'`). Le contrat `StorageAdapter.put({ kind, pathOwner, ... })` est generic ; route handler choisit.
+
+`POST /api/uploads` accepte le nouveau `kind: 'annotation-image'` avec gate role=admin + champ `tradeId` requis. `GET /api/uploads/[...key]` dispatch sur le préfixe : trade-key → check userId in path, annotation-key → lookup trade.userId.
+
+### Server Actions
+
+- `app/admin/members/[id]/trades/[tradeId]/actions.ts` :
+  - `createAnnotationAction(memberId, tradeId)(prev, formData)` : auth + role admin → Zod re-parse → BOLA check `parseAnnotationKey(mediaKey).tradeId === tradeId` → trade-owner check `trade.userId === memberId` → service create + enqueue + email best-effort + audit + revalidate. Sur échec après upload média, cleanup orphelin via `storage.delete()`.
+  - `deleteAnnotationAction(annotationId)` : reads first → cleanup média → `deleteMany({ id, adminId })` (refuse si autre admin) → audit + revalidate.
+
+### UI
+
+- **Admin** : `<AnnotateTradeButton />` ouvre un `<Sheet side="bottom">` mobile-first. Form = textarea (compteur live, max 5000) + `<MediaUploader kind="annotation-image">` générique. Wrapper-action pattern pour reset/close on success (pas de `useEffect` setState — lint react-hooks/set-state-in-effect).
+- **Membre** : `<TradeCard unseenAnnotationsCount>` affiche pill lime "1 nouvelle correction" / "N nouvelles corrections" (live dot). Au render de `/journal/[id]`, `markAnnotationsSeenForTrade(userId, id)` bulk-update les rows non-vues (1 round-trip, index `(tradeId, seenByMemberAt)`) — pas de bouton "Marquer lu" séparé.
+- **Section partagée** : `<AnnotationsSection />` (Server Component) — admin voit "Corrections envoyées" + delete + pill "Non lue" sur les non-vues ; membre voit "Corrections reçues" read-only + pill "Capture jointe" si média.
+
+### Email
+
+`AnnotationReceivedEmail` (React Email v2 lime sur deep space, hex inline pour compat). Posture athlète/coaching : la correction est un point d'amélioration, pas une critique. `sendAnnotationReceivedEmail` est appelée fire-and-forget (jamais await) après `createAnnotation` — un échec Resend ne rollback pas la création.
+
+### Tests
+
+- 199 unit (Vitest) — +30 storage + 12 schema annotation + 3 buildTradeDetailUrl.
+- E2E public surface dans `tests/e2e/admin-annotation.spec.ts` : auth gate sur la route admin, sur POST `/api/uploads` (kind annotation-image), sur GET `/api/uploads/<annotation-key>`. Le full happy-path (admin annote → membre voit badge → ouvre → seenByMemberAt set) attend le helper de seed Postgres cross-jalon.
+
+### TODO J4 → J4.5+
+
+- **J4.5** (vidéo Zoom 500 MiB) : presigned PUT R2 (bypass streaming serveur) OU refactor body-streaming via `req.body` Web Streams. Activer `video/mp4` dans `ALLOWED_*_MIME_TYPES`, `MAX_VIDEO_BYTES = 500 MiB`, magic-byte `ftyp` box (offset 4–7 = `66 74 79 70`). Étendre `KEY_REGEX_ANNOTATION` pour `.{mp4|webm}`. CSP `media-src` avec custom domain R2.
+- **J9** (web-push dispatcher) : worker qui consomme `NotificationQueue` (status=pending, scheduledFor null/elapsed) → `web-push` lib + VAPID. Marquer `sent` ou `failed` + retry budget.
+- **J10** : delete cascade audit log → V2 multi-admin necessite `onDelete: SetNull` + `adminId` nullable côté `TradeAnnotation`.

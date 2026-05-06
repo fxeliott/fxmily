@@ -1,0 +1,28 @@
+{
+  "name": "Fxmily",
+  "short_name": "Fxmily",
+  "description": "Suivi comportemental — formation de trading Fxmily.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07090f",
+  "theme_color": "#07090f",
+  "lang": "fr",
+  "dir": "ltr",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

@@ -28,8 +28,13 @@ export const metadata: Metadata = {
   generator: 'Next.js',
   referrer: 'origin-when-cross-origin',
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/logo.png', type: 'image/png' },
+    ],
+    apple: '/logo.png',
   },
+  manifest: '/manifest.webmanifest',
   robots: {
     index: false,
     follow: false,

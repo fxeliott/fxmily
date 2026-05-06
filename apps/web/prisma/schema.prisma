@@ -4,8 +4,9 @@
 //
 // J0 — datasource + generator only.
 // J1 — User, Account, Session, VerificationToken, Invitation, AuditLog.
-// J2 (this file) — Trade + enums (TradeDirection, TradeSession, TradeOutcome, RealizedRSource).
-// J3+ — TradeAnnotation, DailyCheckin, MarkDouglasCard, etc.
+// J2 — Trade + enums (TradeDirection, TradeSession, TradeOutcome, RealizedRSource).
+// J4 — TradeAnnotation + NotificationQueue + enums (AnnotationMediaType, NotificationType, NotificationStatus).
+// J5+ — DailyCheckin, MarkDouglasCard, etc.
 
 generator client {
   provider = "prisma-client"
@@ -71,6 +72,30 @@ enum RealizedRSource {
   estimated
 }
 
+/// Annotation media kind (J4). V1 supports image attachments only — the
+/// 500 MiB Zoom-video upload path is deferred to J4.5 (depends on R2 wiring).
+/// The enum value is kept open so the column can store `video` once available.
+enum AnnotationMediaType {
+  image
+  video
+}
+
+/// Push-notification kinds queued for J9 dispatch (J4).
+/// Values are persisted as strings — adding a new kind is an additive migration.
+enum NotificationType {
+  annotation_received
+}
+
+/// Lifecycle of a queued notification (J4).
+///   pending  : waiting for the J9 dispatcher.
+///   sent     : delivered to at least one push endpoint.
+///   failed   : dispatcher gave up after the retry budget. Surfaced in admin.
+enum NotificationStatus {
+  pending
+  sent
+  failed
+}
+
 // =============================================================================
 // Auth.js v5 core models (PrismaAdapter contract)
 // https://authjs.dev/getting-started/adapters/prisma
@@ -105,11 +130,15 @@ model User {
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  accounts        Account[]
-  sessions        Session[]
-  invitationsSent Invitation[] @relation("InvitationsSent")
-  auditLogs       AuditLog[]
-  trades          Trade[]
+  accounts            Account[]
+  sessions            Session[]
+  invitationsSent     Invitation[]        @relation("InvitationsSent")
+  auditLogs           AuditLog[]
+  trades              Trade[]
+  // J4 — annotations the admin authored on members' trades.
+  annotationsAuthored TradeAnnotation[]   @relation("AnnotationsAuthored")
+  // J4 — push-notification queue rows targeting this user.
+  notificationsQueued NotificationQueue[]
 
   @@index([status])
   @@index([role])
@@ -226,30 +255,30 @@ model Trade {
   /// One of the 12 allowlisted symbols (see lib/trading/pairs.ts). Stored as
   /// uppercase string rather than an enum so adding pairs doesn't require a
   /// DB migration — the allowlist is enforced at the Zod / Server Action edge.
-  pair          String
-  direction     TradeDirection
-  session       TradeSession
+  pair           String
+  direction      TradeDirection
+  session        TradeSession
   /// User-provided trade entry timestamp, persisted in UTC. The wizard
   /// pre-fills this from `Date.now()` but the user can override (useful when
   /// logging trades retroactively).
-  enteredAt     DateTime       @map("entered_at")
-  entryPrice    Decimal        @map("entry_price") @db.Decimal(20, 8)
+  enteredAt      DateTime       @map("entered_at")
+  entryPrice     Decimal        @map("entry_price") @db.Decimal(20, 8)
   /// Position size in lots (forex/metals) or contracts (indices). Decimal(12,4)
   /// covers micro-lots (0.01) up to institutional sizes.
-  lotSize       Decimal        @map("lot_size") @db.Decimal(12, 4)
+  lotSize        Decimal        @map("lot_size") @db.Decimal(12, 4)
   /// Optional stop-loss price. Strongly encouraged: enables exact `realizedR`.
-  stopLossPrice Decimal?       @map("stop_loss_price") @db.Decimal(20, 8)
+  stopLossPrice  Decimal?       @map("stop_loss_price") @db.Decimal(20, 8)
   /// Planned reward-to-risk ratio (e.g. 2.5 means "risk 1 to make 2.5").
   /// Slider in the UI clamps to [0.5, 10] with 0.25 step.
-  plannedRR     Decimal        @map("planned_rr") @db.Decimal(6, 2)
+  plannedRR      Decimal        @map("planned_rr") @db.Decimal(6, 2)
   /// Multi-select tag slugs (FR labels, EN slugs). See lib/trading/emotions.ts.
   /// UI caps the selection at 3 tags; we don't enforce in DB to allow future
   /// expansion without a migration.
-  emotionBefore String[]       @map("emotion_before")
-  planRespected Boolean        @map("plan_respected")
+  emotionBefore  String[]       @map("emotion_before")
+  planRespected  Boolean        @map("plan_respected")
   /// `null` = N/A (no hedge applicable on this trade). Tri-state per SPEC §7.3.
-  hedgeRespected Boolean?      @map("hedge_respected")
-  notes          String?       @db.Text
+  hedgeRespected Boolean?       @map("hedge_respected")
+  notes          String?        @db.Text
 
   /// Storage key for the pre-entry screenshot (mandatory at creation, but the
   /// column is nullable to allow administrative repairs). Format follows
@@ -273,10 +302,100 @@ model Trade {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  // J4 — admin annotations attached to this trade. Cascade so a member
+  // cleanup wipes its annotations too (RGPD: data minimisation).
+  annotations TradeAnnotation[]
+
   // Indexes — userId-leading because every member-facing query is
   // user-scoped, and the secondary order is the dominant sort key in the UI.
   @@index([userId, enteredAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, closedAt])
   @@map("trades")
+}
+
+// =============================================================================
+// J4 — Admin annotation workflow (SPEC §6.3, §7.8)
+// =============================================================================
+
+/// Admin correction attached to a member trade.
+///
+/// `comment` is markdown-friendly free text (rendered server-side as plain text
+/// at J4; markdown rendering ships when we wire react-markdown in J6+). The
+/// optional `mediaKey` points to a storage object — at J4 image-only
+/// (8 MiB cap, JPEG/PNG/WebP). The Zoom-video upload (500 MiB) is deferred to
+/// J4.5 once R2 is wired (see `apps/web/CLAUDE.md` storage section).
+///
+/// `seenByMemberAt` is set the first time the trade owner opens the trade in
+/// /journal/[id] AFTER the annotation was created (bulk `updateMany` per page
+/// load). Reading it stays in `lib/annotations/member-service.ts`.
+///
+/// `adminId` cascades on User delete: V1 has a single admin (Eliot), so admin
+/// deletion is a teardown event — preserving orphaned annotations would be
+/// dead state. V2 multi-admin should switch to SetNull + nullable adminId.
+model TradeAnnotation {
+  id String @id @default(cuid())
+
+  tradeId String @map("trade_id")
+  trade   Trade  @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+
+  adminId String @map("admin_id")
+  admin   User   @relation("AnnotationsAuthored", fields: [adminId], references: [id], onDelete: Cascade)
+
+  comment String @db.Text
+
+  /// Storage key for the optional media attachment.
+  /// Format: `annotations/{tradeId}/{nanoid32}.{jpg|png|webp}` (J4) or
+  ///         `annotations/{tradeId}/{nanoid32}.{mp4|webm}` (J4.5).
+  mediaKey  String?              @map("media_key")
+  mediaType AnnotationMediaType? @map("media_type")
+
+  /// Timestamp of the first time the member opened the trade detail page after
+  /// this annotation existed. Null = unread.
+  seenByMemberAt DateTime? @map("seen_by_member_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Most reads list a trade's annotations newest-first.
+  @@index([tradeId, createdAt(sort: Desc)])
+  // Powers the unseen-count rollup for the member's journal list.
+  @@index([tradeId, seenByMemberAt])
+  // Admin "annotations I authored" feed (J6+ analytics).
+  @@index([adminId, createdAt(sort: Desc)])
+  @@map("trade_annotations")
+}
+
+/// Notification queue (J4 enqueue, J9 dispatch).
+///
+/// At J4 we persist the *intent* of a notification — the actual web-push
+/// dispatch worker is in J9. Until then the row stays `pending`. Each kind
+/// (`type`) carries its own structured `payload`:
+///   annotation_received → { annotationId, tradeId, adminId, mediaType }
+///
+/// `scheduledFor` lets us delay a notification (e.g. "remind if not seen
+/// after 48h" — SPEC §7.8). Null means "ASAP".
+model NotificationQueue {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    NotificationType
+  payload Json
+  status  NotificationStatus @default(pending)
+
+  attempts      Int       @default(0)
+  scheduledFor  DateTime? @map("scheduled_for")
+  dispatchedAt  DateTime? @map("dispatched_at")
+  failureReason String?   @map("failure_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Worker hot-path: pull the next pending row whose schedule has elapsed.
+  @@index([status, scheduledFor])
+  // User-scoped admin/debug queries.
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notification_queue")
 }

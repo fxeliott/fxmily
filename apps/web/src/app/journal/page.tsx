@@ -7,6 +7,7 @@ import { TradeCard } from '@/components/journal/trade-card';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { countUnseenAnnotationsByTrade } from '@/lib/annotations/member-service';
 import { countTradesByStatus, listTradesForUser } from '@/lib/trades/service';
 import type { TradeStatusFilter } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
@@ -38,9 +39,13 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
   const { status: rawStatus } = await searchParams;
   const status = parseFilter(rawStatus);
 
-  const [{ items }, totals] = await Promise.all([
+  const [{ items }, totals, unseenByTrade] = await Promise.all([
     listTradesForUser(session.user.id, { status, limit: 50 }),
     countTradesByStatus(session.user.id),
+    // J4 — Map<tradeId, unseenAnnotationsCount> for the "Nouvelle correction"
+    // pill. Trades with no unread annotations simply aren't keyed, so the
+    // default 0 from `<TradeCard />` keeps the badge hidden.
+    countUnseenAnnotationsByTrade(session.user.id),
   ]);
 
   return (
@@ -180,7 +185,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
         <ul className="flex flex-col gap-3">
           {items.map((trade) => (
             <li key={trade.id}>
-              <TradeCard trade={trade} />
+              <TradeCard trade={trade} unseenAnnotationsCount={unseenByTrade.get(trade.id) ?? 0} />
             </li>
           ))}
         </ul>

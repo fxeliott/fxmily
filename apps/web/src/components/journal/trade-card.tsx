@@ -1,4 +1,4 @@
-import { Check, ChevronRight, TrendingDown, TrendingUp, X } from 'lucide-react';
+import { Check, ChevronRight, MessageSquare, TrendingDown, TrendingUp, X } from 'lucide-react';
 import Link from 'next/link';
 
 import { Card } from '@/components/ui/card';
@@ -9,6 +9,9 @@ import { cn } from '@/lib/utils';
 
 interface TradeCardProps {
   trade: SerializedTrade;
+  /** J4 — number of admin annotations the member hasn't opened yet. Drives
+   * the "Nouvelle correction" pill in the top row. Pass 0 (default) to hide. */
+  unseenAnnotationsCount?: number;
 }
 
 const NUMBER_FMT = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 5 });
@@ -41,11 +44,12 @@ const OUTCOME_TONE: Record<NonNullable<SerializedTrade['outcome']>, 'ok' | 'bad'
  * système (CTAs, accents), pas signal financier. R-réalisé en JetBrains Mono
  * tabular-nums avec drop-shadow lime/red selon outcome.
  */
-export function TradeCard({ trade }: TradeCardProps) {
+export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps) {
   const isClosed = trade.isClosed;
   const realizedRNumber = trade.realizedR ? Number(trade.realizedR) : null;
   const isWin = realizedRNumber !== null && realizedRNumber > 0;
   const isLoss = realizedRNumber !== null && realizedRNumber < 0;
+  const hasUnseen = unseenAnnotationsCount > 0;
 
   const statusBarColor = isClosed
     ? isWin
@@ -91,6 +95,14 @@ export function TradeCard({ trade }: TradeCardProps) {
               ) : null}
               {isClosed && trade.outcome ? (
                 <Pill tone={OUTCOME_TONE[trade.outcome]}>{OUTCOME_LABEL[trade.outcome]}</Pill>
+              ) : null}
+              {hasUnseen ? (
+                <Pill tone="acc" dot="live">
+                  <MessageSquare className="h-2.5 w-2.5" strokeWidth={2} />
+                  {unseenAnnotationsCount === 1
+                    ? '1 nouvelle correction'
+                    : `${unseenAnnotationsCount} nouvelles corrections`}
+                </Pill>
               ) : null}
             </div>
 

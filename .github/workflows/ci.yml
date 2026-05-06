@@ -48,6 +48,12 @@ jobs:
       - name: Type check
         run: pnpm type-check
 
+      - name: Unit tests (Vitest)
+        # Vitest config stubs DATABASE_URL/AUTH_SECRET/AUTH_URL via vitest.config.ts
+        # so unit tests run without a real Postgres. E2E (Playwright) needs a DB
+        # service container — deferred to its own job once the seed helper lands.
+        run: pnpm test
+
       - name: Build
         env:
           # `next build` runs with NODE_ENV=production. Our env validation

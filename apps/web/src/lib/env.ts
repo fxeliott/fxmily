@@ -61,6 +61,10 @@ const envSchema = z.object({
   // Jalon 10 — Sentry
   SENTRY_DSN: z.string().url().optional(),
   SENTRY_AUTH_TOKEN: z.string().optional(),
+
+  // Jalon 5 — secret partagé avec le cron Hetzner pour `/api/cron/*`. Sans ça,
+  // l'endpoint cron répond 503 (refuse de tourner sans authentification).
+  CRON_SECRET: z.string().min(24, 'CRON_SECRET ≥ 24 chars (openssl rand -hex 24)').optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

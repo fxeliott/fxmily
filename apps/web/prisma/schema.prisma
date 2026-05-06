@@ -6,7 +6,8 @@
 // J1 — User, Account, Session, VerificationToken, Invitation, AuditLog.
 // J2 — Trade + enums (TradeDirection, TradeSession, TradeOutcome, RealizedRSource).
 // J4 — TradeAnnotation + NotificationQueue + enums (AnnotationMediaType, NotificationType, NotificationStatus).
-// J5+ — DailyCheckin, MarkDouglasCard, etc.
+// J5 — DailyCheckin + enum CheckinSlot. Extends NotificationType with morning/evening reminders.
+// J6+ — BehavioralScore, MarkDouglasCard, MarkDouglasDelivery, WeeklyReport.
 
 generator client {
   provider = "prisma-client"
@@ -80,10 +81,23 @@ enum AnnotationMediaType {
   video
 }
 
-/// Push-notification kinds queued for J9 dispatch (J4).
+/// Push-notification kinds queued for J9 dispatch (J4 + J5).
 /// Values are persisted as strings — adding a new kind is an additive migration.
+///   annotation_received      : a member's trade just got a new admin correction (J4).
+///   checkin_morning_reminder : nudges the member to fill their morning check-in (J5).
+///   checkin_evening_reminder : nudges the member to fill their evening check-in (J5).
 enum NotificationType {
   annotation_received
+  checkin_morning_reminder
+  checkin_evening_reminder
+}
+
+/// Daily check-in slot (J5, SPEC §6.4 + §7.4).
+///   morning : sleep, routine, mood, intention. Reminder ~07:30 local.
+///   evening : discipline, stress, gratitude, journal. Reminder ~20:30 local.
+enum CheckinSlot {
+  morning
+  evening
 }
 
 /// Lifecycle of a queued notification (J4).
@@ -139,6 +153,8 @@ model User {
   annotationsAuthored TradeAnnotation[]   @relation("AnnotationsAuthored")
   // J4 — push-notification queue rows targeting this user.
   notificationsQueued NotificationQueue[]
+  // J5 — morning + evening check-ins.
+  dailyCheckins       DailyCheckin[]
 
   @@index([status])
   @@index([role])
@@ -398,4 +414,97 @@ model NotificationQueue {
   // User-scoped admin/debug queries.
   @@index([userId, createdAt(sort: Desc)])
   @@map("notification_queue")
+}
+
+// =============================================================================
+// J5 — Daily check-ins (SPEC §6.4, §7.4)
+// =============================================================================
+
+/// Two-slot daily check-in: morning + evening. SPEC §6.4 keeps a single table
+/// shape with `slot` discriminating which fields are populated; the Zod schemas
+/// (`lib/schemas/checkin.ts`) and the wizards enforce the per-slot field set.
+///
+/// `date` is a Postgres `DATE` (no time component) anchored to the member's
+/// local-day (Europe/Paris by default — SPEC §6.1). The unique index on
+/// (userId, date, slot) prevents duplicates: filling the morning twice updates
+/// the existing row instead of stacking entries. The DB stores the user's
+/// local date as a calendar day; conversions live in `lib/checkin/timezone.ts`.
+///
+/// All slot-specific fields are nullable so the same table can serve both
+/// shapes. The wizards never persist nulls for required fields — the DB shape
+/// is permissive on purpose so a future "I forgot to log my mood" partial fill
+/// can still write something useful.
+///
+/// Streak counter: `lib/checkin/streak.ts` reads the (date, slot) tuples and
+/// counts consecutive days with at least one check-in (morning OR evening). The
+/// streak does NOT require both slots — SPEC §7.4 mentions a soft engagement
+/// score driven by completion rate, not strict morning+evening pairing.
+model DailyCheckin {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Local-date the check-in is for (Europe/Paris by default, see User.timezone).
+  /// `@db.Date` keeps a calendar-day stable across DST and avoids timezone math
+  /// when grouping for streaks / weekly reports.
+  date DateTime    @db.Date
+  slot CheckinSlot
+
+  // ----- Morning fields (mostly nullable on the DB side, required by Zod) ----
+
+  /// Hours of sleep last night (Decimal lets us record half-hours).
+  sleepHours Decimal? @map("sleep_hours") @db.Decimal(4, 2)
+  /// Subjective sleep quality 1–10.
+  sleepQuality Int? @map("sleep_quality")
+  /// Did the member follow their personal morning routine? Tri-state: true
+  /// (done), false (skipped), null (slot-N/A or unanswered).
+  morningRoutineCompleted Boolean? @map("morning_routine_completed")
+  /// Meditation minutes (0 = "didn't meditate"). Capped at 240.
+  meditationMin Int? @map("meditation_min")
+  /// Sport type label (free-text, FR — e.g. "course", "muscu", "yoga").
+  sportType        String? @map("sport_type")
+  sportDurationMin Int?    @map("sport_duration_min")
+  /// One-line intention for the day, optional. Capped at 200 chars by Zod.
+  intention String?
+
+  // ----- Evening fields ----------------------------------------------------
+
+  /// Did the member respect their trading plan today?
+  planRespectedToday Boolean? @map("plan_respected_today")
+  /// Did the member respect their hedge plan? Null = N/A (no hedge today).
+  hedgeRespectedToday Boolean? @map("hedge_respected_today")
+  /// Estimated caffeine intake in mL, capped at 2000.
+  caffeineMl Int? @map("caffeine_ml")
+  /// Water intake in litres (Decimal allows half-litres).
+  waterLiters Decimal? @map("water_liters") @db.Decimal(4, 2)
+  /// Average stress 1–10 across the day (evening retrospective).
+  stressScore Int? @map("stress_score")
+  /// Up to 3 gratitude items, capped at 200 chars each by Zod.
+  gratitudeItems String[] @map("gratitude_items")
+
+  // ----- Both slots --------------------------------------------------------
+
+  /// Mood score 1–10. Captured both morning ("how do I feel right now?") and
+  /// evening ("how did I feel today on average?"). Two distinct snapshots —
+  /// retained in lib/scoring (J6) for emotional-stability variance.
+  moodScore Int? @map("mood_score")
+  /// Tag slugs (lib/checkin/emotions.ts mirrors lib/trading/emotions.ts).
+  /// Used both morning ("how do I feel?") and evening ("dominant emotions").
+  emotionTags String[] @map("emotion_tags")
+  /// Free-form journal entry (max 4000 chars by Zod).
+  journalNote String? @map("journal_note") @db.Text
+
+  submittedAt DateTime  @default(now()) @map("submitted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Idempotency: at most one row per (user, day, slot). The Zod-driven Server
+  // Action upserts on this composite key.
+  @@unique([userId, date, slot])
+  // Streak / dashboard queries: scan the user's most recent days.
+  @@index([userId, date(sort: Desc)])
+  // Weekly report aggregation (J8) — fetch a 7-day window in date order.
+  @@index([userId, slot, date(sort: Desc)])
+  @@map("daily_checkins")
 }

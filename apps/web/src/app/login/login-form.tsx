@@ -1,9 +1,11 @@
 'use client';
 
+import { Mail, Lock } from 'lucide-react';
 import { useActionState } from 'react';
 
 import { Alert } from '@/components/alert';
-import { Spinner } from '@/components/spinner';
+import { Btn } from '@/components/ui/btn';
+import { cn } from '@/lib/utils';
 
 import { signInAction, type SignInActionState } from './actions';
 
@@ -29,6 +31,7 @@ export function LoginForm() {
         label="Email"
         autoComplete="email"
         required
+        icon={<Mail className="h-4 w-4" strokeWidth={1.75} />}
         error={state.fieldErrors?.email}
         disabled={pending}
       />
@@ -38,37 +41,26 @@ export function LoginForm() {
         label="Mot de passe"
         autoComplete="current-password"
         required
+        icon={<Lock className="h-4 w-4" strokeWidth={1.75} />}
         error={state.fieldErrors?.password}
         disabled={pending}
       />
 
-      <button
+      <Btn
         type="submit"
-        disabled={pending}
-        className="bg-primary text-primary-foreground focus-visible:outline-accent inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+        kind="primary"
+        size="l"
+        loading={pending}
+        kbd={pending ? undefined : '↵'}
+        className="w-full"
       >
-        {pending ? (
-          <>
-            <Spinner />
-            <span>Connexion…</span>
-          </>
-        ) : (
-          <span>Se connecter</span>
-        )}
-      </button>
+        {pending ? 'Connexion…' : 'Se connecter'}
+      </Btn>
     </form>
   );
 }
 
-function Field({
-  name,
-  type,
-  label,
-  autoComplete,
-  required,
-  error,
-  disabled,
-}: {
+interface FieldProps {
   name: string;
   type: 'email' | 'password' | 'text';
   label: string;
@@ -76,27 +68,48 @@ function Field({
   required?: boolean | undefined;
   error?: string | undefined;
   disabled?: boolean | undefined;
-}) {
+  icon?: React.ReactNode | undefined;
+}
+
+function Field({ name, type, label, autoComplete, required, error, disabled, icon }: FieldProps) {
   const id = `field-${name}`;
   const errorId = error ? `${id}-error` : undefined;
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-foreground text-sm font-medium">
+      <label
+        htmlFor={id}
+        className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+      >
         {label}
       </label>
-      <input
-        id={id}
-        name={name}
-        type={type}
-        required={required}
-        autoComplete={autoComplete}
-        disabled={disabled}
-        aria-invalid={error ? 'true' : undefined}
-        aria-describedby={errorId}
-        className="bg-card text-foreground focus-visible:border-accent focus-visible:ring-accent/40 rounded-md border border-[var(--border)] px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-60"
-      />
+      <div className="relative">
+        {icon ? (
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--t-4)]">
+            {icon}
+          </span>
+        ) : null}
+        <input
+          id={id}
+          name={name}
+          type={type}
+          required={required}
+          autoComplete={autoComplete}
+          disabled={disabled}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={errorId}
+          className={cn(
+            'rounded-input h-11 w-full border bg-[var(--bg-1)] py-2 pr-3 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            icon ? 'pl-10' : 'pl-3',
+            error
+              ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+              : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+            'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+            'disabled:cursor-not-allowed disabled:opacity-60',
+          )}
+        />
+      </div>
       {error ? (
-        <p id={errorId} className="text-danger text-xs">
+        <p id={errorId} className="text-[11px] text-[var(--bad)]">
           {error}
         </p>
       ) : null}

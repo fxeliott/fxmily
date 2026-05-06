@@ -5,7 +5,7 @@ import { Spinner } from '@/components/spinner';
 import { Kbd } from '@/components/ui/kbd';
 import { cn } from '@/lib/utils';
 
-const btnVariants = cva(
+export const btnVariants = cva(
   'relative inline-flex items-center justify-center select-none whitespace-nowrap rounded-control font-medium transition-[background-color,box-shadow,transform,color,border-color] duration-150',
   {
     variants: {

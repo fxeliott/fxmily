@@ -7,7 +7,7 @@
 
 Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — front + API + service worker (PWA, Jalon 9).
 
-État au 2026-05-06 : **J0 + J1 + J2 + J3 + J4 + J5 livrés**.
+État au 2026-05-07 : **J0 + J1 + J2 + J3 + J4 + J5 livrés** (J5 + audit-driven hardening).
 
 ## Aliases d'import
 
@@ -169,6 +169,7 @@ Variables CSS dans `src/app/globals.css` (palette SPEC §8.1). Mode sombre uniqu
 - Migration `j2_trade` (J2) : `prisma/migrations/20260505160000_j2_trade/` — Trade table + 4 enums (TradeDirection, TradeSession, TradeOutcome, RealizedRSource) + composite indexes user-scoped.
 - Migration `j4_trade_annotation` (J4) : `prisma/migrations/20260506100000_j4_trade_annotation/` — TradeAnnotation + NotificationQueue + 3 enums (AnnotationMediaType, NotificationType, NotificationStatus).
 - Migration `j5_daily_checkin` (J5) : `prisma/migrations/20260506200000_j5_daily_checkin/` — `daily_checkins` table + enum `CheckinSlot` + 2 nouvelles values pour `NotificationType` (`checkin_morning_reminder`, `checkin_evening_reminder`). Note : `ALTER TYPE ADD VALUE IF NOT EXISTS` cohabite avec d'autres DDL dans la même transaction tant qu'on n'utilise pas la nouvelle valeur (ce qui est le cas ici).
+- Migration `j5_notification_dedup` (J5 audit fix) : `prisma/migrations/20260507100000_j5_notification_dedup/` — unique partial index `notification_queue_pending_checkin_dedup` sur `(user_id, type, payload->>'date')` WHERE status=pending AND type IN (checkin\_\*\_reminder). Garantie d'idempotency Postgres-level pour `enqueueCheckinReminder` sous concurrence cron.
 - **Naming convention DB** : tables et colonnes en `snake_case` via `@map`, modèles Prisma en PascalCase / camelCase. C'est la convention Auth.js officielle.
 - **Decimal** : `Prisma.Decimal` exporté via `@/generated/prisma/client`. Au write, on passe `new Prisma.Decimal(numericValue)` (Prisma 7 accepte aussi un number, mais on est explicite). Au read, `.toNumber()` ou `.toString()` selon le cas. Pour passer aux client components, **toujours sérialiser en string** (`SerializedTrade` dans `lib/trades/service.ts`).
 
@@ -178,7 +179,8 @@ Variables CSS dans `src/app/globals.css` (palette SPEC §8.1). Mode sombre uniqu
   - **J1** : `src/lib/auth/{password,invitations,audit}.test.ts`, `src/lib/schemas/auth.test.ts`, `src/lib/email/send.test.ts`
   - **J2** : `src/lib/trading/{pairs,emotions,sessions,calculations}.test.ts`, `src/lib/schemas/trade.test.ts`, `src/lib/storage/keys.test.ts`
   - **J5** : `src/lib/checkin/{streak,timezone}.test.ts`, `src/lib/schemas/checkin.test.ts`
-  - **274 tests verts au close-out J5** (vs 199 au close-out J4, 159 au close-out J2, 38 au close-out J1).
+  - **J5 audit fixes** : `src/lib/notifications/enqueue.test.ts` (6 tests TDD pour la race-safe enqueue P2002), `src/lib/checkin/reminders.test.ts` (8 tests TDD pour le scan cron : early-return out-of-window, bulk lookup, slot-already-filled skip, userIds option, audit canonical row).
+  - **288 tests verts au close-out J5 audit-driven** (vs 274 au commit initial J5, 199 au close-out J4, 159 au close-out J2, 38 au close-out J1).
 - **Vitest setup** : `src/test/setup.ts` charge `@testing-library/jest-dom/vitest`. `vitest.config.ts` stub `DATABASE_URL`/`AUTH_SECRET`/`AUTH_URL` pour permettre les imports transitifs sans crash Zod.
 - **Playwright** (`pnpm --filter @fxmily/web test:e2e`) :
   - `tests/e2e/auth-invitation.spec.ts` (J1) — surface publique auth.
@@ -407,18 +409,20 @@ User-scoped strict. Fonctions :
 
 ### Composants (`components/checkin/`)
 
-- `<ScoreSlider>` — slider 1-10 réutilisable (mood, sleep quality, stress) avec gradient track (cyan→lime ou vert→jaune→rouge) + describeAt() callback pour le label sémantique.
-- `<EmotionCheckinPicker>` — multi-select grid type EmotionPicker du J2, mais sur le set checkin (vitality / mood / pressure) et avec sélection optionnelle.
-- `<StreakCard>` — props `streak`, `todayFilled`, `compact?`. Compact pour le dashboard, full pour la landing /checkin. Flame intensifie au-delà de 7 jours (warn tone + drop-shadow).
-- `<MorningCheckinWizard>` / `<EveningCheckinWizard>` — 5 steps each.
+- `<ScoreSlider>` — slider 1-10 réutilisable (mood, sleep quality, stress) avec gradient track tone-aware (`acc` lime, `cy` cyan, `warn` ok→warn→bad). `aria-valuetext` injecte le mot sémantique du `describeAt` (SR lit "7 sur 10, Calme"). `peer-focus-visible` ring sur le custom thumb (l'`<input type="range">` invisible ne pouvait pas exposer son outline). `threshold-pulse` lors d'une transition de bande sémantique (mood "Neutre" → "Calme") — pas à chaque step pour ne pas spammer le SR.
+- `<EmotionCheckinPicker>` — multi-select grid type EmotionPicker du J2, mais sur le set checkin (vitality / mood / pressure) et avec sélection optionnelle. Compteur `aria-hidden` + sr-only `aria-live` qui n'annonce QUE quand le cap est atteint (was: "polite" qui spam à chaque toggle).
+- `<StreakCard>` — props `streak`, `todayFilled`, `compact?`. Compact pour le dashboard, full pour la landing /checkin. Flame `--acc` (1-6 j) → `--warn` + `flame-flicker` (7+ j) → `--warn` + `flame-pulse` (30+ j "deep habit"). 4-tick milestone strip (7 / 14 / 30 / 100). Pattern "mercy infrastructure" Yu-kai Chou : pas de pill "EN FEU" Snapchat, pas de gamification toxique. SR-only "Palier N franchi" annonce les milestones.
+- `<MorningCheckinWizard>` / `<EveningCheckinWizard>` — 5 steps each. RadioGroup wire les keyboard arrows (ARIA APG) + focus-on-error (jump au premier step invalide). `parseLocaleNumber(s) = Number(s.replace(',', '.'))` partout pour absorber la virgule décimale FR (iOS Safari FR + Android Chrome FR acceptent "7,5" mais `Number("7,5") === NaN`).
 
 ### Cron reminders (`api/cron/checkin-reminders` + `lib/checkin/reminders.ts`)
 
 - POST `/api/cron/checkin-reminders` protégé par header `X-Cron-Secret`. Sans `CRON_SECRET` configuré → 503 (refuse-by-default, pas de fallback unsafe). Header invalide → 401. GET → 405.
-- `runCheckinReminderScan(now?, options?)` : pour chaque user `active`+`member`, vérifie si on est dans la window matin (07:30–09:00 local) ou soir (20:30–22:00 local), si oui et si pas déjà filled → enqueue. Idempotent (deuxième passage dans la même window ne duplique pas).
-- 1 audit row par scan (`checkin.reminder.scan` + metadata counts), pas par user — heartbeat propre dans `audit_logs`.
+- **Comparison constant-time** (J5 audit fix CWE-208) : `crypto.timingSafeEqual` après hashage SHA-256 des deux côtés (sidesteps length-leak Cloudflare pitfall).
+- **`?at=ISO` dev override** : double-gate `NODE_ENV !== 'production'` AND `AUTH_URL` not HTTPS-prod-style — défense contre `NODE_ENV` oublié dans systemd qui ferait fallback Zod sur 'development'.
+- `runCheckinReminderScan(now?, options?)` : early-return si on est hors des windows matin/soir (`isMorningReminderDue` / `isEveningReminderDue` sur Europe/Paris en V1) → 1 audit row, zero DB churn. Sinon : 1 query `findMany({ status: active, role: member })` + 1 bulk query `dailyCheckin.findMany({ userId IN (...), date IN (todays) })` puis dispatch in-memory. **O(1) DB round-trips, plus O(users)** — supporte la cible "milliers de membres" du SPEC.
+- 1 audit row par scan (`checkin.reminder.scan` + metadata counts ± `reason: 'out_of_window'`), pas par user — heartbeat propre dans `audit_logs`.
 - **Wiring prod attendu** : `*/15 7-22 * * *` sur Hetzner → curl avec `X-Cron-Secret`. Le dispatch Web Push reste J9 ; à J5 on enqueue, le worker walk les rows `pending` plus tard.
-- `enqueueCheckinReminder(userId, payload)` dans `lib/notifications/enqueue.ts` : findFirst pending pour `(user, type)` puis filter en mémoire sur `payload.date` pour idempotency. Pas d'index JSON, mais le user queue est petite donc OK.
+- **Race-safe enqueue** : `enqueueCheckinReminder` dans `lib/notifications/enqueue.ts` `INSERT` direct + catch Prisma `P2002` sur l'index unique partial `notification_queue_pending_checkin_dedup` (migration `20260507100000_j5_notification_dedup`). Deux enqueues concurrents convergent sur 1 row côté DB. Test live confirmé : 3 runs cron successifs → toujours 4 rows en queue, jamais 6 ou 12.
 
 ### Env (`lib/env.ts`)
 
@@ -433,3 +437,37 @@ Nouvelle var `CRON_SECRET` (optionnelle) min 24 chars. Pas de default — l'endp
 - **J6** (analytics croisés) : `DailyCheckin.sleepHours × Trade.realizedR` sur 30j → corrélation. `DailyCheckin.stressScore × Trade.outcome` → tendance. Tout déterministe en `lib/scoring/*`.
 - **J8** (weekly report builder) : agréger morning + evening de la semaine pour le prompt Claude. Index `(userId, slot, date DESC)` est là pour ça.
 - **J9** (web-push dispatcher) : pour `checkin_*_reminder`, payload `{ slot, date }` + URL `/checkin/{slot}`. Snooze button = mark `dispatched_at` mais pas `sent`.
+
+## J5 audit-driven hardening (2026-05-07)
+
+Après le commit initial J5 du 2026-05-06, 5 audits parallèles (code-reviewer, security-auditor, accessibility-reviewer, ui-designer, fxmily-content-checker) + 8 recherches web (Mark Douglas, streak ethics Yu-kai Chou, Node `timingSafeEqual`, Postgres `@db.Date` pitfalls, CSRF Next.js 16, ARIA slider WCAG 2.2, Zod 4 transforms, Whoop/Oura UX) ont identifié 13 ship-blockers + ~25 HIGH. **Tous les TIER 1 + TIER 2 fixes appliqués** (+5 commits, +14 tests TDD, smoke-test live validé). Le rapport complet est résumé ici.
+
+### Smoke-test live validé (Postgres `fxmily-postgres-dev` healthy + dev server `pnpm dev`)
+
+Via curl, en parallèle au dev server tournant :
+
+| Test                                                          | Résultat attendu         | Réel                                                       |
+| ------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------- |
+| `GET /api/health`                                             | 200 + db ok              | ✓ 200 + `{"status":"ok","db":"ok"}`                        |
+| `GET /checkin` (no auth)                                      | 307 → /login             | ✓                                                          |
+| `GET /checkin/morning` (no auth)                              | 307 → /login             | ✓                                                          |
+| `GET /checkin/evening` (no auth)                              | 307 → /login             | ✓                                                          |
+| `POST /api/cron/checkin-reminders` (no secret)                | 401                      | ✓                                                          |
+| `POST /api/cron/checkin-reminders` (wrong secret)             | 401                      | ✓                                                          |
+| `GET /api/cron/checkin-reminders`                             | 405                      | ✓                                                          |
+| `POST /api/cron/...?at=2026-05-06T06:30:00Z` (morning window) | 200 + scan 2 morning     | ✓ `enqueuedMorning: 2`                                     |
+| `POST /api/cron/...?at=2026-05-06T18:45:00Z` (evening window) | 200 + scan 2 evening     | ✓ `enqueuedEvening: 2`                                     |
+| `POST /api/cron/...?at=2026-05-06T12:00:00Z` (out of window)  | 200 + scan 0 + reason    | ✓ `reason: "out_of_window"`                                |
+| **Idempotency** : 3× même run morning                         | 4 rows en queue (pas 12) | ✓ — confirmé via `SELECT COUNT(*) FROM notification_queue` |
+
+### TIER 3/4 — follow-ups recommandés (non bloquants pour J5)
+
+- **Security HIGH H2** : rate limiting sur `/api/cron/*` (allowlist IP Hetzner ou `@upstash/ratelimit`). Repoussé à J10 prod hardening.
+- **Security HIGH H3** : JWT `update()` callback (`auth.config.ts:65-82`) accepte client-supplied `role`/`status` sans re-fetch DB → privilege escalation possible si un user authentifié appelle `useSession().update({ role: 'admin' })`. Hors scope J5 mais à fixer avant J10 prod (refactor : déplacer le bloc `update` dans le slice Node `auth.ts` et re-fetch DB).
+- **Security MEDIUM M2** : `dateInWindow` Zod fait check sur today UTC, pas TZ user. V1 single-TZ Europe/Paris donc OK aujourd'hui ; à élargir avec un check TZ-aware côté service quand J5.5 multi-TZ arrive.
+- **Security MEDIUM M5** : Unicode normalization NFC + filter zero-width / RTL override sur `journalNote`/`gratitudeItems`/`intention`. Pas critique en V1 (pas de rendering admin de ces champs), CRITIQUE avant J8 (rapport IA Claude qui prompt avec ces notes — risque de prompt injection via override RTL).
+- **A11y MEDIUM** : touch targets emotion chips (audit H1, `min-h-9` → `min-h-11`), heading focus outline cleanup (H3), DoneBanner re-fade timer client component (M9 - actuellement une seule rétention `?done=1` dans l'URL).
+- **UI BLOCKER B1+B2 (premium polish)** : sleep zones diagram dans le step Sommeil + `<Sparkline>` (existant mais inutilisé) sur la landing /checkin. Recommandé en J5.5 pour rejoindre le niveau du `StepPlannedRR` du J2.
+- **UI HIGH H3** : haptic feedback (`navigator.vibrate`) sur step transitions + submit success — détail premium PWA.
+- **Code MEDIUM M5** : `MorningCheckin.intention` schema retourne `undefined` mais service écrit `null` — incohérence type-safety mineure (mismatch entre `exactOptionalPropertyTypes` et le `?? null` du service).
+- **Tests E2E full** : le happy-path login → wizard → streak++ attend toujours le helper de seed Postgres cross-jalon. Public surface E2E couverte (auth gates).

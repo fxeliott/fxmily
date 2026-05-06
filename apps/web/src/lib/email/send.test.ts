@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildInviteUrl } from './send';
+import { buildInviteUrl, buildTradeDetailUrl } from './send';
 
 describe('buildInviteUrl', () => {
   it('appends the token as a URL query parameter', () => {
@@ -22,5 +22,22 @@ describe('buildInviteUrl', () => {
     // produces no double slashes.
     const url = buildInviteUrl('xyz');
     expect(url).not.toContain('//onboarding');
+  });
+});
+
+describe('buildTradeDetailUrl (J4)', () => {
+  it('points at /journal/[id] on the configured AUTH_URL', () => {
+    const url = buildTradeDetailUrl('clx0trade1');
+    expect(url).toBe('http://localhost:3000/journal/clx0trade1');
+  });
+
+  it('does not produce a double slash when the trade id is benign', () => {
+    const url = buildTradeDetailUrl('clx0trade1');
+    expect(url).not.toContain('//journal');
+  });
+
+  it('encodes non-canonical trade ids defensively', () => {
+    const url = buildTradeDetailUrl('weird id');
+    expect(url).toContain('weird%20id');
   });
 });

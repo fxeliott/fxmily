@@ -1,15 +1,19 @@
+import { ArrowLeft, Mail, Shield, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { MemberTabs, type MemberTabKey } from '@/components/admin/member-tabs';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
-import { logAudit } from '@/lib/auth/audit';
+import { Card } from '@/components/ui/card';
+import { Pill } from '@/components/ui/pill';
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
+import { logAudit } from '@/lib/auth/audit';
+import { cn } from '@/lib/utils';
 
 export const metadata = {
-  title: 'Profil membre',
+  title: 'Profil membre · Fxmily Admin',
 };
 
 export const dynamic = 'force-dynamic';
@@ -44,9 +48,6 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
     throw err;
   }
 
-  // Pre-load the trades list when the active tab needs them, to keep the
-  // page render single-pass. Overview shows a snapshot count; trades tab
-  // shows the full list.
   const trades =
     tab === 'trades' ? await listMemberTradesAsAdmin(memberId, { status: 'all' }) : null;
 
@@ -56,35 +57,77 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
     metadata: { memberId, tab },
   });
 
+  // Generate avatar initials + deterministic hue from email hash
+  const initials =
+    detail.displayName
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase() ?? '')
+      .join('') || 'M';
+  let hue = 0;
+  for (let i = 0; i < detail.email.length; i++) {
+    hue = (hue * 31 + detail.email.charCodeAt(i)) % 360;
+  }
+
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">
-      <header className="flex flex-col gap-3">
-        <Link
-          href="/admin/members"
-          className="text-muted hover:text-foreground focus-visible:outline-accent rounded text-sm underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          ← Membres
-        </Link>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-foreground text-3xl font-semibold tracking-tight sm:text-4xl">
-            {detail.displayName}
-          </h1>
-          {detail.role === 'admin' ? (
-            <span className="border-accent/40 text-accent inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium uppercase tracking-wider">
-              Admin
-            </span>
-          ) : null}
-          {detail.status === 'suspended' ? (
-            <span className="border-warning/40 text-warning inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium uppercase tracking-wider">
-              Suspendu
-            </span>
-          ) : null}
-        </div>
-        <p className="text-muted text-sm">{detail.email}</p>
-      </header>
+      {/* Back link */}
+      <Link
+        href="/admin/members"
+        className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+        Membres
+      </Link>
 
+      {/* Hero header card */}
+      <Card primary className="p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          {/* Avatar with initials + deterministic hash gradient */}
+          <div
+            className="rounded-card grid h-16 w-16 shrink-0 place-items-center border border-[var(--b-strong)] text-[20px] font-semibold text-[var(--t-1)]"
+            style={{
+              background: `linear-gradient(135deg, hsl(${hue}, 28%, 28%), hsl(${(hue + 30) % 360}, 28%, 18%))`,
+            }}
+            aria-hidden
+          >
+            {initials}
+          </div>
+
+          <div className="flex flex-1 flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1
+                className="f-display h-rise text-[24px] font-bold leading-[1.05] tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
+                style={{ fontFeatureSettings: '"ss01" 1' }}
+              >
+                {detail.displayName}
+              </h1>
+              {detail.role === 'admin' ? (
+                <Pill tone="acc">
+                  <Shield className="h-2.5 w-2.5" strokeWidth={2} />
+                  ADMIN
+                </Pill>
+              ) : null}
+              {detail.status === 'suspended' ? (
+                <Pill tone="warn">
+                  <ShieldAlert className="h-2.5 w-2.5" strokeWidth={2} />
+                  SUSPENDU
+                </Pill>
+              ) : null}
+            </div>
+            <p className="t-body inline-flex items-center gap-1.5 font-mono tabular-nums text-[var(--t-2)]">
+              <Mail className="h-3.5 w-3.5 text-[var(--t-4)]" strokeWidth={1.75} />
+              {detail.email}
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Tabs */}
       <MemberTabs memberId={memberId} active={tab} />
 
+      {/* Content */}
       {tab === 'overview' ? <OverviewTab detail={detail} /> : null}
       {tab === 'trades' && trades ? <MemberTradesList memberId={memberId} trades={trades} /> : null}
     </main>
@@ -93,11 +136,20 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
 
 function OverviewTab({ detail }: { detail: Awaited<ReturnType<typeof getMemberDetail>> }) {
   return (
-    <section className="bg-card flex flex-col gap-4 rounded-lg border border-[var(--border)] p-4">
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+    <div className="flex flex-col gap-4">
+      {/* 6 metrics grid */}
+      <div className="border-edge-top rounded-card relative grid grid-cols-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] shadow-[var(--sh-card)] sm:grid-cols-3">
         <Metric label="Trades total" value={detail.tradesCount} />
-        <Metric label="Trades ouverts" value={detail.tradesOpenCount} tone="warning-if-positive" />
-        <Metric label="Trades clôturés" value={detail.tradesClosedCount} />
+        <Metric
+          label="En cours"
+          value={detail.tradesOpenCount}
+          tone={detail.tradesOpenCount > 0 ? 'warn' : 'mute'}
+        />
+        <Metric
+          label="Clôturés"
+          value={detail.tradesClosedCount}
+          tone={detail.tradesClosedCount > 0 ? 'ok' : 'mute'}
+        />
         <Metric label="Inscrit le" value={DATETIME_FMT.format(new Date(detail.joinedAt))} mono />
         <Metric
           label="Dernière connexion"
@@ -111,42 +163,54 @@ function OverviewTab({ detail }: { detail: Awaited<ReturnType<typeof getMemberDe
         />
       </div>
 
-      <p className="text-muted text-xs">
-        Les onglets <strong>Check-ins</strong>, <strong>Mark Douglas</strong> et{' '}
-        <strong>Notes admin</strong> arrivent dans les prochains jalons (J3.5 / J5 / J7).
-      </p>
-    </section>
+      {/* Coming soon hint */}
+      <div className="rounded-control border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] px-3 py-2.5">
+        <p className="t-cap text-[var(--t-2)]">
+          Les onglets <strong className="font-semibold text-[var(--t-1)]">Check-ins</strong>{' '}
+          <Pill tone="cy">J5</Pill>,{' '}
+          <strong className="font-semibold text-[var(--t-1)]">Mark Douglas</strong>{' '}
+          <Pill tone="cy">J7</Pill> et{' '}
+          <strong className="font-semibold text-[var(--t-1)]">Notes admin</strong>{' '}
+          <Pill tone="cy">J3.5</Pill> arrivent dans les prochains jalons.
+        </p>
+      </div>
+    </div>
   );
 }
 
 function Metric({
   label,
   value,
-  tone,
+  tone = 'default',
   mono,
 }: {
   label: string;
   value: number | string;
-  tone?: 'warning-if-positive';
+  tone?: 'default' | 'mute' | 'ok' | 'warn';
   mono?: boolean;
 }) {
-  const numericValue = typeof value === 'number' ? value : null;
-  const toneClass =
-    tone === 'warning-if-positive' && numericValue !== null && numericValue > 0
-      ? 'text-warning'
-      : 'text-foreground';
+  const valColor =
+    tone === 'ok'
+      ? 'text-[var(--ok)]'
+      : tone === 'warn'
+        ? 'text-[var(--warn)]'
+        : tone === 'mute'
+          ? 'text-[var(--t-3)]'
+          : 'text-[var(--t-1)]';
+
   return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-muted text-xs">{label}</dt>
-      <dd
-        className={[
-          'text-base tabular-nums',
-          mono ? 'font-mono text-sm' : 'font-semibold',
-          toneClass,
-        ].join(' ')}
+    <div className="flex flex-col gap-1 border-b border-r border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-b-0 [&:nth-child(2)]:border-r-0 sm:[&:nth-child(2)]:border-r [&:nth-child(3)]:border-r-0 sm:[&:nth-child(3)]:border-b sm:[&:nth-child(3)]:border-r-0 [&:nth-child(4)]:border-b-0 sm:[&:nth-child(4)]:border-r [&:nth-child(5)]:border-b-0 [&:nth-child(5)]:border-r [&:nth-child(6)]:border-b-0 [&:nth-child(6)]:border-r-0">
+      <span className="t-eyebrow">{label}</span>
+      <span
+        className={cn(
+          mono
+            ? 'f-mono text-[13px] tabular-nums'
+            : 'f-mono text-[22px] font-semibold tabular-nums leading-none tracking-[-0.02em]',
+          valColor,
+        )}
       >
         {value}
-      </dd>
+      </span>
     </div>
   );
 }

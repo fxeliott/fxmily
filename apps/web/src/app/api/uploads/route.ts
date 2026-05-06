@@ -2,38 +2,54 @@ import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
+import { db } from '@/lib/db';
 import { selectStorage } from '@/lib/storage';
 import { isAllowedMime, sniffImageMime } from '@/lib/storage/keys';
-import { MAX_SCREENSHOT_BYTES } from '@/lib/storage/types';
+import {
+  ALL_UPLOAD_KINDS,
+  MAX_SCREENSHOT_BYTES,
+  isAnnotationUploadKind,
+  isTradeUploadKind,
+  type UploadKind,
+} from '@/lib/storage/types';
 
 /**
  * POST /api/uploads
  *
- * Upload a screenshot for a trade (J2 — SPEC §7.3 "upload obligatoire").
+ * Upload an image attached to a trade (J2) or to an admin annotation (J4).
  *
  * Request body: `multipart/form-data` with fields:
- *   - `file` (File, required) — image bytes (jpg/png/webp), ≤ 8 MiB.
- *   - `kind` (string, required) — 'trade-entry' | 'trade-exit'. Used in audit
- *     metadata only; the storage key isn't currently parameterised by kind.
+ *   - `file`    (File, required) — image bytes (jpg/png/webp), ≤ 8 MiB.
+ *   - `kind`    (string, required) — one of `ALL_UPLOAD_KINDS`.
+ *   - `tradeId` (string, required when `kind` is annotation-*) — CUID of the
+ *     trade the annotation will attach to. Used to scope the storage path
+ *     and to enforce admin ownership.
  *
- * Response (200): `{ key: string, readUrl: string }`.
+ * Response (201): `{ key: string, readUrl: string }`.
  *
- * Auth: any authenticated session (member or admin). Defense-in-depth: the
- * proxy already gates `/api/*` (except `/api/auth`), but we re-check here.
+ * Auth gates:
+ *   - any authenticated active session for trade-* kinds
+ *   - role=admin for annotation-* kinds (defense in depth on top of the
+ *     `/admin/*` proxy gate which doesn't cover `/api/uploads`)
  *
  * Validation pipeline (defense layered):
- *   1. Auth.
+ *   1. Auth + status active.
  *   2. multipart parsed via `req.formData()`.
- *   3. `kind` enum check.
- *   4. File presence + size cap.
- *   5. `Content-Type` allowlist (via `isAllowedMime`).
- *   6. Magic-byte sniff against the allowlist — must match the declared MIME.
+ *   3. `kind` allowlist check.
+ *   4. Per-kind owner check (admin gate + tradeId existence).
+ *   5. File presence + size cap.
+ *   6. `Content-Type` allowlist (via `isAllowedMime`).
+ *   7. Magic-byte sniff against the allowlist — must match the declared MIME.
  *      Defeats `Content-Type` spoof + extension-rename attacks.
- *   7. Storage adapter `put()` — generates the canonical server-side key.
+ *   8. Storage adapter `put()` — generates the canonical server-side key.
  */
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+function isUploadKind(value: unknown): value is UploadKind {
+  return typeof value === 'string' && (ALL_UPLOAD_KINDS as readonly string[]).includes(value);
+}
 
 export async function POST(req: Request): Promise<Response> {
   const session = await auth();
@@ -52,8 +68,37 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: 'invalid_form' }, { status: 400 });
   }
 
-  const kind = formData.get('kind');
-  if (kind !== 'trade-entry' && kind !== 'trade-exit') {
+  const kindRaw = formData.get('kind');
+  if (!isUploadKind(kindRaw)) {
+    return NextResponse.json({ error: 'invalid_kind' }, { status: 400 });
+  }
+  const kind: UploadKind = kindRaw;
+
+  // Resolve the path-owner segment per kind, applying the kind-specific
+  // authorisation rule. Failing fast keeps malformed requests from reaching
+  // the buffer/sniff pipeline.
+  let pathOwner: string;
+  if (isTradeUploadKind(kind)) {
+    pathOwner = userId;
+  } else if (isAnnotationUploadKind(kind)) {
+    if (session.user.role !== 'admin') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+    const tradeIdRaw = formData.get('tradeId');
+    if (typeof tradeIdRaw !== 'string' || !/^[a-z0-9]{8,40}$/.test(tradeIdRaw)) {
+      return NextResponse.json({ error: 'invalid_trade_id' }, { status: 400 });
+    }
+    // Confirm the trade actually exists — we don't want orphan annotation
+    // media when the admin typo'd the URL.
+    const trade = await db.trade.findUnique({
+      where: { id: tradeIdRaw },
+      select: { id: true },
+    });
+    if (!trade) {
+      return NextResponse.json({ error: 'trade_not_found' }, { status: 404 });
+    }
+    pathOwner = tradeIdRaw;
+  } else {
     return NextResponse.json({ error: 'invalid_kind' }, { status: 400 });
   }
 
@@ -85,8 +130,8 @@ export async function POST(req: Request): Promise<Response> {
   let readUrl: string;
   try {
     const result = await storage.put({
-      userId,
       kind,
+      pathOwner,
       contentType: declared,
       bytes: buffer,
       originalFilename: file.name,
@@ -99,9 +144,18 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   await logAudit({
-    action: 'trade.screenshot.uploaded',
+    action: isAnnotationUploadKind(kind)
+      ? 'admin.annotation.media.uploaded'
+      : 'trade.screenshot.uploaded',
     userId,
-    metadata: { kind, key, mime: declared, size: file.size, adapter: storage.id },
+    metadata: {
+      kind,
+      key,
+      mime: declared,
+      size: file.size,
+      adapter: storage.id,
+      ...(isAnnotationUploadKind(kind) ? { tradeId: pathOwner } : {}),
+    },
   });
 
   return NextResponse.json({ key, readUrl }, { status: 201 });

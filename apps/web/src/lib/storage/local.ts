@@ -3,16 +3,17 @@ import 'server-only';
 import { promises as fs, createReadStream, type ReadStream } from 'node:fs';
 import path from 'node:path';
 
-import { parseTradeKey, generateTradeKey } from './keys';
+import { generateAnnotationKey, generateTradeKey, parseStorageKey, parseTradeKey } from './keys';
 import {
   type StorageAdapter,
   type UploadInput,
   StorageError,
   type AllowedImageMime,
+  isTradeUploadKind,
 } from './types';
 
 /**
- * Local filesystem storage adapter (J2 — dev / pre-R2).
+ * Local filesystem storage adapter (J2 — dev / pre-R2; J4 — annotation media).
  *
  * Stores files in `<UPLOADS_DIR>` (default `<cwd>/.uploads`). The directory is
  * gitignored. Reads are served by the `/api/uploads/[...key]` route handler;
@@ -20,7 +21,7 @@ import {
  * auth + ownership before streaming the bytes.
  *
  * Path-traversal hardening (CVE-2025-27210, OWASP):
- *   - Allowlist key regex (`parseTradeKey`) — refuses `..`, `/`, control chars.
+ *   - Allowlist key regex (`parseStorageKey`) — refuses `..`, `/`, control chars.
  *   - `path.resolve` from the upload root + `startsWith(rootSep)` check.
  *   - Reject Windows device names (CON, AUX, NUL, COM1…, LPT1…).
  */
@@ -40,7 +41,8 @@ function uploadsRoot(): string {
 
 function safePathFor(key: string): string {
   // First validate the key shape (also throws StorageError(invalid_key)).
-  parseTradeKey(key);
+  // Accepts both `trades/...` and `annotations/...` prefixes.
+  parseStorageKey(key);
 
   // Reject device-name segments at any depth.
   for (const segment of key.split('/')) {
@@ -63,7 +65,9 @@ export class LocalStorageAdapter implements StorageAdapter {
 
   async put(input: UploadInput): Promise<{ key: string; readUrl: string }> {
     const mime = input.contentType as AllowedImageMime;
-    const key = generateTradeKey(input.userId, mime);
+    const key = isTradeUploadKind(input.kind)
+      ? generateTradeKey(input.pathOwner, mime)
+      : generateAnnotationKey(input.pathOwner, mime);
     const target = safePathFor(key);
     await fs.mkdir(path.dirname(target), { recursive: true });
     // `wx` → fail if the random key collides with an existing file (cosmic
@@ -75,7 +79,7 @@ export class LocalStorageAdapter implements StorageAdapter {
   getReadUrl(key: string): string {
     // Validate before exposing. We don't want a malformed key to bubble up
     // into a route URL that 500s the streamer.
-    parseTradeKey(key);
+    parseStorageKey(key);
     return `/api/uploads/${key}`;
   }
 
@@ -90,12 +94,13 @@ export class LocalStorageAdapter implements StorageAdapter {
 
 /**
  * Open a read stream on a local key. Used by the GET route handler.
- * Throws `StorageError('not_found')` on missing files.
+ * Throws `StorageError('not_found')` on missing files. Accepts both trade
+ * and annotation keys — the prefix is validated by `parseStorageKey`.
  */
 export async function openLocalReadStream(
   key: string,
 ): Promise<{ stream: ReadStream; size: number; ext: 'jpg' | 'png' | 'webp' }> {
-  const parsed = parseTradeKey(key);
+  const parsed = parseStorageKey(key);
   const target = safePathFor(key);
   const stat = await fs.stat(target).catch((err: NodeJS.ErrnoException) => {
     if (err.code === 'ENOENT') {
@@ -110,7 +115,13 @@ export async function openLocalReadStream(
   };
 }
 
-/** Owner check used by route handlers. Returns true iff `key` is owned by `userId`. */
+/**
+ * Owner check used by route handlers and Server Actions for **trade** keys
+ * only. Returns true iff `key` is shaped `trades/{userId}/...` AND the userId
+ * matches. Annotation keys carry a tradeId rather than a userId — the
+ * member-side ownership check requires a Prisma lookup and lives in the
+ * `/api/uploads/[...key]` route handler.
+ */
 export function keyBelongsTo(key: string, userId: string): boolean {
   try {
     return parseTradeKey(key).userId === userId;

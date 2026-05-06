@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   extensionForMime,
+  generateAnnotationKey,
   generateTradeKey,
   isAllowedMime,
+  parseAnnotationKey,
+  parseStorageKey,
   parseTradeKey,
   sniffImageMime,
 } from './keys';
@@ -47,10 +50,29 @@ describe('generateTradeKey', () => {
   });
 });
 
+describe('generateAnnotationKey (J4)', () => {
+  it('produces a key under the annotations/ prefix', () => {
+    const key = generateAnnotationKey('clx0trade1', 'image/png');
+    expect(key).toMatch(/^annotations\/clx0trade1\/[a-zA-Z0-9_-]{32}\.png$/);
+  });
+
+  it('produces unique keys across calls', () => {
+    const a = generateAnnotationKey('clx0trade1', 'image/webp');
+    const b = generateAnnotationKey('clx0trade1', 'image/webp');
+    expect(a).not.toBe(b);
+  });
+
+  it('throws on a malformed tradeId', () => {
+    expect(() => generateAnnotationKey('clx0../', 'image/jpeg')).toThrow();
+    expect(() => generateAnnotationKey('UPPERCASE', 'image/jpeg')).toThrow();
+  });
+});
+
 describe('parseTradeKey', () => {
   it('extracts userId, filename, ext from a valid key', () => {
     const key = 'trades/clx0abc123/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png';
     expect(parseTradeKey(key)).toEqual({
+      kind: 'trade',
       userId: 'clx0abc123',
       filename: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       ext: 'png',
@@ -68,8 +90,59 @@ describe('parseTradeKey', () => {
     'trades/clx/..bbbbbbbbbb.jpg', // dotdot in filename
     '',
     'random',
+    'annotations/clx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg', // wrong prefix
   ])('rejects malformed key: %s', (key) => {
     expect(() => parseTradeKey(key)).toThrow();
+  });
+});
+
+describe('parseAnnotationKey (J4)', () => {
+  it('extracts tradeId, filename, ext from a valid annotation key', () => {
+    const key = 'annotations/clx0trade1/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.webp';
+    expect(parseAnnotationKey(key)).toEqual({
+      kind: 'annotation',
+      tradeId: 'clx0trade1',
+      filename: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      ext: 'webp',
+    });
+  });
+
+  it.each([
+    'annotations/clx/short.jpg', // filename too short
+    'annotations/clx/aaaaaaaaaaaa.gif', // disallowed extension
+    'annotations/CLX/aaaaaaaaaaaa.jpg', // uppercase tradeId
+    'annotations/../escape/aaaaaaaaaaaa.jpg',
+    'trades/clx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg', // wrong prefix
+    'annotations/clx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.mp4', // J4.5 not yet
+    '',
+  ])('rejects malformed annotation key: %s', (key) => {
+    expect(() => parseAnnotationKey(key)).toThrow();
+  });
+});
+
+describe('parseStorageKey (J4)', () => {
+  it('discriminates a trade key', () => {
+    const parsed = parseStorageKey('trades/clx0abc123/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg');
+    expect(parsed.kind).toBe('trade');
+    if (parsed.kind === 'trade') {
+      expect(parsed.userId).toBe('clx0abc123');
+    }
+  });
+
+  it('discriminates an annotation key', () => {
+    const parsed = parseStorageKey('annotations/clx0trade1/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png');
+    expect(parsed.kind).toBe('annotation');
+    if (parsed.kind === 'annotation') {
+      expect(parsed.tradeId).toBe('clx0trade1');
+    }
+  });
+
+  it('rejects an unknown prefix', () => {
+    expect(() => parseStorageKey('uploads/clx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg')).toThrow();
+  });
+
+  it('rejects an empty string', () => {
+    expect(() => parseStorageKey('')).toThrow();
   });
 });
 
@@ -97,6 +170,14 @@ describe('sniffImageMime', () => {
 
   it('returns null for unrelated content (PDF magic)', () => {
     const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0, 0, 0, 0]);
+    expect(sniffImageMime(bytes)).toBeNull();
+  });
+
+  it('returns null for a fake mp4 ftyp header (J4.5 not wired)', () => {
+    // mp4 ftyp box at offset 4 = "ftyp" + brand "isom" at offset 8
+    const bytes = new Uint8Array([
+      0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d,
+    ]);
     expect(sniffImageMime(bytes)).toBeNull();
   });
 });

@@ -22,11 +22,45 @@
 
 export type ScreenshotKind = 'trade-entry' | 'trade-exit';
 
+/** Subset of `UploadKind` that lives under the `trades/{userId}/...` prefix. */
+export const TRADE_UPLOAD_KINDS = ['trade-entry', 'trade-exit'] as const;
+
+/**
+ * J4 — admin annotations attach images (or videos in J4.5) to a trade. They
+ * live under `annotations/{tradeId}/...` so ownership checks can read the
+ * trade owner via a single Prisma lookup.
+ */
+export const ANNOTATION_UPLOAD_KINDS = ['annotation-image'] as const;
+
+export const ALL_UPLOAD_KINDS = [...TRADE_UPLOAD_KINDS, ...ANNOTATION_UPLOAD_KINDS] as const;
+export type UploadKind = (typeof ALL_UPLOAD_KINDS)[number];
+
+export function isTradeUploadKind(kind: UploadKind): kind is ScreenshotKind {
+  return (TRADE_UPLOAD_KINDS as readonly UploadKind[]).includes(kind);
+}
+
+export function isAnnotationUploadKind(
+  kind: UploadKind,
+): kind is (typeof ANNOTATION_UPLOAD_KINDS)[number] {
+  return (ANNOTATION_UPLOAD_KINDS as readonly UploadKind[]).includes(kind);
+}
+
 export interface UploadInput {
-  /** Authenticated user — used to scope the storage key. */
-  userId: string;
-  /** What this screenshot represents. Trade entry vs exit. */
-  kind: ScreenshotKind;
+  /**
+   * Drives both the storage prefix and the audit metadata. Trade kinds live
+   * under `trades/{userId}/…`, annotation kinds under `annotations/{tradeId}/…`.
+   */
+  kind: UploadKind;
+  /**
+   * Path-owner segment baked into the storage key. For trade kinds this is
+   * the authenticated user's id (CUID). For annotation kinds this is the
+   * parent trade id (also a CUID).
+   *
+   * The route handler is responsible for choosing the right value; this type
+   * stays generic so the adapter contract doesn't need to know about admins
+   * vs members.
+   */
+  pathOwner: string;
   /** Already-validated MIME type. Must be one of `ALLOWED_IMAGE_MIME_TYPES`. */
   contentType: string;
   /** Buffer holding the file bytes. Already validated for size and magic bytes. */

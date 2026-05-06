@@ -28,6 +28,10 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    // Prisma 7 generated client lives in src/generated/prisma. tsconfig
+    // already excludes it, but the flat ESLint config doesn't inherit that
+    // — without this entry every regen produces thousands of lint warnings.
+    'src/generated/**',
   ]),
 ]);
 

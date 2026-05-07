@@ -2,12 +2,11 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { after } from 'next/server';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
 import { tradeCloseSchema, tradeOpenSchema } from '@/lib/schemas/trade';
-import { recomputeAndPersist } from '@/lib/scoring';
+import { scheduleScoreRecompute } from '@/lib/scoring/scheduler';
 import { keyBelongsTo } from '@/lib/storage/local';
 import {
   TradeAlreadyClosedError,
@@ -16,27 +15,6 @@ import {
   createTrade,
   deleteTrade,
 } from '@/lib/trades/service';
-
-/**
- * Schedule a behavioral-score recompute *after the response is sent*.
- *
- * `after()` is the Next.js 16 API for "do this once the user already has
- * their answer" — it does NOT block the redirect / form submission. The
- * recompute runs in the background; the next dashboard render reads the
- * fresh snapshot via `getLatestBehavioralScore`.
- *
- * Errors are swallowed (logged) so a failed recompute never breaks the
- * upstream action.
- */
-function scheduleScoreRecompute(userId: string, reason: string) {
-  after(async () => {
-    try {
-      await recomputeAndPersist(userId);
-    } catch (err) {
-      console.error(`[scoring] background recompute failed (${reason})`, err);
-    }
-  });
-}
 
 /**
  * Server Actions for the trading journal (J2, SPEC §7.3).

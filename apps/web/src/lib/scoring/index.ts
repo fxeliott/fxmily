@@ -50,3 +50,9 @@ export {
   type RecomputeBatchResult,
   type SerializedBehavioralScore,
 } from './service';
+
+export {
+  scheduleScoreRecompute,
+  RECOMPUTE_DEBOUNCE_MS,
+  type ScoreRecomputeReason,
+} from './scheduler';

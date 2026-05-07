@@ -2,7 +2,6 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { after } from 'next/server';
 import type { ZodError } from 'zod';
 
 import { auth } from '@/auth';
@@ -13,23 +12,7 @@ import {
   submitMorningCheckin,
 } from '@/lib/checkin/service';
 import { eveningCheckinSchema, morningCheckinSchema } from '@/lib/schemas/checkin';
-import { recomputeAndPersist } from '@/lib/scoring';
-
-/**
- * Schedule a behavioral-score recompute *after the response is sent* (Next.js
- * 16 `after()`). Filling a check-in changes Discipline + EmotionalStability
- * + Engagement immediately, so the dashboard should reflect the new state on
- * the next render — not wait for the nightly cron.
- */
-function scheduleScoreRecompute(userId: string, reason: string) {
-  after(async () => {
-    try {
-      await recomputeAndPersist(userId);
-    } catch (err) {
-      console.error(`[scoring] background recompute failed (${reason})`, err);
-    }
-  });
-}
+import { scheduleScoreRecompute } from '@/lib/scoring/scheduler';
 
 /**
  * Server Actions for the daily check-in flows (J5, SPEC §7.4).

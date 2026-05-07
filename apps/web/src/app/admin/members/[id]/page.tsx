@@ -5,11 +5,16 @@ import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { MemberTabs, type MemberTabKey } from '@/components/admin/member-tabs';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
+import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
+import { ScoreGaugeGrid } from '@/components/scoring/score-gauge-grid';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
 import { logAudit } from '@/lib/auth/audit';
+import { db } from '@/lib/db';
+import { getDashboardAnalytics } from '@/lib/scoring/dashboard-data';
+import { getLatestBehavioralScore, type SerializedBehavioralScore } from '@/lib/scoring/service';
 import { cn } from '@/lib/utils';
 
 export const metadata = {
@@ -50,6 +55,21 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
 
   const trades =
     tab === 'trades' ? await listMemberTradesAsAdmin(memberId, { status: 'all' }) : null;
+
+  // J6.5 — pull behavioral scores + analytics in parallel for the overview tab.
+  // Skipped on the trades tab to keep its render path lean.
+  const memberRow =
+    tab === 'overview'
+      ? await db.user.findUnique({ where: { id: memberId }, select: { timezone: true } })
+      : null;
+  const memberTimezone = memberRow?.timezone ?? 'Europe/Paris';
+  const [latestScore, analytics] =
+    tab === 'overview'
+      ? await Promise.all([
+          getLatestBehavioralScore(memberId),
+          getDashboardAnalytics(memberId, memberTimezone, '30d'),
+        ])
+      : [null, null];
 
   await logAudit({
     action: 'admin.member.viewed',
@@ -128,13 +148,23 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       <MemberTabs memberId={memberId} active={tab} />
 
       {/* Content */}
-      {tab === 'overview' ? <OverviewTab detail={detail} /> : null}
+      {tab === 'overview' ? (
+        <OverviewTab detail={detail} latestScore={latestScore} analytics={analytics} />
+      ) : null}
       {tab === 'trades' && trades ? <MemberTradesList memberId={memberId} trades={trades} /> : null}
     </main>
   );
 }
 
-function OverviewTab({ detail }: { detail: Awaited<ReturnType<typeof getMemberDetail>> }) {
+function OverviewTab({
+  detail,
+  latestScore,
+  analytics,
+}: {
+  detail: Awaited<ReturnType<typeof getMemberDetail>>;
+  latestScore: SerializedBehavioralScore | null;
+  analytics: Awaited<ReturnType<typeof getDashboardAnalytics>> | null;
+}) {
   return (
     <div className="flex flex-col gap-4">
       {/* 6 metrics grid */}
@@ -162,6 +192,21 @@ function OverviewTab({ detail }: { detail: Awaited<ReturnType<typeof getMemberDe
           mono
         />
       </div>
+
+      {/* J6.5 — Behavioral scores (admin read-only view) */}
+      <ScoreGaugeGrid score={latestScore} />
+
+      {/* J6.5 — Edge + survie cards */}
+      {analytics && analytics.closedCount > 0 ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          <ExpectancyCard expectancy={analytics.expectancy} />
+          <DrawdownStreaksCard
+            drawdown={analytics.drawdown}
+            observedMaxLoss={analytics.streaks.observedMaxLoss}
+            observedMaxWin={analytics.streaks.observedMaxWin}
+          />
+        </div>
+      ) : null}
 
       {/* Coming soon hint */}
       <div className="rounded-control border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] px-3 py-2.5">

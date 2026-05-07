@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 import type { ZodError } from 'zod';
 
 import { auth } from '@/auth';
@@ -12,6 +13,23 @@ import {
   submitMorningCheckin,
 } from '@/lib/checkin/service';
 import { eveningCheckinSchema, morningCheckinSchema } from '@/lib/schemas/checkin';
+import { recomputeAndPersist } from '@/lib/scoring';
+
+/**
+ * Schedule a behavioral-score recompute *after the response is sent* (Next.js
+ * 16 `after()`). Filling a check-in changes Discipline + EmotionalStability
+ * + Engagement immediately, so the dashboard should reflect the new state on
+ * the next render — not wait for the nightly cron.
+ */
+function scheduleScoreRecompute(userId: string, reason: string) {
+  after(async () => {
+    try {
+      await recomputeAndPersist(userId);
+    } catch (err) {
+      console.error(`[scoring] background recompute failed (${reason})`, err);
+    }
+  });
+}
 
 /**
  * Server Actions for the daily check-in flows (J5, SPEC §7.4).
@@ -110,6 +128,7 @@ export async function submitMorningCheckinAction(
 
   revalidatePath('/checkin');
   revalidatePath('/dashboard');
+  scheduleScoreRecompute(session.user.id, 'checkin.morning.submitted');
 
   // `redirect()` always throws (NEXT_REDIRECT). No try/catch: if it ever
   // doesn't throw (Next bug), letting the bug surface is preferable to
@@ -182,6 +201,7 @@ export async function submitEveningCheckinAction(
 
   revalidatePath('/checkin');
   revalidatePath('/dashboard');
+  scheduleScoreRecompute(session.user.id, 'checkin.evening.submitted');
 
   // See morning action — `redirect()` always throws, no try/catch needed.
   redirect('/checkin?slot=evening&done=1');

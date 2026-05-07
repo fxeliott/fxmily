@@ -39,7 +39,10 @@ export type AuditAction =
   // J5 — daily check-ins
   | 'checkin.morning.submitted'
   | 'checkin.evening.submitted'
-  | 'checkin.reminder.scan';
+  | 'checkin.reminder.scan'
+  // J6 — behavioral score snapshot
+  | 'score.computed'
+  | 'cron.recompute_scores.scan';
 
 export interface LogAuditParams {
   action: AuditAction;

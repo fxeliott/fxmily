@@ -1,3 +1,4 @@
+import { ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
@@ -78,9 +79,11 @@ export function SafeMarkdown({ source, className }: SafeMarkdownProps) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-acc underline-offset-2 hover:underline"
+              className="text-acc focus-visible:outline-acc inline-flex items-baseline gap-0.5 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               {children}
+              <ExternalLink aria-hidden className="h-3 w-3 self-center" strokeWidth={1.75} />
+              <span className="sr-only"> (ouvre dans un nouvel onglet)</span>
             </a>
           ),
           h1: ({ children }) => (

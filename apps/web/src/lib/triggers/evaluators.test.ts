@@ -52,6 +52,8 @@ function ctxAt(now: Date, todayLocal = '2026-05-07'): TriggerContext {
     recentClosedTrades: [],
     recentCheckins: [],
     recentAllTrades: [],
+    // M4 fix : default to 90 days old account so triggers fire as before.
+    userCreatedAt: new Date('2026-01-01T00:00:00Z'),
   };
 }
 

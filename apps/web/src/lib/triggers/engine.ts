@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
+import { Prisma } from '@/generated/prisma/client';
 import { localDateOf, parseLocalDate, shiftLocalDate } from '@/lib/checkin/timezone';
 import { logAudit } from '@/lib/auth/audit';
 
@@ -66,7 +67,7 @@ export async function evaluateAndDispatchForUser(
   // --- 1. Fetch user (need timezone) -----------------------------------------
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, timezone: true, status: true },
+    select: { id: true, timezone: true, status: true, createdAt: true },
   });
   if (!user || user.status !== 'active') {
     return emptyResult();
@@ -114,7 +115,7 @@ export async function evaluateAndDispatchForUser(
       },
     }),
     db.markDouglasCard.findMany({
-      where: { published: true, NOT: { triggerRules: { equals: null as unknown as object } } },
+      where: { published: true, triggerRules: { not: Prisma.JsonNull } },
       select: { id: true, slug: true, priority: true, hatClass: true, triggerRules: true },
     }),
     db.markDouglasDelivery.findMany({
@@ -152,6 +153,7 @@ export async function evaluateAndDispatchForUser(
       emotionBefore: t.emotionBefore,
       emotionAfter: t.emotionAfter,
     })),
+    userCreatedAt: user.createdAt,
     recentCheckins: checkins.map((c) => ({
       date: c.date.toISOString().slice(0, 10),
       slot: c.slot,

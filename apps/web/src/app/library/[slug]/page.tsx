@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { logAudit } from '@/lib/auth/audit';
 import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_TONE } from '@/components/library/category-meta';
 import { FavoriteToggle } from '@/components/library/favorite-toggle';
 import { HelpfulFeedback } from '@/components/library/helpful-feedback';
@@ -25,7 +26,7 @@ interface CardReaderPageProps {
 
 export default async function CardReaderPage({ params }: CardReaderPageProps) {
   const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+  if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
   const { slug } = await params;
   const card = await getPublishedCardBySlug(slug);
@@ -36,11 +37,20 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
   // Bulk-mark all unseen deliveries for this card as seen — same pattern as
   // J4 trade detail page (`markAnnotationsSeenForTrade`). Member opens the
   // card → all unseen deliveries for it are dismissed from the badge.
-  const [favorited, delivery] = await Promise.all([
+  const [favorited, delivery, bulkSeenCount] = await Promise.all([
     isFavorite(userId, card.id),
     getDeliveryByCardSlug(userId, slug),
     markDeliveriesForCardSeen(userId, card.id),
   ]);
+
+  // Audit if any deliveries were marked seen by opening this card (J7 BLOQUANT #2 fix).
+  if (bulkSeenCount > 0) {
+    await logAudit({
+      action: 'douglas.delivery.bulk_seen',
+      userId,
+      metadata: { cardId: card.id, cardSlug: card.slug, count: bulkSeenCount },
+    });
+  }
 
   const Icon = CATEGORY_ICON[card.category];
   const tone = CATEGORY_TONE[card.category];
@@ -54,7 +64,7 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
       <div className="mb-4">
         <Link
           href="/library"
-          className="rounded-pill border-border text-muted hover:border-acc/40 hover:text-foreground inline-flex h-9 items-center gap-1.5 border px-3 text-xs font-medium transition-all"
+          className="rounded-pill border-border text-muted hover:border-acc/40 hover:text-foreground focus-visible:outline-acc inline-flex h-11 items-center gap-1.5 border px-3 text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           <span>Retour au catalogue</span>

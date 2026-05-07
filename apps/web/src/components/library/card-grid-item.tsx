@@ -35,10 +35,10 @@ export function CardGridItem({ card, favorited, hasUnread = false }: CardGridIte
   return (
     <Card
       interactive
-      className="group relative flex h-full flex-col gap-3 p-5"
+      className="focus-within:ring-acc group relative flex h-full flex-col gap-3 p-5 focus-within:ring-2 focus-within:ring-offset-2"
       aria-labelledby={`card-${card.slug}-title`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="relative z-10 flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <span
             className="bg-acc-dim text-acc inline-flex h-7 w-7 items-center justify-center rounded-full"

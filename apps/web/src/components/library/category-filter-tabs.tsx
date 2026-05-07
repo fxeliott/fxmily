@@ -32,7 +32,7 @@ export function CategoryFilterTabs({ entries, active, totalCount }: CategoryFilt
   const tabClass = (selected: boolean) =>
     cn(
       'inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-sm transition-all',
-      'min-h-[36px] whitespace-nowrap',
+      'min-h-11 whitespace-nowrap',
       selected
         ? 'border-acc/60 bg-acc/15 text-acc shadow-[0_0_0_1px_var(--b-acc)]'
         : 'border-border bg-bg-1 text-foreground/85 hover:border-strong hover:bg-bg-2',

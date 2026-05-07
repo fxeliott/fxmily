@@ -39,7 +39,7 @@ interface LibraryPageProps {
 
 export default async function LibraryPage({ searchParams }: LibraryPageProps) {
   const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+  if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
   const params = await searchParams;
   const cat =

@@ -17,7 +17,7 @@ interface TabDefinition {
 const TABS: readonly TabDefinition[] = [
   { key: 'overview', label: "Vue d'ensemble" },
   { key: 'trades', label: 'Trades' },
-  { key: 'checkins', label: 'Check-ins', comingSoon: 'J5' },
+  { key: 'checkins', label: 'Check-ins' },
   { key: 'mark-douglas', label: 'Mark Douglas' },
   { key: 'notes', label: 'Notes admin', comingSoon: 'J3.5' },
 ];

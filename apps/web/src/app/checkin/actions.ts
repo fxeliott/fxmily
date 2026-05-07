@@ -12,6 +12,7 @@ import {
   submitMorningCheckin,
 } from '@/lib/checkin/service';
 import { eveningCheckinSchema, morningCheckinSchema } from '@/lib/schemas/checkin';
+import { scheduleDouglasDispatch } from '@/lib/cards/scheduler';
 import { scheduleScoreRecompute } from '@/lib/scoring/scheduler';
 
 /**
@@ -93,6 +94,7 @@ export async function submitMorningCheckinAction(
         sleepQuality: row.sleepQuality,
       },
     });
+    scheduleDouglasDispatch(session.user.id, 'checkin.morning.submitted');
   } catch (err) {
     if (err instanceof CheckinDateOutOfWindowError) {
       return {
@@ -170,6 +172,7 @@ export async function submitEveningCheckinAction(
         planRespected: row.planRespectedToday,
       },
     });
+    scheduleDouglasDispatch(session.user.id, 'checkin.evening.submitted');
   } catch (err) {
     if (err instanceof CheckinDateOutOfWindowError) {
       return {

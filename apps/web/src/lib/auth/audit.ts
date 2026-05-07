@@ -42,7 +42,20 @@ export type AuditAction =
   | 'checkin.reminder.scan'
   // J6 — behavioral score snapshot
   | 'score.computed'
-  | 'cron.recompute_scores.scan';
+  | 'cron.recompute_scores.scan'
+  // J7 - Mark Douglas card module
+  | 'douglas.card.created'
+  | 'douglas.card.updated'
+  | 'douglas.card.deleted'
+  | 'douglas.card.published'
+  | 'douglas.card.unpublished'
+  | 'douglas.dispatched'
+  | 'douglas.delivery.seen'
+  | 'douglas.delivery.dismissed'
+  | 'douglas.delivery.helpful'
+  | 'douglas.favorite.added'
+  | 'douglas.favorite.removed'
+  | 'cron.dispatch_douglas.scan';
 
 export interface LogAuditParams {
   action: AuditAction;

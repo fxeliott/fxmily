@@ -100,6 +100,22 @@ enum CheckinSlot {
   evening
 }
 
+/// Mark Douglas card category (J7, SPEC §7.6).
+/// Maps to canonical pillars from *Trading in the Zone* and *The Disciplined Trader*.
+enum DouglasCategory {
+  acceptance
+  tilt
+  discipline
+  ego
+  probabilities
+  confidence
+  patience
+  consistency
+  fear
+  loss
+  process
+}
+
 /// Lifecycle of a queued notification (J4).
 ///   pending  : waiting for the J9 dispatcher.
 ///   sent     : delivered to at least one push endpoint.
@@ -157,6 +173,9 @@ model User {
   dailyCheckins       DailyCheckin[]
   // J6 — daily behavioral score snapshots (cached, recomputed nightly).
   behavioralScores    BehavioralScore[]
+  // J7 - Mark Douglas contextual card deliveries + manual favorites.
+  douglasDeliveries   MarkDouglasDelivery[]
+  douglasFavorites    MarkDouglasFavorite[]
 
   @@index([status])
   @@index([role])
@@ -585,4 +604,86 @@ model BehavioralScore {
   // Dashboard read (today + 30-day trend), index covers ORDER BY date DESC.
   @@index([userId, date(sort: Desc)])
   @@map("behavioral_scores")
+}
+
+
+// =============================================================================
+// J7 - Module Mark Douglas (SPEC §6.5, §6.6, §7.6, §18.2)
+// =============================================================================
+
+/// Educational psychology card surfaced in /library and pushed contextually.
+/// SPEC §18.2 fair use: quote ≤ 30 words + quoteSourceChapter required.
+/// 	riggerRules discriminated-union JSON (lib/triggers/types.ts). Null = library-only.
+/// hatClass: white (7d cooldown) | black (14d cooldown). Yu-kai Chou Octalysis.
+model MarkDouglasCard {
+  id                 String          @id @default(cuid())
+  slug               String          @unique
+  title              String
+  category           DouglasCategory
+  /// Direct quote ≤ 30 words (Zod-enforced) - fair use FR L122-5.
+  quote              String
+  /// Source attribution e.g. "Trading in the Zone, ch.7" (§18.2 compliance).
+  quoteSourceChapter String          @map("quote_source_chapter")
+  /// 200-400 word FR paraphrase, markdown via react-markdown + rehype-sanitize.
+  /// Sanitized via lib/text/safe.ts (NFC + bidi/zero-width strip) at write.
+  paraphrase         String          @db.Text
+  /// [{ id, label, description }] - 1 to 3 actionable exercises.
+  exercises          Json
+  /// Discriminated-union trigger rule. Null = no contextual push.
+  triggerRules       Json?           @map("trigger_rules")
+  /// Yu-kai Chou Octalysis: "white" (default) | "black".
+  hatClass           String          @default("white") @map("hat_class")
+  /// 1-10. Higher = pushed first when multiple cards match.
+  priority           Int             @default(5)
+  /// Drafts invisible to members until admin publishes.
+  published          Boolean         @default(false)
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  deliveries MarkDouglasDelivery[]
+  favorites  MarkDouglasFavorite[]
+
+  @@index([published, priority(sort: Desc)])
+  @@index([category, published])
+  @@map("mark_douglas_cards")
+}
+
+/// Record of a card pushed to a member.
+/// 	riggeredOn (@db.Date local-day) + (userId, cardId) = idempotency.
+/// 7d/14d hatClass cooldown enforced application-side via lib/triggers/cooldown.
+model MarkDouglasDelivery {
+  id              String          @id @default(cuid())
+  userId          String          @map("user_id")
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardId          String          @map("card_id")
+  card            MarkDouglasCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  /// Human FR label. Example: "3 trades perdants consécutifs sur 24h".
+  triggeredBy     String          @map("triggered_by")
+  /// Structured snapshot for audit + replay. Never PII.
+  triggerSnapshot Json            @map("trigger_snapshot")
+  /// Local-day anchor (matches DailyCheckin.date convention).
+  triggeredOn     DateTime        @map("triggered_on") @db.Date
+  seenAt          DateTime?       @map("seen_at")
+  dismissedAt     DateTime?       @map("dismissed_at")
+  helpful         Boolean?
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  @@unique([userId, cardId, triggeredOn])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, seenAt])
+  @@index([userId, cardId, createdAt(sort: Desc)])
+  @@map("mark_douglas_deliveries")
+}
+
+/// User-curated favorite (manual star on a card).
+model MarkDouglasFavorite {
+  userId    String          @map("user_id")
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardId    String          @map("card_id")
+  card      MarkDouglasCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  @@id([userId, cardId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("mark_douglas_favorites")
 }

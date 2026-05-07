@@ -107,8 +107,17 @@ export function EmotionCheckinPicker({
                     aria-disabled={inert ? 'true' : undefined}
                     aria-label={tag.hint ? `${tag.label} — ${tag.hint}` : tag.label}
                     title={tag.hint}
+                    // Inert chips (cap reached, not selected) are removed
+                    // from the tab order — audit J5 H7. The button is still
+                    // visible (hatch-disabled) and announced as
+                    // "aria-disabled" by the SR; we just don't waste a Tab
+                    // stop on a control the user can't activate.
+                    tabIndex={inert ? -1 : 0}
                     className={cn(
-                      'rounded-pill inline-flex min-h-9 items-center gap-1.5 border px-3 py-1.5 text-[12px] font-medium transition-all',
+                      // min-h-11 (44px) clears WCAG 2.5.5 AAA target size +
+                      // matches the project's mobile-first touch budget
+                      // (`Btn` size m). Was min-h-9 (36px) — audit J5 H1.
+                      'rounded-pill inline-flex min-h-11 items-center gap-1.5 border px-3 py-2 text-[12px] font-medium transition-all',
                       'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                       isSelected
                         ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_2px_oklch(0.879_0.231_130_/_0.10)]'

@@ -3,8 +3,32 @@ name: CI
 on:
   push:
     branches: [main]
+    # Doc-only changes don't need CI — they don't touch lint/type/build/tests.
+    # paths-ignore is OR'd with the watched files: a commit modifying both
+    # `*.md` and `*.ts` still runs CI. Saves ~5-10 min/month of Actions
+    # quota when the README / SPEC / CLAUDE.md gets a tweak.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.editorconfig'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.editorconfig'
+
+# Cancel in-flight runs on the same PR/branch when a new commit is pushed.
+# Avoids wasted minutes on superseded commits during iterative local→CI
+# loops. Pushes to `main` are NOT cancelled (each `main` commit deserves
+# its own confirmed green build).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   HUSKY: 0
@@ -16,6 +40,8 @@ env:
 jobs:
   ci:
     name: Lint, type-check, build
+    # Skip drafts: humans iterate on draft PRs without expecting CI green.
+    if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

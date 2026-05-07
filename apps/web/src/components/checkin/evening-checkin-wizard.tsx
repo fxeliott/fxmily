@@ -302,7 +302,9 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
               id="checkin-heading"
               ref={headingRef}
               tabIndex={-1}
-              className="f-display text-[20px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--t-1)] sm:text-[24px]"
+              // See morning wizard — programmatic-focus heading, no visual
+              // outline. Audit J5 H3.
+              className="f-display text-[20px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--t-1)] outline-none focus-visible:outline-none sm:text-[24px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               {STEP_TITLES[step]}

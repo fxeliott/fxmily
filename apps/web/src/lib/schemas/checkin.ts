@@ -144,6 +144,9 @@ export const morningCheckinSchema = z
     moodScore: intRange(1, 10, 'Humeur entre 1 et 10.'),
     // J5 audit M5 fix — strip bidi/zero-width controls + NFC normalize.
     // Critical: this string is injected into the J8 weekly Claude prompt.
+    // Audit J5 follow-up — emit `null` (not `undefined`) so the service
+    // layer doesn't have to `?? null`-coerce. Aligns with the column being
+    // nullable text in Postgres.
     intention: z
       .string()
       .max(200, 'Intention trop longue (200 max).')
@@ -151,10 +154,10 @@ export const morningCheckinSchema = z
       .refine((v) => v == null || !containsBidiOrZeroWidth(v), {
         message: 'Caractères de contrôle interdits.',
       })
-      .transform((v) => {
-        if (v == null) return undefined;
+      .transform((v): string | null => {
+        if (v == null) return null;
         const cleaned = safeFreeText(v);
-        return cleaned === '' ? undefined : cleaned;
+        return cleaned === '' ? null : cleaned;
       }),
 
     emotionTags: checkinEmotionTags,
@@ -213,6 +216,8 @@ export const eveningCheckinSchema = z.object({
   // J5 audit M5 fix — same hardening as morning.intention. journalNote
   // grows up to 4000 chars and lands in the J8 weekly Claude prompt; a
   // hidden RTL override here would silently reorder the LLM's output.
+  // Audit follow-up — emit `null` (not `undefined`) for service-layer
+  // alignment with the nullable `journal_note` column.
   journalNote: z
     .string()
     .max(4000, 'Note trop longue (4000 max).')
@@ -220,10 +225,10 @@ export const eveningCheckinSchema = z.object({
     .refine((v) => v == null || !containsBidiOrZeroWidth(v), {
       message: 'Caractères de contrôle interdits.',
     })
-    .transform((v) => {
-      if (v == null) return undefined;
+    .transform((v): string | null => {
+      if (v == null) return null;
       const cleaned = safeFreeText(v);
-      return cleaned === '' ? undefined : cleaned;
+      return cleaned === '' ? null : cleaned;
     }),
 
   gratitudeItems: z

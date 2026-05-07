@@ -469,12 +469,24 @@ Trois fixes haut-impact ajoutés après le push initial :
 - **Security MEDIUM M5 FIXÉ** (`e73c67c`) : nouveau helper `lib/text/safe.ts` (`safeFreeText` + `containsBidiOrZeroWidth` + `graphemeCount`, 19 tests TDD) appliqué sur `intention` / `journalNote` / `gratitudeItems` / `sportType`. NFC normalize + strip 8 control chars (zero-width, BOM, legacy + modern bidi). **Bloque le vecteur Trojan Source pour le futur prompt Claude J8** (RTL override invisible qui réordonne l'output LLM).
 - **A11y HIGH H1 + H7 FIXÉ** (`ce0291a`) : touch targets emotion chips bumpés `min-h-9` → `min-h-11` (44px WCAG 2.5.5 AAA). `tabIndex={-1}` sur les chips inert (cap atteint) — sortis du tab order, restent visibles + announced.
 
-### TIER 3/4 — follow-ups encore recommandés (non bloquants pour J5)
+### TIER 4 fixes appliqués (premium polish + dernières surfaces sécurité)
 
-- **Security HIGH H2** : rate limiting sur `/api/cron/*` (allowlist IP Hetzner ou `@upstash/ratelimit`). Repoussé à J10 prod hardening.
-- **Security MEDIUM M2** : `dateInWindow` Zod fait check sur today UTC, pas TZ user. V1 single-TZ Europe/Paris donc OK aujourd'hui ; à élargir avec un check TZ-aware côté service quand J5.5 multi-TZ arrive.
+Six fixes additionnels après TIER 3 qui ferment les UI BLOCKER B1+N2 et les 2 dernières surfaces sécurité :
+
+- **Content Mark Douglas Card FIXÉ** (`913d56c`) : audit séparé sur `<MarkDouglasCard>` du dashboard — 3 truths #2/#3/#4 étaient tronquées ou réécrites, restaurées au texte canonique de _Trading in the Zone_ ch. 11. `<cite>` "paraphrasé" → "citations + paraphrases" pour distinguer `short` (citation) vs `full` (paraphrase). Stat Sharpe +22% fabriquée retirée du JSDoc (anti-hallucination).
+- **Security HIGH H2 FIXÉ** (`af5447f`) : token bucket rate limit in-memory + LRU sur `/api/cron/checkin-reminders` (burst 5, refill 1/min, maxKeys 1024). 10 tests TDD. Migration path Redis ready pour J10. Smoke-test live confirmé : 5 POST → 200, 6e+7e → 429 + `Retry-After`.
+- **Security MEDIUM M2 FIXÉ** (`9a4b0b2`) : `assertCheckinDateInLocalWindow` côté service rejette les dates > today_local + 1. `CheckinDateOutOfWindowError` catché dans Server Actions → `fieldErrors.date`. V1 default Europe/Paris, J5.5-ready (option `timezone`).
+- **UI HIGH H3 FIXÉ** (`8efbef6`) : haptic feedback PWA — `lib/haptics/index.ts` (3 fonctions : `hapticTap` / `hapticSuccess` / `hapticError`). Layered fallback : Android `navigator.vibrate` → iOS Safari 18+ via `<input type="checkbox" switch>` programmatic click hack → silent no-op iOS ≤17. Respecte `prefers-reduced-motion`. Wired dans les 2 wizards (goToStep + submit success/error).
+- **UI BLOCKER B1 FIXÉ** (`4bb2ed0`) : `<SleepZonesBar>` — diagramme pédagogique 4 zones (Dette / Court / Cible / Long) sur le step Sommeil matin, caret live + threshold-pulse aux franchissements. Ferme le gap "wow factor" avec le `StepPlannedRR` du J2. Anchor scientifique : Walker _Why We Sleep_ + Steenbarger _Trading Psychology 2.0_.
+- **UI N2 FIXÉ** (`55af627`) : `<TrendCard>` — 7-day sparklines sleep + mood sur la landing /checkin. Wrap le `<Sparkline>` qui dormait inutilisé dans le DS. Service `getLast7Days(userId, timezone)` ajouté (1 indexed query + grouping in-memory). Empty state friendly. Surface "in-product" du progrès hebdo, sans attendre J6.
+
+Total **TIER 1+2+3+4** : 27 fichiers nouveaux/modifiés, **317 tests verts** (+10 token-bucket TDD vs TIER 3 fin), build prod OK, smoke-test live couvre cron secret/idempotency/rate-limit + auth gates + DB.
+
+### Follow-ups encore en backlog (non bloquants pour J5)
+
 - **A11y MEDIUM** : heading focus outline cleanup (H3), DoneBanner re-fade timer client component (M9 - actuellement une seule rétention `?done=1` dans l'URL).
-- **UI BLOCKER B1+B2 (premium polish)** : sleep zones diagram dans le step Sommeil + `<Sparkline>` (existant mais inutilisé) sur la landing /checkin. Recommandé en J5.5 pour rejoindre le niveau du `StepPlannedRR` du J2.
-- **UI HIGH H3** : haptic feedback (`navigator.vibrate`) sur step transitions + submit success — détail premium PWA.
+- **UI BLOCKER B2 (Streak milestones premium)** : `<StreakCard>` actuelle a déjà flame-flicker + 4-tick milestones strip ; le "premium full" voudrait une illustration animée (Lottie ou SVG) au-dessus du big number quand `ablaze`. Reporté J5.5.
 - **Code MEDIUM M5** : `MorningCheckin.intention` schema retourne `undefined` mais service écrit `null` — incohérence type-safety mineure (mismatch entre `exactOptionalPropertyTypes` et le `?? null` du service).
+- **J5.5 multi-TZ** : propager `User.timezone` dans le JWT + plumber dans les Server Actions (`submitMorningCheckin({ timezone })`). Aujourd'hui la valeur est hardcodée `Europe/Paris` dans les pages — V1 OK car tous les members FR.
 - **Tests E2E full** : le happy-path login → wizard → streak++ attend toujours le helper de seed Postgres cross-jalon. Public surface E2E couverte (auth gates).
+- **Apple Health / Whoop / Oura sync (V2)** : SPEC §6.4 reste manuel V1, mais le `DayPoint` schema + sleep zones diagram sont prêts pour passive ingestion plus tard (recherche 2026 montre que c'est le pattern dominant).

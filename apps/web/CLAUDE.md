@@ -180,7 +180,8 @@ Variables CSS dans `src/app/globals.css` (palette SPEC §8.1). Mode sombre uniqu
   - **J2** : `src/lib/trading/{pairs,emotions,sessions,calculations}.test.ts`, `src/lib/schemas/trade.test.ts`, `src/lib/storage/keys.test.ts`
   - **J5** : `src/lib/checkin/{streak,timezone}.test.ts`, `src/lib/schemas/checkin.test.ts`
   - **J5 audit fixes** : `src/lib/notifications/enqueue.test.ts` (6 tests TDD pour la race-safe enqueue P2002), `src/lib/checkin/reminders.test.ts` (8 tests TDD pour le scan cron : early-return out-of-window, bulk lookup, slot-already-filled skip, userIds option, audit canonical row).
-  - **288 tests verts au close-out J5 audit-driven** (vs 274 au commit initial J5, 199 au close-out J4, 159 au close-out J2, 38 au close-out J1).
+  - **TIER 3 hardening** : `src/lib/text/safe.test.ts` (19 tests TDD pour `safeFreeText` + `containsBidiOrZeroWidth` + `graphemeCount` — Unicode NFC + bidi/zero-width strip + emoji-family grapheme counting).
+  - **307 tests verts au close-out J5 TIER 3** (vs 288 fin TIER 2, vs 274 au commit initial J5, 199 au close-out J4).
 - **Vitest setup** : `src/test/setup.ts` charge `@testing-library/jest-dom/vitest`. `vitest.config.ts` stub `DATABASE_URL`/`AUTH_SECRET`/`AUTH_URL` pour permettre les imports transitifs sans crash Zod.
 - **Playwright** (`pnpm --filter @fxmily/web test:e2e`) :
   - `tests/e2e/auth-invitation.spec.ts` (J1) — surface publique auth.
@@ -460,13 +461,19 @@ Via curl, en parallèle au dev server tournant :
 | `POST /api/cron/...?at=2026-05-06T12:00:00Z` (out of window)  | 200 + scan 0 + reason    | ✓ `reason: "out_of_window"`                                |
 | **Idempotency** : 3× même run morning                         | 4 rows en queue (pas 12) | ✓ — confirmé via `SELECT COUNT(*) FROM notification_queue` |
 
-### TIER 3/4 — follow-ups recommandés (non bloquants pour J5)
+### TIER 3 fixes appliqués dans cette PR (post-push hardening)
+
+Trois fixes haut-impact ajoutés après le push initial :
+
+- **Security HIGH H3 FIXÉ** (`01d5b41`) : JWT `update()` callback bypass — le bloc `trigger === 'update'` qui acceptait `session.role`/`session.status` client-supplied a été RETIRÉ d'`auth.config.ts`. Aucun call site existant (`grep` zero hit), c'était dead attack surface. Smoke-tested live post-fix.
+- **Security MEDIUM M5 FIXÉ** (`e73c67c`) : nouveau helper `lib/text/safe.ts` (`safeFreeText` + `containsBidiOrZeroWidth` + `graphemeCount`, 19 tests TDD) appliqué sur `intention` / `journalNote` / `gratitudeItems` / `sportType`. NFC normalize + strip 8 control chars (zero-width, BOM, legacy + modern bidi). **Bloque le vecteur Trojan Source pour le futur prompt Claude J8** (RTL override invisible qui réordonne l'output LLM).
+- **A11y HIGH H1 + H7 FIXÉ** (`ce0291a`) : touch targets emotion chips bumpés `min-h-9` → `min-h-11` (44px WCAG 2.5.5 AAA). `tabIndex={-1}` sur les chips inert (cap atteint) — sortis du tab order, restent visibles + announced.
+
+### TIER 3/4 — follow-ups encore recommandés (non bloquants pour J5)
 
 - **Security HIGH H2** : rate limiting sur `/api/cron/*` (allowlist IP Hetzner ou `@upstash/ratelimit`). Repoussé à J10 prod hardening.
-- **Security HIGH H3** : JWT `update()` callback (`auth.config.ts:65-82`) accepte client-supplied `role`/`status` sans re-fetch DB → privilege escalation possible si un user authentifié appelle `useSession().update({ role: 'admin' })`. Hors scope J5 mais à fixer avant J10 prod (refactor : déplacer le bloc `update` dans le slice Node `auth.ts` et re-fetch DB).
 - **Security MEDIUM M2** : `dateInWindow` Zod fait check sur today UTC, pas TZ user. V1 single-TZ Europe/Paris donc OK aujourd'hui ; à élargir avec un check TZ-aware côté service quand J5.5 multi-TZ arrive.
-- **Security MEDIUM M5** : Unicode normalization NFC + filter zero-width / RTL override sur `journalNote`/`gratitudeItems`/`intention`. Pas critique en V1 (pas de rendering admin de ces champs), CRITIQUE avant J8 (rapport IA Claude qui prompt avec ces notes — risque de prompt injection via override RTL).
-- **A11y MEDIUM** : touch targets emotion chips (audit H1, `min-h-9` → `min-h-11`), heading focus outline cleanup (H3), DoneBanner re-fade timer client component (M9 - actuellement une seule rétention `?done=1` dans l'URL).
+- **A11y MEDIUM** : heading focus outline cleanup (H3), DoneBanner re-fade timer client component (M9 - actuellement une seule rétention `?done=1` dans l'URL).
 - **UI BLOCKER B1+B2 (premium polish)** : sleep zones diagram dans le step Sommeil + `<Sparkline>` (existant mais inutilisé) sur la landing /checkin. Recommandé en J5.5 pour rejoindre le niveau du `StepPlannedRR` du J2.
 - **UI HIGH H3** : haptic feedback (`navigator.vibrate`) sur step transitions + submit success — détail premium PWA.
 - **Code MEDIUM M5** : `MorningCheckin.intention` schema retourne `undefined` mais service écrit `null` — incohérence type-safety mineure (mismatch entre `exactOptionalPropertyTypes` et le `?? null` du service).

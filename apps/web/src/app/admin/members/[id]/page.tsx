@@ -12,7 +12,6 @@ import { Pill } from '@/components/ui/pill';
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
 import { logAudit } from '@/lib/auth/audit';
-import { db } from '@/lib/db';
 import { getDashboardAnalytics } from '@/lib/scoring/dashboard-data';
 import { getLatestBehavioralScore, type SerializedBehavioralScore } from '@/lib/scoring/service';
 import { cn } from '@/lib/utils';
@@ -57,12 +56,10 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
     tab === 'trades' ? await listMemberTradesAsAdmin(memberId, { status: 'all' }) : null;
 
   // J6.5 — pull behavioral scores + analytics in parallel for the overview tab.
-  // Skipped on the trades tab to keep its render path lean.
-  const memberRow =
-    tab === 'overview'
-      ? await db.user.findUnique({ where: { id: memberId }, select: { timezone: true } })
-      : null;
-  const memberTimezone = memberRow?.timezone ?? 'Europe/Paris';
+  // Skipped on the trades tab to keep its render path lean. J6.6 H1 fix —
+  // `detail.timezone` already contains the value (added to MemberDetail), so
+  // we no longer need a separate `findUnique` round-trip here.
+  const memberTimezone = detail.timezone;
   const [latestScore, analytics] =
     tab === 'overview'
       ? await Promise.all([

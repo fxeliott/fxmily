@@ -1,7 +1,8 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
-import { Info } from 'lucide-react';
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'framer-motion';
+import { Info, Sparkles } from 'lucide-react';
+import { useEffect } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -118,12 +119,25 @@ export function ScoreGauge({
   const tone = toneFor(score);
   const prefersReducedMotion = useReducedMotion();
 
-  // Score number is static — the visual sweep comes from the dashoffset
-  // animation on the SVG arc (Framer Motion). Animating the digit-by-digit
-  // count-up here would require setState-in-effect (lint regression in
-  // React 19) and the user gets the same "growing dial" feeling from the
-  // arc alone.
-  const display = score ?? 0;
+  // Premium count-up via Framer `useMotionValue` (J6.6 M3 fix). No setState
+  // in effect — the motion value drives a `<motion.span>` text node directly,
+  // bypassing React state. Honors `prefers-reduced-motion` (jumps to target).
+  const motionScore = useMotionValue(score === null || prefersReducedMotion ? (score ?? 0) : 0);
+  const displayText = useTransform(motionScore, (v) => Math.round(v).toString());
+  useEffect(() => {
+    if (score === null) return;
+    if (prefersReducedMotion) {
+      motionScore.set(score);
+      return;
+    }
+    const controls = animate(motionScore, score, {
+      duration: 1.1,
+      ease: [0.22, 1, 0.36, 1],
+    });
+    return () => controls.stop();
+  }, [score, prefersReducedMotion, motionScore]);
+
+  const isExcellent = score !== null && score >= 95;
 
   const targetOffset =
     score === null
@@ -158,11 +172,23 @@ export function ScoreGauge({
       <div className="relative grid place-items-center" style={{ width: SIZE, height: SIZE }}>
         {score !== null && (
           <div
-            className="absolute inset-0 rounded-full opacity-30 blur-2xl"
+            className={cn(
+              'absolute inset-0 rounded-full blur-2xl',
+              // Premium tier — score >= 95 glows brighter + steady pulse.
+              isExcellent ? 'animate-pulse opacity-50' : 'opacity-30',
+            )}
             style={{ background: tone.glow }}
             aria-hidden="true"
           />
         )}
+        {/* Excellence sparkle — score >= 95 only. Subtle, not distracting. */}
+        {isExcellent ? (
+          <Sparkles
+            className="absolute -right-1 -top-1 h-4 w-4 text-[var(--acc)]"
+            strokeWidth={2}
+            aria-hidden="true"
+          />
+        ) : null}
         <svg
           width={SIZE}
           height={SIZE}
@@ -206,14 +232,14 @@ export function ScoreGauge({
             <span className="t-mono-cap text-[var(--t-4)]">N/A</span>
           ) : (
             <>
-              <span
+              <motion.span
                 className={cn(
                   'f-mono text-[28px] font-semibold tabular-nums tracking-[-0.02em]',
                   tone.text,
                 )}
               >
-                {display}
-              </span>
+                {displayText}
+              </motion.span>
               <span className="t-mono-cap mt-1 text-[var(--t-4)]">/ 100</span>
             </>
           )}

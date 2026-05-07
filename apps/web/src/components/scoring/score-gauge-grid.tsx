@@ -1,5 +1,3 @@
-import { Info } from 'lucide-react';
-
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import type { SerializedBehavioralScore } from '@/lib/scoring';
@@ -23,66 +21,50 @@ interface ScoreGaugeGridProps {
   score: SerializedBehavioralScore | null;
 }
 
-export function ScoreGaugeGrid({ score }: ScoreGaugeGridProps) {
-  if (score === null) {
-    return (
-      <Card className="flex flex-col gap-3 p-5">
+/**
+ * J6.6 — empty state now shows the 4 greyed gauges (consistent with the
+ * loaded view) plus a one-line pedagogical caption per dimension. More
+ * scannable than the bullet list and fulfills the "tone premium" feedback.
+ */
+function EmptyScoresGrid() {
+  return (
+    <Card primary className="flex flex-col gap-4 p-5" aria-labelledby="scores-empty-heading">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="t-eyebrow">Scores comportementaux</span>
+          <h2 id="scores-empty-heading" className="t-eyebrow">
+            Scores comportementaux
+          </h2>
           <Pill tone="cy">EN ATTENTE</Pill>
         </div>
-        <p className="t-body text-[var(--t-2)]">
-          Tes 4 scores apparaîtront ici dès que tu auras renseigné quelques check-ins et clôturé
-          quelques trades. Le snapshot est calculé chaque nuit sur les 30 derniers jours.
-        </p>
-        <ul className="t-cap mt-1 grid gap-1.5 text-[var(--t-3)]">
-          <li className="flex items-start gap-2">
-            <Info className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-            <span>
-              <strong className="text-[var(--t-1)]">Discipline</strong> — plan respecté, hedge
-              respecté, routine matin.
-            </span>
-          </li>
-          <li className="flex items-start gap-2">
-            <Info className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-            <span>
-              <strong className="text-[var(--t-1)]">Stabilité émotionnelle</strong> — variance du
-              mood, gestion du stress.
-            </span>
-          </li>
-          <li className="flex items-start gap-2">
-            <Info className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-            <span>
-              <strong className="text-[var(--t-1)]">Cohérence</strong> — expectancy, profit factor,
-              drawdown maîtrisé.
-            </span>
-          </li>
-          <li className="flex items-start gap-2">
-            <Info className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-            <span>
-              <strong className="text-[var(--t-1)]">Engagement</strong> — régularité des check-ins,
-              streak, journal.
-            </span>
-          </li>
-        </ul>
-      </Card>
-    );
-  }
+      </div>
+      <p className="t-body text-[var(--t-2)]">
+        Tes 4 scores apparaîtront ici dès que tu auras renseigné quelques check-ins et clôturé
+        quelques trades. Snapshot recalculé chaque nuit + en live après chaque action.
+      </p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <ScoreGauge score={null} label="Discipline" hint="Plan + hedge + routine" />
+        <ScoreGauge score={null} label="Stabilité" hint="Variance + stress + tilt" />
+        <ScoreGauge score={null} label="Cohérence" hint="Expectancy + DD + sessions" />
+        <ScoreGauge score={null} label="Engagement" hint="Fill rate + streak + journal" />
+      </div>
+    </Card>
+  );
+}
+
+export function ScoreGaugeGrid({ score }: ScoreGaugeGridProps) {
+  if (score === null) return <EmptyScoresGrid />;
 
   const reasonOf = (
     s: SerializedBehavioralScore['components'][keyof SerializedBehavioralScore['components']],
   ) => s.reason ?? undefined;
 
   return (
-    <section aria-labelledby="scores-heading" className="flex flex-col gap-3">
+    <Card primary className="flex flex-col gap-3 p-5" aria-labelledby="scores-heading">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 id="scores-heading" className="t-eyebrow">
             Scores comportementaux
           </h2>
-          <Pill tone="acc" dot="live">
-            ACTIFS
-          </Pill>
         </div>
         <SampleSizeDisclaimer
           current={score.sampleSize.checkins.days}
@@ -118,13 +100,19 @@ export function ScoreGaugeGrid({ score }: ScoreGaugeGridProps) {
           reason={reasonOf(score.components.engagement)}
         />
       </div>
-    </section>
+    </Card>
   );
 }
 
 export function ScoreGaugeGridSkeleton() {
   return (
-    <section className="flex flex-col gap-3" aria-busy="true" aria-live="polite">
+    <Card
+      primary
+      className="flex flex-col gap-3 p-5"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement des scores comportementaux"
+    >
       <div className="flex items-center justify-between">
         <span className="t-eyebrow">Scores comportementaux</span>
       </div>
@@ -132,10 +120,10 @@ export function ScoreGaugeGridSkeleton() {
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className="skel rounded-card-lg h-[224px] border border-[var(--b-default)] bg-[var(--bg-1)]"
+            className="skel rounded-card-lg h-[208px] border border-[var(--b-default)] bg-[var(--bg-1)]"
           />
         ))}
       </div>
-    </section>
+    </Card>
   );
 }

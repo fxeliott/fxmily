@@ -34,6 +34,12 @@ export interface MemberDetail extends MemberSummary {
   displayName: string;
   /** ISO timestamps for the last trade activity (any state). */
   lastTradeAt: string | null;
+  /**
+   * IANA timezone of the member (default `'Europe/Paris'` per User schema).
+   * Surfaced here so the admin overview page can fetch dashboard analytics
+   * in the member's local-day frame without a second `findUnique` round-trip.
+   */
+  timezone: string;
 }
 
 /**
@@ -124,6 +130,7 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
       status: true,
       joinedAt: true,
       lastSeenAt: true,
+      timezone: true,
     },
   });
   if (!row || row.status === 'deleted') throw new MemberNotFoundError();
@@ -165,5 +172,6 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
     tradesClosedCount: closed,
     displayName: fullName.length > 0 ? fullName : row.email,
     lastTradeAt: lastTrade?.enteredAt.toISOString() ?? null,
+    timezone: row.timezone,
   };
 }

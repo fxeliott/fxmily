@@ -242,18 +242,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <h2 id="track-record-heading" className="t-eyebrow">
               Track record
             </h2>
-            <Pill tone="acc" dot="live">
-              ACTIF
-            </Pill>
           </div>
-          <Suspense
-            fallback={
-              <div
-                className="rounded-card-lg skel h-[300px] border border-[var(--b-default)] bg-[var(--bg-1)]"
-                aria-busy="true"
-              />
-            }
-          >
+          <Suspense fallback={<TrackRecordSkeleton />}>
             <TrackRecordSection userId={userId!} timezone={timezone} range={range} />
           </Suspense>
         </section>
@@ -264,18 +254,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <h2 id="patterns-heading" className="t-eyebrow">
               Patterns
             </h2>
-            <Pill tone="acc" dot="live">
-              ACTIF
-            </Pill>
           </div>
-          <Suspense
-            fallback={
-              <div
-                className="rounded-card-lg skel h-[260px] border border-[var(--b-default)] bg-[var(--bg-1)]"
-                aria-busy="true"
-              />
-            }
-          >
+          <Suspense fallback={<PatternsSkeleton />}>
             <PatternsSection userId={userId!} timezone={timezone} range={range} />
           </Suspense>
         </section>
@@ -286,9 +266,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="t-eyebrow">Journal de trading</span>
-                <Pill tone="acc" dot="live">
-                  ACTIF
-                </Pill>
               </div>
             </div>
             <p className="t-body text-[var(--t-2)]">
@@ -394,6 +371,48 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 }
 
 // ----- J6 sections (server async) ------------------------------------------
+
+/**
+ * Skeletons that match the final section dimensions to avoid layout shift
+ * (J6.6 H2 fix — previously a flat 300px / 260px skel collapsed when the
+ * real content rendered at ~600px+).
+ */
+function TrackRecordSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-3"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement du track record"
+    >
+      <div className="grid gap-3 lg:grid-cols-[1.6fr_1fr]">
+        <div className="skel rounded-card-lg h-[316px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
+        <div className="flex flex-col gap-3">
+          <div className="skel rounded-card-lg h-[150px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
+          <div className="skel rounded-card-lg h-[150px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
+        </div>
+        <div className="skel rounded-card-lg h-[252px] border border-[var(--b-default)] bg-[var(--bg-1)] lg:col-span-2" />
+      </div>
+    </div>
+  );
+}
+
+function PatternsSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-3"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement des patterns"
+    >
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="skel rounded-card-lg h-[280px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
+        <div className="skel rounded-card-lg h-[280px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
+        <div className="skel rounded-card-lg h-[240px] border border-[var(--b-default)] bg-[var(--bg-1)] lg:col-span-2" />
+      </div>
+    </div>
+  );
+}
 
 async function TrackRecordSection({
   userId,

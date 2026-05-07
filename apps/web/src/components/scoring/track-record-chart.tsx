@@ -81,16 +81,20 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="t-eyebrow">Track record</span>
+          <span className="t-eyebrow" id="track-record-title">
+            Track record
+          </span>
           <span className="t-mono-cap text-[var(--t-4)]">R cumulé</span>
         </div>
-        <div role="tablist" aria-label="Plage temporelle" className="flex items-center gap-1">
+        {/* Plain group of buttons — not an ARIA tablist (the panel is the chart
+            itself, and we don't ship the full APG keyboard pattern Home/End/
+            Arrows + roving tabindex + aria-controls. A11y audit B2 fix). */}
+        <div role="group" aria-label="Plage temporelle" className="flex items-center gap-2">
           {RANGE_ORDER.map((r) => (
             <button
               key={r}
               type="button"
-              role="tab"
-              aria-selected={range === r}
+              aria-pressed={range === r}
               onClick={() => setRange(r)}
               disabled={pending && range !== r}
               className={cn(
@@ -111,7 +115,19 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
           <span className="t-cap">Pas encore de trades clôturés sur cette plage.</span>
         </div>
       ) : (
-        <div className="h-[260px] w-full">
+        <figure
+          className="h-[260px] w-full"
+          role="img"
+          aria-labelledby="track-record-title"
+          aria-describedby="track-record-summary"
+        >
+          {/* SR-only summary — closes A11y audit B1 (Recharts SVG without text alt) */}
+          <figcaption id="track-record-summary" className="sr-only">
+            Courbe de R cumulé sur {formatted.length} trades. Départ{' '}
+            {formatted[0]?.cumR.toFixed(2) ?? '0'} R, arrivée{' '}
+            {formatted[formatted.length - 1]?.cumR.toFixed(2) ?? '0'} R.
+            {estimatedExcluded > 0 ? ` ${estimatedExcluded} trade(s) sans stop-loss exclu(s).` : ''}
+          </figcaption>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={formatted} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
               <defs>
@@ -165,7 +181,7 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
               />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
+        </figure>
       )}
 
       {estimatedExcluded > 0 ? (

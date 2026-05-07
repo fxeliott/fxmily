@@ -3,6 +3,7 @@ import 'server-only';
 import { after } from 'next/server';
 
 import { logAudit } from '@/lib/auth/audit';
+import { localDateOf } from '@/lib/checkin/timezone';
 
 import { recomputeAndPersist } from './service';
 
@@ -55,8 +56,21 @@ export type ScoreRecomputeReason =
  * subsequent calls for the same user within `RECOMPUTE_DEBOUNCE_MS` — only
  * the first call in a burst actually runs the recompute, the rest are
  * silent no-ops (the dashboard sees the fresh snapshot anyway).
+ *
+ * **CRITICAL — `timezone` is mandatory** (J6.5 code-review B1 fix). The
+ * service's default `asOf` is yesterday-local (industry-standard nightly
+ * snapshot policy). Letting it default here would mean the snapshot
+ * EXCLUDES the action that just fired (today's trade close, today's
+ * check-in) — making the whole `after()` wiring theatre. We pass
+ * `localDateOf(now, timezone)` (today-local) so the freshly-submitted
+ * data is part of the window. Result: the dashboard reflects the user's
+ * just-completed action on the next render, as advertised.
  */
-export function scheduleScoreRecompute(userId: string, reason: ScoreRecomputeReason): void {
+export function scheduleScoreRecompute(
+  userId: string,
+  reason: ScoreRecomputeReason,
+  timezone: string,
+): void {
   after(async () => {
     const last = lastRecomputeAt.get(userId) ?? 0;
     const now = Date.now();
@@ -69,11 +83,14 @@ export function scheduleScoreRecompute(userId: string, reason: ScoreRecomputeRea
     lastRecomputeAt.set(userId, now);
 
     try {
-      await recomputeAndPersist(userId);
+      // Anchor on today-local so the just-submitted action is in-window.
+      // Uses `localDateOf` for DST-safe local-day computation in `timezone`.
+      const today = localDateOf(new Date(), timezone);
+      await recomputeAndPersist(userId, today, { timezone });
       await logAudit({
         action: 'score.computed',
         userId,
-        metadata: { reason, triggeredBy: 'action' },
+        metadata: { reason, triggeredBy: 'action', anchor: today },
       });
     } catch (err) {
       // Don't let a recompute failure surface to the user — they already

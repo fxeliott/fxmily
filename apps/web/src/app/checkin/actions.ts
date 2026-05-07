@@ -111,7 +111,11 @@ export async function submitMorningCheckinAction(
 
   revalidatePath('/checkin');
   revalidatePath('/dashboard');
-  scheduleScoreRecompute(session.user.id, 'checkin.morning.submitted');
+  scheduleScoreRecompute(
+    session.user.id,
+    'checkin.morning.submitted',
+    session.user.timezone || 'Europe/Paris',
+  );
 
   // `redirect()` always throws (NEXT_REDIRECT). No try/catch: if it ever
   // doesn't throw (Next bug), letting the bug surface is preferable to
@@ -184,7 +188,11 @@ export async function submitEveningCheckinAction(
 
   revalidatePath('/checkin');
   revalidatePath('/dashboard');
-  scheduleScoreRecompute(session.user.id, 'checkin.evening.submitted');
+  scheduleScoreRecompute(
+    session.user.id,
+    'checkin.evening.submitted',
+    session.user.timezone || 'Europe/Paris',
+  );
 
   // See morning action — `redirect()` always throws, no try/catch needed.
   redirect('/checkin?slot=evening&done=1');

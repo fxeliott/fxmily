@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
 import { tradeCloseSchema, tradeOpenSchema } from '@/lib/schemas/trade';
+import { scheduleDouglasDispatch } from '@/lib/cards/scheduler';
 import { scheduleScoreRecompute } from '@/lib/scoring/scheduler';
 import { keyBelongsTo } from '@/lib/storage/local';
 import {
@@ -163,6 +164,7 @@ export async function createTradeAction(
   revalidatePath('/journal');
   revalidatePath('/dashboard');
   scheduleScoreRecompute(session.user.id, 'trade.created', session.user.timezone || 'Europe/Paris');
+  scheduleDouglasDispatch(session.user.id, 'trade.created');
 
   // Navigate. We never reach the function's normal return on the success path.
   try {
@@ -243,6 +245,7 @@ export async function closeTradeAction(
   revalidatePath(`/journal/${tradeId}`);
   revalidatePath('/dashboard');
   scheduleScoreRecompute(session.user.id, 'trade.closed', session.user.timezone || 'Europe/Paris');
+  scheduleDouglasDispatch(session.user.id, 'trade.closed');
 
   try {
     redirect(`/journal/${tradeId}`);
@@ -276,6 +279,7 @@ export async function deleteTradeAction(tradeId: string): Promise<DeleteTradeAct
   revalidatePath('/journal');
   revalidatePath('/dashboard');
   scheduleScoreRecompute(session.user.id, 'trade.deleted', session.user.timezone || 'Europe/Paris');
+  scheduleDouglasDispatch(session.user.id, 'trade.deleted');
 
   try {
     redirect('/journal');

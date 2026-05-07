@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { runCheckinReminderScan } from '@/lib/checkin/reminders';
 import { env } from '@/lib/env';
+import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
 
 /**
  * Cron endpoint — scan check-in reminder windows (J5).
@@ -49,6 +50,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: 'cron_disabled', detail: 'CRON_SECRET not configured.' },
       { status: 503 },
+    );
+  }
+
+  // Per-IP token bucket (5 burst, 1/min refill). Even with the secret
+  // being constant-time compared, an unbounded request rate from a single
+  // source is a DoS vector and an oracle for brute-forcing — audit J5
+  // Security HIGH H2.
+  const id = callerId(req);
+  const decision = cronLimiter.consume(id);
+  if (!decision.allowed) {
+    return NextResponse.json(
+      { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(Math.ceil(decision.retryAfterMs / 1000)),
+        },
+      },
     );
   }
 

@@ -38,7 +38,7 @@ export async function setPublishedAction(
   const gate = await adminGate();
   if (!gate.ok) return gate;
 
-  if (typeof cardId !== 'string' || cardId.length === 0) {
+  if (typeof cardId !== 'string' || cardId.length === 0 || cardId.length > 64) {
     return { ok: false, error: 'unknown' };
   }
   if (typeof published !== 'boolean') {
@@ -66,7 +66,7 @@ export async function deleteCardAction(cardId: string): Promise<AdminCardActionS
   const gate = await adminGate();
   if (!gate.ok) return gate;
 
-  if (typeof cardId !== 'string' || cardId.length === 0) {
+  if (typeof cardId !== 'string' || cardId.length === 0 || cardId.length > 64) {
     return { ok: false, error: 'unknown' };
   }
 

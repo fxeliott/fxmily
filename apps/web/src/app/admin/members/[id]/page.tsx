@@ -225,12 +225,8 @@ function OverviewTab({
       {/* Coming soon hint */}
       <div className="rounded-control border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] px-3 py-2.5">
         <p className="t-cap text-[var(--t-2)]">
-          Les onglets <strong className="font-semibold text-[var(--t-1)]">Check-ins</strong>{' '}
-          <Pill tone="cy">J5</Pill>,{' '}
-          <strong className="font-semibold text-[var(--t-1)]">Mark Douglas</strong>{' '}
-          <Pill tone="cy">J7</Pill> et{' '}
-          <strong className="font-semibold text-[var(--t-1)]">Notes admin</strong>{' '}
-          <Pill tone="cy">J3.5</Pill> arrivent dans les prochains jalons.
+          L&apos;onglet <strong className="font-semibold text-[var(--t-1)]">Notes admin</strong>{' '}
+          <Pill tone="cy">J3.5</Pill> arrive dans un prochain jalon.
         </p>
       </div>
     </div>

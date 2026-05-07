@@ -90,9 +90,16 @@ async function upsertCard(
   };
 
   if (existing) {
+    // Re-seeds preserve admin overrides on operational fields (published,
+    // priority, hatClass) so a re-run never reverts a card Eliot has tweaked.
+    // Only structural content fields are refreshed.
+    const { published: _p, priority: _pr, hatClass: _h, ...contentOnly } = data;
+    void _p;
+    void _pr;
+    void _h;
     await db.markDouglasCard.update({
       where: { slug: input.slug },
-      data,
+      data: contentOnly,
     });
     return 'updated';
   }

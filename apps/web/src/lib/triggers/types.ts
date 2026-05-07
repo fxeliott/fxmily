@@ -151,6 +151,8 @@ export interface TriggerContext {
   recentCheckins: TriggerCheckinInput[];
   /** All trades (open + closed) within last 30 days, used by `hedge_violation`. */
   recentAllTrades: TriggerTradeInput[];
+  /** User account creation date — used to skip onboarding-day false positives. */
+  userCreatedAt: Date;
 }
 
 // =============================================================================

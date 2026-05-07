@@ -174,6 +174,7 @@ async function main() {
       recentClosedTrades: trades.filter((t) => t.closedAt !== null),
       recentAllTrades: trades,
       recentCheckins: [],
+      userCreatedAt: member.createdAt,
     };
 
     type Match = {

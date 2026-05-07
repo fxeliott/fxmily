@@ -53,7 +53,7 @@ export function FavoriteToggle({
         aria-pressed={favorited}
         aria-label={label}
         className={cn(
-          'inline-flex h-9 w-9 items-center justify-center rounded-full',
+          'inline-flex h-11 w-11 items-center justify-center rounded-full',
           'border-border bg-background/60 border backdrop-blur',
           'hover:border-acc/40 transition-all hover:scale-110',
           'focus-visible:outline-acc focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',

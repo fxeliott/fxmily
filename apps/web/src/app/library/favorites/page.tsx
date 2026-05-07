@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function FavoritesPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+  if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
   const favorites = await listMyFavorites(session.user.id);
 
@@ -22,7 +22,7 @@ export default async function FavoritesPage() {
       <div className="mb-6 flex flex-col gap-3">
         <Link
           href="/library"
-          className="rounded-pill border-border text-muted hover:border-acc/40 hover:text-foreground inline-flex h-9 w-fit items-center gap-1.5 border px-3 text-xs font-medium transition-all"
+          className="rounded-pill border-border text-muted hover:border-acc/40 hover:text-foreground focus-visible:outline-acc inline-flex h-11 w-fit items-center gap-1.5 border px-3 text-xs font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           <span>Retour au catalogue</span>

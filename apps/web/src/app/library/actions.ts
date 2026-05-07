@@ -35,7 +35,7 @@ export async function markDeliverySeenAction(deliveryId: string): Promise<Librar
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') return badAuth();
 
-  if (typeof deliveryId !== 'string' || deliveryId.length === 0) {
+  if (typeof deliveryId !== 'string' || deliveryId.length === 0 || deliveryId.length > 64) {
     return { ok: false, error: 'invalid_input' };
   }
 
@@ -61,7 +61,7 @@ export async function dismissDeliveryAction(deliveryId: string): Promise<Library
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') return badAuth();
 
-  if (typeof deliveryId !== 'string' || deliveryId.length === 0) {
+  if (typeof deliveryId !== 'string' || deliveryId.length === 0 || deliveryId.length > 64) {
     return { ok: false, error: 'invalid_input' };
   }
 
@@ -90,7 +90,7 @@ export async function setDeliveryHelpfulAction(
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') return badAuth();
 
-  if (typeof deliveryId !== 'string' || deliveryId.length === 0) {
+  if (typeof deliveryId !== 'string' || deliveryId.length === 0 || deliveryId.length > 64) {
     return { ok: false, error: 'invalid_input' };
   }
   if (typeof helpful !== 'boolean') {
@@ -126,7 +126,7 @@ export async function toggleFavoriteAction(cardId: string): Promise<ToggleFavori
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') return badAuth();
 
-  if (typeof cardId !== 'string' || cardId.length === 0) {
+  if (typeof cardId !== 'string' || cardId.length === 0 || cardId.length > 64) {
     return { ok: false, error: 'invalid_input' };
   }
 
@@ -137,8 +137,7 @@ export async function toggleFavoriteAction(cardId: string): Promise<ToggleFavori
       userId: session.user.id,
       metadata: { cardId },
     });
-    revalidatePath('/library');
-    revalidatePath(`/library/${cardId}`);
+    revalidatePath('/library', 'layout');
     return { ok: true, favorited: result.favorited };
   } catch (err) {
     if (err instanceof CardNotFoundError) {

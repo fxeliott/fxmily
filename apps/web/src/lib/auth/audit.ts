@@ -51,6 +51,7 @@ export type AuditAction =
   | 'douglas.card.unpublished'
   | 'douglas.dispatched'
   | 'douglas.delivery.seen'
+  | 'douglas.delivery.bulk_seen'
   | 'douglas.delivery.dismissed'
   | 'douglas.delivery.helpful'
   | 'douglas.favorite.added'

@@ -710,3 +710,81 @@ Réplique la pipeline engine localement (engine.ts est server-only, tsx ne peut 
 - **J7.5** : dashboard widget "Tes fiches Mark Douglas" (count unread + 3 dernières + lien /library).
 - **J9** : push notifications quand une fiche est délivrée (NotificationType à étendre douglas_card_delivered).
 - **J10** : wirer le cron Hetzner   0,6,12,18 \* \* \* UTC + add CRON_SECRET au worktree .env.
+
+## J7 audit-driven hardening (2026-05-08)
+
+Après le commit initial J7 (3ae5468) et la PR #24 ouverte, **4 audits subagents parallèles** ont été lancés (code-reviewer + security-auditor + accessibility-reviewer + ui-designer). Verdict combiné : **0 ship-blocker security, 3 BLOQUANTs code-review, 2 BLOQUANTs a11y, 6 BLOQUANTs UI design (cohérence DS)**. Sur les 8 BLOQUANTs uniquement les BLOQUANTs code/sécu/a11y ont été fermés (les BLOQUANTs UI design sont reclassés J7.5 polish premium — voir backlog).
+
+### Closed (commit `feat(j7): audit-driven hardening`)
+
+**a11y BLOQUANTs** :
+
+- **B1 — Focus visible CardGridItem masqué par Link overlay** (card-grid-item.tsx). Fix : ocus-within:ring-2 focus-within:ring-acc focus-within:ring-offset-2 sur la <Card> parente. Le focus traverse le Link (ocus-visible:outline-none) → la carte parente affiche le ring quand n'importe quel descendant est focus.
+- **B2 — FavoriteToggle keyboard order piégé** (card-grid-item.tsx). Fix :
+  elative z-10 sur le wrapper du FavoriteToggle. Tab atteint d'abord le heart, puis le Link du titre.
+
+**security ÉLEVÉ + MOYEN** :
+
+- **M2 — riggerRules: { equals: null as unknown as object } cast unsafe** (engine.ts:117). Fix : riggerRules: { not: Prisma.JsonNull } + import Prisma. Cohérent avec cards-service.getCatalogStats. Idiomatique Prisma 7.
+- **M3 —
+  evalidatePath('/library/' + cardId) invalide la mauvaise route** (library/actions.ts). Fix :
+  evalidatePath('/library', 'layout') qui rafraîchit l'arbre entier (catalog + reader + favorites + inbox). Cohérent avec le toggle qui peut cascader sur plusieurs vues.
+- **M4 — evalNoCheckinStreak match instant pour user fraîchement inscrit** (evaluators.ts). Fix : ajout userCreatedAt à TriggerContext + skip si ccountAgeDays < rule.days. Engine.ts injecte la valeur via User.createdAt select. Tests fixture + smoke test mis à jour. Évite le spam onboarding-day.
+
+**UI BLOQUANT** :
+
+- **B6 — Touch targets h-9 (36px) sur 7 surfaces J7** régression vs J5 audit fix (min-h-11). Fix : h-9 → h-11 (44px) systématique sur back-links library, badges header, FavoriteToggle icon-only, CardActionsRow, CategoryFilterTabs (min-h-[36px] → min-h-11). + ocus-visible outline ajouté sur les surfaces qui en manquaient.
+
+**code-review BLOQUANTs** :
+
+- **#1 — Seed re-run écrase admin overrides published/priority/hatClass** (seed-mark-douglas-cards.ts). Fix : update exclut ces 3 colonnes via destructuring {published: \_p, priority: \_pr, hatClass: \_h, ...contentOnly}. Re-run préserve les tweaks Eliot.
+- **#2 — markDeliveriesForCardSeen bulk update sans audit log** (library/[slug]/page.tsx + udit.ts). Fix : nouvelle action douglas.delivery.bulk_seen ajoutée à AuditAction union. La page reader émet 1 audit row avec metadata: { cardId, cardSlug, count } quand count > 0. Trace complète restaurée.
+- **#3 — Pages /library/\* ne gate pas status === 'active'** (4 pages). Fix : if (!session?.user?.id || session.user.status !== 'active') redirect('/login') sur library/page.tsx + favorites + inbox + [slug]. Suspended members redirigés vers login (cohérent J5/J6).
+
+**code-review HIGH** :
+
+- **H3 — External links markdown SR-only annonce + ExternalLink icon** (markdown.tsx). Fix : custom renderer  ajoute <ExternalLink> lucide après le label + <span class="sr-only">(ouvre dans un nouvel onglet)</span>. Plus de surprise SR.
+- **H8 — Stale "coming soon" hint Mark Douglas J7 + Check-ins J5** (member-tabs.tsx + members/[id]/page.tsx). Fix : retire comingSoon: 'J5' du tab Check-ins (livré J5) ; bloc OverviewTab "coming soon hint" n'annonce plus que Notes admin J3.5.
+- **H9 — Server Actions sans cap longueur sur deliveryId/cardId** (library/actions.ts + dmin/cards/actions.ts). Fix : ajout || deliveryId.length > 64 + || cardId.length > 64 sur les 6 Server Actions. Anti-DoS RAM/Postgres parser.
+
+### Quality gate post-hardening
+
+- **Type-check** : ✓ exit 0
+- **ESLint** : ✓ exit 0 (max-warnings=0)
+- **Vitest** : **503/503** verts (stable, +0 vs commit initial — aucun test cassé par les patches)
+- **Smoke test J7 live** : ✓ ALL GREEN (re-validé après M4 fix avec userCreatedAt: member.createdAt)
+- **Migration appliquée** : ✓ (pas de nouvelle migration, fixes applicatifs uniquement)
+
+### Reclassé J7.5 (backlog non bloquant pour merge)
+
+**UI design audit (6 BLOCKERs DS coherence reclassés HIGH J7.5)** :
+
+- **DS-B1** : 0 occurrence des 10 typography tokens DS ( -display/ -h1/ -eyebrow/etc) — Tailwind raw partout. Migration sed-style requise (~1h).
+- **DS-B2** : 0 occurrence ar(--\*) direct (J5/J6 ont 120+) — utilise les Tailwind aliases. Choix architectural à trancher pour cohérence repo.
+- **DS-B3** : 0 import framer-motion (vs 6 fichiers ailleurs). Stagger entrance grid library + scale spring sur FavoriteToggle + entrée Card primary reader manquent. ~2h pour 3 client islands animés.
+- **DS-B4** : <Card primary> sous-utilisé (1 seul endroit reader). Promouvoir 1 card "featured" du grid en primary.
+- **DS-B5** : Reader hero sans focal point premium. Manque urora wrapper, h-rise H1, drop-shadow lime sur icône halo.
+- **DS-B6** : Déjà fixé en hardening (h-9 → h-11).
+
+**Autres items J7.5** :
+
+- **CR-H4** : "1 fiche par jour cross-card" decision design (engine.ts cap globalement vs unique per-card actuel). À trancher avec Eliot.
+- **CR-H6** : Race scheduler lastDispatchAt set après read (theatre dans certains microtasks tick). V1 Hetzner single-instance OK ; refactor inFlight: Map<userId, Promise> pour V2 multi-instance.
+- **CR-H7** :
+  evalidatePath('/library/') sur oggleFavoriteAction mauvaise route — partiellement fixé via
+  evalidatePath('/library', 'layout') mais le slug-spécifique serait plus précis.
+- **a11y H4** : delete confirm live region (CardActionsRow setTimeout 4s sans annoncer SR).
+- **a11y H5** : favorite/helpful aria-live polite optimistic (annonce "Ajouté aux favoris").
+- **a11y H7** : pills "Brouillon"/"Black hat"/"Cadre d'urgence" aria-label informatif.
+- **a11y H8** : <SafeMarkdown> headingOffset prop pour exercises descriptions.
+- **CR-#10..#19 (MEDIUM)** : audit dead actions, parseExercises silent drop console.warn, setTimeout cleanup CardActionsRow, parsing exercises validation, tagNames allowlist strict (vs filter blocklist) react-markdown, etc.
+- **38 fiches manquantes** (V1 ship 12/50 SPEC §7.6 cible).
+
+### Commits J7 finaux sur `claude/tender-euler-092684`
+
+1. `d16b30c` feat(j7): foundation — DB model + trigger engine + 45 TDD tests
+2. `21492f1` feat(j7): services + Zod + dispatch wiring + cron temporel
+3. `3ae5468` feat(j7): UI premium + admin + tab member-douglas-panel + 12-cards seed
+4. `HEAD` feat(j7): audit-driven hardening — 3 BLOQUANTs + 6 HIGH closed
+
+**PR** : https://github.com/fxeliott/fxmily/pull/24

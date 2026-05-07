@@ -307,9 +307,15 @@ export function evalNoCheckinStreak(
   rule: Extract<TriggerRule, { kind: 'no_checkin_streak' }>,
   ctx: TriggerContext,
 ): TriggerEvalResult {
-  // Most recent check-in date (any slot). Empty list → match if days threshold met
-  // counting from "ever" — but in practice the recentCheckins is bounded so we
-  // need a fallback: if no check-in in the window, treat lastDate as far past.
+  // M4 fix : skip if user account is younger than rule.days (no spam onboarding day).
+  const accountAgeMs = ctx.now.getTime() - ctx.userCreatedAt.getTime();
+  const accountAgeDays = Math.floor(accountAgeMs / (24 * 3600 * 1000));
+  if (accountAgeDays < rule.days) {
+    return { matched: false };
+  }
+
+  // Most recent check-in date (any slot). Empty list → match (the user has been
+  // active long enough per the guard above, but never checked in).
   if (ctx.recentCheckins.length === 0) {
     return {
       matched: true,
@@ -317,7 +323,12 @@ export function evalNoCheckinStreak(
       snapshot: {
         kind: rule.kind,
         rule,
-        details: { lastCheckinDate: null, daysSince: rule.days, requiredDays: rule.days },
+        details: {
+          lastCheckinDate: null,
+          daysSince: accountAgeDays,
+          requiredDays: rule.days,
+          accountAgeDays,
+        },
       },
     };
   }

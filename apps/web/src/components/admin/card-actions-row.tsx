@@ -54,7 +54,7 @@ export function CardActionsRow({ cardId, initialPublished, cardTitle }: CardActi
         aria-pressed={published}
         title={published ? 'Dépublier' : 'Publier'}
         className={cn(
-          'rounded-pill inline-flex h-9 items-center gap-1.5 border px-3 text-xs font-medium transition-all',
+          'rounded-pill inline-flex h-11 items-center gap-1.5 border px-3 text-xs font-medium transition-all',
           published
             ? 'border-acc/40 bg-acc/15 text-acc'
             : 'border-border bg-bg-1 text-muted hover:border-acc/40 hover:text-foreground',
@@ -71,7 +71,7 @@ export function CardActionsRow({ cardId, initialPublished, cardTitle }: CardActi
         disabled={pending}
         aria-label={`Supprimer la fiche « ${cardTitle} »`}
         className={cn(
-          'rounded-pill inline-flex h-9 items-center gap-1.5 border px-3 text-xs font-medium transition-all',
+          'rounded-pill inline-flex h-11 items-center gap-1.5 border px-3 text-xs font-medium transition-all',
           confirmingDelete
             ? 'border-bad bg-bad/15 text-bad'
             : 'border-border bg-bg-1 text-muted hover:border-bad/40 hover:text-bad',

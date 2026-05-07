@@ -19,8 +19,10 @@ import { submitMorningCheckinAction, type CheckinActionState } from '@/app/check
 import { Alert } from '@/components/alert';
 import { EmotionCheckinPicker } from '@/components/checkin/emotion-checkin-picker';
 import { ScoreSlider } from '@/components/checkin/score-slider';
+import { SleepZonesBar } from '@/components/checkin/sleep-zones-bar';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
+import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
 import { MORNING_ROUTINE_SUGGESTIONS } from '@/lib/checkin/routine';
 import { cn } from '@/lib/utils';
 
@@ -170,6 +172,8 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
     setStep(s);
     setFieldErrors({});
     setServerError(null);
+    // Light tap on transitions — fires & forgets, no-op on iOS <18.
+    hapticTap();
   };
 
   // Normalize FR decimal comma — `<input type="number" inputMode="decimal">`
@@ -217,6 +221,7 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
     if (invalidStep !== undefined) {
       setServerError('Certains champs sont incomplets — utilise « Précédent » pour les compléter.');
       goToStep(invalidStep as StepIndex);
+      hapticError();
       return;
     }
 
@@ -237,10 +242,12 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
       const result: CheckinActionState = await submitMorningCheckinAction(null, fd);
       if (result.ok) {
         clearDraft();
+        hapticSuccess();
         return;
       }
       if (result.fieldErrors) setFieldErrors(result.fieldErrors);
       setServerError(serverErrorMessage(result));
+      hapticError();
     });
   };
 
@@ -426,6 +433,11 @@ interface StepProps {
 }
 
 function StepSleep({ draft, update, fieldErrors, disabled }: StepProps) {
+  // Live-classify the entered hours for the SleepZonesBar (J5 audit UI B1
+  // polish — pedagogical zones diagram).
+  const parsed = draft.sleepHours.replace(',', '.');
+  const numericHours = parsed === '' ? null : Number.isNaN(Number(parsed)) ? null : Number(parsed);
+
   return (
     <div className="flex flex-col gap-5">
       <NumericField
@@ -439,8 +451,10 @@ function StepSleep({ draft, update, fieldErrors, disabled }: StepProps) {
         step="0.5"
         inputMode="decimal"
         placeholder="7.5"
-        hint="0 à 24h. Demi-heures acceptées."
+        hint="0 à 24h. Demi-heures et virgule décimale acceptées."
       />
+
+      <SleepZonesBar hours={numericHours} />
 
       <ScoreSlider
         name="sleepQuality"

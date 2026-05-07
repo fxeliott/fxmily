@@ -20,6 +20,7 @@ import { EmotionCheckinPicker } from '@/components/checkin/emotion-checkin-picke
 import { ScoreSlider } from '@/components/checkin/score-slider';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
+import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 
 /**
@@ -180,6 +181,7 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
     setStep(s);
     setFieldErrors({});
     setServerError(null);
+    hapticTap();
   };
 
   // FR decimal-comma support — see morning wizard for rationale (audit J5 H6).
@@ -224,6 +226,7 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
     if (invalidStep !== undefined) {
       setServerError('Certains champs sont incomplets — utilise « Précédent » pour les compléter.');
       goToStep(invalidStep as StepIndex);
+      hapticError();
       return;
     }
 
@@ -253,10 +256,12 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
       const result: CheckinActionState = await submitEveningCheckinAction(null, fd);
       if (result.ok) {
         clearDraft();
+        hapticSuccess();
         return;
       }
       if (result.fieldErrors) setFieldErrors(result.fieldErrors);
       setServerError(serverErrorMessage(result));
+      hapticError();
     });
   };
 

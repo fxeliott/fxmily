@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { CHECKIN_EMOTION_MAX_PER_SLOT, isCheckinEmotionSlug } from '@/lib/checkin/emotions';
+import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
 /**
  * Daily check-in schemas (J5, SPEC §6.4 + §7.4).
@@ -127,18 +128,34 @@ export const morningCheckinSchema = z
       .min(0, 'Au moins 0.')
       .max(240, 'Maximum 240 min.'),
 
-    sportType: z.string().trim().max(80).optional().or(z.literal('')),
+    sportType: z
+      .string()
+      .max(80)
+      .optional()
+      .or(z.literal(''))
+      .refine((v) => v == null || v === '' || !containsBidiOrZeroWidth(v), {
+        message: 'Caractères de contrôle interdits.',
+      })
+      .transform((v) => (v == null || v === '' ? '' : safeFreeText(v))),
     sportDurationMin: z
       .union([z.literal(''), z.coerce.number().int().min(0).max(600)])
       .transform((v) => (v === '' ? null : v)),
 
     moodScore: intRange(1, 10, 'Humeur entre 1 et 10.'),
+    // J5 audit M5 fix — strip bidi/zero-width controls + NFC normalize.
+    // Critical: this string is injected into the J8 weekly Claude prompt.
     intention: z
       .string()
-      .trim()
       .max(200, 'Intention trop longue (200 max).')
       .optional()
-      .transform((v) => (v == null || v === '' ? undefined : v)),
+      .refine((v) => v == null || !containsBidiOrZeroWidth(v), {
+        message: 'Caractères de contrôle interdits.',
+      })
+      .transform((v) => {
+        if (v == null) return undefined;
+        const cleaned = safeFreeText(v);
+        return cleaned === '' ? undefined : cleaned;
+      }),
 
     emotionTags: checkinEmotionTags,
   })
@@ -193,17 +210,29 @@ export const eveningCheckinSchema = z.object({
 
   emotionTags: checkinEmotionTags,
 
+  // J5 audit M5 fix — same hardening as morning.intention. journalNote
+  // grows up to 4000 chars and lands in the J8 weekly Claude prompt; a
+  // hidden RTL override here would silently reorder the LLM's output.
   journalNote: z
     .string()
-    .trim()
     .max(4000, 'Note trop longue (4000 max).')
     .optional()
-    .transform((v) => (v == null || v === '' ? undefined : v)),
+    .refine((v) => v == null || !containsBidiOrZeroWidth(v), {
+      message: 'Caractères de contrôle interdits.',
+    })
+    .transform((v) => {
+      if (v == null) return undefined;
+      const cleaned = safeFreeText(v);
+      return cleaned === '' ? undefined : cleaned;
+    }),
 
   gratitudeItems: z
-    .array(z.string())
-    // Drop empties before counting / length-checking.
-    .transform((items) => items.map((s) => s.trim()).filter((s) => s.length > 0))
+    // Bound the array size first so a malicious caller can't ship 10 000
+    // empty strings to bloat parsing (audit L4 + part of M5 hardening).
+    .array(z.string().max(500))
+    .max(20, 'Trop de gratitudes envoyées.')
+    // Drop empties + bidi-clean each surviving entry before length-checking.
+    .transform((items) => items.map((s) => safeFreeText(s)).filter((s) => s.length > 0))
     .pipe(
       z.array(z.string().max(200, 'Gratitude trop longue (200 max).')).max(3, 'Max 3 gratitudes.'),
     ),

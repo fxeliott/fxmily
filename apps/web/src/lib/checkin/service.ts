@@ -8,7 +8,22 @@ import { db } from '@/lib/db';
 import type { EveningCheckinInput, MorningCheckinInput } from '@/lib/schemas/checkin';
 
 import { computeStreak, type CheckinDay } from './streak';
-import { localDateOf, parseLocalDate, type LocalDateString } from './timezone';
+import { localDateOf, parseLocalDate, shiftLocalDate, type LocalDateString } from './timezone';
+
+/**
+ * Domain error: the submitted check-in date is outside the allowed window
+ * for the user's local timezone. The Zod schema does a UTC-based first
+ * pass; this is the TZ-aware second pass (J5 audit Security MEDIUM M2).
+ */
+export class CheckinDateOutOfWindowError extends Error {
+  constructor(
+    public readonly submitted: LocalDateString,
+    public readonly today: LocalDateString,
+  ) {
+    super(`Check-in date ${submitted} outside the window around ${today}.`);
+    this.name = 'CheckinDateOutOfWindowError';
+  }
+}
 
 /**
  * Daily check-in service layer (J5, SPEC §6.4 + §7.4).
@@ -108,6 +123,32 @@ export function todayFor(timezone: string, now: Date = new Date()): LocalDateStr
   return localDateOf(now, timezone);
 }
 
+/**
+ * TZ-aware bound on the submitted check-in date (J5 audit Security M2 fix).
+ *
+ * The Zod schema bounds the date with TODAY+1 *UTC* — works for V1 single-TZ
+ * Europe/Paris but lets a user in Auckland (UTC+13) submit a check-in for
+ * "tomorrow local" while the server still thinks it's today, polluting the
+ * streak counter. The service performs a second pass keyed on the user's TZ
+ * (sourced from `User.timezone`) and throws if the submitted date is more
+ * than one local-day ahead of `today_local`.
+ *
+ * Past dates are bounded by Zod (60-day backfill) — we don't re-check here.
+ */
+export function assertCheckinDateInLocalWindow(
+  submitted: LocalDateString,
+  timezone: string,
+  now: Date = new Date(),
+): void {
+  const today = todayFor(timezone, now);
+  // Allow today + 1 (covers DST drift and a user who anticipates by a few
+  // hours into "tomorrow"). Past dates are already bounded by Zod.
+  const upper = shiftLocalDate(today, 1);
+  if (submitted > upper) {
+    throw new CheckinDateOutOfWindowError(submitted, today);
+  }
+}
+
 // ----- Submit (upsert) --------------------------------------------------------
 
 /**
@@ -120,7 +161,11 @@ export function todayFor(timezone: string, now: Date = new Date()): LocalDateStr
 export async function submitMorningCheckin(
   userId: string,
   input: MorningCheckinInput,
+  options: { timezone?: string; now?: Date } = {},
 ): Promise<SerializedCheckin> {
+  // Audit J5 M2 — TZ-aware second pass. Defaults to Europe/Paris (V1 reality);
+  // when J5.5 propagates per-user TZ, the Server Action will pass it explicitly.
+  assertCheckinDateInLocalWindow(input.date, options.timezone ?? 'Europe/Paris', options.now);
   const date = parseLocalDate(input.date);
   const updateData = {
     sleepHours: new Prisma.Decimal(input.sleepHours),
@@ -152,7 +197,9 @@ export async function submitMorningCheckin(
 export async function submitEveningCheckin(
   userId: string,
   input: EveningCheckinInput,
+  options: { timezone?: string; now?: Date } = {},
 ): Promise<SerializedCheckin> {
+  assertCheckinDateInLocalWindow(input.date, options.timezone ?? 'Europe/Paris', options.now);
   const date = parseLocalDate(input.date);
   const updateData = {
     planRespectedToday: input.planRespectedToday,
@@ -257,4 +304,87 @@ export async function getCheckin(
     where: { userId_date_slot: { userId, date: parseLocalDate(date), slot } },
   });
   return row ? toSerialized(row) : null;
+}
+
+/**
+ * Last-7-days check-in summary for the dashboard sparkline + sleep-zones
+ * diagram (J5 audit UI N2 polish).
+ *
+ * One value per local-day (matching `today`). Missing days are returned as
+ * `null` so the consumer can render gaps explicitly. Sleep hours are
+ * Number'd (Decimal → number, lossy past 15 sig figs but irrelevant for a
+ * 0–24 range with 0.5 granularity). Mood is averaged across morning + evening
+ * if both slots are present; null otherwise.
+ *
+ * Read-side: 1 indexed query (`(userId, date DESC)`), bounded by 14 rows
+ * (7 days × 2 slots). Cheap.
+ */
+export interface DayPoint {
+  date: LocalDateString;
+  /** Hours of sleep last night (morning slot). Null if no morning checkin. */
+  sleepHours: number | null;
+  /** Average mood across slots filed that day (null if no slot filled). */
+  moodScore: number | null;
+  /** Stress score (evening slot). Null if no evening checkin. */
+  stressScore: number | null;
+  /** True if at least one slot was filled (morning OR evening). */
+  filled: boolean;
+}
+
+export async function getLast7Days(
+  userId: string,
+  timezone: string,
+  now: Date = new Date(),
+): Promise<DayPoint[]> {
+  const today = todayFor(timezone, now);
+  const startDate = parseLocalDate(today);
+  startDate.setUTCDate(startDate.getUTCDate() - 6);
+
+  const rows = await db.dailyCheckin.findMany({
+    where: { userId, date: { gte: startDate } },
+    select: {
+      date: true,
+      slot: true,
+      sleepHours: true,
+      moodScore: true,
+      stressScore: true,
+    },
+    orderBy: { date: 'desc' },
+  });
+
+  // Bucket by date.
+  const byDate = new Map<LocalDateString, typeof rows>();
+  for (const r of rows) {
+    const key = r.date.toISOString().slice(0, 10);
+    const list = byDate.get(key) ?? [];
+    list.push(r);
+    byDate.set(key, list);
+  }
+
+  // Build the 7-day window in chronological order (oldest → newest), so
+  // the sparkline reads left-to-right.
+  const out: DayPoint[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const cursor = new Date(startDate);
+    cursor.setUTCDate(cursor.getUTCDate() + (6 - i));
+    const dateKey = cursor.toISOString().slice(0, 10);
+    const dayRows = byDate.get(dateKey) ?? [];
+
+    const morning = dayRows.find((r) => r.slot === 'morning');
+    const evening = dayRows.find((r) => r.slot === 'evening');
+
+    const moods: number[] = [];
+    if (morning?.moodScore != null) moods.push(morning.moodScore);
+    if (evening?.moodScore != null) moods.push(evening.moodScore);
+    const moodAvg = moods.length ? moods.reduce((a, b) => a + b, 0) / moods.length : null;
+
+    out.push({
+      date: dateKey,
+      sleepHours: morning?.sleepHours ? Number(morning.sleepHours.toString()) : null,
+      moodScore: moodAvg,
+      stressScore: evening?.stressScore ?? null,
+      filled: dayRows.length > 0,
+    });
+  }
+  return out;
 }

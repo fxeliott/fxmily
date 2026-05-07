@@ -6,7 +6,11 @@ import type { ZodError } from 'zod';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
-import { submitEveningCheckin, submitMorningCheckin } from '@/lib/checkin/service';
+import {
+  CheckinDateOutOfWindowError,
+  submitEveningCheckin,
+  submitMorningCheckin,
+} from '@/lib/checkin/service';
 import { eveningCheckinSchema, morningCheckinSchema } from '@/lib/schemas/checkin';
 
 /**
@@ -87,7 +91,18 @@ export async function submitMorningCheckinAction(
       },
     });
   } catch (err) {
-    console.error('[checkin.morning] submit failed', err);
+    if (err instanceof CheckinDateOutOfWindowError) {
+      return {
+        ok: false,
+        error: 'invalid_input',
+        fieldErrors: { date: 'Date hors fenêtre autorisée pour ton fuseau.' },
+      };
+    }
+    const code =
+      err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
+        ? err.code
+        : 'unknown';
+    console.error('[checkin.morning] submit failed', { code });
     return { ok: false, error: 'unknown' };
   }
 
@@ -146,7 +161,18 @@ export async function submitEveningCheckinAction(
       },
     });
   } catch (err) {
-    console.error('[checkin.evening] submit failed', err);
+    if (err instanceof CheckinDateOutOfWindowError) {
+      return {
+        ok: false,
+        error: 'invalid_input',
+        fieldErrors: { date: 'Date hors fenêtre autorisée pour ton fuseau.' },
+      };
+    }
+    const code =
+      err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
+        ? err.code
+        : 'unknown';
+    console.error('[checkin.evening] submit failed', { code });
     return { ok: false, error: 'unknown' };
   }
 

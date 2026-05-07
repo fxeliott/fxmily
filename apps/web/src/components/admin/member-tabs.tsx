@@ -18,7 +18,7 @@ const TABS: readonly TabDefinition[] = [
   { key: 'overview', label: "Vue d'ensemble" },
   { key: 'trades', label: 'Trades' },
   { key: 'checkins', label: 'Check-ins', comingSoon: 'J5' },
-  { key: 'mark-douglas', label: 'Mark Douglas', comingSoon: 'J7' },
+  { key: 'mark-douglas', label: 'Mark Douglas' },
   { key: 'notes', label: 'Notes admin', comingSoon: 'J3.5' },
 ];
 

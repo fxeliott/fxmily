@@ -4,11 +4,13 @@ import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { MemberTabs, type MemberTabKey } from '@/components/admin/member-tabs';
+import { MemberDouglasPanel } from '@/components/admin/member-douglas-panel';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
 import { ScoreGaugeGrid } from '@/components/scoring/score-gauge-grid';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { aggregateMemberDeliveryStats, listMemberDeliveries } from '@/lib/admin/cards-service';
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
 import { logAudit } from '@/lib/auth/audit';
@@ -32,8 +34,12 @@ interface DetailPageProps {
   searchParams: Promise<{ tab?: string }>;
 }
 
-function parseTab(value: string | undefined): Extract<MemberTabKey, 'overview' | 'trades'> {
-  return value === 'trades' ? 'trades' : 'overview';
+function parseTab(
+  value: string | undefined,
+): Extract<MemberTabKey, 'overview' | 'trades' | 'mark-douglas'> {
+  if (value === 'trades') return 'trades';
+  if (value === 'mark-douglas') return 'mark-douglas';
+  return 'overview';
 }
 
 export default async function AdminMemberDetailPage({ params, searchParams }: DetailPageProps) {
@@ -54,6 +60,14 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
 
   const trades =
     tab === 'trades' ? await listMemberTradesAsAdmin(memberId, { status: 'all' }) : null;
+
+  const douglasData =
+    tab === 'mark-douglas'
+      ? await Promise.all([
+          listMemberDeliveries(memberId, { take: 30 }),
+          aggregateMemberDeliveryStats(memberId),
+        ])
+      : null;
 
   // J6.5 — pull behavioral scores + analytics in parallel for the overview tab.
   // Skipped on the trades tab to keep its render path lean. J6.6 H1 fix —
@@ -149,6 +163,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
         <OverviewTab detail={detail} latestScore={latestScore} analytics={analytics} />
       ) : null}
       {tab === 'trades' && trades ? <MemberTradesList memberId={memberId} trades={trades} /> : null}
+      {tab === 'mark-douglas' && douglasData ? (
+        <MemberDouglasPanel deliveries={douglasData[0]} stats={douglasData[1]} />
+      ) : null}
     </main>
   );
 }

@@ -27,8 +27,8 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
   if (!session?.user?.id) redirect('/login');
 
   const userId = session.user.id;
-  const timezone = 'Europe/Paris'; // SPEC §6.1 — User.timezone defaults here.
-  // Note: when the JWT exposes user.timezone (J5+) we'll source it from session.
+  // J5.5 — read timezone from the JWT-backed session (default Europe/Paris).
+  const timezone = session.user.timezone || 'Europe/Paris';
 
   const [status, streak, last7] = await Promise.all([
     getCheckinStatus(userId, timezone),

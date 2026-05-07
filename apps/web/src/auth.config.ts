@@ -76,6 +76,7 @@ export const authConfig = {
       if (user) {
         token.role = user.role;
         token.status = user.status;
+        token.timezone = user.timezone;
         if (user.id) token.sub = user.id;
       }
       return token;
@@ -84,6 +85,9 @@ export const authConfig = {
       if (token.sub) session.user.id = token.sub;
       if (token.role) session.user.role = token.role;
       if (token.status) session.user.status = token.status;
+      // Always emit a string for the consumer — defaults to Europe/Paris
+      // (matches the DB default in `User.timezone`). J5.5 plumbing.
+      session.user.timezone = token.timezone ?? 'Europe/Paris';
       return session;
     },
   },

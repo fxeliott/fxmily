@@ -16,12 +16,15 @@ declare module 'next-auth' {
       id: string;
       role: UserRole;
       status: UserStatus;
+      /** IANA timezone string (Europe/Paris default). J5.5 follow-up. */
+      timezone: string;
     } & DefaultSession['user'];
   }
 
   interface User extends DefaultUser {
     role: UserRole;
     status: UserStatus;
+    timezone: string;
   }
 }
 
@@ -29,5 +32,7 @@ declare module 'next-auth/jwt' {
   interface JWT extends DefaultJWT {
     role?: UserRole;
     status?: UserStatus;
+    /** IANA timezone string. Optional in JWT — defaults to Europe/Paris when missing. */
+    timezone?: string;
   }
 }

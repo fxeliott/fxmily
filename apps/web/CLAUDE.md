@@ -578,3 +578,135 @@ Tous tone-aware sur design-system tokens (acc / cy / warn / bad). Recharts (no T
 - **J6.5** (revalidateTag wiring) : Server Actions `closeTradeAction` + `submitMorningCheckinAction` + `submitEveningCheckinAction` doivent appeler `revalidateTag('user:scores:'+userId)` ET `recomputeAndPersist(userId)` pour que le dashboard reflète immédiatement le dernier trade/checkin sans attendre le cron de la nuit.
 - **J7** (MD library) : la card MarkDouglas du dashboard reste statique TIER 4. La bibliothèque + déclencheurs contextuels (3 trades perdants → fiche tilt) sont J7.
 - **J8** (rapport hebdo IA) : agrège trades + checkins + scores de la semaine pour Claude prompt. Indexes `(userId, date desc)` sur `daily_checkins` et `behavioral_scores` sont déjà là.
+
+## J7 — Module Mark Douglas (livré 2026-05-07)
+
+### Modèle de données
+
+- 3 nouveaux modèles via migration 20260507152652_j7_mark_douglas_card :
+  - MarkDouglasCard (table mark_douglas_cards) — slug unique, category enum DouglasCategory (11 valeurs), quote ≤30 mots + quoteSourceChapter (fair use FR L122-5), paraphrase Text, exercises Json, triggerRules Json?, hatClass 'white'|'black', priority 1-10, published. Indexes (published, priority DESC) et (category, published).
+  - MarkDouglasDelivery (table mark_douglas_deliveries) — userId, cardId, triggeredBy FR, triggerSnapshot Json, **triggeredOn @db.Date** (anchored local-day), seenAt?, dismissedAt?, helpful?. Unique (userId, cardId, triggeredOn) = idempotency Postgres-level "max 1 délivrance par fiche par jour local". Indexes pour timeline membre, badge unread, cooldown lookup.
+  - MarkDouglasFavorite (composite PK (userId, cardId)).
+- enum DouglasCategory : acceptance, tilt, discipline, ego, probabilities, confidence, patience, consistency, fear, loss, process.
+- Cascade User delete sur les 3 tables (RGPD data minimisation).
+
+### Trigger engine (lib/triggers/)
+
+Architecture pure-functions first, side-effects en service. **45 tests TDD verts** (33 evaluators + 12 cooldown).
+
+-     ypes.ts — TriggerRule discriminated union (7 kinds), TriggerContext, TriggerEvalResult, HatClass, COOLDOWN_DAYS_BY_HAT (white=7, black=14 — Yu-kai Chou Octalysis).
+- schema.ts — riggerRuleSchema Zod discriminated union pour valider le riggerRules JSON.
+- evaluators.ts — 7 evaluators purs (un par kind canonique SPEC §7.6) :
+  1. fter_n_consecutive_losses (window: 'any' default, 'rolling_24h', 'session') — tilt mgmt
+  2. plan_violations_in_window — discipline (compte trades + evening checkins)
+  3. sleep_deficit_then_trade — fatigue (sameDay constraint via local-day match)
+  4. emotion_logged (4 fears Douglas trade + 3 fears checkin) — peurs
+  5. win_streak — sur-confiance
+  6. o_checkin_streak — consistance
+  7. hedge_violation — discipline (last closed trade)
+- cooldown.ts — isOnCooldown(cardId, hatClass, history, now) + pickBestMatch(matched, history, now) → 0 ou 1 candidat (anti-spam : max 1 push par évaluation).
+- engine.ts — evaluateAndDispatchForUser(userId, options?) : fetch ctx (trades 30j + checkins 60j + cards published + history 14j en parallèle), évalue, filtre cooldown, pick best, persist delivery, audit douglas.dispatched. Catch P2002 sur (userId, cardId, triggeredOn) → no-op idempotent.
+- engine.ts exporte aussi dispatchForAllActiveMembers(now?) — batch 25-by-25 Promise.allSettled pour le cron.
+
+### Service layer
+
+- lib/cards/types.ts — SerializedCard, SerializedDelivery, SerializedFavorite, CardListFilters.
+- lib/cards/service.ts — member-facing : listPublishedCards(filters?), getPublishedCardBySlug, listPublishedCategories, listMyDeliveries, countUnseenDeliveries, getDelivery, getDeliveryByCardSlug, markDeliverySeen, markDeliveriesForCardSeen (bulk on reader open), markDeliveryDismissed, setDeliveryHelpful, oggleFavorite (P2002/P2025 race-safe), isFavorite, listMyFavorites. Filtre published-only sur les surfaces membre. Custom errors CardNotFoundError, DeliveryNotFoundError.
+- lib/admin/cards-service.ts — admin CRUD : listAllCards, getCardById, createCard, updateCard, deleteCard, setPublished, listMemberDeliveries, ggregateMemberDeliveryStats, getCatalogStats. Custom error CardSlugTakenError (P2002 sur slug).
+- lib/schemas/card.ts — cardCreateSchema, cardUpdateSchema Zod avec : quote ≤ 30 mots (fair use enforced), paraphrase 50-4000 chars + safeFreeText (NFC + bidi/zero-width strip), slug kebab-case, exercises 1-3 items, triggerRules réutilise riggerRuleSchema.
+
+### Dispatch wiring (Server Actions + cron)
+
+- lib/cards/scheduler.ts — scheduleDouglasDispatch(userId, reason) — clone J6.5 scoring scheduler. fter() Next.js 16 + debounce 5s in-memory + try/catch + audit douglas.dispatched avec metadata riggeredBy: 'action'.
+- 3 Server Actions trade wired : createTradeAction, closeTradeAction, deleteTradeAction appellent scheduleDouglasDispatch après scheduleScoreRecompute.
+- 2 Server Actions checkin wired : submitMorningCheckinAction, submitEveningCheckinAction.
+- pp/api/cron/dispatch-douglas/route.ts — pattern J5/J6 carbone : erifyCronSecret SHA-256 + imingSafeEqual (CWE-208), cronLimiter token bucket (5 burst, 1/min), 503 si pas de CRON_SECRET, 401/429/405. POST → dispatchForAllActiveMembers → audit cron.dispatch_douglas.scan. **Wiring prod attendu** :   0,6,12,18 \* \* \* UTC (every 6h) — couvre les triggers temporels purs (
+  o_checkin_streak).
+
+### Server Actions library
+
+- pp/library/actions.ts — markDeliverySeenAction, dismissDeliveryAction, setDeliveryHelpfulAction, oggleFavoriteAction. Auth re-check + audit douglas.delivery.{seen,dismissed,helpful} + douglas.favorite.{added,removed} + revalidatePath('/library' + '/dashboard').
+- pp/admin/cards/actions.ts — setPublishedAction(cardId, published), deleteCardAction(cardId). AdminGate discriminated union typé. Audit douglas.card.{published,unpublished,deleted}.
+
+### UI publique (pp/library/)
+
+- /library — Server Component, catalog grid + filtres URL searchParams (?cat=X). Hero header avec Pill "Module Mark Douglas" + compteurs unread/favorites + intro éducative. CategoryFilterTabs sticky avec icônes lucide + counts. Grid responsive 1/2/3 cols. EmptyState pédagogique posture athlète.
+- /library/[slug] — Server Component, lecteur premium :
+  - Banner "Pourquoi cette fiche maintenant" si delivery (triggeredBy FR humain)
+  - Hero : category icon + Pill + title H1 + favoris labeled toggle
+  - Quote bloc proeminent dans <Card primary> avec attribution chapter
+  - Paraphrase rendue via <SafeMarkdown> (skipHtml + rehype-sanitize hardened schema + remarkGfm + urlTransform allowlist)
+  - Section exercices ordered numérotée avec markdown sanitized
+  - HelpfulFeedback two-button optimistic (si delivery)
+  - MarkSeenOnMount client island fire-and-forget
+  - markDeliveriesForCardSeen(userId, cardId) bulk-update au render
+- /library/favorites — liste des favoris membre.
+- /library/inbox — timeline deliveries reçues (split unread/read).
+
+### UI admin (pp/admin/cards/)
+
+- /admin/cards — list view avec stats strip (total / published / drafts / with-triggers), filtres status (all/published/draft), inline <CardActionsRow> (toggle published optimistic + delete avec double-confirm 4s).
+- /admin/members/[id]?tab=mark-douglas — <MemberDouglasPanel> (stats agrégées + timeline deliveries chronologique avec triggeredBy + helpful pills + dismissed pills). Lien externe vers /library/[slug] pour preview.
+- member-tabs.tsx:21 — comingSoon: 'J7' retiré du tab "Mark Douglas".
+
+### Composants UI premium (components/library/)
+
+- <SafeMarkdown> — wrapper react-markdown sécurisé (skipHtml, rehype-sanitize hardened schema, urlTransform allowlist ^(https?:|mailto:|/)/i, target=\_blank rel=noopener). Custom render mapping pour h2/h3, ul/ol marker:acc, blockquote border-acc, code inline mono.
+- <CategoryFilterTabs> — Server Component sticky avec aria-current, icônes par catégorie, scroll horizontal mobile.
+- <CardGridItem> — Server Component, card cliquable avec <Link> overlay full-card touch target. FavoriteToggle islé en client. Quote excerpt italique + source chapter + Pill catégorie.
+- <FavoriteToggle> — Client useTransition + optimistic, aria-pressed, 2 variants (icon-only pour grid + labeled pour reader).
+- <HelpfulFeedback> — 2 boutons thumbs up/down optimistic, reverte sur échec.
+- <MarkSeenOnMount> — Client useEffect fire-and-forget Server Action (no return value).
+- <CategoryMeta> — single source pour CATEGORY_LABEL FR + CATEGORY_ICON lucide + CATEGORY_TONE (acc/cy/warn/bad/mute).
+
+### Fair use FR + sécurité
+
+- quote ≤ 30 mots (Zod-enforced via wordCount(s) <= 30) — SPEC §18.2 fair use court extract L122-5.
+- quoteSourceChapter non-vide obligatoire — toute citation porte attribution Trading in the Zone, ch.X ou The Disciplined Trader, ch.Y.
+- safeFreeText (NFC + bidi/zero-width strip) appliqué sur title, quote, quoteSourceChapter, paraphrase, exercises.label, exercises.description — bloque Trojan Source J5 audit MEDIUM M5 + futur prompt Claude J8.
+- eact-markdown skipHtml + rehype-sanitize avec schema hardened (filter on\* attributes, drop script/style/iframe/object/embed/svg/math) + urlTransform allowlist (rejette javascript:, data:, vbscript:).
+- Audit étendu avec 12 nouvelles actions J7 (douglas.card._, douglas.dispatched, douglas.delivery._, douglas.favorite.\*, cron.dispatch_douglas.scan).
+
+### Seed initial (scripts/data/cards.ts + scripts/seed-mark-douglas-cards.ts)
+
+- 12 fiches V1 (vs ~50 SPEC §7.6 cible — 38 restantes en backlog J7.5).
+- 7 fiches trigger-mapped (mapping SPEC §7.6 canonique) :
+  - sortir-du-tilt (tilt) → fter_n_consecutive_losses n=3 window=any priority=9 hatClass=black
+  - le-piege-de-la-deviation (discipline) → plan_violations_in_window n=2 days=7 priority=8 hatClass=black
+  -     rader-fatigue-trader-emotionnel (fear) → sleep_deficit_then_trade minHours=6 priority=8 hatClass=white
+  - l-art-de-ne-rien-faire (patience) → emotion_logged tag=fomo priority=8 hatClass=white
+  - sur-confiance-le-piege-d-apres-victoire (confidence) → win_streak n=5 priority=7 hatClass=black
+  - discipline-c-est-consistance (consistency) →
+    o_checkin_streak days=7 priority=6 hatClass=white
+  - pourquoi-le-plan-existe (discipline) → hedge_violation priority=8 hatClass=black
+- 5 fiches catalogue (no trigger) : anything-can-happen, penser-en-probabilites, detacher-identite-resultat, accepter-la-perte-comme-cout, process-vs-outcome.
+- Seed script idempotent par slug (upsert). Pattern seed-admin.ts carbone : env DATABASE_URL required, instancie PrismaClient + adapter-pg locally (lib/db.ts est server-only).
+
+### Smoke test live validé (scripts/smoke-test-j7.ts)
+
+Réplique la pipeline engine localement (engine.ts est server-only, tsx ne peut pas l'importer). Importe directement les helpers purs evaluators.ts + cooldown.ts + schema.ts. **Critère SPEC §15 J7 "Done quand" VALIDÉ** :
+
+`[smoke:j7] step 4 — fetched 3 trades + 7 cards
+[smoke:j7] step 4 — 2 cards matched: sortir-du-tilt, discipline-c-est-consistance
+[smoke:j7] step 4 — sortir-du-tilt picked + persisted: "3 trades perdants consécutifs"
+[smoke:j7] step 5 — 1 delivery: sortir-du-tilt
+[smoke:j7] step 6 — P2002 unique idempotency enforced ✓
+[smoke:j7] step 7 — cleanup OK
+[smoke:j7] ALL GREEN — J7 critère "Done quand" validé en live.`
+
+### Quality gate finale J7
+
+- **Type-check** : ✓ (tsc --noEmit exit 0)
+- **Vitest** : **503/503 tests verts** (vs 458 fin J6.6 = +45 triggers tests)
+- **ESLint** : ✓ (max-warnings=0, exit 0)
+- **Build prod** : ✓ (Turbopack, AUTH_URL=https://build.fxmily.invalid placeholder)
+- **Smoke test live** : ✓ (above)
+- **Migration appliquée** : ✓ (20260507152652_j7_mark_douglas_card, 15 tables en DB)
+
+### TODO J7 → J7.5+ / J8 / J9
+
+- **J7.5** : 38 fiches restantes pour atteindre ~50 SPEC §7.6 cible. Options : Eliot rédige lui-même OU re-spawn subagent avec batchs de 10 pour éviter le crash silencieux.
+- **J7.5** : full CRUD form admin (create/edit) — V1 ship juste toggle published + delete, l'édition du paraphrase markdown attend un éditeur côté admin.
+- **J7.5** : dashboard widget "Tes fiches Mark Douglas" (count unread + 3 dernières + lien /library).
+- **J9** : push notifications quand une fiche est délivrée (NotificationType à étendre douglas_card_delivered).
+- **J10** : wirer le cron Hetzner   0,6,12,18 \* \* \* UTC + add CRON_SECRET au worktree .env.

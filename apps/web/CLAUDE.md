@@ -7,7 +7,7 @@
 
 Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — front + API + service worker (PWA, Jalon 9).
 
-État au 2026-05-07 : **J0 + J1 + J2 + J3 + J4 + J5 livrés** (J5 + audit-driven hardening).
+État au 2026-05-07 : **J0 + J1 + J2 + J3 + J4 + J5 + J6 livrés** (J6 = dashboard membre + scoring comportemental + cron nightly + patterns émotion×perf).
 
 ## Aliases d'import
 
@@ -45,6 +45,7 @@ Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — fro
 | `/checkin/morning`                     | GET      | `src/app/checkin/morning/page.tsx`                     | J5 — wizard 5 étapes (sleep → routine → body → mind → intention)              |
 | `/checkin/evening`                     | GET      | `src/app/checkin/evening/page.tsx`                     | J5 — wizard 5 étapes (discipline → hydratation → stress → mental → réflexion) |
 | `/api/cron/checkin-reminders`          | POST     | `src/app/api/cron/checkin-reminders/route.ts`          | J5 — scan reminders (X-Cron-Secret gate)                                      |
+| `/api/cron/recompute-scores`           | POST     | `src/app/api/cron/recompute-scores/route.ts`           | J6 — nightly recompute behavioral scores (X-Cron-Secret gate, `0 2 * * *`)    |
 
 ## Auth.js v5 (J1)
 
@@ -121,6 +122,7 @@ Si une intégration externe ou un script CLI demande une API REST, ajouter une r
   - **J3** : `admin.members.listed`, `admin.member.viewed` (metadata `{ memberId, tab }`), `admin.trade.viewed` (metadata `{ memberId, tradeId, isClosed, annotationsCount }` — J4 ajoute le compteur).
   - **J4** : `admin.annotation.created` (metadata `{ annotationId, tradeId, memberId, hasMedia, mediaType }`), `admin.annotation.deleted` (metadata `{ annotationId, tradeId, memberId }`), `admin.annotation.media.uploaded` (metadata `{ kind, key, mime, size, adapter, tradeId }`), `member.annotations.viewed` (metadata `{ tradeId, markedCount }` — émis seulement si `markedCount > 0` pour ne pas spammer le log à chaque ouverture de trade), `notification.enqueued` (metadata `{ notificationId, type, tradeId, annotationId }`).
   - **J5** : `checkin.morning.submitted` (metadata `{ checkinId, date, moodScore, sleepQuality }`), `checkin.evening.submitted` (metadata `{ checkinId, date, moodScore, stressScore, planRespected }`), `checkin.reminder.scan` (metadata `{ scannedUsers, enqueuedMorning, enqueuedEvening, skipped, ranAt }` — 1 row par run cron, pas par user). Le helper `enqueueCheckinReminder` ne loggue PAS d'audit (idempotent + bulk run, on track le scan global plutôt).
+  - **J6** : `cron.recompute_scores.scan` (metadata `{ computed, skipped, errors, ranAt }` — 1 row par run cron, pas par user, heartbeat). `score.computed` réservé pour les recomputes on-demand triggered par Server Actions (à câbler J6.5 si besoin).
 
 ## Headers de sécurité
 
@@ -181,13 +183,16 @@ Variables CSS dans `src/app/globals.css` (palette SPEC §8.1). Mode sombre uniqu
   - **J5** : `src/lib/checkin/{streak,timezone}.test.ts`, `src/lib/schemas/checkin.test.ts`
   - **J5 audit fixes** : `src/lib/notifications/enqueue.test.ts` (6 tests TDD pour la race-safe enqueue P2002), `src/lib/checkin/reminders.test.ts` (8 tests TDD pour le scan cron : early-return out-of-window, bulk lookup, slot-already-filled skip, userIds option, audit canonical row).
   - **TIER 3 hardening** : `src/lib/text/safe.test.ts` (19 tests TDD pour `safeFreeText` + `containsBidiOrZeroWidth` + `graphemeCount` — Unicode NFC + bidi/zero-width strip + emoji-family grapheme counting).
-  - **307 tests verts au close-out J5 TIER 3** (vs 288 fin TIER 2, vs 274 au commit initial J5, 199 au close-out J4).
+  - **J6 analytics** : `src/lib/analytics/{wilson,correlations,expectancy,streaks,equity-curve,drawdown}.test.ts` (94 tests TDD — Wilson vs scipy à 1e-12, Newcombe 1998 golden values, Welford-stable variance, Van Tharp expectancy + profit factor cap).
+  - **J6 scoring** : `src/lib/scoring/{discipline,emotional-stability,consistency,engagement}.test.ts` (47 tests TDD — 4 dimensions avec sample-size guards + renormalization).
+  - **458 tests verts au close-out J6** (vs 317 fin J5, +141).
 - **Vitest setup** : `src/test/setup.ts` charge `@testing-library/jest-dom/vitest`. `vitest.config.ts` stub `DATABASE_URL`/`AUTH_SECRET`/`AUTH_URL` pour permettre les imports transitifs sans crash Zod.
 - **Playwright** (`pnpm --filter @fxmily/web test:e2e`) :
   - `tests/e2e/auth-invitation.spec.ts` (J1) — surface publique auth.
   - `tests/e2e/journal.spec.ts` (J2) — auth gates `/journal/*` + 401 sur `/api/uploads*` non-auth.
   - `tests/e2e/admin-annotation.spec.ts` (J4) — auth gates admin annotation routes + uploads.
   - `tests/e2e/checkin.spec.ts` (J5) — auth gates `/checkin/*` + 401/503 sur cron sans secret + 405 sur GET cron.
+  - `tests/e2e/recompute-scores.spec.ts` (J6) — cron `/api/cron/recompute-scores` 401/503/405 public surface.
   - Le full happy-path member (login → create → close → list / login → checkin → streak++) attend le helper de seed Postgres (cross-jalon).
 - Postgres réel attendu (testcontainers ou compose dédié `docker-compose.test.yml` à wirer plus tard).
 - Mock storage : pas besoin — `LocalStorageAdapter` écrit dans `<UPLOADS_DIR>` qu'on peut router vers un répertoire temporaire dans les tests E2E.
@@ -497,3 +502,79 @@ Total **TIER 1+2+3+4** : 27 fichiers nouveaux/modifiés, **317 tests verts** (+1
 - **J5.5 multi-TZ** : propager `User.timezone` dans le JWT + plumber dans les Server Actions (`submitMorningCheckin({ timezone })`). Aujourd'hui la valeur est hardcodée `Europe/Paris` dans les pages — V1 OK car tous les members FR.
 - **Tests E2E full** : le happy-path login → wizard → streak++ attend toujours le helper de seed Postgres cross-jalon. Public surface E2E couverte (auth gates).
 - **Apple Health / Whoop / Oura sync (V2)** : SPEC §6.4 reste manuel V1, mais le `DayPoint` schema + sleep zones diagram sont prêts pour passive ingestion plus tard (recherche 2026 montre que c'est le pattern dominant).
+
+## J6 — Dashboard track record & scoring comportemental (livré 2026-05-07)
+
+### Modèle de données
+
+- `BehavioralScore` (table `behavioral_scores`) — voir `prisma/schema.prisma` + migration `20260507124321_j6_behavioral_score`. 4 colonnes `Int?` nullable pour les scores (null = `insufficient_data`, pas de fake 0/100). 2 colonnes `Json` (`components` = breakdown sous-scores pour transparence UI ; `sample_size` = guards par dimension + counters). `windowDays` Int default 30 (Mark Douglas habit window). Cascade `User.delete`. Unique `(userId, date)` pour idempotency cron.
+
+### Analytics layer (`lib/analytics/`)
+
+Pure-functions, server-only, no DB. Mark Douglas posture: **toujours surfacer le sample size**, jamais mentir avec `n=4`. 94 tests TDD.
+
+- `wilson.ts` — `wilsonInterval(s, n, c='c95')` retourne `{point, lower, upper, sufficientSample}`. Formule asymétrique (n shrinkage) qui reste dans [0,1] aux boundaries. Z-scores pour 90/95/99%. Threshold UI `SUFFICIENT_SAMPLE_MIN = 20`. Match scipy.stats.proportion_confint à 1e-12.
+- `correlations.ts` — `pearson`, `spearman` (avec rankWithTies average-rank), `sampleVariance`/`sampleStdDev` Welford-stable, `coefficientOfVariation`, `median`. Min 8 paires pour `pearson`/`spearman`.
+- `expectancy.ts` — `computeExpectancy(trades)` retourne `{expectancyR, profitFactor, avgWinR, avgLossR, payoffRatio, winRate, lossRate, sampleSize}`. **Exclut `realizedRSource='estimated'` des magnitudes** (pas du win-rate). PF cap à 999 quand 0 perte. Reasons explicites `'no_trades'` / `'no_computed_trades'`.
+- `streaks.ts` — `computeMaxConsecutiveLoss(trades)` (chronologique, BE break le streak), `computeMaxConsecutiveWin`, `computeExpectedMaxConsecutiveLoss(n, lossRate)` formule `log(N)/log(1/LR)` (Van Tharp rule of thumb). Surface "variance normale ≠ edge cassé".
+- `equity-curve.ts` — `buildEquityCurve(trades)` retourne `[{ts, r, cumR, drawdownFromPeak}]` chronologique (filtre estimated, sort par exitedAt). Reports `estimatedExcluded` + `invalidExcluded`.
+- `drawdown.ts` — `computeMaxDrawdown(equityPoints)` single-pass O(n), retourne `{maxDrawdownR, peakAt, troughAt, inDrawdown, currentDrawdownR}`.
+
+### Scoring layer (`lib/scoring/`)
+
+4 dimensions pures avec poids = 100 chacune, sample-size guards, renormalization quand sub-score N/A. 47 tests TDD.
+
+- `discipline.ts` — 35 plan-respect + 20 hedge-respect + 25 evening-plan + 10 intention-filled + 10 routine-completed.
+- `emotional-stability.ts` — 40 mood-variance (Welford stdDev rescaled) + 25 stress-median + 20 negative-emotion-rate (slugs Douglas) + 15 recovery-after-loss (J+1 mood vs baseline). Min 14 mood-days.
+- `consistency.ts` — 35 expectancy-consistency + 25 profit-factor + 20 drawdown-control + 10 loss-streak-control + 10 session-focus (entropy). 0-trade member → null + `reason='no_trades'` (no fake 0/100).
+- `engagement.ts` — 50 fill-rate + 20 dual-slot + 20 streak-normalized (cap 30, anti-Snapchat) + 10 journal-depth.
+
+### Service (`lib/scoring/service.ts`)
+
+- `computeScoresForUser(userId, asOf?, options?)` — fetch trades + checkins en `Promise.all`, run 4 scorers, retourne `AllScoresResult` + `components` + `sampleSize`. Pure (pas de write).
+- `persistBehavioralScore(userId, date, components, sampleSize)` — upsert sur `(userId, date)`.
+- `recomputeAndPersist(userId, asOf?, options?)` — sugar combo.
+- `recomputeAllActiveMembers(now?)` — batch 25-by-25 avec `Promise.allSettled`. Anchor = yesterday-local in `User.timezone`.
+- `getLatestBehavioralScore(userId)` — dashboard read.
+
+### Cron (`app/api/cron/recompute-scores/route.ts`)
+
+Pattern J5 carbone — `verifyCronSecret` SHA-256 + `timingSafeEqual` (CWE-208) + `cronLimiter` token bucket (5 burst, 1/min) + 503 si pas de secret + 401/429/405 + `?at=ISO` dev override double-gated. POST → `recomputeAllActiveMembers` → 1 audit row `cron.recompute_scores.scan` avec `{computed, skipped, errors, ranAt}`.
+
+**Wiring prod** : `0 2 * * *` UTC sur Hetzner (J10 setup).
+
+### Dashboard data aggregator (`lib/scoring/dashboard-data.ts`)
+
+`getDashboardAnalytics(userId, timezone, range='30d', asOf?)` retourne `DashboardAnalytics` complet : expectancy + drawdown + equity-curve + R-distribution buckets + top 5 paires + session perf + emotion×outcome rows + streaks observés. Range converti en windowDays (`'7d'` → 7, `'all'` → 3650).
+
+### UI components (`components/scoring/`)
+
+Tous tone-aware sur design-system tokens (acc / cy / warn / bad). Recharts (no Tremor) pour bundle léger + full design control.
+
+- `<ScoreGauge>` (Client) — radial 0-100 SVG-natif, stroke-dashoffset animé via Framer Motion, fallback `insufficient_data` avec reason text. Score numérique statique (count-up retiré pour respecter `react-hooks/set-state-in-effect`).
+- `<ScoreGaugeGrid>` (Server) — 4× ScoreGauge + skeleton + empty state pédagogique.
+- `<SampleSizeDisclaimer>` (Server) — pill "12/30 jours" avec tone warn si insuffisant.
+- `<TrackRecordChart>` (Client) — Recharts `AreaChart` lime gradient + range tabs (7j/30j/3m/6m/all) wired via `useRouter.push` + `useTransition` (URL searchParams).
+- `<RDistribution>` (Client) — Recharts `BarChart`, buckets 0.5R, lime/red color-coded.
+- `<ExpectancyCard>` + `<DrawdownStreaksCard>` (Server) — strip 4-cellules avec sample-size pill.
+- `<PairTopFive>`, `<SessionPerfBars>`, `<EmotionPerfTable>` (Server, no client JS) — emotion table avec Wilson 95% CI par tag + sample-size pill `<20`.
+
+### Refonte `app/dashboard/page.tsx`
+
+- Server Component `force-dynamic` async, `searchParams: Promise<{ range?: string }>` parsing (Next.js 16).
+- `Promise.all` parallèle racine : counts + checkin status + streak + `getLatestBehavioralScore`.
+- Granular `<Suspense>` autour de `TrackRecordSection` + `PatternsSection` (sub-async-server-components qui font leur propre fetch). Fallback skeleton dimensionné.
+- Coming-soon section ne contient plus J6 (livré). J7 (MD library) + J8 (rapport IA) restent.
+- Mark Douglas card canonique TIER 4 préservée (no-touch).
+
+### Test data (`scripts/seed-j6-demo.ts`)
+
+`pnpm exec tsx scripts/seed-j6-demo.ts` provisions un demo admin (`j6demo.admin.e2e.test@fxmily.local` / `J6DemoPwd-2026!`) + 100 trades + 30 jours checkins déterministes (mulberry32 + Box-Muller, seed=42). Idempotent. Le score snapshot est calculé via le cron HTTP séparément (le service a `import 'server-only'` que tsx ne peut pas loader).
+
+### TODO J6 → J6.5+ / J7 / J9
+
+- **J6.5** (admin) : intégrer les scores du membre dans `/admin/members/[id]` onglet "Vue d'ensemble" (réutiliser `<ScoreGaugeGrid>`).
+- **J6.5** (smoke-tour visuel) : `tests/e2e/smoke-tour-j6.spec.ts` qui seed + login + capture screenshots du dashboard rendered avec data réelle. Le full happy-path nécessite `CRON_SECRET` configuré dans le `.env` du worktree pour faire le compute en live.
+- **J6.5** (revalidateTag wiring) : Server Actions `closeTradeAction` + `submitMorningCheckinAction` + `submitEveningCheckinAction` doivent appeler `revalidateTag('user:scores:'+userId)` ET `recomputeAndPersist(userId)` pour que le dashboard reflète immédiatement le dernier trade/checkin sans attendre le cron de la nuit.
+- **J7** (MD library) : la card MarkDouglas du dashboard reste statique TIER 4. La bibliothèque + déclencheurs contextuels (3 trades perdants → fiche tilt) sont J7.
+- **J8** (rapport hebdo IA) : agrège trades + checkins + scores de la semaine pour Claude prompt. Indexes `(userId, date desc)` sur `daily_checkins` et `behavioral_scores` sont déjà là.

@@ -61,23 +61,22 @@ export const authConfig = {
     /**
      * Persist role + status in the JWT so the `proxy` and Server Components
      * can authorize without an extra DB round trip.
+     *
+     * Audit J5 fix (security HIGH H3): the previous `trigger === 'update'`
+     * branch accepted client-supplied `session.role` / `session.status` and
+     * wrote them straight into the token — privilege escalation hole. A
+     * non-admin authenticated member could call `useSession().update({ role:
+     * 'admin' })` and earn full admin access until token expiry. The branch
+     * is REMOVED on purpose: there is no current call site for `update()`
+     * in the app, and any future need to refresh role/status will flow
+     * through `signIn()` again (re-issues a JWT from DB) or via a Node-side
+     * `jwt` override in `auth.ts` that re-fetches from Prisma.
      */
-    jwt({ token, user, trigger, session }) {
+    jwt({ token, user }) {
       if (user) {
         token.role = user.role;
         token.status = user.status;
         if (user.id) token.sub = user.id;
-      }
-      // Allow `update()` from the client to refresh role/status without
-      // re-logging in (e.g. after admin changes a member's status).
-      if (trigger === 'update' && session && typeof session === 'object') {
-        const next = session as Record<string, unknown>;
-        if (typeof next.role === 'string') {
-          token.role = next.role as NonNullable<typeof token.role>;
-        }
-        if (typeof next.status === 'string') {
-          token.status = next.status as NonNullable<typeof token.status>;
-        }
       }
       return token;
     },

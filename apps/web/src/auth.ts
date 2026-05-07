@@ -68,6 +68,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
             passwordHash: true,
             role: true,
             status: true,
+            timezone: true,
           },
         });
 
@@ -119,6 +120,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           image: user.image,
           role: user.role as UserRole,
           status: user.status as UserStatus,
+          timezone: user.timezone,
         };
       },
     }),

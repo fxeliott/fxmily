@@ -14,7 +14,7 @@ export default async function EveningCheckinPage() {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
 
-  const timezone = 'Europe/Paris'; // TODO J5.5: read from session.user.timezone
+  const timezone = session.user.timezone || 'Europe/Paris';
   const today = todayFor(timezone);
 
   return (

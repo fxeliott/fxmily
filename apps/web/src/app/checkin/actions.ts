@@ -79,7 +79,9 @@ export async function submitMorningCheckinAction(
   }
 
   try {
-    const row = await submitMorningCheckin(session.user.id, parsed.data);
+    const row = await submitMorningCheckin(session.user.id, parsed.data, {
+      timezone: session.user.timezone,
+    });
     await logAudit({
       action: 'checkin.morning.submitted',
       userId: session.user.id,
@@ -148,7 +150,9 @@ export async function submitEveningCheckinAction(
   }
 
   try {
-    const row = await submitEveningCheckin(session.user.id, parsed.data);
+    const row = await submitEveningCheckin(session.user.id, parsed.data, {
+      timezone: session.user.timezone,
+    });
     await logAudit({
       action: 'checkin.evening.submitted',
       userId: session.user.id,

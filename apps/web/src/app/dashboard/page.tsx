@@ -62,7 +62,8 @@ export default async function DashboardPage() {
   if (!session?.user) redirect('/login');
 
   const userId = session.user.id;
-  const timezone = 'Europe/Paris'; // TODO J5.5: read from session.user.timezone
+  // J5.5 — read timezone from the JWT-backed session (default Europe/Paris).
+  const timezone = session.user.timezone || 'Europe/Paris';
   const [counts, checkinStatus, streak] = userId
     ? await Promise.all([
         countTradesByStatus(userId),

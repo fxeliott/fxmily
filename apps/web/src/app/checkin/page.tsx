@@ -4,9 +4,10 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { StreakCard } from '@/components/checkin/streak-card';
+import { TrendCard } from '@/components/checkin/trend-card';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
-import { getCheckinStatus, getStreak } from '@/lib/checkin/service';
+import { getCheckinStatus, getLast7Days, getStreak } from '@/lib/checkin/service';
 import { formatLocalDate } from '@/lib/checkin/timezone';
 import { cn } from '@/lib/utils';
 
@@ -29,9 +30,10 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
   const timezone = 'Europe/Paris'; // SPEC §6.1 — User.timezone defaults here.
   // Note: when the JWT exposes user.timezone (J5+) we'll source it from session.
 
-  const [status, streak] = await Promise.all([
+  const [status, streak, last7] = await Promise.all([
     getCheckinStatus(userId, timezone),
     getStreak(userId, timezone),
+    getLast7Days(userId, timezone),
   ]);
 
   const params = await searchParams;
@@ -67,6 +69,8 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
       {justDone && justDoneSlot ? <DoneBanner slot={justDoneSlot} streak={streak.current} /> : null}
 
       <StreakCard streak={streak.current} todayFilled={streak.todayFilled} />
+
+      <TrendCard days={last7} />
 
       <section className="grid gap-4 sm:grid-cols-2">
         <SlotCard slot="morning" submitted={status.morningSubmitted} href="/checkin/morning" />

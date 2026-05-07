@@ -286,7 +286,12 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
               id="checkin-heading"
               ref={headingRef}
               tabIndex={-1}
-              className="f-display text-[20px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--t-1)] sm:text-[24px]"
+              // Programmatic-focus heading: SR users navigate to it on each
+              // step transition, but the global outline rule would draw a
+              // lime ring around the title which is visually parasitic and
+              // not actionable (you don't "activate" an h1). Keep the focus
+              // discoverable to AT, hidden visually. Audit J5 H3.
+              className="f-display text-[20px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--t-1)] outline-none focus-visible:outline-none sm:text-[24px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               {STEP_TITLES[step]}

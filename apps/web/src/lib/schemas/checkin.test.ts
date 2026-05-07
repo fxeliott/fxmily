@@ -110,9 +110,9 @@ describe('morningCheckinSchema', () => {
     ).toBe(true);
   });
 
-  it('treats empty intention as undefined', () => {
+  it('treats empty intention as null (aligned with DB column type)', () => {
     const r = morningCheckinSchema.parse({ ...validMorning, intention: '' });
-    expect(r.intention).toBeUndefined();
+    expect(r.intention).toBeNull();
   });
 
   it('treats empty sportType / sportDurationMin as nulls', () => {
@@ -275,7 +275,7 @@ describe('eveningCheckinSchema', () => {
     });
     expect(r.caffeineMl).toBeNull();
     expect(r.waterLiters).toBeNull();
-    expect(r.journalNote).toBeUndefined();
+    expect(r.journalNote).toBeNull();
   });
 
   it('rejects unknown emotion slugs', () => {

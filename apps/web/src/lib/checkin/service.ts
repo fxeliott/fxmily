@@ -174,7 +174,7 @@ export async function submitMorningCheckin(
     meditationMin: input.meditationMin,
     sportType: input.sportType,
     sportDurationMin: input.sportDurationMin,
-    intention: input.intention ?? null,
+    intention: input.intention,
     moodScore: input.moodScore,
     emotionTags: input.emotionTags,
     submittedAt: new Date(),
@@ -209,7 +209,7 @@ export async function submitEveningCheckin(
     stressScore: input.stressScore,
     moodScore: input.moodScore,
     emotionTags: input.emotionTags,
-    journalNote: input.journalNote ?? null,
+    journalNote: input.journalNote,
     gratitudeItems: input.gratitudeItems,
     submittedAt: new Date(),
   };

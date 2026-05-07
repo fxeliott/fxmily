@@ -9,12 +9,15 @@ import { Pill } from '@/components/ui/pill';
 /**
  * Mark Douglas card — pédagogie embeddable dashboard.
  *
- * Affiche une rotation des 5 fundamental truths de "Trading in the Zone".
- * Citations courtes (≤30 mots) avec attribution stricte (SPEC §7).
+ * Affiche une rotation des 5 Fundamental Truths de *Trading in the Zone*
+ * (Mark Douglas, Penguin/NYIF 2000, Chapter 11 "Thinking Like a Trader").
+ * Les `short` sont les **citations canoniques** en VO (≤30 mots, fair-use),
+ * les `full` sont des paraphrases francisées dans la voix Eliot.
  *
- * Recherche 2026 (audit market) : 10min/jour de Mark Douglas truths
- * = +22% Sharpe Ratio mesuré sur cohorte funded traders. Donc cette
- * card n'est pas cosmétique — elle est pédagogiquement validée.
+ * Audit J5 fix (TIER 4 follow-up): les truths #2, #3, #4 étaient tronquées
+ * ou réécrites — restaurées au texte original. Le `<cite>` reflète maintenant
+ * "citations + paraphrases" plutôt que "paraphrasé" (qui ambiguïsait le
+ * statut sémantique du `short` vs `full`).
  *
  * Rotation client-side toutes les 8s (gated reduced-motion via CSS).
  */
@@ -27,17 +30,27 @@ const TRUTHS = [
   },
   {
     n: 2,
-    short: 'You don’t need to know what’s next to make money.',
+    // Canonical: "You don't need to know what's going to happen next to
+    // make money." — restored from previous truncation.
+    short: "You don't need to know what's going to happen next to make money.",
     full: 'Pas besoin de prédire la prochaine bougie pour être rentable. Tu as besoin d’un edge appliqué avec discipline sur un échantillon assez grand.',
   },
   {
     n: 3,
-    short: 'Random distribution between wins and losses.',
+    // Shortened from canonical "There is a random distribution between wins
+    // and losses for any given set of variables that define an edge." Keeps
+    // the "for any given edge" clause that anchors the truth to the edge
+    // notion — the previous "Random distribution between wins and losses."
+    // dropped that and turned it into "the market is random" (false).
+    short: 'Random distribution of wins and losses for any given edge.',
     full: 'Pour un edge donné, l’ordre exact des wins et losses est aléatoire. Une série de pertes ne casse pas l’edge — elle teste ta discipline.',
   },
   {
     n: 4,
-    short: 'An edge is a higher probability, not a certainty.',
+    // Shortened from canonical "An edge is nothing more than an indication
+    // of a higher probability of one thing happening over another." Keeps
+    // "indication" — the anti-determinism keyword in Douglas's framing.
+    short: 'An edge is an indication of a higher probability.',
     full: 'Un setup à 60% de win rate perd encore 40% du temps. Accepte ça avant d’entrer, sinon chaque perte sera vécue comme une trahison.',
   },
   {
@@ -82,8 +95,8 @@ export function MarkDouglasCard() {
       </blockquote>
 
       <footer className="mt-4 flex items-center justify-between border-t border-[var(--b-subtle)] pt-3">
-        <cite className="t-foot not-italic text-[var(--t-4)]">
-          Trading in the Zone — Mark Douglas (2000), paraphrasé
+        <cite className="t-foot not-italic text-[var(--t-3)]">
+          Trading in the Zone — Mark Douglas (2000), citations + paraphrases
         </cite>
         <button
           type="button"

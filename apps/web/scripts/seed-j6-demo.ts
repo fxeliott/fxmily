@@ -17,13 +17,13 @@
  * touches real members.
  */
 
-import { db } from '../src/lib/db.ts';
+import { db } from '../src/lib/db.js';
 import {
   cleanupTestUsers,
   seedAdminUser,
   seedCheckinHistory,
   seedTradeHistory,
-} from '../src/test/db-helpers.ts';
+} from '../src/test/db-helpers.js';
 
 const DEMO_EMAIL = 'j6demo.admin.e2e.test@fxmily.local';
 const DEMO_PASSWORD = 'J6DemoPwd-2026!';

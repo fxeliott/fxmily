@@ -7,7 +7,7 @@
 
 Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — front + API + service worker (PWA, Jalon 9).
 
-État au 2026-05-07 : **J0 + J1 + J2 + J3 + J4 + J5 + J6 livrés** (J6 = dashboard membre + scoring comportemental + cron nightly + patterns émotion×perf).
+État au 2026-05-07 : **J0 + J1 + J2 + J3 + J4 + J5 + J6 + J6.5 livrés** (J6 = dashboard membre + scoring comportemental + cron nightly + patterns ; J6.5 = live recompute via `after()` + admin scores integration + smoke-tour visuel + audit-driven hardening).
 
 ## Aliases d'import
 

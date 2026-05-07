@@ -1,14 +1,35 @@
-import { ArrowRight, BookOpen, Check, LogOut, Moon, Plus, Shield, Sun, Users } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpen,
+  Check,
+  LineChart as LineChartIcon,
+  LogOut,
+  Moon,
+  Plus,
+  Shield,
+  Sun,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 
 import { auth, signOut } from '@/auth';
 import { StreakCard } from '@/components/checkin/streak-card';
+import { EmotionPerfTable } from '@/components/scoring/emotion-perf-table';
+import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
+import { PairTopFive } from '@/components/scoring/pair-top-five';
+import { RDistribution } from '@/components/scoring/r-distribution';
+import { ScoreGaugeGrid, ScoreGaugeGridSkeleton } from '@/components/scoring/score-gauge-grid';
+import { SessionPerfBars } from '@/components/scoring/session-perf-bars';
+import { TrackRecordChart } from '@/components/scoring/track-record-chart';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Kbd } from '@/components/ui/kbd';
 import { Pill } from '@/components/ui/pill';
 import { getCheckinStatus, getStreak } from '@/lib/checkin/service';
+import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
+import { getLatestBehavioralScore } from '@/lib/scoring/service';
 import { countTradesByStatus } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
 
@@ -17,15 +38,16 @@ import { MarkDouglasCard } from './mark-douglas-card';
 export const metadata = {
   title: 'Tableau de bord · Fxmily',
 };
+export const dynamic = 'force-dynamic';
 
 const PARIS_TZ = 'Europe/Paris';
 
-/**
- * Renders today's date in French anchored to Europe/Paris — NOT to the
- * server's wall clock. The Hetzner host runs in UTC, so a naive
- * `now.getDay()` would tell Eliot it's already tomorrow during the 22h-00h
- * window. Audit J5 H4 fix.
- */
+const VALID_RANGES = new Set<RangeKey>(['7d', '30d', '3m', '6m', 'all']);
+
+function parseRange(input: string | undefined): RangeKey {
+  return input && VALID_RANGES.has(input as RangeKey) ? (input as RangeKey) : '30d';
+}
+
 function frenchToday(now = new Date()): string {
   const fmt = new Intl.DateTimeFormat('fr-FR', {
     timeZone: PARIS_TZ,
@@ -34,16 +56,10 @@ function frenchToday(now = new Date()): string {
     month: 'long',
     year: 'numeric',
   });
-  // Capitalize the leading weekday for visual rhythm.
   const raw = fmt.format(now);
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
-/**
- * Time-of-day greeting computed in Europe/Paris (same rationale as
- * `frenchToday`): a member opening the dashboard at 22h Paris should see
- * "Bonsoir", not whatever the Hetzner UTC clock thinks.
- */
 function greeting(now = new Date()): string {
   const fmt = new Intl.DateTimeFormat('en-GB', {
     timeZone: PARIS_TZ,
@@ -57,23 +73,31 @@ function greeting(now = new Date()): string {
   return 'Bonsoir';
 }
 
-export default async function DashboardPage() {
+interface DashboardPageProps {
+  searchParams: Promise<{ range?: string }>;
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
   const userId = session.user.id;
-  // J5.5 — read timezone from the JWT-backed session (default Europe/Paris).
   const timezone = session.user.timezone || 'Europe/Paris';
-  const [counts, checkinStatus, streak] = userId
+  const sp = await searchParams;
+  const range = parseRange(sp?.range);
+
+  const [counts, checkinStatus, streak, latestScore] = userId
     ? await Promise.all([
         countTradesByStatus(userId),
         getCheckinStatus(userId, timezone),
         getStreak(userId, timezone),
+        getLatestBehavioralScore(userId),
       ])
     : [
         { open: 0, closed: 0 },
         { today: '', morningSubmitted: false, eveningSubmitted: false },
         { current: 0, todayFilled: false, today: '' },
+        null,
       ];
 
   const fullName = session.user.name?.trim() || session.user.email?.split('@')[0] || 'Membre';
@@ -130,7 +154,7 @@ export default async function DashboardPage() {
           </p>
         </section>
 
-        {/* KPI strip 4-cell — vraies données J0-J3 (counts only ; analytics J6) */}
+        {/* KPI strip 4-cell — counts + streak */}
         <section className="mb-6">
           <div className="border-edge-top rounded-card relative grid grid-cols-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] shadow-[var(--sh-card)] sm:grid-cols-4">
             <KpiCell
@@ -200,9 +224,64 @@ export default async function DashboardPage() {
           <StreakCard streak={streak.current} todayFilled={streak.todayFilled} />
         </section>
 
-        {/* 2-col layout : Quick actions + Mark Douglas */}
+        {/* J6 — Behavioral scores (4 gauges) */}
+        <section className="mb-6">
+          <Suspense fallback={<ScoreGaugeGridSkeleton />}>
+            <ScoreGaugeGrid score={latestScore} />
+          </Suspense>
+        </section>
+
+        {/* J6 — Track record (R cumulé + R-dist + expectancy + DD) */}
+        <section className="mb-6 flex flex-col gap-3" aria-labelledby="track-record-heading">
+          <div className="flex items-center gap-2">
+            <LineChartIcon
+              className="h-3.5 w-3.5 text-[var(--t-3)]"
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            <h2 id="track-record-heading" className="t-eyebrow">
+              Track record
+            </h2>
+            <Pill tone="acc" dot="live">
+              ACTIF
+            </Pill>
+          </div>
+          <Suspense
+            fallback={
+              <div
+                className="rounded-card-lg skel h-[300px] border border-[var(--b-default)] bg-[var(--bg-1)]"
+                aria-busy="true"
+              />
+            }
+          >
+            <TrackRecordSection userId={userId!} timezone={timezone} range={range} />
+          </Suspense>
+        </section>
+
+        {/* J6 — Patterns (emotion×outcome + sessions + paires) */}
+        <section className="mb-6 flex flex-col gap-3" aria-labelledby="patterns-heading">
+          <div className="flex items-center gap-2">
+            <h2 id="patterns-heading" className="t-eyebrow">
+              Patterns
+            </h2>
+            <Pill tone="acc" dot="live">
+              ACTIF
+            </Pill>
+          </div>
+          <Suspense
+            fallback={
+              <div
+                className="rounded-card-lg skel h-[260px] border border-[var(--b-default)] bg-[var(--bg-1)]"
+                aria-busy="true"
+              />
+            }
+          >
+            <PatternsSection userId={userId!} timezone={timezone} range={range} />
+          </Suspense>
+        </section>
+
+        {/* Mark Douglas card (canonical TIER 4) */}
         <section className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-          {/* Quick actions card */}
           <Card primary className="flex flex-col gap-4 p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
@@ -231,7 +310,6 @@ export default async function DashboardPage() {
             </div>
           </Card>
 
-          {/* Mark Douglas card (client component, 5 truths rotation) */}
           <MarkDouglasCard />
         </section>
 
@@ -287,12 +365,7 @@ export default async function DashboardPage() {
             <BookOpen className="h-3.5 w-3.5 text-[var(--t-3)]" strokeWidth={1.75} />
             <span className="t-eyebrow">Bientôt</span>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <ComingSoonCard
-              title="Track record"
-              jalon="J6"
-              desc="4 scores, R cumulé, patterns émotion×perf."
-            />
+          <div className="grid gap-3 sm:grid-cols-2">
             <ComingSoonCard
               title="Bibliothèque MD"
               jalon="J7"
@@ -319,6 +392,63 @@ export default async function DashboardPage() {
     </main>
   );
 }
+
+// ----- J6 sections (server async) ------------------------------------------
+
+async function TrackRecordSection({
+  userId,
+  timezone,
+  range,
+}: {
+  userId: string;
+  timezone: string;
+  range: RangeKey;
+}) {
+  const analytics = await getDashboardAnalytics(userId, timezone, range);
+  return (
+    <div className="grid gap-3 lg:grid-cols-[1.6fr_1fr]">
+      <TrackRecordChart
+        data={analytics.equity.points}
+        estimatedExcluded={analytics.equity.estimatedExcluded}
+        range={range}
+      />
+      <div className="flex flex-col gap-3">
+        <ExpectancyCard expectancy={analytics.expectancy} />
+        <DrawdownStreaksCard
+          drawdown={analytics.drawdown}
+          observedMaxLoss={analytics.streaks.observedMaxLoss}
+          observedMaxWin={analytics.streaks.observedMaxWin}
+        />
+      </div>
+      <div className="lg:col-span-2">
+        <RDistribution buckets={analytics.rDistribution} />
+      </div>
+    </div>
+  );
+}
+
+async function PatternsSection({
+  userId,
+  timezone,
+  range,
+}: {
+  userId: string;
+  timezone: string;
+  range: RangeKey;
+}) {
+  const analytics = await getDashboardAnalytics(userId, timezone, range);
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      <EmotionPerfTable rows={analytics.emotionPerf} totalTrades={analytics.closedCount} />
+      <SessionPerfBars sessions={analytics.sessionPerf} />
+      <div className="lg:col-span-2">
+        <PairTopFive pairs={analytics.pairTopFive} />
+      </div>
+    </div>
+  );
+}
+
+// ----- KPI / chip / placeholder cells ---------------------------------------
 
 function KpiCell({
   label,

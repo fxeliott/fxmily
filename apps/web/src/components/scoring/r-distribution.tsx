@@ -1,9 +1,19 @@
 'use client';
 
 import { motion, useReducedMotion } from 'framer-motion';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 import type { RDistributionBucket } from '@/lib/scoring/dashboard-data';
+import { C } from '@/lib/theme-colors';
 
 /**
  * Histogram of R-multiples grouped in 0.5R buckets, clipped to [-3R, +3R+].
@@ -19,10 +29,12 @@ interface RDistributionProps {
 
 export function RDistribution({ buckets }: RDistributionProps) {
   const prefersReducedMotion = useReducedMotion();
+  // J6.6 BLOCKER B1 fix — hex literals (Safari fill bug). Floating-point
+  // epsilon test for the "0R" bucket boundary.
   const data = buckets.map((b) => ({
     label: b.label,
     count: b.count,
-    fill: b.from < 0 ? 'var(--bad)' : b.from < 0.001 ? 'var(--t-4)' : 'var(--acc)',
+    fill: b.from < 0 ? C.bad : b.from < 0.001 ? C.t4 : C.acc,
   }));
 
   const total = buckets.reduce((s, b) => s + b.count, 0);
@@ -63,32 +75,34 @@ export function RDistribution({ buckets }: RDistributionProps) {
           </figcaption>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 4, right: 0, left: -24, bottom: 0 }}>
-              <CartesianGrid stroke="var(--b-subtle)" strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid stroke={C.bSubtle} strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="label"
-                stroke="var(--t-4)"
-                tick={{ fontSize: 9, fill: 'var(--t-4)' }}
+                stroke={C.t4}
+                // J6.6 H5 fix — bumped from 9px (zoom-200 violator) to 11px.
+                tick={{ fontSize: 11, fill: C.t4 }}
                 tickLine={false}
                 axisLine={false}
                 interval={1}
               />
               <YAxis
-                stroke="var(--t-4)"
-                tick={{ fontSize: 10, fill: 'var(--t-4)' }}
+                stroke={C.t4}
+                tick={{ fontSize: 11, fill: C.t4 }}
                 tickLine={false}
                 axisLine={false}
                 width={32}
                 allowDecimals={false}
               />
               <Tooltip
-                cursor={{ fill: 'var(--bg-2)' }}
+                cursor={{ fill: C.bg2 }}
                 contentStyle={{
-                  background: 'var(--bg-2)',
-                  border: '1px solid var(--b-default)',
+                  background: C.bg3,
+                  border: `1px solid ${C.bDefault}`,
                   borderRadius: 8,
-                  fontSize: 11,
+                  fontSize: 12,
                 }}
-                labelStyle={{ color: 'var(--t-3)' }}
+                labelStyle={{ color: C.t2 }}
+                itemStyle={{ color: C.t1 }}
                 formatter={(value) => {
                   const v = typeof value === 'number' ? value : Number(value);
                   return [`${Number.isFinite(v) ? v : 0} trades`, ''];
@@ -99,7 +113,13 @@ export function RDistribution({ buckets }: RDistributionProps) {
                 radius={[3, 3, 0, 0]}
                 isAnimationActive={!prefersReducedMotion}
                 animationDuration={900}
-              />
+              >
+                {/* Per-cell fill — bypasses the data-driven `fill` field
+                    (Recharts ignores it on Bar in some versions). */}
+                {data.map((entry, idx) => (
+                  <Cell key={idx} fill={entry.fill} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </figure>

@@ -13,6 +13,7 @@ import {
   YAxis,
 } from 'recharts';
 
+import { C } from '@/lib/theme-colors';
 import { cn } from '@/lib/utils';
 
 import type { RangeKey } from '@/lib/scoring/dashboard-data';
@@ -97,8 +98,9 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
               aria-pressed={range === r}
               onClick={() => setRange(r)}
               disabled={pending && range !== r}
+              // J6.6 H6 fix — touch target >= 32px height (WCAG 2.5.8 AA min 24).
               className={cn(
-                'rounded-pill border px-2.5 py-1 text-[11px] font-medium transition-colors',
+                'rounded-pill inline-flex min-h-[32px] items-center border px-3 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-50',
                 range === r
                   ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)]'
                   : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:text-[var(--t-1)]',
@@ -116,10 +118,15 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
         </div>
       ) : (
         <figure
-          className="h-[260px] w-full"
+          className={cn(
+            'h-[260px] w-full transition-opacity',
+            // J6.6 BLOCKER B2 fix — visible loading state during URL transition.
+            pending && 'opacity-60',
+          )}
           role="img"
           aria-labelledby="track-record-title"
           aria-describedby="track-record-summary"
+          aria-busy={pending}
         >
           {/* SR-only summary — closes A11y audit B1 (Recharts SVG without text alt) */}
           <figcaption id="track-record-summary" className="sr-only">
@@ -131,37 +138,40 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={formatted} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
               <defs>
+                {/* J6.6 BLOCKER B1 fix — hex literals instead of var(--token) so
+                    Safari/iOS WebView resolves the gradient correctly. */}
                 <linearGradient id="cumR-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--acc)" stopOpacity={0.5} />
-                  <stop offset="100%" stopColor="var(--acc)" stopOpacity={0} />
+                  <stop offset="0%" stopColor={C.acc} stopOpacity={0.5} />
+                  <stop offset="100%" stopColor={C.acc} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="var(--b-subtle)" strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid stroke={C.bSubtle} strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="date"
-                stroke="var(--t-4)"
-                tick={{ fontSize: 10, fill: 'var(--t-4)' }}
+                stroke={C.t4}
+                tick={{ fontSize: 11, fill: C.t4 }}
                 tickLine={false}
                 axisLine={false}
                 interval="preserveStartEnd"
                 minTickGap={24}
               />
               <YAxis
-                stroke="var(--t-4)"
-                tick={{ fontSize: 10, fill: 'var(--t-4)' }}
+                stroke={C.t4}
+                tick={{ fontSize: 11, fill: C.t4 }}
                 tickLine={false}
                 axisLine={false}
                 width={40}
               />
               <Tooltip
-                cursor={{ stroke: 'var(--b-strong)', strokeDasharray: '3 3' }}
+                cursor={{ stroke: C.bStrong, strokeDasharray: '3 3' }}
                 contentStyle={{
-                  background: 'var(--bg-2)',
-                  border: '1px solid var(--b-default)',
+                  background: C.bg3,
+                  border: `1px solid ${C.bDefault}`,
                   borderRadius: 8,
-                  fontSize: 11,
+                  fontSize: 12,
                 }}
-                labelStyle={{ color: 'var(--t-3)' }}
+                labelStyle={{ color: C.t2 }}
+                itemStyle={{ color: C.t1 }}
                 formatter={(value, name) => {
                   const v = typeof value === 'number' ? value : Number(value);
                   if (!Number.isFinite(v)) return ['—', String(name)];
@@ -173,7 +183,7 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
               <Area
                 type="monotone"
                 dataKey="cumR"
-                stroke="var(--acc)"
+                stroke={C.acc}
                 strokeWidth={2}
                 fill="url(#cumR-fill)"
                 isAnimationActive={!prefersReducedMotion}

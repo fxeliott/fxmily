@@ -469,6 +469,13 @@ Trois fixes haut-impact ajoutés après le push initial :
 - **Security MEDIUM M5 FIXÉ** (`e73c67c`) : nouveau helper `lib/text/safe.ts` (`safeFreeText` + `containsBidiOrZeroWidth` + `graphemeCount`, 19 tests TDD) appliqué sur `intention` / `journalNote` / `gratitudeItems` / `sportType`. NFC normalize + strip 8 control chars (zero-width, BOM, legacy + modern bidi). **Bloque le vecteur Trojan Source pour le futur prompt Claude J8** (RTL override invisible qui réordonne l'output LLM).
 - **A11y HIGH H1 + H7 FIXÉ** (`ce0291a`) : touch targets emotion chips bumpés `min-h-9` → `min-h-11` (44px WCAG 2.5.5 AAA). `tabIndex={-1}` sur les chips inert (cap atteint) — sortis du tab order, restent visibles + announced.
 
+### J5.5 — propagation timezone JWT + dernières finitions (post TIER 4)
+
+Deux commits qui ferment les J5.5 backlog items immédiats :
+
+- **JWT TZ claim plumbing** (`e4e0390`) : `User.timezone` est désormais sourcée du JWT-backed `session.user.timezone` dans toutes les pages (`/dashboard`, `/checkin`, `/checkin/morning`, `/checkin/evening`) + Server Actions (`submitMorning/EveningCheckinAction`). Élimine 4 hardcodes `'Europe/Paris'` qui restaient. Backwards-compat : sessions JWT pré-fix gardent le default `Europe/Paris` jusqu'au prochain login. Vraiment multi-TZ-ready maintenant.
+- **A11y heading + null/undefined alignment** (`a7de07f`) : `<h1>` programmatic-focus du wizard a `outline-none focus-visible:outline-none` (le SR garde le focus, pas d'artefact visuel). Schémas Zod `intention` + `journalNote` émettent `null` directement (pas `undefined`) — aligne avec le type colonne nullable text + `exactOptionalPropertyTypes` strict du tsconfig. Service drop le `?? null`. Tests adaptés.
+
 ### TIER 4 fixes appliqués (premium polish + dernières surfaces sécurité)
 
 Six fixes additionnels après TIER 3 qui ferment les UI BLOCKER B1+N2 et les 2 dernières surfaces sécurité :

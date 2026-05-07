@@ -35,7 +35,9 @@ export function RDistribution({ buckets }: RDistributionProps) {
       className="rounded-card-lg flex flex-col gap-2 border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="t-eyebrow">Distribution R</span>
+        <span className="t-eyebrow" id="r-dist-title">
+          Distribution R
+        </span>
         <span className="t-mono-cap text-[var(--t-4)]">{total} trades</span>
       </div>
       {total === 0 ? (
@@ -43,7 +45,22 @@ export function RDistribution({ buckets }: RDistributionProps) {
           <span className="t-cap">Pas encore de trades clôturés.</span>
         </div>
       ) : (
-        <div className="h-[200px] w-full">
+        <figure
+          className="h-[200px] w-full"
+          role="img"
+          aria-labelledby="r-dist-title"
+          aria-describedby="r-dist-summary"
+        >
+          {/* SR-only summary — closes A11y audit B1 */}
+          <figcaption id="r-dist-summary" className="sr-only">
+            Histogramme des R-multiples sur {total} trades clôturés (source computed seulement).
+            Buckets de 0.5R de -3R à +3R+.
+            {data
+              .filter((b) => b.count > 0)
+              .map((b) => `${b.label}: ${b.count} trades`)
+              .join(', ')}
+            .
+          </figcaption>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 4, right: 0, left: -24, bottom: 0 }}>
               <CartesianGrid stroke="var(--b-subtle)" strokeDasharray="3 3" vertical={false} />
@@ -85,7 +102,7 @@ export function RDistribution({ buckets }: RDistributionProps) {
               />
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </figure>
       )}
     </motion.div>
   );

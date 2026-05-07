@@ -162,7 +162,7 @@ export async function createTradeAction(
 
   revalidatePath('/journal');
   revalidatePath('/dashboard');
-  scheduleScoreRecompute(session.user.id, 'trade.created');
+  scheduleScoreRecompute(session.user.id, 'trade.created', session.user.timezone || 'Europe/Paris');
 
   // Navigate. We never reach the function's normal return on the success path.
   try {
@@ -242,7 +242,7 @@ export async function closeTradeAction(
   revalidatePath('/journal');
   revalidatePath(`/journal/${tradeId}`);
   revalidatePath('/dashboard');
-  scheduleScoreRecompute(session.user.id, 'trade.closed');
+  scheduleScoreRecompute(session.user.id, 'trade.closed', session.user.timezone || 'Europe/Paris');
 
   try {
     redirect(`/journal/${tradeId}`);
@@ -275,7 +275,7 @@ export async function deleteTradeAction(tradeId: string): Promise<DeleteTradeAct
 
   revalidatePath('/journal');
   revalidatePath('/dashboard');
-  scheduleScoreRecompute(session.user.id, 'trade.deleted');
+  scheduleScoreRecompute(session.user.id, 'trade.deleted', session.user.timezone || 'Europe/Paris');
 
   try {
     redirect('/journal');

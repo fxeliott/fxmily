@@ -26,9 +26,9 @@ export default defineConfig({
   reporter: process.env.CI ? [['github'], ['list']] : [['list']],
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    trace: process.env.PLAYWRIGHT_CAPTURE === 'all' ? 'on' : 'retain-on-failure',
+    screenshot: process.env.PLAYWRIGHT_CAPTURE === 'all' ? 'on' : 'only-on-failure',
+    video: process.env.PLAYWRIGHT_CAPTURE === 'all' ? 'on' : 'retain-on-failure',
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },

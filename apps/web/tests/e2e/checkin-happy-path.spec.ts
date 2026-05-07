@@ -66,7 +66,9 @@ test.describe('J5 — checkin happy path', () => {
 
     // ─── Step 2 (Routine matinale) ─────────────────────────────────────
     await expect(page.getByRole('heading', { name: /Routine matinale/i })).toBeVisible();
-    await page.getByRole('radio', { name: /Oui/i }).first().check();
+    // Radios are visually-hidden (`sr-only`) — click the wrapping <label>
+    // text instead of trying to drive the input directly.
+    await page.locator('label').filter({ hasText: /^Oui$/i }).first().click();
     await page.getByRole('button', { name: /Suivant/i }).click();
 
     // ─── Step 3 (Corps) ─────────────────────────────────────────────────
@@ -94,7 +96,7 @@ test.describe('J5 — checkin happy path', () => {
     expect(row).not.toBeNull();
     expect(row).toMatchObject({
       slot: 'morning',
-      sleepHours: '7.50',
+      sleepHours: '7.5', // Prisma Decimal(4,2) trims trailing zeros on read
       sleepQuality: 6,
       morningRoutineCompleted: true,
       meditationMin: 0,
@@ -117,7 +119,9 @@ test.describe('J5 — checkin happy path', () => {
     await page.goto('/checkin/morning');
     await page.getByLabel(/Heures de sommeil/i).fill('8');
     await page.getByRole('button', { name: /Suivant/i }).click();
-    await page.getByRole('radio', { name: /Oui/i }).first().check();
+    // Radios are visually-hidden (`sr-only`) — click the wrapping <label>
+    // text instead of trying to drive the input directly.
+    await page.locator('label').filter({ hasText: /^Oui$/i }).first().click();
     await page.getByRole('button', { name: /Suivant/i }).click();
     await page.getByRole('button', { name: /Suivant/i }).click();
     await page.getByRole('button', { name: /Suivant/i }).click();
@@ -126,11 +130,12 @@ test.describe('J5 — checkin happy path', () => {
 
     // Step 2 — go submit evening.
     await page.goto('/checkin/evening');
-    await page.getByRole('radio', { name: /^Oui$/i }).first().check();
+    await page.locator('label').filter({ hasText: /^Oui$/i }).first().click();
     await page
-      .getByRole('radio', { name: /^N\/A$/i })
+      .locator('label')
+      .filter({ hasText: /^N\/A$/i })
       .first()
-      .check();
+      .click();
     await page.getByRole('button', { name: /Suivant/i }).click();
     // Hydratation step — leave optional fields empty.
     await page.getByRole('button', { name: /Suivant/i }).click();

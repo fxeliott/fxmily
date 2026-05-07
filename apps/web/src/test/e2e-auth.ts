@@ -80,12 +80,18 @@ export async function loginAs(
     );
   }
 
+  // Playwright `addCookies` accepts either { url } OR { domain + path }.
+  // The cookie object from `storageState` carries both, but mixing them with
+  // a fresh `url` triggers "Cookie should have either url or domain". Pick
+  // exactly the minimum shape the cookie needs, anchored to our origin.
   await page.context().addCookies([
     {
-      ...sessionCookie,
-      // Force-attach to the browser context's URL — Playwright requires
-      // either `url` OR (`domain` AND `path`).
+      name: sessionCookie.name,
+      value: sessionCookie.value,
       url: origin,
+      httpOnly: sessionCookie.httpOnly,
+      secure: sessionCookie.secure,
+      sameSite: sessionCookie.sameSite,
     },
   ]);
 

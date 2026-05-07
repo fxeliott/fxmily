@@ -19,6 +19,7 @@ const webServer = process.env.PLAYWRIGHT_NO_SERVER
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  globalSetup: './tests/e2e/global-setup.ts',
   fullyParallel: false, // shared DB state — run serially
   retries: process.env.CI ? 2 : 0,
   workers: 1,

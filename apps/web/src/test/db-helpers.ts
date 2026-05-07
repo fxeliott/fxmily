@@ -31,8 +31,11 @@
  *     });
  */
 
-import 'server-only';
-
+// Intentionally NO `import 'server-only'` here. Test helpers run in the
+// Playwright Node runtime (vanilla ESM, no Next.js bundler) so the
+// `'server-only'` shim wouldn't resolve. The file lives under `src/test/`
+// which Next's tsconfig excludes from the build, so client bundles can
+// never accidentally import it anyway.
 import { nanoid } from 'nanoid';
 
 import { db } from '@/lib/db';

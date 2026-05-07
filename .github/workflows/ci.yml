@@ -30,6 +30,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Minimum default permissions for `GITHUB_TOKEN` (defense-in-depth).
+# Each job can request more if needed — but the default in this workflow is
+# strict read-only on contents. Without this block, GITHUB_TOKEN inherits
+# the repo-wide default which is more permissive (write on contents).
+permissions:
+  contents: read
+
 env:
   HUSKY: 0
   # Placeholder DB URL used at "prisma generate" + "next build" time only.
@@ -44,6 +51,11 @@ jobs:
     if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Job-scoped permissions — explicit even if same as workflow default,
+    # so the next contributor doesn't have to climb up the file to read
+    # what this job is allowed to do.
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout

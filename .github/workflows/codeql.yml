@@ -1,0 +1,75 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.editorconfig'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.editorconfig'
+  schedule:
+    # Weekly Monday 04:00 UTC (06:00 Europe/Paris) — catches CVEs disclosed
+    # against transitive deps even if no commits land. Light enough to stay
+    # well under the 2000 min/month quota even if we ever go private again.
+    - cron: '0 4 * * 1'
+
+# Cancel duplicate runs on the same PR — same logic as ci.yml.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
+
+    permissions:
+      # Minimum permissions for CodeQL — avoids the workflow being able to
+      # write code, releases, or comment on issues. Defence-in-depth: even
+      # if a malicious dep ran here, it can't escape the analysis scope.
+      contents: read
+      security-events: write
+      actions: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # `javascript-typescript` covers both Next.js client + Server
+        # Components + Server Actions + Node API routes.
+        language: [javascript-typescript]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # `security-and-quality` includes the full security suite + code
+          # quality queries (anti-patterns, dead code). `security-extended`
+          # would also work but adds noise — we'll graduate to it after
+          # ironing out the baseline.
+          queries: security-and-quality
+          # Build mode `none` skips the build phase — works for pure
+          # TypeScript and is much faster than `autobuild`. We don't compile
+          # to native here.
+          build-mode: none
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'

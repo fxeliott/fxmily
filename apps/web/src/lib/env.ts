@@ -126,7 +126,7 @@ const envSchema = z.object({
  *    mirror (subscriptions would silently fail).
  *  - Drift after a key rotation (forgetting to update the NEXT_PUBLIC mirror).
  */
-const envSchemaWithRefines = envSchema
+export const envSchemaWithRefines = envSchema
   .refine(
     (e) =>
       (e.VAPID_PUBLIC_KEY === undefined && e.VAPID_PRIVATE_KEY === undefined) ||

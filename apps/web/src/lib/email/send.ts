@@ -4,7 +4,9 @@ import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
 import { AnnotationReceivedEmail } from '@/lib/email/templates/annotation-received';
 import { InvitationEmail } from '@/lib/email/templates/invitation';
+import { NotificationFallbackEmail } from '@/lib/email/templates/notification-fallback';
 import { WeeklyDigestEmail } from '@/lib/email/templates/weekly-digest';
+import type { NotificationTypeSlug } from '@/lib/schemas/push-subscription';
 import type { SerializedWeeklyReport } from '@/lib/weekly-report/types';
 
 /**
@@ -117,6 +119,84 @@ export async function sendAnnotationReceivedEmail({
       tradeUrl,
       ``,
       `La correction est marquée comme lue dès que tu ouvres le trade.`,
+    ].join('\n'),
+  });
+}
+
+// ----- J9 — Web Push fallback after 3 failed dispatch attempts -------------
+
+/// Per-type subject + plain-text intro for the fallback email. Mirrors the
+/// `META_BY_TYPE` map inside the React Email template — kept in sync manually
+/// (DRY would require a shared module but the duplication is small enough to
+/// not warrant the indirection).
+const FALLBACK_SUBJECT_BY_TYPE: Record<NotificationTypeSlug, string> = {
+  annotation_received: 'Nouvelle correction reçue · Fxmily',
+  checkin_morning_reminder: 'Check-in matin · Fxmily',
+  checkin_evening_reminder: 'Check-in soir · Fxmily',
+  douglas_card_delivered: 'Nouvelle fiche Mark Douglas · Fxmily',
+  weekly_report_ready: 'Rapport hebdo prêt · Fxmily',
+};
+
+const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
+  annotation_received:
+    "Eliot a laissé une correction sur l'un de tes trades. Elle t'attend dans ton journal — la correction sera marquée comme lue dès que tu ouvres le trade.",
+  checkin_morning_reminder:
+    'Trois minutes pour poser ton intention du jour. Pas de rattrapage — si la fenêtre est passée, on se retrouve ce soir.',
+  checkin_evening_reminder:
+    'Bilan rapide du jour : plan, ressenti, gratitude. Trois minutes pour fermer la journée proprement.',
+  douglas_card_delivered:
+    'Une fiche est arrivée dans ta bibliothèque, choisie selon ton activité récente. Lis-la quand le moment te paraît juste.',
+  weekly_report_ready: 'Ton digest hebdomadaire des membres a été généré.',
+};
+
+const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
+  annotation_received: 'Voir la correction',
+  checkin_morning_reminder: 'Faire le check-in matin',
+  checkin_evening_reminder: 'Faire le check-in soir',
+  douglas_card_delivered: 'Lire la fiche',
+  weekly_report_ready: 'Ouvrir le rapport',
+};
+
+export interface SendNotificationFallbackParams {
+  to: string;
+  recipientFirstName: string | null | undefined;
+  type: NotificationTypeSlug;
+  /** Absolute URL to the in-app surface (built by caller, e.g. dispatcher). */
+  deepUrl: string;
+}
+
+/**
+ * Email fallback when a Web Push notification has failed all retries
+ * (SPEC §18.2 — iOS push fragility mitigation). Best-effort delivery; the
+ * caller (`lib/push/dispatcher.ts:dispatchOne`) does NOT roll back the queue
+ * row on email failure — it just records `email_attempted` in the audit
+ * metadata so admin can spot chronic Resend issues.
+ */
+export async function sendNotificationFallbackEmail({
+  to,
+  recipientFirstName,
+  type,
+  deepUrl,
+}: SendNotificationFallbackParams): Promise<{ id: string | null; delivered: boolean }> {
+  const recipient = recipientFirstName?.trim() || 'Trader';
+  const subject = FALLBACK_SUBJECT_BY_TYPE[type];
+  const body = FALLBACK_BODY_BY_TYPE[type];
+  const cta = FALLBACK_CTA_BY_TYPE[type];
+
+  return sendEmail({
+    to,
+    subject,
+    react: NotificationFallbackEmail({ recipientFirstName, type, deepUrl }),
+    text: [
+      `Salut ${recipient},`,
+      ``,
+      body,
+      ``,
+      `${cta} : ${deepUrl}`,
+      ``,
+      `Ce message t'arrive parce qu'une notification push n'a pas pu atteindre`,
+      `ton appareil après plusieurs tentatives (Web Push iOS reste fragile en`,
+      `2026). Tu peux ajuster les catégories de notification dans ton compte.`,
     ].join('\n'),
   });
 }

@@ -3,6 +3,7 @@ import 'server-only';
 import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
+import { sendNotificationFallbackEmail } from '@/lib/email/send';
 import { env } from '@/lib/env';
 import { getEffectivePreferences } from '@/lib/push/preferences';
 import {
@@ -476,6 +477,44 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
       reason: failureReason,
     },
   });
+
+  // Email fallback best-effort (SPEC §18.2 mitigation iOS push fragility).
+  // Triggered ONLY on permanent failure of an actual dispatch attempt.
+  // Skipped for `preference_off` (explicit opt-out, see early return above)
+  // and `no_subscriptions` (no device known — V1 keeps email-as-only-channel
+  // out of scope; revisit J9.5+ if observed in audit log).
+  // Best-effort posture: a Resend hiccup MUST NOT re-fail the dispatcher
+  // (the queue row is already marked `failed`, this is just nudge-recovery).
+  try {
+    const user = await db.user.findUnique({
+      where: { id: row.userId },
+      select: { email: true, firstName: true },
+    });
+    if (user !== null) {
+      const result = await sendNotificationFallbackEmail({
+        to: user.email,
+        recipientFirstName: user.firstName,
+        type: slug,
+        deepUrl: payload.notification.navigate,
+      });
+      await logAudit({
+        action: 'notification.fallback.emailed',
+        userId: row.userId,
+        metadata: {
+          notificationId: row.id,
+          type: slug,
+          delivered: result.delivered,
+          // NEVER log the email address itself — PII, audit metadata stays
+          // PII-free (SPEC §16). The notificationId + userId are enough for
+          // operator-side correlation.
+        },
+      });
+    }
+  } catch (err) {
+    // Email fallback failure must not propagate. Console + best-effort audit.
+    console.error('[push.dispatcher] fallback email failed', err);
+  }
+
   return { status: 'failed', reason: failureReason };
 }
 

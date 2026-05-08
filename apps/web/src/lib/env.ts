@@ -70,10 +70,39 @@ const envSchema = z.object({
   /// est fait (J10).
   WEEKLY_REPORT_RECIPIENT: z.string().email().optional(),
 
-  // Jalon 9 — Web Push
-  VAPID_PUBLIC_KEY: z.string().optional(),
-  VAPID_PRIVATE_KEY: z.string().optional(),
-  VAPID_SUBJECT: z.string().optional(),
+  // Jalon 9 — Web Push (VAPID RFC 8292 keys + subject + client-exposed pubkey)
+  /// Server-side VAPID public key (base64url, P-256 ECDSA, ~87 chars). Used to
+  /// sign the JWT auth header sent to push services (FCM, APNs, Mozilla).
+  /// Generate via `npx web-push generate-vapid-keys`. The same value lives in
+  /// `NEXT_PUBLIC_VAPID_PUBLIC_KEY` for client-side `pushManager.subscribe()`.
+  /// `optional()` because dev environments may not have it set yet ; the push
+  /// dispatcher refuses to run without it (returns 503 like the cron pattern).
+  VAPID_PUBLIC_KEY: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{70,120}$/, 'VAPID_PUBLIC_KEY base64url ~87 chars (P-256 ECDSA)')
+    .optional(),
+  /// Server-only VAPID private key (base64url, ~43 chars). Never expose to
+  /// client. Pair MUST match `VAPID_PUBLIC_KEY` (regenerate both together).
+  VAPID_PRIVATE_KEY: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{40,80}$/, 'VAPID_PRIVATE_KEY base64url ~43 chars')
+    .optional(),
+  /// Contact for push services to reach in case of issue (RFC 8292 §2.1).
+  /// `mailto:` or `https://` — anything else fails Apple's strict validation.
+  VAPID_SUBJECT: z
+    .string()
+    .refine(
+      (v) => v.startsWith('mailto:') || v.startsWith('https://'),
+      'VAPID_SUBJECT must start with mailto: or https://',
+    )
+    .optional(),
+  /// Client-exposed VAPID public key (mirrors VAPID_PUBLIC_KEY). Required by
+  /// `pushManager.subscribe({ applicationServerKey })` in the browser. Set in
+  /// `.env` as `NEXT_PUBLIC_VAPID_PUBLIC_KEY=<same as VAPID_PUBLIC_KEY>`.
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{70,120}$/, 'NEXT_PUBLIC_VAPID_PUBLIC_KEY base64url ~87 chars')
+    .optional(),
 
   // Jalon 10 — Sentry
   SENTRY_DSN: z.string().url().optional(),

@@ -59,6 +59,7 @@ export type AuditAction =
   | 'weekly_report.generated'
   | 'weekly_report.email.sent'
   | 'weekly_report.email.failed'
+  | 'weekly_report.email.skipped'
   | 'admin.weekly_report.viewed'
   | 'cron.weekly_reports.scan';
 

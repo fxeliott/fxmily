@@ -52,6 +52,9 @@ const envSchema = z.object({
   // Jalon 8 — Anthropic
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
+  /// Destinataire du digest hebdo IA admin. Defaults à `eliott.pena@icloud.com`
+  /// (compte Resend Eliot vérifié en V1, fxmily.com domain verify J10).
+  WEEKLY_REPORT_RECIPIENT: z.string().email().optional(),
 
   // Jalon 9 — Web Push
   VAPID_PUBLIC_KEY: z.string().optional(),

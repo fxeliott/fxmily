@@ -4,6 +4,8 @@ import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
 import { AnnotationReceivedEmail } from '@/lib/email/templates/annotation-received';
 import { InvitationEmail } from '@/lib/email/templates/invitation';
+import { WeeklyDigestEmail } from '@/lib/email/templates/weekly-digest';
+import type { SerializedWeeklyReport } from '@/lib/weekly-report/types';
 
 /**
  * High-level email helpers — one function per concrete email the app sends.
@@ -60,6 +62,12 @@ export function buildTradeDetailUrl(tradeId: string): string {
   return `${base}/journal/${encodeURIComponent(tradeId)}`;
 }
 
+/** Build the absolute URL to /admin/reports/[id] — used by the J8 weekly digest. */
+export function buildAdminReportUrl(reportId: string): string {
+  const base = env.AUTH_URL.replace(/\/+$/, '');
+  return `${base}/admin/reports/${encodeURIComponent(reportId)}`;
+}
+
 // ----- J4 — annotation received --------------------------------------------
 
 export interface SendAnnotationReceivedParams {
@@ -110,5 +118,86 @@ export async function sendAnnotationReceivedEmail({
       ``,
       `La correction est marquée comme lue dès que tu ouvres le trade.`,
     ].join('\n'),
+  });
+}
+
+// ----- J8 — weekly digest IA admin -----------------------------------------
+
+export interface SendWeeklyDigestParams {
+  to: string;
+  memberLabel: string;
+  report: SerializedWeeklyReport;
+}
+
+/**
+ * Send the J8 weekly digest email (SPEC §7.10). Best-effort delivery — the
+ * caller (`lib/weekly-report/service.ts`) does NOT roll back the report
+ * persistence if email fails; instead it logs an `weekly_report.email.failed`
+ * audit row and the cron retries on the next pass.
+ *
+ * Plain-text fallback follows the same structure as the React Email template
+ * so non-HTML clients still get the actionable summary.
+ */
+export async function sendWeeklyDigestEmail({
+  to,
+  memberLabel,
+  report,
+}: SendWeeklyDigestParams): Promise<{ id: string | null; delivered: boolean }> {
+  const reportUrl = buildAdminReportUrl(report.id);
+  const subject = `Rapport hebdo · ${memberLabel} · ${report.weekStart} → ${report.weekEnd}`;
+  const lines: string[] = [];
+  lines.push(`Rapport hebdo Fxmily — ${memberLabel}`);
+  lines.push(`Période : ${report.weekStart} → ${report.weekEnd}`);
+  lines.push('');
+  lines.push('Synthèse :');
+  lines.push(report.summary);
+  lines.push('');
+  if (report.risks.length > 0) {
+    lines.push('Risques à surveiller :');
+    for (const risk of report.risks) lines.push(`- ${risk}`);
+    lines.push('');
+  }
+  lines.push('Recommandations :');
+  for (const reco of report.recommendations) lines.push(`- ${reco}`);
+  lines.push('');
+  const patternEntries: Array<[string, string]> = [];
+  if (report.patterns.emotionPerf)
+    patternEntries.push(['Émotion × Performance', report.patterns.emotionPerf]);
+  if (report.patterns.sleepPerf)
+    patternEntries.push(['Sommeil × Performance', report.patterns.sleepPerf]);
+  if (report.patterns.sessionFocus)
+    patternEntries.push(['Sessions traitées', report.patterns.sessionFocus]);
+  if (report.patterns.disciplineTrend)
+    patternEntries.push(['Trajectoire discipline', report.patterns.disciplineTrend]);
+  if (patternEntries.length > 0) {
+    lines.push('Patterns observés :');
+    for (const [label, value] of patternEntries) lines.push(`- ${label} : ${value}`);
+    lines.push('');
+  }
+  lines.push(`Ouvre le rapport complet : ${reportUrl}`);
+  lines.push('');
+  lines.push(
+    `Modèle : ${report.claudeModel} · coût : ${Number(report.costEur).toFixed(4)} € · aucun conseil de trade.`,
+  );
+
+  const mocked = report.claudeModel.startsWith('mock:');
+
+  return sendEmail({
+    to,
+    subject,
+    react: WeeklyDigestEmail({
+      memberLabel,
+      weekStartLocal: report.weekStart,
+      weekEndLocal: report.weekEnd,
+      summary: report.summary,
+      risks: report.risks,
+      recommendations: report.recommendations,
+      patterns: report.patterns,
+      reportUrl,
+      claudeModel: report.claudeModel,
+      costEur: report.costEur,
+      mocked,
+    }),
+    text: lines.join('\n'),
   });
 }

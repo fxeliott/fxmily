@@ -39,4 +39,39 @@ export interface BuilderInput {
   latestScore: BehavioralScoreSnapshot | null;
 }
 
-export type { WeeklySnapshot } from '@/lib/schemas/weekly-report';
+export type { WeeklySnapshot, WeeklyReportOutput } from '@/lib/schemas/weekly-report';
+
+/**
+ * JSON-safe view of a `WeeklyReport` row — output of the Phase B service
+ * layer (`lib/weekly-report/service.ts`) and the shape consumed by both the
+ * admin UI and the email template. Decimals → strings, Dates → ISO/YYYY-MM-DD.
+ *
+ * Defined here (not in service.ts) so the email module can `import type` it
+ * without a runtime cycle through `service.ts → send.ts → service.ts`.
+ */
+export interface SerializedWeeklyReport {
+  id: string;
+  userId: string;
+  /** YYYY-MM-DD (local Monday). */
+  weekStart: string;
+  /** YYYY-MM-DD (local Sunday). */
+  weekEnd: string;
+  generatedAt: string;
+  summary: string;
+  risks: string[];
+  recommendations: string[];
+  /// Re-uses the Phase A inferred shape so optional fields stay `?: string | undefined`,
+  /// keeping `exactOptionalPropertyTypes` happy (the parser can return objects without
+  /// the field at all OR with the field present as a string — never as `undefined`).
+  patterns: import('@/lib/schemas/weekly-report').WeeklyReportOutput['patterns'];
+  claudeModel: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreateTokens: number;
+  /** EUR with 6-decimal precision. */
+  costEur: string;
+  sentToAdminAt: string | null;
+  sentToAdminEmail: string | null;
+  emailMessageId: string | null;
+}

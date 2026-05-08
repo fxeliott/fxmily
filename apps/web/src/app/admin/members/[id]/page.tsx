@@ -6,6 +6,8 @@ import { auth } from '@/auth';
 import { MemberTabs, type MemberTabKey } from '@/components/admin/member-tabs';
 import { MemberDouglasPanel } from '@/components/admin/member-douglas-panel';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
+import { MemberWeeklyReportsPanel } from '@/components/admin/member-weekly-reports-panel';
+import { listReportsForMember } from '@/lib/weekly-report/service';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
 import { ScoreGaugeGrid } from '@/components/scoring/score-gauge-grid';
 import { Card } from '@/components/ui/card';
@@ -36,9 +38,10 @@ interface DetailPageProps {
 
 function parseTab(
   value: string | undefined,
-): Extract<MemberTabKey, 'overview' | 'trades' | 'mark-douglas'> {
+): Extract<MemberTabKey, 'overview' | 'trades' | 'mark-douglas' | 'weekly-reports'> {
   if (value === 'trades') return 'trades';
   if (value === 'mark-douglas') return 'mark-douglas';
+  if (value === 'weekly-reports') return 'weekly-reports';
   return 'overview';
 }
 
@@ -68,6 +71,8 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           aggregateMemberDeliveryStats(memberId),
         ])
       : null;
+
+  const weeklyReports = tab === 'weekly-reports' ? await listReportsForMember(memberId, 12) : null;
 
   // J6.5 — pull behavioral scores + analytics in parallel for the overview tab.
   // Skipped on the trades tab to keep its render path lean. J6.6 H1 fix —
@@ -165,6 +170,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       {tab === 'trades' && trades ? <MemberTradesList memberId={memberId} trades={trades} /> : null}
       {tab === 'mark-douglas' && douglasData ? (
         <MemberDouglasPanel deliveries={douglasData[0]} stats={douglasData[1]} />
+      ) : null}
+      {tab === 'weekly-reports' && weeklyReports !== null ? (
+        <MemberWeeklyReportsPanel reports={weeklyReports} />
       ) : null}
     </main>
   );

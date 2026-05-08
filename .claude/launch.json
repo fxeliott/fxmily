@@ -7,6 +7,17 @@
       "runtimeArgs": ["--filter", "@fxmily/web", "exec", "next", "dev"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "fxmily-web-j8-smoke",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:DATABASE_URL='postgresql://fxmily:fxmily_dev@localhost:5432/fxmily?schema=public'; $env:AUTH_SECRET='dev-smoke-secret-32chars-fxmily-j8'; $env:AUTH_URL='http://localhost:3000'; $env:CRON_SECRET='dev-smoke-cron-secret-fxmily-j8'; $env:WEEKLY_REPORT_RECIPIENT='eliott.pena@icloud.com'; pnpm --filter @fxmily/web exec next dev"
+      ],
+      "port": 3000,
+      "autoPort": true
     }
   ]
 }

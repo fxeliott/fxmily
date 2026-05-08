@@ -972,48 +972,121 @@ Branche dédiée pour livrer la **fondation DB + types + builder pure-functions 
 - **Build prod** : ✓ (Turbopack avec placeholders documentés)
 - **Migration appliquée live** : ✓ Postgres `fxmily-postgres-dev` (16 tables total)
 
-### Reste pour Phase B+ (next session avec `/clear`)
+## J8 — Phase B+ livré (2026-05-08)
 
-**Phase B — Service layer** :
+Pipeline complet rapport hebdo IA admin **end-to-end live validé**. Path :
+`cron POST → loader DB → builder pure → claude-client (mock V1 / live ready) → Zod validate → upsert weekly_reports → maybeSendEmail → React Email + Resend → audit trail`.
 
-- `lib/weekly-report/service.ts` — orchestrator : load 7j slice from DB → buildWeeklySnapshot → claude-client.generate → Zod validate → persist + audit + email
-- `lib/weekly-report/loader.ts` (optionnel) — fetch 7j Trade + DailyCheckin + MarkDouglasDelivery + BehavioralScore latest + annotation counts depuis Prisma. Anchored local-timezone du membre.
-- Tests Vitest service avec mock DB
+### Phase B — Loader + Service orchestrator
 
-**Phase C — Anthropic SDK + Claude client** :
+- `lib/weekly-report/week-window.ts` — week boundaries Mon→Sun en TZ membre via `Intl.DateTimeFormat` (Node 22 LTS bundled ICU). Trois entrées :
+  - `computeWeekWindow(now, tz)` — semaine "containing today" (semantique brute).
+  - `computeReportingWeek(now, tz)` — **anchor sur `now - 24h`** : Sunday-21-UTC cron donne la semaine qui vient de finir aussi bien pour Paris (CEST = Sun 23h, semaine ending today) que pour Tokyo (JST = Mon 06h, semaine ending yesterday). Fix audit BLOCKER #2.
+  - `computePreviousFullWeekWindow(now, tz)` — semaine -1 (back-fill manuel).
+- `lib/weekly-report/loader.ts` — `loadWeeklySliceForUser(userId, options)` : parallèle Trade (`enteredAt` in window) + DailyCheckin (`date` DATE in window) + MarkDouglasDelivery (`createdAt` in window) + annotations admin counts + `getLatestBehavioralScore`. Sérialise tout en `BuilderInput` (Decimal → string, Date → ISO).
+- `lib/weekly-report/service.ts` — orchestrator stateless :
+  - `generateWeeklyReportForUser(userId, options)` : load → buildWeeklySnapshot → Zod validate → claude-client.generate → upsert (idempotent sur `(userId, weekStart)`) → `maybeSendEmail` (best-effort). Audit `weekly_report.generated` PII-free.
+  - `generateWeeklyReportsForAllActiveMembers(options)` : batch 5-by-5 `Promise.allSettled` ; classifie l'email en `sent` / `skipped` / `failed` / `not_attempted` (séparation Resend rejection vs dev fallback `no_api_key_dev_fallback`).
+  - Read helpers admin : `listReportsForAdmin`, `getReportByIdForAdmin`, `getReportStatsForAdmin`, `listReportsForMember`.
+  - **BLOCKER #1 fix** : DB write utilise `parseLocalDate(weekStartLocal)` (UTC midnight de la date locale) — Postgres `@db.Date` truncate sur UTC, donc local-Mon-00:00 converti en UTC dérive d'un jour dans toutes TZ ≠ UTC. Carbone du pattern J5 `lib/checkin/service.ts`.
+  - **`recipientOverride` gated `!isProdRuntime`** — anti-exfiltration via cron en prod.
 
-- `pnpm --filter @fxmily/web add @anthropic-ai/sdk` (v0.30+ early 2026 — vérifié WebSearch)
-- `lib/weekly-report/claude-client.ts` — wrapper avec :
-  - `messages.parse()` + `output_config.format: zodOutputFormat(weeklyReportOutputSchema, 'weekly_report')`
-  - System prompt cached 1h (`cache_control: { type: 'ephemeral', ttl: '1h' }`) — SPEC §16 cost optimal weekly cron
-  - Cost calc en EUR (Sonnet 4.6 : $3 input / $15 output / $0.30 cache hit / $6 cache write 1h)
-  - Mock SDK pour tests Vitest (V1 ship sans `ANTHROPIC_API_KEY` worktree — Eliot ajoutera)
-  - `safeFreeText` sur retour Claude (defense-in-depth)
-- Tests Vitest claude-client avec mock SDK
+### Phase C — Claude client + prompt + pricing
 
-**Phase D — Cron pattern carbone J5/J6/J7** :
+- `lib/weekly-report/prompt.ts` — `WEEKLY_REPORT_SYSTEM_PROMPT` (posture Mark Douglas + interdiction analyse marché + format JSON strict + instructions sécurité prompt-injection) + `buildWeeklyReportUserPrompt` rend snapshot Markdown + `WEEKLY_REPORT_OUTPUT_JSON_SCHEMA` strict (no `additionalProperties`).
+- `lib/weekly-report/pricing.ts` — `PRICING_USD_PER_MTOK` (Sonnet 4.6 : $3 input / $15 output / $0.30 cache read / $3.75 cache create 1h). `USD_TO_EUR=0.93`. `computeCostEur(model, usage)` → 6-decimal string EUR.
+- `lib/weekly-report/claude-client.ts` — interface + 2 impls :
+  - `MockWeeklyReportClient` — déterministe, dérivé du snapshot. Zod-valid. Cost réel computé sur tokens fictifs (3200 in / 950 out → 0.0222 €). V1 default tant que `ANTHROPIC_API_KEY` absent.
+  - `LiveWeeklyReportClient` — lazy `await import('@anthropic-ai/sdk')` (v0.95.1 installé). `messages.create` avec `system` array `cache_control: { type: 'ephemeral', ttl: '1h' }` (90% rabais cache-hit, audit Phase G fix). `extractTextFromResponse` accepte text block ET tool_use block (audit Phase G fix). Validation Zod post-parse defense-in-depth.
+  - Factory `getWeeklyReportClient()` cache per-process, `resetClaudeClient()` pour tests.
 
-- `app/api/cron/weekly-reports/route.ts` — POST avec `verifyCronSecret` SHA-256 + `timingSafeEqual` (CWE-208) + `cronLimiter` token bucket (5 burst, 1/min) + 503/401/429/405 + `?at=ISO` dev override double-gated
-- `runWeeklyReportScan(now)` — early-return si pas dimanche 21:00 UTC ; sinon scan members status='active' batch 25-by-25 `Promise.allSettled`
-- Audit row `cron.weekly_reports.scan` avec `{processed, errors, ranAt}`
-- Wiring prod : `0 21 * * 0` UTC (J10)
+### Phase D — Cron route
 
-**Phase E — UI admin** :
+- `app/api/cron/weekly-reports/route.ts` — pattern J5/J6/J7 carbone fidèle :
+  - `verifyCronSecret` SHA-256 + `timingSafeEqual` (CWE-208 length-leak defense)
+  - `cronLimiter` token bucket (5 burst, 1/min, LRU `maxKeys: 1024`) AVANT verify (404 sur secret invalide)
+  - 503 si pas de `CRON_SECRET`, 401 sur secret invalide, 405 sur GET, 429 + Retry-After
+  - `?at=ISO` dev override **strict T-required** (audit fix : refuse `?at=2026-05-10` sans heure pour éviter confusion semaine)
+  - `?dryRun=true` skip email (smoke test sans cramer Resend free tier)
+  - Double-gate `NODE_ENV !== 'production'` AND `!AUTH_URL.startsWith('https://')`
+  - Audit row `cron.weekly_reports.scan` avec counts (scanned/generated/errors/emailsDelivered/emailsFailed/emailsSkipped/mocked/totalCostEur)
 
-- `/admin/reports` — liste rapports paginée + filtres (week, member)
-- `/admin/reports/[id]` — détail rapport avec `<WeeklyReportCard>` Server Component
-- Tab `member-tabs.tsx` — ajout "Rapports" sur `/admin/members/[id]?tab=weekly-reports`
+### Phase E — UI admin
 
-**Phase F — Email digest** :
+- `/admin/reports` page.tsx — liste cohorte chronologique, groupée par `weekStart`. Stats strip 4 cells (totalReports / totalCostEur / emailsDelivered / membersInLastWeek). Pills MOCK vs LIVE + ENVOYÉ vs EN ATTENTE. Token / cost / count/risks/recos résumé par row. EmptyState pédagogique.
+- `/admin/reports/[id]` page.tsx — détail rapport :
+  - Hero : member label (avec fallback `Membre #${id.slice(-6)}` au lieu d'email pour PII protection — audit fix), période formatée FR, pills.
+  - Sections : Synthèse, Risques (border-l warn), Recommandations (border-l acc), Patterns observés (grid 2 col), Génération (model / cost / tokens / cache / email status).
+  - Lien retour vers `/admin/members/[id]?tab=weekly-reports`.
+- `components/admin/member-weekly-reports-panel.tsx` — timeline rapports membre (newest first). Pills + tokens + cost + counts.
+- `components/admin/member-tabs.tsx` — tab "Rapports IA" ajouté entre "Mark Douglas" et "Notes admin". Active sur `?tab=weekly-reports`.
+- `app/admin/members/page.tsx` — bouton ghost "Rapports IA" en header.
 
-- `lib/email/templates/weekly-digest-email.tsx` — React Email v2 lime/deep-space (carbone `AnnotationReceivedEmail` J4)
-- Plain text fallback (deliverability post-2024 Gmail/Yahoo bulk sender rules)
-- `sendWeeklyDigestEmail()` — Resend + idempotency key (reportId)
-- V1 envoi à `eliott.pena@icloud.com` (compte Resend Eliot vérifié) — Domain `fxmily.com` verify J10
+### Phase F — Email digest
 
-**Phase G — Audit-driven hardening 4-5 subagents** + **Phase H — Smoke test live mock SDK** + **Phase I — apps/web/CLAUDE.md J8 close-out + memory update + briefing J9**.
+- `lib/email/templates/weekly-digest.tsx` — React Email v2 lime/deep-space (carbone `AnnotationReceivedEmail` J4). Sections : eyebrow + heading + period + (mock banner if mocked) + Synthèse + Risques (bullet warn) + Recommandations (bullet acc) + Patterns observés (label + value rows) + CTA "Ouvrir le rapport complet" + footer "Aucun conseil de trade — uniquement comportement, exécution, psychologie (SPEC §2)" + cost line.
+- `sendWeeklyDigestEmail({ to, memberLabel, report })` dans `lib/email/send.ts` — plain-text fallback structuré + `buildAdminReportUrl(reportId)`.
+- V1 envoie à `WEEKLY_REPORT_RECIPIENT` env (default `eliott.pena@icloud.com`) — domaine `fxmily.com` verify J10.
 
-**Pré-requis Eliot avant smoke test live (Phase H)** :
+### Phase G — Audit-driven hardening (8 closed)
 
-1. `ANTHROPIC_API_KEY` dans `apps/web/.env` worktree (Console Anthropic → API Keys → "Create Key" Fxmily). V1 ship sans = mock SDK suffit.
-2. CI vert sur PR phase A (déjà fait).
+Subagent `code-reviewer` lancé sur le diff Phase B+ → 2 BLOCKERs + 6 HIGH/MEDIUM closed in-session :
+
+1. **TIER 1 BLOCKER** — DB date drift `@db.Date` truncate UTC date alors que `weekStartUtc` = local-Mon-00:00 en UTC. Pour Paris CEST 2026-05-04 → stocké comme 2026-05-03 silencieusement. **Fix** : `weekStartDb = parseLocalDate(window.weekStartLocal)` (UTC midnight de la date locale). Audit-validated par smoke test.
+2. **TIER 1 BLOCKER** — Cron Sun 21 UTC reportait future-week pour TZ à l'est (Tokyo Mon 06h JST → Mon 11 → Sun 17). **Fix** : `computeReportingWeek(now, tz)` anchor `now - 24h`. Test couvert pour Paris/London/Tokyo/NY/UTC.
+3. **TIER 2 HIGH** — Email re-spam : `update` resettait `sentToAdminAt: null`, donc chaque re-run cron ré-envoyait email (cramant Resend free 100/jour à 30 membres). **Fix** : préserve dispatch state ; `maybeSendEmail` short-circuit si déjà envoyé.
+4. **TIER 2 HIGH** — `recipientOverride` exfiltration vector. **Fix** : honoré ONLY `!isProdRuntime`.
+5. **TIER 2 HIGH** — `tool_use` block path manquant (Sonnet 4.6 structured output mode). **Fix** : `extractTextFromResponse` détecte `block.type === 'tool_use'` et lit `block.input` JSON.
+6. **TIER 2 HIGH** — `cache_control: { type: 'ephemeral' }` sans `ttl: '1h'` cache 5min default = optim cache 90% rabais perdue sur cadence weekly. **Fix** : `ttl: '1h'` explicite (SDK 0.95.1 supporte).
+7. **TIER 3 MEDIUM** — `displayMemberLabel` fallback sur email brut leak PII dans subject/body. **Fix** : fallback `Membre #${id.slice(-6)}`.
+8. **TIER 3 MEDIUM** — `weekly_report.email.failed` confondait Resend rejection avec dev-fallback (no key). **Fix** : nouvelle action `weekly_report.email.skipped` + counter `emailsSkipped` dans batch result.
+9. **TIER 3 MEDIUM** — `?at=ISO` parsing accepte dates sans heure → confusion. **Fix** : regex `/[Tt ]/` strict sur la valeur avant `new Date()`.
+
+**Test TDD** : `lib/weekly-report/week-window.test.ts` — 12 tests verts couvrant `dayOfWeekIso`, `shiftLocalDateString`, `localInstantToUtc` (Paris/Tokyo/UTC), `computeWeekWindow`, `computeReportingWeek` (BLOCKER #2 multi-TZ), `computePreviousFullWeekWindow`. Le test "cron contract" itère sur 5 TZ et assert `weekStart=Mon` + `weekEnd=Sun`.
+
+### Phase H — Smoke test live (ALL GREEN)
+
+`apps/web/scripts/smoke-test-j8.ts` — pattern carbone `smoke-test-j7.ts`. Tsx-driven, parle au dev server live via `fetch /api/cron/weekly-reports`.
+
+Validations :
+
+- ✓ POST cron 200 ; response `{ scanned: 6, generated: 6, mocked: 6, emailsSkipped: 6, totalCostEur: "0.133086" }`
+- ✓ `weekly_reports.weekStart === "2026-05-04"` (Mon Paris CEST), `weekEnd === "2026-05-10"` — preuve directe BLOCKER #1 fix
+- ✓ Summary 270 chars (≥100), recommandations 2 items, patterns 4 entries
+- ✓ Idempotency upsert : 2nd POST → même `report.id`, pas de duplicate
+- ✓ Audit trail : `weekly_report.generated` × 6, `weekly_report.email.skipped` × 6, `cron.weekly_reports.scan` × 2
+- ✓ UI admin live :
+  - `/admin/reports` rendu : h1 "Rapports hebdo", 6 reportLinks, pills MOCK/EN ATTENTE/cost/counts
+  - `/admin/reports/[id]` rendu : h1 member label, sections Synthèse/Recommandations/Patterns observés/Génération
+  - `/admin/members/[id]?tab=weekly-reports` rendu : tab "Rapports IA" présent dans nav, panel affiche 1 rapport
+- ✓ Dev fallback Resend log : 6 emails plain-text affichés (1 par membre actif) avec subject `Rapport hebdo · {label} · 2026-05-04 → 2026-05-10`, body structuré (Synthèse + Recommandations + Patterns + URL)
+
+**Conclusion smoke test** : SPEC §15 J8 "Done quand : un dimanche, Eliot reçoit un email digest avec un rapport structuré pour CHAQUE membre actif Fxmily" → ✅ validé end-to-end (mock SDK path, prêt pour live le jour où Eliot ajoute `ANTHROPIC_API_KEY`).
+
+### Quality gate Phase B+
+
+- **Type-check** : ✓ (tsc --noEmit exit 0)
+- **Lint** : ✓ (max-warnings=0)
+- **Vitest** : **535/535 verts** (+12 vs Phase A 523, week-window.test.ts)
+- **Build prod** : ✓ Turbopack — routes J8 listées : `/admin/reports`, `/admin/reports/[id]`, `/api/cron/weekly-reports`
+- **Smoke live** : ✓ 6 reports persisted, idempotency, full audit trail, UI rendered
+
+### Wiring prod attendu (J10)
+
+```
+# Hetzner crontab — every Sunday 21:00 UTC
+0 21 * * 0  curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
+            https://app.fxmily.com/api/cron/weekly-reports
+```
+
+### Suivis non-bloquants (TIER 4 polish — J9.5+)
+
+- `getReportStatsForAdmin` `findMany` sans pagination → muter en `prisma.weeklyReport.aggregate({ _sum: { costEur: true } })` avant J10 prod.
+- Pricing constants en code → considérer env var `USD_TO_EUR_RATE` si FX drift > 5%.
+- Allowlist Zod refine sur `ANTHROPIC_MODEL` pour bloquer drift accidentel modèle.
+- Sentry capture sur cron `catch` (J10).
+
+### Pré-requis Eliot pour activer Claude live
+
+1. **Claude live** : `ANTHROPIC_API_KEY` dans `apps/web/.env` (Console Anthropic → API Keys → "Create Key" Fxmily). Le `LiveWeeklyReportClient` se réveille automatiquement (factory `getWeeklyReportClient()`).
+2. **Email réel à fxeliott** : laisser `WEEKLY_REPORT_RECIPIENT` non-set → default `eliott.pena@icloud.com` (compte Resend vérifié). Domain `fxmily.com` verify J10.

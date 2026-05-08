@@ -60,6 +60,12 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // J10 — Docker production build. `output: 'standalone'` produces a self-
+  // contained `.next/standalone/` directory with a minimal `node_modules/`
+  // (only deps actually traced by the build), shrinking the prod image
+  // from ~1.5 GB → ~250 MB and avoiding the need to copy `pnpm-lock.yaml`
+  // into the runtime layer (no install step at boot).
+  output: 'standalone',
   poweredByHeader: false,
   reactStrictMode: true,
   typedRoutes: true,

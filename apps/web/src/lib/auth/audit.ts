@@ -54,7 +54,13 @@ export type AuditAction =
   | 'douglas.delivery.helpful'
   | 'douglas.favorite.added'
   | 'douglas.favorite.removed'
-  | 'cron.dispatch_douglas.scan';
+  | 'cron.dispatch_douglas.scan'
+  // J8 — weekly AI report (Phase A foundation: actions reserved, emitted in Phase B+)
+  | 'weekly_report.generated'
+  | 'weekly_report.email.sent'
+  | 'weekly_report.email.failed'
+  | 'admin.weekly_report.viewed'
+  | 'cron.weekly_reports.scan';
 
 export interface LogAuditParams {
   action: AuditAction;

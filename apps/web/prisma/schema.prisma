@@ -402,6 +402,12 @@ model TradeAnnotation {
   @@index([tradeId, seenByMemberAt])
   // Admin "annotations I authored" feed (J6+ analytics).
   @@index([adminId, createdAt(sort: Desc)])
+  // J8 perf TIER 2 fix — `lib/weekly-report/loader.ts:loadAnnotationStats`
+  // filtre `createdAt: { gte, lte } AND trade.userId = X`. Sans cet index,
+  // Postgres seq-scan toute la table (à 1000 membres × 6 mois = potentiel
+  // 100k+ rows). Ajout d'un index `(createdAt DESC)` permet un range-scan
+  // index-only sur la window puis JOIN PK Trade pour le filtre userId.
+  @@index([createdAt(sort: Desc)])
   @@map("trade_annotations")
 }
 

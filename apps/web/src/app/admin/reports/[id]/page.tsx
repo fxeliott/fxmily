@@ -80,6 +80,7 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-5 px-4 py-8">
       <Link
         href="/admin/reports"
+        aria-label="Retour à la liste des rapports"
         className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
       >
         <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -88,18 +89,28 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
 
       <Card primary className="p-5">
         <div className="flex flex-wrap items-center gap-2">
-          <Sparkles className="h-3.5 w-3.5 text-[var(--acc)]" strokeWidth={1.75} />
-          <Pill tone="acc">RAPPORT HEBDO</Pill>
-          {mocked ? <Pill tone="warn">MOCK</Pill> : <Pill tone="acc">LIVE</Pill>}
+          <Sparkles className="h-3.5 w-3.5 text-[var(--acc)]" strokeWidth={1.75} aria-hidden />
+          <Pill tone="acc">
+            <span aria-label="Catégorie : rapport hebdomadaire">RAPPORT HEBDO</span>
+          </Pill>
+          {mocked ? (
+            <Pill tone="warn">
+              <span aria-label="Source : mock déterministe (sans appel API Claude)">MOCK</span>
+            </Pill>
+          ) : (
+            <Pill tone="acc">
+              <span aria-label="Source : Claude API live">LIVE</span>
+            </Pill>
+          )}
           {report.sentToAdminAt ? (
             <Pill tone="ok">
-              <Mail className="h-2.5 w-2.5" strokeWidth={2} />
-              ENVOYÉ
+              <Mail className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
+              <span aria-label="Email digest envoyé à l’admin">ENVOYÉ</span>
             </Pill>
           ) : (
             <Pill tone="mute">
-              <Mail className="h-2.5 w-2.5" strokeWidth={2} />
-              EN ATTENTE
+              <Mail className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
+              <span aria-label="Email digest en attente d’envoi">EN ATTENTE</span>
             </Pill>
           )}
         </div>

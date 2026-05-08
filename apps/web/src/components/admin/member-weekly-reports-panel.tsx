@@ -50,7 +50,7 @@ export function MemberWeeklyReportsPanel({ reports }: MemberWeeklyReportsPanelPr
           guides={[
             'Le cron tourne à 21:00 UTC chaque dimanche.',
             'Sans ANTHROPIC_API_KEY, le rapport est généré en mode mock (déterministe).',
-            'Un email digest est envoyé automatiquement à l&apos;admin.',
+            'Un email digest est envoyé automatiquement à l’admin.',
           ]}
         />
       </Card>

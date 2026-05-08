@@ -6,8 +6,8 @@ import { auth } from '@/auth';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
-import { listMembersForAdmin } from '@/lib/admin/members-service';
 import { logAudit } from '@/lib/auth/audit';
+import { db } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import {
   getReportStatsForAdmin,
@@ -45,10 +45,9 @@ export default async function AdminReportsPage() {
   const session = await auth();
   if (!session?.user || session.user.role !== 'admin') redirect('/login');
 
-  const [{ items }, stats, members] = await Promise.all([
+  const [{ items }, stats] = await Promise.all([
     listReportsForAdmin({ limit: 30 }),
     getReportStatsForAdmin(),
-    listMembersForAdmin(),
   ]);
 
   await logAudit({
@@ -56,6 +55,19 @@ export default async function AdminReportsPage() {
     userId: session.user.id,
     metadata: { surface: 'list', count: items.length },
   });
+
+  // J8 perf TIER 2 (T2.2) — fetch uniquement les membres présents dans la
+  // page courante de rapports (max 30) au lieu de TOUTE la cohorte
+  // (`listMembersForAdmin` charge potentiellement 1000+ rows pour résoudre
+  // 30 labels). À 1000 membres : économise 970 rows par render.
+  const memberIds = Array.from(new Set(items.map((r) => r.userId)));
+  const members =
+    memberIds.length > 0
+      ? await db.user.findMany({
+          where: { id: { in: memberIds } },
+          select: { id: true, email: true, firstName: true, lastName: true },
+        })
+      : [];
 
   // Index member display labels for the list rows.
   const memberLabel = new Map<string, string>();

@@ -74,7 +74,15 @@ export type AuditAction =
   | 'notification.dispatch.failed'
   | 'notification.dispatch.skipped'
   | 'notification.fallback.emailed'
-  | 'cron.dispatch_notifications.scan';
+  | 'cron.dispatch_notifications.scan'
+  // J10 — RGPD account self-service + ops crons
+  | 'account.data.exported'
+  | 'account.deletion.requested'
+  | 'account.deletion.cancelled'
+  | 'account.deletion.materialised'
+  | 'account.deletion.purged'
+  | 'cron.purge_deleted.scan'
+  | 'cron.purge_push_subscriptions.scan';
 
 export interface LogAuditParams {
   action: AuditAction;

@@ -1,9 +1,9 @@
 # SPEC — Fxmily App
 
-**Date** : 2026-05-05
+**Date initiale** : 2026-05-05 · **Dernière révision** : 2026-05-08 (v1.1 amendement post-J7.8)
 **Auteur** : Eliot Pena (interview structuré avec Claude Code, skill `/spec`)
-**Version** : 1.0 (initiale, à valider avant implémentation)
-**Statut** : Brouillon — à relire et amender par Eliot avant `/clear` + nouvelle session d'implémentation
+**Version** : **1.1** — voir [§20 Changelog v1.0 → v1.1](#20-changelog-v10--v11) pour les pivots stack et sous-jalons inventés en cours.
+**Statut** : Reflète la réalité 2026-05-08 (J0→J7.8 livrés, 12 PRs mergées, 503/503 tests verts, 50/50 fiches Mark Douglas seedées).
 
 ---
 
@@ -878,4 +878,118 @@ Pour ne pas surcharger une seule session Claude Code (qualité dégrade au-delà
 
 ---
 
-**Fin du SPEC v1.0**
+**Fin du SPEC v1.0** (préservé tel quel pour traçabilité de l'intent initial)
+
+---
+
+## 20. Changelog v1.0 → v1.1 (2026-05-08)
+
+> Cette section documente les pivots tranchés en cours d'implémentation entre 2026-05-05 et 2026-05-08, qui n'étaient pas reflétés dans le SPEC v1.0. **Le SPEC v1.0 est préservé immuable au-dessus pour traçabilité de la vision initiale** — cette section v1.1 est le delta vers la réalité.
+
+### 20.1 — Pivots stack (déviations contrôlées validées)
+
+| Item | SPEC v1.0 | Réalité v1.1 | Justification | Jalon |
+|---|---|---|---|---|
+| Charts | Tremor (§4) | **Recharts** | Bundle 200KB→150KB + control DS complet (Cell, Tooltip, fontSize tokens) | J6.6 |
+| Auth strategy | DB sessions (§7.1) | **JWT** | Bug Auth.js v5 + Credentials + DB strategy (issue `nextauthjs/next-auth#12848`). JWT-only edge-compat et officiellement recommandé par Auth.js. Table `Session` conservée pour future Email provider. | J1 |
+| Middleware | `middleware.ts` (§17) | **`proxy.ts`** | Renommage Next 16 (sortie 21 oct 2025) + matcher exclude `/api/*` (handler retourne 401 JSON, pas 307 redirect). | J1 + J2 fix |
+| Palette | bleu/noir + Inter (§8.1, §8.2) | **lime accent + Geist + Mercury shadows** | Handoff Claude Design Sprint #1, validé visuellement par Eliot. Tokens DS v2 (`--acc`, `--bg-*`, `--t-*`, `--b-*`). | Sprint #1 |
+| Composants UI | shadcn/ui (§4) | **shadcn/ui + 9 primitives DS-v2 custom** | Sprint #1 a généré : `btn`, `card`, `pill`, `tooltip`, `kbd`, `sparkline`, `empty-state`, `error-state`, `info-dot`. Tailwind 4.2 + variants tone-aware. | Sprint #1 |
+| Trade screens | `screenshots[]` array (§6.2) | **2 colonnes nullable** `screenshotEntryKey` / `screenshotExitKey` | KISS — V1 a 2 instances connues alignées sur les 2 phases du wizard (avant/après). Migration vers `TradeScreenshot` table en V2 si plus besoin. | J2 |
+| R2 | wired V1 (§4) | **stub local FS** (LocalStorageAdapter) | Cloudflare R2 keys non livrées par Eliot. Switch automatique vers R2StorageAdapter quand `R2_ACCOUNT_ID + 3 autres R2_*` sont set en `.env`. AWS SDK pas installé. | J2 |
+| Trade R réalisé | calc auto si possible (§7.3) | **`stopLossPrice` optionnel + `realizedRSource: 'computed' \| 'estimated'`** | Permet R réalisé exact quand stop-loss saisi, fallback intelligent selon outcome sinon. Exclu des aggregates précision-sensibles. | J2 |
+| Vidéo Zoom 500MB annotation | J4 (§7.8) | **différée J4.5** | `req.formData()` actuel buffer-tout-en-RAM (incompatible 500 MiB) + R2 pas wired. UI prête (slot vidéo désactivé J4.5). | J4 |
+| Markdown rendering | non spécifié | **`<SafeMarkdown>` server-only** (react-markdown + remark-gfm + rehype-sanitize hardened schema + skipHtml + urlTransform allowlist) | Hardening défense-en-profondeur pour le contenu Mark Douglas (ch.J7) + futur prompt Claude J8. Bundle 30KB en RSC, 0 client JS. | J7 |
+| Fiches Mark Douglas | ~50 (§7.6) | **50 livrées** (12 J7 + 10 J7.5 + 9 J7.6 + 19 J7.8) | Cible atteinte. Citations ≤30 mots fair use FR L122-5 + `quoteSourceChapter` obligatoire + paraphrases 200-400 mots à la voix d'Eliot + 1-3 exercises. | J7.8 |
+| Cooldown Mark Douglas | non spécifié | **Yu-kai Chou Octalysis** : white hat 7j / black hat 14j | Anti-spam push notifications. Black hat = fiches d'urgence (tilt, deviation, hedge violation). White hat = fiches catalogue (acceptance, probabilities, process). | J7 |
+| Streak design | non spécifié | **Mercy infrastructure** anti-Snapchat | Pill "EN FEU" retirée. Flame-flicker (7+ j) + flame-pulse (30+ j) + 4-tick milestone strip 7/14/30/100 + sr-only "Palier franchi". | J5 audit |
+
+### 20.2 — Sous-jalons inventés en cours (12)
+
+Le SPEC v1.0 §15 décrivait 11 jalons J0→J10. La réalité a produit **12 sous-jalons polish/hardening** non prévus, intercalés entre les jalons SPEC. Pattern récurrent : "audit-driven hardening" post-implémentation initiale (4-5 subagents code-reviewer + security-auditor + accessibility-reviewer + ui-designer + fxmily-content-checker en parallèle).
+
+| Sous-jalon | PR | mergeCommit | Scope |
+|---|---|---|---|
+| **Sprint #1 Design** | #12 | `a62280f` | Palette lime + Geist + Mercury shadows + 12/12 écrans élevés DS v2 |
+| **J1.5 magic link** | _différé_ | — | Reset password Auth.js (Email provider workaround Credentials) |
+| **J4.5 vidéo Zoom 500MB** | _différé_ | — | Presigned PUT R2 + body streaming |
+| **J5.5 timezone JWT + édition checkin + routine perso** | inclus #15 | `c8c891f` | `User.timezone` propagée via JWT à toutes pages + Server Actions, élimine 4 hardcodes Europe/Paris |
+| **J5 ops** | #16 #17 #18 #19 | — | E2E helpers cross-jalon, smoke-tour visuel Playwright, CI quota optim, `tsx` devDep |
+| **J6.5 live recompute** | #22 | `8e01f64` | Server Actions `closeTrade`/`submitMorning`/`submitEvening` appellent `scheduleScoreRecompute` via `after()` Next 16 + debounce 5s |
+| **J6.6 premium polish** | #23 | `8813ee0` | Recharts hex (Safari iOS CSS-var fix) + count-up `useMotionValue` + glow95+ + a11y BLOCKERs |
+| **J7.5 polish premium** | #25 | `e187c63` | Framer Motion (FavoriteToggle spring + AnimatedCardGrid stagger + HelpfulFeedback tap) + a11y H4-H5 + 10 cards + cleanup CR-#10/#16/#19 |
+| **J7.6 deep polish** | #26 | `fb336a0` | Reader hero aurora halo + h-rise H1 f-display 32-48px + drop-cap magazine + 9 cards + a11y H8 (`headingOffset` prop) |
+| **J7.7 dashboard widget** | #27 | `607e6ae` | `<DouglasInboxWidget>` Server Component sur `/dashboard` (top 3 deliveries + counter unread + CTAs) + smoke browser live validé |
+| **J7.8 50/50 fiches** | _en cours_ | _en cours_ | +19 fiches Mark Douglas (ego+3, prob+2, conf+1, pat+2, cons+2, fear+3, loss+2, proc+4) → cible §7.6 atteinte. Fix `accepter-1r-mental` lowercase. SPEC.md → v1.1. |
+
+### 20.3 — Pattern audit-driven hardening (canon Fxmily)
+
+Institué progressivement de J5 → J7. Chaque jalon non-trivial est livré en 2 phases :
+
+```
+Phase 1 — Implementation (commit "feat(jX): ...")
+Phase 2 — Audit-driven hardening :
+  ├─ 4-5 subagents en parallèle (code-reviewer + security-auditor +
+  │   accessibility-reviewer + ui-designer + fxmily-content-checker)
+  ├─ Tri TIER 1 (BLOCKERs) → TIER 2 (HIGH) → TIER 3 (MEDIUM) → TIER 4 (LOW)
+  ├─ Fix TIER 1+2+3 in-session (commit "feat(jX): audit-driven hardening")
+  ├─ Reclassement TIER 4 → sous-jalon polish suivant (J5.5, J6.5, J7.5...)
+  ├─ Smoke test live (curl + DB + dev server) prouvant SPEC §15 critère "Done quand"
+  ├─ Update apps/web/CLAUDE.md (section close-out)
+  └─ PR + rebase merge (préserve commits granulaires)
+```
+
+**Stats par jalon** : J5 (13 ship-blockers + ~25 HIGH closed), J6 (8 BLOCKERs + 6 HIGH), J7 (8 BLOCKERs + 6 HIGH closed, 6 BLOCKERs UI design DS-coherence reclassés J7.5).
+
+### 20.4 — Sécurité tranchée en session (canon Fxmily, à conserver pour J8+)
+
+| Pattern | Origine | Application |
+|---|---|---|
+| `crypto.timingSafeEqual` SHA-256 sur `X-Cron-Secret` | J5 (CWE-208 Cloudflare length-leak) | Tous crons (`/api/cron/checkin-reminders`, `recompute-scores`, `dispatch-douglas`, `weekly-reports` à venir J8) |
+| Token bucket in-memory (5 burst, 1/min) + LRU `maxKeys: 1024` | J5 | Tous crons |
+| `?at=ISO` dev override double-gated (`NODE_ENV !== 'production'` AND `AUTH_URL` not HTTPS-prod) | J5 | Tous crons (smoke test live sans attendre temporel) |
+| `safeFreeText` NFC + bidi/zero-width strip | J5 audit M5 (Trojan Source) | 100% champs free-text user-controlled (`intention`, `journalNote`, `gratitudeItems`, `sportType`, `paraphrase`, `quote`, `title`, `exercises.label/description`). **CRITIQUE pour J8 prompt Claude**. |
+| Postgres unique partial index (`WHERE status='pending' AND ...`) | J5 dedup | Idempotency cron-side au niveau DB (pattern J5 carbone J7) |
+| JWT `update()` callback bypass closé | J5 audit H3 | Dead-code retiré (`session.role` / `session.status` client-supplied refusés) |
+| BOLA cross-resource check à 2 niveaux (path-owner + auth check) | J2 | Tous uploads (`trades/*`, `annotations/*`) + GET re-vérifie ownership |
+| `rehype-sanitize` hardened schema + `urlTransform` allowlist | J7 | `<SafeMarkdown>` server-only (anti-XSS + anti-`javascript:` URLs) |
+
+### 20.5 — État vs SPEC §15 critères "Done quand"
+
+| Jalon | Critère SPEC §15 | État 2026-05-08 |
+|---|---|---|
+| J0 | `pnpm dev` lance app + page accueil bleue/noire au logo | ✅ (palette pivotée lime DS v2) |
+| J1 | Eliot peut inviter, recevoir mail, créer compte, logger | ✅ smoke E2E live validé via Resend réel |
+| J2 | Membre crée trade complet, voit liste, ouvre trade + screens | ✅ smoke live curl + magic-byte + BOLA |
+| J3 | Eliot voit liste membres, ouvre membre, voit trades | ✅ |
+| J4 | Eliot annote, membre reçoit push, ouvre, statut "vu" | ⚠️ V1 image-only 8 MiB (vidéo 500 MiB → J4.5) |
+| J5 | Membre fait 2 check-ins, voit streak, reçoit pushes | ✅ smoke cron+P2002+rate-limit+JWT validé |
+| J6 | Membre voit 4 scores + graphiques + patterns émotion×perf | ✅ 458→503 tests, 100 trades demo seeded |
+| J7 | Bibliothèque + déclencheurs + membre reçoit fiche après 3 pertes consécutives | ✅ smoke `scripts/smoke-test-j7.ts` ALL GREEN avec 50 cards |
+| J8 | Eliot reçoit email avec rapport hebdo de chaque membre actif | ⏳ NEXT — voir §20.6 |
+| J9 | Membre active notifs, reçoit pushes prévus | ⏳ pending |
+| J10 | App en prod sur app.fxmily.com, Eliot s'invite + teste end-to-end | ⏳ pending (Hetzner deploy + RGPD + Sentry + domaine) |
+
+### 20.6 — Backlog clair J8 (prochaine session, après `/clear`)
+
+**Scope** : Rapport hebdo IA admin (SPEC §7.10) — Claude Sonnet 4.6 + prompt caching + cron dimanche 21:00 UTC + email digest fxeliott.
+
+**Pré-requis** :
+- ✅ `safeFreeText` câblé sur tous champs free-text (J5+J7 — anti-prompt-injection critique)
+- ✅ Pattern cron J5/J6/J7 carbone (`timingSafeEqual` + token bucket + 503/401/429/405)
+- ⚠️ `ANTHROPIC_API_KEY` à ajouter par Eliot dans `.env` worktree avant smoke test live (V1 ship avec mock SDK acceptable)
+- ⚠️ Resend domain `fxmily.com` non vérifié → V1 ship en envoyant à `eliott.pena@icloud.com` (compte Resend Eliot vérifié)
+
+**Briques réutilisables** :
+- `lib/cards/service.ts` `listMyDeliveries` + `aggregateMemberDeliveryStats` pour intégrer la posture Douglas dans le digest IA
+- `lib/scoring/service.ts` `getLatestBehavioralScore` pour sourcer scores 4-dim
+- `lib/checkin/service.ts` `listRecentCheckinDays` + `getStreak` pour la 7j window
+- `lib/trades/service.ts` pour la 7j trades window (R, outcome, plan, hedge, émotion)
+- `safeFreeText` (`lib/text/safe.ts`) — appliquer sur 100% des inputs user-controlled AVANT envoi au prompt Claude
+- Pattern email React Email v2 + Resend (`AnnotationReceivedEmail` template carbone)
+
+**Coût SPEC §16** : ~30 membres × ~3-5k tokens input + ~1-2k tokens output × Sonnet 4.6 = ~5-10€/mois. Garde-fou : retry h+6/h+12/h+24 si API down. Pas de blocage app.
+
+---
+
+**Fin du SPEC v1.1**

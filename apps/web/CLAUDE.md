@@ -843,3 +843,83 @@ Branche dédiée claude/j7-5-polish pour pousser les BLOCKERs UI design DS coher
 - a11y H8 : <SafeMarkdown> headingOffset prop pour exercises descriptions (latent risk).
 - J9 : push notifications quand fiche délivrée.
 - J10 : wirer cron Hetzner 6h + CRON_SECRET au worktree .env.
+
+## J7.8 — 50/50 fiches Mark Douglas (livré 2026-05-08)
+
+Branche dédiée pour pousser la cible SPEC §7.6 à 50 fiches livrées (vs 31 fin J7.7), avec sourcing canonique Mark Douglas vérifié via WebSearch (Trading in the Zone ch.6/7/10/11 + The Disciplined Trader ch.4/6/7/9/10/13/15/16). Fix bonus d'un id exercise pré-existant qui violait le regex Zod kebab-case lowercase.
+
+### Closed
+
+**+19 fiches Mark Douglas** (`scripts/data/cards.ts`, +800 lignes) ciblées sur les catégories sous-couvertes :
+
+- **ego (+3)** : `l-ego-veut-avoir-raison` (TitZ ch.7, black), `je-ne-suis-pas-mon-resultat` (TitZ ch.10, white), `l-arrogance-precede-la-chute` (TitZ ch.6, black, trigger `win_streak n=7`).
+- **probabilities (+2)** : `penser-en-statistiques-pas-en-prevision` (TitZ ch.11 — verbatim 2nd fundamental truth, white), `la-loi-des-grands-nombres` (TitZ ch.11 — verbatim 4th fundamental truth, white).
+- **confidence (+1)** : `la-confiance-vient-de-l-execution` (TitZ ch.11, white).
+- **patience (+2)** : `attendre-est-une-action` (TDT ch.6, white), `le-piege-de-la-quantite` (TDT ch.4, black).
+- **consistency (+2)** : `consistance-vs-perfection` (TitZ ch.11 — verbatim definition, white), `pourquoi-tu-trahis-ton-plan` (TDT ch.10, black).
+- **fear (+3)** : `la-peur-de-rater-quelque-chose` (TitZ ch.7 — verbatim 4 fears, black, trigger `emotion_logged tag=fomo`), `la-peur-de-laisser-de-l-argent` (TitZ ch.7 — verbatim 4 fears, black), `la-peur-de-perdre-bloque-l-execution` (TitZ ch.7 — verbatim "Fear narrows our focus", black).
+- **loss (+2)** : `la-perte-est-une-information` (TDT ch.7, white), `couper-court-couper-vite` (TDT ch.16, black, priority 9).
+- **process (+4)** : `pre-trade-checklist` (TDT ch.6, white), `journal-est-un-miroir` (TDT ch.13, white), `mesurer-ce-qui-compte` (TDT ch.16, white), `revue-mensuelle-strategique` (TDT ch.16, white).
+
+**Sourcing rigueur fair use FR L122-5** :
+
+- 5 fiches utilisent des **citations verbatim** sourcées via WebSearch (Goodreads + TraderLion + Bookey 2025-2026) sur les 5 fundamental truths + 4 primary trading fears + "Fear narrows our focus" — toutes ≤30 mots avec attribution chapter précise.
+- 14 fiches utilisent des **citations en paraphrase synthèse** marquées explicitement "(paraphrase de l'argument)" dans `quoteSourceChapter` — pattern déjà institué par J5 audit Mark Douglas Card content fix (cf. fxmily_project.md "Citation Mark Douglas pseudo-sourcée 'définir le brief' remplacée par paraphrase honnête 'Dans l'esprit de Mark Douglas'").
+- 100% paraphrases en français, voix d'Eliot, posture athlète/process — strict alignment avec `feedback_premium_frontend` et SPEC §2 (zéro analyse de marché, oui process + psychologie).
+- 100% `safeFreeText`-compatibles (NFC + bidi/zero-width strip enforced par Zod schema).
+
+**Trigger rules nouvelles** :
+
+- `l-arrogance-precede-la-chute` → `win_streak n=7` priority 8 (complète le tier `sur-confiance-le-piege-d-apres-victoire` n=5).
+- `la-peur-de-rater-quelque-chose` → `emotion_logged tag=fomo` priority 8 (complète `l-art-de-ne-rien-faire`).
+- 17 fiches catalogue (`triggerRules: null`) — accessibles via `/library` parcours libre + favoris.
+
+**Code-review CR-bonus FIXÉ** :
+
+- `accepter-la-perte-comme-cout` exercise.1.id était `accepter-1R-mental` (uppercase R) qui violait le regex Zod kebab-case lowercase `/^[a-z0-9-]+$/`. Fix : renommé en `accepter-1r-mental`. Bug pré-existant détecté par le validateur 50/50 lors de la passe J7.8.
+
+**Validation Zod 50/50** :
+
+- Nouveau script `scripts/validate-cards.ts` qui parse chaque fiche du seed via `cardCreateSchema.safeParse`. Sortie : `Total: 50 | OK: 50 | ERR: 0`.
+- Garantit que toute future fiche ajoutée au seed passe la validation ≤30 mots quote + paraphrase 50-4000 chars + safeFreeText + slug kebab-case + exercises 1-3 + trigger rules JSON valide.
+
+### Quality gate
+
+- **Type-check** : ✓ (tsc --noEmit exit 0)
+- **Vitest** : **503/503** verts (stable, +0 — aucun test cassé par les patches content)
+- **ESLint** : ✓ (max-warnings=0)
+- **Prettier** : ✓ sur les fichiers modifiés (`cards.ts` + `validate-cards.ts`). Note : 218 fichiers du repo ont des issues Prettier pré-existantes — hors scope J7.8.
+- **Build prod** : ✓ (Turbopack avec placeholders documentés `AUTH_URL=https://build.fxmily.invalid` + DATABASE_URL placeholder)
+- **Validation Zod cards** : ✓ 50/50 OK
+- **Seed live** : ✓ DB `fxmily-postgres-dev` healthy, 50 cards en DB (19 created + 31 updated par seed safe-update)
+- **Smoke test J7** : ✓ ALL GREEN avec 50 cards (engine pick `sortir-du-tilt` correctement, P2002 idempotency enforced, audit trail propre)
+- **Migration** : ✓ (aucune nouvelle migration, content-only)
+
+### SPEC.md → v1.1
+
+Section 20 ajoutée à `D:\Fxmily\SPEC.md` documentant :
+
+- 20.1 Pivots stack (Tremor→Recharts, JWT, lime DS v2, Sprint #1, R2 stub, etc.)
+- 20.2 12 sous-jalons inventés en cours (Sprint #1 + J5.5 + J6.5/J6.6 + J7.5/J7.6/J7.7/J7.8)
+- 20.3 Pattern audit-driven hardening (canon Fxmily depuis J5)
+- 20.4 Sécurité tranchée en session (timingSafeEqual + token bucket + safeFreeText + JWT bypass + BOLA + rehype-sanitize)
+- 20.5 État vs SPEC §15 critères "Done quand" (J0→J7.8 ✅, J8 ⏳, J9/J10 pending)
+- 20.6 Backlog clair J8 (rapport hebdo IA Claude Sonnet 4.6 + briques réutilisables + coût ~5-10€/mois)
+
+SPEC v1.0 préservé immuable au-dessus pour traçabilité de la vision initiale ; v1.1 est le delta vers la réalité 2026-05-08.
+
+### Reste après J7.8
+
+**Avant J8** :
+
+- DS coherence J7.5 résiduelle (typography tokens DS + var(--\*) direct hybride). Optionnel V1.
+- a11y H7 : pills "Brouillon"/"Black hat"/"Cadre d'urgence" aria-label informatif.
+- Form CRUD admin `/admin/cards/new` + `/admin/cards/[id]/edit` (V1 ship sans — seed + toggle published + delete suffisent).
+- Tests E2E full happy-path login → trade → dispatch Douglas (helper seed Postgres cross-jalon attendu).
+- 218 fichiers Prettier issues pré-existantes (cleanup hors scope).
+
+**J8 (next session après `/clear`)** : Rapport hebdo IA admin Claude Sonnet 4.6 (cf. SPEC §20.6 backlog).
+
+**J9** : Push notifications Web Push + VAPID + service worker.
+
+**J10** : Prod hardening + RGPD endpoints + Sentry + Hetzner deploy + domaine app.fxmily.com.

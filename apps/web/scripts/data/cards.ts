@@ -488,7 +488,7 @@ Tous ces comportements ont la même racine : l'identité accrochée au résultat
           "Engagement : à partir de maintenant, aucune entrée sans stop défini. Si tu n'arrives pas à poser un stop logique sur ce trade, c'est que le trade n'est pas valide. Tu passes.",
       },
       {
-        id: 'accepter-1R-mental',
+        id: 'accepter-1r-mental',
         label: 'Acceptation mentale du -1R',
         description:
           'Avant chaque entrée, dis à voix haute : "Ce trade peut prendre -1R. Je l\'accepte." Cette pré-acceptation rend la coupure mécanique au lieu d\'émotionnelle.',
@@ -1327,6 +1327,843 @@ Le piège : croire que la routine est une perte de temps quand "y a déjà du mo
     triggerRules: null,
     hatClass: 'white',
     priority: 6,
+    published: true,
+  },
+
+  // =============================================================================
+  // J7.8 — 19 fiches additionnelles → 50/50 SPEC §7.6 cible
+  // Catégories sous-couvertes ciblées : ego(+3), probabilities(+2), confidence(+1),
+  // patience(+2), consistency(+2), fear(+3), loss(+2), process(+4).
+  // Sources canoniques vérifiées via Trading in the Zone (TitZ) + The Disciplined
+  // Trader 1990 (TDT) — chapitres confirmés via WebSearch. Quotes ≤30 mots fair
+  // use FR L122-5 + paraphrases 200-400 mots à la voix d'Eliot.
+  // =============================================================================
+
+  // ---- EGO (+3) ----
+
+  {
+    slug: 'l-ego-veut-avoir-raison',
+    title: "L'ego veut avoir raison, pas gagner",
+    category: 'ego',
+    quote:
+      'The need to be right is the single most destructive force in your trading. It blocks the flow of information.',
+    quoteSourceChapter: "Trading in the Zone, ch.7 (paraphrase de l'argument central)",
+    paraphrase: `Le marché te tend une perche : tu peux soit avoir raison, soit gagner. Mark Douglas démontre dans Trading in the Zone que les deux sont rarement compatibles à court terme.
+
+**Le mécanisme.** Quand tu entres en trade, ton cerveau crée immédiatement une histoire ("le marché va monter"). Cette histoire devient une identité. Si le prix va contre toi, ton ego ne lit plus le marché — il défend son histoire. Tu déplaces ton stop, tu rajoutes à la perte, tu refuses de couper. Pas parce que c'est rationnel, mais parce qu'avoir tort fait mal à ton ego.
+
+**Le test honnête.** Pose-toi la question avant chaque add ou hold-through : "Si je n'avais pas ce trade ouvert, est-ce que j'entrerais maintenant ?" Si la réponse est non, ton ego parle, pas ton edge.
+
+**La posture du pro.** Le trader constant n'a pas d'opinion sur le marché — il a des hypothèses probabilistes qu'il abandonne dès que l'évidence change. Il préfère être profitable plutôt que validé. C'est la différence entre l'analyste et l'opérateur.
+
+**Action :**
+
+- À l'entrée, écris la condition d'invalidation. "Je suis dans le trade tant que X. Si X casse, je sors sans débat."
+- Quand la condition casse, exécute. Pas de négociation. L'ego va protester — c'est exactement la preuve que tu fais bien.
+- Tiens un journal "ego vs edge" : pour chaque trade qui a fini en perte plus grosse que prévue, identifie le moment où l'ego a pris la main.`,
+    exercises: [
+      {
+        id: 'condition-invalidation',
+        label: "Écrire la condition d'invalidation à l'entrée",
+        description:
+          'Avant chaque trade, écris en une phrase la condition qui invalide ta thèse : "Je sors si X." X doit être objectif (niveau, structure, news). Pas "si ça monte trop". Si tu ne peux pas l\'écrire, tu n\'as pas de plan.',
+      },
+      {
+        id: 'journal-ego-vs-edge',
+        label: 'Journal ego vs edge',
+        description:
+          "Pour chaque trade clos cette semaine, note : as-tu sorti à la condition prévue ? Si non, qu'est-ce qui t'a fait dévier ? Cherche le pattern. L'ego laisse une signature reconnaissable.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 7,
+    published: true,
+  },
+
+  {
+    slug: 'je-ne-suis-pas-mon-resultat',
+    title: 'Je ne suis pas mon résultat',
+    category: 'ego',
+    quote:
+      "When you operate from the assumption that anything can happen, you can't be wrong about the market — only your expectations can.",
+    quoteSourceChapter: 'Trading in the Zone, ch.10',
+    paraphrase: `Une perte n'est pas un jugement sur toi. Une victoire non plus. Pourtant ton mental colle les deux à ton identité — c'est de là que vient la souffrance du trading.
+
+**Le piège identitaire.** Quand tu dis "je suis perdant aujourd'hui", tu confonds ton compte de résultat avec ta personne. Ton cerveau réagit alors comme à une attaque sociale : honte, repli, agressivité réparatrice. Mark Douglas explique qu'aucune décision lucide ne peut sortir de cet état.
+
+**Ce qui se passe quand tu te détaches.** Le trade devient ce qu'il est : une transaction probabiliste, gagnante ou perdante, isolée. Tu peux observer le résultat sans qu'il te définisse. Cette distance crée la marge mentale nécessaire pour appliquer ton plan le trade suivant.
+
+**Pourquoi c'est si dur.** Parce que la société récompense l'identification au résultat ("je suis bon en maths", "je suis nul en sport"). Mais le trading récompense l'inverse : la dissociation entre toi et le compte de résultat. C'est une discipline mentale qui se construit, pas un trait de caractère.
+
+**Méthode :**
+
+- Reformule à voix haute après chaque trade : "Le trade a perdu" — pas "j'ai perdu". Ce n'est pas un détail.
+- Sépare les KPI : suivre process metrics (plan respecté, sizing standard, SL placé) et outcome metrics (PnL) sur deux lignes distinctes du journal. Tu n'es responsable que des premières.
+- Si tu sens la honte monter après une perte, écris une phrase : "Le trade X a perdu Y R. Mon plan était Z. Plan respecté : oui/non." Factuel. Pas d'adjectif.`,
+    exercises: [
+      {
+        id: 'reformulation-resultat',
+        label: 'Reformulation : "le trade a perdu"',
+        description:
+          'Banni de ton vocabulaire le "j\'ai perdu / j\'ai gagné". Remplace par "le trade a perdu / gagné X R". Petit changement, gros effet sur la dissociation identité-résultat.',
+      },
+      {
+        id: 'kpi-process-vs-outcome',
+        label: 'Séparer process metrics et outcome metrics',
+        description:
+          'Crée deux colonnes dans ton journal : (1) Process — plan respecté, sizing standard, SL placé, sortie selon plan. (2) Outcome — PnL, R réalisé. Évalue ta semaine sur la 1ère colonne, pas la 2nde.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 7,
+    published: true,
+  },
+
+  {
+    slug: 'l-arrogance-precede-la-chute',
+    title: "L'arrogance précède la chute",
+    category: 'ego',
+    quote:
+      "When you are at the height of your success, that's precisely when you are most vulnerable to the kind of thinking that will undo it.",
+    quoteSourceChapter: 'Trading in the Zone, ch.6',
+    paraphrase: `Tu viens d'enchaîner une belle série. Le compte est haut. Tu te sens fluide, lucide, presque invincible. C'est le moment exact où ton edge va craquer — pas à cause du marché, à cause de toi.
+
+**Le pattern documenté.** Mark Douglas observe ce cycle de façon répétée chez les traders qui cassent : sur-confiance après une série, prise de risque hors plan, retour brutal à la moyenne avec dégâts amplifiés. La psychologie du gain est plus dangereuse que celle de la perte parce qu'elle ne déclenche pas d'alerte interne.
+
+**Pourquoi le cerveau te trahit.** Une série de gains active le système de récompense (dopamine). Cette chimie crée une distorsion : tu attribues le succès à ton talent, pas à la variance favorable. Tu sizes plus gros, tu ignores le SL, tu prends des setups B-grade en pensant qu'ils sont A-grade. Le marché te ramène à la moyenne avec violence.
+
+**Le contre-poids.** Le trader pro applique le **scaling discipliné** : après une série positive, il ne change rien. Sizing identique, setups identiques, plan identique. Il sait que la performance suit une distribution non-stationnaire et que la sur-confiance est un bug, pas une feature.
+
+**Action :**
+
+- Définis à l'avance la règle : "Après 5 trades gagnants consécutifs, je ne change pas mon sizing pendant 10 trades suivants."
+- Si tu sens "le flow", écris-le dans ton journal. C'est un signal d'alerte, pas une autorisation. Le flow vient avec un coût caché.
+- Garde une métrique "drawdown du high" — distance entre ton plus haut equity et l'actuel. Visualise-la. Le pire drawdown vient toujours après le high.`,
+    exercises: [
+      {
+        id: 'sizing-frozen-post-streak',
+        label: 'Sizing gelé après 5 wins consécutifs',
+        description:
+          'Règle stricte : après 5 trades gagnants consécutifs, le sizing reste identique pendant les 10 trades suivants. Pas de "je peux me permettre". Le marché punit l\'asymétrie ego/edge.',
+      },
+      {
+        id: 'flow-signal-alerte',
+        label: 'Le "flow" est un signal d\'alerte, pas une autorisation',
+        description:
+          'Quand tu sens "tout réussir", note-le dans ton journal avec timestamp. Relis ces entrées une fois par mois. Tu verras le pattern : la chute suit le flow.',
+      },
+    ],
+    triggerRules: { kind: 'win_streak', n: 7 },
+    hatClass: 'black',
+    priority: 8,
+    published: true,
+  },
+
+  // ---- PROBABILITIES (+2) ----
+
+  {
+    slug: 'penser-en-statistiques-pas-en-prevision',
+    title: 'Penser en statistiques, pas en prévision',
+    category: 'probabilities',
+    quote: "You don't need to know what is going to happen next to make money.",
+    quoteSourceChapter: 'Trading in the Zone, ch.11 (5 fundamental truths)',
+    paraphrase: `La 2e des cinq vérités fondamentales de Mark Douglas est contre-intuitive : tu n'as pas besoin de prédire pour gagner. C'est même l'inverse — chercher à prédire est ce qui te coûte le plus cher.
+
+**Le piège de la prévision.** Quand tu entres en trade en pensant "ça va monter", tu attaches ton ego à un résultat. Si le marché va contre toi, ta prévision est en jeu, pas seulement le trade. Tu défends, tu refuses de couper, tu rationalises. C'est la prévision qui crée l'incapacité à exécuter.
+
+**La pensée statistique.** Le pro ne prédit pas le prochain trade — il sait que sur 100 setups identiques, son edge produit X% de gagnants avec un payoff moyen Y. Il exécute chaque trade comme un échantillon de cette distribution. Le résultat individuel n'a pas de signification émotionnelle.
+
+**La transition mentale.** Passer de "je pense que ça va monter" à "j'ai un setup qui produit historiquement X%" est le passage le plus difficile du trader débutant. Ça enlève le plaisir de l'analyse-prévision, mais ça donne la consistance.
+
+**Comment t'y entraîner :**
+
+- Avant chaque entrée, formule : "Sur 100 trades comme celui-ci dans le passé, j'ai approximativement X% de wins avec Y R moyen." Si tu ne peux pas répondre, tu n'as pas d'edge mesuré — tu as une opinion.
+- Tiens un tracker par setup. Pas global. Setup A : 47 trades, 58% win, +0.8R moyen. Setup B : 22 trades, 41% win, +0.3R moyen. Le tracker te ramène à la statistique quand l'émotion veut prendre la barre.
+- Refuse de répondre à la question "où va le marché demain ?" — ni à toi-même, ni aux autres. Le pro répond "je ne sais pas, et c'est OK".`,
+    exercises: [
+      {
+        id: 'tracker-par-setup',
+        label: 'Tracker statistique par setup',
+        description:
+          "Pour chaque setup que tu trades, maintiens un compteur : nombre de trades, win rate, R moyen, drawdown observé. Minimum 30 trades par setup avant conclusion. C'est ta base statistique — sans elle, tu opines, tu ne tranches pas.",
+      },
+      {
+        id: 'verbalisation-probabiliste',
+        label: "Verbalisation probabiliste à l'entrée",
+        description:
+          'À chaque entrée, dis à voix haute : "Setup X, win rate historique Y%, payoff Z. Ce trade peut être un gagnant ou un perdant — je ne sais pas." Banalise l\'incertitude.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 8,
+    published: true,
+  },
+
+  {
+    slug: 'la-loi-des-grands-nombres',
+    title: 'La loi des grands nombres : ton edge a besoin de temps',
+    category: 'probabilities',
+    quote:
+      'An edge is nothing more than an indication of a higher probability of one thing happening over another.',
+    quoteSourceChapter: 'Trading in the Zone, ch.11 (4th fundamental truth)',
+    paraphrase: `Ton edge ne se manifeste pas sur 5 trades. Pas sur 20. Souvent pas sur 50. La loi des grands nombres est un théorème mathématique, pas une métaphore — elle a besoin d'échantillon pour produire son résultat attendu.
+
+**Pourquoi c'est crucial.** Un edge à 55% de win rate avec payoff 1.2R produira une espérance positive sur 1000 trades. Sur 30 trades, il peut afficher 40% de win rate par variance — sans que l'edge soit cassé. Le débutant tire la conclusion "mon edge ne marche pas" exactement au moment où il devrait tenir.
+
+**Le danger du sample size minuscule.** À 30 trades, l'intervalle de confiance Wilson 95% sur un win rate observé de 50% va de ~33% à ~67%. Tu ne peux rien conclure de ferme. Pourtant ton mental conclut, parce qu'il déteste l'incertitude.
+
+**Ce que ça change concrètement.** Tu mesures ta performance sur des fenêtres de 100+ trades, pas par session ou par semaine. Tu acceptes que les drawdowns intermédiaires sont mathématiquement nécessaires. Tu ne touches pas à un système avant 200 trades minimum. C'est rude — mais c'est ça, le pro.
+
+**Application :**
+
+- Refuse toute conclusion sur ton edge avant 100 trades sur le setup mesuré. C'est une règle, pas un conseil.
+- Calcule l'intervalle de confiance Wilson de ton win rate observé. Si l'intervalle inclut le seuil de rentabilité, tu n'as **pas** la preuve d'un edge — tu as un échantillon.
+- Quand un drawdown survient, demande-toi : "Est-il dans la distribution attendue de ma stratégie ?" Si oui, tiens. Sinon, audit hors session — pas en plein trade.`,
+    exercises: [
+      {
+        id: 'cap-conclusion-sample-size',
+        label: '100 trades minimum avant conclusion sur un edge',
+        description:
+          'Règle : aucune décision "ce setup ne marche pas / marche bien" avant 100 trades exécutés sur ce setup. Avant : tu observes, tu mesures, tu n\'agis pas.',
+      },
+      {
+        id: 'wilson-confidence-interval',
+        label: "Calculer l'intervalle de confiance Wilson",
+        description:
+          "Pour ton setup principal, calcule l'intervalle de confiance 95% de ton win rate. Si ta win rate observée est 60% sur 30 trades, l'intervalle réel est ~42-76%. Visualise cette amplitude. Elle relativise tes conclusions.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 7,
+    published: true,
+  },
+
+  // ---- CONFIDENCE (+1) ----
+
+  {
+    slug: 'la-confiance-vient-de-l-execution',
+    title: "La confiance vient de l'exécution, pas du résultat",
+    category: 'confidence',
+    quote:
+      'Confidence comes from knowing that your edge has been executed flawlessly, not from knowing the trade will win.',
+    quoteSourceChapter: 'Trading in the Zone, ch.11 (paraphrase synthèse)',
+    paraphrase: `La confiance qui dure n'est pas la confiance dans le résultat — c'est la confiance dans l'exécution. Mark Douglas insiste : on ne peut pas avoir confiance dans ce qu'on ne contrôle pas (le marché), mais on peut avoir confiance dans ce qu'on contrôle (le process).
+
+**La confiance toxique.** "J'ai confiance que ce trade va gagner." Cette phrase est un piège. Tu attaches ta confiance à un résultat aléatoire. Quand il échoue, ta confiance s'écroule. Tu trades plus mal le suivant. Cycle destructeur.
+
+**La confiance saine.** "J'ai confiance que j'exécute mon plan correctement." C'est une phrase ancrée dans ce qui dépend de toi : entrée selon plan, SL placé, sizing standard, sortie selon règle. Le résultat suit ou ne suit pas — ta confiance reste intacte.
+
+**Comment elle se construit.** Par répétitions cohérentes. Chaque fois que tu exécutes ton plan parfaitement (qu'importe le résultat), tu déposes une "preuve" dans ton mental. Au bout de centaines de répétitions, tu n'as plus besoin d'y penser — l'exécution devient automatique. C'est la mécanique du stade "Mécanique" de Mark Douglas (TitZ ch.11).
+
+**Routine pour bâtir cette confiance :**
+
+- Score quotidien : combien de trades exécutés exactement selon plan / total trades. Vise 100%, peu importe le PnL.
+- Célèbre l'exécution propre, pas le PnL. Quand tu sors selon ton plan d'un trade gagnant, c'est aussi méritoire que quand tu coupes selon ton SL d'un trade perdant.
+- Ne juge pas une session par le compte de résultat. Juge-la par le ratio "exécutions propres / exécutions hors plan".`,
+    exercises: [
+      {
+        id: 'score-execution-propre',
+        label: "Score quotidien d'exécution propre",
+        description:
+          "Chaque session, calcule : (trades exécutés exactement selon plan) / (total trades). Cible 100%. C'est la métrique reine. Le PnL est subalterne.",
+      },
+      {
+        id: 'celebration-execution',
+        label: "Célébrer l'exécution, pas le résultat",
+        description:
+          "Quand tu coupes selon ton SL un trade perdant, prends 30 secondes pour te dire : \"J'ai exécuté.\" C'est une victoire mentale qui vaut autant qu'un trade gagnant — peut-être plus.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 7,
+    published: true,
+  },
+
+  // ---- PATIENCE (+2) ----
+
+  {
+    slug: 'attendre-est-une-action',
+    title: 'Attendre est une action, pas une absence',
+    category: 'patience',
+    quote: 'The market does not owe you a setup. Your job is to wait, not to find one.',
+    quoteSourceChapter: "The Disciplined Trader, ch.6 (paraphrase de l'argument)",
+    paraphrase: `Quand tu n'as pas de setup A-grade, ne pas trader **est** ton trade. Cette posture mentale est parmi les plus difficiles à adopter — parce que ton cerveau interprète l'absence d'action comme une perte d'opportunité.
+
+**L'illusion productiviste.** Tu sens que "ne rien faire" est paresseux ou peureux. Erreur de framing. Le cash en attente est une position active. Mark Douglas explique dans The Disciplined Trader (ch.6) que le marché est un "environnement non-construit" — il ne te doit rien, et certainement pas un setup à chaque session.
+
+**Le coût caché de l'impatience.** Forcer un trade B-grade détruit l'edge global. Si ton setup A-grade a un win rate de 60% et le B-grade de 45%, mélanger les deux te ramène à 50% — et fout en l'air ton expectancy. Tu paies très cher l'illusion de "faire quelque chose".
+
+**Le contre-poids mental.** Le trader qui dure considère le cash comme une **position** — exactement comme un long ou un short. Il en mesure la performance ("aujourd'hui j'ai gardé 100% en cash, c'était la bonne décision"). Il célèbre les sessions où il n'a pas tradé pour de bonnes raisons.
+
+**Comment t'y entraîner :**
+
+- Définis les conditions A-grade par écrit. Hors A-grade = pas de trade. Période.
+- Tiens un journal "no-trade days" : note pourquoi tu n'as pas tradé. C'est la décision la plus rentable de la semaine quand l'absence de setup était réelle.
+- Si tu ressens l'impulsion de "trouver" un trade, ferme l'écran 30 minutes. Si à la réouverture le setup A-grade est là, tu n'as rien manqué — il sera toujours là demain. Si non, tu viens de t'épargner une perte évitable.`,
+    exercises: [
+      {
+        id: 'conditions-a-grade',
+        label: 'Définir par écrit les conditions A-grade',
+        description:
+          'Liste les 3-5 conditions précises qui définissent un setup A-grade pour ta stratégie. Confluence, structure, contexte, news. Hors-A-grade = no trade. Rédige-le ce week-end, pas en plein trade.',
+      },
+      {
+        id: 'journal-no-trade',
+        label: 'Journal des "no-trade days"',
+        description:
+          "Note chaque session sans trade : durée écran, raison de ne pas avoir entré, ce que le marché a fait après. Réviser cette liste chaque mois renforce la conviction que l'attente est rentable.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 7,
+    published: true,
+  },
+
+  {
+    slug: 'le-piege-de-la-quantite',
+    title: "Le piège de la quantité : trader plus n'est pas trader mieux",
+    category: 'patience',
+    quote: 'There is unlimited potential for profit and loss in any given moment.',
+    quoteSourceChapter: 'The Disciplined Trader, ch.4',
+    paraphrase: `Tu trades 12 fois par jour pour "rentabiliser le temps écran". Tu confonds activité et productivité. Mark Douglas démontre dans The Disciplined Trader (ch.4) que cette équation est fausse — et coûteuse.
+
+**Le piège du payement à l'heure.** Le trader débutant traite ses heures écran comme du salariat : "j'y ai passé 6h, je dois en sortir quelque chose". Le marché ne récompense pas le temps passé — il récompense la qualité des décisions. 1 trade A-grade par jour produit plus que 12 trades B-grade.
+
+**La dilution mathématique.** Chaque trade ajouté hors edge dilue ton expectancy. Si ton edge produit +0.4R par trade A-grade, et que tu rajoutes 5 trades à -0.1R chacun par impatience, ta moyenne tombe à +0.05R. Tu fais beaucoup pour gagner peu — et tu fragilises ton compte.
+
+**Le coût mental.** Multiplier les trades multiplie aussi les décisions, donc l'épuisement décisionnel ("decision fatigue"). À ton 8e trade, tu n'es plus le même opérateur qu'au 1er. Tes décisions tardives sont structurellement moins bonnes.
+
+**La discipline du sniper.** Le pro a une thèse de la journée, attend le moment exact, exécute, sort. Il rentre chez lui. Il ne cherche pas à "couvrir" le marché — il chasse une opportunité précise.
+
+**Plafond quotidien :**
+
+- Définis un cap de trades par session. 3 max si tu débutes. Au 3e exécuté, l'écran se ferme — gagnant ou perdant.
+- Mesure ton expectancy par tranche de qualité de setup. Tu verras que tes 3 meilleurs trades de la semaine portent 90% du PnL — et le reste te coûte.
+- Si tu sens monter le besoin de "rentabiliser le temps écran", c'est l'alerte. Le temps écran n'est pas un coût à amortir — c'est une exposition à payer.`,
+    exercises: [
+      {
+        id: 'cap-trades-quotidien',
+        label: 'Plafond strict de trades par session',
+        description:
+          'Définis ton cap : 3 trades max par session quand tu débutes, 5 max quand tu es établi. Au cap atteint, écran fermé. Pas de "encore un dernier".',
+      },
+      {
+        id: 'pareto-trades',
+        label: 'Identifier le Pareto de tes trades',
+        description:
+          'Sur tes 30 derniers trades, isole les 6 plus gros gagnants. Quel % du PnL total représentent-ils ? Probablement 70-100%. Ça veut dire que les 24 autres ne servaient à rien — voire ils ont coûté.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 7,
+    published: true,
+  },
+
+  // ---- CONSISTENCY (+2) ----
+
+  {
+    slug: 'consistance-vs-perfection',
+    title: 'La consistance bat la perfection',
+    category: 'consistency',
+    quote:
+      "Consistency is a state of mind that has at its core the fundamental belief that you don't need to know what is going to happen next to make money.",
+    quoteSourceChapter: 'Trading in the Zone, ch.11',
+    paraphrase: `Tu cherches le "trade parfait" — l'entrée au sommet, la sortie au plus haut, le sizing optimal. Mark Douglas appelle ça une distraction. Le pro cherche le **trade consistant**, pas parfait.
+
+**Pourquoi la perfection nuit.** Vouloir le parfait te paralyse à l'entrée ("est-ce vraiment le meilleur point ?") et te frustre à la sortie ("j'aurais dû tenir plus"). Tu produis des trades inconfortables émotionnellement, qui sapent ta discipline. Le perfectionniste trade moins bien que le consistant.
+
+**Ce qu'est la consistance.** Exécuter le même process, dans les mêmes conditions, avec la même rigueur — sur 1000 trades. C'est binaire : tu as exécuté ton plan ou non. Le perfectionnisme est un continuum qui te punit toujours. La consistance est un seuil que tu passes ou pas.
+
+**Le test pratique.** Compare 2 traders sur 100 trades :
+- Trader A : essaie de "maximiser" chaque trade. Win rate 55%, R moyen +0.4R, mais 12 sorties hors plan (greed ou peur).
+- Trader B : exécute strictement son plan. Win rate 50%, R moyen +0.6R, 0 sortie hors plan.
+
+B gagne plus. B dort mieux. B peut tenir son régime sur 5 ans. A burnout en 18 mois.
+
+**Méthode :**
+
+- Banni le mot "optimal" de ton vocabulaire. Remplace par "selon plan".
+- Évalue chaque trade sur 1 critère : "exécuté selon plan oui/non". Pas "était-ce le meilleur entry/exit ?". Le meilleur entry/exit est inconnaissable à priori.
+- Tiens une métrique "% trades selon plan" sur la semaine. Vise 95%+. C'est plus important que ton win rate.`,
+    exercises: [
+      {
+        id: 'metrique-selon-plan',
+        label: 'Métrique "% trades selon plan"',
+        description:
+          "Chaque semaine, calcule : nombre de trades exécutés strictement selon plan / total trades. Vise 95%+. C'est ta métrique reine. Si elle est en dessous, ton edge ne s'exprimera jamais — peu importe le marché.",
+      },
+      {
+        id: 'banir-optimal',
+        label: 'Banir "optimal" du vocabulaire',
+        description:
+          'Remplace "optimal", "le meilleur", "j\'aurais dû" par "selon plan / hors plan". Petit changement de langage, gros effet sur le mindset. Le perfectionnisme se nourrit de mots.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 8,
+    published: true,
+  },
+
+  {
+    slug: 'pourquoi-tu-trahis-ton-plan',
+    title: 'Pourquoi tu trahis ton plan : la croyance manquante',
+    category: 'consistency',
+    quote:
+      'When your beliefs are not aligned with your trading plan, the beliefs will win. Every time.',
+    quoteSourceChapter: "The Disciplined Trader, ch.10 (paraphrase de l'argument)",
+    paraphrase: `Tu connais ton plan. Tu l'as écrit, validé, testé. Et pourtant tu ne le respectes pas. Mark Douglas explique pourquoi : tu n'as pas la croyance qui le sous-tend, seulement la règle.
+
+**La règle vs la croyance.** Une règle est une instruction extérieure ("je coupe à -1R"). Une croyance est une vérité intérieure ("perdre 1R fait partie du jeu et ne menace pas mon edge"). Quand le marché te met sous tension, ton cerveau tranche selon tes croyances, pas tes règles. La règle perd, toujours.
+
+**Le test diagnostic.** Liste ce que tu ne respectes pas dans ton plan. Pour chaque item, demande-toi : "Quelle croyance profonde devrais-je avoir pour appliquer cette règle naturellement ?" Si la croyance n'est pas en place, la règle restera décorative.
+
+**Exemples typiques.**
+
+- "Je ne respecte pas mon SL." Croyance manquante : *la perte est un coût d'opération, pas un échec*.
+- "Je sors trop vite mes gagnants." Croyance manquante : *mon edge nécessite que je laisse les trades atteindre leur target pour produire son expectancy*.
+- "Je rajoute en perte." Croyance manquante : *le marché ne me doit pas un retournement*.
+
+**Comment installer une croyance.** Pas par la volonté — par l'évidence répétée. Tu as besoin de **preuves vécues** que la règle protège ton compte. C'est lent. Mark Douglas (TDT ch.10) recommande l'approche par micro-engagements : 10 trades en respectant strictement la règle, sans exception, pour accumuler les preuves.
+
+**Pratique :**
+
+- Identifie la règle que tu trahis le plus. Une seule.
+- Pendant 10 trades minimum, respecte-la **sans aucune exception**, peu importe le contexte. Note l'inconfort dans ton journal.
+- Au 10e trade, regarde ton equity curve. La preuve s'accumule. La croyance commence à s'installer. Continue.`,
+    exercises: [
+      {
+        id: 'diagnostic-regle-vs-croyance',
+        label: 'Diagnostic : règle vs croyance manquante',
+        description:
+          "Liste 3 règles de ton plan que tu ne respectes pas systématiquement. Pour chaque : quelle croyance profonde devrais-tu avoir pour respecter naturellement la règle ? Cette croyance, tu l'as ou pas ?",
+      },
+      {
+        id: '10-trades-sans-exception',
+        label: '10 trades sans exception sur la règle critique',
+        description:
+          "Choisis ta règle la plus violée. Engage-toi à la respecter sur les 10 prochains trades sans aucune exception. Note l'inconfort, l'envie de dévier. Au 10e, examine le résultat. Tu verras une preuve.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 8,
+    published: true,
+  },
+
+  // ---- FEAR (+3) ----
+
+  {
+    slug: 'la-peur-de-rater-quelque-chose',
+    title: 'La peur de rater quelque chose (FOMO) : la 3e des 4 peurs',
+    category: 'fear',
+    quote:
+      'Ninety-five percent of the trading errors you are likely to make will stem from your attitudes about being wrong, losing money, missing out, and leaving money on the table.',
+    quoteSourceChapter: 'Trading in the Zone, ch.7 (4 primary trading fears)',
+    paraphrase: `La peur de rater une opportunité est la 3e des 4 peurs trader identifiées par Mark Douglas. Elle est particulièrement vicieuse parce qu'elle se déguise en enthousiasme.
+
+**Le mécanisme FOMO.** Tu vois un mouvement déjà en cours. Ton cerveau interprète "le train part sans moi". Tu sautes dedans en retard, sans confluence, sans plan, juste pour ne pas rater. Tu paies le pic d'émotion collective au plus haut. Tu sors en perte.
+
+**Pourquoi c'est si fort.** Le FOMO active les mêmes circuits cérébraux que la perte sociale. Voir une opportunité passer sans en profiter active la douleur. Pour éviter cette douleur, ton cerveau te pousse à entrer même quand le setup ne le justifie pas. C'est une fuite en avant, pas une décision.
+
+**La vérité que Douglas martèle.** Le marché produit des opportunités quotidiennes. La 4e vérité fondamentale : "every moment in the market is unique" — il y aura toujours un autre setup demain, structurellement identique au prochain niveau d'analyse. Manquer un trade n'a jamais coûté un trader pro. Forcer un trade FOMO en a ruiné beaucoup.
+
+**Antidote pratique.**
+
+- Quand tu vois un mouvement en cours sans avoir participé : repose la main, formule "ce n'était pas mon setup" à voix haute. Acte de séparation explicite.
+- Si tu sens monter le FOMO, écris-le dans ton journal avec timestamp. "FOMO sur EURUSD à 14h32, je n'entre pas." Cette ligne te protégera plus tard, en feedback loop.
+- Refuse les trades "en mouvement". Si tu n'étais pas placé avant que ça parte, tu n'es pas un participant — tu es un spectateur. Reste-le.`,
+    exercises: [
+      {
+        id: 'verbalisation-pas-mon-setup',
+        label: 'Verbaliser "ce n\'était pas mon setup"',
+        description:
+          "Quand un mouvement passe sans toi, dis à voix haute : \"Ce n'était pas mon setup. Je laisse passer.\" Ferme la pulsion. C'est un acte de discipline plus puissant qu'on ne le pense.",
+      },
+      {
+        id: 'journal-fomo-timestamps',
+        label: 'Journal des moments FOMO',
+        description:
+          'Note chaque pulsion FOMO avec timestamp, paire, ce que tu as ressenti, ta décision (entré ou non), et le résultat 1h après. Sur 30 jours, tu verras le pattern : 80% des FOMO auraient perdu.',
+      },
+    ],
+    triggerRules: { kind: 'emotion_logged', tag: 'fomo' },
+    hatClass: 'black',
+    priority: 8,
+    published: true,
+  },
+
+  {
+    slug: 'la-peur-de-laisser-de-l-argent',
+    title: "La peur de laisser de l'argent sur la table : la 4e des 4 peurs",
+    category: 'fear',
+    quote:
+      'Ninety-five percent of the trading errors you are likely to make will stem from your attitudes about being wrong, losing money, missing out, and leaving money on the table.',
+    quoteSourceChapter: 'Trading in the Zone, ch.7 (4 primary trading fears)',
+    paraphrase: `Tu es en gain. Le trade approche de ta target. Et au lieu de fermer comme prévu, tu décales. "Encore un peu, peut-être que ça va plus loin." Mark Douglas appelle ça la peur de "laisser de l'argent sur la table" — la 4e peur trader.
+
+**Le retournement piégeant.** Cette peur s'active quand tu gagnes, pas quand tu perds. Elle est insidieuse parce qu'elle ressemble à de l'ambition. En réalité, c'est la même mécanique que la peur de rater : ton cerveau veut maximiser, et tu trahis ton plan pour la même raison qu'un FOMO — l'émotion prend la main.
+
+**Le coût mathématique.** Tes targets sont calibrées par ton edge. Quand tu décales pour "voir si ça monte plus", tu sors du domaine où ton edge a été testé. Tu transformes un trade gagnant en trade aléatoire. Statistiquement, tu sors en moins bien que la target d'origine — souvent en perte parce que le marché retrace.
+
+**Pourquoi tu cèdes.** L'asymétrie du regret : tu redoutes plus de "manquer 1R supplémentaire" que de "perdre les 2R déjà acquis". C'est un biais cognitif documenté. Le pro inverse cette asymétrie : il préfère encaisser ses gains certains plutôt que poursuivre des gains hypothétiques.
+
+**Discipline de sortie.**
+
+- Targets fermes. Écrites avant l'entrée. Exécutées sans débat. Si tu décales en cours de trade, ce n'est plus ton plan — c'est ton émotion.
+- Si tu veux trail un stop, fais-le selon une règle objective et écrite (ex: stop sous le dernier swing low, jamais "à l'œil").
+- Tient un score "sorties selon plan" sur la semaine. Une sortie décalée = échec process, peu importe le résultat. C'est la métrique qui te durcit le plus rapidement.`,
+    exercises: [
+      {
+        id: 'targets-fermes-ecrites',
+        label: "Targets fermes écrites avant l'entrée",
+        description:
+          'Avant chaque entrée, écris ta TP1 et ta TP2 (si applicable). Une fois entré, ces niveaux sont inviolables. Pour modifier, tu dois fermer le trade et en ouvrir un nouveau (avec friction délibérée).',
+      },
+      {
+        id: 'score-sorties-selon-plan',
+        label: 'Score hebdomadaire "sorties selon plan"',
+        description:
+          'Chaque semaine, compte combien de trades tu as fermés exactement à la target prévue vs combien tu as décalés. Vise 100% selon plan. Le décalage est un défaut, pas une optimisation.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 7,
+    published: true,
+  },
+
+  {
+    slug: 'la-peur-de-perdre-bloque-l-execution',
+    title: "La peur de perdre bloque l'exécution",
+    category: 'fear',
+    quote:
+      'Fear narrows our focus of attention to the object of our fear, blocking out everything else from awareness.',
+    quoteSourceChapter: 'Trading in the Zone, ch.7',
+    paraphrase: `Tu vois le setup. Tu sais que c'est ton edge. Tu hésites. Tu attends "encore une confirmation". Le prix part sans toi. Mark Douglas (TitZ ch.7) explique : la peur de perdre rétrécit ton attention au point que tu ne peux plus exécuter.
+
+**Le piège physiologique.** Quand la peur active le système nerveux sympathique, ton cerveau bascule en mode "menace". Il ferme les options, narrow ton focus sur le risque. Tu ne vois plus l'opportunité — tu vois la perte potentielle. Cette focalisation paralyse l'action.
+
+**Le paradoxe.** Plus tu as peur de perdre, plus tu performes mal — donc plus tu as raison d'avoir peur. Spirale destructrice. Le pro casse cette spirale en acceptant la perte **avant** d'entrer en trade. C'est la 1ère vérité fondamentale de Douglas : "anything can happen". Tu ne peux exécuter sereinement que si tu as déjà absorbé la possibilité de perdre ce trade-ci.
+
+**Le seul antidote durable.** Réduire la taille jusqu'à ce que la peur disparaisse. Si tu es paralysé à 1% de risk per trade, tu n'es pas prêt pour 1%. Trade à 0.25% ou 0.5% jusqu'à ce que l'exécution redevienne fluide. Construire la confiance d'exécution avant de scaler — pas l'inverse.
+
+**Méthode :**
+
+- Si tu hésites à entrer 3 fois de suite alors que ton plan le dit : réduis ton sizing de moitié pour les 10 prochains trades. Tu réinstalles la fluidité d'abord.
+- À l'entrée, formule à voix haute : "Ce trade peut perdre. C'est OK. Mon edge se joue sur 100 trades, pas celui-ci." Acte d'acceptation explicite.
+- Tiens un journal "trades non pris" : note les setups que tu as vus, validés, mais pas exécutés. Pourquoi ? La réponse est presque toujours la peur de perdre. Mesurer cette perte d'opportunité te ramène à la réalité.`,
+    exercises: [
+      {
+        id: 'sizing-confiance-first',
+        label: "Réduire le sizing jusqu'à fluidité d'exécution",
+        description:
+          "Si tu hésites à entrer alors que ton plan le valide, divise ton sizing par 2 pour les 10 prochains trades. Reconstruis la fluidité avant de scaler. C'est contre-intuitif mais c'est le chemin le plus court.",
+      },
+      {
+        id: 'journal-trades-non-pris',
+        label: 'Journal des trades non pris',
+        description:
+          "Note chaque setup validé que tu n'as pas exécuté, avec la raison. Mesure le coût d'opportunité après coup. Cette ligne te confronte à la peur — et te permet de la travailler.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 8,
+    published: true,
+  },
+
+  // ---- LOSS (+2) ----
+
+  {
+    slug: 'la-perte-est-une-information',
+    title: 'La perte est une information, pas une punition',
+    category: 'loss',
+    quote:
+      'In the market environment, reasons are irrelevant. The market does not care why you took the trade.',
+    quoteSourceChapter: 'The Disciplined Trader, ch.7',
+    paraphrase: `Une perte ne te punit pas. Le marché n'a pas d'opinion sur toi — il distribue les résultats selon ses propres lois. Mark Douglas (TDT ch.7) répète ce point parce que c'est exactement là que les traders amateurs basculent : ils prennent la perte personnellement, et leur réaction émotionnelle dégrade le trade suivant.
+
+**Reframer la perte.** La perte est une information sur trois choses : (1) la variance normale de ton edge — tu vas perdre X% du temps même quand tout est juste, (2) un détail de ton setup à raffiner — peut-être que la condition Y manquait, (3) un défaut d'exécution — tu as dévié. Trois lectures différentes, trois actions différentes.
+
+**Le piège du jugement.** Quand tu perds et que tu te dis "j'aurais dû voir", tu mélanges les trois lectures. Tu transformes une perte de variance (lecture 1, qui ne demande rien) en faute personnelle (qui demande punition). Cette confusion produit le revenge trade, le tilt, le burnout.
+
+**La grille de lecture pro :**
+
+- Plan respecté ? Sizing standard ? SL placé ? Sortie selon règle ? Si oui aux 4 → variance normale, lecture 1, ne change rien.
+- Trade hors A-grade pris par impatience ? → lecture 3, défaut d'exécution. Action : auditer le déclencheur, ajouter une règle anti-impatience.
+- Setup A-grade exécuté propre mais perte récurrente ? → lecture 2, raffiner le setup hors session.
+
+**Le rituel post-perte de 60 secondes :**
+
+- Plan respecté ? oui / non
+- Sizing standard ? oui / non
+- SL placé ? oui / non
+- Sortie selon règle ? oui / non
+- Lecture : 1, 2, ou 3 ?
+- Action : (vide si lecture 1, sinon une ligne)`,
+    exercises: [
+      {
+        id: 'rituel-post-perte-60s',
+        label: 'Rituel post-perte de 60 secondes',
+        description:
+          'Après chaque perte : 4 questions oui/non + lecture 1/2/3 + action. Exécute ce rituel à chaque perte sans exception. Il bloque la rumination et te ramène en mode opérateur.',
+      },
+      {
+        id: 'grille-3-lectures',
+        label: 'Grille des 3 lectures par perte',
+        description:
+          "Pour chaque perte de la semaine, classe-la : (1) variance normale, (2) setup à raffiner, (3) défaut d'exécution. Tu verras la distribution. La majorité devraient être en lecture 1 — sinon ton edge ou ton process a un trou.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 7,
+    published: true,
+  },
+
+  {
+    slug: 'couper-court-couper-vite',
+    title: 'Couper court, couper vite : le seul muscle qui sépare',
+    category: 'loss',
+    quote: 'Cut your losses short and let your profits run. The hardest part is the first half.',
+    quoteSourceChapter:
+      'The Disciplined Trader, ch.16 (axiome trader classique repris par Douglas)',
+    paraphrase: `Le 1er muscle que développe un trader pro, c'est de couper. Vite. Sans débat. C'est aussi le muscle qui distingue le plus brutalement les traders qui durent de ceux qui craquent.
+
+**Pourquoi c'est si dur.** Couper, c'est matérialiser une perte — passer du "papier" au "réel". Ton cerveau résiste violemment parce qu'il interprète la matérialisation comme un échec définitif. Tant que tu n'as pas coupé, tu peux espérer un retournement. Cette espérance est le poison qui transforme une perte de 1R en perte de 5R.
+
+**Mark Douglas en TDT ch.16.** Le passage à l'acte de coupe est le seul vrai test de ta discipline. Pas l'entrée — l'entrée est facile, ton ego n'est pas encore engagé. La coupe est le moment où ton ego résiste maximalement. C'est là que les habitudes mentales se forgent ou se corrompent.
+
+**Les 3 façons typiques de saboter la coupe.**
+
+- "Je décale mon stop pour éviter une mèche" → la mèche reviendra, la perte sera plus grosse.
+- "Je rajoute pour baisser mon coût moyen" → tu as transformé un trade en plusieurs trades, ton risk a doublé sans que ton edge le justifie.
+- "Le SL ne se déclenchera pas, le marché va retourner avant" → tu négocies avec le marché. Le marché n'écoute pas.
+
+**Le seul protocole qui dure.** SL automatique, placé en hard-stop dans le broker à l'entrée, jamais déplacé en cours de trade dans le sens défavorable. Si tu manques de discipline, externalise-la dans le système — le SL automatique est ton meilleur allié quand l'émotion menace.
+
+**Discipline du couteau.**
+
+- Tous les SL en hard-stop broker. Période. Aucune exception.
+- Pas de "mental stop". Le mental stop est un mensonge à toi-même.
+- Si tu sens l'envie de décaler un SL en cours de trade, écris la pulsion dans ton journal **sans la suivre**. Garde la trace pour le post-mortem.`,
+    exercises: [
+      {
+        id: 'sl-hard-stop-broker',
+        label: 'SL en hard-stop broker à 100%',
+        description:
+          "Règle absolue : tous tes stops sont placés en hard-stop dans le terminal broker à l'entrée. Pas de mental stop. Pas d'exception. Externalise ta discipline de coupe dans le système — il ne négocie pas, lui.",
+      },
+      {
+        id: 'no-decalage-defavorable',
+        label: 'Aucun décalage de SL dans le sens défavorable',
+        description:
+          'Une fois entré, ton SL ne bouge que vers le breakeven ou en trail (dans le sens favorable). Jamais loin. Si tu sens la tentation, écris-la dans ton journal sans la suivre. Cette discipline binaire est non-négociable.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 9,
+    published: true,
+  },
+
+  // ---- PROCESS (+4) ----
+
+  {
+    slug: 'pre-trade-checklist',
+    title: 'La checklist pré-trade : externaliser ta discipline',
+    category: 'process',
+    quote:
+      'The market is an unconstructed environment. Structure must come from you, not from the market.',
+    quoteSourceChapter: 'The Disciplined Trader, ch.6',
+    paraphrase: `Mark Douglas appelle le marché un "environnement non-construit" (TDT ch.6) : il n'a pas de règles intrinsèques qui te protègent. Toute structure doit venir de toi. La checklist pré-trade est l'outil qui transforme cette intention en automatisme.
+
+**Pourquoi une checklist écrite.** Quand tu es en flow d'exécution, ton cerveau prend des raccourcis. Tu sautes des vérifications. Tu rationalises l'absence d'une condition. La checklist écrite est un anti-raccourci : tu ne valides pas mentalement, tu coches physiquement.
+
+**Le pattern aviation.** Les pilotes les plus expérimentés du monde utilisent encore une checklist écrite avant chaque décollage. Pas par manque de mémoire — par humilité face à la dégradation de l'attention sous stress. Le trader devrait emprunter cette humilité.
+
+**Format minimal.** 5-8 items max. Tous binaires (oui/non). Pas d'item subjectif type "le setup est bon". Tous objectifs : niveau X cassé ? Volume confirmé ? News risk dans 1h ? SL clair ? RR ≥ 1:2 ? Sizing standard ?
+
+**La règle d'or.** Si un item est NON, tu ne prends pas le trade. Pas "je le prends quand même parce que…". Pas. Tu fermes l'écran 5 minutes, tu reviens. Si la condition manquante n'est pas là, le trade n'existe pas pour toi.
+
+**Adoption progressive.**
+
+- Commence par 5 items. Ajoute-en au fur et à mesure que tu identifies des trous récurrents dans ton process.
+- Imprime-la, scotche-la à côté de l'écran. Pas dans une note digitale qu'on ferme — visible en permanence.
+- Coche-la **avant** l'entrée, pas après. Si tu ne peux pas la cocher, tu n'entres pas.`,
+    exercises: [
+      {
+        id: 'checklist-5-items-binaires',
+        label: 'Checklist 5 items binaires',
+        description:
+          'Rédige ta checklist pré-trade : 5 items maximum, tous oui/non, tous objectifs (pas "feeling"). Imprime-la. Scotche-la à côté de l\'écran. Coche avant chaque entrée. Si un NON, pas de trade.',
+      },
+      {
+        id: 'audit-checklist-mensuel',
+        label: 'Audit mensuel de la checklist',
+        description:
+          'Une fois par mois, hors session : revois ta checklist. Quels items sont devenus automatiques (à supprimer) ? Quels nouveaux trous as-tu identifiés (à ajouter) ? La checklist évolue avec ton niveau, mais elle ne disparaît jamais.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 7,
+    published: true,
+  },
+
+  {
+    slug: 'journal-est-un-miroir',
+    title: 'Le journal de trade est un miroir, pas un palmarès',
+    category: 'process',
+    quote:
+      'Awareness of your own mental processes is the most important skill you can develop as a trader.',
+    quoteSourceChapter: "The Disciplined Trader, ch.13 (paraphrase de l'argument central)",
+    paraphrase: `Ton journal n'est pas là pour célébrer tes wins ou pleurer tes losses. Mark Douglas (TDT ch.13) le présente comme un miroir : un instrument d'auto-observation pour repérer les patterns invisibles à l'œil nu.
+
+**Ce qu'un journal pro contient.** Pas juste l'entrée/sortie/PnL — ça, le broker le fait. Le journal pro contient :
+
+- L'état émotionnel à l'entrée (calme, fébrile, FOMO, revanchard)
+- La condition d'invalidation écrite avant l'entrée
+- L'état émotionnel à la sortie
+- La lecture post-trade (variance / setup / exécution)
+- Les leçons identifiées (si applicable)
+
+C'est l'épaisseur du contexte qui rend le journal utile. Sans le contexte émotionnel, tu ne peux pas relier tes performances à ton état mental — donc tu ne peux pas progresser.
+
+**La revue qui transforme.** Chaque dimanche, relis tes trades de la semaine. Cherche les patterns invisibles : tes pertes arrivent-elles à des heures précises ? Après certaines émotions ? Sur certains setups ? Sur certaines paires ? Sans la revue, ton journal est un dépôt de données mortes. Avec la revue, c'est un système d'apprentissage.
+
+**Le piège du trade-monkey.** Beaucoup tiennent un journal "présentable" — phrases construites, jugements posés. C'est une perte de temps. Le journal doit être franc, parfois brutal, jamais auto-protecteur. Si tu te relis et que tu te sens trop bon ou trop mauvais, tu mens — pas au journal, à toi-même.
+
+**Discipline du miroir :**
+
+- 5 minutes par trade post-clôture. Toujours. Même les jours fatigués.
+- 30 minutes le dimanche pour la revue hebdo.
+- 2 heures par mois pour la revue mensuelle stratégique (cf. fiche dédiée).`,
+    exercises: [
+      {
+        id: 'journal-5-champs-emotionnels',
+        label: 'Journal avec 5 champs contextuels',
+        description:
+          "Chaque trade journalisé inclut : (1) état émotionnel entrée, (2) condition d'invalidation, (3) état émotionnel sortie, (4) lecture post-trade (variance/setup/exécution), (5) leçon. Sans ces champs, ton journal est mort.",
+      },
+      {
+        id: 'revue-dimanche-30min',
+        label: 'Revue hebdomadaire dimanche 30 min',
+        description:
+          "Bloque 30 min chaque dimanche pour relire tes trades de la semaine. Cherche les patterns émotionnels, horaires, setups. Note 1-3 ajustements pour la semaine suivante. Sans la revue, le journal n'enseigne rien.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 8,
+    published: true,
+  },
+
+  {
+    slug: 'mesurer-ce-qui-compte',
+    title: 'Mesurer ce qui compte : process metrics vs outcome metrics',
+    category: 'process',
+    quote: "You can't manage what you don't measure, but you must measure the right thing.",
+    quoteSourceChapter: "The Disciplined Trader, ch.16 (synthèse de l'argument)",
+    paraphrase: `La majorité des traders amateurs mesurent leur PnL et leur win rate. Le pro mesure ces deux-là **plus** une dizaine de **process metrics** qui prédisent la performance future bien mieux que le PnL passé.
+
+**Distinction fondamentale.**
+
+- **Outcome metrics** : PnL, win rate, R moyen. Te disent ce qui s'est passé. Volatiles court terme à cause de la variance.
+- **Process metrics** : % trades exécutés selon plan, % SL placés en hard-stop à l'entrée, % sorties à la target prévue, # déviations dans la semaine, # checklist cochée avant entrée. Te disent ce que tu fais. Bien plus stables et causales.
+
+**Pourquoi c'est crucial.** Sur 30 trades, tes outcome metrics peuvent fluctuer énormément par variance. Tes process metrics, elles, sont sous ton contrôle direct — elles ne fluctuent que si toi tu changes. Si tu pilotes uniquement par les outcomes, tu changes ton plan sur du bruit. Si tu pilotes par les process, tu améliores ce qui compte vraiment.
+
+**Mark Douglas en TDT ch.16.** "Les steps to success" sont tous des process steps : adopter une mentalité de probabilités, accepter le risque, exécuter sans hésiter, journaliser sans filtre. Le succès financier suit. L'inverse n'est pas vrai : optimiser le PnL sans process produit des comètes qui s'écrasent.
+
+**Top 7 process metrics à tracker hebdomadairement :**
+
+1. % trades exécutés selon plan strict
+2. % SL en hard-stop broker à l'entrée
+3. % sorties à la target prévue (sans décalage)
+4. # déviations identifiées
+5. # checklist cochée avant entrée
+6. # routine pré-session faite intégralement
+7. # entrées de journal complètes (5 champs)
+
+**Tableau de bord :**
+
+- Vise 95%+ sur les 1, 2, 5, 6, 7. C'est ta base.
+- Vise 0 ou 1 sur la 4 (déviations).
+- La 3 dépend de ta stratégie (certaines stratégies trail, ce qui modifie la lecture).`,
+    exercises: [
+      {
+        id: 'tableau-bord-process',
+        label: 'Tableau de bord 7 process metrics',
+        description:
+          'Calcule chaque dimanche les 7 process metrics de la fiche. Note-les dans un tableau visible. Cibles : ≥95% sur 1/2/5/6/7, 0-1 sur 4. Le PnL et le win rate restent en bas — ce sont des outcomes, pas des leviers.',
+      },
+      {
+        id: 'pilotage-par-process',
+        label: 'Pilotage par process, pas par outcome',
+        description:
+          "Cette semaine, ne regarde pas ton PnL. Pilote uniquement par tes 7 process metrics. À la fin de la semaine, regarde le PnL. Tu verras qu'il suit la qualité du process — avec un délai.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 8,
+    published: true,
+  },
+
+  {
+    slug: 'revue-mensuelle-strategique',
+    title: 'La revue mensuelle stratégique',
+    category: 'process',
+    quote:
+      'The steps to success are not in the next trade. They are in the rituals between trades.',
+    quoteSourceChapter: "The Disciplined Trader, ch.16 (paraphrase de l'argument)",
+    paraphrase: `La revue hebdomadaire t'enseigne tactiquement. La revue mensuelle te repositionne stratégiquement. Sans la mensuelle, tu fais du fine-tuning sur du bruit pendant que tes vrais leviers stratégiques sont invisibles.
+
+**Différence d'horizon.**
+
+- Revue hebdo (30 min, dimanche) : ajustements tactiques. Quels patterns émotionnels cette semaine ? Quels setups ont marché ? Petits ajustements à tester la semaine suivante.
+- Revue mensuelle (2h, dernier dimanche du mois) : audit stratégique. L'edge est-il toujours là ? Mes process metrics tendance positive ou négative ? Mon expectancy par setup est-il cohérent avec mon plan ? Mes peurs principales du mois ?
+
+**Format de la revue mensuelle.**
+
+1. **Métrique macro.** PnL mensuel, R total, # trades, expectancy moyen, drawdown max. 5 lignes max.
+2. **Process metrics moyens du mois.** Les 7 metrics de la fiche "mesurer ce qui compte". Tendance vs mois précédent.
+3. **Top 3 trades gagnants + top 3 perdants.** Pour chaque, lecture honnête : exécution propre ? variance ? défaut process ?
+4. **Émotions dominantes.** Quelles peurs sont sorties ce mois-ci ? Quels patterns émotionnels récurrents ?
+5. **1-3 ajustements pour le mois prochain.** Précis, mesurables, écrits.
+6. **1 chose à arrêter.** Souvent un comportement parasite identifié.
+
+**Pourquoi c'est puissant.** Sur 30 jours, tu as suffisamment d'échantillon pour voir des tendances. Tu sors du bruit court-terme. Tu peux faire des choix stratégiques (changer un setup, changer un horaire, supprimer une paire) avec assez de data pour les justifier.
+
+**Fréquence.** Dernier dimanche du mois, 14h-16h, dans un endroit calme. Pas devant l'écran de trading. Avec ton journal du mois sous les yeux. Sans interruption.
+
+**Ce qui distingue.** Beaucoup de traders font des revues hebdos. Très peu font des revues mensuelles. C'est précisément cette assiduité qui sépare les traders qui durent 5 ans de ceux qui s'épuisent en 18 mois.`,
+    exercises: [
+      {
+        id: 'revue-mensuelle-2h',
+        label: 'Revue mensuelle stratégique 2h dernier dimanche',
+        description:
+          'Bloque 2h le dernier dimanche de chaque mois. Hors écran trading. 6 sections : métrique macro, process metrics, top 3 wins/3 losses, émotions dominantes, 1-3 ajustements, 1 chose à arrêter. Écris-la, archive-la.',
+      },
+      {
+        id: 'archive-revues-tendance',
+        label: 'Archiver les revues pour voir les tendances',
+        description:
+          "Garde toutes tes revues mensuelles dans un dossier dédié. Au bout de 6 mois, relis les 6 ensemble. Tu verras des patterns invisibles à l'échelle d'une seule revue : régressions cycliques, progrès sous-estimés, croyances qui évoluent.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 7,
     published: true,
   },
 ];

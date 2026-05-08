@@ -479,3 +479,129 @@ Pré-requis Eliot AVANT smoke live :
 ---
 
 **Fin du briefing J9** — préparé 2026-05-08, à valider context7 + WebSearch fresh en début de session J9 (l'écosystème Web Push évolue vite, especially Safari/iOS).
+
+---
+
+## CLOSE-OUT (2026-05-08, fin de session J9)
+
+J9 livré end-to-end **dans la session du briefing même**, sur la branche `claude/j9-web-push-notifications` (PR #33). Pattern carbone J5/J6/J7/J8 + 5-subagent audit-driven hardening en 3 rounds successifs.
+
+### 5 commits cumulés ([PR #33](https://github.com/fxeliott/fxmily/pull/33))
+
+| Commit    | Phase                                                                   | Diff      |
+| --------- | ----------------------------------------------------------------------- | --------- |
+| `3d8a93c` | feat(j9): foundation + UI + dispatcher + cron + smoke ALL GREEN         | +3589/-42 |
+| `6348ad7` | perf(j9): audit-driven hardening 6 BLOCKERs + 4 HIGH closed             | +249/-37  |
+| `dd65b7d` | docs(j9): close-out CLAUDE.md scoped + briefing J10 update              | +101/-1   |
+| `eacbb29` | perf(j9): round 2 hardening — endpoint allowlist + VAPID cross-var      | +108/-6   |
+| `abdf43a` | perf(j9): round 3 hardening — email fallback + env tests + smoke step 8 | +559/-50  |
+
+### Quality gate finale
+
+- type-check exit 0 · lint exit 0 (max-warnings=0)
+- **Vitest 631/631 verts** (+86 vs J8 baseline 545)
+- Build prod Turbopack OK · Migration `20260508180000_j9_push_subscription` appliquée live (18 tables)
+- Smoke live `scripts/smoke-test-j9.ts` 9/9 steps ALL GREEN (mock client path)
+- **CI GitHub Actions 3/3 verts** sur les 3 rounds (Analyze + CodeQL + Lint/type/build)
+
+### Score audit-driven hardening cumulé J9
+
+- **6 BLOCKERs** closed in-session (round 1) — content + a11y + code/sec
+- **4 HIGH** closed in-session (round 1)
+- **2 TIER 2** ramenés round 2 (endpoint allowlist anti-SSRF + VAPID cross-var refine E2)
+- **3 TIER 2** ramenés round 3 (email fallback SPEC §18.2 + env TDD 9 tests + smoke step 8 stuck recovery DB-side)
+- **Apple Touch Icon** vérifié déjà câblé (J0/J1 layout.tsx:35)
+
+**Total : 15 fixes audit-driven** in-session sans empiéter sur J9.5/J10.
+
+### SPEC §15 J9 critère "Done quand" — ✅ validé
+
+> "Un membre active ses notifs, reçoit les pushes prévus, peut les désactiver par catégorie."
+
+End-to-end via mock client path :
+
+- ✅ Activation : `<PushToggle>` 5 states + permission user-gesture + 5 categories de notif
+- ✅ Pushes prévus : dispatcher atomic claim + retry budget 3 + Apple Declarative dual payload (`web_push: 8030`)
+- ✅ Désactiver par catégorie : `<PreferencesGrid>` 5 toggles avec audit + `getEffectivePreferences` default-on
+- ✅ **Bonus SPEC §18.2** : email fallback after 3 attempts wired (template + send helper + dispatcher integration)
+
+### Reclassé J9.5+ (UI polish premium DS-v2)
+
+- Aurora hero + halo Bell + h-rise H1 (focal premium, carbone J7 reader).
+- AnimatePresence transitions 5 states `<PushToggle>` (slide-fade y:4).
+- Skeleton shimmer loading state (`.skel h-20 w-full`).
+- `<Btn kind={isSubscribed ? 'danger' : 'primary'}>` + `<Pill tone="mute">` empty state cohérence DS.
+- `<TrendCard>`-style sparkline 7j notifications reçues.
+- Apple Touch Icon 192/512/96 PNG dédiés (current = 1920×1080 `logo.png` accepté Apple, polish optionnel).
+- Dispatcher 5-by-5 parallel batch (carbone weekly-reports) si scan > 5 min Caddy timeout.
+
+### Reclassé J10 prod
+
+- Hetzner crontab `*/2 * * * *` UTC `dispatch-notifications`.
+- M5 RGPD : cron `0 5 * * 0` purge subscriptions `lastSeenAt < now - 90d`.
+- M1 sécurité : endpoint URL allowlist déjà partiellement faite (round 2). Étendre Edge mobile si besoin.
+- Sentry capture `lib/push/dispatcher.ts:dispatchOne` catch + cron route.
+- Live VAPID test iPhone Safari 18.4+ real-device (HTTPS exigé iOS, ngrok ou prod app.fxmily.com).
+
+### Activation Live VAPID
+
+Zéro action requise — VAPID keys déjà dans `apps/web/.env` (J8 polish session). Factory `getWebPushClient()` switch automatique Mock → Live au prochain restart si les 3 vars VAPID + NEXT_PUBLIC mirror sont set (cf. `lib/env.ts` cross-var refine round 2).
+
+### Pickup prompt J10 (à coller post-`/clear`)
+
+```
+Implémente le Jalon 10 du SPEC à `D:\Fxmily\SPEC.md` — Prod hardening complet
+(RGPD pages legal + Sentry + Hetzner deploy + domaine + 1ère invitation prod).
+
+Lis dans cet ordre :
+1. SPEC §15 J10 critère + §16 RGPD + §17 décisions
+2. apps/web/CLAUDE.md sections J0→J9 close-out (full historical context)
+3. docs/jalon-10-prep.md — briefing complet 12 sections (mise à jour J9 livré)
+4. docs/jalon-9-prep.md → CLOSE-OUT pour les items J9 reclassés J10
+5. docs/runbook-cron-recompute-scores.md (carbone Hetzner cron pattern)
+6. memory MEMORY.md + fxmily_project.md (état J9 final + frustrations Eliot)
+
+Done quand SPEC §15 J10 : l'app est en prod sur app.fxmily.com, Eliot peut
+s'inviter et tester end-to-end (J0→J9 happy-path validé real-device incluant
+iPhone Web Push).
+
+Stack J10 vérifiée 2026-05-08 :
+- Hetzner Cloud CX22 (Falkenstein UE) Ubuntu 24.04 LTS
+- Docker Compose + Caddy + Let's Encrypt + cron systemd (6 routes incl J9)
+- Cloudflare Registrar fxmily.com + DNS + Resend domain verify
+- @sentry/nextjs (client + server + edge) + source maps CI upload
+- pg_dump quotidien + R2 cross-région (US east) cross-encrypted GPG
+
+Phase A : RGPD pages legal + cookie banner + export JSON + soft-delete +
+  cron purge 30j users + cron purge 90j subscriptions (J9 reclassé) +
+  4 nouveaux AuditAction + safeFreeText sanitization 100% audit.
+Phase B : Sentry integration (wizard + breadcrumbs lib/scoring + lib/cards
+  + lib/weekly-report + lib/push + cron catches) + source maps CI upload.
+Phase C : Docker production image + docker-compose.prod.yml + Caddyfile +
+  /etc/fxmily/cron.env + wrapper /usr/local/bin/fxmily-cron + backup wrapper
+  pg_dump + R2 GPG encryption + Hetzner crontab 6 routes.
+Phase D : Cloudflare Registrar achat fxmily.com + DNS A/MX/SPF/DKIM/DMARC +
+  Resend domain verify + update env worktree + prod (recipient widening).
+Phase E : GitHub Actions deploy workflow + Hetzner SSH push + smoke prod.
+Phase F : Eliot 1ère invitation end-to-end checklist 12 steps incluant
+  J9 push iPhone real-device test (HTTPS via prod app.fxmily.com) +
+  bug-fix any blocker found.
+Phase G : Audit-driven hardening 5 subagents parallèles (canon J5/J7/J8/J9)
+  + smoke prod live + final commit close-out.
+Phase H : Update apps/web/CLAUDE.md J10 + memory + briefing J11 si V2 ouvre.
+
+Pattern hybride atomic : back + ops + commits + push branche
+`claude/j10-prod-deploy` dans cette session.
+
+Mantra long activé : pleine puissance, autonomie totale, perfection absolue,
+control PC OK, anti-hallucination, smoke prod live obligatoire.
+
+Pré-requis Eliot AVANT smoke prod :
+1. Hetzner CX22 provisioning + SSH key (cf. SPEC §6.3)
+2. Cloudflare Registrar achat fxmily.com (~10€/an, vérifier dispo)
+3. Resend domain verify (3 TXT records DNS Cloudflare → Resend Console,
+   propagation 24h)
+4. Sentry compte + DSN
+5. iPhone physique pour J9 push real-device test
+6. Mdp admin rotaté (déjà fait J8 polish)
+```

@@ -63,8 +63,11 @@ const envSchema = z.object({
       'ANTHROPIC_MODEL doit être un modèle pricé (claude-sonnet-4-6, claude-haiku-4-5, claude-opus-4-7).',
     )
     .default('claude-sonnet-4-6'),
-  /// Destinataire du digest hebdo IA admin. Defaults à `eliott.pena@icloud.com`
-  /// (compte Resend Eliot vérifié en V1, fxmily.com domain verify J10).
+  /// Destinataire du digest hebdo IA admin. Defaults à `eliottpena34690@gmail.com`
+  /// (email du compte Resend Eliot — seul recipient autorisé free-tier sans
+  /// domain verify ; Resend retourne 403 sinon, vérifié live 2026-05-08).
+  /// À élargir à `eliot@fxmily.com` quand `fxmily.com` domain verify Resend
+  /// est fait (J10).
   WEEKLY_REPORT_RECIPIENT: z.string().email().optional(),
 
   // Jalon 9 — Web Push

@@ -14,8 +14,12 @@ import {
 } from '@/lib/schemas/weekly-report';
 
 import { buildWeeklySnapshot } from './builder';
-import { getWeeklyReportClient, type WeeklyReportGeneration } from './claude-client';
-import { loadWeeklySliceForUser } from './loader';
+import {
+  getWeeklyReportClient,
+  MockWeeklyReportClient,
+  type WeeklyReportGeneration,
+} from './claude-client';
+import { loadWeeklySliceForUser, type LoadedWeeklySlice } from './loader';
 import type { SerializedWeeklyReport } from './types';
 import type { WeekWindow } from './week-window';
 
@@ -83,14 +87,26 @@ export async function generateWeeklyReportForUser(
   // Validate via Zod — defense-in-depth, the snapshot may be reused later.
   const validatedSnapshot = weeklySnapshotSchema.parse(snapshot);
 
-  const client = getWeeklyReportClient();
+  // J8 perf TIER 2 (mitigation #4) — court-circuit la live Anthropic API
+  // pour les membres SANS activité cette semaine (0 trades + 0 morning + 0
+  // evening). Le mock client produit une "no activity" output déterministe
+  // qui est sémantiquement identique à ce que Claude renverrait pour un
+  // payload vide — autant économiser ~3k input tokens et $0.02 par membre
+  // inactif. À 1000 membres × 30% inactifs : -27 €/mois sur la cible
+  // SPEC §16. En MOCK mode (V1 ship default), aucun changement de
+  // comportement (mock client est aussi le live path).
+  const c = validatedSnapshot.counters;
+  const hasActivity = c.tradesTotal > 0 || c.morningCheckinsCount > 0 || c.eveningCheckinsCount > 0;
+  const client = hasActivity ? getWeeklyReportClient() : new MockWeeklyReportClient();
   const generation = await client.generate(validatedSnapshot);
 
   // Persist (upsert on (userId, weekStart) unique).
   const persisted = await persistReport(slice.window, userId, generation);
 
   // Email — best-effort, never throws back into the cron loop.
-  const emailOutcome = await maybeSendEmail(persisted, options);
+  // J8 perf TIER 2 (T2.1) — passer userMeta du loader pour économiser le
+  // round-trip `findUnique` redondant.
+  const emailOutcome = await maybeSendEmail(persisted, options, slice.userMeta);
 
   // Audit row — keep PII-free (counts only).
   await logAudit({
@@ -100,6 +116,7 @@ export async function generateWeeklyReportForUser(
       reportId: persisted.id,
       weekStart: persisted.weekStart,
       mocked: generation.mocked,
+      hasActivity,
       inputTokens: generation.usage.inputTokens,
       outputTokens: generation.usage.outputTokens,
       costEur: persisted.costEur,
@@ -173,7 +190,10 @@ export async function generateWeeklyReportsForAllActiveMembers(
   let totalCostCents = 0; // accumulate in EUR cents to avoid float drift
 
   for (let i = 0; i < users.length; i += batchSize) {
+    const batchIndex = Math.floor(i / batchSize);
     const slice = users.slice(i, i + batchSize);
+    let batchGenerated = 0;
+    let batchErrors = 0;
     const settled = await Promise.allSettled(
       slice.map((u) => generateWeeklyReportForUser(u.id, options)),
     );
@@ -182,6 +202,7 @@ export async function generateWeeklyReportsForAllActiveMembers(
         const value = r.value;
         if (value.status === 'generated' && value.report) {
           generated += 1;
+          batchGenerated += 1;
           if (value.mocked) mocked += 1;
           // Counter classification — distinguishes Resend rejection (`failed`)
           // from the dev-fallback / already-sent (`skipped`) path so the cron
@@ -209,9 +230,28 @@ export async function generateWeeklyReportsForAllActiveMembers(
         }
       } else {
         errors += 1;
+        batchErrors += 1;
         console.error('[weekly-report] member generation failed:', r.reason);
       }
     }
+
+    // J8 perf TIER 1 (T1.3) — heartbeat audit row par batch pour
+    // observability sous long-running scans (>1min). Cheap (1 row /
+    // 5 membres), invaluable post-mortem si le cron OOM ou timeout
+    // proxy à mid-run. Sans ça, le seul audit row arrive APRÈS toute
+    // la boucle — donc invisible si crash au milieu.
+    await logAudit({
+      action: 'cron.weekly_reports.batch_done',
+      metadata: {
+        batchIndex,
+        batchSize: slice.length,
+        batchGenerated,
+        batchErrors,
+        cumulativeGenerated: generated,
+        cumulativeErrors: errors,
+        ranAt,
+      },
+    });
   }
 
   return {
@@ -253,9 +293,14 @@ export async function listReportsForAdmin(
   const where: Prisma.WeeklyReportWhereInput = {};
   if (options.userId) where.userId = options.userId;
 
+  // J8 perf TIER 2 (T2.3) — `id` desc tiebreaker pour cursor pagination
+  // stable. `weekStart` peut être identique entre membres (1 par semaine
+  // pour 30 membres) et `generatedAt` peut collide si le cron parallélise
+  // les writes au même tick. Ajouter `id: 'desc'` final garantit un
+  // ordering total et évite saut/répétition de rows entre pages.
   const rows = await db.weeklyReport.findMany({
     where,
-    orderBy: [{ weekStart: 'desc' }, { generatedAt: 'desc' }],
+    orderBy: [{ weekStart: 'desc' }, { generatedAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
     ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
   });
@@ -285,33 +330,58 @@ export interface AdminReportStats {
 }
 
 export async function getReportStatsForAdmin(): Promise<AdminReportStats> {
-  const all = await db.weeklyReport.findMany({
-    select: {
-      id: true,
-      weekStart: true,
-      sentToAdminAt: true,
-      costEur: true,
-      userId: true,
-    },
-    orderBy: { weekStart: 'desc' },
-  });
-  const lastWeekStart = all[0]?.weekStart.toISOString().slice(0, 10) ?? null;
-  const membersInLastWeek = lastWeekStart
-    ? new Set(
-        all
-          .filter((r) => r.weekStart.toISOString().slice(0, 10) === lastWeekStart)
-          .map((r) => r.userId),
-      ).size
-    : 0;
-  const totalCostCents = all.reduce(
-    (acc, r) => acc + Math.round(Number(r.costEur.toString()) * 1_000_000),
-    0,
-  );
+  // J8 perf TIER 1 (T1.1) — aggregate SQL au lieu de findMany + reduce JS.
+  // Avant : SELECT toutes les rows, reduce JS pour cost total + count
+  // emails + count membres semaine récente. À 1000 membres × 52 sem × 2 ans
+  // = 104k rows × ~100 bytes = ~10MB heap par render `/admin/reports`. La
+  // page est `force-dynamic` donc payé à chaque hit.
+  // Après : 4 queries parallèles bornées par index :
+  //   1. aggregate sum(costEur) + count(*) — index-only sur PK
+  //   2. groupBy sentToAdminAt is-null — index-only sur sentToAdminAt index
+  //   3. findFirst orderBy weekStart desc — index hit
+  //   4. findMany distinct userId WHERE weekStart=last — sub-second
+  const [totals, lastReport, deliveryStats] = await Promise.all([
+    db.weeklyReport.aggregate({
+      _count: { id: true },
+      _sum: { costEur: true },
+    }),
+    db.weeklyReport.findFirst({
+      orderBy: { weekStart: 'desc' },
+      select: { weekStart: true },
+    }),
+    db.weeklyReport.groupBy({
+      by: ['sentToAdminAt'],
+      _count: { id: true },
+    }),
+  ]);
+
+  let emailsDelivered = 0;
+  let emailsPending = 0;
+  for (const row of deliveryStats) {
+    if (row.sentToAdminAt === null) emailsPending += row._count.id;
+    else emailsDelivered += row._count.id;
+  }
+
+  const lastWeekStart = lastReport?.weekStart.toISOString().slice(0, 10) ?? null;
+  let membersInLastWeek = 0;
+  if (lastReport !== null) {
+    const distinctRows = await db.weeklyReport.findMany({
+      where: { weekStart: lastReport.weekStart },
+      distinct: ['userId'],
+      select: { userId: true },
+    });
+    membersInLastWeek = distinctRows.length;
+  }
+
+  // costEur Prisma.Decimal → 6-decimal string via Decimal arithmetic (no
+  // float drift). `_sum.costEur` est null si aucune row → fallback `0`.
+  const totalCostEur = (totals._sum.costEur ?? new Prisma.Decimal(0)).toFixed(6);
+
   return {
-    totalReports: all.length,
-    totalCostEur: (totalCostCents / 1_000_000).toFixed(6),
-    emailsDelivered: all.filter((r) => r.sentToAdminAt !== null).length,
-    emailsPending: all.filter((r) => r.sentToAdminAt === null).length,
+    totalReports: totals._count.id,
+    totalCostEur,
+    emailsDelivered,
+    emailsPending,
     lastWeekStart,
     membersInLastWeek,
   };
@@ -405,6 +475,7 @@ async function persistReport(
 async function maybeSendEmail(
   report: SerializedWeeklyReport,
   options: GenerateOptions,
+  preloadedUserMeta?: LoadedWeeklySlice['userMeta'],
 ): Promise<{ outcome: EmailOutcome; messageId: string | null }> {
   if (options.skipEmail) return { outcome: 'not_attempted', messageId: null };
 
@@ -417,15 +488,33 @@ async function maybeSendEmail(
   }
 
   const recipient = resolveRecipient(options);
-  let user: { id: string; email: string; firstName: string | null; lastName: string | null } | null;
-  try {
-    user = await db.user.findUnique({
-      where: { id: report.userId },
-      select: { id: true, email: true, firstName: true, lastName: true },
-    });
-  } catch (err) {
-    console.error('[weekly-report] failed to read user metadata for email', err);
-    user = null;
+
+  // J8 perf TIER 2 (T2.1) — réutilise le `userMeta` pré-chargé par
+  // `loadWeeklySliceForUser` quand fourni, évite un round-trip DB par
+  // membre. Fallback `findUnique` si pas fourni (ex. backward compat).
+  let user: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
+  if (preloadedUserMeta) {
+    user = {
+      id: report.userId,
+      email: preloadedUserMeta.email,
+      firstName: preloadedUserMeta.firstName,
+      lastName: preloadedUserMeta.lastName,
+    };
+  } else {
+    try {
+      user = await db.user.findUnique({
+        where: { id: report.userId },
+        select: { id: true, email: true, firstName: true, lastName: true },
+      });
+    } catch (err) {
+      console.error('[weekly-report] failed to read user metadata for email', err);
+      user = null;
+    }
   }
 
   const memberLabel = displayMemberLabel(user);

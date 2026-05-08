@@ -51,7 +51,18 @@ const envSchema = z.object({
 
   // Jalon 8 — Anthropic
   ANTHROPIC_API_KEY: z.string().optional(),
-  ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
+  /// Modèle Claude pour le rapport hebdo IA (J8). Allowlist refine pour
+  /// bloquer un drift accidentel (typo dans l'env qui ferait facturer
+  /// `claude-opus-4-7` au lieu de `claude-sonnet-4-6` = 5× le coût). La
+  /// liste matche `PRICING_USD_PER_MTOK` (`lib/weekly-report/pricing.ts`).
+  /// Étendre ici quand un nouveau modèle est ajouté à la pricing table.
+  ANTHROPIC_MODEL: z
+    .string()
+    .refine(
+      (v) => ['claude-sonnet-4-6', 'claude-haiku-4-5', 'claude-opus-4-7'].includes(v),
+      'ANTHROPIC_MODEL doit être un modèle pricé (claude-sonnet-4-6, claude-haiku-4-5, claude-opus-4-7).',
+    )
+    .default('claude-sonnet-4-6'),
   /// Destinataire du digest hebdo IA admin. Defaults à `eliott.pena@icloud.com`
   /// (compte Resend Eliot vérifié en V1, fxmily.com domain verify J10).
   WEEKLY_REPORT_RECIPIENT: z.string().email().optional(),

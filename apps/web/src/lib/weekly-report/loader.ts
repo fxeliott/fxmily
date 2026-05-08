@@ -34,6 +34,14 @@ import {
 export interface LoadedWeeklySlice {
   builderInput: BuilderInput;
   window: WeekWindow;
+  /// Member metadata — joined in the same `findUnique` round-trip as
+  /// timezone, so downstream layers (email, audit) don't re-query the DB.
+  /// J8 perf TIER 2 (T2.1) economy : 30 members × 1 round-trip saved.
+  userMeta: {
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  };
 }
 
 export interface LoadOptions {
@@ -56,7 +64,16 @@ export async function loadWeeklySliceForUser(
 
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, timezone: true, status: true },
+    select: {
+      id: true,
+      timezone: true,
+      status: true,
+      // J8 perf TIER 2 (T2.1) — pull email metadata in same round-trip so
+      // downstream `maybeSendEmail` doesn't re-query for member label.
+      email: true,
+      firstName: true,
+      lastName: true,
+    },
   });
   if (!user || user.status !== 'active') return null;
 
@@ -89,7 +106,15 @@ export async function loadWeeklySliceForUser(
     latestScore: latestScore === null ? null : toScoreSnapshot(latestScore),
   };
 
-  return { builderInput, window };
+  return {
+    builderInput,
+    window,
+    userMeta: {
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    },
+  };
 }
 
 // =============================================================================

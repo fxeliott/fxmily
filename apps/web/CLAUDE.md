@@ -1090,3 +1090,60 @@ Validations :
 
 1. **Claude live** : `ANTHROPIC_API_KEY` dans `apps/web/.env` (Console Anthropic → API Keys → "Create Key" Fxmily). Le `LiveWeeklyReportClient` se réveille automatiquement (factory `getWeeklyReportClient()`).
 2. **Email réel à fxeliott** : laisser `WEEKLY_REPORT_RECIPIENT` non-set → default `eliott.pena@icloud.com` (compte Resend vérifié). Domain `fxmily.com` verify J10.
+
+## J8 — Polish post-PR #30 (audit-driven hardening 2e passe, 2026-05-08)
+
+Subagents `security-auditor` + `researcher` (J9 prep) + `performance-profiler` lancés en parallèle après ouverture PR #30. Findings :
+
+### Sécurité — découverte critique externe au repo
+
+**Resend API key live + mot de passe admin exposés dans 4 JSONL Claude Code locaux** (`~/.claude/projects/D--Fxmily*/...`). Surfaces :
+
+- `D--Fxmily--claude-worktrees-thirsty-banzai-82b1f7/7ec0971c-...jsonl` (9 occurrences clé `re_esT...***`).
+- `D--Fxmily--claude-worktrees-mystifying-villani-c49530/28a72ada-...jsonl` (J8 session courante).
+- 2 sub-agent JSONL dans `.../subagents/`.
+
+**Repo public depuis 2026-05-07 mais .env JAMAIS committé** (vérifié git history clean). Risque limité au disque local mais infostealers Windows scannent `%USERPROFILE%\.claude\projects\`. Procédure rotation documentée dans `docs/jalon-9-prep.md` final report.
+
+**Action Eliot mandatory** : rotation key Resend + changement mdp admin + redaction JSONL post-rotation (PowerShell script fourni dans report final).
+
+**Préventions** :
+
+- Ajouter hook `secret_scanner.ps1` PreToolUse UserPromptSubmit qui block si pattern `re_*`, `sk-ant-*`, `sk-*`, `ghp_*`, `eyJ*` détecté dans prompt.
+- `gitleaks protect --staged` à ajouter `.husky/pre-commit`.
+- Documenter "ne jamais coller secret en prompt — passer par `$env:VAR` PowerShell hors Claude" dans `docs/env-template.md`.
+
+### Polish performance TIER 1+2 (8 fixes appliqués)
+
+1. **`getReportStatsForAdmin` aggregate SQL** (`lib/weekly-report/service.ts:287-340`) — remplacé `findMany` + reduce JS par 4 queries parallèles : `aggregate({ _count, _sum: { costEur }})` + `findFirst({ orderBy: weekStart desc })` + `groupBy(['sentToAdminAt'])` + `findMany({ distinct, where: weekStart=last })`. **Économie** : à 1000 membres × 104 sem = 104k rows / 10MB heap → bornée par index. RAM constante.
+2. **Cursor pagination stable** (`service.ts:262-269`) — ajouté `id: 'desc'` tiebreaker final dans `orderBy: [{ weekStart: 'desc' }, { generatedAt: 'desc' }, { id: 'desc' }]`. Évite saut/répétition rows entre pages quand 2 reports ont même `weekStart` + `generatedAt`.
+3. **Mid-batch heartbeat audit** (`service.ts:235-248` + `lib/auth/audit.ts` extension `cron.weekly_reports.batch_done`) — 1 audit row par batch de 5 membres avec `batchIndex`, `batchGenerated`, `batchErrors`, `cumulativeGenerated`. Sous long-running scans (>1min), permet post-mortem précis si crash mid-run. **Smoke test live confirmé** : 2 batch rows persistées par scan (5+1 membres).
+4. **User metadata pré-chargé dans loader** (`loader.ts:41-46` + `service.ts:467-485`) — `LoadedWeeklySlice.userMeta` joint email/firstName/lastName dans le `findUnique` initial. `maybeSendEmail` accepte `preloadedUserMeta?` optionnel, économise round-trip DB par membre. **À 30 membres** : 30 round-trips économisés.
+5. **Member labels via `IN(distinctIds)`** (`app/admin/reports/page.tsx:50-67`) — remplacé `listMembersForAdmin()` (qui charge TOUS les membres non-soft-deleted) par `db.user.findMany({ where: { id: { in: memberIds } } })` dérivé de `items.map(r => r.userId)`. **À 1000 membres** : 970 rows économisés par render.
+6. **Skip Claude pour membres inactifs** (`service.ts:91-100`) — court-circuit live API si `tradesTotal === 0 && morningCheckinsCount === 0 && eveningCheckinsCount === 0`. Le mock client produit déjà une output déterministe "no activity" sémantiquement identique. **Économie** : à 1000 membres × 30% inactifs = -27 €/mois sur cible SPEC §16. Audit metadata `hasActivity: bool` ajoute traçabilité. Smoke test live confirmé : `has_activity=true` pour membre seedé, `false` pour 4 autres.
+7. **Allowlist Zod refine `ANTHROPIC_MODEL`** (`lib/env.ts:53-66`) — `.refine((v) => ['claude-sonnet-4-6', 'claude-haiku-4-5', 'claude-opus-4-7'].includes(v))`. Bloque drift accidentel (typo `claude-opus-4-7` au lieu de `claude-sonnet-4-6` = 5× le coût).
+8. **`logAudit` payload metadata enrichi** — `weekly_report.generated` audit row inclut `hasActivity: bool` pour stats observability cumul (post-J10 : tracker ratio actifs/inactifs hebdomadaire).
+
+### Suivi non-bloquant différé J10 prod
+
+- **Cron `after()` background** (T1.2 du profiler audit) — passer le batch wrapper en `after()` Next.js 16 pour return 202 immediate + audit row final dans le callback. Évite timeout reverse-proxy Caddy à 1000 membres × 5min = >5min de batch. **Pas blocker V1 30 membres** (90s synchrone OK), à wirer J10 prod (cf. profiler audit T1.2 recommendation).
+- **`TradeAnnotation` index `(trade.userId, createdAt)`** absent → JOIN au lieu d'index hit. À 1000 membres × 6 mois annotations = potentielle slowness. À mesurer `EXPLAIN ANALYZE` post-seed J9 démo.
+- **Sentry capture sur cron catch** (existant J10).
+
+### Quality gate post-polish
+
+- **Type-check** : ✓
+- **Lint** : ✓ (max-warnings=0)
+- **Vitest** : 535/535 verts (stable, pas de régression)
+- **Build prod** : ✓ Turbopack
+- **Smoke test live** : ALL GREEN
+  - 6 reports persistés
+  - `weekStart === '2026-05-04'` (Mon Paris CEST) — BLOCKER #1 fix audit Phase G tient
+  - Idempotency upsert (même id sur re-run)
+  - 2 batch heartbeat audit rows par scan
+  - `hasActivity=true` (1) + `hasActivity=false` (5) classification correcte
+  - `cron.weekly_reports.scan` × 2 + `cron.weekly_reports.batch_done` × 4
+
+### Briefing J9 préparé : `docs/jalon-9-prep.md`
+
+13 sections couvrant Apple Declarative Web Push BLOCKER (Safari 18.4+), web-push lib 3.6.7, Service Worker manuel Next.js 16 (Serwist incompatible Turbopack default), iOS PWA fragility table, fallback email mandatory SPEC §18.2, architecture Phase A→E, RGPD privacy push, pré-requis Eliot (VAPID generate + logo + iPhone test), pickup prompt prêt à coller post-`/clear`. Lecture obligatoire avant nouvelle session J9.

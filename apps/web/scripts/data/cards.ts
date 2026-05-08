@@ -951,4 +951,382 @@ Une review efficace tient en 30 minutes maximum, le même jour de la semaine, au
     priority: 5,
     published: true,
   },
+
+  // =============================================================================
+  // J7.6 — 9 fiches additionnelles (acceptance + tilt + discipline)
+  // =============================================================================
+
+  {
+    slug: 'la-perte-fait-partie-du-jeu',
+    title: 'La perte fait partie du jeu',
+    category: 'acceptance',
+    quote:
+      "Anything can happen. You don't need to know what is going to happen next in order to make money.",
+    quoteSourceChapter: 'Trading in the Zone, ch.7',
+    paraphrase: `La perte n'est pas un accident dans ton parcours, c'est un ingrédient.
+
+**Le marché ne te doit rien.** Tant que tu traites une perte comme une anomalie à corriger, tu vis chaque trade comme un examen à réussir. Mark Douglas appelle ça la résistance fondamentale du trader débutant : refuser que le hasard fasse partie du métier. Tu ne peux pas négocier avec la distribution statistique de ton edge. Sur 100 trades, une partie sera perdante, peu importe la qualité de ton analyse.
+
+L'acceptation, ce n'est pas se dire "tant pis" après coup. C'est savoir AVANT le trade que ce setup peut perdre, et rentrer quand même parce que ton edge est positif sur la série, pas sur le trade unique.
+
+- Le trade individuel n'a pas d'information sur ta compétence
+- La série de 50 trades, oui
+- Ton job c'est d'exécuter la série, pas de gagner ce trade
+- Si tu réagis émotionnellement à un trade isolé, tu sabotes la série
+
+La différence entre un trader pro et un trader émotionnel : le pro a déjà payé psychologiquement la perte AVANT de cliquer. Le SL n'est pas une menace, c'est un coût d'opération budgétisé.
+
+**Action concrète.** Avant chaque entrée, écris à voix haute le montant exact que tu acceptes de perdre sur ce trade. Si tu n'arrives pas à le dire calmement, ne prends pas le trade.`,
+    exercises: [
+      {
+        id: 'pre-trade-loss-acceptance',
+        label: "Verbaliser la perte avant l'entrée",
+        description:
+          'Avant chaque trade, dis à voix haute : "Sur ce trade je peux perdre X euros, c\'est OK." Si tu ne peux pas le dire calmement, le size est trop gros ou ton acceptation n\'est pas faite. Réduis ou skip.',
+      },
+      {
+        id: 'serie-50-mindset',
+        label: 'Penser en série de 50',
+        description:
+          "Au lieu d'évaluer ta journée sur 1 trade, ouvre ton journal et regarde les 50 derniers. Note ton win rate réel et ton expectancy. C'est ça ta réalité, pas le dernier trade.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 5,
+    published: true,
+  },
+
+  {
+    slug: 'l-incertitude-est-ton-environnement',
+    title: "L'incertitude est ton environnement",
+    category: 'acceptance',
+    quote:
+      'There is a random distribution between wins and losses for any given set of variables that define an edge.',
+    quoteSourceChapter: 'Trading in the Zone, ch.7',
+    paraphrase: `Tu ne travailles pas dans un environnement déterministe. Accepter ça change tout.
+
+**L'incertitude n'est pas un bug à corriger, c'est la matière première.** Mark Douglas insiste : même un edge avec 70% de win rate distribue ses pertes de manière aléatoire. Tu peux avoir 5 pertes consécutives sur un système qui gagne sur 100 trades. Ce n'est pas que ton système est cassé, c'est la distribution qui s'exprime.
+
+Le débutant cherche à éliminer l'incertitude par plus d'analyse, plus d'indicateurs, plus de confluences. Le pro l'accepte comme constante et travaille dessus. Brett Steenbarger note la même chose chez les traders qu'il coache : ceux qui durent ne demandent pas "vais-je gagner ce trade", ils demandent "est-ce que j'exécute mon process correctement".
+
+- Tu ne peux pas savoir quel trade va gagner dans la série
+- Tu peux savoir que ta série est positive sur 50+ trades
+- Chaque trade est unique mais ton edge ne l'est pas
+- L'incertitude individuelle + certitude statistique = la base du métier
+
+Quand tu acceptes l'incertitude, tu cesses de chercher à la prédire. Tu agis en probabilités, pas en certitudes.
+
+**Action concrète.** À la fin de la semaine, classe tes trades en deux colonnes : "process correct" et "résultat positif". Le seul score qui compte est la première colonne.`,
+    exercises: [
+      {
+        id: 'process-vs-result-tracking',
+        label: 'Tracker process vs résultat',
+        description:
+          "Sur chaque trade clôturé, note 2 choses séparément : (1) process correct oui/non, (2) résultat positif oui/non. À la fin de la semaine, ton vrai score c'est le ratio process correct, pas le PnL.",
+      },
+      {
+        id: 'embrace-uncertainty-journal',
+        label: "Journal d'acceptation incertitude",
+        description:
+          'Chaque matin, écris une phrase : "Aujourd\'hui je ne sais pas quels trades vont gagner, et c\'est OK car mon edge se joue sur la série." Lecture obligatoire avant la première entrée.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 5,
+    published: true,
+  },
+
+  {
+    slug: 'l-erreur-n-est-pas-l-echec',
+    title: "L'erreur n'est pas l'échec",
+    category: 'acceptance',
+    quote: 'The hard, cold reality of trading is that every trade has an uncertain outcome.',
+    quoteSourceChapter: 'Trading in the Zone, ch.3',
+    paraphrase: `Une erreur d'exécution n'est pas un échec moral, c'est une donnée.
+
+**Ton ego confond erreur et identité.** Quand tu loupes un setup ou que tu sors trop tôt, ton cerveau interprète ça comme "je suis nul" au lieu de "j'ai fait une erreur de process". Cette confusion est le carburant principal du tilt. Mark Douglas l'explique dans The Disciplined Trader : tant que tu identifies ta valeur personnelle au résultat de tes trades, tu auras peur de trader.
+
+L'athlète pro fait des erreurs chaque jour et les analyse à froid. Il ne se demande pas "suis-je un bon athlète" après chaque action ratée. Il demande "qu'est-ce que cette erreur m'apprend sur mon process".
+
+- Erreur d'analyse : ton edge n'était pas valide
+- Erreur d'exécution : tu n'as pas respecté ton plan
+- Erreur de gestion : ton SL/TP n'était pas adapté
+- Échec moral : ça n'existe pas dans le trading
+
+Trois catégories d'erreurs, zéro jugement personnel. Tu sépares le faire et l'être. Sans cette séparation, chaque perte devient une attaque sur ton identité.
+
+**Action concrète.** Quand tu identifies une erreur, écris-la au format "j'ai fait X parce que Y", jamais "je suis Z".`,
+    exercises: [
+      {
+        id: 'error-categorization',
+        label: 'Catégoriser tes erreurs',
+        description:
+          'Pour chaque erreur identifiée, classe-la : analyse / exécution / gestion. Note la cause concrète. Interdiction d\'utiliser des mots de jugement personnel ("nul", "stupide"). Reformule jusqu\'à ce que ce soit factuel.',
+      },
+      {
+        id: 'separate-do-from-be',
+        label: 'Séparer faire et être',
+        description:
+          'Une fois par semaine, relis tes notes de trading. Surligne toute phrase qui décrit qui tu ES (jugement) et réécris-la pour décrire ce que tu as FAIT (action).',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 6,
+    published: true,
+  },
+
+  {
+    slug: 'la-frustration-de-la-perte-rapide',
+    title: 'La frustration de la perte rapide',
+    category: 'tilt',
+    quote:
+      'The four primary trading fears: being wrong, losing money, missing out, and leaving money on the table.',
+    quoteSourceChapter: 'Trading in the Zone, ch.4',
+    paraphrase: `Tu viens de prendre un SL en quelques minutes. Ton corps brûle. C'est là que ton compte se joue.
+
+**La perte rapide active une réponse physiologique avant cognitive.** Tu n'as pas le temps de digérer mentalement, ton système nerveux est déjà en mode alerte. Cortisol, rythme cardiaque, vision tunnel. C'est exactement le pire état pour décider du trade suivant. Brett Steenbarger documente ça extensivement : la performance cognitive chute drastiquement dans les 10-20 minutes après un événement émotionnellement chargé.
+
+Le piège classique : tu crois que reprendre un trade va "réparer" la perte. Ton cerveau cherche du soulagement immédiat, pas du PnL futur. C'est la définition même du revenge trade.
+
+- La perte rapide n'est pas plus grave qu'une perte lente
+- Elle se sent juste plus violente parce que ton corps n'a pas eu le temps de l'absorber
+- Aucun trade pris dans cet état n'a de valeur statistique pour toi
+
+La règle athlète pro : après une perte rapide qui te chauffe, tu n'as plus accès à ton edge. Tes décisions des 30 prochaines minutes ne sortent pas du même cerveau.
+
+**Action concrète.** Après une perte qui te fait sentir physiquement chaud, ferme le terminal pendant 30 minutes minimum. Marche, eau, respiration. Pas de chart.`,
+    exercises: [
+      {
+        id: 'physiological-cooldown',
+        label: 'Cooldown physiologique 30 min',
+        description:
+          'Après une perte qui te fait sentir chaleur, accélération cardiaque ou tension, tu coupes le terminal 30 min minimum. Marche, eau, respiration carrée 4-4-4-4. Pas de chart, pas de news, pas de Discord trading.',
+      },
+      {
+        id: 'body-scan-post-loss',
+        label: 'Scan corporel post-perte',
+        description:
+          "Juste après le SL, ferme les yeux 60 secondes et scanne ton corps : épaules, mâchoire, ventre, mains. Note où tu sens la tension. Ce n'est pas du yoga, c'est de l'information sur ton état opérationnel.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 6,
+    published: true,
+  },
+
+  {
+    slug: 'le-tilt-froid',
+    title: 'Le tilt froid',
+    category: 'tilt',
+    quote:
+      'When you really believe that trading is simply a probability game, concepts like right and wrong or win and lose no longer have the same significance.',
+    quoteSourceChapter: 'Trading in the Zone, ch.7',
+    paraphrase: `Le tilt n'est pas toujours bruyant. Sa version la plus dangereuse est silencieuse.
+
+**Le tilt froid c'est l'autopilote sans présence.** Tu n'es pas en colère, tu ne cries pas. Tu cliques juste sans ressentir. Tu prends des trades en mode mécanique, sans le filtre de validation, parce qu'une partie de toi veut "rentabiliser la session" ou "voir ce qui se passe". Tu te dis que tu es calme alors qu'en réalité tu es absent. C'est plus dangereux que le tilt chaud parce que tu ne déclenches aucun signal d'alarme.
+
+Brett Steenbarger appelle ça "the dissociated trader" : déconnecté de son process, déconnecté de son corps. Le compte saigne lentement et tu ne le vois pas parce que rien ne brûle.
+
+- Tu cliques sans relire ton plan
+- Tu ne vérifies pas si le setup est valide
+- Tu te dis "on va voir" au lieu de "voici pourquoi"
+- Tu confonds calme et présence
+
+Présence n'est pas absence d'émotion. Présence c'est savoir POURQUOI tu prends chaque trade, à chaque instant.
+
+**Action concrète.** Avant chaque clic, oblige-toi à dire à voix haute : "Je prends ce trade parce que [setup précis], mon SL est à [niveau], mon TP est à [niveau]." Si tu ne peux pas, tu n'es pas présent.`,
+    exercises: [
+      {
+        id: 'verbal-pre-click',
+        label: 'Verbalisation pré-clic',
+        description:
+          'Avant chaque entrée, dis à voix haute : "Setup X, SL à Y, TP à Z, raison principale = [phrase courte]." Pas dans ta tête. À voix haute. Si la phrase ne sort pas fluide, tu n\'es pas en condition de trader.',
+      },
+      {
+        id: 'cold-tilt-checkin',
+        label: 'Check-in présence toutes les 30 min',
+        description:
+          'Toutes les 30 minutes pendant la session, pause 60 secondes : ferme les yeux, scanne ton état. Es-tu présent ou en autopilote ? Note sur 1-10 ton niveau de présence. Sous 6, coupe.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 6,
+    published: true,
+  },
+
+  {
+    slug: 'le-tilt-de-l-ennui',
+    title: "Le tilt de l'ennui",
+    category: 'tilt',
+    quote:
+      'The best traders are not afraid. They have developed an attitude that gives them the greatest amount of mental flexibility.',
+    quoteSourceChapter: 'Trading in the Zone, ch.1',
+    paraphrase: `Le marché ne fait rien, et toi tu cherches à faire quelque chose. Mauvaise combinaison.
+
+**L'ennui est une émotion qui pousse à l'action sans setup.** Tu n'as pas pris de trade depuis 2 heures, ton cerveau interprète l'inactivité comme un échec. "Je suis là pour trader, pas pour regarder." Et là tu commences à voir des setups qui n'existent pas, à forcer des entrées sur des configurations B ou C, à descendre en timeframe pour "trouver quelque chose".
+
+C'est exactement ce que Mark Douglas appelle l'incapacité à attendre. Le marché ne te paie pas pour cliquer, il te paie pour cliquer AU BON MOMENT.
+
+- L'ennui n'est pas un signal de marché
+- L'ennui est un signal sur TOI
+- Trader pour ne pas s'ennuyer = revenir avec moins de capital
+- Le pro accepte que la majorité du temps soit "ne rien faire"
+
+Un sniper passe 95% de son temps à observer et 5% à tirer. C'est le ratio normal du métier.
+
+**Action concrète.** Quand tu sens l'ennui monter, lève-toi physiquement de ta chaise. Marche 5 minutes. Si en revenant le setup est toujours là et toujours valide, prends-le. Sinon, tu viens d'éviter un trade d'ennui.`,
+    exercises: [
+      {
+        id: 'boredom-walk-test',
+        label: "Test de la marche d'ennui",
+        description:
+          "Quand tu sens l'ennui (>30 min sans setup), lève-toi et marche 5 minutes hors écran. Au retour, le setup est-il toujours visible et toujours A-grade ? Si non, tu viens d'éviter un trade pourri.",
+      },
+      {
+        id: 'sniper-ratio-mantra',
+        label: 'Mantra ratio sniper',
+        description:
+          'Affiche sur ton bureau : "95% observer, 5% exécuter. Ne rien faire EST le métier." Lecture quand tu sens l\'envie de cliquer pour cliquer.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 5,
+    published: true,
+  },
+
+  {
+    slug: 'le-tilt-d-euphorie',
+    title: "Le tilt d'euphorie",
+    category: 'tilt',
+    quote: 'I am a consistent winner because I think like a trader, not because I had a good day.',
+    quoteSourceChapter: 'Trading in the Zone, ch.8',
+    paraphrase: `Le tilt n'est pas réservé aux pertes. Une grosse victoire peut détruire ta semaine.
+
+**L'euphorie déforme ta perception du risque.** Tu viens d'aligner 3 winners. Ton cerveau libère de la dopamine, ton sentiment de compétence explose, et soudain les setups B-grade ressemblent à des A-grade. Tu sizes plus gros parce que tu es "in the zone". Tu zappes le SL parce que "ça va revenir comme tout à l'heure". C'est statistiquement le moment où tu rends tous tes gains.
+
+Mark Douglas parle de l'euphorie comme du pire ennemi du trader expérimenté, parce qu'elle se déguise en compétence. Tu crois que c'est toi qui as réussi, alors que c'est juste la distribution qui t'a souri sur 3 trades.
+
+- 3 winners consécutifs n'augmentent pas ta probabilité du 4e
+- L'euphorie te fait sizer hors plan
+- L'euphorie te fait skip ta checklist
+- L'euphorie te fait confondre talent et chance
+
+Brett Steenbarger note que les pires drawdowns arrivent souvent juste après les meilleures séries.
+
+**Action concrète.** Après 3 winners consécutifs, oblige-toi à réduire ta size de 50% sur les 5 trades suivants. Pas pour te punir, pour neutraliser le biais d'euphorie.`,
+    exercises: [
+      {
+        id: 'post-streak-size-cap',
+        label: 'Cap de size post-série gagnante',
+        description:
+          "Après 3 trades gagnants d'affilée, réduis automatiquement ta size de 50% pour les 5 prochains trades. Règle mécanique, non négociable. Tu reviens à size normale après ces 5 trades, peu importe le résultat.",
+      },
+      {
+        id: 'euphoria-checklist',
+        label: 'Checklist post-victoire',
+        description:
+          'Après chaque trade gagnant supérieur à 2R, avant de regarder les charts, réponds : "Mon plan a-t-il changé ? Mon edge est-il différent ? Suis-je en train de chercher un nouveau setup valide ?" Si tu cherches, tu coupes 30 min.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 5,
+    published: true,
+  },
+
+  {
+    slug: 'la-discipline-est-une-architecture',
+    title: 'La discipline est une architecture',
+    category: 'discipline',
+    quote:
+      'Discipline is a mental technique to redirect your focus of attention to the object of your goal.',
+    quoteSourceChapter: 'The Disciplined Trader, ch.4',
+    paraphrase: `La discipline n'est pas une force de caractère, c'est un système conçu.
+
+**Tu ne disciplines pas avec ta volonté, tu disciplines avec ton environnement.** Le trader qui compte sur sa motivation pour respecter son plan perdra cette guerre. La volonté est une ressource finie qui s'épuise dans la journée. Brett Steenbarger insiste : les pros ne sont pas plus disciplinés mentalement, ils ont juste construit des architectures qui rendent l'indiscipline coûteuse ou impossible.
+
+Mark Douglas dans The Disciplined Trader développe la même idée : la discipline est un mécanisme de redirection d'attention, pas une lutte contre soi-même. Tu rediriges parce que ton environnement te le rappelle, pas parce que tu te bats avec toi.
+
+- Plan écrit avant la session, pas pendant
+- Size automatique calculée par Excel/script, pas à la main
+- SL placé dès l'entrée, pas plus tard
+- Heures de trading définies à l'avance, alarme physique
+
+Chaque règle qui ne tient qu'à ta volonté du moment est une règle qui sera violée dans une mauvaise journée. Chaque règle inscrite dans une mécanique extérieure est une règle qui tient même quand tu es fatigué, énervé ou euphorique.
+
+**Action concrète.** Identifie cette semaine une règle que tu violes régulièrement. Au lieu de "essayer plus fort", construis l'architecture qui rend la violation difficile (alarme, lock-out broker, écran éteint).`,
+    exercises: [
+      {
+        id: 'rule-architecture-audit',
+        label: "Audit d'architecture des règles",
+        description:
+          'Liste tes 5 règles de trading principales. Pour chacune, note : "tient à ma volonté" ou "tient à mon environnement". Pour chaque règle qui tient à la volonté, conçois UNE modification d\'environnement pour la mécaniser.',
+      },
+      {
+        id: 'environment-redesign-weekly',
+        label: "Redesign hebdo de l'environnement",
+        description:
+          'Chaque dimanche, identifie 1 violation de règle de la semaine. Question unique : "Quelle modification physique/logicielle aurait empêché ça ?" Implémente avant lundi.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 5,
+    published: true,
+  },
+
+  {
+    slug: 'la-routine-pre-session',
+    title: 'La routine pré-session',
+    category: 'discipline',
+    quote:
+      'Trading is a state of mind. To execute consistently you need to be in a particular state of mind.',
+    quoteSourceChapter: 'Trading in the Zone, ch.6',
+    paraphrase: `Tu n'arrives pas en session, tu y entres. La différence se construit avant le premier clic.
+
+**Aucun athlète pro ne commence sans échauffement.** Tu n'attaques pas un match sans préparation, tu n'attaques pas une session de trading sans rituel. Brett Steenbarger documente que les traders constants ont tous une routine pré-session reproductible. Ce n'est pas une superstition, c'est un mécanisme de mise en condition mentale et physiologique.
+
+La routine sert trois fonctions précises : caler ton corps (respiration, hydratation, posture), caler ton cerveau (revue du plan, des news, des niveaux), caler ton émotion (intention claire pour la session, acceptation de l'incertitude). Si tu sautes une, tu trades en sous-régime.
+
+- Sommeil mesuré la veille
+- Hydratation avant écran
+- Revue du journal de la veille
+- Niveaux clés notés à la main
+- Plan écrit pour la session
+- Verbalisation de l'intention
+
+Le piège : croire que la routine est une perte de temps quand "y a déjà du mouvement sur le marché". C'est exactement l'inverse. Les jours où tu sens l'urgence de cliquer sans préparer sont les jours où la routine est la plus rentable.
+
+**Action concrète.** Construis une routine pré-session de 15-20 minutes maximum, écrite, identique chaque jour. Si tu n'as pas fait la routine, tu ne trades pas. Pas de demi-mesure.`,
+    exercises: [
+      {
+        id: 'routine-design',
+        label: 'Design de routine pré-session',
+        description:
+          'Écris une routine pré-session de 15-20 min en 5-8 étapes concrètes : sommeil/hydratation/respiration/revue journal/niveaux/plan/intention. Ordre fixe. Imprime-la et coche chaque étape avant le premier clic.',
+      },
+      {
+        id: 'no-routine-no-trade',
+        label: 'Règle absolue pas de routine = pas de trade',
+        description:
+          'Si tu n\'as pas exécuté ta routine complète, tu ne touches pas le terminal. Pas "juste un petit trade pour voir". Règle binaire. Note dans ton journal chaque jour : routine faite oui/non.',
+      },
+      {
+        id: 'intention-statement',
+        label: "Déclaration d'intention quotidienne",
+        description:
+          'Avant la session, écris en 1-2 phrases ton intention du jour. Pas un objectif de PnL. Une intention de process : "Aujourd\'hui je n\'entre que sur setups A-grade, je respecte mon SL, je ne dépasse pas 3 trades."',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 6,
+    published: true,
+  },
 ];

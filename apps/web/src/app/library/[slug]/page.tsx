@@ -89,26 +89,34 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
         </div>
       )}
 
-      {/* Hero */}
-      <header className="mb-6 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+      {/* Hero — premium polish J7.6 (halo glow icon + h-rise H1 t-display) */}
+      <header className="relative mb-8 flex flex-col gap-3">
+        {/* Aurora halo lime behind the icon — signature focal point */}
+        <div
+          aria-hidden
+          className="bg-acc-dim pointer-events-none absolute -left-6 -top-6 h-24 w-24 rounded-full opacity-50 blur-2xl"
+        />
+        <div className="relative flex flex-wrap items-center gap-2">
           <span
-            className="bg-acc-dim text-acc inline-flex h-7 w-7 items-center justify-center rounded-full"
+            className="bg-acc-dim text-acc inline-flex h-9 w-9 items-center justify-center rounded-full shadow-[0_0_24px_-2px_var(--acc-glow)]"
             aria-hidden
           >
-            <Icon className="h-3.5 w-3.5" />
+            <Icon className="h-4 w-4" strokeWidth={1.75} />
           </span>
           <Pill tone={tone}>{CATEGORY_LABEL[card.category]}</Pill>
           {card.hatClass === 'black' && (
-            <Pill tone="warn" dot>
+            <Pill tone="warn" dot aria-label="Cadre d'urgence — fiche tilt management">
               Cadre d&apos;urgence
             </Pill>
           )}
         </div>
-        <h1 className="text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
+        <h1
+          className="f-display h-rise text-foreground relative text-[32px] font-bold leading-[1.05] tracking-[-0.03em] sm:text-[40px] md:text-[48px]"
+          style={{ fontFeatureSettings: '"ss01" 1' }}
+        >
           {card.title}
         </h1>
-        <div className="flex items-center gap-3">
+        <div className="relative flex items-center gap-3">
           <FavoriteToggle cardId={card.id} initialFavorited={favorited} variant="labeled" />
         </div>
       </header>
@@ -129,12 +137,16 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
         </div>
       </Card>
 
-      {/* Paraphrase markdown */}
+      {/* Paraphrase markdown — drop-cap premium magazine feel J7.6 */}
       <section className="mb-8" aria-labelledby="paraphrase-heading">
         <h2 id="paraphrase-heading" className="sr-only">
           Paraphrase
         </h2>
-        <SafeMarkdown source={card.paraphrase} className="text-[15px] leading-relaxed" />
+        <SafeMarkdown
+          source={card.paraphrase}
+          className="mx-auto max-w-[66ch] text-[15px] leading-relaxed"
+          dropCap
+        />
       </section>
 
       {/* Exercises */}
@@ -165,7 +177,11 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
                 </span>
                 <div className="flex-1">
                   <p className="text-foreground font-medium">{ex.label}</p>
-                  <SafeMarkdown source={ex.description} className="text-muted text-sm" />
+                  <SafeMarkdown
+                    source={ex.description}
+                    className="text-muted text-sm"
+                    headingOffset={2}
+                  />
                 </div>
               </li>
             ))}

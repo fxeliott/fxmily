@@ -1239,3 +1239,184 @@ TIER 2 fixes : `kind:'promise_rejected'` retryable, `failureReason='all_endpoint
 - M1 sécurité : endpoint URL allowlist FCM/APNs/Mozilla/Windows.
 - Email fallback après 3 attempts failed (SPEC §18.2) — Resend template carbone J4.
 - Sentry capture `/api/cron/dispatch-notifications` catch.
+
+## J10 — Production hardening (livré 2026-05-09)
+
+Phase A → H couvrent SPEC §15 J10 + §16 : RGPD self-service, Sentry, Hetzner
+deploy, domaine `fxmily.com`, première invitation prod. Branche
+`claude/j10-prod-deploy` (4 commits granulaires, rebase merge).
+
+### Phases livrées (in-session)
+
+- **A — RGPD foundation** (`f0bae30`) : migration `20260508210000_j10_user_deleted_at`,
+  7 nouvelles `AuditAction` (`account.data.exported` / `account.deletion.{requested,
+cancelled, materialised, purged}` / `cron.purge_{deleted, push_subscriptions}.scan`),
+  3 pages legal Server Component (`/legal/{privacy,terms,mentions}`), `<LegalFooter>`
+  - `<CookieBanner>` montés globalement, `/account/data` (export JSON download +
+    Server Action audit), `/account/delete` (state machine `(status, deletedAt)`
+    via `deriveDeletionState` : active → scheduled 24h → materialised → hard-purge
+    30j), 2 cron routes (`/api/cron/purge-deleted` qui matérialise + purge,
+    `/api/cron/purge-push-subscriptions` qui retire les subs `lastSeenAt < now-90d`),
+    service `lib/account/{deletion,export}.ts` + `lib/push/cleanup.ts`. 28 tests
+    TDD (Vitest 659/659, +28 vs J9 baseline 631).
+- **B — Sentry integration** (`ba026e0`) : `@sentry/nextjs` installé + 3 configs
+  (`sentry.{client,server,edge}.config.ts`) gardées par DSN-presence, `instrumentation.ts`
+  registers + ré-emit `Sentry.captureRequestError`, `withSentryConfig` wrap +
+  `tunnelRoute: '/monitoring'` + CSP `connect-src 'self' https://*.sentry.io`,
+  helper `lib/observability.ts` `reportError(scope, err, extra)` câblé dans les 7
+  catch blocks de cron, env Zod cross-var refine `NEXT_PUBLIC_SENTRY_DSN ↔
+SENTRY_DSN`, CI source-map upload via `SENTRY_AUTH_TOKEN` injecté seulement sur
+  push `main`.
+- **C+D+E+F — Hetzner ops** (`7cf22f9`) : `Dockerfile.prod` 3-stage (deps +
+  builder + runner non-root uid 1001 ~250 MB), `docker-compose.prod.yml` Postgres
+  17 + web standalone + Caddy 2 (réseau interne, secrets via Docker secrets,
+  resource caps CX22 4 GB), `Caddyfile` HSTS preload + `-Server` strip + zstd/br/gzip
+  - log rolling 100 MiB × 7, wrappers `/usr/local/bin/{fxmily-cron,fxmily-backup}`
+    (sourcés depuis `/etc/fxmily/cron.env` 0600, `pg_dump → gzip → GPG AES-256 → R2`
+  - 7 jours rotation locale + 30 jours R2 lifecycle), crontab `/etc/cron.d/fxmily-app`
+    avec 8 lignes (J5+J6+J7+J8+J9+J10×2+backup), `next.config.ts` `output: 'standalone'`
+    pour le tracing runtime. Workflow `.github/workflows/deploy.yml` :
+    `docker buildx → push GHCR → SSH appleboy → docker compose pull/up → migrate
+deploy via container one-shot prisma`. Runbooks `docs/runbook-{hetzner-deploy,
+backup-restore,prod-smoke-test}.md`.
+- **G — Audit-driven hardening** (`14b51c2`) : 5 subagents lancés en parallèle
+  (code-reviewer + security-auditor + accessibility-reviewer + ui-designer +
+  fxmily-content-checker). 5 BLOCKERs + 7 HIGH closed in-session :
+  - **CSRF strict** : `/api/account/data/export` rejette si Origin AND Referer
+    null (avant : passait).
+  - **Cron route allowlist** dans `fxmily-cron` (régression J9 round 2 colmatée).
+  - **Promise.all → sequential** dans `purge-deleted` cron (counts atomiques).
+  - **Audit userId** : `materialisePendingDeletions` + `purgeMaterialisedDeletions`
+    retournent désormais `{materialised,purged}Ids: string[]`. Le cron émet
+    `account.deletion.materialised` per-user (avec userId) + `account.deletion.purged`
+    per-user (userId dans `metadata`, pas dans la FK qui est SetNull post-cascade).
+  - **Prisma migrate path** : `deploy.yml` lance la migration via container
+    `node:22-bookworm-slim` one-shot + `npx prisma@7 migrate deploy` au lieu
+    d'appeler `apps/web/node_modules/prisma/build/index.js` qui n'existe pas
+    dans l'image runtime standalone.
+  - **a11y `<ol>` énumération** : spans visibles "1." "2." "3." marqués
+    `aria-hidden` (NVDA/JAWS lisaient "1. 1. ...").
+  - **a11y live region pending** : DeleteAccountForm + CancelDeletionForm
+    enveloppent isPending dans `role="status" aria-live="polite"` sr-only —
+    `aria-busy` seul n'est pas annoncé fiable.
+  - **a11y footer touch target** : LegalFooter links → `inline-flex min-h-6
+px-2 py-1.5` (WCAG 2.5.8 AA 24×24).
+  - **a11y CookieBanner contrast + DS Btn** : body bumpé `--t-3 → --t-2`
+    (12px sur `--bg-3` ne clearait pas 4.5:1), boutons remplacés par `<Btn
+kind="primary"|"ghost" size="m">` (focus ring, hover lift, ≥ 44×44),
+    shadow `--sh-toast` token, anchor `bottom-[max(0.75rem,env(safe-area-inset-bottom))]`.
+  - **UI last-updated** : LegalLayout badge → `<Pill tone="mute">`.
+  - **Sentry URL scrub** : `beforeSend` strip `?token|secret|password|code|key|sig`
+    de `query_string` + `url` (magic-link / verify URL leak).
+  - **Posture content** : Privacy §5 Anthropic mention "modèle Claude (famille
+    Sonnet)" au lieu de "Sonnet 4.6" (anti-drift annuel).
+  - **Anti-impulsivité** : DeleteAccountForm placeholder `Tape ici` au lieu de
+    `SUPPRIMER` (mobile auto-tap defeat removed).
+- **H — Close-out** (ce commit) : section `apps/web/CLAUDE.md` J10 livré +
+  memory `fxmily_project.md` état final V1 + briefing V2 roadmap.
+
+### Modèle de données
+
+Migration `20260508210000_j10_user_deleted_at` :
+
+- `User.deletedAt DateTime?` — anchor unique pour les 3 phases du soft-delete :
+  `null` (active), `now+24h` (scheduled, status='active'), `now` (materialised,
+  status='deleted').
+- Partial index `users_status_deleted_at_idx ON (status, deleted_at) WHERE
+status = 'deleted'` — la cron purge scanne en O(log n) sur les rows soft-deleted
+  uniquement, pas sur la cohorte entière.
+
+### Stack
+
+- **`@sentry/nextjs`** (latest, gardé par DSN-presence pour dev silence).
+- **Caddy 2** + Let's Encrypt (HTTP-01, HTTPS forcé HSTS preload).
+- **Docker Compose** Postgres 17-alpine + web standalone + Caddy 2-alpine.
+- **Cloudflare R2** (US east cross-région backup) + AWS CLI profile fxmily-backup.
+- **GitHub Actions** docker buildx → GHCR → appleboy/ssh-action → migrate via
+  one-shot container.
+
+### Audit-driven hardening (5 subagents, 5 BLOCKERs + 7 HIGH closed)
+
+Pattern carbone canon Fxmily (J5/J6/J7/J8/J9). Chaque subagent renvoie un report
+TIER 1 → TIER 4. Les TIER 1 + TIER 2 prio sont fix in-session, TIER 3 / TIER 4
+reclassés.
+
+- **code-reviewer** : 6 BLOCKERs (B1 audit userId, B2 race purge-deleted, B3
+  CSRF Origin null, B4 cron allowlist, B5 build env OK, B6 prisma migrate path)
+  → tous closed.
+- **security-auditor** : 2 TIER 1 (allowlist + CSRF, doublons code-reviewer),
+  3 TIER 3 (URL token leak, rate-limit `/monitoring`, rate-limit export route)
+  → URL strip closed, rate-limits reclassés J11.
+- **accessibility-reviewer** : 5 BLOCKERs (a11y B1 ol span, B2 aria-busy SR,
+  B3 footer touch, B4 cookie banner obscure focus, B5 contrast `--t-3` on
+  `--bg-3`) → tous closed via DS Btn swap + bump tokens.
+- **ui-designer** : 0 TIER 1, 4 TIER 2 (shadow magic, Btn custom, Pill custom,
+  hierarchy h2) → 3 fixés (shadow `--sh-toast`, Btn DS, Pill DS), hierarchy
+  h2 reclassé J10.5+.
+- **fxmily-content-checker** : 0 TIER 1, 1 TIER 3 (Sonnet 4.6 hardcoded
+  drift) → fixé.
+
+### Quality gate finale J10
+
+- **Format check** ✓ — `pnpm format:check` clean
+- **Lint** ✓ — `pnpm lint` exit 0 (max-warnings=0)
+- **Type-check** ✓ — `tsc --noEmit` exit 0
+- **Vitest** : **659/659 verts** (+28 vs J9 baseline 631)
+- **Build prod Turbopack** ✓ — toutes routes J10 listées :
+  - `/api/account/data/export` (ƒ POST)
+  - `/api/cron/purge-deleted` (ƒ POST)
+  - `/api/cron/purge-push-subscriptions` (ƒ POST)
+  - `/account/data` (ƒ Server Component)
+  - `/account/delete` (ƒ Server Component)
+  - `/legal/privacy` (○ static)
+  - `/legal/terms` (○ static)
+  - `/legal/mentions` (○ static)
+- **Migration appliquée** (live dev DB) — partial index vérifié `\d users` :
+  `"users_status_deleted_at_idx" btree (status, deleted_at) WHERE status =
+'deleted'::"UserStatus"`.
+
+### Pré-requis Eliot pour Phase F (1ère invitation prod, BLOQUÉE in-session)
+
+Cf. `docs/runbook-prod-smoke-test.md` (12 steps end-to-end). Conditions à
+satisfaire AVANT d'exécuter le smoke :
+
+1. **Hetzner CX22 provisionné** + clé SSH publique posée + IPv4 noté.
+2. **`fxmily.com` acheté** (Cloudflare Registrar) + DNS posé (A `app` →
+   Hetzner IP, MX Resend, TXT SPF/DKIM/DMARC).
+3. **Resend Console** → `fxmily.com` domain **verified** (3 TXT propagés ≥ 24h).
+4. **Sentry projet créé** + DSN dans `/etc/fxmily/web.env` + AUTH_TOKEN dans
+   GitHub secrets.
+5. **iPhone Safari 18.4+** dispo pour le push real-device test.
+6. **Mdp admin rotaté** post-J8 polish (incident sécurité Resend key leak
+   docs/jalon-9-prep.md).
+7. **GitHub secrets** posés : `HETZNER_HOST`, `HETZNER_SSH_KEY`,
+   `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
+
+Une fois ces 7 boîtes cochées, l'invitation Eliot → eliott.pena@icloud.com →
+onboarding → trade → check-in → score → fiche → push iPhone → digest weekly
+→ export JSON → erreur Sentry → tout vert : SPEC §15 J10 satisfait.
+
+### TODO J10.5+ (reclassés post-V1)
+
+Items détectés par les audits mais non-bloquants pour le critère SPEC §15 J10.
+À considérer une fois le V1 ship :
+
+- **Rate-limit `/api/account/data/export`** par userId (token bucket par
+  user → DB load anti-spam à 1000+ membres).
+- **Rate-limit `/monitoring` tunnel route Sentry** (DoS du quota côté
+  attaquant — Sentry Free a hard cap 5000 errors/mois).
+- **Atomic update** dans `requestAccountDeletion` (UPDATE WHERE deletedAt=null
+  pour fermer le race check+update).
+- **Skip-link** `<a href="#main">Aller au contenu</a>` global (WCAG 2.4.1)
+  avec `id="main"` sur les `<main>`.
+- **Hierarchy h2** des pages legal — `text-base sm:text-lg` pour amorcer la
+  cadence (UI designer T2-6).
+- **`role="alert"`** au lieu de `role="status"` pour les error regions
+  (a11y H5 — assertive plus appropriée).
+- **CookieBanner transition** d'apparition (opacity 200ms `--e-smooth`).
+- **`<Code>` component** extracted (drift across `legal-layout` / `account/data`
+  / `delete-form`).
+- **CSP nonces** Phase J10 hardening (`'unsafe-inline'` aujourd'hui — déjà
+  noté `next.config.ts:8`).
+- **Annual DR test** dans `docs/runbook-backup-restore.md` (RTO objectif
+  < 24h, mesurer).

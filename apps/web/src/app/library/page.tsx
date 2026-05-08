@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
-import { CardGridItem } from '@/components/library/card-grid-item';
+import { AnimatedCardGrid } from '@/components/library/animated-card-grid';
 import { CategoryFilterTabs } from '@/components/library/category-filter-tabs';
 import { CATEGORY_LABEL } from '@/components/library/category-meta';
 import { Card } from '@/components/ui/card';
@@ -135,13 +135,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
           />
         </Card>
       ) : (
-        <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {cards.map((card) => (
-            <li key={card.id}>
-              <CardGridItem card={card} favorited={favoriteIds.has(card.id)} />
-            </li>
-          ))}
-        </ul>
+        <AnimatedCardGrid cards={cards} favoritedIds={Array.from(favoriteIds)} />
       )}
     </main>
   );

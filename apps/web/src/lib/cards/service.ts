@@ -329,16 +329,25 @@ export function serializeDelivery(row: DeliveryRow): SerializedDelivery {
 }
 
 function parseExercises(raw: Prisma.JsonValue): CardExercise[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter(
-      (item): item is { id: string; label: string; description: string } =>
-        typeof item === 'object' &&
-        item !== null &&
-        !Array.isArray(item) &&
-        typeof (item as Record<string, unknown>).id === 'string' &&
-        typeof (item as Record<string, unknown>).label === 'string' &&
-        typeof (item as Record<string, unknown>).description === 'string',
-    )
-    .map((item) => ({ id: item.id, label: item.label, description: item.description }));
+  if (!Array.isArray(raw)) {
+    if (raw !== null && raw !== undefined) {
+      console.warn('[cards.parseExercises] expected array, got', typeof raw);
+    }
+    return [];
+  }
+  const valid = raw.filter(
+    (item): item is { id: string; label: string; description: string } =>
+      typeof item === 'object' &&
+      item !== null &&
+      !Array.isArray(item) &&
+      typeof (item as Record<string, unknown>).id === 'string' &&
+      typeof (item as Record<string, unknown>).label === 'string' &&
+      typeof (item as Record<string, unknown>).description === 'string',
+  );
+  if (valid.length !== raw.length) {
+    console.warn(
+      `[cards.parseExercises] dropped ${raw.length - valid.length}/${raw.length} invalid items`,
+    );
+  }
+  return valid.map((item) => ({ id: item.id, label: item.label, description: item.description }));
 }

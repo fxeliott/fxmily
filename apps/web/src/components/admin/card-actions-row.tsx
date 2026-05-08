@@ -1,7 +1,7 @@
 'use client';
 
 import { Eye, EyeOff, Trash2 } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 
 import { deleteCardAction, setPublishedAction } from '@/app/admin/cards/actions';
 import { cn } from '@/lib/utils';
@@ -14,39 +14,80 @@ interface CardActionsRowProps {
 
 /**
  * Inline admin row controls for `/admin/cards`: toggle publish + delete.
- * Optimistic UI for publish; double-confirm for delete.
+ *
+ * J7.5 polish :
+ *   - Optimistic publish toggle with `aria-live` announcement (a11y H5).
+ *   - Double-confirm delete with `aria-live` status when entering confirmation
+ *     state (a11y H4 — `setTimeout` cleanup via `useEffect` cleanup so a
+ *     unmount during the 4s window doesn't leak setState (CR-#12 fix).
  */
 export function CardActionsRow({ cardId, initialPublished, cardTitle }: CardActionsRowProps) {
   const [published, setPublishedState] = useState(initialPublished);
   const [pending, startTransition] = useTransition();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [announce, setAnnounce] = useState('');
+  const announceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-cancel confirmation after 4s — useEffect ensures cleanup on unmount.
+  useEffect(() => {
+    if (!confirmingDelete) return;
+    const id = setTimeout(() => setConfirmingDelete(false), 4000);
+    return () => clearTimeout(id);
+  }, [confirmingDelete]);
+
+  // Cleanup announce timeout on unmount.
+  useEffect(() => {
+    return () => {
+      if (announceTimeoutRef.current) clearTimeout(announceTimeoutRef.current);
+    };
+  }, []);
+
+  function announceFor(msg: string) {
+    setAnnounce(msg);
+    if (announceTimeoutRef.current) clearTimeout(announceTimeoutRef.current);
+    // Clear after 1.5s so a re-announce of the same message will fire.
+    announceTimeoutRef.current = setTimeout(() => setAnnounce(''), 1500);
+  }
 
   function togglePublished() {
     const next = !published;
     setPublishedState(next); // optimistic
+    announceFor(next ? `Fiche « ${cardTitle} » publiée` : `Fiche « ${cardTitle} » dépubliée`);
     startTransition(async () => {
       const r = await setPublishedAction(cardId, next);
-      if (!r.ok) setPublishedState(!next);
+      if (!r.ok) {
+        setPublishedState(!next);
+        announceFor('Échec, essaie à nouveau');
+      }
     });
   }
 
   function onDelete() {
     if (!confirmingDelete) {
       setConfirmingDelete(true);
-      // Auto-cancel confirmation after 4 seconds.
-      setTimeout(() => setConfirmingDelete(false), 4000);
+      announceFor(
+        `Confirmation requise pour supprimer la fiche « ${cardTitle} ». Clique à nouveau dans 4 secondes.`,
+      );
       return;
     }
     startTransition(async () => {
       const r = await deleteCardAction(cardId);
       if (!r.ok) {
         setConfirmingDelete(false);
+        announceFor('Échec de la suppression');
+      } else {
+        announceFor('Fiche supprimée');
       }
     });
   }
 
   return (
     <div className="flex items-center gap-2">
+      {/* Live region for screen readers — announces optimistic state changes. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {announce}
+      </span>
+
       <button
         type="button"
         onClick={togglePublished}

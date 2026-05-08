@@ -554,4 +554,401 @@ Le P&L est la conséquence. Le process est la cause. Travaille sur la cause.`,
     priority: 6,
     published: true,
   },
+
+  // =============================================================================
+  // J7.5 — 10 fiches additionnelles (catalogue extended, pas de triggers)
+  // =============================================================================
+
+  {
+    slug: 'every-moment-is-unique',
+    title: 'Chaque instant de marché est unique',
+    category: 'acceptance',
+    quote: 'Every moment in the market is unique.',
+    quoteSourceChapter: 'Trading in the Zone, ch.7',
+    paraphrase: `Tu regardes un setup qui ressemble à celui d'hier. Ton cerveau te dit : "je connais, ça va faire pareil." C'est exactement à cet instant que tu perds ton edge.
+
+**Aucun moment de marché ne se répète à l'identique.** Les acteurs ne sont pas les mêmes, le contexte macro a changé, le flux d'ordres est différent. Le pattern visuel est similaire, mais les forces qui le produisent ne le sont jamais. Quand tu projettes le résultat passé sur le présent, tu ne trades plus le marché — tu trades un souvenir.
+
+Cette règle n'est pas une abstraction philosophique. Elle a une conséquence opératoire : chaque trade doit être pris comme un événement nouveau, indépendant. Pas "ce setup a marché 3 fois cette semaine donc il marchera la 4ème". Pas "ce niveau a tenu hier donc il tient aujourd'hui". Le passé informe ton edge statistique, pas la prédiction du trade individuel.
+
+- Le pattern n'est qu'un signal, pas une promesse.
+- Les acteurs derrière le prix ont changé depuis hier.
+- "Ça ressemble" n'est pas "ça va faire pareil".
+- Ton edge se joue sur la série, pas sur le trade.
+
+**Action concrète.** Avant chaque entrée, dis-toi à voix basse : "ce trade est unique, le résultat est inconnu". Cette phrase casse la projection automatique du cerveau et te ramène au présent — où se trouve ton exécution.`,
+    exercises: [
+      {
+        id: 'mantra-unique-moment',
+        label: 'Mantra "ce trade est unique"',
+        description:
+          'Avant chaque entrée, prononce à voix basse "ce trade est unique, le résultat est inconnu". Note dans le journal si tu l\'as fait sur 100% de tes trades de la semaine.',
+      },
+      {
+        id: 'compare-similar-setups',
+        label: 'Comparer 5 setups "identiques"',
+        description:
+          "Sors 5 setups visuellement similaires de ton historique 30 derniers jours. Identifie 3 différences contextuelles entre eux (volume, news, range D-1). Conclusion : ils n'étaient jamais identiques.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 5,
+    published: true,
+  },
+
+  {
+    slug: 'edge-is-not-guarantee',
+    title: "Un edge n'est pas une garantie",
+    category: 'probabilities',
+    quote:
+      'An edge is nothing more than an indication of a higher probability of one thing happening over another.',
+    quoteSourceChapter: 'Trading in the Zone, ch.7',
+    paraphrase: `Tu as backtesté ta stratégie. Win rate 58%, RR 1.4. Tu sais que c'est rentable sur la série. Mais sur ce trade-ci, à cet instant, le marché ne te doit rien.
+
+**Un edge est une probabilité, pas une certitude.** 58% de win rate signifie que sur 1000 trades, environ 580 seront gagnants — pas que ce trade-ci a 58% de chances. Le marché n'a pas de mémoire de ton edge. Il ne sait pas que tu as backtesté. Le prochain trade peut perdre, et le suivant aussi, et celui d'après. Ce n'est pas une trahison de ton edge — c'est sa nature statistique.
+
+Confondre edge et garantie produit deux comportements toxiques : sizer trop gros parce qu'on est "sûr" du trade, et révolter contre le marché quand il ne valide pas. Les deux viennent du même malentendu : croire que la probabilité s'applique au trade individuel plutôt qu'à la série.
+
+- 58% win rate ne dit RIEN sur le trade en cours.
+- Le marché ne te doit pas la statistique au prochain trade.
+- Une perte ne casse pas ton edge ; elle l'exécute.
+- Une série de pertes est mathématiquement attendue.
+
+**Action concrète.** Calcule la probabilité d'avoir 5 pertes consécutives avec ton win rate (formule : (1-WR)^5). À 58%, c'est 1.3% — soit ~1 fois par 77 séries. Une drawdown n'est pas un signal d'arrêter, c'est l'exécution normale de la statistique.`,
+    exercises: [
+      {
+        id: 'compute-streak-probability',
+        label: 'Calculer la prob. de séries perdantes',
+        description:
+          "Avec ton win rate réel des 100 derniers trades, calcule la probabilité d'avoir 3, 5, 7 pertes consécutives. Note ces chiffres en haut de ton journal hebdo. Ils dédramatisent les drawdowns.",
+      },
+      {
+        id: 'separate-trade-from-series',
+        label: 'Séparer le trade de la série',
+        description:
+          'À chaque trade fermé (gain ou perte), écris UNE phrase : "ce trade : [résultat]. Ma série de 100 : toujours 58% WR." Tu sépares mentalement l\'évènement du système.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 6,
+    published: true,
+  },
+
+  {
+    slug: 'random-distribution-wins-losses',
+    title: 'Tes gains et tes pertes sont distribués au hasard',
+    category: 'probabilities',
+    quote:
+      'There is a random distribution between wins and losses for any given set of variables that define an edge.',
+    quoteSourceChapter: 'Trading in the Zone, ch.7',
+    paraphrase: `Tu viens de gagner 3 trades d'affilée. Tu sens que le 4ème est statistiquement "dû" pour perdre, alors tu sizes plus petit. Erreur. Tu viens de perdre 4 trades d'affilée, tu sens que le prochain "doit" gagner, alors tu sizes plus gros. Double erreur.
+
+**L'ordre des gains et des pertes dans ta série est aléatoire.** Même avec un edge réel, tu ne peux pas prédire si le prochain trade gagne ou perd. Tu sais seulement que sur N trades, environ X% gagneront. La distribution dans le temps est imprévisible. Ce qui veut dire qu'une série de 5 gagnants ne réduit pas la probabilité du suivant, et 5 perdants ne l'augmentent pas.
+
+C'est l'erreur du joueur : croire que la roulette doit "compenser". En trading, chaque trade pris dans les conditions de ton edge a la même probabilité — celle de ton edge. Sizer en fonction du résultat des trades précédents, c'est ajouter une erreur stratégique à un biais cognitif.
+
+- 3 gagnants d'affilée n'augmentent pas la prob. d'une perte au suivant.
+- 4 perdants d'affilée n'augmentent pas la prob. d'un gain au suivant.
+- Ta taille de position doit dépendre de ton risque, pas de ta série récente.
+- "Sentir que ça va perdre/gagner" est un bruit, pas un signal.
+
+**Action concrète.** Fixe ta taille de position en pourcentage du capital, défini en avance, hors session. Si tu te surprends à modifier ce sizing en réaction aux 3 derniers trades, c'est un signal d'arrêter et de revenir au plan.`,
+    exercises: [
+      {
+        id: 'fixed-sizing-rule',
+        label: 'Sizing fixe défini hors session',
+        description:
+          "Avant la semaine, écris ta règle de sizing en % du capital. Ex : 0.5% par trade. Pendant la semaine, interdis-toi de la modifier. Compte combien de fois tu as été tenté de l'ajuster.",
+      },
+      {
+        id: 'log-streak-reaction',
+        label: 'Logger les réactions aux séries',
+        description:
+          'Pendant 2 semaines, après chaque trade, note 1 ligne : "ma série actuelle : X gagnants/perdants — j\'ai été tenté de sizer +/- ? oui/non". Lis le tout en fin de période pour voir ton biais.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 6,
+    published: true,
+  },
+
+  {
+    slug: 'revenge-trade-trap',
+    title: 'Le piège du revenge trade',
+    category: 'tilt',
+    quote:
+      "The market doesn't generate happy or painful information. From the market's perspective, it's all simply information.",
+    quoteSourceChapter: 'Trading in the Zone, ch.4',
+    paraphrase: `Tu viens de perdre. Le marché continue dans le sens où tu étais positionné, juste après ton stop. Ton corps réagit avant ton cerveau — la main est déjà sur le clic d'achat. C'est le revenge trade.
+
+**Le revenge trade n'est pas un trade, c'est une réaction.** Tu ne cherches plus à exécuter ton edge ; tu cherches à effacer la perte précédente. Le marché ne sait pas que tu viens de perdre. Il ne te doit aucune compensation. Mais ton cerveau interprète la perte comme une attaque, et la réponse instinctive est de contre-attaquer — immédiatement, plus gros, sans plan.
+
+Trois signaux distinguent un revenge trade d'un vrai trade : 1) il arrive dans les 60 secondes après une perte, 2) tu ne peux pas verbaliser ton setup en une phrase claire, 3) la taille est différente de ta taille standard. Si deux de ces trois cases sont cochées, ce n'est pas du trading. C'est de l'émotion.
+
+- La main qui clique avant que le cerveau ait formulé le setup = signal rouge.
+- Le marché ne te doit pas la perte précédente.
+- Augmenter le size pour "rattraper" multiplie le risque, pas l'edge.
+- L'urgence ressentie est interne, pas dans le marché.
+
+**Action concrète.** Règle dure : après une perte, 5 minutes de pause minimum, écran fermé ou regard sur une autre fenêtre. Si tu prends un trade dans cet intervalle, il est annulé mentalement et noté comme tilt dans le journal — quel que soit son résultat.`,
+    exercises: [
+      {
+        id: 'cooldown-after-loss',
+        label: 'Cooldown 5 min après chaque perte',
+        description:
+          'Programme un timer de 5 minutes qui se déclenche à chaque stop touché. Pendant ce délai : pas de nouvelle entrée. Compte les violations sur 2 semaines. Objectif : 0 violation en semaine 3.',
+      },
+      {
+        id: 'verbalize-setup-test',
+        label: 'Test de verbalisation du setup',
+        description:
+          "Avant chaque entrée, dis à voix haute en 1 phrase : \"j'entre parce que [condition], stop à [niveau], cible [niveau].\" Si tu ne peux pas la formuler claire, tu n'entres pas. C'est ton filtre anti-revenge.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 7,
+    published: true,
+  },
+
+  {
+    slug: 'wait-for-your-setup',
+    title: 'Attendre TON setup, pas un setup',
+    category: 'patience',
+    quote: 'The hard part is waiting. The trader who can wait has already won half the battle.',
+    quoteSourceChapter: 'The Disciplined Trader, ch.8',
+    paraphrase: `Tu es devant l'écran depuis 2 heures. Le marché bouge, mais pas dans tes conditions. Tu commences à lire les bougies différemment, à élargir mentalement ce qui qualifie comme "setup". C'est là que tu vas perdre.
+
+**Ton edge a des conditions précises. En dehors, tu trades autre chose qu'on appellera selon les jours : ennui, FOMO, ou frustration.** Attendre n'est pas du temps perdu — c'est l'acte de trading le plus rentable que tu poses. Chaque trade pris hors-conditions dilue statistiquement ton edge. Sur 100 trades, si 30 sont "marginaux", ton win rate réel n'est plus celui de ton backtest. Il est plus bas, parfois sous le seuil de rentabilité.
+
+Le problème : l'attente est inconfortable. Le cerveau confond "ne rien faire" avec "ne pas travailler". Mais le travail du trader, c'est l'exécution conditionnelle, pas la fréquence. Un trader qui prend 2 trades par semaine dans ses conditions surperforme un trader qui en prend 20 dont 14 marginaux.
+
+- Pas de setup = pas de trade. Période.
+- Élargir mentalement les conditions = changer de stratégie sans backtest.
+- L'attente active (rester focus) est un travail.
+- Forcer la fréquence dilue l'edge.
+
+**Action concrète.** Écris en 5 lignes maximum les conditions exactes de ton setup. Imprime-les. Affiche-les à côté de l'écran. Avant chaque entrée, vérifie ligne par ligne. Si une seule ligne ne coche pas, tu n'entres pas.`,
+    exercises: [
+      {
+        id: 'setup-checklist-physical',
+        label: 'Checklist setup imprimée',
+        description:
+          "Écris en 5 lignes max les conditions exactes de ton setup. Imprime. Avant chaque trade, lis les 5 lignes à voix basse et confirme oui/non. Note le nombre d'entrées refusées par semaine grâce à la checklist.",
+      },
+      {
+        id: 'no-trade-day-target',
+        label: 'Objectif jours sans trade',
+        description:
+          'Définis combien de jours par semaine tu PEUX rester sans entrer, en cohérence avec ta stratégie. Note les jours sans trade comme une victoire dans le journal, pas comme un échec.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 6,
+    published: true,
+  },
+
+  {
+    slug: 'confidence-vs-arrogance',
+    title: 'Confiance vs arrogance',
+    category: 'confidence',
+    quote:
+      'Confidence is not a function of being right. Confidence is a function of having a sound process.',
+    quoteSourceChapter: 'Trading in the Zone, ch.10',
+    paraphrase: `Tu as enchaîné une bonne semaine. Tu te sens lucide, le marché te parle. Attention : ce sentiment précède statistiquement les pires drawdowns. Il s'appelle l'arrogance, et il porte le costume de la confiance.
+
+**La confiance vient du process, l'arrogance vient du résultat.** Confiance : "j'ai exécuté mon plan sur les 50 derniers trades sans dévier, je sais que mon edge tient sur la série." Arrogance : "j'ai gagné 5 fois cette semaine, je peux maintenant lire le marché mieux que la semaine dernière." La première est stable, la seconde est volatile — elle s'écroule au premier trade perdant.
+
+Symptômes d'arrogance : tu prends des positions hors conditions parce que "tu sens", tu sizes plus gros sans raison statistique, tu gardes des positions au-delà de ta cible parce que "ça va continuer", tu commentes mentalement les trades des autres comme s'ils étaient mauvais. Ces signaux apparaissent toujours après une série gagnante. Ils précèdent toujours une casse.
+
+- Confiance = ancrée dans l'exécution répétée.
+- Arrogance = ancrée dans le résultat récent.
+- "Je sens le marché" = signal d'arrogance, pas de skill.
+- Sizer plus gros sans raison statistique = arrogance.
+
+**Action concrète.** Après toute série de 4+ gagnants consécutifs, ouvre le journal et écris : "qu'est-ce que je risque de modifier dans mon exécution à cause de cette série ?" Identifie les tentations. Ne les autorise pas.`,
+    exercises: [
+      {
+        id: 'post-streak-checkpoint',
+        label: 'Checkpoint après série gagnante',
+        description:
+          'Définis un seuil (ex: 4 gagnants d\'affilée). Au-delà, ouvre le journal et écris 3 phrases : "ma série actuelle / ce que je risque de modifier / ma règle pour ne PAS le modifier." Relis avant la prochaine entrée.',
+      },
+      {
+        id: 'confidence-from-process',
+        label: 'Score de confiance basé process',
+        description:
+          'En fin de semaine, note ta confiance sur 10 selon : nombre de trades pris dans tes conditions / total. Pas selon le P&L. Cette note isole confiance saine vs arrogance.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 6,
+    published: true,
+  },
+
+  {
+    slug: 'the-3-phases-of-execution',
+    title: "Les 3 phases d'exécution d'un trade",
+    category: 'discipline',
+    quote: "You don't need to know what's going to happen next to make money. Anything can happen.",
+    quoteSourceChapter: 'Trading in the Zone, ch.11',
+    paraphrase: `Un trade se joue en trois phases distinctes : avant, pendant, après. Chaque phase a ses règles. Confondre les règles d'une phase avec celles d'une autre est la cause principale d'erreur d'exécution.
+
+**Avant l'entrée : décision conditionnelle.** Tu vérifies si les conditions de ton setup sont réunies. Réponse binaire : oui (j'entre, taille fixe, stop défini) ou non (je n'entre pas). Aucune négociation, aucun ajustement de cible "parce que ça a l'air fort". Le moment d'entrée est le seul où tu décides — après, tu exécutes.
+
+**Pendant le trade : zéro décision discrétionnaire.** Le stop et la cible sont fixés. Tu ne les déplaces pas en réaction au prix. Tu peux ajuster selon des règles écrites en avance (trailing stop déclenché par condition X), pas selon ce que tu ressens. Si tu sens l'envie de couper avant la cible ou d'élargir le stop, c'est un signal de l'émotion, pas un signal de marché.
+
+**Après le trade : analyse du process, pas du résultat.** Question unique : "ai-je exécuté mon plan ?" Si oui = trade réussi (gain ou perte). Si non = trade raté (gain ou perte). Le résultat financier est secondaire à l'évaluation de l'exécution.
+
+- Avant = décision binaire.
+- Pendant = exécution sans débat.
+- Après = audit du process, pas du P&L.
+
+**Action concrète.** Sépare physiquement les trois phases dans ton journal : 3 colonnes "Avant / Pendant / Après". Pour chaque trade, remplis les 3. Cela force la conscience de quelle phase tu es en train de violer.`,
+    exercises: [
+      {
+        id: 'three-column-journal',
+        label: 'Journal en 3 colonnes',
+        description:
+          'Refais ton template de journal avec 3 colonnes : Avant (conditions cochées), Pendant (interventions sur stop/cible et raisons), Après (process exécuté oui/non). Tiens-le 2 semaines minimum.',
+      },
+      {
+        id: 'no-mid-trade-edit',
+        label: 'Règle "pas de modif en cours de trade"',
+        description:
+          "Pendant 1 semaine, interdis-toi tout déplacement de stop/cible une fois le trade ouvert, sauf règle écrite à l'avance. Compte les violations. Cible : 0 en semaine 2.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 5,
+    published: true,
+  },
+
+  {
+    slug: 'the-fear-of-being-wrong',
+    title: "La peur d'avoir tort",
+    category: 'fear',
+    quote: 'The fear of being wrong is the most fundamental fear of all traders.',
+    quoteSourceChapter: 'Trading in the Zone, ch.5',
+    paraphrase: `Tu hésites à couper une position perdante. Tu ajoutes au lieu de couper. Tu déplaces ton stop "pour donner de l'air". Diagnostic : tu n'as pas peur de perdre de l'argent. Tu as peur d'avoir tort.
+
+**La peur d'avoir tort est la peur fondamentale du trader.** Elle ne porte pas sur l'argent — elle porte sur l'identité. Couper la perte, c'est admettre que ton analyse était fausse. Déplacer le stop, c'est se donner une chance de "ne pas avoir eu tort". Mais le marché ne valide jamais l'analyse rétroactivement. Il valide uniquement l'exécution.
+
+Cette peur produit des comportements identifiables : positions perdantes maintenues trop longtemps, ajouts à la perte, stops mentaux non respectés, refus de prendre la perte petite quand elle est encore petite. Tous ces comportements ont la même racine : protéger l'égo, pas le capital.
+
+L'antidote n'est pas "ne plus avoir peur d'avoir tort". L'antidote est de redéfinir ce que "avoir tort" signifie. Tu n'as pas tort quand un trade perd. Tu as tort quand tu ne suis pas ton plan.
+
+- Couper la perte ≠ avoir tort = exécuter le plan.
+- Déplacer le stop = protection de l'égo, pas du capital.
+- "J'avais raison sur la direction, juste un peu tôt" = signal de peur.
+- Le marché ne valide pas l'analyse, il valide l'exécution.
+
+**Action concrète.** Reformule l'auto-évaluation. Au lieu de "ce trade a perdu, j'ai eu tort", écris "ce trade a perdu, j'ai exécuté mon plan ou pas". Si oui, tu n'as pas eu tort, peu importe le résultat.`,
+    exercises: [
+      {
+        id: 'reframe-being-wrong',
+        label: 'Reformuler "avoir tort"',
+        description:
+          'Pendant 2 semaines, après chaque trade, réponds à 1 seule question : "ai-je suivi mon plan ?" oui/non. Le P&L vient en second. Cette discipline déconnecte progressivement l\'égo du résultat.',
+      },
+      {
+        id: 'small-loss-celebration',
+        label: 'Célébrer les petites pertes',
+        description:
+          'Définis "petite perte" = stop respecté à -1R ou moins. À chaque petite perte, écris 1 ligne dans le journal : "petite perte exécutée correctement = victoire de discipline". Compte ces victoires en fin de mois.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 7,
+    published: true,
+  },
+
+  {
+    slug: 'stop-loss-is-cost-not-failure',
+    title: 'Le stop loss est un coût, pas un échec',
+    category: 'loss',
+    quote: 'Losses are simply the cost of doing business as a trader.',
+    quoteSourceChapter: 'Trading in the Zone, ch.7',
+    paraphrase: `Un commerçant achète son stock à 10€ et le revend 15€. Il sait que certains articles ne se vendront pas et finiront en solde à 5€. Cette perte n'est pas un échec — c'est un coût d'exploitation. Le trader qui touche un stop est dans la même situation.
+
+**Le stop loss n'est pas un échec, c'est un coût d'opération.** Sans stop, pas de business. C'est le prix à payer pour participer à un jeu probabiliste. Tant que tes pertes par trade restent dans ton sizing prévu (0.5% à 1% du capital, par exemple), elles ne sont pas un problème — elles sont l'exécution normale du système.
+
+Le problème commence quand tu interprètes le stop comme un jugement personnel. À ce moment-là, deux comportements toxiques apparaissent : l'évitement (ne pas mettre de stop, ou le mettre trop loin) et la négation (déplacer le stop quand il approche). Les deux transforment un coût normal en risque catastrophique.
+
+- Le stop est un coût, comme le loyer pour un commerce.
+- Pas de stop = pas de business viable.
+- Déplacer le stop = transformer un coût en risque inconnu.
+- Une série de stops dans ton sizing ≠ catastrophe.
+
+**Action concrète.** Calcule ton "coût d'exploitation hebdomadaire" — combien tu peux perdre sur une semaine en respectant ton sizing et ton win rate. Ce chiffre devient ta limite acceptable. En dessous, tout va bien — c'est le coût de faire du trading.`,
+    exercises: [
+      {
+        id: 'compute-weekly-cost',
+        label: 'Calculer le coût hebdomadaire',
+        description:
+          'Avec ton sizing (% par trade) et ton nombre de trades/semaine moyen, calcule la perte maximale attendue dans une mauvaise semaine (ex: 60% pertes). Ce chiffre est ton "coût d\'exploitation". Note-le, accepte-le, ne le dépasse pas.',
+      },
+      {
+        id: 'stop-respect-rate',
+        label: 'Taux de respect des stops',
+        description:
+          'Sur 50 trades, compte combien de fois ton stop a été respecté à 100% (pas déplacé, pas annulé). Cible : 100%. Tout en dessous = problème de discipline à corriger en priorité.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'black',
+    priority: 6,
+    published: true,
+  },
+
+  {
+    slug: 'weekly-review-rituel',
+    title: 'Le rituel de review hebdomadaire',
+    category: 'process',
+    quote: 'Without self-discipline, no real success is possible.',
+    quoteSourceChapter: 'The Disciplined Trader, ch.1',
+    paraphrase: `Un trader qui ne fait pas de review hebdomadaire est un athlète qui ne regarde jamais ses vidéos d'entraînement. Le talent ne suffit pas. La progression vient de la boucle exécution → mesure → ajustement → exécution.
+
+**La review hebdomadaire n'est pas optionnelle, c'est la moitié du travail.** L'autre moitié, c'est le trading lui-même. Sans review, tu répètes les mêmes erreurs sans les voir. Avec review, tu identifies les patterns d'erreur et tu les corriges un par un.
+
+Une review efficace tient en 30 minutes maximum, le même jour de la semaine, au même endroit. Elle suit toujours la même structure : statistiques d'exécution (pas de P&L brut), erreurs récurrentes, une seule action concrète pour la semaine suivante. Pas trois actions. Une seule. Le but n'est pas de tout corriger en une semaine — c'est d'incrémenter de manière compounding sur 50 semaines.
+
+- 30 minutes max, même jour, même heure.
+- Métriques d'exécution AVANT métriques de P&L.
+- Une seule action pour la semaine suivante.
+- Compounding sur 50 semaines = transformation réelle.
+
+**Action concrète.** Bloque dimanche 19h-19h30 dans ton calendrier comme "Review Fxmily" récurrent. Ouvre un template fixe : 5 stats d'exécution, 1 erreur récurrente, 1 action pour la semaine. Refuse toute autre activité dans ce créneau. La régularité bat l'intensité.`,
+    exercises: [
+      {
+        id: 'weekly-review-slot',
+        label: 'Bloquer le créneau review',
+        description:
+          'Crée un événement récurrent hebdomadaire dans ton calendrier, 30 minutes, jour et heure fixes. Tiens-le 4 semaines consécutives sans exception. Note dans le journal chaque review effectuée.',
+      },
+      {
+        id: 'one-action-per-week',
+        label: 'Une seule action par semaine',
+        description:
+          "À chaque review, identifie UNE seule erreur récurrente et UNE seule action concrète. Pas plus. Mesure son application la semaine suivante. La discipline d'avoir une seule cible évite la dispersion.",
+      },
+      {
+        id: 'execution-stats-template',
+        label: "Template stats d'exécution",
+        description:
+          'Crée un template fixe avec 5 métriques : % trades dans tes conditions, % stops respectés, % cibles atteintes vs sorties anticipées, nombre de revenge trades, nombre de modifications mid-trade. Remplis-le chaque semaine.',
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 5,
+    published: true,
+  },
 ];

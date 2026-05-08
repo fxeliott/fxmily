@@ -43,9 +43,7 @@ export type AuditAction =
   // J6 — behavioral score snapshot
   | 'score.computed'
   | 'cron.recompute_scores.scan'
-  // J7 - Mark Douglas card module
-  | 'douglas.card.created'
-  | 'douglas.card.updated'
+  // J7 - Mark Douglas card module (created/updated reserved for J7.5 admin CRUD form)
   | 'douglas.card.deleted'
   | 'douglas.card.published'
   | 'douglas.card.unpublished'

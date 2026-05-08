@@ -1,3 +1,5 @@
+import 'server-only';
+
 import { ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';

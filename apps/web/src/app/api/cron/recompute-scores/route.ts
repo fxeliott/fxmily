@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
+import { reportError } from '@/lib/observability';
 import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
 import { recomputeAllActiveMembers } from '@/lib/scoring';
 
@@ -100,11 +101,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    const code =
-      err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
-        ? err.code
-        : 'unknown';
-    console.error('[cron.recompute-scores] scan failed', { code });
+    reportError('cron.recompute-scores', err, { route: '/api/cron/recompute-scores' });
     return NextResponse.json({ ok: false, error: 'scan_failed' }, { status: 500 });
   }
 }

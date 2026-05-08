@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
+import { reportError } from '@/lib/observability';
 import { purgeStalePushSubscriptions } from '@/lib/push/cleanup';
 import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
 
@@ -79,11 +80,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    const code =
-      err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
-        ? err.code
-        : 'unknown';
-    console.error('[cron.purge-push-subscriptions] scan failed', { code });
+    reportError('cron.purge-push-subscriptions', err, {
+      route: '/api/cron/purge-push-subscriptions',
+    });
     return NextResponse.json({ ok: false, error: 'scan_failed' }, { status: 500 });
   }
 }

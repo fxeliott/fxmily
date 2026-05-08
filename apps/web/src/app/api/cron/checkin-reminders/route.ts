@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { runCheckinReminderScan } from '@/lib/checkin/reminders';
 import { env } from '@/lib/env';
+import { reportError } from '@/lib/observability';
 import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
 
 /**
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
       err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
         ? err.code
         : 'unknown';
-    console.error('[cron.checkin-reminders] scan failed', { code });
+    reportError('cron.checkin-reminders', err, { route: '/api/cron/checkin-reminders', code });
     return NextResponse.json({ ok: false, error: 'scan_failed' }, { status: 500 });
   }
 }

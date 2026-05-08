@@ -26,6 +26,20 @@ if [[ -z "$ROUTE" ]]; then
   exit 2
 fi
 
+# Allowlist (J10 Phase G hardening — code-reviewer B4 + security-auditor T1.1).
+# `$ROUTE` is interpolated into the curl URL ; un-validated input would let a
+# compromise of /etc/cron.d/* reach arbitrary `/api/...` paths via traversal
+# (`../auth/signin?evil=1`) and exfiltrate `CRON_SECRET` via Host header. The
+# Next.js side ALSO refuses unknown cron routes (404) but defense-in-depth
+# starts here, before the secret leaves the host.
+case "$ROUTE" in
+  checkin-reminders|recompute-scores|dispatch-douglas|weekly-reports|dispatch-notifications|purge-deleted|purge-push-subscriptions) ;;
+  *)
+    echo "[fxmily-cron] route '$ROUTE' is not in the allowlist" >&2
+    exit 2
+    ;;
+esac
+
 # Source secrets. Fail-loud if missing — refuse to run blind.
 if [[ ! -r /etc/fxmily/cron.env ]]; then
   echo "[fxmily-cron] /etc/fxmily/cron.env unreadable (mode 0600 + owner ?)" >&2

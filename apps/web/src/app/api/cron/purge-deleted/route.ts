@@ -82,10 +82,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   try {
     const refNow = now ?? new Date();
-    const [materialise, purge] = await Promise.all([
-      materialisePendingDeletions({ now: refNow }),
-      purgeMaterialisedDeletions({ now: refNow }),
-    ]);
+    // Sequential, not Promise.all (J10 Phase G hardening — code-reviewer B2).
+    // The two phases operate on disjoint sets at the WHERE-clause level
+    // (`status='active'` vs `status='deleted'`), but parallelising them
+    // means the audit row counts can race against an in-flight `update`
+    // inside `materialise`. Sequential is observably safer for ops triage
+    // and the wall-clock cost (≤ 1s for 30 → 1000 members at batch 200) is
+    // well under the cron budget.
+    const materialise = await materialisePendingDeletions({ now: refNow });
+    const purge = await purgeMaterialisedDeletions({ now: refNow });
 
     await logAudit({
       action: 'cron.purge_deleted.scan',
@@ -93,21 +98,33 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         materialiseScanned: materialise.scanned,
         materialised: materialise.materialised,
         materialiseErrors: materialise.errors,
+        materialisedIds: materialise.materialisedIds,
         purgeScanned: purge.scanned,
         purged: purge.purged,
         purgeErrors: purge.errors,
         purgeThreshold: purge.threshold,
+        purgedIds: purge.purgedIds,
         ranAt: refNow.toISOString(),
       },
     });
 
-    // Per-user purge audit trail (`userId=null` because the row is gone but
-    // the action signal stays in the trail). One row per actually purged
-    // account so downstream observability can count vanishings.
-    for (let i = 0; i < purge.purged; i += 1) {
+    // Per-user materialised audit trail. The user row still exists at this
+    // point (status flipped to 'deleted') so we can carry `userId` directly.
+    for (const userId of materialise.materialisedIds) {
+      await logAudit({
+        action: 'account.deletion.materialised',
+        userId,
+        metadata: { ranAt: refNow.toISOString() },
+      });
+    }
+
+    // Per-user purge audit trail. Carrying `userId` in `metadata` (not the
+    // FK column) preserves the value beyond the cascade `SetNull` — without
+    // it, post-mortem "did user X get purged on day Y ?" is unanswerable.
+    for (const userId of purge.purgedIds) {
       await logAudit({
         action: 'account.deletion.purged',
-        metadata: { ranAt: refNow.toISOString() },
+        metadata: { userId, ranAt: refNow.toISOString() },
       });
     }
 

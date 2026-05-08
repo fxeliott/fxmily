@@ -113,23 +113,35 @@ function ActiveAccountPanel(): React.ReactElement {
           <h2 id="delete-heading" className="text-base font-semibold text-[var(--t-1)]">
             Ce qui se passe quand tu valides
           </h2>
+          {/*
+            Numbering : the visible "1.", "2.", "3." spans are decorative —
+            the `<ol>` element already conveys the order to assistive tech.
+            `aria-hidden="true"` prevents the double-enumeration that would
+            otherwise read "1. 1. Compte à rebours ..." (J10 Phase G a11y B1).
+          */}
           <ol className="mt-3 space-y-2 text-sm leading-relaxed text-[var(--t-2)] [&>li]:flex [&>li]:gap-2">
             <li>
-              <span className="text-[var(--acc-hi)]">1.</span>
+              <span aria-hidden="true" className="text-[var(--acc-hi)]">
+                1.
+              </span>
               <span>
                 Compte à rebours de <strong>{ACCOUNT_DELETION_GRACE_HOURS}h</strong>. Tu peux
                 annuler à n&apos;importe quel moment depuis cette page.
               </span>
             </li>
             <li>
-              <span className="text-[var(--acc-hi)]">2.</span>
+              <span aria-hidden="true" className="text-[var(--acc-hi)]">
+                2.
+              </span>
               <span>
                 À l&apos;expiration, ton compte passe en <em>soft-delete</em> : email, prénom, nom,
                 image, mot de passe sont effacés. Tu es déconnecté.
               </span>
             </li>
             <li>
-              <span className="text-[var(--acc-hi)]">3.</span>
+              <span aria-hidden="true" className="text-[var(--acc-hi)]">
+                3.
+              </span>
               <span>
                 <strong>{ACCOUNT_HARD_PURGE_DAYS} jours</strong> plus tard, suppression définitive :
                 trades, check-ins, scores, fiches reçues, abonnements push, logs. Plus rien ne

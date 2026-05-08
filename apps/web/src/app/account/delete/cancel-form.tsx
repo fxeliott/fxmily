@@ -36,6 +36,12 @@ export function CancelDeletionForm(): React.ReactElement {
       <Btn type="submit" kind="primary" size="l" loading={isPending}>
         Annuler la suppression
       </Btn>
+      {/* Live region carrying the in-flight state explicitly for AT
+          (J10 Phase G a11y B2 — `aria-busy` on the button is NOT
+          reliably announced by NVDA/JAWS). */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {isPending ? 'Annulation en cours…' : ''}
+      </div>
       <div
         id={errorRegionId}
         role="status"

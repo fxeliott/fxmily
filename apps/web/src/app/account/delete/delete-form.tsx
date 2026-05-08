@@ -71,7 +71,11 @@ export function DeleteAccountForm(): React.ReactElement {
         autoCapitalize="characters"
         inputMode="text"
         className="mt-3 h-11 w-full rounded-md border border-[var(--b-strong)] bg-[var(--bg-2)] px-3 font-mono text-sm tracking-widest text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:border-[var(--b-acc)] focus:outline-none focus:ring-2 focus:ring-[var(--acc)]"
-        placeholder="SUPPRIMER"
+        // J10 Phase G — code-reviewer H7 : the placeholder must NOT match
+        // the expected phrase. Some mobile keyboards offer the placeholder
+        // as a one-tap autocomplete, which would defeat the anti-impulsivity
+        // gate. Asking the user to type matches their intent.
+        placeholder="Tape ici"
         value={phrase}
         onChange={(e) => {
           setPhrase(e.target.value);
@@ -93,6 +97,17 @@ export function DeleteAccountForm(): React.ReactElement {
             : errorCode === 'unauthorized'
               ? 'Session expirée — recharge la page.'
               : null}
+      </div>
+      {/*
+        Live region for the pending state (J10 Phase G a11y B2). NVDA / JAWS
+        do NOT reliably announce `aria-busy` transitions on a `<button>`,
+        so screen-reader users can't tell the difference between idle and
+        in-flight. A dedicated polite live region carries the message
+        explicitly during the action — sighted users see the spinner,
+        AT users hear "Suppression en cours…".
+      */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {isPending ? 'Demande de suppression en cours…' : ''}
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <Btn type="submit" kind="danger" size="l" disabled={!isMatch} loading={isPending}>

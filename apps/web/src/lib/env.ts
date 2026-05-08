@@ -113,7 +113,42 @@ const envSchema = z.object({
   CRON_SECRET: z.string().min(24, 'CRON_SECRET ≥ 24 chars (openssl rand -hex 24)').optional(),
 });
 
-const parsed = envSchema.safeParse(process.env);
+/**
+ * Cross-var consistency refines (J9 audit E2 fix).
+ *
+ * VAPID server private/public keys must be deployed together — if either is
+ * set, BOTH must be set. AND the client-exposed `NEXT_PUBLIC_VAPID_PUBLIC_KEY`
+ * must mirror `VAPID_PUBLIC_KEY` exactly. This blocks a class of mistakes:
+ *  - Setting only the private key (server attempts to sign without a matching
+ *    pubkey → web-push errors at runtime).
+ *  - Letting the page fall back to `env.VAPID_PUBLIC_KEY` server-side and
+ *    leaking through SSR markup with a value that doesn't match the public
+ *    mirror (subscriptions would silently fail).
+ *  - Drift after a key rotation (forgetting to update the NEXT_PUBLIC mirror).
+ */
+const envSchemaWithRefines = envSchema
+  .refine(
+    (e) =>
+      (e.VAPID_PUBLIC_KEY === undefined && e.VAPID_PRIVATE_KEY === undefined) ||
+      (e.VAPID_PUBLIC_KEY !== undefined && e.VAPID_PRIVATE_KEY !== undefined),
+    {
+      message: 'VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be deployed together (or both absent).',
+      path: ['VAPID_PRIVATE_KEY'],
+    },
+  )
+  .refine(
+    (e) =>
+      e.VAPID_PUBLIC_KEY === undefined ||
+      (e.NEXT_PUBLIC_VAPID_PUBLIC_KEY !== undefined &&
+        e.NEXT_PUBLIC_VAPID_PUBLIC_KEY === e.VAPID_PUBLIC_KEY),
+    {
+      message:
+        'NEXT_PUBLIC_VAPID_PUBLIC_KEY must mirror VAPID_PUBLIC_KEY exactly (set both to the same base64url value).',
+      path: ['NEXT_PUBLIC_VAPID_PUBLIC_KEY'],
+    },
+  );
+
+const parsed = envSchemaWithRefines.safeParse(process.env);
 
 if (!parsed.success) {
   console.error("❌ Variables d'environnement invalides :");

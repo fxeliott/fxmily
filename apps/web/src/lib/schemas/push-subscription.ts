@@ -42,12 +42,35 @@ const authKeySchema = z
   .min(20, 'auth too short (expected ~22 chars base64url for 16 random bytes)')
   .max(30, 'auth too long');
 
-/// Push service endpoint URL. Length cap matches the column type and avoids
-/// pathological RAM usage if a malicious client sends a 10 MB string.
+/// Allowed push service hostnames (anti-SSRF amplifier). Restricts the
+/// `endpoint` URL to the canonical push providers a real browser will produce.
+/// Without this allowlist, a malicious client could subscribe with
+/// `endpoint: 'http://169.254.169.254/...'` (AWS metadata) or
+/// `endpoint: 'http://localhost:6379/'` and amplify dispatcher cost into
+/// internal services. Each pattern matches the host with optional arbitrary
+/// subdomain prefixes — push services use sharded subdomains
+/// (e.g. `wns2-by3p.notify.windows.com`, `updates.push.services.mozilla.com`,
+/// `web.push.apple.com`, `fcm.googleapis.com`).
+const ALLOWED_PUSH_HOSTS_REGEX =
+  /^([a-z0-9-]+\.)*(?:googleapis\.com|push\.apple\.com|push\.services\.mozilla\.com|notify\.windows\.com)$/i;
+
+/// Push service endpoint URL. Three layers of defense:
+/// 1. Valid URL (Zod `.url()`).
+/// 2. Length cap 2048 (RAM DoS guard + btree index safety).
+/// 3. Allowlist of trusted push service hostnames + HTTPS-only (spec mandate).
 const endpointSchema = z
   .string()
   .url('endpoint must be a valid URL')
-  .max(2048, 'endpoint too long (max 2048 chars)');
+  .max(2048, 'endpoint too long (max 2048 chars)')
+  .refine((url) => {
+    try {
+      const u = new URL(url);
+      if (u.protocol !== 'https:') return false;
+      return ALLOWED_PUSH_HOSTS_REGEX.test(u.hostname);
+    } catch {
+      return false;
+    }
+  }, 'endpoint must come from a trusted push service (FCM, APNs, Mozilla, Microsoft)');
 
 /// What the browser passes us via `subscription.toJSON()`. Spec-canonical shape.
 export const pushSubscriptionInputSchema = z

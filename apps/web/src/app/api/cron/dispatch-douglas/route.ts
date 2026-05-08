@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
-import { reportError } from '@/lib/observability';
+import { flushSentry, reportError } from '@/lib/observability';
 import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
 import { dispatchForAllActiveMembers } from '@/lib/triggers/engine';
 
@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
         ? err.code
         : 'unknown';
     reportError('cron.dispatch-douglas', err, { route: '/api/cron/dispatch-douglas', code });
+    await flushSentry();
     return NextResponse.json({ ok: false, error: 'scan_failed' }, { status: 500 });
   }
 }

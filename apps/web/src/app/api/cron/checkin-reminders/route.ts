@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { runCheckinReminderScan } from '@/lib/checkin/reminders';
 import { env } from '@/lib/env';
-import { reportError } from '@/lib/observability';
+import { flushSentry, reportError } from '@/lib/observability';
 import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
 
 /**
@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
         ? err.code
         : 'unknown';
     reportError('cron.checkin-reminders', err, { route: '/api/cron/checkin-reminders', code });
+    await flushSentry();
     return NextResponse.json({ ok: false, error: 'scan_failed' }, { status: 500 });
   }
 }

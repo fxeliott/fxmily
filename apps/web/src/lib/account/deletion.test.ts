@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const findUniqueMock = vi.fn();
 const findManyMock = vi.fn();
 const updateMock = vi.fn();
+const updateManyMock = vi.fn();
 const deleteMock = vi.fn();
 
 vi.mock('@/lib/db', () => ({
@@ -11,6 +12,7 @@ vi.mock('@/lib/db', () => ({
       findUnique: findUniqueMock,
       findMany: findManyMock,
       update: updateMock,
+      updateMany: updateManyMock,
       delete: deleteMock,
     },
   },
@@ -32,6 +34,7 @@ beforeEach(() => {
   findUniqueMock.mockReset();
   findManyMock.mockReset();
   updateMock.mockReset();
+  updateManyMock.mockReset();
   deleteMock.mockReset();
 });
 
@@ -79,40 +82,53 @@ describe('deriveDeletionState', () => {
 });
 
 describe('requestAccountDeletion', () => {
-  it('schedules deletedAt = now + 24h and returns the timestamp', async () => {
+  it('schedules deletedAt = now + 24h via atomic updateMany when row matches predicate', async () => {
     const now = new Date('2026-05-08T10:00:00.000Z');
-    findUniqueMock.mockResolvedValueOnce({ status: 'active', deletedAt: null });
-    updateMock.mockResolvedValueOnce({});
+    updateManyMock.mockResolvedValueOnce({ count: 1 });
 
     const { scheduledAt } = await requestAccountDeletion('u1', { now });
 
     expect(scheduledAt.toISOString()).toBe('2026-05-09T10:00:00.000Z');
-    expect(updateMock).toHaveBeenCalledWith({
-      where: { id: 'u1' },
+    expect(updateManyMock).toHaveBeenCalledWith({
+      where: { id: 'u1', status: 'active', deletedAt: null },
       data: { deletedAt: scheduledAt },
     });
+    // Atomic path : no fallback findUnique read.
+    expect(findUniqueMock).not.toHaveBeenCalled();
     expect(ACCOUNT_DELETION_GRACE_HOURS).toBe(24);
   });
 
-  it('throws AccountDeletionAlreadyRequestedError when one is already scheduled', async () => {
+  it('throws AccountDeletionAlreadyRequestedError when predicate misses (count=0) and row exists', async () => {
     const now = new Date('2026-05-08T10:00:00.000Z');
-    const scheduled = new Date(now.getTime() + 60 * 60 * 1000);
-    findUniqueMock.mockResolvedValueOnce({ status: 'active', deletedAt: scheduled });
+    updateManyMock.mockResolvedValueOnce({ count: 0 });
+    findUniqueMock.mockResolvedValueOnce({
+      status: 'active',
+      deletedAt: new Date(now.getTime() + 60 * 60 * 1000),
+    });
 
     await expect(requestAccountDeletion('u1', { now })).rejects.toBeInstanceOf(
       AccountDeletionAlreadyRequestedError,
     );
-    expect(updateMock).not.toHaveBeenCalled();
   });
 
-  it('throws AccountDeletionAlreadyRequestedError when already materialised', async () => {
+  it('throws AccountDeletionAlreadyRequestedError when row already materialised', async () => {
     const now = new Date('2026-05-08T10:00:00.000Z');
+    updateManyMock.mockResolvedValueOnce({ count: 0 });
     findUniqueMock.mockResolvedValueOnce({
       status: 'deleted',
       deletedAt: new Date('2026-04-30T00:00:00.000Z'),
     });
     await expect(requestAccountDeletion('u1', { now })).rejects.toBeInstanceOf(
       AccountDeletionAlreadyRequestedError,
+    );
+  });
+
+  it('throws plain Error when count=0 AND user does not exist', async () => {
+    const now = new Date('2026-05-08T10:00:00.000Z');
+    updateManyMock.mockResolvedValueOnce({ count: 0 });
+    findUniqueMock.mockResolvedValueOnce(null);
+    await expect(requestAccountDeletion('u_missing', { now })).rejects.toThrow(
+      /User u_missing not found/,
     );
   });
 });

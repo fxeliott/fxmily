@@ -146,6 +146,40 @@ export const cronLimiter = new TokenBucketLimiter({
   maxKeys: 1024,
 });
 
+/**
+ * J10 Phase I — Per-user RGPD export endpoint (`/api/account/data/export`).
+ *
+ * `bucketSize: 3` lets a member retry twice if a download was interrupted
+ * (network blip on a 5-10 s export at 1000+ trades). `refillRate: 1/(15*60)`
+ * = 1 token every 15 minutes — enough to stop a logged-in attacker from
+ * spamming exports to drive up DB load + R2 egress. The bucket is keyed
+ * by `userId` ; aggregate fan-out across the whole cohort stays bounded
+ * because each user has their own bucket.
+ *
+ * `maxKeys: 5000` matches the LruMap default ; at 30 → 1000 active members
+ * we never come close.
+ */
+export const exportLimiter = new TokenBucketLimiter({
+  bucketSize: 3,
+  refillRate: 1 / (15 * 60),
+});
+
+/**
+ * J10 Phase I — Sentry tunnel route (`/monitoring`).
+ *
+ * The browser SDK posts envelopes via the same-origin tunnel to bypass
+ * ad-blockers ; without rate-limiting, a logged-out attacker can spam
+ * `/monitoring` and burn Eliot's Sentry quota (Free 5000 events / month
+ * hard cap). We allow generous bursts (50 envelopes per IP for a 5-min
+ * window) but cap the long-run rate at 1 / sec which is plenty for
+ * legitimate sessions.
+ */
+export const sentryTunnelLimiter = new TokenBucketLimiter({
+  bucketSize: 50,
+  refillRate: 1, // 1 envelope/sec sustained
+  maxKeys: 2048,
+});
+
 // =============================================================================
 // Helpers — extract a stable per-caller identity from the request
 // =============================================================================

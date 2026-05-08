@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { btnVariants } from '@/components/ui/btn';
+import { Code } from '@/components/ui/code';
 import { db } from '@/lib/db';
 
 /**
@@ -147,11 +148,8 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
               Ce que contient l&apos;export
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
-              Format :{' '}
-              <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
-                application/json
-              </code>{' '}
-              · Schéma versionné · Champs sensibles exclus (mot de passe, clés push, hash IP).
+              Format : <Code>application/json</Code> · Schéma versionné · Champs sensibles exclus
+              (mot de passe, clés push, hash IP).
             </p>
           </div>
         </div>
@@ -182,8 +180,7 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
           </button>
           <p className="mt-3 flex items-center gap-1.5 text-[11px] text-[var(--t-3)]">
             <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5 text-[var(--acc-hi)]" />
-            Chaque export est tracé dans tes logs (action{' '}
-            <code className="font-mono">account.data.exported</code>).
+            Chaque export est tracé dans tes logs (action <Code>account.data.exported</Code>).
           </p>
         </form>
       </section>

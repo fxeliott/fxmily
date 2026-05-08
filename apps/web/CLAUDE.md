@@ -788,3 +788,58 @@ Après le commit initial J7 (3ae5468) et la PR #24 ouverte, **4 audits subagents
 4. `HEAD` feat(j7): audit-driven hardening — 3 BLOQUANTs + 6 HIGH closed
 
 **PR** : https://github.com/fxeliott/fxmily/pull/24
+
+## J7.5 polish premium (2026-05-08)
+
+Branche dédiée claude/j7-5-polish pour pousser les BLOCKERs UI design DS coherence reclassés J7.5 + ajouter 10 fiches additionnelles + a11y H4/H5 live regions + code cleanup CR-#10/#16/#19.
+
+### Closed
+
+**Framer Motion premium** :
+
+- <FavoriteToggle> (components/library/favorite-toggle.tsx) — Spring burst animation [1, 1.35, 1] sur favori toggle / [1, 0.85, 1] sur unfavori. whileTap={{ scale: 0.92 }} icon-only / 0.96 labeled. Heart fill animation lime + shadow-[0_0_16px_-2px_var(--acc-glow)] quand favorited. Respecte useReducedMotion() (skip animation, durée 0). Spread conditionnel {...(prefersReducedMotion ? {} : { whileTap: { scale: 0.92 } })} pour TS exactOptionalPropertyTypes.
+- <HelpfulFeedback> (components/library/helpful-feedback.tsx) — <motion.button> avec whileTap scale spring + bg shadow lime sur "Oui".
+  ole="group" + ria-labelledby="helpful-q" (a11y M3 fix).
+- <AnimatedCardGrid> (components/library/animated-card-grid.tsx) — Client island wrapper qui stagger entrance les cards du /library grid : staggerChildren: 0.05 + delayChildren: 0.08, item variant { opacity: 0, y: 8 } → { opacity: 1, y: 0 } ease [0.22, 1, 0.36, 1] (e-smooth signature). Gracefully no-anim si prefers-reduced-motion. library/page.tsx wire l'island avec avoritedIds={Array.from(favoriteIds)} (Set non JSON-safe → array).
+
+**a11y H4 + H5 + CR-#12 (live regions + setTimeout cleanup)** :
+
+- <CardActionsRow> (components/admin/card-actions-row.tsx) — <span role="status" aria-live="polite" class="sr-only"> annonce les états ("Fiche X publiée/dépubliée", "Confirmation requise pour supprimer X. Clique à nouveau dans 4 secondes.", "Fiche supprimée", "Échec, essaie à nouveau"). setTimeout confirm migré en useEffect avec cleanup clearTimeout (CR-#12 fix : plus de setState on unmounted component sous strict mode). useRef pour le timeout d'announce avec cleanup au unmount.
+- <FavoriteToggle> — même pattern live region. Annonce "Ajouté aux favoris" / "Retiré des favoris" / "Échec, essaie à nouveau" via useState nnounce + setTimeout re-clear 1.5s + cleanup.
+- <HelpfulFeedback> — <span role="status" aria-live="polite"> annonce "Réponse « Oui » enregistrée" / "Réponse « Pas vraiment » enregistrée" / "Échec, essaie à nouveau". <div role="group" aria-labelledby="helpful-q"> regroupe les 2 boutons sémantiquement (a11y M3 fix).
+
+**Code cleanup** :
+
+- **CR-#16** : import 'server-only'; ajouté en tête de components/library/markdown.tsx — sentinelle anti-régression au cas où un composant client tenterait d'importer <SafeMarkdown> (qui drag react-markdown + remark + rehype-sanitize ~30 KB gzip dans le bundle client). Le tool runtime fail-fast avec un message clair.
+- **CR-#19** : parseExercises (lib/cards/service.ts) — console.warn('[cards.parseExercises] dropped X/Y invalid items') quand des items du JSON sont silencieusement filtrés (admin a edit en SQL direct, ou shape change). Plus de drops invisibles.
+- **CR-#10** : retiré 'douglas.card.created' + 'douglas.card.updated' de AuditAction union (lib/auth/audit.ts) — V1 ship juste publish/unpublish/delete via UI. Les 2 actions create/updated sont reservées pour J7.5 admin CRUD form, à ré-ajouter alors. Commentaire mis à jour pour le signaler.
+
+**10 fiches additionnelles** :
+
+- scripts/data/cards.ts étendu de 12 → **22 fiches** (subagent J7.5 a livré dans une réponse compacte ce que le subagent J7 initial avait raté en silence). Toutes catalogue ( riggerRules: null).
+- 10 nouvelles : every-moment-is-unique, edge-is-not-guarantee,
+  andom-distribution-wins-losses,
+  evenge-trade-trap, wait-for-your-setup, confidence-vs-arrogance, he-3-phases-of-execution, he-fear-of-being-wrong, stop-loss-is-cost-not-failure, weekly-review-rituel.
+- Couvre : 4 truths Mark Douglas restants (every-moment, edge-not-guarantee, random-distribution), revenge-trade & wait psychologie, confidence sain vs arrogance, 3 phases d'exécution, fondamentale fear "avoir tort", stop-loss comme coût, rituel review hebdomadaire.
+- Seed re-run : 22 cards en DB (10 created + 12 updated par seed safe-update). Smoke test J7 toujours ALL GREEN (engine pick sortir-du-tilt correctement avec les 22 cards).
+
+### Quality gate
+
+- **Type-check** : ✓ (tsc --noEmit exit 0)
+- **Vitest** : **503/503** verts (stable)
+- **ESLint** : ✓ (max-warnings=0)
+- **Build prod** : ✓ (Turbopack, toutes routes J7 listées)
+- **Smoke test J7** : ✓ ALL GREEN (re-validé avec 22 fiches en DB)
+- **Migration** : ✓ (pas de nouvelle migration, content + UI only)
+
+### Reste J7.6+ ou J8
+
+- 28 fiches manquantes pour atteindre cible SPEC §7.6 ~50 fiches.
+- DS coherence : typography tokens + var(--\*) direct (les DS-B1/B2 du UI design audit, Tailwind aliases hybride OK V1).
+- DS-B5 : reader hero aurora wrapper + h-rise H1 + drop-cap quote bloc.
+- Form CRUD admin (/admin/cards/new + [id]/edit).
+- Dashboard widget "Tes fiches Mark Douglas" sur /dashboard.
+- a11y H7 : pills one="warn" "Brouillon"/"Black hat"/"Cadre d'urgence" aria-label informatif.
+- a11y H8 : <SafeMarkdown> headingOffset prop pour exercises descriptions (latent risk).
+- J9 : push notifications quand fiche délivrée.
+- J10 : wirer cron Hetzner 6h + CRON_SECRET au worktree .env.

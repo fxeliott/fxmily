@@ -1,0 +1,66 @@
+{
+	# Caddy global options.
+	#
+	# `email` enables Let's Encrypt issuance (used in the ACME account
+	# registration). Use a real address — Let's Encrypt notifies on cert
+	# expiry / revocation events.
+	email eliot@fxmily.com
+
+	# Logs to file — rolled by Caddy itself (no logrotate dependency).
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 100MiB
+			roll_keep 7
+		}
+		format json
+		level INFO
+	}
+}
+
+app.fxmily.com {
+	# Reverse proxy to the `web` container (compose-network DNS).
+	reverse_proxy web:3000 {
+		# `lb_try_duration` retries upstream until container healthcheck
+		# reports healthy (60s window covers most rolling deploys).
+		lb_try_duration 60s
+		lb_try_interval 1s
+		# Trust the X-Forwarded-* chain only because we terminate TLS
+		# here (Caddy is the FIRST hop after the public IP).
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	# Defence-in-depth headers (Caddy-side ; Next.js also emits CSP +
+	# X-Frame-Options + Referrer-Policy via next.config.ts headers()).
+	# HSTS preload-eligible : 2 years, includeSubDomains, preload.
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		# Cross-origin isolation (lets us use SharedArrayBuffer if ever needed
+		# for V2 audio analysis — opt-out by removing if it conflicts).
+		Cross-Origin-Opener-Policy "same-origin"
+		# Permissions stripped at the edge in addition to next.config.ts.
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+		# Caddy reveals its version by default — strip it.
+		-Server
+	}
+
+	# Compress everything text-y. Brotli > gzip > zstd in compression
+	# ratio for HTML / JS bundles ; Caddy negotiates per-Accept-Encoding.
+	encode zstd br gzip
+
+	# Per-domain access log (in addition to the global log block).
+	log {
+		output file /var/log/caddy/fxmily.log {
+			roll_size 100MiB
+			roll_keep 7
+		}
+		format json
+	}
+}
+
+# Marketing / public landing : redirects to the app for V1 (no public
+# marketing site yet). Kill this block when fxmily.com gets a real
+# landing page in V2.
+www.fxmily.com, fxmily.com {
+	redir https://app.fxmily.com{uri} permanent
+}

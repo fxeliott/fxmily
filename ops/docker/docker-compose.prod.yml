@@ -1,0 +1,113 @@
+# J10 — Fxmily production stack on Hetzner CX22 (Falkenstein UE).
+#
+# Stack :
+#   - postgres   : Postgres 17 alpine, 1.5 GB allocated, single instance.
+#   - web        : Next.js 16 standalone runtime (image built from
+#                  ops/docker/Dockerfile.prod by the GitHub Actions deploy).
+#   - caddy      : reverse proxy + Let's Encrypt certs + HSTS preload.
+#
+# Crons run on the HOST via systemd timers / `/etc/cron.d/fxmily-app`,
+# which curl into `web` on port 3000 with the shared `CRON_SECRET`. We
+# do NOT run cron in a container — keeps the cron daemon's `--max-time`
+# observable through `journalctl -u cron` and decoupled from app restarts.
+#
+# Secrets policy :
+#   - `/etc/fxmily/postgres_password`  : 0600 root-owned, mounted via
+#     Docker secrets.
+#   - `/etc/fxmily/web.env`            : 0600 fxmily-owned, mounted via
+#     `env_file` (full env shape ; the `web` service reads it on boot).
+#   - `/etc/fxmily/cron.env`           : 0600 fxmily-owned, sourced by the
+#     `fxmily-cron` host wrapper script (NOT by Docker — never in image).
+#
+# First-time provisioning steps live in `docs/runbook-hetzner-deploy.md`.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: fxmily-postgres
+    restart: unless-stopped
+    # `pg_isready` healthcheck shadows the real "can app connect" answer.
+    # We accept this because the alternative (psql -c) requires shell+
+    # auth dance that adds attack surface to a HEALTHCHECK script.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fxmily -d fxmily']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_USER: fxmily
+      POSTGRES_DB: fxmily
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      # Locale matters for ORDER BY + ILIKE accent-insensitive lookups.
+      LANG: C.UTF-8
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - /etc/fxmily/backups:/backups
+    secrets:
+      - postgres_password
+    # Keep Postgres internal — only `web` reaches it via the compose
+    # network. No host port published (no 5432 leak).
+    networks:
+      - internal
+    # Resource caps for the CX22 (2 vCPU, 4 GB RAM) — Postgres gets ~1.5 GB
+    # max so OOM protection still leaves Caddy + Next.js room.
+    deploy:
+      resources:
+        limits:
+          memory: 1500m
+
+  web:
+    image: ${FXMILY_IMAGE:-ghcr.io/fxeliott/fxmily:latest}
+    container_name: fxmily-web
+    restart: unless-stopped
+    # `env_file` reads `/etc/fxmily/web.env` (host-mounted secrets file).
+    env_file:
+      - /etc/fxmily/web.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - '3000'
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
+    # Container's own healthcheck (Dockerfile HEALTHCHECK) drives Caddy's
+    # `lb_try_duration` retry behaviour. No additional override needed.
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: fxmily-caddy
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp' # HTTP/3
+    volumes:
+      - /etc/fxmily/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - /var/log/fxmily/caddy:/var/log/caddy
+    depends_on:
+      - web
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+    name: fxmily-postgres-data
+  caddy_data:
+    name: fxmily-caddy-data
+  caddy_config:
+    name: fxmily-caddy-config
+
+networks:
+  internal:
+    name: fxmily-internal
+    driver: bridge
+
+secrets:
+  postgres_password:
+    file: /etc/fxmily/postgres_password

@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# /usr/local/bin/fxmily-backup — daily Postgres dump → GPG → R2 upload.
+#
+# Wired by `/etc/cron.d/fxmily-app` daily at 02:30 UTC (after the score
+# recompute window so the snapshot reflects the full day's writes).
+#
+# Failure semantics :
+#   - dump failure  → exit 1, no upload, alert via cron stderr
+#   - encrypt fail  → exit 2, leaves un-encrypted dump on disk for ops
+#   - upload fail   → exit 3, encrypted dump preserved locally (R2 retry
+#                     by hand or wait for the next 02:30 cycle)
+#
+# Local retention : 7 days (`-mtime +7 -delete`).
+# Remote retention : 30 days (R2 lifecycle policy applied bucket-side).
+
+set -euo pipefail
+
+# shellcheck disable=SC1091
+source /etc/fxmily/cron.env  # GPG_PASS_FILE, R2_ENDPOINT, R2_BUCKET, CRON_LOG
+
+CRON_LOG="${CRON_LOG:-/var/log/fxmily/cron.log}"
+BACKUP_DIR="/etc/fxmily/backups"
+TS=$(date -u +%Y%m%d-%H%M)
+DUMP_FILE="${BACKUP_DIR}/fxmily-${TS}.sql.gz"
+ENCRYPTED_FILE="${DUMP_FILE}.gpg"
+
+mkdir -p "$BACKUP_DIR"
+mkdir -p "$(dirname "$CRON_LOG")"
+
+ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
+log() { echo "[$(ts)] [fxmily-backup] $*" >> "$CRON_LOG"; }
+
+log "starting → $DUMP_FILE"
+
+# ---- 1. pg_dump from inside the Postgres container -------------------------
+# `compose exec -T` keeps stdin closed (no TTY) so cron stays clean.
+# `pg_dump --no-owner --no-acl` strips the `fxmily` role grants so a
+# restore on a fresh DB doesn't fail when the role doesn't exist yet.
+if ! docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+    pg_dump --no-owner --no-acl -U fxmily fxmily | gzip > "$DUMP_FILE"; then
+  log "FAIL pg_dump ; partial file removed"
+  rm -f "$DUMP_FILE"
+  exit 1
+fi
+DUMP_SIZE=$(du -h "$DUMP_FILE" | cut -f1)
+log "dump OK ($DUMP_SIZE)"
+
+# ---- 2. GPG symmetric encryption ------------------------------------------
+# AES-256 + iter+salted S2K (gpg defaults). Passphrase from a 0600 file —
+# never on the command line (would leak via /proc/<pid>/cmdline).
+if ! gpg --cipher-algo AES256 --symmetric --batch --yes \
+    --passphrase-file "$GPG_PASS_FILE" "$DUMP_FILE"; then
+  log "FAIL gpg encrypt ; un-encrypted dump preserved at $DUMP_FILE for ops"
+  exit 2
+fi
+log "encrypt OK → $ENCRYPTED_FILE"
+
+# Strict cleanup of the un-encrypted file as soon as the encrypted one
+# exists. Replace, don't keep both — disk on CX22 is 40 GB.
+rm -f "$DUMP_FILE"
+
+# ---- 3. R2 upload ----------------------------------------------------------
+# `aws --profile fxmily-backup` was provisioned at first deploy with the
+# R2 access keys (Cloudflare → R2 → API Tokens → "Object Read & Write").
+# `--no-progress` keeps the cron stderr noise-free.
+if ! aws s3 cp "$ENCRYPTED_FILE" "s3://${R2_BUCKET}/$(basename "$ENCRYPTED_FILE")" \
+    --endpoint-url "$R2_ENDPOINT" \
+    --profile fxmily-backup \
+    --no-progress; then
+  log "FAIL R2 upload ; encrypted dump preserved locally for retry"
+  exit 3
+fi
+log "upload OK → s3://${R2_BUCKET}/$(basename "$ENCRYPTED_FILE")"
+
+# ---- 4. Local retention ----------------------------------------------------
+# 7 days local. Older files were already on R2 (30-day lifecycle there).
+find "$BACKUP_DIR" -name 'fxmily-*.sql.gz.gpg' -mtime +7 -delete
+log "rotation OK (kept 7 days local)"
+
+log "done"

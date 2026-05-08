@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# /usr/local/bin/fxmily-cron — invoke a Fxmily cron endpoint with the secret.
+#
+# Carbon-copy of the J6 runbook helper, extended in J10 to log per-route
+# exit status into the central cron log. Used by `/etc/cron.d/fxmily-app`.
+#
+# Usage :
+#   fxmily-cron <route>
+#       e.g. fxmily-cron recompute-scores
+#            fxmily-cron purge-deleted
+#
+# Sources : /etc/fxmily/cron.env (CRON_SECRET, APP_URL, CRON_LOG).
+# Logs to : $CRON_LOG (default /var/log/fxmily/cron.log).
+#
+# Exit codes :
+#   0   route returned 200/2xx
+#   22  route returned non-2xx (curl --fail-with-body)
+#   28  curl timeout
+#   2   misuse (no route given)
+
+set -euo pipefail
+
+ROUTE="${1:-}"
+if [[ -z "$ROUTE" ]]; then
+  echo "usage: fxmily-cron <route>" >&2
+  exit 2
+fi
+
+# Source secrets. Fail-loud if missing — refuse to run blind.
+if [[ ! -r /etc/fxmily/cron.env ]]; then
+  echo "[fxmily-cron] /etc/fxmily/cron.env unreadable (mode 0600 + owner ?)" >&2
+  exit 2
+fi
+# shellcheck disable=SC1091
+source /etc/fxmily/cron.env
+
+CRON_LOG="${CRON_LOG:-/var/log/fxmily/cron.log}"
+
+ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
+
+mkdir -p "$(dirname "$CRON_LOG")"
+
+START_TS="$(ts)"
+
+# `--max-time 600` — most cron tasks return < 60s. The 10-minute ceiling
+# protects against a stuck weekly-reports run from blocking the next run.
+# `--retry 0` because re-firing a non-idempotent route is worse than a
+# missed run (the cron will fire again on the next schedule).
+HTTP_CODE=$(curl \
+  --silent \
+  --show-error \
+  --output /dev/null \
+  --write-out '%{http_code}' \
+  --max-time 600 \
+  --retry 0 \
+  -X POST \
+  -H "X-Cron-Secret: ${CRON_SECRET}" \
+  -H "User-Agent: fxmily-cron/1.0" \
+  "${APP_URL}/api/cron/${ROUTE}" \
+  || echo "000")
+
+END_TS="$(ts)"
+
+if [[ "$HTTP_CODE" == "200" ]]; then
+  echo "[$END_TS] [fxmily-cron] $ROUTE OK ($START_TS → $END_TS)" >> "$CRON_LOG"
+  exit 0
+else
+  echo "[$END_TS] [fxmily-cron] $ROUTE FAIL http=$HTTP_CODE ($START_TS → $END_TS)" >> "$CRON_LOG"
+  # Exit 22 mimics curl's --fail-with-body convention so monit / cron
+  # alert wrappers can tell apart "endpoint replied error" from "host
+  # broken" (network errors come back as 28/56/etc).
+  exit 22
+fi

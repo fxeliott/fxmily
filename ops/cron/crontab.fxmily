@@ -1,0 +1,56 @@
+# /etc/cron.d/fxmily-app — Fxmily V1 production cron schedule (J10).
+#
+# Owner   : root (system crond reads /etc/cron.d/* with mode 0644).
+# User    : fxmily (each row's 6th field — non-privileged execution).
+# Wrapper : /usr/local/bin/fxmily-cron sources /etc/fxmily/cron.env
+#           which is mode 0600 owner fxmily, so the secret never appears
+#           in `ps -ef` / `journalctl` / this file.
+#
+# Schedule philosophy : every cron is anchored to a UTC slot that's deep
+# in the off-hours window for `Europe/Paris` (V1 single-TZ cohort) and
+# spaced so two long-running jobs never overlap on the CX22 (2 vCPU,
+# 4 GB RAM).
+#
+# Wired routes (POST + X-Cron-Secret SHA-256 verify timingSafeEqual) :
+#
+#   - checkin-reminders         every 15 min, 7-9 AM + 8-10 PM UTC (J5)
+#   - recompute-scores          daily 02:00 UTC                    (J6)
+#   - dispatch-douglas          every 6 h                          (J7)
+#   - weekly-reports            Sunday 21:00 UTC                   (J8)
+#   - dispatch-notifications    every 2 min                        (J9)
+#   - purge-deleted             daily 03:00 UTC                    (J10)
+#   - purge-push-subscriptions  Sunday 05:00 UTC                   (J10)
+#
+# Log : every run appends one line to /var/log/fxmily/cron.log via the
+# wrapper. The DB audit row (`cron.<route>.scan`) is the canonical
+# record (counts + threshold + ranAt) — this log is just for ops triage.
+
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+
+# m h dom mon dow user command
+
+# J5 — check-in reminders : every 15 min in 2 windows, 07:00→09:00 + 20:00→22:00 UTC.
+0,15,30,45 7-8,20-21 * * *   fxmily   /usr/local/bin/fxmily-cron checkin-reminders
+
+# J6 — behavioral score recompute : nightly 02:00 UTC.
+0 2 * * *                    fxmily   /usr/local/bin/fxmily-cron recompute-scores
+
+# J7 — Mark Douglas temporal dispatch : every 6 hours.
+0 0,6,12,18 * * *            fxmily   /usr/local/bin/fxmily-cron dispatch-douglas
+
+# J8 — Weekly AI report (admin digest) : Sunday 21:00 UTC.
+0 21 * * 0                   fxmily   /usr/local/bin/fxmily-cron weekly-reports
+
+# J9 — Web Push dispatcher : every 2 minutes.
+*/2 * * * *                  fxmily   /usr/local/bin/fxmily-cron dispatch-notifications
+
+# J10 — RGPD soft-delete materialise + 30d hard-purge : daily 03:00 UTC.
+0 3 * * *                    fxmily   /usr/local/bin/fxmily-cron purge-deleted
+
+# J10 — Stale push subscriptions cleanup (90d) : Sunday 05:00 UTC.
+0 5 * * 0                    fxmily   /usr/local/bin/fxmily-cron purge-push-subscriptions
+
+# J10 — Postgres backup (pg_dump → GPG → R2) : daily 02:30 UTC.
+30 2 * * *                   fxmily   /usr/local/bin/fxmily-backup

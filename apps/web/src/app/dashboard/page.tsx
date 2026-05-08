@@ -16,6 +16,7 @@ import { Suspense } from 'react';
 
 import { auth, signOut } from '@/auth';
 import { StreakCard } from '@/components/checkin/streak-card';
+import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
 import { EmotionPerfTable } from '@/components/scoring/emotion-perf-table';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
 import { PairTopFive } from '@/components/scoring/pair-top-five';
@@ -336,6 +337,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </section>
         ) : null}
 
+        {/* J7.7 — Mark Douglas widget (replaces stale "Bibliothèque MD J7" coming-soon) */}
+        <section className="mb-6" aria-label="Module Mark Douglas">
+          <DouglasInboxWidget userId={session.user.id} />
+        </section>
+
         {/* Coming soon section */}
         <section className="mb-6">
           <div className="mb-3 flex items-center gap-2">
@@ -344,14 +350,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <ComingSoonCard
-              title="Bibliothèque MD"
-              jalon="J7"
-              desc="~50 fiches Mark Douglas + déclencheurs."
-            />
-            <ComingSoonCard
               title="Rapport hebdo IA"
               jalon="J8"
               desc="Analyse Claude livrée chaque dimanche."
+            />
+            <ComingSoonCard
+              title="Notifications push"
+              jalon="J9"
+              desc="Push contextuels sur tes fiches Mark Douglas."
             />
           </div>
         </section>

@@ -206,3 +206,189 @@ describe('buildExportFilename', () => {
     expect(filename).toBe('fxmily-data-efghij-2026-05-08.json');
   });
 });
+
+// =============================================================================
+// J10 Phase A — extended edge cases (added 2026-05-09)
+// =============================================================================
+
+const EMPTY_SNAPSHOT_FIELDS = {
+  schemaVersion: 1 as const,
+  exportedAt: '2026-05-08T10:00:00.000Z',
+  notes: { source: 's', contact: 'c', schemaDocumentation: 'd' },
+  user: null,
+  trades: [],
+  tradeAnnotations: [],
+  dailyCheckins: [],
+  behavioralScores: [],
+  douglasDeliveries: [],
+  douglasFavorites: [],
+  weeklyReports: [],
+  pushSubscriptions: [],
+  notificationPreferences: [],
+  notificationQueue: [],
+  auditLogs: [],
+};
+
+describe('buildUserDataExport — fresh-user / empty-state', () => {
+  // Why this edge case matters : a user that just signed up but never
+  // submitted any trade or check-in must still get a valid, schema-versioned
+  // export (article 20 GDPR — even an empty dataset must be portable). The
+  // snapshot must NOT throw because every section is empty.
+  it('returns valid empty-array sections for a brand-new user with zero data anywhere', async () => {
+    userFindUnique.mockResolvedValueOnce({
+      id: 'u_fresh',
+      email: 'fresh@example.com',
+      emailVerified: null,
+      firstName: null,
+      lastName: null,
+      image: null,
+      role: 'member',
+      status: 'active',
+      timezone: 'Europe/Paris',
+      consentRgpdAt: null,
+      joinedAt: new Date('2026-05-08T08:00:00Z'),
+      lastSeenAt: null,
+      createdAt: new Date('2026-05-08T08:00:00Z'),
+      updatedAt: new Date('2026-05-08T08:00:00Z'),
+      deletedAt: null,
+    });
+
+    const snap = await buildUserDataExport('u_fresh');
+
+    // Every collection is an empty array (not null, not undefined).
+    expect(snap.trades).toEqual([]);
+    expect(snap.tradeAnnotations).toEqual([]);
+    expect(snap.dailyCheckins).toEqual([]);
+    expect(snap.behavioralScores).toEqual([]);
+    expect(snap.douglasDeliveries).toEqual([]);
+    expect(snap.douglasFavorites).toEqual([]);
+    expect(snap.weeklyReports).toEqual([]);
+    expect(snap.pushSubscriptions).toEqual([]);
+    expect(snap.notificationPreferences).toEqual([]);
+    expect(snap.notificationQueue).toEqual([]);
+    expect(snap.auditLogs).toEqual([]);
+    // User itself is hydrated.
+    expect(snap.user?.email).toBe('fresh@example.com');
+    // Summary on a fresh snapshot must be all zeros.
+    const summary = summariseExport(snap);
+    expect(summary.tradeCount).toBe(0);
+    expect(summary.auditLogCount).toBe(0);
+  });
+
+  // Why this edge case matters : a heavy-trader with thousands of trades
+  // could push the JSON payload to a size that breaks downloads (browser
+  // memory / R2 egress / Cloudflare 100 MB limit). We sanity-check that the
+  // serialised payload for 5000 minimal trades stays well under 50 MB so the
+  // current architecture (single in-memory JSON.stringify) is safe at the V1
+  // member cap of ~1000.
+  it('keeps JSON payload < 50 MB even for a power-user with 5000 trades (sanity check)', async () => {
+    const largeTrades = Array.from({ length: 5000 }, (_, i) => ({
+      id: `trade_${i}`,
+      userId: 'u_power',
+      pair: 'EURUSD',
+      direction: 'long',
+      entryPrice: 1.085 + i * 0.0001,
+      exitPrice: 1.087,
+      size: 0.1,
+      pnl: 200,
+      openedAt: new Date('2026-05-08T08:00:00Z'),
+      closedAt: new Date('2026-05-08T09:00:00Z'),
+      createdAt: new Date('2026-05-08T09:00:00Z'),
+      updatedAt: new Date('2026-05-08T09:00:00Z'),
+      session: 'london',
+      notes: null,
+      screenshots: [],
+    }));
+    tradeFindMany.mockResolvedValueOnce(largeTrades);
+    userFindUnique.mockResolvedValueOnce({
+      id: 'u_power',
+      email: 'power@example.com',
+      emailVerified: null,
+      firstName: null,
+      lastName: null,
+      image: null,
+      role: 'member',
+      status: 'active',
+      timezone: 'Europe/Paris',
+      consentRgpdAt: null,
+      joinedAt: new Date('2026-01-01T00:00:00Z'),
+      lastSeenAt: null,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      updatedAt: new Date('2026-05-08T08:00:00Z'),
+      deletedAt: null,
+    });
+
+    const snap = await buildUserDataExport('u_power');
+    const serialised = JSON.stringify(snap);
+    const sizeBytes = Buffer.byteLength(serialised, 'utf8');
+    const sizeMb = sizeBytes / (1024 * 1024);
+
+    expect(snap.trades.length).toBe(5000);
+    // Sanity ceiling : 5000 trades should stay well below 50 MB. If this
+    // assertion ever trips, the route handler needs streaming JSON.
+    expect(sizeMb).toBeLessThan(50);
+  });
+});
+
+describe('summariseExport — defensive shape handling', () => {
+  // Why this edge case matters : `summariseExport` is also called from the
+  // POST route to build the audit metadata. If a future schema change adds
+  // an unexpected extra field on the snapshot (e.g. a V2 `subscriptions`
+  // section), the summariser must not crash on the existing keys. We pin
+  // that the function only reads the well-known keys it knows about.
+  it('ignores foreign / unknown fields on the snapshot (forward-compat)', () => {
+    const snap = {
+      ...EMPTY_SNAPSHOT_FIELDS,
+      trades: [{}, {}] as never,
+      // Foreign field that doesn't exist in the type — added by a hypothetical
+      // future schema. The summariser must remain a pure projection.
+      mysteryFutureSection: [{}, {}, {}],
+      anotherUnknownKey: 'value',
+    } as unknown as Parameters<typeof summariseExport>[0];
+
+    const summary = summariseExport(snap);
+
+    expect(summary.tradeCount).toBe(2);
+    // No unknown counter snuck into the output.
+    expect(Object.keys(summary)).toEqual([
+      'schemaVersion',
+      'tradeCount',
+      'tradeAnnotationCount',
+      'dailyCheckinCount',
+      'behavioralScoreCount',
+      'douglasDeliveryCount',
+      'douglasFavoriteCount',
+      'weeklyReportCount',
+      'pushSubscriptionCount',
+      'notificationPreferenceCount',
+      'notificationQueueCount',
+      'auditLogCount',
+    ]);
+  });
+});
+
+describe('buildExportFilename — userId edge cases', () => {
+  // Why this edge case matters : while real cuids are 25 chars, defensive
+  // handling of a shorter userId (test data, support tooling, future ID
+  // format change) must not crash or produce a malformed filename. With a
+  // 5-char userId, slice(-6) returns the entire string (5 chars).
+  it('handles a userId shorter than 6 chars by using the whole string', () => {
+    const filename = buildExportFilename(
+      { ...EMPTY_SNAPSHOT_FIELDS, exportedAt: '2026-05-08T10:00:00.000Z' },
+      'u1234',
+    );
+    expect(filename).toBe('fxmily-data-u1234-2026-05-08.json');
+  });
+
+  // Why this edge case matters : a 1-char userId still produces a valid,
+  // non-empty filename. We pin this so any future "minimum length" bug
+  // (e.g. forgetting the slice fallback) is caught.
+  it('still produces a valid filename for a 1-char userId', () => {
+    const filename = buildExportFilename(
+      { ...EMPTY_SNAPSHOT_FIELDS, exportedAt: '2026-05-08T10:00:00.000Z' },
+      'a',
+    );
+    expect(filename).toBe('fxmily-data-a-2026-05-08.json');
+    expect(filename).toMatch(/^fxmily-data-.+-\d{4}-\d{2}-\d{2}\.json$/);
+  });
+});

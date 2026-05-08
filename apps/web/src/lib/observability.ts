@@ -52,3 +52,20 @@ export function reportBreadcrumb(
     /* swallow */
   }
 }
+
+/**
+ * J10 Phase J — performance-profiler T3.6 fix : flush the Sentry queue
+ * before a one-shot worker (cron) returns, so events queued by
+ * `reportError` are not lost when the request handler exits.
+ *
+ * `Sentry.flush(timeoutMs)` returns true when the queue drained, false on
+ * timeout. Best-effort : we never throw here so a Sentry hiccup can't
+ * mask the actual cron result.
+ */
+export async function flushSentry(timeoutMs = 2000): Promise<void> {
+  try {
+    await Sentry.flush(timeoutMs);
+  } catch {
+    /* swallow — Sentry must never be the reason a cron looks broken. */
+  }
+}

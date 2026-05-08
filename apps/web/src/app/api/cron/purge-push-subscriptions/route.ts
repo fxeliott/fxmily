@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
-import { reportError } from '@/lib/observability';
+import { flushSentry, reportError } from '@/lib/observability';
 import { purgeStalePushSubscriptions } from '@/lib/push/cleanup';
 import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
 
@@ -83,6 +83,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     reportError('cron.purge-push-subscriptions', err, {
       route: '/api/cron/purge-push-subscriptions',
     });
+    // J10 Phase J — flush Sentry queue before exit (perf-profiler T3.6).
+    await flushSentry();
     return NextResponse.json({ ok: false, error: 'scan_failed' }, { status: 500 });
   }
 }

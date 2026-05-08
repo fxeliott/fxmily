@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
-import { reportError } from '@/lib/observability';
+import { flushSentry, reportError } from '@/lib/observability';
 import { dispatchAllReady } from '@/lib/push/dispatcher';
 import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
 
@@ -112,6 +112,7 @@ export async function POST(req: NextRequest) {
     reportError('cron.dispatch-notifications', err, {
       route: '/api/cron/dispatch-notifications',
     });
+    await flushSentry();
     return NextResponse.json({ ok: false, error: 'scan_failed' }, { status: 500 });
   }
 }

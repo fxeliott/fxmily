@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
-import { reportError } from '@/lib/observability';
+import { flushSentry, reportError } from '@/lib/observability';
 import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
 import { generateWeeklyReportsForAllActiveMembers } from '@/lib/weekly-report/service';
 
@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
         ? err.code
         : 'unknown';
     reportError('cron.weekly-reports', err, { route: '/api/cron/weekly-reports', code });
+    await flushSentry();
     return NextResponse.json({ ok: false, error: 'scan_failed' }, { status: 500 });
   }
 }

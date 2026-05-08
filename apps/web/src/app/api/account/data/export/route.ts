@@ -85,7 +85,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     metadata: { ...summary },
   });
 
-  const body = JSON.stringify(snapshot, null, 2);
+  // J10 Phase J — performance-profiler T2.3 : drop `null, 2` pretty-print.
+  // The export is consumed programmatically (`jq`, scripts) so indentation
+  // costs more than it helps : ~30 % payload size + ~50 % transient memory
+  // savings at 5000+ trades. Users who want pretty output can pipe through
+  // `jq .` on download.
+  const body = JSON.stringify(snapshot);
   const filename = buildExportFilename(snapshot, userId);
 
   return new NextResponse(body, {

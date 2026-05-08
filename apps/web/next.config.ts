@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { withSentryConfig } from '@sentry/nextjs';
 
 /**
  * Security headers — defense in depth on top of Caddy's HSTS / TLS termination.
@@ -22,7 +23,10 @@ function buildContentSecurityPolicy(isProd: boolean): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    // J10 — Sentry ingest. The browser SDK POSTs envelope payloads to the
+    // DSN host. We accept any sentry.io subdomain (cluster + region tags
+    // appear in the public DSN).
+    "connect-src 'self' https://*.sentry.io",
     "frame-src 'none'",
     "frame-ancestors 'none'",
     "object-src 'none'",
@@ -90,4 +94,34 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/**
+ * Sentry plugin wrap (J10) — uploads source maps + tunnels Sentry traffic
+ * through the same origin so an ad-blocker doesn't drop reports.
+ *
+ * The plugin is a no-op when `SENTRY_AUTH_TOKEN` / `SENTRY_DSN` are absent
+ * (local dev), so the wrap is safe to ship unconditionally.
+ */
+export default withSentryConfig(nextConfig, {
+  // Filled from `.env` / CI secrets — `org` and `project` slugs from the
+  // Sentry project settings page.
+  org: process.env.SENTRY_ORG ?? 'fxmily',
+  project: process.env.SENTRY_PROJECT ?? 'fxmily-web',
+  ...(process.env.SENTRY_AUTH_TOKEN ? { authToken: process.env.SENTRY_AUTH_TOKEN } : {}),
+  // Source-map handling :
+  silent: !process.env.CI, // suppress non-CI noise locally
+  widenClientFileUpload: true,
+  sourcemaps: {
+    // Hide the source maps from the user (the upload step still ships them
+    // to Sentry; only the public chunks are stripped client-side).
+    deleteSourcemapsAfterUpload: true,
+  },
+  disableLogger: true,
+  // Tunnel `/monitoring` → Sentry ingest. Same-origin requests are not
+  // blocked by privacy extensions / corporate firewalls.
+  tunnelRoute: '/monitoring',
+  // Don't fail the build if upload errors out (CI may have a flaky Sentry
+  // gateway window).
+  errorHandler: (err: Error) => {
+    console.warn('[sentry] source maps upload failed (non-fatal):', err.message);
+  },
+});

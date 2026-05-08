@@ -99,4 +99,11 @@ jobs:
           # so the placeholder must use https:// even in CI.
           AUTH_SECRET: ci_placeholder_secret_must_be_at_least_32_characters_long
           AUTH_URL: https://ci.fxmily.invalid
+          # J10 — Sentry source-map upload runs INSIDE `pnpm build` via the
+          # `withSentryConfig` plugin. We only inject the auth token here on
+          # `main` pushes (release builds) so PR builds stay free of side
+          # effects against the Sentry project.
+          SENTRY_AUTH_TOKEN: ${{ github.ref == 'refs/heads/main' && secrets.SENTRY_AUTH_TOKEN || '' }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: pnpm build

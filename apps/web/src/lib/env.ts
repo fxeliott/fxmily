@@ -105,8 +105,18 @@ const envSchema = z.object({
     .optional(),
 
   // Jalon 10 — Sentry
+  /// Server-side DSN. The client mirror lives in `NEXT_PUBLIC_SENTRY_DSN` —
+  /// they MUST point at the same project so frontend + backend errors land
+  /// in one place. A J10 audit cross-var refine enforces this when set.
   SENTRY_DSN: z.string().url().optional(),
+  /// CI-only token used by `sentry-cli sourcemaps upload` after a `main`
+  /// build. Never deployed to runtime; the workflow injects it from
+  /// GitHub secrets. `optional()` so local builds don't fail.
   SENTRY_AUTH_TOKEN: z.string().optional(),
+  /// Client-exposed mirror of `SENTRY_DSN`. Required by the browser SDK
+  /// to send errors/transactions back to the same project. Set to the
+  /// same value as `SENTRY_DSN` in `.env`.
+  NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
 
   // Jalon 5 — secret partagé avec le cron Hetzner pour `/api/cron/*`. Sans ça,
   // l'endpoint cron répond 503 (refuse de tourner sans authentification).
@@ -145,6 +155,22 @@ export const envSchemaWithRefines = envSchema
       message:
         'NEXT_PUBLIC_VAPID_PUBLIC_KEY must mirror VAPID_PUBLIC_KEY exactly (set both to the same base64url value).',
       path: ['NEXT_PUBLIC_VAPID_PUBLIC_KEY'],
+    },
+  )
+  /**
+   * J10 — Sentry DSN cross-var consistency. If the server DSN is set, the
+   * client mirror MUST be set AND match. Mismatched DSNs would split errors
+   * between two Sentry projects (confusing) or leak the wrong key into the
+   * browser bundle (potentially exposing internal-only routes).
+   */
+  .refine(
+    (e) =>
+      e.SENTRY_DSN === undefined ||
+      (e.NEXT_PUBLIC_SENTRY_DSN !== undefined && e.NEXT_PUBLIC_SENTRY_DSN === e.SENTRY_DSN),
+    {
+      message:
+        'NEXT_PUBLIC_SENTRY_DSN must mirror SENTRY_DSN exactly (set both to the same DSN URL).',
+      path: ['NEXT_PUBLIC_SENTRY_DSN'],
     },
   );
 

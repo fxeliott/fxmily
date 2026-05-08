@@ -73,3 +73,8 @@ playwright/.cache/
 
 # Local upload store (J2 — replaced by R2 in prod)
 .uploads/
+
+# VAPID keys dev fixture (J9 prep) — never commit
+.vapid-keys-dev.txt
+
+.admin-password-rotation.txt

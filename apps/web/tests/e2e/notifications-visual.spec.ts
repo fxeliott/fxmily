@@ -95,6 +95,14 @@ test.describe('J9 visual — /account/notifications', () => {
   }) => {
     if (!seeded) throw new Error('seed missing — beforeAll did not run');
 
+    // The shared `loginAs` helper resolves `baseURL` from
+    // `page.context().pages()[0]?.url()`. On a fresh test the only page is
+    // still `about:blank`, whose `URL(...).origin` parses to the literal
+    // string `'null'` and crashes `browserContext.addCookies` with
+    // "Invalid URL". Navigating to a real route first puts a valid origin
+    // (http://localhost:3000) in the page URL so the helper resolves cleanly.
+    await page.goto('/login');
+
     await loginAs(page, request, seeded.email, seeded.password);
     await page.goto('/account/notifications');
     await page.waitForLoadState('networkidle');

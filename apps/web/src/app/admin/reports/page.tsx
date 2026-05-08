@@ -93,6 +93,7 @@ export default async function AdminReportsPage() {
       <header className="flex flex-col gap-4">
         <Link
           href="/admin/members"
+          aria-label="Retour à la liste des membres"
           className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
         >
           <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -184,16 +185,24 @@ export default async function AdminReportsPage() {
                             <span className="f-display text-[15px] font-semibold text-[var(--t-1)]">
                               {label}
                             </span>
-                            {mocked ? <Pill tone="warn">MOCK</Pill> : <Pill tone="acc">LIVE</Pill>}
+                            {mocked ? (
+                              <Pill tone="warn">
+                                <span aria-label="Source : mock déterministe">MOCK</span>
+                              </Pill>
+                            ) : (
+                              <Pill tone="acc">
+                                <span aria-label="Source : Claude API live">LIVE</span>
+                              </Pill>
+                            )}
                             {report.sentToAdminAt ? (
                               <Pill tone="ok">
-                                <Mail className="h-2.5 w-2.5" strokeWidth={2} />
-                                ENVOYÉ
+                                <Mail className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
+                                <span aria-label="Email digest envoyé">ENVOYÉ</span>
                               </Pill>
                             ) : (
                               <Pill tone="mute">
-                                <Mail className="h-2.5 w-2.5" strokeWidth={2} />
-                                EN ATTENTE
+                                <Mail className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
+                                <span aria-label="Email digest en attente">EN ATTENTE</span>
                               </Pill>
                             )}
                           </div>

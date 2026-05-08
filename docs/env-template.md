@@ -68,6 +68,33 @@ AUTH_URL=http://localhost:3000
 - ✅ Régénère `AUTH_SECRET` à chaque déploiement (dev / prod différents)
 - ✅ Les VAR `NEXT_PUBLIC_*` sont exposées au client — n'y mets QUE des choses publiques
 
+### ⚠️ Ne JAMAIS coller un secret dans un prompt Claude
+
+Les prompts soumis à Claude Code finissent dans `~/.claude/projects/<scope>/<sessionId>.jsonl` **en clair**, et transitent par les serveurs Anthropic (rétention selon plan, ~30j Max consumer).
+
+**Précédent** : 2026-05-05, une clé Resend live + un mdp admin ont été collés dans 2 prompts. Le hook `~/.claude/hooks/secret_scanner.ps1` (UserPromptSubmit) bloque désormais ces patterns automatiquement.
+
+**Pattern recommandé** :
+
+```powershell
+# 1. Charge le secret hors Claude (PowerShell normal)
+$env:RESEND_API_KEY = Read-Host "Resend key" -AsSecureString
+# (ou simplement copier dans clipboard)
+
+# 2. Dans Claude, référence par nom :
+#    "j'ai mis ma clé dans $env:RESEND_API_KEY, génère le snippet qui la consomme"
+
+# 3. Claude écrit le code → tu copies → tu lances hors Claude
+```
+
+**Si une clé fuit** :
+
+1. Console du provider (Resend, Anthropic, etc.) → DELETE/REVOKE.
+2. Verify Activity logs : aucun usage non reconnu post-leak.
+3. Generate new key → coller dans `.env` hors Claude.
+4. Update `gh secret set` si la clé est aussi dans GitHub Secrets CI.
+5. Redact les JSONL exposés (script PowerShell dans `apps/web/CLAUDE.md` J8 polish section).
+
 ## Validation au runtime
 
 `apps/web/src/lib/env.ts` valide via Zod le shape attendu. Si `DATABASE_URL`, `AUTH_SECRET` ou `AUTH_URL` sont absents/invalides, l'app **crash au démarrage** avec un message clair. C'est volontaire (fail fast, pas de comportement aléatoire en runtime).

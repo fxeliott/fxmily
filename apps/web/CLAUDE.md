@@ -1147,3 +1147,95 @@ Subagents `security-auditor` + `researcher` (J9 prep) + `performance-profiler` l
 ### Briefing J9 préparé : `docs/jalon-9-prep.md`
 
 13 sections couvrant Apple Declarative Web Push BLOCKER (Safari 18.4+), web-push lib 3.6.7, Service Worker manuel Next.js 16 (Serwist incompatible Turbopack default), iOS PWA fragility table, fallback email mandatory SPEC §18.2, architecture Phase A→E, RGPD privacy push, pré-requis Eliot (VAPID generate + logo + iPhone test), pickup prompt prêt à coller post-`/clear`. Lecture obligatoire avant nouvelle session J9.
+
+## J9 — Web Push notifications (livré 2026-05-08)
+
+Wire complet Web Push : VAPID + Service Worker + dispatcher cron + UI `/account/notifications`. Carbon-copy J8 patterns + 5-subagent audit-driven hardening.
+
+### Modèle de données
+
+3 nouveaux modèles via migration `20260508180000_j9_push_subscription` :
+
+- **`PushSubscription`** (`push_subscriptions`) — 1 row par (user, browser/device). UNIQUE `(userId, endpoint)`. `endpoint` Text (max 2048 Zod-enforced), `p256dhKey` (~88 chars base64url), `authKey` (~22 chars), `userAgent` Text? (sanitized via `safeFreeText` + truncated 2048), `lastSeenAt` (bumped on dispatch + pushsubscriptionchange — used for J9.5+ 90-day cleanup cron).
+- **`NotificationPreference`** (`notification_preferences`) — composite PK `(userId, type)`. `enabled` Boolean default `true` (consent default-on, opt-out by toggle). Missing row = enabled. Cascade User delete.
+- **`NotificationQueue` extension** : `+last_error_code` (machine taxonomy : gone, rate_limited, server_error, timeout, network, promise_rejected, payload_too_large, unknown), `+next_attempt_at` (exponential backoff anchor 4^(attempts-1) capped 30 min, honors Retry-After).
+- **Enums étendus** : `NotificationType` +douglas_card_delivered +weekly_report_ready ; `NotificationStatus` +`dispatching` (atomic claim race-safe).
+- **Index partial** `notification_queue_pending_dispatch_idx ON (status, next_attempt_at) WHERE status IN ('pending', 'dispatching')` — dispatcher hot-path narrow scan.
+
+### Stack
+
+- `web-push@3.6.7` + `@types/web-push@3.6.4` (RFC 8030/8292 stable). Lazy-imported via `LiveWebPushClient`.
+- Apple Declarative Web Push (Safari 18.4+ / iOS 18.4+ / iOS 26 default standalone) supported via dual payload `{ web_push: 8030, notification: { title, body, navigate, ... }, type, id }`.
+- Service Worker `public/sw.js` plain JS (Turbopack-compatible — Serwist requires Webpack).
+- `app/manifest.ts` Next.js 16 native (replaces static `manifest.webmanifest`, served at `/manifest.webmanifest`).
+
+### Service Worker (`public/sw.js`)
+
+3 handlers : `push` (DUAL Apple declarative + classic), `notificationclick` (focus existing same-origin tab + `client.navigate` OR `clients.openWindow`), `pushsubscriptionchange` (Firefox auto-resubscribe vers `/api/account/push/resubscribe`).
+
+### UI `/account/notifications`
+
+- Page Server Component avec auth gate + `Promise.all` (preferences + safe subscriptions list — NEVER endpoints).
+- `<PushToggle>` 5 states (`loading | unsupported | not-standalone | permission-denied | idle-no-sub | subscribed`). Detects iOS standalone, requests permission only on user-gesture click.
+- `<PreferencesGrid>` 5 toggles `<input type="checkbox" role="switch">` avec single `<label htmlFor>` + `aria-describedby`.
+- `<ServiceWorkerRegister>` Client island avec `updateViaCache: 'none'`.
+- Posture Mark Douglas (no audio, no FOMO) ancrée dans la section "Comment ça marche".
+
+### Server Actions + route
+
+- `subscribePushAction`, `unsubscribePushAction`, `unsubscribeAllPushAction`, `togglePreferenceAction`, `logPermissionDecisionAction`.
+- **`/api/account/push/resubscribe`** route handler dédié (POST) pour le SW Firefox `pushsubscriptionchange` event.
+- **`/api/cron/dispatch-notifications`** carbone J5/J6/J7/J8 (timingSafeEqual SHA-256 + token bucket 5/1min + 503/401/405/429 + `?at=ISO` strict + double-gate dev).
+
+### Dispatcher (`lib/push/`)
+
+- **`web-push-client.ts`** : factory `IWebPushClient` + `MockPushClient` (V1 default) + `LiveWebPushClient` (lazy-imports `web-push`, `aes128gcm`, error taxonomy 8 kinds).
+- **`dispatcher.ts`** : pure `buildPayload` (Apple+classic), `classifyError` (gone→delete, payload_too_large→fail, retryable→retry+backoff), `nextAttemptDelay` (exp 4^(att-1) capped 30 min, retryAfter honored).
+- **`dispatchOne`** atomic claim `updateMany WHERE status='pending' AND nextAttemptAt <= now → dispatching+attempts++`, preference filter post-claim, fan-out `Promise.allSettled`, 410 Gone auto-delete, retry budget MAX_ATTEMPTS=3.
+- **`dispatchAllReady`** : crash recovery first (rows `dispatching` > 10 min → `pending`, audit `recoveredStuck`), FIFO scan capped `maxPerRun=200`.
+- **`preferences.ts`** : `getEffectivePreferences` (default-true if missing), `setPreference` upsert, `isPreferenceEnabled`.
+- **`service.ts`** : cap `MAX_SUBSCRIPTIONS_PER_USER=10` + `TooManySubscriptionsError`, `safeFreeText` userAgent, `listSafeSubscriptionsForUser` (NEVER endpoint exposed, SPEC §16).
+
+### Audit-driven hardening (5 subagents, 6 BLOCKERs + 4 HIGH closed)
+
+- code-reviewer 2 BLOQUANTs : route `/api/account/push/resubscribe` créée (404 silent fix), stuck `dispatching` recovery 10 min.
+- security-auditor 0 critique, 2 ÉLEVÉ + 5 MEDIUM. Pattern carbone strict, no payload logging.
+- accessibility-reviewer 3 BLOQUANTs : back-link size 's' (32px) → 'm' (44px), preferences-grid double `<label htmlFor>` (WCAG 4.1.2) → `<span>` wrapper, focus ring sur 44×44 hit-area.
+- ui-designer 4 DS-tokens BLOCKERs : `text-danger` → `text-[var(--bad)]`, `bg-muted/50` → `bg-[var(--bg-2)]`. 6 HIGH polish reclassés J9.5+.
+- fxmily-content-checker 2 BLOQUANTs + 3 HIGH copy : refonte douglas_card_delivered (anti-FOMO + anti-anthropomorphisation), adoucissements push-toggle + checkin morning + annotation.
+
+TIER 2 fixes : `kind:'promise_rejected'` retryable, `failureReason='all_endpoints_gone'` explicit, cap 10 subs, `safeFreeText` userAgent, `aria-busy`+`aria-pressed`+sr-only live region push-toggle.
+
+### Quality gate finale J9
+
+- type-check exit 0, lint exit 0, **Vitest 617/617 verts** (+72 vs J8 baseline 545)
+- Build prod OK Turbopack — route `/api/cron/dispatch-notifications` listed
+- Migration appliquée live (18 tables en DB)
+- Smoke live `scripts/smoke-test-j9.ts` ALL GREEN (mock client path) :
+  - cron POST 200 → `{sent:1, scanned:1, recoveredStuck:0}`
+  - Idempotency 2nd → `{scanned:0, sent:0}`
+  - Preference filter → `{skipped:1}` + audit `notification.dispatch.skipped`
+
+### Pré-requis Eliot pour activer Live VAPID
+
+1. **VAPID keys** : déjà dans `apps/web/.env` (J8 polish session, cf. memory `fxmily_project.md:92`).
+2. **iPhone test physique** : pour valider iOS Safari 18.4+ Declarative Web Push real-device (mandatory SPEC §15 J9 critère).
+3. **HTTPS** : `pushManager.subscribe()` exige HTTPS strict iOS Safari (localhost OK Chrome desktop seulement) — ngrok tunnel ou prod app.fxmily.com.
+
+### TODO J9.5+ (UI polish premium reclassé)
+
+- Aurora hero + halo Bell + h-rise H1 (focal premium, carbone J7 reader).
+- AnimatePresence transitions 5 states `<PushToggle>` (slide-fade y:4).
+- Skeleton shimmer loading state.
+- `<Btn kind={isSubscribed ? 'danger' : 'primary'}>` + `<Pill tone="mute">` empty state cohérence DS.
+- `<TrendCard>`-style notifs reçues 7j sparkline.
+- Apple Touch Icon 192/512/96 PNG dédiés.
+- Dispatcher 5-by-5 parallel batch (carbone weekly-reports) si scan > 5 min Caddy timeout.
+
+### TODO J10 prod
+
+- Hetzner crontab `*/2 * * * *` UTC `dispatch-notifications`.
+- M5 RGPD : cron `0 5 * * 0` purge subscriptions `lastSeenAt < now - 90d`.
+- M1 sécurité : endpoint URL allowlist FCM/APNs/Mozilla/Windows.
+- Email fallback après 3 attempts failed (SPEC §18.2) — Resend template carbone J4.
+- Sentry capture `/api/cron/dispatch-notifications` catch.

@@ -1,6 +1,14 @@
 # Jalon 10 — Prod hardening : RGPD + Sentry + Hetzner deploy + domaine + 1ère invitation prod
 
-> Préparation rédigée 2026-05-08 (post-J8 polish, avant J9). Démarrer dans une nouvelle session avec `/clear` (SPEC §18.4).
+> Préparation rédigée 2026-05-08 (post-J8 polish), mise à jour 2026-05-08 (J9 livré). Démarrer dans une nouvelle session avec `/clear` (SPEC §18.4).
+>
+> **Mise à jour J9 livré** : commits `3d8a93c` (foundation+UI+dispatcher+smoke) + `6348ad7` (5-subagent hardening 6 BLOCKERs + 4 HIGH closed) sur branche `claude/j9-web-push-notifications`. Vitest 617/617 verts, smoke live ALL GREEN (mock client path). Migration `20260508180000_j9_push_subscription` appliquée. À ajouter au scope J10 :
+>
+> - Hetzner crontab `*/2 * * * *` UTC `dispatch-notifications` (cf. §6.4 ligne 269 déjà listé).
+> - Cron `0 5 * * 0` UTC RGPD purge subscriptions inactives 90j (`lastSeenAt < now - 90d`) + audit row.
+> - Endpoint URL allowlist FCM/APNs/Mozilla/Windows dans `pushSubscriptionInputSchema` (anti-SSRF amplifier).
+> - Email fallback Resend après 3 attempts dispatch failed (SPEC §18.2 mitigation iOS push fragility).
+> - Sentry capture sur `lib/push/dispatcher.ts:dispatchOne` catch + cron route.
 
 ## 1. Critère SPEC §15 J10 "Done quand" (verbatim)
 

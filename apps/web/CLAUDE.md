@@ -923,3 +923,97 @@ SPEC v1.0 préservé immuable au-dessus pour traçabilité de la vision initiale
 **J9** : Push notifications Web Push + VAPID + service worker.
 
 **J10** : Prod hardening + RGPD endpoints + Sentry + Hetzner deploy + domaine app.fxmily.com.
+
+## J8 — Foundation (Phase A livré 2026-05-08)
+
+Branche dédiée pour livrer la **fondation DB + types + builder pure-functions + tests TDD** du Jalon 8 (Rapport hebdo IA admin), sans toucher à l'Anthropic SDK ni à la complexité Claude API. Phase B+ (claude-client + cron + email + UI) reste pour nouvelle session avec `/clear`. Respecte la règle SPEC §18.4 "1 session = 1 jalon" tout en débloquant la prochaine session de démarrer avec les briques DB déjà en place.
+
+### Closed
+
+**Modèle DB** :
+
+- Nouveau modèle `WeeklyReport` (table `weekly_reports`) — voir `prisma/schema.prisma` + migration `20260508113316_j8_weekly_report` appliquée live. Cascade `User.delete` (RGPD data minimisation). Unique `(userId, weekStart)` enforce idempotency cron weekly. Indexes `(userId, weekStart DESC)` + `(generatedAt DESC)`.
+- Champs : output Claude (`summary` Text, `risks` / `recommendations` / `patterns` Json), cost tracking (`claudeModel`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheCreateTokens`, `costEur` Decimal(10,6)), email dispatch state (`sentToAdminAt`, `sentToAdminEmail`, `emailMessageId`).
+- Posture RGPD : `costEur` 6 décimales pour sub-cent tracking SPEC §16 (~5€/mois target). `sentToAdminEmail` audité pour traçabilité.
+- **15 tables → 16 tables** en DB.
+
+**Zod schemas** (`lib/schemas/weekly-report.ts`) :
+
+- `weeklyReportPatternsSchema` — patterns extraits 7j (emotionPerf, sleepPerf, sessionFocus, disciplineTrend) tous optionnels avec `safePatternValueSchema` + `.strict()`.
+- `weeklyReportOutputSchema` — ce que Claude doit renvoyer via `output_config.format` (post-`messages.parse()` Phase B). `summary` 100-800 chars, `risks` 0-5 items, `recommendations` 1-5 items, `patterns` strict. **Validation TWICE** : SDK level + post-parse (defense enum fuzzing).
+- `weeklyReportCostSchema` — cost tracking metrics + claudeModel + token counts.
+- `weeklyReportPersistInputSchema` — combinaison output + userId + weekStart/End + cost (DB write input).
+- `weeklySnapshotSchema` — ce que le builder produit (input à Claude). Counters (numerics seuls, jamais user-text), free-text (sanitized via safeFreeText), scores pass-through.
+- **Hardening systématique** : `safeFreeText` (NFC + bidi/zero-width strip) sur 100% des champs free-text user-controlled ET sur le retour Claude (defense-in-depth si LLM hallucine bidi). `.strict()` partout pour rejeter clés extra hallucinées par le LLM. `containsBidiOrZeroWidth` refine sur tous les strings.
+
+**Builder pure-functions** (`lib/weekly-report/builder.ts` + `types.ts`) :
+
+- `buildWeeklySnapshot(input: BuilderInput): WeeklySnapshot` — pure aggregator. Pas de DB, pas de `Date.now()`, pas d'I/O. Service layer (Phase B) loadera la slice 7j filtrée local-timezone et passera ici.
+- `buildCounters` — 21 metrics : tradesTotal/Win/Loss/BE/Open, realizedRSum/Mean (rounded 4 décimales), planRespectRate, hedgeRespectRate (exclude N/A), morningCheckinsCount, eveningCheckinsCount, streakDays, sleepHoursMedian, moodMedian, stressMedian, annotationsReceived/Viewed, douglasCardsDelivered/Seen/Helpful.
+- `buildFreeText` — emotion tags frequency-sorted (top 20), pairs traded (top 10), sessions traded (canonical order asia/london/newyork/overlap), journal excerpts (5 most recent, sanitized + truncated 200 chars + "…").
+- `buildScores` — pass-through `BehavioralScoreSnapshot | null` (insufficient_data preserved).
+- **Defense-in-depth safeFreeText** sur journalExcerpts même si service layer doit l'avoir fait — belt-and-suspenders pour prompt injection.
+- Helpers : `parseRealizedR`, `parseDecimalOrNull`, `bumpCount`, `median` (odd + even), `roundTo`.
+
+**Tests TDD** (`lib/weekly-report/builder.test.ts`) :
+
+- **20 tests verts** couvrant : empty input defaults, trade counters (wins/losses/BE/open + realizedR sum/mean), plan respect rate, hedge respect rate (excludes N/A), median sleep/mood/stress (odd + even sample), streak unique dates across slots, Mark Douglas counters (delivered/seen/helpful), emotion tags frequency-sorted + cap, pairs frequency-sorted + cap, sessions canonical order, journal excerpt truncation 200 chars + ellipsis, **bidi/zero-width strip Trojan Source defense**, cap 5 excerpts most-recent-first, skip empty/whitespace journals, scores null pass-through, scores numeric pass-through, scores partially-null preserved, annotations counters propagate.
+
+**AuditAction extension** (`lib/auth/audit.ts`) :
+
+- 5 nouvelles actions réservées (Phase B+ emettra) : `weekly_report.generated`, `weekly_report.email.sent`, `weekly_report.email.failed`, `admin.weekly_report.viewed`, `cron.weekly_reports.scan`.
+
+### Quality gate
+
+- **Type-check** : ✓ (tsc --noEmit exit 0)
+- **Lint** : ✓ (max-warnings=0)
+- **Vitest** : **523/523 verts** (+20 vs J7.8 baseline 503)
+- **Prettier** : ✓ sur fichiers modifiés
+- **Build prod** : ✓ (Turbopack avec placeholders documentés)
+- **Migration appliquée live** : ✓ Postgres `fxmily-postgres-dev` (16 tables total)
+
+### Reste pour Phase B+ (next session avec `/clear`)
+
+**Phase B — Service layer** :
+
+- `lib/weekly-report/service.ts` — orchestrator : load 7j slice from DB → buildWeeklySnapshot → claude-client.generate → Zod validate → persist + audit + email
+- `lib/weekly-report/loader.ts` (optionnel) — fetch 7j Trade + DailyCheckin + MarkDouglasDelivery + BehavioralScore latest + annotation counts depuis Prisma. Anchored local-timezone du membre.
+- Tests Vitest service avec mock DB
+
+**Phase C — Anthropic SDK + Claude client** :
+
+- `pnpm --filter @fxmily/web add @anthropic-ai/sdk` (v0.30+ early 2026 — vérifié WebSearch)
+- `lib/weekly-report/claude-client.ts` — wrapper avec :
+  - `messages.parse()` + `output_config.format: zodOutputFormat(weeklyReportOutputSchema, 'weekly_report')`
+  - System prompt cached 1h (`cache_control: { type: 'ephemeral', ttl: '1h' }`) — SPEC §16 cost optimal weekly cron
+  - Cost calc en EUR (Sonnet 4.6 : $3 input / $15 output / $0.30 cache hit / $6 cache write 1h)
+  - Mock SDK pour tests Vitest (V1 ship sans `ANTHROPIC_API_KEY` worktree — Eliot ajoutera)
+  - `safeFreeText` sur retour Claude (defense-in-depth)
+- Tests Vitest claude-client avec mock SDK
+
+**Phase D — Cron pattern carbone J5/J6/J7** :
+
+- `app/api/cron/weekly-reports/route.ts` — POST avec `verifyCronSecret` SHA-256 + `timingSafeEqual` (CWE-208) + `cronLimiter` token bucket (5 burst, 1/min) + 503/401/429/405 + `?at=ISO` dev override double-gated
+- `runWeeklyReportScan(now)` — early-return si pas dimanche 21:00 UTC ; sinon scan members status='active' batch 25-by-25 `Promise.allSettled`
+- Audit row `cron.weekly_reports.scan` avec `{processed, errors, ranAt}`
+- Wiring prod : `0 21 * * 0` UTC (J10)
+
+**Phase E — UI admin** :
+
+- `/admin/reports` — liste rapports paginée + filtres (week, member)
+- `/admin/reports/[id]` — détail rapport avec `<WeeklyReportCard>` Server Component
+- Tab `member-tabs.tsx` — ajout "Rapports" sur `/admin/members/[id]?tab=weekly-reports`
+
+**Phase F — Email digest** :
+
+- `lib/email/templates/weekly-digest-email.tsx` — React Email v2 lime/deep-space (carbone `AnnotationReceivedEmail` J4)
+- Plain text fallback (deliverability post-2024 Gmail/Yahoo bulk sender rules)
+- `sendWeeklyDigestEmail()` — Resend + idempotency key (reportId)
+- V1 envoi à `eliott.pena@icloud.com` (compte Resend Eliot vérifié) — Domain `fxmily.com` verify J10
+
+**Phase G — Audit-driven hardening 4-5 subagents** + **Phase H — Smoke test live mock SDK** + **Phase I — apps/web/CLAUDE.md J8 close-out + memory update + briefing J9**.
+
+**Pré-requis Eliot avant smoke test live (Phase H)** :
+
+1. `ANTHROPIC_API_KEY` dans `apps/web/.env` worktree (Console Anthropic → API Keys → "Create Key" Fxmily). V1 ship sans = mock SDK suffit.
+2. CI vert sur PR phase A (déjà fait).

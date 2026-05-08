@@ -50,7 +50,11 @@ export interface GenerateOptions {
   /// `true` → skip the email send (smoke testing). DB write still happens.
   skipEmail?: boolean;
   /// Override the recipient. Defaults to `WEEKLY_REPORT_RECIPIENT` env (or
-  /// `eliott.pena@icloud.com` per SPEC §20.6).
+  /// `eliottpena34690@gmail.com` — l'email du compte Resend Eliot,
+  /// **seul recipient autorisé free-tier sans domain verify**. Découvert
+  /// lors du test live 2026-05-08 : Resend free retourne 403 si recipient
+  /// ≠ owner email du compte. Domain verify `fxmily.com` reporté J10 →
+  /// then anyone-recipient.
   recipientOverride?: string;
 }
 
@@ -574,7 +578,12 @@ function resolveRecipient(options: GenerateOptions): string {
   // closing the data-exfiltration vector flagged by the security review.
   const isProdRuntime = env.NODE_ENV === 'production' || env.AUTH_URL.startsWith('https://');
   if (options.recipientOverride && !isProdRuntime) return options.recipientOverride;
-  return env.WEEKLY_REPORT_RECIPIENT ?? 'eliott.pena@icloud.com';
+  // V1 fallback : `eliottpena34690@gmail.com` = email du compte Resend Eliot
+  // (seul recipient autorisé free-tier sans domain verify — Resend retourne
+  // 403 si recipient ≠ owner email). Discovered live 2026-05-08 lors du
+  // smoke test J8 polish 4e passe. À élargir J10 quand `fxmily.com` domain
+  // verify Resend Console est fait → `eliot@fxmily.com` ou similaire.
+  return env.WEEKLY_REPORT_RECIPIENT ?? 'eliottpena34690@gmail.com';
 }
 
 function displayMemberLabel(

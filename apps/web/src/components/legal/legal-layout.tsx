@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { btnVariants } from '@/components/ui/btn';
+import { Pill } from '@/components/ui/pill';
 import { cn } from '@/lib/utils';
 
 interface LegalLayoutProps {
@@ -61,9 +62,8 @@ export function LegalLayout({
           <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">{summary}</p>
         ) : null}
         <p className="mt-4 text-xs text-[var(--t-3)]">
-          <span className="rounded-full border border-[var(--b-default)] px-2 py-0.5">
-            Dernière mise à jour&nbsp;: {formatLastUpdated(lastUpdatedIso)}
-          </span>
+          {/* `<Pill tone="mute">` for DS-coherence (J10 Phase G UI designer T2-5). */}
+          <Pill tone="mute">Dernière mise à jour&nbsp;: {formatLastUpdated(lastUpdatedIso)}</Pill>
         </p>
       </header>
 

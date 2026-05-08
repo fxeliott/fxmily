@@ -135,8 +135,21 @@ jobs:
             # 4. Apply pending Prisma migrations against prod.
             # `migrate deploy` is non-interactive + non-destructive (refuses
             # to delete data) — safe to run on every deploy.
-            docker compose -f docker-compose.prod.yml exec -T web \
-              node apps/web/node_modules/prisma/build/index.js migrate deploy
+            #
+            # The standalone Next.js runtime image does NOT include the
+            # Prisma CLI (only the runtime client). We run a one-shot
+            # migration container based on the official `node:22-bookworm-slim`
+            # image, which sidesteps having to bake the CLI into the runtime.
+            # The container reuses the compose network so it can resolve
+            # `postgres:5432` by service name and reads the same DATABASE_URL
+            # from `/etc/fxmily/web.env`. Removed after each run via `--rm`.
+            docker run --rm \
+              --network fxmily-internal \
+              --env-file /etc/fxmily/web.env \
+              -v /opt/fxmily/prisma:/prisma:ro \
+              -w /prisma \
+              node:22-bookworm-slim \
+              sh -c "npx --yes prisma@7 migrate deploy --schema=/prisma/schema.prisma"
 
             # 5. Reap dangling images so the 40 GB CX22 disk doesn't fill
             # over time. Keeps the last 3 versions for quick rollback.

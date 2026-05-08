@@ -175,6 +175,7 @@ describe('materialisePendingDeletions', () => {
       scanned: 2,
       materialised: 2,
       errors: 0,
+      materialisedIds: ['u1', 'u2'],
       ranAt: now.toISOString(),
     });
     // Verify the scrub payload of the first call
@@ -213,6 +214,8 @@ describe('materialisePendingDeletions', () => {
     expect(result.errors).toBe(1);
     expect(result.materialised).toBe(1);
     expect(result.scanned).toBe(2);
+    // The successful row (u2) is captured; u1's failed update isn't.
+    expect(result.materialisedIds).toEqual(['u2']);
     errSpy.mockRestore();
   });
 
@@ -221,6 +224,7 @@ describe('materialisePendingDeletions', () => {
     const result = await materialisePendingDeletions();
     expect(result.scanned).toBe(0);
     expect(result.materialised).toBe(0);
+    expect(result.materialisedIds).toEqual([]);
     expect(updateMock).not.toHaveBeenCalled();
   });
 });
@@ -242,6 +246,7 @@ describe('purgeMaterialisedDeletions', () => {
     });
     expect(deleteMock).toHaveBeenCalledTimes(3);
     expect(result.purged).toBe(3);
+    expect(result.purgedIds).toEqual(['u1', 'u2', 'u3']);
     expect(result.threshold).toBe(expectedThreshold.toISOString());
     expect(ACCOUNT_HARD_PURGE_DAYS).toBe(30);
   });
@@ -273,6 +278,8 @@ describe('purgeMaterialisedDeletions', () => {
     expect(result.scanned).toBe(2);
     expect(result.purged).toBe(1);
     expect(result.errors).toBe(1);
+    // Only u2 succeeded; u1 failed and is excluded from purgedIds.
+    expect(result.purgedIds).toEqual(['u2']);
     errSpy.mockRestore();
   });
 });

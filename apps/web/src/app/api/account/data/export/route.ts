@@ -39,13 +39,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
   const userId = session.user.id;
 
-  // Same-origin check : Origin header is set on form POSTs in modern
-  // browsers; Referer is a fallback. Skip the check entirely if neither
-  // is present (legitimate native fetch without origin) — the auth cookie
-  // already gates this. We only reject on an active mismatch.
+  // Strict same-origin check (J10 Phase G hardening — security-auditor T1.2 +
+  // code-reviewer B3) : modern browsers ALWAYS send Origin on cross-site
+  // POSTs and same-origin POSTs to authenticated endpoints. The previous
+  // "skip if both null" lenience was OWASP-misaligned : a corp proxy that
+  // strips Origin/Referer (rare but real, esp. on enterprise WebViews) +
+  // an attacker-controlled <form action="..."> would clear the gate while
+  // SameSite=Lax STILL forwards the auth cookie on a top-level POST
+  // navigation. We now require either Origin OR Referer matching, and
+  // reject with 403 when both are absent.
   const expectedOrigin = new URL(env.AUTH_URL).origin;
   const actualOrigin = req.headers.get('origin') ?? originFromReferer(req.headers.get('referer'));
-  if (actualOrigin && actualOrigin !== expectedOrigin) {
+  if (!actualOrigin || actualOrigin !== expectedOrigin) {
     return NextResponse.json({ error: 'origin_mismatch' }, { status: 403 });
   }
 

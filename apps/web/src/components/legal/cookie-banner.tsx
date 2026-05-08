@@ -4,6 +4,8 @@ import { Cookie, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useState, useSyncExternalStore } from 'react';
 
+import { Btn } from '@/components/ui/btn';
+
 const STORAGE_KEY = 'fxmily.cookie.dismissed';
 
 /**
@@ -19,6 +21,14 @@ const STORAGE_KEY = 'fxmily.cookie.dismissed';
  * `react-hooks/set-state-in-effect` lint rule). The server snapshot returns
  * `'hidden'` so the banner never ships in the SSR markup, eliminating the
  * hydration-mismatch flash that a useEffect-based approach would cause.
+ *
+ * J10 Phase G hardening :
+ *   - DS v2 `<Btn>` for the primary action (44px touch, hatch-disabled,
+ *     hover lift, focus ring) instead of an ad-hoc `<button>` (UI designer
+ *     T2-3 + a11y B3 touch target).
+ *   - Body copy bumped from `--t-3` to `--t-2` so contrast on `--bg-3`
+ *     clears WCAG 1.4.3 AA at the 12px size (a11y B5).
+ *   - `--sh-toast` shadow token instead of magic rgba (UI designer T2-1).
  */
 export function CookieBanner(): React.ReactElement | null {
   // We keep a tiny piece of local state for the in-session dismiss-bump :
@@ -60,7 +70,7 @@ export function CookieBanner(): React.ReactElement | null {
     <div
       role="region"
       aria-label="Information cookies"
-      className="fixed inset-x-3 bottom-3 z-40 mx-auto flex max-w-2xl items-start gap-3 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-3)] p-4 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.55),0_0_0_1px_rgba(255,255,255,0.03)] sm:p-5"
+      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-2xl items-start gap-3 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-3)] p-4 shadow-[var(--sh-toast)] sm:p-5"
     >
       <span
         aria-hidden="true"
@@ -72,7 +82,7 @@ export function CookieBanner(): React.ReactElement | null {
         <p className="text-sm font-medium text-[var(--t-1)]">
           Fxmily n&apos;utilise que des cookies techniques.
         </p>
-        <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
+        <p className="mt-1 text-xs leading-relaxed text-[var(--t-2)]">
           Aucun tracker, aucun pixel publicitaire, aucune analytics tierce. Juste un cookie de
           session pour que ton login tienne.{' '}
           <Link
@@ -83,22 +93,25 @@ export function CookieBanner(): React.ReactElement | null {
           </Link>
           .
         </p>
-        <button
-          type="button"
+        <Btn
+          kind="primary"
+          size="m"
           onClick={dismiss}
-          className="mt-3 inline-flex h-9 items-center justify-center rounded-md bg-[var(--acc)] px-3 text-[12px] font-semibold text-[var(--acc-fg)] transition-colors hover:bg-[var(--acc-hi)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2"
+          className="mt-3"
+          aria-label="J'ai compris, fermer la bannière"
         >
           J&apos;ai compris
-        </button>
+        </Btn>
       </div>
-      <button
-        type="button"
+      <Btn
+        kind="ghost"
+        size="m"
         onClick={dismiss}
         aria-label="Fermer la bannière cookies"
-        className="-mr-1 grid h-9 w-9 shrink-0 place-items-center rounded-md text-[var(--t-3)] transition-colors hover:bg-[var(--bg-2)] hover:text-[var(--t-1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--acc)]"
+        className="-mr-1 h-11 w-11 shrink-0 px-0"
       >
         <X aria-hidden="true" className="h-4 w-4" />
-      </button>
+      </Btn>
     </div>
   );
 }

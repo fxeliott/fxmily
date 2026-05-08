@@ -28,10 +28,17 @@ export function LegalFooter(): React.ReactElement {
           <span aria-hidden="true">·</span>
           <span>Suivi comportemental — pas de conseil de trade.</span>
         </p>
-        <nav aria-label="Liens légaux" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {/*
+          Touch target ≥ 24×24 (WCAG 2.5.8 AA — J10 Phase G a11y B3).
+          `py-1.5` (12px vertical padding) gives ~24px hit-area on the
+          ~12px line-height links. Inline focus-ring for clarity (the
+          global `*:focus-visible` ring still applies via cascade — kept
+          here explicit for immediate intent).
+        */}
+        <nav aria-label="Liens légaux" className="flex flex-wrap items-center gap-x-1 gap-y-1">
           <Link
             href="/legal/privacy"
-            className="rounded px-1 hover:text-[var(--t-1)] focus-visible:text-[var(--t-1)]"
+            className="inline-flex min-h-6 items-center rounded px-2 py-1.5 hover:text-[var(--t-1)] focus-visible:text-[var(--t-1)]"
           >
             Confidentialité
           </Link>
@@ -40,7 +47,7 @@ export function LegalFooter(): React.ReactElement {
           </span>
           <Link
             href="/legal/terms"
-            className="rounded px-1 hover:text-[var(--t-1)] focus-visible:text-[var(--t-1)]"
+            className="inline-flex min-h-6 items-center rounded px-2 py-1.5 hover:text-[var(--t-1)] focus-visible:text-[var(--t-1)]"
           >
             CGU
           </Link>
@@ -49,7 +56,7 @@ export function LegalFooter(): React.ReactElement {
           </span>
           <Link
             href="/legal/mentions"
-            className="rounded px-1 hover:text-[var(--t-1)] focus-visible:text-[var(--t-1)]"
+            className="inline-flex min-h-6 items-center rounded px-2 py-1.5 hover:text-[var(--t-1)] focus-visible:text-[var(--t-1)]"
           >
             Mentions légales
           </Link>

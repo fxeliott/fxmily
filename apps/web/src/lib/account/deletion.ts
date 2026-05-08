@@ -160,6 +160,8 @@ export interface MaterialiseResult {
   scanned: number;
   materialised: number;
   errors: number;
+  /** IDs of users actually flipped from 'active' to 'deleted' this run. */
+  materialisedIds: string[];
   ranAt: string;
 }
 
@@ -197,7 +199,7 @@ export async function materialisePendingDeletions(
     take: batchSize,
   });
 
-  let materialised = 0;
+  const materialisedIds: string[] = [];
   let errors = 0;
   for (const u of pending) {
     try {
@@ -218,7 +220,7 @@ export async function materialisePendingDeletions(
           pushSubscription: Prisma.DbNull,
         },
       });
-      materialised += 1;
+      materialisedIds.push(u.id);
     } catch (err) {
       errors += 1;
       console.error('[account.deletion.materialise] failed for', u.id, err);
@@ -227,8 +229,9 @@ export async function materialisePendingDeletions(
 
   return {
     scanned: pending.length,
-    materialised,
+    materialised: materialisedIds.length,
     errors,
+    materialisedIds,
     ranAt: now.toISOString(),
   };
 }
@@ -237,6 +240,8 @@ export interface PurgeResult {
   scanned: number;
   purged: number;
   errors: number;
+  /** IDs of users actually hard-deleted this run (cascade triggered). */
+  purgedIds: string[];
   ranAt: string;
   threshold: string;
 }
@@ -268,12 +273,12 @@ export async function purgeMaterialisedDeletions(
     take: batchSize,
   });
 
-  let purged = 0;
+  const purgedIds: string[] = [];
   let errors = 0;
   for (const u of stale) {
     try {
       await db.user.delete({ where: { id: u.id } });
-      purged += 1;
+      purgedIds.push(u.id);
     } catch (err) {
       errors += 1;
       console.error('[account.deletion.purge] failed for', u.id, err);
@@ -282,8 +287,9 @@ export async function purgeMaterialisedDeletions(
 
   return {
     scanned: stale.length,
-    purged,
+    purged: purgedIds.length,
     errors,
+    purgedIds,
     ranAt: now.toISOString(),
     threshold: threshold.toISOString(),
   };

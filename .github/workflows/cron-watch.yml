@@ -1,0 +1,134 @@
+name: Cron Watch
+
+# J10 Phase J — external heartbeat watcher.
+#
+# Hits `/api/cron/health` every hour and opens an issue if the endpoint
+# returns 503 (at least one cron is stale or never ran). Closes the
+# auto-opened issue once the endpoint returns 200 again.
+#
+# Why GitHub Actions instead of an external SaaS (UptimeRobot, etc.) :
+#  - free quota covers the workflow comfortably (24 runs/day = 720/mo)
+#  - issue creation gives a paper trail with auto-close on resolution
+#  - no extra account to manage
+#
+# Required secrets : `CRON_SECRET` (mirrors `/etc/fxmily/web.env`) and
+# `APP_URL` repository variable (e.g. `https://app.fxmily.com`).
+
+on:
+  schedule:
+    # Every hour at :15. Random offset distributes the load against
+    # other on-the-hour workflows in the GitHub Actions free pool.
+    - cron: '15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    name: Heartbeat check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Curl health endpoint
+        id: curl
+        run: |
+          set +e
+          BODY=$(curl -fsS \
+            --max-time 30 \
+            -X POST \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Accept: application/json" \
+            "${{ vars.APP_URL || 'https://app.fxmily.com' }}/api/cron/health")
+          STATUS=$?
+          echo "status_code=$STATUS" >> "$GITHUB_OUTPUT"
+          if [ -n "$BODY" ]; then
+            echo "body<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$BODY" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$STATUS" -eq 0 ]; then
+            echo "healthy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "healthy=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+      - name: Find existing alert issue
+        id: existing
+        if: ${{ steps.curl.outputs.healthy == 'false' }}
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: ['cron-watch', 'auto-opened'],
+              per_page: 5,
+            });
+            const existing = issues.data[0];
+            core.setOutput('number', existing ? String(existing.number) : '');
+      - name: Open or update issue when red
+        if: ${{ steps.curl.outputs.healthy == 'false' }}
+        uses: actions/github-script@v8
+        env:
+          BODY: ${{ steps.curl.outputs.body }}
+        with:
+          script: |
+            const body = [
+              '## Cron heartbeat alert',
+              '',
+              'The `/api/cron/health` endpoint returned a non-2xx status. Latest report :',
+              '',
+              '```json',
+              process.env.BODY || '(no body)',
+              '```',
+              '',
+              `Run : ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              '',
+              '**Auto-opened by `.github/workflows/cron-watch.yml`. Will auto-close on next green run.**',
+            ].join('\n');
+            const number = '${{ steps.existing.outputs.number }}';
+            if (number) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: Number(number),
+                body: '_Re-fired ' + new Date().toISOString() + '._\n\n' + body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'Cron heartbeat alert — ' + new Date().toISOString().slice(0, 10),
+                labels: ['cron-watch', 'auto-opened'],
+                body,
+              });
+            }
+      - name: Close auto-opened alerts when green
+        if: ${{ steps.curl.outputs.healthy == 'true' }}
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: ['cron-watch', 'auto-opened'],
+              per_page: 50,
+            });
+            for (const issue of issues.data) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: '✅ Heartbeat green ' + new Date().toISOString() + ' — auto-closing.',
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+              });
+            }

@@ -1,0 +1,104 @@
+'use client';
+
+import { useId, useState, useTransition } from 'react';
+
+import { Btn } from '@/components/ui/btn';
+
+import { requestAccountDeletionAction } from './actions';
+
+type ActionErrorCode =
+  | 'unauthorized'
+  | 'bad_confirmation'
+  | 'already_requested'
+  | 'not_pending'
+  | null;
+
+const REQUIRED_PHRASE = 'SUPPRIMER';
+
+/**
+ * Type-to-confirm form for the destructive request action. Client island
+ * ONLY for the typed-validation feedback — the actual deletion happens
+ * server-side via the `requestAccountDeletionAction` Server Action.
+ *
+ * UX :
+ *   - Live validation : the submit button stays disabled until the user
+ *     types `SUPPRIMER` exactly (case-sensitive). Avoids the case where a
+ *     muscle-memory click on a primary button lands a 24h cancel timer
+ *     unintentionally.
+ *   - Pending state : the submit button shows a spinner during the action
+ *     so a slow network doesn't tempt the user into double-clicking.
+ *   - Error feedback : `aria-live="polite"` region; the page revalidates
+ *     on success so the parent Server Component re-renders the
+ *     "scheduled" UI without an extra round-trip.
+ */
+export function DeleteAccountForm(): React.ReactElement {
+  const [phrase, setPhrase] = useState('');
+  const [isPending, startTransition] = useTransition();
+  const [errorCode, setErrorCode] = useState<ActionErrorCode>(null);
+  const inputId = useId();
+  const errorRegionId = useId();
+
+  const isMatch = phrase === REQUIRED_PHRASE;
+
+  return (
+    <form
+      action={(formData) => {
+        setErrorCode(null);
+        startTransition(async () => {
+          const result = await requestAccountDeletionAction(formData);
+          if (!result.ok) setErrorCode(result.error);
+        });
+      }}
+      noValidate
+    >
+      <label htmlFor={inputId} className="block text-sm font-medium text-[var(--t-1)]">
+        Tape{' '}
+        <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[12px] text-[var(--t-1)]">
+          SUPPRIMER
+        </code>{' '}
+        pour confirmer
+      </label>
+      <p className="mt-1 text-[11px] text-[var(--t-3)]">
+        Une fois validée, ta demande lance un compte à rebours de 24h. Tu pourras toujours
+        l&apos;annuler depuis cette page tant que le compte à rebours n&apos;est pas écoulé.
+      </p>
+      <input
+        id={inputId}
+        name="confirmation"
+        type="text"
+        autoComplete="off"
+        spellCheck={false}
+        autoCapitalize="characters"
+        inputMode="text"
+        className="mt-3 h-11 w-full rounded-md border border-[var(--b-strong)] bg-[var(--bg-2)] px-3 font-mono text-sm tracking-widest text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:border-[var(--b-acc)] focus:outline-none focus:ring-2 focus:ring-[var(--acc)]"
+        placeholder="SUPPRIMER"
+        value={phrase}
+        onChange={(e) => {
+          setPhrase(e.target.value);
+          if (errorCode) setErrorCode(null);
+        }}
+        aria-describedby={errorRegionId}
+        disabled={isPending}
+      />
+      <div
+        id={errorRegionId}
+        role="status"
+        aria-live="polite"
+        className="mt-2 min-h-[1.25rem] text-xs text-[var(--bad)]"
+      >
+        {errorCode === 'bad_confirmation'
+          ? 'Le texte ne correspond pas. Tape `SUPPRIMER` exactement.'
+          : errorCode === 'already_requested'
+            ? 'Une demande de suppression est déjà en cours.'
+            : errorCode === 'unauthorized'
+              ? 'Session expirée — recharge la page.'
+              : null}
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Btn type="submit" kind="danger" size="l" disabled={!isMatch} loading={isPending}>
+          Demander la suppression
+        </Btn>
+      </div>
+    </form>
+  );
+}

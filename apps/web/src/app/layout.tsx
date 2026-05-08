@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { GeistSans } from 'geist/font/sans';
+import { CookieBanner } from '@/components/legal/cookie-banner';
+import { LegalFooter } from '@/components/legal/legal-footer';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import './globals.css';
 
@@ -59,7 +61,11 @@ export default function RootLayout({
       className={`${GeistSans.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="bg-background text-foreground flex min-h-full flex-col font-sans">
-        <TooltipProvider>{children}</TooltipProvider>
+        <TooltipProvider>
+          <div className="flex min-h-full flex-1 flex-col">{children}</div>
+          <LegalFooter />
+        </TooltipProvider>
+        <CookieBanner />
       </body>
     </html>
   );

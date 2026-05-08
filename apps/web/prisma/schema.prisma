@@ -166,6 +166,11 @@ model User {
   lastSeenAt DateTime? @map("last_seen_at")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
+  /// J10 — RGPD soft-delete anchor. Set when `/account/delete` Server Action
+  /// confirms (status flipped to `deleted`, PII scrubbed). Cleared on cancel
+  /// inside the 24h grace window. Hard-purged 30 days later by
+  /// `/api/cron/purge-deleted` (cascade removes all user-scoped rows).
+  deletedAt  DateTime? @map("deleted_at")
 
   // Relations
   accounts            Account[]
@@ -192,6 +197,12 @@ model User {
 
   @@index([status])
   @@index([role])
+  /// J10 — partial index for the soft-delete purge cron. Only rows where
+  /// `status = 'deleted'` satisfy the predicate; the partial index keeps it
+  /// trivially small even at 1000+ members. The actual `WHERE status =
+  /// 'deleted'` clause lives in the migration SQL (Prisma 7 doesn't expose
+  /// partial-index predicates declaratively yet).
+  @@index([status, deletedAt])
   @@map("users")
 }
 

@@ -125,36 +125,43 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
               <label htmlFor={id} className="text-foreground block text-sm font-medium">
                 {cat.label}
               </label>
-              <p className="text-muted-foreground mt-1 text-sm">{cat.description}</p>
+              <p id={`${id}-desc`} className="text-muted-foreground mt-1 text-sm">
+                {cat.description}
+              </p>
               {error !== undefined && (
-                <p role="alert" className="text-danger mt-1 text-sm">
+                <p
+                  key={`${cat.type}-${error}`}
+                  role="alert"
+                  className="mt-1 text-sm text-[var(--bad)]"
+                >
                   {error}
                 </p>
               )}
             </div>
             {/*
-             * Native checkbox styled as a switch. Touch target 44px (h-11) to
-             * match J5 / J7 patterns. role="switch" announces state correctly
-             * to screen readers (NVDA / VoiceOver / TalkBack).
+             * Native checkbox styled as a switch. Single `<label htmlFor>`
+             * association above (avoids WCAG 4.1.2 ambiguity of two labels
+             * pointing at the same input). Touch target 44px (h-11) on the
+             * <span> wrapper. Focus outline lives on the wrapper (full
+             * 44×44 hit-area), not on the 24px-tall track — so the focus
+             * outline isn't visually clipped to the track.
              */}
-            <label
-              htmlFor={id}
-              className="relative inline-flex h-11 w-11 cursor-pointer items-center justify-center"
-            >
+            <span className="relative inline-flex h-11 w-11 items-center justify-center has-[:focus-visible]:rounded-full has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--acc)]">
               <input
                 id={id}
                 type="checkbox"
                 role="switch"
                 aria-checked={enabled}
+                aria-describedby={`${id}-desc`}
                 checked={enabled}
                 onChange={(e) => handleToggle(cat.type, e.target.checked)}
-                className="peer sr-only"
+                className="peer absolute inset-0 cursor-pointer opacity-0"
               />
               <span
                 aria-hidden="true"
                 className={`relative h-6 w-11 rounded-full transition ${
-                  enabled ? 'bg-primary' : 'bg-muted/50'
-                } peer-focus-visible:ring-primary peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2`}
+                  enabled ? 'bg-primary' : 'bg-[var(--bg-2)]'
+                }`}
               >
                 <span
                   className={`bg-background absolute top-0.5 h-5 w-5 rounded-full shadow transition ${
@@ -162,7 +169,7 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
                   }`}
                 />
               </span>
-            </label>
+            </span>
           </li>
         );
       })}

@@ -9,6 +9,7 @@ import { setPreference } from '@/lib/push/preferences';
 import {
   deleteAllPushSubscriptionsForUser,
   deletePushSubscriptionByEndpoint,
+  TooManySubscriptionsError,
   upsertPushSubscription,
 } from '@/lib/push/service';
 import {
@@ -65,7 +66,18 @@ export async function subscribePushAction(rawJson: unknown): Promise<ActionResul
     return { ok: false, error: 'invalid_subscription' };
   }
 
-  const { id, created } = await upsertPushSubscription(ctx.userId, parsed.data, ctx.userAgent);
+  let id: string;
+  let created: boolean;
+  try {
+    const result = await upsertPushSubscription(ctx.userId, parsed.data, ctx.userAgent);
+    id = result.id;
+    created = result.created;
+  } catch (err) {
+    if (err instanceof TooManySubscriptionsError) {
+      return { ok: false, error: 'too_many_devices' };
+    }
+    throw err;
+  }
 
   await logAudit({
     action: created ? 'push.subscription.created' : 'push.subscription.updated',

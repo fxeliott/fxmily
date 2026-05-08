@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
         retried: result.retried,
         failed: result.failed,
         skipped: result.skipped,
+        recoveredStuck: result.recoveredStuck,
         ranAt: result.ranAt,
       },
     });

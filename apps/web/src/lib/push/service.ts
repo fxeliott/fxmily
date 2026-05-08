@@ -2,6 +2,24 @@ import 'server-only';
 
 import { db } from '@/lib/db';
 import type { PushSubscriptionInput } from '@/lib/schemas/push-subscription';
+import { safeFreeText } from '@/lib/text/safe';
+
+/**
+ * Hard cap on the number of active subscriptions per user. Prevents abuse
+ * (a malicious or buggy client spamming `subscribePushAction` with synthetic
+ * endpoints to amplify dispatcher cost). 10 covers realistic usage:
+ * 1 phone + 1 desktop + 1 tablet + replacements (Apple ITP can churn the
+ * subscription on iOS Safari). Beyond 10, the action returns
+ * `too_many_devices` and the member must `unsubscribeAllPushAction` first.
+ */
+export const MAX_SUBSCRIPTIONS_PER_USER = 10;
+
+export class TooManySubscriptionsError extends Error {
+  constructor() {
+    super('too_many_subscriptions');
+    this.name = 'TooManySubscriptionsError';
+  }
+}
 
 /**
  * Push subscription persistence layer (J9).
@@ -39,6 +57,16 @@ export type SafeSubscriptionView = {
   createdAt: string;
 };
 
+/**
+ * Sanitize a captured UA string before persistence. NFC normalize + bidi/zero-width
+ * strip (`safeFreeText`) protects against Trojan Source / log spoofing if the
+ * UA later renders in admin views. Truncated to 2048 chars.
+ */
+function sanitizeUserAgent(ua: string | null): string | null {
+  if (ua === null) return null;
+  return safeFreeText(ua).slice(0, 2048);
+}
+
 export async function upsertPushSubscription(
   userId: string,
   input: PushSubscriptionInput,
@@ -50,19 +78,26 @@ export async function upsertPushSubscription(
     select: { id: true },
   });
 
+  const cleanUa = sanitizeUserAgent(userAgent);
+
   if (existing) {
     const updated = await db.pushSubscription.update({
       where: { id: existing.id },
       data: {
         p256dhKey: input.keys.p256dh,
         authKey: input.keys.auth,
-        // Truncate UA defensively to bound the column.
-        userAgent: userAgent !== null ? userAgent.slice(0, 2048) : null,
+        userAgent: cleanUa,
         lastSeenAt: new Date(),
       },
       select: { id: true },
     });
     return { id: updated.id, created: false };
+  }
+
+  // Cap active subscriptions per user (anti-amplification of dispatcher cost).
+  const activeCount = await db.pushSubscription.count({ where: { userId } });
+  if (activeCount >= MAX_SUBSCRIPTIONS_PER_USER) {
+    throw new TooManySubscriptionsError();
   }
 
   const created = await db.pushSubscription.create({
@@ -71,7 +106,7 @@ export async function upsertPushSubscription(
       endpoint: input.endpoint,
       p256dhKey: input.keys.p256dh,
       authKey: input.keys.auth,
-      userAgent: userAgent !== null ? userAgent.slice(0, 2048) : null,
+      userAgent: cleanUa,
     },
     select: { id: true },
   });

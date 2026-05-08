@@ -269,7 +269,7 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
           <p className="text-muted-foreground mt-1 text-sm">
             {isSubscribed
               ? 'Tu reçois les notifications cochées plus bas. Tu peux les désactiver à tout moment.'
-              : "Reçois sur ton téléphone les corrections d'Eliot, les rappels de check-in, et les fiches Mark Douglas — au moment où ça sert."}
+              : "Reçois les corrections d'Eliot, les rappels de check-in, et les fiches Mark Douglas pertinentes — sans bruit superflu."}
           </p>
         </div>
         <button
@@ -280,14 +280,29 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
             });
           }}
           disabled={isPending}
+          aria-busy={isPending || undefined}
+          aria-pressed={isSubscribed}
           className="bg-primary text-primary-foreground focus-visible:ring-primary inline-flex h-11 min-w-11 items-center gap-2 rounded-md px-4 text-sm font-medium transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60"
         >
           {isPending ? '…' : isSubscribed ? 'Désactiver' : 'Activer'}
         </button>
       </div>
 
+      {/*
+       * Live region (sr-only) so screen readers announce transient progress
+       * states. Errors are also surfaced visibly via the `<p role="alert">`
+       * below — the live region focuses on the in-flight state.
+       */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {isPending
+          ? isSubscribed
+            ? 'Désactivation des notifications en cours…'
+            : 'Activation des notifications en cours…'
+          : ''}
+      </span>
+
       {error !== null && (
-        <p role="alert" className="text-danger mt-3 text-sm">
+        <p role="alert" className="mt-3 text-sm text-[var(--bad)]">
           {error}
         </p>
       )}

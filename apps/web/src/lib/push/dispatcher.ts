@@ -109,33 +109,33 @@ export function buildPayload(
     case 'annotation_received': {
       const tradeId = typeof payload.tradeId === 'string' ? payload.tradeId : '';
       title = 'Nouvelle correction reçue';
-      body = "Eliot a annoté l'un de tes trades. Ouvre pour voir.";
+      body = "Eliot a laissé une correction sur l'un de tes trades.";
       path = tradeId ? `/journal/${tradeId}` : '/journal';
       break;
     }
     case 'checkin_morning_reminder': {
       title = 'Check-in matin';
-      body = 'Trois minutes pour caler ton intention du jour.';
+      body = 'Trois minutes pour poser ton intention du jour.';
       path = '/checkin/morning';
       break;
     }
     case 'checkin_evening_reminder': {
       title = 'Check-in soir';
-      body = 'Bilan rapide : plan respecté, ressenti, gratitudes.';
+      body = 'Bilan rapide du jour : plan, ressenti, gratitude.';
       path = '/checkin/evening';
       break;
     }
     case 'douglas_card_delivered': {
       const slug = typeof payload.cardSlug === 'string' ? payload.cardSlug : '';
-      title = 'Une fiche pour maintenant';
-      body = 'Mark Douglas a quelque chose à te dire pile à propos de ce moment.';
+      title = 'Nouvelle fiche Mark Douglas';
+      body = 'Une fiche est arrivée dans ta bibliothèque, choisie selon ton activité récente.';
       path = slug ? `/library/${slug}` : '/library/inbox';
       break;
     }
     case 'weekly_report_ready': {
       const reportId = typeof payload.reportId === 'string' ? payload.reportId : '';
       title = 'Rapport hebdo prêt';
-      body = 'Le digest IA de la semaine est généré.';
+      body = 'Ton digest hebdomadaire des membres est prêt.';
       path = reportId ? `/admin/reports/${reportId}` : '/admin/reports';
       break;
     }
@@ -217,7 +217,8 @@ export function classifyError(result: SendResult, attemptsAfter: number): Result
     result.kind === 'rate_limited' ||
     result.kind === 'server_error' ||
     result.kind === 'timeout' ||
-    result.kind === 'network'
+    result.kind === 'network' ||
+    result.kind === 'promise_rejected'
   ) {
     return {
       action: 'retry',
@@ -443,13 +444,24 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
     };
   }
 
-  // Permanent failure (max retries OR gone-all OR payload-too-large).
+  // Permanent failure. Three reason taxonomies map to `decision`:
+  //  - `delete_subscription` : every endpoint returned 410 Gone — we already
+  //    deleted the rows above. The queue row is `failed` with explicit reason
+  //    so admin observability is clear (vs the misleading "unknown").
+  //  - `fail_permanent { reason: 'payload_too_large_413' | 'max_attempts_*' | 'unclassified_*' }`
+  //  - else                : truly unknown (defensive; should not reach here).
+  const failureReason =
+    decision.action === 'delete_subscription'
+      ? 'all_endpoints_gone'
+      : decision.action === 'fail_permanent'
+        ? decision.reason
+        : 'unknown';
   await db.notificationQueue.update({
     where: { id: row.id },
     data: {
       status: 'failed',
       lastErrorCode: aggregateResult.delivered === false ? aggregateResult.kind : null,
-      failureReason: decision.action === 'fail_permanent' ? decision.reason : 'unknown',
+      failureReason,
     },
   });
   await logAudit({
@@ -461,13 +473,10 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
       attempts: row.attempts,
       kind: aggregateResult.delivered === false ? aggregateResult.kind : 'unknown',
       retry: false,
-      reason: decision.action === 'fail_permanent' ? decision.reason : 'unknown',
+      reason: failureReason,
     },
   });
-  return {
-    status: 'failed',
-    reason: decision.action === 'fail_permanent' ? decision.reason : 'unknown',
-  };
+  return { status: 'failed', reason: failureReason };
 }
 
 // ── Batch entry — `dispatchAllReady()` walks the queue ─────────────────────
@@ -482,20 +491,55 @@ export type DispatchBatchResult = {
 };
 
 /**
+ * How long a row may stay in `dispatching` before we consider the dispatcher
+ * crashed/timed-out and reclaim it. 10 minutes is generous vs. our 5s per-send
+ * timeout and the worst-case Caddy 60s reverse-proxy limit.
+ */
+const STUCK_DISPATCHING_THRESHOLD_MS = 10 * 60 * 1000;
+
+/**
  * Walk the queue and dispatch every row that's "ready" (status='pending' AND
  * (nextAttemptAt is null OR nextAttemptAt <= now)). Bounded by `maxPerRun`
  * (default 200) — reverse-proxies (Caddy) typically time out at 60s, so we
  * cap to keep each cron pulse under that budget.
  *
+ * Crash recovery: before scanning, any row stuck in `dispatching` for more
+ * than 10 minutes is rolled back to `pending` (with `nextAttemptAt = now` so
+ * it gets picked up immediately). This handles process crashes / OOM kills
+ * between the atomic claim and the status update — without recovery, those
+ * rows would never be re-attempted.
+ *
  * Returns aggregate counts. Audit row `cron.dispatch_notifications.scan` is
- * emitted by the route handler with this result.
+ * emitted by the route handler with this result. The `recoveredStuck` count
+ * surfaces in the audit metadata for SLO tracking (≥1/run = signal of
+ * dispatcher instability).
  */
 export async function dispatchAllReady(
   options: { maxPerRun?: number; now?: Date } = {},
-): Promise<DispatchBatchResult> {
+): Promise<DispatchBatchResult & { recoveredStuck: number }> {
   const maxPerRun = options.maxPerRun ?? 200;
   const now = options.now ?? new Date();
   const ranAt = now.toISOString();
+
+  // Crash recovery: reclaim rows stuck in `dispatching` past the threshold.
+  const stuckBefore = new Date(now.getTime() - STUCK_DISPATCHING_THRESHOLD_MS);
+  const recovered = await db.notificationQueue.updateMany({
+    where: {
+      status: 'dispatching',
+      updatedAt: { lt: stuckBefore },
+    },
+    data: { status: 'pending', nextAttemptAt: now },
+  });
+  if (recovered.count > 0) {
+    await logAudit({
+      action: 'notification.dispatch.failed',
+      metadata: {
+        recoveredStuck: recovered.count,
+        reason: 'stuck_in_dispatching',
+        ranAt,
+      },
+    });
+  }
 
   // Read the IDs of rows ready to claim. We claim them one by one inside
   // `dispatchOne` — this preview gives us the work list.
@@ -522,5 +566,13 @@ export async function dispatchAllReady(
     else skipped += 1;
   }
 
-  return { scanned: ready.length, sent, retried, failed, skipped, ranAt };
+  return {
+    scanned: ready.length,
+    sent,
+    retried,
+    failed,
+    skipped,
+    recoveredStuck: recovered.count,
+    ranAt,
+  };
 }

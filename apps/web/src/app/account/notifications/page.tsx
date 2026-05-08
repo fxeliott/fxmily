@@ -61,7 +61,7 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
       <header className="mb-6">
         <Link
           href="/dashboard"
-          className={btnVariants({ kind: 'ghost', size: 's' })}
+          className={btnVariants({ kind: 'ghost', size: 'm' })}
           aria-label="Retour au dashboard"
         >
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />

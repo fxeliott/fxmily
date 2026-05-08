@@ -57,6 +57,9 @@ export type SendResult =
       delivered: false;
       statusCode: number | null;
       /// Machine-readable taxonomy used by the dispatcher to decide retry vs delete.
+      /// `promise_rejected` is the dispatcher's marker when `Promise.allSettled`
+      /// reports `rejected` on a per-device send (lib threw without returning a
+      /// structured `SendResult`) — treated as transient/retryable.
       kind:
         | 'gone'
         | 'payload_too_large'
@@ -64,6 +67,7 @@ export type SendResult =
         | 'server_error'
         | 'timeout'
         | 'network'
+        | 'promise_rejected'
         | 'unknown';
       message: string;
       /// `Retry-After` from the response, in seconds. Only set on 429 typically.

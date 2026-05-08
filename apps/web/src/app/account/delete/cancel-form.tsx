@@ -42,10 +42,11 @@ export function CancelDeletionForm(): React.ReactElement {
       <div role="status" aria-live="polite" className="sr-only">
         {isPending ? 'Annulation en cours…' : ''}
       </div>
+      {/* `role="alert"` for assertive failure announcement (J10 Phase I — a11y H5). */}
       <div
         id={errorRegionId}
-        role="status"
-        aria-live="polite"
+        role="alert"
+        aria-atomic="true"
         className="mt-2 min-h-[1.25rem] text-xs text-[var(--bad)]"
       >
         {errorCode === 'not_pending'

@@ -4,6 +4,7 @@ import { auth } from '@/auth';
 import { buildExportFilename, buildUserDataExport, summariseExport } from '@/lib/account/export';
 import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
+import { exportLimiter } from '@/lib/rate-limit/token-bucket';
 
 /**
  * `POST /api/account/data/export` — RGPD article 20 portability download.
@@ -38,6 +39,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const userId = session.user.id;
+
+  // Per-user rate limit (J10 Phase I — security-auditor T3.15). Burst 3,
+  // refill 1 per 15 min. Keyed by userId so a noisy session can't starve
+  // anyone else's bucket.
+  const decision = exportLimiter.consume(userId);
+  if (!decision.allowed) {
+    return NextResponse.json(
+      { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil(decision.retryAfterMs / 1000)) },
+      },
+    );
+  }
 
   // Strict same-origin check (J10 Phase G hardening — security-auditor T1.2 +
   // code-reviewer B3) : modern browsers ALWAYS send Origin on cross-site

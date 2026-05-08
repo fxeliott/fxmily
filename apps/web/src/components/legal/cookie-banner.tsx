@@ -70,7 +70,10 @@ export function CookieBanner(): React.ReactElement | null {
     <div
       role="region"
       aria-label="Information cookies"
-      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-2xl items-start gap-3 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-3)] p-4 shadow-[var(--sh-toast)] sm:p-5"
+      // `motion-safe:animate-cookie-rise` triggers a 200 ms slide+fade-in
+      // from below on first paint. `motion-safe` honours `prefers-reduced-
+      // motion` (WCAG 2.3.3). Keyframe defined in globals.css.
+      className="motion-safe:animate-cookie-rise fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-2xl items-start gap-3 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-3)] p-4 shadow-[var(--sh-toast)] sm:p-5"
     >
       <span
         aria-hidden="true"

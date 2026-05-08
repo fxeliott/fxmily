@@ -677,6 +677,23 @@
   animation: confirmFlash 700ms var(--e-data);
 }
 
+/* J10 Phase I — CookieBanner entry animation. 220 ms slide+fade-in from
+ * below. `motion-safe:` honours `prefers-reduced-motion` (WCAG 2.3.3) —
+ * AT users see the banner appear instantly. */
+@keyframes cookieRise {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-cookie-rise {
+  animation: cookieRise 220ms var(--e-smooth) both;
+}
+
 /* Row hover slide-in indicator (left edge bar lime) */
 .row-hover {
   position: relative;

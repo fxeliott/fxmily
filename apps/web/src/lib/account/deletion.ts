@@ -98,6 +98,18 @@ export interface RequestAccountDeletionResult {
  * Schedule a soft-delete : flips `deletedAt` to `now + 24h`, leaves `status`
  * at `active` so the member can still cancel inside the grace window.
  *
+ * Atomicity (J10 Phase I — code-reviewer H1) : the previous implementation
+ * was `findUnique` THEN `update`, leaving a race where two concurrent
+ * submissions of the form (double-click on slow connection) could both
+ * pass the `state.kind === 'active'` check and both `update`. Benign in
+ * practice (`deletedAt` overwrites with the same value) BUT the audit row
+ * fired twice, which polluted post-mortems. We now combine check + update
+ * via a `WHERE deletedAt IS NULL AND status='active'` predicate +
+ * `updateMany` so Prisma returns `count` ; if `count === 0` we know
+ * another request won OR the user moved out of the active state. We then
+ * fall back to `findUnique` to discriminate "already scheduled" vs
+ * "user not found" so the Server Action can render the right banner.
+ *
  * Idempotency : if a deletion is already scheduled, throws
  * `AccountDeletionAlreadyRequestedError`. Callers (Server Action) translate
  * this into a friendly UI message rather than re-extending the grace.
@@ -110,23 +122,30 @@ export async function requestAccountDeletion(
   const graceMs = options.graceMs ?? GRACE_MS;
   const scheduledAt = new Date(now.getTime() + graceMs);
 
+  // Atomic transition `(active, null) → (active, scheduledAt)`. Returns the
+  // count of rows the predicate matched.
+  const result = await db.user.updateMany({
+    where: { id: userId, status: 'active', deletedAt: null },
+    data: { deletedAt: scheduledAt },
+  });
+
+  if (result.count === 1) {
+    return { scheduledAt };
+  }
+
+  // count===0 : either the user doesn't exist, or already scheduled, or
+  // already materialised. Disambiguate with a single read.
   const existing = await db.user.findUnique({
     where: { id: userId },
     select: { status: true, deletedAt: true },
   });
   if (!existing) throw new Error(`User ${userId} not found`);
 
-  const state = deriveDeletionState(existing, now);
-  if (state.kind !== 'active') {
-    throw new AccountDeletionAlreadyRequestedError();
-  }
-
-  await db.user.update({
-    where: { id: userId },
-    data: { deletedAt: scheduledAt },
-  });
-
-  return { scheduledAt };
+  // If the row exists but the predicate didn't match, it means the user is
+  // not in the "active + null" state — every other possibility is "already
+  // requested" (scheduled in the future) or "already materialised" (deleted).
+  // Both surface as the same UI message.
+  throw new AccountDeletionAlreadyRequestedError();
 }
 
 /**

@@ -3,6 +3,7 @@
 import { useId, useState, useTransition } from 'react';
 
 import { Btn } from '@/components/ui/btn';
+import { Code } from '@/components/ui/code';
 
 import { requestAccountDeletionAction } from './actions';
 
@@ -52,11 +53,7 @@ export function DeleteAccountForm(): React.ReactElement {
       noValidate
     >
       <label htmlFor={inputId} className="block text-sm font-medium text-[var(--t-1)]">
-        Tape{' '}
-        <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[12px] text-[var(--t-1)]">
-          SUPPRIMER
-        </code>{' '}
-        pour confirmer
+        Tape <Code>SUPPRIMER</Code> pour confirmer
       </label>
       <p className="mt-1 text-[11px] text-[var(--t-3)]">
         Une fois validée, ta demande lance un compte à rebours de 24h. Tu pourras toujours
@@ -84,10 +81,16 @@ export function DeleteAccountForm(): React.ReactElement {
         aria-describedby={errorRegionId}
         disabled={isPending}
       />
+      {/*
+        `role="alert"` (J10 Phase I — a11y H5) for assertive SR announcement
+        on submission failure. `aria-live="assertive"` is implicit on alerts
+        and the right pick here because the user just clicked a destructive
+        action — they should be interrupted, not "polite".
+      */}
       <div
         id={errorRegionId}
-        role="status"
-        aria-live="polite"
+        role="alert"
+        aria-atomic="true"
         className="mt-2 min-h-[1.25rem] text-xs text-[var(--bad)]"
       >
         {errorCode === 'bad_confirmation'

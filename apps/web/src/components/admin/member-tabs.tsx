@@ -1,6 +1,12 @@
 import Link from 'next/link';
 
-export type MemberTabKey = 'overview' | 'trades' | 'checkins' | 'mark-douglas' | 'notes';
+export type MemberTabKey =
+  | 'overview'
+  | 'trades'
+  | 'checkins'
+  | 'mark-douglas'
+  | 'weekly-reports'
+  | 'notes';
 
 interface MemberTabsProps {
   memberId: string;
@@ -19,6 +25,7 @@ const TABS: readonly TabDefinition[] = [
   { key: 'trades', label: 'Trades' },
   { key: 'checkins', label: 'Check-ins' },
   { key: 'mark-douglas', label: 'Mark Douglas' },
+  { key: 'weekly-reports', label: 'Rapports IA' },
   { key: 'notes', label: 'Notes admin', comingSoon: 'J3.5' },
 ];
 

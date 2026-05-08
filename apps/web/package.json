@@ -21,6 +21,7 @@
     "prisma:format": "prisma format"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.1",
     "@auth/prisma-adapter": "^2.11.2",
     "@hookform/resolvers": "^5.2.2",
     "@node-rs/argon2": "^2.0.2",

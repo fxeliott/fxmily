@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus, Users } from 'lucide-react';
+import { ArrowLeft, Plus, Sparkles, Users } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -59,10 +59,16 @@ export default async function AdminMembersPage() {
             </h1>
           </div>
 
-          <Link href="/admin/invite" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
-            <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-            Inviter un membre
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/admin/reports" className={cn(btnVariants({ kind: 'ghost', size: 'm' }))}>
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Rapports IA
+            </Link>
+            <Link href="/admin/invite" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
+              <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Inviter un membre
+            </Link>
+          </div>
         </div>
 
         {/* Top stats strip */}

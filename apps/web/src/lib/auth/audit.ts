@@ -62,7 +62,19 @@ export type AuditAction =
   | 'weekly_report.email.skipped'
   | 'admin.weekly_report.viewed'
   | 'cron.weekly_reports.scan'
-  | 'cron.weekly_reports.batch_done';
+  | 'cron.weekly_reports.batch_done'
+  // J9 — Web Push notifications (VAPID + Service Worker + dispatcher)
+  | 'push.subscription.created'
+  | 'push.subscription.updated'
+  | 'push.subscription.deleted'
+  | 'push.permission.granted'
+  | 'push.permission.denied'
+  | 'push.preference.toggled'
+  | 'notification.dispatched'
+  | 'notification.dispatch.failed'
+  | 'notification.dispatch.skipped'
+  | 'notification.fallback.emailed'
+  | 'cron.dispatch_notifications.scan';
 
 export interface LogAuditParams {
   action: AuditAction;

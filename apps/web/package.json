@@ -48,6 +48,7 @@
     "remark-gfm": "^4.0.1",
     "resend": "^6.12.2",
     "tailwind-merge": "^3.5.0",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -60,6 +61,7 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9.18.0",
     "eslint-config-next": "16.2.4",

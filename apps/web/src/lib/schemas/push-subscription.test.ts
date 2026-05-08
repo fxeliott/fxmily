@@ -116,9 +116,49 @@ describe('pushSubscriptionInputSchema', () => {
   it('rejects endpoint > 2048 chars (RAM DoS guard)', () => {
     const r = pushSubscriptionInputSchema.safeParse({
       ...VALID_INPUT,
-      endpoint: 'https://example.com/' + 'a'.repeat(2050),
+      endpoint: 'https://wns2.notify.windows.com/' + 'a'.repeat(2050),
     });
     expect(r.success).toBe(false);
+  });
+
+  it('rejects http (not https) endpoint — allowlist denies plain HTTP', () => {
+    const r = pushSubscriptionInputSchema.safeParse({
+      ...VALID_INPUT,
+      endpoint: 'http://fcm.googleapis.com/fcm/send/abc',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects untrusted host (anti-SSRF amplifier — example.com)', () => {
+    const r = pushSubscriptionInputSchema.safeParse({
+      ...VALID_INPUT,
+      endpoint: 'https://example.com/some/endpoint',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects internal AWS metadata IP (anti-SSRF)', () => {
+    const r = pushSubscriptionInputSchema.safeParse({
+      ...VALID_INPUT,
+      endpoint: 'https://169.254.169.254/latest/meta-data/',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects localhost endpoint (anti-SSRF)', () => {
+    const r = pushSubscriptionInputSchema.safeParse({
+      ...VALID_INPUT,
+      endpoint: 'https://localhost/some/path',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('accepts Microsoft WNS sharded subdomain (wns2-by3p)', () => {
+    const r = pushSubscriptionInputSchema.safeParse({
+      ...VALID_INPUT,
+      endpoint: 'https://wns2-by3p.notify.windows.com/wns/some-path',
+    });
+    expect(r.success).toBe(true);
   });
 
   it('rejects unknown extra keys (`.strict()` guards prompt-injection-shape exfil)', () => {

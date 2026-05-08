@@ -51,7 +51,11 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
   // server-side key — both should match when deployed correctly. Empty string
   // signals "not configured" to the client island, which renders a friendly
   // disabled state.
-  const vapidPublicKey = env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? env.VAPID_PUBLIC_KEY ?? '';
+  // Use the client mirror exclusively. J9 hardening E2: env-level cross-var
+  // refine guarantees NEXT_PUBLIC_VAPID_PUBLIC_KEY is present AND matches
+  // VAPID_PUBLIC_KEY whenever the latter is set. No server-key fallback (that
+  // would leak through SSR markup; the public mirror is mandatory).
+  const vapidPublicKey = env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
   const isConfigured = vapidPublicKey.length > 0;
 
   return (

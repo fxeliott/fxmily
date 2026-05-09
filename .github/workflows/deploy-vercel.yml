@@ -25,6 +25,9 @@ name: Deploy (Vercel zero-cost path)
 # Prisma migrations run via the `pre-build` hook below.
 
 on:
+  # J10 Phase O fix B1 : path A/B mutually exclusive. See deploy.yml for
+  # the rationale. Set `vars.DEPLOY_PATH=vercel` on the repo to activate
+  # the Vercel path, or use manual `workflow_dispatch`.
   push:
     branches: [main]
     paths-ignore:
@@ -49,6 +52,8 @@ permissions:
 jobs:
   deploy:
     name: Vercel deploy
+    # J10 Phase O fix B1 : guard against parallel-running deploy.yml.
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.DEPLOY_PATH == 'vercel' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:

@@ -31,8 +31,25 @@
 set -euo pipefail
 
 readonly REPO="${FXMILY_REPO:-fxeliott/fxmily}"
-readonly REQUIRED_SECRETS=(HETZNER_HOST HETZNER_SSH_KEY SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT CRON_SECRET)
-readonly REQUIRED_VARIABLES=(APP_URL)
+
+# J10 Phase O fix H4 : two-path support. Path A (Hetzner) and Path B
+# (Vercel) need different secret sets. The script reads `DEPLOY_PATH`
+# from the env file (`hetzner` | `vercel` | `both`) and picks the
+# right list. `both` posts every secret — useful for keeping the repo
+# ready to switch paths without re-running the script.
+readonly PATH_A_SECRETS=(HETZNER_HOST HETZNER_SSH_KEY)
+readonly PATH_B_SECRETS=(
+  VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID
+  DATABASE_URL AUTH_SECRET
+  RESEND_API_KEY RESEND_FROM
+  VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY NEXT_PUBLIC_VAPID_PUBLIC_KEY VAPID_SUBJECT
+)
+readonly SHARED_SECRETS=(
+  CRON_SECRET
+  SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT
+  SENTRY_DSN NEXT_PUBLIC_SENTRY_DSN
+)
+readonly REQUIRED_VARIABLES=(APP_URL DEPLOY_PATH)
 
 usage() {
   echo "usage: $(basename "$0") <secrets.local.env>" >&2
@@ -89,7 +106,20 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   KV["$key"]="$val"
 done < "$ENV_FILE"
 
-# ---- 4. Set secrets --------------------------------------------------------
+# ---- 4. Determine which secret set to post --------------------------------
+DEPLOY_PATH="${KV[DEPLOY_PATH]:-${FXMILY_DEPLOY_PATH:-hetzner}}"
+case "$DEPLOY_PATH" in
+  hetzner) REQUIRED_SECRETS=("${PATH_A_SECRETS[@]}" "${SHARED_SECRETS[@]}") ;;
+  vercel)  REQUIRED_SECRETS=("${PATH_B_SECRETS[@]}" "${SHARED_SECRETS[@]}") ;;
+  both)    REQUIRED_SECRETS=("${PATH_A_SECRETS[@]}" "${PATH_B_SECRETS[@]}" "${SHARED_SECRETS[@]}") ;;
+  *)
+    echo "error: DEPLOY_PATH must be one of: hetzner|vercel|both (got '$DEPLOY_PATH')" >&2
+    exit 2
+    ;;
+esac
+echo "→ Path : $DEPLOY_PATH (${#REQUIRED_SECRETS[@]} secrets to post)"
+
+# ---- 5. Set secrets --------------------------------------------------------
 posted_secrets=()
 for secret in "${REQUIRED_SECRETS[@]}"; do
   if [[ -z "${KV[$secret]:-}" ]]; then
@@ -101,7 +131,7 @@ for secret in "${REQUIRED_SECRETS[@]}"; do
   echo "  ✓ secret : $secret"
 done
 
-# ---- 5. Set repository variables -------------------------------------------
+# ---- 6. Set repository variables -------------------------------------------
 posted_variables=()
 for var in "${REQUIRED_VARIABLES[@]}"; do
   if [[ -z "${KV[$var]:-}" ]]; then
@@ -113,7 +143,7 @@ for var in "${REQUIRED_VARIABLES[@]}"; do
   echo "  ✓ variable : $var"
 done
 
-# ---- 6. Summary ------------------------------------------------------------
+# ---- 7. Summary ------------------------------------------------------------
 echo
 echo "Done. ${#posted_secrets[@]} secrets + ${#posted_variables[@]} variables posted to $REPO."
 echo

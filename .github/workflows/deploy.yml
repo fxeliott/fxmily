@@ -31,6 +31,13 @@ name: Deploy
 # the Hetzner SSH script.
 
 on:
+  # J10 Phase O fix B1 : path A/B mutually exclusive. The Hetzner deploy
+  # only triggers if `vars.DEPLOY_PATH == 'hetzner'` is set on the repo
+  # (Settings → Variables → Actions). Otherwise we fall back to manual
+  # `workflow_dispatch`. Without this gate, both deploy.yml and
+  # deploy-vercel.yml fired in parallel on every push to main → double
+  # `prisma migrate deploy` against two distinct DBs OR one path's
+  # secrets missing → permanent CI red.
   push:
     branches: [main]
     paths-ignore:
@@ -52,6 +59,11 @@ permissions:
 jobs:
   build-and-push:
     name: Build and push Docker image
+    # J10 Phase O fix B1 : guard against parallel-running deploy-vercel.yml.
+    # Set `DEPLOY_PATH=hetzner` on the repo Variables to enable this path,
+    # `DEPLOY_PATH=vercel` to enable the Vercel path, or leave unset and
+    # use `workflow_dispatch` to run on demand.
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.DEPLOY_PATH == 'hetzner' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:

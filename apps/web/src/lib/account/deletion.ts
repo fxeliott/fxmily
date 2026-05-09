@@ -152,27 +152,51 @@ export async function requestAccountDeletion(
  * Cancel a scheduled deletion. Only valid while `status='active'` AND
  * `deletedAt` is in the future. Once the cron has materialised the deletion
  * (status='deleted'), cancellation requires Eliot intervention via support.
+ *
+ * Atomicity (J10 Phase L review B2 — race fix to mirror `requestAccountDeletion`
+ * Phase I H1) : the previous `findUnique` + `update` combo opened a race
+ * window between the user clicking "annuler" and the cron flipping
+ * `status='deleted'` mid-flight. Single `updateMany` with the full
+ * predicate `(status='active', deletedAt > now)` makes the transition
+ * atomic ; `count===0` means the cron won (or the row never had a
+ * deletion scheduled).
  */
 export async function cancelAccountDeletion(
   userId: string,
   options: { now?: Date } = {},
 ): Promise<void> {
   const now = options.now ?? new Date();
-  const existing = await db.user.findUnique({
-    where: { id: userId },
-    select: { status: true, deletedAt: true },
-  });
-  if (!existing) throw new Error(`User ${userId} not found`);
 
-  const state = deriveDeletionState(existing, now);
-  if (state.kind !== 'scheduled') {
-    throw new AccountDeletionNotPendingError();
-  }
-
-  await db.user.update({
-    where: { id: userId },
+  // Predicate semantic — `status='active'` (the cron hasn't yet flipped
+  // the row to 'deleted') AND `deletedAt IS NOT NULL` (a deletion is
+  // actually scheduled). We do NOT add `gt: now` here : once the grace
+  // window has passed but BEFORE the cron has materialised, the user
+  // still has a legitimate cancel right (no actual destruction has
+  // happened yet). If the cron has run, `status` is already 'deleted'
+  // and the predicate misses → we throw `NotPending` and tell them to
+  // contact Eliot for a manual restore (within the 30d window).
+  // The `now` parameter is kept for API symmetry with `requestAccountDeletion`
+  // — used only by the disambiguation read below if needed.
+  void now;
+  const result = await db.user.updateMany({
+    where: {
+      id: userId,
+      status: 'active',
+      deletedAt: { not: null },
+    },
     data: { deletedAt: null },
   });
+
+  if (result.count === 1) return;
+
+  // count===0 — disambiguate "not pending" vs "user not found" so the
+  // Server Action can render the right message.
+  const existing = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!existing) throw new Error(`User ${userId} not found`);
+  throw new AccountDeletionNotPendingError();
 }
 
 export interface MaterialiseResult {

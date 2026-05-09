@@ -17,7 +17,11 @@ import { ImageResponse } from 'next/og';
  * The render uses pure CSS so the bundle stays minimal.
  */
 
-export const runtime = 'edge';
+// J10 Phase L review H8 : `runtime = 'nodejs'` (default) on a self-hosted
+// standalone Next 16 build avoids the Edge worker simulation that may
+// fail to trace `@vercel/og` in `output: 'standalone'`. Penalty ~15 ms
+// cold start, negligible for a cached PWA icon.
+export const runtime = 'nodejs';
 export const size = { width: 180, height: 180 };
 export const contentType = 'image/png';
 

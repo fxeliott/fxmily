@@ -119,8 +119,10 @@ jobs:
             # 1. Auth GHCR using the deploy-keyed token (mounted at
             # `/etc/fxmily/ghcr.token` mode 0600 owner fxmily, populated
             # once during initial provisioning).
+            # J10 Phase L review B1 fix : use the workflow's repository_owner
+            # so a fork/transfer doesn't break the pull silently.
             cat /etc/fxmily/ghcr.token | docker login ghcr.io \
-              -u fxeliott --password-stdin
+              -u ${{ github.repository_owner }} --password-stdin
 
             # 2. Pull the freshly-published image (SHA tag pinned for
             # observability ; `latest` is also updated by the build job).

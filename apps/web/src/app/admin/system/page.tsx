@@ -35,7 +35,12 @@ export const dynamic = 'force-dynamic';
 
 export default async function AdminSystemPage(): Promise<React.ReactElement> {
   const session = await auth();
-  if (!session?.user || session.user.role !== 'admin') {
+  // J10 Phase L review H3 : align with every other admin gate
+  // (cards/page.tsx, members/page.tsx, …) — admins whose status flipped
+  // to 'deleted' still hold a valid JWT for up to 30d ; locking on
+  // `status === 'active'` prevents a soft-deleted admin from peeking
+  // at observability data they no longer have a right to.
+  if (!session?.user || session.user.role !== 'admin' || session.user.status !== 'active') {
     redirect('/login?redirect=/admin/system');
   }
 

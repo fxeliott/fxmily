@@ -123,8 +123,8 @@ run the following Node one-shot on the host (DATABASE_URL pointing at prod):
 sudo -u fxmily /usr/local/bin/fxmily-recompute-asof 2026-05-01
 ```
 
-Where `fxmily-recompute-asof` is a small script (TODO: ship in J7 or J6.5
-addendum) that calls `recomputeAllActiveMembers(new Date('2026-05-01...'))`
+Where `fxmily-recompute-asof` is a small script (TODO V2 — backfill DR-only,
+not shipped V1) that calls `recomputeAllActiveMembers(new Date('2026-05-01...'))`
 in-process. The cron route's `?at=ISO` debug knob is intentionally
 double-gated against prod (`NODE_ENV !== 'production'` AND
 `AUTH_URL !== 'https://...'`).
@@ -133,7 +133,8 @@ double-gated against prod (`NODE_ENV !== 'production'` AND
 
 - **Per-run heartbeat**: `audit_logs` row `cron.recompute_scores.scan`.
 - **Per-user errors**: `console.error('[scoring] recompute failed:', err)` in
-  the service — Sentry will pick those up once wired (J10).
+  the service — Sentry captures them via `instrumentation.ts onRequestError`
+  and `reportError()` helper (câblé J10 Phase B, commit `ba026e0`).
 - **Latency budget**: at 30 active members × 4 dimensions × 30-day window,
   one run takes ≈1–3s on a CX22. Bump to a CX32 if it grows past 10s
   (a sustained recompute cost > 0.1% of a CX22 wall-clock month is a smell).
@@ -160,9 +161,21 @@ mismatched secrets just produce 401s in the cron log until both ends agree.
 | `computed` count drops to 0     | All members suspended/deleted   | Check `users.status` distribution                         |
 | Cron fires but no row updated   | DB lock / transaction abort     | Check Postgres logs, may need pg_isready check before run |
 
-## J6.5+ TODO
+## V2 TODO (post-V1)
 
-- Wire Sentry breadcrumb on the cron handler so partial failures (some users
-  succeed, some fail) surface without trawling the audit log.
-- Add Prometheus / Grafana counter for `computed` / `errors` (J10 monitoring).
-- Backfill script `fxmily-recompute-asof` (currently a TODO above).
+- Add Prometheus / Grafana counter for `computed` / `errors` (au-delà de
+  l'observability `/admin/system` + cron-watch GH Actions livrée J10
+  Phase J).
+- Backfill script `fxmily-recompute-asof` (currently a TODO above) — pour
+  DR / replay scenarios uniquement.
+
+## ✅ Câblé J10
+
+- Sentry capture côté serveur via `instrumentation.ts` + `reportError()`
+  helper (Phase B, commit `ba026e0`).
+- `flushSentry(2000)` appelé dans 7 cron catches avant return (Phase J
+  round 3, commit `f5ba4a9`).
+- `/admin/system` cohort snapshot + per-cron heartbeat status pill
+  (Phase J observability, commit `4d9381c`).
+- `cron-watch.yml` scheduled hourly, auto-issue si red, auto-close si
+  green (Phase J observability).

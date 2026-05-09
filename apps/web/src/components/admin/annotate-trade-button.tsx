@@ -129,7 +129,7 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               maxLength={ANNOTATION_COMMENT_MAX + 256 /* let server enforce hard cap */}
-              placeholder="Ex. Plan respecté à 100%, mais entrée à contre-tendance — revois le check de structure avant le tap."
+              placeholder="Ex. R:R 1:2 prévu, mais sizing doublé après 2 wins — attention au pattern over-confidence (cf. fiche Douglas « arrogance précède la chute »)."
               className="rounded-card resize-y border border-[var(--b-default)] bg-[var(--bg)] px-3 py-2.5 font-sans text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
               aria-invalid={state?.fieldErrors?.comment ? 'true' : undefined}
             />

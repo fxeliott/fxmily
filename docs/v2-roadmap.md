@@ -19,25 +19,54 @@ patterns d'usage, écouter les retours des premiers membres réels.
 
 ## J10.5+ — Polish post-V1 (1-2 semaines, rolling)
 
-Items reclassés des audits J10 (Phase G) qui ne bloquaient pas SPEC §15 J10
-mais valent la peine d'être traités avant que la cohorte grandisse :
+> **Update 2026-05-09 — Phase P close-out.** Plusieurs items initialement
+> listés ici ont été ramenés dans J10 par les Phases I → P. La liste
+> ci-dessous reflète **uniquement** ce qui reste réellement ouvert post-V1.
+> Voir `apps/web/CLAUDE.md` §J10 Phases L→P pour le détail des items
+> promus.
 
-- **Rate-limit `/api/account/data/export`** par userId (token bucket per
-  user) — anti-spam DB load à 1000+ membres.
-- **Rate-limit `/monitoring` Sentry tunnel** — DoS du quota free 5000
-  errors/mois.
-- **Atomic update `requestAccountDeletion`** (`UPDATE WHERE deletedAt IS
-NULL` au lieu de `findUnique` + `update` séparés) — race-free.
-- **Skip-link global** `<a href="#main">` + `id="main"` sur `<main>` —
-  WCAG 2.4.1.
-- **`<Code>` component** extracted (3 endroits dupliquent les mêmes classes).
-- **`role="alert"`** au lieu de `role="status"` pour les error regions
-  (assertive plus appropriée).
-- **CookieBanner transition** d'apparition (opacity 200ms `--e-smooth`).
+**Items réellement ouverts post-V1** :
+
 - **CSP nonces** — passer de `'unsafe-inline'` à un nonce-based strict CSP.
-  Refactor `proxy.ts` pour générer un nonce par requête + `headers()` côté
-  layouts.
+  Refactor `proxy.ts` (edge runtime) pour générer un nonce par requête +
+  `headers()` côté layouts. Reclassé V2 post-Phase O (refactor non-trivial,
+  pas urgent en l'absence d'XSS connue).
+- **JWT `tokenVersion` révocation immédiate** — actuellement un user
+  suspended/deleted garde un JWT valide jusqu'à `maxAge` 30j (la Phase P
+  status gate global force re-login mais c'est une protection edge
+  middleware uniquement). `tokenVersion: Int` sur `User` + comparaison
+  dans le `session()` callback fait que logout/password-reset incrémente
+  la version → tous les JWTs précédents invalidés instantanément.
+- **Login rate-limit credential-stuffing** — `/api/auth/callback/credentials`
+  - Server Action `signInAction` pas rate-limités. À ajouter
+    `loginLimiter = new TokenBucketLimiter({ bucketSize: 5, refillRate:
+1/60 })` keyé sur `email.toLowerCase()` ET `callerId(req)` AVANT le
+    `signIn()` argon2 (~150 ms par check).
+- **`auditLog` retention 90j** — table peut dominer write IOPS sur Hetzner
+  CX22 (4 GB box) à >1000 membres × ~5 notifs/j × ~3 audit rows. Cron
+  `cron.purge_audit_log` aligné sur `purge-deleted` pattern.
+- **Service Worker offline strategy** — `public/sw.js` est push-only. Si
+  on veut promettre "offline-first" PWA dans le marketing, ajouter un
+  fetch handler avec workbox/strategy.
+- **`listMemberTradesAsAdmin` cursor pagination** — `take: 100` cap silent
+  data loss past 100 trades. OK pour V1 30-membres mais à câbler avant
+  cohorte 100+.
 - **Annual DR test** documenté + automatisé (RTO objectif < 24h).
+
+**Items déjà livrés J10 Phases I → P** (ne plus les listr ici) :
+
+- ✅ Atomic `requestAccountDeletion` + `cancelAccountDeletion` (Phase I + L).
+- ✅ Per-user rate-limit `/api/account/data/export` (Phase I).
+- ✅ `sentryTunnelLimiter` exporté + documenté (Phase I — wiring V2).
+- ✅ Skip-link global `#main-content` (Phase I).
+- ✅ `<Code>` component extracted (Phase I).
+- ✅ `role="alert"` form error regions (Phase I).
+- ✅ CookieBanner entry transition (Phase I).
+- ✅ Hierarchy h2 legal pages (Phase I).
+- ✅ EmptyState/ErrorState `headingLevel` prop (Phase P).
+- ✅ Schemas sanitization bidi/zero-width auth+trade+annotation (Phase P).
+- ✅ Auth status='active' gate global proxy (Phase P).
+- ✅ `app/global-error.tsx` Next 16 root-layout catch (Phase P).
 
 ## V2 — features (selon priorité Eliot)
 

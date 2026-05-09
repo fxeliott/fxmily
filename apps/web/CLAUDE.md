@@ -7,7 +7,7 @@
 
 Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — front + API + service worker (PWA, Jalon 9).
 
-État au 2026-05-07 : **J0 + J1 + J2 + J3 + J4 + J5 + J6 livrés** (J6 = dashboard membre + scoring comportemental + cron nightly + patterns émotion×perf).
+État au 2026-05-09 : **J0 → J10 livrés** (Phases A → P). Branche `claude/j10-prod-deploy` HEAD `0588d12`, 18 commits granulaires, [PR #35](https://github.com/fxeliott/fxmily/pull/35) ouverte avec CI verte. **Smoke prod end-to-end** bloqué par 7 pré-requis externes Eliot — voir §J10 plus bas + `docs/runbook-prod-smoke-test.md`.
 
 ## Aliases d'import
 
@@ -128,7 +128,7 @@ Si une intégration externe ou un script CLI demande une API REST, ajouter une r
 
 Wired dans `next.config.ts` `headers()` (réponse à toute route via `source: '/:path*'`) :
 
-- `Content-Security-Policy` — baseline J1 (default-src 'self', script-src 'self' 'unsafe-inline' [+ 'unsafe-eval' en dev], style-src 'self' 'unsafe-inline', frame-ancestors 'none', form-action 'self', base-uri 'self', upgrade-insecure-requests prod-only). **TODO J10** : remplacer `'unsafe-inline'` par nonces générés dans `proxy.ts`.
+- `Content-Security-Policy` — baseline J1 (default-src 'self', script-src 'self' 'unsafe-inline' [+ 'unsafe-eval' en dev], style-src 'self' 'unsafe-inline', frame-ancestors 'none', form-action 'self', base-uri 'self', upgrade-insecure-requests prod-only). **TODO V2** : remplacer `'unsafe-inline'` par nonces générés dans `proxy.ts` (reclassé V2 post-J10 audit Phase O — refactor non-trivial du proxy edge runtime).
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: strict-origin-when-cross-origin`
@@ -136,16 +136,21 @@ Wired dans `next.config.ts` `headers()` (réponse à toute route via `source: '/
 - `Cross-Origin-Opener-Policy: same-origin`
 - `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` (prod uniquement)
 
-## Theme (Tailwind 4)
+## Theme (Tailwind 4) — DS-v2 (palette pivot Sprint #1, lime + Geist + Mercury shadows)
 
-Variables CSS dans `src/app/globals.css` (palette SPEC §8.1). Mode sombre uniquement V1.
+Variables CSS dans `src/app/globals.css`. Mode sombre uniquement V1.
 
-- `--background: #0a0e1a` / `--foreground: #e8ecf4`
-- `--primary: #2563eb` / `--accent: #3b82f6`
-- `--muted: #94a3b8` (bumpé depuis #64748b pour WCAG AA contrast)
-- Border `rgba(99, 102, 241, 0.15)`
-- `@layer base` pour les resets globaux
-- `@media (prefers-reduced-motion: reduce)` actif
+- **Deep-space backgrounds** : `--bg`, `--bg-2`, `--bg-3` (du plus sombre au moins).
+- **Text tokens tone-aware** : `--t-1`, `--t-2`, `--t-3`, `--t-4` (du plus contrasté au plus muté ; tous WCAG AA-validés).
+- **Lime accent** : `--acc`, `--acc-hi` (hover), `--acc-dim` / `--acc-dim-2` (halos), `--acc-fg` (foreground sur fond lime).
+- **Sémantique** : `--bad`, `--bad-dim`, `--cy` (info), `--cy-dim`.
+- **Borders** : `--b-default`, `--b-strong`, `--b-acc`, `--b-danger`.
+- **Typo** : `Geist` (sans + mono), tailles `t-h1`, `t-h2`, `t-body`, `t-cap`.
+- **Mercury shadows** : `--sh-btn-pri`, `--sh-btn-pri-hover`, `--sh-tooltip`, `--sh-toast`.
+- **Curves** : `--e-smooth` (220ms ease-out), `--e-spring`.
+- `@layer base` pour les resets globaux + `@media (prefers-reduced-motion: reduce)` actif.
+
+> Note historique : la palette SPEC §8.1 (bleu `#2563eb`/`#0a0e1a`) a été remplacée par DS-v2 lime/deep-space pendant le Sprint #1 (handoff Claude Design 2026-05-06). Validée visuellement par Eliot. Voir SPEC §20.1 pivot row "Palette".
 
 ## Conventions composants
 
@@ -1516,6 +1521,88 @@ Auth.js v5 — directement exposé. Patch line, zero breaking change.
 ### Commit chain final J10 (9 commits)
 
 ```
+ded91dd feat(j10): Phase K — semantic audit fix + health.ts tests + Apple Touch Icons
+4d9381c feat(j10): observability prod — /admin/system + cron-watch workflow
+f5ba4a9 fix(j10): CVE patch Next 16.2.6 + perf wins + +47 tests (round 3)
+f2187af perf(j10): promote J10.5+ items + Eliot ops automation scripts
+768ade2 docs(j10): close-out CLAUDE.md J10 + v2-roadmap
+14b51c2 perf(j10): audit-driven hardening — 5 BLOCKERs + 7 HIGH closed
+7cf22f9 perf(j10): Hetzner Docker prod stack + Caddyfile + cron systemd
+ba026e0 feat(j10): Sentry integration + reportError helper + 7 cron catches
+f0bae30 feat(j10): RGPD foundation + soft-delete + cron purge
+```
+
+## J10 — Phases L + M + N + O + P (post-K extension, livré 2026-05-09)
+
+8 commits supplémentaires sur `claude/j10-prod-deploy` après le close-out Phase K. Ce close-out documente Phases L → P (étendant le commit chain final à 18 commits).
+
+### Phase L — `/account` hub + error pages + final review fixes (`e845cf4` + `2e81eb3`)
+
+- **`/account` hub** Server Component : cards links vers `/account/notifications`, `/account/data`, `/account/delete` avec deletion-state aware tone (warn pill si scheduled).
+- **`app/error.tsx`** : route-error boundary (catches sous root layout) avec digest ID + retry/home + lazy Sentry.
+- **`app/not-found.tsx`** : 404 sober + lien retour dashboard/login selon auth state.
+- **Atomic `cancelAccountDeletion`** : `updateMany WHERE status='active' AND deletedAt IS NOT NULL` collapse check+update en single op race-safe.
+- **`pose-github-secrets.sh`** automation : lit `tokens.local.env`, pose tous les secrets via `gh secret set` (allowlist DEPLOY_PATH=hetzner|vercel|both).
+- **`docs/eliot-prerequisites.md`** : checklist pré-deploy mise à jour 2026-05-09.
+
+### Phase M — Mega automation Cloudflare/Resend/bootstrap (`2ddf48f`)
+
+- **`ops/scripts/cloudflare-dns-setup.sh`** : pose A `app` → Hetzner IP + MX Resend + 3 TXT SPF/DKIM/DMARC via Cloudflare API.
+- **`ops/scripts/resend-domain-add.sh`** : add domain `fxmily.com` + récupère les 3 DNS records DKIM/SPF.
+- **`ops/scripts/bootstrap-fxmily.sh`** : orchestrator chain → provision-hetzner → resend-domain-add → cloudflare-dns-setup → pose-github-secrets.
+- Réduit l'effort manuel Eliot ~2h → ~30 min côté setup. Les pré-requis externes (compte Hetzner, achat `fxmily.com`, compte Resend) restent côté Eliot.
+
+### Phase N — Zero-cost deployment path (Vercel + Neon + GH Actions) (`cd7e623` + `a0a9b86`)
+
+Alternative gratuite à Hetzner pour respecter "pas de coût supplémentaire" (Eliot constraint) :
+
+- **`.github/workflows/deploy-vercel.yml`** : Vercel Hobby free tier (~100 GB bw, 100 h compute) + Neon (Postgres serverless gratuit 0.5 GB) + GH Actions cron (5-min schedule pour bypass cron Hetzner).
+- **`docs/zero-cost-deployment.md`** : guide complet 4-paths comparison + non-commercial use clause warning.
+- **Switch Hetzner ↔ Vercel** mutuellement exclusif via `vars.DEPLOY_PATH=hetzner|vercel` repo variable.
+
+### Phase O — 3 BLOCKERs cross-file (`bfd43c5`) + Phase O fix-up format (`81d3fc5`)
+
+Audit multi-subagent rounds 4 & 5 :
+
+- **B1** : `deploy.yml` ET `deploy-vercel.yml` triggeraient en parallèle sur push main. Fix : `if: vars.DEPLOY_PATH == 'hetzner'|'vercel'` mutuellement exclusif.
+- **B2** : commentaire `proxy.ts` mentionnait que `sentryTunnelLimiter` était wired sur `/monitoring`, FAUX (tunnel route auto-générée par Sentry plugin, pas de hook). Commentaire corrigé, limiter export gardé comme stub V2.
+- **B3** : `getCronHealthReport` devait inclure `cron.health.scan` (self-monitoring du watcher). 8e expectation ajoutée + tests adaptés.
+- **H4** : `pose-github-secrets.sh` restructuré PATH_A_SECRETS (Hetzner) / PATH_B_SECRETS (Vercel) / SHARED_SECRETS pour éviter les drifts.
+- **Format fix-up** : `prettier --write docs/runbook-prod-smoke-test.md` (CI format check unblock — 2 markdown indentation drifts).
+
+### Phase P — 6 BLOCKERs from 6-subagent ultra-deep audit (`0588d12`)
+
+6 audits parallèles (verifier + perf-profiler + ui-designer + doc-writer + content-checker + researcher SPEC + researcher hygiene). 6 BLOCKERs cross-cutting que les audits per-jalon avaient laissés filer :
+
+- **T1.1 — Auth status gate global** : `auth.config.ts` `authorized()` short-circuit `auth.user.status !== 'active'` AVANT per-route gates. Defense-in-depth contre user soft-deleted/suspended gardant un JWT valide 30j.
+- **T1.2 — Schema sanitization** : `nameSchema` (auth), `notesSchema` (trade), `commentSchema` (annotation), `emailSchema` ajoutés `.refine(!containsBidiOrZeroWidth)` + `.transform(safeFreeText)`. Trojan-Source vector neutralisé sur admin trade view, weekly Claude IA prompt input, dashboard greeting.
+- **T1.3 — `app/global-error.tsx`** : Next 16 root-layout catch (catches errors DANS `app/layout.tsx` que `app/error.tsx` ne peut pas attraper). Own `<html>`/`<body>` + inline styles + lazy Sentry import.
+- **WCAG B1 — `delete-button.tsx`** : touch target text-xs ~16px → `min-h-6 + py-1.5` (≥24×24 WCAG 2.5.8 AA).
+- **WCAG B2 — `<Link><Btn>` nesting** : `welcome/page.tsx` + `admin/members/page.tsx` switchés `<Link className={btnVariants(...)}>` (single `<a>`, pattern existant dans repo).
+- **WCAG B3 — `EmptyState` / `ErrorState`** : `headingLevel?: 'h2' | 'h3'` prop default `'h2'` (was hard-coded `h3` skipping hierarchy).
+- **WCAG B4 — splash-hero secondary CTA inerte** : `<Btn>Demander un accès</Btn>` sans onClick → `<a href="mailto:eliot@fxmily.com?subject=...">` + `btnVariants`.
+- **Deps T2 — hono CVE override** : pnpm.overrides `hono >= 4.12.18` (CVE-2026-44457/44458/44459 dev-only via @prisma/dev).
+- **Tech debt — `docs/env-template.md`** complété avec `WEEKLY_REPORT_RECIPIENT`, `CRON_SECRET`, `UPLOADS_DIR` (validés Zod mais absents du template).
+
+### Quality gate finale post-P (2026-05-09)
+
+- format ✓, lint ✓, type-check ✓
+- **Vitest 717/717 verts** (+86 vs J9 baseline 631, +57 vs J10 ship 660)
+- Build prod Turbopack ✓ Next 16.2.6 + React 19.2.6 patched (CVE clean)
+- CI [PR #35](https://github.com/fxeliott/fxmily/pull/35) verte sur 3 checks (Lint+type-check+build, Analyze JS-TS, CodeQL).
+
+### Commit chain final J10 (18 commits Phases A → P)
+
+```
+0588d12 fix(j10): Phase P — 6 BLOCKERs from 6-subagent ultra-deep audit
+81d3fc5 chore(j10): prettier --write runbook-prod-smoke-test (CI format fix)
+bfd43c5 fix(j10): Phase O — 3 BLOCKERs cross-file + drift sync
+a0a9b86 docs(j10): clarify Vercel Hobby non-commercial clause + 4 paths comparison
+cd7e623 feat(j10): Phase N — zero-cost deployment path (Vercel + Neon + GH Actions)
+2ddf48f feat(j10): Phase M — mega automation cloudflare/resend/bootstrap
+2e81eb3 feat(j10): pose-github-secrets.sh automation + eliot-prerequisites doc update
+e845cf4 feat(j10): Phase L — /account hub + error pages + final review fixes
+40076da docs(j10): close-out CLAUDE.md phases I+J+K — final 9-commit chain
 ded91dd feat(j10): Phase K — semantic audit fix + health.ts tests + Apple Touch Icons
 4d9381c feat(j10): observability prod — /admin/system + cron-watch workflow
 f5ba4a9 fix(j10): CVE patch Next 16.2.6 + perf wins + +47 tests (round 3)

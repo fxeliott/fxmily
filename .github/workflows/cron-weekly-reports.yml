@@ -1,0 +1,21 @@
+name: Cron · weekly-reports
+
+# Sunday 21:00 UTC (J8).
+
+on:
+  schedule:
+    - cron: '0 21 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: |
+          curl -fsS --max-time 900 -X POST \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ vars.APP_URL }}/api/cron/weekly-reports"

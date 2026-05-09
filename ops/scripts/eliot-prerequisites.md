@@ -1,13 +1,30 @@
-# Eliot — pré-requis manuels J10 (étape par étape, **~10 min**)
+# Eliot — pré-requis manuels J10
+
+Deux paths au choix selon ta tolérance coût :
+
+| Path              | Coût                            | Où                  | Quand choisir                                            |
+| ----------------- | ------------------------------- | ------------------- | -------------------------------------------------------- |
+| **A — Hetzner**   | ~5-15 €/mois + ~10 €/an domaine | `app.fxmily.com`    | Si tu acceptes ~70 €/an documenté SPEC §16 + budget caps |
+| **B — Zero-cost** | **0 € / 0 CB**                  | `fxmily.vercel.app` | Si "pas de coût supplémentaire" strict (Phase N pivot)   |
+
+Les deux paths livrent le même code Fxmily V1 SPEC §15 J10. Seule la
+config infra diffère. Migration A↔B reste possible (export/import DB
+
+- switch DNS).
+
+* **Path A** : continue ci-dessous (Phase M scripts).
+* **Path B** : voir [`docs/zero-cost-deployment.md`](../../docs/zero-cost-deployment.md).
 
 Phase M (2026-05-09) a réduit le manuel de **30 → 10 min** via les scripts
 `bootstrap-fxmily.sh` + `cloudflare-dns-setup.sh` + `resend-domain-add.sh`
 
 - `pose-github-secrets.sh` qui automatisent toute la partie API.
 
-> ⚠️ **Budget caps avant tout** : configure les budget alerts AVANT
-> d'enregistrer une carte bancaire — incident Gemini avril 2026
-> (95 € abusés via key leak, memory `contraintes_financieres`).
+> ⚠️ **Budget caps avant tout** (Path A uniquement) : configure les
+> budget alerts AVANT d'enregistrer une carte bancaire — incident Gemini
+> avril 2026 (95 € abusés via key leak, memory `contraintes_financieres`).
+> Path B (Vercel/Neon free) = aucun engagement CB, donc pas de risque
+> overage par construction.
 
 ---
 

@@ -713,7 +713,11 @@ Trois signaux distinguent un revenge trade d'un vrai trade : 1) il arrive dans l
           "Avant chaque entrée, dis à voix haute en 1 phrase : \"j'entre parce que [condition], stop à [niveau], cible [niveau].\" Si tu ne peux pas la formuler claire, tu n'entres pas. C'est ton filtre anti-revenge.",
       },
     ],
-    triggerRules: null,
+    // Phase V/W (2026-05-09) — câblage trigger emotion_logged 'revenge-trade'.
+    // L'émotion existait dans lib/trading/emotions.ts mais n'avait pas de
+    // fiche trigger associée. Désormais : log de revenge-trade par le
+    // membre → fiche Douglas livrée immédiatement (black hat anti-tilt).
+    triggerRules: { kind: 'emotion_logged', tag: 'revenge-trade' },
     hatClass: 'black',
     priority: 7,
     published: true,

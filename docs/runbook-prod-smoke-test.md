@@ -20,7 +20,7 @@ image sans nouveau commit).
       `/etc/fxmily/web.env` (et `NEXT_PUBLIC_SENTRY_DSN` mirror).
 - [ ] iPhone Safari 18.4+ disponible (Web Push real-device test).
 - [ ] `/etc/fxmily/web.env` contient `WEEKLY_REPORT_RECIPIENT=
-    eliot@fxmily.com` ET `RESEND_FROM=Fxmily <noreply@fxmily.com>` ET
+eliot@fxmily.com` ET `RESEND_FROM=Fxmily <noreply@fxmily.com>` ET
       `VAPID_SUBJECT=mailto:eliot@fxmily.com` (alignement post-domain
       verify).
 - [ ] Mot de passe admin **rotaté post-J8 polish** (incident sec docs/
@@ -71,7 +71,7 @@ image sans nouveau commit).
 - Le matin (heure locale), `/checkin/morning` → wizard sleep/mood/
   intention → submit.
 - **DB row** : `SELECT id FROM daily_checkins WHERE slot='morning'
- ORDER BY created_at DESC LIMIT 1`.
+ORDER BY created_at DESC LIMIT 1`.
 
 ### 7. /dashboard → score widget render
 

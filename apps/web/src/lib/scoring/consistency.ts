@@ -63,8 +63,24 @@ const WEIGHT_DRAWDOWN = 20;
 const WEIGHT_LOSS_STREAK = 10;
 const WEIGHT_SESSION = 10;
 
-/** R that maps to a perfect expectancyConsistency sub-score. 3R/trade → 100. */
-const EXPECTANCY_FULL_SCALE = 3;
+/**
+ * R that maps to a perfect expectancyConsistency sub-score. 1R/trade → 100.
+ *
+ * Phase V/W calibration (2026-05-09) — was 3, beaucoup trop sévère.
+ * Sources littérature trading :
+ *   - Van Tharp (Trade Your Way to Financial Freedom, ch.7) : 0.5R/trade
+ *     est `excellent`.
+ *   - Brett Steenbarger (Daily Trading Coach) : pros discrétionnaires top
+ *     decile vivent à 0.3-0.6R/trade soutenu.
+ * 1R/trade est le plafond pour des fenêtres 30-trades soutenues — top 1%
+ * mondial. FULL_SCALE=1 met ce plafond comme score-100 :
+ *   exp=0R → score 0   (break-even, pas de edge)
+ *   exp=0.3R → score 30  (bon trader)
+ *   exp=0.5R → score 50  (très bon)
+ *   exp=1.0R → score 100 (exceptionnel)
+ *   exp>1.0R → score 100 (clampé)
+ */
+const EXPECTANCY_FULL_SCALE = 1;
 /** PF that maps to a perfect profitFactor sub-score. PF=3 → 100. */
 const PF_FULL_SCALE = 3;
 /** Drawdown (R) at which control sub-score reaches 0. 15R DD → 0. */

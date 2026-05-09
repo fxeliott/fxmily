@@ -90,8 +90,21 @@ const WEIGHT_STRESS = 25;
 const WEIGHT_NEG_EMO = 20;
 const WEIGHT_RECOVERY = 15;
 
-/** stdDev → score scaling: stdDev≥8 → 0, stdDev=0 → 100. */
-const STDDEV_FULL_SCALE = 8;
+/**
+ * stdDev → score scaling on a 1-10 mood scale.
+ *   stdDev=0 → score 100 (parfaitement stable)
+ *   stdDev=1 → score  75
+ *   stdDev=2 → score  50
+ *   stdDev=3 → score  25
+ *   stdDev≥4 → score   0 (clampé)
+ *
+ * Phase V/W calibration (2026-05-09) — was 8, way too lenient. Max théorique
+ * de stdDev sur une échelle 1-10 (Bernoulli 50/50 sur les extrêmes) est
+ * ~4.5 ; en pratique un trader chaotique culmine à 3.0-3.5. FULL_SCALE=4
+ * met le pire cas réaliste au plancher et aligne avec un mapping linéaire
+ * cohérent avec les autres sub-scores 1-10 (stress).
+ */
+const STDDEV_FULL_SCALE = 4;
 
 /** stress(1)→100, stress(10)→0. */
 const STRESS_FULL_SCALE = 10;

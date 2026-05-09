@@ -19,6 +19,8 @@ import { TRADING_PAIRS } from '@/lib/trading/pairs';
 const SESSIONS = ['asia', 'london', 'newyork', 'overlap'] as const;
 const DIRECTIONS = ['long', 'short'] as const;
 const OUTCOMES = ['win', 'loss', 'break_even'] as const;
+/// V1.5 — Steenbarger setup quality buckets.
+const TRADE_QUALITIES = ['A', 'B', 'C'] as const;
 
 const positivePrice = z.coerce
   .number({ message: 'Prix invalide.' })
@@ -34,6 +36,13 @@ const plannedRR = z.coerce
   .number({ message: 'R:R invalide.' })
   .gte(0.25, 'Le R:R minimum est 0.25.')
   .lte(20, 'Le R:R maximum est 20.');
+
+/// V1.5 — Risk percentage of account capital. Tharp rule: 1-2% typical.
+/// Capped at 99.99 % defensively (degenerate case = full account on one trade).
+const riskPctSchema = z.coerce
+  .number({ message: 'Risque % invalide.' })
+  .gte(0, 'Le risque ne peut pas être négatif.')
+  .lt(100, 'Le risque doit rester sous 100 % du compte.');
 
 const pairSchema = z
   .string()
@@ -98,6 +107,12 @@ export const tradeOpenSchema = z
     lotSize,
     stopLossPrice: positivePrice.optional().nullable(),
     plannedRR,
+    /// V1.5 — Optional setup quality classification. Wizard UI capture
+    /// position TBD (dedicated step or inline in step 4) — Eliot to validate.
+    tradeQuality: z.enum(TRADE_QUALITIES).optional(),
+    /// V1.5 — Optional risk percentage of account. Capture in step 3 alongside
+    /// stop-loss and lot size when the member knows their account size.
+    riskPct: riskPctSchema.optional(),
     emotionBefore: emotionTagsRequired,
     planRespected: z.coerce.boolean(),
     /** Tri-state: true / false / null (= N/A). The form sends `'na'` for N/A. */

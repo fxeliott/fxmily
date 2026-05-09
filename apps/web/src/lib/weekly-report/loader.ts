@@ -148,6 +148,9 @@ async function loadTrades(userId: string, window: WeekWindow): Promise<BuilderIn
     lotSize: trade.lotSize.toString(),
     stopLossPrice: trade.stopLossPrice == null ? null : trade.stopLossPrice.toString(),
     plannedRR: trade.plannedRR.toString(),
+    // V1.5 — Steenbarger setup quality + Tharp risk %.
+    tradeQuality: trade.tradeQuality,
+    riskPct: trade.riskPct == null ? null : trade.riskPct.toString(),
     emotionBefore: [...trade.emotionBefore],
     planRespected: trade.planRespected,
     hedgeRespected: trade.hedgeRespected,

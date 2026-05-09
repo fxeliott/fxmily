@@ -196,9 +196,33 @@ const freeTextSliceSchema = z
   })
   .strict();
 
+/**
+ * V1.5 pseudonymization — the snapshot sent to Claude carries a stable but
+ * non-reversible label (`memberLabel`) instead of the raw `userId` UUID.
+ *
+ * Rationale (defense-in-depth, Phase V audit):
+ *   - The cuid `userId` is not directly PII (no email, no name) but it is
+ *     system-identifying and ends up serialized in Anthropic API logs +
+ *     potentially in `WeeklyReport.summary` if Claude ever copy-pastes it
+ *     into the output.
+ *   - `member-${SHA-256(userId)[0..6].toUpperCase()}` is :
+ *       - deterministic (same userId → same label, no DB schema change)
+ *       - non-reversible without a precomputed rainbow table
+ *       - human-readable in admin reports ("member-A1B2C3" vs a 25-char cuid)
+ *       - collision-free for cohorts up to ~16M members (24-bit space)
+ *   - The DB row `WeeklyReport.userId` keeps the FK — pseudonymization is
+ *     a *prompt boundary* concern, not a *persistence* concern.
+ *
+ * The internal `BuilderInput.userId` (in `lib/weekly-report/types.ts`) stays
+ * as the cuid — only the externally-visible snapshot loses it.
+ */
+const memberLabelSchema = z
+  .string()
+  .regex(/^member-[A-F0-9]{6}$/, 'memberLabel must match member-XXXXXX (uppercase hex).');
+
 export const weeklySnapshotSchema = z
   .object({
-    userId: z.string().min(1).max(64),
+    memberLabel: memberLabelSchema,
     timezone: z.string().min(3).max(60),
     weekStart: z.date(),
     weekEnd: z.date(),

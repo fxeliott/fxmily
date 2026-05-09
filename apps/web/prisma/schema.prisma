@@ -73,6 +73,20 @@ enum RealizedRSource {
   estimated
 }
 
+/// V1.5 — Setup quality classification (Steenbarger best practice).
+/// Captured BEFORE the outcome is known, so it cannot rationalize a posteriori.
+///   A : setup parfait, conviction haute, contexte favorable (gold standard).
+///   B : setup correct, conviction moyenne, ou contexte mitigé (default acceptable).
+///   C : setup limite, conviction basse, ou doute sur le contexte (à coacher).
+/// Eliot uses the distribution to coach : "tes B et C ont un win-rate 30 %
+/// plus bas que tes A, pourquoi tu les prends ?". Decoupled from `realizedR`
+/// — a C trade that wins is still a C trade.
+enum TradeQuality {
+  A
+  B
+  C
+}
+
 /// Annotation media kind (J4). V1 supports image attachments only — the
 /// 500 MiB Zoom-video upload path is deferred to J4.5 (depends on R2 wiring).
 /// The enum value is kept open so the column can store `video` once available.
@@ -346,6 +360,20 @@ model Trade {
   /// `lib/storage` conventions: `trades/{userId}/{nanoid}.{ext}`.
   screenshotEntryKey String? @map("screenshot_entry_key")
 
+  // ----- V1.5 trading-expert calibration (Steenbarger / Tharp) -----------
+
+  /// Setup quality A/B/C (Steenbarger, *Daily Trading Coach*). Captured at
+  /// trade creation. Optional — V1 trades created before V1.5 ship are NULL
+  /// and excluded from quality-distribution analytics.
+  tradeQuality TradeQuality? @map("trade_quality")
+
+  /// Percentage of account risked on this trade (e.g. 1.50 = 1.5 %).
+  /// Tharp gold rule: never risk more than 1-2 % per trade. Optional.
+  /// Captured by the member at form-fill time (we don't have account
+  /// balance in the schema — V2 candidate). Decimal(5, 2) covers 0.01 %
+  /// up to 999.99 % (degenerate case but defensive).
+  riskPct Decimal? @map("risk_pct") @db.Decimal(5, 2)
+
   // ----- Post-exit block (filled at close) -----
 
   exitedAt          DateTime?        @map("exited_at")
@@ -372,6 +400,10 @@ model Trade {
   @@index([userId, enteredAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, closedAt])
+  // V1.5 — quality distribution analytics (admin coaching view).
+  // Partial-index predicate (`WHERE trade_quality IS NOT NULL`) is added in
+  // the migration SQL since Prisma 7 doesn't model it declaratively.
+  @@index([userId, tradeQuality])
   @@map("trades")
 }
 

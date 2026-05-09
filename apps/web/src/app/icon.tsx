@@ -11,7 +11,9 @@ import { ImageResponse } from 'next/og';
  * `ImageResponse`.
  */
 
-export const runtime = 'edge';
+// J10 Phase L review H8 : `nodejs` runtime aligns with `apple-icon.tsx`
+// for self-hosted Next 16 standalone tracing.
+export const runtime = 'nodejs';
 export const size = { width: 32, height: 32 };
 export const contentType = 'image/png';
 

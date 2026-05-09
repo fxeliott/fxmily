@@ -134,36 +134,89 @@ describe('requestAccountDeletion', () => {
 });
 
 describe('cancelAccountDeletion', () => {
-  it('clears deletedAt when scheduled in the future', async () => {
+  // J10 Phase L review B2 — atomic updateMany now mirrors `requestAccountDeletion`
+  // so cancel/cron races can't accidentally restore a soft-deleted user.
+  it('clears deletedAt via atomic updateMany predicate (status=active, deletedAt!=null)', async () => {
     const now = new Date('2026-05-08T10:00:00.000Z');
-    findUniqueMock.mockResolvedValueOnce({
-      status: 'active',
-      deletedAt: new Date(now.getTime() + 60 * 60 * 1000),
-    });
-    updateMock.mockResolvedValueOnce({});
+    updateManyMock.mockResolvedValueOnce({ count: 1 });
 
     await cancelAccountDeletion('u1', { now });
 
-    expect(updateMock).toHaveBeenCalledWith({
-      where: { id: 'u1' },
+    expect(updateManyMock).toHaveBeenCalledWith({
+      where: {
+        id: 'u1',
+        status: 'active',
+        deletedAt: { not: null },
+      },
       data: { deletedAt: null },
     });
+    // Atomic happy path : no fallback findUnique read.
+    expect(findUniqueMock).not.toHaveBeenCalled();
   });
 
-  it('throws AccountDeletionNotPendingError when nothing to cancel', async () => {
+  it('throws AccountDeletionNotPendingError when predicate misses (count=0) and row exists', async () => {
     const now = new Date('2026-05-08T10:00:00.000Z');
-    findUniqueMock.mockResolvedValueOnce({ status: 'active', deletedAt: null });
+    updateManyMock.mockResolvedValueOnce({ count: 0 });
+    findUniqueMock.mockResolvedValueOnce({ id: 'u1' });
+
     await expect(cancelAccountDeletion('u1', { now })).rejects.toBeInstanceOf(
       AccountDeletionNotPendingError,
     );
   });
 
-  it('throws AccountDeletionNotPendingError when already materialised', async () => {
+  it('throws plain Error when count=0 AND user does not exist', async () => {
     const now = new Date('2026-05-08T10:00:00.000Z');
-    findUniqueMock.mockResolvedValueOnce({
-      status: 'deleted',
-      deletedAt: new Date('2026-05-01T00:00:00.000Z'),
+    updateManyMock.mockResolvedValueOnce({ count: 0 });
+    findUniqueMock.mockResolvedValueOnce(null);
+
+    await expect(cancelAccountDeletion('u_missing', { now })).rejects.toThrow(
+      /User u_missing not found/,
+    );
+  });
+
+  // Race scenario : the cron's materialisation update lands a millisecond
+  // BEFORE the user's cancel click. The cancel's predicate `status='active'`
+  // misses (status was just flipped to 'deleted'). The fallback findUnique
+  // confirms the row still exists, so we throw NotPending — the user sees
+  // a friendly "fenêtre de 24h expirée" message rather than a phantom
+  // success.
+  it('detects cron-won-race via count=0 predicate miss (status flipped to deleted mid-flight)', async () => {
+    const now = new Date('2026-05-08T10:00:00.000Z');
+    updateManyMock.mockResolvedValueOnce({ count: 0 });
+    findUniqueMock.mockResolvedValueOnce({ id: 'u1' }); // row exists post-cron
+
+    await expect(cancelAccountDeletion('u1', { now })).rejects.toBeInstanceOf(
+      AccountDeletionNotPendingError,
+    );
+    expect(updateManyMock.mock.calls[0]?.[0]).toMatchObject({
+      where: { status: 'active' },
     });
+  });
+});
+
+describe('cancelAccountDeletion — race window', () => {
+  // The grace boundary case : `deletedAt = now - 1ms` (grace expired) but
+  // status still 'active' (cron hasn't run). The user still has a legitimate
+  // cancel right — destruction hasn't happened. The atomic predicate
+  // `status='active' AND deletedAt IS NOT NULL` allows this (no `gt: now`
+  // gate). The cron will see this row on its next sweep and (now correctly)
+  // skip it because deletedAt is already null.
+  it('still cancels when grace has expired by 1ms but status is still active (cron not yet ran)', async () => {
+    const now = new Date('2026-05-08T10:00:00.000Z');
+    updateManyMock.mockResolvedValueOnce({ count: 1 });
+
+    await expect(cancelAccountDeletion('u1', { now })).resolves.toBeUndefined();
+  });
+
+  // The cron already won the race : the row's status is now 'deleted'.
+  // The atomic predicate `status='active'` misses → count=0 → fallback
+  // findUnique confirms row exists → throw NotPending. User gets the
+  // "fenêtre 24h expirée" UI.
+  it('throws AccountDeletionNotPendingError when the cron materialised between page-load and click', async () => {
+    const now = new Date('2026-05-08T10:00:00.000Z');
+    updateManyMock.mockResolvedValueOnce({ count: 0 });
+    findUniqueMock.mockResolvedValueOnce({ id: 'u1' });
+
     await expect(cancelAccountDeletion('u1', { now })).rejects.toBeInstanceOf(
       AccountDeletionNotPendingError,
     );
@@ -391,16 +444,15 @@ describe('cancelAccountDeletion — race window', () => {
   // (deletedAt is now NULL → no longer matches `deletedAt <= now`).
   it('still cancels when grace has expired by 1ms but status is still active (cron not yet ran)', async () => {
     const now = new Date('2026-05-08T10:00:00.000Z');
-    findUniqueMock.mockResolvedValueOnce({
-      status: 'active',
-      deletedAt: new Date(now.getTime() - 1),
-    });
-    updateMock.mockResolvedValueOnce({});
+    // Atomic predicate (`status='active' AND deletedAt!=null`) matches even
+    // when `deletedAt` is in the past — the cron hasn't materialised yet
+    // so the user retains the cancel right.
+    updateManyMock.mockResolvedValueOnce({ count: 1 });
 
     await cancelAccountDeletion('u_race', { now });
 
-    expect(updateMock).toHaveBeenCalledWith({
-      where: { id: 'u_race' },
+    expect(updateManyMock).toHaveBeenCalledWith({
+      where: { id: 'u_race', status: 'active', deletedAt: { not: null } },
       data: { deletedAt: null },
     });
   });
@@ -410,11 +462,11 @@ describe('cancelAccountDeletion — race window', () => {
   // "not pending" rather than a misleading success.
   it('throws AccountDeletionNotPendingError when the cron materialised between page-load and click', async () => {
     const now = new Date('2026-05-08T10:00:00.000Z');
-    // Page loaded showing "scheduled in 1h" but cron flipped status meanwhile.
-    findUniqueMock.mockResolvedValueOnce({
-      status: 'deleted',
-      deletedAt: new Date(now.getTime() - 1_000),
-    });
+    // Predicate `status='active'` misses the now-deleted row → count=0.
+    updateManyMock.mockResolvedValueOnce({ count: 0 });
+    // Disambiguation read confirms the row still exists (it's just in
+    // the materialised state).
+    findUniqueMock.mockResolvedValueOnce({ id: 'u1' });
 
     await expect(cancelAccountDeletion('u1', { now })).rejects.toBeInstanceOf(
       AccountDeletionNotPendingError,

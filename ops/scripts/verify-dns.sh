@@ -25,14 +25,20 @@ fail=0
 ok() { echo "  ✓ $1"; pass=$((pass + 1)); }
 ko() { echo "  ✗ $1" >&2; fail=$((fail + 1)); }
 
-dig_short() { dig +short "$@" 2>/dev/null | tr -d '"'; }
-
 # `dig` is the canonical DNS tool ; on Windows Eliot may need to install
 # BIND tools or use WSL. Fallback to `nslookup` if missing — limited but
 # enough for the visual sanity check.
-if ! command -v dig >/dev/null 2>&1; then
-  echo "Warning: 'dig' not installed. Falling back to a less precise check."
-  alias dig_short='nslookup'
+#
+# J10 Phase L review H6 fix : we redefine `dig_short` as a function
+# instead of using `alias` — bash aliases are NOT expanded inside
+# non-interactive shells (this script is run as `bash verify-dns.sh ...`),
+# so the alias path was silently dead code. The function form works
+# regardless of how bash is invoked.
+if command -v dig >/dev/null 2>&1; then
+  dig_short() { dig +short "$@" 2>/dev/null | tr -d '"'; }
+else
+  echo "Warning: 'dig' not installed. Falling back to nslookup (less precise)."
+  dig_short() { nslookup "$@" 2>/dev/null | tail -n +3 | tr -d '"'; }
 fi
 
 echo "DNS verification for $DOMAIN"

@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
 import { flushSentry, reportError } from '@/lib/observability';
 import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
@@ -58,6 +59,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const report = await getCronHealthReport();
     const healthy = report.overall === 'green' || report.overall === 'amber';
+    // Heartbeat audit row : the watcher itself emits a `cron.health.scan`
+    // so a missing health-check (e.g. cron-watch.yml broken) is also
+    // detectable. Counts only — no PII.
+    await logAudit({
+      action: 'cron.health.scan',
+      metadata: {
+        overall: report.overall,
+        red: report.entries.filter((e) => e.status === 'red').length,
+        amber: report.entries.filter((e) => e.status === 'amber').length,
+        neverRan: report.entries.filter((e) => e.status === 'never_ran').length,
+        ranAt: report.ranAt,
+      },
+    });
     return NextResponse.json(report, { status: healthy ? 200 : 503 });
   } catch (err) {
     reportError('cron.health', err, { route: '/api/cron/health' });

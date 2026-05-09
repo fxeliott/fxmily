@@ -169,6 +169,17 @@ const counterSliceSchema = z
     douglasCardsDelivered: z.number().int().min(0),
     douglasCardsSeen: z.number().int().min(0),
     douglasCardsHelpful: z.number().int().min(0),
+    /// V1.5 — Steenbarger setup quality distribution. Counts trades whose
+    /// quality was captured (NULL trades excluded from the distribution).
+    /// `tradesQualityCaptured` is the denominator for ratio analysis.
+    tradesQualityA: z.number().int().min(0),
+    tradesQualityB: z.number().int().min(0),
+    tradesQualityC: z.number().int().min(0),
+    tradesQualityCaptured: z.number().int().min(0),
+    /// V1.5 — Tharp risk %. Median over trades that captured the field.
+    /// `riskPctOverTwoCount` surfaces over-2 % violations (Tharp ceiling).
+    riskPctMedian: z.number().min(0).max(100).nullable(),
+    riskPctOverTwoCount: z.number().int().min(0),
   })
   .strict();
 

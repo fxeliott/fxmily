@@ -106,6 +106,30 @@ export function buildWeeklyReportUserPrompt(snapshot: WeeklySnapshot): string {
   }
   lines.push(``);
 
+  // V1.5 — Steenbarger setup quality + Tharp risk %. Surface only when at
+  // least one trade in the window captured the field (else section is noise).
+  if (c.tradesQualityCaptured > 0 || c.riskPctMedian !== null) {
+    lines.push(`## Qualité d'exécution (V1.5 Steenbarger + Tharp)`);
+    if (c.tradesQualityCaptured > 0) {
+      const denom = c.tradesQualityCaptured;
+      const pct = (n: number) => Math.round((n / denom) * 100);
+      lines.push(
+        `- Distribution setup (${denom} trade${denom > 1 ? 's' : ''} classé${denom > 1 ? 's' : ''}) : ` +
+          `A=${c.tradesQualityA} (${pct(c.tradesQualityA)}%), ` +
+          `B=${c.tradesQualityB} (${pct(c.tradesQualityB)}%), ` +
+          `C=${c.tradesQualityC} (${pct(c.tradesQualityC)}%)`,
+      );
+    }
+    if (c.riskPctMedian !== null) {
+      const overTharp = c.riskPctOverTwoCount;
+      lines.push(
+        `- Risque % médian : **${c.riskPctMedian.toFixed(2)}%** ` +
+          `(règle Tharp 1-2%)${overTharp > 0 ? ` — ⚠ ${overTharp} trade${overTharp > 1 ? 's' : ''} > 2 %` : ''}`,
+      );
+    }
+    lines.push(``);
+  }
+
   lines.push(`## Routine quotidienne`);
   lines.push(
     `- Check-ins : ${c.morningCheckinsCount} matin · ${c.eveningCheckinsCount} soir · streak ${c.streakDays}j`,

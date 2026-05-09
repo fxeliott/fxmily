@@ -37,23 +37,46 @@ const SESSIONS_ALL: readonly TradeSession[] = ['asia', 'london', 'newyork', 'ove
 // =============================================================================
 
 /**
- * Map a member's `userId` (cuid) to a stable, non-reversible 24-bit label.
+ * Map a member's `userId` (cuid) to a stable label of the form `member-XXXXXX`.
  *
- * `member-${SHA-256(userId)[0..6].toUpperCase()}` is :
- *   - deterministic (same userId → same label across runs)
- *   - one-way (no reverse map without a precomputed rainbow table)
- *   - human-readable for Eliot in admin reports
- *   - collision-free for cohorts up to ~16M members (24-bit hex space).
- *     Birthday-paradox 50% collision threshold ≈ 4096 members; for V1
- *     30-100 cohort the collision probability is < 1e-4. If we ever
- *     scale past 1000 members, swap to 32-bit (`slice(0, 8)`) or store
- *     a UUID v5 mapping in DB.
+ * Properties (with optional salt):
+ *   - **Deterministic** : same `(userId, salt)` → same label across runs.
+ *   - **Pseudonymous, not anonymous** (GDPR Art. 4(5)) : reversible by anyone
+ *     who has the salt + the userId — i.e. by Fxmily itself. The label is a
+ *     prompt-boundary defence against accidental Anthropic-side leaks, not
+ *     an anonymisation primitive.
+ *   - **Without a salt** (default V1) : an attacker who knows a candidate
+ *     cuid can verify its presence in a leaked report by hashing once
+ *     (~1 ms). For V1 30-100 closed cohort with no external rapport export
+ *     this is acceptable risk. **For V2 with cohort > 100 OR external
+ *     report export (audit Anthropic, Slack archive, S3 backup of digests)
+ *     set `MEMBER_LABEL_SALT` env var** (server-side secret) to make
+ *     ré-identification require the salt.
  *
- * Pure — no I/O, no `Date.now()`. Hash collision risk and label format
- * are exercised in `builder.test.ts` (V1.5 tests).
+ * Birthday-paradox correctness (24-bit hex space, n = 16,777,216):
+ *   - 50 % collision threshold ≈ √(π·n / 2) ≈ **4823** members
+ *     (the previous comment said "4096" — corrected security-auditor M2).
+ *   - At n = 1000: P(≥1 collision) ≈ 1 − exp(−1000² / (2·n)) ≈ **2.9 %**
+ *     (previous comment said "< 1e-4" which was wrong).
+ *   - Recommended migration before V2 cohort > 1000 : extend to 32 bits
+ *     (`slice(0, 8)`) where the 50 % threshold becomes ≈ 77 k members.
+ *
+ * Pure mathematically (no Date.now, no random); reads `process.env` at call
+ * time so the salt rotates at next process restart (intentional — see
+ * `lib/env.ts MEMBER_LABEL_SALT` doc).
  */
-export function pseudonymizeMember(userId: string): string {
-  const hash = createHash('sha256').update(userId).digest('hex').slice(0, 6).toUpperCase();
+export function pseudonymizeMember(userId: string, salt?: string): string {
+  // Defensive guard (security-auditor #7) : an empty userId is a programming
+  // error — silently labelizing it would collapse all malformed inputs onto
+  // the constant SHA-256(empty) hash and poison the cohort distribution.
+  if (typeof userId !== 'string' || userId.length === 0) {
+    throw new TypeError('pseudonymizeMember requires a non-empty userId');
+  }
+  // Default to env var; tests pass `salt: ''` explicitly to assert the
+  // unsalted behavior is reproducible.
+  const effectiveSalt = salt ?? process.env.MEMBER_LABEL_SALT ?? '';
+  const input = effectiveSalt === '' ? userId : `${effectiveSalt}:${userId}`;
+  const hash = createHash('sha256').update(input).digest('hex').slice(0, 6).toUpperCase();
   return `member-${hash}`;
 }
 
@@ -124,6 +147,19 @@ function buildCounters(input: BuilderInput): WeeklySnapshot['counters'] {
   const cardsSeen = input.deliveries.filter((d) => d.seenAt !== null).length;
   const cardsHelpful = input.deliveries.filter((d) => d.helpful === true).length;
 
+  // V1.5 — Steenbarger setup quality distribution (NULL trades excluded).
+  const tradesQualityA = input.trades.filter((t) => t.tradeQuality === 'A').length;
+  const tradesQualityB = input.trades.filter((t) => t.tradeQuality === 'B').length;
+  const tradesQualityC = input.trades.filter((t) => t.tradeQuality === 'C').length;
+  const tradesQualityCaptured = tradesQualityA + tradesQualityB + tradesQualityC;
+
+  // V1.5 — Tharp risk %. Median over captured values + Tharp-ceiling violations.
+  const riskPcts = input.trades
+    .map((t) => parseRiskPct(t.riskPct))
+    .filter((n): n is number => n !== null);
+  const riskPctMedian = median(riskPcts);
+  const riskPctOverTwoCount = riskPcts.filter((v) => v > 2).length;
+
   return {
     tradesTotal: input.trades.length,
     tradesWin: wins.length,
@@ -145,6 +181,12 @@ function buildCounters(input: BuilderInput): WeeklySnapshot['counters'] {
     douglasCardsDelivered: input.deliveries.length,
     douglasCardsSeen: cardsSeen,
     douglasCardsHelpful: cardsHelpful,
+    tradesQualityA,
+    tradesQualityB,
+    tradesQualityC,
+    tradesQualityCaptured,
+    riskPctMedian,
+    riskPctOverTwoCount,
   };
 }
 
@@ -256,6 +298,12 @@ function buildScores(input: BuilderInput): WeeklySnapshot['scores'] {
 // =============================================================================
 
 function parseRealizedR(value: SerializedTrade['realizedR']): number | null {
+  if (value === null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseRiskPct(value: SerializedTrade['riskPct']): number | null {
   if (value === null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;

@@ -1,20 +1,29 @@
 # Runbook — Production deploy (Hetzner CX22)
 
-Wires Fxmily V1 from a fresh Hetzner Cloud CX22 to a working
-`https://app.fxmily.com`. Pair this runbook with
+Wires Fxmily V1 from a Hetzner Cloud CX22 to a working
+`https://app.fxmilyapp.com` (V1 — pivot du SPEC `app.fxmily.com` vers le
+domaine déjà possédé `fxmilyapp.com`, décision Phase R 2026-05-09 pour
+respecter strictement la contrainte zéro coût supplémentaire). Pair with
 [`runbook-backup-restore.md`](runbook-backup-restore.md) and
 [`docs/jalon-10-prep.md`](jalon-10-prep.md).
 
-> **Pré-requis manuel Eliot avant ce runbook** :
+> **Pré-requis manuel Eliot (V1 — Phase R reality check 2026-05-09)** :
 >
-> 1. Acheter `fxmily.com` (Cloudflare Registrar, ~10€/an, auto-renew ON).
-> 2. Provisionner Hetzner Cloud CX22 (Falkenstein, Ubuntu 24.04 LTS),
->    ajouter la clé SSH publique, noter l'IPv4 publique.
-> 3. Créer le projet Sentry (`sentry.io` → New Project → Next.js) +
+> 0. **Décision domaine** : V1 ship sur `fxmilyapp.com` (déjà possédé +
+>    Cloudflare DNS configuré). Achat `fxmily.com` reporté V2 si l'image de
+>    marque l'exige. Coût supplémentaire V1 : 0 €.
+> 1. **Hetzner CX22 EXISTANT** : `hetzner-dieu` à `178.104.39.201` (hostname
+>    `fxmilyapp.com`) — déjà payé pour n8n/Langfuse. Vérifier d'abord la
+>    capacité résiduelle via `ssh hetzner-dieu 'free -h && df -h'`. Si
+>    saturé, provisionner un nouveau CX22 (~5 €/mois, doc §1 ci-dessous).
+>    Sinon `bootstrap-fxmily.sh --skip-hetzner FXMILY_HETZNER_IP=178.104.39.201`
+>    réutilise l'IP existante.
+> 2. Créer le projet Sentry (`sentry.io` → New Project → Next.js) +
 >    générer un `SENTRY_AUTH_TOKEN` (Settings → Auth Tokens →
->    `project:write` + `project:releases`).
-> 4. Resend Console → Domains → Add `fxmily.com` (3 TXT records DNS à
->    coller dans Cloudflare → wait 24h → Verify).
+>    `project:write` + `project:releases`). 5000 events/mois free.
+> 3. Resend Console → Domains → Add `fxmilyapp.com` (3 TXT records DNS à
+>    coller dans Cloudflare → ~15 min TXT propagation → Verify). Free tier
+>    3000 emails/mois **mais 100/jour cap** = vrai bottleneck Phase R.1.
 
 ## 1. Provisioning du serveur (×1, 30 min)
 

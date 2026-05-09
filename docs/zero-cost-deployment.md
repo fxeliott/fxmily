@@ -1,31 +1,48 @@
-# Runbook — Zero-cost deployment (Phase N)
+# Runbook — Zero-cost deployment (Phase N — ❌ NON UTILISABLE pour Fxmily)
 
-> Préparé 2026-05-09 en réponse à la contrainte Eliot "pas de coût
-> supplémentaire et en API". Path alternatif au runbook Hetzner.
-> **Coût total V1 : 0 €/mois, 0 € de CB engagée.**
-
-> ⚠️ **AVERTISSEMENT CRITIQUE — Clause non-commerciale Vercel Hobby**
+> ## 🚫 STATUS : INVALIDE POUR FXMILY V1 — DOCUMENT GARDÉ EN ARCHIVE
 >
-> Recherche 2026-05-09 (researcher subagent + sources Vercel officielles) :
-> Vercel Hobby plan ToS interdit explicitement _"any deploy for the purpose
-> of financial gain of anyone involved"_. La **formation Fxmily étant payante**,
-> l'app de suivi cohorte en est un sous-produit commercial — risque réel
-> de **suspension du compte** sans préavis si Vercel détecte l'usage.
+> **Recherche web 2026-05-09 (Phase R.1 web research subagent)** :
 >
-> Sources :
+> Vercel Hobby ToS (mai 2026) interdit _"any deployment used for financial
+> gain of anyone involved in any part of the production of the project,
+> including a paid employee or consultant writing the code"_.
 >
-> - [Vercel Hobby plan doc](https://vercel.com/docs/plans/hobby)
+> **Fxmily = formation de trading payante** (cohorte payante, app = sous-produit).
+> → **Commercial use today, not "future V2"**.
+> → Vercel Hobby = violation TOS dès le 1er deploy.
+> → Risque concret : suspension compte sans préavis (cas documentés 2025-2026).
+>
+> **De plus** : Vercel Hobby utilise le contenu déployé pour entraîner ses modèles
+> AI **par défaut** (Pro = opt-out, Hobby = no opt-out). Données membres Fxmily
+> = absolutely no go.
+>
+> **Sources** :
+>
 > - [Vercel Fair Use Guidelines](https://vercel.com/docs/limits/fair-use-guidelines)
+> - [Vercel Hobby plan](https://vercel.com/docs/plans/hobby)
+> - [Vercel Terms § AI Training](https://vercel.com/legal/terms)
 >
-> **3 options pour contourner le risque** :
+> ## ✅ DÉCISION RECOMMANDÉE — Hetzner existant
 >
-> 1. **Vercel Pro $20/mo** — clause levée, prod-grade (mais 240 €/an > Hetzner 70 €/an, NON OPTIMAL)
-> 2. **Contact Vercel Support** avant de déployer — décrire le contexte (cohorte interne 30 users, app pas facturée directement, formation hors-app) et obtenir une autorisation écrite. Lent (~3-5 jours), incertain.
-> 3. **Pivot vers Hetzner CX22** (Path A, ~5€/mois) — pas de clause commerciale, prod-grade. Recommandé.
+> Eliot dispose déjà d'un Hetzner CX22 (`hetzner-dieu` 178.104.39.201, hostname
+> `fxmilyapp.com`). **Coût marginal réel = 0 €** (déjà payé pour autres workloads
+> n8n / Langfuse). Path A `runbook-hetzner-deploy.md` + `bootstrap-fxmily.sh
+--skip-hetzner` + `FXMILY_HETZNER_IP=178.104.39.201`. Aucune clause commerciale
+> bloquante côté Hetzner (TOS standard cloud provider).
 >
-> Le path Vercel ci-dessous reste **techniquement valide pour un proof-of-concept
-> ou une démo non-cohorte**. À ne PAS utiliser tel quel pour la cohorte
-> formation payante sans validation Vercel Support.
+> **Si capacité CX22 insuffisante** (RAM/disk déjà saturés par n8n + Langfuse) :
+> nouveau CX22 ~5 €/mois est l'alternative la moins chère. Pas Vercel Pro
+> ($20/mo = 4× plus cher) sauf besoin spécifique CDN edge global.
+>
+> ## 📜 Document gardé pour archive uniquement
+>
+> Le path technique Vercel + Neon + GH Actions ci-dessous reste documenté pour :
+> (a) future V2 commerciale avec Vercel Pro si besoin CDN edge global,
+> (b) référence sur le pattern GH Actions cron 5-min,
+> (c) preuve de notre due diligence sur les TOS providers.
+>
+> **Ne pas exécuter pour Fxmily V1.**
 
 ## Stack
 

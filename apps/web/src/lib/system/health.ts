@@ -32,6 +32,7 @@ interface CronExpectation {
     | 'cron.dispatch_notifications.scan'
     | 'cron.purge_deleted.scan'
     | 'cron.purge_push_subscriptions.scan'
+    | 'cron.purge_audit_log.scan'
     | 'cron.health.scan';
   /** Human-readable label for the dashboard. */
   label: string;
@@ -84,6 +85,15 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.purge_push_subscriptions.scan',
     label: 'Stale push subscriptions cleanup',
     periodMs: WEEK, // Sun 05:00 UTC
+  },
+  {
+    // J10 V2-roadmap reclassed — audit_log retention 90j (daily 04:00 UTC).
+    // Without this purge, the audit_logs table dominates write IOPS at the
+    // 1000-member cohort. The cron is daily so default tolerance (×3) is
+    // 72h before flagging red — gentler than the dispatcher (10 min).
+    action: 'cron.purge_audit_log.scan',
+    label: 'Audit log retention purge',
+    periodMs: DAY, // 04:00 UTC daily
   },
   {
     // J10 Phase O fix B3 : self-monitor the watcher itself. If `cron-watch.yml`

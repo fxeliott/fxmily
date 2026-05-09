@@ -33,7 +33,7 @@ fi
 # Next.js side ALSO refuses unknown cron routes (404) but defense-in-depth
 # starts here, before the secret leaves the host.
 case "$ROUTE" in
-  checkin-reminders|recompute-scores|dispatch-douglas|weekly-reports|dispatch-notifications|purge-deleted|purge-push-subscriptions) ;;
+  checkin-reminders|recompute-scores|dispatch-douglas|weekly-reports|dispatch-notifications|purge-deleted|purge-push-subscriptions|purge-audit-log) ;;
   *)
     echo "[fxmily-cron] route '$ROUTE' is not in the allowlist" >&2
     exit 2

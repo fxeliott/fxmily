@@ -8,7 +8,7 @@ App web installable (PWA) pour le suivi de chaque membre : journal de trading, c
 🤖 **Conventions Claude Code** : [`CLAUDE.md`](./CLAUDE.md).
 🗺️ **V2 / post-V1 backlog** : [`docs/v2-roadmap.md`](./docs/v2-roadmap.md).
 
-**Statut** : J0 → J10 livrés (code prêt prod) · 2026-05-09. Smoke prod end-to-end bloqué par pré-requis externes Eliot (Hetzner CX22, domaine `fxmily.com`, Resend domain verify, Sentry DSN, iPhone Safari 18.4+ pour test push) — checklist dans [`docs/runbook-prod-smoke-test.md`](./docs/runbook-prod-smoke-test.md).
+**Statut** : J0 → J10 livrés (code prêt prod) · 2026-05-09. **Phase R reality check** : pivot V1 sur `app.fxmilyapp.com` (Hetzner déjà existant `hetzner-dieu`, domaine déjà possédé) — coût supplémentaire = 0 €. Vercel Hobby ❌ exclu (clause non-commerciale interdit formation payante). Smoke prod end-to-end bloqué par : Sentry DSN + Resend domain verify + iPhone Safari 18.4+ device test + admin password rotation + GitHub secrets posés. Checklist dans [`docs/runbook-prod-smoke-test.md`](./docs/runbook-prod-smoke-test.md).
 
 ---
 
@@ -162,7 +162,7 @@ Voir section 15 du [`SPEC.md`](./SPEC.md). 11 jalons (J0 → J10), ~50-70 jours 
 | **J9**  | ✅ 2026-05-08 | Web Push API + VAPID + SW + 5 toggles préférences                |
 | **J10** | ⏳ 2026-05-09 | RGPD + Sentry + Hetzner/Vercel deploy + observability            |
 
-**J10 status** : code prêt, smoke prod end-to-end bloqué par 7 pré-requis externes Eliot. Une fois levés (Hetzner CX22 provisionné + `fxmily.com` acheté + Resend domain verified + Sentry DSN + iPhone Safari 18.4+ + admin password rotated + GitHub secrets posés), checklist 12-step dans [`docs/runbook-prod-smoke-test.md`](./docs/runbook-prod-smoke-test.md) conclut l'itération.
+**J10 status** : code prêt + audits Phase Q (drift sync + perf T1.3 + content YELLOW) + Phase R (web research CVE + reality check pré-requis + 3 BLOCKERs PWA proxy matcher). Smoke prod end-to-end bloqué par 5 pré-requis externes Eliot (réduits de 7 à 5 grâce à Phase R) : Sentry DSN, Resend `fxmilyapp.com` verify, iPhone Safari 18.4+ test, admin password rotation, GitHub secrets. Checklist 12-step dans [`docs/runbook-prod-smoke-test.md`](./docs/runbook-prod-smoke-test.md).
 
 ## Licence
 

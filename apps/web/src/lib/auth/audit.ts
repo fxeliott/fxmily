@@ -83,6 +83,7 @@ export type AuditAction =
   | 'account.deletion.purged'
   | 'cron.purge_deleted.scan'
   | 'cron.purge_push_subscriptions.scan'
+  | 'cron.purge_audit_log.scan'
   // J10 Phase J — observability dashboard surface
   | 'admin.system.viewed'
   | 'cron.health.scan';

@@ -1707,3 +1707,76 @@ Fix : `proxy.ts` matcher étendu pour exclure `manifest\.webmanifest|sw\.js|robo
 ### Commit chain final J10 (24+ commits Phases A → V)
 
 Voir `git log main..HEAD`. PR #35 CI verte 3/3 (Lint+type-check+build, Analyze JS-TS, CodeQL).
+
+## V1.5 + V1.5.1 + V1.5.2 — Trading-expert calibration (livré 2026-05-09 sur branche dédiée)
+
+> **Branche** : [`feat/v1.5-trading-calibration`](https://github.com/fxeliott/fxmily/tree/feat/v1.5-trading-calibration), 5 commits depuis `claude/j10-prod-deploy` HEAD `368264c`. Ouverte en PR séparée post-merge J10 (respect règle SPEC §18.4 "1 session = 1 jalon").
+
+### V1.5 — Backend (commit `52d4671`)
+
+3 items shipped end-to-end :
+
+1. **Pseudonymisation `userId` → `memberLabel`** au prompt boundary Claude. SHA-256 truncated 24 bits avec salt optionnel V1, mandatory V2 si export externe (`MEMBER_LABEL_SALT` env). Birthday paradox 50 % threshold ≈ 4823 membres. +5 tests.
+2. **`Trade.tradeQuality`** enum A/B/C (Steenbarger Daily Trading Coach). Prisma enum + ALTER TABLE nullable + partial index `WHERE trade_quality IS NOT NULL` + Zod `.optional()` + service + admin trades-service + weekly-report loader. +3 tests.
+3. **`Trade.riskPct`** Decimal(4, 2) (Tharp 1-2 % rule, aligné Zod `< 100`). Zod `gt(0)` + service + admin + loader. +5 tests.
+
+**Migration** : `20260509180000_v1_5_trade_quality_riskpct/migration.sql` écrite à la main. Apply : `pnpm --filter @fxmily/web prisma:migrate dev`.
+
+**ADRs** :
+
+- [ADR-001](../../docs/decisions/ADR-001-scoring-constants-pragmatic-heuristics.md) (commit `368264c`) — codifie heuristiques pragmatiques sans backing empirique 2024-2026. Trigger re-évaluation cohort drift / peer-reviewed publication / V2 launch ≥100 membres.
+- [ADR-002](../../docs/decisions/ADR-002-v2-calibration-prop-firm-empirical.md) (commit `8158465`) — propose V2 calibration (`STDDEV=2.5`, `DD=10R`, `PF=2.5`, `EXPECTANCY=1R` kept) basée sur prop-firm 2024-2026 disclosed stats. Status Proposed.
+
+### V1.5.1 — Wizard UI capture (commit `402ea66`)
+
+UI wizard `/journal/new` capture désormais les 2 nouveaux fields end-to-end :
+
+- **`riskPct`** : NumericField step 2 (Prix & taille), après stopLossPrice. Soft-warning inline si > 2 % (Tharp ceiling).
+- **`tradeQuality`** : nouveau `<TradeQualitySelector>` step 4 (Discipline & émotion), AU TOP de la step (Steenbarger : classifier le setup AVANT l'outcome pour défaire le biais de résultat). 3 cards visuelles A/B/C avec tons ok/cy/bad, mirroring Direction Long/Short. Click une card active pour clear (back to NULL). Tooltips pédagogiques verbatim Steenbarger.
+
+**Wiring** : `WIZARD_STEPS` étendu, `DraftState` + `emptyDraft` + `validateStep` + `submit` FormData + `createTradeAction` extraient les 2 fields. `localStorage` draft persist contract préservé.
+
+### V1.5.1 — Audit-driven hardening (commit `f6539e7`)
+
+3 subagents audit en parallèle (security-auditor + code-reviewer + 3 deep-research web 2026-05-09) :
+
+| Severity               | Finding                                                                          | Fix                                                                                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CRITICAL #2**        | builder.ts/prompt.ts ignoraient `tradeQuality`+`riskPct` (snapshot Claude blind) | `counterSliceSchema` étendu avec distribution A/B/C + `riskPctMedian` + `riskPctOverTwoCount`. `prompt.ts` surface une nouvelle section conditionnelle "Qualité d'exécution (V1.5 Steenbarger + Tharp)". |
+| **MEDIUM M1**          | pseudonymise SHA-256 unsalted → ré-identification triviale                       | `MEMBER_LABEL_SALT` env var + `pseudonymizeMember(userId, salt?)` + defensive guard empty userId → TypeError.                                                                                            |
+| **MEDIUM M2**          | math birthday paradox commentaire faux (4096 vs 4823, 1e-4 vs 2.9 %)             | Commentaire corrigé. Note V2 migration `slice(0, 8)` → 32 bits → seuil ~77 k membres.                                                                                                                    |
+| **MEDIUM M3** + **#6** | `riskPct.gte(0)` ambigu vs NULL + `Decimal(5,2)` mismatch Zod `<100`             | `gt(0)` + Trade.riskPct `Decimal(4, 2)` aligné.                                                                                                                                                          |
+
+### V1.5.2 — FR locale + close-out (commit `e6a7a3b`)
+
+- **L2 FR locale** : `riskPct` Zod `z.preprocess` accepte `'1,5'` (decimal comma FR) → 1.5. Multi-commas rejetés. +2 tests.
+- **`docs/jalon-V1.5.2-prep.md`** : briefing items différés (naming collision `memberLabel` rename → `pseudonymLabel`, 32-bit slice migration, rollback recipe SQL, NFC normalization, `CREATE INDEX CONCURRENTLY`, hook revert long-term fix `post_tool_fxmily.ps1` 3 options).
+
+### Mystère hook revert Phase V — résolu en pratique
+
+Cause confirmée : `D:\Fxmily\.claude\hooks\post_tool_fxmily.ps1` (PostToolUse async) invoque `prettier --write` sur Edit/Write. Quand Claude Edit puis Read immédiatement, voit le state prettier-reformaté → perception "revert". Workaround V1.5/V1.5.1/V1.5.2 : edits depuis worktree Ichor (project root différent → hook NON chargé). Long-term fix V1.5.2 : Option C (sync invocation) recommandée — cf. `docs/jalon-V1.5.2-prep.md §3`.
+
+### Quality gate V1.5 + V1.5.1 + V1.5.2
+
+- type-check exit 0 ✅
+- lint exit 0 (max-warnings = 0) ✅
+- **Vitest 749 / 749 verts** (+18 vs J10 baseline 731 : 8 V1.5 schema + 5 builder pseudonym + 3 hardening salt/empty + 2 FR locale)
+- Prisma 7.8.0 client regenerated ✅
+
+### Commit chain V1.5 (5 commits sur `feat/v1.5-trading-calibration`)
+
+```
+e6a7a3b fix(v1.5.2): FR locale comma support + close-out doc + V1.5.2 prep
+f6539e7 fix(v1.5.1): audit-driven hardening — builder aggregates + salt + Decimal align + bounds
+402ea66 feat(v1.5.1): wizard UI capture — tradeQuality + riskPct end-to-end
+8158465 docs(v1.5): ADR-002 V2 calibration prop-firm empirical + RGPD P0 decisions
+52d4671 feat(v1.5): trading-expert calibration — pseudonymize + tradeQuality + riskPct
+```
+
+### Pré-requis Eliot pour activer V1.5 en prod
+
+1. Mergement PR #35 J10 d'abord (smoke prod 12-step validé).
+2. PR `feat/v1.5-trading-calibration` créée + reviewed + merged sur main.
+3. Apply migration : `pnpm --filter @fxmily/web prisma:migrate deploy`.
+4. **Décision P1 sécurité** : poser `MEMBER_LABEL_SALT` env var (`openssl rand -hex 32`) dans `/etc/fxmily/web.env` AVANT 1er rapport IA hebdo si export externe envisagé.
+5. Décider P0 Anthropic Bedrock Frankfurt (Option B) vs API directe US (Option A) — cf. [v2-roadmap.md §🚨 P0 RGPD](../../docs/v2-roadmap.md).

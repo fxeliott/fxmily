@@ -162,6 +162,74 @@ Effort estimé : **1-1.5 semaine**.
 > Subagent recherche web parallèle au close-out J10 Phase ω. 8 verdicts
 > sourcés. À intégrer aux décisions V2 quand pertinent.
 
+### 🚨 P0 — RGPD Anthropic Claude API : décision avant la 1ère cohorte payante
+
+**Source** : deep-research subagent RGPD 2026-05-09 (CNIL + Légifrance + AMF + Anthropic GDPR docs).
+
+**Constat** : Anthropic API directe = transferts US par défaut. Le rapport hebdo IA
+(Sonnet 4.6) envoie le `WeeklySnapshot` du membre — counters anonymisés via
+`memberLabel` (V1.5 commit `52d4671`) MAIS journal excerpts + emotion tags
+restent dans le payload.
+
+**Choix V2 (à trancher avant 1er rapport prod incluant données membres)** :
+
+- **Option A — API directe US** : conserver `@anthropic-ai/sdk` actuel
+  - DPA Anthropic effective 1er janvier 2026 + SCCs incluses + ISO 42001/SOC 2.
+    **Action obligatoire** : documenter un TIA (Transfer Impact Assessment) +
+    minimisation explicite (pseudonymisation déjà faite via memberLabel).
+- **Option B — AWS Bedrock Frankfurt EU** : route Anthropic Claude via Bedrock
+  EU. Avantage : résidence EU stricte, pas de TIA US à documenter. Inconvénient :
+  coût plus élevé (~+30 %) + refactor `lib/weekly-report/claude-client.ts`
+  pour passer par AWS SDK + `@aws-sdk/client-bedrock-runtime`.
+
+**Recommandation** : **Option A pour V1**, escalader Option B en V2 si la
+cohorte dépasse 100 membres ou si CNIL inspecte. La pseudonymisation V1.5
+(`memberLabel`) couvre déjà la minimisation requise par l'Art. 28 GDPR.
+
+### 🚨 P0 — Politique de Confidentialité Art. 13 RGPD
+
+Page `/legal/privacy` à finaliser AVANT 1ère invitation cohorte payante. Doit
+inclure :
+
+- Finalités du traitement (suivi comportemental + coaching psychologique).
+- Bases légales (contrat de formation = exécution).
+- Durées de rétention par catégorie (auth = durée relation, comptabilité = 10
+  ans Code commerce, prospects = 3 ans dernier contact actif — CNIL délib.
+  n°2021-130).
+- Sous-traitants listés : Anthropic (rapport IA), Resend (email), Cloudflare
+  R2 (stockage médias), Sentry (monitoring), Hetzner (hébergement).
+- Droits RGPD (accès, rectification, effacement, portabilité, opposition).
+- Contact DPO (à nommer si cohorte > 250 membres ou traitement à grande échelle).
+
+### 🟢 Hors scope confirmé (recherche RGPD 2026-05-09)
+
+- **AML6 + DAC8** : 🟢 hors scope tant que Fxmily reste service éducatif sans
+  paiement crypto direct.
+- **MiFID II** : 🟢 hors scope — Fxmily ne fournit aucun service d'investissement
+  au sens Annexe I (pas de réception/transmission/exécution d'ordres).
+- **DSA VLOP** : 🟢 hors scope — seuil 45M MAU UE, Fxmily ~1000 membres max V2.
+
+### ⚠️ Loi influenceurs 2023 / décret 30 mars 2026 (CPF)
+
+Si promo externe de Fxmily via finfluenceur :
+
+- Contrat écrit obligatoire dès **1 000 € HT** (décret 28 nov 2025, en vigueur
+  1er janv 2026).
+- Si formation **financée CPF** ET promue via influenceur → mention "financement
+  public" 90 % durée + 7 % espace écran + lien hypertexte (décret n°2026-233
+  du 30 mars 2026).
+- Si Fxmily auto-financée par membres uniquement → ce volet ne s'applique
+  pas.
+
+### Citation Mark Douglas L122-5 CPI
+
+Pas de seuil quantitatif fixe en jurisprudence FR récente (2024-2026 — la Cour
+apprécie _in concreto_). Règle de prudence Fxmily : ≤30 mots/citation +
+finalité pédagogique explicite + attribution complète :
+_Mark Douglas, Trading in the Zone, Prentice Hall Press (Penguin Publishing
+Group), 2000_. Escalade avocat PI recommandée avant batch publications
+commerciales régulières.
+
 ### Stack patches (pas d'action V2, juste tracking)
 
 - **Next.js 16.2.6** — patché 12 advisories 16.2.4 → 16.2.5 (mai 2026)

@@ -1,0 +1,108 @@
+name: Deploy (Vercel zero-cost path)
+
+# Phase N — Vercel Hobby alternative to the Hetzner deploy.yml.
+#
+# Eliot's constraint : "pas de coût supplémentaire et en API".
+# Vercel Hobby free tier (~100GB bw, 100h compute, 0 € / 0 CB) covers
+# Fxmily's 30-user cohort with margin. This workflow triggers on push
+# to `main` (gated by the Vercel CLI auth via `VERCEL_TOKEN`).
+#
+# Required GitHub repository secrets (cf. ops/scripts/eliot-prerequisites-zerocost.md) :
+#   - VERCEL_TOKEN          : `vercel.com → Account → Tokens`
+#   - VERCEL_ORG_ID         : `vercel.com → Account → General` (Team ID)
+#   - VERCEL_PROJECT_ID     : `.vercel/project.json` after `vercel link`
+#   - DATABASE_URL          : Neon connection string (with `?sslmode=require`)
+#   - AUTH_SECRET           : `openssl rand -base64 32`
+#   - CRON_SECRET           : `openssl rand -hex 24`
+#   - RESEND_API_KEY        : Resend dashboard
+#   - SENTRY_DSN            : Sentry DSN
+#   - NEXT_PUBLIC_SENTRY_DSN: same value (mirror)
+#   - SENTRY_AUTH_TOKEN     : Sentry → Settings → Auth Tokens
+#   - SENTRY_ORG / SENTRY_PROJECT
+#   - VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_SUBJECT
+#
+# Idempotent : Vercel CLI deploys are atomic, no DB drift risk because
+# Prisma migrations run via the `pre-build` hook below.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'ops/**'
+      - 'LICENSE'
+  workflow_dispatch:
+    inputs:
+      production:
+        description: 'Promote to production (vs preview)'
+        required: false
+        default: 'true'
+
+concurrency:
+  group: deploy-vercel-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Vercel deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @fxmily/web prisma:generate
+
+      - name: Apply pending migrations to Neon
+        run: pnpm --filter @fxmily/web exec prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Install Vercel CLI
+        run: pnpm add -g vercel@latest
+
+      - name: Pull Vercel environment
+        run: |
+          vercel pull --yes \
+            --environment=${{ github.event.inputs.production == 'false' && 'preview' || 'production' }} \
+            --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build with Vercel
+        run: |
+          vercel build \
+            ${{ github.event.inputs.production == 'false' && '' || '--prod' }} \
+            --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        run: |
+          vercel deploy \
+            ${{ github.event.inputs.production == 'false' && '' || '--prod' }} \
+            --prebuilt \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            > /tmp/deploy-url.txt
+          echo "Deployed to : $(cat /tmp/deploy-url.txt)"
+
+      - name: Upload Sentry source maps
+        if: github.ref == 'refs/heads/main'
+        run: pnpm --filter @fxmily/web exec sentry-cli sourcemaps upload .next || true
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}

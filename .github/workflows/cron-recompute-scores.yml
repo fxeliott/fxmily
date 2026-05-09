@@ -1,0 +1,21 @@
+name: Cron · recompute-scores
+
+# Daily 02:00 UTC (J6).
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: |
+          curl -fsS --max-time 600 -X POST \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ vars.APP_URL }}/api/cron/recompute-scores"

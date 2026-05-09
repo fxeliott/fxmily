@@ -1,0 +1,29 @@
+name: Cron · checkin-reminders
+
+# Phase N — Vercel Hobby has a 1×/day cron limit, so we drive Fxmily's
+# 7 cron routes from GitHub Actions scheduled workflows instead.
+# 5-min granularity is the GH Actions minimum ; we approximate the
+# original `*/15 7-9,20-22 UTC` window by running every 15 min between
+# 06-10 and 19-23 UTC (covers all DST shifts for Europe/Paris members).
+#
+# Latency note : GH Actions scheduled workflows can lag 5-15 min under
+# load. The cron routes are idempotent (audit dedup, atomic claim) so
+# missing one run only delays the next opportunity.
+
+on:
+  schedule:
+    - cron: '0,15,30,45 6-10,19-23 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          curl -fsS --max-time 60 -X POST \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ vars.APP_URL }}/api/cron/checkin-reminders"

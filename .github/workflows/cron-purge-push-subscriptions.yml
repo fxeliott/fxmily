@@ -1,0 +1,21 @@
+name: Cron · purge-push-subscriptions
+
+# Sunday 05:00 UTC (J10 — stale push subscriptions cleanup, 90d).
+
+on:
+  schedule:
+    - cron: '0 5 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          curl -fsS --max-time 120 -X POST \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ vars.APP_URL }}/api/cron/purge-push-subscriptions"

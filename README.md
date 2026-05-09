@@ -6,20 +6,21 @@ App web installable (PWA) pour le suivi de chaque membre : journal de trading, c
 
 📋 **Spec complète** : [`SPEC.md`](./SPEC.md) — source de vérité produit.
 🤖 **Conventions Claude Code** : [`CLAUDE.md`](./CLAUDE.md).
-🛠️ **Préparation prochain jalon** : [`docs/jalon-1-prep.md`](./docs/jalon-1-prep.md).
+🗺️ **V2 / post-V1 backlog** : [`docs/v2-roadmap.md`](./docs/v2-roadmap.md).
 
-**Statut** : Jalon 0 (setup) terminé · 2026-05-05.
+**Statut** : J0 → J10 livrés (code prêt prod) · 2026-05-09. Smoke prod end-to-end bloqué par pré-requis externes Eliot (Hetzner CX22, domaine `fxmily.com`, Resend domain verify, Sentry DSN, iPhone Safari 18.4+ pour test push) — checklist dans [`docs/runbook-prod-smoke-test.md`](./docs/runbook-prod-smoke-test.md).
 
 ---
 
 ## Stack
 
-- **Next.js 16.2** (App Router) + **React 19.2** + **TypeScript 5.7 strict**
-- **Tailwind CSS 4.2** + **shadcn/ui** + **Framer Motion** (J2+) + **Tremor** (J6+)
-- **Prisma 7.8** (Rust-free, driver adapter `@prisma/adapter-pg`) + **PostgreSQL 17.9**
-- **Auth.js v5** (email/password + magic link) — câblé au J1
-- **Cloudflare R2** (médias) + **Resend** (emails) + **Sentry** (monitoring) + **Anthropic Claude API** (rapports hebdo IA)
-- **Vitest** + **React Testing Library** + **Playwright** — wired au J1
+- **Next.js 16.2.6** (App Router, Turbopack) + **React 19.2.6** + **TypeScript 6 strict** — patches CVE-2026-23870/44574/44575/44578.
+- **Tailwind CSS 4.2** + **shadcn/ui** + **DS-v2 9 primitives custom** (lime + Geist + Mercury shadows) + **Framer Motion** + **Recharts** (pivot SPEC §20.1)
+- **Prisma 7.8** (Rust-free, driver adapter `@prisma/adapter-pg`) + **PostgreSQL 17**
+- **Auth.js v5** (Credentials + JWT strategy) — câblé J1, status gate global Phase P
+- **Cloudflare R2** (médias) + **Resend** (emails) + **Sentry** (monitoring) + **Anthropic Claude API** (rapports hebdo IA, Sonnet)
+- **Web Push API + VAPID** + Service Worker manuel (Apple Declarative Web Push 8030 + classic, J9)
+- **Vitest 4** (717 tests) + **React Testing Library** + **Playwright** — wired J1+
 - **Turborepo** + **pnpm 10 workspaces** — **Node 22 LTS**
 
 ## Structure du monorepo
@@ -126,35 +127,42 @@ pnpm format:check && pnpm lint && pnpm type-check && pnpm build
 Conventional Commits enforced via commit-msg hook (commitlint). Format : `type(scope?): subject`.
 Types : `feat`, `fix`, `chore`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `revert`, `style`.
 
-## Stack de sécurité (J0)
+## Stack de sécurité
 
-Already wired :
+Wired J0 → J10 :
 
-- Headers (`next.config.ts`) : X-Content-Type-Options, X-Frame-Options DENY, Referrer-Policy, Permissions-Policy, COOP, HSTS-en-prod
+- Headers (`next.config.ts`) : CSP, X-Content-Type-Options, X-Frame-Options DENY, Referrer-Policy, Permissions-Policy, COOP, HSTS preload prod
 - Validation env Zod au boot (`apps/web/src/lib/env.ts` via `instrumentation.ts`)
 - Pas de secrets en dur, `.env*` gitignored avec allowlist `.env.example`
-- `@prisma/client` 7.8 + `@prisma/adapter-pg` 7.8 — Rust-free, plus petite surface d'attaque
-- `pnpm.overrides` sur `postcss` et `@hono/node-server` — patch CVE-2026-41305 + CVE-2026-39406
+- `argon2id` (`@node-rs/argon2`, OWASP 2024 — 19 MiB/t=2/p=1) + bidi/zero-width sanitization sur tous les champs free-text
+- `crypto.timingSafeEqual` SHA-256 sur `X-Cron-Secret` + token bucket rate limiter (5 burst, 1/min) sur tous les crons
+- BOLA cross-resource ownership check 2 niveaux sur uploads
+- Origin/Referer enforcement export RGPD + Zod allowlist hosts FCM/APNs/Mozilla sur push subscriptions
+- Soft-delete RGPD 24h grace + cron purge 30j + audit slugs `account.deletion.*`
+- Sentry beforeSend scrubber (cookies/auth/X-Cron-Secret/IP/email/body strip)
+- `pnpm.overrides` : `postcss` ≥ 8.5.10, `@hono/node-server` ≥ 1.19.13, `hono` ≥ 4.12.18 (CVE 2026-44457/44458/44459)
 
-À câbler aux jalons suivants : CSP stricte (J1), rate limiting (J1), argon2id (J1), Sentry (J10).
+Reclassé V2 : CSP nonces (`'unsafe-inline'` aujourd'hui), JWT `tokenVersion` révocation immédiate, login rate-limit credential-stuffing.
 
 ## Roadmap (jalons)
 
 Voir section 15 du [`SPEC.md`](./SPEC.md). 11 jalons (J0 → J10), ~50-70 jours estimés.
 
-| Jalon  | Statut        | Description                                    |
-| ------ | ------------- | ---------------------------------------------- |
-| **J0** | ✅ 2026-05-05 | Setup projet (ce repo)                         |
-| J1     | À venir       | Auth & invitation (cf. `docs/jalon-1-prep.md`) |
-| J2     | —             | Journal de trading                             |
-| J3     | —             | Espace admin & vue membre                      |
-| J4     | —             | Workflow d'annotation                          |
-| J5     | —             | Tracking quotidien (check-ins)                 |
-| J6     | —             | Dashboard membre & track record                |
-| J7     | —             | Module Mark Douglas                            |
-| J8     | —             | Rapport hebdo IA admin                         |
-| J9     | —             | Notifications push                             |
-| J10    | —             | RGPD, légal, monitoring, déploiement prod      |
+| Jalon   | Statut        | Description                                                      |
+| ------- | ------------- | ---------------------------------------------------------------- |
+| **J0**  | ✅ 2026-05-05 | Setup projet (Turborepo + Next 16 + Prisma 7 + DS-v2 lime)       |
+| **J1**  | ✅ 2026-05-05 | Auth.js v5 + invitation Resend + onboarding atomique             |
+| **J2**  | ✅ 2026-05-05 | Journal trading wizard 7-step + uploads R2/local + BOLA          |
+| **J3**  | ✅ 2026-05-06 | Espace admin + vue membre + trades tab                           |
+| **J4**  | ✅ 2026-05-06 | Annotation admin (image V1, vidéo Zoom V2) + queue notifications |
+| **J5**  | ✅ 2026-05-06 | Check-ins matin/soir + streak Mercy + cron reminders             |
+| **J6**  | ✅ 2026-05-07 | Dashboard membre + 4 scores comportementaux + Recharts           |
+| **J7**  | ✅ 2026-05-07 | 50/50 fiches Mark Douglas + déclencheurs Octalysis               |
+| **J8**  | ✅ 2026-05-08 | Rapport hebdo IA admin (Claude Sonnet + cache 1h)                |
+| **J9**  | ✅ 2026-05-08 | Web Push API + VAPID + SW + 5 toggles préférences                |
+| **J10** | ⏳ 2026-05-09 | RGPD + Sentry + Hetzner/Vercel deploy + observability            |
+
+**J10 status** : code prêt, smoke prod end-to-end bloqué par 7 pré-requis externes Eliot. Une fois levés (Hetzner CX22 provisionné + `fxmily.com` acheté + Resend domain verified + Sentry DSN + iPhone Safari 18.4+ + admin password rotated + GitHub secrets posés), checklist 12-step dans [`docs/runbook-prod-smoke-test.md`](./docs/runbook-prod-smoke-test.md) conclut l'itération.
 
 ## Licence
 

@@ -3,7 +3,7 @@
 **Date initiale** : 2026-05-05 · **Dernière révision** : 2026-05-08 (v1.1 amendement post-J7.8)
 **Auteur** : Eliot Pena (interview structuré avec Claude Code, skill `/spec`)
 **Version** : **1.1** — voir [§20 Changelog v1.0 → v1.1](#20-changelog-v10--v11) pour les pivots stack et sous-jalons inventés en cours.
-**Statut** : Reflète la réalité 2026-05-08 (J0→J7.8 livrés, 12 PRs mergées, 503/503 tests verts, 50/50 fiches Mark Douglas seedées).
+**Statut** : Reflète la réalité 2026-05-09 (J0→J10 livrés, 717/717 tests verts, 18 commits Phases A→P sur `claude/j10-prod-deploy`, smoke prod bloqué par 7 pré-requis externes Eliot — voir `docs/runbook-prod-smoke-test.md`).
 
 ---
 
@@ -966,29 +966,26 @@ Phase 2 — Audit-driven hardening :
 | J5 | Membre fait 2 check-ins, voit streak, reçoit pushes | ✅ smoke cron+P2002+rate-limit+JWT validé |
 | J6 | Membre voit 4 scores + graphiques + patterns émotion×perf | ✅ 458→503 tests, 100 trades demo seeded |
 | J7 | Bibliothèque + déclencheurs + membre reçoit fiche après 3 pertes consécutives | ✅ smoke `scripts/smoke-test-j7.ts` ALL GREEN avec 50 cards |
-| J8 | Eliot reçoit email avec rapport hebdo de chaque membre actif | ⏳ NEXT — voir §20.6 |
-| J9 | Membre active notifs, reçoit pushes prévus | ⏳ pending |
-| J10 | App en prod sur app.fxmily.com, Eliot s'invite + teste end-to-end | ⏳ pending (Hetzner deploy + RGPD + Sentry + domaine) |
+| J8 | Eliot reçoit email avec rapport hebdo de chaque membre actif | ✅ Phase B+ smoke live ALL GREEN — Claude Sonnet mock + cron Sun 21 UTC + email digest |
+| J9 | Membre active notifs, reçoit pushes prévus | ✅ smoke `scripts/smoke-test-j9.ts` ALL GREEN — Apple Declarative Web Push 8030 + classic dual SW + email fallback |
+| J10 | App en prod sur app.fxmily.com, Eliot s'invite + teste end-to-end | ⚠️ code prêt (18 commits Phases A→P sur `claude/j10-prod-deploy`, RGPD + Sentry + Hetzner/Vercel deploy + observability `/admin/system` + cron-watch). **Smoke prod end-to-end** bloqué par 7 pré-requis externes Eliot (Hetzner CX22 provisionné + `fxmily.com` + Resend domain verified + Sentry DSN + iPhone Safari 18.4+ + admin password rotated + GitHub secrets) |
 
-### 20.6 — Backlog clair J8 (prochaine session, après `/clear`)
+### 20.6 — Backlog J8 (livré ✅ 2026-05-08)
 
-**Scope** : Rapport hebdo IA admin (SPEC §7.10) — Claude Sonnet 4.6 + prompt caching + cron dimanche 21:00 UTC + email digest fxeliott.
+J8 livré PR #30 + Phase B+. 6 fixes audit-driven hardening + 8 polish post-PR. Voir `apps/web/CLAUDE.md` section J8 pour les détails. Cron Sun 21 UTC + email digest + cache 1h Sonnet + 535 tests verts.
 
-**Pré-requis** :
-- ✅ `safeFreeText` câblé sur tous champs free-text (J5+J7 — anti-prompt-injection critique)
-- ✅ Pattern cron J5/J6/J7 carbone (`timingSafeEqual` + token bucket + 503/401/429/405)
-- ⚠️ `ANTHROPIC_API_KEY` à ajouter par Eliot dans `.env` worktree avant smoke test live (V1 ship avec mock SDK acceptable)
-- ⚠️ Resend domain `fxmily.com` non vérifié → V1 ship en envoyant à `eliott.pena@icloud.com` (compte Resend Eliot vérifié)
+### 20.7 — État final V1 (2026-05-09)
 
-**Briques réutilisables** :
-- `lib/cards/service.ts` `listMyDeliveries` + `aggregateMemberDeliveryStats` pour intégrer la posture Douglas dans le digest IA
-- `lib/scoring/service.ts` `getLatestBehavioralScore` pour sourcer scores 4-dim
-- `lib/checkin/service.ts` `listRecentCheckinDays` + `getStreak` pour la 7j window
-- `lib/trades/service.ts` pour la 7j trades window (R, outcome, plan, hedge, émotion)
-- `safeFreeText` (`lib/text/safe.ts`) — appliquer sur 100% des inputs user-controlled AVANT envoi au prompt Claude
-- Pattern email React Email v2 + Resend (`AnnotationReceivedEmail` template carbone)
+J0 → J10 livrés. Branche `claude/j10-prod-deploy` HEAD `0588d12` après Phases A → P (18 commits granulaires) :
 
-**Coût SPEC §16** : ~30 membres × ~3-5k tokens input + ~1-2k tokens output × Sonnet 4.6 = ~5-10€/mois. Garde-fou : retry h+6/h+12/h+24 si API down. Pas de blocage app.
+- **Phases A → H** : RGPD (soft-delete + cron purge) + Sentry (DSN-guarded + scrubber) + Hetzner Docker prod stack + audit-driven hardening round 1 (5 BLOCKERs + 7 HIGH).
+- **Phases I → K** : promote J10.5+ items (atomic deletion + 2 rate-limits + skip-link + `<Code>` + `role="alert"` + h2 hierarchy + CookieBanner transition + Apple Touch Icons), CVE patch Next 16.2.6 (4 HIGH advisories), observability `/admin/system` + cron-watch GH Actions hourly.
+- **Phases L → N** : `/account` hub + `error.tsx` + `not-found.tsx` + automation Cloudflare/Resend/bootstrap + zero-cost Vercel Hobby alternative.
+- **Phases O → P** : 6 BLOCKERs cross-file finaux (auth status gate global + 4 schemas sanitization bidi + global-error.tsx + 4 WCAG) + override hono CVE 2026.
+
+**Quality gate finale** : format ✓, lint ✓, type-check ✓, **Vitest 717/717 verts**, build prod Turbopack ✓. CI [PR #35](https://github.com/fxeliott/fxmily/pull/35) verte sur 3 checks.
+
+**Reclassé V2 / J10.5+** : CSP nonces, JWT `tokenVersion`, login rate-limit credential-stuffing, Capacitor + App Store, Stripe paiement, multi-admin, annual DR test, Service Worker offline strategy, retention auditLog 90j.
 
 ---
 

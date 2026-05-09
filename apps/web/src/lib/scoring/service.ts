@@ -90,11 +90,15 @@ export async function computeScoresForUser(
 }> {
   const windowDays = options.windowDays ?? DEFAULT_WINDOW_DAYS;
 
-  // Resolve the user's timezone (Europe/Paris fallback).
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: { timezone: true },
-  });
+  // Resolve the user's timezone (Europe/Paris fallback). Phase Q.2 perf
+  // T1#3 — skip the round-trip when the cron loop already supplied the
+  // timezone via options (saves 1000 queries/night at 1000 members).
+  const user = options.timezone
+    ? null
+    : await db.user.findUnique({
+        where: { id: userId },
+        select: { timezone: true },
+      });
   const timezone = options.timezone ?? user?.timezone ?? 'Europe/Paris';
 
   // Anchor to yesterday-local by default — today is incomplete.

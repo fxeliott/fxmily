@@ -49,12 +49,11 @@ export interface GenerateOptions {
   previousFullWeek?: boolean;
   /// `true` → skip the email send (smoke testing). DB write still happens.
   skipEmail?: boolean;
-  /// Override the recipient. Defaults to `WEEKLY_REPORT_RECIPIENT` env (or
-  /// `eliottpena34690@gmail.com` — l'email du compte Resend Eliot,
-  /// **seul recipient autorisé free-tier sans domain verify**. Découvert
-  /// lors du test live 2026-05-08 : Resend free retourne 403 si recipient
-  /// ≠ owner email du compte. Domain verify `fxmilyapp.com` reporté J10 →
-  /// then anyone-recipient.
+  /// Override the recipient. Defaults to `WEEKLY_REPORT_RECIPIENT` env
+  /// (REQUIRED in prod — Phase T security hardening 2026-05-09 : le
+  /// fallback hardcoded sur l'email perso a été retiré du repo public).
+  /// Resend free retourne 403 si recipient ≠ owner email du compte tant
+  /// que `fxmilyapp.com` n'est pas domain-verified Resend Console.
   recipientOverride?: string;
 }
 
@@ -578,12 +577,18 @@ function resolveRecipient(options: GenerateOptions): string {
   // closing the data-exfiltration vector flagged by the security review.
   const isProdRuntime = env.NODE_ENV === 'production' || env.AUTH_URL.startsWith('https://');
   if (options.recipientOverride && !isProdRuntime) return options.recipientOverride;
-  // V1 fallback : `eliottpena34690@gmail.com` = email du compte Resend Eliot
-  // (seul recipient autorisé free-tier sans domain verify — Resend retourne
-  // 403 si recipient ≠ owner email). Discovered live 2026-05-08 lors du
-  // smoke test J8 polish 4e passe. À élargir J10 quand `fxmilyapp.com` domain
-  // verify Resend Console est fait → `eliot@fxmilyapp.com` ou similaire.
-  return env.WEEKLY_REPORT_RECIPIENT ?? 'eliottpena34690@gmail.com';
+  // Phase T security hardening (2026-05-09) : retiré le hardcoded fallback
+  // sur l'email perso d'Eliot (phishing surface dans repo public). Le
+  // env var `WEEKLY_REPORT_RECIPIENT` est désormais REQUIS en runtime ; si
+  // absent, on throw au lieu d'envoyer à un fallback en dur. Le runner
+  // saura immédiatement que l'env est mal configurée.
+  if (!env.WEEKLY_REPORT_RECIPIENT) {
+    throw new Error(
+      '[weekly-report] WEEKLY_REPORT_RECIPIENT env var is required. ' +
+        'Set it in apps/web/.env (dev) or /etc/fxmily/web.env (prod).',
+    );
+  }
+  return env.WEEKLY_REPORT_RECIPIENT;
 }
 
 function displayMemberLabel(

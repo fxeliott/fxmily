@@ -10,6 +10,8 @@ import { LoginForm } from './login-form';
 
 export const metadata = {
   title: 'Connexion · Fxmily',
+  // Phase T security — V1 closed cohort, no SEO discovery.
+  robots: { index: false, follow: false },
 };
 
 interface LoginPageProps {

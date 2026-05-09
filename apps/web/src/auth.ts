@@ -7,6 +7,7 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
+import { loginEmailLimiter } from '@/lib/rate-limit/token-bucket';
 import { signInSchema } from '@/lib/schemas/auth';
 import authConfig from '@/auth.config';
 import type { UserRole, UserStatus } from '@/generated/prisma/client';
@@ -56,6 +57,31 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         if (!parsed.success) return null;
 
         const { email, password } = parsed.data;
+
+        // Phase T security promotion (2026-05-09) — credential-stuffing
+        // defense at the AUTH PROVIDER level (covers
+        // /api/auth/callback/credentials direct hits, not just the
+        // signInAction Server Action). Per-email + per-(unknown-IP-here,
+        // see comment) bucket. Auth.js doesn't pass the request to
+        // authorize() so we key on email only here ; the IP gate lives
+        // in `app/login/actions.ts` which is the legit caller path.
+        // An attacker hitting /api/auth/callback/credentials directly
+        // is still bound by the per-email bucket → 5 burst, 1/min refill.
+        // After 5 failures, argon2 verify is short-circuited and we
+        // return null without revealing the throttle (anti-enumeration).
+        const emailDecision = loginEmailLimiter.consume(email.toLowerCase());
+        if (!emailDecision.allowed) {
+          await logAudit({
+            action: 'auth.login.rate_limited',
+            userId: null,
+            metadata: {
+              kind: 'email',
+              retryAfterMs: emailDecision.retryAfterMs,
+              source: 'authorize',
+            },
+          }).catch(() => undefined);
+          return null;
+        }
 
         const user = await db.user.findUnique({
           where: { email },

@@ -186,6 +186,38 @@ export const sentryTunnelLimiter = new TokenBucketLimiter({
   maxKeys: 2048,
 });
 
+/**
+ * J10 Phase T (security promotion 2026-05-09) — Login bruteforce / credential
+ * stuffing defense.
+ *
+ * Wraps `signInAction` in `app/login/actions.ts`. Two buckets are consumed
+ * per login attempt:
+ *   1. **per-email** : same email × 5 attempts max in the burst, then
+ *      1 attempt per minute. Stops dictionary attacks on a known account.
+ *   2. **per-IP**    : same caller IP × 10 attempts max in the burst, then
+ *      1/min. Stops credential stuffing across many emails from one machine.
+ *
+ * If EITHER bucket trips, return `{ ok: false, error: 'rate_limited' }` with
+ * the longer of the two `retryAfterMs`. We don't reveal which bucket was hit
+ * (anti-enumeration). Audit row `auth.login.rate_limited` with metadata
+ * `{ kind: 'email' | 'ip', retryAfterMs }` (no email in plaintext).
+ *
+ * `bucketSize: 5/10` is generous enough that a typo-prone Eliot won't lock
+ * himself out, but tight enough that a bot doing 60 req/min still trips
+ * after the 11th attempt.
+ */
+export const loginEmailLimiter = new TokenBucketLimiter({
+  bucketSize: 5,
+  refillRate: 1 / 60, // 1 token/min sustained
+  maxKeys: 5000,
+});
+
+export const loginIpLimiter = new TokenBucketLimiter({
+  bucketSize: 10,
+  refillRate: 1 / 60,
+  maxKeys: 5000,
+});
+
 // =============================================================================
 // Helpers — extract a stable per-caller identity from the request
 // =============================================================================

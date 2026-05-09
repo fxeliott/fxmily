@@ -14,7 +14,7 @@ import { dispatchForAllActiveMembers } from '@/lib/triggers/engine';
  * Wiring expected in production: every 6 hours on Hetzner via crontab
  * "0 0,6,12,18 * * *" or equivalent ->
  *   curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
- *        https://app.fxmily.com/api/cron/dispatch-douglas
+ *        https://app.fxmilyapp.com/api/cron/dispatch-douglas
  *
  * Why every 6h: temporal triggers (no_checkin_streak, weekly drift) do not
  * fire from member actions - a member who hasn't logged in for 7 days has no

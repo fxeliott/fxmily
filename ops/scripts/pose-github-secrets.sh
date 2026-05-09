@@ -15,7 +15,7 @@
 #        SENTRY_ORG="fxmily"
 #        SENTRY_PROJECT="fxmily-web"
 #        # Optional repository VARIABLE (not secret) :
-#        APP_URL="https://app.fxmily.com"
+#        APP_URL="https://app.fxmilyapp.com"
 #        CRON_SECRET="…"  # mirrors /etc/fxmily/web.env, used by cron-watch.yml
 #   3. Run :
 #        bash ops/scripts/pose-github-secrets.sh secrets.local.env

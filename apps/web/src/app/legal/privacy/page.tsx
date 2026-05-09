@@ -39,9 +39,9 @@ export default function PrivacyPolicyPage(): React.ReactElement {
       <h2>1. Qui traite tes données ?</h2>
       <p>
         Le responsable de traitement est <strong>Eliot Pena</strong>, éditeur et utilisateur unique
-        de Fxmily, joignable à <a href="mailto:eliot@fxmily.com">eliot@fxmily.com</a>. Voir aussi
-        nos <a href="/legal/mentions">mentions légales</a> pour l&apos;hébergeur et l&apos;adresse
-        postale.
+        de Fxmily, joignable à <a href="mailto:eliot@fxmilyapp.com">eliot@fxmilyapp.com</a>. Voir
+        aussi nos <a href="/legal/mentions">mentions légales</a> pour l&apos;hébergeur et
+        l&apos;adresse postale.
       </p>
 
       <h2>2. Quelles données on collecte</h2>
@@ -164,8 +164,8 @@ export default function PrivacyPolicyPage(): React.ReactElement {
         </li>
         <li>
           <strong>Rectification &amp; opposition</strong> — par email à{' '}
-          <a href="mailto:eliot@fxmily.com">eliot@fxmily.com</a>, réponse sous 30 jours (article 12
-          RGPD).
+          <a href="mailto:eliot@fxmilyapp.com">eliot@fxmilyapp.com</a>, réponse sous 30 jours
+          (article 12 RGPD).
         </li>
         <li>
           <strong>Réclamation</strong> — si tu estimes que tes droits ne sont pas respectés, tu peux

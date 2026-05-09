@@ -117,10 +117,10 @@ export default function GlobalError({
               Une erreur grave a empêché le chargement de l&apos;application. On l&apos;a logué côté
               serveur. Tu peux réessayer ou contacter{' '}
               <a
-                href="mailto:eliot@fxmily.com"
+                href="mailto:eliot@fxmilyapp.com"
                 style={{ color: '#a3e635', textDecoration: 'underline' }}
               >
-                eliot@fxmily.com
+                eliot@fxmilyapp.com
               </a>{' '}
               en mentionnant l&apos;identifiant ci-dessous.
             </p>

@@ -121,7 +121,7 @@ export function SplashHero() {
                 onClick/href (inert at keyboard + mouse). Use a mailto link
                 styled as a button so it actually does something. */}
             <a
-              href="mailto:eliot@fxmily.com?subject=Demande%20d%27acc%C3%A8s%20Fxmily"
+              href="mailto:eliot@fxmilyapp.com?subject=Demande%20d%27acc%C3%A8s%20Fxmily"
               className={cn(btnVariants({ kind: 'secondary', size: 'l' }))}
             >
               Demander un accès

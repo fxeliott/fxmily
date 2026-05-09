@@ -13,7 +13,7 @@ import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
  * Wiring expected in production:
  *   `*\/15 7-22 * * *` on Hetzner →
  *     curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
- *          https://app.fxmily.com/api/cron/checkin-reminders
+ *          https://app.fxmilyapp.com/api/cron/checkin-reminders
  *
  * Why every 15 min: the morning window is 90 min (07:30–09:00) and the
  * evening window is 90 min as well; a 15-min cadence guarantees each member

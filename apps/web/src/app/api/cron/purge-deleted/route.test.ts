@@ -50,7 +50,7 @@ const TEST_CRON_SECRET = 'test_cron_secret_dummy_value_32chars_x';
 
 vi.mock('@/lib/env', () => ({
   env: {
-    AUTH_URL: 'https://app.fxmily.com',
+    AUTH_URL: 'https://app.fxmilyapp.com',
     NODE_ENV: 'test',
     CRON_SECRET: TEST_CRON_SECRET,
   },
@@ -70,7 +70,7 @@ afterEach(() => {
 });
 
 function makeRequest(opts: { secret?: string; ip?: string; query?: string }): Request {
-  const url = `https://app.fxmily.com/api/cron/purge-deleted${opts.query ?? ''}`;
+  const url = `https://app.fxmilyapp.com/api/cron/purge-deleted${opts.query ?? ''}`;
   const headers: Record<string, string> = {};
   if (opts.secret) headers['x-cron-secret'] = opts.secret;
   if (opts.ip) headers['x-forwarded-for'] = opts.ip;

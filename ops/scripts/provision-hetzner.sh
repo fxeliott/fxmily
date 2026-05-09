@@ -110,7 +110,7 @@ echo "Next steps:"
 echo "  1. Copy ops/scripts/setup-host.sh to the host and run it as root."
 echo "       scp ops/scripts/setup-host.sh root@$IP:/root/"
 echo "       ssh root@$IP 'bash /root/setup-host.sh'"
-echo "  2. Add the IP as a Cloudflare DNS A record for app.fxmily.com (proxied=NO)."
+echo "  2. Add the IP as a Cloudflare DNS A record for app.fxmilyapp.com (proxied=NO)."
 echo "  3. Populate /etc/fxmily/web.env + /etc/fxmily/cron.env on the host."
 echo "  4. cd /opt/fxmily && docker compose -f docker-compose.prod.yml pull && up -d"
 echo

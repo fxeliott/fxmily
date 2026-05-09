@@ -12,7 +12,7 @@ name: Cron Watch
 #  - no extra account to manage
 #
 # Required secrets : `CRON_SECRET` (mirrors `/etc/fxmily/web.env`) and
-# `APP_URL` repository variable (e.g. `https://app.fxmily.com`).
+# `APP_URL` repository variable (e.g. `https://app.fxmilyapp.com`).
 
 on:
   schedule:
@@ -40,7 +40,7 @@ jobs:
             -X POST \
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
             -H "Accept: application/json" \
-            "${{ vars.APP_URL || 'https://app.fxmily.com' }}/api/cron/health")
+            "${{ vars.APP_URL || 'https://app.fxmilyapp.com' }}/api/cron/health")
           STATUS=$?
           echo "status_code=$STATUS" >> "$GITHUB_OUTPUT"
           if [ -n "$BODY" ]; then

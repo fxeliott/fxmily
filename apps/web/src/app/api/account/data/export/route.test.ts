@@ -40,7 +40,7 @@ vi.mock('@/lib/auth/audit', () => ({
 // Pin AUTH_URL so the same-origin check is deterministic.
 vi.mock('@/lib/env', () => ({
   env: {
-    AUTH_URL: 'https://app.fxmily.com',
+    AUTH_URL: 'https://app.fxmilyapp.com',
     NODE_ENV: 'test',
   },
 }));
@@ -65,7 +65,7 @@ afterEach(() => {
 });
 
 function makeRequest(headers: Record<string, string>): Request {
-  return new Request('https://app.fxmily.com/api/account/data/export', {
+  return new Request('https://app.fxmilyapp.com/api/account/data/export', {
     method: 'POST',
     headers,
   });
@@ -90,7 +90,7 @@ describe('POST /api/account/data/export — auth gate', () => {
   it('returns 401 when no session is present', async () => {
     authMock.mockResolvedValueOnce(null);
 
-    const res = await POST(makeRequest({ origin: 'https://app.fxmily.com' }) as never);
+    const res = await POST(makeRequest({ origin: 'https://app.fxmilyapp.com' }) as never);
 
     expect(res.status).toBe(401);
     const body = await res.json();
@@ -105,7 +105,7 @@ describe('POST /api/account/data/export — auth gate', () => {
   it('returns 401 when session.user.status is not active', async () => {
     authMock.mockResolvedValueOnce({ user: { id: 'u1', status: 'deleted' } });
 
-    const res = await POST(makeRequest({ origin: 'https://app.fxmily.com' }) as never);
+    const res = await POST(makeRequest({ origin: 'https://app.fxmilyapp.com' }) as never);
 
     expect(res.status).toBe(401);
     expect(buildUserDataExportMock).not.toHaveBeenCalled();
@@ -153,7 +153,7 @@ describe('POST /api/account/data/export — same-origin defence', () => {
 
     const res = await POST(
       makeRequest({
-        referer: 'https://app.fxmily.com/account/data',
+        referer: 'https://app.fxmilyapp.com/account/data',
       }) as never,
     );
 
@@ -177,7 +177,7 @@ describe('POST /api/account/data/export — happy path', () => {
     summariseExportMock.mockReturnValueOnce({ schemaVersion: 1, tradeCount: 0 });
     buildExportFilenameMock.mockReturnValueOnce('fxmily-data-uok-2026-05-09.json');
 
-    const res = await POST(makeRequest({ origin: 'https://app.fxmily.com' }) as never);
+    const res = await POST(makeRequest({ origin: 'https://app.fxmilyapp.com' }) as never);
 
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toBe('application/json; charset=utf-8');
@@ -203,7 +203,7 @@ describe('POST /api/account/data/export — happy path', () => {
 
     await POST(
       makeRequest({
-        origin: 'https://app.fxmily.com',
+        origin: 'https://app.fxmilyapp.com',
         'user-agent': 'Mozilla/5.0 (test)',
       }) as never,
     );
@@ -235,7 +235,7 @@ describe('POST /api/account/data/export — error path', () => {
     buildUserDataExportMock.mockRejectedValueOnce(new Error('connection refused'));
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    const res = await POST(makeRequest({ origin: 'https://app.fxmily.com' }) as never);
+    const res = await POST(makeRequest({ origin: 'https://app.fxmilyapp.com' }) as never);
 
     expect(res.status).toBe(500);
     const body = await res.json();
@@ -260,12 +260,12 @@ describe('POST /api/account/data/export — per-user rate-limit (T3.15)', () => 
 
     // Burn the 3 burst tokens with valid same-origin POSTs.
     for (let i = 0; i < 3; i++) {
-      const r = await POST(makeRequest({ origin: 'https://app.fxmily.com' }) as never);
+      const r = await POST(makeRequest({ origin: 'https://app.fxmilyapp.com' }) as never);
       expect(r.status).toBe(200);
     }
 
     // 4th call within the burst window → 429.
-    const limited = await POST(makeRequest({ origin: 'https://app.fxmily.com' }) as never);
+    const limited = await POST(makeRequest({ origin: 'https://app.fxmilyapp.com' }) as never);
 
     expect(limited.status).toBe(429);
     const body = await limited.json();

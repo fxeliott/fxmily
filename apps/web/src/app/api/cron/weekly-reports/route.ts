@@ -15,7 +15,7 @@ import { generateWeeklyReportsForAllActiveMembers } from '@/lib/weekly-report/se
  * Wiring expected in production : Hetzner crontab "0 21 * * 0" (every Sunday
  * at 21:00 UTC) →
  *   curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
- *        https://app.fxmily.com/api/cron/weekly-reports
+ *        https://app.fxmilyapp.com/api/cron/weekly-reports
  *
  * Why Sunday 21:00 UTC : that's 22:00 Paris winter / 23:00 Paris summer — late
  * enough for the local-week to be effectively over (markets closed), early

@@ -66,7 +66,7 @@ const envSchema = z.object({
   /// Destinataire du digest hebdo IA admin. Defaults à `eliottpena34690@gmail.com`
   /// (email du compte Resend Eliot — seul recipient autorisé free-tier sans
   /// domain verify ; Resend retourne 403 sinon, vérifié live 2026-05-08).
-  /// À élargir à `eliot@fxmily.com` quand `fxmily.com` domain verify Resend
+  /// À élargir à `eliot@fxmilyapp.com` quand `fxmilyapp.com` domain verify Resend
   /// est fait (J10).
   WEEKLY_REPORT_RECIPIENT: z.string().email().optional(),
 

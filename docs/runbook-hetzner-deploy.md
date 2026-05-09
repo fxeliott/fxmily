@@ -1,7 +1,7 @@
 # Runbook — Production deploy (Hetzner CX22)
 
 Wires Fxmily V1 from a Hetzner Cloud CX22 to a working
-`https://app.fxmilyapp.com` (V1 — pivot du SPEC `app.fxmily.com` vers le
+`https://app.fxmilyapp.com` (V1 — pivot du SPEC `app.fxmilyapp.com` vers le
 domaine déjà possédé `fxmilyapp.com`, décision Phase R 2026-05-09 pour
 respecter strictement la contrainte zéro coût supplémentaire). Pair with
 [`runbook-backup-restore.md`](runbook-backup-restore.md) and
@@ -10,8 +10,9 @@ respecter strictement la contrainte zéro coût supplémentaire). Pair with
 > **Pré-requis manuel Eliot (V1 — Phase R reality check 2026-05-09)** :
 >
 > 0. **Décision domaine** : V1 ship sur `fxmilyapp.com` (déjà possédé +
->    Cloudflare DNS configuré). Achat `fxmily.com` reporté V2 si l'image de
->    marque l'exige. Coût supplémentaire V1 : 0 €.
+>    Cloudflare DNS configuré). Achat éventuel d'un domaine plus court
+>    (`fxmily.com` si dispo) reporté V2 si l'image de marque l'exige. Coût
+>    supplémentaire V1 : 0 €.
 > 1. **Hetzner CX22 EXISTANT** : `hetzner-dieu` à `178.104.39.201` (hostname
 >    `fxmilyapp.com`) — déjà payé pour n8n/Langfuse. Vérifier d'abord la
 >    capacité résiduelle via `ssh hetzner-dieu 'free -h && df -h'`. Si
@@ -135,15 +136,15 @@ docker compose -f docker-compose.prod.yml exec -T web \
 
 ## 4. DNS Cloudflare (×1, 10 min)
 
-Cloudflare Dashboard → fxmily.com → DNS :
+Cloudflare Dashboard → fxmilyapp.com → DNS :
 
-| Type | Name               | Content                                               | Proxied |
-| ---- | ------------------ | ----------------------------------------------------- | ------- |
-| A    | app                | <IP-Hetzner>                                          | NO      |
-| MX   | @                  | 10 mx1.resend.com / 20 mx2.resend.com                 | NO      |
-| TXT  | @                  | `v=spf1 include:_spf.resend.com -all`                 | NO      |
-| TXT  | resend.\_domainkey | (DKIM record fourni par Resend)                       | NO      |
-| TXT  | \_dmarc            | `v=DMARC1; p=quarantine; rua=mailto:eliot@fxmily.com` | NO      |
+| Type | Name               | Content                                                  | Proxied |
+| ---- | ------------------ | -------------------------------------------------------- | ------- |
+| A    | app                | <IP-Hetzner>                                             | NO      |
+| MX   | @                  | 10 mx1.resend.com / 20 mx2.resend.com                    | NO      |
+| TXT  | @                  | `v=spf1 include:_spf.resend.com -all`                    | NO      |
+| TXT  | resend.\_domainkey | (DKIM record fourni par Resend)                          | NO      |
+| TXT  | \_dmarc            | `v=DMARC1; p=quarantine; rua=mailto:eliot@fxmilyapp.com` | NO      |
 
 **`Proxied: NO`** : Caddy gère HTTPS direct, pas de proxy Cloudflare
 intermédiaire (évite le double-TLS et garde le HTTP/3 actif). Si tu
@@ -151,25 +152,25 @@ veux activer le proxy Cloudflare pour DDoS later, vérifie d'abord que
 `Strict-Transport-Security` ne soit pas pinned avec `preload` sur un
 domaine non-routable.
 
-Resend Console → Domains → `fxmily.com` → "Verify" (peut prendre 24h
+Resend Console → Domains → `fxmilyapp.com` → "Verify" (peut prendre 24h
 de propagation DNS). Une fois OK, l'app peut envoyer des emails depuis
-`noreply@fxmily.com`.
+`noreply@fxmilyapp.com`.
 
 ## 5. Caddy + HTTPS (×1, automatique)
 
-Au premier hit `https://app.fxmily.com`, Caddy provisionne le cert
+Au premier hit `https://app.fxmilyapp.com`, Caddy provisionne le cert
 Let's Encrypt automatiquement (challenge HTTP-01). Vérifie :
 
 ```bash
 docker compose -f docker-compose.prod.yml logs caddy | grep -i "certificate"
 # Attendu : "obtained certificate" + chain présente
-curl -sI https://app.fxmily.com | head -5
+curl -sI https://app.fxmilyapp.com | head -5
 # Attendu : HTTP/2 200 + Strict-Transport-Security présent
 ```
 
 ## 6. HSTS preload (Eliot, manuel ×1)
 
-Une fois que `https://app.fxmily.com` répond et que tu es SÛR de ne pas
+Une fois que `https://app.fxmilyapp.com` répond et que tu es SÛR de ne pas
 revenir en HTTP, soumets la liste preload : <https://hstspreload.org/>.
 Pré-requis : header `Strict-Transport-Security: max-age=63072000;
 includeSubDomains; preload`. Le Caddyfile l'émet déjà.
@@ -182,7 +183,7 @@ includeSubDomains; preload`. Le Caddyfile l'émet déjà.
 
 ```bash
 # Healthcheck app
-curl -fsS https://app.fxmily.com/api/health
+curl -fsS https://app.fxmilyapp.com/api/health
 # {"ok": true, ...}
 
 # Cron manuel (fxmily user)

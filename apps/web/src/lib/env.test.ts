@@ -104,7 +104,7 @@ describe('envSchemaWithRefines — VAPID cross-var refines (J9 E2)', () => {
       ...BASE_VALID_ENV,
       VAPID_PUBLIC_KEY: VALID_VAPID_PUB,
       VAPID_PRIVATE_KEY: VALID_VAPID_PRIV,
-      VAPID_SUBJECT: 'https://app.fxmily.com',
+      VAPID_SUBJECT: 'https://app.fxmilyapp.com',
       NEXT_PUBLIC_VAPID_PUBLIC_KEY: VALID_VAPID_PUB,
     });
     expect(r.success).toBe(true);
@@ -113,7 +113,7 @@ describe('envSchemaWithRefines — VAPID cross-var refines (J9 E2)', () => {
   it('rejects VAPID_SUBJECT with bare email (no scheme)', () => {
     const r = envSchemaWithRefines.safeParse({
       ...BASE_VALID_ENV,
-      VAPID_SUBJECT: 'eliott@fxmily.com',
+      VAPID_SUBJECT: 'eliott@fxmilyapp.com',
     });
     expect(r.success).toBe(false);
   });

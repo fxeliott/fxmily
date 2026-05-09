@@ -34,10 +34,10 @@ export default function MentionsPage(): React.ReactElement {
         <strong>Eliot Pena</strong>, éditeur du service Fxmily.
         <br />
         Adresse postale : Cournonterral, France (communiquée sur demande à
-        <a href="mailto:eliot@fxmily.com">&nbsp;eliot@fxmily.com</a>, conformément à l&apos;article
-        6 III 2° de la LCEN — particulier non-professionnel).
+        <a href="mailto:eliot@fxmilyapp.com">&nbsp;eliot@fxmilyapp.com</a>, conformément à
+        l&apos;article 6 III 2° de la LCEN — particulier non-professionnel).
         <br />
-        Contact : <a href="mailto:eliot@fxmily.com">eliot@fxmily.com</a>
+        Contact : <a href="mailto:eliot@fxmilyapp.com">eliot@fxmilyapp.com</a>
       </p>
 
       <h2>Directeur de la publication</h2>
@@ -55,7 +55,7 @@ export default function MentionsPage(): React.ReactElement {
 
       <h2>Nom de domaine</h2>
       <p>
-        <code>fxmily.com</code>, déposé via Cloudflare Registrar (Cloudflare, Inc., 101 Townsend
+        <code>fxmilyapp.com</code>, déposé via Cloudflare Registrar (Cloudflare, Inc., 101 Townsend
         Street, San Francisco, CA 94107, USA).
       </p>
 
@@ -70,9 +70,9 @@ export default function MentionsPage(): React.ReactElement {
       <h2>Signalement</h2>
       <p>
         Tout contenu illicite hébergé sur Fxmily peut être signalé par email à{' '}
-        <a href="mailto:eliot@fxmily.com">eliot@fxmily.com</a>. Conformément à l&apos;article 6 I 2°
-        de la LCEN, l&apos;éditeur retirera ou rendra inaccessible le contenu manifestement illicite
-        dès qu&apos;il en aura connaissance.
+        <a href="mailto:eliot@fxmilyapp.com">eliot@fxmilyapp.com</a>. Conformément à l&apos;article
+        6 I 2° de la LCEN, l&apos;éditeur retirera ou rendra inaccessible le contenu manifestement
+        illicite dès qu&apos;il en aura connaissance.
       </p>
 
       <h2>Documents associés</h2>

@@ -14,7 +14,7 @@ import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
  *
  * Wiring expected in production : Hetzner crontab "every 2 minutes" →
  *   curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
- *        https://app.fxmily.com/api/cron/dispatch-notifications
+ *        https://app.fxmilyapp.com/api/cron/dispatch-notifications
  *
  * Why every 2 minutes : balance latency (a member submitting a check-in at
  * 7:31 should get the absent reminder before 7:35) vs cost (push services

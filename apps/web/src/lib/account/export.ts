@@ -197,9 +197,9 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     exportedAt: new Date().toISOString(),
     notes: {
       source: 'Fxmily — /account/data',
-      contact: 'eliot@fxmily.com',
+      contact: 'eliot@fxmilyapp.com',
       schemaDocumentation:
-        'Politique de confidentialité Fxmily — voir https://app.fxmily.com/legal/privacy',
+        'Politique de confidentialité Fxmily — voir https://app.fxmilyapp.com/legal/privacy',
     },
     user: user as SafeUser | null,
     trades,

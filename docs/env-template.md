@@ -35,14 +35,14 @@ AUTH_URL=http://localhost:3000
 
 # -- Resend (transactional email) — Jalon 1 -----------------------------------
 # RESEND_API_KEY=re_...
-# RESEND_FROM=no-reply@fxmily.com
+# RESEND_FROM=no-reply@fxmilyapp.com
 
 # -- Cloudflare R2 (media storage) — Jalon 1+ ---------------------------------
 # R2_ACCOUNT_ID=
 # R2_ACCESS_KEY_ID=
 # R2_SECRET_ACCESS_KEY=
 # R2_BUCKET=fxmily-media
-# R2_PUBLIC_URL=https://media.fxmily.com
+# R2_PUBLIC_URL=https://media.fxmilyapp.com
 
 # -- Sentry (monitoring) — Jalon 10 -------------------------------------------
 # SENTRY_DSN=
@@ -68,8 +68,8 @@ AUTH_URL=http://localhost:3000
 # -- Rapports hebdo IA — destinataire admin (Jalon 8 + 10) --------------------
 # Email où sont expédiés les digests + rapports sécurité.
 # Doit pointer vers une boîte que tu lis. En dev, mets ton perso ; en prod,
-# mets l'alias eliot@fxmily.com une fois le domaine Resend vérifié.
-# WEEKLY_REPORT_RECIPIENT=eliot@fxmily.com
+# mets l'alias eliot@fxmilyapp.com une fois le domaine Resend vérifié.
+# WEEKLY_REPORT_RECIPIENT=eliot@fxmilyapp.com
 
 # -- Storage local fallback (avant R2) — dev uniquement -----------------------
 # Sans R2 keys, les uploads atterrissent dans ce dossier (gitignored).

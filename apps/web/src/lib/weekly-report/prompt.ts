@@ -9,7 +9,7 @@ import type { WeeklySnapshot } from '@/lib/schemas/weekly-report';
  *   - **Pas de conseil de trade.** No setups, no market analysis. The system
  *     prompt locks Claude into Mark Douglas territory : execution discipline,
  *     emotional regulation, plan/hedge respect.
- *   - **Pas de PII.** Only `userId` UUID + counters + redacted excerpts.
+ *   - **Pas de PII.** Only `memberLabel` pseudonyme + counters + redacted excerpts.
  *   - **Free-text déjà sanitisé.** The builder ran `safeFreeText` on every
  *     member-controlled string. The snapshot we serialize here is already
  *     bidi/zero-width-safe — defense-in-depth.
@@ -78,7 +78,7 @@ export function buildWeeklyReportUserPrompt(snapshot: WeeklySnapshot): string {
       : null;
 
   const lines: string[] = [];
-  lines.push(`# Snapshot hebdomadaire — membre ${snapshot.userId}`);
+  lines.push(`# Snapshot hebdomadaire — ${snapshot.memberLabel}`);
   lines.push(``);
   lines.push(
     `Période : du ${formatDate(snapshot.weekStart)} au ${formatDate(snapshot.weekEnd)} (TZ ${snapshot.timezone}).`,

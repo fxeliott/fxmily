@@ -18,7 +18,8 @@ import { MockWeeklyReportClient, resetClaudeClient } from './claude-client';
 import { computeCostEur, PRICING_USD_PER_MTOK } from './pricing';
 
 const ACTIVE_SNAPSHOT = {
-  userId: 'user_active_1',
+  // V1.5 — pseudonymized member label (replaces raw userId at the prompt boundary).
+  memberLabel: 'member-A1B2C3',
   timezone: 'Europe/Paris',
   weekStart: new Date('2026-05-04T00:00:00Z'),
   weekEnd: new Date('2026-05-10T23:59:59.999Z'),
@@ -62,7 +63,8 @@ const ACTIVE_SNAPSHOT = {
 };
 
 const INACTIVE_SNAPSHOT = {
-  userId: 'user_inactive_1',
+  // V1.5 — pseudonymized member label.
+  memberLabel: 'member-D4E5F6',
   timezone: 'Europe/Paris',
   weekStart: new Date('2026-05-04T00:00:00Z'),
   weekEnd: new Date('2026-05-10T23:59:59.999Z'),

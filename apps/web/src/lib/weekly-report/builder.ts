@@ -1,11 +1,12 @@
 /**
  * Pure aggregator that turns a 7-day slice of DB data into a
  * {@link WeeklySnapshot} ready to feed into Claude Sonnet 4.6 as the user
- * prompt payload (J8 — Phase A foundation).
+ * prompt payload (J8 — Phase A foundation, V1.5 pseudonymization).
  *
- * Posture (SPEC §2 + §20.4) :
- *   - **Zero PII in the snapshot.** No email, no name. Only `userId` UUID
- *     + counters + redacted free-text excerpts.
+ * Posture (SPEC §2 + §20.4 + V1.5 pseudonymization) :
+ *   - **Zero PII in the snapshot.** No email, no name, no raw cuid.
+ *     `memberLabel` (e.g. `member-A1B2C3`) replaces `userId` at the prompt
+ *     boundary — see `pseudonymizeMember` below.
  *   - **`safeFreeText` on every member-controlled string** before it enters
  *     the snapshot. Prompt-injection defense (Trojan Source bidi reorder +
  *     zero-width invisible instructions). Applied here so downstream layers
@@ -15,6 +16,8 @@
  * Pure — no DB calls, no `Date.now()`, no I/O. Service layer (Phase B) loads
  * the slice and calls this. Easy to unit-test against a frozen fixture.
  */
+
+import { createHash } from 'node:crypto';
 
 import type { TradeSession } from '@/generated/prisma/client.js';
 
@@ -30,12 +33,37 @@ const PAIRS_MAX = 10;
 const SESSIONS_ALL: readonly TradeSession[] = ['asia', 'london', 'newyork', 'overlap'];
 
 // =============================================================================
+// Pseudonymization (V1.5 — prompt boundary defense)
+// =============================================================================
+
+/**
+ * Map a member's `userId` (cuid) to a stable, non-reversible 24-bit label.
+ *
+ * `member-${SHA-256(userId)[0..6].toUpperCase()}` is :
+ *   - deterministic (same userId → same label across runs)
+ *   - one-way (no reverse map without a precomputed rainbow table)
+ *   - human-readable for Eliot in admin reports
+ *   - collision-free for cohorts up to ~16M members (24-bit hex space).
+ *     Birthday-paradox 50% collision threshold ≈ 4096 members; for V1
+ *     30-100 cohort the collision probability is < 1e-4. If we ever
+ *     scale past 1000 members, swap to 32-bit (`slice(0, 8)`) or store
+ *     a UUID v5 mapping in DB.
+ *
+ * Pure — no I/O, no `Date.now()`. Hash collision risk and label format
+ * are exercised in `builder.test.ts` (V1.5 tests).
+ */
+export function pseudonymizeMember(userId: string): string {
+  const hash = createHash('sha256').update(userId).digest('hex').slice(0, 6).toUpperCase();
+  return `member-${hash}`;
+}
+
+// =============================================================================
 // Public entrypoint
 // =============================================================================
 
 export function buildWeeklySnapshot(input: BuilderInput): WeeklySnapshot {
   return {
-    userId: input.userId,
+    memberLabel: pseudonymizeMember(input.userId),
     timezone: input.timezone,
     weekStart: input.weekStart,
     weekEnd: input.weekEnd,

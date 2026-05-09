@@ -18,7 +18,7 @@ import type { SerializedDelivery } from '@/lib/cards/types';
 import type { SerializedCheckin } from '@/lib/checkin/service';
 import type { SerializedTrade } from '@/lib/trades/service';
 
-import { buildWeeklySnapshot } from './builder';
+import { buildWeeklySnapshot, pseudonymizeMember } from './builder';
 import type { BuilderInput } from './types';
 
 const WEEK_START = new Date('2026-05-04T00:00:00Z'); // Monday
@@ -51,6 +51,9 @@ function makeTrade(partial: Partial<SerializedTrade> = {}): SerializedTrade {
     lotSize: '0.10',
     stopLossPrice: '1.0950',
     plannedRR: '2',
+    // V1.5 — defaults to null (V1 trades created before V1.5 ship are NULL).
+    tradeQuality: null,
+    riskPct: null,
     emotionBefore: ['calm'],
     planRespected: true,
     hedgeRespected: null,
@@ -144,7 +147,8 @@ function makeDelivery(partial: Partial<SerializedDelivery> = {}): SerializedDeli
 describe('buildWeeklySnapshot — empty input', () => {
   it('returns sane defaults with no trades / check-ins / deliveries', () => {
     const snap = buildWeeklySnapshot(emptyInput());
-    expect(snap.userId).toBe('user_test_1');
+    // V1.5 pseudonymization — memberLabel replaces raw userId at the prompt boundary.
+    expect(snap.memberLabel).toMatch(/^member-[A-F0-9]{6}$/);
     expect(snap.timezone).toBe('Europe/Paris');
     expect(snap.counters.tradesTotal).toBe(0);
     expect(snap.counters.tradesWin).toBe(0);
@@ -439,5 +443,51 @@ describe('buildWeeklySnapshot — annotations pass-through', () => {
     const snap = buildWeeklySnapshot(input);
     expect(snap.counters.annotationsReceived).toBe(3);
     expect(snap.counters.annotationsViewed).toBe(2);
+  });
+});
+
+// =============================================================================
+// V1.5 — pseudonymization (memberLabel replaces userId at the prompt boundary)
+// =============================================================================
+
+describe('pseudonymizeMember — V1.5 prompt boundary defense', () => {
+  it('produces a deterministic member-XXXXXX label', () => {
+    const label = pseudonymizeMember('user_test_1');
+    expect(label).toMatch(/^member-[A-F0-9]{6}$/);
+    // Same input → same output across calls (no Date.now or random).
+    expect(pseudonymizeMember('user_test_1')).toBe(label);
+  });
+
+  it('different userIds produce different labels (collision-free at V1 cohort scale)', () => {
+    const labels = new Set<string>();
+    for (let i = 0; i < 1000; i++) {
+      labels.add(pseudonymizeMember(`user_test_${i}`));
+    }
+    // 1000 unique inputs in a 24-bit space → expected collision count ~0.03.
+    // We assert no collisions happen on this fixture (deterministic seeds).
+    expect(labels.size).toBe(1000);
+  });
+
+  it('handles edge-case userIds (empty, unicode, very long) without crashing', () => {
+    expect(pseudonymizeMember('')).toMatch(/^member-[A-F0-9]{6}$/);
+    expect(pseudonymizeMember('ñoño-éà')).toMatch(/^member-[A-F0-9]{6}$/);
+    expect(pseudonymizeMember('a'.repeat(1000))).toMatch(/^member-[A-F0-9]{6}$/);
+  });
+
+  it('does NOT include the original userId in the label (one-way)', () => {
+    const userId = 'cm0xyz123abc456def789';
+    const label = pseudonymizeMember(userId);
+    // The label is 6 hex chars; the cuid is 21+ alphanum. No substring match.
+    expect(label.toLowerCase()).not.toContain(userId.toLowerCase().slice(0, 6));
+  });
+
+  it('snapshot.memberLabel is set (not snapshot.userId — that field is removed)', () => {
+    const input = emptyInput();
+    input.userId = 'user_test_pseudo';
+    const snap = buildWeeklySnapshot(input);
+    expect(snap.memberLabel).toBe(pseudonymizeMember('user_test_pseudo'));
+    // TypeScript: snap should not expose `userId` field anymore.
+    // @ts-expect-error — `userId` is no longer a property of WeeklySnapshot.
+    expect(snap.userId).toBeUndefined();
   });
 });

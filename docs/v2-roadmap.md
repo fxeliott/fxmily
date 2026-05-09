@@ -157,12 +157,118 @@ Effort estimé : **1-1.5 semaine**.
 4. **Migration test DR** avant release publique.
 5. **PR — rebase merge** pour préserver commits granulaires.
 
+## Findings recherche web 2026-05-09 (deep-research subagent)
+
+> Subagent recherche web parallèle au close-out J10 Phase ω. 8 verdicts
+> sourcés. À intégrer aux décisions V2 quand pertinent.
+
+### Stack patches (pas d'action V2, juste tracking)
+
+- **Next.js 16.2.6** — patché 12 advisories 16.2.4 → 16.2.5 (mai 2026)
+  incluant CVE-2025-66478 RCE (CVSS 10.0, App Router) et CVE-2026-23864
+  DoS (CVSS 7.5). Fxmily à jour. Surveiller blog mensuel
+  <https://nextjs.org/blog>.
+- **React 19.2.6** — CVE-2026-23864 DoS RSC patché. Fxmily à jour.
+- **Prisma 7.8.0** — bug Postgres 17 P1010 SSL connu. Workaround :
+  `ssl: { rejectUnauthorized: false }` ou `NODE_EXTRA_CA_CERTS`. À tester
+  explicit en smoke prod (Hetzner local socket = peut-être OK sans SSL).
+
+### Auth.js v5 → migration Better Auth (V2 Q3 2026)
+
+**Fact** : Auth.js a rejoint Better Auth en septembre 2025 ([annonce
+GitHub #13252](https://github.com/nextauthjs/next-auth/discussions/13252)).
+Le maintainer principal Balázs Orbán a quitté en janvier 2025. Auth.js v5
+reste en beta indéfiniment, patchs sécurité uniquement.
+
+**Décision V1** : pin sur `5.0.0-beta.31` (ou la beta la plus récente).
+Pas de migration urgente — l'API v5 est stable suffisamment pour Fxmily
+V1.
+
+**Décision V2 (Q3 2026)** : évaluer migration Better Auth. Avantages :
+
+- Maintainer actif, releases stables.
+- Architecture plug-in plus moderne (vs callbacks Auth.js).
+- Better TypeScript inference.
+
+Inconvénients :
+
+- Migration script Auth.js → Better Auth pas trivial (sessions DB,
+  argon2 hash compatible, Prisma adapter différent).
+- Risque de re-écriture de `auth.config.ts` + `auth.ts` complets.
+
+**Effort estimé migration V2** : ~1 semaine (refactor auth + tests E2E
+
+- smoke prod).
+
+### Bugsink — alternative self-hosted à Sentry cloud (V2 candidate)
+
+**Sentry self-hosted écarté pour CX22** : minimum 8 GB RAM (Postgres + Redis
+
+- Kafka + ClickHouse + Relay) — incompatible avec un CX22 partagé.
+
+**Alternative léger 2026** : [Bugsink](https://www.bugsink.com/) — single
+Docker container, SDK Sentry-compatible (drop-in replacement
+`@sentry/nextjs`), peut **réutiliser le Postgres 17 existant** sur
+`hetzner-dieu`.
+
+**Décision V2 candidate** : si on veut sortir de Sentry cloud (RGPD strict
+ou quota free 5000 events/mois dépassé), migrer vers Bugsink. Effort
+estimé : ~4h (provisioner Bugsink container + reverse proxy Caddy +
+update `SENTRY_DSN` env). Le code applicatif ne change pas.
+
+**Alternatives considérées** :
+
+- [GlitchTip](https://glitchtip.com) — comparable à Bugsink, Django stack.
+- [SigNoz](https://signoz.io) — OTel-native + traces distribuées
+  (over-kill pour Fxmily V2, V3 si scale).
+- [PostHog free tier](https://posthog.com) — 100k errors/mo, zero-ops
+  alternative cloud (mais vendor lock).
+
+**Sources** : [Security Boulevard 2026](https://securityboulevard.com/2026/04/best-sentry-alternatives-for-error-tracking-and-monitoring-2026/) · [SigNoz alternatives 2026](https://signoz.io/comparisons/sentry-alternatives/)
+
+### Apple Declarative Web Push — bonus iOS 26
+
+**Confirmation 2026** : iOS 26 ouvre les sites Home Screen en standalone
+**par défaut**, même sans manifest. Fxmily aura donc une UX améliorée pour
+les nouveaux users sur iOS 26+. Pas d'action requise — déjà géré par
+`detectStandalone()` côté client.
+
+**Sources** : [WWDC25 Session 235 — Declarative Web Push](https://developer.apple.com/videos/play/wwdc2025/235/) · [MobiLoud PWA iOS 2026](https://www.mobiloud.com/blog/progressive-web-apps-ios)
+
+### Calibration scoring — pas d'empirique 2024-2026
+
+**Recherche web confirme** : aucun papier peer-reviewed 2024-2026 ne
+valide les constantes scoring Fxmily (`STDDEV_FULL_SCALE=4`,
+`EXPECTANCY_FULL_SCALE=1`, etc.). Les sources Tharp + Steenbarger sont
+qualitatives, pas mesurées.
+
+→ **Décision capturée dans [ADR-001](decisions/ADR-001-scoring-constants-pragmatic-heuristics.md)**.
+Les constantes sont des heuristiques pragmatiques, à recalibrer post-cohorte
+(30+ membres × 3+ mois).
+
+### iOS Web Push fragility — fallback email §18.2 confirmé optimal
+
+**2026 update** : pas de silent push, pas de Background Sync / Periodic /
+Background Fetch sur iOS. `event.waitUntil(showNotification)` obligatoire
+(Fxmily ✅ ligne 151 sw.js). Permission denied → réinstall PWA only.
+
+→ Le fallback email Resend après 3 attempts (J9 round 3) reste la bonne
+stratégie. **V1.5 candidate** : ajouter monitoring delivery rate
+(audit row `notification.delivery_rate.snapshot` chaque semaine) pour
+détecter les unsub silencieux.
+
+---
+
 ## Fichiers de référence
 
 - `D:\Fxmily\SPEC.md` (source de vérité produit)
 - `D:\Fxmily\apps\web\CLAUDE.md` (sections close-out J0 → J10)
+- `D:\Fxmily\docs\decisions\ADR-001-scoring-constants-pragmatic-heuristics.md`
+- `D:\Fxmily\docs\jalon-V1.5-prep.md` (briefing post-merge J10)
 - `D:\Fxmily\docs\runbook-hetzner-deploy.md` (provisioning + ops)
 - `D:\Fxmily\docs\runbook-backup-restore.md` (DR procedures)
 - `D:\Fxmily\docs\runbook-prod-smoke-test.md` (12-step smoke V1)
 - `C:\Users\eliot\.claude\projects\D--Fxmily\memory\fxmily_project.md`
   (état projet avec timeline jalons)
+- `C:\Users\eliot\.claude\projects\D--Fxmily\memory\fxmily_session_2026-05-09_smoke_prep_consolidated.md`
+  (consolidé fin J10 + 8 verdicts recherche web 2026)

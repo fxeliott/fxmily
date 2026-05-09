@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smoke test iPhone Web Push — Fxmily</title>
+    <style>
+      :root {
+        --bg: #07090f;
+        --bg-2: #0c1117;
+        --bg-3: #1a1f2c;
+        --t-1: #f8fafc;
+        --t-2: #cbd5e1;
+        --t-3: #94a3b8;
+        --t-4: #64748b;
+        --acc: #a3e635;
+        --acc-hi: #bef264;
+        --acc-dim: rgba(163, 230, 53, 0.12);
+        --acc-fg: #07090f;
+        --bad: #f87171;
+        --bad-dim: rgba(248, 113, 113, 0.12);
+        --warn: #fbbf24;
+        --warn-dim: rgba(251, 191, 36, 0.12);
+        --info: #60a5fa;
+        --info-dim: rgba(96, 165, 250, 0.12);
+        --ok: #34d399;
+        --ok-dim: rgba(52, 211, 153, 0.12);
+        --b: rgba(148, 163, 184, 0.18);
+        --b-strong: rgba(148, 163, 184, 0.28);
+        --b-acc: rgba(163, 230, 53, 0.4);
+        --r: 12px;
+        --e: cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--t-2);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 15px;
+        line-height: 1.65;
+      }
+      .layout {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 0 32px;
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+        gap: 56px;
+      }
+      header.hero {
+        grid-column: 1 / -1;
+        padding: 56px 0 32px;
+        border-bottom: 1px solid var(--b);
+        margin-bottom: 40px;
+      }
+      .hero-badge {
+        display: inline-flex;
+        gap: 8px;
+        background: var(--acc-dim);
+        color: var(--acc);
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        margin-bottom: 20px;
+        border: 1px solid var(--b-acc);
+      }
+      h1 {
+        font-size: 36px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--t-1);
+        margin: 0 0 14px;
+        line-height: 1.15;
+      }
+      .lead { font-size: 17px; color: var(--t-2); max-width: 720px; }
+      .hero-meta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+      .meta-pill {
+        background: var(--bg-3);
+        border: 1px solid var(--b);
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        color: var(--t-2);
+      }
+      .meta-pill strong { color: var(--t-1); }
+      .meta-pill.acc strong { color: var(--acc); }
+      nav.toc {
+        position: sticky;
+        top: 24px;
+        align-self: start;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
+      }
+      nav.toc h2 {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--t-3);
+        margin: 0 0 16px;
+      }
+      nav.toc ol {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        counter-reset: toc;
+      }
+      nav.toc li { counter-increment: toc; margin: 0; }
+      nav.toc a {
+        display: block;
+        padding: 9px 12px 9px 38px;
+        color: var(--t-3);
+        text-decoration: none;
+        font-size: 13px;
+        border-left: 2px solid transparent;
+        transition: all 150ms var(--e);
+        border-radius: 0 6px 6px 0;
+        position: relative;
+      }
+      nav.toc a::before {
+        content: counter(toc);
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 18px;
+        height: 18px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--bg-3);
+        color: var(--t-4);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      nav.toc a:hover {
+        color: var(--t-1);
+        background: var(--bg-3);
+      }
+      nav.toc a:hover::before { background: var(--acc-dim); color: var(--acc); }
+      nav.toc a.active { color: var(--acc); border-left-color: var(--acc); background: var(--acc-dim); }
+      nav.toc a.active::before { background: var(--acc); color: var(--acc-fg); }
+      nav.toc .time { color: var(--t-4); font-size: 11px; margin-left: 6px; }
+      main { padding-bottom: 80px; max-width: 800px; }
+      section.step {
+        background: var(--bg-2);
+        border: 1px solid var(--b);
+        border-radius: var(--r);
+        padding: 22px 26px;
+        margin-bottom: 18px;
+        position: relative;
+        scroll-margin-top: 24px;
+      }
+      .step-num {
+        position: absolute;
+        top: -14px;
+        left: 22px;
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--acc);
+        color: var(--acc-fg);
+        font-weight: 700;
+        font-size: 14px;
+      }
+      .step-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+      h2 {
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--t-1);
+        margin: 4px 0 0;
+        letter-spacing: -0.015em;
+      }
+      .duration {
+        background: var(--info-dim);
+        color: var(--info);
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      h3 {
+        margin: 20px 0 8px;
+        font-size: 13px;
+        color: var(--t-2);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 600;
+      }
+      p { margin: 0 0 12px; }
+      ul, ol { margin: 0 0 12px; padding-left: 22px; }
+      li { margin: 4px 0; }
+      ul li::marker { color: var(--acc); }
+      a { color: var(--acc); border-bottom: 1px solid var(--b-acc); text-decoration: none; }
+      a:hover { color: var(--acc-hi); }
+      strong { color: var(--t-1); }
+      em { color: var(--t-2); font-style: italic; }
+      code {
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 0.88em;
+        background: var(--bg-3);
+        color: var(--t-1);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      pre {
+        background: var(--bg);
+        border: 1px solid var(--b);
+        border-radius: var(--r);
+        padding: 14px 18px;
+        overflow-x: auto;
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--t-1);
+        margin: 12px 0;
+      }
+      pre code { background: transparent; padding: 0; font-size: inherit; }
+      .callout {
+        border-left: 3px solid;
+        padding: 12px 16px;
+        margin: 14px 0;
+        border-radius: 0 var(--r) var(--r) 0;
+        font-size: 14px;
+      }
+      .callout p:last-child { margin-bottom: 0; }
+      .callout .label {
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+        display: inline-block;
+      }
+      .callout.warn { border-color: var(--warn); background: var(--warn-dim); }
+      .callout.warn .label { color: var(--warn); }
+      .callout.info { border-color: var(--info); background: var(--info-dim); }
+      .callout.info .label { color: var(--info); }
+      .callout.danger { border-color: var(--bad); background: var(--bad-dim); }
+      .callout.danger .label { color: var(--bad); }
+      .callout.ok { border-color: var(--ok); background: var(--ok-dim); }
+      .callout.ok .label { color: var(--ok); }
+      .what-you-see {
+        background: var(--bg);
+        border: 1px solid var(--b);
+        border-left: 3px solid var(--acc);
+        border-radius: 0 8px 8px 0;
+        padding: 12px 16px;
+        margin: 12px 0;
+        font-size: 14px;
+      }
+      .what-you-see strong { color: var(--acc); }
+      .checklist {
+        background: var(--bg);
+        border: 1px solid var(--b);
+        border-radius: var(--r);
+        padding: 18px 22px;
+        margin: 24px 0;
+      }
+      .checklist ul { list-style: none; padding: 0; margin: 0; }
+      .checklist li {
+        padding: 6px 0 6px 30px;
+        position: relative;
+      }
+      .checklist li::before {
+        content: '☐';
+        position: absolute;
+        left: 4px;
+        color: var(--acc);
+        font-size: 18px;
+        line-height: 1.2;
+      }
+      footer {
+        grid-column: 1 / -1;
+        margin-top: 64px;
+        padding: 32px 0;
+        border-top: 1px solid var(--b);
+        color: var(--t-4);
+        font-size: 12.5px;
+      }
+      footer a { color: var(--t-3); border-bottom-color: var(--b); }
+      @media (max-width: 900px) {
+        .layout { grid-template-columns: 1fr; gap: 0; padding: 0 20px; }
+        nav.toc {
+          position: relative;
+          max-height: none;
+          margin-bottom: 32px;
+          padding: 16px;
+          background: var(--bg-2);
+          border: 1px solid var(--b);
+          border-radius: var(--r);
+        }
+        h1 { font-size: 28px; }
+        h2 { font-size: 19px; }
+      }
+      @media print {
+        body { background: white; color: black; }
+        nav.toc, footer { display: none; }
+        .layout { display: block; padding: 0; }
+        section.step { page-break-inside: avoid; }
+        h1, h2, h3 { color: black; }
+        pre { border: 1px solid #999; background: #f5f5f5; color: black; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <header class="hero">
+        <div class="hero-badge">Phase W · iPhone walkthrough 2026-05-09</div>
+        <h1>Smoke test Web Push iPhone — étape par étape</h1>
+        <p class="lead">
+          Tu installes Fxmily comme une app sur ton iPhone et tu vérifies que les notifications
+          push arrivent. <strong>10 minutes</strong> de tes mains, sur un iPhone réel (pas
+          simulateur).
+        </p>
+        <div class="hero-meta">
+          <span class="meta-pill acc">⏱ <strong>~10 min total</strong></span>
+          <span class="meta-pill">📱 iPhone iOS <strong>18.4+</strong> requis</span>
+          <span class="meta-pill">🌐 Safari obligatoire (pas Chrome iOS)</span>
+          <span class="meta-pill">🇫🇷 France OK (DMA EU PWA Safari fix tardif)</span>
+        </div>
+        <div class="callout warn" style="margin-top: 20px">
+          <span class="label">À lire avant de commencer</span>
+          <p>
+            Web Push iOS exige <strong>3 conditions cumulées</strong> : (1) iOS ≥ 18.4, (2) PWA
+            installée via <strong>Safari</strong> (pas onglet, pas autre browser), (3) permission
+            "Autoriser" acceptée à la 1re demande. Si tu rates l'une, désinstalle et recommence —
+            iOS donne <strong>UNE SEULE</strong> chance par installation pour la permission.
+          </p>
+        </div>
+      </header>
+
+      <nav class="toc">
+        <h2>Sommaire</h2>
+        <ol>
+          <li><a href="#s1">Vérifier iOS 18.4+<span class="time">30 s</span></a></li>
+          <li><a href="#s2">Vérifier Safari<span class="time">15 s</span></a></li>
+          <li><a href="#s3">Aller sur l'app<span class="time">30 s</span></a></li>
+          <li><a href="#s4">Installer en PWA<span class="time">1 min</span></a></li>
+          <li><a href="#s5">Renommer (optionnel)<span class="time">5 s</span></a></li>
+          <li><a href="#s6">Ouvrir depuis Home<span class="time">10 s</span></a></li>
+          <li><a href="#s7">Login admin<span class="time">30 s</span></a></li>
+          <li><a href="#s8">Notifications page<span class="time">20 s</span></a></li>
+          <li><a href="#s9">Permission iOS<span class="time">15 s</span></a></li>
+          <li><a href="#s10">Vérif Réglages<span class="time">30 s</span></a></li>
+          <li><a href="#s11">Forcer push test<span class="time">1 min</span></a></li>
+          <li><a href="#s12">Troubleshooting<span class="time">cas par cas</span></a></li>
+          <li><a href="#checklist">Checklist finale</a></li>
+        </ol>
+      </nav>
+
+      <main>
+        <!-- ========================================== -->
+        <section class="step" id="s1">
+          <div class="step-num">1</div>
+          <div class="step-title-row">
+            <h2>Vérifier la version iOS</h2>
+            <span class="duration">⏱ 30 s</span>
+          </div>
+          <div class="what-you-see">
+            <strong>Ce que tu vois</strong> : écran d'accueil iPhone (icônes app, dock en bas avec
+            4 apps).
+          </div>
+          <h3>Action</h3>
+          <ol>
+            <li>Ouvre <strong>Réglages</strong> (icône grise, engrenages) — souvent page 1, parfois dans Bibliothèque d'apps (swipe gauche jusqu'au bout).</li>
+            <li>Touche <strong>Général</strong> (icône grise avec engrenage à l'intérieur, ~5e ligne, sous "Concentration" et "Temps d'écran").</li>
+            <li>Touche <strong>Informations</strong> (1re ligne du bloc Général).</li>
+            <li>Lis la ligne <strong>"Version du logiciel"</strong> ou <strong>"Version iOS"</strong>.</li>
+          </ol>
+          <h3>Validation</h3>
+          <p>Doit afficher <strong>18.4</strong> ou plus (ex : <code>18.7.8</code>, <code>26.1</code>). Si <code>&lt; 18.4</code> → <em>Réglages → Général → Mise à jour logicielle</em> et installe (compte 30 min + redémarrage).</p>
+          <div class="callout warn">
+            <span class="label">iPhone non compatible iOS 18</span>
+            <p>iPhone 8/X et plus anciens (limite hardware A11) <strong>ne peuvent pas</strong> monter à 18. Modèles compatibles : iPhone XS, XR, 11, 12, 13, 14, 15, 16, SE 2, SE 3.</p>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <section class="step" id="s2">
+          <div class="step-num">2</div>
+          <div class="step-title-row">
+            <h2>Vérifier Safari (ou s'assurer qu'il existe)</h2>
+            <span class="duration">⏱ 15 s</span>
+          </div>
+          <p>Sur iOS, <strong>Safari n'a pas de version indépendante</strong> d'iOS — ils partagent WebKit. Si tu es en iOS 18.4+, Safari est en 18.4+.</p>
+          <h3>Action</h3>
+          <p>Confirme que l'icône <strong>Safari</strong> (boussole bleue/blanche) est présente — sur écran d'accueil ou Bibliothèque d'apps.</p>
+          <div class="callout warn">
+            <span class="label">Pièges</span>
+            <ul>
+              <li>Safari peut être <strong>caché par Temps d'écran</strong> : Réglages → Temps d'écran → Restrictions de contenu et confidentialité → Apps autorisées → vérifier que Safari est ON. S'il est OFF, l'installation PWA est impossible.</li>
+              <li>En France, Web Push fonctionne <strong>uniquement</strong> via Safari (pas Chrome iOS, pas Edge iOS).</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <section class="step" id="s3">
+          <div class="step-num">3</div>
+          <div class="step-title-row">
+            <h2>Aller sur app.fxmilyapp.com</h2>
+            <span class="duration">⏱ 30 s</span>
+          </div>
+          <h3>Action</h3>
+          <ol>
+            <li>Touche l'icône <strong>Safari</strong>.</li>
+            <li>Touche la <strong>barre d'adresse</strong> (centre-bas en iOS 18, ou haut selon réglage perso).</li>
+            <li>Tape <code>app.fxmilyapp.com</code> (sans <code>https://</code>, Safari l'ajoute auto).</li>
+            <li>Touche <strong>Aller</strong> (touche bleue clavier).</li>
+          </ol>
+          <h3>Validation</h3>
+          <p>La home Fxmily charge — hero "splash" sombre, logo Fxmily, CTA "Se connecter". Si erreur réseau ou cert : signale-le, ne continue pas.</p>
+        </section>
+
+        <!-- ========================================== -->
+        <section class="step" id="s4">
+          <div class="step-num">4</div>
+          <div class="step-title-row">
+            <h2>Installer en PWA — "Sur l'écran d'accueil"</h2>
+            <span class="duration">⏱ 1 min</span>
+          </div>
+          <div class="what-you-see">
+            <strong>Ce que tu vois</strong> : la page Fxmily affichée. En bas de l'écran (iOS 18 défaut), une <strong>barre de boutons</strong> : <code>‹</code> (retour), <code>›</code> (avancer), <strong>icône partage</strong> (carré + flèche montante), icône onglets (deux carrés superposés).
+          </div>
+          <h3>Action</h3>
+          <ol>
+            <li>Touche l'<strong>icône partage</strong> (carré + flèche pointant vers le haut, <strong>bas-centre</strong> sur iOS 18 avec barre en bas, ou <strong>bas-droite</strong> si barre en haut).</li>
+            <li>Une <strong>feuille de partage</strong> glisse depuis le bas, occupant ~70% de l'écran. En haut : aperçu page (favicon + "Fxmily" + URL). Rangée 1 : contacts AirDrop. Rangée 2 : icônes apps. En dessous : <strong>liste verticale d'actions</strong> (Copier, Ajouter aux favoris, Liste de lecture, Marque-page, <strong>Sur l'écran d'accueil</strong>, Annoter…).</li>
+            <li><strong>Scroll vers le bas</strong> dans la feuille jusqu'à voir <strong>"Sur l'écran d'accueil"</strong> (icône carré avec <code>+</code>).</li>
+            <li>Touche <strong>"Sur l'écran d'accueil"</strong>.</li>
+            <li>Vue d'aperçu : icône Fxmily (gauche) + champ texte "Fxmily" pré-rempli (droite). Touche <strong>"Ajouter"</strong> (haut-droite, texte bleu).</li>
+          </ol>
+          <h3>Validation</h3>
+          <p>Retour automatique à l'écran d'accueil. <strong>Une nouvelle icône "Fxmily"</strong> apparaît (logo Fxmily ou capture du favicon).</p>
+          <div class="callout warn">
+            <span class="label">Pièges</span>
+            <ul>
+              <li><strong>"Sur l'écran d'accueil" n'apparaît pas</strong> : scroll tout en bas → "<strong>Modifier les actions</strong>" → active "Sur l'écran d'accueil" (toggle vert) → réessaye.</li>
+              <li><strong>Tu navigues depuis Messages/Mail</strong> : feuille partage limitée. Touche les <strong>3 points "..."</strong> → "Ouvrir dans Safari".</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <section class="step" id="s5">
+          <div class="step-num">5</div>
+          <div class="step-title-row">
+            <h2>Renommer l'app installée (optionnel)</h2>
+            <span class="duration">⏱ 5 s</span>
+          </div>
+          <p>L'étape 4 propose un champ texte "Fxmily". <strong>Laisse "Fxmily"</strong> par défaut. Pas de renommage requis. Si tu veux raccourcir : tape directement, supprime, retape.</p>
+          <p>L'identité PWA est dans le <code>manifest.json</code> côté serveur, pas dans le label local.</p>
+        </section>
+
+        <!-- ========================================== -->
+        <section class="step" id="s6">
+          <div class="step-num">6</div>
+          <div class="step-title-row">
+            <h2>Ouvrir l'app DEPUIS l'écran d'accueil (CRITIQUE)</h2>
+            <span class="duration">⏱ 10 s</span>
+          </div>
+          <div class="callout danger">
+            <span class="label">Pourquoi c'est critique</span>
+            <p>iOS Safari <strong>n'expose Web Push qu'en mode standalone</strong>. Si tu ouvres <code>app.fxmilyapp.com</code> dans un onglet Safari, <code>window.Notification</code> reste indisponible et l'API <code>pushManager.subscribe()</code> rejette. Seul le lancement via icône Home Screen donne le contexte PWA standalone.</p>
+          </div>
+          <h3>Action</h3>
+          <ol>
+            <li>Quitte Safari (swipe up depuis le bas + relâche au milieu, ou bouton Home).</li>
+            <li>Localise l'icône <strong>Fxmily</strong> sur l'écran d'accueil (la page où elle a été ajoutée — dernière page utilisée). Si tu ne la trouves pas : swipe droite jusqu'à la <strong>Bibliothèque d'apps</strong> et tape "Fxmily".</li>
+            <li>Touche l'icône.</li>
+          </ol>
+          <h3>Validation</h3>
+          <p>L'app s'ouvre <strong>sans la barre d'adresse Safari ni la barre de boutons en bas</strong>. Plein écran. C'est le mode <strong>standalone</strong>.</p>
+          <div class="callout warn">
+            <span class="label">Pièges</span>
+            <ul>
+              <li>Si tu vois la barre Safari + barre de boutons en bas : tu es en onglet (étape 3 d'install ratée). Désinstalle (touche longue icône → "Supprimer le marque-page" / "Supprimer du Home Screen") et refais étape 4.</li>
+              <li>Si "Ouvrir dans Safari" en haut de l'app : <code>manifest.json</code> serveur a <code>"display": "browser"</code> au lieu de <code>"standalone"</code>. Bug serveur, pas toi.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <section class="step" id="s7">
+          <div class="step-num">7</div>
+          <div class="step-title-row">
+            <h2>Login admin</h2>
+            <span class="duration">⏱ 30 s</span>
+          </div>
+          <h3>Action</h3>
+          <ol>
+            <li>Touche le champ <strong>Email</strong> → tape l'email admin.</li>
+            <li>Touche le champ <strong>Password</strong> → tape le password.</li>
+            <li>Touche <strong>"Se connecter"</strong>.</li>
+          </ol>
+          <h3>Auto-save iOS Keychain ?</h3>
+          <p><strong>Oui</strong>, si :</p>
+          <ul>
+            <li>iCloud Keychain activé (Réglages → [Toi] → Mots de passe → Mots de passe et trousseau → toggle "Synchroniser ce iPhone" ON).</li>
+            <li>Auto-remplissage activé (Réglages → Apps → Mots de passe → Auto-remplissage activé).</li>
+          </ul>
+          <p>Au-dessus du clavier, une barre <strong>"Enregistrer le mot de passe ?"</strong> apparaîtra après login réussi → <strong>"Enregistrer"</strong> ou "Pas maintenant".</p>
+          <h3>Validation</h3>
+          <p>Redirection vers le dashboard Fxmily (home authentifiée).</p>
+        </section>
+
+        <!-- ========================================== -->
+        <section class="step" id="s8">
+          <div class="step-num">8</div>
+          <div class="step-title-row">
+            <h2>Aller à /account/notifications</h2>
+            <span class="duration">⏱ 20 s</span>
+          </div>
+          <h3>Action</h3>
+          <p>Selon la nav Fxmily V1, soit :</p>
+          <ul>
+            <li>Touche l'icône <strong>profil</strong> (rond, top-right) → menu déroulant → <strong>"Notifications"</strong>.</li>
+            <li>Soit menu hamburger (3 lignes top-left) → <strong>"Compte"</strong> → <strong>"Notifications"</strong>.</li>
+            <li>Sinon : navigation interne <em>Compte → Notifications</em>.</li>
+          </ul>
+          <h3>Sur la page</h3>
+          <p>Un toggle <strong>"Activer les notifications push"</strong> (état par défaut : OFF). Touche-le.</p>
+          <h3>Validation</h3>
+          <p>Toggle passe en vert → un popup système iOS apparaît (étape 9).</p>
+        </section>
+
+        <!-- ========================================== -->
+        <section class="step" id="s9">
+          <div class="step-num">9</div>
+          <div class="step-title-row">
+            <h2>Permission Safari iOS</h2>
+            <span class="duration">⏱ 15 s</span>
+          </div>
+          <div class="what-you-see">
+            <strong>Ce que tu vois</strong> : popup système iOS centré, titre <strong>« Fxmily souhaite vous envoyer des notifications »</strong>, sous-titre "Les notifications peuvent être des alertes, des sons et des pastilles. Elles peuvent être configurées dans Réglages." Deux boutons : <strong>"Refuser"</strong> (gauche) et <strong>"Autoriser"</strong> (droite, <strong>bleu</strong>).
+          </div>
+          <h3>Action</h3>
+          <p>Touche <strong>"Autoriser"</strong>.</p>
+          <h3>Validation</h3>
+          <p>Popup disparaît. Le toggle reste vert dans l'app. La page peut afficher "Notifications activées" ou similaire.</p>
+          <div class="callout danger">
+            <span class="label">Une seule chance</span>
+            <p>Une <strong>seule</strong> chance par installation PWA. Si tu touches "Refuser" par erreur, le popup ne reviendra <strong>jamais</strong>. Pour récupérer :</p>
+            <ul>
+              <li><strong>Méthode 1</strong> : Réglages → Notifications → scroll → trouve "Fxmily" → toggle "Autoriser les notifications" ON. <em>Mais</em> sur iOS 18.4+ avec PWA, Fxmily n'apparaît dans cette liste <strong>que si</strong> permission a été accordée au moins une fois.</li>
+              <li><strong>Méthode 2 (fallback)</strong> : touche longue icône Fxmily écran d'accueil → "Supprimer du Home Screen" → "Supprimer". Refais étapes 3-9.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <section class="step" id="s10">
+          <div class="step-num">10</div>
+          <div class="step-title-row">
+            <h2>Vérifier dans Réglages iOS</h2>
+            <span class="duration">⏱ 30 s</span>
+          </div>
+          <h3>Action</h3>
+          <ol>
+            <li>Quitte la PWA (swipe up).</li>
+            <li>Réglages (icône grise engrenages).</li>
+            <li>Touche <strong>Notifications</strong> (bloc haut, icône rouge bell).</li>
+            <li>Scroll vers le bas dans la liste alphabétique des apps. Trouve <strong>"Fxmily"</strong>.</li>
+            <li>Touche <strong>"Fxmily"</strong>.</li>
+          </ol>
+          <h3>Validation</h3>
+          <ul>
+            <li>"Autoriser les notifications" = <strong>ON</strong> (toggle vert).</li>
+            <li>Style d'alerte : "Bannières", "Sons", "Pastilles" tous activables.</li>
+            <li>Si Fxmily <strong>n'apparaît pas</strong> dans la liste = la permission n'a pas été accordée (popup étape 9 raté ou refusé). Retour étape 4 (réinstall).</li>
+          </ul>
+        </section>
+
+        <!-- ========================================== -->
+        <section class="step" id="s11">
+          <div class="step-num">11</div>
+          <div class="step-title-row">
+            <h2>Forcer un push test</h2>
+            <span class="duration">⏱ 1 min</span>
+          </div>
+          <h3>Action</h3>
+          <p>Depuis ton ordinateur, lance :</p>
+          <pre><code>curl -X POST https://app.fxmilyapp.com/api/cron/dispatch-douglas \
+  -H "X-Cron-Secret: $CRON_SECRET" \
+  -H "Content-Type: application/json"</code></pre>
+          <p>Remplace <code>$CRON_SECRET</code> par la valeur réelle (depuis ton <code>tokens.local.env</code>). Réponse attendue : JSON <code>{ "ok": true, "dispatched": N }</code> (200 OK).</p>
+          <h3>Validation côté iPhone</h3>
+          <ul>
+            <li>Dans <strong>5 à 30 sec</strong>, l'iPhone reçoit une notification push avec une citation Mark Douglas.</li>
+            <li>Si écran allumé : bannière en haut.</li>
+            <li>Si écran verrouillé : notif sur lock screen.</li>
+            <li>Touche la notif → ouvre Fxmily PWA directement à la page concernée (deep-link).</li>
+          </ul>
+          <div class="callout warn">
+            <span class="label">Pièges</span>
+            <ul>
+              <li>Réponse 200 mais pas de notif → checkpoints étape 12.</li>
+              <li>Réponse 401/403 → mauvais <code>X-Cron-Secret</code> (vérifier env).</li>
+              <li>Réponse 500 → log Vercel + Sentry.</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <section class="step" id="s12">
+          <div class="step-num">12</div>
+          <div class="step-title-row">
+            <h2>Troubleshooting complet</h2>
+            <span class="duration">⏱ cas par cas</span>
+          </div>
+
+          <h3>A · Permission refusée par accident</h3>
+          <ol>
+            <li>Réglages → Notifications → Fxmily → si présent, toggle ON.</li>
+            <li>Si absent : désinstaller PWA + réinstaller (étapes 4 + 9).</li>
+          </ol>
+
+          <h3>B · PWA pas reconnue comme installée (mode browser au lieu de standalone)</h3>
+          <p><strong>Symptôme</strong> : barre Safari visible quand tu ouvres "Fxmily" depuis Home Screen, ou bandeau "Ouvrir dans Safari".</p>
+          <p><strong>Cause</strong> : <code>manifest.json</code> serveur expose <code>"display": "browser"</code> au lieu de <code>"standalone"</code>. Bug serveur, pas toi.</p>
+          <p><strong>Fix</strong> : vérifier <code>apps/web/public/manifest.json</code> → <code>"display": "standalone"</code>. Redéployer. Désinstalle + réinstalle PWA iPhone.</p>
+
+          <h3>C · Notifications ne s'affichent pas (push arrive serveur mais pas écran)</h3>
+          <p>Vérifie dans l'ordre :</p>
+          <ol>
+            <li><strong>Mode Avion OFF</strong> : Centre de contrôle (swipe haut depuis coin haut-droite iPhone X+) → icône avion <strong>PAS orange</strong>.</li>
+            <li><strong>Concentration / Focus mode OFF</strong> : Centre de contrôle → tuile "Concentration" (icône lune/voiture/personne) <strong>éteinte</strong>. iOS 18 a une feature "Personnel" qui s'active toute seule via IA — vérifie : Réglages → Concentration → Personnel → désactive "Filtrage intelligent" et "Silence intelligent".</li>
+            <li><strong>Mode Économie d'énergie OFF</strong> : Réglages → Batterie → toggle "Mode économie d'énergie" OFF. <strong>Note 2026</strong> : ce mode <strong>désactive les push web/PWA</strong>, pas seulement les retarde. Icône batterie en haut-droite <strong>PAS jaune</strong>.</li>
+            <li><strong>Background App Refresh ON</strong> : Réglages → Général → Actualisation en arrière-plan → ON (Wi-Fi + cellulaire OK).</li>
+            <li><strong>Restart Safari / iPhone</strong> : redémarrage iPhone (boutons volume haut + power → glisser pour éteindre).</li>
+            <li><strong>Throttling Apple</strong> : si tu n'as <strong>pas ouvert</strong> la PWA depuis 7-14 jours et <strong>pas tapé</strong> sur les push reçus → Apple bride et désabonne le endpoint silencieusement. Symptôme : <code>subscription.endpoint</code> change ou disparaît côté DB. Fix : ouvre la PWA, le SW renouvelle l'abonnement au prochain <code>pushsubscriptionchange</code>.</li>
+          </ol>
+
+          <h3>D · Apple Declarative Web Push (8030) vs Classic</h3>
+          <p>Safari 18.4 (mars 2025) a introduit Declarative. Côté serveur, on envoie un payload JSON avec clé top-level <code>"web_push": 8030</code> qui agit comme "magic key" → notification s'affiche sans Service Worker. Fallback : si pas reconnu, le SW prend le relais (classique).</p>
+          <p><strong>Côté toi : aucune différence visible.</strong> Backend Fxmily fait les deux.</p>
+
+          <h3>E · Mode Focus / Ne pas déranger (iOS 18)</h3>
+          <p>iOS 18 a redessiné Concentration avec IA. Symptôme : "Personnel" s'active <strong>automatiquement</strong> à des horaires que tu n'as pas programmés. Fix : Réglages → Concentration → chaque profil → vérifier "Activation intelligente" OFF si non voulu, et <strong>autoriser Fxmily</strong> dans "Apps autorisées" → "+" → Fxmily.</p>
+
+          <h3>F · Battery Saver et push silent</h3>
+          <p><strong>Confirmé</strong> : Mode économie désactive les push (web et natifs) pendant qu'il est actif. Pas un retard, un blocage. Charge l'iPhone à &gt;80% pour désactivation auto, ou désactive manuellement.</p>
+
+          <h3>G · Service Worker debug iPhone</h3>
+          <p><strong>Impossible</strong> d'inspecter directement depuis iPhone. Options :</p>
+          <ol>
+            <li><strong>Safari Web Inspector via Mac USB</strong> : connecte iPhone à Mac via câble Lightning/USB-C → Mac : Safari → Réglages → Avancé → "Afficher menu Développement" → menu Développement → "[ton iPhone]" → "Fxmily" → fenêtre Inspecteur (Console, Réseau, Stockage, Service Workers).</li>
+            <li><strong>Sans Mac</strong> : ajouter logging serveur exhaustif côté SW vers endpoint <code>/api/debug/sw-log</code>.</li>
+          </ol>
+        </section>
+
+        <!-- Checklist -->
+        <section class="step" id="checklist">
+          <div class="step-num">✓</div>
+          <div class="step-title-row">
+            <h2>Checklist finale</h2>
+          </div>
+          <div class="checklist">
+            <ul>
+              <li>iOS ≥ 18.4</li>
+              <li>PWA installée via Safari (pas autre browser, pas onglet)</li>
+              <li>App ouverte depuis Home Screen (mode standalone confirmé visuellement)</li>
+              <li>Permission "Autoriser" cliquée</li>
+              <li>Fxmily visible dans Réglages → Notifications</li>
+              <li>Pas de Mode Avion / Focus / Économie d'énergie actif</li>
+              <li>curl POST → 200 OK</li>
+              <li>Notif reçue dans 5-30 sec</li>
+            </ul>
+          </div>
+          <div class="callout ok">
+            <span class="label">Si tous les checkpoints passent</span>
+            <p><strong>Web Push smoke test = PASS</strong>. Fxmily V1 est validé end-to-end côté membre. La cohorte peut être invitée.</p>
+          </div>
+          <div class="callout danger">
+            <span class="label">Si un checkpoint fail</span>
+            <p>Section 12 + log Sentry + DB endpoint check (<code>SELECT id, endpoint, last_error_code FROM push_subscriptions WHERE user_id = '...';</code>).</p>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div>
+          Document généré le <strong>2026-05-09</strong> · subagent W.1 web research validation
+          (Apple Developer + WebKit blog + Mobiloud + MagicBell 2026) ·
+          <a href="eliot-guide-prod-launch.html">guide résumé</a> ·
+          <a href="eliot-guide-screens.html">guide screens (Sentry/Resend/Cloudflare)</a>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      const sections = document.querySelectorAll('main section.step[id]');
+      const links = document.querySelectorAll('nav.toc a');
+      const linkBySectionId = new Map();
+      links.forEach((a) => {
+        const id = a.getAttribute('href').slice(1);
+        linkBySectionId.set(id, a);
+      });
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const link = linkBySectionId.get(entry.target.id);
+            if (!link) return;
+            if (entry.isIntersecting) {
+              links.forEach((l) => l.classList.remove('active'));
+              link.classList.add('active');
+            }
+          });
+        },
+        { rootMargin: '-30% 0px -65% 0px', threshold: 0 },
+      );
+      sections.forEach((s) => observer.observe(s));
+    </script>
+  </body>
+</html>

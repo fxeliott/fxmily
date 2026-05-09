@@ -42,10 +42,27 @@ const plannedRR = z.coerce
 /// **`gt(0)` not `gte(0)`** — security-auditor M3 (2026-05-09) : `0 %` is
 /// semantically ambiguous vs NULL ("captured = 0" vs "not captured"). Force
 /// the user to either omit the field (NULL) or enter a real positive value.
-const riskPctSchema = z.coerce
-  .number({ message: 'Risque % invalide.' })
-  .gt(0, 'Le risque doit être strictement positif (laisse vide si non capturé).')
-  .lt(100, 'Le risque doit rester sous 100 % du compte.');
+///
+/// **FR locale support** (audit L2, 2026-05-09) : a French user typing
+/// `1,5` (decimal comma) used to fail with `Number('1,5') = NaN`. The
+/// preprocess step normalises a single comma to a dot before coercion.
+/// Multiple commas / mixed locale stays rejected.
+const riskPctSchema = z.preprocess(
+  (v) => {
+    if (typeof v === 'string') {
+      const trimmed = v.trim();
+      // Replace a single FR decimal comma with a dot. Reject inputs with
+      // multiple commas (locale ambiguity → user typed something weird).
+      const commaCount = (trimmed.match(/,/g) ?? []).length;
+      if (commaCount === 1) return trimmed.replace(',', '.');
+    }
+    return v;
+  },
+  z.coerce
+    .number({ message: 'Risque % invalide.' })
+    .gt(0, 'Le risque doit être strictement positif (laisse vide si non capturé).')
+    .lt(100, 'Le risque doit rester sous 100 % du compte.'),
+);
 
 const pairSchema = z
   .string()

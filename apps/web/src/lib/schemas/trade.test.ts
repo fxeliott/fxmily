@@ -236,6 +236,19 @@ describe('tradeOpenSchema — V1.5 riskPct', () => {
     }
   });
 
+  it('accepts FR locale decimal comma "1,5" → 1.5 (audit L2)', () => {
+    const result = tradeOpenSchema.safeParse({ ...baseOpen, riskPct: '1,5' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.riskPct).toBe(1.5);
+    }
+  });
+
+  it('rejects multiple commas (locale ambiguity)', () => {
+    const result = tradeOpenSchema.safeParse({ ...baseOpen, riskPct: '1,5,0' });
+    expect(result.success).toBe(false);
+  });
+
   it('treats omission as undefined (default = NULL in DB)', () => {
     const result = tradeOpenSchema.safeParse(baseOpen);
     expect(result.success).toBe(true);

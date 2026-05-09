@@ -4,6 +4,29 @@
 > supplémentaire et en API". Path alternatif au runbook Hetzner.
 > **Coût total V1 : 0 €/mois, 0 € de CB engagée.**
 
+> ⚠️ **AVERTISSEMENT CRITIQUE — Clause non-commerciale Vercel Hobby**
+>
+> Recherche 2026-05-09 (researcher subagent + sources Vercel officielles) :
+> Vercel Hobby plan ToS interdit explicitement _"any deploy for the purpose
+> of financial gain of anyone involved"_. La **formation Fxmily étant payante**,
+> l'app de suivi cohorte en est un sous-produit commercial — risque réel
+> de **suspension du compte** sans préavis si Vercel détecte l'usage.
+>
+> Sources :
+>
+> - [Vercel Hobby plan doc](https://vercel.com/docs/plans/hobby)
+> - [Vercel Fair Use Guidelines](https://vercel.com/docs/limits/fair-use-guidelines)
+>
+> **3 options pour contourner le risque** :
+>
+> 1. **Vercel Pro $20/mo** — clause levée, prod-grade (mais 240 €/an > Hetzner 70 €/an, NON OPTIMAL)
+> 2. **Contact Vercel Support** avant de déployer — décrire le contexte (cohorte interne 30 users, app pas facturée directement, formation hors-app) et obtenir une autorisation écrite. Lent (~3-5 jours), incertain.
+> 3. **Pivot vers Hetzner CX22** (Path A, ~5€/mois) — pas de clause commerciale, prod-grade. Recommandé.
+>
+> Le path Vercel ci-dessous reste **techniquement valide pour un proof-of-concept
+> ou une démo non-cohorte**. À ne PAS utiliser tel quel pour la cohorte
+> formation payante sans validation Vercel Support.
+
 ## Stack
 
 | Composant      | Service                          | Free tier                            | CB requise ?   |

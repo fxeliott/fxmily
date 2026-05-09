@@ -2,7 +2,7 @@
 
 > **Critère SPEC §15 J10 verbatim** :
 >
-> > "L'app est en prod sur app.fxmily.com, Eliot peut s'inviter et tester end-to-end."
+> > "L'app est en prod sur app.fxmilyapp.com, Eliot peut s'inviter et tester end-to-end."
 
 Ce runbook est la **checklist 12 steps** à exécuter une fois que les
 phases A → E du J10 sont déployées sur Hetzner. Phase E (`deploy.yml`)
@@ -12,16 +12,16 @@ image sans nouveau commit).
 ## Pré-requis (à confirmer avant d'attaquer)
 
 - [ ] Hetzner CX22 provisionné, IP DNS-routable.
-- [ ] `fxmily.com` acheté (Cloudflare Registrar) + DNS posé (A `app`,
+- [ ] `fxmilyapp.com` acheté (Cloudflare Registrar) + DNS posé (A `app`,
       MX Resend, TXT SPF/DKIM/DMARC).
-- [ ] Resend Console → Domain `fxmily.com` **verified** (les 3 TXT
+- [ ] Resend Console → Domain `fxmilyapp.com` **verified** (les 3 TXT
       propagés depuis 24h+).
 - [ ] Sentry projet `fxmily-web` créé, DSN configuré dans
       `/etc/fxmily/web.env` (et `NEXT_PUBLIC_SENTRY_DSN` mirror).
 - [ ] iPhone Safari 18.4+ disponible (Web Push real-device test).
 - [ ] `/etc/fxmily/web.env` contient `WEEKLY_REPORT_RECIPIENT=
-eliot@fxmily.com` ET `RESEND_FROM=Fxmily <noreply@fxmily.com>` ET
-      `VAPID_SUBJECT=mailto:eliot@fxmily.com` (alignement post-domain
+eliot@fxmilyapp.com` ET `RESEND_FROM=Fxmily <noreply@fxmilyapp.com>` ET
+      `VAPID_SUBJECT=mailto:eliot@fxmilyapp.com` (alignement post-domain
       verify).
 - [ ] Mot de passe admin **rotaté post-J8 polish** (incident sec docs/
       jalon-9-prep.md → 2026-05-08 rotation Resend + admin pw).
@@ -30,9 +30,9 @@ eliot@fxmily.com` ET `RESEND_FROM=Fxmily <noreply@fxmily.com>` ET
 
 ## Checklist 12 steps end-to-end
 
-### 1. Login admin sur app.fxmily.com
+### 1. Login admin sur app.fxmilyapp.com
 
-- Ouvrir <https://app.fxmily.com/login> sur Chrome desktop.
+- Ouvrir <https://app.fxmilyapp.com/login> sur Chrome desktop.
 - Email + mdp admin (rotaté post-J8 polish).
 - Doit redirect vers `/admin` (pas `/dashboard` — l'admin n'est pas
   membre).
@@ -47,10 +47,10 @@ eliot@fxmily.com` ET `RESEND_FROM=Fxmily <noreply@fxmily.com>` ET
 ### 3. Recevoir l'email Resend dans iCloud
 
 - Inbox de `eliott.pena@icloud.com` → email "Tu es invité sur Fxmily".
-- Vérifier headers : `From: Fxmily <noreply@fxmily.com>`,
+- Vérifier headers : `From: Fxmily <noreply@fxmilyapp.com>`,
   `DKIM=pass`, `SPF=pass`, `DMARC=pass` (cliquer "Show original" ou
   équivalent iCloud).
-- Cliquer le lien → ouvre `https://app.fxmily.com/onboarding/welcome?token=...`.
+- Cliquer le lien → ouvre `https://app.fxmilyapp.com/onboarding/welcome?token=...`.
 
 ### 4. Onboarding → mdp test ≥14 chars → /dashboard
 
@@ -90,7 +90,7 @@ ORDER BY created_at DESC LIMIT 1`.
 > Ce step est l'**unique** validation real-device de J9 — exigée par
 > SPEC §15 J9 + Apple Declarative Web Push (Safari 18.4+).
 
-- Sur iPhone : Safari → `https://app.fxmily.com` → login compte test.
+- Sur iPhone : Safari → `https://app.fxmilyapp.com` → login compte test.
 - Bouton Partage → "Sur l'écran d'accueil".
 - Lancer Fxmily depuis l'icône Home (mode standalone iOS PWA).
 - `/account/notifications` → toggle "Activer les notifications".
@@ -98,7 +98,7 @@ ORDER BY created_at DESC LIMIT 1`.
 - Côté serveur : déclencher manuellement
   ```bash
   curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
-    https://app.fxmily.com/api/cron/dispatch-notifications
+    https://app.fxmilyapp.com/api/cron/dispatch-notifications
   ```
 - iPhone lock screen → push reçu (titre + body cohérents avec la fiche
   Mark Douglas envoyée).
@@ -108,7 +108,7 @@ ORDER BY created_at DESC LIMIT 1`.
 - En attendant le dimanche 21:00 UTC : trigger manuel.
   ```bash
   curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
-    "https://app.fxmily.com/api/cron/weekly-reports?dryRun=false"
+    "https://app.fxmilyapp.com/api/cron/weekly-reports?dryRun=false"
   ```
 - Inbox iCloud → email "Rapport hebdo · <member-label>" reçu.
 - Vérifier la posture (pas de conseil de trade, exécution +
@@ -128,10 +128,10 @@ ORDER BY created_at DESC LIMIT 1`.
 - Dans Sentry Dashboard → projet `fxmily-web` → "Issues" doit être vide.
 - Trigger une erreur de test côté server (depuis ssh fxmily) :
   ```bash
-  curl -X GET https://app.fxmily.com/api/cron/recompute-scores
+  curl -X GET https://app.fxmilyapp.com/api/cron/recompute-scores
   # → 405 method_not_allowed (pas une vraie erreur)
   curl -X POST -H "X-Cron-Secret: bad" \
-    https://app.fxmily.com/api/cron/recompute-scores
+    https://app.fxmilyapp.com/api/cron/recompute-scores
   # → 401 unauthorized (pas une vraie erreur — silence côté Sentry)
   ```
 - Pour un vrai test : trigger une exception via une feature flag interne

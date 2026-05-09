@@ -8,12 +8,21 @@
 #
 # Pre-reqs Eliot manuel (incompressible — ~10 min) :
 #
-#   1. Cloudflare account + ACHAT fxmily.com (~10 €/an, CB engagée)
-#      ⚠️  Configure le budget cap Cloudflare AVANT (Account → Billing →
-#          Budget alert at 50 €/mois threshold).
-#      → Crée un API Token "Edit zone DNS" scope fxmily.com → CLOUDFLARE_API_TOKEN
+# RECOMMANDATION V1 (post-Phase R reality check 2026-05-09) :
+# Utiliser l'Hetzner CX22 existant `hetzner-dieu` (178.104.39.201) +
+# domaine `fxmilyapp.com` (déjà possédé) → coût supplémentaire = 0 €.
+# Skip Hetzner provisioning + skip Cloudflare DNS (déjà configuré pour
+# d'autres workloads — il suffira d'ajouter un sous-domaine `app`).
 #
-#   2. Hetzner Cloud account + CB enregistrée + budget alert
+#   FXMILY_HETZNER_IP=178.104.39.201 FXMILY_DOMAIN=fxmilyapp.com \
+#     bash ops/scripts/bootstrap-fxmily.sh tokens.local.env --skip-hetzner
+#
+#   1. Cloudflare account (déjà existant pour fxmilyapp.com)
+#      → Crée un API Token "Edit zone DNS" scope fxmilyapp.com → CLOUDFLARE_API_TOKEN
+#
+#   2. Hetzner Cloud (skip provisioning si réutilisation `hetzner-dieu`)
+#      Si nouveau CX22 nécessaire (cohabitation insuffisante avec autres
+#      workloads) :
 #      ⚠️  Hetzner Console → Project → Settings → Billing → Set spending alert
 #          at 20 €/mois (CX22 = ~5 €/mois, marge confortable).
 #      → Crée un API Token "Read & Write" → HCLOUD_TOKEN
@@ -23,7 +32,7 @@
 #      → Crée un projet Next.js "fxmily-web"
 #      → Note le DSN + génère un Auth Token "project:write project:releases"
 #
-#   4. Resend account (free tier 3000 emails/mois, pas de CB demandée)
+#   4. Resend account (free tier 3000 emails/mois + 100/jour cap, pas de CB)
 #      → Crée une API Key "domains:write emails:send"
 #
 # Usage :
@@ -41,7 +50,10 @@
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly DOMAIN="${FXMILY_DOMAIN:-fxmily.com}"
+# V1 default = `fxmilyapp.com` (Eliot's existing domain, post-Phase R pivot
+# 2026-05-09). To use `fxmilyapp.com` (V2 — requires purchase) override via
+# FXMILY_DOMAIN=fxmilyapp.com env var.
+readonly DOMAIN="${FXMILY_DOMAIN:-fxmilyapp.com}"
 readonly APP_HOST="app.${DOMAIN}"
 
 usage() {

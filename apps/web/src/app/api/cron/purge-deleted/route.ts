@@ -27,7 +27,7 @@ import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
  *
  * Wiring expected in production : Hetzner crontab daily 03:00 UTC →
  *   curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
- *        https://app.fxmily.com/api/cron/purge-deleted
+ *        https://app.fxmilyapp.com/api/cron/purge-deleted
  *
  * Auth/rate-limit/dev-window : carbon-copy of the J5/J6/J7/J8/J9 crons.
  *   - SHA-256 + `timingSafeEqual` (CWE-208 length-leak defense)

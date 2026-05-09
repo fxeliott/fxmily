@@ -179,7 +179,7 @@ WeeklyDigestEmail.PreviewProps = {
     sessionFocus: '6 trades en session London, 2 en NY — bon focus sur la fenêtre habituelle.',
     disciplineTrend: 'Plan respect rate 75% (vs 65% semaine -1) — progression claire.',
   },
-  reportUrl: 'https://app.fxmily.com/admin/reports/clx0report1',
+  reportUrl: 'https://app.fxmilyapp.com/admin/reports/clx0report1',
   claudeModel: 'claude-sonnet-4-6',
   costEur: '0.014230',
   mocked: false,

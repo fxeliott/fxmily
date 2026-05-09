@@ -24,7 +24,7 @@ import type { StorageAdapter, UploadInput } from './types';
  *      set with a Cloudflare Access policy; otherwise issue a 15-min
  *      presigned GET URL via `getSignedUrl(client, new GetObjectCommand(...))`.
  *   5. `delete`: `DeleteObjectCommand`.
- *   6. CORS on the bucket: restrict to `https://app.fxmily.com` only.
+ *   6. CORS on the bucket: restrict to `https://app.fxmilyapp.com` only.
  *
  * The interface (`StorageAdapter`) is identical to the local adapter so the
  * switch is a single line in `index.ts`. **Until then, this class throws on

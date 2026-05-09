@@ -62,10 +62,10 @@ export default function GlobalError({
           Inattendu, on a logué l&apos;erreur côté serveur. Tu peux réessayer la page, ou revenir à
           l&apos;accueil. Si ça persiste, contacte{' '}
           <a
-            href="mailto:eliot@fxmily.com"
+            href="mailto:eliot@fxmilyapp.com"
             className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
           >
-            eliot@fxmily.com
+            eliot@fxmilyapp.com
           </a>{' '}
           en mentionnant l&apos;identifiant ci-dessous.
         </p>

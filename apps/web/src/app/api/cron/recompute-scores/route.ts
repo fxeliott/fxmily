@@ -14,7 +14,7 @@ import { recomputeAllActiveMembers } from '@/lib/scoring';
  * Wiring expected in production:
  *   `0 2 * * *` on Hetzner →
  *     curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
- *          https://app.fxmily.com/api/cron/recompute-scores
+ *          https://app.fxmilyapp.com/api/cron/recompute-scores
  *
  * Why 02:00 UTC: deep in the off-hours window for every supported member
  * timezone (V1 Europe/Paris — 03:00 winter / 04:00 summer local). The

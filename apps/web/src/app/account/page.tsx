@@ -102,10 +102,10 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
         <p>
           Une question ?{' '}
           <a
-            href="mailto:eliot@fxmily.com"
+            href="mailto:eliot@fxmilyapp.com"
             className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
           >
-            eliot@fxmily.com
+            eliot@fxmilyapp.com
           </a>
           . Voir aussi la{' '}
           <Link

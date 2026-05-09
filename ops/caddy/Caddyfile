@@ -4,7 +4,7 @@
 	# `email` enables Let's Encrypt issuance (used in the ACME account
 	# registration). Use a real address — Let's Encrypt notifies on cert
 	# expiry / revocation events.
-	email eliot@fxmily.com
+	email eliot@fxmilyapp.com
 
 	# Logs to file — rolled by Caddy itself (no logrotate dependency).
 	log {
@@ -17,7 +17,7 @@
 	}
 }
 
-app.fxmily.com {
+app.fxmilyapp.com {
 	# Reverse proxy to the `web` container (compose-network DNS).
 	reverse_proxy web:3000 {
 		# `lb_try_duration` retries upstream until container healthcheck
@@ -59,8 +59,8 @@ app.fxmily.com {
 }
 
 # Marketing / public landing : redirects to the app for V1 (no public
-# marketing site yet). Kill this block when fxmily.com gets a real
+# marketing site yet). Kill this block when fxmilyapp.com gets a real
 # landing page in V2.
-www.fxmily.com, fxmily.com {
-	redir https://app.fxmily.com{uri} permanent
+www.fxmilyapp.com, fxmilyapp.com {
+	redir https://app.fxmilyapp.com{uri} permanent
 }

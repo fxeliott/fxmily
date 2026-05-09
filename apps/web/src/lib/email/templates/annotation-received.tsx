@@ -110,7 +110,7 @@ AnnotationReceivedEmail.PreviewProps = {
   adminName: 'Eliot',
   tradePair: 'EURUSD',
   hasMedia: true,
-  tradeUrl: 'https://app.fxmily.com/journal/clx0trade1',
+  tradeUrl: 'https://app.fxmilyapp.com/journal/clx0trade1',
 } satisfies AnnotationReceivedEmailProps;
 
 export default AnnotationReceivedEmail;

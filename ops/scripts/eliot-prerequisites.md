@@ -4,7 +4,7 @@ Deux paths au choix selon ta tolérance coût :
 
 | Path              | Coût                            | Où                  | Quand choisir                                            |
 | ----------------- | ------------------------------- | ------------------- | -------------------------------------------------------- |
-| **A — Hetzner**   | ~5-15 €/mois + ~10 €/an domaine | `app.fxmily.com`    | Si tu acceptes ~70 €/an documenté SPEC §16 + budget caps |
+| **A — Hetzner**   | ~5-15 €/mois + ~10 €/an domaine | `app.fxmilyapp.com` | Si tu acceptes ~70 €/an documenté SPEC §16 + budget caps |
 | **B — Zero-cost** | **0 € / 0 CB**                  | `fxmily.vercel.app` | Si "pas de coût supplémentaire" strict (Phase N pivot)   |
 
 Les deux paths livrent le même code Fxmily V1 SPEC §15 J10. Seule la
@@ -30,15 +30,15 @@ Phase M (2026-05-09) a réduit le manuel de **30 → 10 min** via les scripts
 
 ## Manuel incompressible (~10 min total)
 
-### 1. Cloudflare — Achat `fxmily.com` (~10 €/an, 3 min)
+### 1. Cloudflare — Achat `fxmilyapp.com` (~10 €/an, 3 min)
 
 > ⚠️ Cloudflare Registrar **n'a pas d'API publique pour l'achat de domaine**.
 > Cette étape reste manuelle.
 
 1. Account Cloudflare créé + CB enregistrée → **Account → Billing → Budget alert ≤ 30 €/mois**
-2. Dashboard → **Registrar** → search `fxmily.com` → buy → **auto-renew ON**
+2. Dashboard → **Registrar** → search `fxmilyapp.com` → buy → **auto-renew ON**
 3. Profile → **API Tokens** → Create Token → "Edit zone DNS" template,
-   scope = `fxmily.com` Zone → note la valeur
+   scope = `fxmilyapp.com` Zone → note la valeur
 
 ### 2. Hetzner Cloud — Compte + token + SSH key (~3 min)
 
@@ -84,8 +84,8 @@ bash ops/scripts/bootstrap-fxmily.sh tokens.local.env
 
 # Le script enchaîne :
 #   - Step 1 : provision-hetzner.sh (idempotent, demande confirmation avant `hcloud server create`)
-#   - Step 2 : resend-domain-add.sh fxmily.com (add domain + fetch DKIM)
-#   - Step 3 : cloudflare-dns-setup.sh fxmily.com (5 records via API)
+#   - Step 2 : resend-domain-add.sh fxmilyapp.com (add domain + fetch DKIM)
+#   - Step 3 : cloudflare-dns-setup.sh fxmilyapp.com (5 records via API)
 #   - Step 4 : pose-github-secrets.sh (5 secrets + 2 variables via gh CLI)
 #   - Step 5 : prints next-step instructions
 
@@ -94,15 +94,15 @@ scp ops/scripts/setup-host.sh root@<IP>:/root/
 ssh root@<IP> 'bash /root/setup-host.sh'
 
 # 5. Wait ~24h DNS propagation, puis :
-bash ops/scripts/verify-dns.sh fxmily.com app.fxmily.com
+bash ops/scripts/verify-dns.sh fxmilyapp.com app.fxmilyapp.com
 RESEND_API_KEY=$(grep RESEND_API_KEY tokens.local.env | cut -d= -f2-) \
-  bash ops/scripts/resend-domain-add.sh fxmily.com --verify-only
+  bash ops/scripts/resend-domain-add.sh fxmilyapp.com --verify-only
 
 # 6. Trigger le 1er deploy
 gh workflow run deploy.yml -R fxeliott/fxmily
 
 # 7. Smoke automatisé (8/12 checks)
-APP_URL=https://app.fxmily.com \
+APP_URL=https://app.fxmilyapp.com \
   CRON_SECRET=$(grep CRON_SECRET tokens.local.env | cut -d= -f2-) \
   bash ops/scripts/post-deploy-smoke.sh
 

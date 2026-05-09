@@ -102,7 +102,7 @@ NEXT STEPS (manual, log in as 'fxmily' user):
 
 3. Populate /etc/fxmily/web.env (chmod 600 fxmily:fxmily) — see
    docs/env-template.md for the full var list (DATABASE_URL pointing at
-   postgres:5432, AUTH_URL=https://app.fxmily.com, AUTH_SECRET, CRON_SECRET,
+   postgres:5432, AUTH_URL=https://app.fxmilyapp.com, AUTH_SECRET, CRON_SECRET,
    VAPID_*, SENTRY_*, RESEND_API_KEY/FROM, R2_*, ANTHROPIC_API_KEY optional).
 
 4. Edit /etc/fxmily/cron.env (chmod 600) — must keep CRON_SECRET in sync
@@ -115,7 +115,7 @@ NEXT STEPS (manual, log in as 'fxmily' user):
 
 6. DNS (Cloudflare): set A app → \$(curl -s ifconfig.me) (Proxied=NO).
 
-7. Verify: bash ops/scripts/verify-dns.sh fxmily.com app.fxmily.com
+7. Verify: bash ops/scripts/verify-dns.sh fxmilyapp.com app.fxmilyapp.com
 
 ═══════════════════════════════════════════════════════════════════════
 EOF

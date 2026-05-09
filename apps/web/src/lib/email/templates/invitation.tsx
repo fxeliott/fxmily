@@ -126,7 +126,7 @@ export function InvitationEmail({ inviteUrl, invitedByName, expiresInDays }: Inv
 }
 
 InvitationEmail.PreviewProps = {
-  inviteUrl: 'https://app.fxmily.com/onboarding/welcome?token=preview',
+  inviteUrl: 'https://app.fxmilyapp.com/onboarding/welcome?token=preview',
   invitedByName: 'Eliot',
   expiresInDays: 7,
 } satisfies InvitationEmailProps;

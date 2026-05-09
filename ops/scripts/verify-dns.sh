@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # J10 — DNS + Resend domain verification helper.
 #
-# Usage: bash ops/scripts/verify-dns.sh fxmily.com app.fxmily.com
+# Usage: bash ops/scripts/verify-dns.sh fxmilyapp.com app.fxmilyapp.com
 #
 # Checks:
-#   - app.fxmily.com → A record present (Hetzner IP)
-#   - fxmily.com → MX records to mx1/mx2.resend.com
+#   - app.fxmilyapp.com → A record present (Hetzner IP)
+#   - fxmilyapp.com → MX records to mx1/mx2.resend.com
 #   - SPF TXT v=spf1 include:_spf.resend.com
-#   - DKIM TXT resend._domainkey.fxmily.com
-#   - DMARC TXT _dmarc.fxmily.com
-#   - HTTPS reachability of https://app.fxmily.com/api/health (if up)
+#   - DKIM TXT resend._domainkey.fxmilyapp.com
+#   - DMARC TXT _dmarc.fxmilyapp.com
+#   - HTTPS reachability of https://app.fxmilyapp.com/api/health (if up)
 #
 # Returns 0 only if all checks pass. Use during the 24h propagation window
 # to know when Resend can be "verified" in the console.
 
 set -euo pipefail
 
-readonly DOMAIN="${1:-fxmily.com}"
+readonly DOMAIN="${1:-fxmilyapp.com}"
 readonly APP="${2:-app.${DOMAIN}}"
 
 pass=0

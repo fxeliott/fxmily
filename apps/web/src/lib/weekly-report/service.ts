@@ -53,7 +53,7 @@ export interface GenerateOptions {
   /// `eliottpena34690@gmail.com` — l'email du compte Resend Eliot,
   /// **seul recipient autorisé free-tier sans domain verify**. Découvert
   /// lors du test live 2026-05-08 : Resend free retourne 403 si recipient
-  /// ≠ owner email du compte. Domain verify `fxmily.com` reporté J10 →
+  /// ≠ owner email du compte. Domain verify `fxmilyapp.com` reporté J10 →
   /// then anyone-recipient.
   recipientOverride?: string;
 }
@@ -581,8 +581,8 @@ function resolveRecipient(options: GenerateOptions): string {
   // V1 fallback : `eliottpena34690@gmail.com` = email du compte Resend Eliot
   // (seul recipient autorisé free-tier sans domain verify — Resend retourne
   // 403 si recipient ≠ owner email). Discovered live 2026-05-08 lors du
-  // smoke test J8 polish 4e passe. À élargir J10 quand `fxmily.com` domain
-  // verify Resend Console est fait → `eliot@fxmily.com` ou similaire.
+  // smoke test J8 polish 4e passe. À élargir J10 quand `fxmilyapp.com` domain
+  // verify Resend Console est fait → `eliot@fxmilyapp.com` ou similaire.
   return env.WEEKLY_REPORT_RECIPIENT ?? 'eliottpena34690@gmail.com';
 }
 

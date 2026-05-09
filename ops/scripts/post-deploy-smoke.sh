@@ -6,13 +6,13 @@
 # Chrome desktop + iPhone Safari.
 #
 # Usage:
-#   export APP_URL=https://app.fxmily.com
+#   export APP_URL=https://app.fxmilyapp.com
 #   export CRON_SECRET=<from /etc/fxmily/web.env>
 #   bash ops/scripts/post-deploy-smoke.sh
 
 set -euo pipefail
 
-: "${APP_URL:?APP_URL env var required (e.g. https://app.fxmily.com)}"
+: "${APP_URL:?APP_URL env var required (e.g. https://app.fxmilyapp.com)}"
 : "${CRON_SECRET:?CRON_SECRET env var required}"
 
 pass=0

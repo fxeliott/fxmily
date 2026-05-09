@@ -71,9 +71,9 @@ describe('buildPayload', () => {
       'annotation_received',
       'n1',
       { tradeId: 't1' },
-      'https://app.fxmily.com',
+      'https://app.fxmilyapp.com',
     );
-    expect(out.notification.navigate).toBe('https://app.fxmily.com/journal/t1');
+    expect(out.notification.navigate).toBe('https://app.fxmilyapp.com/journal/t1');
   });
 
   it('NEVER includes audio fields (preference Eliot no-audio)', () => {

@@ -87,7 +87,7 @@ describe('buildUserDataExport', () => {
     expect(snap.schemaVersion).toBe(EXPORT_SCHEMA_VERSION);
     expect(snap.user?.email).toBe('eliot@example.com');
     expect(snap.trades).toEqual([]);
-    expect(snap.notes.contact).toBe('eliot@fxmily.com');
+    expect(snap.notes.contact).toBe('eliot@fxmilyapp.com');
     expect(typeof snap.exportedAt).toBe('string');
     expect(new Date(snap.exportedAt).toString()).not.toBe('Invalid Date');
   });

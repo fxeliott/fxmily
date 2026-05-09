@@ -5,7 +5,7 @@ import { inviteSchema, onboardingSchema, signInSchema } from './auth';
 describe('signInSchema', () => {
   it('accepts a valid email + password', () => {
     const result = signInSchema.safeParse({
-      email: 'eliot@fxmily.com',
+      email: 'eliot@fxmilyapp.com',
       password: 'whatever',
     });
     expect(result.success).toBe(true);
@@ -29,7 +29,7 @@ describe('signInSchema', () => {
 
   it('rejects an empty password', () => {
     const result = signInSchema.safeParse({
-      email: 'eliot@fxmily.com',
+      email: 'eliot@fxmilyapp.com',
       password: '',
     });
     expect(result.success).toBe(false);

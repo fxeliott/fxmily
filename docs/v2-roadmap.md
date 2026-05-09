@@ -1,14 +1,14 @@
 # V2 Roadmap — post-J10
 
 > Préparé 2026-05-09 en clôture du Jalon 10. À relire ensemble une fois le
-> smoke prod (Phase F du J10) validé sur `app.fxmily.com`.
+> smoke prod (Phase F du J10) validé sur `app.fxmilyapp.com`.
 
 ## V1 = ship
 
 À ce stade :
 
 - Code J0 → J10 mergé sur `main`.
-- Stack prod (`app.fxmily.com`, Hetzner CX22, Caddy, Postgres 17) opérationnelle.
+- Stack prod (`app.fxmilyapp.com`, Hetzner CX22, Caddy, Postgres 17) opérationnelle.
 - Cohorte cible 30 → 100 membres invités.
 - Coût récurrent ~10-15€/mois (cf. SPEC §16).
 - Pas d'audio nulle part. Pas de tracker. Pas d'API payante consommée par

@@ -11,10 +11,10 @@
 # one mistake-proof.
 #
 # Pre-reqs Eliot manuel (incompressible) :
-#   1. Compte Cloudflare créé + CB enregistrée + `fxmily.com` ACHETÉ
+#   1. Compte Cloudflare créé + CB enregistrée + `fxmilyapp.com` ACHETÉ
 #      (Cloudflare Registrar pas d'API publique pour l'achat).
 #   2. API Token créé : Profile → API Tokens → Create Token →
-#      "Edit zone DNS" template, scope = `fxmily.com` Zone.
+#      "Edit zone DNS" template, scope = `fxmilyapp.com` Zone.
 #   3. Resend domain ADD effectué (cf. resend-domain-add.sh) pour
 #      récupérer la valeur DKIM (qui est unique par projet Resend).
 #
@@ -22,7 +22,7 @@
 #   export CLOUDFLARE_API_TOKEN="…"
 #   export FXMILY_HETZNER_IP="X.X.X.X"
 #   export FXMILY_RESEND_DKIM_VALUE="p=…(long base64)…"     # from resend-domain-add.sh
-#   bash ops/scripts/cloudflare-dns-setup.sh fxmily.com
+#   bash ops/scripts/cloudflare-dns-setup.sh fxmilyapp.com
 #
 # Sécurité :
 #   - Token JAMAIS loggé (curl -H avec --silent + tee /dev/null sur les body retours)
@@ -33,7 +33,7 @@
 
 set -euo pipefail
 
-readonly DOMAIN="${1:-${FXMILY_DOMAIN:-fxmily.com}}"
+readonly DOMAIN="${1:-${FXMILY_DOMAIN:-fxmilyapp.com}}"
 readonly APP_SUBDOMAIN="${FXMILY_APP_SUBDOMAIN:-app}"
 readonly API_BASE="https://api.cloudflare.com/client/v4"
 

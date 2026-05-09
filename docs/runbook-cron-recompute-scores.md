@@ -51,7 +51,7 @@ curl -fsS \
   -X POST \
   -H "X-Cron-Secret: ${CRON_SECRET}" \
   -H "User-Agent: fxmily-cron/1.0" \
-  "https://app.fxmily.com/api/cron/${ENDPOINT}"
+  "https://app.fxmilyapp.com/api/cron/${ENDPOINT}"
 ```
 
 `/etc/fxmily/cron.env` (mode `0600`, owner `fxmily`):

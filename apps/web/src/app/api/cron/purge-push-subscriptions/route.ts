@@ -14,7 +14,7 @@ import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
  *
  * Wiring expected : Hetzner crontab weekly Sunday 05:00 UTC.
  *   curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
- *        https://app.fxmily.com/api/cron/purge-push-subscriptions
+ *        https://app.fxmilyapp.com/api/cron/purge-push-subscriptions
  *
  * Why weekly (not daily) : cohort shrink rate at 30 → 1000 members is
  * measured in handfuls of subscriptions per week; daily would amortise

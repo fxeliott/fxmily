@@ -927,7 +927,7 @@ SPEC v1.0 préservé immuable au-dessus pour traçabilité de la vision initiale
 
 **J9** : Push notifications Web Push + VAPID + service worker.
 
-**J10** : Prod hardening + RGPD endpoints + Sentry + Hetzner deploy + domaine app.fxmily.com.
+**J10** : Prod hardening + RGPD endpoints + Sentry + Hetzner deploy + domaine app.fxmilyapp.com.
 
 ## J8 — Foundation (Phase A livré 2026-05-08)
 
@@ -1031,7 +1031,7 @@ Pipeline complet rapport hebdo IA admin **end-to-end live validé**. Path :
 
 - `lib/email/templates/weekly-digest.tsx` — React Email v2 lime/deep-space (carbone `AnnotationReceivedEmail` J4). Sections : eyebrow + heading + period + (mock banner if mocked) + Synthèse + Risques (bullet warn) + Recommandations (bullet acc) + Patterns observés (label + value rows) + CTA "Ouvrir le rapport complet" + footer "Aucun conseil de trade — uniquement comportement, exécution, psychologie (SPEC §2)" + cost line.
 - `sendWeeklyDigestEmail({ to, memberLabel, report })` dans `lib/email/send.ts` — plain-text fallback structuré + `buildAdminReportUrl(reportId)`.
-- V1 envoie à `WEEKLY_REPORT_RECIPIENT` env (default `eliott.pena@icloud.com`) — domaine `fxmily.com` verify J10.
+- V1 envoie à `WEEKLY_REPORT_RECIPIENT` env (default `eliott.pena@icloud.com`) — domaine `fxmilyapp.com` verify J10.
 
 ### Phase G — Audit-driven hardening (8 closed)
 
@@ -1081,7 +1081,7 @@ Validations :
 ```
 # Hetzner crontab — every Sunday 21:00 UTC
 0 21 * * 0  curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
-            https://app.fxmily.com/api/cron/weekly-reports
+            https://app.fxmilyapp.com/api/cron/weekly-reports
 ```
 
 ### Suivis non-bloquants (TIER 4 polish — J9.5+)
@@ -1094,7 +1094,7 @@ Validations :
 ### Pré-requis Eliot pour activer Claude live
 
 1. **Claude live** : `ANTHROPIC_API_KEY` dans `apps/web/.env` (Console Anthropic → API Keys → "Create Key" Fxmily). Le `LiveWeeklyReportClient` se réveille automatiquement (factory `getWeeklyReportClient()`).
-2. **Email réel à fxeliott** : laisser `WEEKLY_REPORT_RECIPIENT` non-set → default `eliott.pena@icloud.com` (compte Resend vérifié). Domain `fxmily.com` verify J10.
+2. **Email réel à fxeliott** : laisser `WEEKLY_REPORT_RECIPIENT` non-set → default `eliott.pena@icloud.com` (compte Resend vérifié). Domain `fxmilyapp.com` verify J10.
 
 ## J8 — Polish post-PR #30 (audit-driven hardening 2e passe, 2026-05-08)
 
@@ -1225,7 +1225,7 @@ TIER 2 fixes : `kind:'promise_rejected'` retryable, `failureReason='all_endpoint
 
 1. **VAPID keys** : déjà dans `apps/web/.env` (J8 polish session, cf. memory `fxmily_project.md:92`).
 2. **iPhone test physique** : pour valider iOS Safari 18.4+ Declarative Web Push real-device (mandatory SPEC §15 J9 critère).
-3. **HTTPS** : `pushManager.subscribe()` exige HTTPS strict iOS Safari (localhost OK Chrome desktop seulement) — ngrok tunnel ou prod app.fxmily.com.
+3. **HTTPS** : `pushManager.subscribe()` exige HTTPS strict iOS Safari (localhost OK Chrome desktop seulement) — ngrok tunnel ou prod app.fxmilyapp.com.
 
 ### TODO J9.5+ (UI polish premium reclassé)
 
@@ -1248,7 +1248,7 @@ TIER 2 fixes : `kind:'promise_rejected'` retryable, `failureReason='all_endpoint
 ## J10 — Production hardening (livré 2026-05-09)
 
 Phase A → H couvrent SPEC §15 J10 + §16 : RGPD self-service, Sentry, Hetzner
-deploy, domaine `fxmily.com`, première invitation prod. Branche
+deploy, domaine `fxmilyapp.com`, première invitation prod. Branche
 `claude/j10-prod-deploy` (4 commits granulaires, rebase merge).
 
 ### Phases livrées (in-session)
@@ -1385,17 +1385,24 @@ reclassés.
 Cf. `docs/runbook-prod-smoke-test.md` (12 steps end-to-end). Conditions à
 satisfaire AVANT d'exécuter le smoke :
 
-1. **Hetzner CX22 provisionné** + clé SSH publique posée + IPv4 noté.
-2. **`fxmily.com` acheté** (Cloudflare Registrar) + DNS posé (A `app` →
-   Hetzner IP, MX Resend, TXT SPF/DKIM/DMARC).
-3. **Resend Console** → `fxmily.com` domain **verified** (3 TXT propagés ≥ 24h).
-4. **Sentry projet créé** + DSN dans `/etc/fxmily/web.env` + AUTH_TOKEN dans
-   GitHub secrets.
-5. **iPhone Safari 18.4+** dispo pour le push real-device test.
-6. **Mdp admin rotaté** post-J8 polish (incident sécurité Resend key leak
-   docs/jalon-9-prep.md).
-7. **GitHub secrets** posés : `HETZNER_HOST`, `HETZNER_SSH_KEY`,
-   `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
+**État au 2026-05-09 (post-Phase R)** — 7 → **5** pré-requis bloquants :
+
+1. ✅ **Hetzner CX22** : utiliser `hetzner-dieu` 178.104.39.201 existant
+   (déjà payé pour n8n/Langfuse). `bootstrap-fxmily.sh --skip-hetzner
+FXMILY_HETZNER_IP=178.104.39.201` réutilise l'IP existante.
+2. ✅ **Domaine** : `fxmilyapp.com` (déjà possédé par Eliot via Cloudflare).
+   DNS apex configuré, ajouter le sous-domaine `app.fxmilyapp.com` →
+   Hetzner IP via `cloudflare-dns-setup.sh`. Achat `fxmily.com` reporté V2.
+3. ⏳ **Resend Console** → `fxmilyapp.com` domain **verified** (3 TXT
+   propagés ~15 min, **pas 24h** — vérifié Phase R web research).
+4. ⏳ **Sentry projet créé** + DSN dans `/etc/fxmily/web.env` + AUTH_TOKEN
+   dans GitHub secrets.
+5. ⏳ **iPhone Safari 18.4+** dispo pour le push real-device test.
+6. ⏳ **Mdp admin rotaté** post-J8 polish (incident sécurité Resend key
+   leak — détails `docs/jalon-9-prep.md`).
+7. ⏳ **GitHub secrets** posés via `pose-github-secrets.sh tokens.local.env` :
+   `HETZNER_HOST`, `HETZNER_SSH_KEY`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`,
+   `SENTRY_PROJECT` + Resend + Cloudflare + VAPID + CRON_SECRET.
 
 Une fois ces 7 boîtes cochées, l'invitation Eliot → eliott.pena@icloud.com →
 onboarding → trade → check-in → score → fiche → push iPhone → digest weekly
@@ -1548,9 +1555,9 @@ f0bae30 feat(j10): RGPD foundation + soft-delete + cron purge
 ### Phase M — Mega automation Cloudflare/Resend/bootstrap (`2ddf48f`)
 
 - **`ops/scripts/cloudflare-dns-setup.sh`** : pose A `app` → Hetzner IP + MX Resend + 3 TXT SPF/DKIM/DMARC via Cloudflare API.
-- **`ops/scripts/resend-domain-add.sh`** : add domain `fxmily.com` + récupère les 3 DNS records DKIM/SPF.
+- **`ops/scripts/resend-domain-add.sh`** : add domain `fxmilyapp.com` + récupère les 3 DNS records DKIM/SPF.
 - **`ops/scripts/bootstrap-fxmily.sh`** : orchestrator chain → provision-hetzner → resend-domain-add → cloudflare-dns-setup → pose-github-secrets.
-- Réduit l'effort manuel Eliot ~2h → ~30 min côté setup. Les pré-requis externes (compte Hetzner, achat `fxmily.com`, compte Resend) restent côté Eliot.
+- Réduit l'effort manuel Eliot ~2h → ~30 min côté setup. Les pré-requis externes (compte Hetzner, achat `fxmilyapp.com`, compte Resend) restent côté Eliot.
 
 ### Phase N — Zero-cost deployment path (Vercel + Neon + GH Actions) (`cd7e623` + `a0a9b86`)
 
@@ -1580,7 +1587,7 @@ Audit multi-subagent rounds 4 & 5 :
 - **WCAG B1 — `delete-button.tsx`** : touch target text-xs ~16px → `min-h-6 + py-1.5` (≥24×24 WCAG 2.5.8 AA).
 - **WCAG B2 — `<Link><Btn>` nesting** : `welcome/page.tsx` + `admin/members/page.tsx` switchés `<Link className={btnVariants(...)}>` (single `<a>`, pattern existant dans repo).
 - **WCAG B3 — `EmptyState` / `ErrorState`** : `headingLevel?: 'h2' | 'h3'` prop default `'h2'` (was hard-coded `h3` skipping hierarchy).
-- **WCAG B4 — splash-hero secondary CTA inerte** : `<Btn>Demander un accès</Btn>` sans onClick → `<a href="mailto:eliot@fxmily.com?subject=...">` + `btnVariants`.
+- **WCAG B4 — splash-hero secondary CTA inerte** : `<Btn>Demander un accès</Btn>` sans onClick → `<a href="mailto:eliot@fxmilyapp.com?subject=...">` + `btnVariants`.
 - **Deps T2 — hono CVE override** : pnpm.overrides `hono >= 4.12.18` (CVE-2026-44457/44458/44459 dev-only via @prisma/dev).
 - **Tech debt — `docs/env-template.md`** complété avec `WEEKLY_REPORT_RECIPIENT`, `CRON_SECRET`, `UPLOADS_DIR` (validés Zod mais absents du template).
 
@@ -1648,7 +1655,7 @@ Senior trader review : posture conforme SPEC §2 (no market analysis), 50/50 fic
 7 → **5** pré-requis bloquants après Phase R :
 
 - ✅ **Hetzner CX22** : `hetzner-dieu` existant 178.104.39.201 (déjà payé pour n8n/Langfuse). `bootstrap-fxmily.sh --skip-hetzner` + `FXMILY_HETZNER_IP=178.104.39.201`.
-- ✅ **Domaine** : pivot V1 sur `fxmilyapp.com` (déjà possédé, Cloudflare DNS configuré). Achat `fxmily.com` reporté V2.
+- ✅ **Domaine** : pivot V1 sur `fxmilyapp.com` (déjà possédé, Cloudflare DNS configuré). Achat éventuel `fxmily.com` reporté V2 si l'image de marque l'exige.
 - ⏳ Sentry DSN signup (gratuit 5000 events/mois, no CB).
 - ⏳ Resend domain `fxmilyapp.com` verify (3 TXT DNS Cloudflare → ~15 min propagation).
 - ⏳ iPhone Safari 18.4+ test (non automatisable, device physique).
@@ -1670,4 +1677,4 @@ Fix : `proxy.ts` matcher étendu pour exclure `manifest\.webmanifest|sw\.js|robo
 - format ✓, lint ✓, type-check ✓, **Vitest 717/717 verts**.
 - Build prod Turbopack ✓ — nouvelle route `/api/cron/purge-audit-log` listée dans le manifest des routes (9e cron).
 - Smoke browser live D:/Fxmily HEAD post-R confirme : `/`, `/login`, `/legal/*`, `/apple-icon`, `/icon`, `/manifest.webmanifest`, `/sw.js`, `/api/health` → 200. `/dashboard`, `/account`, `/admin/system` → 307→/login (auth gate intact).
-- WCAG fixes Phase P toujours visibles dans HTML rendered : `<a href="mailto:eliot@fxmily.com">` sur splash secondary CTA + `<a className={btnVariants(...)}>` direct sur welcome/admin/members links.
+- WCAG fixes Phase P toujours visibles dans HTML rendered : `<a href="mailto:eliot@fxmilyapp.com">` sur splash secondary CTA + `<a className={btnVariants(...)}>` direct sur welcome/admin/members links.

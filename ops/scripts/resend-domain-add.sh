@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Phase M — Resend domain registration automation.
 #
-# Adds `fxmily.com` to the Resend account, fetches the DKIM value
+# Adds `fxmilyapp.com` to the Resend account, fetches the DKIM value
 # (unique per Resend project), and exposes it for `cloudflare-dns-setup.sh`
 # to plant in DNS. Then with `--verify-only`, polls Resend until the
 # domain status flips to `verified` (after DNS propagation).
@@ -13,9 +13,9 @@
 #
 # Usage :
 #   export RESEND_API_KEY="re_…"
-#   bash ops/scripts/resend-domain-add.sh fxmily.com
+#   bash ops/scripts/resend-domain-add.sh fxmilyapp.com
 #       → ajoute le domaine, dump le DKIM dans /tmp/fxmily-resend-dkim.value
-#   bash ops/scripts/resend-domain-add.sh fxmily.com --verify-only
+#   bash ops/scripts/resend-domain-add.sh fxmilyapp.com --verify-only
 #       → poll status jusqu'à `verified`
 #
 # Sécurité :
@@ -25,7 +25,7 @@
 
 set -euo pipefail
 
-readonly DOMAIN="${1:-${FXMILY_DOMAIN:-fxmily.com}}"
+readonly DOMAIN="${1:-${FXMILY_DOMAIN:-fxmilyapp.com}}"
 readonly MODE="${2:-add}"
 readonly API_BASE="https://api.resend.com"
 readonly DKIM_OUT="${RESEND_DKIM_OUT:-/tmp/fxmily-resend-dkim.value}"

@@ -67,7 +67,11 @@ interface DraftState {
   entryPrice: string;
   lotSize: string;
   stopLossPrice: string;
+  /** V1.5 — Tharp risk % rule. Empty string = "not captured" (default). */
+  riskPct: string;
   plannedRR: number;
+  /** V1.5 — Steenbarger setup quality. Empty string = "not captured" (default). */
+  tradeQuality: 'A' | 'B' | 'C' | '';
   emotionBefore: string[];
   planRespected: boolean | null;
   hedgeRespected: 'true' | 'false' | 'na' | '';
@@ -93,7 +97,9 @@ function emptyDraft(): DraftState {
     entryPrice: '',
     lotSize: '',
     stopLossPrice: '',
+    riskPct: '',
     plannedRR: 2,
+    tradeQuality: '',
     emotionBefore: [],
     planRespected: null,
     hedgeRespected: '',
@@ -194,7 +200,11 @@ export function TradeFormWizard() {
       entryPrice: draft.entryPrice,
       lotSize: draft.lotSize,
       stopLossPrice: draft.stopLossPrice === '' ? null : Number(draft.stopLossPrice),
+      // V1.5 — empty strings are treated as "not captured" (omitted), so the
+      // Zod schema's `.optional()` handles them as undefined → service NULL.
+      ...(draft.riskPct !== '' ? { riskPct: draft.riskPct } : {}),
       plannedRR: draft.plannedRR,
+      ...(draft.tradeQuality !== '' ? { tradeQuality: draft.tradeQuality } : {}),
       emotionBefore: draft.emotionBefore,
       planRespected: draft.planRespected ?? false,
       hedgeRespected: draft.hedgeRespected || 'na',
@@ -257,7 +267,9 @@ export function TradeFormWizard() {
     fd.set('entryPrice', draft.entryPrice);
     fd.set('lotSize', draft.lotSize);
     if (draft.stopLossPrice !== '') fd.set('stopLossPrice', draft.stopLossPrice);
+    if (draft.riskPct !== '') fd.set('riskPct', draft.riskPct);
     fd.set('plannedRR', String(draft.plannedRR));
+    if (draft.tradeQuality !== '') fd.set('tradeQuality', draft.tradeQuality);
     for (const slug of draft.emotionBefore) fd.append('emotionBefore', slug);
     fd.set('planRespected', String(draft.planRespected));
     fd.set('hedgeRespected', draft.hedgeRespected);
@@ -654,6 +666,24 @@ function StepPricesSizing({ draft, update, fieldErrors, disabled }: StepProps) {
         placeholder="—"
         hint="Sans stop-loss, le R réalisé sera estimé (computed → estimated fallback)."
       />
+      {/* V1.5 — Tharp risk % rule. Optional capture; surfaces a soft warning
+          when the value exceeds 2 % (Tharp gold standard). */}
+      <NumericField
+        id="riskPct"
+        label="Risque % du compte (optionnel — règle Tharp 1-2 %)"
+        value={draft.riskPct}
+        onChange={(v) => update('riskPct', v)}
+        error={fieldErrors.riskPct}
+        disabled={disabled}
+        step="0.1"
+        inputMode="decimal"
+        placeholder="1.5"
+        hint={
+          draft.riskPct !== '' && Number(draft.riskPct) > 2
+            ? `⚠ ${Number(draft.riskPct).toFixed(2)} % dépasse la limite Tharp 2 %. Vérifie ta taille.`
+            : 'Pourcentage du compte exposé sur ce trade. Ex: 1.5 = 1.5 % du capital.'
+        }
+      />
     </div>
   );
 }
@@ -945,6 +975,12 @@ function StepPlannedRR({
 function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepProps) {
   return (
     <div className="flex flex-col gap-5">
+      <TradeQualitySelector
+        value={draft.tradeQuality}
+        onChange={(v) => update('tradeQuality', v)}
+        disabled={disabled}
+        error={fieldErrors.tradeQuality}
+      />
       <RadioGroup
         legend="Plan respecté ?"
         name="planRespected"
@@ -1041,6 +1077,109 @@ function StepEntryScreenshot({ draft, update, fieldErrors, disabled }: StepProps
 // ============================================================
 // BUILDING BLOCKS
 // ============================================================
+
+/**
+ * V1.5 — Steenbarger setup quality classification (Daily Trading Coach).
+ *
+ * Captured BEFORE the outcome is known so it cannot rationalize a posteriori
+ * ("ce trade gagnant était un A" — biais de résultat). Three buckets,
+ * mutually exclusive, optional capture (member can skip if undecided).
+ *
+ * Tooltips are pedagogical (Steenbarger's exact framing) — no judgment, just
+ * description. The picker uses the same visual treatment as the Direction
+ * Long/Short cards for consistency.
+ */
+function TradeQualitySelector({
+  value,
+  onChange,
+  disabled,
+  error,
+}: {
+  value: 'A' | 'B' | 'C' | '';
+  onChange: (next: 'A' | 'B' | 'C' | '') => void;
+  disabled?: boolean | undefined;
+  error?: string | undefined;
+}) {
+  const options = [
+    {
+      value: 'A' as const,
+      label: 'A — Setup parfait',
+      hint: 'Conviction haute, contexte favorable, le marché te dit oui sur tous les fronts.',
+      tone: 'ok' as const,
+    },
+    {
+      value: 'B' as const,
+      label: 'B — Setup correct',
+      hint: 'Conviction moyenne ou contexte mitigé. Acceptable mais à surveiller.',
+      tone: 'cy' as const,
+    },
+    {
+      value: 'C' as const,
+      label: 'C — Setup limite',
+      hint: 'Conviction basse ou doute sur le contexte. À éviter idéalement.',
+      tone: 'bad' as const,
+    },
+  ];
+  const errorId = error ? 'tradeQuality-error' : undefined;
+
+  return (
+    <fieldset className="flex flex-col gap-2" aria-describedby={errorId}>
+      <legend className="mb-1 flex items-center gap-2 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+        Qualité du setup
+        <span className="text-[10px] normal-case tracking-normal text-[var(--t-4)]">
+          (optionnel — Steenbarger A/B/C)
+        </span>
+      </legend>
+      <div
+        role="radiogroup"
+        aria-label="Qualité du setup A B C"
+        className="grid gap-2 sm:grid-cols-3"
+      >
+        {options.map((opt) => {
+          const active = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              // Click an already-selected card to clear the field (back to "not captured").
+              onClick={() => onChange(active ? '' : opt.value)}
+              disabled={disabled}
+              className={cn(
+                'rounded-card flex min-h-20 flex-col items-start gap-1 border bg-[var(--bg-1)] px-3 py-2.5 text-left transition-all',
+                'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
+                active
+                  ? opt.tone === 'ok'
+                    ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)] shadow-[0_0_0_3px_oklch(0.804_0.181_145_/_0.10)]'
+                    : opt.tone === 'cy'
+                      ? 'border-[var(--cy)] bg-[var(--cy-dim-2)] text-[var(--cy)] shadow-[0_0_0_3px_oklch(0.78_0.16_240_/_0.10)]'
+                      : 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)] shadow-[0_0_0_3px_oklch(0.7_0.165_22_/_0.10)]'
+                  : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
+                disabled && 'cursor-not-allowed opacity-60',
+              )}
+            >
+              <span className="text-[13px] font-semibold uppercase tracking-[0.06em]">
+                {opt.label}
+              </span>
+              <span className="t-cap text-[var(--t-4)]">{opt.hint}</span>
+            </button>
+          );
+        })}
+      </div>
+      {error ? (
+        <p id={errorId} role="alert" className="text-[11px] text-[var(--bad)]">
+          {error}
+        </p>
+      ) : (
+        <p className="t-cap text-[var(--t-4)]">
+          Capture la qualité du setup AVANT de connaître l&apos;issue — bloque le biais de résultat.
+          Un C qui gagne reste un C.
+        </p>
+      )}
+    </fieldset>
+  );
+}
 
 function NumericField({
   id,

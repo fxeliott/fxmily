@@ -87,6 +87,8 @@ export async function createTradeAction(
     return { ok: false, error: 'unauthorized' };
   }
 
+  const rawTradeQuality = formData.get('tradeQuality');
+  const rawRiskPct = formData.get('riskPct');
   const raw = {
     pair: formData.get('pair'),
     direction: formData.get('direction'),
@@ -99,6 +101,10 @@ export async function createTradeAction(
         ? null
         : formData.get('stopLossPrice'),
     plannedRR: formData.get('plannedRR'),
+    // V1.5 — both fields are optional. Empty/absent → schema treats as undefined,
+    // service layer maps undefined → NULL in DB.
+    tradeQuality: rawTradeQuality === '' || rawTradeQuality == null ? undefined : rawTradeQuality,
+    riskPct: rawRiskPct === '' || rawRiskPct == null ? undefined : rawRiskPct,
     emotionBefore: formData
       .getAll('emotionBefore')
       .filter((v): v is string => typeof v === 'string'),
@@ -143,6 +149,9 @@ export async function createTradeAction(
       lotSize: data.lotSize,
       stopLossPrice: data.stopLossPrice ?? null,
       plannedRR: data.plannedRR,
+      // V1.5 — Steenbarger setup quality + Tharp risk %. Both optional.
+      tradeQuality: data.tradeQuality ?? null,
+      riskPct: data.riskPct ?? null,
       emotionBefore: data.emotionBefore,
       planRespected: data.planRespected,
       hedgeRespected: data.hedgeRespected,

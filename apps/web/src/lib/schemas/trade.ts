@@ -200,12 +200,14 @@ export const WIZARD_STEPS = [
   ['pair', 'enteredAt'],
   // 1 — direction & session
   ['direction', 'session'],
-  // 2 — prices & sizing
-  ['entryPrice', 'lotSize', 'stopLossPrice'],
+  // 2 — prices & sizing (V1.5: + riskPct, captured next to SL since the formula
+  //                      riskPct = (entry - SL) * lotSize / accountBalance ties them)
+  ['entryPrice', 'lotSize', 'stopLossPrice', 'riskPct'],
   // 3 — risk plan
   ['plannedRR'],
-  // 4 — discipline & emotion before
-  ['planRespected', 'hedgeRespected', 'emotionBefore'],
+  // 4 — discipline & emotion before (V1.5: + tradeQuality at the top of the step,
+  //                                  Steenbarger setup classification before discipline tags)
+  ['tradeQuality', 'planRespected', 'hedgeRespected', 'emotionBefore'],
   // 5 — entry screenshot
   ['screenshotEntryKey'],
   // 6 — outcome (optional, can be skipped to "save as open")

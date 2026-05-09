@@ -170,3 +170,72 @@ describe('WIZARD_STEPS', () => {
     expect(WIZARD_STEPS[0]).toEqual(expect.arrayContaining(['pair', 'enteredAt']));
   });
 });
+
+// =============================================================================
+// V1.5 — Trade quality + risk %
+// =============================================================================
+
+describe('tradeOpenSchema — V1.5 tradeQuality', () => {
+  it('accepts A / B / C', () => {
+    for (const q of ['A', 'B', 'C'] as const) {
+      const result = tradeOpenSchema.safeParse({ ...baseOpen, tradeQuality: q });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.tradeQuality).toBe(q);
+      }
+    }
+  });
+
+  it('rejects values outside the A/B/C enum', () => {
+    for (const q of ['D', 'a', 'AA', '', 1]) {
+      const result = tradeOpenSchema.safeParse({ ...baseOpen, tradeQuality: q });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it('treats omission as undefined (V1 trades pre-V1.5 stay valid)', () => {
+    const result = tradeOpenSchema.safeParse(baseOpen);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tradeQuality).toBeUndefined();
+    }
+  });
+});
+
+describe('tradeOpenSchema — V1.5 riskPct', () => {
+  it('accepts 0 ≤ riskPct < 100', () => {
+    for (const v of [0, 0.5, 1.5, 50, 99.99]) {
+      const result = tradeOpenSchema.safeParse({ ...baseOpen, riskPct: v });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.riskPct).toBeCloseTo(v, 2);
+      }
+    }
+  });
+
+  it('rejects negative riskPct', () => {
+    const result = tradeOpenSchema.safeParse({ ...baseOpen, riskPct: -0.1 });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects riskPct ≥ 100 (degenerate full-account exposure)', () => {
+    expect(tradeOpenSchema.safeParse({ ...baseOpen, riskPct: 100 }).success).toBe(false);
+    expect(tradeOpenSchema.safeParse({ ...baseOpen, riskPct: 150 }).success).toBe(false);
+  });
+
+  it('coerces riskPct from a numeric string (form data)', () => {
+    const result = tradeOpenSchema.safeParse({ ...baseOpen, riskPct: '1.5' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.riskPct).toBe(1.5);
+    }
+  });
+
+  it('treats omission as undefined (default = NULL in DB)', () => {
+    const result = tradeOpenSchema.safeParse(baseOpen);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.riskPct).toBeUndefined();
+    }
+  });
+});

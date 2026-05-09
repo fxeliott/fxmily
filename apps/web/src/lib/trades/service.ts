@@ -5,6 +5,7 @@ import type {
   RealizedRSource,
   TradeDirection,
   TradeOutcome,
+  TradeQuality,
   TradeSession,
 } from '@/generated/prisma/enums';
 import type { TradeModel } from '@/generated/prisma/models/Trade';
@@ -41,6 +42,10 @@ export interface CreateTradeInput {
   lotSize: number;
   stopLossPrice: number | null;
   plannedRR: number;
+  /// V1.5 — Steenbarger setup quality. Optional, NULL when not captured.
+  tradeQuality?: TradeQuality | null;
+  /// V1.5 — Tharp risk % of account. Optional, NULL when not captured.
+  riskPct?: number | null;
   emotionBefore: string[];
   planRespected: boolean;
   hedgeRespected: boolean | null;
@@ -73,6 +78,10 @@ export interface SerializedTrade {
   lotSize: string;
   stopLossPrice: string | null;
   plannedRR: string;
+  /// V1.5 — Steenbarger setup quality (A/B/C/null).
+  tradeQuality: TradeQuality | null;
+  /// V1.5 — Tharp risk % of account (Decimal as string, null when not captured).
+  riskPct: string | null;
   emotionBefore: string[];
   planRespected: boolean;
   hedgeRespected: boolean | null;
@@ -122,6 +131,8 @@ function toSerialized(trade: TradeModel): SerializedTrade {
     lotSize: trade.lotSize.toString(),
     stopLossPrice: trade.stopLossPrice == null ? null : trade.stopLossPrice.toString(),
     plannedRR: trade.plannedRR.toString(),
+    tradeQuality: trade.tradeQuality,
+    riskPct: trade.riskPct == null ? null : trade.riskPct.toString(),
     emotionBefore: [...trade.emotionBefore],
     planRespected: trade.planRespected,
     hedgeRespected: trade.hedgeRespected,
@@ -172,6 +183,9 @@ export async function createTrade(
       lotSize: new Prisma.Decimal(input.lotSize),
       stopLossPrice: input.stopLossPrice == null ? null : new Prisma.Decimal(input.stopLossPrice),
       plannedRR: new Prisma.Decimal(input.plannedRR),
+      // V1.5 — Steenbarger setup quality + Tharp risk %.
+      tradeQuality: input.tradeQuality ?? null,
+      riskPct: input.riskPct == null ? null : new Prisma.Decimal(input.riskPct),
       emotionBefore: input.emotionBefore,
       planRespected: input.planRespected,
       hedgeRespected: input.hedgeRespected,

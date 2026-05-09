@@ -1019,17 +1019,17 @@ SENTRY_AUTH_TOKEN=sntrys_&lt;copy-from-dashboard&gt;</code></pre>
                 </tr>
                 <tr>
                   <td>TXT DKIM</td>
-                  <td><code>resend._domainkey.fxmilyapp.com</code></td>
+                  <td><code>resend._domainkey</code> (sans le domaine)</td>
                   <td><code>p=&lt;long-base64-unique-au-tenant&gt;</code> ← <em>copie ce qui s&rsquo;affiche</em></td>
                 </tr>
                 <tr>
                   <td>MX</td>
-                  <td><code>send.fxmilyapp.com</code></td>
-                  <td><code>feedback-smtp.eu-central-1.amazonses.com</code> (priority 10)</td>
+                  <td><code>send</code> (sans le domaine)</td>
+                  <td><code>feedback-smtp.us-east-1.amazonses.com</code> (priority 10) — <code>eu-central-1</code> si Pro EU</td>
                 </tr>
                 <tr>
                   <td>TXT DMARC</td>
-                  <td><code>_dmarc.fxmilyapp.com</code></td>
+                  <td><code>_dmarc</code> (sans le domaine)</td>
                   <td><code>v=DMARC1; p=none;</code></td>
                 </tr>
               </tbody>

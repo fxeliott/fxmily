@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Walkthroughs visuels Sentry / Resend / Cloudflare — Fxmily</title>
+    <style>
+      :root {
+        --bg: #07090f;
+        --bg-2: #0c1117;
+        --bg-3: #1a1f2c;
+        --t-1: #f8fafc;
+        --t-2: #cbd5e1;
+        --t-3: #94a3b8;
+        --t-4: #64748b;
+        --acc: #a3e635;
+        --acc-hi: #bef264;
+        --acc-dim: rgba(163, 230, 53, 0.12);
+        --acc-fg: #07090f;
+        --bad: #f87171;
+        --bad-dim: rgba(248, 113, 113, 0.12);
+        --warn: #fbbf24;
+        --warn-dim: rgba(251, 191, 36, 0.12);
+        --info: #60a5fa;
+        --info-dim: rgba(96, 165, 250, 0.12);
+        --ok: #34d399;
+        --ok-dim: rgba(52, 211, 153, 0.12);
+        --b: rgba(148, 163, 184, 0.18);
+        --b-strong: rgba(148, 163, 184, 0.28);
+        --b-acc: rgba(163, 230, 53, 0.4);
+        --r: 12px;
+        --e: cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--t-2);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 15px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+      .layout {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 32px;
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 56px;
+      }
+      header.hero {
+        grid-column: 1 / -1;
+        padding: 56px 0 32px;
+        border-bottom: 1px solid var(--b);
+        margin-bottom: 40px;
+      }
+      .hero-badge {
+        display: inline-flex;
+        gap: 8px;
+        background: var(--acc-dim);
+        color: var(--acc);
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        margin-bottom: 20px;
+        border: 1px solid var(--b-acc);
+      }
+      h1 {
+        font-size: 38px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--t-1);
+        margin: 0 0 14px;
+        line-height: 1.15;
+      }
+      .lead { font-size: 17px; color: var(--t-2); max-width: 720px; }
+      nav.toc {
+        position: sticky;
+        top: 24px;
+        align-self: start;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
+      }
+      nav.toc h2 {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--t-3);
+        margin: 0 0 16px;
+      }
+      nav.toc ul { list-style: none; padding: 0; margin: 0 0 24px; }
+      nav.toc li { margin: 0; }
+      nav.toc a {
+        display: block;
+        padding: 8px 12px;
+        color: var(--t-3);
+        text-decoration: none;
+        font-size: 13px;
+        border-left: 2px solid transparent;
+        transition: all 150ms var(--e);
+        border-radius: 0 6px 6px 0;
+      }
+      nav.toc a:hover {
+        color: var(--t-1);
+        background: var(--bg-3);
+      }
+      nav.toc a.active {
+        color: var(--acc);
+        border-left-color: var(--acc);
+        background: var(--acc-dim);
+      }
+      nav.toc .group {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        color: var(--acc);
+        margin: 18px 12px 8px;
+      }
+      main {
+        padding-bottom: 80px;
+        max-width: 800px;
+      }
+      section.service {
+        margin-bottom: 72px;
+        scroll-margin-top: 24px;
+        padding-top: 8px;
+      }
+      .service-header {
+        background: linear-gradient(135deg, var(--bg-2), var(--bg-3));
+        border: 1px solid var(--b);
+        border-radius: var(--r);
+        padding: 20px 24px;
+        margin-bottom: 28px;
+      }
+      .service-header h2 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        color: var(--t-1);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      .service-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .service-meta span {
+        font-size: 11px;
+        color: var(--t-3);
+        background: var(--bg);
+        border: 1px solid var(--b);
+        padding: 4px 10px;
+        border-radius: 999px;
+      }
+      .step {
+        background: var(--bg-2);
+        border: 1px solid var(--b);
+        border-radius: var(--r);
+        padding: 18px 22px;
+        margin-bottom: 16px;
+        position: relative;
+        scroll-margin-top: 24px;
+      }
+      .step-num {
+        position: absolute;
+        top: -12px;
+        left: 18px;
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--acc);
+        color: var(--acc-fg);
+        font-weight: 700;
+        font-size: 13px;
+      }
+      .step h3 {
+        margin: 4px 0 12px;
+        font-size: 16px;
+        color: var(--t-1);
+        font-weight: 600;
+      }
+      .url {
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 12px;
+        background: var(--bg);
+        color: var(--acc);
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--b);
+        display: inline-block;
+        margin: 6px 0;
+        word-break: break-all;
+      }
+      .button-spec {
+        background: var(--bg);
+        border: 1px solid var(--b-strong);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin: 12px 0;
+        font-size: 13px;
+      }
+      .button-spec dt {
+        color: var(--acc);
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 4px;
+      }
+      .button-spec dd {
+        margin: 4px 0;
+        color: var(--t-2);
+      }
+      .button-spec dd .label {
+        color: var(--t-4);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-right: 6px;
+      }
+      .button-spec dd code {
+        background: var(--bg-3);
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-size: 12px;
+      }
+      h4 {
+        margin: 20px 0 8px;
+        font-size: 13px;
+        color: var(--t-2);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 600;
+      }
+      p { margin: 0 0 12px; }
+      ul, ol { margin: 0 0 12px; padding-left: 22px; }
+      li { margin: 4px 0; }
+      ul li::marker { color: var(--acc); }
+      ol li::marker { color: var(--t-3); font-weight: 500; }
+      a {
+        color: var(--acc);
+        text-decoration: none;
+        border-bottom: 1px solid var(--b-acc);
+      }
+      a:hover { color: var(--acc-hi); }
+      code {
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 0.88em;
+        background: var(--bg-3);
+        color: var(--t-1);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      pre {
+        background: var(--bg-2);
+        border: 1px solid var(--b);
+        border-radius: var(--r);
+        padding: 14px 18px;
+        overflow-x: auto;
+        font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--t-1);
+        margin: 12px 0;
+      }
+      pre code {
+        background: transparent;
+        padding: 0;
+        font-size: inherit;
+      }
+      .callout {
+        border-left: 3px solid;
+        padding: 12px 16px;
+        margin: 14px 0;
+        border-radius: 0 var(--r) var(--r) 0;
+        font-size: 14px;
+      }
+      .callout p:last-child { margin-bottom: 0; }
+      .callout .label {
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+        display: inline-block;
+      }
+      .callout.warn { border-color: var(--warn); background: var(--warn-dim); }
+      .callout.warn .label { color: var(--warn); }
+      .callout.info { border-color: var(--info); background: var(--info-dim); }
+      .callout.info .label { color: var(--info); }
+      .callout.danger { border-color: var(--bad); background: var(--bad-dim); }
+      .callout.danger .label { color: var(--bad); }
+      .callout.ok { border-color: var(--ok); background: var(--ok-dim); }
+      .callout.ok .label { color: var(--ok); }
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--b);
+        border-radius: var(--r);
+        margin: 14px 0;
+      }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th {
+        background: var(--bg-3);
+        color: var(--t-1);
+        text-align: left;
+        padding: 9px 13px;
+        font-weight: 600;
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        border-bottom: 1px solid var(--b-strong);
+      }
+      td {
+        padding: 9px 13px;
+        border-bottom: 1px solid var(--b);
+        vertical-align: top;
+      }
+      tr:last-child td { border-bottom: 0; }
+      tr:nth-child(even) td { background: var(--bg); }
+      .yellow-flag {
+        display: inline-block;
+        background: var(--warn-dim);
+        color: var(--warn);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      footer {
+        grid-column: 1 / -1;
+        margin-top: 64px;
+        padding: 32px 0;
+        border-top: 1px solid var(--b);
+        color: var(--t-4);
+        font-size: 12.5px;
+      }
+      footer a {
+        color: var(--t-3);
+        border-bottom-color: var(--b);
+      }
+
+      @media (max-width: 900px) {
+        .layout { grid-template-columns: 1fr; gap: 0; padding: 0 20px; }
+        nav.toc {
+          position: relative;
+          max-height: none;
+          margin-bottom: 32px;
+          padding: 16px;
+          background: var(--bg-2);
+          border: 1px solid var(--b);
+          border-radius: var(--r);
+        }
+        h1 { font-size: 28px; }
+        .service-header h2 { font-size: 22px; }
+      }
+      @media print {
+        body { background: white; color: black; }
+        nav.toc, footer { display: none; }
+        .layout { display: block; padding: 0; }
+        section.service, .step { page-break-inside: avoid; }
+        h1, h2, h3, h4 { color: black; }
+        pre { border: 1px solid #999; background: #f5f5f5; color: black; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <header class="hero">
+        <div class="hero-badge">Phase U · Walkthroughs visuels 2026-05-09</div>
+        <h1>Sentry, Resend, Cloudflare — écran par écran</h1>
+        <p class="lead">
+          Guide débutant total. Pour <strong>chaque écran</strong> des 3 services externes, je te dis
+          exactement où regarder, quel bouton cliquer, quoi taper. Validé via doc live + sources
+          publiques 2026-05-09.
+        </p>
+        <div class="callout warn" style="margin-top: 24px">
+          <span class="label">À lire avant de commencer</span>
+          <p>
+            Ce guide complète <a href="eliot-guide-prod-launch.html">eliot-guide-prod-launch.html</a>
+            (résumé). Quand tu es devant un écran et tu hésites, <strong>reviens ici</strong> à la
+            section concernée. Si l'UI réelle a changé depuis 2026-05-09 (badge
+            <span class="yellow-flag">🟡 À vérifier</span>), envoie-moi une capture, je débogue.
+          </p>
+        </div>
+      </header>
+
+      <nav class="toc">
+        <h2>Sommaire</h2>
+        <div class="group">Sentry · 12 écrans</div>
+        <ul>
+          <li><a href="#sentry-1">1 · Arrivée signup</a></li>
+          <li><a href="#sentry-2">2 · OAuth GitHub vs email</a></li>
+          <li><a href="#sentry-3">3 · Email confirmation</a></li>
+          <li><a href="#sentry-4">4 · Onboarding Welcome</a></li>
+          <li><a href="#sentry-5">5 · Region (IMMUTABLE)</a></li>
+          <li><a href="#sentry-6">6 · Organization name</a></li>
+          <li><a href="#sentry-7">7 · Platform Next.js</a></li>
+          <li><a href="#sentry-8">8 · Project name</a></li>
+          <li><a href="#sentry-9">9 · Skip wizard install</a></li>
+          <li><a href="#sentry-10">10 · Settings → DSN</a></li>
+          <li><a href="#sentry-11">11 · Copy DSN</a></li>
+          <li><a href="#sentry-12">12 · Auth Token org-level</a></li>
+        </ul>
+        <div class="group">Resend · 11 écrans</div>
+        <ul>
+          <li><a href="#resend-1">1 · Signup</a></li>
+          <li><a href="#resend-2">2 · OAuth GitHub</a></li>
+          <li><a href="#resend-3">3 · Team setup</a></li>
+          <li><a href="#resend-4">4 · Dashboard</a></li>
+          <li><a href="#resend-5">5 · Domains page</a></li>
+          <li><a href="#resend-6">6 · Add Domain modal</a></li>
+          <li><a href="#resend-7">7 · DNS Records (CRITIQUE)</a></li>
+          <li><a href="#resend-8">8 · Verify DNS</a></li>
+          <li><a href="#resend-9">9 · API Keys</a></li>
+          <li><a href="#resend-10">10 · Polling status</a></li>
+          <li><a href="#resend-11">11 · Si fail</a></li>
+        </ul>
+        <div class="group">Cloudflare · 3 tâches</div>
+        <ul>
+          <li><a href="#cf-token">A · Custom API Token</a></li>
+          <li><a href="#cf-zone-id">B · Zone ID + Account ID</a></li>
+          <li><a href="#cf-fallback">C · DNS records manuel (fallback)</a></li>
+        </ul>
+        <div class="group">Glossaire</div>
+        <ul>
+          <li><a href="#glossary">Glossaire débutant</a></li>
+        </ul>
+      </nav>
+
+      <main>
+        <!-- ════════════════════════════════════════════════ -->
+        <!-- SENTRY -->
+        <!-- ════════════════════════════════════════════════ -->
+        <section class="service" id="sentry">
+          <div class="service-header">
+            <h2>🛡️ Sentry — monitoring d'erreurs</h2>
+            <p style="margin: 0; color: var(--t-2)">
+              Capture les erreurs runtime de l'app + les source maps pour stack traces lisibles.
+              Plan free 2026 : 5 000 errors/mois, 50 replays, retention 30 jours, pas de CB.
+            </p>
+            <div class="service-meta">
+              <span>⏱ ~12 min</span>
+              <span>📍 sentry.io</span>
+              <span>💳 Pas de CB</span>
+              <span>🇪🇺 Region EU IMMUTABLE</span>
+            </div>
+          </div>
+
+          <!-- Étape 1 -->
+          <div class="step" id="sentry-1">
+            <div class="step-num">1</div>
+            <h3>Arrivée sur la page signup</h3>
+            <span class="url">https://sentry.io/signup/</span>
+            <p>
+              Page sur fond sombre. Formulaire <strong>centré sur une seule colonne</strong> (pas un
+              wizard multi-étapes — Sentry a tout mis sur la même page). Titre principal :
+              <em>"Start monitoring today"</em> + sous-titre ("4M+ developers and 100K+
+              organizations").
+            </p>
+            <p>
+              Au-dessus du formulaire : <strong>3 boutons OAuth</strong> côte à côte (Google,
+              GitHub, Azure DevOps). En dessous : champs Name → Organization → Email → Password →
+              <strong>Data Storage Location</strong> (le dropdown critique) → 2 checkboxes (CGU +
+              marketing) → bouton final.
+            </p>
+            <div class="callout warn">
+              <span class="label">Piège marketing</span>
+              <p>
+                Plus bas dans la page, des CTA "Try Sentry for Free" / "Get Demo" — sont en boucle
+                vers la même page. <strong>Reste sur le formulaire central</strong>.
+              </p>
+            </div>
+          </div>
+
+          <!-- Étape 2 -->
+          <div class="step" id="sentry-2">
+            <div class="step-num">2</div>
+            <h3>Choisir GitHub OAuth (ou email)</h3>
+            <p>Décide tout de suite. Pour Fxmily, recommandation : email + password.</p>
+            <dl class="button-spec">
+              <dt>[BOUTON] "GitHub"</dt>
+              <dd><span class="label">Position</span> rangée OAuth en haut du formulaire</dd>
+              <dd><span class="label">Apparence</span> bouton outline avec logo octocat</dd>
+              <dd><span class="label">Action</span> redirige vers github.com/login/oauth → autorise → retour Sentry</dd>
+              <dd><span class="label">Trade-off</span> pratique mais lie ton compte Sentry à ton compte GitHub</dd>
+            </dl>
+            <dl class="button-spec">
+              <dt>[CHAMP] "Email"</dt>
+              <dd><span class="label">Position</span> 3e champ du formulaire</dd>
+              <dd><span class="label">Apparence</span> input texte fond sombre, bordure grise</dd>
+              <dd><span class="label">Saisis</span> <code>eliot@fxmilyapp.com</code> (ou le tien)</dd>
+            </dl>
+            <p class="yellow-flag">🟡 À vérifier live</p>
+            <p>
+              Sentry teste régulièrement l'ordre des champs (Name avant ou après Organization). Le
+              bouton OAuth principal peut aussi être en bas plutôt qu'en haut.
+            </p>
+          </div>
+
+          <!-- Étape 3 -->
+          <div class="step" id="sentry-3">
+            <div class="step-num">3</div>
+            <h3>Email confirmation (si tu as choisi email)</h3>
+            <p>
+              Tu reçois un mail "Verify your email" de <code>noreply@sentry.io</code>. Clique le
+              lien dedans.
+            </p>
+            <div class="callout info">
+              <span class="label">Note importante</span>
+              <p>
+                Sentry te laisse continuer l'onboarding sans vérifier <em>tout de suite</em>. Mais
+                <strong>avant de générer un Auth Token (étape 12), tu DOIS avoir cliqué le lien
+                dans le mail</strong>. Sinon le token est révoqué automatiquement à la 1re
+                utilisation.
+              </p>
+            </div>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Create your account"</dt>
+              <dd><span class="label">Position</span> tout en bas du formulaire, pleine largeur</dd>
+              <dd><span class="label">Apparence</span> bouton plein violet (signature Sentry #6C5FC7)</dd>
+              <dd><span class="label">Action</span> crée le compte → redirige vers l'onboarding</dd>
+            </dl>
+          </div>
+
+          <!-- Étape 4 -->
+          <div class="step" id="sentry-4">
+            <div class="step-num">4</div>
+            <h3>Welcome wizard — comment skip</h3>
+            <span class="url">https://sentry.io/onboarding/&lt;org-slug&gt;/welcome/</span>
+            <p>
+              Page centrée avec gros titre "Welcome to Sentry" + bouton "Start" central. Sous le
+              bouton, un <strong>petit lien texte gris</strong> du genre "Skip onboarding" / "Take
+              me to my organization" — c'est lui qu'il faut cliquer pour aller direct au dashboard.
+            </p>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Start"</dt>
+              <dd><span class="label">Position</span> centre de l'écran, pleine largeur</dd>
+              <dd><span class="label">Action</span> lance le tour guidé (4-5 étapes péda)</dd>
+            </dl>
+            <dl class="button-spec">
+              <dt>[LIEN] "Skip onboarding" (label exact varie)</dt>
+              <dd><span class="label">Position</span> juste sous le bouton "Start", petite police</dd>
+              <dd><span class="label">Apparence</span> lien texte gris souligné, peu visible (volontaire)</dd>
+              <dd><span class="label">Action</span> saute au dashboard / création de projet direct</dd>
+            </dl>
+            <p class="yellow-flag">🟡 Texte exact peut être "Skip" / "Skip for now" / "Take me to Sentry"</p>
+          </div>
+
+          <!-- Étape 5 -->
+          <div class="step" id="sentry-5">
+            <div class="step-num">5</div>
+            <h3>Region — DROPDOWN CRITIQUE & IMMUTABLE</h3>
+            <div class="callout danger">
+              <span class="label">⚠️ Action irréversible</span>
+              <p>
+                Le choix de la région se fait <strong>dans le formulaire signup étape 1</strong>,
+                via le dropdown <em>"Data Storage Location"</em>. Une fois le compte créé, c'est
+                <strong>impossible à changer</strong>. Pour migrer en région, il faut créer une
+                nouvelle organisation.
+              </p>
+            </div>
+            <dl class="button-spec">
+              <dt>[DROPDOWN] "Data Storage Location"</dt>
+              <dd><span class="label">Position</span> dans le formulaire signup, juste au-dessus des checkboxes CGU</dd>
+              <dd><span class="label">Apparence</span> dropdown standard, valeur par défaut <strong>"United States"</strong></dd>
+              <dd><span class="label">Pour Fxmily (RGPD France)</span> sélectionne <strong>"European Union"</strong> (Frankfurt)</dd>
+            </dl>
+            <p>
+              Effet sur le DSN : si EU, ton DSN aura
+              <code>o&lt;orgid&gt;.ingest.<strong>de</strong>.sentry.io</code> (`.de.` au lieu de
+              `.us.`).
+            </p>
+          </div>
+
+          <!-- Étape 6 -->
+          <div class="step" id="sentry-6">
+            <div class="step-num">6</div>
+            <h3>Organization name</h3>
+            <p>Toujours dans le formulaire signup. Champ "Organization".</p>
+            <dl class="button-spec">
+              <dt>[CHAMP] "Organization"</dt>
+              <dd><span class="label">Position</span> 2e champ du formulaire, après "Name"</dd>
+              <dd><span class="label">Saisis</span> <code>Fxmily</code></dd>
+            </dl>
+            <p>
+              Slug auto-généré : "Fxmily" → <code>fxmily</code>. Visible/modifiable après dans
+              <em>Settings → General Settings → Organization Slug</em>. Le slug apparaît dans toutes
+              les URLs (<code>sentry.io/organizations/fxmily/...</code>).
+            </p>
+            <p class="yellow-flag">
+              🟡 Selon variante A/B, certains comptes voient un écran <em>"Create a New
+              Organization"</em> séparé après login. Mêmes champs.
+            </p>
+          </div>
+
+          <!-- Étape 7 -->
+          <div class="step" id="sentry-7">
+            <div class="step-num">7</div>
+            <h3>Choix de la platform → Next.js</h3>
+            <span class="url">https://sentry.io/onboarding/&lt;org-slug&gt;/select-platform/</span>
+            <p>
+              Grille de cartes (logos Python, Node, React, Next.js, Vue, Django…). Champ "Search"
+              en haut. 4-5 colonnes sur desktop.
+            </p>
+            <dl class="button-spec">
+              <dt>[CHAMP] "Search"</dt>
+              <dd><span class="label">Position</span> haut de la grille, pleine largeur</dd>
+              <dd><span class="label">Saisis</span> <code>next</code> → la grille se filtre</dd>
+            </dl>
+            <dl class="button-spec">
+              <dt>[CARTE] "Next.js"</dt>
+              <dd><span class="label">Apparence</span> carte avec logo Next (triangle), label "Next.js"</dd>
+              <dd><span class="label">Action</span> clic sélectionne (bordure violette) — ne navigue pas encore</dd>
+            </dl>
+            <div class="callout warn">
+              <span class="label">Piège</span>
+              <p>
+                Il y a parfois <strong>deux entrées Next.js</strong> — une sous "JavaScript" et une
+                autonome. Prends celle marquée explicitement "Next.js".
+              </p>
+            </div>
+          </div>
+
+          <!-- Étape 8 -->
+          <div class="step" id="sentry-8">
+            <div class="step-num">8</div>
+            <h3>Project name</h3>
+            <p>Même écran ou écran suivant selon variante.</p>
+            <dl class="button-spec">
+              <dt>[CHAMP] "Project name"</dt>
+              <dd><span class="label">Valeur par défaut</span> souvent <code>javascript-nextjs</code></dd>
+              <dd><span class="label">Remplace par</span> <code>fxmily-web</code></dd>
+            </dl>
+            <dl class="button-spec">
+              <dt>[DROPDOWN] "Team"</dt>
+              <dd><span class="label">Valeur par défaut</span> #fxmily (ton orga = ta team unique au signup)</dd>
+              <dd><span class="label">Action</span> laisse</dd>
+            </dl>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Create Project"</dt>
+              <dd><span class="label">Position</span> bas-droite du panneau</dd>
+              <dd><span class="label">Action</span> crée → redirige vers l'écran "Install Sentry"</dd>
+            </dl>
+          </div>
+
+          <!-- Étape 9 -->
+          <div class="step" id="sentry-9">
+            <div class="step-num">9</div>
+            <h3>Écran "Install Sentry" — comment skip le wizard</h3>
+            <p>
+              Page longue avec instructions pas-à-pas. Tout en haut un bloc de code avec
+              <code>npx @sentry/wizard@latest -i nextjs</code> et un bouton "Copy".
+            </p>
+            <p>
+              <strong>Tu veux skip</strong> (pour configurer manuellement avec tes propres .env) :
+            </p>
+            <dl class="button-spec">
+              <dt>[LIEN] "Take me to Issues" / "Skip onboarding" / "Done"</dt>
+              <dd><span class="label">Position</span> bas de page, ou bouton bas-droite</dd>
+              <dd><span class="label">Action</span> saute le wizard, va au dashboard Issues</dd>
+            </dl>
+            <div class="callout warn">
+              <span class="label">Si bouton grisé</span>
+              <p>
+                Le bouton principal en bas-droite est souvent <em>"Take me to Issues"</em> mais
+                Sentry attend que tu aies déclenché un premier event. Si bouton grisé, clique sur
+                le <strong>logo Sentry en haut-gauche</strong> pour aller au dashboard, OU ferme
+                l'onglet et reviens sur sentry.io.
+              </p>
+            </div>
+          </div>
+
+          <!-- Étape 10 -->
+          <div class="step" id="sentry-10">
+            <div class="step-num">10</div>
+            <h3>Settings → Projects → fxmily-web → Client Keys (DSN)</h3>
+            <span class="url">https://sentry.io/settings/&lt;org-slug&gt;/projects/fxmily-web/keys/</span>
+            <ol>
+              <li>Logo Sentry en haut-gauche (sidebar) → dashboard</li>
+              <li>Sidebar gauche → icône <strong>engrenage "Settings"</strong> (en bas)</li>
+              <li>Menu Settings : clique <strong>"Projects"</strong> (sous-section "Organization")</li>
+              <li>Liste des projets : clique <strong>"fxmily-web"</strong></li>
+              <li>Sidebar gauche du projet : clique <strong>"Client Keys (DSN)"</strong> (sous "SDK Setup")</li>
+            </ol>
+            <div class="callout warn">
+              <span class="label">Confusion fréquente</span>
+              <p>
+                Il y a "Settings" au niveau orga (engrenage du bas, sidebar globale) ET "Project
+                Settings" (en cliquant sur un projet → onglet Settings). Pour le DSN passe par
+                <strong>Settings → Projects → fxmily-web</strong> (chemin officiel).
+              </p>
+            </div>
+          </div>
+
+          <!-- Étape 11 -->
+          <div class="step" id="sentry-11">
+            <div class="step-num">11</div>
+            <h3>Copy DSN</h3>
+            <p>
+              Page "Client Keys" : titre + une <strong>carte/box</strong> par clé. Par défaut une
+              seule clé "Default" est créée. Dans la carte : champ texte affichant le DSN complet +
+              bouton "Copy" / icône clipboard à droite.
+            </p>
+            <dl class="button-spec">
+              <dt>[BOUTON] icône clipboard "Copy"</dt>
+              <dd><span class="label">Position</span> à droite du champ DSN</dd>
+              <dd><span class="label">Action</span> copie + toast "Copied!" en bas-droite</dd>
+            </dl>
+            <p>Format DSN attendu :</p>
+            <pre><code>https://&lt;hash&gt;@o&lt;orgid&gt;.ingest.de.sentry.io/&lt;projectid&gt;</code></pre>
+            <div class="callout danger">
+              <span class="label">Piège</span>
+              <p>
+                Plus bas, un "Security Header Endpoint" est aussi affiché. <strong>Ce n'est PAS le
+                DSN</strong> — ne le copie pas.
+              </p>
+            </div>
+            <p>Pose dans <code>tokens.local.env</code> :</p>
+            <pre><code>SENTRY_DSN=&lt;copy-from-dashboard&gt;
+NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN</code></pre>
+          </div>
+
+          <!-- Étape 12 -->
+          <div class="step" id="sentry-12">
+            <div class="step-num">12</div>
+            <h3>Auth Token (Organization-level)</h3>
+            <span class="url">https://sentry.io/settings/&lt;org-slug&gt;/auth-tokens/</span>
+            <ol>
+              <li>Sidebar engrenage "Settings" (niveau orga, pas projet)</li>
+              <li>Sidebar Settings → <strong>"Developer Settings"</strong></li>
+              <li>Clique <strong>"Auth Tokens"</strong></li>
+            </ol>
+            <p class="yellow-flag">
+              🟡 Selon variante UI, l'item peut être "Auth Tokens" ou "Internal Integrations" ou
+              "Custom Integrations". Cherche un item contenant "Token" dans la sidebar Settings.
+            </p>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Create New Token"</dt>
+              <dd><span class="label">Position</span> haut-droite</dd>
+              <dd><span class="label">Action</span> ouvre modal "Create New Auth Token"</dd>
+            </dl>
+            <p>Modal : champ "Name" → tape <code>fxmily-ci-sourcemaps</code>.</p>
+            <p>
+              Pour les <strong>Organization Tokens</strong>, les scopes ne sont PAS personnalisables
+              — Sentry attribue auto <code>org:ci</code>, <code>project:releases</code>,
+              <code>project:read</code> (suffisant pour upload sourcemaps + créer releases).
+            </p>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Create Token"</dt>
+              <dd><span class="label">Position</span> bas-droite du modal</dd>
+              <dd><span class="label">Action</span> génère + affiche UNE SEULE FOIS</dd>
+            </dl>
+            <div class="callout danger">
+              <span class="label">CRITIQUE — token visible 1 fois</span>
+              <p>
+                Carte verte affiche le token complet (<code>sntrys_eyJpYXQ...</code>) avec bouton
+                "Copy". <strong>Copie-le immédiatement</strong> dans tokens.local.env. Si tu fermes
+                le modal sans copier, c'est mort, tu dois en créer un nouveau.
+              </p>
+            </div>
+            <pre><code>SENTRY_AUTH_TOKEN=sntrys_eyJpYXQ...
+SENTRY_ORG=fxmily
+SENTRY_PROJECT=fxmily-web</code></pre>
+          </div>
+        </section>
+
+        <!-- ════════════════════════════════════════════════ -->
+        <!-- RESEND -->
+        <!-- ════════════════════════════════════════════════ -->
+        <section class="service" id="resend">
+          <div class="service-header">
+            <h2>📧 Resend — emails transactionnels</h2>
+            <p style="margin: 0; color: var(--t-2)">
+              Sender pour invitations, magic links, weekly digests. Plan free 2026 : 3 000
+              emails/mois <strong>+ 100/jour cap</strong>, 1 custom domain, retention 30 jours, pas
+              de CB.
+            </p>
+            <div class="service-meta">
+              <span>⏱ ~10 min</span>
+              <span>📍 resend.com</span>
+              <span>💳 Pas de CB</span>
+              <span>🇪🇺 Région : Pro only</span>
+            </div>
+          </div>
+
+          <div class="callout danger">
+            <span class="label">Correction critique vs guide précédent</span>
+            <p>
+              <strong>DKIM Resend = 1 seul TXT record</strong> (PAS 3 CNAMEs
+              <code>*.dkim.amazonses.com</code>). Le pattern 3-CNAME c'est SES direct, pas Resend.
+              Confirmé via doc Resend live 2026-05-09. Si tu as posé 3 CNAMEs ailleurs : supprime-les
+              et pose 1 TXT comme expliqué étape 7.
+            </p>
+          </div>
+          <div class="callout warn">
+            <span class="label">Région : Pro only</span>
+            <p>
+              Le multi-region (Frankfurt EU) est <strong>Pro only ($20/mo)</strong>. Sur Free,
+              Resend choisit auto (souvent US). Pour RGPD strict France → upgrade Pro avant Add
+              Domain. Sinon, accepte la région auto (acceptable pour 30 membres V1).
+            </p>
+          </div>
+
+          <!-- Étape 1 -->
+          <div class="step" id="resend-1">
+            <div class="step-num">1</div>
+            <h3>Signup</h3>
+            <span class="url">https://resend.com/signup</span>
+            <p>
+              Page sombre, logo Resend en haut-gauche, gros titre "Create your account", carte
+              centrale avec 3 boutons empilés.
+            </p>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Continue with GitHub"</dt>
+              <dd><span class="label">Position</span> carte centrale, en haut, pleine largeur</dd>
+              <dd><span class="label">Apparence</span> fond noir bordure blanche + icône GitHub</dd>
+              <dd><span class="label">Recommandé</span> évite la confirmation email</dd>
+            </dl>
+          </div>
+
+          <!-- Étape 2 -->
+          <div class="step" id="resend-2">
+            <div class="step-num">2</div>
+            <h3>OAuth GitHub (popup)</h3>
+            <span class="url">github.com/login/oauth/authorize?client_id=...</span>
+            <p>Page GitHub blanche, "Authorize Resend", liste des permissions (read user email).</p>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Authorize Resend"</dt>
+              <dd><span class="label">Position</span> gros bouton vert au centre</dd>
+              <dd><span class="label">Action</span> redirige vers resend.com/onboarding</dd>
+            </dl>
+          </div>
+
+          <!-- Étape 3 -->
+          <div class="step" id="resend-3">
+            <div class="step-num">3</div>
+            <h3>Team setup</h3>
+            <span class="url">https://resend.com/onboarding ou /teams/new</span>
+            <p>Resend force la notion de team même solo.</p>
+            <dl class="button-spec">
+              <dt>[CHAMP] "Team name"</dt>
+              <dd><span class="label">Saisis</span> <code>Fxmily</code></dd>
+            </dl>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Create team"</dt>
+              <dd><span class="label">Position</span> bas du formulaire, fond noir</dd>
+              <dd><span class="label">Action</span> redirige vers /overview</dd>
+            </dl>
+            <div class="callout warn">
+              <span class="label">Piège upsell Pro</span>
+              <p>
+                Si écran "Choose your plan" apparaît avec Pro mis en avant, cherche
+                <strong>"Continue with Free"</strong> ou "Skip" en petit en bas. Clique celui-là.
+              </p>
+            </div>
+          </div>
+
+          <!-- Étape 4 -->
+          <div class="step" id="resend-4">
+            <div class="step-num">4</div>
+            <h3>Dashboard /overview</h3>
+            <p>
+              Layout 2 colonnes. <strong>Sidebar gauche</strong> avec icônes :
+            </p>
+            <ul>
+              <li>Overview (maison)</li>
+              <li>Emails (enveloppe)</li>
+              <li>Broadcasts (mégaphone)</li>
+              <li>Audiences (groupe)</li>
+              <li><strong>Domains (globe)</strong></li>
+              <li><strong>API Keys (clé)</strong></li>
+              <li>Logs, Webhooks, Settings (en bas)</li>
+            </ul>
+            <p>Zone centrale : "Welcome" + checklist onboarding.</p>
+            <p class="yellow-flag">🟡 Bouton "Upgrade to Pro" visible en haut-droite — ne clique pas.</p>
+          </div>
+
+          <!-- Étape 5 -->
+          <div class="step" id="resend-5">
+            <div class="step-num">5</div>
+            <h3>Naviguer à Domains page</h3>
+            <p>
+              <strong>[CLIC sidebar]</strong> "Domains" (icône globe, ~5e item).
+            </p>
+            <span class="url">https://resend.com/domains</span>
+            <p>
+              Titre "Domains", sous-titre "Add a domain to start sending emails", grand bouton à
+              droite, tableau vide.
+            </p>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Add Domain"</dt>
+              <dd><span class="label">Position</span> haut-droite</dd>
+              <dd><span class="label">Apparence</span> <code>+ Add Domain</code></dd>
+              <dd><span class="label">Action</span> ouvre modal au centre</dd>
+            </dl>
+          </div>
+
+          <!-- Étape 6 -->
+          <div class="step" id="resend-6">
+            <div class="step-num">6</div>
+            <h3>Modal Add Domain</h3>
+            <dl class="button-spec">
+              <dt>[CHAMP] "Domain"</dt>
+              <dd><span class="label">Label au-dessus</span> "Name"</dd>
+              <dd><span class="label">Saisis</span> <code>fxmilyapp.com</code> (sans https://, sans www.)</dd>
+            </dl>
+            <p class="yellow-flag">
+              🟡 [DROPDOWN Region] visible uniquement Pro plan. Sur Free, absent ou désactivé. Si
+              Pro : choisis "Frankfurt (eu-central-1)" pour RGPD.
+            </p>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Add"</dt>
+              <dd><span class="label">Position</span> bas-droite de la modal</dd>
+              <dd><span class="label">Action</span> crée → redirige vers /domains/[id] = écran DNS Records</dd>
+            </dl>
+          </div>
+
+          <!-- Étape 7 -->
+          <div class="step" id="resend-7">
+            <div class="step-num">7</div>
+            <h3>DNS Records (le coeur du sujet)</h3>
+            <span class="url">https://resend.com/domains/&lt;uuid&gt;</span>
+            <p>
+              Titre <code>fxmilyapp.com</code> + badge <strong>"Not Started"</strong> (gris) ou
+              <strong>"Pending"</strong> (jaune). Bouton "Verify DNS Records" à droite. Tableau DNS
+              en dessous avec colonnes <em>Type | Name | Value | Priority | TTL | Status</em>.
+            </p>
+            <h4>Structure (3 lignes, parfois 4) — confirmé 2026</h4>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>#</th><th>Type</th><th>Name</th><th>Value (extrait)</th><th>Priority</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1</td>
+                    <td><strong>MX</strong></td>
+                    <td><code>send</code></td>
+                    <td><code>feedback-smtp.us-east-1.amazonses.com</code> (ou eu-central-1 si Pro EU)</td>
+                    <td><strong>10</strong></td>
+                  </tr>
+                  <tr>
+                    <td>2</td>
+                    <td><strong>TXT</strong></td>
+                    <td><code>send</code></td>
+                    <td><code>"v=spf1 include:amazonses.com ~all"</code></td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td>3</td>
+                    <td><strong>TXT</strong></td>
+                    <td><code>resend._domainkey</code></td>
+                    <td><code>p=MIGfMA0GCSq...</code> (~210 chars, unique à ton domaine)</td>
+                    <td>—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="callout info">
+              <span class="label">Receiving toggle</span>
+              <p>
+                <strong>Pour Fxmily V1, garde Receiving OFF.</strong> Tu envoies, tu ne reçois pas.
+                Toggle "Receiving" en haut de la page = laisser désactivé. Sinon, 4e ligne MX
+                <code>inbound</code> à poser.
+              </p>
+            </div>
+            <h4>Comment copier les valeurs</h4>
+            <p>
+              [BOUTON copy] à droite de chaque cellule "Value", icône carrée (deux rectangles
+              superposés). Clique → toast "Copied!".
+            </p>
+            <div class="callout danger">
+              <span class="label">DEUX pièges critiques</span>
+              <p>
+                <strong>1.</strong> Le champ <em>Name = `send` ou `resend._domainkey` SANS le
+                domaine</em>. Ne colle pas <code>send.fxmilyapp.com</code>, juste <code>send</code>.
+                Cloudflare append le domaine automatiquement.<br><br>
+                <strong>2.</strong> La valeur TXT SPF inclut les <strong>guillemets</strong>
+                <code>"v=spf1..."</code> — Cloudflare les ajoute lui-même, donc colle
+                <strong>sans guillemets</strong>.
+              </p>
+            </div>
+          </div>
+
+          <!-- Étape 8 -->
+          <div class="step" id="resend-8">
+            <div class="step-num">8</div>
+            <h3>Verify DNS Records</h3>
+            <p>
+              Une fois les 3 records posés côté Cloudflare (cf. section Cloudflare ci-dessous) :
+            </p>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Verify DNS Records"</dt>
+              <dd><span class="label">Position</span> haut-droite, fond noir</dd>
+              <dd><span class="label">Action</span> Resend interroge les DNS, badge passe à "Pending"</dd>
+            </dl>
+            <h4>Statuts possibles (polling auto toutes ~30s)</h4>
+            <ul>
+              <li><code>not_started</code> (gris) → tu n'as pas encore cliqué Verify</li>
+              <li><code>pending</code> (jaune) → en cours, attendre 1-30 min (Cloudflare propage en ~1 min en général)</li>
+              <li><code>verified</code> (vert ✓) → done, tu peux envoyer</li>
+              <li><code>partially_verified</code> (orange) → un des 3 records OK, autres pending</li>
+              <li><code>failed</code> (rouge) → après 72h sans détection</li>
+            </ul>
+          </div>
+
+          <!-- Étape 9 -->
+          <div class="step" id="resend-9">
+            <div class="step-num">9</div>
+            <h3>API Keys</h3>
+            <p>[CLIC sidebar] "API Keys"</p>
+            <span class="url">https://resend.com/api-keys</span>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Create API Key"</dt>
+              <dd><span class="label">Position</span> haut-droite</dd>
+            </dl>
+            <h4>Modal "Create API Key"</h4>
+            <ul>
+              <li><strong>Name</strong> → <code>fxmily-web-prod</code></li>
+              <li><strong>Permission</strong> → <strong>"Sending access"</strong> (PAS "Full access" — moindre privilège)</li>
+              <li><strong>Domain</strong> → <code>fxmilyapp.com</code> (PAS "All domains")</li>
+            </ul>
+            <dl class="button-spec">
+              <dt>[BOUTON] "Add"</dt>
+            </dl>
+            <div class="callout danger">
+              <span class="label">Clé visible 1 fois</span>
+              <p>
+                La clé <code>re_AbC123...</code> s'affiche une seule fois, fond gris, icône copy à
+                droite. Copie maintenant. Si tu fermes sans copier, tu dois en recréer une.
+              </p>
+            </div>
+            <pre><code>RESEND_API_KEY=re_&lt;copy-from-dashboard&gt;
+RESEND_FROM=Fxmily &lt;noreply@fxmilyapp.com&gt;</code></pre>
+          </div>
+
+          <!-- Étape 10 -->
+          <div class="step" id="resend-10">
+            <div class="step-num">10</div>
+            <h3>Polling status (automatique via prod-launch.sh)</h3>
+            <p>
+              Si tu utilises <code>bash ops/scripts/prod-launch.sh</code>, le polling Resend est
+              automatique : le script attend que <code>fxmilyapp.com</code> passe à
+              <code>verified</code> avant de continuer (timeout 30 min).
+            </p>
+            <p>Manuel, depuis ton ordi :</p>
+            <pre><code>curl -fsS -H "Authorization: Bearer $RESEND_API_KEY" \
+  https://api.resend.com/domains | jq '.data[] | {name, status}'</code></pre>
+          </div>
+
+          <!-- Étape 11 -->
+          <div class="step" id="resend-11">
+            <div class="step-num">11</div>
+            <h3>Si verify timeout / fail</h3>
+            <ol>
+              <li>Sur la page domain, clique chaque ligne pour voir <em>"Detected: x"</em> vs <em>"Expected: y"</em> — diff visible.</li>
+              <li>Côté Cloudflare : vérifie le proxy status (<strong>gris obligatoire</strong>).</li>
+              <li>Depuis PowerShell : <code>nslookup -type=TXT resend._domainkey.fxmilyapp.com</code> → doit renvoyer le <code>p=...</code>.</li>
+              <li>Si Name est doublé (<code>send.fxmilyapp.com.fxmilyapp.com</code>) → tu as collé le FQDN au lieu du subdomain seul. Edit le record CF, mets juste <code>send</code>.</li>
+              <li>Re-clique "Verify DNS Records" après corrections.</li>
+            </ol>
+          </div>
+        </section>
+
+        <!-- ════════════════════════════════════════════════ -->
+        <!-- CLOUDFLARE -->
+        <!-- ════════════════════════════════════════════════ -->
+        <section class="service" id="cloudflare">
+          <div class="service-header">
+            <h2>☁️ Cloudflare — DNS + API Token</h2>
+            <p style="margin: 0; color: var(--t-2)">
+              Tu possèdes déjà <code>fxmilyapp.com</code> chez Cloudflare. Trois tâches : créer un
+              API token scopé, récupérer le Zone ID, et (en fallback) poser les records DNS Resend
+              à la main.
+            </p>
+            <div class="service-meta">
+              <span>⏱ ~5 min</span>
+              <span>📍 dash.cloudflare.com</span>
+              <span>🔑 Token format <code>cfut_</code> (2026)</span>
+            </div>
+          </div>
+
+          <!-- Tâche A -->
+          <div class="step" id="cf-token">
+            <div class="step-num">A</div>
+            <h3>Créer le Custom API Token</h3>
+            <ol>
+              <li>Ouvre <span class="url">https://dash.cloudflare.com/profile/api-tokens</span></li>
+              <li>Bouton <strong>"Create Token"</strong> (haut-droite, bleu plein)</li>
+              <li>Scrolle en bas → ligne <strong>"Create Custom Token"</strong> → bouton "Get started" (outline bleu, à droite de la ligne)</li>
+            </ol>
+            <h4>Formulaire</h4>
+            <p><strong>A. Token name</strong> : <code>fxmily-deploy</code></p>
+            <p><strong>B. Permissions</strong> — ajoute 2 lignes (bouton + Add more) :</p>
+            <ul>
+              <li>Ligne 1 : <code>Zone</code> / <code>Zone</code> / <code>Read</code></li>
+              <li>Ligne 2 : <code>Zone</code> / <code>DNS</code> / <code>Edit</code></li>
+            </ul>
+            <p>
+              <strong>C. Account Resources</strong> : section probablement absente (pas nécessaire
+              pour Zone-only permissions). Si présente, laisse "All accounts" par défaut.
+            </p>
+            <p><strong>D. Zone Resources</strong> :</p>
+            <ul>
+              <li>1er dropdown : <code>Include</code> (défaut, laisse)</li>
+              <li>2e dropdown : <strong><code>Specific zone</code></strong> (PAS "All zones", sinon le token a accès à toutes tes zones)</li>
+              <li>3e dropdown : <code>fxmilyapp.com</code></li>
+            </ul>
+            <p><strong>E. Client IP Address Filtering</strong> : laisse vide (ton IP FAI peut changer)</p>
+            <p><strong>F. TTL</strong> : End Date = aujourd'hui + 90 jours (rappel calendrier J-7)</p>
+            <h4>Continuer</h4>
+            <ol>
+              <li><strong>"Continue to summary"</strong> → écran review</li>
+              <li><strong>"Create Token"</strong></li>
+              <li><strong>Copie immédiatement</strong> (montré 1 fois). Format 2026 : <code>cfut_xxxxxxxxxxxxx</code></li>
+              <li>En bas : un curl de test → exécute pour valider, attendu <code>"status":"active"</code></li>
+            </ol>
+            <pre><code>CLOUDFLARE_API_TOKEN=cfut_&lt;copy-from-dashboard&gt;</code></pre>
+          </div>
+
+          <!-- Tâche B -->
+          <div class="step" id="cf-zone-id">
+            <div class="step-num">B</div>
+            <h3>Récupérer Zone ID + Account ID</h3>
+            <ol>
+              <li>Va sur <span class="url">https://dash.cloudflare.com</span></li>
+              <li>Clique sur ta zone <code>fxmilyapp.com</code> dans la liste</li>
+              <li>Tu arrives sur la page <strong>Overview</strong> (sélectionnée par défaut)</li>
+              <li>Scrolle vers le <strong>bas</strong> de la page Overview</li>
+              <li>Sur la <strong>droite</strong>, sidebar, sous "Account Details" / "Domain Registration", trouve la section <strong>"API"</strong></li>
+              <li>Deux lignes : <strong>Zone ID</strong> + <strong>Account ID</strong> (32 chars hex chacun)</li>
+              <li>Bouton "Click to copy" sous chaque ID</li>
+            </ol>
+            <pre><code>CLOUDFLARE_ZONE_ID=&lt;copy-from-dashboard&gt;
+CLOUDFLARE_ACCOUNT_ID=&lt;copy-from-dashboard&gt;</code></pre>
+          </div>
+
+          <!-- Tâche C -->
+          <div class="step" id="cf-fallback">
+            <div class="step-num">C</div>
+            <h3>Fallback — poser les DNS records manuellement</h3>
+            <p>
+              Tu fais ça <strong>uniquement si</strong> <code>bootstrap-fxmily.sh</code> a échoué.
+              Sinon saute cette section, le script automatise tout via API.
+            </p>
+            <h4>Étape 0 — récupérer les valeurs Resend</h4>
+            <ol>
+              <li>Onglet 1 : <span class="url">https://resend.com/domains</span> → click sur <code>fxmilyapp.com</code></li>
+              <li>Tu vois le tableau 3 lignes (cf. Resend étape 7)</li>
+              <li>Garde l'onglet ouvert</li>
+            </ol>
+            <h4>Étape 1 — DNS Cloudflare</h4>
+            <ol>
+              <li>Onglet 2 : <span class="url">https://dash.cloudflare.com</span> → fxmilyapp.com → <strong>DNS → Records</strong></li>
+              <li>Bouton <strong>"Add record"</strong> (haut-droite, bleu plein)</li>
+            </ol>
+            <h4>Étape 2 — A record pour <code>app</code></h4>
+            <ul>
+              <li><strong>Type</strong> : <code>A</code></li>
+              <li><strong>Name</strong> : <code>app</code> (juste <code>app</code>, Cloudflare append <code>.fxmilyapp.com</code> auto)</li>
+              <li><strong>IPv4 address</strong> : <code>178.104.39.201</code> (ton Hetzner)</li>
+              <li><strong>Proxy status</strong> : <strong>toggle GRIS = "DNS only"</strong> (V1 recommandé) ⚠️</li>
+              <li><strong>TTL</strong> : Auto</li>
+              <li>Save</li>
+            </ul>
+            <div class="callout warn">
+              <span class="label">Proxy gris vs orange</span>
+              <p>
+                V1 = DNS only (gris). Pourquoi : Caddy gère TLS sur le serveur. Activer le proxy
+                orange = double TLS = risque erreur 525. V2 si stable, tu pourras passer en
+                orange (DDoS shield).
+              </p>
+            </div>
+            <h4>Étape 3 — MX pour <code>send</code></h4>
+            <ul>
+              <li><strong>Type</strong> : <code>MX</code></li>
+              <li><strong>Name</strong> : <code>send</code></li>
+              <li><strong>Mail server</strong> : valeur exacte depuis Resend (ex. <code>feedback-smtp.us-east-1.amazonses.com</code> — ou <code>eu-central-1</code> si Pro EU)</li>
+              <li><strong>Priority</strong> : <code>10</code></li>
+              <li><strong>Proxy</strong> : MX n'a pas de toggle (CF ne proxifie jamais MX)</li>
+              <li>Save</li>
+            </ul>
+            <h4>Étape 4 — TXT SPF pour <code>send</code></h4>
+            <ul>
+              <li><strong>Type</strong> : <code>TXT</code></li>
+              <li><strong>Name</strong> : <code>send</code></li>
+              <li><strong>Content</strong> : <code>v=spf1 include:amazonses.com ~all</code> (sans guillemets, CF les ajoute)</li>
+              <li>Save</li>
+            </ul>
+            <h4>Étape 5 — TXT DKIM pour <code>resend._domainkey</code></h4>
+            <div class="callout danger">
+              <span class="label">UNE seule entrée TXT — pas 3 CNAMEs</span>
+              <p>
+                Resend signe via sa propre clé, pas via les sous-clés SES. Si tu as posé 3 CNAMEs
+                <code>*.dkim.amazonses.com</code> ailleurs, supprime-les.
+              </p>
+            </div>
+            <ul>
+              <li><strong>Type</strong> : <code>TXT</code></li>
+              <li><strong>Name</strong> : <code>resend._domainkey</code></li>
+              <li><strong>Content</strong> : la longue clé publique copiée depuis Resend (commence par <code>p=...</code>, ~210 chars)</li>
+              <li>Save</li>
+            </ul>
+            <h4>Étape 6 — TXT DMARC pour <code>_dmarc</code> (optionnel mais recommandé)</h4>
+            <ul>
+              <li><strong>Type</strong> : <code>TXT</code></li>
+              <li><strong>Name</strong> : <code>_dmarc</code></li>
+              <li><strong>Content</strong> : <code>v=DMARC1; p=none; rua=mailto:eliot@fxmilyapp.com</code></li>
+              <li><code>p=none</code> = mode observation V1 ; tu durciras en <code>quarantine</code> plus tard</li>
+              <li>Save</li>
+            </ul>
+            <h4>Étape 7 — Vérifier dans la liste</h4>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>#</th><th>Type</th><th>Name</th><th>Proxy</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>1</td><td>A</td><td>app.fxmilyapp.com</td><td>DNS only (gris)</td></tr>
+                  <tr><td>2</td><td>MX</td><td>send.fxmilyapp.com</td><td>—</td></tr>
+                  <tr><td>3</td><td>TXT</td><td>send.fxmilyapp.com</td><td>—</td></tr>
+                  <tr><td>4</td><td>TXT</td><td>resend._domainkey.fxmilyapp.com</td><td>—</td></tr>
+                  <tr><td>5</td><td>TXT</td><td>_dmarc.fxmilyapp.com</td><td>—</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="callout danger">
+              <span class="label">Règle d'or</span>
+              <p>
+                Sur les lignes mail, le proxy DOIT être DNS only. MX/TXT n'ont pas de toggle (donc
+                auto-conforme). Si tu rajoutes un CNAME mail un jour, vérifie qu'il est gris. Un
+                nuage orange sur DKIM = signature cassée = mails en spam.
+              </p>
+            </div>
+            <h4>Étape 8 — Retour Resend pour valider</h4>
+            <p>
+              Onglet Resend → page domain → bouton <strong>"Verify DNS Records"</strong>.
+              Propagation 1–10 min via Cloudflare en général. Si rouge après 30 min : recopie les
+              valeurs (un caractère manquant suffit à casser).
+            </p>
+          </div>
+        </section>
+
+        <!-- ════════════════════════════════════════════════ -->
+        <!-- GLOSSAIRE -->
+        <!-- ════════════════════════════════════════════════ -->
+        <section class="service" id="glossary">
+          <div class="service-header">
+            <h2>📖 Glossaire débutant</h2>
+            <p style="margin: 0; color: var(--t-2)">
+              Termes techniques que tu rencontres souvent dans Sentry / Resend / Cloudflare et qui
+              peuvent être obscurs au départ.
+            </p>
+          </div>
+          <div class="step">
+            <h3>DNS (Domain Name System)</h3>
+            <p>
+              Annuaire qui traduit <code>fxmilyapp.com</code> en adresse IP du serveur. Tu y poses
+              des "records" (entrées). Cloudflare est ton DNS provider.
+            </p>
+          </div>
+          <div class="step">
+            <h3>A record</h3>
+            <p>
+              Record DNS qui pointe un nom (ex. <code>app.fxmilyapp.com</code>) vers une IP IPv4
+              (<code>178.104.39.201</code>). C'est ce qui permet à un browser de trouver ton serveur.
+            </p>
+          </div>
+          <div class="step">
+            <h3>MX record</h3>
+            <p>
+              Mail eXchanger. Indique quel serveur mail accepte les emails pour ton domaine. Resend
+              en pose un sur <code>send.fxmilyapp.com</code> pour gérer les bounces (rebonds).
+            </p>
+          </div>
+          <div class="step">
+            <h3>TXT record</h3>
+            <p>
+              Record DNS qui contient du texte arbitraire. Utilisé pour SPF, DKIM, DMARC,
+              vérifications de propriété de domaine.
+            </p>
+          </div>
+          <div class="step">
+            <h3>CNAME record</h3>
+            <p>
+              Record qui pointe un nom vers un autre nom (alias). <strong>Resend N'utilise PAS de
+              CNAME pour DKIM</strong> (contrairement à SES direct).
+            </p>
+          </div>
+          <div class="step">
+            <h3>SPF (Sender Policy Framework)</h3>
+            <p>
+              Standard qui dit "quels serveurs ont le droit d'envoyer des emails au nom de ce
+              domaine". Sans SPF correct, Gmail/Outlook flag tes emails en spam.
+            </p>
+          </div>
+          <div class="step">
+            <h3>DKIM (DomainKeys Identified Mail)</h3>
+            <p>
+              Standard qui signe cryptographiquement chaque email avec une clé privée. Le récepteur
+              vérifie avec la clé publique posée en TXT DNS. Sans DKIM, livraison dégradée.
+            </p>
+          </div>
+          <div class="step">
+            <h3>DMARC</h3>
+            <p>
+              Standard qui dit "que faire si SPF + DKIM échouent ?" (none = observe, quarantine =
+              spam, reject = drop). Recommandé d'activer même en mode <code>p=none</code>.
+            </p>
+          </div>
+          <div class="step">
+            <h3>DSN (Data Source Name)</h3>
+            <p>
+              URL Sentry qui identifie ton projet. Côté app, on l'utilise pour envoyer les erreurs
+              à la bonne organisation/projet Sentry. Format :
+              <code>https://hash@oXXX.ingest.de.sentry.io/N</code>.
+            </p>
+          </div>
+          <div class="step">
+            <h3>API token</h3>
+            <p>
+              Mot de passe long pour authentifier les appels API. Scopé (limité à certaines
+              actions). Si fuité, à révoquer immédiatement.
+            </p>
+          </div>
+          <div class="step">
+            <h3>Auth Token (Sentry)</h3>
+            <p>
+              Token spécifique Sentry pour les actions CI/CD : upload sourcemaps, créer releases,
+              etc. Format <code>sntrys_eyJ...</code>.
+            </p>
+          </div>
+          <div class="step">
+            <h3>Zone ID (Cloudflare)</h3>
+            <p>
+              Identifiant unique d'un domaine dans Cloudflare. Utilisé par les API pour cibler les
+              records DNS. 32 chars hex.
+            </p>
+          </div>
+          <div class="step">
+            <h3>Proxy status (Cloudflare)</h3>
+            <p>
+              Toggle DNS only (gris) vs Proxied (orange). Orange = trafic passe par les serveurs
+              Cloudflare (DDoS shield, cache, WAF). Gris = trafic direct vers ton serveur. Pour
+              records mail, TOUJOURS gris.
+            </p>
+          </div>
+          <div class="step">
+            <h3>Region / Data residency</h3>
+            <p>
+              Où sont stockées physiquement tes données. Pour RGPD France, choisis EU/Frankfurt sur
+              Sentry et Resend Pro. Sur Resend Free, pas de choix (US par défaut).
+            </p>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div>
+          Document généré le <strong>2026-05-09</strong> · 3 subagents web research validation ·
+          source : <a href="eliot-guide-prod-launch.md">eliot-guide-prod-launch.md</a> +
+          <a href="eliot-guide-prod-launch.html">eliot-guide-prod-launch.html</a>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      // TOC active section highlight
+      const sections = document.querySelectorAll('main .step[id]');
+      const links = document.querySelectorAll('nav.toc a');
+      const linkBySectionId = new Map();
+      links.forEach((a) => {
+        const id = a.getAttribute('href').slice(1);
+        linkBySectionId.set(id, a);
+      });
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const link = linkBySectionId.get(entry.target.id);
+            if (!link) return;
+            if (entry.isIntersecting) {
+              links.forEach((l) => l.classList.remove('active'));
+              link.classList.add('active');
+            }
+          });
+        },
+        { rootMargin: '-30% 0px -65% 0px', threshold: 0 },
+      );
+      sections.forEach((s) => observer.observe(s));
+    </script>
+  </body>
+</html>

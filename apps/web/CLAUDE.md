@@ -1678,3 +1678,32 @@ Fix : `proxy.ts` matcher étendu pour exclure `manifest\.webmanifest|sw\.js|robo
 - Build prod Turbopack ✓ — nouvelle route `/api/cron/purge-audit-log` listée dans le manifest des routes (9e cron).
 - Smoke browser live D:/Fxmily HEAD post-R confirme : `/`, `/login`, `/legal/*`, `/apple-icon`, `/icon`, `/manifest.webmanifest`, `/sw.js`, `/api/health` → 200. `/dashboard`, `/account`, `/admin/system` → 307→/login (auth gate intact).
 - WCAG fixes Phase P toujours visibles dans HTML rendered : `<a href="mailto:eliot@fxmilyapp.com">` sur splash secondary CTA + `<a className={btnVariants(...)}>` direct sur welcome/admin/members links.
+
+## J10 — Phase S + T + U + V (livré 2026-05-09)
+
+**Phase S** — pivot domain V1 vers `fxmilyapp.com` (51 fichiers patchés sed) + `tokens.local.env.example` refondu + guide HTML résumé `eliot-guide-prod-launch.html`.
+
+**Phase T** — login rate-limit anti-abuse :
+
+- `auth.config.ts authorized()` global status='active' gate
+- `loginEmailLimiter` (5 burst) + `loginIpLimiter` (10 burst) consommés par `signInAction` ET `auth.ts authorize()` (couvre `/api/auth/callback/credentials` direct)
+- `app/robots.ts` + `app/sitemap.ts` (Disallow:/ V1 cohorte privée)
+- Email perso scrubbed du repo public
+- 4 scripts ops : `generate-local-secrets.sh` + `test-tokens.sh` + `preflight-check.sh` + `rotate-admin-password.sh`
+
+**Phase U** — guide HTML débutant + master script :
+
+- `docs/eliot-guide-screens.html` (1402 LOC) — 26 écrans Sentry/Resend/Cloudflare détaillés + glossaire 14 termes débutant
+- `ops/scripts/prod-launch.sh` — master orchestrator failsafe
+- Fix critical 2026 : Resend DKIM = 1 TXT (pas 3 CNAMEs)
+
+**Phase V** — tests + calibration audit + CVE sweep :
+
+- V.1 : 14 tests Vitest login rate-limit (token-bucket + actions.test.ts NEW). Tests 717→731 verts.
+- V.2 : audit calibration scoring (`STDDEV 8→4`, `EXPECTANCY 3→1`) — edits revertés par hook auto (Phase W investigation à venir)
+- V.3 : verifier 28/28 items VERIFIED. Phase P→U intactes.
+- V.4 : CVE sweep 0 CVE Critical/High post-2026-05-06. 3 hygiene checks Docker (node 22.22.2, postgres 17.9, caddy 2.11.2).
+
+### Commit chain final J10 (24+ commits Phases A → V)
+
+Voir `git log main..HEAD`. PR #35 CI verte 3/3 (Lint+type-check+build, Analyze JS-TS, CodeQL).

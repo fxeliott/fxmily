@@ -1,181 +1,134 @@
-# Eliot — pré-requis manuels J10 (étape par étape, ~30 min)
+# Eliot — pré-requis manuels J10 (étape par étape, **~10 min**)
 
-Ce guide regroupe les **7 actions manuelles** que je ne peux pas automatiser
-pour toi (cartes bancaires, validations interactives, device physique).
-Une fois fait, lance simplement `provision-hetzner.sh` puis `setup-host.sh`
-et tout le reste est automatisé.
+Phase M (2026-05-09) a réduit le manuel de **30 → 10 min** via les scripts
+`bootstrap-fxmily.sh` + `cloudflare-dns-setup.sh` + `resend-domain-add.sh`
 
-> ⚠️ **Budget caps avant tout** : configure des budget alerts AVANT
-> d'enregistrer une carte bancaire sur les services payants ci-dessous.
-> Cf. memory `contraintes_financieres` (incident Gemini avril 2026,
-> 95 € abusés via key leak).
+- `pose-github-secrets.sh` qui automatisent toute la partie API.
+
+> ⚠️ **Budget caps avant tout** : configure les budget alerts AVANT
+> d'enregistrer une carte bancaire — incident Gemini avril 2026
+> (95 € abusés via key leak, memory `contraintes_financieres`).
 
 ---
 
-## 1. Cloudflare Registrar — Achat de `fxmily.com` (~10 €/an)
+## Manuel incompressible (~10 min total)
 
-1. Connecte-toi sur <https://dash.cloudflare.com/?to=/:account/registrar>.
-2. Onglet **Register** → search `fxmily.com`.
-3. Si dispo, achète. Sinon teste les alternatives `fxmily.app`, `fxmily.fr`,
-   `fxmily.io` (et reviens me dire — j'adapte les configs).
-4. **Auto-renew ON** par défaut (laisser).
-5. **Privacy proxy** automatique chez Cloudflare (bonus RGPD).
+### 1. Cloudflare — Achat `fxmily.com` (~10 €/an, 3 min)
 
-✅ Done quand : `fxmily.com` apparait dans ta liste de domaines Cloudflare.
+> ⚠️ Cloudflare Registrar **n'a pas d'API publique pour l'achat de domaine**.
+> Cette étape reste manuelle.
 
-## 2. Hetzner Cloud — Création projet + token (gratuit jusqu'au boot)
+1. Account Cloudflare créé + CB enregistrée → **Account → Billing → Budget alert ≤ 30 €/mois**
+2. Dashboard → **Registrar** → search `fxmily.com` → buy → **auto-renew ON**
+3. Profile → **API Tokens** → Create Token → "Edit zone DNS" template,
+   scope = `fxmily.com` Zone → note la valeur
 
-1. Inscription sur <https://accounts.hetzner.com/signUp> si pas déjà fait.
-   Carte bancaire requise — **pas facturé tant qu'aucune ressource n'est
-   créée**.
-2. Dans Hetzner Cloud Console → **New Project** → nom `Fxmily`.
-3. Project → Security → **API Tokens** → **Generate API Token** :
-   - Permission: **Read & Write**.
-   - Description: `cli-provisioning`.
-   - **Copie la valeur immédiatement** (elle ne sera plus affichée).
-4. Project → Security → **SSH Keys** → **Add SSH Key** :
-   - Colle le contenu de `~/.ssh/id_ed25519.pub` (ou
-     `%USERPROFILE%\.ssh\id_ed25519.pub` sur Windows).
-   - Name: `eliot-laptop`.
+### 2. Hetzner Cloud — Compte + token + SSH key (~3 min)
 
-✅ Done quand : tu as le token API + SSH key uploadée.
+1. <https://accounts.hetzner.com/signUp> → ajoute CB
+2. **Project → Settings → Billing → Spending alert ≤ 20 €/mois**
+   (CX22 = ~5 €/mois, large marge)
+3. Project → Security → **API Tokens** → "Read & Write" → note la valeur
+4. Project → Security → **SSH Keys** → upload `~/.ssh/id_ed25519.pub` (name=`eliot-laptop`)
 
-## 3. Sentry — Création du projet (gratuit Plan Free 5000 errors/mois)
+### 3. Sentry — Projet Next.js (~2 min, pas de CB requise)
 
-1. Inscription sur <https://sentry.io/signup/> (free tier).
-2. **Create Project** → platform `Next.js` → name `fxmily-web`.
-3. Note le **DSN** (`https://<key>@<orgid>.ingest.<region>.sentry.io/<projectid>`).
-4. Settings → **Auth Tokens** → **Create New Token** :
-   - Scopes: `project:read`, `project:write`, `project:releases`.
-   - Description: `fxmily-ci-source-maps`.
-   - Note la valeur.
+1. <https://sentry.io/signup/> (free tier 5000 events/mo)
+2. Settings → **Spend Caps → ON** (hard cap free tier)
+3. Create Project → platform `Next.js` → name `fxmily-web`
+4. Note le **DSN** (`https://<key>@<orgid>.ingest.<region>.sentry.io/<projectid>`)
+5. Settings → **Auth Tokens** → Create → scopes `project:write` + `project:releases` → note la valeur
 
-✅ Done quand : tu as DSN + auth token + org slug + project slug
-(`fxmily` + `fxmily-web`).
+### 4. Resend — Compte + API key (~1 min, pas de CB requise)
 
-## 4. Resend — Domain `fxmily.com` (gratuit Free tier 3000 emails/mois)
+1. <https://resend.com/signup> (free tier 3000 emails/mo)
+2. Dashboard → **API Keys** → Create → permissions `domains:write` + `emails:send` → note la valeur
 
-⚠️ Cette étape exige que `fxmily.com` soit acheté (étape 1).
+### 5. iPhone Safari 18.4+ (~1 min)
 
-1. <https://resend.com/domains> → **Add Domain** → `fxmily.com`.
-2. Resend affiche **3 TXT records** à coller dans Cloudflare DNS :
-   - SPF: `v=spf1 include:_spf.resend.com ~all`
-   - DKIM: `resend._domainkey` → long valeur
-   - DMARC: `_dmarc` → `v=DMARC1; p=quarantine; rua=mailto:eliot@fxmily.com`
-3. Cloudflare Dashboard → `fxmily.com` → DNS → **Add record** pour les 3.
-4. **Wait ~24 h** pour la propagation. Vérifie avec
-   `bash ops/scripts/verify-dns.sh fxmily.com app.fxmily.com`.
-5. Resend Console → bouton **Verify** quand tout passe vert.
+Mets à jour iOS sur ton iPhone (Settings → General → Software Update).
+Sera utilisé Phase F step 9 pour valider le push real-device.
 
-✅ Done quand : Resend affiche `Verified` à côté de `fxmily.com`.
+---
 
-## 5. iPhone Safari 18.4+ — Préparé pour le push test
-
-1. Mets à jour ton iPhone vers iOS 18.4 minimum (Settings → General → Software
-   Update).
-2. Aucune action en plus avant la Phase F étape 9 — tu utiliseras Safari
-   classique pour Add-to-Home-Screen.
-
-## 6. Mot de passe admin Fxmily rotaté
-
-L'incident sec post-J8 polish (docs/jalon-9-prep.md) recommande de rotationner
-le mdp admin **avant** la 1ère invitation prod.
+## Automation — TOUT le reste via `bootstrap-fxmily.sh` (~5 min)
 
 ```bash
-# Sur ta machine, génère un mdp fort :
-openssl rand -base64 24
-# Copie-le, change le mdp admin Fxmily via /admin/profile une fois loggé.
-```
+# 1. Crée le fichier tokens.local.env (gitignored par défaut)
+cp ops/scripts/tokens.local.env.example tokens.local.env
+$EDITOR tokens.local.env  # remplis les 7 valeurs notées ci-dessus
+chmod 600 tokens.local.env
 
-## 7. GitHub Secrets — Pose les valeurs dans `fxeliott/fxmily`
-
-<https://github.com/fxeliott/fxmily/settings/secrets/actions> → **New
-repository secret** pour chacun :
-
-| Name                | Value                                               |
-| ------------------- | --------------------------------------------------- |
-| `HETZNER_HOST`      | IPv4 publique du CX22 (étape 2 + provision-hetzner) |
-| `HETZNER_SSH_KEY`   | Clé privée `~/.ssh/id_ed25519` content              |
-| `SENTRY_AUTH_TOKEN` | Token de l'étape 3                                  |
-| `SENTRY_ORG`        | Org slug Sentry (e.g. `fxmily`)                     |
-| `SENTRY_PROJECT`    | Project slug (e.g. `fxmily-web`)                    |
-
-⚠️ **Ne JAMAIS** colle ces valeurs dans une session Claude Code (cf. memory
-`contraintes_financieres` + incident Resend key leak avril 2026).
-
-✅ Done quand : 5 secrets visibles dans la liste GitHub.
-
-**Automation (recommandé)** : au lieu de cliquer 5 fois dans l'UI GitHub,
-utilise le script `ops/scripts/pose-github-secrets.sh` :
-
-```bash
-# Crée un fichier local protégé (NEVER committer)
-cat > /tmp/secrets.local.env <<'EOF'
-HETZNER_HOST="<IP-Hetzner>"
-HETZNER_SSH_KEY="$(cat ~/.ssh/id_ed25519)"
-SENTRY_AUTH_TOKEN="<token>"
-SENTRY_ORG="fxmily"
-SENTRY_PROJECT="fxmily-web"
-APP_URL="https://app.fxmily.com"
-CRON_SECRET="<même valeur que /etc/fxmily/web.env>"
-EOF
-chmod 600 /tmp/secrets.local.env
-
-# Authentifie gh (si pas déjà fait)
+# 2. Authentifie GitHub CLI (si pas déjà fait)
 gh auth login
 
-# Lance l'automation
-bash ops/scripts/pose-github-secrets.sh /tmp/secrets.local.env
+# 3. Lance le mega-script (avec confirmation budget caps)
+bash ops/scripts/bootstrap-fxmily.sh tokens.local.env
 
-# Détruis le fichier secrets après
-shred -u /tmp/secrets.local.env
-```
+# Le script enchaîne :
+#   - Step 1 : provision-hetzner.sh (idempotent, demande confirmation avant `hcloud server create`)
+#   - Step 2 : resend-domain-add.sh fxmily.com (add domain + fetch DKIM)
+#   - Step 3 : cloudflare-dns-setup.sh fxmily.com (5 records via API)
+#   - Step 4 : pose-github-secrets.sh (5 secrets + 2 variables via gh CLI)
+#   - Step 5 : prints next-step instructions
 
-Le script vérifie que le fichier est en mode 0600/0400, valide
-l'authentification gh, puis pose les 5 secrets + 1 variable
-(`APP_URL`) en idempotent. Refuse de runner si gh non auth ou si
-fichier monde-readable.
-
----
-
-## Ensuite — automation prend le relais
-
-```bash
-# 1. Provisionner la VM Hetzner (idempotent)
-export HCLOUD_TOKEN="<token étape 2>"
-bash ops/scripts/provision-hetzner.sh
-# → Note l'IP affichée à la fin.
-
-# 2. Configure le host (run depuis ta machine, ssh transparent)
+# 4. Setup le host Hetzner (~5 min)
 scp ops/scripts/setup-host.sh root@<IP>:/root/
 ssh root@<IP> 'bash /root/setup-host.sh'
 
-# 3. Cloudflare DNS — ajoute manuellement (Console) :
-#    A app → <IP-Hetzner>  (Proxied=NO)
-
-# 4. Vérifie les DNS Resend (peut prendre 24h)
+# 5. Wait ~24h DNS propagation, puis :
 bash ops/scripts/verify-dns.sh fxmily.com app.fxmily.com
+RESEND_API_KEY=$(grep RESEND_API_KEY tokens.local.env | cut -d= -f2-) \
+  bash ops/scripts/resend-domain-add.sh fxmily.com --verify-only
 
-# 5. Premier déploiement automatique
+# 6. Trigger le 1er deploy
 gh workflow run deploy.yml -R fxeliott/fxmily
 
-# 6. Smoke automatisé
-export APP_URL=https://app.fxmily.com
-export CRON_SECRET=<de /etc/fxmily/web.env>
-bash ops/scripts/post-deploy-smoke.sh
+# 7. Smoke automatisé (8/12 checks)
+APP_URL=https://app.fxmily.com \
+  CRON_SECRET=$(grep CRON_SECRET tokens.local.env | cut -d= -f2-) \
+  bash ops/scripts/post-deploy-smoke.sh
 
-# 7. Smoke manuel (4 steps restants — voir runbook-prod-smoke-test.md §9-12)
+# 8. Smoke manuel (4 steps restants — UI + iPhone)
+# Voir docs/runbook-prod-smoke-test.md §9-12
+
+# 9. Cleanup
+shred -u tokens.local.env
 ```
 
 ---
 
-## Récap : 7 actions × ~3-5 min = 30 min total
+## Sécurité
 
-Toutes les autres tâches J10 (4-5 jours selon SPEC §15 estimation) sont
-déjà livrées sur la branche `claude/j10-prod-deploy` (PR #35). Tu n'as
-qu'à exécuter ces 7 étapes + lancer les 6 commandes ci-dessus.
+- **Tokens jamais loggés** : tous les scripts utilisent `curl -H "Authorization: Bearer …" --silent --show-error`. Pas de `set -x` activé. Aucun `echo $TOKEN` nulle part.
+- **Mode 0600 enforced** : `bootstrap-fxmily.sh` refuse de runner si `tokens.local.env` est world-readable (mode > 0644).
+- **`.gitignore`** : `tokens.local.env` + `*.local.env` exclus globalement (cf. ligne 18-21 de `.gitignore`).
+- **Budget caps obligatoires** : `bootstrap-fxmily.sh` demande confirmation explicite des 4 caps avant la première action engageant la CB.
+- **Repo privé** : tout vit dans `fxeliott/fxmily` privé. PR #35 non-public.
 
-🤖 Tout le code, ops, audit, hardening, tests, runbooks ont été générés
-en autonomie totale par Claude Opus 4.7 (1M context) en mode pleine
-puissance — l'effort manuel d'Eliot est volontairement réduit au minimum
-incompressible (carte bancaire, validation Resend, device iPhone).
+## Coûts attendus V1 (cf. SPEC §16)
+
+| Service                                          | Coût                   |
+| ------------------------------------------------ | ---------------------- |
+| Hetzner CX22                                     | ~5 €/mois              |
+| Cloudflare R2 (10 Go free)                       | 0 €/mois               |
+| Resend (3000 emails free)                        | 0 €/mois               |
+| Sentry (5000 events free)                        | 0 €/mois               |
+| Cloudflare Registrar                             | ~10 €/an               |
+| Anthropic Claude API (rapports hebdo, optionnel) | ~5-10 €/mois si activé |
+| **Total V1**                                     | **~5-15 €/mois**       |
+
+Avec les budget caps à 20 € (Hetzner) + 30 € (Cloudflare) + 0 € (Sentry/Resend hard cap free) → **plafond max ~50 €/mois absolu**, marge x3 sur le coût attendu.
+
+---
+
+## Récap : ~10 min manuel + ~5 min de script
+
+L'effort manuel d'Eliot est volontairement réduit au strict incompressible :
+
+- 4 inscriptions de comptes (Cloudflare, Hetzner, Sentry, Resend) → ne peut pas être scripté (formulaires web + email validation)
+- Achat domaine Cloudflare → pas d'API publique
+- iOS update → device physique
+
+Tout le reste (DNS, domain verify, GitHub secrets, provisioning, deploy) est
+chaîné dans `bootstrap-fxmily.sh`.

@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import {
   buildEquityCurve,
   computeExpectancy,
@@ -97,7 +99,19 @@ export interface SessionPerf {
   avgR: number;
 }
 
-export async function getDashboardAnalytics(
+/**
+ * Cached entry point. React 19 `cache()` scopes results to a single
+ * request — when the dashboard renders `TrackRecordSection` and
+ * `PatternsSection` in parallel under `<Suspense>`, only the first
+ * call hits the DB ; the second resolves from the per-request cache.
+ *
+ * Note: cache key matches arguments by reference equality, so callers
+ * must pass the same (userId, timezone, range[, asOf]) tuple to share
+ * the cached result.
+ */
+export const getDashboardAnalytics = cache(_getDashboardAnalyticsImpl);
+
+async function _getDashboardAnalyticsImpl(
   userId: string,
   timezone: string,
   range: RangeKey = '30d',

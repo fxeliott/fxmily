@@ -1,9 +1,14 @@
 /**
- * Mark Douglas card seed data (J7).
+ * Mark Douglas card seed data (J7 + J7.5 + J7.6 + J7.8).
  *
- * V1 ships 12 fiches couvrant les 7 triggers canoniques SPEC §7.6 + 5
- * piliers catalogue. Les 38 fiches restantes sont en backlog J7.5 (Eliot
- * reprendra avec un subagent dédié OU rédigera lui-même).
+ * V1 ships **50 fiches** couvrant les 7 triggers canoniques SPEC §7.6
+ * (tilt, plan-violations, sleep-deficit, emotion-logged FOMO, 4 peurs,
+ * sur-confiance, hedge-violation, recovery-streak) + 8 piliers catalogue
+ * (acceptance, probabilities, process, ego, fear, loss, consistency,
+ * patience). Cible §7.6 atteinte. Distribution : 12 (J7) + 10 (J7.5) +
+ * 9 (J7.6) + 19 (J7.8). Citations ≤30 mots fair use FR L122-5 +
+ * `quoteSourceChapter` obligatoire + paraphrases 200-400 mots à la voix
+ * d'Eliot + 1-3 exercises.
  *
  * Posture (SPEC §2 + §18.2) :
  *   - Aucun conseil de marché.

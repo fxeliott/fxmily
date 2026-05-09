@@ -597,12 +597,35 @@ export async function dispatchAllReady(
   let failed = 0;
   let skipped = 0;
 
-  for (const r of ready) {
-    const result = await dispatchOne(r.id);
-    if (result.status === 'sent') sent += 1;
-    else if (result.status === 'retry') retried += 1;
-    else if (result.status === 'failed') failed += 1;
-    else skipped += 1;
+  // Bounded concurrency : process the queue in chunks of CONCURRENCY rows
+  // with `Promise.allSettled`. Atomic claim already lives inside
+  // `dispatchOne` (UPDATE...WHERE status=pending), so two concurrent
+  // chunks racing on the same row is safe — the loser gets `skipped`.
+  // FIFO order across chunks is preserved (slice walks the sorted list),
+  // intra-chunk order is unspecified but irrelevant : each row is
+  // independent. Tuned to 8 against Hetzner CX22 + 5s per-send timeout :
+  // worst-case ~5s per chunk, 25 chunks = 125s for the 200-row cap, well
+  // under the 600s curl timeout in `fxmily-cron`. Per-row Web Push
+  // `Promise.allSettled` over subscriptions is unchanged (already there).
+  const CONCURRENCY = 8;
+  for (let i = 0; i < ready.length; i += CONCURRENCY) {
+    const chunk = ready.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(chunk.map((r) => dispatchOne(r.id)));
+    for (const settled of results) {
+      if (settled.status === 'rejected') {
+        // `dispatchOne` is meant to be total — a throw here is a bug, but we
+        // refuse to abort the whole batch over one row. Count as failed so
+        // the audit metadata stays accurate, the next cron run picks the row
+        // back up via the stuck-recovery path or the row-level claim retry.
+        failed += 1;
+        continue;
+      }
+      const result = settled.value;
+      if (result.status === 'sent') sent += 1;
+      else if (result.status === 'retry') retried += 1;
+      else if (result.status === 'failed') failed += 1;
+      else skipped += 1;
+    }
   }
 
   return {

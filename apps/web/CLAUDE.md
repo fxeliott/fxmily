@@ -1613,3 +1613,61 @@ f2187af perf(j10): promote J10.5+ items + Eliot ops automation scripts
 ba026e0 feat(j10): Sentry integration + reportError helper + 7 cron catches
 f0bae30 feat(j10): RGPD foundation + soft-delete + cron purge
 ```
+
+## J10 — Phase R (web research + reality check + 3 PWA BLOCKERs, livré 2026-05-09)
+
+4 subagents lancés en parallèle (R.1 web research libs/services + R.2 trading expert posture + R.3 perf T1.1/T1.2/T1.4 + R.4 prerequisite reality check). 3 BLOCKERs PWA détectés en smoke browser live curl localhost.
+
+### R.1 — URGENT findings web research 2026-05-09
+
+- **Vercel Hobby = INVALIDE pour Fxmily** : ToS interdit "any deployment used for financial gain of anyone involved". Fxmily = formation payante = commercial today. → Phase N path (`docs/zero-cost-deployment.md`) flagged ❌ status invalide en haut du doc. Recommandation : Hetzner existant `hetzner-dieu` (déjà payé), domaine `fxmilyapp.com` (déjà possédé). Coût supplémentaire = 0 €.
+- **Vercel Hobby AI training opt-in par défaut** : tout contenu déployé est utilisé pour entraîner les modèles AI. Inacceptable pour données membres Fxmily.
+- **Auth.js v5 stable ne sortira JAMAIS** : projet transféré à Better Auth team 2025. Pin `@beta.31` exact (pas `@beta`). V2 considérer migration Better Auth.
+- **CVE patch validation** : `next@16.2.6` + `react@19.2.6` + `react-dom@19.2.6` couvrent les 13 advisories de mai 2026.
+- **Resend free 100/jour cap** = vrai bottleneck (pas le 3000/mois).
+- **Sonnet 4.6 reste latest** (Sonnet 4.7 n'existe pas) — best ratio qualité/prix rapports hebdo.
+- **CVE 2026-44457 hono ID was wrong** dans nos commits — vrais IDs sont `GHSA-hm8q-7f3q-5f36` (JWT), `GHSA-qp7p-654g-cw7p` (CSS injection), `GHSA-p77w-8qqv-26rm` (Cache Vary), tous fixés `4.12.18`. Override pnpm reste correct.
+
+### R.2 — Trading expert audit posture (SOLID overall, 4 recos V1.5)
+
+Senior trader review : posture conforme SPEC §2 (no market analysis), 50/50 fiches Mark Douglas authentiques, scoring 4-dim solide :
+
+- **Calibration scoring** : `STDDEV_FULL_SCALE = 8` dans `emotional-stability.ts:94` trop généreux (max stdDev sur 1-10 ~4.5) → recalibrer 3.5. `EXPECTANCY_FULL_SCALE = 3` dans `consistency.ts:67` trop sévère (3R/trade = top 1% mondial) → 1.0. **Reclassé V1.5** (changement breaking sur scores existants — rerun cron recompute après).
+- **Trade quality grading** : ajouter `tradeQuality: 'A'|'B'|'C'|null` + `riskPct: Decimal(4,2)` (% capital risqué) sur Trade pour Steenbarger best practice ("% A-grade only" sub-score). **Reclassé V1.5**.
+- **Triggers manquants** : `{kind:'emotion_logged',tag:'revenge'}` + `{kind:'emotion_logged',tag:'overconfident'}` non câblés sur les fiches existantes (slugs présents mais inexploités). **Reclassé V1.5**.
+- **`userId` UUID exposé au prompt Claude** dans `weekly-report/builder.ts:38` + `prompt.ts:81` — pseudonymiser en `member-xxxx`. **Reclassé V1.5**.
+
+### R.3 — Perf T1.1 + T1.2 + T1.4 fixes
+
+- **T1.1 Dashboard duplicate analytics** (`lib/scoring/dashboard-data.ts:112`) : `getDashboardAnalytics` wrappé dans `cache()` React 19. Per-request memoization → `findMany` + 6 aggregations s'exécutent une seule fois même si TrackRecordSection + PatternsSection appellent en parallèle.
+- **T1.2 Dispatcher sequential** (`lib/push/dispatcher.ts:595-629`) : `dispatchAllReady` passe à concurrency bounded 8 via `Promise.allSettled` chunks. Latence cron divisée par ~8.
+- **T1.4 Audit retention 90j** : `lib/audit/cleanup.ts` (NEW, 90 LOC) + `app/api/cron/purge-audit-log/route.ts` (NEW, 104 LOC) + slug `cron.purge_audit_log.scan` + `health.ts` 9e expectation + `crontab.fxmily` `0 4 * * *` + `fxmily-cron` allowlist. Pattern carbone `purge-push-subscriptions`.
+
+### R.4 — Reality check pré-requis Eliot
+
+7 → **5** pré-requis bloquants après Phase R :
+
+- ✅ **Hetzner CX22** : `hetzner-dieu` existant 178.104.39.201 (déjà payé pour n8n/Langfuse). `bootstrap-fxmily.sh --skip-hetzner` + `FXMILY_HETZNER_IP=178.104.39.201`.
+- ✅ **Domaine** : pivot V1 sur `fxmilyapp.com` (déjà possédé, Cloudflare DNS configuré). Achat `fxmily.com` reporté V2.
+- ⏳ Sentry DSN signup (gratuit 5000 events/mois, no CB).
+- ⏳ Resend domain `fxmilyapp.com` verify (3 TXT DNS Cloudflare → ~15 min propagation).
+- ⏳ iPhone Safari 18.4+ test (non automatisable, device physique).
+- ⏳ Admin password rotation (non automatisable).
+- ⏳ GitHub secrets via `pose-github-secrets.sh tokens.local.env`.
+
+### Phase R smoke browser : 3 PWA/SEO BLOCKERs détectés et fixés
+
+Smoke E2E live via `curl` sur dev server `D:/Fxmily` (port 3001) — détectés en testant les routes publiques :
+
+- **`/manifest.webmanifest`** retournait 307 → /login → **PWA install cassé sur splash anonyme**.
+- **`/sw.js`** retournait 307 → service worker pas registrable côté anonyme → push registration cassée.
+- **`/robots.txt`** + **`/sitemap.xml`** retournaient 307 → SEO crawlers redirigés vers login.
+
+Fix : `proxy.ts` matcher étendu pour exclure `manifest\.webmanifest|sw\.js|robots\.txt|sitemap\.xml`. Vérifié live `/manifest.webmanifest` 200 + JSON correct, `/sw.js` 200, `/robots.txt` + `/sitemap.xml` 404 (fichiers absents = OK V1 cohorte privée).
+
+### Phase R quality gate
+
+- format ✓, lint ✓, type-check ✓, **Vitest 717/717 verts**.
+- Build prod Turbopack ✓ — nouvelle route `/api/cron/purge-audit-log` listée dans le manifest des routes (9e cron).
+- Smoke browser live D:/Fxmily HEAD post-R confirme : `/`, `/login`, `/legal/*`, `/apple-icon`, `/icon`, `/manifest.webmanifest`, `/sw.js`, `/api/health` → 200. `/dashboard`, `/account`, `/admin/system` → 307→/login (auth gate intact).
+- WCAG fixes Phase P toujours visibles dans HTML rendered : `<a href="mailto:eliot@fxmily.com">` sur splash secondary CTA + `<a className={btnVariants(...)}>` direct sur welcome/admin/members links.

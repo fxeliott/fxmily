@@ -968,7 +968,7 @@ Phase 2 — Audit-driven hardening :
 | J7 | Bibliothèque + déclencheurs + membre reçoit fiche après 3 pertes consécutives | ✅ smoke `scripts/smoke-test-j7.ts` ALL GREEN avec 50 cards |
 | J8 | Eliot reçoit email avec rapport hebdo de chaque membre actif | ✅ Phase B+ smoke live ALL GREEN — Claude Sonnet mock + cron Sun 21 UTC + email digest |
 | J9 | Membre active notifs, reçoit pushes prévus | ✅ smoke `scripts/smoke-test-j9.ts` ALL GREEN — Apple Declarative Web Push 8030 + classic dual SW + email fallback |
-| J10 | App en prod sur app.fxmily.com, Eliot s'invite + teste end-to-end | ⚠️ code prêt (18 commits Phases A→P sur `claude/j10-prod-deploy`, RGPD + Sentry + Hetzner/Vercel deploy + observability `/admin/system` + cron-watch). **Smoke prod end-to-end** bloqué par 7 pré-requis externes Eliot (Hetzner CX22 provisionné + `fxmily.com` + Resend domain verified + Sentry DSN + iPhone Safari 18.4+ + admin password rotated + GitHub secrets) |
+| J10 | App en prod, Eliot s'invite + teste end-to-end | ⚠️ code prêt (18 commits Phases A→P + Phase Q + R sur `claude/j10-prod-deploy`). **Phase R reality check 2026-05-09** : pivot domaine V1 sur `app.fxmilyapp.com` (déjà possédé par Eliot via `hetzner-dieu`) au lieu de `app.fxmily.com` (achat reporté V2). Pre-requis bloquants restants : Sentry DSN + Resend `fxmilyapp.com` verify + iPhone Safari 18.4+ device test + admin password rotation + GitHub secrets posés. `fxmily.com` purchase = optionnel V2. |
 
 ### 20.6 — Backlog J8 (livré ✅ 2026-05-08)
 

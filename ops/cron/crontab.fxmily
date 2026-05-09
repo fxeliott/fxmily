@@ -20,6 +20,7 @@
 #   - dispatch-notifications    every 2 min                        (J9)
 #   - purge-deleted             daily 03:00 UTC                    (J10)
 #   - purge-push-subscriptions  Sunday 05:00 UTC                   (J10)
+#   - purge-audit-log           daily 04:00 UTC                    (J10)
 #
 # Log : every run appends one line to /var/log/fxmily/cron.log via the
 # wrapper. The DB audit row (`cron.<route>.scan`) is the canonical
@@ -51,6 +52,9 @@ MAILTO=""
 
 # J10 — Stale push subscriptions cleanup (90d) : Sunday 05:00 UTC.
 0 5 * * 0                    fxmily   /usr/local/bin/fxmily-cron purge-push-subscriptions
+
+# J10 — Audit log retention purge (90d) : daily 04:00 UTC (1h after purge-deleted).
+0 4 * * *                    fxmily   /usr/local/bin/fxmily-cron purge-audit-log
 
 # J10 — Postgres backup (pg_dump → GPG → R2) : daily 02:30 UTC.
 30 2 * * *                   fxmily   /usr/local/bin/fxmily-backup

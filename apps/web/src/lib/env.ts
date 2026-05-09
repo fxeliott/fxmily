@@ -121,6 +121,19 @@ const envSchema = z.object({
   // Jalon 5 — secret partagé avec le cron Hetzner pour `/api/cron/*`. Sans ça,
   // l'endpoint cron répond 503 (refuse de tourner sans authentification).
   CRON_SECRET: z.string().min(24, 'CRON_SECRET ≥ 24 chars (openssl rand -hex 24)').optional(),
+
+  /// V1.5 — Salt server-side pour la pseudonymisation `userId → memberLabel`
+  /// dans `lib/weekly-report/builder.ts`. Sans salt, un attaquant qui connaît
+  /// un cuid peut vérifier sa présence dans un export rapport hebdo en
+  /// hashant 1 candidate (audit M1, security-auditor 2026-05-09).
+  /// Optional en V1 (default empty string = behavior actuel, OK si rapports
+  /// jamais exportés hors Eliot). REQUIS en prod si export externe envisagé.
+  /// Génération : `openssl rand -hex 32` (64 chars). Ne JAMAIS rotater une
+  /// fois la cohorte démarrée — perte de continuité des labels historiques.
+  MEMBER_LABEL_SALT: z
+    .string()
+    .min(16, 'MEMBER_LABEL_SALT ≥ 16 chars (openssl rand -hex 32)')
+    .optional(),
 });
 
 /**

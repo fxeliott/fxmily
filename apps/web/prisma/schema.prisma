@@ -370,9 +370,11 @@ model Trade {
   /// Percentage of account risked on this trade (e.g. 1.50 = 1.5 %).
   /// Tharp gold rule: never risk more than 1-2 % per trade. Optional.
   /// Captured by the member at form-fill time (we don't have account
-  /// balance in the schema — V2 candidate). Decimal(5, 2) covers 0.01 %
-  /// up to 999.99 % (degenerate case but defensive).
-  riskPct Decimal? @map("risk_pct") @db.Decimal(5, 2)
+  /// balance in the schema — V2 candidate). Decimal(4, 2) covers 0.01 %
+  /// up to 99.99 % — aligned with the Zod schema upper bound `< 100`.
+  /// Code-reviewer #6 (2026-05-09) — was Decimal(5, 2) which allowed
+  /// 999.99 vs Zod < 100 mismatch.
+  riskPct Decimal? @map("risk_pct") @db.Decimal(4, 2)
 
   // ----- Post-exit block (filled at close) -----
 

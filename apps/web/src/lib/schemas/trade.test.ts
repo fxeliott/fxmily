@@ -203,14 +203,19 @@ describe('tradeOpenSchema — V1.5 tradeQuality', () => {
 });
 
 describe('tradeOpenSchema — V1.5 riskPct', () => {
-  it('accepts 0 ≤ riskPct < 100', () => {
-    for (const v of [0, 0.5, 1.5, 50, 99.99]) {
+  it('accepts 0 < riskPct < 100', () => {
+    for (const v of [0.01, 0.5, 1.5, 50, 99.99]) {
       const result = tradeOpenSchema.safeParse({ ...baseOpen, riskPct: v });
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.riskPct).toBeCloseTo(v, 2);
       }
     }
+  });
+
+  it('rejects 0 (use NULL/omission for "not captured" — security-auditor M3)', () => {
+    const result = tradeOpenSchema.safeParse({ ...baseOpen, riskPct: 0 });
+    expect(result.success).toBe(false);
   });
 
   it('rejects negative riskPct', () => {

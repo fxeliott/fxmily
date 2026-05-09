@@ -21,7 +21,9 @@ ALTER TABLE "trades"
   ADD COLUMN "trade_quality" "TradeQuality";
 
 ALTER TABLE "trades"
-  ADD COLUMN "risk_pct" DECIMAL(5, 2);
+  ADD COLUMN "risk_pct" DECIMAL(4, 2);
+-- DECIMAL(4, 2) covers 0.01 to 99.99 % — aligned with Zod schema `< 100`.
+-- Code-reviewer #6 (2026-05-09) — was DECIMAL(5, 2) which allowed up to 999.99.
 
 -- 3. Partial index for the admin coaching view ----------------------
 -- Postgres 17 partial index syntax. The `WHERE trade_quality IS NOT NULL`

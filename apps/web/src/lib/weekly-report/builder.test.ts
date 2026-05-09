@@ -468,10 +468,23 @@ describe('pseudonymizeMember — V1.5 prompt boundary defense', () => {
     expect(labels.size).toBe(1000);
   });
 
-  it('handles edge-case userIds (empty, unicode, very long) without crashing', () => {
-    expect(pseudonymizeMember('')).toMatch(/^member-[A-F0-9]{6}$/);
+  it('throws on empty userId (defense against programming errors — security M3)', () => {
+    expect(() => pseudonymizeMember('')).toThrow(TypeError);
+  });
+
+  it('handles edge-case userIds (unicode, very long) without crashing', () => {
     expect(pseudonymizeMember('ñoño-éà')).toMatch(/^member-[A-F0-9]{6}$/);
     expect(pseudonymizeMember('a'.repeat(1000))).toMatch(/^member-[A-F0-9]{6}$/);
+  });
+
+  it('respects MEMBER_LABEL_SALT env var (V1.5 security M1 hardening)', () => {
+    const userId = 'user_test_salted';
+    const unsalted = pseudonymizeMember(userId, '');
+    const salted = pseudonymizeMember(userId, 'fxmily-test-salt-32chars-long-enough');
+    expect(salted).not.toBe(unsalted);
+    expect(salted).toMatch(/^member-[A-F0-9]{6}$/);
+    // Same salt → same label (deterministic).
+    expect(pseudonymizeMember(userId, 'fxmily-test-salt-32chars-long-enough')).toBe(salted);
   });
 
   it('does NOT include the original userId in the label (one-way)', () => {

@@ -39,9 +39,12 @@ const plannedRR = z.coerce
 
 /// V1.5 — Risk percentage of account capital. Tharp rule: 1-2% typical.
 /// Capped at 99.99 % defensively (degenerate case = full account on one trade).
+/// **`gt(0)` not `gte(0)`** — security-auditor M3 (2026-05-09) : `0 %` is
+/// semantically ambiguous vs NULL ("captured = 0" vs "not captured"). Force
+/// the user to either omit the field (NULL) or enter a real positive value.
 const riskPctSchema = z.coerce
   .number({ message: 'Risque % invalide.' })
-  .gte(0, 'Le risque ne peut pas être négatif.')
+  .gt(0, 'Le risque doit être strictement positif (laisse vide si non capturé).')
   .lt(100, 'Le risque doit rester sous 100 % du compte.');
 
 const pairSchema = z

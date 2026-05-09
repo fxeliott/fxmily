@@ -152,7 +152,7 @@ export default async function AdminReportsPage() {
             lead="Le cron tourne chaque dimanche 21:00 UTC. Le premier rapport apparaîtra ici dès la première vague (mock par défaut, Claude live quand ANTHROPIC_API_KEY sera configurée)."
             guides={[
               'Smoke test : POST /api/cron/weekly-reports avec X-Cron-Secret en dev (?dryRun=true pour skip email).',
-              'Domaine fxmilyapp.com non vérifié (J10) → V1 envoie à eliottpena34690@gmail.com (compte Resend Eliot).',
+              'Domaine fxmilyapp.com non vérifié → V1 envoie à `WEEKLY_REPORT_RECIPIENT` env (compte Resend owner email tant que domain-verify pending).',
             ]}
           />
         </Card>

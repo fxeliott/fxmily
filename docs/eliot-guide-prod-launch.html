@@ -1,0 +1,1582 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Guide pas-à-pas — Mise en prod Fxmily V1</title>
+    <style>
+      :root {
+        --bg: #07090f;
+        --bg-2: #0c1117;
+        --bg-3: #1a1f2c;
+        --bg-4: #1e293b;
+        --t-1: #f8fafc;
+        --t-2: #cbd5e1;
+        --t-3: #94a3b8;
+        --t-4: #64748b;
+        --acc: #a3e635;
+        --acc-hi: #bef264;
+        --acc-dim: rgba(163, 230, 53, 0.12);
+        --acc-dim-2: rgba(163, 230, 53, 0.06);
+        --acc-fg: #07090f;
+        --bad: #f87171;
+        --bad-dim: rgba(248, 113, 113, 0.12);
+        --warn: #fbbf24;
+        --warn-dim: rgba(251, 191, 36, 0.12);
+        --info: #60a5fa;
+        --info-dim: rgba(96, 165, 250, 0.12);
+        --ok: #34d399;
+        --ok-dim: rgba(52, 211, 153, 0.12);
+        --b: rgba(148, 163, 184, 0.18);
+        --b-strong: rgba(148, 163, 184, 0.28);
+        --b-acc: rgba(163, 230, 53, 0.4);
+        --r-card: 12px;
+        --r-pill: 999px;
+        --sh-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.25);
+        --e-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--t-2);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* ─────────────────────────── Layout ─────────────────────────── */
+
+      .layout {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 32px;
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 56px;
+      }
+
+      header.hero {
+        grid-column: 1 / -1;
+        padding: 56px 0 32px;
+        border-bottom: 1px solid var(--b);
+        margin-bottom: 40px;
+      }
+
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--acc-dim);
+        color: var(--acc);
+        padding: 6px 14px;
+        border-radius: var(--r-pill);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        margin-bottom: 20px;
+        border: 1px solid var(--b-acc);
+      }
+
+      h1 {
+        font-size: 40px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--t-1);
+        margin: 0 0 18px;
+        line-height: 1.15;
+      }
+
+      .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .meta-pill {
+        background: var(--bg-3);
+        border: 1px solid var(--b);
+        padding: 8px 14px;
+        border-radius: var(--r-pill);
+        font-size: 12.5px;
+        color: var(--t-2);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .meta-pill strong {
+        color: var(--t-1);
+        font-weight: 600;
+      }
+
+      .meta-pill.ok {
+        color: var(--ok);
+        border-color: rgba(52, 211, 153, 0.4);
+        background: var(--ok-dim);
+      }
+
+      .meta-pill.acc strong {
+        color: var(--acc);
+      }
+
+      /* ─────────────────────────── TOC ─────────────────────────── */
+
+      nav.toc {
+        position: sticky;
+        top: 24px;
+        align-self: start;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
+        padding-right: 8px;
+      }
+
+      nav.toc h2 {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--t-3);
+        margin: 0 0 16px;
+      }
+
+      nav.toc ol {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        counter-reset: toc;
+      }
+
+      nav.toc li {
+        counter-increment: toc;
+        margin: 0;
+        position: relative;
+      }
+
+      nav.toc a {
+        display: block;
+        padding: 10px 12px 10px 36px;
+        color: var(--t-3);
+        text-decoration: none;
+        font-size: 13.5px;
+        line-height: 1.4;
+        border-left: 2px solid transparent;
+        transition:
+          color 150ms var(--e-smooth),
+          border-color 150ms var(--e-smooth),
+          background 150ms var(--e-smooth);
+        border-radius: 0 6px 6px 0;
+        position: relative;
+      }
+
+      nav.toc a::before {
+        content: counter(toc);
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 18px;
+        height: 18px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--bg-3);
+        color: var(--t-4);
+        font-size: 10px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        transition:
+          background 150ms var(--e-smooth),
+          color 150ms var(--e-smooth);
+      }
+
+      nav.toc a:hover {
+        color: var(--t-1);
+        background: var(--bg-3);
+      }
+
+      nav.toc a:hover::before {
+        background: var(--acc-dim);
+        color: var(--acc);
+      }
+
+      nav.toc a.active {
+        color: var(--acc);
+        border-left-color: var(--acc);
+        background: var(--acc-dim-2);
+      }
+
+      nav.toc a.active::before {
+        background: var(--acc);
+        color: var(--acc-fg);
+      }
+
+      nav.toc .time {
+        color: var(--t-4);
+        font-size: 11px;
+        margin-left: 6px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ─────────────────────────── Content ─────────────────────────── */
+
+      main {
+        padding-bottom: 80px;
+        max-width: 760px;
+      }
+
+      section {
+        margin-bottom: 56px;
+        scroll-margin-top: 24px;
+      }
+
+      .section-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--b);
+      }
+
+      .section-num {
+        flex: 0 0 auto;
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--acc-dim);
+        color: var(--acc);
+        font-weight: 700;
+        font-size: 15px;
+        font-variant-numeric: tabular-nums;
+        border: 1px solid var(--b-acc);
+        margin-top: 2px;
+      }
+
+      .section-title {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      h2 {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+        color: var(--t-1);
+        margin: 0;
+        line-height: 1.3;
+      }
+
+      .section-time {
+        margin-top: 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--bg-3);
+        color: var(--t-3);
+        padding: 4px 10px;
+        border-radius: var(--r-pill);
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        font-variant-numeric: tabular-nums;
+      }
+
+      h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--t-1);
+        margin: 32px 0 12px;
+        letter-spacing: -0.005em;
+      }
+
+      h4 {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--t-2);
+        margin: 20px 0 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      p {
+        margin: 0 0 14px;
+      }
+
+      a {
+        color: var(--acc);
+        text-decoration: none;
+        border-bottom: 1px solid var(--b-acc);
+        transition:
+          color 120ms var(--e-smooth),
+          border-color 120ms var(--e-smooth);
+      }
+
+      a:hover {
+        color: var(--acc-hi);
+        border-bottom-color: var(--acc-hi);
+      }
+
+      a.ext::after {
+        content: '↗';
+        margin-left: 3px;
+        font-size: 0.85em;
+        color: var(--t-4);
+      }
+
+      strong {
+        color: var(--t-1);
+        font-weight: 600;
+      }
+
+      em {
+        color: var(--t-2);
+        font-style: italic;
+      }
+
+      ul,
+      ol {
+        margin: 0 0 16px;
+        padding-left: 24px;
+      }
+
+      li {
+        margin: 6px 0;
+      }
+
+      ul li::marker {
+        color: var(--acc);
+      }
+
+      ol li::marker {
+        color: var(--t-3);
+        font-weight: 500;
+      }
+
+      /* ─────────────────────────── Code ─────────────────────────── */
+
+      code {
+        font-family:
+          ui-monospace, 'SFMono-Regular', SFMono, Menlo, Consolas, 'Liberation Mono', monospace;
+        font-size: 0.88em;
+        background: var(--bg-3);
+        color: var(--t-1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid var(--b);
+      }
+
+      .code-wrap {
+        position: relative;
+        margin: 16px 0 22px;
+      }
+
+      pre {
+        background: var(--bg-2);
+        border: 1px solid var(--b);
+        border-radius: var(--r-card);
+        padding: 16px 20px;
+        overflow-x: auto;
+        font-family:
+          ui-monospace, 'SFMono-Regular', SFMono, Menlo, Consolas, 'Liberation Mono', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--t-1);
+        margin: 0;
+      }
+
+      pre code {
+        background: transparent;
+        border: 0;
+        padding: 0;
+        font-size: inherit;
+        color: inherit;
+        white-space: pre;
+      }
+
+      pre .lang {
+        position: absolute;
+        top: 8px;
+        left: 16px;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--t-4);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        font-family: inherit;
+      }
+
+      .copy-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: var(--bg-3);
+        border: 1px solid var(--b-strong);
+        color: var(--t-3);
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 150ms var(--e-smooth);
+        font-family: inherit;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .copy-btn:hover {
+        color: var(--acc);
+        border-color: var(--b-acc);
+        background: var(--acc-dim);
+      }
+
+      .copy-btn.copied {
+        color: var(--ok);
+        border-color: var(--ok);
+        background: var(--ok-dim);
+      }
+
+      /* ─────────────────────────── Callouts ─────────────────────────── */
+
+      .callout {
+        border-left: 3px solid;
+        padding: 14px 18px;
+        margin: 18px 0 22px;
+        border-radius: 0 var(--r-card) var(--r-card) 0;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .callout p:last-child {
+        margin-bottom: 0;
+      }
+
+      .callout .label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+        display: inline-block;
+      }
+
+      .callout.warn {
+        border-color: var(--warn);
+        background: var(--warn-dim);
+      }
+
+      .callout.warn .label {
+        color: var(--warn);
+      }
+
+      .callout.info {
+        border-color: var(--info);
+        background: var(--info-dim);
+      }
+
+      .callout.info .label {
+        color: var(--info);
+      }
+
+      .callout.ok {
+        border-color: var(--ok);
+        background: var(--ok-dim);
+      }
+
+      .callout.ok .label {
+        color: var(--ok);
+      }
+
+      .callout.danger {
+        border-color: var(--bad);
+        background: var(--bad-dim);
+      }
+
+      .callout.danger .label {
+        color: var(--bad);
+      }
+
+      /* ─────────────────────────── Tables ─────────────────────────── */
+
+      .table-wrap {
+        overflow-x: auto;
+        margin: 18px 0 22px;
+        border-radius: var(--r-card);
+        border: 1px solid var(--b);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        min-width: 480px;
+      }
+
+      th {
+        background: var(--bg-3);
+        color: var(--t-1);
+        text-align: left;
+        padding: 10px 14px;
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        border-bottom: 1px solid var(--b-strong);
+      }
+
+      td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--b);
+        color: var(--t-2);
+        vertical-align: top;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      tr:nth-child(even) td {
+        background: var(--bg-2);
+      }
+
+      td code {
+        font-size: 0.92em;
+        white-space: nowrap;
+      }
+
+      /* ─────────────────────────── Status badges ─────────────────────────── */
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: var(--r-pill);
+        letter-spacing: 0.04em;
+      }
+
+      .status.done {
+        color: var(--ok);
+        background: var(--ok-dim);
+        border: 1px solid rgba(52, 211, 153, 0.3);
+      }
+
+      .status.pending {
+        color: var(--warn);
+        background: var(--warn-dim);
+        border: 1px solid rgba(251, 191, 36, 0.3);
+      }
+
+      .status.warn {
+        color: var(--bad);
+        background: var(--bad-dim);
+        border: 1px solid rgba(248, 113, 113, 0.3);
+      }
+
+      /* ─────────────────────────── Footer ─────────────────────────── */
+
+      footer {
+        grid-column: 1 / -1;
+        margin-top: 64px;
+        padding: 32px 0;
+        border-top: 1px solid var(--b);
+        color: var(--t-4);
+        font-size: 12.5px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        justify-content: space-between;
+      }
+
+      footer a {
+        color: var(--t-3);
+        border-bottom-color: var(--b);
+      }
+
+      /* ─────────────────────────── Mobile ─────────────────────────── */
+
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+          gap: 0;
+          padding: 0 20px;
+        }
+
+        nav.toc {
+          position: relative;
+          top: auto;
+          max-height: none;
+          margin-bottom: 32px;
+          padding: 16px;
+          background: var(--bg-2);
+          border: 1px solid var(--b);
+          border-radius: var(--r-card);
+          padding-right: 16px;
+        }
+
+        nav.toc summary {
+          cursor: pointer;
+          color: var(--t-1);
+          font-weight: 600;
+          font-size: 13px;
+          letter-spacing: 0.04em;
+          margin-bottom: 12px;
+          list-style: none;
+        }
+
+        nav.toc summary::-webkit-details-marker {
+          display: none;
+        }
+
+        nav.toc summary::after {
+          content: '▾';
+          margin-left: 8px;
+          color: var(--acc);
+        }
+
+        nav.toc[open] summary::after {
+          content: '▴';
+        }
+
+        h1 {
+          font-size: 30px;
+        }
+
+        h2 {
+          font-size: 20px;
+        }
+
+        .section-num {
+          width: 30px;
+          height: 30px;
+          font-size: 13px;
+        }
+
+        main {
+          padding-bottom: 48px;
+        }
+
+        header.hero {
+          padding: 32px 0 24px;
+        }
+      }
+
+      /* ─────────────────────────── Print ─────────────────────────── */
+
+      @media print {
+        body {
+          background: white;
+          color: black;
+          font-size: 11pt;
+        }
+        nav.toc,
+        .copy-btn,
+        footer {
+          display: none;
+        }
+        .layout {
+          display: block;
+          padding: 0;
+        }
+        main {
+          max-width: none;
+        }
+        section {
+          page-break-inside: avoid;
+        }
+        h1,
+        h2,
+        h3 {
+          color: black;
+        }
+        pre {
+          border: 1px solid #999;
+          background: #f5f5f5;
+          color: black;
+        }
+        a {
+          color: black;
+          border-bottom: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <header class="hero">
+        <div class="hero-badge">
+          <span>●</span> Phase R &middot; Reality check 2026-05-09
+        </div>
+        <h1>Mise en prod Fxmily V1 &mdash; ton guide pas-à-pas</h1>
+        <p style="font-size: 17px; color: var(--t-2); max-width: 680px">
+          Tout ce que tu dois faire <strong>toi</strong> manuellement (signups externes,
+          générations de secrets locaux, smoke iPhone). Le reste est codé/scripté dans le repo.
+        </p>
+        <div class="hero-meta">
+          <span class="meta-pill ok">
+            <span>✓</span> Cible : <strong>app.fxmilyapp.com</strong>
+          </span>
+          <span class="meta-pill acc">
+            Coût V1 : <strong>0&nbsp;€</strong>
+          </span>
+          <span class="meta-pill">
+            Hetzner : <strong>hetzner-dieu</strong>&nbsp;<code>178.104.39.201</code>
+          </span>
+          <span class="meta-pill">
+            Tes mains : <strong>~50&nbsp;min</strong>
+          </span>
+        </div>
+        <div class="callout info" style="margin-top: 24px">
+          <span class="label">Si tu bloques</span>
+          <p>
+            Reviens à cette page, dis-moi exactement où tu bloques (capture d&rsquo;écran, message
+            d&rsquo;erreur, copy-paste de l&rsquo;output) — je te débloque en live. Toutes les
+            sections du repo sont déjà code-prêtes
+            (<a class="ext" href="https://github.com/fxeliott/fxmily/pull/35" target="_blank" rel="noopener noreferrer">PR #35</a>
+            CI verte) — on est sur du runtime + provisioning, plus du code à écrire.
+          </p>
+        </div>
+      </header>
+
+      <nav class="toc" id="toc">
+        <details open>
+          <summary>Sommaire</summary>
+          <h2>12 étapes</h2>
+          <ol>
+            <li><a href="#s1">Vérifier capacité Hetzner<span class="time">5&nbsp;min</span></a></li>
+            <li><a href="#s2">Sentry &mdash; DSN + Auth Token<span class="time">8&nbsp;min</span></a></li>
+            <li><a href="#s3">Resend &mdash; API key<span class="time">5&nbsp;min</span></a></li>
+            <li><a href="#s4">Cloudflare API Token<span class="time">3&nbsp;min</span></a></li>
+            <li><a href="#s5">VAPID + secrets locaux<span class="time">2&nbsp;min</span></a></li>
+            <li><a href="#s6">Lancer le bootstrap<span class="time">10&nbsp;min</span></a></li>
+            <li><a href="#s7">Verify domaine Resend<span class="time">~10&nbsp;min DNS</span></a></li>
+            <li><a href="#s8">Premier deploy<span class="time">5&nbsp;min</span></a></li>
+            <li><a href="#s9">Smoke iPhone<span class="time">30&nbsp;min</span></a></li>
+            <li><a href="#s10">Rotation password admin<span class="time">2&nbsp;min</span></a></li>
+            <li><a href="#s11">(Opt.) HSTS preload<span class="time">1&nbsp;min</span></a></li>
+            <li><a href="#s12">1ère invitation cohorte<span class="time">5&nbsp;min</span></a></li>
+          </ol>
+        </details>
+      </nav>
+
+      <main>
+        <!-- Section 1 -->
+        <section id="s1">
+          <div class="section-header">
+            <div class="section-num">1</div>
+            <div class="section-title">
+              <h2>Vérifier la capacité du serveur Hetzner existant</h2>
+              <span class="section-time">⏱ 5 min</span>
+            </div>
+          </div>
+          <div class="callout info">
+            <span class="label">Pourquoi</span>
+            <p>
+              Ton serveur <code>hetzner-dieu</code> (<code>178.104.39.201</code>) tourne déjà n8n +
+              Langfuse + autres workloads. Avant d&rsquo;y ajouter Fxmily, on vérifie qu&rsquo;il a
+              la capacité.
+            </p>
+          </div>
+          <div class="code-wrap">
+            <span class="lang">bash</span>
+            <button class="copy-btn">Copier</button>
+<pre><code># Depuis ton ordi, en PowerShell
+ssh hetzner-dieu 'free -h && df -h && docker ps --format "table {{.Names}}\t{{.Status}}"'</code></pre>
+          </div>
+          <h4>Tu cherches</h4>
+          <ul>
+            <li>
+              <strong>RAM disponible (<code>available</code>)</strong> : ≥ 1.5&nbsp;GB libres.
+              Fxmily web container = ~512&nbsp;MB, Postgres = ~256&nbsp;MB, Caddy = ~64&nbsp;MB →
+              ~850&nbsp;MB total. Si <code>available</code> &lt; 1.5&nbsp;GB → considère un
+              <strong>nouveau CX22</strong> (~5&nbsp;€/mois) plutôt que cohabiter.
+            </li>
+            <li>
+              <strong>Disque libre</strong> : ≥ 5&nbsp;GB sur <code>/</code>. R2 backups passent par
+              stream (peu d&rsquo;usage local), Postgres ~500&nbsp;MB pour 1000 trades.
+            </li>
+            <li>
+              <strong>Docker containers</strong> : note ceux qui tournent pour ne pas casser la
+              cohabitation Caddy (port 80/443).
+            </li>
+          </ul>
+          <p>
+            <strong>Si OK</strong> → continuer. Le
+            <code>bootstrap-fxmily.sh --skip-hetzner FXMILY_HETZNER_IP=178.104.39.201</code>
+            réutilisera l&rsquo;IP existante.
+          </p>
+          <p><strong>Si saturé</strong> → on bascule sur un nouveau CX22 :</p>
+          <div class="code-wrap">
+            <span class="lang">bash</span>
+            <button class="copy-btn">Copier</button>
+<pre><code># Le script le crée pour toi avec le HCLOUD_TOKEN dans tokens.local.env
+bash ops/scripts/provision-hetzner.sh</code></pre>
+          </div>
+          <div class="callout warn">
+            <span class="label">Conflit Caddy</span>
+            <p>
+              Si <code>hetzner-dieu</code> a déjà un Caddy qui sert n8n/Langfuse sur 80/443, il faut
+              <strong>éditer le Caddyfile existant</strong> pour ajouter un bloc
+              <code>app.fxmilyapp.com</code> au lieu d&rsquo;en lancer un second. → tu m&rsquo;envoies
+              ton Caddyfile actuel, je te le modifie.
+            </p>
+          </div>
+        </section>
+
+        <!-- Section 2 -->
+        <section id="s2">
+          <div class="section-header">
+            <div class="section-num">2</div>
+            <div class="section-title">
+              <h2>Créer ton compte Sentry et récupérer DSN + Auth Token</h2>
+              <span class="section-time">⏱ 8 min</span>
+            </div>
+          </div>
+          <div class="callout ok">
+            <span class="label">Plan free 2026</span>
+            <p>
+              5&nbsp;000 errors/mois &middot; 50 replays &middot; 5&nbsp;M spans &middot; 1 user
+              &middot; 1&nbsp;GB attachments &middot; retention 30 jours.
+              <strong>Pas de CB demandée.</strong>
+            </p>
+          </div>
+
+          <h3>Signup</h3>
+          <ol>
+            <li>
+              Va sur
+              <a class="ext" href="https://sentry.io/signup/" target="_blank" rel="noopener noreferrer">https://sentry.io/signup/</a>
+            </li>
+            <li>
+              Méthode recommandée : <strong>GitHub OAuth</strong> (1 clic, ton compte
+              <code>fxeliott</code> existe déjà). Sinon email + password (clic le lien dans
+              l&rsquo;email de confirmation).
+            </li>
+            <li>
+              <strong>Region (immuable après !)</strong> : choisis <strong>EU (Frankfurt)</strong>
+              pour RGPD.
+            </li>
+            <li>
+              Onboarding : <strong>Organization name</strong> = <code>Fxmily</code>. Le slug est
+              auto-généré, force-le à <code>fxmily</code> (Settings → General Settings si pas
+              correct).
+            </li>
+          </ol>
+
+          <h3>Création projet</h3>
+          <ol start="5">
+            <li>Wizard &laquo;&nbsp;Choose your platforms&nbsp;&raquo; → coche <strong>Next.js</strong> → &laquo;&nbsp;Create Project&nbsp;&raquo;.</li>
+            <li><strong>Project name</strong> : <code>fxmily-web</code>. Team par défaut OK.</li>
+            <li>
+              Sentry te montre l&rsquo;écran &laquo;&nbsp;Install Sentry&nbsp;&raquo; avec une
+              commande <code>npx @sentry/wizard@latest...</code> :
+              <strong>NE LANCE PAS</strong>. Click <strong>&laquo;&nbsp;Skip Onboarding&nbsp;&raquo;</strong>.
+            </li>
+          </ol>
+
+          <h3>DSN</h3>
+          <ol start="8">
+            <li>Va à <strong>Settings → Projects → fxmily-web → Client Keys (DSN)</strong>.</li>
+            <li>
+              URL directe :
+              <code>https://fxmily.sentry.io/settings/projects/fxmily-web/keys/</code>.
+            </li>
+            <li>
+              Copie le DSN affiché. Format :
+              <code>https://&lt;hash&gt;@o&lt;orgid&gt;.ingest.de.sentry.io/&lt;projectid&gt;</code>
+              (<code>.de.</code> car EU region).
+            </li>
+          </ol>
+
+          <h3>Auth Token</h3>
+          <ol start="11">
+            <li>
+              Va à <strong>Settings → Auth Tokens</strong>. URL directe :
+              <code>https://fxmily.sentry.io/settings/auth-tokens/</code>.
+            </li>
+            <li>Click <strong>&laquo;&nbsp;Create New Token&nbsp;&raquo;</strong>. Name : <code>fxmily-web-ci</code>.</li>
+            <li>
+              <strong>Copie immédiatement</strong> la valeur <code>sntrys_&lt;...&gt;</code> &mdash;
+              Sentry ne la montre qu&rsquo;une seule fois.
+            </li>
+          </ol>
+
+          <h3>Pose dans <code>tokens.local.env</code></h3>
+          <div class="code-wrap">
+            <span class="lang">env</span>
+            <button class="copy-btn">Copier</button>
+<pre><code>SENTRY_DSN=https://&lt;copy-from-dashboard&gt;@o&lt;orgid&gt;.ingest.de.sentry.io/&lt;projectid&gt;
+NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN  # même valeur, copie/colle
+SENTRY_ORG=fxmily
+SENTRY_PROJECT=fxmily-web
+SENTRY_AUTH_TOKEN=sntrys_&lt;copy-from-dashboard&gt;</code></pre>
+          </div>
+
+          <h3>Pièges 2026</h3>
+          <ul>
+            <li>
+              <strong>Quota partagé</strong> errors + transactions sur free → désactive
+              <code>tracesSampleRate</code> ou pose-le à <code>0.05</code> max (déjà câblé dans nos
+              <code>sentry.*.config.ts</code>).
+            </li>
+            <li>
+              <strong><code>@sentry/nextjs</code> v10</strong> : <code>sendDefaultPii: false</code>
+              par défaut désormais → l&rsquo;IP user n&rsquo;est plus inférée (RGPD friendly, OK
+              pour Fxmily).
+            </li>
+          </ul>
+        </section>
+
+        <!-- Section 3 -->
+        <section id="s3">
+          <div class="section-header">
+            <div class="section-num">3</div>
+            <div class="section-title">
+              <h2>Créer ton compte Resend et l&rsquo;API key</h2>
+              <span class="section-time">⏱ 5 min</span>
+            </div>
+          </div>
+          <div class="callout ok">
+            <span class="label">Plan free 2026</span>
+            <p>
+              3&nbsp;000 emails/mois <strong>+ 100/jour cap</strong> (le cap quotidien est le vrai
+              bottleneck) &middot; 1 custom domain &middot; retention logs 30 jours.
+              <strong>Pas de CB demandée.</strong>
+            </p>
+          </div>
+
+          <h3>Signup + API key</h3>
+          <ol>
+            <li>
+              Va sur
+              <a class="ext" href="https://resend.com/signup" target="_blank" rel="noopener noreferrer">https://resend.com/signup</a>.
+              GitHub OAuth (recommandé) ou email/password.
+            </li>
+            <li>Vérification email obligatoire.</li>
+            <li>
+              Va à
+              <a class="ext" href="https://resend.com/api-keys" target="_blank" rel="noopener noreferrer">https://resend.com/api-keys</a>
+              → <strong>&laquo;&nbsp;Create API Key&nbsp;&raquo;</strong>.
+            </li>
+            <li>
+              Modal :
+              <ul>
+                <li><strong>Name</strong> : <code>fxmily-web-prod</code></li>
+                <li><strong>Permission</strong> : <strong>Sending access</strong> (pas &laquo;&nbsp;Full access&nbsp;&raquo;)</li>
+                <li><strong>Domain</strong> : &laquo;&nbsp;All domains&nbsp;&raquo; (on restreint plus tard)</li>
+              </ul>
+            </li>
+            <li>
+              <strong>Copie immédiatement</strong> la clé <code>re_&lt;...&gt;</code>.
+            </li>
+          </ol>
+
+          <h3>Add domain <code>fxmilyapp.com</code></h3>
+          <ol start="6">
+            <li>
+              Va à
+              <a class="ext" href="https://resend.com/domains" target="_blank" rel="noopener noreferrer">https://resend.com/domains</a>
+              → <strong>&laquo;&nbsp;Add Domain&nbsp;&raquo;</strong>.
+            </li>
+            <li>
+              Champ <strong>Domain</strong> : <code>fxmilyapp.com</code>. <strong>Region</strong> :
+              <strong>Frankfurt (eu-central-1)</strong> (RGPD + latence FR).
+            </li>
+            <li>Click <strong>&laquo;&nbsp;Add&nbsp;&raquo;</strong>.</li>
+            <li>L&rsquo;écran suivant affiche un tableau <strong>DNS Records</strong> :</li>
+          </ol>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Name</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>TXT SPF</td>
+                  <td><code>send.fxmilyapp.com</code></td>
+                  <td><code>v=spf1 include:amazonses.com ~all</code></td>
+                </tr>
+                <tr>
+                  <td>TXT DKIM</td>
+                  <td><code>resend._domainkey.fxmilyapp.com</code></td>
+                  <td><code>p=&lt;long-base64-unique-au-tenant&gt;</code> ← <em>copie ce qui s&rsquo;affiche</em></td>
+                </tr>
+                <tr>
+                  <td>MX</td>
+                  <td><code>send.fxmilyapp.com</code></td>
+                  <td><code>feedback-smtp.eu-central-1.amazonses.com</code> (priority 10)</td>
+                </tr>
+                <tr>
+                  <td>TXT DMARC</td>
+                  <td><code>_dmarc.fxmilyapp.com</code></td>
+                  <td><code>v=DMARC1; p=none;</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout warn">
+            <span class="label">Garde cette page ouverte</span>
+            <p>On va coller ces records dans Cloudflare à l&rsquo;étape suivante.</p>
+          </div>
+
+          <h3>Pose dans <code>tokens.local.env</code></h3>
+          <div class="code-wrap">
+            <span class="lang">env</span>
+            <button class="copy-btn">Copier</button>
+<pre><code>RESEND_API_KEY=re_&lt;copy-from-dashboard&gt;
+RESEND_FROM=Fxmily &lt;noreply@fxmilyapp.com&gt;</code></pre>
+          </div>
+
+          <h3>Pièges 2026</h3>
+          <ul>
+            <li>
+              <strong>100/jour cap dur</strong> : le 101e mail du jour = HTTP 429. Reset à minuit
+              UTC. Pour V1 30 membres c&rsquo;est large (~5 emails/jour = bienvenue + reset password
+              + digest weekly).
+            </li>
+            <li>
+              <strong>MX record obligatoire</strong> même en send-only (feedback bounces SES).
+            </li>
+            <li>
+              <strong>DKIM key 2048-bit</strong> dépasse 255 chars → Cloudflare gère le split
+              automatiquement, mais ne mets PAS le proxy orange sur les records DNS de mail.
+            </li>
+          </ul>
+        </section>
+
+        <!-- Section 4 -->
+        <section id="s4">
+          <div class="section-header">
+            <div class="section-num">4</div>
+            <div class="section-title">
+              <h2>Créer un Cloudflare API Token pour <code>fxmilyapp.com</code></h2>
+              <span class="section-time">⏱ 3 min</span>
+            </div>
+          </div>
+          <div class="callout info">
+            <span class="label">Pourquoi</span>
+            <p>
+              Le script <code>bootstrap-fxmily.sh</code> va poser les records DNS automatiquement
+              via l&rsquo;API Cloudflare. Il a besoin d&rsquo;un token scopé.
+            </p>
+          </div>
+
+          <h3>Étapes</h3>
+          <ol>
+            <li>
+              Va sur
+              <a class="ext" href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer">https://dash.cloudflare.com/profile/api-tokens</a>
+            </li>
+            <li>Click <strong>&laquo;&nbsp;Create Token&nbsp;&raquo;</strong>.</li>
+            <li>
+              Scrolle en bas → section <strong>Custom token</strong> → <strong>&laquo;&nbsp;Get
+              started&nbsp;&raquo;</strong> (PAS le template &laquo;&nbsp;Edit zone DNS&nbsp;&raquo;
+              qui est trop large).
+            </li>
+            <li><strong>Token name</strong> : <code>fxmily-deploy</code>.</li>
+            <li>
+              <strong>Permissions</strong> : ajoute 2 lignes (bouton + Add more) :
+              <ul>
+                <li>Ligne 1 : <code>Zone</code> / <code>Zone</code> / <code>Read</code></li>
+                <li>Ligne 2 : <code>Zone</code> / <code>DNS</code> / <code>Edit</code></li>
+              </ul>
+            </li>
+            <li>
+              <strong>Zone Resources</strong> : <code>Include</code> / <code>Specific zone</code> /
+              <code>fxmilyapp.com</code>
+            </li>
+            <li><strong>Client IP Address Filtering</strong> : laisser vide.</li>
+            <li>
+              <strong>TTL</strong> : <strong>End Date</strong> = aujourd&rsquo;hui + 90 jours. (Mets
+              un rappel calendrier J-7 pour rotation.)
+            </li>
+            <li>
+              <strong>&laquo;&nbsp;Continue to summary&nbsp;&raquo;</strong> →
+              <strong>&laquo;&nbsp;Create Token&nbsp;&raquo;</strong>.
+            </li>
+            <li><strong>Copie immédiatement</strong> le token (~40 chars random).</li>
+            <li>Cloudflare propose un curl test en bas → exécute-le pour valider, attendu 200.</li>
+          </ol>
+
+          <h3>Récupère aussi ton Zone ID</h3>
+          <ol start="12">
+            <li>
+              Retourne au dashboard → click <strong>fxmilyapp.com</strong> dans la liste des zones.
+            </li>
+            <li>
+              Sidebar droite → section <strong>API</strong> → copie le <strong>Zone ID</strong> (32
+              chars hex).
+            </li>
+          </ol>
+
+          <h3>Pose dans <code>tokens.local.env</code></h3>
+          <div class="code-wrap">
+            <span class="lang">env</span>
+            <button class="copy-btn">Copier</button>
+<pre><code>CLOUDFLARE_API_TOKEN=&lt;copy-from-dashboard&gt;
+CLOUDFLARE_ZONE_NAME=fxmilyapp.com
+CLOUDFLARE_ZONE_ID=&lt;copy-from-zone-overview&gt;</code></pre>
+          </div>
+        </section>
+
+        <!-- Section 5 -->
+        <section id="s5">
+          <div class="section-header">
+            <div class="section-num">5</div>
+            <div class="section-title">
+              <h2>Générer les clés VAPID + secrets locaux</h2>
+              <span class="section-time">⏱ 2 min</span>
+            </div>
+          </div>
+          <div class="callout danger">
+            <span class="label">Sécurité critique</span>
+            <p>
+              VAPID + AUTH_SECRET + CRON_SECRET sont des secrets locaux que <strong>tu génères
+              toi-même</strong>. <strong>JAMAIS dans Claude</strong> &mdash; les prompts traversent
+              les serveurs Anthropic et finissent dans les logs.
+            </p>
+          </div>
+          <div class="code-wrap">
+            <span class="lang">powershell</span>
+            <button class="copy-btn">Copier</button>
+<pre><code># Depuis le repo D:\Fxmily, dans une PowerShell normale (pas Claude)
+
+# 1. VAPID keys (Web Push)
+pnpm --filter @fxmily/web exec web-push generate-vapid-keys
+# → copie les 2 lignes "Public Key" et "Private Key" qui s'affichent
+
+# 2. AUTH_SECRET
+openssl rand -base64 32
+
+# 3. CRON_SECRET
+openssl rand -hex 24</code></pre>
+          </div>
+
+          <h3>Pose dans <code>tokens.local.env</code></h3>
+          <div class="code-wrap">
+            <span class="lang">env</span>
+            <button class="copy-btn">Copier</button>
+<pre><code># Auth
+AUTH_SECRET=&lt;output openssl rand -base64 32&gt;
+AUTH_URL=https://app.fxmilyapp.com
+
+# Cron
+CRON_SECRET=&lt;output openssl rand -hex 24&gt;
+
+# VAPID
+VAPID_PUBLIC_KEY=&lt;output Public Key&gt;
+VAPID_PRIVATE_KEY=&lt;output Private Key&gt;
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY  # même valeur que VAPID_PUBLIC_KEY
+VAPID_SUBJECT=mailto:eliot@fxmilyapp.com
+
+# DB (sera rempli après bootstrap, ou si tu utilises Postgres existant)
+DATABASE_URL=postgresql://fxmily:&lt;random-pwd&gt;@localhost:5432/fxmily?schema=public
+
+# Admin destinataire des digests weekly
+WEEKLY_REPORT_RECIPIENT=eliot@fxmilyapp.com  # ou eliott.pena@icloud.com en V1 si tu préfères</code></pre>
+          </div>
+          <div class="callout warn">
+            <span class="label">Hygiene</span>
+            <p>
+              <code>tokens.local.env</code> est <strong>gitignored</strong> (vérifié dans
+              <code>.gitignore</code>). Mais sois prudent &mdash; <code>chmod 600 tokens.local.env</code>
+              après création.
+            </p>
+          </div>
+        </section>
+
+        <!-- Section 6 -->
+        <section id="s6">
+          <div class="section-header">
+            <div class="section-num">6</div>
+            <div class="section-title">
+              <h2>Remplir <code>tokens.local.env</code> et lancer le bootstrap</h2>
+              <span class="section-time">⏱ 10 min</span>
+            </div>
+          </div>
+          <div class="code-wrap">
+            <span class="lang">bash</span>
+            <button class="copy-btn">Copier</button>
+<pre><code># Depuis D:\Fxmily
+cp ops/scripts/tokens.local.env.example tokens.local.env
+$EDITOR tokens.local.env
+# → colle toutes les valeurs récupérées aux étapes 2-5
+chmod 600 tokens.local.env
+
+# GitHub CLI authentifié (déjà OK pour toi)
+gh auth status
+
+# Lance le bootstrap (skip-hetzner car réutilise hetzner-dieu existant)
+FXMILY_HETZNER_IP=178.104.39.201 \
+FXMILY_DOMAIN=fxmilyapp.com \
+  bash ops/scripts/bootstrap-fxmily.sh tokens.local.env --skip-hetzner</code></pre>
+          </div>
+          <h3>Le script va faire</h3>
+          <ol>
+            <li>
+              <strong>Resend</strong> : ajouter le domain <code>fxmilyapp.com</code> côté Resend →
+              récupérer les 3 DNS records DKIM/SPF/MX.
+            </li>
+            <li>
+              <strong>Cloudflare DNS</strong> : poser les 6 records (A <code>app</code> →
+              <code>178.104.39.201</code>, MX, 3 TXT, optionnel DMARC).
+            </li>
+            <li>
+              <strong>GitHub secrets</strong> : poser ~13 secrets via <code>gh secret set</code>
+              pour la pipeline <code>deploy.yml</code>.
+            </li>
+          </ol>
+          <p>À la fin, le script t&rsquo;affiche les URLs pour valider Resend.</p>
+        </section>
+
+        <!-- Section 7 -->
+        <section id="s7">
+          <div class="section-header">
+            <div class="section-num">7</div>
+            <div class="section-title">
+              <h2>Vérifier le domaine Resend (~10 min de propagation)</h2>
+              <span class="section-time">⏱ ~10 min DNS</span>
+            </div>
+          </div>
+          <ol>
+            <li>
+              Attends <strong>~15 min</strong> (la propagation TXT Cloudflare est rapide, mais
+              Resend re-check toutes les 5 min).
+            </li>
+            <li>
+              Va sur
+              <a class="ext" href="https://resend.com/domains" target="_blank" rel="noopener noreferrer">https://resend.com/domains</a>
+              → click sur <code>fxmilyapp.com</code>.
+            </li>
+            <li>
+              Click <strong>&laquo;&nbsp;Verify DNS Records&nbsp;&raquo;</strong>. Statut passe
+              <code>pending</code> → <span class="status done">verified</span>.
+            </li>
+            <li>Si toujours <code>pending</code> après 30 min → debug :</li>
+          </ol>
+          <div class="code-wrap">
+            <span class="lang">bash</span>
+            <button class="copy-btn">Copier</button>
+<pre><code>dig TXT resend._domainkey.fxmilyapp.com
+# Tu dois voir le record p=... que Resend t'a fourni</code></pre>
+          </div>
+          <div class="callout warn">
+            <span class="label">Si le record est manquant</span>
+            <p>
+              Vérifie dans Cloudflare DNS qu&rsquo;il a bien été créé (le bootstrap script aurait
+              dû le poser).
+            </p>
+          </div>
+        </section>
+
+        <!-- Section 8 -->
+        <section id="s8">
+          <div class="section-header">
+            <div class="section-num">8</div>
+            <div class="section-title">
+              <h2>Premier deploy + migrations DB</h2>
+              <span class="section-time">⏱ 5 min</span>
+            </div>
+          </div>
+          <p>
+            Une fois Resend verified + GitHub secrets posés, déclenche le premier deploy :
+          </p>
+          <div class="code-wrap">
+            <span class="lang">bash</span>
+            <button class="copy-btn">Copier</button>
+<pre><code>gh workflow run deploy.yml -R fxeliott/fxmily
+gh run list -R fxeliott/fxmily --workflow=deploy.yml --limit=1</code></pre>
+          </div>
+          <h3>Le workflow va</h3>
+          <ol>
+            <li>Build l&rsquo;image Docker <code>ghcr.io/fxeliott/fxmily:latest</code>.</li>
+            <li>SSH dans <code>hetzner-dieu</code> → <code>docker compose pull</code> + <code>up -d</code>.</li>
+            <li>Lancer <code>prisma migrate deploy</code> dans un container one-shot.</li>
+            <li>Pruner les vieilles images.</li>
+          </ol>
+          <p>Vérifie avec <code>gh run watch</code> (CTRL-C une fois &laquo;&nbsp;Deploy succeeded&nbsp;&raquo;).</p>
+          <div class="code-wrap">
+            <span class="lang">bash</span>
+            <button class="copy-btn">Copier</button>
+<pre><code># Healthcheck
+curl -fsS https://app.fxmilyapp.com/api/health
+# Attendu : {"ok": true, "checks": {"db": "ok"}}
+
+# Apple Touch Icon
+curl -sI https://app.fxmilyapp.com/apple-icon | head -3
+# Attendu : HTTP/2 200, content-type: image/png</code></pre>
+          </div>
+        </section>
+
+        <!-- Section 9 -->
+        <section id="s9">
+          <div class="section-header">
+            <div class="section-num">9</div>
+            <div class="section-title">
+              <h2>Smoke test depuis ton iPhone Safari 18.4+</h2>
+              <span class="section-time">⏱ 30 min</span>
+            </div>
+          </div>
+          <div class="callout warn">
+            <span class="label">Pré-requis device</span>
+            <p>iPhone iOS 18.4+ avec Safari à jour. Pas Chrome iOS &mdash; Web Push ne marche que sur Safari.</p>
+          </div>
+          <ol>
+            <li>Ouvre <strong>Safari</strong> (pas Chrome iOS &mdash; Web Push ne marche que sur Safari).</li>
+            <li>Va sur <code>https://app.fxmilyapp.com</code>.</li>
+            <li>
+              <strong>Add to Home Screen</strong> : icône partage → &laquo;&nbsp;Sur l&rsquo;écran d&rsquo;accueil&nbsp;&raquo;.
+            </li>
+            <li>
+              Ouvre l&rsquo;app depuis l&rsquo;icône (PAS depuis Safari &mdash; le Web Push exige
+              PWA installée).
+            </li>
+            <li>
+              <strong>Login</strong> avec un compte admin (cf. étape 10 ci-dessous).
+            </li>
+            <li>
+              <strong>Active les notifications</strong> : <code>/account/notifications</code> →
+              toggle &laquo;&nbsp;Activer&nbsp;&raquo;.
+            </li>
+            <li>Safari demande la permission → &laquo;&nbsp;Autoriser&nbsp;&raquo;.</li>
+            <li>Force un push test : depuis ton ordi, déclenche un push admin via :</li>
+          </ol>
+          <div class="code-wrap">
+            <span class="lang">bash</span>
+            <button class="copy-btn">Copier</button>
+<pre><code>curl -X POST -H "X-Cron-Secret: $CRON_SECRET" \
+  https://app.fxmilyapp.com/api/cron/dispatch-douglas</code></pre>
+          </div>
+          <p>Tu dois voir la notif arriver sur ton iPhone.</p>
+          <div class="callout danger">
+            <span class="label">Si pas de notif</span>
+            <p>
+              Vérifie <em>Réglages → Notifications → Fxmily → Autoriser</em>. Si toujours rien,
+              désinstalle l&rsquo;app + ré-add to Home Screen + retry. iOS PWA push est connu pour
+              être fragile (cf. SPEC §18.2).
+            </p>
+          </div>
+        </section>
+
+        <!-- Section 10 -->
+        <section id="s10">
+          <div class="section-header">
+            <div class="section-num">10</div>
+            <div class="section-title">
+              <h2>Rotation du mot de passe admin</h2>
+              <span class="section-time">⏱ 2 min</span>
+            </div>
+          </div>
+          <div class="callout warn">
+            <span class="label">Pourquoi</span>
+            <p>
+              Un mot de passe admin a été collé par accident dans Claude pendant J8 (incident sécu
+              mai 2026). À rotater avant la 1ère invitation.
+            </p>
+          </div>
+
+          <h3>Mode 1 &mdash; depuis l&rsquo;app (recommandé)</h3>
+          <ol>
+            <li>Login <code>https://app.fxmilyapp.com/login</code> avec ton compte admin.</li>
+            <li>Va à <code>/account</code> → &laquo;&nbsp;Changer le mot de passe&nbsp;&raquo; (V2 &mdash; pas encore V1).</li>
+          </ol>
+
+          <h3>Mode 2 &mdash; direct DB (V1)</h3>
+          <div class="code-wrap">
+            <span class="lang">bash</span>
+            <button class="copy-btn">Copier</button>
+<pre><code># SSH sur hetzner-dieu
+ssh hetzner-dieu
+
+# Génère un nouveau hash argon2
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T web node -e "
+const argon2 = require('@node-rs/argon2');
+console.log(argon2.hashSync('TON-NOUVEAU-MDP-12-CHARS-MIN', { memoryCost: 19456, timeCost: 2, parallelism: 1, algorithm: 2 }));
+"
+# → copie le hash $argon2id$v=19$...
+
+# Update DB (remplace eliot@... par ton vrai email admin)
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres psql -U fxmily -c "
+UPDATE users SET password_hash = '&lt;copy-hash&gt;' WHERE email = 'eliot@fxmilyapp.com';
+"</code></pre>
+          </div>
+        </section>
+
+        <!-- Section 11 -->
+        <section id="s11">
+          <div class="section-header">
+            <div class="section-num">11</div>
+            <div class="section-title">
+              <h2>(Optionnel) HSTS preload</h2>
+              <span class="section-time">⏱ 1 min</span>
+            </div>
+          </div>
+          <p>
+            Une fois <code>https://app.fxmilyapp.com</code> stable et tu es <strong>sûr</strong> de
+            ne plus revenir en HTTP :
+          </p>
+          <ol>
+            <li>
+              Va sur
+              <a class="ext" href="https://hstspreload.org/" target="_blank" rel="noopener noreferrer">https://hstspreload.org/</a>.
+            </li>
+            <li>Entre <code>fxmilyapp.com</code> → &laquo;&nbsp;Check&nbsp;&raquo;.</li>
+            <li>
+              Si tous les pré-requis sont OK (HSTS header avec
+              <code>max-age=63072000; includeSubDomains; preload</code> &mdash; déjà émis par
+              Caddy), submit.
+            </li>
+          </ol>
+          <div class="callout danger">
+            <span class="label">Action irréversible</span>
+            <p>
+              Côté navigateur, une fois preloadé, retour en HTTP = semaines d&rsquo;attente. À faire
+              seulement quand tout est définitivement stable.
+            </p>
+          </div>
+        </section>
+
+        <!-- Section 12 -->
+        <section id="s12">
+          <div class="section-header">
+            <div class="section-num">12</div>
+            <div class="section-title">
+              <h2>Inviter le 1er membre cohorte</h2>
+              <span class="section-time">⏱ 5 min</span>
+            </div>
+          </div>
+          <div class="code-wrap">
+            <span class="lang">bash</span>
+            <button class="copy-btn">Copier</button>
+<pre><code># Login admin sur https://app.fxmilyapp.com/login
+# Va à /admin/invite
+# Entre l'email du membre → "Envoyer"</code></pre>
+          </div>
+          <p>
+            Le membre reçoit un email avec un magic link 7-day TTL. Il clique, arrive sur
+            <code>/onboarding/welcome</code>, choisit prénom/nom/password, accepte le RGPD →
+            autologin.
+          </p>
+          <div class="callout ok">
+            <span class="label">Et c&rsquo;est parti</span>
+            <p>
+              Une fois le 1er membre actif, observer les logs (<code>/admin/system</code>), Sentry,
+              les digests weekly (cron dimanche 21h UTC). Adapter au feedback réel avant
+              d&rsquo;élargir à 30/100/1000 membres.
+            </p>
+          </div>
+        </section>
+
+        <!-- Aide -->
+        <section id="aide">
+          <div class="section-header">
+            <div class="section-num" style="background: var(--info-dim); color: var(--info); border-color: rgba(96,165,250,0.4)">?</div>
+            <div class="section-title">
+              <h2>Aide en cas de blocage</h2>
+            </div>
+          </div>
+          <p>Si une étape bloque, dis-moi exactement :</p>
+          <ol>
+            <li><strong>Quelle étape</strong> (numéro section)</li>
+            <li><strong>Quel message d&rsquo;erreur</strong> (capture ou copy-paste)</li>
+            <li><strong>Output de la commande</strong> qui a échoué</li>
+          </ol>
+          <p>
+            Je te débloque en live. Toutes les sections du repo sont déjà code-prêtes
+            (<a class="ext" href="https://github.com/fxeliott/fxmily/pull/35" target="_blank" rel="noopener noreferrer">PR #35</a>
+            CI verte) &mdash; on est sur du runtime + provisioning, plus du code à écrire.
+          </p>
+
+          <h3>Liens utiles repo</h3>
+          <ul>
+            <li>Spec produit : <a href="../SPEC.md">SPEC.md</a></li>
+            <li>Runbook Hetzner détaillé : <a href="runbook-hetzner-deploy.md">runbook-hetzner-deploy.md</a></li>
+            <li>Runbook backup/restore : <a href="runbook-backup-restore.md">runbook-backup-restore.md</a></li>
+            <li>Smoke test 12-step : <a href="runbook-prod-smoke-test.md">runbook-prod-smoke-test.md</a></li>
+            <li>Bug fix workflow : <a href="runbook-bug-fix.md">runbook-bug-fix.md</a></li>
+          </ul>
+        </section>
+      </main>
+
+      <footer>
+        <div>
+          Document généré le <strong>2026-05-09</strong> &middot; source markdown :
+          <a href="eliot-guide-prod-launch.md">eliot-guide-prod-launch.md</a>
+        </div>
+        <div>
+          Fxmily V1 &middot; Phase R reality check &middot;
+          <a class="ext" href="https://github.com/fxeliott/fxmily/pull/35" target="_blank" rel="noopener noreferrer">PR #35</a>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      // ─────────────── Copy buttons ───────────────
+      document.querySelectorAll('.copy-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const pre = btn.parentElement.querySelector('pre code');
+          const text = pre ? pre.innerText : '';
+          navigator.clipboard
+            .writeText(text)
+            .then(() => {
+              const original = btn.textContent;
+              btn.textContent = 'Copié ✓';
+              btn.classList.add('copied');
+              setTimeout(() => {
+                btn.textContent = original;
+                btn.classList.remove('copied');
+              }, 1500);
+            })
+            .catch(() => {
+              btn.textContent = 'Erreur';
+            });
+        });
+      });
+
+      // ─────────────── TOC active section highlight ───────────────
+      const sections = document.querySelectorAll('main section[id]');
+      const links = document.querySelectorAll('nav.toc a');
+      const linkBySectionId = new Map();
+      links.forEach((a) => {
+        const id = a.getAttribute('href').slice(1);
+        linkBySectionId.set(id, a);
+      });
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const link = linkBySectionId.get(entry.target.id);
+            if (!link) return;
+            if (entry.isIntersecting) {
+              links.forEach((l) => l.classList.remove('active'));
+              link.classList.add('active');
+            }
+          });
+        },
+        { rootMargin: '-30% 0px -65% 0px', threshold: 0 },
+      );
+      sections.forEach((s) => observer.observe(s));
+    </script>
+  </body>
+</html>

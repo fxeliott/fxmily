@@ -19,6 +19,7 @@ import { env } from '@/lib/env';
 export type AuditAction =
   | 'auth.login.success'
   | 'auth.login.failure'
+  | 'auth.login.rate_limited'
   | 'auth.logout'
   | 'invitation.created'
   | 'invitation.consumed'

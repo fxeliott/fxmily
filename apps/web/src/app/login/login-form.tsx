@@ -17,6 +17,11 @@ export function LoginForm() {
   const topError = (() => {
     if (state.ok) return null;
     if (state.error === 'invalid_credentials') return 'Email ou mot de passe incorrect.';
+    if (state.error === 'rate_limited') {
+      const wait = state.retryAfterSec ?? 60;
+      const minutes = Math.max(1, Math.ceil(wait / 60));
+      return `Trop d'essais. Réessaie dans ${minutes} minute${minutes > 1 ? 's' : ''}.`;
+    }
     if (state.error === 'unknown') return 'Une erreur est survenue, réessaie.';
     return null;
   })();

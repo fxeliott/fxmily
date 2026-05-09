@@ -63,12 +63,18 @@ describe('getCronHealthReport', () => {
         action: 'cron.purge_push_subscriptions.scan',
         _max: { createdAt: new Date(now.getTime() - DAY) },
       },
+      {
+        // J10 Phase O fix B3 — the watcher's own heartbeat (period=1h,
+        // tolerance=4h) needs a fresh row to land green.
+        action: 'cron.health.scan',
+        _max: { createdAt: new Date(now.getTime() - 30 * MIN) },
+      },
     ]);
 
     const report = await getCronHealthReport(now);
 
     expect(report.overall).toBe('green');
-    expect(report.entries).toHaveLength(7);
+    expect(report.entries).toHaveLength(8);
     expect(report.entries.every((e) => e.status === 'green')).toBe(true);
     expect(report.ranAt).toBe(now.toISOString());
   });
@@ -153,7 +159,7 @@ describe('getCronHealthReport', () => {
       {
         action: 'cron.recompute_scores.scan',
         _max: { createdAt: new Date(now.getTime() - 100 * HOUR) },
-      }, // red
+      }, // red — period=24h, tolerance=72h, age=100h > tolerance
     ]);
 
     const report = await getCronHealthReport(now);
@@ -166,10 +172,12 @@ describe('getCronHealthReport', () => {
    * update to `EXPECTATIONS` — drift between code + crontab is a high-
    * risk class of bug.
    */
-  it('always returns exactly 7 entries (one per known cron)', async () => {
+  it('always returns exactly 8 entries (J10 Phase O — added cron.health.scan self-loop)', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);
     const report = await getCronHealthReport();
-    expect(report.entries).toHaveLength(7);
+    expect(report.entries).toHaveLength(8);
+    // The 8th entry is the self-monitoring of the watcher (cron-watch.yml).
+    expect(report.entries.map((e) => e.action)).toContain('cron.health.scan');
   });
 });
 

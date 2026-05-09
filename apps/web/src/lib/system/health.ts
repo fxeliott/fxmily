@@ -31,7 +31,8 @@ interface CronExpectation {
     | 'cron.weekly_reports.scan'
     | 'cron.dispatch_notifications.scan'
     | 'cron.purge_deleted.scan'
-    | 'cron.purge_push_subscriptions.scan';
+    | 'cron.purge_push_subscriptions.scan'
+    | 'cron.health.scan';
   /** Human-readable label for the dashboard. */
   label: string;
   /** Expected period in ms (matches the crontab schedule). */
@@ -83,6 +84,19 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.purge_push_subscriptions.scan',
     label: 'Stale push subscriptions cleanup',
     periodMs: WEEK, // Sun 05:00 UTC
+  },
+  {
+    // J10 Phase O fix B3 : self-monitor the watcher itself. If `cron-watch.yml`
+    // (GitHub Actions hourly schedule) stops running, no `cron.health.scan`
+    // audit row appears, and `getCronHealthReport` flags this entry red →
+    // operator notices the watcher is broken on the next admin/system visit.
+    // Without this entry the cron-watch promise of "self-monitoring" was
+    // unkept (route handler emitted the audit row but no expectation
+    // checked the gap).
+    action: 'cron.health.scan',
+    label: 'Health watcher heartbeat',
+    periodMs: HOUR, // cron-watch.yml triggers at `15 * * * *`
+    toleranceMultiplier: 4, // 4h gap before flagging red (covers GH Actions delay)
   },
 ] as const;
 

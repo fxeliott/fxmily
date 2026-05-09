@@ -167,12 +167,18 @@ export const exportLimiter = new TokenBucketLimiter({
 /**
  * J10 Phase I — Sentry tunnel route (`/monitoring`).
  *
- * The browser SDK posts envelopes via the same-origin tunnel to bypass
- * ad-blockers ; without rate-limiting, a logged-out attacker can spam
- * `/monitoring` and burn Eliot's Sentry quota (Free 5000 events / month
- * hard cap). We allow generous bursts (50 envelopes per IP for a 5-min
- * window) but cap the long-run rate at 1 / sec which is plenty for
- * legitimate sessions.
+ * **Reserved for V2** (J10 Phase O review B2 correction). The original
+ * intent was to guard the `withSentryConfig({ tunnelRoute: '/monitoring' })`
+ * plugin-generated route, but the plugin doesn't expose a hook to call a
+ * limiter before the Sentry forward. To actually wire this, V2 needs to
+ * implement a custom `app/monitoring/route.ts` that consumes the limiter
+ * then proxies to Sentry's ingest endpoint manually. Today we rely on
+ * Sentry's edge-side spike protection (90 req/s per project hard cap) +
+ * DSN-level access control. The limiter export below is kept as a stub
+ * so the V2 wiring can pick it up without re-deriving the bucket sizing.
+ *
+ * Bucket sizing rationale (when wired) : burst of 50 envelopes per IP
+ * for a typical session-replay flush, 1 envelope / sec sustained.
  */
 export const sentryTunnelLimiter = new TokenBucketLimiter({
   bucketSize: 50,

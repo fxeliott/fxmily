@@ -27,6 +27,12 @@ const douglasEmotionTagSchema = z.enum([
   'fear-loss',
   'fear-wrong',
   'fear-leaving-money',
+  // Phase V/W (2026-05-09) — promotion V1.5 → V1. Ces 2 slugs existent
+  // dans `lib/trading/emotions.ts` mais n'étaient pas câblés comme
+  // triggers sur les fiches existantes (revenge-trade-trap +
+  // sur-confiance). Désormais déclencheurs contextuels valides.
+  'revenge-trade',
+  'overconfident',
   // Check-in slugs
   'fearful',
   'greedy',

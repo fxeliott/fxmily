@@ -1420,3 +1420,109 @@ Items détectés par les audits mais non-bloquants pour le critère SPEC §15 J1
   noté `next.config.ts:8`).
 - **Annual DR test** dans `docs/runbook-backup-restore.md` (RTO objectif
   < 24h, mesurer).
+
+## J10 — Phases I + J + K (audit rounds 2-3 + observability + polish, livré 2026-05-09)
+
+**3 rounds audit-driven hardening cumulés**, **18 BLOCKERs/HIGH closed
+in-session** sur les 11 items J10.5+ initialement reclassés (3 vraiment
+V2). 4 commits supplémentaires sur `claude/j10-prod-deploy` :
+
+### Phase I — Promote J10.5+ + ops scripts (`f2187af`)
+
+8 items J10.5+ ramenés dans J10 :
+
+- **Atomic `requestAccountDeletion`** — `updateMany WHERE status='active'
+AND deletedAt IS NULL` collapse check+update en single atomic op.
+- **Per-user rate limit `/api/account/data/export`** (token bucket
+  `bucketSize=3, refillRate=1/15min` keyed by `userId`).
+- **Sentry tunnel rate limit** (`bucketSize: 50, refillRate: 1`).
+- **`proxy.ts` matcher exclut `/monitoring`** (Sentry tunnel ne doit pas
+  être 307→/login).
+- **Skip-link global** `<a href="#main-content">` + wrapper avec
+  `tabindex="-1"` (WCAG 2.4.1).
+- **`<Code>` extracted DS component** (3 callsites unifiés).
+- **`role="alert"` form error regions** (WCAG 4.1.3 assertive).
+- **CookieBanner entry transition** `motion-safe:animate-cookie-rise`
+  220ms slide+fade-in (WCAG 2.3.3 prefers-reduced-motion).
+- **Hierarchy h2 legal pages** `text-[15px] sm:text-base`.
+
+5 scripts ops dans `ops/scripts/` (réduction effort manuel Eliot
+~2h → ~30 min) : `provision-hetzner.sh`, `setup-host.sh`,
+`verify-dns.sh`, `post-deploy-smoke.sh`, `eliot-prerequisites.md`.
+
+### Phase J round 3 — CVE + perf + tests (`f5ba4a9`)
+
+Audit 3 subagents en parallèle (perf-profiler + test-writer + dep-auditor).
+
+**SECURITY CRITICAL CVE patch** : Bump `next 16.2.4 → 16.2.6` + `react/
+react-dom 19.2.5 → 19.2.6`. Couvre 4 HIGH advisories Vercel coordinated
+release 2026-05-06 :
+
+- CVE-2026-23870 — DoS deserialization Server Functions
+- CVE-2026-44578 — SSRF WebSocket upgrade self-hosted Node
+- CVE-2026-44574 — Middleware bypass via `.rsc`
+- CVE-2026-44575 — Middleware bypass via segment-prefetch
+
+Fxmily self-hosted Node sur Hetzner avec App Router + middleware
+Auth.js v5 — directement exposé. Patch line, zero breaking change.
+
+**Perf wins** :
+
+- `purge-push-subscriptions` N+1 → `findMany {select:id}` + `deleteMany`
+  ~500x latence cron.
+- Export RGPD : drop `null, 2` JSON.stringify → ~30% size, ~50% RAM
+  transient à 5000+ trades.
+- `flushSentry(2000)` ajouté + appelé dans 7 cron catches avant return.
+
+**Tests** : 707/707 verts (+47 vs J10 ship 660).
+
+### Phase J observability — `/admin/system` + cron-watch (`4d9381c`)
+
+- **`lib/system/health.ts`** — `getCronHealthReport()` query
+  `auditLog.groupBy({by: action, _max: createdAt})` puis classifie status
+  green/amber/red/never_ran selon période + tolerance multiplier per-cron.
+- **`/api/cron/health`** POST auth-gated, branche HTTP code (200 vert/
+  ambre, 503 rouge/never). Émet aussi audit row `cron.health.scan`.
+- **`/admin/system`** Server Component admin-gated — cohort snapshot
+  card grid + per-cron heartbeat list avec Pill tone-aware.
+- **`.github/workflows/cron-watch.yml`** scheduled hourly. Curl le
+  endpoint, ouvre/comment issue auto-labeled si 503, ferme auto si 200.
+  Paper trail GitHub.
+
+### Phase K — Final consistency + Apple Touch Icons (`ded91dd`)
+
+- **Audit slug semantic fix** : `admin.system.viewed` (nouveau) au lieu
+  de réutiliser `admin.members.listed`. `cron.health.scan` ajouté.
+- **`/api/cron/health` heartbeat self** — émet son propre audit row
+  pour que cron-watch détecte aussi un cron-watch broken.
+- **Tests `lib/system/health.test.ts`** (7 tests) — pin status thresholds,
+  red shadows, never_ran distinct, exactement 7 entries.
+- **Apple Touch Icons + favicon** dynamiques via Next.js 16 `app/icon.tsx`
+  - `app/apple-icon.tsx` `ImageResponse`. No ImageMagick/sharp dep.
+    180×180 + 32×32 PNG en lockstep DS v2 (`#07090f` deep-space + `#a3e635`
+    lime accent + system-ui "f" mark).
+- **`proxy.ts` matcher** étendu pour exclure `apple-icon|icon`.
+
+### Quality gate finale post-K
+
+- format ✓, lint ✓, type-check ✓
+- **Vitest 714/714 verts** (+83 vs J9 baseline 631, +54 vs J10 ship 660)
+- Build prod Turbopack ✓ Next 16.2.6 + React 19.2.6 patched (CVE clean)
+- **Smoke E2E local validé** : tous les routes 200, auth gates 401/307,
+  CSP confirmé, skip-link présent, `/api/cron/health` 503 attendu,
+  `/apple-icon` 200 PNG 180×180, `/icon` 200 PNG 32×32, `/monitoring`
+  404 (pas 307 — proxy matcher exclut bien).
+
+### Commit chain final J10 (9 commits)
+
+```
+ded91dd feat(j10): Phase K — semantic audit fix + health.ts tests + Apple Touch Icons
+4d9381c feat(j10): observability prod — /admin/system + cron-watch workflow
+f5ba4a9 fix(j10): CVE patch Next 16.2.6 + perf wins + +47 tests (round 3)
+f2187af perf(j10): promote J10.5+ items + Eliot ops automation scripts
+768ade2 docs(j10): close-out CLAUDE.md J10 + v2-roadmap
+14b51c2 perf(j10): audit-driven hardening — 5 BLOCKERs + 7 HIGH closed
+7cf22f9 perf(j10): Hetzner Docker prod stack + Caddyfile + cron systemd
+ba026e0 feat(j10): Sentry integration + reportError helper + 7 cron catches
+f0bae30 feat(j10): RGPD foundation + soft-delete + cron purge
+```

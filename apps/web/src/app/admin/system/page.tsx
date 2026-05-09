@@ -42,9 +42,9 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
   const [report, snapshot] = await Promise.all([getCronHealthReport(), getSystemSnapshot()]);
 
   await logAudit({
-    action: 'admin.members.listed', // reuse existing slug — admin nav surface
+    action: 'admin.system.viewed',
     userId: session.user.id,
-    metadata: { surface: '/admin/system', overall: report.overall },
+    metadata: { overall: report.overall },
   });
 
   return (

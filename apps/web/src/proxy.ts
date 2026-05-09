@@ -34,5 +34,12 @@ export const config = {
   //
   // Defense in depth: every `/api/*` handler MUST verify `await auth()`
   // before doing anything privileged. See `app/api/uploads/*` for the pattern.
-  matcher: ['/((?!api|monitoring|_next/static|_next/image|favicon.ico|logo.png|.*\\.svg).*)'],
+  // J10 Phase K — `apple-icon` and `icon` are dynamically-generated PNG
+  // routes from `app/apple-icon.tsx` / `app/icon.tsx` (ImageResponse).
+  // They are public assets referenced from `<head>`, so they MUST bypass
+  // the auth gate (a 307→/login on a `<link rel="apple-touch-icon">`
+  // request would just paint a broken icon, not log the user in).
+  matcher: [
+    '/((?!api|monitoring|apple-icon|icon|_next/static|_next/image|favicon.ico|logo.png|.*\\.svg).*)',
+  ],
 };

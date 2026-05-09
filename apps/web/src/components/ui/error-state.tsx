@@ -15,6 +15,13 @@ export interface ErrorStateProps {
   cause?: string;
   /** Retry handler. If provided, shows the retry button. */
   onRetry?: () => void;
+  /**
+   * Heading level for the headline. Default `h2`. Pass `h3` only when the
+   * error state lives inside a section that already owns a deeper
+   * heading. Phase P review WCAG B3 — was hard-coded `h3` and skipped
+   * the hierarchy on every page that uses it.
+   */
+  headingLevel?: 'h2' | 'h3';
   className?: string;
 }
 
@@ -29,8 +36,16 @@ export interface ErrorStateProps {
  *
  * Posture déculpabilisante : "synchronisation impossible" > "vous n'avez pas pu".
  */
-export function ErrorState({ headline, action, cause, onRetry, className }: ErrorStateProps) {
+export function ErrorState({
+  headline,
+  action,
+  cause,
+  onRetry,
+  headingLevel = 'h2',
+  className,
+}: ErrorStateProps) {
   const [open, setOpen] = useState(false);
+  const Heading = headingLevel;
 
   return (
     <div
@@ -46,7 +61,7 @@ export function ErrorState({ headline, action, cause, onRetry, className }: Erro
       </div>
 
       {/* Strate 2 : headline */}
-      <h3 className="t-h3 text-[var(--t-1)]">{headline}</h3>
+      <Heading className="t-h3 text-[var(--t-1)]">{headline}</Heading>
 
       {/* Strate 3 : remediation */}
       {action ? <p className="t-body mt-1 max-w-[36ch] text-[var(--t-3)]">{action}</p> : null}

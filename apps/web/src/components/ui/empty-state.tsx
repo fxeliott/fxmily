@@ -23,6 +23,14 @@ export interface EmptyStateProps {
   onPrimary?: () => void;
   /** Click handler for secondary CTA. */
   onSecondary?: () => void;
+  /**
+   * Heading level for the headline. Default `h2` so the hierarchy stays
+   * sane (the page typically owns `h1`). Pass `h3` only when the empty
+   * state lives inside a section that already owns a deeper heading.
+   * Phase P review WCAG B3 — was hard-coded `h3` and skipped the
+   * hierarchy on every page that uses it.
+   */
+  headingLevel?: 'h2' | 'h3';
   className?: string;
 }
 
@@ -45,8 +53,10 @@ export function EmptyState({
   ctaSecondary,
   onPrimary,
   onSecondary,
+  headingLevel = 'h2',
   className,
 }: EmptyStateProps) {
+  const Heading = headingLevel;
   return (
     <div
       data-slot="empty-state"
@@ -61,7 +71,7 @@ export function EmptyState({
       </div>
 
       {/* Strate 2 : headline */}
-      <h3 className="t-h2 text-[var(--t-1)]">{headline}</h3>
+      <Heading className="t-h2 text-[var(--t-1)]">{headline}</Heading>
 
       {/* Strate 3 : lead */}
       {lead ? <p className="t-body mt-1.5 max-w-[36ch] text-[var(--t-3)]">{lead}</p> : null}

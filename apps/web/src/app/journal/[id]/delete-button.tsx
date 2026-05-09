@@ -42,7 +42,9 @@ export function DeleteTradeButton({ tradeId }: DeleteTradeButtonProps) {
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="text-muted hover:text-danger focus-visible:outline-accent rounded text-xs underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+        // Phase P review WCAG B1 — bumped from text-xs only (~16px) to
+        // min-h-6 + px-2 + py-1.5 = ≥24×24 (WCAG 2.5.8 AA target size).
+        className="text-muted hover:text-danger focus-visible:outline-accent inline-flex min-h-6 items-center rounded px-2 py-1.5 text-xs underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         Supprimer ce trade
       </button>

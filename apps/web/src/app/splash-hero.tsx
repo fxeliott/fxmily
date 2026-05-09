@@ -4,7 +4,7 @@ import { ArrowUp, Brain, Lock, Shield, Upload, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-import { Btn, btnVariants } from '@/components/ui/btn';
+import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Kbd } from '@/components/ui/kbd';
 import { Pill } from '@/components/ui/pill';
@@ -117,9 +117,15 @@ export function SplashHero() {
                 ↵
               </Kbd>
             </Link>
-            <Btn kind="secondary" size="l">
+            {/* Phase P review WCAG B4 — secondary CTA was a Btn with no
+                onClick/href (inert at keyboard + mouse). Use a mailto link
+                styled as a button so it actually does something. */}
+            <a
+              href="mailto:eliot@fxmily.com?subject=Demande%20d%27acc%C3%A8s%20Fxmily"
+              className={cn(btnVariants({ kind: 'secondary', size: 'l' }))}
+            >
               Demander un accès
-            </Btn>
+            </a>
           </div>
 
           {/* Trust strip — 5 items pédago */}

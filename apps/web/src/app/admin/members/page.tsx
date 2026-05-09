@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { MemberRow } from '@/components/admin/member-row';
-import { Btn, btnVariants } from '@/components/ui/btn';
+import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
@@ -131,11 +131,12 @@ export default async function AdminMembersPage() {
 
       {members.length === 0 ? (
         <div className="flex justify-center">
-          <Link href="/admin/invite">
-            <Btn kind="primary" size="m">
-              <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-              Envoyer la première invitation
-            </Btn>
+          {/* Phase P review WCAG B2 — Link wrapping Btn nests <a><button>
+              (invalid HTML5 + double tab-stop). Use btnVariants on the
+              Link directly so it renders as a single <a>. */}
+          <Link href="/admin/invite" className={btnVariants({ kind: 'primary', size: 'm' })}>
+            <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Envoyer la première invitation
           </Link>
         </div>
       ) : null}

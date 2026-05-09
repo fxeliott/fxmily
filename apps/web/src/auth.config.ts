@@ -50,6 +50,15 @@ export const authConfig = {
 
       if (isPublic(pathname)) return true;
 
+      // Phase P review T1.1 — defense-in-depth global gate. A user whose
+      // status flipped to `suspended` or `deleted` keeps a valid JWT for
+      // up to 30 days (session.maxAge). Without this gate, only the admin
+      // pages explicitly checking `status === 'active'` would block them
+      // — every other Server Component would happily render. Returning
+      // false here forces an immediate redirect to /login on the next
+      // request, regardless of route.
+      if (isLoggedIn && auth.user.status !== 'active') return false;
+
       if (pathname.startsWith('/admin')) {
         if (!isLoggedIn) return false;
         return auth.user.role === 'admin';

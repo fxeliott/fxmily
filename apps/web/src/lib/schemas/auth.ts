@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
+
 /**
  * Shared validation schemas for the authentication & invitation flows.
  *
@@ -14,6 +16,7 @@ const emailSchema = z
   .string({ message: 'Email requis.' })
   .trim()
   .toLowerCase()
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
   .email('Email invalide.');
 
 /**
@@ -44,7 +47,9 @@ const nameSchema = z
   .string({ message: 'Champ requis.' })
   .trim()
   .min(1, 'Champ requis.')
-  .max(80, 'Trop long (80 caractères max).');
+  .max(80, 'Trop long (80 caractères max).')
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText);
 
 /** /login form (email + password). */
 export const signInSchema = z.object({

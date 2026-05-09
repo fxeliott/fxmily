@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 import { EMOTION_MAX_PER_MOMENT, isEmotionSlug } from '@/lib/trading/emotions';
 import { TRADING_PAIRS } from '@/lib/trading/pairs';
 
@@ -53,7 +54,15 @@ const emotionTagsRequired = z
   .refine((tags) => tags.every(isEmotionSlug), { message: 'Émotion inconnue.' })
   .refine((tags) => new Set(tags).size === tags.length, { message: 'Doublons interdits.' });
 
-const notesSchema = z.string().trim().max(2000, 'Note trop longue (2000 max).').optional();
+// Phase P review T1.2 — strip bidi/zero-width to defend against
+// Trojan-Source on the admin trade view + Claude weekly summary input.
+const notesSchema = z
+  .string()
+  .trim()
+  .max(2000, 'Note trop longue (2000 max).')
+  .refine((v) => !containsBidiOrZeroWidth(v), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText)
+  .optional();
 
 /**
  * Storage key. Server-issued, NEVER trusted from the client without rechecking

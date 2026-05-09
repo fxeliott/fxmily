@@ -1,7 +1,7 @@
 import { Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
-import { Btn } from '@/components/ui/btn';
+import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { ErrorState } from '@/components/ui/error-state';
 import { findInvitationByToken } from '@/lib/auth/invitations';
@@ -112,10 +112,11 @@ function InvalidTokenView({
           <ErrorState headline={headline} action={action} />
         </Card>
         <div className="flex justify-center">
-          <Link href="/login">
-            <Btn kind="secondary" size="m">
-              Aller à la connexion
-            </Btn>
+          {/* Phase P review WCAG B2 — Link wrapping Btn nests <a><button>
+              (invalid HTML5 + double tab-stop). Use btnVariants on the
+              Link directly so it renders as a single <a>. */}
+          <Link href="/login" className={btnVariants({ kind: 'secondary', size: 'm' })}>
+            Aller à la connexion
           </Link>
         </div>
       </section>

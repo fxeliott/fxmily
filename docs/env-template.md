@@ -59,6 +59,22 @@ AUTH_URL=http://localhost:3000
 # VAPID_PRIVATE_KEY=
 # VAPID_SUBJECT=mailto:eliott.pena@icloud.com
 # NEXT_PUBLIC_VAPID_PUBLIC_KEY=
+
+# -- Cron (Hetzner systemd timer / GH Actions) — Jalon 10 ---------------------
+# Génère avec : openssl rand -hex 24 (24 chars min, 96 bytes recommandé)
+# Vérifié timing-safe via SHA-256 + timingSafeEqual côté serveur.
+# CRON_SECRET=
+
+# -- Rapports hebdo IA — destinataire admin (Jalon 8 + 10) --------------------
+# Email où sont expédiés les digests + rapports sécurité.
+# Doit pointer vers une boîte que tu lis. En dev, mets ton perso ; en prod,
+# mets l'alias eliot@fxmily.com une fois le domaine Resend vérifié.
+# WEEKLY_REPORT_RECIPIENT=eliot@fxmily.com
+
+# -- Storage local fallback (avant R2) — dev uniquement -----------------------
+# Sans R2 keys, les uploads atterrissent dans ce dossier (gitignored).
+# Si non défini, défaut = `apps/web/.uploads/`.
+# UPLOADS_DIR=
 ```
 
 ## Sécurité

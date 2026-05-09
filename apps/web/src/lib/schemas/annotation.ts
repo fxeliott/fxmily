@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { ANNOTATION_KEY_PATTERN } from '@/lib/storage/keys';
+import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
 /**
  * Trade annotation schemas (J4, SPEC §6.3, §7.8).
@@ -23,11 +24,17 @@ export const ANNOTATION_COMMENT_MAX = 5000;
  * never drift. */
 const annotationImageKeySchema = z.string().regex(ANNOTATION_KEY_PATTERN, 'Clé fichier invalide.');
 
+// Phase P review T1.2 — defense-in-depth on admin-controlled annotation
+// comments. Even though only admins can create annotations, this defends
+// against compromise-spreading-via-trojan-source if an admin account is
+// breached, and matches the pattern already established in card schemas.
 const commentSchema = z
   .string()
   .trim()
   .min(1, 'Le commentaire est obligatoire.')
-  .max(ANNOTATION_COMMENT_MAX, `Maximum ${ANNOTATION_COMMENT_MAX} caractères.`);
+  .max(ANNOTATION_COMMENT_MAX, `Maximum ${ANNOTATION_COMMENT_MAX} caractères.`)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText);
 
 /** V1 media type allowlist. Adding `video` is a server-only change once R2
  * is wired (J4.5). The DB enum already accepts it. */

@@ -105,6 +105,37 @@ repository secret** pour chacun :
 
 ✅ Done quand : 5 secrets visibles dans la liste GitHub.
 
+**Automation (recommandé)** : au lieu de cliquer 5 fois dans l'UI GitHub,
+utilise le script `ops/scripts/pose-github-secrets.sh` :
+
+```bash
+# Crée un fichier local protégé (NEVER committer)
+cat > /tmp/secrets.local.env <<'EOF'
+HETZNER_HOST="<IP-Hetzner>"
+HETZNER_SSH_KEY="$(cat ~/.ssh/id_ed25519)"
+SENTRY_AUTH_TOKEN="<token>"
+SENTRY_ORG="fxmily"
+SENTRY_PROJECT="fxmily-web"
+APP_URL="https://app.fxmily.com"
+CRON_SECRET="<même valeur que /etc/fxmily/web.env>"
+EOF
+chmod 600 /tmp/secrets.local.env
+
+# Authentifie gh (si pas déjà fait)
+gh auth login
+
+# Lance l'automation
+bash ops/scripts/pose-github-secrets.sh /tmp/secrets.local.env
+
+# Détruis le fichier secrets après
+shred -u /tmp/secrets.local.env
+```
+
+Le script vérifie que le fichier est en mode 0600/0400, valide
+l'authentification gh, puis pose les 5 secrets + 1 variable
+(`APP_URL`) en idempotent. Refuse de runner si gh non auth ou si
+fichier monde-readable.
+
 ---
 
 ## Ensuite — automation prend le relais

@@ -216,6 +216,14 @@ if [[ "$SKIP_GITHUB" == "0" ]]; then
     echo "  Or generate one : ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ''" >&2
     exit 2
   fi
+  # V1.5.2 round 5 : path-traversal defense. The key MUST live inside $HOME
+  # (defense against a malformed `_FILE=/etc/shadow`-like value).
+  HETZNER_SSH_KEY_REAL="$(realpath -m "$HETZNER_SSH_KEY_FILE_EXPANDED" 2>/dev/null || echo "$HETZNER_SSH_KEY_FILE_EXPANDED")"
+  if [[ "$HETZNER_SSH_KEY_REAL" != "$HOME"/* ]]; then
+    echo "error: SSH key path '$HETZNER_SSH_KEY_REAL' is outside \$HOME" >&2
+    echo "  For safety, the key must be inside ~/. Move it to ~/.ssh/ first." >&2
+    exit 2
+  fi
   # V1.5.2 round 4 : detect passphrase-protected SSH keys. appleboy/ssh-action
   # in deploy.yml does NOT pass a passphrase by default — a key with a
   # passphrase fails silently with "incorrect passphrase". Fail-fast here.

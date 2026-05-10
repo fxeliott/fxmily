@@ -209,31 +209,42 @@ const freeTextSliceSchema = z
 
 /**
  * V1.5 pseudonymization — the snapshot sent to Claude carries a stable but
- * non-reversible label (`memberLabel`) instead of the raw `userId` UUID.
+ * non-reversible label (`pseudonymLabel`) instead of the raw `userId` UUID.
+ *
+ * **V1.5.2 rename + 32-bit widening** :
+ *   - Renamed from `memberLabel` to `pseudonymLabel` to disambiguate from
+ *     the J8 display name `WeeklyDigestEmail.memberLabel` ("Sophie Martin"
+ *     or "Membre #abc123") which lives at a different layer and never
+ *     crosses the prompt boundary. Two distinct concepts now have two
+ *     distinct names — fail-fast at code-review when a future dev would
+ *     have wired them up swapped.
+ *   - Hash truncated from 24 bits (6 hex) to 32 bits (8 hex). Birthday
+ *     50 % collision threshold goes from ~4,823 members (V1.5) to ~77,163
+ *     members (V1.5.2) — sufficient through V2 launch without re-migration.
  *
  * Rationale (defense-in-depth, Phase V audit):
  *   - The cuid `userId` is not directly PII (no email, no name) but it is
  *     system-identifying and ends up serialized in Anthropic API logs +
  *     potentially in `WeeklyReport.summary` if Claude ever copy-pastes it
  *     into the output.
- *   - `member-${SHA-256(userId)[0..6].toUpperCase()}` is :
+ *   - `member-${SHA-256(userId)[0..8].toUpperCase()}` is :
  *       - deterministic (same userId → same label, no DB schema change)
  *       - non-reversible without a precomputed rainbow table
- *       - human-readable in admin reports ("member-A1B2C3" vs a 25-char cuid)
- *       - collision-free for cohorts up to ~16M members (24-bit space)
+ *       - human-readable in admin reports ("member-A1B2C3D4" vs a 25-char cuid)
+ *       - collision-free for cohorts up to ~4.3 G members (32-bit space)
  *   - The DB row `WeeklyReport.userId` keeps the FK — pseudonymization is
  *     a *prompt boundary* concern, not a *persistence* concern.
  *
  * The internal `BuilderInput.userId` (in `lib/weekly-report/types.ts`) stays
  * as the cuid — only the externally-visible snapshot loses it.
  */
-const memberLabelSchema = z
+const pseudonymLabelSchema = z
   .string()
-  .regex(/^member-[A-F0-9]{6}$/, 'memberLabel must match member-XXXXXX (uppercase hex).');
+  .regex(/^member-[A-F0-9]{8}$/, 'pseudonymLabel must match member-XXXXXXXX (uppercase hex).');
 
 export const weeklySnapshotSchema = z
   .object({
-    memberLabel: memberLabelSchema,
+    pseudonymLabel: pseudonymLabelSchema,
     timezone: z.string().min(3).max(60),
     weekStart: z.date(),
     weekEnd: z.date(),

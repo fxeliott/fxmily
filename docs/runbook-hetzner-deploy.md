@@ -234,3 +234,139 @@ sudo docker compose -f /opt/fxmily/docker-compose.prod.yml restart web
 
 Cf. aussi `docs/runbook-cron-recompute-scores.md` et
 `docs/runbook-backup-restore.md` pour les playbooks dédiés.
+
+## 11. Rollback V1.5 migration (`20260509180000_v1_5_trade_quality_riskpct`)
+
+> **Quand l'utiliser** : si la migration V1.5 a été déployée en prod et qu'un
+> blocker post-deploy nécessite de revenir à l'état J10 (ex. : drift de
+> calibration scoring incompatible, IDF prod, ou besoin de recharger un
+> backup pré-V1.5 sans les nouvelles colonnes). Pour un revert local en
+> dev, préférer `prisma migrate reset` (autorisé en dev uniquement, deny en
+> prod par les permissions Claude).
+
+### 11.1 Pré-requis avant tout rollback
+
+1. **Backup atomique de `trades`** : si des rows ont déjà capturé
+   `trade_quality` ou `risk_pct` (V1.5/V1.5.1 wizard adoption), le rollback
+   **détruit** ces données — `DROP COLUMN` est irréversible côté Postgres.
+   Lance un `pg_dump` de la table avant :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     pg_dump -U fxmily -d fxmily -t trades --data-only --column-inserts \
+     | gzip > /etc/fxmily/backups/pre-v1.5-rollback-$(date -u +%Y%m%dT%H%M%SZ).sql.gz
+   ```
+
+2. **Stop le web** pour figer les writes pendant le rollback (les routes
+   `/journal/new` + `closeTradeAction` écrivent les nouvelles colonnes) :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+   ```
+
+3. **Vérifie l'état migrations Prisma** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+       FROM _prisma_migrations \
+       WHERE migration_name LIKE '%v1_5%' ORDER BY started_at DESC;"
+   ```
+
+### 11.2 SQL rollback (Postgres 17 type-cascade ordering)
+
+L'ordre est **non négociable** : on ne peut pas `DROP TYPE` tant qu'une
+colonne référence l'enum. Postgres 17 retournerait `cannot drop type
+"TradeQuality" because other objects depend on it`.
+
+```sql
+-- Connect as fxmily inside the postgres container :
+--   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+--     psql -U fxmily -d fxmily
+
+BEGIN;
+
+-- Step 1 — drop the partial index BEFORE the column it covers.
+DROP INDEX IF EXISTS "trades_user_id_trade_quality_idx";
+
+-- Step 2 — drop the columns. CASCADE not needed (no FK referencing them).
+ALTER TABLE "trades" DROP COLUMN IF EXISTS "trade_quality";
+ALTER TABLE "trades" DROP COLUMN IF EXISTS "risk_pct";
+
+-- Step 3 — drop the enum type now that nothing references it.
+DROP TYPE IF EXISTS "TradeQuality";
+
+-- Step 4 — mark the migration as rolled back so `prisma migrate deploy`
+-- does NOT try to re-apply it on the next deploy.
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260509180000_v1_5_trade_quality_riskpct';
+
+COMMIT;
+```
+
+> ⚠️ **Si le `BEGIN` / `COMMIT` block échoue à mi-parcours** : Postgres
+> rollback automatique de la transaction — l'état reste cohérent (tout ou
+> rien). Re-vérifie `\d trades` pour confirmer que `trade_quality` +
+> `risk_pct` sont bien absents (rollback réussi) ou bien présents (rollback
+> annulé).
+
+### 11.3 Re-déploiement de l'image J10 (sans V1.5 code)
+
+Le rollback DB doit s'accompagner d'un revert au tag image `j10-prod-deploy`
+(sinon le code V1.5 attendra les colonnes au runtime et crashera) :
+
+```bash
+# Pull l'image J10 (tag explicite — `latest` pourrait pointer V1.5).
+docker pull ghcr.io/fxeliott/fxmily:j10-prod-deploy
+docker tag ghcr.io/fxeliott/fxmily:j10-prod-deploy ghcr.io/fxeliott/fxmily:latest
+
+# Restart the stack.
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d web
+docker compose -f /opt/fxmily/docker-compose.prod.yml logs -f web   # CTRL-C une fois "Ready"
+```
+
+### 11.4 Vérification post-rollback
+
+```bash
+# Healthcheck app
+curl -fsS https://app.fxmilyapp.com/api/health
+# {"ok": true, ...}
+
+# Schema check : `trade_quality` + `risk_pct` must be absent.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\d trades" | grep -E 'trade_quality|risk_pct'
+# Expected : no output (both columns dropped).
+
+# Smoke test : create a trade via le wizard — le form ne doit PAS crash sur
+# les steps V1.5 (riskPct field + tradeQuality selector). L'image J10 ne
+# render plus ces UI bits.
+
+# Audit log : consigne le rollback.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', '{\"migration\":\"v1_5_trade_quality_riskpct\",\"by\":\"eliot\"}'::jsonb, NOW());"
+```
+
+### 11.5 Re-application future de V1.5
+
+Si le rollback était une mesure temporaire, ré-appliquer V1.5 implique :
+
+1. Re-deploy l'image V1.5 (`feat/v1.5-trading-calibration` HEAD).
+2. `pnpm --filter @fxmily/web prisma:migrate deploy` (la migration est
+   ré-introduite — Prisma re-cale la row dans `_prisma_migrations` après
+   l'avoir trouvée absente).
+3. Re-restore les rows `trades` depuis le `pg_dump` step 11.1 si on veut
+   restaurer les valeurs `tradeQuality` / `riskPct` capturées avant le
+   rollback. **Attention** : le restore doit utiliser `--data-only` et
+   filtrer les colonnes V1.5 uniquement, pas réécraser le state J10+
+   accumulé entre-temps.
+
+### 11.6 Rollback du `pseudonymLabel` (V1.5.2 widening — purement code)
+
+La V1.5.2 widening 24-bit → 32-bit est **sans changement de schéma DB** —
+le `pseudonymLabel` est calculé à la volée et ne touche aucune colonne.
+Rollback = simple revert de l'image V1.5.2 vers V1.5 (les rapports
+historiques V1.5 conservent leurs labels 6-char, les rapports V1.5.2+
+conservent leurs labels 8-char ; les deux formats coexistent sans
+intervention DB nécessaire). Cf. `apps/web/src/lib/weekly-report/builder.ts`
+JSDoc `pseudonymizeMember` pour la note "Migration data" complète.

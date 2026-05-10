@@ -107,6 +107,14 @@ networks:
   internal:
     name: fxmily-internal
     driver: bridge
+    # Pin a private RFC1918 subnet outside Docker default pool 172.16/12.
+    # Hetzner host already has Ichor (n8n + langfuse) using 172.17/172.19/172.20
+    # from the default pool — without this, Docker errors with "all predefined
+    # address pools have been fully subnetted" when creating fxmily-internal.
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.42.42.0/24
 
 secrets:
   postgres_password:

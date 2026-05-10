@@ -197,13 +197,25 @@ if [[ "$SKIP_GITHUB" == "0" ]]; then
   echo "═══ Step 4/5 : GitHub secrets ═══"
   # Generate the cron secret if not already provided.
   : "${CRON_SECRET:=$(openssl rand -hex 24)}"
+  # V1.5.2 fix : SSH key path is now configurable via HETZNER_SSH_KEY_FILE env.
+  # Default ~/.ssh/id_ed25519 ; Eliot's machine uses ~/.ssh/id_rsa_hetzner.
+  # `pose-github-secrets.sh` will detect the `_FILE` suffix and use
+  # `gh secret set --body-file` to avoid multi-line corruption.
+  HETZNER_SSH_KEY_FILE="${HETZNER_SSH_KEY_FILE:-$HOME/.ssh/id_ed25519}"
+  HETZNER_SSH_KEY_FILE_EXPANDED="${HETZNER_SSH_KEY_FILE/#\~/$HOME}"
+  if [[ ! -r "$HETZNER_SSH_KEY_FILE_EXPANDED" ]]; then
+    echo "error: SSH private key not readable at '$HETZNER_SSH_KEY_FILE_EXPANDED'" >&2
+    echo "  Override via : HETZNER_SSH_KEY_FILE=~/.ssh/id_rsa_hetzner bash $0" >&2
+    echo "  Or generate one : ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ''" >&2
+    exit 2
+  fi
   # Stage the values into a transient env file with strict perms.
   TMPSEC="$(mktemp)"
   trap 'shred -u "$TMPSEC" 2>/dev/null || rm -f "$TMPSEC"' EXIT
   chmod 600 "$TMPSEC"
   cat > "$TMPSEC" <<EOF
 HETZNER_HOST="$FXMILY_HETZNER_IP"
-HETZNER_SSH_KEY="$(cat ~/.ssh/id_ed25519)"
+HETZNER_SSH_KEY_FILE="$HETZNER_SSH_KEY_FILE_EXPANDED"
 SENTRY_AUTH_TOKEN="$SENTRY_AUTH_TOKEN"
 SENTRY_ORG="$SENTRY_ORG"
 SENTRY_PROJECT="$SENTRY_PROJECT"

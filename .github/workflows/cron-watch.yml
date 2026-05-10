@@ -2,14 +2,16 @@ name: Cron Watch
 
 # J10 Phase J — external heartbeat watcher.
 #
-# Hits `/api/cron/health` every hour and opens an issue if the endpoint
-# returns 503 (at least one cron is stale or never ran). Closes the
-# auto-opened issue once the endpoint returns 200 again.
+# Hits `/api/cron/health` every hour and FAILS the run if the endpoint
+# returns 503 (at least one cron is stale or never ran). The GitHub
+# Actions UI itself acts as the paper trail (failed run + email
+# notification to repo admins).
 #
-# Why GitHub Actions instead of an external SaaS (UptimeRobot, etc.) :
-#  - free quota covers the workflow comfortably (24 runs/day = 720/mo)
-#  - issue creation gives a paper trail with auto-close on resolution
-#  - no extra account to manage
+# V1.6 fix : the original implementation auto-opened/closed GitHub
+# Issues, which broke on this private repo where Issues are disabled
+# (`410 Issues has been disabled`). We now exit non-zero from the
+# curl step so GH Actions surfaces the alert through its native
+# notification channel — simpler, no permissions needed, no API calls.
 #
 # Required secrets : `CRON_SECRET` (mirrors `/etc/fxmily/web.env`) and
 # `APP_URL` repository variable (e.g. `https://app.fxmilyapp.com`).
@@ -23,7 +25,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   watch:
@@ -31,104 +32,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Curl health endpoint
-        id: curl
+      - name: Curl health endpoint and fail loud if red
         run: |
           set +e
-          BODY=$(curl -fsS \
+          BODY=$(curl -sS \
             --max-time 30 \
             -X POST \
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
             -H "Accept: application/json" \
+            -w "\n__HTTP_STATUS__%{http_code}" \
             "${{ vars.APP_URL || 'https://app.fxmilyapp.com' }}/api/cron/health")
-          STATUS=$?
-          echo "status_code=$STATUS" >> "$GITHUB_OUTPUT"
-          if [ -n "$BODY" ]; then
-            echo "body<<EOF" >> "$GITHUB_OUTPUT"
-            echo "$BODY" >> "$GITHUB_OUTPUT"
-            echo "EOF" >> "$GITHUB_OUTPUT"
+          HTTP_CODE=$(echo "$BODY" | sed -n 's/.*__HTTP_STATUS__\([0-9]*\)$/\1/p')
+          BODY_ONLY=$(echo "$BODY" | sed '$d')
+          echo "::group::Health response (HTTP $HTTP_CODE)"
+          echo "$BODY_ONLY"
+          echo "::endgroup::"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Heartbeat green"
+            exit 0
           fi
-          if [ "$STATUS" -eq 0 ]; then
-            echo "healthy=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "healthy=false" >> "$GITHUB_OUTPUT"
-          fi
-          exit 0
-      - name: Find existing alert issue
-        id: existing
-        if: ${{ steps.curl.outputs.healthy == 'false' }}
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: ['cron-watch', 'auto-opened'],
-              per_page: 5,
-            });
-            const existing = issues.data[0];
-            core.setOutput('number', existing ? String(existing.number) : '');
-      - name: Open or update issue when red
-        if: ${{ steps.curl.outputs.healthy == 'false' }}
-        uses: actions/github-script@v8
-        env:
-          BODY: ${{ steps.curl.outputs.body }}
-        with:
-          script: |
-            const body = [
-              '## Cron heartbeat alert',
-              '',
-              'The `/api/cron/health` endpoint returned a non-2xx status. Latest report :',
-              '',
-              '```json',
-              process.env.BODY || '(no body)',
-              '```',
-              '',
-              `Run : ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              '',
-              '**Auto-opened by `.github/workflows/cron-watch.yml`. Will auto-close on next green run.**',
-            ].join('\n');
-            const number = '${{ steps.existing.outputs.number }}';
-            if (number) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: Number(number),
-                body: '_Re-fired ' + new Date().toISOString() + '._\n\n' + body,
-              });
-            } else {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: 'Cron heartbeat alert — ' + new Date().toISOString().slice(0, 10),
-                labels: ['cron-watch', 'auto-opened'],
-                body,
-              });
-            }
-      - name: Close auto-opened alerts when green
-        if: ${{ steps.curl.outputs.healthy == 'true' }}
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: ['cron-watch', 'auto-opened'],
-              per_page: 50,
-            });
-            for (const issue of issues.data) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                body: '✅ Heartbeat green ' + new Date().toISOString() + ' — auto-closing.',
-              });
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                state: 'closed',
-              });
-            }
+          echo "::error title=Cron heartbeat alert::HTTP $HTTP_CODE — at least one cron is stale or never ran. See body above."
+          exit 1

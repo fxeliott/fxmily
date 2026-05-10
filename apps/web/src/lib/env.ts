@@ -36,7 +36,31 @@ const envSchema = z.object({
 
   // Jalon 1+ — Resend
   RESEND_API_KEY: z.string().optional(),
-  RESEND_FROM: z.string().email().optional(),
+  /// Resend `from` field. Accepts both addr-spec (`noreply@fxmilyapp.com`)
+  /// and RFC 5322 name-addr (`Fxmily <noreply@fxmilyapp.com>`). The latter
+  /// is what Resend ships in their quickstart and what most SaaS expect.
+  /// Zod has no built-in for name-addr, so we extract the addr-spec and
+  /// re-validate it. Display name guards :
+  ///  - reject `"` (Resend 422 "Invalid `from` field")
+  ///  - reject `?<letter>` sequences (Resend 451 "payload contain invalid
+  ///    characters" — matches their RFC 2047 encoded-word filter)
+  RESEND_FROM: z
+    .string()
+    .optional()
+    .refine((v) => {
+      if (v === undefined) return true;
+      const trimmed = v.trim();
+      const m = trimmed.match(/^(.+?)\s*<([^<>]+)>$/);
+      const addrSpec = m ? m[2].trim() : trimmed;
+      const addrOk = z.string().email().safeParse(addrSpec).success;
+      if (!addrOk) return false;
+      if (m) {
+        const display = m[1].trim();
+        if (/["]/.test(display)) return false;
+        if (/\?[a-zA-Z]/.test(display)) return false;
+      }
+      return true;
+    }, 'RESEND_FROM doit être un email valide ou "Display Name <email@domain>" (sans guillemets ni séquence ?<lettre>)'),
 
   // Jalon 1+ — Cloudflare R2
   R2_ACCOUNT_ID: z.string().optional(),

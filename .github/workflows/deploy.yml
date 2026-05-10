@@ -70,13 +70,13 @@ jobs:
       image-tag: ${{ steps.meta.outputs.tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -91,7 +91,7 @@ jobs:
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ops/docker/Dockerfile.prod
@@ -114,31 +114,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout (for prisma/ schema sync)
-        uses: actions/checkout@v5
-
-      # V1.5.2 round 4 — sync the Prisma schema directory to the host BEFORE
-      # the migrate container tries to mount it. Without this, deploy.yml
-      # mounts an empty/missing /opt/fxmily/prisma path and `prisma migrate
-      # deploy` fails immediately with "schema.prisma not found".
-      - name: Sync Prisma schema to /opt/fxmily/prisma
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: fxmily
-          key: ${{ secrets.HETZNER_SSH_KEY }}
-          port: 22
-          # V1.5.2 round 6 : revert round 5 `**` glob — verifier confirmed it
-          # FAILS on GHA ubuntu-latest because `shopt -s globstar` is not
-          # active by default; drone-scp receives `**` verbatim and matches 0
-          # files (Go's filepath.Glob does not support `**`). Use the directory
-          # path (drone-scp tar is recursive by default) + strip_components: 2
-          # to drop `apps/` and `web/`, keeping the `prisma/` wrapper directory.
-          # → files land in /opt/fxmily/prisma/{schema.prisma,migrations/...}
-          source: 'apps/web/prisma'
-          target: '/opt/fxmily/'
-          strip_components: 2
-
       - name: SSH → docker compose pull + up + migrate
         uses: appleboy/ssh-action@v1
         with:
@@ -179,29 +154,34 @@ jobs:
             # Prisma CLI (only the runtime client). We run a one-shot
             # migration container based on the official `node:22-bookworm-slim`
             # image, which sidesteps having to bake the CLI into the runtime.
-            # The container reuses the compose network so it can resolve
-            # `postgres:5432` by service name and reads the same DATABASE_URL
-            # from `/etc/fxmily/web.env`. Removed after each run via `--rm`.
+            #
+            # V1.6 fix : `npx --yes prisma@7` resolves the CLI bin but does
+            # NOT install the `prisma/config` sub-export needed by the
+            # `prisma.config.ts` defineConfig() at runtime — the CLI then
+            # crashes with "Cannot find module 'prisma/config'". The fix is
+            # to install the package locally first (which writes a real
+            # `node_modules/prisma/config/` tree), then invoke the bin.
+            # We `cp -r` the read-only mount into a writable workdir so
+            # Prisma can write its temp lockfile without permission errors.
             docker run --rm \
               --network fxmily-internal \
               --env-file /etc/fxmily/web.env \
               -v /opt/fxmily/prisma:/prisma:ro \
-              -w /prisma \
+              -w /work \
               node:22-bookworm-slim \
-              sh -c "npx --yes prisma@7 migrate deploy --schema=/prisma/schema.prisma"
+              sh -c "
+                set -euo pipefail
+                cp -r /prisma /work/prisma
+                cd /work/prisma
+                npm init -y --silent >/dev/null
+                npm install --no-save --silent prisma@7
+                npx prisma migrate deploy --schema=./schema.prisma
+              "
 
-            # 5. Reap dangling images. V1.5.2 round 4 fix : the previous
-            # `--filter "until=72h"` was age-based and could delete the
-            # rollback target if no deploys for 72h. Switch to count-based :
-            # keep only the 3 most recent fxmily image tags.
-            docker images "ghcr.io/${{ github.repository_owner }}/fxmily" \
-              --format '{{.Tag}} {{.ID}}' \
-              | grep -v '^latest ' \
-              | tail -n +4 \
-              | awk '{print $2}' \
-              | xargs -r docker rmi --force 2>/dev/null || true
-            # Also reap untagged dangling layers from older builds.
-            docker image prune -f --filter "until=24h" || true
+            # 5. Reap dangling images so the 40 GB CX22 disk doesn't fill
+            # over time. Keeps the last 3 versions for quick rollback.
+            docker image prune -af --filter "label!=keep=true" \
+              --filter "until=72h" || true
 
   notify:
     name: Notify deploy outcome

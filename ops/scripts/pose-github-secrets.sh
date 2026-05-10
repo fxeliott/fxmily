@@ -120,10 +120,30 @@ esac
 echo "→ Path : $DEPLOY_PATH (${#REQUIRED_SECRETS[@]} secrets to post)"
 
 # ---- 5. Set secrets --------------------------------------------------------
+# V1.5.2 fix : multi-line secrets (SSH private keys) cannot survive the
+# line-by-line parser above (each newline becomes its own iteration). To
+# pose a multi-line secret like HETZNER_SSH_KEY, set a sibling variable
+# `<NAME>_FILE` pointing to a file path (e.g. `HETZNER_SSH_KEY_FILE=~/.ssh/id_rsa_hetzner`)
+# in your tokens.local.env. The script resolves the path and uses
+# `gh secret set --body-file` to upload the file content verbatim.
 posted_secrets=()
 for secret in "${REQUIRED_SECRETS[@]}"; do
+  # Resolve via _FILE sibling first (preferred for SSH keys).
+  file_key="${secret}_FILE"
+  if [[ -n "${KV[$file_key]:-}" ]]; then
+    expanded_path="${KV[$file_key]/#\~/$HOME}"
+    if [[ ! -r "$expanded_path" ]]; then
+      echo "  ✗ missing : $secret (file '$expanded_path' not readable — check $file_key in env)"
+      continue
+    fi
+    gh secret set "$secret" --repo "$REPO" --body-file "$expanded_path" >/dev/null
+    posted_secrets+=("$secret")
+    echo "  ✓ secret : $secret (from $expanded_path)"
+    continue
+  fi
+  # Fallback : read from the env value (single-line strings only).
   if [[ -z "${KV[$secret]:-}" ]]; then
-    echo "  ✗ missing : $secret (skipped)"
+    echo "  ✗ missing : $secret (skipped — set $secret or ${secret}_FILE)"
     continue
   fi
   printf '%s' "${KV[$secret]}" | gh secret set "$secret" --repo "$REPO" --body - >/dev/null

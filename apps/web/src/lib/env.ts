@@ -51,11 +51,14 @@ const envSchema = z.object({
       if (v === undefined) return true;
       const trimmed = v.trim();
       const m = trimmed.match(/^(.+?)\s*<([^<>]+)>$/);
-      const addrSpec = m ? m[2].trim() : trimmed;
+      // `m[1]` and `m[2]` are typed `string | undefined` under
+      // `noUncheckedIndexedAccess` — fall back defensively even though
+      // the regex guarantees both groups when `m` is non-null.
+      const addrSpec = m?.[2]?.trim() ?? trimmed;
       const addrOk = z.string().email().safeParse(addrSpec).success;
       if (!addrOk) return false;
       if (m) {
-        const display = m[1].trim();
+        const display = m[1]?.trim() ?? '';
         if (/["]/.test(display)) return false;
         if (/\?[a-zA-Z]/.test(display)) return false;
       }

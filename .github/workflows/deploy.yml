@@ -114,6 +114,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Checkout (for prisma/ schema sync)
+        uses: actions/checkout@v4
+
+      # V1.5.2 round 4 — sync the Prisma schema directory to the host BEFORE
+      # the migrate container tries to mount it. Without this, deploy.yml
+      # mounts an empty/missing /opt/fxmily/prisma path and `prisma migrate
+      # deploy` fails immediately with "schema.prisma not found".
+      - name: Sync Prisma schema to /opt/fxmily/prisma
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: 22
+          source: 'apps/web/prisma/'
+          target: '/opt/fxmily/'
+          strip_components: 2
+
       - name: SSH → docker compose pull + up + migrate
         uses: appleboy/ssh-action@v1
         with:
@@ -165,10 +183,18 @@ jobs:
               node:22-bookworm-slim \
               sh -c "npx --yes prisma@7 migrate deploy --schema=/prisma/schema.prisma"
 
-            # 5. Reap dangling images so the 40 GB CX22 disk doesn't fill
-            # over time. Keeps the last 3 versions for quick rollback.
-            docker image prune -af --filter "label!=keep=true" \
-              --filter "until=72h" || true
+            # 5. Reap dangling images. V1.5.2 round 4 fix : the previous
+            # `--filter "until=72h"` was age-based and could delete the
+            # rollback target if no deploys for 72h. Switch to count-based :
+            # keep only the 3 most recent fxmily image tags.
+            docker images "ghcr.io/${{ github.repository_owner }}/fxmily" \
+              --format '{{.Tag}} {{.ID}}' \
+              | grep -v '^latest ' \
+              | tail -n +4 \
+              | awk '{print $2}' \
+              | xargs -r docker rmi --force 2>/dev/null || true
+            # Also reap untagged dangling layers from older builds.
+            docker image prune -f --filter "until=24h" || true
 
   notify:
     name: Notify deploy outcome

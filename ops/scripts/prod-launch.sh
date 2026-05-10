@@ -141,7 +141,27 @@ step "Polling Resend domain verify (~10-15 min DNS propagation)"
 set -a; . "$TOKENS_FILE"; set +a
 RESEND_DOMAINS_JSON="$(curl -fsS -H "Authorization: Bearer $RESEND_API_KEY" \
   https://api.resend.com/domains 2>&1 || true)"
-DOMAIN_ID="$(echo "$RESEND_DOMAINS_JSON" | grep -oE '"id":"[a-f0-9-]{36}"' | head -1 | sed 's/.*"\([a-f0-9-]*\)"/\1/')"
+# V1.5.2 round 4 : prefer jq (Hetzner has it, Git Bash via pacman -S jq).
+# Filter by domain NAME instead of fragile head -1 (multi-domain accounts).
+# Falls back to node (always available) if jq missing.
+if command -v jq >/dev/null 2>&1; then
+  DOMAIN_ID="$(echo "$RESEND_DOMAINS_JSON" | jq -r --arg d "$DOMAIN" \
+    '.data[] | select(.name==$d) | .id' 2>/dev/null | head -1)"
+elif command -v node >/dev/null 2>&1; then
+  DOMAIN_ID="$(node -e '
+    const d=process.argv[1];
+    const fs=require("fs");
+    const s=fs.readFileSync(0,"utf8");
+    try {
+      const j=JSON.parse(s);
+      const hit=(j.data||[]).find(x=>x.name===d);
+      console.log(hit?.id||"");
+    } catch(e) { process.exit(0); }
+  ' "$DOMAIN" <<< "$RESEND_DOMAINS_JSON" 2>/dev/null)"
+else
+  # Last-resort grep (only safe if exactly 1 domain in account).
+  DOMAIN_ID="$(echo "$RESEND_DOMAINS_JSON" | grep -oE '"id":"[a-f0-9-]{36}"' | head -1 | sed 's/.*"\([a-f0-9-]*\)"/\1/')"
+fi
 if [[ -z "$DOMAIN_ID" ]]; then
   echo "  ⚠️  Domain ID introuvable côté Resend — il n'a peut-être pas été ajouté correctement."
   echo "      Lance manuellement : curl -H 'Authorization: Bearer \$RESEND_API_KEY' https://api.resend.com/domains"
@@ -181,7 +201,7 @@ fi
 # ─────────────── STEP 7 — Healthcheck final ───────────────
 step "Healthcheck https://$APP_HOST/api/health"
 wait_for "App répond 200 sur /api/health" \
-  "curl -fsS https://$APP_HOST/api/health | grep -q '\"ok\":true'" \
+  "curl -fsS https://$APP_HOST/api/health | grep -q '\"status\":\"ok\"'" \
   300 10
 
 # ─────────────── Done ───────────────

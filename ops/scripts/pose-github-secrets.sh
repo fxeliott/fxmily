@@ -10,7 +10,9 @@
 #   1. Authenticate gh : `gh auth login` (needs `repo` + `admin:repo_hook` scopes)
 #   2. Create a local `secrets.local.env` (gitignored — never commit !) :
 #        HETZNER_HOST="X.X.X.X"
-#        HETZNER_SSH_KEY="-----BEGIN OPENSSH PRIVATE KEY-----\n…"
+#        # V1.5.2 : multi-line keys MUST use `_FILE` suffix (line-by-line
+#        # parser would truncate the key to its first line). Path tilde-expanded.
+#        HETZNER_SSH_KEY_FILE="~/.ssh/id_rsa_hetzner"
 #        SENTRY_AUTH_TOKEN="sntrys_…"
 #        SENTRY_ORG="fxmily"
 #        SENTRY_PROJECT="fxmily-web"
@@ -63,14 +65,24 @@ ENV_FILE="${1:-}"
 
 # ---- 1. Permission check (0600 ideal — refuse > 0644) ----------------------
 # `stat -c %a` (GNU) or `stat -f %A` (BSD) — try GNU first.
+# V1.5.2 round 4 : NTFS Win11 reports mode 777/666 by default (no real
+# UNIX perms unless `core.fileMode=true`). Detect Git Bash and skip with
+# warning instead of failing.
 PERMS=$(stat -c '%a' "$ENV_FILE" 2>/dev/null || stat -f '%A' "$ENV_FILE" 2>/dev/null || echo "?")
+IS_NTFS=0
+if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] || [[ -n "${MSYSTEM:-}" ]]; then
+  IS_NTFS=1
+fi
 case "$PERMS" in
   600|400) ;;
   ?)
     echo "warning: cannot determine file permissions on this platform — skip check"
     ;;
   *)
-    if [[ "$PERMS" =~ ^[2-7][2-7][2-7]$ ]] && [[ "${PERMS:1:1}" -ge 4 || "${PERMS:2:1}" -ge 4 ]]; then
+    if [[ "$IS_NTFS" == "1" ]]; then
+      echo "warning: NTFS detected (Git Bash/MSYS) — UNIX perms not meaningful, skipping check"
+      echo "         (use icacls if you want to restrict access on Windows)"
+    elif [[ "$PERMS" =~ ^[2-7][2-7][2-7]$ ]] && [[ "${PERMS:1:1}" -ge 4 || "${PERMS:2:1}" -ge 4 ]]; then
       echo "error: '$ENV_FILE' is too permissive (mode $PERMS). Run :" >&2
       echo "  chmod 600 '$ENV_FILE'" >&2
       exit 2
@@ -136,7 +148,10 @@ for secret in "${REQUIRED_SECRETS[@]}"; do
       echo "  ✗ missing : $secret (file '$expanded_path' not readable — check $file_key in env)"
       continue
     fi
-    gh secret set "$secret" --repo "$REPO" --body-file "$expanded_path" >/dev/null
+    # `gh secret set --body-file` does NOT exist (verified empirically with
+    # gh 2.92.0 : 'unknown flag'). Use stdin redirect — the documented idiom
+    # `gh secret set <name> < file` preserves multi-line content (OpenSSH keys).
+    gh secret set "$secret" --repo "$REPO" < "$expanded_path" >/dev/null
     posted_secrets+=("$secret")
     echo "  ✓ secret : $secret (from $expanded_path)"
     continue

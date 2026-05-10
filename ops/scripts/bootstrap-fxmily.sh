@@ -97,11 +97,18 @@ for arg in "$@"; do
 done
 
 # ---- Permission check on env file ------------------------------------------
+# V1.5.2 round 4 : NTFS Win11 reports mode 777/666 by default. Skip on MSYS/Cygwin.
 PERMS=$(stat -c '%a' "$ENV_FILE" 2>/dev/null || stat -f '%A' "$ENV_FILE" 2>/dev/null || echo "?")
+IS_NTFS=0
+if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] || [[ -n "${MSYSTEM:-}" ]]; then
+  IS_NTFS=1
+fi
 case "$PERMS" in
   600|400|?) ;;
   *)
-    if [[ "${PERMS:1:1}" -ge 4 || "${PERMS:2:1}" -ge 4 ]]; then
+    if [[ "$IS_NTFS" == "1" ]]; then
+      echo "warning: NTFS Git Bash — UNIX perms skipped (use icacls on Windows)"
+    elif [[ "${PERMS:1:1}" -ge 4 || "${PERMS:2:1}" -ge 4 ]]; then
       echo "error: '$ENV_FILE' too permissive (mode $PERMS). Run : chmod 600 '$ENV_FILE'" >&2
       exit 2
     fi
@@ -207,6 +214,17 @@ if [[ "$SKIP_GITHUB" == "0" ]]; then
     echo "error: SSH private key not readable at '$HETZNER_SSH_KEY_FILE_EXPANDED'" >&2
     echo "  Override via : HETZNER_SSH_KEY_FILE=~/.ssh/id_rsa_hetzner bash $0" >&2
     echo "  Or generate one : ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ''" >&2
+    exit 2
+  fi
+  # V1.5.2 round 4 : detect passphrase-protected SSH keys. appleboy/ssh-action
+  # in deploy.yml does NOT pass a passphrase by default — a key with a
+  # passphrase fails silently with "incorrect passphrase". Fail-fast here.
+  if ! ssh-keygen -y -P "" -f "$HETZNER_SSH_KEY_FILE_EXPANDED" >/dev/null 2>&1; then
+    echo "error: SSH key '$HETZNER_SSH_KEY_FILE_EXPANDED' has a passphrase" >&2
+    echo "  GitHub Actions deploy.yml uses appleboy/ssh-action without 'passphrase:'." >&2
+    echo "  Either:" >&2
+    echo "    a) Generate a passphrase-less key : ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_fxmily -N ''" >&2
+    echo "    b) Add 'passphrase: \${{ secrets.HETZNER_SSH_PASSPHRASE }}' to deploy.yml + post the secret." >&2
     exit 2
   fi
   # Stage the values into a transient env file with strict perms.

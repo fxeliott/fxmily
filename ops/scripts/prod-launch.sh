@@ -137,8 +137,18 @@ FXMILY_DOMAIN="$DOMAIN" \
 
 # ─────────────── STEP 5 — Polling Resend verify ───────────────
 step "Polling Resend domain verify (~10-15 min DNS propagation)"
-# shellcheck source=/dev/null
-set -a; . "$TOKENS_FILE"; set +a
+# V1.5.2 round 6 : safe KV parser instead of `set -a; . "$TOKENS_FILE"`
+# (which would `eval` arbitrary expressions in env values). Only well-formed
+# `KEY=value` lines with uppercase-snake-case keys are accepted.
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+  [[ ! "$line" =~ ^[A-Z_][A-Z0-9_]*= ]] && continue
+  k="${line%%=*}"
+  v="${line#*=}"
+  v="${v#\"}"; v="${v%\"}"
+  v="${v#\'}"; v="${v%\'}"
+  export "$k=$v"
+done < "$TOKENS_FILE"
 RESEND_DOMAINS_JSON="$(curl -fsS -H "Authorization: Bearer $RESEND_API_KEY" \
   https://api.resend.com/domains 2>&1 || true)"
 # V1.5.2 round 4 : prefer jq (Hetzner has it, Git Bash via pacman -S jq).

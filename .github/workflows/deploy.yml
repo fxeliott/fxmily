@@ -169,7 +169,7 @@ jobs:
               -v /opt/fxmily/prisma:/prisma:ro \
               -w /work \
               node:22-bookworm-slim \
-              sh -c "
+              bash -c "
                 set -euo pipefail
                 cp -r /prisma /work/prisma
                 cd /work/prisma

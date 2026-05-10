@@ -144,6 +144,16 @@ for secret in "${REQUIRED_SECRETS[@]}"; do
   file_key="${secret}_FILE"
   if [[ -n "${KV[$file_key]:-}" ]]; then
     expanded_path="${KV[$file_key]/#\~/$HOME}"
+    # V1.5.2 round 5 : validate path stays within $HOME (anti path-traversal).
+    # Prevents a malformed `HETZNER_SSH_KEY_FILE=../../etc/shadow` from
+    # being uploaded as a GitHub secret. Use realpath where available.
+    real_path="$(realpath -m "$expanded_path" 2>/dev/null || echo "$expanded_path")"
+    if [[ "$real_path" != "$HOME"/* ]]; then
+      echo "  ✗ refused : $secret — '$file_key' resolved to '$real_path' (outside \$HOME)" >&2
+      echo "    For safety, _FILE paths must point inside ~/. If this is intentional," >&2
+      echo "    move the key to ~/.ssh/ or override with explicit absolute path." >&2
+      continue
+    fi
     if [[ ! -r "$expanded_path" ]]; then
       echo "  ✗ missing : $secret (file '$expanded_path' not readable — check $file_key in env)"
       continue

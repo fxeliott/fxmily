@@ -61,7 +61,11 @@ usermod -aG docker fxmily
 
 # ---- 6. App + secrets directories ------------------------------------------
 mkdir -p /opt/fxmily
-chown fxmily:fxmily /opt/fxmily
+# V1.5.2 round 5 : `/opt/fxmily/prisma` est mounté ro par `deploy.yml` migrate
+# container. Sans ce mkdir, Docker crée le dir comme root et le scp suivant
+# (appleboy/scp-action) échoue (write denied pour user `fxmily`).
+mkdir -p /opt/fxmily/prisma
+chown -R fxmily:fxmily /opt/fxmily
 
 mkdir -p /etc/fxmily/backups
 mkdir -p /var/log/fxmily/caddy

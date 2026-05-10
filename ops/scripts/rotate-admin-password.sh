@@ -81,16 +81,22 @@ fi
 
 echo "  ✓ Hash généré (argon2id, ${#HASH} chars)"
 
-# Update DB
+# Update DB.
+# V1.5.2 round 5 : utiliser psql -v pour binder $ADMIN_EMAIL en parametre
+# (pas d'interpolation shell dans le SQL — anti SQL injection).
+# Le HASH argon2id contient des `$` → on l'envoie via psql -v aussi.
 echo ""
 echo "→ UPDATE users SET passwordHash=… WHERE email=$ADMIN_EMAIL"
 SQL_RESULT="$(ssh "$TARGET" bash -s <<__SSH__ 2>&1
 docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \\
-  psql -U fxmily -d fxmily -tA -c "
+  psql -U fxmily -d fxmily -tA \\
+    -v email='$ADMIN_EMAIL' \\
+    -v hash='$HASH' \\
+    -c "
     UPDATE users
-       SET password_hash = '$HASH',
+       SET password_hash = :'hash',
            updated_at = NOW()
-     WHERE email = '$ADMIN_EMAIL'
+     WHERE email = :'email'
        AND role = 'admin'
     RETURNING id;
   "
@@ -104,17 +110,19 @@ fi
 
 echo "  ✓ Password updated for user $SQL_RESULT"
 
-# Audit
+# Audit. V1.5.2 round 5 : psql -v pour bind ADMIN_EMAIL anti-injection.
 echo ""
 echo "→ Inserting audit row 'admin.password.rotated'..."
 ssh "$TARGET" bash -s >/dev/null 2>&1 <<__SSH__
 docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \\
-  psql -U fxmily -d fxmily -c "
+  psql -U fxmily -d fxmily \\
+    -v email='$ADMIN_EMAIL' \\
+    -c "
     INSERT INTO audit_logs (id, user_id, action, metadata, created_at)
     SELECT gen_random_uuid(), id, 'admin.password.rotated',
            jsonb_build_object('rotatedBy', 'rotate-admin-password.sh', 'ranAt', NOW()::text),
            NOW()
-    FROM users WHERE email = '$ADMIN_EMAIL' AND role = 'admin';
+    FROM users WHERE email = :'email' AND role = 'admin';
   "
 __SSH__
 

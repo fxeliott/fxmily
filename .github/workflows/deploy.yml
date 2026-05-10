@@ -128,12 +128,16 @@ jobs:
           username: fxmily
           key: ${{ secrets.HETZNER_SSH_KEY }}
           port: 22
-          # V1.5.2 round 5 : explicit glob `**` + strip_components 3 levels
-          # (apps/, web/, prisma/) → contents land directly in /opt/fxmily/prisma/
-          # without ambiguity. Trailing-slash behavior of drone-scp varies.
-          source: 'apps/web/prisma/**'
-          target: '/opt/fxmily/prisma/'
-          strip_components: 3
+          # V1.5.2 round 6 : revert round 5 `**` glob — verifier confirmed it
+          # FAILS on GHA ubuntu-latest because `shopt -s globstar` is not
+          # active by default; drone-scp receives `**` verbatim and matches 0
+          # files (Go's filepath.Glob does not support `**`). Use the directory
+          # path (drone-scp tar is recursive by default) + strip_components: 2
+          # to drop `apps/` and `web/`, keeping the `prisma/` wrapper directory.
+          # → files land in /opt/fxmily/prisma/{schema.prisma,migrations/...}
+          source: 'apps/web/prisma'
+          target: '/opt/fxmily/'
+          strip_components: 2
 
       - name: SSH → docker compose pull + up + migrate
         uses: appleboy/ssh-action@v1

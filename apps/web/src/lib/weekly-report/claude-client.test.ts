@@ -19,7 +19,8 @@ import { computeCostEur, PRICING_USD_PER_MTOK } from './pricing';
 
 const ACTIVE_SNAPSHOT = {
   // V1.5 — pseudonymized member label (replaces raw userId at the prompt boundary).
-  memberLabel: 'member-A1B2C3',
+  // V1.5.2 — renamed `memberLabel` → `pseudonymLabel` + widened to 32 bits (8 hex).
+  pseudonymLabel: 'member-A1B2C3D4',
   timezone: 'Europe/Paris',
   weekStart: new Date('2026-05-04T00:00:00Z'),
   weekEnd: new Date('2026-05-10T23:59:59.999Z'),
@@ -70,8 +71,8 @@ const ACTIVE_SNAPSHOT = {
 };
 
 const INACTIVE_SNAPSHOT = {
-  // V1.5 — pseudonymized member label.
-  memberLabel: 'member-D4E5F6',
+  // V1.5 — pseudonymized member label (V1.5.2 — 32-bit / 8 hex chars).
+  pseudonymLabel: 'member-D4E5F6A7',
   timezone: 'Europe/Paris',
   weekStart: new Date('2026-05-04T00:00:00Z'),
   weekEnd: new Date('2026-05-10T23:59:59.999Z'),

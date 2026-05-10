@@ -17,6 +17,11 @@ next-env.d.ts
 !.env.example
 !.env.template
 
+# V1.5.2 round 4 — local secrets bootstrap files. NEVER commit these.
+# Pattern catches `tokens.local.env`, `secrets.local.env`, etc.
+*.local.env
+!*.local.env.example
+
 # Secrets / keys (defense in depth)
 *.pem
 *.key

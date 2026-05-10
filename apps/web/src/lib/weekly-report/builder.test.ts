@@ -147,8 +147,9 @@ function makeDelivery(partial: Partial<SerializedDelivery> = {}): SerializedDeli
 describe('buildWeeklySnapshot — empty input', () => {
   it('returns sane defaults with no trades / check-ins / deliveries', () => {
     const snap = buildWeeklySnapshot(emptyInput());
-    // V1.5 pseudonymization — memberLabel replaces raw userId at the prompt boundary.
-    expect(snap.memberLabel).toMatch(/^member-[A-F0-9]{6}$/);
+    // V1.5 pseudonymization — pseudonymLabel replaces raw userId at the prompt boundary.
+    // V1.5.2 — widened to 32 bits (8 hex chars) + renamed `memberLabel` → `pseudonymLabel`.
+    expect(snap.pseudonymLabel).toMatch(/^member-[A-F0-9]{8}$/);
     expect(snap.timezone).toBe('Europe/Paris');
     expect(snap.counters.tradesTotal).toBe(0);
     expect(snap.counters.tradesWin).toBe(0);
@@ -447,13 +448,14 @@ describe('buildWeeklySnapshot — annotations pass-through', () => {
 });
 
 // =============================================================================
-// V1.5 — pseudonymization (memberLabel replaces userId at the prompt boundary)
+// V1.5 — pseudonymization (pseudonymLabel replaces userId at the prompt boundary)
+// V1.5.2 — widened to 32 bits (8 hex chars) + NFC normalization + rename
 // =============================================================================
 
 describe('pseudonymizeMember — V1.5 prompt boundary defense', () => {
-  it('produces a deterministic member-XXXXXX label', () => {
+  it('produces a deterministic member-XXXXXXXX label (V1.5.2 32-bit)', () => {
     const label = pseudonymizeMember('user_test_1');
-    expect(label).toMatch(/^member-[A-F0-9]{6}$/);
+    expect(label).toMatch(/^member-[A-F0-9]{8}$/);
     // Same input → same output across calls (no Date.now or random).
     expect(pseudonymizeMember('user_test_1')).toBe(label);
   });
@@ -463,7 +465,7 @@ describe('pseudonymizeMember — V1.5 prompt boundary defense', () => {
     for (let i = 0; i < 1000; i++) {
       labels.add(pseudonymizeMember(`user_test_${i}`));
     }
-    // 1000 unique inputs in a 24-bit space → expected collision count ~0.03.
+    // 1000 unique inputs in a 32-bit space (V1.5.2) → expected collisions ~0.0001.
     // We assert no collisions happen on this fixture (deterministic seeds).
     expect(labels.size).toBe(1000);
   });
@@ -473,8 +475,17 @@ describe('pseudonymizeMember — V1.5 prompt boundary defense', () => {
   });
 
   it('handles edge-case userIds (unicode, very long) without crashing', () => {
-    expect(pseudonymizeMember('ñoño-éà')).toMatch(/^member-[A-F0-9]{6}$/);
-    expect(pseudonymizeMember('a'.repeat(1000))).toMatch(/^member-[A-F0-9]{6}$/);
+    expect(pseudonymizeMember('ñoño-éà')).toMatch(/^member-[A-F0-9]{8}$/);
+    expect(pseudonymizeMember('a'.repeat(1000))).toMatch(/^member-[A-F0-9]{8}$/);
+  });
+
+  it('NFC-normalizes the userId before hashing (V1.5.2 — Unicode robustness)', () => {
+    // The same character can be encoded NFC (composed) or NFD (decomposed) —
+    // they hash differently as raw bytes but should yield the same label
+    // after V1.5.2 NFC normalization.
+    const nfc = 'é'; // é (single codepoint, NFC)
+    const nfd = 'é'; // e + combining acute (NFD)
+    expect(pseudonymizeMember(nfc)).toBe(pseudonymizeMember(nfd));
   });
 
   it('respects MEMBER_LABEL_SALT env var (V1.5 security M1 hardening)', () => {
@@ -482,7 +493,7 @@ describe('pseudonymizeMember — V1.5 prompt boundary defense', () => {
     const unsalted = pseudonymizeMember(userId, '');
     const salted = pseudonymizeMember(userId, 'fxmily-test-salt-32chars-long-enough');
     expect(salted).not.toBe(unsalted);
-    expect(salted).toMatch(/^member-[A-F0-9]{6}$/);
+    expect(salted).toMatch(/^member-[A-F0-9]{8}$/);
     // Same salt → same label (deterministic).
     expect(pseudonymizeMember(userId, 'fxmily-test-salt-32chars-long-enough')).toBe(salted);
   });
@@ -490,17 +501,20 @@ describe('pseudonymizeMember — V1.5 prompt boundary defense', () => {
   it('does NOT include the original userId in the label (one-way)', () => {
     const userId = 'cm0xyz123abc456def789';
     const label = pseudonymizeMember(userId);
-    // The label is 6 hex chars; the cuid is 21+ alphanum. No substring match.
-    expect(label.toLowerCase()).not.toContain(userId.toLowerCase().slice(0, 6));
+    // The label is 8 hex chars (V1.5.2); the cuid is 21+ alphanum. No substring match.
+    expect(label.toLowerCase()).not.toContain(userId.toLowerCase().slice(0, 8));
   });
 
-  it('snapshot.memberLabel is set (not snapshot.userId — that field is removed)', () => {
+  it('snapshot.pseudonymLabel is set (not snapshot.userId — that field is removed)', () => {
     const input = emptyInput();
     input.userId = 'user_test_pseudo';
     const snap = buildWeeklySnapshot(input);
-    expect(snap.memberLabel).toBe(pseudonymizeMember('user_test_pseudo'));
+    expect(snap.pseudonymLabel).toBe(pseudonymizeMember('user_test_pseudo'));
     // TypeScript: snap should not expose `userId` field anymore.
     // @ts-expect-error — `userId` is no longer a property of WeeklySnapshot.
     expect(snap.userId).toBeUndefined();
+    // TypeScript: snap.memberLabel was renamed to snap.pseudonymLabel in V1.5.2.
+    // @ts-expect-error — `memberLabel` is no longer a property of WeeklySnapshot.
+    expect(snap.memberLabel).toBeUndefined();
   });
 });

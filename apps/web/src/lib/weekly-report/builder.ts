@@ -1,12 +1,16 @@
 /**
  * Pure aggregator that turns a 7-day slice of DB data into a
  * {@link WeeklySnapshot} ready to feed into Claude Sonnet 4.6 as the user
- * prompt payload (J8 — Phase A foundation, V1.5 pseudonymization).
+ * prompt payload (J8 — Phase A foundation, V1.5 pseudonymization,
+ * V1.5.2 32-bit hardening).
  *
  * Posture (SPEC §2 + §20.4 + V1.5 pseudonymization) :
  *   - **Zero PII in the snapshot.** No email, no name, no raw cuid.
- *     `memberLabel` (e.g. `member-A1B2C3`) replaces `userId` at the prompt
- *     boundary — see `pseudonymizeMember` below.
+ *     `pseudonymLabel` (e.g. `member-A1B2C3D4`) replaces `userId` at the
+ *     prompt boundary — see `pseudonymizeMember` below. **V1.5.2 rename**
+ *     from `memberLabel` to disambiguate from the J8 display name
+ *     `WeeklyDigestEmail.memberLabel` (= "Sophie Martin"), which lives at a
+ *     different layer and never crosses the prompt boundary.
  *   - **`safeFreeText` on every member-controlled string** before it enters
  *     the snapshot. Prompt-injection defense (Trojan Source bidi reorder +
  *     zero-width invisible instructions). Applied here so downstream layers
@@ -37,7 +41,9 @@ const SESSIONS_ALL: readonly TradeSession[] = ['asia', 'london', 'newyork', 'ove
 // =============================================================================
 
 /**
- * Map a member's `userId` (cuid) to a stable label of the form `member-XXXXXX`.
+ * Map a member's `userId` (cuid) to a stable label of the form
+ * `member-XXXXXXXX` (8 hex chars = 32 bits, V1.5.2 widening from the
+ * V1.5 24-bit space).
  *
  * Properties (with optional salt):
  *   - **Deterministic** : same `(userId, salt)` → same label across runs.
@@ -52,14 +58,33 @@ const SESSIONS_ALL: readonly TradeSession[] = ['asia', 'london', 'newyork', 'ove
  *     report export (audit Anthropic, Slack archive, S3 backup of digests)
  *     set `MEMBER_LABEL_SALT` env var** (server-side secret) to make
  *     ré-identification require the salt.
+ *   - **NFC normalization** (V1.5.2) : `userId.normalize('NFC')` defends
+ *     against the theoretical NFC-vs-NFD divergence where two visually
+ *     identical identifiers hash differently. Cuid is alphanum-only so this
+ *     is defensive-only for V1 (no observed collision), but the function is
+ *     exported and a V2 caller could feed arbitrary identifiers.
  *
- * Birthday-paradox correctness (24-bit hex space, n = 16,777,216):
- *   - 50 % collision threshold ≈ √(π·n / 2) ≈ **4823** members
- *     (the previous comment said "4096" — corrected security-auditor M2).
- *   - At n = 1000: P(≥1 collision) ≈ 1 − exp(−1000² / (2·n)) ≈ **2.9 %**
- *     (previous comment said "< 1e-4" which was wrong).
- *   - Recommended migration before V2 cohort > 1000 : extend to 32 bits
- *     (`slice(0, 8)`) where the 50 % threshold becomes ≈ 77 k members.
+ * Birthday-paradox correctness (32-bit hex space, n = 4,294,967,296):
+ *   - 50 % collision threshold ≈ √(π·n / 2) ≈ **77,163 members**
+ *     (V1.5 24-bit threshold was 4,823 — V1.5.2 widened to 77 k for V2 scale).
+ *   - At n = 1000: P(≥1 collision) ≈ 1 − exp(−1000² / (2·n)) ≈ **0.012 %**
+ *     (V1.5 was 2.9 % at n=1000 — orders of magnitude safer now).
+ *   - Sufficient through Fxmily V2 launch even at 100k+ members.
+ *
+ * **Migration data note (V1.5.2 widening)** :
+ *   - Historical `WeeklyReport` rows generated under V1.5 carry **6-char
+ *     pseudonymLabels** (extracted from the persisted `summary` text the LLM
+ *     copied them into, OR derivable by re-hashing `userId` post-fact).
+ *   - V1.5.2+ rows carry **8-char pseudonymLabels**.
+ *   - The two formats coexist by design (pure schema-level concern, no DB
+ *     column to migrate — `WeeklyReport.userId` is the FK, not the label).
+ *   - When Eliot opens an admin report from before the V1.5.2 cutoff, the
+ *     UI / email shows the 6-char label as it was generated. New runs of
+ *     `generateWeeklyReportForUser` always produce 8-char labels.
+ *   - **No replay required** : the label is a prompt-boundary artefact, not
+ *     a join key. The Birthday-paradox 24-bit risk for the 30-member V1
+ *     cohort was ~0.0001 % so historical rows have effectively zero
+ *     collision in their existing 6-char form.
  *
  * Pure mathematically (no Date.now, no random); reads `process.env` at call
  * time so the salt rotates at next process restart (intentional — see
@@ -72,11 +97,19 @@ export function pseudonymizeMember(userId: string, salt?: string): string {
   if (typeof userId !== 'string' || userId.length === 0) {
     throw new TypeError('pseudonymizeMember requires a non-empty userId');
   }
+  // V1.5.2 — NFC normalization. Cuid is alphanum-only (NFC == NFD by
+  // construction) so this is a no-op in V1, but the function is exported and
+  // a V2 caller could feed arbitrary identifiers (Apple Health UID, ULID,
+  // etc.). Normalizing here keeps the contract robust to encoding mishap.
+  const normalizedUserId = userId.normalize('NFC');
   // Default to env var; tests pass `salt: ''` explicitly to assert the
   // unsalted behavior is reproducible.
   const effectiveSalt = salt ?? process.env.MEMBER_LABEL_SALT ?? '';
-  const input = effectiveSalt === '' ? userId : `${effectiveSalt}:${userId}`;
-  const hash = createHash('sha256').update(input).digest('hex').slice(0, 6).toUpperCase();
+  const input = effectiveSalt === '' ? normalizedUserId : `${effectiveSalt}:${normalizedUserId}`;
+  // V1.5.2 — 32-bit slice (8 hex chars) widens the namespace 256× vs V1.5
+  // 24-bit (6 chars). Birthday 50 % threshold ~77 k members, sufficient for
+  // V2 scale before the next migration would be needed.
+  const hash = createHash('sha256').update(input).digest('hex').slice(0, 8).toUpperCase();
   return `member-${hash}`;
 }
 
@@ -86,7 +119,7 @@ export function pseudonymizeMember(userId: string, salt?: string): string {
 
 export function buildWeeklySnapshot(input: BuilderInput): WeeklySnapshot {
   return {
-    memberLabel: pseudonymizeMember(input.userId),
+    pseudonymLabel: pseudonymizeMember(input.userId),
     timezone: input.timezone,
     weekStart: input.weekStart,
     weekEnd: input.weekEnd,

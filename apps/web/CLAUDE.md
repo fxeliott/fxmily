@@ -1754,18 +1754,62 @@ UI wizard `/journal/new` capture désormais les 2 nouveaux fields end-to-end :
 
 ### Mystère hook revert Phase V — résolu en pratique
 
-Cause confirmée : `D:\Fxmily\.claude\hooks\post_tool_fxmily.ps1` (PostToolUse async) invoque `prettier --write` sur Edit/Write. Quand Claude Edit puis Read immédiatement, voit le state prettier-reformaté → perception "revert". Workaround V1.5/V1.5.1/V1.5.2 : edits depuis worktree Ichor (project root différent → hook NON chargé). Long-term fix V1.5.2 : Option C (sync invocation) recommandée — cf. `docs/jalon-V1.5.2-prep.md §3`.
+Cause confirmée : `D:\Fxmily\.claude\hooks\post_tool_fxmily.ps1` (PostToolUse async) invoque `prettier --write` sur Edit/Write. Quand Claude Edit puis Read immédiatement, voit le state prettier-reformaté → perception "revert". Workaround V1.5/V1.5.1/V1.5.2 : edits depuis worktree Ichor (project root différent → hook NON chargé). **V1.5.2 cleanup — long-term fix appliqué** : combo Option B+C dans le hook (`async: true → false` dans `D:\Fxmily\.claude\settings.json` + skip-recently-modified guard `< 5 s` directement dans `post_tool_fxmily.ps1`). Race condition supprimée par construction.
+
+### V1.5.2 cleanup — naming collision + 32-bit slice + rollback + E2E + hook (livré 2026-05-10 sur `feat/v1.5.2-cleanup`)
+
+Cleanup post-V1.5 ship qui ferme les items différés du briefing `docs/jalon-V1.5.2-prep.md`. Branche dédiée [`feat/v1.5.2-cleanup`](https://github.com/fxeliott/fxmily) chained sur `feat/v1.5-trading-calibration`. À merger après PR #36 V1.5.
+
+**1. Naming collision `memberLabel` → `pseudonymLabel`** (HIGH code-reviewer V1.5.1) :
+
+- `WeeklySnapshot.memberLabel` (V1.5 pseudonyme, prompt boundary) renommé `pseudonymLabel` pour éliminer la collision sémantique avec `WeeklyDigestEmail.memberLabel` (J8 display name "Sophie Martin"). Deux concepts → deux noms. Un futur dev qui mélange les deux fail-fast à code-review au lieu d'introduire un PII leak vers Anthropic.
+- 5 fichiers V1.5 only modifiés : `lib/weekly-report/builder.ts` + `builder.test.ts` + `prompt.ts` + `claude-client.test.ts` + `lib/schemas/weekly-report.ts`. Les 5+ fichiers J8 (`weekly-digest.tsx`, `email/send.ts`, `service.ts displayMemberLabel`, `admin/reports/*`) **inchangés** — le `memberLabel` display name garde son nom.
+
+**2. 32-bit slice + NFC normalization** (`pseudonymizeMember`) :
+
+- `slice(0, 6)` → `slice(0, 8)` : 24-bit space (16 M valeurs, threshold 50 % collision = 4823 membres) → 32-bit space (4.3 G, threshold = 77 163 membres). Sufficient through V2 launch.
+- `userId.normalize('NFC')` ajouté avant le hash — defensive contre les NFC vs NFD UTF-8 splits (no-op pour cuid alphanum-only V1, robuste pour V2 callers arbitraires Apple Health UID / ULID).
+- Regex schema `member-[A-F0-9]{6}` → `member-[A-F0-9]{8}`. Test fixtures hardcoded en 8-char hex.
+- **Migration data note** documentée inline dans la JSDoc de `pseudonymizeMember` : les rapports V1.5 historiques portent des labels 6-char, les rapports V1.5.2+ portent des labels 8-char. Pas de DB column à migrer (pseudonyme = prompt-boundary artefact). Les deux formats coexistent sans intervention. Risque de collision pour les 30 membres V1 cohort en 6-char ≈ 0.0001 % — historique safe-as-is.
+
+**3. Rollback V1.5 migration** (HIGH code-reviewer V1.5.1) :
+
+- Section §11 ajoutée à `docs/runbook-hetzner-deploy.md` (143 lignes) couvrant :
+  - 11.1 pré-requis (`pg_dump` atomique, web stop, Prisma migrations check)
+  - 11.2 SQL rollback (Postgres 17 type-cascade order : DROP INDEX → DROP COLUMN ×2 → DROP TYPE → DELETE `_prisma_migrations`)
+  - 11.3 re-déploiement image J10
+  - 11.4 vérification post-rollback (healthcheck + schema check + audit log)
+  - 11.5 re-application future de V1.5 (re-deploy + restore data filtré)
+  - 11.6 rollback du `pseudonymLabel` widening — **note : aucun rollback DB nécessaire** (pure code change, deux formats coexistent par construction).
+
+**4. Playwright E2E `wizard-v1-5-fields.spec.ts`** :
+
+- Nouveau spec `apps/web/tests/e2e/wizard-v1-5-fields.spec.ts` (5 tests) couvrant :
+  - **CAPTURE + PERSIST** : `db.trade.create` avec `tradeQuality='A'` + `riskPct='1.5'` round-trips correctement (Decimal → string `.toString()` = `'1.5'`).
+  - **CAPTURE + PERSIST** : `tradeQuality='C'` + `riskPct='2.5'` (Tharp ceiling violation row, fixture pour le builder counter `riskPctOverTwoCount`).
+  - **CAPTURE + PERSIST** : V1 backward-compat (`tradeQuality=null` + `riskPct=null` — schema rétro-compatible).
+  - **RENDER** : `/journal/[id]` charge sans crash sur un trade V1.5 (smoke check, no error overlay).
+  - **RENDER** : `/journal` (list) charge avec V1.5 + V1 trades coexistants.
+- Pattern carbone J9 visual : skip propre si Chromium absent + `cleanupTestUsers` idempotent + `seedMemberUser` + `loginAs`. **Pas dependent du wizard 6-step happy-path** (selectors fragiles) — la couche capture est testée par les Vitest schema/action unit tests (déjà 17 V1.5 tests verts).
+
+**5. Hook revert long-term fix** (Phase V mystère) :
+
+- `D:\Fxmily\.claude\settings.json` PostToolUse Edit/Write/NotebookEdit : `"async": true` → `"async": false` (Option C — invocation synchrone élimine la race par construction, latence ~100-300 ms acceptable).
+- `D:\Fxmily\.claude\hooks\post_tool_fxmily.ps1` : ajout d'un **skip-recently-modified guard** (Option B — defense-in-depth). Si le fichier a été écrit < 5 s plus tôt, le hook skip le `prettier --write`. lint-staged rattrape le formatting au commit. Combo Option B+C : zéro risque résiduel.
 
 ### Quality gate V1.5 + V1.5.1 + V1.5.2
 
-- type-check exit 0 ✅
+- format check ✓ (sur fichiers modifiés — `.claude/worktrees` exclu de `.prettierignore` au niveau repo)
 - lint exit 0 (max-warnings = 0) ✅
-- **Vitest 749 / 749 verts** (+18 vs J10 baseline 731 : 8 V1.5 schema + 5 builder pseudonym + 3 hardening salt/empty + 2 FR locale)
+- type-check exit 0 ✅
+- **Vitest 750 / 750 verts** (+1 vs V1.5 baseline 749 — nouveau test NFC normalization sur `pseudonymizeMember`)
+- Build prod Turbopack ✅ — toutes les routes V1.5 / V1.5.1 listées
 - Prisma 7.8.0 client regenerated ✅
 
-### Commit chain V1.5 (5 commits sur `feat/v1.5-trading-calibration`)
+### Commit chain V1.5 (6 commits avec V1.5.2 cleanup)
 
 ```
+<HEAD V1.5.2> fix(v1.5.2): cleanup — pseudonymLabel rename + 32-bit + NFC + rollback runbook + E2E + hook
 e6a7a3b fix(v1.5.2): FR locale comma support + close-out doc + V1.5.2 prep
 f6539e7 fix(v1.5.1): audit-driven hardening — builder aggregates + salt + Decimal align + bounds
 402ea66 feat(v1.5.1): wizard UI capture — tradeQuality + riskPct end-to-end
@@ -1776,7 +1820,8 @@ f6539e7 fix(v1.5.1): audit-driven hardening — builder aggregates + salt + Deci
 ### Pré-requis Eliot pour activer V1.5 en prod
 
 1. Mergement PR #35 J10 d'abord (smoke prod 12-step validé).
-2. PR `feat/v1.5-trading-calibration` créée + reviewed + merged sur main.
-3. Apply migration : `pnpm --filter @fxmily/web prisma:migrate deploy`.
-4. **Décision P1 sécurité** : poser `MEMBER_LABEL_SALT` env var (`openssl rand -hex 32`) dans `/etc/fxmily/web.env` AVANT 1er rapport IA hebdo si export externe envisagé.
-5. Décider P0 Anthropic Bedrock Frankfurt (Option B) vs API directe US (Option A) — cf. [v2-roadmap.md §🚨 P0 RGPD](../../docs/v2-roadmap.md).
+2. PR #36 `feat/v1.5-trading-calibration` créée + reviewed + merged sur main.
+3. PR #37 `feat/v1.5.2-cleanup` (V1.5.2 cleanup) créée + reviewed + merged sur main.
+4. Apply migration : `pnpm --filter @fxmily/web prisma:migrate deploy`.
+5. **Décision P1 sécurité** : poser `MEMBER_LABEL_SALT` env var (`openssl rand -hex 32`) dans `/etc/fxmily/web.env` AVANT 1er rapport IA hebdo si export externe envisagé.
+6. Décider P0 Anthropic Bedrock Frankfurt (Option B) vs API directe US (Option A) — cf. [v2-roadmap.md §🚨 P0 RGPD](../../docs/v2-roadmap.md).

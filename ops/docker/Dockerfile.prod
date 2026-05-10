@@ -52,15 +52,14 @@ COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=deps /repo/apps/web/node_modules ./apps/web/node_modules
 COPY . .
 
-# Prisma client (Rust-free, driver adapter — generated under
-# `apps/web/src/generated/prisma/`).
-RUN pnpm --filter @fxmily/web prisma:generate
-
-# Inject build-time env. Real secrets get injected by docker-compose at
-# runtime (env_file). The values below ONLY satisfy the Zod schema so
-# `next build` doesn't crash. `AUTH_URL` MUST be HTTPS in `production`.
-# Sentry source maps run during this step IF SENTRY_AUTH_TOKEN is also
-# passed via `--build-arg` — see CI workflow.
+# Inject build-time env BEFORE prisma:generate (Prisma 7 reads DATABASE_URL
+# from process.env via prisma.config.ts at generate time — needs the
+# placeholder set or `prisma generate` exits 1 with PrismaConfigEnvError).
+# Real secrets get injected by docker-compose at runtime (env_file).
+# Values below ONLY satisfy the Zod schema so `next build` doesn't crash.
+# `AUTH_URL` MUST be HTTPS in `production`.
+# Sentry source maps run during `next build` IF SENTRY_AUTH_TOKEN is passed
+# via `--build-arg` — see deploy.yml workflow.
 ARG SENTRY_AUTH_TOKEN=""
 ARG SENTRY_ORG="fxmily"
 ARG SENTRY_PROJECT="fxmily-web"
@@ -72,6 +71,10 @@ ENV SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN} \
     DATABASE_URL=postgresql://placeholder:placeholder@build-time-only:5432/placeholder \
     AUTH_SECRET=build_time_only_placeholder_must_be_at_least_32_chars \
     AUTH_URL=https://build.fxmily.invalid
+
+# Prisma client (Rust-free, driver adapter — generated under
+# `apps/web/src/generated/prisma/`).
+RUN pnpm --filter @fxmily/web prisma:generate
 
 RUN pnpm --filter @fxmily/web build
 

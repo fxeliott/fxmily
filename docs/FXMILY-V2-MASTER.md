@@ -62,6 +62,16 @@
 - §27 Pickup prompt V1.6
 - §28 Subagents pattern par jalon
 
+**PARTIE IX — RISQUES PRODUIT & ÉTHIQUE (Round 11)**
+
+- §29 Top 5 risques produit (vs techniques)
+- §30 Éthique IA — Anthropic LIVE garde-fous
+
+**PARTIE X — RÉSILIENCE & LANCEMENT (Round 11)**
+
+- §31 Workflow crise membre + bus factor Eliot
+- §32 Stratégie lancement feature flags + beta cohort + go/no-go par jalon
+
 ---
 
 # PARTIE I — ÂME PRODUIT
@@ -90,6 +100,10 @@
 ## §3. North Star + métriques secondaires
 
 **North Star (validée Eliot 2026-05-11 Q3=b)** : **évolution du score discipline moyen cohorte +X % sur 12 semaines glissantes.**
+
+**Cible X aspirationnelle Round 11 (à valider Eliot) : +15 % sur 12 semaines**, soit un effet "medium-large" à l'échelle Cohen (d ≈ 0.5-0.8). Ancrage : Rupprecht et al. 2024 méta-analyse pre-performance routines en sport rapporte Hedges' g = 0.64-0.70 sous pression. Transposé au tracker comportemental trader, +15 % discipline en 12 sem = ambitieux mais défendable scientifiquement (vs +5 % = bruit, +30 % = miracle non crédible).
+
+**Mesure** : `discipline_score_J90_cohorte_moyen / discipline_score_J0_cohorte_moyen - 1`. Calcul cron mensuel sur 12 semaines glissantes.
 
 Toute feature passe par le filtre : _"ça améliore la mesure ou la progression du score discipline ?"_. Si NON → descope.
 
@@ -732,7 +746,9 @@ discipline = planRespect(30) + hedgeRespect(20) + eveningPlan(20) + intentionFil
 
 > **Règle SPEC §18.4 non-négociable** : 1 session Claude Code = 1 jalon. `/clear` entre chaque. Chaque jalon ~8-12h dev.
 
-## §17. V1.6 — Stabilisation backend (4-6h) ⭐ PROCHAIN JALON
+## §17. V1.6 — Stabilisation backend (8-12h révisé Round 11) ⭐ PROCHAIN JALON
+
+> **Correction Round 11** : estimation initiale 4-6h sous-estimée. Tri rigoureux de 10 PRs dependabot = 3-4h seul (test breaking changes par PR), Sentry taxonomy = 2-3h (config + tests scenarios), email cap = 2-3h (champ Prisma + dispatcher.ts + tests). Réaliste = 8-12h. Toujours 1 session, mais session pleine.
 
 **Scope** :
 
@@ -854,9 +870,18 @@ discipline = planRespect(30) + hedgeRespect(20) + eveningPlan(20) + intentionFil
 
 # PARTIE VI — DÉCISIONS D'ÂME À ARBITRER
 
-## §23. Les 10 manques M1-M10
+## §23. Les 10 manques M1-M10 — hiérarchisés Round 11
 
-Ces 10 décisions sont **non-déléguables à Claude**. Elles personnalisent Fxmily à TA formation et TON public. Sans elles, le plan §17-§22 est complet mais générique.
+Ces 10 décisions sont **non-déléguables à Claude**. Elles personnalisent Fxmily à TA formation et TON public.
+
+**Hiérarchie de criticité (Round 11)** :
+
+- 🔴 **BLOQUANTS V1.7+** : M4 (métaphore), M5 (rituel central), M6 (wow moment). Sans ces 3 réponses, le UX V1.7 est aveugle.
+- 🟠 **CRITIQUES pour mesure** : M1 (chiffres baseline), M8 (promesse 12 sem). Sans, on ne peut pas évaluer +15% North Star.
+- 🟡 **IMPORTANTS pour design** : M3 (membre idéal), M9 (rituel Eliot), M10 (courbe émotionnelle).
+- 🟢 **NICE-TO-HAVE narratif** : M2 (définition meilleure formation), M7 (autres outils écosystème).
+
+**Si tu n'as que 5 minutes : réponds M4, M5, M6.** Le reste peut suivre.
 
 | #       | Question                                                                                                                  | Pourquoi bloquant                               | Statut           |
 | ------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------- |
@@ -1000,6 +1025,99 @@ Lance fxmily-jalon-tracker au démarrage.
 
 ---
 
+# PARTIE IX — RISQUES PRODUIT & ÉTHIQUE (Round 11)
+
+## §29. Top 5 risques produit (vs risques techniques)
+
+Les 5 risques techniques sont en §15 (User bloat, write volume, RGPD export, DailyCheckin duplication, CoachDebrief PII). Voici les **5 risques PRODUIT** distincts :
+
+| #      | Risque                                                                                                     | Probabilité | Impact                                 | Mitigation V1.7+                                                                                                 |
+| ------ | ---------------------------------------------------------------------------------------------------------- | ----------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **R1** | **Drift posture** : un membre demande conseil trade en privé, Eliot répond, ligne rouge AMF franchie       | Moyenne     | CRITIQUE (sanctions pénales possibles) | Disclaimer dans tout email/notif (V1.7) + audit log conversations Eliot↔membre + formation Eliot ligne rouge AMF |
+| **R2** | **Adoption faible cohorte 25 actuels** : <5/25 utilisent quotidiennement après 30j                         | Élevée      | HIGH (data trop maigre pour scoring)   | D7/D30 metric (V1.6) + interviews 5 premiers users avant V1.7 + feature flags par user                           |
+| **R3** | **Cannibalisation formation** : membres préfèrent Fxmily au coaching direct = formation devient accessoire | Faible      | MEDIUM (modèle business inversé)       | Module DEBRIEF V2.0 force interaction Eliot×membre + zone "réponses uniquement Eliot"                            |
+| **R4** | **Burnout coaching Eliot** : à 100 membres, Eliot ne peut plus suivre quotidien                            | Élevée      | HIGH (qualité chute)                   | K1 at-risk alerts intelligentes V1.8 + auto-priorisation top 5/jour + bus factor §31                             |
+| **R5** | **Churn invisible** : membres paient mais désengagent silencieusement                                      | Moyenne     | HIGH (rétention payante chute)         | NPS trimestriel (L3 V1.7) + cohort health score (K8 V1.6) + exit interview obligatoire si cancel                 |
+
+## §30. Éthique IA — Anthropic LIVE V1.7
+
+L'activation Anthropic LIVE en V1.7 va générer des messages personnalisés pour des humains en état émotionnel fragile (post-loss, après revenge trade, en burnout). **Responsabilité réelle.**
+
+**Garde-fous obligatoires V1.7** :
+
+1. **System prompt verrouillé** : posture Mark Douglas hardcoded, refuse tout output contenant `[buy/sell/long/short/entry/exit/setup]` (regex post-generation)
+2. **Hallucination disclaimer** : tout message IA flagué visuellement (`✨ Généré par IA — pas un substitut au coaching humain`)
+3. **Modération output** : 2-pass review avant push — (a) `fxmily-content-checker` regex AMF, (b) score sentiment (refuser si <-0.7, escalade Eliot)
+4. **Crisis detection** : si membre mentionne suicidaire / dépression / argent désespéré dans free-text → IA ne répond pas, push direct Eliot + ressources externes §31
+5. **Coût circuit-breaker** : si usage Anthropic >$25/mois → auto-disable + email Eliot
+6. **Audit log obligatoire** : `ai.message.generated` avec hash prompt + hash output (sans contenu PII), pour audit posterior
+7. **Opt-out membre** : settings → toggle "AI coach" off (membre peut refuser)
+
+**Référence éthique** : Anthropic [Acceptable Use Policy](https://www.anthropic.com/legal/aup) + EU AI Act (catégorie "limited risk" pour AI coaching).
+
+# PARTIE X — RÉSILIENCE & LANCEMENT (Round 11)
+
+## §31. Workflow crise membre + bus factor Eliot
+
+### Workflow crise psy membre (V1.7+)
+
+Aucun process défini Rounds 1-10. Ajout obligatoire V1.7 :
+
+1. **Détection automatique** : free-text contenant mots-clés crisis (`suicide`, `dépression`, `tout perdu`, etc.) → ne pas afficher IA response, déclencher workflow
+2. **Push direct Eliot** : notification haute priorité + nom pseudonyme membre + extrait safe (sans détail PII)
+3. **Ressources externes intégrées** (R3 V1.6) :
+   - SOS Amitié 09 72 39 40 50 (24/7)
+   - Suicide Écoute 01 45 39 40 00
+   - 3114 (numéro national prévention)
+   - Service de Santé au Travail (si applicable membre pro)
+4. **Modal in-app** : "Si tu traverses un moment difficile, voici des ressources. Eliot a été notifié."
+5. **Pas de tracking automatique post-crisis** : pause score discipline pendant 7j, l'app ne push plus rien
+6. **Coach note auto-créée** : CoachDebrief.notes pre-rempli pour Eliot avec contexte safeFreeText
+
+### Bus factor Eliot
+
+Si Eliot tombe malade 3 mois, Fxmily survit comment ? Pilier P4 dit "L'IA enrichit, ne remplace pas Eliot". Sans Eliot, le coaching humain disparaît.
+
+**Plan résilience V2.x** :
+
+1. **Documentation transferable** : ce master + SPEC.md + apps/web/CLAUDE.md = onboarding tech complet pour dev externe
+2. **Coach délégué** : V2.x permettre 1 coach secondaire (User.role = 'coach'), partage cohorte
+3. **Mode dégradé "auto-pilot"** : si Eliot inactif >14j, mode notif "Eliot est en pause, mais ta data continue d'être trackée pour son retour"
+4. **Export complet cohorte** : `/admin/export/cohort` zip JSON anonymisé, transférable à un coach successeur
+5. **Sauvegardes** : déjà en place V1 (pg_dump GPG quotidien 02:30 UTC)
+
+## §32. Stratégie de lancement V1.6 → V2.0
+
+Aucune stratégie ramp documentée Rounds 1-10. Comment ramper 5 jalons sur cohorte 25 → 100 membres ?
+
+### Pattern recommandé : feature flags + beta cohort
+
+1. **Feature flag par module** : `featureFlags.routinesV1_8 = boolean` dans `User` settings. Activable progressivement.
+2. **Beta cohort** : 3-5 membres volontaires testent V1.7+ pendant 2 semaines AVANT rollout général. Critères sélection : déjà ≥4 check-ins/sem, NPS ≥8, vocal sur le Discord.
+3. **Rollout en 4 vagues** par jalon :
+   - Semaine 1 : beta 3-5 membres
+   - Semaine 2 : +10 membres (early adopters)
+   - Semaine 3 : +cohorte complete
+   - Semaine 4 : monitoring intensif + interview 5 membres + go/no-go V suivant
+4. **Rollback plan** : feature flag off (instant) + script Prisma `DELETE FROM feature_rows WHERE created_at > $rolloutDate` documenté
+5. **Communication membre** : email broadcast V1.7+ "Nouvelles features Fxmily : voici comment ça t'aide" — 200 mots max, pas de jargon tech
+6. **Mesure go/no-go** : avant chaque jalon suivant, audit cohort health score (K8) — si <70 % en green, on attend +2 sem avant ship suivant
+
+### Critères go/no-go par jalon
+
+| Jalon       | Critère pour passer au suivant                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------- |
+| V1.6 → V1.7 | Cron Watch 7j green continu, Sentry <50 events/j, 0 régression Vitest                                     |
+| V1.7 → V1.8 | ≥3 membres utilisent WeeklyReview pendant 4 sem, Trade.tags taux remplissage >60 %                        |
+| V1.8 → V1.9 | ≥3 membres ont 1 routine custom + 14 jours adherence ≥70 %                                                |
+| V1.9 → V2.0 | ≥5 membres ont fait test psychométrique + ≥1 QCM/sem pendant 2 sem, 0 alerte AMF `fxmily-content-checker` |
+| V2.0 → V2.x | 3 debriefs Eliot conduits avec brief IA, ≥2 milestones complétées sur 5 membres                           |
+
+**Pas de jalon suivant tant que critère go non rempli.** Évite drift architectural.
+
+---
+
 # CHANGELOG
 
 - **2026-05-11 v1.0** — Création initiale via interview Eliot 9 rounds + 5 subagents (planner, researcher × 3, code-architect × 2). Remplace SPEC-V2-VISION.md + MANIFESTO-V2.md (à archiver). Source unique de vérité produit V2.
+- **2026-05-11 v1.1** — Round 11 audit critique self-imposed : (a) §3 X=15% défendu Rupprecht 2024, (b) §17 V1.6 effort corrigé 4-6h → 8-12h réaliste, (c) §23 M1-M10 hiérarchisés (M4/M5/M6 bloquants), (d) ajout PARTIE IX risques produit + éthique IA Anthropic LIVE, (e) ajout PARTIE X résilience bus factor + stratégie lancement feature flags + beta cohort + go/no-go par jalon.

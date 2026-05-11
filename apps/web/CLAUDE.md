@@ -1825,3 +1825,194 @@ f6539e7 fix(v1.5.1): audit-driven hardening — builder aggregates + salt + Deci
 4. Apply migration : `pnpm --filter @fxmily/web prisma:migrate deploy`.
 5. **Décision P1 sécurité** : poser `MEMBER_LABEL_SALT` env var (`openssl rand -hex 32`) dans `/etc/fxmily/web.env` AVANT 1er rapport IA hebdo si export externe envisagé.
 6. Décider P0 Anthropic Bedrock Frankfurt (Option B) vs API directe US (Option A) — cf. [v2-roadmap.md §🚨 P0 RGPD](../../docs/v2-roadmap.md).
+
+## V1.6 — Post-prod-launch hardening (livré 2026-05-10 → 2026-05-11)
+
+Cette section documente les 5 bugs LATENTS détectés via 4 rounds d'audit
+exhaustif POST prod launch. Tous étaient des bugs silencieux qui ne
+crashaient rien en surface mais dégradaient ou paralysaient des sous-systèmes
+critiques sans laisser de trace dans /api/health. **Pattern récurrent : tous
+provenaient du Git checkout Windows convertissant LF → CRLF par défaut.**
+
+### Bug #1 — `pnpm-lock.yaml` duplicate `@types/node@25.6.2` key (commit `f44d124`)
+
+Apparu après merge de 3 PRs dependabot consécutifs (#40 @types/node, #43
+tailwind-merge, #45 turbo). Le lockfile était brisé : `pnpm install
+--frozen-lockfile` retournait `ERR_PNPM_BROKEN_LOCKFILE` au line 2841 sur la
+clé dupliquée. **Impact** : la prochaine CI/Deploy aurait fail au step
+`pnpm install` car le workflow Dockerfile.prod utilise `--frozen-lockfile`.
+Bug latent à exploser au prochain push.
+
+**Fix** : `pnpm install` (sans `--frozen-lockfile`) regen le lockfile clean.
+Diff stat 12 ins / 40 del = net simplification. Verifications post-fix :
+`--frozen-lockfile` exit 0 + vitest 125/125 + tsc 0 + /api/health 200.
+
+### Bug #2 — `/etc/cron.d/fxmily-app` CRLF (~20h cron-down) (commit `dc42a51`)
+
+**Le plus grave bug de cette session.** Crontab Hetzner deployé avec
+**60 caractères CR** (`\r`) embedded. Le cron daemon Debian/Ubuntu
+**SILENT-IGNORE** les lignes contenant CR — le username field se lit
+`fxmily\r` qui ne matche aucun système user → ligne rejetée sans aucun log
+d'erreur. **Aucun cron n'a tourné automatique** entre prod launch
+(2026-05-10 16:43 UTC) et fix (2026-05-11 12:28 UTC) = **~20h zéro auto-run** :
+
+- ❌ Backup pg_dump daily 02:30 UTC (slot complètement manqué)
+- ❌ Dispatch-notifications every 2 min (~600 runs perdus)
+- ❌ Recompute-scores daily 02:00 UTC
+- ❌ Dispatch-douglas every 6h
+- ❌ Weekly-reports Sunday 21:00 UTC (slot non encore atteint mais aurait fail)
+- ❌ Purge-deleted / purge-push-subscriptions / purge-audit-log
+- ❌ Cron-watch self-monitoring (paradoxalement, le watcher lui-même
+  n'aurait pas detecté car il authentifie par CRON_SECRET — cf. Bug #5)
+
+**Détection** : `cat -A /etc/cron.d/fxmily-app` montre `^M$` à chaque fin
+de ligne ; `journalctl _COMM=cron --since '24h ago' | grep '(fxmily)'`
+retournait **zéro entry**.
+
+**Fix** : `tr -d '\r' < ... > .lf.tmp && mv` + `systemctl restart cron`.
+Live-verified : `(*system*fxmily-app) RELOAD` log entry + `(fxmily) CMD`
+immediately suivante = cron daemon enfin reconnait le user `fxmily`.
+
+**Defense permanente** : `ops/scripts/fix-crlf-prod.sh` shipped (commit
+`dc42a51`) + deployé `/usr/local/bin/fxmily-fix-crlf` sur Hetzner.
+`.gitattributes` (commit `e14bdb8`) force LF sur `ops/cron/*`,
+`ops/scripts/*.sh`, `Caddyfile`, `Dockerfile*`, `*.yml`, `*.yaml` pour
+prevenir regression sur future checkout Windows.
+
+### Bug #3 — `/etc/fxmily/Caddyfile` CRLF (66 CR chars) — fix live-only
+
+Même cause que Bug #2 (Git checkout Windows). Caddy parse les CRLF en
+général tolérant mais certaines directives peuvent fail silently. Fix
+live : `tr -d '\r' < /etc/fxmily/Caddyfile > /tmp/Caddyfile.lf && mv` +
+`docker compose exec caddy caddy reload`. **Vérifié post-fix** : HTTPS
+encore 200, HSTS preload toujours actif. Aucun fichier local à committer
+(le fichier source dans le repo était déjà LF).
+
+### Bug #4 — Slug mismatch `checkin.reminder.scan` vs `cron.checkin_reminders.scan` (commit `dc7a4b4`)
+
+`lib/checkin/reminders.ts` émettait le slug J5 legacy (`checkin.reminder.scan`)
+au 4 occurrences (lignes 71, 97, 133, 186). Le `getCronHealthReport`
+(J10 Phase J) attendait le slug canonical `cron.checkin_reminders.scan`
+(pattern utilisé par les 8 autres crons : `cron.recompute_scores.scan`,
+`cron.dispatch_douglas.scan`, etc.). Résultat : **cron-watch GH Actions
+retournait `never_ran` pour `checkin_reminders` même quand le cron tournait
+fine**. Hourly fail récurrent sur Cron Watch workflow.
+
+**Fix** : sed 4× emission dans `reminders.ts` + 2× tests dans
+`reminders.test.ts` + 1× union `audit.ts` → tous au canonical
+`cron.checkin_reminders.scan`. Vitest 8/8 + 7/7 verts post-fix. Les 3 rows
+DB legacy (`checkin.reminder.scan`) restent comme historical record — pas
+queried par `health.ts` donc no impact.
+
+### Bug #5 — GH Actions Secret `CRON_SECRET` mismatch avec Hetzner `/etc/fxmily/cron.env`
+
+Découvert quand Cron Watch retournait HTTP 401 même APRÈS fix du slug. Le
+secret posté initialement dans GH (commit `pose-github-secrets.sh`
+2026-05-10) **ne matchait pas** celui dans `/etc/fxmily/cron.env`
+sur Hetzner. Conséquence : **Cron Watch ne s'est JAMAIS authentifié
+depuis prod launch** — tous les fails depuis hier étaient des 401
+silencieux, attribués à tort à "amber/never_ran" jusqu'à inspection
+du log via `gh run view --log`.
+
+**Détection** : `gh run view <run-id> --log | grep HTTP` → `HTTP 401
+unauthorized` (au lieu de `503` qu'on attendait).
+
+**Fix** : `ssh fxmily@... "cat /etc/fxmily/cron.env" | grep CRON_SECRET=
+| cut -d= -f2- | gh secret set CRON_SECRET --repo fxeliott/fxmily`
+(via stdin pipe = zero chat-exposure). Tokens.local.env confirmed identical
+prefix `ffd8c9a0...` = local matchait Hetzner depuis le début, c'était GH
+seul out of sync. **Live verified** : Cron Watch run #25667396986
+"✅ Heartbeat green" + HTTP 200 — 1er green depuis prod launch.
+
+### Pattern récurrent : Git checkout Windows → CRLF pitfall
+
+Sur les 5 bugs ci-dessus, **3 sont des CRLF latents** (Bug #2 crontab,
+Bug #3 Caddyfile, Bug #4 reminders.ts mais ce dernier était un slug
+naming + pas CRLF directement). Cause root pattern :
+
+```
+Windows Git default: core.autocrlf=true
+  → Au checkout : LF (in repo) → CRLF (working tree)
+  → Au commit : CRLF (working tree) → LF (in repo)
+
+Mais :
+  → SCP du working tree vers Hetzner = CRLF préservé
+  → Linux services qui parsent line-by-line (cron, certains shells, gpg)
+    rejettent silencieusement les lignes CRLF
+```
+
+**Protection en place** :
+
+- `.gitattributes` force `text eol=lf` sur tous les fichiers shell + YAML +
+  Caddyfile + Dockerfile (commit `e14bdb8`).
+- `ops/scripts/fix-crlf-prod.sh` détecte + strip CRLF sur Hetzner targets
+  (`/etc/cron.d/fxmily-app`, `/usr/local/bin/fxmily-*`). Exit 0 si all
+  clean, exit 1 si broken après fix (anti-régression).
+- Run automatique recommandé après tout `setup-host.sh` ou redeploy via
+  GH Actions deploy.yml.
+
+### Hardening dependabot — 14 PRs triage (2026-05-11)
+
+3 PRs low-risk **merged** :
+
+- `#40` @types/node 25.6.0→25.6.2 (patch dev) — commit `9584a38`
+- `#43` tailwind-merge 3.5→3.6 (minor lib) — commit `f91a4e1`
+- `#45` turbo 2.9.9→2.9.12 (patch dev) — commit `a9d2da0`
+
+10 PRs majors **deferred to manual review** (commented with
+"V1.7 manual review — major-version bumps need CHANGELOG check") :
+
+- `#1` actions/setup-node 4→6 (skips v5)
+- `#2` pnpm/action-setup 4→6 (skips v5)
+- `#3` actions/checkout 4→6 (skips v5)
+- `#6` eslint 9→10 (major config potential breaking)
+- `#38` docker/build-push-action 6→7 (major)
+- `#39` docker/login-action 3→4 (major)
+- `#41` tailwind group 3 updates incl prettier-plugin 0.6→0.8 (format diffs)
+- `#42` lint-staged 15→17 (skips v16)
+- `#46` @commitlint/config-conventional 19→21 (major)
+- `#47` @commitlint/cli 19→21 (major)
+
+`#44` resend 6.12.2→6.12.3 **conflicts** post-merge `#40` — dependabot va
+rebase automatiquement.
+
+### Quality gate V1.6
+
+- format check ✓, lint exit 0, tsc exit 0
+- Vitest **125+ tests verts** (8 reminders + 7 health + 38 push-subscription + autres)
+- Build prod Turbopack ✓
+- `/api/health` 200 + `/api/cron/health` overall = `amber` (acceptable) → 200
+- Cron Watch GH Actions ✅ green (run #25667396986)
+- Cron daemon Hetzner **actually running** (vs apparences trompeuses jusqu'à fix Bug #2)
+- 5 bugs latents tous catch + tous fix avec defense permanente
+
+### Commit chain V1.6 (6 commits)
+
+```
+dc7a4b4 fix(observability): align checkin_reminders audit slug with cron.* convention
+dc42a51 fix(ops): CRLF defensive script + document crontab silent-skip pitfall
+f44d124 fix(deps): regen pnpm-lock.yaml after dependabot merges
+9584a38 chore(deps-dev): bump @types/node 25.6.0→25.6.2 (#40)
+f91a4e1 chore(deps): bump tailwind-merge 3.5→3.6 (#43)
+a9d2da0 chore(deps-dev): bump turbo 2.9.9→2.9.12 (#45)
+```
+
+### V1.7+ backlog explicit (tous reclassés post-V1.6)
+
+- **Item #5 Sentry capture taxonomy** : `lib/observability.ts` n'expose
+  que `reportError` (severity=error). Researcher Round 2 recommande
+  taxonomy : 404/410 push gone = `info` (expected, pas erreur), 429 =
+  `warning`, 5xx = `exception`. Faut ajouter `reportWarning(scope,
+message, extra)` qui utilise `Sentry.captureMessage(message, 'warning')`
+  - wiring dans `lib/push/dispatcher.ts:classifyError` catches.
+- **Item #4 Email fallback frequency cap** : `notification_queue` row
+  doit avoir un `is_transactional` field (default false). Si false +
+  user a déjà reçu N>=3 emails fallback dans 24h glissantes → skip
+  l'envoi. SPEC §18.2 polish.
+- **Item #2 Dependabot 10 PRs majors** : batch review séquentiel — pour
+  chaque PR, read CHANGELOG, run `pnpm install` + tests Vitest locally,
+  push CI verify, merge si OK.
+- **Anthropic API key activation** ($12/mois V1, ~5 min Eliot Console)
+  pour 1er digest IA réel non-mock.
+- **iPhone PWA smoke E2E** Phase frontend (différé par décision Eliot
+  "backend d'abord").

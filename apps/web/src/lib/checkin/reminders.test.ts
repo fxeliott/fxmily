@@ -50,7 +50,7 @@ describe('runCheckinReminderScan', () => {
     // The audit row still fires — that's our heartbeat.
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: 'checkin.reminder.scan',
+        action: 'cron.checkin_reminders.scan',
         metadata: expect.objectContaining({ reason: 'out_of_window' }),
       }),
     );
@@ -152,7 +152,7 @@ describe('runCheckinReminderScan', () => {
 
     expect(logAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: 'checkin.reminder.scan',
+        action: 'cron.checkin_reminders.scan',
         metadata: expect.objectContaining({
           scannedUsers: 1,
           enqueuedMorning: 1,

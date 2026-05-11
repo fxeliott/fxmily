@@ -68,7 +68,7 @@ export async function runCheckinReminderScan(
   const eveningDueProbe = isEveningReminderDue(now, probeTz);
   if (!morningDueProbe && !eveningDueProbe) {
     await logAudit({
-      action: 'checkin.reminder.scan',
+      action: 'cron.checkin_reminders.scan',
       metadata: {
         scannedUsers: 0,
         enqueuedMorning: 0,
@@ -94,7 +94,7 @@ export async function runCheckinReminderScan(
 
   if (users.length === 0) {
     await logAudit({
-      action: 'checkin.reminder.scan',
+      action: 'cron.checkin_reminders.scan',
       metadata: { ...result, reason: 'no_eligible_users' },
     });
     return result;
@@ -130,7 +130,7 @@ export async function runCheckinReminderScan(
     result.scannedUsers = users.length;
     result.skipped = users.length;
     await logAudit({
-      action: 'checkin.reminder.scan',
+      action: 'cron.checkin_reminders.scan',
       metadata: { ...result, reason: 'no_users_in_window' },
     });
     return result;
@@ -183,7 +183,7 @@ export async function runCheckinReminderScan(
 
   // Single audit row per scan — heartbeat without spamming the audit log.
   await logAudit({
-    action: 'checkin.reminder.scan',
+    action: 'cron.checkin_reminders.scan',
     metadata: {
       scannedUsers: result.scannedUsers,
       enqueuedMorning: result.enqueuedMorning,

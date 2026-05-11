@@ -152,7 +152,9 @@ Toute feature passe par le filtre : _"ça améliore la mesure ou la progression 
 
 # PARTIE II — ARCHITECTURE PRODUIT
 
-## §6. Les 7 modules
+## §6. Les 7 modules — extensions de l'existant V1 (Round 12)
+
+> **Audit V1 réel 2026-05-11** : 5/7 modules ont déjà des fondations V1 livrées (J0-J10 + V1.5 + V1.5.2 + V1.6). Le master ne dit PAS "créer 7 modules from scratch" — il dit "étendre l'existant vers une vision orchestrée". Cf. `apps/web/CLAUDE.md` pour l'inventaire factuel J0→V1.6.
 
 ```
                             FXMILY V2 ARCHITECTURE
@@ -746,9 +748,14 @@ discipline = planRespect(30) + hedgeRespect(20) + eveningPlan(20) + intentionFil
 
 > **Règle SPEC §18.4 non-négociable** : 1 session Claude Code = 1 jalon. `/clear` entre chaque. Chaque jalon ~8-12h dev.
 
-## §17. V1.6 — Stabilisation backend (8-12h révisé Round 11) ⭐ PROCHAIN JALON
+## §17. V1.6 — Stabilisation backend (8-12h, partiellement livré 2026-05-11)
 
-> **Correction Round 11** : estimation initiale 4-6h sous-estimée. Tri rigoureux de 10 PRs dependabot = 3-4h seul (test breaking changes par PR), Sentry taxonomy = 2-3h (config + tests scenarios), email cap = 2-3h (champ Prisma + dispatcher.ts + tests). Réaliste = 8-12h. Toujours 1 session, mais session pleine.
+> **Update Round 12** : V1.6 audit-driven hardening DÉJÀ EFFECTUÉ (5 bugs latents catch + commit chain `f44d124 + dc42a51 + dc7a4b4 + e14bdb8 + 9584a38 + f91a4e1 + a9d2da0`). Cf. `apps/web/CLAUDE.md §V1.6`. Restent les 4 items polish non encore commités :
+>
+> 1. Sentry alerting taxonomy (info/warning/exception) — wirer `reportWarning(scope, message, extra)` complémentaire à `reportError` existant
+> 2. Email frequency cap (`is_transactional` field sur `NotificationQueue` + check ≥3 emails fallback 24h glissantes — SPEC §18.2)
+> 3. **Recalibrer scoring V1.5 ADR-002** : `STDDEV_FULL_SCALE 8→4` (`emotional-stability.ts:94`) + `EXPECTANCY_FULL_SCALE 3→1` (`consistency.ts:67`). Edits revertés Phase W par hook auto, à re-appliquer V1.6 cleanup
+> 4. 10 PRs dependabot majors batch review (cf. `apps/web/CLAUDE.md §V1.6 backlog`)
 
 **Scope** :
 
@@ -767,7 +774,15 @@ discipline = planRespect(30) + hedgeRespect(20) + eveningPlan(20) + intentionFil
 - `code-reviewer` post-impl
 - `/fxmily-deliver-jalon` AVANT `/clear`
 
-## §18. V1.7 — REFLECT + foundations North Star (10-12h)
+## §18. V1.7 — REFLECT + extensions North Star (10-12h)
+
+> **Update Round 12 — items déjà LIVE V1.5 retirés de V1.7** :
+>
+> - ~~Trade.tags multi-select~~ → REDONDANT avec `Trade.tradeQuality A/B/C` V1.5 (Steenbarger grading déjà câblé). Reclassifier tags vs tradeQuality : **tradeQuality = qualité setup (avant outcome)** / **tags V1.7 si conservés = patterns émotionnels post-outcome (revenge, fomo, overconfidence)**. À arbitrer M5 décision Eliot. Pas urgent.
+> - ~~Trade.riskPct~~ → DÉJÀ LIVE V1.5 (Decimal 4,2 + Tharp warning >2%). À supprimer du scope V1.7.
+> - ~~Disclaimer AMF~~ → audit V1.6 confirme `LegalFooter` + pages `/legal/{privacy,terms,mentions}` LIVE V1 J10 Phase A. À supprimer V1.7.
+>
+> **Items réellement V1.7 (clarifiés)** :
 
 **Scope** :
 
@@ -794,6 +809,8 @@ discipline = planRespect(30) + hedgeRespect(20) + eveningPlan(20) + intentionFil
 - `fxmily-content-checker` valide tous nouveaux contenus
 
 ## §19. V1.8 — ROUTINE customizable + HealthKit/CSV (10-12h)
+
+> **Update Round 12** : V1 a `DailyCheckin.morningRoutineCompleted Boolean` + `lib/scoring/discipline.ts:routineCompleted` weight=10. V1.8 = **étendre ce Boolean** vers `RoutineTemplate` + `RoutineCompletion` (§15) **sans casser** le scoring V1. Le scorer V1.8 lit `RoutineCompletion.completedAt IS NOT NULL` OU fallback `DailyCheckin.morningRoutineCompleted` (backward-compat ≥30j). Migration : seed 1 template "Routine matinale Fxmily" reproduisant le Boolean V1.
 
 **Scope** :
 
@@ -833,6 +850,8 @@ discipline = planRespect(30) + hedgeRespect(20) + eveningPlan(20) + intentionFil
 ⚠️ **Risque AMF/FCA élevé** : `/spec` obligatoire avant pour clarifier scope quiz. Subagent `fxmily-content-checker` BLOQUANT avant commit.
 
 ## §21. V2.0 — PROGRESS + DEBRIEF (12h)
+
+> **Update Round 12** : V1 a déjà `/admin/members/[id]` avec 4 tabs (Vue d'ensemble / Trades / Mark Douglas / Rapports IA — J3/J7/J8). V2.0 DEBRIEF = **ajouter 5e tab "Debriefs"** branché sur `CoachDebrief` model (§15 Migration 3) + Eliot brief generator. PAS création du dashboard admin from scratch. Le PROGRESS module est nouveau (Path 6 phases + Milestones).
 
 **Scope** :
 

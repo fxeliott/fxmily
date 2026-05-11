@@ -59,18 +59,30 @@ log "encrypt OK → $ENCRYPTED_FILE"
 # exists. Replace, don't keep both — disk on CX22 is 40 GB.
 rm -f "$DUMP_FILE"
 
-# ---- 3. R2 upload ----------------------------------------------------------
+# ---- 3. R2 upload (optional V1, mandatory V2 if cross-region DR target) ----
+# Step skipped silently if R2_ENDPOINT is unset/empty (V1 launch state) OR
+# if `aws` CLI is not installed. The encrypted dump remains on local disk
+# under 7-day rotation (step 4). The 30-day R2 lifecycle only kicks in
+# once R2 is wired (Cloudflare R2 bucket + API token + `aws configure`).
+#
 # `aws --profile fxmily-backup` was provisioned at first deploy with the
 # R2 access keys (Cloudflare → R2 → API Tokens → "Object Read & Write").
 # `--no-progress` keeps the cron stderr noise-free.
-if ! aws s3 cp "$ENCRYPTED_FILE" "s3://${R2_BUCKET}/$(basename "$ENCRYPTED_FILE")" \
+R2_ENDPOINT="${R2_ENDPOINT:-}"
+R2_BUCKET="${R2_BUCKET:-}"
+if [[ -z "$R2_ENDPOINT" || -z "$R2_BUCKET" ]]; then
+  log "R2 upload skipped (R2_ENDPOINT or R2_BUCKET unset — local-only V1 mode)"
+elif ! command -v aws >/dev/null 2>&1; then
+  log "R2 upload skipped (aws CLI not installed — V1.6 install todo)"
+elif ! aws s3 cp "$ENCRYPTED_FILE" "s3://${R2_BUCKET}/$(basename "$ENCRYPTED_FILE")" \
     --endpoint-url "$R2_ENDPOINT" \
     --profile fxmily-backup \
     --no-progress; then
   log "FAIL R2 upload ; encrypted dump preserved locally for retry"
   exit 3
+else
+  log "upload OK → s3://${R2_BUCKET}/$(basename "$ENCRYPTED_FILE")"
 fi
-log "upload OK → s3://${R2_BUCKET}/$(basename "$ENCRYPTED_FILE")"
 
 # ---- 4. Local retention ----------------------------------------------------
 # 7 days local. Older files were already on R2 (30-day lifecycle there).

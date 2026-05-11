@@ -1,0 +1,11 @@
+# Ensure shell scripts and config use LF (Linux line endings)
+# Prevents Windows Git checkout from CRLF-mangling shebangs
+*.sh           text eol=lf
+*.bash         text eol=lf
+*.fish         text eol=lf
+ops/cron/*     text eol=lf
+ops/scripts/*  text eol=lf
+**/Caddyfile   text eol=lf
+**/Dockerfile* text eol=lf
+*.yml          text eol=lf
+*.yaml         text eol=lf

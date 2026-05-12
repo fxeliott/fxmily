@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { sendNotificationFallbackEmail } from '@/lib/email/send';
 import { env } from '@/lib/env';
+import { reportWarning } from '@/lib/observability';
 import { getEffectivePreferences } from '@/lib/push/preferences';
 import {
   bumpSubscriptionLastSeen,
@@ -553,6 +554,15 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
             recentFallbacks24h: recentFallbacks,
           },
         });
+        // V1.6 polish — operator-visible signal : a member is chronically
+        // dropping push events AND has already received the 24h email quota.
+        // Admin should reach out proactively (SPEC §18.2 iOS push fragility).
+        reportWarning('push.dispatcher', 'email_fallback_capped', {
+          notificationId: row.id,
+          type: slug,
+          userId: row.userId,
+          recentFallbacks24h: recentFallbacks,
+        });
       }
     }
 
@@ -583,8 +593,16 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
       }
     }
   } catch (err) {
-    // Email fallback failure must not propagate. Console + best-effort audit.
-    console.error('[push.dispatcher] fallback email failed', err);
+    // Email fallback failure must not propagate. The queue row is already
+    // marked `failed`, this catch is just nudge-recovery — Resend transient
+    // 5xx / 429 / DB hiccup all qualify as warning (not error) per V1.6 polish
+    // Sentry taxonomy (observability.ts JSDoc).
+    reportWarning('push.dispatcher', 'fallback_email_failed', {
+      notificationId: row.id,
+      type: slug,
+      userId: row.userId,
+      error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+    });
   }
 
   return { status: 'failed', reason: failureReason };
@@ -649,6 +667,14 @@ export async function dispatchAllReady(
         reason: 'stuck_in_dispatching',
         ranAt,
       },
+    });
+    // V1.6 polish — SLO signal. >=1 recoveredStuck/run = dispatcher instability
+    // (process crashed mid-claim, OOM, Caddy 60s timeout). Per JSDoc on
+    // STUCK_DISPATCHING_THRESHOLD_MS this should surface, not stay silent.
+    reportWarning('push.dispatcher', 'stuck_dispatching_recovered', {
+      recoveredStuck: recovered.count,
+      thresholdMs: STUCK_DISPATCHING_THRESHOLD_MS,
+      ranAt,
     });
   }
 

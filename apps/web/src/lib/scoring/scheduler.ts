@@ -4,6 +4,7 @@ import { after } from 'next/server';
 
 import { logAudit } from '@/lib/auth/audit';
 import { localDateOf } from '@/lib/checkin/timezone';
+import { reportWarning } from '@/lib/observability';
 
 import { recomputeAndPersist } from './service';
 
@@ -93,10 +94,15 @@ export function scheduleScoreRecompute(
         metadata: { reason, triggeredBy: 'action', anchor: today },
       });
     } catch (err) {
-      // Don't let a recompute failure surface to the user — they already
-      // got their action redirect. Log + best-effort audit so DBA can spot
-      // chronic failures via `audit_logs`.
-      console.error(`[scoring] background recompute failed (${reason})`, err);
+      // V1.6 polish — Don't let a recompute failure surface to the user; they
+      // already got their action redirect. Cron picks up next night. Sentry
+      // warning (not error) since the audit row below carries the error detail
+      // and a single failed recompute is recoverable by the next scheduled run.
+      reportWarning('scoring.scheduler', 'background_recompute_failed', {
+        userId,
+        reason,
+        error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+      });
       await logAudit({
         action: 'score.computed',
         userId,

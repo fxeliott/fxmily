@@ -3,6 +3,7 @@ import 'server-only';
 import { after } from 'next/server';
 
 import { logAudit } from '@/lib/auth/audit';
+import { reportWarning } from '@/lib/observability';
 import { evaluateAndDispatchForUser } from '@/lib/triggers/engine';
 
 /**
@@ -78,7 +79,14 @@ export function scheduleDouglasDispatch(userId: string, reason: DouglasDispatchR
         });
       }
     } catch (err) {
-      console.error(`[douglas.scheduler] dispatch failed (${reason})`, err);
+      // V1.6 polish — background `after()` dispatch, user redirect already
+      // completed. Transient evaluator failures (DB hiccup) warrant Sentry
+      // warning, not error : the trigger engine retries on next action.
+      reportWarning('douglas.scheduler', 'dispatch_failed', {
+        userId,
+        reason,
+        error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+      });
     }
   });
 }

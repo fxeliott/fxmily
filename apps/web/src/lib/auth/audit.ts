@@ -75,6 +75,10 @@ export type AuditAction =
   | 'notification.dispatch.failed'
   | 'notification.dispatch.skipped'
   | 'notification.fallback.emailed'
+  // V1.6 — SPEC §18.2 email frequency cap. Emitted when a non-transactional
+  // notification's fallback email is skipped because the user has already
+  // received >= 3 fallback emails in the rolling 24h window.
+  | 'notification.fallback.capped'
   | 'cron.dispatch_notifications.scan'
   // J10 — RGPD account self-service + ops crons
   | 'account.data.exported'

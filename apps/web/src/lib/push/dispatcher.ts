@@ -176,6 +176,44 @@ const MAX_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 60_000; // 1 min
 
 /**
+ * V1.6 — SPEC §18.2 email frequency cap. A non-transactional notification's
+ * fallback email is dropped if the user has already received this many
+ * fallback emails in the rolling 24h window (sliding, NOT calendar day).
+ * Transactional notifications (auth, invitation, password reset, RGPD) are
+ * NEVER capped.
+ *
+ * 3 / 24h = at most one email per ~8h. Empirically the upper bound where a
+ * member still perceives the cadence as informative rather than spammy. If
+ * a member's push subscription is chronically broken (e.g. iOS quirks) the
+ * audit log surfaces `notification.fallback.capped` so admin can reach out
+ * proactively instead of letting Resend free-tier 100/day rate-limit them.
+ *
+ * Concurrency note (V1.6 audit code-reviewer H2) : this is a SOFT cap, not
+ * a hard cap. The audit_log count is read BEFORE the send, so up to
+ * CONCURRENCY (= 8 in `dispatchAllReady`) concurrent dispatchOne calls on
+ * the same user's permanently-failed notifications can ALL pass the cap
+ * check at the same time and send. Worst-case = CONCURRENCY × 1 burst, then
+ * subsequent runs are hard-capped. Acceptable at V1 30-member cohort. V2 :
+ * wrap with `pg_advisory_xact_lock(hash(userId + 'fallback'))` if hard cap
+ * becomes required.
+ */
+export const EMAIL_FALLBACK_CAP_PER_24H = 3;
+export const EMAIL_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Pure helper : decide whether to send the email fallback for a given
+ * permanently-failed notification. Side-effect free so it can be unit-tested
+ * without DB mocks.
+ */
+export function shouldSendFallbackEmail(
+  isTransactional: boolean,
+  recentFallbacks24h: number,
+): boolean {
+  if (isTransactional) return true;
+  return recentFallbacks24h < EMAIL_FALLBACK_CAP_PER_24H;
+}
+
+/**
  * Compute the next-attempt delay (ms). Pure helper, exposed for tests.
  *
  *   attempt 1 (= just failed once)  → 1 min
@@ -269,6 +307,7 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
   }
 
   // 2. Re-fetch the row to get the now-bumped attempts + payload + user.
+  //    V1.6 — select isTransactional too for the email fallback frequency cap.
   const row = await db.notificationQueue.findUnique({
     where: { id: notificationId },
     select: {
@@ -277,6 +316,7 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
       type: true,
       payload: true,
       attempts: true,
+      isTransactional: true,
     },
   });
   if (row === null) {
@@ -485,30 +525,62 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
   // out of scope; revisit J9.5+ if observed in audit log).
   // Best-effort posture: a Resend hiccup MUST NOT re-fail the dispatcher
   // (the queue row is already marked `failed`, this is just nudge-recovery).
+  //
+  // V1.6 — SPEC §18.2 frequency cap : a non-transactional notification's
+  // fallback email is skipped if the user has already received >= 3 fallback
+  // emails in the rolling 24h window. Transactional notifications (auth,
+  // invitation, password reset, RGPD) are NEVER capped — they always reach
+  // the user. Counted via audit_logs (action='notification.fallback.emailed')
+  // which already has the (action, createdAt) index for fast lookup.
   try {
-    const user = await db.user.findUnique({
-      where: { id: row.userId },
-      select: { email: true, firstName: true },
-    });
-    if (user !== null) {
-      const result = await sendNotificationFallbackEmail({
-        to: user.email,
-        recipientFirstName: user.firstName,
-        type: slug,
-        deepUrl: payload.notification.navigate,
-      });
-      await logAudit({
-        action: 'notification.fallback.emailed',
-        userId: row.userId,
-        metadata: {
-          notificationId: row.id,
-          type: slug,
-          delivered: result.delivered,
-          // NEVER log the email address itself — PII, audit metadata stays
-          // PII-free (SPEC §16). The notificationId + userId are enough for
-          // operator-side correlation.
+    let allowFallbackEmail = true;
+    if (!row.isTransactional) {
+      const recentFallbacks = await db.auditLog.count({
+        where: {
+          action: 'notification.fallback.emailed',
+          userId: row.userId,
+          createdAt: { gt: new Date(Date.now() - EMAIL_FALLBACK_WINDOW_MS) },
         },
       });
+      allowFallbackEmail = shouldSendFallbackEmail(row.isTransactional, recentFallbacks);
+      if (!allowFallbackEmail) {
+        await logAudit({
+          action: 'notification.fallback.capped',
+          userId: row.userId,
+          metadata: {
+            notificationId: row.id,
+            type: slug,
+            recentFallbacks24h: recentFallbacks,
+          },
+        });
+      }
+    }
+
+    if (allowFallbackEmail) {
+      const user = await db.user.findUnique({
+        where: { id: row.userId },
+        select: { email: true, firstName: true },
+      });
+      if (user !== null) {
+        const result = await sendNotificationFallbackEmail({
+          to: user.email,
+          recipientFirstName: user.firstName,
+          type: slug,
+          deepUrl: payload.notification.navigate,
+        });
+        await logAudit({
+          action: 'notification.fallback.emailed',
+          userId: row.userId,
+          metadata: {
+            notificationId: row.id,
+            type: slug,
+            delivered: result.delivered,
+            // NEVER log the email address itself — PII, audit metadata stays
+            // PII-free (SPEC §16). The notificationId + userId are enough for
+            // operator-side correlation.
+          },
+        });
+      }
     }
   } catch (err) {
     // Email fallback failure must not propagate. Console + best-effort audit.

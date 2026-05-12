@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildPayload,
   classifyError,
+  EMAIL_FALLBACK_CAP_PER_24H,
   nextAttemptDelay,
+  shouldSendFallbackEmail,
   TTL_BY_TYPE,
   URGENCY_BY_TYPE,
 } from './dispatcher';
@@ -246,5 +248,29 @@ describe('TTL_BY_TYPE / URGENCY_BY_TYPE config tables', () => {
   it('annotations + Douglas use `normal` urgency', () => {
     expect(URGENCY_BY_TYPE.annotation_received).toBe('normal');
     expect(URGENCY_BY_TYPE.douglas_card_delivered).toBe('normal');
+  });
+});
+
+describe('shouldSendFallbackEmail (V1.6 SPEC §18.2 freq cap)', () => {
+  it('returns true for transactional regardless of count (never capped)', () => {
+    expect(shouldSendFallbackEmail(true, 0)).toBe(true);
+    expect(shouldSendFallbackEmail(true, 3)).toBe(true);
+    expect(shouldSendFallbackEmail(true, 100)).toBe(true);
+  });
+
+  it('returns true for non-transactional below cap', () => {
+    expect(shouldSendFallbackEmail(false, 0)).toBe(true);
+    expect(shouldSendFallbackEmail(false, 1)).toBe(true);
+    expect(shouldSendFallbackEmail(false, EMAIL_FALLBACK_CAP_PER_24H - 1)).toBe(true);
+  });
+
+  it('returns false for non-transactional at or above cap', () => {
+    expect(shouldSendFallbackEmail(false, EMAIL_FALLBACK_CAP_PER_24H)).toBe(false);
+    expect(shouldSendFallbackEmail(false, EMAIL_FALLBACK_CAP_PER_24H + 1)).toBe(false);
+    expect(shouldSendFallbackEmail(false, 99)).toBe(false);
+  });
+
+  it('cap is exactly 3 (SPEC §18.2 anti-spam)', () => {
+    expect(EMAIL_FALLBACK_CAP_PER_24H).toBe(3);
   });
 });

@@ -1997,22 +1997,210 @@ f91a4e1 chore(deps): bump tailwind-merge 3.5→3.6 (#43)
 a9d2da0 chore(deps-dev): bump turbo 2.9.9→2.9.12 (#45)
 ```
 
-### V1.7+ backlog explicit (tous reclassés post-V1.6)
+### V1.7+ backlog explicit (post V1.6 polish)
 
-- **Item #5 Sentry capture taxonomy** : `lib/observability.ts` n'expose
-  que `reportError` (severity=error). Researcher Round 2 recommande
-  taxonomy : 404/410 push gone = `info` (expected, pas erreur), 429 =
-  `warning`, 5xx = `exception`. Faut ajouter `reportWarning(scope,
-message, extra)` qui utilise `Sentry.captureMessage(message, 'warning')`
-  - wiring dans `lib/push/dispatcher.ts:classifyError` catches.
-- **Item #4 Email fallback frequency cap** : `notification_queue` row
-  doit avoir un `is_transactional` field (default false). Si false +
-  user a déjà reçu N>=3 emails fallback dans 24h glissantes → skip
-  l'envoi. SPEC §18.2 polish.
-- **Item #2 Dependabot 10 PRs majors** : batch review séquentiel — pour
-  chaque PR, read CHANGELOG, run `pnpm install` + tests Vitest locally,
-  push CI verify, merge si OK.
-- **Anthropic API key activation** ($12/mois V1, ~5 min Eliot Console)
-  pour 1er digest IA réel non-mock.
+- **Item #2 Dependabot 7 PRs majors** restants après V1.6 polish merge (3 CLEAN
+  #38 #39 #42) : #1 actions/setup-node 4→6, #2 pnpm/action-setup 4→6, #3
+  actions/checkout 4→6 (CI majors), #6 eslint 9→10, #41 tailwind group, #46
+  @commitlint/config-conventional 19→21, #47 @commitlint/cli 19→21. Batch
+  review séquentiel — pour chaque PR, read CHANGELOG, run `pnpm install` +
+  tests Vitest locally, push CI verify, merge si OK.
+- **Anthropic API key activation** ($1-2/mois V1 batch+cache, ~5 min Eliot
+  Console) pour 1er digest IA réel non-mock.
+- **Workspace Console spend limit $25/mois** (hard cap RGPD-friendly anti-runaway).
+- **EU AI Act 50(1) chatbot transparency banner** : "Généré par IA — pas
+  substitut coaching humain" (deadline 2 août 2026, pénalité **€15M ou 3% CA
+  Article 99(4)**, source primaire `artificialintelligenceact.eu/article/99`).
+- **Crisis routing FR** : 3114 + SOS Amitié 09 72 39 40 50 + Suicide Écoute
+  01 45 39 40 00, regex post-output over-trigger safety, faux positifs
+  trading exclus ("tout perdre sur ce trade", "killer ce setup",
+  "dépression du marché"). Mandatory pre-V1.7 deploy.
 - **iPhone PWA smoke E2E** Phase frontend (différé par décision Eliot
   "backend d'abord").
+
+## V1.6 polish — Sentry taxonomy + email freq cap + Prisma pool (livré 2026-05-12)
+
+Branche dédiée `feat/v1.6-polish` (renommée depuis `claude/stoic-hofstadter-cebc12`)
+ouvre 4 items polish post-prod-launch. Carbon-copy J5/J6/J7/J8/J9/J10 audit
+pattern. Tests Vitest 764/764 verts (+14 vs V1.5.2 baseline 750).
+
+### Item 1 — Sentry alerting taxonomy (closed)
+
+`lib/observability.ts` exposait uniquement `reportError` (severity=error).
+Toutes les conditions transient (push 429 rate-limited, email fallback cap
+reached, 410 Gone subscription deletion = lifecycle normal) arrivaient en
+`error` → bruit dashboard Sentry, on-call signal noise élevé.
+
+**Ajouts** :
+
+- `reportWarning(scope, message, extra?)` → `Sentry.captureMessage(msg, {
+level: 'warning', tags: { scope }, extra })` + `console.warn`.
+- `reportInfo(scope, message, extra?)` → idem level=info + `console.info`.
+
+Signature identique à `reportError` mais accepte une `string` au lieu d'un
+`Error` (Sentry groupe par message+level, donc warning/info ne polluent
+JAMAIS le dashboard error qui est la surface on-call primaire).
+
+**Tests** : nouveau `lib/observability.test.ts` (10 tests TDD — 3 reportError
+
+- 3 reportWarning + 3 reportInfo + 1 reportBreadcrumb : console plumbing +
+  no-throw on Sentry no-DSN no-op + extra metadata passthrough).
+
+**Wiring suivant** (différé V1.7 polish prochain) : remplacer les `console.error`
+
+- pas-d'audit dans `dispatcher.ts:classifyError` catches par
+  `reportWarning('push.dispatcher', '429 rate_limited', ...)` (429),
+  `reportInfo('push.dispatcher', '410 gone deleted', ...)` (410), etc.
+
+### Item 2 — Email frequency cap `is_transactional` (closed)
+
+**Migration** `20260512182512_v1_6_notification_is_transactional/migration.sql` :
+
+- `ALTER TABLE notification_queue ADD COLUMN is_transactional BOOLEAN NOT NULL DEFAULT FALSE`
+- `CREATE INDEX notification_queue_user_recent_non_transactional_idx ON notification_queue (user_id, created_at DESC) WHERE is_transactional = FALSE`
+
+Tous les V1 NotificationType slugs (annotation_received, checkin\_\*\_reminder,
+douglas_card_delivered, weekly_report_ready) sont engagement nudges → default
+`is_transactional = false`. Futures auth-push types (password reset push, RGPD
+download ready, etc.) viendront avec `is_transactional = true` à l'enqueue.
+
+**Freq cap logic** (`lib/push/dispatcher.ts:dispatchOne` lignes 506-555,
+DANS branche email fallback POST permanent-failure, PAS avant web-push) :
+
+```ts
+if (!row.isTransactional) {
+  const recentFallbacks = await db.auditLog.count({
+    where: {
+      action: 'notification.fallback.emailed',
+      userId: row.userId,
+      createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+  });
+  allowFallbackEmail = shouldSendFallbackEmail(row.isTransactional, recentFallbacks);
+  if (!allowFallbackEmail) {
+    await logAudit({ action: 'notification.fallback.capped', userId, metadata });
+  }
+}
+```
+
+Helper pur `shouldSendFallbackEmail(isTransactional, recentFallbacks24h):
+boolean` exporté + testé (4 tests Vitest — transactional always-true,
+non-transactional below cap, non-transactional at/above cap, exact cap=3
+invariant).
+
+**Note SOFT cap (code-reviewer audit H2)** : la query `db.auditLog.count`
+est lue AVANT le send → jusqu'à `CONCURRENCY=8` dispatcher calls
+concurrents sur le même user peuvent tous passer le check. Worst-case
+burst = 8 emails sur 1 cron tick au lieu de 3. Acceptable V1 30 membres.
+V2 hard cap via `pg_advisory_xact_lock(hash(userId+'fallback'))` quand
+cohorte > 100.
+
+Audit slug nouveau `notification.fallback.capped` ajouté à `AuditAction` union.
+
+Cap fixé à `EMAIL_FALLBACK_CAP_PER_24H = 3` (1 email / ~8h max — empiriquement
+le seuil au-delà duquel un membre perçoit la cadence comme spam plutôt
+qu'informative). Si subscription push chroniquement broken, l'audit log
+surface le pattern via `notification.fallback.capped` rows pour outreach
+admin proactif (anti Resend free-tier 100/jour cap downstream).
+
+### Item 3 — ADR-002 scoring constants (note doc seulement, 0h code)
+
+**Important** : la mémoire MEMORY.md pré-existante affirmait "STDDEV 8→4 +
+EXPECTANCY 3→1 à re-appliquer V1.6". **C'est FAUX** — vérifié dans
+`lib/scoring/consistency.ts:83` + `lib/scoring/emotional-stability.ts:107` :
+les constantes V1 actuelles sont **déjà** `STDDEV_FULL_SCALE = 4` et
+`EXPECTANCY_FULL_SCALE = 1` (validées Phase V/W ADR-001 commits `a968a20`
+
+- `905d659`). ADR-002 propose pour **V2** seulement : `STDDEV → 2.5`,
+  `PF → 2.5`, `DD → 10R`, `EXPECTANCY → 1 keep`.
+
+**Pas de modification scoring V1.6.** Trigger documenté pour passer à
+ADR-002 : cohort drift (≥30 membres × ≥3 mois) OU 80% cohort < 30 sur
+une dim OU > 70 sur une dim OU ≥5 user complaints OU V2 launch >100
+membres. Voir [`docs/decisions/ADR-002`](../../docs/decisions/ADR-002-v2-calibration-prop-firm-empirical.md).
+
+### Item 4 — Bonus : Prisma 7 pool config explicit (closed)
+
+`lib/db.ts` avait `new PrismaPg({ connectionString: env.DATABASE_URL })`
+sans aucune config pool. Prisma 7 + `@prisma/adapter-pg` changent les
+defaults vs v6 :
+
+- v6 : `connectionTimeoutMillis = 5_000` (pool full → throws after 5s)
+- v7 : `connectionTimeoutMillis = 0` (pool full → **hangs forever**)
+
+Sans config explicite, chaque cron + Server Action qui touche DB peut
+deadlock indéfiniment sur un pool saturé. Pin v6 defaults explicitement
+(cf. Prisma skills `/prisma-upgrade-v7/references/driver-adapters.md`) :
+
+```ts
+new PrismaPg({
+  connectionString: env.DATABASE_URL,
+  max: 10,
+  connectionTimeoutMillis: 5_000,
+  idleTimeoutMillis: 30_000,
+});
+```
+
+Signature confirmée 7.8.0 via Context7 (`/prisma/skills`, source primaire
+GitHub `prisma/skills` repo officiel). Shape **flat** — pas nested
+`pool: {...}` qui aurait silent-no-op build-but-hang-prod.
+
+### Item 5 — Bonus : Anthropic SDK 0.95.1 → 0.95.2 (closed)
+
+`package.json` : `@anthropic-ai/sdk: ^0.95.1` → `^0.95.2`. Caret incluait
+déjà 0.95.2 — bump explicite pour traçabilité git history. Patch bump =
+zero breaking change attendu (cf. semver Anthropic SDK convention).
+
+### Quality gate V1.6 polish
+
+- Type-check ✓ exit 0
+- ESLint ✓ exit 0 (max-warnings=0)
+- Prettier ✓ (5 fichiers TS auto-format)
+- **Vitest 764/764 verts** (+14 vs V1.5.2 baseline 750 : 4 freq cap pure
+  helper + 10 observability console plumbing)
+- Prisma client regenerated 7.8.0 (`isTransactional` field disponible)
+- Migration SQL `20260512182512_v1_6_notification_is_transactional` prête
+  pour `pnpm prisma:migrate:deploy` post-merge prod
+- Build prod Turbopack ✓ (à valider via CI sur PR)
+
+### Dependabot triage V1.6 polish
+
+3 PRs CLEAN low-risk **merged** dans V1.6 polish PR (groupé pour réduire CI
+load + montrer cohésion polish) :
+
+- `#38` docker/build-push-action 6→7 (CI action major, no breaking host-side)
+- `#39` docker/login-action 3→4 (CI action major, no breaking host-side)
+- `#42` lint-staged 15→17 (skip v16, peer deps OK avec husky 10)
+
+7 PRs majors restants reclassés V1.7+ backlog (cf. section au-dessus).
+
+### Pré-requis Eliot pour activer V1.6 polish en prod
+
+1. **🔴 BLOQUANT** : Régler billing GitHub Actions
+   <https://github.com/settings/billing/payment_information>. Sinon CI fail
+   sur ce PR + Cron Watch schedule reste rouge (manual dispatch marche mais
+   les schedules /h sont bloqués).
+2. Merger PR V1.6 polish (à ouvrir depuis branche `feat/v1.6-polish`).
+3. Apply migration : `pnpm --filter @fxmily/web prisma:migrate:deploy`
+   (à appliquer pendant maintenance window — `ALTER TABLE + CREATE INDEX`
+   sur `notification_queue`, à 30 membres prod V1 = 0-1s lock acceptable).
+4. Restart container app (pick up new Prisma client + nouveau lib/db.ts pool).
+5. Verify : `/api/health` 200 + `/api/cron/health` overall=green sous 5 min.
+
+### Commit chain V1.6 polish (1 commit attendu, à confirmer)
+
+Tous les changes V1.6 polish dans 1 commit atomic `feat(v1.6-polish): ...` :
+
+- `apps/web/src/lib/observability.ts` (+reportWarning +reportInfo)
+- `apps/web/src/lib/observability.test.ts` (NEW, 10 tests)
+- `apps/web/src/lib/db.ts` (pool config v6 defaults)
+- `apps/web/prisma/schema.prisma` (+isTransactional + index)
+- `apps/web/prisma/migrations/20260512182512_v1_6_notification_is_transactional/migration.sql` (NEW)
+- `apps/web/src/lib/push/dispatcher.ts` (freq cap branch + pure helper export)
+- `apps/web/src/lib/push/dispatcher.test.ts` (+4 freq cap tests)
+- `apps/web/src/lib/auth/audit.ts` (+`notification.fallback.capped` slug)
+- `apps/web/package.json` + `pnpm-lock.yaml` (SDK 0.95.1 → 0.95.2)
+- `apps/web/CLAUDE.md` (this section)
+
+Atomic revert <30s : `git revert <sha>` (sauf migration SQL — voir runbook
+hetzner-deploy §11 pour rollback DB).

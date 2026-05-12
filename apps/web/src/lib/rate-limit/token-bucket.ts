@@ -187,6 +187,30 @@ export const sentryTunnelLimiter = new TokenBucketLimiter({
 });
 
 /**
+ * V1.6 extras — `/api/health` endpoint rate-limit.
+ *
+ * Pre-existing security HIGH identified by Round 5 security-auditor audit :
+ * `/api/health` performs `SELECT 1` against the Prisma pool on every request,
+ * unauthenticated, unlimited. An attacker could saturate the `max=10` pool
+ * (V1.6 polish config) with ~11 concurrent requests and trigger
+ * `connectionTimeoutMillis = 5_000` throws on every other route for 5s+.
+ *
+ * Per-IP bucket : burst 30 (kubelet probes + uptime monitors hit this
+ * legitimately), refill 1/s sustained. Beyond the burst → 429 with
+ * Retry-After. Caddy-side IP forwarding (`x-forwarded-for`) is honored via
+ * `callerId()`.
+ *
+ * Why not just remove the DB ping ? : SPEC §12.4 requires `/api/health` to
+ * report `checks.db === 'ok'` for the Hetzner readiness gate. Removing the
+ * ping would hide a real DB-down condition. Rate-limit is the right answer.
+ */
+export const healthLimiter = new TokenBucketLimiter({
+  bucketSize: 30,
+  refillRate: 1,
+  maxKeys: 4096,
+});
+
+/**
  * J10 Phase T (security promotion 2026-05-09) — Login bruteforce / credential
  * stuffing defense.
  *

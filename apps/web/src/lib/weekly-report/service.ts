@@ -7,6 +7,7 @@ import { parseLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import { sendWeeklyDigestEmail } from '@/lib/email/send';
 import { env } from '@/lib/env';
+import { reportWarning } from '@/lib/observability';
 import {
   weeklyReportOutputSchema,
   weeklySnapshotSchema,
@@ -234,7 +235,17 @@ export async function generateWeeklyReportsForAllActiveMembers(
       } else {
         errors += 1;
         batchErrors += 1;
-        console.error('[weekly-report] member generation failed:', r.reason);
+        // V1.6 polish — isolated via Promise.allSettled. Single-member failure
+        // is captured in the batch_done heartbeat audit (batchErrors counter)
+        // + the scan-level audit row at end. Sentry warning surfaces the rate
+        // so admin can spot patterns (1 member's Claude API key revoked,
+        // Resend bounce, etc.) without polluting the error dashboard.
+        reportWarning('weekly-report.generate', 'member_generation_failed', {
+          reason:
+            r.reason instanceof Error
+              ? r.reason.message.slice(0, 200)
+              : String(r.reason).slice(0, 200),
+        });
       }
     }
 
@@ -515,7 +526,14 @@ async function maybeSendEmail(
         select: { id: true, email: true, firstName: true, lastName: true },
       });
     } catch (err) {
-      console.error('[weekly-report] failed to read user metadata for email', err);
+      // V1.6 polish — graceful degradation : email still ships with the
+      // pseudonym fallback `Membre #xxxxxx` (cf. `displayMemberLabel`).
+      // Sentry warning so DBA can spot chronic Prisma issues — not an error
+      // because the email isn't blocked by this failure.
+      reportWarning('weekly-report.email', 'user_metadata_read_failed', {
+        userId: report.userId,
+        error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+      });
       user = null;
     }
   }

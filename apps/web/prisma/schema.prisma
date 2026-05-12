@@ -486,6 +486,15 @@ model NotificationQueue {
   payload Json
   status  NotificationStatus @default(pending)
 
+  /// V1.6 — SPEC §18.2 email frequency cap support. `true` for transactional
+  /// notifications that MUST always reach the user (auth, invitation, password
+  /// reset, RGPD export-ready). `false` (default) for engagement / nudge
+  /// notifications — the email fallback caps these at 3 per 24h rolling window
+  /// per user to avoid spam-mailing a member with a flaky push subscription.
+  /// All V1 NotificationType slugs default to `false` (none are transactional
+  /// yet — future auth-push types will set this to `true` at enqueue time).
+  isTransactional Boolean @default(false) @map("is_transactional")
+
   attempts      Int       @default(0)
   scheduledFor  DateTime? @map("scheduled_for")
   dispatchedAt  DateTime? @map("dispatched_at")
@@ -514,6 +523,12 @@ model NotificationQueue {
   @@index([status, nextAttemptAt])
   // User-scoped admin/debug queries.
   @@index([userId, createdAt(sort: Desc)])
+  // V1.6 — partial index `notification_queue_user_recent_non_transactional_idx`
+  // is created via the migration SQL only (Prisma 7 doesn't model partial
+  // predicates declaratively, same pattern as `notification_queue_pending_checkin_dedup`).
+  // NOT declared as `@@index` here to avoid Prisma generating a duplicate
+  // full-index without the WHERE predicate (would create two B-tree indexes
+  // on the same columns + cause schema drift on next `prisma migrate dev`).
   @@map("notification_queue")
 }
 

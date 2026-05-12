@@ -32,6 +32,59 @@ export function reportError(scope: string, err: unknown, extra?: Record<string, 
 }
 
 /**
+ * V1.6 — Sentry taxonomy distinct from `reportError`.
+ *
+ * Use `reportWarning` for known-transient or retryable conditions that don't
+ * indicate a code bug but deserve operator visibility :
+ *   - push 429 rate-limited (the dispatcher will retry, but a sustained burst
+ *     means we should look at our enqueue cadence) ;
+ *   - email fallback frequency cap reached (member is dropping push events) ;
+ *   - cron heartbeat ran but found nothing to do (only sampled, not every run).
+ *
+ * Use `reportInfo` for expected lifecycle events that don't need an alert :
+ *   - push 410 Gone subscription deletion (browser unsubscribed, normal) ;
+ *   - cron heartbeat success.
+ *
+ * Why `captureMessage(msg, { level })` instead of `captureException` :
+ *   - we have a string we want to track, not an Error instance ;
+ *   - Sentry groups by message+level so warnings never pollute the error
+ *     dashboard (which is the primary on-call surface for cron failures) ;
+ *   - both still pass `tags.scope` so existing dashboard filters keep working.
+ *
+ * No-op when `SENTRY_DSN` is absent (Sentry SDK init guard). Best-effort —
+ * a Sentry hiccup must NEVER bubble up and double-fault a cron.
+ */
+export function reportWarning(
+  scope: string,
+  message: string,
+  extra?: Record<string, unknown>,
+): void {
+  console.warn(`[${scope}]`, message, extra ?? '');
+  try {
+    Sentry.captureMessage(message, {
+      level: 'warning',
+      tags: { scope },
+      ...(extra ? { extra } : {}),
+    });
+  } catch {
+    /* swallow */
+  }
+}
+
+export function reportInfo(scope: string, message: string, extra?: Record<string, unknown>): void {
+  console.info(`[${scope}]`, message, extra ?? '');
+  try {
+    Sentry.captureMessage(message, {
+      level: 'info',
+      tags: { scope },
+      ...(extra ? { extra } : {}),
+    });
+  } catch {
+    /* swallow */
+  }
+}
+
+/**
  * Drop a structured breadcrumb (no event captured). Useful for tracing a
  * cron run's intermediate state into Sentry's "before this error" panel
  * without burning a separate event quota.

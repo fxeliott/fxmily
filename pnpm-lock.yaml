@@ -41,7 +41,7 @@ importers:
   apps/web:
     dependencies:
       '@anthropic-ai/sdk':
-        specifier: ^0.95.1
+        specifier: ^0.95.2
         version: 0.95.2(zod@4.4.3)
       '@auth/prisma-adapter':
         specifier: ^2.11.2

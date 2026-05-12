@@ -2046,11 +2046,30 @@ JAMAIS le dashboard error qui est la surface on-call primaire).
 - 3 reportWarning + 3 reportInfo + 1 reportBreadcrumb : console plumbing +
   no-throw on Sentry no-DSN no-op + extra metadata passthrough).
 
-**Wiring suivant** (différé V1.7 polish prochain) : remplacer les `console.error`
+**Wiring inclus V1.6 polish (commit `4a3558f`)** — 7 sites Sentry wirés
+end-to-end suite à audit parallèle (researcher dispatcher map + researcher
+scheduler/service downgrade + dependency-auditor) :
 
-- pas-d'audit dans `dispatcher.ts:classifyError` catches par
-  `reportWarning('push.dispatcher', '429 rate_limited', ...)` (429),
-  `reportInfo('push.dispatcher', '410 gone deleted', ...)` (410), etc.
+| #   | Fichier:Ligne                  | Avant                                                  | Après                                                                        |
+| --- | ------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| 1   | `dispatcher.ts:587`            | `console.error('fallback email failed', err)`          | `reportWarning('push.dispatcher', 'fallback_email_failed', {...})`           |
+| 2   | `dispatcher.ts:556`            | (logAudit seul)                                        | + `reportWarning('push.dispatcher', 'email_fallback_capped', {...})`         |
+| 3   | `dispatcher.ts:653`            | (logAudit seul)                                        | + `reportWarning('push.dispatcher', 'stuck_dispatching_recovered', {...})`   |
+| 4   | `cards/scheduler.ts:81`        | `console.error('dispatch failed', err)`                | `reportWarning('douglas.scheduler', 'dispatch_failed', {...})`               |
+| 5   | `scoring/scheduler.ts:99`      | `console.error('background recompute failed', err)`    | `reportWarning('scoring.scheduler', 'background_recompute_failed', {...})`   |
+| 6   | `weekly-report/service.ts:237` | `console.error('member generation failed:', r.reason)` | `reportWarning('weekly-report.generate', 'member_generation_failed', {...})` |
+| 7   | `weekly-report/service.ts:518` | `console.error('failed to read user metadata', err)`   | `reportWarning('weekly-report.email', 'user_metadata_read_failed', {...})`   |
+
+Cible Sentry events/jour V1 30 membres : ~65-75 (sous 5000/mois free tier).
+RGPD §16 respecté — aucun email, payload, endpoint URL dans `extra`.
+
+**Sites NON wirés (negative recommendations researcher)** :
+
+- Per-device 410 Gone branch (`dispatcher.ts:404`) — frequency too high (10 subs × 30 membres × per tick = quota explosion)
+- Per-device `promise_rejected` (`dispatcher.ts:392`) — couvert par future batch aggregate
+- `web-push-client.ts` per-device catch — wrong abstraction layer
+- Cron 401/403/429 paths — external-caller errors, contractuel HTTP réponse
+- Cron 503 "CRON_SECRET not configured" — env validation layer's job
 
 ### Item 2 — Email frequency cap `is_transactional` (closed)
 

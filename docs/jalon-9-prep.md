@@ -98,7 +98,7 @@ const keys = webpush.generateVAPIDKeys();
 
 // Bootstrap au boot (lib/push/web-push-client.ts)
 webpush.setVapidDetails(
-  env.VAPID_SUBJECT, // mailto:eliott.pena@icloud.com
+  env.VAPID_SUBJECT, // mailto:eliot@fxmilyapp.com
   env.VAPID_PUBLIC_KEY,
   env.VAPID_PRIVATE_KEY,
 );
@@ -383,13 +383,13 @@ await db.notificationQueue.update({
 
 ## 9. Pré-requis Eliot avant smoke test J9
 
-| Item                                  | Action                                                                                                                                    | Quand                          |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| **VAPID keys générées**               | `npx web-push generate-vapid-keys` (1×)                                                                                                   | Avant Phase B                  |
-| **VAPID dans `apps/web/.env`**        | `VAPID_PUBLIC_KEY=...`, `VAPID_PRIVATE_KEY=...`, `VAPID_SUBJECT=mailto:eliott.pena@icloud.com` (Eliot manual edit hors Claude, deny rule) | Avant Phase B                  |
-| **Logo Fxmily 192×192 + 512×512 PNG** | Si pas déjà créé Sprint #1 design                                                                                                         | Avant Phase B (manifest icons) |
-| **iPhone test physique**              | Pour valider iOS push real device (mandatory critère SPEC §15)                                                                            | Avant Phase E close            |
-| **HTTPS prod ou tunnel ngrok dev**    | iOS Web Push exige HTTPS strict, localhost OK pour Chrome desktop seulement                                                               | Avant manual iOS test          |
+| Item                                  | Action                                                                                                                                 | Quand                          |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| **VAPID keys générées**               | `npx web-push generate-vapid-keys` (1×)                                                                                                | Avant Phase B                  |
+| **VAPID dans `apps/web/.env`**        | `VAPID_PUBLIC_KEY=...`, `VAPID_PRIVATE_KEY=...`, `VAPID_SUBJECT=mailto:eliot@fxmilyapp.com` (Eliot manual edit hors Claude, deny rule) | Avant Phase B                  |
+| **Logo Fxmily 192×192 + 512×512 PNG** | Si pas déjà créé Sprint #1 design                                                                                                      | Avant Phase B (manifest icons) |
+| **iPhone test physique**              | Pour valider iOS push real device (mandatory critère SPEC §15)                                                                         | Avant Phase E close            |
+| **HTTPS prod ou tunnel ngrok dev**    | iOS Web Push exige HTTPS strict, localhost OK pour Chrome desktop seulement                                                            | Avant manual iOS test          |
 
 ## 10. Vérifications via context7 en début de session J9
 

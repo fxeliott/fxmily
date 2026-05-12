@@ -12,7 +12,7 @@ Le projet n'a pas encore de version publique. La V1 sera supportée dès le dép
 
 **Ne jamais ouvrir d'issue publique** pour une vulnérabilité de sécurité.
 
-Contact : **eliott.pena@icloud.com** (sujet : `[SECURITY] Fxmily — <résumé>`).
+Contact : **eliot@fxmilyapp.com** (sujet : `[SECURITY] Fxmily — <résumé>`).
 
 Inclure :
 

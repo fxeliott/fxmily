@@ -33,7 +33,7 @@ describe('envSchemaWithRefines — VAPID cross-var refines (J9 E2)', () => {
       ...BASE_VALID_ENV,
       VAPID_PUBLIC_KEY: VALID_VAPID_PUB,
       VAPID_PRIVATE_KEY: VALID_VAPID_PRIV,
-      VAPID_SUBJECT: 'mailto:eliott.pena@icloud.com',
+      VAPID_SUBJECT: 'mailto:eliot@fxmilyapp.com',
       NEXT_PUBLIC_VAPID_PUBLIC_KEY: VALID_VAPID_PUB,
     });
     expect(r.success).toBe(true);

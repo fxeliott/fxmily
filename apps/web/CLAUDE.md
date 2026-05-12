@@ -1031,7 +1031,7 @@ Pipeline complet rapport hebdo IA admin **end-to-end live validé**. Path :
 
 - `lib/email/templates/weekly-digest.tsx` — React Email v2 lime/deep-space (carbone `AnnotationReceivedEmail` J4). Sections : eyebrow + heading + period + (mock banner if mocked) + Synthèse + Risques (bullet warn) + Recommandations (bullet acc) + Patterns observés (label + value rows) + CTA "Ouvrir le rapport complet" + footer "Aucun conseil de trade — uniquement comportement, exécution, psychologie (SPEC §2)" + cost line.
 - `sendWeeklyDigestEmail({ to, memberLabel, report })` dans `lib/email/send.ts` — plain-text fallback structuré + `buildAdminReportUrl(reportId)`.
-- V1 envoie à `WEEKLY_REPORT_RECIPIENT` env (default `eliott.pena@icloud.com`) — domaine `fxmilyapp.com` verify J10.
+- V1 envoie à `WEEKLY_REPORT_RECIPIENT` env (default `eliot@fxmilyapp.com`) — domaine `fxmilyapp.com` verify J10.
 
 ### Phase G — Audit-driven hardening (8 closed)
 
@@ -1094,7 +1094,7 @@ Validations :
 ### Pré-requis Eliot pour activer Claude live
 
 1. **Claude live** : `ANTHROPIC_API_KEY` dans `apps/web/.env` (Console Anthropic → API Keys → "Create Key" Fxmily). Le `LiveWeeklyReportClient` se réveille automatiquement (factory `getWeeklyReportClient()`).
-2. **Email réel à fxeliott** : laisser `WEEKLY_REPORT_RECIPIENT` non-set → default `eliott.pena@icloud.com` (compte Resend vérifié). Domain `fxmilyapp.com` verify J10.
+2. **Email réel à fxeliott** : laisser `WEEKLY_REPORT_RECIPIENT` non-set → default `eliot@fxmilyapp.com` (compte Resend vérifié). Domain `fxmilyapp.com` verify J10.
 
 ## J8 — Polish post-PR #30 (audit-driven hardening 2e passe, 2026-05-08)
 
@@ -1404,7 +1404,7 @@ FXMILY_HETZNER_IP=178.104.39.201` réutilise l'IP existante.
    `HETZNER_HOST`, `HETZNER_SSH_KEY`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`,
    `SENTRY_PROJECT` + Resend + Cloudflare + VAPID + CRON_SECRET.
 
-Une fois ces 7 boîtes cochées, l'invitation Eliot → eliott.pena@icloud.com →
+Une fois ces 7 boîtes cochées, l'invitation Eliot → eliot@fxmilyapp.com →
 onboarding → trade → check-in → score → fiche → push iPhone → digest weekly
 → export JSON → erreur Sentry → tout vert : SPEC §15 J10 satisfait.
 

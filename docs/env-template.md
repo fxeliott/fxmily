@@ -57,7 +57,7 @@ AUTH_URL=http://localhost:3000
 # Génère avec : npx web-push generate-vapid-keys
 # VAPID_PUBLIC_KEY=
 # VAPID_PRIVATE_KEY=
-# VAPID_SUBJECT=mailto:eliott.pena@icloud.com
+# VAPID_SUBJECT=mailto:eliot@fxmilyapp.com
 # NEXT_PUBLIC_VAPID_PUBLIC_KEY=
 
 # -- Cron (Hetzner systemd timer / GH Actions) — Jalon 10 ---------------------

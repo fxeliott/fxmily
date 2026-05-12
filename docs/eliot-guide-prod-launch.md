@@ -221,7 +221,7 @@ VAPID_SUBJECT=mailto:eliot@fxmilyapp.com
 DATABASE_URL=postgresql://fxmily:<random-pwd>@localhost:5432/fxmily?schema=public
 
 # Admin destinataire des digests weekly
-WEEKLY_REPORT_RECIPIENT=eliot@fxmilyapp.com  # ou eliott.pena@icloud.com en V1 si tu préfères
+WEEKLY_REPORT_RECIPIENT=eliot@fxmilyapp.com  # ou eliot@fxmilyapp.com en V1 si tu préfères
 ```
 
 > **Important** : `tokens.local.env` est **gitignored** (vérifié dans `.gitignore`). Mais sois prudent — `chmod 600 tokens.local.env` après création.

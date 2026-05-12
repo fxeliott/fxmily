@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AIGeneratedBanner } from './ai-generated-banner';
 
@@ -10,6 +10,12 @@ import { AIGeneratedBanner } from './ai-generated-banner';
 afterEach(() => {
   cleanup();
 });
+
+// jsdom env startup can spike past 5s on cold Windows filesystem (cache
+// invalidation after date rollover, antivirus scan, etc.). The default
+// 5000ms testTimeout is borderline — bump to 15s for this file so the
+// first render() doesn't fail intermittently on slow boxes.
+vi.setConfig({ testTimeout: 15000 });
 
 /**
  * V1.7 prep DORMANT — TDD coverage for the EU AI Act 50(1) disclaimer banner.

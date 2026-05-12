@@ -30,10 +30,10 @@ WSL2 installé ✅ (commande `wsl --install --no-distribution` réussie le 2026-
 
 ### 1. Identité Git (en suspens depuis le J0)
 
-Le commit J0 a été signé `Eliot Pena <eliott.pena@icloud.com>` via `git -c` éphémère. Pour la suite, lance toi-même :
+Le commit J0 a été signé `Eliot Pena <eliot@fxmilyapp.com>` via `git -c` éphémère. Pour la suite, lance toi-même :
 
 ```bash
-git config --global user.email "eliott.pena@icloud.com"
+git config --global user.email "eliot@fxmilyapp.com"
 git config --global user.name "Eliot Pena"
 ```
 

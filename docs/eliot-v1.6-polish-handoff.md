@@ -2,17 +2,20 @@
 
 > Session autonomie max — code V1.6 polish 100% codé, audité, testé, committé, pushé, PR ouvert. Tout ce qui suit nécessite **toi** parce que c'est physique, ou parce que c'est une décision business, ou parce que mon OAuth token manque un scope.
 
-## 🟢 État final session 2026-05-12
+## 🟢 État final session 2026-05-13 (1 PR ouvert + V1.6 polish LIVE sur main)
 
-- **PR #48 OUVERT** : <https://github.com/fxeliott/fxmily/pull/48> — V1.6 polish 3 commits :
-  - `f33489b` initial : helpers Sentry + email freq cap + Prisma pool + SDK bump + ADR-002 note + migration
-  - `4a3558f` wiring : 7 sites Sentry `reportWarning` (dispatcher 3 + cards/scheduler + scoring/scheduler + weekly-report/service 2)
-  - `6901183` docs : CLAUDE.md sync wiring décision
-- **PR #38 + #42 MERGÉS** dans cette session (docker/build-push-action 6→7 + lint-staged 15→17)
-- **PR #41 + #46 + #47** : `@dependabot rebase` triggered (auto-rebase ~5 min, merge dispo dès CI verte post-billing)
-- Branche `feat/v1.6-polish` à jour origin
-- Vitest 764/764 verts (stable post-wiring), prettier+lint+tsc tous green
-- 6 audits subagents cumulés : 0 BLOCKERs, 1 HIGH fixé in-PR, 7 wiring sites validés
+- **V1.6 polish MERGÉ sur main 2026-05-13** : commit `c1bf8c9` via PR #48 squash. App déployée prête à pickup.
+- **PR #49 OUVERT** `feat/v1.6-extras-v1.7-prep` : <https://github.com/fxeliott/fxmily/pull/49> — V1.6 extras + V1.7 dormant :
+  - `/api/health` per-IP rate-limit (closes Round 5 security HIGH)
+  - `ops/scripts/healthchecks-setup.sh` (Cron Watch externalize bonus V1.6 item #9)
+  - `lib/safety/crisis-detection.ts` + 28 tests TDD (V1.7 dormant, regex FR pre/post output)
+  - `components/ai-generated-banner.tsx` + 11 tests TDD (V1.7 dormant, EU AI Act 50(1) bannière)
+- **PR #38 + #42 + #50 MERGÉS** dans cette session (docker/build-push-action + lint-staged + pnpm-lock regen)
+- **Fxmily passé PUBLIC** 2026-05-13 (LICENSE All Rights Reserved + Cron Watch disabled = quota GH plus utilisé)
+- **Personal email scrubbed** : `eliott.pena@icloud.com` → `eliot@fxmilyapp.com` dans 12 fichiers (HEAD only ; cf. note `git filter-repo` recommandation pour purger l'historique)
+- **PR #41 + #46 + #47** : dependabot rebased, à triager (CLEAN/UNSTABLE)
+- **Vitest 803/803 verts** (cumul session)
+- 10 audits subagents cumulés Round 5-9, 0 BLOCKERs prod
 
 ## 🔴 BLOQUANT à régler MAINTENANT (5 min)
 

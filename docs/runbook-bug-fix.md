@@ -8,7 +8,7 @@
 Quand une erreur runtime explose en production, le flow attendu est :
 
 ```
-Sentry → email à eliott.pena@icloud.com
+Sentry → email à eliot@fxmilyapp.com
          ↓
 Eliot ouvre l'événement Sentry → copie le payload (stack trace + breadcrumbs + user context)
          ↓
@@ -30,7 +30,7 @@ C'est **pas du 100% auto**, c'est du **1-clic pour Eliot avec qualité préserv�
 
 ## Étape 1 — Réception de l'alerte
 
-1. Sentry envoie un email à `eliott.pena@icloud.com` avec le titre de l'erreur (ex. `TypeError: Cannot read properties of undefined (reading 'id') in apps/web/src/app/journal/[id]/page.tsx`).
+1. Sentry envoie un email à `eliot@fxmilyapp.com` avec le titre de l'erreur (ex. `TypeError: Cannot read properties of undefined (reading 'id') in apps/web/src/app/journal/[id]/page.tsx`).
 2. Eliot clique le lien → arrive sur le dashboard Sentry de l'événement.
 3. **Récupérer le payload** : copier les 4 sections suivantes :
    - **Title** (1 ligne, type d'erreur + message)

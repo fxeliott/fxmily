@@ -38,15 +38,15 @@ eliot@fxmilyapp.com` ET `RESEND_FROM=Fxmily <noreply@fxmilyapp.com>` ET
   membre).
 - ⚠️ Si 401 : `/var/log/caddy/fxmily.log` + `journalctl -u fxmily-web` .
 
-### 2. Inviter eliott.pena@icloud.com (compte test)
+### 2. Inviter eliot@fxmilyapp.com (compte test)
 
-- `/admin/invite` → entrer `eliott.pena@icloud.com`.
+- `/admin/invite` → entrer `eliot@fxmilyapp.com`.
 - Submit → message "invitation envoyée" attendu.
 - **Audit attendu** : row `invitation.created` dans `audit_logs`.
 
 ### 3. Recevoir l'email Resend dans iCloud
 
-- Inbox de `eliott.pena@icloud.com` → email "Tu es invité sur Fxmily".
+- Inbox de `eliot@fxmilyapp.com` → email "Tu es invité sur Fxmily".
 - Vérifier headers : `From: Fxmily <noreply@fxmilyapp.com>`,
   `DKIM=pass`, `SPF=pass`, `DMARC=pass` (cliquer "Show original" ou
   équivalent iCloud).

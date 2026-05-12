@@ -27,7 +27,7 @@
 ## 3. Décisions à trancher AVEC Eliot avant J10
 
 - **Domaine final** : `fxmily.com` (préféré par SPEC) vs alternative ?
-- **Email business** : `eliot@fxmily.com` vs `noreply@fxmily.com` vs `eliott.pena@fxmily.com` (homogénéité avec compte Resend actuel `eliott.pena@icloud.com`).
+- **Email business** : `eliot@fxmily.com` vs `noreply@fxmily.com` vs `eliott.pena@fxmily.com` (homogénéité avec compte Resend actuel `eliot@fxmilyapp.com`).
 - **Cookie banner copy** : posture athlète (factuel "Cookie technique uniquement, aucun tracker") vs RGPD-conforming standard.
 - **RGPD privacy policy** : rédaction custom by Eliot vs template iubenda/Privacy Policies adapté.
 - **Sentry plan** : Free 5000 erreurs/mois (estimé suffisant à 30 membres) vs Team $26/mois si > 5000.
@@ -395,7 +395,7 @@ VAPID_SUBJECT=mailto:eliot@fxmily.com  # cohérent avec domain verify
 ## 8. Checklist 1ère invitation prod (Eliot)
 
 1. Login `app.fxmily.com/login` avec mdp admin (rotaté post-J8 polish).
-2. `/admin/invite` → email `eliott.pena@icloud.com` (compte personnel test).
+2. `/admin/invite` → email `eliot@fxmilyapp.com` (compte personnel test).
 3. Recevoir email Resend dans inbox iCloud → cliquer le lien.
 4. Onboarding `/onboarding/welcome?token=...` → choisir mdp test ≥14 chars.
 5. Redirect `/dashboard` → vérifier UI rendu correct.

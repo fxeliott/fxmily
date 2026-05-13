@@ -217,9 +217,15 @@ skipped_inactive=0
 ENTRY_INDICES=$(jq '.entries | keys[]' "$ENVELOPE_FILE")
 for idx in $ENTRY_INDICES; do
   i=$((i + 1))
-  USER_ID=$(jq -r ".entries[$idx].userId" "$ENVELOPE_FILE")
-  PSEUDO=$(jq -r ".entries[$idx].pseudonymLabel" "$ENVELOPE_FILE")
-  HAS_ACTIVITY=$(jq -r ".entries[$idx].hasActivity" "$ENVELOPE_FILE")
+  # V1.7.2 R4 Windows-portability fix : use --argjson + single quotes instead
+  # of bash interpolation `.entries[$idx]` inside double quotes. On Windows
+  # Git Bash, MSYS auto-conversion bricolait `[0]` (path-like detection) into
+  # the literal `.entries[0].userId    ` with trailing whitespace, breaking
+  # jq parse. --argjson passes the bash variable as a typed jq variable
+  # safely without any MSYS string-mangling.
+  USER_ID=$(jq -r --argjson idx "$idx" '.entries[$idx].userId' "$ENVELOPE_FILE")
+  PSEUDO=$(jq -r --argjson idx "$idx" '.entries[$idx].pseudonymLabel' "$ENVELOPE_FILE")
+  HAS_ACTIVITY=$(jq -r --argjson idx "$idx" '.entries[$idx].hasActivity' "$ENVELOPE_FILE")
 
   # V1.7 fix carry-over (security-auditor Round 16 BLOCKER 1 CVSS 8.1) :
   # validate the pseudonymLabel as `member-[A-F0-9]{6,8}` before interpolating
@@ -255,7 +261,7 @@ for idx in $ENTRY_INDICES; do
     echo ""
     echo "Voici le snapshot pseudonymisé :"
     echo ""
-    jq ".entries[$idx].snapshot" "$ENVELOPE_FILE"
+    jq --argjson idx "$idx" '.entries[$idx].snapshot' "$ENVELOPE_FILE"
     echo ""
     echo "Réponds STRICTEMENT avec un JSON conforme à ce schéma (pas de markdown,"
     echo "pas de fence, pas de prose hors JSON) :"
@@ -270,14 +276,16 @@ for idx in $ENTRY_INDICES; do
   # system prompt. The file content is treated as a literal argument.
   set +e
   SYSTEM_PROMPT_CONTENT=$(<"$SYSTEM_PROMPT_FILE")
-  # V1.7.2 R2 post-merge hardening (researcher Claude Code Headless 2026) :
-  # --bare skips CLAUDE.md hierarchical loading. The system prompt + JSON
-  # schema travel WITH the envelope from the repo (ban-risk rule #5), so
-  # picking up the local project CLAUDE.md here would leak unrelated context
-  # AND violate ban-risk rule #3 "fresh context per member". --bare reinforces
-  # both rules by construction.
+  # V1.7.2 R4 fix : `--bare` flag REMOVED. claude CLI 2.1.139 docs explicit :
+  # "--bare ... Anthropic auth is strictly ANTHROPIC_API_KEY or apiKeyHelper
+  # via --settings (OAuth and keychain are never read)". Eliot uses OAuth Max
+  # subscription (keychain) so --bare breaks auth → exit 1 with empty stderr.
+  # The Round 2 researcher subagent was wrong on this point. Empirical test
+  # confirmed via `echo test | claude --print --max-turns 1`. Without --bare,
+  # CLAUDE.md hierarchical loading happens but it's project config (not
+  # member data) so ban-risk rule #3 "fresh context per member" remains
+  # satisfied by `--max-turns 1` + single invocation per member.
   claude --print \
-    --bare \
     $MODEL_FLAG \
     --max-turns "$MAX_TURNS" \
     --append-system-prompt "$SYSTEM_PROMPT_CONTENT" \

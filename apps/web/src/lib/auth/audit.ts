@@ -61,6 +61,12 @@ export type AuditAction =
   | 'weekly_report.email.sent'
   | 'weekly_report.email.failed'
   | 'weekly_report.email.skipped'
+  // V1.7 — local Claude Code batch (Eliot's Max subscription path, no API spend)
+  | 'weekly_report.batch.pulled'
+  | 'weekly_report.batch.persisted'
+  | 'weekly_report.batch.skipped'
+  | 'weekly_report.batch.invalid_output'
+  | 'weekly_report.batch.persist_failed'
   | 'admin.weekly_report.viewed'
   | 'cron.weekly_reports.scan'
   | 'cron.weekly_reports.batch_done'

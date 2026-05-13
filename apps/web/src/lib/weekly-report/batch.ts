@@ -12,7 +12,7 @@ import {
 import { reportError, reportWarning } from '@/lib/observability';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
 
-import { buildWeeklySnapshot } from './builder';
+import { buildWeeklySnapshot, pseudonymizeMember } from './builder';
 import { loadWeeklySliceForUser } from './loader';
 import { CLAUDE_CODE_LOCAL_MODEL, computeCostEur } from './pricing';
 import { buildWeeklyReportUserPrompt, WEEKLY_REPORT_SYSTEM_PROMPT } from './prompt';
@@ -173,9 +173,15 @@ export async function loadAllSnapshotsForActiveMembers(
   const ranAt = now.toISOString();
   const previousFullWeek = options.previousFullWeek ?? true;
 
+  // V1.7.2 smoke-test fix : `User.pseudonymLabel` is NOT a DB column — it
+  // is computed at runtime via `pseudonymizeMember(userId, salt)` (V1.5.2
+  // pure SHA-256 helper, no schema dependency). The original V1.7 select
+  // referenced a non-existent column and crashed Prisma at the first
+  // findMany. Selecting only `id` + `timezone` here, computing the label
+  // below per entry.
   const users = await db.user.findMany({
     where: { status: 'active' },
-    select: { id: true, pseudonymLabel: true, timezone: true },
+    select: { id: true, timezone: true },
     orderBy: { joinedAt: 'asc' },
   });
 
@@ -197,7 +203,10 @@ export async function loadAllSnapshotsForActiveMembers(
           c.tradesTotal > 0 || c.morningCheckinsCount > 0 || c.eveningCheckinsCount > 0;
         return {
           userId: user.id,
-          pseudonymLabel: user.pseudonymLabel ?? user.id.slice(0, 8),
+          // V1.7.2 fix : compute the pseudonym at runtime via the V1.5.2
+          // canonical helper (8-char hex, salted via env.MEMBER_LABEL_SALT
+          // when configured). Never read from DB — there is no such column.
+          pseudonymLabel: pseudonymizeMember(user.id),
           timezone: user.timezone,
           weekStart: slice.window.weekStartLocal,
           weekEnd: slice.window.weekEndLocal,

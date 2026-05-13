@@ -2380,3 +2380,210 @@ Cf. memory `fxmily_session_2026-05-12_audit_massif.md` section "Pickup
 prompt V1.7.1 + V1.8 REFLECT post-/clear" + `docs/jalon-V1.7-prep.md` :
 Trade.tags multi-select + Trade.outcomeR + WeeklyReview model séparé +
 ReflectionEntry CBT 4 colonnes + reverse-journaling Steenbarger 2025.
+
+---
+
+## V1.8 REFLECT — Backend Phase 1 (livré 2026-05-13)
+
+Premier batch de 4 PRs atomic backend-first per
+`feedback_backend_first_workflow.md` (memory `D--Fxmily`). Foundation
+shipped : Prisma + Zod + services + Server Actions + crisis routing +
+prompt-injection defenses + audit slugs + edge tests. **STOPS HERE**
+en attente d'un go explicite Eliot pour Phase 2 frontend (wizards UI,
+iPhone PWA smoke, visual verify chrome-devtools).
+
+### Modèle de données
+
+3 ajouts via migration `20260513150000_v1_8_reflect_models` :
+
+- **`WeeklyReview`** (`weekly_reviews`) — member-owned Sunday recap.
+  5 textareas (4 mandatory + 1 optional `bestPractice` pour
+  Steenbarger reverse-journaling). Idempotency `(userId, weekStart)`
+  unique → re-submitting same week upserts. Indexed `(userId,
+weekStart DESC)`. Cascade User delete (RGPD §17). Distinct du
+  `WeeklyReport` admin V1.7.2 — deux concepts, deux noms.
+- **`ReflectionEntry`** (`reflection_entries`) — CBT Ellis ABCD daily.
+  Pas d'unique constraint (membre peut écrire 0..N par jour). `date`
+  est `@db.Date` local civil (membre peut backfill yesterday). Indexed
+  `(userId, date DESC)`. Cascade User delete.
+- **`Trade.tags String[]`** — post-outcome CFA LESSOR + Steenbarger
+  bias classification. Default empty array (V1 trades pre-V1.8 stay
+  valid). Allowlist enforced at Zod boundary (`TRADE_TAG_SLUGS` const
+  = 8 slugs : `loss-aversion`, `overconfidence`, `regret-aversion`,
+  `status-quo`, `self-control-fail`, `endowment`, `discipline-high`,
+  `revenge-trade`). Cap 3 tags per trade (Zod max).
+
+Migration safe à 30 membres scale : 2 CREATE TABLE + 1 ALTER ADD
+COLUMN = <1 s lock chacun. Rollback SQL documenté dans le migration
+header pour runbook §11.
+
+### Schemas Zod (`lib/schemas/`)
+
+- `weekly-review.ts` — `weeklyReviewSchema.strict()`, `weekStart`
+  must be a Monday UTC dans `[-35d, +7d]`, `weekEnd` est
+  service-computed (single source of truth, anti-tamper). Fields
+  hardened via `safeFreeText` (NFC + bidi/zero-width strip), refine
+  `containsBidiOrZeroWidth` rejection. Helpers `weekEndFromWeekStart`
+  - `buildReviewCorpus` (5 textareas → corpus déterministe pour
+    crisis pipeline).
+- `reflection.ts` — `reflectionEntrySchema.strict()` Ellis ABCD,
+  même hardening, date `[-14d, +1d]`. Helper `buildReflectionCorpus`.
+- `trade.ts` extension — `TRADE_TAG_SLUGS` const (8 slugs LESSOR +
+  Steenbarger), `tradeTagSchema` (single), `tradeTagsSchema` (array
+  max 3, no duplicates, allowlist enforced), `isTradeTagSlug` guard.
+  Integration : `tradeCloseSchema.tags` optional with `[]` default.
+
+### Services (`lib/{weekly-review,reflection}/service.ts`)
+
+User-scoped strict. `parseLocalDate` (J5 carbone) handles `@db.Date`
+UTC-midnight pin to defeat TZ drift.
+
+- `submitWeeklyReview(userId, input)` — upsert on `(userId,
+weekStart)`. Pre-check `findUnique` derives `wasNew` boolean
+  deterministically (no transaction needed at 30-member scale).
+- `getWeeklyReview(userId, weekStart)` — read by composite key.
+- `listMyRecentReviews(userId, limit=12)` — desc-sorted, clamp 1..52.
+- `createReflectionEntry(userId, input)` — straight create.
+- `listRecentReflections(userId, windowDays=30)` — rolling window
+  clamp 1..365.
+
+Tous serialize `Date` → `YYYY-MM-DD` / ISO pour client component
+consumption. `SerializedWeeklyReview` + `SerializedReflectionEntry`
+types exportés.
+
+### Server Actions (`app/{review,reflect}/actions.ts`)
+
+Pattern J5 carbone — `auth()` re-check, Zod `safeParse`, service call,
+`logAudit`, `revalidatePath`, `redirect()` (NEXT_REDIRECT re-thrown).
+
+- `submitWeeklyReviewAction(_prev, formData)` — `/review` wizard
+  consumer.
+- `createReflectionEntryAction(_prev, formData)` — `/reflect` wizard
+  consumer.
+
+Both wired :
+
+- **Crisis routing (Q4=A acted)** — `detectCrisis(corpus)` BEFORE
+  persist. HIGH/MEDIUM = audit `*.crisis_detected` + Sentry
+  escalate (HIGH → `reportError`, MEDIUM → `reportWarning`). **PERSIST
+  QUAND MÊME** (UX cassée sinon — differs from V1.7.1 `batch.ts:410`
+  which skips because admin output != member text). Crisis level
+  carried into redirect URL (`?crisis=high`) pour banner FR resources
+  (3114 + SOS Amitié + Suicide Écoute) en Phase 2 frontend.
+- **Prompt-injection pre-classifier (R5 axe 4)** — `detectInjection`
+  on the same corpus. Suspected = audit metadata `injectionSuspected:
+true` + `injectionLabels` + Sentry warning. **Never blocks** — FP
+  must not eat member text. XML wrap defense kicks in V2 when
+  member content reaches a Claude prompt.
+
+Return type `{ ok: false, error, fieldErrors, crisisLevel? }` pour
+`useActionState` côté client (Phase 2 frontend).
+
+### Prompt-injection defenses (`lib/ai/`)
+
+**Shipped maintenant** même si aucun consumer V1.8 (audit trail dès
+J0 + tests anti-regression).
+
+- `injection-detector.ts` — 9 canonical patterns (EN/FR ignore
+  instructions, role markers line-start + bracketed + ChatML, persona
+  override, 200-char+ Base64, Unicode tag-strip U+E0000..U+E007F).
+  Pure function `detectInjection(text) → { suspected, matchedLabels }`.
+  Audit-safe labels (no raw text). Anti-regression pin
+  `INJECTION_PATTERNS.length === 9`.
+- `prompt-builder.ts` — `wrapUntrustedMemberInput(text)` canonical
+  XML envelope (`<member_reflection_untrusted>...
+</member_reflection_untrusted>`) with self-close-tag neutralization.
+  `wrapUntrustedMemberInputBlocks(blocks)` for multi-field.
+  `UNTRUSTED_INPUT_SYSTEM_INSTRUCTION` canonical defense prompt
+  string (ready for V2 system prompt assembly). Dormant V1.8.
+
+Source : researcher addendum R5 axe 4 (`docs/jalon-V1.8-r5-addendum.md`
+
+- Anthropic prompt-injection defenses Q1 2026 + Opus 4.6 system card).
+  Layered defense (XML wrap + pre-classifier + structured output) drop
+  direct-injection breach rate from ~78.6% (k=200) to ~1-17%.
+
+### Audit slugs (`lib/auth/audit.ts`)
+
+4 nouveaux slugs :
+
+- `weekly_review.submitted` — carries `crisisLevel` +
+  `injectionSuspected` + `injectionLabels` dans `metadata`.
+- `weekly_review.crisis_detected` — carries `level` + `matchedLabels`.
+- `reflection.submitted` — même pattern.
+- `reflection.crisis_detected` — même pattern.
+
+Submission rows capture the full audit picture en 1 row ; dedicated
+crisis rows pair avec Sentry escalation pour le forensic filtering.
+PII-free (RGPD §16, SPEC §16) — IDs + canonical labels + booleans
+uniquement, jamais le texte brut.
+
+Anti-regression : `lib/auth/audit-v1-8.test.ts` pin les 4 slugs via
+`satisfies ReadonlyArray<AuditAction>` clause (compile-time anchor).
+
+### Build sequence — 4 PRs atomic chain
+
+| PR  | Branche                        | Scope                                                                    | Tests Δ |
+| --- | ------------------------------ | ------------------------------------------------------------------------ | ------- |
+| #61 | `claude/eloquent-lewin-d7093a` | Prisma + Zod + tests unit                                                | +27     |
+| #62 | `feat/v1.8-services`           | services + Server Actions + crisis wire + prompt-injection + audit slugs | +29     |
+| #63 | `feat/v1.8-edge-tests`         | edge tests cumulatifs (crisis FP + injection FP + byte budget + audit)   | +15     |
+| #64 | `feat/v1.8-close-out`          | close-out docs (CLAUDE.md + jalon-V1.8-close-out.md + outcomeR note)     | 0       |
+
+Vitest : 855 (baseline V1.7.2 R5) → **926** (+71, dépasse largement
+cible Eliot +30).
+
+### Item #3 `outcomeR` note doc (pas de code)
+
+Le brief V1.7-prep mentionnait `Trade.outcomeR` à shipper V1.8.
+**C'est un renommage trompeur** — le champ existe déjà sous
+`realizedR` à `schema.prisma:384` (J2, Decimal(6, 2), avec enum
+`RealizedRSource` computed/estimated). Aucune migration nouvelle
+nécessaire. Si une future PR mentionne `outcomeR`, l'auteur doit
+comprendre que c'est le **même champ** (V1.7-prep naming drift).
+
+### Decisions Q1-Q5 + M4-M6 enforcement
+
+Toutes les 8 décisions `docs/jalon-V1.8-decisions.md` conservées en
+defaults. Eliot peut override en R1 d'une future session V1.8 Phase 2
+en disant simplement "change Q3 vers B" ou similaire — l'override
+est gratuit (impact UI copy + 1-2 lignes Zod).
+
+### Quality gate finale V1.8 backend phase 1
+
+- Format check ✓ sur tous les fichiers V1.8 (repo-wide format debt
+  pré-existant hors scope)
+- Lint ✓ exit 0 (max-warnings = 0)
+- Type-check ✓ exit 0 (strict mode incl `noUncheckedIndexedAccess`
+  - `exactOptionalPropertyTypes`)
+- **Vitest 926/926 verts** (+71 vs main baseline 855)
+- Build prod Turbopack ✓ (PR #61 CI ALL GREEN sur 5 checks)
+- Migration `pnpm prisma:generate` ✓ regen propre
+
+### Pré-requis Eliot pour activer V1.8 backend en prod
+
+1. Merger PR #61 → main (Prisma migration gate)
+2. Merger PR #62 → main (rebase auto sur main post-#61)
+3. Merger PR #63 → main (rebase auto)
+4. Merger PR #64 → main (close-out)
+5. Apply migration en prod : `pnpm --filter @fxmily/web prisma:migrate:deploy`
+   (à appliquer pendant maintenance window — 30 membres = 0-1 s lock
+   acceptable)
+6. Restart container app (pick up new Prisma client)
+7. Verify : `/api/health` 200 + `/api/cron/health` overall = green
+
+### STOP — Backend fini, Phase 2 frontend en attente go Eliot
+
+Per `feedback_backend_first_workflow.md` strict :
+
+1. ✅ Phase backend max → DONE.
+2. ⏸ STOP + annonce "Backend V1.8 fini" → **WE ARE HERE**.
+3. ⏳ Attendre go explicite Eliot.
+4. ⏳ Phase frontend max : wizards UI (`<WeeklyReviewWizard>` 5 steps
+   - `<ReflectionWizard>` 4 steps ABCD + `<TradeTagsPicker>` step
+     nouveau dans `/journal/[id]/close`) + Framer Motion + a11y +
+     tests RTL + Playwright E2E + visual verify chrome-devtools +
+     iPhone PWA smoke.
+
+Pickup prompt V1.8 Phase 2 frontend prêt-à-copier dans
+`docs/jalon-V1.8-close-out.md` §Pickup prompt.

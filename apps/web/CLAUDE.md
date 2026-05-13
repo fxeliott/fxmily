@@ -2326,11 +2326,53 @@ de la détection — voir `lib/safety/crisis-detection.ts` Round 7 prep.
 - `/admin/reports/[id]/page.tsx` : `<AIGeneratedBanner variant="inline" modelName={dyn} />` AVANT la section Synthèse
 - `lib/email/templates/weekly-digest.tsx` : inline HTML banner (React Email rend du HTML email-safe, pas du DOM), même copy verbatim
 
-### Action Eliot RESTANTE V1.7
+### ⚠️ V1.7 batch script BROKEN — V1.7.2 jalon dédié requis (audit 2026-05-13)
 
-🟢 **Tester `/sunday-batch --dry-run`** dans Claude Code session. Si OK
-real run. Si compte A ban : pivoter compte B Pro $20/mois (architecture
-prête, Docker container env CLAUDE_HOME séparé à ajouter).
+L'audit autonome Round 2 session 2026-05-13 a confirmé via SSH Hetzner que
+le script `ops/scripts/weekly-batch-local.sh` **ne peut PAS s'exécuter contre
+la prod actuelle** — 3 bugs architecturaux cumulés :
+
+1. `docker compose` (sans `-f`) cherche `compose.yml`/`docker-compose.yml` →
+   prod a uniquement `docker-compose.prod.yml` → "no configuration file
+   provided: not found" sur lignes 137-139 + 304-306 du script bash
+2. Container `fxmily-web` runtime stage Next.js standalone → `pnpm` absent
+   (uniquement dans le builder stage du Dockerfile, cf. `ops/docker/Dockerfile.prod`)
+3. Container runtime → `tsx` absent également (devDep, non shippé en prod) ;
+   `find / -name tsx` retourne 0 résultat
+
+Audit DB confirmant : `SELECT COUNT(*) FROM audit_logs WHERE action LIKE
+'weekly_report.batch.%'` = **0 entrée**. Le path V1.7 batch n'a jamais été
+exercé contre la prod depuis sa création le 2026-05-12 (commit `aa4816a`).
+
+Le J8 cron `weekly-reports` Sunday 21:00 UTC continue de tourner via le
+path HTTP legacy (`/usr/local/bin/fxmily-cron weekly-reports` → curl POST
+avec X-Cron-Secret) en mock client (ANTHROPIC_API_KEY absente). Dernière
+exécution réussie : 2026-05-10 21:44 UTC (2 weekly_reports générés mock).
+
+**V1.7.1 wires UI/email/crisis routing = OK source-level** (page.tsx:144,
+weekly-digest.tsx:96, batch.ts:376). Le seul flow cassé est l'orchestration
+locale Bash → SSH → docker exec.
+
+**Reco V1.7.2 jalon dédié — options ranked best-first** :
+
+1. **Migrate to HTTP routes** (recommandé) : créer `/api/admin/weekly-batch/{pull,persist}`
+   protected par `X-Admin-Token` (même pattern que les 9 crons J5-J10) ;
+   modifier `weekly-batch-local.sh` pour `curl` au lieu de SSH+docker exec.
+   Plus aucune dépendance pnpm/tsx en prod. Aligné sur architecture existante.
+2. **Pre-compile TSX → JS au build** : ajouter `pnpm run build:scripts`
+   compilant `apps/web/scripts/*.ts` → `dist/`, COPY dans Dockerfile runner
+   stage, invoquer `node /app/apps/web/dist/scripts/weekly-batch-pull.js`.
+3. **Add `tsx` au runtime image** : `RUN pnpm add tsx` dans le runner stage
+   du Dockerfile. Bloat image, devDep en prod, anti-best-practice. À éviter.
+
+NE PAS lancer `/sunday-batch` ni `bash ops/scripts/weekly-batch-local.sh`
+contre la prod actuelle — résultat = exit 1 immédiat sur la phase 1 pull.
+
+### Action Eliot RESTANTE V1.7 (post V1.7.2 fix)
+
+🟢 **Tester `/sunday-batch --dry-run`** une fois V1.7.2 mergé + déployé.
+Si compte A ban : pivoter compte B Pro $20/mois (architecture prête,
+Docker container env CLAUDE_HOME séparé à ajouter).
 
 ### Pickup V1.8 REFLECT prep
 

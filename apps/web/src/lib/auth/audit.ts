@@ -99,7 +99,16 @@ export type AuditAction =
   | 'cron.purge_audit_log.scan'
   // J10 Phase J — observability dashboard surface
   | 'admin.system.viewed'
-  | 'cron.health.scan';
+  | 'cron.health.scan'
+  // V1.8 — REFLECT module (member-facing reflection + CBT Ellis ABCD).
+  // `*.submitted` rows carry `crisisLevel` + `injectionSuspected` in metadata
+  // so a single row captures the full audit picture for a submission.
+  // `*.crisis_detected` rows duplicate the signal with `matchedLabels` for
+  // forensic alerting (Sentry escalation pairs with these).
+  | 'weekly_review.submitted'
+  | 'weekly_review.crisis_detected'
+  | 'reflection.submitted'
+  | 'reflection.crisis_detected';
 
 export interface LogAuditParams {
   action: AuditAction;

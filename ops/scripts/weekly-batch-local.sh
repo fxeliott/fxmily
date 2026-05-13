@@ -38,14 +38,51 @@
 
 set -euo pipefail
 
+# --- Config (env-overridable with strict validation) ------------------------
 SSH_HOST="${FXMILY_SSH_HOST:-hetzner-dieu}"
 BATCH_DIR="${FXMILY_BATCH_DIR:-/tmp/fxmily-batch}"
 SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
 SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
-MAX_TURNS="${FXMILY_MAX_TURNS:-1}"
+MAX_TURNS=1  # Hard-pinned to 1 (single-shot per member — anti-bloat, anti-quota-surprise)
 MODEL_FLAG=""
 if [ -n "${FXMILY_CLAUDE_MODEL:-}" ]; then
+  # Allowlist of acceptable Claude models per `lib/weekly-report/pricing.ts`
+  case "$FXMILY_CLAUDE_MODEL" in
+    claude-sonnet-4-6|claude-haiku-4-5|claude-opus-4-7) ;;
+    *)
+      echo "ERROR: FXMILY_CLAUDE_MODEL=$FXMILY_CLAUDE_MODEL not in allowlist." >&2
+      echo "  Allowed: claude-sonnet-4-6, claude-haiku-4-5, claude-opus-4-7" >&2
+      exit 1
+      ;;
+  esac
   MODEL_FLAG="--model ${FXMILY_CLAUDE_MODEL}"
+fi
+
+# V1.7 fix (security-auditor Round 16 HIGH 6) : SSH host allowlist.
+case "$SSH_HOST" in
+  hetzner-dieu|ichor-hetzner) ;;
+  *)
+    echo "ERROR: FXMILY_SSH_HOST=$SSH_HOST not in trusted allowlist." >&2
+    echo "  Allowed: hetzner-dieu, ichor-hetzner (configured in ~/.ssh/config)" >&2
+    exit 1
+    ;;
+esac
+
+# V1.7 fix (code-reviewer Round 16 BLOQUANT 3 + security-auditor MED 12) :
+# sleep range validation + floor 30s. Without this, RANDOM % 0 div-by-zero or
+# negative modulo on inverted ranges silently breaks mid-batch.
+if ! [[ "$SLEEP_MIN" =~ ^[0-9]+$ ]] || ! [[ "$SLEEP_MAX" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: FXMILY_SLEEP_MIN_S / MAX_S must be non-negative integers." >&2
+  exit 1
+fi
+if [ "$SLEEP_MIN" -lt 30 ]; then
+  echo "ERROR: FXMILY_SLEEP_MIN_S=$SLEEP_MIN must be ≥30 (ban-risk floor)." >&2
+  echo "  The whole point of this batch is the jittered sleep — don't bypass it." >&2
+  exit 1
+fi
+if [ "$SLEEP_MAX" -lt "$SLEEP_MIN" ]; then
+  echo "ERROR: FXMILY_SLEEP_MAX_S=$SLEEP_MAX < SLEEP_MIN=$SLEEP_MIN — invalid range." >&2
+  exit 1
 fi
 
 CURRENT_WEEK_FLAG=""
@@ -83,7 +120,15 @@ command -v ssh >/dev/null 2>&1 || {
 
 mkdir -p "$BATCH_DIR"
 ENVELOPE_FILE="$BATCH_DIR/envelope.json"
+RESULTS_NDJSON="$BATCH_DIR/results.ndjson"  # Append-only NDJSON for atomic writes
 RESULTS_FILE="$BATCH_DIR/results.json"
+ERRORS_LOG="$BATCH_DIR/claude-errors.log"
+
+# V1.7 fix (security-auditor Round 16 HIGH 5) : truncate the errors log at
+# each run + scrub older artifacts (>7 days). Without this, PII from past
+# Claude errors accumulates indefinitely on Eliot's disk.
+: >"$ERRORS_LOG"
+find "$BATCH_DIR" -type f -mtime +7 -delete 2>/dev/null || true
 
 # --- Phase 1 : pull snapshots from Hetzner ----------------------------------
 
@@ -120,8 +165,11 @@ SCHEMA_FILE="$BATCH_DIR/output-schema.json"
 jq -r '.systemPrompt' "$ENVELOPE_FILE" >"$SYSTEM_PROMPT_FILE"
 jq '.outputJsonSchema' "$ENVELOPE_FILE" >"$SCHEMA_FILE"
 
-# Start a fresh results buffer (array)
-echo "{\"weekStart\": \"$WEEK_START\", \"weekEnd\": \"$WEEK_END\", \"results\": []}" >"$RESULTS_FILE"
+# V1.7 fix (code-reviewer Round 16 BLOQUANT 4) : append-only NDJSON instead of
+# rewriting the whole results.json on every member. Atomic per-line append =
+# survives Ctrl-C and corruption-on-rename. Assembled into final JSON at the
+# end of the loop via `jq -s`.
+: >"$RESULTS_NDJSON"
 
 i=0
 generated=0
@@ -135,15 +183,33 @@ for idx in $ENTRY_INDICES; do
   PSEUDO=$(jq -r ".entries[$idx].pseudonymLabel" "$ENVELOPE_FILE")
   HAS_ACTIVITY=$(jq -r ".entries[$idx].hasActivity" "$ENVELOPE_FILE")
 
+  # V1.7 fix (security-auditor Round 16 BLOCKER 1 CVSS 8.1) : validate the
+  # pseudonymLabel as `member-[A-F0-9]{6,8}` before interpolating it into
+  # any path. Shell injection prevention via `pseudonymizeMember` output
+  # contract. Same defense for userId (cuid-safe alnum + _-).
+  if ! [[ "$PSEUDO" =~ ^member-[A-Fa-f0-9]{6,8}$ ]]; then
+    errored=$((errored + 1))
+    echo "  [$i/$ENTRY_COUNT] SKIP (invalid pseudonymLabel format — possible compromise) : '${PSEUDO:0:32}'"
+    echo "{\"userId\":\"$USER_ID\",\"error\":\"invalid_pseudonym_format\"}" >>"$RESULTS_NDJSON"
+    continue
+  fi
+  if ! [[ "$USER_ID" =~ ^[A-Za-z0-9_-]{1,128}$ ]]; then
+    errored=$((errored + 1))
+    echo "  [$i/$ENTRY_COUNT] SKIP (invalid userId format) : '${USER_ID:0:32}'"
+    continue
+  fi
+
   if [ "$HAS_ACTIVITY" != "true" ]; then
     skipped_inactive=$((skipped_inactive + 1))
     echo "  [$i/$ENTRY_COUNT] $PSEUDO → SKIP (no activity this week)"
     continue
   fi
 
-  # Build the per-member user prompt (data + schema)
-  PROMPT_FILE="$BATCH_DIR/prompt-$PSEUDO.txt"
-  RESPONSE_FILE="$BATCH_DIR/response-$PSEUDO.json"
+  # V1.7 fix (code-reviewer Round 16 LOW : use index-based filenames to avoid
+  # pseudonymLabel collision (32-bit hex = 77k members before birthday).
+  PROMPT_FILE="$BATCH_DIR/prompt-$i.txt"
+  RESPONSE_FILE="$BATCH_DIR/response-$i.json"
+  PARSED_FILE="$BATCH_DIR/parsed-$i.json"
 
   {
     echo "Tu dois analyser la semaine de trading d'un membre Fxmily."
@@ -161,30 +227,33 @@ for idx in $ENTRY_INDICES; do
   echo "  [$i/$ENTRY_COUNT] $PSEUDO → generating..."
 
   # Invoke claude --print headless. We pipe the user prompt on stdin.
-  # `--max-turns 1` keeps it to a single shot (no agentic loop).
+  # `--max-turns 1` keeps it to a single shot (no agentic loop, hard-coded).
   # `--output-format text` returns just the assistant content (we'll parse the
   # JSON ourselves). The system prompt is injected via `--append-system-prompt`
   # so the local Mark Douglas posture is locked.
+  #
+  # V1.7 fix (code-reviewer Round 16 HIGH H3) : printf '%s' instead of $(cat)
+  # to prevent shell expansion of $variables and `$()` inside the system
+  # prompt. The file content is treated as a literal argument.
   set +e
+  SYSTEM_PROMPT_CONTENT=$(<"$SYSTEM_PROMPT_FILE")
   claude --print \
     $MODEL_FLAG \
     --max-turns "$MAX_TURNS" \
-    --append-system-prompt "$(cat "$SYSTEM_PROMPT_FILE")" \
+    --append-system-prompt "$SYSTEM_PROMPT_CONTENT" \
     --output-format text \
     <"$PROMPT_FILE" \
-    >"$RESPONSE_FILE" 2>>"$BATCH_DIR/claude-errors.log"
+    >"$RESPONSE_FILE" 2>>"$ERRORS_LOG"
   CLAUDE_EXIT=$?
   set -e
 
   if [ $CLAUDE_EXIT -ne 0 ] || [ ! -s "$RESPONSE_FILE" ]; then
     errored=$((errored + 1))
-    echo "    ✗ claude exited $CLAUDE_EXIT, response file empty or missing — see $BATCH_DIR/claude-errors.log"
-    jq --arg uid "$USER_ID" --arg err "claude_exit_$CLAUDE_EXIT" \
-       '.results += [{userId: $uid, error: $err}]' \
-       "$RESULTS_FILE" >"$RESULTS_FILE.tmp" && mv "$RESULTS_FILE.tmp" "$RESULTS_FILE"
+    echo "    ✗ claude exited $CLAUDE_EXIT, response file empty or missing — see $ERRORS_LOG"
+    # Atomic append-only NDJSON line
+    jq -nc --arg uid "$USER_ID" --arg err "claude_exit_$CLAUDE_EXIT" \
+       '{userId: $uid, error: $err}' >>"$RESULTS_NDJSON"
   else
-    # Try to extract a JSON object from the response (strip code fences if any)
-    PARSED_FILE="$BATCH_DIR/parsed-$PSEUDO.json"
     # Strip leading/trailing markdown fences + whitespace
     sed -E '1{/^```(json)?[[:space:]]*$/d}; ${/^```[[:space:]]*$/d}' "$RESPONSE_FILE" \
       | sed -n '/^{/,$p' >"$PARSED_FILE" || true
@@ -192,15 +261,13 @@ for idx in $ENTRY_INDICES; do
     if jq -e . "$PARSED_FILE" >/dev/null 2>&1; then
       generated=$((generated + 1))
       echo "    ✓ generated, JSON valid"
-      jq --arg uid "$USER_ID" --slurpfile output "$PARSED_FILE" \
-         '.results += [{userId: $uid, output: $output[0]}]' \
-         "$RESULTS_FILE" >"$RESULTS_FILE.tmp" && mv "$RESULTS_FILE.tmp" "$RESULTS_FILE"
+      jq -nc --arg uid "$USER_ID" --slurpfile output "$PARSED_FILE" \
+         '{userId: $uid, output: $output[0]}' >>"$RESULTS_NDJSON"
     else
       errored=$((errored + 1))
       echo "    ✗ output is not valid JSON — saved to $RESPONSE_FILE"
-      jq --arg uid "$USER_ID" --arg err "invalid_json_response" \
-         '.results += [{userId: $uid, error: $err}]' \
-         "$RESULTS_FILE" >"$RESULTS_FILE.tmp" && mv "$RESULTS_FILE.tmp" "$RESULTS_FILE"
+      jq -nc --arg uid "$USER_ID" --arg err "invalid_json_response" \
+         '{userId: $uid, error: $err}' >>"$RESULTS_NDJSON"
     fi
   fi
 
@@ -213,6 +280,13 @@ for idx in $ENTRY_INDICES; do
 done
 
 echo "  Generated: $generated, errored: $errored, skipped inactive: $skipped_inactive"
+
+# V1.7 fix (code-reviewer Round 16 BLOQUANT 4) : assemble final results.json
+# from the append-only NDJSON. Single atomic write at the end — Ctrl-C
+# mid-loop preserves all completed generations in the NDJSON.
+jq -s --arg ws "$WEEK_START" --arg we "$WEEK_END" \
+   '{weekStart: $ws, weekEnd: $we, results: .}' \
+   "$RESULTS_NDJSON" >"$RESULTS_FILE"
 
 # --- Phase 3 : persist to Hetzner -------------------------------------------
 

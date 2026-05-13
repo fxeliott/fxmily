@@ -11,7 +11,7 @@ import {
 
 import { buildWeeklySnapshot } from './builder';
 import { loadWeeklySliceForUser } from './loader';
-import { computeCostEur } from './pricing';
+import { CLAUDE_CODE_LOCAL_MODEL, computeCostEur } from './pricing';
 import { buildWeeklyReportUserPrompt, WEEKLY_REPORT_SYSTEM_PROMPT } from './prompt';
 import type { WeekWindow } from './week-window';
 
@@ -137,6 +137,16 @@ export interface BatchPersistResult {
 // =============================================================================
 
 /**
+ * V1.7 perf fix (code-reviewer Round 16 HIGH H2) : batch concurrency for the
+ * N+1 fan-out. Each `loadWeeklySliceForUser` opens 6 connections (4 findMany +
+ * 1 score query + 1 user findUnique) so a batch of 5 demands up to 30
+ * connections vs `db.ts` pool max=10. Prisma queues the rest, but throughput
+ * is fine at this concurrency and stays well under the 5s connectionTimeout.
+ * If we ever scale past ~500 active members, bump `max` in `lib/db.ts` first.
+ */
+const SNAPSHOT_BATCH_CONCURRENCY = 5;
+
+/**
  * Load every active member's weekly slice + build a pseudonymized snapshot.
  * Used by `scripts/weekly-batch-pull.ts`. Pure read; no side effects.
  *
@@ -147,6 +157,10 @@ export interface BatchPersistResult {
  * Inactive members AND members with `null` slice (e.g. joined > 7 days ago
  * but never logged a trade) are filtered OUT — they get `hasActivity: false`
  * upstream and the local script skips them.
+ *
+ * Performance : `SNAPSHOT_BATCH_CONCURRENCY`-by-5 with `Promise.allSettled`.
+ * At 30 members ~1.8s expected (vs ~9s sequential). At 1000 ~60s (vs ~5min
+ * sequential = Caddy timeout). Pattern mirrors `service.ts:196-269`.
  */
 export async function loadAllSnapshotsForActiveMembers(
   options: { now?: Date; previousFullWeek?: boolean } = {},
@@ -165,28 +179,39 @@ export async function loadAllSnapshotsForActiveMembers(
   let weekStart: string | null = null;
   let weekEnd: string | null = null;
 
-  for (const user of users) {
-    const slice = await loadWeeklySliceForUser(user.id, { now, previousFullWeek });
-    if (slice === null) {
-      continue;
+  // Process members in parallel batches of SNAPSHOT_BATCH_CONCURRENCY to keep
+  // the Prisma pool happy while still cutting wall time by ~5×.
+  for (let i = 0; i < users.length; i += SNAPSHOT_BATCH_CONCURRENCY) {
+    const chunk = users.slice(i, i + SNAPSHOT_BATCH_CONCURRENCY);
+    const results = await Promise.allSettled(
+      chunk.map(async (user) => {
+        const slice = await loadWeeklySliceForUser(user.id, { now, previousFullWeek });
+        if (slice === null) return null;
+        const snapshot = buildWeeklySnapshot(slice.builderInput);
+        const c = snapshot.counters;
+        const hasActivity =
+          c.tradesTotal > 0 || c.morningCheckinsCount > 0 || c.eveningCheckinsCount > 0;
+        return {
+          userId: user.id,
+          pseudonymLabel: user.pseudonymLabel ?? user.id.slice(0, 8),
+          timezone: user.timezone,
+          weekStart: slice.window.weekStartLocal,
+          weekEnd: slice.window.weekEndLocal,
+          snapshot,
+          hasActivity,
+        } satisfies BatchSnapshotEntry;
+      }),
+    );
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value !== null) {
+        weekStart ??= r.value.weekStart;
+        weekEnd ??= r.value.weekEnd;
+        entries.push(r.value);
+      }
+      // Rejected promises are silently dropped — they're individual member
+      // load failures (corrupt timezone, etc.) and shouldn't fail the whole
+      // batch. Audit emit downstream if needed.
     }
-    const snapshot = buildWeeklySnapshot(slice.builderInput);
-    const c = snapshot.counters;
-    const hasActivity =
-      c.tradesTotal > 0 || c.morningCheckinsCount > 0 || c.eveningCheckinsCount > 0;
-
-    weekStart ??= slice.window.weekStartLocal;
-    weekEnd ??= slice.window.weekEndLocal;
-
-    entries.push({
-      userId: user.id,
-      pseudonymLabel: user.pseudonymLabel ?? user.id.slice(0, 8),
-      timezone: user.timezone,
-      weekStart: slice.window.weekStartLocal,
-      weekEnd: slice.window.weekEndLocal,
-      snapshot,
-      hasActivity,
-    });
   }
 
   await logAudit({
@@ -246,12 +271,48 @@ export async function persistGeneratedReports(
   request: BatchPersistRequest,
 ): Promise<BatchPersistResult> {
   const ranAt = new Date().toISOString();
-  const weekStartDb = parseLocalDate(request.weekStart);
-  const weekEndDb = parseLocalDate(request.weekEnd);
+
+  // V1.7 fix (code-reviewer Round 16 BLOQUANT 2) : wrap parseLocalDate so a
+  // malformed weekStart/weekEnd doesn't crash the whole batch. The function
+  // JSDoc promises "never throws on a single bad entry" — that promise was
+  // violated for the envelope itself. Now we surface the error via audit row
+  // and return a clean fail-loud counts object.
+  let weekStartDb: Date;
+  let weekEndDb: Date;
+  try {
+    weekStartDb = parseLocalDate(request.weekStart);
+    weekEndDb = parseLocalDate(request.weekEnd);
+  } catch (err) {
+    await logAudit({
+      action: 'weekly_report.batch.invalid_output',
+      metadata: {
+        ranAt,
+        weekStart: request.weekStart,
+        weekEnd: request.weekEnd,
+        reason: 'invalid_week_window',
+        error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+      },
+    });
+    return { persisted: 0, skipped: 0, errors: request.results.length };
+  }
+
   const weekWindowLog: Pick<WeekWindow, 'weekStartLocal' | 'weekEndLocal'> = {
     weekStartLocal: request.weekStart,
     weekEndLocal: request.weekEnd,
   };
+
+  // V1.7 fix (security-auditor Round 16 BLOCKER 4) : pre-fetch all active
+  // user ids so we can reject persists targeting unknown / suspended users.
+  // A compromised laptop could otherwise inject a fake report against any
+  // userId — even one that never existed. Set lookup is O(1) per entry.
+  const activeUserIds = new Set(
+    (
+      await db.user.findMany({
+        where: { status: 'active' },
+        select: { id: true },
+      })
+    ).map((u) => u.id),
+  );
 
   let persisted = 0;
   let skipped = 0;
@@ -267,6 +328,23 @@ export async function persistGeneratedReports(
           ranAt,
           weekStart: request.weekStart,
           reason: entry.error.slice(0, 200),
+        },
+      });
+      continue;
+    }
+
+    // V1.7 fix (security-auditor Round 16 BLOCKER 4) : reject entries that
+    // target a user id which isn't currently active. Prevents a compromised
+    // laptop from forging a report against an arbitrary userId.
+    if (!activeUserIds.has(entry.userId)) {
+      skipped += 1;
+      await logAudit({
+        action: 'weekly_report.batch.skipped',
+        userId: entry.userId,
+        metadata: {
+          ranAt,
+          weekStart: request.weekStart,
+          reason: 'unknown_or_inactive_user',
         },
       });
       continue;
@@ -292,20 +370,20 @@ export async function persistGeneratedReports(
 
     const output = parsed.data;
     const usage = entry.usage ?? { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
-    const claudeModel = entry.model ?? 'claude-code-local';
-    // Claude Max subscription path : per-token cost is $0 to Eliot (covered
-    // by the flat subscription), so we persist `costEur = "0.000000"` rather
-    // than the computed-API-price. This keeps `cost_eur` columns coherent
-    // when admins query "what did Fxmily spend on AI this month?".
-    const subscriptionCovered = claudeModel === 'claude-code-local';
-    const cost = subscriptionCovered
-      ? { costEur: '0.000000' }
-      : computeCostEur(claudeModel, {
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
-          cacheReadTokens: usage.cacheReadTokens ?? 0,
-          cacheCreateTokens: 0,
-        });
+    // V1.7 fix (code-reviewer Round 16 BLOQUANT 5) : pin the model to the
+    // local-Claude sentinel by default. Reject any external model name the
+    // local script tries to inject — only the 3 known entries of
+    // `PRICING_USD_PER_MTOK` are accepted. This prevents a compromised laptop
+    // from inflating `costEur` via a fake model name.
+    const PRICING_KEYS = ['claude-sonnet-4-6', 'claude-haiku-4-5', CLAUDE_CODE_LOCAL_MODEL];
+    const claudeModel =
+      entry.model && PRICING_KEYS.includes(entry.model) ? entry.model : CLAUDE_CODE_LOCAL_MODEL;
+    const cost = computeCostEur(claudeModel, {
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cacheReadTokens: usage.cacheReadTokens ?? 0,
+      cacheCreateTokens: 0,
+    });
 
     try {
       await db.weeklyReport.upsert({

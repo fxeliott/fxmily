@@ -187,6 +187,24 @@ export const sentryTunnelLimiter = new TokenBucketLimiter({
 });
 
 /**
+ * V1.7.2 — `/api/admin/weekly-batch/{pull,persist}` per-IP bucket.
+ *
+ * Eliot triggers the batch from his local machine ; legitimate flow = 1 pull
+ * + 1 persist per week (Sunday). Burst 10 covers `--resume` retries +
+ * dev iteration without locking him out. Refill 1 token / 5 min sustained
+ * is well below any human cadence but tight enough to throttle a bot
+ * brute-forcing the 32-char token.
+ *
+ * The bucket key is the caller IP (Caddy `x-forwarded-for`) — single
+ * cohort, single admin, low-cardinality. `maxKeys: 256` is generous.
+ */
+export const adminBatchLimiter = new TokenBucketLimiter({
+  bucketSize: 10,
+  refillRate: 1 / (5 * 60),
+  maxKeys: 256,
+});
+
+/**
  * V1.6 extras — `/api/health` endpoint rate-limit.
  *
  * Pre-existing security HIGH identified by Round 5 security-auditor audit :
@@ -254,12 +272,49 @@ export const loginIpLimiter = new TokenBucketLimiter({
  *
  * NEVER persisted, never logged in plaintext (use `hashIp` from
  * `lib/auth/audit.ts` if you need the value in audit logs).
+ *
+ * ⚠️ This reads the FIRST entry of `x-forwarded-for`, which is the entry
+ * the *original client* set — spoofable by anyone. This is acceptable for
+ * the consumers that gate on a strong secret BEFORE consuming the bucket
+ * (cron routes — secret check first, bucket second), but NOT for surfaces
+ * that consume the bucket pre-auth. Use `callerIdTrusted` for those.
  */
 export function callerId(req: Request | { headers: Headers }): string {
   const xff = req.headers.get('x-forwarded-for');
   if (xff) {
     const first = xff.split(',')[0]?.trim();
     if (first) return first;
+  }
+  const real = req.headers.get('x-real-ip');
+  if (real) return real.trim();
+  return 'unknown';
+}
+
+/**
+ * V1.7.2 — Trusted caller identifier from a Next.js request.
+ *
+ * Parses `x-forwarded-for` from the END of the chain. Caddy v2's default
+ * `reverse_proxy` directive **appends** the immediate client IP to
+ * `X-Forwarded-For` (rather than overriding). The LAST entry in the chain
+ * is therefore the IP that Caddy itself observed — trustable, not
+ * client-controlled.
+ *
+ * For surfaces that consume a rate-limit bucket BEFORE the auth gate (so
+ * an unauthenticated caller can drain it), use this helper instead of
+ * `callerId` to prevent XFF-spoofing bypass. Reference : security audit
+ * R2 V1.7.2 finding HIGH 5.3 (`callerId` reads first entry = attacker-set).
+ *
+ * Falls back to `x-real-ip` (single-value, set by Caddy) then `'unknown'`.
+ */
+export function callerIdTrusted(req: Request | { headers: Headers }): string {
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) {
+    const segments = xff
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const last = segments[segments.length - 1];
+    if (last) return last;
   }
   const real = req.headers.get('x-real-ip');
   if (real) return real.trim();

@@ -1,17 +1,19 @@
 ---
-description: Run the V1.7 weekly AI report batch locally using Eliot's Claude Max subscription
-allowed-tools: Bash(bash:*), Bash(ssh:*), Bash(jq:*), Bash(cat:*), Bash(ls:*), Bash(wc:*), Read, Edit
+description: Run the V1.7.2 weekly AI report batch locally using Eliot's Claude Max subscription (HTTP migration)
+allowed-tools: Bash(bash:*), Bash(curl:*), Bash(jq:*), Bash(cat:*), Bash(ls:*), Bash(wc:*), Bash(claude:*), Read, Edit
 ---
 
-# /sunday-batch — V1.7 weekly AI reports via local Claude Code
+# /sunday-batch — V1.7.2 weekly AI reports via local Claude Code
 
-You are about to orchestrate the weekly AI-report generation for Fxmily V1.7. The reports are generated **locally** on Eliot's machine using his Claude Max subscription (NOT the Anthropic API).
+You are about to orchestrate the weekly AI-report generation for Fxmily V1.7.2. The reports are generated **locally** on Eliot's machine using his Claude Max subscription (NOT the Anthropic API).
 
-## Architecture recap
+## Architecture recap (V1.7.2 HTTP migration)
 
-1. SSH into Hetzner (`hetzner-dieu` alias), pull pseudonymized snapshots of every active member's week → `/tmp/fxmily-batch/envelope.json`
+1. `bash ops/scripts/weekly-batch-local.sh` curl-POSTs to `https://app.fxmilyapp.com/api/admin/weekly-batch/pull` with `X-Admin-Token` → JSON envelope of pseudonymized snapshots → `/tmp/fxmily-batch/envelope.json`
 2. For each member with activity : invoke `claude --print` headless (consumes Eliot's Max subscription) → captured JSON → `/tmp/fxmily-batch/results.json`
-3. SSH back into Hetzner, pipe results into `weekly-batch-persist.ts` → upsert into `weekly_reports`
+3. Same script curl-POSTs results to `https://app.fxmilyapp.com/api/admin/weekly-batch/persist` → upsert into `weekly_reports`
+
+V1.7.2 replaced the original V1.7 SSH+`docker compose exec` orchestration which was non-functional in prod (the runtime container does not ship `pnpm` or `tsx`). See `apps/web/CLAUDE.md` section "V1.7.2 Migration HTTP routes ACTIVE".
 
 The actual heavy lifting lives in `ops/scripts/weekly-batch-local.sh`. Your job here is to invoke it, monitor it, and report cleanly.
 
@@ -20,7 +22,9 @@ The actual heavy lifting lives in `ops/scripts/weekly-batch-local.sh`. Your job 
 1. **Pre-flight check** (run these in parallel, then summarize) :
    - `which claude` — confirm Claude Code CLI is in PATH
    - `claude --version` — note the version (warn if ≥ 2.1.100 about token-inflation bug per memory)
-   - `ssh -o BatchMode=yes hetzner-dieu "echo ok"` — confirm SSH key works without prompt
+   - `which curl jq` — confirm both binaries are in PATH (no SSH dependency anymore)
+   - `[ -n "$FXMILY_ADMIN_TOKEN" ] && echo "token set" || echo "FXMILY_ADMIN_TOKEN MISSING — refuse to launch"` — refuse to launch if env not exported
+   - `curl --fail-with-body --silent --max-time 5 "${FXMILY_APP_URL:-https://app.fxmilyapp.com}/api/health" | jq -r '.status'` — confirm prod is up
    - `ls -la /tmp/fxmily-batch/ 2>/dev/null || echo "(workdir not yet created)"` — show any previous batch artifacts
 
 2. **Announce the plan** to Eliot, including :
@@ -37,18 +41,18 @@ The actual heavy lifting lives in `ops/scripts/weekly-batch-local.sh`. Your job 
    - Check `/tmp/fxmily-batch/claude-errors.log` ; if non-empty, summarize the first error
    - If `persisted` == 0, escalate clearly — do NOT pretend success
 
-6. **Optional follow-up** if Eliot asks :
+6. **Optional follow-up** if Eliot asks (these still use SSH because they're DBA queries, not part of the batch flow) :
    - Spot-check a single report by SSHing to Hetzner and dumping a row :
-     `ssh hetzner-dieu "docker compose exec -T fxmily-postgres psql -U fxmily -d fxmily -c \"SELECT summary FROM weekly_reports WHERE week_start = '...' LIMIT 1\""`
+     `ssh hetzner-dieu "cd /opt/fxmily && docker compose -f docker-compose.prod.yml exec -T postgres psql -U fxmily -d fxmily -c \"SELECT summary FROM weekly_reports WHERE week_start = '...' LIMIT 1\""`
    - Tail the prod audit log for `weekly_report.batch.*` rows :
-     `ssh hetzner-dieu "docker compose exec -T fxmily-postgres psql -U fxmily -d fxmily -c \"SELECT action, metadata, created_at FROM audit_logs WHERE action LIKE 'weekly_report.batch.%' ORDER BY created_at DESC LIMIT 20\""`
+     `ssh hetzner-dieu "cd /opt/fxmily && docker compose -f docker-compose.prod.yml exec -T postgres psql -U fxmily -d fxmily -c \"SELECT action, metadata, created_at FROM audit_logs WHERE action LIKE 'weekly_report.batch.%' ORDER BY created_at DESC LIMIT 20\""`
 
 ## Posture verrouillée
 
-- The system prompt + JSON schema travel **inside the envelope** pulled from Hetzner — do NOT swap them out, do NOT inject extra instructions to Claude per-member
+- The system prompt + JSON schema travel **inside the envelope** pulled from prod — do NOT swap them out, do NOT inject extra instructions to Claude per-member
 - The Mark Douglas posture is locked in `apps/web/src/lib/weekly-report/prompt.ts` — code review only, never local override
 - Snapshots are already pseudonymized (`pseudonymizeMember` 8-char hex V1.5) — do NOT log raw `userId` to console / files outside `/tmp/fxmily-batch/`
-- Crisis routing detection (`lib/safety/crisis-detection.ts`) is NOT wired into this batch path — that lives in the runtime member-facing flows. Reports go to the **admin** (Eliot) only.
+- Crisis routing detection (`lib/safety/crisis-detection.ts`) IS wired into the persist path (V1.7.1 — `persistGeneratedReports` gates HIGH/MEDIUM signals before upsert + Sentry escalation). Reports go to the **admin** (Eliot) only.
 
 ## Ban-risk warnings (state these UP FRONT to Eliot before launching)
 

@@ -151,7 +151,8 @@ const SNAPSHOT_BATCH_CONCURRENCY = 5;
 
 /**
  * Load every active member's weekly slice + build a pseudonymized snapshot.
- * Used by `scripts/weekly-batch-pull.ts`. Pure read; no side effects.
+ * Used by `app/api/admin/weekly-batch/pull/route.ts` (V1.7.2 HTTP migration).
+ * Pure read; no side effects.
  *
  * `previousFullWeek` defaults to `true` — the cadence is "Sunday eve / Monday
  * morning, generate reports for the week that just ended". If you want to

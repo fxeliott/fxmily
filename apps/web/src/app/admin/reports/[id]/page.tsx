@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { AIGeneratedBanner } from '@/components/ai-generated-banner';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { db } from '@/lib/db';
@@ -136,6 +137,18 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
           </Link>
         ) : null}
       </Card>
+
+      {/* V1.7.1 — EU AI Act 50(1) chatbot transparency disclaimer
+          (deadline 2 août 2026, €15M / 3% CA Art. 99(4)). The model name is
+          dynamic so future provider switches don't drift the banner copy. */}
+      <AIGeneratedBanner
+        variant="inline"
+        modelName={
+          report.claudeModel === 'claude-code-local'
+            ? 'Claude (subscription locale)'
+            : `Claude ${report.claudeModel}`
+        }
+      />
 
       {/* Summary */}
       <section className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]">

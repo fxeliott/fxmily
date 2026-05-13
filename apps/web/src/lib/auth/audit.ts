@@ -67,6 +67,8 @@ export type AuditAction =
   | 'weekly_report.batch.skipped'
   | 'weekly_report.batch.invalid_output'
   | 'weekly_report.batch.persist_failed'
+  // V1.7.1 — crisis routing wire on the batch output (safety)
+  | 'weekly_report.batch.crisis_detected'
   | 'admin.weekly_report.viewed'
   | 'cron.weekly_reports.scan'
   | 'cron.weekly_reports.batch_done'

@@ -9,6 +9,9 @@ import {
   type WeeklySnapshot,
 } from '@/lib/schemas/weekly-report';
 
+import { reportError, reportWarning } from '@/lib/observability';
+import { detectCrisis } from '@/lib/safety/crisis-detection';
+
 import { buildWeeklySnapshot } from './builder';
 import { loadWeeklySliceForUser } from './loader';
 import { CLAUDE_CODE_LOCAL_MODEL, computeCostEur } from './pricing';
@@ -369,6 +372,63 @@ export async function persistGeneratedReports(
     }
 
     const output = parsed.data;
+
+    // V1.7.1 — Crisis routing wire on the Claude output BEFORE persist.
+    // Concatenate every free-text channel the AI can write into a member's
+    // report, run the deterministic FR regex (V1.7 prep dormant from R7),
+    // and HALT the persist if a HIGH or MEDIUM signal is detected.
+    //
+    // Why pre-persist : we never want a "summary" containing suicidal content
+    // to land in the admin dashboard / digest email — the audit row + Sentry
+    // warning surfaces it for Eliot to handle out-of-band (call the member,
+    // surface 3114 + SOS Amitié + Suicide Écoute).
+    //
+    // Note : `detectCrisis` already excludes trading slang ("tout perdre sur
+    // ce trade", "tuer ma position", "en finir avec ça", "dépression du
+    // marché") so a normal trading-loss summary won't trip the gate.
+    const crisisCorpus = [
+      output.summary,
+      ...output.risks,
+      ...output.recommendations,
+      output.patterns.emotionPerf ?? '',
+      output.patterns.sleepPerf ?? '',
+      output.patterns.sessionFocus ?? '',
+      output.patterns.disciplineTrend ?? '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+    const crisis = detectCrisis(crisisCorpus);
+    if (crisis.level === 'high' || crisis.level === 'medium') {
+      skipped += 1;
+      await logAudit({
+        action: 'weekly_report.batch.crisis_detected',
+        userId: entry.userId,
+        metadata: {
+          ranAt,
+          weekStart: request.weekStart,
+          level: crisis.level,
+          matchedLabels: crisis.matches.map((m) => m.label),
+        },
+      });
+      // HIGH → error (page-out), MEDIUM → warning (review next morning).
+      // Never include the raw text — only canonical labels (RGPD §16).
+      if (crisis.level === 'high') {
+        reportError(
+          'weekly_report.batch',
+          new Error(
+            `crisis_signal_high_in_ai_output: ${crisis.matches.map((m) => m.label).join(',')}`,
+          ),
+          { userId: entry.userId, weekStart: request.weekStart },
+        );
+      } else {
+        reportWarning('weekly_report.batch', 'crisis_signal_medium_in_ai_output', {
+          userId: entry.userId,
+          weekStart: request.weekStart,
+          matchedLabels: crisis.matches.map((m) => m.label),
+        });
+      }
+      continue;
+    }
     const usage = entry.usage ?? { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
     // V1.7 fix (code-reviewer Round 16 BLOQUANT 5) : pin the model to the
     // local-Claude sentinel by default. Reject any external model name the

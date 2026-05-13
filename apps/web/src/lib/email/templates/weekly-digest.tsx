@@ -89,6 +89,21 @@ export function WeeklyDigestEmail({
           <Heading style={heading}>{memberLabel}</Heading>
           <Text style={periodText}>{period}</Text>
 
+          {/* V1.7.1 — EU AI Act 50(1) chatbot transparency disclaimer
+              (mandatoire avant 2 août 2026, pénalité €15M / 3% Art. 99(4)).
+              Inline HTML version of `AIGeneratedBanner` because React Email
+              renders to email-safe HTML, not browser DOM. */}
+          <Section style={aiBanner}>
+            <Text style={aiBannerText}>
+              Ce rapport est généré par une intelligence artificielle (
+              {claudeModel === 'claude-code-local'
+                ? 'Claude — subscription locale'
+                : `Claude ${claudeModel}`}
+              , Anthropic). Il ne remplace ni un coaching humain, ni un avis médical, ni un conseil
+              en investissement personnalisé.
+            </Text>
+          </Section>
+
           {mocked ? (
             <Section style={mockBanner}>
               <Text style={mockBannerText}>
@@ -301,6 +316,23 @@ const mockBanner: React.CSSProperties = {
 
 const mockBannerText: React.CSSProperties = {
   color: '#f7c45c',
+  fontSize: 12,
+  margin: 0,
+  lineHeight: '18px',
+};
+
+// V1.7.1 — EU AI Act 50(1) chatbot transparency disclaimer banner
+const aiBanner: React.CSSProperties = {
+  backgroundColor: 'rgba(99, 102, 241, 0.08)',
+  border: '1px solid rgba(99, 102, 241, 0.25)',
+  borderLeft: '4px solid #6366f1',
+  borderRadius: 6,
+  padding: '10px 14px',
+  margin: '0 0 18px 0',
+};
+
+const aiBannerText: React.CSSProperties = {
+  color: '#c7c8d4',
   fontSize: 12,
   margin: 0,
   lineHeight: '18px',

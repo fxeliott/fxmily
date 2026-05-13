@@ -22,6 +22,55 @@ const OUTCOMES = ['win', 'loss', 'break_even'] as const;
 /// V1.5 — Steenbarger setup quality buckets.
 const TRADE_QUALITIES = ['A', 'B', 'C'] as const;
 
+/**
+ * V1.8 REFLECT — post-outcome bias classification (Q5=A LESSOR-only acted).
+ *
+ * Allowlist of slugs accepted for `Trade.tags` (Postgres TEXT[] column).
+ * Source mapping :
+ *   - CFA Institute LESSOR (6 emotional biases — Loss-aversion, Endowment,
+ *     Self-control, Status-quo, Overconfidence, Regret-aversion)
+ *   - Steenbarger TraderFeed strengths-based (`discipline-high`,
+ *     `revenge-trade` — the latter informal but historically canon).
+ *
+ * Informal slugs (`fomo`, `tilt`, etc.) intentionally EXCLUDED per V1.8
+ * decision Q5=A (academic-validated only). Re-evaluation gate: > 5 members
+ * request a slug → consider adding in V1.9 with an `informal:` prefix.
+ *
+ * The const tuple is `readonly` to feed `z.enum` and TypeScript narrowing.
+ * Append-only: adding a new slug is non-breaking; removing one would require
+ * a DB cleanup migration to avoid orphaned values in existing rows.
+ */
+export const TRADE_TAG_SLUGS = [
+  'loss-aversion',
+  'overconfidence',
+  'regret-aversion',
+  'status-quo',
+  'self-control-fail',
+  'endowment',
+  'discipline-high',
+  'revenge-trade',
+] as const;
+
+export type TradeTagSlug = (typeof TRADE_TAG_SLUGS)[number];
+
+export const TRADE_TAGS_MAX_PER_TRADE = 3;
+
+export function isTradeTagSlug(value: string): value is TradeTagSlug {
+  return (TRADE_TAG_SLUGS as readonly string[]).includes(value);
+}
+
+/// Standalone Zod schema for a single tag — used by the TradeTagsPicker UI
+/// per-option validation and by tests that need to fuzz individual values.
+export const tradeTagSchema = z.enum(TRADE_TAG_SLUGS);
+
+/// Array form for `Trade.tags` — used inside `tradeCloseSchema` and
+/// importable for ad-hoc validation (e.g. admin override flows in V1.9+).
+export const tradeTagsSchema = z
+  .array(z.string())
+  .max(TRADE_TAGS_MAX_PER_TRADE, `Maximum ${TRADE_TAGS_MAX_PER_TRADE} tags.`)
+  .refine((tags) => tags.every(isTradeTagSlug), { message: 'Tag inconnu.' })
+  .refine((tags) => new Set(tags).size === tags.length, { message: 'Doublons interdits.' });
+
 const positivePrice = z.coerce
   .number({ message: 'Prix invalide.' })
   .positive('Le prix doit être positif.')
@@ -183,6 +232,10 @@ export const tradeCloseSchema = z.object({
   exitPrice: positivePrice,
   outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }),
   emotionAfter: emotionTagsRequired,
+  /// V1.8 REFLECT — post-outcome bias tags (CFA LESSOR + Steenbarger).
+  /// Optional: V1 trades closed before V1.8 stay valid; UI defaults to empty.
+  /// Member self-assigned at close (Q3=A) — see `TRADE_TAG_SLUGS` allowlist.
+  tags: tradeTagsSchema.optional().default([]),
   notes: notesSchema,
   screenshotExitKey: storageKey,
 });

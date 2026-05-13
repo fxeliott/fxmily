@@ -135,6 +135,10 @@ command -v claude >/dev/null 2>&1 || {
   echo "  Install Claude Code from https://claude.com/code" >&2
   exit 1
 }
+# V1.7.2 R5 polish : log claude version at start for diagnostics. Useful when
+# Anthropic ships a breaking CLI change (we've already had two — banned wrappers
+# 4 avr 2026 + `--bare` OAuth incompat caught in R4 empirical test).
+echo "Claude CLI: $(claude --version 2>&1 | head -1)"
 command -v jq >/dev/null 2>&1 || {
   echo "ERROR: 'jq' not found in PATH (needed to parse the snapshot envelope)." >&2
   echo "  Install via 'choco install jq' (Windows) or 'apt install jq' (Linux)." >&2
@@ -285,9 +289,17 @@ for idx in $ENTRY_INDICES; do
   # CLAUDE.md hierarchical loading happens but it's project config (not
   # member data) so ban-risk rule #3 "fresh context per member" remains
   # satisfied by `--max-turns 1` + single invocation per member.
+  #
+  # V1.7.2 R5 polish : `--max-budget-usd 5.00` financial circuit-breaker.
+  # On Max sub Eliot's marginal cost is theoretical ($0 actual), but if
+  # Anthropic ever switches the binary to billable API (silent migration
+  # has happened before — Sonnet upgrade Dec 2024) this caps damage at
+  # $5 per call (vs typical Sonnet 4.6 cost ~$0.02-0.05 = 100x margin).
+  # Researcher V1.7.2 R5 confirmed flag in CLI 2.1.139 --help output.
   claude --print \
     $MODEL_FLAG \
     --max-turns "$MAX_TURNS" \
+    --max-budget-usd 5.00 \
     --append-system-prompt "$SYSTEM_PROMPT_CONTENT" \
     --output-format text \
     <"$PROMPT_FILE" \

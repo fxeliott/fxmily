@@ -30,6 +30,14 @@ const SONNET_4_6 = {
 // the DB than reality" so the budget guardrail SPEC §16 (~5–10€/mois) holds.
 export const USD_TO_EUR = 0.93;
 
+/**
+ * V1.7 sentinel — reports generated locally via `claude --print` on Eliot's
+ * Claude Max subscription. Subscription is a flat fee, so per-token cost = 0.
+ * Keep the entry here so `computeCostEur` returns a deterministic 0.000000
+ * without taking the SONNET_4_6 fallback branch (which would `console.warn`).
+ */
+export const CLAUDE_CODE_LOCAL_MODEL = 'claude-code-local' as const;
+
 export const PRICING_USD_PER_MTOK = {
   'claude-sonnet-4-6': SONNET_4_6,
   // Fallback for the cheapest model — used in mock + future Haiku migration
@@ -39,6 +47,13 @@ export const PRICING_USD_PER_MTOK = {
     output: 4.0,
     cacheRead: 0.08,
     cacheCreate: 1.0,
+  },
+  // V1.7 local Claude Code path : flat-rate Max subscription = 0 per-token.
+  [CLAUDE_CODE_LOCAL_MODEL]: {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheCreate: 0,
   },
 } as const;
 

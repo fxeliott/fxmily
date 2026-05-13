@@ -2223,3 +2223,118 @@ Tous les changes V1.6 polish dans 1 commit atomic `feat(v1.6-polish): ...` :
 
 Atomic revert <30s : `git revert <sha>` (sauf migration SQL — voir runbook
 hetzner-deploy §11 pour rollback DB).
+
+---
+
+## V1.7 LIVE prod — Local Claude Code batch (livré 2026-05-13)
+
+### Pourquoi cette architecture
+
+Eliot REFUSE catégoriquement l'API Anthropic ($-per-token). Les rapports
+hebdomadaires IA sont générés **localement sur sa machine Windows via
+`claude --print` headless utilisant son abonnement Claude Max**. Cost
+marginal Anthropic = 0€ ; subscription Max 200$/mois déjà payée pour le
+dev. Pattern défensible : single-user, official `claude` binary, jittered
+sleeps, pseudonymized data, no third-party wrappers. Round 12-13 mes
+deux faux départs (push API, push Gemini free tier) sont documentés
+dans la memory `fxmily_session_2026-05-12_audit_massif.md` section
+Round 11-16.
+
+### Architecture wire complète
+
+```
+TON PC Windows                              HETZNER PROD
+══════════════                              ════════════
+   Tu tapes /sunday-batch
+   │
+   moi → SSH hetzner-dieu ─────────────→  scripts/weekly-batch-pull.ts
+                                            │ batch.ts:loadAllSnapshotsForActiveMembers
+                                            │ (Promise.allSettled batch=5)
+   ◄─────────── JSON envelope ─────────────┘ pseudonymizeMember V1.5
+   │
+   │  Loop 30 membres :
+   │  ┌──────────────────────────────────────┐
+   │  │ claude --print --max-turns 1         │ × 30, 60-120s RANDOM-jittered
+   │  │ --append-system-prompt (Mark Douglas)│
+   │  │ printf %s (anti shell-expansion)     │
+   │  │ pseudonymLabel regex validated       │
+   │  └──────────────────────────────────────┘
+   │
+   │  jq -s NDJSON → results.json (atomic single write)
+   ▼  SSH hetzner-dieu ──────────────────→  scripts/weekly-batch-persist.ts
+                                            │ batch.ts:persistGeneratedReports
+                                            │ - Zod top-level BatchPersistRequest
+                                            │ - active-user findMany check
+                                            │ - parseLocalDate try-catch
+                                            │ - weeklyReportOutputSchema strict
+                                            │ - V1.7.1 crisis routing wire
+                                            │ - model allowlist (fallback local)
+                                            │ - upsert (userId, weekStart)
+   ◄─────────── { persisted, skipped, errors }
+```
+
+### Fichiers wire complets (V1.7 + V1.7.1)
+
+| Fichier                                              | Rôle                                                                                                                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/web/src/lib/weekly-report/batch.ts`            | helpers publics `loadAllSnapshotsForActiveMembers` + `persistGeneratedReports` + wire contract types                                                                     |
+| `apps/web/src/lib/weekly-report/batch.test.ts`       | 10 tests TDD (V1.7.1 — happy + malformed + invalid week + unknown user + crisis HIGH + crisis MEDIUM + trading slang FP + entry.error + forged model + upsert exception) |
+| `apps/web/scripts/weekly-batch-pull.ts`              | TSX server-side, JSON envelope to stdout                                                                                                                                 |
+| `apps/web/scripts/weekly-batch-persist.ts`           | TSX server-side, Zod-validated stdin → DB                                                                                                                                |
+| `ops/scripts/weekly-batch-local.sh`                  | Bash orchestrator local (ton PC)                                                                                                                                         |
+| `.claude/commands/sunday-batch.md`                   | slash command Claude Code custom                                                                                                                                         |
+| `apps/web/src/lib/auth/audit.ts`                     | +6 audit slugs (`weekly_report.batch.{pulled,persisted,skipped,invalid_output,persist_failed,crisis_detected}`)                                                          |
+| `apps/web/src/components/ai-generated-banner.tsx`    | EU AI Act 50(1) disclaimer banner (V1.7 prep dormant R7, wired R17)                                                                                                      |
+| `apps/web/src/lib/safety/crisis-detection.ts`        | regex FR unicode-aware (V1.7 prep dormant R7, wired R17)                                                                                                                 |
+| `apps/web/src/app/admin/reports/[id]/page.tsx`       | banner wire dans la vue rapport admin                                                                                                                                    |
+| `apps/web/src/lib/email/templates/weekly-digest.tsx` | banner wire inline HTML dans le digest email                                                                                                                             |
+
+### Ban-risk mitigation (9 rules baked in)
+
+1. Eliot's machine (TON IP, TON fingerprint, TON Max account)
+2. 60-120s RANDOM-jittered sleeps (validated, floor 30s)
+3. One `claude --print` per member = fresh context (no oversized conversation)
+4. Snapshots pseudonymized via `pseudonymizeMember` 8-char hex V1.5
+5. System prompt + JSON schema travel WITH the envelope from repo (no
+   on-device tamper without commit)
+6. Only official `claude` binary — no OpenClaw / Roo / Goose / CLIProxyAPI
+   (all explicitly banned 14 jan + 4 avr 2026 per Anthropic enforcement)
+7. Human-in-the-loop : Eliot triggers manually, can vary day/time
+8. Double-net validation server-side (`weeklyReportOutputSchema.strict()`)
+   rejects tampered outputs + `db.user.findMany` active set check rejects
+   forged userIds
+9. Audit log `weekly_report.batch.*` records counts + ranAt + week (PII-free)
+
+### V1.7.1 — Crisis routing + AI banner ACTIFS (livré 2026-05-13)
+
+**Crisis routing wire** dans `persistGeneratedReports` AVANT persist :
+chaque output Claude est concaténé (summary + risks + recommendations +
+patterns.\*) puis passé à `detectCrisis(corpus)`. Si level >= MEDIUM, le
+persist est SKIPPED, audit `weekly_report.batch.crisis_detected` (level +
+matchedLabels), et escalade Sentry :
+
+- HIGH → `reportError` (page-out admin)
+- MEDIUM → `reportWarning` (review next morning)
+
+Le corpus exclut les pré-existing trading slang patterns ("tout perdre sur
+ce trade", "tuer ma position", "en finir avec ça", "dépression du marché")
+de la détection — voir `lib/safety/crisis-detection.ts` Round 7 prep.
+
+**AI banner wire** EU AI Act Article 50(1) chatbot transparency (deadline
+2 août 2026, pénalité €15M / 3% CA Article 99(4)) :
+
+- `/admin/reports/[id]/page.tsx` : `<AIGeneratedBanner variant="inline" modelName={dyn} />` AVANT la section Synthèse
+- `lib/email/templates/weekly-digest.tsx` : inline HTML banner (React Email rend du HTML email-safe, pas du DOM), même copy verbatim
+
+### Action Eliot RESTANTE V1.7
+
+🟢 **Tester `/sunday-batch --dry-run`** dans Claude Code session. Si OK
+real run. Si compte A ban : pivoter compte B Pro $20/mois (architecture
+prête, Docker container env CLAUDE_HOME séparé à ajouter).
+
+### Pickup V1.8 REFLECT prep
+
+Cf. memory `fxmily_session_2026-05-12_audit_massif.md` section "Pickup
+prompt V1.7.1 + V1.8 REFLECT post-/clear" + `docs/jalon-V1.7-prep.md` :
+Trade.tags multi-select + Trade.outcomeR + WeeklyReview model séparé +
+ReflectionEntry CBT 4 colonnes + reverse-journaling Steenbarger 2025.

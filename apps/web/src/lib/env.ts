@@ -149,6 +149,18 @@ const envSchema = z.object({
   // l'endpoint cron répond 503 (refuse de tourner sans authentification).
   CRON_SECRET: z.string().min(24, 'CRON_SECRET ≥ 24 chars (openssl rand -hex 24)').optional(),
 
+  /// V1.7.2 — Token partagé entre la machine d'Eliot et `/api/admin/weekly-batch/*`.
+  /// Sans ça, les endpoints admin batch répondent 503 (refuse-by-default).
+  /// Génération : `openssl rand -hex 32` (64 chars). Provisionner sur Hetzner
+  /// via append à `/etc/fxmily/web.env` (0600 owner fxmily) puis
+  /// `docker compose -f docker-compose.prod.yml restart web`.
+  /// SÉPARÉ de `CRON_SECRET` car l'admin batch est invoqué depuis le PC
+  /// d'Eliot (compromis ≠ compromis serveur Hetzner). Rotation indépendante.
+  ADMIN_BATCH_TOKEN: z
+    .string()
+    .min(32, 'ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
+    .optional(),
+
   /// V1.5 — Salt server-side pour la pseudonymisation `userId → memberLabel`
   /// dans `lib/weekly-report/builder.ts`. Sans salt, un attaquant qui connaît
   /// un cuid peut vérifier sa présence dans un export rapport hebdo en

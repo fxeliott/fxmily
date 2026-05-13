@@ -2240,14 +2240,17 @@ deux faux départs (push API, push Gemini free tier) sont documentés
 dans la memory `fxmily_session_2026-05-12_audit_massif.md` section
 Round 11-16.
 
-### Architecture wire complète
+### Architecture wire complète (V1.7.2 HTTP migration — livré 2026-05-13)
 
 ```
-TON PC Windows                              HETZNER PROD
-══════════════                              ════════════
+TON PC Windows                              HETZNER PROD (Caddy → fxmily-web)
+══════════════                              ═════════════════════════════════
    Tu tapes /sunday-batch
    │
-   moi → SSH hetzner-dieu ─────────────→  scripts/weekly-batch-pull.ts
+   bash ops/scripts/weekly-batch-local.sh
+   │
+   curl POST X-Admin-Token ─────────────→  /api/admin/weekly-batch/pull
+                                            │ requireAdminToken (rate-limit + 401/503)
                                             │ batch.ts:loadAllSnapshotsForActiveMembers
                                             │ (Promise.allSettled batch=5)
    ◄─────────── JSON envelope ─────────────┘ pseudonymizeMember V1.5
@@ -2261,33 +2264,41 @@ TON PC Windows                              HETZNER PROD
    │  └──────────────────────────────────────┘
    │
    │  jq -s NDJSON → results.json (atomic single write)
-   ▼  SSH hetzner-dieu ──────────────────→  scripts/weekly-batch-persist.ts
+   ▼  curl POST X-Admin-Token ────────────→  /api/admin/weekly-batch/persist
+                                            │ requireAdminToken (rate-limit + 401/503)
+                                            │ MAX_BODY_BYTES = 16 MiB cap
+                                            │ Zod top-level BatchPersistRequest.strict()
                                             │ batch.ts:persistGeneratedReports
-                                            │ - Zod top-level BatchPersistRequest
                                             │ - active-user findMany check
                                             │ - parseLocalDate try-catch
                                             │ - weeklyReportOutputSchema strict
                                             │ - V1.7.1 crisis routing wire
                                             │ - model allowlist (fallback local)
                                             │ - upsert (userId, weekStart)
-   ◄─────────── { persisted, skipped, errors }
+   ◄─────────── { persisted, skipped, errors, total }
 ```
 
-### Fichiers wire complets (V1.7 + V1.7.1)
+### Fichiers wire complets (V1.7 + V1.7.1 + V1.7.2)
 
-| Fichier                                              | Rôle                                                                                                                                                                     |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/web/src/lib/weekly-report/batch.ts`            | helpers publics `loadAllSnapshotsForActiveMembers` + `persistGeneratedReports` + wire contract types                                                                     |
-| `apps/web/src/lib/weekly-report/batch.test.ts`       | 10 tests TDD (V1.7.1 — happy + malformed + invalid week + unknown user + crisis HIGH + crisis MEDIUM + trading slang FP + entry.error + forged model + upsert exception) |
-| `apps/web/scripts/weekly-batch-pull.ts`              | TSX server-side, JSON envelope to stdout                                                                                                                                 |
-| `apps/web/scripts/weekly-batch-persist.ts`           | TSX server-side, Zod-validated stdin → DB                                                                                                                                |
-| `ops/scripts/weekly-batch-local.sh`                  | Bash orchestrator local (ton PC)                                                                                                                                         |
-| `.claude/commands/sunday-batch.md`                   | slash command Claude Code custom                                                                                                                                         |
-| `apps/web/src/lib/auth/audit.ts`                     | +6 audit slugs (`weekly_report.batch.{pulled,persisted,skipped,invalid_output,persist_failed,crisis_detected}`)                                                          |
-| `apps/web/src/components/ai-generated-banner.tsx`    | EU AI Act 50(1) disclaimer banner (V1.7 prep dormant R7, wired R17)                                                                                                      |
-| `apps/web/src/lib/safety/crisis-detection.ts`        | regex FR unicode-aware (V1.7 prep dormant R7, wired R17)                                                                                                                 |
-| `apps/web/src/app/admin/reports/[id]/page.tsx`       | banner wire dans la vue rapport admin                                                                                                                                    |
-| `apps/web/src/lib/email/templates/weekly-digest.tsx` | banner wire inline HTML dans le digest email                                                                                                                             |
+| Fichier                                                         | Rôle                                                                                                                                                                     |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/web/src/lib/weekly-report/batch.ts`                       | helpers publics `loadAllSnapshotsForActiveMembers` + `persistGeneratedReports` + wire contract types                                                                     |
+| `apps/web/src/lib/weekly-report/batch.test.ts`                  | 10 tests TDD (V1.7.1 — happy + malformed + invalid week + unknown user + crisis HIGH + crisis MEDIUM + trading slang FP + entry.error + forged model + upsert exception) |
+| `apps/web/src/lib/auth/admin-token.ts`                          | V1.7.2 helper `verifyAdminToken` (SHA-256 + timingSafeEqual) + `requireAdminToken` (503 / 429 / 401)                                                                     |
+| `apps/web/src/lib/auth/admin-token.test.ts`                     | V1.7.2 — 9 tests TDD (constant-time + 401 missing + 401 wrong + 200 valid + 429 rate-limit + 503 env disabled)                                                           |
+| `apps/web/src/app/api/admin/weekly-batch/pull/route.ts`         | V1.7.2 POST endpoint, returns `BatchPullEnvelope` JSON                                                                                                                   |
+| `apps/web/src/app/api/admin/weekly-batch/pull/route.test.ts`    | V1.7.2 — 6 tests TDD (auth + happy + currentWeek query + 405 GET + 500 loader throws)                                                                                    |
+| `apps/web/src/app/api/admin/weekly-batch/persist/route.ts`      | V1.7.2 POST endpoint, accepts `BatchPersistRequest` body, calls `persistGeneratedReports`                                                                                |
+| `apps/web/src/app/api/admin/weekly-batch/persist/route.test.ts` | V1.7.2 — 8 tests TDD (auth + 405 GET + body empty + invalid JSON + Zod fail + 413 + happy + 500)                                                                         |
+| `ops/scripts/weekly-batch-local.sh`                             | Bash orchestrator local — V1.7.2 utilise `curl` au lieu de SSH+docker exec                                                                                               |
+| `.claude/commands/sunday-batch.md`                              | slash command Claude Code custom                                                                                                                                         |
+| `apps/web/src/lib/auth/audit.ts`                                | +6 audit slugs (`weekly_report.batch.{pulled,persisted,skipped,invalid_output,persist_failed,crisis_detected}`)                                                          |
+| `apps/web/src/lib/rate-limit/token-bucket.ts`                   | V1.7.2 `adminBatchLimiter` (burst 10, refill 1/5min)                                                                                                                     |
+| `apps/web/src/lib/env.ts`                                       | V1.7.2 `ADMIN_BATCH_TOKEN` (≥32 chars, optional, refuse-by-default 503 si absent)                                                                                        |
+| `apps/web/src/components/ai-generated-banner.tsx`               | EU AI Act 50(1) disclaimer banner (V1.7 prep dormant R7, wired R17)                                                                                                      |
+| `apps/web/src/lib/safety/crisis-detection.ts`                   | regex FR unicode-aware (V1.7 prep dormant R7, wired R17)                                                                                                                 |
+| `apps/web/src/app/admin/reports/[id]/page.tsx`                  | banner wire dans la vue rapport admin                                                                                                                                    |
+| `apps/web/src/lib/email/templates/weekly-digest.tsx`            | banner wire inline HTML dans le digest email                                                                                                                             |
 
 ### Ban-risk mitigation (9 rules baked in)
 
@@ -2326,52 +2337,41 @@ de la détection — voir `lib/safety/crisis-detection.ts` Round 7 prep.
 - `/admin/reports/[id]/page.tsx` : `<AIGeneratedBanner variant="inline" modelName={dyn} />` AVANT la section Synthèse
 - `lib/email/templates/weekly-digest.tsx` : inline HTML banner (React Email rend du HTML email-safe, pas du DOM), même copy verbatim
 
-### ⚠️ V1.7 batch script BROKEN — V1.7.2 jalon dédié requis (audit 2026-05-13)
+### V1.7.2 — Migration HTTP routes ACTIVE (livré 2026-05-13)
 
-L'audit autonome Round 2 session 2026-05-13 a confirmé via SSH Hetzner que
-le script `ops/scripts/weekly-batch-local.sh` **ne peut PAS s'exécuter contre
-la prod actuelle** — 3 bugs architecturaux cumulés :
+L'audit autonome Round 2 session 2026-05-13 a découvert que la V1.7
+initiale (SSH + `docker compose exec` + `pnpm tsx`) était architecturalement
+non-exécutable en prod (le runtime container Next.js standalone n'embarque
+pas pnpm/tsx — cf. `ops/docker/Dockerfile.prod` lignes 100+ "standalone
+build excludes devDeps"). 0 entrée dans `audit_logs.weekly_report.batch.*`
+confirmait que le batch n'avait jamais été exercé contre prod depuis sa
+création (commit `aa4816a` 2026-05-12).
 
-1. `docker compose` (sans `-f`) cherche `compose.yml`/`docker-compose.yml` →
-   prod a uniquement `docker-compose.prod.yml` → "no configuration file
-   provided: not found" sur lignes 137-139 + 304-306 du script bash
-2. Container `fxmily-web` runtime stage Next.js standalone → `pnpm` absent
-   (uniquement dans le builder stage du Dockerfile, cf. `ops/docker/Dockerfile.prod`)
-3. Container runtime → `tsx` absent également (devDep, non shippé en prod) ;
-   `find / -name tsx` retourne 0 résultat
+V1.7.2 résout le bug en migrant vers 2 endpoints HTTP admin protégés par
+`X-Admin-Token` (même pattern que les 9 crons J5-J10 avec `X-Cron-Secret`,
+mais token séparé pour rotation indépendante) :
 
-Audit DB confirmant : `SELECT COUNT(*) FROM audit_logs WHERE action LIKE
-'weekly_report.batch.%'` = **0 entrée**. Le path V1.7 batch n'a jamais été
-exercé contre la prod depuis sa création le 2026-05-12 (commit `aa4816a`).
+- `POST /api/admin/weekly-batch/pull` → returns `BatchPullEnvelope` JSON
+- `POST /api/admin/weekly-batch/persist` → accepts `BatchPersistRequest` body, returns counts
 
-Le J8 cron `weekly-reports` Sunday 21:00 UTC continue de tourner via le
-path HTTP legacy (`/usr/local/bin/fxmily-cron weekly-reports` → curl POST
-avec X-Cron-Secret) en mock client (ANTHROPIC_API_KEY absente). Dernière
-exécution réussie : 2026-05-10 21:44 UTC (2 weekly_reports générés mock).
+Le script bash `weekly-batch-local.sh` utilise désormais `curl` exclusivement
+— plus aucune dépendance SSH ni `docker compose exec`. Caddy reverse-proxy
+LIVE (déjà routes `/api/cron/*` et `/api/health`) traite les nouveaux endpoints
+sans config supplémentaire. Provisionner `ADMIN_BATCH_TOKEN` (32+ chars, gen
+via `openssl rand -hex 32`) dans `/etc/fxmily/web.env` (0600 owner fxmily) puis
+`docker compose -f docker-compose.prod.yml restart web`.
 
-**V1.7.1 wires UI/email/crisis routing = OK source-level** (page.tsx:144,
-weekly-digest.tsx:96, batch.ts:376). Le seul flow cassé est l'orchestration
-locale Bash → SSH → docker exec.
+Les 9 ban-risk mitigation rules restent identiques (jittered sleeps 60-120s,
+pseudonymized data, official `claude` binary only, etc.).
 
-**Reco V1.7.2 jalon dédié — options ranked best-first** :
+### Action Eliot RESTANTE V1.7
 
-1. **Migrate to HTTP routes** (recommandé) : créer `/api/admin/weekly-batch/{pull,persist}`
-   protected par `X-Admin-Token` (même pattern que les 9 crons J5-J10) ;
-   modifier `weekly-batch-local.sh` pour `curl` au lieu de SSH+docker exec.
-   Plus aucune dépendance pnpm/tsx en prod. Aligné sur architecture existante.
-2. **Pre-compile TSX → JS au build** : ajouter `pnpm run build:scripts`
-   compilant `apps/web/scripts/*.ts` → `dist/`, COPY dans Dockerfile runner
-   stage, invoquer `node /app/apps/web/dist/scripts/weekly-batch-pull.js`.
-3. **Add `tsx` au runtime image** : `RUN pnpm add tsx` dans le runner stage
-   du Dockerfile. Bloat image, devDep en prod, anti-best-practice. À éviter.
+🟢 **Tester `/sunday-batch --dry-run`** avec `FXMILY_ADMIN_TOKEN` exporté
+dans le shell local. Si le dry-run pull retourne l'envelope JSON et le
+script génère 0 reports (ou peu, selon `hasActivity` des membres actifs)
+sans erreur Anthropic, V1.7.2 est validé end-to-end.
 
-NE PAS lancer `/sunday-batch` ni `bash ops/scripts/weekly-batch-local.sh`
-contre la prod actuelle — résultat = exit 1 immédiat sur la phase 1 pull.
-
-### Action Eliot RESTANTE V1.7 (post V1.7.2 fix)
-
-🟢 **Tester `/sunday-batch --dry-run`** une fois V1.7.2 mergé + déployé.
-Si compte A ban : pivoter compte B Pro $20/mois (architecture prête,
+🟢 Si compte A ban : pivoter compte B Pro $20/mois (architecture prête,
 Docker container env CLAUDE_HOME séparé à ajouter).
 
 ### Pickup V1.8 REFLECT prep

@@ -159,6 +159,102 @@ describe('POST /api/admin/weekly-batch/persist — happy path', () => {
   });
 });
 
+describe('POST /api/admin/weekly-batch/persist — hardening tests pin V1.7.2 (R2 post-merge)', () => {
+  it('returns 413 when UTF-8 byte length > 16 MiB (emoji 4-byte amplification)', async () => {
+    // Pin defense at route.ts:107 — Buffer.byteLength('utf8') !== string.length.
+    // 4-byte codepoints (🚀, 4 UTF-8 bytes) inflate the wire size 2-4× vs
+    // JS UTF-16 char count. Without this check, attacker could lie about
+    // Content-Length and pass a body that explodes after req.text().
+    const emoji = '🚀'; // 4 UTF-8 bytes per char
+    const oversizedSummary = emoji.repeat(5_000_000); // ~20 MiB UTF-8
+    const body = JSON.stringify({
+      weekStart: '2026-05-04',
+      weekEnd: '2026-05-10',
+      results: [
+        {
+          userId: 'cuid_emoji_test',
+          output: { summary: oversizedSummary, risks: [], recommendations: ['r'], patterns: {} },
+        },
+      ],
+    });
+    const res = await POST(
+      makeRequest({
+        token: TEST_TOKEN,
+        ip: '10.71.0.1',
+        body,
+        declaredLength: 100, // lying low content-length to bypass cheap header check
+      }) as never,
+    );
+    expect(res.status).toBe(413);
+    const json = await res.json();
+    expect(json.error).toBe('payload_too_large');
+    expect(persistMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 body_read_failed when req.text() rejects (stream error)', async () => {
+    // Pin defense at route.ts:95-101 — try/catch around req.text(). If the
+    // underlying ReadableStream errors mid-read, return a clear 400 instead
+    // of crashing the route handler with an unhandled rejection.
+    const req = new Request('https://app.fxmilyapp.com/api/admin/weekly-batch/persist', {
+      method: 'POST',
+      headers: {
+        'x-admin-token': TEST_TOKEN,
+        'x-forwarded-for': '10.71.0.2',
+        'content-type': 'application/json',
+      },
+      body: new ReadableStream({
+        start(controller) {
+          controller.error(new Error('simulated_stream_abort'));
+        },
+      }),
+      // @ts-expect-error — duplex is required when body is a ReadableStream
+      duplex: 'half',
+    });
+    const res = await POST(req as never);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('body_read_failed');
+    expect(reportErrorMock).toHaveBeenCalledTimes(1);
+    expect(persistMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 envelope_validation_failed when results.length > 1000 (H4 cap)', async () => {
+    // Pin V1.7.2 post-merge security-auditor R2 H4 fix : results capped at
+    // 1000 entries (V1 30 members × 1 = 30 entries ; V2 1000 × 1 = 1000).
+    // Above 1000 = malicious/corrupted, refuse before JSON.parse heap blow.
+    const oversizedResults = Array.from({ length: 1001 }, (_, i) => ({
+      userId: `cuid_member_${i.toString().padStart(4, '0')}`,
+      output: { summary: 's', risks: [], recommendations: ['r'], patterns: {} },
+    }));
+    const body = JSON.stringify({
+      weekStart: '2026-05-04',
+      weekEnd: '2026-05-10',
+      results: oversizedResults,
+    });
+    const res = await POST(makeRequest({ token: TEST_TOKEN, ip: '10.71.0.3', body }) as never);
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toBe('envelope_validation_failed');
+    expect(persistMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts results.length === 1000 (boundary exact, no off-by-one)', async () => {
+    persistMock.mockResolvedValueOnce({ persisted: 0, skipped: 1000, errors: 0 });
+    const exactlyMaxResults = Array.from({ length: 1000 }, (_, i) => ({
+      userId: `cuid_member_${i.toString().padStart(4, '0')}`,
+      output: { summary: 's', risks: [], recommendations: ['r'], patterns: {} },
+    }));
+    const body = JSON.stringify({
+      weekStart: '2026-05-04',
+      weekEnd: '2026-05-10',
+      results: exactlyMaxResults,
+    });
+    const res = await POST(makeRequest({ token: TEST_TOKEN, ip: '10.71.0.4', body }) as never);
+    expect(res.status).toBe(200);
+    expect(persistMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('POST /api/admin/weekly-batch/persist — error path', () => {
   it('returns 500 + reportError + audit row when persistGeneratedReports throws', async () => {
     persistMock.mockRejectedValueOnce(new Error('db_unreachable'));

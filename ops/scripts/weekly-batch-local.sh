@@ -270,7 +270,14 @@ for idx in $ENTRY_INDICES; do
   # system prompt. The file content is treated as a literal argument.
   set +e
   SYSTEM_PROMPT_CONTENT=$(<"$SYSTEM_PROMPT_FILE")
+  # V1.7.2 R2 post-merge hardening (researcher Claude Code Headless 2026) :
+  # --bare skips CLAUDE.md hierarchical loading. The system prompt + JSON
+  # schema travel WITH the envelope from the repo (ban-risk rule #5), so
+  # picking up the local project CLAUDE.md here would leak unrelated context
+  # AND violate ban-risk rule #3 "fresh context per member". --bare reinforces
+  # both rules by construction.
   claude --print \
+    --bare \
     $MODEL_FLAG \
     --max-turns "$MAX_TURNS" \
     --append-system-prompt "$SYSTEM_PROMPT_CONTENT" \

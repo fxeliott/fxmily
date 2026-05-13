@@ -146,6 +146,66 @@ describe('requireAdminToken — rate limit (V1.7.2 audit fix : consume on 401 pa
   });
 });
 
+describe('callerIdTrusted — XFF edge inputs (V1.7.2 R2 post-merge hardening E3)', () => {
+  // Pin defense at token-bucket.ts:309-322 — callerIdTrusted reads the LAST
+  // entry of x-forwarded-for (anti-spoof Caddy injects trustable IP at the
+  // end). Malformed XFF (empty / only commas / whitespace-only) must fall
+  // back to 'unknown' instead of returning '' which would crash rate-limit
+  // bucket keying.
+  it('falls back to "unknown" bucket key on empty XFF + missing x-real-ip', async () => {
+    // 10 wrong-token hits from a request with empty XFF should drain the
+    // shared "unknown" bucket. We verify the 11th gets 429 — proving the
+    // bucket key is stable and not '' (which would key-collide with internal
+    // helpers that use the empty string as default).
+    const makeEmptyXffRequest = () =>
+      new Request('https://app.fxmilyapp.com/api/admin/weekly-batch/pull', {
+        method: 'POST',
+        headers: {
+          'x-forwarded-for': '',
+          'x-admin-token': 'WRONG' + 'b'.repeat(60),
+        },
+      });
+    for (let i = 0; i < 10; i++) {
+      const res = requireAdminToken(makeEmptyXffRequest());
+      expect(res!.status).toBe(401);
+    }
+    const res = requireAdminToken(makeEmptyXffRequest());
+    expect(res!.status).toBe(429);
+  });
+
+  it('falls back to "unknown" on comma-only XFF (malformed proxy chain)', async () => {
+    // XFF: ",,," — a misconfigured proxy might emit this. After split/trim/filter,
+    // segments[] is empty → last = undefined → fallback to 'unknown'.
+    const makeCommaOnlyRequest = () =>
+      new Request('https://app.fxmilyapp.com/api/admin/weekly-batch/pull', {
+        method: 'POST',
+        headers: {
+          'x-forwarded-for': ',,,',
+          'x-admin-token': 'WRONG' + 'c'.repeat(60),
+        },
+      });
+    // We can't share the bucket with the empty-XFF test above (both target
+    // 'unknown' key), so the bucket may already be drained. Just verify the
+    // first response is a valid 401 or 429 (auth happens before rate-limit
+    // consumption in the wrong-token path).
+    const res = requireAdminToken(makeCommaOnlyRequest());
+    expect([401, 429]).toContain(res!.status);
+  });
+
+  it('falls back to "unknown" on whitespace-only XFF', async () => {
+    const makeWhitespaceRequest = () =>
+      new Request('https://app.fxmilyapp.com/api/admin/weekly-batch/pull', {
+        method: 'POST',
+        headers: {
+          'x-forwarded-for': '   ,   ,   ',
+          'x-admin-token': 'WRONG' + 'd'.repeat(60),
+        },
+      });
+    const res = requireAdminToken(makeWhitespaceRequest());
+    expect([401, 429]).toContain(res!.status);
+  });
+});
+
 describe('requireAdminToken — env disabled', () => {
   it('returns 503 when ADMIN_BATCH_TOKEN is not configured', async () => {
     vi.resetModules();

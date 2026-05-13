@@ -70,7 +70,14 @@ const batchPersistRequestSchema = z
   .object({
     weekStart: z.string().regex(localDatePattern, 'weekStart must be YYYY-MM-DD'),
     weekEnd: z.string().regex(localDatePattern, 'weekEnd must be YYYY-MM-DD'),
-    results: z.array(batchResultEntrySchema).max(10_000),
+    // V1.7.2 post-merge hardening (security-auditor R2 H4) : cap reduced
+    // 10_000 → 1000. V1 30 members × 1 weekly = 30 entries ; V2 1000 members
+    // × 1 weekly = 1000 entries. Above that is malicious/corrupted. Bounds
+    // JSON.parse heap amplification (10-20× heap vs wire = ~50MB max at
+    // 1000 × 5KB) ; CX22 4GB RAM total minus postgres+caddy = OOM safe.
+    // The 16 MiB MAX_BODY_BYTES is still the cheap-header first line of
+    // defense ; this cap is the semantic ceiling.
+    results: z.array(batchResultEntrySchema).max(1000),
   })
   .strict();
 

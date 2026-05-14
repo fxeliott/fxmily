@@ -58,6 +58,8 @@ export interface CloseTradeInput {
   exitPrice: number;
   outcome: TradeOutcome;
   emotionAfter: string[];
+  /** V1.8 — post-outcome LESSOR + Steenbarger bias tags (max 3, allowlisted Zod-side). */
+  tags?: readonly string[];
   notes: string | undefined;
   screenshotExitKey: string;
 }
@@ -250,6 +252,10 @@ export async function closeTrade(
         realizedR: new Prisma.Decimal(realized.value),
         realizedRSource: realized.source,
         emotionAfter: input.emotionAfter,
+        // V1.8 — persist post-outcome bias tags. Defaults to `[]` so V1 trades
+        // closed before V1.8 stay valid ; explicit `[]` overrides any prior
+        // value (admin edits go through a dedicated path).
+        tags: [...(input.tags ?? [])],
         screenshotExitKey: input.screenshotExitKey,
         closedAt: new Date(),
         ...(mergedNotes !== existing.notes ? { notes: mergedNotes } : {}),

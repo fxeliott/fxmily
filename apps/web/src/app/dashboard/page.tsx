@@ -16,6 +16,7 @@ import { Suspense } from 'react';
 
 import { auth, signOut } from '@/auth';
 import { StreakCard } from '@/components/checkin/streak-card';
+import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
 import { EmotionPerfTable } from '@/components/scoring/emotion-perf-table';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
@@ -340,6 +341,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {/* J7.7 — Mark Douglas widget (replaces stale "Bibliothèque MD J7" coming-soon) */}
         <section className="mb-6" aria-label="Module Mark Douglas">
           <DouglasInboxWidget userId={session.user.id} />
+        </section>
+
+        {/* V1.8 — REFLECT module entry (replaces stale "J8 Rapport hebdo" /
+            "J9 Notifications" coming-soon : J8/J9 sont LIVE, ces cartes
+            étaient devenues fausses). Le module REFLECT a sa propre
+            identité visuelle blue+black sur `/review` + `/reflect` (cf.
+            `.v18-theme` overlay). Le widget reste en DS-v2 lime sur le
+            dashboard avec un dot accent blue pour signaler la destination. */}
+        <section className="mb-6" aria-label="Module REFLECT">
+          <DashboardReflectWidget userId={session.user.id} />
         </section>
 
         {/* Coming soon section */}

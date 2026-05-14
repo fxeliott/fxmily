@@ -118,6 +118,23 @@ enum CheckinSlot {
   evening
 }
 
+/// V2.0 TRACK module — habit logging granular kinds (FXMILY-V2-MASTER A2-A5
+/// must-have features). One row per (user, date, kind). Value JSON shape
+/// is kind-specific and validated at the Zod boundary in
+/// `lib/schemas/habit-log.ts`.
+enum HabitKind {
+  /// Hours of sleep (durationMin) + optional quality rating 1-10.
+  sleep
+  /// Meals count + optional quality rating (poor/fair/good/excellent).
+  nutrition
+  /// Cups of caffeine + optional last-drink HH:MM (UTC). Master plan A3.
+  caffeine
+  /// Type (cardio/strength/mixed/flexibility/other) + duration + intensity.
+  sport
+  /// Duration (minutes) + optional quality rating 1-10. Master plan A5.
+  meditation
+}
+
 /// Mark Douglas card category (J7, SPEC §7.6).
 /// Maps to canonical pillars from *Trading in the Zone* and *The Disciplined Trader*.
 enum DouglasCategory {
@@ -208,6 +225,8 @@ model User {
   // V1.8 — member-facing reflection (Sunday wizard + CBT Ellis ABC).
   weeklyReviews           WeeklyReview[]
   reflectionEntries       ReflectionEntry[]
+  // V2.0 — TRACK module habit logs (sleep/nutrition/caffeine/sport/meditation).
+  habitLogs               HabitLog[]
   // J9 — Web Push subscriptions (one row per browser/device) + per-category opt-out preferences.
   pushSubscriptions       PushSubscription[]
   notificationPreferences NotificationPreference[]
@@ -1015,4 +1034,41 @@ model ReflectionEntry {
 
   @@index([userId, date(sort: Desc)])
   @@map("reflection_entries")
+}
+
+/// V2.0 — TRACK module habit logging (master plan A2–A5 must-have features).
+///
+/// One row per `(userId, date, kind)` — upsert idempotency on retries.
+/// The structured `value` payload is kind-specific and validated at the
+/// Zod boundary in `lib/schemas/habit-log.ts`. We keep it as `Json` rather
+/// than splitting into typed columns because :
+///   - Each kind has its own value shape (durationMin for sleep, mealsCount
+///     for nutrition, cups + lastDrinkAtUtc for caffeine, etc.).
+///   - Sparse-typed columns would balloon the row width and waste storage.
+///   - Posture Mark Douglas : we'd rather extend kinds (HealthKit auto-imports,
+///     new wearables) without forcing a schema migration each time.
+///
+/// `notes` is optional free-text — bounded by Zod (500 chars) so the LLM
+/// digest pipeline (master plan D-features) has a predictable budget.
+model HabitLog {
+  id     String    @id @default(cuid())
+  userId String    @map("user_id")
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Local civil date (no time component). Anchors the unique constraint
+  /// + the daily aggregation queries.
+  date   DateTime  @db.Date
+  kind   HabitKind
+
+  /// Kind-specific structured payload — see lib/schemas/habit-log.ts.
+  value Json
+  /// Optional free-text caveat ("manqué la sieste à cause d'une réunion").
+  notes String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, date, kind])
+  @@index([userId, date(sort: Desc)])
+  @@index([userId, kind, date(sort: Desc)])
+  @@map("habit_logs")
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Check, Info } from 'lucide-react';
+import { Check, Info, ThumbsUp } from 'lucide-react';
 import { useState } from 'react';
 
 import { TRADE_TAGS_MAX_PER_TRADE, type TradeTagSlug } from '@/lib/schemas/trade';
@@ -172,8 +172,18 @@ export function TradeTagsPicker({ value, onChange, disabled }: TradeTagsPickerPr
               )}
             >
               <span>{meta.label}</span>
+              {/* a11y B5 fix (WCAG 1.4.1 Use of Color) — strengths-based
+                  `discipline-high` tag uses ThumbsUp icon when selected, so
+                  color-blind sighted users (deutéranopie ~5% mâles) ne
+                  perçoivent pas seulement la couleur verte vs blue accent
+                  pour distinguer "force" vs "biais". Le label seul OK pour
+                  SR, l'icône comble pour sighted. */}
               {isOn ? (
-                <Check size={13} strokeWidth={2.5} aria-hidden="true" />
+                isPositive ? (
+                  <ThumbsUp size={13} strokeWidth={2.5} aria-hidden="true" />
+                ) : (
+                  <Check size={13} strokeWidth={2.5} aria-hidden="true" />
+                )
               ) : (
                 <Info size={11} strokeWidth={2} aria-hidden="true" className="opacity-60" />
               )}

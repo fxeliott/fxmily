@@ -2707,19 +2707,124 @@ forces avant les failles.
 
 ### Limitations / suites V1.9 polish
 
-- **MCPs visuels déconnectés** livraison : pas de screenshot runtime,
-  Playwright happy-path E2E (seuls auth gates couverts). À valider
-  Eliot iPhone PWA.
-- **Haptic feedback** non câblé V1.8 (J5 morning wizard l'a — à porter
-  V1.9 via `lib/haptics`).
-- **TradeTagsPicker tooltip mobile** : inline aside ; desktop pourrait
-  avoir floating popover V1.9.
+> Backlog enrichi 2026-05-14 par audit final 5-subagent (a11y-reviewer +
+> security-auditor + ui-designer + performance-profiler + verifier) sur
+> PR #65 + polish a164734. **TIER 1 BLOQUANTS de a11y catched and fixed
+> in-session** (3 commits sur `feat/v1.8-frontend`). Tout ce qui suit
+> est V1.9 polish acceptable (non-bloquant ship V1.8).
+
+#### V1.9 — a11y polish (5 items, non-bloquant)
+
+- **H1 char counter `--t-3` borderline AA** — wizards font-mono 11px
+  sur `--bg` est ~7:1 OK, mais sur `--bg-2` (textarea bg, counter visuellement
+  proche) le ratio chute ; sur over-max `--bad` 11px = 4.3:1 borderline.
+  Fix : bumper `--t-2` pour counter normal + `--bad-hi` pour over-max.
+- **H3 H2 `outline-none focus-visible:outline-none`** — invisible si tab
+  clavier remonte sur le heading. Fix : retirer
+  `focus-visible:outline-none`, garder `tabIndex={-1}` ; SR-flow non
+  impacté. Pattern J5 carbone à upgrader globalement.
+- **H4 TradeTagsPicker `<aside aria-live="polite">`** — verbosity SR
+  sur 8 hovers consécutifs. Refactor APG tooltip pattern :
+  `aria-describedby={\`tag-desc-${meta.slug}\`}` + sr-only desc permanent.
+- **H5 Char counter pas `aria-live`** — SR users ne perçoivent pas la
+  transition tone muted → warn → bad. Pattern J5 `EmotionCheckinPicker`
+  utilise `aria-live="polite"` annonce uniquement au cap reached, à porter.
+- **H7 Empty states EmptyState DS** — `<div border-dashed>` actuel pourrait
+  utiliser `<EmptyState>` DS-v2 (J7 carbone) avec illustration mini icon.
+
+#### V1.9 — Security hardening (3 items, non-exploitable V1)
+
+- **`findFirst({ where: { id, userId } })` over `findUnique + post-check`** —
+  `getWeeklyReviewById` + `getReflectionById` pattern J7 `cards/service.ts`
+  carbone collapse en 1 query SQL + élimine timing oracle théorique négligeable.
+- **`wrapUntrustedMemberInputBlocks` label allowlist** — labels const
+  hardcodés repo OK V1.8 ; si futur V2 caller passe `label` user-controlled,
+  ajouter `/^[a-z_]+$/` validation.
+- **`wrapUntrustedMemberInput` close-tag case-insensitive** — `.split`
+  case-sensitive sur `</member_reflection_untrusted>` ; XML parsers tolérants
+  case → théorique bypass V2. Fix : regex `/<\/member_reflection_untrusted>/gi`.
+
+#### V1.9 — UI/DS coherence (5 items refactor risque non négligeable)
+
+- **B1 OKLCH literals inline (50+ occurrences)** — `oklch(0.62 0.19 254 / 0.14)`
+  répété 50+ fois en hardcode au lieu de tokens. Refactor : créer 5 alias
+  `--v18-accent-bg-soft` / `--v18-accent-text` / `--v18-border-accent` dans
+  `.v18-theme` puis `s/oklch(0.62 0.19 254 \/ 0.14)/var(--v18-accent-bg-soft)/g`.
+  Aligne sur le pattern DS-v2 lime (`--acc-dim`, `--acc-edge`).
+- **B2 CTA réinventés vs `<Btn>`** — 8 sites dupliquent 50+ classes Tailwind
+  alors que `<Btn kind="primary" size="m|l">` existe. Refactor adoption
+  systématique (pattern Phase P J10 welcome/admin/members).
+- **B3 Spring values incohérents** — `damping 30 mass 0.6` (step-progress) vs
+  `damping 28 mass 0.7` (wizards) vs `easeInOut` raw (heroes). Extraire
+  `V18_SPRING` + `V18_EASE_DRAW` consts dans `v18/motion-presets.ts`.
+- **B4 Magic spacing 2.5/1.5 hors 4-pt grid** — `space-y-2.5` (10px) /
+  `gap-1.5` (6px) sortent du DS-v2 doctrine "4-pt strict". 9 sites à
+  remplacer par `space-y-3` / `gap-2`.
+- **B5 Typography `clamp` override `t-display` token** — `clamp(36px, 7vw, 56px)`
+  inline sur élément `className="t-display"` (token=68px). Créer
+  `t-display-fluid` token ou utiliser `t-h1` (32px) franchement.
+
+#### V1.9 — Hero illustrations richesse (matche demande Eliot "ultra détaillé")
+
+- **MirrorHero** : ~7 path/circle elements actuels. Ajouter (a) particules
+  flottantes (12-20 dots avec drift indépendant), (b) gradient mesh subtil
+  sur les dômes, (c) ring concentriques au-delà des 2 pulse rings (4-5
+  niveaux d'écho), (d) horizon line dashed avec graduations (sextant trader).
+  Effort : +120 LOC.
+- **ABCDHero** : 4 nœuds + 3 courbes. Ajouter (a) glyphes décoratifs
+  différentiant A/B/C/D, (b) trajectory rays connecting D→A (la boucle
+  d'apprentissage), (c) annotations FR sous chaque nœud.
+  Effort : +120 LOC.
+
+#### V2 — Performance (avant scale 100+ membres)
+
+- **Framer Motion full bundle ~50 KB gzip** — 6 fichiers V1.8 importent
+  `framer-motion` direct. Migrate `LazyMotion + domAnimation + m` split
+  via `app/review/layout.tsx` + `app/reflect/layout.tsx`. Économie estimée
+  ~30-40 KB gzip × 4 routes V1.8 + ~150ms TBT iPhone SE.
+- **Aurora orbs blur 48px drain mobile** — 3 layers GPU-composited
+  permanents + `will-change: transform, opacity`. Fix :
+  `@media (max-width: 640px) { .v18-orb:nth-child(n+2) { display: none } }`
+  garde 1 orb sur 3 mobile.
+- **`Intl.DateTimeFormat` instanciation per-row** — hoist au module level
+  dans `app/review/page.tsx` + `app/reflect/page.tsx` + detail pages.
+- **`useReducedMotion()` SSR mismatch potentiel** — retourne `null` au SSR
+  vs `boolean` CSR. Mitigation : guard `useEffect(setHasMounted(true))`.
+- **`<DashboardReflectWidget>` 2nd query inefficiente** — SELECT all 17
+  colonnes pour ne lire que `weekStart`. Helper `getLastReviewWeekStart` V1.9.
+
+#### V1.9 — Misc
+
+- **MCPs visuels déconnectés** livraison V1.8 : pas de screenshot runtime,
+  Playwright happy-path E2E (auth gates seuls). À valider Eliot iPhone PWA.
+- **Haptic feedback** non câblé V1.8 (J5 morning wizard l'a — porter V1.9
+  via `lib/haptics`).
+- **TradeTagsPicker tooltip mobile** : inline aside ; desktop floating
+  popover V1.9.
 - **Recent timelines pagination** : clampée 12 / 30. Cursor-based V2.
 - **Trade.tags admin filter** : `/admin/members/[id]/trades` ne filtre
   pas encore. V1.9 admin coaching.
-- **Frontend Vitest tests** : zéro V1.8 ship (Playwright auth gates
-  only). RTL setup ready (J5 carbone) — V1.9 polish ajouter wizard
-  step transition + draft hydration tests.
+- **Frontend Vitest/RTL tests** : zéro V1.8 ship (Playwright auth gates
+  only). RTL setup ready — V1.9 polish ajouter wizard step transition +
+  draft hydration tests.
+- **Loading skeleton wizard submit** : `.skel` DS-v2 animation existe,
+  acceptable V1 (submit <500ms à 30 membres), polish V1.9 quand Anthropic
+  API rentre dans le flow.
+- **Transition lime→blue dashboard widget → V1.8** : abrupt actuellement,
+  V1.9 fade-in V18Aurora 400ms initial + hover-state widget teint progressif.
+
+### TIER 1 a11y BLOQUANTS fixés (commit polish round 2)
+
+- **B1 WCAG 1.4.3 contrast** — wizards disabled CTA `text-[var(--t-3)]` →
+  `text-[var(--t-2)]` (≥4.5:1 sur `--bg-2`). Le label CTA "Enregistrer ma
+  revue" reste opérationnellement informatif donc 1.4.3 s'applique aux
+  disabled controls.
+- **B4 WCAG 1.4.11 Non-text Contrast** — Crisis banner `tel:` CTA border
+  `0.42` → `0.85` alpha (3 FR resources = vital path). Background `0.18`
+  → `0.22` + hover bg `0.32` pour feedback affordance.
+- **B5 WCAG 1.4.1 Use of Color** — `<TradeTagsPicker>` `discipline-high`
+  selected utilise `<ThumbsUp>` icon distinctif au lieu de `<Check>` —
+  color-blind sighted users distinguent "force" vs "biais" via icon.
 
 ### Quality gate finale V1.8 Phase 2 frontend
 

@@ -75,11 +75,15 @@ export function V18CrisisBanner({ level }: V18CrisisBannerProps) {
               <li key={r.phone} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <a
                   href={`tel:${r.phone}`}
-                  className="rounded-pill inline-flex min-h-11 items-center gap-2 px-3.5 py-2 text-[13px] font-semibold transition-[background-color,box-shadow] duration-150"
+                  className="rounded-pill inline-flex min-h-11 items-center gap-2 px-3.5 py-2 text-[13px] font-semibold transition-[background-color,box-shadow] duration-150 hover:bg-[oklch(0.62_0.19_254_/_0.32)]"
                   style={{
                     color: 'oklch(0.95 0.01 247)',
-                    background: 'oklch(0.62 0.19 254 / 0.18)',
-                    border: '1px solid oklch(0.62 0.19 254 / 0.42)',
+                    background: 'oklch(0.62 0.19 254 / 0.22)',
+                    // a11y B4 fix (WCAG 1.4.11 Non-text Contrast) — border
+                    // bumped from 0.42 → 0.85 alpha so the CTA boundary
+                    // clears ≥ 3:1 on the crisis-banner gradient bg. The
+                    // 3 FR tel: CTAs are the vital path of this banner.
+                    border: '1px solid oklch(0.62 0.19 254 / 0.85)',
                   }}
                   aria-label={`Appeler ${r.name}, ${r.description}, ${r.hours}`}
                 >

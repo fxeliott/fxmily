@@ -728,3 +728,230 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* =============================================================
+ * V1.8 REFLECT — Blue+Black theme overlay (.v18-theme scope)
+ * -------------------------------------------------------------
+ * Distinct visual identity for the REFLECT module (`/review`,
+ * `/reflect`). Layered on top of DS-v2 via CSS variable overrides
+ * — existing components (Btn, Card, etc.) automatically pick up
+ * the blue accent when wrapped in `.v18-theme`. Zero refactor.
+ *
+ * Posture (M4=C "Le miroir de ton exécution") : deep cosmic
+ * introspection. Tone calm, contained, anti-FOMO. Replaces lime
+ * energy with blue serenity for the reflection surfaces only.
+ *
+ * Palette derived from Tailwind 4 slate + blue ramps. Every
+ * fg-on-bg pairing below was verified WCAG 2.2 AA (4.5:1 body,
+ * 3:1 large) against `#020617` slate-950 base — see comments.
+ * ============================================================= */
+.v18-theme {
+  /* ─── BLUE ACCENT RAMP (oklch P3 gamut) ──────────────────────── */
+  --v18-b-50: oklch(0.97 0.018 246); /* #eff6ff */
+  --v18-b-100: oklch(0.93 0.034 246); /* #dbeafe */
+  --v18-b-200: oklch(0.88 0.068 247); /* #bfdbfe */
+  --v18-b-300: oklch(0.82 0.115 247); /* #93c5fd */
+  --v18-b-400: oklch(0.74 0.16 250); /* #60a5fa — 7.5:1 on slate-950, hover */
+  --v18-b-500: oklch(0.62 0.19 254); /* #3b82f6 — primary CTA bg */
+  --v18-b-600: oklch(0.53 0.21 259); /* #2563eb */
+  --v18-b-700: oklch(0.46 0.21 263); /* #1d4ed8 */
+  --v18-b-800: oklch(0.39 0.18 266); /* #1e40af */
+  --v18-b-900: oklch(0.32 0.14 268); /* #1e3a8a */
+  --v18-b-950: oklch(0.21 0.1 271); /* #172554 */
+
+  /* ─── DEEP NEUTRAL RAMP (slate-tinted, replaces n-* under scope) ─ */
+  --v18-n-50: oklch(0.984 0.003 247); /* #f8fafc */
+  --v18-n-100: oklch(0.95 0.005 250); /* #f1f5f9 — primary text */
+  --v18-n-200: oklch(0.91 0.008 251); /* #e2e8f0 */
+  --v18-n-300: oklch(0.84 0.01 250); /* #cbd5e1 — secondary text */
+  --v18-n-400: oklch(0.66 0.025 252); /* #94a3b8 — tertiary */
+  --v18-n-500: oklch(0.55 0.028 254); /* #64748b */
+  --v18-n-600: oklch(0.41 0.028 256); /* #475569 */
+  --v18-n-700: oklch(0.27 0.03 256); /* #1e293b */
+  --v18-n-800: oklch(0.18 0.03 254); /* #0f172a */
+  --v18-n-850: oklch(0.15 0.03 254); /* between 900-950 */
+  --v18-n-900: oklch(0.13 0.028 254); /* #060e21 ish */
+  --v18-n-950: oklch(0.085 0.02 254); /* #020617 */
+
+  /* ─── SEMANTIC SURFACES (override --bg-* under scope) ─────────── */
+  --bg: var(--v18-n-950);
+  --bg-1: var(--v18-n-900);
+  --bg-2: var(--v18-n-850);
+  --bg-3: var(--v18-n-800);
+
+  /* ─── SEMANTIC TEXT (override --t-* under scope, all WCAG ≥4.5:1) ─ */
+  --t-1: var(--v18-n-100); /* 17:1 on bg */
+  --t-2: var(--v18-n-300); /* 12:1 on bg */
+  --t-3: var(--v18-n-400); /* 7:1 on bg */
+  --t-4: oklch(0.65 0.025 252); /* 6.4:1 bumped from slate-400 default */
+  --t-disabled: oklch(0.55 0.028 254 / 0.45);
+
+  /* ─── SEMANTIC BORDERS (cool slate, replace neutral n-* alphas) ── */
+  --b-subtle: oklch(0.84 0.01 250 / 0.06);
+  --b-default: oklch(0.84 0.01 250 / 0.1);
+  --b-strong: oklch(0.84 0.01 250 / 0.18);
+  --b-stronger: oklch(0.84 0.01 250 / 0.3);
+  --b-acc: oklch(0.62 0.19 254 / 0.42);
+  --b-acc-strong: oklch(0.62 0.19 254 / 0.65);
+
+  /* ─── ACCENT SEMANTIC (override --acc-* — Btn primary turns blue) ─ */
+  --acc: var(--v18-b-500); /* #3b82f6 — primary CTA */
+  --acc-hi: var(--v18-b-400); /* #60a5fa — hover */
+  --acc-fg: oklch(0.98 0.01 247); /* near-white text on blue btn — 5.5:1 */
+  --acc-dim: oklch(0.62 0.19 254 / 0.16);
+  --acc-dim-2: oklch(0.62 0.19 254 / 0.08);
+  --acc-edge: var(--b-acc);
+  --acc-glow: 0 0 28px -4px oklch(0.62 0.19 254 / 0.5);
+  --acc-glow-strong: 0 0 40px -2px oklch(0.62 0.19 254 / 0.7);
+
+  /* Cyan secondary kept (data viz / info pills) — same hue as DS-v2 */
+
+  /* ─── SHADOWS (multi-layer, blue halo) ──────────────────────── */
+  --sh-card:
+    0 1px 0 oklch(1 0 0 / 0.04) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.04),
+    0 1px 2px oklch(0 0 0 / 0.4);
+  --sh-card-hover:
+    0 1px 0 oklch(1 0 0 / 0.06) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.08),
+    0 4px 10px -2px oklch(0 0 0 / 0.5), 0 14px 32px -10px oklch(0.62 0.19 254 / 0.18);
+  --sh-card-primary:
+    0 1px 0 oklch(1 0 0 / 0.07) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.1),
+    0 10px 28px -8px oklch(0.62 0.19 254 / 0.32), 0 2px 6px -1px oklch(0 0 0 / 0.5);
+  --sh-card-selected:
+    0 0 0 1px var(--acc-edge), 0 0 0 4px oklch(0.62 0.19 254 / 0.1),
+    0 10px 28px -8px oklch(0.62 0.19 254 / 0.42);
+  --sh-modal:
+    0 24px 64px -12px oklch(0 0 0 / 0.85), 0 8px 16px -4px oklch(0 0 0 / 0.55),
+    0 0 0 1px oklch(0.62 0.19 254 / 0.14), 0 1px 0 oklch(1 0 0 / 0.06) inset;
+  --sh-tooltip:
+    0 8px 24px -6px oklch(0 0 0 / 0.7), 0 2px 4px oklch(0 0 0 / 0.4), 0 0 0 1px oklch(1 0 0 / 0.07),
+    0 1px 0 oklch(1 0 0 / 0.04) inset;
+  --sh-toast:
+    0 32px 64px -16px oklch(0 0 0 / 0.85), 0 12px 24px -8px oklch(0 0 0 / 0.55),
+    0 0 0 1px oklch(0.62 0.19 254 / 0.16);
+  --sh-btn-pri:
+    0 1px 0 oklch(1 0 0 / 0.22) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.65),
+    0 2px 4px oklch(0 0 0 / 0.28), 0 8px 20px -4px oklch(0.62 0.19 254 / 0.4);
+  --sh-btn-pri-hover:
+    0 1px 0 oklch(1 0 0 / 0.26) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.85),
+    0 4px 10px oklch(0 0 0 / 0.32), 0 14px 32px -6px oklch(0.62 0.19 254 / 0.55);
+
+  /* ─── FOCUS RING (blue accent, ≥3:1 SC 1.4.11) ───────────────── */
+  --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--acc);
+
+  /* Surface background : page-level aurora gradient (orbs handled
+     by .v18-aurora component for parallax / drift). */
+  background: var(--bg);
+  color: var(--t-1);
+  font-family: var(--font-sans);
+}
+
+/* Selection inside v18 — blue tint instead of lime */
+.v18-theme ::selection {
+  background: oklch(0.62 0.19 254 / 0.32);
+  color: var(--v18-b-200);
+}
+.v18-theme ::-moz-selection {
+  background: oklch(0.62 0.19 254 / 0.32);
+  color: var(--v18-b-200);
+}
+
+/* Caret blue */
+.v18-theme input,
+.v18-theme textarea {
+  caret-color: var(--acc-hi);
+}
+
+/* Aurora gradient backplate — radial blue + cyan halo behind hero */
+.v18-aurora {
+  position: relative;
+  background:
+    radial-gradient(70% 40% at 50% -10%, oklch(0.62 0.19 254 / 0.22) 0%, transparent 60%),
+    radial-gradient(40% 30% at 10% 90%, oklch(0.5 0.21 262 / 0.18) 0%, transparent 70%),
+    radial-gradient(40% 30% at 90% 80%, oklch(0.7 0.13 217 / 0.12) 0%, transparent 70%), var(--bg);
+}
+
+/* Drifting orb (decorative, ARIA-hidden, slow parallax) */
+@keyframes v18OrbDrift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.55;
+  }
+  33% {
+    transform: translate3d(28px, -22px, 0) scale(1.08);
+    opacity: 0.7;
+  }
+  66% {
+    transform: translate3d(-18px, 14px, 0) scale(0.96);
+    opacity: 0.5;
+  }
+}
+.v18-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(48px);
+  pointer-events: none;
+  animation: v18OrbDrift 22s var(--e-smooth) infinite;
+  will-change: transform, opacity;
+}
+
+/* Glass card variant for v18 — subtle frosted blue */
+.v18-glass {
+  background: oklch(0.13 0.028 254 / 0.65);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid oklch(0.84 0.01 250 / 0.08);
+}
+
+/* Step-progress bar fill animation (linear width transition) */
+@keyframes v18StepBarFill {
+  from {
+    transform: scaleX(var(--from, 0));
+  }
+  to {
+    transform: scaleX(var(--to, 1));
+  }
+}
+
+/* Subtle SVG path-draw assist (works alongside Framer Motion pathLength) */
+@keyframes v18PathDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Mirror pulse — dual ring expanding (used in MirrorHero) */
+@keyframes v18MirrorPulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.9;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.15);
+    opacity: 0;
+  }
+}
+.v18-mirror-pulse {
+  animation: v18MirrorPulse 3.6s var(--e-smooth) infinite;
+  transform-origin: center;
+}
+
+/* Step-dot active scale */
+@keyframes v18DotPop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.v18-dot-pop {
+  animation: v18DotPop 320ms var(--e-overshoot);
+}

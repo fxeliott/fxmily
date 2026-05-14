@@ -204,6 +204,9 @@ export async function closeTradeAction(
     exitPrice: formData.get('exitPrice'),
     outcome: formData.get('outcome'),
     emotionAfter: formData.getAll('emotionAfter').filter((v): v is string => typeof v === 'string'),
+    // V1.8 — post-outcome bias tags (CFA LESSOR + Steenbarger). Optional ;
+    // the Zod schema defaults to `[]` if missing.
+    tags: formData.getAll('tags').filter((v): v is string => typeof v === 'string'),
     notes: formData.get('notes') ?? undefined,
     screenshotExitKey: formData.get('screenshotExitKey'),
   };
@@ -234,6 +237,7 @@ export async function closeTradeAction(
       exitPrice: data.exitPrice,
       outcome: data.outcome,
       emotionAfter: data.emotionAfter,
+      tags: data.tags,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
       screenshotExitKey: data.screenshotExitKey,
     });
@@ -247,7 +251,11 @@ export async function closeTradeAction(
   await logAudit({
     action: 'trade.closed',
     userId: session.user.id,
-    metadata: { tradeId, outcome: data.outcome },
+    // V1.8 — surface tag count in audit metadata for cohort observability.
+    // Tag *values* are stored on the row itself ; counts here let admins
+    // filter "how many trades closed with N tags this week" without
+    // querying the trades table.
+    metadata: { tradeId, outcome: data.outcome, tagCount: data.tags.length },
   });
 
   revalidatePath('/journal');

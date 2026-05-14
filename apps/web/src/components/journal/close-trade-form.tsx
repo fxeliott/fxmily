@@ -8,7 +8,9 @@ import { closeTradeAction, type CloseTradeActionState } from '@/app/journal/acti
 import { Alert } from '@/components/alert';
 import { EmotionPicker } from '@/components/journal/emotion-picker';
 import { ScreenshotUploader } from '@/components/journal/screenshot-uploader';
+import { TradeTagsPicker } from '@/components/journal/trade-tags-picker';
 import { Btn, btnVariants } from '@/components/ui/btn';
+import type { TradeTagSlug } from '@/lib/schemas/trade';
 import { cn } from '@/lib/utils';
 
 interface CloseTradeFormProps {
@@ -23,6 +25,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
   const [state, formAction, pending] = useActionState(action, initialState);
   const [emotionAfter, setEmotionAfter] = useState<string[]>([]);
   const [screenshotKey, setScreenshotKey] = useState<string>('');
+  const [tags, setTags] = useState<TradeTagSlug[]>([]);
 
   const topError = state.ok
     ? null
@@ -139,6 +142,14 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
       {state.fieldErrors?.emotionAfter ? (
         <p className="text-[11px] text-[var(--bad)]" role="alert">
           {state.fieldErrors.emotionAfter}
+        </p>
+      ) : null}
+
+      {/* V1.8 — Post-outcome bias tags (LESSOR + Steenbarger) */}
+      <TradeTagsPicker value={tags} onChange={setTags} disabled={pending} />
+      {state.fieldErrors?.tags ? (
+        <p className="text-[11px] text-[var(--bad)]" role="alert">
+          {state.fieldErrors.tags}
         </p>
       ) : null}
 

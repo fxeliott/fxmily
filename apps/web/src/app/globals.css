@@ -337,7 +337,11 @@
    scale on mobile (REFLECT module wizards landing). 36px on iPhone SE,
    ~7vw between, capped at 56px to stay below the static `t-display` 68px
    on desktop — typography rhythm preserved. Use this instead of inlining
-   `style={{ fontSize: 'clamp(36px, 7vw, 56px)' }}` on a `.t-display`. */
+   `style={{ fontSize: 'clamp(36px, 7vw, 56px)' }}` on a `.t-display`.
+   V1.9 R2 a11y-reviewer catch : `overflow-wrap: anywhere` + `hyphens: auto`
+   protect WCAG 1.4.10 Reflow at zoom 400% iPhone SE (`exécution`/`éclair`
+   wrap inside long French words on 320 CSS px viewport instead of
+   horizontal-scrolling). */
 .t-display-fluid {
   font-family: var(--font-display);
   font-size: clamp(36px, 7vw, 56px);
@@ -345,6 +349,8 @@
   letter-spacing: -0.04em;
   font-weight: 800;
   font-feature-settings: 'ss01' 1;
+  overflow-wrap: anywhere;
+  hyphens: auto;
 }
 .t-h1 {
   font-family: var(--font-display);

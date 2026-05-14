@@ -51,8 +51,21 @@ const BLOCK_LABEL_ALLOWLIST = /^[a-z_]+$/;
  * `</member_reflection_untrusted>` (any case) mid-textarea from
  * prematurely closing the untrusted region.
  *
- * We replace with a visually-similar but inert sequence so the wrap
- * stays one-to-one with the original char count (audit trail integrity).
+ * Replacement char count : 31 (`</member_reflection_neutralized>`) vs
+ * original 30 (`</member_reflection_untrusted>`) — **+1 char per match**.
+ * The audit trail observable shifts by a constant delta per match (not
+ * chaotic), so the per-message length signature stays deterministic.
+ * V1.9 R2 code-reviewer catch — prior JSDoc inaccurately claimed
+ * "one-to-one char count" preservation.
+ *
+ * **Open V2.x hardening** (V1.9 R2 code-reviewer catch I2) :
+ * `wrapUntrustedMemberInputBlocks` callers can pass arbitrary `label`
+ * values (currently allowlisted to `^[a-z_]+$`, so XML-safe). But this
+ * function does NOT neutralise `</LABEL>` injections inside `text` for
+ * each block — a future V2 chatbot that passes user-controlled labels
+ * AND user-controlled text could allow label-level close-tag escape.
+ * Today's allowlist + hardcoded labels (V1.8 / V2.0) makes this
+ * non-exploitable. Document the constraint in V2.x chatbot Server Action.
  */
 function neutralizeClosingTag(text: string): string {
   return text.replace(REFLECTION_CLOSE_TAG_ANY_CASE, '</member_reflection_neutralized>');

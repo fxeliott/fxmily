@@ -15,6 +15,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 
 import { submitWeeklyReviewAction, type WeeklyReviewActionState } from '@/app/review/actions';
 import { Alert } from '@/components/alert';
+import { V18_SPRING } from '@/components/v18/motion-presets';
 import { V18StepProgress } from '@/components/v18/step-progress';
 import { REVIEW_TEXT_MAX_CHARS, REVIEW_TEXT_MIN_CHARS } from '@/lib/schemas/weekly-review';
 import { cn } from '@/lib/utils';
@@ -245,12 +246,7 @@ export function WeeklyReviewWizard() {
             initial={reduceMotion ? false : { opacity: 0, x: 24 }}
             animate={{ opacity: 1, x: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -24 }}
-            transition={{
-              type: 'spring',
-              stiffness: 220,
-              damping: 28,
-              mass: 0.7,
-            }}
+            transition={V18_SPRING}
             className="flex flex-col gap-5"
           >
             <StepHeader

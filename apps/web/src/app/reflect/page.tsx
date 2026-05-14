@@ -58,10 +58,7 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
         <header className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
             <p className="t-eyebrow text-[var(--t-3)]">Module REFLECT</p>
-            <h1
-              className="t-display text-[var(--t-1)]"
-              style={{ fontSize: 'clamp(36px, 7vw, 56px)' }}
-            >
+            <h1 className="t-display-fluid text-[var(--t-1)]">
               Quand la pensée
               <br />
               <span style={{ color: 'var(--acc-hi)' }}>vient en éclair</span>

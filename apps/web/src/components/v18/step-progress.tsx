@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 
+import { V18_SPRING_TIGHT } from '@/components/v18/motion-presets';
 import { cn } from '@/lib/utils';
 
 interface V18StepProgressProps {
@@ -61,7 +62,7 @@ export function V18StepProgress({ current, total, labels, className }: V18StepPr
           }}
           initial={false}
           animate={{ scaleX: percent }}
-          transition={{ type: 'spring', stiffness: 220, damping: 30, mass: 0.6 }}
+          transition={V18_SPRING_TIGHT}
           aria-hidden="true"
         />
       </div>

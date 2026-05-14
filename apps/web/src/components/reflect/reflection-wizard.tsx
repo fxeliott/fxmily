@@ -15,6 +15,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 
 import { createReflectionEntryAction, type ReflectActionState } from '@/app/reflect/actions';
 import { Alert } from '@/components/alert';
+import { V18_SPRING } from '@/components/v18/motion-presets';
 import { V18StepProgress } from '@/components/v18/step-progress';
 import { REFLECTION_TEXT_MAX_CHARS, REFLECTION_TEXT_MIN_CHARS } from '@/lib/schemas/reflection';
 import { cn } from '@/lib/utils';
@@ -218,7 +219,7 @@ export function ReflectionWizard() {
             initial={reduceMotion ? false : { opacity: 0, x: 24 }}
             animate={{ opacity: 1, x: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -24 }}
-            transition={{ type: 'spring', stiffness: 220, damping: 28, mass: 0.7 }}
+            transition={V18_SPRING}
             className="flex flex-col gap-5"
           >
             <ABCDHeader def={def} headingRef={headingRef} />

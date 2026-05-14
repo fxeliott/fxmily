@@ -135,6 +135,24 @@ jobs:
       - name: Apply database migrations
         run: pnpm --filter @fxmily/web prisma:migrate:deploy
 
+      # J6 demo seed for `smoke-tour-j6.spec.ts` (and any other spec that
+      # relies on the canonical `j6demo.admin.e2e.test@fxmily.local` user
+      # + 100 trades + 30 days check-ins). Idempotent per the script's
+      # contract (touches only `*.e2e.test@fxmily.local` rows).
+      #
+      # Without this step, `smoke-tour-j6` fails at the credentials-login
+      # callback with "no session cookie found" because the demo admin
+      # doesn't exist in the fresh DB.
+      #
+      # Note: the script does NOT compute the behavioral_scores snapshot
+      # (the scoring service has `import 'server-only'` which tsx can't
+      # load). The smoke-tour-j6 dashboard rendering tolerates absent
+      # scores (degraded empty-state). If a future spec asserts on score
+      # values, add a curl POST to `/api/cron/recompute-scores` AFTER the
+      # Playwright `webServer` boots — currently out of scope.
+      - name: Seed J6 demo data for smoke-tour specs
+        run: pnpm --filter @fxmily/web exec tsx scripts/seed-j6-demo.ts
+
       # mobile-iphone-15 project is skipped in CI — adds ~30% runtime
       # without exercising a distinct DOM tree. iPhone-specific UX is
       # validated by real-device smoke (cf. SPEC §15 J9 iOS Safari 18.4+).

@@ -28,18 +28,34 @@
 
 const REFLECTION_OPEN_TAG = '<member_reflection_untrusted>';
 const REFLECTION_CLOSE_TAG = '</member_reflection_untrusted>';
+/**
+ * Case-insensitive variant — XML parsers (and some LLM tokenisers) treat
+ * `</Member_Reflection_Untrusted>` as the same close tag as the canonical
+ * lowercase form. We strip *every* case-variant to keep the envelope
+ * tamper-proof against creative member input. V1.9 TIER B hardening.
+ */
+const REFLECTION_CLOSE_TAG_ANY_CASE = /<\/member_reflection_untrusted>/gi;
+
+/**
+ * Allowlist for block labels passed to `wrapUntrustedMemberInputBlocks`.
+ * V1.8 only passes hardcoded labels, but V1.9 TIER B hardening defends
+ * against future V2 callers that might thread user-controlled values
+ * through — only lowercase ASCII letters + underscore are XML-safe and
+ * line up with our system-prompt instructions.
+ */
+const BLOCK_LABEL_ALLOWLIST = /^[a-z_]+$/;
 
 /**
  * Defensive helper — strips any occurrence of our own closing tag from
  * the member's text BEFORE wrapping. This prevents a member typing
- * `</member_reflection_untrusted>` mid-textarea from prematurely closing
- * the untrusted region.
+ * `</member_reflection_untrusted>` (any case) mid-textarea from
+ * prematurely closing the untrusted region.
  *
  * We replace with a visually-similar but inert sequence so the wrap
  * stays one-to-one with the original char count (audit trail integrity).
  */
 function neutralizeClosingTag(text: string): string {
-  return text.split(REFLECTION_CLOSE_TAG).join('</member_reflection_neutralized>');
+  return text.replace(REFLECTION_CLOSE_TAG_ANY_CASE, '</member_reflection_neutralized>');
 }
 
 /**
@@ -71,7 +87,14 @@ export function wrapUntrustedMemberInputBlocks(
   blocks: ReadonlyArray<{ label: string; text: string }>,
 ): string {
   const inner = blocks
-    .map(({ label, text }) => `  <${label}>${neutralizeClosingTag(text)}</${label}>`)
+    .map(({ label, text }) => {
+      if (!BLOCK_LABEL_ALLOWLIST.test(label)) {
+        throw new Error(
+          `[prompt-builder] Invalid block label "${label}" — must match ${BLOCK_LABEL_ALLOWLIST.source} (XML safety).`,
+        );
+      }
+      return `  <${label}>${neutralizeClosingTag(text)}</${label}>`;
+    })
     .join('\n');
   return `${REFLECTION_OPEN_TAG}\n${inner}\n${REFLECTION_CLOSE_TAG}`;
 }

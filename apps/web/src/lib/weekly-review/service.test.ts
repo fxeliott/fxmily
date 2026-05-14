@@ -8,6 +8,7 @@ vi.mock('@/lib/db', () => ({
   db: {
     weeklyReview: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       upsert: vi.fn(),
       findMany: vi.fn(),
     },
@@ -156,7 +157,7 @@ describe('getWeeklyReview', () => {
   });
 });
 
-describe('getWeeklyReviewById (V1.8 polish — BOLA defence)', () => {
+describe('getWeeklyReviewById (V1.8 BOLA defence, V1.9 TIER B atomic findFirst)', () => {
   it('returns null on empty id', async () => {
     expect(await getWeeklyReviewById('user-1', '')).toBeNull();
   });
@@ -164,19 +165,29 @@ describe('getWeeklyReviewById (V1.8 polish — BOLA defence)', () => {
   it('returns null on oversized id (>64 chars)', async () => {
     const oversized = 'x'.repeat(65);
     expect(await getWeeklyReviewById('user-1', oversized)).toBeNull();
-    expect(db.weeklyReview.findUnique).not.toHaveBeenCalled();
+    expect(db.weeklyReview.findFirst).not.toHaveBeenCalled();
   });
 
-  it('returns null when row belongs to a different user', async () => {
-    vi.mocked(db.weeklyReview.findUnique).mockResolvedValue(
-      makeDbRow({ userId: 'attacker' }) as never,
-    );
+  it('queries findFirst with both id AND userId in the WHERE clause (anti-BOLA at DB layer)', async () => {
+    vi.mocked(db.weeklyReview.findFirst).mockResolvedValue(null as never);
+    await getWeeklyReviewById('user-1', 'rev-1');
+    const call = vi.mocked(db.weeklyReview.findFirst).mock.calls[0];
+    if (!call) throw new Error('expected findFirst to be called');
+    const arg = call[0] as { where: { id: string; userId: string } };
+    expect(arg.where).toEqual({ id: 'rev-1', userId: 'user-1' });
+  });
+
+  it('returns null when DB filters out a row belonging to another user (findFirst returns null)', async () => {
+    // The DB-layer userId filter is the defense — findFirst will simply not
+    // find a row for this user, even if a row with this id exists for someone
+    // else. We mock that as null directly.
+    vi.mocked(db.weeklyReview.findFirst).mockResolvedValue(null as never);
     const result = await getWeeklyReviewById('user-1', 'rev-stolen');
     expect(result).toBeNull();
   });
 
   it('returns the serialized row when ownership matches', async () => {
-    vi.mocked(db.weeklyReview.findUnique).mockResolvedValue(
+    vi.mocked(db.weeklyReview.findFirst).mockResolvedValue(
       makeDbRow({ userId: 'user-1' }) as never,
     );
     const result = await getWeeklyReviewById('user-1', 'rev-1');
@@ -186,7 +197,7 @@ describe('getWeeklyReviewById (V1.8 polish — BOLA defence)', () => {
   });
 
   it('returns null when row absent (P2025 / no match)', async () => {
-    vi.mocked(db.weeklyReview.findUnique).mockResolvedValue(null as never);
+    vi.mocked(db.weeklyReview.findFirst).mockResolvedValue(null as never);
     expect(await getWeeklyReviewById('user-1', 'rev-absent')).toBeNull();
   });
 });

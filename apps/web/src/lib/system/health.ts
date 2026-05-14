@@ -106,7 +106,12 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.health.scan',
     label: 'Health watcher heartbeat',
     periodMs: HOUR, // cron-watch.yml triggers at `15 * * * *`
-    toleranceMultiplier: 4, // 4h gap before flagging red (covers GH Actions delay)
+    // V1.9 TIER B+ : bumped 4 → 6 after run 25842587338 (2026-05-14T04:57Z)
+    // false-positive : GH Actions delayed the schedule by 42 min, pushing the
+    // self-stale check past the 4h threshold. 6h tolerance still flags real
+    // outages of 6 consecutive misses, but absorbs the GH cron jitter that
+    // routinely drifts 30-60 min during peak hours.
+    toleranceMultiplier: 6,
   },
 ] as const;
 

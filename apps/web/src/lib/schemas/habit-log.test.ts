@@ -172,6 +172,46 @@ describe('habitLogInputSchema (discriminated union)', () => {
     ).toThrow();
   });
 
+  it('V1.9 R2 H2 — rejects notes containing bidi / zero-width Trojan Source chars', () => {
+    // U+202E Right-to-Left Override (Trojan Source attack on weekly digest pipeline).
+    expect(() =>
+      habitLogInputSchema.parse({
+        kind: 'sport',
+        date: today,
+        value: { type: 'cardio', durationMin: 30 },
+        notes: 'Normal text ‮hidden-rtl',
+      }),
+    ).toThrow(/Caractères de contrôle interdits/);
+
+    // U+200B Zero-Width Space (LLM tokeniser confusion).
+    expect(() =>
+      habitLogInputSchema.parse({
+        kind: 'meditation',
+        date: today,
+        value: { durationMin: 10 },
+        notes: 'inv​isible-space',
+      }),
+    ).toThrow(/Caractères de contrôle interdits/);
+  });
+
+  it('V1.9 R2 H2 — NFC-normalises notes via safeFreeText transform', () => {
+    // NFD form (decomposed) : 'e' + U+0301 combining acute = `é` rendered.
+    // After NFC normalise, the 2-codepoint sequence collapses to U+00E9 (1 cp).
+    const nfdInput = `Caf${'é'}`; // 5 codepoints : C-a-f-e-(U+0301)
+    expect(nfdInput.length).toBe(5);
+    const parsed = habitLogInputSchema.parse({
+      kind: 'sleep',
+      date: today,
+      value: { durationMin: 420 },
+      notes: nfdInput,
+    });
+    if (parsed.kind !== 'sleep') throw new Error('expected sleep kind');
+    expect(parsed.notes?.length).toBe(4); // C-a-f-é (1 cp for é)
+    expect(parsed.notes).toBe('Café');
+    // No standalone combining acute should remain.
+    expect(parsed.notes?.includes('́')).toBe(false);
+  });
+
   it('discriminated union enforces per-kind value shape', () => {
     // Caffeine + sport value = invalid
     expect(() =>

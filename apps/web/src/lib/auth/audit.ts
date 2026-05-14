@@ -100,6 +100,14 @@ export type AuditAction =
   // J10 Phase J — observability dashboard surface
   | 'admin.system.viewed'
   | 'cron.health.scan'
+  // V2.0 — TRACK module (master plan A2-A5 must-have habit logging).
+  // `habit_log.upserted` carries `kind` + `wasNew` in metadata so the
+  // analytics pipeline (V2.1 D-features) can distinguish create vs update.
+  // Pre-declared even though no Server Action exists yet (V2.0 backend
+  // bootstrap is data + Zod + service only) — anti-regression vs canon
+  // process where audit slugs ship with the model migration.
+  | 'habit_log.upserted'
+  | 'habit_log.deleted'
   // V1.8 — REFLECT module (member-facing reflection + CBT Ellis ABCD).
   // `*.submitted` rows carry `crisisLevel` + `injectionSuspected` in metadata
   // so a single row captures the full audit picture for a submission.

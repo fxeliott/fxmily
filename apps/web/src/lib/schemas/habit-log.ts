@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
+
 /**
  * V2.0 TRACK module — Zod schemas for `HabitLog` input validation.
  *
@@ -116,11 +118,31 @@ function dateInWindow(value: string, now: Date = new Date()): boolean {
 // Discriminated input schema (the one Server Actions / route handlers consume)
 // =============================================================================
 
+/**
+ * Trojan-Source hardening on `notes` — V1.9 R2 security-auditor catch H2.
+ * Canon Fxmily : every member free-text field (DailyCheckin.journalNote,
+ * ReflectionEntry.*, WeeklyReview.*, Trade.notes, MarkDouglasCard.*) applies
+ * `containsBidiOrZeroWidth` reject + `safeFreeText` NFC-normalise transform.
+ * Omitting it here would regress vs J5 audit TIER 3 fix `e73c67c` + V1.8 R5
+ * axe 4 — and the master-plan D-features pipeline (weekly digest assembled
+ * from member content) would inherit the Trojan-Source vector.
+ */
 const notesField = z
   .string()
   .max(HABIT_NOTES_MAX_CHARS, `${HABIT_NOTES_MAX_CHARS} caractères max.`)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText)
   .optional();
 
+/**
+ * **Timezone caveat (V1.9 R2 security-auditor catch H1)** — `dateInWindow`
+ * anchors to UTC midnight via `getUTC*`. The current refine accepts ±13h
+ * drift on the bounds for members east/west of UTC. V2.1 Server Action MUST
+ * re-validate with `session.user.timezone` (carbon J5 `lib/checkin/timezone.ts`
+ * `localDateOf` pattern). Until then, the [-14d, +1d] window is a
+ * **best-effort approximation** sufficient to block 1-year replay attacks
+ * but not authoritative on the day boundary itself.
+ */
 const dateField = isoDate.refine((v) => dateInWindow(v), {
   message: `Date hors fenêtre autorisée (${HABIT_BACKFILL_WINDOW_DAYS}j en arrière → ${HABIT_FORWARD_WINDOW_DAYS}j en avant).`,
 });

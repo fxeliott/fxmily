@@ -3,7 +3,7 @@ import 'server-only';
 import type { Prisma } from '@/generated/prisma/client';
 import { parseLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
-import type { HabitKind, HabitLogInput } from '@/lib/schemas/habit-log';
+import { habitLogInputSchema, type HabitKind, type HabitLogInput } from '@/lib/schemas/habit-log';
 
 /**
  * V2.0 TRACK — `HabitLog` service layer.
@@ -85,30 +85,36 @@ export async function upsertHabitLog(
   userId: string,
   input: HabitLogInput,
 ): Promise<UpsertHabitLogResult> {
-  const dateDb = parseLocalDate(input.date);
+  // Belt-and-suspenders re-parse (V1.9 R2 security-auditor catch M3) —
+  // services are user-scoped trust boundaries too. A caller bypassing the
+  // Server Action layer (refactor, internal cron, test helper) can pass an
+  // unvalidated object cast to `HabitLogInput`. Re-parsing here costs <1ms
+  // and pins the shape against type-cast leaks across the boundary.
+  const safe = habitLogInputSchema.parse(input);
+  const dateDb = parseLocalDate(safe.date);
 
   const existing = await db.habitLog.findUnique({
-    where: { userId_date_kind: { userId, date: dateDb, kind: input.kind } },
+    where: { userId_date_kind: { userId, date: dateDb, kind: safe.kind } },
     select: { id: true },
   });
 
   // Prisma's `Json` field accepts our validated shape — the value type is
   // generic-by-design at the DB layer (kind-specific shape is the Zod's
   // responsibility, not Prisma's).
-  const valueJson = input.value as unknown as Prisma.InputJsonValue;
+  const valueJson = safe.value as unknown as Prisma.InputJsonValue;
 
   const row = await db.habitLog.upsert({
-    where: { userId_date_kind: { userId, date: dateDb, kind: input.kind } },
+    where: { userId_date_kind: { userId, date: dateDb, kind: safe.kind } },
     create: {
       userId,
       date: dateDb,
-      kind: input.kind,
+      kind: safe.kind,
       value: valueJson,
-      notes: input.notes ?? null,
+      notes: safe.notes ?? null,
     },
     update: {
       value: valueJson,
-      notes: input.notes ?? null,
+      notes: safe.notes ?? null,
     },
   });
 

@@ -146,6 +146,47 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d \
               --remove-orphans web
 
+            # 3.5. Refresh /opt/fxmily/prisma/ from the newly pulled image.
+            # ============================================================
+            # CRITICAL BUG FIX 2026-05-14 (post-V1.8 finishing session) :
+            # without this step, /opt/fxmily/prisma stays frozen at
+            # provisioning time (initial V1.5 launch 2026-05-10) and the
+            # migrate container at step 4 reads STALE migration state →
+            # `prisma migrate deploy` becomes a silent no-op for any
+            # subsequent migration. Bug discovered after V1.8 ship found
+            # V1.6 `is_transactional` + V1.8 REFLECT tables had never
+            # applied in prod despite 4 deploys reporting "+ migrate"
+            # success. See memory fxmily_session_2026-05-14_finishing_progress.md
+            # Phase 2 for full root-cause analysis.
+            #
+            # Mechanism :
+            #   1. `docker run --entrypoint /bin/sh $IMAGE -c "tar -C /app/apps/web -cf - prisma"`
+            #      writes a tar of the image's `apps/web/prisma/` directory
+            #      to stdout (without spawning the Next.js server).
+            #   2. Host-side `tar -C /opt/fxmily -xf -` extracts to
+            #      `/opt/fxmily/prisma/` (current dir level under /opt/fxmily/).
+            #   3. Rewrite `/opt/fxmily/prisma/prisma.config.ts` because
+            #      the image-shipped one lives at `apps/web/prisma.config.ts`
+            #      (NOT inside `apps/web/prisma/`) and references
+            #      `prisma/schema.prisma` relative to apps/web. Our migrate
+            #      container at step 4 mounts `/opt/fxmily/prisma` at
+            #      `/prisma` so the schema is at root, requiring
+            #      `./schema.prisma` relative path.
+            echo "Refreshing /opt/fxmily/prisma from new image..."
+            docker run --rm --entrypoint /bin/sh "$FXMILY_IMAGE" \
+              -c "tar -C /app/apps/web -cf - prisma" \
+              | tar -C /opt/fxmily -xf -
+            cat > /opt/fxmily/prisma/prisma.config.ts <<'PRISMA_CONFIG_EOF'
+            import { defineConfig, env } from 'prisma/config';
+
+            export default defineConfig({
+              schema: './schema.prisma',
+              migrations: { path: './migrations' },
+              datasource: { url: env('DATABASE_URL') },
+            });
+            PRISMA_CONFIG_EOF
+            echo "Prisma sync complete : $(ls /opt/fxmily/prisma/migrations/ | grep -c '^[0-9]') migrations on disk."
+
             # 4. Apply pending Prisma migrations against prod.
             # `migrate deploy` is non-interactive + non-destructive (refuses
             # to delete data) — safe to run on every deploy.

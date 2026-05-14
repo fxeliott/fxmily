@@ -1,8 +1,8 @@
 import { ArrowRight, BrainCircuit, NotebookPen } from 'lucide-react';
 import Link from 'next/link';
 
-import { listMyRecentReviews } from '@/lib/weekly-review/service';
-import { listRecentReflections } from '@/lib/reflection/service';
+import { getLastReviewWeekStart } from '@/lib/weekly-review/service';
+import { countRecentReflections } from '@/lib/reflection/service';
 
 interface DashboardReflectWidgetProps {
   userId: string;
@@ -19,15 +19,17 @@ interface DashboardReflectWidgetProps {
  * arrives at `/review` or `/reflect` — this widget is the "doorway"
  * inside the lime house. Tiny blue dot accent on each icon hints at
  * the destination zone.
+ *
+ * V1.9 TIER F : both queries projected to the minimum data needed —
+ * `getLastReviewWeekStart` selects 1 column, `countRecentReflections`
+ * runs an indexed `count(*)` instead of fetching N rows.
  */
 export async function DashboardReflectWidget({ userId }: DashboardReflectWidgetProps) {
-  const [recentReviews, recentReflections] = await Promise.all([
-    listMyRecentReviews(userId, 1),
-    listRecentReflections(userId, 30),
+  const [lastReviewDate, reflectionCount] = await Promise.all([
+    getLastReviewWeekStart(userId),
+    countRecentReflections(userId, 30),
   ]);
-  const reviewCount = recentReviews.length; // 0 or 1 (we only check existence)
-  const reflectionCount = recentReflections.length;
-  const lastReviewDate = recentReviews[0]?.weekStart ?? null;
+  const reviewCount = lastReviewDate !== null ? 1 : 0;
 
   return (
     <div data-slot="dashboard-reflect-widget">

@@ -9,6 +9,19 @@ import { getReflectionById } from '@/lib/reflection/service';
 
 export const dynamic = 'force-dynamic';
 
+// V1.9 TIER F — module-level formatters.
+const FMT_WEEKDAY_LONG_UTC = new Intl.DateTimeFormat('fr-FR', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const FMT_HM_FR = new Intl.DateTimeFormat('fr-FR', {
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 interface ReflectionDetailProps {
   params: Promise<{ id: string }>;
 }
@@ -36,13 +49,7 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
   const formatLocalDate = (iso: string) => {
     const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
     const dt = new Date(Date.UTC(y, m - 1, d));
-    return new Intl.DateTimeFormat('fr-FR', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).format(dt);
+    return FMT_WEEKDAY_LONG_UTC.format(dt);
   };
 
   const sections = [
@@ -100,12 +107,7 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
           </h1>
           <p className="t-cap text-[var(--t-3)]">
             Soumise{' '}
-            <time dateTime={entry.createdAt}>
-              {new Intl.DateTimeFormat('fr-FR', {
-                hour: '2-digit',
-                minute: '2-digit',
-              }).format(new Date(entry.createdAt))}
-            </time>
+            <time dateTime={entry.createdAt}>{FMT_HM_FR.format(new Date(entry.createdAt))}</time>
           </p>
         </header>
 

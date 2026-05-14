@@ -166,15 +166,38 @@ export async function getWeeklyReview(
 /**
  * Read a member's review by cuid. User-scoped — returns `null` if the row
  * belongs to a different member (no enumeration leak via 404).
+ *
+ * Implementation : single `findFirst({ id, userId })` query — atomic,
+ * collapses two-step `findUnique + post-check` into one SQL round-trip and
+ * eliminates the theoretical timing oracle on "row exists for someone else".
+ * Carbon of the `cards/service.ts` `getDelivery` pattern.
  */
 export async function getWeeklyReviewById(
   userId: string,
   id: string,
 ): Promise<SerializedWeeklyReview | null> {
   if (id.length === 0 || id.length > 64) return null;
-  const row = await db.weeklyReview.findUnique({ where: { id } });
-  if (!row || row.userId !== userId) return null;
-  return toSerialized(row);
+  const row = await db.weeklyReview.findFirst({ where: { id, userId } });
+  return row ? toSerialized(row) : null;
+}
+
+/**
+ * V1.9 TIER F — single-column query for the dashboard widget.
+ *
+ * Returns the `weekStart` (YYYY-MM-DD) of the member's most recent review,
+ * or `null` if they've never submitted one. Caller (`DashboardReflectWidget`)
+ * only renders the date and a "submitted yes/no" flag, so projecting one
+ * column instead of fetching all 17 saves a row-build + row-serialize per
+ * dashboard render — meaningful at 30→100 active members hitting the home
+ * page hourly.
+ */
+export async function getLastReviewWeekStart(userId: string): Promise<string | null> {
+  const row = await db.weeklyReview.findFirst({
+    where: { userId },
+    orderBy: { weekStart: 'desc' },
+    select: { weekStart: true },
+  });
+  return row ? row.weekStart.toISOString().slice(0, 10) : null;
 }
 
 /**

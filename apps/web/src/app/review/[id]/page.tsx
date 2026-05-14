@@ -9,6 +9,20 @@ import { getWeeklyReviewById } from '@/lib/weekly-review/service';
 
 export const dynamic = 'force-dynamic';
 
+// V1.9 TIER F — module-level formatters (cheaper than per-render in detail page).
+const FMT_LONG_DATE_UTC = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const FMT_SUBMITTED_LONG_FR = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 interface ReviewDetailProps {
   params: Promise<{ id: string }>;
 }
@@ -36,12 +50,7 @@ export default async function ReviewDetailPage({ params }: ReviewDetailProps) {
   const formatLocalDate = (iso: string) => {
     const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
     const dt = new Date(Date.UTC(y, m - 1, d));
-    return new Intl.DateTimeFormat('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).format(dt);
+    return FMT_LONG_DATE_UTC.format(dt);
   };
 
   const sections: Array<{
@@ -110,12 +119,7 @@ export default async function ReviewDetailPage({ params }: ReviewDetailProps) {
           <p className="t-cap text-[var(--t-3)]">
             Soumise{' '}
             <time dateTime={review.submittedAt}>
-              {new Intl.DateTimeFormat('fr-FR', {
-                day: 'numeric',
-                month: 'long',
-                hour: '2-digit',
-                minute: '2-digit',
-              }).format(new Date(review.submittedAt))}
+              {FMT_SUBMITTED_LONG_FR.format(new Date(review.submittedAt))}
             </time>
           </p>
         </header>

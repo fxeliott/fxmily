@@ -11,6 +11,20 @@ import { listMyRecentReviews } from '@/lib/weekly-review/service';
 
 export const dynamic = 'force-dynamic';
 
+// V1.9 TIER F — hoisted at module level so the 12 timeline rows don't each
+// instantiate a new `Intl.DateTimeFormat` (per-row cost ~0.5 ms × N rows).
+const FMT_SUBMITTED_AT_FR = new Intl.DateTimeFormat('fr-FR', {
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+const FMT_WEEK_RANGE_DAY = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+});
+
 interface ReviewLandingProps {
   searchParams: Promise<{ crisis?: string; done?: string }>;
 }
@@ -47,10 +61,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
         <header className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
             <p className="t-eyebrow text-[var(--t-3)]">Module REFLECT</p>
-            <h1
-              className="t-display text-[var(--t-1)]"
-              style={{ fontSize: 'clamp(36px, 7vw, 56px)' }}
-            >
+            <h1 className="t-display-fluid text-[var(--t-1)]">
               Le miroir de
               <br />
               <span style={{ color: 'var(--acc-hi)' }}>ton exécution</span>
@@ -135,12 +146,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
                         Semaine du <FormattedRange weekStart={r.weekStart} weekEnd={r.weekEnd} />
                       </p>
                       <p className="t-cap font-mono text-[var(--t-3)]">
-                        {new Intl.DateTimeFormat('fr-FR', {
-                          day: '2-digit',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        }).format(new Date(r.submittedAt))}
+                        {FMT_SUBMITTED_AT_FR.format(new Date(r.submittedAt))}
                       </p>
                     </header>
                     <p className="t-body mt-2 line-clamp-2 text-[var(--t-2)]">
@@ -164,11 +170,7 @@ function FormattedRange({ weekStart, weekEnd }: { weekStart: string; weekEnd: st
   const fmt = (iso: string) => {
     const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
     const dt = new Date(Date.UTC(y, m - 1, d));
-    return new Intl.DateTimeFormat('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-      timeZone: 'UTC',
-    }).format(dt);
+    return FMT_WEEK_RANGE_DAY.format(dt);
   };
   return (
     <>

@@ -333,6 +333,25 @@
   font-weight: 800;
   font-feature-settings: 'ss01' 1;
 }
+/* V1.9 TIER C B5 — fluid display variant for hero headlines that need to
+   scale on mobile (REFLECT module wizards landing). 36px on iPhone SE,
+   ~7vw between, capped at 56px to stay below the static `t-display` 68px
+   on desktop — typography rhythm preserved. Use this instead of inlining
+   `style={{ fontSize: 'clamp(36px, 7vw, 56px)' }}` on a `.t-display`.
+   V1.9 R2 a11y-reviewer catch : `overflow-wrap: anywhere` + `hyphens: auto`
+   protect WCAG 1.4.10 Reflow at zoom 400% iPhone SE (`exécution`/`éclair`
+   wrap inside long French words on 320 CSS px viewport instead of
+   horizontal-scrolling). */
+.t-display-fluid {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 7vw, 56px);
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+  font-weight: 800;
+  font-feature-settings: 'ss01' 1;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
 .t-h1 {
   font-family: var(--font-display);
   font-size: 32px;
@@ -893,6 +912,14 @@
   pointer-events: none;
   animation: v18OrbDrift 22s var(--e-smooth) infinite;
   will-change: transform, opacity;
+}
+/* V1.9 TIER F perf — three blur-48px layers + GPU compositor drains mobile
+   battery + drops ~10-15 fps on iPhone SE. Keep only the first orb under
+   640px so the visual identity survives while the cost halves. */
+@media (max-width: 640px) {
+  .v18-orb:nth-child(n + 2) {
+    display: none;
+  }
 }
 
 /* Glass card variant for v18 — subtle frosted blue */

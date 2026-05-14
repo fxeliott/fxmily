@@ -10,6 +10,18 @@ import { listRecentReflections } from '@/lib/reflection/service';
 
 export const dynamic = 'force-dynamic';
 
+// V1.9 TIER F — hoisted at module level (timeline can render up to 30 rows,
+// each previously instantiated 2 formatters).
+const FMT_REFLECT_DATE_LONG_UTC = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'UTC',
+});
+const FMT_HM_FR = new Intl.DateTimeFormat('fr-FR', {
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 interface ReflectLandingProps {
   searchParams: Promise<{ crisis?: string; done?: string }>;
 }
@@ -46,10 +58,7 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
         <header className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
             <p className="t-eyebrow text-[var(--t-3)]">Module REFLECT</p>
-            <h1
-              className="t-display text-[var(--t-1)]"
-              style={{ fontSize: 'clamp(36px, 7vw, 56px)' }}
-            >
+            <h1 className="t-display-fluid text-[var(--t-1)]">
               Quand la pensée
               <br />
               <span style={{ color: 'var(--acc-hi)' }}>vient en éclair</span>
@@ -129,18 +138,11 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
                     <header className="flex items-baseline justify-between gap-3">
                       <p className="t-eyebrow text-[var(--t-3)]" id={`ref-${r.id}-date`}>
                         <time dateTime={r.date}>
-                          {new Intl.DateTimeFormat('fr-FR', {
-                            day: 'numeric',
-                            month: 'long',
-                            timeZone: 'UTC',
-                          }).format(new Date(`${r.date}T00:00:00Z`))}
+                          {FMT_REFLECT_DATE_LONG_UTC.format(new Date(`${r.date}T00:00:00Z`))}
                         </time>
                       </p>
                       <p className="t-cap font-mono text-[var(--t-3)]">
-                        {new Intl.DateTimeFormat('fr-FR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        }).format(new Date(r.createdAt))}
+                        {FMT_HM_FR.format(new Date(r.createdAt))}
                       </p>
                     </header>
                     <dl className="mt-2 space-y-1.5">

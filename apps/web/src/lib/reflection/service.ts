@@ -62,15 +62,19 @@ function toSerialized(row: {
 /**
  * Read a member's reflection entry by cuid. User-scoped — returns `null`
  * if the row belongs to a different member (anti-enumeration via 404).
+ *
+ * Implementation : single `findFirst({ id, userId })` query — atomic,
+ * collapses two-step `findUnique + post-check` into one SQL round-trip and
+ * eliminates the theoretical timing oracle on "row exists for someone else".
+ * Carbon of the `cards/service.ts` `getDelivery` pattern.
  */
 export async function getReflectionById(
   userId: string,
   id: string,
 ): Promise<SerializedReflectionEntry | null> {
   if (id.length === 0 || id.length > 64) return null;
-  const row = await db.reflectionEntry.findUnique({ where: { id } });
-  if (!row || row.userId !== userId) return null;
-  return toSerialized(row);
+  const row = await db.reflectionEntry.findFirst({ where: { id, userId } });
+  return row ? toSerialized(row) : null;
 }
 
 export async function createReflectionEntry(
@@ -94,6 +98,23 @@ export async function createReflectionEntry(
 // =============================================================================
 // Reads
 // =============================================================================
+
+/**
+ * V1.9 TIER F — count-only query for the dashboard widget.
+ *
+ * The widget only renders "N réflexions sur 30 jours" — fetching the N
+ * rows just to read `.length` is wasteful. `db.count()` translates to a
+ * single SQL `SELECT count(*)` that the `(userId, date)` index covers.
+ */
+export async function countRecentReflections(userId: string, windowDays = 30): Promise<number> {
+  const bounded = Math.max(1, Math.min(windowDays, 365));
+  const horizon = new Date();
+  horizon.setUTCDate(horizon.getUTCDate() - bounded);
+  horizon.setUTCHours(0, 0, 0, 0);
+  return db.reflectionEntry.count({
+    where: { userId, date: { gte: horizon } },
+  });
+}
 
 /**
  * List the member's reflection entries from the last `windowDays` days

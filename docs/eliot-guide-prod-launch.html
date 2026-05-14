@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
@@ -721,35 +721,34 @@
   <body>
     <div class="layout">
       <header class="hero">
-        <div class="hero-badge">
-          <span>●</span> Phase R &middot; Reality check 2026-05-09
-        </div>
+        <div class="hero-badge"><span>●</span> Phase R &middot; Reality check 2026-05-09</div>
         <h1>Mise en prod Fxmily V1 &mdash; ton guide pas-à-pas</h1>
         <p style="font-size: 17px; color: var(--t-2); max-width: 680px">
-          Tout ce que tu dois faire <strong>toi</strong> manuellement (signups externes,
-          générations de secrets locaux, smoke iPhone). Le reste est codé/scripté dans le repo.
+          Tout ce que tu dois faire <strong>toi</strong> manuellement (signups externes, générations
+          de secrets locaux, smoke iPhone). Le reste est codé/scripté dans le repo.
         </p>
         <div class="hero-meta">
           <span class="meta-pill ok">
             <span>✓</span> Cible : <strong>app.fxmilyapp.com</strong>
           </span>
-          <span class="meta-pill acc">
-            Coût V1 : <strong>0&nbsp;€</strong>
-          </span>
+          <span class="meta-pill acc"> Coût V1 : <strong>0&nbsp;€</strong> </span>
           <span class="meta-pill">
             Hetzner : <strong>hetzner-dieu</strong>&nbsp;<code>178.104.39.201</code>
           </span>
-          <span class="meta-pill">
-            Tes mains : <strong>~50&nbsp;min</strong>
-          </span>
+          <span class="meta-pill"> Tes mains : <strong>~50&nbsp;min</strong> </span>
         </div>
         <div class="callout info" style="margin-top: 24px">
           <span class="label">Si tu bloques</span>
           <p>
             Reviens à cette page, dis-moi exactement où tu bloques (capture d&rsquo;écran, message
             d&rsquo;erreur, copy-paste de l&rsquo;output) — je te débloque en live. Toutes les
-            sections du repo sont déjà code-prêtes
-            (<a class="ext" href="https://github.com/fxeliott/fxmily/pull/35" target="_blank" rel="noopener noreferrer">PR #35</a>
+            sections du repo sont déjà code-prêtes (<a
+              class="ext"
+              href="https://github.com/fxeliott/fxmily/pull/35"
+              target="_blank"
+              rel="noopener noreferrer"
+              >PR #35</a
+            >
             CI verte) — on est sur du runtime + provisioning, plus du code à écrire.
           </p>
         </div>
@@ -760,18 +759,42 @@
           <summary>Sommaire</summary>
           <h2>12 étapes</h2>
           <ol>
-            <li><a href="#s1">Vérifier capacité Hetzner<span class="time">5&nbsp;min</span></a></li>
-            <li><a href="#s2">Sentry &mdash; DSN + Auth Token<span class="time">8&nbsp;min</span></a></li>
-            <li><a href="#s3">Resend &mdash; API key<span class="time">5&nbsp;min</span></a></li>
-            <li><a href="#s4">Cloudflare API Token<span class="time">3&nbsp;min</span></a></li>
-            <li><a href="#s5">VAPID + secrets locaux<span class="time">2&nbsp;min</span></a></li>
-            <li><a href="#s6">Lancer le bootstrap<span class="time">10&nbsp;min</span></a></li>
-            <li><a href="#s7">Verify domaine Resend<span class="time">~10&nbsp;min DNS</span></a></li>
-            <li><a href="#s8">Premier deploy<span class="time">5&nbsp;min</span></a></li>
-            <li><a href="#s9">Smoke iPhone<span class="time">30&nbsp;min</span></a></li>
-            <li><a href="#s10">Rotation password admin<span class="time">2&nbsp;min</span></a></li>
-            <li><a href="#s11">(Opt.) HSTS preload<span class="time">1&nbsp;min</span></a></li>
-            <li><a href="#s12">1ère invitation cohorte<span class="time">5&nbsp;min</span></a></li>
+            <li>
+              <a href="#s1">Vérifier capacité Hetzner<span class="time">5&nbsp;min</span></a>
+            </li>
+            <li>
+              <a href="#s2">Sentry &mdash; DSN + Auth Token<span class="time">8&nbsp;min</span></a>
+            </li>
+            <li>
+              <a href="#s3">Resend &mdash; API key<span class="time">5&nbsp;min</span></a>
+            </li>
+            <li>
+              <a href="#s4">Cloudflare API Token<span class="time">3&nbsp;min</span></a>
+            </li>
+            <li>
+              <a href="#s5">VAPID + secrets locaux<span class="time">2&nbsp;min</span></a>
+            </li>
+            <li>
+              <a href="#s6">Lancer le bootstrap<span class="time">10&nbsp;min</span></a>
+            </li>
+            <li>
+              <a href="#s7">Verify domaine Resend<span class="time">~10&nbsp;min DNS</span></a>
+            </li>
+            <li>
+              <a href="#s8">Premier deploy<span class="time">5&nbsp;min</span></a>
+            </li>
+            <li>
+              <a href="#s9">Smoke iPhone<span class="time">30&nbsp;min</span></a>
+            </li>
+            <li>
+              <a href="#s10">Rotation password admin<span class="time">2&nbsp;min</span></a>
+            </li>
+            <li>
+              <a href="#s11">(Opt.) HSTS preload<span class="time">1&nbsp;min</span></a>
+            </li>
+            <li>
+              <a href="#s12">1ère invitation cohorte<span class="time">5&nbsp;min</span></a>
+            </li>
           </ol>
         </details>
       </nav>
@@ -797,7 +820,7 @@
           <div class="code-wrap">
             <span class="lang">bash</span>
             <button class="copy-btn">Copier</button>
-<pre><code># Depuis ton ordi, en PowerShell
+            <pre><code># Depuis ton ordi, en PowerShell
 ssh hetzner-dieu 'free -h && df -h && docker ps --format "table {{.Names}}\t{{.Status}}"'</code></pre>
           </div>
           <h4>Tu cherches</h4>
@@ -826,7 +849,7 @@ ssh hetzner-dieu 'free -h && df -h && docker ps --format "table {{.Names}}\t{{.S
           <div class="code-wrap">
             <span class="lang">bash</span>
             <button class="copy-btn">Copier</button>
-<pre><code># Le script le crée pour toi avec le HCLOUD_TOKEN dans tokens.local.env
+            <pre><code># Le script le crée pour toi avec le HCLOUD_TOKEN dans tokens.local.env
 bash ops/scripts/provision-hetzner.sh</code></pre>
           </div>
           <div class="callout warn">
@@ -834,8 +857,8 @@ bash ops/scripts/provision-hetzner.sh</code></pre>
             <p>
               Si <code>hetzner-dieu</code> a déjà un Caddy qui sert n8n/Langfuse sur 80/443, il faut
               <strong>éditer le Caddyfile existant</strong> pour ajouter un bloc
-              <code>app.fxmilyapp.com</code> au lieu d&rsquo;en lancer un second. → tu m&rsquo;envoies
-              ton Caddyfile actuel, je te le modifie.
+              <code>app.fxmilyapp.com</code> au lieu d&rsquo;en lancer un second. → tu
+              m&rsquo;envoies ton Caddyfile actuel, je te le modifie.
             </p>
           </div>
         </section>
@@ -862,7 +885,13 @@ bash ops/scripts/provision-hetzner.sh</code></pre>
           <ol>
             <li>
               Va sur
-              <a class="ext" href="https://sentry.io/signup/" target="_blank" rel="noopener noreferrer">https://sentry.io/signup/</a>
+              <a
+                class="ext"
+                href="https://sentry.io/signup/"
+                target="_blank"
+                rel="noopener noreferrer"
+                >https://sentry.io/signup/</a
+              >
             </li>
             <li>
               Méthode recommandée : <strong>GitHub OAuth</strong> (1 clic, ton compte
@@ -882,12 +911,15 @@ bash ops/scripts/provision-hetzner.sh</code></pre>
 
           <h3>Création projet</h3>
           <ol start="5">
-            <li>Wizard &laquo;&nbsp;Choose your platforms&nbsp;&raquo; → coche <strong>Next.js</strong> → &laquo;&nbsp;Create Project&nbsp;&raquo;.</li>
+            <li>
+              Wizard &laquo;&nbsp;Choose your platforms&nbsp;&raquo; → coche
+              <strong>Next.js</strong> → &laquo;&nbsp;Create Project&nbsp;&raquo;.
+            </li>
             <li><strong>Project name</strong> : <code>fxmily-web</code>. Team par défaut OK.</li>
             <li>
               Sentry te montre l&rsquo;écran &laquo;&nbsp;Install Sentry&nbsp;&raquo; avec une
-              commande <code>npx @sentry/wizard@latest...</code> :
-              <strong>NE LANCE PAS</strong>. Click <strong>&laquo;&nbsp;Skip Onboarding&nbsp;&raquo;</strong>.
+              commande <code>npx @sentry/wizard@latest...</code> : <strong>NE LANCE PAS</strong>.
+              Click <strong>&laquo;&nbsp;Skip Onboarding&nbsp;&raquo;</strong>.
             </li>
           </ol>
 
@@ -911,7 +943,10 @@ bash ops/scripts/provision-hetzner.sh</code></pre>
               Va à <strong>Settings → Auth Tokens</strong>. URL directe :
               <code>https://fxmily.sentry.io/settings/auth-tokens/</code>.
             </li>
-            <li>Click <strong>&laquo;&nbsp;Create New Token&nbsp;&raquo;</strong>. Name : <code>fxmily-web-ci</code>.</li>
+            <li>
+              Click <strong>&laquo;&nbsp;Create New Token&nbsp;&raquo;</strong>. Name :
+              <code>fxmily-web-ci</code>.
+            </li>
             <li>
               <strong>Copie immédiatement</strong> la valeur <code>sntrys_&lt;...&gt;</code> &mdash;
               Sentry ne la montre qu&rsquo;une seule fois.
@@ -922,7 +957,7 @@ bash ops/scripts/provision-hetzner.sh</code></pre>
           <div class="code-wrap">
             <span class="lang">env</span>
             <button class="copy-btn">Copier</button>
-<pre><code>SENTRY_DSN=https://&lt;copy-from-dashboard&gt;@o&lt;orgid&gt;.ingest.de.sentry.io/&lt;projectid&gt;
+            <pre><code>SENTRY_DSN=https://&lt;copy-from-dashboard&gt;@o&lt;orgid&gt;.ingest.de.sentry.io/&lt;projectid&gt;
 NEXT_PUBLIC_SENTRY_DSN=$SENTRY_DSN  # même valeur, copie/colle
 SENTRY_ORG=fxmily
 SENTRY_PROJECT=fxmily-web
@@ -966,33 +1001,54 @@ SENTRY_AUTH_TOKEN=sntrys_&lt;copy-from-dashboard&gt;</code></pre>
           <ol>
             <li>
               Va sur
-              <a class="ext" href="https://resend.com/signup" target="_blank" rel="noopener noreferrer">https://resend.com/signup</a>.
-              GitHub OAuth (recommandé) ou email/password.
+              <a
+                class="ext"
+                href="https://resend.com/signup"
+                target="_blank"
+                rel="noopener noreferrer"
+                >https://resend.com/signup</a
+              >. GitHub OAuth (recommandé) ou email/password.
             </li>
             <li>Vérification email obligatoire.</li>
             <li>
               Va à
-              <a class="ext" href="https://resend.com/api-keys" target="_blank" rel="noopener noreferrer">https://resend.com/api-keys</a>
+              <a
+                class="ext"
+                href="https://resend.com/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                >https://resend.com/api-keys</a
+              >
               → <strong>&laquo;&nbsp;Create API Key&nbsp;&raquo;</strong>.
             </li>
             <li>
               Modal :
               <ul>
                 <li><strong>Name</strong> : <code>fxmily-web-prod</code></li>
-                <li><strong>Permission</strong> : <strong>Sending access</strong> (pas &laquo;&nbsp;Full access&nbsp;&raquo;)</li>
-                <li><strong>Domain</strong> : &laquo;&nbsp;All domains&nbsp;&raquo; (on restreint plus tard)</li>
+                <li>
+                  <strong>Permission</strong> : <strong>Sending access</strong> (pas
+                  &laquo;&nbsp;Full access&nbsp;&raquo;)
+                </li>
+                <li>
+                  <strong>Domain</strong> : &laquo;&nbsp;All domains&nbsp;&raquo; (on restreint plus
+                  tard)
+                </li>
               </ul>
             </li>
-            <li>
-              <strong>Copie immédiatement</strong> la clé <code>re_&lt;...&gt;</code>.
-            </li>
+            <li><strong>Copie immédiatement</strong> la clé <code>re_&lt;...&gt;</code>.</li>
           </ol>
 
           <h3>Add domain <code>fxmilyapp.com</code></h3>
           <ol start="6">
             <li>
               Va à
-              <a class="ext" href="https://resend.com/domains" target="_blank" rel="noopener noreferrer">https://resend.com/domains</a>
+              <a
+                class="ext"
+                href="https://resend.com/domains"
+                target="_blank"
+                rel="noopener noreferrer"
+                >https://resend.com/domains</a
+              >
               → <strong>&laquo;&nbsp;Add Domain&nbsp;&raquo;</strong>.
             </li>
             <li>
@@ -1020,12 +1076,18 @@ SENTRY_AUTH_TOKEN=sntrys_&lt;copy-from-dashboard&gt;</code></pre>
                 <tr>
                   <td>TXT DKIM</td>
                   <td><code>resend._domainkey</code> (sans le domaine)</td>
-                  <td><code>p=&lt;long-base64-unique-au-tenant&gt;</code> ← <em>copie ce qui s&rsquo;affiche</em></td>
+                  <td>
+                    <code>p=&lt;long-base64-unique-au-tenant&gt;</code> ←
+                    <em>copie ce qui s&rsquo;affiche</em>
+                  </td>
                 </tr>
                 <tr>
                   <td>MX</td>
                   <td><code>send</code> (sans le domaine)</td>
-                  <td><code>feedback-smtp.us-east-1.amazonses.com</code> (priority 10) — <code>eu-central-1</code> si Pro EU</td>
+                  <td>
+                    <code>feedback-smtp.us-east-1.amazonses.com</code> (priority 10) —
+                    <code>eu-central-1</code> si Pro EU
+                  </td>
                 </tr>
                 <tr>
                   <td>TXT DMARC</td>
@@ -1044,7 +1106,7 @@ SENTRY_AUTH_TOKEN=sntrys_&lt;copy-from-dashboard&gt;</code></pre>
           <div class="code-wrap">
             <span class="lang">env</span>
             <button class="copy-btn">Copier</button>
-<pre><code>RESEND_API_KEY=re_&lt;copy-from-dashboard&gt;
+            <pre><code>RESEND_API_KEY=re_&lt;copy-from-dashboard&gt;
 RESEND_FROM=Fxmily &lt;noreply@fxmilyapp.com&gt;</code></pre>
           </div>
 
@@ -1086,13 +1148,19 @@ RESEND_FROM=Fxmily &lt;noreply@fxmilyapp.com&gt;</code></pre>
           <ol>
             <li>
               Va sur
-              <a class="ext" href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer">https://dash.cloudflare.com/profile/api-tokens</a>
+              <a
+                class="ext"
+                href="https://dash.cloudflare.com/profile/api-tokens"
+                target="_blank"
+                rel="noopener noreferrer"
+                >https://dash.cloudflare.com/profile/api-tokens</a
+              >
             </li>
             <li>Click <strong>&laquo;&nbsp;Create Token&nbsp;&raquo;</strong>.</li>
             <li>
-              Scrolle en bas → section <strong>Custom token</strong> → <strong>&laquo;&nbsp;Get
-              started&nbsp;&raquo;</strong> (PAS le template &laquo;&nbsp;Edit zone DNS&nbsp;&raquo;
-              qui est trop large).
+              Scrolle en bas → section <strong>Custom token</strong> →
+              <strong>&laquo;&nbsp;Get started&nbsp;&raquo;</strong> (PAS le template
+              &laquo;&nbsp;Edit zone DNS&nbsp;&raquo; qui est trop large).
             </li>
             <li><strong>Token name</strong> : <code>fxmily-deploy</code>.</li>
             <li>
@@ -1134,7 +1202,7 @@ RESEND_FROM=Fxmily &lt;noreply@fxmilyapp.com&gt;</code></pre>
           <div class="code-wrap">
             <span class="lang">env</span>
             <button class="copy-btn">Copier</button>
-<pre><code>CLOUDFLARE_API_TOKEN=&lt;copy-from-dashboard&gt;
+            <pre><code>CLOUDFLARE_API_TOKEN=&lt;copy-from-dashboard&gt;
 CLOUDFLARE_ZONE_NAME=fxmilyapp.com
 CLOUDFLARE_ZONE_ID=&lt;copy-from-zone-overview&gt;</code></pre>
           </div>
@@ -1152,15 +1220,15 @@ CLOUDFLARE_ZONE_ID=&lt;copy-from-zone-overview&gt;</code></pre>
           <div class="callout danger">
             <span class="label">Sécurité critique</span>
             <p>
-              VAPID + AUTH_SECRET + CRON_SECRET sont des secrets locaux que <strong>tu génères
-              toi-même</strong>. <strong>JAMAIS dans Claude</strong> &mdash; les prompts traversent
-              les serveurs Anthropic et finissent dans les logs.
+              VAPID + AUTH_SECRET + CRON_SECRET sont des secrets locaux que
+              <strong>tu génères toi-même</strong>. <strong>JAMAIS dans Claude</strong> &mdash; les
+              prompts traversent les serveurs Anthropic et finissent dans les logs.
             </p>
           </div>
           <div class="code-wrap">
             <span class="lang">powershell</span>
             <button class="copy-btn">Copier</button>
-<pre><code># Depuis le repo D:\Fxmily, dans une PowerShell normale (pas Claude)
+            <pre><code># Depuis le repo D:\Fxmily, dans une PowerShell normale (pas Claude)
 
 # 1. VAPID keys (Web Push)
 pnpm --filter @fxmily/web exec web-push generate-vapid-keys
@@ -1177,7 +1245,7 @@ openssl rand -hex 24</code></pre>
           <div class="code-wrap">
             <span class="lang">env</span>
             <button class="copy-btn">Copier</button>
-<pre><code># Auth
+            <pre><code># Auth
 AUTH_SECRET=&lt;output openssl rand -base64 32&gt;
 AUTH_URL=https://app.fxmilyapp.com
 
@@ -1200,7 +1268,8 @@ WEEKLY_REPORT_RECIPIENT=eliot@fxmilyapp.com  # ou eliot@fxmilyapp.com en V1 si t
             <span class="label">Hygiene</span>
             <p>
               <code>tokens.local.env</code> est <strong>gitignored</strong> (vérifié dans
-              <code>.gitignore</code>). Mais sois prudent &mdash; <code>chmod 600 tokens.local.env</code>
+              <code>.gitignore</code>). Mais sois prudent &mdash;
+              <code>chmod 600 tokens.local.env</code>
               après création.
             </p>
           </div>
@@ -1218,7 +1287,7 @@ WEEKLY_REPORT_RECIPIENT=eliot@fxmilyapp.com  # ou eliot@fxmilyapp.com en V1 si t
           <div class="code-wrap">
             <span class="lang">bash</span>
             <button class="copy-btn">Copier</button>
-<pre><code># Depuis D:\Fxmily
+            <pre><code># Depuis D:\Fxmily
 cp ops/scripts/tokens.local.env.example tokens.local.env
 $EDITOR tokens.local.env
 # → colle toutes les valeurs récupérées aux étapes 2-5
@@ -1243,8 +1312,8 @@ FXMILY_DOMAIN=fxmilyapp.com \
               <code>178.104.39.201</code>, MX, 3 TXT, optionnel DMARC).
             </li>
             <li>
-              <strong>GitHub secrets</strong> : poser ~13 secrets via <code>gh secret set</code>
-              pour la pipeline <code>deploy.yml</code>.
+              <strong>GitHub secrets</strong> : poser ~13 secrets via
+              <code>gh secret set</code> pour la pipeline <code>deploy.yml</code>.
             </li>
           </ol>
           <p>À la fin, le script t&rsquo;affiche les URLs pour valider Resend.</p>
@@ -1266,7 +1335,13 @@ FXMILY_DOMAIN=fxmilyapp.com \
             </li>
             <li>
               Va sur
-              <a class="ext" href="https://resend.com/domains" target="_blank" rel="noopener noreferrer">https://resend.com/domains</a>
+              <a
+                class="ext"
+                href="https://resend.com/domains"
+                target="_blank"
+                rel="noopener noreferrer"
+                >https://resend.com/domains</a
+              >
               → click sur <code>fxmilyapp.com</code>.
             </li>
             <li>
@@ -1278,14 +1353,14 @@ FXMILY_DOMAIN=fxmilyapp.com \
           <div class="code-wrap">
             <span class="lang">bash</span>
             <button class="copy-btn">Copier</button>
-<pre><code>dig TXT resend._domainkey.fxmilyapp.com
+            <pre><code>dig TXT resend._domainkey.fxmilyapp.com
 # Tu dois voir le record p=... que Resend t'a fourni</code></pre>
           </div>
           <div class="callout warn">
             <span class="label">Si le record est manquant</span>
             <p>
-              Vérifie dans Cloudflare DNS qu&rsquo;il a bien été créé (le bootstrap script aurait
-              dû le poser).
+              Vérifie dans Cloudflare DNS qu&rsquo;il a bien été créé (le bootstrap script aurait dû
+              le poser).
             </p>
           </div>
         </section>
@@ -1299,27 +1374,31 @@ FXMILY_DOMAIN=fxmilyapp.com \
               <span class="section-time">⏱ 5 min</span>
             </div>
           </div>
-          <p>
-            Une fois Resend verified + GitHub secrets posés, déclenche le premier deploy :
-          </p>
+          <p>Une fois Resend verified + GitHub secrets posés, déclenche le premier deploy :</p>
           <div class="code-wrap">
             <span class="lang">bash</span>
             <button class="copy-btn">Copier</button>
-<pre><code>gh workflow run deploy.yml -R fxeliott/fxmily
+            <pre><code>gh workflow run deploy.yml -R fxeliott/fxmily
 gh run list -R fxeliott/fxmily --workflow=deploy.yml --limit=1</code></pre>
           </div>
           <h3>Le workflow va</h3>
           <ol>
             <li>Build l&rsquo;image Docker <code>ghcr.io/fxeliott/fxmily:latest</code>.</li>
-            <li>SSH dans <code>hetzner-dieu</code> → <code>docker compose pull</code> + <code>up -d</code>.</li>
+            <li>
+              SSH dans <code>hetzner-dieu</code> → <code>docker compose pull</code> +
+              <code>up -d</code>.
+            </li>
             <li>Lancer <code>prisma migrate deploy</code> dans un container one-shot.</li>
             <li>Pruner les vieilles images.</li>
           </ol>
-          <p>Vérifie avec <code>gh run watch</code> (CTRL-C une fois &laquo;&nbsp;Deploy succeeded&nbsp;&raquo;).</p>
+          <p>
+            Vérifie avec <code>gh run watch</code> (CTRL-C une fois &laquo;&nbsp;Deploy
+            succeeded&nbsp;&raquo;).
+          </p>
           <div class="code-wrap">
             <span class="lang">bash</span>
             <button class="copy-btn">Copier</button>
-<pre><code># Healthcheck
+            <pre><code># Healthcheck
 curl -fsS https://app.fxmilyapp.com/api/health
 # Attendu : {"ok": true, "checks": {"db": "ok"}}
 
@@ -1340,21 +1419,26 @@ curl -sI https://app.fxmilyapp.com/apple-icon | head -3
           </div>
           <div class="callout warn">
             <span class="label">Pré-requis device</span>
-            <p>iPhone iOS 18.4+ avec Safari à jour. Pas Chrome iOS &mdash; Web Push ne marche que sur Safari.</p>
+            <p>
+              iPhone iOS 18.4+ avec Safari à jour. Pas Chrome iOS &mdash; Web Push ne marche que sur
+              Safari.
+            </p>
           </div>
           <ol>
-            <li>Ouvre <strong>Safari</strong> (pas Chrome iOS &mdash; Web Push ne marche que sur Safari).</li>
+            <li>
+              Ouvre <strong>Safari</strong> (pas Chrome iOS &mdash; Web Push ne marche que sur
+              Safari).
+            </li>
             <li>Va sur <code>https://app.fxmilyapp.com</code>.</li>
             <li>
-              <strong>Add to Home Screen</strong> : icône partage → &laquo;&nbsp;Sur l&rsquo;écran d&rsquo;accueil&nbsp;&raquo;.
+              <strong>Add to Home Screen</strong> : icône partage → &laquo;&nbsp;Sur l&rsquo;écran
+              d&rsquo;accueil&nbsp;&raquo;.
             </li>
             <li>
               Ouvre l&rsquo;app depuis l&rsquo;icône (PAS depuis Safari &mdash; le Web Push exige
               PWA installée).
             </li>
-            <li>
-              <strong>Login</strong> avec un compte admin (cf. étape 10 ci-dessous).
-            </li>
+            <li><strong>Login</strong> avec un compte admin (cf. étape 10 ci-dessous).</li>
             <li>
               <strong>Active les notifications</strong> : <code>/account/notifications</code> →
               toggle &laquo;&nbsp;Activer&nbsp;&raquo;.
@@ -1365,7 +1449,7 @@ curl -sI https://app.fxmilyapp.com/apple-icon | head -3
           <div class="code-wrap">
             <span class="lang">bash</span>
             <button class="copy-btn">Copier</button>
-<pre><code>curl -X POST -H "X-Cron-Secret: $CRON_SECRET" \
+            <pre><code>curl -X POST -H "X-Cron-Secret: $CRON_SECRET" \
   https://app.fxmilyapp.com/api/cron/dispatch-douglas</code></pre>
           </div>
           <p>Tu dois voir la notif arriver sur ton iPhone.</p>
@@ -1399,14 +1483,17 @@ curl -sI https://app.fxmilyapp.com/apple-icon | head -3
           <h3>Mode 1 &mdash; depuis l&rsquo;app (recommandé)</h3>
           <ol>
             <li>Login <code>https://app.fxmilyapp.com/login</code> avec ton compte admin.</li>
-            <li>Va à <code>/account</code> → &laquo;&nbsp;Changer le mot de passe&nbsp;&raquo; (V2 &mdash; pas encore V1).</li>
+            <li>
+              Va à <code>/account</code> → &laquo;&nbsp;Changer le mot de passe&nbsp;&raquo; (V2
+              &mdash; pas encore V1).
+            </li>
           </ol>
 
           <h3>Mode 2 &mdash; direct DB (V1)</h3>
           <div class="code-wrap">
             <span class="lang">bash</span>
             <button class="copy-btn">Copier</button>
-<pre><code># SSH sur hetzner-dieu
+            <pre><code># SSH sur hetzner-dieu
 ssh hetzner-dieu
 
 # Génère un nouveau hash argon2
@@ -1439,7 +1526,13 @@ UPDATE users SET password_hash = '&lt;copy-hash&gt;' WHERE email = 'eliot@fxmily
           <ol>
             <li>
               Va sur
-              <a class="ext" href="https://hstspreload.org/" target="_blank" rel="noopener noreferrer">https://hstspreload.org/</a>.
+              <a
+                class="ext"
+                href="https://hstspreload.org/"
+                target="_blank"
+                rel="noopener noreferrer"
+                >https://hstspreload.org/</a
+              >.
             </li>
             <li>Entre <code>fxmilyapp.com</code> → &laquo;&nbsp;Check&nbsp;&raquo;.</li>
             <li>
@@ -1469,7 +1562,7 @@ UPDATE users SET password_hash = '&lt;copy-hash&gt;' WHERE email = 'eliot@fxmily
           <div class="code-wrap">
             <span class="lang">bash</span>
             <button class="copy-btn">Copier</button>
-<pre><code># Login admin sur https://app.fxmilyapp.com/login
+            <pre><code># Login admin sur https://app.fxmilyapp.com/login
 # Va à /admin/invite
 # Entre l'email du membre → "Envoyer"</code></pre>
           </div>
@@ -1491,7 +1584,16 @@ UPDATE users SET password_hash = '&lt;copy-hash&gt;' WHERE email = 'eliot@fxmily
         <!-- Aide -->
         <section id="aide">
           <div class="section-header">
-            <div class="section-num" style="background: var(--info-dim); color: var(--info); border-color: rgba(96,165,250,0.4)">?</div>
+            <div
+              class="section-num"
+              style="
+                background: var(--info-dim);
+                color: var(--info);
+                border-color: rgba(96, 165, 250, 0.4);
+              "
+            >
+              ?
+            </div>
             <div class="section-title">
               <h2>Aide en cas de blocage</h2>
             </div>
@@ -1503,17 +1605,31 @@ UPDATE users SET password_hash = '&lt;copy-hash&gt;' WHERE email = 'eliot@fxmily
             <li><strong>Output de la commande</strong> qui a échoué</li>
           </ol>
           <p>
-            Je te débloque en live. Toutes les sections du repo sont déjà code-prêtes
-            (<a class="ext" href="https://github.com/fxeliott/fxmily/pull/35" target="_blank" rel="noopener noreferrer">PR #35</a>
+            Je te débloque en live. Toutes les sections du repo sont déjà code-prêtes (<a
+              class="ext"
+              href="https://github.com/fxeliott/fxmily/pull/35"
+              target="_blank"
+              rel="noopener noreferrer"
+              >PR #35</a
+            >
             CI verte) &mdash; on est sur du runtime + provisioning, plus du code à écrire.
           </p>
 
           <h3>Liens utiles repo</h3>
           <ul>
             <li>Spec produit : <a href="../SPEC.md">SPEC.md</a></li>
-            <li>Runbook Hetzner détaillé : <a href="runbook-hetzner-deploy.md">runbook-hetzner-deploy.md</a></li>
-            <li>Runbook backup/restore : <a href="runbook-backup-restore.md">runbook-backup-restore.md</a></li>
-            <li>Smoke test 12-step : <a href="runbook-prod-smoke-test.md">runbook-prod-smoke-test.md</a></li>
+            <li>
+              Runbook Hetzner détaillé :
+              <a href="runbook-hetzner-deploy.md">runbook-hetzner-deploy.md</a>
+            </li>
+            <li>
+              Runbook backup/restore :
+              <a href="runbook-backup-restore.md">runbook-backup-restore.md</a>
+            </li>
+            <li>
+              Smoke test 12-step :
+              <a href="runbook-prod-smoke-test.md">runbook-prod-smoke-test.md</a>
+            </li>
             <li>Bug fix workflow : <a href="runbook-bug-fix.md">runbook-bug-fix.md</a></li>
           </ul>
         </section>
@@ -1526,7 +1642,13 @@ UPDATE users SET password_hash = '&lt;copy-hash&gt;' WHERE email = 'eliot@fxmily
         </div>
         <div>
           Fxmily V1 &middot; Phase R reality check &middot;
-          <a class="ext" href="https://github.com/fxeliott/fxmily/pull/35" target="_blank" rel="noopener noreferrer">PR #35</a>
+          <a
+            class="ext"
+            href="https://github.com/fxeliott/fxmily/pull/35"
+            target="_blank"
+            rel="noopener noreferrer"
+            >PR #35</a
+          >
         </div>
       </footer>
     </div>

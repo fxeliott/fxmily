@@ -65,6 +65,36 @@ AUTH_URL=http://localhost:3000
 # Vérifié timing-safe via SHA-256 + timingSafeEqual côté serveur.
 # CRON_SECRET=
 
+# -- Admin batch token (V1.7.2 weekly-batch HTTP) -----------------------------
+# Token partagé entre la machine d'Eliot (script `ops/scripts/weekly-batch-local.sh`)
+# et les routes `/api/admin/weekly-batch/{pull,persist}`. SÉPARÉ de CRON_SECRET
+# pour permettre une rotation indépendante (compromis machine Eliot ≠ compromis
+# serveur Hetzner). Sans ce token, les routes admin batch renvoient 503
+# refuse-by-default.
+#
+# Génération : openssl rand -hex 32  (64 chars hex, ≥32 chars enforced Zod)
+# Provisionnement Hetzner :
+#   echo "ADMIN_BATCH_TOKEN=$VALUE" | ssh fxmily@app.fxmilyapp.com \
+#     "sudo tee -a /etc/fxmily/web.env" \
+#     && ssh fxmily@app.fxmilyapp.com "sudo docker compose \
+#        -f /etc/fxmily/docker-compose.prod.yml restart web"
+# ADMIN_BATCH_TOKEN=
+
+# -- Pseudonymisation IA — salt member labels (V1.5) --------------------------
+# Salt server-only pour la pseudonymisation `userId → memberLabel` dans
+# `lib/weekly-report/builder.ts` (prompt boundary Claude). Sans salt, un
+# attaquant qui connaît un cuid peut vérifier sa présence dans un export
+# rapport hebdo en hashant 1 candidate (audit M1, security-auditor 2026-05-09).
+#
+# Optional en V1 (default empty string = behavior actuel, OK si rapports IA
+# jamais exportés hors Eliot). REQUIS en prod si export externe envisagé.
+# Génération : openssl rand -hex 32  (64 chars, ≥16 chars enforced Zod)
+#
+# ⚠️ NE JAMAIS ROTATER une fois la cohorte démarrée — perte de continuité des
+# labels historiques (un même membre changerait de `member-XXXXXXXX` semaine
+# après semaine, rendant les rapports inintelligibles).
+# MEMBER_LABEL_SALT=
+
 # -- Rapports hebdo IA — destinataire admin (Jalon 8 + 10) --------------------
 # Email où sont expédiés les digests + rapports sécurité.
 # Doit pointer vers une boîte que tu lis. En dev, mets ton perso ; en prod,

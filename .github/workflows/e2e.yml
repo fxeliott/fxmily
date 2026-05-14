@@ -1,0 +1,168 @@
+name: E2E (Playwright)
+
+# Separate workflow so it can fail without blocking the main CI/PR — the
+# 46 Playwright specs under `apps/web/tests/e2e/` were never exercised in
+# CI before this workflow (cf. memory checkpoint 2026-05-14 audit). Once
+# stable, this can be added to the repo's required status checks via the
+# branch protection UI.
+#
+# Triggers match `ci.yml` (push to main + PRs to main, same doc-only
+# paths-ignore filter) so the two workflows stay in lockstep on what
+# constitutes a "code change".
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.editorconfig'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.editorconfig'
+  # Manual trigger for pre-merge validation on feature branches. Without
+  # this, the workflow only registers on `main` and the first real run
+  # happens post-merge — surprising any structural errors AFTER they
+  # land on the default branch. Manual dispatch lets Eliot (or any
+  # contributor) hit "Run workflow" on the GitHub Actions UI against
+  # the branch ref and surface runtime issues (Postgres health timing,
+  # browser cache misses, prisma migrate path) before merging.
+  workflow_dispatch:
+
+# Cancel in-flight runs on the same PR when a new commit is pushed. Same
+# rule as ci.yml — pushes to main are NOT cancelled so each main commit
+# keeps its own confirmed green E2E run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Playwright (chromium)
+    if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    # Real Postgres service container — the 46 specs include /api/uploads,
+    # auth redirects, and cron secret gates which exercise the DB layer.
+    # Mirrors the `docker-compose.dev.yml` Postgres config (alpine 17,
+    # same credentials, same TZ) so local-vs-CI behaviour stays aligned.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: fxmily
+          POSTGRES_PASSWORD: fxmily_dev
+          POSTGRES_DB: fxmily
+          TZ: Europe/Paris
+        ports:
+          - 5432:5432
+        # pg_isready is the contract — TCP accept ≠ ready for queries.
+        options: >-
+          --health-cmd="pg_isready -U fxmily -d fxmily"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      HUSKY: 0
+      # Real connection string for the service container above. Distinct
+      # from the placeholder in ci.yml because Playwright actually queries
+      # the DB (auth tables, audit logs).
+      DATABASE_URL: postgresql://fxmily:fxmily_dev@localhost:5432/fxmily?schema=public
+      # Local-runtime AUTH_URL ≠ prod. `next dev` defaults NODE_ENV=development
+      # so the Zod refine "AUTH_URL must be HTTPS in production" doesn't fire
+      # (envSchemaWithRefines in apps/web/src/lib/env.ts).
+      AUTH_URL: http://localhost:3000
+      AUTH_SECRET: ci_placeholder_secret_must_be_at_least_32_characters_long
+      CI: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Caches the ~/ms-playwright browser binaries (~150 MB chromium-only)
+      # between runs. Cache key includes apps/web/package.json hash so a
+      # `@playwright/test` version bump busts the cache automatically.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/web/package.json') }}
+
+      - name: Install Playwright browsers + system deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @fxmily/web exec playwright install --with-deps chromium
+
+      # On cache hit the browser binaries are restored but `apt` system
+      # libs (libnss3, libatk, etc.) are not — they need a re-install on
+      # every fresh runner.
+      - name: Install Playwright system deps (cache hit branch)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @fxmily/web exec playwright install-deps chromium
+
+      - name: Generate Prisma client
+        run: pnpm --filter @fxmily/web prisma:generate
+
+      # Fresh DB from the postgres service — `migrate deploy` applies all
+      # pending migrations non-interactively (same call the Hetzner deploy
+      # makes against prod via .github/workflows/deploy.yml step 4).
+      - name: Apply database migrations
+        run: pnpm --filter @fxmily/web prisma:migrate:deploy
+
+      # J6 demo seed for `smoke-tour-j6.spec.ts` (and any other spec that
+      # relies on the canonical `j6demo.admin.e2e.test@fxmily.local` user
+      # + 100 trades + 30 days check-ins). Idempotent per the script's
+      # contract (touches only `*.e2e.test@fxmily.local` rows).
+      #
+      # Without this step, `smoke-tour-j6` fails at the credentials-login
+      # callback with "no session cookie found" because the demo admin
+      # doesn't exist in the fresh DB.
+      #
+      # Note: the script does NOT compute the behavioral_scores snapshot
+      # (the scoring service has `import 'server-only'` which tsx can't
+      # load). The smoke-tour-j6 dashboard rendering tolerates absent
+      # scores (degraded empty-state). If a future spec asserts on score
+      # values, add a curl POST to `/api/cron/recompute-scores` AFTER the
+      # Playwright `webServer` boots — currently out of scope.
+      - name: Seed J6 demo data for smoke-tour specs
+        run: pnpm --filter @fxmily/web exec tsx scripts/seed-j6-demo.ts
+
+      # mobile-iphone-15 project is skipped in CI — adds ~30% runtime
+      # without exercising a distinct DOM tree. iPhone-specific UX is
+      # validated by real-device smoke (cf. SPEC §15 J9 iOS Safari 18.4+).
+      - name: Run Playwright tests (chromium project only)
+        run: pnpm --filter @fxmily/web exec playwright test --project=chromium
+
+      - name: Upload Playwright report (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7

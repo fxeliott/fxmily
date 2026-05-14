@@ -2587,3 +2587,155 @@ Per `feedback_backend_first_workflow.md` strict :
 
 Pickup prompt V1.8 Phase 2 frontend prêt-à-copier dans
 `docs/jalon-V1.8-close-out.md` §Pickup prompt.
+
+---
+
+## V1.8 REFLECT — Phase 2 Frontend (livré 2026-05-14)
+
+PR #65 — wizards + pages + blue+black theme + trade tags picker. Stack
+chain final V1.8 : #61 (Prisma) → #62 (services + crisis + injection) →
+#63 (edge tests) → #64 (close-out backend) → **#65 (frontend)**.
+
+### Dual-theme architecture
+
+Eliot a demandé "thème ensemble bleu et noir". L'app LIVE utilise DS-v2
+lime + deep-space sur tous les modules existants. Le module REFLECT
+obtient sa propre identité visuelle via un overlay CSS scopé
+`.v18-theme`, **zéro refactor des composants existants**.
+
+- Nouveaux tokens `--v18-b-*` (blue ramp) + `--v18-n-*` (deep-slate
+  ramp) en OKLCH P3, additifs à DS-v2.
+- À l'intérieur de `.v18-theme`, les sémantiques `--acc`, `--bg-*`,
+  `--t-*`, `--sh-*` sont overrides → Btn / Card / Pill rendent en blue
+  automatiquement.
+- En dehors → DS-v2 lime intact. Aucune régression visuelle prod.
+
+Pattern Notion / Linear. Pivot full DS-v3 = PR V2.x distincte si Eliot
+veut migrer toute l'app vers blue+black.
+
+### Palette WCAG 2.2 AA verified
+
+| Token                   | OKLCH            | HEX        | Sur slate-950   |
+| ----------------------- | ---------------- | ---------- | --------------- |
+| `--v18-b-500` (CTA bg)  | `0.62 0.19 254`  | `#3b82f6`  | 4.6:1 body PASS |
+| `--v18-b-400` (hover)   | `0.74 0.16 250`  | `#60a5fa`  | 7.5:1 PASS AAA  |
+| `--v18-n-100` (text 1)  | `0.95 0.005 250` | `#f1f5f9`  | 17:1 PASS       |
+| `--v18-n-300` (text 2)  | `0.84 0.01 250`  | `#cbd5e1`  | 12:1 PASS       |
+| `--v18-n-400` (text 3)  | `0.66 0.025 252` | `#94a3b8`  | 7:1 PASS AAA    |
+| `--v18-n-950` (bg deep) | `0.085 0.02 254` | `~#020617` | (base)          |
+
+### Fichiers ajoutés / modifiés PR #65
+
+| Fichier                                            | Rôle                                                     |
+| -------------------------------------------------- | -------------------------------------------------------- |
+| `src/app/globals.css`                              | +250 LOC overlay `.v18-theme` namespaced                 |
+| `src/components/v18/theme-scope.tsx`               | Wrapper `.v18-theme` class                               |
+| `src/components/v18/aurora.tsx`                    | Aurora radial gradient + 3 drifting orbs CSS             |
+| `src/components/v18/step-progress.tsx`             | Animated step bar + sr-only APG `<ol>`                   |
+| `src/components/review/mirror-hero.tsx`            | SVG mirror metaphor (M4=C), `pathLength` stagger anim    |
+| `src/components/reflect/abcd-hero.tsx`             | SVG ABCD 4 nodes progressive blue gradient               |
+| `src/components/review/crisis-banner.tsx`          | FR resources (3114 + SOS Amitié + Suicide Écoute) `tel:` |
+| `src/components/reflect/cbt-disclaimer-banner.tsx` | Ellis ABC honest disclaimer                              |
+| `src/components/review/weekly-review-wizard.tsx`   | 5-step Client wizard, localStorage draft, Framer Motion  |
+| `src/components/reflect/reflection-wizard.tsx`     | 4-step ABCD wizard, same chrome                          |
+| `src/app/review/page.tsx`                          | Landing : Mirror hero + crisis banner + 12-row timeline  |
+| `src/app/review/new/page.tsx`                      | Wizard host auth-gated                                   |
+| `src/app/reflect/page.tsx`                         | Landing : ABCD hero + 30-day timeline                    |
+| `src/app/reflect/new/page.tsx`                     | CBT banner + wizard host                                 |
+| `src/components/journal/trade-tags-picker.tsx`     | 8 LESSOR + Steenbarger picker avec tooltips              |
+| `src/components/journal/close-trade-form.tsx`      | `<TradeTagsPicker>` inséré (Emotion → Notes)             |
+| `src/app/journal/actions.ts`                       | `closeTradeAction` extrait `tags` + audit `tagCount`     |
+| `src/lib/trades/service.ts`                        | `closeTrade` persiste `tags` array                       |
+| `tests/e2e/v1-8-reflect.spec.ts`                   | Playwright auth gates × 6 cas                            |
+
+### Patterns frontend V1.8
+
+- **Framer Motion 12** : `<AnimatePresence mode="wait">` + spring
+  stiffness 220 / damping 28 / mass 0.7. `useReducedMotion()` partout =
+  `false` initial + final state instant (WCAG 2.3.3).
+- **SVG path animations** : `pathLength` 0→1 stagger via transition
+  delays (Framer Motion API canonique 2026, `motion.dev` docs).
+- **Sticky bottom CTA bar** : `position: sticky bottom-0` +
+  `padding-bottom: calc(env(safe-area-inset-bottom) + 0.75rem)` pour
+  iOS home indicator. Glassmorphism léger `.v18-glass`.
+- **localStorage drafts** : `fxmily:weekly-review:draft:v1` +
+  `fxmily:reflection:draft:v1`. Hydration SSR-safe via lazy
+  `useState(() => empty)` + `useEffect(() => setDraft(loadDraft()))` —
+  J5 carbone, eslint-disable `react-hooks/set-state-in-effect` justifié.
+- **A11y APG step wizard** : `<ol>` sr-only step list +
+  `aria-current="step"` + auto-focus heading on step change
+  (`tabIndex={-1}` + `outline-none focus-visible:outline-none`).
+- **Char counters live** `font-mono tabular-nums`, tone passe
+  muted → warn (under-min) → bad (over-max).
+- **Hidden form inputs** : tous les wizard fields toujours soumis ;
+  server est l'autorité (Zod `safeParse` full payload). Client step
+  gating = UX, pas sécurité.
+
+### Crisis routing UX flow
+
+Member submit `/review/new` → `submitWeeklyReviewAction` valide Zod
+strict → `detectCrisis(corpus)` returns HIGH/MEDIUM si signaux →
+**PERSIST QUAND MÊME** (Q4=A — diverges from V1.7.1 batch.ts skip) →
+audit `weekly_review.crisis_detected` PII-free → Sentry escalate
+(HIGH=`reportError`, MEDIUM=`reportWarning`) → redirect
+`/review?done=1&crisis=high` → `<V18CrisisBanner>` mount avec 3 FR
+resources `tel:` links.
+
+Justification Q4=A : silent-skip casserait le wizard (member re-types,
+re-trip, infinite loop). Persist + page Eliot + show resources = safest
+balance.
+
+### Trade tags picker
+
+8 slugs `TRADE_TAG_SLUGS` rendus avec tooltips académiques
+`aria-live="polite"`. Cap 3 Zod + UX visuel (`aria-disabled` + classe
+`hatch-disabled`). Slug `discipline-high` rendu `--ok` vert plutôt que
+`--acc` lime/blue — Steenbarger reverse-journaling 2025 surface les
+forces avant les failles.
+
+### Anti-Black-Hat gamification (Yu-kai Chou)
+
+- ❌ Pas de XP / level-up post-submit
+- ❌ Pas de streak counter visible (streak shame post-perte)
+- ❌ Pas de leaderboard cohort
+- ❌ Pas de timer / urgency
+- ❌ Pas de confetti / fanfare
+- ✅ Calm reveal "Ta revue est dans le miroir. Reviens dimanche prochain."
+- ✅ Process language only
+- ✅ Tag `discipline-high` strengths-based
+- ✅ Tone neutre slate sur miss (jamais rouge punition visuelle)
+
+### Limitations / suites V1.9 polish
+
+- **MCPs visuels déconnectés** livraison : pas de screenshot runtime,
+  Playwright happy-path E2E (seuls auth gates couverts). À valider
+  Eliot iPhone PWA.
+- **Haptic feedback** non câblé V1.8 (J5 morning wizard l'a — à porter
+  V1.9 via `lib/haptics`).
+- **TradeTagsPicker tooltip mobile** : inline aside ; desktop pourrait
+  avoir floating popover V1.9.
+- **Recent timelines pagination** : clampée 12 / 30. Cursor-based V2.
+- **Trade.tags admin filter** : `/admin/members/[id]/trades` ne filtre
+  pas encore. V1.9 admin coaching.
+- **Frontend Vitest tests** : zéro V1.8 ship (Playwright auth gates
+  only). RTL setup ready (J5 carbone) — V1.9 polish ajouter wizard
+  step transition + draft hydration tests.
+
+### Quality gate finale V1.8 Phase 2 frontend
+
+- Lint ✓ exit 0 (1 justified `eslint-disable react-hooks/set-state-in-effect`)
+- Type-check ✓ exit 0 strict
+- Prettier ✓ clean
+- Vitest backend stable **926/926** (no regression)
+- Build prod Turbopack à valider CI PR #65
+
+### Pré-requis Eliot pour activer V1.8 frontend prod
+
+1. Merger chain backend complète : #61 → #62 → #63 → #64
+2. `pnpm --filter @fxmily/web prisma:migrate:deploy`
+3. Restart container web
+4. Merger PR #65 frontend (rebase auto sur main après chain)
+5. **Visual smoke iPhone PWA** : `/review` + `/reflect` wizards end-to-end
+6. **Visual smoke `/journal/[id]/close`** : `<TradeTagsPicker>` rend +
+   multi-select 3 max + submit + persist DB `trades.tags` column
+7. **Mode reduced-motion** : Settings iOS → animations désactivées

@@ -27,6 +27,14 @@ on:
       - '.gitignore'
       - 'LICENSE'
       - '.editorconfig'
+  # Manual trigger for pre-merge validation on feature branches. Without
+  # this, the workflow only registers on `main` and the first real run
+  # happens post-merge — surprising any structural errors AFTER they
+  # land on the default branch. Manual dispatch lets Eliot (or any
+  # contributor) hit "Run workflow" on the GitHub Actions UI against
+  # the branch ref and surface runtime issues (Postgres health timing,
+  # browser cache misses, prisma migrate path) before merging.
+  workflow_dispatch:
 
 # Cancel in-flight runs on the same PR when a new commit is pushed. Same
 # rule as ci.yml — pushes to main are NOT cancelled so each main commit

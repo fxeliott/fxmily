@@ -93,7 +93,15 @@ export function AIGeneratedBanner({
       <p>
         Ce rapport est généré par une intelligence artificielle ({modelName}, Anthropic). Il ne
         remplace ni un coaching humain, ni un avis médical, ni un conseil en investissement
-        personnalisé.
+        personnalisé.{' '}
+        {/* V1.9 TIER A : link to /legal/ai-disclosure closes EU AI Act §50
+            transparency loop (page shipped PR #67 2026-05-14). */}
+        <a
+          href="/legal/ai-disclosure"
+          className="font-medium text-[var(--t-1)] underline decoration-[var(--cy)] decoration-2 underline-offset-2 transition-colors hover:text-[var(--acc)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
+        >
+          En savoir plus →
+        </a>
       </p>
     </aside>
   );

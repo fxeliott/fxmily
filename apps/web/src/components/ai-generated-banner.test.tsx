@@ -60,6 +60,15 @@ describe('AIGeneratedBanner', () => {
       const aside = container.querySelector('aside');
       expect(aside?.className).toContain('my-4');
     });
+
+    // V1.9 TIER A : closes EU AI Act §50 transparency loop by linking the
+    // disclosure surface page shipped PR #67 (2026-05-14).
+    it('links to /legal/ai-disclosure for full transparency surface', () => {
+      render(<AIGeneratedBanner />);
+      const link = screen.getByRole('link', { name: /En savoir plus/ });
+      expect(link).toBeInTheDocument();
+      expect(link.getAttribute('href')).toBe('/legal/ai-disclosure');
+    });
   });
 
   describe('badge variant', () => {

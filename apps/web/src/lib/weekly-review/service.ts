@@ -182,6 +182,25 @@ export async function getWeeklyReviewById(
 }
 
 /**
+ * V1.9 TIER F — single-column query for the dashboard widget.
+ *
+ * Returns the `weekStart` (YYYY-MM-DD) of the member's most recent review,
+ * or `null` if they've never submitted one. Caller (`DashboardReflectWidget`)
+ * only renders the date and a "submitted yes/no" flag, so projecting one
+ * column instead of fetching all 17 saves a row-build + row-serialize per
+ * dashboard render — meaningful at 30→100 active members hitting the home
+ * page hourly.
+ */
+export async function getLastReviewWeekStart(userId: string): Promise<string | null> {
+  const row = await db.weeklyReview.findFirst({
+    where: { userId },
+    orderBy: { weekStart: 'desc' },
+    select: { weekStart: true },
+  });
+  return row ? row.weekStart.toISOString().slice(0, 10) : null;
+}
+
+/**
  * List the member's most recent reviews (newest first). Default `limit=12`
  * = a quarter's worth of weekly reviews, enough for a UI timeline without
  * pagination.

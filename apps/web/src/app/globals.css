@@ -894,6 +894,14 @@
   animation: v18OrbDrift 22s var(--e-smooth) infinite;
   will-change: transform, opacity;
 }
+/* V1.9 TIER F perf — three blur-48px layers + GPU compositor drains mobile
+   battery + drops ~10-15 fps on iPhone SE. Keep only the first orb under
+   640px so the visual identity survives while the cost halves. */
+@media (max-width: 640px) {
+  .v18-orb:nth-child(n + 2) {
+    display: none;
+  }
+}
 
 /* Glass card variant for v18 — subtle frosted blue */
 .v18-glass {

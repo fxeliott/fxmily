@@ -18,6 +18,7 @@ vi.mock('@/lib/db', () => ({
 import { db } from '@/lib/db';
 
 import {
+  getLastReviewWeekStart,
   getWeeklyReview,
   getWeeklyReviewById,
   listMyRecentReviews,
@@ -199,6 +200,31 @@ describe('getWeeklyReviewById (V1.8 BOLA defence, V1.9 TIER B atomic findFirst)'
   it('returns null when row absent (P2025 / no match)', async () => {
     vi.mocked(db.weeklyReview.findFirst).mockResolvedValue(null as never);
     expect(await getWeeklyReviewById('user-1', 'rev-absent')).toBeNull();
+  });
+});
+
+describe('getLastReviewWeekStart (V1.9 TIER F)', () => {
+  it('returns null when the member has never submitted a review', async () => {
+    vi.mocked(db.weeklyReview.findFirst).mockResolvedValue(null as never);
+    expect(await getLastReviewWeekStart('user-1')).toBeNull();
+  });
+
+  it('returns the weekStart as YYYY-MM-DD and uses a single-column projection', async () => {
+    vi.mocked(db.weeklyReview.findFirst).mockResolvedValue({
+      weekStart: new Date('2026-05-04T00:00:00Z'),
+    } as never);
+    const result = await getLastReviewWeekStart('user-1');
+    expect(result).toBe('2026-05-04');
+    const call = vi.mocked(db.weeklyReview.findFirst).mock.calls[0];
+    if (!call) throw new Error('expected findFirst to be called');
+    const arg = call[0] as {
+      where: { userId: string };
+      orderBy: { weekStart: 'desc' | 'asc' };
+      select: { weekStart: boolean };
+    };
+    expect(arg.where).toEqual({ userId: 'user-1' });
+    expect(arg.orderBy).toEqual({ weekStart: 'desc' });
+    expect(arg.select).toEqual({ weekStart: true });
   });
 });
 

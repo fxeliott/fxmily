@@ -7,13 +7,19 @@ vi.mock('@/lib/db', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       findFirst: vi.fn(),
+      count: vi.fn(),
     },
   },
 }));
 
 import { db } from '@/lib/db';
 
-import { createReflectionEntry, getReflectionById, listRecentReflections } from './service';
+import {
+  countRecentReflections,
+  createReflectionEntry,
+  getReflectionById,
+  listRecentReflections,
+} from './service';
 
 // ---------------------------------------------------------------------------
 // Typed mock-call introspection helpers
@@ -125,6 +131,33 @@ describe('getReflectionById (V1.8 BOLA defence, V1.9 TIER B atomic findFirst)', 
   it('returns null when row absent', async () => {
     vi.mocked(db.reflectionEntry.findFirst).mockResolvedValue(null as never);
     expect(await getReflectionById('user-1', 'ref-absent')).toBeNull();
+  });
+});
+
+describe('countRecentReflections (V1.9 TIER F)', () => {
+  it('counts via indexed count(*) instead of fetching rows', async () => {
+    vi.mocked(db.reflectionEntry.count).mockResolvedValue(7 as never);
+    const result = await countRecentReflections('user-1', 30);
+    expect(result).toBe(7);
+    expect(db.reflectionEntry.findMany).not.toHaveBeenCalled();
+    const call = vi.mocked(db.reflectionEntry.count).mock.calls[0];
+    if (!call) throw new Error('expected count to be called');
+    const arg = call[0] as { where: { userId: string; date: { gte: Date } } };
+    expect(arg.where.userId).toBe('user-1');
+    expect(arg.where.date.gte).toBeInstanceOf(Date);
+  });
+
+  it('clamps the window to [1, 365] days', async () => {
+    vi.mocked(db.reflectionEntry.count).mockResolvedValue(0 as never);
+    await countRecentReflections('user-1', 0);
+    await countRecentReflections('user-1', 9999);
+    const c0 = vi.mocked(db.reflectionEntry.count).mock.calls[0];
+    const c1 = vi.mocked(db.reflectionEntry.count).mock.calls[1];
+    if (!c0 || !c1) throw new Error('expected count calls');
+    const a0 = c0[0] as { where: { date: { gte: Date } } };
+    const a1 = c1[0] as { where: { date: { gte: Date } } };
+    // 365-day window must reach further back than 1-day window.
+    expect(a1.where.date.gte.getTime()).toBeLessThan(a0.where.date.gte.getTime());
   });
 });
 

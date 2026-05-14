@@ -121,9 +121,10 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
             <ul className="flex flex-col gap-2.5" data-slot="recent-reflections">
               {recent.map((r) => (
                 <li key={r.id}>
-                  <article
-                    className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)]"
+                  <Link
+                    href={`/reflect/${r.id}`}
                     aria-labelledby={`ref-${r.id}-date`}
+                    className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
                   >
                     <header className="flex items-baseline justify-between gap-3">
                       <p className="t-eyebrow text-[var(--t-3)]" id={`ref-${r.id}-date`}>
@@ -152,7 +153,7 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
                         <dd className="t-body line-clamp-1 text-[var(--t-1)]">{r.disputation}</dd>
                       </div>
                     </dl>
-                  </article>
+                  </Link>
                 </li>
               ))}
             </ul>

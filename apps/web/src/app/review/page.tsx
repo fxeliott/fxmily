@@ -83,8 +83,10 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
           </div>
         </header>
 
-        {/* CRISIS BANNER (conditional) */}
-        {crisisLevel ? <V18CrisisBanner level={crisisLevel} /> : null}
+        {/* CRISIS BANNER (conditional). `key={crisisLevel}` forces a clean
+            remount when the level changes (HIGH-4 fix — `aria-live="polite"`
+            re-announces only on region-change, not on same-region prop update). */}
+        {crisisLevel ? <V18CrisisBanner key={crisisLevel} level={crisisLevel} /> : null}
 
         {/* CONFIRM FLASH after submit */}
         {justSubmitted && !crisisLevel ? (
@@ -123,9 +125,10 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
             <ul className="flex flex-col gap-2.5" data-slot="recent-reviews">
               {recent.map((r) => (
                 <li key={r.id}>
-                  <article
-                    className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)]"
+                  <Link
+                    href={`/review/${r.id}`}
                     aria-labelledby={`rev-${r.id}-title`}
+                    className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
                   >
                     <header className="flex items-baseline justify-between gap-3">
                       <p className="t-eyebrow text-[var(--t-3)]" id={`rev-${r.id}-title`}>
@@ -146,7 +149,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
                     <p className="t-cap mt-1.5 line-clamp-1 text-[var(--t-3)]">
                       <span className="font-semibold">Focus suivant :</span> {r.nextWeekFocus}
                     </p>
-                  </article>
+                  </Link>
                 </li>
               ))}
             </ul>

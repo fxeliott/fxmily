@@ -16,7 +16,12 @@ vi.mock('@/lib/db', () => ({
 
 import { db } from '@/lib/db';
 
-import { getWeeklyReview, listMyRecentReviews, submitWeeklyReview } from './service';
+import {
+  getWeeklyReview,
+  getWeeklyReviewById,
+  listMyRecentReviews,
+  submitWeeklyReview,
+} from './service';
 
 // ---------------------------------------------------------------------------
 // Helpers — typed mock-call introspection (defeats noUncheckedIndexedAccess)
@@ -148,6 +153,41 @@ describe('getWeeklyReview', () => {
     expect(result?.weekStart).toBe('2026-05-04');
     expect(result?.weekEnd).toBe('2026-05-10');
     expect(result?.submittedAt).toMatch(/^2026-05-10T/);
+  });
+});
+
+describe('getWeeklyReviewById (V1.8 polish — BOLA defence)', () => {
+  it('returns null on empty id', async () => {
+    expect(await getWeeklyReviewById('user-1', '')).toBeNull();
+  });
+
+  it('returns null on oversized id (>64 chars)', async () => {
+    const oversized = 'x'.repeat(65);
+    expect(await getWeeklyReviewById('user-1', oversized)).toBeNull();
+    expect(db.weeklyReview.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('returns null when row belongs to a different user', async () => {
+    vi.mocked(db.weeklyReview.findUnique).mockResolvedValue(
+      makeDbRow({ userId: 'attacker' }) as never,
+    );
+    const result = await getWeeklyReviewById('user-1', 'rev-stolen');
+    expect(result).toBeNull();
+  });
+
+  it('returns the serialized row when ownership matches', async () => {
+    vi.mocked(db.weeklyReview.findUnique).mockResolvedValue(
+      makeDbRow({ userId: 'user-1' }) as never,
+    );
+    const result = await getWeeklyReviewById('user-1', 'rev-1');
+    expect(result).not.toBeNull();
+    expect(result?.userId).toBe('user-1');
+    expect(result?.weekStart).toBe('2026-05-04');
+  });
+
+  it('returns null when row absent (P2025 / no match)', async () => {
+    vi.mocked(db.weeklyReview.findUnique).mockResolvedValue(null as never);
+    expect(await getWeeklyReviewById('user-1', 'rev-absent')).toBeNull();
   });
 });
 

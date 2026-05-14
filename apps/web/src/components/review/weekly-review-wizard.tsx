@@ -68,14 +68,16 @@ interface DraftState {
 
 const DRAFT_STORAGE_KEY = 'fxmily:weekly-review:draft:v1';
 
-function lastMondayLocal(): string {
+function lastMondayUTC(): string {
+  // Use UTC consistently — the server-side Zod refine in `weeklyReviewSchema`
+  // validates via `d.getUTCDay() === 1`. Computing with local `getDay()` +
+  // `setDate()` would desync for users east of UTC (Tokyo Mon 06:00 JST =
+  // Sun 21:00 UTC, etc.) and for FR users at Sun 23:30 around DST shifts.
+  // Code-review #1 BUG-1 fix 2026-05-14.
   const d = new Date();
-  const offset = (d.getDay() + 6) % 7; // Mon=0..Sun=6
-  d.setDate(d.getDate() - offset);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  const offset = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+  d.setUTCDate(d.getUTCDate() - offset);
+  return d.toISOString().slice(0, 10);
 }
 
 function addDaysIso(iso: string, days: number): string {
@@ -154,11 +156,16 @@ function isStepValid(step: StepIndex, draft: DraftState): boolean {
 
 export function WeeklyReviewWizard() {
   const reduceMotion = useReducedMotion();
-  const initialWeekStart = useMemo(() => lastMondayLocal(), []);
+  const initialWeekStart = useMemo(() => lastMondayUTC(), []);
   const [draft, setDraft] = useState<DraftState>(() => emptyDraft(initialWeekStart));
   const [step, setStep] = useState<StepIndex>(0);
   const [hydrated, setHydrated] = useState(false);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
+  // BUG-2 fix (code-review 2026-05-14) — `firstMount` skips the focus jump
+  // at initial render so the SR-flow reads the step-progress + eyebrow
+  // before the heading (WCAG 2.4.3 focus order). Subsequent step changes
+  // (user-initiated) DO move focus to the new heading.
+  const firstMount = useRef(true);
   const [state, formAction, isPending] = useActionState(submitWeeklyReviewAction, null);
 
   // Hydrate draft from localStorage post-mount (SSR-safe). Pattern carbone
@@ -183,8 +190,13 @@ export function WeeklyReviewWizard() {
     }
   }, [draft, hydrated]);
 
-  // Move focus to the step heading on every step change (a11y APG).
+  // Move focus to the step heading on every step change (a11y APG). Skip
+  // the initial mount so SR users read the progress chrome first (BUG-2).
   useEffect(() => {
+    if (firstMount.current) {
+      firstMount.current = false;
+      return;
+    }
     headingRef.current?.focus();
   }, [step]);
 

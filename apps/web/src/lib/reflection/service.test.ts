@@ -5,13 +5,14 @@ vi.mock('@/lib/db', () => ({
     reflectionEntry: {
       create: vi.fn(),
       findMany: vi.fn(),
+      findUnique: vi.fn(),
     },
   },
 }));
 
 import { db } from '@/lib/db';
 
-import { createReflectionEntry, listRecentReflections } from './service';
+import { createReflectionEntry, getReflectionById, listRecentReflections } from './service';
 
 // ---------------------------------------------------------------------------
 // Typed mock-call introspection helpers
@@ -86,6 +87,37 @@ describe('createReflectionEntry', () => {
 
     expect(result.date).toBe('2026-05-13');
     expect(result.disputation).toContain('plan exists');
+  });
+});
+
+describe('getReflectionById (V1.8 polish — BOLA defence)', () => {
+  it('returns null on empty id', async () => {
+    expect(await getReflectionById('user-1', '')).toBeNull();
+  });
+
+  it('returns null on oversized id', async () => {
+    expect(await getReflectionById('user-1', 'x'.repeat(65))).toBeNull();
+    expect(db.reflectionEntry.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('returns null when row belongs to another user', async () => {
+    vi.mocked(db.reflectionEntry.findUnique).mockResolvedValue({
+      ...makeDbRow(),
+      userId: 'attacker',
+    } as never);
+    expect(await getReflectionById('user-1', 'ref-stolen')).toBeNull();
+  });
+
+  it('serializes the row when ownership matches', async () => {
+    vi.mocked(db.reflectionEntry.findUnique).mockResolvedValue(makeDbRow() as never);
+    const result = await getReflectionById('user-1', 'ref-1');
+    expect(result?.userId).toBe('user-1');
+    expect(result?.date).toBe('2026-05-13');
+  });
+
+  it('returns null when row absent', async () => {
+    vi.mocked(db.reflectionEntry.findUnique).mockResolvedValue(null as never);
+    expect(await getReflectionById('user-1', 'ref-absent')).toBeNull();
   });
 });
 

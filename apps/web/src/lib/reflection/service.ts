@@ -59,6 +59,20 @@ function toSerialized(row: {
 // Mutations
 // =============================================================================
 
+/**
+ * Read a member's reflection entry by cuid. User-scoped — returns `null`
+ * if the row belongs to a different member (anti-enumeration via 404).
+ */
+export async function getReflectionById(
+  userId: string,
+  id: string,
+): Promise<SerializedReflectionEntry | null> {
+  if (id.length === 0 || id.length > 64) return null;
+  const row = await db.reflectionEntry.findUnique({ where: { id } });
+  if (!row || row.userId !== userId) return null;
+  return toSerialized(row);
+}
+
 export async function createReflectionEntry(
   userId: string,
   input: ReflectionEntryInput,

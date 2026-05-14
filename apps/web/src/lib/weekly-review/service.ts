@@ -164,6 +164,20 @@ export async function getWeeklyReview(
 }
 
 /**
+ * Read a member's review by cuid. User-scoped — returns `null` if the row
+ * belongs to a different member (no enumeration leak via 404).
+ */
+export async function getWeeklyReviewById(
+  userId: string,
+  id: string,
+): Promise<SerializedWeeklyReview | null> {
+  if (id.length === 0 || id.length > 64) return null;
+  const row = await db.weeklyReview.findUnique({ where: { id } });
+  if (!row || row.userId !== userId) return null;
+  return toSerialized(row);
+}
+
+/**
  * List the member's most recent reviews (newest first). Default `limit=12`
  * = a quarter's worth of weekly reviews, enough for a UI timeline without
  * pagination.

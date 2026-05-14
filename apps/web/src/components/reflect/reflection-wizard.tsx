@@ -99,12 +99,12 @@ interface DraftState {
 
 const DRAFT_STORAGE_KEY = 'fxmily:reflection:draft:v1';
 
-function todayLocal(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+function todayUTC(): string {
+  // Use UTC consistently (cf. BUG-1 fix in weekly-review-wizard). The
+  // Zod refine for `reflectionEntrySchema.date` validates `[-14d, +1d]`
+  // against UTC midnight, so we anchor here too. The window is wide
+  // enough to absorb any sub-day TZ drift for FR users.
+  return new Date().toISOString().slice(0, 10);
 }
 
 function emptyDraft(date: string): DraftState {
@@ -140,11 +140,13 @@ function isStepValid(step: StepIndex, draft: DraftState): boolean {
 
 export function ReflectionWizard() {
   const reduceMotion = useReducedMotion();
-  const initialDate = useMemo(() => todayLocal(), []);
+  const initialDate = useMemo(() => todayUTC(), []);
   const [draft, setDraft] = useState<DraftState>(() => emptyDraft(initialDate));
   const [step, setStep] = useState<StepIndex>(0);
   const [hydrated, setHydrated] = useState(false);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
+  // BUG-2 fix — skip focus jump at initial mount (cf. weekly-review-wizard).
+  const firstMount = useRef(true);
   const [state, formAction, isPending] = useActionState(createReflectionEntryAction, null);
 
   // Hydrate draft from localStorage post-mount (SSR-safe). See
@@ -164,7 +166,13 @@ export function ReflectionWizard() {
     }
   }, [draft, hydrated]);
 
+  // Focus the step heading on user-initiated step change ; skip initial
+  // mount so the SR-flow reads the progress chrome first (WCAG 2.4.3).
   useEffect(() => {
+    if (firstMount.current) {
+      firstMount.current = false;
+      return;
+    }
     headingRef.current?.focus();
   }, [step]);
 

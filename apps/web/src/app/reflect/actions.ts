@@ -44,6 +44,16 @@ function getString(formData: FormData, key: string): string {
   return typeof v === 'string' ? v : '';
 }
 
+function isNextRedirect(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'digest' in err &&
+    typeof (err as { digest?: unknown }).digest === 'string' &&
+    (err as { digest: string }).digest.startsWith('NEXT_REDIRECT')
+  );
+}
+
 export async function createReflectionEntryAction(
   _prev: ReflectActionState | null,
   formData: FormData,
@@ -132,9 +142,16 @@ export async function createReflectionEntryAction(
   revalidatePath('/reflect');
   revalidatePath('/dashboard');
 
+  // BUG-3 fix — re-throw NEXT_REDIRECT, log + surface anything else.
   const qs = new URLSearchParams({ done: '1' });
   if (crisis.level === 'high' || crisis.level === 'medium') {
     qs.set('crisis', crisis.level);
   }
-  redirect(`/reflect?${qs.toString()}`);
+  try {
+    redirect(`/reflect?${qs.toString()}`);
+  } catch (err) {
+    if (isNextRedirect(err)) throw err;
+    reportError('reflection.redirect', err, { userId: session.user.id });
+    return { ok: false, error: 'unknown' };
+  }
 }

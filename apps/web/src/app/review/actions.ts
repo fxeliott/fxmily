@@ -58,6 +58,22 @@ function getString(formData: FormData, key: string): string {
   return typeof v === 'string' ? v : '';
 }
 
+/**
+ * Next.js `redirect()` throws a `NEXT_REDIRECT` error to short-circuit
+ * the Server Action. The error must be re-thrown so navigation happens —
+ * any other catch path swallows it. Helper carbone from
+ * `app/journal/actions.ts:60` (BUG-3 fix code-review 2026-05-14).
+ */
+function isNextRedirect(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'digest' in err &&
+    typeof (err as { digest?: unknown }).digest === 'string' &&
+    (err as { digest: string }).digest.startsWith('NEXT_REDIRECT')
+  );
+}
+
 export async function submitWeeklyReviewAction(
   _prev: WeeklyReviewActionState | null,
   formData: FormData,
@@ -168,12 +184,19 @@ export async function submitWeeklyReviewAction(
   revalidatePath('/review');
   revalidatePath('/dashboard');
 
-  // `redirect()` always throws (NEXT_REDIRECT). No try/catch — letting any
-  // hypothetical Next bug surface is preferable to silently returning
-  // `{ ok: true }` and leaving the wizard hanging (J5 audit H2 fix).
+  // `redirect()` throws NEXT_REDIRECT — we re-throw to let the runtime
+  // navigate. Any other error is logged + surfaced to the wizard so the
+  // member doesn't sit on an infinite spinner (BUG-3 fix code-review
+  // 2026-05-14, pattern carbone `app/journal/actions.ts:260`).
   const qs = new URLSearchParams({ done: '1' });
   if (crisis.level === 'high' || crisis.level === 'medium') {
     qs.set('crisis', crisis.level);
   }
-  redirect(`/review?${qs.toString()}`);
+  try {
+    redirect(`/review?${qs.toString()}`);
+  } catch (err) {
+    if (isNextRedirect(err)) throw err;
+    reportError('weekly-review.redirect', err, { userId: session.user.id });
+    return { ok: false, error: 'unknown' };
+  }
 }

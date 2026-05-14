@@ -331,11 +331,13 @@ function ABCDHeader({
           <Icon size={11} strokeWidth={2.5} aria-hidden="true" />
           Étape {def.letter}
         </p>
+        {/* V1.9 TIER A H3 : `outline-none` retiré (WCAG 2.4.7 focus visible —
+            cf. notes weekly-review-wizard pour rationale). */}
         <h2
           id="refw-heading"
           ref={headingRef}
           tabIndex={-1}
-          className="t-h1 mt-1 text-[var(--t-1)] outline-none"
+          className="t-h1 mt-1 text-[var(--t-1)]"
         >
           {def.title}
         </h2>
@@ -359,11 +361,12 @@ function FreeTextField(props: FreeTextFieldProps) {
   const charCount = value.length;
   const isOverMax = charCount > REFLECTION_TEXT_MAX_CHARS;
   const isUnderMin = charCount > 0 && value.trim().length < REFLECTION_TEXT_MIN_CHARS;
+  // V1.9 TIER A H1 : counter default tone `--t-2` (WCAG 1.4.3 contrast).
   const counterTone = isOverMax
     ? 'text-[var(--bad)]'
     : isUnderMin
       ? 'text-[var(--warn)]'
-      : 'text-[var(--t-3)]';
+      : 'text-[var(--t-2)]';
   const describedBy = `${id}-counter${error ? ` ${id}-error` : ''}`;
   return (
     <div className="flex flex-col gap-3">
@@ -387,7 +390,14 @@ function FreeTextField(props: FreeTextFieldProps) {
         aria-describedby={describedBy}
       />
       <div className="flex items-baseline justify-between gap-3">
-        <p id={`${id}-counter`} className={cn('t-cap font-mono tabular-nums', counterTone)}>
+        {/* V1.9 TIER A H5 : `aria-live="polite"` + `aria-atomic` pour
+            l'annonce SR du compteur (browser-throttled). */}
+        <p
+          id={`${id}-counter`}
+          aria-live="polite"
+          aria-atomic="true"
+          className={cn('t-cap font-mono tabular-nums', counterTone)}
+        >
           {charCount} / {REFLECTION_TEXT_MAX_CHARS}
           {charCount > 0 && charCount < REFLECTION_TEXT_MIN_CHARS ? (
             <span className="ml-2">

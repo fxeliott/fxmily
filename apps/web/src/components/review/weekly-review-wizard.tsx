@@ -413,12 +413,10 @@ function StepHeader({ step, eyebrow, headingRef }: StepHeaderProps) {
       </div>
       <div className="min-w-0 flex-1">
         <p className="t-eyebrow text-[var(--t-3)]">{eyebrow}</p>
-        <h2
-          id="wrw-heading"
-          ref={headingRef}
-          tabIndex={-1}
-          className="t-h1 mt-1 text-[var(--t-1)] outline-none"
-        >
+        {/* V1.9 TIER A H3 : `outline-none` retiré (WCAG 2.4.7 focus visible —
+            l'heading reçoit le focus programmatique au changement d'étape pour
+            l'annonce SR ; flash bref de l'outline navigateur acceptable). */}
+        <h2 id="wrw-heading" ref={headingRef} tabIndex={-1} className="t-h1 mt-1 text-[var(--t-1)]">
           {def.title}
         </h2>
       </div>
@@ -475,11 +473,13 @@ function FreeTextStep(props: FreeTextStepProps) {
   const charCount = value.length;
   const isOverMax = charCount > REVIEW_TEXT_MAX_CHARS;
   const isUnderMin = !optional && charCount > 0 && value.trim().length < REVIEW_TEXT_MIN_CHARS;
+  // V1.9 TIER A H1 : counter default tone `--t-2` (WCAG 1.4.3 contrast ≥
+  // 4.5:1) au lieu de `--t-3` qui frôle le ratio sur fond DS-v2.
   const counterTone = isOverMax
     ? 'text-[var(--bad)]'
     : isUnderMin
       ? 'text-[var(--warn)]'
-      : 'text-[var(--t-3)]';
+      : 'text-[var(--t-2)]';
   const describedBy = `${id}-counter${error ? ` ${id}-error` : ''}`;
   return (
     <div className="flex flex-col gap-3">
@@ -503,7 +503,15 @@ function FreeTextStep(props: FreeTextStepProps) {
         aria-describedby={describedBy}
       />
       <div className="flex items-baseline justify-between gap-3">
-        <p id={`${id}-counter`} className={cn('t-cap font-mono tabular-nums', counterTone)}>
+        {/* V1.9 TIER A H5 : `aria-live="polite"` + `aria-atomic="true"` pour
+            que les SR annoncent le compteur quand il franchit min/max
+            (browser-throttled — pas de spam à chaque touche). */}
+        <p
+          id={`${id}-counter`}
+          aria-live="polite"
+          aria-atomic="true"
+          className={cn('t-cap font-mono tabular-nums', counterTone)}
+        >
           {charCount} / {REVIEW_TEXT_MAX_CHARS}
           {!optional && charCount > 0 && charCount < REVIEW_TEXT_MIN_CHARS ? (
             <span className="ml-2">

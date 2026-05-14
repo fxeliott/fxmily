@@ -41,8 +41,7 @@
         margin: 0;
         background: var(--bg);
         color: var(--t-2);
-        font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         font-size: 15px;
         line-height: 1.65;
       }
@@ -414,10 +413,9 @@
         <span class="hero-badge">V1.8 REFLECT • Smoke iPhone PWA</span>
         <h1>Smoke physique iPhone — V1.8 REFLECT</h1>
         <p class="lead">
-          Validation manuelle des 6 routes member-facing V1.8 (wizards REFLECT,
-          TradeTagsPicker, dashboard widget) déployées 2026-05-14T11:19:57Z.
-          Cocher chaque item ; persistance dans localStorage du device. Si bug
-          → section 12 (bug report).
+          Validation manuelle des 6 routes member-facing V1.8 (wizards REFLECT, TradeTagsPicker,
+          dashboard widget) déployées 2026-05-14T11:19:57Z. Cocher chaque item ; persistance dans
+          localStorage du device. Si bug → section 12 (bug report).
         </p>
         <div class="hero-meta">
           <span class="meta-pill">ETA <strong>30-45 min</strong></span>
@@ -456,43 +454,40 @@
           <ul class="checklist">
             <li>
               <input type="checkbox" id="p1" /><label for="p1"
-                ><strong>iPhone iOS 18+ recommandé</strong> (push iOS 26 bug
-                catch documented memory R4 context_pickup) — version iOS
-                actuelle :
+                ><strong>iPhone iOS 18+ recommandé</strong> (push iOS 26 bug catch documented memory
+                R4 context_pickup) — version iOS actuelle :
                 <kbd>Réglages → Général → Informations → Version logicielle</kbd></label
               >
             </li>
             <li>
               <input type="checkbox" id="p2" /><label for="p2"
-                ><strong>PWA Fxmily installée</strong> (Safari →
-                <code>app.fxmilyapp.com</code> → bouton Partager → "Sur l'écran
-                d'accueil")</label
+                ><strong>PWA Fxmily installée</strong> (Safari → <code>app.fxmilyapp.com</code> →
+                bouton Partager → "Sur l'écran d'accueil")</label
               >
             </li>
             <li>
               <input type="checkbox" id="p3" /><label for="p3"
-                ><strong>Compte member-test ou prod</strong> avec quelques
-                trades historiques pour `/journal` + `/dashboard` data</label
+                ><strong>Compte member-test ou prod</strong> avec quelques trades historiques pour
+                `/journal` + `/dashboard` data</label
               >
             </li>
             <li>
               <input type="checkbox" id="p4" /><label for="p4"
-                ><strong>Connexion 4G/5G stable</strong> (pour edge cases slow
-                3G plus tard — section 11)</label
+                ><strong>Connexion 4G/5G stable</strong> (pour edge cases slow 3G plus tard —
+                section 11)</label
               >
             </li>
             <li>
               <input type="checkbox" id="p5" /><label for="p5"
-                ><strong>Bluetooth/casque OFF</strong> pour ressentir le retour
-                haptique (note : haptic feedback wizards V1.8 = item V1.9
-                backlog, J5 morning wizard l'a déjà)</label
+                ><strong>Bluetooth/casque OFF</strong> pour ressentir le retour haptique (note :
+                haptic feedback wizards V1.8 = item V1.9 backlog, J5 morning wizard l'a déjà)</label
               >
             </li>
             <li>
               <input type="checkbox" id="p6" /><label for="p6"
                 ><strong>Settings VoiceOver disponible</strong>
-                <kbd>Réglages → Accessibilité → VoiceOver</kbd> — pour spot-test
-                a11y section 10</label
+                <kbd>Réglages → Accessibilité → VoiceOver</kbd> — pour spot-test a11y section
+                10</label
               >
             </li>
           </ul>
@@ -500,46 +495,44 @@
 
         <section id="config" class="card">
           <h2><span class="step-num">2</span>Config smoke device</h2>
-          <p>Démarrer avec settings <em>défaut</em>, on testera les variantes
-          plus tard.</p>
+          <p>Démarrer avec settings <em>défaut</em>, on testera les variantes plus tard.</p>
           <ul class="checklist">
             <li>
               <input type="checkbox" id="c1" /><label for="c1"
                 ><strong>Appearance</strong> = Dark mode
-                <kbd>Réglages → Affichage → Sombre</kbd> (V1 mode sombre
-                uniquement, mode clair non designé V1)</label
+                <kbd>Réglages → Affichage → Sombre</kbd> (V1 mode sombre uniquement, mode clair non
+                designé V1)</label
               >
             </li>
             <li>
               <input type="checkbox" id="c2" /><label for="c2"
                 ><strong>Réduction des animations OFF</strong>
-                <kbd>Réglages → Accessibilité → Animation → OFF</kbd> (on
-                testera ON section 10)</label
+                <kbd>Réglages → Accessibilité → Animation → OFF</kbd> (on testera ON section
+                10)</label
               >
             </li>
             <li>
               <input type="checkbox" id="c3" /><label for="c3"
                 ><strong>Texte taille</strong> = défaut
-                <kbd>Réglages → Affichage → Taille du texte</kbd> (on testera
-                XL section 10)</label
+                <kbd>Réglages → Affichage → Taille du texte</kbd> (on testera XL section 10)</label
               >
             </li>
             <li>
               <input type="checkbox" id="c4" /><label for="c4"
-                ><strong>Orientation</strong> = portrait (smoke principal),
-                rotate test section 11</label
+                ><strong>Orientation</strong> = portrait (smoke principal), rotate test section
+                11</label
               >
             </li>
             <li>
               <input type="checkbox" id="c5" /><label for="c5"
-                ><strong>Ouvrir PWA depuis l'écran d'accueil</strong> (pas
-                Safari) — V1.8 design est PWA standalone, pas browser tab</label
+                ><strong>Ouvrir PWA depuis l'écran d'accueil</strong> (pas Safari) — V1.8 design est
+                PWA standalone, pas browser tab</label
               >
             </li>
             <li>
               <input type="checkbox" id="c6" /><label for="c6"
-                ><strong>Login member-test</strong> /login → email + password
-                → check dashboard se rend</label
+                ><strong>Login member-test</strong> /login → email + password → check dashboard se
+                rend</label
               >
             </li>
           </ul>
@@ -553,191 +546,170 @@
             <span class="badge b-warn">Premium frontend</span>
           </p>
           <p>
-            Naviguer à chaque route depuis le bottom-nav (ou direct URL). Pour
-            chaque route, vérifier : <strong>load &lt; 2s</strong>,
-            <strong>no console error</strong> (smoke iPhone Safari dev tools si
-            activé), <strong>typographie + couleurs cohérentes</strong>.
+            Naviguer à chaque route depuis le bottom-nav (ou direct URL). Pour chaque route,
+            vérifier : <strong>load &lt; 2s</strong>, <strong>no console error</strong> (smoke
+            iPhone Safari dev tools si activé), <strong>typographie + couleurs cohérentes</strong>.
           </p>
           <ul class="checklist">
             <li>
               <input type="checkbox" id="r1" /><label for="r1"
-                ><strong><code>/review</code></strong> (WeeklyReview landing) —
-                voir
+                ><strong><code>/review</code></strong> (WeeklyReview landing) — voir
                 <code>&lt;V18Aurora&gt;</code> 3 orbs background +
-                <code>&lt;MirrorHero&gt;</code> dual-dome symmetric + recent
-                timeline cards (clickable depuis polish R1) + bouton "Nouvelle
-                revue"</label
+                <code>&lt;MirrorHero&gt;</code> dual-dome symmetric + recent timeline cards
+                (clickable depuis polish R1) + bouton "Nouvelle revue"</label
               >
             </li>
             <li>
               <input type="checkbox" id="r2" /><label for="r2"
-                ><strong><code>/review/new</code></strong> (WeeklyReview wizard)
-                — voir
-                <code>&lt;V18StepProgress&gt;</code> animated bar + step 1/5
-                heading auto-focused + char counter live (test section 4
-                ensuite)</label
+                ><strong><code>/review/new</code></strong> (WeeklyReview wizard) — voir
+                <code>&lt;V18StepProgress&gt;</code> animated bar + step 1/5 heading auto-focused +
+                char counter live (test section 4 ensuite)</label
               >
             </li>
             <li>
               <input type="checkbox" id="r3" /><label for="r3"
-                ><strong><code>/review/[id]</code></strong> (WeeklyReview detail
-                page) — depuis timeline /review, tap une card →
-                <code>/review/&lt;id&gt;</code> rend Server Component read-only
-                (no edit V1) + données persistées</label
+                ><strong><code>/review/[id]</code></strong> (WeeklyReview detail page) — depuis
+                timeline /review, tap une card → <code>/review/&lt;id&gt;</code> rend Server
+                Component read-only (no edit V1) + données persistées</label
               >
             </li>
             <li>
               <input type="checkbox" id="r4" /><label for="r4"
-                ><strong><code>/reflect</code></strong> (Reflection landing) —
-                voir <code>&lt;ABCDHero&gt;</code> 4 connected nodes blue +
-                timeline reflections + bouton "Nouvelle réflexion"</label
+                ><strong><code>/reflect</code></strong> (Reflection landing) — voir
+                <code>&lt;ABCDHero&gt;</code> 4 connected nodes blue + timeline reflections + bouton
+                "Nouvelle réflexion"</label
               >
             </li>
             <li>
               <input type="checkbox" id="r5" /><label for="r5"
-                ><strong><code>/reflect/new</code></strong> (Reflection wizard
-                Ellis ABCD) — voir CBT disclaimer banner ("inspired by Ellis
-                ABC, not clinically validated") + 4 steps wizard</label
+                ><strong><code>/reflect/new</code></strong> (Reflection wizard Ellis ABCD) — voir
+                CBT disclaimer banner ("inspired by Ellis ABC, not clinically validated") + 4 steps
+                wizard</label
               >
             </li>
             <li>
               <input type="checkbox" id="r6" /><label for="r6"
-                ><strong><code>/reflect/[id]</code></strong> (Reflection detail
-                page) — depuis timeline /reflect, tap une card → rend read-only
-                + données ABCD complètes</label
+                ><strong><code>/reflect/[id]</code></strong> (Reflection detail page) — depuis
+                timeline /reflect, tap une card → rend read-only + données ABCD complètes</label
               >
             </li>
           </ul>
         </section>
 
         <section id="wizard-weekly" class="card">
-          <h2>
-            <span class="step-num">4</span>WeeklyReviewWizard 5 steps end-to-end
-          </h2>
+          <h2><span class="step-num">4</span>WeeklyReviewWizard 5 steps end-to-end</h2>
           <p>
-            Sur <code class="inline">/review/new</code>. Le wizard est dimanche
-            (M5=A+D décision). 5 textareas : (1) brief semaine, (2) biggestWin,
-            (3) biggestMistake, (4) bestPractice (optionnel), (5) lessonLearned
-            + nextWeekFocus.
+            Sur <code class="inline">/review/new</code>. Le wizard est dimanche (M5=A+D décision). 5
+            textareas : (1) brief semaine, (2) biggestWin, (3) biggestMistake, (4) bestPractice
+            (optionnel), (5) lessonLearned + nextWeekFocus.
           </p>
           <ul class="checklist">
             <li>
               <input type="checkbox" id="w1" /><label for="w1"
-                ><strong>Step 1</strong> : taper un texte dans "Cette semaine
-                en bref" → char counter live (en bas-droit) → bouton "Suivant"
-                actif → tap → animation Framer Motion spring transition</label
+                ><strong>Step 1</strong> : taper un texte dans "Cette semaine en bref" → char
+                counter live (en bas-droit) → bouton "Suivant" actif → tap → animation Framer Motion
+                spring transition</label
               >
             </li>
             <li>
               <input type="checkbox" id="w2" /><label for="w2"
-                ><strong>Step 2 biggestWin</strong> → heading auto-focused
-                (a11y APG <code>firstMount.current</code> skip initial mount
-                BUG-2 fix) → texte taper → "Suivant"</label
+                ><strong>Step 2 biggestWin</strong> → heading auto-focused (a11y APG
+                <code>firstMount.current</code> skip initial mount BUG-2 fix) → texte taper →
+                "Suivant"</label
               >
             </li>
             <li>
               <input type="checkbox" id="w3" /><label for="w3"
-                ><strong>Step 3 biggestMistake</strong> → si over-max
-                (>4000 chars approx) → char counter passe tone warn → bad +
-                bouton "Suivant" se grise (disabled, label garde 4.5:1
-                contrast TIER 1 a11y fix B1)</label
+                ><strong>Step 3 biggestMistake</strong> → si over-max (>4000 chars approx) → char
+                counter passe tone warn → bad + bouton "Suivant" se grise (disabled, label garde
+                4.5:1 contrast TIER 1 a11y fix B1)</label
               >
             </li>
             <li>
               <input type="checkbox" id="w4" /><label for="w4"
-                ><strong>Step 4 bestPractice</strong> (optionnel) → laisser
-                vide → "Suivant" doit rester actif (champ optionnel)</label
+                ><strong>Step 4 bestPractice</strong> (optionnel) → laisser vide → "Suivant" doit
+                rester actif (champ optionnel)</label
               >
             </li>
             <li>
               <input type="checkbox" id="w5" /><label for="w5"
-                ><strong>Step 5 lesson + focus</strong> → taper texte →
-                bouton CTA "Enregistrer ma revue" devient
-                <code>kind="primary"</code> couleur lime sur DS-v2 (mais c'est
-                la zone V18 donc accent passe en blue per
-                <code>.v18-theme</code> override)</label
+                ><strong>Step 5 lesson + focus</strong> → taper texte → bouton CTA "Enregistrer ma
+                revue" devient <code>kind="primary"</code> couleur lime sur DS-v2 (mais c'est la
+                zone V18 donc accent passe en blue per <code>.v18-theme</code> override)</label
               >
             </li>
             <li>
               <input type="checkbox" id="w6" /><label for="w6"
-                ><strong>localStorage draft</strong> → fermer le wizard mid-step
-                (tap bouton back navigation) → re-ouvrir
-                <code>/review/new</code> → champs restaurés depuis
+                ><strong>localStorage draft</strong> → fermer le wizard mid-step (tap bouton back
+                navigation) → re-ouvrir <code>/review/new</code> → champs restaurés depuis
                 <code>fxmily:weekly-review:draft:v1</code></label
               >
             </li>
             <li>
               <input type="checkbox" id="w7" /><label for="w7"
-                ><strong>Submit</strong> → tap "Enregistrer ma revue" → loading
-                state brief (polish skel V1.9) → redirect vers
-                <code>/review</code> → calm reveal "Ta revue est dans le miroir.
-                Reviens dimanche prochain." (anti-gamification M6)</label
+                ><strong>Submit</strong> → tap "Enregistrer ma revue" → loading state brief (polish
+                skel V1.9) → redirect vers <code>/review</code> → calm reveal "Ta revue est dans le
+                miroir. Reviens dimanche prochain." (anti-gamification M6)</label
               >
             </li>
             <li>
               <input type="checkbox" id="w8" /><label for="w8"
-                ><strong>Verify persist DB</strong> → revenir sur /review →
-                nouvelle card en haut de timeline → tap → /review/[id] →
-                données complètes 5 champs visibles</label
+                ><strong>Verify persist DB</strong> → revenir sur /review → nouvelle card en haut de
+                timeline → tap → /review/[id] → données complètes 5 champs visibles</label
               >
             </li>
           </ul>
         </section>
 
         <section id="wizard-reflect" class="card">
-          <h2>
-            <span class="step-num">5</span>ReflectionWizard 4 steps ABCD (Ellis)
-          </h2>
+          <h2><span class="step-num">5</span>ReflectionWizard 4 steps ABCD (Ellis)</h2>
           <p>
-            Sur <code class="inline">/reflect/new</code>. ABCD = Activating
-            event / Belief / Consequence / Disputation. CBT 4 colonnes pattern.
-            Reverse-journaling Steenbarger compatible.
+            Sur <code class="inline">/reflect/new</code>. ABCD = Activating event / Belief /
+            Consequence / Disputation. CBT 4 colonnes pattern. Reverse-journaling Steenbarger
+            compatible.
           </p>
           <ul class="checklist">
             <li>
               <input type="checkbox" id="rw0" /><label for="rw0"
                 ><strong>CBT disclaimer banner</strong> visible avant step 1 :
                 <span class="quote"
-                  >"Inspired by Ellis ABC, adapted for trading — not clinically
-                  validated for trader population."</span
+                  >"Inspired by Ellis ABC, adapted for trading — not clinically validated for trader
+                  population."</span
                 ></label
               >
             </li>
             <li>
               <input type="checkbox" id="rw1" /><label for="rw1"
-                ><strong>Step A Activating event</strong> → décrire ce qui s'est
-                passé (factuel) → "Suivant"</label
+                ><strong>Step A Activating event</strong> → décrire ce qui s'est passé (factuel) →
+                "Suivant"</label
               >
             </li>
             <li>
               <input type="checkbox" id="rw2" /><label for="rw2"
-                ><strong>Step B Belief</strong> → la pensée automatique → bouton
-                actif</label
+                ><strong>Step B Belief</strong> → la pensée automatique → bouton actif</label
               >
             </li>
             <li>
               <input type="checkbox" id="rw3" /><label for="rw3"
-                ><strong>Step C Consequence</strong> → émotion + comportement
-                résultant</label
+                ><strong>Step C Consequence</strong> → émotion + comportement résultant</label
               >
             </li>
             <li>
               <input type="checkbox" id="rw4" /><label for="rw4"
-                ><strong>Step D Disputation</strong> → questionnement honnête
-                de la Belief</label
+                ><strong>Step D Disputation</strong> → questionnement honnête de la Belief</label
               >
             </li>
             <li>
               <input type="checkbox" id="rw5" /><label for="rw5"
-                ><strong>Submit</strong> → redirect <code>/reflect</code> →
-                nouvelle card timeline → tap → /reflect/[id] read-only</label
+                ><strong>Submit</strong> → redirect <code>/reflect</code> → nouvelle card timeline →
+                tap → /reflect/[id] read-only</label
               >
             </li>
             <li>
               <input type="checkbox" id="rw6" /><label for="rw6"
                 ><strong>localStorage draft</strong>
-                <code>fxmily:reflection:draft:v1</code> persistance idem
-                wizard-weekly (test 4 step transitions sans submit)</label
+                <code>fxmily:reflection:draft:v1</code> persistance idem wizard-weekly (test 4 step
+                transitions sans submit)</label
               >
             </li>
           </ul>
@@ -747,14 +719,14 @@
           <h2><span class="step-num">6</span>Crisis routing FR (Q4=A persist)</h2>
           <p>
             <span class="badge b-bad">CRITIQUE</span>
-            Crisis routing FR ACTIF V1.7.1. Q4=A décision V1.8 = persist QUAND
-            MÊME on crisis + Sentry escalate + audit row
-            <code>weekly_review.crisis_detected</code>. Le membre voit son
-            texte sauvegardé + banner FR resources.
+            Crisis routing FR ACTIF V1.7.1. Q4=A décision V1.8 = persist QUAND MÊME on crisis +
+            Sentry escalate + audit row
+            <code>weekly_review.crisis_detected</code>. Le membre voit son texte sauvegardé + banner
+            FR resources.
           </p>
           <p>
-            <strong>Test phrases CRISIS (doit trigger banner)</strong> — à
-            taper dans step 1 ou 3 du WeeklyReviewWizard. Submit ensuite.
+            <strong>Test phrases CRISIS (doit trigger banner)</strong> — à taper dans step 1 ou 3 du
+            WeeklyReviewWizard. Submit ensuite.
           </p>
           <div class="grid-2">
             <div class="sub-card bad">
@@ -776,47 +748,42 @@
               </ul>
             </div>
           </div>
-          <ul class="checklist" style="margin-top:14px">
+          <ul class="checklist" style="margin-top: 14px">
             <li>
               <input type="checkbox" id="cr1" /><label for="cr1"
-                ><strong>Test legitimate crisis</strong> → taper phrase crisis
-                → submit → URL state <code>?crisis=medium</code> ou
-                <code>?crisis=high</code> →
-                <code>&lt;V18CrisisBanner&gt;</code> apparaît avec 3 FR resources
-                cliquables <code>tel:3114</code>,
-                <code>tel:SOS Amitié</code>, <code>tel:Suicide Écoute</code></label
+                ><strong>Test legitimate crisis</strong> → taper phrase crisis → submit → URL state
+                <code>?crisis=medium</code> ou <code>?crisis=high</code> →
+                <code>&lt;V18CrisisBanner&gt;</code> apparaît avec 3 FR resources cliquables
+                <code>tel:3114</code>, <code>tel:SOS Amitié</code>,
+                <code>tel:Suicide Écoute</code></label
               >
             </li>
             <li>
               <input type="checkbox" id="cr2" /><label for="cr2"
-                ><strong>Persist verified</strong> → revenir sur /review →
-                card timeline présente quand même (Q4=A persist
-                QUAND MÊME) → audit row LIVE prod
+                ><strong>Persist verified</strong> → revenir sur /review → card timeline présente
+                quand même (Q4=A persist QUAND MÊME) → audit row LIVE prod
                 <code>weekly_review.crisis_detected</code></label
               >
             </li>
             <li>
               <input type="checkbox" id="cr3" /><label for="cr3"
-                ><strong>FP exclusions trading slang</strong> → taper "tout
-                perdre sur ce trade" → submit → NO banner crisis → submit
-                normal → URL pas de
-                <code>?crisis=</code></label
+                ><strong>FP exclusions trading slang</strong> → taper "tout perdre sur ce trade" →
+                submit → NO banner crisis → submit normal → URL pas de <code>?crisis=</code></label
               >
             </li>
             <li>
               <input type="checkbox" id="cr4" /><label for="cr4"
-                ><strong>Banner key={crisisLevel} aria-live</strong> (HIGH-4
-                fix R1) → SR re-announce sur transition medium→high si
-                applicable (skip si pas VoiceOver activé)</label
+                ><strong>Banner key={crisisLevel} aria-live</strong> (HIGH-4 fix R1) → SR
+                re-announce sur transition medium→high si applicable (skip si pas VoiceOver
+                activé)</label
               >
             </li>
             <li>
               <input type="checkbox" id="cr5" /><label for="cr5"
                 ><strong>Banner border non-text contrast WCAG 1.4.11</strong>
                 (B4 TIER 1 fix R2) → bordure
-                <code>0.85 alpha</code> visible bien sur background
-                <code>0.22</code> + hover bg <code>0.32</code> feedback
-                tactile</label
+                <code>0.85 alpha</code> visible bien sur background <code>0.22</code> + hover bg
+                <code>0.32</code> feedback tactile</label
               >
             </li>
           </ul>
@@ -826,9 +793,8 @@
           <h2><span class="step-num">7</span>TradeTagsPicker (8 LESSOR slugs)</h2>
           <p>
             <span class="badge b-acc">Q3=A self-assigned</span>
-            Sur <code>/journal/[id]/close</code> wizard step nouveau V1.8
-            (post-emotionAfter, pré-soumission). 8 slugs LESSOR +
-            Steenbarger, max 3 cap, tooltips académiques inline.
+            Sur <code>/journal/[id]/close</code> wizard step nouveau V1.8 (post-emotionAfter,
+            pré-soumission). 8 slugs LESSOR + Steenbarger, max 3 cap, tooltips académiques inline.
           </p>
           <p><strong>Les 8 slugs</strong> (anti-régression test count = 8) :</p>
           <pre><code>discipline-high, plan-respected, emotion-controlled, patience-shown,
@@ -836,57 +802,53 @@ loss-aversion, endowment, status-quo, self-control</code></pre>
           <ul class="checklist">
             <li>
               <input type="checkbox" id="t1" /><label for="t1"
-                ><strong>Ouvrir un trade en cours</strong> /journal/[id]/close
-                → scroll au step "Tags" (après emotionAfter) → grid 8 tags
-                visible avec tooltips icon</label
+                ><strong>Ouvrir un trade en cours</strong> /journal/[id]/close → scroll au step
+                "Tags" (après emotionAfter) → grid 8 tags visible avec tooltips icon</label
               >
             </li>
             <li>
               <input type="checkbox" id="t2" /><label for="t2"
-                ><strong>Tap 1 tag</strong> → <code>role="switch"</code> →
-                aria-checked transition → visual highlight</label
+                ><strong>Tap 1 tag</strong> → <code>role="switch"</code> → aria-checked transition →
+                visual highlight</label
               >
             </li>
             <li>
               <input type="checkbox" id="t3" /><label for="t3"
                 ><strong>Tap discipline-high spécifique</strong> → utilise icon
-                <code>&lt;ThumbsUp&gt;</code> distinctif vs <code>&lt;Check&gt;</code>
-                (TIER 1 fix B5 color-blind sighted)</label
+                <code>&lt;ThumbsUp&gt;</code> distinctif vs <code>&lt;Check&gt;</code> (TIER 1 fix
+                B5 color-blind sighted)</label
               >
             </li>
             <li>
               <input type="checkbox" id="t4" /><label for="t4"
-                ><strong>Tap 3 tags max cap</strong> → 4e tap doit être bloqué
-                + message "Maximum 3 tags" → tone warn</label
+                ><strong>Tap 3 tags max cap</strong> → 4e tap doit être bloqué + message "Maximum 3
+                tags" → tone warn</label
               >
             </li>
             <li>
               <input type="checkbox" id="t5" /><label for="t5"
-                ><strong>Untap un tag</strong> (re-tap) → désélection visible
-                + slot libéré (peut re-tap autre tag pour atteindre 3)</label
+                ><strong>Untap un tag</strong> (re-tap) → désélection visible + slot libéré (peut
+                re-tap autre tag pour atteindre 3)</label
               >
             </li>
             <li>
               <input type="checkbox" id="t6" /><label for="t6"
                 ><strong>Submit close trade</strong> → tags persistés DB
-                <code>trades.tags String[]</code> column V1.8 → revenir
-                /journal → trade en historique avec tags rendus</label
+                <code>trades.tags String[]</code> column V1.8 → revenir /journal → trade en
+                historique avec tags rendus</label
               >
             </li>
             <li>
               <input type="checkbox" id="t7" /><label for="t7"
-                ><strong>Long-press / hover tooltip</strong> → définition
-                académique du tag s'affiche (mobile inline aside V1.8,
-                desktop floating popover V1.9)</label
+                ><strong>Long-press / hover tooltip</strong> → définition académique du tag
+                s'affiche (mobile inline aside V1.8, desktop floating popover V1.9)</label
               >
             </li>
           </ul>
         </section>
 
         <section id="dashboard" class="card">
-          <h2>
-            <span class="step-num">8</span>Dashboard widget REFLECT (2 cards)
-          </h2>
+          <h2><span class="step-num">8</span>Dashboard widget REFLECT (2 cards)</h2>
           <p>
             Sur <code>/dashboard</code>. <code>&lt;DashboardReflectWidget&gt;</code>
             Server Component (commit polish R1 a164734).
@@ -894,15 +856,14 @@ loss-aversion, endowment, status-quo, self-control</code></pre>
           <ul class="checklist">
             <li>
               <input type="checkbox" id="d1" /><label for="d1"
-                ><strong>2 cards visible</strong> WeeklyReview + Reflection
-                entry points → coloration blue+black <code>.v18-theme</code>
-                overlay namespacé</label
+                ><strong>2 cards visible</strong> WeeklyReview + Reflection entry points →
+                coloration blue+black <code>.v18-theme</code> overlay namespacé</label
               >
             </li>
             <li>
               <input type="checkbox" id="d2" /><label for="d2"
-                ><strong>Last WeeklyReview weekStart</strong> affiché (ex :
-                "dimanche 12 mai") OU empty state si aucune revue</label
+                ><strong>Last WeeklyReview weekStart</strong> affiché (ex : "dimanche 12 mai") OU
+                empty state si aucune revue</label
               >
             </li>
             <li>
@@ -912,21 +873,18 @@ loss-aversion, endowment, status-quo, self-control</code></pre>
             </li>
             <li>
               <input type="checkbox" id="d4" /><label for="d4"
-                ><strong>Tap card WeeklyReview</strong> → navigate
-                <code>/review</code></label
+                ><strong>Tap card WeeklyReview</strong> → navigate <code>/review</code></label
               >
             </li>
             <li>
               <input type="checkbox" id="d5" /><label for="d5"
-                ><strong>Tap card Reflection</strong> → navigate
-                <code>/reflect</code></label
+                ><strong>Tap card Reflection</strong> → navigate <code>/reflect</code></label
               >
             </li>
             <li>
               <input type="checkbox" id="d6" /><label for="d6"
-                ><strong>Transition lime→blue</strong> abrupte actuellement
-                (V1.9 backlog fade-in 400ms V18Aurora) — note visuelle si
-                disturbing UX</label
+                ><strong>Transition lime→blue</strong> abrupte actuellement (V1.9 backlog fade-in
+                400ms V18Aurora) — note visuelle si disturbing UX</label
               >
             </li>
           </ul>
@@ -936,37 +894,33 @@ loss-aversion, endowment, status-quo, self-control</code></pre>
           <h2><span class="step-num">9</span>.v18-theme overlay regression (DS-v2 lime intact)</h2>
           <p>
             Pattern Notion/Linear per-zone theming.
-            <code>.v18-theme</code> wrapper class override
-            <code>--acc</code>, <code>--bg-*</code>, <code>--t-*</code>,
-            shadow tokens — existing components (Btn, Card, etc.) automatically
+            <code>.v18-theme</code> wrapper class override <code>--acc</code>, <code>--bg-*</code>,
+            <code>--t-*</code>, shadow tokens — existing components (Btn, Card, etc.) automatically
             render blue inside that scope, <strong>zero refactor</strong>.
           </p>
           <ul class="checklist">
             <li>
               <input type="checkbox" id="th1" /><label for="th1"
-                ><strong>Hors V18 zones</strong> → /dashboard top section
-                (hors widget REFLECT), /journal, /admin → palette lime DS-v2
-                intacte (no blue leak)</label
+                ><strong>Hors V18 zones</strong> → /dashboard top section (hors widget REFLECT),
+                /journal, /admin → palette lime DS-v2 intacte (no blue leak)</label
               >
             </li>
             <li>
               <input type="checkbox" id="th2" /><label for="th2"
-                ><strong>Dans V18 zones</strong> → /review*, /reflect* →
-                palette blue (blue-500 CTA + blue-400 hover) +
-                <code>&lt;V18Aurora&gt;</code> orbs visible background</label
+                ><strong>Dans V18 zones</strong> → /review*, /reflect* → palette blue (blue-500 CTA
+                + blue-400 hover) + <code>&lt;V18Aurora&gt;</code> orbs visible background</label
               >
             </li>
             <li>
               <input type="checkbox" id="th3" /><label for="th3"
-                ><strong>Transition no flash</strong> entre /dashboard widget
-                REFLECT et /review → navigation smooth, pas de FOUC</label
+                ><strong>Transition no flash</strong> entre /dashboard widget REFLECT et /review →
+                navigation smooth, pas de FOUC</label
               >
             </li>
             <li>
               <input type="checkbox" id="th4" /><label for="th4"
-                ><strong>WCAG contrasts respectés</strong> palette V18 :
-                slate-950 base, blue-500 CTA @4.6:1, blue-400 hover @7.5:1,
-                slate-100/300/400 text @17:1 / 12:1 / 7:1</label
+                ><strong>WCAG contrasts respectés</strong> palette V18 : slate-950 base, blue-500
+                CTA @4.6:1, blue-400 hover @7.5:1, slate-100/300/400 text @17:1 / 12:1 / 7:1</label
               >
             </li>
           </ul>
@@ -979,28 +933,26 @@ loss-aversion, endowment, status-quo, self-control</code></pre>
               <input type="checkbox" id="a1" /><label for="a1"
                 ><strong>Reduced-motion ON</strong>
                 <kbd>Réglages → Accessibilité → Animation → Réduire</kbd>
-                → revisit /review/new + /reflect/new → animations spring
-                Framer Motion désactivées → step transitions sans bounce</label
+                → revisit /review/new + /reflect/new → animations spring Framer Motion désactivées →
+                step transitions sans bounce</label
               >
             </li>
             <li>
               <input type="checkbox" id="a2" /><label for="a2"
-                ><strong>VoiceOver smoke</strong> 1 wizard step → triple-tap
-                pour activer → step heading auto-focus annoncé →
-                naviguer textarea → submit annoncé</label
+                ><strong>VoiceOver smoke</strong> 1 wizard step → triple-tap pour activer → step
+                heading auto-focus annoncé → naviguer textarea → submit annoncé</label
               >
             </li>
             <li>
               <input type="checkbox" id="a3" /><label for="a3"
-                ><strong>Touch targets ≥44×44</strong> tous boutons CTA +
-                checkboxes + tag pills (WCAG 2.5.5)</label
+                ><strong>Touch targets ≥44×44</strong> tous boutons CTA + checkboxes + tag pills
+                (WCAG 2.5.5)</label
               >
             </li>
             <li>
               <input type="checkbox" id="a4" /><label for="a4"
-                ><strong>Focus visible</strong> tab clavier (si keyboard
-                Bluetooth) → focus ring visible sur tous éléments
-                interactifs</label
+                ><strong>Focus visible</strong> tab clavier (si keyboard Bluetooth) → focus ring
+                visible sur tous éléments interactifs</label
               >
             </li>
             <li>
@@ -1018,52 +970,46 @@ loss-aversion, endowment, status-quo, self-control</code></pre>
           <ul class="checklist">
             <li>
               <input type="checkbox" id="e1" /><label for="e1"
-                ><strong>Offline mid-wizard</strong> → activer Avion mode mid-step
-                → tap "Suivant" → erreur réseau gérée gracefully + draft
-                localStorage préservé</label
+                ><strong>Offline mid-wizard</strong> → activer Avion mode mid-step → tap "Suivant" →
+                erreur réseau gérée gracefully + draft localStorage préservé</label
               >
             </li>
             <li>
               <input type="checkbox" id="e2" /><label for="e2"
-                ><strong>Slow 3G</strong>
-                <kbd>Réglages → Cellulaire → Données → 3G</kbd> ou Network Link
-                Conditioner → /review/new load &lt; 5s → submit &lt; 8s</label
+                ><strong>Slow 3G</strong> <kbd>Réglages → Cellulaire → Données → 3G</kbd> ou Network
+                Link Conditioner → /review/new load &lt; 5s → submit &lt; 8s</label
               >
             </li>
             <li>
               <input type="checkbox" id="e3" /><label for="e3"
-                ><strong>Rotate landscape</strong> mid-wizard → layout reflow OK
-                (mais V1 mobile-first portrait recommandé)</label
+                ><strong>Rotate landscape</strong> mid-wizard → layout reflow OK (mais V1
+                mobile-first portrait recommandé)</label
               >
             </li>
             <li>
               <input type="checkbox" id="e4" /><label for="e4"
-                ><strong>Background switch</strong> → home button mid-wizard →
-                re-ouvrir PWA → state préservé (Server Component fresh
-                fetch OK)</label
+                ><strong>Background switch</strong> → home button mid-wizard → re-ouvrir PWA → state
+                préservé (Server Component fresh fetch OK)</label
               >
             </li>
             <li>
               <input type="checkbox" id="e5" /><label for="e5"
-                ><strong>BOLA defense detail page</strong> → essayer naviguer
-                vers
-                <code>/review/&lt;random-id-pas-le-mien&gt;</code> → doit
-                retourner 404 (ownership check
-                <code>findFirst({ where: { id, userId } })</code> ou findUnique
-                + post-check)</label
+                ><strong>BOLA defense detail page</strong> → essayer naviguer vers
+                <code>/review/&lt;random-id-pas-le-mien&gt;</code> → doit retourner 404 (ownership
+                check <code>findFirst({ where: { id, userId } })</code> ou findUnique +
+                post-check)</label
               >
             </li>
             <li>
               <input type="checkbox" id="e6" /><label for="e6"
-                ><strong>Logout/login</strong> → drafts localStorage purgés
-                ou préservés (à valider comportement)</label
+                ><strong>Logout/login</strong> → drafts localStorage purgés ou préservés (à valider
+                comportement)</label
               >
             </li>
             <li>
               <input type="checkbox" id="e7" /><label for="e7"
-                ><strong>Wizard 12-22 emojis spam</strong> → UTF-8 4-byte safe
-                (byte budget V1.8 78 KiB &lt; 128 KiB Server Action cap, ample
-                margin)</label
+                ><strong>Wizard 12-22 emojis spam</strong> → UTF-8 4-byte safe (byte budget V1.8 78
+                KiB &lt; 128 KiB Server Action cap, ample margin)</label
               >
             </li>
           </ul>
@@ -1071,7 +1017,10 @@ loss-aversion, endowment, status-quo, self-control</code></pre>
 
         <section id="bug-report" class="card">
           <h2><span class="step-num">12</span>Bug report template</h2>
-          <p>Si bug catched pendant smoke → ouvrir issue ou direct dans memory <code>fxmily_bugs_v1_8_smoke.md</code>.</p>
+          <p>
+            Si bug catched pendant smoke → ouvrir issue ou direct dans memory
+            <code>fxmily_bugs_v1_8_smoke.md</code>.
+          </p>
           <pre><code># Bug V1.8 smoke iPhone — &lt;short title&gt;
 
 ## Repro
@@ -1104,8 +1053,8 @@ A a11y / B security / C UI-DS / D heroes / E ops / F perf / F+ misc
           <h2>Smoke done?</h2>
           <p>
             Si tout vert ✓ → V1.8 SHIPPED PROD validated end-to-end.<br />
-            Si bugs catched → noter dans memory file + ouvrir PR V1.9 polish
-            ciblée (TIER A-F selon).
+            Si bugs catched → noter dans memory file + ouvrir PR V1.9 polish ciblée (TIER A-F
+            selon).
           </p>
         </div>
       </main>
@@ -1136,7 +1085,7 @@ A a11y / B security / C UI-DS / D heroes / E ops / F perf / F+ misc
             }
           });
         },
-        { rootMargin: '-30% 0px -60% 0px' }
+        { rootMargin: '-30% 0px -60% 0px' },
       );
       sections.forEach((s) => observer.observe(s));
     </script>

@@ -3062,3 +3062,59 @@ PR [#76](https://github.com/fxeliott/fxmily/pull/76). Audit 5-subagent V1.10 par
 - Memory `fxmily_session_2026-05-15_v1.12_p1_caddyfile_xff_backup.md` (P1 atomic-detail)
 - Memory `fxmily_session_2026-05-15_v1.12_p1_p2_marathon.md` (P1+P2 cumul)
 - Security-auditor sub-agent report intégré PR #85 (L1 fix + 0 Critical/High verdict)
+
+## V1.12 — P4 (TIER A1 pinact + smoke runbook V2 + apps/web/CLAUDE.md drift sync) (livré 2026-05-15)
+
+2 PRs sequential merged ce session : [#87](https://github.com/fxeliott/fxmily/pull/87) TIER A1 pinact + [#88](https://github.com/fxeliott/fxmily/pull/88) runbook V2 refonte (+ ce commit doc drift sync apps/web/CLAUDE.md).
+
+### P4.1 — TIER A1 pinact SHA pinning + zizmor hard-gate (PR #87)
+
+- **19 GitHub Actions SHA-pinned** sur 5 workflows (ci/codeql/deploy/e2e/zizmor). Floating major tags (`@v6`, `@v5`, etc.) remplacés par 40-char commit SHAs + trailing `# vN` comment (Dependabot tracks SHA in-place via version annotation, cf. `.github/dependabot.yml`).
+- **Approach A `gh api repos/<repo>/commits/<tag>`** batch (cross-platform Windows, pas de pinact binary install nécessaire). 11 actions uniques résolues : actions/checkout@v6, actions/setup-node@v6, pnpm/action-setup@v6, actions/cache@v4, actions/upload-artifact@v4, actions/setup-python@v5, github/codeql-action/\*@v3 (init+analyze+upload-sarif partagent SHA), docker/setup-buildx-action@v3, docker/login-action@v4, docker/build-push-action@v7, appleboy/ssh-action@v1.
+- **Zizmor passé soft-gate → hard-gate (medium+)** via split SARIF/audit step :
+  - `Generate zizmor SARIF (full surface, ungated)` — SARIF avec ALL severities + `|| true` neutralise exit-11. Code Scanning surface complète preservée.
+  - `Run zizmor — hard-gate (medium+)` — `--min-severity medium` scope build-blocking sur actionable findings. Info-level `template-injection` Low-confidence FP (3 occurrences : `cron-watch.yml:44` `vars.APP_URL` + `deploy.yml:158`/`:255` `needs.outputs.image-tag`) sont owner-controlled = noise pour threat model.
+- **1 iteration fix** : 1er push (`7a93752`) failed exit 11 (3 info findings). Diagnosed via `gh run view --log-failed`, ajusté threshold (`4378037`). Pas de revert (trader stop-loss → analyser loss avant abandon).
+- **8/8 CI gates SUCCESS** à T+210s : Lint+Analyze+Playwright+Audit GH Actions+CodeQL+zizmor+Socket × 2. Playwright fast cache hit ~150 MB chromium binaries.
+
+### P4.2 — Runbook-prod-smoke-test V2 refonte (PR #88)
+
+- `docs/runbook-prod-smoke-test.md` : refonte complète (568 ins / 122 del) gates-per-jalon avec V1 LIVE prod state factuel.
+- **Structure V2** :
+  - Phase 0 — Pre-flight (5 min) : `/api/health` + `/api/cron/health` + cron daemon vivant + CRON_SECRET sync GitHub/Hetzner + CRLF defense crontab/Caddyfile.
+  - Phase 1 — Gates V1 jalons J0 → V1.12 P4 (7 jalons + 5 sub-jalons V1.12 cumulés).
+  - Phase 2 — RGPD + crisis FR (3114 + SOS Amitié + Suicide Écoute) + EU AI Act Article 50(1).
+  - Phase 3 — Audit slugs canonical sweep (catch silent emission bugs cf. V1.6 Bug #4).
+- **Stale claims V1 corrigées** :
+  - Step 1 V1 disait `/admin` redirect post-login → FAUX (corrigé : `/dashboard` pour tous cf. `actions.test.ts:118`)
+  - Pré-requis V1 listait Sentry "à créer" → V1 LIVE prod, Sentry déjà wired
+  - V1.7.2 batch HTTP migration absent → gate dédié `/api/admin/weekly-batch/{pull,persist}`
+  - EU AI Act pénalité memory pre-existing `€35M/7%` → CORRIGÉ `€15M/3% Article 99(4)` (source primaire vérifiée)
+- **Pattern V2 future-proof** : chaque nouveau jalon ship doit ajouter sa gate dédiée au runbook V2 (anti-régression Phase 3 audit slugs sweep).
+
+### Files touched cumul V1.12 P4
+
+- `.github/workflows/{ci,codeql,deploy,e2e,zizmor}.yml` (P4.1 — 19 uses SHA-pinned + zizmor split SARIF/gate)
+- `docs/runbook-prod-smoke-test.md` (P4.2 — refonte V2)
+- `apps/web/CLAUDE.md` (P4 — ce commit drift sync section)
+
+### Quality gate cumul V1.12 P4
+
+- Vitest **1001/1001** baseline carry-forward (yml-only PR #87 + doc-only PR #88 + ce doc drift commit = pas re-run vitest)
+- 0 CVE / 0 Dependabot alert
+- 8+2 CI checks GREEN cumul (P4.1 full CI + P4.2 docs-only paths-ignore SKIP)
+
+### Backlog restant V1.12 P4 (non-bloquants)
+
+- **runbook-prod-smoke-test V2 execution** : faire le 1er run hebdo lundi 2026-05-18 (~15-30 min selon gates).
+- **E2E V1.8 REFLECT happy-path** (~4-6h dedicated session, deferred V1.13+ ou autre)
+- **V2 enhancements** sub-agent V1.12 P3 follow-ups : L3 ipHash audit metadata + I1 unit tests `authorize()` IP path (requires `auth.ts:57` extract refactor) + M2 'unknown' bucket V2 fallback.
+- **Dependabot triage** : #41 tailwind group (3 deps bump bloqué post-rebase prettier formatting 69 files) + #6 eslint 10 (incompat eslint-plugin-react upstream, real defer).
+
+### Refs
+
+- 2 PRs : [#87](https://github.com/fxeliott/fxmily/pull/87) (`23e81a1`) + [#88](https://github.com/fxeliott/fxmily/pull/88) (`77c01a5`)
+- Memory `fxmily_session_2026-05-15_v1.12_p4_tier_a1_pinact.md` (P4.1 atomic-detail)
+- Zizmor docs `--min-severity` : <https://docs.zizmor.sh/usage/>
+- Zizmor template-injection audit : <https://docs.zizmor.sh/audits/#template-injection>
+- Dependabot SHA pinning convention : trailing `# vN` comment tracked by `github-actions` ecosystem

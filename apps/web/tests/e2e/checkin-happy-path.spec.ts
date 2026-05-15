@@ -19,6 +19,7 @@
 
 import { expect, test } from '@playwright/test';
 
+import { localDateOf } from '@/lib/checkin/timezone';
 import {
   cleanupTestUsers,
   getLatestCheckin,
@@ -91,7 +92,13 @@ test.describe('J5 — checkin happy path', () => {
     await expect(page.getByRole('status').first()).toContainText(/streak 1 jour/i);
 
     // ─── Verify DB state ───────────────────────────────────────────────
-    const today = new Date().toISOString().slice(0, 10);
+    // Anchor `today` to the member's Europe/Paris civil date — the app
+    // stores DailyCheckin.date as @db.Date in the member's local timezone
+    // (J5 design, see lib/checkin/timezone.ts), NOT UTC. A plain
+    // `new Date().toISOString()` would query the UTC date and miss the row
+    // every night in the ~22:00–00:00 UTC window (Paris already next day),
+    // a deterministic wall-clock flake.
+    const today = localDateOf(new Date(), 'Europe/Paris');
     const row = await getLatestCheckin(seeded.id, today, 'morning');
     expect(row).not.toBeNull();
     expect(row).toMatchObject({
@@ -150,7 +157,13 @@ test.describe('J5 — checkin happy path', () => {
     await expect(page.getByRole('status').first()).toContainText(/streak 1 jour/i);
 
     // DB sanity: morning + evening rows both exist.
-    const today = new Date().toISOString().slice(0, 10);
+    // Anchor `today` to the member's Europe/Paris civil date — the app
+    // stores DailyCheckin.date as @db.Date in the member's local timezone
+    // (J5 design, see lib/checkin/timezone.ts), NOT UTC. A plain
+    // `new Date().toISOString()` would query the UTC date and miss the row
+    // every night in the ~22:00–00:00 UTC window (Paris already next day),
+    // a deterministic wall-clock flake.
+    const today = localDateOf(new Date(), 'Europe/Paris');
     const m = await getLatestCheckin(seeded.id, today, 'morning');
     const e = await getLatestCheckin(seeded.id, today, 'evening');
     expect(m).not.toBeNull();

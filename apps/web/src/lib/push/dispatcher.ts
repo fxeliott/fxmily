@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { sendNotificationFallbackEmail } from '@/lib/email/send';
 import { env } from '@/lib/env';
-import { reportWarning } from '@/lib/observability';
+import { reportError, reportWarning } from '@/lib/observability';
 import { getEffectivePreferences } from '@/lib/push/preferences';
 import {
   bumpSubscriptionLastSeen,
@@ -518,6 +518,19 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
       reason: failureReason,
     },
   });
+
+  // V1.11 — payload_too_large_413 is a code bug (we sent a payload bigger than
+  // the push service accepts), not a transient infra error. Escalate to Sentry
+  // as an error (on-call page-out) rather than the silent `notification.dispatch.failed`
+  // audit row alone — a systemic payload bug would otherwise stay invisible until
+  // a member complains. Round 4 audit O finding.
+  if (decision.action === 'fail_permanent' && decision.reason === 'payload_too_large_413') {
+    reportError(
+      'push.dispatcher',
+      new Error('Push payload exceeded 4 KiB limit (413 from push service)'),
+      { notificationId: row.id, type: slug, attempts: row.attempts },
+    );
+  }
 
   // Email fallback best-effort (SPEC §18.2 mitigation iOS push fragility).
   // Triggered ONLY on permanent failure of an actual dispatch attempt.

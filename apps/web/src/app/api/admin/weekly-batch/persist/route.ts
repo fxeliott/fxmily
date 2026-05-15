@@ -41,10 +41,14 @@ export const dynamic = 'force-dynamic';
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
 
 const localDatePattern = /^\d{4}-\d{2}-\d{2}$/;
+// V1.10 sec hardening (M3 security-auditor) : cap reduced 128 → 40. cuid = 25
+// chars, nanoid = up to 32 chars ; 40 covers both with margin. Any longer is
+// malicious or schema drift. Tightens JSON.parse heap amplification when
+// combined with results.max(1000) above.
 const userIdSchema = z
   .string()
   .min(1)
-  .max(128)
+  .max(40)
   .regex(/^[A-Za-z0-9_-]+$/, 'userId must be cuid-safe (alnum + _-)');
 
 const batchResultEntrySchema = z.union([

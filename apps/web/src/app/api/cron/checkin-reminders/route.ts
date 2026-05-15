@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { runCheckinReminderScan } from '@/lib/checkin/reminders';
 import { env } from '@/lib/env';
 import { flushSentry, reportError } from '@/lib/observability';
-import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
+import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
 
 /**
  * Cron endpoint — scan check-in reminder windows (J5).
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   // being constant-time compared, an unbounded request rate from a single
   // source is a DoS vector and an oracle for brute-forcing — audit J5
   // Security HIGH H2.
-  const id = callerId(req);
+  const id = callerIdTrusted(req);
   const decision = cronLimiter.consume(id);
   if (!decision.allowed) {
     return NextResponse.json(

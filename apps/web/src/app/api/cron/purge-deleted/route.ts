@@ -6,7 +6,7 @@ import { materialisePendingDeletions, purgeMaterialisedDeletions } from '@/lib/a
 import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
 import { flushSentry, reportError } from '@/lib/observability';
-import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
+import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
 
 /**
  * Cron endpoint — RGPD soft-delete lifecycle (J10, SPEC §15 J10 + §16).
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const id = callerId(req);
+  const id = callerIdTrusted(req);
   const decision = cronLimiter.consume(id);
   if (!decision.allowed) {
     return NextResponse.json(

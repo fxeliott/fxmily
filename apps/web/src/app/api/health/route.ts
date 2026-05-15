@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { env } from '@/lib/env';
 import { db } from '@/lib/db';
-import { callerId, healthLimiter } from '@/lib/rate-limit/token-bucket';
+import { callerIdTrusted, healthLimiter } from '@/lib/rate-limit/token-bucket';
 
 /**
  * Health check endpoint (SPEC §12.4).
@@ -59,10 +59,11 @@ async function pingDatabase(): Promise<CheckResult> {
 
 export async function GET(req: Request): Promise<NextResponse<HealthBody | RateLimitedBody>> {
   // V1.6 extras — per-IP rate-limit. Caddy forwards `x-forwarded-for` so
-  // `callerId()` picks up the real client IP. Burst 30 covers kubelet probes
-  // and uptime monitors ; refill 1/s sustained throttles a pool-saturation
-  // attack while keeping legitimate ops traffic snappy.
-  const id = callerId(req);
+  // `callerIdTrusted()` picks up the real client IP (V1.10 sec hardening :
+  // last-entry XFF = trusted from Caddy, anti-spoofing). Burst 30 covers
+  // kubelet probes and uptime monitors ; refill 1/s sustained throttles a
+  // pool-saturation attack while keeping legitimate ops traffic snappy.
+  const id = callerIdTrusted(req);
   const decision = healthLimiter.consume(id);
   if (!decision.allowed) {
     return NextResponse.json(

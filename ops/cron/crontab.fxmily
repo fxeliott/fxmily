@@ -21,6 +21,7 @@
 #   - purge-deleted             daily 03:00 UTC                    (J10)
 #   - purge-push-subscriptions  Sunday 05:00 UTC                   (J10)
 #   - purge-audit-log           daily 04:00 UTC                    (J10)
+#   - fxmily-caddy-backup       Sunday 06:30 UTC                   (V1.12)
 #
 # Log : every run appends one line to /var/log/fxmily/cron.log via the
 # wrapper. The DB audit row (`cron.<route>.scan`) is the canonical
@@ -58,3 +59,10 @@ MAILTO=""
 
 # J10 — Postgres backup (pg_dump → GPG → R2) : daily 02:30 UTC.
 30 2 * * *                   fxmily   /usr/local/bin/fxmily-backup
+
+# V1.12 — Caddy data volume backup (Let's Encrypt certs preservation) :
+# Sunday 06:30 UTC. Weekly cadence is sufficient — Let's Encrypt renews
+# ~60 days, Caddy auto-renews at ~30 days remaining. Off-hours
+# Europe/Paris, no overlap with the daily 03:00/04:00 purge slots or
+# the 06:00 dispatch-douglas slot.
+30 6 * * 0                   fxmily   /usr/local/bin/fxmily-caddy-backup

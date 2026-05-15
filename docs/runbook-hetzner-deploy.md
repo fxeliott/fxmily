@@ -370,3 +370,350 @@ historiques V1.5 conservent leurs labels 6-char, les rapports V1.5.2+
 conservent leurs labels 8-char ; les deux formats coexistent sans
 intervention DB nécessaire). Cf. `apps/web/src/lib/weekly-report/builder.ts`
 JSDoc `pseudonymizeMember` pour la note "Migration data" complète.
+
+## 12. Rollback V1.6 migration (`20260512182512_v1_6_notification_is_transactional`)
+
+> **Quand l'utiliser** : si l'email frequency cap (3 emails / 24h sur les
+> notifs non-transactionnelles) introduit un faux positif qui block des
+> notifs critiques (ex. : passe `weekly_report_ready` à transactional par
+> erreur) ET qu'un revert pur du code applicatif ne suffit pas.
+>
+> En pratique, la colonne `is_transactional` est **safe** par construction
+> (DEFAULT FALSE, ADD-only) — le rollback n'est utile que si on veut
+> retirer complètement la colonne (rare, possible si Prisma drift bloque
+> une future migration).
+
+### 12.1 Pré-requis avant rollback
+
+1. **Backup atomique de `notification_queue`** : la colonne est NOT NULL,
+   donc supprimer ne perd PAS de données — Postgres remplit `FALSE` au
+   re-create si on ré-applique. Mais le partial index est susceptible de
+   contenir des entrées que des queries admin V1.6+ utilisent (`recent
+non-transactional lookup`).
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     pg_dump -U fxmily -d fxmily -t notification_queue --data-only --column-inserts \
+     | gzip > /etc/fxmily/backups/pre-v1.6-rollback-$(date -u +%Y%m%dT%H%M%SZ).sql.gz
+   ```
+
+2. **Stop le web** (le dispatcher push lit `isTransactional` dans la
+   freq-cap query) :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+   ```
+
+3. **Vérifie l'état Prisma** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+       FROM _prisma_migrations WHERE migration_name LIKE '%v1_6%' \
+       ORDER BY started_at DESC;"
+   ```
+
+### 12.2 SQL rollback
+
+Ordre **non négociable** (partial index réfère à la colonne) :
+
+```sql
+BEGIN;
+
+-- 1. Drop the partial index FIRST (depends on the column).
+DROP INDEX IF EXISTS "notification_queue_user_recent_non_transactional_idx";
+
+-- 2. Drop the column (safe even with rows — NOT NULL DEFAULT FALSE has no
+-- application-side referent post-V1.6 revert).
+ALTER TABLE "notification_queue" DROP COLUMN IF EXISTS "is_transactional";
+
+-- 3. Wipe the Prisma migrations row so the schema can be re-applied later.
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260512182512_v1_6_notification_is_transactional';
+
+COMMIT;
+```
+
+> ⚠️ Si le `BEGIN`/`COMMIT` échoue à mi-parcours, Postgres rollback
+> automatique — l'état reste cohérent. Re-vérifie via `\d notification_queue`
+> que la colonne est bien absente (rollback OK) ou présente (rollback annulé).
+
+### 12.3 Re-déploiement de l'image V1.5.2
+
+Le rollback DB doit s'accompagner d'un revert au tag image pré-V1.6 :
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<v1-5-2-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+```
+
+### 12.4 Vérification post-rollback
+
+```bash
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\d notification_queue" | grep -c is_transactional
+# Attendu : 0 (colonne absente)
+
+# Audit log : consigne le rollback.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"v1_6_notification_is_transactional\",\"by\":\"eliot\"}'::jsonb, \
+      NOW());"
+```
+
+### 12.5 Re-application future
+
+1. Re-deploy l'image V1.6+ (`feat/v1.6-polish` HEAD ou ulterieure).
+2. `pnpm --filter @fxmily/web prisma:migrate deploy` — Prisma re-cale la row.
+3. Les rows existantes prennent `is_transactional = FALSE` (DEFAULT). Pas
+   de backfill nécessaire — les V1 NotificationType slugs (annotation,
+   checkin, douglas, weekly) sont tous engagement nudges = `false` correct.
+
+## 13. Rollback V1.8 REFLECT migration (`20260513150000_v1_8_reflect_models`)
+
+> **Quand l'utiliser** : si les wizards `/review` ou `/reflect` provoquent
+> un blocker post-deploy non-fixable côté code (ex. : data corruption sur
+> `Trade.tags` array, race condition catastrophique sur
+> `weekly_reviews` upsert) et qu'il faut revenir à l'état V1.7.2.
+>
+> ⚠️ **Risque data loss** : si des membres ont rempli des `weekly_reviews`
+> ou `reflection_entries` post-V1.8 ship, le rollback **DROP les tables
+> entièrement** — `pg_dump` atomique des 2 tables AVANT est OBLIGATOIRE.
+
+### 13.1 Pré-requis avant rollback
+
+1. **Backup atomique des 2 nouvelles tables + colonne `trades.tags`** :
+
+   ```bash
+   TS=$(date -u +%Y%m%dT%H%M%SZ)
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     pg_dump -U fxmily -d fxmily \
+     -t weekly_reviews -t reflection_entries \
+     --data-only --column-inserts \
+     | gzip > "/etc/fxmily/backups/pre-v1.8-rollback-reviews-${TS}.sql.gz"
+
+   # Trade.tags : la colonne est sur trades, on dump la colonne uniquement
+   # via COPY pour préserver les arrays.
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     psql -U fxmily -d fxmily -c "\copy (SELECT id, tags FROM trades \
+       WHERE array_length(tags, 1) > 0) TO STDOUT WITH CSV HEADER" \
+     | gzip > "/etc/fxmily/backups/pre-v1.8-rollback-trade-tags-${TS}.csv.gz"
+   ```
+
+2. **Stop le web** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+   ```
+
+3. **Vérifie l'état Prisma** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+       FROM _prisma_migrations WHERE migration_name LIKE '%v1_8%' \
+       ORDER BY started_at DESC;"
+   ```
+
+4. **Confirme l'absence de FK cascade orpheline** : les 2 tables ont
+   `ON DELETE CASCADE` sur `users.id` — un DROP TABLE clean retire aussi
+   les FK. Pas d'orpheline.
+
+### 13.2 SQL rollback
+
+```sql
+BEGIN;
+
+-- 1. Drop ADD-only Trade.tags column (default empty array, no data loss
+-- on the un-tagged rows).
+ALTER TABLE "trades" DROP COLUMN IF EXISTS "tags";
+
+-- 2. Drop the 2 new tables (CASCADE drops FK + indexes automatically).
+DROP TABLE IF EXISTS "reflection_entries" CASCADE;
+DROP TABLE IF EXISTS "weekly_reviews" CASCADE;
+
+-- 3. Wipe the Prisma migrations row.
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260513150000_v1_8_reflect_models';
+
+COMMIT;
+```
+
+> ⚠️ **Audit logs orphelins** : les rows `weekly_review.*` et `reflection.*`
+> dans `audit_logs` ne sont PAS purgées (logs immuables par design). Ces
+> slugs deviennent "frozen historical" jusqu'à la prochaine re-application.
+
+### 13.3 Re-déploiement de l'image V1.7.2
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<v1-7-2-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+```
+
+### 13.4 Vérification post-rollback
+
+```bash
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+
+# Schema check : les 3 surfaces V1.8 sont absentes.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dt weekly_reviews"            # 0 rows
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dt reflection_entries"        # 0 rows
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\d trades" | grep -c '^.*tags '
+# Attendu : 0 (colonne tags absente)
+
+# Audit log : consigne le rollback.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"v1_8_reflect_models\",\"by\":\"eliot\",\"data_loss_reviews\":N,\"data_loss_reflections\":N,\"data_loss_trade_tags\":N}'::jsonb, \
+      NOW());"
+```
+
+### 13.5 Re-application future
+
+1. Re-deploy l'image V1.8+ HEAD.
+2. `pnpm --filter @fxmily/web prisma:migrate deploy` — Prisma re-cale.
+3. **Restore les 2 tables** depuis `pg_dump` step 13.1 :
+
+   ```bash
+   gunzip -c /etc/fxmily/backups/pre-v1.8-rollback-reviews-<TS>.sql.gz \
+     | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+         psql -U fxmily -d fxmily
+   ```
+
+4. **Restore `trades.tags`** depuis le CSV :
+
+   ```bash
+   # Restore via UPDATE row-by-row (CSV → temp table → UPDATE join).
+   gunzip -c /etc/fxmily/backups/pre-v1.8-rollback-trade-tags-<TS>.csv.gz \
+     | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+         psql -U fxmily -d fxmily -c \
+       "CREATE TEMP TABLE _restore_tags (id TEXT PRIMARY KEY, tags TEXT[]); \
+        \\copy _restore_tags FROM STDIN WITH CSV HEADER; \
+        UPDATE trades SET tags = _restore_tags.tags \
+        FROM _restore_tags WHERE trades.id = _restore_tags.id;"
+   ```
+
+## 14. Rollback V2.0 TRACK migration (`20260514150000_v2_0_track_habit_logs`)
+
+> **Quand l'utiliser** : si un blocker post-deploy nécessite de retirer
+> complètement les habit logs (rare — V2.0 ship backend-only, frontend
+> wizards pas encore wirés, donc en pratique 0 rows attendu sauf si un
+> membre passe par API direct).
+>
+> ⚠️ Le `DROP TYPE HabitKind` est **non négociable AVANT DROP TABLE** —
+> Postgres rejette le drop type si la table le référence (`cannot drop
+type because column ... depends on it`).
+
+### 14.1 Pré-requis avant rollback
+
+1. **Backup atomique de `habit_logs`** :
+
+   ```bash
+   TS=$(date -u +%Y%m%dT%H%M%SZ)
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     pg_dump -U fxmily -d fxmily -t habit_logs --data-only --column-inserts \
+     | gzip > "/etc/fxmily/backups/pre-v2.0-rollback-habits-${TS}.sql.gz"
+   ```
+
+2. **Stop le web** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+   ```
+
+3. **Vérifie l'état Prisma** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+       FROM _prisma_migrations WHERE migration_name LIKE '%v2_0%' \
+       ORDER BY started_at DESC;"
+   ```
+
+### 14.2 SQL rollback
+
+Ordre **non négociable** (DROP TABLE avant DROP TYPE) :
+
+```sql
+BEGIN;
+
+-- 1. Drop the table FIRST (releases the type dependency).
+DROP TABLE IF EXISTS "habit_logs" CASCADE;
+
+-- 2. Drop the enum (no more dependents now).
+DROP TYPE IF EXISTS "HabitKind";
+
+-- 3. Wipe the Prisma migrations row.
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260514150000_v2_0_track_habit_logs';
+
+COMMIT;
+```
+
+### 14.3 Re-déploiement de l'image V1.9 (pré-V2.0)
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<v1-9-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+```
+
+### 14.4 Vérification post-rollback
+
+```bash
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dt habit_logs"   # 0 rows
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dT HabitKind"    # 0 rows
+
+# Audit log : consigne le rollback.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"v2_0_track_habit_logs\",\"by\":\"eliot\",\"data_loss_habit_logs\":N}'::jsonb, \
+      NOW());"
+```
+
+### 14.5 Re-application future
+
+1. Re-deploy l'image V2.0+ HEAD.
+2. `pnpm --filter @fxmily/web prisma:migrate deploy` — Prisma re-cale.
+3. **Restore `habit_logs`** depuis `pg_dump` step 14.1 :
+
+   ```bash
+   gunzip -c /etc/fxmily/backups/pre-v2.0-rollback-habits-<TS>.sql.gz \
+     | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+         psql -U fxmily -d fxmily
+   ```
+
+## Note transversale — pattern rollback Fxmily
+
+Toutes les recipes §11-§14 suivent un même contrat :
+
+1. **pg_dump atomique AVANT** (data-only + column-inserts pour idempotency).
+2. **`docker compose stop web`** (fige les writes, évite la corruption
+   pendant le DROP).
+3. **SQL rollback dans une transaction `BEGIN`/`COMMIT`** (tout ou rien
+   Postgres — pas d'état intermédiaire).
+4. **`DELETE FROM _prisma_migrations`** pour que Prisma re-applique
+   proprement à la prochaine `migrate deploy`.
+5. **Re-deploy l'image pré-migration** (sinon le code applicatif crash sur
+   les colonnes/tables absentes au runtime).
+6. **Audit log row `ops.migration.rolled_back`** avec metadata `migration`
+   - `by` + counters `data_loss_*` honnêtes.
+7. **Re-application future** : re-deploy l'image post-migration +
+   `prisma:migrate deploy` + restore data si pertinent.
+
+Le pattern est testé annuellement via le DR test §`runbook-backup-restore.md`
+"Test de DR (annuel, ~30 min)" — qui simule un restore complet sur une 2e
+VM Hetzner CX22.

@@ -735,6 +735,61 @@
 }
 
 /* =============================================================
+ * V2.1.5 TRACK hero — ambient layer (CSS-class driven).
+ * -------------------------------------------------------------
+ * Infinite ambient loops MUST be CSS-class driven (not framer
+ * `repeat: Infinity`) so the global `@media (prefers-reduced-motion:
+ * reduce)` filet below genuinely neutralises them — framer's
+ * WAAPI/inline-style animations are NOT touched by that media query
+ * (V2.1.5 code-review TIER 2). This is the proven `mirror-hero`
+ * pattern (`.v18-mirror-pulse`). Namespaced `track-*`, lime via the
+ * element's own stroke/fill, `transform-box: fill-box` so SVG
+ * circles scale/translate around their own geometry.
+ * ============================================================= */
+@keyframes trackPulseRing {
+  from {
+    transform: scale(0.5);
+    opacity: 0.45;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+.track-pulse-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: trackPulseRing 3.6s var(--e-smooth) infinite;
+}
+
+@keyframes trackEchoBreathe {
+  0%,
+  100% {
+    opacity: var(--echo-op, 0.12);
+  }
+  50% {
+    opacity: calc(var(--echo-op, 0.12) * 1.9);
+  }
+}
+.track-echo-ring {
+  animation: trackEchoBreathe 9s var(--e-smooth) infinite;
+}
+
+@keyframes trackParticleDrift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(var(--pdx, 0), var(--pdy, 0));
+  }
+}
+.track-particle {
+  transform-box: fill-box;
+  animation: trackParticleDrift var(--pdur, 18s) var(--e-smooth) infinite;
+}
+
+/* =============================================================
  * REDUCED MOTION (WCAG 2.3.3 non négociable)
  * ============================================================= */
 @media (prefers-reduced-motion: reduce) {

@@ -1,3 +1,9 @@
+> ⚠️ **ARCHIVED 2026-05-15** — superseded by [`docs/FXMILY-V2-MASTER.md`](../FXMILY-V2-MASTER.md) (source unique vérité V2).
+>
+> Ce document a été conservé tel quel pour traçabilité historique. Les 5 piliers + 5 paradoxes + 10 phrases-test + dualité ennemi/allié documentés ici sont **absorbés** dans le master V2 §2 (Vision/North Star) + §7 (anti-patterns hard rules). Pour toute nouvelle décision feature V2.x, lire le master, pas ce fichier.
+
+---
+
 # Manifesto Fxmily V2 — l'ADN du produit
 
 > **Source** : interview Eliot 2026-05-11 (round 8 reconstruction)

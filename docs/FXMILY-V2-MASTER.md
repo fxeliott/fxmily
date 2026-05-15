@@ -1,7 +1,7 @@
 # FXMILY V2 — MASTER PLAN
 
 > **Document unique. Source de vérité produit.**
-> Remplace `SPEC-V2-VISION.md` + `MANIFESTO-V2.md` (à archiver).
+> Remplace [`SPEC-V2-VISION.md`](archive/SPEC-V2-VISION.md) + [`MANIFESTO-V2.md`](archive/MANIFESTO-V2.md) (archivés 2026-05-15 dans `docs/archive/`).
 > Complète `SPEC.md` v1.1 (qui reste source produit V1) et `docs/v2-roadmap.md` (qui couvre dette tech).
 > **Préparé** : 2026-05-11 — interview Eliot 8 rounds itératifs + 5 subagents
 > **À valider** : §1 vision + §6 modules + §23 décisions M1-M10
@@ -1136,7 +1136,49 @@ Aucune stratégie ramp documentée Rounds 1-10. Comment ramper 5 jalons sur coho
 
 ---
 
+## §33. Open questions — arbitrage Eliot (extracted V1.11 phase 5)
+
+> Extraction depuis [`archive/SPEC-V2-VISION.md`](archive/SPEC-V2-VISION.md) §11 (lignes 343-371 du document archivé). **15 questions** à arbitrer formellement par Eliot avant ship V1.9/V2.0 frontend. Sub-agent L Round 3 finding : ces questions n'étaient PAS dans le master, elles étaient prisonnières du SPEC-V2-VISION archivé. Promues en §33 pour arbitrage actif.
+
+### ROUTINE module (V1.9 — pre-trade routine + weekly review)
+
+1. **Pre-trade routine bloquante OU non-bloquante** ? Modal qui force completion avant ouverture trade OU suggestion soft (push notification + free entry) ?
+2. **Weekly review auto-généré OU auto-rédigé** ? Résumé data IA (synthèse trade + check-ins + scores) OU le membre écrit lui-même (current V1.8 REFLECT path) ?
+3. **Notifications routines** : push, email, ou les deux ?
+
+### LEARN module (V2.0 — psychométrie + QCM)
+
+4. **QCMs obligatoires OU optionnels** ? Path bloquant (membre doit valider quiz pour débloquer features) OU gamification soft (badge + progression visible) ?
+5. **Tests psychométriques fréquence** : répétés (mensuel ? trimestriel ?) OU one-shot onboarding ?
+6. **Résultats psychométriques visibles au membre OU uniquement coach (Eliot)** ?
+
+### PROGRESS module (V2.0 — path 6 phases Découverte→Maîtrise)
+
+7. **Path linéaire ordre strict OU parallèle** ? Force-t-il une séquence Découverte→...→Maîtrise OU permet plusieurs phases simultanées ?
+8. **Milestones débloquées par data réelle, par temps écoulé, ou les deux** ? (ex: "30j check-ins consécutifs" data vs "30j compte créé" temps vs combo)
+9. **Membre voit milestones futures (motivation) OU seulement actuelles (focus)** ?
+
+### DEBRIEF module (V2.0 — coach sessions admin)
+
+10. **Coach notes visibles au membre OU privées admin** ?
+11. **Debrief sessions planifiées via Fxmily (calendar intégré) OU externe (Calendly link)** ?
+12. **Action items générés en session trackés comme tasks pour le membre** ? (ouvre un module task list dans Fxmily) OU restent dans la note coach uniquement ?
+
+### Posture publique (transverse V1+)
+
+13. **Disclaimer AMF visible permanent (footer toutes pages) OU uniquement onboarding** ?
+14. **Page `/about` anti-scam vs marketing trading** : faut-il l'ajouter pour clarifier la posture publiquement ?
+15. **Ratio formation pricing / valeur Fxmily perçue** — pour future décision standalone pricing si Fxmily devient produit séparé de la formation.
+
+### Process arbitrage
+
+- Chaque question = 1 ligne décision dans `docs/decisions/` (ADR pattern, ADR-001 + ADR-002 déjà établis pour scoring constants).
+- Default behavior si non arbitré : posture conservative (bloquante OU privée OU one-shot OU permanent). Eliot peut déverrouiller via décision explicite documentée.
+
+---
+
 # CHANGELOG
 
-- **2026-05-11 v1.0** — Création initiale via interview Eliot 9 rounds + 5 subagents (planner, researcher × 3, code-architect × 2). Remplace SPEC-V2-VISION.md + MANIFESTO-V2.md (à archiver). Source unique de vérité produit V2.
+- **2026-05-11 v1.0** — Création initiale via interview Eliot 9 rounds + 5 subagents (planner, researcher × 3, code-architect × 2). Remplace [SPEC-V2-VISION.md](archive/SPEC-V2-VISION.md) + [MANIFESTO-V2.md](archive/MANIFESTO-V2.md) (archivés 2026-05-15 V1.11 phase 5). Source unique de vérité produit V2.
+- **2026-05-15 v1.1** — V1.11 phase 5 archive : MANIFESTO + SPEC-VISION déplacés vers `docs/archive/` avec stub deprecation. Extraction des 15 open questions §11 SPEC-V2-VISION vers nouveau §33 master (arbitrage actif Eliot). M3-M Sons rétrogradé N anti-audio Eliot (§10.M ligne 288). Sub-agent L Round 3 + sub-agent S Round 4 findings.
 - **2026-05-11 v1.1** — Round 11 audit critique self-imposed : (a) §3 X=15% défendu Rupprecht 2024, (b) §17 V1.6 effort corrigé 4-6h → 8-12h réaliste, (c) §23 M1-M10 hiérarchisés (M4/M5/M6 bloquants), (d) ajout PARTIE IX risques produit + éthique IA Anthropic LIVE, (e) ajout PARTIE X résilience bus factor + stratégie lancement feature flags + beta cohort + go/no-go par jalon.

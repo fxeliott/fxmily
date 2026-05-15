@@ -34,7 +34,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     <main className="aurora relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 py-10">
       <div
         aria-hidden
-        className="orb pointer-events-none absolute -right-32 -top-32 h-[420px] w-[420px] rounded-full opacity-20"
+        className="orb pointer-events-none absolute -top-32 -right-32 h-[420px] w-[420px] rounded-full opacity-20"
         style={{
           background: 'radial-gradient(circle, oklch(0.879 0.231 130 / 0.20) 0%, transparent 70%)',
         }}
@@ -54,7 +54,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <Card primary className="px-6 py-7">
           <header className="mb-6 flex flex-col items-center gap-2">
             <h1
-              className="f-display h-rise text-[28px] font-bold leading-[1.05] tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               Connexion
@@ -71,11 +71,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <LoginForm />
         </Card>
 
-        <p className="text-center text-[11px] tabular-nums text-[var(--t-4)]">
+        <p className="text-center text-[11px] text-[var(--t-4)] tabular-nums">
           Cohorte privée · accès uniquement par invitation
         </p>
 
-        <p className="text-center text-[10px] tabular-nums text-[var(--t-4)]">
+        <p className="text-center text-[10px] text-[var(--t-4)] tabular-nums">
           <span className="inline-flex items-center gap-1">
             <Kbd>⌘</Kbd>
             <Kbd>?</Kbd>

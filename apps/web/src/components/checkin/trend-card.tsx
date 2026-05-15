@@ -41,7 +41,7 @@ export function TrendCard({ days }: TrendCardProps) {
     <Card className="flex flex-col gap-4 p-5">
       <div className="flex items-center justify-between">
         <span className="t-eyebrow">Tendance 7 jours</span>
-        <span className="font-mono text-[10px] tabular-nums text-[var(--t-3)]">
+        <span className="font-mono text-[10px] text-[var(--t-3)] tabular-nums">
           {filledDays}/7 jours filled
         </span>
       </div>
@@ -102,13 +102,13 @@ function TrendCell({
       </div>
       <div className="flex items-baseline gap-1">
         <span
-          className="f-mono text-[20px] font-bold tabular-nums leading-none tracking-[-0.02em]"
+          className="f-mono text-[20px] leading-none font-bold tracking-[-0.02em] tabular-nums"
           style={{ color: avg == null ? 'var(--t-3)' : color }}
         >
           {avg == null ? '—' : avgFmt(avg)}
         </span>
         {avg != null ? (
-          <span className="font-mono text-[10px] tabular-nums text-[var(--t-3)]">{unit}</span>
+          <span className="font-mono text-[10px] text-[var(--t-3)] tabular-nums">{unit}</span>
         ) : null}
       </div>
       {data.length >= 2 ? (

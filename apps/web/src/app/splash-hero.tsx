@@ -37,7 +37,7 @@ export function SplashHero() {
       {/* Drift orb (slow 18s loop, lime translucent) */}
       <div
         aria-hidden
-        className="orb pointer-events-none absolute -left-32 -top-32 h-[460px] w-[460px] rounded-full opacity-30"
+        className="orb pointer-events-none absolute -top-32 -left-32 h-[460px] w-[460px] rounded-full opacity-30"
         style={{
           background: 'radial-gradient(circle, oklch(0.879 0.231 130 / 0.18) 0%, transparent 70%)',
         }}
@@ -53,7 +53,7 @@ export function SplashHero() {
           <Pill className="ml-1.5">v1 · BETA</Pill>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 text-[10px] tabular-nums text-[var(--t-3)]">
+          <span className="inline-flex items-center gap-1.5 text-[10px] text-[var(--t-3)] tabular-nums">
             <span
               className="live-dot h-1.5 w-1.5 rounded-full"
               style={{ background: 'var(--ok)' }}
@@ -68,7 +68,7 @@ export function SplashHero() {
       <div className="relative z-10 grid flex-1 items-center gap-7 px-5 py-6 sm:gap-12 sm:px-12 sm:py-10 lg:grid-cols-[1.05fr_1fr]">
         {/* Copy */}
         <div className="flex flex-col gap-5">
-          <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--acc)]">
+          <div className="flex items-center gap-2 text-[10px] font-medium tracking-[0.14em] text-[var(--acc)] uppercase">
             <span className="h-1 w-1 rounded-full bg-current" />
             <span>Journal · Discipline · Mental</span>
             <span className="h-3 w-px bg-current opacity-30" />
@@ -76,7 +76,7 @@ export function SplashHero() {
           </div>
 
           <h1
-            className="f-display text-[40px] font-bold leading-[0.94] tracking-[-0.045em] text-[var(--t-1)] sm:text-[68px]"
+            className="f-display text-[40px] leading-[0.94] font-bold tracking-[-0.045em] text-[var(--t-1)] sm:text-[68px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             <span className="word-rise inline-block" style={{ animationDelay: '120ms' }}>
@@ -129,7 +129,7 @@ export function SplashHero() {
           </div>
 
           {/* Trust strip — 5 items pédago */}
-          <ul className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-[11px] tabular-nums text-[var(--t-3)]">
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-[11px] text-[var(--t-3)] tabular-nums">
             <Tooltip>
               <TooltipTrigger asChild>
                 <li className="inline-flex cursor-help items-center gap-1">
@@ -140,7 +140,7 @@ export function SplashHero() {
               <TooltipContent
                 side="top"
                 style={{ maxWidth: 240 }}
-                className="rounded-tooltip border border-[var(--b-strong)] bg-[var(--bg-3)] px-2.5 py-2 text-left text-[11px] font-normal normal-case leading-[1.45] tracking-normal text-[var(--t-2)] shadow-[var(--sh-tooltip)]"
+                className="rounded-tooltip border border-[var(--b-strong)] bg-[var(--bg-3)] px-2.5 py-2 text-left text-[11px] leading-[1.45] font-normal tracking-normal text-[var(--t-2)] normal-case shadow-[var(--sh-tooltip)]"
               >
                 AES-256 sur les screenshots et notes mentales. Personne d&apos;autre que toi ne lit
                 tes trades.
@@ -156,7 +156,7 @@ export function SplashHero() {
               <TooltipContent
                 side="top"
                 style={{ maxWidth: 220 }}
-                className="rounded-tooltip border border-[var(--b-strong)] bg-[var(--bg-3)] px-2.5 py-2 text-left text-[11px] font-normal normal-case leading-[1.45] tracking-normal text-[var(--t-2)] shadow-[var(--sh-tooltip)]"
+                className="rounded-tooltip border border-[var(--b-strong)] bg-[var(--bg-3)] px-2.5 py-2 text-left text-[11px] leading-[1.45] font-normal tracking-normal text-[var(--t-2)] normal-case shadow-[var(--sh-tooltip)]"
               >
                 Cohorte fermée — accès uniquement par invitation d&apos;un membre actif.
               </TooltipContent>
@@ -179,7 +179,7 @@ export function SplashHero() {
               <TooltipContent
                 side="top"
                 style={{ maxWidth: 240 }}
-                className="rounded-tooltip border border-[var(--b-strong)] bg-[var(--bg-3)] px-2.5 py-2 text-left text-[11px] font-normal normal-case leading-[1.45] tracking-normal text-[var(--t-2)] shadow-[var(--sh-tooltip)]"
+                className="rounded-tooltip border border-[var(--b-strong)] bg-[var(--bg-3)] px-2.5 py-2 text-left text-[11px] leading-[1.45] font-normal tracking-normal text-[var(--t-2)] normal-case shadow-[var(--sh-tooltip)]"
               >
                 Export brut JSON / CSV à tout moment. Tes données ne sont pas captives.
               </TooltipContent>
@@ -200,14 +200,14 @@ export function SplashHero() {
             {/* Big telemetry signature (NOT real KPIs — public splash) */}
             <div className="flex items-baseline gap-3">
               <span
-                className="f-mono text-[56px] font-semibold tabular-nums leading-none tracking-[-0.045em] text-[var(--acc)]"
+                className="f-mono text-[56px] leading-none font-semibold tracking-[-0.045em] text-[var(--acc)] tabular-nums"
                 style={{
                   filter: 'drop-shadow(0 0 18px oklch(0.879 0.231 130 / 0.32))',
                 }}
               >
                 +91%
               </span>
-              <span className="mb-1.5 inline-flex items-center gap-0.5 font-mono text-[12px] tabular-nums text-[var(--ok)]">
+              <span className="mb-1.5 inline-flex items-center gap-0.5 font-mono text-[12px] text-[var(--ok)] tabular-nums">
                 <ArrowUp className="h-[11px] w-[11px]" strokeWidth={1.75} />
                 plan respecté
               </span>
@@ -230,11 +230,11 @@ export function SplashHero() {
               />
               <div className="flex shrink-0 flex-col items-end">
                 <span className="t-mono-cap">cible</span>
-                <span className="font-mono text-[10px] tabular-nums text-[var(--t-3)]">≥ 80%</span>
+                <span className="font-mono text-[10px] text-[var(--t-3)] tabular-nums">≥ 80%</span>
               </div>
             </div>
 
-            <div className="mt-2 flex items-center gap-1.5 font-mono text-[10px] tabular-nums text-[var(--t-4)]">
+            <div className="mt-2 flex items-center gap-1.5 font-mono text-[10px] text-[var(--t-4)] tabular-nums">
               <span className="live-dot h-1 w-1 rounded-full" style={{ background: 'var(--ok)' }} />
               démo · données illustratives
             </div>
@@ -251,10 +251,10 @@ export function SplashHero() {
               </Pill>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="f-mono text-[40px] font-semibold tabular-nums leading-none tracking-[-0.04em] text-[var(--acc)]">
+              <span className="f-mono text-[40px] leading-none font-semibold tracking-[-0.04em] text-[var(--acc)] tabular-nums">
                 +91%
               </span>
-              <span className="font-mono text-[11px] tabular-nums text-[var(--ok)]">plan</span>
+              <span className="font-mono text-[11px] text-[var(--ok)] tabular-nums">plan</span>
             </div>
             <p className="t-cap mt-2">Démo · adhérence plan, pas P&amp;L.</p>
             <div className="mt-3">
@@ -274,12 +274,12 @@ export function SplashHero() {
 
       {/* Footer */}
       <footer className="relative z-10 flex items-center justify-between border-t border-[var(--b-default)] px-5 py-3.5 text-[10px] sm:px-12 sm:py-4 sm:text-[11px]">
-        <div className="flex items-center gap-3 tabular-nums text-[var(--t-4)]">
+        <div className="flex items-center gap-3 text-[var(--t-4)] tabular-nums">
           <span>© 2026 Fxmily</span>
           <span>·</span>
           <span className="t-foot">Aucun conseil de marché</span>
         </div>
-        <div className="flex items-center gap-3 tabular-nums text-[var(--t-4)]">
+        <div className="flex items-center gap-3 text-[var(--t-4)] tabular-nums">
           <span className="hidden sm:inline">Cohorte privée</span>
           <span className="inline-flex items-center gap-1">
             <Kbd>⌘</Kbd>

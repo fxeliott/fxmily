@@ -106,7 +106,7 @@ export default async function AdminReportsPage() {
             <span className="t-eyebrow">SPEC §7.10</span>
           </div>
           <h1
-            className="f-display h-rise text-[28px] font-bold leading-[1.05] tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+            className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             Rapports hebdo
@@ -262,11 +262,11 @@ function StatCell({
               : 'text-[var(--t-1)]';
 
   return (
-    <div className="flex flex-col gap-1 border-b border-r border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-b-0 [&:nth-child(2)]:border-r-0 sm:[&:nth-child(2)]:border-r">
+    <div className="flex flex-col gap-1 border-r border-b border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r">
       <span className="t-eyebrow">{label}</span>
       <span
         className={cn(
-          'f-mono text-[20px] font-semibold tabular-nums leading-none tracking-[-0.02em]',
+          'f-mono text-[20px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
           valColor,
         )}
       >

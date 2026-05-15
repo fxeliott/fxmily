@@ -21,7 +21,7 @@ export function Kbd({ children, inline, className }: KbdProps) {
     <kbd
       data-slot="kbd"
       className={cn(
-        'inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[4px] px-1 font-mono text-[10px] font-medium tabular-nums leading-none',
+        'inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[4px] px-1 font-mono text-[10px] leading-none font-medium tabular-nums',
         inline
           ? 'border border-white/15 bg-black/25 text-current'
           : 'border border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-3)]',

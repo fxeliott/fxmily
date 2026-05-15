@@ -93,7 +93,7 @@ export function FavoriteToggle({
           {...(prefersReducedMotion ? {} : { whileTap: { scale: 0.92 } })}
           className={cn(
             'inline-flex h-11 w-11 items-center justify-center rounded-full',
-            'bg-[var(--bg-1)]/60 border border-[var(--b-default)] backdrop-blur',
+            'border border-[var(--b-default)] bg-[var(--bg-1)]/60 backdrop-blur',
             'transition-[border-color,box-shadow] duration-200 hover:border-[var(--b-acc)]',
             'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
             'disabled:opacity-50',
@@ -136,7 +136,7 @@ export function FavoriteToggle({
           'border transition-[border-color,background-color,box-shadow] duration-200',
           favorited
             ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_20px_-4px_var(--acc-glow)]'
-            : 'bg-[var(--bg-1)]/60 border-[var(--b-default)] text-[var(--t-1)] hover:border-[var(--b-acc)]',
+            : 'border-[var(--b-default)] bg-[var(--bg-1)]/60 text-[var(--t-1)] hover:border-[var(--b-acc)]',
           'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
           'disabled:opacity-50',
         )}

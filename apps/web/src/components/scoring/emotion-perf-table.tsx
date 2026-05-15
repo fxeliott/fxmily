@@ -79,7 +79,7 @@ export function EmotionPerfTable({ rows, totalTrades }: EmotionPerfTableProps) {
                     <span className="t-mono-cap text-[var(--t-3)]">{r.trades}</span>
                   </td>
                   <td className="py-2 text-right">
-                    <span className="f-mono text-[12px] tabular-nums text-[var(--t-1)]">
+                    <span className="f-mono text-[12px] text-[var(--t-1)] tabular-nums">
                       {(ci.point * 100).toFixed(0)}%
                     </span>
                   </td>

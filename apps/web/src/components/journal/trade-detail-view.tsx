@@ -75,7 +75,7 @@ export function TradeDetailView({
         </Link>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="f-mono text-[28px] font-semibold leading-none tracking-[0.01em] text-[var(--t-1)] sm:text-[32px]">
+          <h1 className="f-mono text-[28px] leading-none font-semibold tracking-[0.01em] text-[var(--t-1)] sm:text-[32px]">
             {trade.pair}
           </h1>
           <Pill tone={trade.direction === 'long' ? 'ok' : 'bad'}>
@@ -101,7 +101,7 @@ export function TradeDetailView({
 
         <p className="t-body text-[var(--t-3)]">
           Entré le{' '}
-          <span className="font-mono tabular-nums text-[var(--t-2)]">
+          <span className="font-mono text-[var(--t-2)] tabular-nums">
             {DATETIME_FMT.format(new Date(trade.enteredAt))}
           </span>{' '}
           · {SESSION_LABEL[trade.session]}
@@ -142,7 +142,7 @@ export function TradeDetailView({
             <div className="mt-3 flex items-baseline gap-3">
               <span
                 className={cn(
-                  'f-mono text-[48px] font-bold tabular-nums leading-none tracking-[-0.04em] sm:text-[56px]',
+                  'f-mono text-[48px] leading-none font-bold tracking-[-0.04em] tabular-nums sm:text-[56px]',
                   isWin ? 'text-[var(--ok)]' : isLoss ? 'text-[var(--bad)]' : 'text-[var(--t-3)]',
                 )}
                 style={
@@ -268,7 +268,7 @@ export function TradeDetailView({
       {trade.notes ? (
         <Card className="p-4">
           <h2 className="t-eyebrow mb-2">Notes</h2>
-          <p className="t-body whitespace-pre-wrap leading-relaxed text-[var(--t-2)]">
+          <p className="t-body leading-relaxed whitespace-pre-wrap text-[var(--t-2)]">
             {trade.notes}
           </p>
         </Card>

@@ -18,7 +18,7 @@ export default async function FavoritesPage() {
   const favorites = await listMyFavorites(session.user.id);
 
   return (
-    <main className="container mx-auto max-w-3xl px-4 pb-24 pt-6 md:pt-10">
+    <main className="container mx-auto max-w-3xl px-4 pt-6 pb-24 md:pt-10">
       <div className="mb-6 flex flex-col gap-3">
         <Link
           href="/library"
@@ -66,7 +66,7 @@ export default async function FavoritesPage() {
                         <div className="flex items-center gap-2">
                           <Pill tone={tone}>{CATEGORY_LABEL[f.cardCategory]}</Pill>
                         </div>
-                        <h2 className="text-base font-semibold leading-snug">{f.cardTitle}</h2>
+                        <h2 className="text-base leading-snug font-semibold">{f.cardTitle}</h2>
                       </div>
                     </div>
                   </Link>

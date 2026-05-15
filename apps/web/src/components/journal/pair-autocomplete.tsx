@@ -64,14 +64,14 @@ export function PairAutocomplete({
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={inputId}
-        className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+        className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
       >
         Paire
       </label>
       <div className="relative">
         <span
           aria-hidden
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--t-4)]"
+          className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--t-4)]"
         >
           <Search className="h-4 w-4" strokeWidth={1.75} />
         </span>
@@ -93,8 +93,8 @@ export function PairAutocomplete({
           aria-describedby={errorId}
           onChange={(e) => handleChange(e.target.value)}
           className={cn(
-            'f-mono rounded-input h-11 w-full border bg-[var(--bg-1)] py-2 pl-10 pr-10 text-[14px] uppercase tracking-[0.06em] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
-            'placeholder:normal-case placeholder:tracking-normal placeholder:text-[var(--t-4)]',
+            'f-mono rounded-input h-11 w-full border bg-[var(--bg-1)] py-2 pr-10 pl-10 text-[14px] tracking-[0.06em] text-[var(--t-1)] uppercase transition-[border-color,box-shadow] duration-150 outline-none',
+            'placeholder:tracking-normal placeholder:text-[var(--t-4)] placeholder:normal-case',
             hasError
               ? error
                 ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
@@ -109,7 +109,7 @@ export function PairAutocomplete({
         {isValid ? (
           <span
             aria-hidden
-            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ok)]"
+            className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[var(--ok)]"
           >
             <Check className="h-4 w-4" strokeWidth={2.5} />
           </span>

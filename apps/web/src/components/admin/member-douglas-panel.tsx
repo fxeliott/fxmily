@@ -29,11 +29,11 @@ export function MemberDouglasPanel({ deliveries, stats }: MemberDouglasPanelProp
       {/* Stats strip */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Card className="p-4">
-          <p className="text-muted text-[11px] uppercase tracking-wide">Reçues</p>
+          <p className="text-muted text-[11px] tracking-wide uppercase">Reçues</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">{stats.total}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-muted text-[11px] uppercase tracking-wide">Non lues</p>
+          <p className="text-muted text-[11px] tracking-wide uppercase">Non lues</p>
           <p
             className={
               'mt-1 text-xl font-semibold tabular-nums ' +
@@ -44,15 +44,15 @@ export function MemberDouglasPanel({ deliveries, stats }: MemberDouglasPanelProp
           </p>
         </Card>
         <Card className="p-4">
-          <p className="text-muted text-[11px] uppercase tracking-wide">Utiles</p>
+          <p className="text-muted text-[11px] tracking-wide uppercase">Utiles</p>
           <p className="text-acc mt-1 text-xl font-semibold tabular-nums">{stats.helpful}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-muted text-[11px] uppercase tracking-wide">Pas utiles</p>
+          <p className="text-muted text-[11px] tracking-wide uppercase">Pas utiles</p>
           <p className="text-warn mt-1 text-xl font-semibold tabular-nums">{stats.notHelpful}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-muted text-[11px] uppercase tracking-wide">Ignorées</p>
+          <p className="text-muted text-[11px] tracking-wide uppercase">Ignorées</p>
           <p className="text-muted mt-1 text-xl font-semibold tabular-nums">{stats.dismissed}</p>
         </Card>
       </div>
@@ -123,7 +123,7 @@ export function MemberDouglasPanel({ deliveries, stats }: MemberDouglasPanelProp
                       href={`/library/${d.cardSlug}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="hover:text-acc text-base font-semibold leading-snug"
+                      className="hover:text-acc text-base leading-snug font-semibold"
                     >
                       {d.cardTitle}
                     </Link>

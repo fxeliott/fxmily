@@ -83,7 +83,7 @@ export function EmptyState({
             <li key={i} className="flex items-start gap-2.5 text-[12px]">
               <span
                 aria-hidden
-                className="mt-0.5 grid h-5 w-5 place-items-center rounded-full border border-[var(--b-acc)] bg-[var(--acc-dim)] font-mono text-[10px] font-semibold tabular-nums text-[var(--acc)]"
+                className="mt-0.5 grid h-5 w-5 place-items-center rounded-full border border-[var(--b-acc)] bg-[var(--acc-dim)] font-mono text-[10px] font-semibold text-[var(--acc)] tabular-nums"
               >
                 {i + 1}
               </span>

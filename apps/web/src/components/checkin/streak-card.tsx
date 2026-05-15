@@ -102,7 +102,7 @@ export function StreakCard({ streak, todayFilled, compact }: StreakCardProps) {
       <div className="flex items-baseline gap-2">
         <span
           className={cn(
-            'f-mono text-[44px] font-bold tabular-nums leading-none tracking-[-0.04em]',
+            'f-mono text-[44px] leading-none font-bold tracking-[-0.04em] tabular-nums',
             noStreak ? 'text-[var(--t-3)]' : 'text-[var(--acc)]',
           )}
           style={
@@ -132,7 +132,7 @@ export function StreakCard({ streak, todayFilled, compact }: StreakCardProps) {
             );
           })}
         </div>
-        <div className="flex justify-between font-mono text-[10px] tabular-nums text-[var(--t-3)]">
+        <div className="flex justify-between font-mono text-[10px] text-[var(--t-3)] tabular-nums">
           {MILESTONES.map((m) => (
             <span key={m} className={streak >= m ? 'text-[var(--acc)]' : ''}>
               {m}j
@@ -151,9 +151,9 @@ export function StreakCard({ streak, todayFilled, compact }: StreakCardProps) {
 
       {nextMilestone && !noStreak ? (
         <p className="t-cap text-[var(--t-3)]">
-          <span className="font-mono tabular-nums text-[var(--t-2)]">{nextMilestone - streak}</span>{' '}
+          <span className="font-mono text-[var(--t-2)] tabular-nums">{nextMilestone - streak}</span>{' '}
           jour{nextMilestone - streak > 1 ? 's' : ''} avant le palier{' '}
-          <span className="font-mono tabular-nums text-[var(--t-2)]">{nextMilestone} j</span>.
+          <span className="font-mono text-[var(--t-2)] tabular-nums">{nextMilestone} j</span>.
         </p>
       ) : null}
 

@@ -91,7 +91,7 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
       </header>
 
       <section className="mb-8 space-y-3">
-        <h2 className="text-muted-foreground text-xs font-medium uppercase tracking-widest">
+        <h2 className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
           Activation
         </h2>
         {isConfigured ? (
@@ -114,7 +114,7 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
       </section>
 
       <section className="mb-8 space-y-3">
-        <h2 className="text-muted-foreground text-xs font-medium uppercase tracking-widest">
+        <h2 className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
           Catégories
         </h2>
         <PreferencesGrid initialPreferences={preferences} isAdmin={isAdmin} />
@@ -125,7 +125,7 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
       </section>
 
       <section className="mb-8 space-y-3">
-        <h2 className="text-muted-foreground text-xs font-medium uppercase tracking-widest">
+        <h2 className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
           Comment ça marche
         </h2>
         <div className="border-border bg-card text-muted-foreground space-y-2 rounded-lg border p-4 text-sm">

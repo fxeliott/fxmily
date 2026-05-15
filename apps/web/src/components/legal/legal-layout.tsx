@@ -52,7 +52,7 @@ export function LegalLayout({
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
           {backLabel}
         </Link>
-        <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--acc)]">
+        <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
           {eyebrow}
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--t-1)] sm:text-3xl">
@@ -74,8 +74,8 @@ export function LegalLayout({
           // bumped from text-base to text-[15px] sm:text-base for a stronger
           // hierarchy contrast vs the h1 (24-30 px) on long legal pages
           // (UI designer T2-6 — J10 Phase I).
-          '[&_h2:first-child]:mt-0 [&_h2]:mb-3 [&_h2]:mt-8 [&_h2]:text-[15px] [&_h2]:font-semibold [&_h2]:tracking-tight [&_h2]:text-[var(--t-1)] sm:[&_h2]:text-base',
-          '[&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-[var(--t-1)]',
+          '[&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:text-[15px] [&_h2]:font-semibold [&_h2]:tracking-tight [&_h2]:text-[var(--t-1)] sm:[&_h2]:text-base [&_h2:first-child]:mt-0',
+          '[&_h3]:mt-5 [&_h3]:mb-2 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-[var(--t-1)]',
           '[&_p]:my-3 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:text-[var(--t-2)]',
           '[&_ul]:my-3 [&_ul]:ml-5 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:text-sm [&_ul]:text-[var(--t-2)]',
           '[&_ol]:my-3 [&_ol]:ml-5 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:text-sm [&_ol]:text-[var(--t-2)]',

@@ -127,16 +127,16 @@ export function SafeMarkdown({
           ),
           h1: ({ children }) => {
             const Tag = H1;
-            return <Tag className="mb-3 mt-6 text-lg font-semibold tracking-tight">{children}</Tag>;
+            return <Tag className="mt-6 mb-3 text-lg font-semibold tracking-tight">{children}</Tag>;
           },
           h2: ({ children }) => {
             const Tag = H2;
-            return <Tag className="mb-2 mt-5 text-base font-semibold">{children}</Tag>;
+            return <Tag className="mt-5 mb-2 text-base font-semibold">{children}</Tag>;
           },
           h3: ({ children }) => {
             const Tag = H3;
             return (
-              <Tag className="text-muted mb-2 mt-4 text-sm font-semibold uppercase tracking-wide">
+              <Tag className="text-muted mt-4 mb-2 text-sm font-semibold tracking-wide uppercase">
                 {children}
               </Tag>
             );

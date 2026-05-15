@@ -67,7 +67,7 @@ export function DeleteAccountForm(): React.ReactElement {
         spellCheck={false}
         autoCapitalize="characters"
         inputMode="text"
-        className="mt-3 h-11 w-full rounded-md border border-[var(--b-strong)] bg-[var(--bg-2)] px-3 font-mono text-sm tracking-widest text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:border-[var(--b-acc)] focus:outline-none focus:ring-2 focus:ring-[var(--acc)]"
+        className="mt-3 h-11 w-full rounded-md border border-[var(--b-strong)] bg-[var(--bg-2)] px-3 font-mono text-sm tracking-widest text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:border-[var(--b-acc)] focus:ring-2 focus:ring-[var(--acc)] focus:outline-none"
         // J10 Phase G — code-reviewer H7 : the placeholder must NOT match
         // the expected phrase. Some mobile keyboards offer the placeholder
         // as a one-tap autocomplete, which would defeat the anti-impulsivity

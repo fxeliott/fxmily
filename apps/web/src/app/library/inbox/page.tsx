@@ -22,7 +22,7 @@ export default async function InboxPage() {
   const read = deliveries.filter((d) => d.seenAt);
 
   return (
-    <main className="container mx-auto max-w-3xl px-4 pb-24 pt-6 md:pt-10">
+    <main className="container mx-auto max-w-3xl px-4 pt-6 pb-24 md:pt-10">
       <div className="mb-6 flex flex-col gap-3">
         <Link
           href="/library"
@@ -56,7 +56,7 @@ export default async function InboxPage() {
             <section aria-labelledby="unread-heading">
               <h2
                 id="unread-heading"
-                className="text-acc mb-3 text-xs font-semibold uppercase tracking-wide"
+                className="text-acc mb-3 text-xs font-semibold tracking-wide uppercase"
               >
                 Non lues ({unread.length})
               </h2>
@@ -71,7 +71,7 @@ export default async function InboxPage() {
             <section aria-labelledby="read-heading">
               <h2
                 id="read-heading"
-                className="text-muted mb-3 text-xs font-semibold uppercase tracking-wide"
+                className="text-muted mb-3 text-xs font-semibold tracking-wide uppercase"
               >
                 Déjà lues
               </h2>
@@ -117,9 +117,9 @@ function DeliveryItem({
                   </Pill>
                 )}
               </div>
-              <h3 className="text-base font-semibold leading-snug">{d.cardTitle}</h3>
+              <h3 className="text-base leading-snug font-semibold">{d.cardTitle}</h3>
               <p className="text-muted text-xs">{d.triggeredBy}</p>
-              <p className="text-muted text-[10px] uppercase tracking-wide">
+              <p className="text-muted text-[10px] tracking-wide uppercase">
                 {DT.format(new Date(d.createdAt))}
               </p>
             </div>

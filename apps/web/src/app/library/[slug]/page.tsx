@@ -56,7 +56,7 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
   const tone = CATEGORY_TONE[card.category];
 
   return (
-    <main className="container mx-auto max-w-3xl px-4 pb-24 pt-4 md:pt-8">
+    <main className="container mx-auto max-w-3xl px-4 pt-4 pb-24 md:pt-8">
       {/* Mark linked delivery seen if we came from a contextual push. */}
       {delivery ? <MarkSeenOnMount deliveryId={delivery.id} /> : null}
 
@@ -94,7 +94,7 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
         {/* Aurora halo lime behind the icon — signature focal point */}
         <div
           aria-hidden
-          className="bg-acc-dim pointer-events-none absolute -left-6 -top-6 h-24 w-24 rounded-full opacity-50 blur-2xl"
+          className="bg-acc-dim pointer-events-none absolute -top-6 -left-6 h-24 w-24 rounded-full opacity-50 blur-2xl"
         />
         <div className="relative flex flex-wrap items-center gap-2">
           <span
@@ -111,7 +111,7 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
           )}
         </div>
         <h1
-          className="f-display h-rise text-foreground relative text-[32px] font-bold leading-[1.05] tracking-[-0.03em] sm:text-[40px] md:text-[48px]"
+          className="f-display h-rise text-foreground relative text-[32px] leading-[1.05] font-bold tracking-[-0.03em] sm:text-[40px] md:text-[48px]"
           style={{ fontFeatureSettings: '"ss01" 1' }}
         >
           {card.title}
@@ -126,10 +126,10 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
         <div className="flex gap-4">
           <Quote className="text-acc h-6 w-6 shrink-0" aria-hidden />
           <figure className="flex flex-col gap-3">
-            <blockquote className="text-foreground text-lg italic leading-relaxed md:text-xl">
+            <blockquote className="text-foreground text-lg leading-relaxed italic md:text-xl">
               &laquo;&nbsp;{card.quote}&nbsp;&raquo;
             </blockquote>
-            <figcaption className="text-muted flex items-center gap-2 text-xs uppercase tracking-wide">
+            <figcaption className="text-muted flex items-center gap-2 text-xs tracking-wide uppercase">
               <BookOpen className="h-3 w-3" aria-hidden />
               <span>Mark Douglas — {card.quoteSourceChapter}</span>
             </figcaption>
@@ -159,7 +159,7 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
             <Target className="text-acc h-4 w-4" aria-hidden />
             <h2
               id="exercises-heading"
-              className="text-muted text-xs font-semibold uppercase tracking-wide"
+              className="text-muted text-xs font-semibold tracking-wide uppercase"
             >
               {card.exercises.length === 1
                 ? 'Exercice à faire maintenant'

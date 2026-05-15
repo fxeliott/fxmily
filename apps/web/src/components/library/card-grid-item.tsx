@@ -58,7 +58,7 @@ export function CardGridItem({ card, favorited, hasUnread = false }: CardGridIte
 
       <h3
         id={`card-${card.slug}-title`}
-        className="text-foreground group-hover:text-acc text-base font-semibold leading-snug transition-colors"
+        className="text-foreground group-hover:text-acc text-base leading-snug font-semibold transition-colors"
       >
         <Link
           href={`/library/${card.slug}`}
@@ -70,7 +70,7 @@ export function CardGridItem({ card, favorited, hasUnread = false }: CardGridIte
 
       <blockquote className="border-acc/40 text-muted border-l-2 pl-3 text-sm italic">
         &laquo;&nbsp;{card.quote}&nbsp;&raquo;
-        <footer className="text-muted mt-1 text-[10px] uppercase not-italic tracking-wide">
+        <footer className="text-muted mt-1 text-[10px] tracking-wide uppercase not-italic">
           {card.quoteSourceChapter}
         </footer>
       </blockquote>

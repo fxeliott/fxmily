@@ -81,7 +81,7 @@ export function MemberWeeklyReportsPanel({ reports }: MemberWeeklyReportsPanelPr
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <CalendarDays className="h-3.5 w-3.5 text-[var(--t-3)]" strokeWidth={1.75} />
-                  <span className="f-mono text-[13px] font-semibold tabular-nums text-[var(--t-1)]">
+                  <span className="f-mono text-[13px] font-semibold text-[var(--t-1)] tabular-nums">
                     {formatPeriod(report.weekStart, report.weekEnd)}
                   </span>
                   {mocked ? <Pill tone="warn">MOCK</Pill> : <Pill tone="acc">LIVE</Pill>}

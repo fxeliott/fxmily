@@ -93,7 +93,7 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
       <SheetContent
         side="bottom"
         showCloseButton={false}
-        className="rounded-t-card max-h-[90dvh] overflow-y-auto border-x-0 border-b-0 border-t border-[var(--b-default)] bg-[var(--bg-1)] sm:max-h-[80dvh]"
+        className="rounded-t-card max-h-[90dvh] overflow-y-auto border-x-0 border-t border-b-0 border-[var(--b-default)] bg-[var(--bg-1)] sm:max-h-[80dvh]"
       >
         <SheetHeader>
           <SheetTitle className="t-h2">Annoter ce trade</SheetTitle>

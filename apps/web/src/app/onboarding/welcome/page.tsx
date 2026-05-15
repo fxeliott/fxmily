@@ -35,7 +35,7 @@ export default async function OnboardingWelcomePage({ searchParams }: PageProps)
     <main className="aurora relative flex min-h-dvh flex-col items-center overflow-hidden px-4 py-10">
       <div
         aria-hidden
-        className="orb pointer-events-none absolute -left-32 -top-32 h-[420px] w-[420px] rounded-full opacity-25"
+        className="orb pointer-events-none absolute -top-32 -left-32 h-[420px] w-[420px] rounded-full opacity-25"
         style={{
           background: 'radial-gradient(circle, oklch(0.879 0.231 130 / 0.20) 0%, transparent 70%)',
         }}
@@ -64,7 +64,7 @@ export default async function OnboardingWelcomePage({ searchParams }: PageProps)
               </div>
             </div>
             <h1
-              className="f-display h-rise text-[28px] font-bold leading-[1.05] tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               Bienvenue.
@@ -77,7 +77,7 @@ export default async function OnboardingWelcomePage({ searchParams }: PageProps)
           <OnboardingForm token={token} email={lookup.invitation.email} />
         </Card>
 
-        <p className="text-center text-[10px] tabular-nums text-[var(--t-4)]">
+        <p className="text-center text-[10px] text-[var(--t-4)] tabular-nums">
           Cohorte privée · Eliot t&apos;a invité personnellement
         </p>
       </section>

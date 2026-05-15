@@ -86,7 +86,7 @@ export function MarkDouglasCard() {
 
       <blockquote className="flex flex-col gap-2">
         <p
-          className="f-display text-[20px] font-semibold leading-[1.25] tracking-[-0.015em] text-[var(--t-1)]"
+          className="f-display text-[20px] leading-[1.25] font-semibold tracking-[-0.015em] text-[var(--t-1)]"
           style={{ fontFeatureSettings: '"ss01" 1' }}
         >
           {truth.short}
@@ -95,7 +95,7 @@ export function MarkDouglasCard() {
       </blockquote>
 
       <footer className="mt-4 flex items-center justify-between border-t border-[var(--b-subtle)] pt-3">
-        <cite className="t-foot not-italic text-[var(--t-3)]">
+        <cite className="t-foot text-[var(--t-3)] not-italic">
           Trading in the Zone — Mark Douglas (2000), citations + paraphrases
         </cite>
         <button

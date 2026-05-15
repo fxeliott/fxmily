@@ -140,7 +140,7 @@ function AnnotationCard({ annotation, isAdmin, canDelete, mediaUrl }: Annotation
         </time>
       </header>
 
-      <p className="t-body whitespace-pre-wrap leading-relaxed text-[var(--t-2)]">
+      <p className="t-body leading-relaxed whitespace-pre-wrap text-[var(--t-2)]">
         {annotation.comment}
       </p>
 

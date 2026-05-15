@@ -69,7 +69,7 @@ export default async function AccountDeletePage(): Promise<React.ReactElement> {
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
           Dashboard
         </Link>
-        <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--bad)]">
+        <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--bad)] uppercase">
           RGPD · Article 17
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--t-1)] sm:text-3xl">
@@ -153,7 +153,7 @@ function ActiveAccountPanel(): React.ReactElement {
       </div>
 
       <div className="mt-6 rounded-xl border border-[var(--b-subtle)] bg-[var(--bg-2)] p-4">
-        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--t-2)]">
+        <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-[var(--t-2)] uppercase">
           <ShieldAlert aria-hidden="true" className="h-3.5 w-3.5 text-[var(--bad)]" />
           Action irréversible après {ACCOUNT_HARD_PURGE_DAYS} jours
         </p>

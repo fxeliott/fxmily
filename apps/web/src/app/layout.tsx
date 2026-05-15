@@ -70,7 +70,7 @@ export default function RootLayout({
         */}
         <a
           href="#main-content"
-          className="absolute left-2 top-2 z-50 -translate-y-16 rounded-md bg-[var(--acc)] px-3 py-2 text-[12px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-toast)] transition-transform focus:translate-y-0"
+          className="absolute top-2 left-2 z-50 -translate-y-16 rounded-md bg-[var(--acc)] px-3 py-2 text-[12px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-toast)] transition-transform focus:translate-y-0"
         >
           Aller au contenu principal
         </a>

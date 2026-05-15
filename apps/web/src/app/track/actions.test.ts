@@ -226,3 +226,128 @@ describe('submitHabitLogAction — persistence failure', () => {
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 });
+
+describe('submitHabitLogAction — per-kind builders (V2.1.1)', () => {
+  it('nutrition: parses mealsCount + optional quality enum + redirects', async () => {
+    await expect(
+      submitHabitLogAction(
+        null,
+        form({ kind: 'nutrition', date: TODAY, 'value.mealsCount': '3', 'value.quality': 'good' }),
+      ),
+    ).rejects.toMatchObject({ digest: `NEXT_REDIRECT;replace;/track?done=1&kind=nutrition` });
+    expect(upsertHabitLogMock).toHaveBeenCalledWith('usr_1', {
+      kind: 'nutrition',
+      date: TODAY,
+      value: { mealsCount: 3, quality: 'good' },
+    });
+  });
+
+  it('nutrition: omits quality when not provided (Zod .strict() respected)', async () => {
+    await expect(
+      submitHabitLogAction(null, form({ kind: 'nutrition', date: TODAY, 'value.mealsCount': '2' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+    expect(upsertHabitLogMock).toHaveBeenCalledWith('usr_1', {
+      kind: 'nutrition',
+      date: TODAY,
+      value: { mealsCount: 2 },
+    });
+  });
+
+  it('nutrition: rejects an out-of-allowlist quality enum', async () => {
+    const result = await submitHabitLogAction(
+      null,
+      form({ kind: 'nutrition', date: TODAY, 'value.mealsCount': '3', 'value.quality': 'amazing' }),
+    );
+    expect(result).toEqual(expect.objectContaining({ ok: false, error: 'invalid_input' }));
+    expect(upsertHabitLogMock).not.toHaveBeenCalled();
+  });
+
+  it('caffeine: parses cups + optional HH:MM lastDrinkAtUtc + redirects', async () => {
+    await expect(
+      submitHabitLogAction(
+        null,
+        form({
+          kind: 'caffeine',
+          date: TODAY,
+          'value.cups': '2',
+          'value.lastDrinkAtUtc': '16:30',
+        }),
+      ),
+    ).rejects.toMatchObject({ digest: `NEXT_REDIRECT;replace;/track?done=1&kind=caffeine` });
+    expect(upsertHabitLogMock).toHaveBeenCalledWith('usr_1', {
+      kind: 'caffeine',
+      date: TODAY,
+      value: { cups: 2, lastDrinkAtUtc: '16:30' },
+    });
+  });
+
+  it('caffeine: rejects a malformed lastDrinkAtUtc (Zod HH:MM regex)', async () => {
+    const result = await submitHabitLogAction(
+      null,
+      form({ kind: 'caffeine', date: TODAY, 'value.cups': '1', 'value.lastDrinkAtUtc': '25:99' }),
+    );
+    expect(result).toEqual(expect.objectContaining({ ok: false, error: 'invalid_input' }));
+    expect(upsertHabitLogMock).not.toHaveBeenCalled();
+  });
+
+  it('sport: parses type + durationMin + optional intensityRating + redirects', async () => {
+    await expect(
+      submitHabitLogAction(
+        null,
+        form({
+          kind: 'sport',
+          date: TODAY,
+          'value.type': 'cardio',
+          'value.durationMin': '45',
+          'value.intensityRating': '7',
+        }),
+      ),
+    ).rejects.toMatchObject({ digest: `NEXT_REDIRECT;replace;/track?done=1&kind=sport` });
+    expect(upsertHabitLogMock).toHaveBeenCalledWith('usr_1', {
+      kind: 'sport',
+      date: TODAY,
+      value: { type: 'cardio', durationMin: 45, intensityRating: 7 },
+    });
+  });
+
+  it('sport: returns invalid_input + fieldErrors when the required type is missing', async () => {
+    const result = await submitHabitLogAction(
+      null,
+      form({ kind: 'sport', date: TODAY, 'value.durationMin': '30' }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok === false) {
+      expect(result.error).toBe('invalid_input');
+      expect(result.fieldErrors).toBeDefined();
+    }
+    expect(upsertHabitLogMock).not.toHaveBeenCalled();
+  });
+
+  it('meditation: parses durationMin + optional quality + redirects', async () => {
+    await expect(
+      submitHabitLogAction(
+        null,
+        form({
+          kind: 'meditation',
+          date: TODAY,
+          'value.durationMin': '10',
+          'value.quality': '8',
+        }),
+      ),
+    ).rejects.toMatchObject({ digest: `NEXT_REDIRECT;replace;/track?done=1&kind=meditation` });
+    expect(upsertHabitLogMock).toHaveBeenCalledWith('usr_1', {
+      kind: 'meditation',
+      date: TODAY,
+      value: { durationMin: 10, quality: 8 },
+    });
+  });
+
+  it('meditation: rejects a durationMin above the schema max (180)', async () => {
+    const result = await submitHabitLogAction(
+      null,
+      form({ kind: 'meditation', date: TODAY, 'value.durationMin': '999' }),
+    );
+    expect(result).toEqual(expect.objectContaining({ ok: false, error: 'invalid_input' }));
+    expect(upsertHabitLogMock).not.toHaveBeenCalled();
+  });
+});

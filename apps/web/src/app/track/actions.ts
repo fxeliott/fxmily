@@ -24,10 +24,10 @@ import { habitLogInputSchema, type HabitKind } from '@/lib/schemas/habit-log';
  *   - `revalidatePath('/track')` + `revalidatePath('/dashboard')`
  *   - `redirect` re-throws NEXT_REDIRECT to navigate to /track?done=1
  *
- * The `kind` discriminant in FormData picks the parser branch. V2.1.0 ships
- * the `sleep` branch only (Sleep wizard). V2.1.1+ adds nutrition / caffeine /
- * sport / meditation branches — each is a switch case + builder helper, no
- * touch to the rest of the action.
+ * The `kind` discriminant in FormData picks the parser branch. V2.1.1 ships
+ * all five branches (sleep / nutrition / caffeine / sport / meditation) —
+ * each is one switch case + a per-kind `value.*` shape, no touch to the
+ * rest of the action.
  */
 
 export type TrackActionState =
@@ -80,7 +80,73 @@ function buildRawInput(fd: FormData): { kind: HabitKind; raw: unknown } | null {
         },
       };
     }
-    // V2.1.1+ : nutrition / caffeine / sport / meditation builders go here.
+    case 'nutrition': {
+      const mealsCount = pickNum(fd, 'value.mealsCount');
+      const quality = pickStr(fd, 'value.quality')?.trim() || undefined;
+      return {
+        kind,
+        raw: {
+          kind,
+          date,
+          value: {
+            mealsCount: mealsCount ?? -1, // will fail Zod min(0) — surfaces fieldError
+            ...(quality ? { quality } : {}),
+          },
+          ...(notes ? { notes } : {}),
+        },
+      };
+    }
+    case 'caffeine': {
+      const cups = pickNum(fd, 'value.cups');
+      const lastDrinkAtUtc = pickStr(fd, 'value.lastDrinkAtUtc')?.trim() || undefined;
+      return {
+        kind,
+        raw: {
+          kind,
+          date,
+          value: {
+            cups: cups ?? -1, // will fail Zod min(0) — surfaces fieldError
+            ...(lastDrinkAtUtc ? { lastDrinkAtUtc } : {}),
+          },
+          ...(notes ? { notes } : {}),
+        },
+      };
+    }
+    case 'sport': {
+      const type = pickStr(fd, 'value.type')?.trim() || undefined;
+      const durationMin = pickNum(fd, 'value.durationMin');
+      const intensityRating = pickNum(fd, 'value.intensityRating');
+      return {
+        kind,
+        raw: {
+          kind,
+          date,
+          value: {
+            // `type` is required — omitting it surfaces a Zod fieldError
+            ...(type ? { type } : {}),
+            durationMin: durationMin ?? -1,
+            ...(intensityRating !== undefined && intensityRating >= 1 ? { intensityRating } : {}),
+          },
+          ...(notes ? { notes } : {}),
+        },
+      };
+    }
+    case 'meditation': {
+      const durationMin = pickNum(fd, 'value.durationMin');
+      const quality = pickNum(fd, 'value.quality');
+      return {
+        kind,
+        raw: {
+          kind,
+          date,
+          value: {
+            durationMin: durationMin ?? -1, // will fail Zod min(0) — surfaces fieldError
+            ...(quality !== undefined && quality >= 1 ? { quality } : {}),
+          },
+          ...(notes ? { notes } : {}),
+        },
+      };
+    }
     default:
       return null;
   }

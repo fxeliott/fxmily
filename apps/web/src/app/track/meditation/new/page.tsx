@@ -1,0 +1,53 @@
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
+
+import { MeditationHabitWizard } from '@/components/track/meditation-habit-wizard';
+import { auth } from '@/auth';
+
+/**
+ * V2.1.1 TRACK — Méditation wizard host (Server Component).
+ *
+ * Auth gate (status === 'active'). Renders the `<MeditationHabitWizard>`
+ * Client Component which handles the 2-step flow + Server Action submit.
+ */
+
+export const dynamic = 'force-dynamic';
+
+export default async function TrackMeditationNewPage() {
+  const session = await auth();
+  if (!session?.user?.id || session.user.status !== 'active') {
+    redirect('/login');
+  }
+
+  return (
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6 outline-none"
+    >
+      <header className="space-y-2">
+        <Link
+          href="/track"
+          className="inline-flex min-h-6 items-center gap-1.5 px-2 py-1.5 text-[13px] font-medium text-[var(--t-3)] hover:text-[var(--t-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          Retour au suivi
+        </Link>
+        <p className="text-[12px] font-medium tracking-[0.10em] text-[var(--acc)] uppercase">
+          Pilier méditation
+        </p>
+        <h1 className="text-[24px] font-semibold tracking-tight text-[var(--t-1)] sm:text-[28px]">
+          Logger ta méditation
+        </h1>
+        <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
+          Hofmann et al., <em>J. Consult. Clin. Psychol.</em>, 2010 (méta-analyse) — ~10 min/jour de
+          pleine conscience suffisent à réduire l&apos;anxiété et stabiliser ta régulation
+          émotionnelle, les deux leviers de ton exécution sous incertitude.
+        </p>
+      </header>
+
+      <MeditationHabitWizard />
+    </main>
+  );
+}

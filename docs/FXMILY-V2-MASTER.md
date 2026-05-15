@@ -285,7 +285,7 @@ L1-L SOS button · L2-D Feedback widget · L3-D NPS trimestriel · L4-M Member-i
 
 ### M. Fun / plaisant White Hat (6 features)
 
-M1-L Avatars génériques · M2-L Thèmes · M3-M Sons satisfaisants · M4-L Haptic Capacitor V2 · M5-L Wallpapers Douglas · M6-L Trader name custom
+M1-L Avatars génériques · M2-L Thèmes · M3-N Sons satisfaisants (anti-audio Eliot — `feedback_no_audio.md` absolute, alignée tag N comme B8 Voice→texte et O1 Visualization audio) · M4-L Haptic Capacitor V2 · M5-L Wallpapers Douglas · M6-L Trader name custom
 
 ### N. Module TRACK — performance peaks (5 features)
 

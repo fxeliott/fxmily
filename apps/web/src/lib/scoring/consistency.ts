@@ -7,8 +7,9 @@
  * standards 2026):
  *
  *   - expectancyConsistency × 35 — positive expectancy (R/trade) clipped to
- *                                 100 at 3R+. Consistency = a positive edge
- *                                 sustained over the window.
+ *                                 100 at 1R+ (Phase V/W calibration 2026-05-09,
+ *                                 EXPECTANCY_FULL_SCALE=1, was 3). Consistency
+ *                                 = a positive edge sustained over the window.
  *   - profitFactor × 25         — gross win / gross loss, scaled so PF=1→0
  *                                 and PF=3→100.
  *   - drawdownControl × 20      — 100 − scaled(maxDD_R). 15R DD → 0.
@@ -110,7 +111,7 @@ export function computeConsistencyScore(input: ConsistencyInput): ScoreResult<Co
     };
   }
 
-  // Expectancy sub-score: 0R → 0, 3R → 100, clamped.
+  // Expectancy sub-score: 0R → 0, 1R → 100, clamped (EXPECTANCY_FULL_SCALE=1).
   const expectancyConsistency = valueSubScore(
     clamp(exp.expectancyR / EXPECTANCY_FULL_SCALE, 0, 1),
     WEIGHT_EXPECTANCY,

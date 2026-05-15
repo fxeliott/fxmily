@@ -29,7 +29,7 @@ import { hashPassword } from '../src/lib/auth/password.js';
 
 const TEST_EMAIL = 'j8smoke.member.e2e.test@fxmily.local';
 const TEST_PASSWORD = 'J8SmokePwd-2026!';
-const CRON_SECRET = 'dev-smoke-cron-secret-fxmily-j8';
+const CRON_SECRET = process.env.CRON_SECRET ?? 'dev-smoke-cron-secret-fxmily-j8';
 const APP_URL = 'http://localhost:3000';
 
 function required(name: string): string {

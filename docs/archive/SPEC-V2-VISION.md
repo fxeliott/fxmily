@@ -1,3 +1,9 @@
+> ⚠️ **ARCHIVED 2026-05-15** — superseded by [`docs/FXMILY-V2-MASTER.md`](../FXMILY-V2-MASTER.md) (source unique vérité V2).
+>
+> Ce document a été conservé tel quel pour traçabilité historique. §15 blueprint Prisma + §17 inventaire 120 features + §20 verdicts intégrations passives sont **absorbés** dans le master V2 §9 + §12 + §20. Les **15 open questions §11** (lignes 343-371) ont été **extraites** vers [`docs/FXMILY-V2-MASTER.md`](../FXMILY-V2-MASTER.md) §23 pour arbitrage actif Eliot. Pour toute nouvelle décision feature V2.x, lire le master, pas ce fichier.
+
+---
+
 # SPEC V2 VISION — Fxmily Behavioral LMS
 
 > **Préparé** : 2026-05-11 (session ultrathink round 6 post-V1.6 audit)

@@ -1,14 +1,14 @@
 name: zizmor (Actions security)
 
-# V1.12 P2 — TIER A2 zizmor CI integration.
+# V1.12 P2 — TIER A2 zizmor CI integration (V1.12 P4 — hard-gate enabled).
 #
 # Static analysis for `.github/workflows/` files. Surfaces findings via
-# GitHub Code Scanning (Security tab) by uploading a SARIF report. We
-# deliberately do NOT fail the workflow on findings so that the 16
-# remaining `unpinned-uses` HIGH findings (V1.10 audit catalogue) can be
-# triaged in TIER A1 (pinact SHA pinning, dedicated session) without
-# blocking the PR queue here. Once TIER A1 lands, flip `continue-on-error`
-# to `false` on the audit step to make zizmor a hard gate.
+# GitHub Code Scanning (Security tab) by uploading a SARIF report. V1.12 P4
+# TIER A1 cleared the 19 `unpinned-uses` HIGH findings (SHA pinning, this
+# PR) so the audit step now runs WITHOUT `continue-on-error` — any new
+# unpinned ref introduced by a future PR fails the workflow and blocks
+# merge. SARIF upload runs `if: always()` so findings still surface even
+# on a failed audit.
 #
 # Trigger philosophy : mirror CodeQL — push to main + PRs to main +
 # weekly cron. Path filter scoped to workflow files so unrelated PRs
@@ -54,12 +54,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.13'
 
@@ -73,12 +73,11 @@ jobs:
         run: |
           set -euo pipefail
           zizmor --format sarif .github/workflows/ > zizmor.sarif
-          zizmor --format plain .github/workflows/ || true
-        continue-on-error: true
+          zizmor --format plain .github/workflows/
 
       - name: Upload SARIF to Code Scanning
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@458d36d7d4f47d0dd16ca424c1d3cda0060f1360 # v3
         with:
           sarif_file: zizmor.sarif
           category: zizmor

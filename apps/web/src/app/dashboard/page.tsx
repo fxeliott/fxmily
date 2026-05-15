@@ -387,14 +387,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <ComingSoonCard
-              title="4 autres piliers"
-              jalon="V2.1.1"
-              desc="Nutrition, café, sport, méditation — wizards dédiés."
-            />
-            <ComingSoonCard
               title="Corrélations bien-être"
               jalon="V2.1.3"
               desc="L'impact mesuré de tes piliers sur ta discipline."
+            />
+            <ComingSoonCard
+              title="Log express"
+              jalon="V2.1.4"
+              desc="Loguer un pilier en deux taps depuis n'importe quel écran."
             />
           </div>
         </section>

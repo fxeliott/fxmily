@@ -11,7 +11,8 @@ import { cn } from '@/lib/utils';
  * V2.1 TRACK — "Aujourd'hui" status grid (5 cards, 1 per kind).
  *
  * Server Component — fetches the member's logs from the last 1 day at render
- * time, derives per-kind logged status, renders the 5 cards.
+ * time, derives per-kind logged status, renders the 5 cards. As of V2.1.1
+ * every kind links to its wizard.
  *
  * Mark Douglas posture (anti Black-Hat) :
  *   - No "0/5 piliers" counter
@@ -41,28 +42,28 @@ const PILLARS: PillarMeta[] = [
     kind: 'nutrition',
     label: 'Nutrition',
     Icon: UtensilsCrossed,
-    hint: 'Repas réguliers stabilisent la glycémie — V2.1.1.',
+    hint: 'Des repas réguliers stabilisent ta glycémie.',
     href: '/track/nutrition/new',
   },
   {
     kind: 'caffeine',
     label: 'Café',
     Icon: Coffee,
-    hint: 'Demi-vie ~6 h — V2.1.1.',
+    hint: 'Demi-vie ~6 h — coupe avant le coucher.',
     href: '/track/caffeine/new',
   },
   {
     kind: 'sport',
     label: 'Sport',
     Icon: Dumbbell,
-    hint: 'ACSM 150 min/sem MVPA — V2.1.1.',
+    hint: 'ACSM : 150 min/sem régulent ton humeur.',
     href: '/track/sport/new',
   },
   {
     kind: 'meditation',
     label: 'Méditation',
     Icon: Brain,
-    hint: 'Hofmann 2010 : 10 min/jour suffisent — V2.1.1.',
+    hint: 'Hofmann 2010 : 10 min/jour suffisent.',
     href: '/track/meditation/new',
   },
 ];
@@ -98,46 +99,6 @@ export async function TodayHabitCards({ userId }: TodayHabitCardsProps) {
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
         {PILLARS.map((p) => {
           const isLogged = loggedKinds.has(p.kind);
-          const isShippable = p.kind === 'sleep'; // V2.1.0 ship Sleep only
-
-          const inner = (
-            <Card
-              className={cn(
-                'group relative flex h-full flex-col gap-2 p-3.5 transition-colors',
-                isShippable
-                  ? 'focus-within:ring-2 focus-within:ring-[var(--acc)] focus-within:ring-offset-2 focus-within:ring-offset-[var(--bg)] hover:bg-[var(--bg-3)]'
-                  : 'opacity-60',
-              )}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <p.Icon
-                    className={cn(
-                      'h-5 w-5 shrink-0',
-                      isLogged ? 'text-[var(--acc)]' : 'text-[var(--t-2)]',
-                    )}
-                    aria-hidden
-                  />
-                  <span className="text-[14px] font-semibold text-[var(--t-1)]">{p.label}</span>
-                </div>
-                {isLogged ? (
-                  <Pill tone="acc">Logué</Pill>
-                ) : !isShippable ? (
-                  <Pill tone="mute">À venir</Pill>
-                ) : null}
-              </div>
-              <p className="text-[12px] leading-relaxed text-[var(--t-3)]">{p.hint}</p>
-            </Card>
-          );
-
-          if (!isShippable) {
-            return (
-              <div key={p.kind} aria-disabled className="cursor-not-allowed">
-                {inner}
-              </div>
-            );
-          }
-
           return (
             <Link
               key={p.kind}
@@ -149,7 +110,22 @@ export async function TodayHabitCards({ userId }: TodayHabitCardsProps) {
                   : `Logger ${p.label.toLowerCase()} aujourd'hui.`
               }
             >
-              {inner}
+              <Card className="group relative flex h-full flex-col gap-2 p-3.5 transition-colors focus-within:ring-2 focus-within:ring-[var(--acc)] focus-within:ring-offset-2 focus-within:ring-offset-[var(--bg)] hover:bg-[var(--bg-3)]">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <p.Icon
+                      className={cn(
+                        'h-5 w-5 shrink-0',
+                        isLogged ? 'text-[var(--acc)]' : 'text-[var(--t-2)]',
+                      )}
+                      aria-hidden
+                    />
+                    <span className="text-[14px] font-semibold text-[var(--t-1)]">{p.label}</span>
+                  </div>
+                  {isLogged ? <Pill tone="acc">Logué</Pill> : null}
+                </div>
+                <p className="text-[12px] leading-relaxed text-[var(--t-3)]">{p.hint}</p>
+              </Card>
             </Link>
           );
         })}

@@ -75,6 +75,15 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         // X-Forwarded-For {remote_host}` (V1.12 P1) the last-XFF entry
         // is non-spoofable, so `callerIdTrusted` gives a real client IP.
         //
+        // V1.12 P4 (2026-05-15) — L3 enhancement : extract `ip` once at the
+        // top of authorize() and propagate to BOTH audit rows (email +
+        // IP bucket). The `ipHash` top-level column on `audit_logs` lets
+        // forensic queries pivot by SHA-256(AUTH_SECRET + ip) — correlate
+        // rotated-email attacks from the same IP without exposing raw IP
+        // (RGPD §16 data minimisation). Previously V1.12 P3 only fetched
+        // `ip` inside the IP-rate-limit branch, so email-bucket trips had
+        // no ipHash → no cross-event correlation.
+        //
         // Defensive try-catch on `headers()` — Auth.js v5 calls authorize()
         // from inside its Route Handler chain so the request context IS
         // available in Next 16, but a future evolution (e.g. edge-runtime
@@ -82,28 +91,10 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         // as the only gate. The Server Action path
         // (`signInAction → loginIpLimiter.consume`) still hard-enforces
         // the IP limit for the legit user flow.
-        const emailDecision = loginEmailLimiter.consume(email.toLowerCase());
-        if (!emailDecision.allowed) {
-          await logAudit({
-            action: 'auth.login.rate_limited',
-            userId: null,
-            metadata: {
-              kind: 'email',
-              retryAfterMs: emailDecision.retryAfterMs,
-              source: 'authorize',
-            },
-          }).catch(() => undefined);
-          return null;
-        }
-
-        let ipDecision: { allowed: boolean; retryAfterMs: number } = {
-          allowed: true,
-          retryAfterMs: 0,
-        };
+        let ip: string | null = null;
         try {
           const reqHeaders = await headers();
-          const ip = callerIdTrusted({ headers: reqHeaders });
-          ipDecision = loginIpLimiter.consume(ip);
+          ip = callerIdTrusted({ headers: reqHeaders });
         } catch (err) {
           // headers() unavailable in this context (Auth.js v5 future
           // regression or non-Route-Handler invocation). Fail-open : the
@@ -119,10 +110,34 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
             errorName: err instanceof Error ? err.name : 'unknown',
           });
         }
+
+        const emailDecision = loginEmailLimiter.consume(email.toLowerCase());
+        if (!emailDecision.allowed) {
+          await logAudit({
+            action: 'auth.login.rate_limited',
+            userId: null,
+            ip,
+            metadata: {
+              kind: 'email',
+              retryAfterMs: emailDecision.retryAfterMs,
+              source: 'authorize',
+            },
+          }).catch(() => undefined);
+          return null;
+        }
+
+        let ipDecision: { allowed: boolean; retryAfterMs: number } = {
+          allowed: true,
+          retryAfterMs: 0,
+        };
+        if (ip !== null) {
+          ipDecision = loginIpLimiter.consume(ip);
+        }
         if (!ipDecision.allowed) {
           await logAudit({
             action: 'auth.login.rate_limited',
             userId: null,
+            ip,
             metadata: {
               kind: 'ip',
               retryAfterMs: ipDecision.retryAfterMs,

@@ -114,11 +114,36 @@ function parsePayload(eventData) {
 self.addEventListener('push', (event) => {
   const notif = parsePayload(event.data);
   if (!notif || !notif.title) {
-    // Nothing renderable — but we MUST still call waitUntil with *something*
-    // visible on iOS 16.4+. We choose to silently drop here because parsing
-    // errors are so rare (we control the dispatcher) and showing a fake
-    // notification would harm trust. If we observe iOS subscription
-    // revocations in the audit log, revisit this.
+    // V1.11 — C10 silent drop fix (Round 4 sub-agent O finding).
+    //
+    // iOS Safari 18.4+ Declarative Web Push REQUIRES `showNotification()`
+    // to be called for every `push` event. After ~3 missed calls in a
+    // row, iOS revokes the subscription silently — the member loses
+    // notifications without any signal (no audit row, no SDK error, no
+    // UI hint). The previous `return` early triggered exactly that
+    // failure mode.
+    //
+    // We render a silent generic fallback so iOS bookkeeping sees a
+    // `showNotification` call, even when the payload arrives malformed.
+    // `silent: true` keeps the member's device quiet (no sound, no
+    // vibration) — the fallback is a contract-keeper with iOS, not a
+    // user-facing notif. `tag: 'fxmily-fallback'` coalesces consecutive
+    // misfires into a single OS slot.
+    //
+    // Trade-off vs the original "drop silently to protect trust" :
+    // losing the subscription silently is the worse outcome. Document
+    // for telemetry in V1.11.1 (POST `/api/account/push/sw-error` to
+    // surface dispatcher payload bugs in admin observability).
+    event.waitUntil(
+      self.registration.showNotification('Fxmily', {
+        body: 'Notification reçue (contenu indisponible)',
+        tag: 'fxmily-fallback',
+        silent: true,
+        icon: '/favicon.svg',
+        badge: '/favicon.svg',
+        requireInteraction: false,
+      }),
+    );
     return;
   }
 

@@ -7,8 +7,21 @@ App web installable (PWA) pour le suivi de chaque membre : journal de trading, c
 📋 **Spec complète** : [`SPEC.md`](./SPEC.md) — source de vérité produit.
 🤖 **Conventions Claude Code** : [`CLAUDE.md`](./CLAUDE.md).
 🗺️ **V2 / post-V1 backlog** : [`docs/v2-roadmap.md`](./docs/v2-roadmap.md).
+🔒 **Politique sécurité** : [`SECURITY.md`](./SECURITY.md) · 📜 [`LICENSE`](./LICENSE) (All Rights Reserved).
 
-**Statut** : J0 → J10 livrés (code prêt prod) · 2026-05-09. **Phase R reality check** : pivot V1 sur `app.fxmilyapp.com` (Hetzner déjà existant `hetzner-dieu`, domaine déjà possédé) — coût supplémentaire = 0 €. Vercel Hobby ❌ exclu (clause non-commerciale interdit formation payante). Smoke prod end-to-end bloqué par : Sentry DSN + Resend domain verify + iPhone Safari 18.4+ device test + admin password rotation + GitHub secrets posés. Checklist dans [`docs/runbook-prod-smoke-test.md`](./docs/runbook-prod-smoke-test.md).
+## Posture & limites
+
+Fxmily est un **outil de suivi comportemental** — pas un outil d'analyse de marché ni de conseil financier. Posture explicite ancrée dans la pratique des coachs de trading (Mark Douglas, Brett Steenbarger) :
+
+- ❌ **Pas de conseil sur les analyses de trade** (setups, tendances, prévisions de marché, signaux d'achat/vente)
+- ❌ **Pas d'IA qui interprète des décisions de marché** (l'IA est cantonnée aux rapports comportementaux hebdo, bannière EU AI Act 50(1) wired admin + emails)
+- ✅ Conseils autorisés sur l'**exécution** (sessions, hedge, plan, discipline, hygiène)
+- ✅ Conseils autorisés sur la **psychologie** (framework Mark Douglas — citations fair use FR L122-5 ≤30 mots + paraphrases attribuées)
+- ✅ Crisis routing FR wired (3114 / SOS Amitié / Suicide Écoute) avec exclusions slang trading
+
+Fxmily n'est ni un CIF (Conseiller en Investissement Financier) ni un service réglementé AMF — c'est un outil interne de la formation Fxmily d'Eliot, à destination de ses membres exclusivement.
+
+**Statut** : **LIVE prod** depuis 2026-05-10 sur `app.fxmilyapp.com` (Hetzner CX22 + Caddy 2 + Postgres 17 + Docker Compose). Cycle V1 complet livré (**J0 → J10 + V1.5 + V1.6 + V1.7.2 batch HTTP local Claude Max + V1.8 REFLECT + V1.9 polish + V2.0 HabitLog backend bootstrap**). Branch protection main enabled (3 required checks : Lint+CodeQL+Playwright). Vitest **1001/1001** verts. 0 CVE / 0 Dependabot alert.
 
 ---
 
@@ -20,7 +33,7 @@ App web installable (PWA) pour le suivi de chaque membre : journal de trading, c
 - **Auth.js v5** (Credentials + JWT strategy) — câblé J1, status gate global Phase P
 - **Cloudflare R2** (médias) + **Resend** (emails) + **Sentry** (monitoring) + **Anthropic Claude API** (rapports hebdo IA, Sonnet)
 - **Web Push API + VAPID** + Service Worker manuel (Apple Declarative Web Push 8030 + classic, J9)
-- **Vitest 4** (717 tests) + **React Testing Library** + **Playwright** — wired J1+
+- **Vitest 4** (1001 tests verts post V2.0) + **React Testing Library** + **Playwright** (~50 specs auth-gate + 3 happy-path J5/J6/V1.5) — wired J1+
 - **Turborepo** + **pnpm 10 workspaces** — **Node 22 LTS**
 
 ## Structure du monorepo
@@ -160,9 +173,21 @@ Voir section 15 du [`SPEC.md`](./SPEC.md). 11 jalons (J0 → J10), ~50-70 jours 
 | **J7**  | ✅ 2026-05-07 | 50/50 fiches Mark Douglas + déclencheurs Octalysis               |
 | **J8**  | ✅ 2026-05-08 | Rapport hebdo IA admin (Claude Sonnet + cache 1h)                |
 | **J9**  | ✅ 2026-05-08 | Web Push API + VAPID + SW + 5 toggles préférences                |
-| **J10** | ⏳ 2026-05-09 | RGPD + Sentry + Hetzner/Vercel deploy + observability            |
+| **J10** | ✅ 2026-05-10 | RGPD + Sentry + Hetzner deploy + observability LIVE prod         |
 
-**J10 status** : code prêt + audits Phase Q (drift sync + perf T1.3 + content YELLOW) + Phase R (web research CVE + reality check pré-requis + 3 BLOCKERs PWA proxy matcher). Smoke prod end-to-end bloqué par 5 pré-requis externes Eliot (réduits de 7 à 5 grâce à Phase R) : Sentry DSN, Resend `fxmilyapp.com` verify, iPhone Safari 18.4+ test, admin password rotation, GitHub secrets. Checklist 12-step dans [`docs/runbook-prod-smoke-test.md`](./docs/runbook-prod-smoke-test.md).
+### Post-J10 — extensions V1.5 → V2.0 (toutes LIVE prod)
+
+| Sous-jalon | Statut        | Description                                                                 |
+| ---------- | ------------- | --------------------------------------------------------------------------- |
+| **V1.5**   | ✅ 2026-05-09 | Trading calibration (pseudonymize + tradeQuality A/B/C + riskPct Tharp)     |
+| **V1.5.2** | ✅ 2026-05-10 | Cleanup naming + 32-bit slice + NFC + rollback runbook + E2E + hook fix     |
+| **V1.6**   | ✅ 2026-05-11 | Post-launch hardening (5 bugs latents CRLF + Sentry taxonomy + freq cap)    |
+| **V1.7.2** | ✅ 2026-05-13 | Batch HTTP migration `claude --print` local Claude Max ($0 API cost)        |
+| **V1.8**   | ✅ 2026-05-14 | REFLECT module (WeeklyReview + ReflectionEntry CBT Ellis ABCD + Trade.tags) |
+| **V1.9**   | ✅ 2026-05-14 | Polish (RTL tests + sec hardening BOLA + perf hoist + e2e.yml)              |
+| **V2.0**   | ✅ 2026-05-14 | TRACK module backend bootstrap (HabitLog Prisma + Zod + service + 32 tests) |
+
+**Backlog V1.10 / V1.11** : 7 TIERS A-G documentés dans [`docs/v1.10-backlog.md`](./docs/v1.10-backlog.md) (pinact SHA pinning + zizmor + a11y polish + DS coherence + HabitLog frontend + misc).
 
 ## Licence
 

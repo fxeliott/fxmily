@@ -98,7 +98,7 @@ export async function DouglasInboxWidget({ userId }: DouglasInboxWidgetProps) {
                         </Pill>
                       )}
                     </div>
-                    <p className="t-body font-medium leading-snug text-[var(--t-1)] transition-colors group-hover:text-[var(--acc)]">
+                    <p className="t-body leading-snug font-medium text-[var(--t-1)] transition-colors group-hover:text-[var(--acc)]">
                       {d.cardTitle}
                     </p>
                     <p className="t-foot text-[var(--t-3)]">

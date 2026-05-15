@@ -282,7 +282,7 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
           disabled={isPending}
           aria-busy={isPending || undefined}
           aria-pressed={isSubscribed}
-          className="bg-primary text-primary-foreground focus-visible:ring-primary inline-flex h-11 min-w-11 items-center gap-2 rounded-md px-4 text-sm font-medium transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60"
+          className="bg-primary text-primary-foreground focus-visible:ring-primary inline-flex h-11 min-w-11 items-center gap-2 rounded-md px-4 text-sm font-medium transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
         >
           {isPending ? '…' : isSubscribed ? 'Désactiver' : 'Activer'}
         </button>

@@ -61,7 +61,7 @@ export function EmotionCheckinPicker({
   return (
     <fieldset className="flex flex-col gap-3" aria-describedby={counterId}>
       <legend className="flex w-full items-center justify-between">
-        <span className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+        <span className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
           {label}
         </span>
         {/* Visual counter — silent for SR. Only the cap-reached transition

@@ -31,7 +31,7 @@ export default function NotFound(): React.ReactElement {
         <Compass className="h-6 w-6" />
       </span>
       <div>
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--acc)]">404</p>
+        <p className="text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">404</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--t-1)] sm:text-3xl">
           Page introuvable
         </h1>

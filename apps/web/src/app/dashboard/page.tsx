@@ -110,7 +110,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <main className="flex min-h-dvh flex-col bg-[var(--bg)]">
       {/* Sticky header */}
-      <header className="bg-[var(--bg)]/95 sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-[var(--b-default)] px-4 backdrop-blur lg:px-8">
+      <header className="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-[var(--b-default)] bg-[var(--bg)]/95 px-4 backdrop-blur lg:px-8">
         <Link href="/dashboard" className="flex items-center gap-2">
           <div className="grid h-5 w-5 place-items-center rounded-[5px] border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[10px] font-bold text-[var(--acc)]">
             F
@@ -146,7 +146,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <span>{frenchToday()}</span>
           </div>
           <h1
-            className="f-display h-rise text-[28px] font-bold leading-[1.05] tracking-[-0.03em] text-[var(--t-1)] sm:text-[36px]"
+            className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[36px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             {greeting()} {firstName}.
@@ -374,7 +374,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
 
         {/* Footer kbd hint */}
-        <footer className="mt-8 flex items-center justify-between border-t border-[var(--b-default)] pt-4 text-[10px] tabular-nums text-[var(--t-4)]">
+        <footer className="mt-8 flex items-center justify-between border-t border-[var(--b-default)] pt-4 text-[10px] text-[var(--t-4)] tabular-nums">
           <span className="t-foot">Aucun conseil de marché. Discipline avant tout.</span>
           <span className="inline-flex items-center gap-1">
             <Kbd>⌘</Kbd>
@@ -510,11 +510,11 @@ function KpiCell({
             ? 'text-[var(--t-3)]'
             : 'text-[var(--t-1)]';
   return (
-    <div className="flex flex-col gap-1.5 border-b border-r border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 sm:[&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r">
+    <div className="flex flex-col gap-1.5 border-r border-b border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 sm:[&:nth-child(2)]:border-r sm:[&:nth-child(2)]:border-b-0">
       <span className="t-eyebrow">{label}</span>
       <span
         className={cn(
-          'f-mono text-[22px] font-semibold tabular-nums leading-none tracking-[-0.02em]',
+          'f-mono text-[22px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
           valColor,
         )}
       >

@@ -119,7 +119,7 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
           Dashboard
         </Link>
-        <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--acc)]">
+        <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
           RGPD · Article 20
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--t-1)] sm:text-3xl">

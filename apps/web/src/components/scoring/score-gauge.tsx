@@ -184,7 +184,7 @@ export function ScoreGauge({
         {/* Excellence sparkle — score >= 95 only. Subtle, not distracting. */}
         {isExcellent ? (
           <Sparkles
-            className="absolute -right-1 -top-1 h-4 w-4 text-[var(--acc)]"
+            className="absolute -top-1 -right-1 h-4 w-4 text-[var(--acc)]"
             strokeWidth={2}
             aria-hidden="true"
           />
@@ -234,7 +234,7 @@ export function ScoreGauge({
             <>
               <motion.span
                 className={cn(
-                  'f-mono text-[28px] font-semibold tabular-nums tracking-[-0.02em]',
+                  'f-mono text-[28px] font-semibold tracking-[-0.02em] tabular-nums',
                   tone.text,
                 )}
               >

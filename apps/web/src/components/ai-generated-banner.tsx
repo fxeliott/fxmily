@@ -98,7 +98,7 @@ export function AIGeneratedBanner({
             transparency loop (page shipped PR #67 2026-05-14). */}
         <a
           href="/legal/ai-disclosure"
-          className="font-medium text-[var(--t-1)] underline decoration-[var(--cy)] decoration-2 underline-offset-2 transition-colors hover:text-[var(--acc)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
+          className="font-medium text-[var(--t-1)] underline decoration-[var(--cy)] decoration-2 underline-offset-2 transition-colors hover:text-[var(--acc)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
         >
           En savoir plus →
         </a>

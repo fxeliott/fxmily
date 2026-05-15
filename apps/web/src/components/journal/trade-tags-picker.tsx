@@ -125,10 +125,10 @@ export function TradeTagsPicker({ value, onChange, disabled }: TradeTagsPickerPr
   return (
     <fieldset className="flex flex-col gap-2.5" data-slot="trade-tags-picker">
       <legend className="mb-1 flex items-baseline justify-between gap-3">
-        <span className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+        <span className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
           Étiquettes comportementales (optionnel)
         </span>
-        <span className="t-cap font-mono tabular-nums text-[var(--t-3)]">
+        <span className="t-cap font-mono text-[var(--t-3)] tabular-nums">
           {selected.size} / {TRADE_TAGS_MAX_PER_TRADE}
         </span>
       </legend>
@@ -161,7 +161,7 @@ export function TradeTagsPicker({ value, onChange, disabled }: TradeTagsPickerPr
               onFocus={() => setOpen(meta.slug)}
               onBlur={() => setOpen((cur) => (cur === meta.slug ? null : cur))}
               className={cn(
-                'rounded-pill group relative inline-flex min-h-11 items-center gap-1.5 border px-3.5 py-2 text-[12px] font-semibold uppercase tracking-[0.06em] transition-[background-color,border-color,color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]',
+                'rounded-pill group relative inline-flex min-h-11 items-center gap-1.5 border px-3.5 py-2 text-[12px] font-semibold tracking-[0.06em] uppercase transition-[background-color,border-color,color,box-shadow,transform] duration-150 focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none',
                 isOn
                   ? isPositive
                     ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)] shadow-[0_0_0_3px_oklch(0.804_0.181_145_/_0.12)]'

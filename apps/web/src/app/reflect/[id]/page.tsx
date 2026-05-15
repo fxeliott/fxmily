@@ -130,7 +130,7 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
                       color: s.color,
                     }}
                   >
-                    <span className="font-display text-[16px] font-bold leading-none">
+                    <span className="font-display text-[16px] leading-none font-bold">
                       {s.letter}
                     </span>
                   </div>

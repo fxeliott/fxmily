@@ -82,13 +82,13 @@ export function SleepZonesBar({ hours }: SleepZonesBarProps) {
   return (
     <div className="flex flex-col gap-2.5" aria-hidden={value === null ? 'true' : undefined}>
       <div className="flex items-baseline justify-between">
-        <span className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+        <span className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
           Zones de sommeil
         </span>
         {currentZone ? (
           <span
             className={cn(
-              'font-mono text-[11px] font-semibold uppercase tabular-nums tracking-[0.08em]',
+              'font-mono text-[11px] font-semibold tracking-[0.08em] uppercase tabular-nums',
               pulse && 'threshold-pulse',
             )}
             style={{ color: currentZone.color }}
@@ -97,7 +97,7 @@ export function SleepZonesBar({ hours }: SleepZonesBarProps) {
             {currentZone.label}
           </span>
         ) : (
-          <span className="font-mono text-[11px] tabular-nums text-[var(--t-3)]">—</span>
+          <span className="font-mono text-[11px] text-[var(--t-3)] tabular-nums">—</span>
         )}
       </div>
 
@@ -121,7 +121,7 @@ export function SleepZonesBar({ hours }: SleepZonesBarProps) {
               }}
             >
               <span
-                className="hidden font-mono text-[10px] font-semibold uppercase tracking-[0.10em] sm:inline"
+                className="hidden font-mono text-[10px] font-semibold tracking-[0.10em] uppercase sm:inline"
                 style={{ color: z.color }}
               >
                 {z.label}
@@ -146,7 +146,7 @@ export function SleepZonesBar({ hours }: SleepZonesBarProps) {
       </div>
 
       {/* Tick scale: 0, 5, 6.5, 9, 12 */}
-      <div className="relative h-2 font-mono text-[10px] tabular-nums text-[var(--t-3)]">
+      <div className="relative h-2 font-mono text-[10px] text-[var(--t-3)] tabular-nums">
         {[0, 5, 6.5, 9, 12].map((t) => (
           <span
             key={t}
@@ -160,9 +160,9 @@ export function SleepZonesBar({ hours }: SleepZonesBarProps) {
 
       {/* Caption */}
       <p className="t-cap text-[var(--t-3)]">
-        Cible <span className="font-mono tabular-nums text-[var(--t-2)]">6,5–9h</span> : la bande où
+        Cible <span className="font-mono text-[var(--t-2)] tabular-nums">6,5–9h</span> : la bande où
         ta clarté de décision et ta régulation émotionnelle culminent. Sous{' '}
-        <span className="font-mono tabular-nums text-[var(--t-2)]">5h</span> tu trades avec un
+        <span className="font-mono text-[var(--t-2)] tabular-nums">5h</span> tu trades avec un
         désavantage mesurable.
       </p>
     </div>

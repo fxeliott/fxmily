@@ -124,7 +124,7 @@ export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps)
             </div>
 
             {/* Meta row : timestamp + session */}
-            <span className="font-mono text-[11px] tabular-nums text-[var(--t-3)]">
+            <span className="font-mono text-[11px] text-[var(--t-3)] tabular-nums">
               {DATETIME_FMT.format(new Date(trade.enteredAt))}
               <span className="mx-1.5 text-[var(--t-4)]">·</span>
               {SESSION_LABEL[trade.session]}
@@ -163,7 +163,7 @@ export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps)
               <>
                 <span
                   className={cn(
-                    'f-mono text-[20px] font-semibold tabular-nums leading-none tracking-[-0.02em]',
+                    'f-mono text-[20px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
                     isWin ? 'text-[var(--ok)]' : isLoss ? 'text-[var(--bad)]' : 'text-[var(--t-3)]',
                   )}
                   style={
@@ -186,7 +186,7 @@ export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps)
                 ) : null}
               </>
             ) : (
-              <span className="f-mono text-[16px] font-medium leading-none text-[var(--t-4)]">
+              <span className="f-mono text-[16px] leading-none font-medium text-[var(--t-4)]">
                 —
               </span>
             )}

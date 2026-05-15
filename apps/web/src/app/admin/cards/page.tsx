@@ -54,7 +54,7 @@ export default async function AdminCardsPage({ searchParams }: AdminCardsPagePro
   ]);
 
   return (
-    <main className="container mx-auto max-w-6xl px-4 pb-24 pt-6 md:pt-10">
+    <main className="container mx-auto max-w-6xl px-4 pt-6 pb-24 md:pt-10">
       <header className="mb-6 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <span className="bg-acc-dim text-acc inline-flex h-9 w-9 items-center justify-center rounded-full">
@@ -74,21 +74,21 @@ export default async function AdminCardsPage({ searchParams }: AdminCardsPagePro
       {/* Stats strip */}
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card className="p-4">
-          <p className="text-muted text-[11px] uppercase tracking-wide">Total</p>
+          <p className="text-muted text-[11px] tracking-wide uppercase">Total</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{stats.totalCards}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-muted text-[11px] uppercase tracking-wide">Publiées</p>
+          <p className="text-muted text-[11px] tracking-wide uppercase">Publiées</p>
           <p className="text-acc mt-1 text-2xl font-semibold tabular-nums">
             {stats.publishedCards}
           </p>
         </Card>
         <Card className="p-4">
-          <p className="text-muted text-[11px] uppercase tracking-wide">Brouillons</p>
+          <p className="text-muted text-[11px] tracking-wide uppercase">Brouillons</p>
           <p className="text-muted mt-1 text-2xl font-semibold tabular-nums">{stats.draftCards}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-muted text-[11px] uppercase tracking-wide">Avec triggers</p>
+          <p className="text-muted text-[11px] tracking-wide uppercase">Avec triggers</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums">{stats.cardsWithTriggers}</p>
         </Card>
       </div>
@@ -170,7 +170,7 @@ export default async function AdminCardsPage({ searchParams }: AdminCardsPagePro
                         {card.hatClass === 'black' && <Pill tone="warn">Black hat</Pill>}
                         <Pill tone="mute">P{card.priority}</Pill>
                       </div>
-                      <h2 className="text-base font-semibold leading-snug">
+                      <h2 className="text-base leading-snug font-semibold">
                         <Link
                           href={`/library/${card.slug}`}
                           target="_blank"

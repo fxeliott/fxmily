@@ -63,7 +63,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
   const totalCount = categories.reduce((acc, c) => acc + c.count, 0);
 
   return (
-    <main className="container mx-auto max-w-5xl px-4 pb-24 pt-6 md:pt-10">
+    <main className="container mx-auto max-w-5xl px-4 pt-6 pb-24 md:pt-10">
       {/* Hero header */}
       <header className="mb-6 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-4">

@@ -54,7 +54,7 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
         <div className="flex flex-col gap-1.5">
           <span className="t-eyebrow">{formatLocalDate(status.today)}</span>
           <h1
-            className="f-display text-[28px] font-bold leading-[1.05] tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+            className="f-display text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             Check-in quotidien

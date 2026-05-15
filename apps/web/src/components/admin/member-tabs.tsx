@@ -65,7 +65,7 @@ export function MemberTabs({ memberId, active }: MemberTabsProps) {
               title={`Disponible en ${tab.comingSoon}`}
             >
               {tab.label}
-              <span className="text-muted text-[10px] uppercase tracking-wider">
+              <span className="text-muted text-[10px] tracking-wider uppercase">
                 {tab.comingSoon}
               </span>
             </span>

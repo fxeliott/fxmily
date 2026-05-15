@@ -18,7 +18,7 @@ export function LegalFooter(): React.ReactElement {
   return (
     <footer
       role="contentinfo"
-      className="bg-[var(--bg-1)]/40 mt-auto border-t border-[var(--b-subtle)] backdrop-blur-sm"
+      className="mt-auto border-t border-[var(--b-subtle)] bg-[var(--bg-1)]/40 backdrop-blur-sm"
     >
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-5 text-xs text-[var(--t-3)] sm:flex-row sm:items-center sm:justify-between">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">

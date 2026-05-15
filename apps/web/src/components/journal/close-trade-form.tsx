@@ -51,7 +51,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="exitedAt"
-          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
         >
           Date et heure de sortie
         </label>
@@ -64,7 +64,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
           disabled={pending}
           aria-invalid={state.fieldErrors?.exitedAt ? 'true' : undefined}
           className={cn(
-            'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
             state.fieldErrors?.exitedAt
               ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
               : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
@@ -83,7 +83,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="exitPrice"
-          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
         >
           Prix de sortie
         </label>
@@ -98,7 +98,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
           placeholder="0.00000"
           aria-invalid={state.fieldErrors?.exitPrice ? 'true' : undefined}
           className={cn(
-            'f-mono rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] tabular-nums text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            'f-mono rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] tabular-nums transition-[border-color,box-shadow] duration-150 outline-none',
             'placeholder:text-[var(--t-4)]',
             state.fieldErrors?.exitPrice
               ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
@@ -116,7 +116,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
 
       {/* Outcome — 3 cards radio */}
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+        <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
           Résultat
         </legend>
         <div role="radiogroup" aria-label="Résultat du trade" className="grid grid-cols-3 gap-2">
@@ -157,7 +157,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="notes"
-          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
         >
           Notes (optionnel)
         </label>
@@ -169,7 +169,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
           disabled={pending}
           placeholder="Comment tu t'es senti ? Ce qui a marché / pas marché ?"
           className={cn(
-            'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
             'placeholder:text-[var(--t-4)]',
             'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
             'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
@@ -180,7 +180,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
 
       {/* Screenshot exit */}
       <div className="flex flex-col gap-2">
-        <span className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+        <span className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
           Capture après sortie
         </span>
         <ScreenshotUploader
@@ -195,7 +195,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
 
       {/* Submit gate hint */}
       {submitDisabled && !pending ? (
-        <p id="close-submit-hint" className="text-right text-[11px] tabular-nums text-[var(--t-4)]">
+        <p id="close-submit-hint" className="text-right text-[11px] text-[var(--t-4)] tabular-nums">
           Capture {screenshotKey.length === 0 ? '✗' : '✓'} · Émotion(s){' '}
           {emotionAfter.length === 0 ? '✗' : '✓'}
         </p>
@@ -252,7 +252,7 @@ function OutcomeCard({
   return (
     <label
       className={cn(
-        'rounded-card relative flex min-h-12 cursor-pointer flex-col items-center justify-center gap-1 border bg-[var(--bg-1)] px-3 py-3 text-[12px] font-semibold uppercase tracking-[0.10em] text-[var(--t-3)] transition-all',
+        'rounded-card relative flex min-h-12 cursor-pointer flex-col items-center justify-center gap-1 border bg-[var(--bg-1)] px-3 py-3 text-[12px] font-semibold tracking-[0.10em] text-[var(--t-3)] uppercase transition-all',
         'border-[var(--b-default)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
         'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--acc)]',
         toneChecked,
@@ -267,7 +267,7 @@ function OutcomeCard({
         disabled={disabled}
         className="peer sr-only"
       />
-      <span aria-hidden className="absolute right-2 top-2 hidden peer-checked:inline">
+      <span aria-hidden className="absolute top-2 right-2 hidden peer-checked:inline">
         <Check className="h-3 w-3" strokeWidth={2.5} />
       </span>
       {Icon ? <Icon className="h-4 w-4" strokeWidth={1.75} /> : <span>—</span>}

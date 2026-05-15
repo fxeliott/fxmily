@@ -133,7 +133,7 @@ function Metric({
     <div className="flex flex-col gap-1">
       <span className="t-mono-cap text-[var(--t-4)]">{label}</span>
       <span
-        className={`f-mono inline-flex items-center gap-1 text-[20px] font-semibold tabular-nums leading-none tracking-[-0.02em] ${tone}`}
+        className={`f-mono inline-flex items-center gap-1 text-[20px] leading-none font-semibold tracking-[-0.02em] tabular-nums ${tone}`}
       >
         {icon}
         {value}

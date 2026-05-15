@@ -64,12 +64,12 @@ export function HelpfulFeedback({ deliveryId, initialHelpful }: HelpfulFeedbackP
     <div
       role="group"
       aria-labelledby="helpful-q"
-      className="rounded-card bg-[var(--bg-2)]/40 flex flex-col gap-2 border border-[var(--b-default)] p-4"
+      className="rounded-card flex flex-col gap-2 border border-[var(--b-default)] bg-[var(--bg-2)]/40 p-4"
     >
       <span role="status" aria-live="polite" className="sr-only">
         {announce}
       </span>
-      <p id="helpful-q" className="text-xs uppercase tracking-wide text-[var(--t-3)]">
+      <p id="helpful-q" className="text-xs tracking-wide text-[var(--t-3)] uppercase">
         Cette fiche t&apos;a aidé&nbsp;?
       </p>
       <div className="flex gap-2">
@@ -84,7 +84,7 @@ export function HelpfulFeedback({ deliveryId, initialHelpful }: HelpfulFeedbackP
             'border text-sm font-medium transition-[border-color,background-color,box-shadow] duration-200',
             helpful === true
               ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_16px_-4px_var(--acc-glow)]'
-              : 'bg-[var(--bg-1)]/60 border-[var(--b-default)] text-[var(--t-1)] hover:border-[var(--b-acc)]',
+              : 'border-[var(--b-default)] bg-[var(--bg-1)]/60 text-[var(--t-1)] hover:border-[var(--b-acc)]',
             'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
             'disabled:opacity-50',
           )}
@@ -103,7 +103,7 @@ export function HelpfulFeedback({ deliveryId, initialHelpful }: HelpfulFeedbackP
             'border text-sm font-medium transition-[border-color,background-color,box-shadow] duration-200',
             helpful === false
               ? 'border-[oklch(0.834_0.158_80_/_0.40)] bg-[var(--warn-dim)] text-[var(--warn)]'
-              : 'bg-[var(--bg-1)]/60 border-[var(--b-default)] text-[var(--t-1)] hover:border-[oklch(0.834_0.158_80_/_0.40)]',
+              : 'border-[var(--b-default)] bg-[var(--bg-1)]/60 text-[var(--t-1)] hover:border-[oklch(0.834_0.158_80_/_0.40)]',
             'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--warn)]',
             'disabled:opacity-50',
           )}

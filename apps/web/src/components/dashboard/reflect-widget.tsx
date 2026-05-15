@@ -47,7 +47,7 @@ export async function DashboardReflectWidget({ userId }: DashboardReflectWidgetP
       <div className="grid gap-3 sm:grid-cols-2">
         <Link
           href="/review"
-          className="rounded-card-lg group relative flex flex-col gap-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
+          className="rounded-card-lg group relative flex flex-col gap-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
           aria-label={`Revue hebdomadaire — ${reviewCount > 0 ? `dernière soumise le ${lastReviewDate}` : 'aucune pour l’instant'}`}
         >
           <div className="flex items-start justify-between gap-2">
@@ -74,7 +74,7 @@ export async function DashboardReflectWidget({ userId }: DashboardReflectWidgetP
               5 questions process · ~5 min · le miroir de ton exécution
             </p>
             {reviewCount > 0 ? (
-              <p className="t-cap mt-2 font-mono tabular-nums text-[var(--t-2)]">
+              <p className="t-cap mt-2 font-mono text-[var(--t-2)] tabular-nums">
                 Dernière soumise : {lastReviewDate}
               </p>
             ) : (
@@ -85,7 +85,7 @@ export async function DashboardReflectWidget({ userId }: DashboardReflectWidgetP
 
         <Link
           href="/reflect"
-          className="rounded-card-lg group relative flex flex-col gap-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
+          className="rounded-card-lg group relative flex flex-col gap-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
           aria-label={`Réflexion ABCD — ${reflectionCount} réflexion${reflectionCount > 1 ? 's' : ''} ces 30 derniers jours`}
         >
           <div className="flex items-start justify-between gap-2">
@@ -111,7 +111,7 @@ export async function DashboardReflectWidget({ userId }: DashboardReflectWidgetP
             <p className="t-cap mt-1 text-[var(--t-3)]">
               Quand la pensée vient en éclair · structure CBT en 4 étapes
             </p>
-            <p className="t-cap mt-2 font-mono tabular-nums text-[var(--t-2)]">
+            <p className="t-cap mt-2 font-mono text-[var(--t-2)] tabular-nums">
               {reflectionCount} sur 30 derniers jours
             </p>
           </div>

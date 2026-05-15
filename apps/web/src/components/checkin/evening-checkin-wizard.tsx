@@ -281,7 +281,7 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
             <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
             Retour
           </Link>
-          <span className="font-mono text-[11px] tabular-nums text-[var(--t-3)]" aria-live="polite">
+          <span className="font-mono text-[11px] text-[var(--t-3)] tabular-nums" aria-live="polite">
             Étape{' '}
             <span className="font-semibold text-[var(--acc)]">
               {String(step + 1).padStart(2, '0')}
@@ -304,7 +304,7 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
               tabIndex={-1}
               // See morning wizard — programmatic-focus heading, no visual
               // outline. Audit J5 H3.
-              className="f-display text-[20px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--t-1)] outline-none focus-visible:outline-none sm:text-[24px]"
+              className="f-display text-[20px] leading-[1.1] font-bold tracking-[-0.02em] text-[var(--t-1)] outline-none focus-visible:outline-none sm:text-[24px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
               {STEP_TITLES[step]}
@@ -407,7 +407,7 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
 
       <nav
         aria-label="Navigation du check-in soir"
-        className="bg-[var(--bg)]/95 supports-[backdrop-filter]:bg-[var(--bg)]/80 sticky bottom-0 -mx-4 flex flex-col gap-1 border-t border-[var(--b-default)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur"
+        className="sticky bottom-0 -mx-4 flex flex-col gap-1 border-t border-[var(--b-default)] bg-[var(--bg)]/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-[var(--bg)]/80"
       >
         <div className="flex items-center justify-between gap-2">
           <Btn
@@ -565,7 +565,7 @@ function StepReflection({
         <div className="flex items-center justify-between">
           <label
             htmlFor="journalNote"
-            className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+            className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
           >
             Réflexion libre (optionnel)
           </label>
@@ -594,7 +594,7 @@ function StepReflection({
           placeholder="Une pensée, un moment, un déclic, une frustration…"
           aria-invalid={fieldErrors.journalNote ? 'true' : undefined}
           className={cn(
-            'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
             'placeholder:text-[var(--t-3)]',
             fieldErrors.journalNote
               ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
@@ -606,7 +606,7 @@ function StepReflection({
       </div>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+        <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
           3 gratitudes (optionnel)
         </legend>
         {([0, 1, 2] as const).map((i) => (
@@ -615,7 +615,7 @@ function StepReflection({
                 bruit pour le SR (audit UI H4). */}
             <span
               aria-hidden
-              className="w-3 shrink-0 font-mono text-[11px] tabular-nums text-[var(--t-3)]"
+              className="w-3 shrink-0 font-mono text-[11px] text-[var(--t-3)] tabular-nums"
             >
               {i + 1}.
             </span>
@@ -628,7 +628,7 @@ function StepReflection({
               maxLength={200}
               aria-label={`Gratitude ${i + 1}`}
               className={cn(
-                'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+                'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
                 'placeholder:text-[var(--t-3)]',
                 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
                 'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
@@ -679,7 +679,7 @@ function NumericField({
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={id}
-        className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+        className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
       >
         {label}
       </label>
@@ -696,7 +696,7 @@ function NumericField({
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={describedBy}
         className={cn(
-          'f-mono rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] tabular-nums text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+          'f-mono rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] tabular-nums transition-[border-color,box-shadow] duration-150 outline-none',
           'placeholder:text-[var(--t-4)]',
           error
             ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
@@ -768,7 +768,7 @@ function RadioGroup({
 
   return (
     <fieldset className="flex flex-col gap-2" aria-describedby={errorId} onKeyDown={handleKeyDown}>
-      <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+      <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
         {legend}
       </legend>
       <div className="flex flex-wrap gap-2">

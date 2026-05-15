@@ -134,7 +134,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           <div className="flex flex-1 flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <h1
-                className="f-display h-rise text-[24px] font-bold leading-[1.05] tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
+                className="f-display h-rise text-[24px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
                 style={{ fontFeatureSettings: '"ss01" 1' }}
               >
                 {detail.displayName}
@@ -152,7 +152,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
                 </Pill>
               ) : null}
             </div>
-            <p className="t-body inline-flex items-center gap-1.5 font-mono tabular-nums text-[var(--t-2)]">
+            <p className="t-body inline-flex items-center gap-1.5 font-mono text-[var(--t-2)] tabular-nums">
               <Mail className="h-3.5 w-3.5 text-[var(--t-4)]" strokeWidth={1.75} />
               {detail.email}
             </p>
@@ -262,13 +262,13 @@ function Metric({
           : 'text-[var(--t-1)]';
 
   return (
-    <div className="flex flex-col gap-1 border-b border-r border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-b-0 [&:nth-child(2)]:border-r-0 sm:[&:nth-child(2)]:border-r [&:nth-child(3)]:border-r-0 sm:[&:nth-child(3)]:border-b sm:[&:nth-child(3)]:border-r-0 [&:nth-child(4)]:border-b-0 sm:[&:nth-child(4)]:border-r [&:nth-child(5)]:border-b-0 [&:nth-child(5)]:border-r [&:nth-child(6)]:border-b-0 [&:nth-child(6)]:border-r-0">
+    <div className="flex flex-col gap-1 border-r border-b border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r [&:nth-child(3)]:border-r-0 sm:[&:nth-child(3)]:border-r-0 sm:[&:nth-child(3)]:border-b [&:nth-child(4)]:border-b-0 sm:[&:nth-child(4)]:border-r [&:nth-child(5)]:border-r [&:nth-child(5)]:border-b-0 [&:nth-child(6)]:border-r-0 [&:nth-child(6)]:border-b-0">
       <span className="t-eyebrow">{label}</span>
       <span
         className={cn(
           mono
             ? 'f-mono text-[13px] tabular-nums'
-            : 'f-mono text-[22px] font-semibold tabular-nums leading-none tracking-[-0.02em]',
+            : 'f-mono text-[22px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
           valColor,
         )}
       >

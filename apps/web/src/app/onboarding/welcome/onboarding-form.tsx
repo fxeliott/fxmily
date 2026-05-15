@@ -48,12 +48,12 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="onboarding-email"
-          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
         >
           Email
         </label>
         <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--t-4)]">
+          <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--t-4)]">
             <Mail className="h-4 w-4" strokeWidth={1.75} />
           </span>
           <input
@@ -64,7 +64,7 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
             readOnly
             aria-readonly="true"
             tabIndex={-1}
-            className="rounded-input h-11 w-full border border-[var(--b-default)] bg-[var(--bg-2)] py-2 pl-10 pr-3 text-[14px] text-[var(--t-3)] outline-none"
+            className="rounded-input h-11 w-full border border-[var(--b-default)] bg-[var(--bg-2)] py-2 pr-3 pl-10 text-[14px] text-[var(--t-3)] outline-none"
           />
         </div>
       </div>
@@ -192,13 +192,13 @@ function Field({
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={id}
-        className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+        className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
       >
         {label}
       </label>
       <div className="relative">
         {icon ? (
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--t-4)]">
+          <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--t-4)]">
             {icon}
           </span>
         ) : null}
@@ -212,7 +212,7 @@ function Field({
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={describedBy}
           className={cn(
-            'rounded-input h-11 w-full border bg-[var(--bg-1)] py-2 pr-3 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            'rounded-input h-11 w-full border bg-[var(--bg-1)] py-2 pr-3 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
             icon ? 'pl-10' : 'pl-3',
             error
               ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'

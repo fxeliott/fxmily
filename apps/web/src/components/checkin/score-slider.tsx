@@ -119,13 +119,13 @@ export function ScoreSlider({
       <div className="flex items-baseline justify-between">
         <label
           htmlFor={id}
-          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
         >
           {label}
         </label>
         {/* Visual readout — NOT aria-live (the slider's own aria-valuetext
             handles SR announcement, double-channel would be noise). */}
-        <span className="font-mono text-[11px] tabular-nums text-[var(--t-3)]">
+        <span className="font-mono text-[11px] text-[var(--t-3)] tabular-nums">
           <span className={cn('font-semibold tabular-nums', valColor, pulse && 'threshold-pulse')}>
             {value}
           </span>
@@ -142,12 +142,12 @@ export function ScoreSlider({
         {/* Track background */}
         <div
           aria-hidden
-          className="rounded-pill absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 border border-[var(--b-subtle)] bg-[var(--bg-2)]"
+          className="rounded-pill absolute top-1/2 right-0 left-0 h-1.5 -translate-y-1/2 border border-[var(--b-subtle)] bg-[var(--bg-2)]"
         />
         {/* Track filled gradient */}
         <div
           aria-hidden
-          className="rounded-pill absolute left-0 top-1/2 h-1.5 -translate-y-1/2"
+          className="rounded-pill absolute top-1/2 left-0 h-1.5 -translate-y-1/2"
           style={{
             width: `${pct}%`,
             background: fillStyle,
@@ -200,7 +200,7 @@ export function ScoreSlider({
       </div>
 
       {/* Tick labels: 1 / 5 / 10 (decoratifs, --t-3 instead of --t-4 for AA contrast). */}
-      <div className="flex justify-between font-mono text-[10px] tabular-nums text-[var(--t-3)]">
+      <div className="flex justify-between font-mono text-[10px] text-[var(--t-3)] tabular-nums">
         <span>1</span>
         <span>5</span>
         <span>10</span>

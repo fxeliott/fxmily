@@ -44,7 +44,7 @@ export function InfoDot({ tip, side = 'top', width = 240, className }: InfoDotPr
         side={side}
         sideOffset={6}
         style={{ maxWidth: width }}
-        className="rounded-tooltip border border-[var(--b-strong)] bg-[var(--bg-3)] px-2.5 py-2 text-left text-[11px] font-normal normal-case leading-[1.45] tracking-normal text-[var(--t-2)] shadow-[var(--sh-tooltip)]"
+        className="rounded-tooltip border border-[var(--b-strong)] bg-[var(--bg-3)] px-2.5 py-2 text-left text-[11px] leading-[1.45] font-normal tracking-normal text-[var(--t-2)] normal-case shadow-[var(--sh-tooltip)]"
       >
         {tip}
       </TooltipContent>

@@ -139,7 +139,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
                   <Link
                     href={`/review/${r.id}`}
                     aria-labelledby={`rev-${r.id}-title`}
-                    className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
+                    className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
                   >
                     <header className="flex items-baseline justify-between gap-3">
                       <p className="t-eyebrow text-[var(--t-3)]" id={`rev-${r.id}-title`}>

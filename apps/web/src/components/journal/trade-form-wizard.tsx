@@ -304,7 +304,7 @@ export function TradeFormWizard() {
             <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
             Retour
           </Link>
-          <span className="font-mono text-[11px] tabular-nums text-[var(--t-3)]" aria-live="polite">
+          <span className="font-mono text-[11px] text-[var(--t-3)] tabular-nums" aria-live="polite">
             Étape{' '}
             <span className="font-semibold text-[var(--acc)]">
               {String(step + 1).padStart(2, '0')}
@@ -321,7 +321,7 @@ export function TradeFormWizard() {
             id="wizard-heading"
             ref={headingRef}
             tabIndex={-1}
-            className="f-display text-[22px] font-bold leading-[1.1] tracking-[-0.02em] text-[var(--t-1)] sm:text-[26px]"
+            className="f-display text-[22px] leading-[1.1] font-bold tracking-[-0.02em] text-[var(--t-1)] sm:text-[26px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             {STEP_TITLES[step]}
@@ -423,7 +423,7 @@ export function TradeFormWizard() {
       {/* Sticky bottom nav with Btn primitives + kbd hints */}
       <nav
         aria-label="Navigation du formulaire"
-        className="bg-[var(--bg)]/95 supports-[backdrop-filter]:bg-[var(--bg)]/80 sticky bottom-0 -mx-4 flex flex-col gap-1 border-t border-[var(--b-default)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur"
+        className="sticky bottom-0 -mx-4 flex flex-col gap-1 border-t border-[var(--b-default)] bg-[var(--bg)]/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-[var(--bg)]/80"
       >
         <div className="flex items-center justify-between gap-2">
           <Btn
@@ -458,7 +458,7 @@ export function TradeFormWizard() {
           )}
         </div>
         {step === 5 && !draft.screenshotEntryKey ? (
-          <p id="submit-hint" className="text-right text-[11px] tabular-nums text-[var(--t-4)]">
+          <p id="submit-hint" className="text-right text-[11px] text-[var(--t-4)] tabular-nums">
             Ajoute la capture pour activer la sauvegarde.
           </p>
         ) : null}
@@ -490,7 +490,7 @@ function StepWhenAndWhat({
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="enteredAt"
-          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
         >
           Date et heure d&apos;entrée
         </label>
@@ -502,7 +502,7 @@ function StepWhenAndWhat({
           disabled={disabled}
           aria-invalid={fieldErrors.enteredAt ? 'true' : undefined}
           className={cn(
-            'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
             fieldErrors.enteredAt
               ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
               : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
@@ -536,7 +536,7 @@ function StepDirectionSession({ draft, update, fieldErrors, disabled }: StepProp
   return (
     <div className="flex flex-col gap-5">
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+        <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
           Direction
         </legend>
         <div role="radiogroup" aria-label="Direction du trade" className="grid grid-cols-2 gap-2">
@@ -552,7 +552,7 @@ function StepDirectionSession({ draft, update, fieldErrors, disabled }: StepProp
                 onClick={() => update('direction', d)}
                 disabled={disabled}
                 className={cn(
-                  'rounded-card flex min-h-16 flex-col items-center justify-center gap-1.5 border bg-[var(--bg-1)] px-3 py-3 text-[13px] font-semibold uppercase tracking-[0.08em] transition-all',
+                  'rounded-card flex min-h-16 flex-col items-center justify-center gap-1.5 border bg-[var(--bg-1)] px-3 py-3 text-[13px] font-semibold tracking-[0.08em] uppercase transition-all',
                   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                   active
                     ? d === 'long'
@@ -576,7 +576,7 @@ function StepDirectionSession({ draft, update, fieldErrors, disabled }: StepProp
       </fieldset>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+        <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
           Session
         </legend>
         <div
@@ -762,7 +762,7 @@ function StepPlannedRR({
         <div className="mb-4 flex items-baseline gap-3">
           <span
             className={cn(
-              'f-mono text-[48px] font-bold tabular-nums leading-none tracking-[-0.04em] sm:text-[56px]',
+              'f-mono text-[48px] leading-none font-bold tracking-[-0.04em] tabular-nums sm:text-[56px]',
               isLowRR ? 'text-[var(--bad)]' : 'text-[var(--acc)]',
               pulse && 'threshold-pulse',
             )}
@@ -782,13 +782,13 @@ function StepPlannedRR({
           aria-hidden
         >
           <div
-            className="grid place-items-center border-r border-[var(--b-default)] bg-gradient-to-r from-[oklch(0.7_0.165_22_/_0.20)] to-[oklch(0.7_0.165_22_/_0.10)] font-mono text-[11px] font-semibold tabular-nums text-[var(--bad)] transition-[flex-basis]"
+            className="grid place-items-center border-r border-[var(--b-default)] bg-gradient-to-r from-[oklch(0.7_0.165_22_/_0.20)] to-[oklch(0.7_0.165_22_/_0.10)] font-mono text-[11px] font-semibold text-[var(--bad)] tabular-nums transition-[flex-basis]"
             style={{ flexBasis: `${100 / (1 + rr)}%`, transitionDuration: '120ms' }}
           >
             −1R
           </div>
           <div
-            className="grid place-items-center bg-gradient-to-r from-[oklch(0.879_0.231_130_/_0.10)] to-[oklch(0.879_0.231_130_/_0.22)] font-mono text-[11px] font-semibold tabular-nums text-[var(--acc)] transition-[flex-basis]"
+            className="grid place-items-center bg-gradient-to-r from-[oklch(0.879_0.231_130_/_0.10)] to-[oklch(0.879_0.231_130_/_0.22)] font-mono text-[11px] font-semibold text-[var(--acc)] tabular-nums transition-[flex-basis]"
             style={{ flexBasis: `${(rr * 100) / (1 + rr)}%`, transitionDuration: '120ms' }}
           >
             +{rr.toFixed(1)}R
@@ -800,12 +800,12 @@ function StepPlannedRR({
           {/* Track background */}
           <div
             aria-hidden
-            className="rounded-pill absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 border border-[var(--b-subtle)] bg-[var(--bg-2)]"
+            className="rounded-pill absolute top-1/2 right-0 left-0 h-1.5 -translate-y-1/2 border border-[var(--b-subtle)] bg-[var(--bg-2)]"
           />
           {/* Track filled — gradient */}
           <div
             aria-hidden
-            className="rounded-pill absolute left-0 top-1/2 h-1.5 -translate-y-1/2"
+            className="rounded-pill absolute top-1/2 left-0 h-1.5 -translate-y-1/2"
             style={{
               width: `${pct}%`,
               background: 'linear-gradient(90deg, var(--cy) 0%, var(--acc) 80%)',
@@ -851,7 +851,7 @@ function StepPlannedRR({
         </div>
 
         {/* Tick labels */}
-        <div className="mt-2 flex justify-between font-mono text-[10px] tabular-nums text-[var(--t-4)]">
+        <div className="mt-2 flex justify-between font-mono text-[10px] text-[var(--t-4)] tabular-nums">
           <span>0.5</span>
           <span>1.0</span>
           <span>2.0</span>
@@ -886,7 +886,7 @@ function StepPlannedRR({
             <div className="text-[12px] font-medium text-[var(--bad-hi)]">EV négatif sous 1:1</div>
             <p className="t-cap mt-0.5 text-[var(--t-2)]">
               Avec R:R 1:{rr.toFixed(2)}, ton win rate doit dépasser{' '}
-              <span className="font-mono font-semibold tabular-nums text-[var(--bad-hi)]">
+              <span className="font-mono font-semibold text-[var(--bad-hi)] tabular-nums">
                 {breakeven.toFixed(0)}%
               </span>{' '}
               pour ne pas perdre. Vérifie que ton plan est cohérent — ne déplace pas le stop pour
@@ -911,7 +911,7 @@ function StepPlannedRR({
         <div className="flex items-baseline gap-2">
           <span
             className={cn(
-              'f-mono text-[24px] font-bold tabular-nums leading-none tracking-[-0.02em]',
+              'f-mono text-[24px] leading-none font-bold tracking-[-0.02em] tabular-nums',
               isLowRR ? 'text-[var(--bad)]' : 'text-[var(--acc)]',
               pulse && !isLowRR && 'threshold-pulse',
             )}
@@ -923,7 +923,7 @@ function StepPlannedRR({
 
         <p className="t-body mt-2 text-[var(--t-3)]">
           Avec 1:{rr.toFixed(2)} il te faut{' '}
-          <span className="font-mono tabular-nums text-[var(--t-1)]">{breakeven.toFixed(0)}%</span>{' '}
+          <span className="font-mono text-[var(--t-1)] tabular-nums">{breakeven.toFixed(0)}%</span>{' '}
           de wins pour être à zéro. Au-dessus = EV positif sur le long terme.
         </p>
 
@@ -949,7 +949,7 @@ function StepPlannedRR({
                   disabled && 'cursor-not-allowed opacity-60',
                 )}
               >
-                <div className="font-mono text-[10px] tabular-nums text-[var(--t-4)]">
+                <div className="font-mono text-[10px] text-[var(--t-4)] tabular-nums">
                   1:{R.toFixed(R % 1 === 0 ? 0 : 1)}
                 </div>
                 <div
@@ -1022,7 +1022,7 @@ function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepPr
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor="notes"
-          className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
         >
           Notes (optionnel)
         </label>
@@ -1035,7 +1035,7 @@ function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepPr
           maxLength={2000}
           placeholder="Setup, contexte, déclencheur…"
           className={cn(
-            'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+            'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
             'placeholder:text-[var(--t-4)]',
             'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
             'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
@@ -1124,9 +1124,9 @@ function TradeQualitySelector({
 
   return (
     <fieldset className="flex flex-col gap-2" aria-describedby={errorId}>
-      <legend className="mb-1 flex items-center gap-2 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+      <legend className="mb-1 flex items-center gap-2 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
         Qualité du setup
-        <span className="text-[10px] normal-case tracking-normal text-[var(--t-4)]">
+        <span className="text-[10px] tracking-normal text-[var(--t-4)] normal-case">
           (optionnel — Steenbarger A/B/C)
         </span>
       </legend>
@@ -1159,7 +1159,7 @@ function TradeQualitySelector({
                 disabled && 'cursor-not-allowed opacity-60',
               )}
             >
-              <span className="text-[13px] font-semibold uppercase tracking-[0.06em]">
+              <span className="text-[13px] font-semibold tracking-[0.06em] uppercase">
                 {opt.label}
               </span>
               <span className="t-cap text-[var(--t-4)]">{opt.hint}</span>
@@ -1213,7 +1213,7 @@ function NumericField({
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={id}
-        className="text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]"
+        className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
       >
         {label}
       </label>
@@ -1230,7 +1230,7 @@ function NumericField({
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={describedBy}
         className={cn(
-          'f-mono rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] tabular-nums text-[var(--t-1)] outline-none transition-[border-color,box-shadow] duration-150',
+          'f-mono rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] tabular-nums transition-[border-color,box-shadow] duration-150 outline-none',
           'placeholder:text-[var(--t-4)]',
           error
             ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
@@ -1274,7 +1274,7 @@ function RadioGroup({
 
   return (
     <fieldset className="flex flex-col gap-2" aria-describedby={errorId}>
-      <legend className="mb-1 text-[12px] font-medium uppercase tracking-[0.10em] text-[var(--t-3)]">
+      <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
         {legend}
       </legend>
       <div className="flex flex-wrap gap-2">

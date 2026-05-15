@@ -325,7 +325,7 @@ function ABCDHeader({
           color: colorByLetter[def.letter],
         }}
       >
-        <span className="font-display text-[18px] font-bold leading-none">{def.letter}</span>
+        <span className="font-display text-[18px] leading-none font-bold">{def.letter}</span>
       </div>
       <div className="min-w-0 flex-1">
         <p className="t-eyebrow flex items-center gap-1.5 text-[var(--t-3)]">

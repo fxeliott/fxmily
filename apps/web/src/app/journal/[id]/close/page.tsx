@@ -53,7 +53,7 @@ export default async function CloseTradePage({ params }: CloseTradePageProps) {
             <span className="t-eyebrow">Étape finale · résultat</span>
           </div>
           <h1
-            className="f-display h-rise text-[24px] font-bold leading-[1.05] tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
+            className="f-display h-rise text-[24px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             Clôturer <span className="f-mono text-[var(--acc)]">{trade.pair}</span>

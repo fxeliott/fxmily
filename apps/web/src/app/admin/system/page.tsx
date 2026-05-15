@@ -63,7 +63,7 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
           Admin
         </Link>
-        <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--acc)]">
+        <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
           Observability
         </p>
         <h1 className="mt-2 flex items-center gap-3 text-2xl font-semibold tracking-tight text-[var(--t-1)] sm:text-3xl">
@@ -199,7 +199,7 @@ function SnapshotCard({
         : 'text-[var(--acc-hi)]';
   return (
     <div className="rounded-xl border border-[var(--b-subtle)] bg-[var(--bg-2)] p-3">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--t-3)]">{label}</p>
+      <p className="text-[11px] font-medium tracking-wide text-[var(--t-3)] uppercase">{label}</p>
       <p className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${accentClass}`}>{value}</p>
       <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--t-4)]">{sublabel}</p>
     </div>

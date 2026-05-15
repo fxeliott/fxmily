@@ -35,12 +35,12 @@ export function MemberRow({ member }: MemberRowProps) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-foreground truncate text-base font-semibold">{displayName}</span>
           {isAdmin ? (
-            <span className="border-accent/40 text-accent inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider">
+            <span className="border-accent/40 text-accent inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase">
               Admin
             </span>
           ) : null}
           {isSuspended ? (
-            <span className="border-warning/40 text-warning inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider">
+            <span className="border-warning/40 text-warning inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase">
               Suspendu
             </span>
           ) : null}

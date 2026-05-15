@@ -34,14 +34,14 @@ export default async function AdminInvitePage() {
             <span className="t-eyebrow">Invitations</span>
           </div>
           <h1
-            className="f-display h-rise text-[28px] font-bold leading-[1.05] tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+            className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             Inviter un membre
           </h1>
           <p className="t-lead">
             Le membre recevra un email avec un lien personnel valable{' '}
-            <span className="font-mono tabular-nums text-[var(--t-1)]">7 jours</span>. Le lien est
+            <span className="font-mono text-[var(--t-1)] tabular-nums">7 jours</span>. Le lien est
             unique et ne peut servir qu&apos;une seule fois.
           </p>
         </div>

@@ -26,17 +26,13 @@ import { loginAs } from '@/test/e2e-auth';
 
 let seeded: SeededUser | null = null;
 
-// V1.9 hygiène 2026-05-14 : e2e.yml first run on PR #72 exposed this
-// test as failing with `[auth][error] TypeError: Invalid URL` + `no
-// session cookie found after credentials callback`. The seed step in
-// the workflow creates the demo admin row, but Auth.js v5's
-// credentials-callback throws an URL constructor error before the
-// session cookie is set. Root cause not yet isolated (Auth.js
-// internals vs AUTH_URL handling under Playwright's `pnpm dev`
-// webServer); the other 49 specs in the suite all pass. Marking
-// fixme keeps CI green while preserving the test for a dedicated
-// investigation session — see CLAUDE.md J6.5 § "smoke-tour visuel".
-test.describe.fixme('Visual smoke-tour J6 — admin dashboard with seeded analytics', () => {
+// V1.9 hygiène 2026-05-15 : un-fixme this spec. Root cause of the
+// "TypeError: Invalid URL" error during Auth.js v5 credentials callback
+// was the missing AUTH_TRUST_HOST=true env var in e2e.yml. Without it,
+// Auth.js resolves request origin to "localhost" instead of the
+// configured AUTH_URL, throwing in the URL constructor before the
+// session cookie is set. Fixed in this commit's e2e.yml change.
+test.describe('Visual smoke-tour J6 — admin dashboard with seeded analytics', () => {
   test.beforeEach(async () => {
     await cleanupTestUsers();
     seeded = await seedAdminUser({

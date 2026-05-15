@@ -51,10 +51,12 @@ concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false # never cancel a deploy mid-flight — half-deploys are worse than queueing
 
+# Workflow-level permissions are MINIMAL — read-only on contents. The two
+# jobs below grant only the additional permissions they actually need at
+# the job-level, scoped to their scope. This is the zizmor v1.12 P2 fix
+# for excessive-permissions HIGH findings on this workflow.
 permissions:
   contents: read
-  packages: write # push to GHCR
-  id-token: write # for any future OIDC-based deploy targets (V2)
 
 jobs:
   build-and-push:
@@ -66,11 +68,22 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || vars.DEPLOY_PATH == 'hetzner' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Job-scoped permissions — only this job needs to push to GHCR and use
+    # OIDC. `ssh-deploy` and `notify` jobs declare their own minimal blocks.
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # for any future OIDC-based deploy targets (V2)
     outputs:
       image-tag: ${{ steps.meta.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # Don't leave the GITHUB_TOKEN credential in `.git/config` after
+          # the action exits — defense against artifact-uploaded leaks if a
+          # later step mistakenly tars the workspace (zizmor artipacked).
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -113,6 +126,10 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # SSH deploy only needs read access to repository contents (none in
+    # practice — the appleboy/ssh-action only consumes secrets).
+    permissions:
+      contents: read
     steps:
       - name: SSH → docker compose pull + up + migrate
         uses: appleboy/ssh-action@v1
@@ -229,6 +246,8 @@ jobs:
     needs: [build-and-push, ssh-deploy]
     if: always()
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Echo summary
         run: |

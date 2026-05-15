@@ -353,7 +353,33 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <DashboardReflectWidget userId={session.user.id} />
         </section>
 
-        {/* Coming soon section */}
+        {/* V2.1 — TRACK module entry (5 piliers de pratique sous le miroir
+            M4 V1.8). Reste en DS-v2 lime (discipline forte) — pas de V18
+            blue/black overlay. */}
+        <section className="mb-6" aria-label="Module TRACK">
+          <Link
+            href="/track"
+            className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-1">
+                <span className="t-eyebrow text-[var(--acc)]">Suivi des habitudes</span>
+                <p className="text-[15px] font-semibold text-[var(--t-1)]">
+                  Tes 5 piliers de pratique
+                </p>
+                <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
+                  Sommeil, nutrition, café, sport, méditation — les conditions qui alimentent ton
+                  exécution.
+                </p>
+              </div>
+              <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden />
+            </div>
+          </Link>
+        </section>
+
+        {/* Coming soon section — V2.x roadmap (J8 Rapport hebdo + J9 Push
+            sont LIVE, ne PAS les re-lister ici : c'était une carte stale
+            corrigée V2.1.0). */}
         <section className="mb-6">
           <div className="mb-3 flex items-center gap-2">
             <BookOpen className="h-3.5 w-3.5 text-[var(--t-3)]" strokeWidth={1.75} />
@@ -361,14 +387,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <ComingSoonCard
-              title="Rapport hebdo IA"
-              jalon="J8"
-              desc="Analyse Claude livrée chaque dimanche."
+              title="4 autres piliers"
+              jalon="V2.1.1"
+              desc="Nutrition, café, sport, méditation — wizards dédiés."
             />
             <ComingSoonCard
-              title="Notifications push"
-              jalon="J9"
-              desc="Push contextuels sur tes fiches Mark Douglas."
+              title="Corrélations bien-être"
+              jalon="V2.1.3"
+              desc="L'impact mesuré de tes piliers sur ta discipline."
             />
           </div>
         </section>

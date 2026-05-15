@@ -40,7 +40,17 @@ export async function loginAs(
   email: string,
   password: string,
 ): Promise<LoginResult> {
-  const baseURL = page.context().pages()[0]?.url() ?? 'http://localhost:3000';
+  // V1.9 hygiène 2026-05-15 — root cause of smoke-tour-j6 e2e.yml first-run
+  // failure : `page.context().pages()[0]?.url()` returns `'about:blank'`
+  // (truthy string) when the browser context is fresh, so the
+  // `?? 'http://localhost:3000'` fallback is bypassed. `new URL('about:blank').origin`
+  // returns the literal string `'null'`, which then becomes the
+  // `callbackUrl: 'null/dashboard'` form field. Auth.js v5 validates the
+  // callbackUrl with `new URL(...)` and throws `TypeError: Invalid URL`,
+  // which kills the credentials callback before the session cookie is set.
+  // Fix: read the configured `PLAYWRIGHT_BASE_URL` directly (same source
+  // of truth as `playwright.config.ts:28`).
+  const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000';
   const origin = new URL(baseURL).origin;
 
   // Step 1 — fetch CSRF token (sets the csrf cookie in the request context).

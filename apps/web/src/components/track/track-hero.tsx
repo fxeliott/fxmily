@@ -71,20 +71,20 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
 
   return (
     <div className="relative mx-auto w-full max-w-xl" aria-hidden="true">
-      <svg
-        viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
-        className="h-auto w-full"
-        role="img"
-        aria-label="Cinq piliers de pratique en cercle autour du centre."
-      >
+      {/* Decorative — the "5 piliers" information is conveyed by the <h1>
+          "Tes 5 piliers de pratique" + the TodayHabitCards. The wrapper
+          `aria-hidden` already removes this subtree from the a11y tree, so
+          NO `role="img"`/`aria-label` on the svg (would be dead code never
+          read by SR — a11y audit V2.1.0 TIER 3). */}
+      <svg viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`} className="h-auto w-full">
         <defs>
           {/* Radial glow gradient for the center node — lime → transparent. */}
+          {/* `--acc-glow` is a box-shadow token (globals.css), NOT a color —
+              feeding it to `stopColor` yields an invalid value (ui-designer
+              audit V2.1.0 §1). Use `--acc` directly ; the per-stop
+              `stopOpacity` ramp is what produces the glow falloff. */}
           <radialGradient id="track-center-glow" cx="50%" cy="50%" r="50%">
-            <stop
-              offset="0%"
-              stopColor="var(--acc-glow, oklch(0.84 0.18 130))"
-              stopOpacity="0.45"
-            />
+            <stop offset="0%" stopColor="var(--acc)" stopOpacity="0.45" />
             <stop offset="60%" stopColor="var(--acc)" stopOpacity="0.10" />
             <stop offset="100%" stopColor="var(--acc)" stopOpacity="0" />
           </radialGradient>

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+import { Pill } from '@/components/ui/pill';
 import { cn } from '@/lib/utils';
 
 /**
@@ -84,9 +85,7 @@ export function HabitKindPicker() {
               {e.shippable ? (
                 <ArrowRight className="h-4 w-4 text-[var(--t-3)]" aria-hidden />
               ) : (
-                <span className="rounded-pill border border-[var(--b-default)] px-2 py-0.5 font-mono text-[10px] tracking-[0.08em] text-[var(--t-3)] uppercase">
-                  Bientôt
-                </span>
+                <Pill tone="mute">Bientôt</Pill>
               )}
             </span>
           );

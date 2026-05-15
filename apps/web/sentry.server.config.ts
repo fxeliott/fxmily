@@ -7,31 +7,10 @@
  */
 import * as Sentry from '@sentry/nextjs';
 
-const SENSITIVE_PARAM_RE = /^(token|secret|password|code|key|signature|sig)$/i;
-
-function stripSensitiveQueryParams(qs: string): string {
-  try {
-    const search = new URLSearchParams(qs.startsWith('?') ? qs.slice(1) : qs);
-    for (const k of Array.from(search.keys())) {
-      if (SENSITIVE_PARAM_RE.test(k)) search.set(k, '[Filtered]');
-    }
-    return search.toString();
-  } catch {
-    return qs;
-  }
-}
-
-function stripSensitiveUrlParams(url: string): string {
-  try {
-    const u = new URL(url, 'https://placeholder.invalid');
-    for (const k of Array.from(u.searchParams.keys())) {
-      if (SENSITIVE_PARAM_RE.test(k)) u.searchParams.set(k, '[Filtered]');
-    }
-    return u.toString().replace('https://placeholder.invalid', '');
-  } catch {
-    return url;
-  }
-}
+import {
+  stripSensitiveQueryParams,
+  stripSensitiveUrlParams,
+} from './src/lib/observability/url-scrub';
 
 const dsn = process.env.SENTRY_DSN;
 

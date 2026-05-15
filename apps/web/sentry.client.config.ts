@@ -10,6 +10,11 @@
  */
 import * as Sentry from '@sentry/nextjs';
 
+import {
+  stripSensitiveQueryParams,
+  stripSensitiveUrlParams,
+} from './src/lib/observability/url-scrub';
+
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
 if (dsn) {
@@ -42,9 +47,23 @@ if (dsn) {
     // Last-line PII scrubber. Mutate-in-place + return the event so we
     // don't re-declare Sentry's whole `ErrorEvent` shape (which has 50+
     // optional fields).
+    //
+    // V1.11 — symmetric URL/query_string scrub with server config. A JS
+    // error on `/onboarding/welcome?token=...` (J1) or future
+    // `/api/auth/callback/email?token=...` (J1.5 magic-link) would
+    // otherwise carry the token plaintext to Sentry SaaS — 60s window
+    // for a Sentry org member to consume the invitation. Round 4
+    // sub-agent N finding.
     beforeSend(event) {
       if (event.request) {
         delete event.request.cookies;
+        delete event.request.data;
+        if (typeof event.request.query_string === 'string') {
+          event.request.query_string = stripSensitiveQueryParams(event.request.query_string);
+        }
+        if (typeof event.request.url === 'string') {
+          event.request.url = stripSensitiveUrlParams(event.request.url);
+        }
         if (event.request.headers) {
           for (const k of Object.keys(event.request.headers)) {
             if (/^(cookie|authorization|x-cron-secret)$/i.test(k)) {

@@ -2844,3 +2844,221 @@ forces avant les failles.
 6. **Visual smoke `/journal/[id]/close`** : `<TradeTagsPicker>` rend +
    multi-select 3 max + submit + persist DB `trades.tags` column
 7. **Mode reduced-motion** : Settings iOS → animations désactivées
+
+## V1.9 polish — TIER B sec + TIER F perf + RTL wizards (livré 2026-05-14)
+
+PR [#70](https://github.com/fxeliott/fxmily/pull/70). 4 commits granulaires sur `feat/v1.9-polish`. Audit 5-subagent post-V1.8 ship détectait 30+ items polish — TIER B sec + TIER F perf + RTL wizards shipped, TIER C UI/hero/B1+B2+B4 + LazyMotion + Hero illu DEFERRED V1.10 (visual smoke iPhone PWA Eliot required).
+
+### Scope
+
+- **TIER B sec** (commit `681f646`) : `findFirst({ where: { id, userId } })` over `findUnique + post-check` sur `getWeeklyReviewById` + `getReflectionById` (collapse en 1 query SQL + élimine timing oracle théorique). `wrapUntrustedMemberInputBlocks` label allowlist `/^[a-z_]+$/`. `wrapUntrustedMemberInput` close-tag regex case-insensitive `/i` flag.
+- **TIER F perf** (commit `e07e104`) : `Intl.DateTimeFormat` instanciation hoist au module level dans `app/review/page.tsx` + `app/reflect/page.tsx` + detail pages. `<DashboardReflectWidget>` SELECT seulement `weekStart` (vs full 17 cols). `useReducedMotion()` SSR mismatch guard via `useEffect(setHasMounted(true))`.
+- **RTL wizards tests** : `<WeeklyReviewWizard>` + `<ReflectionWizard>` step transition + draft hydration localStorage + char counter live + submit flow. Vitest 936→946 (+10).
+- **TIER C consts** : magic spacing 2.5/1.5 hors 4-pt grid remplacés par 3/2 (`space-y-3`, `gap-2`). Spring values cohérents `V18_SPRING` const extraite dans `v18/motion-presets.ts`.
+
+### Files touched
+
+- `apps/web/src/lib/weekly-review/service.ts` + `lib/reflection/service.ts` (findFirst collapse)
+- `apps/web/src/lib/ai/prompt-builder.ts` (label allowlist + close-tag /i)
+- `apps/web/src/app/review/page.tsx` + `app/reflect/page.tsx` + detail pages (Intl hoist)
+- `apps/web/src/components/v18/motion-presets.ts` (NEW)
+- `apps/web/src/components/review/*.test.tsx` + `components/reflect/*.test.tsx` (RTL NEW)
+
+### Quality gate
+
+- Vitest **946/946** (+10 vs V1.8 baseline 936)
+- type-check + lint ✓
+- Build prod Turbopack ✓
+
+### Refs
+
+- PR #70 https://github.com/fxeliott/fxmily/pull/70
+- Audit 5-subagent V1.8 closeout : code-reviewer + a11y-reviewer + security-auditor + ui-designer + performance-profiler
+
+## V1.9 hygiène — e2e.yml + smoke-tour-j6 root cause fix (livré 2026-05-14)
+
+PR [#72](https://github.com/fxeliott/fxmily/pull/72) (hygiène post-V1.9 polish merge). Audit massif détecté que les 46 Playwright specs n'avaient jamais tourné en CI depuis leur création. `e2e.yml` ajouté + `smoke-tour-j6` un-fixme + root cause fix.
+
+### Scope
+
+- `.github/workflows/e2e.yml` (NEW) : workflow Playwright dédié (séparé de `ci.yml` pour ne pas bloquer). Postgres 17-alpine service container + cache ms-playwright + seed J6 demo + `--project=chromium` (mobile-iphone-15 skip CI per SPEC §15 J9). 46 specs exercées.
+- `tests/e2e/e2e-auth.ts` ROOT CAUSE FIX : `PLAYWRIGHT_BASE_URL` env vs hardcoded `localhost:3000` (smoke-tour-j6 fail depuis création — Auth.js v5 + AUTH_TRUST_HOST=true requis sans quoi `[auth][error] TypeError: Invalid URL` dans credentials callback). Le baseURL pris depuis Playwright config.
+- `tests/e2e/smoke-tour-j6.spec.ts` un-fixme : test `j6demo.admin.e2e.test@fxmily.local` login + dashboard render. 5 expects passent post-fix.
+- `apps/web/playwright.config.ts` : `AUTH_TRUST_HOST: 'true'` ajouté à `webServer.env`.
+
+### Files touched
+
+- `.github/workflows/e2e.yml` (NEW, 179 LOC)
+- `apps/web/tests/e2e/e2e-auth.ts` (PLAYWRIGHT_BASE_URL fix)
+- `apps/web/tests/e2e/smoke-tour-j6.spec.ts` (un-fixme)
+- `apps/web/playwright.config.ts` (AUTH_TRUST_HOST)
+
+### Quality gate
+
+- Vitest 946/946 stable
+- E2E `smoke-tour-j6` GREEN sur CI pour la 1ère fois depuis sa création
+- 46 Playwright specs exercées en CI
+
+### Refs
+
+- PR #72 https://github.com/fxeliott/fxmily/pull/72
+- PR #73 `AUTH_TRUST_HOST=true` propagé deploy.yml + docker-compose.prod.yml + web.env template
+- PR #74 smoke-tour-j6 un-fixme follow-up
+
+## V2.0 — TRACK module backend (HabitLog) (livré 2026-05-14)
+
+PR [#71](https://github.com/fxeliott/fxmily/pull/71). Backend-first per `feedback_backend_first_workflow.md`. V2-MASTER plan A2-A5 must-have. Migration + Prisma + Zod + service + Server Actions + 32 tests. **Frontend wizards V2.1+** (différé go explicite Eliot).
+
+### Modèle de données
+
+Migration `20260514150000_v2_0_track_habit_logs` :
+
+- **`HabitKind`** enum (5 valeurs : `sleep`, `nutrition`, `caffeine`, `sport`, `meditation`).
+- **`HabitLog`** (`habit_logs`) — 1 row par (user, date, kind). UNIQUE `(userId, date, kind)` enforce idempotency upsert. `value` JSONB (kind-discriminated payload : sleep={hours, quality}, caffeine={mgEstimate}, sport={minutes, type}, etc.). `notes` Text? (sanitized via `safeFreeText`). Indexes `(userId, date DESC)` + `(userId, kind, date DESC)` per-kind aggregation. Cascade User delete.
+
+### Service (`lib/track/service.ts`)
+
+- `submitHabitLog(userId, input)` — upsert sur `(userId, date, kind)`. Pré-check `findUnique` derives `wasNew` boolean (pas de transaction needed 30-member scale, V1 1-tab/user).
+- `listRecentHabits(userId, windowDays=30)` — desc-sorted.
+- `getHabitForDate(userId, date, kind)` — single read.
+
+### Zod schemas (`lib/schemas/habit.ts`)
+
+- `habitLogInputSchema.strict()` — kind-discriminated payload validation. Date `[-7d, +1d]` window (membre peut backfill 7 jours).
+- Hardening systématique : `safeFreeText` sur `notes`, refine `containsBidiOrZeroWidth`.
+
+### Server Actions (`app/habits/actions.ts`)
+
+- `submitHabitLogAction(_prev, formData)` — pattern J5 carbone (auth re-check + Zod + service + audit + revalidatePath + redirect NEXT_REDIRECT re-thrown).
+- Audit slugs V2.0 : `habit_log.upserted`, `habit_log.deleted` (declared `audit.ts` union mais pas wired V2.0 backend — pre-declared anti-regression).
+
+### Quality gate
+
+- Vitest **969/969** (+23 vs V1.9 baseline 946, 11 service + 12 schema tests TDD)
+- type-check + lint ✓
+- Migration appliquée live dev DB (17 tables → **18 tables**)
+
+### Refs
+
+- PR #71 https://github.com/fxeliott/fxmily/pull/71
+- V2-MASTER `docs/FXMILY-V2-MASTER.md` §A.2 TRACK module canonical reference
+- Memory `fxmily_session_2026-05-14_post_v2.0_hygiene.md` Phase 2 root cause analysis
+
+## V1.10 — Sec hardening (M1 callerIdTrusted ×11 + M3 userIdSchema.max(40)) (livré 2026-05-15)
+
+PR [#76](https://github.com/fxeliott/fxmily/pull/76). Audit 5-subagent V1.10 part 1 (researcher + verifier + code-reviewer + security-auditor + dependency-auditor) catched 4 MEDIUM sec findings. M1 + M3 shipped, M2 (MEMBER_LABEL_SALT prod env verify) defer Eliot SSH manuel.
+
+### Scope
+
+- **M1 — XFF anti-spoofing** : 11 sites `callerId(req)` → `callerIdTrusted(req)`. Sites couverts : 9 cron routes (`recompute-scores`, `checkin-reminders`, `weekly-reports`, `dispatch-douglas`, `dispatch-notifications`, `health`, `purge-deleted`, `purge-push-subscriptions`, `purge-audit-log`) + `/api/health` (V1.6 healthLimiter) + `/login` Server Action (`loginIpLimiter`). `callerIdTrusted` lit last-XFF entry (non-spoofable post-V1.12 P1 Caddyfile `header_up X-Forwarded-For {remote_host}`).
+- **M3 — userIdSchema tightening** : `/api/admin/weekly-batch/persist` Zod `.max(128)` → `.max(40)` (cuid 25 + nanoid 32 + marge). Tighten JSON.parse heap amplification combined with `results.max(1000)`.
+
+### Files touched
+
+- 9 routes `apps/web/src/app/api/cron/*/route.ts` (callerIdTrusted)
+- `apps/web/src/app/api/health/route.ts` (callerIdTrusted + JSDoc update)
+- `apps/web/src/app/login/actions.ts` (callerIdTrusted)
+- `apps/web/src/app/login/actions.test.ts` (test expectation last-hop `10.0.0.1` vs first-entry `198.51.100.7`)
+- `apps/web/src/lib/schemas/weekly-report.ts` (userIdSchema.max(40))
+
+### Quality gate
+
+- Vitest **1001/1001** (+32 vs V2.0 baseline 969)
+- 0 CVE / 0 Dependabot alert
+- 4 dependabot PRs MERGED autonomously ce session : #1 setup-node 4→6, #2 pnpm/action-setup 4→6, #3 actions/checkout 4→6 (+ #76 sec hardening)
+
+### Refs
+
+- PR #76 https://github.com/fxeliott/fxmily/pull/76
+- Memory `fxmily_session_2026-05-15_audit_exhaustif_v1.10_part1.md` (5-subagent audit 50+ findings)
+- M2 MEMBER_LABEL_SALT — env var prod verify Eliot SSH (carry-over)
+
+## V1.11 — 5-phase batch (Sentry symmetric + sw.js fallback + README/SECURITY refonte + V2 archives) (livré 2026-05-15)
+
+5 PRs sequential merged ce session : [#77](https://github.com/fxeliott/fxmily/pull/77) + [#78](https://github.com/fxeliott/fxmily/pull/78) + [#79](https://github.com/fxeliott/fxmily/pull/79) + [#80](https://github.com/fxeliott/fxmily/pull/80) + [#81](https://github.com/fxeliott/fxmily/pull/81). Pattern V1.11 5-phase batch quick wins + purpose-built single-PR phases.
+
+### Scope par PR
+
+- **#77 Phase 1** : 6 items batch (V2-MASTER M3 audio fix + dispatcher payload_too_large Sentry escalate + JSDoc stale consistency.ts 3R→1R + runbook-bug-fix Repo privé→PUBLIC + scoring service.ts reportWarning wire + smoke-test-j8 CRON_SECRET env fallback).
+- **#78 Phase 2** : Sentry URL scrub **symmetric server + client + edge**. NEW shared module `apps/web/src/lib/observability/url-scrub.ts` (NFC URL strip query params `?token|secret|password|code|key|sig`). Extends `beforeSend` pattern existant server.config.ts → client.config.ts + edge.config.ts. Magic-link / verify URL leak window de 60s fermée.
+- **#79 Phase 3** : `public/sw.js` C10 fallback notification iOS subscription revoke defense. Si `event.data?.json()` throw (subscription invalide post-revoke iOS 26), display generic notification `fxmily-fallback` au lieu de silent drop.
+- **#80 Phase 4** : README + SECURITY refonte — V1 LIVE prod posture. README ajoute roadmap LIVE (J0→V1.11 shipped) + Mark Douglas posture explicit (no analyse trade). SECURITY décrit V1 surface réelle (Auth.js v5 + 20 tables Prisma + R2 + 9 crons + RGPD + Sentry tunnel) au lieu de J0 stale.
+- **#81 Phase 5** : V2 master docs/archive. MANIFESTO-V2.md + SPEC-V2-VISION.md (orphans depuis V1.11 master remplace) → `docs/archive/` rename + stub. `docs/FXMILY-V2-MASTER.md` §33 extract 15 open questions Eliot arbitrage.
+
+### Files touched
+
+- `apps/web/src/lib/observability/url-scrub.ts` (NEW shared, PR #78)
+- `apps/web/sentry.{server,client,edge}.config.ts` (3 files PR #78)
+- `apps/web/public/sw.js` (PR #79 C10 fallback)
+- `README.md` + `SECURITY.md` (PR #80 refonte V1 LIVE)
+- `docs/archive/MANIFESTO-V2.md` + `docs/archive/SPEC-V2-VISION.md` (PR #81 rename)
+- `docs/FXMILY-V2-MASTER.md` (PR #81 §33 open questions)
+
+### Quality gate
+
+- Vitest 1001/1001 stable (5 phases zero regression)
+- 0 CVE / 0 Dependabot alert
+- Build prod Turbopack ✓ tous phases
+
+### Refs
+
+- 5 PRs : #77 #78 #79 #80 #81 (chain séquentiel merge)
+- Memory `fxmily_session_2026-05-15_audit_exhaustif_v1.10_part1.md` Round 2-4 + V1.11 5-phase execution
+
+## V1.12 — P1 + P2 + P3 (Caddyfile XFF + caddy_data backup + zizmor + rollback recipes + sec auth) (livré 2026-05-15)
+
+4 PRs sequential merged ce session : [#82](https://github.com/fxeliott/fxmily/pull/82) P1 + [#83](https://github.com/fxeliott/fxmily/pull/83) P2 TIER A2 zizmor + [#84](https://github.com/fxeliott/fxmily/pull/84) P2 rollback recipes + [#85](https://github.com/fxeliott/fxmily/pull/85) P3 H1 sec auth.
+
+### P1 — Caddyfile XFF propagate + caddy_data weekly backup (PR #82)
+
+- `ops/caddy/Caddyfile` : `header_up X-Forwarded-For {remote_host}` ajouté. Caddy single-hop OVERWRITES tout client-supplied XFF avec TCP-layer IP non-spoofable. Aligne sémantique `callerIdTrusted` (PR #76 last-entry XFF reader).
+- `ops/cron/fxmily-caddy-backup` (NEW, 107 LOC) : weekly Sunday 06:30 UTC snapshot du volume `fxmily-caddy-data` (Let's Encrypt certs + ACME account key). Pattern symétrique `fxmily-backup` : tar via `docker run alpine` readonly + gpg AES256 (passphrase-file partagé Postgres) + R2 prefix `caddy/`. 7d local + 30d R2 retention (lifecycle existante).
+- `ops/cron/crontab.fxmily` : entry `30 6 * * 0 fxmily /usr/local/bin/fxmily-caddy-backup`.
+- `docs/runbook-backup-restore.md` : nouvelle section "Caddy data backup & restore" (verify + restore + DR rationale Let's Encrypt rate-limit 50 certs/domain/week).
+- **Eliot SSH steps ~15 min** post-merge : scp Caddyfile + reload Caddy + scp script + chmod + fix-crlf + scp crontab + cron reload + dry-run.
+
+### P2 — TIER A2 zizmor CI workflow + sec hardening (PR #83)
+
+- `.github/workflows/zizmor.yml` (NEW, 85 LOC) : SARIF upload Code Scanning + `continue-on-error: true` soft-gate (les 16 unpinned-uses HIGH restants seront fixés TIER A1 pinact future).
+- `deploy.yml` permissions hierarchy fix : workflow-level → minimal `contents: read`. Job-level `build-and-push` reçoit `packages: write` + `id-token: write` (seul job qui en a besoin). `ssh-deploy` + `notify` jobs déclarent minimal `contents: read`.
+- `ci.yml` + `codeql.yml` + `deploy.yml` + `e2e.yml` checkout actions reçoivent `with: persist-credentials: false` (zizmor artipacked defense — strip GITHUB_TOKEN du `.git/config` post-step).
+- **Findings delta confirmé** : excessive-permissions 2 HIGH → 0 ✅, artipacked 4 LOW → 0 ✅, unpinned-uses 16 HIGH → 19 HIGH (TIER A1 pinact deferred).
+
+### P2 — Rollback recipes V1.6 + V1.8 + V2.0 (PR #84)
+
+- `docs/runbook-hetzner-deploy.md` étendu §11 (V1.5) avec §12 V1.6 + §13 V1.8 + §14 V2.0 + note transversale.
+- **§12 V1.6** `is_transactional` : safe ADD-only, pg_dump optional. Rollback = remove index + column + DELETE FROM \_prisma_migrations.
+- **§13 V1.8 REFLECT** (2 tables + Trade.tags array) : **data-loss risk** si membres ont rempli reviews/reflections post-V1.8. pg_dump atomique des 2 tables + COPY trades.tags CSV MANDATORY pre-rollback. Re-application via COPY + UPDATE join.
+- **§14 V2.0 TRACK** (habit_logs + HabitKind) : order non-négo — remove table avant type (Postgres rejects type drop while column references it). V2.0 ship backend-only, 0 rows expected at rollback.
+- Pattern transversal : pg*dump → docker stop → BEGIN/COMMIT → DELETE FROM \_prisma_migrations → re-deploy pre-migration image → audit `ops.migration.rolled_back` + data_loss*\* counter honest.
+
+### P3 — H1 sec auth loginIpLimiter dans authorize() (PR #85)
+
+- `apps/web/src/auth.ts` : `loginIpLimiter.consume(ip)` promotion au niveau `authorize()` via `headers()` from `next/headers` + `callerIdTrusted({ headers: reqHeaders })`. Closes le bypass POST direct `/api/auth/callback/credentials` qui était couvert uniquement par per-email bucket.
+- Defensive try-catch sur `headers()` — fail-open vers email bucket (Server Action toujours hard-enforce IP limit sur legit flow) + `reportWarning('auth.authorize', 'headers_unavailable_ip_limit_skipped')` Sentry détecte régression Edge runtime future (security-auditor V1.12 P3 L1 fix).
+- Audit row discriminable : `metadata.source: 'authorize'` distingue ce path du Server Action path (qui omet `source`).
+- **Security-auditor verdict** : 0 finding Critical/High, 4 Medium acceptables V1, L1 (Sentry warning) shipped.
+
+### Files touched cumul V1.12
+
+- `ops/caddy/Caddyfile` (P1)
+- `ops/cron/fxmily-caddy-backup` (NEW, P1)
+- `ops/cron/crontab.fxmily` (P1)
+- `docs/runbook-backup-restore.md` (P1 section)
+- `.github/workflows/zizmor.yml` (NEW, P2)
+- `.github/workflows/{ci,codeql,deploy,e2e}.yml` (P2 persist-credentials + permissions hierarchy)
+- `docs/runbook-hetzner-deploy.md` (P2 §12+§13+§14)
+- `apps/web/src/auth.ts` (P3 IP limiter promotion)
+
+### Quality gate cumul V1.12
+
+- Vitest **1001/1001** (zero regression sur 4 PRs)
+- 0 CVE / 0 Dependabot alert
+- 6+8+2+5 CI checks GREEN cumul
+
+### Refs
+
+- 4 PRs : #82 #83 #84 #85
+- Memory `fxmily_session_2026-05-15_v1.12_p1_caddyfile_xff_backup.md` (P1 atomic-detail)
+- Memory `fxmily_session_2026-05-15_v1.12_p1_p2_marathon.md` (P1+P2 cumul)
+- Security-auditor sub-agent report intégré PR #85 (L1 fix + 0 Critical/High verdict)

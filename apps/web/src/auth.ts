@@ -8,6 +8,7 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
+import { reportWarning } from '@/lib/observability';
 import { callerIdTrusted, loginEmailLimiter, loginIpLimiter } from '@/lib/rate-limit/token-bucket';
 import { signInSchema } from '@/lib/schemas/auth';
 import authConfig from '@/auth.config';
@@ -103,12 +104,20 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           const reqHeaders = await headers();
           const ip = callerIdTrusted({ headers: reqHeaders });
           ipDecision = loginIpLimiter.consume(ip);
-        } catch {
+        } catch (err) {
           // headers() unavailable in this context (Auth.js v5 future
           // regression or non-Route-Handler invocation). Fail-open : the
           // signInAction Server Action still enforces the IP limit for
           // the legit user flow, and per-email bucket above still catches
           // dictionary attacks on a known account.
+          //
+          // Sentry warning surfaces the regression so we don't silently
+          // lose this defense. `reportWarning` (not `reportError`) keeps
+          // the on-call dashboard clean — this is a degraded-mode signal,
+          // not an outage. Cf. security-auditor V1.12 P3 finding L1.
+          reportWarning('auth.authorize', 'headers_unavailable_ip_limit_skipped', {
+            errorName: err instanceof Error ? err.name : 'unknown',
+          });
         }
         if (!ipDecision.allowed) {
           await logAudit({

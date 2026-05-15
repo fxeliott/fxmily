@@ -66,14 +66,27 @@ jobs:
       - name: Install zizmor
         run: pip install zizmor
 
-      - name: Run zizmor → SARIF
-        # `--persona=regular` minimises false positives (default).
-        # SARIF output goes to Code Scanning; the plain-text dump in the
-        # job log is for quick triage.
+      - name: Generate zizmor SARIF (full surface, ungated)
+        # SARIF includes ALL severities (info + low + medium + high) so the
+        # Code Scanning upload below surfaces advisory findings even when the
+        # hard-gate below passes. `|| true` neutralises zizmor's non-zero
+        # exit on findings — the SARIF file is written to stdout BEFORE the
+        # exit check, so the redirect captures the full report.
         run: |
           set -euo pipefail
-          zizmor --format sarif .github/workflows/ > zizmor.sarif
-          zizmor --format plain .github/workflows/
+          zizmor --format sarif .github/workflows/ > zizmor.sarif || true
+
+      - name: Run zizmor — hard-gate (medium+)
+        # V1.12 P4 TIER A1 hard-gate scoped to actionable findings (medium +
+        # high). Info-level `template-injection` advisories on owner-
+        # controlled `vars.*` / `needs.*.outputs.*` expansions are routine
+        # noise for this repo's threat model (no untrusted PR contributors
+        # with write access to repo Variables, all outputs derive from
+        # `GITHUB_SHA` hex). Raise to `--min-severity low` if FP tolerance
+        # changes. The SARIF upload above keeps full visibility regardless.
+        run: |
+          set -euo pipefail
+          zizmor --min-severity medium --format plain .github/workflows/
 
       - name: Upload SARIF to Code Scanning
         if: always()

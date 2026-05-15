@@ -6,7 +6,7 @@ import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
 import { flushSentry, reportError } from '@/lib/observability';
 import { dispatchAllReady } from '@/lib/push/dispatcher';
-import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
+import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
 
 /**
  * Cron endpoint — walk the `notification_queue` and dispatch every ready row
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const id = callerId(req);
+  const id = callerIdTrusted(req);
   const decision = cronLimiter.consume(id);
   if (!decision.allowed) {
     return NextResponse.json(

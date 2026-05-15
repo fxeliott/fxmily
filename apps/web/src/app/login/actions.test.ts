@@ -51,9 +51,11 @@ vi.mock('@/lib/auth/audit', () => ({
   logAudit: logAuditMock,
 }));
 
-// We mock the two limiter singletons but keep `callerId` real so the
+// We mock the two limiter singletons but keep `callerIdTrusted` real so the
 // IP-extraction logic is still exercised end-to-end (the tests pin a
 // specific x-forwarded-for and assert the IP key reaches the limiter).
+// V1.10 sec hardening : login now uses `callerIdTrusted` (last-entry XFF
+// from Caddy) instead of `callerId` (first-entry, spoofable).
 vi.mock('@/lib/rate-limit/token-bucket', async () => {
   const actual = await vi.importActual<typeof import('@/lib/rate-limit/token-bucket')>(
     '@/lib/rate-limit/token-bucket',
@@ -126,7 +128,10 @@ describe('signInAction — happy path', () => {
   // Why this matters : the limiter must be keyed on the LOWERCASED
   // email (anti-enumeration : "Eliot@fxmilyapp.com" and
   // "eliot@fxmilyapp.com" must share one bucket). Same for the
-  // x-forwarded-for first-hop value reaching the IP limiter.
+  // x-forwarded-for last-hop value reaching the IP limiter (V1.10 sec
+  // hardening : `callerIdTrusted` reads the END of the XFF chain, which
+  // Caddy v2 appends with the immediate client IP it observed — non-
+  // spoofable, unlike first-hop which is client-controlled).
   it('keys the email limiter on the lowercased email and the IP limiter on x-forwarded-for', async () => {
     headersMock.mockResolvedValue(new Headers({ 'x-forwarded-for': '198.51.100.7, 10.0.0.1' }));
     const redirectErr = Object.assign(new Error('NEXT_REDIRECT'), {
@@ -139,8 +144,8 @@ describe('signInAction — happy path', () => {
     ).rejects.toBe(redirectErr);
 
     expect(loginEmailConsumeMock).toHaveBeenCalledWith('eliot@fxmilyapp.com');
-    // First hop in x-forwarded-for, trimmed.
-    expect(loginIpConsumeMock).toHaveBeenCalledWith('198.51.100.7');
+    // Last hop in x-forwarded-for = trusted from Caddy (anti-spoofing).
+    expect(loginIpConsumeMock).toHaveBeenCalledWith('10.0.0.1');
   });
 });
 

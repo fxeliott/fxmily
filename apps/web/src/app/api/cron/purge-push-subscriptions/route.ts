@@ -6,7 +6,7 @@ import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
 import { flushSentry, reportError } from '@/lib/observability';
 import { purgeStalePushSubscriptions } from '@/lib/push/cleanup';
-import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
+import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
 
 /**
  * Cron endpoint — purge stale Web Push subscriptions (J10, RGPD §16,
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const id = callerId(req);
+  const id = callerIdTrusted(req);
   const decision = cronLimiter.consume(id);
   if (!decision.allowed) {
     return NextResponse.json(

@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
 import { flushSentry, reportError } from '@/lib/observability';
-import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
+import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
 import { getCronHealthReport } from '@/lib/system/health';
 
 /**
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const id = callerId(req);
+  const id = callerIdTrusted(req);
   const decision = cronLimiter.consume(id);
   if (!decision.allowed) {
     return NextResponse.json(

@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { logAudit } from '@/lib/auth/audit';
 import { env } from '@/lib/env';
 import { flushSentry, reportError } from '@/lib/observability';
-import { callerId, cronLimiter } from '@/lib/rate-limit/token-bucket';
+import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
 import { generateWeeklyReportsForAllActiveMembers } from '@/lib/weekly-report/service';
 
 /**
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const id = callerId(req);
+  const id = callerIdTrusted(req);
   const decision = cronLimiter.consume(id);
   if (!decision.allowed) {
     return NextResponse.json(

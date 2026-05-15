@@ -5,7 +5,7 @@ import { AuthError } from 'next-auth';
 
 import { signIn } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
-import { callerId, loginEmailLimiter, loginIpLimiter } from '@/lib/rate-limit/token-bucket';
+import { callerIdTrusted, loginEmailLimiter, loginIpLimiter } from '@/lib/rate-limit/token-bucket';
 import { signInSchema } from '@/lib/schemas/auth';
 
 export interface SignInActionState {
@@ -43,7 +43,7 @@ export async function signInAction(
   // `auth.ts:authorize` costs ~150ms, so 10 attempts/min is far above any
   // legit human and well below an 8-card-distributed dictionary attack.
   const reqHeaders = await headers();
-  const ip = callerId({ headers: reqHeaders });
+  const ip = callerIdTrusted({ headers: reqHeaders });
   const emailKey = parsed.data.email.toLowerCase();
   const emailDecision = loginEmailLimiter.consume(emailKey);
   const ipDecision = loginIpLimiter.consume(ip);

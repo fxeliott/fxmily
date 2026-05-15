@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# /usr/local/bin/fxmily-caddy-backup — weekly caddy_data volume snapshot.
+#
+# Why : the `fxmily-caddy-data` Docker volume holds Let's Encrypt ACME
+# account keys + issued certificates for `app.fxmilyapp.com`. Losing it
+# forces re-issuance, which hits the ACME rate-limit (50 certs per domain
+# per registered domain per week — Let's Encrypt production limits). On a
+# VM rebuild / disaster recovery scenario, restoring this volume is the
+# difference between "site live in 5 min" and "site dark for hours".
+#
+# Wired by `/etc/cron.d/fxmily-app` weekly Sunday 06:30 UTC (off-hours
+# Europe/Paris, no conflict with the hourly/daily cron slots). Weekly
+# cadence is sufficient because Let's Encrypt renews certs every ~60
+# days (Caddy auto-renews at ~30 days remaining).
+#
+# Failure semantics (mirror fxmily-backup):
+#   - tar failure    → exit 1, no upload, partial file removed
+#   - encrypt fail   → exit 2, leaves un-encrypted tarball for ops triage
+#   - upload fail    → exit 3, encrypted tarball preserved locally
+#
+# Local retention : 7 days (`-mtime +7 -delete`).
+# Remote retention : 30 days (R2 bucket lifecycle policy, shared with
+# the Postgres backups).
+
+set -euo pipefail
+
+# shellcheck disable=SC1091
+source /etc/fxmily/cron.env  # GPG_PASS_FILE, R2_ENDPOINT, R2_BUCKET, CRON_LOG
+
+CRON_LOG="${CRON_LOG:-/var/log/fxmily/cron.log}"
+BACKUP_DIR="/etc/fxmily/backups"
+TS=$(date -u +%Y%m%d-%H%M)
+TAR_FILE="${BACKUP_DIR}/caddy-${TS}.tar.gz"
+ENCRYPTED_FILE="${TAR_FILE}.gpg"
+VOLUME_NAME="fxmily-caddy-data"
+
+mkdir -p "$BACKUP_DIR"
+mkdir -p "$(dirname "$CRON_LOG")"
+
+ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
+log() { echo "[$(ts)] [fxmily-caddy-backup] $*" >> "$CRON_LOG"; }
+
+log "starting → $TAR_FILE"
+
+# ---- 1. Tar the caddy_data volume via an ephemeral alpine container -------
+# Read-only mount of the named volume + write the tarball into BACKUP_DIR.
+# `docker run --rm` discards the container immediately; no host-path
+# coupling to `/var/lib/docker/volumes/...` (which would require root and
+# break if Docker storage driver changes). `-C /data` strips the volume
+# mount point from the archive paths so a restore is `tar -xzf ... -C /data`
+# symmetric.
+if ! docker run --rm \
+    -v "${VOLUME_NAME}:/data:ro" \
+    -v "${BACKUP_DIR}:/backup" \
+    alpine:latest \
+    tar -czf "/backup/caddy-${TS}.tar.gz" -C /data .; then
+  log "FAIL tar ; partial file removed"
+  rm -f "$TAR_FILE"
+  exit 1
+fi
+TAR_SIZE=$(du -h "$TAR_FILE" | cut -f1)
+log "tar OK ($TAR_SIZE)"
+
+# ---- 2. GPG symmetric encryption ------------------------------------------
+# AES-256 with gpg's iter+salted S2K defaults. Passphrase via --passphrase-
+# file (0600), never on the command line (would leak via /proc/<pid>/cmdline).
+# Shares the same passphrase as the Postgres backups — single rotation
+# playbook (docs/runbook-backup-restore.md §Rotation de la GPG passphrase).
+if ! gpg --cipher-algo AES256 --symmetric --batch --yes \
+    --passphrase-file "$GPG_PASS_FILE" "$TAR_FILE"; then
+  log "FAIL gpg encrypt ; un-encrypted tar preserved at $TAR_FILE for ops"
+  exit 2
+fi
+log "encrypt OK → $ENCRYPTED_FILE"
+
+# Strict cleanup of the un-encrypted tarball as soon as the encrypted one
+# exists. Cert + key material must NEVER linger un-encrypted on disk.
+rm -f "$TAR_FILE"
+
+# ---- 3. R2 upload (optional V1, mandatory V2 if cross-region DR target) ----
+# Skipped silently if R2_ENDPOINT/R2_BUCKET unset OR aws CLI absent. The
+# encrypted tarball stays under the 7-day local rotation (step 4). Uses
+# the `caddy/` prefix inside the bucket to keep Postgres + Caddy backups
+# visually separated when listing R2 contents.
+R2_ENDPOINT="${R2_ENDPOINT:-}"
+R2_BUCKET="${R2_BUCKET:-}"
+if [[ -z "$R2_ENDPOINT" || -z "$R2_BUCKET" ]]; then
+  log "R2 upload skipped (R2_ENDPOINT or R2_BUCKET unset — local-only V1 mode)"
+elif ! command -v aws >/dev/null 2>&1; then
+  log "R2 upload skipped (aws CLI not installed)"
+elif ! aws s3 cp "$ENCRYPTED_FILE" "s3://${R2_BUCKET}/caddy/$(basename "$ENCRYPTED_FILE")" \
+    --endpoint-url "$R2_ENDPOINT" \
+    --profile fxmily-backup \
+    --no-progress; then
+  log "FAIL R2 upload ; encrypted tarball preserved locally for retry"
+  exit 3
+else
+  log "upload OK → s3://${R2_BUCKET}/caddy/$(basename "$ENCRYPTED_FILE")"
+fi
+
+# ---- 4. Local retention ----------------------------------------------------
+# 7 days local. Older snapshots already on R2 (30-day lifecycle there,
+# shared with Postgres dumps).
+find "$BACKUP_DIR" -name 'caddy-*.tar.gz.gpg' -mtime +7 -delete
+log "rotation OK (kept 7 days local)"
+
+log "done"

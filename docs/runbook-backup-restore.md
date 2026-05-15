@@ -1,7 +1,8 @@
-# Runbook — Postgres backup & restore
+# Runbook — Postgres + Caddy backup & restore
 
-Couvre le cycle complet : sauvegarde quotidienne, vérification, restore
-catastrophique, test annuel de DR (disaster recovery).
+Couvre le cycle complet : sauvegarde quotidienne (Postgres) + hebdo
+(Caddy data), vérification, restore catastrophique, test annuel de DR
+(disaster recovery).
 
 ## Backup automatique
 
@@ -75,6 +76,85 @@ gpg --decrypt --batch --passphrase-file /etc/fxmily/gpg.pass \
 
 Pour un export complet RGPD, l'app fournit déjà `/account/data` (article 20)
 — préférer ce path utilisateur quand le compte est encore actif.
+
+## Caddy data backup & restore (V1.12)
+
+Couvre le volume Docker `fxmily-caddy-data` qui contient les certificats
+Let's Encrypt + la clé du compte ACME pour `app.fxmilyapp.com`.
+
+**Pourquoi backup ?** En cas de rebuild de VM, sans le volume on doit
+re-demander les certificats à Let's Encrypt — qui applique un rate-limit
+de **50 certs par domaine enregistré et par semaine** (production). Une
+DR sans backup peut donc bloquer le site en HTTPS plusieurs heures.
+
+Wrapper : [`/usr/local/bin/fxmily-caddy-backup`](../ops/cron/fxmily-caddy-backup) — déclenché
+par [`/etc/cron.d/fxmily-app`](../ops/cron/crontab.fxmily) chaque **dimanche
+à 06:30 UTC**. Cadence hebdo : Let's Encrypt renouvelle ~60 jours, Caddy
+auto-renouvelle à ~30 jours restants — un snapshot/semaine suffit.
+
+Pipeline : `docker run alpine tar -czf` (mount volume read-only) → `gpg
+--symmetric AES256` (même passphrase que Postgres backups) → `aws s3 cp`
+vers `s3://${R2_BUCKET}/caddy/` → rotation locale 7 jours + R2 30 jours
+(lifecycle bucket-side partagée avec les dumps Postgres).
+
+### Vérifier qu'un backup Caddy a bien tourné
+
+```bash
+# Dernier run dans le log cron
+tail -10 /var/log/fxmily/cron.log | grep fxmily-caddy-backup
+# Attendu : `... [fxmily-caddy-backup] done`
+
+# Liste R2 (préfixe caddy/)
+aws s3 ls s3://fxmily-backups/caddy/ \
+  --endpoint-url $R2_ENDPOINT \
+  --profile fxmily-backup \
+  | sort -r | head -3
+# Attendu : 3 derniers fichiers `caddy-YYYYMMDD-HHMM.tar.gz.gpg`
+```
+
+### Restore manuel (perte du volume / rebuild VM)
+
+> ⚠️ Stoppe Caddy avant restore — un Caddy actif tient des fichiers
+> ouverts dans `/data` (le volume) et corrompt l'extraction.
+
+```bash
+# 1. Récupère le dernier snapshot R2
+aws s3 cp s3://fxmily-backups/caddy/caddy-YYYYMMDD-HHMM.tar.gz.gpg . \
+  --endpoint-url $R2_ENDPOINT \
+  --profile fxmily-backup
+
+# 2. Décrypte
+gpg --decrypt --batch --passphrase-file /etc/fxmily/gpg.pass \
+  caddy-YYYYMMDD-HHMM.tar.gz.gpg > caddy-restore.tar.gz
+
+# 3. Stoppe Caddy
+docker compose -f /opt/fxmily/docker-compose.prod.yml stop caddy
+
+# 4. Wipe + restore le volume (le volume est recréé par Docker au
+#    `up` suivant, mais on extrait dedans pour éviter de toucher au
+#    runtime layer)
+docker run --rm \
+  -v fxmily-caddy-data:/data \
+  -v "$PWD:/restore" \
+  alpine:latest \
+  sh -c "rm -rf /data/* && tar -xzf /restore/caddy-restore.tar.gz -C /data"
+
+# 5. Relance Caddy
+docker compose -f /opt/fxmily/docker-compose.prod.yml start caddy
+
+# 6. Vérifie : pas de re-issuance ACME dans les logs, cert valide
+docker compose -f /opt/fxmily/docker-compose.prod.yml logs caddy | tail -50
+curl -sI https://app.fxmilyapp.com | head -3
+# Attendu : `HTTP/2 200` + cert non-Let's-Encrypt-fresh (date inchangée).
+```
+
+### Rotation de la passphrase Caddy backup
+
+Pas de rotation dédiée — les Caddy backups partagent
+`/etc/fxmily/gpg.pass` avec les Postgres dumps. Voir
+[Rotation de la GPG passphrase](#rotation-de-la-gpg-passphrase) ci-dessous
+(la boucle `for f in /etc/fxmily/backups/*.gpg` couvre déjà les deux
+familles via le glob).
 
 ## Test de DR (annuel, ~30 min)
 

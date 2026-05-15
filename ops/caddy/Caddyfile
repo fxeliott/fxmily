@@ -25,8 +25,15 @@ app.fxmilyapp.com {
 		lb_try_duration 60s
 		lb_try_interval 1s
 		# Trust the X-Forwarded-* chain only because we terminate TLS
-		# here (Caddy is the FIRST hop after the public IP).
+		# here (Caddy is the FIRST hop after the public IP). Caddy is
+		# single-hop, so we OVERWRITE X-Forwarded-For with `{remote_host}`
+		# (the TCP-layer client IP, non-spoofable) rather than appending
+		# to a potentially attacker-supplied value. This aligns with
+		# `callerIdTrusted` (apps/web/src/lib/rate-limit/token-bucket.ts)
+		# which reads the LAST entry of XFF expecting a trusted Caddy-set
+		# value.
 		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
 		header_up X-Forwarded-Proto {scheme}
 	}
 

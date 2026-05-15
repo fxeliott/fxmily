@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         # Reads pnpm version from `packageManager` in package.json (single source of truth).
 
       - name: Setup Node.js

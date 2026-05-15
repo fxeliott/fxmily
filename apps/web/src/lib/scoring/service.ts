@@ -9,6 +9,7 @@ import {
   type LocalDateString,
 } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
+import { reportWarning } from '@/lib/observability';
 
 import { computeConsistencyScore, type ConsistencyTradeInput } from './consistency';
 import {
@@ -359,12 +360,22 @@ export async function recomputeAllActiveMembers(
     const results = await Promise.allSettled(
       slice.map((u) => recomputeAndPersist(u.id, undefined, { ...options, timezone: u.timezone })),
     );
-    for (const r of results) {
+    for (let j = 0; j < results.length; j++) {
+      const r = results[j];
+      if (r === undefined) continue;
       if (r.status === 'fulfilled') {
         computed++;
       } else {
         errors++;
+        const userId = slice[j]?.id;
         console.error('[scoring] recompute failed:', r.reason);
+        // V1.11 — wire to Sentry (was console-only). Per-user recompute failures
+        // were invisible in observability dashboard despite the cron audit row
+        // surfacing the aggregate count. Round 4 audit P finding.
+        reportWarning('scoring.recompute', 'recompute_failed', {
+          userId,
+          error: r.reason instanceof Error ? r.reason.message : String(r.reason),
+        });
       }
     }
   }

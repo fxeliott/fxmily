@@ -1,0 +1,84 @@
+name: zizmor (Actions security)
+
+# V1.12 P2 — TIER A2 zizmor CI integration.
+#
+# Static analysis for `.github/workflows/` files. Surfaces findings via
+# GitHub Code Scanning (Security tab) by uploading a SARIF report. We
+# deliberately do NOT fail the workflow on findings so that the 16
+# remaining `unpinned-uses` HIGH findings (V1.10 audit catalogue) can be
+# triaged in TIER A1 (pinact SHA pinning, dedicated session) without
+# blocking the PR queue here. Once TIER A1 lands, flip `continue-on-error`
+# to `false` on the audit step to make zizmor a hard gate.
+#
+# Trigger philosophy : mirror CodeQL — push to main + PRs to main +
+# weekly cron. Path filter scoped to workflow files so unrelated PRs
+# don't waste minutes here.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.zizmor.yml'
+      - 'zizmor.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.zizmor.yml'
+      - 'zizmor.yml'
+  schedule:
+    # Monday 05:00 UTC (06:00 Europe/Paris) — staggered after CodeQL
+    # (04:00 UTC) to spread the Actions quota load. Catches new audits
+    # introduced by zizmor upstream releases.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Workflow-level: minimal read-only. The audit job requests
+# `security-events: write` at the job-level for the SARIF upload.
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit GitHub Actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to Code Scanning
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install zizmor
+        run: pip install zizmor
+
+      - name: Run zizmor → SARIF
+        # `--persona=regular` minimises false positives (default).
+        # SARIF output goes to Code Scanning; the plain-text dump in the
+        # job log is for quick triage.
+        run: |
+          set -euo pipefail
+          zizmor --format sarif .github/workflows/ > zizmor.sarif
+          zizmor --format plain .github/workflows/ || true
+        continue-on-error: true
+
+      - name: Upload SARIF to Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: zizmor.sarif
+          category: zizmor

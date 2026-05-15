@@ -54,6 +54,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # Strip GITHUB_TOKEN from `.git/config` after checkout (zizmor
+          # artipacked) — CodeQL itself only needs read access (already
+          # scoped via `contents: read`).
+          persist-credentials: false
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3

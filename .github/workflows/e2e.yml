@@ -102,6 +102,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # Strip GITHUB_TOKEN from `.git/config` after checkout (zizmor
+          # artipacked) — Playwright tests don't push back to the repo.
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6

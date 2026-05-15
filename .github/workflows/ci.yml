@@ -60,6 +60,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # Don't persist GITHUB_TOKEN in `.git/config` post-step (zizmor
+          # artipacked defense — prevents accidental token leak through
+          # artifact archives in later steps).
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6

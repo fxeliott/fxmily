@@ -87,6 +87,16 @@ jobs:
       # (envSchemaWithRefines in apps/web/src/lib/env.ts).
       AUTH_URL: http://localhost:3000
       AUTH_SECRET: ci_placeholder_secret_must_be_at_least_32_characters_long
+      # Auth.js v5 fix : without AUTH_TRUST_HOST=true, the request origin
+      # resolves to "localhost" instead of the public-facing AUTH_URL,
+      # triggering `[auth][error] TypeError: Invalid URL` in the credentials
+      # callback (root cause of smoke-tour-j6 failure on PR #72 first run).
+      # Per Auth.js v5 docs : "When self-hosting behind a proxy or in test
+      # environments, set AUTH_TRUST_HOST=true to opt into trusting the
+      # x-forwarded-host header." `next dev` under Playwright's webServer
+      # is exactly that scenario — Playwright fetches via base URL but the
+      # request reaches Next via localhost.
+      AUTH_TRUST_HOST: 'true'
       CI: 'true'
 
     steps:

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { headers } from 'next/headers';
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
@@ -7,7 +8,7 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
-import { loginEmailLimiter } from '@/lib/rate-limit/token-bucket';
+import { callerIdTrusted, loginEmailLimiter, loginIpLimiter } from '@/lib/rate-limit/token-bucket';
 import { signInSchema } from '@/lib/schemas/auth';
 import authConfig from '@/auth.config';
 import type { UserRole, UserStatus } from '@/generated/prisma/client';
@@ -61,14 +62,25 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         // Phase T security promotion (2026-05-09) — credential-stuffing
         // defense at the AUTH PROVIDER level (covers
         // /api/auth/callback/credentials direct hits, not just the
-        // signInAction Server Action). Per-email + per-(unknown-IP-here,
-        // see comment) bucket. Auth.js doesn't pass the request to
-        // authorize() so we key on email only here ; the IP gate lives
-        // in `app/login/actions.ts` which is the legit caller path.
-        // An attacker hitting /api/auth/callback/credentials directly
-        // is still bound by the per-email bucket → 5 burst, 1/min refill.
-        // After 5 failures, argon2 verify is short-circuited and we
-        // return null without revealing the throttle (anti-enumeration).
+        // signInAction Server Action). Per-email bucket.
+        //
+        // V1.12 P3 (2026-05-15) — IP gate promoted to authorize() level via
+        // `headers()` from `next/headers`. Previously the IP bucket lived
+        // only in `app/login/actions.ts`, leaving the direct
+        // `/api/auth/callback/credentials` POST path covered only by the
+        // per-email bucket. An attacker rotating across many emails from
+        // a single IP could drain the email buckets one-at-a-time without
+        // ever tripping an IP-wide limit. With Caddy's `header_up
+        // X-Forwarded-For {remote_host}` (V1.12 P1) the last-XFF entry
+        // is non-spoofable, so `callerIdTrusted` gives a real client IP.
+        //
+        // Defensive try-catch on `headers()` — Auth.js v5 calls authorize()
+        // from inside its Route Handler chain so the request context IS
+        // available in Next 16, but a future evolution (e.g. edge-runtime
+        // promotion) might break that. Fail-open : keep the email bucket
+        // as the only gate. The Server Action path
+        // (`signInAction → loginIpLimiter.consume`) still hard-enforces
+        // the IP limit for the legit user flow.
         const emailDecision = loginEmailLimiter.consume(email.toLowerCase());
         if (!emailDecision.allowed) {
           await logAudit({
@@ -77,6 +89,34 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
             metadata: {
               kind: 'email',
               retryAfterMs: emailDecision.retryAfterMs,
+              source: 'authorize',
+            },
+          }).catch(() => undefined);
+          return null;
+        }
+
+        let ipDecision: { allowed: boolean; retryAfterMs: number } = {
+          allowed: true,
+          retryAfterMs: 0,
+        };
+        try {
+          const reqHeaders = await headers();
+          const ip = callerIdTrusted({ headers: reqHeaders });
+          ipDecision = loginIpLimiter.consume(ip);
+        } catch {
+          // headers() unavailable in this context (Auth.js v5 future
+          // regression or non-Route-Handler invocation). Fail-open : the
+          // signInAction Server Action still enforces the IP limit for
+          // the legit user flow, and per-email bucket above still catches
+          // dictionary attacks on a known account.
+        }
+        if (!ipDecision.allowed) {
+          await logAudit({
+            action: 'auth.login.rate_limited',
+            userId: null,
+            metadata: {
+              kind: 'ip',
+              retryAfterMs: ipDecision.retryAfterMs,
               source: 'authorize',
             },
           }).catch(() => undefined);

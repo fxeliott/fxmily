@@ -6,8 +6,10 @@ import {
   HabitCorrelationSkeleton,
 } from '@/components/track/habit-correlation-section';
 import { HabitKindPicker } from '@/components/track/habit-kind-picker';
+import { HabitKindTabPicker } from '@/components/track/habit-kind-tab-picker';
 import { TodayHabitCards } from '@/components/track/today-habit-cards';
 import { TrackHero } from '@/components/track/track-hero';
+import { habitKindSchema } from '@/lib/schemas/habit-log';
 import { auth } from '@/auth';
 
 /**
@@ -33,7 +35,7 @@ import { auth } from '@/auth';
 export const dynamic = 'force-dynamic';
 
 interface TrackPageProps {
-  searchParams: Promise<{ done?: string; kind?: string }>;
+  searchParams: Promise<{ done?: string; kind?: string; corr?: string }>;
 }
 
 const KIND_LABELS_FR: Record<string, string> = {
@@ -52,6 +54,8 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
 
   const sp = await searchParams;
   const justLogged = sp.done === '1' && sp.kind && KIND_LABELS_FR[sp.kind];
+  const corrParsed = habitKindSchema.safeParse(sp.corr);
+  const corrKind = corrParsed.success ? corrParsed.data : 'sleep';
 
   return (
     <main
@@ -85,12 +89,26 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
 
       <TodayHabitCards userId={session.user.id} />
 
-      <Suspense fallback={<HabitCorrelationSkeleton />}>
-        <HabitCorrelationSection
-          userId={session.user.id}
-          timezone={session.user.timezone || 'Europe/Paris'}
+      <section aria-labelledby="track-corr-heading" className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <span id="track-corr-heading" className="t-eyebrow">
+            Corrélations habitudes × trading
+          </span>
+        </div>
+        <HabitKindTabPicker
+          selected={corrKind}
+          labelId="track-corr-heading"
+          pathname="/track"
+          preservedQuery=""
         />
-      </Suspense>
+        <Suspense key={corrKind} fallback={<HabitCorrelationSkeleton />}>
+          <HabitCorrelationSection
+            userId={session.user.id}
+            timezone={session.user.timezone || 'Europe/Paris'}
+            habitKind={corrKind}
+          />
+        </Suspense>
+      </section>
 
       <HabitKindPicker />
     </main>

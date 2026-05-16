@@ -241,3 +241,142 @@ describe('buildHabitHeatmap', () => {
     expect(grid.every((d) => Object.keys(d.kinds).length === 0)).toBe(true);
   });
 });
+
+// =============================================================================
+// V2.2 — generalization to all 5 pillars (the per-kind picker guarantee)
+// =============================================================================
+
+/**
+ * V2.1.3 wired only `sleep` in the UI; the picker (V2.2) lets the member
+ * correlate any of the 5 pillars. These exercise the FULL pipeline
+ * (`extractHabitScalar` → `pairHabitLogsToTrades` → `computeHabitTradeCorrelation`)
+ * per kind — not the `mkPairs` shortcut — so a regression in any per-kind
+ * scalar extraction or in the discriminated-union honesty surfaces here.
+ */
+describe('V2.2 — 5-kind round-trip (pair → compute)', () => {
+  const tz = 'Europe/Paris';
+  const day = (d: number) => `2026-05-${String(d).padStart(2, '0')}`;
+  const trade = (d: number, realizedR: number): TradeLike => ({
+    enteredAt: `${day(d)}T08:00:00Z`, // 10:00 Paris — same civil day
+    realizedR,
+  });
+
+  it('nutrition: mealsCount correlates positively, kind carried through', () => {
+    const logs: HabitLogLike[] = [1, 2, 3, 4, 1, 2, 3, 4].map((mealsCount, i) => ({
+      date: day(i + 1),
+      kind: 'nutrition',
+      value: { mealsCount },
+    }));
+    const trades = [1, 2, 3, 4, 1, 2, 3, 4].map((m, i) => trade(i + 1, m * 2)); // y = 2x
+    const pairs = pairHabitLogsToTrades(logs, trades, 'nutrition', tz);
+    const res = computeHabitTradeCorrelation(pairs, 'nutrition', 30, []);
+    expect(res.habitKind).toBe('nutrition');
+    if (res.correlation.status !== 'sufficient') throw new Error('expected sufficient');
+    expect(res.correlation.n).toBe(8);
+    expect(res.correlation.r).toBeCloseTo(1, 12);
+    expect(res.correlation.interpretation).toBe('strong_positive');
+    expect(res.correlation.confidence).toBe('low'); // 8 < SUFFICIENT_SAMPLE_MIN
+  });
+
+  it('caffeine: a NEGATIVE link is surfaced factually, never masked', () => {
+    const cups = [0, 1, 2, 3, 4, 5, 1, 3];
+    const logs: HabitLogLike[] = cups.map((c, i) => ({
+      date: day(i + 1),
+      kind: 'caffeine',
+      value: { cups: c },
+    }));
+    const trades = cups.map((c, i) => trade(i + 1, 10 - 2 * c)); // strictly decreasing
+    const pairs = pairHabitLogsToTrades(logs, trades, 'caffeine', tz);
+    const res = computeHabitTradeCorrelation(pairs, 'caffeine', 30, []);
+    if (res.correlation.status !== 'sufficient') throw new Error('expected sufficient');
+    expect(res.correlation.r).toBeCloseTo(-1, 12);
+    expect(res.correlation.interpretation).toBe('strong_negative');
+  });
+
+  it('sport: requires `type`; a typeless log is dropped, n unaffected', () => {
+    const mins = [10, 20, 30, 40, 50, 60, 15, 25];
+    const logs: HabitLogLike[] = mins.map((durationMin, i) => ({
+      date: day(i + 1),
+      kind: 'sport',
+      value: { type: 'cardio', durationMin },
+    }));
+    // A 9th day with a malformed sport log (no `type`) + its trade.
+    logs.push({ date: day(9), kind: 'sport', value: { durationMin: 30 } });
+    const trades = [...mins.map((m, i) => trade(i + 1, m * 0.05)), trade(9, 5)];
+    const pairs = pairHabitLogsToTrades(logs, trades, 'sport', tz);
+    const res = computeHabitTradeCorrelation(pairs, 'sport', 30, []);
+    if (res.correlation.status !== 'sufficient') throw new Error('expected sufficient');
+    expect(res.correlation.n).toBe(8); // typeless day excluded, not 9
+    expect(res.correlation.r).toBeCloseTo(1, 12);
+    expect(res.habitKind).toBe('sport');
+  });
+
+  it('meditation: durationMin round-trips to a strong positive link', () => {
+    const mins = [5, 10, 15, 20, 25, 30, 8, 12];
+    const logs: HabitLogLike[] = mins.map((durationMin, i) => ({
+      date: day(i + 1),
+      kind: 'meditation',
+      value: { durationMin },
+    }));
+    const trades = mins.map((m, i) => trade(i + 1, m * 0.1));
+    const res = computeHabitTradeCorrelation(
+      pairHabitLogsToTrades(logs, trades, 'meditation', tz),
+      'meditation',
+      30,
+      [],
+    );
+    if (res.correlation.status !== 'sufficient') throw new Error('expected sufficient');
+    expect(res.habitKind).toBe('meditation');
+    expect(res.correlation.interpretation).toBe('strong_positive');
+  });
+
+  it('cross-kind isolation: same days, picking `sport` ignores the sleep scalar', () => {
+    const mins = [10, 20, 30, 40, 50, 60, 70, 80];
+    const logs: HabitLogLike[] = [];
+    mins.forEach((durationMin, i) => {
+      logs.push({ date: day(i + 1), kind: 'sleep', value: { durationMin: 480 } }); // constant 8h
+      logs.push({ date: day(i + 1), kind: 'sport', value: { type: 'mixed', durationMin } });
+    });
+    const trades = mins.map((m, i) => trade(i + 1, m)); // R tracks sport minutes, not sleep
+    const res = computeHabitTradeCorrelation(
+      pairHabitLogsToTrades(logs, trades, 'sport', tz),
+      'sport',
+      30,
+      [],
+    );
+    if (res.correlation.status !== 'sufficient') throw new Error('expected sufficient');
+    expect(res.correlation.r).toBeCloseTo(1, 12); // sport→R, sleep (constant) irrelevant
+    // Sanity: picking `sleep` here is zero-variance x → structurally insufficient.
+    const sleepRes = computeHabitTradeCorrelation(
+      pairHabitLogsToTrades(logs, trades, 'sleep', tz),
+      'sleep',
+      30,
+      [],
+    );
+    expect(sleepRes.correlation.status).toBe('insufficient_data');
+  });
+
+  it('honesty holds per kind: a sparsely-logged pillar stays insufficient_data', () => {
+    const logs: HabitLogLike[] = [];
+    // 30 days of sleep, but only 3 sport days.
+    for (let i = 1; i <= 28; i++) {
+      logs.push({ date: day(i), kind: 'sleep', value: { durationMin: 400 + i } });
+    }
+    [1, 2, 3].forEach((i) =>
+      logs.push({ date: day(i), kind: 'sport', value: { type: 'cardio', durationMin: i * 10 } }),
+    );
+    const trades = Array.from({ length: 28 }, (_, i) => trade(i + 1, (i % 5) - 2));
+    const res = computeHabitTradeCorrelation(
+      pairHabitLogsToTrades(logs, trades, 'sport', tz),
+      'sport',
+      30,
+      [],
+    );
+    expect(res.correlation).toEqual({
+      status: 'insufficient_data',
+      n: 3,
+      minRequired: MIN_CORRELATION_PAIRS,
+    });
+    expect('r' in res.correlation).toBe(false); // union structurally forbids a coefficient
+  });
+});

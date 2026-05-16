@@ -349,7 +349,7 @@ function CaffeineStep({ draft, setDraft, stepError, headingRef, cupsForBar }: St
         </p>
       </header>
 
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         <label
           htmlFor="caffeine-cups"
           className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
@@ -381,7 +381,7 @@ function CaffeineStep({ draft, setDraft, stepError, headingRef, cupsForBar }: St
 
       <CaffeineZonesBar cups={cupsForBar ?? null} />
 
-      <div className="space-y-2.5 pt-2">
+      <div className="space-y-3 pt-2">
         <label
           htmlFor="caffeine-last"
           className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
@@ -447,10 +447,10 @@ function CaffeineNotesStep({ draft, setDraft, headingRef }: StepProps) {
       </div>
 
       <div className="rounded-input border border-[var(--b-default)] bg-[var(--bg-2)] p-3.5">
-        <h3 className="mb-1.5 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
+        <h3 className="mb-2 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
           Récapitulatif
         </h3>
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[13px]">
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
           <dt className="text-[var(--t-3)]">Tasses</dt>
           <dd className="font-mono text-[var(--t-1)] tabular-nums">{draft.cups}</dd>
           <dt className="text-[var(--t-3)]">Dernière prise</dt>

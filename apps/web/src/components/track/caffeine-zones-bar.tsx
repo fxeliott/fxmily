@@ -76,7 +76,7 @@ export function CaffeineZonesBar({ cups }: CaffeineZonesBarProps) {
   const currentZone = value === null ? null : classify(value);
 
   return (
-    <div className="flex flex-col gap-2.5" aria-hidden={value === null ? 'true' : undefined}>
+    <div className="flex flex-col gap-3" aria-hidden={value === null ? 'true' : undefined}>
       <div className="flex items-baseline justify-between">
         <span className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
           Zones de caféine

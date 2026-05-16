@@ -352,7 +352,7 @@ function NutritionStep({ draft, setDraft, stepError, headingRef }: StepProps) {
         </p>
       </header>
 
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         <label
           htmlFor="nutrition-meals"
           className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
@@ -382,7 +382,7 @@ function NutritionStep({ draft, setDraft, stepError, headingRef }: StepProps) {
         ) : null}
       </div>
 
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         <span
           id="nutrition-quality-label"
           className="block text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
@@ -472,10 +472,10 @@ function NutritionNotesStep({ draft, setDraft, headingRef }: StepProps) {
       </div>
 
       <div className="rounded-input border border-[var(--b-default)] bg-[var(--bg-2)] p-3.5">
-        <h3 className="mb-1.5 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
+        <h3 className="mb-2 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
           Récapitulatif
         </h3>
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[13px]">
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
           <dt className="text-[var(--t-3)]">Repas</dt>
           <dd className="font-mono text-[var(--t-1)] tabular-nums">{draft.mealsCount}</dd>
           <dt className="text-[var(--t-3)]">Qualité</dt>

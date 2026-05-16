@@ -29,7 +29,7 @@ export default async function TrackCaffeineNewPage() {
       <header className="space-y-2">
         <Link
           href="/track"
-          className="inline-flex min-h-6 items-center gap-1.5 px-2 py-1.5 text-[13px] font-medium text-[var(--t-3)] hover:text-[var(--t-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          className="inline-flex min-h-6 items-center gap-2 px-2 py-2 text-[13px] font-medium text-[var(--t-3)] hover:text-[var(--t-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Retour au suivi

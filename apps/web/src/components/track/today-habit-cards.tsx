@@ -96,7 +96,7 @@ export async function TodayHabitCards({ userId }: TodayHabitCardsProps) {
         <span className="font-mono text-[11px] text-[var(--t-3)] tabular-nums">{today}</span>
       </header>
 
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {PILLARS.map((p) => {
           const isLogged = loggedKinds.has(p.kind);
           return (

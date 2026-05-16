@@ -58,7 +58,7 @@ export function HabitKindPicker() {
             >
               <span
                 className={cn(
-                  'rounded-input flex min-h-11 items-center gap-2.5 border px-3 py-2.5 text-[14px] transition-colors',
+                  'rounded-input flex min-h-11 items-center gap-3 border px-3 py-3 text-[14px] transition-colors',
                   'border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-1)] hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)]',
                 )}
               >

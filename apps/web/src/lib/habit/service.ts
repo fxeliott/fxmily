@@ -182,3 +182,93 @@ export async function listHabitLogsByKind(
   });
   return rows.map((r) => toSerialized(r as unknown as HabitLogRow));
 }
+
+// =============================================================================
+// V2.1.3 — Habit × Trade correlation data loader
+// =============================================================================
+
+/** Serialized trade slice for the correlation (Decimal -> number at the
+ *  boundary, never crossing the RSC/client edge as a Prisma.Decimal). */
+export interface TradeForCorrelation {
+  /** ISO UTC datetime — the analytics layer buckets this to a Paris day. */
+  enteredAt: string;
+  /** `realized_r` as a finite number. Only `computed`-source rows are
+   *  returned (callers never see `estimated` — see filter below). */
+  realizedR: number;
+  /** Present only when the member graded the setup (V1.5). */
+  tradeQuality?: 'A' | 'B' | 'C';
+}
+
+export interface HabitTradeCorrelationData {
+  habitLogs: SerializedHabitLog[];
+  trades: TradeForCorrelation[];
+}
+
+/**
+ * Load the inputs for the V2.1.3 correlation card: the member's recent
+ * habit logs (all kinds, for the heatmap + per-kind pairing) and their
+ * closed, *computed*-R trades over the same window.
+ *
+ * Why `realizedRSource = 'computed'` only: `estimated` R has no precise
+ * magnitude (it's `plannedRR | -1 | 0` fallback) and would corrupt a
+ * correlation. This mirrors the J6 expectancy/R-distribution convention
+ * (`apps/web/CLAUDE.md` J6 TODO "exclude realizedRSource='estimated'").
+ *
+ * The day-matching itself (Europe/Paris wall-clock, never UTC slice) lives
+ * in the pure `lib/analytics/habit-trade-correlation` module — this
+ * function only fetches + serializes. Both queries are user-scoped and
+ * index-backed (`habit_logs (userId, date desc)` /
+ * `trades (userId, closedAt)` + `(userId, enteredAt desc)`).
+ *
+ * Fetch window = requested `windowDays` **+ 1 day slack** (symmetric on
+ * both queries). The trade filter is `enteredAt >= horizon` (UTC) while
+ * the pairing buckets to a Europe/Paris civil day — without the slack a
+ * boundary-day trade could be fetched while its habit log isn't (or
+ * vice-versa), silently dropping ≤1 pair at the window edge. The pure
+ * module only pairs days present in BOTH sets, so an extra unmatched day
+ * is harmless; the slack just removes the UTC/Paris boundary asymmetry
+ * (code-review V2.1.3 T2#1). The *analytical* window the member sees
+ * stays `windowDays`.
+ */
+export async function loadHabitTradeCorrelationData(
+  userId: string,
+  windowDays = 30,
+): Promise<HabitTradeCorrelationData> {
+  const bounded = Math.max(1, Math.min(windowDays, 90));
+  // +1 day slack (symmetric on both queries) absorbs the Europe/Paris vs
+  // UTC boundary — see JSDoc above. Clamped so it never exceeds the
+  // `listRecentHabitLogs` 90-day ceiling (keeps both fetches symmetric).
+  const fetchDays = Math.min(bounded + 1, 90);
+  const horizon = new Date();
+  horizon.setUTCDate(horizon.getUTCDate() - fetchDays);
+  horizon.setUTCHours(0, 0, 0, 0);
+
+  const [habitLogs, tradeRows] = await Promise.all([
+    listRecentHabitLogs(userId, fetchDays),
+    db.trade.findMany({
+      where: {
+        userId,
+        closedAt: { not: null },
+        realizedR: { not: null },
+        realizedRSource: 'computed',
+        enteredAt: { gte: horizon },
+      },
+      select: { enteredAt: true, realizedR: true, tradeQuality: true },
+      orderBy: { enteredAt: 'desc' },
+    }),
+  ]);
+
+  const trades: TradeForCorrelation[] = [];
+  for (const row of tradeRows) {
+    if (row.realizedR == null) continue; // narrowed by the where, belt-and-suspenders
+    const realizedR = Number(row.realizedR.toString());
+    if (!Number.isFinite(realizedR)) continue;
+    trades.push({
+      enteredAt: row.enteredAt.toISOString(),
+      realizedR,
+      ...(row.tradeQuality ? { tradeQuality: row.tradeQuality } : {}),
+    });
+  }
+
+  return { habitLogs, trades };
+}

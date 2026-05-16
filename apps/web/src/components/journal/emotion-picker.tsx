@@ -65,9 +65,7 @@ export function EmotionPicker({
       aria-describedby={`${counterId}${hintId ? ` ${hintId}` : ''}`}
     >
       <legend className="flex w-full items-center justify-between">
-        <span className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-          {label}
-        </span>
+        <span className="t-eyebrow-lg text-[var(--t-3)]">{label}</span>
         <span
           id={counterId}
           className={cn(

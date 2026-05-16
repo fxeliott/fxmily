@@ -117,10 +117,7 @@ export function ScoreSlider({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between">
-        <label
-          htmlFor={id}
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <label htmlFor={id} className="t-eyebrow-lg text-[var(--t-3)]">
           {label}
         </label>
         {/* Visual readout — NOT aria-live (the slider's own aria-valuetext

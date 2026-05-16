@@ -46,10 +46,7 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
 
       {/* Email readonly avec icon — visible mais pas modifiable */}
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="onboarding-email"
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <label htmlFor="onboarding-email" className="t-eyebrow-lg text-[var(--t-3)]">
           Email
         </label>
         <div className="relative">
@@ -190,10 +187,7 @@ function Field({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={id}
-        className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-      >
+      <label htmlFor={id} className="t-eyebrow-lg text-[var(--t-3)]">
         {label}
       </label>
       <div className="relative">

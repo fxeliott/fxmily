@@ -28,10 +28,7 @@ export function InviteForm() {
       aria-describedby="invite-status"
     >
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="invite-email"
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <label htmlFor="invite-email" className="t-eyebrow-lg text-[var(--t-3)]">
           Email du nouveau membre
         </label>
         <div className="relative">

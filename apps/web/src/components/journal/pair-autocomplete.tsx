@@ -62,10 +62,7 @@ export function PairAutocomplete({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={inputId}
-        className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-      >
+      <label htmlFor={inputId} className="t-eyebrow-lg text-[var(--t-3)]">
         Paire
       </label>
       <div className="relative">

@@ -87,10 +87,7 @@ export async function TodayHabitCards({ userId }: TodayHabitCardsProps) {
   return (
     <section aria-labelledby="today-habits-heading" className="space-y-3">
       <header className="flex items-baseline justify-between gap-4">
-        <h2
-          id="today-habits-heading"
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <h2 id="today-habits-heading" className="t-eyebrow-lg text-[var(--t-3)]">
           Aujourd&apos;hui
         </h2>
         <span className="font-mono text-[11px] text-[var(--t-3)] tabular-nums">{today}</span>

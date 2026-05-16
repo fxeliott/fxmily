@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 import { useMemo } from 'react';
 import {
   CartesianGrid,
@@ -61,7 +61,7 @@ export function HabitCorrelationScatter({ points, xLabel, summary }: HabitCorrel
   );
 
   return (
-    <motion.div
+    <m.div
       initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -146,6 +146,6 @@ export function HabitCorrelationScatter({ points, xLabel, summary }: HabitCorrel
           </ScatterChart>
         </ResponsiveContainer>
       </figure>
-    </motion.div>
+    </m.div>
   );
 }

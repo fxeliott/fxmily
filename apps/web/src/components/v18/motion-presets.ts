@@ -18,7 +18,7 @@ import type { Transition } from 'framer-motion';
 
 /**
  * Canonical wizard step transition. Used by `<WeeklyReviewWizard>` and
- * `<ReflectionWizard>` motion.div step containers.
+ * `<ReflectionWizard>` m.div step containers.
  *
  * Tuning rationale (Q1 2026 audit) :
  *   - `stiffness: 220` lands between Apple HIG iOS animation defaults and

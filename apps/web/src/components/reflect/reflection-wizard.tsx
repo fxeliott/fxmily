@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import {
   ArrowLeft,
   ArrowRight,
@@ -214,7 +214,7 @@ export function ReflectionWizard() {
 
       <div className="relative min-h-[340px]">
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div
+          <m.div
             key={step}
             initial={reduceMotion ? false : { opacity: 0, x: 24 }}
             animate={{ opacity: 1, x: 0 }}
@@ -232,7 +232,7 @@ export function ReflectionWizard() {
               error={errors?.[def.field]}
               placeholder={def.placeholder}
             />
-          </motion.div>
+          </m.div>
         </AnimatePresence>
       </div>
 

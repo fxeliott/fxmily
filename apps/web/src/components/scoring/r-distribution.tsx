@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 import {
   Bar,
   BarChart,
@@ -40,7 +40,7 @@ export function RDistribution({ buckets }: RDistributionProps) {
   const total = buckets.reduce((s, b) => s + b.count, 0);
 
   return (
-    <motion.div
+    <m.div
       initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -124,6 +124,6 @@ export function RDistribution({ buckets }: RDistributionProps) {
           </ResponsiveContainer>
         </figure>
       )}
-    </motion.div>
+    </m.div>
   );
 }

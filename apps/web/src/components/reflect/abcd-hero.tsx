@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 
 /**
  * V1.8 REFLECT — `ABCDHero` SVG illustration for the CBT Ellis wizard.
@@ -17,7 +17,7 @@ import { motion, useReducedMotion } from 'framer-motion';
  * resolution". Connecting paths draw sequentially via `pathLength` so
  * the eye follows the chain naturally on first render.
  *
- * Each node has a small bouncing entrance via `motion.circle scale 0→1`
+ * Each node has a small bouncing entrance via `m.circle scale 0→1`
  * with stagger. The whole figure is decorative — `aria-hidden="true"`.
  *
  * Reduced-motion : single-frame final state via `useReducedMotion()`.
@@ -64,7 +64,7 @@ export function ABCDHero({ className }: { className?: string }) {
         const midY = (from.cy + to.cy) / 2 - (i % 2 === 0 ? 24 : -8);
         const d = `M ${from.cx} ${from.cy} Q ${midX} ${midY} ${to.cx} ${to.cy}`;
         return (
-          <motion.path
+          <m.path
             key={`path-${i}`}
             d={d}
             fill="none"
@@ -86,7 +86,7 @@ export function ABCDHero({ className }: { className?: string }) {
       {nodes.map((n, i) => (
         <g key={n.label}>
           {/* Halo backplate */}
-          <motion.circle
+          <m.circle
             cx={n.cx}
             cy={n.cy}
             r={n.r + 6}
@@ -96,7 +96,7 @@ export function ABCDHero({ className }: { className?: string }) {
             transition={{ duration: 0.4, delay: 0.2 + i * 0.35, ease: 'backOut' }}
           />
           {/* Outer ring */}
-          <motion.circle
+          <m.circle
             cx={n.cx}
             cy={n.cy}
             r={n.r}
@@ -109,7 +109,7 @@ export function ABCDHero({ className }: { className?: string }) {
             transition={{ duration: 0.5, delay: 0.25 + i * 0.35, ease: 'backOut' }}
           />
           {/* Label */}
-          <motion.text
+          <m.text
             x={n.cx}
             y={n.cy + 5}
             textAnchor="middle"
@@ -122,7 +122,7 @@ export function ABCDHero({ className }: { className?: string }) {
             transition={{ duration: 0.3, delay: 0.5 + i * 0.35 }}
           >
             {n.label}
-          </motion.text>
+          </m.text>
         </g>
       ))}
 

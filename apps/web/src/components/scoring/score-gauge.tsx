@@ -1,6 +1,6 @@
 'use client';
 
-import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'framer-motion';
+import { animate, m, useMotionValue, useReducedMotion, useTransform } from 'framer-motion';
 import { Info, Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
 
@@ -120,7 +120,7 @@ export function ScoreGauge({
   const prefersReducedMotion = useReducedMotion();
 
   // Premium count-up via Framer `useMotionValue` (J6.6 M3 fix). No setState
-  // in effect — the motion value drives a `<motion.span>` text node directly,
+  // in effect — the motion value drives a `<m.span>` text node directly,
   // bypassing React state. Honors `prefers-reduced-motion` (jumps to target).
   const motionScore = useMotionValue(score === null || prefersReducedMotion ? (score ?? 0) : 0);
   const displayText = useTransform(motionScore, (v) => Math.round(v).toString());
@@ -207,7 +207,7 @@ export function ScoreGauge({
           />
           {/* Progress */}
           {score !== null && (
-            <motion.circle
+            <m.circle
               cx={SIZE / 2}
               cy={SIZE / 2}
               r={RADIUS}
@@ -232,14 +232,14 @@ export function ScoreGauge({
             <span className="t-mono-cap text-[var(--t-4)]">N/A</span>
           ) : (
             <>
-              <motion.span
+              <m.span
                 className={cn(
                   'f-mono text-[28px] font-semibold tracking-[-0.02em] tabular-nums',
                   tone.text,
                 )}
               >
                 {displayText}
-              </motion.span>
+              </m.span>
               <span className="t-mono-cap mt-1 text-[var(--t-4)]">/ 100</span>
             </>
           )}

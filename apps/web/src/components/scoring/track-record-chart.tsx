@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useTransition } from 'react';
 import {
@@ -74,7 +74,7 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
   );
 
   return (
-    <motion.div
+    <m.div
       initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -201,6 +201,6 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
           précision).
         </p>
       ) : null}
-    </motion.div>
+    </m.div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 import { Brain, Coffee, Dumbbell, Moon, UtensilsCrossed } from 'lucide-react';
 import type { ComponentType, CSSProperties, SVGProps } from 'react';
 
@@ -150,7 +150,7 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
         </defs>
 
         {/* Center halo + node */}
-        <motion.circle
+        <m.circle
           cx={CENTER}
           cy={CENTER}
           r={RADIUS - 10}
@@ -236,7 +236,7 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
           const end = polar(p.angleDeg, RADIUS - NODE_RADIUS - 6);
           const start = polar(p.angleDeg, CENTER_RADIUS + 4);
           return (
-            <motion.line
+            <m.line
               key={`line-${p.kind}`}
               x1={start.x}
               y1={start.y}
@@ -253,7 +253,7 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
         })}
 
         {/* Center node */}
-        <motion.circle
+        <m.circle
           cx={CENTER}
           cy={CENTER}
           r={CENTER_RADIUS}
@@ -285,7 +285,7 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
           const labelOffsetR = NODE_RADIUS + 18;
           const labelPos = polar(p.angleDeg, RADIUS + labelOffsetR - NODE_RADIUS);
           return (
-            <motion.g
+            <m.g
               key={`pillar-${p.kind}`}
               initial={animate ? { scale: 0, opacity: 0 } : false}
               animate={{ scale: 1, opacity: 1 }}
@@ -343,7 +343,7 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
               >
                 {p.label}
               </text>
-            </motion.g>
+            </m.g>
           );
         })}
       </svg>

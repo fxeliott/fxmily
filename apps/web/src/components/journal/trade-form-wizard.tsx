@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import {
   ArrowLeft,
   ArrowRight,
@@ -360,7 +360,7 @@ export function TradeFormWizard() {
       {/* Step content with direction-aware Framer transition */}
       <div className="relative min-h-[24rem]">
         <AnimatePresence mode="wait" custom={direction} initial={false}>
-          <motion.div
+          <m.div
             key={step}
             custom={direction}
             initial={
@@ -416,7 +416,7 @@ export function TradeFormWizard() {
                 disabled={pending}
               />
             ) : null}
-          </motion.div>
+          </m.div>
         </AnimatePresence>
       </div>
 

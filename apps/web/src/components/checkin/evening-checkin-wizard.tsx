@@ -563,10 +563,7 @@ function StepReflection({
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <label
-            htmlFor="journalNote"
-            className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-          >
+          <label htmlFor="journalNote" className="t-eyebrow-lg text-[var(--t-3)]">
             Réflexion libre (optionnel)
           </label>
           {/* Counter — silent for SR until ~10% headroom remains. Audit B4. */}
@@ -606,9 +603,7 @@ function StepReflection({
       </div>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-          3 gratitudes (optionnel)
-        </legend>
+        <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">3 gratitudes (optionnel)</legend>
         {([0, 1, 2] as const).map((i) => (
           <div key={i} className="flex items-center gap-2.5">
             {/* Numérotation décorative — donne du rythme visuel sans
@@ -677,10 +672,7 @@ function NumericField({
   const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={id}
-        className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-      >
+      <label htmlFor={id} className="t-eyebrow-lg text-[var(--t-3)]">
         {label}
       </label>
       <input
@@ -768,9 +760,7 @@ function RadioGroup({
 
   return (
     <fieldset className="flex flex-col gap-2" aria-describedby={errorId} onKeyDown={handleKeyDown}>
-      <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-        {legend}
-      </legend>
+      <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">{legend}</legend>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
           const active = value === opt.value;

@@ -49,10 +49,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
 
       {/* Date sortie */}
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="exitedAt"
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <label htmlFor="exitedAt" className="t-eyebrow-lg text-[var(--t-3)]">
           Date et heure de sortie
         </label>
         <input
@@ -81,10 +78,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
 
       {/* Prix sortie */}
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="exitPrice"
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <label htmlFor="exitPrice" className="t-eyebrow-lg text-[var(--t-3)]">
           Prix de sortie
         </label>
         <input
@@ -116,9 +110,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
 
       {/* Outcome — 3 cards radio */}
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-          Résultat
-        </legend>
+        <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">Résultat</legend>
         <div role="radiogroup" aria-label="Résultat du trade" className="grid grid-cols-3 gap-2">
           <OutcomeCard value="win" label="Gain" icon="up" tone="ok" disabled={pending} />
           <OutcomeCard value="loss" label="Perte" icon="down" tone="bad" disabled={pending} />
@@ -155,10 +147,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
 
       {/* Notes */}
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="notes"
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <label htmlFor="notes" className="t-eyebrow-lg text-[var(--t-3)]">
           Notes (optionnel)
         </label>
         <textarea
@@ -180,9 +169,7 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
 
       {/* Screenshot exit */}
       <div className="flex flex-col gap-2">
-        <span className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-          Capture après sortie
-        </span>
+        <span className="t-eyebrow-lg text-[var(--t-3)]">Capture après sortie</span>
         <ScreenshotUploader
           kind="trade-exit"
           name="screenshotExitKey"

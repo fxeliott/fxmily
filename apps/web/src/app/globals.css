@@ -408,6 +408,27 @@
   text-transform: uppercase;
   color: var(--t-3);
 }
+/* The 12px eyebrow used app-wide (auth / journal / checkin / track forms,
+   wizards, section labels) — historically inlined as the raw cluster
+   `text-[12px] font-medium tracking-[0.10em] uppercase` ~60×. `.t-eyebrow`
+   above is the *compact* 10px variant (dashboard KPI strips). Colour is
+   intentionally NOT set here: every call-site supplies it via an explicit
+   `text-[var(--t-3)]` / `text-[var(--acc)]` utility, so this token stays
+   colour-agnostic and the migration is byte-equivalent to the raw cluster
+   (no line-height either — both inherit, matching `.t-eyebrow`).
+   NB: `.t-eyebrow` and `.t-eyebrow-lg` are NOT a pure size pair — they
+   diverge on 3 axes (10/12px, tracking 0.14em/0.10em, baked colour vs
+   colour-agnostic). Do not "harmonize" them into one scale: the
+   divergence is intentional (compact KPI vs standard form label). A
+   future cleanup may rename to `.t-eyebrow-sm`/`.t-eyebrow` (29-file
+   mechanical PR, own verifier pass) — tracked, not in this PR. */
+.t-eyebrow-lg {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
 .t-foot {
   font-family: var(--font-sans);
   font-size: 10px;

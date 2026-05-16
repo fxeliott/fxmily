@@ -82,9 +82,7 @@ export function SleepZonesBar({ hours }: SleepZonesBarProps) {
   return (
     <div className="flex flex-col gap-2.5" aria-hidden={value === null ? 'true' : undefined}>
       <div className="flex items-baseline justify-between">
-        <span className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-          Zones de sommeil
-        </span>
+        <span className="t-eyebrow-lg text-[var(--t-3)]">Zones de sommeil</span>
         {currentZone ? (
           <span
             className={cn(

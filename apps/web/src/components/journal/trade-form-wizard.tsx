@@ -488,10 +488,7 @@ function StepWhenAndWhat({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="enteredAt"
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <label htmlFor="enteredAt" className="t-eyebrow-lg text-[var(--t-3)]">
           Date et heure d&apos;entrée
         </label>
         <input
@@ -536,9 +533,7 @@ function StepDirectionSession({ draft, update, fieldErrors, disabled }: StepProp
   return (
     <div className="flex flex-col gap-5">
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-          Direction
-        </legend>
+        <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">Direction</legend>
         <div role="radiogroup" aria-label="Direction du trade" className="grid grid-cols-2 gap-2">
           {(['long', 'short'] as const).map((d) => {
             const active = draft.direction === d;
@@ -576,9 +571,7 @@ function StepDirectionSession({ draft, update, fieldErrors, disabled }: StepProp
       </fieldset>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-          Session
-        </legend>
+        <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">Session</legend>
         <div
           role="radiogroup"
           aria-label="Session de trading"
@@ -1020,10 +1013,7 @@ function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepPr
       ) : null}
 
       <div className="flex flex-col gap-1.5">
-        <label
-          htmlFor="notes"
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <label htmlFor="notes" className="t-eyebrow-lg text-[var(--t-3)]">
           Notes (optionnel)
         </label>
         <textarea
@@ -1124,7 +1114,7 @@ function TradeQualitySelector({
 
   return (
     <fieldset className="flex flex-col gap-2" aria-describedby={errorId}>
-      <legend className="mb-1 flex items-center gap-2 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
+      <legend className="t-eyebrow-lg mb-1 flex items-center gap-2 text-[var(--t-3)]">
         Qualité du setup
         <span className="text-[10px] tracking-normal text-[var(--t-4)] normal-case">
           (optionnel — Steenbarger A/B/C)
@@ -1211,10 +1201,7 @@ function NumericField({
   const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={id}
-        className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-      >
+      <label htmlFor={id} className="t-eyebrow-lg text-[var(--t-3)]">
         {label}
       </label>
       <input
@@ -1274,9 +1261,7 @@ function RadioGroup({
 
   return (
     <fieldset className="flex flex-col gap-2" aria-describedby={errorId}>
-      <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-        {legend}
-      </legend>
+      <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">{legend}</legend>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
           const active = value === opt.value;

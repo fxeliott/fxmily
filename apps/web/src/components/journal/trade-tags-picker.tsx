@@ -125,7 +125,7 @@ export function TradeTagsPicker({ value, onChange, disabled }: TradeTagsPickerPr
   return (
     <fieldset className="flex flex-col gap-2.5" data-slot="trade-tags-picker">
       <legend className="mb-1 flex items-baseline justify-between gap-3">
-        <span className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
+        <span className="t-eyebrow-lg text-[var(--t-3)]">
           Étiquettes comportementales (optionnel)
         </span>
         <span className="t-cap font-mono text-[var(--t-3)] tabular-nums">

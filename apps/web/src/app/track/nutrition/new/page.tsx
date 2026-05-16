@@ -34,9 +34,7 @@ export default async function TrackNutritionNewPage() {
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Retour au suivi
         </Link>
-        <p className="text-[12px] font-medium tracking-[0.10em] text-[var(--acc)] uppercase">
-          Pilier nutrition
-        </p>
+        <p className="t-eyebrow-lg text-[var(--acc)]">Pilier nutrition</p>
         <h1 className="text-[24px] font-semibold tracking-tight text-[var(--t-1)] sm:text-[28px]">
           Logger ta nutrition
         </h1>

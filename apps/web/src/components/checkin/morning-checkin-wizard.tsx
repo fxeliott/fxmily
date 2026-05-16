@@ -533,9 +533,7 @@ function StepBody({ draft, update, fieldErrors, disabled }: StepProps) {
       />
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-          Sport (optionnel)
-        </legend>
+        <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">Sport (optionnel)</legend>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr]">
           <div className="flex flex-col gap-1">
             <input
@@ -642,10 +640,7 @@ function StepIntention({ draft, update, fieldErrors, disabled }: StepProps) {
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <label
-            htmlFor="intention"
-            className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-          >
+          <label htmlFor="intention" className="t-eyebrow-lg text-[var(--t-3)]">
             Intention du jour (optionnel)
           </label>
           {/* Counter — silent for SR until ~10% headroom remains, then announces
@@ -740,10 +735,7 @@ function NumericField({
   const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined;
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={id}
-        className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-      >
+      <label htmlFor={id} className="t-eyebrow-lg text-[var(--t-3)]">
         {label}
       </label>
       <input
@@ -837,9 +829,7 @@ function RadioGroup({
 
   return (
     <fieldset className="flex flex-col gap-2" aria-describedby={errorId} onKeyDown={handleKeyDown}>
-      <legend className="mb-1 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-        {legend}
-      </legend>
+      <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">{legend}</legend>
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {
           const active = value === opt.value;

@@ -132,9 +132,7 @@ function HofmannAnchor({ durationMin }: { durationMin: number | null }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between">
-        <span className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-          Ancre Hofmann
-        </span>
+        <span className="t-eyebrow-lg text-[var(--t-3)]">Ancre Hofmann</span>
         <span
           className="font-mono text-[11px] font-semibold tracking-[0.08em] uppercase tabular-nums"
           style={{ color: reached ? 'var(--acc)' : 'var(--t-3)' }}
@@ -275,7 +273,7 @@ export function MeditationHabitWizard() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <StepIcon className="h-4 w-4 text-[var(--acc)]" aria-hidden />
-            <span className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
+            <span className="t-eyebrow-lg text-[var(--t-3)]">
               Étape <span className="font-mono tabular-nums">{step + 1}</span> /{' '}
               <span className="font-mono tabular-nums">{totalSteps}</span>
             </span>
@@ -434,10 +432,7 @@ function MeditationStep({ draft, setDraft, stepError, headingRef, durationForBar
       </header>
 
       <div className="space-y-3">
-        <label
-          htmlFor="meditation-duration"
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <label htmlFor="meditation-duration" className="t-eyebrow-lg text-[var(--t-3)]">
           Durée
         </label>
         <div className="flex items-baseline gap-2">
@@ -498,10 +493,7 @@ function MeditationNotesStep({ draft, setDraft, headingRef }: StepProps) {
       </header>
 
       <div className="space-y-2">
-        <label
-          htmlFor="meditation-notes"
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <label htmlFor="meditation-notes" className="t-eyebrow-lg text-[var(--t-3)]">
           Note
         </label>
         <textarea
@@ -526,9 +518,7 @@ function MeditationNotesStep({ draft, setDraft, headingRef }: StepProps) {
       </div>
 
       <div className="rounded-input border border-[var(--b-default)] bg-[var(--bg-2)] p-3.5">
-        <h3 className="mb-2 text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase">
-          Récapitulatif
-        </h3>
+        <h3 className="t-eyebrow-lg mb-2 text-[var(--t-3)]">Récapitulatif</h3>
         <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
           <dt className="text-[var(--t-3)]">Durée</dt>
           <dd className="font-mono text-[var(--t-1)] tabular-nums">{draft.durationMin} min</dd>

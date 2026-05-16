@@ -41,10 +41,7 @@ export function HabitKindPicker() {
   return (
     <section aria-labelledby="track-picker-heading" className="space-y-3">
       <header className="flex items-baseline justify-between gap-4">
-        <h2
-          id="track-picker-heading"
-          className="text-[12px] font-medium tracking-[0.10em] text-[var(--t-3)] uppercase"
-        >
+        <h2 id="track-picker-heading" className="t-eyebrow-lg text-[var(--t-3)]">
           Logger un pilier
         </h2>
       </header>

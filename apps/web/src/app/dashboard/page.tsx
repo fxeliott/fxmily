@@ -28,11 +28,13 @@ import {
   HabitCorrelationSection,
   HabitCorrelationSkeleton,
 } from '@/components/track/habit-correlation-section';
+import { HabitKindTabPicker } from '@/components/track/habit-kind-tab-picker';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Kbd } from '@/components/ui/kbd';
 import { Pill } from '@/components/ui/pill';
 import { getCheckinStatus, getStreak } from '@/lib/checkin/service';
+import { habitKindSchema } from '@/lib/schemas/habit-log';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
 import { getLatestBehavioralScore } from '@/lib/scoring/service';
 import { countTradesByStatus } from '@/lib/trades/service';
@@ -79,7 +81,7 @@ function greeting(now = new Date()): string {
 }
 
 interface DashboardPageProps {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; corr?: string }>;
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
@@ -90,6 +92,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const timezone = session.user.timezone || 'Europe/Paris';
   const sp = await searchParams;
   const range = parseRange(sp?.range);
+  const corrParsed = habitKindSchema.safeParse(sp?.corr);
+  const corrKind = corrParsed.success ? corrParsed.data : 'sleep';
+  // Keep an explicit ?range across a pillar switch (don't reset the
+  // track-record chart); omit it when the member never chose one, and
+  // normalize via parseRange so a garbage value isn't propagated.
+  const corrPreserved = sp?.range
+    ? new URLSearchParams({ range: parseRange(sp.range) }).toString()
+    : '';
 
   const [counts, checkinStatus, streak, latestScore] = userId
     ? await Promise.all([
@@ -391,8 +401,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               Corrélations habitudes × trading
             </span>
           </div>
-          <Suspense fallback={<HabitCorrelationSkeleton />}>
-            <HabitCorrelationSection userId={userId!} timezone={timezone} />
+          <HabitKindTabPicker
+            selected={corrKind}
+            labelId="habit-corr-heading"
+            pathname="/dashboard"
+            preservedQuery={corrPreserved}
+          />
+          <Suspense key={corrKind} fallback={<HabitCorrelationSkeleton />}>
+            <HabitCorrelationSection userId={userId!} timezone={timezone} habitKind={corrKind} />
           </Suspense>
         </section>
 

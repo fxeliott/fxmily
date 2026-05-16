@@ -1,5 +1,10 @@
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 
+import {
+  HabitCorrelationSection,
+  HabitCorrelationSkeleton,
+} from '@/components/track/habit-correlation-section';
 import { HabitKindPicker } from '@/components/track/habit-kind-picker';
 import { TodayHabitCards } from '@/components/track/today-habit-cards';
 import { TrackHero } from '@/components/track/track-hero';
@@ -81,6 +86,13 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
       <TrackHero />
 
       <TodayHabitCards userId={session.user.id} />
+
+      <Suspense fallback={<HabitCorrelationSkeleton />}>
+        <HabitCorrelationSection
+          userId={session.user.id}
+          timezone={session.user.timezone || 'Europe/Paris'}
+        />
+      </Suspense>
 
       <HabitKindPicker />
     </main>

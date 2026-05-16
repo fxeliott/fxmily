@@ -25,6 +25,10 @@ import { RDistribution } from '@/components/scoring/r-distribution';
 import { ScoreGaugeGrid, ScoreGaugeGridSkeleton } from '@/components/scoring/score-gauge-grid';
 import { SessionPerfBars } from '@/components/scoring/session-perf-bars';
 import { TrackRecordChart } from '@/components/scoring/track-record-chart';
+import {
+  HabitCorrelationSection,
+  HabitCorrelationSkeleton,
+} from '@/components/track/habit-correlation-section';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Kbd } from '@/components/ui/kbd';
@@ -377,20 +381,31 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </Link>
         </section>
 
+        {/* V2.1.3 — Habit × Trade correlation (the documented Fxmily
+            differentiator). Replaces the stale "Corrélations bien-être"
+            coming-soon card — it's LIVE now. Statistical honesty is the
+            product posture (Mark Douglas) : insufficient_data state,
+            sample size always visible, no fabricated coefficient. */}
+        <section className="mb-6 flex flex-col gap-3" aria-labelledby="habit-corr-heading">
+          <div className="flex items-center gap-2">
+            <span id="habit-corr-heading" className="t-eyebrow">
+              Corrélations habitudes × trading
+            </span>
+          </div>
+          <Suspense fallback={<HabitCorrelationSkeleton />}>
+            <HabitCorrelationSection userId={userId!} timezone={timezone} />
+          </Suspense>
+        </section>
+
         {/* Coming soon section — V2.x roadmap (J8 Rapport hebdo + J9 Push
-            sont LIVE, ne PAS les re-lister ici : c'était une carte stale
-            corrigée V2.1.0). */}
+            sont LIVE ; V2.1.3 Corrélations est LIVE ci-dessus, retirée
+            d'ici. Reste V2.1.4 Log express). */}
         <section className="mb-6">
           <div className="mb-3 flex items-center gap-2">
             <BookOpen className="h-3.5 w-3.5 text-[var(--t-3)]" strokeWidth={1.75} />
             <span className="t-eyebrow">Bientôt</span>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <ComingSoonCard
-              title="Corrélations bien-être"
-              jalon="V2.1.3"
-              desc="L'impact mesuré de tes piliers sur ta discipline."
-            />
             <ComingSoonCard
               title="Log express"
               jalon="V2.1.4"

@@ -1,4 +1,26 @@
-@import 'tailwindcss';
+/* WHY Tailwind auto-detection is disabled here (non-obvious, load-bearing):
+   Tailwind v4 automatic content detection scans every non-gitignored
+   file, markdown included. Doc files (CLAUDE.md, SPEC.md, the docs
+   folder) carry class-shaped shorthands in prose; a CSS-invalid one
+   (a pipe inside an arbitrary value such as text-[var(--a or --b)]) is
+   extracted as a real class candidate and produces invalid generated
+   CSS. `next dev` then fails to compile this stylesheet (the Playwright
+   webServer 120s timeout); `next build` tolerates it (the build gate
+   stays green) and doc-only PRs are paths-ignored (Playwright never
+   runs) so the break lands latent on main. Regression: PR #102 CI red,
+   root-caused to #101, fixed by #103, hardened here. A relative
+   per-file `@source not` markdown exclusion is insufficient — it
+   resolves relative to this file (apps/web/src/app) and misses docs
+   above it. `source(none)` removes the markdown surface entirely
+   regardless of doc location; the code directory is then registered
+   explicitly. `..` is apps/web/src (this file is
+   apps/web/src/app/globals.css), scanned recursively — the documented
+   directory form. NOTE: never write a star-then-slash glob inside THIS
+   comment; that sequence closes a CSS comment early and desyncs the
+   parser (it did, during this very fix). Keep `..` in sync if
+   globals.css moves. */
+@import 'tailwindcss' source(none);
+@source '..';
 
 /* =============================================================
  * FXMILY — Design System v2 (Sprint #1)

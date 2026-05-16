@@ -3118,3 +3118,219 @@ PR [#76](https://github.com/fxeliott/fxmily/pull/76). Audit 5-subagent V1.10 par
 - Zizmor docs `--min-severity` : <https://docs.zizmor.sh/usage/>
 - Zizmor template-injection audit : <https://docs.zizmor.sh/audits/#template-injection>
 - Dependabot SHA pinning convention : trailing `# vN` comment tracked by `github-actions` ecosystem
+
+## V2.1.0 — TRACK module frontend bootstrap (/track + Sleep wizard) (livré 2026-05-15)
+
+PR [#93](https://github.com/fxeliott/fxmily/pull/93) (`feb89a7`). Pivot directive Eliot « frontend premium ultra-design self-updating ». Première surface UI du module TRACK posée sur le backend V2.0. M4/M5/M6 confirmés LIVE V2-MASTER §23 (pas de ré-arbitrage — anti memory-stale via Grep).
+
+### Scope
+
+- `/track` landing + `SleepHabitWizard` 2-step (clone du pattern J5 morning-checkin) + Server Action `submitHabitLogAction` wiring.
+- SVG pentagon hero (5 piliers) + `<TodayHabitCards>` + `<HabitKindPicker>` + section TRACK sur `/dashboard` (corrige 2 `ComingSoonCard` STALE J8/J9 → LIVE).
+
+### Décisions clés
+
+- Subagent web-research 6 axes « premium frontend 2026 » + 2 sub-agents post-impl (a11y SHIP-READY 0 TIER 1 ; ui-designer 0 BLOCKER) → 3 fixes in-PR : track-hero glow bug (`--acc-glow` shadow-token sur `stopColor`) + picker `<Pill tone=mute>` + suppression ARIA dead code.
+- Recharts/SVG couleurs via hex `C` (`@/lib/theme-colors`), jamais `var()` (bug WebView iOS J6.6).
+
+### Files touched
+
+9 fichiers, +1570 −7 : `app/track/page.tsx` + `components/track/*` (hero/today-cards/picker/sleep-wizard) + `app/track/sleep/new/page.tsx` + actions + `actions.test.ts`.
+
+### Quality gate
+
+- Vitest **1009 → 1019** (+10 actions.test). type-check + lint ✓.
+- CI 6/6 SUCCESS incl. Playwright e2e.yml route `/track` (route+gate+render-sans-throw).
+
+### Refs
+
+- PR [#93](https://github.com/fxeliott/fxmily/pull/93) (`feb89a7`)
+- Memory `fxmily_session_2026-05-15_v2.1.0_track_frontend.md` (atomic-detail)
+
+## V2.1.1 — TRACK 4 wizards restants + clôture module frontend 5/5 (livré 2026-05-15)
+
+PR [#94](https://github.com/fxeliott/fxmily/pull/94) (`22236ff`). Pickup post-/clear de V2.1.0. **Module TRACK frontend COMPLET — 5/5 piliers shippables.**
+
+### Scope
+
+- 4 wizards `nutrition`/`caffeine`/`sport`/`meditation` clonés de `SleepHabitWizard` + 4 host pages `/track/<kind>/new`.
+- 2 zones-bars evidence-based : `CaffeineZonesBar` (Bjorness — fenêtre 6h pré-sommeil) + `SportZonesBar` (ACSM — 150 min/semaine).
+- `buildRawInput` switch +4 cas + 9 `actions.test`. Picker/today-cards : 5/5 actifs, scaffolding mort (`shippable`/« Bientôt »/disabled) retiré ; dashboard card stale `V2.1.1` → `V2.1.4` (anti-stale D8).
+
+### Décisions clés
+
+- 3 sub-agents parallèle (a11y + ui-designer + code-reviewer) **0 TIER 1**, code-reviewer READY-TO-MERGE → 3 fixes in-PR : `focus-visible` déplacé sur `<Link>` (WCAG 2.4.7 — corrige aussi un latent sleep-picker V2.1.0) + `aria-live=polite` parité SR + retrait regex-gate caffeine client (anti silent-drop ; Zod serveur = SSOT).
+- Différés rationale : `aria-pressed` vs APG radiogroup (collision flèches step-nav, pattern V1.5 accepté, pas un échec AA) + naming/TZ `lastDrinkAtUtc` (schéma V2.0 hors scope).
+
+### Files touched
+
+15 fichiers, +2803 −127 : `components/track/{nutrition,caffeine,sport,meditation}-wizard.tsx` + `{caffeine,sport}-zones-bar.tsx` + 4 `app/track/<kind>/new/page.tsx` + picker/today-cards/actions + tests.
+
+### Quality gate
+
+- Vitest **1019 → 1028**. CI 6/6 SUCCESS incl. Playwright.
+
+### Refs
+
+- PR [#94](https://github.com/fxeliott/fxmily/pull/94) (`22236ff`)
+- Memory `fxmily_session_2026-05-15_v2.1.1_track_wizards.md` (atomic-detail)
+
+## V2.1.5 — TrackHero premium enrich (ambient layer) + e2e flake root-cause (livré 2026-05-16)
+
+PR [#95](https://github.com/fxeliott/fxmily/pull/95) (`625fcc6`). Numéro de version non-séquentiel : V2.1.5 (premium-enrich) shipé **avant** V2.1.3/V2.1.2 — le journal est ordonné par session, pas par numéro de version. Continuation chaîne post-V2.1.1 sous `/maximum-mode`.
+
+### Scope
+
+- Ambient layer autour du pentagon hero : 2 pulse + 2 echo + 10 drift particles, DS-v2 **lime**, calm Mark Douglas, entrance byte-identique à V2.1.0.
+
+### Décision clé (landmine)
+
+- **code-reviewer TIER 2 MUST-FIX** : framer `repeat:Infinity` n'est PAS tué par le filet `@media (prefers-reduced-motion:reduce)`. Corrigé via pattern canon mirror-hero : loop ambient = **classe CSS `.track-*`** (tuée par le filet `transition-duration:.01ms!important`) + pulse double-gardé `!reduceMotion`. **Invariant : loop infini = classe CSS tuée par le filet, JAMAIS framer `repeat:Infinity`. Entrance framer finie ≤0.8s OK.**
+
+### e2e flake root-cause (PR [#96](https://github.com/fxeliott/fxmily/pull/96), `c346420`)
+
+PR atomique séparée (diagnostic evidence-based, pas force-merge). `checkin-happy-path.spec.ts` calculait `today` en UTC alors que l'app ancre `@db.Date` sur Europe/Paris → cassait Playwright de **toute PR nightly 22:00–00:00Z** (flake déterministe project-wide). Fix : `localDateOf(new Date(),'Europe/Paris')` (lignes 94+153). **Invariant : tout e2e/code assertant une row `@db.Date` DOIT utiliser `localDateOf(...,'Europe/Paris')`, jamais `.toISOString().slice(0,10)`.**
+
+### Files touched
+
+V2.1.5 : 2 fichiers, +182 −10 (`track-hero.tsx` + `globals.css` classes `.track-*`). #96 : `checkin-happy-path.spec.ts`.
+
+### Quality gate
+
+- Vitest **1028/1028**. CI 6/6 GREEN (merge origin/main dans #95 après #96 → Playwright vert empirique = preuve du diagnostic).
+
+### Refs
+
+- PRs [#95](https://github.com/fxeliott/fxmily/pull/95) (`625fcc6`) + [#96](https://github.com/fxeliott/fxmily/pull/96) (`c346420`)
+- Memory `fxmily_session_2026-05-15_v2.1.5_trackhero_premium.md` (atomic-detail)
+
+## V2.1.3 — Habit×Trade correlation card + 7-day heatmap (livré 2026-05-16)
+
+PR [#97](https://github.com/fxeliott/fxmily/pull/97) (`0e59e8a`). **Le différenciateur produit.** Exploration déléguée (code-architect blueprint + general-purpose web research parallèle) → impl focalisée TDD. Sur `/dashboard` (remplace `ComingSoonCard V2.1.3` stale) **et** `/track`.
+
+### Scope
+
+- Module pur `lib/analytics/habit-trade-correlation.ts` (TDD) : corrélation `HabitLog`×`Trade.realizedR` (kind day-1 = `sleep`) + heatmap 7j GitHub-style `<table>` sémantique.
+- `lib/habit/service.ts` (`loadHabitTradeCorrelationData`) + 4 composants `components/track/habit-*`.
+
+### Décisions clés (DIVERGENT du blueprint — NE PAS « corriger »)
+
+1. **PAS d'IC sur `r`** : `wilson.ts` = IC de proportion (win-rate), statistiquement FAUX pour Pearson ; pas de Fisher-z repo. → tier `confidence: low|adequate` (`MIN_CORRELATION_PAIRS=8` / `SUFFICIENT_SAMPLE_MIN=20`).
+2. **Appariement = `localDateOf(enteredAt,'Europe/Paris')`** (jour de décision), PAS `closedAt`. Filtre trades : `closedAt!=null AND realizedR!=null AND realizedRSource='computed'`.
+3. Recharts couleurs hex `C`, pas `var()` (bug WebView iOS — le web-research « CSS vars » est FAUX ici).
+4. Scatter SANS trend/regression line — seulement `ReferenceLine y=0` (posture Mark Douglas arbitre une tension réelle entre 2 sub-agents).
+5. **+1j slack symétrique de fetch** (asymétrie bord-de-fenêtre requête-UTC vs pairing-Paris).
+
+- Honnêteté structurelle : union discriminée `CorrelationStatus` — la branche `insufficient_data` n'a **pas** de champ `r` (impossible de rendre un coefficient si n<8 ou variance nulle).
+
+### Files touched
+
+9 fichiers, +1265 −7 : `lib/analytics/habit-trade-correlation.ts` + `.test.ts` (+24 tests) + `lib/habit/service.ts` + 4 composants + `app/{dashboard,track}/page.tsx`.
+
+### Quality gate
+
+- Vitest **1028 → 1052** (+24, module pur). 4 sub-agents post-impl parallèle + **verifier dédié math/honnêteté (7/7 VRAI, 0 trou)** → code-reviewer READY-TO-MERGE 0 T1, a11y 0 T1, ui-designer 1 T1 (skeleton CLS) intégrés passe consolidée unique.
+- CI 6/6 GREEN incl. Playwright (preuve empirique : carte rend sans throw même data=0).
+
+### Backlog restant
+
+- V2.2 : généraliser aux 5 kinds (param `habitKind` déjà prêt, zéro restructuration) + picker per-kind.
+- `durationMin:0` sémantique per-kind → décision produit Eliot à >100 membres (garde-fous Spearman + divergence + n-floor couvrent V1).
+
+### Refs
+
+- PR [#97](https://github.com/fxeliott/fxmily/pull/97) (`0e59e8a`)
+- Memory `fxmily_session_2026-05-16_v2.1.3_habit_trade_correlation.md` (atomic-detail)
+
+## V2.1.2 — TRACK spacing normalisé sur la grille DS-v2 4-pt (livré 2026-05-16)
+
+PR [#98](https://github.com/fxeliott/fxmily/pull/98) (`5576f1f`). Jalon scopé étroit volontairement : **31/31 token swaps spacing-only**, doctrine 4-pt round-up (`2.5→3` / `1.5→2`). Zéro changement de rendu.
+
+### Scope
+
+14 fichiers TRACK V2.1.x : 5 wizards + 2 zones-bars + today-cards + picker + 5 pages `/new`. Tokens d'espacement uniquement.
+
+### Décisions clés
+
+- Scoping délégué `researcher` → application déléguée `general-purpose` sur table exacte vérifiée Grep par moi AVANT → diff re-vérifié `git diff --word-diff=porcelain` (seuls mots changés = tokens spacing, typo byte-identique sur lignes partagées).
+- Option C / typo eyebrow TRACK d'abord décidée scopée-TRACK + déférée → **re-vérif post-challenge a corrigé le scope → RÉSOLU repo-wide #99** (cf. entrée suivante). Le spec TRACK-scoped est obsolète, ne PAS le ré-ouvrir.
+
+### Files touched
+
+14 fichiers, +31 −31 (token swaps spacing-only, symétrique).
+
+### Quality gate
+
+- Vitest **1052/1052** stable (zéro régression rendu).
+
+### Refs
+
+- PR [#98](https://github.com/fxeliott/fxmily/pull/98) (`5576f1f`)
+- Memory `fxmily_session_2026-05-16_v2.1.2_ds_4pt_grid.md` (atomic-detail — bannière SUPERSEDED : Option C résolue #99)
+
+## DS — Consolidation de l'eyebrow 12px app-wide en token `.t-eyebrow-lg` (livré 2026-05-16)
+
+PR [#99](https://github.com/fxeliott/fxmily/pull/99) (`4c264ce`). `refactor(ds)`. Déclenché par le challenge Eliot « tu es sûr d'avoir tout traité ? » qui a forcé une re-vérification de scope ayant catché une **erreur de conception réelle**.
+
+### Correction de scope (le learning central)
+
+Le scoping V2.1.2 (researcher + analyse) concluait « eyebrow 12px = signature TRACK ». **FAUX.** Grep autoritatif repo-wide : le cluster `text-[12px] font-medium tracking-[0.10em] text-[var(--X)] uppercase` est le **standard de TOUTE l'app** (~64×, auth/journal/checkin/track) ; `.t-eyebrow` 10px est l'**outlier** (dashboard KPI). Un token scopé-TRACK aurait **fragmenté** le repo → fixé à la racine. **Prescriptif : toujours re-grep repo-wide un pattern avant d'exécuter une migration « scopée » héritée d'un spec/researcher.**
+
+### Scope
+
+- Token DS `.t-eyebrow-lg` ajouté `globals.css` (famille `.t-*`) : `font-family var(--font-sans); font-size 12px; font-weight 500; letter-spacing 0.1em; text-transform uppercase` — **pas de color, pas de line-height** (color reste l'util adjacent `text-[var(--t-3|--acc)]`).
+- ~64 occurrences du raw cluster → `t-eyebrow-lg text-[var(--X)]` sur 28 fichiers.
+
+### Décisions clés (landmines)
+
+- **`.t-eyebrow-lg` (12px) = standard ; `.t-eyebrow` (10px) = variante compacte volontaire.** JSDoc `globals.css` documente la **divergence 3-axes** (10/12px · 0.14/0.10em · baked vs agnostic color) → anti futur PR « harmonize ».
+- Naming-smell connu (le commun a le suffixe `-lg`) → rename mécanique différé (PR dédié + verifier byte-équivalence, 0 gain visuel).
+- 3 vérifs convergentes : self `git diff --ignore-all-space --word-diff` (minus-cluster **64===64** plus-token) + verifier adversarial DÉCISION OK + ui-designer 0 T1/0 T2.
+
+### Files touched
+
+29 fichiers, **+85 −209** (dé-duplication nette ~−124).
+
+### Quality gate
+
+- Vitest **1052/1052**. type-check 0. Byte-équivalence prouvée par construction. CI 6/6 GREEN.
+
+### Refs
+
+- PR [#99](https://github.com/fxeliott/fxmily/pull/99) (`4c264ce`)
+- Memory `fxmily_session_2026-05-16_eyebrow_token_consolidation.md` (atomic-detail — SUPERSEDES la note « Option C déférée » du checkpoint V2.1.2)
+
+## V2.1.4 — TRACK « Log express » FAB global + bottom-sheet (livré 2026-05-16)
+
+PR [#100](https://github.com/fxeliott/fxmily/pull/100) (`f1ba332`). FAB lime calme global (root layout) → bottom-sheet Radix → 5 chips piliers → wizard `/track/<kind>/new`. Remplace le `ComingSoonCard "Log express" V2.1.4` stale (section « Bientôt » dashboard retirée).
+
+### Scope
+
+- `habit-kinds.ts` (NEW) + `log-express-fab.tsx` (NEW, monté dans `app/layout.tsx`) + `log-express-fab.test.ts` (NEW, +6).
+- `<HabitKindPicker>` refactoré pour consommer `habit-kinds.ts` (rendu byte-équivalent vérifié).
+
+### Décisions clés (landmines)
+
+- **`habit-kinds.ts` = SoT des 5 piliers** (kind/label/Icon/href) — pure data, importable Server + Client. **Tout nouveau pilier passe par ce fichier + `HIDDEN_PREFIXES` de `log-express-fab.tsx`** (le SoT-coupling test échoue sinon = anti-récursion garanti).
+- **PAS de `useSession`/`SessionProvider`** (DIVERGENT du blueprint, vérifié correct par Grep + code-reviewer) : `proxy.ts` gate tout non-public AVANT rendu ⇒ FAB pur `usePathname`. `HIDDEN_PREFIXES` = filtre clutter/anti-récursion, PAS frontière de sécurité. **NE PAS ré-introduire SessionProvider — ce n'est pas un manque.**
+- A11y modale déléguée au primitive Radix `<Sheet>` (focus-trap/Escape/scroll-lock). Focus-return-au-FAB vérifié OK sous pattern controlled `useState` (Radix restaure `document.activeElement`-à-l'ouverture).
+- **Fix shared-primitive intégré** : `sheet.tsx` `SheetPrimitive.Close` 16px → **`h-11 w-11` (44px)** = WCAG 2.5.8 + 2.5.5 AAA. Tout `<Sheet showCloseButton>` du repo en bénéficie.
+- Anti-Black-Hat « exemplaire » (ui-designer) : FAB statique, pas de pulse/badge/streak, dismiss == log, copie neutre, seule motion = `active:scale-95`.
+
+### Files touched
+
+7 fichiers, +278 −50 : `habit-kinds.ts` + `log-express-fab.tsx` + `.test.ts` + `app/layout.tsx` + picker + dashboard (retrait ComingSoonCard + `BookOpen` morts).
+
+### Quality gate
+
+- Vitest **1052 → 1058** (+6 : suppression predicate + SoT-coupling). 3 sub-agents post-impl (a11y 0 T1 + ui-designer 0 T1 « ships » + code-reviewer READY). CI 6/6 GREEN (Playwright = FAB root-layout rend OK toute page authed).
+
+### Backlog restant
+
+- `sheet.tsx` `shadow-lg` → token `--sh-modal` (cosmétique shared pré-existant, change tous les sheets → validation visuelle requise, PR follow-up).
+- FAB sur 404/error = accepté intentionnel (authed-only proxy ; `global-error.tsx` a son propre `<html>`).
+
+### Refs
+
+- PR [#100](https://github.com/fxeliott/fxmily/pull/100) (`f1ba332`)
+- Memory `fxmily_session_2026-05-16_v2.1.4_log_express_fab.md` (atomic-detail)

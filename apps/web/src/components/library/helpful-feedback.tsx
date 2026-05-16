@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useEffect, useRef, useState, useTransition } from 'react';
 
@@ -73,7 +73,7 @@ export function HelpfulFeedback({ deliveryId, initialHelpful }: HelpfulFeedbackP
         Cette fiche t&apos;a aidé&nbsp;?
       </p>
       <div className="flex gap-2">
-        <motion.button
+        <m.button
           type="button"
           onClick={() => answer(true)}
           disabled={pending}
@@ -91,8 +91,8 @@ export function HelpfulFeedback({ deliveryId, initialHelpful }: HelpfulFeedbackP
         >
           <ThumbsUp className="h-4 w-4" strokeWidth={1.75} />
           <span>Oui</span>
-        </motion.button>
-        <motion.button
+        </m.button>
+        <m.button
           type="button"
           onClick={() => answer(false)}
           disabled={pending}
@@ -110,7 +110,7 @@ export function HelpfulFeedback({ deliveryId, initialHelpful }: HelpfulFeedbackP
         >
           <ThumbsDown className="h-4 w-4" strokeWidth={1.75} />
           <span>Pas vraiment</span>
-        </motion.button>
+        </m.button>
       </div>
     </div>
   );

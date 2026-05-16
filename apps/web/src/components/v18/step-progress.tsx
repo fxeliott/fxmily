@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { m } from 'framer-motion';
 
 import { V18_SPRING_TIGHT } from '@/components/v18/motion-presets';
 import { cn } from '@/lib/utils';
@@ -52,7 +52,7 @@ export function V18StepProgress({ current, total, labels, className }: V18StepPr
         className="relative h-[3px] w-full overflow-hidden rounded-full bg-[var(--b-default)]"
         data-slot="v18-step-bar"
       >
-        <motion.div
+        <m.div
           className="absolute inset-y-0 left-0 origin-left rounded-full"
           style={{
             width: '100%',

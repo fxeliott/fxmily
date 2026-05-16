@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 import { Heart } from 'lucide-react';
 import { useEffect, useRef, useState, useTransition } from 'react';
 
@@ -84,7 +84,7 @@ export function FavoriteToggle({
         <span role="status" aria-live="polite" className="sr-only">
           {announce}
         </span>
-        <motion.button
+        <m.button
           type="button"
           onClick={onClick}
           disabled={pending}
@@ -101,7 +101,7 @@ export function FavoriteToggle({
           )}
           data-favorited={favorited}
         >
-          <motion.span
+          <m.span
             animate={heartScale}
             transition={heartTransition}
             className="inline-flex"
@@ -114,8 +114,8 @@ export function FavoriteToggle({
               )}
               strokeWidth={1.75}
             />
-          </motion.span>
-        </motion.button>
+          </m.span>
+        </m.button>
       </>
     );
   }
@@ -125,7 +125,7 @@ export function FavoriteToggle({
       <span role="status" aria-live="polite" className="sr-only">
         {announce}
       </span>
-      <motion.button
+      <m.button
         type="button"
         onClick={onClick}
         disabled={pending}
@@ -141,16 +141,16 @@ export function FavoriteToggle({
           'disabled:opacity-50',
         )}
       >
-        <motion.span
+        <m.span
           animate={heartScale}
           transition={heartTransition}
           className="inline-flex"
           aria-hidden
         >
           <Heart className={cn('h-4 w-4', favorited && 'fill-current')} strokeWidth={1.75} />
-        </motion.span>
+        </m.span>
         <span>{favorited ? 'Favori' : 'Ajouter aux favoris'}</span>
-      </motion.button>
+      </m.button>
     </>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import {
   ArrowLeft,
   ArrowRight,
@@ -342,7 +342,7 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
 
       <div className="relative min-h-[20rem]">
         <AnimatePresence mode="wait" custom={direction} initial={false}>
-          <motion.div
+          <m.div
             key={step}
             custom={direction}
             initial={
@@ -401,7 +401,7 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
                 disabled={pending}
               />
             ) : null}
-          </motion.div>
+          </m.div>
         </AnimatePresence>
       </div>
 

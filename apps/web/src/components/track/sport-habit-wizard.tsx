@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check, Dumbbell, NotebookPen } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -220,7 +220,7 @@ export function SportHabitWizard() {
           </Link>
         </div>
         <div className="h-1 overflow-hidden rounded-full bg-[var(--bg-3)]">
-          <motion.div
+          <m.div
             className="h-full bg-[var(--acc)]"
             initial={false}
             animate={{ scaleX: (step + 1) / totalSteps }}
@@ -248,7 +248,7 @@ export function SportHabitWizard() {
 
       <div className="relative min-h-[280px]">
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div
+          <m.div
             key={step}
             initial={animate ? { opacity: 0, x: direction * 28 } : false}
             animate={{ opacity: 1, x: 0 }}
@@ -266,7 +266,7 @@ export function SportHabitWizard() {
             ) : (
               <SportNotesStep draft={draft} setDraft={setDraft} headingRef={headingRef} />
             )}
-          </motion.div>
+          </m.div>
         </AnimatePresence>
       </div>
 

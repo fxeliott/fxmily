@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 
 import type { SerializedCard } from '@/lib/cards/types';
 
@@ -17,7 +17,7 @@ interface AnimatedCardGridProps {
  *
  * Client island wrapping the Server-rendered `<CardGridItem>` (which is
  * itself a Server Component but contains the `<FavoriteToggle>` client
- * island). Each `<motion.li>` fades + lifts 8px with `--e-smooth` easing,
+ * island). Each `<m.li>` fades + lifts 8px with `--e-smooth` easing,
  * staggered by 50ms.
  *
  * Respects `prefers-reduced-motion` — when set, `initial="show"` makes the
@@ -49,17 +49,17 @@ export function AnimatedCardGrid({ cards, favoritedIds }: AnimatedCardGridProps)
       };
 
   return (
-    <motion.ul
+    <m.ul
       initial="hidden"
       animate="show"
       variants={containerVariants}
       className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
     >
       {cards.map((card) => (
-        <motion.li key={card.id} variants={itemVariants}>
+        <m.li key={card.id} variants={itemVariants}>
           <CardGridItem card={card} favorited={favoritedSet.has(card.id)} />
-        </motion.li>
+        </m.li>
       ))}
-    </motion.ul>
+    </m.ul>
   );
 }

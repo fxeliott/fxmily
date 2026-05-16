@@ -10,36 +10,38 @@ vi.mock('@/app/reflect/actions', () => ({
 // issues in RTL — see weekly-review-wizard.test.tsx for rationale.
 vi.mock('framer-motion', async () => {
   const React = await import('react');
+  const motionStub = new Proxy(
+    {},
+    {
+      get: (_target, key) => {
+        const tag = typeof key === 'string' ? key : 'div';
+        // eslint-disable-next-line react/display-name
+        return React.forwardRef(
+          (
+            props: Record<string, unknown> & { children?: React.ReactNode },
+            ref: React.Ref<HTMLElement>,
+          ) => {
+            const {
+              initial: _initial,
+              animate: _animate,
+              exit: _exit,
+              transition: _transition,
+              variants: _variants,
+              whileHover: _wh,
+              whileTap: _wt,
+              whileInView: _wiv,
+              ...rest
+            } = props;
+            return React.createElement(tag, { ref, ...rest });
+          },
+        );
+      },
+    },
+  );
   return {
     AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
-    motion: new Proxy(
-      {},
-      {
-        get: (_target, key) => {
-          const tag = typeof key === 'string' ? key : 'div';
-          // eslint-disable-next-line react/display-name
-          return React.forwardRef(
-            (
-              props: Record<string, unknown> & { children?: React.ReactNode },
-              ref: React.Ref<HTMLElement>,
-            ) => {
-              const {
-                initial: _initial,
-                animate: _animate,
-                exit: _exit,
-                transition: _transition,
-                variants: _variants,
-                whileHover: _wh,
-                whileTap: _wt,
-                whileInView: _wiv,
-                ...rest
-              } = props;
-              return React.createElement(tag, { ref, ...rest });
-            },
-          );
-        },
-      },
-    ),
+    motion: motionStub,
+    m: motionStub,
     useReducedMotion: () => true,
   };
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 
 /**
  * V1.8 REFLECT — `MirrorHero` SVG illustration.
@@ -58,7 +58,7 @@ export function MirrorHero({ className }: { className?: string }) {
       </defs>
 
       {/* Center halo — radial glow behind the mirror plane */}
-      <motion.circle
+      <m.circle
         cx="200"
         cy="120"
         r="100"
@@ -69,7 +69,7 @@ export function MirrorHero({ className }: { className?: string }) {
       />
 
       {/* Intent dome (TOP — brighter, future-tense) */}
-      <motion.path
+      <m.path
         d="M 100 120 A 100 100 0 0 1 300 120"
         fill="none"
         stroke="url(#v18-mirror-bright)"
@@ -79,7 +79,7 @@ export function MirrorHero({ className }: { className?: string }) {
         animate={{ pathLength: 1, opacity: 1 }}
         transition={{ duration: baseDuration, ease: 'easeInOut', delay: 0.1 }}
       />
-      <motion.path
+      <m.path
         d="M 130 120 A 70 70 0 0 1 270 120"
         fill="none"
         stroke="oklch(0.74 0.16 250)"
@@ -93,7 +93,7 @@ export function MirrorHero({ className }: { className?: string }) {
       />
 
       {/* Action dome (BOTTOM — dimmer, past-tense reflection) */}
-      <motion.path
+      <m.path
         d="M 100 120 A 100 100 0 0 0 300 120"
         fill="none"
         stroke="url(#v18-mirror-dim)"
@@ -103,7 +103,7 @@ export function MirrorHero({ className }: { className?: string }) {
         animate={{ pathLength: 1, opacity: 1 }}
         transition={{ duration: baseDuration, ease: 'easeInOut', delay: 0.25 }}
       />
-      <motion.path
+      <m.path
         d="M 130 120 A 70 70 0 0 0 270 120"
         fill="none"
         stroke="oklch(0.62 0.19 254)"
@@ -117,7 +117,7 @@ export function MirrorHero({ className }: { className?: string }) {
       />
 
       {/* Mirror axis — the horizontal accent line ("the plane of reflection") */}
-      <motion.line
+      <m.line
         x1="40"
         y1="120"
         x2="360"
@@ -132,7 +132,7 @@ export function MirrorHero({ className }: { className?: string }) {
       />
 
       {/* Center accent point — the introspection focal */}
-      <motion.circle
+      <m.circle
         cx="200"
         cy="120"
         r="4"
@@ -168,7 +168,7 @@ export function MirrorHero({ className }: { className?: string }) {
 
       {/* Floating moment-dots along the axis (members' weekly moments) */}
       {[80, 130, 270, 320].map((cx, i) => (
-        <motion.circle
+        <m.circle
           key={cx}
           cx={cx}
           cy="120"
@@ -181,7 +181,7 @@ export function MirrorHero({ className }: { className?: string }) {
       ))}
 
       {/* Subtle drop-down ray from intent → mirror (introspective gesture) */}
-      <motion.line
+      <m.line
         x1="200"
         y1="60"
         x2="200"

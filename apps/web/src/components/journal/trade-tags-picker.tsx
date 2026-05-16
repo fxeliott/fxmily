@@ -1,6 +1,6 @@
 'use client';
 
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion';
 import { Check, Info, ThumbsUp } from 'lucide-react';
 import { useState } from 'react';
 
@@ -194,7 +194,7 @@ export function TradeTagsPicker({ value, onChange, disabled }: TradeTagsPickerPr
 
       <AnimatePresence mode="wait">
         {open ? (
-          <motion.aside
+          <m.aside
             key={open}
             role="note"
             aria-live="polite"
@@ -219,7 +219,7 @@ export function TradeTagsPicker({ value, onChange, disabled }: TradeTagsPickerPr
                 </>
               );
             })()}
-          </motion.aside>
+          </m.aside>
         ) : null}
       </AnimatePresence>
 

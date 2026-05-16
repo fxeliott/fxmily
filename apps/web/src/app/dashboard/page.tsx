@@ -1,6 +1,5 @@
 import {
   ArrowRight,
-  BookOpen,
   Check,
   LineChart as LineChartIcon,
   LogOut,
@@ -397,23 +396,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </Suspense>
         </section>
 
-        {/* Coming soon section — V2.x roadmap (J8 Rapport hebdo + J9 Push
-            sont LIVE ; V2.1.3 Corrélations est LIVE ci-dessus, retirée
-            d'ici. Reste V2.1.4 Log express). */}
-        <section className="mb-6">
-          <div className="mb-3 flex items-center gap-2">
-            <BookOpen className="h-3.5 w-3.5 text-[var(--t-3)]" strokeWidth={1.75} />
-            <span className="t-eyebrow">Bientôt</span>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <ComingSoonCard
-              title="Log express"
-              jalon="V2.1.4"
-              desc="Loguer un pilier en deux taps depuis n'importe quel écran."
-            />
-          </div>
-        </section>
-
         {/* Footer kbd hint */}
         <footer className="mt-8 flex items-center justify-between border-t border-[var(--b-default)] pt-4 text-[10px] text-[var(--t-4)] tabular-nums">
           <span className="t-foot">Aucun conseil de marché. Discipline avant tout.</span>
@@ -568,18 +550,6 @@ function KpiCell({
         </span>
       ) : null}
     </div>
-  );
-}
-
-function ComingSoonCard({ title, jalon, desc }: { title: string; jalon: string; desc: string }) {
-  return (
-    <Card className="flex flex-col gap-2 p-4 opacity-70">
-      <div className="flex items-center justify-between">
-        <h4 className="t-h3 text-[var(--t-2)]">{title}</h4>
-        <Pill tone="cy">{jalon}</Pill>
-      </div>
-      <p className="t-cap text-[var(--t-4)]">{desc}</p>
-    </Card>
   );
 }
 

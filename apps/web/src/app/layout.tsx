@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from 'next/font/google';
 import { GeistSans } from 'geist/font/sans';
 import { CookieBanner } from '@/components/legal/cookie-banner';
 import { LegalFooter } from '@/components/legal/legal-footer';
+import { LogExpressFab } from '@/components/track/log-express-fab';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import './globals.css';
 
@@ -78,6 +79,7 @@ export default function RootLayout({
           <div id="main-content" tabIndex={-1} className="flex min-h-full flex-1 flex-col">
             {children}
           </div>
+          <LogExpressFab />
           <LegalFooter />
         </TooltipProvider>
         <CookieBanner />

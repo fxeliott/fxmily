@@ -1,9 +1,9 @@
-import { ArrowRight, Brain, Coffee, Dumbbell, Moon, UtensilsCrossed } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
-import type { HabitKind } from '@/lib/schemas/habit-log';
 import { cn } from '@/lib/utils';
+
+import { HABIT_KIND_ENTRIES } from './habit-kinds';
 
 /**
  * V2.1 TRACK — 5-pillar picker grid surface.
@@ -22,21 +22,6 @@ import { cn } from '@/lib/utils';
  *     déjà logué — re-log permis, upsert idempotent en service layer)
  */
 
-interface PickerEntry {
-  kind: HabitKind;
-  label: string;
-  Icon: LucideIcon;
-  href: string;
-}
-
-const ENTRIES: PickerEntry[] = [
-  { kind: 'sleep', label: 'Sommeil', Icon: Moon, href: '/track/sleep/new' },
-  { kind: 'nutrition', label: 'Nutrition', Icon: UtensilsCrossed, href: '/track/nutrition/new' },
-  { kind: 'caffeine', label: 'Café', Icon: Coffee, href: '/track/caffeine/new' },
-  { kind: 'sport', label: 'Sport', Icon: Dumbbell, href: '/track/sport/new' },
-  { kind: 'meditation', label: 'Méditation', Icon: Brain, href: '/track/meditation/new' },
-];
-
 export function HabitKindPicker() {
   return (
     <section aria-labelledby="track-picker-heading" className="space-y-3">
@@ -46,7 +31,7 @@ export function HabitKindPicker() {
         </h2>
       </header>
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {ENTRIES.map((e) => (
+        {HABIT_KIND_ENTRIES.map((e) => (
           <li key={e.kind}>
             <Link
               href={e.href}

@@ -3278,7 +3278,7 @@ Le scoping V2.1.2 (researcher + analyse) concluait « eyebrow 12px = signature T
 
 ### Scope
 
-- Token DS `.t-eyebrow-lg` ajouté `globals.css` (famille `.t-*`) : `font-family var(--font-sans); font-size 12px; font-weight 500; letter-spacing 0.1em; text-transform uppercase` — **pas de color, pas de line-height** (color reste l'util adjacent `text-[var(--t-3|--acc)]`).
+- Token DS `.t-eyebrow-lg` ajouté `globals.css` (famille `.t-*`) : `font-family var(--font-sans); font-size 12px; font-weight 500; letter-spacing 0.1em; text-transform uppercase` — **pas de color, pas de line-height** (color reste l'util adjacent `text-[var(--t-3)]` ou `text-[var(--acc)]` selon le call-site).
 - ~64 occurrences du raw cluster → `t-eyebrow-lg text-[var(--X)]` sur 28 fichiers.
 
 ### Décisions clés (landmines)

@@ -10,6 +10,11 @@ import {
 } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import { reportWarning } from '@/lib/observability';
+// 🚨 §21.5 — the ONLY symbol scoring may import from the training module: a
+// count-only primitive. Importing anything else (a serialized backtest,
+// `db.trainingTrade`, a P&L field) is a statistical-isolation breach asserted
+// against by the blocking anti-leak suite.
+import { countRecentTrainingActivity } from '@/lib/training/training-trade-service';
 
 import { computeConsistencyScore, type ConsistencyTradeInput } from './consistency';
 import {
@@ -111,7 +116,7 @@ export async function computeScoresForUser(
   const windowEndExclusive = parseLocalDate(shiftLocalDate(anchor, 1));
 
   // Parallel fetch — anti-waterfall.
-  const [trades, checkins] = await Promise.all([
+  const [trades, checkins, trainingActivity] = await Promise.all([
     db.trade.findMany({
       where: {
         userId,
@@ -150,6 +155,14 @@ export async function computeScoresForUser(
         journalNote: true,
       },
     }),
+    // 🚨 §21.5 — the SINGLE sanctioned training→real-edge touchpoint in
+    // scoring. Returns a COUNT only, never a backtest P&L. Same window as the
+    // trade/check-in slice so the engagement dimension stays internally
+    // coherent. `lte windowEndExclusive` over-includes only the zero-measure
+    // instant T00:00:00.000Z of the day after the anchor — immaterial to an
+    // effort count (same pragmatic edge-tolerance as the documented
+    // habit-trade-correlation "+1j slack").
+    countRecentTrainingActivity(userId, windowStartUtc, windowEndExclusive),
   ]);
 
   // Map to scoring inputs.
@@ -222,6 +235,10 @@ export async function computeScoresForUser(
     checkins: engagementCheckins,
     streak: distinctDates.size,
     windowDays,
+    // 🚨 §21.5 — effort COUNT only (volume/recency feeds engagement; backtest
+    // P&L never does). Empty for all 30 V1 members at deploy → training
+    // sub-score null → engagement renormalizes to its exact pre-J-T4 value.
+    trainingActivityCount: trainingActivity.count,
   });
 
   const components: ComponentsJson = { discipline, emotionalStability, consistency, engagement };

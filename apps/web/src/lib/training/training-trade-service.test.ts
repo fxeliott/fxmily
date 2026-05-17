@@ -6,6 +6,7 @@ vi.mock('@/lib/db', () => ({
       create: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
+      count: vi.fn(),
     },
   },
 }));
@@ -16,6 +17,7 @@ import { db } from '@/lib/db';
 
 import {
   type CreateTrainingTradeInput,
+  countRecentTrainingActivity,
   createTrainingTrade,
   getTrainingTradeById,
   listTrainingTradesForUser,
@@ -163,5 +165,83 @@ describe('getTrainingTradeById', () => {
   it('returns null when absent or not owned', async () => {
     vi.mocked(db.trainingTrade.findFirst).mockResolvedValue(null as never);
     expect(await getTrainingTradeById('nope', 'user-1')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// countRecentTrainingActivity — SPEC §21.5 count-only isolation primitive
+//
+// This is the SINGLE sanctioned channel by which training (backtest) data
+// reaches a real-edge surface. These tests pin the query shape so a future
+// edit cannot silently widen the SELECT to a P&L column.
+// ---------------------------------------------------------------------------
+
+describe('countRecentTrainingActivity (§21.5 count-only primitive)', () => {
+  const FROM = new Date('2026-04-17T00:00:00.000Z');
+  const TO = new Date('2026-05-17T00:00:00.000Z');
+
+  it('counts in [fromUtc, ∞) and returns the all-time most recent enteredAt', async () => {
+    vi.mocked(db.trainingTrade.count).mockResolvedValue(3 as never);
+    vi.mocked(db.trainingTrade.findFirst).mockResolvedValue({
+      enteredAt: new Date('2026-05-10T10:00:00.000Z'),
+    } as never);
+
+    const result = await countRecentTrainingActivity('user-1', FROM);
+
+    const countCall = vi.mocked(db.trainingTrade.count).mock.calls[0];
+    if (!countCall) throw new Error('expected count to be called');
+    const countArg = countCall[0] as {
+      where: { userId: string; enteredAt: Record<string, unknown> };
+    };
+    expect(countArg.where.userId).toBe('user-1');
+    expect(countArg.where.enteredAt).toEqual({ gte: FROM });
+    // 🚨 §21.5 — count() must be a pure COUNT(*): no `select` projection.
+    expect(countArg).not.toHaveProperty('select');
+
+    const ffCall = vi.mocked(db.trainingTrade.findFirst).mock.calls[0];
+    if (!ffCall) throw new Error('expected findFirst to be called');
+    const ffArg = ffCall[0] as {
+      where: { userId: string };
+      orderBy: unknown;
+      select: Record<string, unknown>;
+    };
+    expect(ffArg.where).toEqual({ userId: 'user-1' });
+    expect(ffArg.orderBy).toEqual({ enteredAt: 'desc' });
+    // 🚨 §21.5 — recency SELECT is EXACTLY { enteredAt: true }. Zero P&L.
+    expect(Object.keys(ffArg.select).sort()).toEqual(['enteredAt']);
+    expect(ffArg.select).not.toHaveProperty('resultR');
+    expect(ffArg.select).not.toHaveProperty('outcome');
+    expect(ffArg.select).not.toHaveProperty('plannedRR');
+
+    expect(result).toEqual({ count: 3, lastEnteredAt: '2026-05-10T10:00:00.000Z' });
+  });
+
+  it('adds an inclusive lte bound when toUtc is given', async () => {
+    vi.mocked(db.trainingTrade.count).mockResolvedValue(1 as never);
+    vi.mocked(db.trainingTrade.findFirst).mockResolvedValue(null as never);
+
+    await countRecentTrainingActivity('user-1', FROM, TO);
+
+    const countCall = vi.mocked(db.trainingTrade.count).mock.calls[0];
+    if (!countCall) throw new Error('expected count to be called');
+    const countArg = countCall[0] as { where: { enteredAt: Record<string, unknown> } };
+    expect(countArg.where.enteredAt).toEqual({ gte: FROM, lte: TO });
+  });
+
+  it('returns lastEnteredAt=null when the member never backtested', async () => {
+    vi.mocked(db.trainingTrade.count).mockResolvedValue(0 as never);
+    vi.mocked(db.trainingTrade.findFirst).mockResolvedValue(null as never);
+
+    const result = await countRecentTrainingActivity('user-1', FROM);
+    expect(result).toEqual({ count: 0, lastEnteredAt: null });
+  });
+
+  it('§21.5 — never calls findMany (which would return every column incl. P&L)', async () => {
+    vi.mocked(db.trainingTrade.count).mockResolvedValue(0 as never);
+    vi.mocked(db.trainingTrade.findFirst).mockResolvedValue(null as never);
+
+    await countRecentTrainingActivity('user-1', FROM);
+
+    expect(db.trainingTrade.findMany).not.toHaveBeenCalled();
   });
 });

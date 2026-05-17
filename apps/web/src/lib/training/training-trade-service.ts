@@ -128,3 +128,57 @@ export async function getTrainingTradeById(
   const row = await db.trainingTrade.findFirst({ where: { id, userId } });
   return row ? serializeTrainingTrade(row) : null;
 }
+
+// ----- §21.5 isolation primitive ---------------------------------------------
+
+/**
+ * Aggregated view of a member's recent backtest activity.
+ *
+ * 🚨 STATISTICAL ISOLATION (SPEC §21.5) — `RecentTrainingActivity` is the
+ * SINGLE sanctioned shape by which training data reaches a real-edge surface
+ * (engagement scoring, the Mark Douglas inactivity trigger, the weekly-report
+ * volume line). It carries ONLY a count and a recency timestamp — never a
+ * backtest P&L (`resultR` / `outcome` / `plannedRR`). The three call sites
+ * (`lib/scoring/service.ts`, `lib/triggers/engine.ts`,
+ * `lib/weekly-report/loader.ts`) import `countRecentTrainingActivity` and
+ * NOTHING else from this module.
+ */
+export interface RecentTrainingActivity {
+  /** Backtests with `enteredAt` in the requested window. */
+  count: number;
+  /** All-time most recent backtest `enteredAt` (ISO), or null if never. */
+  lastEnteredAt: string | null;
+}
+
+/**
+ * Count a member's backtests in `[fromUtc, toUtc?]` and surface the all-time
+ * most-recent entry timestamp. Recency is intentionally window-independent so
+ * the inactivity trigger can detect a backtest older than the count window.
+ *
+ * 🚨 §21.5 — this function performs exactly two queries and selects ONLY
+ * `COUNT(*)` + `enteredAt`. NEVER add `resultR` / `outcome` / `plannedRR`
+ * (nor a `select` on the `count`, nor a `findMany`) here: that would leak
+ * backtest P&L into the real edge. `training-trade-service.test.ts` and the
+ * blocking anti-leak suite pin this query shape at runtime.
+ *
+ * Pure of locale logic: callers derive "days since last training" from
+ * `lastEnteredAt` with their own timezone/now, mirroring how every scoring /
+ * trigger fn keeps clock + tz injectable for deterministic tests.
+ */
+export async function countRecentTrainingActivity(
+  userId: string,
+  fromUtc: Date,
+  toUtc?: Date,
+): Promise<RecentTrainingActivity> {
+  const [count, last] = await Promise.all([
+    db.trainingTrade.count({
+      where: { userId, enteredAt: { gte: fromUtc, ...(toUtc ? { lte: toUtc } : {}) } },
+    }),
+    db.trainingTrade.findFirst({
+      where: { userId },
+      orderBy: { enteredAt: 'desc' },
+      select: { enteredAt: true },
+    }),
+  ]);
+  return { count, lastEnteredAt: last ? last.enteredAt.toISOString() : null };
+}

@@ -45,6 +45,7 @@ const ACTIVE_SNAPSHOT = {
     douglasCardsDelivered: 2,
     douglasCardsSeen: 1,
     douglasCardsHelpful: 1,
+    trainingSessionsCount: 3,
     // V1.5 — defaults all-zero / null since this fixture predates capture.
     tradesQualityA: 0,
     tradesQualityB: 0,
@@ -97,6 +98,7 @@ const INACTIVE_SNAPSHOT = {
     douglasCardsDelivered: 0,
     douglasCardsSeen: 0,
     douglasCardsHelpful: 0,
+    trainingSessionsCount: 0,
     // V1.5 — inactive member, no V1.5 capture either.
     tradesQualityA: 0,
     tradesQualityB: 0,

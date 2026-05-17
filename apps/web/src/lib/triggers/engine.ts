@@ -4,6 +4,10 @@ import { db } from '@/lib/db';
 import { Prisma } from '@/generated/prisma/client';
 import { localDateOf, parseLocalDate, shiftLocalDate } from '@/lib/checkin/timezone';
 import { logAudit } from '@/lib/auth/audit';
+// 🚨 §21.5 — the ONLY symbol the trigger engine may import from the training
+// module: the count-only primitive. Anything else (a serialized backtest,
+// `db.trainingTrade`, a P&L field) is a statistical-isolation breach.
+import { countRecentTrainingActivity } from '@/lib/training/training-trade-service';
 
 import { isOnCooldown, pickBestMatch, type DeliveryHistoryEntry } from './cooldown';
 import { evaluateTrigger } from './evaluators';
@@ -82,7 +86,7 @@ export async function evaluateAndDispatchForUser(
   );
   const historyCutoff = new Date(now.getTime() - HISTORY_WINDOW_DAYS * 24 * 3600 * 1000);
 
-  const [trades, checkins, cards, deliveries] = await Promise.all([
+  const [trades, checkins, cards, deliveries, trainingActivity] = await Promise.all([
     db.trade.findMany({
       where: {
         userId,
@@ -122,6 +126,11 @@ export async function evaluateAndDispatchForUser(
       where: { userId, createdAt: { gte: historyCutoff } },
       select: { cardId: true, createdAt: true },
     }),
+    // 🚨 §21.5 — sanctioned training→real-edge touchpoint #2 (trigger
+    // engine). Count-only primitive; the inactivity trigger is recency-only
+    // so only `.lastEnteredAt` is consumed. NEVER a backtest P&L. Reuses the
+    // 30d trade window start as the (unused-for-recency) count bound.
+    countRecentTrainingActivity(userId, tradesWindowStart),
   ]);
 
   // --- 3. Build TriggerContext -----------------------------------------------
@@ -154,6 +163,12 @@ export async function evaluateAndDispatchForUser(
       emotionAfter: t.emotionAfter,
     })),
     userCreatedAt: user.createdAt,
+    // 🚨 §21.5 — recency DATE only, derived from the count-only primitive's
+    // all-time `lastEnteredAt`. The inactivity evaluator reads this; no
+    // backtest P&L ever enters the TriggerContext.
+    lastTrainingActivityLocalDate: trainingActivity.lastEnteredAt
+      ? localDateOf(new Date(trainingActivity.lastEnteredAt), timezone)
+      : null,
     recentCheckins: checkins.map((c) => ({
       date: c.date.toISOString().slice(0, 10),
       slot: c.slot,

@@ -65,6 +65,14 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
     if (!isAdmin && parsed.userId !== session.user.id) {
       return new Response('Forbidden', { status: 403 });
     }
+  } else if (parsed.kind === 'training') {
+    // Mode Entraînement (SPEC §21) — `training/{userId}/...`, member-owned
+    // exactly like a trade screenshot. Admin may also read (J-T3 needs it
+    // to annotate a member's backtest). STATISTICAL ISOLATION: this branch
+    // only touches the training key's own userId — no real-edge lookup.
+    if (!isAdmin && parsed.userId !== session.user.id) {
+      return new Response('Forbidden', { status: 403 });
+    }
   } else {
     // annotation key — lookup the parent trade owner. We collapse the
     // "trade absent" and "trade present but not owner" branches into a

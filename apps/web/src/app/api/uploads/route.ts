@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
-import { logAudit } from '@/lib/auth/audit';
+import { logAudit, resolveUploadAuditAction } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
 import { selectStorage } from '@/lib/storage';
 import { isAllowedMime, sniffImageMime } from '@/lib/storage/keys';
@@ -10,6 +10,7 @@ import {
   MAX_SCREENSHOT_BYTES,
   isAnnotationUploadKind,
   isTradeUploadKind,
+  isTrainingUploadKind,
   type UploadKind,
 } from '@/lib/storage/types';
 
@@ -80,6 +81,11 @@ export async function POST(req: Request): Promise<Response> {
   let pathOwner: string;
   if (isTradeUploadKind(kind)) {
     pathOwner = userId;
+  } else if (isTrainingUploadKind(kind)) {
+    // Mode Entraînement (SPEC §21) — member-owned, exactly like a trade
+    // screenshot: the backtest row doesn't exist yet at upload time, so the
+    // path-owner is the authenticated member. No admin gate, no DB lookup.
+    pathOwner = userId;
   } else if (isAnnotationUploadKind(kind)) {
     if (session.user.role !== 'admin') {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
@@ -144,9 +150,9 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   await logAudit({
-    action: isAnnotationUploadKind(kind)
-      ? 'admin.annotation.media.uploaded'
-      : 'trade.screenshot.uploaded',
+    // §21.5 isolation: backtest uploads emit their own slug — see
+    // `resolveUploadAuditAction` (unit-tested guard).
+    action: resolveUploadAuditAction(kind),
     userId,
     metadata: {
       kind,

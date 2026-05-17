@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
+import { isAnnotationUploadKind, isTrainingUploadKind, type UploadKind } from '@/lib/storage/types';
 
 /**
  * Lightweight audit log helper (SPEC §6.8, §9.2).
@@ -128,13 +129,35 @@ export type AuditAction =
   // `trainingTradeId` in metadata (PII-free — NEVER the P&L / `resultR`) so
   // the J-T4 engagement + inactivity-trigger wiring can count practice
   // volume/recency without a backtest result ever touching the real edge
-  // (§21.5 invariant). `admin.training_annotation.*` mirror the J4
-  // `admin.annotation.*` admin-scoped pattern. Pre-declared even though the
-  // Server Actions land in J-T2/J-T3 — anti-regression, same canon as the
-  // V2.0 `habit_log.*` pre-declaration (slugs ship with the model migration).
+  // (§21.5 invariant). `training_trade.screenshot.uploaded` (J-T2) is a
+  // DISTINCT slug from the real `trade.screenshot.uploaded` ON PURPOSE: a
+  // backtest upload must never inflate the real-edge screenshot-upload
+  // signal a forensic/engagement query counts (§21.5). `admin.training_
+  // annotation.*` mirror the J4 `admin.annotation.*` admin-scoped pattern.
+  // Pre-declared even though the Server Actions land in J-T2/J-T3 —
+  // anti-regression, same canon as the V2.0 `habit_log.*` pre-declaration.
   | 'training_trade.created'
+  | 'training_trade.screenshot.uploaded'
   | 'admin.training_annotation.created'
   | 'admin.training_annotation.deleted';
+
+/**
+ * Resolve the audit slug for an `/api/uploads` screenshot upload by kind.
+ *
+ * 🚨 STATISTICAL ISOLATION (SPEC §21.5, BLOCKING): a Mode-Entraînement
+ * backtest upload MUST emit `training_trade.screenshot.uploaded`, NEVER the
+ * real-edge `trade.screenshot.uploaded` (that would inflate a real-edge
+ * forensic/engagement signal with backtest activity). This is extracted from
+ * the route's inline ternary precisely so the §21.5 mapping has a unit-tested
+ * guard — the upload route has no test of its own, and a silent collapse of
+ * the ternary is the single most regression-exposed point of the invariant
+ * (security-auditor J-T2 T2-2).
+ */
+export function resolveUploadAuditAction(kind: UploadKind): AuditAction {
+  if (isAnnotationUploadKind(kind)) return 'admin.annotation.media.uploaded';
+  if (isTrainingUploadKind(kind)) return 'training_trade.screenshot.uploaded';
+  return 'trade.screenshot.uploaded';
+}
 
 export interface LogAuditParams {
   action: AuditAction;

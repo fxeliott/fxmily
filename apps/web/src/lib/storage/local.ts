@@ -3,13 +3,21 @@ import 'server-only';
 import { promises as fs, createReadStream, type ReadStream } from 'node:fs';
 import path from 'node:path';
 
-import { generateAnnotationKey, generateTradeKey, parseStorageKey, parseTradeKey } from './keys';
+import {
+  generateAnnotationKey,
+  generateTradeKey,
+  generateTrainingKey,
+  parseStorageKey,
+  parseTradeKey,
+  parseTrainingKey,
+} from './keys';
 import {
   type StorageAdapter,
   type UploadInput,
   StorageError,
   type AllowedImageMime,
   isTradeUploadKind,
+  isTrainingUploadKind,
 } from './types';
 
 /**
@@ -41,7 +49,7 @@ function uploadsRoot(): string {
 
 function safePathFor(key: string): string {
   // First validate the key shape (also throws StorageError(invalid_key)).
-  // Accepts both `trades/...` and `annotations/...` prefixes.
+  // Accepts `trades/...`, `annotations/...` and `training/...` prefixes.
   parseStorageKey(key);
 
   // Reject device-name segments at any depth.
@@ -67,7 +75,9 @@ export class LocalStorageAdapter implements StorageAdapter {
     const mime = input.contentType as AllowedImageMime;
     const key = isTradeUploadKind(input.kind)
       ? generateTradeKey(input.pathOwner, mime)
-      : generateAnnotationKey(input.pathOwner, mime);
+      : isTrainingUploadKind(input.kind)
+        ? generateTrainingKey(input.pathOwner, mime)
+        : generateAnnotationKey(input.pathOwner, mime);
     const target = safePathFor(key);
     await fs.mkdir(path.dirname(target), { recursive: true });
     // `wx` → fail if the random key collides with an existing file (cosmic
@@ -94,8 +104,8 @@ export class LocalStorageAdapter implements StorageAdapter {
 
 /**
  * Open a read stream on a local key. Used by the GET route handler.
- * Throws `StorageError('not_found')` on missing files. Accepts both trade
- * and annotation keys — the prefix is validated by `parseStorageKey`.
+ * Throws `StorageError('not_found')` on missing files. Accepts trade,
+ * annotation and training keys — the prefix is validated by `parseStorageKey`.
  */
 export async function openLocalReadStream(
   key: string,
@@ -125,6 +135,23 @@ export async function openLocalReadStream(
 export function keyBelongsTo(key: string, userId: string): boolean {
   try {
     return parseTradeKey(key).userId === userId;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * J-T2 — owner check for **training** keys only (Mode Entraînement, SPEC
+ * §21). Carbon mirror of `keyBelongsTo`: returns true iff `key` is shaped
+ * `training/{userId}/...` AND the userId matches the session. Every other
+ * prefix (including `trades/`) returns false — the backtest screenshot BOLA
+ * gate must never cross-accept a real-edge key (statistical isolation
+ * §21.5). The Server Action calls this exactly like the journal action calls
+ * `keyBelongsTo`.
+ */
+export function trainingKeyBelongsTo(key: string, userId: string): boolean {
+  try {
+    return parseTrainingKey(key).userId === userId;
   } catch {
     return false;
   }

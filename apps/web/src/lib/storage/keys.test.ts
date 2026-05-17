@@ -2,15 +2,18 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ANNOTATION_KEY_PATTERN,
+  TRAINING_ANNOTATION_KEY_PATTERN,
   TRAINING_KEY_PATTERN,
   extensionForMime,
   generateAnnotationKey,
   generateTradeKey,
+  generateTrainingAnnotationKey,
   generateTrainingKey,
   isAllowedMime,
   parseAnnotationKey,
   parseStorageKey,
   parseTradeKey,
+  parseTrainingAnnotationKey,
   parseTrainingKey,
   sniffImageMime,
 } from './keys';
@@ -308,6 +311,86 @@ describe('trainingKeyBelongsTo (J-T2 — BOLA guard, mirror keyBelongsTo)', () =
 
   it('returns false on malformed keys', () => {
     expect(trainingKeyBelongsTo('not-a-key', 'clx0abc123')).toBe(false);
+  });
+});
+
+describe('generateTrainingAnnotationKey (J-T3 admin corrections)', () => {
+  it('produces a key under the training_annotations/ prefix matching TRAINING_ANNOTATION_KEY_PATTERN', () => {
+    const key = generateTrainingAnnotationKey('clx0tt0001', 'image/png');
+    expect(key).toMatch(/^training_annotations\/clx0tt0001\/[a-zA-Z0-9_-]{32}\.png$/);
+    expect(TRAINING_ANNOTATION_KEY_PATTERN.test(key)).toBe(true);
+  });
+
+  it('produces unique keys across calls', () => {
+    const a = generateTrainingAnnotationKey('clx0tt0001', 'image/webp');
+    const b = generateTrainingAnnotationKey('clx0tt0001', 'image/webp');
+    expect(a).not.toBe(b);
+  });
+
+  it('uses the trainingTradeId as the path-owner segment (mirror J4 annotation, NOT the userId)', () => {
+    // Admin correction media attaches to the parent backtest, so ownership
+    // resolves via a single `db.trainingTrade.findUnique` — exactly the J4
+    // `annotations/{tradeId}/…` pattern, never `training/{userId}/…`.
+    const key = generateTrainingAnnotationKey('clx0tt0042', 'image/jpeg');
+    expect(parseTrainingAnnotationKey(key).trainingTradeId).toBe('clx0tt0042');
+  });
+
+  it('throws on a non-alnum trainingTradeId (defense against schema drift)', () => {
+    expect(() => generateTrainingAnnotationKey('clx0tt..', 'image/jpeg')).toThrow();
+    expect(() => generateTrainingAnnotationKey('CLX0TT', 'image/jpeg')).toThrow();
+  });
+});
+
+describe('parseTrainingAnnotationKey (J-T3 admin corrections)', () => {
+  it('extracts trainingTradeId, filename, ext from a valid key', () => {
+    const key = 'training_annotations/clx0tt0001/dddddddddddddddddddddddddddddddd.webp';
+    expect(parseTrainingAnnotationKey(key)).toEqual({
+      kind: 'training_annotation',
+      trainingTradeId: 'clx0tt0001',
+      filename: 'dddddddddddddddddddddddddddddddd',
+      ext: 'webp',
+    });
+  });
+
+  it.each([
+    'training_annotations/clx/short.jpg', // filename too short (< 12)
+    'training_annotations/clx/aaaaaaaaaaaa.bmp', // wrong extension
+    'training_annotations/CLX/aaaaaaaaaaaa.jpg', // uppercase id
+    'training_annotations/clx/aaaaaaaaaaaa.JPG', // uppercase extension
+    'training_annotations/clx//aaaaaaaaaaaa.jpg', // empty id fragment
+    'training_annotations/clx/aaaaaaaaaaaa.jpg/foo', // extra segment
+    '../training_annotations/clx/aaaaaaaaaaaa.jpg', // relative escape
+    'training_annotations/clx/..bbbbbbbbbb.jpg', // dotdot in filename
+    '',
+    'random',
+    'annotations/clx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg', // real-edge prefix
+    'training/clx0abc123/cccccccccccccccccccccccccccccccc.jpg', // J-T2 member prefix, NOT J-T3
+  ])('rejects malformed training annotation key: %s', (key) => {
+    expect(() => parseTrainingAnnotationKey(key)).toThrow();
+  });
+});
+
+describe('parseStorageKey discriminates the J-T3 training_annotation prefix', () => {
+  it('dispatches training_annotations/ to the training_annotation kind', () => {
+    const parsed = parseStorageKey(
+      'training_annotations/clx0tt0001/dddddddddddddddddddddddddddddddd.png',
+    );
+    expect(parsed.kind).toBe('training_annotation');
+    if (parsed.kind === 'training_annotation') {
+      expect(parsed.trainingTradeId).toBe('clx0tt0001');
+    }
+  });
+
+  it('does NOT confuse training_annotations/ with the J-T2 training/ member prefix', () => {
+    // `'training_annotations/…'.startsWith('training/')` is false (char 8 is
+    // `_`, not `/`) — the prefixes are disjoint. Guard the discriminant so a
+    // future refactor can never route an admin correction key to the member
+    // BOLA branch (statistical isolation §21.5).
+    const parsed = parseStorageKey(
+      'training_annotations/clx0tt0001/dddddddddddddddddddddddddddddddd.jpg',
+    );
+    expect(parsed.kind).toBe('training_annotation');
+    expect(parsed.kind).not.toBe('training');
   });
 });
 

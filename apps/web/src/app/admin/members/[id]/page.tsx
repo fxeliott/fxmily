@@ -7,6 +7,7 @@ import { MemberTabs, type MemberTabKey } from '@/components/admin/member-tabs';
 import { MemberAdminNotesPanel } from '@/components/admin/member-admin-notes-panel';
 import { MemberDouglasPanel } from '@/components/admin/member-douglas-panel';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
+import { MemberTrainingPanel } from '@/components/admin/member-training-panel';
 import { MemberWeeklyReportsPanel } from '@/components/admin/member-weekly-reports-panel';
 import { listReportsForMember } from '@/lib/weekly-report/service';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
@@ -17,6 +18,7 @@ import { listAdminNotesForMember } from '@/lib/admin/admin-notes-service';
 import { aggregateMemberDeliveryStats, listMemberDeliveries } from '@/lib/admin/cards-service';
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
+import { listTrainingTradesAsAdmin } from '@/lib/training/training-trade-admin-service';
 import { logAudit } from '@/lib/auth/audit';
 import { getDashboardAnalytics } from '@/lib/scoring/dashboard-data';
 import { getLatestBehavioralScore, type SerializedBehavioralScore } from '@/lib/scoring/service';
@@ -40,8 +42,12 @@ interface DetailPageProps {
 
 function parseTab(
   value: string | undefined,
-): Extract<MemberTabKey, 'overview' | 'trades' | 'mark-douglas' | 'weekly-reports' | 'notes'> {
+): Extract<
+  MemberTabKey,
+  'overview' | 'trades' | 'training' | 'mark-douglas' | 'weekly-reports' | 'notes'
+> {
   if (value === 'trades') return 'trades';
+  if (value === 'training') return 'training';
   if (value === 'mark-douglas') return 'mark-douglas';
   if (value === 'weekly-reports') return 'weekly-reports';
   if (value === 'notes') return 'notes';
@@ -66,6 +72,8 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
 
   const trades =
     tab === 'trades' ? await listMemberTradesAsAdmin(memberId, { status: 'all' }) : null;
+
+  const trainingTrades = tab === 'training' ? await listTrainingTradesAsAdmin(memberId) : null;
 
   const douglasData =
     tab === 'mark-douglas'
@@ -173,6 +181,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
         <OverviewTab detail={detail} latestScore={latestScore} analytics={analytics} />
       ) : null}
       {tab === 'trades' && trades ? <MemberTradesList memberId={memberId} trades={trades} /> : null}
+      {tab === 'training' && trainingTrades ? (
+        <MemberTrainingPanel memberId={memberId} trades={trainingTrades} />
+      ) : null}
       {tab === 'mark-douglas' && douglasData ? (
         <MemberDouglasPanel deliveries={douglasData[0]} stats={douglasData[1]} />
       ) : null}

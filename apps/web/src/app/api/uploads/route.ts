@@ -10,6 +10,7 @@ import {
   MAX_SCREENSHOT_BYTES,
   isAnnotationUploadKind,
   isTradeUploadKind,
+  isTrainingAnnotationUploadKind,
   isTrainingUploadKind,
   type UploadKind,
 } from '@/lib/storage/types';
@@ -86,6 +87,28 @@ export async function POST(req: Request): Promise<Response> {
     // screenshot: the backtest row doesn't exist yet at upload time, so the
     // path-owner is the authenticated member. No admin gate, no DB lookup.
     pathOwner = userId;
+  } else if (isTrainingAnnotationUploadKind(kind)) {
+    // J-T3 admin correction media — admin-only, parent-owned. Carbon mirror
+    // of the annotation branch but through `TrainingTrade` (NEVER `Trade` —
+    // statistical isolation §21.5). pathOwner = the parent trainingTradeId.
+    if (session.user.role !== 'admin') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+    const trainingTradeIdRaw = formData.get('trainingTradeId');
+    if (typeof trainingTradeIdRaw !== 'string' || !/^[a-z0-9]{8,40}$/.test(trainingTradeIdRaw)) {
+      return NextResponse.json({ error: 'invalid_training_trade_id' }, { status: 400 });
+    }
+    // Confirm the backtest exists — avoid orphan correction media on a typo'd
+    // id. Existence-only here; the tighter member-ownership check lives in
+    // the Server Action (defense in depth, mirrors the J4 annotation split).
+    const trainingTrade = await db.trainingTrade.findUnique({
+      where: { id: trainingTradeIdRaw },
+      select: { id: true },
+    });
+    if (!trainingTrade) {
+      return NextResponse.json({ error: 'training_trade_not_found' }, { status: 404 });
+    }
+    pathOwner = trainingTradeIdRaw;
   } else if (isAnnotationUploadKind(kind)) {
     if (session.user.role !== 'admin') {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
@@ -161,6 +184,8 @@ export async function POST(req: Request): Promise<Response> {
       size: file.size,
       adapter: storage.id,
       ...(isAnnotationUploadKind(kind) ? { tradeId: pathOwner } : {}),
+      // §21.5 PII-free: only the parent id, never the member's backtest P&L.
+      ...(isTrainingAnnotationUploadKind(kind) ? { trainingTradeId: pathOwner } : {}),
     },
   });
 

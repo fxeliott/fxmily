@@ -131,6 +131,7 @@ export async function sendAnnotationReceivedEmail({
 /// not warrant the indirection).
 const FALLBACK_SUBJECT_BY_TYPE: Record<NotificationTypeSlug, string> = {
   annotation_received: 'Nouvelle correction reçue · Fxmily',
+  training_annotation_received: 'Correction reçue (entraînement) · Fxmily',
   checkin_morning_reminder: 'Check-in matin · Fxmily',
   checkin_evening_reminder: 'Check-in soir · Fxmily',
   douglas_card_delivered: 'Nouvelle fiche Mark Douglas · Fxmily',
@@ -140,6 +141,8 @@ const FALLBACK_SUBJECT_BY_TYPE: Record<NotificationTypeSlug, string> = {
 const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
   annotation_received:
     "Eliot a laissé une correction sur l'un de tes trades. Elle t'attend dans ton journal — la correction sera marquée comme lue dès que tu ouvres le trade.",
+  training_annotation_received:
+    "Eliot a laissé une correction sur l'un de tes backtests. Elle t'attend dans ton espace entraînement — marquée comme lue dès que tu ouvres le backtest.",
   checkin_morning_reminder:
     'Trois minutes pour poser ton intention du jour. Pas de rattrapage — si la fenêtre est passée, on se retrouve ce soir.',
   checkin_evening_reminder:
@@ -151,6 +154,7 @@ const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
 
 const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
   annotation_received: 'Voir la correction',
+  training_annotation_received: 'Voir la correction',
   checkin_morning_reminder: 'Faire le check-in matin',
   checkin_evening_reminder: 'Faire le check-in soir',
   douglas_card_delivered: 'Lire la fiche',

@@ -98,10 +98,14 @@ export const subscribePushInputSchema = pushSubscriptionInputSchema.extend({
 });
 export type SubscribePushInput = z.infer<typeof subscribePushInputSchema>;
 
-/// The 5 notification categories a member can toggle. Mirrors the
-/// `NotificationType` enum in `prisma/schema.prisma`.
+/// The 6 notification categories a member can toggle. Mirrors the
+/// `NotificationType` enum in `prisma/schema.prisma`. `training_annotation_
+/// received` (J-T3) is DISTINCT from `annotation_received` on purpose: a
+/// backtest correction must never conflate with a real-trade correction
+/// (statistical isolation §21.5).
 export const NOTIFICATION_TYPES = [
   'annotation_received',
+  'training_annotation_received',
   'checkin_morning_reminder',
   'checkin_evening_reminder',
   'douglas_card_delivered',

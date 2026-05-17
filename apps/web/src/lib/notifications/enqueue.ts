@@ -81,6 +81,71 @@ export async function enqueueAnnotationNotification(
 }
 
 // =============================================================================
+// J-T3 — Mode Entraînement admin corrections (SPEC §21)
+// =============================================================================
+
+export interface TrainingAnnotationReceivedPayload {
+  /** The training annotation that was just created. */
+  trainingAnnotationId: string;
+  /** The backtest it's attached to — used in the dispatch deep-link. */
+  trainingTradeId: string;
+  /** Author of the correction — UI mentions "1 correction de Eliot". */
+  adminId: string;
+  /** Whether the correction has a media attachment (drives the body copy). */
+  hasMedia: boolean;
+}
+
+/**
+ * Enqueue a "backtest correction received" push for the backtest owner.
+ *
+ * Carbon mirror of `enqueueAnnotationNotification`, but with the DISTINCT
+ * `training_annotation_received` type and a training-only payload. STATISTICAL
+ * ISOLATION (§21.5): a backtest correction must never reuse the real-trade
+ * `annotation_received` slug/payload — the dispatcher, preferences, email
+ * fallback and audit all branch on the distinct type so the two coaching
+ * signals can never conflate. PII-free: the payload carries ids only, never
+ * the member's backtest P&L.
+ *
+ * Best-effort: returns the row id, or null if the write failed (logged,
+ * never thrown). Optionally joins a parent `db.$transaction`.
+ */
+export async function enqueueTrainingAnnotationNotification(
+  recipientUserId: string,
+  payload: TrainingAnnotationReceivedPayload,
+  tx?: Prisma.TransactionClient,
+): Promise<string | null> {
+  const client = tx ?? db;
+  try {
+    const row = await client.notificationQueue.create({
+      data: {
+        userId: recipientUserId,
+        type: 'training_annotation_received',
+        payload: payload as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+
+    if (!tx) {
+      await logAudit({
+        action: 'notification.enqueued',
+        userId: recipientUserId,
+        metadata: {
+          notificationId: row.id,
+          type: 'training_annotation_received',
+          trainingTradeId: payload.trainingTradeId,
+          trainingAnnotationId: payload.trainingAnnotationId,
+        },
+      });
+    }
+
+    return row.id;
+  } catch (err) {
+    console.error('[notifications.enqueue] training annotation failed', err);
+    return null;
+  }
+}
+
+// =============================================================================
 // J5 — Check-in reminders
 // =============================================================================
 

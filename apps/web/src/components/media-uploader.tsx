@@ -28,6 +28,16 @@ interface MediaUploaderProps {
   kind: UploadKind;
   /** Required when `kind` is annotation-*. Identifies the parent trade. */
   tradeId?: string | null | undefined;
+  /**
+   * J-T3 — required when `kind` is `training-annotation-image`. Identifies
+   * the parent backtest; posted as the `trainingTradeId` field (NOT
+   * `tradeId`) so the route scopes the key under
+   * `training_annotations/{trainingTradeId}/…`. Kept a SEPARATE field from
+   * `tradeId` so a training value never travels a real-edge field name
+   * (statistical isolation §21.5). J4 call sites pass only `tradeId` and are
+   * unaffected.
+   */
+  trainingTradeId?: string | null | undefined;
   /** Form field name — the resolved key is mirrored into a hidden input. */
   name: string;
   /** Accepted MIME types — also used for the file input `accept` attribute. */
@@ -83,6 +93,8 @@ const ERROR_LABELS = {
   invalid_kind: 'Type d’upload invalide.',
   invalid_trade_id: 'Trade introuvable.',
   trade_not_found: 'Trade introuvable.',
+  invalid_training_trade_id: 'Backtest introuvable.',
+  training_trade_not_found: 'Backtest introuvable.',
   missing_file: 'Aucun fichier sélectionné.',
   empty_file: 'Le fichier est vide.',
   too_large: 'Fichier trop lourd.',
@@ -105,6 +117,7 @@ function bytesToMo(bytes: number): string {
 export function MediaUploader({
   kind,
   tradeId,
+  trainingTradeId,
   name,
   acceptMime,
   maxBytes,
@@ -185,6 +198,8 @@ export function MediaUploader({
       fd.append('file', file);
       fd.append('kind', kind);
       if (tradeId) fd.append('tradeId', tradeId);
+      // J-T3: separate field — a training value never travels `tradeId` (§21.5).
+      if (trainingTradeId) fd.append('trainingTradeId', trainingTradeId);
 
       try {
         const res = await fetch('/api/uploads', { method: 'POST', body: fd });
@@ -222,7 +237,7 @@ export function MediaUploader({
         onStatusChange?.('error');
       }
     },
-    [acceptMime, disabled, kind, maxBytes, onUploaded, onStatusChange, tradeId],
+    [acceptMime, disabled, kind, maxBytes, onUploaded, onStatusChange, tradeId, trainingTradeId],
   );
 
   const clear = () => {

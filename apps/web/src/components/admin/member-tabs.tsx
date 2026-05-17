@@ -3,6 +3,7 @@ import Link from 'next/link';
 export type MemberTabKey =
   | 'overview'
   | 'trades'
+  | 'training'
   | 'checkins'
   | 'mark-douglas'
   | 'weekly-reports'
@@ -21,6 +22,7 @@ interface TabDefinition {
 const TABS: readonly TabDefinition[] = [
   { key: 'overview', label: "Vue d'ensemble" },
   { key: 'trades', label: 'Trades' },
+  { key: 'training', label: 'Entraînement' },
   { key: 'checkins', label: 'Check-ins' },
   { key: 'mark-douglas', label: 'Mark Douglas' },
   { key: 'weekly-reports', label: 'Rapports IA' },

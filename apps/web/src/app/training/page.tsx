@@ -4,10 +4,11 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { TrainingStatsBar } from '@/components/training/training-stats-bar';
-import { TrainingTradeCard } from '@/components/training/training-trade-card';
+import { TrainingTradeCardLinkable } from '@/components/training/training-trade-card-linkable';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { countUnseenTrainingAnnotationsByTrainingTrade } from '@/lib/training/training-annotation-member-service';
 import { listTrainingTradesForUser } from '@/lib/training/training-trade-service';
 import { cn } from '@/lib/utils';
 
@@ -24,7 +25,10 @@ export default async function TrainingPage() {
   // weaker than its own Server Action (`createTrainingTradeAction`).
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
-  const trades = await listTrainingTradesForUser(session.user.id);
+  const [trades, unseenMap] = await Promise.all([
+    listTrainingTradesForUser(session.user.id),
+    countUnseenTrainingAnnotationsByTrainingTrade(session.user.id),
+  ]);
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">
@@ -86,7 +90,11 @@ export default async function TrainingPage() {
           <ul className="flex flex-col gap-3">
             {trades.map((trade) => (
               <li key={trade.id}>
-                <TrainingTradeCard trade={trade} />
+                <TrainingTradeCardLinkable
+                  trade={trade}
+                  href={`/training/${trade.id}`}
+                  unseenAnnotationsCount={unseenMap.get(trade.id) ?? 0}
+                />
               </li>
             ))}
           </ul>

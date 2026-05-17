@@ -97,13 +97,18 @@ enum AnnotationMediaType {
 
 /// Push-notification kinds queued for J9 dispatch (J4 + J5 + J9).
 /// Values are persisted as strings — adding a new kind is an additive migration.
-///   annotation_received       : a member's trade just got a new admin correction (J4).
-///   checkin_morning_reminder  : nudges the member to fill their morning check-in (J5).
-///   checkin_evening_reminder  : nudges the member to fill their evening check-in (J5).
-///   douglas_card_delivered    : a Mark Douglas card was triggered for the member (J9).
-///   weekly_report_ready       : the J8 admin weekly digest is ready (admin-only push, opt-in).
+///   annotation_received          : a member's trade just got a new admin correction (J4).
+///   training_annotation_received : a member's BACKTEST just got an admin correction
+///                                  (J-T3). DISTINCT from annotation_received — a
+///                                  backtest correction must never conflate with a
+///                                  real-trade correction (statistical isolation §21.5).
+///   checkin_morning_reminder     : nudges the member to fill their morning check-in (J5).
+///   checkin_evening_reminder     : nudges the member to fill their evening check-in (J5).
+///   douglas_card_delivered       : a Mark Douglas card was triggered for the member (J9).
+///   weekly_report_ready          : the J8 admin weekly digest is ready (admin-only push, opt-in).
 enum NotificationType {
   annotation_received
+  training_annotation_received
   checkin_morning_reminder
   checkin_evening_reminder
   douglas_card_delivered
@@ -680,7 +685,8 @@ model TrainingAnnotation {
 /// At J4 we persist the *intent* of a notification — the actual web-push
 /// dispatch worker is in J9. Until then the row stays `pending`. Each kind
 /// (`type`) carries its own structured `payload`:
-///   annotation_received → { annotationId, tradeId, adminId, mediaType }
+///   annotation_received          → { annotationId, tradeId, adminId, hasMedia }
+///   training_annotation_received → { trainingAnnotationId, trainingTradeId, adminId, hasMedia }
 ///
 /// `scheduledFor` lets us delay a notification (e.g. "remind if not seen
 /// after 48h" — SPEC §7.8). Null means "ASAP".

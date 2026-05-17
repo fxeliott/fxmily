@@ -215,12 +215,13 @@ describe('nextAttemptDelay', () => {
 });
 
 describe('TTL_BY_TYPE / URGENCY_BY_TYPE config tables', () => {
-  it('TTL covers exactly the 5 NotificationType slugs', () => {
+  it('TTL covers exactly the 6 NotificationType slugs', () => {
     expect(Object.keys(TTL_BY_TYPE).sort()).toEqual([
       'annotation_received',
       'checkin_evening_reminder',
       'checkin_morning_reminder',
       'douglas_card_delivered',
+      'training_annotation_received',
       'weekly_report_ready',
     ]);
   });

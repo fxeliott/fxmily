@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   generateAnnotationKey,
   generateTradeKey,
+  generateTrainingAnnotationKey,
   generateTrainingKey,
   parseStorageKey,
   parseTradeKey,
@@ -17,6 +18,7 @@ import {
   StorageError,
   type AllowedImageMime,
   isTradeUploadKind,
+  isTrainingAnnotationUploadKind,
   isTrainingUploadKind,
 } from './types';
 
@@ -77,7 +79,11 @@ export class LocalStorageAdapter implements StorageAdapter {
       ? generateTradeKey(input.pathOwner, mime)
       : isTrainingUploadKind(input.kind)
         ? generateTrainingKey(input.pathOwner, mime)
-        : generateAnnotationKey(input.pathOwner, mime);
+        : isTrainingAnnotationUploadKind(input.kind)
+          ? // J-T3: path-owner is the parent trainingTradeId → the
+            // `training_annotations/` prefix (NEVER `annotations/` — §21.5).
+            generateTrainingAnnotationKey(input.pathOwner, mime)
+          : generateAnnotationKey(input.pathOwner, mime);
     const target = safePathFor(key);
     await fs.mkdir(path.dirname(target), { recursive: true });
     // `wx` → fail if the random key collides with an existing file (cosmic

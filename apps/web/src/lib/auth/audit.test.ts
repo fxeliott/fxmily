@@ -48,4 +48,13 @@ describe('resolveUploadAuditAction (J-T2 — §21.5 statistical-isolation guard)
     expect(slug).toBe('training_trade.screenshot.uploaded');
     expect(slug).not.toBe('trade.screenshot.uploaded');
   });
+
+  it('🚨 maps an admin training correction upload to its OWN slug — NEVER the real-edge J4 annotation slug (J-T3)', () => {
+    // §21.5: an admin correction on a backtest must not inflate the
+    // real-trade `admin.annotation.media.uploaded` forensic signal. Distinct
+    // slug, unit-tested here because the upload route has no test of its own.
+    const slug = resolveUploadAuditAction('training-annotation-image');
+    expect(slug).toBe('admin.training_annotation.media.uploaded');
+    expect(slug).not.toBe('admin.annotation.media.uploaded');
+  });
 });

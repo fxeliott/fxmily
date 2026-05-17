@@ -73,6 +73,19 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
     if (!isAdmin && parsed.userId !== session.user.id) {
       return new Response('Forbidden', { status: 403 });
     }
+  } else if (parsed.kind === 'training_annotation') {
+    // J-T3 admin correction media — `training_annotations/{trainingTradeId}/`.
+    // Mirror of the J4 annotation branch but through `TrainingTrade` (NEVER
+    // `Trade` — statistical isolation §21.5). Admin always allowed; the
+    // member allowed iff they own the parent backtest. Absent + not-owner
+    // collapse to a single Forbidden (no existence oracle), same as J4.
+    const trainingTrade = await db.trainingTrade.findUnique({
+      where: { id: parsed.trainingTradeId },
+      select: { userId: true },
+    });
+    if (!trainingTrade || (!isAdmin && trainingTrade.userId !== session.user.id)) {
+      return new Response('Forbidden', { status: 403 });
+    }
   } else {
     // annotation key — lookup the parent trade owner. We collapse the
     // "trade absent" and "trade present but not owner" branches into a

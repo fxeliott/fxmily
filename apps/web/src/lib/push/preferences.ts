@@ -32,6 +32,7 @@ export async function getEffectivePreferences(userId: string): Promise<Effective
 
   const map: EffectivePreferences = {
     annotation_received: true,
+    training_annotation_received: true,
     checkin_morning_reminder: true,
     checkin_evening_reminder: true,
     douglas_card_delivered: true,

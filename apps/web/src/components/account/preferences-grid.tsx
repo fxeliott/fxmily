@@ -46,6 +46,12 @@ const CATEGORIES: CategoryMeta[] = [
       "Tu es notifié dès qu'une correction texte ou vidéo est ajoutée sur l'un de tes trades.",
   },
   {
+    type: 'training_annotation_received',
+    label: "Corrections d'Eliot sur tes backtests",
+    description:
+      "Tu es notifié dès qu'une correction est ajoutée sur l'un de tes backtests en mode entraînement.",
+  },
+  {
     type: 'checkin_morning_reminder',
     label: 'Rappel check-in du matin',
     description:
@@ -75,6 +81,7 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
   const [preferences, setPreferences] = useState<Record<NotificationTypeSlug, boolean>>(() => {
     const seed: Record<NotificationTypeSlug, boolean> = {
       annotation_received: true,
+      training_annotation_received: true,
       checkin_morning_reminder: true,
       checkin_evening_reminder: true,
       douglas_card_delivered: true,

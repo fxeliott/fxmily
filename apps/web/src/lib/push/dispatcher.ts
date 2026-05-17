@@ -53,6 +53,7 @@ const APP_BASE_URL_DEFAULT = 'http://localhost:3000';
  */
 export const TTL_BY_TYPE: Record<NotificationTypeSlug, number> = {
   annotation_received: 86400, // 24h — corrections stay relevant a day
+  training_annotation_received: 86400, // 24h — backtest corrections, same window
   checkin_morning_reminder: 3600, // 1h — past 9am the matin slot is mostly gone
   checkin_evening_reminder: 3600, // 1h — past 22h the soir slot is gone
   douglas_card_delivered: 21600, // 6h — tilt cards lose freshness fast
@@ -62,6 +63,7 @@ export const TTL_BY_TYPE: Record<NotificationTypeSlug, number> = {
 /// RFC 8030 urgency. `low` = battery-friendly (reminders that aren't critical).
 export const URGENCY_BY_TYPE: Record<NotificationTypeSlug, 'low' | 'normal'> = {
   annotation_received: 'normal',
+  training_annotation_received: 'normal',
   checkin_morning_reminder: 'low',
   checkin_evening_reminder: 'low',
   douglas_card_delivered: 'normal',
@@ -113,6 +115,16 @@ export function buildPayload(
       title = 'Nouvelle correction reçue';
       body = "Eliot a laissé une correction sur l'un de tes trades.";
       path = tradeId ? `/journal/${tradeId}` : '/journal';
+      break;
+    }
+    case 'training_annotation_received': {
+      // §21.5: distinct copy + deep-link to the TRAINING surface, never
+      // `/journal` — a backtest correction stays on the entraînement side.
+      const trainingTradeId =
+        typeof payload.trainingTradeId === 'string' ? payload.trainingTradeId : '';
+      title = 'Correction reçue (entraînement)';
+      body = "Eliot a laissé une correction sur l'un de tes backtests.";
+      path = trainingTradeId ? `/training/${trainingTradeId}` : '/training';
       break;
     }
     case 'checkin_morning_reminder': {

@@ -4,7 +4,12 @@ import { createHash } from 'node:crypto';
 
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
-import { isAnnotationUploadKind, isTrainingUploadKind, type UploadKind } from '@/lib/storage/types';
+import {
+  isAnnotationUploadKind,
+  isTrainingAnnotationUploadKind,
+  isTrainingUploadKind,
+  type UploadKind,
+} from '@/lib/storage/types';
 
 /**
  * Lightweight audit log helper (SPEC §6.8, §9.2).
@@ -134,12 +139,18 @@ export type AuditAction =
   // backtest upload must never inflate the real-edge screenshot-upload
   // signal a forensic/engagement query counts (§21.5). `admin.training_
   // annotation.*` mirror the J4 `admin.annotation.*` admin-scoped pattern.
+  // `admin.training_annotation.media.uploaded` + `admin.training_trade.viewed`
+  // (J-T3) are DISTINCT from the real-edge `admin.annotation.media.uploaded` /
+  // `admin.trade.viewed` ON PURPOSE: an admin correction/view on a backtest
+  // must never inflate a real-edge forensic signal (§21.5).
   // Pre-declared even though the Server Actions land in J-T2/J-T3 —
   // anti-regression, same canon as the V2.0 `habit_log.*` pre-declaration.
   | 'training_trade.created'
   | 'training_trade.screenshot.uploaded'
   | 'admin.training_annotation.created'
-  | 'admin.training_annotation.deleted';
+  | 'admin.training_annotation.deleted'
+  | 'admin.training_annotation.media.uploaded'
+  | 'admin.training_trade.viewed';
 
 /**
  * Resolve the audit slug for an `/api/uploads` screenshot upload by kind.
@@ -155,6 +166,11 @@ export type AuditAction =
  */
 export function resolveUploadAuditAction(kind: UploadKind): AuditAction {
   if (isAnnotationUploadKind(kind)) return 'admin.annotation.media.uploaded';
+  // J-T3: distinct admin slug for a backtest correction upload — grouped
+  // with the annotation branch (both admin-annotation media) and kept ahead
+  // of the member training branch. The guards are disjoint, so ordering is
+  // for clarity; the §21.5 isolation is the slug value, not the order.
+  if (isTrainingAnnotationUploadKind(kind)) return 'admin.training_annotation.media.uploaded';
   if (isTrainingUploadKind(kind)) return 'training_trade.screenshot.uploaded';
   return 'trade.screenshot.uploaded';
 }

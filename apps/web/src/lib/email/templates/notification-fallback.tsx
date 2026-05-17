@@ -102,6 +102,13 @@ const META_BY_TYPE: Record<
     body: "Eliot a laissé une correction sur l'un de tes trades. Le détail t'attend dans ton journal — la correction sera marquée comme lue dès que tu ouvres le trade.",
     ctaLabel: 'Voir la correction →',
   },
+  training_annotation_received: {
+    title: 'Correction reçue (entraînement)',
+    preview: 'Eliot a laissé une correction sur l’un de tes backtests.',
+    eyebrow: 'CORRECTION · ENTRAÎNEMENT',
+    body: "Eliot a laissé une correction sur l'un de tes backtests. Le détail t'attend dans ton espace entraînement — la correction sera marquée comme lue dès que tu ouvres le backtest.",
+    ctaLabel: 'Voir la correction →',
+  },
   checkin_morning_reminder: {
     title: 'Check-in matin',
     preview: 'Trois minutes pour poser ton intention du jour.',

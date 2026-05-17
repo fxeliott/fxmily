@@ -27,6 +27,12 @@ const KEY_REGEX_ANNOTATION =
 // J-T2 — Mode Entraînement backtest screenshot. Capturing variant of the
 // J-T1 `TRAINING_KEY_PATTERN`; the userId segment is the uploading member.
 const KEY_REGEX_TRAINING = /^training\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
+// J-T3 — admin correction media. Capturing variant of the J-T1
+// `TRAINING_ANNOTATION_KEY_PATTERN`; the segment is the parent trainingTradeId
+// (mirror J4 `KEY_REGEX_ANNOTATION`), NOT a userId. Disjoint from
+// `KEY_REGEX_TRAINING` — `training_annotations/` never starts with `training/`.
+const KEY_REGEX_TRAINING_ANNOTATION =
+  /^training_annotations\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
 
 /**
  * Single-source-of-truth pattern for annotation keys, exported for the Zod
@@ -109,6 +115,25 @@ export function generateTrainingKey(userId: string, mime: AllowedImageMime): str
   return `training/${userId}/${id}.${MIME_TO_EXT[mime]}`;
 }
 
+/**
+ * J-T3 — admin correction media key generator. Carbon mirror of
+ * `generateAnnotationKey`: the path component is the parent
+ * `trainingTradeId` (ownership resolves via a single
+ * `db.trainingTrade.findUnique`), NOT the admin or member id. STATISTICAL
+ * ISOLATION (SPEC §21.5): the `training_annotations/` prefix never overlaps
+ * the real-edge `annotations/` / `trades/` surfaces.
+ */
+export function generateTrainingAnnotationKey(
+  trainingTradeId: string,
+  mime: AllowedImageMime,
+): string {
+  if (!CUID_REGEX.test(trainingTradeId)) {
+    throw new StorageError('trainingTradeId is not safe for storage key', 'invalid_key');
+  }
+  const id = nanoid(32);
+  return `training_annotations/${trainingTradeId}/${id}.${MIME_TO_EXT[mime]}`;
+}
+
 export interface ParsedTradeKey {
   kind: 'trade';
   userId: string;
@@ -130,7 +155,18 @@ export interface ParsedTrainingKey {
   ext: 'jpg' | 'png' | 'webp';
 }
 
-export type ParsedStorageKey = ParsedTradeKey | ParsedAnnotationKey | ParsedTrainingKey;
+export interface ParsedTrainingAnnotationKey {
+  kind: 'training_annotation';
+  trainingTradeId: string;
+  filename: string;
+  ext: 'jpg' | 'png' | 'webp';
+}
+
+export type ParsedStorageKey =
+  | ParsedTradeKey
+  | ParsedAnnotationKey
+  | ParsedTrainingKey
+  | ParsedTrainingAnnotationKey;
 
 export function parseTradeKey(key: string): ParsedTradeKey {
   const match = KEY_REGEX_TRADE.exec(key);
@@ -181,15 +217,37 @@ export function parseTrainingKey(key: string): ParsedTrainingKey {
 }
 
 /**
+ * J-T3 — parse an admin correction media key. Mirror of `parseAnnotationKey`
+ * for the `training_annotations/` prefix. Throws `StorageError('invalid_key')`
+ * on mismatch. The captured `trainingTradeId` is the path-owner used by the
+ * BOLA check (admin OR the member who owns the parent backtest).
+ */
+export function parseTrainingAnnotationKey(key: string): ParsedTrainingAnnotationKey {
+  const match = KEY_REGEX_TRAINING_ANNOTATION.exec(key);
+  if (!match) {
+    throw new StorageError(`malformed training annotation key: ${key.slice(0, 80)}`, 'invalid_key');
+  }
+  return {
+    kind: 'training_annotation',
+    trainingTradeId: match[1] as string,
+    filename: match[2] as string,
+    ext: match[3] as 'jpg' | 'png' | 'webp',
+  };
+}
+
+/**
  * Unified parser used by route handlers that accept any prefix. Returns a
  * discriminated union so the caller can dispatch on `parsed.kind`.
  */
 export function parseStorageKey(key: string): ParsedStorageKey {
   if (key.startsWith('trades/')) return parseTradeKey(key);
   if (key.startsWith('annotations/')) return parseAnnotationKey(key);
-  // `training/` is checked AFTER `trades/`/`annotations/`; the prefixes are
-  // disjoint so order is for readability only. `training_annotations/`
-  // (J-T3) is intentionally NOT dispatched here — no caller exists in J-T2.
+  // `training_annotations/` is checked BEFORE `training/` (more specific
+  // prefix first — defensive; the two are disjoint anyway since
+  // `'training_annotations/'.startsWith('training/')` is false: char 8 is
+  // `_`, not `/`). This ordering guarantees an admin correction key can
+  // never be routed to the member `training/` BOLA branch (§21.5).
+  if (key.startsWith('training_annotations/')) return parseTrainingAnnotationKey(key);
   if (key.startsWith('training/')) return parseTrainingKey(key);
   throw new StorageError(`unknown storage key prefix: ${key.slice(0, 80)}`, 'invalid_key');
 }

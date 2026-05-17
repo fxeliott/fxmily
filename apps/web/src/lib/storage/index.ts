@@ -69,17 +69,21 @@ export type {
   ParsedTradeKey,
   ParsedAnnotationKey,
   ParsedTrainingKey,
+  ParsedTrainingAnnotationKey,
 } from './keys';
 export {
   ANNOTATION_KEY_PATTERN,
   TRAINING_KEY_PATTERN,
+  TRAINING_ANNOTATION_KEY_PATTERN,
   generateAnnotationKey,
   generateTradeKey,
   generateTrainingKey,
+  generateTrainingAnnotationKey,
   parseAnnotationKey,
   parseStorageKey,
   parseTradeKey,
   parseTrainingKey,
+  parseTrainingAnnotationKey,
   sniffImageMime,
 } from './keys';
 export { keyBelongsTo, openLocalReadStream, trainingKeyBelongsTo } from './local';

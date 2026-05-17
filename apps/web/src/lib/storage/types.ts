@@ -42,10 +42,22 @@ export const ANNOTATION_UPLOAD_KINDS = ['annotation-image'] as const;
 export const TRAINING_UPLOAD_KINDS = ['training-entry'] as const;
 export type TrainingUploadKind = (typeof TRAINING_UPLOAD_KINDS)[number];
 
+/**
+ * J-T3 — admin correction media on a backtest. Lives under
+ * `training_annotations/{trainingTradeId}/…` (parent-owned, exactly like the
+ * J4 `annotation-image` kind: ownership resolves via one
+ * `db.trainingTrade.findUnique`). STATISTICAL ISOLATION (§21.5): a DISTINCT
+ * kind so the audit slug + storage prefix never collide with the real-edge
+ * `annotation-image` / `trade-*` surface.
+ */
+export const TRAINING_ANNOTATION_UPLOAD_KINDS = ['training-annotation-image'] as const;
+export type TrainingAnnotationUploadKind = (typeof TRAINING_ANNOTATION_UPLOAD_KINDS)[number];
+
 export const ALL_UPLOAD_KINDS = [
   ...TRADE_UPLOAD_KINDS,
   ...ANNOTATION_UPLOAD_KINDS,
   ...TRAINING_UPLOAD_KINDS,
+  ...TRAINING_ANNOTATION_UPLOAD_KINDS,
 ] as const;
 export type UploadKind = (typeof ALL_UPLOAD_KINDS)[number];
 
@@ -61,6 +73,12 @@ export function isAnnotationUploadKind(
 
 export function isTrainingUploadKind(kind: UploadKind): kind is TrainingUploadKind {
   return (TRAINING_UPLOAD_KINDS as readonly UploadKind[]).includes(kind);
+}
+
+export function isTrainingAnnotationUploadKind(
+  kind: UploadKind,
+): kind is TrainingAnnotationUploadKind {
+  return (TRAINING_ANNOTATION_UPLOAD_KINDS as readonly UploadKind[]).includes(kind);
 }
 
 export interface UploadInput {

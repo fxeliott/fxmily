@@ -1,0 +1,93 @@
+-- V1.2 — Mode Entraînement / Backtest: member notification for admin
+-- backtest corrections (SPEC §21, J-T3).
+--
+-- ADD-only enum migration (safe — no DROP, no rename, no NOT-NULL-on-populated,
+-- no backfill, no ALTER on a pre-existing/populated table, no index, no FK):
+--   1. ALTER TYPE "NotificationType" ADD VALUE 'training_annotation_received'.
+--
+-- The single statement below is byte-identical to the canonical
+-- `prisma migrate diff` output (established repo discipline — #108
+-- `20260517150000_v2_1_admin_notes` + #110 `20260517160000_v1_2_training_entities`
+-- were authored the same way; Prisma 7.8.0 emits bare `ADD VALUE` WITHOUT
+-- `IF NOT EXISTS` — the older J5/J9 hand-added `IF NOT EXISTS` is a legacy
+-- deviation NOT reproduced here, byte-equivalence to the diff wins).
+--
+-- STATISTICAL-ISOLATION INVARIANT (SPEC §21.5 — BLOCKING product rule):
+--   `training_annotation_received` is a DISTINCT enum value from
+--   `annotation_received`, deliberately added so a backtest correction push
+--   can NEVER conflate with a real-trade correction push at the notification
+--   layer. Same isolation rationale as the SEPARATE `TrainingOutcome` /
+--   `TrainingAnnotationMediaType` Postgres enums (#110): the real edge never
+--   shares a discriminator with training. This migration adds ONE enum value
+--   and touches ZERO other object — no table, no column, no index, no FK, no
+--   real-edge reference.
+--
+-- POSTGRESQL TRANSACTION SUBTLETY (verified against prior repo migrations
+-- #J5 `20260506200000` + #J9 `20260508180000`, which combined ADD VALUE with
+-- CREATE TABLE in one Prisma-wrapped transaction):
+--   On PostgreSQL 12+, `ALTER TYPE ... ADD VALUE` IS allowed inside a
+--   transaction block. The only hard rule is that the new value cannot be
+--   *used* (INSERT / cast / SELECT-with-cast) in the SAME transaction that
+--   adds it. This migration ONLY adds the value — it never references
+--   `training_annotation_received` — so it is fully transaction-safe and
+--   needs no out-of-transaction handling. Prisma's schema-engine runs the
+--   statement directly; the canonical diff emits no BEGIN/COMMIT (Prisma
+--   owns the wrapping). The runtime code that ENQUEUES this notification
+--   type (J-T3 services) lands in a later commit, never in this migration.
+--
+-- DANGEROUS-PATTERN VERDICT: SAFE. Purely additive enum value. No data loss,
+--   no rename, no backfill, no FK change, no NOT-NULL on populated column.
+--   `ALTER TYPE ADD VALUE` takes a brief lock on the enum TYPE only (not on
+--   `notification_queue` / `notification_preferences` rows); on the V1
+--   30-member prod DB this is sub-second (no rows are rewritten — enum
+--   values are catalog metadata, not stored-row migrations).
+--
+-- ROLLBACK — NON-REVERSIBLE in PostgreSQL (there is NO
+-- `ALTER TYPE ... DROP VALUE`). Documented manual procedure (do NOT automate;
+-- a naive `BEGIN; ... COMMIT;` block like #108/#110 is impossible here):
+--   1. Quiesce: stop the web container so no new rows can be enqueued with
+--      the new type.
+--   2. Purge any rows that used the value (only possible if J-T3 runtime
+--      shipped + ran):
+--        DELETE FROM "notification_queue"        WHERE "type" = 'training_annotation_received';
+--        DELETE FROM "notification_preferences"  WHERE "type" = 'training_annotation_received';
+--      DATA-LOSS if rolled back AFTER J-T3 dispatched: yes — only the
+--      affected `notification_queue` / `notification_preferences` rows of
+--      `type = 'training_annotation_received'` (transient push intents +
+--      per-member opt-out prefs for THIS category only; no member-authored
+--      content, no backtest data, no real-edge data). pg_dump those two
+--      tables BEFORE the DELETE if the rows must be preserved for re-apply.
+--   3. Rebuild the enum type to physically remove the value (manual, the
+--      only correct way — run in one transaction, web stopped):
+--        BEGIN;
+--        ALTER TYPE "NotificationType" RENAME TO "NotificationType_old";
+--        CREATE TYPE "NotificationType" AS ENUM (
+--          'annotation_received',
+--          'checkin_morning_reminder',
+--          'checkin_evening_reminder',
+--          'douglas_card_delivered',
+--          'weekly_report_ready'
+--        );
+--        ALTER TABLE "notification_queue"
+--          ALTER COLUMN "type" TYPE "NotificationType"
+--          USING ("type"::text::"NotificationType");
+--        ALTER TABLE "notification_preferences"
+--          ALTER COLUMN "type" TYPE "NotificationType"
+--          USING ("type"::text::"NotificationType");
+--        DROP TYPE "NotificationType_old";
+--        DELETE FROM "_prisma_migrations"
+--          WHERE migration_name = '20260517170000_v1_2_training_annotation_notification';
+--        COMMIT;
+--      (Step 3 fails fast if any surviving row still references the value —
+--      step 2 must complete first. To be transcribed into
+--      docs/runbook-hetzner-deploy.md §17 at close-out, mirroring the
+--      §12/§13/§14/§15/§16 separate-PR pattern.)
+-- Production-safe at 30-member scale: forward apply is a single sub-second
+-- catalog change; this migration accumulates onto the still-pending prod
+-- carry-over (#108 `20260517150000_v2_1_admin_notes` + #110
+-- `20260517160000_v1_2_training_entities`) — all three apply in the SAME
+-- `prisma:migrate:deploy` maintenance window, in timestamp order.
+
+-- AlterEnum
+ALTER TYPE "NotificationType" ADD VALUE 'training_annotation_received';
+

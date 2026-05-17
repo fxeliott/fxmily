@@ -122,7 +122,19 @@ export type AuditAction =
   | 'weekly_review.submitted'
   | 'weekly_review.crisis_detected'
   | 'reflection.submitted'
-  | 'reflection.crisis_detected';
+  | 'reflection.crisis_detected'
+  // V1.2 — Mode Entraînement / Backtest (SPEC §21). STATISTICAL ISOLATION:
+  // these slugs trace the EFFORT only. `training_trade.created` carries
+  // `trainingTradeId` in metadata (PII-free — NEVER the P&L / `resultR`) so
+  // the J-T4 engagement + inactivity-trigger wiring can count practice
+  // volume/recency without a backtest result ever touching the real edge
+  // (§21.5 invariant). `admin.training_annotation.*` mirror the J4
+  // `admin.annotation.*` admin-scoped pattern. Pre-declared even though the
+  // Server Actions land in J-T2/J-T3 — anti-regression, same canon as the
+  // V2.0 `habit_log.*` pre-declaration (slugs ship with the model migration).
+  | 'training_trade.created'
+  | 'admin.training_annotation.created'
+  | 'admin.training_annotation.deleted';
 
 export interface LogAuditParams {
   action: AuditAction;

@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   caffeineValueSchema,
+  HABIT_BACKFILL_WINDOW_DAYS,
+  HABIT_FORWARD_WINDOW_DAYS,
   habitKindSchema,
   habitLogInputSchema,
+  isHabitDateWithinLocalWindow,
   meditationValueSchema,
   nutritionValueSchema,
   sleepValueSchema,
@@ -221,5 +224,56 @@ describe('habitLogInputSchema (discriminated union)', () => {
         value: { type: 'cardio', durationMin: 30 } as never,
       }),
     ).toThrow();
+  });
+});
+
+describe('isHabitDateWithinLocalWindow (V1.9 R2 H1 — timezone-authoritative window)', () => {
+  // The Zod `dateField` refine anchors the [-14d, +1d] window to UTC
+  // midnight, so a member off-UTC gets up to ±13h of slop on the bounds.
+  // This helper re-derives the member's CIVIL today via `localDateOf` and
+  // compares ISO-date strings (lexicographic == chronological), so the
+  // bound is exact in the member's timezone. The Server Action calls it
+  // with `session.user.timezone || 'Europe/Paris'`.
+
+  // 2026-05-16T23:30Z : UTC civil day = 2026-05-16, but Paris (CEST = +2)
+  // civil day = 2026-05-17. UTC window  = [2026-05-02, 2026-05-17].
+  //                          Paris window = [2026-05-03, 2026-05-18].
+  const now = new Date('2026-05-16T23:30:00Z');
+
+  it('closes the backfill drift: a date inside the UTC window but OUTSIDE the Paris civil window is rejected', () => {
+    // 2026-05-02 passes the UTC-anchored `dateInWindow` (>= 2026-05-02)
+    // but is the 15th day back in Paris civil time → must be rejected.
+    expect(isHabitDateWithinLocalWindow('2026-05-02', now, 'Europe/Paris')).toBe(false);
+  });
+
+  it('corrects the forward drift: a date the UTC window wrongly rejects but valid in Paris civil is accepted', () => {
+    // 2026-05-18 fails the UTC `dateInWindow` (> 2026-05-17) yet is the
+    // member's real tomorrow in Paris → must be accepted (accurate, not
+    // merely stricter).
+    expect(isHabitDateWithinLocalWindow('2026-05-18', now, 'Europe/Paris')).toBe(true);
+  });
+
+  it('accepts the member civil today and both inclusive bounds (Paris)', () => {
+    expect(isHabitDateWithinLocalWindow('2026-05-17', now, 'Europe/Paris')).toBe(true); // today
+    expect(isHabitDateWithinLocalWindow('2026-05-03', now, 'Europe/Paris')).toBe(true); // today-14
+    expect(isHabitDateWithinLocalWindow('2026-05-18', now, 'Europe/Paris')).toBe(true); // today+1
+  });
+
+  it('rejects just outside both Paris bounds', () => {
+    expect(isHabitDateWithinLocalWindow('2026-05-02', now, 'Europe/Paris')).toBe(false); // today-15
+    expect(isHabitDateWithinLocalWindow('2026-05-19', now, 'Europe/Paris')).toBe(false); // today+2
+  });
+
+  it('uses the window constants (not magic numbers)', () => {
+    expect(HABIT_BACKFILL_WINDOW_DAYS).toBe(14);
+    expect(HABIT_FORWARD_WINDOW_DAYS).toBe(1);
+  });
+
+  it('degrades deterministically (no throw) on an unknown/empty timezone — localDateOf falls back to UTC', () => {
+    // Bad IANA string → localDateOf treats as UTC. now UTC day = 2026-05-16
+    // → window [2026-05-02, 2026-05-17] computed off UTC.
+    expect(isHabitDateWithinLocalWindow('2026-05-16', now, 'Not/AZone')).toBe(true);
+    expect(isHabitDateWithinLocalWindow('2026-05-18', now, '')).toBe(false); // > UTC max 2026-05-17
+    expect(isHabitDateWithinLocalWindow('2026-05-17', now, '')).toBe(true); // UTC today+1 bound
   });
 });

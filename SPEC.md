@@ -989,4 +989,84 @@ J0 → J10 livrés. Branche `claude/j10-prod-deploy` HEAD `0588d12` après Phase
 
 ---
 
-**Fin du SPEC v1.1**
+## 21. Mode Entraînement / Backtest TradingView (spec V1.2 — 2026-05-17)
+
+> Source : interview `/spec` 2026-05-17 (8 questions, 2 rounds, autonomie max). HORS SPEC v1.0/v1.1 (gap-analysis 2026-05-17 : 0 hit applicatif backtest/training). Cette section fait foi pour le jalon. **Impl = session dédiée post-`/clear`** (cette session = design only, règle 1 session = 1 jalon §18.4).
+
+### 21.1 Vision en 1 phrase
+
+Un espace où chaque membre journalise ses backtests TradingView (analyses + captures) **totalement isolé de son trading réel**, où Eliot dépose des corrections expertes comme sur le réel, et où l'**activité de pratique** (le volume/la régularité — jamais les résultats) nourrit le signal d'engagement/coaching — sans jamais polluer l'edge réel ni juger la qualité des analyses (système Lhedge inconnu de l'assistant).
+
+### 21.2 Décisions d'architecture (choix Eliot, avec rationale)
+
+| Décision | Choix validé | Rationale |
+|---|---|---|
+| Discriminant réel/training | **Entité séparée `TrainingTrade`** (PAS de flag `Trade.mode`) | Choix Eliot explicite (override reco assistant) — isolation béton : impossible que le backtest pollue le réel par construction. Trade-off accepté : surface de code training dédiée. Migration maîtrisée via `prisma-migration-runner`. |
+| Edge réel | **Training EXCLU** de track-record / score 4-dim / expectancy / corrélation Habit×Trade réels ; vues training dédiées séparées | Intégrité statistique = thèse produit (ne jamais mentir avec les chiffres, posture Mark Douglas). L'edge réel ne reflète que du risque réel. |
+| Surface UI | **Section `/training/*` dédiée** (landing + `/training/new` wizard cloné, identité visuelle "MODE ENTRAÎNEMENT" non-confondable) | Ne jamais flouter backtest/live = point de discipline Mark Douglas ; frontière URL claire (membre + admin) ; cohérent avec REFLECT (routes dédiées). DS-v2 (PAS `.v18-theme`). |
+| Corrections admin | **Table `TrainingAnnotation` séparée**, réutilisant EXACTEMENT le pattern/UX/flow J4 (commentaire + capture annotée + notif "correction reçue") | Cohérence isolation bout-en-bout + schéma propre, zéro FK conditionnelle. Le geste de correction est identique pour Eliot. |
+| Champs de saisie | **Jeu allégé spécifique backtest** (paire, capture analyse à l'entrée, R:R prévu, résultat, respect système/plan auto-check, leçon tirée) — SANS émotions/sommeil/confiance du live | Émotion de backtest ≠ émotion en risque réel (Mark Douglas) ; capturer des signaux psy de pratique fausserait la lecture réelle. Focus = exécution du process/règles. |
+| Lien TradingView | **Capture d'écran (V1.2)** ; URL/replay interactif → V2 | Pipeline upload éprouvé (validation magic-byte, R2-ready, offline PWA), zéro dépendance tierce, correction directe sur l'image. |
+| Coaching / engagement | **Hybride (raffinement Eliot)** : l'*activité* training (volume/régularité/récence — **JAMAIS** le P&L backtest) alimente (a) la dimension `engagement`, (b) un nouveau trigger Mark Douglas `no_training_activity_in_window` configurable en admin (inactivité → alerte), (c) une ligne "volume de pratique" du rapport hebdo IA (count/récence only) | Verbatim Eliot : « plus de trade en training = le membre veut évoluer et pratique beaucoup → à prendre en compte ; inversement s'il fait rien → à alerter ». Le moteur ne commente JAMAIS la qualité des analyses (= correction admin Eliot). |
+
+### 21.3 Modèle de données (cible — à raffiner en impl via `prisma-migration-runner`)
+
+- **`TrainingTrade`** (`training_trades`) : `userId`→User cascade, `pair`, `entryScreenshotKey`, `plannedRR`, `outcome`/`resultR`, `systemRespected` (tri-state), `lessonLearned` (Text, canon `safeFreeText` + reject bidi/zero-width), `enteredAt`, `createdAt`, `updatedAt`. Index `(userId, enteredAt DESC)`. Aucune réutilisation de `Trade`.
+- **`TrainingAnnotation`** (`training_annotations`) : mirror EXACT de `TradeAnnotation` (J4) mais `trainingTradeId`→TrainingTrade cascade + `adminId`→User cascade ; `comment` (Text canon), `mediaKey?`/`mediaType?`, `seenByMemberAt?`, timestamps. Index `(trainingTradeId, createdAt DESC)`, `(trainingTradeId, seenByMemberAt)`, `(adminId, createdAt DESC)`.
+- Storage prefix dédié `training/{trainingTradeId}/{nanoid32}.{jpg|png|webp}` (mirror convention keys J4).
+- **Aucune modification** des modèles réels (Trade / BehavioralScore / corrélation) — isolation par construction.
+
+### 21.4 Comportement attendu
+
+- **Membre** : `/training` (track-record training dédié + liste) → `/training/new` (wizard allégé : paire → capture → R:R → résultat → respect système → leçon) → submit → trade training créé (isolé) → liste + stats training.
+- **Admin** : `/admin/members/[id]` onglet/vue training → liste trades training du membre → annoter (flux J4 carbone sur `TrainingAnnotation`) → membre reçoit notif "correction reçue (entraînement)", statut "vu" tracké.
+- **Engagement** : activité training (count/récence) → dimension `engagement` + trigger inactivité (config JSON admin §7.6) + ligne rapport hebdo (volume pratique, jamais P&L).
+- **Edge cases** : 0 trade training → état vide pédagogique (jamais "score 0" mensonger) ; un trade training n'apparaît JAMAIS dans `/journal` réel, dashboard réel, scoring réel, expectancy/corrélation réels (filtres explicites + **tests anti-fuite obligatoires**) ; suppression membre = cascade training (RGPD).
+- **Erreurs** : upload invalide → garde-fous J2 (magic-byte, taille) ; corrections training = admin-only (auth + role, mirror J4).
+
+### 21.5 Critères d'acceptation (testables)
+
+- [ ] Migrations `TrainingTrade` + `TrainingAnnotation` additives, `prisma-migration-runner` SAFE, rollback documenté (runbook).
+- [ ] **Test anti-fuite** : un trade training n'apparaît dans AUCUNE surface réelle (assertions explicites journal/dashboard/scoring/expectancy/corrélation).
+- [ ] Membre crée un backtest (wizard allégé), le voit dans `/training` + stats training dédiées.
+- [ ] Eliot annote un trade training → membre reçoit notif "correction reçue (entraînement)" → statut "vu".
+- [ ] Activité training alimente engagement + trigger inactivité configurable admin + ligne rapport hebdo (count only, 0 P&L).
+- [ ] Posture : aucune surface ne commente la qualité des analyses Lhedge ; zéro conseil trade.
+- [ ] Gate complet vert + audit-driven hardening (security-auditor frontière isolation + a11y wizard + code-reviewer + prisma-migration-runner).
+
+### 21.6 Hors scope V1.2 (explicite — anti scope-creep)
+
+- URL/replay TradingView interactif → V2 (capture suffit V1.2).
+- Débrief/coaching d'entraînement DÉDIÉ autonome → V2 (V1.2 = training nourrit l'engagement réel + corrections admin).
+- Débrief mensuel, QCM/tests athlète, suivi-formation/cursus = features de vision distinctes → cadrage `/spec` ultérieur dédié (gap-analysis 2026-05-17).
+- Analytics training avancées (corrélation training, equity curve training détaillée) au-delà d'un track-record training basique → V2.
+- Vidéo de correction sur training → image-only V1.2 (cf. J4 → J4.5 pour la vidéo).
+
+### 21.7 Invariants (NON négociables)
+
+- Posture Mark Douglas / zéro conseil sur les analyses Lhedge (SPEC §2, verrouillé).
+- **Intégrité statistique** : l'edge réel ne reçoit JAMAIS de résultat backtest ; seul l'effort (activité count/récence) touche engagement/coaching.
+- SPEC.md = source de vérité (cette §21 fait foi).
+- Stack : Next.js 16 + React 19 TS strict + Prisma 7 + Auth.js v5 + DS-v2 (PAS `.v18-theme` = REFLECT only) + mobile-first PWA dark-only.
+- Pattern Fxmily : backend-first, TDD logique critique, migration via subagent `prisma-migration-runner`, audit-driven hardening (security-auditor + code-reviewer + accessibility-reviewer + prisma-migration-runner), gate exit-codes-explicites, 1 PR atomic = 1 jalon, checkpoint + supersede.
+- 1 session = 1 jalon : impl en session DÉDIÉE post-`/clear`.
+
+### 21.8 Prochaine étape (recommandée)
+
+1. Relire/ajuster §21 (10 min) — corriger ce qui ne correspond pas à ta vision.
+2. `/clear` → nouvelle session dédiée.
+3. Dire : « Implémente SPEC §21 (Mode Entraînement) — backend-first ».
+4. Découpage suggéré en sous-jalons atomiques (gros jalon schema + ~12-18 fichiers) : **J-T1** data + migrations + service `TrainingTrade` + tests · **J-T2** wizard membre `/training/*` + UI · **J-T3** corrections admin `TrainingAnnotation` (mirror J4) · **J-T4** wiring engagement + trigger inactivité + ligne rapport hebdo + tests anti-fuite. Chaque sous-jalon = 1 PR atomic + audit-driven hardening.
+
+Pourquoi nouvelle session : le contexte d'interview pollue l'implémentation ; une session vierge avec §21 comme référence donne une qualité supérieure (pattern Anthropic interview-first).
+
+---
+
+## 22. Changelog v1.1 → v1.2 (2026-05-17)
+
+- **§21 ajoutée** : Mode Entraînement / Backtest TradingView (interview `/spec` 2026-05-17, 8 questions, 2 rounds). Décisions clés : entité `TrainingTrade` **séparée** (isolation béton, choix Eliot — override reco), **exclu** de l'edge réel, section `/training/*` dédiée, `TrainingAnnotation` mirror J4, champs **allégés** backtest, capture d'écran V1.2, activité→engagement+alerte inactivité (**jamais** le P&L backtest). Impl = jalon dédié multi-PR post-`/clear`.
+- Contexte : suit le marathon V1.x→V2.1 (jalon #2 "Notes admin privées" SPEC §7.7 livré PR #108 `26f15d2` 2026-05-17). Mode Entraînement = la prochaine grande étape produit (différenciateur formation), nécessitait amendement SPEC avant tout code (gap-analysis 2026-05-17).
+
+---
+
+**Fin du SPEC v1.2**

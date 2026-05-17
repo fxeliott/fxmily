@@ -108,6 +108,12 @@ export type AuditAction =
   // process where audit slugs ship with the model migration.
   | 'habit_log.upserted'
   | 'habit_log.deleted'
+  // V2.1 — Admin private notes per member (SPEC §7.7). The member NEVER
+  // sees these. `*.created`/`*.deleted` carry `noteId` + `memberId` in
+  // metadata (PII-free — never the body text). Mirrors the J4
+  // `admin.annotation.*` admin-scoped pattern.
+  | 'admin.note.created'
+  | 'admin.note.deleted'
   // V1.8 — REFLECT module (member-facing reflection + CBT Ellis ABCD).
   // `*.submitted` rows carry `crisisLevel` + `injectionSuspected` in metadata
   // so a single row captures the full audit picture for a submission.

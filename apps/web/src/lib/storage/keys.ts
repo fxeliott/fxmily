@@ -34,6 +34,23 @@ const KEY_REGEX_ANNOTATION =
 export const ANNOTATION_KEY_PATTERN =
   /^annotations\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/;
 
+/**
+ * Single-source-of-truth patterns for V1.2 Mode-Entraînement keys (SPEC §21),
+ * exported for the Zod schemas in `lib/schemas/training-trade.ts` +
+ * `lib/schemas/training-annotation.ts`. Mirror of `ANNOTATION_KEY_PATTERN`
+ * with `training` / `training_annotations` prefixes.
+ *
+ * J-T1 (data layer) only needs the validation pattern. The key generators,
+ * parsers and the `parseStorageKey` discriminant for these prefixes land in
+ * J-T2 (when the `/api/uploads` route + the `/training/new` wizard consume
+ * them) — adding them now would be dead code with no caller.
+ */
+export const TRAINING_KEY_PATTERN =
+  /^training\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/;
+
+export const TRAINING_ANNOTATION_KEY_PATTERN =
+  /^training_annotations\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/;
+
 const MIME_TO_EXT: Record<AllowedImageMime, 'jpg' | 'png' | 'webp'> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',

@@ -48,7 +48,13 @@ export function selectStorage(): StorageAdapter {
   return cached;
 }
 
-export type { StorageAdapter, ScreenshotKind, UploadInput, UploadKind } from './types';
+export type {
+  StorageAdapter,
+  ScreenshotKind,
+  TrainingUploadKind,
+  UploadInput,
+  UploadKind,
+} from './types';
 export {
   ALLOWED_IMAGE_MIME_TYPES,
   ALL_UPLOAD_KINDS,
@@ -56,15 +62,24 @@ export {
   StorageError,
   isAnnotationUploadKind,
   isTradeUploadKind,
+  isTrainingUploadKind,
 } from './types';
-export type { ParsedStorageKey, ParsedTradeKey, ParsedAnnotationKey } from './keys';
+export type {
+  ParsedStorageKey,
+  ParsedTradeKey,
+  ParsedAnnotationKey,
+  ParsedTrainingKey,
+} from './keys';
 export {
   ANNOTATION_KEY_PATTERN,
+  TRAINING_KEY_PATTERN,
   generateAnnotationKey,
   generateTradeKey,
+  generateTrainingKey,
   parseAnnotationKey,
   parseStorageKey,
   parseTradeKey,
+  parseTrainingKey,
   sniffImageMime,
 } from './keys';
-export { keyBelongsTo, openLocalReadStream } from './local';
+export { keyBelongsTo, openLocalReadStream, trainingKeyBelongsTo } from './local';

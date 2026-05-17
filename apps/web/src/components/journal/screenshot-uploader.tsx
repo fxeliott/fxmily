@@ -5,12 +5,17 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { Spinner } from '@/components/spinner';
 import { ALLOWED_IMAGE_MIME_TYPES, MAX_SCREENSHOT_BYTES } from '@/lib/storage/types';
-import type { ScreenshotKind } from '@/lib/storage/types';
+import type { ScreenshotKind, TrainingUploadKind } from '@/lib/storage/types';
 import { cn } from '@/lib/utils';
 
 interface ScreenshotUploaderProps {
-  /** Storage kind — drives audit metadata and future routing. */
-  kind: ScreenshotKind;
+  /**
+   * Storage kind — drives audit metadata and storage prefix. J-T2: the
+   * shared uploader also serves the Mode-Entraînement backtest capture
+   * (`training-entry`); the component is presentation-only so widening the
+   * union is enough (the POST just forwards `kind`).
+   */
+  kind: ScreenshotKind | TrainingUploadKind;
   /** Form field name — the resolved key is mirrored into a hidden input. */
   name: string;
   /** Pre-existing key (e.g. when editing a trade). */
@@ -253,7 +258,13 @@ export function ScreenshotUploader({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={state.readUrl ?? ''}
-              alt={kind === 'trade-entry' ? 'Capture avant entrée' : 'Capture après sortie'}
+              alt={
+                kind === 'training-entry'
+                  ? "Capture de l'analyse du backtest"
+                  : kind === 'trade-entry'
+                    ? 'Capture avant entrée'
+                    : 'Capture après sortie'
+              }
               loading="lazy"
               className="rounded-card aspect-[16/9] max-h-44 w-auto border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
             />

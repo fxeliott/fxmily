@@ -2,16 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ANNOTATION_KEY_PATTERN,
+  TRAINING_KEY_PATTERN,
   extensionForMime,
   generateAnnotationKey,
   generateTradeKey,
+  generateTrainingKey,
   isAllowedMime,
   parseAnnotationKey,
   parseStorageKey,
   parseTradeKey,
+  parseTrainingKey,
   sniffImageMime,
 } from './keys';
-import { keyBelongsTo } from './local';
+import { keyBelongsTo, trainingKeyBelongsTo } from './local';
 
 describe('isAllowedMime', () => {
   it.each(['image/jpeg', 'image/png', 'image/webp'])('accepts %s', (mime) => {
@@ -139,6 +142,14 @@ describe('parseStorageKey (J4)', () => {
     }
   });
 
+  it('discriminates a training key (J-T2)', () => {
+    const parsed = parseStorageKey('training/clx0abc123/cccccccccccccccccccccccccccccccc.webp');
+    expect(parsed.kind).toBe('training');
+    if (parsed.kind === 'training') {
+      expect(parsed.userId).toBe('clx0abc123');
+    }
+  });
+
   it('rejects an unknown prefix', () => {
     expect(() => parseStorageKey('uploads/clx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg')).toThrow();
   });
@@ -185,6 +196,118 @@ describe('keyBelongsTo (J4 — guards against annotation key reuse)', () => {
 
   it('returns false on malformed keys', () => {
     expect(keyBelongsTo('not-a-key', 'clx0abc123')).toBe(false);
+  });
+});
+
+describe('generateTrainingKey (J-T2 Mode Entraînement)', () => {
+  it('produces a key under the training/ prefix matching TRAINING_KEY_PATTERN', () => {
+    const key = generateTrainingKey('clx0abc123', 'image/webp');
+    expect(key).toMatch(/^training\/clx0abc123\/[a-zA-Z0-9_-]{32}\.webp$/);
+    expect(TRAINING_KEY_PATTERN.test(key)).toBe(true);
+  });
+
+  it('produces unique keys across calls', () => {
+    const a = generateTrainingKey('clx0abc123', 'image/png');
+    const b = generateTrainingKey('clx0abc123', 'image/png');
+    expect(a).not.toBe(b);
+  });
+
+  it('uses the member userId as the path-owner segment (mirror trade, NOT annotation)', () => {
+    // The backtest row does not exist yet at upload time — ownership is the
+    // uploading member, exactly like J2 trade-screenshot `trades/{userId}/…`.
+    const key = generateTrainingKey('clx0member9', 'image/jpeg');
+    expect(parseTrainingKey(key).userId).toBe('clx0member9');
+  });
+
+  it('throws on a non-alnum userId (defense against schema drift)', () => {
+    expect(() => generateTrainingKey('clx0abc..', 'image/jpeg')).toThrow();
+    expect(() => generateTrainingKey('CLX0ABC', 'image/jpeg')).toThrow();
+  });
+});
+
+describe('parseTrainingKey (J-T2 Mode Entraînement)', () => {
+  it('extracts userId, filename, ext from a valid training key', () => {
+    const key = 'training/clx0abc123/cccccccccccccccccccccccccccccccc.webp';
+    expect(parseTrainingKey(key)).toEqual({
+      kind: 'training',
+      userId: 'clx0abc123',
+      filename: 'cccccccccccccccccccccccccccccccc',
+      ext: 'webp',
+    });
+  });
+
+  it.each([
+    'training/clx/short.jpg', // filename too short (< 12)
+    'training/clx/aaaaaaaaaaaa.bmp', // wrong extension
+    'training/CLX/aaaaaaaaaaaa.jpg', // uppercase userId
+    'training/clx/aaaaaaaaaaaa.JPG', // uppercase extension
+    'training/clx//aaaaaaaaaaaa.jpg', // empty userId fragment
+    'training/clx/aaaaaaaaaaaa.jpg/foo', // extra segment
+    '../training/clx/aaaaaaaaaaaa.jpg', // relative escape
+    'training/clx/..bbbbbbbbbb.jpg', // dotdot in filename
+    '',
+    'random',
+    'trades/clx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg', // wrong prefix
+    'training_annotations/clx/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg', // J-T3 prefix, not J-T2
+  ])('rejects malformed training key: %s', (key) => {
+    expect(() => parseTrainingKey(key)).toThrow();
+  });
+});
+
+describe('TRAINING_KEY_PATTERN (J-T1 SSOT regex, dispatched J-T2)', () => {
+  it('matches a canonical training key', () => {
+    expect(
+      TRAINING_KEY_PATTERN.test('training/clx0abc123/cccccccccccccccccccccccccccccccc.png'),
+    ).toBe(true);
+  });
+
+  it('rejects a trade-prefixed key', () => {
+    expect(
+      TRAINING_KEY_PATTERN.test('trades/clx0abc123/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg'),
+    ).toBe(false);
+  });
+
+  it('rejects the J-T3 training_annotations/ prefix (separate SSOT)', () => {
+    expect(
+      TRAINING_KEY_PATTERN.test('training_annotations/clx0t/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg'),
+    ).toBe(false);
+  });
+
+  it('rejects a path traversal attempt', () => {
+    expect(TRAINING_KEY_PATTERN.test('training/../escape/aaaaaaaaaaaa.jpg')).toBe(false);
+  });
+});
+
+describe('trainingKeyBelongsTo (J-T2 — BOLA guard, mirror keyBelongsTo)', () => {
+  it('returns true for a training key whose userId matches the session', () => {
+    expect(
+      trainingKeyBelongsTo(
+        'training/clx0abc123/cccccccccccccccccccccccccccccccc.jpg',
+        'clx0abc123',
+      ),
+    ).toBe(true);
+  });
+
+  it('returns false when the userId segment does not match the session', () => {
+    expect(
+      trainingKeyBelongsTo(
+        'training/clx0abc123/cccccccccccccccccccccccccccccccc.jpg',
+        'clx0other99',
+      ),
+    ).toBe(false);
+  });
+
+  it('returns false for a trade key — never cross-accept another prefix', () => {
+    // Guards against a future "improvement" that would let a member attach a
+    // trades/{userId}/… screenshot to a backtest (or vice-versa). The
+    // training BOLA check must reject every non-training prefix outright.
+    expect(
+      trainingKeyBelongsTo('trades/clx0abc123/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg', 'clx0abc123'),
+    ).toBe(false);
+  });
+
+  it('returns false on malformed keys', () => {
+    expect(trainingKeyBelongsTo('not-a-key', 'clx0abc123')).toBe(false);
   });
 });
 

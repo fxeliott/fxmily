@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hashIp } from './audit';
+import { hashIp, resolveUploadAuditAction } from './audit';
 
 describe('hashIp', () => {
   it('returns a 64-character lowercase hex string (SHA-256 of salted input)', () => {
@@ -25,5 +25,27 @@ describe('hashIp', () => {
     const rawSha = createHash('sha256').update('203.0.113.42', 'utf8').digest('hex');
     const salted = hashIp('203.0.113.42');
     expect(salted).not.toBe(rawSha);
+  });
+});
+
+describe('resolveUploadAuditAction (J-T2 — §21.5 statistical-isolation guard)', () => {
+  it('maps trade screenshot kinds to the real-edge slug', () => {
+    expect(resolveUploadAuditAction('trade-entry')).toBe('trade.screenshot.uploaded');
+    expect(resolveUploadAuditAction('trade-exit')).toBe('trade.screenshot.uploaded');
+  });
+
+  it('maps the admin annotation kind to the admin slug', () => {
+    expect(resolveUploadAuditAction('annotation-image')).toBe('admin.annotation.media.uploaded');
+  });
+
+  it('🚨 maps a backtest upload to its OWN slug — NEVER trade.screenshot.uploaded', () => {
+    // The blocking §21.5 invariant: a Mode-Entraînement upload must not
+    // inflate the real-edge screenshot-upload signal. This is the single
+    // most regression-exposed point of statistical isolation (the upload
+    // route has no test of its own) — a silent collapse of the mapping
+    // would breach the invariant with nothing else catching it.
+    const slug = resolveUploadAuditAction('training-entry');
+    expect(slug).toBe('training_trade.screenshot.uploaded');
+    expect(slug).not.toBe('trade.screenshot.uploaded');
   });
 });

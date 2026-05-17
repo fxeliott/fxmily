@@ -32,7 +32,21 @@ export const TRADE_UPLOAD_KINDS = ['trade-entry', 'trade-exit'] as const;
  */
 export const ANNOTATION_UPLOAD_KINDS = ['annotation-image'] as const;
 
-export const ALL_UPLOAD_KINDS = [...TRADE_UPLOAD_KINDS, ...ANNOTATION_UPLOAD_KINDS] as const;
+/**
+ * V1.2 Mode Entraînement (SPEC §21) — backtest analysis screenshot. Lives
+ * under `training/{userId}/…` (member-owned, exactly like a trade screenshot:
+ * the backtest row doesn't exist yet at upload time). STATISTICAL ISOLATION
+ * (§21.5): a distinct kind so the audit slug + storage prefix never collide
+ * with the real-edge `trade-*` surface.
+ */
+export const TRAINING_UPLOAD_KINDS = ['training-entry'] as const;
+export type TrainingUploadKind = (typeof TRAINING_UPLOAD_KINDS)[number];
+
+export const ALL_UPLOAD_KINDS = [
+  ...TRADE_UPLOAD_KINDS,
+  ...ANNOTATION_UPLOAD_KINDS,
+  ...TRAINING_UPLOAD_KINDS,
+] as const;
 export type UploadKind = (typeof ALL_UPLOAD_KINDS)[number];
 
 export function isTradeUploadKind(kind: UploadKind): kind is ScreenshotKind {
@@ -43,6 +57,10 @@ export function isAnnotationUploadKind(
   kind: UploadKind,
 ): kind is (typeof ANNOTATION_UPLOAD_KINDS)[number] {
   return (ANNOTATION_UPLOAD_KINDS as readonly UploadKind[]).includes(kind);
+}
+
+export function isTrainingUploadKind(kind: UploadKind): kind is TrainingUploadKind {
+  return (TRAINING_UPLOAD_KINDS as readonly UploadKind[]).includes(kind);
 }
 
 export interface UploadInput {

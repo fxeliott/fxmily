@@ -24,6 +24,9 @@ import { ALLOWED_IMAGE_MIME_TYPES, type AllowedImageMime, StorageError } from '.
 const KEY_REGEX_TRADE = /^trades\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
 const KEY_REGEX_ANNOTATION =
   /^annotations\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
+// J-T2 — Mode Entraînement backtest screenshot. Capturing variant of the
+// J-T1 `TRAINING_KEY_PATTERN`; the userId segment is the uploading member.
+const KEY_REGEX_TRAINING = /^training\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
 
 /**
  * Single-source-of-truth pattern for annotation keys, exported for the Zod
@@ -91,6 +94,21 @@ export function generateAnnotationKey(tradeId: string, mime: AllowedImageMime): 
   return `annotations/${tradeId}/${id}.${MIME_TO_EXT[mime]}`;
 }
 
+/**
+ * J-T2 — Mode Entraînement backtest screenshot key generator. Carbon mirror
+ * of `generateTradeKey`: the path component is the uploading member's id
+ * (the backtest row doesn't exist yet at upload time). STATISTICAL ISOLATION
+ * (SPEC §21.5): the `training/` prefix never overlaps the real-edge
+ * `trades/` / `annotations/` surfaces.
+ */
+export function generateTrainingKey(userId: string, mime: AllowedImageMime): string {
+  if (!CUID_REGEX.test(userId)) {
+    throw new StorageError('userId is not safe for storage key', 'invalid_key');
+  }
+  const id = nanoid(32);
+  return `training/${userId}/${id}.${MIME_TO_EXT[mime]}`;
+}
+
 export interface ParsedTradeKey {
   kind: 'trade';
   userId: string;
@@ -105,7 +123,14 @@ export interface ParsedAnnotationKey {
   ext: 'jpg' | 'png' | 'webp';
 }
 
-export type ParsedStorageKey = ParsedTradeKey | ParsedAnnotationKey;
+export interface ParsedTrainingKey {
+  kind: 'training';
+  userId: string;
+  filename: string;
+  ext: 'jpg' | 'png' | 'webp';
+}
+
+export type ParsedStorageKey = ParsedTradeKey | ParsedAnnotationKey | ParsedTrainingKey;
 
 export function parseTradeKey(key: string): ParsedTradeKey {
   const match = KEY_REGEX_TRADE.exec(key);
@@ -138,12 +163,34 @@ export function parseAnnotationKey(key: string): ParsedAnnotationKey {
 }
 
 /**
- * Unified parser used by route handlers that accept either prefix. Returns a
+ * J-T2 — parse a Mode-Entraînement backtest key. Mirror of `parseTradeKey`
+ * for the `training/` prefix. Throws `StorageError('invalid_key')` on
+ * mismatch. The captured `userId` is the path-owner used by the BOLA check.
+ */
+export function parseTrainingKey(key: string): ParsedTrainingKey {
+  const match = KEY_REGEX_TRAINING.exec(key);
+  if (!match) {
+    throw new StorageError(`malformed training key: ${key.slice(0, 80)}`, 'invalid_key');
+  }
+  return {
+    kind: 'training',
+    userId: match[1] as string,
+    filename: match[2] as string,
+    ext: match[3] as 'jpg' | 'png' | 'webp',
+  };
+}
+
+/**
+ * Unified parser used by route handlers that accept any prefix. Returns a
  * discriminated union so the caller can dispatch on `parsed.kind`.
  */
 export function parseStorageKey(key: string): ParsedStorageKey {
   if (key.startsWith('trades/')) return parseTradeKey(key);
   if (key.startsWith('annotations/')) return parseAnnotationKey(key);
+  // `training/` is checked AFTER `trades/`/`annotations/`; the prefixes are
+  // disjoint so order is for readability only. `training_annotations/`
+  // (J-T3) is intentionally NOT dispatched here — no caller exists in J-T2.
+  if (key.startsWith('training/')) return parseTrainingKey(key);
   throw new StorageError(`unknown storage key prefix: ${key.slice(0, 80)}`, 'invalid_key');
 }
 

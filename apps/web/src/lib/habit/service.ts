@@ -90,6 +90,14 @@ export async function upsertHabitLog(
   // Server Action layer (refactor, internal cron, test helper) can pass an
   // unvalidated object cast to `HabitLogInput`. Re-parsing here costs <1ms
   // and pins the shape against type-cast leaks across the boundary.
+  //
+  // NOTE (V1.9 R2 H1) — this re-parse does NOT re-check the timezone-aware
+  // backfill window: that bound is authoritative only with a session, so
+  // it lives in `submitHabitLogAction` via
+  // `isHabitDateWithinLocalWindow(parsed.data.date, now, session.user.timezone)`.
+  // The stateless Zod `dateField` is the UTC-coarse 1-year-replay floor
+  // only. Any FUTURE non-session writer (cron / batch / import) MUST
+  // replicate the civil-window check, or it re-opens H1.
   const safe = habitLogInputSchema.parse(input);
   const dateDb = parseLocalDate(safe.date);
 

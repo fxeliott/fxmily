@@ -9,7 +9,13 @@ import { logAudit } from '@/lib/auth/audit';
 import { upsertHabitLog } from '@/lib/habit/service';
 import { reportError } from '@/lib/observability';
 import { callerIdTrusted } from '@/lib/rate-limit/token-bucket';
-import { habitLogInputSchema, type HabitKind } from '@/lib/schemas/habit-log';
+import {
+  HABIT_BACKFILL_WINDOW_DAYS,
+  HABIT_FORWARD_WINDOW_DAYS,
+  habitLogInputSchema,
+  type HabitKind,
+  isHabitDateWithinLocalWindow,
+} from '@/lib/schemas/habit-log';
 
 /**
  * V2.1 TRACK — Server Action for `HabitLog` upsert.
@@ -172,6 +178,25 @@ export async function submitHabitLogAction(
       ok: false,
       error: 'invalid_input',
       fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  // V1.9 R2 security-auditor H1 — authoritative timezone-aware
+  // backfill-window check. The Zod `dateField` refine is UTC-anchored
+  // (±13h drift for members off-UTC); now that the session is resolved
+  // we re-validate against the member's CIVIL window. Unknown / unset
+  // timezone → app default 'Europe/Paris' (`localDateOf` further
+  // degrades a malformed IANA string to UTC, deterministically).
+  const tz = session.user.timezone || 'Europe/Paris';
+  if (!isHabitDateWithinLocalWindow(parsed.data.date, new Date(), tz)) {
+    return {
+      ok: false,
+      error: 'invalid_input',
+      fieldErrors: {
+        date: [
+          `Date hors fenêtre autorisée (${HABIT_BACKFILL_WINDOW_DAYS}j en arrière → ${HABIT_FORWARD_WINDOW_DAYS}j en avant).`,
+        ],
+      },
     };
   }
 

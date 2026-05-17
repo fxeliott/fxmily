@@ -351,3 +351,50 @@ describe('submitHabitLogAction — per-kind builders (V2.1.1)', () => {
     expect(upsertHabitLogMock).not.toHaveBeenCalled();
   });
 });
+
+describe('submitHabitLogAction — V1.9 R2 H1 timezone-authoritative window', () => {
+  // Frozen instant: 2026-05-16T23:30Z. The Zod `dateField` refine (runs
+  // first, UTC-anchored) treats UTC today = 2026-05-16 → its window is
+  // [2026-05-02, 2026-05-17], so `2026-05-02` is exactly the −14d UTC
+  // bound and PASSES Zod. The new action layer re-derives the member's
+  // CIVIL window from `session.user.timezone`. Same date + same instant,
+  // only the timezone differs → conclusively the tz-authoritative layer.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-16T23:30:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('closes the drift: rejects a Zod-valid date that is the 15th day back in the member CIVIL window (Paris default — unknown bucket)', async () => {
+    // No `timezone` in the session → app default 'Europe/Paris' (CEST=+2):
+    // civil today = 2026-05-17, window [2026-05-03, 2026-05-18]. 2026-05-02
+    // is day-15 back → rejected by the new layer (Zod alone accepted it).
+    const result = await submitHabitLogAction(
+      null,
+      form({ kind: 'sleep', date: '2026-05-02', 'value.durationMin': '450' }),
+    );
+    expect(result).toEqual({
+      ok: false,
+      error: 'invalid_input',
+      fieldErrors: { date: [expect.stringContaining('hors fenêtre autorisée')] },
+    });
+    expect(upsertHabitLogMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts the exact same Zod-valid date + instant when the member timezone makes it in-window (proves it is the tz layer, not a blanket Zod reject)', async () => {
+    // timezone 'UTC' → civil today 2026-05-16, window [2026-05-02,
+    // 2026-05-17]; 2026-05-02 is the inclusive −14d bound → accepted →
+    // the action proceeds to the NEXT_REDIRECT contract.
+    authMock.mockResolvedValue({ user: { id: 'usr_1', status: 'active', timezone: 'UTC' } });
+    await expect(
+      submitHabitLogAction(
+        null,
+        form({ kind: 'sleep', date: '2026-05-02', 'value.durationMin': '450' }),
+      ),
+    ).rejects.toMatchObject({ digest: 'NEXT_REDIRECT;replace;/track?done=1&kind=sleep' });
+    expect(upsertHabitLogMock).toHaveBeenCalledTimes(1);
+  });
+});

@@ -227,6 +227,10 @@ model User {
   reflectionEntries       ReflectionEntry[]
   // V2.0 — TRACK module habit logs (sleep/nutrition/caffeine/sport/meditation).
   habitLogs               HabitLog[]
+  // V2.1 — admin private notes (SPEC §7.7). Two named relations: notes
+  // written ABOUT this member, and notes this (admin) user authored.
+  adminNotesAbout         AdminNote[]              @relation("AdminNotesAbout")
+  adminNotesAuthored      AdminNote[]              @relation("AdminNotesAuthored")
   // J9 — Web Push subscriptions (one row per browser/device) + per-category opt-out preferences.
   pushSubscriptions       PushSubscription[]
   notificationPreferences NotificationPreference[]
@@ -498,6 +502,43 @@ model TradeAnnotation {
   // index-only sur la window puis JOIN PK Trade pour le filtre userId.
   @@index([createdAt(sort: Desc)])
   @@map("trade_annotations")
+}
+
+/// V2.1 — Admin private notes about a member (SPEC §7.7 "tes notes
+/// privées sur ce membre, pas vu par lui").
+///
+/// The member NEVER sees these: there is deliberately no member-facing
+/// read path. They are listed only through the admin member-detail
+/// "Notes admin" tab. `body` is hardened at the Zod boundary
+/// (`safeFreeText` + reject bidi/zero-width = Trojan-Source defense,
+/// canon Fxmily — these notes are rendered back to the admin and could
+/// one day feed an LLM prompt).
+///
+/// Cascade on BOTH relations (RGPD data minimisation, consistent with
+/// the rest of the schema). V1 = solo admin Eliot; V2 multi-admin →
+/// consider `authorId` SetNull + nullable so a deleted admin's notes
+/// survive (same follow-up noted on `TradeAnnotation`).
+model AdminNote {
+  id String @id @default(cuid())
+
+  /// The member this note is ABOUT (never the author).
+  memberId String @map("member_id")
+  member   User   @relation("AdminNotesAbout", fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// The admin who wrote the note.
+  authorId String @map("author_id")
+  author   User   @relation("AdminNotesAuthored", fields: [authorId], references: [id], onDelete: Cascade)
+
+  body String @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // The panel lists a member's notes newest-first.
+  @@index([memberId, createdAt(sort: Desc)])
+  // Admin "notes I authored" feed (V2 multi-admin analytics).
+  @@index([authorId, createdAt(sort: Desc)])
+  @@map("admin_notes")
 }
 
 /// Notification queue (J4 enqueue, J9 dispatch).

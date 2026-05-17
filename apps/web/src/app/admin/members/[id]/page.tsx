@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { MemberTabs, type MemberTabKey } from '@/components/admin/member-tabs';
+import { MemberAdminNotesPanel } from '@/components/admin/member-admin-notes-panel';
 import { MemberDouglasPanel } from '@/components/admin/member-douglas-panel';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
 import { MemberWeeklyReportsPanel } from '@/components/admin/member-weekly-reports-panel';
@@ -12,6 +13,7 @@ import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expect
 import { ScoreGaugeGrid } from '@/components/scoring/score-gauge-grid';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { listAdminNotesForMember } from '@/lib/admin/admin-notes-service';
 import { aggregateMemberDeliveryStats, listMemberDeliveries } from '@/lib/admin/cards-service';
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
@@ -38,10 +40,11 @@ interface DetailPageProps {
 
 function parseTab(
   value: string | undefined,
-): Extract<MemberTabKey, 'overview' | 'trades' | 'mark-douglas' | 'weekly-reports'> {
+): Extract<MemberTabKey, 'overview' | 'trades' | 'mark-douglas' | 'weekly-reports' | 'notes'> {
   if (value === 'trades') return 'trades';
   if (value === 'mark-douglas') return 'mark-douglas';
   if (value === 'weekly-reports') return 'weekly-reports';
+  if (value === 'notes') return 'notes';
   return 'overview';
 }
 
@@ -73,6 +76,8 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       : null;
 
   const weeklyReports = tab === 'weekly-reports' ? await listReportsForMember(memberId, 12) : null;
+
+  const adminNotes = tab === 'notes' ? await listAdminNotesForMember(memberId) : null;
 
   // J6.5 — pull behavioral scores + analytics in parallel for the overview tab.
   // Skipped on the trades tab to keep its render path lean. J6.6 H1 fix —
@@ -174,6 +179,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       {tab === 'weekly-reports' && weeklyReports !== null ? (
         <MemberWeeklyReportsPanel reports={weeklyReports} />
       ) : null}
+      {tab === 'notes' && adminNotes !== null ? (
+        <MemberAdminNotesPanel memberId={memberId} notes={adminNotes} />
+      ) : null}
     </main>
   );
 }
@@ -229,14 +237,6 @@ function OverviewTab({
           />
         </div>
       ) : null}
-
-      {/* Coming soon hint */}
-      <div className="rounded-control border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] px-3 py-2.5">
-        <p className="t-cap text-[var(--t-2)]">
-          L&apos;onglet <strong className="font-semibold text-[var(--t-1)]">Notes admin</strong>{' '}
-          <Pill tone="cy">J3.5</Pill> arrive dans un prochain jalon.
-        </p>
-      </div>
     </div>
   );
 }

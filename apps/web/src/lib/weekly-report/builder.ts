@@ -214,6 +214,10 @@ function buildCounters(input: BuilderInput): WeeklySnapshot['counters'] {
     douglasCardsDelivered: input.deliveries.length,
     douglasCardsSeen: cardsSeen,
     douglasCardsHelpful: cardsHelpful,
+    // SPEC §21 J-T4 — "volume de pratique" (effort COUNT only, never P&L,
+    // §21.5). The loader feeds `trainingActivityCount` from the count-only
+    // primitive; absent → 0 (zero-regression for pre-J-T4 fixtures/callers).
+    trainingSessionsCount: input.trainingActivityCount ?? 0,
     tradesQualityA,
     tradesQualityB,
     tradesQualityC,

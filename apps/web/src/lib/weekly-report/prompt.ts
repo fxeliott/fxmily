@@ -134,6 +134,15 @@ export function buildWeeklyReportUserPrompt(snapshot: WeeklySnapshot): string {
   lines.push(
     `- Check-ins : ${c.morningCheckinsCount} matin · ${c.eveningCheckinsCount} soir · streak ${c.streakDays}j`,
   );
+  // SPEC §21 J-T4 — volume de pratique (mode entraînement / backtest).
+  // EFFORT only: a session count, never a backtest result. The training edge
+  // is statistically isolated (§21.5) — Claude must treat this strictly as an
+  // engagement/practice-volume signal, never as a performance indicator.
+  lines.push(
+    `- Mode entraînement (backtest) : ${c.trainingSessionsCount} session${
+      c.trainingSessionsCount === 1 ? '' : 's'
+    } cette semaine — volume de pratique uniquement, AUCUN résultat de backtest n'entre dans ce rapport (SPEC §21.5).`,
+  );
   lines.push(
     `- Médianes : sommeil ${c.sleepHoursMedian === null ? 'n/a' : c.sleepHoursMedian.toFixed(1) + 'h'} · humeur ${c.moodMedian === null ? 'n/a' : c.moodMedian.toFixed(1) + '/10'} · stress ${c.stressMedian === null ? 'n/a' : c.stressMedian.toFixed(1) + '/10'}`,
   );

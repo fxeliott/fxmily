@@ -36,6 +36,15 @@ export interface BuilderInput {
   deliveries: SerializedDelivery[];
   annotationsReceived: number;
   annotationsViewed: number;
+  /**
+   * SPEC §21 J-T4 — number of the member's backtests in the report week
+   * ("volume de pratique"). Optional: absent → the builder defaults it to 0
+   * (existing fixtures + pre-J-T4 callers stay valid). 🚨 §21.5: an integer
+   * COUNT only — `resultR`/`outcome`/`plannedRR` MUST NEVER reach the
+   * weekly snapshot / Claude prompt. Recency lives in the inactivity
+   * trigger, not here (SPEC line is "volume pratique").
+   */
+  trainingActivityCount?: number;
   latestScore: BehavioralScoreSnapshot | null;
 }
 

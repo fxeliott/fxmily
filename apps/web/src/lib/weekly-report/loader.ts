@@ -3,6 +3,9 @@ import 'server-only';
 import { db } from '@/lib/db';
 import type { SerializedCheckin } from '@/lib/checkin/service';
 import { getLatestBehavioralScore } from '@/lib/scoring/service';
+// 🚨 §21.5 — the ONLY symbol the weekly-report loader may import from the
+// training module: the count-only primitive. Anything else is a breach.
+import { countRecentTrainingActivity } from '@/lib/training/training-trade-service';
 
 import type { BehavioralScoreSnapshot, BuilderInput } from './types';
 import {
@@ -85,13 +88,19 @@ export async function loadWeeklySliceForUser(
     ? computePreviousFullWeekWindow(now, user.timezone)
     : computeReportingWeek(now, user.timezone);
 
-  const [trades, checkins, deliveries, annotations, latestScore] = await Promise.all([
-    loadTrades(userId, window),
-    loadCheckins(userId, window),
-    loadDeliveries(userId, window),
-    loadAnnotationStats(userId, window),
-    getLatestBehavioralScore(userId),
-  ]);
+  const [trades, checkins, deliveries, annotations, latestScore, trainingActivity] =
+    await Promise.all([
+      loadTrades(userId, window),
+      loadCheckins(userId, window),
+      loadDeliveries(userId, window),
+      loadAnnotationStats(userId, window),
+      getLatestBehavioralScore(userId),
+      // 🚨 §21.5 — sanctioned training→real-edge touchpoint #3 (weekly
+      // report). Count-only; the report window is exactly the helper
+      // window (loader trade query uses the same gte/lte bounds). Only
+      // `.count` is consumed — never a backtest P&L.
+      countRecentTrainingActivity(userId, window.weekStartUtc, window.weekEndUtc),
+    ]);
 
   const builderInput: BuilderInput = {
     userId: user.id,
@@ -103,6 +112,9 @@ export async function loadWeeklySliceForUser(
     deliveries,
     annotationsReceived: annotations.received,
     annotationsViewed: annotations.viewed,
+    // 🚨 §21.5 — effort COUNT only (volume de pratique). Recency is handled
+    // by the no_training_activity_in_window trigger, not the report.
+    trainingActivityCount: trainingActivity.count,
     latestScore: latestScore === null ? null : toScoreSnapshot(latestScore),
   };
 

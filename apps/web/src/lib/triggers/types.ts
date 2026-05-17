@@ -95,6 +95,17 @@ export type TriggerRule =
     }
   | {
       kind: 'hedge_violation';
+    }
+  | {
+      /**
+       * SPEC §21 J-T4 — fires when the member has logged no backtest
+       * (training mode) for `days` days. Recency-only, structural mirror of
+       * `no_checkin_streak`. 🚨 §21.5: evaluated from a local-date string
+       * (`TriggerContext.lastTrainingActivityLocalDate`) only — never a
+       * backtest P&L (`resultR`/`outcome`/`plannedRR`).
+       */
+      kind: 'no_training_activity_in_window';
+      days: number;
     };
 
 export type TriggerKind = TriggerRule['kind'];
@@ -157,6 +168,16 @@ export interface TriggerContext {
   recentAllTrades: TriggerTradeInput[];
   /** User account creation date — used to skip onboarding-day false positives. */
   userCreatedAt: Date;
+  /**
+   * SPEC §21 J-T4 — local-day (YYYY-MM-DD) of the member's most recent
+   * backtest, `null` if they have never backtested, or `undefined` if the
+   * engine did not load training data (the inactivity evaluator then skips
+   * defensively; the field is optional so the other 7 evaluators + every
+   * existing test fixture compile unchanged). 🚨 §21.5: a DATE only —
+   * never a backtest P&L. The engine derives it from the count-only
+   * `countRecentTrainingActivity().lastEnteredAt`.
+   */
+  lastTrainingActivityLocalDate?: string | null;
 }
 
 // =============================================================================

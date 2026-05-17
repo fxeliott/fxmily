@@ -52,6 +52,8 @@ export function evaluateTrigger(rule: TriggerRule, ctx: TriggerContext): Trigger
       return evalNoCheckinStreak(rule, ctx);
     case 'hedge_violation':
       return evalHedgeViolation(rule, ctx);
+    case 'no_training_activity_in_window':
+      return evalNoTrainingActivityInWindow(rule, ctx);
   }
 }
 
@@ -381,6 +383,73 @@ export function evalHedgeViolation(
       },
     },
   };
+}
+
+// =============================================================================
+// 8. no_training_activity_in_window — SPEC §21 J-T4 (backtest inactivity)
+//
+// Carbon mirror of `evalNoCheckinStreak`: defensive not-loaded skip +
+// account-age guard (no onboarding-day spam) + recency check via the
+// existing pure `daysBetweenLocal` (NO date-fns). Recency-only — `engine.ts`
+// injects `ctx.lastTrainingActivityLocalDate` via the count-only
+// `countRecentTrainingActivity` primitive. 🚨 §21.5: the snapshot carries
+// counts/dates ONLY, never a backtest P&L (`resultR`/`outcome`/`plannedRR`).
+// =============================================================================
+
+export function evalNoTrainingActivityInWindow(
+  rule: Extract<TriggerRule, { kind: 'no_training_activity_in_window' }>,
+  ctx: TriggerContext,
+): TriggerEvalResult {
+  // Engine didn't inject training data → nothing to evaluate. The field is
+  // optional on TriggerContext so the other 7 evaluators + fixtures compile.
+  if (ctx.lastTrainingActivityLocalDate === undefined) {
+    return { matched: false };
+  }
+
+  // M4 mirror — skip while the account is younger than the window so a
+  // brand-new member isn't nagged before they could discover the module.
+  const accountAgeMs = ctx.now.getTime() - ctx.userCreatedAt.getTime();
+  const accountAgeDays = Math.floor(accountAgeMs / (24 * 3600 * 1000));
+  if (accountAgeDays < rule.days) {
+    return { matched: false };
+  }
+
+  // Account old enough, but the member has never backtested → fire.
+  if (ctx.lastTrainingActivityLocalDate === null) {
+    return {
+      matched: true,
+      triggeredBy: `Aucune session d'entraînement depuis l'inscription`,
+      snapshot: {
+        kind: rule.kind,
+        rule,
+        details: {
+          lastTrainingDate: null,
+          daysSince: accountAgeDays,
+          requiredDays: rule.days,
+          accountAgeDays,
+        },
+      },
+    };
+  }
+
+  const daysSince = daysBetweenLocal(ctx.lastTrainingActivityLocalDate, ctx.todayLocal);
+  if (daysSince >= rule.days) {
+    return {
+      matched: true,
+      triggeredBy: `${daysSince} jours sans session d'entraînement`,
+      snapshot: {
+        kind: rule.kind,
+        rule,
+        details: {
+          lastTrainingDate: ctx.lastTrainingActivityLocalDate,
+          daysSince,
+          requiredDays: rule.days,
+          accountAgeDays,
+        },
+      },
+    };
+  }
+  return { matched: false };
 }
 
 // =============================================================================

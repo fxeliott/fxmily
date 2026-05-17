@@ -436,6 +436,33 @@ describe('buildWeeklySnapshot — scores pass-through', () => {
   });
 });
 
+describe('buildWeeklySnapshot — training volume (SPEC §21 J-T4)', () => {
+  // 🚨 §21.5: the weekly report surfaces a COUNT of backtest sessions
+  // (volume de pratique) ONLY. `BuilderInput` has no field by which a
+  // backtest P&L (`resultR`/`outcome`/`plannedRR`) could reach the prompt.
+
+  it('trainingSessionsCount defaults to 0 when the loader did not wire it', () => {
+    const snap = buildWeeklySnapshot(emptyInput());
+    expect(snap.counters.trainingSessionsCount).toBe(0);
+  });
+
+  it('propagates input.trainingActivityCount verbatim as the volume counter', () => {
+    const input = emptyInput();
+    input.trainingActivityCount = 4;
+    const snap = buildWeeklySnapshot(input);
+    expect(snap.counters.trainingSessionsCount).toBe(4);
+  });
+
+  it('is a pure integer count — deterministic, no hidden P&L channel', () => {
+    const input = emptyInput();
+    input.trainingActivityCount = 7;
+    const a = buildWeeklySnapshot(input).counters.trainingSessionsCount;
+    const b = buildWeeklySnapshot(input).counters.trainingSessionsCount;
+    expect(a).toBe(7);
+    expect(b).toBe(7);
+  });
+});
+
 describe('buildWeeklySnapshot — annotations pass-through', () => {
   it('annotations counters propagated as-is', () => {
     const input = emptyInput();

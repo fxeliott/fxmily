@@ -169,6 +169,11 @@ const counterSliceSchema = z
     douglasCardsDelivered: z.number().int().min(0),
     douglasCardsSeen: z.number().int().min(0),
     douglasCardsHelpful: z.number().int().min(0),
+    /// SPEC §21 J-T4 — "volume de pratique" : backtest sessions in the report
+    /// week. 🚨 §21.5: a pure non-negative integer (effort/volume). The
+    /// `.strict()` on this object structurally rejects any P&L key (e.g.
+    /// `resultR`) the builder might erroneously try to add.
+    trainingSessionsCount: z.number().int().min(0),
     /// V1.5 — Steenbarger setup quality distribution. Counts trades whose
     /// quality was captured (NULL trades excluded from the distribution).
     /// `tradesQualityCaptured` is the denominator for ratio analysis.

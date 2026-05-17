@@ -6,6 +6,7 @@ import {
   evalEmotionLogged,
   evalHedgeViolation,
   evalNoCheckinStreak,
+  evalNoTrainingActivityInWindow,
   evalPlanViolationsInWindow,
   evalSleepDeficitThenTrade,
   evalWinStreak,
@@ -417,6 +418,100 @@ describe('evalHedgeViolation', () => {
     const ctx = ctxAt(now);
     const r = evalHedgeViolation({ kind: 'hedge_violation' }, ctx);
     expect(r.matched).toBe(false);
+  });
+});
+
+// =============================================================================
+// 8. no_training_activity_in_window — SPEC §21 J-T4 (carbon mirror of
+//    evalNoCheckinStreak, recency-only; 🚨 §21.5: zero P&L in the snapshot)
+// =============================================================================
+
+describe('evalNoTrainingActivityInWindow', () => {
+  const now = new Date('2026-05-07T12:00:00Z');
+
+  it('matches when the last backtest was ≥ rule.days ago', () => {
+    const ctx = ctxAt(now, '2026-05-07');
+    ctx.lastTrainingActivityLocalDate = '2026-04-20'; // 17 days before todayLocal
+    const r = evalNoTrainingActivityInWindow(
+      { kind: 'no_training_activity_in_window', days: 14 },
+      ctx,
+    );
+    expect(r.matched).toBe(true);
+    if (r.matched) {
+      expect(r.snapshot.kind).toBe('no_training_activity_in_window');
+      expect(r.snapshot.details.daysSince).toBe(17);
+      expect(r.snapshot.details.requiredDays).toBe(14);
+      expect(r.snapshot.details.lastTrainingDate).toBe('2026-04-20');
+    }
+  });
+
+  it('does NOT match when the last backtest is recent (< rule.days)', () => {
+    const ctx = ctxAt(now, '2026-05-07');
+    ctx.lastTrainingActivityLocalDate = '2026-05-01'; // 6 days
+    const r = evalNoTrainingActivityInWindow(
+      { kind: 'no_training_activity_in_window', days: 14 },
+      ctx,
+    );
+    expect(r.matched).toBe(false);
+  });
+
+  it('matches when the member has never backtested (null) and the account is old enough', () => {
+    const ctx = ctxAt(now, '2026-05-07'); // userCreatedAt 2026-01-01 ≈ 126d
+    ctx.lastTrainingActivityLocalDate = null;
+    const r = evalNoTrainingActivityInWindow(
+      { kind: 'no_training_activity_in_window', days: 14 },
+      ctx,
+    );
+    expect(r.matched).toBe(true);
+    if (r.matched) {
+      expect(r.snapshot.details.lastTrainingDate).toBe(null);
+      expect(r.triggeredBy).toContain('entraînement');
+    }
+  });
+
+  it('does NOT match when training data was not loaded (undefined — defensive skip)', () => {
+    const ctx = ctxAt(now, '2026-05-07'); // lastTrainingActivityLocalDate absent
+    const r = evalNoTrainingActivityInWindow(
+      { kind: 'no_training_activity_in_window', days: 14 },
+      ctx,
+    );
+    expect(r.matched).toBe(false);
+  });
+
+  it('does NOT match when the account is younger than rule.days (M4 onboarding-spam mirror)', () => {
+    const ctx = ctxAt(now, '2026-05-07');
+    ctx.userCreatedAt = new Date('2026-05-01T00:00:00Z'); // ≈ 6 days old < 14
+    ctx.lastTrainingActivityLocalDate = null;
+    const r = evalNoTrainingActivityInWindow(
+      { kind: 'no_training_activity_in_window', days: 14 },
+      ctx,
+    );
+    expect(r.matched).toBe(false);
+  });
+
+  it('§21.5 — snapshot.details carries ONLY counts/dates, never a backtest P&L', () => {
+    const ctx = ctxAt(now, '2026-05-07');
+    ctx.lastTrainingActivityLocalDate = '2026-04-01';
+    const r = evalNoTrainingActivityInWindow(
+      { kind: 'no_training_activity_in_window', days: 14 },
+      ctx,
+    );
+    expect(r.matched).toBe(true);
+    if (r.matched) {
+      expect(r.snapshot.details).not.toHaveProperty('resultR');
+      expect(r.snapshot.details).not.toHaveProperty('outcome');
+      expect(r.snapshot.details).not.toHaveProperty('plannedRR');
+      expect(Object.keys(r.snapshot.details).sort()).toEqual(
+        ['accountAgeDays', 'daysSince', 'lastTrainingDate', 'requiredDays'].sort(),
+      );
+    }
+  });
+
+  it('evaluateTrigger dispatches the new kind', () => {
+    const ctx = ctxAt(now, '2026-05-07');
+    ctx.lastTrainingActivityLocalDate = '2026-04-01';
+    const r = evaluateTrigger({ kind: 'no_training_activity_in_window', days: 14 }, ctx);
+    expect(r.matched).toBe(true);
   });
 });
 

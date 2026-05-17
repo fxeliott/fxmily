@@ -95,6 +95,14 @@ const hedgeViolationSchema = z
   })
   .strict();
 
+// SPEC §21 J-T4 — backtest inactivity. `days` 1–60 mirrors no_checkin_streak.
+const noTrainingActivityInWindowSchema = z
+  .object({
+    kind: z.literal('no_training_activity_in_window'),
+    days: positiveInt(60),
+  })
+  .strict();
+
 // =============================================================================
 // Union — single entry point
 // =============================================================================
@@ -107,6 +115,7 @@ export const triggerRuleSchema: z.ZodType<TriggerRule> = z.discriminatedUnion('k
   winStreakSchema,
   noCheckinStreakSchema,
   hedgeViolationSchema,
+  noTrainingActivityInWindowSchema,
 ]);
 
 /**

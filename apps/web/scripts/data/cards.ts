@@ -286,6 +286,46 @@ La consistance d'un trader pro se reconnait dans ce qu'il fait quand personne ne
   },
 
   {
+    slug: 'la-regularite-en-entrainement',
+    title: 'La régularité en entraînement',
+    category: 'consistency',
+    quote:
+      "Sans pression, c'est ta routine qui parle. La régularité du backtest se construit les jours où rien ne t'y oblige.",
+    quoteSourceChapter: "paraphrase de l'argument — Mark Douglas, Trading in the Zone, ch.11",
+    paraphrase: `Un backtest isolé ne change pas un mindset. C'est la répétition qui installe les automatismes — exactement comme l'entraînement d'un athlète.
+
+**Pourquoi la régularité prime.** Le mode entraînement n'a de valeur que si tu y reviens. Une session unique te donne une sensation ; une séquence de sessions te donne une compétence. Mark Douglas insiste : la consistance ne naît pas d'un effort exceptionnel, mais d'un comportement répété quand rien ne t'y force.
+
+**Ce que ça construit.** Pratiquer sur données passées, régulièrement, c'est répéter ton process à froid : reconnaître ton setup, dérouler ton plan, accepter l'incertitude — sans l'argent réel en jeu. Plus tu répètes le geste, plus il devient automatique le jour où ça compte.
+
+**Comment reprendre :**
+
+- Pas de rattrapage. Tu ne compenses pas les semaines sautées. Tu reprends une session maintenant.
+- Vise un rythme tenable, pas un volume héroïque. Une session courte chaque semaine bat dix sessions le même jour puis plus rien.
+- Traite la séance d'entraînement comme l'échauffement d'un sportif : non négociable, indépendante du fait que tu traderas ou non aujourd'hui.
+
+Le moteur ne juge jamais tes analyses. Il regarde une seule chose ici : est-ce que tu t'entraînes régulièrement. C'est le seul levier que tu contrôles à 100 %.`,
+    exercises: [
+      {
+        id: 'backtest-hebdo-30-min',
+        label: 'Une session de backtest par semaine',
+        description:
+          'Bloque 30 minutes cette semaine pour une session de mode entraînement. La régularité prime sur la durée — une session courte mais régulière bat un marathon ponctuel.',
+      },
+      {
+        id: 'rythme-pas-volume',
+        label: 'Le rythme avant le volume',
+        description:
+          "Ne cherche pas à enchaîner vingt backtests d'un coup. Vise un rythme tenable que tu pourras répéter chaque semaine sans t'épuiser.",
+      },
+    ],
+    triggerRules: { kind: 'no_training_activity_in_window', days: 14 },
+    hatClass: 'white',
+    priority: 6,
+    published: true,
+  },
+
+  {
     slug: 'pourquoi-le-plan-existe',
     title: 'Pourquoi le plan existe : hedge non respecté',
     category: 'discipline',

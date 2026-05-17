@@ -96,6 +96,14 @@ export interface EngagementParts {
   streakNormalized: SubScore;
   /** (eveningsWithJournalNote / eveningsFilled) × 100. */
   journalDepthRate: SubScore;
+  /**
+   * SPEC §21 J-T4 — training (backtest) activity sub-score. `null` when the
+   * member has no recent backtest activity → `aggregateDimension`
+   * renormalizes it away so non-backtesters' engagement is unaffected
+   * (zero-regression invariant). 🚨 §21.5: derived from a COUNT of training
+   * activity only, never a backtest P&L (`resultR`/`outcome`/`plannedRR`).
+   */
+  trainingActivityRate: SubScore | null;
 }
 
 /**

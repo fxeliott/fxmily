@@ -696,9 +696,378 @@ docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
          psql -U fxmily -d fxmily
    ```
 
+## 15. Rollback V2.1 admin notes migration (`20260517150000_v2_1_admin_notes`)
+
+> **Quand l'utiliser** : si la migration V2.1 (onglet "Notes admin" par
+> membre, SPEC §7.7 — `admin_notes`) a été déployée en prod et qu'un blocker
+> post-deploy nécessite de retirer complètement la table (rare — feature
+> admin-only solo Eliot V1, faible volume ; le rollback existe pour la parité
+> runbook). La table est **ADD-only** (aucun DROP/rename/backfill, 2 FK
+> `ON DELETE CASCADE` côté `admin_notes` uniquement — aucune donnée `users`
+> touchée). Brand-new + vide au moment de l'apply → rollback immédiat
+> loss-free.
+
+### 15.1 Pré-requis avant rollback
+
+1. **Backup atomique de `admin_notes`** : si des notes ont déjà été écrites
+   (RGPD : donnée admin-authored À PROPOS d'un membre), le `DROP TABLE` les
+   détruit irréversiblement. `pg_dump` AVANT :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     pg_dump -U fxmily -d fxmily -t admin_notes --data-only --column-inserts \
+     | gzip > /etc/fxmily/backups/pre-v2.1-rollback-admin-notes-$(date -u +%Y%m%dT%H%M%SZ).sql.gz
+   ```
+
+2. **Stop le web** (les Server Actions notes admin écrivent la table) :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+   ```
+
+3. **Vérifie l'état Prisma** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+       FROM _prisma_migrations WHERE migration_name LIKE '%v2_1_admin_notes%' \
+       ORDER BY started_at DESC;"
+   ```
+
+4. **Confirme l'absence de FK cascade orpheline** : les 2 FK (`member_id`,
+   `author_id`) sont `ON DELETE CASCADE` côté `admin_notes` — un `DROP TABLE`
+   clean retire aussi les FK. Pas d'orpheline côté `users`.
+
+### 15.2 SQL rollback
+
+Transcrit verbatim du header de migration (`prior jalons §12/§13/§14
+separate-PR pattern`). Pas d'enum, pas d'index-avant-colonne — `DROP TABLE`
+retire ses propres index + FK :
+
+```sql
+BEGIN;
+
+-- Drop the table (CASCADE not needed — indexes + FK belong to admin_notes).
+DROP TABLE IF EXISTS "admin_notes";
+
+-- Wipe the Prisma migrations row so the schema can be re-applied later.
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260517150000_v2_1_admin_notes';
+
+COMMIT;
+```
+
+> ⚠️ Si le `BEGIN`/`COMMIT` échoue à mi-parcours, Postgres rollback
+> automatique — état cohérent (tout ou rien). Re-vérifie via
+> `\dt admin_notes` que la table est bien absente.
+
+### 15.3 Re-déploiement de l'image pré-V2.1
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<pre-v2.1-admin-notes-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+```
+
+### 15.4 Vérification post-rollback
+
+```bash
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dt admin_notes"   # 0 rows (table absente)
+
+# Audit log : consigne le rollback.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"v2_1_admin_notes\",\"by\":\"eliot\",\"data_loss_admin_notes\":N}'::jsonb, \
+      NOW());"
+```
+
+### 15.5 Re-application future
+
+1. Re-deploy l'image V2.1+ HEAD.
+2. `pnpm --filter @fxmily/web prisma:migrate deploy` — Prisma re-cale la row.
+3. **Restore `admin_notes`** depuis `pg_dump` step 15.1 si des notes avaient
+   été écrites :
+
+   ```bash
+   gunzip -c /etc/fxmily/backups/pre-v2.1-rollback-admin-notes-<TS>.sql.gz \
+     | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+         psql -U fxmily -d fxmily
+   ```
+
+## 16. Rollback V1.2 training entities migration (`20260517160000_v1_2_training_entities`)
+
+> **Quand l'utiliser** : si la migration V1.2 "Mode Entraînement / Backtest"
+> (SPEC §21 — tables `training_trades` + `training_annotations`) a été
+> déployée et qu'un blocker post-deploy nécessite de retirer **tout le data
+> layer du Mode Entraînement** et revenir à l'état pré-§21.
+>
+> ⚠️ **Rollback du data layer fondateur** : `training_entities` (#110, J-T1)
+> est la fondation consommée par J-T2 (`/training` membre), J-T3 (corrections
+> admin) et J-T4 (engagement). Le rollback de §16 EXIGE une image applicative
+> pré-#110 (sinon le code J-T2/3/4 crash au runtime sur les tables absentes).
+> Si §17 (`training_annotation_notification`, #112) a aussi été déployé,
+> **roller §17 AVANT §16** (ordre inverse de l'apply ; voir Note
+> transversale).
+>
+> ⚠️ **Risque data loss** : si des membres ont enregistré des backtests
+> (`training_trades`) ou si l'admin a posté des corrections
+> (`training_annotations`) post-V1.2 ship, le rollback **DROP les 2 tables
+> entièrement** — `pg_dump` atomique des 2 tables AVANT est OBLIGATOIRE
+> (RGPD : donnée membre-authored + corrections admin).
+>
+> **Invariant §21.5 préservé** : ces tables ne touchent AUCUN objet
+> real-edge (zéro FK `trades`, enums `TrainingOutcome` /
+> `TrainingAnnotationMediaType` distincts de `TradeOutcome` /
+> `AnnotationMediaType`). Le rollback ne peut pas affecter le track-record /
+> score / expectancy réels.
+
+### 16.1 Pré-requis avant rollback
+
+1. **Backup atomique des 2 tables** :
+
+   ```bash
+   TS=$(date -u +%Y%m%dT%H%M%SZ)
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     pg_dump -U fxmily -d fxmily \
+     -t training_trades -t training_annotations \
+     --data-only --column-inserts \
+     | gzip > "/etc/fxmily/backups/pre-v1.2-rollback-training-${TS}.sql.gz"
+   ```
+
+2. **Stop le web** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+   ```
+
+3. **Vérifie l'état Prisma** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+       FROM _prisma_migrations WHERE migration_name LIKE '%v1_2_training_entities%' \
+       ORDER BY started_at DESC;"
+   ```
+
+4. **Confirme l'absence de FK cascade orpheline** : les 3 FK
+   (`training_trades.user_id`, `training_annotations.training_trade_id`,
+   `training_annotations.admin_id`) sont toutes `ON DELETE CASCADE` côté
+   training — un `DROP TABLE` clean retire aussi les FK. Pas d'orpheline côté
+   `users`.
+
+### 16.2 SQL rollback
+
+Ordre **non négociable** transcrit verbatim du header de migration : table
+enfant (`training_annotations`, FK → `training_trades`) AVANT
+`training_trades`, PUIS les types enum (Postgres rejette un `DROP TYPE` tant
+qu'une colonne le référence), PUIS la row `_prisma_migrations`, le tout dans
+une transaction :
+
+```sql
+BEGIN;
+
+-- 1. Drop the child table FIRST (FK -> training_trades).
+DROP TABLE IF EXISTS "training_annotations";
+
+-- 2. Drop the parent table.
+DROP TABLE IF EXISTS "training_trades";
+
+-- 3. Drop the enums now that no column references them.
+DROP TYPE IF EXISTS "TrainingAnnotationMediaType";
+DROP TYPE IF EXISTS "TrainingOutcome";
+
+-- 4. Wipe the Prisma migrations row.
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260517160000_v1_2_training_entities';
+
+COMMIT;
+```
+
+> ⚠️ Si le `BEGIN`/`COMMIT` échoue à mi-parcours, Postgres rollback
+> automatique — état cohérent. Re-vérifie via `\dt training_trades` +
+> `\dT TrainingOutcome` que tables et types sont bien absents.
+
+### 16.3 Re-déploiement de l'image pré-V1.2 (pré-#110)
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<pre-v1.2-training-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+```
+
+### 16.4 Vérification post-rollback
+
+```bash
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dt training_trades"        # 0 rows
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dt training_annotations"   # 0 rows
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dT TrainingOutcome"        # 0 rows
+
+# Audit log : consigne le rollback.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"v1_2_training_entities\",\"by\":\"eliot\",\"data_loss_training_trades\":N,\"data_loss_training_annotations\":N}'::jsonb, \
+      NOW());"
+```
+
+### 16.5 Re-application future
+
+1. Re-deploy l'image V1.2+ HEAD (chaîne J-T1 → J-T4).
+2. `pnpm --filter @fxmily/web prisma:migrate deploy` — Prisma re-cale.
+3. **Restore les 2 tables** depuis `pg_dump` step 16.1 :
+
+   ```bash
+   gunzip -c /etc/fxmily/backups/pre-v1.2-rollback-training-<TS>.sql.gz \
+     | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+         psql -U fxmily -d fxmily
+   ```
+
+## 17. Rollback V1.2 training annotation notification migration (`20260517170000_v1_2_training_annotation_notification`)
+
+> **Quand l'utiliser** : si l'ajout de la valeur enum
+> `training_annotation_received` à `NotificationType` (SPEC §21, J-T3 —
+> notification membre quand l'admin corrige un backtest) doit être
+> physiquement retiré (rare — la valeur est safe par construction ADD-only ;
+> le rollback n'est utile que si un drift Prisma futur bloque une migration,
+> ou pour un revert complet du Mode Entraînement avec §16).
+>
+> ⚠️ **NON-RÉVERSIBLE par un simple `BEGIN/COMMIT`** : PostgreSQL n'a **pas**
+> d'`ALTER TYPE … DROP VALUE`. Le rollback est une **procédure manuelle de
+> reconstruction du type** (exception au point 3 de la Note transversale). NE
+> PAS automatiser dans un bloc naïf comme §15/§16.
+>
+> Si §16 (`training_entities`) est aussi rollé, **roller §17 EN PREMIER**
+> (ordre inverse de l'apply : #112 avant #110).
+
+### 17.1 Pré-requis — quiesce
+
+Stop le web pour qu'aucune nouvelle row ne soit enqueue avec le nouveau
+type :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+```
+
+Vérifie l'état Prisma :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+    FROM _prisma_migrations \
+    WHERE migration_name LIKE '%v1_2_training_annotation_notification%' \
+    ORDER BY started_at DESC;"
+```
+
+### 17.2 Purge des rows utilisant la valeur
+
+Seulement si le runtime J-T3 a shippé + tourné (sinon aucune row n'utilise
+la valeur → sauter à 17.3). **Data-loss si rollé APRÈS dispatch J-T3** :
+uniquement les rows `notification_queue` / `notification_preferences` de
+`type = 'training_annotation_received'` (intents push transients +
+préférences opt-out par membre pour CETTE catégorie ; aucun contenu
+membre-authored, aucune donnée backtest, aucune donnée real-edge).
+`pg_dump` ces 2 tables AVANT le DELETE si les rows doivent être préservées
+pour un re-apply :
+
+```bash
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  pg_dump -U fxmily -d fxmily \
+  -t notification_queue -t notification_preferences \
+  --data-only --column-inserts \
+  | gzip > "/etc/fxmily/backups/pre-v1.2-rollback-notif-enum-${TS}.sql.gz"
+```
+
+```sql
+DELETE FROM "notification_queue"       WHERE "type" = 'training_annotation_received';
+DELETE FROM "notification_preferences" WHERE "type" = 'training_annotation_received';
+```
+
+### 17.3 SQL rollback — reconstruction manuelle du type
+
+Transcrit verbatim du header de migration. Une seule transaction, web
+stoppé. **Step 17.2 doit être complété d'abord** — ce bloc échoue fast si
+une row survivante référence encore la valeur :
+
+```sql
+BEGIN;
+ALTER TYPE "NotificationType" RENAME TO "NotificationType_old";
+CREATE TYPE "NotificationType" AS ENUM (
+  'annotation_received',
+  'checkin_morning_reminder',
+  'checkin_evening_reminder',
+  'douglas_card_delivered',
+  'weekly_report_ready'
+);
+ALTER TABLE "notification_queue"
+  ALTER COLUMN "type" TYPE "NotificationType"
+  USING ("type"::text::"NotificationType");
+ALTER TABLE "notification_preferences"
+  ALTER COLUMN "type" TYPE "NotificationType"
+  USING ("type"::text::"NotificationType");
+DROP TYPE "NotificationType_old";
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260517170000_v1_2_training_annotation_notification';
+COMMIT;
+```
+
+> ⚠️ Si le `BEGIN`/`COMMIT` échoue à mi-parcours, Postgres rollback
+> automatique — état cohérent. Re-vérifie que `training_annotation_received`
+> n'est plus une valeur de `NotificationType` (requête 17.5).
+
+### 17.4 Re-déploiement de l'image pré-J-T3
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<pre-jt3-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+```
+
+### 17.5 Vérification post-rollback
+
+```bash
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c \
+  "SELECT 1 FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid \
+   WHERE t.typname = 'NotificationType' AND e.enumlabel = 'training_annotation_received';"
+# Attendu : 0 rows (valeur absente)
+
+# Audit log : consigne le rollback.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"v1_2_training_annotation_notification\",\"by\":\"eliot\",\"data_loss_notif_queue_rows\":N,\"data_loss_notif_pref_rows\":N}'::jsonb, \
+      NOW());"
+```
+
+### 17.6 Re-application future
+
+1. Re-deploy l'image J-T3+ HEAD.
+2. `pnpm --filter @fxmily/web prisma:migrate deploy` — Prisma re-applique
+   l'`ALTER TYPE … ADD VALUE` et re-cale la row.
+3. **Restore** depuis `pg_dump` step 17.2 si des rows
+   `training_annotation_received` avaient été préservées :
+
+   ```bash
+   gunzip -c /etc/fxmily/backups/pre-v1.2-rollback-notif-enum-<TS>.sql.gz \
+     | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+         psql -U fxmily -d fxmily
+   ```
+
 ## Note transversale — pattern rollback Fxmily
 
-Toutes les recipes §11-§14 suivent un même contrat :
+Toutes les recipes §11-§17 suivent un même contrat :
 
 1. **pg_dump atomique AVANT** (data-only + column-inserts pour idempotency).
 2. **`docker compose stop web`** (fige les writes, évite la corruption
@@ -713,6 +1082,21 @@ Toutes les recipes §11-§14 suivent un même contrat :
    - `by` + counters `data_loss_*` honnêtes.
 7. **Re-application future** : re-deploy l'image post-migration +
    `prisma:migrate deploy` + restore data si pertinent.
+
+> **Exception §17** — `20260517170000_v1_2_training_annotation_notification`
+> ne suit PAS le point 3 : PostgreSQL n'a pas d'`ALTER TYPE … DROP VALUE`,
+> donc le rollback est une **procédure manuelle de reconstruction du type**
+> (RENAME → CREATE → `ALTER COLUMN` ×2 → DROP old), pas un simple
+> `BEGIN/COMMIT`-revert. Les points 1/2/4/6/7 s'appliquent quand même. Voir
+> §17.
+>
+> **Ordre de rollback du batch carry-over prod** — les 3 migrations
+> encore non-déployées (#108 `v2_1_admin_notes` §15 + #110
+> `v1_2_training_entities` §16 + #112 `v1_2_training_annotation_notification`
+> §17) sont des objets **indépendants** (un rollback partiel d'un seul est
+> valide). Pour un rollback **complet** du batch, procéder en **ordre
+> inverse de l'apply** (timestamp décroissant) : §17 → §16 → §15, pour
+> garder `_prisma_migrations` cohérent.
 
 Le pattern est testé annuellement via le DR test §`runbook-backup-restore.md`
 "Test de DR (annuel, ~30 min)" — qui simule un restore complet sur une 2e

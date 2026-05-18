@@ -91,10 +91,20 @@ const REAL_EDGE_MODULES: string[] = [
 ].filter((f) => !(SANCTIONED_TOUCHPOINTS as readonly string[]).includes(f));
 
 // A real-edge file may NOT contain any of these (case-sensitive). They catch
-// the Prisma model (`TrainingTrade`), its serializers
-// (`SerializedTrainingTrade`, `serializeTrainingTrade`, `TrainingTradeModel`),
-// a `db.trainingTrade` query, or an import of the training module.
-const BREACH_TOKENS = ['TrainingTrade', 'db.trainingTrade', '@/lib/training'];
+// the Prisma models (`TrainingTrade` / `TrainingDebrief`), their serializers,
+// a `db.trainingTrade` / `db.trainingDebrief` query, or an import of either
+// training module. `@/lib/training-debrief` is a superstring of the existing
+// `@/lib/training` token (so already caught) — listed for explicit intent.
+const BREACH_TOKENS = [
+  'TrainingTrade',
+  'db.trainingTrade',
+  '@/lib/training',
+  // V1.3 — SPEC §23 Débrief Training dédié. The debrief + its computed stats
+  // must never reach a real-edge surface (§21.5, §23.5/§23.7 BLOCKING).
+  'TrainingDebrief',
+  'db.trainingDebrief',
+  '@/lib/training-debrief',
+];
 
 // =============================================================================
 // Block A — static import firewall (the structural §21.5 proof)
@@ -299,5 +309,92 @@ describe('§21.5 — weekly snapshot counters are volume-only', () => {
     if (!parsed.success) {
       expect(JSON.stringify(parsed.error.issues)).toContain('resultR');
     }
+  });
+});
+
+// =============================================================================
+// Block F — V1.3 TrainingDebrief (SPEC §23) stats stay process-only
+// =============================================================================
+
+/**
+ * SPEC §23.5/§23.7 (BLOCKING): a `TrainingDebrief` and its computed process
+ * stats reach NO real-edge surface, and the debrief service NEVER selects
+ * `resultR` / `outcome` / `plannedRR`. Block A (BREACH_TOKENS extended with
+ * `TrainingDebrief` / `db.trainingDebrief`) already proves no scoring /
+ * analytics / trades / habit / weekly-report module references the debrief.
+ * This block pins the debrief side: the pure aggregator and the service read
+ * the four safe columns ONLY, and the debrief module imports no real edge.
+ */
+describe('§21.5 — TrainingDebrief stats are process-only (no backtest P&L)', () => {
+  const PNL_TOKENS = ['resultR', 'outcome', 'plannedRR'] as const;
+
+  it('the pure aggregator stats.ts has zero P&L token in code', () => {
+    const code = readSrcCode('lib/training-debrief/stats.ts');
+    for (const t of PNL_TOKENS) {
+      expect(code, `stats.ts must not reference "${t}" in code (§21.5)`).not.toContain(t);
+    }
+  });
+
+  it('the debrief service reads exactly the 4 safe columns + a bare annotation count', () => {
+    const raw = readSrc('lib/training-debrief/service.ts');
+    const code = readSrcCode('lib/training-debrief/service.ts');
+
+    // Negative (code, comments stripped): no P&L column anywhere.
+    for (const t of PNL_TOKENS) {
+      expect(code, `service.ts must not reference "${t}" in code (§21.5)`).not.toContain(t);
+    }
+
+    // Positive: the trainingTrade read is an EXPLICIT safe projection and the
+    // annotation rollup is a bare count (no findMany of comments / P&L).
+    expect(raw).toContain('db.trainingTrade.findMany(');
+    expect(raw).toContain('db.trainingAnnotation.count(');
+    for (const safe of [
+      'id: true',
+      'enteredAt: true',
+      'pair: true',
+      'systemRespected: true',
+      'lessonLearned: true',
+    ]) {
+      expect(raw, `service.ts safe select must keep "${safe}"`).toContain(safe);
+    }
+    // The trainingTrade query must be a select (projection), never a bare
+    // findMany that would over-fetch the row (incl. resultR/outcome).
+    const findManyIdx = code.indexOf('db.trainingTrade.findMany(');
+    expect(findManyIdx).toBeGreaterThan(-1);
+    expect(code.slice(findManyIdx, findManyIdx + 400)).toContain('select:');
+  });
+
+  it('the debrief module — INCLUDING the Server Action entry point — imports no real-edge module', () => {
+    // The Server Action `app/training/debrief/actions.ts` is the entry point
+    // and is NOT covered by the Block A real-edge glob (it scans lib/ trees,
+    // never app/**). It is a carbon of `app/reflect/actions.ts`, which DOES
+    // `revalidatePath('/dashboard')`. A future dev copy-pasting that line
+    // would silently re-create the real-edge coupling §21.5 forbids — with a
+    // green suite. Pin it here (security-auditor V1.3 finding).
+    for (const rel of [
+      'lib/training-debrief/stats.ts',
+      'lib/training-debrief/service.ts',
+      'lib/training-debrief/week.ts',
+      'app/training/debrief/actions.ts',
+    ]) {
+      const raw = readSrc(rel);
+      for (const forbidden of [
+        '@/lib/scoring',
+        '@/lib/analytics',
+        '@/lib/trades',
+        '@/lib/habit',
+        '@/lib/weekly-report',
+      ]) {
+        expect(raw, `${rel} must not import ${forbidden} (§21.5)`).not.toContain(forbidden);
+      }
+    }
+    // The debrief Server Action must NOT revalidate the real-edge dashboard
+    // (it feeds nothing into engagement/scoring — SPEC §23.2 "aucun nouveau
+    // couplage"). Comments stripped so the documenting comment doesn't trip.
+    const actionCode = readSrcCode('app/training/debrief/actions.ts');
+    expect(
+      actionCode,
+      "the debrief Server Action must not revalidatePath('/dashboard') (§21.5)",
+    ).not.toContain("revalidatePath('/dashboard')");
   });
 });

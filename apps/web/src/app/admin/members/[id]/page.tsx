@@ -8,6 +8,10 @@ import { MemberAdminNotesPanel } from '@/components/admin/member-admin-notes-pan
 import { MemberDouglasPanel } from '@/components/admin/member-douglas-panel';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
 import { MemberTrainingPanel } from '@/components/admin/member-training-panel';
+import {
+  MemberTrainingDebriefsPanel,
+  type MemberTrainingDebriefItem,
+} from '@/components/admin/member-training-debriefs-panel';
 import { MemberWeeklyReportsPanel } from '@/components/admin/member-weekly-reports-panel';
 import { listReportsForMember } from '@/lib/weekly-report/service';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
@@ -19,6 +23,10 @@ import { aggregateMemberDeliveryStats, listMemberDeliveries } from '@/lib/admin/
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
 import { listTrainingTradesAsAdmin } from '@/lib/training/training-trade-admin-service';
+import {
+  listTrainingDebriefsForMember,
+  loadTrainingDebriefStats,
+} from '@/lib/training-debrief/service';
 import { logAudit } from '@/lib/auth/audit';
 import { getDashboardAnalytics } from '@/lib/scoring/dashboard-data';
 import { getLatestBehavioralScore, type SerializedBehavioralScore } from '@/lib/scoring/service';
@@ -74,6 +82,20 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
     tab === 'trades' ? await listMemberTradesAsAdmin(memberId, { status: 'all' }) : null;
 
   const trainingTrades = tab === 'training' ? await listTrainingTradesAsAdmin(memberId) : null;
+
+  // V1.3 — read-only weekly debriefs for the training tab (SPEC §23.4). Stats
+  // recomputed in parallel per debrief; capped at 12 (admin-only, not a hot
+  // path, 30-member scale — same bound as the weekly-reports panel). §21.5:
+  // `loadTrainingDebriefStats` never selects `resultR`/`outcome`.
+  const trainingDebriefItems: MemberTrainingDebriefItem[] | null =
+    tab === 'training'
+      ? await Promise.all(
+          (await listTrainingDebriefsForMember(memberId, 12)).map(async (debrief) => ({
+            debrief,
+            stats: await loadTrainingDebriefStats(memberId, debrief.weekStart),
+          })),
+        )
+      : null;
 
   const douglasData =
     tab === 'mark-douglas'
@@ -182,7 +204,12 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       ) : null}
       {tab === 'trades' && trades ? <MemberTradesList memberId={memberId} trades={trades} /> : null}
       {tab === 'training' && trainingTrades ? (
-        <MemberTrainingPanel memberId={memberId} trades={trainingTrades} />
+        <div className="flex flex-col gap-8">
+          <MemberTrainingPanel memberId={memberId} trades={trainingTrades} />
+          {trainingDebriefItems ? (
+            <MemberTrainingDebriefsPanel items={trainingDebriefItems} />
+          ) : null}
+        </div>
       ) : null}
       {tab === 'mark-douglas' && douglasData ? (
         <MemberDouglasPanel deliveries={douglasData[0]} stats={douglasData[1]} />

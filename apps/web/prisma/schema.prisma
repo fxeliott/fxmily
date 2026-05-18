@@ -240,6 +240,10 @@ model User {
   // from the real edge: no FK to Trade, separate enums, dedicated services.
   trainingTrades              TrainingTrade[]
   trainingAnnotationsAuthored TrainingAnnotation[]     @relation("TrainingAnnotationsAuthored")
+  // V1.3 — member-owned weekly backtest-practice debrief (SPEC §23).
+  // Statistically isolated like the rest of the training surface: no FK to
+  // Trade / WeeklyReview / BehavioralScore, only this implicit userId link.
+  trainingDebriefs            TrainingDebrief[]
   // J9 — Web Push subscriptions (one row per browser/device) + per-category opt-out preferences.
   pushSubscriptions           PushSubscription[]
   notificationPreferences     NotificationPreference[]
@@ -678,6 +682,52 @@ model TrainingAnnotation {
   // Admin "corrections I authored" feed.
   @@index([adminId, createdAt(sort: Desc)])
   @@map("training_annotations")
+}
+
+/// V1.3 — Débrief Training dédié (SPEC §23). Member-owned WEEKLY recap of the
+/// member's BACKTEST practice (SPEC §21). Structurally mirrors `WeeklyReview`
+/// (idempotent `(userId, weekStart)` upsert, `weekStart` @db.Date, `submittedAt`
+/// bumped on edit) BUT stays inside the §21.5 statistical-isolation boundary:
+/// there is NO foreign key to `Trade` / `WeeklyReview` / `BehavioralScore` —
+/// only the implicit `userId` link, exactly like `TrainingTrade`.
+///
+/// The process-stats panel (volume & regularity · system respect · diversity ·
+/// lessons & corrections) is computed at RENDER from `TrainingTrade` /
+/// `TrainingAnnotation` and NEVER stored — see `lib/training-debrief/stats.ts`.
+/// That aggregator NEVER selects `resultR` / `outcome` (posture §23.2: a
+/// debrief shows process effort, never backtest P&L, even intra-training).
+///
+/// The 4 free-text fields are Steenbarger reverse-journaling (2 process
+/// strengths + 1 micro-adjustment + 1 transversal lesson), all mandatory and
+/// hardened at the Zod edge (`safeFreeText` + reject bidi/zero-width =
+/// Trojan-Source canon Fxmily). `userId` cascades on User delete (RGPD §17).
+model TrainingDebrief {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Monday of the debriefed week, local Europe/Paris, materialised at the
+  /// service layer via `parseLocalDate` (UTC-midnight pin) so Postgres
+  /// `@db.Date` truncation never drifts a day (anti-flake invariant PR#96).
+  weekStart DateTime @map("week_start") @db.Date
+
+  /// Steenbarger reverse-journaling — process strength #1 (mandatory). NOT
+  /// P&L: "j'ai attendu mon setup au lieu de forcer", never "+3R en backtest".
+  processStrengthOne String @map("process_strength_one") @db.Text
+  /// Process strength #2 (mandatory).
+  processStrengthTwo String @map("process_strength_two") @db.Text
+  /// One concrete micro-adjustment for next week (mandatory) — small, testable.
+  microAdjustment    String @map("micro_adjustment") @db.Text
+  /// The transversal lesson abstracted from the week's practice (mandatory).
+  transversalLesson  String @map("transversal_lesson") @db.Text
+
+  submittedAt DateTime @default(now()) @map("submitted_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, weekStart])
+  @@index([userId, weekStart(sort: Desc)])
+  @@map("training_debriefs")
 }
 
 /// Notification queue (J4 enqueue, J9 dispatch).

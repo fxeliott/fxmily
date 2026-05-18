@@ -150,7 +150,18 @@ export type AuditAction =
   | 'admin.training_annotation.created'
   | 'admin.training_annotation.deleted'
   | 'admin.training_annotation.media.uploaded'
-  | 'admin.training_trade.viewed';
+  | 'admin.training_trade.viewed'
+  // V1.3 — Débrief Training dédié (SPEC §23, jalon #1 séquence §21.6).
+  // Mirror of the V1.8 REFLECT `*.submitted` / `*.crisis_detected` pair:
+  // `training_debrief.submitted` carries `weekStart` + `crisisLevel` +
+  // `injectionSuspected` (+ `injectionLabels` when suspected) + `wasNew` so a
+  // single row captures the full submission picture; `*.crisis_detected`
+  // duplicates the signal with `matchedLabels` for forensic Sentry pairing.
+  // PII-FREE and §21.5-clean: NEVER the reflective free-text, NEVER a backtest
+  // P&L (`resultR`/`outcome`) — the debrief audit traces a member's reflective
+  // EFFORT only, exactly like the rest of the training surface.
+  | 'training_debrief.submitted'
+  | 'training_debrief.crisis_detected';
 
 /**
  * Resolve the audit slug for an `/api/uploads` screenshot upload by kind.

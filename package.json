@@ -29,7 +29,7 @@
     "lint-staged": "^17.0.4",
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.8.0",
-    "turbo": "^2.9.12"
+    "turbo": "^2.9.14"
   },
   "pnpm": {
     "overrides": {

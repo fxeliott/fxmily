@@ -1036,9 +1036,9 @@ Un espace où chaque membre journalise ses backtests TradingView (analyses + cap
 
 ### 21.6 Hors scope V1.2 (explicite — anti scope-creep)
 
-- URL/replay TradingView interactif → V2 (capture suffit V1.2).
-- Débrief/coaching d'entraînement DÉDIÉ autonome → V2 (V1.2 = training nourrit l'engagement réel + corrections admin).
-- Débrief mensuel, QCM/tests athlète, suivi-formation/cursus = features de vision distinctes → cadrage `/spec` ultérieur dédié (gap-analysis 2026-05-17).
+- URL/replay TradingView interactif → **ÉLIMINÉ définitivement** (décision Eliot 2026-05-18 — l'analyse reste sur TradingView ; l'app log trades/screens/comportement = posture §2 déjà en place ; ne jamais re-proposer). La capture suffit.
+- Débrief/coaching d'entraînement DÉDIÉ autonome → **specé V1.3, voir §23** (jalon #1 de la séquence §21.6 verrouillée 2026-05-18 : débrief training → débrief mensuel → QCM athlète → suivi-formation). V1.2 = training nourrit l'engagement réel + corrections admin.
+- Débrief mensuel (#2), QCM/tests athlète (#3), suivi-formation/cursus (#4) = jalons distincts de la séquence §21.6 → chacun son cadrage `/spec` ultérieur dédié (gap-analysis 2026-05-17 ; séquence verrouillée 2026-05-18, un `/spec` + un build chacun, jamais bundlés §18.4).
 - Analytics training avancées (corrélation training, equity curve training détaillée) au-delà d'un track-record training basique → V2.
 - Vidéo de correction sur training → image-only V1.2 (cf. J4 → J4.5 pour la vidéo).
 
@@ -1069,4 +1069,94 @@ Pourquoi nouvelle session : le contexte d'interview pollue l'implémentation ; u
 
 ---
 
-**Fin du SPEC v1.2**
+## 23. Débrief Training dédié (spec V1.3 — 2026-05-18)
+
+> Source : interview `/spec` 2026-05-18 (2 rounds, 6 questions, autonomie max). **Jalon #1 de la séquence §21.6** (4 jalons verrouillés 2026-05-18 : débrief training → débrief mensuel → QCM athlète → suivi-formation ; un `/spec` + un build chacun, `/clear` entre, jamais bundlés §18.4). HORS §21 V1.2 (différé explicite §21.6 « Débrief/coaching d'entraînement DÉDIÉ autonome »). **Impl = session dédiée post-`/clear`** (règle 1 session = 1 jalon §18.4). Mirror patterns REFLECT V1.8 (`WeeklyReview` / `ReflectionEntry`).
+
+### 23.1 Vision en 1 phrase
+
+Un bilan **hebdomadaire** structuré où le membre prend du recul sur sa **pratique d'entraînement** (ses backtests §21 de la semaine) — un panneau de stats **process** auto-calculées (régularité, discipline, diversité, leçons — **jamais le P&L**) + une réflexion guidée Steenbarger reverse-journaling — visible **en lecture seule** par Eliot pour le coaching, **totalement isolé de l'edge réel** (§21.5) et sans jamais juger les analyses Lhedge (système inconnu de l'assistant, posture §2).
+
+### 23.2 Décisions d'architecture (choix Eliot via interview, avec rationale)
+
+| Décision | Choix validé | Rationale |
+|---|---|---|
+| Cadence | **Hebdomadaire ancré** lundi `@db.Date`, idempotent `(userId, weekStart)`, upsert au re-submit | Choix Eliot (override reco on-demand). Crée un rituel de recul régulier ; miroir exact `WeeklyReview` V1.8 = pattern éprouvé, zéro invention. Semaine ancrée Europe/Paris via `parseLocalDate` (invariant anti-drift `@db.Date` PR#96). |
+| Entité | **`TrainingDebrief` séparée** (mirror `WeeklyReview`) | Isolation béton §21.5 par construction — aucune FK vers `Trade`/`WeeklyReview`/`BehavioralScore`. Cohérent avec l'entité `TrainingTrade` séparée (choix Eliot §21.2). |
+| Structure | **Stats process auto (read-only) + wizard réflexion Steenbarger** : 2 forces de process + 1 micro-ajustement + 1 leçon transversale | Choix Eliot (reco confirmée). « Bilan structuré » = data objective (effort) + sens (réflexion). Reverse-journaling Steenbarger = canon lignée V1.7-prep/REFLECT (strengths-based, pas seulement fix-the-flaws). |
+| Posture résultats | **Strict process — JAMAIS de P&L** : le débrief n'affiche jamais `outcome`/`resultR`, même en training | Choix Eliot (reco confirmée). Cohérent bannière `/training` (« la régularité qui compte, pas le P&L ») + posture §2 maximale + boot « ZÉRO analyse marché ». Le service débrief ne `select` JAMAIS `resultR`/`outcome` (discipline §21.5-style appliquée même intra-training). |
+| Stats surfacées | **Les 4 familles** : Volume & régularité · Respect du système · Diversité de pratique · Leçons & corrections | Choix Eliot (4/4 cochées). Toutes dérivées des champs `TrainingTrade` + count `TrainingAnnotation` existants ; **calculées au render, jamais stockées** (pas de duplication, recompute-safe). |
+| Visibilité admin | **Lecture seule** dans l'onglet `/admin/members/[id]?tab=training` EXISTANT (liste read-only, comme les backtests J-T3) | Choix Eliot (reco confirmée). Garde le jalon ATOMIQUE (1 session = 1 jalon §18.4). L'annotation/notif sur le débrief = jalon §21.6 follow-up séparé éventuel, PAS ce jalon. |
+| Couplage edge réel | **AUCUN nouveau couplage** — faire un débrief n'alimente PAS l'engagement réel | Intégrité §21.5 : seul le `countRecentTrainingActivity` existant (compte les BACKTESTS, pas les débriefs) touche l'engagement. Le débrief est un outil de recul training-interne. |
+| Crisis routing + injection | **Mirror REFLECT carbone** : `detectCrisis` + `detectInjection` sur le corpus réflexion, **persist QUAND MÊME**, audit PII-free + Sentry escalate, redirect `?crisis=` | Décidé (canon Server Action REFLECT). Le free-text réflexif peut porter un signal de détresse même sans champ émotion ; coût nul, sécurité maximale, anti-régression. |
+| Identité visuelle | **DS-v2 cyan `--cy` « Mode entraînement »** (PAS `.v18-theme`) | Invariant §21.7 (`.v18-theme` = REFLECT only). Frontière backtest/live jamais floutée (discipline Mark Douglas). Mirror chrome `/training`. |
+
+### 23.3 Modèle de données
+
+- **`TrainingDebrief`** (`training_debriefs`) : `userId`→User cascade, `weekStart` `@db.Date` (lundi local Europe/Paris), réflexion Steenbarger — `processStrengthOne` (Text, mandatory), `processStrengthTwo` (Text, mandatory), `microAdjustment` (Text, mandatory), `transversalLesson` (Text, mandatory) — tous canon `safeFreeText` + reject bidi/zero-width. `createdAt`/`updatedAt`. **Unique `(userId, weekStart)`** (idempotency, upsert). Index `(userId, weekStart DESC)`. Cascade User delete (RGPD §17). **Aucune FK** vers `Trade`/`WeeklyReview`/`BehavioralScore` (isolation §21.5 par construction).
+- **Stats = calculées au render, jamais stockées** : agrégateur PUR (testable TDD, §21.5-sensible) sur les `TrainingTrade` dont `enteredAt` ∈ `[weekStart, weekStart + 6 j]` (semaine Europe/Paris), **sans jamais `select` `resultR`/`outcome`**. Mapping famille→source explicite : (1) **Volume & régularité** = nombre de backtests + jours civils distincts pratiqués + plus long écart sans pratique (dérivés de `enteredAt`) ; (2) **Respect du système** = répartition tri-state de `systemRespected` (respecté / non respecté / non renseigné) ; (3) **Diversité de pratique** = nombre de `pair` distinctes ; (4) **Leçons & corrections** = nombre de `lessonLearned` non vides (le texte n'est PAS affiché) + `count` des `TrainingAnnotation` de la semaine (§21.5-safe). Recompute-safe, idempotent.
+- Migration **additive** (1 `CREATE TABLE`), `prisma-migration-runner` SAFE, rollback documenté runbook (nouvelle section après §17). **Carry-over prod** : ajoute 1 migration à la maintenance window Eliot.
+
+### 23.4 Comportement attendu
+
+- **Membre** : `/training/debrief` (landing — hero cyan + timeline ~12 derniers débriefs) → `/training/debrief/new` (panneau stats process read-only de la semaine courante + wizard réflexion Steenbarger 4 champs) → submit → upsert `(userId, weekStart)` → redirect landing `?done=1` (calm reveal, anti Black-Hat : pas de XP/streak/fanfare).
+- **Admin** : `/admin/members/[id]?tab=training` (onglet EXISTANT J-T3) → section read-only listant les débriefs hebdo du membre (réflexion + stats process recalculées) — **aucune action** (lecture seule ce jalon).
+- **Edge cases** : semaine training à 0 backtest → le membre PEUT quand même écrire un débrief ; le panneau stats affiche « 0 backtest cette semaine » pédagogique (jamais « score 0 » mensonger, §21.4 canon). Re-submit même semaine = upsert (1 row). Un débrief n'apparaît JAMAIS dans `/journal`, dashboard, scoring, expectancy, corrélation Habit×Trade réels (filtres explicites + **test anti-fuite obligatoire**). Suppression membre = cascade (RGPD).
+- **Crisis** : corpus réflexion → `detectCrisis` ; HIGH/MEDIUM → audit `training_debrief.crisis_detected` + Sentry escalate (HIGH `reportError`, MEDIUM `reportWarning`) → **persist quand même** → redirect `?crisis=` → bannière FR ressources (3114 + SOS Amitié + Suicide Écoute). Mirror REFLECT exact.
+- **Erreurs** : Zod `safeParse` du payload complet côté serveur (autorité) ; `weekStart` = un **lundi local Europe/Paris** matérialisé en `Date` UTC-minuit via `parseLocalDate` (canon `WeeklyReview` `weekly-review/service.ts` — JAMAIS `getUTCDay()` ni `toISOString().slice(0,10)` sur un input naïf, invariant §23.7), dans une fenêtre bornée `[-35 j, +7 j]` ; `weekEnd` = `weekStart + 6 jours` service-computed (SSOT anti-tamper, jamais reçu du client) ; injection suspectée → audit metadata + Sentry warning, **jamais bloquant** (un FP ne doit pas manger le texte membre).
+
+### 23.5 Critères d'acceptation (testables)
+
+- [ ] Migration `TrainingDebrief` additive, `prisma-migration-runner` SAFE, rollback documenté runbook.
+- [ ] **Test anti-fuite** : un `TrainingDebrief` + ses stats n'apparaissent dans AUCUNE surface réelle (assertions explicites journal/dashboard/scoring/expectancy/corrélation) ; le service débrief ne `select` JAMAIS `resultR`/`outcome`.
+- [ ] Membre crée un débrief hebdo (stats process auto + 4 champs réflexion), le voit dans `/training/debrief` + timeline.
+- [ ] Re-submit même semaine = upsert (1 row), pas de duplicate.
+- [ ] Semaine 0 backtest → débrief possible + panneau « 0 backtest » pédagogique (jamais score-0 mensonger).
+- [ ] Stats process exactes (4 familles) calculées depuis `TrainingTrade`/`TrainingAnnotation`, zéro P&L affiché.
+- [ ] Eliot voit les débriefs en lecture seule dans `/admin/members/[id]?tab=training`.
+- [ ] Crisis HIGH/MEDIUM → audit + Sentry escalate + persist + bannière FR (mirror REFLECT).
+- [ ] Posture : aucune surface ne commente la qualité des analyses Lhedge ni n'affiche de P&L ; zéro conseil trade.
+- [ ] Gate complet vert + audit-driven hardening (security-auditor frontière §21.5 + a11y wizard + code-reviewer + prisma-migration-runner).
+
+### 23.6 Hors scope (explicite — anti scope-creep)
+
+- **Annotation admin du débrief** (commentaire/capture/notif « correction reçue »/seen) → jalon §21.6 follow-up séparé éventuel (ce jalon = lecture admin seule).
+- **Débrief mensuel** = jalon #2 distinct de la séquence §21.6 (cadrage `/spec` ultérieur dédié).
+- **QCM athlète** (#3) + **Suivi-formation/cursus** (#4) = jalons #3/#4 distincts de la séquence.
+- Stats avancées training (equity curve training, corrélation training) → V2 (déjà §21.6).
+- Affichage de tout P&L backtest (`resultR`/`outcome`) dans le débrief → exclu par design (posture stricte, choix Eliot).
+- TradingView interactif → ÉLIMINÉ définitivement (décision Eliot 2026-05-18, ne jamais re-proposer).
+
+### 23.7 Invariants (NON négociables)
+
+- Posture Mark Douglas / zéro conseil ni jugement des analyses Lhedge (SPEC §2, verrouillé). Système Lhedge INCONNU de l'assistant — ne JAMAIS l'inventer.
+- **Intégrité statistique §21.5** : le débrief ne touche que `TrainingTrade`/`TrainingAnnotation` (training-scoped) ; l'edge réel ne reçoit JAMAIS rien du débrief ; le service ne `select` JAMAIS `resultR`/`outcome`. Test anti-fuite bloquant.
+- `@db.Date` ⇒ `parseLocalDate`/`localDateOf` Europe/Paris, JAMAIS `toISOString().slice(0,10)` (invariant flake nocturne PR#96).
+- Crisis routing FR + `safeFreeText` + `detectInjection` sur tout free-text (canon REFLECT).
+- SPEC.md = source de vérité (cette §23 fait foi pour le jalon).
+- Stack : Next.js 16 + React 19 TS strict + Prisma 7 + Auth.js v5 + **DS-v2 cyan training** (PAS `.v18-theme` = REFLECT only).
+- Pattern Fxmily : backend-first, TDD logique critique, migration via `prisma-migration-runner`, audit-driven hardening, gate exit-codes-explicites, 1 PR atomic = 1 jalon, checkpoint + supersede.
+- 1 session = 1 jalon : impl en session DÉDIÉE post-`/clear`.
+
+### 23.8 Prochaine étape (recommandée)
+
+1. Relire/ajuster §23 (10 min) — corriger ce qui ne correspond pas à ta vision.
+2. Merger la doc-PR (SPEC §23) → `main`.
+3. `/clear` → nouvelle session dédiée.
+4. Dire : « Implémente SPEC §23 (Débrief Training dédié) — backend-first ».
+5. Découpage suggéré (jalon atomique, ~12-16 fichiers) — **backend, DANS CET ORDRE** : migration `TrainingDebrief` (`prisma-migration-runner`, backup DB avant, jamais prod) → Zod `trainingDebriefSchema.strict()` (+ `weekStart` lundi/`parseLocalDate`, `weekEnd`=+6 j) → **agrégateur stats PUR D'ABORD** (fonction pure testée TDD, §21.5-sensible : ne `select` JAMAIS `resultR`/`outcome` ; mapping famille→champ §23.3 ; c'est la pièce à risque, la blinder avant l'UI) → service user-scoped → Server Action carbone `reflect/actions.ts` → audit slugs PII-free → tests TDD → STOP/confirm (backend-first canon) → **frontend** (`/training/debrief` landing + `/training/debrief/new` wizard cyan + panneau stats + admin read-only dans l'onglet training existant + Playwright auth-gates + happy-path). 1 PR atomic.
+
+Pourquoi nouvelle session : le contexte d'interview pollue l'implémentation ; une session vierge avec §23 comme référence donne une qualité supérieure (pattern Anthropic interview-first, précédent §21 → J-T1..J-T4).
+
+---
+
+## 24. Changelog v1.2 → v1.3 (2026-05-18)
+
+- **§23 ajoutée** : Débrief Training dédié (interview `/spec` 2026-05-18, 2 rounds, 6 questions). Décisions clés : entité `TrainingDebrief` **séparée** (mirror `WeeklyReview`, isolation §21.5 béton), cadence **hebdomadaire ancrée** lundi `@db.Date` idempotent `(userId, weekStart)`, structure **stats process auto + wizard réflexion Steenbarger**, posture **strict process — jamais de P&L** (jamais `resultR`/`outcome`), 4 familles de stats (volume & régularité · respect système · diversité · leçons & corrections) **calculées au render**, visibilité admin **lecture seule** dans l'onglet training existant (jalon atomique), **aucun nouveau couplage** edge réel, crisis routing + injection **mirror REFLECT carbone**, identité **cyan DS-v2** (PAS `.v18-theme`). Impl = jalon dédié post-`/clear`.
+- **§21.6 mis à jour** : la séquence des 4 jalons différés est verrouillée (2026-05-18) ; TradingView interactif **éliminé définitivement** ; le 1ᵉʳ jalon (débrief training) renvoie désormais vers §23.
+- Contexte : suit la complétion §21 Mode Entraînement 4/4 (J-T1..J-T4 #110→#113) + le hardening post-§21 (#114/#115/#130/#129). Le débrief training = jalon #1 de la séquence §21.6, nécessitait amendement SPEC avant tout code (pattern interview-first, précédent §21).
+- Note traçabilité : l'en-tête du SPEC (ligne 5, « Version : 1.1 ») est resté désynchronisé depuis l'ajout de §21 (« spec V1.2 », end-marker « v1.2 »). Drift pré-existant **volontairement non corrigé ici** (hors-scope d'une doc-PR §23 ; un re-sync de l'en-tête mérite sa propre PR pour ne pas masquer le diff §23).
+
+---
+
+**Fin du SPEC v1.3**

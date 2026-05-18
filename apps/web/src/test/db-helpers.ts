@@ -122,7 +122,9 @@ export function seedAdminUser(options: SeedUserOptions = {}): Promise<SeededUser
  *   1. notifications, audit logs, daily_checkins, trades, trade_annotations
  *      → cascade on User delete, but we delete-by-userId for explicitness.
  *   2. Sessions / accounts / invitations are also user-cascading.
- *   3. Finally, the users themselves.
+ *   3. weekly_reviews / reflection_entries (V1.8 REFLECT) — member-owned,
+ *      cascade on User delete, explicit here for the same visibility reason.
+ *   4. Finally, the users themselves.
  *
  * Idempotent: deleting from an empty set is a no-op.
  */
@@ -151,6 +153,10 @@ export async function cleanupTestUsers(): Promise<{ deleted: number }> {
   await db.invitation.deleteMany({ where: { invitedById: { in: ids } } });
   await db.session.deleteMany({ where: { userId: { in: ids } } });
   await db.account.deleteMany({ where: { userId: { in: ids } } });
+  // V1.8 REFLECT tables — already ON DELETE CASCADE in the schema, but
+  // explicit so a future migration that drops the cascade surfaces here.
+  await db.weeklyReview.deleteMany({ where: { userId: { in: ids } } });
+  await db.reflectionEntry.deleteMany({ where: { userId: { in: ids } } });
 
   const result = await db.user.deleteMany({ where: { id: { in: ids } } });
   return { deleted: result.count };

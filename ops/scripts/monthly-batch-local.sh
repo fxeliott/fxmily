@@ -209,7 +209,12 @@ for idx in $ENTRY_INDICES; do
 
   # Validate the pseudonymLabel before interpolating into any path (shell
   # injection prevention via the pseudonymizeMember output contract).
-  if ! [[ "$PSEUDO" =~ ^member-[A-Fa-f0-9]{6,8}$ ]]; then
+  # Pinned to the locked J-M1 contract: `pseudonymLabelSchema`
+  # (lib/schemas/monthly-debrief.ts) + `pseudonymizeMember` emit EXACTLY
+  # 8 UPPERCASE hex. The monthly pipeline is brand-new — no legacy 6-char
+  # pseudonyms exist (unlike the weekly script's `{6,8}` which accommodates
+  # historical V1.5 reports). Tightened deliberately (code-review T2-1).
+  if ! [[ "$PSEUDO" =~ ^member-[A-F0-9]{8}$ ]]; then
     errored=$((errored + 1))
     echo "  [$i/$ENTRY_COUNT] SKIP (invalid pseudonymLabel format — possible compromise) : '${PSEUDO:0:32}'"
     echo "{\"userId\":\"$USER_ID\",\"error\":\"invalid_pseudonym_format\"}" >>"$RESULTS_NDJSON"

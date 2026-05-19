@@ -106,6 +106,9 @@ enum AnnotationMediaType {
 ///   checkin_evening_reminder     : nudges the member to fill their evening check-in (J5).
 ///   douglas_card_delivered       : a Mark Douglas card was triggered for the member (J9).
 ///   weekly_report_ready          : the J8 admin weekly digest is ready (admin-only push, opt-in).
+///   monthly_debrief_ready        : the V1.4 member monthly AI debrief is ready (SPEC §25 —
+///                                  member-facing push, mirror douglas_card_delivered; no
+///                                  admin monthly push by design).
 enum NotificationType {
   annotation_received
   training_annotation_received
@@ -113,6 +116,7 @@ enum NotificationType {
   checkin_evening_reminder
   douglas_card_delivered
   weekly_report_ready
+  monthly_debrief_ready
 }
 
 /// Daily check-in slot (J5, SPEC §6.4 + §7.4).
@@ -244,6 +248,11 @@ model User {
   // Statistically isolated like the rest of the training surface: no FK to
   // Trade / WeeklyReview / BehavioralScore, only this implicit userId link.
   trainingDebriefs            TrainingDebrief[]
+  // V1.4 — monthly AI debrief (SPEC §25). IA-pipeline sibling of WeeklyReport
+  // but dual-section §21.5-walled: no FK to Trade/WeeklyReport/TrainingTrade/
+  // BehavioralScore — only this implicit userId link (the WeeklyReport rows
+  // of the month are read as INPUT by the aggregator, never linked as FK).
+  monthlyDebriefs             MonthlyDebrief[]
   // J9 — Web Push subscriptions (one row per browser/device) + per-category opt-out preferences.
   pushSubscriptions           PushSubscription[]
   notificationPreferences     NotificationPreference[]
@@ -1167,6 +1176,71 @@ model WeeklyReport {
   @@index([userId, weekStart(sort: Desc)])
   @@index([generatedAt(sort: Desc)])
   @@map("weekly_reports")
+}
+
+/// V1.4 — Débrief Mensuel IA dédié (SPEC §25, jalon #2 de la séquence
+/// §21.6). Structural IA-pipeline sibling of `WeeklyReport` (cost-tracking,
+/// JSON output, idempotent upsert) BUT member-facing + dual-section and
+/// inside the §21.5 statistical-isolation boundary:
+///
+///   - NO foreign key to `Trade` / `WeeklyReport` / `TrainingTrade` /
+///     `BehavioralScore` — only the implicit `userId` link (mirror
+///     `TrainingDebrief` / `TrainingTrade`). The ≤4 `WeeklyReport` rows of
+///     the civil month are read as INPUT context by the pure aggregator,
+///     NEVER linked as an FK.
+///   - `summaryReal` (legitimate REAL-trade P&L coaching) and
+///     `summaryTraining` (§21.5 firewall: count/recurrence ONLY, never a
+///     backtest `resultR`/`outcome`/`plannedRR`) are STRICTLY separate
+///     columns so the isolation boundary is visible in the schema itself.
+///   - The debrief feeds NOTHING back into the real edge (no score, no
+///     engagement, no trigger — canon §23).
+///
+/// `monthStart` = local Europe/Paris 1st-of-month, materialised at the
+/// service layer via `parseLocalDate` (UTC-midnight pin, anti-flake PR#96).
+/// `monthEnd` is ALWAYS service-computed (SSOT, anti-tamper) — NEVER
+/// accepted from a client. Idempotency `(userId, monthStart)` upsert.
+/// `userId` cascades on User delete (RGPD §17). Generation is batch-local
+/// Claude Max (SPEC §25.2 — never the paid API); cost tracking kept for
+/// audit/traceability even though the marginal cost is 0€.
+model MonthlyDebrief {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  monthStart  DateTime @map("month_start") @db.Date
+  /// Service-computed last calendar day of the civil month (SSOT,
+  /// anti-tamper — never received from the client, SPEC §25.3/§25.7).
+  monthEnd    DateTime @map("month_end") @db.Date
+  generatedAt DateTime @default(now()) @map("generated_at")
+
+  // Output Claude (Zod `monthlyDebriefOutputSchema`-validated before write).
+  // Dual-section by design (§21.5 boundary visible in the data model).
+  progressionNarrative String @map("progression_narrative") @db.Text
+  summaryReal          String @map("summary_real") @db.Text
+  summaryTraining      String @map("summary_training") @db.Text
+  risks                Json
+  recommendations      Json
+  patterns             Json
+
+  // Cost tracking + observability (mirror WeeklyReport; batch-local Claude
+  // Max ⇒ 0€ marginal but kept for traceability/audit, SPEC §25.3).
+  claudeModel       String  @map("claude_model")
+  inputTokens       Int     @map("input_tokens")
+  outputTokens      Int     @map("output_tokens")
+  cacheReadTokens   Int     @default(0) @map("cache_read_tokens")
+  cacheCreateTokens Int     @default(0) @map("cache_create_tokens")
+  /// Cost in EUR with 6 decimals precision (sub-cent tracking).
+  costEur           Decimal @map("cost_eur") @db.Decimal(10, 6)
+
+  // Member dispatch state (push + Resend). NO admin dispatch field by
+  // design — Eliot reads /admin only, no monthly admin email (SPEC §25.2).
+  sentToMemberAt    DateTime? @map("sent_to_member_at")
+  sentToMemberEmail String?   @map("sent_to_member_email")
+  pushEnqueuedAt    DateTime? @map("push_enqueued_at")
+
+  @@unique([userId, monthStart])
+  @@index([userId, monthStart(sort: Desc)])
+  @@map("monthly_debriefs")
 }
 
 // =============================================================================

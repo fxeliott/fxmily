@@ -104,6 +104,14 @@ const BREACH_TOKENS = [
   'TrainingDebrief',
   'db.trainingDebrief',
   '@/lib/training-debrief',
+  // V1.4 — SPEC §25 Débrief Mensuel IA. The monthly debrief + its snapshot
+  // must never reach a real-edge surface — §21.5/§25.7 BLOCKING: "l'edge
+  // réel ne reçoit JAMAIS rien du débrief". (`@/lib/monthly-debrief` is a
+  // distinct path from `@/lib/schemas/monthly-debrief`; listing the model +
+  // db accessor catches a real-edge import of either, mirror §23.)
+  'MonthlyDebrief',
+  'db.monthlyDebrief',
+  '@/lib/monthly-debrief',
 ];
 
 // =============================================================================
@@ -396,5 +404,102 @@ describe('§21.5 — TrainingDebrief stats are process-only (no backtest P&L)', 
       actionCode,
       "the debrief Server Action must not revalidatePath('/dashboard') (§21.5)",
     ).not.toContain("revalidatePath('/dashboard')");
+  });
+});
+
+// =============================================================================
+// Block G — V1.4 MonthlyDebrief (SPEC §25) stays §21.5-safe
+// =============================================================================
+
+/**
+ * SPEC §25.7 (BLOCKING): the monthly AI debrief's TRAINING section is
+ * count/recurrence ONLY (sourced from the J-T4 sanctioned primitive
+ * `countRecentTrainingActivity`), the aggregator NEVER selects a backtest
+ * `resultR`/`outcome`/`plannedRR`, and the real edge receives NOTHING from
+ * the debrief. Block A (BREACH_TOKENS extended with `MonthlyDebrief` /
+ * `db.monthlyDebrief` / `@/lib/monthly-debrief`) already proves no scoring /
+ * analytics / trades / habit / weekly-report builder module references the
+ * monthly debrief.
+ *
+ * 🚨 Block G is DELIBERATELY NOT a copy of Block F. The §25 firewall is
+ * TRAINING-isolation only — UNLIKE the fully-isolated `TrainingDebrief`,
+ * the monthly debrief's REAL section legitimately reads real-trade P&L
+ * (`SerializedTrade.outcome`, the product) and ingests the ≤4 weekly AI
+ * summaries of the month as INPUT (SPEC §25.3). So `outcome` /
+ * `@/lib/weekly-report` are NOT forbidden here; the proof is STRUCTURAL:
+ * the only training channel is the count-only primitive, and the snapshot
+ * data-contract carries no backtest-P&L identifier.
+ */
+describe('§21.5 — MonthlyDebrief is §21.5-safe (training count-only, no backtest P&L)', () => {
+  // `outcome` is intentionally EXCLUDED — the real section legitimately
+  // reads `SerializedTrade.outcome` of a REAL trade (legitimate real-edge
+  // P&L coaching, the §25 product). `resultR` / `plannedRR` are the
+  // backtest-specific identifiers that must never appear.
+  const BACKTEST_PNL_TOKENS = ['resultR', 'plannedRR'] as const;
+
+  const MONTHLY_FOUNDATION = [
+    'lib/schemas/monthly-debrief.ts',
+    'lib/monthly-debrief/builder.ts',
+    'lib/monthly-debrief/types.ts',
+    'lib/monthly-debrief/month-window.ts',
+  ] as const;
+
+  it('the monthly schema + pure aggregator carry no backtest-P&L identifier', () => {
+    // The training slice is structurally count/recency only; the real
+    // counters use win/loss/BE tallies, never a raw backtest P&L field.
+    for (const rel of MONTHLY_FOUNDATION) {
+      const code = readSrcCode(rel);
+      for (const t of BACKTEST_PNL_TOKENS) {
+        expect(code, `${rel} must not reference "${t}" in code (§21.5/§25.7)`).not.toContain(t);
+      }
+    }
+  });
+
+  it('the monthly module reaches training EXCLUSIVELY via the count-only primitive', () => {
+    // Structural §25.7 proof: the ONLY sanctioned training channel is
+    // `countRecentTrainingActivity` ({ count, enteredAt } — pinned by
+    // Block B). No `db.trainingTrade` projection, no `@/lib/training-debrief`,
+    // no `TrainingTrade` model reference anywhere in the monthly foundation.
+    // (J-M2 adds `lib/monthly-debrief/loader.ts` as a 4th sanctioned
+    // touchpoint importing ONLY the primitive — pinned by Block A then.)
+    for (const rel of MONTHLY_FOUNDATION) {
+      const code = readSrcCode(rel);
+      for (const forbidden of [
+        'TrainingTrade',
+        'db.trainingTrade',
+        '@/lib/training',
+        '@/lib/training-debrief',
+        'TrainingDebrief',
+        'db.trainingDebrief',
+      ]) {
+        expect(
+          code,
+          `${rel} must not reference "${forbidden}" in code (§25.7 — training only via the primitive)`,
+        ).not.toContain(forbidden);
+      }
+    }
+  });
+
+  it('the monthly foundation feeds NOTHING into the real edge (no new coupling, canon §23)', () => {
+    // SPEC §25.7 "l'edge réel ne reçoit JAMAIS rien du débrief". The pure
+    // foundation must not import a real-edge writer nor revalidate the
+    // real-edge dashboard. (J-M2's loader will READ a persisted score for
+    // the real section — sanctioned by §25.3, exactly like
+    // `weekly-report/loader.ts` — so the loader is asserted separately as a
+    // sanctioned touchpoint, not blanket-forbidden, when it lands.)
+    for (const rel of ['lib/monthly-debrief/builder.ts', 'lib/monthly-debrief/month-window.ts']) {
+      const code = readSrcCode(rel);
+      for (const forbidden of [
+        '@/lib/scoring',
+        '@/lib/analytics',
+        '@/lib/habit',
+        'revalidatePath',
+      ]) {
+        expect(
+          code,
+          `${rel} must not couple to ${forbidden} (§25.7 no new edge coupling)`,
+        ).not.toContain(forbidden);
+      }
+    }
   });
 });

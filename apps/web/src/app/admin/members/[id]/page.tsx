@@ -13,7 +13,9 @@ import {
   type MemberTrainingDebriefItem,
 } from '@/components/admin/member-training-debriefs-panel';
 import { MemberWeeklyReportsPanel } from '@/components/admin/member-weekly-reports-panel';
+import { MemberMonthlyDebriefsPanel } from '@/components/admin/member-monthly-debriefs-panel';
 import { listReportsForMember } from '@/lib/weekly-report/service';
+import { listMonthlyDebriefsForMember } from '@/lib/monthly-debrief/service';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
 import { ScoreGaugeGrid } from '@/components/scoring/score-gauge-grid';
 import { Card } from '@/components/ui/card';
@@ -52,12 +54,19 @@ function parseTab(
   value: string | undefined,
 ): Extract<
   MemberTabKey,
-  'overview' | 'trades' | 'training' | 'mark-douglas' | 'weekly-reports' | 'notes'
+  | 'overview'
+  | 'trades'
+  | 'training'
+  | 'mark-douglas'
+  | 'weekly-reports'
+  | 'monthly-debrief'
+  | 'notes'
 > {
   if (value === 'trades') return 'trades';
   if (value === 'training') return 'training';
   if (value === 'mark-douglas') return 'mark-douglas';
   if (value === 'weekly-reports') return 'weekly-reports';
+  if (value === 'monthly-debrief') return 'monthly-debrief';
   if (value === 'notes') return 'notes';
   return 'overview';
 }
@@ -106,6 +115,13 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       : null;
 
   const weeklyReports = tab === 'weekly-reports' ? await listReportsForMember(memberId, 12) : null;
+
+  // V1.4 — read-only monthly debriefs for the monthly-debrief tab
+  // (SPEC §25.4/§25.6). Capped at 12 (admin-only, not a hot path, 30-member
+  // scale). §21.5: read straight from `monthly_debriefs`, never recomputed
+  // against `trades`/`training_trades`.
+  const monthlyDebriefs =
+    tab === 'monthly-debrief' ? await listMonthlyDebriefsForMember(memberId, 12) : null;
 
   const adminNotes = tab === 'notes' ? await listAdminNotesForMember(memberId) : null;
 
@@ -216,6 +232,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       ) : null}
       {tab === 'weekly-reports' && weeklyReports !== null ? (
         <MemberWeeklyReportsPanel reports={weeklyReports} />
+      ) : null}
+      {tab === 'monthly-debrief' && monthlyDebriefs !== null ? (
+        <MemberMonthlyDebriefsPanel debriefs={monthlyDebriefs} />
       ) : null}
       {tab === 'notes' && adminNotes !== null ? (
         <MemberAdminNotesPanel memberId={memberId} notes={adminNotes} />

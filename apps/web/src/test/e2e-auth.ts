@@ -27,6 +27,37 @@ const SESSION_COOKIE_NAMES = [
 ];
 
 /**
+ * Each `loginAs` call must present a DISTINCT client IP.
+ *
+ * The production Credentials `authorize()` consumes `loginIpLimiter`
+ * (burst 10, refill 1 token / 60 s, keyed by `callerIdTrusted()`) on every
+ * login — a deliberate credential-stuffing defense. Under `next dev` in CI
+ * there is no Caddy and no `x-forwarded-for` / `x-real-ip`, so
+ * `callerIdTrusted()` collapses every request to the literal key
+ * `'unknown'`. The full e2e suite then drains that single shared bucket
+ * after ~10 cumulative logins, and every later `loginAs` gets
+ * `CredentialsSignin` with no session cookie — a deterministic,
+ * retry-proof failure that masquerades as a flake.
+ *
+ * Presenting a unique synthetic IP per call gives each login its own fresh
+ * bucket, exactly as N real members on N real IPs would. The limiter stays
+ * fully exercised (it still runs on every login) — it is just no longer
+ * artificially exhausted by the harness collapsing to one origin.
+ *
+ * `callerIdTrusted` reads the LAST `x-forwarded-for` entry; under `next
+ * dev` there is no upstream proxy so our single value is both first and
+ * last. RFC 1918 private addresses make it obvious these are synthetic.
+ */
+let syntheticCallerSeq = 0;
+
+export function nextSyntheticCallerIp(): string {
+  syntheticCallerSeq += 1;
+  const n = syntheticCallerSeq;
+  // 10.<a>.<b>.<c> — 24 bits, far more than any suite will ever need.
+  return `10.${(n >> 16) & 0xff}.${(n >> 8) & 0xff}.${n & 0xff}`;
+}
+
+/**
  * Log in via the real Auth.js v5 Credentials flow:
  *   1. GET /api/auth/csrf → cookie `authjs.csrf-token` + JSON `{ csrfToken }`.
  *   2. POST /api/auth/callback/credentials?json=true with form fields
@@ -53,8 +84,14 @@ export async function loginAs(
   const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000';
   const origin = new URL(baseURL).origin;
 
+  // One synthetic client IP for this whole login attempt — keeps the
+  // per-IP login rate-limit bucket fresh (see `nextSyntheticCallerIp`).
+  const callerIp = nextSyntheticCallerIp();
+
   // Step 1 — fetch CSRF token (sets the csrf cookie in the request context).
-  const csrfRes = await request.get('/api/auth/csrf');
+  const csrfRes = await request.get('/api/auth/csrf', {
+    headers: { 'x-forwarded-for': callerIp },
+  });
   if (csrfRes.status() !== 200) {
     throw new Error(`csrf endpoint returned ${csrfRes.status()}`);
   }
@@ -70,6 +107,7 @@ export async function loginAs(
     },
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
+      'x-forwarded-for': callerIp,
     },
   });
   if (callbackRes.status() >= 400) {

@@ -1039,7 +1039,8 @@ Un espace où chaque membre journalise ses backtests TradingView (analyses + cap
 - URL/replay TradingView interactif → **ÉLIMINÉ définitivement** (décision Eliot 2026-05-18 — l'analyse reste sur TradingView ; l'app log trades/screens/comportement = posture §2 déjà en place ; ne jamais re-proposer). La capture suffit.
 - Débrief/coaching d'entraînement DÉDIÉ autonome → **specé V1.3, voir §23** (jalon #1 de la séquence §21.6 verrouillée 2026-05-18 : débrief training → débrief mensuel → QCM athlète → suivi-formation). V1.2 = training nourrit l'engagement réel + corrections admin.
 - Débrief mensuel (#2) → **specé V1.4, voir §25** (jalon #2 de la séquence §21.6 verrouillée : synthèse IA mensuelle dual-audience, dual-périmètre cloisonné réel / training §21.5-safe ; cadré via interview `/spec` 2026-05-19).
-- QCM/tests athlète (#3), suivi-formation/cursus (#4) = jalons distincts de la séquence §21.6 → chacun son cadrage `/spec` ultérieur dédié (gap-analysis 2026-05-17 ; séquence verrouillée 2026-05-18, un `/spec` + un build chacun, jamais bundlés §18.4).
+- QCM athlète (#3) → **specé V1.5, voir §27** (jalon #3 de la séquence §21.6 verrouillée : auto-évaluation mindset hebdomadaire courte, 100 % déterministe, isolée du score §7.11, restitution premium anti Black-Hat ; cadré via interview `/spec` 2026-05-19).
+- Suivi-formation/cursus (#4) = jalon #4 distinct de la séquence §21.6 → son cadrage `/spec` ultérieur dédié (gap-analysis 2026-05-17 ; séquence verrouillée 2026-05-18, un `/spec` + un build chacun, jamais bundlés §18.4).
 - Analytics training avancées (corrélation training, equity curve training détaillée) au-delà d'un track-record training basique → V2.
 - Vidéo de correction sur training → image-only V1.2 (cf. J4 → J4.5 pour la vidéo).
 
@@ -1263,4 +1264,108 @@ Pourquoi nouvelle session : le contexte d'interview pollue l'implémentation ; u
 
 ---
 
-**Fin du SPEC v1.4**
+## 27. QCM athlète — auto-évaluation mindset hebdomadaire (spec V1.5 — 2026-05-19)
+
+> Source : interview `/spec` 2026-05-19 (2 rounds, 7 questions, autonomie max + méta-délégation calibrée). **Jalon #3 de la séquence §21.6** (4 jalons verrouillés 2026-05-18 : débrief training → débrief mensuel → QCM athlète → suivi-formation ; un `/spec` + un build chacun, `/clear` entre, jamais bundlés §18.4). HORS §21 V1.2 (différé explicite §21.6). **Impl = session dédiée post-`/clear`** (règle 1 session = 1 jalon §18.4). Mirror patterns `TrainingDebrief` §23 (cadence hebdo ancrée lundi `@db.Date`, idempotent `(userId, weekStart)`, profil calculé au render, admin read-only) — instrument **100 % déterministe, zéro IA** (distinct du débrief mensuel IA §25).
+
+### 27.1 Vision en 1 phrase
+
+Un **auto-questionnaire mindset hebdomadaire court** (échelle type Likert, ~8-12 items, 2-3 min — **pas de bonne/mauvaise réponse**) où le membre s'auto-évalue sur les piliers psychologiques de l'athlète-trader (cadre Mark Douglas §7.6), produisant un **profil mental multi-dimensionnel et sa tendance dans le temps** — restitué au membre de façon **calme, strengths-based, ultra-visuelle et premium** (anti Black-Hat) et **visible en lecture seule par Eliot** pour le coaching — **100 % déterministe (zéro IA, zéro API)**, **totalement isolé** de l'edge réel et du score déterministe §7.11 (aucun nouveau couplage, canon §23/§25), sans jamais donner de conseil de trade ni juger les analyses Lhedge (système inconnu de l'assistant, posture §2).
+
+### 27.2 Décisions d'architecture (choix Eliot via interview, avec rationale)
+
+| Décision | Choix validé | Rationale |
+|---|---|---|
+| Nature | **Auto-évaluation mindset** (Likert, pas de bonne/mauvaise réponse) — PAS un test de connaissances, PAS un gate de certification | Choix Eliot explicite (R1). Objectif verbatim : « max de data récurrente pour le meilleur suivi, l'aider, l'améliorer ». Capture le ressenti psychologique du membre = matière première coaching §3. |
+| Cadence | **Hebdomadaire ancrée** lundi `@db.Date`, idempotent `(userId, weekStart)`, upsert au re-submit | Choix Eliot (R2). Mirror EXACT `TrainingDebrief`/`WeeklyReview` (pattern éprouvé, zéro invention). Hebdo court = max de data longitudinale fine sans fatigue de questionnaire (remise en question §27 : un instrument long passé fréquemment ⇒ réponses non fiables). Ancrage Europe/Paris via `parseLocalDate` (invariant anti-drift `@db.Date` PR#96). |
+| Longueur instrument | **Court : ~8-12 items fermés, échelle Likert 1-5**, ~2-3 min | Décidé (méta-délégation, rationale qualitatif) : la fiabilité psychométrique d'un instrument répété tient à sa brièveté + sa stabilité. Échelle 1-5 = charge cognitive minimale, mobile-first. |
+| Entité | **`MindsetCheck` séparée** (mirror `TrainingDebrief`/`WeeklyReport`) | Isolation §21.5 béton — aucune FK vers `Trade`/`BehavioralScore`/`TrainingTrade`/`WeeklyReport`. Cohérent doctrine entités séparées (canon §21/§23/§25). |
+| Provenance des items | **Instrument statique versionné** (`instrumentVersion`), écrit par Claude Code à l'impl + **validé par Eliot**, en code (PAS de CRUD admin) | Décidé (méta-délégation, remise en question §27). Validité longitudinale = l'instrument doit être STABLE entre passations ; questions éditables en admin ⇒ dérive ⇒ comparaison temporelle cassée. Mirror le canon « ~50-100 fiches MD §7.6 écrites à l'impl, validées Eliot ». Comparaison de tendance **intra-`instrumentVersion` uniquement**. |
+| Dimensions mesurées | **Piliers Mark Douglas §7.6** (set proposé §27.3, à ajuster par Eliot à la relecture — son domaine de coach) | Dérivées du cadre explicite de l'app (§2/§7.6) + voisines conceptuelles des 4 dims déterministes §7.11 mais **distinctes** (auto-perçu ≠ mesuré). Eliot valide/ajuste le set à l'étape §27.8.1. |
+| Couplage scoring/engagement | **AUCUN nouveau couplage** — le QCM ne nourrit NI `BehavioralScore` §7.11 NI engagement NI trigger | Décidé (méta-délégation, remise en question §27). Injecter de l'auto-déclaratif subjectif dans le score **déterministe** (thèse produit §7.11) le corromprait. Canon §23/§25 « aucun nouveau couplage ». Le QCM est un instrument de recul/connaissance, pas un input du moteur. |
+| Génération | **100 % déterministe — ZÉRO IA, zéro pipeline, zéro API** | Décidé (méta-délégation R2). Garde le jalon atomique (§18.4), zéro coût, zéro bannière EU AI Act, zéro surface crisis-sur-output-IA. La data `MindsetCheck` devient un **INPUT disponible** pour la synthèse mensuelle IA §25 dans un jalon ultérieur (pas de nouveau pipeline ici, isolation préservée). « Plus » ≠ mieux : la bonne archi = instrument pur + réutilisation du pipeline §25 déjà construit. |
+| Free-text | **Aucun champ libre v1 — instrument 100 % fermé (Likert only)** | Décidé. « QCM » = choix multiples par définition. Zéro free-text ⇒ zéro surface `detectCrisis`/`detectInjection`/`safeFreeText` (jalon plus atomique). La réflexion écrite guidée = le rôle du **débrief training §23** (wizard Steenbarger), pas du QCM. Champ réflexif = explicitement hors-scope (§27.6). |
+| Restitution membre | **Calme, strengths-based, ULTRA-VISUELLE et premium** (radar multi-dimensions + courbes de tendance + texte structuré, animations premium) ; anti Black-Hat | Choix Eliot (R2, verbatim « max de data visuel, schéma/graphique, ultra design, animation premium, ultra structuré »). Cadre Steenbarger strengths-based (canon §23) : jamais « score nul » mensonger, jamais fanfare/streak/classement. Recharts (stack §4/§20.1) + Framer Motion (§8.3) + DS-v2. |
+| Visibilité admin | **Lecture seule** dans `/admin/members/[id]` (section dédiée, mirror §23/§25 « aucune action ») | Choix Eliot (objectif « le meilleur suivi »). Garde le jalon ATOMIQUE (§18.4). L'annotation/notif sur le QCM = follow-up §21.6 séparé éventuel. |
+| Notif membre | **Push `mindset_check_ready` (nouveau `NotificationType`, mirror J9) — rappel hebdo doux** ; PAS d'email | Décidé (méta-délégation, calme/anti-FOMO canon §7.9/§23). Rappel non culpabilisant ; le rituel hebdo se suffit dans l'app, anti sur-notification. |
+| Identité visuelle | **DS-v2 neutre** — **PAS de cyan §21.7, PAS de `.v18-theme`** | Décidé : l'accent cyan §21.7 est le marqueur frontière du **mode entraînement §21 uniquement** ; le QCM est un instrument de psychologie neutre (ni réel ni training). `.v18-theme` = REFLECT only (invariant). |
+| Couplage edge réel / training | **AUCUN** — le QCM ne touche ni `Trade` ni `TrainingTrade` ; §21.5 trivialement satisfait (0-FK, ne `select` jamais aucun P&L) | Intégrité §21.5 canon. Instrument psychologique pur, orthogonal au réel et au training. |
+
+### 27.3 Modèle de données
+
+- **`MindsetCheck`** (`mindset_checks`) : `userId`→User cascade, `weekStart` `@db.Date` (lundi local Europe/Paris ; `weekEnd` = `weekStart + 6 j` **service-computed SSOT anti-tamper**, jamais reçu du client), `instrumentVersion` (Int — version de l'instrument figé en code), `responses` (Json — map `itemId → valeur Likert 1-5`, validée Zod strict contre le schéma de la version d'instrument), `createdAt`/`updatedAt`. **Unique `(userId, weekStart)`** (idempotency, upsert). Index `(userId, weekStart DESC)`. Cascade User delete (RGPD §17). **Aucune FK** vers `Trade`/`TrainingTrade`/`WeeklyReport`/`BehavioralScore` (isolation §21.5 par construction — le QCM est psychologie pure, orthogonale).
+- **Instrument figé en code, versionné** : `lib/mindset/instrument.ts` exporte l'instrument courant = liste d'items `{ id, dimension, libellé FR, ancrage Likert 1-5 }`, écrit par Claude Code à l'impl, **validé par Eliot**. Tout changement d'items ⇒ **bump `instrumentVersion`** (les tendances ne se comparent qu'intra-version — intégrité longitudinale).
+- **Profil = calculé au render, jamais stocké** : agrégateur **PUR** (testable TDD) mappant `responses` → score par dimension (moyenne normalisée 0-100 des items de la dimension, recompute-safe, idempotent). Set proposé (cadre Mark Douglas §7.6, **à ajuster Eliot §27.8.1**) : (1) **Acceptation de l'incertitude / pensée probabiliste** ; (2) **Détachement résultat & ego** ; (3) **Discipline & respect du plan (auto-perçu)** ; (4) **Régulation émotionnelle / gestion du tilt** ; (5) **Confiance vs sur-confiance** ; (6) **Patience & anti-FOMO**. ~2 items/dimension ⇒ ~12 items. Aucune dimension ne porte de notion de « réussite/échec ».
+- Migration **additive** : 1 `CREATE TABLE` + 1 valeur enum `mindset_check_ready` sur `NotificationType` (`ALTER TYPE ADD VALUE`). `prisma-migration-runner` SAFE, rollback documenté runbook (nouvelle section après §19). **Déploiement prod = automatique** via `deploy.yml` (CI/CD `DEPLOY_PATH=hetzner` → `prisma migrate deploy` sur push `main`, vérifié 2026-05-19) — **plus de carry-over manuel** (canon « maintenance window » §23/§25 corrigé : le pipeline applique les migrations au merge).
+
+### 27.4 Comportement attendu
+
+- **Membre** : `/mindset` (landing — hero + dashboard premium ultra-visuel : radar du profil de la semaine + courbes de tendance multi-semaines par dimension + lecture strengths-based structurée + timeline ~12 dernières passations) → `/mindset/new` (instrument hebdo court de la semaine courante : ~8-12 items Likert 1-5, barre de progression, mobile-first) → submit → upsert `(userId, weekStart)` → redirect landing `?done=1` (calm reveal, anti Black-Hat : pas de XP/streak/score-shaming/fanfare).
+- **Admin** : `/admin/members/[id]` → section **read-only** listant les `MindsetCheck` du membre (profil + tendance recalculés) — **aucune action** (lecture seule ce jalon).
+- **Edge cases** : 0 passation passée → état vide pédagogique (jamais « score 0 » mensonger, canon §21.4/§23.4) ; re-submit même semaine = upsert (1 row) ; **changement d'`instrumentVersion`** ⇒ les courbes de tendance segmentent par version (jamais comparer entre versions — intégrité psychométrique) ; semaine sans passation = trou honnête dans la tendance (jamais extrapolé) ; suppression membre = cascade (RGPD) ; un `MindsetCheck` n'apparaît JAMAIS dans `/journal`, dashboard, scoring, expectancy, corrélation Habit×Trade réels, ni dans aucune surface training (filtres explicites + **test anti-fuite obligatoire**).
+- **Erreurs** : Zod `safeParse` strict du payload serveur (autorité) — chaque `itemId` doit appartenir au schéma de l'`instrumentVersion` courante, chaque valeur ∈ {1..5}, instrument complet requis (refus serveur + message clair sinon) ; `weekStart` = un **lundi local Europe/Paris** matérialisé `@db.Date` UTC-minuit via `parseLocalDate` (canon `WeeklyReview`/`TrainingDebrief` — JAMAIS `getUTCDay()` ni `toISOString().slice(0,10)` sur input naïf, invariant §27.7), fenêtre bornée `[-35 j, +7 j]` ; `weekEnd` service-computed (SSOT anti-tamper).
+
+### 27.5 Critères d'acceptation (testables)
+
+- [ ] Migration `MindsetCheck` + valeur enum `mindset_check_ready` additive, `prisma-migration-runner` SAFE, rollback documenté runbook.
+- [ ] **Test anti-fuite §21.5** : un `MindsetCheck` n'apparaît dans AUCUNE surface réelle ni training (assertions explicites journal/dashboard/scoring/expectancy/corrélation/training) ; entité 0-FK ; ne nourrit NI `BehavioralScore` NI engagement NI trigger.
+- [ ] Agrégateur de profil **PUR** testé TDD : `responses` → score 0-100 par dimension, recompute-safe, idempotent, mapping item→dimension exact §27.3.
+- [ ] Instrument **versionné** : bump `instrumentVersion` sur changement d'items ; tendance comparée intra-version uniquement (test de segmentation).
+- [ ] Membre passe l'instrument hebdo court (Likert 1-5), le voit dans `/mindset` + dashboard premium (radar + tendances + lecture strengths-based) + timeline.
+- [ ] Re-submit même semaine = upsert (1 row), pas de duplicate.
+- [ ] 0 passation → état vide pédagogique (jamais score-0 mensonger) ; semaine manquante = trou honnête (jamais extrapolé).
+- [ ] Restitution **calme strengths-based** (anti Black-Hat : zéro fanfare/streak/classement/score-shaming) ET **ultra-visuelle premium** (Recharts radar + courbes tendance + Framer Motion + DS-v2, mobile-first iPhone SE/15).
+- [ ] Eliot voit les `MindsetCheck` en **lecture seule** dans `/admin/members/[id]` ; aucun couplage scoring.
+- [ ] Push `mindset_check_ready` rappel hebdo doux ; **pas d'email** ; pas de fanfare.
+- [ ] **Zéro IA / zéro API / zéro pipeline** ; **zéro free-text** (instrument 100 % fermé) ⇒ pas de surface crisis/injection ; pas de bannière EU AI Act (rien généré par IA).
+- [ ] Posture : aucune surface ne commente la qualité des analyses Lhedge ni n'affiche de P&L ; zéro conseil trade.
+- [ ] Gate complet vert + audit-driven hardening (security-auditor frontière §21.5 + 0-couplage + accessibility-reviewer **dont a11y des charts** : jamais information couleur-seule, équivalents texte, WCAG 2.2 AA + ui-designer qualité premium + code-reviewer + `prisma-migration-runner`).
+
+### 27.6 Hors scope (explicite — anti scope-creep)
+
+- **Synthèse IA du mindset** (narration de l'évolution) → exclu v1 (instrument déterministe pur, choix tranché). La data `MindsetCheck` = **INPUT futur** pour la synthèse mensuelle IA §25 (jalon ultérieur, pas de nouveau pipeline ici).
+- **Champ réflexif libre / wizard d'écriture** → exclu (c'est le rôle du débrief training §23 Steenbarger). Le QCM est 100 % fermé ⇒ pas de surface crisis/injection.
+- **Couplage au `BehavioralScore` §7.11 / engagement / triggers** → exclu par design (intégrité du score déterministe, canon §23/§25).
+- **CRUD admin des questions** → exclu (instrument figé versionné = validité longitudinale ; édition libre = dérive).
+- **Annotation admin du QCM** (commentaire/notif « correction reçue »/seen) → follow-up §21.6 séparé éventuel (ce jalon = lecture admin seule).
+- **Gate « prêt à trader live » / certification / notion de réussite-échec** → exclu (auto-évaluation sans bonne réponse, choix Eliot R1).
+- **Email membre / digest** → exclu (push doux suffit, anti sur-notification).
+- **QCM adaptatif, item-response-theory, branching** → V2 (instrument fixe court v1).
+- **Suivi-formation/cursus (#4)** = jalon #4 distinct de la séquence §21.6 (cadrage `/spec` ultérieur dédié, jamais bundlé §18.4).
+
+### 27.7 Invariants (NON négociables)
+
+- Posture Mark Douglas / zéro conseil ni jugement des analyses Lhedge (SPEC §2, verrouillé). Système Lhedge INCONNU de l'assistant — ne JAMAIS l'inventer.
+- **Intégrité statistique §21.5 + score déterministe §7.11** : `MindsetCheck` entité 0-FK ; ne nourrit JAMAIS `BehavioralScore`/engagement/trigger/edge réel/training ; ne `select` JAMAIS aucun P&L réel ou backtest. Test anti-fuite bloquant.
+- **Validité longitudinale** : instrument figé **versionné** ; tendance comparée intra-`instrumentVersion` uniquement.
+- **100 % déterministe** : zéro IA, zéro API Anthropic (payante ou batch), zéro pipeline — donc pas de bannière EU AI Act (rien généré par IA). Si une synthèse IA est voulue un jour, elle passera par le pipeline §25 existant (jalon séparé).
+- `@db.Date` ⇒ `parseLocalDate`/`localDateOf` Europe/Paris, JAMAIS `toISOString().slice(0,10)` ni `getUTCDay()` sur input naïf (invariant flake nocturne PR#96).
+- Anti Black-Hat (canon §23) : restitution calme strengths-based ; jamais « score nul » mensonger, fanfare, streak, classement, score-shaming.
+- DS-v2 **neutre** : PAS de cyan §21.7 (= mode training only), PAS de `.v18-theme` (= REFLECT only).
+- SPEC.md = source de vérité (cette §27 fait foi pour le jalon).
+- Stack : Next.js 16 + React 19 TS strict + Prisma 7 + Auth.js v5 + DS-v2 + Recharts + Framer Motion + mobile-first PWA dark-only.
+- Pattern Fxmily : backend-first, **agrégateur de profil pur TDD-first AVANT l'UI** (canon §23.8/§25.8 — pièce à risque blindée d'abord), migration via `prisma-migration-runner`, audit-driven hardening (security-auditor + accessibility-reviewer + ui-designer + code-reviewer + `prisma-migration-runner`), gate exit-codes-explicites, 1 PR atomic = 1 jalon, checkpoint + supersede.
+- 1 session = 1 jalon : impl en session DÉDIÉE post-`/clear`.
+
+### 27.8 Prochaine étape (recommandée)
+
+1. Relire/ajuster §27 (10 min) — **en particulier le set de dimensions §27.3 et les items de l'instrument (ton domaine de coach)** : corriger ce qui ne correspond pas à ta vision.
+2. Merger la doc-PR (SPEC §27) → `main`.
+3. `/clear` → nouvelle session dédiée.
+4. Dire : « Implémente SPEC §27 (QCM athlète) — backend-first ».
+5. Découpage suggéré (jalon atomique, ~12-16 fichiers) — **backend, DANS CET ORDRE** : migration `MindsetCheck` + enum (`prisma-migration-runner`, backup DB avant, jamais prod) → instrument figé versionné `lib/mindset/instrument.ts` (items validés Eliot) → Zod `mindsetCheckSchema.strict()` (validation item↔version + Likert 1-5 + `weekStart` lundi `parseLocalDate` + `weekEnd`=+6 j) → **agrégateur de profil PUR D'ABORD** (fonction pure testée TDD : `responses`→score/dimension, segmentation par version ; c'est la pièce à risque) → service user-scoped → Server Action carbone `training-debrief`/`reflect` → audit slugs PII-free → tests TDD anti-fuite → STOP/confirm (backend-first canon) → **frontend** (`/mindset` landing + dashboard premium Recharts radar+tendances + `/mindset/new` instrument + admin read-only section + Playwright auth-gates + happy-path). 1 PR atomic.
+
+Pourquoi nouvelle session : le contexte d'interview pollue l'implémentation ; une session vierge avec §27 comme référence donne une qualité supérieure (pattern Anthropic interview-first, précédents §21 → J-T1..J-T4, §23 → #132, §25 → #135).
+
+---
+
+## 28. Changelog v1.4 → v1.5 (2026-05-19)
+
+- **§27 ajoutée** : QCM athlète — auto-évaluation mindset hebdomadaire (interview `/spec` 2026-05-19, 2 rounds, 7 questions + méta-délégation calibrée). Décisions clés : **auto-évaluation mindset** (Likert, pas de bonne/mauvaise réponse), cadence **hebdomadaire ancrée** lundi `@db.Date` idempotent `(userId, weekStart)` (mirror §23), instrument **court ~8-12 items, statique versionné** (validité longitudinale ; écrit à l'impl + validé Eliot ; PAS de CRUD admin), entité `MindsetCheck` **séparée** (0-FK, isolation §21.5 béton), **aucun nouveau couplage** (ne nourrit NI `BehavioralScore` §7.11 NI engagement NI trigger — intégrité du score déterministe), **100 % déterministe (zéro IA / zéro API / zéro pipeline / zéro bannière EU AI Act)** — la data devient un INPUT futur de la synthèse mensuelle IA §25, **zéro free-text** (instrument fermé ⇒ pas de surface crisis/injection), restitution membre **calme strengths-based ET ultra-visuelle premium** (Recharts radar+tendances + Framer Motion + DS-v2, anti Black-Hat), visibilité admin **lecture seule**, push `mindset_check_ready` doux **sans email**, DS-v2 **neutre** (PAS cyan §21.7, PAS `.v18-theme`). Impl = jalon dédié post-`/clear`.
+- **§21.6 mis à jour** : le jalon #3 (QCM athlète) renvoie désormais vers §27 ; #4 (suivi-formation/cursus) reste à cadrer `/spec` (un `/spec` + un build, jamais bundlé §18.4).
+- Contexte : suit le ship du jalon #2 §21.6 (Débrief Mensuel IA — spec §25 #134 `0ce2f79`, impl #135 `3603954` auto-déployé prod 2026-05-19T15:12:24Z). Le QCM athlète = jalon #3 de la séquence §21.6 verrouillée, nécessitait un amendement SPEC avant tout code (pattern interview-first, précédents §21/§23/§25).
+- Note traçabilité : l'en-tête du SPEC (ligne 5) reste désynchronisé (drift pré-existant depuis §21, déjà noté §24/§26) — **volontairement non corrigé ici** (hors-scope d'une doc-PR §27 ; un re-sync de l'en-tête mérite sa propre PR pour ne pas masquer le diff §27).
+
+---
+
+**Fin du SPEC v1.5**

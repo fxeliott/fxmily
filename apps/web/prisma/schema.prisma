@@ -109,6 +109,9 @@ enum AnnotationMediaType {
 ///   monthly_debrief_ready        : the V1.4 member monthly AI debrief is ready (SPEC §25 —
 ///                                  member-facing push, mirror douglas_card_delivered; no
 ///                                  admin monthly push by design).
+///   mindset_check_ready          : the V1.5 weekly mindset self-check is available (SPEC §27 —
+///                                  member-facing push, mirror monthly_debrief_ready;
+///                                  deterministic, no AI).
 enum NotificationType {
   annotation_received
   training_annotation_received
@@ -117,6 +120,7 @@ enum NotificationType {
   douglas_card_delivered
   weekly_report_ready
   monthly_debrief_ready
+  mindset_check_ready
 }
 
 /// Daily check-in slot (J5, SPEC §6.4 + §7.4).
@@ -253,6 +257,11 @@ model User {
   // BehavioralScore — only this implicit userId link (the WeeklyReport rows
   // of the month are read as INPUT by the aggregator, never linked as FK).
   monthlyDebriefs             MonthlyDebrief[]
+  // V1.5 — weekly mindset self-check (SPEC §27). Deterministic, zero-AI.
+  // 0-FK statistically isolated like the rest of the training surface:
+  // no FK to Trade / WeeklyReport / BehavioralScore, only this implicit
+  // userId link — feeds nothing back into the real edge (§21.5/§27.7).
+  mindsetChecks               MindsetCheck[]
   // J9 — Web Push subscriptions (one row per browser/device) + per-category opt-out preferences.
   pushSubscriptions           PushSubscription[]
   notificationPreferences     NotificationPreference[]
@@ -1241,6 +1250,56 @@ model MonthlyDebrief {
   @@unique([userId, monthStart])
   @@index([userId, monthStart(sort: Desc)])
   @@map("monthly_debriefs")
+}
+
+/// V1.5 — QCM athlète / auto-évaluation mindset hebdomadaire (SPEC §27,
+/// jalon #3 de la séquence §21.6). Member-owned WEEKLY mindset self-check,
+/// 100% DETERMINISTIC — zero AI, zero API, zero pipeline (mirror of the
+/// deterministic check-in surface, NOT of the Claude debrief pipeline).
+///
+///   - 0-FK statistical isolation BY CONSTRUCTION (§21.5/§27.7): the ONLY
+///     relation is the implicit `userId` link (mirror `TrainingDebrief` /
+///     `MonthlyDebrief` / `TrainingTrade`). NO foreign key to `Trade` /
+///     `WeeklyReport` / `TrainingTrade` / `BehavioralScore`. A mindset row
+///     can never reference a real-edge object, so it can never leak into /
+///     be fed by the real track-record / score / expectancy / engagement /
+///     trigger. The isolation is enforced by the schema shape itself.
+///   - This entity feeds NOTHING back into the real edge (no
+///     `BehavioralScore`, no engagement, no trigger — canon §23/§25/§27.7).
+///
+/// The questionnaire instrument is a FROZEN, code-VERSIONED Likert
+/// instrument (`lib/mindset/instrument.ts`) — `instrumentVersion` pins the
+/// exact item set a submission was answered against, guaranteeing
+/// longitudinal validity even when the instrument is later revised.
+/// `responses` is the raw Likert payload (item↔version validated at the Zod
+/// edge). The mindset profile (dimensions, trends) is ALWAYS computed at
+/// render from `responses` + the versioned instrument, NEVER stored —
+/// derived data has no column (anti-drift, single source of truth).
+///
+/// `weekStart` = Monday of the assessed week, local Europe/Paris,
+/// materialised at the service layer via `parseLocalDate` (UTC-midnight
+/// pin) so Postgres `@db.Date` truncation never drifts a day (anti-flake
+/// invariant PR#96). Idempotency `(userId, weekStart)` upsert — a re-submit
+/// of the same week updates the same row (`updatedAt @updatedAt` covers the
+/// re-submit; no dedicated `submittedAt`). No dispatch column — the
+/// `notification.enqueued` audit row is the dispatch source of truth (canon
+/// `TrainingDebrief`). `userId` cascades on User delete (RGPD §17).
+model MindsetCheck {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  weekStart DateTime @map("week_start") @db.Date
+
+  instrumentVersion Int  @map("instrument_version")
+  responses         Json
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, weekStart])
+  @@index([userId, weekStart(sort: Desc)])
+  @@map("mindset_checks")
 }
 
 // =============================================================================

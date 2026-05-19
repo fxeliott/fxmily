@@ -1349,9 +1349,183 @@ docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
 4. **Restore** depuis `pg_dump` step 19.2.2 si des rows
    `monthly_debrief_ready` (queue / préférences) avaient été préservées.
 
+## 20. Rollback V1.5 §27 mindset_check migration (`20260519170000_v1_5_mindset_check`)
+
+> **Quand l'utiliser** : si la migration V1.5 "QCM athlète" (SPEC §27,
+> jalon #3 de la séquence §21.6 — table `mindset_checks` + valeur enum
+> `mindset_check_ready` sur `NotificationType`, auto-évaluation mindset
+> hebdomadaire Likert 100 % déterministe zéro-IA) a été déployée en prod et
+> qu'un blocker post-deploy nécessite de la retirer complètement. Purement
+> ADD-only (1 valeur enum + 1 table neuve + 1 FK `user_id → users`
+> `ON DELETE CASCADE` côté `mindset_checks` uniquement). Brand-new + vide au
+> moment de l'apply → rollback immédiat loss-free.
+>
+> ⚠️ **NON-RÉVERSIBLE par un simple `BEGIN/COMMIT`** : comme §17/§19,
+> PostgreSQL n'a **pas** d'`ALTER TYPE … DROP VALUE`. La partie enum est une
+> **procédure manuelle de reconstruction du type** (exception au point 3 de
+> la Note transversale). NE PAS automatiser dans un bloc naïf comme
+> §15/§16/§18. C'est le **deuxième rollback enum-rebuild consécutif** après
+> §19 (`monthly_debrief_ready`) — le type reconstruit ci-dessous repart donc
+> du jeu **7 valeurs** post-§25 (incluant `monthly_debrief_ready`), pas du
+> jeu 6 valeurs de §19.
+>
+> ⚠️ **Risque data loss** : dès qu'un membre a une auto-évaluation persistée
+> (`mindset_checks` — `responses` Likert member-authored), le `DROP TABLE`
+> les détruit irréversiblement. `pg_dump -t mindset_checks` atomique AVANT
+> est OBLIGATOIRE (RGPD : auto-évaluation member-authored).
+>
+> **Invariant §21.5/§27.7 préservé** : `mindset_checks` ne touche AUCUN objet
+> real-edge — zéro FK vers `trades` / `weekly_reports` / `training_trades` /
+> `behavioral_scores`, la seule relation est
+> `mindset_checks.user_id → users.id` (même forme que `training_debriefs` /
+> `monthly_debriefs`). Le profil/tendance sont calculés purement au render
+> (jamais stockés) — le rollback ne peut pas affecter le track-record /
+> score / engagement / trigger. Indépendant de §15/§16/§17/§18/§19 (aucune
+> FK croisée). Si §19 (`monthly_debriefs`) est aussi rollé, **roller §20 EN
+> PREMIER** (ordre inverse de l'apply : ce PR après #135).
+
+### 20.1 Pré-requis — quiesce
+
+Stop le web pour qu'aucune nouvelle row ne soit enqueue avec le nouveau
+type ni qu'un membre ne soumette une auto-évaluation pendant le DROP :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+```
+
+Vérifie l'état Prisma :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+    FROM _prisma_migrations WHERE migration_name LIKE '%v1_5_mindset_check%' \
+    ORDER BY started_at DESC;"
+```
+
+### 20.2 Backup `mindset_checks` + purge des rows utilisant l'enum
+
+1. **Backup atomique de `mindset_checks`** : si des auto-évaluations ont
+   déjà été soumises (RGPD : `responses` Likert member-authored), le `DROP
+TABLE` les détruit irréversiblement. `pg_dump` AVANT :
+
+   ```bash
+   TS=$(date -u +%Y%m%dT%H%M%SZ)
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     pg_dump -U fxmily -d fxmily -t mindset_checks --data-only --column-inserts \
+     | gzip > "/etc/fxmily/backups/pre-v1.5-rollback-mindset-check-${TS}.sql.gz"
+   ```
+
+2. **Purge des rows enum** — seulement si le runtime qui enqueue
+   `mindset_check_ready` (cron `mindset-check-reminders`) a shippé + tourné
+   (sinon aucune row n'utilise la valeur → sauter à 20.3). Data-loss limité
+   aux rows `notification_queue` / `notification_preferences` de
+   `type = 'mindset_check_ready'` (intents push transients + préférences
+   opt-out par membre pour CETTE catégorie ; aucun contenu membre-authored,
+   aucune donnée backtest, aucune donnée real-edge). `pg_dump` ces 2 tables
+   AVANT le DELETE si elles doivent être préservées pour un re-apply :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     pg_dump -U fxmily -d fxmily \
+     -t notification_queue -t notification_preferences \
+     --data-only --column-inserts \
+     | gzip > "/etc/fxmily/backups/pre-v1.5-rollback-notif-enum-${TS}.sql.gz"
+   ```
+
+   ```sql
+   DELETE FROM "notification_queue"       WHERE "type" = 'mindset_check_ready';
+   DELETE FROM "notification_preferences" WHERE "type" = 'mindset_check_ready';
+   ```
+
+### 20.3 SQL rollback — DROP TABLE + reconstruction manuelle du type
+
+Transcrit verbatim du header de migration (`20260519170000_v1_5_mindset_
+check/migration.sql` step 4). Une seule transaction, web stoppé. **Step
+20.2.2 doit être complété d'abord** — le `CREATE TYPE` échoue fast si une
+row survivante référence encore la valeur :
+
+```sql
+BEGIN;
+DROP TABLE IF EXISTS "mindset_checks";
+ALTER TYPE "NotificationType" RENAME TO "NotificationType_old";
+CREATE TYPE "NotificationType" AS ENUM (
+  'annotation_received',
+  'training_annotation_received',
+  'checkin_morning_reminder',
+  'checkin_evening_reminder',
+  'douglas_card_delivered',
+  'weekly_report_ready',
+  'monthly_debrief_ready'
+);
+ALTER TABLE "notification_queue"
+  ALTER COLUMN "type" TYPE "NotificationType"
+  USING ("type"::text::"NotificationType");
+ALTER TABLE "notification_preferences"
+  ALTER COLUMN "type" TYPE "NotificationType"
+  USING ("type"::text::"NotificationType");
+DROP TYPE "NotificationType_old";
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260519170000_v1_5_mindset_check';
+COMMIT;
+```
+
+> ⚠️ Le `CREATE TYPE` repart du jeu **7 valeurs** post-§25 (incluant
+> `monthly_debrief_ready`) — le re-cast des 2 colonnes est lossless pour
+> toutes les rows non-`mindset_check_ready`. Si le `BEGIN`/`COMMIT` échoue à
+> mi-parcours, Postgres rollback automatique — état cohérent (tout ou rien).
+> Re-vérifie via `\dt mindset_checks` (table absente) + la requête enum de
+> 20.5.
+
+### 20.4 Re-déploiement de l'image pré-V1.5
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<pre-v1.5-mindset-check-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+```
+
+### 20.5 Vérification post-rollback
+
+```bash
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dt mindset_checks"   # 0 rows (table absente)
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c \
+  "SELECT 1 FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid \
+   WHERE t.typname = 'NotificationType' AND e.enumlabel = 'mindset_check_ready';"
+# Attendu : 0 rows (valeur absente)
+
+# Audit log : consigne le rollback.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"v1_5_mindset_check\",\"by\":\"eliot\",\"data_loss_mindset_checks\":N,\"data_loss_notif_queue_rows\":N,\"data_loss_notif_pref_rows\":N}'::jsonb, \
+      NOW());"
+```
+
+### 20.6 Re-application future
+
+1. Re-deploy l'image V1.5+ HEAD.
+2. `pnpm --filter @fxmily/web prisma:migrate deploy` — Prisma re-applique
+   l'`ALTER TYPE … ADD VALUE` + le `CREATE TABLE`.
+3. **Restore `mindset_checks`** depuis `pg_dump` step 20.2.1 si des
+   auto-évaluations avaient été soumises :
+
+   ```bash
+   gunzip -c /etc/fxmily/backups/pre-v1.5-rollback-mindset-check-<TS>.sql.gz \
+     | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+         psql -U fxmily -d fxmily
+   ```
+
+4. **Restore** depuis `pg_dump` step 20.2.2 si des rows
+   `mindset_check_ready` (queue / préférences) avaient été préservées.
+
 ## Note transversale — pattern rollback Fxmily
 
-Toutes les recipes §11-§19 suivent un même contrat :
+Toutes les recipes §11-§20 suivent un même contrat :
 
 1. **pg_dump atomique AVANT** (data-only + column-inserts pour idempotency).
 2. **`docker compose stop web`** (fige les writes, évite la corruption
@@ -1367,24 +1541,27 @@ Toutes les recipes §11-§19 suivent un même contrat :
 7. **Re-application future** : re-deploy l'image post-migration +
    `prisma:migrate deploy` + restore data si pertinent.
 
-> **Exceptions §17 + §19** — `20260517170000_v1_2_training_annotation_
-notification` (§17) ET `20260519150000_v1_4_monthly_debrief` (§19) ne
-> suivent PAS le point 3 : PostgreSQL n'a pas d'`ALTER TYPE … DROP VALUE`,
-> donc le rollback de la partie enum est une **procédure manuelle de
-> reconstruction du type** (RENAME → CREATE → `ALTER COLUMN` ×2 → DROP old),
-> pas un simple `BEGIN/COMMIT`-revert. §19 combine en plus un `DROP TABLE
-monthly_debriefs` dans la même transaction (enum + table). Les points
-> 1/2/4/6/7 s'appliquent quand même. Voir §17 / §19.
+> **Exceptions §17 + §19 + §20** — `20260517170000_v1_2_training_annotation_
+notification` (§17), `20260519150000_v1_4_monthly_debrief` (§19) ET
+> `20260519170000_v1_5_mindset_check` (§20) ne suivent PAS le point 3 :
+> PostgreSQL n'a pas d'`ALTER TYPE … DROP VALUE`, donc le rollback de la
+> partie enum est une **procédure manuelle de reconstruction du type**
+> (RENAME → CREATE → `ALTER COLUMN` ×2 → DROP old), pas un simple
+> `BEGIN/COMMIT`-revert. §19 ET §20 combinent en plus un `DROP TABLE`
+> (`monthly_debriefs` / `mindset_checks`) dans la même transaction (enum +
+> table) ; §20 est le 2ᵉ enum-rebuild consécutif → son `CREATE TYPE` repart
+> du jeu 7 valeurs post-§25. Les points 1/2/4/6/7 s'appliquent quand même.
+> Voir §17 / §19 / §20.
 >
-> **Ordre de rollback du batch carry-over prod** — les 5 migrations
-> encore non-déployées (#108 `v2_1_admin_notes` §15 + #110
-> `v1_2_training_entities` §16 + #112 `v1_2_training_annotation_notification`
-> §17 + #132 `v1_3_training_debrief` §18 + ce PR `v1_4_monthly_debrief`
-> §19) sont des objets **indépendants** (un rollback partiel d'un seul est
-> valide ; `monthly_debriefs` comme `training_debriefs` n'ont aucune FK
-> vers les 4 autres — seulement vers `users`). Pour un rollback **complet**
-> du batch, procéder en **ordre inverse de l'apply** (timestamp
-> décroissant) : §19 → §18 → §17 → §16 → §15, pour garder
+> **Ordre de rollback multi-migrations** — les 6 sections de migration
+> (#108 `v2_1_admin_notes` §15 + #110 `v1_2_training_entities` §16 + #112
+> `v1_2_training_annotation_notification` §17 + #132 `v1_3_training_debrief`
+> §18 + #135 `v1_4_monthly_debrief` §19 + ce PR `v1_5_mindset_check` §20)
+> sont des objets **indépendants** (un rollback partiel d'un seul est
+> valide ; `mindset_checks` / `monthly_debriefs` / `training_debriefs`
+> n'ont aucune FK croisée — seulement vers `users`). Pour un rollback
+> **complet**, procéder en **ordre inverse de l'apply** (timestamp
+> décroissant) : §20 → §19 → §18 → §17 → §16 → §15, pour garder
 > `_prisma_migrations` cohérent.
 
 Le pattern est testé annuellement via le DR test §`runbook-backup-restore.md`

@@ -203,6 +203,65 @@ export async function enqueueMonthlyDebriefNotification(
 }
 
 // =============================================================================
+// V1.5 §27 — Mindset check ready (member-facing weekly nudge, mirror J9)
+// =============================================================================
+
+export interface MindsetCheckReadyPayload {
+  /** Monday `YYYY-MM-DD` of the week the nudge is for — deep-links
+   *  `/mindset/new`. PII-free; the member hasn't filled it yet (it's a
+   *  gentle reminder, not a "content ready" signal — SPEC §27.2). */
+  weekStart: string;
+}
+
+/**
+ * Enqueue a gentle "your weekly mindset check is available" push for the
+ * member (SPEC §27.2/§27.4 — push `mindset_check_ready`, NO email, no
+ * fanfare; anti-FOMO canon §7.9/§23).
+ *
+ * Carbon mirror of `enqueueMonthlyDebriefNotification`: best-effort (returns
+ * the row id, or null if the write failed — logged, never thrown, so a
+ * reminder-scan hiccup never breaks the run). PII-free payload: only the
+ * local Monday date, never anything from the real or backtest edge
+ * (§21.5/§27.7/RGPD §16). Idempotency is the WEEKLY scan's job (it skips a
+ * member who already submitted this week or already has a pending nudge for
+ * this `weekStart`) — a single-instance weekly cron needs no dedup index.
+ */
+export async function enqueueMindsetCheckNotification(
+  recipientUserId: string,
+  payload: MindsetCheckReadyPayload,
+  tx?: Prisma.TransactionClient,
+): Promise<string | null> {
+  const client = tx ?? db;
+  try {
+    const row = await client.notificationQueue.create({
+      data: {
+        userId: recipientUserId,
+        type: 'mindset_check_ready',
+        payload: payload as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+
+    if (!tx) {
+      await logAudit({
+        action: 'notification.enqueued',
+        userId: recipientUserId,
+        metadata: {
+          notificationId: row.id,
+          type: 'mindset_check_ready',
+          weekStart: payload.weekStart,
+        },
+      });
+    }
+
+    return row.id;
+  } catch (err) {
+    console.error('[notifications.enqueue] mindset check failed', err);
+    return null;
+  }
+}
+
+// =============================================================================
 // J5 — Check-in reminders
 // =============================================================================
 

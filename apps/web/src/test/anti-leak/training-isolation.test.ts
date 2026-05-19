@@ -117,6 +117,17 @@ const BREACH_TOKENS = [
   'MonthlyDebrief',
   'db.monthlyDebrief',
   '@/lib/monthly-debrief',
+  // V1.5 — SPEC §27 QCM athlète (auto-évaluation mindset). The mindset check
+  // is psychology-pure, ORTHOGONAL to the real edge AND the training surface
+  // (§27.7 BLOCKING: "ne nourrit NI BehavioralScore §7.11 NI engagement NI
+  // trigger"). It is the most isolated entity of the §21.6 sequence — a
+  // 0-FK table read only by its own module, profile computed purely. The
+  // model / `db.mindsetCheck` accessor / `@/lib/mindset` lib path must never
+  // appear in a real-edge module (`MindsetCheckInput` etc. are superstrings
+  // of `MindsetCheck`, so a schema-type import is caught too — mirror §23).
+  'MindsetCheck',
+  'db.mindsetCheck',
+  '@/lib/mindset',
 ];
 
 // =============================================================================
@@ -504,6 +515,119 @@ describe('§21.5 — MonthlyDebrief is §21.5-safe (training count-only, no back
           code,
           `${rel} must not couple to ${forbidden} (§25.7 no new edge coupling)`,
         ).not.toContain(forbidden);
+      }
+    }
+  });
+});
+
+// =============================================================================
+// Block H — V1.5 MindsetCheck (SPEC §27) is the MOST isolated entity
+// =============================================================================
+
+/**
+ * SPEC §27.7 (BLOCKING): the mindset check is psychology-pure, ORTHOGONAL to
+ * BOTH the real edge and the training surface. It is even more isolated than
+ * `TrainingDebrief` (Block F): there is NO §21.5-sensitive cross-read at all
+ * (no `trainingTrade` projection — the profile is computed PURELY from the
+ * row's own `responses`). Block A (BREACH_TOKENS extended with `MindsetCheck`
+ * / `db.mindsetCheck` / `@/lib/mindset`) already proves no globbed real-edge
+ * module references it. Block H pins BOTH sides:
+ *   - the mindset module (incl. its Server Action) imports no real edge,
+ *     reads ONLY `db.mindsetCheck`, names no P&L, never revalidates
+ *     `/dashboard`;
+ *   - §27.7 explicit — the SANCTIONED touchpoints + the score/trigger
+ *     engines (which Block A's real-edge glob does NOT scan) reference NO
+ *     mindset token: the QCM feeds NOTHING into `BehavioralScore` §7.11 /
+ *     engagement / triggers.
+ */
+describe('§21.5/§27.7 — MindsetCheck is fully isolated (psychology-pure, 0 coupling)', () => {
+  const PNL_TOKENS = ['resultR', 'outcome', 'plannedRR'] as const;
+  const REAL_EDGE_IMPORTS = [
+    '@/lib/scoring',
+    '@/lib/analytics',
+    '@/lib/trades',
+    '@/lib/habit',
+    '@/lib/weekly-report',
+    '@/lib/triggers',
+  ] as const;
+  const MINDSET_PURE = [
+    'lib/mindset/instrument.ts',
+    'lib/mindset/profile.ts',
+    'lib/mindset/week.ts',
+  ] as const;
+  const MINDSET_MODULE = [
+    ...MINDSET_PURE,
+    'lib/mindset/service.ts',
+    'lib/mindset/reminders.ts',
+    'lib/schemas/mindset-check.ts',
+    'app/mindset/actions.ts',
+    'app/api/cron/mindset-check-reminders/route.ts',
+  ] as const;
+  const MINDSET_TOKENS = ['MindsetCheck', 'db.mindsetCheck', '@/lib/mindset'] as const;
+
+  it('the pure mindset modules carry no P&L token and no real-edge object', () => {
+    for (const rel of MINDSET_PURE) {
+      const code = readSrcCode(rel);
+      for (const t of [
+        ...PNL_TOKENS,
+        'TrainingTrade',
+        'db.trainingTrade',
+        'db.trade',
+        'db.behavioralScore',
+      ]) {
+        expect(code, `${rel} must not reference "${t}" in code (§27.7)`).not.toContain(t);
+      }
+    }
+  });
+
+  it('the mindset service reads ONLY db.mindsetCheck — no real-edge object, no P&L', () => {
+    const raw = readSrc('lib/mindset/service.ts');
+    const code = readSrcCode('lib/mindset/service.ts');
+    expect(raw).toContain('db.mindsetCheck.');
+    for (const forbidden of [
+      'db.trade',
+      'db.trainingTrade',
+      'db.behavioralScore',
+      'db.weeklyReport',
+      'db.monthlyDebrief',
+      ...PNL_TOKENS,
+    ]) {
+      expect(code, `service.ts must not reference "${forbidden}" (§27.7)`).not.toContain(forbidden);
+    }
+  });
+
+  it('the mindset module — INCLUDING the Server Action — imports no real-edge module nor revalidates /dashboard', () => {
+    for (const rel of MINDSET_MODULE) {
+      const raw = readSrc(rel);
+      for (const imp of REAL_EDGE_IMPORTS) {
+        expect(raw, `${rel} must not import ${imp} (§27.7)`).not.toContain(imp);
+      }
+    }
+    const actionCode = readSrcCode('app/mindset/actions.ts');
+    expect(
+      actionCode,
+      "the mindset Server Action must not revalidatePath('/dashboard') (§27.7)",
+    ).not.toContain("revalidatePath('/dashboard')");
+  });
+
+  it('§27.7 — the QCM feeds NOTHING into scoring / engagement / triggers', () => {
+    // These modules are NOT all under Block A's real-edge glob (the
+    // sanctioned touchpoints + the trigger dir are excluded), so the
+    // "mindset never reaches the score/trigger engine" proof lives here.
+    for (const rel of [
+      'lib/scoring/service.ts',
+      'lib/scoring/engagement.ts',
+      'lib/triggers/engine.ts',
+      'lib/triggers/evaluators.ts',
+      'lib/weekly-report/loader.ts',
+      'lib/monthly-debrief/loader.ts',
+    ]) {
+      const code = readSrcCode(rel);
+      for (const token of MINDSET_TOKENS) {
+        expect(
+          code,
+          `${rel} must not reference "${token}" — the QCM feeds nothing into the edge (§27.7)`,
+        ).not.toContain(token);
       }
     }
   });

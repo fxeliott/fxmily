@@ -14,8 +14,11 @@ import {
 } from '@/components/admin/member-training-debriefs-panel';
 import { MemberWeeklyReportsPanel } from '@/components/admin/member-weekly-reports-panel';
 import { MemberMonthlyDebriefsPanel } from '@/components/admin/member-monthly-debriefs-panel';
+import { MemberMindsetChecksPanel } from '@/components/admin/member-mindset-checks-panel';
 import { listReportsForMember } from '@/lib/weekly-report/service';
 import { listMonthlyDebriefsForMember } from '@/lib/monthly-debrief/service';
+import { loadMindsetDashboardData } from '@/lib/mindset/service';
+import { currentParisWeekStart } from '@/lib/mindset/week';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
 import { ScoreGaugeGrid } from '@/components/scoring/score-gauge-grid';
 import { Card } from '@/components/ui/card';
@@ -60,6 +63,7 @@ function parseTab(
   | 'mark-douglas'
   | 'weekly-reports'
   | 'monthly-debrief'
+  | 'mindset'
   | 'notes'
 > {
   if (value === 'trades') return 'trades';
@@ -67,6 +71,7 @@ function parseTab(
   if (value === 'mark-douglas') return 'mark-douglas';
   if (value === 'weekly-reports') return 'weekly-reports';
   if (value === 'monthly-debrief') return 'monthly-debrief';
+  if (value === 'mindset') return 'mindset';
   if (value === 'notes') return 'notes';
   return 'overview';
 }
@@ -122,6 +127,16 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // against `trades`/`training_trades`.
   const monthlyDebriefs =
     tab === 'monthly-debrief' ? await listMonthlyDebriefsForMember(memberId, 12) : null;
+
+  // V1.5 — read-only mindset profile/trend for the mindset tab (SPEC §27.4).
+  // Capped at 52 (admin-only, not a hot path, 30-member scale). §21.5/§27.7:
+  // the profile/trend are computed PURELY from the member's own
+  // `mindset_checks` rows — never a real-edge read, never recomputed against
+  // `trades`/`training_trades`.
+  const mindsetData =
+    tab === 'mindset'
+      ? await loadMindsetDashboardData(memberId, currentParisWeekStart(), 52)
+      : null;
 
   const adminNotes = tab === 'notes' ? await listAdminNotesForMember(memberId) : null;
 
@@ -235,6 +250,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       ) : null}
       {tab === 'monthly-debrief' && monthlyDebriefs !== null ? (
         <MemberMonthlyDebriefsPanel debriefs={monthlyDebriefs} />
+      ) : null}
+      {tab === 'mindset' && mindsetData !== null ? (
+        <MemberMindsetChecksPanel data={mindsetData} />
       ) : null}
       {tab === 'notes' && adminNotes !== null ? (
         <MemberAdminNotesPanel memberId={memberId} notes={adminNotes} />

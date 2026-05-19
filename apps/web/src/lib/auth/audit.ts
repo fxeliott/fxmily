@@ -176,7 +176,18 @@ export type AuditAction =
   | 'monthly_debrief.batch.skipped'
   | 'monthly_debrief.batch.invalid_output'
   | 'monthly_debrief.batch.persist_failed'
-  | 'monthly_debrief.batch.crisis_detected';
+  | 'monthly_debrief.batch.crisis_detected'
+  // V1.5 — QCM athlète / auto-évaluation mindset (SPEC §27, jalon #3 séquence
+  // §21.6). ONE slug only: the instrument is 100 % closed (Likert) — ZERO
+  // free-text ⇒ NO crisis/injection surface (§27.6/§27.7), so there is NO
+  // `*.crisis_detected` counterpart (unlike training_debrief/REFLECT).
+  // PII-FREE and §21.5/§27.7-clean: the row carries `checkId` + `weekStart` +
+  // `instrumentVersion` + `wasNew` only — NEVER the responses payload, NEVER
+  // a P&L, NEVER anything from the real edge. `cron.mindset_check_reminders.
+  // scan` is the weekly heartbeat (counts + `weekStart` + `ranAt`), strict
+  // `cron.<name>.scan` underscore convention (cron-watch — V1.6 Bug #4).
+  | 'mindset_check.submitted'
+  | 'cron.mindset_check_reminders.scan';
 
 /**
  * Resolve the audit slug for an `/api/uploads` screenshot upload by kind.

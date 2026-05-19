@@ -1038,7 +1038,8 @@ Un espace où chaque membre journalise ses backtests TradingView (analyses + cap
 
 - URL/replay TradingView interactif → **ÉLIMINÉ définitivement** (décision Eliot 2026-05-18 — l'analyse reste sur TradingView ; l'app log trades/screens/comportement = posture §2 déjà en place ; ne jamais re-proposer). La capture suffit.
 - Débrief/coaching d'entraînement DÉDIÉ autonome → **specé V1.3, voir §23** (jalon #1 de la séquence §21.6 verrouillée 2026-05-18 : débrief training → débrief mensuel → QCM athlète → suivi-formation). V1.2 = training nourrit l'engagement réel + corrections admin.
-- Débrief mensuel (#2), QCM/tests athlète (#3), suivi-formation/cursus (#4) = jalons distincts de la séquence §21.6 → chacun son cadrage `/spec` ultérieur dédié (gap-analysis 2026-05-17 ; séquence verrouillée 2026-05-18, un `/spec` + un build chacun, jamais bundlés §18.4).
+- Débrief mensuel (#2) → **specé V1.4, voir §25** (jalon #2 de la séquence §21.6 verrouillée : synthèse IA mensuelle dual-audience, dual-périmètre cloisonné réel / training §21.5-safe ; cadré via interview `/spec` 2026-05-19).
+- QCM/tests athlète (#3), suivi-formation/cursus (#4) = jalons distincts de la séquence §21.6 → chacun son cadrage `/spec` ultérieur dédié (gap-analysis 2026-05-17 ; séquence verrouillée 2026-05-18, un `/spec` + un build chacun, jamais bundlés §18.4).
 - Analytics training avancées (corrélation training, equity curve training détaillée) au-delà d'un track-record training basique → V2.
 - Vidéo de correction sur training → image-only V1.2 (cf. J4 → J4.5 pour la vidéo).
 
@@ -1159,4 +1160,107 @@ Pourquoi nouvelle session : le contexte d'interview pollue l'implémentation ; u
 
 ---
 
-**Fin du SPEC v1.3**
+## 25. Débrief Mensuel IA dédié (spec V1.4 — 2026-05-19)
+
+> Source : interview `/spec` 2026-05-19 (3 rounds, 11 questions, autonomie max). **Jalon #2 de la séquence §21.6** (4 jalons verrouillés 2026-05-18 : débrief training → débrief mensuel → QCM athlète → suivi-formation ; un `/spec` + un build chacun, `/clear` entre, jamais bundlés §18.4). HORS §21 V1.2 (différé explicite §21.6). **Impl = session dédiée post-`/clear`** (règle 1 session = 1 jalon §18.4). Réutilise le pipeline rapport hebdo IA V1.7/V1.7.2 (batch local Claude Max). Distinct du débrief training §23 (qui est écrit par le membre, zéro IA, hebdo, training-only).
+
+### 25.1 Vision en 1 phrase
+
+Une **synthèse IA mensuelle** (générée par batch local Claude Max — **jamais l'API payante**) du **mois civil écoulé**, **dual-audience** (le membre la lit pour prendre du recul, Eliot la voit en lecture seule pour le coaching), structurée en un narratif de **progression mois-sur-mois** + **deux sections strictement cloisonnées** — Trading réel + Pratique d'entraînement §21 (§21.5-safe : count/récurrence only, **jamais le P&L backtest**) — sans jamais donner de conseil de trade ni juger les analyses Lhedge (système inconnu de l'assistant, posture §2).
+
+### 25.2 Décisions d'architecture (choix Eliot via interview, avec rationale)
+
+| Décision | Choix validé | Rationale |
+|---|---|---|
+| Nature | **Synthèse IA générée** (PAS de rédaction membre) — réutilise le pipeline rapport hebdo IA V1.7.2 (batch local Claude Max), cadence mensuelle | Choix Eliot. Capitalise sur l'infra éprouvée (J8 + V1.7.2), coût marginal Anthropic 0€ (abonnement Max déjà payé). Distinct du débrief training §23 (membre-written, zéro IA). |
+| API payante | **Exclue définitivement** — génération via batch local Claude Max uniquement | Contrainte dure Eliot (canon V1.7 : « REFUSE catégoriquement l'API Anthropic $-per-token »). Les 9 ban-risk mitigation rules V1.7 sont conservées. |
+| Audience | **Dual** : le membre lit son débrief + Eliot le voit en lecture seule dans `/admin` | Choix Eliot (posture athlète + coach). **Un seul débrief généré** (pas 2 angles) ; la posture Mark Douglas s'applique au texte unique member-facing (zéro conseil trade, calme, anti Black-Hat). |
+| Périmètre | **Dual cloisonné** : section Trading réel (P&L réel légitime — coaching admin du risque réel) + section Entraînement §21 (**§21.5-firewall : count/récurrence only, JAMAIS `resultR`/`outcome`/`plannedRR` backtest**) | Choix Eliot. Intégrité statistique §21.5 = thèse produit : le réel ne reçoit rien du training ; le training n'expose que l'effort (count/récence). Mirror exact de la primitive J-T4 `countRecentTrainingActivity`. |
+| Source | **Synthèse des (≤4) `WeeklyReport` IA du mois + agrégats bruts du mois civil** | Choix Eliot. Capitalise sur les synthèses hebdo déjà générées (narratif de progression) tout en restant robuste si des semaines manquent (membre inactif → les agrégats bruts portent quand même la synthèse). |
+| Cadence | **Mois civil** (1er → dernier jour, Europe/Paris), idempotent `(userId, monthStart)`, généré le 1er du mois suivant pour le mois écoulé | Choix Eliot. Modèle mental membre (« mon bilan de mai »), ré-consultable. Ancrage `parseLocalDate` Europe/Paris (canon, JAMAIS `toISOString().slice` / `getUTCDay` sur input naïf). |
+| Entité | **`MonthlyDebrief` séparée** (mirror `WeeklyReport`) | Isolation §21.5 béton — aucune FK vers `Trade`/`WeeklyReport`/`TrainingTrade`/`BehavioralScore`. Cohérent doctrine entités séparées (TrainingTrade/WeeklyReview/TrainingDebrief). |
+| Structure | **Spécifique mensuelle** : narratif de progression mois-sur-mois + section Trading réel + section Entraînement §21 (§21.5-safe) | Choix Eliot. Met en valeur la tendance (valeur ajoutée vs hebdo), respecte le cloisonnement par design. |
+| Génération | **Pipeline mirror V1.7.2** : équivalent mensuel de `/sunday-batch` + endpoints `/api/admin/monthly-batch/{pull,persist}` (`X-Admin-Token`, mirror weekly-batch) | Pattern HTTP éprouvé (le runtime container standalone n'embarque pas tsx — leçon V1.7.2). Token séparé du weekly pour rotation indépendante. |
+| Pseudonymisation | **`pseudonymizeMember` V1.5** au boundary Claude (8-char hex, jamais userId/email brut) | Canon RGPD + ban-risk mitigation V1.7. |
+| Notif membre | **Push (`monthly_debrief_ready` nouveau `NotificationType`, mirror J9) + email membre (mirror template weekly-digest)** | Choix Eliot. Visibilité, calme (anti-FOMO, pas de fanfare). |
+| Notif admin | **Aucun email admin mensuel** — Eliot consulte `/admin` en lecture seule (il a déjà le digest hebdo IA par email) | Choix Eliot : anti sur-notification d'Eliot. |
+| Annotation admin | **Différée** — read-only ce jalon (mirror §23.6) | Choix Eliot. Garde le jalon ATOMIQUE (§18.4). L'annotation/notif « correction reçue » = jalon §21.6 follow-up séparé éventuel. |
+| Couplage edge réel | **AUCUN nouveau** — le débrief mensuel ne nourrit NI score NI engagement NI trigger | Intégrité §21.5, canon §23. C'est un outil de recul (un read/synthèse), pas un input. |
+| Crisis + injection | **Mirror V1.7.1 `batch.ts` carbone** : `detectCrisis` + `detectInjection` sur l'output IA concaténé AVANT persist ; HIGH/MEDIUM → **skip persist** + audit PII-free + Sentry escalate | Décidé (canon batch admin/IA). Le texte IA peut surfacer un signal de détresse depuis la data membre. ⚠️ C'est l'**output Claude** qui est scanné (skip persist comme le weekly batch admin), **PAS** le pattern REFLECT « persist-quand-même » (qui s'applique au texte écrit par le membre — ici rien n'est écrit par le membre). |
+| Identité visuelle | **DS-v2** ; section Entraînement §21 = accent **cyan** (frontière §21 jamais floutée, §21.7) ; PAS `.v18-theme` | Invariant §21.7 (`.v18-theme` = REFLECT only). Discipline Mark Douglas : la frontière backtest/live reste visible même dans un débrief mixte. |
+| EU AI Act | **Bannière transparence Article 50(1)** (« Généré par IA — pas substitut coaching humain ») sur la vue membre, la vue admin ET l'email (mirror `AIGeneratedBanner` V1.7.1) | Texte IA member-facing. Canon V1.7.1, deadline 2 août 2026. |
+
+### 25.3 Modèle de données
+
+- **`MonthlyDebrief`** (`monthly_debriefs`) : `userId`→User cascade, `monthStart` `@db.Date` (1er du mois local Europe/Paris ; `monthEnd` = dernier jour du mois, **service-computed SSOT anti-tamper**, jamais reçu du client). Output IA cloisonné : `progressionNarrative` (Text), `summaryReal` (Text), `summaryTraining` (Text), `risks` (Json array), `recommendations` (Json array), `patterns` (Json) — tous canon validation stricte. Cost tracking mirror `WeeklyReport` (`claudeModel`, token counts, `costEur` Decimal — batch local Claude Max ⇒ marginal 0€ mais conservé pour traçabilité/audit). État dispatch membre : `sentToMemberAt`, `sentToMemberEmail`, `pushEnqueuedAt` (**aucun** champ dispatch admin — pas d'email admin). `generatedAt`. **Unique `(userId, monthStart)`** (idempotency, upsert). Index `(userId, monthStart DESC)`. Cascade User delete (RGPD §17). **Aucune FK** vers `Trade`/`WeeklyReport`/`TrainingTrade`/`BehavioralScore` (isolation §21.5 par construction — les `WeeklyReport` du mois sont lus en **INPUT** par l'agrégateur, jamais liés en FK).
+- **Agrégateur = pur, testable TDD, §21.5-sensible** : produit un `MonthlySnapshot` à **deux sections** — **(A) Réel** : agrégats du mois civil (trades réels outcome/R/expectancy, scores comportementaux, checkins, habitudes) + les ≤4 `WeeklyReport.summary` du mois en **contexte** ; **(B) Training §21** : **count-only** via la primitive `countRecentTrainingActivity` (canon J-T4) sur la fenêtre mois — nombre de backtests + jours civils distincts pratiqués + récence ; **JAMAIS** `resultR`/`outcome`/`plannedRR` (firewall §21.5). Le snapshot ne `select` JAMAIS un champ P&L backtest. Pseudonymisé au boundary Claude.
+- Migration **additive** : 1 `CREATE TABLE` + 1 valeur enum `monthly_debrief_ready` sur `NotificationType` (`ALTER TYPE ADD VALUE`). `prisma-migration-runner` SAFE, rollback documenté runbook (nouvelle section après §18). **Carry-over prod** : ajoute 1 migration à la maintenance window Eliot.
+
+### 25.4 Comportement attendu
+
+- **Auto (cron mensuel)** : le 1er du mois (~XX UTC, ancre `now − Xj` multi-TZ-safe comme `computeReportingWeek`) → pour chaque membre `status='active'` : agrège le mois écoulé → snapshot 2 sections → `claude --print` batch local (mirror `/sunday-batch` mensuel) → Zod strict validate l'output → crisis/injection scan output → upsert `(userId, monthStart)` → enqueue push `monthly_debrief_ready` + email membre.
+- **Membre** : `/debrief-mensuel` (landing — hero + timeline ~12 derniers mois) → ouvre le débrief du mois (lecture : narratif progression + section Trading réel + section Entraînement §21 §21.5-safe + bannière EU AI Act). **Pas de wizard** (rien à écrire — c'est une synthèse IA).
+- **Admin** : onglet existant `/admin/members/[id]` → liste **read-only** des débriefs mensuels du membre (narratif + 2 sections recalculées/persistées) — **aucune action** (lecture seule ce jalon).
+- **Edge cases** : mois 0 activité (0 trade réel, 0 backtest, 0 `WeeklyReport`) → débrief généré quand même avec cadrage pédagogique honnête « mois calme » (jamais « score 0 » mensonger, canon §21.4/§23.4) ; membre inscrit en cours de mois → couverture depuis la date d'inscription, IA informée de l'âge du compte (garde account-age canon J-T4) ; re-run cron même mois = upsert (1 row) ; un `MonthlyDebrief` n'apparaît JAMAIS dans `/journal`, dashboard, scoring, expectancy, corrélation Habit×Trade réels (filtres explicites + **test anti-fuite obligatoire**) ; semaines sans `WeeklyReport` → IA informée « semaine sans rapport (inactif) », les agrégats bruts portent quand même la synthèse ; suppression membre = cascade (RGPD).
+- **Crisis** : output IA concaténé → `detectCrisis` ; HIGH/MEDIUM → audit `monthly_debrief.batch.crisis_detected` (level + matchedLabels, PII-free) + Sentry escalate (HIGH `reportError`, MEDIUM `reportWarning`) → **persist SKIPPED** (mirror V1.7.1 `batch.ts` — output IA/admin ⇒ skip ; ≠ REFLECT « persist-quand-même » qui ne s'applique qu'au texte écrit par le membre). Injection suspectée sur l'output → audit metadata + Sentry warning, **jamais bloquant**.
+- **Erreurs** : Zod `safeParse` strict de l'output Claude (autorité, double-net mirror weekly batch) ; `monthStart` = 1er du mois local Europe/Paris matérialisé `@db.Date` UTC-minuit via `parseLocalDate` (canon — JAMAIS `toISOString().slice(0,10)` ni `getUTCDay()` sur input naïf, invariant §25.7) ; `monthEnd` service-computed SSOT ; userId pseudonymisé au boundary Claude ; active-user set re-check server-side (mirror weekly batch anti-forge).
+
+### 25.5 Critères d'acceptation (testables)
+
+- [ ] Migration `MonthlyDebrief` + valeur enum `monthly_debrief_ready` additive, `prisma-migration-runner` SAFE, rollback documenté runbook.
+- [ ] **Test anti-fuite §21.5** : un `MonthlyDebrief` n'apparaît dans AUCUNE surface réelle (assertions explicites journal/dashboard/scoring/expectancy/corrélation) ; l'agrégateur ne `select` JAMAIS `resultR`/`outcome`/`plannedRR` backtest ; la section training = count/récurrence only.
+- [ ] Agrégateur **PUR** testé TDD : snapshot 2 sections (réel + training §21.5-safe), ≤4 `WeeklyReport` ingérés en contexte, fenêtre mois civil Europe/Paris exacte.
+- [ ] Cron mensuel génère 1 débrief / membre actif, idempotent `(userId, monthStart)` (re-run = upsert, pas de duplicate).
+- [ ] Mois 0 activité → débrief généré + cadrage pédagogique « mois calme » (jamais score-0 mensonger).
+- [ ] Pipeline batch local Claude Max (mirror V1.7.2 `/api/admin/monthly-batch/{pull,persist}`, `X-Admin-Token`, **jamais l'API payante**).
+- [ ] Membre reçoit push `monthly_debrief_ready` + email ; lit le débrief sur sa page dédiée (narratif progression + section Réel + section Training §21.5-safe + bannière EU AI Act).
+- [ ] Eliot voit les débriefs mensuels en **lecture seule** dans `/admin` ; **aucun** email admin mensuel.
+- [ ] Crisis HIGH/MEDIUM sur output IA → **skip persist** + audit + Sentry escalate (mirror V1.7.1).
+- [ ] Posture : aucune surface ne commente la qualité des analyses Lhedge ni n'affiche de P&L backtest ; zéro conseil trade ; bannière EU AI Act 50(1) présente (vue membre + admin + email).
+- [ ] Gate complet vert + audit-driven hardening (security-auditor frontière §21.5 + a11y + code-reviewer + `prisma-migration-runner`).
+
+### 25.6 Hors scope (explicite — anti scope-creep)
+
+- **Annotation admin du débrief mensuel** (commentaire/notif « correction reçue »/seen) → jalon §21.6 follow-up séparé éventuel (ce jalon = lecture admin seule).
+- **Digest admin mensuel par email** pour Eliot → exclu (choix Eliot : `/admin` read-only suffit, anti sur-notification).
+- **Rédaction membre / wizard réflexion mensuel** → exclu (c'est une synthèse IA ; le débrief écrit par le membre est le débrief training hebdo §23).
+- **QCM athlète (#3)** + **Suivi-formation/cursus (#4)** = jalons #3/#4 distincts de la séquence §21.6 (cadrage `/spec` ultérieur dédié chacun).
+- **Visualisations/charts mois-sur-mois avancés** (equity curve mensuelle, graphes tendance détaillés) → V2 (le narratif IA + agrégats textuels suffisent V1.4).
+- **Affichage de tout P&L backtest** (`resultR`/`outcome`/`plannedRR`) dans la section training → exclu par design (firewall §21.5, choix Eliot strict).
+- **API Anthropic payante** → exclue définitivement (contrainte dure Eliot, canon V1.7 — batch local Claude Max only).
+
+### 25.7 Invariants (NON négociables)
+
+- Posture Mark Douglas / zéro conseil ni jugement des analyses Lhedge (SPEC §2, verrouillé). Système Lhedge INCONNU de l'assistant — ne JAMAIS l'inventer.
+- **Intégrité statistique §21.5** : la section training du débrief = count/récurrence only ; l'agrégateur ne `select` JAMAIS `resultR`/`outcome`/`plannedRR` backtest ; l'edge réel ne reçoit JAMAIS rien du débrief. **Test anti-fuite bloquant.**
+- **Jamais l'API Anthropic payante** : génération via batch local Claude Max uniquement (contrainte dure Eliot, canon V1.7 ; 9 ban-risk mitigation rules conservées).
+- `@db.Date` ⇒ `parseLocalDate`/`localDateOf` Europe/Paris, JAMAIS `toISOString().slice(0,10)` ni `getUTCDay()` sur input naïf (invariant flake nocturne PR#96).
+- Pseudonymisation `pseudonymizeMember` V1.5 au boundary Claude ; audit PII-free (RGPD §16) ; crisis/injection mirror V1.7.1 carbone (skip persist sur output IA).
+- **Aucun nouveau couplage edge réel** : le débrief mensuel ne nourrit NI score NI engagement NI trigger (canon §23).
+- SPEC.md = source de vérité (cette §25 fait foi pour le jalon).
+- Stack : Next.js 16 + React 19 TS strict + Prisma 7 + Auth.js v5 + **DS-v2** (section training accent cyan §21.7 ; PAS `.v18-theme` = REFLECT only) + mobile-first PWA dark-only.
+- Pattern Fxmily : backend-first, **agrégateur pur §21.5-sensible TDD-first AVANT le pipeline** (canon §23.8), migration via `prisma-migration-runner`, audit-driven hardening (security-auditor + code-reviewer + accessibility-reviewer + `prisma-migration-runner`), gate exit-codes-explicites, 1 PR atomic = 1 jalon, checkpoint + supersede.
+- 1 session = 1 jalon : impl en session DÉDIÉE post-`/clear`.
+
+### 25.8 Prochaine étape (recommandée)
+
+1. Relire/ajuster §25 (10 min) — corriger ce qui ne correspond pas à ta vision.
+2. Merger la doc-PR (SPEC §25) → `main`.
+3. `/clear` → nouvelle session dédiée.
+4. Dire : « Implémente SPEC §25 (Débrief Mensuel IA) — backend-first ».
+5. Découpage suggéré en sous-jalons atomiques : **J-M1** agrégateur pur 2 sections §21.5-safe + `MonthlyDebrief` schema/migration + tests anti-fuite TDD · **J-M2** pipeline batch local Claude Max (`/api/admin/monthly-batch/{pull,persist}` + script mensuel + crisis/injection wire) · **J-M3** UI membre `/debrief-mensuel` + bannière EU AI Act + push/email · **J-M4** vue admin read-only + close-out. Découpage **indicatif** — le build session arbitre l'atomicité réelle (possible en 1 PR atomic si le périmètre tient, comme §23 → #132).
+
+Pourquoi nouvelle session : le contexte d'interview pollue l'implémentation ; une session vierge avec §25 comme référence donne une qualité supérieure (pattern Anthropic interview-first, précédents §21 → J-T1..J-T4, §23 → #132).
+
+---
+
+## 26. Changelog v1.3 → v1.4 (2026-05-19)
+
+- **§25 ajoutée** : Débrief Mensuel IA dédié (interview `/spec` 2026-05-19, 3 rounds, 11 questions). Décisions clés : **synthèse IA** générée (réutilise le pipeline rapport hebdo IA V1.7.2 batch local Claude Max, **jamais l'API payante**), cadence **mois civil** ancré Europe/Paris idempotent `(userId, monthStart)`, **dual-audience** (le membre lit + Eliot read-only `/admin`, **un seul débrief**), **dual-périmètre cloisonné** (section Trading réel + section Entraînement §21 **§21.5-safe count/récurrence only, jamais le P&L backtest**), source = **synthèse des ≤4 `WeeklyReport` IA du mois + agrégats bruts** (narratif progression mois-sur-mois), entité `MonthlyDebrief` **séparée** (mirror `WeeklyReport`, isolation §21.5 béton), notif **push `monthly_debrief_ready` + email membre** (pas de digest admin mensuel), annotation admin **différée** (read-only ce jalon), **aucun nouveau couplage** edge réel, crisis/injection **mirror V1.7.1 batch carbone** (skip persist sur output IA), bannière **EU AI Act 50(1)**, agrégateur **pur §21.5-sensible TDD-first**. Impl = jalon dédié post-`/clear`.
+- **§21.6 mis à jour** : le jalon #2 (débrief mensuel) renvoie désormais vers §25 ; #3 (QCM athlète) / #4 (suivi-formation) restent à cadrer `/spec` (un chacun, jamais bundlés §18.4).
+- Contexte : suit la complétion + le ship du jalon #1 §21.6 (Débrief Training dédié — spec §23 #131 `b4fdc07`, impl #132 `f48cde4`, doc-debt §18 #133 `02c2aba`). Le débrief mensuel = jalon #2 de la séquence §21.6 verrouillée, nécessitait un amendement SPEC avant tout code (pattern interview-first, précédents §21/§23).
+- Note traçabilité : l'en-tête du SPEC (ligne 5) reste désynchronisé (drift pré-existant depuis §21, déjà noté §24) — **volontairement non corrigé ici** (hors-scope d'une doc-PR §25 ; un re-sync de l'en-tête mérite sa propre PR pour ne pas masquer le diff §25).
+
+---
+
+**Fin du SPEC v1.4**

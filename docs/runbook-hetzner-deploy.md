@@ -1065,9 +1065,126 @@ docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
          psql -U fxmily -d fxmily
    ```
 
+## 18. Rollback V1.3 training debrief migration (`20260518150000_v1_3_training_debrief`)
+
+> **Quand l'utiliser** : si la migration V1.3 "Débrief Training dédié"
+> (SPEC §23, jalon #1 de la séquence §21.6 — table `training_debriefs`,
+> recap hebdo de pratique backtest reverse-journaling Steenbarger 4 champs)
+> a été déployée en prod et qu'un blocker post-deploy nécessite de retirer
+> complètement la table. La table est **ADD-only** (aucun DROP/rename/
+> backfill/NOT-NULL-on-populated, 1 seule FK `user_id → users`
+> `ON DELETE CASCADE` côté `training_debriefs` uniquement — aucune donnée
+> `users` touchée). Brand-new + vide au moment de l'apply → rollback
+> immédiat loss-free.
+>
+> ⚠️ **Risque data loss** : dès qu'un membre a soumis un débrief
+> (`training_debriefs` — 4 champs free-text reverse-journaling
+> membre-authored : `process_strength_one`, `process_strength_two`,
+> `micro_adjustment`, `transversal_lesson`), le `DROP TABLE` les détruit
+> irréversiblement. `pg_dump -t training_debriefs` atomique AVANT est
+> OBLIGATOIRE (RGPD : donnée membre-authored réflexive).
+>
+> **Invariant §21.5 préservé** : `training_debriefs` ne touche AUCUN objet
+> real-edge — zéro FK vers `trades` / `weekly_reviews` / `behavioral_scores`,
+> la seule relation est `training_debriefs.user_id → users.id` (même forme
+> que `training_trades`). Le rollback ne peut pas affecter le track-record /
+> score / expectancy réels. Indépendant de §15/§16/§17 (aucune FK croisée).
+
+### 18.1 Pré-requis avant rollback
+
+1. **Backup atomique de `training_debriefs`** : si des débriefs ont déjà
+   été écrits (RGPD : donnée membre-authored réflexive), le `DROP TABLE`
+   les détruit irréversiblement. `pg_dump` AVANT :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     pg_dump -U fxmily -d fxmily -t training_debriefs --data-only --column-inserts \
+     | gzip > /etc/fxmily/backups/pre-v1.3-rollback-training-debrief-$(date -u +%Y%m%dT%H%M%SZ).sql.gz
+   ```
+
+2. **Stop le web** (la Server Action débrief écrit la table) :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+   ```
+
+3. **Vérifie l'état Prisma** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+       FROM _prisma_migrations WHERE migration_name LIKE '%v1_3_training_debrief%' \
+       ORDER BY started_at DESC;"
+   ```
+
+4. **Confirme l'absence de FK cascade orpheline** : l'unique FK
+   (`user_id`) est `ON DELETE CASCADE` côté `training_debriefs` — un
+   `DROP TABLE` clean retire aussi la FK + les 2 index (1 regular timeline
+   - 1 unique idempotency). Pas d'orpheline côté `users`.
+
+### 18.2 SQL rollback
+
+Transcrit verbatim du header de migration (`prior jalons §11..§17
+separate-PR pattern`). Pas d'enum, pas d'index-avant-colonne — `DROP
+TABLE` retire ses propres index + la FK :
+
+```sql
+BEGIN;
+
+-- Drop the table (CASCADE not needed — indexes + FK belong to training_debriefs).
+DROP TABLE IF EXISTS "training_debriefs";
+
+-- Wipe the Prisma migrations row so the schema can be re-applied later.
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260518150000_v1_3_training_debrief';
+
+COMMIT;
+```
+
+> ⚠️ Si le `BEGIN`/`COMMIT` échoue à mi-parcours, Postgres rollback
+> automatique — état cohérent (tout ou rien). Re-vérifie via
+> `\dt training_debriefs` que la table est bien absente.
+
+### 18.3 Re-déploiement de l'image pré-V1.3
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<pre-v1.3-training-debrief-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+```
+
+### 18.4 Vérification post-rollback
+
+```bash
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dt training_debriefs"   # 0 rows (table absente)
+
+# Audit log : consigne le rollback.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"v1_3_training_debrief\",\"by\":\"eliot\",\"data_loss_training_debriefs\":N}'::jsonb, \
+      NOW());"
+```
+
+### 18.5 Re-application future
+
+1. Re-deploy l'image V1.3+ HEAD.
+2. `pnpm --filter @fxmily/web prisma:migrate deploy` — Prisma re-cale la row.
+3. **Restore `training_debriefs`** depuis `pg_dump` step 18.1 si des
+   débriefs avaient été écrits :
+
+   ```bash
+   gunzip -c /etc/fxmily/backups/pre-v1.3-rollback-training-debrief-<TS>.sql.gz \
+     | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+         psql -U fxmily -d fxmily
+   ```
+
 ## Note transversale — pattern rollback Fxmily
 
-Toutes les recipes §11-§17 suivent un même contrat :
+Toutes les recipes §11-§18 suivent un même contrat :
 
 1. **pg_dump atomique AVANT** (data-only + column-inserts pour idempotency).
 2. **`docker compose stop web`** (fige les writes, évite la corruption
@@ -1090,13 +1207,15 @@ Toutes les recipes §11-§17 suivent un même contrat :
 > `BEGIN/COMMIT`-revert. Les points 1/2/4/6/7 s'appliquent quand même. Voir
 > §17.
 >
-> **Ordre de rollback du batch carry-over prod** — les 3 migrations
+> **Ordre de rollback du batch carry-over prod** — les 4 migrations
 > encore non-déployées (#108 `v2_1_admin_notes` §15 + #110
 > `v1_2_training_entities` §16 + #112 `v1_2_training_annotation_notification`
-> §17) sont des objets **indépendants** (un rollback partiel d'un seul est
-> valide). Pour un rollback **complet** du batch, procéder en **ordre
-> inverse de l'apply** (timestamp décroissant) : §17 → §16 → §15, pour
-> garder `_prisma_migrations` cohérent.
+> §17 + #132 `v1_3_training_debrief` §18) sont des objets **indépendants**
+> (un rollback partiel d'un seul est valide ; `training_debriefs` n'a
+> aucune FK vers les 3 autres — seulement vers `users`). Pour un rollback
+> **complet** du batch, procéder en **ordre inverse de l'apply** (timestamp
+> décroissant) : §18 → §17 → §16 → §15, pour garder `_prisma_migrations`
+> cohérent.
 
 Le pattern est testé annuellement via le DR test §`runbook-backup-restore.md`
 "Test de DR (annuel, ~30 min)" — qui simule un restore complet sur une 2e

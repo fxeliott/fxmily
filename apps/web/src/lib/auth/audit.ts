@@ -161,7 +161,22 @@ export type AuditAction =
   // P&L (`resultR`/`outcome`) — the debrief audit traces a member's reflective
   // EFFORT only, exactly like the rest of the training surface.
   | 'training_debrief.submitted'
-  | 'training_debrief.crisis_detected';
+  | 'training_debrief.crisis_detected'
+  // V1.4 — Débrief Mensuel IA dédié (SPEC §25, jalon #2 séquence §21.6).
+  // EXACT mirror of the V1.7 `weekly_report.batch.*` slug family (the
+  // monthly pipeline is a carbon of the weekly batch-local Claude Max
+  // path). PII-FREE: rows carry counts + `monthStart` + `ranAt` only —
+  // never a member email/name, never the AI free-text, never a backtest
+  // P&L (§21.5/§25.7). `*.crisis_detected` pairs with Sentry escalation
+  // and carries `level` + `matchedLabels` for forensic alerting (crisis
+  // on the AI OUTPUT ⇒ skip persist, mirror V1.7.1 — not the REFLECT
+  // persist-anyway path which only applies to member-written text).
+  | 'monthly_debrief.batch.pulled'
+  | 'monthly_debrief.batch.persisted'
+  | 'monthly_debrief.batch.skipped'
+  | 'monthly_debrief.batch.invalid_output'
+  | 'monthly_debrief.batch.persist_failed'
+  | 'monthly_debrief.batch.crisis_detected';
 
 /**
  * Resolve the audit slug for an `/api/uploads` screenshot upload by kind.

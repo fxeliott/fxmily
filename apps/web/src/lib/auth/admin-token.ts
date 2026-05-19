@@ -5,7 +5,11 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 
 import { env } from '@/lib/env';
-import { adminBatchLimiter, callerIdTrusted } from '@/lib/rate-limit/token-bucket';
+import {
+  adminBatchLimiter,
+  callerIdTrusted,
+  monthlyBatchLimiter,
+} from '@/lib/rate-limit/token-bucket';
 
 /**
  * V1.7.2 — `X-Admin-Token` header verification for the admin batch routes.
@@ -73,6 +77,50 @@ export function requireAdminToken(req: Request): NextResponse | null {
     // caller IP (Caddy-injected last segment of XFF, not spoofable).
     const id = callerIdTrusted(req);
     const decision = adminBatchLimiter.consume(id);
+    if (!decision.allowed) {
+      return NextResponse.json(
+        { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(Math.ceil(decision.retryAfterMs / 1000)) },
+        },
+      );
+    }
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  return null;
+}
+
+/**
+ * V1.4 §25 — per-request guard for the `/api/admin/monthly-batch/*` routes.
+ *
+ * EXACT carbon of {@link requireAdminToken} with two deliberate swaps:
+ *   - reads `env.MONTHLY_ADMIN_BATCH_TOKEN` (SPEC §25.2 — token separate
+ *     from the weekly `ADMIN_BATCH_TOKEN` so the monthly batch rotates
+ *     independently ; a leaked weekly token must not unlock the monthly
+ *     endpoints and vice-versa)
+ *   - consumes the dedicated `monthlyBatchLimiter` on the 401 path (so a
+ *     weekly-batch flood can never lock Eliot out of the monthly batch)
+ *
+ * Same anti-accumulation rationale as `requireAdminToken` : a parametrized
+ * single helper would force touching the weekly routes + their tests for
+ * zero functional change. `verifyAdminToken` (the pure constant-time
+ * compare) IS reused — only the env key + limiter differ. Same check order
+ * (503 → 401-consume-bucket → 429 → null) and same status semantics.
+ */
+export function requireMonthlyAdminToken(req: Request): NextResponse | null {
+  if (!env.MONTHLY_ADMIN_BATCH_TOKEN) {
+    return NextResponse.json(
+      { error: 'monthly_batch_disabled', detail: 'MONTHLY_ADMIN_BATCH_TOKEN not configured.' },
+      { status: 503 },
+    );
+  }
+
+  const provided = req.headers.get('x-admin-token');
+  if (!provided || !verifyAdminToken(provided, env.MONTHLY_ADMIN_BATCH_TOKEN)) {
+    const id = callerIdTrusted(req);
+    const decision = monthlyBatchLimiter.consume(id);
     if (!decision.allowed) {
       return NextResponse.json(
         { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },

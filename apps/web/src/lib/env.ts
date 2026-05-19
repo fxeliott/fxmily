@@ -161,6 +161,19 @@ const envSchema = z.object({
     .min(32, 'ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
     .optional(),
 
+  /// V1.4 §25 — Token partagé entre la machine d'Eliot et
+  /// `/api/admin/monthly-batch/*` (débrief mensuel IA). Sans ça, les
+  /// endpoints monthly batch répondent 503 (refuse-by-default, mirror
+  /// ADMIN_BATCH_TOKEN). Génération : `openssl rand -hex 32` (64 chars).
+  /// Provisionner sur Hetzner via append à `/etc/fxmily/web.env` (0600
+  /// owner fxmily) puis `docker compose -f docker-compose.prod.yml restart web`.
+  /// SÉPARÉ de `ADMIN_BATCH_TOKEN` (weekly) : cadence + compromis distincts,
+  /// rotation indépendante (SPEC §25.2 — "Token séparé du weekly").
+  MONTHLY_ADMIN_BATCH_TOKEN: z
+    .string()
+    .min(32, 'MONTHLY_ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
+    .optional(),
+
   /// V1.5 — Salt server-side pour la pseudonymisation `userId → memberLabel`
   /// dans `lib/weekly-report/builder.ts`. Sans salt, un attaquant qui connaît
   /// un cuid peut vérifier sa présence dans un export rapport hebdo en

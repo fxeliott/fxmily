@@ -205,6 +205,23 @@ export const adminBatchLimiter = new TokenBucketLimiter({
 });
 
 /**
+ * V1.4 §25 — `/api/admin/monthly-batch/{pull,persist}` per-IP bucket.
+ *
+ * Carbon of `adminBatchLimiter` (weekly). Eliot triggers the monthly batch
+ * from his local machine ; legitimate flow = 1 pull + 1 persist per month.
+ * Same burst 10 / refill 1-per-5-min envelope as the weekly batch — well
+ * below any human cadence, tight enough to throttle a bot brute-forcing the
+ * 32-char `MONTHLY_ADMIN_BATCH_TOKEN`. Separate singleton (not shared with
+ * `adminBatchLimiter`) so a weekly-batch flood never locks out the monthly
+ * batch and vice-versa — independent surfaces, independent buckets.
+ */
+export const monthlyBatchLimiter = new TokenBucketLimiter({
+  bucketSize: 10,
+  refillRate: 1 / (5 * 60),
+  maxKeys: 256,
+});
+
+/**
  * V1.6 extras — `/api/health` endpoint rate-limit.
  *
  * Pre-existing security HIGH identified by Round 5 security-auditor audit :

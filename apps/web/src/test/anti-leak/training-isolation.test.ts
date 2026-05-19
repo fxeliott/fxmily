@@ -52,11 +52,16 @@ function readSrcCode(rel: string): string {
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
 
-/** The 3 deliberate touchpoints — may import ONLY the count-only primitive. */
+/** The 4 deliberate touchpoints — may import ONLY the count-only primitive.
+ *  V1.4 J-M2 added `lib/monthly-debrief/loader.ts` (SPEC §25.3 — the monthly
+ *  debrief's training slice is sourced EXCLUSIVELY from the same audited
+ *  primitive, exactly like `weekly-report/loader.ts`). It is NOT under a
+ *  globbed real-edge tree, so Block A pins its import contract here. */
 const SANCTIONED_TOUCHPOINTS = [
   'lib/scoring/service.ts',
   'lib/triggers/engine.ts',
   'lib/weekly-report/loader.ts',
+  'lib/monthly-debrief/loader.ts',
 ] as const;
 
 /**

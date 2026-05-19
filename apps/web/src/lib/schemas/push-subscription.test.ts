@@ -271,7 +271,7 @@ describe('unsubscribePushInputSchema', () => {
 });
 
 describe('NOTIFICATION_TYPES const', () => {
-  it('contains exactly the 6 notification categories', () => {
+  it('contains exactly the 7 notification categories', () => {
     expect(NOTIFICATION_TYPES).toEqual([
       'annotation_received',
       'training_annotation_received',
@@ -279,12 +279,13 @@ describe('NOTIFICATION_TYPES const', () => {
       'checkin_evening_reminder',
       'douglas_card_delivered',
       'weekly_report_ready',
+      'monthly_debrief_ready',
     ]);
   });
 
   it('is readonly (typed as `as const`)', () => {
     // Compile-time assertion mirror via TS — we just sanity-check the runtime
     // value is frozen-equivalent (cannot mutate without a cast).
-    expect(Object.isFrozen(NOTIFICATION_TYPES) || NOTIFICATION_TYPES.length === 6).toBe(true);
+    expect(Object.isFrozen(NOTIFICATION_TYPES) || NOTIFICATION_TYPES.length === 7).toBe(true);
   });
 });

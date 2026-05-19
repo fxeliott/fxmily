@@ -137,6 +137,13 @@ const META_BY_TYPE: Record<
     body: 'Ton digest hebdomadaire des membres a été généré.',
     ctaLabel: 'Ouvrir le rapport →',
   },
+  monthly_debrief_ready: {
+    title: 'Ton débrief mensuel est prêt',
+    preview: 'Une synthèse du mois écoulé t’attend.',
+    eyebrow: 'DÉBRIEF MENSUEL · IA',
+    body: 'Une synthèse du mois écoulé t’attend — progression, trading réel, entraînement. Un moment pour prendre du recul, à ton rythme.',
+    ctaLabel: 'Ouvrir mon débrief →',
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

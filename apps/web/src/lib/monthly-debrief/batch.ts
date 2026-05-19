@@ -3,6 +3,8 @@ import 'server-only';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { parseLocalDate } from '@/lib/checkin/timezone';
+import { sendMonthlyDebriefReadyEmail } from '@/lib/email/send';
+import { enqueueMonthlyDebriefNotification } from '@/lib/notifications/enqueue';
 import {
   monthlyDebriefOutputSchema,
   type MonthlyDebriefOutput,
@@ -20,6 +22,7 @@ import {
   MONTHLY_DEBRIEF_SYSTEM_PROMPT,
   buildMonthlyDebriefUserPrompt,
 } from './prompt';
+import { toSerializedMonthlyDebrief } from './service';
 
 /**
  * V1.4 §25 — Local-Claude monthly debrief batch (Eliot's Max subscription
@@ -228,6 +231,108 @@ export function buildMonthlyBatchUserPrompt(entry: MonthlyBatchSnapshotEntry): s
 // Persist side — accept Claude-generated debriefs + write to DB
 // =============================================================================
 
+/// The persisted-row shape `toSerializedMonthlyDebrief` accepts — already
+/// carries everything the member dispatch needs (`id`, `userId`,
+/// `monthStart`, `sentToMemberAt`). The Prisma upsert return is
+/// structurally assignable (carbon `service.ts` call-sites).
+type PersistedMonthlyDebriefRow = Parameters<typeof toSerializedMonthlyDebrief>[0];
+
+/**
+ * V1.4 §25 — notify the member their monthly debrief is ready: enqueue the
+ * `monthly_debrief_ready` push + send the member email, then stamp the
+ * dispatch state on the row. Best-effort by design: ANY failure (missing
+ * user, Resend hiccup, queue error) is swallowed + Sentry-warned — it must
+ * NEVER roll back the already-persisted debrief nor fail the batch. Only
+ * called when `sentToMemberAt === null` (idempotent, no re-spam in steady
+ * state — the J-M2 upsert `update` branch never resets the dispatch cols).
+ *
+ * ⚠️ Residual at-least-once window (code-reviewer T2-1, accepted at V1
+ * 30-member single-admin manual-batch scale — mirrors the weekly canon
+ * `weekly-report/service.ts` posture). The order is push → email → stamp.
+ * An external email send cannot be transactionally tied to the DB stamp, so
+ * if the final stamp `update` throws (e.g. pool exhaustion in the narrow gap
+ * after the email returns), `sentToMemberAt` stays null and the next batch
+ * re-run re-enters this path → ONE duplicate notification. The duplicate
+ * push is benign (the SW coalesces by `tag: type`, replacing the prior
+ * notif — see `dispatcher.ts buildPayload`); only a single duplicate email
+ * is the real residual, and it is made OBSERVABLE by the distinct
+ * `dispatch_stamp_failed` Sentry warning below (not a silent re-spam). A
+ * true exactly-once fix (transactional outbox) would also have to touch the
+ * weekly pipeline → out of §25 scope, tracked as a V2 decision. "Stamp
+ * first" is deliberately NOT used: it would trade this rare dup for silent
+ * non-delivery, which is worse for a notify feature.
+ */
+async function dispatchMonthlyDebriefToMember(row: PersistedMonthlyDebriefRow): Promise<void> {
+  try {
+    const user = await db.user.findUnique({
+      where: { id: row.userId },
+      select: { email: true, firstName: true },
+    });
+    if (user === null) return;
+
+    const serialized = toSerializedMonthlyDebrief(row);
+
+    const pushId = await enqueueMonthlyDebriefNotification(row.userId, {
+      debriefId: row.id,
+      monthStart: serialized.monthStart,
+    });
+    if (pushId === null) {
+      // code-reviewer T2-2 — `enqueueMonthlyDebriefNotification` swallows a
+      // queue-write failure + returns null (best-effort by design). Without
+      // this, a chronically-broken push path stays invisible at 30-member
+      // scale. Email still proceeds (the member is notified by at least one
+      // channel); the warning lets an operator spot the pattern (mirrors the
+      // V1.6 Sentry-taxonomy convention used for `member_dispatch_failed`).
+      reportWarning('monthly_debrief.batch', 'push_enqueue_failed', {
+        userId: row.userId,
+        monthStart: serialized.monthStart,
+      });
+    }
+
+    const email = await sendMonthlyDebriefReadyEmail({
+      to: user.email,
+      recipientFirstName: user.firstName,
+      debrief: serialized,
+    });
+
+    // Dispatch state is the SSOT observability record (SPEC §25.3 — no
+    // dedicated email audit slug; `notification.enqueued` covers the push).
+    // Isolated try/catch (code-reviewer T2-1): push + email have already
+    // fired here, so a lost stamp = a re-notify next run. Surface it as a
+    // distinct warning instead of letting it ride the generic outer catch —
+    // the residual is documented + accepted at V1 scale, but never silent.
+    try {
+      await db.monthlyDebrief.update({
+        where: { id: row.id },
+        data: {
+          sentToMemberAt: new Date(),
+          sentToMemberEmail: email.delivered ? user.email : null,
+          pushEnqueuedAt: pushId !== null ? new Date() : null,
+        },
+      });
+    } catch (stampErr) {
+      reportWarning('monthly_debrief.batch', 'dispatch_stamp_failed', {
+        userId: row.userId,
+        monthStart: serialized.monthStart,
+        error: stampErr instanceof Error ? stampErr.message.slice(0, 200) : 'unknown',
+      });
+    }
+  } catch (err) {
+    reportWarning('monthly_debrief.batch', 'member_dispatch_failed', {
+      userId: row.userId,
+      monthStart: serializedMonthStartOf(row),
+      error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+    });
+  }
+}
+
+/** PII-free month label for the dispatch-failure warning (no P&L, RGPD §16). */
+function serializedMonthStartOf(row: PersistedMonthlyDebriefRow): string {
+  return row.monthStart instanceof Date
+    ? row.monthStart.toISOString().slice(0, 10)
+    : String(row.monthStart);
+}
+
 /**
  * Validate + persist a batch of locally-generated monthly debriefs.
  * Idempotent on `(userId, monthStart)` (upsert). Carbon weekly
@@ -399,7 +504,7 @@ export async function persistGeneratedReports(
     });
 
     try {
-      await db.monthlyDebrief.upsert({
+      const persistedRow = await db.monthlyDebrief.upsert({
         where: {
           userId_monthStart: {
             userId: entry.userId,
@@ -444,6 +549,18 @@ export async function persistGeneratedReports(
         },
       });
       persisted += 1;
+
+      // V1.4 §25 — member dispatch (push `monthly_debrief_ready` + member
+      // email; NO admin monthly email by design, SPEC §25.2). Best-effort,
+      // idempotent: decision (g) — the upsert `update` branch does NOT
+      // reset `sentToMemberAt`, so on a cron re-run an already-notified
+      // member is NEVER re-spammed (carbon weekly J8 TIER 2 HIGH fix). We
+      // dispatch only when `sentToMemberAt` is still null (first persist,
+      // or a prior persist whose dispatch failed). A push/email hiccup
+      // never rolls back the persisted debrief.
+      if (persistedRow.sentToMemberAt === null) {
+        await dispatchMonthlyDebriefToMember(persistedRow);
+      }
     } catch (err) {
       errors += 1;
       await logAudit({

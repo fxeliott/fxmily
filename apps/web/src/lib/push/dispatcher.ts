@@ -58,6 +58,7 @@ export const TTL_BY_TYPE: Record<NotificationTypeSlug, number> = {
   checkin_evening_reminder: 3600, // 1h — past 22h the soir slot is gone
   douglas_card_delivered: 21600, // 6h — tilt cards lose freshness fast
   weekly_report_ready: 21600, // 6h — admin Sunday digest, can wait until morning
+  monthly_debrief_ready: 86400, // 24h — monthly recul tool, not time-critical
 };
 
 /// RFC 8030 urgency. `low` = battery-friendly (reminders that aren't critical).
@@ -68,6 +69,7 @@ export const URGENCY_BY_TYPE: Record<NotificationTypeSlug, 'low' | 'normal'> = {
   checkin_evening_reminder: 'low',
   douglas_card_delivered: 'normal',
   weekly_report_ready: 'low',
+  monthly_debrief_ready: 'low', // calm, anti-FOMO — a monthly recul, never urgent
 };
 
 export type BuiltPayload = {
@@ -151,6 +153,16 @@ export function buildPayload(
       title = 'Rapport hebdo prêt';
       body = 'Ton digest hebdomadaire des membres est prêt.';
       path = reportId ? `/admin/reports/${reportId}` : '/admin/reports';
+      break;
+    }
+    case 'monthly_debrief_ready': {
+      // §25 member-facing monthly synthesis. Deep-link to the member page,
+      // pinned to the exact month via `?id=`. Calm Mark Douglas copy — no
+      // fanfare/XP/streak (anti Black-Hat, SPEC §25.2).
+      const debriefId = typeof payload.debriefId === 'string' ? payload.debriefId : '';
+      title = 'Ton débrief mensuel est prêt';
+      body = 'Une synthèse du mois écoulé t’attend — un moment pour prendre du recul.';
+      path = debriefId ? `/debrief-mensuel?id=${debriefId}` : '/debrief-mensuel';
       break;
     }
   }

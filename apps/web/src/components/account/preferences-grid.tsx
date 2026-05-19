@@ -75,6 +75,12 @@ const CATEGORIES: CategoryMeta[] = [
       'Notification quand le digest hebdomadaire des membres est généré (dimanche soir).',
     adminOnly: true,
   },
+  {
+    type: 'monthly_debrief_ready',
+    label: 'Débrief mensuel prêt',
+    description:
+      'Notification début de mois quand ta synthèse du mois écoulé est disponible — progression, trading réel, entraînement.',
+  },
 ];
 
 export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.ReactNode {
@@ -86,6 +92,7 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
       checkin_evening_reminder: true,
       douglas_card_delivered: true,
       weekly_report_ready: true,
+      monthly_debrief_ready: true,
     };
     for (const type of NOTIFICATION_TYPES) {
       if (initialPreferences[type] !== undefined) {

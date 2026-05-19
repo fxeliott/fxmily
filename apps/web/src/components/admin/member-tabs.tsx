@@ -7,6 +7,7 @@ export type MemberTabKey =
   | 'checkins'
   | 'mark-douglas'
   | 'weekly-reports'
+  | 'monthly-debrief'
   | 'notes';
 
 interface MemberTabsProps {
@@ -26,6 +27,7 @@ const TABS: readonly TabDefinition[] = [
   { key: 'checkins', label: 'Check-ins' },
   { key: 'mark-douglas', label: 'Mark Douglas' },
   { key: 'weekly-reports', label: 'Rapports IA' },
+  { key: 'monthly-debrief', label: 'Débrief mensuel' },
   { key: 'notes', label: 'Notes admin' },
 ];
 

@@ -146,6 +146,63 @@ export async function enqueueTrainingAnnotationNotification(
 }
 
 // =============================================================================
+// V1.4 §25 — Monthly AI debrief ready (member-facing, mirror J9)
+// =============================================================================
+
+export interface MonthlyDebriefReadyPayload {
+  /** The persisted `MonthlyDebrief` row — deep-links the member page. */
+  debriefId: string;
+  /** Local 1st-of-month `YYYY-MM-DD` — PII-free audit/observability only. */
+  monthStart: string;
+}
+
+/**
+ * Enqueue a "monthly debrief ready" push for the member (SPEC §25.2 — push
+ * `monthly_debrief_ready` + member email; NO admin monthly push by design).
+ *
+ * Carbon mirror of `enqueueAnnotationNotification`: best-effort (returns the
+ * row id, or null if the write failed — logged, never thrown, so the J-M2
+ * batch persist never rolls back a debrief over a queue hiccup). Optionally
+ * joins a parent `db.$transaction`. PII-free payload: ids + the local month
+ * date only, never the member's real or backtest P&L (§21.5/RGPD §16).
+ */
+export async function enqueueMonthlyDebriefNotification(
+  recipientUserId: string,
+  payload: MonthlyDebriefReadyPayload,
+  tx?: Prisma.TransactionClient,
+): Promise<string | null> {
+  const client = tx ?? db;
+  try {
+    const row = await client.notificationQueue.create({
+      data: {
+        userId: recipientUserId,
+        type: 'monthly_debrief_ready',
+        payload: payload as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+
+    if (!tx) {
+      await logAudit({
+        action: 'notification.enqueued',
+        userId: recipientUserId,
+        metadata: {
+          notificationId: row.id,
+          type: 'monthly_debrief_ready',
+          debriefId: payload.debriefId,
+          monthStart: payload.monthStart,
+        },
+      });
+    }
+
+    return row.id;
+  } catch (err) {
+    console.error('[notifications.enqueue] monthly debrief failed', err);
+    return null;
+  }
+}
+
+// =============================================================================
 // J5 — Check-in reminders
 // =============================================================================
 

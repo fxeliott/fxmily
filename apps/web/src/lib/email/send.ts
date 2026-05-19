@@ -4,8 +4,11 @@ import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
 import { AnnotationReceivedEmail } from '@/lib/email/templates/annotation-received';
 import { InvitationEmail } from '@/lib/email/templates/invitation';
+import { MonthlyDebriefEmail } from '@/lib/email/templates/monthly-debrief';
 import { NotificationFallbackEmail } from '@/lib/email/templates/notification-fallback';
 import { WeeklyDigestEmail } from '@/lib/email/templates/weekly-digest';
+import { formatMonthLabelFr } from '@/lib/monthly-debrief/format';
+import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 import type { NotificationTypeSlug } from '@/lib/schemas/push-subscription';
 import type { SerializedWeeklyReport } from '@/lib/weekly-report/types';
 
@@ -68,6 +71,14 @@ export function buildTradeDetailUrl(tradeId: string): string {
 export function buildAdminReportUrl(reportId: string): string {
   const base = env.AUTH_URL.replace(/\/+$/, '');
   return `${base}/admin/reports/${encodeURIComponent(reportId)}`;
+}
+
+/** Build the absolute URL to the MEMBER monthly debrief page (V1.4 §25).
+ * Member-facing — pinned to the exact month via `?id=` (NO admin URL: there
+ * is no monthly admin email by design, SPEC §25.2). */
+export function buildMemberMonthlyDebriefUrl(debriefId: string): string {
+  const base = env.AUTH_URL.replace(/\/+$/, '');
+  return `${base}/debrief-mensuel?id=${encodeURIComponent(debriefId)}`;
 }
 
 // ----- J4 — annotation received --------------------------------------------
@@ -136,6 +147,7 @@ const FALLBACK_SUBJECT_BY_TYPE: Record<NotificationTypeSlug, string> = {
   checkin_evening_reminder: 'Check-in soir · Fxmily',
   douglas_card_delivered: 'Nouvelle fiche Mark Douglas · Fxmily',
   weekly_report_ready: 'Rapport hebdo prêt · Fxmily',
+  monthly_debrief_ready: 'Ton débrief mensuel est prêt · Fxmily',
 };
 
 const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
@@ -150,6 +162,8 @@ const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
   douglas_card_delivered:
     'Une fiche est arrivée dans ta bibliothèque, choisie selon ton activité récente. Lis-la quand le moment te paraît juste.',
   weekly_report_ready: 'Ton digest hebdomadaire des membres a été généré.',
+  monthly_debrief_ready:
+    'Une synthèse du mois écoulé t’attend — progression, trading réel, entraînement. Un moment pour prendre du recul.',
 };
 
 const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
@@ -159,6 +173,7 @@ const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
   checkin_evening_reminder: 'Faire le check-in soir',
   douglas_card_delivered: 'Lire la fiche',
   weekly_report_ready: 'Ouvrir le rapport',
+  monthly_debrief_ready: 'Ouvrir mon débrief',
 };
 
 export interface SendNotificationFallbackParams {
@@ -281,6 +296,96 @@ export async function sendWeeklyDigestEmail({
       claudeModel: report.claudeModel,
       costEur: report.costEur,
       mocked,
+    }),
+    text: lines.join('\n'),
+  });
+}
+
+// ----- V1.4 §25 — monthly AI debrief (MEMBER, no admin email) --------------
+
+export interface SendMonthlyDebriefReadyParams {
+  to: string;
+  recipientFirstName: string | null | undefined;
+  debrief: SerializedMonthlyDebrief;
+}
+
+/**
+ * Send the V1.4 §25 monthly debrief email to the MEMBER (SPEC §25.2 — push
+ * + member email; NO monthly admin email). Best-effort: the caller
+ * (`lib/monthly-debrief/batch.ts:persistGeneratedReports`) does NOT roll
+ * back the persisted debrief if email fails — it records the dispatch state
+ * + audit and moves on.
+ *
+ * Plain-text fallback mirrors the React Email structure (dual-section, the
+ * §21.7 boundary stays explicit even in plain text) so non-HTML clients
+ * still get an actionable summary.
+ */
+export async function sendMonthlyDebriefReadyEmail({
+  to,
+  recipientFirstName,
+  debrief,
+}: SendMonthlyDebriefReadyParams): Promise<{ id: string | null; delivered: boolean }> {
+  const debriefUrl = buildMemberMonthlyDebriefUrl(debrief.id);
+  const monthLabel = formatMonthLabelFr(debrief.monthStart);
+  const recipient = recipientFirstName?.trim() || 'Trader';
+  const subject = `Ton débrief mensuel · ${monthLabel}`;
+
+  const lines: string[] = [];
+  lines.push(`Salut ${recipient},`);
+  lines.push('');
+  lines.push(`Voici ta synthèse Fxmily du mois écoulé — ${monthLabel}.`);
+  lines.push('');
+  lines.push('Progression :');
+  lines.push(debrief.progressionNarrative);
+  lines.push('');
+  lines.push('Trading réel :');
+  lines.push(debrief.summaryReal);
+  lines.push('');
+  lines.push('Entraînement (régularité/pratique uniquement — pas de P&L) :');
+  lines.push(debrief.summaryTraining);
+  lines.push('');
+  if (debrief.risks.length > 0) {
+    lines.push('Points de vigilance :');
+    for (const risk of debrief.risks) lines.push(`- ${risk}`);
+    lines.push('');
+  }
+  lines.push('Pistes pour le mois à venir :');
+  for (const reco of debrief.recommendations) lines.push(`- ${reco}`);
+  lines.push('');
+  const patternEntries: Array<[string, string]> = [];
+  if (debrief.patterns.monthOverMonth)
+    patternEntries.push(['Progression mois sur mois', debrief.patterns.monthOverMonth]);
+  if (debrief.patterns.realTrend)
+    patternEntries.push(['Tendance trading réel', debrief.patterns.realTrend]);
+  if (debrief.patterns.trainingRhythm)
+    patternEntries.push(['Rythme d’entraînement', debrief.patterns.trainingRhythm]);
+  if (debrief.patterns.disciplineTrend)
+    patternEntries.push(['Trajectoire discipline', debrief.patterns.disciplineTrend]);
+  if (patternEntries.length > 0) {
+    lines.push('Tendances observées :');
+    for (const [label, value] of patternEntries) lines.push(`- ${label} : ${value}`);
+    lines.push('');
+  }
+  lines.push(`Ouvre ton débrief : ${debriefUrl}`);
+  lines.push('');
+  lines.push(
+    'Synthèse générée par IA (Claude, Anthropic) — ne remplace ni coaching humain, ni avis médical, ni conseil en investissement. Aucun conseil de trade (SPEC §2).',
+  );
+
+  return sendEmail({
+    to,
+    subject,
+    react: MonthlyDebriefEmail({
+      recipientFirstName,
+      monthLabel,
+      progressionNarrative: debrief.progressionNarrative,
+      summaryReal: debrief.summaryReal,
+      summaryTraining: debrief.summaryTraining,
+      risks: debrief.risks,
+      recommendations: debrief.recommendations,
+      patterns: debrief.patterns,
+      debriefUrl,
+      claudeModel: debrief.claudeModel,
     }),
     text: lines.join('\n'),
   });

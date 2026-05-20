@@ -1,9 +1,9 @@
 # SPEC — Fxmily App
 
-**Date initiale** : 2026-05-05 · **Dernière révision** : 2026-05-08 (v1.1 amendement post-J7.8)
+**Date initiale** : 2026-05-05 · **Dernière révision** : 2026-05-19 (v1.5 amendement, §28 Changelog v1.4 → v1.5)
 **Auteur** : Eliot Pena (interview structuré avec Claude Code, skill `/spec`)
-**Version** : **1.1** — voir [§20 Changelog v1.0 → v1.1](#20-changelog-v10--v11) pour les pivots stack et sous-jalons inventés en cours.
-**Statut** : Reflète la réalité 2026-05-09 (J0→J10 livrés, 717/717 tests verts, 18 commits Phases A→P sur `claude/j10-prod-deploy`, smoke prod bloqué par 7 pré-requis externes Eliot — voir `docs/runbook-prod-smoke-test.md`).
+**Version** : **1.5** — voir §20 (v1.0→v1.1), §22 (v1.1→v1.2), §24 (v1.2→v1.3), §26 (v1.3→v1.4), §28 (v1.4→v1.5) pour les pivots stack et sous-jalons inventés en cours.
+**Statut** : Reflète la réalité 2026-05-20 (V2.1.6 LIVE prod Hetzner sur `app.fxmilyapp.com`, séquence §21.6 1→4 complète, 1429/1429 tests Vitest verts, repo public depuis 2026-05-12).
 
 ---
 

@@ -3334,3 +3334,297 @@ PR [#100](https://github.com/fxeliott/fxmily/pull/100) (`f1ba332`). FAB lime cal
 
 - PR [#100](https://github.com/fxeliott/fxmily/pull/100) (`f1ba332`)
 - Memory `fxmily_session_2026-05-16_v2.1.4_log_express_fab.md` (atomic-detail)
+
+## V1.2 J-T1 — Mode Entraînement / Backtest data layer (livré 2026-05-17)
+
+PR [#110](https://github.com/fxeliott/fxmily/pull/110) (`090cafd`). 1er des 4 sous-jalons SPEC §21 (Mode Entraînement). Backend-only data layer pour le journal de backtest, **statistiquement ISOLÉ du real-edge par construction** (invariant BLOQUANT §21.5).
+
+### Scope
+
+- Prisma : 2 enums SÉPARÉS `TrainingOutcome` + `TrainingAnnotationMediaType` (réutiliser `TradeOutcome`/`AnnotationMediaType` = breach §21.5) + 2 tables `training_trades`/`training_annotations` + 3 FK `ON DELETE CASCADE` (RGPD).
+- Migration `prisma/migrations/20260517160000_v1_2_training_entities/migration.sql` (additive, authored par `prisma-migration-runner`, byte-identique au canonical `prisma migrate diff`).
+- Zod `lib/schemas/training-trade.ts` + `training-annotation.ts` (mirror byte-faithful `admin-note.ts`/`annotation.ts` Trojan-Source canon, `TRAINING_LESSON_MAX=2000`, `TRAINING_ANNOTATION_COMMENT_MAX=5000`).
+- Services `lib/training/training-trade-service.ts` (member-scoped, `findFirst({id,userId})` V1.9 TIER B ownership) + `lib/admin/training-annotation-service.ts` (admin-scoped, J4 mirror).
+- `lib/storage/keys.ts` + `lib/auth/audit.ts` slugs `training_trade.created` + `admin.training_annotation.created`/`.deleted` pré-déclarés.
+
+### Décisions clés (landmines — NE PAS re-casser)
+
+- **§21.5 ISOLATION STATISTIQUE = invariant BLOQUANT, structurellement prouvé** : 0 FK vers `trades`, 0 enum partagé, 0 import cross real↔training. Tout cross-ref futur = breach.
+- **`enteredAt` = `DateTime` (`@map("entered_at")`), PAS `@db.Date`** — mirror `Trade.enteredAt` (INSTANT, pas calendar day) → **délibérément AUCUNE H1 civil-window** (le pattern `isHabitDateWithinLocalWindow` s'applique uniquement aux `@db.Date` HabitLog/DailyCheckin).
+- **`getTrainingTradeById` = `findFirst({id,userId})`** (V1.9 TIER B, single SQL, member-scoped) ; **`getTrainingAnnotationById` = `findUnique` unscoped** (admin-only mirror `getAnnotationById`, asymétrie CORRECTE).
+- **`entryScreenshotKey` colonne nullable** (admin-repair escape-hatch) mais Zod schema REQUIRE — NE PAS tighten la colonne à NOT NULL (casserait la réparation admin).
+
+### Files touched
+
+12 fichiers, +1353 −20 : schema.prisma + migration + 2 schémas Zod + 2 services + keys.ts + audit.ts + 4 tests.
+
+### Quality gate
+
+- Vitest **1089 → 1144** (+55 TDD-first). type-check 0, lint 0, build 0.
+- CI 6/6 GREEN incl. Playwright chromium (preuve render route-handler-only).
+
+### Refs
+
+- PR [#110](https://github.com/fxeliott/fxmily/pull/110) (`090cafd`)
+- Memory `fxmily_session_2026-05-17_jt1_training_data_layer.md` (atomic-detail)
+
+## V1.2 J-T2 — Mode Entraînement member surface (livré 2026-05-17)
+
+PR [#111](https://github.com/fxeliott/fxmily/pull/111) (`f718fdf`). 2ᵉ des 4 sous-jalons SPEC §21. Surface membre `/training/*` consommant le data layer J-T1, avec wizard 6 étapes et plumbing upload training-entry.
+
+### Scope
+
+- `app/training/page.tsx` (landing : `listTrainingTradesForUser` → `TrainingStatsBar` + `TrainingTradeCard`, EmptyState pédagogique Mark Douglas) + `app/training/new/page.tsx` shell.
+- `components/training/training-form-wizard.tsx` (6 steps : pair+date → capture → R:R → résultat → respect système → leçon ; mirror carbone `trade-form-wizard.tsx`, LIGHTER — pas d'emotions/sleep/confidence §21.2).
+- `components/training/{training-trade-card,training-stats-bar}.tsx` (read-only DS-v2, honest "—" si aucun trade décidé).
+- `app/training/actions.ts` (`createTrainingTradeAction` : auth + `status==='active'`, `safeParse`, `'' | null → null` bridge `outcome`/`resultR`, audit `training_trade.created` PII-free `{trainingTradeId}` SEUL, `revalidatePath('/training')` ONLY).
+- `lib/storage/{keys,types,local}.ts` : `generateTrainingKey`/`parseTrainingKey`, `parseStorageKey` dispatch `training/`, `TRAINING_UPLOAD_KINDS=['training-entry']`, `trainingKeyBelongsTo` (BOLA carbone `keyBelongsTo`, NEVER cross-accepte `trades/`).
+- `app/api/uploads/{route,[...key]/route}.ts` : POST branche `training-entry` (pathOwner=userId, member-owned) + GET ownership dispatch + `resolveUploadAuditAction` helper extrait pour audit slug guard §21.5.
+
+### Décisions clés (landmines)
+
+- **Training pages check `status==='active'`** (canon track/review V2.0/V1.8) — NE PAS « re-aligner J-T2 à journal » (legacy `!session?.user`-only = latent weakness, security-auditor T2-1 vérifié).
+- **`resolveUploadAuditAction` existe ON PURPOSE** comme guard unit-testé pour le slug §21.5 (la route upload n'a pas de test propre ; collapse silencieux de la map = regression-exposé). NE PAS re-inline dans le ternaire route.
+- **`.t-eyebrow` (10px) sur card/stats CORRECT** (DS forbid harmonization — `globals.css:441-446` documenté). NE PAS « fix » en `.t-eyebrow-lg`.
+- **R:R hero = `<Card primary>`** (canon fidelity `trade-form-wizard.tsx:747`). NE PAS revert neutral.
+- Wizard utilise `m.*` (LazyMotion ancestor app-shell-provided), JAMAIS `motion.*` (V1.9 strict).
+
+### Files touched
+
+18 fichiers, +1878 −25 : `app/training/{page,new/page,actions}.tsx` + 3 composants training + storage (4) + audit.ts + uploads (2) + screenshot-uploader + tests (keys/actions/audit/e2e).
+
+### Quality gate
+
+- Vitest **1144 → 1182** (+38, 79 files). type-check 0, lint 0, build 0 (`/training` + `/training/new` au manifest).
+- CI 6/6 GREEN incl. Playwright chromium 3m29s (auth-gated routes — gate render autoritatif).
+
+### Refs
+
+- PR [#111](https://github.com/fxeliott/fxmily/pull/111) (`f718fdf`)
+- Memory `fxmily_session_2026-05-17_jt2_training_member_surface.md` (atomic-detail)
+
+## V1.2 J-T3 — Mode Entraînement admin corrections + notification (livré 2026-05-17)
+
+PR [#112](https://github.com/fxeliott/fxmily/pull/112) (`a02e4a4`). 3ᵉ des 4 sous-jalons SPEC §21. Workflow admin de corrections `TrainingAnnotation` carbone J4 + notification membre dédiée (push + email).
+
+### Scope
+
+- Storage `lib/storage/keys.ts` : `generateTrainingAnnotationKey` (pathOwner=`trainingTradeId`, mirror `generateAnnotationKey`) + `parseStorageKey` 4-member union + `local.ts put()` **4-way** + `isTrainingAnnotationUploadKind`.
+- Migration `20260517170000_v1_2_training_annotation_notification` : `ALTER TYPE "NotificationType" ADD VALUE 'training_annotation_received'` (canonical bare, non-réversible documenté header).
+- Notification fan-out **distinct** `training_annotation_received` (deep-link `/training/${id}` JAMAIS `/journal`) : `enqueue.ts` + `push-subscription.ts` `NOTIFICATION_TYPES` + dispatcher TTL/URGENCY/switch + `preferences.ts` default + `email/send.ts` + `notification-fallback.tsx` + `preferences-grid.tsx` CATEGORIES — pattern **type-check-driven exhaustive** (`Record<NotificationTypeSlug>` force chaque site).
+- Services `lib/training/training-trade-admin-service.ts` (`listTrainingTradesAsAdmin` + `getTrainingTradeAsAdmin` = `findFirst({id,userId:memberId})` dual-scope BOLA) + `training-annotation-member-service.ts` (`markSeen`/`list`/`countUnseen`, byte-faithful J4).
+- `app/admin/members/[id]/training/[trainingTradeId]/{page,actions}.tsx` + Server Actions `createTrainingAnnotationAction`/`deleteTrainingAnnotationAction` (PII-free audit `{trainingAnnotationId,trainingTradeId,memberId,hasMedia,mediaType}`).
+- UI : `components/training/{annotate-training-trade-button,training-annotations-section,delete-training-annotation-button,training-trade-card-linkable}.tsx` + `components/admin/member-training-panel.tsx` + onglet admin `'training'` (`member-tabs.tsx` + `parseTab` + render).
+- `components/media-uploader.tsx` : prop `trainingTradeId` SÉPARÉE de `tradeId` (FormData distinct, J4 call-sites passent `tradeId` SEUL = zéro régression).
+
+### Décisions clés (landmines)
+
+- **§21.5 ISOLATION TRIPLE-PROUVÉE** (grep indé + security-auditor + code-reviewer convergent) : 0 FK Trade, distinct slugs/storage-prefix/deep-link/revalidate, audit metadata PII-free test-asserted.
+- **MediaUploader keystone** : `trainingTradeId` ≠ `tradeId` (champs FormData distincts). NE JAMAIS fusionner — un training value ne doit JAMAIS voyager via le champ real-edge `tradeId`.
+- **Member detail page : AUCUN audit row** (réutiliser le slug J4 `member.annotations.viewed` polluerait le signal §21.5 ; `seenByMemberAt` sur la row est la trace durable « seen »). Divergence J4 délibérée.
+- **Cyan `--cy` training identity** sur 6 surfaces vs lime `--acc` journal — la non-confusabilité §21.5/Mark-Douglas, contraste AA ~9–11:1. Le Sheet admin garde lime J4 (contexte admin, jamais membre-confusable). NE PAS « harmoniser ».
+- **Admin action ne fire PAS d'email immédiat** (J4 le fait). `enqueueTrainingAnnotationNotification` (push + email fallback wired) couvre §21.4. Direct email = hors §21.
+
+### Files touched
+
+35 fichiers, +1932 −23 : storage (4) + audit.ts + uploads (2) + migration + notification fan-out (8) + 2 services + actions + 5 composants training/admin + media-uploader + 2 detail pages + member-tabs + tests.
+
+### Quality gate
+
+- Vitest **1182 → 1213** (+31, 80 files, 10 §21.5 action tests + keys + audit guard). type-check 0, lint 0, build 0 (les 2 routes `[trainingTradeId]` au manifest).
+- CI 6/6 GREEN incl. Playwright chromium 3m40s.
+
+### Refs
+
+- PR [#112](https://github.com/fxeliott/fxmily/pull/112) (`a02e4a4`)
+- Memory `fxmily_session_2026-05-17_jt3_training_admin_corrections.md` (atomic-detail)
+
+## V1.2 J-T4 — Engagement wiring + §21.5 anti-leak (SPEC §21 COMPLET 4/4) (livré 2026-05-17)
+
+PR [#113](https://github.com/fxeliott/fxmily/pull/113) (`09e55c8`). 4ᵉ et DERNIER sous-jalon SPEC §21. Câblage training-EFFORT → real-edge via **1 primitive count-only audité**, suite anti-fuite RUNTIME, **clôture le Mode Entraînement V1.2**. 0 migration (JSON `triggerRules` + counts calculés).
+
+### Scope (5 étapes TDD RED→GREEN)
+
+- (a) `countRecentTrainingActivity(userId, fromUtc, toUtc?)` dans `lib/training/training-trade-service.ts` → `{ count, lastEnteredAt }`. **LE primitive §21.5 unique** : `db.trainingTrade.count` + `findFirst orderBy enteredAt desc select enteredAt`. JAMAIS `resultR`/`outcome`/`plannedRR`.
+- (b) Engagement : `EngagementParts.trainingActivityRate: SubScore|null` + `EngagementInput.trainingActivityCount?: number` câblés via `scoring/service.ts` (3ᵉ `Promise.all`).
+- (c) Trigger `no_training_activity_in_window` : `lib/triggers/{types,schema,evaluators,engine}.ts` + 1 fiche seed `la-regularite-en-entrainement` dans `scripts/data/cards.ts`. Carbone EXACT de `evalNoCheckinStreak` (recency-only, account-age `<rule.days` anti-spam onboarding).
+- (d) Weekly report : `BuilderInput.trainingActivityCount?` + `counterSliceSchema.trainingSessionsCount` + `loader.ts` (6ᵉ `Promise.all`) + `prompt.ts` ligne "volume de pratique".
+- (e) `src/test/anti-leak/training-isolation.test.ts` : suite BLOQUANTE (firewall import glob `lib/{scoring,analytics,trades,habit}/**` + weekly-report/builder.ts moins les 3 touchpoints sanctionnés + invariance comportementale P&L + snapshot PII-free + schéma `.strict()` rejette resultR injecté).
+
+### Décisions verrouillées (NE PAS re-casser / NE JAMAIS rééquilibrer)
+
+- **Engagement = ADDITION PURE, AUCUN rééquilibrage des poids existants.** Les 4 poids 50/20/20/10 sont **inchangés** ; `WEIGHT_TRAINING=15` ajouté EN PLUS (`TRAINING_ACTIVITY_TARGET=8`). `trainingActivityRate=null` quand count=0 → `aggregateDimension` skip et normalise sur `pointsMax` actif → score **byte-identique** pré-J-T4 pour un membre sans backtest. Σpoids=100 n'est PAS contrainte de correctness. **Le blueprint architecte proposait WEIGHT_FILL 50→42 = VRAIE RÉGRESSION** prouvée (membre fill=0.5 → 75 avant / 77 après) → REJETÉ.
+- **3 touchpoints §21.5 sanctionnés** : `scoring/service.ts` + `triggers/engine.ts` + `weekly-report/loader.ts`. Chacun importe **UNIQUEMENT** `countRecentTrainingActivity` et RIEN d'autre. Tout autre module real-edge important training = breach.
+- **Trigger = carbone exact `evalNoCheckinStreak`** : `daysBetweenLocal(...)` — PAS de date-fns `differenceInDays` (halluciné par le blueprint, n'existe pas dans le trigger module). Branche "jamais" = `daysSince:accountAgeDays` (miroir fidèle, NE PAS « fixer » en `0`).
+- **Weekly report = volume-count SEULEMENT** (`trainingSessionsCount`). La récence passe par le trigger (inactivité→alerte), PAS par le rapport.
+- **Firewall anti-leak = GLOB de répertoires** (auto-couvre tout futur fichier real-edge), `readSrcCode` strip les commentaires AVANT grep (commentaires défensifs `// 🚨 §21.5 never db.trainingTrade` voulus). NE PAS re-naïviser en string-contains brut.
+- **Fiche seed `quote` = paraphrase honnête** explicitement marquée `quoteSourceChapter:"paraphrase de l'argument — Mark Douglas, Trading in the Zone, ch.11"` (PAS un verbatim fabriqué). 25 mots ≤30, posture §2 « le moteur ne juge jamais tes analyses ».
+
+### Files touched
+
+20 fichiers, +938 −10 : training-trade-service + scoring/{service,types,helpers} + triggers/{types,schema,evaluators,engine,cooldown} + weekly-report/{loader,builder,types,prompt} + schemas/weekly-report + scripts/data/cards.ts + test/anti-leak/training-isolation.test.ts + tests.
+
+### Quality gate
+
+- Vitest **1213 → 1266** (+53, 81 files, 0 régression). validate-cards **51/51**. type-check 0, lint 0, build 0.
+- CI 6/6 GREEN incl. Playwright chromium 3m36s.
+- **Carry-over prod jusqu'à 2026-05-19** : 3 migrations accumulées (#108 admin_notes + #110 training_entities + #112 training_annotation_notification) — déploiement manuel maintenance window jusqu'à ce que la pipeline `DEPLOY_PATH=hetzner` reprenne automatiquement (résolu V1.5).
+
+### Refs
+
+- PR [#113](https://github.com/fxeliott/fxmily/pull/113) (`09e55c8`)
+- Memory `fxmily_session_2026-05-17_jt4_training_engagement_wiring.md` (atomic-detail + pickup verbatim)
+
+## V1.3 — Débrief Training dédié (SPEC §23) (livré 2026-05-18)
+
+PR [#132](https://github.com/fxeliott/fxmily/pull/132) (`f48cde4`). Jalon #1 de la **séquence §21.6** (post-clôture §21 V1.2). Débrief hebdomadaire dédié au Mode Entraînement, calme et anti Black-Hat, isolé par construction des surfaces real-edge.
+
+### Scope
+
+- Migration `20260518150000_v1_3_training_debrief` : table `TrainingDebrief` ADD-only, relation `User` cascade RGPD, 0 FK vers `TrainingTrade`/`Trade` (lecture par fenêtre `enteredAt`).
+- Backend pur : `lib/training-debrief/{stats,service,week}.ts` (agrégateur 100% pur — `loadTrainingDebriefStats` `select` explicite `{id,enteredAt,pair,systemRespected,lessonLearned}` SEUL + `db.trainingAnnotation.count` bare ; aucun `resultR`/`outcome`/`plannedRR`) + schémas Zod `lib/schemas/training-debrief.ts` (durcissement `localDateOf` vs carbone weekly-review).
+- Server Action `app/training/debrief/actions.ts` (upsert idempotent {userId,weekStart}, audit PII-free, **NE revalide PAS `/dashboard`** — divergence §23.2 voulue vs REFLECT) + 2 pages `app/training/debrief/{page,new/page}.tsx`.
+- 5 composants `components/training-debrief/` : `wizard` (multi-step), `stats-panel` (2 Recharts + tuiles calmes), `timeline`, `crisis-banner`, `step-progress` — cyan §21.7 DS-v2 dédié, JAMAIS `.v18-theme`.
+- Admin `components/admin/member-training-debriefs-panel.tsx` (READ-ONLY, 0 mutation, gate `role==='admin'`).
+- Anti-leak `test/anti-leak/training-isolation.test.ts` : **Block F** étend le firewall à `app/training/debrief/actions.ts` + assertion `no revalidatePath('/dashboard')`.
+
+### Décisions clés (landmines)
+
+- **§21.5 par construction** : `TrainingDebriefStatTrade` (input agrégateur) **omet structurellement** `resultR`/`outcome`/`plannedRR`. La Server Action ne revalide PAS `/dashboard` (≠ REFLECT carbone) — recréerait le couplage. NE JAMAIS ajouter ce revalidate.
+- **§23.7 / PR#96 carry-over** : `weekStart` dérivé serveur via `currentParisWeekStart()` (`localDateOf` + `parseLocalDate` + math-lundi Europe/Paris). Le wizard NE calcule PAS weekStart côté client (le `lastMondayUTC` UTC-naïf de REFLECT **délibérément non porté**, JSDoc explicite).
+- **§21.7 cyan strict** : composants debrief = clone propre, JAMAIS `.v18-*`/`--v18-*`. `V18_SPRING`/`V18_SPRING_TIGHT` importés = constantes timing app-wide (pas un token thème — canon V1.9). `crisis-banner` garde `bad`/`warn` universels (sévérité doit lire pareil partout) ; seul CTA `tel:` est cyan.
+- **Calm reveal anti Black-Hat STRICT** : 0 XP/streak/badge/fanfare/confetti ; `notRespected = C.warn` ambre JAMAIS `C.bad` rouge ; empty-week = panneau pédagogique « 0 backtest… le geste prime », JAMAIS score-0 ; done-reveal calme « Reviens dimanche prochain ».
+- **Recharts couleurs hex `C.*`** (jamais `var()` — bug WebView iOS J6.6).
+- **prefill vs draft same-week = draft-wins V1** (UX autosave + parité carbone REFLECT). PAS de bannière « ton brouillon a écrasé » V1 (scope creep).
+
+### Files touched
+
+23 fichiers, +3029 −8 : 18 nouveaux (migration + 5 lib + 2 schémas + 3 actions/pages + 5 composants + admin panel + e2e) + 5 modifiés (schema.prisma model TrainingDebrief + relation User, audit.ts 2 slugs, anti-leak Block F + BREACH_TOKENS, db-helpers cleanupTestUsers `trainingDebrief.deleteMany`, `app/admin/members/[id]/page.tsx` wire tab=training).
+
+### Quality gate
+
+- Vitest **1291/83 → 1304/84** (+13 backend stats/week CET-hiver + frontend, 0 régression). type-check 0, lint 0, build 0 (`/training/debrief` + `/training/debrief/new` au manifest). Anti-leak 36 tests.
+- CI 6/6 GREEN incl. Playwright chromium 8m36s.
+- 9 sub-agents (4 backend + 5 frontend) : 0 TIER 1 cumulé. Passe consolidée backend = 3 edits source-adjugés (Block F + service single-source `inWeek` + commentaire fetch-window CET-hiver). Frontend = 0 edit (findings adjugés à la source : t-eyebrow 10px parité carbone /training:47, axes `C.t4`≈3.6:1 parité r-distribution).
+
+### Refs
+
+- PR [#132](https://github.com/fxeliott/fxmily/pull/132) (`f48cde4`)
+- Memory `fxmily_session_2026-05-18_v1.3_training_debrief.md` (atomic-detail + décisions verrouillées)
+
+## V1.4 — Débrief Mensuel IA dédié (SPEC §25) (livré 2026-05-19)
+
+PR [#135](https://github.com/fxeliott/fxmily/pull/135) (`3603954`). Jalon #2 de la séquence §21.6. Rapport mensuel IA avec pipeline **batch local Claude Max** (jamais d'API payante), push + email **membre uniquement**, page dédiée `/debrief-mensuel`, lecture admin read-only.
+
+### Scope
+
+- Migration `20260519150000_v1_4_monthly_debrief` : table `MonthlyDebrief` ADD-only + enum value `monthly_debrief_ready` (rollback runbook §19 hybride §17/§18).
+- Backend pur agrégateur (J-M1) + pipeline batch (J-M2) : endpoints `/api/admin/monthly-batch/{pull,persist}` + `requireMonthlyAdminToken` (carbone weekly V1.7) + loader pseudonymise via `pseudonymLabel` (Eliot ne re-pseudonymise PAS côté batch).
+- Service read-only + shared `<MonthlyDebriefReader>` SSOT présentationnel membre+admin (J-M3) : page `/debrief-mensuel` + push `monthly_debrief_ready` (10 surfaces TS-exhaustives) + email membre `sendMonthlyDebriefReadyEmail` carbone weekly-digest (TTL 86400/URGENCY low, deep-link `/debrief-mensuel?id=${debriefId}`).
+- Admin panel READ-ONLY (J-M4) + `?tab=monthly-debrief` + member-tabs + runbook §19.
+- **`format.test.ts` 21 tests** ajoutés post-ship sur méta-délégation Eliot « le plus qualitatif » — pin contrat défensif des formatters purs.
+
+### Décisions verrouillées (NE PAS re-litiger)
+
+- **§25.7 ≠ §21.5 tailored** : la section RÉELLE lit légitimement `SerializedTrade.outcome`/`realizedR` = le produit du membre. Block G du firewall isolé du Block F (§21.5 isolation TRAINING only).
+- **`pseudonymLabel` pré-calculé par loader** (builder pur sans import) ; `MonthlyBatchSnapshotEntry.userId` réel transite dans l'enveloppe `/pull` (routage retour, carbone EXACT weekly V1.7.2, single-admin token-gated, V2-defer pour token corrélation opaque).
+- **Training = count/récence ONLY** via `countRecentTrainingActivity` (J-T4 sanctioned touchpoint). PAS de distinct-days.
+- **`computeReportingMonth` ancre `now−24h`** carbone `computeReportingWeek`. `monthEnd` SSOT service-computed. 1 PR atomic.
+- **§25.4 débrief TOUS actifs** (script SANS skip `hasActivity`). **Crisis HIGH/MEDIUM skip-persist** mirror V1.7.1 (output IA, ≠ REFLECT persist-anyway).
+- **Email membre UNIQUEMENT** (§25.2), 0 email admin. Push TTL 86400/URGENCY low (calme anti-FOMO).
+- **At-least-once accepté V1** (push tag-coalesced ⇒ dup bénin, 1 email dup max en cas de DB-hiccup) — `dispatch_stamp_failed` Sentry warning observable, JSDoc documente. Exactly-once outbox = V2-defer (toucherait aussi weekly).
+- **Loader importe `getLatestBehavioralScore` de `@/lib/scoring/service` = SANCTIONNÉ §25.3** (sec-auditor a re-confirmé non-défaut J-M3 — NE PAS « fixer »).
+
+### Files touched
+
+~30 fichiers (6 commits du PR : J-M1 + J-M2 + hardening + J-M3 + J-M4 + format.test).
+
+### Quality gate
+
+- Vitest **1304/84 → 1364/89 → 1385/90** (+81 total). type-check 0, lint 0, build 0 (`/debrief-mensuel` + monthly-batch routes au manifest). Anti-leak 40/40 (Block G + Block F intact).
+- CI 6/6 GREEN incl. Playwright chromium.
+- 4 sub-agents (prisma-migration-runner SAFE + security-auditor 0 T1/T2 + a11y 0 blocker + code-reviewer READY) → 2 fixes adjugés (T2-2 `reportWarning push_enqueue_failed` + T2-1 stamp `update` try/catch isolé `dispatch_stamp_failed`).
+
+### Refs
+
+- PR [#135](https://github.com/fxeliott/fxmily/pull/135) (`3603954`)
+- Memory `fxmily_session_2026-05-19_v1.4_monthly_debrief.md` (atomic-detail + 6 commits + max-quality pass)
+
+## V1.5 (§27) — QCM athlète Mindset (MindsetCheck) (livré 2026-05-19)
+
+PR [#137](https://github.com/fxeliott/fxmily/pull/137) (`82723d8`). Jalon #3 de la séquence §21.6. **Distincte de l'ancienne V1.5 « Trading-expert calibration » (2026-05-09, lignes 1711+1759+1820 ci-dessus)** — collision de numéro de version assumée, le scope est §27 (QCM mindset hebdo) pas backend scoring.
+
+### Scope
+
+- Migration `20260519170000_v1_5_mindset_check` : table `mindset_checks` ADD-only + enum value `mindset_check_ready` (rollback runbook §20 hybride §17/§19). **LIVE prod via pipeline `DEPLOY_PATH=hetzner` auto** (deploy.yml run sur `82723d8` = completed/success — fin du carry-over manuel des migrations §21).
+- Instrument v1 figé versionné `lib/mindset/instrument.ts` : **6 dimensions × 2 items = 12 items** opaques immuables `d{n}_i{m}` + `dimensionId` explicite. Ancres fréquence 1 Jamais→5 Presque toujours. **No reverse-keying v1** (instrument court+mobile+répété → biais méthode).
+- Agrégateur `lib/mindset/profile.ts` 100% PUR (no DB/Date.now/I/O), null-honnête jamais fake-0 (§27.4), segmentation `splitByContiguousVersion` (validité longitudinale §27.7), gaps honnêtes `connectNulls={false}`.
+- Server Action `app/mindset/actions.ts` : Zod `.strict()` + superRefine exhaustif item↔version + Likert int 1-5 + `weekStart` lundi `parseLocalDate` carbone §23.7. Server-authority : reconstruit `responses` depuis les item ids de l'instrument résolu (clé inconnue/extra structurellement impossible).
+- Cron rappel hebdo `/api/cron/mindset-check-reminders` carbone `checkin-reminders` (gates allowlist `fxmily-cron`, crontab `0 9 * * 1` lundi). Push `mindset_check_ready` SANS email (§27.6).
+- UI wizard 12 items + RadarChart Recharts 3.8.1 (hex `C`, jamais `var()`) + Likert APG radiogroup (roving tabindex, focus-visible, pas info couleur-seule).
+- Anti-fuite **Block H** : `BREACH_TOKENS += MindsetCheck/db.mindsetCheck/@/lib/mindset` (2 directions : mindset n'importe aucun real-edge ∧ scoring/engagement/triggers/loaders ne référencent aucun token mindset). `db.mindsetCheck.deleteMany` avant `db.user.deleteMany` (db-helpers, FK-order).
+
+### Décisions verrouillées (instrument v1 + archi — la session BUILD #4 NE re-litige PAS)
+
+- **6 dimensions §27.3** : `uncertainty_acceptance`, `ego_result_detachment`, `discipline_plan_adherence`, `emotional_regulation`, `confidence_calibration`, `patience_anti_fomo` — self-responsibility folded into D2, « the zone » = état émergent pas dimension. Items = domaine coach Eliot, ajustables via bump `version` sans casser l'historique.
+- **`MindsetCheck` 0-FK** (seul `userId→User` cascade RGPD). PAS de `submittedAt` (`updatedAt @updatedAt` couvre re-submit). PAS de colonne `weekEnd` (service-computed SSOT). PAS de colonne dispatch (audit `notification.enqueued` suffit, canon TrainingDebrief).
+- **Zéro free-text §27** ⇒ AUCUN import `safeFreeText`/`buildCorpus`/`detectCrisis`/`detectInjection` (pas de dead-code spéculatif ; surface crisis/injection inexistante par design §27.6/§27.7).
+- **Frontend DS-v2 NEUTRE/lime** — JAMAIS `--cy`/`oklch(0.789…)` (§21.7 training-only) ; JAMAIS `.v18-*` (REFLECT-only). Recharts hex `C` (J6.6).
+- **Idempotence cron app-level** (skip si déjà soumis cette semaine OU push pending ce weekStart) — PAS de nouvel index dedup (mono-instance hebdo).
+
+### Hardening 5 sub-agents (passe consolidée unique)
+
+- prisma-migration-runner SAFE 0 finding + security-auditor 0 T1/T2 (firewall §27.7 étanche 2 directions, rebuild non-contournable) + code-reviewer 0 T1 READY + ui-designer 0 T1/T2 + accessibility-reviewer **1 T1 + 1 T2** → **4 fixes appliqués** : (a) `LikertItem.move()` `selectedIndex<0 → LIKERT[0]` (APG WCAG 2.1.1) ; (b) hint sr-only `aria-live` calme step incomplet (3.3.1 anti Black-Hat) ; (c) `ProfileRadar` type-safe `dims:{label,score:number}[]` (élimine `?? 0` latent fake-0 §27.4) ; (d) wizard eyebrow `t-eyebrow → t-eyebrow-lg` (consensus ui+code, cohérence PR#99).
+
+### Files touched
+
+30 fichiers, +3764 −22 : migration + schema.prisma + instrument + profile + service + actions + cron + 5 composants + RadarChart + audit slugs + anti-leak Block H + db-helpers + 6 tests e2e + tests TDD profile 29 + intégrité instrument.
+
+### Quality gate
+
+- Vitest **1425/1425 (93 files)**. type-check 0 strict, lint 0, build 0. Anti-fuite §21.5/§27.7 Block A→H. 0-balloon prouvé tous fichiers édités.
+- CI 6/6 GREEN. **e2e.yml flake pré-existant** sur `loginAs` (`e2e-auth.ts:88` "no session cookie") + `WebServer timeout` — déterministe sur `main` AVANT §27, ORTHOGONAL (les 6 tests `v1-5-mindset-check.spec.ts` PASS). `--admin` merge justifié (seul rouge = required-check pré-existant orthogonal tool-confirmé non causé par PR + surface §27 verte). **Jalon dédié spawn_task « Fix pre-existing e2e loginAs auth flake »** — JAMAIS bundlé §18.4.
+
+### Refs
+
+- PR [#137](https://github.com/fxeliott/fxmily/pull/137) (`82723d8`)
+- Memory `fxmily_session_2026-05-19_v1.5_qcm_mindset.md` (atomic-detail + décisions verrouillées + adjudication hardening)
+
+## V2.1.6 — Placeholder UI « À venir » suivi-formation (livré 2026-05-20)
+
+PR [#140](https://github.com/fxeliott/fxmily/pull/140) (`51bd8c8`). Jalon #4 de la séquence §21.6, **placeholder UI seulement** (le build substantif reste à venir, décision Eliot ultérieure). SUPERSEDES la PR #139 (`aec6d07`) qui marquait #4 comme « DIFFÉRÉ — post-projet pédagogie » — dépendance externe retirée + placeholder calme exposé `/dashboard`.
+
+### Scope
+
+- `SPEC.md` ligne 1043 : reformulation 1+/1− « DIFFÉRÉ — post-projet pédagogie » → « À VENIR — placeholder UI calme exposé `/dashboard` (décision Eliot 2026-05-20) ».
+- `apps/web/src/app/dashboard/page.tsx` : nouvelle `<section>` non-cliquable entre Module TRACK (`</section>` ligne 392) et `{/* V2.1.3 — Habit × Trade correlation */}` ligne 423. Icône `GraduationCap` lucide + `<Pill tone="mute">À venir</Pill>` + copy Mark Douglas « Le module de suivi de ta progression sur la formation Fxmily arrivera plus tard. On t'avertira quand il sera prêt. ».
+- 0 migration, 0 env var, 0 dep, 0 route `/formation` créée (volontaire — marker visuel pas teaser engageant).
+
+### Décisions verrouillées
+
+- **Emplacement = entre TRACK et Corrélations** (cohérence narrative : LIVE en haut + slot futur + analytics en bas). ui-designer T2-4 « fin-de-page » contradiction interne T2-1/T2-2 → NO-ACTION défer V2.1.7+.
+- **Tone neutre/mute `var(--t-3)`** délibéré, signale « slot reconnu mais pas encore actif » vs modules LIVE lime `--acc`. Convention placeholder ≠ active à formaliser V2 mais non-bloquant.
+- **`<Pill tone="mute">`** = `components/ui/pill.tsx:11` (border `--b-default` + text `--t-3` + bg `oklch(0.604 0.02 257 / 0.04)`).
+- **`<section aria-label>` + `<div aria-describedby>`** pattern WAI-ARIA 1.2 valide. a11y T2-2 propose déplacer sur `<section>`, code-reviewer propose retirer entièrement — 2 verdicts contradictoires + impact réel 0 → NO-ACTION défer V2.1.7+.
+- **`aria-hidden` sur `<GraduationCap>`** (icône décorative, texte porte le sens). Pattern J7 audit B8.
+- **0 animation, 0 hover-state cliquable** — anti-Black-Hat strict.
+- **Pas de bump SPEC.md ligne 5 « Version 1.1 »** (placeholder ne mérite pas un bump ; les bumps v1.3/v1.4/v1.5 = sections substantives §23/§25/§27).
+
+### Hardening 4 sub-agents (3 audits + 1 verifier)
+
+- ui-designer READY 0 T1 + accessibility-reviewer SHIP-READY 0 T1 (contrastes WCAG AAA : `--t-3` sur `--bg-2` ~7.5:1, sur `--bg-1` ~8.1:1, Pill composite ~7.3:1) + code-reviewer READY 0 T1 + verifier 10/10 VRAI. **0 TIER 1 cumulé, 0 TIER 2 actionnable in-PR avec consensus** (les 3 TIER 2 contradictoires ou impact 0). Décision /maximum-mode : reconsidération honnête → polish ANNULÉ → _no edge no commit_ trader stop-loss (force-push pour gain marginal 0 = anti-pattern).
+
+### Files touched
+
+2 fichiers, +30 LOC (SPEC.md 1 ligne reformulée + dashboard/page.tsx +30 LOC section + import `GraduationCap`). 0 fichier supprimé.
+
+### Quality gate
+
+- Vitest **1429/1429** stable, +0 régression. prettier ✓ fichiers modifiés. ESLint 0, type-check 0 strict, build Turbopack 0 (`/dashboard` ƒ inclus).
+- CI 6/6 GREEN sur `801b063` (Analyze 1m28s + CodeQL 2s + Lint/tc/build 2m27s + Playwright chromium 5m21s + Socket ×2). `mergeStateStatus:CLEAN`.
+- **Deploy.yml auto-déclenché** : run `26150638512` sur push `51bd8c8` (gate ligne 68 TRUE non-docs-only, ETA ~3min). 0 migration ⇒ `prisma migrate deploy` no-op.
+
+### Refs
+
+- PR [#140](https://github.com/fxeliott/fxmily/pull/140) (`51bd8c8`)
+- Memory `fxmily_session_2026-05-20_v2.1.6_placeholder_formation.md` (atomic-detail + décisions + SUPERSEDES #139)

@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Check,
+  GraduationCap,
   LineChart as LineChartIcon,
   LogOut,
   Moon,
@@ -388,6 +389,35 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden />
             </div>
           </Link>
+        </section>
+
+        {/* V2.1.6 — Suivi-formation/cursus (#4 séquence §21.6) placeholder
+            UI calme. Décision Eliot 2026-05-20 : la dépendance "projet
+            pédagogie externe" est retirée ; ce slot est exposé comme
+            marker non-cliquable pour les membres. L'activation V1.x se
+            fera via `/spec` dédié + build séparé sur décision Eliot
+            ultérieure (jamais bundlés §18.4). Tone neutre/mute,
+            anti-Black-Hat : pas de teaser engageant, pas d'animation,
+            pas de hover-state cliquable. */}
+        <section className="mb-6" aria-label="Module Suivi formation (à venir)">
+          <div
+            className="rounded-card flex items-center gap-3 border border-[var(--b-default)] bg-[var(--bg-2)] p-4"
+            aria-describedby="formation-soon-desc"
+          >
+            <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)]">
+              <GraduationCap className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+            </div>
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="t-eyebrow-lg text-[var(--t-3)]">Suivi formation</span>
+                <Pill tone="mute">À venir</Pill>
+              </div>
+              <p id="formation-soon-desc" className="text-[12px] leading-relaxed text-[var(--t-3)]">
+                Le module de suivi de ta progression sur la formation Fxmily arrivera plus tard. On
+                t&apos;avertira quand il sera prêt.
+              </p>
+            </div>
+          </div>
         </section>
 
         {/* V2.1.3 — Habit × Trade correlation (the documented Fxmily

@@ -21,7 +21,7 @@ Fxmily est un **outil de suivi comportemental** — pas un outil d'analyse de ma
 
 Fxmily n'est ni un CIF (Conseiller en Investissement Financier) ni un service réglementé AMF — c'est un outil interne de la formation Fxmily d'Eliot, à destination de ses membres exclusivement.
 
-**Statut** : **LIVE prod** depuis 2026-05-10 sur `app.fxmilyapp.com` (Hetzner CX22 + Caddy 2 + Postgres 17 + Docker Compose). Cycle V1 complet livré (**J0 → J10 + V1.5 + V1.6 + V1.7.2 batch HTTP local Claude Max + V1.8 REFLECT + V1.9 polish + V2.0 HabitLog backend bootstrap**). Branch protection main enabled (3 required checks : Lint+CodeQL+Playwright). Vitest **1001/1001** verts. 0 CVE / 0 Dependabot alert.
+**Statut** : **LIVE prod** depuis 2026-05-10 sur `app.fxmilyapp.com` (Hetzner CX22 + Caddy 2 + Postgres 17 + Docker Compose). Cycle V1 + V2 partiel livré (**J0 → J10 + V1.5 + V1.6 + V1.7.2 batch HTTP local Claude Max + V1.8 REFLECT + V1.9 polish + V2.0 HabitLog backend + V2.1.0→V2.1.6 TRACK frontend + DS-v2 + suivi formation**). Branch protection main enabled (3 required checks : Lint+CodeQL+Playwright). Vitest **1429/1429** verts. 0 CVE / 0 Dependabot alert.
 
 ---
 

@@ -332,7 +332,7 @@ détecter les unsub silencieux.
 - `D:\Fxmily\SPEC.md` (source de vérité produit)
 - `D:\Fxmily\apps\web\CLAUDE.md` (sections close-out J0 → J10)
 - `D:\Fxmily\docs\decisions\ADR-001-scoring-constants-pragmatic-heuristics.md`
-- `D:\Fxmily\docs\jalon-V1.5-prep.md` (briefing post-merge J10)
+- `D:\Fxmily\docs\archive\jalon-V1.5-prep.md` (briefing post-merge J10)
 - `D:\Fxmily\docs\runbook-hetzner-deploy.md` (provisioning + ops)
 - `D:\Fxmily\docs\runbook-backup-restore.md` (DR procedures)
 - `D:\Fxmily\docs\runbook-prod-smoke-test.md` (12-step smoke V1)

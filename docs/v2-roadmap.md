@@ -1,57 +1,72 @@
-# V2 Roadmap — post-J10
+# V2 Roadmap — post-V2.1.6
 
-> Préparé 2026-05-09 en clôture du Jalon 10. À relire ensemble une fois le
-> smoke prod (Phase F du J10) validé sur `app.fxmilyapp.com`.
+> Préparé 2026-05-09 en clôture du Jalon 10. Resynchronisé 2026-05-21 post-Sprint 1
+> (audit V1.5 pré-V2 fermé, séquence §21.6 close, V2.1.6 LIVE prod).
+> La section "V1 = ship" liste désormais V1 + V2 SHIPPED. Les items "ouverts post-V1"
+> sont annotés du statut actuel (LIVE / partial / ouvert).
 
-## V1 = ship
+## V1 + V2.1.6 = ship (état 2026-05-21)
 
 À ce stade :
 
-- Code J0 → J10 mergé sur `main`.
-- Stack prod (`app.fxmilyapp.com`, Hetzner CX22, Caddy, Postgres 17) opérationnelle.
+- Code J0 → J10 + V1.5 → V1.12 + V2.0 → V2.1.6 + V2.2 + séquence §21.6 (3 jalons LIVE
+  - 1 placeholder UI) mergé sur `main`.
+- Stack prod (`app.fxmilyapp.com`, Hetzner CX22, Caddy, Postgres 17) opérationnelle,
+  8/8 derniers deploys Hetzner SUCCESS.
 - Cohorte cible 30 → 100 membres invités.
 - Coût récurrent ~10-15€/mois (cf. SPEC §16).
-- Pas d'audio nulle part. Pas de tracker. Pas d'API payante consommée par
-  défaut (Anthropic Live activable manuellement).
+- Pas d'audio nulle part. Pas de tracker. **Aucune API Anthropic payante consommée** :
+  V1.7.2 a pivoté en batch local Claude Max only (canon dur §25.7 / SPEC :1237).
+- Vitest baseline 1429/1429 verts ; Playwright 17 specs E2E ; cron-watch hourly green.
+- Audit qualité V1.5 pré-V2 fermé (Sprint 1, 3 TIER 1 résolus : brace-expansion CVE-2026-45149 #141,
+  Recharts dynamic split #142, Dependabot TIER 1 batch #119/#120/#122).
 
-Avant tout V2 : laisser tourner V1 quelques semaines, observer les vrais
-patterns d'usage, écouter les retours des premiers membres réels.
+Avant tout V2 stratégique (Capacitor / Stripe / multi-admin) : laisser tourner V2.1.6
+quelques semaines, observer les vrais patterns d'usage, écouter les retours des
+premiers membres réels.
 
-## J10.5+ — Polish post-V1 (1-2 semaines, rolling)
+## J10.5+ — Polish post-V1 (rolling)
 
-> **Update 2026-05-09 — Phase P close-out.** Plusieurs items initialement
-> listés ici ont été ramenés dans J10 par les Phases I → P. La liste
-> ci-dessous reflète **uniquement** ce qui reste réellement ouvert post-V1.
-> Voir `apps/web/CLAUDE.md` §J10 Phases L→P pour le détail des items
-> promus.
+> **Update 2026-05-21 — post-Sprint 1 + V1.12 P3.** La liste ci-dessous reflète
+> ce qui reste ouvert post-V1.12 P4. Plusieurs items initialement listés
+> 2026-05-09 ont été partiellement ou totalement livrés en V1.10/V1.11/V1.12.
+> Voir `apps/web/CLAUDE.md` § V1.10 sec hardening / V1.11 5-phase batch /
+> V1.12 P1-P4 pour les détails livrés.
 
-**Items réellement ouverts post-V1** :
+**Items réellement ouverts post-V2.1.6** :
 
 - **CSP nonces** — passer de `'unsafe-inline'` à un nonce-based strict CSP.
   Refactor `proxy.ts` (edge runtime) pour générer un nonce par requête +
-  `headers()` côté layouts. Reclassé V2 post-Phase O (refactor non-trivial,
-  pas urgent en l'absence d'XSS connue).
+  `headers()` côté layouts. Reclassé V2 (refactor non-trivial, pas urgent
+  en l'absence d'XSS connue). **Statut 2026-05-21 : ouvert.**
 - **JWT `tokenVersion` révocation immédiate** — actuellement un user
   suspended/deleted garde un JWT valide jusqu'à `maxAge` 30j (la Phase P
   status gate global force re-login mais c'est une protection edge
   middleware uniquement). `tokenVersion: Int` sur `User` + comparaison
   dans le `session()` callback fait que logout/password-reset incrémente
   la version → tous les JWTs précédents invalidés instantanément.
-- **Login rate-limit credential-stuffing** — `/api/auth/callback/credentials`
-  - Server Action `signInAction` pas rate-limités. À ajouter
-    `loginLimiter = new TokenBucketLimiter({ bucketSize: 5, refillRate:
-1/60 })` keyé sur `email.toLowerCase()` ET `callerId(req)` AVANT le
-    `signIn()` argon2 (~150 ms par check).
+  **Statut 2026-05-21 : ouvert.**
+- **Login rate-limit credential-stuffing** — **PARTIELLEMENT LIVRÉ V1.12 P3 H1**
+  (`loginIpLimiter.consume(ip)` promotion dans `authorize()` closes bypass POST
+  direct `/api/auth/callback/credentials`, cf. `apps/web/CLAUDE.md` §V1.12 P3).
+  Reste : double-key `email.toLowerCase()` ET `callerId(req)` AVANT `signIn()`
+  argon2 (~150 ms par check) si l'analyse trafic le justifie. **Statut 2026-05-21 :
+  partial (IP-side fermé, email-side reste à câbler si besoin).**
 - **`auditLog` retention 90j** — table peut dominer write IOPS sur Hetzner
   CX22 (4 GB box) à >1000 membres × ~5 notifs/j × ~3 audit rows. Cron
-  `cron.purge_audit_log` aligné sur `purge-deleted` pattern.
+  `cron.purge_audit_log` aligné sur `purge-deleted` pattern. **Statut 2026-05-21 :
+  ouvert.**
 - **Service Worker offline strategy** — `public/sw.js` est push-only. Si
   on veut promettre "offline-first" PWA dans le marketing, ajouter un
-  fetch handler avec workbox/strategy.
+  fetch handler avec workbox/strategy. V1.11 a juste fixé le fallback iOS
+  subscription revoke (`apps/web/CLAUDE.md` §V1.11). **Statut 2026-05-21 :
+  ouvert (offline-first non câblé).**
 - **`listMemberTradesAsAdmin` cursor pagination** — `take: 100` cap silent
   data loss past 100 trades. OK pour V1 30-membres mais à câbler avant
-  cohorte 100+.
-- **Annual DR test** documenté + automatisé (RTO objectif < 24h).
+  cohorte 100+. **Statut 2026-05-21 : ouvert.**
+- **Annual DR test** — runbook `runbook-backup-restore.md` §6 documente le
+  workflow manuel (~30 min/an, RTO objectif <24h). Automatisation reste à câbler.
+  **Statut 2026-05-21 : runbook docs ✓, exécution annuelle ouverte.**
 
 **Items déjà livrés J10 Phases I → P** (ne plus les listr ici) :
 
@@ -68,7 +83,40 @@ patterns d'usage, écouter les retours des premiers membres réels.
 - ✅ Auth status='active' gate global proxy (Phase P).
 - ✅ `app/global-error.tsx` Next 16 root-layout catch (Phase P).
 
-## V2 — features (selon priorité Eliot)
+## V2 déjà LIVRÉ post-V1 (chronologique, état 2026-05-21)
+
+Les jalons V2 suivants sont LIVE prod sur `app.fxmilyapp.com` (deploy auto Hetzner sur push main non-docs). Ne sont **PAS** des candidats roadmap mais l'état actuel des features V2 déployées :
+
+- **V2.0 HabitLog backend** (2026-05-14) — Prisma `HabitLog` 5 kinds
+  `sleep/nutrition/caffeine/sport/meditation` + service + 32 tests.
+- **V2.1.0 / V2.1.1 TRACK frontend + wizards** (2026-05-15, PR #93 / #94) — landing
+  `/track` + 5 wizards habit.
+- **V2.1.2 DS 4-pt grid** (2026-05-16, PR #98) — dette `T3-3` repo-wide flag
+  ui-designer.
+- **V2.1.3 Habit×Trade correlation** (2026-05-16, PR #97) — pairing
+  `localDateOf(enteredAt, 'Europe/Paris')` (jour décision), filter
+  `realizedRSource='computed'`, pas d'IC sur `r` (Wilson = CI proportion, pas
+  Pearson), tier `confidence: low|adequate`.
+- **V2.1.4 Log express FAB** (2026-05-16, PR #100) — FAB dashboard global,
+  `habit-kinds.ts` SoT 5 piliers (PAS de `useSession`/`SessionProvider`, vérifié
+  correct par Grep + code-reviewer).
+- **V2.1.5 TrackHero premium** (2026-05-15/16, PR #95/#96) — design premium TrackHero.
+- **V2.1.6 Placeholder formation** (2026-05-20, PR #140) — slot UI "À venir"
+  séquence §21.6 jalon #4 (suivi-formation/cursus build complet via `/spec` dédié
+  ultérieur).
+- **V2.2 correlation 5-kinds** (2026-05-16, PR #102) — 5 types corrélation
+  habit×trade.
+
+Séquence §21.6 (4 jalons verrouillés 2026-05-18) :
+
+| #   | Nom                                                      | SPEC                       | Statut                | PR                                    |
+| --- | -------------------------------------------------------- | -------------------------- | --------------------- | ------------------------------------- |
+| 1   | Débrief Training dédié                                   | §23 (V1.3)                 | LIVE 2026-05-18       | #131 + #132 (`f48cde4`)               |
+| 2   | Débrief Mensuel IA                                       | §25 (V1.4)                 | LIVE 2026-05-19       | #134 + #135 (`3603954`)               |
+| 3   | QCM athlète Mindset (zéro IA, instrument figé versionné) | §27 (V1.5)                 | LIVE 2026-05-19       | #136 + #137 (`82723d8`)               |
+| 4   | Suivi-formation/cursus                                   | À cadrer `/spec` ultérieur | PLACEHOLDER UI V2.1.6 | #140 (placeholder) + #139 (defer doc) |
+
+## V2 stratégique — features candidates (selon priorité Eliot)
 
 Trois directions possibles, pas mutuellement exclusives :
 
@@ -307,12 +355,17 @@ les nouveaux users sur iOS 26+. Pas d'action requise — déjà géré par
 
 **Recherche web confirme** : aucun papier peer-reviewed 2024-2026 ne
 valide les constantes scoring Fxmily (`STDDEV_FULL_SCALE=4`,
-`EXPECTANCY_FULL_SCALE=1`, etc.). Les sources Tharp + Steenbarger sont
-qualitatives, pas mesurées.
+`EXPECTANCY_FULL_SCALE=1`, `PF_FULL_SCALE=3`, `DD_FULL_SCALE=15`). Les sources
+Tharp + Steenbarger sont qualitatives, pas mesurées.
 
-→ **Décision capturée dans [ADR-001](decisions/ADR-001-scoring-constants-pragmatic-heuristics.md)**.
-Les constantes sont des heuristiques pragmatiques, à recalibrer post-cohorte
-(30+ membres × 3+ mois).
+→ **Décision V1 capturée dans [ADR-001](decisions/ADR-001-scoring-constants-pragmatic-heuristics.md)**
+(Accepted 2026-05-09). Les constantes sont des heuristiques pragmatiques.
+
+→ **Proposition V2 capturée dans [ADR-002](decisions/ADR-002-v2-calibration-prop-firm-empirical.md)**
+(Proposed 2026-05-09). Recommandations prop-firm empirique 2024-2026 : `STDDEV 4→2.5`,
+`EXPECTANCY 1 R keep`, `PF 3→2.5`, `DD 15→10 R`. À accepter en V2 après observation
+de la cohorte V1 ≥30 membres × ≥3 mois (trigger : si 80%+ cohorte <30 ou >70 sur
+une dimension, recalibration).
 
 ### iOS Web Push fragility — fallback email §18.2 confirmé optimal
 
@@ -321,9 +374,11 @@ Background Fetch sur iOS. `event.waitUntil(showNotification)` obligatoire
 (Fxmily ✅ ligne 151 sw.js). Permission denied → réinstall PWA only.
 
 → Le fallback email Resend après 3 attempts (J9 round 3) reste la bonne
-stratégie. **V1.5 candidate** : ajouter monitoring delivery rate
-(audit row `notification.delivery_rate.snapshot` chaque semaine) pour
-détecter les unsub silencieux.
+stratégie. **Reclassé V2.x** (V1.5 LIVE depuis 2026-05-09, candidate
+historique non-livrée) : ajouter monitoring delivery rate (audit row
+`notification.delivery_rate.snapshot` chaque semaine) pour détecter les
+unsub silencieux. Statut 2026-05-21 : ouvert, faible priorité tant que
+cohorte <100 membres.
 
 ---
 

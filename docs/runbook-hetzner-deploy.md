@@ -1523,9 +1523,146 @@ docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
 4. **Restore** depuis `pg_dump` step 20.2.2 si des rows
    `mindset_check_ready` (queue / préférences) avaient été préservées.
 
+## 21. Rollback T5 track-record migration (`20260521172000_track_record_public_trades`)
+
+> **Quand l'utiliser** : si la migration T5 "Admin CRUD Public Track Record"
+> (PR #151, jalon final — `PublicTrade` + `PublicTradePartial` pour gérer la
+> vitrine publique `@fxmily/track-record` Cloudflare Pages) a été déployée en
+> prod et qu'un blocker post-deploy nécessite de la retirer complètement.
+> Pure ADD-only (2 enums Postgres + 2 tables neuves + 3 index + 1 FK
+> `public_trade_partials.publicTradeId → public_trades.id` `ON DELETE CASCADE`).
+> Brand-new + isolé du graphe métier real-edge (zéro FK vers `trades` /
+> `users` / `weekly_reports` / etc. — `public_trades` est admin-authored
+> uniquement, pas member-authored).
+>
+> ✅ **Simple `BEGIN/COMMIT`-revertable** (PAS d'`ALTER TYPE … DROP VALUE`
+> nécessaire — les 2 enums `PublicTradeSegment` + `PublicTradeStatus` sont
+> brand-new et ne sont référencés QUE par les 2 tables qu'on supprime →
+> `DROP TYPE` clean). Pattern carbone §16 (`v1_2_training_entities`).
+>
+> ⚠️ **Risque data loss** : `public_trades` contient les 139 trades importés
+> depuis l'ODS de Fxmily 2025 (cf. `scripts/import-fxmily-trades.ts`) +
+> toutes les éditions admin ultérieures via `/admin/track-record/*`. Pas de
+> données member-authored (donc RGPD non-impacté), mais ré-importer l'ODS
+>
+> - reproduire les éditions admin = effort manuel non-trivial. `pg_dump
+--data-only` atomique des 2 tables AVANT est OBLIGATOIRE.
+>
+> **Surface admin uniquement** : la sous-app `@fxmily/track-record` (vitrine
+> Cloudflare Pages) est un static export — elle ne lit JAMAIS la DB Hetzner
+> en runtime. Le rollback n'affecte donc pas `trackrecordfxmily.pages.dev`
+> tant qu'aucun rebuild static n'est déclenché (cf. T6 deferred — wire
+> webhook static rebuild).
+>
+> **Indépendant de §15-§20** : 0 FK croisée. Si plusieurs rollbacks sont
+> nécessaires, l'ordre inverse de l'apply continue d'appliquer (§21 → §20 →
+> §19 → … → §15).
+
+### 21.1 Pré-requis — quiesce
+
+Stop le web pour qu'aucune nouvelle mutation admin ne soit persistée pendant
+le DROP :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+```
+
+Vérifie l'état Prisma :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+    FROM _prisma_migrations WHERE migration_name LIKE '%track_record_public_trades%' \
+    ORDER BY started_at DESC;"
+```
+
+### 21.2 Backup `public_trades` + `public_trade_partials`
+
+```bash
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  pg_dump -U fxmily -d fxmily \
+  -t public_trades -t public_trade_partials \
+  --data-only --column-inserts \
+  | gzip > "/etc/fxmily/backups/pre-t5-rollback-public-trades-${TS}.sql.gz"
+```
+
+> Conservé 30j R2 (lifecycle `caddy/` carbone) + 7j local (`fxmily-backup`
+> rotation). Le re-import 2025 via `tsx scripts/import-fxmily-trades.ts
+--year 2025` reste possible mais perd les éditions admin manuelles
+> post-import.
+
+### 21.3 SQL rollback — DROP TABLES + DROP TYPES dans un seul BEGIN/COMMIT
+
+Ordre obligatoire : table fille (`public_trade_partials`) AVANT table parent
+(`public_trades`) AVANT les types enum (sinon `cannot drop type because
+other objects depend on it`) :
+
+```sql
+BEGIN;
+DROP TABLE IF EXISTS "public_trade_partials";
+DROP TABLE IF EXISTS "public_trades";
+DROP TYPE IF EXISTS "PublicTradeStatus";
+DROP TYPE IF EXISTS "PublicTradeSegment";
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260521172000_track_record_public_trades';
+COMMIT;
+```
+
+> Postgres rollback automatique si une étape échoue (cohérence garantie).
+
+### 21.4 Re-déploiement de l'image pré-T5
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<pre-t5-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+```
+
+### 21.5 Vérification post-rollback
+
+```bash
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dt public_trades public_trade_partials"
+# Attendu : "Did not find any relations" (les 2 tables absentes)
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c \
+  "SELECT typname FROM pg_type WHERE typname IN \
+   ('PublicTradeSegment', 'PublicTradeStatus');"
+# Attendu : 0 rows (types absents)
+
+# Audit log : consigne le rollback honnête counters.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"t5_track_record_public_trades\",\"by\":\"eliot\",\"data_loss_public_trades\":N,\"data_loss_public_trade_partials\":M}'::jsonb, \
+      NOW());"
+```
+
+### 21.6 Re-application future
+
+1. Re-deploy l'image T5+ HEAD.
+2. `docker compose -f /opt/fxmily/docker-compose.prod.yml run --rm web \
+pnpm --filter @fxmily/web prisma:migrate deploy` (rejoue la migration).
+3. **Restore** depuis `pg_dump` step 21.2 si on veut préserver les 139
+   trades ODS 2025 + éditions admin :
+
+   ```bash
+   gunzip -c /etc/fxmily/backups/pre-t5-rollback-public-trades-<TS>.sql.gz \
+     | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+         psql -U fxmily -d fxmily
+   ```
+
+4. **Alternative** : re-import propre via
+   `pnpm --filter @fxmily/web exec tsx scripts/import-fxmily-trades.ts --year 2025`
+   (re-crée les 139 trades depuis l'ODS source, perd les éditions admin).
+
 ## Note transversale — pattern rollback Fxmily
 
-Toutes les recipes §11-§20 suivent un même contrat :
+Toutes les recipes §11-§21 suivent un même contrat :
 
 1. **pg_dump atomique AVANT** (data-only + column-inserts pour idempotency).
 2. **`docker compose stop web`** (fige les writes, évite la corruption
@@ -1553,16 +1690,18 @@ notification` (§17), `20260519150000_v1_4_monthly_debrief` (§19) ET
 > du jeu 7 valeurs post-§25. Les points 1/2/4/6/7 s'appliquent quand même.
 > Voir §17 / §19 / §20.
 >
-> **Ordre de rollback multi-migrations** — les 6 sections de migration
+> **Ordre de rollback multi-migrations** — les 7 sections de migration
 > (#108 `v2_1_admin_notes` §15 + #110 `v1_2_training_entities` §16 + #112
 > `v1_2_training_annotation_notification` §17 + #132 `v1_3_training_debrief`
-> §18 + #135 `v1_4_monthly_debrief` §19 + ce PR `v1_5_mindset_check` §20)
-> sont des objets **indépendants** (un rollback partiel d'un seul est
-> valide ; `mindset_checks` / `monthly_debriefs` / `training_debriefs`
-> n'ont aucune FK croisée — seulement vers `users`). Pour un rollback
-> **complet**, procéder en **ordre inverse de l'apply** (timestamp
-> décroissant) : §20 → §19 → §18 → §17 → §16 → §15, pour garder
-> `_prisma_migrations` cohérent.
+> §18 + #135 `v1_4_monthly_debrief` §19 + #137 `v1_5_mindset_check` §20 +
+> #151 `t5_track_record_public_trades` §21) sont des objets **indépendants**
+> (un rollback partiel d'un seul est valide ; `mindset_checks` /
+> `monthly_debriefs` / `training_debriefs` / `public_trades` n'ont aucune FK
+> croisée — seulement vers `users`, sauf `public_trades` qui est admin-
+> authored et ne référence aucun user). Pour un rollback **complet**,
+> procéder en **ordre inverse de l'apply** (timestamp décroissant) : §21 →
+> §20 → §19 → §18 → §17 → §16 → §15, pour garder `_prisma_migrations`
+> cohérent.
 
 Le pattern est testé annuellement via le DR test §`runbook-backup-restore.md`
 "Test de DR (annuel, ~30 min)" — qui simule un restore complet sur une 2e

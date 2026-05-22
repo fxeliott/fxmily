@@ -3744,3 +3744,54 @@ Metadata **PII-free strict** : `{publicTradeId, ordinal, segment, instrument, st
 
 - PR [#151](https://github.com/fxeliott/fxmily/pull/151) (10 commits, base `feat/track-record-T0`)
 - Memory `fxmily_session_2026-05-22_t5_admin_crud_public_track_record.md` (foundation + Phase H + décisions + 1 false-positive contested)
+
+### Phase H+1 + H+2 — Round 2 audit-driven hardening (2026-05-22)
+
+5 commits supplémentaires ajoutés post-Phase H suite à un re-audit sceptique 4-subagent (verifier + code-reviewer Phase H re-pass + security-auditor Phase H+1 re-pass + documentation-writer) :
+
+- `7a9173d` test(track-record): extract form-shapers + Vitest TDD coverage Phase H BLOQUANTS — test-writer sub-agent extracted the 5 FormData helpers (`strField`, `strFieldNullable`, `numFieldNullable`, `boolField`, `tagsField`) + `shapeFormData`/`shapeFormDataForUpdate` + `CommonInput` interface from `actions.ts` (server-only `'use server'` boundary) to new pure `app/admin/track-record/form-shapers.ts` module. Pattern carbone `lib/admin/public-trade-math.ts` extract. Vitest can now load helpers without dragging `@/auth` → `next-auth` graph. +31 tests TDD (25 `actions.test.ts` + 5 `public-trade-service.test.ts` Prisma mock + 1 `public-trade-math.test.ts` lifecycle msg).
+- `4d7c799` fix(track-record): Phase H+1 SSRF regex query/fragment + path traversal + notes trim — code-reviewer Phase H re-pass caught :
+  - **H-1** : `SCREENSHOT_URL_HTTPS_REGEX` rejected `?v=2026-05-22` query strings + `#section` fragments → CDN URLs / Cloudinary signed URLs broken in prod. Fix : extended path class `[\w./%~+\-?#&=]`. +3 positive tests (cache-busting, multi-param Cloudinary, fragment).
+  - **H-3** : Storage regex accepted `public-trades/../../etc/passwd.png` path traversal. Fix : explicit `!s.includes('..')` pre-check in `.refine()`. +2 reject tests.
+  - **IMPORTANT-6** : `notesSchema` missing `.trim()` early (vs `instrumentSchema`/`setupSchema`/`tagSchema` siblings). Fix : add `.trim()` for consistency. Trailing `\n\n\n` no longer consumes `NOTES_MAX=2000` margin.
+- `5a67289` docs(track-record): apps/web/CLAUDE.md T5 section (Phase H + H+1) — initial documentation insertion 115 LOC (current section being amended).
+- `e9dca65` fix(track-record): Phase H+2 — numFieldNullable Infinity pass-through (H-4) — refined fix distinguishes `NaN` (admin garbage like `"abc"` → silent null clear) vs `±Infinity` (overflow like `"1e500"` → pass-through so Zod `.finite()` rejects with clear "R doit être un nombre fini" error). Before : `Number.isFinite(n) ? n : null` mapped both to null silently. After : `Number.isNaN(n) ? null : n`. +3 tests (Infinity, -Infinity, 1e500).
+- `2bd50d0` fix(track-record): Phase H+2 — IPv4 + IPv6 literal SSRF reject (H-IPLIT) — security-auditor Phase H+1 re-pass caught BASELINE Phase H finding : the regex `[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+` accepted IPv4 literals (`169.254.169.254/` AWS metadata, `192.168.1.1`, `10.0.0.1:8080`, `[::1]` IPv6 loopback, `[fe80::1]` link-local) — contradicting the JSDoc Phase H promise. Non-exploitable V1 (vitrine doesn't consume `screenshotUrl`) mais latent T6. Fix : 2 lookahead regex pre-checks (`!/^https:\/\/(?:\d{1,3}\.){3}\d{1,3}/` IPv4 + `!/^https:\/\/\[/` IPv6) before allowlist. +5 reject tests + 2 FP defense (DNS hosts with digits like `cdn4.example.com`, `s3-eu-west-1.amazonaws.com`).
+
+#### Quality gate post Phase H+2
+
+- Vitest **1543 passed + 2 skipped (1545 total)**, +47 cumul vs main baseline 1498
+- type-check 0, lint 0, prettier 0 sur 12 fichiers T5 modifiés/nouveaux
+- 6 sub-agents audit cumulés (5 Phase H + 4 Phase H+1 re-pass + 3 Phase H+2 re-pass)
+- 0 TIER 1 outstanding cumul, 0 TIER 2 HIGH actionable
+- PR #151 `mergeStateStatus: CLEAN`, 20 changed files, +4732/-1
+
+#### Defense layers cumul
+
+- Auth gate triple-check (id + role admin + status active) — Foundation
+- Zod `.strict()` + `safeFreeText` + `containsBidiOrZeroWidth` reject — Foundation
+- SSRF allowlist (HTTPS scheme + DNS hostname + IPv4/v6 reject + path traversal `..`) — Phase H + H+1 + H+2
+- Lifecycle invariants service-side post-merge — Foundation
+- Anti-doublon ordinal via P2002 catch — Foundation
+- Audit slugs PII-free (7 nouveaux) — Foundation
+- `setPublished` preserve original `publishedAt` on republish — Phase H
+- `shapeFormDataForUpdate` distinguishes `undefined` (skip) vs `null` (clear) — Phase H
+- a11y signed R prefix + SubField required asterisk — Phase H
+- Suspense skeleton (`loading.tsx`) Next 16 — Phase H
+- Filter chip hover state affordance — Phase H
+
+#### Backlog V2-defer (non-bloquant V1)
+
+- `%2e%2e` URL-encoded path traversal decode (TIER 2 NEW prophylactic, V2)
+- `?#` URL structure constraints (1 `?` max + 1 `#` max, V2)
+- `nextOrdinal` Postgres SEQUENCE migration (race window multi-admin V2)
+- Service-layer Vitest with Prisma mock for `updatePublicTrade` merge logic
+- Buttons custom drift J7-héritée DS-wide refactor PR séparée
+- Magic spacing repo-wide cleanup (héritage J7)
+- Happy-path Playwright CRUD smoke (carry-over cross-jalon seed helper)
+- Wire static rebuild webhook (T6 deferred — vitrine deploy manual)
+- **`listPublicTrades` pagination** (Phase H+3) — actuellement `findMany` sans `take`/`skip`, retourne TOUS les rows. À 139 trades V1 = OK (<1s render), mais à 1000+ trades V2 le list page deviendra slow + DOM lourd. Ajouter `take?: number` (default cap 500) + cursor pagination via `?after=<id>` URL param. Cohérent pattern J8 `getReportStatsForAdmin` aggregate (V1 polish).
+- **IPv4 obfuscation hex/decimal au T6 wire-time** (code-reviewer Phase H+2 MED-3) — `https://0x7f.0x0.0x0.0x1/` (hex) passe la dot-rule + est réinterprété en `127.0.0.1` au resolve time côté browser/Node `URL`/`fetch`. Non-exploitable V1 (la vitrine `apps/track-record` ne fetch PAS `screenshotUrl` côté serveur — 0 `<img>` server-rendered). Fix au moment où T6 wire un fetch server-side : parser real-IP via WHATWG `URL.host` + DNS resolve check au lieu du regex pré-check.
+- **JSDoc `numFieldNullable` boundary explicit** (MED-4 cosmetic) — mentionner `Number.MAX_VALUE ≈ 1.7976931348623157e308` comme borne explicite dans la JSDoc (`form-shapers.ts:67-81`). Aide future-debugging si Eliot saisit un R énorme par typo.
+- **Test boundary tight `1e309`** (MED-5 nice-to-have) — actuellement `actions.test.ts` teste `1e500` (très au-delà overflow) mais pas `1e309` (premier exposant overflow strict). Pin le boundary pour catch régression si V8 ajuste un jour les bornes IEEE 754.
+- **Rollback recipe documenté** : `docs/runbook-hetzner-deploy.md` §21 (T5 track-record).

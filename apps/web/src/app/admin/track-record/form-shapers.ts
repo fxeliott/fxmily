@@ -76,6 +76,12 @@ export function strFieldNullable(
  *     en aval rejette avec un message clair "R doit être un nombre fini"
  *     → admin VOIT son erreur au lieu du silent-clear.
  *
+ * **Boundary IEEE 754 (Phase H+3 MED-4)** : `Number.MAX_VALUE ≈
+ * 1.7976931348623157e308` est le plus grand finite double. `Number("1e308")`
+ * → fini ; `Number("1e309")` → `Infinity` (premier exposant overflow strict).
+ * Le test `actions.test.ts:165` pin cette frontière via `1e309` pour
+ * détecter une régression V8 hypothétique sur les bornes IEEE 754.
+ *
  * Avant H-4 : `Number.isFinite(n) ? n : null` mappait Infinity + NaN
  * indistinctement à null → admin qui tape `1e500` (vrai nombre overflow)
  * voyait son R disparaître sans erreur visible.

@@ -163,6 +163,24 @@ describe('numFieldNullable', () => {
     expect(numFieldNullable(fd, 'resultR')).toBe(Infinity);
   });
 
+  // Phase H+3 MED-5 — pin la frontière IEEE 754 stricte. `1e308` est fini,
+  // `1e309` est le premier exposant overflow strict (Number.MAX_VALUE ≈
+  // 1.7976931348623157e308). Si V8 change un jour les bornes IEEE 754 ou
+  // si numFieldNullable régresse vers `Number.isFinite ? n : null`, ce test
+  // catch immédiatement la régression côté boundary tight (vs `1e500` qui
+  // couvre seulement "far overflow").
+  it('pins IEEE 754 boundary — 1e308 fini pass + 1e309 Infinity pass-through', () => {
+    const fdFinite = new FormData();
+    fdFinite.set('resultR', '1e308');
+    const finite = numFieldNullable(fdFinite, 'resultR');
+    expect(finite).not.toBeNull();
+    expect(Number.isFinite(finite)).toBe(true);
+
+    const fdOverflow = new FormData();
+    fdOverflow.set('resultR', '1e309');
+    expect(numFieldNullable(fdOverflow, 'resultR')).toBe(Infinity);
+  });
+
   it('returns null for "NaN" literal string (Number("NaN") === NaN)', () => {
     const fd = new FormData();
     fd.set('resultR', 'NaN');

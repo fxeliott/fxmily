@@ -1,50 +1,32 @@
 import type { NextConfig } from 'next';
 
-// Reuse the same defense-in-depth headers as apps/web. Sentry wrap intentionally
-// deferred to T3 (deploy phase) — this app ships static-first.
-function buildContentSecurityPolicy(isProd: boolean): string {
-  const scriptSrc = isProd ? "'self' 'unsafe-inline'" : "'self' 'unsafe-inline' 'unsafe-eval'";
-  return [
-    "default-src 'self'",
-    `script-src ${scriptSrc}`,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
-    "font-src 'self' data:",
-    "connect-src 'self'",
-    "frame-src 'none'",
-    "frame-ancestors 'none'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    ...(isProd ? ['upgrade-insecure-requests'] : []),
-  ].join('; ');
-}
-
-const isProd = process.env.NODE_ENV === 'production';
-
-const securityHeaders = [
-  { key: 'Content-Security-Policy', value: buildContentSecurityPolicy(isProd) },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'X-Frame-Options', value: 'DENY' },
-  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  {
-    key: 'Permissions-Policy',
-    value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
-  },
-  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-  ...(isProd
-    ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }]
-    : []),
-];
-
+/**
+ * T0.5b — pivot Hetzner → Cloudflare Pages gratuit (Eliot 2026-05-22).
+ *
+ * `output: 'export'` génère du HTML/CSS/JS dans `out/`, servable sur le
+ * CDN edge Cloudflare. C'est le mode canonique pour une vitrine 100%
+ * statique sans backend runtime (cf. Cloudflare docs 2026 « Deploy a
+ * static Next.js site »).
+ *
+ * Pas de `next-on-pages` (deprecated 2026) ni de Workers + OpenNext
+ * (over-kill — pas de Server Actions / pas de Route Handlers runtime).
+ *
+ * `images: { unoptimized: true }` car le default loader Next/Image
+ * nécessite un runtime serveur — incompatible export.
+ *
+ * Les headers de sécurité ne sont PAS définis ici : `headers()` est
+ * unsupported en mode export. Ils vivent dans `public/_headers` que
+ * Cloudflare Pages applique au CDN edge (et qui est plus puissant car
+ * couvre toutes les routes statiques, pas juste celles Next).
+ */
 const nextConfig: NextConfig = {
-  output: 'standalone',
+  output: 'export',
   poweredByHeader: false,
   reactStrictMode: true,
   typedRoutes: true,
-  images: { remotePatterns: [] },
-  async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+  trailingSlash: true,
+  images: {
+    unoptimized: true,
   },
 };
 

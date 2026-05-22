@@ -23,14 +23,14 @@ export function ShowYourLosses({ bestTrades, worstTrades }: ShowYourLossesProps)
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       <Column
         title="Pires trades"
-        subtitle="Affichés avec la même prégnance que les meilleurs"
+        subtitle="Top 5 par R-multiple négatif"
         accent="loss"
         trades={worstTrades}
         reduced={!!reduced}
       />
       <Column
         title="Meilleurs trades"
-        subtitle="Conviction haute, exécution propre"
+        subtitle="Top 5 par R-multiple positif"
         accent="gain"
         trades={bestTrades}
         reduced={!!reduced}

@@ -1,11 +1,22 @@
 /**
- * Disclaimer AMF — formulation verbatim Règlement Général AMF
- * (article 314-14 RGAMF + Règlement délégué UE 2017/565 art. 44 post-MiFID II).
+ * Disclaimer AMF — formulations conformes Règlement Général AMF en vigueur
+ * (2026) + recommandations AMF/ESMA finfluenceurs janvier 2026 + loi 9 juin
+ * 2023 sur l'influence commerciale.
  *
- * Placement OBLIGATOIRE "en bonne place" (pas footer 9px) — voir Guide AMF
- * communications promotionnelles 2021. Inline ici sous la section performance.
+ * Researcher audit 2026-05-22 : le numéro d'article exact (314-14 / 314-30)
+ * a évolué entre versions RGAMF ; éviter de citer un numéro qui pourrait
+ * être périmé → formulation générique "Règlement Général AMF en vigueur".
  *
- * Pas de promesse de gain. Pas de "centre de l'information" sur la performance.
+ * Mentions obligatoires intégrées :
+ *  - Past performance (formule canonique AMF + MiFID II)
+ *  - Risque substantiel de perte en capital
+ *  - Statut non-CIF (Article L. 321-1 du Code monétaire et financier)
+ *  - Période exhaustive (RGAMF — tranches complètes, aucune exclusion)
+ *  - Identification publique (loi 9 juin 2023)
+ *  - Nature éducative (anti-requalification CIF)
+ *
+ * Placement "en bonne place" obligatoire — pas footer 9px (Guide AMF
+ * communications promotionnelles 2021).
  */
 export function LegalDisclaimer() {
   return (
@@ -18,23 +29,34 @@ export function LegalDisclaimer() {
         <span aria-hidden>⚠</span> Information réglementaire
       </div>
       <p className="mb-3">
-        Les chiffres cités ont trait aux périodes écoulées et{' '}
         <strong className="text-[var(--tr-t-1)]">
-          les performances passées ne sont pas un indicateur fiable des performances futures
-        </strong>
-        . Cette page documente une démarche pédagogique à des fins de formation. Elle ne constitue
-        ni un conseil en investissement, ni une recommandation personnalisée, ni une incitation à
-        acheter ou vendre un instrument financier.
+          Les performances passées ne préjugent pas des performances futures.
+        </strong>{' '}
+        Les chiffres présentés sur cette page ont trait à des périodes écoulées et ne sont pas un
+        indicateur fiable des performances futures (Règlement Général AMF en vigueur).
       </p>
       <p className="mb-3">
-        Le trading sur instruments à effet de levier (CFD, forex, futures) comporte un risque élevé
-        de perte rapide en capital. Il n&apos;est adapté qu&apos;aux personnes ayant les moyens
-        financiers de supporter cette perte et la connaissance suffisante pour évaluer le risque.
+        Le trading sur instruments à effet de levier (CFD, forex, futures) comporte un{' '}
+        <strong className="text-[var(--tr-t-1)]">risque substantiel de perte en capital</strong>. Il
+        n&apos;est adapté qu&apos;aux personnes ayant les moyens financiers de supporter cette perte
+        et la connaissance suffisante pour évaluer le risque.
       </p>
-      <p className="text-[var(--tr-t-3)]">
-        Fxmily n&apos;est pas un prestataire de services d&apos;investissement régulé par l&apos;AMF
-        (Autorité des Marchés Financiers). Les résultats individuels des membres dépendent de leur
-        exécution personnelle, de leur gestion du risque et des conditions de marché.{' '}
+      <p className="mb-3">
+        Cette page documente une démarche pédagogique à des fins de formation. Elle ne constitue ni
+        un conseil en investissement personnalisé au sens de l&apos;article L. 321-1 du Code
+        monétaire et financier, ni une recommandation, ni une incitation à acheter ou vendre un
+        instrument financier.{' '}
+        <strong className="text-[var(--tr-t-1)]">
+          Fxmily n&apos;est pas un Conseiller en Investissements Financiers (CIF)
+        </strong>{' '}
+        et n&apos;est pas immatriculé à l&apos;ORIAS à ce titre.
+      </p>
+      <p>
+        <span className="text-[var(--tr-t-3)]">
+          Période documentée intégralement, aucun trade retiré, aucune période exclue. Les résultats
+          individuels des membres dépendent de leur exécution personnelle, de leur gestion du risque
+          et des conditions de marché.{' '}
+        </span>
         <strong className="text-[var(--tr-t-2)]">
           Aucun rendement n&apos;est garanti ni promis.
         </strong>

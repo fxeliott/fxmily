@@ -250,4 +250,73 @@ describe('validateLifecycleInvariants — failures', () => {
       }
     }
   });
+
+  // Phase H+4 TIER 1 stress-test #1 — service-level enforcement de l'invariant
+  // `status=open` exitedAt+resultR vides. Couvre le merge-update path (admin
+  // change status closed → open sans clear les champs result). Carbone le
+  // Zod superRefine (cf. public-trade.test.ts Phase H+4) pour symétrie
+  // create/update.
+  it('rejects merged status=open with exitedAt set (service-level invariant)', () => {
+    expect(() =>
+      validateLifecycleInvariants({
+        status: 'open',
+        enteredAt: baseEntered,
+        exitedAt: baseExited, // residual from a previous closed state
+        riskPercent: 1.0,
+        resultR: null,
+      }),
+    ).toThrow(PublicTradeInvalidStateError);
+    try {
+      validateLifecycleInvariants({
+        status: 'open',
+        enteredAt: baseEntered,
+        exitedAt: baseExited,
+        riskPercent: 1.0,
+        resultR: null,
+      });
+    } catch (err) {
+      if (err instanceof PublicTradeInvalidStateError) {
+        expect(err.field).toBe('exitedAt');
+        expect(err.message).toContain('vide quand status = open');
+      }
+    }
+  });
+
+  it('rejects merged status=open with resultR set (service-level invariant)', () => {
+    expect(() =>
+      validateLifecycleInvariants({
+        status: 'open',
+        enteredAt: baseEntered,
+        exitedAt: null,
+        riskPercent: 1.0,
+        resultR: 2.5, // residual from a previous closed state
+      }),
+    ).toThrow(PublicTradeInvalidStateError);
+    try {
+      validateLifecycleInvariants({
+        status: 'open',
+        enteredAt: baseEntered,
+        exitedAt: null,
+        riskPercent: 1.0,
+        resultR: 2.5,
+      });
+    } catch (err) {
+      if (err instanceof PublicTradeInvalidStateError) {
+        expect(err.field).toBe('resultR');
+        expect(err.message).toContain('vide quand status = open');
+      }
+    }
+  });
+
+  it('accepts merged status=open with both exitedAt and resultR null (golden path)', () => {
+    expect(() =>
+      validateLifecycleInvariants({
+        status: 'open',
+        enteredAt: baseEntered,
+        exitedAt: null,
+        riskPercent: 1.0,
+        resultR: null,
+      }),
+    ).not.toThrow();
+  });
 });

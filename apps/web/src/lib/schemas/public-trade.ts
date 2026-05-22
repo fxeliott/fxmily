@@ -200,29 +200,57 @@ const sessionSchema = z.enum(TRADE_SESSIONS);
 const ordinalSchema = z.number().int().min(ORDINAL_MIN).max(ORDINAL_MAX);
 
 /**
+ * **Phase H+4 TIER 2 stress-test #4 — FR locale comma support.**
+ *
+ * V1.5.2 a fixé ce pattern pour `Trade.riskPct` (cf. `apps/web/CLAUDE.md`
+ * V1.5.2 section "FR locale + close-out"). Eliot tape habituellement en
+ * locale FR (`1,5` au lieu de `1.5`), or `Number("1,5") === NaN`, ce qui
+ * faisait que `numFieldNullable` mappait silencieusement à `null` côté
+ * form-shaper (H+1 H-4 distinction NaN→null) → input admin disparaissait
+ * sans erreur visible.
+ *
+ * Fix : `z.preprocess` remplace la PREMIÈRE virgule par un point AVANT le
+ * `z.coerce.number()`. Conséquences :
+ *   - `"1,5"` → `"1.5"` → `1.5` ✅
+ *   - `"2,5"` → `"2.5"` → `2.5` ✅
+ *   - `"1,5,7"` → `"1.5,7"` → `Number("1.5,7") === NaN` → Zod reject avec
+ *     "Risque % doit être un nombre fini" (clear error vs silent clear)
+ *   - `"1.5"` (déjà point) → inchangé → `1.5` ✅
+ *   - `1.5` (number direct) → inchangé → `1.5` ✅
+ */
+const frLocaleCommaPreprocess = (v: unknown): unknown =>
+  typeof v === 'string' ? v.replace(',', '.') : v;
+
+/**
  * Risk percent (% de capital risqué — 0.50, 1.00, 2.00). Stocké en % brut
  * cf. schema.prisma:1480-1483 (1.0 = 1%, pas 0.01). Decimal(4,2) ⇒ 99.99 max.
  * Min 0.01 (1 pb) défense contre `0` qui briserait `resultPercent =
  * riskPercent × resultR` (toujours = 0 ⇒ équivalent BE silencieux).
  */
-const riskPercentSchema = z.coerce
-  .number()
-  .finite({ message: 'Risque % doit être un nombre fini.' })
-  .gt(0, { message: 'Risque % doit être > 0.' })
-  .max(RISK_PERCENT_MAX, { message: `Risque % doit être ≤ ${RISK_PERCENT_MAX}.` })
-  // T5 audit fix #3 — Prisma Decimal(4,2) arrondit silencieusement à 2 décimales
-  // si on lui envoie 99.995 → 100.00 → P2000 numeric out of range. Reject côté
-  // Zod AVANT le write avec un message clair plutôt qu'un crash Prisma.
-  .multipleOf(0.01, { message: 'Risque % doit avoir au plus 2 décimales.' });
+const riskPercentSchema = z.preprocess(
+  frLocaleCommaPreprocess,
+  z.coerce
+    .number()
+    .finite({ message: 'Risque % doit être un nombre fini.' })
+    .gt(0, { message: 'Risque % doit être > 0.' })
+    .max(RISK_PERCENT_MAX, { message: `Risque % doit être ≤ ${RISK_PERCENT_MAX}.` })
+    // T5 audit fix #3 — Prisma Decimal(4,2) arrondit silencieusement à 2 décimales
+    // si on lui envoie 99.995 → 100.00 → P2000 numeric out of range. Reject côté
+    // Zod AVANT le write avec un message clair plutôt qu'un crash Prisma.
+    .multipleOf(0.01, { message: 'Risque % doit avoir au plus 2 décimales.' }),
+);
 
 /** R-multiple atteint (1R = +1×risque, -1R = stop, 0R = BE). Decimal(6,3). */
-const resultRSchema = z.coerce
-  .number()
-  .finite({ message: 'R doit être un nombre fini.' })
-  .min(RESULT_R_MIN, { message: `R doit être ≥ ${RESULT_R_MIN}.` })
-  .max(RESULT_R_MAX, { message: `R doit être ≤ ${RESULT_R_MAX}.` })
-  // Decimal(6,3) — max 3 décimales (cf. fix #3 ci-dessus).
-  .multipleOf(0.001, { message: 'R doit avoir au plus 3 décimales.' });
+const resultRSchema = z.preprocess(
+  frLocaleCommaPreprocess,
+  z.coerce
+    .number()
+    .finite({ message: 'R doit être un nombre fini.' })
+    .min(RESULT_R_MIN, { message: `R doit être ≥ ${RESULT_R_MIN}.` })
+    .max(RESULT_R_MAX, { message: `R doit être ≤ ${RESULT_R_MAX}.` })
+    // Decimal(6,3) — max 3 décimales (cf. fix #3 ci-dessus).
+    .multipleOf(0.001, { message: 'R doit avoir au plus 3 décimales.' }),
+);
 
 /**
  * Date ISO compatible Postgres `DateTime`. Pas `@db.Date` ici (PublicTrade
@@ -293,6 +321,28 @@ export const publicTradeCreateSchema = z
           code: z.ZodIssueCode.custom,
           path: ['resultR'],
           message: 'resultR doit être 0 (ou vide) quand status = break_even.',
+        });
+      }
+    }
+    // Phase H+4 TIER 1 stress-test #1 — `status=open` doit avoir `exitedAt`
+    // et `resultR` VIDES. Sans cette branche, l'admin pouvait persister un
+    // trade "open" avec un `exitedAt` + `resultR` non-null (latent bug qui
+    // polluerait les agrégats T6 vitrine + retrouve un état incohérent à
+    // l'edit). Le JSDoc l.243 annonçait l'invariant comme "form-level warn"
+    // mais aucune ligne ne le warn → fix par addIssue strict.
+    if (data.status === 'open') {
+      if (data.exitedAt) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['exitedAt'],
+          message: 'exitedAt doit être vide quand status = open.',
+        });
+      }
+      if (data.resultR !== null && data.resultR !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['resultR'],
+          message: 'resultR doit être vide quand status = open.',
         });
       }
     }

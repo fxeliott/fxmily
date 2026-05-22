@@ -326,7 +326,7 @@ export function PublicTradeForm({ trade }: PublicTradeFormProps) {
         label="Notes"
         htmlFor="notes"
         error={fieldErrors.notes}
-        hint={`max ${NOTES_MAX} chars · markdown light OK`}
+        hint={`max ${NOTES_MAX} chars · texte brut (pas de markdown)`}
       >
         <textarea
           id="notes"

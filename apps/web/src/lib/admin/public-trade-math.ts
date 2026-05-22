@@ -86,6 +86,24 @@ export function validateLifecycleInvariants(merged: {
       );
     }
   }
+  // Phase H+4 TIER 1 stress-test #1 — service-level enforcement de
+  // l'invariant `status=open` exitedAt+resultR vides. Couvre le merge-update
+  // path (admin change status closed → open sans clear les champs result).
+  // Carbone le Zod superRefine pour symétrie create/update.
+  if (merged.status === 'open') {
+    if (merged.exitedAt) {
+      throw new PublicTradeInvalidStateError(
+        'exitedAt',
+        'exitedAt doit être vide quand status = open.',
+      );
+    }
+    if (merged.resultR !== null) {
+      throw new PublicTradeInvalidStateError(
+        'resultR',
+        'resultR doit être vide quand status = open.',
+      );
+    }
+  }
   if (merged.exitedAt && merged.exitedAt < merged.enteredAt) {
     throw new PublicTradeInvalidStateError(
       'exitedAt',

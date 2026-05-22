@@ -628,3 +628,158 @@ describe('publicTradeCreateSchema — screenshotUrl allowlist (SSRF defense)', (
     expect(r.success).toBe(true);
   });
 });
+
+// =============================================================================
+// Phase H+4 stress-test #1 (TIER 1) — status=open invariants
+// =============================================================================
+//
+// Le stress-test sub-agent Phase H+3 a détecté que le superRefine couvrait
+// uniquement `closed` + `break_even` + `exitedAt < enteredAt` MAIS pas
+// `status=open + (exitedAt|resultR non-vide)`. Le JSDoc l.243 annonçait
+// l'invariant comme "form-level warn" mais aucune branche ne le rejetait —
+// admin pouvait persister un trade "open" avec un `exitedAt` et un `resultR`
+// non-null (latent bug qui polluerait les agrégats T6 vitrine + retrouve
+// un état incohérent à l'edit). Fix par 2 addIssue strict + tests TDD.
+
+describe('publicTradeCreateSchema — status=open invariants (Phase H+4 TIER 1)', () => {
+  it('rejects status=open with exitedAt set (must be null)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      status: 'open',
+      exitedAt: new Date('2026-05-22T16:00:00Z'),
+      resultR: null,
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const exitedAtErr = r.error.issues.find((i) => i.path[0] === 'exitedAt');
+      expect(exitedAtErr).toBeDefined();
+      expect(exitedAtErr?.message).toContain('vide quand status = open');
+    }
+  });
+
+  it('rejects status=open with resultR set (must be null)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      status: 'open',
+      exitedAt: null,
+      resultR: 2.5,
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const resultRErr = r.error.issues.find((i) => i.path[0] === 'resultR');
+      expect(resultRErr).toBeDefined();
+      expect(resultRErr?.message).toContain('vide quand status = open');
+    }
+  });
+
+  it('rejects status=open with BOTH exitedAt and resultR set (collects 2 issues)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      status: 'open',
+      exitedAt: new Date('2026-05-22T16:00:00Z'),
+      resultR: 2.5,
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const paths = r.error.issues.map((i) => i.path[0]);
+      expect(paths).toContain('exitedAt');
+      expect(paths).toContain('resultR');
+    }
+  });
+
+  it('accepts status=open with both exitedAt and resultR null (golden path)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      status: 'open',
+      exitedAt: null,
+      resultR: null,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts status=open with exitedAt + resultR fields absent entirely', () => {
+    // Same as above but using key-absence rather than explicit null. Zod
+    // `.nullable().optional()` accepts both. `validOpen()` returns a minimal
+    // payload that omits both keys — admin form submit sans ces champs (HTML
+    // `<input>` non rempli → FormData entry absent).
+    const r = publicTradeCreateSchema.safeParse(validOpen());
+    expect(r.success).toBe(true);
+  });
+});
+
+// =============================================================================
+// Phase H+4 stress-test #4 (TIER 2) — FR locale comma support
+// =============================================================================
+//
+// Le stress-test sub-agent Phase H+3 a détecté que `riskPercentSchema` +
+// `resultRSchema` n'avaient PAS le fix V1.5.2 FR locale (`z.preprocess` qui
+// remplace `,` par `.`). Eliot tape habituellement en locale FR → `Number("1,5")
+// === NaN` → côté form-shaper `numFieldNullable` mappait silencieusement à
+// `null` (cf. H+1 H-4 distinction NaN→null silent clear) → input admin
+// disparaissait sans erreur visible. Carbone V1.5.2 pattern Trade.riskPct.
+
+describe('publicTradeCreateSchema — FR locale comma support (Phase H+4 TIER 2)', () => {
+  it('accepts riskPercent FR locale `"1,5"` (comma → dot transform)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      riskPercent: '1,5',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.riskPercent).toBe(1.5);
+    }
+  });
+
+  it('accepts resultR FR locale `"2,5"` on closed trade', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      status: 'closed',
+      exitedAt: new Date('2026-05-22T16:00:00Z'),
+      resultR: '2,5',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.resultR).toBe(2.5);
+    }
+  });
+
+  it('accepts riskPercent dot-notation `"1.5"` (backward-compat)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      riskPercent: '1.5',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.riskPercent).toBe(1.5);
+    }
+  });
+
+  it('rejects multi-comma `"1,5,7"` (ambiguous → NaN after replace-first)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      riskPercent: '1,5,7',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const err = r.error.issues.find((i) => i.path[0] === 'riskPercent');
+      expect(err).toBeDefined();
+      // After preprocess "1,5,7" → "1.5,7" → Number("1.5,7") === NaN → Zod 4
+      // `z.coerce.number()` rejects at coerce stage with "Invalid input:
+      // expected number" (avant que `.finite()` ne soit atteint). On valide
+      // l'effet (rejection sur le path correct) sans pinner le wording exact
+      // qui peut drift entre versions Zod.
+      expect(err?.code).toBeDefined();
+    }
+  });
+
+  it('accepts riskPercent as native number 1.5 (no preprocess needed)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      riskPercent: 1.5,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.riskPercent).toBe(1.5);
+    }
+  });
+});

@@ -97,6 +97,7 @@ export function PartialsSection({ publicTradeId, initialPartials }: PartialsSect
             htmlFor="partial-closedAtR"
             error={fieldErrors.closedAtR}
             hint="ex. 1.5 pour TP1 à +1.5R"
+            required
           >
             <input
               id="partial-closedAtR"
@@ -118,6 +119,7 @@ export function PartialsSection({ publicTradeId, initialPartials }: PartialsSect
             htmlFor="partial-closedPercent"
             error={fieldErrors.closedPercent}
             hint="0.01..100"
+            required
           >
             <input
               id="partial-closedPercent"
@@ -135,7 +137,7 @@ export function PartialsSection({ publicTradeId, initialPartials }: PartialsSect
             />
           </SubField>
 
-          <SubField label="Date" htmlFor="partial-closedAt" error={fieldErrors.closedAt}>
+          <SubField label="Date" htmlFor="partial-closedAt" error={fieldErrors.closedAt} required>
             <input
               id="partial-closedAt"
               name="closedAt"
@@ -282,10 +284,19 @@ interface SubFieldProps {
   htmlFor: string;
   error?: string | undefined;
   hint?: string | undefined;
+  /**
+   * T5 audit Phase H — a11y-reviewer T1#3 : parité avec `Field` de
+   * `public-trade-form.tsx`. Marque le champ comme requis pour les voyants
+   * via astérisque visuel (sr-hidden — le `required` natif HTML est lu par
+   * les AT). Sans cette prop, les inputs `<input required>` annonçaient
+   * "requis" au SR mais aucun signal visuel pour les voyants. Asymétrie
+   * d'info entre voyants et SR (WCAG 1.3.3 + 4.1.2).
+   */
+  required?: boolean | undefined;
   children: React.ReactNode;
 }
 
-function SubField({ label, htmlFor, error, hint, children }: SubFieldProps) {
+function SubField({ label, htmlFor, error, hint, required, children }: SubFieldProps) {
   const hintId = `${htmlFor}-hint`;
   const errorId = `${htmlFor}-error`;
   // a11y H2-3 fix : injecte `aria-describedby` sur l'input (parité avec Field
@@ -301,6 +312,11 @@ function SubField({ label, htmlFor, error, hint, children }: SubFieldProps) {
     <div className="flex flex-1 flex-col gap-1.5">
       <label htmlFor={htmlFor} className="t-eyebrow-lg text-[var(--t-3)]">
         {label}
+        {required ? (
+          <span aria-hidden className="ml-1 text-[var(--bad)]">
+            *
+          </span>
+        ) : null}
       </label>
       {child}
       {hint && !error ? (

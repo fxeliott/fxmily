@@ -49,11 +49,20 @@ const DIRECTION_TONE: Record<NonNullable<SerializedPublicTrade['direction']>, Pi
  */
 export function PublicTradeRow({ trade }: PublicTradeRowProps) {
   const dateLabel = formatDate(trade.enteredAt);
-  const resultLabel = trade.resultR !== null ? `${Number(trade.resultR).toFixed(2)} R` : '—';
+  const rNum = trade.resultR !== null ? Number(trade.resultR) : null;
+  const isWin = rNum !== null && rNum > 0;
+  const isLoss = rNum !== null && rNum < 0;
+  // T5 audit Phase H — a11y-reviewer T1#2 : signed R label avec `+` prefix
+  // pour les gains. Sans préfixe explicite, le signal win/loss reposait
+  // uniquement sur la couleur (WCAG 1.4.1 Use of Color). Les utilisateurs
+  // daltoniens (deutéranopie ~5% population masculine) ne distinguaient pas
+  // `+1.50 R` vert de `-1.50 R` rouge si la couleur est désaturée.
+  // `formatSignedPercent` (helper bas du fichier) avait déjà ce pattern.
+  const resultLabel = rNum === null ? '—' : `${rNum > 0 ? '+' : ''}${rNum.toFixed(2)} R`;
+  const resultAriaLabel: string | undefined =
+    rNum === null ? undefined : isWin ? 'gain' : isLoss ? 'perte' : 'break-even';
   const percentLabel =
     trade.resultPercent !== null ? formatSignedPercent(Number(trade.resultPercent)) : null;
-  const isWin = trade.resultR !== null && Number(trade.resultR) > 0;
-  const isLoss = trade.resultR !== null && Number(trade.resultR) < 0;
 
   return (
     <Card className="p-4" edge={false}>
@@ -83,6 +92,7 @@ export function PublicTradeRow({ trade }: PublicTradeRowProps) {
               className={`text-sm font-semibold tabular-nums ${
                 isWin ? 'text-[var(--ok)]' : isLoss ? 'text-[var(--bad)]' : 'text-[var(--t-3)]'
               }`}
+              aria-label={resultAriaLabel ? `${resultLabel} — ${resultAriaLabel}` : undefined}
             >
               {resultLabel}
             </span>

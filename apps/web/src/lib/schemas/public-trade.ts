@@ -154,17 +154,30 @@ const screenshotUrlSchema = z
   // T5 audit Phase H — SSRF defense. Allowlist scheme HTTPS ou storage-key
   // R2 (cf. const regex au-dessus + JSDoc). Rejette `javascript:` / `data:`
   // / `file://` / `http://localhost` / IP literals / protocol-relative `//`.
-  // Phase H+1 H-3 : rejet explicite `..` path traversal en pré-check (les
-  // 2 regex acceptent sinon `public-trades/../../etc/passwd.png` car le `.`
-  // est autorisé dans la classe de path).
+  // Phase H+1 H-3 : rejet explicite `..` path traversal en pré-check.
+  // Phase H+2 H-IPLIT : rejet IPv4 + IPv6 literal hosts pour vraiment tenir
+  // la promesse JSDoc anti-SSRF. La regex HTTPS de base acceptait
+  // `https://169.254.169.254/` (AWS metadata) + `https://192.168.1.1/` (LAN)
+  // + `https://[::1]/` (IPv6 loopback) car `[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+`
+  // matche aussi des digits + dots. Non-exploitable V1 (la vitrine
+  // `apps/track-record` ne consomme PAS `screenshotUrl` actuellement —
+  // 0 `<img>` server-rendered) mais LATENT pour T6 wiring vitrine.
+  // Pattern : pre-check via 2 lookahead regex avant l'allowlist match.
   .refine(
     (s) =>
       s === '' ||
       (!s.includes('..') &&
+        // IPv4 literal reject : `https://1.2.3.4/...` (incl. AWS metadata
+        // 169.254.169.254, LAN 192.168/16, CGNAT 100.64/10, loopback 127/8).
+        !/^https:\/\/(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?(?:\/|$)/.test(s) &&
+        // IPv6 literal reject : `https://[::1]/...` (loopback) ou
+        // `https://[fe80::1]/...` (link-local) — le bracket `[` est le
+        // marqueur RFC 3986 d'un IPv6 host literal.
+        !/^https:\/\/\[/.test(s) &&
         (SCREENSHOT_URL_HTTPS_REGEX.test(s) || SCREENSHOT_URL_STORAGE_REGEX.test(s))),
     {
       message:
-        'URL https:// (avec domaine valide) ou storage-key public-trades/...{png,jpg,webp} requis (pas de `..`).',
+        'URL https:// (avec domaine DNS valide, pas IP literal) ou storage-key public-trades/...{png,jpg,webp} requis (pas de `..`).',
     },
   );
 

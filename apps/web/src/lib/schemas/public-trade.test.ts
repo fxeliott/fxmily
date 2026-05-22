@@ -565,4 +565,66 @@ describe('publicTradeCreateSchema — screenshotUrl allowlist (SSRF defense)', (
     });
     expect(r.success).toBe(false);
   });
+
+  // T5 audit Phase H+2 — H-IPLIT : la JSDoc Phase H promettait de bloquer
+  // AWS metadata + LAN IP + IPv6 loopback. Avant ce fix la regex HTTPS de
+  // base les acceptait car `[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+` matche aussi
+  // les digits. Non-exploitable V1 (vitrine ne render PAS screenshotUrl)
+  // mais latent pour T6 wiring. Fix : 2 lookahead regex (IPv4 + IPv6).
+
+  it('rejects IPv4 literal `https://169.254.169.254/` (AWS metadata SSRF)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://169.254.169.254/latest/meta-data/iam',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects IPv4 literal `https://192.168.1.1/` (LAN SSRF)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://192.168.1.1/admin.png',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects IPv4 literal with port `https://10.0.0.1:8080/` (LAN SSRF)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://10.0.0.1:8080/secret.png',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects IPv6 literal `https://[::1]/` (loopback SSRF)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://[::1]/admin',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects IPv6 literal `https://[fe80::1]/` (link-local SSRF)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://[fe80::1]/x.png',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('accepts DNS host that contains digits `https://cdn4.example.com/img.png` (FP defense)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://cdn4.example.com/img.png',
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts DNS host with subdomain digits `https://s3-eu-west-1.amazonaws.com/path.png`', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://s3-eu-west-1.amazonaws.com/bucket/img.png',
+    });
+    expect(r.success).toBe(true);
+  });
 });

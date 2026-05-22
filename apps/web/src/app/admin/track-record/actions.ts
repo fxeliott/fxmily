@@ -21,6 +21,9 @@ import {
   publicTradeCreateSchema,
   publicTradePartialSchema,
   publicTradeUpdateSchema,
+  NOTES_MAX,
+  SCREENSHOT_URL_MAX,
+  SETUP_MAX,
 } from '@/lib/schemas/public-trade';
 
 /**
@@ -91,6 +94,11 @@ function zodIssuesToFieldErrors(
  * Extrait + cast un champ FormData en string trimmé, ou `undefined` si vide.
  * Cap defensif à 2048 chars (anti-DoS — chaque field individuel borné, le
  * service en plus borne via Zod).
+ *
+ * Utilisé sur le CREATE path : un champ absent du form (ou vide) signifie
+ * "non fourni" = laisse Zod appliquer ses defaults. Pour l'UPDATE path où
+ * l'admin peut vouloir explicitement *effacer* un nullable field, voir
+ * `strFieldNullable` ci-dessous.
  */
 function strField(fd: FormData, key: string, maxLen = 2048): string | undefined {
   const v = fd.get(key);
@@ -99,6 +107,45 @@ function strField(fd: FormData, key: string, maxLen = 2048): string | undefined 
   if (t.length === 0) return undefined;
   if (t.length > maxLen) return t.slice(0, maxLen);
   return t;
+}
+
+/**
+ * Variante `strField` pour le UPDATE path qui distingue 3 états :
+ *   - `undefined` : le champ n'est PAS dans la FormData (form n'a pas envoyé
+ *     l'input du tout — ex. partial update API non-form). Service-side =
+ *     "ne touche pas, garde la valeur existante".
+ *   - `null` : le champ est présent dans la FormData MAIS valeur vide après
+ *     trim. Signal explicite "l'admin veut effacer ce champ". Service-side =
+ *     "écris NULL en DB".
+ *   - `string` : valeur non-vide, comme strField.
+ *
+ * T5 audit Phase H — code-reviewer BLOQUANT-1 : sans cette distinction, un
+ * admin qui efface un champ nullable (`notes`, `exitedAt`, `screenshotUrl`,
+ * etc.) sur le form edit voyait silencieusement la valeur DB conservée. Pire :
+ * impossible de re-ouvrir un trade `closed → open` en effaçant `exitedAt`.
+ */
+function strFieldNullable(fd: FormData, key: string, maxLen = 2048): string | null | undefined {
+  if (!fd.has(key)) return undefined;
+  const v = fd.get(key);
+  if (typeof v !== 'string') return undefined;
+  const t = v.trim();
+  if (t.length === 0) return null;
+  if (t.length > maxLen) return t.slice(0, maxLen);
+  return t;
+}
+
+/**
+ * Variante numérique de `strFieldNullable`. Empty input → `null` (clear),
+ * absent du form → `undefined` (keep), non-vide → coerce en number (avec
+ * `NaN` mappé sur `null` pour garder une sémantique "input invalide = effacé"
+ * — Zod refine `.finite()` aurait de toute façon rejeté un NaN passé tel quel).
+ */
+function numFieldNullable(fd: FormData, key: string, maxLen = 16): number | null | undefined {
+  const raw = strFieldNullable(fd, key, maxLen);
+  if (raw === undefined) return undefined;
+  if (raw === null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -175,15 +222,51 @@ function shapeFormData(fd: FormData): CommonInput {
     resultR: resultRRaw !== undefined ? Number(resultRRaw) : undefined,
     status: strField(fd, 'status', 32),
     session: strField(fd, 'session', 32),
-    setup: strField(fd, 'setup', 200),
+    setup: strField(fd, 'setup', SETUP_MAX),
     tags: tagsField(fd),
-    notes: strField(fd, 'notes', 4000),
-    screenshotUrl: strField(fd, 'screenshotUrl', 1024),
+    notes: strField(fd, 'notes', NOTES_MAX),
+    screenshotUrl: strField(fd, 'screenshotUrl', SCREENSHOT_URL_MAX),
     // T5 audit fix #14 — HTML checkbox absent = unchecked. Fallback DOIT être
     // `false`, sinon `<input type="checkbox" defaultChecked={false}>` non touché
     // par l'admin enverrait null → fallback `true` → impossible de créer un
     // brouillon. Le form set `defaultChecked={true}` au create (le browser
     // envoie 'on' tant que l'admin ne décoche pas) ⇒ default = published OK.
+    isPublished: boolField(fd, 'isPublished', false),
+  };
+}
+
+/**
+ * Variante de `shapeFormData` pour le UPDATE path.
+ *
+ * T5 audit Phase H — code-reviewer BLOQUANT-1 : les nullable fields (`direction`,
+ * `exitedAt`, `resultR`, `session`, `setup`, `notes`, `screenshotUrl`) doivent
+ * pouvoir être effacés explicitement par l'admin. Utilise `*Nullable` helpers
+ * qui retournent `null` quand le form envoie une valeur vide.
+ *
+ * Les fields NON-nullable (segment, ordinal, instrument, enteredAt, riskPercent,
+ * status, tags, isPublished) gardent le comportement `undefined` = "non fourni
+ * = keep existing" (Zod superRefine + service `validateLifecycleInvariants`
+ * post-merge attrapent les invariants violés).
+ */
+function shapeFormDataForUpdate(fd: FormData): CommonInput {
+  const ordinalRaw = strField(fd, 'ordinal', 16);
+  const riskRaw = strField(fd, 'riskPercent', 16);
+
+  return {
+    segment: strField(fd, 'segment', 32),
+    ordinal: ordinalRaw !== undefined ? Number(ordinalRaw) : undefined,
+    instrument: strField(fd, 'instrument', 32),
+    direction: strFieldNullable(fd, 'direction', 32),
+    enteredAt: strField(fd, 'enteredAt', 64),
+    exitedAt: strFieldNullable(fd, 'exitedAt', 64),
+    riskPercent: riskRaw !== undefined ? Number(riskRaw) : undefined,
+    resultR: numFieldNullable(fd, 'resultR', 16),
+    status: strField(fd, 'status', 32),
+    session: strFieldNullable(fd, 'session', 32),
+    setup: strFieldNullable(fd, 'setup', SETUP_MAX),
+    tags: tagsField(fd),
+    notes: strFieldNullable(fd, 'notes', NOTES_MAX),
+    screenshotUrl: strFieldNullable(fd, 'screenshotUrl', SCREENSHOT_URL_MAX),
     isPublished: boolField(fd, 'isPublished', false),
   };
 }
@@ -250,7 +333,7 @@ export async function updatePublicTradeAction(
     return { ok: false, error: 'validation', fieldErrors: { _root: 'ID invalide.' } };
   }
 
-  const shaped = shapeFormData(formData);
+  const shaped = shapeFormDataForUpdate(formData);
   const parsed = publicTradeUpdateSchema.safeParse(shaped);
   if (!parsed.success) {
     return {
@@ -418,6 +501,10 @@ export async function createPartialAction(
         closedPercent: partial.closedPercent,
       },
     });
+    // T5 audit Phase H — code-reviewer BLOQUANT-2 : la list `/admin/track-record`
+    // affiche `partialsCount` via `<Pill>{n} leg(s)</Pill>`. Sans revalidate
+    // ici, le badge reste stale jusqu'au prochain full reload.
+    revalidatePath('/admin/track-record');
     revalidatePath(`/admin/track-record/${publicTradeId}/edit`);
     return {
       ok: true,
@@ -456,6 +543,9 @@ export async function deletePartialAction(
       userId: gate.userId,
       metadata: { publicTradeId, partialId },
     });
+    // T5 audit Phase H — code-reviewer BLOQUANT-2 : symétrique à create —
+    // refresh aussi la list pour le badge `partialsCount`.
+    revalidatePath('/admin/track-record');
     revalidatePath(`/admin/track-record/${publicTradeId}/edit`);
     return { ok: true };
   } catch (err) {

@@ -404,3 +404,115 @@ describe('schema constants', () => {
     expect([...PUBLIC_TRADE_STATUSES].sort()).toEqual(['break_even', 'closed', 'open']);
   });
 });
+
+// =============================================================================
+// screenshotUrl allowlist — T5 audit Phase H, security-auditor H1 SSRF defense
+// =============================================================================
+//
+// `screenshotUrl` est rendu sur `trackrecordfxmily.pages.dev` (vitrine
+// publique static export Cloudflare Pages) après un rebuild. Sans allowlist
+// scheme, un admin (ou XSS chain V2 si admin role escalation future) pouvait
+// stocker une URL exotique qui s'exécutait au render :
+//   - `javascript:` / `data:` schemes → XSS direct
+//   - `file://` → vol filesystem côté process Pages worker
+//   - `http://localhost` / `http://169.254.169.254/` (AWS metadata) → SSRF
+//     network scan interne ou exfiltration credentials cloud
+//   - `//evil.com` protocol-relative → bypass http→https policy
+//
+// Le refine accepte uniquement HTTPS avec domaine valide OU storage-key
+// (`public-trades/<file>.{png|jpg|jpeg|webp}`).
+
+describe('publicTradeCreateSchema — screenshotUrl allowlist (SSRF defense)', () => {
+  it('accepts empty string (champ optional)', () => {
+    const r = publicTradeCreateSchema.safeParse({ ...validOpen(), screenshotUrl: '' });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts a valid HTTPS URL with path', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://cdn.example.com/screenshots/abc123.png',
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts a storage-key (public-trades/...png)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'public-trades/eurusd-20260522.png',
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts a storage-key with subdir (public-trades/2025/img.webp)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'public-trades/2025/01-january/eurusd-tp2.webp',
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects javascript: scheme (XSS)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'javascript:alert(1)',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects data: scheme', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'data:text/html,<script>alert(1)</script>',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects file:// scheme (local filesystem)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'file:///etc/passwd',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects http:// (non-TLS — SSRF localhost / AWS metadata)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'http://169.254.169.254/latest/meta-data/iam/security-credentials/',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects https://localhost (no dot — SSRF internal)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://localhost:5432/admin',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects protocol-relative //evil.com', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: '//evil.com/exfil',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects storage-key with disallowed extension (.exe)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'public-trades/payload.exe',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects storage-key with absolute path traversal', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: '/public-trades/abc.png',
+    });
+    expect(r.success).toBe(false);
+  });
+});

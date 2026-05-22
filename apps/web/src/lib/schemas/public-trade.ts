@@ -55,6 +55,28 @@ export const TAGS_MAX = 10;
 export const TAG_MAX = 50;
 export const NOTES_MAX = 2000;
 export const SCREENSHOT_URL_MAX = 500;
+
+/**
+ * Allowlist scheme pour `screenshotUrl` (T5 audit Phase H — SSRF defense).
+ *
+ * Sans allowlist, un admin (ou XSS chain V2 si admin role escalation future)
+ * pouvait stocker `javascript:alert(1)`, `data:text/html,...`, `file:///etc/
+ * passwd`, ou `http://169.254.169.254/` (AWS metadata) / `http://localhost:5432/`
+ * (network scan interne). La valeur étant rendue sur `trackrecordfxmily.pages
+ * .dev` après rebuild static, l'exploit landait au render.
+ *
+ *   - `^https://[host][:port]/[path]` — TLS-only, pas `http://` pour bloquer
+ *     mixed content + SSRF localhost. Le hostname doit avoir au moins un point
+ *     `.` (rejette `https://localhost`, `https://intranet`).
+ *   - `^public-trades/<key>.{png|jpg|jpeg|webp}` — storage-key R2 carbone J2
+ *     `trades/{userId}/{nanoid}.{jpg|png|webp}` adapté T5 (monovendeur Eliot
+ *     → préfixe `public-trades/` au lieu du segment `userId`).
+ *   - empty string accepté (le champ est optional côté DB).
+ */
+const SCREENSHOT_URL_HTTPS_REGEX =
+  /^https:\/\/[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+(:\d+)?(\/[\w./%~+-]*)?$/;
+const SCREENSHOT_URL_STORAGE_REGEX = /^public-trades\/[\w./-]+\.(png|jpg|jpeg|webp)$/i;
+
 export const ORDINAL_MIN = 1;
 export const ORDINAL_MAX = 99999;
 export const RISK_PERCENT_MIN = 0.01;
@@ -114,7 +136,17 @@ const screenshotUrlSchema = z
   .trim()
   .max(SCREENSHOT_URL_MAX)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
-  .transform(safeFreeText);
+  .transform(safeFreeText)
+  // T5 audit Phase H — SSRF defense. Allowlist scheme HTTPS ou storage-key
+  // R2 (cf. const regex au-dessus + JSDoc). Rejette `javascript:` / `data:`
+  // / `file://` / `http://localhost` / IP literals / protocol-relative `//`.
+  .refine(
+    (s) => s === '' || SCREENSHOT_URL_HTTPS_REGEX.test(s) || SCREENSHOT_URL_STORAGE_REGEX.test(s),
+    {
+      message:
+        'URL https:// (avec domaine valide) ou storage-key public-trades/...{png,jpg,webp} requis.',
+    },
+  );
 
 // =============================================================================
 // Enum schemas — alignés `@/generated/prisma/enums`
@@ -228,7 +260,11 @@ export const publicTradeCreateSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['exitedAt'],
-        message: 'exitedAt doit être postérieur à enteredAt.',
+        // T5 audit Phase H — code-reviewer BLOQUANT-4 : le prédicat `<` accepte
+        // l'égalité `exitedAt === enteredAt` (cf. `math.test.ts` qui pin cette
+        // acceptance comme edge boundary légitime). Le message dit donc
+        // "non-antérieur" (pas "postérieur" qui implique strict afterness).
+        message: 'exitedAt ne doit pas être antérieur à enteredAt.',
       });
     }
   });

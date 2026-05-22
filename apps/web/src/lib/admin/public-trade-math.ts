@@ -89,7 +89,9 @@ export function validateLifecycleInvariants(merged: {
   if (merged.exitedAt && merged.exitedAt < merged.enteredAt) {
     throw new PublicTradeInvalidStateError(
       'exitedAt',
-      'exitedAt doit être postérieur à enteredAt.',
+      // T5 audit Phase H — code-reviewer BLOQUANT-4 : prédicat `<` accepte
+      // équalité (test pin cette edge boundary). Message aligné non-strict.
+      'exitedAt ne doit pas être antérieur à enteredAt.',
     );
   }
 }

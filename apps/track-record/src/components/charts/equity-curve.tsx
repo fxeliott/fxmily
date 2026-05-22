@@ -32,18 +32,19 @@ const FR = new Intl.NumberFormat('fr-FR', {
 });
 
 /**
- * Courbe equity T1 ultra-minimal — UNE seule ligne fine, axes très light,
- * pas de gradient fill saturé, pas de glow filter. Le focal de la page est
- * le chiffre hero, pas le chart. Le chart confirme.
+ * Courbe equity T2 — pivot enhanced : signature lumineuse bleue.
  *
- * Specs ui-designer §4 :
- *  - 1 ligne 1.5px en `--text` (off-white)
- *  - 1 point cardinal accent au dernier datapoint
- *  - Axes invisibles ou ultra-light (`--text-subtle`)
- *  - Pas de gradient fill multicouleur — gradient `--accent-soft` → transparent uniquement
- *  - Border-radius 16px, bg `--surface`, border 1px hairline
+ * Évolutions vs T1 :
+ *  - Ligne stroke `--accent` (#5b8def) au lieu de blanc neutre : le bleu
+ *    devient la signature lumineuse demandée par Eliot
+ *  - SVG filter `feGaussianBlur` subtle pour glow sur le stroke (intensité
+ *    mesurée, jamais saturée)
+ *  - Activedot accent avec ring blanc subtile pour cardinal point
+ *  - Gradient fill `--accent-soft` 0.18 → 0 (un peu plus présent que T1)
+ *  - Reference line à y=0 pour ancrer le contexte
+ *  - Axes Y ticks discrets, X axis hidden
  */
-export function EquityCurve({ data, height = 320, className = '' }: EquityCurveProps) {
+export function EquityCurve({ data, height = 360, className = '' }: EquityCurveProps) {
   const reduced = useReducedMotion();
   const series: ChartDatum[] = useMemo(
     () =>
@@ -71,10 +72,21 @@ export function EquityCurve({ data, height = 320, className = '' }: EquityCurveP
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={series} margin={{ top: 12, right: 8, bottom: 4, left: 4 }}>
             <defs>
+              {/* Gradient fill : bleu signature lumineuse subtle */}
               <linearGradient id="tr-eq-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#5B8DEF" stopOpacity={0.12} />
+                <stop offset="0%" stopColor="#5B8DEF" stopOpacity={0.22} />
+                <stop offset="60%" stopColor="#5B8DEF" stopOpacity={0.05} />
                 <stop offset="100%" stopColor="#5B8DEF" stopOpacity={0} />
               </linearGradient>
+              {/* Glow filter : aura bleue très diffuse derrière le stroke.
+                  feGaussianBlur stdDeviation mesuré pour rester premium. */}
+              <filter id="tr-eq-glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
             </defs>
             <XAxis
               dataKey="ordinal"
@@ -118,14 +130,15 @@ export function EquityCurve({ data, height = 320, className = '' }: EquityCurveP
             <Area
               type="monotone"
               dataKey="cumPercent"
-              stroke="#EDEDEF"
-              strokeWidth={1.5}
+              stroke="#5B8DEF"
+              strokeWidth={1.75}
               fill="url(#tr-eq-fill)"
+              filter="url(#tr-eq-glow)"
               isAnimationActive={!reduced}
-              animationDuration={1400}
+              animationDuration={1600}
               animationEasing="ease-out"
               dot={false}
-              activeDot={{ r: 4, fill: '#5B8DEF', stroke: '#0A0A0B', strokeWidth: 2 }}
+              activeDot={{ r: 5, fill: '#5B8DEF', stroke: '#0A0A0B', strokeWidth: 2 }}
             />
           </AreaChart>
         </ResponsiveContainer>

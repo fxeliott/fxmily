@@ -3,12 +3,15 @@
 import { useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import type { RawTrade } from '@/lib/metrics';
+import { cn } from '@/lib/utils';
 
 interface TradesTableProps {
   trades: readonly RawTrade[];
   initialVisible?: number;
   className?: string;
 }
+
+type FilterMode = 'all' | 'gains' | 'losses' | 'be';
 
 const FR_PCT = new Intl.NumberFormat('fr-FR', {
   signDisplay: 'always',
@@ -23,32 +26,102 @@ const FR_DATE_SHORT = new Intl.DateTimeFormat('fr-FR', {
 });
 
 /**
- * Trades table T1 minimal — hairlines 1px uniquement, pas de cards autour,
- * pas de filter tabs (ui-designer §10 : « tabs = visual noise pour minimal
- * premium »). 4 colonnes seulement (Date · Instrument · Risque · Résultat),
- * le sens long/short est implicite (badge discret), le statut Gain/Perte
- * passe en couleur du chiffre.
+ * Trades table T2 — hairlines + 4 filter buttons (Tous / Gains / Pertes / BE).
  *
- * Si l'utilisateur veut voir tous les 139 trades, bouton textuel discret
- * (link-style, pas pill CTA).
+ * Pattern WCAG 2.2 AA :
+ *  - Filter buttons : `aria-pressed` au lieu de tabs (T2.1 finding ui-designer)
+ *  - role="grid" + role="row" + role="cell" + role="columnheader"
+ *  - 4 colonnes (Date · Instrument · Risque · Résultat), direction implicite
+ *    via badge discret
+ *  - "Voir plus →" link-style (pas pill CTA)
  */
 export function TradesTable({ trades, initialVisible = 12, className = '' }: TradesTableProps) {
   const reduced = useReducedMotion();
+  const [mode, setMode] = useState<FilterMode>('all');
   const [visible, setVisible] = useState(initialVisible);
-  const sliced = useMemo(() => trades.slice(0, visible), [trades, visible]);
-  const hasMore = trades.length > visible;
+
+  const filtered = useMemo(() => {
+    if (mode === 'all') return trades;
+    return trades.filter((t) => {
+      const r = t.resultR ?? 0;
+      const isBe = t.status === 'break_even' || r === 0;
+      if (mode === 'gains') return !isBe && r > 0;
+      if (mode === 'losses') return !isBe && r < 0;
+      if (mode === 'be') return isBe;
+      return true;
+    });
+  }, [trades, mode]);
+
+  const sliced = useMemo(() => filtered.slice(0, visible), [filtered, visible]);
+  const hasMore = filtered.length > visible;
+
+  const counts = useMemo(() => {
+    let g = 0;
+    let l = 0;
+    let b = 0;
+    for (const t of trades) {
+      const r = t.resultR ?? 0;
+      if (t.status === 'break_even' || r === 0) b += 1;
+      else if (r > 0) g += 1;
+      else l += 1;
+    }
+    return { all: trades.length, gains: g, losses: l, be: b };
+  }, [trades]);
+
   const motionProps = reduced
     ? {}
     : { initial: { opacity: 0, y: 4 }, animate: { opacity: 1, y: 0 } };
 
+  const filters: Array<{ key: FilterMode; label: string; count: number }> = [
+    { key: 'all', label: 'Tous', count: counts.all },
+    { key: 'gains', label: 'Gains', count: counts.gains },
+    { key: 'losses', label: 'Pertes', count: counts.losses },
+    { key: 'be', label: 'Break-even', count: counts.be },
+  ];
+
   return (
     <div className={className} role="region" aria-label="Liste des trades">
+      {/* Filter buttons row */}
+      <div role="toolbar" aria-label="Filtrer les trades" className="mb-6 flex flex-wrap gap-2">
+        {filters.map((f) => {
+          const active = mode === f.key;
+          return (
+            <button
+              key={f.key}
+              type="button"
+              aria-pressed={active}
+              onClick={() => {
+                setMode(f.key);
+                setVisible(initialVisible);
+              }}
+              className={cn(
+                't-caption inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 transition-colors',
+                active
+                  ? 'border-[var(--accent-edge)] bg-[var(--accent-soft)] text-[var(--accent)]'
+                  : 'border-[var(--border)] bg-transparent text-[var(--text-muted)] hover:border-[var(--border-strong)] hover:text-[var(--text)]',
+              )}
+            >
+              <span>{f.label}</span>
+              <span
+                className="num tabular-nums"
+                style={{
+                  color: active ? 'var(--accent)' : 'var(--text-subtle)',
+                  fontFeatureSettings: '"tnum"',
+                }}
+              >
+                {f.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <div
         role="grid"
-        aria-rowcount={trades.length + 1}
+        aria-rowcount={filtered.length + 1}
         className="border-t border-[var(--border)]"
       >
-        {/* Header */}
+        {/* Header (desktop only) */}
         <div
           role="row"
           className="t-caption hidden grid-cols-[80px_1fr_88px_88px] gap-4 py-3 text-[var(--text-subtle)] sm:grid"
@@ -78,7 +151,11 @@ export function TradesTable({ trades, initialVisible = 12, className = '' }: Tra
               key={`${t.ordinal}-${idx}`}
               role="row"
               {...motionProps}
-              transition={{ duration: 0.35, delay: Math.min(idx * 0.015, 0.3), ease: 'easeOut' }}
+              transition={{
+                duration: 0.35,
+                delay: Math.min(idx * 0.015, 0.3),
+                ease: 'easeOut',
+              }}
               className="grid grid-cols-2 items-baseline gap-4 border-t border-[var(--border)] py-3 sm:grid-cols-[80px_1fr_88px_88px]"
             >
               <span role="cell" className="num t-body text-[var(--text-muted)] sm:text-[13px]">
@@ -90,7 +167,10 @@ export function TradesTable({ trades, initialVisible = 12, className = '' }: Tra
               >
                 {t.instrument}
                 {t.direction && (
-                  <span className="t-micro ml-2 align-middle text-[var(--text-subtle)]">
+                  <span
+                    aria-label={t.direction === 'long' ? 'achat' : 'vente'}
+                    className="t-micro ml-2 align-middle text-[var(--text-subtle)]"
+                  >
                     {t.direction === 'long' ? '↗' : '↘'}
                   </span>
                 )}
@@ -111,16 +191,24 @@ export function TradesTable({ trades, initialVisible = 12, className = '' }: Tra
             </motion.div>
           );
         })}
+
+        {sliced.length === 0 && (
+          <div role="row" className="border-t border-[var(--border)] py-8">
+            <p className="t-body text-center text-[var(--text-muted)]">
+              Aucun trade dans cette catégorie.
+            </p>
+          </div>
+        )}
       </div>
 
       {hasMore && (
         <div className="mt-6 flex items-center justify-between border-t border-[var(--border)] pt-5">
           <span className="t-micro">
-            {Math.min(visible, trades.length)} sur {trades.length}
+            {Math.min(visible, filtered.length)} sur {filtered.length}
           </span>
           <button
             type="button"
-            onClick={() => setVisible((v) => Math.min(v + 30, trades.length))}
+            onClick={() => setVisible((v) => Math.min(v + 30, filtered.length))}
             className="t-body text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
           >
             Voir plus →

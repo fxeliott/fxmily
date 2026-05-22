@@ -292,15 +292,26 @@ export async function deletePublicTrade(id: string): Promise<void> {
 }
 
 export async function setPublished(id: string, published: boolean): Promise<SerializedPublicTrade> {
+  // T5 audit Phase H — code-reviewer BLOQUANT-3 : `publishedAt` est la
+  // chronologie publique du track-record (la valeur la plus exposée du
+  // module). Bumper à chaque republish = destruction silencieuse du signal.
+  // Fix : set-once at first publish — preserve la date d'origine sur tout
+  // republish ultérieur. On lit l'état existant pour décider.
+  const existing = await db.publicTrade.findUnique({
+    where: { id },
+    select: { publishedAt: true },
+  });
+  if (!existing) throw new PublicTradeNotFoundError();
+
   try {
     const row = await db.publicTrade.update({
       where: { id },
       data: {
         isPublished: published,
-        // Bump `publishedAt` SEULEMENT quand on (re)publish — preserve la
-        // date d'origine lors d'un unpublish (anti exactOptionalPropertyTypes
-        // qui interdit `publishedAt: undefined` explicite).
-        ...(published ? { publishedAt: new Date() } : {}),
+        // Bump `publishedAt` UNIQUEMENT au tout premier publish (existing null).
+        // Republish d'un trade déjà publié-puis-unpublished préserve la date.
+        // Unpublish ne touche jamais `publishedAt` (historique conservé).
+        ...(published && existing.publishedAt === null ? { publishedAt: new Date() } : {}),
       },
       include: { _count: { select: { partials: true } } },
     });

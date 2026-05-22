@@ -27,11 +27,15 @@ premiers membres réels.
 
 ## J10.5+ — Polish post-V1 (rolling)
 
-> **Update 2026-05-21 — post-Sprint 1 + V1.12 P3.** La liste ci-dessous reflète
-> ce qui reste ouvert post-V1.12 P4. Plusieurs items initialement listés
-> 2026-05-09 ont été partiellement ou totalement livrés en V1.10/V1.11/V1.12.
-> Voir `apps/web/CLAUDE.md` § V1.10 sec hardening / V1.11 5-phase batch /
-> V1.12 P1-P4 pour les détails livrés.
+> **Update 2026-05-22 (Session N audit drift resync) — post-Sprint 1 + V1.12 P3.**
+> La liste ci-dessous reflète ce qui reste ouvert post-V1.12 P4. Plusieurs items
+> initialement listés 2026-05-09 ont été partiellement ou totalement livrés en
+> V1.6 Phase R / V1.10 / V1.11 / V1.12. Session N audit (4 sub-agents parallèles
+> tool-confirmed grep) a reclassé 2 items ✅ LIVRÉ COMPLET : login rate-limit
+> credential-stuffing (V1.12 P3, email + IP côtés câblés) + auditLog retention 90j
+> (V1.6 Phase R, code + cron route + crontab Hetzner). Voir `apps/web/CLAUDE.md`
+> § V1.6 Phase R / V1.10 sec hardening / V1.11 5-phase batch / V1.12 P1-P4 pour
+> les détails livrés.
 
 **Items réellement ouverts post-V2.1.6** :
 
@@ -46,16 +50,21 @@ premiers membres réels.
   dans le `session()` callback fait que logout/password-reset incrémente
   la version → tous les JWTs précédents invalidés instantanément.
   **Statut 2026-05-21 : ouvert.**
-- **Login rate-limit credential-stuffing** — **PARTIELLEMENT LIVRÉ V1.12 P3 H1**
-  (`loginIpLimiter.consume(ip)` promotion dans `authorize()` closes bypass POST
-  direct `/api/auth/callback/credentials`, cf. `apps/web/CLAUDE.md` §V1.12 P3).
-  Reste : double-key `email.toLowerCase()` ET `callerId(req)` AVANT `signIn()`
-  argon2 (~150 ms par check) si l'analyse trafic le justifie. **Statut 2026-05-21 :
-  partial (IP-side fermé, email-side reste à câbler si besoin).**
-- **`auditLog` retention 90j** — table peut dominer write IOPS sur Hetzner
-  CX22 (4 GB box) à >1000 membres × ~5 notifs/j × ~3 audit rows. Cron
-  `cron.purge_audit_log` aligné sur `purge-deleted` pattern. **Statut 2026-05-21 :
-  ouvert.**
+- **Login rate-limit credential-stuffing** — ✅ **LIVRÉ COMPLET V1.12 P3.**
+  Double-key câblé dans `authorize()` AVANT `signIn()` argon2 (~150 ms par check) :
+  `loginEmailLimiter.consume(email.toLowerCase())`
+  (`apps/web/src/lib/auth/authorize-credentials.ts:135`) + `loginIpLimiter.consume(ip)`
+  (ibid `:155`). Closes bypass POST direct `/api/auth/callback/credentials`.
+  Cf. `apps/web/CLAUDE.md` §V1.12 P3. **Statut 2026-05-22 : LIVE prod (email + IP
+  côtés tous deux fermés, reclassé Session N audit).**
+- **`auditLog` retention 90j** — ✅ **LIVRÉ V1.6 Phase R (2026-05-09).**
+  `apps/web/src/lib/audit/cleanup.ts` (`RETENTION_DAYS=90`, batch 5000, two-step
+  find→deleteMany) ; cron HTTP `/api/cron/purge-audit-log` (SHA-256 +
+  `timingSafeEqual` CWE-208 + token bucket + audit row `cron.purge_audit_log.scan`) ;
+  crontab Hetzner `0 4 * * * fxmily /usr/local/bin/fxmily-cron purge-audit-log`
+  (`ops/cron/crontab.fxmily:59`, daily 04:00 UTC, 1h après purge-deleted) ;
+  9e expectation `getCronHealthReport`. **Statut 2026-05-22 : LIVE prod (reclassé
+  Session N audit, table dimensionnement OK <1000 membres actuel).**
 - **Service Worker offline strategy** — `public/sw.js` est push-only. Si
   on veut promettre "offline-first" PWA dans le marketing, ajouter un
   fetch handler avec workbox/strategy. V1.11 a juste fixé le fallback iOS

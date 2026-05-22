@@ -7,7 +7,9 @@ import {
   useSpring,
   useReducedMotion,
 } from 'framer-motion';
+import Image from 'next/image';
 import type { PointerEvent } from 'react';
+import logoFxmily from '../../public/logo-fxmily.png';
 
 interface LogoMarkProps {
   size?: number;
@@ -15,12 +17,16 @@ interface LogoMarkProps {
 }
 
 /**
- * Fxmily "FK" logo mark — SVG inline avec halo bleu pointer-reactive.
- * Pattern : drop-shadow halo + spotlight radial-gradient suivi par pointer
- * (useMotionValue + useSpring, JAMAIS setState — re-renders tuent 60 fps).
- * Idle : "breathing" subtil 5.5s via .tr-breathe (CSS keyframes).
+ * Fxmily "FK" logo mark — asset original Eliot, fond noir strippé en alpha
+ * (PIL luminance threshold + ramp anti-alias, 2026-05-22).
  *
- * Source : research Motion design subagent + Awwwards 2026 pattern.
+ * Le PNG a une vraie transparence : 86 % de pixels alpha=0, 13 % blanc
+ * opaque, 0.6 % rampe sur les edges pour anti-alias clean. Plus besoin
+ * de `mix-blend-mode: lighten` (qui interférait avec l'aurora gradient).
+ *
+ * Halo bleu derrière (`tr-breathe` 5.5s idle), spotlight pointer-reactive
+ * (Motion useMotionValue + useSpring — JAMAIS setState pour 60 fps), et
+ * drop-shadow sur l'image elle-même donnent la signature lumineuse.
  */
 export function LogoMark({ size = 96, className = '' }: LogoMarkProps) {
   const reduced = useReducedMotion();
@@ -28,7 +34,7 @@ export function LogoMark({ size = 96, className = '' }: LogoMarkProps) {
   const my = useMotionValue(50);
   const sx = useSpring(mx, { stiffness: 150, damping: 20 });
   const sy = useSpring(my, { stiffness: 150, damping: 20 });
-  const bg = useMotionTemplate`radial-gradient(circle 220px at ${sx}% ${sy}%, rgba(0,133,255,0.35), transparent 60%)`;
+  const bg = useMotionTemplate`radial-gradient(circle 240px at ${sx}% ${sy}%, rgba(0,133,255,0.40), transparent 60%)`;
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (reduced) return;
@@ -37,13 +43,13 @@ export function LogoMark({ size = 96, className = '' }: LogoMarkProps) {
     my.set(((e.clientY - r.top) / r.height) * 100);
   };
 
-  // exactOptionalPropertyTypes : conditional spread to avoid `prop={cond ? undefined : x}`.
   const motionProps = reduced
     ? {}
     : {
         initial: { opacity: 0, filter: 'blur(8px)', scale: 0.95 },
         animate: { opacity: 1, filter: 'blur(0px)', scale: 1 },
       };
+
   return (
     <motion.div
       {...motionProps}
@@ -52,7 +58,7 @@ export function LogoMark({ size = 96, className = '' }: LogoMarkProps) {
       onPointerMove={onPointerMove}
       transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
     >
-      {/* Halo soft idle — breathes (5.5s). */}
+      {/* Halo soft idle — breathes 5.5s. */}
       <div
         aria-hidden
         className="tr-breathe pointer-events-none absolute inset-0 -z-10 rounded-full"
@@ -67,31 +73,21 @@ export function LogoMark({ size = 96, className = '' }: LogoMarkProps) {
         style={{ background: bg }}
       />
 
-      <svg
-        viewBox="0 0 100 100"
+      {/* Logo original (mix-blend-mode: lighten élimine le bg pur-noir). */}
+      <Image
+        src={logoFxmily}
+        alt="Fxmily"
         width={size}
         height={size}
-        role="img"
-        aria-label="Fxmily"
+        priority
+        sizes={`${size}px`}
         style={{
+          width: size,
+          height: 'auto',
           filter:
-            'drop-shadow(0 0 24px rgba(0,133,255,0.45)) drop-shadow(0 4px 12px rgba(0,0,0,0.4))',
+            'drop-shadow(0 0 28px rgba(0,133,255,0.45)) drop-shadow(0 4px 14px rgba(0,0,0,0.5))',
         }}
-      >
-        {/* "F" mark + "X" stroke (approximation du logo fxmily noir/blanc). */}
-        <g fill="#EDEDF3">
-          {/* F vertical stem */}
-          <path d="M 22 18 L 32 18 L 32 82 L 22 82 Z" />
-          {/* F top bar */}
-          <path d="M 22 18 L 58 18 L 58 28 L 32 28 Z" />
-          {/* F middle bar */}
-          <path d="M 32 44 L 50 44 L 50 54 L 32 54 Z" />
-          {/* X — top-left to bottom-right */}
-          <path d="M 48 18 L 58 18 L 84 82 L 74 82 Z" />
-          {/* X — top-right to bottom-left */}
-          <path d="M 74 18 L 84 18 L 58 82 L 48 82 Z" />
-        </g>
-      </svg>
+      />
     </motion.div>
   );
 }

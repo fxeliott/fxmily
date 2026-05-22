@@ -140,7 +140,9 @@ async function main() {
       if (Number.isFinite(fraction)) plPct = fraction * 100;
     }
     if (plPct === null && row.pl_text) {
-      const cleaned = row.pl_text.replace('%', '').replace(',', '.').trim();
+      // replaceAll vs replace : CodeQL js/incomplete-sanitization defense
+      // (controlled input row.pl_text from ODS export, mais defense-in-depth)
+      const cleaned = row.pl_text.replaceAll('%', '').replaceAll(',', '.').trim();
       const v = Number(cleaned);
       if (Number.isFinite(v)) plPct = v;
     }

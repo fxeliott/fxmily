@@ -15,29 +15,33 @@ interface AnimatedNumberProps {
   decimals?: number;
   prefix?: string;
   suffix?: string;
-  /** Animation duration in seconds. Default 1.6s. */
+  /** Use signed (+/-) display via Intl signDisplay 'always'. */
+  signed?: boolean;
+  /** Animation duration in seconds. Default 1.4s. */
   duration?: number;
   className?: string;
 }
 
 /**
- * Count-up T1 — utilisé UNE seule fois sur le chiffre hero (effet rare =
- * effet puissant, ui-designer §8). Geist Sans tabular-nums via classe `.num`
- * (drop Mono — trop ingénieur).
+ * Count-up T4 — utilisé sur hero display + 8 KPIs.
  *
- * `once: true` + `amount: 0.5` : se déclenche une seule fois quand le chiffre
- * entre dans 50 % du viewport. Reduced-motion → valeur finale instant.
+ * Pattern Build UI : `useInView` `once: true, amount: 0.4` déclenche
+ * l'animation quand l'élément entre dans le viewport. Geist Sans tabular-nums
+ * via classe `.num`. Reduced-motion → valeur finale instant.
+ *
+ * `signed: true` → Intl signDisplay 'always' pour gain +X / perte -X.
  */
 export function AnimatedNumber({
   to,
   decimals = 0,
   prefix = '',
   suffix = '',
-  duration = 1.6,
+  signed = false,
+  duration = 1.4,
   className = '',
 }: AnimatedNumberProps) {
   const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, amount: 0.5 });
+  const inView = useInView(ref, { once: true, amount: 0.4 });
   const reduced = useReducedMotion();
   const motionValue = useMotionValue(reduced ? to : 0);
 
@@ -45,6 +49,7 @@ export function AnimatedNumber({
     const fmt = new Intl.NumberFormat('fr-FR', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
+      ...(signed ? { signDisplay: 'always' as const } : {}),
     });
     return `${prefix}${fmt.format(v)}${suffix}`;
   });

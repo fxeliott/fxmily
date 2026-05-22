@@ -4,10 +4,16 @@ import { useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import type { RawTrade } from '@/lib/metrics';
 import { cn } from '@/lib/utils';
+import { LivePulse } from './live-pulse';
 
 interface TradesTableProps {
   trades: readonly RawTrade[];
   initialVisible?: number;
+  /** Optional pivot caption to insert as inline row after the last visible
+   *  historical trade — only when mode === 'all' and the full historical
+   *  set has been revealed. */
+  pivotCaption?: string;
+  pivotDate?: string;
   className?: string;
 }
 
@@ -35,7 +41,13 @@ const FR_DATE_SHORT = new Intl.DateTimeFormat('fr-FR', {
  *    via badge discret
  *  - "Voir plus →" link-style (pas pill CTA)
  */
-export function TradesTable({ trades, initialVisible = 12, className = '' }: TradesTableProps) {
+export function TradesTable({
+  trades,
+  initialVisible = 12,
+  pivotCaption,
+  pivotDate,
+  className = '',
+}: TradesTableProps) {
   const reduced = useReducedMotion();
   const [mode, setMode] = useState<FilterMode>('all');
   const [visible, setVisible] = useState(initialVisible);
@@ -199,6 +211,31 @@ export function TradesTable({ trades, initialVisible = 12, className = '' }: Tra
             </p>
           </div>
         )}
+
+        {/* Pivot inline row — visible only when 'all' mode + fully revealed */}
+        {pivotCaption &&
+          mode === 'all' &&
+          filtered.length === trades.length &&
+          visible >= filtered.length && (
+            <div
+              role="row"
+              className="relative my-6 border-t border-dashed border-[var(--accent-edge)] pt-6"
+            >
+              <span
+                className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[var(--bg)] px-3"
+                style={{ color: 'var(--accent)' }}
+              >
+                <span
+                  className="t-caption inline-flex items-center gap-2"
+                  style={{ fontSize: 9, letterSpacing: '0.16em' }}
+                >
+                  <LivePulse size={6} color="var(--accent)" />
+                  PIVOT{pivotDate ? ` · ${pivotDate}` : ''}
+                </span>
+              </span>
+              <p className="t-body mt-2 text-center text-[var(--text-muted)]">{pivotCaption}</p>
+            </div>
+          )}
       </div>
 
       {hasMore && (

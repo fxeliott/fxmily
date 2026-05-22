@@ -17,6 +17,7 @@ import { AmbientBackground } from '@/components/ambient-background';
 import { CursorSpotlight } from '@/components/cursor-spotlight';
 import { LivePulse } from '@/components/live-pulse';
 import { HeroReveal } from '@/components/hero-reveal';
+import { PivotRail } from '@/components/pivot-rail';
 import {
   TRACK_RECORD_KPIS,
   EQUITY_CURVE,
@@ -44,11 +45,13 @@ const FR_DATE_LONG = new Intl.DateTimeFormat('fr-FR', {
 const LAST_UPDATE = new Date('2026-05-22T11:00:00+02:00');
 const PIVOT_DATE = new Date('2026-05-22T00:00:00+02:00');
 
-/** Container widths : prose vs data viz.
- *  - Prose/hero/footer : 1440px (lecture)
- *  - Data viz/charts/tables : 1680px (breathing room sur 27"/4K) */
-const CONTAINER_PROSE = 'mx-auto max-w-[1440px] px-6 sm:px-10';
-const CONTAINER_WIDE = 'mx-auto max-w-[1680px] px-6 sm:px-12';
+/** Container widths T4 :
+ *  - Prose/hero/footer : 1280px max (lecture confortable)
+ *  - Data viz/charts/tables : FULL-BLEED (no max-w, edge-padding only)
+ *    Padding adaptatif : 24px → 80px → 128px → 160px selon viewport.
+ *    Eliot feedback T3 « focus sur le milieu » : drop the cap entirely. */
+const CONTAINER_PROSE = 'mx-auto max-w-[1280px] px-6 sm:px-10';
+const CONTAINER_WIDE = 'px-6 sm:px-12 lg:px-20 xl:px-28 2xl:px-40';
 
 export default function TrackRecordPage() {
   const k = TRACK_RECORD_KPIS;
@@ -67,6 +70,7 @@ export default function TrackRecordPage() {
     <>
       <AmbientBackground />
       <ScrollProgress />
+      <PivotRail date="22.05.2026" />
 
       <main className="relative bg-transparent text-[var(--text)]">
         {/* ─────────────────── Header — logo + caption verified ─────────────────── */}
@@ -134,7 +138,7 @@ export default function TrackRecordPage() {
 
         {/* ─────────────────── KPIs grid — 4×2 hero density ─────────────────── */}
         <section aria-label="Indicateurs clés" className={`${CONTAINER_WIDE} pb-24`}>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8 xl:gap-3">
             <KpiCard
               index={0}
               label="Performance cumulée"
@@ -171,6 +175,7 @@ export default function TrackRecordPage() {
               tone="primary"
               value={String(k.closedTrades)}
               caption={`${k.openCount} ouverts`}
+              live
             />
             <KpiCard
               index={5}
@@ -178,6 +183,7 @@ export default function TrackRecordPage() {
               tone="gain"
               value={formatWinrate(k.winrate)}
               caption={`${k.winCount} gains · ${k.lossCount} pertes · ${k.beCount} BE`}
+              live
             />
             <KpiCard
               index={6}
@@ -185,6 +191,7 @@ export default function TrackRecordPage() {
               tone="primary"
               value={formatR(k.expectancyR)}
               caption="formule Van Tharp"
+              live
             />
             <KpiCard
               index={7}
@@ -192,6 +199,7 @@ export default function TrackRecordPage() {
               tone="accent"
               value={String(k.bestStreak)}
               caption={`gains consécutifs · pire ${k.worstStreak}`}
+              live
             />
           </div>
         </section>
@@ -278,7 +286,12 @@ export default function TrackRecordPage() {
             title="Liste des trades"
             description={`${k.closedTrades} trades clôturés, dans l'ordre chronologique. Aucun trade retiré, aucune modification rétroactive.`}
           />
-          <TradesTable trades={HISTORICAL_TRADES} initialVisible={12} />
+          <TradesTable
+            trades={HISTORICAL_TRADES}
+            initialVisible={12}
+            pivotCaption="Les prochains trades seront ajoutés en direct via l'interface admin."
+            pivotDate={FR_DATE_LONG.format(PIVOT_DATE)}
+          />
         </section>
 
         {/* ─────────────────── Segment divider — historique → live ─────────────────── */}

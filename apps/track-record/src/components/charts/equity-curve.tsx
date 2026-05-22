@@ -9,6 +9,8 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceArea,
+  ReferenceDot,
 } from 'recharts';
 import { motion, useReducedMotion } from 'framer-motion';
 import type { EquityPoint } from '@/lib/metrics';
@@ -26,6 +28,21 @@ interface ChartDatum {
   ordinal: number;
   cumPercent: number;
   enteredAt: string;
+}
+
+/** SVG-native pulse for last data point — pattern Gaurav Gupta.
+ *  Pas de React re-renders : SMIL <animate> directement off-thread. */
+function LastPointPulse(props: { cx?: number | undefined; cy?: number | undefined }) {
+  const { cx = 0, cy = 0 } = props;
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={4} fill="#5B8DEF" stroke="#0A0A0B" strokeWidth={1.5} />
+      <circle cx={cx} cy={cy} r={4} fill="#5B8DEF" opacity={0.5}>
+        <animate attributeName="r" from="4" to="14" dur="2s" repeatCount="indefinite" />
+        <animate attributeName="opacity" from="0.5" to="0" dur="2s" repeatCount="indefinite" />
+      </circle>
+    </g>
+  );
 }
 
 const FR = new Intl.NumberFormat('fr-FR', {
@@ -110,22 +127,32 @@ export function EquityCurve({
               width={48}
             />
             <ReferenceLine y={0} stroke="#1F1F23" strokeDasharray="0" />
-            {pivotOrdinal !== undefined && (
-              <ReferenceLine
-                x={pivotOrdinal}
-                stroke="#5B8DEF"
-                strokeDasharray="3 4"
-                strokeOpacity={0.55}
-                label={{
-                  value: 'PIVOT',
-                  position: 'top',
-                  fill: '#5B8DEF',
-                  fontSize: 9,
-                  fontWeight: 600,
-                  letterSpacing: '0.12em',
-                  offset: 6,
-                }}
-              />
+            {pivotOrdinal !== undefined && series.length > 0 && (
+              <>
+                {/* ReferenceArea : post-pivot territoire teinté bleu très subtil */}
+                <ReferenceArea
+                  x1={pivotOrdinal}
+                  x2={series[series.length - 1]!.ordinal + 8}
+                  fill="#5B8DEF"
+                  fillOpacity={0.05}
+                  ifOverflow="extendDomain"
+                />
+                <ReferenceLine
+                  x={pivotOrdinal}
+                  stroke="#5B8DEF"
+                  strokeDasharray="3 4"
+                  strokeOpacity={0.55}
+                  label={{
+                    value: 'PIVOT',
+                    position: 'top',
+                    fill: '#5B8DEF',
+                    fontSize: 9,
+                    fontWeight: 600,
+                    letterSpacing: '0.12em',
+                    offset: 6,
+                  }}
+                />
+              </>
             )}
             <Tooltip
               contentStyle={{
@@ -162,6 +189,15 @@ export function EquityCurve({
               dot={false}
               activeDot={{ r: 5, fill: '#5B8DEF', stroke: '#0A0A0B', strokeWidth: 2 }}
             />
+            {/* Pulse on the last data point — SVG-native, no React re-renders */}
+            {series.length > 0 && !reduced && (
+              <ReferenceDot
+                x={series[series.length - 1]!.ordinal}
+                y={series[series.length - 1]!.cumPercent}
+                shape={(props) => <LastPointPulse cx={props.cx} cy={props.cy} />}
+                ifOverflow="extendDomain"
+              />
+            )}
           </AreaChart>
         </ResponsiveContainer>
       </div>

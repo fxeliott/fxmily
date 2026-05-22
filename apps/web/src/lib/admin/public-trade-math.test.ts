@@ -226,4 +226,28 @@ describe('validateLifecycleInvariants — failures', () => {
       }),
     ).not.toThrow();
   });
+
+  it('error message uses non-strict wording "ne doit pas être antérieur" (T5 Phase H BLOQUANT-4)', () => {
+    // The error message must match the predicate semantics : the predicate is
+    // `exitedAt < enteredAt` (rejects strictly anterior, accepts equality).
+    // Wording "ne doit pas être antérieur" (must not be before) matches ;
+    // "doit être postérieur" (must be after) would imply `>` strict (which
+    // would reject the equality boundary above — divergence détectée par
+    // l'audit Phase H code-reviewer BLOQUANT-4).
+    try {
+      validateLifecycleInvariants({
+        status: 'closed',
+        enteredAt: baseExited, // 14h
+        exitedAt: baseEntered, // 10h
+        riskPercent: 1.0,
+        resultR: 2.0,
+      });
+      throw new Error('should not reach');
+    } catch (err) {
+      expect(err).toBeInstanceOf(PublicTradeInvalidStateError);
+      if (err instanceof PublicTradeInvalidStateError) {
+        expect(err.message).toContain('ne doit pas être antérieur');
+      }
+    }
+  });
 });

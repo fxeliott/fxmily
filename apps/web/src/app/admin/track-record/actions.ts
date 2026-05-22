@@ -21,10 +21,9 @@ import {
   publicTradeCreateSchema,
   publicTradePartialSchema,
   publicTradeUpdateSchema,
-  NOTES_MAX,
-  SCREENSHOT_URL_MAX,
-  SETUP_MAX,
 } from '@/lib/schemas/public-trade';
+
+import { shapeFormData, shapeFormDataForUpdate, strField } from './form-shapers';
 
 /**
  * Admin Server Actions for the Public Track Record (T5).
@@ -87,189 +86,10 @@ function zodIssuesToFieldErrors(
 }
 
 // =============================================================================
-// FormData → Zod input shapers
+// FormData → Zod input shapers — extracted to `./form-shapers.ts` for unit
+// testability (this file is `'use server'` + drags `@/auth` graph; the
+// extracted module is pure and importable from Vitest without `next-auth`).
 // =============================================================================
-
-/**
- * Extrait + cast un champ FormData en string trimmé, ou `undefined` si vide.
- * Cap defensif à 2048 chars (anti-DoS — chaque field individuel borné, le
- * service en plus borne via Zod).
- *
- * Utilisé sur le CREATE path : un champ absent du form (ou vide) signifie
- * "non fourni" = laisse Zod appliquer ses defaults. Pour l'UPDATE path où
- * l'admin peut vouloir explicitement *effacer* un nullable field, voir
- * `strFieldNullable` ci-dessous.
- */
-function strField(fd: FormData, key: string, maxLen = 2048): string | undefined {
-  const v = fd.get(key);
-  if (typeof v !== 'string') return undefined;
-  const t = v.trim();
-  if (t.length === 0) return undefined;
-  if (t.length > maxLen) return t.slice(0, maxLen);
-  return t;
-}
-
-/**
- * Variante `strField` pour le UPDATE path qui distingue 3 états :
- *   - `undefined` : le champ n'est PAS dans la FormData (form n'a pas envoyé
- *     l'input du tout — ex. partial update API non-form). Service-side =
- *     "ne touche pas, garde la valeur existante".
- *   - `null` : le champ est présent dans la FormData MAIS valeur vide après
- *     trim. Signal explicite "l'admin veut effacer ce champ". Service-side =
- *     "écris NULL en DB".
- *   - `string` : valeur non-vide, comme strField.
- *
- * T5 audit Phase H — code-reviewer BLOQUANT-1 : sans cette distinction, un
- * admin qui efface un champ nullable (`notes`, `exitedAt`, `screenshotUrl`,
- * etc.) sur le form edit voyait silencieusement la valeur DB conservée. Pire :
- * impossible de re-ouvrir un trade `closed → open` en effaçant `exitedAt`.
- */
-function strFieldNullable(fd: FormData, key: string, maxLen = 2048): string | null | undefined {
-  if (!fd.has(key)) return undefined;
-  const v = fd.get(key);
-  if (typeof v !== 'string') return undefined;
-  const t = v.trim();
-  if (t.length === 0) return null;
-  if (t.length > maxLen) return t.slice(0, maxLen);
-  return t;
-}
-
-/**
- * Variante numérique de `strFieldNullable`. Empty input → `null` (clear),
- * absent du form → `undefined` (keep), non-vide → coerce en number (avec
- * `NaN` mappé sur `null` pour garder une sémantique "input invalide = effacé"
- * — Zod refine `.finite()` aurait de toute façon rejeté un NaN passé tel quel).
- */
-function numFieldNullable(fd: FormData, key: string, maxLen = 16): number | null | undefined {
-  const raw = strFieldNullable(fd, key, maxLen);
-  if (raw === undefined) return undefined;
-  if (raw === null) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
-}
-
-/**
- * Lit un boolean depuis FormData. HTML checkbox absente = false ; valeur
- * 'on'/'true'/'1' = true ; 'off'/'false'/'0' = false. Default = fallback.
- */
-function boolField(fd: FormData, key: string, fallback = false): boolean {
-  const v = fd.get(key);
-  if (typeof v !== 'string') return fallback;
-  const t = v.trim().toLowerCase();
-  if (['on', 'true', '1', 'yes'].includes(t)) return true;
-  if (['off', 'false', '0', 'no'].includes(t)) return false;
-  return fallback;
-}
-
-/**
- * Parse un input `tags` en CSV (`news, FOMC, partagé`). Le service Zod tag
- * schema fait le trim + safeFreeText par tag. Cap 200 chars total brut
- * (anti-DoS — au-delà, Zod max 10 × 50 chars couvre).
- */
-function tagsField(fd: FormData): string[] {
-  const v = fd.get('tags');
-  if (typeof v !== 'string') return [];
-  const raw = v.trim();
-  if (raw.length === 0) return [];
-  return raw
-    .slice(0, 200)
-    .split(',')
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0);
-}
-
-interface CommonInput {
-  segment?: string | undefined;
-  ordinal?: number | undefined;
-  instrument?: string | undefined;
-  direction?: string | null | undefined;
-  enteredAt?: string | undefined;
-  exitedAt?: string | null | undefined;
-  riskPercent?: number | undefined;
-  resultR?: number | null | undefined;
-  status?: string | undefined;
-  session?: string | null | undefined;
-  setup?: string | null | undefined;
-  tags?: string[] | undefined;
-  notes?: string | null | undefined;
-  screenshotUrl?: string | null | undefined;
-  isPublished?: boolean | undefined;
-}
-
-/**
- * Construit un input object à partir de FormData. Les champs vides
- * deviennent `undefined` (Zod treats undefined as "not provided" → permet
- * d'avoir des optional schemas qui ne tombent pas sur `null` quand le user
- * laisse blank).
- *
- * Pour `nullable` fields (direction, exitedAt, etc.), le caller décide après
- * (sur create ils sont laissés undefined, sur update on les passe explicitement
- * en null si le user a coché "clear").
- */
-function shapeFormData(fd: FormData): CommonInput {
-  const ordinalRaw = strField(fd, 'ordinal', 16);
-  const riskRaw = strField(fd, 'riskPercent', 16);
-  const resultRRaw = strField(fd, 'resultR', 16);
-
-  return {
-    segment: strField(fd, 'segment', 32),
-    ordinal: ordinalRaw !== undefined ? Number(ordinalRaw) : undefined,
-    instrument: strField(fd, 'instrument', 32),
-    direction: strField(fd, 'direction', 32),
-    enteredAt: strField(fd, 'enteredAt', 64),
-    exitedAt: strField(fd, 'exitedAt', 64),
-    riskPercent: riskRaw !== undefined ? Number(riskRaw) : undefined,
-    resultR: resultRRaw !== undefined ? Number(resultRRaw) : undefined,
-    status: strField(fd, 'status', 32),
-    session: strField(fd, 'session', 32),
-    setup: strField(fd, 'setup', SETUP_MAX),
-    tags: tagsField(fd),
-    notes: strField(fd, 'notes', NOTES_MAX),
-    screenshotUrl: strField(fd, 'screenshotUrl', SCREENSHOT_URL_MAX),
-    // T5 audit fix #14 — HTML checkbox absent = unchecked. Fallback DOIT être
-    // `false`, sinon `<input type="checkbox" defaultChecked={false}>` non touché
-    // par l'admin enverrait null → fallback `true` → impossible de créer un
-    // brouillon. Le form set `defaultChecked={true}` au create (le browser
-    // envoie 'on' tant que l'admin ne décoche pas) ⇒ default = published OK.
-    isPublished: boolField(fd, 'isPublished', false),
-  };
-}
-
-/**
- * Variante de `shapeFormData` pour le UPDATE path.
- *
- * T5 audit Phase H — code-reviewer BLOQUANT-1 : les nullable fields (`direction`,
- * `exitedAt`, `resultR`, `session`, `setup`, `notes`, `screenshotUrl`) doivent
- * pouvoir être effacés explicitement par l'admin. Utilise `*Nullable` helpers
- * qui retournent `null` quand le form envoie une valeur vide.
- *
- * Les fields NON-nullable (segment, ordinal, instrument, enteredAt, riskPercent,
- * status, tags, isPublished) gardent le comportement `undefined` = "non fourni
- * = keep existing" (Zod superRefine + service `validateLifecycleInvariants`
- * post-merge attrapent les invariants violés).
- */
-function shapeFormDataForUpdate(fd: FormData): CommonInput {
-  const ordinalRaw = strField(fd, 'ordinal', 16);
-  const riskRaw = strField(fd, 'riskPercent', 16);
-
-  return {
-    segment: strField(fd, 'segment', 32),
-    ordinal: ordinalRaw !== undefined ? Number(ordinalRaw) : undefined,
-    instrument: strField(fd, 'instrument', 32),
-    direction: strFieldNullable(fd, 'direction', 32),
-    enteredAt: strField(fd, 'enteredAt', 64),
-    exitedAt: strFieldNullable(fd, 'exitedAt', 64),
-    riskPercent: riskRaw !== undefined ? Number(riskRaw) : undefined,
-    resultR: numFieldNullable(fd, 'resultR', 16),
-    status: strField(fd, 'status', 32),
-    session: strFieldNullable(fd, 'session', 32),
-    setup: strFieldNullable(fd, 'setup', SETUP_MAX),
-    tags: tagsField(fd),
-    notes: strFieldNullable(fd, 'notes', NOTES_MAX),
-    screenshotUrl: strFieldNullable(fd, 'screenshotUrl', SCREENSHOT_URL_MAX),
-    isPublished: boolField(fd, 'isPublished', false),
-  };
-}
 
 // =============================================================================
 // CRUD trade

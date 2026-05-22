@@ -57,7 +57,8 @@ export const NOTES_MAX = 2000;
 export const SCREENSHOT_URL_MAX = 500;
 
 /**
- * Allowlist scheme pour `screenshotUrl` (T5 audit Phase H — SSRF defense).
+ * Allowlist scheme pour `screenshotUrl` (T5 audit Phase H — SSRF defense,
+ * étendu Phase H+1 — H-1 + H-3).
  *
  * Sans allowlist, un admin (ou XSS chain V2 si admin role escalation future)
  * pouvait stocker `javascript:alert(1)`, `data:text/html,...`, `file:///etc/
@@ -65,16 +66,22 @@ export const SCREENSHOT_URL_MAX = 500;
  * (network scan interne). La valeur étant rendue sur `trackrecordfxmily.pages
  * .dev` après rebuild static, l'exploit landait au render.
  *
- *   - `^https://[host][:port]/[path]` — TLS-only, pas `http://` pour bloquer
- *     mixed content + SSRF localhost. Le hostname doit avoir au moins un point
- *     `.` (rejette `https://localhost`, `https://intranet`).
+ *   - `^https://[host][:port]/[path][?query][#fragment]` — TLS-only, pas
+ *     `http://` pour bloquer mixed content + SSRF localhost. Le hostname doit
+ *     avoir au moins un point `.` (rejette `https://localhost`, `https://
+ *     intranet`). Phase H+1 H-1 : path autorise `?#&=` pour CDN URLs avec
+ *     cache-busting (`?v=2026-05-22`) ou Cloudinary signées (`?token=xyz`) —
+ *     extrêmement courant en prod, le regex initial Phase H les rejetait.
  *   - `^public-trades/<key>.{png|jpg|jpeg|webp}` — storage-key R2 carbone J2
  *     `trades/{userId}/{nanoid}.{jpg|png|webp}` adapté T5 (monovendeur Eliot
  *     → préfixe `public-trades/` au lieu du segment `userId`).
+ *   - Phase H+1 H-3 : rejet explicite path traversal `..` dans le storage-key
+ *     (defense-in-depth — pas exploitable runtime sur static export Cloudflare,
+ *     mais évite qu'un futur file-server qui résoudrait le path crée un trou).
  *   - empty string accepté (le champ est optional côté DB).
  */
 const SCREENSHOT_URL_HTTPS_REGEX =
-  /^https:\/\/[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+(:\d+)?(\/[\w./%~+-]*)?$/;
+  /^https:\/\/[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+(:\d+)?(\/[\w./%~+\-?#&=]*)?$/;
 const SCREENSHOT_URL_STORAGE_REGEX = /^public-trades\/[\w./-]+\.(png|jpg|jpeg|webp)$/i;
 
 export const ORDINAL_MIN = 1;
@@ -127,6 +134,13 @@ const tagsSchema = z.array(tagSchema).max(TAGS_MAX);
 
 const notesSchema = z
   .string()
+  .trim()
+  // T5 audit Phase H+1 — code-reviewer IMPORTANT-6 : consistency avec
+  // `instrumentSchema` / `setupSchema` / `tagSchema` qui appliquent tous
+  // `.trim()` early. Un admin qui paste avec trailing `\n\n\n` voyait ces
+  // chars compter sur `NOTES_MAX=2000` + persisté en DB → display drift
+  // sur la vitrine publique. Trim avant max-check assure que la marge
+  // utilisable matche bien `NOTES_MAX`.
   .max(NOTES_MAX)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
   .transform(safeFreeText);
@@ -140,11 +154,17 @@ const screenshotUrlSchema = z
   // T5 audit Phase H — SSRF defense. Allowlist scheme HTTPS ou storage-key
   // R2 (cf. const regex au-dessus + JSDoc). Rejette `javascript:` / `data:`
   // / `file://` / `http://localhost` / IP literals / protocol-relative `//`.
+  // Phase H+1 H-3 : rejet explicite `..` path traversal en pré-check (les
+  // 2 regex acceptent sinon `public-trades/../../etc/passwd.png` car le `.`
+  // est autorisé dans la classe de path).
   .refine(
-    (s) => s === '' || SCREENSHOT_URL_HTTPS_REGEX.test(s) || SCREENSHOT_URL_STORAGE_REGEX.test(s),
+    (s) =>
+      s === '' ||
+      (!s.includes('..') &&
+        (SCREENSHOT_URL_HTTPS_REGEX.test(s) || SCREENSHOT_URL_STORAGE_REGEX.test(s))),
     {
       message:
-        'URL https:// (avec domaine valide) ou storage-key public-trades/...{png,jpg,webp} requis.',
+        'URL https:// (avec domaine valide) ou storage-key public-trades/...{png,jpg,webp} requis (pas de `..`).',
     },
   );
 

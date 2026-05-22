@@ -515,4 +515,54 @@ describe('publicTradeCreateSchema — screenshotUrl allowlist (SSRF defense)', (
     });
     expect(r.success).toBe(false);
   });
+
+  // T5 audit Phase H+1 — code-reviewer H-1 : CDN URLs avec query string
+  // (`?v=2026-05-22` cache-busting) ou fragment sont COURANTES en prod
+  // (Cloudinary signées, GitHub user-content, etc.). Le regex Phase H initial
+  // les rejetait — Eliot aurait heurté ça sur la première URL externe.
+
+  it('accepts HTTPS URL with query string (CDN cache-busting)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://cdn.example.com/trades/abc.png?v=2026-05-22',
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts HTTPS URL with multi-param query string (Cloudinary signed)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://res.cloudinary.com/demo/image/upload/v1/abc.png?token=xyz&sig=abc',
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts HTTPS URL with fragment', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://cdn.example.com/trades/abc.png#section-zoom',
+    });
+    expect(r.success).toBe(true);
+  });
+
+  // T5 audit Phase H+1 — code-reviewer H-3 : defense-in-depth contre path
+  // traversal `..` dans le storage-key. Pas exploitable runtime sur static
+  // export Cloudflare (rebuild ne sert que ce qui est listé), mais évite
+  // qu'un futur file-server qui résoudrait le path crée un trou silencieux.
+
+  it('rejects storage-key with `..` path traversal (defense-in-depth)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'public-trades/../../etc/passwd.png',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects HTTPS URL with `..` in path (defense-in-depth)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      screenshotUrl: 'https://cdn.example.com/../etc/secret.png',
+    });
+    expect(r.success).toBe(false);
+  });
 });

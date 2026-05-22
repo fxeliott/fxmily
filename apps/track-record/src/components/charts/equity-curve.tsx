@@ -16,6 +16,9 @@ import type { EquityPoint } from '@/lib/metrics';
 interface EquityCurveProps {
   data: readonly EquityPoint[];
   height?: number;
+  /** Ordinal at which historical period ends and live period begins.
+   *  Affiche une ReferenceLine verticale subtle. */
+  pivotOrdinal?: number;
   className?: string;
 }
 
@@ -32,19 +35,21 @@ const FR = new Intl.NumberFormat('fr-FR', {
 });
 
 /**
- * Courbe equity T2 — pivot enhanced : signature lumineuse bleue.
+ * Courbe equity T3 — signature lumineuse bleue + pivot ReferenceLine subtle.
  *
- * Évolutions vs T1 :
- *  - Ligne stroke `--accent` (#5b8def) au lieu de blanc neutre : le bleu
- *    devient la signature lumineuse demandée par Eliot
- *  - SVG filter `feGaussianBlur` subtle pour glow sur le stroke (intensité
- *    mesurée, jamais saturée)
- *  - Activedot accent avec ring blanc subtile pour cardinal point
- *  - Gradient fill `--accent-soft` 0.18 → 0 (un peu plus présent que T1)
- *  - Reference line à y=0 pour ancrer le contexte
- *  - Axes Y ticks discrets, X axis hidden
+ * Evolutions vs T2 :
+ *  - Optional `pivotOrdinal` prop → ReferenceLine verticale dashed accent à
+ *    l'ordinal donné (marque la frontière historique/live)
+ *  - Custom label "PIVOT" 10px tracked au-dessus de la ReferenceLine
+ *  - Glow filter feGaussianBlur sur le stroke (signature lumineuse)
+ *  - Gradient fill bleu signature 0.22 → 0
  */
-export function EquityCurve({ data, height = 360, className = '' }: EquityCurveProps) {
+export function EquityCurve({
+  data,
+  height = 360,
+  pivotOrdinal,
+  className = '',
+}: EquityCurveProps) {
   const reduced = useReducedMotion();
   const series: ChartDatum[] = useMemo(
     () =>
@@ -70,16 +75,13 @@ export function EquityCurve({ data, height = 360, className = '' }: EquityCurveP
     >
       <div style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={series} margin={{ top: 12, right: 8, bottom: 4, left: 4 }}>
+          <AreaChart data={series} margin={{ top: 24, right: 8, bottom: 4, left: 4 }}>
             <defs>
-              {/* Gradient fill : bleu signature lumineuse subtle */}
               <linearGradient id="tr-eq-fill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#5B8DEF" stopOpacity={0.22} />
                 <stop offset="60%" stopColor="#5B8DEF" stopOpacity={0.05} />
                 <stop offset="100%" stopColor="#5B8DEF" stopOpacity={0} />
               </linearGradient>
-              {/* Glow filter : aura bleue très diffuse derrière le stroke.
-                  feGaussianBlur stdDeviation mesuré pour rester premium. */}
               <filter id="tr-eq-glow" x="-20%" y="-20%" width="140%" height="140%">
                 <feGaussianBlur stdDeviation="3.5" result="blur" />
                 <feMerge>
@@ -91,7 +93,10 @@ export function EquityCurve({ data, height = 360, className = '' }: EquityCurveP
             <XAxis
               dataKey="ordinal"
               type="number"
-              domain={['dataMin', 'dataMax']}
+              domain={[
+                'dataMin',
+                pivotOrdinal !== undefined ? (dataMax: number) => dataMax + 8 : 'dataMax',
+              ]}
               tick={{ fontSize: 11, fill: '#5A5A63' }}
               tickLine={false}
               axisLine={false}
@@ -105,6 +110,23 @@ export function EquityCurve({ data, height = 360, className = '' }: EquityCurveP
               width={48}
             />
             <ReferenceLine y={0} stroke="#1F1F23" strokeDasharray="0" />
+            {pivotOrdinal !== undefined && (
+              <ReferenceLine
+                x={pivotOrdinal}
+                stroke="#5B8DEF"
+                strokeDasharray="3 4"
+                strokeOpacity={0.55}
+                label={{
+                  value: 'PIVOT',
+                  position: 'top',
+                  fill: '#5B8DEF',
+                  fontSize: 9,
+                  fontWeight: 600,
+                  letterSpacing: '0.12em',
+                  offset: 6,
+                }}
+              />
+            )}
             <Tooltip
               contentStyle={{
                 background: '#17171B',

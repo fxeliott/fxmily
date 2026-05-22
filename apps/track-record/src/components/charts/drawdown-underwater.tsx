@@ -17,6 +17,8 @@ import { formatPercent } from '@/lib/format';
 interface DrawdownUnderwaterProps {
   data: readonly EquityPoint[];
   height?: number;
+  /** Ordinal pivot historique/live — ReferenceLine verticale subtle. */
+  pivotOrdinal?: number;
   className?: string;
   ariaCaption?: string;
 }
@@ -32,6 +34,7 @@ interface DrawdownUnderwaterProps {
 export function DrawdownUnderwater({
   data,
   height = 220,
+  pivotOrdinal,
   className = '',
   ariaCaption,
 }: DrawdownUnderwaterProps) {
@@ -86,7 +89,10 @@ export function DrawdownUnderwater({
           <XAxis
             dataKey="ordinal"
             type="number"
-            domain={['dataMin', 'dataMax']}
+            domain={[
+              'dataMin',
+              pivotOrdinal !== undefined ? (dataMax: number) => dataMax + 8 : 'dataMax',
+            ]}
             tick={{ fontSize: 11, fill: '#5A5A63' }}
             tickLine={false}
             axisLine={false}
@@ -101,6 +107,14 @@ export function DrawdownUnderwater({
             width={48}
           />
           <ReferenceLine y={0} stroke="#1F1F23" strokeDasharray="0" />
+          {pivotOrdinal !== undefined && (
+            <ReferenceLine
+              x={pivotOrdinal}
+              stroke="#5B8DEF"
+              strokeDasharray="3 4"
+              strokeOpacity={0.55}
+            />
+          )}
           <Tooltip
             contentStyle={{
               background: '#17171B',

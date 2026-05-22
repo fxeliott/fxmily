@@ -7,6 +7,9 @@ interface MonthlyHeatmapProps {
   data: readonly MonthlyAggregate[];
   odsSummaries?: readonly { month: number; label: string; percent: number }[];
   year?: number;
+  /** Mois pivot (1..12). Les cellules >= pivotMonth sont marquées "live" avec
+   *  un ring accent subtle. */
+  pivotMonth?: number;
 }
 
 const MONTH_LABELS_SHORT_FR = [
@@ -73,7 +76,7 @@ function tintFor(percent: number): { bg: string; text: string } {
   return { bg: `rgba(200, 124, 124, ${alpha.toFixed(3)})`, text: 'var(--negative)' };
 }
 
-export function MonthlyHeatmap({ data, odsSummaries, year }: MonthlyHeatmapProps) {
+export function MonthlyHeatmap({ data, odsSummaries, year, pivotMonth }: MonthlyHeatmapProps) {
   const reduced = useReducedMotion();
   const byMonth = new Map<number, number>();
   if (odsSummaries) {
@@ -104,14 +107,23 @@ export function MonthlyHeatmap({ data, odsSummaries, year }: MonthlyHeatmapProps
     >
       {cells.map((c, idx) => {
         const ariaYear = year ? ' ' + year : '';
+        const isLive = pivotMonth !== undefined && c.monthNum >= pivotMonth;
+        const liveRingClass = isLive ? 'ring-1 ring-[var(--accent-edge)] ring-offset-0' : '';
         if (c.percent === null) {
           return (
             <li
               key={c.monthNum}
               role="listitem"
-              className="flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)]"
-              aria-label={`${c.longLabel}${ariaYear} : pas de donnée`}
+              className={`relative flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] ${liveRingClass}`}
+              aria-label={`${c.longLabel}${ariaYear} : pas de donnée${isLive ? ' (live)' : ''}`}
             >
+              {isLive && (
+                <span
+                  aria-hidden
+                  className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full"
+                  style={{ background: 'var(--accent)' }}
+                />
+              )}
               <span aria-hidden className="t-caption">
                 {c.label}
               </span>
@@ -122,7 +134,7 @@ export function MonthlyHeatmap({ data, odsSummaries, year }: MonthlyHeatmapProps
           );
         }
         const tint = tintFor(c.percent);
-        const ariaLabel = `${c.longLabel}${ariaYear} : ${FR_PCT.format(c.percent)} %`;
+        const ariaLabel = `${c.longLabel}${ariaYear} : ${FR_PCT.format(c.percent)} %${isLive ? ' (live)' : ''}`;
         const motionProps = reduced
           ? {}
           : {
@@ -139,10 +151,17 @@ export function MonthlyHeatmap({ data, odsSummaries, year }: MonthlyHeatmapProps
               delay: idx * 0.04,
               ease: [0.22, 1, 0.36, 1],
             }}
-            className="flex aspect-square flex-col items-center justify-center rounded-xl border border-[var(--border)]"
+            className={`relative flex aspect-square flex-col items-center justify-center rounded-xl border border-[var(--border)] ${liveRingClass}`}
             style={{ background: tint.bg }}
             aria-label={ariaLabel}
           >
+            {isLive && (
+              <span
+                aria-hidden
+                className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full"
+                style={{ background: 'var(--accent)' }}
+              />
+            )}
             <span aria-hidden className="t-caption">
               {c.label}
             </span>

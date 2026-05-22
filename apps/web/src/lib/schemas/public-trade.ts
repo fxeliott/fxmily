@@ -167,8 +167,15 @@ const screenshotUrlSchema = z
     (s) =>
       s === '' ||
       (!s.includes('..') &&
-        // IPv4 literal reject : `https://1.2.3.4/...` (incl. AWS metadata
-        // 169.254.169.254, LAN 192.168/16, CGNAT 100.64/10, loopback 127/8).
+        // IPv4 literal reject : rejette TOUT host numérique 4-segments
+        // (superset volontaire — pas de check per-range, on n'autorise
+        // simplement aucune IP literale). Cas connus couverts :
+        // AWS metadata 169.254.169.254, LAN 192.168/16, CGNAT 100.64/10,
+        // loopback 127/8, IP publiques routables 8.8.8.8 etc. Policy V1 :
+        // DNS hostname OBLIGATOIRE (le dot-rule de SCREENSHOT_URL_HTTPS_REGEX
+        // rejette aussi `https://2130706433/` decimal-encoded, hors hex form
+        // `0x7f.0x0.0x0.0x1` qui passerait : V2 T6 wire-time fix via WHATWG
+        // URL parser + DNS resolve check).
         !/^https:\/\/(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?(?:\/|$)/.test(s) &&
         // IPv6 literal reject : `https://[::1]/...` (loopback) ou
         // `https://[fe80::1]/...` (link-local) — le bracket `[` est le

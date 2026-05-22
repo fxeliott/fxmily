@@ -1436,3 +1436,95 @@ model HabitLog {
   @@index([userId, kind, date(sort: Desc)])
   @@map("habit_logs")
 }
+
+// =============================================================================
+// T-RECORD — Public-facing Eliott + Fxmily trade showcase (T0 2026-05-21).
+// Décision : table dédiée séparée du Journal membre (table `trades`). Les
+// trades public-facing appartiennent à Eliott (formateur), pas aux membres
+// — surface RGPD distincte, schema sur mesure pour la vitrine publique :
+// segments HISTORICAL/LIVE, partials, BE, tags news, screenshot R2.
+// Pas de relation User : Eliott seul écrit, monovendeur.
+// =============================================================================
+
+/// Segment du track record. La frontière `historical → live` marque la
+/// refonte structurelle (cf. brief Eliot 2026-05-21) entre les trades
+/// importés du fichier ODS et ceux saisis manuellement à partir d'aujourd'hui.
+enum PublicTradeSegment {
+  historical
+  live
+}
+
+/// Statut d'un trade public.
+enum PublicTradeStatus {
+  open
+  closed
+  break_even
+}
+
+model PublicTrade {
+  id            String               @id @default(cuid())
+  segment       PublicTradeSegment
+  /// Position chronologique 1..N. Conservée depuis l'ODS pour les
+  /// historiques, auto-incrémentée ensuite via service layer.
+  ordinal       Int                  @unique
+  /// Instrument (EURUSD, XAUUSD, US30, USOIL...). Pas d'enum DB car la
+  /// liste s'étend au-delà des paires majeures de l'app membre.
+  instrument    String
+  /// Direction long/short — réutilise enum existant. Nullable car certains
+  /// historiques ODS n'ont pas le sens renseigné (action col vide).
+  direction     TradeDirection?
+  /// Date d'entrée. Pour les historiques importés ODS, anchored au lundi
+  /// de la semaine (week label tel que "20 JANVIER" + année à confirmer).
+  enteredAt     DateTime             @map("entered_at")
+  exitedAt      DateTime?            @map("exited_at")
+  /// % de capital risqué (0.50, 1.00, 2.00). Stocké en % brut, pas en
+  /// fraction décimale (1.0 = 1%, pas 0.01). Decimal(4,2) cohérent avec
+  /// `Trade.riskPct` V1.5 + Tharp ceiling (< 100%).
+  riskPercent   Decimal              @map("risk_percent") @db.Decimal(4, 2)
+  /// R-multiple final atteint (1R = +1×risque, -1R = stop plein, 0R = BE).
+  resultR       Decimal?             @map("result_r") @db.Decimal(6, 3)
+  /// % de portefeuille net (riskPercent × resultR). Précalculé pour
+  /// performance lecture.
+  resultPercent Decimal?             @map("result_percent") @db.Decimal(6, 3)
+  status        PublicTradeStatus
+  /// Session de trading — réutilise enum TradeSession existant.
+  session       TradeSession?
+  /// Tag setup (ICT FVG, OB retest, SMC liquidity sweep, breakout...).
+  setup         String?
+  /// Tags additionnels (news, FOMC, CPI, partagé en réunion live...).
+  tags          String[]
+  /// Commentaire post-trade public (sanitized via safeFreeText).
+  notes         String?              @db.Text
+  /// Lien screenshot — R2 key ou URL externe.
+  screenshotUrl String?              @map("screenshot_url")
+  /// Provenance du trade (audit / re-import).
+  source        String               @default("import")
+  /// Toggle publication. False = draft admin.
+  isPublished   Boolean              @default(true) @map("is_published")
+  publishedAt   DateTime             @default(now()) @map("published_at")
+  partials      PublicTradePartial[]
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  @@index([segment, enteredAt(sort: Desc)])
+  @@index([isPublished, enteredAt(sort: Desc)])
+  @@index([instrument])
+  @@map("public_trades")
+}
+
+/// Clôture partielle d'un trade public (legs successives).
+model PublicTradePartial {
+  id            String      @id @default(cuid())
+  publicTradeId String      @map("public_trade_id")
+  publicTrade   PublicTrade @relation(fields: [publicTradeId], references: [id], onDelete: Cascade)
+  /// R-multiple atteint sur cette leg (1.5R = TP1).
+  closedAtR     Decimal     @map("closed_at_r") @db.Decimal(6, 3)
+  /// % de la position fermée sur cette leg (0..100).
+  closedPercent Decimal     @map("closed_percent") @db.Decimal(5, 2)
+  closedAt      DateTime    @map("closed_at")
+  notes         String?     @db.Text
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@index([publicTradeId, closedAt(sort: Asc)])
+  @@map("public_trade_partials")
+}

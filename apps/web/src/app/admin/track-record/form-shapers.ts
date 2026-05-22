@@ -65,9 +65,20 @@ export function strFieldNullable(
 
 /**
  * Variante numérique de `strFieldNullable`. Empty input → `null` (clear),
- * absent du form → `undefined` (keep), non-vide → coerce en number (avec
- * `NaN` mappé sur `null` pour garder une sémantique "input invalide = effacé"
- * — Zod refine `.finite()` aurait de toute façon rejeté un NaN passé tel quel).
+ * absent du form → `undefined` (keep), non-vide → coerce en number.
+ *
+ * **Sémantique « admin invalide »** distinguée en 2 cas (T5 audit Phase H+1 H-4) :
+ *   - `NaN` (input non-numérique type `"abc"`, `"NaN"` literal) → `null`
+ *     ("admin a tapé du garbage → on clear le champ silencieusement, garde
+ *     l'UX simple : pas de message Zod confusant pour une frappe complète").
+ *   - `±Infinity` (overflow numérique : `"1e500"`, `"-1e500"`, `"Infinity"`)
+ *     → **pass-through** (`Infinity`/`-Infinity`). Le Zod `.finite()` refine
+ *     en aval rejette avec un message clair "R doit être un nombre fini"
+ *     → admin VOIT son erreur au lieu du silent-clear.
+ *
+ * Avant H-4 : `Number.isFinite(n) ? n : null` mappait Infinity + NaN
+ * indistinctement à null → admin qui tape `1e500` (vrai nombre overflow)
+ * voyait son R disparaître sans erreur visible.
  */
 export function numFieldNullable(
   fd: FormData,
@@ -78,7 +89,9 @@ export function numFieldNullable(
   if (raw === undefined) return undefined;
   if (raw === null) return null;
   const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
+  // `NaN` (input non-parsable comme nombre) → silent clear.
+  // `±Infinity` (overflow) → pass-through, Zod `.finite()` rejette en aval.
+  return Number.isNaN(n) ? null : n;
 }
 
 /**

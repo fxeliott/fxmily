@@ -141,13 +141,29 @@ describe('numFieldNullable', () => {
     expect(numFieldNullable(fd, 'resultR')).toBeNull();
   });
 
-  it('returns null for "Infinity" (not finite → null)', () => {
+  // T5 audit Phase H+1 H-4 : distingue `Infinity` (overflow numérique) vs
+  // `NaN` (input garbage). Infinity pass-through pour que Zod `.finite()`
+  // rejette avec message clair "R doit être un nombre fini" au lieu du
+  // silent-clear qui faisait disparaître l'input admin sans erreur.
+  it('passes Infinity through (Zod `.finite()` rejects downstream with clear error)', () => {
     const fd = new FormData();
     fd.set('resultR', 'Infinity');
-    expect(numFieldNullable(fd, 'resultR')).toBeNull();
+    expect(numFieldNullable(fd, 'resultR')).toBe(Infinity);
   });
 
-  it('returns null for "NaN" string', () => {
+  it('passes -Infinity through (Zod `.finite()` rejects downstream)', () => {
+    const fd = new FormData();
+    fd.set('resultR', '-Infinity');
+    expect(numFieldNullable(fd, 'resultR')).toBe(-Infinity);
+  });
+
+  it('passes 1e500 overflow through as Infinity (Zod `.finite()` rejects)', () => {
+    const fd = new FormData();
+    fd.set('resultR', '1e500');
+    expect(numFieldNullable(fd, 'resultR')).toBe(Infinity);
+  });
+
+  it('returns null for "NaN" literal string (Number("NaN") === NaN)', () => {
     const fd = new FormData();
     fd.set('resultR', 'NaN');
     expect(numFieldNullable(fd, 'resultR')).toBeNull();

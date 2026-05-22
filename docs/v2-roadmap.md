@@ -67,6 +67,17 @@ premiers membres réels.
 - **Annual DR test** — runbook `runbook-backup-restore.md` §6 documente le
   workflow manuel (~30 min/an, RTO objectif <24h). Automatisation reste à câbler.
   **Statut 2026-05-21 : runbook docs ✓, exécution annuelle ouverte.**
+- **ESLint 9→10 — blocked-upstream Q2 2026.** Dependabot PR
+  [#6](https://github.com/fxeliott/fxmily/pull/6) bloquée par
+  `eslint-plugin-react@7.37.5` incompat ESLint 10 API
+  (`context.getFilename()` retirée). Upstream fix
+  [`jsx-eslint/eslint-plugin-react#3979`](https://github.com/jsx-eslint/eslint-plugin-react/pull/3979)
+  OPEN avec requested changes (bloqué dep externe
+  [`import-js/eslint-plugin-import#3230`](https://github.com/import-js/eslint-plugin-import/issues/3230)).
+  Aucune EOL annoncée pour ESLint 9, 0 CVE bloquant. CI breakage empirique
+  confirmé (run `26221562493` job `Lint, type-check, build` FAILURE
+  2026-05-21). **Statut 2026-05-22 : ouvert, label `blocked-upstream`,
+  monitoring `eslint-plugin-react@8.x` release.**
 
 **Items déjà livrés J10 Phases I → P** (ne plus les listr ici) :
 

@@ -1,0 +1,296 @@
+/**
+ * Zod schemas for `PublicTrade` + `PublicTradePartial` (T5 admin CRUD).
+ *
+ * Three layers:
+ *   - `publicTradeCreateSchema`  — admin "create trade" form. status-aware
+ *                                  refine (closed → exitedAt+resultR mandatory).
+ *   - `publicTradeUpdateSchema`  — admin "edit trade" form. All fields optional.
+ *   - `publicTradePartialSchema` — admin "add partial leg" sub-form (TP1/TP2).
+ *
+ * Hardening (carbone `lib/schemas/card.ts` J7 — TIER 3 fix M5 lineage) :
+ *   - `instrument` strict `[A-Z0-9]{3,10}` + `safeFreeText` (NFC) +
+ *     `containsBidiOrZeroWidth` reject (Trojan Source defense).
+ *   - `setup` 0-100 chars + `safeFreeText` + bidi reject.
+ *   - `tags` array 0-10 × 0-50 chars chacun + `safeFreeText` + bidi reject.
+ *   - `notes` 0-2000 chars + `safeFreeText` + bidi reject.
+ *   - `screenshotUrl` 0-500 chars (URL ou R2 storage key) + safeFreeText.
+ *   - `ordinal` int 1..99999 (NULL = auto-derive MAX(ordinal)+1 dans service).
+ *   - `riskPercent` numeric > 0, ≤ 99.99 (aligné `Trade.riskPct` V1.5
+ *     Decimal(4,2) + Tharp ceiling <100%).
+ *   - `resultR` numeric -100..100 (Decimal(6,3) — supporte 100R théorique).
+ *   - `enteredAt`/`exitedAt` ISO datetime (DateTime Postgres, pas @db.Date).
+ *
+ * Cross-field invariants (`.superRefine`) :
+ *   - `status='closed'` → `exitedAt` + `resultR` REQUIRED.
+ *   - `status='break_even'` → `exitedAt` REQUIRED, `resultR` = 0 ou null.
+ *   - `status='open'` → `exitedAt` + `resultR` SHOULD BE null (warn-only
+ *     dans le form — le service ne calcule pas `resultPercent` si open).
+ *
+ * `resultPercent` est computed par le service (`riskPercent × resultR`), pas
+ * fourni par le form (single source of truth).
+ *
+ * Enums référencés depuis `@/generated/prisma/enums` (Prisma 7 const-object
+ * pattern). Les const arrays ci-dessous SONT les valeurs canoniques —
+ * désynchroniser avec `schema.prisma` casse le type-check immédiatement.
+ */
+
+import { z } from 'zod';
+
+import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
+
+// =============================================================================
+// Constants — DOIVENT matcher prisma/schema.prisma:1452+
+// =============================================================================
+
+export const PUBLIC_TRADE_SEGMENTS = ['historical', 'live'] as const;
+export const PUBLIC_TRADE_STATUSES = ['open', 'closed', 'break_even'] as const;
+export const TRADE_DIRECTIONS = ['long', 'short'] as const;
+export const TRADE_SESSIONS = ['asia', 'london', 'overlap', 'newyork'] as const;
+
+export const INSTRUMENT_REGEX = /^[A-Z0-9]{3,10}$/;
+export const INSTRUMENT_MIN = 3;
+export const INSTRUMENT_MAX = 10;
+export const SETUP_MAX = 100;
+export const TAGS_MAX = 10;
+export const TAG_MAX = 50;
+export const NOTES_MAX = 2000;
+export const SCREENSHOT_URL_MAX = 500;
+export const ORDINAL_MIN = 1;
+export const ORDINAL_MAX = 99999;
+export const RISK_PERCENT_MIN = 0.01;
+export const RISK_PERCENT_MAX = 99.99;
+export const RESULT_R_MIN = -100;
+export const RESULT_R_MAX = 100;
+export const CLOSED_PERCENT_MIN = 0.01;
+export const CLOSED_PERCENT_MAX = 100;
+
+// =============================================================================
+// Sub-schemas — hardened free-text fields
+// =============================================================================
+
+/**
+ * Instrument tag (EURUSD, XAUUSD, US30, USOIL…). NFC + reject bidi/zero-width,
+ * uppercased before validation (admin can paste lower-case → we upper). Regex
+ * `[A-Z0-9]{3,10}` matche les tickers fxmily v1 (forex majors + metals +
+ * indices US + futures CFD). Si Eliot ajoute un instrument exotique (e.g.
+ * "BTCUSD"), il passera ; "EUR/USD" sera rejeté (admin doit normaliser).
+ */
+const instrumentSchema = z
+  .string()
+  .trim()
+  .min(INSTRUMENT_MIN)
+  .max(INSTRUMENT_MAX)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform((s) => safeFreeText(s).toUpperCase())
+  .refine((s) => INSTRUMENT_REGEX.test(s), {
+    message: 'Instrument doit être en majuscules alphanumériques (3-10 chars).',
+  });
+
+const setupSchema = z
+  .string()
+  .trim()
+  .max(SETUP_MAX)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText);
+
+const tagSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(TAG_MAX)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText);
+
+const tagsSchema = z.array(tagSchema).max(TAGS_MAX);
+
+const notesSchema = z
+  .string()
+  .max(NOTES_MAX)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText);
+
+const screenshotUrlSchema = z
+  .string()
+  .trim()
+  .max(SCREENSHOT_URL_MAX)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText);
+
+// =============================================================================
+// Enum schemas — alignés `@/generated/prisma/enums`
+// =============================================================================
+
+const segmentSchema = z.enum(PUBLIC_TRADE_SEGMENTS);
+const statusSchema = z.enum(PUBLIC_TRADE_STATUSES);
+const directionSchema = z.enum(TRADE_DIRECTIONS);
+const sessionSchema = z.enum(TRADE_SESSIONS);
+
+const ordinalSchema = z.number().int().min(ORDINAL_MIN).max(ORDINAL_MAX);
+
+/**
+ * Risk percent (% de capital risqué — 0.50, 1.00, 2.00). Stocké en % brut
+ * cf. schema.prisma:1480-1483 (1.0 = 1%, pas 0.01). Decimal(4,2) ⇒ 99.99 max.
+ * Min 0.01 (1 pb) défense contre `0` qui briserait `resultPercent =
+ * riskPercent × resultR` (toujours = 0 ⇒ équivalent BE silencieux).
+ */
+const riskPercentSchema = z.coerce
+  .number()
+  .finite({ message: 'Risque % doit être un nombre fini.' })
+  .gt(0, { message: 'Risque % doit être > 0.' })
+  .max(RISK_PERCENT_MAX, { message: `Risque % doit être ≤ ${RISK_PERCENT_MAX}.` })
+  // T5 audit fix #3 — Prisma Decimal(4,2) arrondit silencieusement à 2 décimales
+  // si on lui envoie 99.995 → 100.00 → P2000 numeric out of range. Reject côté
+  // Zod AVANT le write avec un message clair plutôt qu'un crash Prisma.
+  .multipleOf(0.01, { message: 'Risque % doit avoir au plus 2 décimales.' });
+
+/** R-multiple atteint (1R = +1×risque, -1R = stop, 0R = BE). Decimal(6,3). */
+const resultRSchema = z.coerce
+  .number()
+  .finite({ message: 'R doit être un nombre fini.' })
+  .min(RESULT_R_MIN, { message: `R doit être ≥ ${RESULT_R_MIN}.` })
+  .max(RESULT_R_MAX, { message: `R doit être ≤ ${RESULT_R_MAX}.` })
+  // Decimal(6,3) — max 3 décimales (cf. fix #3 ci-dessus).
+  .multipleOf(0.001, { message: 'R doit avoir au plus 3 décimales.' });
+
+/**
+ * Date ISO compatible Postgres `DateTime`. Pas `@db.Date` ici (PublicTrade
+ * stocke un instant, pas un jour civil — différencie un trade entré 14:32
+ * vs 14:33 dans le même session london).
+ */
+const dateTimeSchema = z.coerce.date();
+
+// =============================================================================
+// Create / Update — admin form schemas
+// =============================================================================
+
+/**
+ * Create form input. Cross-field refine enforce les invariants lifecycle :
+ *   - closed       → exitedAt + resultR required
+ *   - break_even   → exitedAt required, resultR ∈ {0, null}
+ *   - open         → exitedAt + resultR doivent être null (form-level warn)
+ *
+ * `ordinal` optionnel : si absent, service auto-derive `MAX(ordinal) + 1`.
+ * Cohérent admin V1 (Eliot ajoute le prochain live trade sans calculer 140).
+ */
+export const publicTradeCreateSchema = z
+  .object({
+    segment: segmentSchema,
+    ordinal: ordinalSchema.optional(),
+    instrument: instrumentSchema,
+    direction: directionSchema.nullable().optional(),
+    enteredAt: dateTimeSchema,
+    exitedAt: dateTimeSchema.nullable().optional(),
+    riskPercent: riskPercentSchema,
+    resultR: resultRSchema.nullable().optional(),
+    status: statusSchema,
+    session: sessionSchema.nullable().optional(),
+    setup: setupSchema.nullable().optional(),
+    tags: tagsSchema.default([]),
+    notes: notesSchema.nullable().optional(),
+    screenshotUrl: screenshotUrlSchema.nullable().optional(),
+    isPublished: z.boolean().default(true),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.status === 'closed') {
+      if (!data.exitedAt) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['exitedAt'],
+          message: 'exitedAt requis quand status = closed.',
+        });
+      }
+      if (data.resultR === null || data.resultR === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['resultR'],
+          message: 'resultR requis quand status = closed.',
+        });
+      }
+    }
+    if (data.status === 'break_even') {
+      if (!data.exitedAt) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['exitedAt'],
+          message: 'exitedAt requis quand status = break_even.',
+        });
+      }
+      if (data.resultR !== null && data.resultR !== undefined && data.resultR !== 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['resultR'],
+          message: 'resultR doit être 0 (ou vide) quand status = break_even.',
+        });
+      }
+    }
+    if (data.exitedAt && data.exitedAt < data.enteredAt) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['exitedAt'],
+        message: 'exitedAt doit être postérieur à enteredAt.',
+      });
+    }
+  });
+
+export type PublicTradeCreateInput = z.infer<typeof publicTradeCreateSchema>;
+
+/**
+ * Update form input. Tous les champs optionnels (le form peut envoyer un
+ * subset). On refait le cross-field refine UNIQUEMENT si `status` est présent
+ * dans le payload : service-side, l'invariant complet est vérifié post-merge
+ * avec l'état actuel DB (cf. `updatePublicTrade`).
+ */
+export const publicTradeUpdateSchema = z
+  .object({
+    segment: segmentSchema.optional(),
+    ordinal: ordinalSchema.optional(),
+    instrument: instrumentSchema.optional(),
+    direction: directionSchema.nullable().optional(),
+    enteredAt: dateTimeSchema.optional(),
+    exitedAt: dateTimeSchema.nullable().optional(),
+    riskPercent: riskPercentSchema.optional(),
+    resultR: resultRSchema.nullable().optional(),
+    status: statusSchema.optional(),
+    session: sessionSchema.nullable().optional(),
+    setup: setupSchema.nullable().optional(),
+    tags: tagsSchema.optional(),
+    notes: notesSchema.nullable().optional(),
+    screenshotUrl: screenshotUrlSchema.nullable().optional(),
+    isPublished: z.boolean().optional(),
+  })
+  .strict();
+
+export type PublicTradeUpdateInput = z.infer<typeof publicTradeUpdateSchema>;
+
+// =============================================================================
+// Partial — admin "add leg" sub-form (TP1/TP2/...)
+// =============================================================================
+
+/**
+ * Partial leg (clôture partielle). closedPercent + closedAtR + closedAt.
+ *   - `closedAtR` Decimal(6,3) — R atteint sur cette leg (1.5R = TP1 à +1.5R).
+ *   - `closedPercent` Decimal(5,2) — % de la position fermée (0..100).
+ *   - `closedAt` DateTime — instant de la clôture leg.
+ *   - `notes` optional, hardened.
+ */
+export const publicTradePartialSchema = z
+  .object({
+    closedAtR: resultRSchema, // réutilise validation -100..100 + .finite() + multipleOf(0.001)
+    closedPercent: z.coerce
+      .number()
+      .finite({ message: '% fermé doit être un nombre fini.' })
+      .min(CLOSED_PERCENT_MIN, {
+        message: `% fermé doit être ≥ ${CLOSED_PERCENT_MIN}.`,
+      })
+      .max(CLOSED_PERCENT_MAX, {
+        message: `% fermé doit être ≤ ${CLOSED_PERCENT_MAX}.`,
+      })
+      // Decimal(5,2) — max 2 décimales (fix #3).
+      .multipleOf(0.01, { message: '% fermé doit avoir au plus 2 décimales.' }),
+    closedAt: dateTimeSchema,
+    notes: notesSchema.nullable().optional(),
+  })
+  .strict();
+
+export type PublicTradePartialInput = z.infer<typeof publicTradePartialSchema>;

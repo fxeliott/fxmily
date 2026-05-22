@@ -1,0 +1,406 @@
+/**
+ * TDD-first tests for `public-trade.ts` Zod schemas (T5).
+ *
+ * Coverage focus :
+ *   - Instrument allowlist + bidi/zero-width reject (Trojan Source).
+ *   - Cross-field invariants (status ↔ exitedAt/resultR).
+ *   - Decimal coercion (string → number).
+ *   - Tags array + caps.
+ *   - Notes hardening (safeFreeText).
+ *   - Partial schema bounds.
+ */
+
+import { describe, expect, it } from 'vitest';
+
+import {
+  publicTradeCreateSchema,
+  publicTradePartialSchema,
+  publicTradeUpdateSchema,
+  PUBLIC_TRADE_SEGMENTS,
+  PUBLIC_TRADE_STATUSES,
+} from './public-trade';
+
+// =============================================================================
+// Helpers — minimal valid trade for permutations
+// =============================================================================
+
+function validOpen() {
+  return {
+    segment: 'live' as const,
+    instrument: 'EURUSD',
+    enteredAt: '2026-05-22T10:00:00Z',
+    riskPercent: 1.0,
+    status: 'open' as const,
+  };
+}
+
+function validClosed() {
+  return {
+    segment: 'live' as const,
+    instrument: 'XAUUSD',
+    enteredAt: '2026-05-22T10:00:00Z',
+    exitedAt: '2026-05-22T14:00:00Z',
+    riskPercent: 1.5,
+    resultR: 2.0,
+    status: 'closed' as const,
+  };
+}
+
+function validBE() {
+  return {
+    segment: 'live' as const,
+    instrument: 'US30',
+    enteredAt: '2026-05-22T10:00:00Z',
+    exitedAt: '2026-05-22T12:00:00Z',
+    riskPercent: 1.0,
+    resultR: 0,
+    status: 'break_even' as const,
+  };
+}
+
+// =============================================================================
+// publicTradeCreateSchema — happy paths
+// =============================================================================
+
+describe('publicTradeCreateSchema — happy paths', () => {
+  it('accepts a minimal open trade', () => {
+    const r = publicTradeCreateSchema.safeParse(validOpen());
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts a fully-resolved closed trade', () => {
+    const r = publicTradeCreateSchema.safeParse(validClosed());
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.resultR).toBe(2.0);
+      expect(r.data.tags).toEqual([]); // default
+    }
+  });
+
+  it('accepts BE trade with resultR=0', () => {
+    const r = publicTradeCreateSchema.safeParse(validBE());
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts BE trade with resultR=null', () => {
+    const r = publicTradeCreateSchema.safeParse({ ...validBE(), resultR: null });
+    expect(r.success).toBe(true);
+  });
+
+  it('uppercases instrument input', () => {
+    const r = publicTradeCreateSchema.safeParse({ ...validOpen(), instrument: 'eurusd' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.instrument).toBe('EURUSD');
+  });
+});
+
+// =============================================================================
+// Cross-field invariants
+// =============================================================================
+
+describe('publicTradeCreateSchema — cross-field invariants', () => {
+  it('rejects closed without exitedAt', () => {
+    const { exitedAt: _e, ...rest } = validClosed();
+    void _e;
+    const r = publicTradeCreateSchema.safeParse(rest);
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const paths = r.error.issues.map((i) => i.path.join('.'));
+      expect(paths).toContain('exitedAt');
+    }
+  });
+
+  it('rejects closed without resultR', () => {
+    const { resultR: _r, ...rest } = validClosed();
+    void _r;
+    const r = publicTradeCreateSchema.safeParse(rest);
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const paths = r.error.issues.map((i) => i.path.join('.'));
+      expect(paths).toContain('resultR');
+    }
+  });
+
+  it('rejects break_even with nonzero resultR', () => {
+    const r = publicTradeCreateSchema.safeParse({ ...validBE(), resultR: 0.5 });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const paths = r.error.issues.map((i) => i.path.join('.'));
+      expect(paths).toContain('resultR');
+    }
+  });
+
+  it('rejects exitedAt before enteredAt', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validClosed(),
+      enteredAt: '2026-05-22T14:00:00Z',
+      exitedAt: '2026-05-22T10:00:00Z',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const paths = r.error.issues.map((i) => i.path.join('.'));
+      expect(paths).toContain('exitedAt');
+    }
+  });
+});
+
+// =============================================================================
+// Hardening — Trojan Source / bidi / zero-width / instrument allowlist
+// =============================================================================
+
+describe('publicTradeCreateSchema — hardening', () => {
+  it('rejects instrument with bidi control char (U+202E RLO)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      instrument: 'EUR‮USD',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects instrument with zero-width space', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      instrument: 'EUR​USD',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects instrument with slash or special chars', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      instrument: 'EUR/USD',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects instrument too short', () => {
+    const r = publicTradeCreateSchema.safeParse({ ...validOpen(), instrument: 'EU' });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects instrument too long', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      instrument: 'EURUSDXYZAB',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects notes with bidi control char', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      notes: 'analyse ‮ malveillante',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('accepts FR diacritics in notes', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      notes: 'Trade gagnant après cassure de résistance — éxécution propre.',
+    });
+    expect(r.success).toBe(true);
+  });
+});
+
+// =============================================================================
+// Bounds — risk / R / ordinal / tags
+// =============================================================================
+
+describe('publicTradeCreateSchema — bounds', () => {
+  it('rejects riskPercent = 0', () => {
+    const r = publicTradeCreateSchema.safeParse({ ...validOpen(), riskPercent: 0 });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects riskPercent > 99.99 (Tharp ceiling)', () => {
+    const r = publicTradeCreateSchema.safeParse({ ...validOpen(), riskPercent: 100 });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects resultR > 100', () => {
+    const r = publicTradeCreateSchema.safeParse({ ...validClosed(), resultR: 101 });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects resultR < -100', () => {
+    const r = publicTradeCreateSchema.safeParse({ ...validClosed(), resultR: -101 });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects ordinal = 0', () => {
+    const r = publicTradeCreateSchema.safeParse({ ...validOpen(), ordinal: 0 });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects ordinal > 99999', () => {
+    const r = publicTradeCreateSchema.safeParse({ ...validOpen(), ordinal: 100000 });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects > 10 tags', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      tags: Array.from({ length: 11 }, (_, i) => `tag${i}`),
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects tag > 50 chars', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      tags: ['x'.repeat(51)],
+    });
+    expect(r.success).toBe(false);
+  });
+});
+
+// =============================================================================
+// Coercion — string → number for form inputs
+// =============================================================================
+
+describe('publicTradeCreateSchema — coercion', () => {
+  it('coerces riskPercent string to number', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      riskPercent: '1.5' as unknown as number,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.riskPercent).toBe(1.5);
+  });
+
+  it('coerces resultR string to number (closed)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validClosed(),
+      resultR: '2.5' as unknown as number,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.resultR).toBe(2.5);
+  });
+
+  it('coerces enteredAt ISO string to Date', () => {
+    const r = publicTradeCreateSchema.safeParse(validOpen());
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.enteredAt).toBeInstanceOf(Date);
+  });
+});
+
+// =============================================================================
+// Strict mode — reject unknown fields
+// =============================================================================
+
+describe('publicTradeCreateSchema — strict mode', () => {
+  it('rejects unknown field (anti-tamper)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      resultPercent: 50, // computed server-side, NOT form input
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects source field (server-derived)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      source: 'manual_tamper',
+    });
+    expect(r.success).toBe(false);
+  });
+});
+
+// =============================================================================
+// publicTradeUpdateSchema — partial input
+// =============================================================================
+
+describe('publicTradeUpdateSchema', () => {
+  it('accepts empty object (no-op update)', () => {
+    const r = publicTradeUpdateSchema.safeParse({});
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts single field update', () => {
+    const r = publicTradeUpdateSchema.safeParse({ status: 'closed' });
+    expect(r.success).toBe(true);
+  });
+
+  it('does NOT re-validate cross-field (service post-merge enforces it)', () => {
+    // status=closed sans exitedAt/resultR doit PASS au Zod level —
+    // c'est `validateLifecycleInvariants` côté service qui catch.
+    const r = publicTradeUpdateSchema.safeParse({ status: 'closed' });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects unknown fields', () => {
+    const r = publicTradeUpdateSchema.safeParse({ resultPercent: 50 });
+    expect(r.success).toBe(false);
+  });
+});
+
+// =============================================================================
+// publicTradePartialSchema
+// =============================================================================
+
+describe('publicTradePartialSchema', () => {
+  it('accepts a valid TP1 leg', () => {
+    const r = publicTradePartialSchema.safeParse({
+      closedAtR: 1.5,
+      closedPercent: 50,
+      closedAt: '2026-05-22T12:00:00Z',
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects closedPercent = 0', () => {
+    const r = publicTradePartialSchema.safeParse({
+      closedAtR: 1.5,
+      closedPercent: 0,
+      closedAt: '2026-05-22T12:00:00Z',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects closedPercent > 100', () => {
+    const r = publicTradePartialSchema.safeParse({
+      closedAtR: 1.5,
+      closedPercent: 100.5,
+      closedAt: '2026-05-22T12:00:00Z',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects notes with bidi', () => {
+    const r = publicTradePartialSchema.safeParse({
+      closedAtR: 1.5,
+      closedPercent: 50,
+      closedAt: '2026-05-22T12:00:00Z',
+      notes: '‮ hidden',
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('coerces decimal strings', () => {
+    const r = publicTradePartialSchema.safeParse({
+      closedAtR: '1.5' as unknown as number,
+      closedPercent: '50' as unknown as number,
+      closedAt: '2026-05-22T12:00:00Z',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.closedAtR).toBe(1.5);
+      expect(r.data.closedPercent).toBe(50);
+    }
+  });
+});
+
+// =============================================================================
+// Enum invariants — schema constants match Prisma
+// =============================================================================
+
+describe('schema constants', () => {
+  it('PUBLIC_TRADE_SEGMENTS matches Prisma enum literal', () => {
+    expect([...PUBLIC_TRADE_SEGMENTS].sort()).toEqual(['historical', 'live']);
+  });
+
+  it('PUBLIC_TRADE_STATUSES matches Prisma enum literal', () => {
+    expect([...PUBLIC_TRADE_STATUSES].sort()).toEqual(['break_even', 'closed', 'open']);
+  });
+});

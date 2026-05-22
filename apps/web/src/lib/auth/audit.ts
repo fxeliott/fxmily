@@ -187,7 +187,23 @@ export type AuditAction =
   // scan` is the weekly heartbeat (counts + `weekStart` + `ranAt`), strict
   // `cron.<name>.scan` underscore convention (cron-watch — V1.6 Bug #4).
   | 'mindset_check.submitted'
-  | 'cron.mindset_check_reminders.scan';
+  | 'cron.mindset_check_reminders.scan'
+  // T5 — Track Record admin CRUD (sub-app `@fxmily/track-record` public trade
+  // showcase). Eliott seul (monovendeur) écrit/modifie/clôture via
+  // `/admin/track-record/*` dans `@fxmily/web` (la sous-app reste static
+  // export Cloudflare Pages, pas de DB connection runtime). PII-FREE: rows
+  // carry `publicTradeId` + ordinal + segment in metadata — NEVER the notes
+  // free-text, NEVER the screenshot URL (storage key only if relevant), NEVER
+  // a member-facing field (these trades sont publics par design AMF — pas de
+  // données personnelles tierces). `*.partial.*` mirror the trade lifecycle
+  // (legs successives TP1/TP2) — distinct slugs pour forensic granularity.
+  | 'admin.public_trade.created'
+  | 'admin.public_trade.updated'
+  | 'admin.public_trade.deleted'
+  | 'admin.public_trade.published'
+  | 'admin.public_trade.unpublished'
+  | 'admin.public_trade.partial.created'
+  | 'admin.public_trade.partial.deleted';
 
 /**
  * Resolve the audit slug for an `/api/uploads` screenshot upload by kind.

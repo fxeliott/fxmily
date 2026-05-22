@@ -2,15 +2,27 @@
 
 import { motion, useReducedMotion } from 'framer-motion';
 import type { MonthlyAggregate } from '@/lib/metrics';
-import { formatPercent } from '@/lib/format';
 
 interface MonthlyHeatmapProps {
   data: readonly MonthlyAggregate[];
-  /** Optional verbatim source-of-truth values (ODS author monthly summaries). */
   odsSummaries?: readonly { month: number; label: string; percent: number }[];
-  /** Year displayed in the SR-only aria-labels (defaults to current). */
   year?: number;
 }
+
+const MONTH_LABELS_SHORT_FR = [
+  'Jan',
+  'Fév',
+  'Mar',
+  'Avr',
+  'Mai',
+  'Juin',
+  'Juil',
+  'Août',
+  'Sept',
+  'Oct',
+  'Nov',
+  'Déc',
+] as const;
 
 const MONTH_LABELS_LONG_FR = [
   'Janvier',
@@ -25,74 +37,61 @@ const MONTH_LABELS_LONG_FR = [
   'Octobre',
   'Novembre',
   'Décembre',
-];
+] as const;
+
+const FR_PCT = new Intl.NumberFormat('fr-FR', {
+  signDisplay: 'always',
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
 
 /**
- * Monthly heatmap — calendar grid (4 × 3) avec cellules tone-coded.
+ * Heatmap mensuel T1 ultra-minimal — drop des couleurs saturées (vert flashy
+ * + rouge vif). Pivot vers échelle de surface neutre + texte tone-coded :
  *
- * Convention couleur :
- *   gain hue `#3EAE20` intensifiée selon ampleur (clamp [0, 60]%)
- *   loss hue `#F46B7D` intensifiée selon ampleur (clamp [-30, 0]%)
- *   BE / 0% : `--tr-t-3` muted
+ *  - Cellule : `--surface` base, fond `--accent-soft` modulé pour gains,
+ *    fond `--negative-soft` modulé pour pertes (très désaturé)
+ *  - Chiffre : `--positive` muted vert pour gain, `--negative` muted rouge
+ *    pour perte, `--text-muted` pour 0 ou null
+ *  - Hairline border 1px true-HEX (pas opacity)
+ *  - Pas d'effet hover lift, juste opacity color shift
  *
- * Patterns sourcés research subagent 2026-05-21 (Bridgewater public reports,
- * Mercury accent dosage discipline).
+ * Specs ui-designer §10 + Eliot doctrine "pertes même prégnance que gains"
+ * → les pertes restent VISIBLES (couleur muted) mais sans saturation cheap.
  */
-const MONTH_LABELS_SHORT_FR = [
-  'Jan',
-  'Fév',
-  'Mar',
-  'Avr',
-  'Mai',
-  'Juin',
-  'Juil',
-  'Août',
-  'Sept',
-  'Oct',
-  'Nov',
-  'Déc',
-];
-
-function colorForPercent(pct: number): {
-  bg: string;
-  border: string;
-  tone: 'gain' | 'loss' | 'neutral';
-} {
-  if (pct === 0) {
-    return { bg: 'rgba(140,153,173,0.08)', border: 'rgba(140,153,173,0.18)', tone: 'neutral' };
+function tintFor(percent: number): { bg: string; text: string } {
+  if (percent === 0) {
+    return { bg: 'transparent', text: 'var(--text-muted)' };
   }
-  if (pct > 0) {
-    const intensity = Math.min(1, pct / 60); // clamp at 60%
-    const alpha = 0.15 + intensity * 0.55;
-    return {
-      bg: `rgba(62, 174, 32, ${alpha.toFixed(3)})`,
-      border: `rgba(62, 174, 32, ${(alpha + 0.2).toFixed(3)})`,
-      tone: 'gain',
-    };
+  if (percent > 0) {
+    const intensity = Math.min(1, percent / 60);
+    const alpha = 0.06 + intensity * 0.18;
+    return { bg: `rgba(124, 184, 124, ${alpha.toFixed(3)})`, text: 'var(--positive)' };
   }
-  const intensity = Math.min(1, Math.abs(pct) / 30);
-  const alpha = 0.18 + intensity * 0.5;
-  return {
-    bg: `rgba(244, 107, 125, ${alpha.toFixed(3)})`,
-    border: `rgba(244, 107, 125, ${(alpha + 0.2).toFixed(3)})`,
-    tone: 'loss',
-  };
+  const intensity = Math.min(1, Math.abs(percent) / 30);
+  const alpha = 0.06 + intensity * 0.18;
+  return { bg: `rgba(200, 124, 124, ${alpha.toFixed(3)})`, text: 'var(--negative)' };
 }
 
 export function MonthlyHeatmap({ data, odsSummaries, year }: MonthlyHeatmapProps) {
   const reduced = useReducedMotion();
-  // Use ODS verbatim if provided (source-of-truth), else derived aggregates.
   const byMonth = new Map<number, number>();
   if (odsSummaries) {
     for (const s of odsSummaries) byMonth.set(s.month, s.percent);
   } else {
     for (const a of data) byMonth.set(a.monthNum, a.totalPercent);
   }
-  const cells: Array<{ monthNum: number; label: string; percent: number | null }> = [];
+  const cells: Array<{
+    monthNum: number;
+    label: string;
+    longLabel: string;
+    percent: number | null;
+  }> = [];
   for (let m = 1; m <= 12; m += 1) {
     cells.push({
       monthNum: m,
       label: MONTH_LABELS_SHORT_FR[m - 1]!,
+      longLabel: MONTH_LABELS_LONG_FR[m - 1]!,
       percent: byMonth.has(m) ? byMonth.get(m)! : null,
     });
   }
@@ -100,71 +99,59 @@ export function MonthlyHeatmap({ data, odsSummaries, year }: MonthlyHeatmapProps
   return (
     <ul
       role="list"
-      aria-label={`Performances mensuelles${year ? ' ' + year : ''}`}
-      className="grid list-none grid-cols-4 gap-2.5 p-0 sm:gap-3"
+      aria-label={`Performance mensuelle${year ? ' ' + year : ''}`}
+      className="m-0 grid list-none grid-cols-3 gap-2 p-0 sm:grid-cols-4 sm:gap-3 lg:grid-cols-6"
     >
       {cells.map((c, idx) => {
-        const longLabel = MONTH_LABELS_LONG_FR[c.monthNum - 1] ?? c.label ?? '?';
+        const ariaYear = year ? ' ' + year : '';
         if (c.percent === null) {
           return (
             <li
               key={c.monthNum}
               role="listitem"
-              className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed"
-              style={{ borderColor: 'rgba(255,255,255,0.06)' }}
-              aria-label={`${longLabel}${year ? ' ' + year : ''} : aucune donnée`}
+              className="flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)]"
+              aria-label={`${c.longLabel}${ariaYear} : pas de donnée`}
             >
-              <span
-                aria-hidden
-                className="text-[11px] tracking-[0.06em] text-[var(--tr-t-3)] uppercase opacity-60"
-              >
+              <span aria-hidden className="t-caption">
                 {c.label}
               </span>
-              <span aria-hidden className="mt-1 text-[10px] text-[var(--tr-t-3)] opacity-50">
-                N/A
+              <span aria-hidden className="num mt-1 text-[11px] text-[var(--text-subtle)]">
+                —
               </span>
             </li>
           );
         }
-        const colors = colorForPercent(c.percent);
-        const ariaLabel = `${longLabel}${year ? ' ' + year : ''} : performance ${formatPercent(c.percent, { signed: true })}`;
-        const cellMotion = reduced
+        const tint = tintFor(c.percent);
+        const ariaLabel = `${c.longLabel}${ariaYear} : ${FR_PCT.format(c.percent)} %`;
+        const motionProps = reduced
           ? {}
           : {
-              initial: { opacity: 0, scale: 0.94 },
-              whileInView: { opacity: 1, scale: 1 },
-              whileHover: { y: -2 },
+              initial: { opacity: 0, y: 4 },
+              animate: { opacity: 1, y: 0 },
             };
         return (
           <motion.li
             key={c.monthNum}
             role="listitem"
-            {...cellMotion}
-            viewport={{ once: true, amount: 0.4 }}
-            transition={{ duration: 0.45, delay: idx * 0.04, ease: [0.22, 1, 0.36, 1] }}
-            className="flex aspect-square cursor-default flex-col items-center justify-center rounded-lg border px-2"
-            style={{ background: colors.bg, borderColor: colors.border }}
+            {...motionProps}
+            transition={{
+              duration: 0.4,
+              delay: idx * 0.04,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            className="flex aspect-square flex-col items-center justify-center rounded-xl border border-[var(--border)]"
+            style={{ background: tint.bg }}
             aria-label={ariaLabel}
           >
-            <span
-              aria-hidden
-              className="text-[10px] font-medium tracking-[0.08em] text-[var(--tr-t-3)] uppercase"
-            >
+            <span aria-hidden className="t-caption">
               {c.label}
             </span>
             <span
               aria-hidden
-              className="mt-1.5 font-mono text-[15px] leading-none font-semibold tabular-nums sm:text-base"
-              style={{
-                color:
-                  colors.tone === 'loss'
-                    ? '#FCA9B5'
-                    : colors.tone === 'gain'
-                      ? '#A4E6A1'
-                      : 'var(--tr-t-2)',
-              }}
+              className="num mt-1.5 text-[15px] leading-none font-medium"
+              style={{ color: tint.text }}
             >
-              {formatPercent(c.percent, { signed: true })}
+              {FR_PCT.format(c.percent)} %
             </span>
           </motion.li>
         );

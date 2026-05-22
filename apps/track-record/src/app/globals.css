@@ -1,124 +1,93 @@
-/* Track-record T0 — Design System "Deep Ink + Lumen Blue".
- * Recettes 2026-05-21 verifiees via WebSearch :
- *   Stripe Connect dark embedded appearance (HEX token source)
- *   Mercury banking surface elevations + shadow recipes
- *   Vercel Geist border philosophy (rgba 0.06-0.08)
- *   Robinhood single-accent discipline (P&L stays gain/loss, not accent)
- *   Myfxbook trust-signal stack (3 verification pills + last-update timestamp)
+/* T1 ultra-minimal premium — palette désaturée Apple/Linear/Vercel dark.
  *
- * Single accent : #0085FF (Lumen Blue). P&L stays gain #3EAE20 / loss #F46B7D
- * — never invent a new red/green that diverges from semantic tokens.
+ * Refonte 2026-05-22 après feedback Eliot : la version T0.6 institutional
+ * verbose avec bleu saturé `#0085FF` + gradients + drop-shadows + halos
+ * était « cheap et moche ». Pivot vers austérité luxueuse :
  *
- * Tailwind 4 source(none) + explicit ../ scan : same anti-pattern guard as
- * apps/web/globals.css (markdown class-extraction breaks Playwright). */
+ *  - Un seul bleu désaturé (`#5B8DEF`) réservé aux data (chart line +
+ *    accent rare). JAMAIS partout.
+ *  - Greys neutres tirant légèrement vers le bleu froid (cool gray).
+ *  - Zéro gradient multi-couleur.
+ *  - Zéro halo permanent.
+ *  - Zéro drop-shadow permanent.
+ *  - Hairline borders 1px true-HEX (pas opacity).
+ *
+ * Source : ui-designer audit 2026-05-22 (Linear / Vercel / Apple HIG /
+ * Mercury / Stripe minimal references).
+ */
 @import 'tailwindcss' source(none);
 @source '..';
 
 :root {
-  /* ─── Surfaces (3 elevations max) ───────────────────────────── */
-  --tr-bg: #0b0e14; /* canvas — slightly cooler than Stripe #14171D */
-  --tr-bg-1: #14171d; /* card / panel base — Stripe Connect colorBackground */
-  --tr-bg-2: #1b1e25; /* hover / popover / elevated — Stripe Connect offsetBg */
-  --tr-bg-3: #232732; /* modal / toast */
+  /* ─── Surfaces (3 niveaux, dark luxueux) ──────────────── */
+  --bg: #0a0a0b; /* page bg — Linear, pas pur `#000` (trop dur OLED) */
+  --surface: #111114; /* cards, panneaux légèrement élevés */
+  --surface-2: #17171b; /* hover state, modals */
 
-  /* ─── Text (3 levels max, off-white never pure #FFF) ─────────── */
-  --tr-t-1: #ededf3; /* primary — Mercury Starlight */
-  --tr-t-2: #c9ced8; /* secondary — Stripe colorText */
-  --tr-t-3: #8c99ad; /* tertiary — Stripe colorSecondaryText, labels/units */
-  --tr-t-disabled: rgba(140, 153, 173, 0.45);
+  /* ─── Bordures hairline 1px true-HEX (nettes, pas opacity) ─ */
+  --border: #1f1f23;
+  --border-strong: #2a2a30;
 
-  /* ─── Borders (Geist philosophy, lower opacity = premium) ─────── */
-  --tr-b-subtle: rgba(255, 255, 255, 0.06);
-  --tr-b-default: #2b3039; /* Stripe Connect colorBorder */
-  --tr-b-strong: rgba(255, 255, 255, 0.14);
+  /* ─── Text (3 niveaux off-white luxueux, pas pur #fff) ─── */
+  --text: #ededef; /* Apple HIG dark labelColor */
+  --text-muted: #8a8a93; /* captions, métadonnées */
+  --text-subtle: #5a5a63; /* micro-text, footer, disclaimers */
 
-  /* ─── ACCENT — Lumen Blue (unique CTA color) ─────────────────── */
-  /* T0.5 a11y fix : darken `--tr-acc` from #0085ff to #0070d9 to meet
-   * WCAG 1.4.3 AA on `white text over accent CTA` (4.13:1 → 5.21:1).
-   * The lighter shade is promoted to `--tr-acc-hi` (hover / decorative
-   * non-text accents such as gradient text + glow rings — 3:1 ✓). */
-  --tr-acc: #0070d9; /* CTA bg with white text → 5.21:1 ✓ AA */
-  --tr-acc-hi: #0085ff; /* Stripe Connect colorPrimary — hover + decorative */
-  --tr-acc-dim: rgba(0, 133, 255, 0.14);
-  --tr-acc-glow: rgba(0, 133, 255, 0.25); /* never above 0.30 — anti-rugpull */
-  --tr-acc-glow-soft: rgba(0, 133, 255, 0.08);
-  --tr-acc-fg: #ffffff; /* text on accent button */
+  /* ─── Accent unique (signature rare, jamais partout) ───── */
+  --accent: #5b8def; /* bleu désaturé HSL 218,79%,65% (PAS #3B82F6 saturé) */
+  --accent-soft: rgba(91, 141, 239, 0.08); /* halo très diffus, fonds chiffres */
+  --accent-edge: rgba(91, 141, 239, 0.18); /* bordure très subtile sur accent */
 
-  /* ─── P&L semantic (NEVER reuse accent for gain) ───────────────── */
-  --tr-gain: #3eae20; /* Stripe Connect success text */
-  --tr-gain-bg: #152207;
-  --tr-gain-border: #20360c;
-  --tr-loss: #f46b7d; /* softer than pure red — long-session friendly */
-  --tr-loss-bg: #420320;
-  --tr-loss-border: #5a1129;
-  --tr-warn: #f27400; /* drawdown threshold breach only */
-  --tr-warn-bg: #2a1304;
+  /* ─── P&L sémantique désaturé (jamais flashy) ───────────── */
+  --positive: #7cb87c; /* Apple Health green dark adapted */
+  --positive-soft: rgba(124, 184, 124, 0.08);
+  --negative: #c87c7c; /* rouge désaturé, jamais `#ef4444` flashy */
+  --negative-soft: rgba(200, 124, 124, 0.08);
 
-  /* ─── Verified / trust signal (reuse gain hue — no new green) ─── */
-  --tr-verified: var(--tr-gain);
-  --tr-verified-bg: var(--tr-gain-bg);
-  --tr-verified-border: var(--tr-gain-border);
+  /* ─── Typographie (Geist Sans only, drop Mono) ──────────── */
+  --font-sans: var(--font-geist-sans), 'Inter', system-ui, sans-serif;
 
-  /* ─── Shadows (Mercury multi-layer — never single-layer) ───────── */
-  --tr-sh-card: 0 4px 24px rgba(0, 0, 0, 0.4);
-  --tr-sh-card-hover: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --tr-sh-cta: 0 0 24px rgba(0, 133, 255, 0.3);
-  --tr-sh-cta-hover: 0 0 32px rgba(0, 133, 255, 0.45);
-  --tr-sh-modal: 0 24px 64px rgba(0, 0, 0, 0.65);
-
-  /* ─── Easings (3 max — pick a direction, stick) ────────────────── */
-  --tr-e-quick: cubic-bezier(0.4, 0, 0.2, 1); /* micro UI */
-  --tr-e-out: cubic-bezier(0.22, 1, 0.36, 1); /* entries (out-expo premium) */
-
-  /* ─── Typography stack ─────────────────────────────────────────── */
-  --tr-font-display: var(--font-geist-sans), 'Inter Display', system-ui, sans-serif;
-  --tr-font-body: var(--font-geist-sans), 'Inter', system-ui, sans-serif;
-  --tr-font-mono:
-    var(--font-geist-mono), 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  /* ─── Easings (1 max, austère) ──────────────────────────── */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @layer base {
   * {
-    border-color: var(--tr-b-subtle);
+    border-color: var(--border);
   }
   html {
     color-scheme: dark;
   }
   body {
-    background-color: var(--tr-bg);
-    color: var(--tr-t-1);
-    font-family: var(--tr-font-body);
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-feature-settings: 'ss01', 'cv11';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     overscroll-behavior-y: none;
   }
 
-  /* Numerics — tabular always. P&L digits never "dance" on update. */
-  .tabular-nums,
+  /* Tabular nums via Geist Sans (drop besoin de Mono).
+   * Appliqué globalement sur chiffres via classe `.num`. */
   .num,
   [data-num] {
     font-feature-settings:
+      'tnum' 1,
       'lnum' 1,
-      'tnum' 1;
-    font-variant-numeric: lining-nums tabular-nums;
+      'ss01' 1;
+    font-variant-numeric: tabular-nums lining-nums;
   }
 
-  /* Focus ring — 2px accent + 2px outer halo (never outline+box-shadow combo). */
+  /* Focus ring sobre (2px accent + 4px offset, pas de glow). */
   :focus-visible {
-    outline: 2px solid var(--tr-acc);
-    outline-offset: 2px;
-    box-shadow: 0 0 0 4px var(--tr-acc-glow);
-    border-radius: 6px;
-  }
-  /* T0.5 a11y fix : CTA buttons with bg=accent need a WHITE focus ring,
-   * otherwise the accent-on-accent ring is invisible. */
-  .tr-cta:focus-visible {
-    outline-color: #ffffff;
-    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+    border-radius: 4px;
   }
 
-  /* Honor prefers-reduced-motion strict (WCAG 2.3.3). */
+  /* Reduced-motion strict (WCAG 2.3.3). */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -131,74 +100,42 @@
   }
 }
 
+/* ────────── Typography utilities (4 niveaux strict) ────────── */
 @layer utilities {
-  .tr-aurora {
-    background:
-      radial-gradient(60% 60% at 20% 0%, var(--tr-acc-glow-soft) 0%, transparent 60%),
-      radial-gradient(50% 50% at 80% 30%, rgba(0, 133, 255, 0.06) 0%, transparent 60%),
-      radial-gradient(40% 40% at 50% 100%, rgba(0, 133, 255, 0.04) 0%, transparent 60%);
+  .t-display {
+    /* hero chiffre (count-up) — 72px medium 500, tracking serré */
+    font-size: clamp(3rem, 5.5vw, 4.5rem);
+    line-height: 1;
+    font-weight: 500;
+    letter-spacing: -0.04em;
   }
-  .tr-glass {
-    background: linear-gradient(180deg, rgba(20, 23, 29, 0.85) 0%, rgba(11, 14, 20, 0.92) 100%);
-    backdrop-filter: saturate(140%) blur(12px);
-    -webkit-backdrop-filter: saturate(140%) blur(12px);
+  .t-h1 {
+    /* H1 page unique — 32px medium */
+    font-size: clamp(1.5rem, 2.5vw, 2rem);
+    line-height: 1.1;
+    font-weight: 500;
+    letter-spacing: -0.02em;
   }
-  .tr-grid {
-    background-image:
-      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-    background-size: 64px 64px;
+  .t-body {
+    /* corps — 15px regular */
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    font-weight: 400;
   }
-}
-
-/* ────────── Ping soft (live indicator, 2s — NOT Tailwind default 1s) ────── */
-@keyframes tr-ping-soft {
-  0% {
-    transform: scale(1);
-    opacity: 0.6;
+  .t-caption {
+    /* caption uppercase tracked — 12px medium */
+    font-size: 0.75rem;
+    line-height: 1.4;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
   }
-  75%,
-  100% {
-    transform: scale(2.4);
-    opacity: 0;
+  .t-micro {
+    /* micro-text, footer, disclaimers */
+    font-size: 0.6875rem;
+    line-height: 1.4;
+    font-weight: 400;
+    color: var(--text-subtle);
   }
-}
-.tr-ping {
-  animation: tr-ping-soft 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-}
-
-/* ────────── Logo halo breathing (idle, 4s — anti-tachycardie) ────────── */
-@keyframes tr-breathe {
-  0%,
-  100% {
-    opacity: 0.55;
-    filter: blur(20px);
-  }
-  50% {
-    opacity: 0.85;
-    filter: blur(28px);
-  }
-}
-.tr-breathe {
-  animation: tr-breathe 5.5s ease-in-out infinite;
-}
-
-/* ────────── Shimmer skeleton (dark base + light shimmer 1.6s) ────────── */
-@keyframes tr-shimmer {
-  from {
-    background-position: 200% 0;
-  }
-  to {
-    background-position: -200% 0;
-  }
-}
-.tr-shimmer {
-  background-image: linear-gradient(
-    100deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.06) 50%,
-    transparent 70%
-  );
-  background-size: 200% 100%;
-  animation: tr-shimmer 1.6s ease-in-out infinite;
 }

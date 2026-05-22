@@ -1,223 +1,127 @@
+import { LogoMark } from '@/components/logo-mark';
 import { AnimatedNumber } from '@/components/animated-number';
-import { KpiCard } from '@/components/kpi-card';
-import { LegalDisclaimer } from '@/components/legal-disclaimer';
-import { SectionHeader } from '@/components/section-header';
+import { EquityCurve } from '@/components/charts/equity-curve';
 import { MonthlyHeatmap } from '@/components/charts/monthly-heatmap';
-import { ChartTabPanel } from '@/components/chart-tab-panel';
 import { TradesTable } from '@/components/trades-table';
-import { ShowYourLosses } from '@/components/show-your-losses';
-import { StatementHeader } from '@/components/statement-header';
-import { MethodologyBand } from '@/components/methodology-band';
-import { CutoverTimeline } from '@/components/cutover-timeline';
-import { FooterAudit } from '@/components/footer-audit';
+import { LegalDisclaimer } from '@/components/legal-disclaimer';
 import {
   TRACK_RECORD_KPIS,
   EQUITY_CURVE,
   MONTHLY_AGGREGATES,
   ODS_MONTHLY_SUMMARIES,
-  INSTRUMENT_AGGREGATES,
   HISTORICAL_TRADES,
   HISTORICAL_YEAR,
 } from '@/lib/data';
-import { bestTrades, worstTrades, bucketByR } from '@/lib/metrics';
-import { formatCount } from '@/lib/format';
+
+const FR_PCT = new Intl.NumberFormat('fr-FR', {
+  signDisplay: 'always',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const FR_DATE_LONG = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+const LAST_UPDATE = new Date('2026-05-21T14:32:00+02:00');
 
 export default function TrackRecordPage() {
   const k = TRACK_RECORD_KPIS;
-  const rBuckets = bucketByR(HISTORICAL_TRADES, 0.5);
-  const best = bestTrades(HISTORICAL_TRADES, 5);
-  const worst = worstTrades(HISTORICAL_TRADES, 5);
   const monthsCount = MONTHLY_AGGREGATES.length;
-  const tradesPerMonth = monthsCount > 0 ? k.closedTrades / monthsCount : 0;
 
   return (
-    <main className="relative overflow-x-hidden">
-      {/* Aurora background bleu lumineux + grid pattern. */}
-      <div
-        aria-hidden
-        className="tr-aurora pointer-events-none absolute inset-x-0 top-0 -z-10 h-[740px]"
-      />
-      <div
-        aria-hidden
-        className="tr-grid pointer-events-none absolute inset-x-0 top-0 -z-10 h-[740px] opacity-20"
-        style={{ maskImage: 'linear-gradient(180deg, black 0%, transparent 80%)' }}
-      />
-
-      {/* ─────────────────── BLOC 1 — Statement header institutionnel ─────────────────── */}
-      <StatementHeader
-        totalPercent={k.totalPercent}
-        closedTrades={k.closedTrades}
-        instruments={INSTRUMENT_AGGREGATES.length}
-        firstTradeAt={k.firstTradeAt}
-        lastTradeAt={k.lastTradeAt}
-        months={monthsCount}
-        maxDrawdownPercent={k.maxDrawdownPercent}
-      />
-
-      {/* ─────────────────── BLOC 2 — KPI strip dense (8 cells, Max DD en position 1 — Bridgewater inversé) ─────────────────── */}
-      <section className="mx-auto max-w-7xl px-5 pb-8 sm:px-7" aria-label="Indicateurs clés">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8 lg:gap-2.5">
-          <KpiCard
-            index={0}
-            label="Drawdown max"
-            value={<AnimatedNumber to={k.maxDrawdownPercent} decimals={1} />}
-            suffix="%"
-            caption="Pire creux peak-to-trough"
-            tone="loss"
-          />
-          <KpiCard
-            index={1}
-            label="R cumulé"
-            value={<AnimatedNumber to={k.totalR} decimals={1} prefix="+" />}
-            suffix="R"
-            caption={`${formatCount(k.closedTrades)} clôturés`}
-            tone="primary"
-          />
-          <KpiCard
-            index={2}
-            label="Win rate"
-            value={<AnimatedNumber to={k.winrate * 100} decimals={1} />}
-            suffix="%"
-            caption={`${formatCount(k.winCount)}W · ${formatCount(k.lossCount)}L · ${formatCount(k.beCount)}BE`}
-            tone="primary"
-          />
-          <KpiCard
-            index={3}
-            label="Profit factor"
-            value={
-              <AnimatedNumber
-                to={Number.isFinite(k.profitFactor) ? k.profitFactor : 99}
-                decimals={2}
-              />
-            }
-            caption="Σ gains / Σ pertes"
-            tone="primary"
-          />
-          <KpiCard
-            index={4}
-            label="Expectancy"
-            value={<AnimatedNumber to={k.expectancyR} decimals={2} prefix="+" />}
-            suffix="R"
-            caption="Van Tharp · R / trade"
-            tone="gain"
-          />
-          <KpiCard
-            index={5}
-            label="Trades / mois"
-            value={<AnimatedNumber to={tradesPerMonth} decimals={1} />}
-            caption="Cadence moyenne documentée"
-            tone="primary"
-          />
-          <KpiCard
-            index={6}
-            label="Instruments"
-            value={<AnimatedNumber to={INSTRUMENT_AGGREGATES.length} decimals={0} />}
-            caption="Distinct instruments traded"
-            tone="primary"
-          />
-          <KpiCard
-            index={7}
-            label="Best streak"
-            value={<AnimatedNumber to={k.bestStreak} decimals={0} />}
-            caption={`Pire série · ${k.worstStreak} L`}
-            tone="primary"
-          />
+    <main className="bg-[var(--bg)] text-[var(--text)]">
+      {/* ─────────────────── Header — logo + nom seul ─────────────────── */}
+      <header className="border-b border-[var(--border)]">
+        <div className="mx-auto flex max-w-[1120px] items-center justify-between px-6 py-5 sm:px-10">
+          <LogoMark height={32} />
+          <span className="t-caption text-[var(--text-muted)]">Performance vérifiée</span>
         </div>
-      </section>
+      </header>
 
-      {/* ─────────────────── BLOC 3 — Méthodologie (4 colonnes Calc / Source / Excl / Audit) ─────────────────── */}
-      <section className="mx-auto max-w-7xl px-5 pb-8 sm:px-7">
-        <MethodologyBand />
-      </section>
-
-      {/* ─────────────────── BLOC 4 — Cutover timeline (historique → live) ─────────────────── */}
-      <section className="mx-auto max-w-7xl px-5 pb-8 sm:px-7">
-        <CutoverTimeline
-          historicalCount={HISTORICAL_TRADES.length}
-          historicalInstruments={INSTRUMENT_AGGREGATES.length}
-          historicalLabel={`Jan – Nov ${HISTORICAL_YEAR}`}
-          cutoverDate="2026-05-21"
-          cutoverLabel="21 mai 2026"
+      {/* ─────────────────── Hero centré : chiffre + période ─────────────────── */}
+      <section className="mx-auto max-w-[1120px] px-6 pt-24 pb-16 text-center sm:px-10 sm:pt-32 sm:pb-24">
+        <h1 className="t-h1 text-[var(--text-muted)]">Performance cumulée</h1>
+        <div className="mt-6">
+          <span className="t-display text-[var(--text)]">
+            <AnimatedNumber to={k.totalPercent} decimals={1} prefix="+" suffix=" %" />
+          </span>
+        </div>
+        <div
+          aria-hidden
+          className="mx-auto mt-8 h-px w-12"
+          style={{ background: 'var(--accent)' }}
         />
+        <p className="t-body mx-auto mt-6 max-w-md text-[var(--text-muted)]">
+          Sur {monthsCount} mois — {HISTORICAL_YEAR}. {k.closedTrades} trades publiés en direct,
+          avant exécution.
+        </p>
       </section>
 
-      {/* ─────────────────── BLOC 5 — Main grid : ChartTabs (left 65%) + Sidebar (right 35%) ─────────────────── */}
-      <section className="mx-auto max-w-7xl px-5 pb-10 sm:px-7">
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-5">
-          <div className="lg:col-span-8">
-            <ChartTabPanel
-              equityCurve={EQUITY_CURVE}
-              rBuckets={rBuckets}
-              instruments={INSTRUMENT_AGGREGATES}
-            />
+      {/* ─────────────────── Courbe equity centrée ─────────────────── */}
+      <section className="mx-auto max-w-[1120px] px-6 pb-24 sm:px-10">
+        <EquityCurve data={EQUITY_CURVE} height={320} />
+      </section>
+
+      {/* ─────────────────── 3 chiffres inline (Gain / Recul / Trades gagnants) ─────────────────── */}
+      <section aria-label="Indicateurs clés" className="mx-auto max-w-[1120px] px-6 pb-24 sm:px-10">
+        <div className="grid grid-cols-1 gap-12 sm:grid-cols-3 sm:gap-24">
+          <div className="text-center sm:text-left">
+            <div className="t-caption">Performance cumulée</div>
+            <div className="num mt-2 text-2xl font-medium text-[var(--positive)] sm:text-[28px]">
+              {FR_PCT.format(k.totalPercent)} %
+            </div>
           </div>
-          <aside className="space-y-5 lg:col-span-4">
-            <section className="rounded-xl border border-[var(--tr-b-default)] bg-[var(--tr-bg-1)] p-4 sm:p-5">
-              <div className="mb-3 flex items-baseline justify-between gap-4">
-                <h2 className="text-base font-semibold tracking-tight text-[var(--tr-t-1)]">
-                  Performance mensuelle · {HISTORICAL_YEAR}
-                </h2>
-                <span className="text-[10px] font-medium tracking-[0.08em] text-[var(--tr-t-3)] uppercase">
-                  {monthsCount} mois
-                </span>
-              </div>
-              <MonthlyHeatmap
-                data={MONTHLY_AGGREGATES}
-                odsSummaries={ODS_MONTHLY_SUMMARIES}
-                year={HISTORICAL_YEAR}
-              />
-              <p className="mt-3 text-[11px] leading-relaxed text-[var(--tr-t-3)]">
-                Source verbatim ODS · Avril affiché en perte avec la même prégnance que les mois
-                positifs.
-              </p>
-            </section>
-            <section className="rounded-xl border border-[var(--tr-b-default)] bg-[var(--tr-bg-1)] p-4 sm:p-5">
-              <div className="mb-3 flex items-baseline justify-between gap-4">
-                <h2 className="text-base font-semibold tracking-tight text-[var(--tr-t-1)]">
-                  Top 5 par R-multiple
-                </h2>
-                <span className="text-[10px] font-medium tracking-[0.08em] text-[var(--tr-t-3)] uppercase">
-                  Pires & meilleurs
-                </span>
-              </div>
-              <ShowYourLosses bestTrades={best} worstTrades={worst} />
-              <p className="mt-3 text-[11px] leading-relaxed text-[var(--tr-t-3)]">
-                Pertes et gains affichés côte-à-côte · anti-cherrypick par construction.
-              </p>
-            </section>
-          </aside>
+          <div className="text-center sm:text-left">
+            <div className="t-caption">Recul maximum</div>
+            <div className="num mt-2 text-2xl font-medium text-[var(--negative)] sm:text-[28px]">
+              {FR_PCT.format(k.maxDrawdownPercent)} %
+            </div>
+          </div>
+          <div className="text-center sm:text-left">
+            <div className="t-caption">Trades gagnants</div>
+            <div className="num mt-2 text-2xl font-medium text-[var(--text)] sm:text-[28px]">
+              {(k.winrate * 100).toFixed(0).replace('.', ',')} %
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ─────────────────── BLOC 6 — Trade-by-trade table (audit trail) ─────────────────── */}
-      <section className="mx-auto max-w-7xl px-5 pb-10 sm:px-7">
-        <SectionHeader
-          eyebrow={`${formatCount(HISTORICAL_TRADES.length)} trades · ${monthsCount} mois · ${INSTRUMENT_AGGREGATES.length} instruments`}
-          title="Journal trade-par-trade · audit trail"
-          description={
-            <>
-              Aucun trade retiré. Filtre par résultat ci-dessous. Pertes en{' '}
-              <span className="text-[var(--tr-loss)]">rouge</span>, gains en{' '}
-              <span className="text-[var(--tr-gain)]">vert</span>, BE en gris — convention finance
-              respectée.
-            </>
-          }
+      {/* ─────────────────── Heatmap mensuel ─────────────────── */}
+      <section className="mx-auto max-w-[1120px] px-6 pb-24 sm:px-10">
+        <h2 className="t-h1 mb-8 text-[var(--text)]">Mois par mois</h2>
+        <MonthlyHeatmap
+          data={MONTHLY_AGGREGATES}
+          odsSummaries={ODS_MONTHLY_SUMMARIES}
+          year={HISTORICAL_YEAR}
         />
-        <TradesTable trades={HISTORICAL_TRADES} initialVisible={10} />
+        <p className="t-micro mt-6">
+          Le mois en recul est affiché avec la même prégnance que les mois positifs.
+        </p>
       </section>
 
-      {/* ─────────────────── BLOC 7 — Disclaimer AMF complet ─────────────────── */}
-      <section id="legal" className="mx-auto max-w-7xl px-5 pb-12 sm:px-7">
+      {/* ─────────────────── Trades table ─────────────────── */}
+      <section className="mx-auto max-w-[1120px] px-6 pb-24 sm:px-10">
+        <h2 className="t-h1 mb-2 text-[var(--text)]">Liste des trades</h2>
+        <p className="t-body mb-8 text-[var(--text-muted)]">
+          {k.closedTrades} trades clôturés, dans l&apos;ordre chronologique. Aucun trade retiré.
+        </p>
+        <TradesTable trades={HISTORICAL_TRADES} initialVisible={12} />
+      </section>
+
+      {/* ─────────────────── Footer minimal (1 ligne dernière maj + disclaimer condensé) ─────────────────── */}
+      <footer className="mx-auto max-w-[1120px] px-6 pt-12 pb-16 sm:px-10">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <span className="t-micro">
+            Mis à jour le{' '}
+            <time dateTime={LAST_UPDATE.toISOString()}>{FR_DATE_LONG.format(LAST_UPDATE)}</time>.
+          </span>
+          <span className="t-micro">© Fxmily {new Date().getFullYear()}</span>
+        </div>
         <LegalDisclaimer />
-      </section>
-
-      {/* ─────────────────── BLOC 8 — Footer audit Bloomberg-grade ─────────────────── */}
-      <FooterAudit
-        closedTrades={k.closedTrades}
-        totalTrades={HISTORICAL_TRADES.length}
-        months={monthsCount}
-        instruments={INSTRUMENT_AGGREGATES.length}
-      />
+      </footer>
     </main>
   );
 }

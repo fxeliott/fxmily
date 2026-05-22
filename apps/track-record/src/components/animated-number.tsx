@@ -15,17 +15,18 @@ interface AnimatedNumberProps {
   decimals?: number;
   prefix?: string;
   suffix?: string;
-  /** Animation duration in seconds. Default 1.6s — sweet spot (Stripe/Mercury). */
+  /** Animation duration in seconds. Default 1.6s. */
   duration?: number;
   className?: string;
 }
 
 /**
- * Count-up KPI hero pattern (Motion docs 2026).
- * - `tabular-nums` indispensable pour éviter layout shift digit par digit.
- * - `once: true` — never re-count on scroll back (signaled as bug).
- * - ease-out exponentielle [0.22, 1, 0.36, 1] = arrive vite puis se pose.
- * - Reduce-motion = render final value directly (WCAG 2.3.3).
+ * Count-up T1 — utilisé UNE seule fois sur le chiffre hero (effet rare =
+ * effet puissant, ui-designer §8). Geist Sans tabular-nums via classe `.num`
+ * (drop Mono — trop ingénieur).
+ *
+ * `once: true` + `amount: 0.5` : se déclenche une seule fois quand le chiffre
+ * entre dans 50 % du viewport. Reduced-motion → valeur finale instant.
  */
 export function AnimatedNumber({
   to,
@@ -62,7 +63,7 @@ export function AnimatedNumber({
   }, [inView, to, duration, reduced, motionValue]);
 
   return (
-    <motion.span ref={ref} className={`tabular-nums ${className}`}>
+    <motion.span ref={ref} className={`num ${className}`}>
       {formatted}
     </motion.span>
   );

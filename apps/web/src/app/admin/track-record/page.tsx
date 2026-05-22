@@ -226,7 +226,7 @@ function FilterChip({ href, label, active }: FilterChipProps) {
         'rounded-pill inline-flex h-9 items-center border px-3 text-xs font-medium transition-all',
         active
           ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]'
-          : 'border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-2)] hover:border-[var(--b-acc)]',
+          : 'border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-2)] hover:border-[var(--b-acc)] hover:bg-[var(--bg-2)]',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
       )}
     >

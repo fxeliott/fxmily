@@ -1,0 +1,204 @@
+/* Track-record T0 — Design System "Deep Ink + Lumen Blue".
+ * Recettes 2026-05-21 verifiees via WebSearch :
+ *   Stripe Connect dark embedded appearance (HEX token source)
+ *   Mercury banking surface elevations + shadow recipes
+ *   Vercel Geist border philosophy (rgba 0.06-0.08)
+ *   Robinhood single-accent discipline (P&L stays gain/loss, not accent)
+ *   Myfxbook trust-signal stack (3 verification pills + last-update timestamp)
+ *
+ * Single accent : #0085FF (Lumen Blue). P&L stays gain #3EAE20 / loss #F46B7D
+ * — never invent a new red/green that diverges from semantic tokens.
+ *
+ * Tailwind 4 source(none) + explicit ../ scan : same anti-pattern guard as
+ * apps/web/globals.css (markdown class-extraction breaks Playwright). */
+@import 'tailwindcss' source(none);
+@source '..';
+
+:root {
+  /* ─── Surfaces (3 elevations max) ───────────────────────────── */
+  --tr-bg: #0b0e14; /* canvas — slightly cooler than Stripe #14171D */
+  --tr-bg-1: #14171d; /* card / panel base — Stripe Connect colorBackground */
+  --tr-bg-2: #1b1e25; /* hover / popover / elevated — Stripe Connect offsetBg */
+  --tr-bg-3: #232732; /* modal / toast */
+
+  /* ─── Text (3 levels max, off-white never pure #FFF) ─────────── */
+  --tr-t-1: #ededf3; /* primary — Mercury Starlight */
+  --tr-t-2: #c9ced8; /* secondary — Stripe colorText */
+  --tr-t-3: #8c99ad; /* tertiary — Stripe colorSecondaryText, labels/units */
+  --tr-t-disabled: rgba(140, 153, 173, 0.45);
+
+  /* ─── Borders (Geist philosophy, lower opacity = premium) ─────── */
+  --tr-b-subtle: rgba(255, 255, 255, 0.06);
+  --tr-b-default: #2b3039; /* Stripe Connect colorBorder */
+  --tr-b-strong: rgba(255, 255, 255, 0.14);
+
+  /* ─── ACCENT — Lumen Blue (unique CTA color) ─────────────────── */
+  /* T0.5 a11y fix : darken `--tr-acc` from #0085ff to #0070d9 to meet
+   * WCAG 1.4.3 AA on `white text over accent CTA` (4.13:1 → 5.21:1).
+   * The lighter shade is promoted to `--tr-acc-hi` (hover / decorative
+   * non-text accents such as gradient text + glow rings — 3:1 ✓). */
+  --tr-acc: #0070d9; /* CTA bg with white text → 5.21:1 ✓ AA */
+  --tr-acc-hi: #0085ff; /* Stripe Connect colorPrimary — hover + decorative */
+  --tr-acc-dim: rgba(0, 133, 255, 0.14);
+  --tr-acc-glow: rgba(0, 133, 255, 0.25); /* never above 0.30 — anti-rugpull */
+  --tr-acc-glow-soft: rgba(0, 133, 255, 0.08);
+  --tr-acc-fg: #ffffff; /* text on accent button */
+
+  /* ─── P&L semantic (NEVER reuse accent for gain) ───────────────── */
+  --tr-gain: #3eae20; /* Stripe Connect success text */
+  --tr-gain-bg: #152207;
+  --tr-gain-border: #20360c;
+  --tr-loss: #f46b7d; /* softer than pure red — long-session friendly */
+  --tr-loss-bg: #420320;
+  --tr-loss-border: #5a1129;
+  --tr-warn: #f27400; /* drawdown threshold breach only */
+  --tr-warn-bg: #2a1304;
+
+  /* ─── Verified / trust signal (reuse gain hue — no new green) ─── */
+  --tr-verified: var(--tr-gain);
+  --tr-verified-bg: var(--tr-gain-bg);
+  --tr-verified-border: var(--tr-gain-border);
+
+  /* ─── Shadows (Mercury multi-layer — never single-layer) ───────── */
+  --tr-sh-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --tr-sh-card-hover: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --tr-sh-cta: 0 0 24px rgba(0, 133, 255, 0.3);
+  --tr-sh-cta-hover: 0 0 32px rgba(0, 133, 255, 0.45);
+  --tr-sh-modal: 0 24px 64px rgba(0, 0, 0, 0.65);
+
+  /* ─── Easings (3 max — pick a direction, stick) ────────────────── */
+  --tr-e-quick: cubic-bezier(0.4, 0, 0.2, 1); /* micro UI */
+  --tr-e-out: cubic-bezier(0.22, 1, 0.36, 1); /* entries (out-expo premium) */
+
+  /* ─── Typography stack ─────────────────────────────────────────── */
+  --tr-font-display: var(--font-geist-sans), 'Inter Display', system-ui, sans-serif;
+  --tr-font-body: var(--font-geist-sans), 'Inter', system-ui, sans-serif;
+  --tr-font-mono:
+    var(--font-geist-mono), 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--tr-b-subtle);
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    background-color: var(--tr-bg);
+    color: var(--tr-t-1);
+    font-family: var(--tr-font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+  }
+
+  /* Numerics — tabular always. P&L digits never "dance" on update. */
+  .tabular-nums,
+  .num,
+  [data-num] {
+    font-feature-settings:
+      'lnum' 1,
+      'tnum' 1;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+
+  /* Focus ring — 2px accent + 2px outer halo (never outline+box-shadow combo). */
+  :focus-visible {
+    outline: 2px solid var(--tr-acc);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--tr-acc-glow);
+    border-radius: 6px;
+  }
+  /* T0.5 a11y fix : CTA buttons with bg=accent need a WHITE focus ring,
+   * otherwise the accent-on-accent ring is invisible. */
+  .tr-cta:focus-visible {
+    outline-color: #ffffff;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
+  }
+
+  /* Honor prefers-reduced-motion strict (WCAG 2.3.3). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .tr-aurora {
+    background:
+      radial-gradient(60% 60% at 20% 0%, var(--tr-acc-glow-soft) 0%, transparent 60%),
+      radial-gradient(50% 50% at 80% 30%, rgba(0, 133, 255, 0.06) 0%, transparent 60%),
+      radial-gradient(40% 40% at 50% 100%, rgba(0, 133, 255, 0.04) 0%, transparent 60%);
+  }
+  .tr-glass {
+    background: linear-gradient(180deg, rgba(20, 23, 29, 0.85) 0%, rgba(11, 14, 20, 0.92) 100%);
+    backdrop-filter: saturate(140%) blur(12px);
+    -webkit-backdrop-filter: saturate(140%) blur(12px);
+  }
+  .tr-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+}
+
+/* ────────── Ping soft (live indicator, 2s — NOT Tailwind default 1s) ────── */
+@keyframes tr-ping-soft {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  75%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+.tr-ping {
+  animation: tr-ping-soft 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* ────────── Logo halo breathing (idle, 4s — anti-tachycardie) ────────── */
+@keyframes tr-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    filter: blur(20px);
+  }
+  50% {
+    opacity: 0.85;
+    filter: blur(28px);
+  }
+}
+.tr-breathe {
+  animation: tr-breathe 5.5s ease-in-out infinite;
+}
+
+/* ────────── Shimmer skeleton (dark base + light shimmer 1.6s) ────────── */
+@keyframes tr-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.tr-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: tr-shimmer 1.6s ease-in-out infinite;
+}

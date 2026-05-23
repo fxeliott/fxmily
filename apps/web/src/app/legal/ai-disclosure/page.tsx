@@ -37,13 +37,13 @@ export default function AIDisclosurePage(): React.ReactElement {
     <LegalLayout
       eyebrow="Transparence IA"
       title="Comment Fxmily utilise l'IA"
-      lastUpdatedIso="2026-05-14"
+      lastUpdatedIso="2026-05-23"
       summary={
         <>
           Fxmily utilise une IA générative (Claude, Anthropic) pour{' '}
-          <strong>un seul cas d&apos;usage</strong> : rédiger ton rapport hebdomadaire à partir de
-          tes propres données. Pas de conseil de trade, pas de décision autonome, pas de
-          remplacement du coaching humain.
+          <strong>deux cas d&apos;usage</strong> : rédiger ton rapport hebdomadaire et ton débrief
+          mensuel à partir de tes propres données. Pas de conseil de trade, pas de décision
+          autonome, pas de remplacement du coaching humain.
         </>
       }
     >
@@ -65,14 +65,18 @@ export default function AIDisclosurePage(): React.ReactElement {
           <a href="/legal/privacy">Politique de confidentialité §3</a> pour les sous-traitants).
         </li>
         <li>
-          <strong>Usage unique</strong> — rédaction du <em>rapport hebdomadaire</em> que tu reçois
-          chaque dimanche par email et qui s&apos;affiche dans l&apos;onglet Admin pour Eliot. Le
-          rapport synthétise <strong>tes propres données</strong> (trades de la semaine, check-ins,
-          notes) en un texte lisible.
+          <strong>Deux usages</strong> — (a) rédaction du <em>rapport hebdomadaire</em> que tu
+          reçois chaque dimanche par email et qui s&apos;affiche dans l&apos;onglet Admin pour Eliot
+          ; (b) rédaction du <em>débrief mensuel</em> (V1.4, SPEC §25.4) consultable sur ta page{' '}
+          <a href="/debrief-mensuel">/debrief-mensuel</a> et dans l&apos;onglet Admin (
+          <code>?tab=monthly-debrief</code>). Les deux synthétisent{' '}
+          <strong>tes propres données</strong> (trades, check-ins, notes, progression mois sur mois)
+          en un texte lisible.
         </li>
         <li>
-          <strong>Volume</strong> — 1 appel par utilisateur par semaine, plafonné à $5 de tokens par
-          run (garde-fou technique côté Eliot pour éviter toute dérive de coût).
+          <strong>Volume</strong> — 1 appel par utilisateur par semaine (rapport hebdo) + 1 appel
+          par utilisateur par mois (débrief mensuel), plafonnés à $5 de tokens par run (garde-fou
+          technique côté Eliot pour éviter toute dérive de coût).
         </li>
       </ul>
 
@@ -144,10 +148,11 @@ export default function AIDisclosurePage(): React.ReactElement {
           humaine.
         </li>
         <li>
-          <strong>Droit de refuser le contenu IA</strong> — tu peux désactiver l&apos;envoi du
-          rapport hebdomadaire dans{' '}
-          <a href="/account/notifications">tes préférences de notifications</a>. Le rapport ne sera
-          plus généré, ni envoyé, ni stocké pour toi.
+          <strong>Droit de refuser le contenu IA</strong> — tu peux désactiver indépendamment
+          l&apos;envoi du rapport hebdomadaire et/ou du débrief mensuel dans{' '}
+          <a href="/account/notifications">tes préférences de notifications</a> (toggles{' '}
+          <code>weekly_report_ready</code> et <code>monthly_debrief_ready</code>). Le contenu
+          désactivé ne sera plus généré, ni envoyé, ni stocké pour toi.
         </li>
         <li>
           <strong>Droit de signaler une erreur</strong> — si un rapport contient une affirmation

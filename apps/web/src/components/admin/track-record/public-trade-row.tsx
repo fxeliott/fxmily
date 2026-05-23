@@ -124,13 +124,21 @@ export function PublicTradeRow({ trade }: PublicTradeRowProps) {
   );
 }
 
+// Phase H+6 perf-profiler #5 — hoist `Intl.DateTimeFormat` au module level.
+// Avant : `new Intl.DateTimeFormat(...)` à chaque appel `formatDate` → 1×
+// instantiation per row dans la list. À 139 rows V1 = ~50ms surcoût render
+// (Intl est expensive à instancier, cheap à utiliser). Hoisting carbone le
+// pattern J8 `apps/web/src/app/review/page.tsx` + `app/reflect/page.tsx`
+// (cf. CLAUDE.md V1.9 TIER F perf section).
+const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+});
+
 function formatDate(iso: string): string {
   try {
-    return new Intl.DateTimeFormat('fr-FR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }).format(new Date(iso));
+    return DATE_FMT.format(new Date(iso));
   } catch {
     return iso.slice(0, 10);
   }

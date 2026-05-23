@@ -3796,7 +3796,18 @@ Metadata **PII-free strict** : `{publicTradeId, ordinal, segment, instrument, st
 - **Test boundary tight `1e309`** (MED-5) — **shippé Phase H+3.1** commit `0f214f8` (`actions.test.ts:166-180`).
 - **Rollback recipe documenté** : `docs/runbook-hetzner-deploy.md` §21 (T5 track-record).
 
-#### Backlog V1.x — Phase H+4 stress-test deferred (non-bloquant V1)
+#### Phase H+5 + H+6 shipped (round 5-6 audit-driven hardening)
+
+Round 5 (Phase H+5) : 2 sub-agents orthogonaux (`a764abee43e6775ab` code-reviewer pages + `aeb18b923eeeca777` api-designer Server Actions). Round 6 (Phase H+6) : `acd3f906265728a4d` performance-profiler — angle perf jamais audit pour T5.
+
+- **TIER 1 #1 timezone drift** — vrai bug data-corruption silencieux : `<input type="datetime-local">` pre-fill Paris wall-clock → admin re-submit sans toucher → `z.coerce.date()` parsé en LOCAL serveur runtime → sur Hetzner UTC = drift +2h cumulatif. Fix par helper `parisLocalDatetimeToUtc` + `z.preprocess` (`Intl.DateTimeFormat` DST-aware) sur `dateTimeSchema`. **+9 tests** (CEST + CET + Z + Date + seconds + round-trip + DST spring-forward gap + DST fall-back overlap + year boundary CET winter).
+- **Sentry observability wire** — 6× `console.error('[admin.track-record.X] failed')` → `reportError('admin.public_trade.X', err)` canon J10 Phase B. Scope naming aligné taxonomy audit slugs.
+- **`tagsField` defense-in-depth** — retourne `string[] | undefined` quand fd absent (symétrie `strFieldNullable`). Protège `@invariant shapeFormDataForUpdate` régression future.
+- **`loading.tsx` padding align** — `py-8` → `pt-6 pb-24 md:pt-10` cohérent `page.tsx`. Stop layout shift ~16px mobile.
+- **`updatePublicTrade` Prisma mock tests** (Phase H+5 close V2-defer gap) — **+7 tests TDD** : NotFound, merge undefined-skip vs null-clear, Phase H+4 open invariant service-side, resultPercent SSOT recompute, Decimal wrap.
+- **Hoist `Intl.DateTimeFormat` au module level** (Phase H+6 perf #5) — `public-trade-row.tsx:127-137` carbone pattern J8 review/reflect. ~50ms saving render list à 139 trades V1, ~360ms à 1000 trades V2.
+
+#### Backlog V1.x — Phase H+4 stress-test + H+6 perf-profiler deferred (non-bloquant V1)
 
 Sub-agent stress-test FRESH `aef24aa0602d3cec0` (Phase H+3 closeout, angle ORTHOGONAL aux 3 rounds précédents) trouve **1 TIER 1 vrai bug latent** + **2 TIER 2 UX gotchas réels** + **4 TIER 3 V1.x defer**. Tous TIER 1 + TIER 2 fix in-session Phase H+4 commit `9e9fc85` ; TIER 3 listés ci-dessous :
 
@@ -3804,3 +3815,13 @@ Sub-agent stress-test FRESH `aef24aa0602d3cec0` (Phase H+3 closeout, angle ORTHO
 - **P2002 `ordinal_taken` UI retry button** (stress-test #5) — si 2 tabs ouverts par Eliot soumettent simultanément avec auto-derive `ordinal`, le 2ᵉ reçoit `fieldErrors: { ordinal: "Ordinal N déjà utilisé." }`. UX V1 = message brut acceptable + admin resubmit manuellement. V1.x polish = bouton "Retry avec ordinal auto" qui clear l'input + resoumet.
 - **`setPublished` audit log spam idempotence** (stress-test #6) — `actions.ts:249-255` émet `admin.public_trade.published` à chaque clic, même si le trade est déjà dans l'état target. `setPublished` service ne short-circuit pas. À 5 clics consécutifs = 5 audit rows identiques. Audit retention 90j J10 absorbe, mais à corriger si UI history view les consomme. Fix : `setPublished` retourne `wasChanged: boolean` ; action skip `logAudit` si `!wasChanged`.
 - **`dateTimeSchema` calendar validity check** (stress-test #7) — `z.coerce.date()` retourne "Invalid Date" générique sur `2026-13-01`. Cohérent V1 mais message d'erreur Zod brut ("Invalid date") au lieu de "Date invalide.". V1.x polish = `.refine((d) => !isNaN(d.getTime()), { message: 'Date invalide.' })` custom error map. Pattern carbone `localDateSchema` checkin J5.
+
+#### Backlog V2-defer — Phase H+6 perf-profiler items
+
+Sub-agent perf-profiler (`acd3f906265728a4d`) verdict V1 SHIP-ACCEPTABLE — 0 TIER 1 perf bug à 139 trades. Items reclassés V2 quand cohort dépasse 500 trades :
+
+- **`listPublicTrades` slim select sur list view** — Prisma retourne TOUTES les colonnes incluant `notes` (Text 2000 chars), `setup`, `screenshotUrl` qui ne sont pas consommés par `<PublicTradeRow>`. À 1000 trades × ~500 bytes notes moyennes = ~500 KB transférés inutilement Server→hydration. Fix V2 couplé pagination : `select` explicit qui omit `notes`/`screenshotUrl`/`source` + nouveau type `SerializedPublicTradeListItem`. ~1h dev couplé pagination.
+- **`getCatalogStats` 7× COUNT → single GROUP BY FILTER** — 7 queries parallèles via `Promise.all` à 139 = ~7ms total. À 10 000 trades V3 = 7× sequential scan partial-aggregate. Fix via Postgres `COUNT(*) FILTER (WHERE ...)` single scan ~5× speedup. V2 micro-optim, V1 noise.
+- **`_count: { partials }` sub-COUNT par row** — Prisma `_count` génère un `LEFT JOIN LATERAL`. Index `(publicTradeId, closedAt asc)` couvre déjà. À 1000 trades × 5 partials = 5000 rows scannées = OK. V2 si EXPLAIN ANALYZE flag.
+- **`logAudit` await blocant Server Action** — `await logAudit(...)` ajoute ~5-20ms latency DB par mutation. Cohérent pattern J5/J6 (changer T5 seul = inconsistance). V2 candidate `unstable_after` Next.js 16 pour audits non-critiques.
+- **`revalidateTag` granularité** — actions utilisent `revalidatePath('/admin/track-record')` qui invalide page entière. V2 `revalidateTag('public-trade:list')` + `fetch(..., { next: { tags } })` pour révalidation granulaire. À 1000+ rows.

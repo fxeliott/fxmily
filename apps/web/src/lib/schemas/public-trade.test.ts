@@ -885,4 +885,56 @@ describe('publicTradeCreateSchema — Europe/Paris timezone (Phase H+5 TIER 1)',
       expect(r.data.enteredAt.getTime()).toBe(original.getTime());
     }
   });
+
+  // Phase H+6 DST edge cases — pin l'algorithme déterministe.
+  // Le wall-clock `02:30` est ambigu autour des transitions DST européennes :
+  //   - Spring forward (last Sun of March) : `02:30` n'existe pas (clocks
+  //     jump 02:00 CET → 03:00 CEST). Algorithme produit une interprétation
+  //     "best-effort" déterministe (pre-jump CET).
+  //   - Fall back (last Sun of October) : `02:30` happens TWICE (02:30 CEST
+  //     puis 02:30 CET). Algorithme picks le post-jump CET (later occurrence).
+  // Ces tests pinnent l'output exact pour qu'une régression de l'algorithme
+  // soit détectée immédiatement.
+
+  it('DST spring-forward gap : Mar 29 2026 02:30 (wall-clock skipped) produces deterministic Date', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: '2026-03-29T02:30',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      // Algorithm output: naive UTC `02:30Z` interprété comme CEST (post-jump
+      // car la transition CET→CEST a déjà eu lieu à UTC 01:00). Offset = +2h.
+      // Result = `00:30Z` = `01:30 CET` (pre-jump, the non-existent 02:30
+      // collapse vers la dernière minute valide pre-jump).
+      expect(r.data.enteredAt.toISOString()).toBe('2026-03-29T00:30:00.000Z');
+    }
+  });
+
+  it('DST fall-back overlap : Oct 25 2026 02:30 (wall-clock happens twice) picks CET (post-jump)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: '2026-10-25T02:30',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      // Algorithm output: naive UTC `02:30Z` interprété comme CET (post-jump
+      // car la transition CEST→CET a déjà eu lieu à UTC 01:00). Offset = +1h.
+      // Result = `01:30Z` = `02:30 CET` (la 2e occurrence du wall-clock 02:30).
+      expect(r.data.enteredAt.toISOString()).toBe('2026-10-25T01:30:00.000Z');
+    }
+  });
+
+  it('Year boundary CET winter : Jan 1 2026 00:00 Paris → 2025-12-31 23:00Z', () => {
+    // Edge case anniversaire : admin saisit midnight Paris start-of-year en
+    // hiver (CET UTC+1). UTC instant = -1h = last day of previous year.
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: '2026-01-01T00:00',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.enteredAt.toISOString()).toBe('2025-12-31T23:00:00.000Z');
+    }
+  });
 });

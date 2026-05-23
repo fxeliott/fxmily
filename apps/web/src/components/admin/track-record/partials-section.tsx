@@ -345,15 +345,23 @@ function inputCls(hasError: boolean): string {
   );
 }
 
+// Phase H+8 — hoist `Intl.DateTimeFormat` au module level (pattern Phase H+6
+// carbone `public-trade-row.tsx`) ET ajout `timeZone: 'Europe/Paris'` explicite
+// (vs runtime-local TZ qui produirait UTC display sur Hetzner prod → display
+// "22/05/2026 22:00" pour un partial closed Paris 00:00 May 23). Cohérent
+// SPEC §16 + closes le gap raté lors de Phase H+6 perf hoisting / H+8 TZ fix.
+const DATETIME_FMT = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: 'Europe/Paris',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 function formatDateTime(iso: string): string {
   try {
-    return new Intl.DateTimeFormat('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(iso));
+    return DATETIME_FMT.format(new Date(iso));
   } catch {
     return iso.slice(0, 16).replace('T', ' ');
   }

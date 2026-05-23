@@ -130,7 +130,14 @@ export function PublicTradeRow({ trade }: PublicTradeRowProps) {
 // (Intl est expensive à instancier, cheap à utiliser). Hoisting carbone le
 // pattern J8 `apps/web/src/app/review/page.tsx` + `app/reflect/page.tsx`
 // (cf. CLAUDE.md V1.9 TIER F perf section).
+//
+// **Phase H+8 — `timeZone: 'Europe/Paris'` explicite** (SPEC §16 fuseau projet).
+// Avant : `Intl.DateTimeFormat` sans `timeZone` utilisait le runtime local
+// (Hetzner prod = UTC). Conséquence : trade Paris 1h du matin May 23
+// (stocké UTC `2026-05-22T23:00Z`) s'affichait "22 mai" au lieu de "23 mai"
+// boundary. Fix : timezone explicite garantit Paris display partout.
 const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: 'Europe/Paris',
   day: '2-digit',
   month: 'short',
   year: 'numeric',

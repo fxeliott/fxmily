@@ -11,6 +11,8 @@ import {
 import { Alert } from '@/components/alert';
 import { Btn } from '@/components/ui/btn';
 import type { SerializedPublicTrade } from '@/lib/admin/public-trade-service';
+
+import { toDatetimeLocal } from './datetime-paris';
 import {
   PUBLIC_TRADE_SEGMENTS,
   PUBLIC_TRADE_STATUSES,
@@ -492,25 +494,17 @@ function selectCls(hasError: boolean): string {
 // =============================================================================
 
 /**
- * Convertit un ISO string UTC en valeur `datetime-local` (YYYY-MM-DDTHH:mm)
- * pour le default-value d'un `<input type="datetime-local">`. Le browser
- * interprète la valeur comme local time et c'est le navigateur qui re-convertit
- * en UTC à submit. Pour `null`/`undefined` → '' (input vide).
+ * Convertit un ISO string UTC en valeur `datetime-local` (YYYY-MM-DDTHH:mm).
+ *
+ * Phase H+8 — déléguée à `./datetime-paris` qui utilise `Intl.DateTimeFormat`
+ * avec `timeZone: 'Europe/Paris'` explicite (vs `d.getTimezoneOffset()`
+ * browser-dépendant). Fix le bug latent où un admin en TZ ≠ Paris (voyage,
+ * SSR runtime UTC) produisait un wall-clock browser-local que le server
+ * preprocess Phase H+5 interpretait comme Paris → drift cumulatif.
+ *
+ * Cohérent SPEC §16 "Fuseau Europe/Paris" — client + server alignés sur
+ * Paris by construction.
  */
-function toDatetimeLocal(iso: string | null | undefined): string {
-  if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '';
-    // YYYY-MM-DDTHH:mm — slice 16 du format ISO. On utilise local time
-    // (admin pense en heure de Paris, pas UTC) via offset correction.
-    const tzOffsetMs = d.getTimezoneOffset() * 60_000;
-    const local = new Date(d.getTime() - tzOffsetMs);
-    return local.toISOString().slice(0, 16);
-  } catch {
-    return '';
-  }
-}
 
 function rootErrorMessage(error: AdminTrackRecordActionState['error']): string {
   switch (error) {

@@ -55,7 +55,7 @@ Fxmily n'est ni un CIF (Conseiller en Investissement Financier) ni un service r�
 │       ├── components.json  # shadcn/ui config
 │       ├── next.config.ts   # Headers de sécurité + typedRoutes
 │       └── prisma.config.ts # Prisma 7 connection config
-├── docs/                    # env-template.md, jalon-1-prep.md, runbooks
+├── docs/                    # env-template.md, runbooks, archive/ (jalon briefings historiques)
 ├── packages/                # Packages partagés (réservé V2)
 ├── CLAUDE.md                # Conventions Claude Code
 ├── SPEC.md                  # Spec produit (source de vérité)

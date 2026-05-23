@@ -879,7 +879,6 @@ discipline = planRespect(30) + hedgeRespect(20) + eveningPlan(20) + intentionFil
 - SHARE module (cohort heatmap NPS) — reporter post-PMF ≥80 membres
 - CSP nonces (refactor proxy.ts edge)
 - JWT tokenVersion révocation immédiate
-- Login rate-limit credential-stuffing
 - Service Worker offline strategy
 - Listing cursor pagination >100 trades
 - Annual DR test automatisé

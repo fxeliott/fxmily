@@ -126,7 +126,7 @@ Ce principe guide toutes les décisions de design : si une feature ne contribue 
 > `realizedRSource`, `enteredAt`/`exitedAt`/`closedAt` et remplace `screenshots[]`
 > par deux colonnes nullable (`screenshotEntryKey`, `screenshotExitKey`)
 > pour aligner avec les 2 phases du wizard (avant entrée / après sortie).
-> Cf. `docs/jalon-2-prep.md` → "Décisions produit prises pendant la session J2"
+> Cf. `docs/archive/jalon-2-prep.md` → "Décisions produit prises pendant la session J2"
 > et `apps/web/prisma/schema.prisma` (modèle `Trade`).
 
 - `id`, `userId`

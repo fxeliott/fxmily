@@ -2,6 +2,15 @@
 
 > **Statut** : Brief de préparation (Session S 2026-05-23). Synthèse Round 2 Session S audit `/maximum-mode` 4 sub-agents parallèles (CAP-1 architecture compat + CAP-2 Capacitor docs 2026 + CAP-3 Apple Developer Program 2026 + ASC + CAP-4 push V1 → APN refactor scope).
 >
+> **Session T 2026-05-23 (post-merge décisions tranchées Voie V2-A)** : 4 pré-requis blockers résolus via clarifications Eliot + méta-délégation carte blanche + due diligence sub-agent `a2c7cdf21c0ecf53b` (Apple Developer 2026 + push notifications stack 2026, 10 URLs sources primaires) :
+>
+> 1. ✅ Mac hardware OK (Eliot confirmé Session T)
+> 2. ✅ Bundle ID `com.fxmily.app` validé (Session T)
+> 3. ✅ Track Apple Developer = **Individual** default (Session T décision tranchée, voir §5.2 — caveat migration `transfer app` documenté)
+> 4. ✅ Push channel = **Direct APN HTTP/2** via `@parse/node-apn` + plugin Capacitor `@capacitor/push-notifications` natif (Session T décision tranchée, voir §6.4 — reverse drift CAP-2 sur plugin Firebase Messaging)
+>
+> Pré-requis restants Session T+ : iPhone physique smoke test (Session BB TestFlight) + Demo account `apple-review@fxmilyapp.com` provisioned (Session Y).
+>
 > **Décision Eliot** : Capacitor iOS + Apple Developer Program **$99/an APPROUVÉ** (Session S clarification).
 >
 > **Posture rappelée** : Fxmily app PRIVÉE/INTERNE (accès réservé membres formation Eliot post-inscription contrat amont). PAS vitrine grand public. Posture Mark Douglas stricte (0 conseil trade, exécution + psychologie seul). Système Lhedge INCONNU. EU AI Act §50(1) compliance résolu Session R.
@@ -81,20 +90,20 @@ Transformer Fxmily PWA Next.js 16 + React 19 (V1.12 P4 LIVE prod Hetzner) en **a
 
 [tool-output CAP-2 §8] :
 
-| #   | Plugin npm                                                        | Usage Fxmily                                  | Priorité |
-| --- | ----------------------------------------------------------------- | --------------------------------------------- | -------- |
-| 1   | `@capacitor-firebase/messaging` ⚠️ **PAS plugin officiel legacy** | Push APN via FCM proxy (recommandé 2026)      | P0       |
-| 2   | `@capacitor/preferences`                                          | Replace `localStorage` storage natif sécurisé | P0       |
-| 3   | `@capacitor/app`                                                  | Lifecycle resume/pause/deep links             | P0       |
-| 4   | `@capacitor/status-bar`                                           | Style dark mode V1 Fxmily                     | P1       |
-| 5   | `@capacitor/splash-screen`                                        | Splash native lancement app                   | P1       |
-| 6   | `@capacitor/network`                                              | Online/offline UX (mode déconnecté)           | P1       |
-| 7   | `@capacitor/keyboard`                                             | Auto-scroll inputs (wizards REFLECT/TRACK)    | P1       |
-| 8   | `@capacitor/haptics`                                              | Feedback tactile REFLECT wizard validation    | P1       |
-| 9   | `@capacitor/browser`                                              | Liens externes (/legal/\* pages)              | P1       |
-| 10  | `@capacitor/share`                                                | Partage natif debrief (WhatsApp/Telegram)     | P1       |
+| #   | Plugin npm                                                                               | Usage Fxmily                                                             | Priorité |
+| --- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------- |
+| 1   | `@capacitor/push-notifications` (officiel Capacitor 2026, Session T reverse drift CAP-2) | Push APN natif iOS — Direct APN HTTP/2 backend (Session T décision §6.4) | P0       |
+| 2   | `@capacitor/preferences`                                                                 | Replace `localStorage` storage natif sécurisé                            | P0       |
+| 3   | `@capacitor/app`                                                                         | Lifecycle resume/pause/deep links                                        | P0       |
+| 4   | `@capacitor/status-bar`                                                                  | Style dark mode V1 Fxmily                                                | P1       |
+| 5   | `@capacitor/splash-screen`                                                               | Splash native lancement app                                              | P1       |
+| 6   | `@capacitor/network`                                                                     | Online/offline UX (mode déconnecté)                                      | P1       |
+| 7   | `@capacitor/keyboard`                                                                    | Auto-scroll inputs (wizards REFLECT/TRACK)                               | P1       |
+| 8   | `@capacitor/haptics`                                                                     | Feedback tactile REFLECT wizard validation                               | P1       |
+| 9   | `@capacitor/browser`                                                                     | Liens externes (/legal/\* pages)                                         | P1       |
+| 10  | `@capacitor/share`                                                                       | Partage natif debrief (WhatsApp/Telegram)                                | P1       |
 
-**Note critique** : `@capacitor/push-notifications` (plugin officiel historique) **en phasing out 2026** [tool-output CAP-2 §9 community guides janvier 2026]. **Décision** : utiliser `@capacitor-firebase/messaging` dès le départ, PAS le plugin legacy même si CAP-1 le mentionnait.
+**Note Session T due diligence sub-agent `a2c7cdf21c0ecf53b` — reverse drift CAP-2** : Capacitor docs officielles 2026 listent toujours `@capacitor/push-notifications` comme guide officiel verbatim [capacitorjs.com/docs/guides/push-notifications-firebase] (PAS phasing out). `@capacitor-firebase/messaging` reste **alternative valide** pour proxy FCM unifié Android+iOS futur (Android V2.1+ refactor), MAIS non obligatoire 2026. **Décision Session T** : `@capacitor/push-notifications` natif iOS V2 (couplé Direct APN HTTP/2 backend §6.4) pour minimisation sub-processors Google + Privacy Manifest Apple (cohérent app PRIVÉE/INTERNE + posture data minimization). Refactor Android V2.1+ devra introduire abstraction `PushProvider` côté backend pour découpler.
 
 Plugins P2-P3 (`@capacitor/camera`, `@capacitor/local-notifications`, `@capacitor/filesystem`) DEFERRED V2.1+ post-PMF mobile.
 
@@ -336,6 +345,28 @@ Mirror pattern `/api/account/push/resubscribe/route.ts` :
 
 **Recommandation V1 Fxmily** : Track **Individual** suggéré pour démarrage rapide. Si Eliot veut "Fxmily" seller name à terme → migration Organization (changement seller name post-publication = process Apple lourd → **trancher AVANT 1ère submission**).
 
+#### Décision tranchée Session T 2026-05-23 (méta-délégation Eliot carte blanche + due diligence sub-agent `a2c7cdf21c0ecf53b` 5 URLs sources primaires Apple 2026) :
+
+**Track choisi V1 = Individual $99/an** (seller name = "Eliot Pena" nom légal personne physique visible publiquement sur App Store).
+
+Rationale hardcore :
+
+1. **App PRIVÉE/INTERNE** (accès réservé membres formation post-inscription contrat amont) ⇒ seller name visibility = concern mineur (membres connaissent déjà Eliot personnellement, posture Mark Douglas privacy-first cohérente)
+2. **Auto-entrepreneur / EI fréquent formateurs France** ⇒ pas d'entité légale "Fxmily" SAS/SARL confirmée (Apple n'accepte **PAS de DBA/fictitious names** verbatim [developer.apple.com/programs/enroll/] — Organization track impossible sans entité légale au nom "Fxmily")
+3. **Speed enrollment** : Individual 1-4 sem réaliste 2026 (vs Org +5-30j DUNS France ouvrés + 14j replication internationale = jusqu'à 6-7 sem worst case)
+4. **Trader discipline "start lean iterate"** : Individual $99/an = pas de surcoût difference vs Org $99/an, lance dev Capacitor V2-B plus vite
+5. **Sunk cost minimal** : si Eliot crée plus tard entité Fxmily SAS/SARL → migration via `transfer app` Apple possible (App garde reviews/ratings/Bundle ID)
+
+**Caveat critique migration `transfer app` Individual → Organization** [developer.apple.com/help/app-store-connect/transfer-an-app/app-transfer-criteria/] :
+
+- App-Specific Shared Secret + nouveaux provisioning profiles requis post-transfer
+- Transfert expire à **60 jours** (urgence si initiated)
+- **Deux Account Holders requis** (sender Individual + receiver Organization, donc Eliot doit créer Organization account séparé puis initiate transfer)
+- Apple n'expose **PAS de procédure "convert account" publique** — il faut contacter Apple support OR utiliser mécanisme transfer app
+- Downtime exact transfer = `[TBD 2026]` non quantifié sources primaires consultées
+
+**Réversibilité** : décision tranchée AVANT 1ère submission App Store (Session CC V2-J). Si Eliot crée entité Fxmily SAS/SARL entre Session T et Session BB TestFlight beta → re-évaluation possible carbone scar O1 decision tree (révision avant publication = process Apple plus simple que post-publication).
+
 ### 5.3 Processing time réel 2026 (drift vs Apple official)
 
 [tool-output CAP-3 §4] :
@@ -385,9 +416,9 @@ Stockage sécurisé `.p8` :
 - **JAMAIS commit** `.p8` raw au git
 - Env vars supplémentaires : `APN_KEY_ID`, `APN_TEAM_ID`, `APN_BUNDLE_ID`, `APN_ENVIRONMENT`
 
-### 6.4 Firebase Cloud Messaging proxy (recommandé 2026)
+### 6.4 Firebase Cloud Messaging proxy (alternative non retenue Session T)
 
-Si choix `@capacitor-firebase/messaging` (recommandation CAP-2) :
+Si choix `@capacitor-firebase/messaging` (recommandation CAP-2 initiale) :
 
 - Firebase Console → Project Settings → Cloud Messaging → APNs Authentication Key
 - Upload `.p8` + Key ID + Team ID dans Firebase
@@ -396,7 +427,23 @@ Si choix `@capacitor-firebase/messaging` (recommandation CAP-2) :
 
 **Trade-off** : Firebase proxy = simplifie unified push V2.1 Android, MAIS ajoute dépendance Firebase (privacy nutrition labels + sub-processor à déclarer Apple + tiers à mentionner privacy policy).
 
-**Décision** : à trancher Session T setup (FCM proxy vs direct APN HTTP/2). Si seul iOS V2, direct APN suffit. Si Android V2.1 prévu → FCM proxy maintenant économise refactor.
+#### Décision tranchée Session T 2026-05-23 (méta-délégation Eliot carte blanche + due diligence sub-agent `a2c7cdf21c0ecf53b` 5 URLs sources primaires Capacitor + Apple Privacy Manifests + npm 2026) :
+
+**Push channel V2 iOS = Direct APN HTTP/2** via lib backend Node.js **`@parse/node-apn`** (v8.1.0 publiée 12 avril 2026, 80k-110k weekly downloads, repo non archivé [github.com/parse-community/node-apn]). Plugin Capacitor côté device = **`@capacitor/push-notifications`** natif (cohérent §3.2 reverse drift CAP-2).
+
+Rationale hardcore :
+
+1. **App PRIVÉE/INTERNE + posture data minimization** ⇒ 0 sub-processor Google Firebase préférable (RGPD app privée = data exposure surface réduite)
+2. **Privacy Manifest Apple ENFORCED depuis 1ᵉʳ mai 2024 (ITMS-91053)** [developer.apple.com/documentation/bundleresources/adding-a-privacy-manifest-to-your-app-or-third-party-sdk] ⇒ FCM = sub-processor obligatoire à déclarer Privacy Nutrition Labels App Store + DPA Google. Direct APN = **aucun tiers ajouté**, données restent Apple↔Hetzner direct
+3. **FCM requiert quand même upload `.p8` APN key côté Firebase Console** [firebase.google.com/docs/cloud-messaging/ios/client] ⇒ FCM = **couche intermédiaire sans gain iOS-only**, double overhead config + sub-processor
+4. **Capacitor docs officielles 2026** [capacitorjs.com/docs/guides/push-notifications-firebase] listent `@capacitor/push-notifications` comme guide officiel verbatim — Firebase Messaging est alternative pour Android+iOS unifié, pas obligatoire iOS-only
+5. **Lib backend `@parse/node-apn` active 2026** : JWT signing automatique (renew ~20-60min), HTTP/2 endpoint natif, BadDeviceToken/Unregistered taxonomy claire — préféré à signing manuel JWT custom
+
+**Caveat critique Android V2.1+ futur** : Direct APN choix iOS V2 = refactor obligatoire vers FCM lorsque Android V2.1 implémenté (Android n'a **PAS** d'équivalent APN direct, doit passer par FCM). **Mitigation Session V V2-C** : design abstraction `PushProvider` (interface `IApnClient` factory déjà extensible §4.4) côté backend pour découpler `lib/push/dispatcher.ts` du driver concret. Refactor V2.1 = ajouter `LiveFcmClient implements IPushProvider` parallèle, swap Android dispatcher path. Effort estimé refactor V2.1 = ~1-2j si abstraction propre Session V vs ~4-5j si tight coupling APN-only.
+
+**Caveat sub-processor scope app PRIVÉE/INTERNE** [synthèse sub-agent A2C7] : _"moins de membres = moins d'exposition GDPR, mais statut privé ne dispense PAS des Privacy Manifests App Store ni du DPA sub-processor si FCM choisi → Direct APN reste préférable pour minimiser surface contractuelle Google."_
+
+**Latence comparée APN direct vs FCM proxy 2026** : `[TBD 2026]` non chiffrée dans sources primaires consultées sub-agent A2C7 — Direct APN théoriquement plus rapide (1 hop Apple↔Hetzner vs 2 hops Apple↔FCM↔Hetzner) mais magnitude exacte invérifiable.
 
 ## 7. TestFlight beta (verbatim CAP-3 §10)
 
@@ -612,15 +659,21 @@ Pendant attente enrollment Apple (1-4 sem) :
 
 ## 14. Pré-requis blockers Eliot AVANT démarrage
 
-[Récap actionnable] :
+[Récap actionnable post-Session T 2026-05-23] :
 
 1. ✅ **Capacitor approuvé $99/an** (Session S clarification)
-2. ⚠️ **Mac hardware** : Eliot a-t-il un MacBook ? Si non → décision achat €1100-1500 OU cloud Mac service ~€330-880/an
-3. ⚠️ **Décision Individual vs Organization** track enrollment (impact seller name App Store)
-4. ⚠️ **Bundle ID** : confirmer `com.fxmily.app` (reverse-DNS)
-5. ⚠️ **iPhone physique** smoke test APN sandbox (Apple a un iPhone, Eliot ?) — push ne fonctionne PAS sur simulateur
-6. ⚠️ **Décision Firebase Cloud Messaging proxy vs direct APN HTTP/2** (impact Privacy Manifests sub-processors + futur Android V2.1)
-7. ⚠️ **Demo account credentials** : `apple-review@fxmilyapp.com` + password généré + données mock provisioned (Session Y)
+2. ✅ **Mac hardware OK** (Eliot confirmé Session T — pas de surcoût hardware, Xcode 26 installable App Store gratuit)
+3. ✅ **Track Apple Developer = Individual** default (Session T décision tranchée §5.2, méta-délégation Eliot carte blanche + sub-agent due diligence) — caveat migration `transfer app` documenté §5.2
+4. ✅ **Bundle ID `com.fxmily.app`** validé (Session T, reverse-DNS standard)
+5. ⚠️ **iPhone physique** smoke test APN sandbox — push ne fonctionne PAS sur simulateur, requis Session BB TestFlight beta cycle (à confirmer Eliot d'ici Session BB)
+6. ✅ **Push channel = Direct APN HTTP/2** via `@parse/node-apn` + plugin Capacitor `@capacitor/push-notifications` natif (Session T décision tranchée §6.4 — reverse drift CAP-2 sur plugin Firebase Messaging)
+7. ⚠️ **Demo account credentials** : `apple-review@fxmilyapp.com` + password généré + données mock provisioned (Session Y, post-enrollment Apple)
+
+**Pré-requis externes Eliot manuel post-Session T** (1-4 sem parallèle dev Capacitor) :
+
+- Enrollment Apple Developer Program Individual track via `developer.apple.com/programs/enroll/` (~10 min UI Apple ID + 2FA + pièce d'identité ID gov FR passeport/CNI)
+- Budget tampon enrollment 2-4 semaines (réalité 2026 vs 24-48h Apple official)
+- Sessions U..CC parallélisables pendant attente enrollment (dev Capacitor V2-B setup + V2-C APN dispatcher + V2-D plugins + V2-E auth cookies + V2-F account deletion + V2-G assets + V2-H Privacy Manifests audit)
 
 ## 15. État actuel post-Sessions R+0.5 (#148) + R+0.75 (#151) MERGED par Eliot
 
@@ -651,10 +704,12 @@ Pendant attente enrollment Apple (1-4 sem) :
 ## 16. Refs
 
 - **CAP-1 architecture compat** : pattern WebView shell `server.url` arbitré vs CAP-2 static export. Compat HIGH ≥90%.
-- **CAP-2 Capacitor docs 2026** : Capacitor 8 + deadline Xcode 26 (28 avril 2026 passée) + plugin `@capacitor-firebase/messaging` recommandé (vs legacy `@capacitor/push-notifications`)
+- **CAP-2 Capacitor docs 2026** : Capacitor 8 + deadline Xcode 26 (28 avril 2026 passée) + plugin `@capacitor-firebase/messaging` recommandé (vs legacy `@capacitor/push-notifications`) — **Session T reverse drift** : sub-agent A2C7 confirme `@capacitor/push-notifications` toujours guide officiel Capacitor 2026 [capacitorjs.com/docs/guides/push-notifications-firebase], PAS phasing out (cf. §3.2 + §6.4 décisions tranchées Session T)
 - **CAP-3 Apple Developer Program 2026** : $99/€99 + Individual vs Org + enrollment 1-4 sem 2026 réaliste + TestFlight + assets 2026 (icon 1024 + screenshots 1320×2868 iPhone 6.9") + Privacy Nutrition Labels + 3 caveats critiques
 - **CAP-4 push V1 + APN refactor** : mono-channel Web Push pur → dual-channel coexistence + modèle séparé `ApnDeviceToken` (pattern §21.5 isolation) + factory IApnClient HTTP/2 direct + bug latent `mindset_check_ready` à fixer
 - **Posture Mark Douglas SPEC §2** : 0 conseil trade, exécution + psychologie seul. Système Lhedge INCONNU.
 - **Eliot clarification Session S** : app interne PRIVÉE accès réservé membres formation post-inscription contrat amont. PAS vitrine grand public. Légalité formation gérée en amont. Multi-admin DEFERRED. Stripe DEFERRED. Capacitor iOS $99/an APPROUVÉ.
 - **Session R canon EU AI Act §50(1) compliance** : Monthly Debrief IA disclosure résolu PR #155 `92d139f` 2026-05-23T12:02:02Z.
 - **Sub-agents transcripts** : `a536d99efbdc39825` (CAP-1) + `a38757fa15c453598` (CAP-2) + `af3d2c71b184417c8` (CAP-3) + `a652edca36d0c5458` (CAP-4) — output_files NON lus carbone instruction système.
+- **Session T 2026-05-23 due diligence sub-agent** : `a2c7cdf21c0ecf53b` — verdict Apple Developer Individual vs Organization + push channel Direct APN HTTP/2 vs FCM proxy. 10 URLs sources primaires consultées (developer.apple.com/programs/enroll + transfer-an-app + Privacy Manifests + capacitorjs.com/docs + firebase.google.com/docs + github.com/parse-community/node-apn + npmjs.com/@parse/node-apn). 2 caveats `[TBD 2026]` calibrated refusal (downtime transfer app exact + latence APN direct vs FCM chiffrée).
+- **Session T clarifications Eliot** : Mac OK + Bundle ID `com.fxmily.app` validés directs ; Track Apple Developer + Push channel = méta-délégation totale "carte blanche, exploite tes capacités" → Claude tranche hardcore self-challenge → Individual + Direct APN HTTP/2 (rationale §5.2 + §6.4).

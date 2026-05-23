@@ -247,12 +247,19 @@ export async function setPublishedAction(
   }
 
   try {
-    const updated = await setPublished(publicTradeId, published);
-    await logAudit({
-      action: published ? 'admin.public_trade.published' : 'admin.public_trade.unpublished',
-      userId: gate.userId,
-      metadata: { publicTradeId: updated.id, ordinal: updated.ordinal },
-    });
+    // Phase H+7 — `setPublished` retourne `{ row, wasChanged }`. Si l'état
+    // target == état actuel (toggle redondant), skip `logAudit` pour ne pas
+    // spammer la timeline d'audit rows identiques. api-designer YELLOW #6
+    // closure. Pattern : revalidatePath reste appelé (idempotent Next.js)
+    // pour garantir que le client voit l'état canonique post-mutation.
+    const { row: updated, wasChanged } = await setPublished(publicTradeId, published);
+    if (wasChanged) {
+      await logAudit({
+        action: published ? 'admin.public_trade.published' : 'admin.public_trade.unpublished',
+        userId: gate.userId,
+        metadata: { publicTradeId: updated.id, ordinal: updated.ordinal },
+      });
+    }
     revalidatePath('/admin/track-record');
     return { ok: true };
   } catch (err) {

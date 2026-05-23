@@ -286,6 +286,24 @@ function parisLocalDatetimeToUtc(s: string): Date | null {
   const minute = Number(mi);
   const second = Number(se);
 
+  // Phase H+7 — calendar validity gate (stress-test #7 closure).
+  // `Date.UTC(2026, 12, 1, ...)` silently rolls invalid month/day vers le
+  // mois/année suivant(e) → Feb 29 sur année non-bisextile → Mar 1 ; mois
+  // 13 → Jan année+1. Sans ce gate, admin tape `2026-13-01T12:00` et finit
+  // avec un trade silencieusement décalé en Jan 2027. Return null → le
+  // preprocess flow vers `z.coerce.date()` → `new Date()` invalid → `.refine`
+  // sur dateTimeSchema attrape avec "Date invalide.".
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  const checkDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    checkDate.getUTCFullYear() !== year ||
+    checkDate.getUTCMonth() !== month - 1 ||
+    checkDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
   // Naive UTC : treat the wall-clock numbers as if they were UTC.
   const naiveUtcMs = Date.UTC(year, month - 1, day, hour, minute, second);
   if (Number.isNaN(naiveUtcMs)) return null;
@@ -333,17 +351,25 @@ function parisLocalDatetimeToUtc(s: string): Date | null {
  * (Z, +HH:MM) ET Date objects → pass-through. Voir
  * `parisLocalDatetimeToUtc` ci-dessus pour le rationale.
  */
-const dateTimeSchema = z.preprocess((v) => {
-  if (typeof v !== 'string') return v;
-  // Has TZ designator (Z or ±HH:MM[:SS]) → pass-through (admin script /
-  // serialization paths emit ISO with TZ, parsable by Date directly).
-  if (/Z$|[+-]\d{2}:?\d{2}$/.test(v)) return v;
-  // datetime-local format (YYYY-MM-DDTHH:MM[:SS], no TZ) → interpret as
-  // Europe/Paris local wall-clock.
-  const parisDate = parisLocalDatetimeToUtc(v);
-  if (parisDate) return parisDate;
-  return v;
-}, z.coerce.date());
+const dateTimeSchema = z.preprocess(
+  (v) => {
+    if (typeof v !== 'string') return v;
+    // Has TZ designator (Z or ±HH:MM[:SS]) → pass-through (admin script /
+    // serialization paths emit ISO with TZ, parsable by Date directly).
+    if (/Z$|[+-]\d{2}:?\d{2}$/.test(v)) return v;
+    // datetime-local format (YYYY-MM-DDTHH:MM[:SS], no TZ) → interpret as
+    // Europe/Paris local wall-clock.
+    const parisDate = parisLocalDatetimeToUtc(v);
+    if (parisDate) return parisDate;
+    // Phase H+7 stress-test #7 closure — calendar validity gate KO OU format
+    // non-datetime-local sans TZ. Return Invalid Date explicit pour que
+    // `z.coerce.date({ error: 'Date invalide.' })` rejette avec le message
+    // custom (vs (a) silent roll-over côté V8 sur `new Date("2026-02-30")`
+    // qui parse en Mar 2, OU (b) Zod default "Invalid input: expected date").
+    return new Date(NaN);
+  },
+  z.coerce.date({ error: () => ({ message: 'Date invalide.' }) }),
+);
 
 // =============================================================================
 // Create / Update — admin form schemas

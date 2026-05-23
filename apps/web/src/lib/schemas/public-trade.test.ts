@@ -937,4 +937,64 @@ describe('publicTradeCreateSchema — Europe/Paris timezone (Phase H+5 TIER 1)',
       expect(r.data.enteredAt.toISOString()).toBe('2025-12-31T23:00:00.000Z');
     }
   });
+
+  // Phase H+7 — calendar validity refine (stress-test #7 closure).
+  // Sans `.refine`, l'admin pouvait taper `2026-13-01T12:00` (mois 13) ET
+  // le helper roll-back-avoidance avant, ou `2026-02-30` (Feb 30 doesn't
+  // exist) → `Date.UTC` silently rolls vers le mois/année suivant(e),
+  // créant un trade décalé silencieusement. Le helper gate calendar
+  // validity returns null, le preprocess flow vers `z.coerce.date()` qui
+  // produit Invalid Date (NaN), le `.refine` final attrape avec "Date
+  // invalide.".
+
+  it('Phase H+7 — rejects invalid month `2026-13-01T12:00` with "Date invalide."', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: '2026-13-01T12:00',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const err = r.error.issues.find((i) => i.path[0] === 'enteredAt');
+      expect(err).toBeDefined();
+      // Le message attendu : "Date invalide." (custom refine error map).
+      // Vs Zod default générique "Invalid input: expected date".
+      expect(err?.message).toBe('Date invalide.');
+    }
+  });
+
+  it('Phase H+7 — rejects invalid day `2026-02-30T12:00` (Feb 30 inexistant) with "Date invalide."', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: '2026-02-30T12:00',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const err = r.error.issues.find((i) => i.path[0] === 'enteredAt');
+      expect(err).toBeDefined();
+      expect(err?.message).toBe('Date invalide.');
+    }
+  });
+
+  it('Phase H+7 — rejects Feb 29 on non-leap year `2026-02-29T12:00` (2026 not leap)', () => {
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: '2026-02-29T12:00',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const err = r.error.issues.find((i) => i.path[0] === 'enteredAt');
+      expect(err).toBeDefined();
+      expect(err?.message).toBe('Date invalide.');
+    }
+  });
+
+  it('Phase H+7 — accepts Feb 29 on leap year `2024-02-29T12:00` (2024 IS leap)', () => {
+    // Sanity check : le calendar validity gate ne reject pas un Feb 29
+    // valide. 2024 est bissextile, 2026 ne l'est pas.
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: '2024-02-29T12:00',
+    });
+    expect(r.success).toBe(true);
+  });
 });

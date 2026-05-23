@@ -83,6 +83,7 @@ describe('setPublished — publishedAt lifecycle', () => {
     // Arrange : a draft trade that has never been published.
     vi.mocked(db.publicTrade.findUnique).mockResolvedValueOnce({
       publishedAt: null,
+      isPublished: false,
     } as never);
     vi.mocked(db.publicTrade.update).mockResolvedValueOnce(makeRow() as never);
 
@@ -106,6 +107,7 @@ describe('setPublished — publishedAt lifecycle', () => {
     const originalPublishedAt = new Date('2026-01-01T00:00:00Z');
     vi.mocked(db.publicTrade.findUnique).mockResolvedValueOnce({
       publishedAt: originalPublishedAt,
+      isPublished: true,
     } as never);
     vi.mocked(db.publicTrade.update).mockResolvedValueOnce(makeRow() as never);
 
@@ -127,6 +129,7 @@ describe('setPublished — publishedAt lifecycle', () => {
     const originalPublishedAt = new Date('2026-01-01T00:00:00Z');
     vi.mocked(db.publicTrade.findUnique).mockResolvedValueOnce({
       publishedAt: originalPublishedAt,
+      isPublished: true,
     } as never);
     vi.mocked(db.publicTrade.update).mockResolvedValueOnce(
       makeRow({ isPublished: false }) as never,
@@ -151,6 +154,7 @@ describe('setPublished — publishedAt lifecycle', () => {
     // so when published=false the publishedAt write is skipped regardless.
     vi.mocked(db.publicTrade.findUnique).mockResolvedValueOnce({
       publishedAt: null,
+      isPublished: false,
     } as never);
     vi.mocked(db.publicTrade.update).mockResolvedValueOnce(
       makeRow({ isPublished: false }) as never,
@@ -165,6 +169,65 @@ describe('setPublished — publishedAt lifecycle', () => {
     };
     expect(arg.data.isPublished).toBe(false);
     expect('publishedAt' in arg.data).toBe(false);
+  });
+
+  // =============================================================================
+  // Phase H+7 — setPublished idempotence `wasChanged` (api-designer YELLOW #6)
+  //
+  // Sub-agent api-designer Phase H+5 flagged que 5 clicks répétés sur un trade
+  // déjà publié = 5 audit rows identiques (pollue timeline admin). Le service
+  // ne short-circuit pas. Fix Phase H+7 : retourne `wasChanged: boolean` ;
+  // action skip `logAudit` si false. Tests : pin la sémantique des 4
+  // combinaisons (existing × target) × wasChanged value.
+  // =============================================================================
+
+  it('Phase H+7 — `wasChanged: false` quand target == existing (already published → publish redundant)', async () => {
+    // Trade déjà publié, admin re-clique "Publier" — toggle redondant.
+    vi.mocked(db.publicTrade.findUnique).mockResolvedValueOnce({
+      publishedAt: new Date('2026-01-01T00:00:00Z'),
+      isPublished: true,
+    } as never);
+    vi.mocked(db.publicTrade.update).mockResolvedValueOnce(makeRow() as never);
+
+    const result = await setPublished('trade-1', true);
+    expect(result.wasChanged).toBe(false);
+  });
+
+  it('Phase H+7 — `wasChanged: true` quand target != existing (publish a draft)', async () => {
+    vi.mocked(db.publicTrade.findUnique).mockResolvedValueOnce({
+      publishedAt: null,
+      isPublished: false,
+    } as never);
+    vi.mocked(db.publicTrade.update).mockResolvedValueOnce(makeRow() as never);
+
+    const result = await setPublished('trade-1', true);
+    expect(result.wasChanged).toBe(true);
+  });
+
+  it('Phase H+7 — `wasChanged: true` quand unpublishing a published trade', async () => {
+    vi.mocked(db.publicTrade.findUnique).mockResolvedValueOnce({
+      publishedAt: new Date('2026-01-01T00:00:00Z'),
+      isPublished: true,
+    } as never);
+    vi.mocked(db.publicTrade.update).mockResolvedValueOnce(
+      makeRow({ isPublished: false }) as never,
+    );
+
+    const result = await setPublished('trade-1', false);
+    expect(result.wasChanged).toBe(true);
+  });
+
+  it('Phase H+7 — `wasChanged: false` quand unpublish redundant (already unpublished)', async () => {
+    vi.mocked(db.publicTrade.findUnique).mockResolvedValueOnce({
+      publishedAt: null,
+      isPublished: false,
+    } as never);
+    vi.mocked(db.publicTrade.update).mockResolvedValueOnce(
+      makeRow({ isPublished: false }) as never,
+    );
+
+    const result = await setPublished('trade-1', false);
+    expect(result.wasChanged).toBe(false);
   });
 });
 

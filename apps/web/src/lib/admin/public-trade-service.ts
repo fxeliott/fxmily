@@ -291,17 +291,38 @@ export async function deletePublicTrade(id: string): Promise<void> {
   }
 }
 
-export async function setPublished(id: string, published: boolean): Promise<SerializedPublicTrade> {
+/**
+ * Result envelope for `setPublished` — Phase H+7 idempotence.
+ *
+ * `wasChanged: false` quand l'état target == état actuel (toggle redondant).
+ * Permet à l'action caller de skip `logAudit` pour éviter le spam d'audit
+ * rows identiques (api-designer YELLOW #6 closure) — un admin qui clique
+ * 5× sur "Publier" sur un trade déjà publié ne pollue plus la timeline
+ * audit. Pattern carbone le canon J5 (`enqueueCheckinReminder` skip-if-
+ * already-enqueued) + observability hygiene.
+ */
+export interface SetPublishedResult {
+  row: SerializedPublicTrade;
+  wasChanged: boolean;
+}
+
+export async function setPublished(id: string, published: boolean): Promise<SetPublishedResult> {
   // T5 audit Phase H — code-reviewer BLOQUANT-3 : `publishedAt` est la
   // chronologie publique du track-record (la valeur la plus exposée du
   // module). Bumper à chaque republish = destruction silencieuse du signal.
   // Fix : set-once at first publish — preserve la date d'origine sur tout
   // republish ultérieur. On lit l'état existant pour décider.
+  //
+  // Phase H+7 — `select` étendu pour récupérer `isPublished` (en plus de
+  // `publishedAt`) afin de calculer `wasChanged`. Coût query identique
+  // (toujours 1 column extra, négligeable).
   const existing = await db.publicTrade.findUnique({
     where: { id },
-    select: { publishedAt: true },
+    select: { publishedAt: true, isPublished: true },
   });
   if (!existing) throw new PublicTradeNotFoundError();
+
+  const wasChanged = existing.isPublished !== published;
 
   try {
     const row = await db.publicTrade.update({
@@ -315,7 +336,7 @@ export async function setPublished(id: string, published: boolean): Promise<Seri
       },
       include: { _count: { select: { partials: true } } },
     });
-    return serializePublicTrade(row);
+    return { row: serializePublicTrade(row), wasChanged };
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
       throw new PublicTradeNotFoundError();

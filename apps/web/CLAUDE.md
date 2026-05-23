@@ -3628,3 +3628,202 @@ PR [#140](https://github.com/fxeliott/fxmily/pull/140) (`51bd8c8`). Jalon #4 de 
 
 - PR [#140](https://github.com/fxeliott/fxmily/pull/140) (`51bd8c8`)
 - Memory `fxmily_session_2026-05-20_v2.1.6_placeholder_formation.md` (atomic-detail + décisions + SUPERSEDES #139)
+
+## T5 — Admin CRUD Public Track Record (livré 2026-05-22)
+
+PR [#151](https://github.com/fxeliott/fxmily/pull/151), 10 commits chaînés sur `feat/track-record-T0` (PR #148 = T0-T4 vitrine). T5 livre le **CRUD admin** dans `@fxmily/web` sous `/admin/track-record/*` pour les modèles `PublicTrade` + `PublicTradePartial`. La sub-app `@fxmily/track-record` (static export Cloudflare Pages, vitrine publique) reste **séparée** — T5 ne touche que le back-office Next.js.
+
+5 commits foundation (`2a6a1d3` → `8616655`, 2026-05-22 11h52→11h54 UTC) puis 5 commits Phase H audit-driven hardening (`4a0ca11` → `6483ea6`, 2026-05-22 13h31→13h33 UTC) après revue sceptique 5 sub-agents parallèles ayant attrapé **4 BLOQUANTS + 2 HIGH security + 2 a11y T1 + 2 UI T2** (et 1 a11y false positive contesté + skippé explicitement, cf. décisions verrouillées).
+
+### Modèle de données
+
+Migration `prisma/migrations/20260521172000_track_record_public_trades/migration.sql` (74 LOC, additive ADD-only, safe à 30 membres) :
+
+- 2 enums : `PublicTradeSegment` + `PublicTradeStatus`.
+- 2 tables : `public_trades` + `public_trade_partials` (FK cascade `publicTradeId`).
+- 0 changement breaking sur les modèles existants.
+
+Schema `prisma/schema.prisma:1464-1530` :
+
+- **`PublicTrade`** — segment + ordinal (unique chronologique 1..N, auto-incrémenté via service), instrument (string, pas d'enum DB car liste extensible au-delà des paires app membre), `direction TradeDirection?` (nullable car ODS historique parfois vide), `riskPercent Decimal(4,2)` en % brut (1.0 = 1%, pas 0.01, cohérent `Trade.riskPct` V1.5), `resultR Decimal(6,3)`, `resultPercent` précalculé pour perf lecture, `status PublicTradeStatus`, `session TradeSession?` (réutilise enum existant), `setup` + `tags String[]`, `notes Text`, `screenshotUrl` (R2 key ou URL externe — SSRF allowlist Phase H), `isPublished` toggle (default `true`), `publishedAt`. 3 index : `(segment, enteredAt DESC)` + `(isPublished, enteredAt DESC)` + `(instrument)`.
+- **`PublicTradePartial`** — legs successives (TP1, TP2...) avec `closedAtR Decimal(6,3)` + `closedPercent Decimal(5,2)` (0..100) + `closedAt`. Cascade delete via FK. Index `(publicTradeId, closedAt ASC)`.
+
+### Schemas Zod (`lib/schemas/public-trade.ts`)
+
+3 schemas `.strict()` (create / update / partial) avec :
+
+- `safeFreeText` + `containsBidiOrZeroWidth` rejection (pattern carbone V1.8 REFLECT) sur `notes` / `setup` / `tags`.
+- Cross-field `superRefine` lifecycle invariants (`open` ⇒ pas d'`exitedAt`/`resultR`, `closed`/`break_even` ⇒ requis, etc.).
+- `multipleOf(0.001)` défensif sur Decimal serialisés.
+- **Phase H — SSRF allowlist `screenshotUrl`** : whitelist hosts (R2 public bucket + `localhost` dev) + reject IP literals + reject schemes ≠ `https`/`http`. +12 tests Vitest dédiés.
+
+### Pure helpers (`lib/admin/public-trade-math.ts`)
+
+- `computeResultPercent(riskPercent, resultR)` — précalcule la colonne dénormalisée.
+- `validateLifecycleInvariants(input)` — throw `PublicTradeInvalidStateError` (custom error avec `fieldErrors` pour binding form).
+
+17 tests Vitest carbone (TDD-first).
+
+### Service (`lib/admin/public-trade-service.ts`)
+
+CRUD avec custom errors typés (`PublicTradeNotFoundError`, `PublicTradeOrdinalConflictError`, `PublicTradeInvalidStateError`) + `nextOrdinal` auto-derive (`MAX(ordinal) + 1`, race window connue — cf. backlog). `serializePublicTrade` convertit `Decimal` → `string` pour Server Component → Client boundary.
+
+**Phase H — `setPublished` preserve `publishedAt`** : republish ne réécrit pas la date d'origine (BLOQUANT-3, important pour la chronologie publique stable).
+
+### Server Actions (`app/admin/track-record/actions.ts`)
+
+**6 mutations** (vs 7 brief initial — `markBreakEvenAction` defer V1 KISS, cf. décisions) :
+
+- `createPublicTradeAction` / `updatePublicTradeAction` / `deletePublicTradeAction`
+- `setPublishedAction` (toggle isPublished + preserve `publishedAt`)
+- `createPartialAction` / `deletePartialAction`
+
+Pattern J5 carbone : `auth()` re-check + `adminGate` + Zod `safeParse` + service call + `logAudit` PII-free + `revalidatePath('/admin/track-record')` + `NEXT_REDIRECT` re-throw.
+
+**Phase H — FormData shaper distingue `undefined` vs `null`** : helpers `strFieldNullable` / `numFieldNullable` + `shapeFormDataForUpdate` permettent au form admin de **clear un champ nullable** (set à `null`) sans confondre avec « champ non touché » (`undefined` = skip update). BLOQUANT-2 fix.
+
+### Pages (`app/admin/track-record/{page,new,[id]/edit,loading}.tsx`)
+
+3 routes Server Components + `force-dynamic` + auth-gated admin. **Phase H** : `loading.tsx` Suspense fallback skeleton ajouté pour UX premium.
+
+### Composants (`components/admin/track-record/`)
+
+4 client components :
+
+- `public-trade-form.tsx` — formulaire principal (create/edit, progressive enhancement compatible).
+- `public-trade-row.tsx` — ligne liste avec status pill + résultats.
+- `public-trade-actions-row.tsx` — `<PublishToggle>` intégré inline (cf. décisions verrouillées) + delete.
+- `partials-section.tsx` — sub-form legs avec `SubField required asterisk` (Phase H a11y).
+
+**Phase H a11y** : `closedAtR` affiche un **prefix signé `R`** (vs raw number) pour cohérence sémantique screen-reader.
+
+### Audit log (7 nouveaux slugs — `lib/auth/audit.ts:200-206`)
+
+- `admin.public_trade.created` / `updated` / `deleted`
+- `admin.public_trade.published` / `unpublished`
+- `admin.public_trade.partial.created` / `partial.deleted`
+
+Metadata **PII-free strict** : `{publicTradeId, ordinal, segment, instrument, status, fieldsChanged[], partialId, closedAtR, closedPercent}`. JAMAIS `notes` / `screenshotUrl` brute / texte free-form. Cohérent §J7 audit B5 + V1.8 audit slugs.
+
+### Décisions verrouillées
+
+- **`markBreakEvenAction` defer V1 KISS** : 6 mutations livrées vs 7 brief. Admin set `status=break_even + exitedAt=now + resultR=0` via form principal. Documenté `actions.ts:39-47`.
+- **`<PublishToggle>` intégré inline dans `<PublicTradeActionsRow>`** au lieu de composant shared dédié. Fonctionnellement équivalent — extract V2.x si besoin densification.
+- **Buttons custom drift J7-héritée** (T2-1 ui-designer) : `admin/cards/*` réinvente aussi `<Btn>`. Fix isolé créerait inconsistance cross-module → reclassé V1.x DS-wide polish PR séparée.
+- **A11y T1#1 contrast `--ok` 3.6:1 = FALSE POSITIVE** : OKLCH math vérifiée ~11.4:1 PASS large (DS-v2 tokens documented AA-validated). Audit estimation incorrecte, skip explicite.
+- **Visual verify desktop+mobile DÉFÉRÉ** : requires Docker + admin session, couvert par CI Playwright auth gate.
+
+### Quality gate finale (post Phase H)
+
+- **Vitest 1498/1498** (96 files), **+69 vs V2.1.6 baseline 1429** (40 schemas + 17 math + 12 Phase H SSRF = 69 tests T5).
+- **Playwright** : 4 e2e auth-gate tests (`tests/e2e/track-record-admin.spec.ts`) — happy-path CRUD smoke carry-over jalon suivant (cf. backlog).
+- type-check 0 strict, ESLint 0 (max-warnings=0), prettier 0 sur 9 fichiers T5 touchés.
+- Build prod Turbopack ✓ avec env CI placeholder `AUTH_URL=https://build.fxmily.invalid` + `AUTH_SECRET`.
+- CI workflows ci/codeql/e2e **ne déclenchent pas** (PR base `feat/track-record-T0` ≠ `main`) — auto-trigger post-merge #148.
+
+### Pré-requis prod (post-merge Eliot)
+
+1. Merge PR [#148](https://github.com/fxeliott/fxmily/pull/148) T0-T4 chain first (actuellement `mergeStateStatus: BEHIND`, needs rebase main).
+2. PR #151 auto-rebase main post-#148 → push triggers full CI → merge.
+3. Start Docker Desktop + `docker compose -f docker-compose.dev.yml up -d`.
+4. `pnpm --filter @fxmily/web prisma:migrate dev` (apply migration `20260521172000_track_record_public_trades`).
+5. `pnpm --filter @fxmily/web exec tsx scripts/import-fxmily-trades.ts --year 2025` (139 trades).
+6. Verify `db.publicTrade.count() === 139`.
+7. Visit `/admin/track-record` + smoke fonctionnel (Phase H BLOQUANTS test : clear nullable fields + publishedAt preserve sur republish + SSRF reject sur URL hors allowlist).
+
+### Backlog non-bloquant T5.5+
+
+- **Service-layer Vitest avec Prisma mock** (code-reviewer IMPORTANT-1).
+- **`nextOrdinal` race window V2 multi-admin** : Postgres `SEQUENCE` ou advisory lock — non-bloquant solo-admin V1.
+- **Buttons DS-wide cleanup PR séparée** (DS-B4 héritage).
+- **Magic spacing repo-wide** : `text-[11px]`, `gap-1.5`, `py-0.5`, `h-9` filter chips (héritage J7).
+- **Happy-path Playwright CRUD smoke** : carry-over cross-jalon seed helper.
+- **Wire static rebuild webhook OU manual workflow** (T6 deferred — sub-app vitrine déploie manuellement pour l'instant).
+
+### Refs
+
+- PR [#151](https://github.com/fxeliott/fxmily/pull/151) (10 commits, base `feat/track-record-T0`)
+- Memory `fxmily_session_2026-05-22_t5_admin_crud_public_track_record.md` (foundation + Phase H + décisions + 1 false-positive contested)
+
+### Phase H+1 + H+2 — Round 2 audit-driven hardening (2026-05-22)
+
+5 commits supplémentaires ajoutés post-Phase H suite à un re-audit sceptique 4-subagent (verifier + code-reviewer Phase H re-pass + security-auditor Phase H+1 re-pass + documentation-writer) :
+
+- `7a9173d` test(track-record): extract form-shapers + Vitest TDD coverage Phase H BLOQUANTS — test-writer sub-agent extracted the 5 FormData helpers (`strField`, `strFieldNullable`, `numFieldNullable`, `boolField`, `tagsField`) + `shapeFormData`/`shapeFormDataForUpdate` + `CommonInput` interface from `actions.ts` (server-only `'use server'` boundary) to new pure `app/admin/track-record/form-shapers.ts` module. Pattern carbone `lib/admin/public-trade-math.ts` extract. Vitest can now load helpers without dragging `@/auth` → `next-auth` graph. +31 tests TDD (25 `actions.test.ts` + 5 `public-trade-service.test.ts` Prisma mock + 1 `public-trade-math.test.ts` lifecycle msg).
+- `4d7c799` fix(track-record): Phase H+1 SSRF regex query/fragment + path traversal + notes trim — code-reviewer Phase H re-pass caught :
+  - **H-1** : `SCREENSHOT_URL_HTTPS_REGEX` rejected `?v=2026-05-22` query strings + `#section` fragments → CDN URLs / Cloudinary signed URLs broken in prod. Fix : extended path class `[\w./%~+\-?#&=]`. +3 positive tests (cache-busting, multi-param Cloudinary, fragment).
+  - **H-3** : Storage regex accepted `public-trades/../../etc/passwd.png` path traversal. Fix : explicit `!s.includes('..')` pre-check in `.refine()`. +2 reject tests.
+  - **IMPORTANT-6** : `notesSchema` missing `.trim()` early (vs `instrumentSchema`/`setupSchema`/`tagSchema` siblings). Fix : add `.trim()` for consistency. Trailing `\n\n\n` no longer consumes `NOTES_MAX=2000` margin.
+- `5a67289` docs(track-record): apps/web/CLAUDE.md T5 section (Phase H + H+1) — initial documentation insertion 115 LOC (current section being amended).
+- `e9dca65` fix(track-record): Phase H+2 — numFieldNullable Infinity pass-through (H-4) — refined fix distinguishes `NaN` (admin garbage like `"abc"` → silent null clear) vs `±Infinity` (overflow like `"1e500"` → pass-through so Zod `.finite()` rejects with clear "R doit être un nombre fini" error). Before : `Number.isFinite(n) ? n : null` mapped both to null silently. After : `Number.isNaN(n) ? null : n`. +3 tests (Infinity, -Infinity, 1e500).
+- `2bd50d0` fix(track-record): Phase H+2 — IPv4 + IPv6 literal SSRF reject (H-IPLIT) — security-auditor Phase H+1 re-pass caught BASELINE Phase H finding : the regex `[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+` accepted IPv4 literals (`169.254.169.254/` AWS metadata, `192.168.1.1`, `10.0.0.1:8080`, `[::1]` IPv6 loopback, `[fe80::1]` link-local) — contradicting the JSDoc Phase H promise. Non-exploitable V1 (vitrine doesn't consume `screenshotUrl`) mais latent T6. Fix : 2 lookahead regex pre-checks (`!/^https:\/\/(?:\d{1,3}\.){3}\d{1,3}/` IPv4 + `!/^https:\/\/\[/` IPv6) before allowlist. +5 reject tests + 2 FP defense (DNS hosts with digits like `cdn4.example.com`, `s3-eu-west-1.amazonaws.com`).
+
+#### Quality gate post Phase H+2
+
+- Vitest **1543 passed + 2 skipped (1545 total)**, +47 cumul vs main baseline 1498
+- type-check 0, lint 0, prettier 0 sur 12 fichiers T5 modifiés/nouveaux
+- 6 sub-agents audit cumulés (5 Phase H + 4 Phase H+1 re-pass + 3 Phase H+2 re-pass)
+- 0 TIER 1 outstanding cumul, 0 TIER 2 HIGH actionable
+- PR #151 `mergeStateStatus: CLEAN`, 20 changed files, +4732/-1
+
+#### Defense layers cumul
+
+- Auth gate triple-check (id + role admin + status active) — Foundation
+- Zod `.strict()` + `safeFreeText` + `containsBidiOrZeroWidth` reject — Foundation
+- SSRF allowlist (HTTPS scheme + DNS hostname + IPv4/v6 reject + path traversal `..`) — Phase H + H+1 + H+2
+- Lifecycle invariants service-side post-merge — Foundation
+- Anti-doublon ordinal via P2002 catch — Foundation
+- Audit slugs PII-free (7 nouveaux) — Foundation
+- `setPublished` preserve original `publishedAt` on republish — Phase H
+- `shapeFormDataForUpdate` distinguishes `undefined` (skip) vs `null` (clear) — Phase H
+- a11y signed R prefix + SubField required asterisk — Phase H
+- Suspense skeleton (`loading.tsx`) Next 16 — Phase H
+- Filter chip hover state affordance — Phase H
+
+#### Backlog V2-defer (non-bloquant V1)
+
+- `%2e%2e` URL-encoded path traversal decode (TIER 2 NEW prophylactic, V2)
+- `?#` URL structure constraints (1 `?` max + 1 `#` max, V2)
+- `nextOrdinal` Postgres SEQUENCE migration (race window multi-admin V2)
+- Service-layer Vitest with Prisma mock for `updatePublicTrade` merge logic
+- Buttons custom drift J7-héritée DS-wide refactor PR séparée
+- Magic spacing repo-wide cleanup (héritage J7)
+- Happy-path Playwright CRUD smoke (carry-over cross-jalon seed helper)
+- Wire static rebuild webhook (T6 deferred — vitrine deploy manual)
+- **`listPublicTrades` pagination** (Phase H+3) — actuellement `findMany` sans `take`/`skip`, retourne TOUS les rows. À 139 trades V1 = OK (<1s render), mais à 1000+ trades V2 le list page deviendra slow + DOM lourd. Ajouter `take?: number` (default cap 500) + cursor pagination via `?after=<id>` URL param. Cohérent pattern J8 `getReportStatsForAdmin` aggregate (V1 polish).
+- **IPv4 obfuscation hex/decimal au T6 wire-time** (code-reviewer Phase H+2 MED-3) — `https://0x7f.0x0.0x0.0x1/` (hex) passe la dot-rule + est réinterprété en `127.0.0.1` au resolve time côté browser/Node `URL`/`fetch`. Non-exploitable V1 (la vitrine `apps/track-record` ne fetch PAS `screenshotUrl` côté serveur — 0 `<img>` server-rendered). Fix au moment où T6 wire un fetch server-side : parser real-IP via WHATWG `URL.host` + DNS resolve check au lieu du regex pré-check.
+- **JSDoc `numFieldNullable` `Number.MAX_VALUE` boundary** (MED-4) — **shippé Phase H+3.1** commit `0f214f8` (`form-shapers.ts:67-87`).
+- **Test boundary tight `1e309`** (MED-5) — **shippé Phase H+3.1** commit `0f214f8` (`actions.test.ts:166-180`).
+- **Rollback recipe documenté** : `docs/runbook-hetzner-deploy.md` §21 (T5 track-record).
+
+#### Phase H+5 + H+6 shipped (round 5-6 audit-driven hardening)
+
+Round 5 (Phase H+5) : 2 sub-agents orthogonaux (`a764abee43e6775ab` code-reviewer pages + `aeb18b923eeeca777` api-designer Server Actions). Round 6 (Phase H+6) : `acd3f906265728a4d` performance-profiler — angle perf jamais audit pour T5.
+
+- **TIER 1 #1 timezone drift** — vrai bug data-corruption silencieux : `<input type="datetime-local">` pre-fill Paris wall-clock → admin re-submit sans toucher → `z.coerce.date()` parsé en LOCAL serveur runtime → sur Hetzner UTC = drift +2h cumulatif. Fix par helper `parisLocalDatetimeToUtc` + `z.preprocess` (`Intl.DateTimeFormat` DST-aware) sur `dateTimeSchema`. **+9 tests** (CEST + CET + Z + Date + seconds + round-trip + DST spring-forward gap + DST fall-back overlap + year boundary CET winter).
+- **Sentry observability wire** — 6× `console.error('[admin.track-record.X] failed')` → `reportError('admin.public_trade.X', err)` canon J10 Phase B. Scope naming aligné taxonomy audit slugs.
+- **`tagsField` defense-in-depth** — retourne `string[] | undefined` quand fd absent (symétrie `strFieldNullable`). Protège `@invariant shapeFormDataForUpdate` régression future.
+- **`loading.tsx` padding align** — `py-8` → `pt-6 pb-24 md:pt-10` cohérent `page.tsx`. Stop layout shift ~16px mobile.
+- **`updatePublicTrade` Prisma mock tests** (Phase H+5 close V2-defer gap) — **+7 tests TDD** : NotFound, merge undefined-skip vs null-clear, Phase H+4 open invariant service-side, resultPercent SSOT recompute, Decimal wrap.
+- **Hoist `Intl.DateTimeFormat` au module level** (Phase H+6 perf #5) — `public-trade-row.tsx:127-137` carbone pattern J8 review/reflect. ~50ms saving render list à 139 trades V1, ~360ms à 1000 trades V2.
+- **Client-side Paris timezone consistency** (Phase H+8 — closes Phase H+5 round-trip) — `toDatetimeLocal` (pre-fill form) utilisait `d.getTimezoneOffset()` browser-local → admin en TZ ≠ Paris OU SSR runtime UTC produisait un wall-clock browser-dépendant que le server preprocess H+5 interpretait comme Paris → drift cumulatif silencieux. Fix : extracted dans `components/admin/track-record/datetime-paris.ts` (pure module testable) + `Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' })` explicite. Symétrique avec server helper `parisLocalDatetimeToUtc`. **+8 tests TDD** (CEST + CET + Date object + null/undefined + invalid + day boundary + midnight collapse "24"→"00" + round-trip preserve UTC instant). Aussi : `formatDate` dans `public-trade-row.tsx` ajout `timeZone: 'Europe/Paris'` explicite (fix display "22 mai" au lieu de "23 mai" boundary pour trades Paris 1h AM = UTC 23:00 jour précédent). Cohérent SPEC §16 "Fuseau Europe/Paris".
+
+#### Backlog V1.x — Phase H+4 stress-test + H+6 perf-profiler deferred (non-bloquant V1)
+
+Sub-agent stress-test FRESH `aef24aa0602d3cec0` (Phase H+3 closeout, angle ORTHOGONAL aux 3 rounds précédents) trouve **1 TIER 1 vrai bug latent** + **2 TIER 2 UX gotchas réels** + **4 TIER 3 V1.x defer**. Tous TIER 1 + TIER 2 fix in-session Phase H+4 commit `9e9fc85` ; TIER 3 listés ci-dessous :
+
+- **`<PartialsSection>` edit-partial UI** (stress-test #2) — actuellement V1 ship create-only flow (admin add partial puis delete uniquement, pas d'edit). Si V1.x câble un edit-partial form, le `strField` ligne `actions.ts:282` doit devenir `strFieldNullable` pour permettre de clearer le commentaire d'une leg via update.
+- **P2002 `ordinal_taken` UI retry button** (stress-test #5) — si 2 tabs ouverts par Eliot soumettent simultanément avec auto-derive `ordinal`, le 2ᵉ reçoit `fieldErrors: { ordinal: "Ordinal N déjà utilisé." }`. UX V1 = message brut acceptable + admin resubmit manuellement. V1.x polish = bouton "Retry avec ordinal auto" qui clear l'input + resoumet.
+- **`setPublished` audit log spam idempotence** (stress-test #6) — `actions.ts:249-255` émet `admin.public_trade.published` à chaque clic, même si le trade est déjà dans l'état target. `setPublished` service ne short-circuit pas. À 5 clics consécutifs = 5 audit rows identiques. Audit retention 90j J10 absorbe, mais à corriger si UI history view les consomme. Fix : `setPublished` retourne `wasChanged: boolean` ; action skip `logAudit` si `!wasChanged`.
+- **`dateTimeSchema` calendar validity check** (stress-test #7) — **shippé Phase H+7** commit `<HEAD>` : helper `parisLocalDatetimeToUtc` gate calendar validity (rejette month>12, day>31, day rolling Date.UTC) + `z.coerce.date({ error: () => "Date invalide." })` custom error sur new `Date(NaN)` retourné par le preprocess. +4 tests TDD (invalid month 13, invalid day Feb 30, Feb 29 non-leap 2026, Feb 29 leap 2024 accepté).
+- **`setPublished` audit log spam idempotence** (api-designer YELLOW #6) — **shippé Phase H+7** : service retourne `{ row, wasChanged }`, action skip `logAudit` si `!wasChanged`. Toggle redondant n'émet plus d'audit row. +4 tests (publish redundant, publish first time, unpublish-then-published, unpublish redundant).
+
+#### Backlog V2-defer — Phase H+6 perf-profiler items
+
+Sub-agent perf-profiler (`acd3f906265728a4d`) verdict V1 SHIP-ACCEPTABLE — 0 TIER 1 perf bug à 139 trades. Items reclassés V2 quand cohort dépasse 500 trades :
+
+- **`listPublicTrades` slim select sur list view** — Prisma retourne TOUTES les colonnes incluant `notes` (Text 2000 chars), `setup`, `screenshotUrl` qui ne sont pas consommés par `<PublicTradeRow>`. À 1000 trades × ~500 bytes notes moyennes = ~500 KB transférés inutilement Server→hydration. Fix V2 couplé pagination : `select` explicit qui omit `notes`/`screenshotUrl`/`source` + nouveau type `SerializedPublicTradeListItem`. ~1h dev couplé pagination.
+- **`getCatalogStats` 7× COUNT → single GROUP BY FILTER** — 7 queries parallèles via `Promise.all` à 139 = ~7ms total. À 10 000 trades V3 = 7× sequential scan partial-aggregate. Fix via Postgres `COUNT(*) FILTER (WHERE ...)` single scan ~5× speedup. V2 micro-optim, V1 noise.
+- **`_count: { partials }` sub-COUNT par row** — Prisma `_count` génère un `LEFT JOIN LATERAL`. Index `(publicTradeId, closedAt asc)` couvre déjà. À 1000 trades × 5 partials = 5000 rows scannées = OK. V2 si EXPLAIN ANALYZE flag.
+- **`logAudit` await blocant Server Action** — `await logAudit(...)` ajoute ~5-20ms latency DB par mutation. Cohérent pattern J5/J6 (changer T5 seul = inconsistance). V2 candidate `unstable_after` Next.js 16 pour audits non-critiques.
+- **`revalidateTag` granularité** — actions utilisent `revalidatePath('/admin/track-record')` qui invalide page entière. V2 `revalidateTag('public-trade:list')` + `fetch(..., { next: { tags } })` pour révalidation granulaire. À 1000+ rows.

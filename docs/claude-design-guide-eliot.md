@@ -550,7 +550,7 @@ Lis aussi pour le contexte :
 - D:\Fxmily\docs\claude-design-brief-sprint-1.md (le brief original)
 - D:\Fxmily\apps\web\CLAUDE.md (conventions repo Next.js / Tailwind / etc.)
 - D:\Fxmily\SPEC.md (vision produit)
-- D:\Fxmily\docs\jalon-2-prep.md (décisions produit J2 actées)
+- D:\Fxmily\docs\archive\jalon-2-prep.md (décisions produit J2 actées)
 - C:\Users\eliot\.claude\projects\D--Fxmily\memory\MEMORY.md
   (préférences user — pas d'audio, design premium)
 
@@ -577,7 +577,7 @@ Méthode demandée :
 6. Quality gate après chaque commit (format, lint, type-check, test, build)
 7. Tests E2E auth-gate existants à préserver (zéro régression sur
    tests/e2e/auth-invitation.spec.ts, journal.spec.ts, admin-members.spec.ts)
-8. Update docs/jalon-2-prep.md ou crée docs/design-sprint-1-close-out.md
+8. Update docs/archive/jalon-2-prep.md ou crée docs/design-sprint-1-close-out.md
    avec les décisions design et le récap palette enrichie
 ```
 
@@ -615,7 +615,7 @@ enrichi sorti du Sprint #1 Claude Design :
 ### 9.2. Créer un close-out doc
 
 ```
-Crée docs/design-sprint-1-close-out.md inspiré de docs/jalon-2-prep.md :
+Crée docs/design-sprint-1-close-out.md inspiré de docs/archive/jalon-2-prep.md :
 - Ce qui a été designé (les 11 écrans + 8 composants)
 - Screenshots avant/après (à insérer dans .claude/worktrees/, ou liens)
 - Décisions design tranchées (palette enrichie, fonts, animations)

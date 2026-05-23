@@ -5,7 +5,7 @@ Wires Fxmily V1 from a Hetzner Cloud CX22 to a working
 domaine déjà possédé `fxmilyapp.com`, décision Phase R 2026-05-09 pour
 respecter strictement la contrainte zéro coût supplémentaire). Pair with
 [`runbook-backup-restore.md`](runbook-backup-restore.md) and
-[`docs/jalon-10-prep.md`](jalon-10-prep.md).
+[`docs/archive/jalon-10-prep.md`](archive/jalon-10-prep.md).
 
 > **Pré-requis manuel Eliot (V1 — Phase R reality check 2026-05-09)** :
 >
@@ -202,7 +202,7 @@ aws s3 ls s3://fxmily-backups/ --endpoint-url $R2_ENDPOINT --profile fxmily-back
 
 ## 8. Premier membre (Eliot s'invite — Phase F du J10)
 
-Cf. [`docs/jalon-10-prep.md`](jalon-10-prep.md) §8 — checklist 12 steps
+Cf. [`docs/archive/jalon-10-prep.md`](archive/jalon-10-prep.md) §8 — checklist 12 steps
 end-to-end. À ne lancer qu'**après** étapes 1-7 ci-dessus + Resend domain
 verify accompli.
 

@@ -3106,8 +3106,8 @@ PR [#76](https://github.com/fxeliott/fxmily/pull/76). Audit 5-subagent V1.10 par
 
 ### Backlog restant V1.12 P4 (non-bloquants)
 
-- **runbook-prod-smoke-test V2 execution** : faire le 1er run hebdo lundi 2026-05-18 (~15-30 min selon gates).
-- **E2E V1.8 REFLECT happy-path** (~4-6h dedicated session, deferred V1.13+ ou autre)
+- **runbook-prod-smoke-test V2 execution** : faire le 1er run hebdo lundi 2026-05-18 (~15-30 min selon gates). **Statut 2026-05-22** : ✅ V2 LIVE depuis V1.12 P4 refonte 2026-05-15 (`docs/runbook-prod-smoke-test.md:3` `V2 (V1.12 P4 refonte 2026-05-15)`), runbook hebdo désormais routine ops courante (date 2026-05-18 passée, 0 incident sessions J→P post-2026-05-18).
+- **E2E V1.8 REFLECT happy-path** (~4-6h dedicated session, deferred V1.13+ ou autre). **Statut 2026-05-22** : ✅ LIVRÉ V1.8 (PR #115 MERGED 2026-05-18, spec file shipped `apps/web/tests/e2e/v1-8-reflect-happy-path.spec.ts`).
 - **V2 enhancements** sub-agent V1.12 P3 follow-ups : L3 ipHash audit metadata + I1 unit tests `authorize()` IP path (requires `auth.ts:57` extract refactor) + M2 'unknown' bucket V2 fallback.
 - **Dependabot triage** : #41 tailwind group (3 deps bump bloqué post-rebase prettier formatting 69 files) + #6 eslint 10 (incompat eslint-plugin-react upstream, real defer).
 

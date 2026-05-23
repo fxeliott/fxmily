@@ -253,11 +253,97 @@ const resultRSchema = z.preprocess(
 );
 
 /**
+ * **Phase H+5 TIER 1 #1 — timezone drift fix**
+ *
+ * Le sub-agent code-reviewer Phase H+5 (`a764abee43e6775ab`) a détecté un
+ * vrai bug data-corruption silencieux : le form admin pré-remplit
+ * `<input type="datetime-local">` avec un wall-clock Paris (e.g.
+ * `"2026-05-22T12:00"` pour un trade stocké `2026-05-22T10:00Z`). Quand
+ * l'admin re-submit SANS toucher au champ, FormData ré-envoie la string.
+ * `z.coerce.date()` appelle `new Date("2026-05-22T12:00")` qui interprète
+ * la string comme **local-time du serveur runtime**. Sur Hetzner prod UTC,
+ * c'est `2026-05-22T12:00:00Z` ⇒ drift +2h vs intent admin. **Drift
+ * cumulatif silencieux** à chaque save innocent (le trade glisse
+ * progressivement en avant à chaque édition).
+ *
+ * Fix : preprocess les strings au format datetime-local SANS TZ designator
+ * (`YYYY-MM-DDTHH:MM[:SS]`) en les interprétant comme Europe/Paris
+ * (fuseau projet par construction, SPEC §2 + §16). Pour strings avec TZ
+ * (Z, +HH:MM) OU Date objects → pass-through inchangé.
+ *
+ * Pourquoi pas une lib (date-fns-tz) : éviter une dépendance nouvelle pour
+ * un fix scopé. L'algorithme via `Intl.DateTimeFormat` natif Node 22 LTS
+ * (ICU bundled) gère DST automatiquement (offset query à l'instant naïf).
+ */
+function parisLocalDatetimeToUtc(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(s);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, se = '00'] = m;
+  const year = Number(y);
+  const month = Number(mo);
+  const day = Number(d);
+  const hour = Number(h);
+  const minute = Number(mi);
+  const second = Number(se);
+
+  // Naive UTC : treat the wall-clock numbers as if they were UTC.
+  const naiveUtcMs = Date.UTC(year, month - 1, day, hour, minute, second);
+  if (Number.isNaN(naiveUtcMs)) return null;
+  const naiveUtc = new Date(naiveUtcMs);
+
+  // Find what time it IS in Paris when the actual UTC is `naiveUtc`.
+  // The diff = Paris-vs-UTC offset at that instant (DST-aware).
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(naiveUtc);
+  const get = (t: string): number => Number(parts.find((p) => p.type === t)?.value ?? '0');
+
+  // Note : the en-CA locale formats `hour: '2-digit', hour12: false` as
+  // "24" for midnight (00:00 in Europe/Paris is displayed as "24"). On
+  // collapse 24 → 0 pour cohérence avec Date.UTC.
+  const pH = get('hour') === 24 ? 0 : get('hour');
+  const parisAsUtcMs = Date.UTC(
+    get('year'),
+    get('month') - 1,
+    get('day'),
+    pH,
+    get('minute'),
+    get('second'),
+  );
+  const offsetMs = parisAsUtcMs - naiveUtcMs;
+
+  return new Date(naiveUtcMs - offsetMs);
+}
+
+/**
  * Date ISO compatible Postgres `DateTime`. Pas `@db.Date` ici (PublicTrade
  * stocke un instant, pas un jour civil — différencie un trade entré 14:32
  * vs 14:33 dans le même session london).
+ *
+ * Phase H+5 TIER 1 #1 : preprocess datetime-local strings (HTML5 input
+ * format sans TZ) → interprété Europe/Paris. Strings avec TZ designator
+ * (Z, +HH:MM) ET Date objects → pass-through. Voir
+ * `parisLocalDatetimeToUtc` ci-dessus pour le rationale.
  */
-const dateTimeSchema = z.coerce.date();
+const dateTimeSchema = z.preprocess((v) => {
+  if (typeof v !== 'string') return v;
+  // Has TZ designator (Z or ±HH:MM[:SS]) → pass-through (admin script /
+  // serialization paths emit ISO with TZ, parsable by Date directly).
+  if (/Z$|[+-]\d{2}:?\d{2}$/.test(v)) return v;
+  // datetime-local format (YYYY-MM-DDTHH:MM[:SS], no TZ) → interpret as
+  // Europe/Paris local wall-clock.
+  const parisDate = parisLocalDatetimeToUtc(v);
+  if (parisDate) return parisDate;
+  return v;
+}, z.coerce.date());
 
 // =============================================================================
 // Create / Update — admin form schemas

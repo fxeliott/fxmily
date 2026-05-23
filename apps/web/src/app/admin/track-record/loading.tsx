@@ -15,7 +15,10 @@
 
 import { Card } from '@/components/ui/card';
 
-const CONTAINER = 'container mx-auto max-w-6xl px-4 py-8 md:py-12';
+// Phase H+5 TIER 2 #7 fix — align padding avec `page.tsx:68` pour éviter
+// le layout shift visible mobile (~16px scroll bump) à la transition
+// skeleton → loaded. `page.tsx` utilise `pt-6 pb-24 md:pt-10`.
+const CONTAINER = 'container mx-auto max-w-6xl px-4 pt-6 pb-24 md:pt-10';
 
 export default function AdminTrackRecordLoading() {
   return (

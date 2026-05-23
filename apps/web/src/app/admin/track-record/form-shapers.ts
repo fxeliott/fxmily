@@ -124,9 +124,17 @@ export function boolField(fd: FormData, key: string, fallback = false): boolean 
  */
 export const TAGS_FIELD_RAW_CAP = 600;
 
-export function tagsField(fd: FormData): string[] {
+export function tagsField(fd: FormData): string[] | undefined {
+  // Phase H+5 defense-in-depth — return `undefined` quand la clé est ABSENTE
+  // du FormData (vs `[]` qui signifie "admin a explicitly cleared l'input").
+  // Distinction symétrique avec `strFieldNullable` : absent → undefined
+  // (preserve existing), present-empty → [] (explicit clear), present-value
+  // → array. Le `@invariant shapeFormDataForUpdate` (form rend
+  // inconditionnellement tous les inputs) rend ce cas absent théorique en
+  // V1 — fix défensif contre régression future si l'invariant casse.
+  if (!fd.has('tags')) return undefined;
   const v = fd.get('tags');
-  if (typeof v !== 'string') return [];
+  if (typeof v !== 'string') return undefined;
   const raw = v.trim();
   if (raw.length === 0) return [];
   return raw

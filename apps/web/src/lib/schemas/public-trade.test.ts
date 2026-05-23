@@ -783,3 +783,106 @@ describe('publicTradeCreateSchema — FR locale comma support (Phase H+4 TIER 2)
     }
   });
 });
+
+// =============================================================================
+// Phase H+5 TIER 1 #1 — Europe/Paris timezone interpretation on datetime-local
+// =============================================================================
+//
+// Le sub-agent code-reviewer Phase H+5 a détecté que `z.coerce.date()` sur
+// une string datetime-local (`YYYY-MM-DDTHH:MM[:SS]` SANS TZ designator)
+// interprète comme **local-time du serveur runtime**. Sur Hetzner UTC,
+// `new Date("2026-05-22T12:00")` = `2026-05-22T12:00Z` MAIS l'admin
+// (Paris CEST) voulait dire `2026-05-22T10:00Z`. Drift cumulatif silencieux
+// à chaque save innocent. Fix : preprocess qui interprète Europe/Paris.
+
+describe('publicTradeCreateSchema — Europe/Paris timezone (Phase H+5 TIER 1)', () => {
+  it('interprets datetime-local string (no TZ) as Europe/Paris CEST (summer)', () => {
+    // Admin saisit `"2026-05-22T12:00"` (noon Paris CEST UTC+2)
+    // Expected UTC instant: `2026-05-22T10:00:00.000Z`
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: '2026-05-22T12:00',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.enteredAt).toBeInstanceOf(Date);
+      expect(r.data.enteredAt.toISOString()).toBe('2026-05-22T10:00:00.000Z');
+    }
+  });
+
+  it('interprets datetime-local string (no TZ) as Europe/Paris CET (winter)', () => {
+    // Admin saisit `"2026-01-15T12:00"` (noon Paris CET UTC+1)
+    // Expected UTC instant: `2026-01-15T11:00:00.000Z`
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: '2026-01-15T12:00',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.enteredAt.toISOString()).toBe('2026-01-15T11:00:00.000Z');
+    }
+  });
+
+  it('preserves Z-suffixed UTC string unchanged (pass-through path)', () => {
+    // Admin script ou serialization émet ISO avec Z → pass-through cohérent
+    // `new Date()`.
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: '2026-05-22T10:00:00.000Z',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.enteredAt.toISOString()).toBe('2026-05-22T10:00:00.000Z');
+    }
+  });
+
+  it('preserves Date object pass-through (test fixture path)', () => {
+    const dateObj = new Date('2026-05-22T10:00:00.000Z');
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: dateObj,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.enteredAt.toISOString()).toBe('2026-05-22T10:00:00.000Z');
+    }
+  });
+
+  it('handles datetime-local with seconds component', () => {
+    // `<input type="datetime-local" step="1">` peut émettre seconds.
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: '2026-05-22T12:00:30',
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.enteredAt.toISOString()).toBe('2026-05-22T10:00:30.000Z');
+    }
+  });
+
+  it('round-trip preserves the UTC instant — no cumulative drift on re-save', () => {
+    // Critical regression test : the bug was that admin save WITHOUT TOUCHING
+    // the field shifted the UTC instant. Simulate the round-trip :
+    //   1. DB stores `2026-05-22T10:00:00.000Z` (UTC instant, was Paris noon).
+    //   2. Server-Component renders, pre-fills form with `toDatetimeLocal()`
+    //      result = `"2026-05-22T12:00"` (Paris wall-clock, the admin's POV).
+    //   3. Admin submits without touching. FormData carries `"2026-05-22T12:00"`.
+    //   4. Server Zod re-parses. MUST yield `2026-05-22T10:00:00.000Z` (identical
+    //      UTC instant). Avant fix Phase H+5 : `2026-05-22T12:00:00.000Z`
+    //      (drift +2h, cumulative regression).
+    const original = new Date('2026-05-22T10:00:00.000Z');
+    // Simule `toDatetimeLocal` côté client (Paris CEST) — `"2026-05-22T12:00"`.
+    // On hardcode la string que le browser side renvoie pour rendre le test
+    // déterministe (vs dépendre du TZ du runner CI).
+    const formSubmittedString = '2026-05-22T12:00';
+    const r = publicTradeCreateSchema.safeParse({
+      ...validOpen(),
+      enteredAt: formSubmittedString,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      // L'instant UTC reparsé DOIT être identique à l'original.
+      expect(r.data.enteredAt.getTime()).toBe(original.getTime());
+    }
+  });
+});

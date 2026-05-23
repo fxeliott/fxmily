@@ -17,6 +17,7 @@ import {
   updatePublicTrade,
 } from '@/lib/admin/public-trade-service';
 import { logAudit } from '@/lib/auth/audit';
+import { reportError } from '@/lib/observability';
 import {
   publicTradeCreateSchema,
   publicTradePartialSchema,
@@ -133,7 +134,7 @@ export async function createPublicTradeAction(
     if (err instanceof PublicTradeInvalidStateError) {
       return { ok: false, error: 'invalid_state', fieldErrors: { [err.field]: err.message } };
     }
-    console.error('[admin.track-record.create] failed', err);
+    reportError('admin.public_trade.create', err);
     return { ok: false, error: 'unknown' };
   }
   // Redirect post-create vers la list — enchaîne plusieurs ajouts.
@@ -190,7 +191,7 @@ export async function updatePublicTradeAction(
     if (err instanceof PublicTradeInvalidStateError) {
       return { ok: false, error: 'invalid_state', fieldErrors: { [err.field]: err.message } };
     }
-    console.error('[admin.track-record.update] failed', err);
+    reportError('admin.public_trade.update', err);
     return { ok: false, error: 'unknown' };
   }
 }
@@ -221,7 +222,7 @@ export async function deletePublicTradeAction(
     return { ok: true };
   } catch (err) {
     if (err instanceof PublicTradeNotFoundError) return { ok: false, error: 'not_found' };
-    console.error('[admin.track-record.delete] failed', err);
+    reportError('admin.public_trade.delete', err);
     return { ok: false, error: 'unknown' };
   }
 }
@@ -256,7 +257,7 @@ export async function setPublishedAction(
     return { ok: true };
   } catch (err) {
     if (err instanceof PublicTradeNotFoundError) return { ok: false, error: 'not_found' };
-    console.error('[admin.track-record.setPublished] failed', err);
+    reportError('admin.public_trade.set_published', err);
     return { ok: false, error: 'unknown' };
   }
 }
@@ -333,7 +334,7 @@ export async function createPartialAction(
     };
   } catch (err) {
     if (err instanceof PublicTradeNotFoundError) return { ok: false, error: 'not_found' };
-    console.error('[admin.track-record.partial.create] failed', err);
+    reportError('admin.public_trade.partial.create', err);
     return { ok: false, error: 'unknown' };
   }
 }
@@ -370,7 +371,7 @@ export async function deletePartialAction(
     return { ok: true };
   } catch (err) {
     if (err instanceof PublicTradePartialNotFoundError) return { ok: false, error: 'not_found' };
-    console.error('[admin.track-record.partial.delete] failed', err);
+    reportError('admin.public_trade.partial.delete', err);
     return { ok: false, error: 'unknown' };
   }
 }

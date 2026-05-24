@@ -1,5 +1,21 @@
 # Jalon V2-Capacitor-iOS — Préparation App Store soumission
 
+> ## ⏸️ Session U 2026-05-24 — TIMING DEFERRED "à la toute fin"
+>
+> **Eliot clarification scope sequencing Session U** (verbatim) : _"pour l'instant on termine tout en laissant en web app et après on fera le play store et apple store à la toute fin quand tout de terminer sinon maintenant"_.
+>
+> **Décodage hardcore** :
+>
+> - ⏸️ **Sessions U..CC Capacitor V2 (iOS + Android) DEFERRED jusqu'à fin V1/V2 hardening Web** (PAS imminent comme briefs Sessions T/T+ recommandaient initialement)
+> - ✅ **Focus Sessions V+ jusqu'à clôture features** = continuer Web/PWA V1 LIVE prod Hetzner (`app.fxmilyapp.com`) + V1 backlog + V2 hardening non-Capacitor + bug fixes + features Web emergentes
+> - ❌ **NE PAS lancer enrollments maintenant** : Apple Developer Program $99/an récurrent + Google Play Console $25 one-time = waste si Capacitor pas utilisé avant des mois (Apple = abonnement annuel auto-renew = facturé même sans usage)
+> - ✅ **Brief Capacitor ci-dessous reste canon spécification valide** quand Capacitor sequence lancée plus tard — décisions tranchées Sessions T + T+ (9 décisions verrouillées) restent applicables intactes
+> - ⚠️ **Réactivation Capacitor sequence** = futur point décision Eliot post-clôture V1/V2 hardening (signal explicit "OK on lance Capacitor maintenant" requis avant Session U réactive V2-B Capacitor setup)
+>
+> **Décision tranchée Session U Voie V2-Z** : annotation DEFERRED ici (PAS suppression brief — il reste canon spécification pour réactivation future). Pickup Session V+ recalculé vers V1/V2 hardening non-Capacitor (cf. memory `auto_session_resume.md` post-Session U close-out).
+>
+> ---
+>
 > **Statut** : Brief de préparation (Session S 2026-05-23). Synthèse Round 2 Session S audit `/maximum-mode` 4 sub-agents parallèles (CAP-1 architecture compat + CAP-2 Capacitor docs 2026 + CAP-3 Apple Developer Program 2026 + ASC + CAP-4 push V1 → APN refactor scope).
 >
 > **Session T 2026-05-23 (post-merge décisions tranchées Voie V2-A)** : 4 pré-requis blockers résolus via clarifications Eliot + méta-délégation carte blanche + due diligence sub-agent `a2c7cdf21c0ecf53b` (Apple Developer 2026 + push notifications stack 2026, 10 URLs sources primaires) :
@@ -835,6 +851,8 @@ Si freemium futur V2+ : IAP StoreKit obligatoire (commission EU 20% via DMA Smal
 
 ## 12. Calendar réaliste séquence multi-jalons §18.4 (Session T+ multi-platform pivot)
 
+> ⏸️ **Session U 2026-05-24 — TIMING DEFERRED "à la toute fin"** : Eliot clarification scope post-Session T+ = Sessions U..CC Capacitor V2 DEFERRED jusqu'à fin V1/V2 hardening Web. Sessions V+ focus = Web/PWA V1 LIVE non-Capacitor. Réactivation Capacitor sequence = futur point décision Eliot post-clôture features. Calendar 10-14 sem cross-platform reste **valide quand réactivé** (calculé à partir du moment où Eliot signal "OK on lance Capacitor maintenant"), PAS depuis date publication brief.
+
 Estimation totale **10-14 semaines calendaires** cross-platform iOS + Android (extension de 8-11 sem iOS-only Session S original) :
 
 - Best case enrollment Apple 48h + Google Play 2j + 0 rejection : **7-8 semaines**
@@ -896,6 +914,8 @@ Pendant attente enrollments Apple (1-4 sem) + Google Play (2-7j) :
 | **DUNS / SIRET / Android developer verification 2024-2026** (Session T+) | TBD France                    | Délai enrollment Personal Android      | `[TBD 2026]` sub-agent A7D7 non précisé — vérifier support.google.com/android/answer/14138318 avant enrollment Eliot      |
 
 ## 14. Pré-requis blockers Eliot AVANT démarrage
+
+> ⏸️ **Session U 2026-05-24 — TIMING DEFERRED** : tous les pré-requis Eliot manuel (enrollments Apple Developer Program $99/an récurrent + Google Play Console $25 one-time + Firebase project + Android Studio install + scans pièce identité gov FR + DUNS éventuel) **NE PAS LANCER maintenant**. Eliot clarification scope Session U = Sessions U..CC Capacitor V2 DEFERRED jusqu'à fin V1/V2 hardening Web. Enrollment Apple $99/an = auto-renew annuel = waste si Capacitor pas utilisé avant des mois. Réactivation = futur point décision Eliot post-clôture features. Liste pré-requis ci-dessous reste **valide quand réactivé** comme checklist d'action.
 
 [Récap actionnable post-Session T+ multi-platform pivot 2026-05-23] :
 
@@ -967,4 +987,5 @@ Pendant attente enrollments Apple (1-4 sem) + Google Play (2-7j) :
 - **Session T clarifications Eliot** : Mac OK + Bundle ID `com.fxmily.app` validés directs ; Track Apple Developer + Push channel = méta-délégation totale "carte blanche, exploite tes capacités" → Claude tranche hardcore self-challenge → Individual + Direct APN HTTP/2 (rationale §5.2 + §6.4).
 - **Session T+ 2026-05-23 due diligence sub-agent** : `a7d7d73cdda5b79a4` — verdict Google Play Console + FCM HTTP v1 + plugin Capacitor Firebase Messaging Android + Android Studio prerequisites 2026. 10 URLs sources primaires consultées (support.google.com/googleplay/android-developer + firebase.google.com/docs + firebase.google.com/pricing + github.com/capawesome-team/capacitor-firebase + developer.android.com/studio + developer.android.com/google/play/requirements/target-sdk). 2 caveats `[TBD 2026]` calibrated refusal (DUNS/SIRET France Google enrollment + délai validation Google Play exact).
 - **Session T+ clarifications Eliot multi-platform pivot** : "n'importe quel client android comme ios est pas de soucis et surtout puisse ouvrir l'app que ça soit sur internet ou vrai app le mieux pour lui et surtout recevoir les notification comme une vraie application même téléphone éteint avec notif sur page d'accueil etc" = scope V2 étendu Android simultané iOS (PAS DEFERRED V2.1+ comme brief Session S initial). Méta-délégation totale "carte blanche exploite tes capacités" → Claude tranche hardcore self-challenge re-décision push channel = Option D best-of-breed Direct APN iOS + Direct FCM Android + abstraction PushProvider backend.
+- **Session U 2026-05-24 clarifications Eliot timing DEFERRED** (verbatim) : _"pour l'instant on termine tout en laissant en web app et après on fera le play store et apple store à la toute fin quand tout de terminer sinon maintenant"_ = Sessions U..CC Capacitor V2 (iOS + Android) DEFERRED jusqu'à clôture V1/V2 hardening Web. Brief Capacitor décisions tranchées Sessions T + T+ (9 décisions verrouillées) restent **canon spécification valide** pour réactivation future. Méta-délégation totale "exploite tes capacités full autonomie remettant hardcore en question le plus qualitatif". Pickup Session V+ recalculé vers V1/V2 hardening non-Capacitor (cf. memory `auto_session_resume.md` post-Session U close-out).
 - **Sources primaires Android 2026 (sub-agent A7D7, 10 URLs)** : `support.google.com/googleplay/android-developer/answer/6112435` ($25 one-time) + `support.google.com/android/answer/14138318` (Android developer verification 2024-2026) + `firebase.google.com/docs/cloud-messaging` (FCM HTTP v1 actuel) + `firebase.google.com/docs/admin/setup` (Firebase Admin SDK Node 22+) + `firebase.google.com/pricing` (FCM no-cost) + `github.com/capawesome-team/capacitor-firebase` (plugin actif release 2026-03-31) + `github.com/capawesome-team/capacitor-firebase/tree/main/packages/messaging` + `developer.android.com/studio` (Panda 4 Mac/Windows/Linux) + `developer.android.com/studio/install` (system requirements) + `developer.android.com/google/play/requirements/target-sdk` (API 35 obligatoire 2025-08-31+)

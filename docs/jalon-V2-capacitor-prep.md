@@ -7,9 +7,19 @@
 > 1. ✅ Mac hardware OK (Eliot confirmé Session T)
 > 2. ✅ Bundle ID `com.fxmily.app` validé (Session T)
 > 3. ✅ Track Apple Developer = **Individual** default (Session T décision tranchée, voir §5.2 — caveat migration `transfer app` documenté)
-> 4. ✅ Push channel = **Direct APN HTTP/2** via `@parse/node-apn` + plugin Capacitor `@capacitor/push-notifications` natif (Session T décision tranchée, voir §6.4 — reverse drift CAP-2 sur plugin Firebase Messaging)
+> 4. ✅ Push channel iOS = **Direct APN HTTP/2** via `@parse/node-apn` + plugin Capacitor `@capacitor/push-notifications` natif (Session T décision tranchée, voir §6.4 — reverse drift CAP-2 sur plugin Firebase Messaging)
 >
 > Pré-requis restants Session T+ : iPhone physique smoke test (Session BB TestFlight) + Demo account `apple-review@fxmilyapp.com` provisioned (Session Y).
+>
+> **Session T+ 2026-05-23 (multi-platform pivot scope expansion)** : Eliot clarification post-Session T = "n'importe quel client android comme ios est pas de soucis... recevoir les notification comme une vraie application même téléphone éteint" → **scope V2 étendu iOS + Android simultané** (PAS DEFERRED V2.1+ comme brief Session S initial). Méta-délégation totale Eliot + due diligence sub-agent `a7d7d73cdda5b79a4` (Google Play Console + FCM HTTP v1 + plugin Capacitor Firebase Messaging Android + Android Studio prerequisites 2026, 10 URLs sources primaires) :
+>
+> 5. ✅ Scope V2 étendu = iOS + Android simultané (PAS deferred V2.1+) — voir §1 Périmètre mis à jour
+> 6. ✅ Push channel Android = **Direct FCM HTTP v1** via `firebase-admin` Node + plugin Capacitor `@capacitor-firebase/messaging` (Session T+ décision tranchée, voir §6.5 nouvelle section)
+> 7. ✅ Backend abstraction = `IPushProvider` interface + 3 implémentations (`LiveApnClient` iOS + `LiveFcmClient` Android + `LiveWebPushClient` Web V1 existant) = **triple-channel dispatcher fan-out** parallèle `Promise.allSettled` (voir §4.4 + §4.6)
+> 8. ✅ Coût Google Play Console = **$25 USD one-time** (vs Apple $99/an récurrent) — voir §5.5 nouvelle section
+> 9. ✅ Android Studio + Capacitor 8 Android : Mac PAS obligatoire (Windows 10+/Mac 12+/Linux supportés). Capacitor min API 24 + Play Store target API 35+ obligatoire depuis 2025-08-31
+>
+> Pré-requis Eliot Session T++ : Google Play Console enrollment $25 one-time + Android iPhone smoke test (Session BB beta cycle parallèle TestFlight + Internal Testing Google Play).
 >
 > **Décision Eliot** : Capacitor iOS + Apple Developer Program **$99/an APPROUVÉ** (Session S clarification).
 >
@@ -17,22 +27,24 @@
 
 ## 1. Objectif
 
-Transformer Fxmily PWA Next.js 16 + React 19 (V1.12 P4 LIVE prod Hetzner) en **app native iOS** soumise et publiée sur Apple App Store, accessible aux membres formation Fxmily depuis leur iPhone via icône Home Screen native + APN push notifications natives.
+Transformer Fxmily PWA Next.js 16 + React 19 (V1.12 P4 LIVE prod Hetzner) en **app native iOS + Android cross-platform** soumise et publiée sur Apple App Store + Google Play Store, accessible aux membres formation Fxmily depuis iPhone OU Android via icône Home Screen native + push notifications natives APN/FCM (background telephone verrouillé inclus).
 
-**Périmètre V2.x** :
+**Périmètre V2.x** (Session T+ multi-platform pivot) :
 
-- iOS uniquement V2 (Android Play Store DEFERRED — V2.1 ou V3)
+- iOS **+ Android** simultané V2 (cross-platform, PAS Android DEFERRED comme brief Session S initial)
 - 1 build production Fxmily V1.x feature set actuel (PAS de nouvelles features Fxmily dans ce jalon)
-- App icon + splash + push APN + 10 plugins MVP P0+P1
-- Distribution App Store Connect (PAS Enterprise distribution)
+- App icon + splash + push APN (iOS) + push FCM (Android) + 10 plugins MVP P0+P1 cross-platform
+- Distribution App Store Connect (Apple) + Google Play Console (Android) en parallèle
+- Web/PWA Fxmily V1 LIVE Hetzner conservé (3ème surface user) : navigateur PC/Mac/Linux + Android Chrome (PWA "Add to Home Screen") + iPhone Safari 16.4+ (PWA installée Web Push limité, fallback dégradé)
 
 **Hors-scope explicite** :
 
 - Multi-admin (DEFERRED Eliot)
 - Stripe billing in-app (DEFERRED Eliot — cohorte payée hors-app Stripe externe Eliot direct)
-- Android Capacitor (V2.1+)
 - Capacitor Camera plugin (V2.1+ si upload photos trades)
 - Local notifications (V2.1+)
+- iPad / Android tablet optimization (V2.1+ — V2 phone form factor only)
+- ~~Android Capacitor (V2.1+)~~ **MOVED IN-SCOPE V2 Session T+ multi-platform pivot**
 
 ## 2. Architecture cible (ARBITRAGE hardcore CAP-1 vs CAP-2)
 
@@ -86,24 +98,33 @@ Transformer Fxmily PWA Next.js 16 + React 19 (V1.12 P4 LIVE prod Hetzner) en **a
 - **Node.js 22+** requis (Fxmily déjà Node 22 LTS ✓)
 - **SPM par défaut Capacitor 8** (CocoaPods en maintenance depuis août 2024)
 
-### 3.2 Plugins MVP iOS — sélection définitive 10 P0+P1
+### 3.2 Plugins MVP cross-platform iOS + Android — sélection définitive 11 P0+P1 (Session T+ multi-platform pivot)
 
-[tool-output CAP-2 §8] :
+[tool-output CAP-2 §8 + sub-agent A7D7 Session T+] :
 
-| #   | Plugin npm                                                                               | Usage Fxmily                                                             | Priorité |
-| --- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------- |
-| 1   | `@capacitor/push-notifications` (officiel Capacitor 2026, Session T reverse drift CAP-2) | Push APN natif iOS — Direct APN HTTP/2 backend (Session T décision §6.4) | P0       |
-| 2   | `@capacitor/preferences`                                                                 | Replace `localStorage` storage natif sécurisé                            | P0       |
-| 3   | `@capacitor/app`                                                                         | Lifecycle resume/pause/deep links                                        | P0       |
-| 4   | `@capacitor/status-bar`                                                                  | Style dark mode V1 Fxmily                                                | P1       |
-| 5   | `@capacitor/splash-screen`                                                               | Splash native lancement app                                              | P1       |
-| 6   | `@capacitor/network`                                                                     | Online/offline UX (mode déconnecté)                                      | P1       |
-| 7   | `@capacitor/keyboard`                                                                    | Auto-scroll inputs (wizards REFLECT/TRACK)                               | P1       |
-| 8   | `@capacitor/haptics`                                                                     | Feedback tactile REFLECT wizard validation                               | P1       |
-| 9   | `@capacitor/browser`                                                                     | Liens externes (/legal/\* pages)                                         | P1       |
-| 10  | `@capacitor/share`                                                                       | Partage natif debrief (WhatsApp/Telegram)                                | P1       |
+| #   | Plugin npm                                                                                                                 | Usage Fxmily                                                                   | Priorité | Plateforme    |
+| --- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | -------- | ------------- |
+| 1   | `@capacitor/push-notifications` (officiel Capacitor 2026, Session T reverse drift CAP-2)                                   | Push APN natif iOS — Direct APN HTTP/2 backend (Session T décision §6.4)       | P0       | iOS only      |
+| 1b  | `@capacitor-firebase/messaging` (Capawesome community plugin Capacitor 8 supporté, release 2026-03-31, Session T+ Android) | Push FCM natif Android — Direct FCM HTTP v1 backend (Session T+ décision §6.5) | P0       | Android only  |
+| 2   | `@capacitor/preferences`                                                                                                   | Replace `localStorage` storage natif sécurisé                                  | P0       | iOS + Android |
+| 3   | `@capacitor/app`                                                                                                           | Lifecycle resume/pause/deep links                                              | P0       | iOS + Android |
+| 4   | `@capacitor/status-bar`                                                                                                    | Style dark mode V1 Fxmily                                                      | P1       | iOS + Android |
+| 5   | `@capacitor/splash-screen`                                                                                                 | Splash native lancement app                                                    | P1       | iOS + Android |
+| 6   | `@capacitor/network`                                                                                                       | Online/offline UX (mode déconnecté)                                            | P1       | iOS + Android |
+| 7   | `@capacitor/keyboard`                                                                                                      | Auto-scroll inputs (wizards REFLECT/TRACK)                                     | P1       | iOS + Android |
+| 8   | `@capacitor/haptics`                                                                                                       | Feedback tactile REFLECT wizard validation                                     | P1       | iOS + Android |
+| 9   | `@capacitor/browser`                                                                                                       | Liens externes (/legal/\* pages)                                               | P1       | iOS + Android |
+| 10  | `@capacitor/share`                                                                                                         | Partage natif debrief (WhatsApp/Telegram)                                      | P1       | iOS + Android |
 
-**Note Session T due diligence sub-agent `a2c7cdf21c0ecf53b` — reverse drift CAP-2** : Capacitor docs officielles 2026 listent toujours `@capacitor/push-notifications` comme guide officiel verbatim [capacitorjs.com/docs/guides/push-notifications-firebase] (PAS phasing out). `@capacitor-firebase/messaging` reste **alternative valide** pour proxy FCM unifié Android+iOS futur (Android V2.1+ refactor), MAIS non obligatoire 2026. **Décision Session T** : `@capacitor/push-notifications` natif iOS V2 (couplé Direct APN HTTP/2 backend §6.4) pour minimisation sub-processors Google + Privacy Manifest Apple (cohérent app PRIVÉE/INTERNE + posture data minimization). Refactor Android V2.1+ devra introduire abstraction `PushProvider` côté backend pour découpler.
+**Note Session T due diligence sub-agent `a2c7cdf21c0ecf53b` — reverse drift CAP-2** : Capacitor docs officielles 2026 listent toujours `@capacitor/push-notifications` comme guide officiel verbatim [capacitorjs.com/docs/guides/push-notifications-firebase] (PAS phasing out). `@capacitor-firebase/messaging` reste **alternative valide** pour Android (PAS pour iOS).
+
+**Note Session T+ multi-platform pivot sub-agent `a7d7d73cdda5b79a4`** : scope V2 étendu Android simultané iOS. Architecture Option D = best-of-breed per-platform :
+
+- **iOS** : plugin natif `@capacitor/push-notifications` + backend `@parse/node-apn` Direct APN HTTP/2 (Session T décision §6.4 conservée — 0 sub-processor Google côté iOS bundle)
+- **Android** : plugin community `@capacitor-firebase/messaging` (Capawesome team, Capacitor 8 supporté, release 2026-03-31 active maintenance) + backend `firebase-admin` Node 22+ Direct FCM HTTP v1 (Session T+ décision §6.5 nouvelle section — Firebase obligatoire Android car FCM = seul transport push Android natif)
+- **Web V1 LIVE** : `web-push` lib backend Hetzner V1 inchangé (3ème channel parallèle pour PC/Mac/Linux navigateur + Android Chrome PWA + iPhone Safari 16.4+ PWA installée — voir §4.6 dispatcher triple-channel)
+
+Backend abstraction `IPushProvider` factory + 3 implémentations (`LiveApnClient` + `LiveFcmClient` + `LiveWebPushClient`) dispatcher fan-out `Promise.allSettled` parallèle. Refactor V2.1+ futur (ex: ajout WhatsApp/SMS) = ajouter 4ème driver sans toucher fan-out logic.
 
 Plugins P2-P3 (`@capacitor/camera`, `@capacitor/local-notifications`, `@capacitor/filesystem`) DEFERRED V2.1+ post-PMF mobile.
 
@@ -131,9 +152,25 @@ const config: CapacitorConfig = {
     allowsLinkPreview: false,
     scrollEnabled: true,
   },
+  android: {
+    // Session T+ multi-platform pivot — Android block ajouté
+    buildOptions: {
+      keystorePath: 'release.keystore', // configured Session U V2-B via Android Studio
+      keystoreAlias: 'fxmily-release',
+    },
+    backgroundColor: '#07090f',
+    allowMixedContent: false,
+    captureInput: true, // soft keyboard handling wizards REFLECT/TRACK
+    webContentsDebuggingEnabled: false, // production
+  },
   plugins: {
     PushNotifications: {
+      // iOS plugin officiel Capacitor natif
       presentationOptions: ['badge', 'sound', 'alert', 'banner', 'list'],
+    },
+    FirebaseMessaging: {
+      // Android Capawesome @capacitor-firebase/messaging — Session T+
+      presentationOptions: ['badge', 'sound', 'alert'],
     },
     SplashScreen: {
       launchShowDuration: 1500,
@@ -219,33 +256,118 @@ model ApnDeviceToken {
 
 Migration sera **ADD-only** (nouveau table, 0 modif existing) → rollback recipe simple `DROP TABLE apn_device_tokens` (carbone pattern runbook-hetzner-deploy.md §15 V2.1 admin_notes).
 
-### 4.4 Service push : `lib/push/apn-push-client.ts` (NEW)
+### 4.4 Services push : abstraction `IPushProvider` + 3 drivers (Session T+ multi-platform pivot)
 
-**Fichier** : `apps/web/src/lib/push/apn-push-client.ts` (~200 LOC).
+**Architecture** : interface unifiée `IPushProvider` + 3 implémentations active simultanées (iOS APN + Android FCM + Web V1).
 
-Interface `IApnClient` parallèle à `IWebPushClient` factory (pattern déjà extensible `web-push-client.ts:77-83`) :
+**Fichier 1** : `apps/web/src/lib/push/push-provider.ts` (~30 LOC NEW interface) :
 
 ```typescript
-export interface IApnClient {
-  send(token: string, payload: ApnPayload): Promise<ApnSendResult>;
+// Session T+ abstraction unified push channel backend
+export type PushPlatform = 'web' | 'apn' | 'fcm';
+
+export interface IPushProvider {
+  platform: PushPlatform;
+  send(target: string, payload: PushPayload): Promise<PushSendResult>;
 }
 
-class LiveApnClient implements IApnClient {
-  // HTTP/2 direct APN endpoint (moderne 2026 préféré à node-apn abandonware)
-  // JWT signing avec .p8 + Key ID + Team ID
+export interface PushPayload {
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  badge?: number;
+  sound?: string;
+}
+
+export interface PushSendResult {
+  ok: boolean;
+  errorCode?: 'BadDeviceToken' | 'Unregistered' | 'TooManyRequests' | 'InvalidToken' | 'Other';
+  errorMessage?: string;
+}
+```
+
+**Fichier 2** : `apps/web/src/lib/push/apn-push-client.ts` (~200 LOC iOS Session T décision) :
+
+```typescript
+class LiveApnClient implements IPushProvider {
+  platform = 'apn' as const;
+  // HTTP/2 direct APN endpoint via @parse/node-apn v8.1.0 (Session T sub-agent A2C7 confirmé active 2026)
+  // JWT signing avec .p8 + Key ID + Team ID (auto-renew ~20-60min)
   // Endpoints : api.sandbox.push.apple.com (TestFlight) | api.push.apple.com (prod)
   // Payload format : {aps:{alert:{title,body},badge,sound}, custom_keys}
   // Error taxonomy : BadDeviceToken | Unregistered | TooManyRequests | other
+  // 0 sub-processor Google (cohérent Privacy Manifest Apple)
 }
 
-class MockApnClient implements IApnClient { /* V1 default deterministe */ }
+class MockApnClient implements IPushProvider { platform = 'apn' as const; /* V1 default */ }
 
-export function createApnClient(): IApnClient {
+export function createApnClient(): IPushProvider {
   return env.APN_AUTH_KEY_P8 && env.APN_KEY_ID && env.APN_TEAM_ID
     ? new LiveApnClient(...)
     : new MockApnClient();
 }
 ```
+
+**Fichier 3** : `apps/web/src/lib/push/fcm-push-client.ts` (~200 LOC Android Session T+ décision) :
+
+```typescript
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
+
+class LiveFcmClient implements IPushProvider {
+  platform = 'fcm' as const;
+  // Firebase Admin SDK Node 22+ via firebase-admin npm (Session T+ sub-agent A7D7 confirmé active 2026, FCM no-cost Spark + Blaze)
+  // Direct FCM HTTP v1 API (PAS legacy FCM HTTP EOL juin 2024)
+  // Service account JSON via env.FIREBASE_SERVICE_ACCOUNT_JSON (Firebase Console → Settings → Service accounts → Generate New Private Key)
+  // Payload format FCM v1 : {message:{token, notification:{title,body}, android:{notification:{icon,sound,priority}}, data}}
+  // Error taxonomy : registration-token-not-registered | invalid-argument | quota-exceeded | other
+  // Sub-processor Google obligatoire Android (FCM = seul transport push Android natif) — déclaré Privacy Policy Fxmily + Google Play Data Safety form
+}
+
+class MockFcmClient implements IPushProvider { platform = 'fcm' as const; /* V1 default */ }
+
+export function createFcmClient(): IPushProvider {
+  return env.FIREBASE_SERVICE_ACCOUNT_JSON && env.FIREBASE_PROJECT_ID
+    ? new LiveFcmClient(...)
+    : new MockFcmClient();
+}
+```
+
+**Fichier 4** : `apps/web/src/lib/push/web-push-client.ts` (existing V1 LIVE) — adapter pour implémenter `IPushProvider` interface :
+
+```typescript
+class LiveWebPushClient implements IPushProvider {
+  platform = 'web' as const;
+  // web-push lib V1 existante (PWA Service Worker + VAPID keys)
+  // Inchangé V1 LIVE, juste adapter signature send() → IPushProvider
+}
+```
+
+**Schema Prisma** : ajouter modèle `FcmDeviceToken` parallèle à `ApnDeviceToken` (§4.3) — mirror pattern §21.5 isolation Android :
+
+```prisma
+/// V2 Session T+ — Capacitor Android FCM device tokens. Distinct table from
+/// ApnDeviceToken (iOS) + PushSubscription (web-push) for clean query patterns.
+model FcmDeviceToken {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fcmToken      String   @map("fcm_token") @db.Text  // FCM registration token (variable length)
+  packageName   String   @map("package_name")         // 'com.fxmily.app' (Android package = iOS Bundle ID)
+  appVersion    String?  @map("app_version")          // Capacitor build version
+  androidVersion String? @map("android_version")
+  lastSeenAt    DateTime @map("last_seen_at") @db.Timestamptz
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([userId, fcmToken])
+  @@index([userId])
+  @@index([lastSeenAt])
+  @@map("fcm_device_tokens")
+}
+```
+
+Migration sera **ADD-only** (nouveau table parallèle à `apn_device_tokens` Session T) → rollback recipe simple `DROP TABLE fcm_device_tokens`.
 
 ### 4.5 Service push : `lib/push/service.ts` (ajout `listDispatchableApnTokensForUser`)
 
@@ -262,31 +384,39 @@ export async function listDispatchableApnTokensForUser(
 }
 ```
 
-### 4.6 Dispatcher dual-channel : `lib/push/dispatcher.ts` (modifs ~20 LOC)
+### 4.6 Dispatcher triple-channel : `lib/push/dispatcher.ts` (modifs ~30 LOC — Session T+ multi-platform pivot)
 
-**Fichier** : `apps/web/src/lib/push/dispatcher.ts:387-405` fan-out étendu.
+**Fichier** : `apps/web/src/lib/push/dispatcher.ts:387-405` fan-out étendu **triple-channel** (Web + APN + FCM).
 
-Pattern dual-channel coexistence (NOT migration full APN) :
+Pattern triple-channel coexistence (NOT migration full APN/FCM) :
 
-- User installé Capacitor app + browser desktop = 2 endpoints (1 web + 1 apn) = 2 notifications (1 par device, comportement attendu UX)
-- Logic dispatcher : `Promise.allSettled([web fan-out, apn fan-out])` parallèle
-- Audit `push.notification.sent` carry `platform: 'web' | 'apn'` metadata
+- User installé app native iPhone + app native Android + navigateur PC = 3 endpoints (1 web + 1 apn + 1 fcm) = 3 notifications (1 par device, comportement attendu UX cross-platform)
+- User PWA Android Chrome only = 1 endpoint web (pas d'app native installée encore)
+- User PWA iPhone Safari only = 1 endpoint web (fallback dégradé iOS 16.4+, moins fiable que APN natif)
+- Logic dispatcher : `Promise.allSettled([web fan-out, apn fan-out, fcm fan-out])` parallèle
+- Audit `push.notification.sent` carry `platform: 'web' | 'apn' | 'fcm'` metadata
 
 ```typescript
-// dispatcher.ts:387 (approximatif)
-const [webResults, apnResults] = await Promise.allSettled([
+// dispatcher.ts:387 (approximatif Session T+)
+const [webResults, apnResults, fcmResults] = await Promise.allSettled([
   Promise.allSettled(webSubscriptions.map((sub) => webClient.send(sub.endpoint, webPayload))),
   Promise.allSettled(apnTokens.map((t) => apnClient.send(t.deviceToken, apnPayload))),
+  Promise.allSettled(fcmTokens.map((t) => fcmClient.send(t.fcmToken, fcmPayload))),
 ]);
 ```
 
-Payload mapping per-platform : `buildPayload` switch ajouter branche APN format `{aps:{alert:{title,body},badge,sound}, type, id}` vs web `{web_push:8030, notification:{...}}`.
+Payload mapping per-platform : `buildPayload` switch 3 branches :
 
-### 4.7 Env vars APN
+- **Web** : `{web_push:8030, notification:{title,body,icon,badge}, data}` (VAPID + Service Worker)
+- **APN** : `{aps:{alert:{title,body},badge,sound}, type, id}` (Apple format)
+- **FCM v1** : `{message:{token, notification:{title,body}, android:{notification:{icon,sound,priority:'high'}}, data}}` (Google format)
 
-**Fichier** : `apps/web/src/lib/env.ts:107-132` ajouts (~15 LOC) :
+### 4.7 Env vars APN + FCM (Session T+ multi-platform pivot)
+
+**Fichier** : `apps/web/src/lib/env.ts:107-132` ajouts (~25 LOC iOS + ~15 LOC Android = ~40 LOC) :
 
 ```typescript
+// iOS APN (Session T décision §6.4) :
 APN_AUTH_KEY_P8: z.string().regex(/^[A-Za-z0-9+/=\s]+$/).optional()
   .describe('Base64-encoded .p8 APN auth key from Apple Developer'),
 APN_KEY_ID: z.string().regex(/^[A-Z0-9]{10}$/).optional()
@@ -296,6 +426,13 @@ APN_TEAM_ID: z.string().regex(/^[A-Z0-9]{10}$/).optional()
 APN_BUNDLE_ID: z.string().regex(/^[a-z]+\.[a-z]+\.[a-z]+$/).optional()
   .describe('Reverse-DNS bundle ID e.g. com.fxmily.app'),
 APN_ENVIRONMENT: z.enum(['sandbox', 'production']).default('production'),
+
+// Android FCM (Session T+ décision §6.5 — Firebase Admin SDK Node) :
+FIREBASE_SERVICE_ACCOUNT_JSON: z.string().min(100).optional()
+  .describe('Base64 OR raw JSON of Firebase service account key (Firebase Console → Settings → Service accounts → Generate New Private Key)'),
+FIREBASE_PROJECT_ID: z.string().regex(/^[a-z0-9-]+$/).optional()
+  .describe('Firebase project ID (matches firebase.google.com/project/{id} URL)'),
+FCM_ENVIRONMENT: z.enum(['development', 'production']).default('production'),
 ```
 
 Cross-var refine `env.ts:204-224` (carbone V1.9 hardening E2 pattern) :
@@ -385,7 +522,40 @@ Rationale hardcore :
 - Adresse postale obligatoire (P.O. boxes refusées)
 - 2FA Apple ID activé requis
 
-## 6. APNs `.p8` authentication key
+### 5.5 Google Play Console enrollment (Session T+ multi-platform pivot — Android scope ADDED V2)
+
+[tool-output sub-agent A7D7 Session T+ — 4 sujets validés sources primaires 2026] :
+
+**Coût + paiement** :
+
+- **$25 USD one-time** (PAS récurrent annuel comme Apple $99/an) verbatim [support.google.com/googleplay/android-developer/answer/6112435]
+- Paiement carte Visa/MC une seule fois à enrollment
+- Pas d'auto-renew, account permanent à vie tant que pas violation policies
+
+**Account types** :
+
+- **Personal** (= Individual Apple équivalent) — recommandé Fxmily V1 carbone décision Apple Track Individual §5.2 Session T (cohérence cross-platform)
+- **Organization** disponible si Eliot crée entité légale "Fxmily" SAS/SARL plus tard
+- ID gov verification mandatoire depuis 2023-11-13 (gov ID requis Personal accounts) — workflow parallèle Apple ID verification
+
+**Délai validation 2026** : `[TBD 2026]` — sub-agent A7D7 n'a pas trouvé timeframe précis verbatim. Source Google mentionne "validation delays may occur" sans chiffres. Anecdotal réaliste : 2-7j ouvrés (vs Apple 1-4 sem).
+
+**France SIRET / DUNS** : `[TBD 2026]` — Google n'utilise PAS DUNS comme Apple. Sub-agent A7D7 n'a pas trouvé verbatim si SIRET requis Organization France. ID gov suffit typiquement Personal France.
+
+**Pre-requis Eliot manuel** post-décision V2 multi-platform :
+
+1. Compte Google personnel (Gmail OK)
+2. Carte bancaire $25 USD
+3. Pièce d'identité gov FR scan (passeport/CNI) — workflow ID verification 2023-11-13+
+4. Adresse postale (P.O. boxes potentiellement refusées comme Apple)
+
+**Caveat critique** "Android developer verification" 2024-2026 : Google a renforcé programme distinct du Play Console fee ([support.google.com/android/answer/14138318]). Vérifier avant enrollment — nouvelles règles 2025-2026 peuvent ajouter friction Personal account France.
+
+#### Décision tranchée Session T+ 2026-05-23 (méta-délégation Eliot carte blanche + due diligence sub-agent `a7d7d73cdda5b79a4` 4 URLs Google Play Console sources primaires 2026) :
+
+**Track Google Play V1 = Personal $25 USD one-time** (cohérence Apple Track Individual §5.2 Session T + lean start trader discipline). Migration Organization plus tard possible si Eliot crée entité légale.
+
+## 6. APNs `.p8` authentication key (iOS only)
 
 [tool-output CAP-3 §8 + CAP-2 §9] :
 
@@ -444,6 +614,57 @@ Rationale hardcore :
 **Caveat sub-processor scope app PRIVÉE/INTERNE** [synthèse sub-agent A2C7] : _"moins de membres = moins d'exposition GDPR, mais statut privé ne dispense PAS des Privacy Manifests App Store ni du DPA sub-processor si FCM choisi → Direct APN reste préférable pour minimiser surface contractuelle Google."_
 
 **Latence comparée APN direct vs FCM proxy 2026** : `[TBD 2026]` non chiffrée dans sources primaires consultées sub-agent A2C7 — Direct APN théoriquement plus rapide (1 hop Apple↔Hetzner vs 2 hops Apple↔FCM↔Hetzner) mais magnitude exacte invérifiable.
+
+### 6.5 Firebase Cloud Messaging Direct FCM HTTP v1 (Android only — Session T+ multi-platform pivot)
+
+[tool-output sub-agent A7D7 Session T+ — 4 sujets Firebase Admin SDK + FCM HTTP v1 + plugin Capacitor Firebase Messaging + Android Studio 2026] :
+
+**Architecture choisie Android** : `firebase-admin` npm Node 22+ backend Hetzner → Direct FCM HTTP v1 API → device Android (plugin Capacitor `@capacitor-firebase/messaging` côté device gère registration FCM token + notification handling).
+
+**FCM HTTP v1 API status 2026** :
+
+- **Seul API actuel 2026** (legacy FCM HTTP API EOL juin 2024 verbatim, URL legacy retourne 404 maintenant — preuve migration terminée)
+- Cité comme méthode active sur [firebase.google.com/docs/cloud-messaging]
+- Authentication = service account JSON (PAS legacy server key API)
+
+**Firebase Admin SDK Node.js setup workflow** :
+
+1. Firebase Console → créer project Firebase "fxmily-mobile" (gratuit Spark plan)
+2. Settings → Service accounts → "Generate New Private Key" → télécharge JSON
+3. Backend Hetzner : `npm install firebase-admin --save` (Node 22+ recommandé verbatim [firebase.google.com/docs/admin/setup])
+4. Encode JSON → env var prod `FIREBASE_SERVICE_ACCOUNT_JSON` (base64 OU raw JSON quoted)
+5. JAMAIS commit JSON service account raw au git (carbone .p8 APN handling §6.3)
+
+**Coût FCM 2026** : **gratuit illimité** sur Spark plan (no-cost) ET Blaze plan verbatim [firebase.google.com/pricing] "Cloud Messaging (FCM) - No-cost". Pas de tier paywall même volume élevé.
+
+**Plugin Capacitor Android `@capacitor-firebase/messaging`** (Capawesome community team) :
+
+- **Actif 2026** : monorepo `github.com/capawesome-team/capacitor-firebase`, dernière release **2026-03-31**
+- Capacitor 8 supporté explicitement
+- Setup Android : `google-services.json` Firebase Console → placé dans dir `apps/mobile/android/app/`
+- Icon push : `AndroidManifest.xml` notification icon (white pixels / transparent bg, PAS app icon)
+- Token registration : `FirebaseMessaging.getToken()` côté plugin → POST `/api/account/push/register-fcm-token` backend
+- Auto-init désactivable via `firebase_messaging_auto_init_enabled=false` metadata (utile contrôle granulaire opt-in)
+
+**Privacy iOS impact** : `firebase-admin` côté Node.js backend Hetzner = PAS dans bundle iOS = **pas de declaration Privacy Manifest iOS requise** (sub-processor Google côté backend = mention privacy policy Fxmily seulement, PAS manifest plist app).
+
+**Privacy Android Google Play Data Safety form** : déclarer Firebase comme sub-processor + types données partagées (FCM device tokens + payload notification content) — workflow Google Play Console Data Safety form (équivalent Privacy Nutrition Labels Apple).
+
+#### Décision tranchée Session T+ 2026-05-23 (méta-délégation Eliot carte blanche + due diligence sub-agent `a7d7d73cdda5b79a4` 4 URLs Firebase + Capacitor + Android sources primaires 2026) :
+
+**Push channel V2 Android = Direct FCM HTTP v1** via lib backend Node.js **`firebase-admin`** Node 22+. Plugin Capacitor côté device = **`@capacitor-firebase/messaging`** Capawesome (cohérent §3.2 plugin row 1b).
+
+Rationale hardcore Option D best-of-breed per-platform (vs FCM proxy unified iOS+Android) :
+
+1. **Android FCM obligatoire** ⇒ Firebase = seul transport push Android natif (pas d'équivalent APN direct côté Android). Sub-processor Google **inévitable** pour Android quel que soit le choix
+2. **iOS reste pur 0 sub-processor Google** ⇒ Direct APN HTTP/2 iOS conservé (§6.4 Session T décision), Firebase ABSENT bundle iOS = Privacy Manifest Apple plus simple
+3. **Backend abstraction `IPushProvider`** ⇒ 3 drivers parallèles (APN + FCM + Web Push) → triple-channel dispatcher fan-out `Promise.allSettled` (§4.6) → architecture propre + extensible V2.1+ (ex: ajout 4ème driver WhatsApp/SMS sans refactor)
+4. **Cost zero** ⇒ FCM no-cost Spark + Blaze (Google paie infra push Android)
+5. **Plugin Capawesome actif** ⇒ release 2026-03-31, Capacitor 8 supporté, maintenance community confirmée
+
+**Caveat critique workflow plugin Capacitor `MainActivity.kt`** : modifications spécifiques (register plugin) PAS visibles README packages/messaging sub-agent A7D7 — workflow standard Capacitor 8 attendu mais non cité verbatim. À confirmer Session U V2-B setup.
+
+**Caveat target SDK Android Play Store** : "New apps and app updates must target Android 15 (API level 35) or higher" depuis **2025-08-31** [developer.android.com/google/play/requirements/target-sdk]. Capacitor 8 min API 24 (Android 7) couvre 99% market — OK.
 
 ## 7. TestFlight beta (verbatim CAP-3 §10)
 
@@ -584,96 +805,127 @@ Si freemium futur V2+ : IAP StoreKit obligatoire (commission EU 20% via DMA Smal
 
 **Impact Fxmily V2 si freemium IAP futur** : 20% (15% si <$1M/an Small Business Program).
 
-## 11. Coût total année 1 Apple
+## 11. Coût total année 1 cross-platform Apple + Google (Session T+ multi-platform pivot)
 
-| Poste                                                 | Coût USD     | Coût EUR (~) |
-| ----------------------------------------------------- | ------------ | ------------ |
-| Apple Developer Program (Individual OR Org)           | $99          | €99          |
-| DUNS Number (si Organization)                         | $0 (gratuit) | €0           |
-| Apple Sign in (optional)                              | $0           | €0           |
-| Certificats + provisioning (inclus Developer Program) | $0           | €0           |
-| TestFlight (inclus)                                   | $0           | €0           |
-| App Store Connect API (inclus)                        | $0           | €0           |
-| Push Notifications APNs (inclus)                      | $0           | €0           |
-| iCloud / CloudKit (Fxmily n'utilise pas)              | $0           | €0           |
-| Xcode Cloud 25h/mois (Fxmily peut s'en passer)        | $0           | €0           |
-| **Total Apple année 1**                               | **$99**      | **€99**      |
+| Poste                                                 | Coût USD             | Coût EUR (~)         | Récurrence         |
+| ----------------------------------------------------- | -------------------- | -------------------- | ------------------ |
+| Apple Developer Program (Individual)                  | $99                  | €99                  | annuel récurrent   |
+| Google Play Console (Personal)                        | **$25**              | **€25**              | **ONE-TIME à vie** |
+| DUNS Number Apple (si Organization migration)         | $0 (gratuit)         | €0                   | one-time           |
+| Firebase project + FCM (Cloud Messaging)              | **$0 (no-cost)**     | €0                   | gratuit illimité   |
+| Apple Sign in (optional)                              | $0                   | €0                   | -                  |
+| Certificats + provisioning Apple (inclus Developer)   | $0                   | €0                   | -                  |
+| Android signing keys (`release.keystore` local)       | $0                   | €0                   | -                  |
+| TestFlight (inclus Apple Developer)                   | $0                   | €0                   | -                  |
+| Google Play Internal Testing (inclus Play Console)    | $0                   | €0                   | -                  |
+| App Store Connect API (inclus Apple)                  | $0                   | €0                   | -                  |
+| Google Play Developer API (inclus Play Console)       | $0                   | €0                   | -                  |
+| Push Notifications APNs (inclus Apple)                | $0                   | €0                   | -                  |
+| Push Notifications FCM (gratuit illimité Spark/Blaze) | $0                   | €0                   | -                  |
+| iCloud / CloudKit (Fxmily n'utilise pas)              | $0                   | €0                   | -                  |
+| Xcode Cloud 25h/mois (Fxmily peut s'en passer)        | $0                   | €0                   | -                  |
+| **Total année 1 cross-platform iOS + Android**        | **$124 ($99 + $25)** | **€124 (€99 + €25)** | mixed              |
+| **Total années suivantes (récurrent)**                | **$99/an**           | **€99/an**           | Apple only         |
 
-**Hardware prerequisite TBD Eliot** : Capacitor iOS build **REQUIERT macOS + Xcode local**.
+**Hardware prerequisite Session T+** :
 
-- Si Eliot a un Mac existant : 0 surcoût hardware
-- Si pas de Mac : MacBook M2/M3 minimum (~€1100-1500) OU cloud Mac service (MacInCloud ~$30/mois = ~€330/an, MacStadium ~$80/mois = ~€880/an)
+- **iOS build** : REQUIERT macOS + Xcode local — ✅ **Mac OK Eliot confirmé Session T** (0 surcoût hardware)
+- **Android build** : Windows 10+/macOS 12+/Linux supportés [developer.android.com/studio] — Mac OK Eliot ⇒ same machine pour les 2 dev (économie ressources). Sub-agent A7D7 confirme **Mac NON obligatoire** pour Android dev (vs Apple requires Mac uniquement).
+- Si pas de Mac (alternative scenario) : MacBook M2/M3 minimum (~€1100-1500) OU cloud Mac service (MacInCloud ~$30/mois = ~€330/an, MacStadium ~$80/mois = ~€880/an) — couvre les 2 plateformes
 
-**Décision** : **vérifier auprès d'Eliot** s'il a un Mac avant Session T setup.
+## 12. Calendar réaliste séquence multi-jalons §18.4 (Session T+ multi-platform pivot)
 
-## 12. Calendar réaliste séquence multi-jalons §18.4
+Estimation totale **10-14 semaines calendaires** cross-platform iOS + Android (extension de 8-11 sem iOS-only Session S original) :
 
-Estimation totale **8-11 semaines calendaires** (CAP-3 §16 + CAP-2 §15 arbitré WebView shell pattern) :
+- Best case enrollment Apple 48h + Google Play 2j + 0 rejection : **7-8 semaines**
+- Realistic 2026 enrollment Apple 2-4 sem + Google Play 1 sem + 1 rejection cycle fintech lane Apple : **10-14 semaines**
+- Worst case Apple enrollment stuck + 2 rejections + Google Play rejection : **14-20 semaines**
 
-- Best case enrollment 48h + 0 rejection : **5-6 semaines**
-- Realistic 2026 enrollment 2-4 sem + 1 rejection cycle fintech lane : **8-11 semaines**
-- Worst case enrollment stuck + 2 rejections : **12-16 semaines**
+### Séquence Sessions §18.4 atomic (10 jalons proposés — Session T+ étendu Android)
 
-### Séquence Sessions §18.4 atomic (10 jalons proposés)
+| Session | Jalon                                                                                                                                                                                                              | Effort                                 | Type                                  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | ------------------------------------- |
+| **T**   | V2-A Enrollment Apple Developer + bundle ID design + Mac check Eliot                                                                                                                                               | 1-2h                                   | Ops + checks ✓ DONE                   |
+| **T+**  | V2-A+ Multi-platform pivot + Google Play Console scope + push channel triple-stack Option D + abstraction PushProvider                                                                                             | 1-2h                                   | Ops docs (re-tranche) ✓ THIS PR       |
+| **U**   | V2-B Capacitor 8 setup **iOS + Android workspace** (`apps/mobile/` + cap init + cap add ios + cap add android + sync test simu iOS + emulator Android)                                                             | **2-3j** (était 1-2j iOS only)         | Code (workspace setup cross-platform) |
+| **V**   | V2-C APN `.p8` + FCM service account + backend triple-channel dispatcher + nouvelles routes (register-apn-token + register-fcm-token) + schema migration (ApnDeviceToken + FcmDeviceToken)                         | **3-4j** (était 2-3j iOS only)         | Code multi-fichiers                   |
+| **W**   | V2-D Plugins MVP cross-platform integration (iOS @capacitor/push-notifications + Android @capacitor-firebase/messaging + 9 partagés) + safe-area iOS + status bar + splash + Android notification icon             | **2-3j** (était 1-2j iOS only)         | Code                                  |
+| **X**   | V2-E Auth.js cookies SameSite=none override + cross-validation Capacitor flow iOS + Android WebView                                                                                                                | 0.5j                                   | Code (peu d'impact Android vs iOS)    |
+| **Y**   | V2-F Account deletion in-app verify (iOS Apple req + Android Google Play req équivalent) + demo accounts (`apple-review@fxmilyapp.com` + `google-play-review@fxmilyapp.com`) provisioned                           | **1-1.5j** (était 0.5-1j iOS only)     | Code + setup                          |
+| **Z**   | V2-G App Store assets (icon 1024 + screenshots iPhone 6.9" 1320×2868) **+ Google Play assets** (icon 512×512 + feature graphic 1024×500 + screenshots Android phone) + metadata cross-platform                     | **2-3j** (était 1-2j iOS only)         | Design + content                      |
+| **AA**  | V2-H Privacy Manifests Apple audit SDK tiers + Privacy Nutrition Labels ASC **+ Google Play Data Safety form** (Firebase sub-processor déclaré + types données)                                                    | **2-3j** (était 1-2j iOS only)         | Audit + docs                          |
+| **BB**  | V2-I TestFlight beta cycle (internal Eliot + external 5-10 membres formation) **+ Google Play Internal Testing parallèle** (Closed Testing track 5-10 testers)                                                     | 3-7j calendaires (parallèle)           | Ops + iterations                      |
+| **CC**  | V2-J App Store submission Notes for Review + suivi Apple review fintech lane (5-10j) **+ Google Play Production submission** + suivi Google review (typically 1-3j vs Apple 5-10j) + buffer rejection les 2 stores | 7-21j calendaires (parallèle 2 stores) | Ops + submission                      |
 
-| Session | Jalon                                                                                                         | Effort            | Type                   |
-| ------- | ------------------------------------------------------------------------------------------------------------- | ----------------- | ---------------------- |
-| **T**   | V2-A Enrollment Apple Developer + bundle ID design + Mac check Eliot                                          | 1-2h              | Ops + checks           |
-| **U**   | V2-B Capacitor 8 setup minimal (`apps/mobile/` workspace + cap init + ios add + sync test simu)               | 1-2j              | Code (workspace setup) |
-| **V**   | V2-C APN `.p8` génération + backend dispatcher dual-channel + nouvelle route + schema migration               | 2-3j              | Code multi-fichiers    |
-| **W**   | V2-D Plugins 10 MVP integration + safe-area + status bar + splash polish iOS                                  | 1-2j              | Code                   |
-| **X**   | V2-E Auth.js cookies SameSite=none override + cross-validation Capacitor flow                                 | 0.5j              | Code                   |
-| **Y**   | V2-F Account deletion in-app verify + demo account `apple-review@fxmilyapp.com` provisioned                   | 0.5-1j            | Code + setup           |
-| **Z**   | V2-G App Store assets (icon 1024×1024 + screenshots 1320×2868 6 unités + metadata)                            | 1-2j              | Design + content       |
-| **AA**  | V2-H Privacy Manifests audit SDK tiers (Sentry + Firebase + Capacitor plugins) + Privacy Nutrition Labels ASC | 1-2j              | Audit + docs           |
-| **BB**  | V2-I TestFlight beta cycle (internal 1-2 testers + external 5-10 membres formation)                           | 3-7j calendaires  | Ops + iterations       |
-| **CC**  | V2-J App Store submission Notes for Review + suivi Apple review fintech lane (5-10j) + buffer rejection       | 7-21j calendaires | Ops + submission       |
+### Activités parallèles dev/enrollments multi-platform
 
-### Activités parallèles dev/enrollment
+Pendant attente enrollments Apple (1-4 sem) + Google Play (2-7j) :
 
-Pendant attente enrollment Apple (1-4 sem) :
+- Sessions U/V/W/X dev backend + Capacitor wrapper local **iOS + Android simultané** (Mac peut builder les 2)
+- Session Y account deletion + demo accounts (iOS + Android)
+- Session Z assets preparation **2 stores parallèle** (Eliot a la designer skill / un graphiste pour produire les 2 sets distincts ?)
+- Session AA Privacy Manifests Apple + Google Play Data Safety form parallèle
+- Au reçu enrollment Apple OK → Bundle ID + APN key + TestFlight upload
+- Au reçu Google Play Console OK → Package name + service account JSON Firebase + Internal Testing upload
 
-- Sessions U/V/W/X dev backend + Capacitor wrapper local
-- Session Y account deletion + demo account
-- Session Z assets preparation
-- Session AA Privacy Manifests audit
-- Au reçu enrollment OK → Bundle ID + APN key + TestFlight upload
+**Note Session T+ scar reproductible** : Sessions U..CC = chacune ~1-2j effort additionnel pour ajout Android (cross-platform parallélisable la plupart, Capacitor 8 supporte les 2 dans même workspace). Total +4-5 semaines vs iOS-only séquence Session S/T originale. ROI : 1 codebase = 2 app stores = 2× addressable user base.
 
 ## 13. Risks Fxmily-spécifiques (10 tabulés)
 
 [tool-output CAP-3 §17 + CAP-1 §11] :
 
-| Risk                                       | Probabilité                   | Impact                           | Mitigation                                                             |
-| ------------------------------------------ | ----------------------------- | -------------------------------- | ---------------------------------------------------------------------- |
-| Enrollment stuck >2 sem                    | Moyenne 2026 trend            | Bloque tout iOS                  | Enroll EARLY parallèle dev. Backup plan : web PWA stable V1.           |
-| Misclassification fintech / Org required   | Moyenne                       | Rejection + Org migration        | Description App Store strict non-fintech (cf. §9.3)                    |
-| Account deletion absente                   | Élevée si non-checké          | Rejection 5.1.1(v)               | Implémenter + tester avant submission (cf. §9.1)                       |
-| Demo account manquant                      | Moyenne                       | Rejection 2.1                    | Demo user provisioned + Notes for Review (cf. §9.2)                    |
-| AI disclosure tier compliance              | Faible (carbone Session R OK) | Rejection 5.1.2(i)               | `/legal/ai-disclosure` LIVE post-Session R + Monthly Debrief disclosed |
-| iOS 26 SDK incompat Capacitor              | TBD                           | Bloque submission 28 avril 2026+ | Capacitor 8 confirmé compat 26 SDK                                     |
-| Eliot pas Mac hardware                     | TBD info Eliot                | Bloque Capacitor iOS build local | MacBook achat OR cloud Mac service                                     |
-| DUNS delay si Org                          | Moyenne                       | +5-15j enrollment                | Individual track preferred V1                                          |
-| Cookie SameSite=lax cross-origin WebView   | Faible avec iosScheme:'https' | Auth broken WebView              | Override SameSite=none secure partitioned (§4.1)                       |
-| Privacy Manifests SDK tiers manquants      | Moyenne 2026 trend rejection  | Rejection commune                | Audit exhaustif chaque SDK + Capacitor plugin (§8.4)                   |
-| Seller name "Eliot Pena" vs "Fxmily" brand | Élevée si Individual          | UX brand inconsistency           | Trancher Individual vs Org AVANT 1ère submission                       |
+| Risk                                                                     | Probabilité                   | Impact                                 | Mitigation                                                                                                                |
+| ------------------------------------------------------------------------ | ----------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Enrollment stuck >2 sem                                                  | Moyenne 2026 trend            | Bloque tout iOS                        | Enroll EARLY parallèle dev. Backup plan : web PWA stable V1.                                                              |
+| Misclassification fintech / Org required                                 | Moyenne                       | Rejection + Org migration              | Description App Store strict non-fintech (cf. §9.3)                                                                       |
+| Account deletion absente                                                 | Élevée si non-checké          | Rejection 5.1.1(v)                     | Implémenter + tester avant submission (cf. §9.1)                                                                          |
+| Demo account manquant                                                    | Moyenne                       | Rejection 2.1                          | Demo user provisioned + Notes for Review (cf. §9.2)                                                                       |
+| AI disclosure tier compliance                                            | Faible (carbone Session R OK) | Rejection 5.1.2(i)                     | `/legal/ai-disclosure` LIVE post-Session R + Monthly Debrief disclosed                                                    |
+| iOS 26 SDK incompat Capacitor                                            | TBD                           | Bloque submission 28 avril 2026+       | Capacitor 8 confirmé compat 26 SDK                                                                                        |
+| Eliot pas Mac hardware                                                   | TBD info Eliot                | Bloque Capacitor iOS build local       | MacBook achat OR cloud Mac service                                                                                        |
+| DUNS delay si Org                                                        | Moyenne                       | +5-15j enrollment                      | Individual track preferred V1                                                                                             |
+| Cookie SameSite=lax cross-origin WebView                                 | Faible avec iosScheme:'https' | Auth broken WebView                    | Override SameSite=none secure partitioned (§4.1)                                                                          |
+| Privacy Manifests SDK tiers manquants                                    | Moyenne 2026 trend rejection  | Rejection commune                      | Audit exhaustif chaque SDK + Capacitor plugin (§8.4)                                                                      |
+| Seller name "Eliot Pena" vs "Fxmily" brand                               | Élevée si Individual          | UX brand inconsistency                 | Trancher Individual vs Org AVANT 1ère submission                                                                          |
+| **Android Studio version compat** (Session T+)                           | Faible 2026 trend             | Bloque Android build local             | Panda 4 (2025.3.4 Patch 1) stable, Mac OK supporté (Mac NON obligatoire)                                                  |
+| **Target API 35 Android Play Store** (Session T+)                        | Élevée hors Capacitor 8       | Bloque submission depuis 2025-08-31    | Capacitor 8 confirmé compat API 35+ (min API 24 = 99% market)                                                             |
+| **Google Play Personal verification** (Session T+)                       | Moyenne 2026 trend            | Délai enrollment +5-15j                | ID gov verification mandatoire depuis 2023-11-13 — préparer scan passeport/CNI                                            |
+| **Plugin Capacitor Firebase Messaging MainActivity.kt** (Session T+)     | Faible                        | Setup Android push broken              | Workflow Capacitor 8 standard, à confirmer Session U V2-B setup (caveat sub-agent A7D7)                                   |
+| **FCM service account JSON leak** (Session T+)                           | Faible                        | Auth FCM compromis backend             | Env var prod `FIREBASE_SERVICE_ACCOUNT_JSON` base64, JAMAIS commit git, audit Hetzner SSH                                 |
+| **Privacy Policy Fxmily missing Firebase sub-processor** (Session T+)    | Moyenne                       | Rejection Google Play Data Safety form | Update `/legal/privacy` page V2 : Firebase Cloud Messaging listed sub-processor (carbone Session R AI disclosure pattern) |
+| **DUNS / SIRET / Android developer verification 2024-2026** (Session T+) | TBD France                    | Délai enrollment Personal Android      | `[TBD 2026]` sub-agent A7D7 non précisé — vérifier support.google.com/android/answer/14138318 avant enrollment Eliot      |
 
 ## 14. Pré-requis blockers Eliot AVANT démarrage
 
-[Récap actionnable post-Session T 2026-05-23] :
+[Récap actionnable post-Session T+ multi-platform pivot 2026-05-23] :
+
+**iOS (Apple)** :
 
 1. ✅ **Capacitor approuvé $99/an** (Session S clarification)
-2. ✅ **Mac hardware OK** (Eliot confirmé Session T — pas de surcoût hardware, Xcode 26 installable App Store gratuit)
-3. ✅ **Track Apple Developer = Individual** default (Session T décision tranchée §5.2, méta-délégation Eliot carte blanche + sub-agent due diligence) — caveat migration `transfer app` documenté §5.2
+2. ✅ **Mac hardware OK** (Eliot confirmé Session T — Xcode 26 installable App Store gratuit, **même machine pour Android dev** ⇒ 0 surcoût matériel additionnel multi-platform pivot)
+3. ✅ **Track Apple Developer = Individual** default (Session T décision tranchée §5.2)
 4. ✅ **Bundle ID `com.fxmily.app`** validé (Session T, reverse-DNS standard)
 5. ⚠️ **iPhone physique** smoke test APN sandbox — push ne fonctionne PAS sur simulateur, requis Session BB TestFlight beta cycle (à confirmer Eliot d'ici Session BB)
-6. ✅ **Push channel = Direct APN HTTP/2** via `@parse/node-apn` + plugin Capacitor `@capacitor/push-notifications` natif (Session T décision tranchée §6.4 — reverse drift CAP-2 sur plugin Firebase Messaging)
-7. ⚠️ **Demo account credentials** : `apple-review@fxmilyapp.com` + password généré + données mock provisioned (Session Y, post-enrollment Apple)
+6. ✅ **Push channel iOS = Direct APN HTTP/2** via `@parse/node-apn` + plugin Capacitor `@capacitor/push-notifications` natif (Session T décision tranchée §6.4)
+7. ⚠️ **Demo account credentials Apple** : `apple-review@fxmilyapp.com` + password généré + données mock provisioned (Session Y, post-enrollment Apple)
 
-**Pré-requis externes Eliot manuel post-Session T** (1-4 sem parallèle dev Capacitor) :
+**Android (Google) — Session T+ multi-platform pivot** :
+
+8. ✅ **Scope V2 étendu Android simultané** (Session T+ Eliot clarification "n'importe quel client android comme ios est pas de soucis... téléphone éteint avec notif sur page d'accueil") — PAS DEFERRED V2.1+ comme brief Session S initial
+9. ⚠️ **Google Play Console enrollment Personal $25 USD one-time** (à enroll Eliot post-Session T+ via [play.google.com/console](https://play.google.com/console)) — pièce d'identité gov FR scan requis (ID verification mandatoire depuis 2023-11-13)
+10. ✅ **Push channel Android = Direct FCM HTTP v1** via `firebase-admin` Node 22+ + plugin Capacitor `@capacitor-firebase/messaging` Capawesome (Session T+ décision tranchée §6.5)
+11. ⚠️ **Android Studio Panda 4 (2025.3.4 Patch 1)** installable sur Mac Eliot (Mac OK supporté, PAS Mac obligatoire — Windows 10+/Linux aussi OK) — à installer Session U V2-B setup
+12. ⚠️ **Firebase project + service account JSON** à créer post-enrollment Google Play (Firebase Console gratuit → Settings → Service accounts → Generate New Private Key)
+13. ⚠️ **Android device physique smoke test FCM** (Session BB Google Play Internal Testing parallèle TestFlight — Android emulator AVD aussi possible pour smoke test FCM contrairement à iOS APN)
+14. ⚠️ **Demo account credentials Google** : `google-play-review@fxmilyapp.com` + password généré + données mock provisioned (Session Y équivalent Apple, post-enrollment Google Play)
+15. ⚠️ **Privacy Policy Fxmily mise à jour** : ajouter Firebase Cloud Messaging comme sub-processor déclaré (carbone pattern Session R AI disclosure `/legal/ai-disclosure` + nouveau `/legal/privacy` update Session AA V2-H)
+
+**Pré-requis externes Eliot manuel post-Session T+** (1-4 sem Apple + 2-7j Google parallèle dev Capacitor) :
 
 - Enrollment Apple Developer Program Individual track via `developer.apple.com/programs/enroll/` (~10 min UI Apple ID + 2FA + pièce d'identité ID gov FR passeport/CNI)
-- Budget tampon enrollment 2-4 semaines (réalité 2026 vs 24-48h Apple official)
-- Sessions U..CC parallélisables pendant attente enrollment (dev Capacitor V2-B setup + V2-C APN dispatcher + V2-D plugins + V2-E auth cookies + V2-F account deletion + V2-G assets + V2-H Privacy Manifests audit)
+- **Enrollment Google Play Console Personal $25 one-time** via `play.google.com/console` (~10 min Google account + 2FA + ID gov scan post-2023-11-13)
+- Budget tampon enrollment 2-4 semaines Apple (réalité 2026 vs 24-48h Apple official) + 2-7j Google Play (`[TBD 2026]` exact)
+- Sessions U..CC parallélisables pendant attente enrollments (dev Capacitor V2-B iOS + Android workspace + V2-C APN + FCM dispatcher triple-channel + V2-D plugins + V2-E auth cookies + V2-F account deletion 2 demo accounts + V2-G assets 2 stores + V2-H Privacy Manifests + Data Safety form parallèles)
 
 ## 15. État actuel post-Sessions R+0.5 (#148) + R+0.75 (#151) MERGED par Eliot
 
@@ -713,3 +965,6 @@ Pendant attente enrollment Apple (1-4 sem) :
 - **Sub-agents transcripts** : `a536d99efbdc39825` (CAP-1) + `a38757fa15c453598` (CAP-2) + `af3d2c71b184417c8` (CAP-3) + `a652edca36d0c5458` (CAP-4) — output_files NON lus carbone instruction système.
 - **Session T 2026-05-23 due diligence sub-agent** : `a2c7cdf21c0ecf53b` — verdict Apple Developer Individual vs Organization + push channel Direct APN HTTP/2 vs FCM proxy. 10 URLs sources primaires consultées (developer.apple.com/programs/enroll + transfer-an-app + Privacy Manifests + capacitorjs.com/docs + firebase.google.com/docs + github.com/parse-community/node-apn + npmjs.com/@parse/node-apn). 2 caveats `[TBD 2026]` calibrated refusal (downtime transfer app exact + latence APN direct vs FCM chiffrée).
 - **Session T clarifications Eliot** : Mac OK + Bundle ID `com.fxmily.app` validés directs ; Track Apple Developer + Push channel = méta-délégation totale "carte blanche, exploite tes capacités" → Claude tranche hardcore self-challenge → Individual + Direct APN HTTP/2 (rationale §5.2 + §6.4).
+- **Session T+ 2026-05-23 due diligence sub-agent** : `a7d7d73cdda5b79a4` — verdict Google Play Console + FCM HTTP v1 + plugin Capacitor Firebase Messaging Android + Android Studio prerequisites 2026. 10 URLs sources primaires consultées (support.google.com/googleplay/android-developer + firebase.google.com/docs + firebase.google.com/pricing + github.com/capawesome-team/capacitor-firebase + developer.android.com/studio + developer.android.com/google/play/requirements/target-sdk). 2 caveats `[TBD 2026]` calibrated refusal (DUNS/SIRET France Google enrollment + délai validation Google Play exact).
+- **Session T+ clarifications Eliot multi-platform pivot** : "n'importe quel client android comme ios est pas de soucis et surtout puisse ouvrir l'app que ça soit sur internet ou vrai app le mieux pour lui et surtout recevoir les notification comme une vraie application même téléphone éteint avec notif sur page d'accueil etc" = scope V2 étendu Android simultané iOS (PAS DEFERRED V2.1+ comme brief Session S initial). Méta-délégation totale "carte blanche exploite tes capacités" → Claude tranche hardcore self-challenge re-décision push channel = Option D best-of-breed Direct APN iOS + Direct FCM Android + abstraction PushProvider backend.
+- **Sources primaires Android 2026 (sub-agent A7D7, 10 URLs)** : `support.google.com/googleplay/android-developer/answer/6112435` ($25 one-time) + `support.google.com/android/answer/14138318` (Android developer verification 2024-2026) + `firebase.google.com/docs/cloud-messaging` (FCM HTTP v1 actuel) + `firebase.google.com/docs/admin/setup` (Firebase Admin SDK Node 22+) + `firebase.google.com/pricing` (FCM no-cost) + `github.com/capawesome-team/capacitor-firebase` (plugin actif release 2026-03-31) + `github.com/capawesome-team/capacitor-firebase/tree/main/packages/messaging` + `developer.android.com/studio` (Panda 4 Mac/Windows/Linux) + `developer.android.com/studio/install` (system requirements) + `developer.android.com/google/play/requirements/target-sdk` (API 35 obligatoire 2025-08-31+)

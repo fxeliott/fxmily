@@ -21,7 +21,7 @@ import { NOTIFICATION_TYPES, type NotificationTypeSlug } from '@/lib/schemas/pus
 export type EffectivePreferences = Record<NotificationTypeSlug, boolean>;
 
 /**
- * Returns the effective preferences map for a member: all 7 NotificationType
+ * Returns the effective preferences map for a member: all 8 NotificationType
  * slugs with their enabled/disabled state. Missing rows default to `true`.
  */
 export async function getEffectivePreferences(userId: string): Promise<EffectivePreferences> {
@@ -38,6 +38,7 @@ export async function getEffectivePreferences(userId: string): Promise<Effective
     douglas_card_delivered: true,
     weekly_report_ready: true,
     monthly_debrief_ready: true,
+    mindset_check_ready: true,
   };
 
   for (const row of rows) {

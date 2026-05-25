@@ -81,6 +81,12 @@ const CATEGORIES: CategoryMeta[] = [
     description:
       'Notification début de mois quand ta synthèse du mois écoulé est disponible — progression, trading réel, entraînement.',
   },
+  {
+    type: 'mindset_check_ready',
+    label: 'Auto-évaluation mindset hebdo',
+    description:
+      'Rappel hebdo (lundi matin) pour ton QCM de 2 minutes — mindset, discipline, patience. Calme et sans pression.',
+  },
 ];
 
 export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.ReactNode {
@@ -93,6 +99,7 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
       douglas_card_delivered: true,
       weekly_report_ready: true,
       monthly_debrief_ready: true,
+      mindset_check_ready: true,
     };
     for (const type of NOTIFICATION_TYPES) {
       if (initialPreferences[type] !== undefined) {

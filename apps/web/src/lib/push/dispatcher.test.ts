@@ -68,6 +68,15 @@ describe('buildPayload', () => {
     expect(out.notification.navigate).toMatch(/\/admin\/reports\/rep_123$/);
   });
 
+  it('builds mindset_check_ready with deep-link /mindset/new (V1.5 §27)', () => {
+    const out = buildPayload('mindset_check_ready', 'm1', { weekStart: '2026-05-25' });
+    expect(out.notification.title).toBe('Auto-évaluation mindset prête');
+    expect(out.notification.body).toContain('QCM hebdo');
+    expect(out.notification.navigate).toMatch(/\/mindset\/new$/);
+    expect(out.notification.tag).toBe('mindset_check_ready');
+    expect(out.type).toBe('mindset_check_ready');
+  });
+
   it('uses custom appBaseUrl when provided', () => {
     const out = buildPayload(
       'annotation_received',
@@ -215,16 +224,25 @@ describe('nextAttemptDelay', () => {
 });
 
 describe('TTL_BY_TYPE / URGENCY_BY_TYPE config tables', () => {
-  it('TTL covers exactly the 7 NotificationType slugs', () => {
+  it('TTL covers exactly the 8 NotificationType slugs', () => {
     expect(Object.keys(TTL_BY_TYPE).sort()).toEqual([
       'annotation_received',
       'checkin_evening_reminder',
       'checkin_morning_reminder',
       'douglas_card_delivered',
+      'mindset_check_ready',
       'monthly_debrief_ready',
       'training_annotation_received',
       'weekly_report_ready',
     ]);
+  });
+
+  it('mindset_check_ready TTL = 24h (weekly cadence, calm V1.5 §27.6)', () => {
+    expect(TTL_BY_TYPE.mindset_check_ready).toBe(86_400);
+  });
+
+  it('mindset_check_ready URGENCY = low (anti-FOMO §27.6)', () => {
+    expect(URGENCY_BY_TYPE.mindset_check_ready).toBe('low');
   });
 
   it('annotations TTL ≥ 24h (relevance window)', () => {

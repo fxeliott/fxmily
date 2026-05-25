@@ -7,6 +7,7 @@
  */
 import * as Sentry from '@sentry/nextjs';
 
+import { hashUserId } from './src/lib/observability/user-scrub';
 import {
   stripSensitiveQueryParams,
   stripSensitiveUrlParams,
@@ -23,7 +24,7 @@ if (dsn) {
     // in the event payload. The audit log row IS the canonical record;
     // Sentry only carries the stack + breadcrumbs.
     sendDefaultPii: false,
-    beforeSend(event) {
+    async beforeSend(event) {
       if (event.request) {
         delete event.request.cookies;
         // Body of a request can contain trade screenshots / check-in fields —
@@ -50,6 +51,15 @@ if (dsn) {
       if (event.user) {
         delete event.user.ip_address;
         delete event.user.email;
+        // Session W Voie A2 — pseudonymise the userId cuid (SHA-256 hex first
+        // 16 chars). Preserves Sentry "events grouped by user" while breaking
+        // the raw-cuid leak (RGPD §16 + SPEC §16 PII minimisation). Returns
+        // null on empty/invalid input → fallback to '[Filtered]' so Sentry
+        // never sees a raw cuid even on guard miss.
+        if (event.user.id !== undefined && event.user.id !== null) {
+          const hashed = await hashUserId(String(event.user.id));
+          event.user.id = hashed ?? '[Filtered]';
+        }
       }
       return event;
     },

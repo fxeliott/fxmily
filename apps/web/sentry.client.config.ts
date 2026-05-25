@@ -10,6 +10,7 @@
  */
 import * as Sentry from '@sentry/nextjs';
 
+import { hashUserId } from './src/lib/observability/user-scrub';
 import {
   stripSensitiveQueryParams,
   stripSensitiveUrlParams,
@@ -54,7 +55,7 @@ if (dsn) {
     // otherwise carry the token plaintext to Sentry SaaS — 60s window
     // for a Sentry org member to consume the invitation. Round 4
     // sub-agent N finding.
-    beforeSend(event) {
+    async beforeSend(event) {
       if (event.request) {
         delete event.request.cookies;
         delete event.request.data;
@@ -75,6 +76,14 @@ if (dsn) {
       if (event.user) {
         delete event.user.ip_address;
         delete event.user.email;
+        // Session W Voie A2 — pseudonymise the userId cuid (SHA-256 hex first
+        // 16 chars). Symmetric with server + edge configs. Preserves Sentry
+        // "events grouped by user" while breaking the raw-cuid leak client-
+        // side too (a frontend JS error otherwise carried the cuid plaintext).
+        if (event.user.id !== undefined && event.user.id !== null) {
+          const hashed = await hashUserId(String(event.user.id));
+          event.user.id = hashed ?? '[Filtered]';
+        }
       }
       return event;
     },

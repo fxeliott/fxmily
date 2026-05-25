@@ -15,6 +15,7 @@
  */
 import * as Sentry from '@sentry/nextjs';
 
+import { hashUserId } from './src/lib/observability/user-scrub';
 import {
   stripSensitiveQueryParams,
   stripSensitiveUrlParams,
@@ -28,7 +29,7 @@ if (dsn) {
     tracesSampleRate: 0.1,
     enableLogs: false,
     sendDefaultPii: false,
-    beforeSend(event) {
+    async beforeSend(event) {
       if (event.request) {
         delete event.request.cookies;
         delete event.request.data;
@@ -49,6 +50,14 @@ if (dsn) {
       if (event.user) {
         delete event.user.ip_address;
         delete event.user.email;
+        // Session W Voie A2 — pseudonymise the userId cuid (SHA-256 hex first
+        // 16 chars). Symmetric with server + client configs. Edge runtime
+        // (`proxy.ts`) runs on every request; a thrown wrapper would otherwise
+        // leak the cuid via `event.user.id` to Sentry SaaS.
+        if (event.user.id !== undefined && event.user.id !== null) {
+          const hashed = await hashUserId(String(event.user.id));
+          event.user.id = hashed ?? '[Filtered]';
+        }
       }
       return event;
     },

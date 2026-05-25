@@ -60,7 +60,7 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^25.9.1",
     "@types/pg": "^8.20.0",
-    "@types/react": "^19.2.0",
+    "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.0",
     "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.0.2",

@@ -171,7 +171,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
 
         {/* KPI strip 4-cell — counts + streak */}
-        <section className="mb-6">
+        <section className="mb-6" aria-labelledby="kpi-heading">
+          <h2 id="kpi-heading" className="sr-only">
+            Statistiques d&apos;activité
+          </h2>
           <div className="border-edge-top rounded-card relative grid grid-cols-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] shadow-[var(--sh-card)] sm:grid-cols-4">
             <KpiCell
               label="Trades total"
@@ -206,11 +209,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
 
         {/* J5 — Check-in du jour */}
-        <section className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <section
+          className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]"
+          aria-labelledby="checkin-heading"
+        >
           <Card primary className="flex flex-col gap-4 p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <span className="t-eyebrow">Check-in du jour</span>
+                <h2 id="checkin-heading" className="t-eyebrow">
+                  Check-in du jour
+                </h2>
                 <Pill tone="acc" dot="live">
                   ACTIF
                 </Pill>
@@ -241,7 +249,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
 
         {/* J6 — Behavioral scores (4 gauges) */}
-        <section className="mb-6">
+        <section className="mb-6" aria-labelledby="scores-heading">
+          <h2 id="scores-heading" className="sr-only">
+            Scores comportementaux
+          </h2>
           <Suspense fallback={<ScoreGaugeGridSkeleton />}>
             <ScoreGaugeGrid score={latestScore} />
           </Suspense>
@@ -277,11 +288,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
 
         {/* Mark Douglas card (canonical TIER 4) */}
-        <section className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <section
+          className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]"
+          aria-labelledby="journal-md-heading"
+        >
           <Card primary className="flex flex-col gap-4 p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <span className="t-eyebrow">Journal de trading</span>
+                <h2 id="journal-md-heading" className="t-eyebrow">
+                  Journal de trading
+                </h2>
               </div>
             </div>
             <p className="t-body text-[var(--t-2)]">
@@ -308,10 +324,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         {/* Admin section (conditional) */}
         {isAdmin ? (
-          <section className="mb-6">
+          <section className="mb-6" aria-labelledby="admin-heading">
             <div className="mb-3 flex items-center gap-2">
               <Shield className="h-3.5 w-3.5 text-[var(--acc)]" strokeWidth={1.75} />
-              <span className="t-eyebrow">Espace admin</span>
+              <h2 id="admin-heading" className="t-eyebrow">
+                Espace admin
+              </h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <Link href="/admin/members" className="block">

@@ -98,13 +98,15 @@ export const subscribePushInputSchema = pushSubscriptionInputSchema.extend({
 });
 export type SubscribePushInput = z.infer<typeof subscribePushInputSchema>;
 
-/// The 7 notification categories a member can toggle. Mirrors the
+/// The 8 notification categories a member can toggle. Mirrors the
 /// `NotificationType` enum in `prisma/schema.prisma`. `training_annotation_
 /// received` (J-T3) is DISTINCT from `annotation_received` on purpose: a
 /// backtest correction must never conflate with a real-trade correction
 /// (statistical isolation §21.5). `monthly_debrief_ready` (V1.4 §25) is the
 /// member-facing monthly AI synthesis push (distinct from the admin-only
-/// `weekly_report_ready`).
+/// `weekly_report_ready`). `mindset_check_ready` (V1.5 §27) is the weekly
+/// gentle nudge for the 12-item QCM athlète mindset wizard, calm anti-FOMO
+/// (no email, no fanfare — §27.4/§27.6).
 export const NOTIFICATION_TYPES = [
   'annotation_received',
   'training_annotation_received',
@@ -113,6 +115,7 @@ export const NOTIFICATION_TYPES = [
   'douglas_card_delivered',
   'weekly_report_ready',
   'monthly_debrief_ready',
+  'mindset_check_ready',
 ] as const;
 export type NotificationTypeSlug = (typeof NOTIFICATION_TYPES)[number];
 

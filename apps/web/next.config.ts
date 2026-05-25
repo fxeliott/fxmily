@@ -1,5 +1,19 @@
 import type { NextConfig } from 'next';
+import bundleAnalyzer from '@next/bundle-analyzer';
 import { withSentryConfig } from '@sentry/nextjs';
+
+/**
+ * Session W Voie A2 — `@next/bundle-analyzer` wire. No-op unless
+ * `ANALYZE=true` is set (so prod builds + CI stay silent). To inspect bundle
+ * splits locally :
+ *   `ANALYZE=true pnpm --filter @fxmily/web build`
+ * → produces `apps/web/.next/analyze/{client,nodejs,edge}.html` (open them in
+ * a browser). Used to measure framer-motion / Recharts / Sentry chunk sizes
+ * before pushing perf hardening work to V2 hot paths.
+ */
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
 
 /**
  * Security headers — defense in depth on top of Caddy's HSTS / TLS termination.
@@ -107,7 +121,7 @@ const nextConfig: NextConfig = {
  * The plugin is a no-op when `SENTRY_AUTH_TOKEN` / `SENTRY_DSN` are absent
  * (local dev), so the wrap is safe to ship unconditionally.
  */
-export default withSentryConfig(nextConfig, {
+export default withSentryConfig(withBundleAnalyzer(nextConfig), {
   // Filled from `.env` / CI secrets — `org` and `project` slugs from the
   // Sentry project settings page.
   org: process.env.SENTRY_ORG ?? 'fxmily',

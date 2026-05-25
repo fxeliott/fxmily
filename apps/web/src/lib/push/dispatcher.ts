@@ -59,6 +59,7 @@ export const TTL_BY_TYPE: Record<NotificationTypeSlug, number> = {
   douglas_card_delivered: 21600, // 6h — tilt cards lose freshness fast
   weekly_report_ready: 21600, // 6h — admin Sunday digest, can wait until morning
   monthly_debrief_ready: 86400, // 24h — monthly recul tool, not time-critical
+  mindset_check_ready: 86400, // 24h — weekly mindset recul, not time-critical (§27.6)
 };
 
 /// RFC 8030 urgency. `low` = battery-friendly (reminders that aren't critical).
@@ -70,6 +71,7 @@ export const URGENCY_BY_TYPE: Record<NotificationTypeSlug, 'low' | 'normal'> = {
   douglas_card_delivered: 'normal',
   weekly_report_ready: 'low',
   monthly_debrief_ready: 'low', // calm, anti-FOMO — a monthly recul, never urgent
+  mindset_check_ready: 'low', // calm weekly recul, anti-FOMO §27.6 (no fanfare)
 };
 
 export type BuiltPayload = {
@@ -163,6 +165,15 @@ export function buildPayload(
       title = 'Ton débrief mensuel est prêt';
       body = 'Une synthèse du mois écoulé t’attend — un moment pour prendre du recul.';
       path = debriefId ? `/debrief-mensuel?id=${debriefId}` : '/debrief-mensuel';
+      break;
+    }
+    case 'mindset_check_ready': {
+      // V1.5 §27 weekly mindset QCM athlète (12 items × 6 dimensions). Deep-link
+      // to `/mindset/new` for the 2-min wizard (carbone enqueue.ts JSDoc :211).
+      // Calm Mark Douglas copy — no fanfare/XP/streak (anti Black-Hat §27.6).
+      title = 'Auto-évaluation mindset prête';
+      body = 'Ton QCM hebdo de 2 minutes pour mesurer où tu en es.';
+      path = '/mindset/new';
       break;
     }
   }

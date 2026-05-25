@@ -148,6 +148,9 @@ const FALLBACK_SUBJECT_BY_TYPE: Record<NotificationTypeSlug, string> = {
   douglas_card_delivered: 'Nouvelle fiche Mark Douglas · Fxmily',
   weekly_report_ready: 'Rapport hebdo prêt · Fxmily',
   monthly_debrief_ready: 'Ton débrief mensuel est prêt · Fxmily',
+  // V1.5 §27.6 dispose "push-only, no email" — defense-in-depth copy if the
+  // fallback ever fires (push failed 3× + non-transactional + cap not reached).
+  mindset_check_ready: 'Auto-évaluation mindset prête · Fxmily',
 };
 
 const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
@@ -164,6 +167,8 @@ const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
   weekly_report_ready: 'Ton digest hebdomadaire des membres a été généré.',
   monthly_debrief_ready:
     'Une synthèse du mois écoulé t’attend — progression, trading réel, entraînement. Un moment pour prendre du recul.',
+  mindset_check_ready:
+    'Ton QCM hebdo de 2 minutes pour mesurer où tu en es — mindset, discipline, patience. Calme et sans pression.',
 };
 
 const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
@@ -174,6 +179,7 @@ const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
   douglas_card_delivered: 'Lire la fiche',
   weekly_report_ready: 'Ouvrir le rapport',
   monthly_debrief_ready: 'Ouvrir mon débrief',
+  mindset_check_ready: 'Faire mon QCM hebdo',
 };
 
 export interface SendNotificationFallbackParams {

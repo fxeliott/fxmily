@@ -144,6 +144,15 @@ const META_BY_TYPE: Record<
     body: 'Une synthèse du mois écoulé t’attend — progression, trading réel, entraînement. Un moment pour prendre du recul, à ton rythme.',
     ctaLabel: 'Ouvrir mon débrief →',
   },
+  // V1.5 §27.6 dispose "push-only, no email" — defense-in-depth copy if the
+  // fallback ever fires (push failed 3× + non-transactional + cap not reached).
+  mindset_check_ready: {
+    title: 'Auto-évaluation mindset prête',
+    preview: 'Ton QCM hebdo de 2 minutes est disponible.',
+    eyebrow: 'MINDSET · QCM HEBDO',
+    body: 'Ton QCM hebdo de 2 minutes pour mesurer où tu en es — mindset, discipline, patience. Calme et sans pression.',
+    ctaLabel: 'Faire mon QCM hebdo →',
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

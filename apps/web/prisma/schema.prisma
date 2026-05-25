@@ -1444,11 +1444,22 @@ model HabitLog {
 // — surface RGPD distincte, schema sur mesure pour la vitrine publique :
 // segments HISTORICAL/LIVE, partials, BE, tags news, screenshot R2.
 // Pas de relation User : Eliott seul écrit, monovendeur.
+//
+// 🚨 DEPRECATED 2026-05-25 — Track Record split to standalone repo.
+// These two models (PublicTrade + PublicTradePartial) and their enums
+// (PublicTradeSegment + PublicTradeStatus) are still declared so Prisma
+// stays in sync with the prod Hetzner DB tables, but no application code
+// in this monorepo touches them anymore. The CRUD + vitrine live in
+// <https://github.com/fxeliott/trackrecord-fxmily> (Hono Worker + Neon).
+//
+// To drop the tables from this DB, follow `docs/runbook-hetzner-deploy.md`
+// §21 (T5 rollback recipe) — pg_dump + `DROP TABLE public_trade_partials,
+// public_trades` + `DROP TYPE "PublicTradeSegment", "PublicTradeStatus"`
+// (order matters: tables first, then types). Then remove the models below
+// + run `prisma migrate dev --name v1_13_drop_public_trades`.
 // =============================================================================
 
-/// Segment du track record. La frontière `historical → live` marque la
-/// refonte structurelle (cf. brief Eliot 2026-05-21) entre les trades
-/// importés du fichier ODS et ceux saisis manuellement à partir d'aujourd'hui.
+/// @deprecated 2026-05-25 — moved to trackrecord-fxmily standalone repo.
 enum PublicTradeSegment {
   historical
   live

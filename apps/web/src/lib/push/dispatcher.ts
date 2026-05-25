@@ -74,6 +74,38 @@ export const URGENCY_BY_TYPE: Record<NotificationTypeSlug, 'low' | 'normal'> = {
   mindset_check_ready: 'low', // calm weekly recul, anti-FOMO §27.6 (no fanfare)
 };
 
+/**
+ * V1.5.1 — Push-only notification types. The fallback email path is NEVER
+ * exercised for these slugs, even on permanent push failure of a
+ * non-transactional row that would otherwise be under the 24h cap.
+ *
+ * SPEC §27.6 (QCM Mindset, anti-FOMO Mark Douglas) explicitly disposes
+ * push-only / no email. Defense-in-depth copy in `lib/email/send.ts`
+ * (`FALLBACK_SUBJECT_BY_TYPE` / `FALLBACK_BODY_BY_TYPE` / `FALLBACK_CTA_BY_TYPE`
+ * / `META_BY_TYPE`) is preserved as a safety net for future slugs incorrectly
+ * omitting allowlist updates — but THIS Set is the authoritative gate, so the
+ * defense-in-depth copy is unreachable for slugs that opt out here.
+ *
+ * Add a slug here when the product invariant is "push channel only, no email
+ * fallback under any circumstance". Transactional flag does NOT override
+ * (the skip is unconditional — the slug declares that email is wrong, period).
+ */
+export const EMAIL_FALLBACK_SKIP_TYPES: ReadonlySet<NotificationTypeSlug> = new Set([
+  'mindset_check_ready',
+]);
+
+/**
+ * Pure helper : check if a notification slug should NEVER spawn a fallback
+ * email (push-only invariant). Side-effect free for unit tests.
+ *
+ * Carbone pattern `shouldSendFallbackEmail` (V1.6 SPEC §18.2 cap helper) —
+ * but unconditional : the slug declares the channel intent, isTransactional
+ * does NOT override.
+ */
+export function shouldSkipFallbackEmailForType(type: NotificationTypeSlug): boolean {
+  return EMAIL_FALLBACK_SKIP_TYPES.has(type);
+}
+
 export type BuiltPayload = {
   /** Apple declarative envelope (RFC 8030 magic key 8030). */
   web_push: 8030;
@@ -583,7 +615,23 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
   // which already has the (action, createdAt) index for fast lookup.
   try {
     let allowFallbackEmail = true;
-    if (!row.isTransactional) {
+
+    // V1.5.1 — §27.6 strict push-only allowlist takes precedence over the
+    // transactional / cap-24h logic. Mindset Check pushes never spawn an
+    // email fallback (anti-FOMO, anti-Black-Hat product invariant). The
+    // dispatcher emits a dedicated audit slug so operators can observe the
+    // skip without confusion with the cap-24h path.
+    if (shouldSkipFallbackEmailForType(slug)) {
+      allowFallbackEmail = false;
+      await logAudit({
+        action: 'notification.fallback.skipped_push_only',
+        userId: row.userId,
+        metadata: {
+          notificationId: row.id,
+          type: slug,
+        },
+      });
+    } else if (!row.isTransactional) {
       const recentFallbacks = await db.auditLog.count({
         where: {
           action: 'notification.fallback.emailed',

@@ -93,6 +93,11 @@ export type AuditAction =
   // notification's fallback email is skipped because the user has already
   // received >= 3 fallback emails in the rolling 24h window.
   | 'notification.fallback.capped'
+  // V1.5.1 — §27.6 strict push-only allowlist (e.g. `mindset_check_ready`).
+  // Emitted when the dispatcher skips the email fallback because the slug is
+  // in `EMAIL_FALLBACK_SKIP_TYPES` (anti-FOMO product invariant, no email
+  // copy even under cap-24h logic).
+  | 'notification.fallback.skipped_push_only'
   | 'cron.dispatch_notifications.scan'
   // J10 — RGPD account self-service + ops crons
   | 'account.data.exported'

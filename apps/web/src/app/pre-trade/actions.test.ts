@@ -209,8 +209,10 @@ describe('submitPreTradeCheckAction — happy path (persist + audit + revalidate
     });
 
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard');
-    expect(revalidatePathMock).toHaveBeenCalledWith('/pre-trade/new');
-    expect(revalidatePathMock).toHaveBeenCalledTimes(2);
+    expect(revalidatePathMock).toHaveBeenCalledTimes(1);
+    // V2.3.1 nit cleanup : `/pre-trade/new` revalidate retiré (page
+    // `force-dynamic`, revalidate était un dead call).
+    expect(revalidatePathMock).not.toHaveBeenCalledWith('/pre-trade/new');
 
     expect(redirectMock).toHaveBeenCalledWith('/dashboard?done=pre-trade');
   });

@@ -192,7 +192,20 @@ export type AuditAction =
   // scan` is the weekly heartbeat (counts + `weekStart` + `ranAt`), strict
   // `cron.<name>.scan` underscore convention (cron-watch — V1.6 Bug #4).
   | 'mindset_check.submitted'
-  | 'cron.mindset_check_reminders.scan';
+  | 'cron.mindset_check_reminders.scan'
+  // V2.3 — Pre-trade circuit breaker (ADR-003, jalon Session BB+CC). Mark
+  // Douglas 4 primary trading fears (Trading in the Zone ch.7-8) + Gollwitzer
+  // if-then implementation intentions meta d=0.65 (PMC4500900). ONE slug:
+  // the instrument is 100% closed (4 enum answers, ZERO free-text) ⇒ NO
+  // crisis/injection surface (no `*.crisis_detected` counterpart, mirrors
+  // V1.5 mindset_check). PII-FREE metadata: `{checkId, reasonToTrade,
+  // emotionLabel, planAlignment, stopLossPredefined, linkedTradeId: null}`.
+  // `linkedTradeId` starts as null at creation ; the auto-link wired in
+  // `createTrade*` / `closeTrade*` enriches the `trade.created` /
+  // `trade.closed` metadata with `linkedPreTradeCheckId` (NOT a separate
+  // slug on the check — the check row's `linkedTradeId` column is the
+  // authoritative join).
+  | 'pre_trade_check.created';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the
 // public Track Record was split out to a standalone repo

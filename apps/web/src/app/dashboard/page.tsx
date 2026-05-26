@@ -7,6 +7,7 @@ import {
   Moon,
   Plus,
   Shield,
+  ShieldCheck,
   Sun,
   Users,
 } from 'lucide-react';
@@ -285,6 +286,40 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <Suspense fallback={<PatternsSkeleton />}>
             <PatternsSection userId={userId!} timezone={timezone} range={range} />
           </Suspense>
+        </section>
+
+        {/* V2.3 — Pre-trade circuit breaker trigger (ADR-003 Trigger A).
+            Card lime calme positioned ABOVE the Journal section so a member
+            who is about to open `/journal/new` sees the "Pause 30s" prompt
+            first. Non-bloquant per ADR-003 §Alt 2 — Fxmily NEVER blocks a
+            trade, the wizard is a mirror. */}
+        <section className="mb-6" aria-labelledby="pre-trade-heading">
+          <Link
+            href="/pre-trade/new"
+            className="rounded-card block border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]">
+                  <ShieldCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="t-eyebrow text-[var(--acc)]">Pré-trade</span>
+                  <h2
+                    id="pre-trade-heading"
+                    className="text-[15px] font-semibold text-[var(--t-1)]"
+                  >
+                    Pause 30 secondes avant ton prochain trade
+                  </h2>
+                  <p className="text-[12px] leading-relaxed text-[var(--t-2)]">
+                    4 questions courtes : raison, émotion, plan, stop-loss. Un miroir, pas une
+                    barrière.
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="h-5 w-5 shrink-0 text-[var(--acc)]" aria-hidden="true" />
+            </div>
+          </Link>
         </section>
 
         {/* Mark Douglas card (canonical TIER 4) */}

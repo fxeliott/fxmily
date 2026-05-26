@@ -148,6 +148,37 @@ enum HabitKind {
   meditation
 }
 
+/// V2.3 — Pre-trade circuit breaker (Mark Douglas anti-FOMO + Gollwitzer if-then).
+/// 4 options to answer "Pourquoi je veux prendre ce trade ?" before each entry.
+/// See `docs/decisions/ADR-003-pre-trade-circuit-breaker.md` for the mapping
+/// vs Douglas's 4 primary trading fears (Trading in the Zone, 2000) — `edge`
+/// = absence of the 4 fears, `fomo` = fear of missing out (direct), `revenge`
+/// = mixed fear of being wrong + losing money, `boredom` = Steenbarger
+/// "low arousal" affect (extension hors-Douglas-canonique, documented).
+enum PreTradeReason {
+  /// Setup éprouvé, je suis dans ma routine (absence des 4 fears Douglas).
+  edge
+  /// J'ai peur de rater quelque chose (fear of missing out — Douglas).
+  fomo
+  /// Je veux compenser une perte (fear of being wrong + losing money — Douglas).
+  revenge
+  /// J'ai juste envie de faire quelque chose (Steenbarger low-arousal extension).
+  boredom
+}
+
+/// V2.3 — Pre-trade affective state. Russell-Weiss-Mendelsohn 1989 affect grid
+/// 2x2 (valence × arousal). 4 options mapping the 4 quadrants. See ADR-003.
+enum PreTradeEmotion {
+  /// Low arousal, positive valence.
+  calme
+  /// High arousal, positive valence.
+  excite
+  /// High arousal, negative valence.
+  frustre
+  /// Low-to-medium arousal, negative valence.
+  anxieux
+}
+
 /// Mark Douglas card category (J7, SPEC §7.6).
 /// Maps to canonical pillars from *Trading in the Zone* and *The Disciplined Trader*.
 enum DouglasCategory {
@@ -262,6 +293,15 @@ model User {
   // no FK to Trade / WeeklyReport / BehavioralScore, only this implicit
   // userId link — feeds nothing back into the real edge (§21.5/§27.7).
   mindsetChecks               MindsetCheck[]
+  // V2.3 — pre-trade circuit breaker (Mark Douglas anti-FOMO + Gollwitzer
+  // if-then, Session BB). 4 questions one-tap (~30s) before each trade.
+  // ZERO free-text → ZERO crisis/injection surface → ZERO AI banner needed.
+  // Optional auto-link to a Trade via service-layer linkRecentCheckToTrade
+  // window 15min P2002-safe. The member always stays master of the decision
+  // — Fxmily NEVER blocks a trade. See docs/decisions/ADR-003-pre-trade-
+  // circuit-breaker.md for the evidence base (Gollwitzer-Sheeran 2006
+  // d=0.65, 94 studies, n=8461) + Mark Douglas 4 primary trading fears.
+  preTradeChecks              PreTradeCheck[]
   // J9 — Web Push subscriptions (one row per browser/device) + per-category opt-out preferences.
   pushSubscriptions           PushSubscription[]
   notificationPreferences     NotificationPreference[]
@@ -1435,6 +1475,69 @@ model HabitLog {
   @@index([userId, date(sort: Desc)])
   @@index([userId, kind, date(sort: Desc)])
   @@map("habit_logs")
+}
+
+// =============================================================================
+// V2.3 — Pre-trade circuit breaker (Session BB, ADR-003)
+// =============================================================================
+//
+// Mark Douglas anti-FOMO + Gollwitzer if-then implementation intentions
+// (meta-analysis Gollwitzer-Sheeran 2006: d=0.65, 94 studies, n=8461,
+// CI 95% [0.6, 0.7] — *Advances in Experimental Social Psychology* vol.38,
+// updates Sheeran 2024 ERSP 642 tests + Gollwitzer-Sheeran 2025 Annu. Rev.
+// Psychol. 76:303-328). See docs/decisions/ADR-003-pre-trade-circuit-breaker.md
+// for the full mapping vs Mark Douglas's 4 primary trading fears (Trading
+// in the Zone, 2000).
+//
+// 4 questions one-tap (~30s) before each trade entry:
+//   reasonToTrade      : edge / fomo / revenge / boredom (PreTradeReason)
+//   emotionLabel       : calme / excite / frustre / anxieux (PreTradeEmotion)
+//   planAlignment      : does this trade respect the documented plan?
+//   stopLossPredefined : is the stop-loss defined BEFORE entry?
+//
+// Statistical scope: REAL edge surface (NOT §21.5 training).
+// Free-text fields: NONE → safeFreeText NOT needed, no crisis/injection
+// surface, no EU AI Act 50(1) banner needed (zero AI).
+//
+// Optional auto-link via service-layer `linkRecentCheckToTrade(userId,
+// tradeId, windowMin=15)` — a Trade created within 15min after a check
+// sets `linkedTradeId` (P2002-safe via WHERE linkedTradeId IS NULL).
+// String only (no FK constraint): if the linked Trade is later deleted,
+// the linkedTradeId becomes a dangling pointer — gracefully handled via
+// leftJoin null in service-layer reads. Trade deletion ≠ check deletion.
+// =============================================================================
+
+/// V2.3 — Pre-trade circuit breaker (Mark Douglas anti-FOMO + Gollwitzer).
+/// One row per (member, pre-trade self-assessment). Cascade-delete with the
+/// user (RGPD §17). See enum docs + ADR-003 for the evidence base.
+model PreTradeCheck {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// Why the member is about to enter the trade. 4 options Mark Douglas + Steenbarger.
+  reasonToTrade PreTradeReason @map("reason_to_trade")
+
+  /// Affective state at the moment of decision. Russell-Weiss-Mendelsohn 1989 2x2.
+  emotionLabel PreTradeEmotion @map("emotion_label")
+
+  /// Does this trade respect the member's documented plan? Yes/No.
+  planAlignment Boolean @map("plan_alignment")
+
+  /// Is the stop-loss defined BEFORE entry? Mark Douglas "accepting risk" ch.8.
+  stopLossPredefined Boolean @map("stop_loss_predefined")
+
+  /// Optional auto-link to a Trade created within 15min after this check.
+  /// String only (no FK constraint): a deleted Trade leaves the linkedTradeId
+  /// dangling rather than nulling out the check (graceful via leftJoin null
+  /// in service-layer reads). Set via linkRecentCheckToTrade window 15min,
+  /// P2002-safe via WHERE linkedTradeId IS NULL predicate in the UPDATE.
+  linkedTradeId String? @map("linked_trade_id")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("pre_trade_checks")
 }
 
 // =============================================================================

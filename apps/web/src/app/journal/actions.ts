@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
+import { linkRecentCheckToTrade } from '@/lib/pre-trade/service';
 import { tradeCloseSchema, tradeOpenSchema } from '@/lib/schemas/trade';
 import { scheduleDouglasDispatch } from '@/lib/cards/scheduler';
 import { scheduleScoreRecompute } from '@/lib/scoring/scheduler';
@@ -164,10 +165,28 @@ export async function createTradeAction(
     return { ok: false, error: 'unknown' };
   }
 
+  // V2.3 (ADR-003) — auto-link the most recent unlinked PreTradeCheck
+  // created within 15 min to this trade. Best-effort: a service-level
+  // failure (DB transient, race lost) must NEVER fail the trade-create
+  // flow — we treat the link as opportunistic metadata enrichment.
+  let linkedPreTradeCheckId: string | null = null;
+  try {
+    linkedPreTradeCheckId = await linkRecentCheckToTrade(session.user.id, tradeId);
+  } catch (err) {
+    console.error('[journal.createTrade] linkRecentCheckToTrade failed', err);
+  }
+
   await logAudit({
     action: 'trade.created',
     userId: session.user.id,
-    metadata: { tradeId, pair: data.pair, direction: data.direction },
+    metadata: {
+      tradeId,
+      pair: data.pair,
+      direction: data.direction,
+      // PII-FREE. `linkedPreTradeCheckId` is null if no recent check within
+      // the 15-min window (ADR-003 §Auto-link).
+      linkedPreTradeCheckId,
+    },
   });
 
   revalidatePath('/journal');
@@ -248,6 +267,18 @@ export async function closeTradeAction(
     return { ok: false, error: 'unknown' };
   }
 
+  // V2.3 (ADR-003) — auto-link a recent unlinked PreTradeCheck to this
+  // trade on close. Covers the path where a member opens a trade WITHOUT
+  // running the wizard but DOES run it before clicking close (e.g. the
+  // wizard reminds them to step back at exit). Best-effort, same try/catch
+  // discipline as createTradeAction.
+  let linkedPreTradeCheckId: string | null = null;
+  try {
+    linkedPreTradeCheckId = await linkRecentCheckToTrade(session.user.id, tradeId);
+  } catch (err) {
+    console.error('[journal.closeTrade] linkRecentCheckToTrade failed', err);
+  }
+
   await logAudit({
     action: 'trade.closed',
     userId: session.user.id,
@@ -255,7 +286,16 @@ export async function closeTradeAction(
     // Tag *values* are stored on the row itself ; counts here let admins
     // filter "how many trades closed with N tags this week" without
     // querying the trades table.
-    metadata: { tradeId, outcome: data.outcome, tagCount: data.tags.length },
+    // V2.3 — `linkedPreTradeCheckId` mirrors `trade.created`. The
+    // service-layer `update where linkedTradeId IS NULL` predicate makes
+    // this idempotent: a check already linked at create won't re-link on
+    // close (the WHERE clause filters it out).
+    metadata: {
+      tradeId,
+      outcome: data.outcome,
+      tagCount: data.tags.length,
+      linkedPreTradeCheckId,
+    },
   });
 
   revalidatePath('/journal');

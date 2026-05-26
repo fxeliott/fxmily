@@ -1,0 +1,267 @@
+/**
+ * V2.3 PreTradeCheck E2E — auth-gate + happy-path (capture/persist) + auto-link
+ * + triggers UI render (Card /dashboard + Banner /journal/new).
+ *
+ * ADR-003 + SPEC §18.4. Covers V2.3 anti-FOMO wizard surface in 4 phases :
+ *
+ *   1. AUTH GATE — anon bounced to /login on /pre-trade/new (proxy.ts matcher
+ *      + page-level `auth()` + `status='active'` gate).
+ *   2. CAPTURE + PERSIST — a `PreTradeCheck` created directly via Prisma is
+ *      accepted by the V2.3 DB schema (Prisma 7 typing guarantees the contract
+ *      at compile time ; this re-verifies at runtime the 4-field shape +
+ *      `linkedTradeId String?` nullable + 2 Postgres enums `PreTradeReason`
+ *      and `PreTradeEmotion`).
+ *   3. AUTO-LINK — `linkRecentCheckToTrade(userId, tradeId)` pairs the most
+ *      recent unlinked check with a Trade created within `LINK_DEFAULT_WINDOW_MIN`
+ *      (15 min). P2025-safe optimistic locking via `WHERE linkedTradeId IS NULL`
+ *      predicate (cf. `lib/pre-trade/service.ts:144-172`).
+ *   4. RENDER triggers UI — `/pre-trade/new` shows the wizard for an authed
+ *      member ; `/dashboard` surfaces Trigger A Card with
+ *      `aria-labelledby="pre-trade-heading"` ; `/journal/new` surfaces
+ *      Trigger B Banner with `aria-labelledby="pre-trade-banner-heading"`.
+ *
+ * NOT covered (canon `v1-5-mindset-check.spec.ts:18-22`) : driving the 4-step
+ * wizard UI itself (hidden inputs + localStorage draft → fragile selectors).
+ * The capture+persist + Server Action layer is covered by Vitest +22 tests
+ * V2.3 (cf. `lib/pre-trade/service.test.ts` + `app/pre-trade/actions.test.ts`).
+ *
+ * Cleanup : `PreTradeCheck` declares `onDelete: Cascade` on User (FK in
+ * migration `20260526100000_v2_3_pre_trade_check`). `cleanupTestUsers` wipes
+ * the rows explicitly (carbone V1.5/V1.8/V1.3 pattern — FK-correct BEFORE
+ * `db.user.deleteMany`).
+ *
+ * Skipping policy (carbon J9 visual) : skip with a clear message if Playwright
+ * Chromium is not installed, rather than crashing.
+ */
+
+import { existsSync } from 'node:fs';
+
+import { chromium, expect, test } from '@playwright/test';
+
+import { db } from '@/lib/db';
+import { linkRecentCheckToTrade } from '@/lib/pre-trade/service';
+import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
+import { loginAs } from '@/test/e2e-auth';
+
+const MEMBER_EMAIL = 'v2-3-pre-trade.member.e2e.test@fxmily.local';
+const MEMBER_PASSWORD = 'V2_3-PreTradePwd-2026!';
+
+let member: SeededUser | null = null;
+
+async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }> {
+  const exec = chromium.executablePath();
+  if (!exec || !existsSync(exec)) {
+    return {
+      ok: false,
+      reason: `Playwright Chromium binary not found at ${exec || '(unresolved path)'} — run \`pnpm exec playwright install chromium\` once and re-run this suite.`,
+    };
+  }
+  return { ok: true };
+}
+
+test.describe('V2.3 PreTradeCheck — auth-gate + happy-path persist + auto-link + triggers UI', () => {
+  test.beforeAll(async () => {
+    const probe = await isChromiumLaunchable();
+    test.skip(!probe.ok, probe.reason ?? 'Chromium not launchable');
+
+    await cleanupTestUsers();
+    member = await seedMemberUser({
+      email: MEMBER_EMAIL,
+      password: MEMBER_PASSWORD,
+      firstName: 'V2_3',
+      lastName: 'PreTrade',
+    });
+  });
+
+  test.afterAll(async () => {
+    await cleanupTestUsers();
+    member = null;
+  });
+
+  test('anon is bounced to /login on /pre-trade/new', async ({ page }) => {
+    await page.goto('/pre-trade/new');
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('CAPTURE + PERSIST: a PreTradeCheck round-trips through Prisma V2.3 schema', async () => {
+    if (!member) throw new Error('seed missing — beforeAll did not run');
+
+    const check = await db.preTradeCheck.create({
+      data: {
+        userId: member.id,
+        reasonToTrade: 'edge',
+        emotionLabel: 'calme',
+        planAlignment: true,
+        stopLossPredefined: true,
+      },
+      select: {
+        id: true,
+        userId: true,
+        reasonToTrade: true,
+        emotionLabel: true,
+        planAlignment: true,
+        stopLossPredefined: true,
+        linkedTradeId: true,
+        createdAt: true,
+      },
+    });
+
+    expect(check.userId).toBe(member.id);
+    expect(check.reasonToTrade).toBe('edge');
+    expect(check.emotionLabel).toBe('calme');
+    expect(check.planAlignment).toBe(true);
+    expect(check.stopLossPredefined).toBe(true);
+    // linkedTradeId is nullable + has NO FK to trades (race-safe P2025 invariant
+    // documented at schema.prisma:1532-1537 — scar I1). A fresh check starts
+    // unlinked.
+    expect(check.linkedTradeId).toBeNull();
+    expect(check.createdAt).toBeInstanceOf(Date);
+  });
+
+  test('AUTO-LINK: linkRecentCheckToTrade pairs a check with a recent Trade (15 min window)', async () => {
+    if (!member) throw new Error('seed missing');
+
+    // 1. Create a fresh, unlinked PreTradeCheck (within the 15 min window).
+    const check = await db.preTradeCheck.create({
+      data: {
+        userId: member.id,
+        reasonToTrade: 'edge',
+        emotionLabel: 'calme',
+        planAlignment: true,
+        stopLossPredefined: true,
+      },
+      select: { id: true },
+    });
+
+    // 2. Create an open Trade for the same member (carbone `seedTradeHistory`
+    //    fields shape — `emotionBefore` is the legacy singular array name in
+    //    the J2 Trade schema, not `emotionsBefore`).
+    const trade = await db.trade.create({
+      data: {
+        userId: member.id,
+        pair: 'EURUSD',
+        direction: 'long',
+        session: 'london',
+        enteredAt: new Date(),
+        entryPrice: 1.085,
+        lotSize: 0.1,
+        plannedRR: 2.5,
+        emotionBefore: ['calm'],
+        planRespected: true,
+      },
+      select: { id: true },
+    });
+
+    // 3. Auto-link should pick the recent unlinked check and stamp linkedTradeId.
+    const linkedCheckId = await linkRecentCheckToTrade(member.id, trade.id);
+    expect(linkedCheckId).toBe(check.id);
+
+    const updated = await db.preTradeCheck.findUnique({
+      where: { id: check.id },
+      select: { linkedTradeId: true },
+    });
+    expect(updated?.linkedTradeId).toBe(trade.id);
+  });
+
+  test('AUTO-LINK: no recent unlinked check → returns null', async () => {
+    if (!member) throw new Error('seed missing');
+
+    // Member has only the linked check from the previous test. A new trade
+    // should find no unlinked candidate within the window.
+    const newTrade = await db.trade.create({
+      data: {
+        userId: member.id,
+        pair: 'GBPUSD',
+        direction: 'short',
+        session: 'newyork',
+        enteredAt: new Date(),
+        entryPrice: 1.265,
+        lotSize: 0.1,
+        plannedRR: 2.0,
+        emotionBefore: ['focused'],
+        planRespected: true,
+      },
+      select: { id: true },
+    });
+
+    const linkedCheckId = await linkRecentCheckToTrade(member.id, newTrade.id);
+    expect(linkedCheckId).toBeNull();
+  });
+
+  test('RENDER: /pre-trade/new shows the wizard heading for an authed member', async ({
+    page,
+    request,
+  }) => {
+    if (!member) throw new Error('seed missing');
+
+    await page.goto('/login');
+    await loginAs(page, request, member.email, member.password);
+
+    await page.goto('/pre-trade/new');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page).toHaveURL(/\/pre-trade\/new/);
+
+    // V2.3.1 hardening : page-level `<h1 id="ptw-heading">` is the form's
+    // `aria-labelledby` target. The wizard renders inside a Server Component
+    // host page.
+    await expect(page.locator('h1#ptw-heading')).toBeVisible();
+
+    // No Next dev-overlay error dialog mounted.
+    await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
+  });
+
+  test('RENDER: /dashboard surfaces Trigger A Card (pre-trade-heading)', async ({
+    page,
+    request,
+  }) => {
+    if (!member) throw new Error('seed missing');
+
+    await page.goto('/login');
+    await loginAs(page, request, member.email, member.password);
+
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page).toHaveURL(/\/dashboard/);
+
+    // ADR-003 Trigger A : visible h2 heading lime calme positioned ABOVE the
+    // Journal section. Pattern carbone `<section aria-labelledby>` V1.12 P7.
+    const heading = page.locator('h2#pre-trade-heading');
+    await expect(heading).toBeVisible();
+    await expect(heading).toContainText(/Pause 30 secondes/i);
+
+    // Anchor the trigger link to confirm the card is wired to /pre-trade/new
+    // (not a stale stub).
+    await expect(page.locator('a[href="/pre-trade/new"]').first()).toBeVisible();
+
+    await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
+  });
+
+  test('RENDER: /journal/new surfaces Trigger B Banner (pre-trade-banner-heading)', async ({
+    page,
+    request,
+  }) => {
+    if (!member) throw new Error('seed missing');
+
+    await page.goto('/login');
+    await loginAs(page, request, member.email, member.password);
+
+    await page.goto('/journal/new');
+    await page.waitForLoadState('networkidle');
+
+    await expect(page).toHaveURL(/\/journal\/new/);
+
+    // ADR-003 Trigger B : visible `<span id="pre-trade-banner-heading">`
+    // inside an `<aside aria-labelledby>` wrapper. Span (not h2) is the
+    // labelledby target — Banner is decorative, not a structural heading.
+    const bannerHeading = page.locator('#pre-trade-banner-heading');
+    await expect(bannerHeading).toBeVisible();
+    await expect(bannerHeading).toContainText(/Pause 30 secondes/i);
+
+    // Anchor link to /pre-trade/new + aria-label confirming the destination.
+    await expect(page.locator('a[href="/pre-trade/new"][aria-label*="pré-trade"]')).toBeVisible();
+
+    await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
+  });
+});

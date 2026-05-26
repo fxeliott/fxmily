@@ -165,6 +165,14 @@ export async function cleanupTestUsers(): Promise<{ deleted: number }> {
   // V1.5 — MindsetCheck (SPEC §27). 0-FK psychology-pure, ON DELETE CASCADE;
   // explicit here for the same cleanup-visibility reason as REFLECT/§23 above.
   await db.mindsetCheck.deleteMany({ where: { userId: { in: ids } } });
+  // V2.3 — PreTradeCheck (ADR-003). `linkedTradeId` is a plain nullable string
+  // (NO FK to trades, race-safe P2025 invariant scar I1) — but the parent
+  // `userId` FK has ON DELETE CASCADE. Explicit deletion here BEFORE the user
+  // wipe keeps the cleanup log obvious (carbone V1.5/V1.8/V1.3 pattern) and
+  // also runs the deleteMany even on rows whose Trade was already wiped
+  // above (the dangling linkedTradeId would otherwise stay until the User
+  // cascade fires).
+  await db.preTradeCheck.deleteMany({ where: { userId: { in: ids } } });
 
   const result = await db.user.deleteMany({ where: { id: { in: ids } } });
   return { deleted: result.count };

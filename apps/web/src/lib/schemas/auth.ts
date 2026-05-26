@@ -51,10 +51,27 @@ const nameSchema = z
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
   .transform(safeFreeText);
 
-/** /login form (email + password). */
+/** /login form (email + password).
+ *
+ * `.max(256)` defense-in-depth against DoS via argon2id worker pool saturation
+ * (CWE-400/770). Without this cap, `authorizeCredentials` would call
+ * `verifyPassword(rawInput, hash)` on a multi-MB string — argon2id at
+ * `memoryCost=19MiB + timeCost=2 + parallelism=1` pre-processes the entire
+ * input before constant-time compare, exploding latency from ~150ms (12 chars)
+ * to several hundred ms per request. Combined with login rate limits 10
+ * burst/IP and 5/email (V1.12 P3), an attacker rotating ~10+ IPs can still
+ * saturate the single-node CX22 worker thread. Cap at 256 chars matches the
+ * `passwordSchema` (line ~40) used at onboarding — passwords above this
+ * length would already have been rejected at account creation, so this
+ * cap never affects a legitimate login flow. Safe-Parse fails fast BEFORE
+ * any DB hit or rate-limit bucket consume (`authorize-credentials.ts:109-110`).
+ */
 export const signInSchema = z.object({
   email: emailSchema,
-  password: z.string({ message: 'Mot de passe requis.' }).min(1, 'Mot de passe requis.'),
+  password: z
+    .string({ message: 'Mot de passe requis.' })
+    .min(1, 'Mot de passe requis.')
+    .max(256, 'Mot de passe trop long.'),
 });
 export type SignInInput = z.infer<typeof signInSchema>;
 

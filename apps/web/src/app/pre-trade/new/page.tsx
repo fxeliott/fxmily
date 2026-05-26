@@ -47,6 +47,7 @@ export default async function NewPreTradeCheckPage() {
             Pré-trade · Pause de discipline
           </span>
           <h1
+            id="ptw-heading"
             className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >

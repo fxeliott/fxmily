@@ -83,6 +83,20 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   typedRoutes: true,
+  // V2.3 post-ship perf hardening — explicit per-package tree-shaking for
+  // `lucide-react`. 111+ files across the codebase do `import { X, Y, Z }
+  // from 'lucide-react'`. While Next 16 + modern bundlers tree-shake named
+  // imports by default, the lucide-react barrel `index.js` interacts in
+  // non-obvious ways with the Sentry `withSentryConfig` wrap (which modifies
+  // the module graph) — making the optim implicit risk leaking into the
+  // shared client chunk. Flagging it explicitly via `optimizePackageImports`
+  // guarantees per-icon import resolution at build time. Estimated gain:
+  // 10-30 KB gzipped on First Load JS shared chunk. Validate via
+  // `ANALYZE=true pnpm --filter @fxmily/web build` before/after — compare
+  // `lucide-react*` chunk sizes in `.next/analyze/client.html`.
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
   images: {
     remotePatterns: [],
   },

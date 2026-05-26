@@ -21,7 +21,7 @@ Fxmily est un **outil de suivi comportemental** — pas un outil d'analyse de ma
 
 Fxmily n'est ni un CIF (Conseiller en Investissement Financier) ni un service réglementé AMF — c'est un outil interne de la formation Fxmily d'Eliot, à destination de ses membres exclusivement.
 
-**Statut** : **LIVE prod** depuis 2026-05-10 sur `app.fxmilyapp.com` (Hetzner CX22 + Caddy 2 + Postgres 17 + Docker Compose). Cycle V1 + V2 partiel livré (**J0 → J10 + V1.5 + V1.6 + V1.7.2 batch HTTP local Claude Max + V1.8 REFLECT + V1.9 polish + V2.0 HabitLog backend + V2.1.0→V2.1.6 TRACK frontend + DS-v2 + suivi formation**). Branch protection main enabled (3 required checks : Lint+CodeQL+Playwright). Vitest **1429/1429** verts. 0 CVE / 0 Dependabot alert.
+**Statut** : **LIVE prod** depuis 2026-05-10 sur `app.fxmilyapp.com` (Hetzner CX22 + Caddy 2 + Postgres 17 + Docker Compose). Cycle V1 complet + V2.x mid-flight (**J0 → J10 + V1.2 §21 training mode + V1.3 §23 training debrief + V1.4 §25 monthly debrief IA + V1.5 + V1.5.1 + V1.5.2 + V1.5 §27 mindset QCM + V1.6 + V1.7/V1.7.1/V1.7.2 batch HTTP local Claude Max + V1.8 REFLECT + V1.9 polish + V1.10 sec + V1.11 batch + V1.12 P1-P8 hardening + V2.0 HabitLog backend + V2.1.0→V2.1.6 TRACK frontend + DS-v2 + V2.2 correlation 5-kinds + T5 track-record public split-out + V2.3 pre-trade circuit breaker ADR-003 + V2.3.1 polish hardening**). Branch protection main enabled (3 required checks : Lint+CodeQL+Playwright). Vitest **1484/1484** verts. 0 CVE / 0 Dependabot alert.
 
 ---
 
@@ -33,7 +33,7 @@ Fxmily n'est ni un CIF (Conseiller en Investissement Financier) ni un service r�
 - **Auth.js v5** (Credentials + JWT strategy) — câblé J1, status gate global Phase P
 - **Cloudflare R2** (médias) + **Resend** (emails) + **Sentry** (monitoring) + **Anthropic Claude API** (rapports hebdo IA, Sonnet)
 - **Web Push API + VAPID** + Service Worker manuel (Apple Declarative Web Push 8030 + classic, J9)
-- **Vitest 4** (1001 tests verts post V2.0) + **React Testing Library** + **Playwright** (~50 specs auth-gate + 3 happy-path J5/J6/V1.5) — wired J1+
+- **Vitest 4** (**1484/1484** verts post V2.3.1) + **React Testing Library** + **Playwright** (18 specs `apps/web/tests/e2e/` auth-gate + 3 happy-path J5/J6/V1.5) — wired J1+
 - **Turborepo** + **pnpm 10 workspaces** — **Node 22 LTS**
 
 ## Structure du monorepo

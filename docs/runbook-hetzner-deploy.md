@@ -1660,9 +1660,165 @@ pnpm --filter @fxmily/web prisma:migrate deploy` (rejoue la migration).
    `pnpm --filter @fxmily/web exec tsx scripts/import-fxmily-trades.ts --year 2025`
    (re-crée les 139 trades depuis l'ODS source, perd les éditions admin).
 
+## 22. Rollback V2.3 pre-trade circuit breaker migration (`20260526100000_v2_3_pre_trade_check`)
+
+> **Quand l'utiliser** : si la migration V2.3 "Pre-trade circuit breaker"
+> (PR #178 `602787c`, ADR-003 Gollwitzer if-then d=0.65 + Mark Douglas 4
+> fears + Steenbarger boredom extension — anti-FOMO wizard 4 questions
+> closed instrument) a été déployée en prod et qu'un blocker post-deploy
+> nécessite de la retirer complètement.
+> Pure ADD-only (2 enums Postgres + 1 table neuve + 1 index + 1 FK
+> `pre_trade_checks.user_id → users.id` `ON DELETE CASCADE`).
+> Brand-new + structurellement isolé du graphe métier real-edge :
+> `linkedTradeId String?` est **intentionnellement SANS FK** vers `trades`
+> (ADR-003 §Auto-link race-safe P2025 — un Trade supprimé laisse
+> `linkedTradeId` dangling plutôt que nuller le check, scar I1
+> documenté). Donc 0 FK croisée vers `trades` / `weekly_reports` / etc.
+>
+> ✅ **Simple `BEGIN/COMMIT`-revertable** (PAS d'`ALTER TYPE … DROP VALUE`
+> nécessaire — les 2 enums `PreTradeReason` + `PreTradeEmotion` sont
+> brand-new et ne sont référencés QUE par la seule table qu'on supprime →
+> `DROP TYPE` clean). Pattern carbone §14 (`v2_0_track_habit_logs`) + §15
+> (`v2_1_admin_notes`) + §21 (`track_record_public_trades`).
+>
+> ⚠️ **Risque data loss** : `pre_trade_checks` est **member-authored**
+> (instrument closed 4 enums + 2 booleans, ~30s par check). À 30 membres
+> × ~1 check/jour cible ADR-003 = ~30 rows/jour cumulés. Closed instrument
+> ⇒ pas de PII texte libre (just enum values), mais c'est de la donnée
+> réflexive du membre (RGPD member-authored). `pg_dump --data-only`
+> atomique de la table AVANT est OBLIGATOIRE.
+>
+> **Surface impactée** : `/pre-trade/new` (host wizard) deviendra 500 ou
+> compile-time error post-rollback car le Server Action
+> `submitPreTradeCheckAction` (`app/pre-trade/actions.ts`) référence
+> `db.preTradeCheck.create`. Le Card trigger `/dashboard` + Banner trigger
+> `/journal/new` linkent toujours vers `/pre-trade/new` mais la cible
+> sera 500. Mitigation : re-deploy l'image pré-V2.3 (sha < `602787c`)
+> qui n'a pas les chemins V2.3 wired. Le wire `linkRecentCheckToTrade`
+> dans `journal/actions.ts:createTradeAction`/`closeTradeAction` est en
+> try/catch best-effort → un schema DB sans `pre_trade_checks` fera
+> throw `P2021 (table does not exist)` mais ne cassera PAS le trade flow
+> (catch silencieux, log Sentry warning).
+>
+> **Indépendant de §15-§21** : 0 FK croisée. Si plusieurs rollbacks sont
+> nécessaires, l'ordre inverse de l'apply continue d'appliquer (§22 → §21
+> → §20 → … → §15).
+
+### 22.1 Pré-requis — quiesce
+
+Stop le web pour qu'aucun nouveau PreTradeCheck ne soit créé pendant le
+DROP, et qu'aucun trade ne tente un auto-link :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+```
+
+Vérifie l'état Prisma :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+    FROM _prisma_migrations WHERE migration_name LIKE '%v2_3_pre_trade_check%' \
+    ORDER BY started_at DESC;"
+```
+
+### 22.2 Backup `pre_trade_checks`
+
+```bash
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  pg_dump -U fxmily -d fxmily \
+  -t pre_trade_checks \
+  --data-only --column-inserts \
+  | gzip > "/etc/fxmily/backups/pre-v2-3-rollback-pre-trade-checks-${TS}.sql.gz"
+```
+
+> Conservé 30j R2 (lifecycle `caddy/` carbone) + 7j local (`fxmily-backup`
+> rotation). Les données réflexives membre (4 enums + 2 booleans par
+> check) sont member-authored RGPD — le backup permet de restorer
+> intégralement si la migration est ré-appliquée plus tard.
+
+### 22.3 SQL rollback — DROP TABLE + DROP TYPES dans un seul BEGIN/COMMIT
+
+Ordre obligatoire : table d'abord (sinon `cannot drop type because other
+objects depend on it`) puis les 2 enums :
+
+```sql
+BEGIN;
+DROP TABLE IF EXISTS "pre_trade_checks";
+DROP TYPE IF EXISTS "PreTradeEmotion";
+DROP TYPE IF EXISTS "PreTradeReason";
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260526100000_v2_3_pre_trade_check';
+COMMIT;
+```
+
+> Postgres rollback automatique si une étape échoue (cohérence garantie).
+> Note : `audit_logs.action='pre_trade_check.created'` rows sont
+> **conservées** (logs immuables par design, frozen historical). Le slug
+> reste dans le union type `AuditAction` TypeScript du code re-déployé
+> pré-V2.3 (si le code ne sait pas générer ce slug, les rows existantes
+> restent valides — l'union est input-validation côté serveur, pas une
+> contrainte DB).
+
+### 22.4 Re-déploiement de l'image pré-V2.3
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<pre-v2-3-sha>
+# Le pré-V2.3 sha le plus récent = 6f993ea (PR #177 V1.12 P8 T5 SUPERSEDED).
+# Si V2.3.1 polish hardening (PR #179 3404e29) doit aussi être rollé,
+# pré-V2.3 = pré-V2.3.1 (3404e29 est sur top de 602787c).
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+```
+
+### 22.5 Vérification post-rollback
+
+```bash
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dt pre_trade_checks"
+# Attendu : "Did not find any relations" (table absente)
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c \
+  "SELECT typname FROM pg_type WHERE typname IN \
+   ('PreTradeReason', 'PreTradeEmotion');"
+# Attendu : 0 rows (types absents)
+
+curl -sI https://app.fxmilyapp.com/pre-trade/new
+# Attendu : HTTP/2 404 (route absente sur pré-V2.3 image)
+
+# Audit log : consigne le rollback honnête counters.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"v2_3_pre_trade_check\",\"by\":\"eliot\",\"data_loss_pre_trade_checks\":N}'::jsonb, \
+      NOW());"
+```
+
+### 22.6 Re-application future
+
+1. Re-deploy l'image V2.3+ HEAD (sha >= `602787c` ou V2.3.1 `3404e29`).
+2. `docker compose -f /opt/fxmily/docker-compose.prod.yml run --rm web \
+pnpm --filter @fxmily/web prisma:migrate deploy` (rejoue la migration).
+3. **Restore** depuis `pg_dump` step 22.2 si on veut préserver les rows
+   PreTradeCheck capturées avant rollback :
+
+   ```bash
+   gunzip -c /etc/fxmily/backups/pre-v2-3-rollback-pre-trade-checks-<TS>.sql.gz \
+     | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+         psql -U fxmily -d fxmily
+   ```
+
+4. **Alternative** : laisser fresh (perd les checks réflexifs captured —
+   acceptable car données enum-only sans PII, le membre re-fillera les
+   wizards futurs).
+
 ## Note transversale — pattern rollback Fxmily
 
-Toutes les recipes §11-§21 suivent un même contrat :
+Toutes les recipes §11-§22 suivent un même contrat :
 
 1. **pg_dump atomique AVANT** (data-only + column-inserts pour idempotency).
 2. **`docker compose stop web`** (fige les writes, évite la corruption
@@ -1690,18 +1846,20 @@ notification` (§17), `20260519150000_v1_4_monthly_debrief` (§19) ET
 > du jeu 7 valeurs post-§25. Les points 1/2/4/6/7 s'appliquent quand même.
 > Voir §17 / §19 / §20.
 >
-> **Ordre de rollback multi-migrations** — les 7 sections de migration
+> **Ordre de rollback multi-migrations** — les 8 sections de migration
 > (#108 `v2_1_admin_notes` §15 + #110 `v1_2_training_entities` §16 + #112
 > `v1_2_training_annotation_notification` §17 + #132 `v1_3_training_debrief`
 > §18 + #135 `v1_4_monthly_debrief` §19 + #137 `v1_5_mindset_check` §20 +
-> #151 `t5_track_record_public_trades` §21) sont des objets **indépendants**
-> (un rollback partiel d'un seul est valide ; `mindset_checks` /
-> `monthly_debriefs` / `training_debriefs` / `public_trades` n'ont aucune FK
-> croisée — seulement vers `users`, sauf `public_trades` qui est admin-
-> authored et ne référence aucun user). Pour un rollback **complet**,
-> procéder en **ordre inverse de l'apply** (timestamp décroissant) : §21 →
-> §20 → §19 → §18 → §17 → §16 → §15, pour garder `_prisma_migrations`
-> cohérent.
+> #151 `t5_track_record_public_trades` §21 + #178 `v2_3_pre_trade_check` §22)
+> sont des objets **indépendants** (un rollback partiel d'un seul est
+> valide ; `mindset_checks` / `monthly_debriefs` / `training_debriefs` /
+> `public_trades` / `pre_trade_checks` n'ont aucune FK croisée — seulement
+> vers `users`, sauf `public_trades` qui est admin-authored et ne
+> référence aucun user, et `pre_trade_checks.linkedTradeId String?` qui
+> est intentionnellement SANS FK vers `trades`). Pour un rollback
+> **complet**, procéder en **ordre inverse de l'apply** (timestamp
+> décroissant) : §22 → §21 → §20 → §19 → §18 → §17 → §16 → §15, pour
+> garder `_prisma_migrations` cohérent.
 
 Le pattern est testé annuellement via le DR test §`runbook-backup-restore.md`
 "Test de DR (annuel, ~30 min)" — qui simule un restore complet sur une 2e

@@ -124,8 +124,11 @@ export async function submitPreTradeCheckAction(
     },
   });
 
+  // Revalidate only `/dashboard` — the source page `/pre-trade/new` is itself
+  // `export const dynamic = 'force-dynamic'` (`new/page.tsx:12`), so it does
+  // NOT participate in Next's RSC cache and revalidating it is a no-op (V2.3.1
+  // reviewer P3 nit cleanup, scar W1 anti dead-call).
   revalidatePath('/dashboard');
-  revalidatePath('/pre-trade/new');
 
   // J5 H2 fix: `redirect()` always throws (NEXT_REDIRECT). No try/catch —
   // if Next ever doesn't throw, letting the bug surface beats silently

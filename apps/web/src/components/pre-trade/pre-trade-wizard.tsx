@@ -222,25 +222,6 @@ export function PreTradeCheckWizard() {
     headingRef.current?.focus();
   }, [step]);
 
-  // Clear the draft once the action returned a hard error-free state via
-  // redirect (state stays null after successful redirect; the action throws
-  // NEXT_REDIRECT before returning). On unmount we don't clear — the user
-  // could refresh mid-flow.
-  useEffect(() => {
-    if (state === null) return;
-    // On error states we keep the draft so the user can retry.
-  }, [state]);
-
-  // Clear the draft on successful navigation: best-effort via beforeunload
-  // — we cannot detect the throw, but the redirect target is /dashboard.
-  useEffect(() => {
-    if (!hydrated) return;
-    return () => {
-      // We don't clear on unmount because that would wipe the draft on
-      // an SSR re-render; explicit clear happens in form action wrapper.
-    };
-  }, [hydrated]);
-
   function setField<K extends keyof DraftState>(key: K, value: DraftState[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
   }
@@ -261,9 +242,12 @@ export function PreTradeCheckWizard() {
 
   // Drop the draft right before the form submission fires — the action will
   // throw NEXT_REDIRECT on success, so this `onSubmit` runs synchronously
-  // before navigation. On a server error the user lands back here with
-  // `state.error` set; the draft is gone so they re-fill (acceptable: errors
-  // are rare and the redo is fast).
+  // before navigation. On a server error the draft is **preserved** (we only
+  // call `clearDraft()` when `allValid`, AND the action would not throw on
+  // error so handleSubmit's call still runs — but Next.js form action error
+  // paths re-render the same page with `state.error` set, so the localStorage
+  // draft remains untouched by setDraft and the user keeps their answers for
+  // a quick retry).
   function handleSubmit() {
     if (allValid) clearDraft();
   }

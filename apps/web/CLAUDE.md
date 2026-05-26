@@ -3829,3 +3829,140 @@ Sub-agent perf-profiler (`acd3f906265728a4d`) verdict V1 SHIP-ACCEPTABLE — 0 T
 - **`_count: { partials }` sub-COUNT par row** — Prisma `_count` génère un `LEFT JOIN LATERAL`. Index `(publicTradeId, closedAt asc)` couvre déjà. À 1000 trades × 5 partials = 5000 rows scannées = OK. V2 si EXPLAIN ANALYZE flag.
 - **`logAudit` await blocant Server Action** — `await logAudit(...)` ajoute ~5-20ms latency DB par mutation. Cohérent pattern J5/J6 (changer T5 seul = inconsistance). V2 candidate `unstable_after` Next.js 16 pour audits non-critiques.
 - **`revalidateTag` granularité** — actions utilisent `revalidatePath('/admin/track-record')` qui invalide page entière. V2 `revalidateTag('public-trade:list')` + `fetch(..., { next: { tags } })` pour révalidation granulaire. À 1000+ rows.
+
+## V1.12 P7 — A11y landmark hierarchy `/dashboard` scope minimal (livré 2026-05-25, PR #176 `21c8ae3`)
+
+> **Jalon build a11y atomique**. WCAG 1.3.1 (Info and Relationships) + 2.4.1 (Bypass Blocks) + 2.4.6 (Headings and Labels) landmarks `<section aria-labelledby>` exposés via SR rotor "régions". Pattern réutilisable scope élargi V1.12 P9+ autres surfaces (`/journal`, `/account`, `/library`, etc.) si Eliot décide.
+
+### Scope
+
+- `/dashboard` uniquement (scope minimal canon — éviter scope creep §18.4).
+- Sections existantes : KPI strip + Check-in du jour + Behavioral scores + Track record + Patterns + Journal de trading (Mark Douglas card) + Admin conditional + Douglas inbox + REFLECT + TRACK + Suivi formation placeholder + Habit × Trade correlation + Footer.
+- Chaque `<section>` reçoit `aria-labelledby="<heading-id>"` + `<h2 id="...">` (parfois sr-only pour les sections qui n'ont pas de title visible).
+
+### Décisions verrouillees (NON re-litigable)
+
+- **Sections déjà avec heading visible** (Mark Douglas card, REFLECT, TRACK, etc.) : `aria-labelledby` pointe vers le h2 existant.
+- **Sections sans heading visible** (KPI strip) : ajout `<h2 id="kpi-heading" className="sr-only">` invisible visuellement mais lu SR.
+- **Pattern carbone Phase R J10** : skip-link "Aller au contenu principal" déjà présent layout.tsx — V1.12 P7 complète l'arborescence en exposant les landmarks régions.
+- **Scope STRICT `/dashboard`** : ne pas étendre à `/journal`, `/account`, etc. cette session — §18.4.
+
+### Tests
+
+Pas de nouveau test unitaire (a11y verified manuellement + browser SR — pas wired NVDA/JAWS test runtime cette session). Vitest baseline préservée.
+
+### Patterns réutilisables
+
+- **Decision tree h2 visible vs sr-only** : si la section a un titre visuel → `aria-labelledby` cible. Si pas de titre visible (KPI dense) → ajout `sr-only` h2 + `aria-labelledby`.
+- **Anti-régression** : éviter le pattern `<h2>` à l'intérieur d'un `<Link>` cliquable (autorisé HTML5, mais annonce SR redondante "lien, ..., heading 2").
+
+### Scars
+
+- P7-1 : pattern réutilisable scope élargi candidat V1.12 P9+ — ne PAS faire dans la même PR §18.4 strict.
+
+## V2.3 — Pre-trade circuit breaker anti-FOMO wizard + auto-link (livré 2026-05-26, PR #178 `602787c`)
+
+> **V2.3 atomic ship Session BB+CC partial → complete**. ADR-003 Proposed → Accepted post-merge. Pattern carbone J5 `submitMorningCheckinAction` (Server Action) + V1.5 §27 `MindsetCheckWizard` (UI closed instrument). Anti-FOMO wizard 4 questions one-tap (~30s) mappé sur les 4 fears Mark Douglas + Gollwitzer if-then implementation intentions meta d=0.65 (PMC4500900, n=8461 / 94 studies).
+
+### Scope V1 (ADR-003 §Scope V1)
+
+1. **Migration Prisma** `20260526100000_v2_3_pre_trade_check` — 2 enums (`PreTradeReason` edge/fomo/revenge/boredom + `PreTradeEmotion` calme/excite/frustre/anxieux) + 1 model `PreTradeCheck` + relation `User.preTradeChecks` cascade + index `[userId, createdAt DESC]`.
+2. **Schemas Zod** `lib/schemas/pre-trade-check.ts` — `.strict()` 4 fields + 2 `as const` tuples re-use UI + anti-regression length asserts.
+3. **Service** `lib/pre-trade/service.ts` — `createPreTradeCheck` + `listRecentPreTradeChecks` (cap 100) + `linkRecentCheckToTrade` (window 15min, P2025-safe optimistic locking via `linkedTradeId IS NULL` predicate).
+4. **Server Action** `app/pre-trade/actions.ts` — pattern J5 carbone : `auth()` re-check + `status='active'` gate + Zod safeParse + `coerceBool` FormData footgun guard + `createPreTradeCheck` + `logAudit('pre_trade_check.created', PII-FREE)` + revalidatePath × 2 + `redirect()` direct throw (J5 H2 fix, no try/catch wrapper).
+5. **UI wizard** `components/pre-trade/pre-trade-wizard.tsx` (810 LOC) — 4-step Framer Motion `AnimatePresence` + `m.div` + `useReducedMotion`, `useActionState` + hidden inputs (carbone V1.5 mindset), localStorage draft `fxmily:pre-trade:draft:v1` (SSR-safe), APG radiogroup roving tabindex Home/End/Arrow keys, focus-on-step-change heading.
+6. **Host page** `app/pre-trade/new/page.tsx` — auth-gated `status='active'`, full-page wizard (ADR-003 §Alt 1 rejects modal: swipe-down dismiss < 500ms defeats friction).
+7. **2 triggers UI Q1=D combo** : Trigger A Card lime `/dashboard` ABOVE Journal section + Trigger B optional Banner `/journal/new` above TradeFormWizard.
+8. **Audit slug** `pre_trade_check.created` ajouté `AuditAction` union (PII-FREE metadata: `{checkId, reasonToTrade, emotionLabel, planAlignment, stopLossPredefined, linkedTradeId: null}`).
+9. **Auto-link** wired in `createTradeAction` + `closeTradeAction` post-persist (best-effort try/catch — link failure NEVER fails the trade flow). Audit metadata enriched `linkedPreTradeCheckId`.
+
+### Decisions verrouillees (NON re-litigable)
+
+- **Q1 trigger UI = D combo** (Card `/dashboard` + Banner `/journal/new` optional).
+- **Q2 auto-link window = A 15min silencieux** (P2002-safe optimistic locking via `WHERE linkedTradeId IS NULL`).
+- **Q3 enums proposés** : `reasonToTrade` (edge/fomo/revenge/boredom) + `emotionLabel` (calme/excite/frustre/anxieux) + `planAlignment` boolean + `stopLossPredefined` boolean.
+- **`boredom` Steenbarger extension** honestly documented ADR-003 §Honesty disclaimer (NOT one of Douglas's 4 canonical fears — kept for operational accuracy ↑ vs strict fidelity ↓, _Daily Trading Coach_ Lesson 23).
+- **`linkedTradeId String?` no FK** vers trades (intentionnel — race-safe P2025, scar I1 documenté schema.prisma:1532-1537 : un Trade supprimé laisse `linkedTradeId` dangling plutôt que nuller le check).
+- **Redirect target** `/dashboard?done=pre-trade` (déviation explicite vs brief Session BB `/?done=pre-trade` — splash `/` est public, dashboard est landing auth user). JSDoc-documenté `actions.ts:130-138`.
+- **Closed instrument** : ZERO free-text → ZERO crisis/injection surface (mirror V1.5 §27 mindset — no `*.crisis_detected` slug counterpart, no `safeFreeText`/`containsBidiOrZeroWidth` import, no EU AI Act banner).
+- **Non-bloquant** : Fxmily NEVER blocks a trade (master §29 R1 invariant AMF/FCA — wizard est un miroir, pas une gate).
+- **No Skip button** : friction IS the feature (ADR-003 §Alt 3 reject — Skip créerait silent-skip backdoor qui défait le mécanisme cognitive-pause).
+- **No `MAX_CHECKS_PER_DAY`** : no Black Hat coercion (ADR-003 §Alt 4 reject — membre self-régule).
+
+### Tests
+
+- +18 schemas tests (anti-regression tuples + 4 happy paths + 3 enum reject + 3 boolean strictness + 2 `.strict()` defense + 4 missing fields).
+- +14 service tests (2 create defense + 4 list clamps + 8 link race scenarios incl. P2025-safe + LINK_DEFAULT_WINDOW_MIN=15 + custom window + userId scoping).
+- +8 Server Action tests (auth gate × 2 + Zod reject × 2 + boolean coercion × 2 + happy path persist+audit+redirect NEXT_REDIRECT + service failure).
+- **Total +40 vitest verts**. Full suite **1484/1484**. type-check 0 / ESLint 0 / build prod Turbopack ✓ (route `/pre-trade/new` listed dynamique).
+
+### Patterns réutilisables
+
+- **Pattern J5 carbone Server Action closed instrument** : `auth()` re-check + status gate + Zod safeParse + service + audit PII-FREE + revalidatePath + redirect direct (J5 H2 fix no try/catch). Réutilisable pour V2.3 ext #1/#2/#3/#4 + futures features closed-instrument.
+- **Pattern V1.5 mindset wizard carbone** : `useActionState` + hidden inputs + localStorage draft (SSR-safe) + APG roving tabindex + focus-on-step-change heading. Réutilisable pour les wizards futurs §18.4 closed.
+- **`coerceBool` FormData footgun guard** : `'on'/'true'/'1'/'yes'` → true, else false. Anti-`Boolean('false') === true` JS footgun. Pattern réutilisable wizard avec hidden boolean inputs.
+- **Optimistic locking Postgres-native** : `UPDATE WHERE id + linkedTradeId IS NULL` + catch P2025 → null. Pattern réutilisable race-safe link sans `SELECT FOR UPDATE` (V2 advisory lock si scale >100 membres).
+- **Best-effort enrichment auto-link** : try/catch isolant le link du trade flow critique — pattern réutilisable pour metadata enrichment opportuniste (V2.3 ext #4 correlation candidate).
+
+### Scars CC1-CC6
+
+- **CC1** Worktree spawn différent : Session CC spawn sur `romantic-jemison-95dd5f` au lieu de `clever-kare-52a1fd` recommandé brief. Vérification git ls-remote + path-aware Read/Write a permis de continuer dans clever-kare via absolute paths. **Toujours vérifier CWD vs auto_session_resume §1 CWD recommandé au pickup**.
+- **CC2** Format:check 565 file drift local non-bloquant CI (Lint/TC/build SUCCESS).
+- **CC3** Redirect target deviation `/dashboard?done=pre-trade` vs brief `/?done=pre-trade` (UX justifiée splash public, JSDoc-documentée). **Pattern : déviations explicites avec justification au lieu de suivre brief aveuglément quand UX cassée**.
+- **CC4** Code-reviewer P3 spawné en parallèle de git ops (read-only review n'a pas conflit avec git commit). Pattern parallélisme efficient.
+- **CC5** Dead `useEffect` lignes 229-242 détectés par reviewer — squelette unused (cleanup draft sur unmount). **Supprimer tout code mort avant commit** (la review aurait été 0 nit).
+- **CC6** Smoke `curl -L=no` invalide — par défaut curl ne suit pas redirects (besoin `-L` POUR suivre). Pattern : pour smoke 307, juste pas mettre `-L`.
+
+### Code-reviewer P3 findings (non merge-blocking, candidats post-merge fix)
+
+- 🟠 **IMPORTANT auto-link N→1** : `journal/actions.ts:265-279` — si check linké au create + 2ᵉ wizard avant close → 2 PreTradeCheck rows linked au même tradeId. Schéma DB le permet (`linkedTradeId` pas `@unique`). Sémantiquement défendable (pre-entry + pre-exit reflective). **Action future** : soit add test couvrant cas N→1, soit clarifier ADR-003 §Auto-link "1 trade peut avoir N checks linked".
+- 🟡 NIT dead `useEffect` lignes 229-242 `pre-trade-wizard.tsx`. Suppression nette.
+- 🟡 NIT commentaire `clearDraft()` ment (code correct, comment à corriger).
+- 🟡 NIT `revalidatePath('/pre-trade/new')` inutile (page `force-dynamic`).
+
+### Out-of-scope V1 (reserved Sessions CC+/extension)
+
+- Mark Douglas card auto-delivery sur PreTradeCheck patterns (e.g. "5 fomo last 7d → fiche peur-de-rater")
+- Dashboard analytics widget distribution `reasonToTrade` 30j + plan alignment rate
+- Admin tab `/admin/members/[id]?tab=pre-trade` pseudonymisé
+- Correlation `pre_trade × trade outcome` (extension habit-trade-correlation V2.x pattern — **différenciateur Fxmily révélateur empirique edge anti-FOMO**)
+- Capacitor haptic confirmation par option-tap (V2 post-Capacitor)
+- MAX_CHECKS_PER_DAY rate limit (no Black Hat coercion)
+
+### Rollback recipe
+
+`docs/runbook-hetzner-deploy.md` §22 V2.3 (ajoutée Session EE PR drift resync) — simple BEGIN/COMMIT-revertable ADD-only (2 enums + 1 table + index + FK CASCADE User), 0 FK croisée vers trades.
+
+## V2.3.1 — V2.3 post-ship hardening 3-fix bundle (livré 2026-05-26, PR #179 `3404e29`)
+
+> **Jalon ops hardening cross-axe**. Bundle TIER 1 cohérent post-V2.3 audit Round 2 — 3 fixes orthogonaux 3 fichiers 1 PR atomic. Cohérence narrative "V2.3 polish post-ship findings cleanup". Pattern carbone **Session V Dependabot SAFE batch combined** (7 PRs minors → 1 PR atomic, lockfile-free path) appliqué cross-axe (sec + perf + a11y).
+
+### Scope (3 fixes)
+
+1. **Sec E1** — `signInSchema.password.max(256)` `apps/web/src/lib/schemas/auth.ts` — CWE-400/770 DoS asymétrique argon2id. Sans le cap, `verifyPassword(rawInput, hash)` argon2id à `memoryCost=19MiB + timeCost=2 + parallelism=1` pré-traite multi-MB input avant compare constant-time, explosant latence ~150ms (12 chars) à plusieurs centaines de ms/requête. Combiné login rate-limits 10 burst/IP + 5/email V1.12 P3, attaquant ~10+ IPs sature single-node CX22 worker thread. Cap 256 mirror `passwordSchema` onboarding (passwords >256 déjà rejetés à création — n'affecte aucun login légitime). SafeParse fail-fast AVANT DB hit ou bucket consume.
+2. **Perf** — `experimental.optimizePackageImports: ['lucide-react']` `apps/web/next.config.ts` — 111+ fichiers `apps/web/src/**/*.tsx` font `import { X, Y, Z } from 'lucide-react'`. Next 16 tree-shake named imports par défaut, mais le barrel `lucide-react/index.js` interagit en ways non-évidentes avec `withSentryConfig` wrap (qui modifie module graph). Flagger explicitement garantit la résolution per-icon au build. **Gain estimé 10-30 KB gzipped sur First Load JS shared chunk** (confirmé actif via `· optimizePackageImports` mention output Turbopack build). Validation : `ANALYZE=true pnpm --filter @fxmily/web build` avant/après — comparer `lucide-react*` chunk sizes dans `.next/analyze/client.html`.
+3. **A11y IMP-6** — `id="ptw-heading"` `<h1>` `apps/web/src/app/pre-trade/new/page.tsx` — `<form aria-labelledby="ptw-heading">` `pre-trade-wizard.tsx:277` pointait vers un id absent du DOM. Conséquence ARIA : `aria-labelledby` ignoré silencieusement → form sans nom accessible → landmark non-exposé Chromium → gêne navigation SR rotor "régions". WCAG 4.1.2 marge confort renforcée.
+
+### Decisions verrouillees
+
+- **Bundle = 1 jalon §18.4 OK** : 3 fixes orthogonaux MAIS thématique unique "V2.3 polish post-ship findings cleanup" + cohérence narrative + même origine (audit Round 2). Carbone Session V Dependabot batch combined SAFE (7 PRs → 1 PR atomic).
+- **Lockfile-free path** : 0 deps changes → pas de cascade rebases, pas de risque déps drift.
+- **TIER 1 sélection** : seuls les 🟠 IMPORTANT sec/perf/a11y inclus. Les 🟡 NIT V2.3 (dead useEffect, comment ment, revalidatePath inutile) DIFFÉRÉS — pattern carbone audit-driven hardening "TIER 1 fix in-session, TIER 4 reclassement".
+
+### Tests
+
+- Gates locaux **5/5 GREEN** : format:check ✓ (prettier --write 2 fichiers, 1 unchanged) / lint 0 warnings (`max-warnings=0`) ✓ / type-check 0 ✓ / **vitest 1484/1484 verts baseline préservée** ✓ / build prod Turbopack 21.5s ✓ (`/pre-trade/new` listed dynamique + `· optimizePackageImports` confirmé actif).
+- **CI 6/6 SUCCESS** : Lint+CodeQL Analyze+Playwright (4m16s) + CodeQL umbrella + Socket Project Report + Socket PR Alerts.
+- **Deploy Hetzner SUCCESS** cohorte R3 range (build + SSH + notify).
+- **Smoke 5/5 GREEN** : `/api/health 200` + `/pre-trade/new 307` + `/dashboard 307` + `/journal/new 307` + `/login 200`.
+
+### Patterns réutilisables
+
+- **Bundle cross-axe TIER 1 post-ship hardening** : sec + perf + a11y findings du MÊME audit Round 2 → 1 PR atomic. Pattern carbone Session V (Dependabot batch lockfile-shared) appliqué cross-axe (lockfile-free → 0 cascade rebase nécessaire).
+- **`optimizePackageImports`** pattern Next 16 explicite pour `lucide-react` (et candidats futurs : `@radix-ui/*`, `framer-motion` si besoin) — défense contre barrel interaction avec wraps externes (`withSentryConfig`).
+- **`<form aria-labelledby="X">` X DOIT exister DOM** — pattern à check obligatoire dans tous wizards Framer/closed instruments futurs. Fail silencieux ARIA, hyper invisible au runtime sans SR.
+
+### Scars (Session DD #1)
+
+- **DD1-1** Reviewer P3 V2.3 ship pre-merge a raté IMP-6 id-target mort `aria-labelledby` — violation scar W1 P1 strict (amend obligatoire si nuance détectée). **Action**: amend post-merge intégré dans cette V2.3.1 bundle.
+- **DD1-2** Bundle cross-axe sec+perf+a11y validé empiriquement comme 1 jalon §18.4 OK (cohérence narrative + même origine audit) — pattern réutilisable pour futurs bundles findings post-ship.

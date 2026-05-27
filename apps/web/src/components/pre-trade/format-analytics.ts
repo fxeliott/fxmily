@@ -74,15 +74,17 @@ export function formatSampleSize(n: number): string {
 }
 
 /**
- * Copy pédagogique pour les 2 variants `insufficient_data`. Distincts pour
- * que l'UI guide le membre :
- *   - `no_checks` (n=0) → invite à faire son 1er check
+ * Copy pédagogique pour les 3 variants `insufficient_data`. Distincts pour
+ * que l'UI guide le membre selon le scénario exact :
+ *   - `no_checks` (Session HH : n=0 checks du tout) → invite au 1er check
+ *   - `no_linked_trades` (Session II : checks peuvent exister mais aucun
+ *     linké à un Trade closed) → invite à finir un trade après le check
  *   - `below_threshold` (1 ≤ n < 8) → décompte vers le seuil
  *
  * Posture Mark Douglas : phrase factuelle, jamais culpabilisante.
  */
 export function emptyCopyForReason(
-  reason: 'no_checks' | 'below_threshold',
+  reason: 'no_checks' | 'no_linked_trades' | 'below_threshold',
   sampleSize: number,
   minSample: number,
 ): { title: string; subtitle: string } {
@@ -90,6 +92,12 @@ export function emptyCopyForReason(
     return {
       title: 'Pas encore de pré-trade check',
       subtitle: `Fais ton premier check avant un trade pour commencer à voir tes patterns. Il en faut ${minSample} pour des stats honnêtes.`,
+    };
+  }
+  if (reason === 'no_linked_trades') {
+    return {
+      title: 'Pas encore de trade lié',
+      subtitle: `Fais un pré-trade check puis ouvre/clôture un trade dans les 15 min. Il en faut ${minSample} par raison pour comparer.`,
     };
   }
   const remaining = Math.max(0, minSample - sampleSize);
@@ -115,4 +123,25 @@ export function distributionPercents(
     revenge: (distribution.revenge / sampleSize) * 100,
     boredom: (distribution.boredom / sampleSize) * 100,
   };
+}
+
+/**
+ * Format Session II correlation `avgRealizedR` field for display.
+ *
+ * - `null` → `"—"` (em-dash, transparence honesty : aucun trade `computed`
+ *   dans le bucket, exclusion `realizedRSource='estimated'` canon V1.5)
+ * - `0` → `"0R"` (no sign, pas de fake `"+0R"`)
+ * - positive → `"+1.0R"` (toujours sign positif explicite pour comparaison
+ *   visuelle face à `-X.XR` négatifs voisins dans la table)
+ * - negative → `"-0.5R"` (sign négatif natif de `toFixed`)
+ *
+ * Précision : 1 décimale (membre n'a pas besoin de 4 décimales — bruit
+ * cognitif). Posture Mark Douglas neutre : la couleur est appliquée
+ * UI-side (slate sur fomo/revenge, jamais rouge punition).
+ */
+export function formatRMagnitude(r: number | null): string {
+  if (r === null) return '—';
+  if (r === 0) return '0R';
+  const sign = r > 0 ? '+' : '';
+  return `${sign}${r.toFixed(1)}R`;
 }

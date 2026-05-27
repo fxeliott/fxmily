@@ -13,6 +13,7 @@ import {
   REASON_TONE,
   distributionPercents,
   emptyCopyForReason,
+  formatRMagnitude,
   formatRatePercent,
   formatSampleSize,
 } from './format-analytics';
@@ -118,6 +119,48 @@ describe('emptyCopyForReason', () => {
     const out = emptyCopyForReason('below_threshold', 1, 8);
     expect(out.subtitle).toContain('1 check fait');
     expect(out.subtitle).not.toContain('checks faits'); // ensure singular not used as fallback
+  });
+
+  it('no_linked_trades → invitation à finir un trade après un check (Session II distinct de no_checks)', () => {
+    const out = emptyCopyForReason('no_linked_trades', 0, 8);
+    expect(out.title).toMatch(/pas encore de trade/i);
+    expect(out.subtitle).toContain('15');
+    expect(out.subtitle).toContain('8'); // minSample mentioned
+  });
+});
+
+describe('formatRMagnitude', () => {
+  it('null → "—" em-dash (transparence honesty : 0 trade computed)', () => {
+    expect(formatRMagnitude(null)).toBe('—');
+  });
+
+  it('0 → "0R" (no sign, pas de fake "+0R")', () => {
+    expect(formatRMagnitude(0)).toBe('0R');
+  });
+
+  it('positive → "+X.XR" avec sign explicite pour comparaison face aux négatifs', () => {
+    expect(formatRMagnitude(1)).toBe('+1.0R');
+    expect(formatRMagnitude(1.5)).toBe('+1.5R');
+    expect(formatRMagnitude(0.8)).toBe('+0.8R');
+  });
+
+  it('negative → "-X.XR" sign natif toFixed', () => {
+    expect(formatRMagnitude(-1)).toBe('-1.0R');
+    expect(formatRMagnitude(-0.5)).toBe('-0.5R');
+    expect(formatRMagnitude(-2.3)).toBe('-2.3R');
+  });
+
+  it('rounds to 1 decimal (Mark Douglas : pas de bruit cognitif au-delà)', () => {
+    // 1.04 rounds to 1.0
+    expect(formatRMagnitude(1.04)).toBe('+1.0R');
+    // 1.05 rounds to 1.1 (banker's rounding in modern engines, but at least
+    // not 1.05). We accept either 1.0 or 1.1.
+    const out = formatRMagnitude(1.05);
+    expect(out).toMatch(/^\+(1\.0|1\.1)R$/);
+  });
+
+  it('handles tiny positive without losing sign', () => {
+    expect(formatRMagnitude(0.01)).toBe('+0.0R'); // rounded to 0.0 but sign preserved
   });
 });
 

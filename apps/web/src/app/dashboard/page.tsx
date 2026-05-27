@@ -43,6 +43,7 @@ import { countTradesByStatus } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
 
 import { PreTradeAnalyticsCard } from '@/components/pre-trade/pre-trade-analytics-card';
+import { PreTradeCorrelationCard } from '@/components/pre-trade/pre-trade-correlation-card';
 
 import { MarkDouglasCard } from './mark-douglas-card';
 
@@ -368,6 +369,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             `edge`, `t-3` slate sur fomo/revenge/boredom (Yu-kai Chou
             anti-Black-Hat invariant : aucun rouge sur les "biais"). */}
         <PreTradeAnalyticsCard userId={userId!} />
+
+        {/* V2.3 ext #4 — Session II frontend (différenciateur Fxmily).
+            Table-compare empirique des 4 raisons (edge / fomo / revenge /
+            boredom) × performance réelle (win-rate + R moyen) sur 30j.
+            Server Component async (loadPreTradeCorrelationData server-only),
+            grid 4-colonnes responsive, 0 Recharts / 0 Client island.
+            Posture Mark Douglas STRICT : tone `acc` UNIQUEMENT sur `edge`,
+            slate sur 3 autres, AUCUNE comparaison automatique. Win-rate
+            JAMAIS rouge — le membre observe, ne se fait pas punir. */}
+        <PreTradeCorrelationCard userId={userId!} />
 
         {/* Admin section (conditional) */}
         {isAdmin ? (

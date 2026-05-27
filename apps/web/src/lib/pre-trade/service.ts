@@ -10,6 +10,11 @@ import {
   type RateResult,
   type ReasonDistributionResult,
 } from '@/lib/pre-trade/analytics';
+import {
+  computeCorrelationByReason,
+  type CorrelationByReason,
+  type LinkedPreTradeOutcome,
+} from '@/lib/pre-trade/correlation';
 
 /**
  * V2.3 — `PreTradeCheck` service layer (Session BB, ADR-003).
@@ -221,6 +226,126 @@ export async function loadPreTradeAnalyticsData(
     reasonDistribution: computeReasonDistribution(inputs),
     planAlignmentRate: computePlanAlignmentRate(inputs),
     stopLossPredefinedRate: computeStopLossPredefinedRate(inputs),
+  };
+}
+
+/**
+ * V2.3 ext #4 — Session II backend (pre-trade × outcome correlation).
+ *
+ * Default window 30j (cohérence Session HH analytics — même cadre temporel
+ * pour les 2 widgets pre-trade). Clamp `[1, 365]` carbone analytics.
+ */
+export const PRE_TRADE_CORRELATION_DEFAULT_WINDOW_DAYS = 30;
+const PRE_TRADE_CORRELATION_MAX_WINDOW_DAYS = 365;
+
+/**
+ * Per-reason correlation aggregate over a recent window.
+ *
+ * `asOf` = ISO timestamp pour traçabilité UI ("Données arrêtées au …").
+ *
+ * **Différenciateur Fxmily** (§2 SPEC posture Mark Douglas) : révélateur
+ * empirique de la performance par raison de trade, jamais comparaison ou
+ * jugement — c'est au membre d'interpréter via la couche UI.
+ */
+export interface PreTradeCorrelationData {
+  windowDays: number;
+  asOf: string;
+  perReason: CorrelationByReason;
+}
+
+/**
+ * Load linked PreTradeCheck × Trade over a recent window and compute the
+ * per-reason correlation via the pure module.
+ *
+ * Implementation : 2 Prisma queries + JS merge (no FK formelle entre
+ * `PreTradeCheck.linkedTradeId` et `Trade.id` — scar I1, race-safe P2025
+ * canon V2.3). À 30 membres × ~30 checks/30j = ~900 rows max, donc 2
+ * queries triviales (pas besoin de raw SQL JOIN ni d'advisory lock V2).
+ *
+ * Filter chain :
+ *   1. PreTradeCheck `userId + linkedTradeId != null + createdAt >= since`
+ *   2. Trade `id IN (linkedTradeIds) + userId + outcome != null`
+ *      (closed only — open trades n'ont pas encore d'outcome)
+ *   3. JS merge : pour chaque PreTradeCheck linké, retrouver le Trade,
+ *      extraire `outcome` + `realizedR` SI `realizedRSource === 'computed'`
+ *      (sinon `realizedR: null` exclut des magnitudes — canon V1.5 + J6
+ *      expectancy + V2.1.3 habit-trade-correlation).
+ *
+ * Defensive : si un `linkedTradeId` pointe vers un Trade absent (utilisateur
+ * delete + cascade différée OU Trade pas encore close au moment du link),
+ * la row est silencieusement skip (dangling linkedTradeId scar I1 explicite).
+ */
+export async function loadPreTradeCorrelationData(
+  userId: string,
+  windowDays: number = PRE_TRADE_CORRELATION_DEFAULT_WINDOW_DAYS,
+  now: Date = new Date(),
+): Promise<PreTradeCorrelationData> {
+  const safeWindow = Math.min(
+    Math.max(1, Math.trunc(windowDays)),
+    PRE_TRADE_CORRELATION_MAX_WINDOW_DAYS,
+  );
+  const since = new Date(now.getTime() - safeWindow * 86_400_000);
+
+  const checks = await db.preTradeCheck.findMany({
+    where: {
+      userId,
+      linkedTradeId: { not: null },
+      createdAt: { gte: since },
+    },
+    select: {
+      reasonToTrade: true,
+      linkedTradeId: true,
+    },
+  });
+
+  const tradeIds = checks.map((c) => c.linkedTradeId).filter((id): id is string => id !== null);
+
+  // No linked trades → all 4 reasons will be insufficient_data via the
+  // pure module (no_linked_trades). Short-circuit DB hit.
+  if (tradeIds.length === 0) {
+    return {
+      windowDays: safeWindow,
+      asOf: now.toISOString(),
+      perReason: computeCorrelationByReason([]),
+    };
+  }
+
+  const trades = await db.trade.findMany({
+    where: {
+      id: { in: tradeIds },
+      userId,
+      outcome: { not: null },
+    },
+    select: {
+      id: true,
+      outcome: true,
+      realizedR: true,
+      realizedRSource: true,
+    },
+  });
+
+  const tradeMap = new Map(trades.map((t) => [t.id, t]));
+
+  const outcomes: LinkedPreTradeOutcome[] = [];
+  for (const check of checks) {
+    if (check.linkedTradeId === null) continue;
+    const trade = tradeMap.get(check.linkedTradeId);
+    if (!trade || trade.outcome === null) continue;
+    outcomes.push({
+      reasonToTrade: check.reasonToTrade,
+      outcome: trade.outcome,
+      // Honesty V1.5 + J6 + V2.1.3 : exclude estimated from magnitudes
+      realizedR:
+        trade.realizedRSource === 'computed' && trade.realizedR !== null
+          ? Number(trade.realizedR)
+          : null,
+    });
+  }
+
+  return {
+    windowDays: safeWindow,
+    asOf: now.toISOString(),
+    perReason: computeCorrelationByReason(outcomes),
   };
 }
 

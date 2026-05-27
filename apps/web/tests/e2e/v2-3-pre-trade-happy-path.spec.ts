@@ -39,9 +39,52 @@ import { existsSync } from 'node:fs';
 import { chromium, expect, test } from '@playwright/test';
 
 import { db } from '@/lib/db';
-import { linkRecentCheckToTrade } from '@/lib/pre-trade/service';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
 import { loginAs } from '@/test/e2e-auth';
+
+/**
+ * Inline replica of `linkRecentCheckToTrade` from `lib/pre-trade/service.ts`
+ * (which uses `import 'server-only'` and so cannot be loaded from the
+ * Playwright runtime — `vitest.config.ts:13` aliases `server-only` to a
+ * shim, but `playwright.config.ts` has no equivalent alias).
+ *
+ * Pattern carbone `v1-5-mindset-check.spec.ts`: tests talk to Prisma
+ * directly via `@/lib/db` (which does NOT import `server-only`), no service
+ * imports.
+ *
+ * Semantics MUST match the service exactly: 15-min window, optimistic
+ * locking via `linkedTradeId IS NULL` predicate, P2025 → null (lost race).
+ */
+const LINK_DEFAULT_WINDOW_MIN = 15;
+
+async function linkRecentCheckToTradeInline(
+  userId: string,
+  tradeId: string,
+  windowMin: number = LINK_DEFAULT_WINDOW_MIN,
+): Promise<string | null> {
+  const since = new Date(Date.now() - windowMin * 60_000);
+
+  const recent = await db.preTradeCheck.findFirst({
+    where: { userId, linkedTradeId: null, createdAt: { gte: since } },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+
+  if (!recent) return null;
+
+  try {
+    await db.preTradeCheck.update({
+      where: { id: recent.id, linkedTradeId: null },
+      data: { linkedTradeId: tradeId },
+    });
+    return recent.id;
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'P2025') {
+      return null;
+    }
+    throw err;
+  }
+}
 
 const MEMBER_EMAIL = 'v2-3-pre-trade.member.e2e.test@fxmily.local';
 const MEMBER_PASSWORD = 'V2_3-PreTradePwd-2026!';
@@ -153,7 +196,7 @@ test.describe('V2.3 PreTradeCheck — auth-gate + happy-path persist + auto-link
     });
 
     // 3. Auto-link should pick the recent unlinked check and stamp linkedTradeId.
-    const linkedCheckId = await linkRecentCheckToTrade(member.id, trade.id);
+    const linkedCheckId = await linkRecentCheckToTradeInline(member.id, trade.id);
     expect(linkedCheckId).toBe(check.id);
 
     const updated = await db.preTradeCheck.findUnique({
@@ -184,7 +227,7 @@ test.describe('V2.3 PreTradeCheck — auth-gate + happy-path persist + auto-link
       select: { id: true },
     });
 
-    const linkedCheckId = await linkRecentCheckToTrade(member.id, newTrade.id);
+    const linkedCheckId = await linkRecentCheckToTradeInline(member.id, newTrade.id);
     expect(linkedCheckId).toBeNull();
   });
 

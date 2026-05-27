@@ -205,7 +205,19 @@ export type AuditAction =
   // `trade.closed` metadata with `linkedPreTradeCheckId` (NOT a separate
   // slug on the check — the check row's `linkedTradeId` column is the
   // authoritative join).
-  | 'pre_trade_check.created';
+  | 'pre_trade_check.created'
+  // V2.4 — Onboarding interview profilage IA (Session α, M3 directive 2026-05-27).
+  // Lifecycle slugs : started (row created) → answer_submitted (each answer
+  // append, idempotent on upsert) → completed (member finalize) OR abandoned
+  // (cron sweep V2.4+ after 7d inactivity). PII-FREE metadata expected :
+  // `{interviewId, instrumentVersion}` for start ; +`{questionIndex, questionKey}`
+  // for answer ; +`{totalAnswers, completedAt}` for completed. NEVER log
+  // `answerText` content nor Claude raw output (Phase A.2 future analysis
+  // slugs `member_profile.analyzed`/`.published` will follow same PII-free rule).
+  | 'onboarding.interview.started'
+  | 'onboarding.interview.answer_submitted'
+  | 'onboarding.interview.completed'
+  | 'onboarding.interview.abandoned';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the
 // public Track Record was split out to a standalone repo

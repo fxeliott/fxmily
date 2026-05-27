@@ -250,11 +250,11 @@ model User {
   // Relations
   accounts                    Account[]
   sessions                    Session[]
-  invitationsSent             Invitation[]             @relation("InvitationsSent")
+  invitationsSent             Invitation[]                @relation("InvitationsSent")
   auditLogs                   AuditLog[]
   trades                      Trade[]
   // J4 — annotations the admin authored on members' trades.
-  annotationsAuthored         TradeAnnotation[]        @relation("AnnotationsAuthored")
+  annotationsAuthored         TradeAnnotation[]           @relation("AnnotationsAuthored")
   // J4 — push-notification queue rows targeting this user.
   notificationsQueued         NotificationQueue[]
   // J5 — morning + evening check-ins.
@@ -273,12 +273,12 @@ model User {
   habitLogs                   HabitLog[]
   // V2.1 — admin private notes (SPEC §7.7). Two named relations: notes
   // written ABOUT this member, and notes this (admin) user authored.
-  adminNotesAbout             AdminNote[]              @relation("AdminNotesAbout")
-  adminNotesAuthored          AdminNote[]              @relation("AdminNotesAuthored")
+  adminNotesAbout             AdminNote[]                 @relation("AdminNotesAbout")
+  adminNotesAuthored          AdminNote[]                 @relation("AdminNotesAuthored")
   // V1.2 — Mode Entraînement / Backtest (SPEC §21). Statistically isolated
   // from the real edge: no FK to Trade, separate enums, dedicated services.
   trainingTrades              TrainingTrade[]
-  trainingAnnotationsAuthored TrainingAnnotation[]     @relation("TrainingAnnotationsAuthored")
+  trainingAnnotationsAuthored TrainingAnnotation[]        @relation("TrainingAnnotationsAuthored")
   // V1.3 — member-owned weekly backtest-practice debrief (SPEC §23).
   // Statistically isolated like the rest of the training surface: no FK to
   // Trade / WeeklyReview / BehavioralScore, only this implicit userId link.
@@ -302,6 +302,18 @@ model User {
   // circuit-breaker.md for the evidence base (Gollwitzer-Sheeran 2006
   // d=0.65, 94 studies, n=8461) + Mark Douglas 4 primary trading fears.
   preTradeChecks              PreTradeCheck[]
+  // V2.4 — Onboarding interview profilage IA Mark Douglas (Session α, M3
+  // directive Eliot 2026-05-27 verbatim "claude pour analyser au plus deep").
+  // 1-1 OnboardingInterview + MemberProfile cascade User. Static questionnaire
+  // ~30 questions safeFreeText-sanitized at service layer. Claude batch local
+  // async post-completion (carbone V1.4 monthly-debrief — ZÉRO API payante).
+  // Posture §2 strict — Claude generates psycho/process axes ONLY, never
+  // trade analysis. Cf. memory/fxmily_session_2026-05-27_pipeline_ee_ii_closure.md
+  // for the M3 directive context. ADR-004 future evidence base for instrument
+  // versioning + crisis detection patterns.
+  onboardingInterview         OnboardingInterview?
+  onboardingAnswers           OnboardingInterviewAnswer[]
+  memberProfile               MemberProfile?
   // J9 — Web Push subscriptions (one row per browser/device) + per-category opt-out preferences.
   pushSubscriptions           PushSubscription[]
   notificationPreferences     NotificationPreference[]
@@ -1641,4 +1653,120 @@ model PublicTradePartial {
 
   @@index([publicTradeId, closedAt(sort: Asc)])
   @@map("public_trade_partials")
+}
+
+// =============================================================================
+// V2.4 — Onboarding interview profilage IA (Session α, M3 directive 2026-05-27)
+// =============================================================================
+// Pattern : static questionnaire ~30 questions safeFreeText-sanitized service-
+// side. Claude batch local async post-completion (carbone V1.4 monthly-debrief
+// — ZÉRO API payante consommée, §canon dur). Posture §2 strict — Claude generates
+// psycho/process axes ONLY (Mark Douglas / Steenbarger), never trade analysis.
+// 1-1 cascade User × OnboardingInterview × MemberProfile.
+
+/// Status lifecycle of an OnboardingInterview row.
+/// started      → row created, no answers yet
+/// in_progress  → ≥1 answer submitted (member is mid-questionnaire)
+/// completed    → finalize() invoked → MemberProfile generated (Claude batch)
+/// abandoned    → member inactive >7d post-creation (cron sweep V2.4+ future)
+enum InterviewStatus {
+  started
+  in_progress
+  completed
+  abandoned
+}
+
+/// V2.4 — Onboarding interview profilage IA (Session α, M3 directive).
+///
+/// 1-1 cascade User. Static questionnaire ~30 questions Mark Douglas-aligned,
+/// instrumentVersion semver-tracked for longitudinal validity (mirror V1.5
+/// MindsetCheck pattern). claudeModelVersion + totalTokens{Input,Output} tracked
+/// for cost transparency (batch local Claude Max = $0 but tokens logged for audit).
+///
+/// Pipeline pattern : carbone V1.4 monthly-debrief —
+/// 1. Member répond aux questions (UI wizard V2.4 Phase B future)
+/// 2. finalize() flips status started/in_progress → completed
+/// 3. Cron OR admin batch local triggers Claude analysis → MemberProfile created
+/// 4. Member sees MemberProfile in dashboard "Mon profil"
+/// 5. Admin (Eliot) sees pseudonymized profile in /admin/members/[id]?tab=profil
+///
+/// Posture §2 strict : Claude's job is to extract psycho/process axes from
+/// the answers (discipline, patience, acceptance, probabilities thinking,
+/// emotion regulation, process focus, etc.). NEVER trade analysis. NEVER setup
+/// recommendation. Regex AMF post-gen guard at claude-client layer.
+model OnboardingInterview {
+  id                 String                      @id @default(cuid())
+  userId             String                      @unique @map("user_id")
+  user               User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status             InterviewStatus             @default(started)
+  startedAt          DateTime                    @default(now()) @map("started_at")
+  completedAt        DateTime?                   @map("completed_at")
+  claudeModelVersion String?                     @map("claude_model_version")
+  totalTokensInput   Int                         @default(0) @map("total_tokens_input")
+  totalTokensOutput  Int                         @default(0) @map("total_tokens_output")
+  instrumentVersion  String                      @default("v1") @map("instrument_version")
+  answers            OnboardingInterviewAnswer[]
+  profile            MemberProfile?
+  createdAt          DateTime                    @default(now()) @map("created_at")
+  updatedAt          DateTime                    @updatedAt @map("updated_at")
+
+  @@index([status, completedAt])
+  @@map("onboarding_interviews")
+}
+
+/// V2.4 — Onboarding interview answer (one row per question/answer pair).
+///
+/// Cascade via OnboardingInterview AND via User (for RGPD export Art. 15 +
+/// soft-delete cascade J10). answerText is safeFreeText-sanitized at service
+/// layer (crisis/injection detection BEFORE persist — carbone V1.8 REFLECT
+/// pattern). questionKey is the slug stable for analytics (questionText may
+/// evolve across instrumentVersion bumps).
+///
+/// @@unique [interviewId, questionIndex] guarantees idempotent append (cant
+/// double-submit same question — service handles via upsert semantics).
+model OnboardingInterviewAnswer {
+  id            String              @id @default(cuid())
+  interviewId   String              @map("interview_id")
+  interview     OnboardingInterview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  userId        String              @map("user_id")
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionIndex Int                 @map("question_index")
+  questionKey   String              @map("question_key")
+  questionText  String              @map("question_text") @db.Text
+  answerText    String              @map("answer_text") @db.Text
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  @@unique([interviewId, questionIndex])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("onboarding_interview_answers")
+}
+
+/// V2.4 — MemberProfile = final Claude-synthesized output of OnboardingInterview.
+///
+/// 1-1 cascade User + 1-1 Restrict to OnboardingInterview (preserves audit trail
+/// even if downstream interview row is touched — equivalent V1.4 MonthlyDebrief
+/// retention pattern). summary = 200-800 chars Claude-generated synthesis.
+/// highlights = JSON [{ key, label, evidence: [{ answerId, excerpt }] }]
+/// structured insights with traceable evidence references back to InterviewAnswer.
+/// axesPrioritaires = JSON ["discipline", "patience", "acceptance", ...] 3-5
+/// Mark Douglas psycho/process axes the member should focus on first.
+///
+/// claudeModelVersion + instrumentVersion mirror OnboardingInterview row for
+/// audit/longitudinal traceability. analyzedAt = batch-local job timestamp.
+model MemberProfile {
+  id                 String              @id @default(cuid())
+  userId             String              @unique @map("user_id")
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interviewId        String              @unique @map("interview_id")
+  interview          OnboardingInterview @relation(fields: [interviewId], references: [id], onDelete: Restrict)
+  summary            String              @db.Text
+  highlights         Json
+  axesPrioritaires   Json                @map("axes_prioritaires")
+  claudeModelVersion String              @map("claude_model_version")
+  instrumentVersion  String              @map("instrument_version")
+  analyzedAt         DateTime            @default(now()) @map("analyzed_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  @@map("member_profiles")
 }

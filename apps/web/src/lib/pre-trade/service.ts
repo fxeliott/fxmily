@@ -2,6 +2,14 @@ import 'server-only';
 
 import { db } from '@/lib/db';
 import type { PreTradeCheckInput } from '@/lib/schemas/pre-trade-check';
+import {
+  computePlanAlignmentRate,
+  computeReasonDistribution,
+  computeStopLossPredefinedRate,
+  type PreTradeAnalyticsInput,
+  type RateResult,
+  type ReasonDistributionResult,
+} from '@/lib/pre-trade/analytics';
 
 /**
  * V2.3 — `PreTradeCheck` service layer (Session BB, ADR-003).
@@ -133,6 +141,89 @@ export async function listRecentPreTradeChecks(
  * V2 if multi-instance scale : use Postgres advisory lock or
  * `SELECT ... FOR UPDATE SKIP LOCKED` in a transaction.
  */
+/**
+ * V2.3 ext #2 — Session HH backend (Dashboard analytics widget).
+ *
+ * Default window for analytics aggregation = 30 calendar days. Aligned with
+ * scoring J6 (`windowDays = 30`), habit-trade-correlation V2.1.3 fetch window,
+ * REFLECT V1.8 weekly cadence × 4. Member-meaningful timescale to detect
+ * patterns without being too short (noise) or too long (stale signal).
+ */
+export const PRE_TRADE_ANALYTICS_DEFAULT_WINDOW_DAYS = 30;
+
+/** Maximum window cap to prevent unbounded scans by buggy callers. */
+const PRE_TRADE_ANALYTICS_MAX_WINDOW_DAYS = 365;
+
+/**
+ * Aggregated analytics for a member over a recent window (default 30 days).
+ *
+ * Three independent metrics — each uses the same sample-size floor
+ * ({@link MIN_SAMPLE_PRE_TRADE_ANALYTICS}) so the UI can render them
+ * coherently (all `ok` together, or all `insufficient_data` together).
+ *
+ * `asOf` is the ISO timestamp at which the window was computed (returned for
+ * traceability / UI labels like "Données arrêtées au 27 mai 2026 08h").
+ */
+export interface PreTradeAnalyticsData {
+  windowDays: number;
+  asOf: string;
+  reasonDistribution: ReasonDistributionResult;
+  planAlignmentRate: RateResult;
+  stopLossPredefinedRate: RateResult;
+}
+
+/**
+ * Load the recent PreTradeChecks for a member, filtered by a sliding
+ * `windowDays` window, and compute the three analytics dimensions via the
+ * pure `lib/pre-trade/analytics` module.
+ *
+ * Single Prisma query (one `findMany`), narrow `select` (only the 3 fields
+ * the analytics need + nothing else — data-minimality canon §16). Window
+ * is computed via `now − windowDays * 86400000` (instant filter on
+ * `createdAt`, NOT `@db.Date` — `PreTradeCheck.createdAt` is a `DateTime`
+ * mirror of `Trade.enteredAt` and similar §21.1 timestamps, NOT a civil
+ * calendar day like `DailyCheckin.date`).
+ *
+ * `windowDays` is clamped to `[1, 365]` to defeat caller-side abuse without
+ * silently failing — `Math.min(Math.max(...), max)` mirrors
+ * `linkRecentCheckToTrade` pattern.
+ */
+export async function loadPreTradeAnalyticsData(
+  userId: string,
+  windowDays: number = PRE_TRADE_ANALYTICS_DEFAULT_WINDOW_DAYS,
+  now: Date = new Date(),
+): Promise<PreTradeAnalyticsData> {
+  const safeWindow = Math.min(
+    Math.max(1, Math.trunc(windowDays)),
+    PRE_TRADE_ANALYTICS_MAX_WINDOW_DAYS,
+  );
+  const since = new Date(now.getTime() - safeWindow * 86_400_000);
+
+  const rows = await db.preTradeCheck.findMany({
+    where: { userId, createdAt: { gte: since } },
+    select: {
+      reasonToTrade: true,
+      planAlignment: true,
+      stopLossPredefined: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const inputs: PreTradeAnalyticsInput[] = rows.map((row) => ({
+    reasonToTrade: row.reasonToTrade,
+    planAlignment: row.planAlignment,
+    stopLossPredefined: row.stopLossPredefined,
+  }));
+
+  return {
+    windowDays: safeWindow,
+    asOf: now.toISOString(),
+    reasonDistribution: computeReasonDistribution(inputs),
+    planAlignmentRate: computePlanAlignmentRate(inputs),
+    stopLossPredefinedRate: computeStopLossPredefinedRate(inputs),
+  };
+}
+
 export async function linkRecentCheckToTrade(
   userId: string,
   tradeId: string,

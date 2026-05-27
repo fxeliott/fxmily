@@ -1,9 +1,9 @@
 # SPEC — Fxmily App
 
-**Date initiale** : 2026-05-05 · **Dernière révision** : 2026-05-19 (v1.5 amendement, §28 Changelog v1.4 → v1.5)
+**Date initiale** : 2026-05-05 · **Dernière révision** : 2026-05-27 (v1.6 amendement, §29 Changelog v1.5 → v1.6 — pipeline auto-pilote DD→II 6/10 SHIPPED)
 **Auteur** : Eliot Pena (interview structuré avec Claude Code, skill `/spec`)
-**Version** : **1.5** — voir §20 (v1.0→v1.1), §22 (v1.1→v1.2), §24 (v1.2→v1.3), §26 (v1.3→v1.4), §28 (v1.4→v1.5) pour les pivots stack et sous-jalons inventés en cours.
-**Statut** : Reflète la réalité 2026-05-20 (V2.1.6 LIVE prod Hetzner sur `app.fxmilyapp.com`, séquence §21.6 1→4 complète, 1429/1429 tests Vitest verts, repo public depuis 2026-05-12).
+**Version** : **1.6** — voir §20 (v1.0→v1.1), §22 (v1.1→v1.2), §24 (v1.2→v1.3), §26 (v1.3→v1.4), §28 (v1.4→v1.5), §29 (v1.5→v1.6) pour les pivots stack et sous-jalons inventés en cours.
+**Statut** : Reflète la réalité 2026-05-27 (V2.3 + extensions analytics+correlation LIVE prod Hetzner sur `app.fxmilyapp.com` — commit `4dd8616` PR #187 Session II frontend ; **différenciateur Fxmily** pre-trade × outcome correlation per-reason déployé ; 1547/1547 tests Vitest verts ; pipeline auto-pilote DD→MM 6/10 SHIPPED — 4 restantes JJ/KK/LL/MM).
 
 ---
 
@@ -1368,4 +1368,21 @@ Pourquoi nouvelle session : le contexte d'interview pollue l'implémentation ; u
 
 ---
 
-**Fin du SPEC v1.5**
+## 29. Changelog v1.5 → v1.6 (2026-05-27)
+
+- **Pipeline auto-pilote DD→MM** : séquence de 10 jalons §18.4 strict (1 session = 1 jalon, `/clear` entre chaque) couvrant V2.3 base hardening + extensions analytics + correlation + 4 jalons suivants. **6/10 SHIPPED** au 2026-05-27 — DD #1 hardening + EE drift-resync + FF pivot V2.3.2 + GG E2E + HH analytics + II correlation. **4 restantes** : JJ Mark Douglas card auto-delivery trigger (5 `fomo` 7d → fiche peur-de-rater) / KK EmptyState DS adoption `/review` + `/reflect` / LL Admin tab `/admin/members/[id]?tab=pre-trade` vue pseudonymisée / MM JWT `tokenVersion` Int + Auth.js session callback révocation immédiate.
+- **V2.3 base** ship Session BB+CC (PR #178 `602787c` 2026-05-26T14:29:25Z) : pre-trade circuit breaker anti-FOMO wizard 4-step + auto-link no-FK race-safe P2025 + ADR-003 evidence Gollwitzer if-then meta d=0.65 PMC4500900 + Mark Douglas 4 fears + Steenbarger boredom extension + Russell 1989 affect grid 2×2 ; migration `20260526100000_v2_3_pre_trade_check` 2 enums + 1 table closed instrument zéro free-text ; audit slug `pre_trade_check.created` PII-FREE.
+- **V2.3.1 hardening** Session DD #1 (PR #179 `3404e29`) : sec `passwordSchema.max(256)` argon2id CWE-400 DoS mirror + perf `optimizePackageImports: ['lucide-react']` ~10-30KB First Load JS + a11y `id="ptw-heading"` aria-labelledby wizard form.
+- **V2.3.2 nits** Session FF pivot (PR #181 `1136380`) : dead `useEffect` retiré + comment fix + `revalidatePath` inutile retiré post-investigation react-email v6 migration AVORT (researcher Round 2 hallucination détectée — v6 = CLI dev-server ≠ bundle). **Scar O3 re-grep tool-confirmed avant migration deps** = nouveau canon documenté.
+- **Session GG E2E** (PR #182 `a54d90b`) : Playwright `apps/web/tests/e2e/v2-3-pre-trade-happy-path.spec.ts` 7 tests / 4 phases anti-régression V2.3 surface. **Scar GG-CI nouveau canon** : replica auto-link inline car `service.ts:1 'server-only'` incompatible Playwright runtime. ADR-003 status Proposed → **Accepted** post-#178/#179/#181/#182.
+- **Session HH pre-trade analytics 30j** (PRs #184 `7fb02b2` backend + #185 `2063326` frontend) : module pur `analytics.ts:1-172` (0 DB / 0 Date.now() / 0 `'server-only'` Playwright-importable) ; `MIN_SAMPLE_PRE_TRADE_ANALYTICS=8` ; discriminated union `ReasonDistributionResult`/`RateResult` branche `insufficient_data` structurellement n'expose pas distribution/rate (compile-time honesty) ; 4 buckets `{edge, fomo, revenge, boredom}` single-pass ; widget Server Component tone `acc` UNIQUEMENT sur `edge` Yu-kai Chou anti-Black-Hat ; wire `/dashboard` après `<PreTradeCheckBanner>`.
+- **Session II pre-trade × outcome correlation** (PRs #186 `ad5bdb5` backend + #187 `4dd8616` frontend LIVE prod 2026-05-27T08:15:29Z) — **TIER 0 différenciateur Fxmily LIVE** : correlation per-reason 4 buckets indépendants no Pearson/Spearman (variable catégorielle × outcome) ; `MIN_SAMPLE_PER_REASON_CORRELATION=8` floor PER REASON ; `PerReasonStats` discriminated union ok expose `winRate+lossRate+breakEvenRate+avgRealizedR+avgRSampleSize≠sampleSize` transparence ; pair-up 2 Prisma queries + JS merge no-FK race-safe P2025 + defensive skip dangling rows ; em-dash null `formatRMagnitude` ; win-rate JAMAIS rouge ; aucune comparaison auto edge>fomo (membre interprète) ; 16 tests Vitest TDD.
+- **Patterns drift-resync** (PRs #180 `3587089` Session EE + #183 `ef37f4e` Session HH-pre) : 6ème + 7ème jalon ops "drift resync" §18.4 (carbone Sessions N/O/P/Q/AA). 0 deploy paths-ignore.
+- **Tests baseline** : Vitest 1429 (post V2.3.1) → **1547/1547 verts** post-pipeline EE→II (95 files). E2E Playwright `18+3` → `19+4` post-GG.
+- **Décisions d'âme M1-M10** : 10/10 closed verbatim Eliot 2026-05-27 — M4/M5/M6 LIVRÉS V1.7-V1.8 ; M3 (interview profilage IA deep + chacun à son profil) + M8 (promesse 12 sem = discipline ↑ + erreurs psy ↓ + routines + entraînement + résultats réels ; tracker max data via QCM/tests récurrents auto-rapport) = **directives neuves à implémenter pipeline futur** ; M1/M2/M7/M9/M10 = **out-of-scope app** (interne, projet Scale séparé).
+- **Cadre interne légal clarifié** : app interne, membres déjà payants, partie légale traitée en amont (disclaimer "pas conseiller en investissement"), flow accès = membre fait demande + crée compte → admin (Eliot) confirme.
+- **Trajectoire restante post-MM** : 3 voies V2 stratégiques A (Capacitor iOS+Android, DEFERRED Session U, pas de refactor REST nécessaire — WebView shell hybride), B (Stripe billing, DEFERRED), C (Multi-admin, DEFERRED). M3 onboarding interview IA + M8 axes 3+4 (formation + market analysis tracking) à câbler avant V2 stratégique.
+
+---
+
+**Fin du SPEC v1.6**

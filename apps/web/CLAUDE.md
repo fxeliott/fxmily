@@ -3967,6 +3967,37 @@ Pas de nouveau test unitaire (a11y verified manuellement + browser SR — pas wi
 - **DD1-1** Reviewer P3 V2.3 ship pre-merge a raté IMP-6 id-target mort `aria-labelledby` — violation scar W1 P1 strict (amend obligatoire si nuance détectée). **Action**: amend post-merge intégré dans cette V2.3.1 bundle.
 - **DD1-2** Bundle cross-axe sec+perf+a11y validé empiriquement comme 1 jalon §18.4 OK (cohérence narrative + même origine audit) — pattern réutilisable pour futurs bundles findings post-ship.
 
+## Session EE — drift-resync post-V2.3 + V2.3.1 SoT cohérence (livré 2026-05-26, PR #180 `3587089`)
+
+> **Jalon ops "drift resync" §18.4** — 6ᵉ du genre (carbone Sessions N/O/P/Q/AA). 3 fichiers docs-only paths-ignore `0 deploy`. 2ᵉ session pipeline auto-pilote DD→MM SHIPPED.
+
+### Scope
+
+- `apps/web/CLAUDE.md` (+137 LOC) — 3 sections insérées : V1.12 P7 a11y landmark hierarchy + V2.3 base pre-trade circuit breaker + V2.3.1 hardening 3-fix bundle.
+- `docs/runbook-hetzner-deploy.md` (+178 / -12) — §22 V2.3 rollback recipe ajoutée (migration `20260526100000_v2_3_pre_trade_check` SAFE BEGIN/COMMIT revertable ADD-only).
+- `README.md` (+4 / -2) — status header V2.3.1 LIVE + Vitest counts 1429 → 1484.
+
+### Patterns réutilisables
+
+- **paths-ignore docs-only** confirmé via `deploy.yml:41-47` gate `**/*.md` + `docs/**` + `LICENSE` + `.editorconfig`. 0 deploy = 0 risk prod.
+- Pattern carbone Sessions N/O/P/Q/AA — formalisation 6ᵉ jalon ops "drift resync" §18.4 (nouveau type identifié Session N).
+
+## Session FF pivot — V2.3.2 nits cleanup intra-wizard (livré 2026-05-26, PR #181 `1136380`)
+
+> **Jalon polish §18.4** — pivot session : brief initial = react-email v6 migration → AVORT post-investigation → V2.3.2 nits cleanup. 3 fichiers, deploy SUCCESS + smoke 5/5.
+
+### Scope
+
+- `apps/web/src/components/pre-trade/pre-trade-wizard.tsx` (-17 LOC) — dead `useEffect` retiré + comment fix.
+- `apps/web/src/app/pre-trade/actions.ts` (-1 LOC) — `revalidatePath` inutile retiré (Server Action `redirect()` invalidate déjà).
+- `apps/web/src/app/pre-trade/actions.test.ts` — test update `revalidatePathMock × 1` (était × 2, devient × 1).
+
+### Scars critiques (Session FF) — pattern carbone
+
+- **FF-1 PIVOT** : brief initial `react-email v6 migration` ; investigation 3 vérifs croisées (`pnpm view` + `WebFetch` registry + sub-packages check) → **researcher Round 2 hallucination détectée** (v6 = CLI dev-server `@react-email/cli`, PAS package bundle utilisateur) → **AVORT migration**. Pivot vers V2.3.2 nits dans la même session (utilisation efficace du pickup time).
+- **FF-2 NOUVEAU CANON `scar O3 re-grep tool-confirmed avant migration deps`** : avant toute migration de dep majeure, **TOUJOURS** re-grep tool-confirmed `pnpm view <pkg>@<version> --json` + WebFetch npm registry + sub-packages enumeration. NE PAS faire confiance à researcher Round 1 seul sur des migrations cross-cutting.
+- **FF-3** `revalidatePath()` après `redirect()` dans une Server Action = redondance (le redirect invalide déjà le cache Next 16 RSC). À cleanup partout dans le codebase Server Actions audit futur.
+
 ## Session GG — E2E Playwright spec `/pre-trade/new` (livré 2026-05-27, PR #182 `a54d90b`)
 
 > **Jalon E2E anti-régression V2.3 surface**. 4ᵉ session du pipeline auto-pilote DD→MM (4/10 SHIPPED). Pattern carbone `v1-5-mindset-check.spec.ts`. Baseline 18 → 19 E2E specs.
@@ -4006,3 +4037,89 @@ Pas de nouveau test unitaire (a11y verified manuellement + browser SR — pas wi
 - **GG-2** Diagnostic via `gh run view <id> --log-failed | grep -E "(Error|FAIL)"` = méthode canonique pour root-cause les CI fails Playwright. ~30s pour identifier le `server-only` message vs spelunking aveugle. À documenter en V1.x ops runbook.
 - **GG-3** Worktree main blocked by autre worktree `lucid-mclaren-b95627` → `git checkout main` fail. Solution : `git checkout -b <new-branch> origin/main` directement, ou continuer sur la branche worktree courante avec rebase. NE JAMAIS `reset --hard` (hook protection + pattern destructif).
 - **GG-4** Squash-merge cleaning : après PR #182 merged, ma branche `claude/cranky-gagarin-b47ccc` avait 2 commits dont le contenu = squash sur main. `git rebase origin/main` a tenté de re-appliquer → conflit. La bonne réponse = `git rebase --abort` + nouvelle branche depuis origin/main.
+
+## Session HH — V2.3 ext #2 pre-trade analytics 30j (livré 2026-05-27, PRs #184 `7fb02b2` backend + #185 `2063326` frontend)
+
+> **5ᵉ session pipeline auto-pilote DD→MM SHIPPED**. Backend-first split en 2 PRs atomiques (carbone `feedback_backend_first_workflow`). Module pur module-pur → widget Server Component sur `/dashboard`. Tone Yu-kai Chou anti-Black-Hat verrouillé.
+
+### Backend (PR #184 `7fb02b2`)
+
+- **NEW** `apps/web/src/lib/pre-trade/analytics.ts` (~171 LOC) — module pur **0 DB / 0 `Date.now()` / 0 `'server-only'`** → Playwright-importable (carbone scar GG-CI nouveau canon).
+- `MIN_SAMPLE_PRE_TRADE_ANALYTICS = 8` (`analytics.ts:53`) — floor aligné `MIN_CORRELATION_PAIRS` V2.1.3 ; **honnêteté floor compile-time**.
+- **Discriminated union** `ReasonDistributionResult` / `RateResult` (`:68-99`) — branche `insufficient_data` structurellement n'expose pas `distribution` / `rate` (compile-time honesty guarantee). Membre voit empty state, jamais nombres mensongers.
+- `reason: 'no_checks' | 'below_threshold'` (`:101-111`) — distinction `n=0` vs `1≤n<8` pour empty states UI distincts.
+- `computeReasonDistribution(checks)` — 4 buckets fixes `{edge, fomo, revenge, boredom}` single-pass `for...of`.
+- `computePlanAlignmentRate` + `computeStopLossPredefinedRate` — rates float `[0,1]`. **Rate 0.0 = valid `ok` result** (8 checks tous false = genuine 0% signal ≠ no data yet).
+- **Service orchestrateur** `service.ts:196-230` — window 30j default clamp `[1, 365]` + single Prisma query narrow `select` (3 fields data-minimality canon §16).
+- **+ 5 tests Vitest TDD** (distribution + plan rate + stoploss rate + insufficient_data branch + boundary n=7/n=8).
+
+### Frontend (PR #185 `2063326`)
+
+- **NEW** `apps/web/src/components/pre-trade/pre-trade-analytics-card.tsx` — widget Server Component `async` qui appelle `loadPreTradeAnalyticsData(userId)`.
+- **Tone `acc` (lime) UNIQUEMENT sur `edge`** ; `fomo / revenge / boredom` = `mute` (slate). **DECISION VERROUILLÉE Yu-kai Chou anti-Black-Hat** — JAMAIS rouge sur fomo/revenge/boredom, le membre n'est pas puni visuellement.
+- `REASON_ORDER = ['edge', 'fomo', 'revenge', 'boredom']` — edge en tête (seul accentué).
+- **3 empty states distincts** (`format-analytics.ts:86-108`) : `no_checks` (n=0) / `no_linked_trades` / `below_threshold` (1≤n<8) → copy pédagogique avec décompte `remaining = MIN_SAMPLE - sampleSize`.
+- Wire `apps/web/src/app/dashboard/page.tsx:371` après `<PreTradeCheckBanner>` Session BB+CC.
+- **+ 13 tests Vitest TDD** (format helpers + edge cases + empty states).
+
+### Patterns réutilisables Session HH
+
+- **Module pur sans `'server-only'`** = Playwright-importable directement. Pattern carbone scar GG-CI : isoler la logique pure dans un fichier sans `'server-only'`, seul le service orchestrateur (DB-aware) garde le marker.
+- **Discriminated union compile-time honesty** : branche `insufficient_data` n'expose pas les fields qui n'auraient pas de sens → impossible d'afficher un nombre flou par erreur dans le TypeScript strict.
+- **Backend-first split en 2 PRs** : backend ship + tests TDD AVANT le frontend ; frontend ne peut être mergé sans backend déjà LIVE prod. Découplage CI green + déploiement incrémental safe.
+
+## Session II — V2.3 ext #4 pre-trade × outcome correlation (livré 2026-05-27, PRs #186 `ad5bdb5` backend + #187 `4dd8616` frontend) — **DIFFÉRENCIATEUR FXMILY LIVE PROD**
+
+> **6ᵉ session pipeline auto-pilote DD→MM SHIPPED**. **TIER 0 différenciateur Fxmily** — aucun concurrent (Edgewonk, Tradervue, TraderSync) ne propose ce niveau de granularité × honnêteté × posture éducative. Commit `4dd8616` = prod runtime LIVE 2026-05-27T08:15:29Z.
+
+### Backend (PR #186 `ad5bdb5`)
+
+- **NEW** `apps/web/src/lib/pre-trade/correlation.ts` (~153 LOC) — module pur **différenciateur**.
+- **PAS de Pearson/Spearman** — variable catégorielle (`PreTradeReason`) × outcome catégoriel (`win|loss|break_even`) ∪ continuous `realizedR`. **Per-category breakdown** : 4 buckets indépendants `{edge, fomo, revenge, boredom}`.
+- `MIN_SAMPLE_PER_REASON_CORRELATION = 8` (`:52`) — **floor PER REASON** (chaque bucket indépendant ; un bucket peut être `insufficient_data` pendant qu'un autre est `ok`).
+- **`PerReasonStats` discriminated union** (`:59-86`) — branche `ok` expose `winRate + lossRate + breakEvenRate + avgRealizedR + avgRSampleSize` ; branche `insufficient_data` réduit à `{sampleSize, reason: 'no_linked_trades' | 'below_threshold'}`.
+- **`avgRSampleSize` distincte de `sampleSize`** — transparence honesty : "n=8 trades, R calculé sur 5" si 3 trades sont `realizedRSource='estimated'`. Membre voit le delta explicitement.
+- `aggregateBucket(rows)` — single-pass `for...of`, compteurs `wins/losses/breakEvens/rSum/rCount`. `avgRealizedR = rCount===0 ? null : rSum/rCount`.
+- **Pair-up logic dans service** `service.ts:278-350` — 2 Prisma queries + JS merge (no FK formelle `PreTradeCheck.linkedTradeId × Trade.id` scar I1, race-safe P2025). Query 1 `preTradeCheck.findMany WHERE userId + linkedTradeId NOT null + createdAt >= since` ; Query 2 `trade.findMany WHERE id IN (linkedTradeIds) + userId + outcome NOT null` (closed only). **Defensive skip** dangling rows (`:331-333`) — pas de crash UI si `linkedTradeId` pointe Trade absent/non-closed.
+- **realizedR exclusion `estimated`** : `realizedRSource === 'computed'` seul est compté pour `avgRealizedR`, sinon `null` → exclu des magnitudes. Carbone V1.5/J6 honesty.
+- **Short-circuit DB hit** si `tradeIds.length === 0` (`:305-311`).
+- **+ 7 tests Vitest TDD** (4 buckets aggregation + insufficient_data per-bucket + realizedR null exclusion + avgRSampleSize vs sampleSize).
+
+### Frontend (PR #187 `4dd8616` — PROD LIVE)
+
+- **NEW** `apps/web/src/components/pre-trade/pre-trade-correlation-card.tsx` — widget table-compare 4 cellules `<ReasonCell>` Server Component.
+- **`formatRMagnitude(null) → '—'`** (`format-analytics.ts:142-147`) — em-dash null honesty doctrine. Aucun trade `computed` dans le bucket = em-dash, jamais "0R" mensonger.
+- `REASON_TONE` : `edge: 'acc'` (lime) ; `fomo/revenge/boredom: 'mute'` (slate). **DECISION VERROUILLÉE Yu-kai Chou anti-Black-Hat** carbone Session HH.
+- **Win-rate JAMAIS rouge** (`pre-trade-correlation-card.tsx:38` JSDoc) — tone slate neutre même sur loss-dominant. Le membre n'est pas attaqué émotionnellement.
+- **Aucune comparaison automatique "edge > fomo"** (`correlation-card.tsx:35`) — la table affiche les 4 stats côte à côte, le membre interprète.
+- **`avgRSampleSize` rendu distinctement** (`correlation-card.tsx:222-226`) — "R calculé sur 5/8" affiché si `avgRSampleSize !== sampleSize`. Transparence delta `estimated` vs `computed`.
+- **3 empty states distincts** : `no_checks` (n=0) / `no_linked_trades` (Session II nouveau — checks créés mais aucun linké à un trade clôturé) / `below_threshold` (1≤n<8).
+- Wire `apps/web/src/app/dashboard/page.tsx:381` après `<PreTradeAnalyticsCard>` Session HH.
+- **+ 7 tests Vitest TDD** + 4 nouveaux empty states copy tests.
+
+### Évidence ADR-003 sources primaires citées
+
+- **Gollwitzer & Sheeran 2006** — meta n=8461 / 94 studies, d=0.65 [CI 0.6-0.7], `PMC4500900`. Mécanisme : if-then plans → prospective memory cue accessibility.
+- **Sheeran et al. 2024** — `tandfonline 10.1080/10463283.2024.2334563`, 642 tests meta update.
+- **Gollwitzer & Sheeran 2025** — `Annual Review of Psychology 76:303-328`.
+- **Mark Douglas, _Trading in the Zone_, 2000** — verbatim 4 primary fears (being wrong / losing money / missing out / leaving money on table), ch.7-8.
+- **Russell, Weiss & Mendelsohn 1989** — affect grid 2×2 valence × arousal, `J. Personality & Social Psychology 57(3):493-502` mappe les 4 `PreTradeEmotion`.
+- **Brett Steenbarger, _The Daily Trading Coach_, Lesson 23** — `boredom` extension hors-Douglas-canonique (déficit honnêteté ADR-003 §Honesty disclaimer explicite).
+
+### Pourquoi II = TIER 0 différenciateur
+
+Le différenciateur Fxmily face concurrence (Edgewonk, Tradervue, TraderSync, etc.) est verrouillé Session II :
+
+1. **Pre-trade auto-déclaration** (raison + emotion + plan-alignment + stoploss-predefined) avant chaque trade
+2. **Auto-link** check → trade dans fenêtre 15min via no-FK race-safe + optimistic locking
+3. **Correlation per-reason** : "quand tu trades sur `fomo`, ton winRate est X% / R magnitude est Y / vs `edge` Z%"
+4. **Honesty doctrine compile-time** : impossible d'afficher un chiffre flou (em-dash + discriminated union + sample-size floor)
+5. **Anti-Black-Hat** : aucune comparaison automatique, le membre interprète ; tone neutre sur loss-dominant
+
+Aucun concurrent ne propose ce niveau de granularité × honnêteté × posture éducative.
+
+### Patterns réutilisables Session II
+
+- **Per-reason breakdown vs scalar correlation** : quand variable catégorielle, abandonner Pearson/Spearman pour aggregation par bucket. Floor PER bucket (pas global).
+- **`avgSampleSize ≠ sampleSize` transparence** : si certaines stats sont calculées sur un sous-ensemble (ex: `realizedR` excluant `estimated`), exposer les 2 compteurs distinctement.
+- **No-FK + optimistic locking + catch P2025** : pour relations 1-1 race-safe optionnelles. Carbone Session BB+CC V2.3 base réutilisé Session II correlation pair-up.

@@ -1,13 +1,19 @@
 # ADR-003 — Pre-trade circuit breaker (Mark Douglas anti-FOMO + Gollwitzer if-then implementation intentions)
 
-- **Status** : **Accepted** (2026-05-27) — V2.3 shipped + LIVE prod end-to-end.
+- **Status** : **Accepted** (2026-05-27) — V2.3 + extensions analytics+correlation shipped + LIVE prod end-to-end (différenciateur Fxmily commit `4dd8616`).
   - PR [#178](https://github.com/fxeliott/fxmily/pull/178) (`602787c`, 2026-05-26) — Session BB+CC build atomic 15 fichiers +2431 LOC (migration + service + Server Action + wizard + 2 triggers UI + audit slug + auto-link)
   - PR [#179](https://github.com/fxeliott/fxmily/pull/179) (`3404e29`, 2026-05-26) — Session DD #1 post-ship hardening 3-fix bundle (sec E1 password.max + perf `optimizePackageImports` lucide-react + a11y IMP-6 `aria-labelledby="ptw-heading"`)
+  - PR [#180](https://github.com/fxeliott/fxmily/pull/180) (`3587089`, 2026-05-26) — Session EE drift-resync SoT cohérence 3 fichiers (apps/web/CLAUDE.md + runbook + README) docs-only paths-ignore 0 deploy
   - PR [#181](https://github.com/fxeliott/fxmily/pull/181) (`1136380`, 2026-05-26) — Session FF nits cleanup intra-wizard (dead useEffect + comment fix + revalidatePath inutile)
   - PR [#182](https://github.com/fxeliott/fxmily/pull/182) (`a54d90b`, 2026-05-27) — Session GG E2E Playwright spec `/pre-trade/new` (anti-régression, 19 specs baseline)
+  - PR [#183](https://github.com/fxeliott/fxmily/pull/183) (`ef37f4e`, 2026-05-27) — Session HH-pre drift-resync post-GG SoT cohérence 4 fichiers (status ADR-003 Proposed → **Accepted** ici) docs-only paths-ignore 0 deploy
+  - PR [#184](https://github.com/fxeliott/fxmily/pull/184) (`7fb02b2`, 2026-05-27) — Session HH backend V2.3 ext #2 pre-trade analytics 30j module pur (reason distribution + plan-alignment + stoploss rate, MIN_SAMPLE=8, discriminated union honesty)
+  - PR [#185](https://github.com/fxeliott/fxmily/pull/185) (`2063326`, 2026-05-27) — Session HH frontend widget Server Component `/dashboard` (tone `acc` only on `edge` Yu-kai Chou anti-Black-Hat)
+  - PR [#186](https://github.com/fxeliott/fxmily/pull/186) (`ad5bdb5`, 2026-05-27) — Session II backend V2.3 ext #4 pre-trade × outcome correlation **différenciateur Fxmily** (per-reason 4 buckets no Pearson/Spearman, MIN_SAMPLE_PER_REASON=8, avgRSampleSize≠sampleSize transparence)
+  - PR [#187](https://github.com/fxeliott/fxmily/pull/187) (`4dd8616`, 2026-05-27) — Session II frontend correlation widget `/dashboard` **PROD LIVE** (em-dash null formatRMagnitude, win-rate JAMAIS rouge, aucune comparaison auto edge>fomo)
 - **Supersedes** : nothing.
-- **Authors** : Claude Code (Session BB pre-code researcher subagent + main agent synthesis) + Eliot Pena (review accepted via merge cascade #178 → #182).
-- **Related** : [SPEC.md §2](../../SPEC.md) posture · [`docs/FXMILY-V2-MASTER.md` §6 module ROUTINE + §9 features O3/B1](../FXMILY-V2-MASTER.md) · [`memory/auto_session_resume.md` §4](C:/Users/eliot/.claude/projects/D--Fxmily/memory/auto_session_resume.md) Session BB brief canon · [`apps/web/CLAUDE.md` §V2.3](../../apps/web/CLAUDE.md) build details.
+- **Authors** : Claude Code (Session BB pre-code researcher subagent + main agent synthesis) + Eliot Pena (review accepted via merge cascade #178 → #187).
+- **Related** : [SPEC.md §2](../../SPEC.md) posture + §29 changelog v1.5→v1.6 · [`docs/FXMILY-V2-MASTER.md` §6 module ROUTINE + §9 features O3/B1](../FXMILY-V2-MASTER.md) · [`memory/auto_session_resume.md` §4](C:/Users/eliot/.claude/projects/D--Fxmily/memory/auto_session_resume.md) Session BB brief canon · [`memory/fxmily_session_2026-05-27_pipeline_ee_ii_closure.md`](C:/Users/eliot/.claude/projects/D--Fxmily/memory/fxmily_session_2026-05-27_pipeline_ee_ii_closure.md) closure record sessions EE→II · [`apps/web/CLAUDE.md` §V2.3 + §Session HH + §Session II](../../apps/web/CLAUDE.md) build details.
 
 ---
 

@@ -1,10 +1,12 @@
-# V2 Roadmap — post-V2.3.2 + Sessions DD-GG SHIPPED
+# V2 Roadmap — post-V2.3 + extensions analytics+correlation SHIPPED
 
 > Préparé 2026-05-09 en clôture du Jalon 10. Resynchronisé 2026-05-21 post-Sprint 1
 > (audit V1.5 pré-V2 fermé, séquence §21.6 close, V2.1.6 LIVE prod).
-> **Resynchronisé 2026-05-27 post-Session GG E2E `/pre-trade/new`** (V2.3 + V2.3.1
+> **Resynchronisé 2026-05-27 post-pipeline EE→II SHIPPED** (V2.3 base + V2.3.1
+> hardening + V2.3.2 nits + Session GG E2E + Session HH analytics + Session II
+> correlation = différenciateur Fxmily LIVE prod commit `4dd8616`).
 >
-> - V2.3.2 LIVE prod + pipeline auto-pilote DD→MM 4/10 SHIPPED).
+> - V2.3 + extensions LIVE prod + pipeline auto-pilote DD→MM **6/10 SHIPPED**.
 >   La section "V1 + V2 = ship" liste désormais V1 + V2 SHIPPED. Les items "ouverts post-V1"
 >   sont annotés du statut actuel (LIVE / partial / ouvert).
 
@@ -15,26 +17,38 @@
 - Code J0 → J10 + V1.5 → V1.12 + V2.0 → V2.1.6 + V2.2 + séquence §21.6 (3 jalons LIVE
   - 1 placeholder UI) + **T5 admin track-record split-out (#172) + V2.3 pre-trade
     circuit breaker ADR-003 (#178) + V2.3.1 hardening 3-fix (#179) + V2.3.2 nits
-    cleanup (#181) + Session GG E2E `/pre-trade/new` (#182)** mergé sur `main`.
+    cleanup (#181) + Session GG E2E `/pre-trade/new` (#182) + Session HH pre-trade
+    analytics 30j (#184 backend + #185 frontend) + Session II pre-trade × outcome
+    correlation différenciateur Fxmily (#186 backend + #187 frontend LIVE prod
+    `4dd8616`)** mergé sur `main`.
 - Stack prod (`app.fxmilyapp.com`, Hetzner CX22, Caddy, Postgres 17) opérationnelle,
-  derniers deploys Hetzner SUCCESS (Session GG 2026-05-27 build 1m45s + SSH 23s).
+  derniers deploys Hetzner SUCCESS (Session II frontend 2026-05-27T08:15:35Z).
 - Cohorte cible 30 → 100 membres invités.
 - Coût récurrent ~10-15€/mois (cf. SPEC §16).
 - Pas d'audio nulle part. Pas de tracker. **Aucune API Anthropic payante consommée** :
   V1.7.2 a pivoté en batch local Claude Max only (canon dur §25.7 / SPEC :1237).
-- **Vitest baseline 1484/1484 verts** (post-V2.3) ; **Playwright 19 specs E2E**
-  (auth-gate + 4 happy-path J5/J6/V1.5/V2.3) ; cron-watch hourly green.
+- **Vitest baseline 1547/1547 verts** (post-pipeline EE→II, 95 files) ; **Playwright
+  19 specs E2E** (auth-gate + 4 happy-path J5/J6/V1.5/V2.3) ; cron-watch hourly green.
 - Audit qualité V1.5 pré-V2 fermé (Sprint 1, 3 TIER 1 résolus : brace-expansion CVE-2026-45149 #141,
   Recharts dynamic split #142, Dependabot TIER 1 batch #119/#120/#122).
-- **Pipeline auto-pilote Sessions DD→MM** : 4/10 SHIPPED (DD #179 hardening + EE #180
-  drift resync + FF #181 nits cleanup + GG #182 E2E `/pre-trade/new`). 6 restantes :
-  HH (V2.3 ext #2 dashboard widget) → II (correlation pre_trade × outcome) → JJ
-  (Mark Douglas auto-delivery) → KK (EmptyState DS) → LL (admin tab pseudonymisé)
-  → MM (JWT tokenVersion).
+- **Pipeline auto-pilote Sessions DD→MM** : **6/10 SHIPPED** (DD #179 hardening + EE #180
+  drift resync + FF #181 nits cleanup + GG #182 E2E `/pre-trade/new` + HH #184+#185
+  pre-trade analytics 30j + II #186+#187 correlation différenciateur Fxmily LIVE prod).
+  **4 restantes** : JJ (Mark Douglas card auto-delivery trigger — 5 `fomo` 7d → fiche
+  peur-de-rater) → KK (EmptyState DS adoption `/review` + `/reflect`) → LL (admin
+  tab `/admin/members/[id]?tab=pre-trade` vue pseudonymisée) → MM (JWT `tokenVersion`
+  Int + Auth.js session callback révocation immédiate).
+- **Décisions d'âme M1-M10** : 10/10 closed verbatim Eliot 2026-05-27 — M4/M5/M6
+  LIVRÉS V1.7-V1.8 ; **M3** (interview profilage IA deep + chacun à son profil) +
+  **M8** (promesse 12 sem = tracker max data via QCM/tests récurrents auto-rapport,
+  Mark Douglas psycho only) = **directives neuves à implémenter pipeline futur** ;
+  M1/M2/M7/M9/M10 = out-of-scope app (interne, projet Scale séparé).
 
-Avant tout V2 stratégique (Capacitor / Stripe / multi-admin) : laisser tourner V2.3
-quelques semaines, observer les vrais patterns d'usage (notamment distribution
-`reasonToTrade` 30j post-Session HH), écouter les retours des premiers membres réels.
+Avant tout V2 stratégique (Capacitor / Stripe / multi-admin) : finir pipeline DD→MM
+(JJ/KK/LL/MM) + câbler M3 onboarding interview IA + M8 axes 3+4 (formation + market
+analysis tracking). Observer les vrais patterns d'usage (distribution `reasonToTrade`
+30j post-Session HH + correlation per-reason post-Session II), écouter les retours
+des premiers membres réels.
 
 ## J10.5+ — Polish post-V1 (rolling)
 

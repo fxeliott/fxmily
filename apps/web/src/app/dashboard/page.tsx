@@ -42,6 +42,8 @@ import { getLatestBehavioralScore } from '@/lib/scoring/service';
 import { countTradesByStatus } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
 
+import { PreTradeAnalyticsCard } from '@/components/pre-trade/pre-trade-analytics-card';
+
 import { MarkDouglasCard } from './mark-douglas-card';
 
 export const metadata = {
@@ -356,6 +358,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           <MarkDouglasCard />
         </section>
+
+        {/* V2.3 ext #2 — Session HH frontend (Dashboard analytics widget pre-trade).
+            Lecture honnête des patterns d'exécution sur 30j : distribution
+            reasonToTrade + plan alignment rate + stoploss predefined rate.
+            Server Component async (fetch direct via loadPreTradeAnalyticsData
+            server-only). CSS bars natives (pas de Recharts → 0 KB JS client
+            ajouté). Posture Mark Douglas neutre — `acc` lime UNIQUEMENT sur
+            `edge`, `t-3` slate sur fomo/revenge/boredom (Yu-kai Chou
+            anti-Black-Hat invariant : aucun rouge sur les "biais"). */}
+        <PreTradeAnalyticsCard userId={userId!} />
 
         {/* Admin section (conditional) */}
         {isAdmin ? (

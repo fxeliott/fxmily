@@ -3966,3 +3966,43 @@ Pas de nouveau test unitaire (a11y verified manuellement + browser SR — pas wi
 
 - **DD1-1** Reviewer P3 V2.3 ship pre-merge a raté IMP-6 id-target mort `aria-labelledby` — violation scar W1 P1 strict (amend obligatoire si nuance détectée). **Action**: amend post-merge intégré dans cette V2.3.1 bundle.
 - **DD1-2** Bundle cross-axe sec+perf+a11y validé empiriquement comme 1 jalon §18.4 OK (cohérence narrative + même origine audit) — pattern réutilisable pour futurs bundles findings post-ship.
+
+## Session GG — E2E Playwright spec `/pre-trade/new` (livré 2026-05-27, PR #182 `a54d90b`)
+
+> **Jalon E2E anti-régression V2.3 surface**. 4ᵉ session du pipeline auto-pilote DD→MM (4/10 SHIPPED). Pattern carbone `v1-5-mindset-check.spec.ts`. Baseline 18 → 19 E2E specs.
+
+### Scope
+
+- **NEW** `apps/web/tests/e2e/v2-3-pre-trade-happy-path.spec.ts` (~262 LOC, 7 tests) couvrant 4 phases :
+  1. **AUTH GATE** — anon bounced to `/login` on `/pre-trade/new` (proxy.ts matcher + page-level `auth()` + `status='active'` gate).
+  2. **CAPTURE + PERSIST** — `db.preTradeCheck.create` round-trips la V2.3 schema (4 fields + 2 enums Postgres `PreTradeReason`/`PreTradeEmotion` + `linkedTradeId String?` nullable no-FK race-safe P2025 scar I1).
+  3. **AUTO-LINK** — `linkRecentCheckToTradeInline` (replica) pair-up dans la fenêtre 15min (`LINK_DEFAULT_WINDOW_MIN`) + null-path quand aucun check récent (2 tests).
+  4. **RENDER triggers UI** — `/pre-trade/new` `h1#ptw-heading` (V2.3.1 fix) + `/dashboard` Trigger A Card `h2#pre-trade-heading` "Pause 30 secondes avant ton prochain trade" + `/journal/new` Trigger B Banner `#pre-trade-banner-heading` "Pause 30 secondes avant ton trade ?".
+- **PATCH** `apps/web/src/test/db-helpers.ts` (+8 LOC) — `cleanupTestUsers` ajoute `db.preTradeCheck.deleteMany` AVANT `db.user.deleteMany` (carbone V1.5/V1.8/V1.3 explicit cascade-visibility pattern). FK CASCADE schema préservée mais logging explicite anti-régression futur drop cascade.
+
+### Scar critique CI fix (1 round audit) — server-only Playwright incompatible
+
+- **Symptôme** : 1ᵉʳ push de la PR Playwright job FAIL 1m18s avec `Error: This module cannot be imported from a Client Component module. It should only be used from a Server Component.`
+- **ROOT CAUSE** : `lib/pre-trade/service.ts:1` = `import 'server-only';` direct. Vitest a alias `'server-only' → src/test/server-only.shim.ts` dans `vitest.config.ts:13`, MAIS `playwright.config.ts` n'a AUCUN alias équivalent → Playwright crash sur l'import transitif. `db.ts` (que V1.5 mindset spec importe sans problème) n'a PAS `import 'server-only'` ligne 1 — c'est ça qui fait passer le pattern carbone.
+- **FIX chirurgical** : retirer l'import `linkRecentCheckToTrade` + **inliner la logique** (~10 LOC) dans le spec sous nom `linkRecentCheckToTradeInline`. Semantics identiques (15-min window + `WHERE linkedTradeId IS NULL` predicate + P2025 → null on lost race). JSDoc référence la source canonique pour les mainteneurs futurs.
+- **Pattern réutilisable** : tout E2E Playwright doit éviter d'importer transitivement des modules `server-only`. Importer uniquement `@/lib/db` (server-only-free) + helpers `@/test/*` (qui ont JSDoc explicite "Intentionally NO `import 'server-only'`"). **NE JAMAIS importer de services `lib/<domain>/service.ts`** depuis un E2E.
+
+### Tests
+
+- Gates locaux **5/5 GREEN** : prettier ✓ / lint 0 ✓ / type-check 0 ✓ / **vitest 1484/1484 verts baseline préservée** ✓ / build prod Turbopack ✓ (`/pre-trade/new` listed dynamique).
+- **CI 6/6 SUCCESS** : Lint+CodeQL Analyze+Playwright **chromium 4m50s** + CodeQL umbrella + Socket × 2 (sur `3144c19` post-fix).
+- **Deploy Hetzner SUCCESS** 2026-05-27T06:21-06:23Z : build 1m45s + SSH 23s + notify 4s.
+- **Smoke 5/5 GREEN prod** : `/api/health 200` + `/pre-trade/new 307` + `/dashboard 307` + `/journal/new 307` + `/login 200`.
+
+### Patterns réutilisables
+
+- **`v1-5-mindset-check.spec.ts` = canonical E2E pattern** pour wizards/closed instruments. Tests touchent Prisma directement, jamais via service. Skip propre si Chromium absent. `cleanupTestUsers` carbone pattern. `loginAs(page, request, email, password)` helper.
+- **db-helpers `deleteMany` explicit avant `user.deleteMany`** : FK CASCADE schema fait le job mais ordre explicite log-visibility évite régression futur drop cascade. Pattern V1.3/V1.5/V1.8 unifié.
+- **Inline replica vs alias config change** : quand un service `server-only` doit être exercé en E2E, préférer inline replica chirurgical (~10 LOC, JSDoc référence canonique) au lieu de toucher `playwright.config.ts` alias (cross-cutting infra, plus de risque régression).
+
+### Scars (Session GG)
+
+- **GG-1** CI 6/6 vert local ≠ CI Playwright vert remote : les imports `server-only` ne crashent pas localement (Vitest alias kick in à la résolution) mais Playwright sur GitHub Actions runner échoue. **Toujours pousser + watch CI Playwright avant de claim "tests passent"** (la validation locale `vitest run` ne couvre pas Playwright). Pattern Eliot "tu es sûr d'avoir tout fait" appliqué.
+- **GG-2** Diagnostic via `gh run view <id> --log-failed | grep -E "(Error|FAIL)"` = méthode canonique pour root-cause les CI fails Playwright. ~30s pour identifier le `server-only` message vs spelunking aveugle. À documenter en V1.x ops runbook.
+- **GG-3** Worktree main blocked by autre worktree `lucid-mclaren-b95627` → `git checkout main` fail. Solution : `git checkout -b <new-branch> origin/main` directement, ou continuer sur la branche worktree courante avec rebase. NE JAMAIS `reset --hard` (hook protection + pattern destructif).
+- **GG-4** Squash-merge cleaning : après PR #182 merged, ma branche `claude/cranky-gagarin-b47ccc` avait 2 commits dont le contenu = squash sur main. `git rebase origin/main` a tenté de re-appliquer → conflit. La bonne réponse = `git rebase --abort` + nouvelle branche depuis origin/main.

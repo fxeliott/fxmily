@@ -1,29 +1,40 @@
-# V2 Roadmap — post-V2.1.6
+# V2 Roadmap — post-V2.3.2 + Sessions DD-GG SHIPPED
 
 > Préparé 2026-05-09 en clôture du Jalon 10. Resynchronisé 2026-05-21 post-Sprint 1
 > (audit V1.5 pré-V2 fermé, séquence §21.6 close, V2.1.6 LIVE prod).
-> La section "V1 = ship" liste désormais V1 + V2 SHIPPED. Les items "ouverts post-V1"
-> sont annotés du statut actuel (LIVE / partial / ouvert).
+> **Resynchronisé 2026-05-27 post-Session GG E2E `/pre-trade/new`** (V2.3 + V2.3.1
+>
+> - V2.3.2 LIVE prod + pipeline auto-pilote DD→MM 4/10 SHIPPED).
+>   La section "V1 + V2 = ship" liste désormais V1 + V2 SHIPPED. Les items "ouverts post-V1"
+>   sont annotés du statut actuel (LIVE / partial / ouvert).
 
-## V1 + V2.1.6 = ship (état 2026-05-21)
+## V1 + V2.x = ship (état 2026-05-27)
 
 À ce stade :
 
 - Code J0 → J10 + V1.5 → V1.12 + V2.0 → V2.1.6 + V2.2 + séquence §21.6 (3 jalons LIVE
-  - 1 placeholder UI) mergé sur `main`.
+  - 1 placeholder UI) + **T5 admin track-record split-out (#172) + V2.3 pre-trade
+    circuit breaker ADR-003 (#178) + V2.3.1 hardening 3-fix (#179) + V2.3.2 nits
+    cleanup (#181) + Session GG E2E `/pre-trade/new` (#182)** mergé sur `main`.
 - Stack prod (`app.fxmilyapp.com`, Hetzner CX22, Caddy, Postgres 17) opérationnelle,
-  8/8 derniers deploys Hetzner SUCCESS.
+  derniers deploys Hetzner SUCCESS (Session GG 2026-05-27 build 1m45s + SSH 23s).
 - Cohorte cible 30 → 100 membres invités.
 - Coût récurrent ~10-15€/mois (cf. SPEC §16).
 - Pas d'audio nulle part. Pas de tracker. **Aucune API Anthropic payante consommée** :
   V1.7.2 a pivoté en batch local Claude Max only (canon dur §25.7 / SPEC :1237).
-- Vitest baseline 1429/1429 verts ; Playwright 17 specs E2E ; cron-watch hourly green.
+- **Vitest baseline 1484/1484 verts** (post-V2.3) ; **Playwright 19 specs E2E**
+  (auth-gate + 4 happy-path J5/J6/V1.5/V2.3) ; cron-watch hourly green.
 - Audit qualité V1.5 pré-V2 fermé (Sprint 1, 3 TIER 1 résolus : brace-expansion CVE-2026-45149 #141,
   Recharts dynamic split #142, Dependabot TIER 1 batch #119/#120/#122).
+- **Pipeline auto-pilote Sessions DD→MM** : 4/10 SHIPPED (DD #179 hardening + EE #180
+  drift resync + FF #181 nits cleanup + GG #182 E2E `/pre-trade/new`). 6 restantes :
+  HH (V2.3 ext #2 dashboard widget) → II (correlation pre_trade × outcome) → JJ
+  (Mark Douglas auto-delivery) → KK (EmptyState DS) → LL (admin tab pseudonymisé)
+  → MM (JWT tokenVersion).
 
-Avant tout V2 stratégique (Capacitor / Stripe / multi-admin) : laisser tourner V2.1.6
-quelques semaines, observer les vrais patterns d'usage, écouter les retours des
-premiers membres réels.
+Avant tout V2 stratégique (Capacitor / Stripe / multi-admin) : laisser tourner V2.3
+quelques semaines, observer les vrais patterns d'usage (notamment distribution
+`reasonToTrade` 30j post-Session HH), écouter les retours des premiers membres réels.
 
 ## J10.5+ — Polish post-V1 (rolling)
 

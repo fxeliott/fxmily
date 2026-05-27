@@ -33,7 +33,7 @@ Fxmily n'est ni un CIF (Conseiller en Investissement Financier) ni un service r�
 - **Auth.js v5** (Credentials + JWT strategy) — câblé J1, status gate global Phase P
 - **Cloudflare R2** (médias) + **Resend** (emails) + **Sentry** (monitoring) + **Anthropic Claude API** (rapports hebdo IA, Sonnet)
 - **Web Push API + VAPID** + Service Worker manuel (Apple Declarative Web Push 8030 + classic, J9)
-- **Vitest 4** (**1484/1484** verts post V2.3.1) + **React Testing Library** + **Playwright** (18 specs `apps/web/tests/e2e/` auth-gate + 3 happy-path J5/J6/V1.5) — wired J1+
+- **Vitest 4** (**1484/1484** verts post V2.3.1) + **React Testing Library** + **Playwright** (19 specs `apps/web/tests/e2e/` auth-gate + 4 happy-path J5/J6/V1.5/V2.3) — wired J1+
 - **Turborepo** + **pnpm 10 workspaces** — **Node 22 LTS**
 
 ## Structure du monorepo

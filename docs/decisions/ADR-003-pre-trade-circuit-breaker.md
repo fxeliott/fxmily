@@ -1,9 +1,13 @@
 # ADR-003 — Pre-trade circuit breaker (Mark Douglas anti-FOMO + Gollwitzer if-then implementation intentions)
 
-- **Status** : Proposed (2026-05-26) — to be Accepted after Eliot review + Session BB ship.
+- **Status** : **Accepted** (2026-05-27) — V2.3 shipped + LIVE prod end-to-end.
+  - PR [#178](https://github.com/fxeliott/fxmily/pull/178) (`602787c`, 2026-05-26) — Session BB+CC build atomic 15 fichiers +2431 LOC (migration + service + Server Action + wizard + 2 triggers UI + audit slug + auto-link)
+  - PR [#179](https://github.com/fxeliott/fxmily/pull/179) (`3404e29`, 2026-05-26) — Session DD #1 post-ship hardening 3-fix bundle (sec E1 password.max + perf `optimizePackageImports` lucide-react + a11y IMP-6 `aria-labelledby="ptw-heading"`)
+  - PR [#181](https://github.com/fxeliott/fxmily/pull/181) (`1136380`, 2026-05-26) — Session FF nits cleanup intra-wizard (dead useEffect + comment fix + revalidatePath inutile)
+  - PR [#182](https://github.com/fxeliott/fxmily/pull/182) (`a54d90b`, 2026-05-27) — Session GG E2E Playwright spec `/pre-trade/new` (anti-régression, 19 specs baseline)
 - **Supersedes** : nothing.
-- **Authors** : Claude Code (Session BB pre-code researcher subagent + main agent synthesis) + Eliot Pena (review pending).
-- **Related** : [SPEC.md §2](../../SPEC.md) posture · [`docs/FXMILY-V2-MASTER.md` §6 module ROUTINE + §9 features O3/B1](../FXMILY-V2-MASTER.md) · [`memory/auto_session_resume.md` §4](C:/Users/eliot/.claude/projects/D--Fxmily/memory/auto_session_resume.md) Session BB brief canon.
+- **Authors** : Claude Code (Session BB pre-code researcher subagent + main agent synthesis) + Eliot Pena (review accepted via merge cascade #178 → #182).
+- **Related** : [SPEC.md §2](../../SPEC.md) posture · [`docs/FXMILY-V2-MASTER.md` §6 module ROUTINE + §9 features O3/B1](../FXMILY-V2-MASTER.md) · [`memory/auto_session_resume.md` §4](C:/Users/eliot/.claude/projects/D--Fxmily/memory/auto_session_resume.md) Session BB brief canon · [`apps/web/CLAUDE.md` §V2.3](../../apps/web/CLAUDE.md) build details.
 
 ---
 

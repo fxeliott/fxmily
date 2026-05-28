@@ -4123,3 +4123,141 @@ Aucun concurrent ne propose ce niveau de granularité × honnêteté × posture 
 - **Per-reason breakdown vs scalar correlation** : quand variable catégorielle, abandonner Pearson/Spearman pour aggregation par bucket. Floor PER bucket (pas global).
 - **`avgSampleSize ≠ sampleSize` transparence** : si certaines stats sont calculées sur un sous-ensemble (ex: `realizedR` excluant `estimated`), exposer les 2 compteurs distinctement.
 - **No-FK + optimistic locking + catch P2025** : pour relations 1-1 race-safe optionnelles. Carbone Session BB+CC V2.3 base réutilisé Session II correlation pair-up.
+
+## V2.4 Phase A.1 — Onboarding interview backend Session α (livré 2026-05-27, PR [#189](https://github.com/fxeliott/fxmily/pull/189) `6fb410f`)
+
+> **Directive M3 Eliot 2026-05-27 verbatim** (≤30 mots fair use FR L122-5) :
+> _"à toi au début de poser le maximum de question pour faire le profil de chaque membre en utilisant claude pour analyser au plus deep et à la perfection chacun"_
+
+### Modèle de données
+
+Migration `20260527170000_v2_4_onboarding_interview` — 3 modèles + 1 enum `InterviewStatus` (`started`/`in_progress`/`completed`) :
+
+- **`OnboardingInterview`** — UNIQUE `userId` (1 entretien/membre V1), status state machine, `instrumentVersion` (figé `v1`), `claudeModelVersion` null jusqu'à Phase A.2 batch run, totalTokens input/output, `startedAt`/`completedAt`. Cascade User delete.
+- **`OnboardingInterviewAnswer`** — UNIQUE composite `(interviewId, questionIndex)` upsert idempotent (membre peut corriger une réponse). `userId` redondant cascade RGPD. `questionText: ''` placeholder Phase A.1 (dette héritée — Phase A.2 batch populate via `ONBOARDING_INSTRUMENT_V1.items[questionIndex].text` lookup).
+- **`MemberProfile`** — UNIQUE `userId`, FK `interviewId`. `summary` String 100-800 chars, `highlights` Json (3-7 items avec `key`/`label`/`evidence` verbatim NFC substring), `axesPrioritaires` Json (3-5 axes), `claudeModelVersion`, `analyzedAt`.
+
+### Service layer (`lib/onboarding-interview/service.ts:1-306`)
+
+5 fonctions pure async :
+
+- `startInterview(userId, input)` — idempotent (returns existing si row exists), audit `onboarding.interview.started`
+- `appendAnswer(userId, input)` — upsert sur `(interviewId, questionIndex)` + `started → in_progress` flip on first answer. **Returns `AppendAnswerResult.{answer, interview, crisisDetected, injectionDetected}`** — detection synchrone via `detectCrisis` + `detectInjection` au service layer (carbone V1.8 REFLECT pattern).
+- `finalizeInterview(userId)` — `in_progress → completed` + stamp `completedAt`. Idempotent on already-completed rows.
+- `getInterviewForUser(userId)` — read current state, null si non-démarré.
+- `getProfileForUser(userId)` — read MemberProfile, null jusqu'à Phase A.2 batch run.
+
+### Schemas Zod (`lib/schemas/onboarding-interview.ts:1-300`)
+
+3 schemas `.strict()` Server Action inputs : `onboardingStartInputSchema` + `onboardingAnswerInputSchema` (10-2000 chars `safeFreeText` NFC + bidi/zero-width strip) + `onboardingFinalizeInputSchema`. Plus Phase A.2 schemas (`memberProfileOutputSchema` + `OnboardingInterviewSnapshot` + `batchPersistRequestSchema`).
+
+### Audit slugs (15 pré-déclarés)
+
+- `onboarding.interview.{started, answer_submitted, completed, abandoned}` (4 lifecycle V1)
+- `member_profile.{analyzed, published}` (Phase A.2 batch emits)
+- `onboarding.batch.{pulled, persisted, skipped, invalid_output, persist_failed, crisis_detected, amf_violation, evidence_invalid}` (8 Phase A.2 batch HTTP routes)
+
+### Quality gate Phase A.1
+
+- Vitest **1429 → 1442 verts** (+13 TDD service tests)
+- Migration appliquée live + 0 régression
+
+## V2.4 Phase A.2 — Batch local Claude pipeline analyzer (livré 2026-05-28, PR [#190](https://github.com/fxeliott/fxmily/pull/190) `3c2db71`)
+
+### Scope
+
+**Pipeline batch local Claude Max (ZÉRO API payante per SPEC §1177-1237)** consommant les `OnboardingInterview` `status='completed'` et générant les `MemberProfile`. Architecture défendable Eliot abonnement Max + 9 ban-risk rules V1.7 carbone.
+
+### Composants
+
+- **Instrument v1 figé** (`lib/onboarding-interview/instrument-v1.ts:1-525`) — **30 questions / 12 dimensions / 3 phases** (warmup 0-3 / core 4-25 / reflective_close 26-29). 6 dimensions Mark Douglas-canon (uncertainty/ego/discipline/emotion/confidence/patience) + 3 biographiques (parcours/routines/triggers) + 2 méta-pédagogiques (objectifs/coaching) + 1 formation-adherence. Sources primaires Trading in the Zone ch.4-11 + Disciplined Trader ch.1-8 + Steenbarger TP2.0 + Lo&Repin 2002 + Duckworth&Quinn 2009 + Neff 2003. **`as const` immutable + `LONGITUDINAL-VALIDITY INVARIANT` non-negotiable §27.7** — toute mutation = v2 bump + migration.
+- **Prompt 4-blocks + few-shot** (`lib/onboarding-interview/prompt.ts`)
+- **`claude-client.ts` Mock+Live** cache 1h (90% rabais cache-hit Anthropic)
+- **3 couches anti-hallucination §J** : SDK JSON Schema → Zod `.strict()` post-parse → AMF regex + anti-clinical (`dépression|anxiété|trouble|pathologie|diagnostic`) + evidence verbatim NFC substring validation
+- **Batch orchestrator** (`batch.ts`) — 6 fail-fast gates (gate 1-6) + crisis routing skip-persist sur HIGH/MEDIUM
+- **2 HTTP admin routes token-gated** (`/api/admin/onboarding-batch/{pull,persist}`) — Zod top-level `BatchPersistRequest.strict()` + MAX_BODY_BYTES 16 MiB cap + active-user findMany check
+- **Bash orchestrator** (`ops/scripts/onboarding-batch-local.sh`) — jittered 60-120s + Eliot machine + fresh context per member + pseudonymizeMember 8-char hex + official `claude` binary only + human-in-the-loop
+- **Slash command** `/onboarding-batch`
+- **ADR-004 Proposed** (instrument v1 design rationale)
+
+### Quality gate Phase A.2
+
+- Vitest **1442 → 1603 verts** (+40 TDD : 18 schemas + 14 service + 8 actions Phase A.1 cumul)
+- 9 ban-risk rules V1.7 carbone confirmé
+- Crisis routing HIGH/MEDIUM skip-persist + audit `onboarding.batch.crisis_detected` (mirror V1.7.1 weekly batch)
+
+## V2.4 Phase B — Wizard frontend onboarding interview membre (livré 2026-05-28, PR [#191](https://github.com/fxeliott/fxmily/pull/191) `35c7321`)
+
+> **Boucle valeur M3 ACTIVÉE prod** — membre Fxmily peut maintenant créer son profil via wizard 30 questions DS-v2 lime.
+
+### Scope
+
+- **`OnboardingInterviewWizard`** ~700 LOC (`components/onboarding/onboarding-interview-wizard.tsx`) — 30 questions wizard hybride carbone **80% V1.5 MindsetCheckWizard** (DS-v2 lime + Framer Motion `m.*` + `AnimatePresence` + `useReducedMotion` + sticky safe-area CTA + APG focus-on-step) + **15% V1.8 REFLECT** (crisis routing FR resources 3114 + SOS Amitié + Suicide Écoute) + **5% V2.3 PreTrade** (useActionState pattern). Innovation UX Round 3 verrouillée : progress segmentée par phase (Warmup 4 / Core 22 / Reflective close 4) + estimation honnête rolling avg + mobile 9 min cap STRICT.
+- **3 Server Actions** (`app/onboarding/interview/actions.ts`) — `startInterview` + `appendAnswer` (per-question, returns `crisisLevel`/`injectionSuspected` pour banner inline) + `finalizeInterview`. + **`startInterviewFormAction` wrapper one-arg** pour `<form action>` Server Component landing.
+- **4 routes Phase B** :
+  - `/onboarding/interview` — landing auth-gate + redirect status + CTA POST
+  - `/onboarding/interview/new` — host wizard + Prisma narrow select existing answers
+  - `/onboarding/interview/complete` — calm reveal post-finalize Mark Douglas anti-fanfare
+  - `/profile` — `MemberProfile` standalone première classe (Round 3 §D arbitrage #5 vs nested `/account/profile`) + **EU AI Act 50(1) `<AIGeneratedBanner>` inline** (5e site production avant deadline 2026-08-02)
+- **2 audit slugs nouveaux PII-FREE** (`audit.ts:230-244`) — `onboarding.interview.{crisis_detected, injection_suspected}` strict §16 `{interviewId, questionIndex, level, matchedLabels}`
+- **Crisis Sentry escalation carbone V1.7.1** — HIGH → `reportError` page-out admin / MEDIUM → `reportWarning` / LOW = audit only noise floor
+- **Q4=A persist-anyway** sur crisis MEDIUM/HIGH (silent skip casserait le wizard — diverge V1.7.1 batch.ts skip qui s'applique au AI OUTPUT, pas member text)
+- **localStorage per-question draft** `fxmily:onboarding-interview:answer:v1:q-${N}` + **`<ResumePrompt>` modal Y/N explicite** on mount si drafts diffèrent du server state (R7 §C #3 shared-device safety)
+- **db-helpers V2.4 cleanup** — `cleanupTestUsers` ajoute `MemberProfile + Answer + Interview` deleteMany avant `user.deleteMany` (pattern carbone V1.5/V1.8/V1.3/V2.3 explicit-deletion log-visibility)
+
+### Décisions verrouillées Round 3 audit hardcore (NON-litigable)
+
+1. **DS-v2 lime neutre** (PAS V18 REFLECT blue+black)
+2. **SPA single-URL `/onboarding/interview/new`** state interne (carbone V1.5 mindset)
+3. **Progress segmentée par phase** + estimation JS-mesurée + mobile 9 min cap STRICT
+4. **localStorage per-question + prompt explicite resume**
+5. **Crisis routing PERSIST QUAND MÊME** Q4=A V1.8 carbone + banner FR
+6. **Injection warning persist anyway** + audit + Sentry warning calme
+7. **`/profile` standalone première classe**
+8. **EU AI Act 50(1) bannière inline** `/profile`
+
+### Tests
+
+- **Vitest +15** (`actions.test.ts`) TDD-first : auth gates ×3 + Zod rejects ×2 + happy paths ×3 + crisis MEDIUM ×1 + crisis HIGH ×1 + injection ×1 + service failures ×2 + finalize ×3
+- **Playwright +6 E2E** (`v2-4-onboarding-interview-happy-path.spec.ts` carbone Session GG scar GG-CI inline replica) : auth gate + START idempotency + APPEND upsert + status flip + FINALIZE flip + RENDER landing + RENDER `/profile` placeholder
+- Full suite **1603 → 1618 verts** (+15, 0 régression)
+
+### Scar GG-CI nouveau canon
+
+NE PAS importer `lib/onboarding-interview/service.ts` (`import 'server-only'` ligne 1) — incompatible Playwright runtime. Touch Prisma directement via `@/lib/db` (qui n'a pas `server-only` marker).
+
+### Quality gate Phase B
+
+- format ✓, lint 0 warnings ✓, type-check 0 strict ✓, **vitest 1618/1618** ✓, build prod Turbopack ✓ (4 routes Phase B au manifest ƒ Dynamic)
+- CI 6/6 GREEN + Deploy Hetzner SUCCESS T+~7s + smoke prod 5/5 GREEN
+
+## V2.4 Phase C — Admin tab profile pseudonymisé (livré 2026-05-28, PR [#192](https://github.com/fxeliott/fxmily/pull/192) `638d6d1`)
+
+> **§18 vision Eliot verbatim CLOSURE** : _"je dois pouvoir voir tous, absolument tous les membres et tous leurs résultats, accéder au profil de chacun"_ ✅ ACTIVÉE.
+
+### Scope (atomic small jalon ~0.5j)
+
+- **`MemberTabs`** : ajout `'profile'` à `MemberTabKey` union + TABS entry label "Profil" entre 'mindset' et 'notes'
+- **`app/admin/members/[id]/page.tsx`** : `parseTab` accepte `'profile'` + imports `getProfileForUser`/`getInterviewForUser`/`MemberProfileViewerAdmin` + `Promise.all` fetch quand `tab='profile'` + render conditional
+- **`<MemberProfileViewerAdmin>`** NEW ~260 LOC (`components/admin/member-profile-viewer-admin.tsx`) — Server Component admin avec header `pseudonymLabel` (8-char hex via `pseudonymizeMember` V1.5.2) + status pill (terminé/en cours/démarré/pas démarré) + 4 states (no interview / in-flight / completed-pending / analyzed) + sections summary + highlights + axes_prioritaires + **6e site production `<AIGeneratedBanner>` inline EU AI Act 50(1)** avant deadline 2026-08-02
+
+### Décisions §20 architecture globale Eliot directive verbatim
+
+> _"Ne superpose jamais des couches, n'accumule jamais : construis une véritable architecture globale"_
+
+- **AUCUN nouveau audit slug** — réutilise existant `admin.member.viewed` qui carry déjà `{memberId, tab}` PII-FREE. Anti-accumulation §20.
+- **AUCUNE nouvelle migration** — pur frontend wire sur tables Phase A.1 existantes
+- **AUCUNE nouvelle route** — extension `/admin/members/[id]` via `?tab=profile` (pattern carbone J3/J7/J8/V1.5)
+- **AUCUN composant shared inutile** — `AdminPlaceholder` interne au fichier (réutilisé 2× null states)
+
+### Pattern carbone hybride
+
+- **80% `/profile` member route** V2.4 Phase B PR #191 — mêmes sections + helpers `asHighlights`/`asStringArray` + 4 null states. Forks **WITHOUT** membre-facing CTA links (admin ne peut agir au nom du membre).
+- **15% V1.5.2 pseudonymisation** — header montre `pseudonymLabel` via `pseudonymizeMember(memberId)` (boundary Claude prompt). Admin-context INTERNAL mais consistency SoT + train l'œil admin sur la pseudonymous label qui voyage à Claude.
+- **5% EU AI Act 50(1)** — 6e site production wired
+
+### Quality gate Phase C
+
+- prettier ✓, lint 0 warnings ✓, type-check 0 strict ✓, **vitest 1618/1618** stable (zéro régression V2.4 Phase B baseline) ✓, build prod Turbopack ✓
+- CI 6/6 GREEN + Deploy Hetzner SUCCESS T+~4s + smoke prod 2/2 GREEN (`/api/health 200` + `/admin/members/anyid?tab=profile 307→/login` admin gate)
+- 4 PRs same-day V2.4 A.1 + A.2 + B + C = boucle valeur M3 vision §14+§18 ACTIVÉE end-to-end 2026-05-28

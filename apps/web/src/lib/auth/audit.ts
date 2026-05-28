@@ -218,6 +218,20 @@ export type AuditAction =
   | 'onboarding.interview.answer_submitted'
   | 'onboarding.interview.completed'
   | 'onboarding.interview.abandoned'
+  // V2.4 Phase B — safety routing wired in `appendAnswerAction`. The
+  // Server Action persists the answer ANYWAY (Q4=A persist-anyway carbone
+  // V1.8 REFLECT — silent skip would break the wizard UX) and audits the
+  // safety signal in a SEPARATE row paired with Sentry escalation
+  // (HIGH → reportError page-out, MEDIUM → reportWarning). PII-FREE
+  // metadata expected :
+  //   - crisis_detected     : `{interviewId, questionIndex, level, matchedLabels}`
+  //   - injection_suspected : `{interviewId, questionIndex, matchedLabels}`
+  // NEVER log `answerText` content. Crisis level `low` is NOT escalated to
+  // the audit log (mirror V1.7.1 — low = emotional-fatigue noise that
+  // would drown the medium/high signal). Injection always audits when
+  // matched (it's a security boundary, not a content policy).
+  | 'onboarding.interview.crisis_detected'
+  | 'onboarding.interview.injection_suspected'
   // V2.4 Phase A.2 — Onboarding interview batch local Claude pipeline
   // (Session β, M3 directive 2026-05-28). Mirror V1.7 weekly-report batch
   // canonical lifecycle. PII-FREE metadata expected :

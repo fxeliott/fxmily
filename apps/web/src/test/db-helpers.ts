@@ -173,6 +173,15 @@ export async function cleanupTestUsers(): Promise<{ deleted: number }> {
   // above (the dangling linkedTradeId would otherwise stay until the User
   // cascade fires).
   await db.preTradeCheck.deleteMany({ where: { userId: { in: ids } } });
+  // V2.4 — Onboarding interview (Phase A.1 + A.2, M3 directive). 3 tables,
+  // all ON DELETE CASCADE on User. Order matters BEFORE the User wipe :
+  //   1. MemberProfile (FK userId + interviewId — child of both)
+  //   2. OnboardingInterviewAnswer (FK userId + interviewId)
+  //   3. OnboardingInterview (parent, FK userId)
+  // Carbone V1.5/V1.8/V1.3/V2.3 explicit-deletion canon for log-visibility.
+  await db.memberProfile.deleteMany({ where: { userId: { in: ids } } });
+  await db.onboardingInterviewAnswer.deleteMany({ where: { userId: { in: ids } } });
+  await db.onboardingInterview.deleteMany({ where: { userId: { in: ids } } });
 
   const result = await db.user.deleteMany({ where: { id: { in: ids } } });
   return { deleted: result.count };

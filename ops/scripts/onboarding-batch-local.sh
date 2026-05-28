@@ -61,6 +61,9 @@ readonly BASE_URL="${FXMILY_BASE_URL:-https://app.fxmilyapp.com}"
 readonly ADMIN_TOKEN="${FXMILY_ADMIN_TOKEN:-}"
 readonly WORK_DIR="${TMPDIR:-/tmp}/fxmily-onboarding-batch-$$"
 readonly MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-5.00}"
+# §8 — local Claude solicitations run on Opus 4.8 at "extra" effort by default.
+readonly CLAUDE_MODEL="${FXMILY_CLAUDE_MODEL:-claude-opus-4-8}"
+readonly CLAUDE_EFFORT="${FXMILY_CLAUDE_EFFORT:-xhigh}"
 
 # CLI args
 DRY_RUN=false
@@ -80,6 +83,8 @@ Environment variables :
   FXMILY_ADMIN_TOKEN    32+ chars admin token (required)
   FXMILY_BASE_URL       default https://app.fxmilyapp.com
   CLAUDE_MAX_BUDGET_USD default 5.00
+  FXMILY_CLAUDE_MODEL   default claude-opus-4-8 (§8 — Opus 4.8 for profile analysis)
+  FXMILY_CLAUDE_EFFORT  default xhigh (§8 "en extra" ; low|medium|high|xhigh|max)
 
 Options :
   --dry-run             pull only, do not call claude or persist
@@ -119,11 +124,23 @@ if ! claude --version 2>&1 | grep -qi "claude"; then
   exit 1
 fi
 
+# §8 — model + effort allowlist (verified `claude --help` CLI 2.1.154 : full
+# names like 'claude-opus-4-8' ; --effort low|medium|high|xhigh|max).
+case "$CLAUDE_MODEL" in
+  claude-opus-4-8|claude-opus-4-7|claude-sonnet-4-6|claude-haiku-4-5) ;;
+  *) echo "[FATAL] FXMILY_CLAUDE_MODEL=$CLAUDE_MODEL not in allowlist (claude-opus-4-8, claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5)." >&2; exit 1 ;;
+esac
+case "$CLAUDE_EFFORT" in
+  low|medium|high|xhigh|max) ;;
+  *) echo "[FATAL] FXMILY_CLAUDE_EFFORT=$CLAUDE_EFFORT invalid (low|medium|high|xhigh|max)." >&2; exit 1 ;;
+esac
+
 mkdir -p "$WORK_DIR"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "[onboarding-batch] Work dir: $WORK_DIR"
 echo "[onboarding-batch] Base URL: $BASE_URL"
+echo "[onboarding-batch] Model: $CLAUDE_MODEL — effort: $CLAUDE_EFFORT (§8 full performance)"
 echo "[onboarding-batch] Dry-run: $DRY_RUN"
 echo "[onboarding-batch] Max members: ${MAX_MEMBERS:-(none)}"
 echo "[onboarding-batch] Started: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -213,6 +230,8 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
   echo "[onboarding-batch] Invoking claude --print..."
   CLAUDE_EXIT=0
   claude --print \
+    --model "$CLAUDE_MODEL" \
+    --effort "$CLAUDE_EFFORT" \
     --max-turns 1 \
     --max-budget-usd "$MAX_BUDGET_USD" \
     --append-system-prompt "$(cat "$WORK_DIR/system-prompt.txt")" \
@@ -245,7 +264,7 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
     --arg uid "$USER_ID" \
     --arg iid "$INTERVIEW_ID" \
     --argjson output "$RESPONSE_CONTENT" \
-    --arg model "claude-sonnet-4-6" \
+    --arg model "$CLAUDE_MODEL" \
     '{userId: $uid, interviewId: $iid, output: $output, model: $model}' \
     >> "$RESULTS_NDJSON"
 

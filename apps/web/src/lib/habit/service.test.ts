@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -62,6 +62,19 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('upsertHabitLog', () => {
+  // Freeze system clock to a date that keeps the hardcoded fixtures
+  // (sleepInput=2026-05-13, sportInput=2026-05-14) within the schema's
+  // 14-day-back civil window. Without this, the assertions silently age
+  // out after 14 days from the fixture commit date and the suite goes
+  // red on every PR (detected 2026-05-28 during V2.4 Phase A.2 gates).
+  // Carbone pattern J5 timezone tests + V1.5 mindset wizard fakeTimers.
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date('2026-05-14T12:00:00Z') });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('upserts on the (userId, date, kind) composite unique key', async () => {
     vi.mocked(db.habitLog.findUnique).mockResolvedValue(null as never);
     vi.mocked(db.habitLog.upsert).mockResolvedValue(makeRow() as never);

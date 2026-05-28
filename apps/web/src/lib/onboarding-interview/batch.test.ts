@@ -1,0 +1,407 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * V2.4 Phase A.2 — `persistGeneratedProfiles` 6-gate fail-fast tests.
+ *
+ * Pattern carbone V1.7 `weekly-report/batch.test.ts` — mock Prisma client +
+ * audit + observability + crisis detection BEFORE importing the SUT.
+ *
+ * The 6 gates tested here (in order, fail-fast) :
+ *   Gate 1 — active user check (reject forged userId)
+ *   Gate 2 — interview owner match (BOLA-resistant)
+ *   Gate 3 — Zod strict re-parse (defense-in-depth)
+ *   Gate 4 — Crisis routing SKIP-PERSIST (mirror V1.7.1)
+ *   Gate 5 — Safety gate composite (AMF + clinical + evidence substring NFC)
+ *   Gate 6 — Prisma upsert MemberProfile (idempotent on userId)
+ */
+
+// =============================================================================
+// Mocks (must be declared BEFORE importing SUT)
+// =============================================================================
+
+const userFindManyMock = vi.fn();
+const interviewFindManyMock = vi.fn();
+const interviewFindUniqueMock = vi.fn();
+const interviewUpdateMock = vi.fn();
+const answerFindManyMock = vi.fn();
+const profileFindManyMock = vi.fn();
+const profileUpsertMock = vi.fn();
+const auditLogCreateMock = vi.fn();
+
+vi.mock('@/lib/db', () => ({
+  db: {
+    user: { findMany: userFindManyMock },
+    onboardingInterview: {
+      findMany: interviewFindManyMock,
+      findUnique: interviewFindUniqueMock,
+      update: interviewUpdateMock,
+    },
+    onboardingInterviewAnswer: { findMany: answerFindManyMock },
+    memberProfile: {
+      findMany: profileFindManyMock,
+      upsert: profileUpsertMock,
+    },
+    auditLog: { create: auditLogCreateMock },
+  },
+}));
+
+const logAuditMock = vi.fn();
+vi.mock('@/lib/auth/audit', () => ({
+  logAudit: logAuditMock,
+}));
+
+const reportErrorMock = vi.fn();
+const reportWarningMock = vi.fn();
+vi.mock('@/lib/observability', () => ({
+  reportError: reportErrorMock,
+  reportWarning: reportWarningMock,
+}));
+
+const detectCrisisMock = vi.fn();
+vi.mock('@/lib/safety/crisis-detection', () => ({
+  detectCrisis: detectCrisisMock,
+}));
+
+// Mock pseudonymizeMember to avoid loading the full weekly-report module
+vi.mock('@/lib/weekly-report/builder', () => ({
+  pseudonymizeMember: (userId: string) => `member-${userId.slice(0, 8)}`,
+}));
+
+const { persistGeneratedProfiles } = await import('./batch');
+
+import type { BatchPersistRequest, BatchResultEntry } from './batch';
+import type { MemberProfileOutput } from '@/lib/schemas/onboarding-interview';
+
+// =============================================================================
+// Test fixtures
+// =============================================================================
+
+function makeValidOutput(overrides: Partial<MemberProfileOutput> = {}): MemberProfileOutput {
+  return {
+    summary:
+      'Profil descriptif standard du membre — process-focus présent, work in progress sur la discipline plan-adherence. Routine matinale stable. Awareness somatique sous stress.',
+    highlights: [
+      {
+        key: 'pattern-one',
+        label: 'Pattern un',
+        evidence: ["J'ai démarré le trading"],
+      },
+      {
+        key: 'pattern-two',
+        label: 'Pattern deux',
+        evidence: ['Honnêtement 4 sur 10'],
+      },
+      {
+        key: 'pattern-three',
+        label: 'Pattern trois',
+        evidence: ['Tension dans les épaules'],
+      },
+    ],
+    axes_prioritaires: [
+      'Travailler la consistance du plan personnel',
+      'Capitaliser sur les routines déjà solides',
+      'Approfondir la self-awareness somatique',
+    ],
+    ...overrides,
+  };
+}
+
+function makeRequestEntry(
+  variant: 'output' | 'error',
+  userId = 'user_123',
+  interviewId = 'iv_abc',
+): BatchResultEntry {
+  if (variant === 'error') {
+    return { userId, interviewId, error: 'claude_exit_1' };
+  }
+  return {
+    userId,
+    interviewId,
+    output: makeValidOutput(),
+    model: 'claude-sonnet-4-6',
+  };
+}
+
+function setupSuccessMocks(opts: { userIds?: string[]; interviewIds?: string[] } = {}): void {
+  const userIds = opts.userIds ?? ['user_123'];
+  const interviewIds = opts.interviewIds ?? ['iv_abc'];
+  userFindManyMock.mockResolvedValue(userIds.map((id) => ({ id })));
+  interviewFindManyMock.mockResolvedValue(
+    interviewIds.map((id, idx) => ({
+      id,
+      userId: userIds[idx] ?? userIds[0],
+    })),
+  );
+  // For Gate 5 (rederive snapshot for evidence validation)
+  interviewFindUniqueMock.mockResolvedValue({
+    id: interviewIds[0],
+    userId: userIds[0],
+    instrumentVersion: 'v1',
+    startedAt: new Date('2026-05-28T10:00:00Z'),
+    completedAt: new Date('2026-05-28T10:30:00Z'),
+  });
+  answerFindManyMock.mockResolvedValue([
+    {
+      questionIndex: 0,
+      questionKey: 'parcours_origin',
+      questionText: 'Question',
+      answerText:
+        "J'ai démarré le trading en 2022. Honnêtement 4 sur 10 trades selon plan. Tension dans les épaules.",
+    },
+  ]);
+  profileUpsertMock.mockResolvedValue({});
+  interviewUpdateMock.mockResolvedValue({});
+  detectCrisisMock.mockReturnValue({ level: 'none', matches: [] });
+}
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+// =============================================================================
+// Tests — 6 gates fail-fast coverage
+// =============================================================================
+
+describe('persistGeneratedProfiles — happy path + error variant', () => {
+  beforeEach(() => {
+    setupSuccessMocks();
+  });
+
+  it('persists a valid entry + emits member_profile.analyzed audit', async () => {
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('output')],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.persisted).toBe(1);
+    expect(result.skipped).toBe(0);
+    expect(result.errors).toBe(0);
+    expect(profileUpsertMock).toHaveBeenCalledTimes(1);
+
+    // member_profile.analyzed audit row
+    const analyzedCall = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'member_profile.analyzed',
+    );
+    expect(analyzedCall).toBeDefined();
+  });
+
+  it('skips entry.error variant (claude exit non-zero)', async () => {
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('error')],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.skipped).toBe(1);
+    expect(result.persisted).toBe(0);
+    expect(profileUpsertMock).not.toHaveBeenCalled();
+
+    const skippedCall = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.skipped',
+    );
+    expect(skippedCall).toBeDefined();
+  });
+});
+
+describe('persistGeneratedProfiles — Gate 1: active user check', () => {
+  it('skips entry when userId is not in active users set', async () => {
+    setupSuccessMocks({ userIds: ['user_other'] }); // SUT requestUserIds will pre-fetch this
+    userFindManyMock.mockResolvedValue([]); // override: empty active set
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('output', 'user_forged', 'iv_abc')],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.skipped).toBe(1);
+    expect(profileUpsertMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('persistGeneratedProfiles — Gate 2: interview owner match', () => {
+  it('skips entry when interview belongs to a different userId', async () => {
+    setupSuccessMocks({ userIds: ['user_123'], interviewIds: ['iv_abc'] });
+    interviewFindManyMock.mockResolvedValue([
+      { id: 'iv_abc', userId: 'user_OTHER' }, // owner mismatch
+    ]);
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('output', 'user_123', 'iv_abc')],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.skipped).toBe(1);
+    expect(profileUpsertMock).not.toHaveBeenCalled();
+    expect(reportWarningMock).toHaveBeenCalled(); // suspicious mismatch
+  });
+
+  it('skips entry when interview does not exist (forged interviewId)', async () => {
+    setupSuccessMocks({ userIds: ['user_123'] });
+    interviewFindManyMock.mockResolvedValue([]); // interview not found
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('output', 'user_123', 'iv_nope')],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.skipped).toBe(1);
+    expect(profileUpsertMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('persistGeneratedProfiles — Gate 3: Zod strict re-parse', () => {
+  it('rejects malformed output (Zod fail) → onboarding.batch.invalid_output', async () => {
+    setupSuccessMocks();
+    const request: BatchPersistRequest = {
+      results: [
+        {
+          userId: 'user_123',
+          interviewId: 'iv_abc',
+          // @ts-expect-error — intentionally invalid output (missing fields)
+          output: { summary: 'too short' }, // < 100 chars + no highlights
+        },
+      ],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.errors).toBe(1);
+    expect(profileUpsertMock).not.toHaveBeenCalled();
+
+    const invalidCall = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.invalid_output',
+    );
+    expect(invalidCall).toBeDefined();
+  });
+});
+
+describe('persistGeneratedProfiles — Gate 4: Crisis routing SKIP-PERSIST', () => {
+  it('skips on crisis HIGH + reportError (mirror V1.7.1)', async () => {
+    setupSuccessMocks();
+    detectCrisisMock.mockReturnValue({
+      level: 'high',
+      matches: [{ label: 'me_suicider', value: 'mock', index: 0 }],
+    });
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('output')],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.skipped).toBe(1);
+    expect(profileUpsertMock).not.toHaveBeenCalled();
+    expect(reportErrorMock).toHaveBeenCalled();
+
+    const crisisCall = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.crisis_detected',
+    );
+    expect(crisisCall).toBeDefined();
+    expect(crisisCall?.[0].metadata.level).toBe('high');
+  });
+
+  it('skips on crisis MEDIUM + reportWarning (not error)', async () => {
+    setupSuccessMocks();
+    detectCrisisMock.mockReturnValue({
+      level: 'medium',
+      matches: [{ label: 'tout_perdre', value: 'mock', index: 0 }],
+    });
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('output')],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.skipped).toBe(1);
+    expect(reportWarningMock).toHaveBeenCalled();
+    expect(reportErrorMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('persistGeneratedProfiles — Gate 5: Safety gate (AMF + clinical + evidence)', () => {
+  it('skips on AMF violation in summary + audit onboarding.batch.amf_violation', async () => {
+    setupSuccessMocks();
+    const request: BatchPersistRequest = {
+      results: [
+        {
+          userId: 'user_123',
+          interviewId: 'iv_abc',
+          output: makeValidOutput({
+            summary:
+              'Profil membre avec recommandation marché : achetez LONG sur EURUSD à 1.0850 TP 1.0900. Workflow process-driven en construction. Travail discipline à approfondir. Routine matinale solide. Excellent process-focus.',
+          }),
+        },
+      ],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.skipped).toBe(1);
+    expect(profileUpsertMock).not.toHaveBeenCalled();
+
+    const amfCall = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.amf_violation',
+    );
+    expect(amfCall).toBeDefined();
+  });
+
+  it('skips on clinical language in summary', async () => {
+    setupSuccessMocks();
+    const request: BatchPersistRequest = {
+      results: [
+        {
+          userId: 'user_123',
+          interviewId: 'iv_abc',
+          output: makeValidOutput({
+            summary:
+              'Le membre montre une dépression sévère avec idéation suicidaire récurrente. Profil clinique préoccupant nécessitant consultation immédiate. Pas un sujet de coaching standard — escalade requise. Profil descriptif au-delà du process trading.',
+          }),
+        },
+      ],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.skipped).toBe(1);
+    expect(profileUpsertMock).not.toHaveBeenCalled();
+  });
+
+  it('skips on evidence not present in answers (hallucinated citation)', async () => {
+    setupSuccessMocks();
+    // Override the rederived snapshot to have answers that DON'T contain the
+    // evidence strings used in makeValidOutput()
+    answerFindManyMock.mockResolvedValue([
+      {
+        questionIndex: 0,
+        questionKey: 'parcours_origin',
+        questionText: 'Question',
+        answerText: 'Texte totalement différent qui ne contient AUCUNE des evidence du highlight.',
+      },
+    ]);
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('output')], // uses makeValidOutput evidence (verbatim from setupSuccessMocks default)
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.skipped).toBe(1);
+    expect(profileUpsertMock).not.toHaveBeenCalled();
+
+    const evidenceCall = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.evidence_invalid',
+    );
+    expect(evidenceCall).toBeDefined();
+  });
+});
+
+describe('persistGeneratedProfiles — Gate 6: Prisma upsert', () => {
+  it('counts errors+1 + audit onboarding.batch.persist_failed on Prisma exception', async () => {
+    setupSuccessMocks();
+    profileUpsertMock.mockRejectedValue(new Error('DB connection lost'));
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('output')],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.errors).toBe(1);
+    expect(reportErrorMock).toHaveBeenCalled();
+
+    const persistFailedCall = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.persist_failed',
+    );
+    expect(persistFailedCall).toBeDefined();
+  });
+});
+
+describe('persistGeneratedProfiles — summary audit', () => {
+  it('emits onboarding.batch.persisted summary at end of batch', async () => {
+    setupSuccessMocks();
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('output'), makeRequestEntry('error')],
+    };
+    await persistGeneratedProfiles(request);
+
+    const persistedSummary = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.persisted',
+    );
+    expect(persistedSummary).toBeDefined();
+    expect(persistedSummary?.[0].metadata.total).toBe(2);
+  });
+});

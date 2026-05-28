@@ -217,7 +217,32 @@ export type AuditAction =
   | 'onboarding.interview.started'
   | 'onboarding.interview.answer_submitted'
   | 'onboarding.interview.completed'
-  | 'onboarding.interview.abandoned';
+  | 'onboarding.interview.abandoned'
+  // V2.4 Phase A.2 — Onboarding interview batch local Claude pipeline
+  // (Session β, M3 directive 2026-05-28). Mirror V1.7 weekly-report batch
+  // canonical lifecycle. PII-FREE metadata expected :
+  //   - analyzed   : `{userId, interviewId, claudeModelVersion, instrumentVersion, mocked}`
+  //   - published  : `{userId, interviewId, profileId}` (admin gate flow, future)
+  //   - pulled     : `{ranAt, entriesCount, instrumentVersion}`
+  //   - persisted  : `{ranAt, persisted, skipped, errors, total}`
+  //   - skipped    : `{userId, interviewId, reason}`
+  //   - invalid_output : `{userId, interviewId, issuesCount}`
+  //   - persist_failed : `{userId, interviewId, error (truncated 200)}`
+  //   - crisis_detected : `{userId, level, matchedLabels}` (mirror V1.7.1)
+  //   - amf_violation   : `{userId, matchedLabels}` (post-gen regex filter)
+  //   - evidence_invalid: `{userId, invalidIndexes}` (substring NFC failure)
+  // NEVER log `answerText`, Claude raw output (summary/highlights/axes),
+  // pseudonymLabel.
+  | 'member_profile.analyzed'
+  | 'member_profile.published'
+  | 'onboarding.batch.pulled'
+  | 'onboarding.batch.persisted'
+  | 'onboarding.batch.skipped'
+  | 'onboarding.batch.invalid_output'
+  | 'onboarding.batch.persist_failed'
+  | 'onboarding.batch.crisis_detected'
+  | 'onboarding.batch.amf_violation'
+  | 'onboarding.batch.evidence_invalid';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the
 // public Track Record was split out to a standalone repo

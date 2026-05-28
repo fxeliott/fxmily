@@ -1816,9 +1816,132 @@ pnpm --filter @fxmily/web prisma:migrate deploy` (rejoue la migration).
    acceptable car données enum-only sans PII, le membre re-fillera les
    wizards futurs).
 
+## 23. Rollback V2.4 onboarding interview migration (`20260527170000_v2_4_onboarding_interview`)
+
+> **Migration** shipped PR [#189](https://github.com/fxeliott/fxmily/pull/189) `6fb410f` 2026-05-27.
+> **Objets DB** : 1 enum (`InterviewStatus` : `started`/`in_progress`/`completed`) + 3 tables (`onboarding_interviews` + `onboarding_interview_answers` + `member_profiles`) + 5 FK cascade User delete (RGPD §17) + 2 FK cascade Interview delete + 5 UNIQUE constraints + 4 indexes.
+> **V2.4 Phase A.2 + B + C n'ont AJOUTÉ AUCUNE migration** (pur pipeline batch local + frontend wizard + admin tab) → §23 = unique rollback DB pour tout le cycle V2.4.
+>
+> **Indépendant de §15-§22** : 0 FK croisée vers les autres tables de migration. Seules FK = `users` cascade User delete. Si plusieurs rollbacks nécessaires, l'ordre inverse de l'apply continue (§23 → §22 → §21 → § …).
+
+### 23.1 Pré-requis — quiesce
+
+Stop le web pour qu'aucun nouveau interview answer ne soit créé pendant le
+DROP, et qu'aucun batch local Claude pipeline ne tente un INSERT MemberProfile :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+```
+
+### 23.2 pg_dump SÉLECTIF des 3 tables AVANT rollback (data-loss critical)
+
+Si des membres ont déjà rempli des interviews :
+
+```bash
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  pg_dump -U fxmily fxmily \
+  --table=onboarding_interviews \
+  --table=onboarding_interview_answers \
+  --table=member_profiles \
+  --column-inserts --no-owner --no-acl \
+  | gzip > /etc/fxmily/backups/pre-v2-4-rollback-onboarding-${TS}.sql.gz
+```
+
+Compter les rows pré-rollback pour audit honnête :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c '
+    SELECT (SELECT COUNT(*) FROM onboarding_interviews) AS interviews,
+           (SELECT COUNT(*) FROM onboarding_interview_answers) AS answers,
+           (SELECT COUNT(*) FROM member_profiles) AS profiles;'
+```
+
+### 23.3 Procédure SQL (BEGIN/COMMIT atomic, ordre FK-correct)
+
+```sql
+BEGIN;
+
+-- 1. Drop tables dans l'ordre inverse des FK :
+--    member_profiles (FK userId + interviewId) → onboarding_interview_answers
+--    (FK userId + interviewId) → onboarding_interviews (parent)
+DROP TABLE IF EXISTS "member_profiles" CASCADE;
+DROP TABLE IF EXISTS "onboarding_interview_answers" CASCADE;
+DROP TABLE IF EXISTS "onboarding_interviews" CASCADE;
+
+-- 2. Drop l'enum (V2.4 = unique consumer)
+DROP TYPE IF EXISTS "InterviewStatus";
+
+-- 3. Marquer la migration rolled-back dans _prisma_migrations (DELETE row
+--    complète, pas UPDATE — sinon `prisma migrate status` rapporte un drift)
+DELETE FROM "_prisma_migrations"
+WHERE "migration_name" = '20260527170000_v2_4_onboarding_interview';
+
+COMMIT;
+```
+
+### 23.4 Re-deploy image pré-V2.4
+
+**Critical** : re-déployer une image qui ne référence PAS V2.4 (ni `service.ts` `OnboardingInterview` query, ni les `/onboarding/interview/*` routes, ni `/profile`, ni `/admin/members/[id]?tab=profile` Phase C). Reset HEAD au commit avant `6fb410f` = `4c18d9a` chore drift-resync EE→II.
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d web
+curl -fsS https://app.fxmilyapp.com/api/health
+```
+
+### 23.5 Audit
+
+```sql
+INSERT INTO audit_logs (action, metadata) VALUES (
+  'ops.migration.rolled_back',
+  '{"migration":"20260527170000_v2_4_onboarding_interview",
+    "rows_lost_interviews":<I>,
+    "rows_lost_answers":<A>,
+    "rows_lost_profiles":<P>,
+    "rolled_back_at":"<ISO>",
+    "operator":"<eliot>"}'::jsonb
+);
+```
+
+### 23.6 Re-application future
+
+```bash
+# 1. Re-deploy image V2.4 LIVE (post-#189) :
+git checkout <ref-with-v2.4>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d web
+
+# 2. Re-apply migration :
+docker compose -f /opt/fxmily/docker-compose.prod.yml run --rm web \
+  pnpm --filter @fxmily/web prisma:migrate deploy
+
+# 3. Restore data sélectif (si interviews préservées via pg_dump 23.2) :
+gunzip -c /etc/fxmily/backups/pre-v2-4-rollback-onboarding-<TS>.sql.gz \
+  | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+      psql -U fxmily -d fxmily
+
+# 4. Vérifier integrité :
+psql -c 'SELECT COUNT(*) FROM onboarding_interviews;'
+psql -c 'SELECT * FROM member_profiles LIMIT 3;'
+```
+
+### 23.7 ⚠️ V2.4 Phase A.2 + B + C cascade fonctionnelle
+
+Rollback §23 supprime les 3 tables = casse :
+
+- **Phase A.2 batch local Claude pipeline** (`batch.ts` référence `onboarding_interview` + `member_profile`)
+- **Phase B wizard** (`/onboarding/interview/{,new,complete}` + `/profile` retourneront 500)
+- **Phase C admin tab** (`?tab=profile` render error sur lookup `getProfileForUser`)
+
+C'est attendu — V2.4 est un cycle complet, le rollback DB d'une partie casse tout.
+
+**Recommandation forte** : rollback V2.4 **uniquement** en cas de bug critique data-corrupting (e.g. crisis routing skip-persist défaillant qui exposerait du contenu sensible, ou amf_violation regex laxe). Pour bugs UI Phase B/C ou bug pipeline Phase A.2, préférer un **rollback code-only** (revert PR sur main + re-deploy) sans toucher au schéma DB.
+
 ## Note transversale — pattern rollback Fxmily
 
-Toutes les recipes §11-§22 suivent un même contrat :
+Toutes les recipes §11-§23 suivent un même contrat :
 
 1. **pg_dump atomique AVANT** (data-only + column-inserts pour idempotency).
 2. **`docker compose stop web`** (fige les writes, évite la corruption
@@ -1846,20 +1969,22 @@ notification` (§17), `20260519150000_v1_4_monthly_debrief` (§19) ET
 > du jeu 7 valeurs post-§25. Les points 1/2/4/6/7 s'appliquent quand même.
 > Voir §17 / §19 / §20.
 >
-> **Ordre de rollback multi-migrations** — les 8 sections de migration
+> **Ordre de rollback multi-migrations** — les **9 sections** de migration
 > (#108 `v2_1_admin_notes` §15 + #110 `v1_2_training_entities` §16 + #112
 > `v1_2_training_annotation_notification` §17 + #132 `v1_3_training_debrief`
 > §18 + #135 `v1_4_monthly_debrief` §19 + #137 `v1_5_mindset_check` §20 +
-> #151 `t5_track_record_public_trades` §21 + #178 `v2_3_pre_trade_check` §22)
-> sont des objets **indépendants** (un rollback partiel d'un seul est
-> valide ; `mindset_checks` / `monthly_debriefs` / `training_debriefs` /
-> `public_trades` / `pre_trade_checks` n'ont aucune FK croisée — seulement
-> vers `users`, sauf `public_trades` qui est admin-authored et ne
-> référence aucun user, et `pre_trade_checks.linkedTradeId String?` qui
-> est intentionnellement SANS FK vers `trades`). Pour un rollback
-> **complet**, procéder en **ordre inverse de l'apply** (timestamp
-> décroissant) : §22 → §21 → §20 → §19 → §18 → §17 → §16 → §15, pour
-> garder `_prisma_migrations` cohérent.
+> #151 `t5_track_record_public_trades` §21 + #178 `v2_3_pre_trade_check` §22
+>
+> - #189 `v2_4_onboarding_interview` §23) sont des objets **indépendants**
+>   (un rollback partiel d'un seul est valide ; `mindset_checks` /
+>   `monthly_debriefs` / `training_debriefs` / `public_trades` /
+>   `pre_trade_checks` / `onboarding_interviews` n'ont aucune FK croisée —
+>   seulement vers `users`, sauf `public_trades` qui est admin-authored et ne
+>   référence aucun user, et `pre_trade_checks.linkedTradeId String?` qui
+>   est intentionnellement SANS FK vers `trades`). Pour un rollback
+>   **complet**, procéder en **ordre inverse de l'apply** (timestamp
+>   décroissant) : §23 → §22 → §21 → §20 → §19 → §18 → §17 → §16 → §15,
+>   pour garder `_prisma_migrations` cohérent.
 
 Le pattern est testé annuellement via le DR test §`runbook-backup-restore.md`
 "Test de DR (annuel, ~30 min)" — qui simule un restore complet sur une 2e

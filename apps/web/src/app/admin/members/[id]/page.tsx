@@ -28,6 +28,8 @@ import { aggregateMemberDeliveryStats, listMemberDeliveries } from '@/lib/admin/
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
 import { listTrainingTradesAsAdmin } from '@/lib/training/training-trade-admin-service';
+import { getProfileForUser, getInterviewForUser } from '@/lib/onboarding-interview/service';
+import { MemberProfileViewerAdmin } from '@/components/admin/member-profile-viewer-admin';
 import {
   listTrainingDebriefsForMember,
   loadTrainingDebriefStats,
@@ -64,6 +66,7 @@ function parseTab(
   | 'weekly-reports'
   | 'monthly-debrief'
   | 'mindset'
+  | 'profile'
   | 'notes'
 > {
   if (value === 'trades') return 'trades';
@@ -72,6 +75,7 @@ function parseTab(
   if (value === 'weekly-reports') return 'weekly-reports';
   if (value === 'monthly-debrief') return 'monthly-debrief';
   if (value === 'mindset') return 'mindset';
+  if (value === 'profile') return 'profile';
   if (value === 'notes') return 'notes';
   return 'overview';
 }
@@ -139,6 +143,17 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       : null;
 
   const adminNotes = tab === 'notes' ? await listAdminNotesForMember(memberId) : null;
+
+  // V2.4 Phase C — read-only MemberProfile for the admin profile tab (M3
+  // directive 2026-05-27 closure §18 vision "admin voir tout"). PII-FREE
+  // admin context : interview + profile read directly via service layer,
+  // pseudonymLabel will be computed in the viewer for header. §27.7 / §J
+  // posture invariants enforced via the same getProfileForUser used by /profile
+  // member (single source of truth).
+  const profileData =
+    tab === 'profile'
+      ? await Promise.all([getProfileForUser(memberId), getInterviewForUser(memberId)])
+      : null;
 
   // J6.5 — pull behavioral scores + analytics in parallel for the overview tab.
   // Skipped on the trades tab to keep its render path lean. J6.6 H1 fix —
@@ -253,6 +268,13 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       ) : null}
       {tab === 'mindset' && mindsetData !== null ? (
         <MemberMindsetChecksPanel data={mindsetData} />
+      ) : null}
+      {tab === 'profile' && profileData !== null ? (
+        <MemberProfileViewerAdmin
+          memberId={memberId}
+          profile={profileData[0]}
+          interview={profileData[1]}
+        />
       ) : null}
       {tab === 'notes' && adminNotes !== null ? (
         <MemberAdminNotesPanel memberId={memberId} notes={adminNotes} />

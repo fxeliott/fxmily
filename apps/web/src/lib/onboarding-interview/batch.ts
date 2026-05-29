@@ -386,6 +386,21 @@ export function buildBatchUserPrompt(entry: BatchSnapshotEntry): string {
 // =============================================================================
 
 /**
+ * Canonicalize the orchestrator-supplied `error` string to a bounded label
+ * before it leaves the perimeter (external Sentry telemetry). The wire `error`
+ * field is produced by the local batch script and the server does NOT trust
+ * the laptop (cf. Gate 1-2 forged-userId defenses). Propagating it verbatim
+ * to a third-party sink could leak member free-text if a future orchestrator
+ * change — or a compromised laptop — put answer text there. The internal
+ * audit log keeps the raw slice; external Sentry gets this canonical label.
+ */
+export function canonicalizeBatchErrorCategory(error: string): string {
+  if (error.startsWith('claude_exit_')) return 'claude_exit';
+  if (error === 'invalid_json_response') return 'invalid_json_response';
+  return 'unknown';
+}
+
+/**
  * Validate + persist a batch of locally-generated MemberProfiles.
  * Idempotent on `(userId)` unique (upsert).
  *
@@ -456,6 +471,19 @@ export async function persistGeneratedProfiles(
           interviewId: entry.interviewId,
           reason: entry.error.slice(0, 200),
         },
+      });
+      // Anti-skip guardrail (model-independent) — a completed interview that
+      // produced NO profile (Claude refusal / non-zero exit / empty output)
+      // must surface for human review, not vanish into an audit-only row.
+      // Covers the residual over-refusal rate + any future model drift.
+      // PII-free metadata only (RGPD §16) — the orchestrator-supplied `error`
+      // string is canonicalized to a bounded label before reaching the
+      // external Sentry sink (the laptop is untrusted, cf. Gate 1-2). The raw
+      // slice stays in the internal audit log above.
+      reportWarning('onboarding-interview.batch', 'entry_error_no_profile_review_needed', {
+        userId: entry.userId,
+        interviewId: entry.interviewId,
+        errorCategory: canonicalizeBatchErrorCategory(entry.error),
       });
       continue;
     }
@@ -625,6 +653,14 @@ export async function persistGeneratedProfiles(
             interviewId: entry.interviewId,
             invalidHighlightIndexes: safety.invalidHighlightIndexes,
           },
+        });
+        // Surface for human review — a completed interview produced no profile
+        // because Claude fabricated a citation. Symmetric with amf_violation /
+        // clinical_language siblings above (which already escalate to Sentry).
+        reportWarning('onboarding-interview.batch', 'evidence_invalid_in_ai_output', {
+          userId: entry.userId,
+          interviewId: entry.interviewId,
+          invalidHighlightIndexes: safety.invalidHighlightIndexes,
         });
       }
       continue;

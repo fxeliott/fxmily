@@ -67,7 +67,7 @@ vi.mock('@/lib/weekly-report/builder', () => ({
   pseudonymizeMember: (userId: string) => `member-${userId.slice(0, 8)}`,
 }));
 
-const { persistGeneratedProfiles } = await import('./batch');
+const { persistGeneratedProfiles, canonicalizeBatchErrorCategory } = await import('./batch');
 
 import type { BatchPersistRequest, BatchResultEntry } from './batch';
 import type { MemberProfileOutput } from '@/lib/schemas/onboarding-interview';
@@ -197,6 +197,18 @@ describe('persistGeneratedProfiles — happy path + error variant', () => {
       (c) => c[0].action === 'onboarding.batch.skipped',
     );
     expect(skippedCall).toBeDefined();
+
+    // Anti-skip guardrail — a completed interview that produced no profile
+    // (Claude refusal / non-zero exit) escalates to Sentry for human review.
+    const warnCall = reportWarningMock.mock.calls.find(
+      (c) => c[1] === 'entry_error_no_profile_review_needed',
+    );
+    expect(warnCall).toBeDefined();
+
+    // PII boundary — the Sentry extra carries a canonical category, never the
+    // raw orchestrator-supplied error string.
+    expect(warnCall?.[2]).toMatchObject({ errorCategory: 'claude_exit' });
+    expect(warnCall?.[2]).not.toHaveProperty('reason');
   });
 });
 
@@ -369,6 +381,13 @@ describe('persistGeneratedProfiles — Gate 5: Safety gate (AMF + clinical + evi
       (c) => c[0].action === 'onboarding.batch.evidence_invalid',
     );
     expect(evidenceCall).toBeDefined();
+
+    // Symmetric Sentry escalation with amf/clinical siblings — surfaces the
+    // fabricated-citation skip for human review.
+    const warnCall = reportWarningMock.mock.calls.find(
+      (c) => c[1] === 'evidence_invalid_in_ai_output',
+    );
+    expect(warnCall).toBeDefined();
   });
 });
 
@@ -403,5 +422,21 @@ describe('persistGeneratedProfiles — summary audit', () => {
     );
     expect(persistedSummary).toBeDefined();
     expect(persistedSummary?.[0].metadata.total).toBe(2);
+  });
+});
+
+describe('canonicalizeBatchErrorCategory — PII boundary', () => {
+  it('maps claude_exit_N to a bounded label', () => {
+    expect(canonicalizeBatchErrorCategory('claude_exit_1')).toBe('claude_exit');
+    expect(canonicalizeBatchErrorCategory('claude_exit_137')).toBe('claude_exit');
+  });
+
+  it('passes through the canonical invalid_json_response', () => {
+    expect(canonicalizeBatchErrorCategory('invalid_json_response')).toBe('invalid_json_response');
+  });
+
+  it('collapses any unexpected string to "unknown" (no member text leaks to Sentry)', () => {
+    expect(canonicalizeBatchErrorCategory("J'ai envie d'en finir avec tout ça")).toBe('unknown');
+    expect(canonicalizeBatchErrorCategory('')).toBe('unknown');
   });
 });

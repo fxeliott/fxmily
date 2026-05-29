@@ -71,7 +71,7 @@ Patterns appliqués dans les 30 questions :
 
 ### 3. Pipeline Claude batch local Max ($0 marginal)
 
-- **Modèle** : `claude-sonnet-4-6` via `claude --print` headless local sur machine Windows Eliot. **PAS Opus 4.7** (over-refusal 9% transcripts vs 1% Sonnet + 35 false-positive refusals avril 2026 — Anthropic system card).
+- **Modèle** : **`claude-opus-4-8` + `--effort xhigh`** via `claude --print` headless local sur machine Windows Eliot (directive §8 « toutes les sollicitations Claude locales = Opus 4.8, sans exception » — PR #195 `1b44ecc`, 2026-05-29 ; **supersede** le choix `claude-sonnet-4-6` initial). ⚠️ Le rationale over-refusal d'origine visait **Opus 4.7** (9% transcripts vs 1% Sonnet, system card avril 2026) — **pas 4.8** (taux non re-vérifié) ; les 3 couches anti-hallu + crisis-skip-persist absorbent refus/outputs douteux, et le 1ᵉʳ batch onboarding réel d'Eliot doit surveiller le taux de refus (env override `FXMILY_CLAUDE_MODEL` dispo si régression).
 - **Cache strategy** : `cache_control: { type: 'ephemeral', ttl: '1h' }` (90% rabais sur reads). Break-even = 4 reads, atteint trivialement avec 30 membres séquentiels.
 - **Few-shot** : 2 exemples canoniques (`member-aaaaaaaa` + `member-bbbbbbbb` pseudonyms fictifs) dans `messages` array → ~18% gain anti-hallucination vs zero-shot (paper 2026).
 - **System prompt 4 blocks** : (1) Rôle + posture / (2) Format strict / (3) Sécurité (anti-clinical wording) / (4) Pseudonymisation.

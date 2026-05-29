@@ -807,7 +807,7 @@ Pour cadrer le projet, voici ce qui est **explicitement EXCLU** de la V1 :
 | Mobile V2 | Capacitor + stores | Eliot validera 99€ Apple quand prêt |
 | App Store iOS | Reporté V2 | Eliot veut commencer gratuit |
 | Coach MD | Statique uniquement | Eliot a choisi (zéro coût API runtime) |
-| Rapport IA hebdo | Sonnet 4.6 admin uniquement | Eliot a choisi, ~5€/mois |
+| Rapport IA hebdo | batch local Claude Max (Opus 4.8 §8) admin uniquement | Eliot a choisi — $0 API marginal (pivot V1.7) |
 | Déclencheurs MD | Règles déterministes | Eliot a choisi |
 | Social | 100% solo + admin | Eliot a choisi |
 | Tracking quotidien | Matin + soir | Eliot a choisi |

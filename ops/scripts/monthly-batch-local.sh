@@ -38,7 +38,8 @@
 #
 # Optional env :
 #   FXMILY_APP_URL          default 'https://app.fxmilyapp.com' (HTTPS in prod)
-#   FXMILY_CLAUDE_MODEL     default empty (let Claude Code pick default Sonnet 4.6)
+#   FXMILY_CLAUDE_MODEL     default 'claude-opus-4-8' (§8 — Opus 4.8 for member analyses)
+#   FXMILY_CLAUDE_EFFORT    default 'xhigh' (§8 "en extra" ; low|medium|high|xhigh|max)
 #   FXMILY_MONTHLY_BATCH_DIR default '/tmp/fxmily-monthly-batch'
 #   FXMILY_SLEEP_MIN_S      default 60 (floor 30 — ban-risk mitigation)
 #   FXMILY_SLEEP_MAX_S      default 120
@@ -56,7 +57,11 @@ BATCH_DIR="${FXMILY_MONTHLY_BATCH_DIR:-/tmp/fxmily-monthly-batch}"
 SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
 SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
 MAX_TURNS=1  # Hard-pinned to 1 (single-shot per member — anti-bloat)
+# §8 — local Claude solicitations run on Opus 4.8 at "extra" effort by default.
+CLAUDE_MODEL="${FXMILY_CLAUDE_MODEL:-claude-opus-4-8}"
+CLAUDE_EFFORT="${FXMILY_CLAUDE_EFFORT:-xhigh}"
 MODEL_FLAG=""
+EFFORT_FLAG=""
 
 # Required token. Refuse to run without it (mirrors the server-side 503).
 if [ -z "${FXMILY_MONTHLY_ADMIN_TOKEN:-}" ]; then
@@ -78,17 +83,26 @@ case "$APP_URL" in
     ;;
 esac
 
-if [ -n "${FXMILY_CLAUDE_MODEL:-}" ]; then
-  case "$FXMILY_CLAUDE_MODEL" in
-    claude-sonnet-4-6|claude-haiku-4-5|claude-opus-4-7) ;;
-    *)
-      echo "ERROR: FXMILY_CLAUDE_MODEL=$FXMILY_CLAUDE_MODEL not in allowlist." >&2
-      echo "  Allowed: claude-sonnet-4-6, claude-haiku-4-5, claude-opus-4-7" >&2
-      exit 1
-      ;;
-  esac
-  MODEL_FLAG="--model ${FXMILY_CLAUDE_MODEL}"
-fi
+# §8 — Opus 4.8 default allowlist (verified `claude --help` CLI 2.1.154).
+case "$CLAUDE_MODEL" in
+  claude-opus-4-8|claude-opus-4-7|claude-sonnet-4-6|claude-haiku-4-5) ;;
+  *)
+    echo "ERROR: FXMILY_CLAUDE_MODEL=$CLAUDE_MODEL not in allowlist." >&2
+    echo "  Allowed: claude-opus-4-8, claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5" >&2
+    exit 1
+    ;;
+esac
+MODEL_FLAG="--model ${CLAUDE_MODEL}"
+
+# §8 — effort level (low|medium|high|xhigh|max). Default xhigh = "en extra".
+case "$CLAUDE_EFFORT" in
+  low|medium|high|xhigh|max) ;;
+  *)
+    echo "ERROR: FXMILY_CLAUDE_EFFORT=$CLAUDE_EFFORT invalid (low|medium|high|xhigh|max)." >&2
+    exit 1
+    ;;
+esac
+EFFORT_FLAG="--effort ${CLAUDE_EFFORT}"
 
 # Sleep range validation + floor 30s (ban-risk mitigation, carbon weekly).
 if ! [[ "$SLEEP_MIN" =~ ^[0-9]+$ ]] || ! [[ "$SLEEP_MAX" =~ ^[0-9]+$ ]]; then
@@ -129,6 +143,7 @@ command -v claude >/dev/null 2>&1 || {
   exit 1
 }
 echo "Claude CLI: $(claude --version 2>&1 | head -1)"
+echo "Model: $CLAUDE_MODEL — effort: $CLAUDE_EFFORT (§8 full performance)"
 command -v jq >/dev/null 2>&1 || {
   echo "ERROR: 'jq' not found in PATH (needed to parse the snapshot envelope)." >&2
   echo "  Install via 'choco install jq' (Windows) or 'apt install jq' (Linux)." >&2
@@ -257,6 +272,7 @@ for idx in $ENTRY_INDICES; do
   # sub, caps damage if Anthropic ever silently switches to billable API).
   claude --print \
     $MODEL_FLAG \
+    $EFFORT_FLAG \
     --max-turns "$MAX_TURNS" \
     --max-budget-usd 5.00 \
     --append-system-prompt "$SYSTEM_PROMPT_CONTENT" \

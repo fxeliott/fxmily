@@ -38,7 +38,8 @@
 #
 # Optional env :
 #   FXMILY_APP_URL        default 'https://app.fxmilyapp.com' (must be HTTPS in prod)
-#   FXMILY_CLAUDE_MODEL   default empty (let Claude Code pick default Sonnet 4.6)
+#   FXMILY_CLAUDE_MODEL   default 'claude-opus-4-8' (§8 — Opus 4.8 for member analyses)
+#   FXMILY_CLAUDE_EFFORT  default 'xhigh' (§8 "en extra" ; low|medium|high|xhigh|max)
 #   FXMILY_BATCH_DIR      default '/tmp/fxmily-batch' (workdir)
 #   FXMILY_SLEEP_MIN_S    default 60 (floor 30 — ban-risk mitigation)
 #   FXMILY_SLEEP_MAX_S    default 120
@@ -57,7 +58,12 @@ BATCH_DIR="${FXMILY_BATCH_DIR:-/tmp/fxmily-batch}"
 SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
 SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
 MAX_TURNS=1  # Hard-pinned to 1 (single-shot per member — anti-bloat, anti-quota-surprise)
+# §8 — local Claude solicitations run on Opus 4.8 at "extra" effort by default.
+# Both are env-overridable but default to the strongest persistable config.
+CLAUDE_MODEL="${FXMILY_CLAUDE_MODEL:-claude-opus-4-8}"
+CLAUDE_EFFORT="${FXMILY_CLAUDE_EFFORT:-xhigh}"
 MODEL_FLAG=""
+EFFORT_FLAG=""
 
 # V1.7.2 — required token. Refuse to run without it (refuse-by-default mirrors
 # the server-side 503).
@@ -82,18 +88,31 @@ case "$APP_URL" in
     ;;
 esac
 
-if [ -n "${FXMILY_CLAUDE_MODEL:-}" ]; then
-  # Allowlist of acceptable Claude models per `lib/weekly-report/pricing.ts`.
-  case "$FXMILY_CLAUDE_MODEL" in
-    claude-sonnet-4-6|claude-haiku-4-5|claude-opus-4-7) ;;
-    *)
-      echo "ERROR: FXMILY_CLAUDE_MODEL=$FXMILY_CLAUDE_MODEL not in allowlist." >&2
-      echo "  Allowed: claude-sonnet-4-6, claude-haiku-4-5, claude-opus-4-7" >&2
-      exit 1
-      ;;
-  esac
-  MODEL_FLAG="--model ${FXMILY_CLAUDE_MODEL}"
-fi
+# Allowlist of acceptable Claude model slugs for `claude --model`. Opus 4.8 is
+# the §8 default; older slugs kept for back-compat / cost-tiering. Verified
+# against `claude --help` (CLI 2.1.154) : full names like 'claude-opus-4-8'.
+case "$CLAUDE_MODEL" in
+  claude-opus-4-8|claude-opus-4-7|claude-sonnet-4-6|claude-haiku-4-5) ;;
+  *)
+    echo "ERROR: FXMILY_CLAUDE_MODEL=$CLAUDE_MODEL not in allowlist." >&2
+    echo "  Allowed: claude-opus-4-8, claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5" >&2
+    exit 1
+    ;;
+esac
+MODEL_FLAG="--model ${CLAUDE_MODEL}"
+
+# §8 — effort level for `claude --print` (low|medium|high|xhigh|max, CLI 2.1.154).
+# Default 'xhigh' = deepest *persistable* reasoning ("en extra"). 'max' is NOT
+# the default — it is prone to overthinking / diminishing returns on a
+# single-shot generation (one prompt in, one JSON out).
+case "$CLAUDE_EFFORT" in
+  low|medium|high|xhigh|max) ;;
+  *)
+    echo "ERROR: FXMILY_CLAUDE_EFFORT=$CLAUDE_EFFORT invalid (low|medium|high|xhigh|max)." >&2
+    exit 1
+    ;;
+esac
+EFFORT_FLAG="--effort ${CLAUDE_EFFORT}"
 
 # V1.7 fix carry-over (code-reviewer Round 16 BLOQUANT 3 + security-auditor MED 12) :
 # sleep range validation + floor 30s. Without this, RANDOM % 0 div-by-zero or
@@ -139,6 +158,7 @@ command -v claude >/dev/null 2>&1 || {
 # Anthropic ships a breaking CLI change (we've already had two — banned wrappers
 # 4 avr 2026 + `--bare` OAuth incompat caught in R4 empirical test).
 echo "Claude CLI: $(claude --version 2>&1 | head -1)"
+echo "Model: $CLAUDE_MODEL — effort: $CLAUDE_EFFORT (§8 full performance)"
 command -v jq >/dev/null 2>&1 || {
   echo "ERROR: 'jq' not found in PATH (needed to parse the snapshot envelope)." >&2
   echo "  Install via 'choco install jq' (Windows) or 'apt install jq' (Linux)." >&2
@@ -298,6 +318,7 @@ for idx in $ENTRY_INDICES; do
   # Researcher V1.7.2 R5 confirmed flag in CLI 2.1.139 --help output.
   claude --print \
     $MODEL_FLAG \
+    $EFFORT_FLAG \
     --max-turns "$MAX_TURNS" \
     --max-budget-usd 5.00 \
     --append-system-prompt "$SYSTEM_PROMPT_CONTENT" \

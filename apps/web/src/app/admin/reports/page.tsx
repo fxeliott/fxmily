@@ -112,8 +112,8 @@ export default async function AdminReportsPage() {
             Rapports hebdo
           </h1>
           <p className="t-body text-[var(--t-2)]">
-            Synthèse comportementale claude-sonnet-4-6 chaque dimanche 21:00 UTC. Posture Mark
-            Douglas + exécution + scores. Aucun avis sur les analyses de marché.
+            Synthèse comportementale générée par Claude en local (Max) chaque dimanche 21:00 UTC.
+            Posture Mark Douglas + exécution + scores. Aucun avis sur les analyses de marché.
           </p>
         </div>
 

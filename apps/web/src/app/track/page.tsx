@@ -58,11 +58,7 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
   const corrKind = corrParsed.success ? corrParsed.data : 'sleep';
 
   return (
-    <main
-      id="main-content"
-      tabIndex={-1}
-      className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6 outline-none"
-    >
+    <main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6">
       <header className="space-y-2">
         <p className="t-eyebrow-lg text-[var(--acc)]">Suivi des habitudes</p>
         <h1 className="text-[28px] font-semibold tracking-tight text-[var(--t-1)] sm:text-[32px]">

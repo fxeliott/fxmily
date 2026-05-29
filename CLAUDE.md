@@ -20,7 +20,7 @@ Détails complets dans SPEC.md §4. En pratique :
 - **Tailwind CSS 4** + **shadcn/ui** + **Framer Motion** + **Recharts** (pivot J6.6 — Tremor abandonné pour bundle plus léger + control DS, cf. SPEC §20.1)
 - **Prisma 7** (Rust-free, driver adapter `@prisma/adapter-pg`) + **PostgreSQL 17**
 - **Auth.js v5** (email + password + magic link)
-- **Cloudflare R2** (médias) + **Resend** (emails) + **Sentry** (monitoring) + **Anthropic Claude API** (rapports hebdo IA)
+- **Cloudflare R2** (médias) + **Resend** (emails) + **Sentry** (monitoring) + **Claude en local** (`claude --print` batch Claude Max, $0 API marginal — rapports IA + analyse onboarding, Opus 4.8 §8 ; chemin SDK API payant dormant)
 - **Vitest** + **React Testing Library** + **Playwright**
 - **Turborepo** + **pnpm workspaces** — **Node 22 LTS** — **pnpm 10**
 

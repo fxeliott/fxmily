@@ -332,7 +332,7 @@ T1-L Stripe self-service · T2-L Renewal reminder · T3-L Member portal facturat
 
 ## §11. Stack existant (rappel)
 
-Next.js 16 + React 19 + TypeScript strict + Prisma 7 (driver adapter `@prisma/adapter-pg`) + Postgres 17 self-hosted Hetzner CX22 + Caddy + Docker Compose. Auth.js v5 JWT + argon2id. Tailwind 4 + shadcn/ui + Framer Motion. Resend HTTP API. R2 (médias). Sentry tunnel. Anthropic Claude API (V1 mock, V1.7 live). Vitest + Playwright. Turborepo + pnpm + Node 22 LTS.
+Next.js 16 + React 19 + TypeScript strict + Prisma 7 (driver adapter `@prisma/adapter-pg`) + Postgres 17 self-hosted Hetzner CX22 + Caddy + Docker Compose. Auth.js v5 JWT + argon2id. Tailwind 4 + shadcn/ui + Framer Motion. Resend HTTP API. R2 (médias). Sentry tunnel. Claude en local `claude --print` (batch Claude Max, $0 API marginal — V1 mock, V1.7 live local, Opus 4.8 §8). Vitest + Playwright. Turborepo + pnpm + Node 22 LTS.
 
 **Réutilisé tel quel** : audit log + 9 crons + cron-watch + RGPD export + Web Push VAPID + pseudonymisation admin (`pseudonymLabel`) + backup pg_dump + GPG + `.gitattributes` LF-enforce + `fix-crlf-prod.sh`.
 

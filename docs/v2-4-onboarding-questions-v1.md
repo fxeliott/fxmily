@@ -7,7 +7,7 @@
 
 ## §1 — Vision & posture
 
-Cet instrument v1 capture le profil profond d'un membre Fxmily au moment de son onboarding — au-delà du tracking quotidien V1 (DailyCheckin / Trade journal / MindsetCheck §27 / WeeklyReview §28). C'est un **deep-interview free-text** (vs Likert QCM mindset hebdo) que Claude Sonnet 4.6 analyse en batch local pour générer un `MemberProfile` lu par Eliot en admin.
+Cet instrument v1 capture le profil profond d'un membre Fxmily au moment de son onboarding — au-delà du tracking quotidien V1 (DailyCheckin / Trade journal / MindsetCheck §27 / WeeklyReview §28). C'est un **deep-interview free-text** (vs Likert QCM mindset hebdo) que Claude (batch local Max, **Opus 4.8** par défaut depuis §8 — env-overridable `FXMILY_CLAUDE_MODEL`) analyse pour générer un `MemberProfile` lu par Eliot en admin.
 
 **Mission directive M3 Eliot verbatim** (handoff α 2026-05-27) :
 

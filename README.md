@@ -31,7 +31,7 @@ Fxmily n'est ni un CIF (Conseiller en Investissement Financier) ni un service r�
 - **Tailwind CSS 4.2** + **shadcn/ui** + **DS-v2 9 primitives custom** (lime + Geist + Mercury shadows) + **Framer Motion** + **Recharts** (pivot SPEC §20.1)
 - **Prisma 7.8** (Rust-free, driver adapter `@prisma/adapter-pg`) + **PostgreSQL 17**
 - **Auth.js v5** (Credentials + JWT strategy) — câblé J1, status gate global Phase P
-- **Cloudflare R2** (médias) + **Resend** (emails) + **Sentry** (monitoring) + **Anthropic Claude API** (rapports hebdo IA, Sonnet)
+- **Cloudflare R2** (médias) + **Resend** (emails) + **Sentry** (monitoring) + **Claude en local** (`claude --print` batch Max, $0 API marginal — rapports IA hebdo/mensuel + analyse onboarding, Opus 4.8 §8)
 - **Web Push API + VAPID** + Service Worker manuel (Apple Declarative Web Push 8030 + classic, J9)
 - **Vitest 4** (**1618/1618** verts post V2.4 Phase C) + **React Testing Library** + **Playwright** (20 specs `apps/web/tests/e2e/` auth-gate + 5 happy-path J5/J6/V1.5/V2.3/V2.4) — wired J1+
 - **Turborepo** + **pnpm 10 workspaces** — **Node 22 LTS**
@@ -171,7 +171,7 @@ Voir section 15 du [`SPEC.md`](./SPEC.md). 11 jalons (J0 → J10), ~50-70 jours 
 | **J5**  | ✅ 2026-05-06 | Check-ins matin/soir + streak Mercy + cron reminders             |
 | **J6**  | ✅ 2026-05-07 | Dashboard membre + 4 scores comportementaux + Recharts           |
 | **J7**  | ✅ 2026-05-07 | 50/50 fiches Mark Douglas + déclencheurs Octalysis               |
-| **J8**  | ✅ 2026-05-08 | Rapport hebdo IA admin (Claude Sonnet + cache 1h)                |
+| **J8**  | ✅ 2026-05-08 | Rapport hebdo IA admin (Claude batch local Max + cache 1h)       |
 | **J9**  | ✅ 2026-05-08 | Web Push API + VAPID + SW + 5 toggles préférences                |
 | **J10** | ✅ 2026-05-10 | RGPD + Sentry + Hetzner deploy + observability LIVE prod         |
 

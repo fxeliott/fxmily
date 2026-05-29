@@ -261,6 +261,25 @@ Considérés :
 - **Page-exact attribution Mark Douglas DT 1990 ch.8 p.65** — confirmée LiquidityFinder source secondaire + Bookey, [Eliot à vérifier sur sa copie pour confirmation primaire].
 - **Sonnet 4.6 NOT pinned** dans Sentry release auto-detection — `SENTRY_RELEASE` non explicitement set, defaults Git SHA CI auto-detection (non-bloquant V1).
 
+## Safety hardening 2026-05-29 — Opus 4.8 residual API distress risk
+
+Modèle pinné = **`claude-opus-4-8`** (PR #195 ; Opus 4.8 sorti 2026-05-28 — vérifié anthropic.com). Cette passe durcit deux axes du pipeline batch local (`prompt.ts` + `batch.ts`) sans toucher la logique métier.
+
+### Over-refusal — statut de vérification (honnête)
+
+- Re-vérification tentée 2026-05-29 : les chiffres over-refusal spécifiques (Opus 4.8 vs 4.7 vs Sonnet 4.6, system card §4.1.2) **n'ont PAS pu être vérifiés en source primaire** cette passe — le system card est un PDF de 244 pages (> limite de fetch automatique 10 MB), et la recherche web ne surface pas la table.
+- Faits **vérifiés** (anthropic.com + couverture 2026-05-28) : Anthropic positionne Opus 4.8 comme son modèle « le plus honnête », avec des refus « plus clairs » et de meilleurs scores sur les catégories de misalignment que 4.7 **et** Sonnet 4.6 → sur l'axe over-refusal, **pas de régression attendue**.
+- Le chiffre historique « Opus 4.7 ~9 % » (cf. Evidence §J) **reste non vérifié** et possiblement mal attribué (notes internes : le ~8,5 % pourrait être Sonnet 4.5) — à confirmer contre le system card avant de s'y fier.
+- **Décision** : la posture « monitor au 1ᵉʳ dry-run réel » de la PR #196 **TIENT** (non remplacée par des chiffres non sourcés — calibrated refusal §6).
+
+### Réserve détresse / means-substitution — mitigée par code
+
+Axe distinct où Opus 4.8 est noté plus faible : reconnaissance des références codées d'auto-mutilation + « means substitution » sur API sans system-prompt dédié. Mitigations :
+
+1. **NEW — bloc « SÉCURITÉ — DÉTRESSE / SIGNAUX DE CRISE »** dans `ONBOARDING_INTERVIEW_SYSTEM_PROMPT` (`prompt.ts`) : interdit l'analyse/interprétation/citation des signaux de détresse dans le profil, **aucune substitution de moyen**, route vers l'intervention humaine, pas d'interprétation émotionnelle non sollicitée. Anti-régression : `prompt.test.ts` (4 assertions). Le prompt voyage dans l'enveloppe `/pull` → **requiert un deploy prod** pour prendre effet sur le batch réel.
+2. **NEW — escalade `reportWarning` Sentry anti-skip** dans `persistGeneratedProfiles` (`batch.ts`) : tout entretien complété ne produisant AUCUN profil (refus Claude / sortie non-nulle / `evidence_invalid`) remonte pour review humaine au lieu de disparaître dans une ligne d'audit silencieuse — couvre le résiduel over-refusal + tout drift modèle futur. PII-free §16. Symétrique avec les escalades `amf_violation` / `clinical_language` existantes.
+3. **Existant (inchangé)** : crisis-detection sur les réponses membre (`service.appendAnswer`) + sur l'output IA (`batch.ts` gate 4, skip-persist HIGH/MEDIUM) + anti-clinical hard reject (`safety.ts` gate 5) + revue admin (`/admin/members/[id]?tab=profile`).
+
 ## Sources primaires citées
 
 ### Mark Douglas
@@ -288,6 +307,7 @@ Considérés :
 ## ADR-004 audit trail
 
 - **2026-05-28** — Proposed (Eliot Pena, Session β Phase A.2).
+- **2026-05-29** — Amended (safety hardening, status inchangé Proposed) : bloc distress ajouté au system prompt analyzer + escalade Sentry anti-skip dans le gate persist. Chiffres over-refusal §4.1.2 non vérifiables cette passe — posture monitor-at-dry-run maintenue. Cf. section « Safety hardening 2026-05-29 ».
 - **TBD** — Accepted post-merge + first cohort validation.
 - **TBD** — Superseded by ADR-XXX (next instrument version bump v2).
 

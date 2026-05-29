@@ -24,6 +24,8 @@ export interface AuthorizeCredentialsResult {
   role: UserRole;
   status: UserStatus;
   timezone: string;
+  /** J4 — session-revocation epoch baked into the JWT at sign-in. */
+  tokenVersion: number;
 }
 
 /**
@@ -180,6 +182,7 @@ export async function authorizeCredentials(
       role: true,
       status: true,
       timezone: true,
+      tokenVersion: true,
     },
   });
 
@@ -240,5 +243,6 @@ export async function authorizeCredentials(
     role: user.role as UserRole,
     status: user.status as UserStatus,
     timezone: user.timezone,
+    tokenVersion: user.tokenVersion,
   };
 }

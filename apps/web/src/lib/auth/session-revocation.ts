@@ -89,7 +89,13 @@ export function applyRevocationCheck(
  * for.
  */
 export async function refreshAndCheckToken(token: JWT): Promise<JWT | null> {
-  if (!token.sub) return token;
+  // Fail-CLOSED on a malformed token: with no subject we cannot resolve the
+  // user to check the revocation epoch, so the token is untrusted and the
+  // session is destroyed. Unreachable on the happy path — sign-in always sets
+  // `sub` (auth.config.ts) and is short-circuited before this function in
+  // auth.ts — but a future provider (e.g. magic link) that issued a sub-less
+  // token must NOT slip past revocation (security-auditor J4 TIER 2).
+  if (!token.sub) return null;
 
   try {
     const dbUser = await db.user.findUnique({

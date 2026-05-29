@@ -117,11 +117,11 @@ describe('applyRevocationCheck (pure)', () => {
 });
 
 describe('refreshAndCheckToken (DB orchestrator)', () => {
-  it('returns the token untouched without hitting the DB when there is no sub', async () => {
+  it('fails closed (returns null) without hitting the DB for a malformed token with no sub', async () => {
     const token = makeToken();
     delete (token as { sub?: string }).sub;
     const result = await refreshAndCheckToken(token);
-    expect(result).toBe(token);
+    expect(result).toBeNull();
     expect(dbUserFindUniqueMock).not.toHaveBeenCalled();
   });
 

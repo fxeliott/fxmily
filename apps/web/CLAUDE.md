@@ -4261,3 +4261,29 @@ NE PAS importer `lib/onboarding-interview/service.ts` (`import 'server-only'` li
 - prettier ✓, lint 0 warnings ✓, type-check 0 strict ✓, **vitest 1618/1618** stable (zéro régression V2.4 Phase B baseline) ✓, build prod Turbopack ✓
 - CI 6/6 GREEN + Deploy Hetzner SUCCESS T+~4s + smoke prod 2/2 GREEN (`/api/health 200` + `/admin/members/anyid?tab=profile 307→/login` admin gate)
 - 4 PRs same-day V2.4 A.1 + A.2 + B + C = boucle valeur M3 vision §14+§18 ACTIVÉE end-to-end 2026-05-28
+
+## V2.4 — Onboarding safety hardening (livré 2026-05-29, PR [#198](https://github.com/fxeliott/fxmily/pull/198) `3a8e071`)
+
+> **Jalon code safety-critical** post-recherche system card Opus 4.8 (réserve API détresse / means-substitution). Durcit le pipeline batch local Claude (`claude --print` Opus 4.8 qui analyse les réponses d'onboarding membre) sans toucher la logique métier. Reviews indépendantes code-reviewer + security-auditor = READY TO MERGE, 0 TIER 1/2.
+
+### Scope (3 parties)
+
+1. **`prompt.ts`** — nouveau bloc « SÉCURITÉ — DÉTRESSE / SIGNAUX DE CRISE » dans `ONBOARDING_INTERVIEW_SYSTEM_PROMPT` : interdit l'analyse/interprétation/citation des signaux de détresse, **aucune substitution de moyen**, route vers intervention humaine, pas d'interprétation émotionnelle/clinique non sollicitée, profil plus court plutôt qu'analyse de détresse. Anti-régression `prompt.test.ts` (4 assertions).
+2. **`batch.ts`** — escalade `reportWarning` Sentry sur les gates `error` (refus Claude / exit non-nul) + `evidence_invalid` : tout entretien complété ne produisant AUCUN profil remonte pour review humaine (model-independent ; couvre résiduel over-refusal + drift modèle futur). Symétrique avec les escalades `amf_violation` / `clinical_language` existantes. + helper `canonicalizeBatchErrorCategory()` exporté.
+3. **`docs/decisions/ADR-004`** — section datée « Safety hardening 2026-05-29 » + audit-trail entry.
+
+### Décisions verrouillées (NE PAS re-casser)
+
+- **Le bloc distress NE crée PAS de gap crise** (verdict security-auditor) : la **Couche A input-side** (`service.ts:199` `detectCrisis(input.answerText)`) est INDÉPENDANTE et INTOUCHÉE — elle fire sur le texte brut membre AVANT Claude, déclenche bannière FR (3114/SOS Amitié/Suicide Écoute) + escalade admin. C'est elle qui protège le membre. La Couche B output-side (gate 4) devient best-effort mais n'a jamais été la couche primaire. **NE JAMAIS supposer que le bloc distress couvre la détection de crise — c'est la couche input qui sauve.**
+- **`canonicalizeBatchErrorCategory()` = frontière PII §16** : le champ `error` est fourni par le laptop (non fiable, cf. Gate 1-2 forged-userId). Sa valeur brute reste dans l'audit INTERNE Postgres ; seule la catégorie bornée (`claude_exit` / `invalid_json_response` / `unknown`) part vers Sentry (sink EXTERNE). **NE PAS re-propager `entry.error` brut vers `reportWarning`.**
+- **Over-refusal Opus 4.8 NON vérifié** : les chiffres `0,36%/0,31%/0,40%` (« Table 4.1.2.A ») d'anciennes notes **n'ont PAS pu être vérifiés** (system card = PDF 244p > limite fetch 10MB). NON inscrits dans l'ADR (calibrated refusal). Posture monitor-at-dry-run maintenue. **Ne PAS les re-traiter comme fait acquis.**
+- **Prompt servi par prod via `/pull`** → un changement de `ONBOARDING_INTERVIEW_SYSTEM_PROMPT` ne prend effet sur le batch réel qu'après deploy prod.
+
+### Quality gate
+
+- prettier ✓, lint 0 ✓, type-check 0 strict ✓, **Vitest 1618 → 1625** (+4 prompt anti-régression + 3 `canonicalizeBatchErrorCategory` PII boundary + 2 batch reportWarning) ✓, build prod Turbopack ✓.
+- CI 6/6 GREEN + Deploy Hetzner SUCCESS (build 2m15s + SSH 23s, **0 migration**) + smoke prod `/api/health` ok/db/env 10:12Z.
+
+### Reste (EN ATTENTE Eliot)
+
+- Au 1ᵉʳ vrai `bash ops/scripts/onboarding-batch-local.sh --dry-run` : observer le taux de refus Opus 4.8 (seul moyen de confirmer empiriquement le chiffre over-refusal non vérifiable).

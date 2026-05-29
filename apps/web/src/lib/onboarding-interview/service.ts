@@ -9,6 +9,8 @@ import type {
 import { detectCrisis } from '@/lib/safety/crisis-detection';
 import { detectInjection } from '@/lib/ai/injection-detector';
 
+import { getOnboardingInstrument } from './instrument-v1';
+
 /**
  * V2.4 — Onboarding interview service layer (Session α, M3 directive 2026-05-27).
  *
@@ -45,6 +47,27 @@ import { detectInjection } from '@/lib/ai/injection-detector';
 /** Default instrument version used when caller omits it. Bumped on questionnaire
  *  semver change. */
 export const DEFAULT_INSTRUMENT_VERSION = 'v1';
+
+// =============================================================================
+// Errors
+// =============================================================================
+
+/**
+ * Thrown by `appendAnswer` when the submitted `(instrumentVersion,
+ * questionIndex, questionKey)` triple does not match the frozen instrument
+ * catalog. The Zod schema only validates SHAPE/bounds — the catalog is the
+ * single source of truth for which (index, key) pairs exist. Without this gate
+ * a forged or buggy authenticated request could persist an out-of-catalog
+ * `questionIndex`, which `batch.ts` then silently drops from the Claude
+ * snapshot (it matches answers by `questionIndex`) — the member believes they
+ * answered, the profile ignores it. The Server Action maps this to a
+ * `invalid_input` field error (never a 500). */
+export class OnboardingInstrumentMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OnboardingInstrumentMismatchError';
+  }
+}
 
 // =============================================================================
 // Serialization types
@@ -196,6 +219,29 @@ export async function appendAnswer(
   userId: string,
   input: OnboardingAnswerInput,
 ): Promise<AppendAnswerResult> {
+  // Server-authority validation against the frozen instrument catalog. The Zod
+  // schema only bounds SHAPE — the catalog is the single source of truth for
+  // which (index, key) pairs exist. Reject unknown version / out-of-catalog
+  // index / key↔index mismatch so a forged or buggy client can never persist
+  // an answer that `batch.ts` would silently drop (it matches by questionIndex).
+  const instrument = getOnboardingInstrument(input.instrumentVersion);
+  if (!instrument) {
+    throw new OnboardingInstrumentMismatchError(
+      `Version d'instrument inconnue : ${input.instrumentVersion}.`,
+    );
+  }
+  const item = instrument.items.find((i) => i.questionIndex === input.questionIndex);
+  if (!item) {
+    throw new OnboardingInstrumentMismatchError(
+      `Question ${input.questionIndex} hors du catalogue ${input.instrumentVersion}.`,
+    );
+  }
+  if (item.id !== input.questionKey) {
+    throw new OnboardingInstrumentMismatchError(
+      `Clé de question incohérente avec le catalogue (index ${input.questionIndex}).`,
+    );
+  }
+
   const crisis = detectCrisis(input.answerText);
   const injection = detectInjection(input.answerText);
 
@@ -204,25 +250,28 @@ export async function appendAnswer(
     instrumentVersion: input.instrumentVersion,
   });
 
-  // Upsert answer on the unique (interviewId, questionIndex) constraint.
+  // Upsert answer on the unique (interviewId, questionIndex) constraint. Both
+  // questionKey and questionText come from the catalog item (server authority)
+  // — this also closes the historical `questionText: ''` debt: the column is
+  // now populated at write-time from the frozen instrument wording.
   const answerRow = await db.onboardingInterviewAnswer.upsert({
     where: {
       interviewId_questionIndex: {
         interviewId: interview.id,
-        questionIndex: input.questionIndex,
+        questionIndex: item.questionIndex,
       },
     },
     update: {
-      questionKey: input.questionKey,
-      questionText: '', // populated by service from instrument catalog Phase A.2
+      questionKey: item.id,
+      questionText: item.text,
       answerText: input.answerText,
     },
     create: {
       interviewId: interview.id,
       userId,
-      questionIndex: input.questionIndex,
-      questionKey: input.questionKey,
-      questionText: '', // populated by service from instrument catalog Phase A.2
+      questionIndex: item.questionIndex,
+      questionKey: item.id,
+      questionText: item.text,
       answerText: input.answerText,
     },
   });

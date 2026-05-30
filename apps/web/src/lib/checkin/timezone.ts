@@ -54,6 +54,78 @@ export function localDateOf(instant: Date, timezone: string): LocalDateString {
 }
 
 /**
+ * Convert a local wall-clock moment (local-date YYYY-MM-DD + h/m/s/ms) to a
+ * UTC instant, given an IANA timezone. This is the **inverse** of
+ * {@link localDateOf} for a fixed wall-clock time.
+ *
+ * Algorithm :
+ *   1. Build "fake UTC" — interpret the local moment as if it were UTC.
+ *   2. Look up the TZ's UTC offset at that instant via `Intl`.
+ *   3. Real UTC = fake UTC - offset.
+ *
+ * Handles DST automatically because `Intl.DateTimeFormat` returns the *actual*
+ * offset for the queried instant (e.g. 12:00 Europe/Paris → 10:00 UTC in CEST,
+ * 11:00 UTC in CET). The offset is read via `formatToParts` — version-agnostic
+ * (no dependency on a specific Node/ICU `longOffset` rendering). For the rare
+ * "ambiguous local time" case (DST fall-back hour) we accept the Intl-default
+ * resolution — fine for our day/window granularity.
+ *
+ * Canonical home for the project's wall-clock→UTC conversion. Re-exported by
+ * `lib/weekly-report/week-window.ts` (its original home) for backward-compat.
+ */
+export function localInstantToUtc(
+  localDate: LocalDateString,
+  hour: number,
+  minute: number,
+  second: number,
+  ms: number,
+  timezone: string,
+): Date {
+  const [yearStr, monthStr, dayStr] = localDate.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  const fakeUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, second, ms));
+  const offsetMin = getTimezoneOffsetMinutes(fakeUtc, timezone);
+  return new Date(fakeUtc.getTime() - offsetMin * 60_000);
+}
+
+function getTimezoneOffsetMinutes(instant: Date, timezone: string): number {
+  let tz = timezone;
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: tz });
+  } catch {
+    tz = 'UTC';
+  }
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const parts = fmt.formatToParts(instant);
+  const num = (t: string): number => {
+    const part = parts.find((p) => p.type === t);
+    return part ? Number(part.value) : 0;
+  };
+  // `Intl` may render hour=24 at midnight in some locales — guard.
+  const hour = num('hour') === 24 ? 0 : num('hour');
+  const localAsUtc = Date.UTC(
+    num('year'),
+    num('month') - 1,
+    num('day'),
+    hour,
+    num('minute'),
+    num('second'),
+  );
+  return Math.round((localAsUtc - instant.getTime()) / 60_000);
+}
+
+/**
  * `YYYY-MM-DD` → `Date` at UTC midnight. Used to feed Prisma's `@db.Date`
  * column without timezone drift. Throws on malformed inputs (Zod-friendly).
  */

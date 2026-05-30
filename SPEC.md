@@ -1385,4 +1385,108 @@ Pourquoi nouvelle session : le contexte d'interview pollue l'implémentation ; u
 
 ---
 
-**Fin du SPEC v1.6**
+## 30. Suivi de présence aux réunions Fxmily (spec V1.7 — 2026-05-30)
+
+> Source : interview `/spec` 2026-05-30 (autonomie max, 4 questions produit + réponse libre Eliot). **HORS SPEC v1.0→v1.6** (gap-analysis 2026-05-30 : 0 hit applicatif `réunion`/`meeting`/`présence`/`assiduité`). Cette section fait foi pour le jalon. Phase 1 « compléter la vision » — donnée comportementale fondatrice de l'assiduité, **brique du cockpit M8 « promesse 12 semaines »** (discipline ↑). **Impl = sessions dédiées post-`/clear`** (règle 1 session = 1 jalon §18.4 — feature multi-PR comme §21 Mode Entraînement). Pattern carbone : `DailyCheckin` (J5) + §21 `TrainingTrade`/`TrainingAnnotation` + engagement additif J-T4.
+
+### 30.1 Vision en 1 phrase
+
+Chaque membre **auto-déclare in-app** sa présence aux réunions Fxmily récurrentes (Lun–Ven 12h & 20h Europe/Paris, sur Zoom) — *présent en live* **ou** *rediffusion regardée sur le Drive*, **et** *contenu Ichor associé lu* (l'analyse pour 12h, le bilan/débrief pour 20h) — l'admin voit un **taux d'assiduité par membre** (créneaux annulés exclus), et l'assiduité **nourrit la dimension `engagement`** comme signal d'effort/régularité — **sans jamais culpabiliser une absence** (posture §2 anti Black-Hat) ni stocker/afficher/commenter le contenu des analyses (posture §2 zéro conseil de trade).
+
+### 30.2 Décisions d'architecture (interview Eliot 2026-05-30, avec rationale)
+
+| Décision | Choix validé | Rationale |
+|---|---|---|
+| Modèle « réunion » | **Entité `Meeting` admin-scoped, auto-générée** (PAS d'auto-déclaration libre sans entité) | Un taux d'assiduité fiable exige un **dénominateur** = total des réunions tenues. Seule une entité réunion le fournit. Carbone §21 (entité dédiée admin-created). |
+| Récurrence | **Génération auto par cron** : Lun–Ven, créneaux 12h00 & 20h00 Europe/Paris, DST-aware | Verbatim Eliot : « du lundi au vendredi à 12h et à 20h ». Zéro saisie manuelle (« le plus automatisé possible »). L'admin n'intervient que pour **annuler** une exception. |
+| Slot ↔ contenu | **`MeetingSlot { midday, evening }`** : `midday`(12h) ⇒ analyse Ichor ; `evening`(20h) ⇒ bilan/débrief Ichor | Verbatim Eliot. Le type de slot porte le type de contenu attendu — pas d'entité contenu séparée (KISS). |
+| Définition de la présence | **2 composantes** : `(live Zoom OU rediffusion Drive)` **ET** `contenu Ichor lu` | Verbatim Eliot : « soit qu'il soit sur la réunion soit qu'il ait regardé la rediffusion… et en plus pour la 12h il doit avoir lu l'analyse Ichor, pour 20h le bilan ». Présence **complète** = attendance renseignée **ET** contenu lu. |
+| Contenu Ichor dans l'app | **Booléen `contentReviewed` SEUL** — l'app ne stocke, n'affiche ni ne commente JAMAIS l'analyse/le bilan | Posture §2 verrouillée : zéro conseil/affichage sur les analyses de trade. Le contenu vit sur Discord/Drive ; l'app traque uniquement « as-tu fait ta prep » = discipline/exécution (§2 autorisé). |
+| Mécanisme de vérification | **Auto-déclaration in-app structurée** (self-report) | **Recadrage honnête (Eliot a demandé « le plus automatique sans faute »)** : la vérif réellement automatique est **infaisable** (Drive n'expose pas le visionnage par user ; Discord n'expose pas « message lu ») ou **fragile** (Zoom API = matcher l'identité). Promettre l'auto-vérif serait mentir. Tout Fxmily est déjà du self-report fiabilisé par l'engagement membre + la visibilité admin (check-ins, journal, QCM). Réconciliation Zoom API = **exploration V2** §30.6 (avec caveats). |
+| Annulation admin | **`MeetingStatus { scheduled, cancelled }`** : admin marque un créneau `cancelled` (« pas dispo / pas de réunion ») ⇒ **exclu du dénominateur** | Verbatim Eliot : « parfois je ne fais pas de réunion et je le dis sur ma page admin, ça le prend en compte pour eux comme pas de réunion ». Un membre n'est **jamais** pénalisé quand Eliot n'est pas dispo. |
+| Périmètre V1 | **Track + affichage ET wiring engagement** (réponse Eliot « 1 et 2 ») | Assiduité = signal d'effort. (a) sous-score `engagement` **additif** (pattern J-T4) ; (b) **signal admin** « assiduité basse / absences répétées » (jamais un push shame membre) ; (c) ligne « présence réunions » du rapport hebdo IA (count only). |
+| Fenêtre de déclaration | **Tout créneau passé non-annulé, sans verrou dur V1** | Eliot : « ils doivent forcément s'organiser pour regarder la rediffusion ». On **encourage le rattrapage** ; la fenêtre roulante de l'engagement pondère naturellement la récence. |
+| Posture restitution | **Anti Black-Hat strict** : « non déclaré » = *en attente* (rattrapable), jamais « absent honteux » ; ton neutre membre ; signal absences = **admin-only** | Posture §2 + canon Yu-kai Chou (mercy infrastructure J5/§21). « à force trop de fois… à le noter » d'Eliot ⇒ la donnée est visible **côté admin** pour le coaching, pas une punition visuelle côté membre. |
+
+### 30.3 Modèle de données (cible — à raffiner en impl via `prisma-migration-runner`)
+
+- **`enum MeetingSlot { midday, evening }`** — `midday` = 12h00 Paris (analyse Ichor) ; `evening` = 20h00 Paris (bilan/débrief Ichor).
+- **`enum MeetingStatus { scheduled, cancelled }`** — `cancelled` = admin indisponible / pas de réunion (exclu du dénominateur).
+- **`enum MeetingAttendanceMode { live, replay }`** — comment le membre a assisté (live Zoom OU rediffusion Drive).
+- **`Meeting`** (`meetings`) :
+  - `id` cuid · `date DateTime @db.Date` (jour civil Europe/Paris, pin `parseLocalDate` UTC-midnight, anti-drift DST canon PR#96) · `slot MeetingSlot` · `scheduledAt DateTime` (**instant UTC précis** du 12h/20h Paris ce jour-là, calculé DST-aware — sert au tri + check « passé ») · `status MeetingStatus @default(scheduled)` · `cancelledReason String?` (note admin optionnelle, `safeFreeText`) · timestamps.
+  - `@@unique([date, slot])` (idempotence génération : 1 réunion par créneau par jour). Index `[status, scheduledAt(sort: Desc)]` + `[scheduledAt(sort: Desc)]`.
+  - **0 FK vers les modèles real-edge** (`Trade`/`BehavioralScore`) — la réunion est une donnée d'assiduité, pas de trading.
+- **`MeetingAttendance`** (`meeting_attendances`) :
+  - `id` cuid · `meetingId → Meeting onDelete: Cascade` · `userId → User onDelete: Cascade` (RGPD §17) · `attendanceMode MeetingAttendanceMode?` (null tant que non déclaré) · `contentReviewed Boolean @default(false)` · `declaredAt DateTime @default(now())` · timestamps.
+  - `@@unique([meetingId, userId])` (upsert idempotent : re-déclarer met à jour, ne stacke pas — pattern `DailyCheckin (userId, date, slot)`). Index `[userId, declaredAt(sort: Desc)]` (vue membre) + `[meetingId]` (vue admin par réunion).
+  - **Présence complète** (compte au numérateur du taux) = `attendanceMode != null && contentReviewed === true`. Une ligne avec seulement l'un des deux = **partielle** (renseignée mais pas complète).
+- **Relations `User`** : `meetingAttendances MeetingAttendance[]`. **Aucune modification des modèles real-edge** (isolation par construction — l'assiduité ne touche QUE `engagement` via un primitive count, §30.7).
+- **Dénominateur du taux** (membre M) = `Meeting WHERE status='scheduled' AND scheduledAt < now AND date >= localDateOf(M.joinedAt)`. **Numérateur** = ceux avec une `MeetingAttendance` complète. (Optionnel V1 : exposer aussi un taux « présence seule » `attendanceMode != null` à côté du taux « complet », pour distinguer « venu mais pas lu » de « rien ».)
+
+### 30.4 Comportement attendu
+
+- **Génération (cron)** : `POST /api/cron/generate-meetings` (carbone `recompute-scores/route.ts:39-110` — `runtime='nodejs'` + `dynamic='force-dynamic'` + 503 si `!CRON_SECRET` + `verifyCronSecret` SHA-256/`timingSafeEqual` CWE-208 + `callerIdTrusted` + `cronLimiter` token bucket + `?at=ISO` double-gated + `logAudit` heartbeat + GET→405). Matérialise une **fenêtre roulante** `[today, today+N]` (N≈7, config) des créneaux Lun–Ven 12h/20h, **idempotent** sur `(date, slot)`. Skippe Sam/Dim. `scheduledAt` calculé via un helper « heure locale Paris → instant UTC » DST-aware (à construire — cf. §30.7 ; carbone `lib/checkin/timezone.ts:109 localMinutes` en sens inverse, OU `parisLocalDatetimeToUtc` de `components/admin/track-record/datetime-paris.ts`). Wiring prod Hetzner : `*/30 * * * *` ou `0 6 * * *` (10ᵉ cron).
+- **Membre** : `/reunions` (landing) → liste des réunions récentes (fenêtre ~14j), chacune avec : libellé créneau (« Réunion 12h — lundi 2 juin ») + état (✅ complète / ◐ partielle / ○ en attente, ton neutre) + contrôles de déclaration : **mode** (« J'étais présent en live » | « J'ai regardé la rediffusion ») + **contenu** (case « J'ai lu l'analyse » pour midday / « J'ai lu le bilan » pour evening). Server Action `declareMeetingAttendanceAction` (carbone `pre-trade/actions.ts:81-142` : `auth()` re-check `status==='active'` + `coerceBool` FormData + Zod `safeParse` + service upsert + `logAudit` PII-free + `revalidatePath` + `redirect` direct). Affichage **assiduité du membre** (taux complet sur fenêtre, ton neutre, anti Black-Hat — jamais rouge, jamais « tu es à 40% » accusateur).
+- **Admin** : (a) `/admin/reunions` — liste des réunions à venir/récentes + action **« Annuler ce créneau / Pas de réunion (indispo) »** (`status='scheduled'↔'cancelled'`) ; (b) `/admin/members/[id]?tab=presence` — onglet « Présence » (carbone `admin/members/[id]/page.tsx:58/78/153/171/272` : étendre `MemberTabKey` + `parseTab` + fetch conditionnel + render ; **réutiliser le slug `admin.member.viewed` `{memberId, tab}`, NE PAS créer de slug** — doctrine anti-accumulation §20) : taux d'assiduité du membre + détail par réunion (complet/partiel/absent), créneaux annulés grisés exclus.
+- **Engagement** (J-M4) : un primitive **count-only** `countMeetingAttendance(userId, fromUtc, toUtc)` → `{ scheduledCount, completedCount, lastDeclaredAt }` (carbone exact `countRecentTrainingActivity` `training-trade-service.ts:168`), branché en **Nᵉ `Promise.all`** de `computeScoresForUser` (`scoring/service.ts:88/119/165/241`). `computeEngagementScore` (`engagement.ts:87`) reçoit un sous-score `meetingAttendanceRate: SubScore | null` ajouté en **ADDITION PURE** (`WEIGHT_MEETING` EN PLUS, ex. 15 ; **aucun rééquilibrage des poids existants** 50/20/20/10 + training 15). `aggregateDimension` (`helpers.ts:99`) renormalise sur `totalMaxActive` ⇒ membre sans réunion (`scheduledCount===0` → sous-score `null`, ternaire carbone `engagement.ts:184`) ⇒ score **byte-identique** à l'avant-ajout. Plus : signal admin « assiduité basse » (vue admin only) + ligne « présence réunions : X/Y » (count only) dans le rapport hebdo IA (carbone ligne « volume de pratique » §21.4 / `weekly-report/loader.ts`).
+- **Edge cases** : membre inscrit en milieu de semaine → seules les réunions `date >= joinedAt` comptent · week-end → pas de génération · jour férié → admin annule manuellement (V1 ; calendrier fériés = V2) · rattrapage replay J+14 → autorisé (déclaration sur tout créneau passé non annulé) · 0 réunion tenue → état vide pédagogique (jamais « 0% » mensonger — taux `null` si dénominateur 0) · réunion annulée → toute `MeetingAttendance` existante ignorée du calcul (et idéalement non saisissable).
+- **Erreurs** : déclaration sur une réunion future ou annulée → refus service (`MeetingNotDeclarableError` → `fieldErrors`) · `cancelledReason` free-text → `safeFreeText` + reject bidi/zero-width (`lib/text/safe.ts:45/55`) · annulation = admin-only (auth + role).
+
+### 30.5 Critères d'acceptation (testables)
+
+- [ ] Migration `Meeting` + `MeetingAttendance` (+ 3 enums) **additive**, `prisma-migration-runner` SAFE, rollback documenté (runbook §25).
+- [ ] Cron `generate-meetings` matérialise idempotemment les créneaux Lun–Ven 12h/20h Paris (DST-aware : 12h CEST = 10h UTC / CET = 11h UTC vérifié), skippe le week-end, re-run = 0 doublon (`@@unique(date, slot)`).
+- [ ] Membre déclare présence (mode + contenu) sur un créneau passé → état « complète » ; re-déclaration = upsert (pas de doublon).
+- [ ] Membre voit son taux d'assiduité en **ton neutre** (jamais rouge/accusateur) + états vides pédagogiques (jamais « 0% » si dénominateur 0).
+- [ ] Admin annule un créneau (`cancelled`) → **exclu du dénominateur** de tous les membres (taux re-calculé sans pénalité).
+- [ ] Admin voit le taux par membre + détail par réunion sous `?tab=presence` (réutilise `admin.member.viewed`, **0 nouveau slug** vue).
+- [ ] Assiduité nourrit `engagement` en **addition pure** : test prouvant qu'un membre **sans** réunion garde un score `engagement` **byte-identique** à l'avant-ajout (sous-score `null` skip + renormalisation).
+- [ ] Posture : aucune surface ne stocke/affiche/commente le contenu des analyses Ichor ; le signal « absences répétées » est **admin-only** (aucun push/bannière shame membre) ; zéro conseil de trade.
+- [ ] Gate complet vert + audit-driven hardening (`security-auditor` + `code-reviewer` + `accessibility-reviewer` + `prisma-migration-runner`).
+
+### 30.6 Hors scope V1 (explicite — anti scope-creep)
+
+- **Réconciliation automatique Zoom / Drive / Discord** → **exploration V2 honnête** : Zoom Reports API peut lister les participants d'un meeting (matcher l'identité membre↔Zoom = fragile) ; **Drive ne fournit PAS** le visionnage par-user fiable ; **Discord ne fournit PAS** « message lu » (au mieux une réaction ✅, qui reste du self-report déporté). V1 = self-report in-app structuré. Ne jamais promettre l'auto-vérif sans une source primaire qui la rend possible.
+- **Moteur de récurrence configurable** (admin édite l'horaire/les jours) → V2. V1 = schedule figé Lun–Ven 12h/20h dans le cron (changement = config code + deploy).
+- **Calendrier de jours fériés** (auto-skip) → V2. V1 = admin annule manuellement.
+- **Annulation en masse / plage** (« je suis absent toute la semaine ») → V2 (V1 = annuler chaque créneau).
+- **Override admin de présence** (Eliot marque un membre présent depuis une liste Zoom) → V2 (V1 = self-report membre seul).
+- **Trigger Mark Douglas membre sur faible assiduité** → différé / **white-hat only** si activé (une fiche *régularité* encourageante carbone `discipline-c-est-consistance`, JAMAIS une fiche shame). V1 = signal admin-side seulement.
+- **Raison d'absence / champ « pourquoi »** côté membre → hors V1 (friction + risque shame). La donnée riche d'absence se lit côté admin via le détail par réunion.
+- **Notification/rappel push « déclare ta présence »** → V2 (carbone cron checkin-reminders si Eliot le veut).
+
+### 30.7 Invariants (NON négociables)
+
+- **Posture §2 verrouillée** : zéro conseil/affichage/commentaire sur les analyses de trade Ichor ; l'app traque l'**acte** (présence + lecture = discipline/exécution, §2 autorisé), jamais le **contenu**.
+- **Anti Black-Hat** : « non déclaré » ≠ « absent honteux » ; ton membre neutre (jamais rouge punitif) ; signal « absences répétées » **admin-only**, jamais un push/bannière shame. Mercy infrastructure (Yu-kai Chou, canon J5/§21).
+- **Engagement = ADDITION PURE** : `WEIGHT_MEETING` ajouté EN PLUS ; **interdiction absolue de rééquilibrer** les poids `engagement` existants (50/20/20/10 + training 15). Un membre sans réunion ⇒ sous-score `null` ⇒ score **byte-identique**. (Pattern J-T4 verrouillé : le blueprint qui propose `WEIGHT_FILL 50→42` = **vraie régression** prouvée, REJETÉ.)
+- **Touchpoint unique vers le real-edge** : l'assiduité ne touche QUE `engagement`, via le **seul** primitive `countMeetingAttendance` (count-only, jamais de P&L). Toute autre lecture cross-module = breach.
+- **DST correctness obligatoire** : `scheduledAt` = instant UTC exact du 12h/20h Paris **par date** (CET/CEST), via helper DST-aware. Jamais `12:00 UTC` hardcodé. `date @db.Date` pinné `parseLocalDate` (anti-drift PR#96).
+- **`@@unique(date, slot)`** = idempotence cron béton (re-run = 0 doublon). **`@@unique(meetingId, userId)`** = upsert déclaration béton.
+- **RGPD** : cascade `User` delete sur `MeetingAttendance` ; audit PII-free.
+- **SPEC.md = source de vérité** (cette §30 fait foi). Stack : Next.js 16 + React 19 TS strict + Prisma 7 + Auth.js v5 + DS-v2 (PAS `.v18-theme`, PAS cyan §21.7 — réunions = surface neutre/lime) + mobile-first PWA dark-only.
+- **1 session = 1 jalon** : impl en sessions DÉDIÉES post-`/clear` (§18.4).
+
+### 30.8 Découpage en sous-jalons + prochaine étape (recommandée)
+
+Feature de la taille de §21 (Mode Entraînement) → **4 sous-jalons atomiques**, 1 PR + audit-driven hardening chacun, `/clear` entre chaque, **jamais bundlés** (§18.4) :
+
+- **J-M1 — Data layer** : 3 enums + 2 models `Meeting`/`MeetingAttendance` + migration (`prisma-migration-runner`) + helper « heure Paris → UTC » DST-aware + Zod schemas + service pur (`countMeetingAttendance` + calcul taux, branche `insufficient_data` honnête carbone `analytics.test.ts:34/240-259`) + tests TDD (boundary, DST, idempotence). Backend-only.
+- **J-M2 — Surface membre** : `/reunions` landing + contrôles de déclaration (mode + contenu) + Server Action `declareMeetingAttendanceAction` (carbone `pre-trade/actions.ts`) + affichage assiduité neutre + E2E Playwright (scar GG-CI : importer `@/lib/db`, jamais un `service.ts 'server-only'`).
+- **J-M3 — Surface admin** : cron `/api/cron/generate-meetings` (carbone 10ᵉ cron) + `/admin/reunions` (annulation créneau) + onglet `?tab=presence` (taux/membre + détail/réunion, réutilise `admin.member.viewed`) + 2-3 audit slugs (`meeting.generated`, `admin.meeting.cancelled`, `meeting.attendance.declared`) PII-free.
+- **J-M4 — Wiring engagement** : `meetingAttendanceRate` **additif** (`engagement.ts` + `scoring/service.ts` Nᵉ `Promise.all` + primitive sanctionné) + signal admin « assiduité basse » + ligne rapport hebdo (count only) + test anti-régression « score byte-identique sans réunion ».
+
+**Prochaine étape** : (1) Eliot relit/ajuste §30 (~10 min). (2) `/clear`. (3) « Implémente SPEC §30 J-M1 (data layer réunions) — backend-first ». La session d'interview ne contamine pas l'implémentation (pattern interview-first, précédents §21/§23/§25/§27).
+
+---
+
+## 31. Changelog v1.6 → v1.7 (2026-05-30)
+
+- **§30 ajoutée** : Suivi de présence aux réunions Fxmily (interview `/spec` 2026-05-30). Décisions clés : entité **`Meeting` admin-scoped auto-générée par cron** (Lun–Ven 12h/20h Paris DST-aware) ⇒ taux d'assiduité fiable ; **présence = 2 composantes** `(live OU rediffusion) ET contenu Ichor lu` (analyse@12h / bilan@20h, booléen seul — **zéro stockage/affichage du contenu**, posture §2) ; vérification = **self-report in-app structuré** (auto-vérif Zoom/Drive/Discord infaisable/fragile = recadrage honnête, réconciliation Zoom API explorée V2) ; **annulation admin** d'un créneau exclut du dénominateur (« pas dispo ») ; périmètre **track+display ET engagement** (réponse Eliot « 1 et 2 ») ⇒ sous-score `engagement` **additif** (pattern J-T4, zéro rééquilibrage) + signal admin absences (jamais push shame) + ligne rapport hebdo (count only). Posture **anti Black-Hat** verrouillée (« non déclaré » ≠ absent honteux). Impl = 4 sous-jalons J-M1→J-M4 dédiés post-`/clear` (§18.4).
+- **Contexte** : Phase 1 « compléter la vision » (§14) — l'assiduité est la donnée comportementale fondatrice qui manquait, et une **brique du cockpit M8 « promesse 12 semaines »** (discipline ↑). Feature multi-PR de la taille de §21 (Mode Entraînement), nécessitait un amendement SPEC avant tout code (pattern interview-first, précédents §21/§23/§25/§27 ; gap-analysis 2026-05-30 : 0 hit applicatif `réunion`/`présence`).
+- **Note traçabilité** : l'en-tête du SPEC (ligne 5) reste désynchronisé (drift pré-existant depuis §21, déjà noté §24/§26/§28) — **volontairement non corrigé ici** (hors-scope d'une doc-PR §30 ; un re-sync de l'en-tête mérite sa propre PR).
+
+---
+
+**Fin du SPEC v1.7**

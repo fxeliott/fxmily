@@ -77,7 +77,7 @@ export default async function ReunionsPage() {
             </span>
             <span className="t-cap text-[var(--t-3)]">
               {rate.completedCount} / {rate.scheduledCount} réunion
-              {rate.scheduledCount > 1 ? 's' : ''} complète{rate.completedCount > 1 ? 's' : ''}
+              {rate.scheduledCount > 1 ? 's' : ''} complète{rate.scheduledCount > 1 ? 's' : ''}
             </span>
           </div>
         ) : (

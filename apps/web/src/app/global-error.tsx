@@ -118,7 +118,7 @@ export default function GlobalError({
               serveur. Tu peux réessayer ou contacter{' '}
               <a
                 href="mailto:eliot@fxmilyapp.com"
-                style={{ color: '#a3e635', textDecoration: 'underline' }}
+                style={{ color: '#3b82f6', textDecoration: 'underline' }}
               >
                 eliot@fxmilyapp.com
               </a>{' '}
@@ -145,7 +145,7 @@ export default function GlobalError({
               type="button"
               onClick={reset}
               style={{
-                background: '#a3e635',
+                background: '#3b82f6',
                 color: '#0c1117',
                 border: 'none',
                 padding: '0.625rem 1.25rem',

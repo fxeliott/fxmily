@@ -43,8 +43,7 @@ export const CHART_COLORS = {
   bStrong: 'rgba(140, 146, 163, 0.22)',
 
   // Semantic
-  acc: '#3b82f6', // lime — process / discipline scores
-  accGlow: 'rgba(163, 230, 53, 0.55)',
+  acc: '#3b82f6', // blue — process / discipline scores (DS-v3)
   cy: '#22d3ee', // cyan — secondary / charts secondary
   ok: '#4ade80', // green — outcome / gain
   warn: '#fbbf24', // amber — caution

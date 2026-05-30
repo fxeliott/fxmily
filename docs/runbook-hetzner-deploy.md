@@ -1939,9 +1939,137 @@ C'est attendu — V2.4 est un cycle complet, le rollback DB d'une partie casse t
 
 **Recommandation forte** : rollback V2.4 **uniquement** en cas de bug critique data-corrupting (e.g. crisis routing skip-persist défaillant qui exposerait du contenu sensible, ou amf_violation regex laxe). Pour bugs UI Phase B/C ou bug pipeline Phase A.2, préférer un **rollback code-only** (revert PR sur main + re-deploy) sans toucher au schéma DB.
 
+## 24. Rollback V1.7 §30 meeting-attendance migration (`20260530150000_v1_7_meeting_attendance`)
+
+> **Quand l'utiliser** : si la migration J-M1 "suivi de présence aux réunions"
+> (PR #207 — `Meeting` + `MeetingAttendance` + 3 enums `MeetingSlot` /
+> `MeetingStatus` / `MeetingAttendanceMode`) a été déployée en prod et qu'un
+> blocker post-deploy nécessite de la retirer. Pure ADD-only (3 enums + 2
+> tables neuves + 4 index + 2 FK : `meeting_attendances.meeting_id → meetings.id`
+> ET `meeting_attendances.user_id → users.id`, les deux `ON DELETE CASCADE`).
+> 0 FK vers le real-edge (`trades` / `behavioral_scores`) — l'assiduité est une
+> donnée d'engagement, pas de trading (SPEC §30.3 isolation par construction).
+>
+> ✅ **Simple `BEGIN/COMMIT`-revertable** (PAS d'`ALTER TYPE … DROP VALUE` :
+> les 3 enums sont brand-new, référencés QUE par les 2 tables supprimées →
+> `DROP TYPE` clean). Pattern carbone §16 / §21.
+>
+> ⚠️ **Risque data loss = dépend du jalon en prod au moment du rollback** :
+> à J-M1 seul (pas encore de surface membre `/reunions` ni de cron
+> `generate-meetings`), les 2 tables sont **VIDES** → rollback sans aucune
+> perte. DÈS QUE J-M2 (déclarations membres) / J-M3 (cron) sont live,
+> `meeting_attendances` contient des auto-déclarations membres (donnée
+> comportementale, RGPD — reconstructible par re-déclaration) et `meetings`
+> les occurrences générées (reconstructibles par re-run du cron). Le
+> `pg_dump --data-only` atomique des 2 tables AVANT reste OBLIGATOIRE par
+> sécurité.
+>
+> **Indépendant de §15-§23** : 0 FK croisée vers les autres features. Si
+> plusieurs rollbacks sont nécessaires, l'ordre inverse de l'apply continue
+> d'appliquer (§24 → §23 → … → §15).
+
+### 24.1 Pré-requis — quiesce
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+```
+
+Vérifie l'état Prisma :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+    FROM _prisma_migrations WHERE migration_name LIKE '%v1_7_meeting_attendance%' \
+    ORDER BY started_at DESC;"
+```
+
+### 24.2 Backup `meetings` + `meeting_attendances`
+
+```bash
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  pg_dump -U fxmily -d fxmily \
+  -t meetings -t meeting_attendances \
+  --data-only --column-inserts \
+  | gzip > "/etc/fxmily/backups/pre-v1_7-rollback-meetings-${TS}.sql.gz"
+```
+
+> Conservé 30j R2 (lifecycle `caddy/` carbone) + 7j local (`fxmily-backup`
+> rotation). À J-M1 seul le dump est vide (tables non encore alimentées).
+
+### 24.3 SQL rollback — DROP TABLES + DROP TYPES dans un seul BEGIN/COMMIT
+
+Ordre obligatoire : table fille (`meeting_attendances`, qui porte les 2 FK)
+AVANT table parent (`meetings`) AVANT les 3 types enum (sinon `cannot drop
+type because other objects depend on it`) :
+
+```sql
+BEGIN;
+DROP TABLE IF EXISTS "meeting_attendances";  -- cascade-removes ses 2 FK
+DROP TABLE IF EXISTS "meetings";
+DROP TYPE IF EXISTS "MeetingAttendanceMode";
+DROP TYPE IF EXISTS "MeetingStatus";
+DROP TYPE IF EXISTS "MeetingSlot";
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260530150000_v1_7_meeting_attendance';
+COMMIT;
+```
+
+> Postgres rollback automatique si une étape échoue (cohérence garantie).
+
+### 24.4 Re-déploiement de l'image pré-V1.7
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<pre-v1_7-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+```
+
+### 24.5 Vérification post-rollback
+
+```bash
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\dt meetings meeting_attendances"
+# Attendu : "Did not find any relations" (les 2 tables absentes)
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c \
+  "SELECT typname FROM pg_type WHERE typname IN \
+   ('MeetingSlot', 'MeetingStatus', 'MeetingAttendanceMode');"
+# Attendu : 0 rows (types absents)
+
+# Audit log : consigne le rollback honnête counters.
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"v1_7_meeting_attendance\",\"by\":\"eliot\",\"data_loss_meetings\":N,\"data_loss_meeting_attendances\":M}'::jsonb, \
+      NOW());"
+```
+
+### 24.6 Re-application future
+
+1. Re-deploy l'image V1.7+ HEAD.
+2. `docker compose -f /opt/fxmily/docker-compose.prod.yml run --rm web \
+pnpm --filter @fxmily/web prisma:migrate deploy` (rejoue la migration).
+3. **Restore** depuis `pg_dump` step 24.2 si des déclarations membres
+   existaient :
+
+   ```bash
+   gunzip -c /etc/fxmily/backups/pre-v1_7-rollback-meetings-<TS>.sql.gz \
+     | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+         psql -U fxmily -d fxmily
+   ```
+
+4. **Alternative `meetings`** : re-run du cron `generate-meetings` (J-M3)
+   régénère les occurrences à venir (idempotent sur `@@unique(date, slot)`) ;
+   les déclarations membres passées, elles, ne se régénèrent PAS → restore
+   step 3 obligatoire si on veut les préserver.
+
 ## Note transversale — pattern rollback Fxmily
 
-Toutes les recipes §11-§23 suivent un même contrat :
+Toutes les recipes §11-§24 suivent un même contrat :
 
 1. **pg_dump atomique AVANT** (data-only + column-inserts pour idempotency).
 2. **`docker compose stop web`** (fige les writes, évite la corruption

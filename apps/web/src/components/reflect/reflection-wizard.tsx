@@ -212,7 +212,11 @@ export function ReflectionWizard() {
         </Alert>
       ) : null}
 
-      <div className="relative min-h-[340px]">
+      {/* DS-v3 — frosted glass panel over the V18Aurora mesh. Blur via Tailwind
+          backdrop utilities on this STATIC container (Lightning CSS strips raw
+          `backdrop-filter`); the inner slide transform stays on the `m.div`
+          child so they never collide on the same element (J3 invariant). */}
+      <div className="glass-panel border-edge-top rounded-card-lg relative min-h-[340px] overflow-hidden p-5 backdrop-blur-[16px] backdrop-saturate-150 sm:p-6">
         <AnimatePresence mode="wait" initial={false}>
           <m.div
             key={step}

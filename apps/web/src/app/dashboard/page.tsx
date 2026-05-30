@@ -17,6 +17,8 @@ import { Suspense } from 'react';
 
 import { auth, signOut } from '@/auth';
 import { StreakCard } from '@/components/checkin/streak-card';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { DrawnRule } from '@/components/dashboard/drawn-rule';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
 import { EmotionPerfTable } from '@/components/scoring/emotion-perf-table';
@@ -33,6 +35,7 @@ import {
 import { HabitKindTabPicker } from '@/components/track/habit-kind-tab-picker';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
+import { HoverLift } from '@/components/ui/hover-lift';
 import { Kbd } from '@/components/ui/kbd';
 import { Pill } from '@/components/ui/pill';
 import { getCheckinStatus, getStreak } from '@/lib/checkin/service';
@@ -126,7 +129,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const totalTrades = counts.open + counts.closed;
 
   return (
-    <main className="flex min-h-dvh flex-col bg-[var(--bg)]">
+    <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
+      {/* DS-v3 J3 — ambient mesh + drifting orbs behind the glass panels */}
+      <DashboardAmbient />
       {/* Sticky header */}
       <header className="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-[var(--b-default)] bg-[var(--bg)]/95 px-4 backdrop-blur lg:px-8">
         <Link href="/dashboard" className="flex items-center gap-2">
@@ -157,21 +162,25 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </form>
       </header>
 
-      <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 lg:px-8 lg:py-8">
+      <div className="relative mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8">
         {/* Title row */}
         <section className="mb-6 flex flex-col gap-2">
           <div className="t-eyebrow flex items-center gap-2">
             <span>{frenchToday()}</span>
           </div>
           <h1
-            className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[36px]"
-            style={{ fontFeatureSettings: '"ss01" 1' }}
+            className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+            style={{
+              fontFeatureSettings: '"ss01" 1',
+              fontSize: 'clamp(1.75rem, 1.45rem + 1.3vw, 2.25rem)',
+            }}
           >
             {greeting()} {firstName}.
           </h1>
           <p className="t-lead">
             La discipline avant le marché. Logge ton plan, mesure ton mental, oublie les bougies.
           </p>
+          <DrawnRule className="mt-1 max-w-[220px]" />
         </section>
 
         {/* KPI strip 4-cell — counts + streak */}
@@ -179,7 +188,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <h2 id="kpi-heading" className="sr-only">
             Statistiques d&apos;activité
           </h2>
-          <div className="border-edge-top rounded-card relative grid grid-cols-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] shadow-[var(--sh-card)] sm:grid-cols-4">
+          <div className="glass-panel border-edge-top rounded-card relative grid grid-cols-2 overflow-hidden backdrop-blur-[16px] backdrop-saturate-150 sm:grid-cols-4">
             <KpiCell
               label="Trades total"
               value={totalTrades.toString()}
@@ -217,7 +226,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]"
           aria-labelledby="checkin-heading"
         >
-          <Card primary className="flex flex-col gap-4 p-5">
+          <Card primary glass className="@container flex flex-col gap-4 p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <h2 id="checkin-heading" className="t-eyebrow">
@@ -235,7 +244,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <ArrowRight className="h-3 w-3" strokeWidth={1.75} />
               </Link>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 @[20rem]:grid-cols-2">
               <CheckinSlotChip
                 slot="morning"
                 submitted={checkinStatus.morningSubmitted}
@@ -297,32 +306,34 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             first. Non-bloquant per ADR-003 §Alt 2 — Fxmily NEVER blocks a
             trade, the wizard is a mirror. */}
         <section className="mb-6" aria-labelledby="pre-trade-heading">
-          <Link
-            href="/pre-trade/new"
-            className="rounded-card block border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]">
-                  <ShieldCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+          <HoverLift className="block">
+            <Link
+              href="/pre-trade/new"
+              className="rounded-card block border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]">
+                    <ShieldCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="t-eyebrow text-[var(--acc)]">Pré-trade</span>
+                    <h2
+                      id="pre-trade-heading"
+                      className="text-[15px] font-semibold text-[var(--t-1)]"
+                    >
+                      Pause 30 secondes avant ton prochain trade
+                    </h2>
+                    <p className="text-[12px] leading-relaxed text-[var(--t-2)]">
+                      4 questions courtes : raison, émotion, plan, stop-loss. Un miroir, pas une
+                      barrière.
+                    </p>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="t-eyebrow text-[var(--acc)]">Pré-trade</span>
-                  <h2
-                    id="pre-trade-heading"
-                    className="text-[15px] font-semibold text-[var(--t-1)]"
-                  >
-                    Pause 30 secondes avant ton prochain trade
-                  </h2>
-                  <p className="text-[12px] leading-relaxed text-[var(--t-2)]">
-                    4 questions courtes : raison, émotion, plan, stop-loss. Un miroir, pas une
-                    barrière.
-                  </p>
-                </div>
+                <ArrowRight className="h-5 w-5 shrink-0 text-[var(--acc)]" aria-hidden="true" />
               </div>
-              <ArrowRight className="h-5 w-5 shrink-0 text-[var(--acc)]" aria-hidden="true" />
-            </div>
-          </Link>
+            </Link>
+          </HoverLift>
         </section>
 
         {/* Mark Douglas card (canonical TIER 4) */}
@@ -330,7 +341,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]"
           aria-labelledby="journal-md-heading"
         >
-          <Card primary className="flex flex-col gap-4 p-5">
+          <Card primary glass className="flex flex-col gap-4 p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <h2 id="journal-md-heading" className="t-eyebrow">
@@ -390,40 +401,44 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Link href="/admin/members" className="block">
-                <Card interactive className="flex items-start gap-3 p-4">
-                  <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
-                    <Users className="h-4 w-4" strokeWidth={1.75} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="t-h3 text-[var(--t-1)]">Membres</h3>
-                    <p className="t-cap mt-0.5 text-[var(--t-3)]">
-                      Voir la liste, statuts, dernières activités.
-                    </p>
-                  </div>
-                  <ArrowRight
-                    className="mt-1.5 h-3.5 w-3.5 shrink-0 text-[var(--t-4)]"
-                    strokeWidth={1.75}
-                  />
-                </Card>
-              </Link>
-              <Link href="/admin/invite" className="block">
-                <Card interactive className="flex items-start gap-3 p-4">
-                  <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
-                    <Plus className="h-4 w-4" strokeWidth={1.75} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="t-h3 text-[var(--t-1)]">Inviter un membre</h3>
-                    <p className="t-cap mt-0.5 text-[var(--t-3)]">
-                      Lien personnel valable 7 jours, unique.
-                    </p>
-                  </div>
-                  <ArrowRight
-                    className="mt-1.5 h-3.5 w-3.5 shrink-0 text-[var(--t-4)]"
-                    strokeWidth={1.75}
-                  />
-                </Card>
-              </Link>
+              <HoverLift className="block">
+                <Link href="/admin/members" className="block">
+                  <Card interactive className="flex items-start gap-3 p-4">
+                    <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+                      <Users className="h-4 w-4" strokeWidth={1.75} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="t-h3 text-[var(--t-1)]">Membres</h3>
+                      <p className="t-cap mt-0.5 text-[var(--t-3)]">
+                        Voir la liste, statuts, dernières activités.
+                      </p>
+                    </div>
+                    <ArrowRight
+                      className="mt-1.5 h-3.5 w-3.5 shrink-0 text-[var(--t-4)]"
+                      strokeWidth={1.75}
+                    />
+                  </Card>
+                </Link>
+              </HoverLift>
+              <HoverLift className="block">
+                <Link href="/admin/invite" className="block">
+                  <Card interactive className="flex items-start gap-3 p-4">
+                    <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+                      <Plus className="h-4 w-4" strokeWidth={1.75} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="t-h3 text-[var(--t-1)]">Inviter un membre</h3>
+                      <p className="t-cap mt-0.5 text-[var(--t-3)]">
+                        Lien personnel valable 7 jours, unique.
+                      </p>
+                    </div>
+                    <ArrowRight
+                      className="mt-1.5 h-3.5 w-3.5 shrink-0 text-[var(--t-4)]"
+                      strokeWidth={1.75}
+                    />
+                  </Card>
+                </Link>
+              </HoverLift>
             </div>
           </section>
         ) : null}
@@ -447,24 +462,26 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             M4 V1.8). Reste en DS-v2 lime (discipline forte) — pas de V18
             blue/black overlay. */}
         <section className="mb-6" aria-label="Module TRACK">
-          <Link
-            href="/track"
-            className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-1">
-                <span className="t-eyebrow text-[var(--acc)]">Suivi des habitudes</span>
-                <p className="text-[15px] font-semibold text-[var(--t-1)]">
-                  Tes 5 piliers de pratique
-                </p>
-                <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
-                  Sommeil, nutrition, café, sport, méditation — les conditions qui alimentent ton
-                  exécution.
-                </p>
+          <HoverLift className="block">
+            <Link
+              href="/track"
+              className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <span className="t-eyebrow text-[var(--acc)]">Suivi des habitudes</span>
+                  <p className="text-[15px] font-semibold text-[var(--t-1)]">
+                    Tes 5 piliers de pratique
+                  </p>
+                  <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
+                    Sommeil, nutrition, café, sport, méditation — les conditions qui alimentent ton
+                    exécution.
+                  </p>
+                </div>
+                <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden />
               </div>
-              <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden />
-            </div>
-          </Link>
+            </Link>
+          </HoverLift>
         </section>
 
         {/* V2.1.6 — Suivi-formation/cursus (#4 séquence §21.6) placeholder

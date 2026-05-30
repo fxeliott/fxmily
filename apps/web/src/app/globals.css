@@ -508,6 +508,81 @@
   -webkit-backdrop-filter: blur(20px) saturate(140%);
 }
 
+/* =============================================================
+ * DS-v3 PREMIUM CRAFT (J3) — glassmorphism 2.0 + mesh aurora
+ * -------------------------------------------------------------
+ * App-wide (:root blue+black tokens). Decorative layers are
+ * ARIA-hidden + pointer-events:none. The drift animation is
+ * killed by the global `prefers-reduced-motion` rule (l.838).
+ * Naming `.ds-*` keeps these distinct from the REFLECT-scoped
+ * `.v18-*` set (which is tuned for full-page hero landings).
+ * ============================================================= */
+
+/* Ambient mesh aurora — blue + indigo depth backplate behind the
+   glass panels. Static gradient, zero JS, paints under content. */
+.ds-aurora {
+  background:
+    radial-gradient(58% 34% at 50% -8%, oklch(0.62 0.19 254 / 0.16) 0%, transparent 62%),
+    radial-gradient(42% 30% at 4% 16%, oklch(0.5 0.21 262 / 0.12) 0%, transparent 68%),
+    radial-gradient(40% 32% at 98% 6%, oklch(0.7 0.13 217 / 0.08) 0%, transparent 70%);
+}
+
+/* Drifting orb seen through the glass — slow GPU parallax. Mobile
+   keeps a single orb (perf — carbone .v18-orb 640px gate). */
+@keyframes dsOrbDrift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate3d(22px, -18px, 0) scale(1.06);
+    opacity: 0.56;
+  }
+}
+.ds-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(56px);
+  pointer-events: none;
+  opacity: 0.4;
+  animation: dsOrbDrift 26s var(--e-smooth) infinite;
+  will-change: transform, opacity;
+}
+/* Mobile keeps a single orb (perf — the `.ds-orb-extra` ones drop). The
+   first `.ds-orb` is the 2nd child of the wrapper (after `.ds-aurora`), so
+   an `:nth-child` gate would wrongly hide it — use an explicit class. */
+@media (max-width: 640px) {
+  .ds-orb-extra {
+    display: none;
+  }
+}
+
+/* Glassmorphism 2.0 — frosted panel + 1px hairline highlight on the
+   top edge (luminous border). bg ~14% opacity reveals .ds-aurora. */
+.glass-panel {
+  position: relative;
+  background: oklch(0.13 0.028 254 / 0.55);
+  /* The frost blur is applied via the Tailwind `backdrop-blur-[16px]` +
+     `backdrop-saturate-150` utilities at the call sites — Lightning CSS
+     (Tailwind v4) strips a *raw* `backdrop-filter` from custom rules but
+     keeps the generated utilities (same path the sticky header uses). */
+  border: 1px solid oklch(0.84 0.01 250 / 0.1);
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 0.05),
+    var(--sh-card);
+}
+
+/* Luminous accent inner-glow — for primary / CTA glass surfaces.
+   Layer ON the .glass-panel base (adds the blue halo + acc edge). */
+.glow-edge {
+  border-color: var(--b-acc);
+  box-shadow:
+    inset 0 1px 0 0 oklch(0.74 0.16 250 / 0.2),
+    inset 0 0 0 1px oklch(0.62 0.19 254 / 0.12),
+    var(--acc-glow);
+}
+
 /* Hatch pattern for disabled */
 .hatch-disabled {
   background-image: repeating-linear-gradient(

@@ -41,7 +41,7 @@ export default function AppleIcon(): ImageResponse {
         backgroundImage:
           'radial-gradient(circle at 100% 100%, rgba(163,230,53,0.18) 0%, transparent 55%)',
         fontFamily: 'system-ui, -apple-system, sans-serif',
-        color: '#a3e635',
+        color: '#3b82f6',
         fontWeight: 700,
         fontSize: 96,
         letterSpacing: '-0.04em',

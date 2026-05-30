@@ -316,7 +316,7 @@ export function WeeklyReviewWizard() {
 
       {/* Sticky bottom CTA bar — safe-area aware */}
       <div
-        className="v18-glass sticky bottom-0 z-10 -mx-4 mt-2 flex items-center gap-3 border-t border-[var(--b-default)] px-4 py-3 sm:-mx-6 sm:px-6"
+        className="v18-glass sticky bottom-0 z-10 -mx-4 mt-2 flex items-center gap-3 border-t border-[var(--b-default)] px-4 py-3 backdrop-blur-[16px] backdrop-saturate-150 sm:-mx-6 sm:px-6"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
       >
         {step > 0 ? (

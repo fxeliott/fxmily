@@ -182,6 +182,14 @@ export async function cleanupTestUsers(): Promise<{ deleted: number }> {
   await db.memberProfile.deleteMany({ where: { userId: { in: ids } } });
   await db.onboardingInterviewAnswer.deleteMany({ where: { userId: { in: ids } } });
   await db.onboardingInterview.deleteMany({ where: { userId: { in: ids } } });
+  // V1.7 — MeetingAttendance (§30, J-M2). Member-owned, ON DELETE CASCADE on
+  // User; explicit here BEFORE the user wipe (same FK-order visibility canon
+  // as V1.5/V1.8/V1.3/V2.3 above). The `Meeting` rows themselves are
+  // admin-scoped (0 FK to User), so they are NOT cleaned here — the E2E that
+  // creates test meetings cleans them up by id (no test-email filter exists
+  // for a global admin entity, and a blanket `meeting.deleteMany()` would risk
+  // wiping cron-generated meetings).
+  await db.meetingAttendance.deleteMany({ where: { userId: { in: ids } } });
 
   const result = await db.user.deleteMany({ where: { id: { in: ids } } });
   return { deleted: result.count };

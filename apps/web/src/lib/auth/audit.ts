@@ -256,7 +256,16 @@ export type AuditAction =
   | 'onboarding.batch.persist_failed'
   | 'onboarding.batch.crisis_detected'
   | 'onboarding.batch.amf_violation'
-  | 'onboarding.batch.evidence_invalid';
+  | 'onboarding.batch.evidence_invalid'
+  // V1.7 §30 J-M2 — meeting attendance member declaration (`/reunions`). ONE
+  // slug: the declaration is a 100% closed instrument (meetingId + 2 enums/
+  // booleans, ZERO free-text) ⇒ NO crisis/injection surface (mirror V1.5
+  // mindset_check / V2.3 pre_trade_check). PII-FREE metadata expected :
+  // `{meetingId, attendanceMode, contentReviewed}` — NEVER the Ichor content
+  // itself (posture §2: `contentReviewed` is a boolean, never the analysis).
+  // The admin slugs (`meeting.generated`, `admin.meeting.cancelled`) follow
+  // in J-M3.
+  | 'meeting.attendance.declared';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the
 // public Track Record was split out to a standalone repo

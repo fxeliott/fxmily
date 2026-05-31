@@ -216,7 +216,7 @@ export function ReflectionWizard() {
           backdrop utilities on this STATIC container (Lightning CSS strips raw
           `backdrop-filter`); the inner slide transform stays on the `m.div`
           child so they never collide on the same element (J3 invariant). */}
-      <div className="glass-panel border-edge-top rounded-card-lg relative min-h-[340px] overflow-hidden p-5 backdrop-blur-[16px] backdrop-saturate-150 sm:p-6">
+      <div className="glass-panel border-edge-top rounded-card-lg relative min-h-[340px] p-5 backdrop-blur-[16px] backdrop-saturate-150 sm:p-6">
         <AnimatePresence mode="wait" initial={false}>
           <m.div
             key={step}
@@ -327,6 +327,7 @@ function ABCDHeader({
           background: 'oklch(0.18 0.03 254 / 0.85)',
           borderColor: colorByLetter[def.letter],
           color: colorByLetter[def.letter],
+          boxShadow: 'var(--acc-glow)',
         }}
       >
         <span className="font-display text-[18px] leading-none font-bold">{def.letter}</span>

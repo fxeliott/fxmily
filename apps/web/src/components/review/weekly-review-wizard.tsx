@@ -245,7 +245,7 @@ export function WeeklyReviewWizard() {
           transform stays on the `m.div` child so the two never collide on the
           same element (J3 separation invariant). `border-edge-top` adds the
           luminous top hairline (dashboard KPI strip parity). */}
-      <div className="glass-panel border-edge-top rounded-card-lg relative min-h-[320px] overflow-hidden p-5 backdrop-blur-[16px] backdrop-saturate-150 sm:p-6">
+      <div className="glass-panel border-edge-top rounded-card-lg relative min-h-[320px] p-5 backdrop-blur-[16px] backdrop-saturate-150 sm:p-6">
         <AnimatePresence mode="wait" initial={false}>
           <m.div
             key={step}
@@ -409,6 +409,7 @@ function StepHeader({ step, eyebrow, headingRef }: StepHeaderProps) {
         style={{
           background: 'oklch(0.62 0.19 254 / 0.14)',
           color: 'oklch(0.82 0.115 247)',
+          boxShadow: 'var(--acc-glow)',
         }}
       >
         <Icon size={18} strokeWidth={2.2} />

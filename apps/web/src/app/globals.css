@@ -95,6 +95,13 @@
   --acc-glow-strong: 0 0 32px -2px oklch(0.62 0.19 254 / 0.65);
   --cy: var(--c-400); /* #22d3ee */
   --cy-dim: oklch(0.789 0.139 217 / 0.12);
+  /* Cyan accent edge/glow — §21.7 training-debrief "Mode entraînement".
+     Mirror of --acc-edge/--acc-glow/--acc-glow-strong but in cyan. Consumed
+     ONLY by the training-debrief surface (a soft focal halo on the step icon,
+     never a CTA — §23.2 keeps --acc blue for primary buttons). */
+  --cy-edge: oklch(0.789 0.139 217 / 0.42);
+  --cy-glow: 0 0 24px -4px oklch(0.789 0.139 217 / 0.45);
+  --cy-glow-strong: 0 0 32px -2px oklch(0.789 0.139 217 / 0.65);
 
   /* ─── SEMANTIC: state colors ────────────────────────────────── */
   --ok: oklch(0.804 0.181 145); /* #4ade80 — long, gain */
@@ -505,6 +512,17 @@
     radial-gradient(58% 34% at 50% -8%, oklch(0.62 0.19 254 / 0.16) 0%, transparent 62%),
     radial-gradient(42% 30% at 4% 16%, oklch(0.5 0.21 262 / 0.12) 0%, transparent 68%),
     radial-gradient(40% 32% at 98% 6%, oklch(0.7 0.13 217 / 0.08) 0%, transparent 70%);
+}
+
+/* Cyan-forward variant — §21.7 training-debrief "Mode entraînement". Same
+   subtle mesh as .ds-aurora but cyan-led (the dark blue-black base stays;
+   only the accent glow shifts) so the backtest surface reads as a distinct
+   "practice mode" without ever blurring the live/backtest line (Mark Douglas). */
+.ds-aurora-cy {
+  background:
+    radial-gradient(58% 34% at 50% -8%, oklch(0.789 0.139 217 / 0.14) 0%, transparent 62%),
+    radial-gradient(42% 30% at 4% 16%, oklch(0.703 0.145 218 / 0.1) 0%, transparent 68%),
+    radial-gradient(40% 32% at 98% 6%, oklch(0.62 0.19 254 / 0.06) 0%, transparent 70%);
 }
 
 /* Drifting orb seen through the glass — slow GPU parallax. Mobile

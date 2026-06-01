@@ -87,7 +87,7 @@ export default async function TrainingDebriefLandingPage({ searchParams }: Debri
 
           <DrawnRule tone="cyan" className="max-w-[220px]" />
 
-          <p className="rounded-control border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] px-3 py-2 text-[12px] leading-[1.5] text-[var(--t-2)]">
+          <p className="rounded-control border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] px-3 py-2 text-[12px] leading-[1.5] text-[var(--t-2)]">
             Un recul hebdomadaire sur ta <strong className="text-[var(--t-1)]">pratique</strong>{' '}
             d&apos;entraînement — régularité, discipline, leçons. Pas de P&amp;L, pas d&apos;analyse
             de marché : ton débrief est isolé de ton edge réel, comme le reste du mode entraînement.
@@ -100,7 +100,7 @@ export default async function TrainingDebriefLandingPage({ searchParams }: Debri
           <div
             role="status"
             data-slot="training-debrief-done"
-            className="rounded-card-lg border border-[oklch(0.789_0.139_217_/_0.30)] p-4"
+            className="rounded-card-lg border border-[var(--cy-edge-soft)] p-4"
             style={{
               background:
                 'linear-gradient(135deg, oklch(0.789 0.139 217 / 0.16) 0%, oklch(0.12 0.02 240 / 0.85) 80%)',

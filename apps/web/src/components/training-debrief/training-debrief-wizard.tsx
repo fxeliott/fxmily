@@ -408,7 +408,7 @@ function FreeTextStep(props: FreeTextStepProps) {
         placeholder={placeholder}
         maxLength={TRAINING_DEBRIEF_TEXT_MAX_CHARS + 100} // soft cap; server hard-caps
         rows={6}
-        className="rounded-input w-full resize-y border bg-[var(--bg-2)] px-3.5 py-3 text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:border-[var(--cy)] focus:shadow-[0_0_0_3px_oklch(0.789_0.139_217_/_0.16)] focus:outline-none"
+        className="rounded-input w-full resize-y border bg-[var(--bg-2)] px-3.5 py-3 text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:border-[var(--cy)] focus:shadow-[0_0_0_3px_var(--cy-dim-strong)] focus:outline-none"
         style={{
           borderColor: error ? 'oklch(0.7 0.165 22 / 0.55)' : 'var(--b-strong)',
           minHeight: '160px',

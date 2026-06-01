@@ -95,6 +95,11 @@
   --acc-glow-strong: 0 0 32px -2px oklch(0.62 0.19 254 / 0.65);
   --cy: var(--c-400); /* #22d3ee */
   --cy-dim: oklch(0.789 0.139 217 / 0.12);
+  /* Cyan surface fills — stronger dim + softer border, mirroring the blue
+     --acc-dim ramp. Single source of truth for the §21.7 cyan accent alphas
+     (calm fills/borders, never a CTA). */
+  --cy-dim-strong: oklch(0.789 0.139 217 / 0.16);
+  --cy-edge-soft: oklch(0.789 0.139 217 / 0.3);
   /* Cyan accent edge/glow — §21.7 training-debrief "Mode entraînement".
      Mirror of --acc-edge/--acc-glow/--acc-glow-strong but in cyan. Consumed
      ONLY by the training-debrief surface (a soft focal halo on the step icon,

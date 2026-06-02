@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { DrawnRule } from '@/components/dashboard/drawn-rule';
 import { AnimatedCardGrid } from '@/components/library/animated-card-grid';
 import { CategoryFilterTabs } from '@/components/library/category-filter-tabs';
 import { CATEGORY_LABEL } from '@/components/library/category-meta';
@@ -63,80 +65,84 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
   const totalCount = categories.reduce((acc, c) => acc + c.count, 0);
 
   return (
-    <main className="container mx-auto max-w-5xl px-4 pt-6 pb-24 md:pt-10">
-      {/* Hero header */}
-      <header className="mb-6 flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span
-              className="bg-acc-dim text-acc inline-flex h-9 w-9 items-center justify-center rounded-full"
-              aria-hidden
-            >
-              <BookOpen className="h-4 w-4" />
-            </span>
-            <Pill tone="acc">Module Mark Douglas</Pill>
-          </div>
-          <div className="flex items-center gap-2">
-            {unseenCount > 0 && (
-              <Link
-                href="/library/inbox"
-                className="rounded-pill border-acc/40 bg-acc/10 text-acc inline-flex h-9 items-center gap-2 border px-3 text-xs font-medium transition-all hover:scale-105"
+    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
+      <DashboardAmbient />
+      <div className="relative mx-auto w-full max-w-5xl px-4 pt-6 pb-24 md:pt-10">
+        {/* Hero header */}
+        <header className="mb-6 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span
+                className="bg-acc-dim text-acc inline-flex h-9 w-9 items-center justify-center rounded-full shadow-[0_0_24px_-2px_var(--acc-glow)]"
+                aria-hidden
               >
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>
-                  {unseenCount} nouvelle{unseenCount > 1 ? 's' : ''}
-                </span>
-              </Link>
-            )}
-            {favorites.length > 0 && (
-              <Link
-                href="/library/favorites"
-                className="rounded-pill border-border bg-bg-1 text-foreground hover:border-acc/40 inline-flex h-9 items-center gap-2 border px-3 text-xs font-medium transition-all"
-              >
-                <Heart className="h-3.5 w-3.5" />
-                <span>
-                  {favorites.length} favori{favorites.length > 1 ? 's' : ''}
-                </span>
-              </Link>
-            )}
+                <BookOpen className="h-4 w-4" />
+              </span>
+              <Pill tone="acc">Module Mark Douglas</Pill>
+            </div>
+            <div className="flex items-center gap-2">
+              {unseenCount > 0 && (
+                <Link
+                  href="/library/inbox"
+                  className="rounded-pill border-acc/40 bg-acc/10 text-acc inline-flex h-9 items-center gap-2 border px-3 text-xs font-medium transition-all hover:scale-105"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>
+                    {unseenCount} nouvelle{unseenCount > 1 ? 's' : ''}
+                  </span>
+                </Link>
+              )}
+              {favorites.length > 0 && (
+                <Link
+                  href="/library/favorites"
+                  className="rounded-pill border-border bg-bg-1 text-foreground hover:border-acc/40 inline-flex h-9 items-center gap-2 border px-3 text-xs font-medium transition-all"
+                >
+                  <Heart className="h-3.5 w-3.5" />
+                  <span>
+                    {favorites.length} favori{favorites.length > 1 ? 's' : ''}
+                  </span>
+                </Link>
+              )}
+            </div>
           </div>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+            Ta bibliothèque psychologie trader
+          </h1>
+          <p className="text-muted max-w-2xl text-sm leading-relaxed">
+            Fiches inspirées de <em>Trading in the Zone</em> et <em>The Disciplined Trader</em> de
+            Mark Douglas. Tu reçois automatiquement les fiches qui correspondent à ton état
+            comportemental — et tu peux parcourir tout le catalogue à ta guise.
+          </p>
+          <DrawnRule className="mt-1 max-w-[220px]" />
+        </header>
+
+        {/* Filters */}
+        <div className="mb-6">
+          <CategoryFilterTabs entries={categories} active={cat} totalCount={totalCount} />
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-          Ta bibliothèque psychologie trader
-        </h1>
-        <p className="text-muted max-w-2xl text-sm leading-relaxed">
-          Fiches inspirées de <em>Trading in the Zone</em> et <em>The Disciplined Trader</em> de
-          Mark Douglas. Tu reçois automatiquement les fiches qui correspondent à ton état
-          comportemental — et tu peux parcourir tout le catalogue à ta guise.
-        </p>
-      </header>
 
-      {/* Filters */}
-      <div className="mb-6">
-        <CategoryFilterTabs entries={categories} active={cat} totalCount={totalCount} />
+        {/* Grid */}
+        {cards.length === 0 ? (
+          <Card className="p-6">
+            <EmptyState
+              icon={BookOpen}
+              headline={
+                cat
+                  ? `Pas encore de fiche dans « ${CATEGORY_LABEL[cat]} »`
+                  : 'Le catalogue arrive bientôt'
+              }
+              lead={
+                cat
+                  ? "Eliot publiera de nouvelles fiches dans cette thématique très bientôt. Reviens d'ici quelques jours."
+                  : 'Eliot prépare la première vague de fiches Mark Douglas. Tu y auras accès dès la publication.'
+              }
+              tip="En attendant, fais un check-in de qualité aujourd'hui : c'est ce qui nourrit le système qui te poussera la bonne fiche au bon moment."
+            />
+          </Card>
+        ) : (
+          <AnimatedCardGrid cards={cards} favoritedIds={Array.from(favoriteIds)} />
+        )}
       </div>
-
-      {/* Grid */}
-      {cards.length === 0 ? (
-        <Card className="p-6">
-          <EmptyState
-            icon={BookOpen}
-            headline={
-              cat
-                ? `Pas encore de fiche dans « ${CATEGORY_LABEL[cat]} »`
-                : 'Le catalogue arrive bientôt'
-            }
-            lead={
-              cat
-                ? "Eliot publiera de nouvelles fiches dans cette thématique très bientôt. Reviens d'ici quelques jours."
-                : 'Eliot prépare la première vague de fiches Mark Douglas. Tu y auras accès dès la publication.'
-            }
-            tip="En attendant, fais un check-in de qualité aujourd'hui : c'est ce qui nourrit le système qui te poussera la bonne fiche au bon moment."
-          />
-        </Card>
-      ) : (
-        <AnimatedCardGrid cards={cards} favoritedIds={Array.from(favoriteIds)} />
-      )}
     </main>
   );
 }

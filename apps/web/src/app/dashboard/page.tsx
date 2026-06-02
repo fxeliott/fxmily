@@ -132,37 +132,39 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
       {/* DS-v3 J3 — ambient mesh + drifting orbs behind the glass panels */}
       <DashboardAmbient />
-      {/* Sticky header */}
-      <header className="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-[var(--b-default)] bg-[var(--bg)]/95 px-4 backdrop-blur lg:px-8">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="grid h-5 w-5 place-items-center rounded-[5px] border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[10px] font-bold text-[var(--acc)]">
-            F
-          </div>
-          <span className="f-display text-[13px] font-semibold tracking-[-0.01em]">Fxmily</span>
-        </Link>
-        <span className="text-[var(--t-4)]">/</span>
-        <span className="text-[12px] text-[var(--t-1)]">{fullName}</span>
-        {isAdmin ? <Pill tone="acc">ADMIN</Pill> : null}
+      {/* Sticky header — full-bleed bar, content aligned to the body width */}
+      <header className="sticky top-0 z-20 border-b border-[var(--b-default)] bg-[var(--bg)]/95 backdrop-blur">
+        <div className="mx-auto flex h-12 w-full max-w-[var(--w-app)] items-center gap-3 px-4 lg:px-8 2xl:px-12">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <div className="grid h-5 w-5 place-items-center rounded-[5px] border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[10px] font-bold text-[var(--acc)]">
+              F
+            </div>
+            <span className="f-display text-[13px] font-semibold tracking-[-0.01em]">Fxmily</span>
+          </Link>
+          <span className="text-[var(--t-4)]">/</span>
+          <span className="text-[12px] text-[var(--t-1)]">{fullName}</span>
+          {isAdmin ? <Pill tone="acc">ADMIN</Pill> : null}
 
-        <div className="flex-1" />
+          <div className="flex-1" />
 
-        <form
-          action={async () => {
-            'use server';
-            await signOut({ redirectTo: '/login' });
-          }}
-        >
-          <button
-            type="submit"
-            className="rounded-control inline-flex h-7 items-center gap-1.5 border border-transparent px-2.5 text-[11px] text-[var(--t-3)] transition-colors hover:border-[var(--b-default)] hover:text-[var(--t-1)]"
+          <form
+            action={async () => {
+              'use server';
+              await signOut({ redirectTo: '/login' });
+            }}
           >
-            <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
-            <span className="hidden sm:inline">Déconnexion</span>
-          </button>
-        </form>
+            <button
+              type="submit"
+              className="rounded-control inline-flex h-7 items-center gap-1.5 border border-transparent px-2.5 text-[11px] text-[var(--t-3)] transition-colors hover:border-[var(--b-default)] hover:text-[var(--t-1)]"
+            >
+              <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
+              <span className="hidden sm:inline">Déconnexion</span>
+            </button>
+          </form>
+        </div>
       </header>
 
-      <div className="relative mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8">
+      <div className="relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
         {/* Title row */}
         <section className="mb-6 flex flex-col gap-2">
           <div className="t-eyebrow flex items-center gap-2">
@@ -311,7 +313,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               href="/pre-trade/new"
               className="rounded-card block border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
             >
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
                 <div className="flex items-start gap-3">
                   <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]">
                     <ShieldCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
@@ -325,12 +327,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       Pause 30 secondes avant ton prochain trade
                     </h2>
                     <p className="text-[12px] leading-relaxed text-[var(--t-2)]">
-                      4 questions courtes : raison, émotion, plan, stop-loss. Un miroir, pas une
-                      barrière.
+                      Un miroir de ton exécution, pas une barrière.
                     </p>
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 shrink-0 text-[var(--acc)]" aria-hidden="true" />
+
+                {/* §23 — les 4 questions en chips : remplissent la largeur du
+                    bandeau sur grand écran (fini le creux central), wrap sous lg. */}
+                <ul
+                  className="flex flex-wrap items-center gap-2"
+                  aria-label="Les 4 questions du pré-trade : raison, émotion, plan, stop-loss"
+                >
+                  {['Raison', 'Émotion', 'Plan', 'Stop-loss'].map((q) => (
+                    <li
+                      key={q}
+                      className="rounded-pill inline-flex items-center border border-[var(--b-acc)] bg-[var(--acc-dim-2)] px-2.5 py-1 text-[11px] font-medium text-[var(--acc)]"
+                    >
+                      {q}
+                    </li>
+                  ))}
+                </ul>
+
+                <span
+                  className={cn(
+                    btnVariants({ kind: 'primary', size: 'm' }),
+                    'pointer-events-none shrink-0 self-start lg:self-auto',
+                  )}
+                >
+                  Commencer
+                  <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                </span>
               </div>
             </Link>
           </HoverLift>
@@ -371,7 +397,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <MarkDouglasCard />
         </section>
 
-        {/* V2.3 ext #2 — Session HH frontend (Dashboard analytics widget pre-trade).
+        {/* §23 full-width — twin pre-trade analytics tiled 2-up on wide
+            screens (thematic pair : execution patterns + reason×outcome
+            correlation). Stack single-column below lg. */}
+        <div className="mb-6 grid gap-4 lg:grid-cols-2">
+          {/* V2.3 ext #2 — Session HH frontend (Dashboard analytics widget pre-trade).
             Lecture honnête des patterns d'exécution sur 30j : distribution
             reasonToTrade + plan alignment rate + stoploss predefined rate.
             Server Component async (fetch direct via loadPreTradeAnalyticsData
@@ -379,9 +409,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ajouté). Posture Mark Douglas neutre — `acc` lime UNIQUEMENT sur
             `edge`, `t-3` slate sur fomo/revenge/boredom (Yu-kai Chou
             anti-Black-Hat invariant : aucun rouge sur les "biais"). */}
-        <PreTradeAnalyticsCard userId={userId!} />
+          <PreTradeAnalyticsCard userId={userId!} />
 
-        {/* V2.3 ext #4 — Session II frontend (différenciateur Fxmily).
+          {/* V2.3 ext #4 — Session II frontend (différenciateur Fxmily).
             Table-compare empirique des 4 raisons (edge / fomo / revenge /
             boredom) × performance réelle (win-rate + R moyen) sur 30j.
             Server Component async (loadPreTradeCorrelationData server-only),
@@ -389,7 +419,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             Posture Mark Douglas STRICT : tone `acc` UNIQUEMENT sur `edge`,
             slate sur 3 autres, AUCUNE comparaison automatique. Win-rate
             JAMAIS rouge — le membre observe, ne se fait pas punir. */}
-        <PreTradeCorrelationCard userId={userId!} />
+          <PreTradeCorrelationCard userId={userId!} />
+        </div>
 
         {/* Admin section (conditional) */}
         {isAdmin ? (
@@ -458,33 +489,35 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <DashboardReflectWidget userId={session.user.id} />
         </section>
 
-        {/* V2.1 — TRACK module entry (5 piliers de pratique sous le miroir
-            M4 V1.8). Reste en DS-v2 lime (discipline forte) — pas de V18
-            blue/black overlay. */}
-        <section className="mb-6" aria-label="Module TRACK">
-          <HoverLift className="block">
-            <Link
-              href="/track"
-              className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <span className="t-eyebrow text-[var(--acc)]">Suivi des habitudes</span>
-                  <p className="text-[15px] font-semibold text-[var(--t-1)]">
-                    Tes 5 piliers de pratique
-                  </p>
-                  <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
-                    Sommeil, nutrition, café, sport, méditation — les conditions qui alimentent ton
-                    exécution.
-                  </p>
+        {/* §23 full-width — TRACK + slot formation tuilés 2-up sur grand écran
+            (évite les bandeaux étirés vides). TRACK reste DS-v2 lime
+            (discipline forte) — pas de V18 overlay ; le slot formation reste
+            muté/non-cliquable. h-full → cartes de hauteur égale. */}
+        <div className="mb-6 grid items-stretch gap-4 lg:grid-cols-2">
+          <section aria-label="Module TRACK" className="h-full">
+            <HoverLift className="block h-full">
+              <Link
+                href="/track"
+                className="rounded-card block h-full border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <span className="t-eyebrow text-[var(--acc)]">Suivi des habitudes</span>
+                    <p className="text-[15px] font-semibold text-[var(--t-1)]">
+                      Tes 5 piliers de pratique
+                    </p>
+                    <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
+                      Sommeil, nutrition, café, sport, méditation — les conditions qui alimentent
+                      ton exécution.
+                    </p>
+                  </div>
+                  <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden />
                 </div>
-                <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden />
-              </div>
-            </Link>
-          </HoverLift>
-        </section>
+              </Link>
+            </HoverLift>
+          </section>
 
-        {/* V2.1.6 — Suivi-formation/cursus (#4 séquence §21.6) placeholder
+          {/* V2.1.6 — Suivi-formation/cursus (#4 séquence §21.6) placeholder
             UI calme. Décision Eliot 2026-05-20 : la dépendance "projet
             pédagogie externe" est retirée ; ce slot est exposé comme
             marker non-cliquable pour les membres. L'activation V1.x se
@@ -492,26 +525,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ultérieure (jamais bundlés §18.4). Tone neutre/mute,
             anti-Black-Hat : pas de teaser engageant, pas d'animation,
             pas de hover-state cliquable. */}
-        <section className="mb-6" aria-label="Module Suivi formation (à venir)">
-          <div
-            className="rounded-card flex items-center gap-3 border border-[var(--b-default)] bg-[var(--bg-2)] p-4"
-            aria-describedby="formation-soon-desc"
-          >
-            <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)]">
-              <GraduationCap className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-            </div>
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="t-eyebrow-lg text-[var(--t-3)]">Suivi formation</span>
-                <Pill tone="mute">À venir</Pill>
+          <section aria-label="Module Suivi formation (à venir)" className="h-full">
+            <div
+              className="rounded-card flex h-full items-center gap-3 border border-[var(--b-default)] bg-[var(--bg-2)] p-4"
+              aria-describedby="formation-soon-desc"
+            >
+              <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)]">
+                <GraduationCap className="h-4 w-4" strokeWidth={1.75} aria-hidden />
               </div>
-              <p id="formation-soon-desc" className="text-[12px] leading-relaxed text-[var(--t-3)]">
-                Le module de suivi de ta progression sur la formation Fxmily arrivera plus tard. On
-                t&apos;avertira quand il sera prêt.
-              </p>
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="t-eyebrow-lg text-[var(--t-3)]">Suivi formation</span>
+                  <Pill tone="mute">À venir</Pill>
+                </div>
+                <p
+                  id="formation-soon-desc"
+                  className="text-[12px] leading-relaxed text-[var(--t-3)]"
+                >
+                  Le module de suivi de ta progression sur la formation Fxmily arrivera plus tard.
+                  On t&apos;avertira quand il sera prêt.
+                </p>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
 
         {/* V2.1.3 — Habit × Trade correlation (the documented Fxmily
             differentiator). Replaces the stale "Corrélations bien-être"

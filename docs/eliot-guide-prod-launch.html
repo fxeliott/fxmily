@@ -733,7 +733,7 @@
           </span>
           <span class="meta-pill acc"> Coût V1 : <strong>0&nbsp;€</strong> </span>
           <span class="meta-pill">
-            Hetzner : <strong>hetzner-dieu</strong>&nbsp;<code>178.104.39.201</code>
+            Hetzner : <strong>fxmily-prod</strong>&nbsp;<code>203.0.113.10</code>
           </span>
           <span class="meta-pill"> Tes mains : <strong>~50&nbsp;min</strong> </span>
         </div>
@@ -812,7 +812,7 @@
           <div class="callout info">
             <span class="label">Pourquoi</span>
             <p>
-              Ton serveur <code>hetzner-dieu</code> (<code>178.104.39.201</code>) tourne déjà n8n +
+              Ton serveur <code>fxmily-prod</code> (<code>203.0.113.10</code>) tourne déjà n8n +
               Langfuse + autres workloads. Avant d&rsquo;y ajouter Fxmily, on vérifie qu&rsquo;il a
               la capacité.
             </p>
@@ -821,7 +821,7 @@
             <span class="lang">bash</span>
             <button class="copy-btn">Copier</button>
             <pre><code># Depuis ton ordi, en PowerShell
-ssh hetzner-dieu 'free -h && df -h && docker ps --format "table {{.Names}}\t{{.Status}}"'</code></pre>
+ssh fxmily-prod 'free -h && df -h && docker ps --format "table {{.Names}}\t{{.Status}}"'</code></pre>
           </div>
           <h4>Tu cherches</h4>
           <ul>
@@ -842,7 +842,7 @@ ssh hetzner-dieu 'free -h && df -h && docker ps --format "table {{.Names}}\t{{.S
           </ul>
           <p>
             <strong>Si OK</strong> → continuer. Le
-            <code>bootstrap-fxmily.sh --skip-hetzner FXMILY_HETZNER_IP=178.104.39.201</code>
+            <code>bootstrap-fxmily.sh --skip-hetzner FXMILY_HETZNER_IP=203.0.113.10</code>
             réutilisera l&rsquo;IP existante.
           </p>
           <p><strong>Si saturé</strong> → on bascule sur un nouveau CX22 :</p>
@@ -855,7 +855,7 @@ bash ops/scripts/provision-hetzner.sh</code></pre>
           <div class="callout warn">
             <span class="label">Conflit Caddy</span>
             <p>
-              Si <code>hetzner-dieu</code> a déjà un Caddy qui sert n8n/Langfuse sur 80/443, il faut
+              Si <code>fxmily-prod</code> a déjà un Caddy qui sert n8n/Langfuse sur 80/443, il faut
               <strong>éditer le Caddyfile existant</strong> pour ajouter un bloc
               <code>app.fxmilyapp.com</code> au lieu d&rsquo;en lancer un second. → tu
               m&rsquo;envoies ton Caddyfile actuel, je te le modifie.
@@ -1296,8 +1296,8 @@ chmod 600 tokens.local.env
 # GitHub CLI authentifié (déjà OK pour toi)
 gh auth status
 
-# Lance le bootstrap (skip-hetzner car réutilise hetzner-dieu existant)
-FXMILY_HETZNER_IP=178.104.39.201 \
+# Lance le bootstrap (skip-hetzner car réutilise fxmily-prod existant)
+FXMILY_HETZNER_IP=203.0.113.10 \
 FXMILY_DOMAIN=fxmilyapp.com \
   bash ops/scripts/bootstrap-fxmily.sh tokens.local.env --skip-hetzner</code></pre>
           </div>
@@ -1309,7 +1309,7 @@ FXMILY_DOMAIN=fxmilyapp.com \
             </li>
             <li>
               <strong>Cloudflare DNS</strong> : poser les 6 records (A <code>app</code> →
-              <code>178.104.39.201</code>, MX, 3 TXT, optionnel DMARC).
+              <code>203.0.113.10</code>, MX, 3 TXT, optionnel DMARC).
             </li>
             <li>
               <strong>GitHub secrets</strong> : poser ~13 secrets via
@@ -1385,7 +1385,7 @@ gh run list -R fxeliott/fxmily --workflow=deploy.yml --limit=1</code></pre>
           <ol>
             <li>Build l&rsquo;image Docker <code>ghcr.io/fxeliott/fxmily:latest</code>.</li>
             <li>
-              SSH dans <code>hetzner-dieu</code> → <code>docker compose pull</code> +
+              SSH dans <code>fxmily-prod</code> → <code>docker compose pull</code> +
               <code>up -d</code>.
             </li>
             <li>Lancer <code>prisma migrate deploy</code> dans un container one-shot.</li>
@@ -1493,8 +1493,8 @@ curl -sI https://app.fxmilyapp.com/apple-icon | head -3
           <div class="code-wrap">
             <span class="lang">bash</span>
             <button class="copy-btn">Copier</button>
-            <pre><code># SSH sur hetzner-dieu
-ssh hetzner-dieu
+            <pre><code># SSH sur fxmily-prod
+ssh fxmily-prod
 
 # Génère un nouveau hash argon2
 docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T web node -e "

@@ -87,12 +87,19 @@
   /* ─── ACCENT semantic ───────────────────────────────────────── */
   --acc: oklch(0.62 0.19 254); /* DS-v3 #3b82f6 — luminous blue CTA */
   --acc-hi: oklch(0.74 0.16 250); /* #60a5fa — luminous hover/text-accent */
-  --acc-fg: oklch(0.98 0.01 247); /* near-white text on blue btn (≥4.5:1) */
+  --acc-fg: oklch(0.98 0.01 247); /* #f3f9ff — near-white label on --acc-btn (4.97:1 AA) */
   --acc-dim: oklch(0.62 0.19 254 / 0.16);
   --acc-dim-2: oklch(0.62 0.19 254 / 0.06);
   --acc-edge: var(--b-acc);
   --acc-glow: 0 0 24px -4px oklch(0.62 0.19 254 / 0.45);
   --acc-glow-strong: 0 0 32px -2px oklch(0.62 0.19 254 / 0.65);
+  /* Primary-CTA BACKGROUND tokens (WCAG 1.4.3 AA). Distinct from --acc/--acc-hi
+     on purpose: --acc (0.62 L) is light enough for accent TEXT/icons on --bg
+     (5.6:1) but too light as a button bg under white --acc-fg (only 3.48:1).
+     --acc-btn is darkened so white labels clear 4.5:1; the hover DEEPENS
+     (never lightens — lightening drops back below 4.5:1). */
+  --acc-btn: oklch(0.54 0.19 264); /* #3364db — white --acc-fg on it = 4.97:1 */
+  --acc-btn-hover: oklch(0.5 0.19 264); /* #2858cd — CTA hover, deepens (5.92:1) */
   --cy: var(--c-400); /* #22d3ee */
   --cy-dim: oklch(0.789 0.139 217 / 0.12);
   /* Cyan surface fills — stronger dim + softer border, mirroring the blue

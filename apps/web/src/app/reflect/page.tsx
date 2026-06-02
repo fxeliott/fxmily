@@ -81,7 +81,7 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
           <div className="flex flex-wrap items-center gap-3">
             <Link
               href="/reflect/new"
-              className="rounded-control inline-flex h-12 items-center gap-2 bg-[var(--acc)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]"
+              className="rounded-control inline-flex h-12 items-center gap-2 bg-[var(--acc-btn)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]"
             >
               <BrainCircuit size={16} strokeWidth={2.2} aria-hidden="true" />
               Démarrer une réflexion

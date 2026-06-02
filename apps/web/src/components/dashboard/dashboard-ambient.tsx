@@ -13,11 +13,17 @@
  * Orbs are positioned in the hero zone (top, rem-based) on purpose — the
  * dashboard is a long scroll, so anchoring the glow near the masthead
  * keeps the depth cue where the eye lands first, fading down the page.
+ *
+ * `tone` defaults to `'blue'` (the app-wide :root accent — dashboard, mindset,
+ * etc. render byte-identically). `tone="cyan"` retints the mesh + orbs for the
+ * §21.7 training-debrief "Mode entraînement" surface, keeping the live/backtest
+ * line visually distinct (Mark Douglas discipline) without a separate component.
  */
-export function DashboardAmbient() {
+export function DashboardAmbient({ tone = 'blue' }: { tone?: 'blue' | 'cyan' }) {
+  const isCyan = tone === 'cyan';
   return (
     <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
-      <div className="ds-aurora absolute inset-0" />
+      <div className={`${isCyan ? 'ds-aurora-cy' : 'ds-aurora'} absolute inset-0`} />
       <div
         className="ds-orb"
         style={{
@@ -27,7 +33,9 @@ export function DashboardAmbient() {
           height: '44vw',
           maxWidth: '460px',
           maxHeight: '460px',
-          background: 'radial-gradient(circle, oklch(0.62 0.19 254 / 0.5) 0%, transparent 70%)',
+          background: isCyan
+            ? 'radial-gradient(circle, oklch(0.789 0.139 217 / 0.42) 0%, transparent 70%)'
+            : 'radial-gradient(circle, oklch(0.62 0.19 254 / 0.5) 0%, transparent 70%)',
           animationDelay: '0s',
         }}
       />
@@ -40,7 +48,9 @@ export function DashboardAmbient() {
           height: '34vw',
           maxWidth: '360px',
           maxHeight: '360px',
-          background: 'radial-gradient(circle, oklch(0.5 0.21 262 / 0.42) 0%, transparent 70%)',
+          background: isCyan
+            ? 'radial-gradient(circle, oklch(0.703 0.145 218 / 0.34) 0%, transparent 70%)'
+            : 'radial-gradient(circle, oklch(0.5 0.21 262 / 0.42) 0%, transparent 70%)',
           animationDelay: '-9s',
         }}
       />

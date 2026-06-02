@@ -288,7 +288,7 @@ export function MindsetCheckWizard({ weekStart, prefill }: MindsetCheckWizardPro
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-4 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid
-                ? 'bg-[var(--acc)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
             )}
           >
@@ -302,7 +302,7 @@ export function MindsetCheckWizard({ weekStart, prefill }: MindsetCheckWizardPro
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-5 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               allValid && !isPending
-                ? 'bg-[var(--acc)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
             )}
             aria-busy={isPending || undefined}
@@ -399,7 +399,7 @@ function LikertItem({ item, value, onChange, error }: LikertItemProps) {
               className={cn(
                 'rounded-control flex min-h-12 flex-col items-center justify-center gap-0.5 border px-1 py-2 text-center transition-colors focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none',
                 checked
-                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]'
+                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc-btn)] text-[var(--acc-fg)]'
                   : 'border-[var(--b-strong)] bg-[var(--bg-2)] text-[var(--t-2)] hover:border-[var(--b-acc)] hover:text-[var(--t-1)]',
               )}
             >

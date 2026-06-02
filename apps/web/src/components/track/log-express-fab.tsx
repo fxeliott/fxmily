@@ -117,7 +117,7 @@ export function LogExpressFab(): React.JSX.Element | null {
         onClick={() => setOpen(true)}
         aria-label="Logger un pilier"
         aria-haspopup="dialog"
-        className="fixed right-4 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-40 grid h-14 w-14 place-items-center rounded-full bg-[var(--acc)] text-[var(--acc-fg)] shadow-[var(--sh-toast)] transition-[color,box-shadow,transform] hover:bg-[var(--acc-hi)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] active:scale-95"
+        className="fixed right-4 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-40 grid h-14 w-14 place-items-center rounded-full bg-[var(--acc-btn)] text-[var(--acc-fg)] shadow-[var(--sh-toast)] transition-[color,box-shadow,transform] hover:bg-[var(--acc-btn-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] active:scale-95"
       >
         <Plus className="h-6 w-6" strokeWidth={2} aria-hidden />
       </button>

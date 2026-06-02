@@ -40,6 +40,9 @@
  * ============================================================= */
 
 :root {
+  /* ─── LAYOUT (§23 full-width shells — single source of truth) ── */
+  --w-app: 1600px; /* content max-width for full-width surfaces (dashboard, admin, analytics). Tokenised so the whole §23 series shares one value (no max-w-[1600px] drift). */
+
   /* ─── NEUTRAL RAMP (11 stops, deep space) ───────────────────── */
   --n-50: oklch(0.971 0.005 256); /* #f6f7f9 */
   --n-100: oklch(0.939 0.008 256); /* #eceef3 */

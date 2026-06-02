@@ -73,7 +73,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <span
-                className="bg-acc-dim text-acc inline-flex h-9 w-9 items-center justify-center rounded-full shadow-[0_0_24px_-2px_var(--acc-glow)]"
+                className="bg-acc-dim text-acc inline-flex h-9 w-9 items-center justify-center rounded-full shadow-[var(--acc-glow)]"
                 aria-hidden
               >
                 <BookOpen className="h-4 w-4" />

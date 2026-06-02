@@ -97,7 +97,7 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
         <header className="relative mb-8 flex flex-col gap-3">
           <div className="relative flex flex-wrap items-center gap-2">
             <span
-              className="bg-acc-dim text-acc inline-flex h-9 w-9 items-center justify-center rounded-full shadow-[0_0_24px_-2px_var(--acc-glow)]"
+              className="bg-acc-dim text-acc inline-flex h-9 w-9 items-center justify-center rounded-full shadow-[var(--acc-glow)]"
               aria-hidden
             >
               <Icon className="h-4 w-4" strokeWidth={1.75} />

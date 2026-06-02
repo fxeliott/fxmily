@@ -313,7 +313,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               href="/pre-trade/new"
               className="rounded-card block border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
             >
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
                 <div className="flex items-start gap-3">
                   <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]">
                     <ShieldCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
@@ -327,12 +327,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       Pause 30 secondes avant ton prochain trade
                     </h2>
                     <p className="text-[12px] leading-relaxed text-[var(--t-2)]">
-                      4 questions courtes : raison, émotion, plan, stop-loss. Un miroir, pas une
-                      barrière.
+                      Un miroir de ton exécution, pas une barrière.
                     </p>
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 shrink-0 text-[var(--acc)]" aria-hidden="true" />
+
+                {/* §23 — les 4 questions en chips : remplissent la largeur du
+                    bandeau sur grand écran (fini le creux central), wrap sous lg. */}
+                <ul
+                  className="flex flex-wrap items-center gap-2"
+                  aria-label="Les 4 questions du pré-trade : raison, émotion, plan, stop-loss"
+                >
+                  {['Raison', 'Émotion', 'Plan', 'Stop-loss'].map((q) => (
+                    <li
+                      key={q}
+                      className="rounded-pill inline-flex items-center border border-[var(--b-acc)] bg-[var(--acc-dim-2)] px-2.5 py-1 text-[11px] font-medium text-[var(--acc)]"
+                    >
+                      {q}
+                    </li>
+                  ))}
+                </ul>
+
+                <span
+                  className={cn(
+                    btnVariants({ kind: 'primary', size: 'm' }),
+                    'pointer-events-none shrink-0 self-start lg:self-auto',
+                  )}
+                >
+                  Commencer
+                  <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                </span>
               </div>
             </Link>
           </HoverLift>

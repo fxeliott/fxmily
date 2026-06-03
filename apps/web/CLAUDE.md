@@ -4288,6 +4288,53 @@ NE PAS importer `lib/onboarding-interview/service.ts` (`import 'server-only'` li
 
 - Au 1ᵉʳ vrai `bash ops/scripts/onboarding-batch-local.sh --dry-run` : observer le taux de refus Opus 4.8 (seul moyen de confirmer empiriquement le chiffre over-refusal non vérifiable).
 
+## §26 — Calendrier adaptatif J-C3 (questionnaire wizard UI membre) (livré 2026-06-03, PR [#231](https://github.com/fxeliott/fxmily/pull/231) `6a5adaf`)
+
+> 3ᵉ des 4 jalons §26. **Frontend-only, 0 migration** — surface membre posée sur le data layer J-C1 (sur `main`). NE dépend PAS de J-C2 (PR #230 backend batch, open). Carbon du wizard MindsetCheck V1.5 §27. ADR-005 reste **Proposed** (flip post-J-C4). Section SPEC §26/§31 ajoutée au close-out J-C4.
+
+### Scope
+
+- **`components/calendar/calendar-questionnaire-wizard.tsx`** — wizard 4 steps fermés (1: profil + objectif sessions 1-7 · 2: dispo Lun-Ven 5j×3 slots · 3: dispo week-end 2j×3 + sommeil + pic d'énergie · 4: réunions + focus pratique + contrainte optionnelle). `useActionState` + hidden inputs « submit-everything » + localStorage draft `fxmily:calendar-questionnaire:draft:v1` (SSR-safe lazy `useState`+`useEffect`) + APG roving tabindex (`SingleChoiceField` vertical + `SessionGoalField` segmenté 1-7 horizontal) + `AvailabilityGrid` toggles `aria-pressed` (Check/Minus, pas info couleur-seule) + Framer `m.*` (LazyMotion app-shell) + `useReducedMotion` + sticky safe-area CTA. Validation par step = UX ; **serveur = seule autorité**.
+- **`components/calendar/calendar-step-progress.tsx`** — APG sr-only `<ol>` + fill gradient `--acc`/`--acc-hi` + `boxShadow:'var(--acc-glow)'`.
+- **`components/calendar/calendar-status-widget.tsx`** — widget dashboard Server Component, 2 états anti-Black-Hat : CTA « Organise ta semaine » (lien) si `getQuestionnaireForUser===null`, sinon « Ton organisation est enregistrée » discret + « Modifier ». `justSubmitted` (`?done=questionnaire`) → confirmation calme.
+- **`app/calendar/questionnaire/actions.ts`** — Server Action carbon mindset/J5. `auth()` + `status==='active'`, `weekStart=currentParisWeekStart()` **SERVER** (jamais le hidden client — anti PR#96), `coerceBool` guard (footgun `Boolean('false')===true`) sur les 21 toggles, reconstruction nested + `submitWeeklyScheduleInputSchema.strict().safeParse`, `submitWeeklyScheduleQuestionnaire` [J-C1], audit PII-free `calendar.questionnaire.submitted` (`{weekStart, instrumentVersion, wasNew}`), `revalidatePath('/calendrier')`+`('/dashboard')`, `redirect('/dashboard?done=questionnaire')` + re-throw NEXT_REDIRECT.
+- **`app/calendar/questionnaire/new/page.tsx`** — host auth-gated active, hydrate le questionnaire existant de la semaine en prefill (édition = re-remplir, `instrumentVersion` doit matcher).
+- **`app/dashboard/page.tsx`** — `<CalendarStatusWidget>` wiré dans une `<section aria-labelledby="calendar-widget-heading">` (Suspense + skeleton anti-CLS `h-[104px]`) après Check-in ; parse `?done=questionnaire`.
+- **E2E** `tests/e2e/calendar-questionnaire.spec.ts` — auth gate anon→/login + CAPTURE (round-trip Prisma `weeklyScheduleQuestionnaire`) + RENDER (wizard + widget). +11 Vitest action (`actions.test.ts`).
+
+### Décisions verrouillées (NE PAS re-casser)
+
+- **Redirect `/dashboard?done=questionnaire` (PAS `/calendrier`)** — divergence brief délibérée + JSDoc-documentée : `/calendrier` est la surface J-C4 **non construite** (404erait en prod si J-C3 merge avant J-C4). Le widget dashboard porte la confirmation ; J-C4 pourra re-pointer.
+- **weekStart server-authority** : recomputé `currentParisWeekStart()`, le hidden client est ignoré (jamais lu par `getString`). `submitWeeklyScheduleQuestionnaire` re-pin via `parseLocalDate` (double filet).
+- **`coerceBool`** : lit la string littérale (`'true'/'on'/'1'/'yes'`→true, reste→false), jamais `z.coerce.boolean()`. Toggle absent/`File` → false (fail-safe : indisponibilité, grille all-false légitime).
+- **`constraint` vide → `undefined` → `.default('none')`** (un `''` n'est PAS un membre d'enum, le passer casserait — `...(constraintRaw ? {constraint} : {})`).
+- **0 free-text** (instrument fermé §26 Q4) → AUCUN import `safeFreeText`/`detectCrisis`/`detectInjection`, **pas de bannière EU AI Act** sur CE formulaire (elle est en J-C4 sur le calendrier généré). Posture §2 : organise le TEMPS, jamais le marché (aucun import real-edge P&L).
+- **DS-v2 lime NEUTRE** — jamais `.v18-*`/`--v18-*` (REFLECT), `--cy*` (training), ni le pattern bugué `shadow-[0_0_..._var(--acc-glow)]` (`--acc-glow` = box-shadow complet → `boxShadow:'var(--acc-glow)'`). `V18_SPRING`/`V18_SPRING_TIGHT` = constantes timing SSOT, pas tokens thème.
+- **`calendar-step-progress.tsx` = clone dédié** (PAS de réutilisation de `mindset-step-progress` — data-slot `calendar-step-progress`, aria-label « Progression du questionnaire »).
+- **Pas de `removeItem` localStorage explicite au submit** (carbon mindset identique) : le redirect navigue ailleurs + gating week/version + prefill serveur authoritatif rendent le draft inoffensif ; « draft-wins same-week » = canon REFLECT/V1.3.
+- **db-helpers `cleanupTestUsers`** : `weeklyScheduleQuestionnaire`+`adaptiveCalendar` `deleteMany` AVANT `user.deleteMany` — déjà présent J-C1, pas re-touché.
+
+### Quality gate + audits + vérif réelle
+
+- `format:check` ✓ · `lint` ✓ (0 warn) · `type-check` ✓ · `build` ✓ (`/calendar/questionnaire/new` listée `ƒ`) · **Vitest 1722/1722** (baseline J-C1 main = **1711**, +11 ; le « 1749 » du pickup supposait J-C2 mergé — J-C3 branche off main sans J-C2).
+- **4 audits Opus parallèles** : accessibility-reviewer **SHIP-READY 0 TIER1** (7 points vigilance PASS, APG roving + grille `aria-pressed` + `aria-labelledby`→id existant scar V2.3.1) · ui-designer **0 TIER1/0 TIER2** (4 verrous DS PASS) · code-reviewer **READY TO MERGE 0 TIER1/2** (9 invariants OK) · verifier **9/9 VRAI, DÉCISION OK**. **1 fix TIER2 appliqué** : `aria-describedby="cqw-preamble"` sur le `<form>`.
+- **Vérif RÉELLE Playwright local** (Docker dev → **migration `20260603120000` appliquée à la DB dev** [était manquante : P2021 `weekly_schedule_questionnaires does not exist` → `prisma migrate deploy`] → login → remplir 4 steps → submit → redirect `/dashboard?done=questionnaire` → widget rempli). **Ligne DB exacte vérifiée** : `week_start=2026-06-01` (lundi Paris server-authority), `instrument_version=1`, `energy_peak_slot=morning` (colonne dérivée), `profile=salarie`, `goal=3`, `mon_morning=true`/`fri_evening=true`/`sat_morning=true` (coerceBool), `meeting=occasional`, `focus=balanced`, `constraint=none`. Screenshots iPhone SE 375 (steps 1/2/4 + widget rempli) + iPhone 15 393 (édition/prefill). **Segmented 1-7 confortable aux 2 tailles** (préoccupation densité a11y+ui levée visuellement).
+
+### Turn-2 — re-challenge world-class (commit `6b68a14`, scope §18.4, PAS de J-C4)
+
+- **5ᵉ audit adversarial** (stress FormData malveillant + Suspense-error + localStorage poisoning + completeness vs brief) = **0 TIER1/0 TIER2**. Confirmé : 0 prototype-pollution (clés littérales + vocab figés), parseInt coercition borne [1,7] non-exploitable, File→false fail-safe, `mergeGrid` robuste, 0 XSS, brief §8 100% couvert. **CANON Suspense-error** : un throw du widget calendar crashe tout `/dashboard` (error boundary global) — MAIS pattern identique de TOUTES les sections async du dashboard (TrackRecord/Patterns/HabitCorrelation + PreTrade sans même Suspense) ; un error boundary local serait inconsistant → dette dashboard-wide pré-existante (`app/dashboard/error.tsx` segment), hors scope.
+- **2 polish** : (1) `SessionGoalField` aria-label `"X sessions"` → `"X sessions sur 7"` (contexte d'échelle SR) ; (2) **e2e déterministe** — retrait de `waitForLoadState('networkidle')` des 2 tests RENDER. **CANON e2e : PAS de `networkidle` contre le dev server** (Turbopack garde un socket HMR → ne settle jamais → timeout flaky local ; passe en CI car `next start` prod n'a pas de socket). `goto` (load) + `toBeVisible` (auto-wait) = déterministe dev ET prod. **Local : 4/4 en 10.5s** (vs 1.8m + 1 flaky). Le carbon mindset + autres specs ont le même `networkidle` latent → candidat hygiène e2e future.
+- **CI PR #231 = 6/6 GREEN** sur le push (Playwright chromium PASS — le spec e2e passe en env CI prod).
+
+### Pré-requis Eliot
+
+1. Merger PR #231 (rebase auto sur main ; 0 migration ⇒ deploy no-op côté DB).
+2. La migration J-C1 `20260603120000_calendar_questionnaire` est **déjà LIVE prod** (sess.17) — rien à appliquer en prod pour J-C3.
+
+### Reste J-C4 (session FRAÎCHE /clear)
+
+Affichage `/calendrier` 3-états (pas de questionnaire→CTA · rempli sans calendrier→« génération en cours » · généré→affichage) + `<AIGeneratedBanner>` AVANT les blocs (EU AI Act 50(1), 7ᵉ site prod ; `markAdaptiveCalendarDisclosureShown` [J-C1]) + `components/calendar/{week-view,calendar-overview,calendar-warnings}.tsx` (grille 7j color-codée par category, hex `C` jamais `var()`, anti-Black-Hat) + admin read-only `?tab=calendar` dans `/admin/members/[id]` + 3 audits + Playwright 3-états + close-out SPEC.md §26/§31 + flip ADR-005 Accepted.
+
 ## §26 — Calendrier adaptatif J-C2 (pipeline batch local Claude $0) (livré 2026-06-03)
 
 > Jalon #2 de la séquence §26 (post J-C1 data layer mergé+déployé prod `69eee30`). Pipeline IA

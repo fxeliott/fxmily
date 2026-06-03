@@ -1387,9 +1387,9 @@ satisfaire AVANT d'exécuter le smoke :
 
 **État au 2026-05-09 (post-Phase R)** — 7 → **5** pré-requis bloquants :
 
-1. ✅ **Hetzner CX22** : utiliser `hetzner-dieu` 178.104.39.201 existant
+1. ✅ **Hetzner CX22** : utiliser `fxmily-prod` 203.0.113.10 existant
    (déjà payé pour n8n/Langfuse). `bootstrap-fxmily.sh --skip-hetzner
-FXMILY_HETZNER_IP=178.104.39.201` réutilise l'IP existante.
+FXMILY_HETZNER_IP=203.0.113.10` réutilise l'IP existante.
 2. ✅ **Domaine** : `fxmilyapp.com` (déjà possédé par Eliot via Cloudflare).
    DNS apex configuré, ajouter le sous-domaine `app.fxmilyapp.com` →
    Hetzner IP via `cloudflare-dns-setup.sh`. Achat `fxmily.com` reporté V2.
@@ -1627,7 +1627,7 @@ f0bae30 feat(j10): RGPD foundation + soft-delete + cron purge
 
 ### R.1 — URGENT findings web research 2026-05-09
 
-- **Vercel Hobby = INVALIDE pour Fxmily** : ToS interdit "any deployment used for financial gain of anyone involved". Fxmily = formation payante = commercial today. → Phase N path (`docs/zero-cost-deployment.md`) flagged ❌ status invalide en haut du doc. Recommandation : Hetzner existant `hetzner-dieu` (déjà payé), domaine `fxmilyapp.com` (déjà possédé). Coût supplémentaire = 0 €.
+- **Vercel Hobby = INVALIDE pour Fxmily** : ToS interdit "any deployment used for financial gain of anyone involved". Fxmily = formation payante = commercial today. → Phase N path (`docs/zero-cost-deployment.md`) flagged ❌ status invalide en haut du doc. Recommandation : Hetzner existant `fxmily-prod` (déjà payé), domaine `fxmilyapp.com` (déjà possédé). Coût supplémentaire = 0 €.
 - **Vercel Hobby AI training opt-in par défaut** : tout contenu déployé est utilisé pour entraîner les modèles AI. Inacceptable pour données membres Fxmily.
 - **Auth.js v5 stable ne sortira JAMAIS** : projet transféré à Better Auth team 2025. Pin `@beta.31` exact (pas `@beta`). V2 considérer migration Better Auth.
 - **CVE patch validation** : `next@16.2.6` + `react@19.2.6` + `react-dom@19.2.6` couvrent les 13 advisories de mai 2026.
@@ -1654,7 +1654,7 @@ Senior trader review : posture conforme SPEC §2 (no market analysis), 50/50 fic
 
 7 → **5** pré-requis bloquants après Phase R :
 
-- ✅ **Hetzner CX22** : `hetzner-dieu` existant 178.104.39.201 (déjà payé pour n8n/Langfuse). `bootstrap-fxmily.sh --skip-hetzner` + `FXMILY_HETZNER_IP=178.104.39.201`.
+- ✅ **Hetzner CX22** : `fxmily-prod` existant 203.0.113.10 (déjà payé pour n8n/Langfuse). `bootstrap-fxmily.sh --skip-hetzner` + `FXMILY_HETZNER_IP=203.0.113.10`.
 - ✅ **Domaine** : pivot V1 sur `fxmilyapp.com` (déjà possédé, Cloudflare DNS configuré). Achat éventuel `fxmily.com` reporté V2 si l'image de marque l'exige.
 - ⏳ Sentry DSN signup (gratuit 5000 events/mois, no CB).
 - ⏳ Resend domain `fxmilyapp.com` verify (3 TXT DNS Cloudflare → ~15 min propagation).

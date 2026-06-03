@@ -10,7 +10,7 @@ Trigger manuel du batch local Claude Max pour analyser les `OnboardingInterview`
 2. **Env var `FXMILY_ADMIN_TOKEN`** exportée dans le shell — 32+ chars, doit matcher `ADMIN_BATCH_TOKEN` dans `/etc/fxmily/web.env` sur Hetzner :
 
    ```bash
-   export FXMILY_ADMIN_TOKEN=$(ssh fxmily@hetzner-dieu "sudo cat /etc/fxmily/web.env" | grep '^ADMIN_BATCH_TOKEN=' | cut -d= -f2-)
+   export FXMILY_ADMIN_TOKEN=$(ssh fxmily@fxmily-prod "sudo cat /etc/fxmily/web.env" | grep '^ADMIN_BATCH_TOKEN=' | cut -d= -f2-)
    ```
 
 3. **`claude --version`** retourne le CLI officiel Anthropic (PAS un wrapper tiers).
@@ -114,7 +114,7 @@ Le script intègre par construction :
 
 | Symptôme                    | Diagnostic                                    | Recovery                                                                  |
 | --------------------------- | --------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
-| `HTTP 401` pull/persist     | Token mismatch GitHub ↔ Hetzner               | `ssh fxmily@hetzner-dieu "sudo cat /etc/fxmily/web.env"                   | grep ADMIN_BATCH_TOKEN` puis re-export |
+| `HTTP 401` pull/persist     | Token mismatch GitHub ↔ Hetzner               | `ssh fxmily@fxmily-prod "sudo cat /etc/fxmily/web.env"                    | grep ADMIN_BATCH_TOKEN` puis re-export |
 | `HTTP 503` persist          | `ADMIN_BATCH_TOKEN` non set sur prod          | SSH + ajouter à `/etc/fxmily/web.env` + restart web container             |
 | `HTTP 429`                  | Rate-limit atteint (10 burst / 5 min)         | Attendre 5 min ou lancer ailleurs                                         |
 | `claude_exit_N`             | Claude --print échec (network / quota Max)    | Re-run même cohort → idempotent côté serveur (pull filtre déjà-analyzed)  |

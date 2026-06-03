@@ -105,10 +105,22 @@ rejette les clés hallucinées ; `safeFreeText` post-parse en défense (même si
 
 - Routes `POST /api/admin/calendar-batch/{pull,persist}` gardées par `requireCalendarAdminToken`
   (503/429/401). `pull` → `CalendarBatchPullEnvelope` (systemPrompt + outputJsonSchema
-  embarqués). `persist` → 6 gates : (1) active-user (anti forged userId) · (2) questionnaire
-  existe pour (userId,weekStart) · (3) Zod `.strict()` · (4) `detectCrisis(overview+focus+warnings)`
-  → skip+audit+Sentry si HIGH/MEDIUM (carbone V1.7.1, output IA) · (5) check AMF-style sur
-  warnings · (6) upsert `(userId, weekStart)`.
+  embarqués). `persist` → gates dans l'ordre : (1) `parseLocalDate(weekStart)` → `invalid_week_window` ·
+  (2) active-user Set (anti forged userId) → `unknown_or_inactive_user` · (3) questionnaire
+  existe pour (userId,weekStart) → `calendar.batch.skipped` reason `no_questionnaire` (gate
+  CALENDAR-ONLY — le weekly/monthly n'a pas de pré-requis questionnaire) · (4) `adaptiveCalendarOutputSchema.safeParse`
+  → `invalid_output` · (5) `detectCrisis(corpus IA complet)` → skip + `calendar.batch.crisis_detected`
+  - Sentry si HIGH/MEDIUM (carbone V1.7.1, output IA) · **(5b) posture §2 : `detectAMFViolation(corpus IA complet)`**
+    → skip + `calendar.batch.amf_violation` + Sentry warning · (6) `persistAdaptiveCalendar` upsert `(userId, weekStart)`.
+    > ⚠️ **Correction du briefing** : le gate AMF (5b) N'EST PAS un carbon weekly/monthly —
+    > **ni le weekly ni le monthly n'ont de gate AMF** (vérifié). Le SEUL carbon AMF du repo est
+    > `lib/onboarding-interview/safety.ts` : on réutilise **uniquement** sa couche AMF-regex
+    > (`detectAMFViolation`, langage conseil marché/réglementé), PAS l'anti-clinical ni l'evidence-
+    > substring (= onboarding-only). Le corpus scanné est l'output IA COMPLET (overview + weeklyFocus
+    >
+    > - warnings + dayLabels + block labels), pas seulement les warnings — §2 est BLOQUANT, un avis
+    >   marché peut atterrir n'importe où. Slug dédié `calendar.batch.amf_violation` ajouté à `AuditAction`
+    >   (mirror `onboarding.batch.amf_violation`) pour ne pas polluer le signal crisis.
 - `loadAllSnapshotsForCalendarGeneration` : membres active + ont un questionnaire ce
   weekStart + n'ont pas déjà un calendrier (idempotency). 5 queries count-only (isolation).
   `pseudonymizeMember` au snapshot.

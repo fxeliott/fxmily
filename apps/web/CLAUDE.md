@@ -4334,3 +4334,72 @@ NE PAS importer `lib/onboarding-interview/service.ts` (`import 'server-only'` li
 ### Reste J-C4 (session FRAÎCHE /clear)
 
 Affichage `/calendrier` 3-états (pas de questionnaire→CTA · rempli sans calendrier→« génération en cours » · généré→affichage) + `<AIGeneratedBanner>` AVANT les blocs (EU AI Act 50(1), 7ᵉ site prod ; `markAdaptiveCalendarDisclosureShown` [J-C1]) + `components/calendar/{week-view,calendar-overview,calendar-warnings}.tsx` (grille 7j color-codée par category, hex `C` jamais `var()`, anti-Black-Hat) + admin read-only `?tab=calendar` dans `/admin/members/[id]` + 3 audits + Playwright 3-états + close-out SPEC.md §26/§31 + flip ADR-005 Accepted.
+
+## §26 — Calendrier adaptatif J-C2 (pipeline batch local Claude $0) (livré 2026-06-03)
+
+> Jalon #2 de la séquence §26 (post J-C1 data layer mergé+déployé prod `69eee30`). Pipeline IA
+> **batch local Claude Max** ($0 API marginal, `claude --print` Opus 4.8 §8) qui lit le
+> `WeeklyScheduleQuestionnaire` + les compteurs count-only + le résumé profil onboarding, génère un
+> calendrier hebdo structuré (`AdaptiveCalendar`), Zod-validé. **Carbon fidèle de V1.7.2 weekly +
+> V1.4 monthly.** Backend-only, 0 UI (J-C3 = wizard, J-C4 = affichage). ADR-005 reste **Proposed**
+> (flip Accepted = post-J-C4 + 1er batch réel réussi).
+
+### Architecture wire complète (mirror V1.7.2)
+
+```
+TON PC Windows                              HETZNER PROD (Caddy → fxmily-web)
+  /calendar-batch  ou
+  bash ops/scripts/calendar-batch-local.sh
+   │ curl POST X-Admin-Token ───────────→  /api/admin/calendar-batch/pull
+   │                                        │ requireCalendarAdminToken (503/429/401)
+   │                                        │ loadAllSnapshotsForCalendarGeneration
+   │                                        │  · users active ∩ ont un questionnaire ce weekStart
+   │                                        │  · ∧ n'ont PAS déjà un AdaptiveCalendar (idempotency)
+   │ ◄──── CalendarBatchPullEnvelope ───────┘  · loadCalendarSnapshotForUser (J-C1, count-only)
+   │  Loop par membre : claude --print --max-turns 1 --append-system-prompt (CALENDAR_SYSTEM_PROMPT)
+   │  60-120s jittered, model claude-opus-4-8, --max-budget-usd 5.00
+   ▼ curl POST X-Admin-Token ───────────→  /api/admin/calendar-batch/persist
+                                            │ MAX_BODY_BYTES 16MiB + Zod .strict() results.max(1000)
+                                            │ persistGeneratedCalendars (gates ci-dessous)
+   ◄──── { persisted, skipped, errors, total }
+```
+
+### Fichiers livrés J-C2
+
+| Fichier                                                | Rôle                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lib/calendar/prompt.ts`                               | `CALENDAR_SYSTEM_PROMPT` (§2 BLOQUANT hardcodé) + `buildCalendarUserPrompt` (Markdown, wrappe `profileSummary` via `wrapUntrustedMemberInput`) + `CALENDAR_OUTPUT_JSON_SCHEMA` (`additionalProperties:false` partout, miroir `adaptiveCalendarOutputSchema`) |
+| `lib/calendar/pricing.ts`                              | `computeCostEur` + `USD_TO_EUR=0.93` + `CLAUDE_CODE_LOCAL_MODEL` sentinel ($0) + `CLAUDE_OPUS_4_8_LOCAL_MODEL='claude-opus-4-8'` ($0 — binaire local Max ; commentaire : un futur path API payant Opus-4-8 doit remplacer par un pricing vérifié)            |
+| `lib/calendar/claude-client.ts`                        | `MockCalendarClient` (déterministe, dérive un calendrier Zod-valide de la dispo déclarée) + `LiveCalendarClient` (lazy `@anthropic-ai/sdk`, `cache_control ttl '1h'`, dormant V1) + `getCalendarClient` factory                                              |
+| `lib/calendar/batch.ts`                                | `loadAllSnapshotsForCalendarGeneration` (2 filtres calendar-only) + `persistGeneratedCalendars` (6 gates + 5b AMF) + types wire                                                                                                                              |
+| `app/api/admin/calendar-batch/{pull,persist}/route.ts` | endpoints token-gated (`requireCalendarAdminToken`, runtime nodejs, force-dynamic) — pull a un MEMBER_LABEL_SALT prod guard, persist a le body-cap + Zod `.strict()`                                                                                         |
+| `ops/scripts/calendar-batch-local.sh`                  | orchestrateur bash (9 ban-risk rules, `FXMILY_CALENDAR_TOKEN`, jitter floor 30, `FXMILY_CLAUDE_MODEL` default `claude-opus-4-8`, skip `hasQuestionnaire!=true`, pseudonym regex guard)                                                                       |
+| `.claude/commands/calendar-batch.md`                   | slash command `/calendar-batch` (carbon `/sunday-batch` + `/monthly-batch`)                                                                                                                                                                                  |
+| `lib/auth/audit.ts`                                    | +1 slug `calendar.batch.amf_violation` (9ᵉ slug `calendar.*`, mirror `onboarding.batch.amf_violation`)                                                                                                                                                       |
+
+### Gates `persistGeneratedCalendars` (ordre exact — NE PAS réordonner)
+
+`error` field traité EN PREMIER → (1) `parseLocalDate(weekStart)` → `invalid_week_window` (whole-batch, `errors=results.length`) · (2) active-user Set → `unknown_or_inactive_user` (anti forged userId) · (3) `WeeklyScheduleQuestionnaire` existe pour (userId,weekStart) → `calendar.batch.skipped` reason `no_questionnaire` (**gate CALENDAR-ONLY**, pas d'analog weekly/monthly) · (4) `adaptiveCalendarOutputSchema.safeParse` → `invalid_output` · (5) `detectCrisis(corpus IA complet)` → skip + `crisis_detected` + Sentry `reportError`(high)/`reportWarning`(medium) (`=== 'high' || === 'medium'`, PAS `>=` — `CrisisLevel` est une union non ordonnée) · **(5b) `detectAMFViolation(corpus IA complet)`** → skip + `amf_violation` + `reportWarning` · (6) `persistAdaptiveCalendar` (J-C1, dérive `primaryCategory`).
+
+### Décisions verrouillées (NE PAS re-litiger)
+
+- **Gate 5b AMF n'est PAS un carbon weekly/monthly** : NI le weekly NI le monthly n'ont de gate AMF (vérifié). Le SEUL carbon AMF du repo = `lib/onboarding-interview/safety.ts` ; on réutilise **uniquement** `detectAMFViolation` (couche AMF-regex : langage conseil marché/réglementé), PAS `detectClinicalLanguage` ni `validateEvidenceSubstrings` (= onboarding-only). Le doc `docs/jalon-calendrier-prep.md §7` a été corrigé (son "(5) check AMF-style … carbone" était imprécis).
+- **Corpus crisis + AMF = output IA COMPLET** : `composeCalendarOutputCorpus` concatène `overview + weeklyFocus + warnings + tous les dayLabels + tous les block labels` — pas seulement `warnings` (§2 BLOQUANT, un avis marché peut atterrir n'importe où). Plus profond que le corpus weekly (summary/risks/recos).
+- **Slug dédié `calendar.batch.amf_violation`** (pas réutiliser `crisis_detected`) : une violation de posture est un signal de sécurité distinct d'une détresse — ne pas polluer le signal crisis (qui escalade `reportError` sur HIGH). Mirror `onboarding.batch.amf_violation`.
+- **Model persisté = sentinel `claude-code-local` (cost $0)** : la bash n'envoie PAS de champ `model` → `entry.model` undefined → fallback `CLAUDE_CODE_LOCAL_MODEL`. `PRICING_KEYS = [claude-opus-4-8, claude-sonnet-4-6, claude-code-local]` accepte le binaire réel si jamais envoyé. `claude-opus-4-8` pricé $0 (binaire local Max) — c'est CORRECT pour son seul usage réel (le batch local). Sonnet gardé avec pricing réel pour un futur path API payant (ADR-005 Alt 6).
+- **Persist request = `{ weekStart, results }`** (PAS de `weekEnd` — `AdaptiveCalendar` n'a pas de colonne weekEnd, l'output `days[7]` couvre la semaine).
+- **`calendarInstrumentVersion`** passé à `persistAdaptiveCalendar` = la version du questionnaire qui a nourri (lue dans la Map `instrumentVersionByUser` du gate 3), pas une constante.
+- **Pull n'a pas de body-cap** (POST sans body, envelope produite serveur) — correct par design ; `calendarBatchLimiter` protège du flood.
+
+### Quality gate J-C2
+
+- format (prettier --write 7 fichiers) ✓, lint exit 0 ✓, type-check exit 0 strict ✓, build prod Turbopack ✓ (routes `/api/admin/calendar-batch/{pull,persist}` au manifest).
+- **Vitest 1711 → 1749** (+38 ; 30 tests calendar : `batch.test.ts` 14 + `calendar-batch/pull/route.test.ts` 6 + `persist/route.test.ts` 10 ; le reste = recomptage suite). `bash -n calendar-batch-local.sh` OK.
+- **2 audits Opus 0 TIER 1** : `verifier` (10 claims VRAI, re-run type-check + 30 tests lui-même, 0 fuite P&L, 0 gate désordre) + `security-auditor` (**0 CRITIQUE / 0 ÉLEVÉ**, 8 axes PASS ; 1 MEDIUM `computeCostEur` fallback = **inatteignable depuis le batch** car model toujours pinné par l'allowlist avant l'appel → no fix, mirror weekly canon).
+
+### Pré-requis Eliot pour activer J-C2 batch en prod (post-merge)
+
+1. Merger la PR J-C2 (merge=Eliot) → deploy auto Hetzner (`DEPLOY_PATH=hetzner`, 0 migration ⇒ no-op `prisma migrate deploy`).
+2. Provisionner `CALENDAR_ADMIN_BATCH_TOKEN` (`openssl rand -hex 32`) dans `/etc/fxmily/web.env` (0600 owner fxmily) + `docker compose -f docker-compose.prod.yml restart web`.
+3. Exporter `FXMILY_CALENDAR_TOKEN=<même valeur>` dans le shell local + `/calendar-batch --dry-run` (le pull renvoie l'enveloppe ; les membres sans questionnaire J-C3 → 0 entrée tant que J-C3 n'est pas livré).
+4. `MEMBER_LABEL_SALT` prod requis (le pull 503 sinon en prod — pseudonymes quittent l'host).

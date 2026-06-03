@@ -60,10 +60,29 @@ rollback runbook §N+1).
 - **`AdaptiveCalendar`** — `userId` (cascade), `weekStart @db.Date`, `schedule Json`
   (sortie Claude validée), cost tracking (`claudeModel`, `inputTokens`, `outputTokens`,
   `costEur Decimal(10,6)`), `aiDisclosureShownAt`, `calendarInstrumentVersion`. Unique
-  `(userId, weekStart)`. Pas de FK vers le questionnaire (snapshot-at-generation découplé,
-  carbone `MemberProfile` ↛ `OnboardingInterview`).
+  `(userId, weekStart)`. Pas de FK vers le questionnaire (snapshot-at-generation découplé).
 - Enums : `CalendarBlockCategory` (`live_trading`/`backtest`/`mark_douglas_review`/
   `checkin`/`rest`/`meeting`/`free`), `CalendarSlot` (`morning`/`afternoon`/`evening`).
+
+> **Corrections J-C1 build (2026-06-03, vérifiées sub-agent — voir ADR-005 §2/§3/§4) :**
+>
+> 1. **FK — l'analogie d'origine était FAUSSE.** Le découplage `AdaptiveCalendar` sans FK
+>    ne se justifie PAS par « carbone `MemberProfile` ↛ `OnboardingInterview` » : c'est
+>    l'inverse — `MemberProfile` **A** une FK `interviewId @unique → OnboardingInterview
+onDelete:Restrict`. Le découplage tient sur son mérite intrinsèque : le calendrier est
+>    un **snapshot figé** (un edit du questionnaire ne doit pas réécrire un calendrier déjà
+>    généré). `calendarInstrumentVersion` trace la provenance.
+> 2. **Enums — ancrés à des colonnes réelles.** Prisma DROP les enums non-référencés. Les 2
+>    enums sont donc ancrés : `CalendarSlot` via `WeeklyScheduleQuestionnaire.energyPeakSlot`
+>    (le pic d'énergie EST un slot) ; `CalendarBlockCategory` via `AdaptiveCalendar.primaryCategory`
+>    (catégorie dominante de la semaine, dérivée au persist). Vérifié `prisma-migration-runner` :
+>    les 2 `CREATE TYPE` sont bien émis.
+> 3. **`meetingsAttendedLast4w` ABSENT en J-C1** (§2 ci-dessus) : les modèles §30
+>    `Meeting`/`MeetingAttendance` ne sont PAS sur `main` (PR §30 ouverte non mergée). Le
+>    compteur est additif au snapshot quand §30 atterrit. Snapshot J-C1 = `{ tradesLast30d,
+checkinsLast14d, trainingSessionsLast14d, lastMindsetCheckDate }`.
+> 4. **Migration = `20260603120000_calendar_questionnaire`** (date du jour ≠ `20260604`).
+>    Rollback : `docs/runbook-hetzner-deploy.md §24`.
 
 ## 5. Questionnaire — instrument v1 figé (9 items, fermé)
 

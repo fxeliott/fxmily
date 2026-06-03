@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { env } from '@/lib/env';
 import {
   adminBatchLimiter,
+  calendarBatchLimiter,
   callerIdTrusted,
   monthlyBatchLimiter,
 } from '@/lib/rate-limit/token-bucket';
@@ -121,6 +122,48 @@ export function requireMonthlyAdminToken(req: Request): NextResponse | null {
   if (!provided || !verifyAdminToken(provided, env.MONTHLY_ADMIN_BATCH_TOKEN)) {
     const id = callerIdTrusted(req);
     const decision = monthlyBatchLimiter.consume(id);
+    if (!decision.allowed) {
+      return NextResponse.json(
+        { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(Math.ceil(decision.retryAfterMs / 1000)) },
+        },
+      );
+    }
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  return null;
+}
+
+/**
+ * §26 — per-request guard for the `/api/admin/calendar-batch/*` routes (J-C2).
+ *
+ * EXACT carbon of {@link requireMonthlyAdminToken} with two deliberate swaps:
+ *   - reads `env.CALENDAR_ADMIN_BATCH_TOKEN` (§26 — token separate from the
+ *     weekly/monthly tokens so the calendar batch rotates independently ; a
+ *     leaked weekly/monthly token must not unlock the calendar endpoints and
+ *     vice-versa)
+ *   - consumes the dedicated `calendarBatchLimiter` on the 401 path (so a flood
+ *     on another batch surface can never lock Eliot out of the calendar batch)
+ *
+ * Same anti-accumulation rationale: `verifyAdminToken` (the pure constant-time
+ * compare) IS reused — only the env key + limiter differ. Same check order
+ * (503 → 401-consume-bucket → 429 → null) and same status semantics.
+ */
+export function requireCalendarAdminToken(req: Request): NextResponse | null {
+  if (!env.CALENDAR_ADMIN_BATCH_TOKEN) {
+    return NextResponse.json(
+      { error: 'calendar_batch_disabled', detail: 'CALENDAR_ADMIN_BATCH_TOKEN not configured.' },
+      { status: 503 },
+    );
+  }
+
+  const provided = req.headers.get('x-admin-token');
+  if (!provided || !verifyAdminToken(provided, env.CALENDAR_ADMIN_BATCH_TOKEN)) {
+    const id = callerIdTrusted(req);
+    const decision = calendarBatchLimiter.consume(id);
     if (!decision.allowed) {
       return NextResponse.json(
         { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },

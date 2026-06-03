@@ -35,7 +35,7 @@ export default async function AdminMembersPage() {
   const totalTradesAcrossMembers = members.reduce((s, m) => s + (m.tradesCount ?? 0), 0);
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex min-h-dvh w-full max-w-[var(--w-app)] flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
       <header className="flex flex-col gap-4">
         <Link
           href="/dashboard"
@@ -120,7 +120,7 @@ export default async function AdminMembersPage() {
           />
         </Card>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="grid gap-3 xl:grid-cols-2 [&>li]:h-full">
           {members.map((member) => (
             <li key={member.id}>
               <MemberRow member={member} />

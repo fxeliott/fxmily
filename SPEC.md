@@ -1385,4 +1385,79 @@ Pourquoi nouvelle session : le contexte d'interview pollue l'implémentation ; u
 
 ---
 
+## 31. Calendrier personnel adaptatif (spec §26 — 2026-06-03)
+
+> Formalisé au build des jalons J-C1→J-C4 (le design vivait dans
+> `docs/jalon-calendrier-prep.md` + `docs/decisions/ADR-005`). **§30 est
+> réservé aux réunions** (PR #206 `/spec`, en attente de merge) — d'où la
+> numérotation §31 pour le calendrier (évite la collision, cf.
+> jalon-calendrier-prep §«Numérotation»).
+
+### 31.1 Vision (master prompt §26, verbatim ≤30 mots — fair use FR L122-5)
+
+« Chaque membre dispose de SON calendrier, qu'il adapte à sa disponibilité
+(selon qu'il travaille ou est étudiant, etc.). Chaque semaine, un questionnaire
+d'organisation de la semaine lui permet de mettre à jour son calendrier, et
+cette mise à jour est réalisée automatiquement par Claude Opus 4.8 en LOCAL. »
+
+Le calendrier organise le **TEMPS de pratique** du membre — sessions de trading
+à respecter, entraînement/backtest, présence réunions (§30), check-ins
+quotidiens, révision Mark Douglas, sommeil/repos.
+
+### 31.2 Posture §2 (invariant BLOQUANT)
+
+ZÉRO conseil de marché / setup / tendance / prévision / paire à trader. Le
+system prompt Claude (`lib/calendar/prompt.ts`, hardcodé repo-side) l'interdit ;
+le snapshot envoyé à Claude exclut **structurellement** tout
+`realizedR`/`outcome`/`plannedRR` (firewall type-level `CalendarActivityCounts`
++ test anti-leak `calendar-isolation`). Le calendrier organise le TEMPS, jamais
+les trades. Anti-Black-Hat (Yu-kai Chou) STRICT côté affichage : 0 score
+d'adhérence, 0 streak, 0 timer/urgence, 0 rouge « pas fait ». Le seul signal =
+la `priority` d'un bloc (poids visuel).
+
+### 31.3 Modèle de données (J-C1, migration `20260603120000_calendar_questionnaire`)
+
+- **`WeeklyScheduleQuestionnaire`** — `(userId, weekStart @db.Date)` unique,
+  `instrumentVersion`, `energyPeakSlot` (ancre l'enum `CalendarSlot`),
+  `responses Json` (instrument fermé v1, 0 free-text). Upsert idempotent.
+- **`AdaptiveCalendar`** — `(userId, weekStart)` unique, `schedule Json` (sortie
+  Claude validée), `primaryCategory` (ancre l'enum `CalendarBlockCategory`),
+  cost tracking, `aiDisclosureShownAt`, `calendarInstrumentVersion`. **AUCUNE FK**
+  vers le questionnaire (snapshot-at-generation figé). `weekStart` = lundi
+  Europe/Paris, server-authority (`parseLocalDate`, anti-flake PR#96).
+
+### 31.4 Pipeline IA — batch local Claude Max (J-C2, $0 API marginal)
+
+`claude --print` (abonnement Max, Opus 4.8 §8 — pas d'API payante). Routes
+admin token-gated `POST /api/admin/calendar-batch/{pull,persist}`
+(`CALENDAR_ADMIN_BATCH_TOKEN` séparé). `persist` enchaîne 6 gates
+(invalid_week → unknown_user → **no_questionnaire** [gate calendar-only] →
+invalid_output → crisis → **AMF §2 `detectAMFViolation`** → upsert). Carbone
+V1.7.2 weekly + V1.4 monthly. Pseudonymisation `pseudonymizeMember` au snapshot.
+
+### 31.5 Surfaces UI
+
+- **J-C3 — questionnaire hebdo** : wizard 4 steps fermé
+  (`/calendar/questionnaire/new`, carbone MindsetCheck §27), widget statut sur
+  `/dashboard`. Redirect après soumission → `/calendrier?done=questionnaire`
+  (re-pointé J-C4).
+- **J-C4 — affichage `/calendrier`** (Server Component, `force-dynamic`, auth
+  status active) : 3 états calmes — (i) pas de questionnaire → CTA ; (ii) rempli
+  sans calendrier → « ton calendrier se prépare, reviens en début de semaine » ;
+  (iii) généré → `<AIGeneratedBanner>` (EU AI Act 50(1), 7ᵉ site prod ;
+  `aiDisclosureShownAt` stampé au 1ᵉʳ affichage + audit
+  `calendar.disclosure.shown`) + overview/weeklyFocus (principe Mark Douglas) +
+  grille 7 jours color-codée par catégorie (hex `C`, mobile-first 375 → 2-up
+  desktop) + warnings ambre calmes. Reader partagé membre + admin
+  (`/admin/members/[id]?tab=calendar`, lecture seule, sans stamp).
+
+### 31.6 Jalons (1 = 1 session /clear — §18.4)
+
+J-C1 data layer → J-C2 pipeline batch → J-C3 questionnaire UI → J-C4 affichage.
+Détail de design + alternatives →
+`docs/decisions/ADR-005-adaptive-calendar-instrument-v1.md` (Status Proposed →
+Accepted post-1ᵉʳ run batch réel + validation Eliot §2 sur 5+ calendriers).
+
+---
+
 **Fin du SPEC v1.6**

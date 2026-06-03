@@ -37,11 +37,11 @@ import { submitWeeklyScheduleInputSchema } from '@/lib/schemas/weekly-schedule-q
  * banner belongs to J-C4 on the GENERATED calendar). §2 posture: organises the
  * member's TIME of practice, never the market.
  *
- * Redirect: `/dashboard?done=questionnaire`. DELIBERATE divergence from the
- * J-C3 brief's `/calendrier?done=questionnaire` — `/calendrier` is the J-C4
- * surface and does NOT exist yet, so redirecting there would land on
- * `not-found`. The `/dashboard` widget shows the "rempli" confirmation. J-C4
- * may re-point this once `/calendrier` ships.
+ * Redirect: `/calendrier?done=questionnaire`. J-C4 re-pointed this from the
+ * J-C3 interim `/dashboard?done=questionnaire` now that `/calendrier` ships
+ * (the original divergence existed only because the surface did not exist yet,
+ * scar CC3). The member lands on their calendar page — state (ii) "ton
+ * calendrier se prépare" with a calm confirmation — the cohesive flow.
  */
 
 export interface CalendarQuestionnaireActionState {
@@ -161,14 +161,14 @@ export async function submitCalendarQuestionnaireAction(
   });
 
   // The calendar surface (J-C4) + the dashboard widget both reflect the new
-  // questionnaire. `/calendrier` does not exist yet — revalidating it is a
-  // harmless no-op and keeps this forward-compatible with J-C4.
+  // questionnaire.
   revalidatePath('/calendrier');
   revalidatePath('/dashboard');
 
-  // Calm reveal, anti Black-Hat (§26): no score/streak in the URL.
+  // Calm reveal, anti Black-Hat (§26): no score/streak in the URL. Lands on the
+  // member's calendar (J-C4) — state (ii) "se prépare" + a calm confirmation.
   try {
-    redirect('/dashboard?done=questionnaire');
+    redirect('/calendrier?done=questionnaire');
   } catch (err) {
     if (isNextRedirect(err)) throw err;
     reportError('calendar.questionnaire.redirect', err, { userId: session.user.id });

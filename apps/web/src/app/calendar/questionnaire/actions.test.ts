@@ -214,7 +214,7 @@ describe('submitCalendarQuestionnaireAction — weekStart server authority', () 
 });
 
 describe('submitCalendarQuestionnaireAction — happy path', () => {
-  it('persists, audits PII-free, revalidates /calendrier + /dashboard, redirects', async () => {
+  it('persists, audits PII-free, revalidates /calendrier + /dashboard, redirects to /calendrier', async () => {
     const serverWeek = currentParisWeekStart();
     authMock.mockResolvedValueOnce(ACTIVE_SESSION);
     submitQuestionnaireMock.mockResolvedValueOnce(frozenResult(serverWeek));
@@ -238,7 +238,7 @@ describe('submitCalendarQuestionnaireAction — happy path', () => {
 
     expect(revalidatePathMock).toHaveBeenCalledWith('/calendrier');
     expect(revalidatePathMock).toHaveBeenCalledWith('/dashboard');
-    expect(redirectMock).toHaveBeenCalledWith('/dashboard?done=questionnaire');
+    expect(redirectMock).toHaveBeenCalledWith('/calendrier?done=questionnaire');
   });
 
   it('defaults an empty constraint to "none" (schema default, not a rejection)', async () => {

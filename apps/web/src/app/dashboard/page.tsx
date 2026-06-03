@@ -109,9 +109,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const corrPreserved = sp?.range
     ? new URLSearchParams({ range: parseRange(sp.range) }).toString()
     : '';
-  // §26 — calm post-submit confirmation on the calendar widget (the
-  // questionnaire Server Action redirects here with `?done=questionnaire`).
-  const calendarJustSubmitted = sp?.done === 'questionnaire';
 
   const [counts, checkinStatus, streak, latestScore] = userId
     ? await Promise.all([
@@ -277,7 +274,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             Organisation de la semaine
           </h2>
           <Suspense fallback={<CalendarStatusSkeleton />}>
-            <CalendarStatusWidget userId={userId!} justSubmitted={calendarJustSubmitted} />
+            <CalendarStatusWidget userId={userId!} />
           </Suspense>
         </section>
 

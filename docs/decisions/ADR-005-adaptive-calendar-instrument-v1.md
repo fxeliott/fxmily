@@ -144,7 +144,8 @@ Test anti-leak dédié `test/anti-leak/calendar-isolation.test.ts` (carbone `tra
 ## ADR-005 audit trail
 
 - **2026-06-03** — Proposed (Eliot Pena, sess.17 J-C1 build). Data layer + instrument v1 + isolation shippés ; J-C2→J-C4 à venir (1 jalon = 1 session).
-- **TBD** — Accepted post-build J-C4 + first cohort calendar validation.
+- **2026-06-03** — J-C2 (pipeline batch local Claude $0) + J-C3 (questionnaire wizard + dashboard widget) + **J-C4 (affichage `/calendrier` + onglet admin)** buildés/mergés. **Status reste Proposed** : le merge J-C4 satisfait la **précondition BUILD** des 4 trigger conditions ci-dessus, mais PAS l'empirique. Restent avant `Accepted` : (1) 1ᵉʳ `/calendar-batch` réel réussi ; (2) Eliot valide la posture §2 sur 5+ calendriers générés (0 market call) ; (3) 0 `calendar.batch.crisis_detected` HIGH non géré. Le test anti-leak `calendar-isolation` est vert sur main (il globbe `lib/calendar/**` et auto-couvre `lib/calendar/format.ts` J-C4) ; les **3 audits J-C4** (a11y + ui-designer + security-auditor) sont **0 TIER 1** (security 0 Critical/High/Medium). Décideur du flip = Eliot.
+- **TBD** — Accepted post-1ᵉʳ run batch réel + validation cohorte Eliot.
 - **TBD** — Superseded by ADR-XXX (next instrument version bump v2).
 
 ## Related ADRs

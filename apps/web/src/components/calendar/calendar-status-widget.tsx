@@ -13,20 +13,14 @@ import { currentParisWeekStart, formatWeekRangeFr } from '@/lib/calendar/week';
  * states, anti-Black-Hat (Yu-kai Chou) — NO streak, NO score, NO shame, NO
  * red-on-empty:
  *   - not filled → a calm "Organise ta semaine" CTA → `/calendar/questionnaire/new`.
- *   - filled     → a discreet "✓ rempli cette semaine" acknowledgement + an
- *                  unobtrusive edit affordance.
+ *   - filled     → a discreet acknowledgement + "Voir mon calendrier" (J-C4)
+ *                  + an unobtrusive edit affordance.
  *
- * `justSubmitted` (from `/dashboard?done=questionnaire`) adds a brief, polite
- * confirmation line — the redirect target's calm reveal (§26 posture §2).
- * DS-v2 NEUTRAL/lime — never `--cy` (training) nor `.v18-theme` (REFLECT).
+ * The calm post-submit confirmation lives on `/calendrier` (J-C4 re-pointed the
+ * questionnaire redirect there), not here. DS-v2 NEUTRAL/lime — never `--cy`
+ * (training) nor `.v18-theme` (REFLECT).
  */
-export async function CalendarStatusWidget({
-  userId,
-  justSubmitted = false,
-}: {
-  userId: string;
-  justSubmitted?: boolean;
-}) {
+export async function CalendarStatusWidget({ userId }: { userId: string }) {
   const weekStart = currentParisWeekStart();
   const questionnaire = await getQuestionnaireForUser(userId, weekStart);
   const weekRange = formatWeekRangeFr(weekStart);
@@ -82,14 +76,24 @@ export async function CalendarStatusWidget({
             Ton organisation est enregistrée
           </h3>
           <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
-            {justSubmitted
-              ? "C'est noté. Ton calendrier de la semaine sera prêt en début de semaine."
-              : 'Tu peux la mettre à jour si ta disponibilité change.'}
+            Tu peux la mettre à jour si ta disponibilité change.
           </p>
         </div>
+      </div>
+
+      {/* §26 J-C4 — the entry point into the member calendar surface, plus an
+          unobtrusive edit affordance. Two distinct links (no nesting). */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Link
+          href="/calendrier"
+          className="rounded-control inline-flex h-9 items-center gap-1.5 border border-[var(--b-acc)] bg-[var(--acc-dim)] px-3 text-[12px] font-semibold text-[var(--acc)] transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+        >
+          Voir mon calendrier
+          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+        </Link>
         <Link
           href="/calendar/questionnaire/new"
-          className="rounded-control mt-0.5 inline-flex h-7 shrink-0 items-center gap-1 border border-[var(--b-default)] px-2.5 text-[12px] text-[var(--t-3)] transition-colors hover:border-[var(--b-acc)] hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          className="rounded-control inline-flex h-9 items-center gap-1 border border-[var(--b-default)] px-3 text-[12px] text-[var(--t-3)] transition-colors hover:border-[var(--b-acc)] hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
         >
           <Pencil className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
           Modifier

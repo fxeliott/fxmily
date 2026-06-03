@@ -66,6 +66,28 @@ function formatDayDate(iso: string): string {
   return FMT_DAY.format(new Date(Date.UTC(y, m - 1, d)));
 }
 
+/** Calm neutral shown if a persisted block carries an out-of-enum category. */
+const FALLBACK_CATEGORY = { label: 'Bloc', color: C.t3 } as const;
+
+/**
+ * Defensive category lookup. The persisted `schedule` is cast from a JSONB
+ * column (`service.serializeCalendar`), so a legacy/drifted row — e.g. after a
+ * future instrument-v2 enum change — could carry a category outside the current
+ * 7 values despite the compile-time type. Fall back to a calm neutral instead of
+ * crashing the whole page (mirrors the `SLOT_ORDER.get(...) ?? 0` guard below).
+ */
+function categoryMetaFor(category: string): { label: string; color: string } {
+  return (
+    (CATEGORY_META as Record<string, { label: string; color: string }>)[category] ??
+    FALLBACK_CATEGORY
+  );
+}
+
+/** Defensive slot label lookup (same JSONB-drift rationale). */
+function slotLabelFor(slot: string): string {
+  return (SLOT_LABELS as Record<string, string>)[slot] ?? slot;
+}
+
 function DayCard({ day }: { day: CalendarDay }) {
   const blocks = [...day.blocks].sort(
     (a, b) => (SLOT_ORDER.get(a.slot) ?? 0) - (SLOT_ORDER.get(b.slot) ?? 0),
@@ -83,7 +105,7 @@ function DayCard({ day }: { day: CalendarDay }) {
       ) : (
         <ul className="flex flex-col gap-2">
           {blocks.map((block, idx) => {
-            const meta = CATEGORY_META[block.category];
+            const meta = categoryMetaFor(block.category);
             return (
               <li
                 key={`${block.slot}-${idx}`}
@@ -102,7 +124,7 @@ function DayCard({ day }: { day: CalendarDay }) {
                 />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="t-cap text-[var(--t-3)]">
-                    {meta.label} · {SLOT_LABELS[block.slot]} · {block.durationMin} min
+                    {meta.label} · {slotLabelFor(block.slot)} · {block.durationMin} min
                   </span>
                   <span className="text-[13px] leading-snug text-[var(--t-1)]">
                     {block.label}

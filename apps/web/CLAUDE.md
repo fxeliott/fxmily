@@ -4507,6 +4507,27 @@ currentParisWeekStart()` **SERVER** (anti-flake PR#96). 3 ÉTATS calmes :
   sous charge CPU concurrente (5 sub-agents) = cold-compile Turbopack, PAS un bug
   — re-run à vide = 5/5 ; CI `retries:2` couvre le cold-compile.**
 
+### Turn-2 — durcissement final pré-merge (2 fixes robustesse)
+
+Avant le merge prod, 2 sub-agents adversariaux fraîches (coverage+correctness =
+**MERGE-GO** ; prod-readiness = **PROD-SAFE**) ont relevé 2 gaps de robustesse
+LATENTS (non bloquants, mais le standard « 0 faille durable » les justifie) :
+
+- **Lookups défensifs week-view** (`calendar-week-view.tsx`) : `CATEGORY_META[block.category]`
+  - `SLOT_LABELS[block.slot]` jetaient un `TypeError`→500 si un `schedule` JSONB
+    persisté portait un jour une catégorie/slot hors-enum (impossible aujourd'hui —
+    `.strict()` au persist + v1 unique — mais foot-gun sur une future évolution
+    d'enum). Helpers `categoryMetaFor`/`slotLabelFor` avec fallback calme (`{ 'Bloc',
+C.t3 }` / slot brut) — **cohérent avec le guard `SLOT_ORDER.get(...) ?? 0`
+    pré-existant**, type-honnête (cast `Record<string,…>` → `?? fallback` lint-clean).
+- **Stamp disclosure best-effort** (`calendrier/page.tsx`) : `markAdaptiveCalendarDisclosureShown`
+  - audit enveloppés `try/catch` → `reportWarning('calendar.disclosure', 'stamp_failed')`.
+    Un hiccup DB transitoire sur le stamp (write non-essentiel) ne 500 plus le
+    calendrier déjà chargé du membre (carbon canon monthly V1.4 `dispatch_stamp_failed`).
+
+Re-gate post-fix : type-check 0 · lint 0 · Vitest **1762/1762** · build ✓ ·
+**e2e RÉEL 5/5 VERT** (29.7s, 0 régression).
+
 ### Pré-requis Eliot
 
 1. Merger la PR J-C4 (merge=Eliot) → deploy auto Hetzner (**0 migration** ⇒

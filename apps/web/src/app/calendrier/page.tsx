@@ -18,6 +18,7 @@ import {
   markAdaptiveCalendarDisclosureShown,
 } from '@/lib/calendar/service';
 import { currentParisWeekStart } from '@/lib/calendar/week';
+import { reportWarning } from '@/lib/observability';
 
 export const metadata = {
   title: 'Mon calendrier · Fxmily',
@@ -116,12 +117,19 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
     // the page owns the audit slug (`calendar.disclosure.shown`).
     const wasFirstView = calendar.aiDisclosureShownAt === null;
     if (wasFirstView) {
-      await markAdaptiveCalendarDisclosureShown(userId, weekStart);
-      await logAudit({
-        action: 'calendar.disclosure.shown',
-        userId,
-        metadata: { weekStart: calendar.weekStart },
-      });
+      // Best-effort: the calendar is already loaded — a transient DB hiccup on
+      // the disclosure stamp/audit must NEVER 500 a member's calendar view. The
+      // stamp is idempotent; a missed stamp just re-attempts on the next view.
+      try {
+        await markAdaptiveCalendarDisclosureShown(userId, weekStart);
+        await logAudit({
+          action: 'calendar.disclosure.shown',
+          userId,
+          metadata: { weekStart: calendar.weekStart },
+        });
+      } catch {
+        reportWarning('calendar.disclosure', 'stamp_failed', { userId });
+      }
     }
 
     body = (

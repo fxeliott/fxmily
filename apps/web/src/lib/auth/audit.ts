@@ -267,6 +267,7 @@ export type AuditAction =
   //   - batch.invalid_output : `{userId, weekStart, issuesCount}` (Zod .strict() fail)
   //   - batch.persist_failed : `{userId, weekStart, error (truncated 200)}`
   //   - batch.crisis_detected : `{userId, weekStart, level, matchedLabels}` (mirror V1.7.1, AI output)
+  //   - batch.amf_violation : `{userId, weekStart, matchedLabels}` (J-C2 §2 posture gate, mirror onboarding.batch.amf_violation)
   //   - disclosure.shown  : `{userId, weekStart}` (EU AI Act 50(1) banner first view, J-C4)
   | 'calendar.questionnaire.submitted'
   | 'calendar.batch.pulled'
@@ -275,6 +276,7 @@ export type AuditAction =
   | 'calendar.batch.invalid_output'
   | 'calendar.batch.persist_failed'
   | 'calendar.batch.crisis_detected'
+  | 'calendar.batch.amf_violation'
   | 'calendar.disclosure.shown';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the

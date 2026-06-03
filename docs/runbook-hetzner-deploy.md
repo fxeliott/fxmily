@@ -1939,6 +1939,123 @@ C'est attendu — V2.4 est un cycle complet, le rollback DB d'une partie casse t
 
 **Recommandation forte** : rollback V2.4 **uniquement** en cas de bug critique data-corrupting (e.g. crisis routing skip-persist défaillant qui exposerait du contenu sensible, ou amf_violation regex laxe). Pour bugs UI Phase B/C ou bug pipeline Phase A.2, préférer un **rollback code-only** (revert PR sur main + re-deploy) sans toucher au schéma DB.
 
+## 24. Rollback §26 calendrier adaptatif migration (`20260603120000_calendar_questionnaire`)
+
+> **Migration** shipped jalon J-C1 (data layer backend-first) 2026-06-03.
+> **Objets DB** : 2 enums (`CalendarSlot` : `morning`/`afternoon`/`evening` ; `CalendarBlockCategory` : `live_trading`/`backtest`/`mark_douglas_review`/`checkin`/`rest`/`meeting`/`free`) + 2 tables (`weekly_schedule_questionnaires` + `adaptive_calendars`) + 2 FK cascade User delete (RGPD §17) + 2 UNIQUE `(user_id, week_start)` + 3 indexes.
+> **ADD-only** : 0 changement sur table/colonne existante. Tables NEUVES → en J-C1 elles sont vides (aucun batch réel lancé) ; data-loss possible seulement si des membres ont déjà rempli des questionnaires (J-C3 mergé) ou si des calendriers ont été générés (J-C2 mergé).
+>
+> **Indépendant de §15-§23** : 0 FK croisée vers les autres tables de migration. Seules FK = `users` cascade User delete. `adaptive_calendars` n'a AUCUNE FK vers `weekly_schedule_questionnaires` (snapshot-at-generation découplé, ADR-005) → les 2 tables se droppent dans n'importe quel ordre.
+
+### 24.1 Pré-requis — quiesce
+
+Stop le web pour qu'aucun nouveau questionnaire ne soit upserté et qu'aucun
+batch local Claude calendar ne tente un INSERT AdaptiveCalendar pendant le DROP :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+```
+
+### 24.2 pg_dump SÉLECTIF des 2 tables AVANT rollback (data-loss si peuplées)
+
+Inutile en J-C1 (tables vides). Requis si J-C2/J-C3 mergés et des membres ont rempli/généré :
+
+```bash
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  pg_dump -U fxmily fxmily \
+  --table=weekly_schedule_questionnaires \
+  --table=adaptive_calendars \
+  --column-inserts --no-owner --no-acl \
+  | gzip > /etc/fxmily/backups/pre-calendar-rollback-${TS}.sql.gz
+```
+
+Compter les rows pré-rollback pour audit honnête :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c '
+    SELECT (SELECT COUNT(*) FROM weekly_schedule_questionnaires) AS questionnaires,
+           (SELECT COUNT(*) FROM adaptive_calendars) AS calendars;'
+```
+
+### 24.3 Procédure SQL (BEGIN/COMMIT atomic, tables avant types)
+
+```sql
+BEGIN;
+
+-- 1. Drop les 2 tables (pas de FK croisée entre elles — ordre libre).
+DROP TABLE IF EXISTS "adaptive_calendars" CASCADE;
+DROP TABLE IF EXISTS "weekly_schedule_questionnaires" CASCADE;
+
+-- 2. Drop les 2 enums APRÈS les tables (Postgres refuse de drop un type
+--    encore référencé par une colonne — ordre non négociable).
+DROP TYPE IF EXISTS "CalendarBlockCategory";
+DROP TYPE IF EXISTS "CalendarSlot";
+
+-- 3. Marquer la migration rolled-back dans _prisma_migrations (DELETE row
+--    complète, pas UPDATE — sinon `prisma migrate status` rapporte un drift).
+DELETE FROM "_prisma_migrations"
+WHERE "migration_name" = '20260603120000_calendar_questionnaire';
+
+COMMIT;
+```
+
+### 24.4 Re-deploy image pré-§26
+
+Re-déployer une image qui ne référence PAS le calendrier (ni `lib/calendar/service.ts`
+`db.weeklyScheduleQuestionnaire` / `db.adaptiveCalendar`, ni — une fois mergées — les
+routes `/calendrier` / `/api/admin/calendar-batch/*`). Reset HEAD au commit avant la
+PR J-C1.
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d web
+curl -fsS https://app.fxmilyapp.com/api/health
+```
+
+### 24.5 Audit
+
+```sql
+INSERT INTO audit_logs (action, metadata) VALUES (
+  'ops.migration.rolled_back',
+  '{"migration":"20260603120000_calendar_questionnaire",
+    "rows_lost_questionnaires":<Q>,
+    "rows_lost_calendars":<C>,
+    "rolled_back_at":"<ISO>",
+    "operator":"<eliot>"}'::jsonb
+);
+```
+
+### 24.6 Re-application future
+
+```bash
+# 1. Re-deploy image avec §26 LIVE :
+git checkout <ref-with-calendar>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d web
+
+# 2. Re-apply migration :
+docker compose -f /opt/fxmily/docker-compose.prod.yml run --rm web \
+  pnpm --filter @fxmily/web prisma:migrate deploy
+
+# 3. Restore data sélectif (si questionnaires/calendriers préservés via 24.2) :
+gunzip -c /etc/fxmily/backups/pre-calendar-rollback-<TS>.sql.gz \
+  | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+      psql -U fxmily -d fxmily
+
+# 4. Vérifier intégrité :
+psql -c 'SELECT COUNT(*) FROM weekly_schedule_questionnaires;'
+psql -c 'SELECT COUNT(*) FROM adaptive_calendars;'
+```
+
+### 24.7 ⚠️ Recommandation
+
+En J-C1, le calendrier est **data-layer only** (0 UI, 0 batch réel). Un rollback DB est
+quasiment sans conséquence fonctionnelle (aucune route ne consomme encore ces tables).
+Une fois J-C2→J-C4 mergés, préférer un **rollback code-only** (revert PR + re-deploy) pour
+tout bug UI/pipeline ; ne droper le schéma qu'en cas de bug critique data-corrupting.
+
 ## Note transversale — pattern rollback Fxmily
 
 Toutes les recipes §11-§23 suivent un même contrat :

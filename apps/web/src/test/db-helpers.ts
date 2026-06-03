@@ -183,6 +183,11 @@ export async function cleanupTestUsers(): Promise<{ deleted: number }> {
   await db.onboardingInterviewAnswer.deleteMany({ where: { userId: { in: ids } } });
   await db.onboardingInterview.deleteMany({ where: { userId: { in: ids } } });
 
+  // §26 — Calendrier adaptatif. Both ON DELETE CASCADE on User; deleted
+  // explicitly BEFORE the User wipe for log-visibility (same canon).
+  await db.adaptiveCalendar.deleteMany({ where: { userId: { in: ids } } });
+  await db.weeklyScheduleQuestionnaire.deleteMany({ where: { userId: { in: ids } } });
+
   const result = await db.user.deleteMany({ where: { id: { in: ids } } });
   return { deleted: result.count };
 }

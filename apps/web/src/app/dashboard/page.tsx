@@ -16,6 +16,7 @@ import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { auth, signOut } from '@/auth';
+import { CalendarStatusWidget } from '@/components/calendar/calendar-status-widget';
 import { StreakCard } from '@/components/checkin/streak-card';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DrawnRule } from '@/components/dashboard/drawn-rule';
@@ -89,7 +90,7 @@ function greeting(now = new Date()): string {
 }
 
 interface DashboardPageProps {
-  searchParams: Promise<{ range?: string; corr?: string }>;
+  searchParams: Promise<{ range?: string; corr?: string; done?: string }>;
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
@@ -108,6 +109,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const corrPreserved = sp?.range
     ? new URLSearchParams({ range: parseRange(sp.range) }).toString()
     : '';
+  // §26 — calm post-submit confirmation on the calendar widget (the
+  // questionnaire Server Action redirects here with `?done=questionnaire`).
+  const calendarJustSubmitted = sp?.done === 'questionnaire';
 
   const [counts, checkinStatus, streak, latestScore] = userId
     ? await Promise.all([
@@ -261,6 +265,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </Card>
 
           <StreakCard streak={streak.current} todayFilled={streak.todayFilled} />
+        </section>
+
+        {/* §26 — Calendrier adaptatif : weekly-schedule questionnaire status.
+            Calm CTA "Organise ta semaine" when the member hasn't filled this
+            week's questionnaire, discreet "rempli" ack otherwise. Anti-Black-Hat
+            (no streak/score). The generated calendar surface (/calendrier) is
+            J-C4 — this widget routes to the questionnaire only. */}
+        <section className="mb-6" aria-labelledby="calendar-widget-heading">
+          <h2 id="calendar-widget-heading" className="sr-only">
+            Organisation de la semaine
+          </h2>
+          <Suspense fallback={<CalendarStatusSkeleton />}>
+            <CalendarStatusWidget userId={userId!} justSubmitted={calendarJustSubmitted} />
+          </Suspense>
         </section>
 
         {/* J6 — Behavioral scores (4 gauges) */}
@@ -627,6 +645,17 @@ function PatternsSkeleton() {
         <div className="skel rounded-card-lg h-[240px] border border-[var(--b-default)] bg-[var(--bg-1)] lg:col-span-2" />
       </div>
     </div>
+  );
+}
+
+function CalendarStatusSkeleton() {
+  return (
+    <div
+      className="skel rounded-card h-[104px] border border-[var(--b-default)] bg-[var(--bg-1)]"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement de l'organisation de la semaine"
+    />
   );
 }
 

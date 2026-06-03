@@ -53,7 +53,7 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
   });
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-10">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-6 sm:py-10 lg:px-8 2xl:px-12">
       <header className="mb-6">
         <Link
           href="/admin"
@@ -101,7 +101,7 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
           </div>
         </div>
 
-        <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           <SnapshotCard
             label="Membres actifs"
             value={snapshot.members.active}
@@ -157,7 +157,11 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
           </div>
         </div>
 
-        <ul className="mt-5 divide-y divide-[var(--b-subtle)]">
+        {/* §23 full-width — heartbeat tuilé 2-up dès xl pour combler le creux
+            central qu'une liste full-bleed laisserait à 1600px (label à gauche,
+            timing à droite). Séparateur = border-b par row (le grid casse le
+            divide-y). Sous xl = 1 colonne. */}
+        <ul className="mt-5 grid gap-x-8 xl:grid-cols-2">
           {report.entries.map((entry) => (
             <CronRow key={entry.action} entry={entry} />
           ))}
@@ -208,7 +212,7 @@ function SnapshotCard({
 
 function CronRow({ entry }: { entry: CronHealthEntry }): React.ReactElement {
   return (
-    <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <li className="flex flex-col gap-2 border-b border-[var(--b-subtle)] py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium text-[var(--t-1)]">{entry.label}</p>

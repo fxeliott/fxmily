@@ -89,7 +89,7 @@ export default async function AdminReportsPage() {
   const weeks = Array.from(grouped.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex min-h-dvh w-full max-w-[var(--w-app)] flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
       <header className="flex flex-col gap-4">
         <Link
           href="/admin/members"
@@ -171,7 +171,10 @@ export default async function AdminReportsPage() {
                     {list.length} rapport{list.length > 1 ? 's' : ''}
                   </span>
                 </div>
-                <ul className="flex flex-col gap-2">
+                {/* §23 full-width — cards verticales (résumé + méta) : 2-up
+                    dès lg, 3-up à 2xl. `[&>li]:h-full` → hauteurs égales par
+                    rangée malgré des résumés de longueurs différentes. */}
+                <ul className="grid gap-2 lg:grid-cols-2 2xl:grid-cols-3 [&>li]:h-full">
                   {list.map((report) => {
                     const mocked = isMockedModel(report.claudeModel);
                     const label = memberLabel.get(report.userId) ?? 'Membre supprimé';
@@ -179,7 +182,7 @@ export default async function AdminReportsPage() {
                       <li key={report.id}>
                         <Link
                           href={`/admin/reports/${report.id}`}
-                          className="rounded-card focus-visible:outline-acc block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 shadow-[var(--sh-card)] transition-colors hover:border-[var(--b-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                          className="rounded-card focus-visible:outline-acc flex h-full flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-4 shadow-[var(--sh-card)] transition-colors hover:border-[var(--b-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="f-display text-[15px] font-semibold text-[var(--t-1)]">

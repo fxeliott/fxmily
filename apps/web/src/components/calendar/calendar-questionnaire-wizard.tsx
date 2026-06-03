@@ -795,7 +795,7 @@ function SessionGoalField({ legend, value, onChange, error }: SessionGoalFieldPr
               type="button"
               role="radio"
               aria-checked={checked}
-              aria-label={`${v} session${v > 1 ? 's' : ''}`}
+              aria-label={`${v} session${v > 1 ? 's' : ''} sur ${CALENDAR_SESSION_GOAL_MAX}`}
               tabIndex={i === tabbableIndex ? 0 : -1}
               onClick={() => onChange(v)}
               className={cn(

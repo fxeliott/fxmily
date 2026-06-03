@@ -187,8 +187,10 @@ test.describe('§26 Calendar questionnaire — auth-gate + happy-path persist/re
     await loginAs(page, request, member.email, member.password);
 
     await page.goto('/calendar/questionnaire/new');
-    await page.waitForLoadState('networkidle');
-
+    // NB: no `waitForLoadState('networkidle')` — Turbopack dev keeps an HMR
+    // socket open so network never goes idle (flaky 30s timeout in dev). `goto`
+    // already awaits `load`; the `toBeVisible` assertions auto-wait. Deterministic
+    // in dev AND prod (CI `next start` has no HMR socket).
     await expect(page).toHaveURL(/\/calendar\/questionnaire\/new/);
     await expect(page.locator('[data-slot="calendar-questionnaire-wizard"]')).toBeVisible();
     await expect(page.locator('[data-slot="calendar-step-progress"]')).toBeVisible();
@@ -203,8 +205,8 @@ test.describe('§26 Calendar questionnaire — auth-gate + happy-path persist/re
     await loginAs(page, request, member.email, member.password);
 
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
-
+    // No `networkidle` (see the wizard RENDER test) — deterministic via `goto`
+    // load + the `toBeVisible` auto-wait.
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.locator('[data-slot="calendar-status-widget"]')).toBeVisible();
 

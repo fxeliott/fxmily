@@ -25,10 +25,10 @@
 >
 > ## ✅ DÉCISION RECOMMANDÉE — Hetzner existant
 >
-> Eliot dispose déjà d'un Hetzner CX22 (`hetzner-dieu` 178.104.39.201, hostname
+> Eliot dispose déjà d'un Hetzner CX22 (`fxmily-prod` 203.0.113.10, hostname
 > `fxmilyapp.com`). **Coût marginal réel = 0 €** (déjà payé pour autres workloads
 > n8n / Langfuse). Path A `runbook-hetzner-deploy.md` + `bootstrap-fxmily.sh
---skip-hetzner` + `FXMILY_HETZNER_IP=178.104.39.201`. Aucune clause commerciale
+--skip-hetzner` + `FXMILY_HETZNER_IP=203.0.113.10`. Aucune clause commerciale
 > bloquante côté Hetzner (TOS standard cloud provider).
 >
 > **Si capacité CX22 insuffisante** (RAM/disk déjà saturés par n8n + Langfuse) :

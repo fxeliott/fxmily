@@ -13,11 +13,11 @@ respecter strictement la contrainte zéro coût supplémentaire). Pair with
 >    Cloudflare DNS configuré). Achat éventuel d'un domaine plus court
 >    (`fxmily.com` si dispo) reporté V2 si l'image de marque l'exige. Coût
 >    supplémentaire V1 : 0 €.
-> 1. **Hetzner CX22 EXISTANT** : `hetzner-dieu` à `178.104.39.201` (hostname
+> 1. **Hetzner CX22 EXISTANT** : `fxmily-prod` à `203.0.113.10` (hostname
 >    `fxmilyapp.com`) — déjà payé pour n8n/Langfuse. Vérifier d'abord la
->    capacité résiduelle via `ssh hetzner-dieu 'free -h && df -h'`. Si
+>    capacité résiduelle via `ssh fxmily-prod 'free -h && df -h'`. Si
 >    saturé, provisionner un nouveau CX22 (~5 €/mois, doc §1 ci-dessous).
->    Sinon `bootstrap-fxmily.sh --skip-hetzner FXMILY_HETZNER_IP=178.104.39.201`
+>    Sinon `bootstrap-fxmily.sh --skip-hetzner FXMILY_HETZNER_IP=203.0.113.10`
 >    réutilise l'IP existante.
 > 2. Créer le projet Sentry (`sentry.io` → New Project → Next.js) +
 >    générer un `SENTRY_AUTH_TOKEN` (Settings → Auth Tokens →

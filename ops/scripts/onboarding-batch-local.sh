@@ -229,12 +229,18 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
   # Run claude --print headless
   echo "[onboarding-batch] Invoking claude --print..."
   CLAUDE_EXIT=0
+  # Pure-generator isolation (see §26 calendar batch, real e2e validated
+  # 2026-06-04): --setting-sources "" drops the operator's CLAUDE.md + hooks
+  # (else conversational prose, not JSON); --system-prompt REPLACES the agent
+  # framing; --max-turns 8 (NOT 1 — Opus 4.8 thinking uses a turn before JSON,
+  # `--max-turns 1` aborts "Reached max turns"). --max-budget-usd caps runaway.
   claude --print \
     --model "$CLAUDE_MODEL" \
     --effort "$CLAUDE_EFFORT" \
-    --max-turns 1 \
+    --max-turns 8 \
     --max-budget-usd "$MAX_BUDGET_USD" \
-    --append-system-prompt "$(cat "$WORK_DIR/system-prompt.txt")" \
+    --setting-sources "" \
+    --system-prompt "$(cat "$WORK_DIR/system-prompt.txt")" \
     < "$PROMPT_FILE" \
     > "$RESPONSE_FILE" 2> "$WORK_DIR/response-$i.err" || CLAUDE_EXIT=$?
 

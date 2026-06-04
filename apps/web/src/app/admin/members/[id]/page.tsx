@@ -30,6 +30,8 @@ import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
 import { listTrainingTradesAsAdmin } from '@/lib/training/training-trade-admin-service';
 import { getProfileForUser, getInterviewForUser } from '@/lib/onboarding-interview/service';
 import { MemberProfileViewerAdmin } from '@/components/admin/member-profile-viewer-admin';
+import { getLatestCalendarForUser } from '@/lib/calendar/service';
+import { MemberCalendarPanel } from '@/components/admin/member-calendar-panel';
 import {
   listTrainingDebriefsForMember,
   loadTrainingDebriefStats,
@@ -66,6 +68,7 @@ function parseTab(
   | 'weekly-reports'
   | 'monthly-debrief'
   | 'mindset'
+  | 'calendar'
   | 'profile'
   | 'notes'
 > {
@@ -75,6 +78,7 @@ function parseTab(
   if (value === 'weekly-reports') return 'weekly-reports';
   if (value === 'monthly-debrief') return 'monthly-debrief';
   if (value === 'mindset') return 'mindset';
+  if (value === 'calendar') return 'calendar';
   if (value === 'profile') return 'profile';
   if (value === 'notes') return 'notes';
   return 'overview';
@@ -154,6 +158,11 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
     tab === 'profile'
       ? await Promise.all([getProfileForUser(memberId), getInterviewForUser(memberId)])
       : null;
+
+  // §26 J-C4 — read-only latest AdaptiveCalendar for the calendar tab. §2:
+  // read straight from `adaptive_calendars` (no real-edge recompute). The
+  // member's first-view disclosure stamp is NOT touched here (admin view).
+  const calendar = tab === 'calendar' ? await getLatestCalendarForUser(memberId) : null;
 
   // J6.5 — pull behavioral scores + analytics in parallel for the overview tab.
   // Skipped on the trades tab to keep its render path lean. J6.6 H1 fix —
@@ -269,6 +278,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       {tab === 'mindset' && mindsetData !== null ? (
         <MemberMindsetChecksPanel data={mindsetData} />
       ) : null}
+      {tab === 'calendar' ? <MemberCalendarPanel calendar={calendar} /> : null}
       {tab === 'profile' && profileData !== null ? (
         <MemberProfileViewerAdmin
           memberId={memberId}

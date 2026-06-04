@@ -11,7 +11,8 @@
 # Ban-risk mitigation rules (9, unchanged from weekly/monthly) :
 #   - Runs FROM Eliot's machine (his IP, his fingerprint, his Max account)
 #   - Spreads `claude --print` invocations across 60–120 s jittered sleeps
-#   - One invocation per member = fresh context per generation (--max-turns 1)
+#   - One invocation per member = fresh context per generation (single-shot,
+#     bounded by --max-turns + --max-budget-usd)
 #   - Snapshots are already pseudonymized (no PII reaches Anthropic)
 #   - System prompt + JSON schema travel WITH the envelope (no on-device tamper)
 #   - No third-party wrappers — only the official `claude` binary
@@ -35,7 +36,7 @@
 #   FXMILY_CALENDAR_BATCH_DIR  default '/tmp/fxmily-calendar-batch' (workdir)
 #   FXMILY_SLEEP_MIN_S      default 60 (floor 30 — ban-risk mitigation)
 #   FXMILY_SLEEP_MAX_S      default 120
-#   FXMILY_MAX_TURNS        default 1 (anti-bloat ; Claude reads prompt, writes JSON, done)
+#   FXMILY_MAX_TURNS        default 8 (≥2 ; Opus 4.8 thinking uses a turn before the JSON)
 #
 # Exit codes :
 #   0 = batch completed (some entries may have errored ; check report)
@@ -49,7 +50,12 @@ APP_URL="${FXMILY_APP_URL:-https://app.fxmilyapp.com}"
 BATCH_DIR="${FXMILY_CALENDAR_BATCH_DIR:-/tmp/fxmily-calendar-batch}"
 SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
 SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
-MAX_TURNS=1  # Hard-pinned to 1 (single-shot per member — anti-bloat, anti-quota-surprise)
+# Opus 4.8 at high/xhigh effort emits an extended-thinking pass that consumes a
+# turn BEFORE the JSON answer, so `--max-turns 1` aborts with "Reached max turns
+# (1)" (confirmed by real end-to-end generation, 2026-06-04). 8 = ample headroom
+# for think+answer while staying bounded; `--max-budget-usd` below is the real
+# runaway circuit-breaker. NOT 1.
+MAX_TURNS="${FXMILY_MAX_TURNS:-8}"
 # §8 — local Claude solicitations run on Opus 4.8 at "extra" effort by default.
 CLAUDE_MODEL="${FXMILY_CLAUDE_MODEL:-claude-opus-4-8}"
 CLAUDE_EFFORT="${FXMILY_CLAUDE_EFFORT:-xhigh}"
@@ -262,15 +268,26 @@ for idx in $ENTRY_INDICES; do
   # prompt are NOT shell-expanded. The file content is a literal argument.
   set +e
   SYSTEM_PROMPT_CONTENT=$(<"$SYSTEM_PROMPT_FILE")
-  # `--bare` NOT used (breaks OAuth Max keychain auth — empirically confirmed,
-  # weekly R4). `--max-budget-usd 5.00` is the financial circuit-breaker in
-  # case Anthropic ever silently switches the binary to billable API.
+  # PURE-GENERATOR ISOLATION (real e2e validated 2026-06-04) — three flags make
+  # `claude --print` a deterministic JSON generator instead of an interactive
+  # coding agent:
+  #   --system-prompt (REPLACE, not --append) : the calendar prompt becomes the
+  #     ENTIRE system prompt, dropping the default coding-agent framing.
+  #   --setting-sources "" : load NO user/project/local settings → the operator's
+  #     own ~/.claude/CLAUDE.md + hooks (self-checklist, tracker, …) are NOT
+  #     injected. WITHOUT this the model returns conversational prose ("tracker
+  #     cleared… self-checklist…") with the JSON buried, breaking the parse.
+  #   --max-turns 8 (see MAX_TURNS) : Opus 4.8 thinking uses a turn before the JSON.
+  # `--bare` is NOT used (breaks OAuth Max keychain auth — weekly R4).
+  # `--max-budget-usd 5.00` = financial circuit-breaker if the binary ever
+  # silently switches to billable API.
   claude --print \
     $MODEL_FLAG \
     $EFFORT_FLAG \
     --max-turns "$MAX_TURNS" \
     --max-budget-usd 5.00 \
-    --append-system-prompt "$SYSTEM_PROMPT_CONTENT" \
+    --setting-sources "" \
+    --system-prompt "$SYSTEM_PROMPT_CONTENT" \
     --output-format text \
     <"$PROMPT_FILE" \
     >"$RESPONSE_FILE" 2>>"$ERRORS_LOG"

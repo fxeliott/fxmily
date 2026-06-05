@@ -63,10 +63,11 @@ import { cn } from '@/lib/utils';
  *     question that DIFFERS from server state, prompt "Reprendre la
  *     brouillon ?" before silently overwriting (Y/N modal).
  *
- *   - **Skip OPT-IN signalé honnêtement** (R7 §E) — "Tu peux passer cette
- *     question, ton profil sera moins riche". Skip POSTs an empty answer
- *     via the `_skipped: '1'` hidden marker → server interprets as no-op
- *     no-persist + advance.
+ *   - **Pas de skip de question** — chaque réponse est obligatoire (≥10
+ *     caractères, `answerTextSchema`). NB : un "skip OPT-IN" via un marqueur
+ *     `_skipped: '1'` avait été envisagé (R7 §E) mais n'est PAS implémenté
+ *     (ni bouton "Passer", ni champ `_skipped`, ni branche serveur). À cadrer
+ *     en jalon dédié si le besoin est confirmé.
  *
  *   - **Crisis routing UX = persist QUAND MÊME** (R6 §C) + banner FR +
  *     audit slug separate. Returned crisisLevel from action triggers the

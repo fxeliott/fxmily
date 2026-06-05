@@ -313,6 +313,23 @@ describe('buildWeeklySnapshot — free text aggregation', () => {
     expect(snap.freeText.emotionTags).toHaveLength(5);
   });
 
+  it('aggregates emotionDuring into the weekly emotion summary (§22 axis)', () => {
+    const input = emptyInput();
+    input.trades = [
+      closedTrade('win', 1, {
+        emotionBefore: ['calm'],
+        emotionDuring: ['anxious', 'doubt'],
+        emotionAfter: ['satisfied'],
+      }),
+    ];
+    const snap = buildWeeklySnapshot(input);
+    // The in-position affect ("pendant") must feed the IA summary too, not just
+    // entry/exit — 'anxious'/'doubt' are carried ONLY by emotionDuring here.
+    expect(snap.freeText.emotionTags).toEqual(
+      expect.arrayContaining(['calm', 'anxious', 'doubt', 'satisfied']),
+    );
+  });
+
   it('pairs traded are frequency-sorted and capped at 10', () => {
     const input = emptyInput();
     input.trades = [

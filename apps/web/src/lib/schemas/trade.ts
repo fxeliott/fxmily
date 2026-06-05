@@ -288,7 +288,15 @@ export const WIZARD_STEPS = [
   // 5 — entry screenshot
   ['screenshotEntryKey'],
   // 6 — outcome (optional, can be skipped to "save as open")
-  ['exitedAt', 'exitPrice', 'outcome', 'emotionAfter', 'screenshotExitKey', 'notes'],
+  [
+    'exitedAt',
+    'exitPrice',
+    'outcome',
+    'emotionDuring',
+    'emotionAfter',
+    'screenshotExitKey',
+    'notes',
+  ],
 ] as const;
 
 export const WIZARD_TOTAL_STEPS = WIZARD_STEPS.length;

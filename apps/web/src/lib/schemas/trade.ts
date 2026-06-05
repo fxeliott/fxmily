@@ -231,6 +231,10 @@ export const tradeCloseSchema = z.object({
     }),
   exitPrice: positivePrice,
   outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }),
+  /// Emotions felt DURING the open position (recalled at close). Required,
+  /// mirroring `emotionAfter` — closes the "avant / pendant / après" axis
+  /// (master prompt §22). Same `emotionTagsRequired` rule (1–3 allowlisted).
+  emotionDuring: emotionTagsRequired,
   emotionAfter: emotionTagsRequired,
   /// V1.8 REFLECT — post-outcome bias tags (CFA LESSOR + Steenbarger).
   /// Optional: V1 trades closed before V1.8 stay valid; UI defaults to empty.

@@ -239,6 +239,7 @@ Champs à remplir au sortie de trade :
 - **Prix sortie**
 - **Outcome** : win / loss / BE
 - **R réalisé** (auto-calculé si possible)
+- **Émotion pendant le trade** : tags (ressenti en position — ajout V2.x, axe « avant / pendant / après » du master prompt §22)
 - **Émotion après sortie** : tags
 - **Screen sortie** (upload obligatoire)
 - **Notes** (texte libre, optionnel)

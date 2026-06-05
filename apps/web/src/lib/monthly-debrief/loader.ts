@@ -246,6 +246,7 @@ async function loadTrades(
     outcome: trade.outcome,
     realizedR: trade.realizedR == null ? null : trade.realizedR.toString(),
     realizedRSource: trade.realizedRSource,
+    emotionDuring: [...trade.emotionDuring],
     emotionAfter: [...trade.emotionAfter],
     screenshotExitKey: trade.screenshotExitKey,
     closedAt: trade.closedAt ? trade.closedAt.toISOString() : null,

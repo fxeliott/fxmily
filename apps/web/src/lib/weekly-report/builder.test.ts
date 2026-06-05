@@ -64,6 +64,7 @@ function makeTrade(partial: Partial<SerializedTrade> = {}): SerializedTrade {
     outcome: null,
     realizedR: null,
     realizedRSource: null,
+    emotionDuring: [],
     emotionAfter: [],
     screenshotExitKey: null,
     closedAt: null,

@@ -533,6 +533,13 @@ model Trade {
   realizedR       Decimal?         @map("realized_r") @db.Decimal(6, 2)
   realizedRSource RealizedRSource? @map("realized_r_source")
   emotionAfter    String[]         @map("emotion_after")
+  /// Multi-select emotion slugs felt DURING the open position, recalled at
+  /// close next to `emotionAfter`. Same allowlist as `emotionBefore`/
+  /// `emotionAfter` (lib/trading/emotions.ts), capped at 3 by the Zod boundary.
+  /// Closes the "avant / pendant / après" emotional axis (master prompt §22).
+  /// Plain `text[]` (no DB allowlist) for migration-free slug evolution; trades
+  /// closed before this field shipped carry `{}` (migration DEFAULT).
+  emotionDuring   String[]         @map("emotion_during")
 
   // V1.8 REFLECT — post-outcome bias tags (CFA LESSOR + Steenbarger).
   // Distinct from `emotionAfter` (raw affect): `tags` is a structured

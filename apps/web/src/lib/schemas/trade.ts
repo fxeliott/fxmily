@@ -223,26 +223,28 @@ export type TradeOpenInput = z.infer<typeof tradeOpenSchema>;
 /**
  * Post-exit block (step 7, or close-out flow on /journal/[id]/close).
  */
-export const tradeCloseSchema = z.object({
-  exitedAt: z.coerce
-    .date({ message: 'Date de sortie invalide.' })
-    .refine((d) => d.getTime() <= Date.now() + 60 * 60 * 1000, {
-      message: 'Date dans le futur.',
-    }),
-  exitPrice: positivePrice,
-  outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }),
-  /// Emotions felt DURING the open position (recalled at close). Required,
-  /// mirroring `emotionAfter` — closes the "avant / pendant / après" axis
-  /// (master prompt §22). Same `emotionTagsRequired` rule (1–3 allowlisted).
-  emotionDuring: emotionTagsRequired,
-  emotionAfter: emotionTagsRequired,
-  /// V1.8 REFLECT — post-outcome bias tags (CFA LESSOR + Steenbarger).
-  /// Optional: V1 trades closed before V1.8 stay valid; UI defaults to empty.
-  /// Member self-assigned at close (Q3=A) — see `TRADE_TAG_SLUGS` allowlist.
-  tags: tradeTagsSchema.optional().default([]),
-  notes: notesSchema,
-  screenshotExitKey: storageKey,
-});
+export const tradeCloseSchema = z
+  .object({
+    exitedAt: z.coerce
+      .date({ message: 'Date de sortie invalide.' })
+      .refine((d) => d.getTime() <= Date.now() + 60 * 60 * 1000, {
+        message: 'Date dans le futur.',
+      }),
+    exitPrice: positivePrice,
+    outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }),
+    /// Emotions felt DURING the open position (recalled at close). Required,
+    /// mirroring `emotionAfter` — closes the "avant / pendant / après" axis
+    /// (master prompt §22). Same `emotionTagsRequired` rule (1–3 allowlisted).
+    emotionDuring: emotionTagsRequired,
+    emotionAfter: emotionTagsRequired,
+    /// V1.8 REFLECT — post-outcome bias tags (CFA LESSOR + Steenbarger).
+    /// Optional: V1 trades closed before V1.8 stay valid; UI defaults to empty.
+    /// Member self-assigned at close (Q3=A) — see `TRADE_TAG_SLUGS` allowlist.
+    tags: tradeTagsSchema.optional().default([]),
+    notes: notesSchema,
+    screenshotExitKey: storageKey,
+  })
+  .strict(); // invariant #6 — reject unknown keys (raw is hand-built, 8 fields)
 
 export type TradeCloseInput = z.infer<typeof tradeCloseSchema>;
 

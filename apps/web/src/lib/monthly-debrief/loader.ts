@@ -276,6 +276,7 @@ async function loadCheckins(userId: string, window: MonthWindow): Promise<Serial
     sleepHours: row.sleepHours == null ? null : row.sleepHours.toString(),
     sleepQuality: row.sleepQuality,
     morningRoutineCompleted: row.morningRoutineCompleted,
+    marketAnalysisDone: row.marketAnalysisDone,
     meditationMin: row.meditationMin,
     sportType: row.sportType,
     sportDurationMin: row.sportDurationMin,

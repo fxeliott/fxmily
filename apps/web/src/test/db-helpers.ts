@@ -490,6 +490,11 @@ export async function seedCheckinHistory(
         sleepHours: sleep,
         sleepQuality: Math.round(clampNum(sleep, 1, 10)),
         morningRoutineCompleted: rand() > 0.3,
+        // SPEC §28/§22 market-analysis-done — DETERMINISTIC `i`-based value, NOT
+        // `rand()`: inserting a PRNG draw here would shift the whole mulberry32
+        // sequence and break the seed=42 deterministic fixtures. The scorers do
+        // not read this field, so an `i`-based value has zero score impact.
+        marketAnalysisDone: i % 4 !== 0,
         meditationMin: rand() < 0.4 ? Math.round(rand() * 20) : null,
         sportType: rand() < 0.3 ? 'course' : null,
         sportDurationMin: rand() < 0.3 ? Math.round(rand() * 60) : null,

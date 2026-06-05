@@ -325,6 +325,10 @@ export async function seedTradeHistory(
 
     let emotionBefore: string[] = [];
     let emotionAfter: string[] = [];
+    // `emotionDuring` (§22 in-position affect) uses FIXED values derived from
+    // `willWin` — deliberately NO `rand()` call so the deterministic PRNG
+    // sequence (and therefore every other seeded field) stays byte-identical.
+    let emotionDuring: string[] = [];
     if (emotionCorrelation === 'realistic') {
       const pickNeg = () => NEGATIVE_TRADE_TAGS[Math.floor(rand() * NEGATIVE_TRADE_TAGS.length)]!;
       const pickPos = () => POSITIVE_TRADE_TAGS[Math.floor(rand() * POSITIVE_TRADE_TAGS.length)]!;
@@ -333,9 +337,11 @@ export async function seedTradeHistory(
         willWin ? (rand() < 0.6 ? pickPos() : pickNeg()) : rand() < 0.6 ? pickNeg() : pickPos(),
       ];
       emotionAfter = [willWin ? pickPos() : pickNeg()];
+      emotionDuring = [willWin ? 'focused' : 'fear-loss'];
     } else {
       emotionBefore = [POSITIVE_TRADE_TAGS[i % POSITIVE_TRADE_TAGS.length]!];
       emotionAfter = [willWin ? 'calm' : 'frustrated'];
+      emotionDuring = [willWin ? 'focused' : 'fear-wrong'];
     }
 
     const closedAt = isOpen ? null : new Date(enteredAt.getTime() + 30 * 60 * 1000);
@@ -380,6 +386,7 @@ export async function seedTradeHistory(
               outcome,
               realizedR: clampedR,
               realizedRSource: isEstimated ? 'estimated' : 'computed',
+              emotionDuring,
               emotionAfter,
               closedAt,
             }

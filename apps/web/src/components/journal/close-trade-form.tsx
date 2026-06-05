@@ -23,6 +23,7 @@ const initialState: CloseTradeActionState = { ok: false };
 export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps) {
   const action = closeTradeAction.bind(null, tradeId);
   const [state, formAction, pending] = useActionState(action, initialState);
+  const [emotionDuring, setEmotionDuring] = useState<string[]>([]);
   const [emotionAfter, setEmotionAfter] = useState<string[]>([]);
   const [screenshotKey, setScreenshotKey] = useState<string>('');
   const [tags, setTags] = useState<TradeTagSlug[]>([]);
@@ -41,7 +42,11 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
               ? 'Erreur inattendue, réessaie.'
               : null;
 
-  const submitDisabled = pending || screenshotKey.length === 0 || emotionAfter.length === 0;
+  const submitDisabled =
+    pending ||
+    screenshotKey.length === 0 ||
+    emotionDuring.length === 0 ||
+    emotionAfter.length === 0;
 
   return (
     <form action={formAction} className="flex flex-col gap-5" noValidate>
@@ -123,7 +128,22 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
         ) : null}
       </fieldset>
 
-      {/* Emotion */}
+      {/* Émotion pendant le trade (master prompt §22 — recalled at close,
+          chronologically before "après la sortie"). */}
+      <EmotionPicker
+        value={emotionDuring}
+        onChange={setEmotionDuring}
+        name="emotionDuring"
+        label="Émotion(s) pendant le trade"
+        disabled={pending}
+      />
+      {state.fieldErrors?.emotionDuring ? (
+        <p className="text-[11px] text-[var(--bad)]" role="alert">
+          {state.fieldErrors.emotionDuring}
+        </p>
+      ) : null}
+
+      {/* Émotion après la sortie */}
       <EmotionPicker
         value={emotionAfter}
         onChange={setEmotionAfter}
@@ -183,8 +203,8 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
       {/* Submit gate hint */}
       {submitDisabled && !pending ? (
         <p id="close-submit-hint" className="text-right text-[11px] text-[var(--t-4)] tabular-nums">
-          Capture {screenshotKey.length === 0 ? '✗' : '✓'} · Émotion(s){' '}
-          {emotionAfter.length === 0 ? '✗' : '✓'}
+          Capture {screenshotKey.length === 0 ? '✗' : '✓'} · Pendant{' '}
+          {emotionDuring.length === 0 ? '✗' : '✓'} · Après {emotionAfter.length === 0 ? '✗' : '✓'}
         </p>
       ) : null}
 

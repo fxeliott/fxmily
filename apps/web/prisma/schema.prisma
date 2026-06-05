@@ -1041,6 +1041,11 @@ model DailyCheckin {
   sportDurationMin        Int?     @map("sport_duration_min")
   /// One-line intention for the day, optional. Capped at 200 chars by Zod.
   intention               String?
+  /// Did the member do their market analysis before the session? Pure
+  /// pre-session discipline signal — declarative binary, NO market content
+  /// (SPEC §2: we track that the prep happened, never the prep itself).
+  /// Tri-state: true (done), false (skipped), null (unanswered/legacy row).
+  marketAnalysisDone      Boolean? @map("market_analysis_done")
 
   // ----- Evening fields ----------------------------------------------------
 

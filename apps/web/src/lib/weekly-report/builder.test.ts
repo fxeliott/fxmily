@@ -105,6 +105,7 @@ function makeCheckin(
     sleepHours: null,
     sleepQuality: null,
     morningRoutineCompleted: null,
+    marketAnalysisDone: null,
     meditationMin: null,
     sportType: null,
     sportDurationMin: null,

@@ -22,6 +22,7 @@ import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DrawnRule } from '@/components/dashboard/drawn-rule';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
+import { ProfileStatusWidget } from '@/components/onboarding/profile-status-widget';
 import { EmotionPerfTable } from '@/components/scoring/emotion-perf-table';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
 import { PairTopFive } from '@/components/scoring/pair-top-five';
@@ -262,6 +263,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </Card>
 
           <StreakCard streak={streak.current} todayFilled={streak.todayFilled} />
+        </section>
+
+        {/* V2.4 — Onboarding profile status (Session 2 hardening). The profiling
+            pipeline (30-q interview → batch local Claude Opus 4.8 → MemberProfile
+            → /profile) was fully built but had NO entry point in the member
+            journey — /dashboard carried zero link to it, so new members never
+            discovered the flagship "profilage initial" (SPEC §28). This calm
+            status widget is the missing bridge ; it routes every member into
+            building their profile. Four states, anti-Black-Hat, posture §2. */}
+        <section className="mb-6" aria-labelledby="profile-widget-heading">
+          <h2 id="profile-widget-heading" className="sr-only">
+            Mon profil de trader
+          </h2>
+          <Suspense fallback={<ProfileStatusSkeleton />}>
+            <ProfileStatusWidget userId={userId!} />
+          </Suspense>
         </section>
 
         {/* §26 — Calendrier adaptatif : weekly-schedule questionnaire status.
@@ -652,6 +669,17 @@ function CalendarStatusSkeleton() {
       aria-busy="true"
       aria-live="polite"
       aria-label="Chargement de l'organisation de la semaine"
+    />
+  );
+}
+
+function ProfileStatusSkeleton() {
+  return (
+    <div
+      className="skel rounded-card h-[116px] border border-[var(--b-default)] bg-[var(--bg-1)]"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement de ton profil"
     />
   );
 }

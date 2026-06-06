@@ -57,3 +57,34 @@ export const meetingAttendanceDeclarationSchema = z
   .strict();
 
 export type MeetingAttendanceDeclarationInput = z.infer<typeof meetingAttendanceDeclarationSchema>;
+
+/**
+ * V1.7 §30 J-M3 — admin cancel/uncancel of a meeting slot.
+ *
+ * The ONLY free-text in §30 (SPEC §30.6): `reason` is an optional admin note
+ * ("pas dispo / jour férié"). It is `safeFreeText`-sanitised at the SERVICE
+ * boundary (`cancelMeeting`), so the schema only bounds its length here (anti
+ * heap-amplification, mirror the J5 audit H9 cap pattern). `action` is the
+ * desired terminal state — `cancel` flips to `cancelled`, `uncancel` back to
+ * `scheduled`. `.strict()` rejects unknown keys (defense-in-depth).
+ *
+ * The reason is NEVER logged to the audit (posture §2 + PII-free invariant
+ * §30.7) — only `{meetingId, cancelled}` reach `logAudit`.
+ */
+export const MEETING_CANCEL_REASON_MAX = 280;
+
+export const meetingCancelSchema = z
+  .object({
+    meetingId: meetingIdSchema,
+    action: z.enum(['cancel', 'uncancel'], { error: 'Action invalide.' }),
+    reason: z
+      .string()
+      .trim()
+      .max(MEETING_CANCEL_REASON_MAX, {
+        error: `Raison trop longue (max ${MEETING_CANCEL_REASON_MAX} caractères).`,
+      })
+      .optional(),
+  })
+  .strict();
+
+export type MeetingCancelInput = z.infer<typeof meetingCancelSchema>;

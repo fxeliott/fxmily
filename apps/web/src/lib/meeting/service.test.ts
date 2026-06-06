@@ -11,7 +11,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db', () => ({
   db: {
-    meeting: { count: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
+    meeting: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      createMany: vi.fn(),
+      update: vi.fn(),
+    },
     meetingAttendance: { count: vi.fn(), findFirst: vi.fn(), upsert: vi.fn() },
     user: { findUnique: vi.fn() },
   },
@@ -20,10 +26,16 @@ vi.mock('@/lib/db', () => ({
 import { db } from '@/lib/db';
 
 import {
+  cancelMeeting,
   countMeetingAttendance,
   declareMeetingAttendance,
+  generateMeetingsForWindow,
+  listMeetingAttendanceForMember,
+  listMeetingsForAdmin,
   listMeetingsForMember,
   MeetingNotDeclarableError,
+  MeetingNotFoundError,
+  uncancelMeeting,
 } from './service';
 
 const FROM = new Date('2026-04-30T10:00:00.000Z');
@@ -302,5 +314,227 @@ describe('declareMeetingAttendance — HARD guard (SPEC §30.7)', () => {
     expect(err).toBeInstanceOf(MeetingNotDeclarableError);
     expect(err.reason).toBe('not_found');
     expect(vi.mocked(db.meetingAttendance.upsert)).not.toHaveBeenCalled();
+  });
+});
+
+// J-M3 — admin surface + cron generation -------------------------------------
+
+describe('generateMeetingsForWindow (idempotent createMany)', () => {
+  it('materialises the occurrences with skipDuplicates and returns {generated, skipped}', async () => {
+    // Mon 2026-06-01 → +2 days = Mon + Tue = 4 occurrences (2 slots × 2 days).
+    vi.mocked(db.meeting.createMany).mockResolvedValue({ count: 4 } as never);
+
+    const result = await generateMeetingsForWindow('2026-06-01', 2);
+
+    const call = vi.mocked(db.meeting.createMany).mock.calls[0];
+    if (!call) throw new Error('expected createMany');
+    const arg = call[0] as {
+      data: { date: Date; slot: string; scheduledAt: Date }[];
+      skipDuplicates: boolean;
+    };
+    // Idempotence guard: skipDuplicates on @@unique(date, slot) (SPEC §30.7).
+    expect(arg.skipDuplicates).toBe(true);
+    expect(arg.data).toHaveLength(4);
+    // Mon then Tue, each midday + evening, chronological.
+    expect(arg.data.map((d) => d.slot)).toEqual(['midday', 'evening', 'midday', 'evening']);
+    // `date` is a UTC-midnight Date for the @db.Date column.
+    expect(arg.data[0]?.date.toISOString()).toBe('2026-06-01T00:00:00.000Z');
+    // DST-aware scheduledAt: 2026-06-01 is CEST → 12h Paris = 10:00 UTC.
+    expect(arg.data[0]?.scheduledAt.toISOString()).toBe('2026-06-01T10:00:00.000Z');
+
+    expect(result).toEqual({ generated: 4, skipped: 0 });
+  });
+
+  it('re-run with all rows present → generated 0, skipped = occurrence count', async () => {
+    vi.mocked(db.meeting.createMany).mockResolvedValue({ count: 0 } as never);
+
+    // Mon 2026-06-01 → +1 day = Mon only = 2 occurrences.
+    const result = await generateMeetingsForWindow('2026-06-01', 1);
+
+    expect(result).toEqual({ generated: 0, skipped: 2 });
+  });
+
+  it('skips a weekend-only window without touching the DB', async () => {
+    // Sat 2026-06-06 + Sun 2026-06-07 → 0 weekday occurrences.
+    const result = await generateMeetingsForWindow('2026-06-06', 2);
+
+    expect(result).toEqual({ generated: 0, skipped: 0 });
+    expect(vi.mocked(db.meeting.createMany)).not.toHaveBeenCalled();
+  });
+});
+
+describe('cancelMeeting / uncancelMeeting', () => {
+  it('cancel: flips status to cancelled and safeFreeText-sanitises the reason', async () => {
+    vi.mocked(db.meeting.findUnique).mockResolvedValue({ id: 'm1' } as never);
+    vi.mocked(db.meeting.update).mockResolvedValue({ id: 'm1', status: 'cancelled' } as never);
+
+    // Reason carries a zero-width char (U+200B) — must be stripped by safeFreeText.
+    const result = await cancelMeeting('m1', 'Pas​ dispo');
+
+    const call = vi.mocked(db.meeting.update).mock.calls[0];
+    if (!call) throw new Error('expected update');
+    const arg = call[0] as {
+      where: { id: string };
+      data: { status: string; cancelledReason: string | null };
+    };
+    expect(arg.where).toEqual({ id: 'm1' });
+    expect(arg.data.status).toBe('cancelled');
+    // Zero-width stripped + NFC normalised (SPEC §30.6).
+    expect(arg.data.cancelledReason).toBe('Pas dispo');
+    expect(result).toEqual({ id: 'm1', status: 'cancelled' });
+  });
+
+  it('cancel without a reason stores null (no note)', async () => {
+    vi.mocked(db.meeting.findUnique).mockResolvedValue({ id: 'm1' } as never);
+    vi.mocked(db.meeting.update).mockResolvedValue({ id: 'm1', status: 'cancelled' } as never);
+
+    await cancelMeeting('m1');
+
+    const arg = vi.mocked(db.meeting.update).mock.calls[0]?.[0] as {
+      data: { cancelledReason: string | null };
+    };
+    expect(arg.data.cancelledReason).toBeNull();
+  });
+
+  it('uncancel: back to scheduled, clears the reason', async () => {
+    vi.mocked(db.meeting.findUnique).mockResolvedValue({ id: 'm1' } as never);
+    vi.mocked(db.meeting.update).mockResolvedValue({ id: 'm1', status: 'scheduled' } as never);
+
+    const result = await uncancelMeeting('m1');
+
+    const arg = vi.mocked(db.meeting.update).mock.calls[0]?.[0] as {
+      data: { status: string; cancelledReason: string | null };
+    };
+    expect(arg.data).toEqual({ status: 'scheduled', cancelledReason: null });
+    expect(result).toEqual({ id: 'm1', status: 'scheduled' });
+  });
+
+  it('throws MeetingNotFoundError on an unknown id (never updates)', async () => {
+    vi.mocked(db.meeting.findUnique).mockResolvedValue(null as never);
+
+    await expect(cancelMeeting('ghost')).rejects.toBeInstanceOf(MeetingNotFoundError);
+    expect(vi.mocked(db.meeting.update)).not.toHaveBeenCalled();
+
+    await expect(uncancelMeeting('ghost')).rejects.toBeInstanceOf(MeetingNotFoundError);
+    expect(vi.mocked(db.meeting.update)).not.toHaveBeenCalled();
+  });
+});
+
+describe('listMeetingsForAdmin', () => {
+  it('returns slots with per-meeting counts + isPast, window centred on now', async () => {
+    vi.mocked(db.meeting.findMany).mockResolvedValue([
+      // Past, scheduled: 2 complete, 1 partial → completedCount 2, declaredCount 3.
+      {
+        id: 'm1',
+        slot: 'midday',
+        scheduledAt: new Date('2026-05-29T10:00:00.000Z'),
+        status: 'scheduled',
+        attendances: [
+          { attendanceMode: 'live', contentReviewed: true },
+          { attendanceMode: 'replay', contentReviewed: true },
+          { attendanceMode: 'live', contentReviewed: false }, // partial
+        ],
+      },
+      // Future, cancelled, no attendance.
+      {
+        id: 'm2',
+        slot: 'evening',
+        scheduledAt: new Date('2026-05-31T18:00:00.000Z'),
+        status: 'cancelled',
+        attendances: [],
+      },
+    ] as never);
+
+    const result = await listMeetingsForAdmin(NOW); // NOW = 2026-05-30T10:00Z
+
+    // Window: [now-14d, now+14d).
+    const call = vi.mocked(db.meeting.findMany).mock.calls[0];
+    if (!call) throw new Error('expected findMany');
+    const arg = call[0] as { where: { scheduledAt: { gte: Date; lt: Date } }; orderBy: unknown };
+    expect(arg.orderBy).toEqual({ scheduledAt: 'desc' });
+    expect(arg.where.scheduledAt.gte.getTime()).toBeLessThan(NOW.getTime());
+    expect(arg.where.scheduledAt.lt.getTime()).toBeGreaterThan(NOW.getTime());
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      id: 'm1',
+      status: 'scheduled',
+      isPast: true,
+      completedCount: 2,
+      declaredCount: 3,
+    });
+    expect(result[1]).toMatchObject({
+      id: 'm2',
+      status: 'cancelled',
+      isPast: false,
+      completedCount: 0,
+      declaredCount: 0,
+    });
+  });
+});
+
+describe('listMeetingAttendanceForMember (rate excludes cancelled)', () => {
+  it('maps admin states + computes a rate that excludes cancelled slots', async () => {
+    vi.mocked(db.user.findUnique).mockResolvedValue({ joinedAt: JOINED_AT } as never);
+    vi.mocked(db.meeting.findMany).mockResolvedValue([
+      meetingRow('m1', 'midday', '2026-05-29T10:00:00.000Z', 'scheduled', [
+        { attendanceMode: 'live', contentReviewed: true },
+      ]), // complete
+      meetingRow('m2', 'evening', '2026-05-28T18:00:00.000Z', 'scheduled', [
+        { attendanceMode: 'replay', contentReviewed: false },
+      ]), // partielle
+      meetingRow('m3', 'midday', '2026-05-27T10:00:00.000Z', 'scheduled', []), // absent
+      meetingRow('m4', 'evening', '2026-05-26T18:00:00.000Z', 'cancelled', []), // cancelled
+    ] as never);
+
+    const result = await listMeetingAttendanceForMember('user-1', NOW);
+
+    // attendances left-joined for THIS member only (admin read-only).
+    const call = vi.mocked(db.meeting.findMany).mock.calls[0];
+    if (!call) throw new Error('expected findMany');
+    const arg = call[0] as {
+      where: { scheduledAt: Record<string, unknown> };
+      select: { attendances: { where: { userId: string } } };
+    };
+    expect(arg.where.scheduledAt).toEqual({ gte: WINDOW_START, lt: NOW });
+    expect(arg.select.attendances.where).toEqual({ userId: 'user-1' });
+
+    expect(result.meetings.map((m) => [m.id, m.state])).toEqual([
+      ['m1', 'complete'],
+      ['m2', 'partielle'],
+      ['m3', 'absent'],
+      ['m4', 'cancelled'],
+    ]);
+
+    // Rate: 3 scheduled denominator, 1 complete numerator. Cancelled m4 excluded
+    // from BOTH (SPEC §30.3).
+    expect(result.rate.kind).toBe('ok');
+    if (result.rate.kind === 'ok') {
+      expect(result.rate.scheduledCount).toBe(3);
+      expect(result.rate.completedCount).toBe(1);
+      expect(result.rate.rate).toBeCloseTo(1 / 3, 10);
+    }
+  });
+
+  it('only-cancelled window → insufficient_data (never a fake 0%)', async () => {
+    vi.mocked(db.user.findUnique).mockResolvedValue({ joinedAt: JOINED_AT } as never);
+    vi.mocked(db.meeting.findMany).mockResolvedValue([
+      meetingRow('mc', 'midday', '2026-05-29T10:00:00.000Z', 'cancelled', []),
+    ] as never);
+
+    const result = await listMeetingAttendanceForMember('user-1', NOW);
+
+    expect(result.meetings[0]?.state).toBe('cancelled');
+    expect(result.rate.kind).toBe('insufficient_data');
+  });
+
+  it('returns empty defensively when the member vanished', async () => {
+    vi.mocked(db.user.findUnique).mockResolvedValue(null as never);
+
+    const result = await listMeetingAttendanceForMember('ghost', NOW);
+
+    expect(result.meetings).toEqual([]);
+    expect(result.rate.kind).toBe('insufficient_data');
+    expect(vi.mocked(db.meeting.findMany)).not.toHaveBeenCalled();
   });
 });

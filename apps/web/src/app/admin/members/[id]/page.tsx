@@ -17,6 +17,8 @@ import { MemberMonthlyDebriefsPanel } from '@/components/admin/member-monthly-de
 import { MemberMindsetChecksPanel } from '@/components/admin/member-mindset-checks-panel';
 import { listReportsForMember } from '@/lib/weekly-report/service';
 import { listMonthlyDebriefsForMember } from '@/lib/monthly-debrief/service';
+import { listMeetingAttendanceForMember } from '@/lib/meeting/service';
+import { MemberPresencePanel } from '@/components/admin/member-presence-panel';
 import { loadMindsetDashboardData } from '@/lib/mindset/service';
 import { currentParisWeekStart } from '@/lib/mindset/week';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
@@ -70,6 +72,7 @@ function parseTab(
   | 'mindset'
   | 'calendar'
   | 'profile'
+  | 'presence'
   | 'notes'
 > {
   if (value === 'trades') return 'trades';
@@ -80,6 +83,7 @@ function parseTab(
   if (value === 'mindset') return 'mindset';
   if (value === 'calendar') return 'calendar';
   if (value === 'profile') return 'profile';
+  if (value === 'presence') return 'presence';
   if (value === 'notes') return 'notes';
   return 'overview';
 }
@@ -163,6 +167,11 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // read straight from `adaptive_calendars` (no real-edge recompute). The
   // member's first-view disclosure stamp is NOT touched here (admin view).
   const calendar = tab === 'calendar' ? await getLatestCalendarForUser(memberId) : null;
+
+  // V1.7 §30 J-M3 — read-only meeting attendance for the presence tab. Rate +
+  // per-meeting detail over the rolling 30d window (cancelled slots greyed +
+  // excluded from the rate, SPEC §30.4). Fetched only when the tab is active.
+  const presence = tab === 'presence' ? await listMeetingAttendanceForMember(memberId) : null;
 
   // J6.5 — pull behavioral scores + analytics in parallel for the overview tab.
   // Skipped on the trades tab to keep its render path lean. J6.6 H1 fix —
@@ -286,6 +295,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           interview={profileData[1]}
         />
       ) : null}
+      {tab === 'presence' && presence !== null ? <MemberPresencePanel data={presence} /> : null}
       {tab === 'notes' && adminNotes !== null ? (
         <MemberAdminNotesPanel memberId={memberId} notes={adminNotes} />
       ) : null}

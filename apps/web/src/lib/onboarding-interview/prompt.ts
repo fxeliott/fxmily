@@ -125,7 +125,7 @@ export function buildOnboardingInterviewUserPrompt(snapshot: OnboardingInterview
   lines.push(`# Entretien onboarding — ${snapshot.pseudonymLabel}`);
   lines.push(``);
   lines.push(
-    `Instrument : v${snapshot.instrumentVersion} · Démarré : ${formatIsoDate(snapshot.startedAt)} · Complété : ${formatIsoDate(snapshot.completedAt)}.`,
+    `Instrument : ${snapshot.instrumentVersion} · Démarré : ${formatIsoDate(snapshot.startedAt)} · Complété : ${formatIsoDate(snapshot.completedAt)}.`,
   );
   lines.push(``);
   lines.push(
@@ -210,7 +210,7 @@ export const ONBOARDING_FEW_SHOT_EXAMPLES: ReadonlyArray<{
   {
     userPrompt: `# Entretien onboarding — member-aaaaaaaa
 
-Instrument : vv1 · Démarré : 2026-01-15 · Complété : 2026-01-17.
+Instrument : v1 · Démarré : 2026-01-15 · Complété : 2026-01-17.
 
 Le membre a répondu à 4 questions (extrait).
 
@@ -276,7 +276,7 @@ Génère le MemberProfile...`,
   {
     userPrompt: `# Entretien onboarding — member-bbbbbbbb
 
-Instrument : vv1 · Démarré : 2026-02-03 · Complété : 2026-02-03.
+Instrument : v1 · Démarré : 2026-02-03 · Complété : 2026-02-03.
 
 Le membre a répondu à 3 questions (extrait).
 

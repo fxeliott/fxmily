@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { localDateOf, parseLocalDate, type LocalDateString } from '@/lib/checkin/timezone';
+import {
+  localDateOf,
+  localInstantToUtc,
+  parseLocalDate,
+  type LocalDateString,
+} from '@/lib/checkin/timezone';
 
 /**
  * Week-window helpers for the J8 weekly report (Phase B).
@@ -122,72 +127,6 @@ export function shiftLocalDateString(s: LocalDateString, days: number): LocalDat
 }
 
 /**
- * Convert a local wall-clock moment (local-date YYYY-MM-DD + h/m/s/ms) to a
- * UTC instant, given an IANA timezone.
- *
- * Algorithm :
- *   1. Build "fake UTC" — interpret the local moment as if it were UTC.
- *   2. Look up the TZ's UTC offset at that instant via `Intl`.
- *   3. Real UTC = fake UTC - offset.
- *
- * Handles DST automatically because `Intl.DateTimeFormat` returns the *actual*
- * offset for the queried instant. For the rare "ambiguous local time" case
- * (DST fallback hour) we accept the Intl-default resolution (typically the
- * later occurrence) — fine for our 7-day window granularity.
- */
-export function localInstantToUtc(
-  localDate: LocalDateString,
-  hour: number,
-  minute: number,
-  second: number,
-  ms: number,
-  timezone: string,
-): Date {
-  const [yearStr, monthStr, dayStr] = localDate.split('-');
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  const day = Number(dayStr);
-  const fakeUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, second, ms));
-  const offsetMin = getTimezoneOffsetMinutes(fakeUtc, timezone);
-  return new Date(fakeUtc.getTime() - offsetMin * 60_000);
-}
-
-function getTimezoneOffsetMinutes(instant: Date, timezone: string): number {
-  let tz = timezone;
-  try {
-    new Intl.DateTimeFormat('en-CA', { timeZone: tz });
-  } catch {
-    tz = 'UTC';
-  }
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz,
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-  const parts = fmt.formatToParts(instant);
-  const num = (t: string): number => {
-    const part = parts.find((p) => p.type === t);
-    return part ? Number(part.value) : 0;
-  };
-  // `Intl` may render hour=24 at midnight in some locales — guard.
-  const hour = num('hour') === 24 ? 0 : num('hour');
-  const localAsUtc = Date.UTC(
-    num('year'),
-    num('month') - 1,
-    num('day'),
-    hour,
-    num('minute'),
-    num('second'),
-  );
-  return Math.round((localAsUtc - instant.getTime()) / 60_000);
-}
-
-/**
  * Calendar duration of a {@link WeekWindow} in days. Always 7 by construction
  * but we expose the helper for symmetry with future "partial week" use cases.
  */
@@ -210,5 +149,8 @@ export function approxWeekHours(window: WeekWindow): number {
 }
 
 // Re-export so callers can build week-window-relative helpers without a
-// second import line.
-export { MS_PER_DAY };
+// second import line. `localInstantToUtc` was relocated to
+// `@/lib/checkin/timezone` (neutral tz home) in V1.7 §30 — re-exported here
+// (it is already imported above for `computeWeekWindow`) so existing callers
+// (`week-window.test.ts`, `monthly-debrief/month-window.ts`) keep working.
+export { MS_PER_DAY, localInstantToUtc };

@@ -262,7 +262,7 @@ model User {
   /// password reset). The Node-side `jwt` callback in `auth.ts` re-reads this
   /// on each `auth()` call and tears the session down when the token's stale
   /// claim no longer matches. See `lib/auth/session-revocation.ts`.
-  tokenVersion Int @default(0) @map("token_version")
+  tokenVersion Int     @default(0) @map("token_version")
 
   // Authorization & lifecycle
   role   UserRole   @default(member)
@@ -360,6 +360,10 @@ model User {
   // isolation enforced by test/anti-leak/calendar-isolation.test.ts.
   weeklyScheduleQuestionnaires WeeklyScheduleQuestionnaire[]
   adaptiveCalendars            AdaptiveCalendar[]
+  // V1.7 §30 — meeting attendance declarations (self-report). `Meeting` has
+  // NO User FK (admin-scoped global entity); only this join links the member.
+  // Touches ONLY engagement via the count-only primitive countMeetingAttendance (J-M4).
+  meetingAttendances           MeetingAttendance[]
   // J9 — Web Push subscriptions (one row per browser/device) + per-category opt-out preferences.
   pushSubscriptions            PushSubscription[]
   notificationPreferences      NotificationPreference[]
@@ -1929,4 +1933,114 @@ model AdaptiveCalendar {
   @@index([userId, weekStart(sort: Desc)])
   @@index([generatedAt(sort: Desc)])
   @@map("adaptive_calendars")
+}
+
+// =============================================================================
+// V1.7 §30 — Meeting attendance tracking (suivi de présence aux réunions).
+//
+// Recurring Fxmily meetings (Mon–Fri 12h & 20h Europe/Paris, Zoom) are
+// materialised as `Meeting` rows by a cron (J-M3). Each member self-declares
+// attendance in-app via `MeetingAttendance`. Posture §2 verrouillée: the app
+// tracks the ACT (présence + lecture = discipline/exécution) via a boolean
+// `contentReviewed` ONLY — it NEVER stores / displays / comments the Ichor
+// analysis content. Attendance feeds ONLY the `engagement` dimension via the
+// count-only primitive `countMeetingAttendance` (J-M4), never the real edge.
+// See SPEC §30 (source of truth) for the full rationale + invariants §30.7.
+// =============================================================================
+
+/// V1.7 §30 — meeting slot. `midday` = 12h00 Paris (Ichor analyse), `evening`
+/// = 20h00 Paris (Ichor bilan/débrief). The slot carries the expected content
+/// type — no separate content entity (KISS, SPEC §30.2).
+enum MeetingSlot {
+  midday
+  evening
+}
+
+/// V1.7 §30 — meeting lifecycle. `cancelled` = admin unavailable / no meeting
+/// → excluded from the attendance-rate denominator (a member is NEVER
+/// penalised when Eliot is not available, SPEC §30.2).
+enum MeetingStatus {
+  scheduled
+  cancelled
+}
+
+/// V1.7 §30 — how the member attended. `live` = present on Zoom, `replay` =
+/// watched the Drive recording. Null on a `MeetingAttendance` row means "not
+/// yet declared". A complete attendance = `attendanceMode != null` AND
+/// `contentReviewed = true` (SPEC §30.3).
+enum MeetingAttendanceMode {
+  live
+  replay
+}
+
+/// V1.7 §30 — a recurring Fxmily meeting occurrence (admin-scoped, cron-generated).
+/// 0 FK to the real-edge models (`Trade` / `BehavioralScore`): a meeting is an
+/// attendance datum, not a trading one (SPEC §30.3 isolation by construction).
+model Meeting {
+  id String @id @default(cuid())
+
+  /// Civil day (Europe/Paris) of the meeting. DERIVED from `scheduledAt` by
+  /// construction = `localDateOf(scheduledAt, 'Europe/Paris')` — never computed
+  /// independently (anti DST-drift on the switch day, invariant §30.7).
+  /// `@db.Date` pins UTC-midnight (canon DailyCheckin).
+  date DateTime    @db.Date
+  slot MeetingSlot
+
+  /// Exact UTC instant of the 12h/20h Paris slot for `date`, DST-aware via
+  /// `localInstantToUtc` (CET = 11h UTC / CEST = 10h UTC). Drives sort + the
+  /// "past meeting" check. Never `12:00 UTC` hardcoded (invariant §30.7).
+  scheduledAt DateTime @map("scheduled_at")
+
+  status MeetingStatus @default(scheduled)
+
+  /// Optional admin note when cancelling a slot ("pas dispo"). Free-text,
+  /// `safeFreeText`-sanitised at the J-M3 admin Server Action boundary.
+  cancelledReason String? @map("cancelled_reason") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  attendances MeetingAttendance[]
+
+  /// Idempotent cron generation: at most one meeting per slot per civil day.
+  /// Doubles as the `date >=` / `scheduledAt` denominator filter index.
+  @@unique([date, slot])
+  /// Denominator filter: scheduled meetings ordered by recency. No standalone
+  /// `[scheduledAt]` index — it is a redundant prefix of this composite
+  /// (repo convention: no redundant single-column index, cf. DailyCheckin/Trade).
+  @@index([status, scheduledAt(sort: Desc)])
+  @@map("meetings")
+}
+
+/// V1.7 §30 — a member's self-reported attendance for one `Meeting`. Cascade on
+/// both `Meeting` and `User` delete (RGPD §17 data minimisation).
+model MeetingAttendance {
+  id String @id @default(cuid())
+
+  meetingId String  @map("meeting_id")
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// How the member attended (live Zoom OR Drive replay). Null until declared.
+  attendanceMode MeetingAttendanceMode? @map("attendance_mode")
+
+  /// Did the member read the associated Ichor content (analyse@12h / bilan@20h)?
+  /// Boolean ONLY — the app NEVER stores the content itself (posture §2). A
+  /// complete attendance = `attendanceMode != null` AND `contentReviewed = true`.
+  contentReviewed Boolean @default(false) @map("content_reviewed")
+
+  declaredAt DateTime @default(now()) @map("declared_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  /// Idempotent declaration: re-declaring updates the same row, never stacks
+  /// (upsert on this composite key — pattern DailyCheckin `(userId,date,slot)`).
+  @@unique([meetingId, userId])
+  /// Member view: their recent declarations. No standalone `[meetingId]` index
+  /// — the admin per-meeting lookup is served by the `[meetingId, userId]`
+  /// unique prefix (repo convention: no redundant single-column index).
+  @@index([userId, declaredAt(sort: Desc)])
+  @@map("meeting_attendances")
 }

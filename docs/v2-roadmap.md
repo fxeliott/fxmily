@@ -370,7 +370,7 @@ Inconvénients :
 **Alternative léger 2026** : [Bugsink](https://www.bugsink.com/) — single
 Docker container, SDK Sentry-compatible (drop-in replacement
 `@sentry/nextjs`), peut **réutiliser le Postgres 17 existant** sur
-`hetzner-dieu`.
+`fxmily-prod`.
 
 **Décision V2 candidate** : si on veut sortir de Sentry cloud (RGPD strict
 ou quota free 5000 events/mois dépassé), migrer vers Bugsink. Effort

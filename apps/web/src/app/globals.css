@@ -40,6 +40,9 @@
  * ============================================================= */
 
 :root {
+  /* ─── LAYOUT (§23 full-width shells — single source of truth) ── */
+  --w-app: 1600px; /* content max-width for full-width surfaces (dashboard, admin, analytics). Tokenised so the whole §23 series shares one value (no max-w-[1600px] drift). */
+
   /* ─── NEUTRAL RAMP (11 stops, deep space) ───────────────────── */
   --n-50: oklch(0.971 0.005 256); /* #f6f7f9 */
   --n-100: oklch(0.939 0.008 256); /* #eceef3 */
@@ -54,19 +57,6 @@
   --n-900: oklch(0.171 0.02 252); /* #0f131c */
   --n-950: oklch(0.111 0.013 252); /* #07090f */
 
-  /* ─── LIME ACCENT RAMP (mono propriétaire — Robin Neon) ─────── */
-  --l-50: oklch(0.984 0.038 117); /* #f7fee7 */
-  --l-100: oklch(0.967 0.073 121); /* #ecfccb */
-  --l-200: oklch(0.937 0.139 124); /* #d9f99d */
-  --l-300: oklch(0.913 0.197 132); /* #bef264 — hover */
-  --l-400: oklch(0.879 0.231 130); /* #a3e635 — primary stop */
-  --l-500: oklch(0.804 0.235 132); /* #84cc16 */
-  --l-600: oklch(0.69 0.196 134); /* #65a30d */
-  --l-700: oklch(0.553 0.156 137); /* #4d7c0f */
-  --l-800: oklch(0.472 0.124 139); /* #3f6212 */
-  --l-900: oklch(0.341 0.087 140); /* #2a3f0a */
-  --l-950: oklch(0.25 0.062 140); /* #1a2806 */
-
   /* ─── CYAN RAMP (charts/jauges secondary — JAMAIS CTA) ──────── */
   --c-300: oklch(0.847 0.115 217); /* #67e8f9 */
   --c-400: oklch(0.789 0.139 217); /* #22d3ee */
@@ -74,10 +64,10 @@
   --c-600: oklch(0.612 0.131 220); /* #0891b2 */
 
   /* ─── SEMANTIC: surfaces (3 elevations + modal) ─────────────── */
-  --bg: var(--n-950);
-  --bg-1: var(--n-900); /* card default */
-  --bg-2: var(--n-850); /* card elevated, sticky header, hover */
-  --bg-3: oklch(0.226 0.03 256); /* #1a1f2c — tooltip / popover / modal */
+  --bg: oklch(0.085 0.02 254); /* DS-v3 deep blue-black */
+  --bg-1: oklch(0.13 0.028 254); /* card default */
+  --bg-2: oklch(0.15 0.03 254); /* card elevated, sticky header, hover */
+  --bg-3: oklch(0.18 0.03 254); /* tooltip / popover / modal */
 
   /* ─── SEMANTIC: text (5 niveaux) ────────────────────────────── */
   --t-1: oklch(0.929 0.005 256); /* #ecedf2 — primary */
@@ -93,21 +83,40 @@
   --b-default: oklch(0.604 0.02 257 / 0.14);
   --b-strong: oklch(0.604 0.02 257 / 0.22);
   --b-stronger: oklch(0.604 0.02 257 / 0.34);
-  --b-acc: oklch(0.879 0.231 130 / 0.42);
-  --b-acc-strong: oklch(0.879 0.231 130 / 0.65);
+  --b-acc: oklch(0.62 0.19 254 / 0.42);
+  --b-acc-strong: oklch(0.62 0.19 254 / 0.65);
   --b-danger: oklch(0.7 0.165 22 / 0.42);
 
   /* ─── ACCENT semantic ───────────────────────────────────────── */
-  --acc: var(--l-400); /* #a3e635 */
-  --acc-hi: var(--l-300); /* #bef264 — hover */
-  --acc-fg: oklch(0.14 0.03 130); /* #0a1006 — text on lime btn */
-  --acc-dim: oklch(0.879 0.231 130 / 0.14);
-  --acc-dim-2: oklch(0.879 0.231 130 / 0.06);
+  --acc: oklch(0.62 0.19 254); /* DS-v3 #3b82f6 — luminous blue CTA */
+  --acc-hi: oklch(0.74 0.16 250); /* #60a5fa — luminous hover/text-accent */
+  --acc-fg: oklch(0.98 0.01 247); /* #f3f9ff — near-white label on --acc-btn (4.97:1 AA) */
+  --acc-dim: oklch(0.62 0.19 254 / 0.16);
+  --acc-dim-2: oklch(0.62 0.19 254 / 0.06);
   --acc-edge: var(--b-acc);
-  --acc-glow: 0 0 24px -4px oklch(0.879 0.231 130 / 0.45);
-  --acc-glow-strong: 0 0 32px -2px oklch(0.879 0.231 130 / 0.65);
+  --acc-glow: 0 0 24px -4px oklch(0.62 0.19 254 / 0.45);
+  --acc-glow-strong: 0 0 32px -2px oklch(0.62 0.19 254 / 0.65);
+  /* Primary-CTA BACKGROUND tokens (WCAG 1.4.3 AA). Distinct from --acc/--acc-hi
+     on purpose: --acc (0.62 L) is light enough for accent TEXT/icons on --bg
+     (5.6:1) but too light as a button bg under white --acc-fg (only 3.48:1).
+     --acc-btn is darkened so white labels clear 4.5:1; the hover DEEPENS
+     (never lightens — lightening drops back below 4.5:1). */
+  --acc-btn: oklch(0.54 0.19 264); /* #3364db — white --acc-fg on it = 4.97:1 */
+  --acc-btn-hover: oklch(0.5 0.19 264); /* #2858cd — CTA hover, deepens (5.92:1) */
   --cy: var(--c-400); /* #22d3ee */
   --cy-dim: oklch(0.789 0.139 217 / 0.12);
+  /* Cyan surface fills — stronger dim + softer border, mirroring the blue
+     --acc-dim ramp. Single source of truth for the §21.7 cyan accent alphas
+     (calm fills/borders, never a CTA). */
+  --cy-dim-strong: oklch(0.789 0.139 217 / 0.16);
+  --cy-edge-soft: oklch(0.789 0.139 217 / 0.3);
+  /* Cyan accent edge/glow — §21.7 training-debrief "Mode entraînement".
+     Mirror of --acc-edge/--acc-glow/--acc-glow-strong but in cyan. Consumed
+     ONLY by the training-debrief surface (a soft focal halo on the step icon,
+     never a CTA — §23.2 keeps --acc blue for primary buttons). */
+  --cy-edge: oklch(0.789 0.139 217 / 0.42);
+  --cy-glow: 0 0 24px -4px oklch(0.789 0.139 217 / 0.45);
+  --cy-glow-strong: 0 0 32px -2px oklch(0.789 0.139 217 / 0.65);
 
   /* ─── SEMANTIC: state colors ────────────────────────────────── */
   --ok: oklch(0.804 0.181 145); /* #4ade80 — long, gain */
@@ -154,29 +163,29 @@
   --sh-card:
     0 1px 0 oklch(1 0 0 / 0.04) inset, 0 0 0 1px oklch(1 0 0 / 0.01), 0 1px 2px oklch(0 0 0 / 0.18);
   --sh-card-hover:
-    0 1px 0 oklch(1 0 0 / 0.06) inset, 0 0 0 1px oklch(0.879 0.231 130 / 0.04),
-    0 4px 8px -2px oklch(0 0 0 / 0.24), 0 12px 28px -8px oklch(0.879 0.231 130 / 0.1);
+    0 1px 0 oklch(1 0 0 / 0.06) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.04),
+    0 4px 8px -2px oklch(0 0 0 / 0.24), 0 12px 28px -8px oklch(0.62 0.19 254 / 0.1);
   --sh-card-primary:
-    0 1px 0 oklch(1 0 0 / 0.06) inset, 0 0 0 1px oklch(0.879 0.231 130 / 0.06),
-    0 8px 24px -8px oklch(0.879 0.231 130 / 0.18), 0 2px 6px -1px oklch(0 0 0 / 0.3);
+    0 1px 0 oklch(1 0 0 / 0.06) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.06),
+    0 8px 24px -8px oklch(0.62 0.19 254 / 0.18), 0 2px 6px -1px oklch(0 0 0 / 0.3);
   --sh-card-selected:
     0 0 0 1px var(--acc-edge), 0 0 0 4px var(--acc-dim-2),
-    0 8px 24px -8px oklch(0.879 0.231 130 / 0.28);
+    0 8px 24px -8px oklch(0.62 0.19 254 / 0.28);
   --sh-modal:
     0 24px 64px -12px oklch(0 0 0 / 0.75), 0 8px 16px -4px oklch(0 0 0 / 0.45),
-    0 0 0 1px oklch(0.879 0.231 130 / 0.1), 0 1px 0 oklch(1 0 0 / 0.05) inset;
+    0 0 0 1px oklch(0.62 0.19 254 / 0.1), 0 1px 0 oklch(1 0 0 / 0.05) inset;
   --sh-tooltip:
     0 8px 24px -6px oklch(0 0 0 / 0.65), 0 2px 4px oklch(0 0 0 / 0.35),
     0 0 0 1px oklch(1 0 0 / 0.06), 0 1px 0 oklch(1 0 0 / 0.04) inset;
   --sh-toast:
     0 32px 64px -16px oklch(0 0 0 / 0.85), 0 12px 24px -8px oklch(0 0 0 / 0.55),
-    0 0 0 1px oklch(0.879 0.231 130 / 0.12);
+    0 0 0 1px oklch(0.62 0.19 254 / 0.12);
   --sh-btn-pri:
-    0 1px 0 oklch(1 0 0 / 0.18) inset, 0 0 0 1px oklch(0.879 0.231 130 / 0.65),
-    0 2px 4px oklch(0 0 0 / 0.2), 0 8px 16px -4px oklch(0.879 0.231 130 / 0.3);
+    0 1px 0 oklch(1 0 0 / 0.18) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.65),
+    0 2px 4px oklch(0 0 0 / 0.2), 0 8px 16px -4px oklch(0.62 0.19 254 / 0.3);
   --sh-btn-pri-hover:
-    0 1px 0 oklch(1 0 0 / 0.22) inset, 0 0 0 1px oklch(0.879 0.231 130 / 0.85),
-    0 4px 8px oklch(0 0 0 / 0.24), 0 12px 28px -6px oklch(0.879 0.231 130 / 0.5);
+    0 1px 0 oklch(1 0 0 / 0.22) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.85),
+    0 4px 8px oklch(0 0 0 / 0.24), 0 12px 28px -6px oklch(0.62 0.19 254 / 0.5);
 
   /* ─── FOCUS RING (accessibilité non négociable) ─────────────── */
   --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--acc);
@@ -298,12 +307,12 @@
 
   /* Lime selection */
   ::selection {
-    background: oklch(0.879 0.231 130 / 0.25);
-    color: var(--l-300);
+    background: oklch(0.62 0.19 254 / 0.25);
+    color: var(--acc-hi);
   }
   ::-moz-selection {
-    background: oklch(0.879 0.231 130 / 0.25);
-    color: var(--l-300);
+    background: oklch(0.62 0.19 254 / 0.25);
+    color: var(--acc-hi);
   }
 
   /* Lime caret */
@@ -325,7 +334,7 @@
   a:focus-visible {
     outline: 2px solid var(--acc);
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px oklch(0.879 0.231 130 / 0.18);
+    box-shadow: 0 0 0 4px oklch(0.62 0.19 254 / 0.18);
   }
 }
 
@@ -497,15 +506,94 @@
 /* Aurora hero subtle */
 .aurora {
   background:
-    radial-gradient(60% 40% at 80% 0%, oklch(0.879 0.231 130 / 0.06) 0%, transparent 60%),
+    radial-gradient(60% 40% at 80% 0%, oklch(0.62 0.19 254 / 0.06) 0%, transparent 60%),
     radial-gradient(50% 50% at 0% 100%, oklch(0.52 0.22 263 / 0.1) 0%, transparent 60%), var(--bg);
 }
 
-/* Glassmorphism strict (modales / toasts only) */
-.glass-modal {
-  background: oklch(0.171 0.02 252 / 0.78);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
+/* =============================================================
+ * DS-v3 PREMIUM CRAFT (J3) — glassmorphism 2.0 + mesh aurora
+ * -------------------------------------------------------------
+ * App-wide (:root blue+black tokens). Decorative layers are
+ * ARIA-hidden + pointer-events:none. The drift animation is
+ * killed by the global `prefers-reduced-motion` rule.
+ * Naming `.ds-*` keeps these distinct from the REFLECT-scoped
+ * `.v18-*` set (which is tuned for full-page hero landings).
+ * ============================================================= */
+
+/* Ambient mesh aurora — blue + indigo depth backplate behind the
+   glass panels. Static gradient, zero JS, paints under content. */
+.ds-aurora {
+  background:
+    radial-gradient(58% 34% at 50% -8%, oklch(0.62 0.19 254 / 0.16) 0%, transparent 62%),
+    radial-gradient(42% 30% at 4% 16%, oklch(0.5 0.21 262 / 0.12) 0%, transparent 68%),
+    radial-gradient(40% 32% at 98% 6%, oklch(0.7 0.13 217 / 0.08) 0%, transparent 70%);
+}
+
+/* Cyan-forward variant — §21.7 training-debrief "Mode entraînement". Same
+   subtle mesh as .ds-aurora but cyan-led (the dark blue-black base stays;
+   only the accent glow shifts) so the backtest surface reads as a distinct
+   "practice mode" without ever blurring the live/backtest line (Mark Douglas). */
+.ds-aurora-cy {
+  background:
+    radial-gradient(58% 34% at 50% -8%, oklch(0.789 0.139 217 / 0.14) 0%, transparent 62%),
+    radial-gradient(42% 30% at 4% 16%, oklch(0.703 0.145 218 / 0.1) 0%, transparent 68%),
+    radial-gradient(40% 32% at 98% 6%, oklch(0.62 0.19 254 / 0.06) 0%, transparent 70%);
+}
+
+/* Drifting orb seen through the glass — slow GPU parallax. Mobile
+   keeps a single orb (perf — carbone .v18-orb 640px gate). */
+@keyframes dsOrbDrift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate3d(22px, -18px, 0) scale(1.06);
+    opacity: 0.56;
+  }
+}
+.ds-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(56px);
+  pointer-events: none;
+  opacity: 0.4;
+  animation: dsOrbDrift 26s var(--e-smooth) infinite;
+  will-change: transform, opacity;
+}
+/* Mobile keeps a single orb (perf — the `.ds-orb-extra` ones drop). The
+   first `.ds-orb` is the 2nd child of the wrapper (after `.ds-aurora`), so
+   an `:nth-child` gate would wrongly hide it — use an explicit class. */
+@media (max-width: 640px) {
+  .ds-orb-extra {
+    display: none;
+  }
+}
+
+/* Glassmorphism 2.0 — frosted panel + 1px hairline highlight on the
+   top edge (luminous border). bg ~14% opacity reveals .ds-aurora. */
+.glass-panel {
+  position: relative;
+  background: oklch(0.13 0.028 254 / 0.55);
+  /* The frost blur is applied via the Tailwind `backdrop-blur-[16px]` +
+     `backdrop-saturate-150` utilities at the call sites — Lightning CSS
+     (Tailwind v4) strips a *raw* `backdrop-filter` from custom rules but
+     keeps the generated utilities (same path the sticky header uses). */
+  border: 1px solid oklch(0.84 0.01 250 / 0.1);
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 0.05),
+    var(--sh-card);
+}
+
+/* Luminous accent inner-glow — for primary / CTA glass surfaces.
+   Layer ON the .glass-panel base (adds the blue halo + acc edge). */
+.glow-edge {
+  border-color: var(--b-acc);
+  box-shadow:
+    inset 0 1px 0 0 oklch(0.74 0.16 250 / 0.2),
+    inset 0 0 0 1px oklch(0.62 0.19 254 / 0.12),
+    var(--acc-glow);
 }
 
 /* Hatch pattern for disabled */
@@ -528,16 +616,16 @@
   background: transparent;
 }
 .scroll-thin::-webkit-scrollbar-thumb {
-  background: oklch(0.879 0.231 130 / 0.18);
+  background: oklch(0.62 0.19 254 / 0.18);
   border-radius: 999px;
   transition: background 160ms var(--e-data);
 }
 .scroll-thin::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.879 0.231 130 / 0.42);
+  background: oklch(0.62 0.19 254 / 0.42);
 }
 .scroll-thin {
   scrollbar-width: thin;
-  scrollbar-color: oklch(0.879 0.231 130 / 0.22) transparent;
+  scrollbar-color: oklch(0.62 0.19 254 / 0.22) transparent;
 }
 .no-sb::-webkit-scrollbar {
   display: none;
@@ -647,10 +735,10 @@
 /* Threshold pulse (slider milestones) */
 @keyframes thresholdPulse {
   0% {
-    box-shadow: 0 0 0 0 oklch(0.879 0.231 130 / 0.55);
+    box-shadow: 0 0 0 0 oklch(0.62 0.19 254 / 0.55);
   }
   100% {
-    box-shadow: 0 0 0 12px oklch(0.879 0.231 130 / 0);
+    box-shadow: 0 0 0 12px oklch(0.62 0.19 254 / 0);
   }
 }
 .threshold-pulse {
@@ -662,11 +750,11 @@
   0%,
   100% {
     opacity: 1;
-    box-shadow: 0 0 0 0 oklch(0.879 0.231 130 / 0.6);
+    box-shadow: 0 0 0 0 oklch(0.62 0.19 254 / 0.6);
   }
   50% {
     opacity: 0.85;
-    box-shadow: 0 0 0 6px oklch(0.879 0.231 130 / 0);
+    box-shadow: 0 0 0 6px oklch(0.62 0.19 254 / 0);
   }
 }
 .live-dot {
@@ -687,7 +775,7 @@
     90deg,
     oklch(0.527 0.025 258 / 0.06) 0%,
     oklch(0.527 0.025 258 / 0.14) 40%,
-    oklch(0.879 0.231 130 / 0.1) 50%,
+    oklch(0.62 0.19 254 / 0.1) 50%,
     oklch(0.527 0.025 258 / 0.14) 60%,
     oklch(0.527 0.025 258 / 0.06) 100%
   );
@@ -729,7 +817,7 @@
 /* Optimistic confirm flash */
 @keyframes confirmFlash {
   0% {
-    background-color: oklch(0.879 0.231 130 / 0.18);
+    background-color: oklch(0.62 0.19 254 / 0.18);
   }
   100% {
     background-color: transparent;
@@ -1020,11 +1108,12 @@
   }
 }
 
-/* Glass card variant for v18 — subtle frosted blue */
+/* Glass card variant for v18 — subtle frosted blue. The frost blur is
+   applied via the Tailwind `backdrop-blur-[16px]` + `backdrop-saturate-150`
+   utilities at the call sites (the two REFLECT wizard CTA bars): Lightning
+   CSS strips a raw `backdrop-filter` from custom rules, same as `.glass-panel`. */
 .v18-glass {
   background: oklch(0.13 0.028 254 / 0.65);
-  backdrop-filter: blur(16px) saturate(150%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
   border: 1px solid oklch(0.84 0.01 250 / 0.08);
 }
 

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { CURRENT_ONBOARDING_INSTRUMENT } from './instrument-v1';
+
 /**
  * V2.4 — Onboarding interview service unit tests (Session α, M3 directive).
  *
@@ -59,6 +61,7 @@ const {
   getInterviewForUser,
   getProfileForUser,
   DEFAULT_INSTRUMENT_VERSION,
+  OnboardingInstrumentMismatchError,
 } = await import('./service');
 
 afterEach(() => {
@@ -84,6 +87,14 @@ function makeInterviewRow(overrides: Partial<Record<string, unknown>> = {}) {
     instrumentVersion: 'v1',
     ...overrides,
   };
+}
+
+/** Resolve a real catalog item by questionIndex — keeps tests robust to text
+ *  tweaks (no hardcoded French strings) and forces valid (index, id) pairs. */
+function itemAt(idx: number) {
+  const it = CURRENT_ONBOARDING_INSTRUMENT.items.find((i) => i.questionIndex === idx);
+  if (!it) throw new Error(`test fixture: no instrument item at index ${idx}`);
+  return it;
 }
 
 describe('startInterview', () => {
@@ -118,14 +129,15 @@ describe('startInterview', () => {
 
 describe('appendAnswer', () => {
   it('upserts answer + flips status started → in_progress on first answer', async () => {
+    const i0 = itemAt(0);
     interviewFindUniqueMock.mockResolvedValueOnce(makeInterviewRow({ status: 'started' }));
     answerUpsertMock.mockResolvedValueOnce({
       id: 'oia_1',
       interviewId: 'oi_1',
       userId: 'user_1',
       questionIndex: 0,
-      questionKey: 'experience',
-      questionText: '',
+      questionKey: i0.id,
+      questionText: i0.text,
       answerText: 'Hello world deep introspection',
       createdAt: NOW,
     });
@@ -134,11 +146,19 @@ describe('appendAnswer', () => {
     const result = await appendAnswer('user_1', {
       instrumentVersion: 'v1',
       questionIndex: 0,
-      questionKey: 'experience',
+      questionKey: i0.id,
       answerText: 'Hello world deep introspection',
     });
 
     expect(answerUpsertMock).toHaveBeenCalledTimes(1);
+    // Server-authority + dette #1 closed : questionKey AND questionText are
+    // taken from the catalog item, never from the client payload.
+    expect(answerUpsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ questionKey: i0.id, questionText: i0.text }),
+        update: expect.objectContaining({ questionKey: i0.id, questionText: i0.text }),
+      }),
+    );
     expect(interviewUpdateMock).toHaveBeenCalledWith({
       where: { id: 'oi_1' },
       data: { status: 'in_progress' },
@@ -150,14 +170,15 @@ describe('appendAnswer', () => {
   });
 
   it('does NOT flip status if already in_progress (idempotent)', async () => {
+    const i1 = itemAt(1);
     interviewFindUniqueMock.mockResolvedValueOnce(makeInterviewRow({ status: 'in_progress' }));
     answerUpsertMock.mockResolvedValueOnce({
       id: 'oia_2',
       interviewId: 'oi_1',
       userId: 'user_1',
       questionIndex: 1,
-      questionKey: 'motivation',
-      questionText: '',
+      questionKey: i1.id,
+      questionText: i1.text,
       answerText: 'Trader since 2 years working on discipline',
       createdAt: NOW,
     });
@@ -165,7 +186,7 @@ describe('appendAnswer', () => {
     await appendAnswer('user_1', {
       instrumentVersion: 'v1',
       questionIndex: 1,
-      questionKey: 'motivation',
+      questionKey: i1.id,
       answerText: 'Trader since 2 years working on discipline',
     });
 
@@ -173,14 +194,15 @@ describe('appendAnswer', () => {
   });
 
   it('flags crisisDetected=true when answerText matches crisis pattern', async () => {
+    const i2 = itemAt(2);
     interviewFindUniqueMock.mockResolvedValueOnce(makeInterviewRow({ status: 'in_progress' }));
     answerUpsertMock.mockResolvedValueOnce({
       id: 'oia_3',
       interviewId: 'oi_1',
       userId: 'user_1',
       questionIndex: 2,
-      questionKey: 'emotions',
-      questionText: '',
+      questionKey: i2.id,
+      questionText: i2.text,
       answerText: 'I feel crisis-mock and overwhelmed lately',
       createdAt: NOW,
     });
@@ -188,12 +210,51 @@ describe('appendAnswer', () => {
     const result = await appendAnswer('user_1', {
       instrumentVersion: 'v1',
       questionIndex: 2,
-      questionKey: 'emotions',
+      questionKey: i2.id,
       answerText: 'I feel crisis-mock and overwhelmed lately',
     });
 
     expect(result.crisisDetected).toBe(true);
     expect(result.injectionDetected).toBe(false);
+  });
+
+  // --- Server-authority validation (J1 hardening) ---------------------------
+
+  it('throws OnboardingInstrumentMismatchError + no DB write on unknown instrumentVersion', async () => {
+    await expect(
+      appendAnswer('user_1', {
+        instrumentVersion: 'v9',
+        questionIndex: 0,
+        questionKey: itemAt(0).id,
+        answerText: 'A valid length answer for the test',
+      }),
+    ).rejects.toBeInstanceOf(OnboardingInstrumentMismatchError);
+    expect(interviewFindUniqueMock).not.toHaveBeenCalled();
+    expect(answerUpsertMock).not.toHaveBeenCalled();
+  });
+
+  it('throws + no DB write when questionIndex is outside the catalog (0..29)', async () => {
+    await expect(
+      appendAnswer('user_1', {
+        instrumentVersion: 'v1',
+        questionIndex: 40,
+        questionKey: 'parcours_origin',
+        answerText: 'A valid length answer for the test',
+      }),
+    ).rejects.toBeInstanceOf(OnboardingInstrumentMismatchError);
+    expect(answerUpsertMock).not.toHaveBeenCalled();
+  });
+
+  it('throws + no DB write when questionKey does not match the catalog item id', async () => {
+    await expect(
+      appendAnswer('user_1', {
+        instrumentVersion: 'v1',
+        questionIndex: 0,
+        questionKey: 'not-the-real-id',
+        answerText: 'A valid length answer for the test',
+      }),
+    ).rejects.toBeInstanceOf(OnboardingInstrumentMismatchError);
+    expect(answerUpsertMock).not.toHaveBeenCalled();
   });
 });
 

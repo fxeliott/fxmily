@@ -237,6 +237,19 @@ export function TradeDetailView({
             </dl>
           </Card>
 
+          {trade.emotionDuring.length > 0 ? (
+            <Card className="p-4">
+              <h2 className="t-eyebrow mb-3">Émotion pendant</h2>
+              <ul className="flex flex-wrap gap-1.5">
+                {trade.emotionDuring.map((slug) => (
+                  <li key={slug}>
+                    <Pill tone="mute">{emotionLabel(slug)}</Pill>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
           {trade.emotionAfter.length > 0 ? (
             <Card className="p-4">
               <h2 className="t-eyebrow mb-3">Émotion après</h2>

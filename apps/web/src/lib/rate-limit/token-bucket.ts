@@ -222,6 +222,23 @@ export const monthlyBatchLimiter = new TokenBucketLimiter({
 });
 
 /**
+ * §26 — `/api/admin/calendar-batch/{pull,persist}` per-IP bucket (J-C2).
+ *
+ * Carbon of `monthlyBatchLimiter`. Eliot triggers the calendar batch from his
+ * local machine ; legitimate flow = 1 pull + 1 persist per week. Same burst 10
+ * / refill 1-per-5-min envelope — well below any human cadence, tight enough to
+ * throttle a bot brute-forcing the 32-char `CALENDAR_ADMIN_BATCH_TOKEN`.
+ * Separate singleton (not shared with the weekly/monthly buckets) so a flood on
+ * one batch surface never locks Eliot out of another — independent surfaces,
+ * independent buckets.
+ */
+export const calendarBatchLimiter = new TokenBucketLimiter({
+  bucketSize: 10,
+  refillRate: 1 / (5 * 60),
+  maxKeys: 256,
+});
+
+/**
  * V1.6 extras — `/api/health` endpoint rate-limit.
  *
  * Pre-existing security HIGH identified by Round 5 security-auditor audit :

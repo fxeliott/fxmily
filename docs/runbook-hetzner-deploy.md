@@ -13,11 +13,11 @@ respecter strictement la contrainte zéro coût supplémentaire). Pair with
 >    Cloudflare DNS configuré). Achat éventuel d'un domaine plus court
 >    (`fxmily.com` si dispo) reporté V2 si l'image de marque l'exige. Coût
 >    supplémentaire V1 : 0 €.
-> 1. **Hetzner CX22 EXISTANT** : `hetzner-dieu` à `178.104.39.201` (hostname
+> 1. **Hetzner CX22 EXISTANT** : `fxmily-prod` à `203.0.113.10` (hostname
 >    `fxmilyapp.com`) — déjà payé pour n8n/Langfuse. Vérifier d'abord la
->    capacité résiduelle via `ssh hetzner-dieu 'free -h && df -h'`. Si
+>    capacité résiduelle via `ssh fxmily-prod 'free -h && df -h'`. Si
 >    saturé, provisionner un nouveau CX22 (~5 €/mois, doc §1 ci-dessous).
->    Sinon `bootstrap-fxmily.sh --skip-hetzner FXMILY_HETZNER_IP=178.104.39.201`
+>    Sinon `bootstrap-fxmily.sh --skip-hetzner FXMILY_HETZNER_IP=203.0.113.10`
 >    réutilise l'IP existante.
 > 2. Créer le projet Sentry (`sentry.io` → New Project → Next.js) +
 >    générer un `SENTRY_AUTH_TOKEN` (Settings → Auth Tokens →
@@ -1939,7 +1939,206 @@ C'est attendu — V2.4 est un cycle complet, le rollback DB d'une partie casse t
 
 **Recommandation forte** : rollback V2.4 **uniquement** en cas de bug critique data-corrupting (e.g. crisis routing skip-persist défaillant qui exposerait du contenu sensible, ou amf_violation regex laxe). Pour bugs UI Phase B/C ou bug pipeline Phase A.2, préférer un **rollback code-only** (revert PR sur main + re-deploy) sans toucher au schéma DB.
 
-## 24. Rollback V1.7 §30 meeting-attendance migration (`20260530150000_v1_7_meeting_attendance`)
+## 24. Rollback §26 calendrier adaptatif migration (`20260603120000_calendar_questionnaire`)
+
+> **Migration** shipped jalon J-C1 (data layer backend-first) 2026-06-03.
+> **Objets DB** : 2 enums (`CalendarSlot` : `morning`/`afternoon`/`evening` ; `CalendarBlockCategory` : `live_trading`/`backtest`/`mark_douglas_review`/`checkin`/`rest`/`meeting`/`free`) + 2 tables (`weekly_schedule_questionnaires` + `adaptive_calendars`) + 2 FK cascade User delete (RGPD §17) + 2 UNIQUE `(user_id, week_start)` + 3 indexes.
+> **ADD-only** : 0 changement sur table/colonne existante. Tables NEUVES → en J-C1 elles sont vides (aucun batch réel lancé) ; data-loss possible seulement si des membres ont déjà rempli des questionnaires (J-C3 mergé) ou si des calendriers ont été générés (J-C2 mergé).
+>
+> **Indépendant de §15-§23** : 0 FK croisée vers les autres tables de migration. Seules FK = `users` cascade User delete. `adaptive_calendars` n'a AUCUNE FK vers `weekly_schedule_questionnaires` (snapshot-at-generation découplé, ADR-005) → les 2 tables se droppent dans n'importe quel ordre.
+
+### 24.1 Pré-requis — quiesce
+
+Stop le web pour qu'aucun nouveau questionnaire ne soit upserté et qu'aucun
+batch local Claude calendar ne tente un INSERT AdaptiveCalendar pendant le DROP :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+```
+
+### 24.2 pg_dump SÉLECTIF des 2 tables AVANT rollback (data-loss si peuplées)
+
+Inutile en J-C1 (tables vides). Requis si J-C2/J-C3 mergés et des membres ont rempli/généré :
+
+```bash
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  pg_dump -U fxmily fxmily \
+  --table=weekly_schedule_questionnaires \
+  --table=adaptive_calendars \
+  --column-inserts --no-owner --no-acl \
+  | gzip > /etc/fxmily/backups/pre-calendar-rollback-${TS}.sql.gz
+```
+
+Compter les rows pré-rollback pour audit honnête :
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c '
+    SELECT (SELECT COUNT(*) FROM weekly_schedule_questionnaires) AS questionnaires,
+           (SELECT COUNT(*) FROM adaptive_calendars) AS calendars;'
+```
+
+### 24.3 Procédure SQL (BEGIN/COMMIT atomic, tables avant types)
+
+```sql
+BEGIN;
+
+-- 1. Drop les 2 tables (pas de FK croisée entre elles — ordre libre).
+DROP TABLE IF EXISTS "adaptive_calendars" CASCADE;
+DROP TABLE IF EXISTS "weekly_schedule_questionnaires" CASCADE;
+
+-- 2. Drop les 2 enums APRÈS les tables (Postgres refuse de drop un type
+--    encore référencé par une colonne — ordre non négociable).
+DROP TYPE IF EXISTS "CalendarBlockCategory";
+DROP TYPE IF EXISTS "CalendarSlot";
+
+-- 3. Marquer la migration rolled-back dans _prisma_migrations (DELETE row
+--    complète, pas UPDATE — sinon `prisma migrate status` rapporte un drift).
+DELETE FROM "_prisma_migrations"
+WHERE "migration_name" = '20260603120000_calendar_questionnaire';
+
+COMMIT;
+```
+
+### 24.4 Re-deploy image pré-§26
+
+Re-déployer une image qui ne référence PAS le calendrier (ni `lib/calendar/service.ts`
+`db.weeklyScheduleQuestionnaire` / `db.adaptiveCalendar`, ni — une fois mergées — les
+routes `/calendrier` / `/api/admin/calendar-batch/*`). Reset HEAD au commit avant la
+PR J-C1.
+
+```bash
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d web
+curl -fsS https://app.fxmilyapp.com/api/health
+```
+
+### 24.5 Audit
+
+```sql
+INSERT INTO audit_logs (action, metadata) VALUES (
+  'ops.migration.rolled_back',
+  '{"migration":"20260603120000_calendar_questionnaire",
+    "rows_lost_questionnaires":<Q>,
+    "rows_lost_calendars":<C>,
+    "rolled_back_at":"<ISO>",
+    "operator":"<eliot>"}'::jsonb
+);
+```
+
+### 24.6 Re-application future
+
+```bash
+# 1. Re-deploy image avec §26 LIVE :
+git checkout <ref-with-calendar>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d web
+
+# 2. Re-apply migration :
+docker compose -f /opt/fxmily/docker-compose.prod.yml run --rm web \
+  pnpm --filter @fxmily/web prisma:migrate deploy
+
+# 3. Restore data sélectif (si questionnaires/calendriers préservés via 24.2) :
+gunzip -c /etc/fxmily/backups/pre-calendar-rollback-<TS>.sql.gz \
+  | docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+      psql -U fxmily -d fxmily
+
+# 4. Vérifier intégrité :
+psql -c 'SELECT COUNT(*) FROM weekly_schedule_questionnaires;'
+psql -c 'SELECT COUNT(*) FROM adaptive_calendars;'
+```
+
+### 24.7 ⚠️ Recommandation
+
+En J-C1, le calendrier est **data-layer only** (0 UI, 0 batch réel). Un rollback DB est
+quasiment sans conséquence fonctionnelle (aucune route ne consomme encore ces tables).
+Une fois J-C2→J-C4 mergés, préférer un **rollback code-only** (revert PR + re-deploy) pour
+tout bug UI/pipeline ; ne droper le schéma qu'en cas de bug critique data-corrupting.
+
+## 25. Rollback J4 migration (`20260529150000_j4_user_token_version`)
+
+> **Quand l'utiliser** : quasi jamais. La colonne `users.token_version` est
+> **safe** par construction (NOT NULL DEFAULT 0, ADD-only, metadata-only sur
+> PG 11+). Le rollback n'est utile que si on veut retirer complètement la
+> colonne (rare — possible si un Prisma drift bloque une future migration).
+>
+> Aucune perte de données : la colonne ne porte qu'un compteur de révocation.
+> Le callback `jwt` (`lib/auth/session-revocation.ts`) coalesce un claim absent
+> à 0, donc post-rollback tous les JWT en cours valident comme `tokenVersion=0`.
+> **Effet de bord du rollback** : les sessions révoquées (compteur bumpé sur un
+> hard-delete) redeviendraient acceptées jusqu'à expiration naturelle — c'est
+> précisément la faille que J4 ferme, donc ne rollback que si le code applicatif
+> est lui aussi reverté avant J4.
+
+### 25.1 Pré-requis avant rollback
+
+1. **Pas de backup de données nécessaire** (compteur pur, aucune donnée
+   métier). Un `pg_dump` global de routine suffit.
+
+2. **Stop le web** (le callback `jwt` Node-side lit `token_version` à chaque
+   `auth()`) :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+   ```
+
+3. **Vérifie l'état Prisma** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+       FROM _prisma_migrations WHERE migration_name LIKE '%token_version%' \
+       ORDER BY started_at DESC;"
+   ```
+
+### 25.2 SQL rollback
+
+Single DROP COLUMN (aucun index ni FK ne réfère la colonne) :
+
+```sql
+BEGIN;
+
+-- Drop the revocation-epoch column (lossless — pure counter, no referent).
+ALTER TABLE "users" DROP COLUMN IF EXISTS "token_version";
+
+-- Wipe the Prisma migrations row so the schema can be re-applied later.
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260529150000_j4_user_token_version';
+
+COMMIT;
+```
+
+> ⚠️ `BEGIN`/`COMMIT` → tout-ou-rien. Re-vérifie via `\d users` que la colonne
+> `token_version` est bien absente (rollback OK) ou présente (rollback annulé).
+
+### 25.3 Re-déploiement de l'image pré-J4 + vérification
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<pre-j4-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\d users" | grep -c token_version
+# Attendu : 0 (colonne absente)
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"j4_user_token_version\",\"by\":\"eliot\"}'::jsonb, NOW());"
+```
+
+### 25.4 Re-application future
+
+1. Re-deploy l'image J4+ (`feat/jwt-token-version-revocation` HEAD ou ultérieure).
+2. `pnpm --filter @fxmily/web prisma:migrate deploy` — Prisma re-cale la row.
+3. Les rows existantes prennent `token_version = 0` (DEFAULT). Pas de backfill
+   nécessaire — la révocation repart à neuf (aucune session pré-rollback n'est
+   à invalider rétroactivement).
+
+## 26. Rollback V1.7 §30 meeting-attendance migration (`20260530150000_v1_7_meeting_attendance`)
 
 > **Quand l'utiliser** : si la migration J-M1 "suivi de présence aux réunions"
 > (PR #207 — `Meeting` + `MeetingAttendance` + 3 enums `MeetingSlot` /
@@ -1968,7 +2167,7 @@ C'est attendu — V2.4 est un cycle complet, le rollback DB d'une partie casse t
 > plusieurs rollbacks sont nécessaires, l'ordre inverse de l'apply continue
 > d'appliquer (§24 → §23 → … → §15).
 
-### 24.1 Pré-requis — quiesce
+### 26.1 Pré-requis — quiesce
 
 ```bash
 docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
@@ -1983,7 +2182,7 @@ docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
     ORDER BY started_at DESC;"
 ```
 
-### 24.2 Backup `meetings` + `meeting_attendances`
+### 26.2 Backup `meetings` + `meeting_attendances`
 
 ```bash
 TS=$(date -u +%Y%m%dT%H%M%SZ)
@@ -1997,7 +2196,7 @@ docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
 > Conservé 30j R2 (lifecycle `caddy/` carbone) + 7j local (`fxmily-backup`
 > rotation). À J-M1 seul le dump est vide (tables non encore alimentées).
 
-### 24.3 SQL rollback — DROP TABLES + DROP TYPES dans un seul BEGIN/COMMIT
+### 26.3 SQL rollback — DROP TABLES + DROP TYPES dans un seul BEGIN/COMMIT
 
 Ordre obligatoire : table fille (`meeting_attendances`, qui porte les 2 FK)
 AVANT table parent (`meetings`) AVANT les 3 types enum (sinon `cannot drop
@@ -2017,7 +2216,7 @@ COMMIT;
 
 > Postgres rollback automatique si une étape échoue (cohérence garantie).
 
-### 24.4 Re-déploiement de l'image pré-V1.7
+### 26.4 Re-déploiement de l'image pré-V1.7
 
 ```bash
 export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<pre-v1_7-sha>
@@ -2025,7 +2224,7 @@ docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
 docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
 ```
 
-### 24.5 Vérification post-rollback
+### 26.5 Vérification post-rollback
 
 ```bash
 curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
@@ -2048,7 +2247,7 @@ docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
       NOW());"
 ```
 
-### 24.6 Re-application future
+### 26.6 Re-application future
 
 1. Re-deploy l'image V1.7+ HEAD.
 2. `docker compose -f /opt/fxmily/docker-compose.prod.yml run --rm web \
@@ -2066,6 +2265,8 @@ pnpm --filter @fxmily/web prisma:migrate deploy` (rejoue la migration).
    régénère les occurrences à venir (idempotent sur `@@unique(date, slot)`) ;
    les déclarations membres passées, elles, ne se régénèrent PAS → restore
    step 3 obligatoire si on veut les préserver.
+
+---
 
 ## Note transversale — pattern rollback Fxmily
 

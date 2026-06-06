@@ -34,12 +34,21 @@ export function SplashHero() {
       {/* Aurora hero ambient (subtle lime + indigo radial gradients) */}
       <div aria-hidden className="aurora pointer-events-none absolute inset-0" />
 
-      {/* Drift orb (slow 18s loop, lime translucent) */}
+      {/* Drift orbs (slow loops) — blue + indigo mesh depth behind the hero.
+          CSS-class driven (`.orb`) so prefers-reduced-motion neutralises them. */}
       <div
         aria-hidden
-        className="orb pointer-events-none absolute -top-32 -left-32 h-[460px] w-[460px] rounded-full opacity-30"
+        className="orb pointer-events-none absolute -top-32 -left-32 h-[460px] w-[460px] rounded-full opacity-40 blur-[40px]"
         style={{
-          background: 'radial-gradient(circle, oklch(0.879 0.231 130 / 0.18) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, oklch(0.62 0.19 254 / 0.22) 0%, transparent 70%)',
+        }}
+      />
+      <div
+        aria-hidden
+        className="orb pointer-events-none absolute -right-40 -bottom-40 h-[520px] w-[520px] rounded-full opacity-30 blur-[56px]"
+        style={{
+          background: 'radial-gradient(circle, oklch(0.5 0.21 262 / 0.18) 0%, transparent 70%)',
+          animationDelay: '-9s',
         }}
       />
 
@@ -189,7 +198,10 @@ export function SplashHero() {
 
         {/* Hero bento (desktop only — mobile gets simplified card after) */}
         <div className="hidden lg:block">
-          <Card primary className="ml-auto max-w-[480px] overflow-hidden p-5">
+          <Card
+            primary
+            className="ml-auto max-w-[480px] overflow-hidden p-5 transition-all duration-300 ease-[var(--e-smooth)] hover:-translate-y-1 hover:shadow-[var(--sh-card-hover)]"
+          >
             <div className="mb-3 flex items-center justify-between">
               <span className="t-eyebrow">Discipline · 30 jours</span>
               <Pill tone="acc" dot="live">
@@ -202,7 +214,7 @@ export function SplashHero() {
               <span
                 className="f-mono text-[56px] leading-none font-semibold tracking-[-0.045em] text-[var(--acc)] tabular-nums"
                 style={{
-                  filter: 'drop-shadow(0 0 18px oklch(0.879 0.231 130 / 0.32))',
+                  filter: 'drop-shadow(0 0 18px oklch(0.62 0.19 254 / 0.4))',
                 }}
               >
                 +91%

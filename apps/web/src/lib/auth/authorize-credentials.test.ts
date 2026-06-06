@@ -262,6 +262,9 @@ describe('authorizeCredentials — happy path (constant-time + sanitized result)
       role: 'admin',
       status: 'active',
       timezone: 'Europe/Paris',
+      // J4 — a non-zero value proves the revocation epoch is threaded from
+      // the DB select through to the result (not defaulted to 0).
+      tokenVersion: 3,
     });
     verifyPasswordMock.mockResolvedValueOnce(true);
 
@@ -282,6 +285,8 @@ describe('authorizeCredentials — happy path (constant-time + sanitized result)
       role: 'admin',
       status: 'active',
       timezone: 'Europe/Paris',
+      // J4 — baked into the JWT by auth.config.ts at sign-in.
+      tokenVersion: 3,
     });
     // lastSeenAt bump (fire-and-forget — the .catch() in the SUT must
     // swallow rejections without flipping the result to null).

@@ -9,6 +9,7 @@ import { logAudit } from '@/lib/auth/audit';
 import {
   appendAnswer,
   finalizeInterview,
+  OnboardingInstrumentMismatchError,
   startInterview,
 } from '@/lib/onboarding-interview/service';
 import { reportError, reportWarning } from '@/lib/observability';
@@ -244,6 +245,20 @@ export async function appendAnswerAction(
   try {
     result = await appendAnswer(session.user.id, parsed.data);
   } catch (err) {
+    if (err instanceof OnboardingInstrumentMismatchError) {
+      // Catalog mismatch = forged/buggy client. A legit wizard always submits a
+      // valid (index, key) from the same instrument, so this never fires on the
+      // happy path. Surface as a field error (not a 500) + reportWarning for
+      // forensics — NOT reportError (it is not a server fault).
+      reportWarning('onboarding.interview.append', 'instrument_mismatch_rejected', {
+        questionIndex: parsed.data.questionIndex,
+      });
+      return {
+        ok: false,
+        error: 'invalid_input',
+        fieldErrors: { questionIndex: err.message },
+      };
+    }
     reportError('onboarding.interview.append', err);
     return { ok: false, error: 'unknown' };
   }

@@ -24,6 +24,12 @@ vi.mock('@/lib/onboarding-interview/service', () => ({
   startInterview: startInterviewMock,
   appendAnswer: appendAnswerMock,
   finalizeInterview: finalizeInterviewMock,
+  OnboardingInstrumentMismatchError: class OnboardingInstrumentMismatchError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'OnboardingInstrumentMismatchError';
+    }
+  },
 }));
 vi.mock('@/lib/safety/crisis-detection', () => ({ detectCrisis: detectCrisisMock }));
 vi.mock('@/lib/ai/injection-detector', () => ({ detectInjection: detectInjectionMock }));
@@ -36,6 +42,8 @@ vi.mock('next/navigation', () => ({ redirect: redirectMock }));
 
 const { startInterviewAction, appendAnswerAction, finalizeInterviewAction } =
   await import('./actions');
+// Same (mocked) class the SUT checks against via `instanceof`.
+const { OnboardingInstrumentMismatchError } = await import('@/lib/onboarding-interview/service');
 
 afterEach(() => {
   authMock.mockReset();
@@ -418,6 +426,35 @@ describe('appendAnswerAction — service failure', () => {
 
     expect(result).toEqual({ ok: false, error: 'unknown' });
     expect(reportErrorMock).toHaveBeenCalledWith('onboarding.interview.append', dbErr);
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('maps OnboardingInstrumentMismatchError to invalid_input + reportWarning (not reportError)', async () => {
+    authMock.mockResolvedValueOnce(ACTIVE_SESSION);
+    appendAnswerMock.mockRejectedValueOnce(
+      new OnboardingInstrumentMismatchError('Question 40 hors du catalogue v1.'),
+    );
+
+    const fd = makeFormData({
+      instrumentVersion: 'v1',
+      questionIndex: '40',
+      questionKey: 'parcours_origin',
+      answerText: SAFE_ANSWER_TEXT,
+    });
+
+    const result = await appendAnswerAction(null, fd);
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'invalid_input',
+      fieldErrors: { questionIndex: 'Question 40 hors du catalogue v1.' },
+    });
+    expect(reportWarningMock).toHaveBeenCalledWith(
+      'onboarding.interview.append',
+      'instrument_mismatch_rejected',
+      expect.objectContaining({ questionIndex: 40 }),
+    );
+    expect(reportErrorMock).not.toHaveBeenCalled();
     expect(logAuditMock).not.toHaveBeenCalled();
   });
 });

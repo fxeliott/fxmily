@@ -48,6 +48,27 @@ import { getOnboardingInstrument } from './instrument-v1';
 export const DEFAULT_INSTRUMENT_VERSION = 'v1';
 
 // =============================================================================
+// Errors
+// =============================================================================
+
+/**
+ * Thrown by `appendAnswer` when the submitted `(instrumentVersion,
+ * questionIndex, questionKey)` triple does not match the frozen instrument
+ * catalog. The Zod schema only validates SHAPE/bounds — the catalog is the
+ * single source of truth for which (index, key) pairs exist. Without this gate
+ * a forged or buggy authenticated request could persist an out-of-catalog
+ * `questionIndex`, which `batch.ts` then silently drops from the Claude
+ * snapshot (it matches answers by `questionIndex`) — the member believes they
+ * answered, the profile ignores it. The Server Action maps this to a
+ * `invalid_input` field error (never a 500). */
+export class OnboardingInstrumentMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OnboardingInstrumentMismatchError';
+  }
+}
+
+// =============================================================================
 // Serialization types
 // =============================================================================
 
@@ -197,6 +218,29 @@ export async function appendAnswer(
   userId: string,
   input: OnboardingAnswerInput,
 ): Promise<AppendAnswerResult> {
+  // Server-authority validation against the frozen instrument catalog. The Zod
+  // schema only bounds SHAPE — the catalog is the single source of truth for
+  // which (index, key) pairs exist. Reject unknown version / out-of-catalog
+  // index / key↔index mismatch so a forged or buggy client can never persist
+  // an answer that `batch.ts` would silently drop (it matches by questionIndex).
+  const instrument = getOnboardingInstrument(input.instrumentVersion);
+  if (!instrument) {
+    throw new OnboardingInstrumentMismatchError(
+      `Version d'instrument inconnue : ${input.instrumentVersion}.`,
+    );
+  }
+  const item = instrument.items.find((i) => i.questionIndex === input.questionIndex);
+  if (!item) {
+    throw new OnboardingInstrumentMismatchError(
+      `Question ${input.questionIndex} hors du catalogue ${input.instrumentVersion}.`,
+    );
+  }
+  if (item.id !== input.questionKey) {
+    throw new OnboardingInstrumentMismatchError(
+      `Clé de question incohérente avec le catalogue (index ${input.questionIndex}).`,
+    );
+  }
+
   const crisis = detectCrisis(input.answerText);
   const injection = detectInjection(input.answerText);
 
@@ -205,35 +249,28 @@ export async function appendAnswer(
     instrumentVersion: input.instrumentVersion,
   });
 
-  // Resolve the canonical question text from the versioned instrument at
-  // WRITE-TIME (previously deferred to a "Phase A.2" that never shipped, leaving
-  // questionText=''). Matched by questionIndex — the exact resolution the batch
-  // pipeline uses (batch.ts: instrument.items.find(i => i.questionIndex === …)).
-  // Falls back to '' for an unknown version/index (no regression: the batch
-  // keeps its own `ans.questionText || item.text` fallback).
-  const instrumentDef = getOnboardingInstrument(input.instrumentVersion);
-  const questionText =
-    instrumentDef?.items.find((item) => item.questionIndex === input.questionIndex)?.text ?? '';
-
-  // Upsert answer on the unique (interviewId, questionIndex) constraint.
+  // Upsert answer on the unique (interviewId, questionIndex) constraint. Both
+  // questionKey and questionText come from the catalog item (server authority)
+  // — this also closes the historical `questionText: ''` debt: the column is
+  // now populated at write-time from the frozen instrument wording.
   const answerRow = await db.onboardingInterviewAnswer.upsert({
     where: {
       interviewId_questionIndex: {
         interviewId: interview.id,
-        questionIndex: input.questionIndex,
+        questionIndex: item.questionIndex,
       },
     },
     update: {
-      questionKey: input.questionKey,
-      questionText, // canonical text resolved from the versioned instrument
+      questionKey: item.id,
+      questionText: item.text,
       answerText: input.answerText,
     },
     create: {
       interviewId: interview.id,
       userId,
-      questionIndex: input.questionIndex,
-      questionKey: input.questionKey,
-      questionText, // canonical text resolved from the versioned instrument
+      questionIndex: item.questionIndex,
+      questionKey: item.id,
+      questionText: item.text,
       answerText: input.answerText,
     },
   });

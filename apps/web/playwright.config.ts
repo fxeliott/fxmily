@@ -23,9 +23,25 @@ export default defineConfig({
   fullyParallel: false, // shared DB state — run serially
   retries: process.env.CI ? 2 : 0,
   workers: 1,
+  // CI runs against `next dev` (compile-on-demand). A cold first hit on a
+  // heavy route (e.g. /journal, /dashboard with Recharts) can take several
+  // seconds while Next compiles it, which previously tripped the default
+  // 5s `expect` / 30s navigation timeouts intermittently (`socket hang up`
+  // is handled separately by the retry in `src/test/e2e-auth.ts`; this
+  // covers the render-side cold-compile timeouts). The bumps only delay
+  // FAILING assertions — passing ones resolve as soon as the element shows,
+  // so the happy-path suite stays ~the same wall-clock. Local runs keep the
+  // snappy defaults. The deeper root fix (a production `next start` E2E
+  // server, no on-demand compile) is deferred: it conflicts with the
+  // `AUTH_URL must be HTTPS in production` env refine and would touch app
+  // env validation, out of scope for a test-infra-only change.
+  timeout: process.env.CI ? 60_000 : 30_000,
+  expect: { timeout: process.env.CI ? 10_000 : 5_000 },
   reporter: process.env.CI ? [['github'], ['list']] : [['list']],
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
+    actionTimeout: process.env.CI ? 15_000 : 0,
+    navigationTimeout: process.env.CI ? 45_000 : 30_000,
     trace: process.env.PLAYWRIGHT_CAPTURE === 'all' ? 'on' : 'retain-on-failure',
     screenshot: process.env.PLAYWRIGHT_CAPTURE === 'all' ? 'on' : 'only-on-failure',
     video: process.env.PLAYWRIGHT_CAPTURE === 'all' ? 'on' : 'retain-on-failure',

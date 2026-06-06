@@ -58,6 +58,35 @@ export function nextSyntheticCallerIp(): string {
 }
 
 /**
+ * Retry a Playwright request ONLY on a thrown network-level error — under
+ * `next dev` in CI the server compiles routes on-demand and can momentarily
+ * drop a connection (`socket hang up` / `ECONNRESET` / `ECONNREFUSED`),
+ * surfacing as a thrown error before any HTTP response. That is a transient
+ * harness/dev-server hiccup, not an auth failure.
+ *
+ * IMPORTANT: Playwright's `request.get/post` resolve (do NOT throw) on HTTP
+ * 4xx/5xx — those are returned as a response and handled by the caller's
+ * explicit `status()` checks. So this wrapper NEVER retries a real auth
+ * rejection (e.g. a 401 from a wrong password); it only re-attempts when the
+ * request threw at the socket layer. Retries reuse the same synthetic caller
+ * IP, so the per-IP login bucket (burst 10) easily absorbs 2 extra attempts.
+ */
+async function requestWithRetry<T>(label: string, fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+      }
+    }
+  }
+  throw new Error(`${label} failed after ${attempts} attempts: ${String(lastErr)}`);
+}
+
+/**
  * Log in via the real Auth.js v5 Credentials flow:
  *   1. GET /api/auth/csrf → cookie `authjs.csrf-token` + JSON `{ csrfToken }`.
  *   2. POST /api/auth/callback/credentials?json=true with form fields
@@ -89,27 +118,31 @@ export async function loginAs(
   const callerIp = nextSyntheticCallerIp();
 
   // Step 1 — fetch CSRF token (sets the csrf cookie in the request context).
-  const csrfRes = await request.get('/api/auth/csrf', {
-    headers: { 'x-forwarded-for': callerIp },
-  });
+  const csrfRes = await requestWithRetry('GET /api/auth/csrf', () =>
+    request.get('/api/auth/csrf', {
+      headers: { 'x-forwarded-for': callerIp },
+    }),
+  );
   if (csrfRes.status() !== 200) {
     throw new Error(`csrf endpoint returned ${csrfRes.status()}`);
   }
   const { csrfToken } = (await csrfRes.json()) as { csrfToken: string };
 
   // Step 2 — submit credentials with the CSRF token in the form body.
-  const callbackRes = await request.post('/api/auth/callback/credentials?json=true', {
-    form: {
-      csrfToken,
-      email,
-      password,
-      callbackUrl: `${origin}/dashboard`,
-    },
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      'x-forwarded-for': callerIp,
-    },
-  });
+  const callbackRes = await requestWithRetry('POST /api/auth/callback/credentials', () =>
+    request.post('/api/auth/callback/credentials?json=true', {
+      form: {
+        csrfToken,
+        email,
+        password,
+        callbackUrl: `${origin}/dashboard`,
+      },
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-forwarded-for': callerIp,
+      },
+    }),
+  );
   if (callbackRes.status() >= 400) {
     throw new Error(
       `credentials callback returned ${callbackRes.status()}: ${await callbackRes.text()}`,

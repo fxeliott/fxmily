@@ -20,6 +20,24 @@ const C = (
   emotionTags: tags,
 });
 
+/** Closed-trade fixture. Emotion arrays default empty → trade carries no
+ *  emotion data → excluded from the DoD#3 footprint (byte-identical default). */
+const TR = (
+  closeDay: string | null,
+  outcome: EmotionalStabilityTradeInput['outcome'],
+  emo: {
+    before?: string[];
+    during?: string[];
+    after?: string[];
+  } = {},
+): EmotionalStabilityTradeInput => ({
+  closeDay,
+  outcome,
+  emotionBefore: emo.before ?? [],
+  emotionDuring: emo.during ?? [],
+  emotionAfter: emo.after ?? [],
+});
+
 const days14 = (start = 1): string[] =>
   Array.from({ length: 14 }, (_, i) => `2026-01-${String(start + i).padStart(2, '0')}`);
 
@@ -114,7 +132,7 @@ describe('computeEmotionalStabilityScore', () => {
       '2026-01-14': 5,
     };
     const checkins = Object.entries(moods).map(([d, m]) => C(d, m, 1, []));
-    const trades: EmotionalStabilityTradeInput[] = [{ closeDay: '2026-01-01', outcome: 'loss' }];
+    const trades: EmotionalStabilityTradeInput[] = [TR('2026-01-01', 'loss')];
     const r = computeEmotionalStabilityScore({ checkins, closedTrades: trades });
     expect(r.parts.recoveryAfterLoss).not.toBeNull();
     expect(r.parts.recoveryAfterLoss!.rate).toBeGreaterThan(0.5); // bounced back
@@ -140,5 +158,114 @@ describe('computeEmotionalStabilityScore', () => {
     const r = computeEmotionalStabilityScore({ checkins, closedTrades: [] });
     expect(r.score).toBeNull();
     expect(r.parts.moodVariance.pointsAwarded).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DoD#3 — trade-emotion footprint sub-score.
+//
+// ADDITION PURE: `WEIGHT_TRADE_EMO` (15) is added EN PLUS; the existing four
+// weights (40/25/20/15) are NEVER rebalanced. A member whose closed trades
+// carry NO emotion data scores BYTE-IDENTICALLY to pre-DoD#3 — the part is
+// `null` and renormalized away.
+//
+// EXACT mirror of `negativeEmotionRate` (checkin tags), reusing the SAME
+// NEGATIVE_EMOTION_SLUGS set: denominator = closed trades with ≥1 non-empty
+// before/during/after array; numerator = those whose arrays contain a negative
+// slug; sub-score = clamp(1 − rate) (higher = calmer trading). SPEC §2: reads
+// the emotional ARC, never the trade's P&L / outcome.
+// ---------------------------------------------------------------------------
+
+describe('computeEmotionalStabilityScore — trade-emotion footprint (DoD#3)', () => {
+  // 14 stable-mood, low-stress, no-checkin-tag days → the three checkin
+  // sub-scores are fully determined (moodVar 40 @ rate1, stress 25 @ rate1,
+  // negEmo skipped, recovery skipped) so any delta is attributable to the
+  // trade footprint alone. Base (no trade emotion) score = 100.
+  const stableCheckins = (): EmotionalStabilityCheckinInput[] =>
+    days14().map((d) => C(d, 6, 1, []));
+
+  it('ZERO REGRESSION — no trade carries emotion data ≡ pre-DoD#3 (byte-identical, part null)', () => {
+    const checkins = stableCheckins();
+    // Closed trades present but with empty emotion arrays (every pre-DoD#3 row).
+    // `closeDay: null` keeps recovery-after-loss skipped so the ONLY variable
+    // under test is the footprint — isolating the byte-identical proof.
+    const trades = [TR(null, 'win'), TR(null, 'loss')];
+    const base = computeEmotionalStabilityScore({ checkins, closedTrades: [] });
+    const withTrades = computeEmotionalStabilityScore({ checkins, closedTrades: trades });
+    expect(base.score).toBe(100); // pinned pre-DoD#3 value
+    expect(withTrades.score).toBe(base.score);
+    expect(base.parts.tradeEmotionFootprint).toBeNull();
+    expect(withTrades.parts.tradeEmotionFootprint).toBeNull();
+  });
+
+  it('all-calm trades → full WEIGHT_TRADE_EMO contribution (still 100 when otherwise perfect)', () => {
+    const checkins = stableCheckins();
+    // 4 trades, each carrying a non-negative slug only → rate 0 negative → 1−0=1.
+    // `closeDay: null` → recovery stays skipped (footprint isolated).
+    const trades = [
+      TR(null, 'win', { before: ['calm'] }),
+      TR(null, 'loss', { during: ['confident'] }),
+      TR(null, 'win', { after: ['calm'] }),
+      TR(null, 'break_even', { before: ['confident'], after: ['calm'] }),
+    ];
+    const r = computeEmotionalStabilityScore({ checkins, closedTrades: trades });
+    expect(r.score).toBe(100);
+    expect(r.parts.tradeEmotionFootprint).not.toBeNull();
+    expect(r.parts.tradeEmotionFootprint?.rate).toBe(1);
+    expect(r.parts.tradeEmotionFootprint?.pointsMax).toBe(15);
+    expect(r.parts.tradeEmotionFootprint?.pointsAwarded).toBe(15);
+    expect(r.parts.tradeEmotionFootprint?.numerator).toBe(0); // 0 negative trades
+    expect(r.parts.tradeEmotionFootprint?.denominator).toBe(4);
+  });
+
+  it('all-negative trades → rate 0 (calmest=0), sub-score present, dimension drops', () => {
+    const checkins = stableCheckins();
+    // Every trade carries ≥1 negative slug across before/during/after.
+    // `closeDay: null` → recovery skipped → active max = moodVar 40 + stress 25
+    // + footprint 15 = 80 (no recovery 15), isolating the footprint.
+    const trades = [
+      TR(null, 'loss', { before: ['fomo'] }),
+      TR(null, 'loss', { during: ['fear-loss'] }),
+      TR(null, 'win', { after: ['frustrated'] }),
+      TR(null, 'loss', { before: ['anxious'], after: ['doubt'] }),
+    ];
+    const base = computeEmotionalStabilityScore({ checkins, closedTrades: [] });
+    const r = computeEmotionalStabilityScore({ checkins, closedTrades: trades });
+    // base 100 over active max 65; with footprint at rate 0: awarded 65, active
+    // max 80 → 65/80 × 100 = 81.25 → 81. Strictly below base.
+    expect(r.score).toBe(81);
+    expect(r.score!).toBeLessThan(base.score!);
+    expect(r.parts.tradeEmotionFootprint?.rate).toBe(0);
+    expect(r.parts.tradeEmotionFootprint?.numerator).toBe(4);
+    expect(r.parts.tradeEmotionFootprint?.denominator).toBe(4);
+    expect(r.parts.tradeEmotionFootprint?.pointsAwarded).toBe(0);
+  });
+
+  it('mixed: trades with empty arrays are excluded from the denominator', () => {
+    const checkins = stableCheckins();
+    // 2 trades carry emotion (1 negative), 2 trades carry NO emotion (excluded).
+    const trades = [
+      TR(null, 'loss', { before: ['fomo'] }), // negative
+      TR(null, 'win', { after: ['calm'] }), // positive
+      TR(null, 'win'), // empty → excluded
+      TR(null, 'loss'), // empty → excluded
+    ];
+    const r = computeEmotionalStabilityScore({ checkins, closedTrades: trades });
+    // 1 negative / 2 with-emotion = 0.5 → 1−0.5 = 0.5.
+    expect(r.parts.tradeEmotionFootprint?.rate).toBe(0.5);
+    expect(r.parts.tradeEmotionFootprint?.numerator).toBe(1);
+    expect(r.parts.tradeEmotionFootprint?.denominator).toBe(2);
+  });
+
+  it('a single negative slug ANYWHERE in the 3 arrays marks the trade negative', () => {
+    const checkins = stableCheckins();
+    // calm before + confident after, but ONE negative during → counts negative.
+    const trades = [
+      TR(null, 'win', { before: ['calm'], during: ['fear-wrong'], after: ['confident'] }),
+    ];
+    const r = computeEmotionalStabilityScore({ checkins, closedTrades: trades });
+    expect(r.parts.tradeEmotionFootprint?.numerator).toBe(1);
+    expect(r.parts.tradeEmotionFootprint?.denominator).toBe(1);
+    expect(r.parts.tradeEmotionFootprint?.rate).toBe(0);
   });
 });

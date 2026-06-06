@@ -30,6 +30,12 @@ export interface EngagementCheckinInput {
   slot: 'morning' | 'evening';
   /** Evening only — `null` when no journal entry was filled. */
   journalNote: string | null;
+  /**
+   * Morning only (DoD#3). Subjective sleep quality 1–10, `null` when not
+   * answered. A conservative self-care habit signal (anti-Black-Hat: only ever
+   * a positive contribution when present — never a "you sleep badly" penalty).
+   */
+  sleepQuality?: number | null;
 }
 
 export interface EngagementInput {
@@ -114,6 +120,20 @@ const TRAINING_ACTIVITY_TARGET = 8;
  */
 const WEIGHT_MEETING = 15;
 
+/**
+ * DoD#3 — sleep (self-care) sub-score weight. Added as a PURE ADDITION: the
+ * existing weights (50/20/20/10 + training 15 + meeting 15) are deliberately
+ * NOT rebalanced. `aggregateDimension` normalizes by the *active* `pointsMax`,
+ * so a member who logs no sleep quality scores byte-identically to pre-DoD#3.
+ * Sized conservatively (10, level with `journalDepthRate`): sleep is a
+ * wellness/habit-adherence act, meaningful but non-dominant vs the daily
+ * check-in (50). Anti-Black-Hat: only a positive contribution when present.
+ */
+const WEIGHT_SLEEP = 10;
+
+/** DoD#3 — subjective sleep-quality scale max (the field is 1–10). */
+const SLEEP_QUALITY_SCALE = 10;
+
 export function computeEngagementScore(input: EngagementInput): ScoreResult<EngagementParts> {
   const windowDays = input.windowDays ?? DEFAULT_WINDOW_DAYS;
 
@@ -133,6 +153,20 @@ export function computeEngagementScore(input: EngagementInput): ScoreResult<Enga
   const daysWithBoth = Array.from(byDate.values()).filter((e) => e.morning && e.evening).length;
   const eveningsFilled = Array.from(byDate.values()).filter((e) => e.evening).length;
   const eveningsWithJournal = Array.from(byDate.values()).filter((e) => e.journal).length;
+
+  // DoD#3 — subjective sleep quality, averaged over mornings where the member
+  // answered (`sleepQuality !== null`). A self-care habit signal: when no
+  // morning carries it the sub-score is skipped (null → renormalized away →
+  // byte-identical to pre-DoD#3). NaN/Infinity are guarded out like moodScore.
+  let sleepQualitySum = 0;
+  let sleepQualityDays = 0;
+  for (const c of input.checkins) {
+    if (c.slot !== 'morning') continue;
+    const q = c.sleepQuality;
+    if (typeof q !== 'number' || !Number.isFinite(q)) continue;
+    sleepQualitySum += q;
+    sleepQualityDays += 1;
+  }
 
   if (daysWithAny === 0) {
     return {
@@ -154,6 +188,8 @@ export function computeEngagementScore(input: EngagementInput): ScoreResult<Enga
       input.trainingActivityCount,
       input.meetingScheduledCount,
       input.meetingCompletedCount,
+      sleepQualitySum,
+      sleepQualityDays,
     );
     return {
       score: null,
@@ -174,6 +210,8 @@ export function computeEngagementScore(input: EngagementInput): ScoreResult<Enga
     input.trainingActivityCount,
     input.meetingScheduledCount,
     input.meetingCompletedCount,
+    sleepQualitySum,
+    sleepQualityDays,
   );
   const score = aggregateDimension(partsForAggregate);
 
@@ -195,6 +233,8 @@ function computeParts(
   trainingActivityCount: number | undefined,
   meetingScheduledCount: number | undefined,
   meetingCompletedCount: number | undefined,
+  sleepQualitySum: number,
+  sleepQualityDays: number,
 ): {
   parts: EngagementParts;
   partsForAggregate: Array<{ pointsAwarded: number; pointsMax: number } | null>;
@@ -240,6 +280,20 @@ function computeParts(
     WEIGHT_MEETING,
   );
 
+  // DoD#3 — sleep self-care signal. `valueSubScore` on the normalized average
+  // sleep quality (avg / 10), exactly like `streakNormalized`/`trainingActivityRate`
+  // build a value sub-score from a normalized [0,1] input. `null` (skipped →
+  // renormalized away) when no morning carried `sleepQuality`, so a member who
+  // never logs sleep is byte-identical to pre-DoD#3. Anti-Black-Hat: only ever
+  // a positive contribution — never a "you sleep badly" penalty.
+  const sleepQualityRate: SubScore | null =
+    sleepQualityDays > 0
+      ? valueSubScore(sleepQualitySum / sleepQualityDays / SLEEP_QUALITY_SCALE, WEIGHT_SLEEP, {
+          numerator: sleepQualitySum,
+          denominator: sleepQualityDays,
+        })
+      : null;
+
   const parts: EngagementParts = {
     checkinFillRate,
     dualSlotRate,
@@ -248,6 +302,8 @@ function computeParts(
     trainingActivityRate,
     // Surfaced for transparency even when skipped (denom 0 → rate 0, pts 0).
     meetingAttendanceRate: (meetingScheduledCount ?? 0) > 0 ? meetingAttendanceRate : null,
+    // Already `null` when no morning carried a sleepQuality value.
+    sleepQualityRate,
   };
 
   const partsForAggregate = [
@@ -261,6 +317,9 @@ function computeParts(
     // above: skip on `scheduledCount` (NOT completedCount). 0 scheduled → null →
     // renormalize → byte-identical; >0 scheduled & 0 completed → rate 0 → drop.
     (meetingScheduledCount ?? 0) > 0 ? meetingAttendanceRate : null,
+    // DoD#3 — already `null` when no morning carried a sleepQuality value →
+    // renormalized away → byte-identical to pre-DoD#3.
+    sleepQualityRate,
   ];
 
   return { parts, partsForAggregate };
@@ -298,5 +357,6 @@ function emptyParts(): EngagementParts {
     },
     trainingActivityRate: null,
     meetingAttendanceRate: null,
+    sleepQualityRate: null,
   };
 }

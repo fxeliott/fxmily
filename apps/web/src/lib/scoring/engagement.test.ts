@@ -12,6 +12,13 @@ const E = (date: string, journal: string | null = null): EngagementCheckinInput 
   slot: 'evening',
   journalNote: journal,
 });
+/** Morning check-in carrying a sleepQuality value (DoD#3). */
+const MS = (date: string, sleepQuality: number | null): EngagementCheckinInput => ({
+  date,
+  slot: 'morning',
+  journalNote: null,
+  sleepQuality,
+});
 
 const day = (i: number) => `2026-01-${String(i + 1).padStart(2, '0')}`;
 
@@ -397,5 +404,115 @@ describe('computeEngagementScore — meeting attendance (SPEC §30.4 J-M4)', () 
     expect(a.score).toBe(b.score);
     expect(a.parts.trainingActivityRate).not.toBeNull();
     expect(a.parts.meetingAttendanceRate).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DoD#3 — sleep (self-care) sub-score.
+//
+// ADDITION PURE: `WEIGHT_SLEEP` (10) is added EN PLUS; the existing weights
+// (50/20/20/10 + training 15 + meeting 15) are NEVER rebalanced. A member who
+// never logs sleep quality scores BYTE-IDENTICALLY to pre-DoD#3 — the part is
+// `null` and renormalized away.
+//
+// Anti-Black-Hat: sleep is ONLY ever a positive contribution when present —
+// never a "you sleep badly" penalty by itself. The sub-score normalizes the
+// average subjective quality (avg / 10) over mornings where it was answered,
+// EXACTLY like `streakNormalized` builds a value sub-score from a [0,1] input.
+//
+// Pinned for the standard 14-day fullish run (windowDays 30, streak 14, no
+// training, no meeting): the four base sub-scores award 62.6̄ / 100 → 63.
+// ---------------------------------------------------------------------------
+
+describe('computeEngagementScore — sleep self-care (DoD#3)', () => {
+  function fullishCheckins(): EngagementCheckinInput[] {
+    const cs: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 14; i++) {
+      cs.push(M(day(i)));
+      cs.push(E(day(i), 'journal'));
+    }
+    return cs;
+  }
+  /** Same fullish run but the morning carries a sleepQuality value. */
+  function fullishWithSleep(quality: number | null): EngagementCheckinInput[] {
+    const cs: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 14; i++) {
+      cs.push(MS(day(i), quality));
+      cs.push(E(day(i), 'journal'));
+    }
+    return cs;
+  }
+
+  it('ZERO REGRESSION — omitted ≡ all-null sleepQuality (byte-identical, part null)', () => {
+    const omitted = computeEngagementScore({ checkins: fullishCheckins(), streak: 14 });
+    const allNull = computeEngagementScore({ checkins: fullishWithSleep(null), streak: 14 });
+    expect(omitted.score).toBe(63); // pinned pre-DoD#3 value
+    expect(allNull.score).toBe(omitted.score);
+    expect(omitted.parts.sleepQualityRate).toBeNull();
+    expect(allNull.parts.sleepQualityRate).toBeNull();
+  });
+
+  it('present sleepQuality → non-null sub-score that lifts engagement', () => {
+    const base = computeEngagementScore({ checkins: fullishCheckins(), streak: 14 });
+    // Perfect quality 10 on all 14 mornings → rate 1 → full 10 pts.
+    // 62.6̄ + 10 awarded over 110 active max → 66.06̄ → 66.
+    const r = computeEngagementScore({ checkins: fullishWithSleep(10), streak: 14 });
+    expect(r.score).toBe(66);
+    expect(r.score!).toBeGreaterThan(base.score!);
+    expect(r.parts.sleepQualityRate).not.toBeNull();
+    expect(r.parts.sleepQualityRate?.rate).toBe(1);
+    expect(r.parts.sleepQualityRate?.pointsMax).toBe(10);
+    expect(r.parts.sleepQualityRate?.pointsAwarded).toBe(10);
+  });
+
+  it('mid-quality sleep produces a proportional rate', () => {
+    // quality 5 / 10 = 0.5 → rate 0.5. 62.6̄ + 5 over 110 → 61.51̄ → 62.
+    const r = computeEngagementScore({ checkins: fullishWithSleep(5), streak: 14 });
+    expect(r.parts.sleepQualityRate?.rate).toBe(0.5);
+    expect(r.score).toBe(62);
+  });
+
+  it('averages over only the mornings that answered (null mornings excluded)', () => {
+    // 7 mornings quality 8, 7 mornings quality null → avg 8 over 7 days.
+    const cs: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 7; i++) {
+      cs.push(MS(day(i), 8));
+      cs.push(E(day(i), 'journal'));
+    }
+    for (let i = 7; i < 14; i++) {
+      cs.push(MS(day(i), null));
+      cs.push(E(day(i), 'journal'));
+    }
+    const r = computeEngagementScore({ checkins: cs, streak: 14 });
+    expect(r.parts.sleepQualityRate?.rate).toBe(0.8); // avg 8 / 10
+    expect(r.parts.sleepQualityRate?.denominator).toBe(7); // only answered mornings
+    expect(r.parts.sleepQualityRate?.numerator).toBe(56); // sum 7 × 8
+  });
+
+  it('a perfect 30-day run stays exactly 100 with full sleep quality', () => {
+    const cs: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 30; i++) {
+      cs.push(MS(day(i), 10));
+      cs.push(E(day(i), 'journal'));
+    }
+    const r = computeEngagementScore({ checkins: cs, streak: 30 });
+    expect(r.score).toBe(100);
+    expect(r.parts.sleepQualityRate?.rate).toBe(1);
+  });
+
+  it('clamps an out-of-range quality and guards NaN/Infinity', () => {
+    // quality 99 (out of 1–10) → avg/10 = 9.9 → clamped to rate 1.
+    const over = computeEngagementScore({ checkins: fullishWithSleep(99), streak: 14 });
+    expect(over.parts.sleepQualityRate?.rate).toBe(1);
+    // NaN morning is filtered out → no answered morning → part null.
+    const nan = computeEngagementScore({ checkins: fullishWithSleep(Number.NaN), streak: 14 });
+    expect(nan.parts.sleepQualityRate).toBeNull();
+  });
+
+  it('insufficient check-in data still short-circuits (sleep does not rescue the guard)', () => {
+    const r = computeEngagementScore({ checkins: [], streak: 0 });
+    expect(r.score).toBeNull();
+    expect(r.reason).toBe('no_checkins');
+    expect(r.parts.sleepQualityRate).toBeNull();
   });
 });

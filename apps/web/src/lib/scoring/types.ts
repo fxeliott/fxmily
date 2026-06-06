@@ -144,6 +144,19 @@ export interface EngagementParts {
    * → byte-identical to pre-DoD#3 (ADDITION PURE; existing weights NEVER changed).
    */
   sleepQualityRate: SubScore | null;
+  /**
+   * SPEC §28/§22 — course-adherence habit signal: evening check-ins where the
+   * member declares they studied Eliot's COURSE (`formationFollowed=true`) /
+   * evenings where they were asked (`formationFollowed !== null`). A true
+   * fill-rate (sibling of `journalDepthRate`), engagement-side because it's a
+   * curriculum-interaction habit, NOT a trading-process discipline. `null`
+   * when NO evening carries the field → `aggregateDimension` renormalizes it
+   * away → byte-identical to pre-§28 (ADDITION PURE; existing weights NEVER
+   * changed). 🔒 Firewall-clean: a plain `DailyCheckin` boolean, NO
+   * `@/lib/training` coupling — distinct from the §21 Entraînement module.
+   * SPEC §2: counts the ACT of studying, never the studied content.
+   */
+  formationFollowedRate: SubScore | null;
 }
 
 /**

@@ -1071,6 +1071,15 @@ model DailyCheckin {
   stressScore         Int?     @map("stress_score")
   /// Up to 3 gratitude items, capped at 200 chars each by Zod.
   gratitudeItems      String[] @map("gratitude_items")
+  /// SPEC §28/§22 — evening "bilan" self-report: did the member study / make
+  /// progress in Eliot's COURSE (la formation) today? A course-adherence ACT
+  /// only — SPEC §2 posture: we track THAT the member studied, NEVER the
+  /// content of what was studied (no curriculum body, no progress %, no edge).
+  /// Distinct from the §21 Entraînement/TrainingTrade module (backtest); this
+  /// is a plain habit-signal boolean on the check-in, no training-module link.
+  /// Tri-state: true (studied), false (skipped), null (slot-N/A / unanswered /
+  /// legacy row) — nullable & additive, mirroring `marketAnalysisDone`.
+  formationFollowed   Boolean? @map("formation_followed")
 
   // ----- Both slots --------------------------------------------------------
 

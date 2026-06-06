@@ -140,6 +140,8 @@ export async function submitEveningCheckinAction(
     date: getString(formData, 'date'),
     planRespectedToday: getString(formData, 'planRespectedToday'),
     hedgeRespectedToday: getString(formData, 'hedgeRespectedToday'),
+    // SPEC §28/§22 — optional course self-report ('' → null in the schema).
+    formationFollowed: getString(formData, 'formationFollowed'),
     caffeineMl: getString(formData, 'caffeineMl'),
     waterLiters: getString(formData, 'waterLiters'),
     stressScore: getString(formData, 'stressScore'),

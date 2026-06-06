@@ -8,6 +8,7 @@ import type {
 } from '@/lib/schemas/onboarding-interview';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
 import { detectInjection } from '@/lib/ai/injection-detector';
+import { getOnboardingInstrument } from './instrument-v1';
 
 /**
  * V2.4 — Onboarding interview service layer (Session α, M3 directive 2026-05-27).
@@ -204,6 +205,16 @@ export async function appendAnswer(
     instrumentVersion: input.instrumentVersion,
   });
 
+  // Resolve the canonical question text from the versioned instrument at
+  // WRITE-TIME (previously deferred to a "Phase A.2" that never shipped, leaving
+  // questionText=''). Matched by questionIndex — the exact resolution the batch
+  // pipeline uses (batch.ts: instrument.items.find(i => i.questionIndex === …)).
+  // Falls back to '' for an unknown version/index (no regression: the batch
+  // keeps its own `ans.questionText || item.text` fallback).
+  const instrumentDef = getOnboardingInstrument(input.instrumentVersion);
+  const questionText =
+    instrumentDef?.items.find((item) => item.questionIndex === input.questionIndex)?.text ?? '';
+
   // Upsert answer on the unique (interviewId, questionIndex) constraint.
   const answerRow = await db.onboardingInterviewAnswer.upsert({
     where: {
@@ -214,7 +225,7 @@ export async function appendAnswer(
     },
     update: {
       questionKey: input.questionKey,
-      questionText: '', // populated by service from instrument catalog Phase A.2
+      questionText, // canonical text resolved from the versioned instrument
       answerText: input.answerText,
     },
     create: {
@@ -222,7 +233,7 @@ export async function appendAnswer(
       userId,
       questionIndex: input.questionIndex,
       questionKey: input.questionKey,
-      questionText: '', // populated by service from instrument catalog Phase A.2
+      questionText, // canonical text resolved from the versioned instrument
       answerText: input.answerText,
     },
   });

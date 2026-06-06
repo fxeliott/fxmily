@@ -283,6 +283,7 @@ async function loadCheckins(userId: string, window: MonthWindow): Promise<Serial
     intention: row.intention,
     planRespectedToday: row.planRespectedToday,
     hedgeRespectedToday: row.hedgeRespectedToday,
+    formationFollowed: row.formationFollowed,
     caffeineMl: row.caffeineMl,
     waterLiters: row.waterLiters == null ? null : row.waterLiters.toString(),
     stressScore: row.stressScore,

@@ -36,6 +36,14 @@ export interface EngagementCheckinInput {
    * a positive contribution when present — never a "you sleep badly" penalty).
    */
   sleepQuality?: number | null;
+  /**
+   * Evening only (SPEC §28/§22). Did the member study Eliot's COURSE today?
+   * Tri-state: `true` (studied), `false` (skipped), `null`/absent (not asked /
+   * legacy row). A course-adherence habit signal — we score THAT they studied,
+   * never the content (SPEC §2). 🔒 Firewall-clean: a plain check-in boolean,
+   * NOT the §21 Entraînement/TrainingTrade module.
+   */
+  formationFollowed?: boolean | null;
 }
 
 export interface EngagementInput {
@@ -134,6 +142,19 @@ const WEIGHT_SLEEP = 10;
 /** DoD#3 — subjective sleep-quality scale max (the field is 1–10). */
 const SLEEP_QUALITY_SCALE = 10;
 
+/**
+ * SPEC §28/§22 — course-adherence ("formation suivie") sub-score weight. Added
+ * as a PURE ADDITION: the existing weights (50/20/20/10 + training 15 + meeting
+ * 15 + sleep 10) are deliberately NOT rebalanced. `aggregateDimension`
+ * normalizes by the *active* `pointsMax`, so a member with no evening carrying
+ * the field scores BYTE-IDENTICALLY to pre-§28. Sized conservatively (10, level
+ * with `journalDepthRate`/`sleepQualityRate`): following the course is a
+ * meaningful but non-dominant engagement habit vs the daily check-in (50).
+ * Heuristic (ADR-001-style), tunable. 🔒 Firewall-clean: derived from a plain
+ * `DailyCheckin` boolean, NO `@/lib/training` coupling.
+ */
+const WEIGHT_FORMATION = 10;
+
 export function computeEngagementScore(input: EngagementInput): ScoreResult<EngagementParts> {
   const windowDays = input.windowDays ?? DEFAULT_WINDOW_DAYS;
 
@@ -168,6 +189,20 @@ export function computeEngagementScore(input: EngagementInput): ScoreResult<Enga
     sleepQualityDays += 1;
   }
 
+  // SPEC §28/§22 — course adherence ("formation suivie"), a true fill-rate over
+  // EVENINGS where the member was asked (`formationFollowed !== null`). When no
+  // evening carries it the sub-score is skipped (null → renormalized away →
+  // byte-identical to pre-§28). Numerator = evenings the course was studied.
+  let formationAsked = 0;
+  let formationStudied = 0;
+  for (const c of input.checkins) {
+    if (c.slot !== 'evening') continue;
+    const f = c.formationFollowed;
+    if (f === null || f === undefined) continue;
+    formationAsked += 1;
+    if (f === true) formationStudied += 1;
+  }
+
   if (daysWithAny === 0) {
     return {
       score: null,
@@ -190,6 +225,8 @@ export function computeEngagementScore(input: EngagementInput): ScoreResult<Enga
       input.meetingCompletedCount,
       sleepQualitySum,
       sleepQualityDays,
+      formationStudied,
+      formationAsked,
     );
     return {
       score: null,
@@ -212,6 +249,8 @@ export function computeEngagementScore(input: EngagementInput): ScoreResult<Enga
     input.meetingCompletedCount,
     sleepQualitySum,
     sleepQualityDays,
+    formationStudied,
+    formationAsked,
   );
   const score = aggregateDimension(partsForAggregate);
 
@@ -235,6 +274,8 @@ function computeParts(
   meetingCompletedCount: number | undefined,
   sleepQualitySum: number,
   sleepQualityDays: number,
+  formationStudied: number,
+  formationAsked: number,
 ): {
   parts: EngagementParts;
   partsForAggregate: Array<{ pointsAwarded: number; pointsMax: number } | null>;
@@ -294,6 +335,16 @@ function computeParts(
         })
       : null;
 
+  // SPEC §28/§22 — course adherence. EXACT mirror of `journalDepthRate` (a true
+  // fill-rate over evenings): `rateSubScore` returns pointsAwarded:0 when the
+  // denominator is 0, but the SKIP below is keyed on `formationAsked` so an
+  // evening where the member was never asked never penalizes the rate. `null`
+  // when no evening carried the field → renormalized away → byte-identical to
+  // pre-§28. Anti-Black-Hat: a "Pas aujourd’hui" lowers the rate but is never a
+  // punitive event — it is just the honest signal. 🔒 No `@/lib/training` import.
+  const formationRate = rateSubScore(formationStudied, formationAsked, WEIGHT_FORMATION);
+  const formationFollowedRate: SubScore | null = formationAsked > 0 ? formationRate : null;
+
   const parts: EngagementParts = {
     checkinFillRate,
     dualSlotRate,
@@ -304,6 +355,8 @@ function computeParts(
     meetingAttendanceRate: (meetingScheduledCount ?? 0) > 0 ? meetingAttendanceRate : null,
     // Already `null` when no morning carried a sleepQuality value.
     sleepQualityRate,
+    // SPEC §28/§22 — already `null` when no evening carried the field.
+    formationFollowedRate,
   };
 
   const partsForAggregate = [
@@ -320,6 +373,9 @@ function computeParts(
     // DoD#3 — already `null` when no morning carried a sleepQuality value →
     // renormalized away → byte-identical to pre-DoD#3.
     sleepQualityRate,
+    // SPEC §28/§22 — already `null` when no evening carried `formationFollowed`
+    // → renormalized away → byte-identical to pre-§28.
+    formationFollowedRate,
   ];
 
   return { parts, partsForAggregate };
@@ -358,5 +414,6 @@ function emptyParts(): EngagementParts {
     trainingActivityRate: null,
     meetingAttendanceRate: null,
     sleepQualityRate: null,
+    formationFollowedRate: null,
   };
 }

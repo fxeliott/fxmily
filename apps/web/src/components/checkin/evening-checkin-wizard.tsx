@@ -48,6 +48,9 @@ interface DraftState {
   date: string;
   planRespectedToday: boolean | null;
   hedgeRespectedToday: 'true' | 'false' | 'na' | '';
+  // SPEC §28/§22 — evening "bilan": studied Eliot's course today? Optional
+  // tri-state ('' = unanswered → submits as null). Never required to advance.
+  formationFollowed: 'true' | 'false' | '';
   caffeineMl: string;
   waterLiters: string;
   stressScore: number;
@@ -64,6 +67,7 @@ function emptyDraft(today: string): DraftState {
     date: today,
     planRespectedToday: null,
     hedgeRespectedToday: '',
+    formationFollowed: '',
     caffeineMl: '',
     waterLiters: '',
     stressScore: 5,
@@ -240,6 +244,9 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
       draft.planRespectedToday === null ? '' : String(draft.planRespectedToday),
     );
     fd.set('hedgeRespectedToday', draft.hedgeRespectedToday);
+    // SPEC §28/§22 — optional course self-report. Empty string → schema maps
+    // to null ("unanswered"); never blocks submit (no validateStep gate).
+    fd.set('formationFollowed', draft.formationFollowed);
     fd.set('caffeineMl', draft.caffeineMl.replace(',', '.'));
     fd.set('waterLiters', draft.waterLiters.replace(',', '.'));
     fd.set('stressScore', String(draft.stressScore));
@@ -561,6 +568,23 @@ function StepReflection({
   const isCharLimitNear = journalChars > 3500;
   return (
     <div className="flex flex-col gap-5">
+      {/* SPEC §28/§22 — evening "bilan" course self-report. OPTIONAL (no
+          validateStep gate, '' submits as null). §2 posture: we track the ACT
+          of studying, never the content. Anti-Black-Hat wording — "Pas
+          aujourd’hui" carries no judgement, it's just a signal. */}
+      <RadioGroup
+        legend="As-tu avancé dans ta formation aujourd’hui ?"
+        name="formationFollowed"
+        value={draft.formationFollowed}
+        options={[
+          { value: 'true', label: 'Oui' },
+          { value: 'false', label: 'Pas aujourd’hui' },
+        ]}
+        onChange={(v) => update('formationFollowed', v as DraftState['formationFollowed'])}
+        disabled={disabled}
+        error={fieldErrors.formationFollowed}
+      />
+
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
           <label htmlFor="journalNote" className="t-eyebrow-lg text-[var(--t-3)]">

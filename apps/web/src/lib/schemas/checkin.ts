@@ -70,6 +70,23 @@ const triStateBoolean = z
   });
 
 /**
+ * SPEC §28/§22 — optional evening "formation suivie ?" self-report. Same
+ * tri-state values as {@link triStateBoolean} (true / false / na) PLUS the
+ * empty-string / omitted case, both collapsing to `null` ("unanswered"). This
+ * keeps the field strictly OPTIONAL so the evening wizard / e2e specs that
+ * never touch it submit fine — no new REQUIRED field (PR #238 canon). SPEC §2
+ * posture: a binary ACT only — the schema never carries any course content.
+ */
+const optionalTriStateBoolean = z
+  .union([z.boolean(), z.literal('true'), z.literal('false'), z.literal('na'), z.literal('')])
+  .optional()
+  .transform((v) => {
+    if (v === undefined || v === '' || v === 'na') return null;
+    if (typeof v === 'string') return v === 'true';
+    return v;
+  });
+
+/**
  * `z.coerce.boolean()` is a footgun: `Boolean("false")` is `true`. We accept
  * the FormData strings "true"/"false" explicitly and the native boolean.
  */
@@ -207,6 +224,13 @@ export const eveningCheckinSchema = z.object({
 
   planRespectedToday: formBoolean,
   hedgeRespectedToday: triStateBoolean,
+
+  // SPEC §28/§22 — evening "bilan": has the member studied / progressed in
+  // Eliot's COURSE (la formation) today? OPTIONAL tri-state (true/false/na →
+  // null when unanswered/omitted) so it never blocks the wizard. §2 posture:
+  // a declarative ACT only — NEVER the studied content. Distinct from the §21
+  // Entraînement/TrainingTrade module (no `@/lib/training` coupling).
+  formationFollowed: optionalTriStateBoolean,
 
   caffeineMl: optionalCoercedInt(2000),
   waterLiters: optionalCoercedDecimal(10),

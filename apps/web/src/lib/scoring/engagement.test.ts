@@ -516,3 +516,165 @@ describe('computeEngagementScore — sleep self-care (DoD#3)', () => {
     expect(r.parts.sleepQualityRate).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// SPEC §28/§22 — course adherence ("formation suivie") sub-score.
+//
+// ADDITION PURE: `WEIGHT_FORMATION` (10) is added EN PLUS; the existing weights
+// (50/20/20/10 + training 15 + meeting 15 + sleep 10) are NEVER rebalanced. A
+// member with no evening carrying `formationFollowed` scores BYTE-IDENTICALLY
+// to pre-§28 — the part is `null` and renormalized away.
+//
+// Engagement-side (not discipline): following the COURSE is a curriculum-
+// interaction HABIT, sibling of `journalDepthRate`. A true fill-rate over the
+// evenings where the member was asked (`formationFollowed !== null`); the skip
+// is keyed on that "asked" denominator, so an unanswered/legacy evening never
+// penalizes the rate. Anti-Black-Hat: "Pas aujourd’hui" lowers the rate but is
+// never a punitive event. 🔒 Firewall-clean — a plain `DailyCheckin` boolean,
+// no `@/lib/training` coupling (distinct from the §21 Entraînement module).
+//
+// Pinned for the standard 14-day fullish run (windowDays 30, streak 14, no
+// training/meeting/sleep): the four base sub-scores award 62.6̄ / 100 → 63.
+// ---------------------------------------------------------------------------
+
+describe('computeEngagementScore — course adherence (SPEC §28/§22)', () => {
+  /** Evening carrying a formationFollowed value. */
+  const EF = (date: string, formationFollowed: boolean | null): EngagementCheckinInput => ({
+    date,
+    slot: 'evening',
+    journalNote: 'journal',
+    formationFollowed,
+  });
+
+  function fullishCheckins(): EngagementCheckinInput[] {
+    const cs: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 14; i++) {
+      cs.push(M(day(i)));
+      cs.push(E(day(i), 'journal'));
+    }
+    return cs;
+  }
+  /** Same fullish run but each evening carries a formationFollowed value. */
+  function fullishWithFormation(value: boolean | null): EngagementCheckinInput[] {
+    const cs: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 14; i++) {
+      cs.push(M(day(i)));
+      cs.push(EF(day(i), value));
+    }
+    return cs;
+  }
+
+  it('ZERO REGRESSION — omitted ≡ all-null formationFollowed (byte-identical, part null)', () => {
+    const omitted = computeEngagementScore({ checkins: fullishCheckins(), streak: 14 });
+    const allNull = computeEngagementScore({ checkins: fullishWithFormation(null), streak: 14 });
+    expect(omitted.score).toBe(63); // pinned pre-§28 value
+    expect(allNull.score).toBe(omitted.score);
+    expect(omitted.parts.formationFollowedRate).toBeNull();
+    expect(allNull.parts.formationFollowedRate).toBeNull();
+  });
+
+  it('all-studied evenings → non-null sub-score that lifts engagement', () => {
+    const base = computeEngagementScore({ checkins: fullishCheckins(), streak: 14 });
+    // 14/14 evenings studied → rate 1 → full 10 pts.
+    // 62.6̄ + 10 awarded over 110 active max → 66.06̄ → 66.
+    const r = computeEngagementScore({ checkins: fullishWithFormation(true), streak: 14 });
+    expect(r.score).toBe(66);
+    expect(r.score!).toBeGreaterThan(base.score!);
+    expect(r.parts.formationFollowedRate).not.toBeNull();
+    expect(r.parts.formationFollowedRate?.rate).toBe(1);
+    expect(r.parts.formationFollowedRate?.pointsMax).toBe(10);
+    expect(r.parts.formationFollowedRate?.pointsAwarded).toBe(10);
+    expect(r.parts.formationFollowedRate?.numerator).toBe(14);
+    expect(r.parts.formationFollowedRate?.denominator).toBe(14);
+  });
+
+  it('all "Pas aujourd’hui" → present sub-score at rate 0 (honest signal, not skipped)', () => {
+    // Asked 14×, studied 0 → rate 0, NOT null (the skip is on "asked", not
+    // "studied"): 62.6̄ over 110 active max → 56.96̄ → 57.
+    const r = computeEngagementScore({ checkins: fullishWithFormation(false), streak: 14 });
+    expect(r.parts.formationFollowedRate).not.toBeNull();
+    expect(r.parts.formationFollowedRate?.rate).toBe(0);
+    expect(r.parts.formationFollowedRate?.pointsAwarded).toBe(0);
+    expect(r.parts.formationFollowedRate?.denominator).toBe(14);
+    expect(r.score).toBe(57);
+  });
+
+  it('partial adherence sits strictly between zero and full', () => {
+    const cs: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 7; i++) {
+      cs.push(M(day(i)));
+      cs.push(EF(day(i), true));
+    }
+    for (let i = 7; i < 14; i++) {
+      cs.push(M(day(i)));
+      cs.push(EF(day(i), false));
+    }
+    const half = computeEngagementScore({ checkins: cs, streak: 14 });
+    const none = computeEngagementScore({ checkins: fullishWithFormation(false), streak: 14 });
+    const full = computeEngagementScore({ checkins: fullishWithFormation(true), streak: 14 });
+    expect(half.parts.formationFollowedRate?.rate).toBe(0.5);
+    expect(half.score!).toBeGreaterThan(none.score!);
+    expect(half.score!).toBeLessThan(full.score!);
+  });
+
+  it('counts ONLY answered evenings (null evenings excluded from the denominator)', () => {
+    const cs: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 7; i++) {
+      cs.push(M(day(i)));
+      cs.push(EF(day(i), true)); // asked + studied
+    }
+    for (let i = 7; i < 14; i++) {
+      cs.push(M(day(i)));
+      cs.push(EF(day(i), null)); // not asked → excluded
+    }
+    const r = computeEngagementScore({ checkins: cs, streak: 14 });
+    expect(r.parts.formationFollowedRate?.rate).toBe(1); // 7/7 studied
+    expect(r.parts.formationFollowedRate?.numerator).toBe(7);
+    expect(r.parts.formationFollowedRate?.denominator).toBe(7);
+  });
+
+  it('a perfect 30-day run stays exactly 100 with full course adherence', () => {
+    const cs: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 30; i++) {
+      cs.push(M(day(i)));
+      cs.push(EF(day(i), true));
+    }
+    const r = computeEngagementScore({ checkins: cs, streak: 30 });
+    expect(r.score).toBe(100);
+    expect(r.parts.formationFollowedRate?.rate).toBe(1);
+  });
+
+  it('is orthogonal to the sleep / meeting / training sub-scores (all addible)', () => {
+    const cs: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 14; i++) {
+      cs.push(MS(day(i), 10));
+      cs.push(EF(day(i), true));
+    }
+    const a = computeEngagementScore({
+      checkins: cs,
+      streak: 14,
+      trainingActivityCount: 8,
+      meetingScheduledCount: 4,
+      meetingCompletedCount: 4,
+    });
+    const b = computeEngagementScore({
+      checkins: cs,
+      streak: 14,
+      trainingActivityCount: 8,
+      meetingScheduledCount: 4,
+      meetingCompletedCount: 4,
+    });
+    expect(a.score).toBe(b.score);
+    expect(a.parts.formationFollowedRate).not.toBeNull();
+    expect(a.parts.sleepQualityRate).not.toBeNull();
+    expect(a.parts.meetingAttendanceRate).not.toBeNull();
+    expect(a.parts.trainingActivityRate).not.toBeNull();
+  });
+
+  it('insufficient check-in data still short-circuits (formation does not rescue the guard)', () => {
+    const r = computeEngagementScore({ checkins: [], streak: 0 });
+    expect(r.score).toBeNull();
+    expect(r.reason).toBe('no_checkins');
+    expect(r.parts.formationFollowedRate).toBeNull();
+  });
+});

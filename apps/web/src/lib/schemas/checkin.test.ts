@@ -32,6 +32,7 @@ const validEvening = {
   date: '2026-05-06',
   planRespectedToday: 'true',
   hedgeRespectedToday: 'na',
+  formationFollowed: 'true',
   caffeineMl: '500',
   waterLiters: '2',
   stressScore: '4',
@@ -201,6 +202,30 @@ describe('morningCheckinSchema', () => {
 describe('eveningCheckinSchema', () => {
   it('accepts a complete valid payload', () => {
     expect(eveningCheckinSchema.safeParse(validEvening).success).toBe(true);
+  });
+
+  // SPEC §28/§22 — optional evening course-adherence self-report.
+  it('coerces optional formationFollowed: true / false', () => {
+    expect(
+      eveningCheckinSchema.parse({ ...validEvening, formationFollowed: 'true' }).formationFollowed,
+    ).toBe(true);
+    expect(
+      eveningCheckinSchema.parse({ ...validEvening, formationFollowed: 'false' }).formationFollowed,
+    ).toBe(false);
+  });
+
+  it('maps formationFollowed na / empty / omitted to null (unanswered, never blocks)', () => {
+    expect(
+      eveningCheckinSchema.parse({ ...validEvening, formationFollowed: 'na' }).formationFollowed,
+    ).toBeNull();
+    expect(
+      eveningCheckinSchema.parse({ ...validEvening, formationFollowed: '' }).formationFollowed,
+    ).toBeNull();
+    // Omitted entirely (the canon — no new REQUIRED field, e2e specs unbroken).
+    const { formationFollowed: _omit, ...withoutField } = validEvening;
+    const r = eveningCheckinSchema.safeParse(withoutField);
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.formationFollowed).toBeNull();
   });
 
   it('coerces tri-state hedgeRespectedToday: true/false/na', () => {

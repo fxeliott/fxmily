@@ -168,6 +168,9 @@ export async function computeScoresForUser(
         marketAnalysisDone: true,
         sleepQuality: true,
         sleepHours: true,
+        // SPEC §28/§22 — evening course-adherence act (engagement). A plain
+        // check-in boolean — NOT a training-module read (firewall-clean).
+        formationFollowed: true,
       },
     }),
     // 🚨 §21.5 — the SINGLE sanctioned training→real-edge touchpoint in
@@ -242,6 +245,9 @@ export async function computeScoresForUser(
     // DoD#3 — sleep self-care signal (morning only; null on evening rows /
     // unanswered mornings → skipped → byte-identical to pre-DoD#3).
     sleepQuality: c.sleepQuality,
+    // SPEC §28/§22 — evening course-adherence act (null on morning rows /
+    // unanswered evenings → skipped → byte-identical to pre-§28).
+    formationFollowed: c.formationFollowed,
   }));
 
   // Compute streak in-window for engagement (we count distinct days with any

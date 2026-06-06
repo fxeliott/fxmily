@@ -183,6 +183,11 @@ export async function cleanupTestUsers(): Promise<{ deleted: number }> {
   await db.onboardingInterviewAnswer.deleteMany({ where: { userId: { in: ids } } });
   await db.onboardingInterview.deleteMany({ where: { userId: { in: ids } } });
 
+  // §26 — Calendrier adaptatif. Both ON DELETE CASCADE on User; deleted
+  // explicitly BEFORE the User wipe for log-visibility (same canon).
+  await db.adaptiveCalendar.deleteMany({ where: { userId: { in: ids } } });
+  await db.weeklyScheduleQuestionnaire.deleteMany({ where: { userId: { in: ids } } });
+
   const result = await db.user.deleteMany({ where: { id: { in: ids } } });
   return { deleted: result.count };
 }
@@ -320,6 +325,10 @@ export async function seedTradeHistory(
 
     let emotionBefore: string[] = [];
     let emotionAfter: string[] = [];
+    // `emotionDuring` (§22 in-position affect) uses FIXED values derived from
+    // `willWin` — deliberately NO `rand()` call so the deterministic PRNG
+    // sequence (and therefore every other seeded field) stays byte-identical.
+    let emotionDuring: string[] = [];
     if (emotionCorrelation === 'realistic') {
       const pickNeg = () => NEGATIVE_TRADE_TAGS[Math.floor(rand() * NEGATIVE_TRADE_TAGS.length)]!;
       const pickPos = () => POSITIVE_TRADE_TAGS[Math.floor(rand() * POSITIVE_TRADE_TAGS.length)]!;
@@ -328,9 +337,11 @@ export async function seedTradeHistory(
         willWin ? (rand() < 0.6 ? pickPos() : pickNeg()) : rand() < 0.6 ? pickNeg() : pickPos(),
       ];
       emotionAfter = [willWin ? pickPos() : pickNeg()];
+      emotionDuring = [willWin ? 'focused' : 'fear-loss'];
     } else {
       emotionBefore = [POSITIVE_TRADE_TAGS[i % POSITIVE_TRADE_TAGS.length]!];
       emotionAfter = [willWin ? 'calm' : 'frustrated'];
+      emotionDuring = [willWin ? 'focused' : 'fear-wrong'];
     }
 
     const closedAt = isOpen ? null : new Date(enteredAt.getTime() + 30 * 60 * 1000);
@@ -375,6 +386,7 @@ export async function seedTradeHistory(
               outcome,
               realizedR: clampedR,
               realizedRSource: isEstimated ? 'estimated' : 'computed',
+              emotionDuring,
               emotionAfter,
               closedAt,
             }
@@ -478,6 +490,11 @@ export async function seedCheckinHistory(
         sleepHours: sleep,
         sleepQuality: Math.round(clampNum(sleep, 1, 10)),
         morningRoutineCompleted: rand() > 0.3,
+        // SPEC §28/§22 market-analysis-done — DETERMINISTIC `i`-based value, NOT
+        // `rand()`: inserting a PRNG draw here would shift the whole mulberry32
+        // sequence and break the seed=42 deterministic fixtures. The scorers do
+        // not read this field, so an `i`-based value has zero score impact.
+        marketAnalysisDone: i % 4 !== 0,
         meditationMin: rand() < 0.4 ? Math.round(rand() * 20) : null,
         sportType: rand() < 0.3 ? 'course' : null,
         sportDurationMin: rand() < 0.3 ? Math.round(rand() * 60) : null,

@@ -256,7 +256,28 @@ export type AuditAction =
   | 'onboarding.batch.persist_failed'
   | 'onboarding.batch.crisis_detected'
   | 'onboarding.batch.amf_violation'
-  | 'onboarding.batch.evidence_invalid';
+  | 'onboarding.batch.evidence_invalid'
+  // §26 — Calendrier adaptatif (J-C1 pre-declared, wired J-C2/J-C3/J-C4).
+  // Mirror the V1.7 weekly-report batch canonical lifecycle. PII-FREE metadata
+  // expected (posture §2 — NEVER log responses, schedule, pseudonymLabel) :
+  //   - questionnaire.submitted : `{userId, weekStart, instrumentVersion, wasNew}` (J-C3 action)
+  //   - batch.pulled      : `{ranAt, entriesCount, weekStart}` (J-C2 /pull)
+  //   - batch.persisted   : `{ranAt, persisted, skipped, errors, total}` (J-C2 /persist)
+  //   - batch.skipped     : `{userId, weekStart, reason}` (no questionnaire / already generated)
+  //   - batch.invalid_output : `{userId, weekStart, issuesCount}` (Zod .strict() fail)
+  //   - batch.persist_failed : `{userId, weekStart, error (truncated 200)}`
+  //   - batch.crisis_detected : `{userId, weekStart, level, matchedLabels}` (mirror V1.7.1, AI output)
+  //   - batch.amf_violation : `{userId, weekStart, matchedLabels}` (J-C2 §2 posture gate, mirror onboarding.batch.amf_violation)
+  //   - disclosure.shown  : `{userId, weekStart}` (EU AI Act 50(1) banner first view, J-C4)
+  | 'calendar.questionnaire.submitted'
+  | 'calendar.batch.pulled'
+  | 'calendar.batch.persisted'
+  | 'calendar.batch.skipped'
+  | 'calendar.batch.invalid_output'
+  | 'calendar.batch.persist_failed'
+  | 'calendar.batch.crisis_detected'
+  | 'calendar.batch.amf_violation'
+  | 'calendar.disclosure.shown';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the
 // public Track Record was split out to a standalone repo

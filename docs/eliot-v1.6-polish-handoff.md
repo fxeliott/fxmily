@@ -100,8 +100,8 @@ Si tu acceptes ces 3 → on enchaîne V1.7 immédiatement après V1.6 polish mer
 
 ```bash
 ssh fxmily@<hetzner-ip>
-bash /opt/fxmily/ops/scripts/rotate-admin-password.sh eliot@fxmilyapp.com
-# → génère mdp solide, update Hetzner, display 1× → stocke en password manager
+bash /opt/fxmily/ops/scripts/set-admin-creds.sh fxmily@<hetzner-ip> <admin-email>
+# → demande mdp solide (caché), hash local argon2id, update Hetzner → stocke en password manager
 ```
 
 ## 🟢 Backlog V1.7+ documenté (non-action immédiate)

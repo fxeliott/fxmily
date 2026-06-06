@@ -129,6 +129,7 @@ describe('tradeCloseSchema', () => {
     exitedAt: new Date('2026-05-05T11:00:00Z'),
     exitPrice: 1.105,
     outcome: 'win' as const,
+    emotionDuring: ['calm'],
     emotionAfter: ['confident'],
     notes: 'TP atteint, discipline OK.',
     screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',
@@ -148,6 +149,47 @@ describe('tradeCloseSchema', () => {
     const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
     expect(tradeCloseSchema.safeParse({ ...baseClose, exitedAt: farFuture }).success).toBe(false);
   });
+
+  // §22 — "émotion pendant" mirrors emotionAfter (required, 1–3 allowlisted).
+  it('requires at least one emotionDuring tag', () => {
+    const { emotionDuring, ...rest } = baseClose;
+    void emotionDuring;
+    expect(tradeCloseSchema.safeParse(rest).success).toBe(false);
+    expect(tradeCloseSchema.safeParse({ ...baseClose, emotionDuring: [] }).success).toBe(false);
+  });
+
+  it('rejects more than EMOTION_MAX_PER_MOMENT emotionDuring tags', () => {
+    const result = tradeCloseSchema.safeParse({
+      ...baseClose,
+      emotionDuring: ['calm', 'confident', 'doubt', 'anxious'],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects unknown emotionDuring slugs', () => {
+    expect(tradeCloseSchema.safeParse({ ...baseClose, emotionDuring: ['serenity'] }).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects duplicate emotionDuring tags', () => {
+    expect(
+      tradeCloseSchema.safeParse({ ...baseClose, emotionDuring: ['calm', 'calm'] }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a distinct emotionDuring vs emotionAfter', () => {
+    const result = tradeCloseSchema.safeParse({
+      ...baseClose,
+      emotionDuring: ['anxious', 'doubt'],
+      emotionAfter: ['confident'],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.emotionDuring).toEqual(['anxious', 'doubt']);
+      expect(result.data.emotionAfter).toEqual(['confident']);
+    }
+  });
 });
 
 describe('tradeFullSchema cross-validation', () => {
@@ -158,6 +200,7 @@ describe('tradeFullSchema cross-validation', () => {
         exitedAt: new Date('2026-05-05T07:00:00Z'),
         exitPrice: 1.105,
         outcome: 'win',
+        emotionDuring: ['calm'],
         emotionAfter: ['confident'],
         screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',
       },
@@ -280,6 +323,7 @@ describe('tradeCloseSchema — V1.8 tags integration', () => {
     exitedAt: new Date('2026-05-05T11:00:00Z'),
     exitPrice: 1.105,
     outcome: 'win' as const,
+    emotionDuring: ['calm'],
     emotionAfter: ['confident'],
     notes: 'TP atteint, discipline OK.',
     screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',

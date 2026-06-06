@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { ABCDHero } from '@/components/reflect/abcd-hero';
+import { HoverLift } from '@/components/ui/hover-lift';
 import { V18Aurora } from '@/components/v18/aurora';
 import { V18ThemeScope } from '@/components/v18/theme-scope';
 import { listRecentReflections } from '@/lib/reflection/service';
@@ -80,7 +81,7 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
           <div className="flex flex-wrap items-center gap-3">
             <Link
               href="/reflect/new"
-              className="rounded-control inline-flex h-12 items-center gap-2 bg-[var(--acc)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]"
+              className="rounded-control inline-flex h-12 items-center gap-2 bg-[var(--acc-btn)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]"
             >
               <BrainCircuit size={16} strokeWidth={2.2} aria-hidden="true" />
               Démarrer une réflexion
@@ -130,32 +131,36 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
             <ul className="flex flex-col gap-2.5" data-slot="recent-reflections">
               {recent.map((r) => (
                 <li key={r.id}>
-                  <Link
-                    href={`/reflect/${r.id}`}
-                    aria-labelledby={`ref-${r.id}-date`}
-                    className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
-                  >
-                    <header className="flex items-baseline justify-between gap-3">
-                      <p className="t-eyebrow text-[var(--t-3)]" id={`ref-${r.id}-date`}>
-                        <time dateTime={r.date}>
-                          {FMT_REFLECT_DATE_LONG_UTC.format(new Date(`${r.date}T00:00:00Z`))}
-                        </time>
-                      </p>
-                      <p className="t-cap font-mono text-[var(--t-3)]">
-                        {FMT_HM_FR.format(new Date(r.createdAt))}
-                      </p>
-                    </header>
-                    <dl className="mt-2 space-y-1.5">
-                      <div className="flex items-baseline gap-2">
-                        <dt className="t-eyebrow w-7 shrink-0 text-[oklch(0.46_0.21_263)]">A</dt>
-                        <dd className="t-body line-clamp-1 text-[var(--t-2)]">{r.triggerEvent}</dd>
-                      </div>
-                      <div className="flex items-baseline gap-2">
-                        <dt className="t-eyebrow w-7 shrink-0 text-[oklch(0.82_0.115_247)]">D</dt>
-                        <dd className="t-body line-clamp-1 text-[var(--t-1)]">{r.disputation}</dd>
-                      </div>
-                    </dl>
-                  </Link>
+                  <HoverLift className="block">
+                    <Link
+                      href={`/reflect/${r.id}`}
+                      aria-labelledby={`ref-${r.id}-date`}
+                      className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
+                    >
+                      <header className="flex items-baseline justify-between gap-3">
+                        <p className="t-eyebrow text-[var(--t-3)]" id={`ref-${r.id}-date`}>
+                          <time dateTime={r.date}>
+                            {FMT_REFLECT_DATE_LONG_UTC.format(new Date(`${r.date}T00:00:00Z`))}
+                          </time>
+                        </p>
+                        <p className="t-cap font-mono text-[var(--t-3)]">
+                          {FMT_HM_FR.format(new Date(r.createdAt))}
+                        </p>
+                      </header>
+                      <dl className="mt-2 space-y-1.5">
+                        <div className="flex items-baseline gap-2">
+                          <dt className="t-eyebrow w-7 shrink-0 text-[oklch(0.46_0.21_263)]">A</dt>
+                          <dd className="t-body line-clamp-1 text-[var(--t-2)]">
+                            {r.triggerEvent}
+                          </dd>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                          <dt className="t-eyebrow w-7 shrink-0 text-[oklch(0.82_0.115_247)]">D</dt>
+                          <dd className="t-body line-clamp-1 text-[var(--t-1)]">{r.disputation}</dd>
+                        </div>
+                      </dl>
+                    </Link>
+                  </HoverLift>
                 </li>
               ))}
             </ul>

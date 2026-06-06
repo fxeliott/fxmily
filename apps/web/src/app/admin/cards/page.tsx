@@ -54,7 +54,7 @@ export default async function AdminCardsPage({ searchParams }: AdminCardsPagePro
   ]);
 
   return (
-    <main className="container mx-auto max-w-6xl px-4 pt-6 pb-24 md:pt-10">
+    <main className="mx-auto w-full max-w-[var(--w-app)] px-4 pt-6 pb-24 md:pt-10 lg:px-8 2xl:px-12">
       <header className="mb-6 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <span className="bg-acc-dim text-acc inline-flex h-9 w-9 items-center justify-center rounded-full">
@@ -147,13 +147,13 @@ export default async function AdminCardsPage({ searchParams }: AdminCardsPagePro
           />
         </Card>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="grid gap-3 xl:grid-cols-2 [&>li]:h-full">
           {cards.map((card) => {
             const Icon = CATEGORY_ICON[card.category];
             const tone = CATEGORY_TONE[card.category];
             return (
               <li key={card.id}>
-                <Card className="p-4">
+                <Card className="h-full p-4">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="flex flex-1 flex-col gap-2">
                       <div className="flex items-center gap-2">

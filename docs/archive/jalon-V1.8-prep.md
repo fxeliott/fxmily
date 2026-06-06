@@ -1,7 +1,7 @@
 # V1.8 REFLECT — Pickup prompt opérationnel (post-V1.7.2 LIVE prod)
 
 > Brief généré 2026-05-13 fin de session V1.7.2 follow-up + V1.8 prep.
-> **Pré-requis vérifié** : V1.7.2.1 LIVE mergée main HEAD `5beb9b9` (post-#44 resend + #47 commitlint). Smoke /api/admin/weekly-batch/pull empirique : HTTP 200 + 7780 bytes envelope JSON avec data réelle (2026-05-13 14:30 UTC via SSH hetzner-dieu).
+> **Pré-requis vérifié** : V1.7.2.1 LIVE mergée main HEAD `5beb9b9` (post-#44 resend + #47 commitlint). Smoke /api/admin/weekly-batch/pull empirique : HTTP 200 + 7780 bytes envelope JSON avec data réelle (2026-05-13 14:30 UTC via SSH fxmily-prod).
 > **Synthèse 5 subagents** : researcher (trader psych state-of-art 2024-2026) + code-reviewer (Prisma 7) + dependency-auditor (8 PRs) + planner (ultrathink V1.8 plan) + performance-profiler (V1.7.2 coverage stress).
 
 ## Contexte court
@@ -728,4 +728,4 @@ Détail :
 2. Nouvelle session V1.8 REFLECT avec pickup prompt ci-dessus
 3. AVANT V1.8 : test `/sunday-batch --dry-run` end-to-end (validation empirique V1.7.2 flow + EU AI Act compliance final check, ~10 sem avant deadline 2 août 2026)
 
-🟢 **Validation empirique V1.7.2 cette session** : `/api/admin/weekly-batch/pull` LIVE 200 + 7780 bytes envelope confirmé via SSH hetzner-dieu 2026-05-13 14:30 UTC. Server-side half du batch est fonctionnel end-to-end. Reste à valider le `claude --print × N membres jittered` orchestration côté Eliot machine Windows avec son abonnement Max + token exporté.
+🟢 **Validation empirique V1.7.2 cette session** : `/api/admin/weekly-batch/pull` LIVE 200 + 7780 bytes envelope confirmé via SSH fxmily-prod 2026-05-13 14:30 UTC. Server-side half du batch est fonctionnel end-to-end. Reste à valider le `claude --print × N membres jittered` orchestration côté Eliot machine Windows avec son abonnement Max + token exporté.

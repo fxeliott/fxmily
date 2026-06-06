@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { Card } from '@/components/ui/card';
+import { HoverLift } from '@/components/ui/hover-lift';
 import { Pill } from '@/components/ui/pill';
 import type { SerializedCard } from '@/lib/cards/types';
 
@@ -33,47 +34,49 @@ export function CardGridItem({ card, favorited, hasUnread = false }: CardGridIte
   const tone = CATEGORY_TONE[card.category];
 
   return (
-    <Card
-      interactive
-      className="focus-within:ring-acc group relative flex h-full flex-col gap-3 p-5 focus-within:ring-2 focus-within:ring-offset-2"
-      aria-labelledby={`card-${card.slug}-title`}
-    >
-      <div className="relative z-10 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span
-            className="bg-acc-dim text-acc inline-flex h-7 w-7 items-center justify-center rounded-full"
-            aria-hidden
-          >
-            <Icon className="h-3.5 w-3.5" />
-          </span>
-          <Pill tone={tone}>{CATEGORY_LABEL[card.category]}</Pill>
-          {hasUnread && (
-            <Pill tone="acc" dot="live">
-              Nouvelle
-            </Pill>
-          )}
-        </div>
-        <FavoriteToggle cardId={card.id} initialFavorited={favorited} />
-      </div>
-
-      <h3
-        id={`card-${card.slug}-title`}
-        className="text-foreground group-hover:text-acc text-base leading-snug font-semibold transition-colors"
+    <HoverLift className="block h-full">
+      <Card
+        interactive
+        className="focus-within:ring-acc group relative flex h-full flex-col gap-3 p-5 focus-within:ring-2 focus-within:ring-offset-2"
+        aria-labelledby={`card-${card.slug}-title`}
       >
-        <Link
-          href={`/library/${card.slug}`}
-          className="before:absolute before:inset-0 before:content-[''] focus-visible:outline-none"
-        >
-          {card.title}
-        </Link>
-      </h3>
+        <div className="relative z-10 flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span
+              className="bg-acc-dim text-acc inline-flex h-7 w-7 items-center justify-center rounded-full"
+              aria-hidden
+            >
+              <Icon className="h-3.5 w-3.5" />
+            </span>
+            <Pill tone={tone}>{CATEGORY_LABEL[card.category]}</Pill>
+            {hasUnread && (
+              <Pill tone="acc" dot="live">
+                Nouvelle
+              </Pill>
+            )}
+          </div>
+          <FavoriteToggle cardId={card.id} initialFavorited={favorited} />
+        </div>
 
-      <blockquote className="border-acc/40 text-muted border-l-2 pl-3 text-sm italic">
-        &laquo;&nbsp;{card.quote}&nbsp;&raquo;
-        <footer className="text-muted mt-1 text-[10px] tracking-wide uppercase not-italic">
-          {card.quoteSourceChapter}
-        </footer>
-      </blockquote>
-    </Card>
+        <h3
+          id={`card-${card.slug}-title`}
+          className="text-foreground group-hover:text-acc text-base leading-snug font-semibold transition-colors"
+        >
+          <Link
+            href={`/library/${card.slug}`}
+            className="before:absolute before:inset-0 before:content-[''] focus-visible:outline-none"
+          >
+            {card.title}
+          </Link>
+        </h3>
+
+        <blockquote className="border-acc/40 text-muted border-l-2 pl-3 text-sm italic">
+          &laquo;&nbsp;{card.quote}&nbsp;&raquo;
+          <footer className="text-muted mt-1 text-[10px] tracking-wide uppercase not-italic">
+            {card.quoteSourceChapter}
+          </footer>
+        </blockquote>
+      </Card>
+    </HoverLift>
   );
 }

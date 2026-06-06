@@ -51,6 +51,15 @@ test.describe('Visual smoke-tour — member full journey', () => {
       fullPage: true,
     });
 
+    // Dismiss the cookie-info banner (localStorage-gated → always present on a
+    // fresh CI browser). It is `fixed bottom` and would otherwise intercept the
+    // click on a later wizard submit button that sits low on a long step.
+    const cookieDismiss = page.getByRole('button', { name: /J'ai compris/i });
+    if (await cookieDismiss.isVisible().catch(() => false)) {
+      await cookieDismiss.click();
+      await cookieDismiss.waitFor({ state: 'hidden' }).catch(() => {});
+    }
+
     // ─── 3) /checkin landing — empty streak ─────────────────────────────
     await page.goto('/checkin');
     await page.waitForLoadState('networkidle');

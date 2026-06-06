@@ -142,6 +142,11 @@ export async function computeScoresForUser(
         session: true,
         planRespected: true,
         hedgeRespected: true,
+        // DoD#3 — trade-emotion footprint (emotional stability). String[] tag
+        // slugs only — the before/during/after emotional ARC, never the P&L.
+        emotionBefore: true,
+        emotionDuring: true,
+        emotionAfter: true,
       },
     }),
     db.dailyCheckin.findMany({
@@ -159,6 +164,10 @@ export async function computeScoresForUser(
         morningRoutineCompleted: true,
         intention: true,
         journalNote: true,
+        // DoD#3 — morning prep act (discipline) + sleep self-care (engagement).
+        marketAnalysisDone: true,
+        sleepQuality: true,
+        sleepHours: true,
       },
     }),
     // 🚨 §21.5 — the SINGLE sanctioned training→real-edge touchpoint in
@@ -189,6 +198,9 @@ export async function computeScoresForUser(
     planRespectedToday: c.planRespectedToday,
     morningRoutineCompleted: c.morningRoutineCompleted,
     intention: c.intention,
+    // DoD#3 — morning prep act. Tri-state passed through verbatim (null → not
+    // asked → skipped → byte-identical to pre-DoD#3).
+    marketAnalysisDone: c.marketAnalysisDone,
   }));
 
   const emotionalCheckins: EmotionalStabilityCheckinInput[] = checkins.map((c) => ({
@@ -204,6 +216,12 @@ export async function computeScoresForUser(
     .map((t) => ({
       closeDay: t.closedAt ? localDateOfDate(t.closedAt, timezone) : null,
       outcome: t.outcome,
+      // DoD#3 — trade-emotion footprint. Tag slugs (String[]) only; the
+      // negative ones feed the calmer-trading sub-score (SPEC §2 — arc
+      // awareness, never P&L). Empty arrays → trade skipped → byte-identical.
+      emotionBefore: t.emotionBefore,
+      emotionDuring: t.emotionDuring,
+      emotionAfter: t.emotionAfter,
     }));
 
   const consistencyTrades: ConsistencyTradeInput[] = trades
@@ -221,6 +239,9 @@ export async function computeScoresForUser(
     date: localDateOfDate(c.date, timezone),
     slot: c.slot,
     journalNote: c.journalNote,
+    // DoD#3 — sleep self-care signal (morning only; null on evening rows /
+    // unanswered mornings → skipped → byte-identical to pre-DoD#3).
+    sleepQuality: c.sleepQuality,
   }));
 
   // Compute streak in-window for engagement (we count distinct days with any

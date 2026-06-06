@@ -73,6 +73,16 @@ export interface EmotionalStabilityTradeInput {
   /** Local-day on which the trade closed (YYYY-MM-DD). */
   closeDay: string | null;
   outcome: 'win' | 'loss' | 'break_even' | null;
+  /**
+   * DoD#3 — emotion tag slugs felt BEFORE entry (`Trade.emotionBefore`). Same
+   * allowlist family as the checkin tags; the negative ones are scored exactly
+   * like `negativeEmotionRate` (awareness/regulation, never trade advice).
+   */
+  emotionBefore: readonly string[];
+  /** DoD#3 — emotion tag slugs felt DURING the open position (`emotionDuring`). */
+  emotionDuring: readonly string[];
+  /** DoD#3 — emotion tag slugs felt AFTER the trade (`emotionAfter`). */
+  emotionAfter: readonly string[];
 }
 
 export interface EmotionalStabilityInput {
@@ -89,6 +99,18 @@ const WEIGHT_MOOD_VAR = 40;
 const WEIGHT_STRESS = 25;
 const WEIGHT_NEG_EMO = 20;
 const WEIGHT_RECOVERY = 15;
+
+/**
+ * DoD#3 — trade-emotion-footprint sub-score weight. Added as a PURE ADDITION:
+ * the existing four weights (40/25/20/15) are deliberately NOT rebalanced.
+ * `aggregateDimension` normalizes by the *active* `pointsMax`, so a member
+ * whose closed trades carry no emotion data scores byte-identically to
+ * pre-DoD#3. Symmetric with `negativeEmotionRate` (the checkin footprint, 20)
+ * but sized at 15 — level with `recoveryAfterLoss`: the trade-level emotional
+ * arc is a meaningful but non-dominant regulation signal vs the daily mood
+ * variance (40). SPEC §2: measures awareness/regulation, never advises trades.
+ */
+const WEIGHT_TRADE_EMO = 15;
 
 /**
  * stdDev → score scaling on a 1-10 mood scale.
@@ -203,11 +225,37 @@ function computeParts(
           denominator: recovery.followupCount,
         });
 
+  // 5. DoD#3 — trade-emotion footprint. EXACT mirror of `negativeEmotionRate`
+  //    (checkin tags) but over closed trades: among trades that carried ANY
+  //    emotion data (≥1 non-empty before/during/after array — the denominator),
+  //    the share whose before/during/after contain a negative slug. Scored
+  //    `1 − rate` (higher score = calmer trading), reusing the SAME
+  //    NEGATIVE_EMOTION_SLUGS set as the checkin footprint. SPEC §2: this reads
+  //    the member's emotional ARC awareness, NEVER the trade's P&L / outcome.
+  let tradesWithEmotion = 0;
+  let negTrades = 0;
+  for (const t of input.closedTrades) {
+    const tags = [...t.emotionBefore, ...t.emotionDuring, ...t.emotionAfter];
+    if (tags.length === 0) continue;
+    tradesWithEmotion++;
+    if (tags.some((s) => NEGATIVE_EMOTION_SLUGS.has(s))) negTrades++;
+  }
+  const tradeNegRate = tradesWithEmotion > 0 ? negTrades / tradesWithEmotion : 0;
+  const tradeEmoValue = clamp(1 - tradeNegRate, 0, 1);
+  const tradeEmotionFootprint =
+    tradesWithEmotion > 0
+      ? valueSubScore(tradeEmoValue, WEIGHT_TRADE_EMO, {
+          numerator: negTrades,
+          denominator: tradesWithEmotion,
+        })
+      : null;
+
   const parts: EmotionalStabilityParts = {
     moodVariance,
     stressMedian: stressSub,
     negativeEmotionRate,
     recoveryAfterLoss: recoverySub,
+    tradeEmotionFootprint,
   };
 
   const partsForAggregate = [
@@ -215,6 +263,9 @@ function computeParts(
     eveningStress.length > 0 ? stressSub : null,
     taggedDays > 0 ? negativeEmotionRate : null,
     recoverySub,
+    // DoD#3 — already `null` when no closed trade carried emotion data →
+    // renormalized away → byte-identical to pre-DoD#3.
+    tradeEmotionFootprint,
   ];
 
   return { parts, partsForAggregate };
@@ -285,5 +336,7 @@ function emptyParts(): EmotionalStabilityParts {
     stressMedian: { rate: 0, pointsAwarded: 0, pointsMax: WEIGHT_STRESS },
     negativeEmotionRate: { rate: 0, pointsAwarded: 0, pointsMax: WEIGHT_NEG_EMO },
     recoveryAfterLoss: null,
+    // DoD#3 — null on the no-checkin branch (no trades scored either).
+    tradeEmotionFootprint: null,
   };
 }

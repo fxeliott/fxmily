@@ -15,11 +15,16 @@ const T = (
   hedgeRespected,
 });
 
-const M = (intention: string | null, routine: boolean | null = null): DisciplineCheckinInput => ({
+const M = (
+  intention: string | null,
+  routine: boolean | null = null,
+  marketAnalysisDone: boolean | null = null,
+): DisciplineCheckinInput => ({
   slot: 'morning',
   planRespectedToday: null,
   morningRoutineCompleted: routine,
   intention,
+  marketAnalysisDone,
 });
 
 const E = (planRespected: boolean | null): DisciplineCheckinInput => ({
@@ -27,6 +32,7 @@ const E = (planRespected: boolean | null): DisciplineCheckinInput => ({
   planRespectedToday: planRespected,
   morningRoutineCompleted: null,
   intention: null,
+  marketAnalysisDone: null,
 });
 
 describe('computeDisciplineScore', () => {
@@ -140,5 +146,103 @@ describe('computeDisciplineScore', () => {
     expect(r.parts.planRespect.denominator).toBe(3);
     expect(r.parts.hedgeRespect.numerator).toBe(2);
     expect(r.parts.hedgeRespect.denominator).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DoD#3 — market-analysis (morning prep) sub-score.
+//
+// ADDITION PURE: `WEIGHT_MARKET_ANALYSIS` (10) is added EN PLUS; the existing
+// five weights (35/20/25/10/10) are NEVER rebalanced. A member whose mornings
+// never carry `marketAnalysisDone` (every pre-DoD#3 / legacy row) scores
+// BYTE-IDENTICALLY to pre-DoD#3 — the part is `null` and renormalized away.
+//
+// The skip is keyed on field-PRESENCE (`marketAnalysisDone !== null`), exactly
+// like discipline's hedge N/A skip: a morning where the member was NOT asked
+// never penalizes the rate; a morning where they answered `false` (skipped the
+// prep) counts in the denominator and lowers the rate (the effort signal).
+// ---------------------------------------------------------------------------
+
+describe('computeDisciplineScore — market analysis (DoD#3)', () => {
+  it('ZERO REGRESSION — absent field (all-null) ≡ pre-DoD#3 (byte-identical, part null)', () => {
+    // 50% plan, 100% hedge, no morning field carries marketAnalysisDone (null).
+    // This is the EXACT input of the existing "respects partial sub-scores"
+    // test (score 68) — proves the addition is byte-identical when absent.
+    const trades: DisciplineTradeInput[] = [
+      ...Array.from({ length: 6 }, () => T(true, true)),
+      ...Array.from({ length: 6 }, () => T(false, true)),
+    ];
+    const r = computeDisciplineScore({ trades, checkins: [] });
+    expect(r.score).toBe(68); // pinned pre-DoD#3 value
+    expect(r.parts.marketAnalysisDone).toBeNull();
+  });
+
+  it('all mornings null → market part skipped even with morning data present', () => {
+    // 14 mornings with intention+routine perfect but marketAnalysisDone null.
+    // Pre-DoD#3: intention(10) + routine(10) both rate 1 → 100. Must stay 100.
+    const checkins = Array.from({ length: 14 }, () => M('plan', true, null));
+    const r = computeDisciplineScore({ trades: [], checkins });
+    expect(r.score).toBe(100);
+    expect(r.parts.marketAnalysisDone).toBeNull();
+  });
+
+  it('present + all done → full WEIGHT_MARKET_ANALYSIS contribution (still 100 when perfect)', () => {
+    // 14 mornings: intention + routine + marketAnalysisDone all perfect.
+    // Active morning weights: intention 10 + routine 10 + market 10, all rate 1
+    // → 100. Adding a perfect sub-score keeps a perfect dimension at 100.
+    const checkins = Array.from({ length: 14 }, () => M('plan', true, true));
+    const r = computeDisciplineScore({ trades: [], checkins });
+    expect(r.score).toBe(100);
+    expect(r.parts.marketAnalysisDone).not.toBeNull();
+    expect(r.parts.marketAnalysisDone?.rate).toBe(1);
+    expect(r.parts.marketAnalysisDone?.pointsMax).toBe(10);
+    expect(r.parts.marketAnalysisDone?.pointsAwarded).toBe(10);
+  });
+
+  it('present + all skipped (false) → rate 0, sub-score present (effort signal)', () => {
+    // 14 mornings: intention + routine perfect, marketAnalysisDone all FALSE.
+    // intention 10 + routine 10 awarded = 20; market 0/10 awarded.
+    // active max = 30 → 20/30 × 100 = 66.6̄ → 67.
+    const checkins = Array.from({ length: 14 }, () => M('plan', true, false));
+    const r = computeDisciplineScore({ trades: [], checkins });
+    expect(r.score).toBe(67);
+    expect(r.parts.marketAnalysisDone).not.toBeNull();
+    expect(r.parts.marketAnalysisDone?.rate).toBe(0);
+    expect(r.parts.marketAnalysisDone?.numerator).toBe(0);
+    expect(r.parts.marketAnalysisDone?.denominator).toBe(14);
+  });
+
+  it('only-asked mornings count in the denominator (null mornings excluded)', () => {
+    // 7 mornings done(true) + 7 mornings not-asked(null). intention+routine
+    // present (true) on all 14, marketAnalysisDone only on the first 7.
+    const checkins = [
+      ...Array.from({ length: 7 }, () => M('plan', true, true)),
+      ...Array.from({ length: 7 }, () => M('plan', true, null)),
+    ];
+    const r = computeDisciplineScore({ trades: [], checkins });
+    expect(r.parts.marketAnalysisDone?.numerator).toBe(7);
+    expect(r.parts.marketAnalysisDone?.denominator).toBe(7); // null mornings excluded
+    expect(r.parts.marketAnalysisDone?.rate).toBe(1);
+  });
+
+  it('partial (3 done / 6 asked) sits strictly between skipped and full', () => {
+    const skipped = computeDisciplineScore({
+      trades: [],
+      checkins: Array.from({ length: 6 }, () => M('plan', true, false)),
+    });
+    const partial = computeDisciplineScore({
+      trades: [],
+      checkins: [
+        ...Array.from({ length: 3 }, () => M('plan', true, true)),
+        ...Array.from({ length: 3 }, () => M('plan', true, false)),
+      ],
+    });
+    const full = computeDisciplineScore({
+      trades: [],
+      checkins: Array.from({ length: 6 }, () => M('plan', true, true)),
+    });
+    expect(partial.parts.marketAnalysisDone?.rate).toBe(0.5);
+    expect(partial.score!).toBeGreaterThan(skipped.score!);
+    expect(partial.score!).toBeLessThan(full.score!);
   });
 });

@@ -55,6 +55,15 @@ export interface DisciplineParts {
   intentionFilled: SubScore;
   /** Morning checkins with morningRoutineCompleted=true / mornings filled. */
   routineCompleted: SubScore;
+  /**
+   * DoD#3 — morning checkins with `marketAnalysisDone=true` / mornings where
+   * the member was asked (`marketAnalysisDone !== null`). A prep/routine ACT
+   * (sibling of `routineCompleted`): we track THAT the market prep happened,
+   * never its content (SPEC §2). `null` when NO morning carries the field →
+   * `aggregateDimension` renormalizes it away (ADDITION PURE — byte-identical
+   * to pre-DoD#3 when absent). The existing five weights are NEVER rebalanced.
+   */
+  marketAnalysisDone: SubScore | null;
 }
 
 // ----- Emotional Stability --------------------------------------------------
@@ -68,6 +77,16 @@ export interface EmotionalStabilityParts {
   negativeEmotionRate: SubScore;
   /** Recovery after a loss day vs baseline. High = bounces back fast. */
   recoveryAfterLoss: SubScore | null;
+  /**
+   * DoD#3 — trade-emotion footprint. Mirrors `negativeEmotionRate` over closed
+   * trades that carried ANY emotion data (before/during/after): the share whose
+   * arrays contain a negative slug, scored `1 − rate` (higher = calmer trading).
+   * Measures the member's emotional ARC awareness/regulation across the trade
+   * (SPEC §2 — same posture as the checkin emotion logic; NEVER advises trades).
+   * `null` when no closed trade carries emotion data → renormalized away →
+   * byte-identical to pre-DoD#3 (ADDITION PURE; existing weights NEVER changed).
+   */
+  tradeEmotionFootprint: SubScore | null;
 }
 
 // ----- Consistency ----------------------------------------------------------
@@ -116,6 +135,15 @@ export interface EngagementParts {
    * `countMeetingAttendance`); no meeting body, no P&L, no real-edge cross-read.
    */
   meetingAttendanceRate: SubScore | null;
+  /**
+   * DoD#3 — sleep self-care habit signal. Normalized average subjective sleep
+   * quality (`sleepQuality / 10`) over mornings where `sleepQuality !== null`.
+   * A conservative wellness/habit-adherence ACT (anti-Black-Hat: never "you
+   * sleep badly" — only a positive contribution when present). `null` when no
+   * morning carries `sleepQuality` → `aggregateDimension` renormalizes it away
+   * → byte-identical to pre-DoD#3 (ADDITION PURE; existing weights NEVER changed).
+   */
+  sleepQualityRate: SubScore | null;
 }
 
 /**

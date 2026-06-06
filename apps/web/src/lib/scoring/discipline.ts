@@ -46,6 +46,12 @@ export interface DisciplineCheckinInput {
   morningRoutineCompleted: boolean | null;
   /** Morning only. */
   intention: string | null;
+  /**
+   * Morning only (DoD#3). Tri-state: `true` (market prep done), `false`
+   * (skipped), `null` (not asked / legacy row). A prep/routine ACT — we score
+   * THAT it happened, never its content (SPEC §2).
+   */
+  marketAnalysisDone: boolean | null;
 }
 
 export interface DisciplineInput {
@@ -65,6 +71,17 @@ const WEIGHT_HEDGE = 20;
 const WEIGHT_EVENING_PLAN = 25;
 const WEIGHT_INTENTION = 10;
 const WEIGHT_ROUTINE = 10;
+
+/**
+ * DoD#3 — market-analysis (morning prep) sub-score weight. Added as a PURE
+ * ADDITION: the existing five weights (35/20/25/10/10) are deliberately NOT
+ * rebalanced. `aggregateDimension` normalizes by the *active* `pointsMax`, so
+ * when no morning checkin carries the field the part is `null` and the
+ * dimension renormalizes to EXACTLY its pre-DoD#3 value — a provable zero
+ * regression. Sized level with `routineCompleted`/`intentionFilled` (10):
+ * market prep is a meaningful but non-dominant prep act vs plan respect (35).
+ */
+const WEIGHT_MARKET_ANALYSIS = 10;
 
 export function computeDisciplineScore(input: DisciplineInput): ScoreResult<DisciplineParts> {
   const closed = input.trades.filter((t) => t.closedAt !== null);
@@ -117,12 +134,29 @@ export function computeDisciplineScore(input: DisciplineInput): ScoreResult<Disc
   const routineCompletedCount = morning.filter((c) => c.morningRoutineCompleted === true).length;
   const routineCompleted = rateSubScore(routineCompletedCount, morningCount, WEIGHT_ROUTINE);
 
+  // DoD#3 — market analysis (morning prep). Carbon-copy of routineCompleted,
+  // but the denominator skips mornings where the member was NOT asked
+  // (`marketAnalysisDone === null`) so a legacy/unanswered morning never
+  // penalizes the rate. Numerator = mornings the prep was actually done.
+  const marketAnalysisApplicable = morning.filter((c) => c.marketAnalysisDone !== null);
+  const marketAnalysisDoneCount = marketAnalysisApplicable.filter(
+    (c) => c.marketAnalysisDone === true,
+  ).length;
+  const marketAnalysisRate = rateSubScore(
+    marketAnalysisDoneCount,
+    marketAnalysisApplicable.length,
+    WEIGHT_MARKET_ANALYSIS,
+  );
+
   const parts: DisciplineParts = {
     planRespect,
     hedgeRespect,
     eveningPlan,
     intentionFilled,
     routineCompleted,
+    // Surfaced for transparency only when the member was asked at least once;
+    // `null` otherwise so the UI doesn't show a phantom 0-of-0 prep metric.
+    marketAnalysisDone: marketAnalysisApplicable.length > 0 ? marketAnalysisRate : null,
   };
 
   // Renormalize: sub-scores whose denominator=0 are "not applicable".
@@ -132,6 +166,9 @@ export function computeDisciplineScore(input: DisciplineInput): ScoreResult<Disc
     eveningPlanApplicable.length > 0 ? eveningPlan : null,
     morningCount > 0 ? intentionFilled : null,
     morningCount > 0 ? routineCompleted : null,
+    // DoD#3 — null-skip on the field-presence denominator: byte-identical when
+    // no morning carries `marketAnalysisDone` (every pre-DoD#3 / legacy row).
+    marketAnalysisApplicable.length > 0 ? marketAnalysisRate : null,
   ];
 
   const score = aggregateDimension(partsForAggregate);
@@ -183,5 +220,8 @@ function emptyParts(): DisciplineParts {
       numerator: 0,
       denominator: 0,
     },
+    // DoD#3 — null on the insufficient-data branch (no morning data → the prep
+    // act was never asked), mirroring engagement's `trainingActivityRate: null`.
+    marketAnalysisDone: null,
   };
 }

@@ -239,6 +239,7 @@ Champs à remplir au sortie de trade :
 - **Prix sortie**
 - **Outcome** : win / loss / BE
 - **R réalisé** (auto-calculé si possible)
+- **Émotion pendant le trade** : tags (ressenti en position — ajout V2.x, axe « avant / pendant / après » du master prompt §22)
 - **Émotion après sortie** : tags
 - **Screen sortie** (upload obligatoire)
 - **Notes** (texte libre, optionnel)
@@ -968,7 +969,7 @@ Phase 2 — Audit-driven hardening :
 | J7 | Bibliothèque + déclencheurs + membre reçoit fiche après 3 pertes consécutives | ✅ smoke `scripts/smoke-test-j7.ts` ALL GREEN avec 50 cards |
 | J8 | Eliot reçoit email avec rapport hebdo de chaque membre actif | ✅ Phase B+ smoke live ALL GREEN — Claude Sonnet mock + cron Sun 21 UTC + email digest |
 | J9 | Membre active notifs, reçoit pushes prévus | ✅ smoke `scripts/smoke-test-j9.ts` ALL GREEN — Apple Declarative Web Push 8030 + classic dual SW + email fallback |
-| J10 | App en prod, Eliot s'invite + teste end-to-end | ⚠️ code prêt (18 commits Phases A→P + Phase Q + R sur `claude/j10-prod-deploy`). **Phase R reality check 2026-05-09** : pivot domaine V1 sur `app.fxmilyapp.com` (déjà possédé par Eliot via `hetzner-dieu`) au lieu de `app.fxmily.com` (achat reporté V2). Pre-requis bloquants restants : Sentry DSN + Resend `fxmilyapp.com` verify + iPhone Safari 18.4+ device test + admin password rotation + GitHub secrets posés. `fxmily.com` purchase = optionnel V2. |
+| J10 | App en prod, Eliot s'invite + teste end-to-end | ⚠️ code prêt (18 commits Phases A→P + Phase Q + R sur `claude/j10-prod-deploy`). **Phase R reality check 2026-05-09** : pivot domaine V1 sur `app.fxmilyapp.com` (déjà possédé par Eliot via `fxmily-prod`) au lieu de `app.fxmily.com` (achat reporté V2). Pre-requis bloquants restants : Sentry DSN + Resend `fxmilyapp.com` verify + iPhone Safari 18.4+ device test + admin password rotation + GitHub secrets posés. `fxmily.com` purchase = optionnel V2. |
 
 ### 20.6 — Backlog J8 (livré ✅ 2026-05-08)
 
@@ -1382,6 +1383,81 @@ Pourquoi nouvelle session : le contexte d'interview pollue l'implémentation ; u
 - **Décisions d'âme M1-M10** : 10/10 closed verbatim Eliot 2026-05-27 — M4/M5/M6 LIVRÉS V1.7-V1.8 ; **M3 LIVRÉ V2.4** (onboarding interview Phases A-C LIVE 2026-05-28 — profilage IA deep + profil par membre) ; **M8** (promesse 12 sem = discipline ↑ + erreurs psy ↓ + routines + entraînement + résultats réels ; tracker max data via QCM/tests récurrents auto-rapport) = **seule directive restante à implémenter** ; M1/M2/M7/M9/M10 = **out-of-scope app** (interne, projet Scale séparé).
 - **Cadre interne légal clarifié** : app interne, membres déjà payants, partie légale traitée en amont (disclaimer "pas conseiller en investissement"), flow accès = membre fait demande + crée compte → admin (Eliot) confirme.
 - **Trajectoire restante post-MM** : 3 voies V2 stratégiques A (Capacitor iOS+Android, DEFERRED Session U, pas de refactor REST nécessaire — WebView shell hybride), B (Stripe billing, DEFERRED), C (Multi-admin, DEFERRED). M3 onboarding interview IA + M8 axes 3+4 (formation + market analysis tracking) à câbler avant V2 stratégique.
+
+---
+
+## 31. Calendrier personnel adaptatif (spec §26 — 2026-06-03)
+
+> Formalisé au build des jalons J-C1→J-C4 (le design vivait dans
+> `docs/jalon-calendrier-prep.md` + `docs/decisions/ADR-005`). **§30 est
+> réservé aux réunions** (PR #206 `/spec`, en attente de merge) — d'où la
+> numérotation §31 pour le calendrier (évite la collision, cf.
+> jalon-calendrier-prep §«Numérotation»).
+
+### 31.1 Vision (master prompt §26, verbatim ≤30 mots — fair use FR L122-5)
+
+« Chaque membre dispose de SON calendrier, qu'il adapte à sa disponibilité
+(selon qu'il travaille ou est étudiant, etc.). Chaque semaine, un questionnaire
+d'organisation de la semaine lui permet de mettre à jour son calendrier, et
+cette mise à jour est réalisée automatiquement par Claude Opus 4.8 en LOCAL. »
+
+Le calendrier organise le **TEMPS de pratique** du membre — sessions de trading
+à respecter, entraînement/backtest, présence réunions (§30), check-ins
+quotidiens, révision Mark Douglas, sommeil/repos.
+
+### 31.2 Posture §2 (invariant BLOQUANT)
+
+ZÉRO conseil de marché / setup / tendance / prévision / paire à trader. Le
+system prompt Claude (`lib/calendar/prompt.ts`, hardcodé repo-side) l'interdit ;
+le snapshot envoyé à Claude exclut **structurellement** tout
+`realizedR`/`outcome`/`plannedRR` (firewall type-level `CalendarActivityCounts`
++ test anti-leak `calendar-isolation`). Le calendrier organise le TEMPS, jamais
+les trades. Anti-Black-Hat (Yu-kai Chou) STRICT côté affichage : 0 score
+d'adhérence, 0 streak, 0 timer/urgence, 0 rouge « pas fait ». Le seul signal =
+la `priority` d'un bloc (poids visuel).
+
+### 31.3 Modèle de données (J-C1, migration `20260603120000_calendar_questionnaire`)
+
+- **`WeeklyScheduleQuestionnaire`** — `(userId, weekStart @db.Date)` unique,
+  `instrumentVersion`, `energyPeakSlot` (ancre l'enum `CalendarSlot`),
+  `responses Json` (instrument fermé v1, 0 free-text). Upsert idempotent.
+- **`AdaptiveCalendar`** — `(userId, weekStart)` unique, `schedule Json` (sortie
+  Claude validée), `primaryCategory` (ancre l'enum `CalendarBlockCategory`),
+  cost tracking, `aiDisclosureShownAt`, `calendarInstrumentVersion`. **AUCUNE FK**
+  vers le questionnaire (snapshot-at-generation figé). `weekStart` = lundi
+  Europe/Paris, server-authority (`parseLocalDate`, anti-flake PR#96).
+
+### 31.4 Pipeline IA — batch local Claude Max (J-C2, $0 API marginal)
+
+`claude --print` (abonnement Max, Opus 4.8 §8 — pas d'API payante). Routes
+admin token-gated `POST /api/admin/calendar-batch/{pull,persist}`
+(`CALENDAR_ADMIN_BATCH_TOKEN` séparé). `persist` enchaîne 6 gates
+(invalid_week → unknown_user → **no_questionnaire** [gate calendar-only] →
+invalid_output → crisis → **AMF §2 `detectAMFViolation`** → upsert). Carbone
+V1.7.2 weekly + V1.4 monthly. Pseudonymisation `pseudonymizeMember` au snapshot.
+
+### 31.5 Surfaces UI
+
+- **J-C3 — questionnaire hebdo** : wizard 4 steps fermé
+  (`/calendar/questionnaire/new`, carbone MindsetCheck §27), widget statut sur
+  `/dashboard`. Redirect après soumission → `/calendrier?done=questionnaire`
+  (re-pointé J-C4).
+- **J-C4 — affichage `/calendrier`** (Server Component, `force-dynamic`, auth
+  status active) : 3 états calmes — (i) pas de questionnaire → CTA ; (ii) rempli
+  sans calendrier → « ton calendrier se prépare, reviens en début de semaine » ;
+  (iii) généré → `<AIGeneratedBanner>` (EU AI Act 50(1), 7ᵉ site prod ;
+  `aiDisclosureShownAt` stampé au 1ᵉʳ affichage + audit
+  `calendar.disclosure.shown`) + overview/weeklyFocus (principe Mark Douglas) +
+  grille 7 jours color-codée par catégorie (hex `C`, mobile-first 375 → 2-up
+  desktop) + warnings ambre calmes. Reader partagé membre + admin
+  (`/admin/members/[id]?tab=calendar`, lecture seule, sans stamp).
+
+### 31.6 Jalons (1 = 1 session /clear — §18.4)
+
+J-C1 data layer → J-C2 pipeline batch → J-C3 questionnaire UI → J-C4 affichage.
+Détail de design + alternatives →
+`docs/decisions/ADR-005-adaptive-calendar-instrument-v1.md` (Status Proposed →
+Accepted post-1ᵉʳ run batch réel + validation Eliot §2 sur 5+ calendriers).
 
 ---
 

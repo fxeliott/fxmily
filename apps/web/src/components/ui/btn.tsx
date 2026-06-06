@@ -11,7 +11,7 @@ export const btnVariants = cva(
     variants: {
       kind: {
         primary:
-          'bg-[var(--acc)] text-[var(--acc-fg)] font-semibold shadow-[var(--sh-btn-pri)] hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] hover:-translate-y-px active:translate-y-0 active:shadow-[var(--sh-btn-pri)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hatch-disabled disabled:hover:translate-y-0',
+          'bg-[var(--acc-btn)] text-[var(--acc-fg)] font-semibold shadow-[var(--sh-btn-pri)] hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] hover:-translate-y-px active:translate-y-0 active:shadow-[var(--sh-btn-pri)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hatch-disabled disabled:hover:translate-y-0',
         secondary:
           'bg-transparent text-[var(--t-1)] border border-[var(--b-strong)] hover:border-[var(--b-acc)] hover:bg-[var(--acc-dim-2)] hover:text-[var(--acc-hi)] active:bg-[var(--acc-dim)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hatch-disabled',
         ghost:

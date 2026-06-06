@@ -1,0 +1,70 @@
+import { NextResponse, type NextRequest } from 'next/server';
+
+import { requireCalendarAdminToken } from '@/lib/auth/admin-token';
+import { env } from '@/lib/env';
+import { flushSentry, reportError } from '@/lib/observability';
+import { loadAllSnapshotsForCalendarGeneration } from '@/lib/calendar/batch';
+
+/**
+ * §26 — POST `/api/admin/calendar-batch/pull` (J-C2).
+ *
+ * Returns a `CalendarBatchPullEnvelope` JSON describing every eligible member's
+ * pseudonymized weekly snapshot (members who filled the questionnaire this week
+ * and don't already have a generated calendar). Designed to be `curl`'d from
+ * Eliot's local machine by `ops/scripts/calendar-batch-local.sh` :
+ *
+ *   curl --fail-with-body --silent -X POST \
+ *        -H "X-Admin-Token: $FXMILY_CALENDAR_TOKEN" \
+ *        "https://app.fxmilyapp.com/api/admin/calendar-batch/pull"
+ *
+ * Carbon of the weekly/monthly pull routes. Auth + rate-limit delegated to
+ * `requireCalendarAdminToken` (separate token from weekly/monthly — rotation
+ * independent). POST-only (mirrors the cron + batch pattern: defense-in-depth,
+ * URL never leaks via referer, body not echoed in Caddy access.log).
+ *
+ * Idempotency : `loadAllSnapshotsForCalendarGeneration` is a pure read — repeat
+ * calls in the same week return the same envelope (modulo a single
+ * `calendar.batch.pulled` audit row per call, desired for abuse detection). The
+ * "already generated" filter means once a calendar exists it stops appearing.
+ */
+
+// Reads env + DB → must run on Node.js, never Edge.
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: NextRequest) {
+  const guard = requireCalendarAdminToken(req);
+  if (guard) return guard;
+
+  // The batch is an "external export" path (pseudonymized snapshots leave the
+  // host → Eliot's laptop → Anthropic). `lib/env.ts` JSDoc says
+  // MEMBER_LABEL_SALT is "REQUIS en prod si export externe envisagé" — refuse
+  // in production NODE_ENV if the salt is unset, else unsalted pseudonyms leak.
+  // Dev/test exempt (V1 single-user dev with seed cuids). Carbon weekly pull.
+  if (env.NODE_ENV === 'production' && !env.MEMBER_LABEL_SALT) {
+    return NextResponse.json(
+      {
+        error: 'member_label_salt_missing',
+        detail:
+          'MEMBER_LABEL_SALT must be configured in production before exposing pseudonymized snapshots externally.',
+      },
+      { status: 503 },
+    );
+  }
+
+  try {
+    const envelope = await loadAllSnapshotsForCalendarGeneration({});
+    return NextResponse.json(envelope);
+  } catch (err) {
+    reportError('admin.calendar_batch.pull', err, {
+      route: '/api/admin/calendar-batch/pull',
+    });
+    await flushSentry();
+    return NextResponse.json({ error: 'pull_failed' }, { status: 500 });
+  }
+}
+
+export function GET() {
+  // POST-only: defense in depth (mirrors cron + weekly/monthly batch pattern).
+  return NextResponse.json({ error: 'method_not_allowed' }, { status: 405 });
+}

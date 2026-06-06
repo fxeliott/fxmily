@@ -212,7 +212,11 @@ export function ReflectionWizard() {
         </Alert>
       ) : null}
 
-      <div className="relative min-h-[340px]">
+      {/* DS-v3 — frosted glass panel over the V18Aurora mesh. Blur via Tailwind
+          backdrop utilities on this STATIC container (Lightning CSS strips raw
+          `backdrop-filter`); the inner slide transform stays on the `m.div`
+          child so they never collide on the same element (J3 invariant). */}
+      <div className="glass-panel border-edge-top rounded-card-lg relative min-h-[340px] p-5 backdrop-blur-[16px] backdrop-saturate-150 sm:p-6">
         <AnimatePresence mode="wait" initial={false}>
           <m.div
             key={step}
@@ -238,7 +242,7 @@ export function ReflectionWizard() {
 
       {/* Sticky bottom CTA */}
       <div
-        className="v18-glass sticky bottom-0 z-10 -mx-4 mt-2 flex items-center gap-3 border-t border-[var(--b-default)] px-4 py-3 sm:-mx-6 sm:px-6"
+        className="v18-glass sticky bottom-0 z-10 -mx-4 mt-2 flex items-center gap-3 border-t border-[var(--b-default)] px-4 py-3 backdrop-blur-[16px] backdrop-saturate-150 sm:-mx-6 sm:px-6"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
       >
         {step > 0 ? (
@@ -265,7 +269,7 @@ export function ReflectionWizard() {
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-4 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid
-                ? 'bg-[var(--acc)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : // a11y B1 fix (WCAG 1.4.3) — `--t-2` for disabled CTA
                   // contrast ≥ 4.5:1, see weekly-review-wizard same fix.
                   'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
@@ -281,7 +285,7 @@ export function ReflectionWizard() {
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-5 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid && !isPending
-                ? 'bg-[var(--acc)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : // a11y B1 fix (WCAG 1.4.3) — `--t-2` for disabled CTA
                   // contrast ≥ 4.5:1, see weekly-review-wizard same fix.
                   'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
@@ -323,6 +327,7 @@ function ABCDHeader({
           background: 'oklch(0.18 0.03 254 / 0.85)',
           borderColor: colorByLetter[def.letter],
           color: colorByLetter[def.letter],
+          boxShadow: 'var(--acc-glow)',
         }}
       >
         <span className="font-display text-[18px] leading-none font-bold">{def.letter}</span>

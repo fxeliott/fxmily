@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { DrawnRule } from '@/components/dashboard/drawn-rule';
 import { TrainingDebriefStatsPanel } from '@/components/training-debrief/training-debrief-stats-panel';
 import {
   TrainingDebriefWizard,
@@ -49,34 +51,39 @@ export default async function NewTrainingDebriefPage() {
     : undefined;
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">
-      <header className="flex flex-col gap-4">
-        <Link
-          href="/training/debrief"
-          className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Mes débriefs
-        </Link>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="t-eyebrow inline-flex items-center gap-1.5 text-[var(--cy)]">
-            <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} />
-            Mode entraînement · Débrief
-          </span>
-          <h1
-            className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-            style={{ fontFeatureSettings: '"ss01" 1' }}
+    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
+      <DashboardAmbient tone="cyan" />
+      <div className="relative mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
+        <header className="flex flex-col gap-4">
+          <Link
+            href="/training/debrief"
+            className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
           >
-            {existing ? 'Reprendre mon débrief' : 'Débrief de la semaine'}
-          </h1>
-          <p className="t-cap text-[var(--t-3)]">Semaine du {weekRange}</p>
-        </div>
-      </header>
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Mes débriefs
+          </Link>
 
-      <TrainingDebriefStatsPanel stats={stats} weekRangeLabel={weekRange} />
+          <div className="flex flex-col gap-1.5">
+            <span className="t-eyebrow inline-flex items-center gap-1.5 text-[var(--cy)]">
+              <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} />
+              Mode entraînement · Débrief
+            </span>
+            <h1
+              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              style={{ fontFeatureSettings: '"ss01" 1' }}
+            >
+              {existing ? 'Reprendre mon débrief' : 'Débrief de la semaine'}
+            </h1>
+            <p className="t-cap text-[var(--t-3)]">Semaine du {weekRange}</p>
+          </div>
 
-      <TrainingDebriefWizard weekStart={weekStart} {...(prefill ? { prefill } : {})} />
+          <DrawnRule tone="cyan" className="max-w-[220px]" />
+        </header>
+
+        <TrainingDebriefStatsPanel stats={stats} weekRangeLabel={weekRange} />
+
+        <TrainingDebriefWizard weekStart={weekStart} {...(prefill ? { prefill } : {})} />
+      </div>
     </main>
   );
 }

@@ -84,7 +84,7 @@ export function TrainingDebriefStatsPanel({
       {empty ? (
         <div
           data-slot="training-debrief-stats-empty"
-          className="rounded-control border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] px-4 py-3"
+          className="rounded-control border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] px-4 py-3"
         >
           <p className="t-body text-[var(--t-1)]">0 backtest cette semaine.</p>
           <p className="t-cap mt-1 text-[var(--t-2)]">

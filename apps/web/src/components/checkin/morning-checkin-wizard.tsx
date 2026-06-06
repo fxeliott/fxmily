@@ -31,7 +31,7 @@ import { cn } from '@/lib/utils';
  *
  * 5 steps:
  *   1. Sleep block — hours + quality slider
- *   2. Routine — yes/no toggle + suggestion list
+ *   2. Routine — routine + market-analysis yes/no toggles + suggestion list
  *   3. Body — meditation min + sport (optional)
  *   4. Mind — mood slider + emotion tags
  *   5. Intention — short text (optional)
@@ -56,6 +56,7 @@ interface DraftState {
   sleepHours: string;
   sleepQuality: number;
   morningRoutineCompleted: boolean | null;
+  marketAnalysisDone: boolean | null;
   meditationMin: string;
   sportType: string;
   sportDurationMin: string;
@@ -72,6 +73,7 @@ function emptyDraft(today: string): DraftState {
     sleepHours: '',
     sleepQuality: 6,
     morningRoutineCompleted: null,
+    marketAnalysisDone: null,
     meditationMin: '0',
     sportType: '',
     sportDurationMin: '',
@@ -189,8 +191,13 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
         if (Number.isNaN(n) || n < 0 || n > 24) errs.sleepHours = 'Entre 0 et 24h.';
       }
     }
-    if (s === 1 && draft.morningRoutineCompleted === null) {
-      errs.morningRoutineCompleted = 'Sélection requise.';
+    if (s === 1) {
+      if (draft.morningRoutineCompleted === null) {
+        errs.morningRoutineCompleted = 'Sélection requise.';
+      }
+      if (draft.marketAnalysisDone === null) {
+        errs.marketAnalysisDone = 'Sélection requise.';
+      }
     }
     if (s === 2) {
       const med = parseLocaleNumber(draft.meditationMin);
@@ -231,6 +238,7 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
     fd.set('sleepHours', draft.sleepHours.replace(',', '.'));
     fd.set('sleepQuality', String(draft.sleepQuality));
     fd.set('morningRoutineCompleted', String(draft.morningRoutineCompleted ?? false));
+    fd.set('marketAnalysisDone', String(draft.marketAnalysisDone ?? false));
     fd.set('meditationMin', (draft.meditationMin || '0').replace(',', '.'));
     fd.set('sportType', draft.sportType.trim());
     fd.set('sportDurationMin', draft.sportDurationMin.replace(',', '.'));
@@ -511,6 +519,22 @@ function StepRoutine({ draft, update, fieldErrors, disabled }: StepProps) {
         onChange={(v) => update('morningRoutineCompleted', v === 'true')}
         disabled={disabled}
         error={fieldErrors.morningRoutineCompleted}
+      />
+
+      {/* SPEC §28/§22 — pre-session discipline declaration. We track the FACT
+          that the member prepared their analysis, never any market content
+          (§2 posture: no trade/market advice, only behaviour + discipline). */}
+      <RadioGroup
+        legend="As-tu préparé ton analyse de marché avant ta session ?"
+        name="marketAnalysisDone"
+        value={draft.marketAnalysisDone === null ? '' : draft.marketAnalysisDone ? 'true' : 'false'}
+        options={[
+          { value: 'true', label: 'Oui' },
+          { value: 'false', label: 'Pas encore' },
+        ]}
+        onChange={(v) => update('marketAnalysisDone', v === 'true')}
+        disabled={disabled}
+        error={fieldErrors.marketAnalysisDone}
       />
     </div>
   );

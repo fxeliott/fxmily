@@ -1,6 +1,6 @@
 'use client';
 
-import { domAnimation, LazyMotion } from 'framer-motion';
+import { domAnimation, LazyMotion, MotionConfig } from 'framer-motion';
 
 /**
  * Single global `LazyMotion` provider (perf — bundle size).
@@ -30,7 +30,7 @@ import { domAnimation, LazyMotion } from 'framer-motion';
 export function MotionProvider({ children }: { children: React.ReactNode }) {
   return (
     <LazyMotion features={domAnimation} strict>
-      {children}
+      <MotionConfig reducedMotion="user">{children}</MotionConfig>
     </LazyMotion>
   );
 }

@@ -12,6 +12,14 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   interactive?: boolean;
   /** Top edge gradient line (Linear pattern). Default true. */
   edge?: boolean;
+  /**
+   * DS-v3 (J3) glassmorphism 2.0 surface — frosted translucent panel
+   * that reveals the ambient mesh behind it. With `primary`, adds the
+   * luminous accent inner-glow (`.glow-edge`). Replaces the solid
+   * bg/border/shadow; use on hero/info panels, not on transformed
+   * (spring-lifted) surfaces — backdrop-filter + transform conflict.
+   */
+  glass?: boolean;
 }
 
 /**
@@ -27,7 +35,7 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
  * Edge-top : gradient subtle 1px en haut, signature Linear.
  */
 export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
-  { children, primary, selected, interactive, edge = true, className, ...props },
+  { children, primary, selected, interactive, edge = true, glass, className, ...props },
   ref,
 ) {
   return (
@@ -36,11 +44,14 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
       data-slot="card"
       data-primary={primary || undefined}
       data-selected={selected || undefined}
+      data-glass={glass || undefined}
       className={cn(
         'rounded-card border transition-[border-color,box-shadow,background-color] duration-200',
-        primary
-          ? 'border-[var(--b-strong)] bg-gradient-to-br from-[var(--bg-2)] to-[var(--bg-1)] shadow-[var(--sh-card-primary)]'
-          : 'border-[var(--b-default)] bg-[var(--bg-1)] shadow-[var(--sh-card)]',
+        glass
+          ? cn('glass-panel backdrop-blur-[16px] backdrop-saturate-150', primary && 'glow-edge')
+          : primary
+            ? 'border-[var(--b-strong)] bg-gradient-to-br from-[var(--bg-2)] to-[var(--bg-1)] shadow-[var(--sh-card-primary)]'
+            : 'border-[var(--b-default)] bg-[var(--bg-1)] shadow-[var(--sh-card)]',
         selected && '!border-[var(--b-acc)] shadow-[var(--sh-card-selected)]',
         interactive &&
           !selected &&

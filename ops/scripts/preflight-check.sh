@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Phase T (2026-05-09) — Vérifie la capacité de hetzner-dieu (server existant)
+# Phase T (2026-05-09) — Vérifie la capacité de fxmily-prod (server existant)
 # avant de cohabiter avec Fxmily. SSH read-only, ne modifie rien.
 #
 # Usage :
 #   bash ops/scripts/preflight-check.sh [user@host]
 #
-# Default : 'fxmily@hetzner-dieu' (lit ~/.ssh/config alias).
+# Default : 'fxmily@fxmily-prod' (lit ~/.ssh/config alias).
 
 set -euo pipefail
 
-readonly TARGET="${1:-fxmily@hetzner-dieu}"
+readonly TARGET="${1:-fxmily@fxmily-prod}"
 
 echo "→ SSH preflight check on $TARGET"
 echo ""
@@ -60,14 +60,14 @@ fi
 
 echo ""
 if [[ "$VERDICT_OK" == "1" ]]; then
-  echo "✅ COHABITATION OK — réutilise hetzner-dieu pour Fxmily."
+  echo "✅ COHABITATION OK — réutilise fxmily-prod pour Fxmily."
   echo "   Lance : bash ops/scripts/bootstrap-fxmily.sh tokens.local.env --skip-hetzner"
-  echo "   avec FXMILY_HETZNER_IP=178.104.39.201 dans tokens.local.env."
+  echo "   avec FXMILY_HETZNER_IP=203.0.113.10 dans tokens.local.env."
 else
   echo "❌ COHABITATION RISQUÉE — provisionne un nouveau CX22 (~5€/mois) :"
   echo "   bash ops/scripts/provision-hetzner.sh"
   echo ""
-  echo "   OU libère de la RAM/disque sur hetzner-dieu d'abord."
+  echo "   OU libère de la RAM/disque sur fxmily-prod d'abord."
 fi
 
 # Caddy cohabitation

@@ -64,7 +64,7 @@ export async function PreTradeCorrelationCard({ userId }: { userId: string }) {
 
   return (
     <section
-      className="rounded-card-lg mb-6 flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-1)] p-5"
+      className="rounded-card-lg flex h-full flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-1)] p-5"
       aria-labelledby="pre-trade-correlation-heading"
     >
       <header className="flex items-start justify-between gap-3">

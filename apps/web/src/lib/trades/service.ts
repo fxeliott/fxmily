@@ -57,6 +57,8 @@ export interface CloseTradeInput {
   exitedAt: Date;
   exitPrice: number;
   outcome: TradeOutcome;
+  /** Emotions felt DURING the open position (recalled at close). Master prompt §22. */
+  emotionDuring: string[];
   emotionAfter: string[];
   /** V1.8 — post-outcome LESSOR + Steenbarger bias tags (max 3, allowlisted Zod-side). */
   tags?: readonly string[];
@@ -95,6 +97,7 @@ export interface SerializedTrade {
   outcome: TradeOutcome | null;
   realizedR: string | null;
   realizedRSource: RealizedRSource | null;
+  emotionDuring: string[];
   emotionAfter: string[];
   screenshotExitKey: string | null;
   closedAt: string | null;
@@ -145,6 +148,7 @@ function toSerialized(trade: TradeModel): SerializedTrade {
     outcome: trade.outcome,
     realizedR: trade.realizedR == null ? null : trade.realizedR.toString(),
     realizedRSource: trade.realizedRSource,
+    emotionDuring: [...trade.emotionDuring],
     emotionAfter: [...trade.emotionAfter],
     screenshotExitKey: trade.screenshotExitKey,
     closedAt: trade.closedAt ? trade.closedAt.toISOString() : null,
@@ -251,6 +255,7 @@ export async function closeTrade(
         outcome: input.outcome,
         realizedR: new Prisma.Decimal(realized.value),
         realizedRSource: realized.source,
+        emotionDuring: input.emotionDuring,
         emotionAfter: input.emotionAfter,
         // V1.8 — persist post-outcome bias tags. Defaults to `[]` so V1 trades
         // closed before V1.8 stay valid ; explicit `[]` overrides any prior

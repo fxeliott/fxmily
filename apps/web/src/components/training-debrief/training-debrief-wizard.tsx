@@ -196,7 +196,13 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
         </Alert>
       ) : null}
 
-      <div className="relative min-h-[300px]">
+      {/* DS-v3 (§21.7) glass step-region — frosted panel over the cyan ambient
+          mesh. NO `overflow-hidden` (it would clip the icon halo; the x:±24
+          slide rides the child `m.div` in `mode="wait"`). Blur comes from the
+          Tailwind backdrop utilities here, never a raw rule (Lightning CSS
+          strips raw `backdrop-filter`). J3 invariant: backdrop-filter on the
+          static parent, transform on the child. */}
+      <div className="glass-panel border-edge-top rounded-card-lg relative min-h-[300px] p-5 backdrop-blur-[16px] backdrop-saturate-150 sm:p-6">
         <AnimatePresence mode="wait" initial={false}>
           <m.div
             key={step}
@@ -257,6 +263,19 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
         </AnimatePresence>
       </div>
 
+      {/* SR-only reason the CTA is inert — calm, non-judgmental (anti Black-Hat):
+          keyboard/SR users learn WHY "Suivant"/"Enregistrer" is disabled instead
+          of meeting a silent dead control (a11y WCAG 3.3.1). */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {step < STEP_DEFS.length - 1
+          ? stepValid
+            ? ''
+            : `Écris au moins ${TRAINING_DEBRIEF_TEXT_MIN_CHARS} caractères pour passer à l'étape suivante.`
+          : stepValid
+            ? ''
+            : `Écris au moins ${TRAINING_DEBRIEF_TEXT_MIN_CHARS} caractères pour enregistrer ton débrief.`}
+      </p>
+
       {/* Sticky bottom CTA bar — DS-v2 (no `.v18-glass`), safe-area aware. */}
       <div
         className="sticky bottom-0 z-10 -mx-4 mt-2 flex items-center gap-3 border-t border-[var(--b-default)] bg-[var(--bg)]/85 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6"
@@ -286,7 +305,7 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-4 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid
-                ? 'bg-[var(--acc)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
             )}
           >
@@ -300,7 +319,7 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-5 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid && !isPending
-                ? 'bg-[var(--acc)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
             )}
             aria-busy={isPending || undefined}
@@ -334,9 +353,13 @@ function StepHeader({ step, eyebrow, headingRef }: StepHeaderProps) {
         aria-hidden="true"
         className="rounded-pill mt-1 flex h-10 w-10 shrink-0 items-center justify-center border"
         style={{
-          background: 'oklch(0.789 0.139 217 / 0.14)',
-          borderColor: 'oklch(0.789 0.139 217 / 0.3)',
-          color: 'oklch(0.85 0.13 210)',
+          background: 'var(--cy-dim)',
+          borderColor: 'var(--cy-edge)',
+          color: 'var(--cy)',
+          // DS-v3 focal glow — a calm cyan halo on the step's icon (the premium
+          // focal point, anti Black-Hat: a soft halo, no pulse). Mirror of the
+          // mindset wizard's --acc-glow, in the §21.7 training cyan.
+          boxShadow: 'var(--cy-glow)',
         }}
       >
         <Icon size={18} strokeWidth={2.2} />
@@ -385,7 +408,7 @@ function FreeTextStep(props: FreeTextStepProps) {
         placeholder={placeholder}
         maxLength={TRAINING_DEBRIEF_TEXT_MAX_CHARS + 100} // soft cap; server hard-caps
         rows={6}
-        className="rounded-input w-full resize-y border bg-[var(--bg-2)] px-3.5 py-3 text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:border-[var(--cy)] focus:shadow-[0_0_0_3px_oklch(0.789_0.139_217_/_0.16)] focus:outline-none"
+        className="rounded-input w-full resize-y border bg-[var(--bg-2)] px-3.5 py-3 text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:border-[var(--cy)] focus:shadow-[0_0_0_3px_var(--cy-dim-strong)] focus:outline-none"
         style={{
           borderColor: error ? 'oklch(0.7 0.165 22 / 0.55)' : 'var(--b-strong)',
           minHeight: '160px',

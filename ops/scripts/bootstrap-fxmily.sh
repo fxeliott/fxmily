@@ -9,18 +9,18 @@
 # Pre-reqs Eliot manuel (incompressible — ~10 min) :
 #
 # RECOMMANDATION V1 (post-Phase R reality check 2026-05-09) :
-# Utiliser l'Hetzner CX22 existant `hetzner-dieu` (178.104.39.201) +
+# Utiliser l'Hetzner CX22 existant `fxmily-prod` (203.0.113.10) +
 # domaine `fxmilyapp.com` (déjà possédé) → coût supplémentaire = 0 €.
 # Skip Hetzner provisioning + skip Cloudflare DNS (déjà configuré pour
 # d'autres workloads — il suffira d'ajouter un sous-domaine `app`).
 #
-#   FXMILY_HETZNER_IP=178.104.39.201 FXMILY_DOMAIN=fxmilyapp.com \
+#   FXMILY_HETZNER_IP=203.0.113.10 FXMILY_DOMAIN=fxmilyapp.com \
 #     bash ops/scripts/bootstrap-fxmily.sh tokens.local.env --skip-hetzner
 #
 #   1. Cloudflare account (déjà existant pour fxmilyapp.com)
 #      → Crée un API Token "Edit zone DNS" scope fxmilyapp.com → CLOUDFLARE_API_TOKEN
 #
-#   2. Hetzner Cloud (skip provisioning si réutilisation `hetzner-dieu`)
+#   2. Hetzner Cloud (skip provisioning si réutilisation `fxmily-prod`)
 #      Si nouveau CX22 nécessaire (cohabitation insuffisante avec autres
 #      workloads) :
 #      ⚠️  Hetzner Console → Project → Settings → Billing → Set spending alert

@@ -257,6 +257,10 @@ export async function materialisePendingDeletions(
           lastName: null,
           image: null,
           passwordHash: null,
+          // J4 (security T2-1) — bump the revocation epoch in the same write
+          // so any JWT this user still holds is torn down on its next
+          // `auth()` round-trip instead of staying valid until `maxAge`.
+          tokenVersion: { increment: 1 },
           // Prisma 7 requires `Prisma.DbNull` to write SQL NULL into a Json
           // column ; bare `null` is rejected at the type level (and would be
           // misinterpreted as JSON `null` literal at the Postgres level).

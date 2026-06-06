@@ -222,6 +222,9 @@ export async function closeTradeAction(
     exitedAt: formData.get('exitedAt'),
     exitPrice: formData.get('exitPrice'),
     outcome: formData.get('outcome'),
+    emotionDuring: formData
+      .getAll('emotionDuring')
+      .filter((v): v is string => typeof v === 'string'),
     emotionAfter: formData.getAll('emotionAfter').filter((v): v is string => typeof v === 'string'),
     // V1.8 — post-outcome bias tags (CFA LESSOR + Steenbarger). Optional ;
     // the Zod schema defaults to `[]` if missing.
@@ -255,6 +258,7 @@ export async function closeTradeAction(
       exitedAt: data.exitedAt,
       exitPrice: data.exitPrice,
       outcome: data.outcome,
+      emotionDuring: data.emotionDuring,
       emotionAfter: data.emotionAfter,
       tags: data.tags,
       notes: typeof data.notes === 'string' ? data.notes : undefined,

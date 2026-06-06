@@ -19,6 +19,7 @@ const validMorning = {
   sleepHours: '7.5',
   sleepQuality: '8',
   morningRoutineCompleted: 'true',
+  marketAnalysisDone: 'true',
   meditationMin: '10',
   sportType: '',
   sportDurationMin: '',
@@ -181,6 +182,19 @@ describe('morningCheckinSchema', () => {
     expect(yes.morningRoutineCompleted).toBe(true);
     const no = morningCheckinSchema.parse({ ...validMorning, morningRoutineCompleted: 'false' });
     expect(no.morningRoutineCompleted).toBe(false);
+  });
+
+  // SPEC §28/§22 — pre-session "market analysis done?" discipline signal.
+  it('coerces marketAnalysisDone from "true" / "false"', () => {
+    const yes = morningCheckinSchema.parse({ ...validMorning, marketAnalysisDone: 'true' });
+    expect(yes.marketAnalysisDone).toBe(true);
+    const no = morningCheckinSchema.parse({ ...validMorning, marketAnalysisDone: 'false' });
+    expect(no.marketAnalysisDone).toBe(false);
+  });
+
+  it('requires marketAnalysisDone (formBoolean, mirror of morningRoutineCompleted)', () => {
+    const { marketAnalysisDone: _omit, ...withoutField } = validMorning;
+    expect(morningCheckinSchema.safeParse(withoutField).success).toBe(false);
   });
 });
 

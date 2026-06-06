@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { DrawnRule } from '@/components/dashboard/drawn-rule';
 import { MindsetDashboard } from '@/components/mindset/mindset-dashboard';
 import { MindsetTimeline } from '@/components/mindset/mindset-timeline';
 import { btnVariants } from '@/components/ui/btn';
@@ -48,74 +50,80 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
   const ctaLabel = currentWeek ? 'Reprendre mon auto-évaluation' : 'Faire mon auto-évaluation';
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">
-      <header className="flex flex-col gap-4">
-        <Link
-          href="/dashboard"
-          className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Tableau de bord
-        </Link>
-
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="flex flex-col gap-1.5">
-            <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
-              <Brain className="h-3.5 w-3.5" strokeWidth={2} />
-              Mindset · Auto-évaluation
-            </span>
-            <h1
-              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-              style={{ fontFeatureSettings: '"ss01" 1' }}
-            >
-              Mon mindset hebdo
-            </h1>
-          </div>
-          <Link href="/mindset/new" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
-            <ClipboardCheck className="h-3.5 w-3.5" strokeWidth={1.75} />
-            {ctaLabel}
-            <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
+    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
+      {/* DS-v3 J3 — ambient mesh + drifting orbs behind the masthead */}
+      <DashboardAmbient />
+      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
+        <header className="flex flex-col gap-4">
+          <Link
+            href="/dashboard"
+            className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Tableau de bord
           </Link>
-        </div>
 
-        <p className="rounded-control border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 text-[12px] leading-[1.5] text-[var(--t-2)]">
-          Un point hebdomadaire sur ton{' '}
-          <strong className="text-[var(--t-1)]">état d&apos;esprit</strong> d&apos;athlète-trader
-          (cadre Mark Douglas). Pas de bonne ni de mauvaise réponse, pas de P&amp;L, pas
-          d&apos;analyse de marché — c&apos;est un instrument de recul, totalement séparé de ton
-          score et de ton edge.
-        </p>
-      </header>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
+                <Brain className="h-3.5 w-3.5" strokeWidth={2} />
+                Mindset · Auto-évaluation
+              </span>
+              <h1
+                className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+                style={{ fontFeatureSettings: '"ss01" 1' }}
+              >
+                Mon mindset hebdo
+              </h1>
+            </div>
+            <Link href="/mindset/new" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
+              <ClipboardCheck className="h-3.5 w-3.5" strokeWidth={1.75} />
+              {ctaLabel}
+              <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
+            </Link>
+          </div>
 
-      {justSubmitted ? (
-        <div
-          role="status"
-          data-slot="mindset-done"
-          className="rounded-card-lg border border-[var(--b-acc)] bg-[var(--acc-dim-2)] p-4"
-        >
-          <p className="t-eyebrow-lg text-[var(--t-3)]">Enregistré</p>
-          <p className="t-h3 mt-1 text-[var(--t-1)]">
-            Ton auto-évaluation de la semaine est posée. Reviens lundi prochain prendre le même
-            recul, sans pression.
+          <DrawnRule className="max-w-[220px]" />
+
+          <p className="rounded-control border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 text-[12px] leading-[1.5] text-[var(--t-2)]">
+            Un point hebdomadaire sur ton{' '}
+            <strong className="text-[var(--t-1)]">état d&apos;esprit</strong> d&apos;athlète-trader
+            (cadre Mark Douglas). Pas de bonne ni de mauvaise réponse, pas de P&amp;L, pas
+            d&apos;analyse de marché — c&apos;est un instrument de recul, totalement séparé de ton
+            score et de ton edge.
           </p>
-        </div>
-      ) : null}
+        </header>
 
-      <MindsetDashboard
-        latestProfile={latestProfile}
-        trend={trend}
-        instrumentVersion={CURRENT_MINDSET_INSTRUMENT_VERSION}
-      />
+        {justSubmitted ? (
+          <div
+            role="status"
+            data-slot="mindset-done"
+            className="rounded-card-lg border border-[var(--b-acc)] bg-[var(--acc-dim-2)] p-4"
+          >
+            <p className="t-eyebrow-lg text-[var(--t-3)]">Enregistré</p>
+            <p className="t-h3 mt-1 text-[var(--t-1)]">
+              Ton auto-évaluation de la semaine est posée. Reviens lundi prochain prendre le même
+              recul, sans pression.
+            </p>
+          </div>
+        ) : null}
 
-      <section className="flex flex-col gap-4">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="t-h2 text-[var(--t-1)]">Tes auto-évaluations récentes</h2>
-          <p className="t-cap text-[var(--t-3)]">
-            {recent.length} / 12 · semaine {weekRange}
-          </p>
-        </div>
-        <MindsetTimeline checks={recent} />
-      </section>
+        <MindsetDashboard
+          latestProfile={latestProfile}
+          trend={trend}
+          instrumentVersion={CURRENT_MINDSET_INSTRUMENT_VERSION}
+        />
+
+        <section className="flex flex-col gap-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="t-h2 text-[var(--t-1)]">Tes auto-évaluations récentes</h2>
+            <p className="t-cap text-[var(--t-3)]">
+              {recent.length} / 12 · semaine {weekRange}
+            </p>
+          </div>
+          <MindsetTimeline checks={recent} />
+        </section>
+      </div>
     </main>
   );
 }

@@ -8,7 +8,6 @@ import type {
 } from '@/lib/schemas/onboarding-interview';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
 import { detectInjection } from '@/lib/ai/injection-detector';
-
 import { getOnboardingInstrument } from './instrument-v1';
 
 /**

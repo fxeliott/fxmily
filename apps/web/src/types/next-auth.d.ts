@@ -25,6 +25,8 @@ declare module 'next-auth' {
     role: UserRole;
     status: UserStatus;
     timezone: string;
+    /** J4 — session-revocation epoch, copied into the JWT at sign-in. */
+    tokenVersion: number;
   }
 }
 
@@ -34,5 +36,11 @@ declare module 'next-auth/jwt' {
     status?: UserStatus;
     /** IANA timezone string. Optional in JWT — defaults to Europe/Paris when missing. */
     timezone?: string;
+    /**
+     * J4 — session-revocation epoch. Optional because JWTs minted before the
+     * `User.tokenVersion` column existed carry no claim; the revocation check
+     * coalesces a missing value to 0. See `lib/auth/session-revocation.ts`.
+     */
+    tokenVersion?: number;
   }
 }

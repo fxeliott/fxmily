@@ -142,6 +142,9 @@ export async function computeScoresForUser(
         session: true,
         planRespected: true,
         hedgeRespected: true,
+        // SPEC §28/§21 — "oublis" axis (discipline). Tri-state Boolean only —
+        // the ACT of process-completeness/forgetting, never the trade content.
+        processComplete: true,
         // DoD#3 — trade-emotion footprint (emotional stability). String[] tag
         // slugs only — the before/during/after emotional ARC, never the P&L.
         emotionBefore: true,
@@ -194,6 +197,9 @@ export async function computeScoresForUser(
     closedAt: t.closedAt ? t.closedAt.toISOString() : null,
     planRespected: t.planRespected,
     hedgeRespected: t.hedgeRespected,
+    // SPEC §28/§21 — "oublis" axis. Tri-state passed through verbatim (null →
+    // not asked → skipped → byte-identical to pre-§28).
+    processComplete: t.processComplete,
   }));
 
   const disciplineCheckins: DisciplineCheckinInput[] = checkins.map((c) => ({

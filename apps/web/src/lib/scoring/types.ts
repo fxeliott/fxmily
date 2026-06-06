@@ -64,6 +64,19 @@ export interface DisciplineParts {
    * to pre-DoD#3 when absent). The existing five weights are NEVER rebalanced.
    */
   marketAnalysisDone: SubScore | null;
+  /**
+   * SPEC §28/§21 — "oublis" axis: closed trades with `processComplete=true` /
+   * closed trades where the member answered (`processComplete !== null`). Did
+   * they follow ALL their process, forgetting nothing? An execution-discipline
+   * ACT (sibling of `planRespect`), keyed on field-PRESENCE exactly like the
+   * hedge N/A skip: a trade where the member wasn't asked never penalizes the
+   * rate; a `false` (forgot) counts and lowers it (the effort signal). SPEC §2:
+   * the ACT of completeness only, never advice on the trade. `null` when NO
+   * closed trade carries the field → `aggregateDimension` renormalizes it away
+   * (ADDITION PURE — byte-identical to pre-§28 when absent; existing weights
+   * NEVER rebalanced — mirror of `marketAnalysisDone`).
+   */
+  processComplete: SubScore | null;
 }
 
 // ----- Emotional Stability --------------------------------------------------

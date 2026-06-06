@@ -57,6 +57,7 @@ function makeTrade(partial: Partial<SerializedTrade> = {}): SerializedTrade {
     emotionBefore: ['calm'],
     planRespected: true,
     hedgeRespected: null,
+    processComplete: null,
     notes: null,
     screenshotEntryKey: null,
     exitedAt: null,

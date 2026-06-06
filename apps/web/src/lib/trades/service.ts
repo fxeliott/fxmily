@@ -60,6 +60,12 @@ export interface CloseTradeInput {
   /** Emotions felt DURING the open position (recalled at close). Master prompt §22. */
   emotionDuring: string[];
   emotionAfter: string[];
+  /**
+   * SPEC §28/§21 — "oublis" axis. Tri-state: `true` (followed all process, forgot
+   * nothing), `false` (forgot/missed steps), `null` (not answered — OPTIONAL).
+   * Mirror of `hedgeRespected`. SPEC §2: the ACT of completeness only.
+   */
+  processComplete: boolean | null;
   /** V1.8 — post-outcome LESSOR + Steenbarger bias tags (max 3, allowlisted Zod-side). */
   tags?: readonly string[];
   notes: string | undefined;
@@ -89,6 +95,8 @@ export interface SerializedTrade {
   emotionBefore: string[];
   planRespected: boolean;
   hedgeRespected: boolean | null;
+  /** SPEC §28/§21 — "oublis" axis (tri-state: true / false / null=not answered). */
+  processComplete: boolean | null;
   notes: string | null;
   screenshotEntryKey: string | null;
   // Post-exit (nullable until closed)
@@ -141,6 +149,7 @@ function toSerialized(trade: TradeModel): SerializedTrade {
     emotionBefore: [...trade.emotionBefore],
     planRespected: trade.planRespected,
     hedgeRespected: trade.hedgeRespected,
+    processComplete: trade.processComplete,
     notes: trade.notes,
     screenshotEntryKey: trade.screenshotEntryKey,
     exitedAt: trade.exitedAt ? trade.exitedAt.toISOString() : null,
@@ -257,6 +266,11 @@ export async function closeTrade(
         realizedRSource: realized.source,
         emotionDuring: input.emotionDuring,
         emotionAfter: input.emotionAfter,
+        // SPEC §28/§21 — persist the "oublis" axis. Tri-state passed through
+        // verbatim (null = not answered → never coerced to false, which would
+        // fabricate a "forgot" signal the member never gave). Mirror of
+        // hedgeRespected / marketAnalysisDone null-handling.
+        processComplete: input.processComplete,
         // V1.8 — persist post-outcome bias tags. Defaults to `[]` so V1 trades
         // closed before V1.8 stay valid ; explicit `[]` overrides any prior
         // value (admin edits go through a dedicated path).

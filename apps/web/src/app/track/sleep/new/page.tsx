@@ -21,11 +21,7 @@ export default async function TrackSleepNewPage() {
   }
 
   return (
-    <main
-      id="main-content"
-      tabIndex={-1}
-      className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6 outline-none"
-    >
+    <main className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6">
       <header className="space-y-2">
         <Link
           href="/track"

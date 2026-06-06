@@ -239,6 +239,7 @@ Champs à remplir au sortie de trade :
 - **Prix sortie**
 - **Outcome** : win / loss / BE
 - **R réalisé** (auto-calculé si possible)
+- **Émotion pendant le trade** : tags (ressenti en position — ajout V2.x, axe « avant / pendant / après » du master prompt §22)
 - **Émotion après sortie** : tags
 - **Screen sortie** (upload obligatoire)
 - **Notes** (texte libre, optionnel)
@@ -968,7 +969,7 @@ Phase 2 — Audit-driven hardening :
 | J7 | Bibliothèque + déclencheurs + membre reçoit fiche après 3 pertes consécutives | ✅ smoke `scripts/smoke-test-j7.ts` ALL GREEN avec 50 cards |
 | J8 | Eliot reçoit email avec rapport hebdo de chaque membre actif | ✅ Phase B+ smoke live ALL GREEN — Claude Sonnet mock + cron Sun 21 UTC + email digest |
 | J9 | Membre active notifs, reçoit pushes prévus | ✅ smoke `scripts/smoke-test-j9.ts` ALL GREEN — Apple Declarative Web Push 8030 + classic dual SW + email fallback |
-| J10 | App en prod, Eliot s'invite + teste end-to-end | ⚠️ code prêt (18 commits Phases A→P + Phase Q + R sur `claude/j10-prod-deploy`). **Phase R reality check 2026-05-09** : pivot domaine V1 sur `app.fxmilyapp.com` (déjà possédé par Eliot via `hetzner-dieu`) au lieu de `app.fxmily.com` (achat reporté V2). Pre-requis bloquants restants : Sentry DSN + Resend `fxmilyapp.com` verify + iPhone Safari 18.4+ device test + admin password rotation + GitHub secrets posés. `fxmily.com` purchase = optionnel V2. |
+| J10 | App en prod, Eliot s'invite + teste end-to-end | ⚠️ code prêt (18 commits Phases A→P + Phase Q + R sur `claude/j10-prod-deploy`). **Phase R reality check 2026-05-09** : pivot domaine V1 sur `app.fxmilyapp.com` (déjà possédé par Eliot via `fxmily-prod`) au lieu de `app.fxmily.com` (achat reporté V2). Pre-requis bloquants restants : Sentry DSN + Resend `fxmilyapp.com` verify + iPhone Safari 18.4+ device test + admin password rotation + GitHub secrets posés. `fxmily.com` purchase = optionnel V2. |
 
 ### 20.6 — Backlog J8 (livré ✅ 2026-05-08)
 
@@ -1488,7 +1489,82 @@ Feature de la taille de §21 (Mode Entraînement) → **4 sous-jalons atomiques*
 
 ---
 
-## 31. Changelog v1.6 → v1.7 (2026-05-30)
+## 31. Calendrier personnel adaptatif (spec §26 — 2026-06-03)
+
+> Formalisé au build des jalons J-C1→J-C4 (le design vivait dans
+> `docs/jalon-calendrier-prep.md` + `docs/decisions/ADR-005`). **§30 est
+> réservé aux réunions** (PR #206 `/spec`, en attente de merge) — d'où la
+> numérotation §31 pour le calendrier (évite la collision, cf.
+> jalon-calendrier-prep §«Numérotation»).
+
+### 31.1 Vision (master prompt §26, verbatim ≤30 mots — fair use FR L122-5)
+
+« Chaque membre dispose de SON calendrier, qu'il adapte à sa disponibilité
+(selon qu'il travaille ou est étudiant, etc.). Chaque semaine, un questionnaire
+d'organisation de la semaine lui permet de mettre à jour son calendrier, et
+cette mise à jour est réalisée automatiquement par Claude Opus 4.8 en LOCAL. »
+
+Le calendrier organise le **TEMPS de pratique** du membre — sessions de trading
+à respecter, entraînement/backtest, présence réunions (§30), check-ins
+quotidiens, révision Mark Douglas, sommeil/repos.
+
+### 31.2 Posture §2 (invariant BLOQUANT)
+
+ZÉRO conseil de marché / setup / tendance / prévision / paire à trader. Le
+system prompt Claude (`lib/calendar/prompt.ts`, hardcodé repo-side) l'interdit ;
+le snapshot envoyé à Claude exclut **structurellement** tout
+`realizedR`/`outcome`/`plannedRR` (firewall type-level `CalendarActivityCounts`
++ test anti-leak `calendar-isolation`). Le calendrier organise le TEMPS, jamais
+les trades. Anti-Black-Hat (Yu-kai Chou) STRICT côté affichage : 0 score
+d'adhérence, 0 streak, 0 timer/urgence, 0 rouge « pas fait ». Le seul signal =
+la `priority` d'un bloc (poids visuel).
+
+### 31.3 Modèle de données (J-C1, migration `20260603120000_calendar_questionnaire`)
+
+- **`WeeklyScheduleQuestionnaire`** — `(userId, weekStart @db.Date)` unique,
+  `instrumentVersion`, `energyPeakSlot` (ancre l'enum `CalendarSlot`),
+  `responses Json` (instrument fermé v1, 0 free-text). Upsert idempotent.
+- **`AdaptiveCalendar`** — `(userId, weekStart)` unique, `schedule Json` (sortie
+  Claude validée), `primaryCategory` (ancre l'enum `CalendarBlockCategory`),
+  cost tracking, `aiDisclosureShownAt`, `calendarInstrumentVersion`. **AUCUNE FK**
+  vers le questionnaire (snapshot-at-generation figé). `weekStart` = lundi
+  Europe/Paris, server-authority (`parseLocalDate`, anti-flake PR#96).
+
+### 31.4 Pipeline IA — batch local Claude Max (J-C2, $0 API marginal)
+
+`claude --print` (abonnement Max, Opus 4.8 §8 — pas d'API payante). Routes
+admin token-gated `POST /api/admin/calendar-batch/{pull,persist}`
+(`CALENDAR_ADMIN_BATCH_TOKEN` séparé). `persist` enchaîne 6 gates
+(invalid_week → unknown_user → **no_questionnaire** [gate calendar-only] →
+invalid_output → crisis → **AMF §2 `detectAMFViolation`** → upsert). Carbone
+V1.7.2 weekly + V1.4 monthly. Pseudonymisation `pseudonymizeMember` au snapshot.
+
+### 31.5 Surfaces UI
+
+- **J-C3 — questionnaire hebdo** : wizard 4 steps fermé
+  (`/calendar/questionnaire/new`, carbone MindsetCheck §27), widget statut sur
+  `/dashboard`. Redirect après soumission → `/calendrier?done=questionnaire`
+  (re-pointé J-C4).
+- **J-C4 — affichage `/calendrier`** (Server Component, `force-dynamic`, auth
+  status active) : 3 états calmes — (i) pas de questionnaire → CTA ; (ii) rempli
+  sans calendrier → « ton calendrier se prépare, reviens en début de semaine » ;
+  (iii) généré → `<AIGeneratedBanner>` (EU AI Act 50(1), 7ᵉ site prod ;
+  `aiDisclosureShownAt` stampé au 1ᵉʳ affichage + audit
+  `calendar.disclosure.shown`) + overview/weeklyFocus (principe Mark Douglas) +
+  grille 7 jours color-codée par catégorie (hex `C`, mobile-first 375 → 2-up
+  desktop) + warnings ambre calmes. Reader partagé membre + admin
+  (`/admin/members/[id]?tab=calendar`, lecture seule, sans stamp).
+
+### 31.6 Jalons (1 = 1 session /clear — §18.4)
+
+J-C1 data layer → J-C2 pipeline batch → J-C3 questionnaire UI → J-C4 affichage.
+Détail de design + alternatives →
+`docs/decisions/ADR-005-adaptive-calendar-instrument-v1.md` (Status Proposed →
+Accepted post-1ᵉʳ run batch réel + validation Eliot §2 sur 5+ calendriers).
+
+---
+
+## 32. Changelog v1.6 → v1.7 (2026-05-30)
 
 - **§30 ajoutée** : Suivi de présence aux réunions Fxmily (interview `/spec` 2026-05-30). Décisions clés : entité **`Meeting` admin-scoped auto-générée par cron** (Lun–Ven 12h/20h Paris DST-aware) ⇒ taux d'assiduité fiable ; **présence = 2 composantes** `(live OU rediffusion) ET contenu Ichor lu` (analyse@12h / bilan@20h, booléen seul — **zéro stockage/affichage du contenu**, posture §2) ; vérification = **self-report in-app structuré** (auto-vérif Zoom/Drive/Discord infaisable/fragile = recadrage honnête, réconciliation Zoom API explorée V2) ; **annulation admin** d'un créneau exclut du dénominateur (« pas dispo ») ; périmètre **track+display ET engagement** (réponse Eliot « 1 et 2 ») ⇒ sous-score `engagement` **additif** (pattern J-T4, zéro rééquilibrage) + signal admin absences (jamais push shame) + ligne rapport hebdo (count only). Posture **anti Black-Hat** verrouillée (« non déclaré » ≠ absent honteux). Impl = 4 sous-jalons J-M1→J-M4 dédiés post-`/clear` (§18.4).
 - **Durcissement world-class (maximum-mode, 2026-05-30 sess.2)** : 3 sub-agents parallèles (web-vérif auto-vérification + modélisation récurrence/DST + review adversariale de conception) → décisions **vérifiées sur sources primaires** + **3 corrections TIER 1** intégrées : (1) helper Paris→UTC corrigé — `localInstantToUtc` réel (`lib/weekly-report/week-window.ts:138`) vs `datetime-paris.ts` **mort** (supprimé PR #172, hallucination héritée de la section T5 SUPERSEDED de apps/web/CLAUDE.md) ; (2) invariant `date = localDateOf(scheduledAt)` **par construction** (anti-drift DST jour de bascule) ; (3) **fenêtre 30j** unique bornant déclaration + taux + engagement, refus déclaration si annulé/futur/hors-fenêtre, annulation post-déclaration tranchée (ligne conservée+masquée+exclue), et cas engagement `scheduledCount=0→null` (score inchangé) vs `>0 & 0 validé→0` (score baisse). Chemin **auto-vérif V2 partielle** documenté avec verdicts vérifiés (Discord réaction ✅ = fiable, Zoom Reports = fragile, Google Drive = infaisable).

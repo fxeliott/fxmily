@@ -2,6 +2,19 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "fxmily-web-ds-v3",
+      "runtimeExecutable": "pnpm.cmd",
+      "runtimeArgs": ["--filter", "@fxmily/web", "exec", "next", "dev"],
+      "port": 3000,
+      "autoPort": true,
+      "env": {
+        "DATABASE_URL": "postgresql://placeholder:placeholder@localhost:5432/placeholder",
+        "AUTH_SECRET": "dev-ds-v3-secret-32chars-fxmily-aaaaaa",
+        "AUTH_URL": "http://localhost:3000",
+        "AUTH_TRUST_HOST": "true"
+      }
+    },
+    {
       "name": "fxmily-web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@fxmily/web", "exec", "next", "dev"],

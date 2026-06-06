@@ -122,6 +122,9 @@ export const morningCheckinSchema = z
     sleepQuality: intRange(1, 10, 'Qualité de sommeil entre 1 et 10.'),
 
     morningRoutineCompleted: formBoolean,
+    // SPEC §28/§22 — "a-t-il fait son analyse ?" Pre-session discipline signal,
+    // declarative binary only (§2 posture: the FACT, never market content).
+    marketAnalysisDone: formBoolean,
     meditationMin: z.coerce
       .number({ message: 'Méditation invalide.' })
       .int('Entier requis.')

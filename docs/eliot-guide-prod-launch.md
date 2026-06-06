@@ -1,7 +1,7 @@
 # Guide pas-à-pas — Mise en prod Fxmily V1 (Eliot)
 
 > **Date** : 2026-05-09 — **post-Phase R reality check**.
-> **Cible** : `https://app.fxmilyapp.com` sur ton Hetzner existant `hetzner-dieu` (178.104.39.201).
+> **Cible** : `https://app.fxmilyapp.com` sur ton Hetzner existant `fxmily-prod` (203.0.113.10).
 > **Coût supplémentaire V1** : **0 €** (Hetzner et `fxmilyapp.com` déjà payés).
 > **Temps total estimé** : ~50 min de tes mains + ~10 min de propagation DNS + 30 min de smoke test.
 
@@ -30,11 +30,11 @@ Ce guide couvre **uniquement** ce que je (Claude) ne peux pas faire en autonomie
 
 ## 1. Vérifier la capacité du serveur Hetzner existant
 
-> **Pourquoi** : Ton serveur `hetzner-dieu` (178.104.39.201) tourne déjà n8n + Langfuse + autres workloads. Avant de lui ajouter Fxmily, on vérifie qu'il a la capacité.
+> **Pourquoi** : Ton serveur `fxmily-prod` (203.0.113.10) tourne déjà n8n + Langfuse + autres workloads. Avant de lui ajouter Fxmily, on vérifie qu'il a la capacité.
 
 ```bash
 # Depuis ton ordi, en PowerShell
-ssh hetzner-dieu 'free -h && df -h && docker ps --format "table {{.Names}}\t{{.Status}}"'
+ssh fxmily-prod 'free -h && df -h && docker ps --format "table {{.Names}}\t{{.Status}}"'
 ```
 
 **Tu cherches** :
@@ -43,7 +43,7 @@ ssh hetzner-dieu 'free -h && df -h && docker ps --format "table {{.Names}}\t{{.S
 - **Disque libre** : ≥ 5 GB sur `/`. R2 backups passent par stream (peu d'usage local), Postgres ~500 MB pour 1000 trades.
 - **Docker containers** : noter ceux qui tournent pour ne pas casser la cohabitation Caddy (port 80/443).
 
-**Si OK** → continuer. Le `bootstrap-fxmily.sh --skip-hetzner FXMILY_HETZNER_IP=178.104.39.201` réutilisera l'IP existante.
+**Si OK** → continuer. Le `bootstrap-fxmily.sh --skip-hetzner FXMILY_HETZNER_IP=203.0.113.10` réutilisera l'IP existante.
 
 **Si saturé** → on bascule sur un nouveau CX22 :
 
@@ -52,7 +52,7 @@ ssh hetzner-dieu 'free -h && df -h && docker ps --format "table {{.Names}}\t{{.S
 bash ops/scripts/provision-hetzner.sh
 ```
 
-> **Conflit Caddy** : si `hetzner-dieu` a déjà un Caddy qui sert n8n/Langfuse sur 80/443, il faut **éditer le Caddyfile existant** pour ajouter un bloc `app.fxmilyapp.com` au lieu d'en lancer un second. → tu m'envoies ton Caddyfile actuel, je te le modifie.
+> **Conflit Caddy** : si `fxmily-prod` a déjà un Caddy qui sert n8n/Langfuse sur 80/443, il faut **éditer le Caddyfile existant** pour ajouter un bloc `app.fxmilyapp.com` au lieu d'en lancer un second. → tu m'envoies ton Caddyfile actuel, je te le modifie.
 
 ---
 
@@ -240,8 +240,8 @@ chmod 600 tokens.local.env
 # GitHub CLI authentifié (déjà OK pour toi)
 gh auth status
 
-# Lance le bootstrap (skip-hetzner car réutilise hetzner-dieu existant)
-FXMILY_HETZNER_IP=178.104.39.201 \
+# Lance le bootstrap (skip-hetzner car réutilise fxmily-prod existant)
+FXMILY_HETZNER_IP=203.0.113.10 \
 FXMILY_DOMAIN=fxmilyapp.com \
   bash ops/scripts/bootstrap-fxmily.sh tokens.local.env --skip-hetzner
 ```
@@ -249,7 +249,7 @@ FXMILY_DOMAIN=fxmilyapp.com \
 Le script va :
 
 1. **Resend** : ajouter le domain `fxmilyapp.com` côté Resend → récupérer les 3 DNS records DKIM/SPF/MX.
-2. **Cloudflare DNS** : poser les 6 records (A `app` → 178.104.39.201, MX, 3 TXT, optionnel DMARC).
+2. **Cloudflare DNS** : poser les 6 records (A `app` → 203.0.113.10, MX, 3 TXT, optionnel DMARC).
 3. **GitHub secrets** : poser ~13 secrets via `gh secret set` pour la pipeline `deploy.yml`.
 
 À la fin, le script t'affiche les URLs pour valider Resend.
@@ -284,7 +284,7 @@ gh run list -R fxeliott/fxmily --workflow=deploy.yml --limit=1
 Le workflow va :
 
 1. Build l'image Docker `ghcr.io/fxeliott/fxmily:latest`.
-2. SSH dans `hetzner-dieu` → `docker compose pull` + `up -d`.
+2. SSH dans `fxmily-prod` → `docker compose pull` + `up -d`.
 3. Lancer `prisma migrate deploy` dans un container one-shot.
 4. Pruner les vieilles images.
 
@@ -338,8 +338,8 @@ Tu dois voir la notif arriver sur ton iPhone.
 ### Mode 2 : direct DB (V1)
 
 ```bash
-# SSH sur hetzner-dieu
-ssh hetzner-dieu
+# SSH sur fxmily-prod
+ssh fxmily-prod
 
 # Génère un nouveau hash argon2
 docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T web node -e "

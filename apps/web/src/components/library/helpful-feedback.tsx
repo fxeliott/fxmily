@@ -83,7 +83,7 @@ export function HelpfulFeedback({ deliveryId, initialHelpful }: HelpfulFeedbackP
             'rounded-pill inline-flex h-11 flex-1 items-center justify-center gap-2 px-4',
             'border text-sm font-medium transition-[border-color,background-color,box-shadow] duration-200',
             helpful === true
-              ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_16px_-4px_var(--acc-glow)]'
+              ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[var(--acc-glow)]'
               : 'border-[var(--b-default)] bg-[var(--bg-1)]/60 text-[var(--t-1)] hover:border-[var(--b-acc)]',
             'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
             'disabled:opacity-50',

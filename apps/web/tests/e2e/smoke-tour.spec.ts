@@ -81,7 +81,19 @@ test.describe('Visual smoke-tour — member full journey', () => {
       fullPage: true,
     });
 
-    await page.locator('label').filter({ hasText: /^Oui$/i }).first().click();
+    // Step 2 (Routine matinale) has TWO required yes/no groups — morning
+    // routine + market-analysis (SPEC §28/§22). Answer BOTH (scoped by
+    // fieldset legend) or validateStep blocks the wizard from advancing.
+    await page
+      .getByRole('group', { name: /routine matinale/i })
+      .locator('label')
+      .filter({ hasText: /^Oui$/i })
+      .click();
+    await page
+      .getByRole('group', { name: /analyse de marché/i })
+      .locator('label')
+      .filter({ hasText: /^Oui$/i })
+      .click();
     await page.getByRole('button', { name: /Suivant/i }).click();
     await page.waitForTimeout(200);
     await page.screenshot({

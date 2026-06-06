@@ -209,8 +209,17 @@ test.describe('V2.3 PreTradeCheck — auth-gate + happy-path persist + auto-link
   test('AUTO-LINK: no recent unlinked check → returns null', async () => {
     if (!member) throw new Error('seed missing');
 
-    // Member has only the linked check from the previous test. A new trade
-    // should find no unlinked candidate within the window.
+    // Establish the precondition DETERMINISTICALLY rather than assuming it.
+    // Earlier tests in this serial describe (workers:1, cleanup only in
+    // afterAll) leave UNLINKED checks behind — the "CAPTURE + PERSIST" test
+    // creates a check that is never linked. Without this wipe, that stale
+    // unlinked check is still inside the 15-min window, so the inline link
+    // helper finds + links it and returns a non-null id → flaky failure
+    // (masked by retries: the failed attempt links the row, the retry then
+    // sees none). Deleting the member's pre-trade checks first makes "no
+    // recent unlinked check" a real, order-independent precondition.
+    await db.preTradeCheck.deleteMany({ where: { userId: member.id } });
+
     const newTrade = await db.trade.create({
       data: {
         userId: member.id,

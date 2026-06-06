@@ -57,7 +57,10 @@ APP_URL="${FXMILY_APP_URL:-https://app.fxmilyapp.com}"
 BATCH_DIR="${FXMILY_BATCH_DIR:-/tmp/fxmily-batch}"
 SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
 SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
-MAX_TURNS=1  # Hard-pinned to 1 (single-shot per member — anti-bloat, anti-quota-surprise)
+# ≥2 required: Opus 4.8 thinking uses a turn before the JSON, so `--max-turns 1`
+# aborts with "Reached max turns (1)" (validated via the §26 calendar batch real
+# e2e, 2026-06-04). `--max-budget-usd` below is the runaway circuit-breaker. NOT 1.
+MAX_TURNS="${FXMILY_MAX_TURNS:-8}"
 # §8 — local Claude solicitations run on Opus 4.8 at "extra" effort by default.
 # Both are env-overridable but default to the strongest persistable config.
 CLAUDE_MODEL="${FXMILY_CLAUDE_MODEL:-claude-opus-4-8}"
@@ -321,7 +324,8 @@ for idx in $ENTRY_INDICES; do
     $EFFORT_FLAG \
     --max-turns "$MAX_TURNS" \
     --max-budget-usd 5.00 \
-    --append-system-prompt "$SYSTEM_PROMPT_CONTENT" \
+    --setting-sources "" \
+    --system-prompt "$SYSTEM_PROMPT_CONTENT" \
     --output-format text \
     <"$PROMPT_FILE" \
     >"$RESPONSE_FILE" 2>>"$ERRORS_LOG"

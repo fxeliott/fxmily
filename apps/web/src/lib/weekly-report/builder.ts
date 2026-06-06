@@ -242,9 +242,13 @@ function buildFreeText(input: BuilderInput): WeeklySnapshot['freeText'] {
 
 function collectEmotionTags(input: BuilderInput): string[] {
   const counts = new Map<string, number>();
-  // Emotions from trades (before + after entries).
+  // Emotions from trades (before + during + after — the full §22 axis, so the
+  // weekly IA analysis sees the in-position affect, not just entry/exit).
   for (const trade of input.trades) {
     for (const tag of trade.emotionBefore) {
+      bumpCount(counts, tag);
+    }
+    for (const tag of trade.emotionDuring) {
       bumpCount(counts, tag);
     }
     for (const tag of trade.emotionAfter) {

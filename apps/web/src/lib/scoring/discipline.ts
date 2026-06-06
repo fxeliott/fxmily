@@ -12,6 +12,12 @@
  *   - intentionFilled × 10  morning checkins intention!=null / mornings filled
  *   - routineCompleted × 10 morning checkins morningRoutineCompleted=true / mornings filled
  *
+ * Additive sub-scores (PURE ADDITION — the five weights above are NEVER
+ * rebalanced; each is null-skipped → byte-identical when the field is absent):
+ *   - marketAnalysisDone × 10  (DoD#3) mornings marketAnalysisDone=true / asked
+ *   - processComplete    × 10  (SPEC §28/§21 "oublis") closed trades
+ *                              processComplete=true / closed trades answered
+ *
  * Sample-size guard:
  *   - 0 closed trades AND 0 evening checkins → status='insufficient_data',
  *     reason='no_trades'. The dashboard renders the disclaimer.
@@ -35,6 +41,14 @@ export interface DisciplineTradeInput {
   closedAt: string | null;
   planRespected: boolean;
   hedgeRespected: boolean | null;
+  /**
+   * SPEC §28/§21 — "oublis" axis. Tri-state: `true` (followed all process,
+   * forgot nothing), `false` (forgot/missed steps), `null` (not asked / legacy
+   * trade). An execution-completeness ACT — we score THAT it was followed, never
+   * the trade content (SPEC §2). `null` is skipped so legacy trades never
+   * penalize the rate (byte-identical to pre-§28 when absent).
+   */
+  processComplete: boolean | null;
 }
 
 /** Check-in fields needed to score discipline. */
@@ -82,6 +96,17 @@ const WEIGHT_ROUTINE = 10;
  * market prep is a meaningful but non-dominant prep act vs plan respect (35).
  */
 const WEIGHT_MARKET_ANALYSIS = 10;
+
+/**
+ * SPEC §28/§21 — "oublis" (process-completeness) sub-score weight. Added as a
+ * PURE ADDITION exactly like `WEIGHT_MARKET_ANALYSIS`: the existing weights are
+ * NOT rebalanced. `aggregateDimension` normalizes by the *active* `pointsMax`,
+ * so when no closed trade carries `processComplete` the part is `null` and the
+ * dimension renormalizes to EXACTLY its pre-§28 value — a provable zero
+ * regression. Sized 10 (sibling of `marketAnalysisDone`/`routineCompleted`): a
+ * meaningful but non-dominant execution-discipline act vs plan respect (35).
+ */
+const WEIGHT_PROCESS_COMPLETE = 10;
 
 export function computeDisciplineScore(input: DisciplineInput): ScoreResult<DisciplineParts> {
   const closed = input.trades.filter((t) => t.closedAt !== null);
@@ -148,6 +173,20 @@ export function computeDisciplineScore(input: DisciplineInput): ScoreResult<Disc
     WEIGHT_MARKET_ANALYSIS,
   );
 
+  // SPEC §28/§21 — "oublis" axis. Carbon-copy of marketAnalysis (and of the
+  // hedge N/A skip) but over CLOSED trades: the denominator skips trades where
+  // the member was NOT asked (`processComplete === null`) so a legacy/unanswered
+  // trade never penalizes the rate. Numerator = trades they followed all process.
+  const processCompleteApplicable = closed.filter((t) => t.processComplete !== null);
+  const processCompleteDoneCount = processCompleteApplicable.filter(
+    (t) => t.processComplete === true,
+  ).length;
+  const processCompleteRate = rateSubScore(
+    processCompleteDoneCount,
+    processCompleteApplicable.length,
+    WEIGHT_PROCESS_COMPLETE,
+  );
+
   const parts: DisciplineParts = {
     planRespect,
     hedgeRespect,
@@ -157,6 +196,9 @@ export function computeDisciplineScore(input: DisciplineInput): ScoreResult<Disc
     // Surfaced for transparency only when the member was asked at least once;
     // `null` otherwise so the UI doesn't show a phantom 0-of-0 prep metric.
     marketAnalysisDone: marketAnalysisApplicable.length > 0 ? marketAnalysisRate : null,
+    // SPEC §28/§21 — same transparency rule: surfaced only when at least one
+    // closed trade carried the "oublis" answer.
+    processComplete: processCompleteApplicable.length > 0 ? processCompleteRate : null,
   };
 
   // Renormalize: sub-scores whose denominator=0 are "not applicable".
@@ -169,6 +211,9 @@ export function computeDisciplineScore(input: DisciplineInput): ScoreResult<Disc
     // DoD#3 — null-skip on the field-presence denominator: byte-identical when
     // no morning carries `marketAnalysisDone` (every pre-DoD#3 / legacy row).
     marketAnalysisApplicable.length > 0 ? marketAnalysisRate : null,
+    // SPEC §28/§21 — null-skip on field presence: byte-identical when no closed
+    // trade carries `processComplete` (every pre-§28 / legacy trade).
+    processCompleteApplicable.length > 0 ? processCompleteRate : null,
   ];
 
   const score = aggregateDimension(partsForAggregate);
@@ -223,5 +268,8 @@ function emptyParts(): DisciplineParts {
     // DoD#3 — null on the insufficient-data branch (no morning data → the prep
     // act was never asked), mirroring engagement's `trainingActivityRate: null`.
     marketAnalysisDone: null,
+    // SPEC §28/§21 — null on the insufficient-data branch (no closed trade → the
+    // "oublis" axis was never asked), mirroring `marketAnalysisDone`.
+    processComplete: null,
   };
 }

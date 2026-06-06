@@ -226,6 +226,9 @@ export async function closeTradeAction(
       .getAll('emotionDuring')
       .filter((v): v is string => typeof v === 'string'),
     emotionAfter: formData.getAll('emotionAfter').filter((v): v is string => typeof v === 'string'),
+    // SPEC §28/§21 — "oublis" axis. OPTIONAL: absent/'' → schema maps to null
+    // (not answered — no required-field gate, CANON). Mirror of hedgeRespected.
+    processComplete: formData.get('processComplete') ?? undefined,
     // V1.8 — post-outcome bias tags (CFA LESSOR + Steenbarger). Optional ;
     // the Zod schema defaults to `[]` if missing.
     tags: formData.getAll('tags').filter((v): v is string => typeof v === 'string'),
@@ -260,6 +263,7 @@ export async function closeTradeAction(
       outcome: data.outcome,
       emotionDuring: data.emotionDuring,
       emotionAfter: data.emotionAfter,
+      processComplete: data.processComplete,
       tags: data.tags,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
       screenshotExitKey: data.screenshotExitKey,

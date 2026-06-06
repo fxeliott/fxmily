@@ -512,6 +512,15 @@ model Trade {
   planRespected  Boolean        @map("plan_respected")
   /// `null` = N/A (no hedge applicable on this trade). Tri-state per SPEC §7.3.
   hedgeRespected Boolean?       @map("hedge_respected")
+  /// SPEC §28/§21 — "oublis" tracking axis (master prompt §28: "exécution en
+  /// position réelle (respect du plan, oublis)" / §21: "s'il oublie des choses
+  /// ou non"). Positive framing (anti-Black-Hat): `true` = "j'ai suivi tout mon
+  /// process, rien oublié", `false` = forgot/missed steps, `null` = not answered
+  /// / legacy row. Answered at CLOSE alongside `emotionDuring` (PR #236 precedent)
+  /// and parallel to `planRespected`/`hedgeRespected`. SPEC §2 posture: we track
+  /// the ACT of completeness/forgetting, NEVER advise on the trade itself. Pure
+  /// additive nullable Boolean — exact mirror of `DailyCheckin.marketAnalysisDone`.
+  processComplete Boolean?      @map("process_complete")
   notes          String?        @db.Text
 
   /// Storage key for the pre-entry screenshot (mandatory at creation, but the

@@ -157,6 +157,25 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
         </p>
       ) : null}
 
+      {/* SPEC §28/§21 — "oublis" axis. As-tu suivi tout ton process, sans rien
+          oublier ? OPTIONAL (no submit gate — a new required field would break
+          the shared-wizard e2e, CANON). Positive framing (anti-Black-Hat):
+          tracks the ACT of completeness/forgetting, never the trade itself. */}
+      <fieldset className="flex flex-col gap-2">
+        <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">
+          As-tu suivi tout ton process, sans rien oublier ?{' '}
+          <span className="font-normal text-[var(--t-4)] normal-case">(optionnel)</span>
+        </legend>
+        <div
+          role="radiogroup"
+          aria-label="Process suivi sans oubli"
+          className="grid grid-cols-2 gap-2"
+        >
+          <ProcessCompleteCard value="true" label="Oui, rien oublié" disabled={pending} />
+          <ProcessCompleteCard value="false" label="J'ai oublié des choses" disabled={pending} />
+        </div>
+      </fieldset>
+
       {/* V1.8 — Post-outcome bias tags (LESSOR + Steenbarger) */}
       <TradeTagsPicker value={tags} onChange={setTags} disabled={pending} />
       {state.fieldErrors?.tags ? (
@@ -278,6 +297,51 @@ function OutcomeCard({
         <Check className="h-3 w-3" strokeWidth={2.5} />
       </span>
       {Icon ? <Icon className="h-4 w-4" strokeWidth={1.75} /> : <span>—</span>}
+      <span>{label}</span>
+    </label>
+  );
+}
+
+/**
+ * SPEC §28/§21 — "oublis" axis radio card. Two options (true / false), but the
+ * radios are NOT `required`: the member can submit without answering (the field
+ * maps to `null` server-side). Positive option keeps the accent tone, the
+ * "forgot" option stays neutral (anti-Black-Hat: no shaming red on a self-report).
+ */
+function ProcessCompleteCard({
+  value,
+  label,
+  disabled,
+}: {
+  value: 'true' | 'false';
+  label: string;
+  disabled?: boolean;
+}) {
+  const toneChecked =
+    value === 'true'
+      ? 'has-[:checked]:border-[var(--ok)] has-[:checked]:bg-[var(--ok-dim-2)] has-[:checked]:text-[var(--ok)]'
+      : 'has-[:checked]:border-[var(--b-acc)] has-[:checked]:bg-[var(--acc-dim)] has-[:checked]:text-[var(--t-1)]';
+
+  return (
+    <label
+      className={cn(
+        'rounded-card relative flex min-h-12 cursor-pointer items-center justify-center gap-1.5 border bg-[var(--bg-1)] px-3 py-3 text-center text-[12px] font-semibold tracking-[0.06em] text-[var(--t-3)] uppercase transition-all',
+        'border-[var(--b-default)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
+        'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--acc)]',
+        toneChecked,
+        disabled && 'cursor-not-allowed opacity-60',
+      )}
+    >
+      <input
+        type="radio"
+        name="processComplete"
+        value={value}
+        disabled={disabled}
+        className="peer sr-only"
+      />
+      <span aria-hidden className="absolute top-2 right-2 hidden peer-checked:inline">
+        <Check className="h-3 w-3" strokeWidth={2.5} />
+      </span>
       <span>{label}</span>
     </label>
   );

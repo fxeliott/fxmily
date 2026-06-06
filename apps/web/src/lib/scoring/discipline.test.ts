@@ -9,10 +9,12 @@ import {
 const T = (
   planRespected: boolean,
   hedgeRespected: boolean | null = null,
+  processComplete: boolean | null = null,
 ): DisciplineTradeInput => ({
   closedAt: '2026-01-01T10:00:00Z',
   planRespected,
   hedgeRespected,
+  processComplete,
 });
 
 const M = (
@@ -131,6 +133,7 @@ describe('computeDisciplineScore', () => {
         closedAt: null,
         planRespected: false,
         hedgeRespected: false,
+        processComplete: false,
       })),
     ];
     const r = computeDisciplineScore({ trades, checkins: [] });
@@ -244,5 +247,118 @@ describe('computeDisciplineScore — market analysis (DoD#3)', () => {
     expect(partial.parts.marketAnalysisDone?.rate).toBe(0.5);
     expect(partial.score!).toBeGreaterThan(skipped.score!);
     expect(partial.score!).toBeLessThan(full.score!);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SPEC §28/§21 — "oublis" (processComplete) sub-score.
+//
+// ADDITION PURE: `WEIGHT_PROCESS_COMPLETE` (10) is added EN PLUS; the existing
+// weights are NEVER rebalanced. A member whose closed trades never carry
+// `processComplete` (every pre-§28 / legacy trade) scores BYTE-IDENTICALLY to
+// pre-§28 — the part is `null` and renormalized away.
+//
+// The skip is keyed on field-PRESENCE (`processComplete !== null`), exactly
+// like discipline's hedge N/A skip and marketAnalysis: a trade where the member
+// was NOT asked never penalizes the rate; a trade where they answered `false`
+// (forgot/missed steps) counts in the denominator and lowers the rate (the
+// effort signal). SPEC §2: the ACT of completeness only, never advice.
+// ---------------------------------------------------------------------------
+
+describe('computeDisciplineScore — process complete / "oublis" (SPEC §28/§21)', () => {
+  it('ZERO REGRESSION — absent field (all-null) ≡ pre-§28 (byte-identical, part null)', () => {
+    // EXACT input of the existing "respects partial sub-scores" test (score 68):
+    // T(_, true) leaves processComplete null. Proves the addition is
+    // byte-identical when absent.
+    const trades: DisciplineTradeInput[] = [
+      ...Array.from({ length: 6 }, () => T(true, true)),
+      ...Array.from({ length: 6 }, () => T(false, true)),
+    ];
+    const r = computeDisciplineScore({ trades, checkins: [] });
+    expect(r.score).toBe(68); // pinned pre-§28 value
+    expect(r.parts.processComplete).toBeNull();
+  });
+
+  it('all closed trades null → process part skipped even with trade data present', () => {
+    // 12 trades, plan+hedge perfect, processComplete null on every one.
+    // Pre-§28: plan(35) + hedge(20) both rate 1 → 100. Must stay 100.
+    const trades: DisciplineTradeInput[] = Array.from({ length: 12 }, () => T(true, true, null));
+    const r = computeDisciplineScore({ trades, checkins: [] });
+    expect(r.score).toBe(100);
+    expect(r.parts.processComplete).toBeNull();
+  });
+
+  it('present + all complete → full WEIGHT_PROCESS_COMPLETE contribution (still 100 when perfect)', () => {
+    // 12 trades: plan + hedge + processComplete all perfect → still 100.
+    const trades: DisciplineTradeInput[] = Array.from({ length: 12 }, () => T(true, true, true));
+    const r = computeDisciplineScore({ trades, checkins: [] });
+    expect(r.score).toBe(100);
+    expect(r.parts.processComplete).not.toBeNull();
+    expect(r.parts.processComplete?.rate).toBe(1);
+    expect(r.parts.processComplete?.pointsMax).toBe(10);
+    expect(r.parts.processComplete?.pointsAwarded).toBe(10);
+  });
+
+  it('present + all forgot (false) → rate 0, sub-score present (effort signal)', () => {
+    // 12 trades: plan + hedge perfect, processComplete all FALSE.
+    // plan 35 + hedge 20 awarded = 55; process 0/10 awarded.
+    // active max = 65 → 55/65 × 100 = 84.6̄ → 85.
+    const trades: DisciplineTradeInput[] = Array.from({ length: 12 }, () => T(true, true, false));
+    const r = computeDisciplineScore({ trades, checkins: [] });
+    expect(r.score).toBe(85);
+    expect(r.parts.processComplete).not.toBeNull();
+    expect(r.parts.processComplete?.rate).toBe(0);
+    expect(r.parts.processComplete?.numerator).toBe(0);
+    expect(r.parts.processComplete?.denominator).toBe(12);
+  });
+
+  it('only-answered trades count in the denominator (null trades excluded)', () => {
+    // 6 complete(true) + 6 not-asked(null). plan+hedge present on all 12.
+    const trades: DisciplineTradeInput[] = [
+      ...Array.from({ length: 6 }, () => T(true, true, true)),
+      ...Array.from({ length: 6 }, () => T(true, true, null)),
+    ];
+    const r = computeDisciplineScore({ trades, checkins: [] });
+    expect(r.parts.processComplete?.numerator).toBe(6);
+    expect(r.parts.processComplete?.denominator).toBe(6); // null trades excluded
+    expect(r.parts.processComplete?.rate).toBe(1);
+  });
+
+  it('partial (3 complete / 6 answered) sits strictly between forgot and full', () => {
+    const forgot = computeDisciplineScore({
+      trades: Array.from({ length: 6 }, () => T(true, true, false)),
+      checkins: [],
+    });
+    const partial = computeDisciplineScore({
+      trades: [
+        ...Array.from({ length: 3 }, () => T(true, true, true)),
+        ...Array.from({ length: 3 }, () => T(true, true, false)),
+      ],
+      checkins: [],
+    });
+    const full = computeDisciplineScore({
+      trades: Array.from({ length: 6 }, () => T(true, true, true)),
+      checkins: [],
+    });
+    expect(partial.parts.processComplete?.rate).toBe(0.5);
+    expect(partial.score!).toBeGreaterThan(forgot.score!);
+    expect(partial.score!).toBeLessThan(full.score!);
+  });
+
+  it('open trades are excluded from the "oublis" denominator (closed-only)', () => {
+    // 1 closed answered(true) + 5 open with processComplete=false → only the
+    // closed one counts (open trades filtered out before the rate).
+    const trades: DisciplineTradeInput[] = [
+      T(true, true, true),
+      ...Array.from({ length: 5 }, () => ({
+        closedAt: null,
+        planRespected: true,
+        hedgeRespected: true,
+        processComplete: false,
+      })),
+    ];
+    const r = computeDisciplineScore({ trades, checkins: [] });
+    expect(r.parts.processComplete?.numerator).toBe(1);
+    expect(r.parts.processComplete?.denominator).toBe(1);
   });
 });

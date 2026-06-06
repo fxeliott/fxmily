@@ -190,6 +190,43 @@ describe('tradeCloseSchema', () => {
       expect(result.data.emotionAfter).toEqual(['confident']);
     }
   });
+
+  // SPEC §28/§21 — "oublis" axis (processComplete). OPTIONAL tri-state,
+  // mirror of hedgeRespected coercion. `.strict()` still accepts it (known key).
+  describe('processComplete ("oublis" axis, SPEC §28/§21)', () => {
+    it('defaults to null when omitted (OPTIONAL — no required-field gate)', () => {
+      const result = tradeCloseSchema.safeParse(baseClose);
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.processComplete).toBeNull();
+    });
+
+    it.each([
+      ['true', true],
+      [true, true],
+      ['false', false],
+      [false, false],
+    ] as const)('coerces processComplete = %s → %s', (input, expected) => {
+      const result = tradeCloseSchema.safeParse({ ...baseClose, processComplete: input });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.processComplete).toBe(expected);
+    });
+
+    it.each(['na', ''] as const)('maps processComplete = "%s" → null (not answered)', (input) => {
+      const result = tradeCloseSchema.safeParse({ ...baseClose, processComplete: input });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.processComplete).toBeNull();
+    });
+
+    it('rejects an unknown processComplete value (tri-state union is closed)', () => {
+      const result = tradeCloseSchema.safeParse({ ...baseClose, processComplete: 'maybe' });
+      expect(result.success).toBe(false);
+    });
+
+    it('keeps .strict() — an unrelated unknown key is still rejected', () => {
+      const result = tradeCloseSchema.safeParse({ ...baseClose, bogusKey: 'x' });
+      expect(result.success).toBe(false);
+    });
+  });
 });
 
 describe('tradeFullSchema cross-validation', () => {

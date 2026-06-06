@@ -40,6 +40,7 @@ function toSerialized(trade: TradeModel): SerializedTrade {
     emotionBefore: [...trade.emotionBefore],
     planRespected: trade.planRespected,
     hedgeRespected: trade.hedgeRespected,
+    processComplete: trade.processComplete,
     notes: trade.notes,
     screenshotEntryKey: trade.screenshotEntryKey,
     exitedAt: trade.exitedAt ? trade.exitedAt.toISOString() : null,

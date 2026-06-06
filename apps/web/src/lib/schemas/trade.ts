@@ -237,6 +237,21 @@ export const tradeCloseSchema = z
     /// (master prompt §22). Same `emotionTagsRequired` rule (1–3 allowlisted).
     emotionDuring: emotionTagsRequired,
     emotionAfter: emotionTagsRequired,
+    /// SPEC §28/§21 — "oublis" tracking axis. Did the member follow ALL their
+    /// process at close, without forgetting steps? Tri-state, answered at close:
+    /// `true` (rien oublié), `false` (forgot/missed something), `null` (not
+    /// answered — OPTIONAL, NO required-field gate: a new required field breaks
+    /// the shared-wizard e2e — CANON). The form sends `'na'`/absent for "not
+    /// answered". Mirror of `hedgeRespected`'s tri-state coercion + `tags`'
+    /// optionality. SPEC §2: tracks the ACT of completeness/forgetting only.
+    processComplete: z
+      .union([z.boolean(), z.literal('na'), z.literal('true'), z.literal('false'), z.literal('')])
+      .optional()
+      .transform((v) => {
+        if (v === undefined || v === 'na' || v === '') return null;
+        if (typeof v === 'string') return v === 'true';
+        return v;
+      }),
     /// V1.8 REFLECT — post-outcome bias tags (CFA LESSOR + Steenbarger).
     /// Optional: V1 trades closed before V1.8 stay valid; UI defaults to empty.
     /// Member self-assigned at close (Q3=A) — see `TRADE_TAG_SLUGS` allowlist.

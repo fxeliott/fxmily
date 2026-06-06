@@ -286,7 +286,18 @@ export type AuditAction =
   // itself (posture §2: `contentReviewed` is a boolean, never the analysis).
   // The admin slugs (`meeting.generated`, `admin.meeting.cancelled`) follow
   // in J-M3.
-  | 'meeting.attendance.declared';
+  | 'meeting.attendance.declared'
+  // V1.7 §30 J-M3 — meeting admin surface (cron generation + slot cancel).
+  // `meeting.generated` is the `generate-meetings` cron heartbeat: ONE row per
+  // scan carrying `{generated, skipped, ranAt}` (counts + timestamp only —
+  // strict `cron.<name>.scan`-style observability, no PII, no member id, no
+  // Ichor content). `admin.meeting.cancelled` is emitted by the admin
+  // cancel/uncancel Server Action: PII-FREE metadata `{meetingId, cancelled}`
+  // (the boolean records the resulting state) — NEVER the `cancelledReason`
+  // free-text (posture §2 + audit-PII-free invariant §30.7), mirror of the
+  // V2.1 `admin.note.*` admin-scoped pattern.
+  | 'meeting.generated'
+  | 'admin.meeting.cancelled';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the
 // public Track Record was split out to a standalone repo

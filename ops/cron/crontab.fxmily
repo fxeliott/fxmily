@@ -23,6 +23,7 @@
 #   - purge-audit-log           daily 04:00 UTC                    (J10)
 #   - fxmily-caddy-backup       Sunday 06:30 UTC                   (V1.12)
 #   - mindset-check-reminders   Monday 09:00 UTC                   (V1.5 §27)
+#   - generate-meetings         weekdays 06:00 UTC                 (V1.7 §30)
 #
 # Log : every run appends one line to /var/log/fxmily/cron.log via the
 # wrapper. The DB audit row (`cron.<route>.scan`) is the canonical
@@ -74,3 +75,12 @@ MAILTO=""
 # 07:00-08:00 check-in windows nor the daily 02:00-05:00 / 0,6,12,18
 # off-hours jobs. Idempotent (scan skips already-submitted / already-nudged).
 0 9 * * 1                    fxmily   /usr/local/bin/fxmily-cron mindset-check-reminders
+
+# V1.7 §30 — Fxmily meeting slot generation : weekdays 06:00 UTC. Materialises
+# the rolling [today, today+7] window of Mon–Fri 12h/20h Paris slots (DST-aware,
+# weekends auto-skipped by the occurrence generator). A generous lead before the
+# day's earliest 12h Paris slot (10:00/11:00 UTC). Idempotent on @@unique(date,
+# slot) → a missed weekday run self-heals on the next (re-run = 0 duplicate).
+# Shares the 06:00 slot with dispatch-douglas (0 0,6,12,18) — both are short
+# (a createMany / a temporal scan), no contention on the CX22.
+0 6 * * 1-5                  fxmily   /usr/local/bin/fxmily-cron generate-meetings

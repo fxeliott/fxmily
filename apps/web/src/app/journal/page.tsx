@@ -49,7 +49,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
   ]);
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex min-h-dvh w-full max-w-[var(--w-app)] flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
       {/* Header */}
       <header className="flex flex-col gap-4">
         <Link
@@ -182,7 +182,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
           )}
         </Card>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="grid items-start gap-3 xl:grid-cols-2">
           {items.map((trade) => (
             <li key={trade.id}>
               <TradeCard trade={trade} unseenAnnotationsCount={unseenByTrade.get(trade.id) ?? 0} />

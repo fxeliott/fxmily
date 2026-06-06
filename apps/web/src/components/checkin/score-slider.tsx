@@ -102,7 +102,7 @@ export function ScoreSlider({
       ? '0 0 10px -2px oklch(0.834 0.158 80 / 0.45)'
       : tone === 'cy'
         ? '0 0 10px -2px oklch(0.789 0.139 217 / 0.45)'
-        : '0 0 10px -2px oklch(0.879 0.231 130 / 0.45)';
+        : '0 0 10px -2px oklch(0.62 0.19 254 / 0.45)';
 
   const thumbBg =
     tone === 'warn' ? 'bg-[var(--warn)]' : tone === 'cy' ? 'bg-[var(--cy)]' : 'bg-[var(--acc)]';
@@ -112,7 +112,7 @@ export function ScoreSlider({
       ? '0 0 0 4px oklch(0.834 0.158 80 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)'
       : tone === 'cy'
         ? '0 0 0 4px oklch(0.789 0.139 217 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)'
-        : '0 0 0 4px oklch(0.879 0.231 130 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)';
+        : '0 0 0 4px oklch(0.62 0.19 254 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)';
 
   return (
     <div className="flex flex-col gap-3">

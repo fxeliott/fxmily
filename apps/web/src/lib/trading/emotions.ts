@@ -8,7 +8,9 @@
  *
  * Design notes:
  *   - Slugs are EN, kebab-cased, persisted in `Trade.emotionBefore` /
- *     `emotionAfter` (Postgres `text[]`). Labels are FR (UI lang).
+ *     `emotionDuring` / `emotionAfter` (Postgres `text[]`). Labels are FR (UI
+ *     lang). The three moments capture the "avant / pendant / après" axis
+ *     (master prompt §22). Same allowlist for all three.
  *   - The wizard caps a selection to 3 tags per moment to force priorisation.
  *     We don't enforce in DB; the SPEC §7.3 says "tags multiples", so future
  *     features (admin tagging, retro-edits) may exceed 3.

@@ -113,7 +113,7 @@ echo "→ Hetzner Cloud token"
 if [[ "$SKIP_HETZNER" == "1" ]]; then
   warn "Skipped (--skip-hetzner — tu réutilises le serveur existant via SSH)"
 elif [[ -z "${HCLOUD_TOKEN:-}" ]]; then
-  warn "HCLOUD_TOKEN absent — OK si tu réutilises hetzner-dieu (passe --skip-hetzner)"
+  warn "HCLOUD_TOKEN absent — OK si tu réutilises fxmily-prod (passe --skip-hetzner)"
 else
   resp="$(curl -fsS -H "Authorization: Bearer $HCLOUD_TOKEN" \
     https://api.hetzner.cloud/v1/servers 2>&1 || echo '{"error":"err"}')"
@@ -162,5 +162,5 @@ if [[ "$FAILED" -gt 0 ]]; then
 fi
 echo ""
 echo "✅ Tous les tokens sont valides — tu peux lancer :"
-echo "   FXMILY_HETZNER_IP=178.104.39.201 \\"
+echo "   FXMILY_HETZNER_IP=203.0.113.10 \\"
 echo "     bash ops/scripts/bootstrap-fxmily.sh $TOKENS_FILE --skip-hetzner"

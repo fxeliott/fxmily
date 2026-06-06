@@ -73,7 +73,7 @@ export function MarkDouglasCard() {
   const truth = TRUTHS[idx]!;
 
   return (
-    <Card primary className="overflow-hidden p-5">
+    <Card primary glass className="overflow-hidden p-5">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Brain className="h-3.5 w-3.5 text-[var(--acc)]" strokeWidth={1.75} />

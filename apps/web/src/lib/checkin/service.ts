@@ -52,6 +52,7 @@ export interface SerializedCheckin {
   sleepHours: string | null;
   sleepQuality: number | null;
   morningRoutineCompleted: boolean | null;
+  marketAnalysisDone: boolean | null;
   meditationMin: number | null;
   sportType: string | null;
   sportDurationMin: number | null;
@@ -99,6 +100,7 @@ function toSerialized(row: DailyCheckinModel): SerializedCheckin {
     sleepHours: row.sleepHours == null ? null : row.sleepHours.toString(),
     sleepQuality: row.sleepQuality,
     morningRoutineCompleted: row.morningRoutineCompleted,
+    marketAnalysisDone: row.marketAnalysisDone,
     meditationMin: row.meditationMin,
     sportType: row.sportType,
     sportDurationMin: row.sportDurationMin,
@@ -171,6 +173,7 @@ export async function submitMorningCheckin(
     sleepHours: new Prisma.Decimal(input.sleepHours),
     sleepQuality: input.sleepQuality,
     morningRoutineCompleted: input.morningRoutineCompleted,
+    marketAnalysisDone: input.marketAnalysisDone,
     meditationMin: input.meditationMin,
     sportType: input.sportType,
     sportDurationMin: input.sportDurationMin,

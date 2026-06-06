@@ -67,9 +67,21 @@ test.describe('J5 — checkin happy path', () => {
 
     // ─── Step 2 (Routine matinale) ─────────────────────────────────────
     await expect(page.getByRole('heading', { name: /Routine matinale/i })).toBeVisible();
-    // Radios are visually-hidden (`sr-only`) — click the wrapping <label>
-    // text instead of trying to drive the input directly.
-    await page.locator('label').filter({ hasText: /^Oui$/i }).first().click();
+    // Radios are visually-hidden (`sr-only`) — click the wrapping <label>.
+    // Step 2 (Routine matinale) has TWO yes/no groups — morning routine +
+    // market-analysis (SPEC §28/§22) — and BOTH are required to advance
+    // (validateStep step 1). Scope each "Oui" to its fieldset legend
+    // (role=group) so the test stays robust if more groups are ever added.
+    await page
+      .getByRole('group', { name: /routine matinale/i })
+      .locator('label')
+      .filter({ hasText: /^Oui$/i })
+      .click();
+    await page
+      .getByRole('group', { name: /analyse de marché/i })
+      .locator('label')
+      .filter({ hasText: /^Oui$/i })
+      .click();
     await page.getByRole('button', { name: /Suivant/i }).click();
 
     // ─── Step 3 (Corps) ─────────────────────────────────────────────────
@@ -106,6 +118,7 @@ test.describe('J5 — checkin happy path', () => {
       sleepHours: '7.5', // Prisma Decimal(4,2) trims trailing zeros on read
       sleepQuality: 6,
       morningRoutineCompleted: true,
+      marketAnalysisDone: true,
       meditationMin: 0,
       moodScore: 6,
     });
@@ -126,9 +139,21 @@ test.describe('J5 — checkin happy path', () => {
     await page.goto('/checkin/morning');
     await page.getByLabel(/Heures de sommeil/i).fill('8');
     await page.getByRole('button', { name: /Suivant/i }).click();
-    // Radios are visually-hidden (`sr-only`) — click the wrapping <label>
-    // text instead of trying to drive the input directly.
-    await page.locator('label').filter({ hasText: /^Oui$/i }).first().click();
+    // Radios are visually-hidden (`sr-only`) — click the wrapping <label>.
+    // Step 2 (Routine matinale) has TWO yes/no groups — morning routine +
+    // market-analysis (SPEC §28/§22) — and BOTH are required to advance
+    // (validateStep step 1). Scope each "Oui" to its fieldset legend
+    // (role=group) so the test stays robust if more groups are ever added.
+    await page
+      .getByRole('group', { name: /routine matinale/i })
+      .locator('label')
+      .filter({ hasText: /^Oui$/i })
+      .click();
+    await page
+      .getByRole('group', { name: /analyse de marché/i })
+      .locator('label')
+      .filter({ hasText: /^Oui$/i })
+      .click();
     await page.getByRole('button', { name: /Suivant/i }).click();
     await page.getByRole('button', { name: /Suivant/i }).click();
     await page.getByRole('button', { name: /Suivant/i }).click();

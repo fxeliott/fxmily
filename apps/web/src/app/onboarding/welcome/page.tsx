@@ -37,7 +37,7 @@ export default async function OnboardingWelcomePage({ searchParams }: PageProps)
         aria-hidden
         className="orb pointer-events-none absolute -top-32 -left-32 h-[420px] w-[420px] rounded-full opacity-25"
         style={{
-          background: 'radial-gradient(circle, oklch(0.879 0.231 130 / 0.20) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, oklch(0.62 0.19 254 / 0.20) 0%, transparent 70%)',
         }}
       />
 

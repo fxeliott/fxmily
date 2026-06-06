@@ -104,6 +104,18 @@ export interface EngagementParts {
    * activity only, never a backtest P&L (`resultR`/`outcome`/`plannedRR`).
    */
   trainingActivityRate: SubScore | null;
+  /**
+   * SPEC §30.4 J-M4 — meeting (réunion Fxmily) attendance sub-score:
+   * `completedMeetings / scheduledMeetings` over the scoring window. `null`
+   * when NO meeting was scheduled in the window (`scheduledCount === 0`) →
+   * `aggregateDimension` renormalizes it away so a member with no meeting in
+   * the window scores byte-identically to pre-J-M4 (ADDITION PURE). The skip
+   * is keyed on `scheduledCount`, NOT `completedCount`: a member who HAD
+   * meetings but validated none gets a `0` sub-score (engagement DROPS — the
+   * effort signal). Derived from two integer COUNTS only (count-only primitive
+   * `countMeetingAttendance`); no meeting body, no P&L, no real-edge cross-read.
+   */
+  meetingAttendanceRate: SubScore | null;
 }
 
 /**

@@ -51,6 +51,23 @@ export interface EngagementInput {
    * MUST NEVER be threaded into engagement.
    */
   trainingActivityCount?: number;
+  /**
+   * SPEC §30.4 J-M4 — number of NON-cancelled meetings scheduled within the
+   * scoring window (the attendance-rate DENOMINATOR). `undefined`/`0` (no
+   * meeting in the window) → the meeting sub-score is skipped and engagement
+   * renormalizes to exactly its pre-J-M4 value (ADDITION PURE).
+   * 🚨 §30.7: a raw integer COUNT only — no meeting body / content / P&L.
+   */
+  meetingScheduledCount?: number;
+  /**
+   * SPEC §30.4 J-M4 — number of the member's COMPLETE attendances on those
+   * scheduled, in-window meetings (the attendance-rate NUMERATOR). Bounded
+   * by `meetingScheduledCount`. `undefined`/`0` with a positive scheduled
+   * count → the member had meetings but validated none → meeting sub-score
+   * `0` → engagement DROPS (the effort signal, SPEC §30.4 crux T2-2).
+   * 🚨 §30.7: a raw integer COUNT only.
+   */
+  meetingCompletedCount?: number;
 }
 
 export const ENGAGEMENT_MIN_DAYS = 7;
@@ -83,6 +100,19 @@ const WEIGHT_TRAINING = 15;
  * Heuristic (ADR-001-style), tunable.
  */
 const TRAINING_ACTIVITY_TARGET = 8;
+
+/**
+ * SPEC §30.4 J-M4 — meeting (réunion Fxmily) attendance sub-score weight.
+ * Added as a PURE ADDITION (SPEC §30.7 invariant): the existing five weights
+ * (50/20/20/10 + training 15) are deliberately NOT rebalanced — the blueprint
+ * that proposes `WEIGHT_FILL 50→42` is a real regression and is REJECTED.
+ * `aggregateDimension` renormalizes by the *active* `pointsMax`, so a member
+ * with no meeting in the window (`scheduledCount === 0` → part `null`) scores
+ * byte-identically to pre-J-M4. Heuristic (ADR-001-style), placed level with
+ * training (15): meeting assiduity is a meaningful but non-dominant engagement
+ * behaviour vs the daily check-in (50). Tunable.
+ */
+const WEIGHT_MEETING = 15;
 
 export function computeEngagementScore(input: EngagementInput): ScoreResult<EngagementParts> {
   const windowDays = input.windowDays ?? DEFAULT_WINDOW_DAYS;
@@ -122,6 +152,8 @@ export function computeEngagementScore(input: EngagementInput): ScoreResult<Enga
       input.streak,
       windowDays,
       input.trainingActivityCount,
+      input.meetingScheduledCount,
+      input.meetingCompletedCount,
     );
     return {
       score: null,
@@ -140,6 +172,8 @@ export function computeEngagementScore(input: EngagementInput): ScoreResult<Enga
     input.streak,
     windowDays,
     input.trainingActivityCount,
+    input.meetingScheduledCount,
+    input.meetingCompletedCount,
   );
   const score = aggregateDimension(partsForAggregate);
 
@@ -159,6 +193,8 @@ function computeParts(
   streak: number,
   windowDays: number,
   trainingActivityCount: number | undefined,
+  meetingScheduledCount: number | undefined,
+  meetingCompletedCount: number | undefined,
 ): {
   parts: EngagementParts;
   partsForAggregate: Array<{ pointsAwarded: number; pointsMax: number } | null>;
@@ -190,12 +226,28 @@ function computeParts(
         )
       : null;
 
+  // SPEC §30.4 J-M4 — meeting attendance: completed / scheduled in the window.
+  // Carbon copy of `journalDepthRate` (a true fill-rate, NOT a capped count
+  // like training): `rateSubScore` returns pointsAwarded:0 when the denominator
+  // is 0, but the SKIP is keyed on `scheduledCount` below (the §30.4 crux T2-2),
+  // NOT on `completedCount` — so a member who HAD meetings but validated none
+  // gets a real `0` sub-score (engagement drops), while a member with NO meeting
+  // in the window is skipped (null → renormalized → byte-identical).
+  // 🚨 §30.7: two integer COUNTS only — never a meeting body / content / P&L.
+  const meetingAttendanceRate = rateSubScore(
+    meetingCompletedCount ?? 0,
+    meetingScheduledCount ?? 0,
+    WEIGHT_MEETING,
+  );
+
   const parts: EngagementParts = {
     checkinFillRate,
     dualSlotRate,
     streakNormalized,
     journalDepthRate,
     trainingActivityRate,
+    // Surfaced for transparency even when skipped (denom 0 → rate 0, pts 0).
+    meetingAttendanceRate: (meetingScheduledCount ?? 0) > 0 ? meetingAttendanceRate : null,
   };
 
   const partsForAggregate = [
@@ -205,6 +257,10 @@ function computeParts(
     eveningsFilled > 0 ? journalDepthRate : null,
     // Already `null` when the member has no recent training activity.
     trainingActivityRate,
+    // SPEC §30.4 — EXACT mirror of `eveningsFilled > 0 ? journalDepthRate : null`
+    // above: skip on `scheduledCount` (NOT completedCount). 0 scheduled → null →
+    // renormalize → byte-identical; >0 scheduled & 0 completed → rate 0 → drop.
+    (meetingScheduledCount ?? 0) > 0 ? meetingAttendanceRate : null,
   ];
 
   return { parts, partsForAggregate };
@@ -241,5 +297,6 @@ function emptyParts(): EngagementParts {
       denominator: 0,
     },
     trainingActivityRate: null,
+    meetingAttendanceRate: null,
   };
 }

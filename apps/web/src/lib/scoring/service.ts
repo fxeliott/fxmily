@@ -9,6 +9,12 @@ import {
   type LocalDateString,
 } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
+// SPEC §30.4 J-M4 — the count-only meeting-attendance primitive (different
+// module from training: `@/lib/meeting`, so it does NOT touch the single
+// `@/lib/training` import the anti-leak firewall pins on this touchpoint).
+// Returns two integers ({ scheduledCount, completedCount }); no meeting body,
+// no P&L. Feeds engagement ONLY (SPEC §30.7 — assiduité touches no real edge).
+import { countMeetingAttendance } from '@/lib/meeting/service';
 import { reportWarning } from '@/lib/observability';
 // 🚨 §21.5 — the ONLY symbol scoring may import from the training module: a
 // count-only primitive. Importing anything else (a serialized backtest,
@@ -116,7 +122,7 @@ export async function computeScoresForUser(
   const windowEndExclusive = parseLocalDate(shiftLocalDate(anchor, 1));
 
   // Parallel fetch — anti-waterfall.
-  const [trades, checkins, trainingActivity] = await Promise.all([
+  const [trades, checkins, trainingActivity, meetingActivity] = await Promise.all([
     db.trade.findMany({
       where: {
         userId,
@@ -163,6 +169,12 @@ export async function computeScoresForUser(
     // effort count (same pragmatic edge-tolerance as the documented
     // habit-trade-correlation "+1j slack").
     countRecentTrainingActivity(userId, windowStartUtc, windowEndExclusive),
+    // SPEC §30.4 J-M4 — the Nᵉ Promise.all entry: count-only meeting attendance
+    // over the SAME scoring window as the trade/check-in/training slices, so the
+    // engagement dimension stays internally coherent (one window drives every
+    // sub-score). Returns { scheduledCount, completedCount } integers — feeds the
+    // ADDITION-PURE `meetingAttendanceRate` sub-score and nothing else (§30.7).
+    countMeetingAttendance(userId, windowStartUtc, windowEndExclusive),
   ]);
 
   // Map to scoring inputs.
@@ -239,6 +251,12 @@ export async function computeScoresForUser(
     // P&L never does). Empty for all 30 V1 members at deploy → training
     // sub-score null → engagement renormalizes to its exact pre-J-T4 value.
     trainingActivityCount: trainingActivity.count,
+    // SPEC §30.4 J-M4 — two integer COUNTS (denominator + numerator). When no
+    // meeting is scheduled in the window (scheduledCount 0 — every member before
+    // the first generate-meetings cron run) the meeting sub-score is skipped →
+    // engagement renormalizes to its exact pre-J-M4 value (ADDITION PURE §30.7).
+    meetingScheduledCount: meetingActivity.scheduledCount,
+    meetingCompletedCount: meetingActivity.completedCount,
   });
 
   const components: ComponentsJson = { discipline, emotionalStability, consistency, engagement };

@@ -1,0 +1,12 @@
+-- J4 (security T2-1) — JWT session-revocation epoch.
+--
+-- ADD-only column, NOT NULL with a constant DEFAULT (0). On Postgres 11+ this
+-- is a metadata-only change: existing rows are NOT rewritten and the table is
+-- only briefly ACCESS EXCLUSIVE locked to update the catalog, so it stays safe
+-- even well past the current 30-member cohort.
+--
+-- Rollback: see docs/runbook-hetzner-deploy.md (J4 recipe) —
+--   ALTER TABLE "users" DROP COLUMN "token_version";
+-- No data loss on rollback (the column only carries a revocation counter; an
+-- absent claim coalesces to 0 in lib/auth/session-revocation.ts).
+ALTER TABLE "users" ADD COLUMN "token_version" INTEGER NOT NULL DEFAULT 0;

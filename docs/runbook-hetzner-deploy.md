@@ -2056,9 +2056,91 @@ quasiment sans conséquence fonctionnelle (aucune route ne consomme encore ces t
 Une fois J-C2→J-C4 mergés, préférer un **rollback code-only** (revert PR + re-deploy) pour
 tout bug UI/pipeline ; ne droper le schéma qu'en cas de bug critique data-corrupting.
 
+## 25. Rollback J4 migration (`20260529150000_j4_user_token_version`)
+
+> **Quand l'utiliser** : quasi jamais. La colonne `users.token_version` est
+> **safe** par construction (NOT NULL DEFAULT 0, ADD-only, metadata-only sur
+> PG 11+). Le rollback n'est utile que si on veut retirer complètement la
+> colonne (rare — possible si un Prisma drift bloque une future migration).
+>
+> Aucune perte de données : la colonne ne porte qu'un compteur de révocation.
+> Le callback `jwt` (`lib/auth/session-revocation.ts`) coalesce un claim absent
+> à 0, donc post-rollback tous les JWT en cours valident comme `tokenVersion=0`.
+> **Effet de bord du rollback** : les sessions révoquées (compteur bumpé sur un
+> hard-delete) redeviendraient acceptées jusqu'à expiration naturelle — c'est
+> précisément la faille que J4 ferme, donc ne rollback que si le code applicatif
+> est lui aussi reverté avant J4.
+
+### 25.1 Pré-requis avant rollback
+
+1. **Pas de backup de données nécessaire** (compteur pur, aucune donnée
+   métier). Un `pg_dump` global de routine suffit.
+
+2. **Stop le web** (le callback `jwt` Node-side lit `token_version` à chaque
+   `auth()`) :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+   ```
+
+3. **Vérifie l'état Prisma** :
+
+   ```bash
+   docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+     psql -U fxmily -d fxmily -c "SELECT migration_name, finished_at \
+       FROM _prisma_migrations WHERE migration_name LIKE '%token_version%' \
+       ORDER BY started_at DESC;"
+   ```
+
+### 25.2 SQL rollback
+
+Single DROP COLUMN (aucun index ni FK ne réfère la colonne) :
+
+```sql
+BEGIN;
+
+-- Drop the revocation-epoch column (lossless — pure counter, no referent).
+ALTER TABLE "users" DROP COLUMN IF EXISTS "token_version";
+
+-- Wipe the Prisma migrations row so the schema can be re-applied later.
+DELETE FROM "_prisma_migrations"
+  WHERE migration_name = '20260529150000_j4_user_token_version';
+
+COMMIT;
+```
+
+> ⚠️ `BEGIN`/`COMMIT` → tout-ou-rien. Re-vérifie via `\d users` que la colonne
+> `token_version` est bien absente (rollback OK) ou présente (rollback annulé).
+
+### 25.3 Re-déploiement de l'image pré-J4 + vérification
+
+```bash
+export FXMILY_IMAGE=ghcr.io/<owner>/fxmily:<pre-j4-sha>
+docker compose -f /opt/fxmily/docker-compose.prod.yml pull web
+docker compose -f /opt/fxmily/docker-compose.prod.yml up -d --remove-orphans web
+
+curl -fsS https://app.fxmilyapp.com/api/health   # 200 attendu
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "\d users" | grep -c token_version
+# Attendu : 0 (colonne absente)
+
+docker compose -f /opt/fxmily/docker-compose.prod.yml exec -T postgres \
+  psql -U fxmily -d fxmily -c "INSERT INTO audit_logs (action, metadata, created_at) \
+    VALUES ('ops.migration.rolled_back', \
+      '{\"migration\":\"j4_user_token_version\",\"by\":\"eliot\"}'::jsonb, NOW());"
+```
+
+### 25.4 Re-application future
+
+1. Re-deploy l'image J4+ (`feat/jwt-token-version-revocation` HEAD ou ultérieure).
+2. `pnpm --filter @fxmily/web prisma:migrate deploy` — Prisma re-cale la row.
+3. Les rows existantes prennent `token_version = 0` (DEFAULT). Pas de backfill
+   nécessaire — la révocation repart à neuf (aucune session pré-rollback n'est
+   à invalider rétroactivement).
+
 ## Note transversale — pattern rollback Fxmily
 
-Toutes les recipes §11-§23 suivent un même contrat :
+Toutes les recipes §11-§24 suivent un même contrat :
 
 1. **pg_dump atomique AVANT** (data-only + column-inserts pour idempotency).
 2. **`docker compose stop web`** (fige les writes, évite la corruption

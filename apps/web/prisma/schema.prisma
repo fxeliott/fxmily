@@ -257,6 +257,12 @@ model User {
 
   // Authentication
   passwordHash String? @map("password_hash") // argon2id, optional (magic-link-only users have null)
+  /// J4 (security T2-1) — JWT session-revocation epoch. Bumped to invalidate
+  /// every outstanding JWT for this user (suspend / hard-delete / future
+  /// password reset). The Node-side `jwt` callback in `auth.ts` re-reads this
+  /// on each `auth()` call and tears the session down when the token's stale
+  /// claim no longer matches. See `lib/auth/session-revocation.ts`.
+  tokenVersion Int @default(0) @map("token_version")
 
   // Authorization & lifecycle
   role   UserRole   @default(member)

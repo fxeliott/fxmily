@@ -259,6 +259,9 @@ describe('materialisePendingDeletions', () => {
       lastName: null,
       image: null,
       passwordHash: null,
+      // J4 (security T2-1) — revoke every outstanding JWT of the deleted user
+      // by bumping the epoch in the same scrub write.
+      tokenVersion: { increment: 1 },
     });
     // The legacy J9 `pushSubscription` Json column is scrubbed via
     // `Prisma.DbNull` (writes a SQL NULL into a Json column — bare `null`

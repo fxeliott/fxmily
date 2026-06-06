@@ -86,6 +86,11 @@ export const authConfig = {
         token.role = user.role;
         token.status = user.status;
         token.timezone = user.timezone;
+        // J4 — bake the session-revocation epoch into the JWT at sign-in.
+        // Edge-safe (no DB): the value comes from `authorizeCredentials`.
+        // The Node-side `jwt` callback in `auth.ts` re-reads the DB counter
+        // on every `auth()` call and tears the session down on a mismatch.
+        token.tokenVersion = user.tokenVersion;
         if (user.id) token.sub = user.id;
       }
       return token;

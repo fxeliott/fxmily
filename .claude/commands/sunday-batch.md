@@ -43,9 +43,9 @@ The actual heavy lifting lives in `ops/scripts/weekly-batch-local.sh`. Your job 
 
 6. **Optional follow-up** if Eliot asks (these still use SSH because they're DBA queries, not part of the batch flow) :
    - Spot-check a single report by SSHing to Hetzner and dumping a row :
-     `ssh hetzner-dieu "cd /opt/fxmily && docker compose -f docker-compose.prod.yml exec -T postgres psql -U fxmily -d fxmily -c \"SELECT summary FROM weekly_reports WHERE week_start = '...' LIMIT 1\""`
+     `ssh fxmily-prod "cd /opt/fxmily && docker compose -f docker-compose.prod.yml exec -T postgres psql -U fxmily -d fxmily -c \"SELECT summary FROM weekly_reports WHERE week_start = '...' LIMIT 1\""`
    - Tail the prod audit log for `weekly_report.batch.*` rows :
-     `ssh hetzner-dieu "cd /opt/fxmily && docker compose -f docker-compose.prod.yml exec -T postgres psql -U fxmily -d fxmily -c \"SELECT action, metadata, created_at FROM audit_logs WHERE action LIKE 'weekly_report.batch.%' ORDER BY created_at DESC LIMIT 20\""`
+     `ssh fxmily-prod "cd /opt/fxmily && docker compose -f docker-compose.prod.yml exec -T postgres psql -U fxmily -d fxmily -c \"SELECT action, metadata, created_at FROM audit_logs WHERE action LIKE 'weekly_report.batch.%' ORDER BY created_at DESC LIMIT 20\""`
 
 ## Posture verrouillée
 

@@ -36,12 +36,12 @@ export default function AppleIcon(): ImageResponse {
         justifyContent: 'center',
         // DS v2 — `--bg` deep-space (`#07090f`) → opaque per Apple HIG.
         background: '#07090f',
-        // Subtle lime corner accent for brand recognition without
+        // Subtle blue corner accent for brand recognition without
         // dominating the home screen tile.
         backgroundImage:
-          'radial-gradient(circle at 100% 100%, rgba(163,230,53,0.18) 0%, transparent 55%)',
+          'radial-gradient(circle at 100% 100%, rgba(59,130,246,0.18) 0%, transparent 55%)',
         fontFamily: 'system-ui, -apple-system, sans-serif',
-        color: '#a3e635',
+        color: '#3b82f6',
         fontWeight: 700,
         fontSize: 96,
         letterSpacing: '-0.04em',

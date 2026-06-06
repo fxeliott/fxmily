@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { V18CrisisBanner } from '@/components/review/crisis-banner';
 import { MirrorHero } from '@/components/review/mirror-hero';
+import { HoverLift } from '@/components/ui/hover-lift';
 import { V18Aurora } from '@/components/v18/aurora';
 import { V18ThemeScope } from '@/components/v18/theme-scope';
 import { listMyRecentReviews } from '@/lib/weekly-review/service';
@@ -79,7 +80,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
           <div className="flex flex-wrap items-center gap-3">
             <Link
               href="/review/new"
-              className="rounded-control inline-flex h-12 items-center gap-2 bg-[var(--acc)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]"
+              className="rounded-control inline-flex h-12 items-center gap-2 bg-[var(--acc-btn)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]"
             >
               <NotebookPen size={16} strokeWidth={2.2} aria-hidden="true" />
               Faire ma revue hebdo
@@ -136,26 +137,28 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
             <ul className="flex flex-col gap-2.5" data-slot="recent-reviews">
               {recent.map((r) => (
                 <li key={r.id}>
-                  <Link
-                    href={`/review/${r.id}`}
-                    aria-labelledby={`rev-${r.id}-title`}
-                    className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
-                  >
-                    <header className="flex items-baseline justify-between gap-3">
-                      <p className="t-eyebrow text-[var(--t-3)]" id={`rev-${r.id}-title`}>
-                        Semaine du <FormattedRange weekStart={r.weekStart} weekEnd={r.weekEnd} />
+                  <HoverLift className="block">
+                    <Link
+                      href={`/review/${r.id}`}
+                      aria-labelledby={`rev-${r.id}-title`}
+                      className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
+                    >
+                      <header className="flex items-baseline justify-between gap-3">
+                        <p className="t-eyebrow text-[var(--t-3)]" id={`rev-${r.id}-title`}>
+                          Semaine du <FormattedRange weekStart={r.weekStart} weekEnd={r.weekEnd} />
+                        </p>
+                        <p className="t-cap font-mono text-[var(--t-3)]">
+                          {FMT_SUBMITTED_AT_FR.format(new Date(r.submittedAt))}
+                        </p>
+                      </header>
+                      <p className="t-body mt-2 line-clamp-2 text-[var(--t-2)]">
+                        <strong className="text-[var(--t-1)]">Leçon :</strong> {r.lessonLearned}
                       </p>
-                      <p className="t-cap font-mono text-[var(--t-3)]">
-                        {FMT_SUBMITTED_AT_FR.format(new Date(r.submittedAt))}
+                      <p className="t-cap mt-1.5 line-clamp-1 text-[var(--t-3)]">
+                        <span className="font-semibold">Focus suivant :</span> {r.nextWeekFocus}
                       </p>
-                    </header>
-                    <p className="t-body mt-2 line-clamp-2 text-[var(--t-2)]">
-                      <strong className="text-[var(--t-1)]">Leçon :</strong> {r.lessonLearned}
-                    </p>
-                    <p className="t-cap mt-1.5 line-clamp-1 text-[var(--t-3)]">
-                      <span className="font-semibold">Focus suivant :</span> {r.nextWeekFocus}
-                    </p>
-                  </Link>
+                    </Link>
+                  </HoverLift>
                 </li>
               ))}
             </ul>

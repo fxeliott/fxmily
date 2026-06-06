@@ -1387,9 +1387,9 @@ satisfaire AVANT d'exécuter le smoke :
 
 **État au 2026-05-09 (post-Phase R)** — 7 → **5** pré-requis bloquants :
 
-1. ✅ **Hetzner CX22** : utiliser `hetzner-dieu` 178.104.39.201 existant
+1. ✅ **Hetzner CX22** : utiliser `fxmily-prod` 203.0.113.10 existant
    (déjà payé pour n8n/Langfuse). `bootstrap-fxmily.sh --skip-hetzner
-FXMILY_HETZNER_IP=178.104.39.201` réutilise l'IP existante.
+FXMILY_HETZNER_IP=203.0.113.10` réutilise l'IP existante.
 2. ✅ **Domaine** : `fxmilyapp.com` (déjà possédé par Eliot via Cloudflare).
    DNS apex configuré, ajouter le sous-domaine `app.fxmilyapp.com` →
    Hetzner IP via `cloudflare-dns-setup.sh`. Achat `fxmily.com` reporté V2.
@@ -1627,7 +1627,7 @@ f0bae30 feat(j10): RGPD foundation + soft-delete + cron purge
 
 ### R.1 — URGENT findings web research 2026-05-09
 
-- **Vercel Hobby = INVALIDE pour Fxmily** : ToS interdit "any deployment used for financial gain of anyone involved". Fxmily = formation payante = commercial today. → Phase N path (`docs/zero-cost-deployment.md`) flagged ❌ status invalide en haut du doc. Recommandation : Hetzner existant `hetzner-dieu` (déjà payé), domaine `fxmilyapp.com` (déjà possédé). Coût supplémentaire = 0 €.
+- **Vercel Hobby = INVALIDE pour Fxmily** : ToS interdit "any deployment used for financial gain of anyone involved". Fxmily = formation payante = commercial today. → Phase N path (`docs/zero-cost-deployment.md`) flagged ❌ status invalide en haut du doc. Recommandation : Hetzner existant `fxmily-prod` (déjà payé), domaine `fxmilyapp.com` (déjà possédé). Coût supplémentaire = 0 €.
 - **Vercel Hobby AI training opt-in par défaut** : tout contenu déployé est utilisé pour entraîner les modèles AI. Inacceptable pour données membres Fxmily.
 - **Auth.js v5 stable ne sortira JAMAIS** : projet transféré à Better Auth team 2025. Pin `@beta.31` exact (pas `@beta`). V2 considérer migration Better Auth.
 - **CVE patch validation** : `next@16.2.6` + `react@19.2.6` + `react-dom@19.2.6` couvrent les 13 advisories de mai 2026.
@@ -1654,7 +1654,7 @@ Senior trader review : posture conforme SPEC §2 (no market analysis), 50/50 fic
 
 7 → **5** pré-requis bloquants après Phase R :
 
-- ✅ **Hetzner CX22** : `hetzner-dieu` existant 178.104.39.201 (déjà payé pour n8n/Langfuse). `bootstrap-fxmily.sh --skip-hetzner` + `FXMILY_HETZNER_IP=178.104.39.201`.
+- ✅ **Hetzner CX22** : `fxmily-prod` existant 203.0.113.10 (déjà payé pour n8n/Langfuse). `bootstrap-fxmily.sh --skip-hetzner` + `FXMILY_HETZNER_IP=203.0.113.10`.
 - ✅ **Domaine** : pivot V1 sur `fxmilyapp.com` (déjà possédé, Cloudflare DNS configuré). Achat éventuel `fxmily.com` reporté V2 si l'image de marque l'exige.
 - ⏳ Sentry DSN signup (gratuit 5000 events/mois, no CB).
 - ⏳ Resend domain `fxmilyapp.com` verify (3 TXT DNS Cloudflare → ~15 min propagation).
@@ -4287,3 +4287,256 @@ NE PAS importer `lib/onboarding-interview/service.ts` (`import 'server-only'` li
 ### Reste (EN ATTENTE Eliot)
 
 - Au 1ᵉʳ vrai `bash ops/scripts/onboarding-batch-local.sh --dry-run` : observer le taux de refus Opus 4.8 (seul moyen de confirmer empiriquement le chiffre over-refusal non vérifiable).
+
+## §26 — Calendrier adaptatif J-C3 (questionnaire wizard UI membre) (livré 2026-06-03, PR [#231](https://github.com/fxeliott/fxmily/pull/231) `6a5adaf`)
+
+> 3ᵉ des 4 jalons §26. **Frontend-only, 0 migration** — surface membre posée sur le data layer J-C1 (sur `main`). NE dépend PAS de J-C2 (PR #230 backend batch, open). Carbon du wizard MindsetCheck V1.5 §27. ADR-005 reste **Proposed** (flip post-J-C4). Section SPEC §26/§31 ajoutée au close-out J-C4.
+
+### Scope
+
+- **`components/calendar/calendar-questionnaire-wizard.tsx`** — wizard 4 steps fermés (1: profil + objectif sessions 1-7 · 2: dispo Lun-Ven 5j×3 slots · 3: dispo week-end 2j×3 + sommeil + pic d'énergie · 4: réunions + focus pratique + contrainte optionnelle). `useActionState` + hidden inputs « submit-everything » + localStorage draft `fxmily:calendar-questionnaire:draft:v1` (SSR-safe lazy `useState`+`useEffect`) + APG roving tabindex (`SingleChoiceField` vertical + `SessionGoalField` segmenté 1-7 horizontal) + `AvailabilityGrid` toggles `aria-pressed` (Check/Minus, pas info couleur-seule) + Framer `m.*` (LazyMotion app-shell) + `useReducedMotion` + sticky safe-area CTA. Validation par step = UX ; **serveur = seule autorité**.
+- **`components/calendar/calendar-step-progress.tsx`** — APG sr-only `<ol>` + fill gradient `--acc`/`--acc-hi` + `boxShadow:'var(--acc-glow)'`.
+- **`components/calendar/calendar-status-widget.tsx`** — widget dashboard Server Component, 2 états anti-Black-Hat : CTA « Organise ta semaine » (lien) si `getQuestionnaireForUser===null`, sinon « Ton organisation est enregistrée » discret + « Modifier ». `justSubmitted` (`?done=questionnaire`) → confirmation calme.
+- **`app/calendar/questionnaire/actions.ts`** — Server Action carbon mindset/J5. `auth()` + `status==='active'`, `weekStart=currentParisWeekStart()` **SERVER** (jamais le hidden client — anti PR#96), `coerceBool` guard (footgun `Boolean('false')===true`) sur les 21 toggles, reconstruction nested + `submitWeeklyScheduleInputSchema.strict().safeParse`, `submitWeeklyScheduleQuestionnaire` [J-C1], audit PII-free `calendar.questionnaire.submitted` (`{weekStart, instrumentVersion, wasNew}`), `revalidatePath('/calendrier')`+`('/dashboard')`, `redirect('/dashboard?done=questionnaire')` + re-throw NEXT_REDIRECT.
+- **`app/calendar/questionnaire/new/page.tsx`** — host auth-gated active, hydrate le questionnaire existant de la semaine en prefill (édition = re-remplir, `instrumentVersion` doit matcher).
+- **`app/dashboard/page.tsx`** — `<CalendarStatusWidget>` wiré dans une `<section aria-labelledby="calendar-widget-heading">` (Suspense + skeleton anti-CLS `h-[104px]`) après Check-in ; parse `?done=questionnaire`.
+- **E2E** `tests/e2e/calendar-questionnaire.spec.ts` — auth gate anon→/login + CAPTURE (round-trip Prisma `weeklyScheduleQuestionnaire`) + RENDER (wizard + widget). +11 Vitest action (`actions.test.ts`).
+
+### Décisions verrouillées (NE PAS re-casser)
+
+- **Redirect `/dashboard?done=questionnaire` (PAS `/calendrier`)** — divergence brief délibérée + JSDoc-documentée : `/calendrier` est la surface J-C4 **non construite** (404erait en prod si J-C3 merge avant J-C4). Le widget dashboard porte la confirmation ; J-C4 pourra re-pointer.
+- **weekStart server-authority** : recomputé `currentParisWeekStart()`, le hidden client est ignoré (jamais lu par `getString`). `submitWeeklyScheduleQuestionnaire` re-pin via `parseLocalDate` (double filet).
+- **`coerceBool`** : lit la string littérale (`'true'/'on'/'1'/'yes'`→true, reste→false), jamais `z.coerce.boolean()`. Toggle absent/`File` → false (fail-safe : indisponibilité, grille all-false légitime).
+- **`constraint` vide → `undefined` → `.default('none')`** (un `''` n'est PAS un membre d'enum, le passer casserait — `...(constraintRaw ? {constraint} : {})`).
+- **0 free-text** (instrument fermé §26 Q4) → AUCUN import `safeFreeText`/`detectCrisis`/`detectInjection`, **pas de bannière EU AI Act** sur CE formulaire (elle est en J-C4 sur le calendrier généré). Posture §2 : organise le TEMPS, jamais le marché (aucun import real-edge P&L).
+- **DS-v2 lime NEUTRE** — jamais `.v18-*`/`--v18-*` (REFLECT), `--cy*` (training), ni le pattern bugué `shadow-[0_0_..._var(--acc-glow)]` (`--acc-glow` = box-shadow complet → `boxShadow:'var(--acc-glow)'`). `V18_SPRING`/`V18_SPRING_TIGHT` = constantes timing SSOT, pas tokens thème.
+- **`calendar-step-progress.tsx` = clone dédié** (PAS de réutilisation de `mindset-step-progress` — data-slot `calendar-step-progress`, aria-label « Progression du questionnaire »).
+- **Pas de `removeItem` localStorage explicite au submit** (carbon mindset identique) : le redirect navigue ailleurs + gating week/version + prefill serveur authoritatif rendent le draft inoffensif ; « draft-wins same-week » = canon REFLECT/V1.3.
+- **db-helpers `cleanupTestUsers`** : `weeklyScheduleQuestionnaire`+`adaptiveCalendar` `deleteMany` AVANT `user.deleteMany` — déjà présent J-C1, pas re-touché.
+
+### Quality gate + audits + vérif réelle
+
+- `format:check` ✓ · `lint` ✓ (0 warn) · `type-check` ✓ · `build` ✓ (`/calendar/questionnaire/new` listée `ƒ`) · **Vitest 1722/1722** (baseline J-C1 main = **1711**, +11 ; le « 1749 » du pickup supposait J-C2 mergé — J-C3 branche off main sans J-C2).
+- **4 audits Opus parallèles** : accessibility-reviewer **SHIP-READY 0 TIER1** (7 points vigilance PASS, APG roving + grille `aria-pressed` + `aria-labelledby`→id existant scar V2.3.1) · ui-designer **0 TIER1/0 TIER2** (4 verrous DS PASS) · code-reviewer **READY TO MERGE 0 TIER1/2** (9 invariants OK) · verifier **9/9 VRAI, DÉCISION OK**. **1 fix TIER2 appliqué** : `aria-describedby="cqw-preamble"` sur le `<form>`.
+- **Vérif RÉELLE Playwright local** (Docker dev → **migration `20260603120000` appliquée à la DB dev** [était manquante : P2021 `weekly_schedule_questionnaires does not exist` → `prisma migrate deploy`] → login → remplir 4 steps → submit → redirect `/dashboard?done=questionnaire` → widget rempli). **Ligne DB exacte vérifiée** : `week_start=2026-06-01` (lundi Paris server-authority), `instrument_version=1`, `energy_peak_slot=morning` (colonne dérivée), `profile=salarie`, `goal=3`, `mon_morning=true`/`fri_evening=true`/`sat_morning=true` (coerceBool), `meeting=occasional`, `focus=balanced`, `constraint=none`. Screenshots iPhone SE 375 (steps 1/2/4 + widget rempli) + iPhone 15 393 (édition/prefill). **Segmented 1-7 confortable aux 2 tailles** (préoccupation densité a11y+ui levée visuellement).
+
+### Turn-2 — re-challenge world-class (commit `6b68a14`, scope §18.4, PAS de J-C4)
+
+- **5ᵉ audit adversarial** (stress FormData malveillant + Suspense-error + localStorage poisoning + completeness vs brief) = **0 TIER1/0 TIER2**. Confirmé : 0 prototype-pollution (clés littérales + vocab figés), parseInt coercition borne [1,7] non-exploitable, File→false fail-safe, `mergeGrid` robuste, 0 XSS, brief §8 100% couvert. **CANON Suspense-error** : un throw du widget calendar crashe tout `/dashboard` (error boundary global) — MAIS pattern identique de TOUTES les sections async du dashboard (TrackRecord/Patterns/HabitCorrelation + PreTrade sans même Suspense) ; un error boundary local serait inconsistant → dette dashboard-wide pré-existante (`app/dashboard/error.tsx` segment), hors scope.
+- **2 polish** : (1) `SessionGoalField` aria-label `"X sessions"` → `"X sessions sur 7"` (contexte d'échelle SR) ; (2) **e2e déterministe** — retrait de `waitForLoadState('networkidle')` des 2 tests RENDER. **CANON e2e : PAS de `networkidle` contre le dev server** (Turbopack garde un socket HMR → ne settle jamais → timeout flaky local ; passe en CI car `next start` prod n'a pas de socket). `goto` (load) + `toBeVisible` (auto-wait) = déterministe dev ET prod. **Local : 4/4 en 10.5s** (vs 1.8m + 1 flaky). Le carbon mindset + autres specs ont le même `networkidle` latent → candidat hygiène e2e future.
+- **CI PR #231 = 6/6 GREEN** sur le push (Playwright chromium PASS — le spec e2e passe en env CI prod).
+
+### Pré-requis Eliot
+
+1. Merger PR #231 (rebase auto sur main ; 0 migration ⇒ deploy no-op côté DB).
+2. La migration J-C1 `20260603120000_calendar_questionnaire` est **déjà LIVE prod** (sess.17) — rien à appliquer en prod pour J-C3.
+
+### Reste J-C4 (session FRAÎCHE /clear)
+
+Affichage `/calendrier` 3-états (pas de questionnaire→CTA · rempli sans calendrier→« génération en cours » · généré→affichage) + `<AIGeneratedBanner>` AVANT les blocs (EU AI Act 50(1), 7ᵉ site prod ; `markAdaptiveCalendarDisclosureShown` [J-C1]) + `components/calendar/{week-view,calendar-overview,calendar-warnings}.tsx` (grille 7j color-codée par category, hex `C` jamais `var()`, anti-Black-Hat) + admin read-only `?tab=calendar` dans `/admin/members/[id]` + 3 audits + Playwright 3-états + close-out SPEC.md §26/§31 + flip ADR-005 Accepted.
+
+## §26 — Calendrier adaptatif J-C2 (pipeline batch local Claude $0) (livré 2026-06-03)
+
+> Jalon #2 de la séquence §26 (post J-C1 data layer mergé+déployé prod `69eee30`). Pipeline IA
+> **batch local Claude Max** ($0 API marginal, `claude --print` Opus 4.8 §8) qui lit le
+> `WeeklyScheduleQuestionnaire` + les compteurs count-only + le résumé profil onboarding, génère un
+> calendrier hebdo structuré (`AdaptiveCalendar`), Zod-validé. **Carbon fidèle de V1.7.2 weekly +
+> V1.4 monthly.** Backend-only, 0 UI (J-C3 = wizard, J-C4 = affichage). ADR-005 reste **Proposed**
+> (flip Accepted = post-J-C4 + 1er batch réel réussi).
+
+### Architecture wire complète (mirror V1.7.2)
+
+```
+TON PC Windows                              HETZNER PROD (Caddy → fxmily-web)
+  /calendar-batch  ou
+  bash ops/scripts/calendar-batch-local.sh
+   │ curl POST X-Admin-Token ───────────→  /api/admin/calendar-batch/pull
+   │                                        │ requireCalendarAdminToken (503/429/401)
+   │                                        │ loadAllSnapshotsForCalendarGeneration
+   │                                        │  · users active ∩ ont un questionnaire ce weekStart
+   │                                        │  · ∧ n'ont PAS déjà un AdaptiveCalendar (idempotency)
+   │ ◄──── CalendarBatchPullEnvelope ───────┘  · loadCalendarSnapshotForUser (J-C1, count-only)
+   │  Loop par membre : claude --print --max-turns 1 --append-system-prompt (CALENDAR_SYSTEM_PROMPT)
+   │  60-120s jittered, model claude-opus-4-8, --max-budget-usd 5.00
+   ▼ curl POST X-Admin-Token ───────────→  /api/admin/calendar-batch/persist
+                                            │ MAX_BODY_BYTES 16MiB + Zod .strict() results.max(1000)
+                                            │ persistGeneratedCalendars (gates ci-dessous)
+   ◄──── { persisted, skipped, errors, total }
+```
+
+### Fichiers livrés J-C2
+
+| Fichier                                                | Rôle                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lib/calendar/prompt.ts`                               | `CALENDAR_SYSTEM_PROMPT` (§2 BLOQUANT hardcodé) + `buildCalendarUserPrompt` (Markdown, wrappe `profileSummary` via `wrapUntrustedMemberInput`) + `CALENDAR_OUTPUT_JSON_SCHEMA` (`additionalProperties:false` partout, miroir `adaptiveCalendarOutputSchema`) |
+| `lib/calendar/pricing.ts`                              | `computeCostEur` + `USD_TO_EUR=0.93` + `CLAUDE_CODE_LOCAL_MODEL` sentinel ($0) + `CLAUDE_OPUS_4_8_LOCAL_MODEL='claude-opus-4-8'` ($0 — binaire local Max ; commentaire : un futur path API payant Opus-4-8 doit remplacer par un pricing vérifié)            |
+| `lib/calendar/claude-client.ts`                        | `MockCalendarClient` (déterministe, dérive un calendrier Zod-valide de la dispo déclarée) + `LiveCalendarClient` (lazy `@anthropic-ai/sdk`, `cache_control ttl '1h'`, dormant V1) + `getCalendarClient` factory                                              |
+| `lib/calendar/batch.ts`                                | `loadAllSnapshotsForCalendarGeneration` (2 filtres calendar-only) + `persistGeneratedCalendars` (6 gates + 5b AMF) + types wire                                                                                                                              |
+| `app/api/admin/calendar-batch/{pull,persist}/route.ts` | endpoints token-gated (`requireCalendarAdminToken`, runtime nodejs, force-dynamic) — pull a un MEMBER_LABEL_SALT prod guard, persist a le body-cap + Zod `.strict()`                                                                                         |
+| `ops/scripts/calendar-batch-local.sh`                  | orchestrateur bash (9 ban-risk rules, `FXMILY_CALENDAR_TOKEN`, jitter floor 30, `FXMILY_CLAUDE_MODEL` default `claude-opus-4-8`, skip `hasQuestionnaire!=true`, pseudonym regex guard)                                                                       |
+| `.claude/commands/calendar-batch.md`                   | slash command `/calendar-batch` (carbon `/sunday-batch` + `/monthly-batch`)                                                                                                                                                                                  |
+| `lib/auth/audit.ts`                                    | +1 slug `calendar.batch.amf_violation` (9ᵉ slug `calendar.*`, mirror `onboarding.batch.amf_violation`)                                                                                                                                                       |
+
+### Gates `persistGeneratedCalendars` (ordre exact — NE PAS réordonner)
+
+`error` field traité EN PREMIER → (1) `parseLocalDate(weekStart)` → `invalid_week_window` (whole-batch, `errors=results.length`) · (2) active-user Set → `unknown_or_inactive_user` (anti forged userId) · (3) `WeeklyScheduleQuestionnaire` existe pour (userId,weekStart) → `calendar.batch.skipped` reason `no_questionnaire` (**gate CALENDAR-ONLY**, pas d'analog weekly/monthly) · (4) `adaptiveCalendarOutputSchema.safeParse` → `invalid_output` · (5) `detectCrisis(corpus IA complet)` → skip + `crisis_detected` + Sentry `reportError`(high)/`reportWarning`(medium) (`=== 'high' || === 'medium'`, PAS `>=` — `CrisisLevel` est une union non ordonnée) · **(5b) `detectAMFViolation(corpus IA complet)`** → skip + `amf_violation` + `reportWarning` · (6) `persistAdaptiveCalendar` (J-C1, dérive `primaryCategory`).
+
+### Décisions verrouillées (NE PAS re-litiger)
+
+- **Gate 5b AMF n'est PAS un carbon weekly/monthly** : NI le weekly NI le monthly n'ont de gate AMF (vérifié). Le SEUL carbon AMF du repo = `lib/onboarding-interview/safety.ts` ; on réutilise **uniquement** `detectAMFViolation` (couche AMF-regex : langage conseil marché/réglementé), PAS `detectClinicalLanguage` ni `validateEvidenceSubstrings` (= onboarding-only). Le doc `docs/jalon-calendrier-prep.md §7` a été corrigé (son "(5) check AMF-style … carbone" était imprécis).
+- **Corpus crisis + AMF = output IA COMPLET** : `composeCalendarOutputCorpus` concatène `overview + weeklyFocus + warnings + tous les dayLabels + tous les block labels` — pas seulement `warnings` (§2 BLOQUANT, un avis marché peut atterrir n'importe où). Plus profond que le corpus weekly (summary/risks/recos).
+- **Slug dédié `calendar.batch.amf_violation`** (pas réutiliser `crisis_detected`) : une violation de posture est un signal de sécurité distinct d'une détresse — ne pas polluer le signal crisis (qui escalade `reportError` sur HIGH). Mirror `onboarding.batch.amf_violation`.
+- **Model persisté = sentinel `claude-code-local` (cost $0)** : la bash n'envoie PAS de champ `model` → `entry.model` undefined → fallback `CLAUDE_CODE_LOCAL_MODEL`. `PRICING_KEYS = [claude-opus-4-8, claude-sonnet-4-6, claude-code-local]` accepte le binaire réel si jamais envoyé. `claude-opus-4-8` pricé $0 (binaire local Max) — c'est CORRECT pour son seul usage réel (le batch local). Sonnet gardé avec pricing réel pour un futur path API payant (ADR-005 Alt 6).
+- **Persist request = `{ weekStart, results }`** (PAS de `weekEnd` — `AdaptiveCalendar` n'a pas de colonne weekEnd, l'output `days[7]` couvre la semaine).
+- **`calendarInstrumentVersion`** passé à `persistAdaptiveCalendar` = la version du questionnaire qui a nourri (lue dans la Map `instrumentVersionByUser` du gate 3), pas une constante.
+- **Pull n'a pas de body-cap** (POST sans body, envelope produite serveur) — correct par design ; `calendarBatchLimiter` protège du flood.
+
+### Quality gate J-C2
+
+- format (prettier --write 7 fichiers) ✓, lint exit 0 ✓, type-check exit 0 strict ✓, build prod Turbopack ✓ (routes `/api/admin/calendar-batch/{pull,persist}` au manifest).
+- **Vitest 1711 → 1749** (+38 ; 30 tests calendar : `batch.test.ts` 14 + `calendar-batch/pull/route.test.ts` 6 + `persist/route.test.ts` 10 ; le reste = recomptage suite). `bash -n calendar-batch-local.sh` OK.
+- **2 audits Opus 0 TIER 1** : `verifier` (10 claims VRAI, re-run type-check + 30 tests lui-même, 0 fuite P&L, 0 gate désordre) + `security-auditor` (**0 CRITIQUE / 0 ÉLEVÉ**, 8 axes PASS ; 1 MEDIUM `computeCostEur` fallback = **inatteignable depuis le batch** car model toujours pinné par l'allowlist avant l'appel → no fix, mirror weekly canon).
+
+### Pré-requis Eliot pour activer J-C2 batch en prod (post-merge)
+
+1. Merger la PR J-C2 (merge=Eliot) → deploy auto Hetzner (`DEPLOY_PATH=hetzner`, 0 migration ⇒ no-op `prisma migrate deploy`).
+2. Provisionner `CALENDAR_ADMIN_BATCH_TOKEN` (`openssl rand -hex 32`) dans `/etc/fxmily/web.env` (0600 owner fxmily) + `docker compose -f docker-compose.prod.yml restart web`.
+3. Exporter `FXMILY_CALENDAR_TOKEN=<même valeur>` dans le shell local + `/calendar-batch --dry-run` (le pull renvoie l'enveloppe ; les membres sans questionnaire J-C3 → 0 entrée tant que J-C3 n'est pas livré).
+4. `MEMBER_LABEL_SALT` prod requis (le pull 503 sinon en prod — pseudonymes quittent l'host).
+
+## §26 — Calendrier adaptatif J-C4 (affichage `/calendrier`) — DERNIER jalon §26 (clôt 4/4) (livré 2026-06-03)
+
+> 4ᵉ et dernier jalon §26. **Frontend-only, 0 migration** — surface d'affichage
+> posée sur le data layer J-C1 (sur `main`). NE dépend que de J-C1. Carbon de
+> `monthly-debrief-reader` (page read-only multi-états + reader partagé
+> membre/admin + `<AIGeneratedBanner>` en tête). **§26 socle backend + frontend
+> COMPLET prod.** ADR-005 reste **Proposed** (flip Accepted = post-1ᵉʳ run batch
+> réel + validation Eliot §2 sur 5+ calendriers — le merge J-C4 ne satisfait que
+> la précondition BUILD).
+
+### Scope
+
+- **`app/calendrier/page.tsx`** — Server Component `force-dynamic`, auth-gate
+  `status==='active'`→`redirect('/login')` (carbon debrief-mensuel), `weekStart =
+currentParisWeekStart()` **SERVER** (anti-flake PR#96). 3 ÉTATS calmes :
+  (i) `getQuestionnaireForUser===null` → CTA « Organise ta semaine » →
+  `/calendar/questionnaire/new` ; (ii) questionnaire rempli mais
+  `getCalendarForUser===null` → état calme « Ton calendrier se prépare, reviens
+  en début de semaine » (0 urgence) ; (iii) calendrier généré →
+  `<AIGeneratedBanner variant="inline">` **AVANT** les blocs (EU AI Act 50(1),
+  **7ᵉ site prod**) + `markAdaptiveCalendarDisclosureShown(userId, weekStart)` au
+  1ᵉʳ affichage (`wasFirstView = aiDisclosureShownAt === null` calculé AVANT le
+  mark) + audit PII-free `calendar.disclosure.shown` `{weekStart}` + overview /
+  week-view / warnings. `?done=questionnaire` → bannière de confirmation calme.
+- **`components/calendar/calendar-overview.tsx`** — en-tête semaine
+  (`formatWeekRangeFr`) + overview + weeklyFocus (principe Mark Douglas, carte
+  accent lime). Eyebrow `<p>`, pas de heading (canon `monthly-debrief-reader`).
+- **`components/calendar/calendar-week-view.tsx`** — grille 7 jours
+  color-codée par category (hex `C`, JAMAIS `var()` — bug WebView iOS). THE
+  reader partagé membre+admin. Mobile-first 375 (empilement vertical) →
+  `sm:grid-cols-2` desktop. Liste sémantique `<ul>/<li>` (pas de heading →
+  context-independent). priority = poids visuel (barre + opacité), JAMAIS rouge ;
+  text-equivalent SR `(temps fort)` / `(secondaire)` (WCAG 1.4.1).
+- **`components/calendar/calendar-warnings.tsx`** — warnings 0-3 ambre
+  (`--warn`), JAMAIS rouge/alarmiste. `return null` si 0.
+- **`components/calendar/format.ts`** — `modelDisplay` SSOT (DRY, importé par la
+  page + le panel admin ; auto-couvert §2-clean par le firewall anti-leak qui
+  globbe `lib/calendar/**` → +2 tests).
+- **`components/admin/member-calendar-panel.tsx`** + onglet `?tab=calendar`
+  (`member-tabs.tsx` `MemberTabKey` + TABS ; `admin/members/[id]/page.tsx`
+  parseTab + `getLatestCalendarForUser(memberId)` + render read-only, gate role
+  admin, 0 mutation — ne stampe PAS la disclosure, c'est le concern du membre).
+- **Point d'entrée** : widget dashboard J-C3 (`calendar-status-widget.tsx`) état
+  rempli lie désormais vers `/calendrier` (« Voir mon calendrier ») + « Modifier ».
+- **Redirect re-pointé** (E6b, scar CC3 résolu) :
+  `app/calendar/questionnaire/actions.ts` `/dashboard?done=questionnaire` →
+  `/calendrier?done=questionnaire` (la page existe maintenant ; flux cohérent
+  questionnaire→calendrier). Dead `justSubmitted` du dashboard nettoyé
+  (code-review T2-1).
+- **E2E** `tests/e2e/calendar-display.spec.ts` (5 tests) : auth gate + 3 états +
+  disclosure stamp/audit (état iii) + admin. Scar GG-CI (db direct, pas
+  `server-only`) + pas de `networkidle` (canon J-C3).
+
+### Décisions verrouillées (NE PAS re-casser)
+
+- **`meeting` = NEUTRE (`C.t2`), PAS amber** — l'amber est réservé au rail
+  warnings (`--warn`) ; un bloc réunion amber se lirait comme une « caution » et
+  rimerait visuellement avec les warnings (collision ui audit T2). La category
+  est TOUJOURS conveyed en TEXTE → la couleur est décorative. Palette : 3 hues
+  pour les 3 pratiques cœur (live=acc/blue, backtest=cy/cyan, mark_douglas=ok/
+  green) + neutres pour meeting/checkin/rest/free. JAMAIS `C.bad` (rouge).
+- **Disclosure stamp au 1ᵉʳ affichage UNIQUEMENT** (membre) ; le panel admin ne
+  stampe jamais. `markAdaptiveCalendarDisclosureShown` est idempotent
+  (`updateMany WHERE aiDisclosureShownAt IS NULL`) ; le service stampe la ligne,
+  la PAGE émet le slug `calendar.disclosure.shown`. **L1 accepté** (audit
+  double-émission TOCTOU sous 2 GET concurrents = au pire 1 log best-effort
+  dupliqué, stamp DB non corrompu, échelle 30 membres — security-auditor verdict
+  « acceptable V1 », mirror at-least-once monthly).
+- **Admin tab render guard `tab === 'calendar'`** (pas `&& calendar !== null`) :
+  ici `null` = état légitime (pas de calendrier) → le panel rend un EmptyState
+  honnête. Le fetch ne tourne que si `tab === 'calendar'`, pas de collision
+  stale-null.
+- **DS-v2 lime NEUTRE** — jamais `.v18-*` (REFLECT), `--cy*` en chrome (cyan
+  uniquement comme hex category `backtest` + dans `<AIGeneratedBanner>` propre),
+  ni le pattern bugué `shadow-[0_0.._var(--acc-glow)]`.
+- **Page `max-w-3xl`** (carbon debrief-mensuel) + grille `sm:grid-cols-2` (pas de
+  strip 7-colonnes — chips riches en texte). `force-dynamic`.
+
+### Gate + 5 audits + vérif RÉELLE
+
+- `format:check` ✓ · `lint` ✓ · `type-check` ✓ · `build` ✓ (`/calendrier` au
+  manifest `ƒ`) · **Vitest 1760 → 1762** (baseline post-#230+#231 recomptée =
+  **1760** ; +2 = le firewall anti-leak `calendar-isolation` globbe
+  `lib/calendar/**` et auto-couvre le nouveau `format.ts`, 2 `it.each` PASS = §2
+  prouvé clean). 0 nouveau test Vitest côté display (l'e2e Playwright porte la
+  couverture render).
+- **5 audits Opus parallèles** : accessibility-reviewer **SHIP-READY 0 TIER1/2**
+  · security-auditor **0 Critical/High/Medium** (AuthZ/IDOR/BOLA OK, §2 isolation
+  prouvée, 0 XSS, audit PII-free) · ui-designer **SHIP-READY 0 TIER1** ·
+  code-reviewer (1 TIER2 fixé) · verifier **10/10 VRAI**. **5 fixes appliqués** :
+  (1) collision amber meeting↔warnings → meeting neutre ; (2) DRY `modelDisplay`
+  → `format.ts` ; (3) sr-only `(secondaire)` low-priority (a11y T3) ; (4) dead
+  `justSubmitted` dashboard nettoyé (CR T2-1) ; (5) double week-range admin retiré
+  (CR T3-2). Accepté+documenté : security L1, spacing carbon-consistent, admin
+  EmptyState h3 (carbon monthly).
+- **Vérif RÉELLE Playwright** (Docker dev → DB dev migration `20260603120000`
+  déjà appliquée sess.19 → 5/5 e2e VERT en 28.5s) : auth gate anon→/login + 3
+  états rendus + **état iii vérifie en DB que `aiDisclosureShownAt` est stampé +
+  audit `calendar.disclosure.shown` émis** + admin `?tab=calendar`. Screenshots
+  iPhone SE 375 + iPhone 15 393 (3 états + admin). **CANON : un timeout e2e isolé
+  sous charge CPU concurrente (5 sub-agents) = cold-compile Turbopack, PAS un bug
+  — re-run à vide = 5/5 ; CI `retries:2` couvre le cold-compile.**
+
+### Turn-2 — durcissement final pré-merge (2 fixes robustesse)
+
+Avant le merge prod, 2 sub-agents adversariaux fraîches (coverage+correctness =
+**MERGE-GO** ; prod-readiness = **PROD-SAFE**) ont relevé 2 gaps de robustesse
+LATENTS (non bloquants, mais le standard « 0 faille durable » les justifie) :
+
+- **Lookups défensifs week-view** (`calendar-week-view.tsx`) : `CATEGORY_META[block.category]`
+  - `SLOT_LABELS[block.slot]` jetaient un `TypeError`→500 si un `schedule` JSONB
+    persisté portait un jour une catégorie/slot hors-enum (impossible aujourd'hui —
+    `.strict()` au persist + v1 unique — mais foot-gun sur une future évolution
+    d'enum). Helpers `categoryMetaFor`/`slotLabelFor` avec fallback calme (`{ 'Bloc',
+C.t3 }` / slot brut) — **cohérent avec le guard `SLOT_ORDER.get(...) ?? 0`
+    pré-existant**, type-honnête (cast `Record<string,…>` → `?? fallback` lint-clean).
+- **Stamp disclosure best-effort** (`calendrier/page.tsx`) : `markAdaptiveCalendarDisclosureShown`
+  - audit enveloppés `try/catch` → `reportWarning('calendar.disclosure', 'stamp_failed')`.
+    Un hiccup DB transitoire sur le stamp (write non-essentiel) ne 500 plus le
+    calendrier déjà chargé du membre (carbon canon monthly V1.4 `dispatch_stamp_failed`).
+
+Re-gate post-fix : type-check 0 · lint 0 · Vitest **1762/1762** · build ✓ ·
+**e2e RÉEL 5/5 VERT** (29.7s, 0 régression).
+
+### Pré-requis Eliot
+
+1. Merger la PR J-C4 (merge=Eliot) → deploy auto Hetzner (**0 migration** ⇒
+   `prisma migrate deploy` no-op). `/calendrier` devient LIVE auth-gated.
+2. Pour voir un calendrier généré en prod (état iii) : lancer le batch J-C2
+   réel (`/calendar-batch`) sur des membres ayant rempli le questionnaire J-C3.
+
+### Reste (§26 COMPLET côté build)
+
+- **ADR-005 → Accepted** : nécessite encore l'empirique (1ᵉʳ run batch réel
+  réussi + validation Eliot §2 sur 5+ calendriers générés, 0 market call). Le
+  merge J-C4 satisfait la précondition BUILD seulement. Décideur = Eliot.

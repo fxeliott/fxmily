@@ -27,7 +27,7 @@ export default function Icon(): ImageResponse {
         alignItems: 'center',
         justifyContent: 'center',
         background: '#07090f',
-        color: '#a3e635',
+        color: '#3b82f6',
         fontFamily: 'system-ui, -apple-system, sans-serif',
         fontWeight: 700,
         fontSize: 22,

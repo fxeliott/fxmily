@@ -63,10 +63,11 @@ import { cn } from '@/lib/utils';
  *     question that DIFFERS from server state, prompt "Reprendre la
  *     brouillon ?" before silently overwriting (Y/N modal).
  *
- *   - **Skip OPT-IN signalé honnêtement** (R7 §E) — "Tu peux passer cette
- *     question, ton profil sera moins riche". Skip POSTs an empty answer
- *     via the `_skipped: '1'` hidden marker → server interprets as no-op
- *     no-persist + advance.
+ *   - **Pas de skip de question** — chaque réponse est obligatoire (≥10
+ *     caractères, `answerTextSchema`). NB : un "skip OPT-IN" via un marqueur
+ *     `_skipped: '1'` avait été envisagé (R7 §E) mais n'est PAS implémenté
+ *     (ni bouton "Passer", ni champ `_skipped`, ni branche serveur). À cadrer
+ *     en jalon dédié si le besoin est confirmé.
  *
  *   - **Crisis routing UX = persist QUAND MÊME** (R6 §C) + banner FR +
  *     audit slug separate. Returned crisisLevel from action triggers the
@@ -330,7 +331,7 @@ function ResumePrompt({ onResume, onDiscard, questionCount }: ResumePromptProps)
         <button
           type="button"
           onClick={onResume}
-          className="rounded-control inline-flex h-11 items-center gap-1.5 bg-[var(--acc)] px-4 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]"
+          className="rounded-control inline-flex h-11 items-center gap-1.5 bg-[var(--acc-btn)] px-4 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]"
         >
           Reprendre
         </button>
@@ -505,7 +506,7 @@ function QuestionStep({
           className={cn(
             'rounded-control inline-flex h-11 flex-1 items-center justify-center gap-1.5 text-[14px] font-semibold transition-[background-color,box-shadow,transform] duration-150',
             canSubmit
-              ? 'bg-[var(--acc)] text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+              ? 'bg-[var(--acc-btn)] text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
               : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
           )}
           aria-busy={isPending || undefined}
@@ -583,7 +584,7 @@ function FinalizeStep() {
           'rounded-control inline-flex h-12 w-full items-center justify-center gap-2 text-[14px] font-semibold transition-[background-color,box-shadow,transform] duration-150',
           isPending
             ? 'cursor-not-allowed bg-[var(--bg-3)] text-[var(--t-2)] shadow-none'
-            : 'bg-[var(--acc)] text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)]',
+            : 'bg-[var(--acc-btn)] text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)]',
         )}
         aria-busy={isPending || undefined}
       >

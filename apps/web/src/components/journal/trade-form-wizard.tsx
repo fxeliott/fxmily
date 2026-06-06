@@ -762,7 +762,7 @@ function StepPlannedRR({
             style={{
               filter: isLowRR
                 ? 'drop-shadow(0 0 14px oklch(0.7 0.165 22 / 0.32))'
-                : 'drop-shadow(0 0 14px oklch(0.879 0.231 130 / 0.40))',
+                : 'drop-shadow(0 0 14px oklch(0.62 0.19 254 / 0.40))',
             }}
           >
             1:{rr.toFixed(2)}
@@ -802,7 +802,7 @@ function StepPlannedRR({
             style={{
               width: `${pct}%`,
               background: 'linear-gradient(90deg, var(--cy) 0%, var(--acc) 80%)',
-              boxShadow: '0 0 10px -2px oklch(0.879 0.231 130 / 0.50)',
+              boxShadow: '0 0 10px -2px oklch(0.62 0.19 254 / 0.50)',
               transition: 'width 80ms cubic-bezier(0.4,0,0.2,1)',
             }}
           />
@@ -835,7 +835,7 @@ function StepPlannedRR({
             className="pointer-events-none absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--bg)] bg-[var(--acc)] transition-shadow"
             style={{
               left: `${pct}%`,
-              boxShadow: '0 0 0 4px oklch(0.879 0.231 130 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)',
+              boxShadow: '0 0 0 4px oklch(0.62 0.19 254 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)',
               transition: 'left 80ms cubic-bezier(0.4,0,0.2,1)',
             }}
           >

@@ -50,7 +50,7 @@ export function StreakCard({ streak, todayFilled, compact }: StreakCardProps) {
     ? undefined
     : ablaze
       ? 'drop-shadow(0 0 12px oklch(0.78 0.18 70 / 0.50))'
-      : 'drop-shadow(0 0 8px oklch(0.879 0.231 130 / 0.45))';
+      : 'drop-shadow(0 0 8px oklch(0.62 0.19 254 / 0.45))';
 
   // Reuse the keyframes already defined in globals.css (flame-flicker /
   // flame-pulse). Skipped automatically by the global @media (prefers-reduced-
@@ -106,7 +106,7 @@ export function StreakCard({ streak, todayFilled, compact }: StreakCardProps) {
             noStreak ? 'text-[var(--t-3)]' : 'text-[var(--acc)]',
           )}
           style={
-            noStreak ? undefined : { filter: 'drop-shadow(0 0 12px oklch(0.879 0.231 130 / 0.40))' }
+            noStreak ? undefined : { filter: 'drop-shadow(0 0 12px oklch(0.62 0.19 254 / 0.40))' }
           }
         >
           {streak}

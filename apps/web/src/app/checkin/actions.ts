@@ -63,6 +63,7 @@ export async function submitMorningCheckinAction(
     sleepHours: getString(formData, 'sleepHours'),
     sleepQuality: getString(formData, 'sleepQuality'),
     morningRoutineCompleted: getString(formData, 'morningRoutineCompleted'),
+    marketAnalysisDone: getString(formData, 'marketAnalysisDone'),
     meditationMin: getString(formData, 'meditationMin'),
     sportType: getString(formData, 'sportType'),
     sportDurationMin: getString(formData, 'sportDurationMin'),

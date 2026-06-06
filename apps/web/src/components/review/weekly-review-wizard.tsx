@@ -239,7 +239,13 @@ export function WeeklyReviewWizard() {
         </Alert>
       ) : null}
 
-      <div className="relative min-h-[320px]">
+      {/* DS-v3 — the wizard lives in a frosted glass panel over the V18Aurora
+          mesh. Blur via Tailwind backdrop utilities on this STATIC container
+          (Lightning CSS strips raw `backdrop-filter`); the inner slide
+          transform stays on the `m.div` child so the two never collide on the
+          same element (J3 separation invariant). `border-edge-top` adds the
+          luminous top hairline (dashboard KPI strip parity). */}
+      <div className="glass-panel border-edge-top rounded-card-lg relative min-h-[320px] p-5 backdrop-blur-[16px] backdrop-saturate-150 sm:p-6">
         <AnimatePresence mode="wait" initial={false}>
           <m.div
             key={step}
@@ -316,7 +322,7 @@ export function WeeklyReviewWizard() {
 
       {/* Sticky bottom CTA bar — safe-area aware */}
       <div
-        className="v18-glass sticky bottom-0 z-10 -mx-4 mt-2 flex items-center gap-3 border-t border-[var(--b-default)] px-4 py-3 sm:-mx-6 sm:px-6"
+        className="v18-glass sticky bottom-0 z-10 -mx-4 mt-2 flex items-center gap-3 border-t border-[var(--b-default)] px-4 py-3 backdrop-blur-[16px] backdrop-saturate-150 sm:-mx-6 sm:px-6"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
       >
         {step > 0 ? (
@@ -343,7 +349,7 @@ export function WeeklyReviewWizard() {
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-4 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid
-                ? 'bg-[var(--acc)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : // a11y B1 fix (WCAG 1.4.3) — `--t-2` instead of `--t-3`
                   // lifts contrast above 4.5:1 on the `--bg-2` disabled CTA.
                   // The label remains operationally informative ("Enregistrer
@@ -362,7 +368,7 @@ export function WeeklyReviewWizard() {
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-5 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid && !isPending
-                ? 'bg-[var(--acc)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : // a11y B1 fix (WCAG 1.4.3) — `--t-2` instead of `--t-3`
                   // lifts contrast above 4.5:1 on the `--bg-2` disabled CTA.
                   // The label remains operationally informative ("Enregistrer
@@ -403,6 +409,7 @@ function StepHeader({ step, eyebrow, headingRef }: StepHeaderProps) {
         style={{
           background: 'oklch(0.62 0.19 254 / 0.14)',
           color: 'oklch(0.82 0.115 247)',
+          boxShadow: 'var(--acc-glow)',
         }}
       >
         <Icon size={18} strokeWidth={2.2} />
@@ -434,7 +441,7 @@ function StepWeekIntro({ weekStart }: { weekStart: string }) {
         <span className="text-[var(--t-1)]">Pas de P&amp;L</span>, pas d&apos;analyse de marché —
         juste ton exécution.
       </p>
-      <div className="rounded-card-lg border border-[var(--b-acc)] bg-[oklch(0.62_0.19_254_/_0.08)] p-4">
+      <div className="glow-edge rounded-card-lg border bg-[oklch(0.62_0.19_254_/_0.08)] p-4">
         <p className="t-eyebrow text-[var(--t-3)]">Semaine couverte</p>
         <p className="t-h2 mt-1 font-mono text-[var(--t-1)]">{period}</p>
       </div>

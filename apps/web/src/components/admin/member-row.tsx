@@ -28,7 +28,7 @@ export function MemberRow({ member }: MemberRowProps) {
   return (
     <Link
       href={`/admin/members/${member.id}`}
-      className="bg-card hover:border-accent focus-visible:outline-accent group flex flex-col gap-3 rounded-lg border border-[var(--border)] p-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 sm:flex-row sm:items-center sm:justify-between"
+      className="bg-card hover:border-accent focus-visible:outline-accent group flex h-full flex-col gap-3 rounded-lg border border-[var(--border)] p-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 sm:flex-row sm:items-center sm:justify-between"
       aria-label={`Voir le profil de ${displayName}`}
     >
       <div className="flex min-w-0 flex-col gap-0.5">

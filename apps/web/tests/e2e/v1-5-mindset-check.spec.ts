@@ -103,6 +103,22 @@ test.describe('V1.5 MindsetCheck — auth-gates + happy-path persist/render + cr
       firstName: 'V1_5',
       lastName: 'MindsetAdmin',
     });
+
+    // Seed the member's current-week MindsetCheck UP-FRONT so the RENDER
+    // tests below are self-contained + deterministic. Previously they relied
+    // on the "CAPTURE + PERSIST" test having created the row first — a fragile
+    // inter-test data dependency that intermittently rendered as the empty
+    // state under CI load (the seeded row exists in the DB, proven, but the
+    // ordering made the render tests flaky/red). All four items answered 4 →
+    // every dimension mean 4 → overall 75 → the assertable `EXPECTED_OVERALL`.
+    await db.mindsetCheck.create({
+      data: {
+        userId: member.id,
+        weekStart: parseLocalDate(currentParisWeekMonday()),
+        instrumentVersion: CURRENT_MINDSET_INSTRUMENT.version,
+        responses: fullResponses(),
+      },
+    });
   });
 
   test.afterAll(async () => {
@@ -128,10 +144,19 @@ test.describe('V1.5 MindsetCheck — auth-gates + happy-path persist/render + cr
     // `mindsetWeekStartSchema`) — assert the fixture math is faithful.
     expect(weekStartDate.getUTCDay()).toBe(1);
 
-    const check = await db.mindsetCheck.create({
-      data: {
+    // Idempotent upsert: `beforeAll` already seeded this week's row, so a bare
+    // `create` would hit the `(userId, weekStart)` unique constraint. The
+    // round-trip contract (Monday weekStart, frozen version, responses shape)
+    // is still fully exercised on the persisted row.
+    const check = await db.mindsetCheck.upsert({
+      where: { userId_weekStart: { userId: member.id, weekStart: weekStartDate } },
+      create: {
         userId: member.id,
         weekStart: weekStartDate,
+        instrumentVersion: CURRENT_MINDSET_INSTRUMENT.version,
+        responses: fullResponses(),
+      },
+      update: {
         instrumentVersion: CURRENT_MINDSET_INSTRUMENT.version,
         responses: fullResponses(),
       },

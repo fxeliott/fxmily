@@ -36,7 +36,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         aria-hidden
         className="orb pointer-events-none absolute -top-32 -right-32 h-[420px] w-[420px] rounded-full opacity-20"
         style={{
-          background: 'radial-gradient(circle, oklch(0.879 0.231 130 / 0.20) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, oklch(0.62 0.19 254 / 0.20) 0%, transparent 70%)',
         }}
       />
 

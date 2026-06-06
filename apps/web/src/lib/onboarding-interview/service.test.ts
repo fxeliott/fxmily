@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { getOnboardingInstrument } from './instrument-v1';
+
 /**
  * V2.4 — Onboarding interview service unit tests (Session α, M3 directive).
  *
@@ -139,6 +141,18 @@ describe('appendAnswer', () => {
     });
 
     expect(answerUpsertMock).toHaveBeenCalledTimes(1);
+    // Fix: questionText is now resolved from the versioned instrument at
+    // write-time (was persisted as '' under a never-shipped "Phase A.2").
+    const expectedQuestionText = getOnboardingInstrument('v1')?.items.find(
+      (item) => item.questionIndex === 0,
+    )?.text;
+    expect(expectedQuestionText).toBeTruthy();
+    expect(answerUpsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ questionText: expectedQuestionText }),
+        update: expect.objectContaining({ questionText: expectedQuestionText }),
+      }),
+    );
     expect(interviewUpdateMock).toHaveBeenCalledWith({
       where: { id: 'oi_1' },
       data: { status: 'in_progress' },

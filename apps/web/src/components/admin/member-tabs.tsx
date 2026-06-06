@@ -9,6 +9,7 @@ export type MemberTabKey =
   | 'weekly-reports'
   | 'monthly-debrief'
   | 'mindset'
+  | 'calendar'
   | 'profile'
   | 'notes';
 
@@ -31,6 +32,9 @@ const TABS: readonly TabDefinition[] = [
   { key: 'weekly-reports', label: 'Rapports IA' },
   { key: 'monthly-debrief', label: 'Débrief mensuel' },
   { key: 'mindset', label: 'Mindset' },
+  // §26 J-C4 — admin read-only view of the member's latest AdaptiveCalendar
+  // (post-J-C1/J-C2/J-C3 LIVE). Carbone pattern §7.7 admin-only read-only.
+  { key: 'calendar', label: 'Calendrier' },
   // V2.4 Phase C — admin pseudonymized view of MemberProfile (post-V2.4 Phase B
   // onboarding interview LIVE). Carbone pattern §7.7 admin-only read-only.
   { key: 'profile', label: 'Profil' },

@@ -22,9 +22,11 @@ import { cn } from '@/lib/utils';
  * Mechanics are a faithful clone of `<TrainingDebriefWizard>` (`useActionState`
  * + localStorage draft + Framer `m.*` + `AnimatePresence mode="wait"` +
  * reduced-motion gating + hidden-input "submit everything" + APG focus-on-step
- * + sticky safe-area CTA) re-skinned to the **DS-v2 NEUTRAL/lime identity** —
- * NEVER the cyan `--cy` family (§21.7 training-only), NEVER `.v18-theme`
- * (REFLECT-only). `weekStart` is server-derived (`currentParisWeekStart`,
+ * + sticky safe-area CTA). DS-v3 (J3): the step-region is a frosted
+ * `.glass-panel` over the page ambient mesh with a calm focal glow on the step
+ * icon (app-wide `:root` blue — `--acc`). NEVER the cyan `--cy` family (§21.7
+ * training-only), NEVER `.v18-theme` (REFLECT's deeper scope — mindset rides
+ * the `:root` blue). `weekStart` is server-derived (`currentParisWeekStart`,
  * §27.7), never computed client-side. The instrument is the SoT — items/labels
  * come from `CURRENT_MINDSET_INSTRUMENT` (frozen, versioned).
  *
@@ -180,7 +182,14 @@ export function MindsetCheckWizard({ weekStart, prefill }: MindsetCheckWizardPro
         </Alert>
       ) : null}
 
-      <div className="relative min-h-[320px]">
+      {/* DS-v3 (J3) glass step-region — frosted panel over the ambient mesh.
+          NO `overflow-hidden` (carbone REFLECT audit polish: it would clip the
+          icon halo + is unneeded — the x:±24 slide rides the child `m.div` in
+          `mode="wait"`, verified 0 scroll-X @375/@1280). The blur comes from the
+          Tailwind backdrop utilities at the call site, never a raw rule (Lightning
+          CSS strips raw `backdrop-filter`). Slide stays on the child = J3 invariant
+          (backdrop-filter on the static parent, transform on the child). */}
+      <div className="glass-panel border-edge-top rounded-card-lg relative min-h-[320px] p-5 backdrop-blur-[16px] backdrop-saturate-150 sm:p-6">
         <AnimatePresence mode="wait" initial={false}>
           <m.div
             key={safeStep}
@@ -198,6 +207,9 @@ export function MindsetCheckWizard({ weekStart, prefill }: MindsetCheckWizardPro
                   background: 'var(--acc-dim)',
                   borderColor: 'var(--b-acc)',
                   color: 'var(--acc)',
+                  // DS-v3 focal glow — calm blue halo on the step's icon (the
+                  // premium focal point, anti Black-Hat: a soft halo, no pulse).
+                  boxShadow: 'var(--acc-glow)',
                 }}
               >
                 <Compass size={18} strokeWidth={2.2} />
@@ -276,7 +288,7 @@ export function MindsetCheckWizard({ weekStart, prefill }: MindsetCheckWizardPro
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-4 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid
-                ? 'bg-[var(--acc)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
             )}
           >
@@ -290,7 +302,7 @@ export function MindsetCheckWizard({ weekStart, prefill }: MindsetCheckWizardPro
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-5 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               allValid && !isPending
-                ? 'bg-[var(--acc)] hover:-translate-y-px hover:bg-[var(--acc-hi)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
             )}
             aria-busy={isPending || undefined}
@@ -387,7 +399,7 @@ function LikertItem({ item, value, onChange, error }: LikertItemProps) {
               className={cn(
                 'rounded-control flex min-h-12 flex-col items-center justify-center gap-0.5 border px-1 py-2 text-center transition-colors focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none',
                 checked
-                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]'
+                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc-btn)] text-[var(--acc-fg)]'
                   : 'border-[var(--b-strong)] bg-[var(--bg-2)] text-[var(--t-2)] hover:border-[var(--b-acc)] hover:text-[var(--t-1)]',
               )}
             >

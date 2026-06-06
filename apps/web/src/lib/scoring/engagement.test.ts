@@ -206,3 +206,196 @@ describe('computeEngagementScore — training activity (SPEC §21 J-T4)', () => 
     expect(r.parts.trainingActivityRate).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// SPEC §30.4 J-M4 — meeting (réunion Fxmily) attendance sub-score.
+//
+// ADDITION PURE (§30.7): `WEIGHT_MEETING` (15) is added EN PLUS; the existing
+// five weights (50/20/20/10 + training 15) are NEVER rebalanced. A member with
+// no meeting scheduled in the window scores BYTE-IDENTICALLY to pre-J-M4.
+//
+// CRUX (T2-2): the skip is keyed on `scheduledCount`, NOT `completedCount`
+// (≠ training, which tests `count > 0`):
+//   - scheduledCount === 0 (no meeting in the window)      → sub-score null →
+//     `aggregateDimension` renormalizes it away           → byte-identical.
+//   - scheduledCount > 0 & completedCount === 0 (had       → sub-score 0 →
+//     meetings, validated none)                            → engagement DROPS
+//     (the effort signal — "ne rien déclarer" ≠ "pas de réunion").
+//
+// Numbers below are pinned for a 14-day fullish run (windowDays 30, streak 14,
+// no training), where the four check-in sub-scores are:
+//   fill   = 14/30 × 50 = 23.3̄ (max 50)
+//   dual   = 14/14 × 20 = 20    (max 20)
+//   streak = 14/30 × 20 =  9.3̄ (max 20)
+//   journal= 14/14 × 10 = 10    (max 10)
+// base (no meeting) = 62.6̄ / 100 → round 63.
+// ---------------------------------------------------------------------------
+
+describe('computeEngagementScore — meeting attendance (SPEC §30.4 J-M4)', () => {
+  /** 14 days, morning + evening + journal each — every check-in sub-score is
+   *  fully determined, so any score delta is attributable to the meeting part
+   *  alone. */
+  function fullishCheckins(): EngagementCheckinInput[] {
+    const cs: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 14; i++) {
+      cs.push(M(day(i)));
+      cs.push(E(day(i), 'journal'));
+    }
+    return cs;
+  }
+
+  it('(a) scheduledCount 0 → BYTE-IDENTICAL to the same input without meeting fields', () => {
+    const checkins = fullishCheckins();
+    // No meeting fields at all (state of every member before the first
+    // generate-meetings cron run).
+    const omitted = computeEngagementScore({ checkins, streak: 14 });
+    // Explicit zeros: no meeting was scheduled in the window.
+    const zero = computeEngagementScore({
+      checkins,
+      streak: 14,
+      meetingScheduledCount: 0,
+      meetingCompletedCount: 0,
+    });
+
+    // Pinned exact score (round of 62.6̄).
+    expect(omitted.score).toBe(63);
+    // Byte-identical: the meeting part is skipped → renormalized away.
+    expect(zero.score).toBe(omitted.score);
+    expect(omitted.parts.meetingAttendanceRate).toBeNull();
+    expect(zero.parts.meetingAttendanceRate).toBeNull();
+  });
+
+  it('(b) scheduledCount 4, completedCount 0 → STRICTLY LOWER than case (a) (effort signal)', () => {
+    const checkins = fullishCheckins();
+    const base = computeEngagementScore({ checkins, streak: 14 });
+    // Had 4 meetings in the window, validated none → meeting sub-score 0
+    // (NOT skipped — the crux is the skip is on scheduledCount, not completed).
+    const r = computeEngagementScore({
+      checkins,
+      streak: 14,
+      meetingScheduledCount: 4,
+      meetingCompletedCount: 0,
+    });
+
+    // Pinned exact score: 62.6̄ awarded over 115 active max → 54.49̄ → round 54.
+    expect(r.score).toBe(54);
+    expect(r.score!).toBeLessThan(base.score!);
+    // The sub-score is present (NOT null) and contributes 0 points — the drop.
+    expect(r.parts.meetingAttendanceRate).not.toBeNull();
+    expect(r.parts.meetingAttendanceRate?.rate).toBe(0);
+    expect(r.parts.meetingAttendanceRate?.pointsAwarded).toBe(0);
+    expect(r.parts.meetingAttendanceRate?.pointsMax).toBe(15);
+  });
+
+  it('(c) scheduledCount 4, completedCount 4 → full WEIGHT_MEETING contribution', () => {
+    const checkins = fullishCheckins();
+    const base = computeEngagementScore({ checkins, streak: 14 });
+    // Attended + validated all 4 → meeting sub-score at rate 1 (full 15 pts).
+    const r = computeEngagementScore({
+      checkins,
+      streak: 14,
+      meetingScheduledCount: 4,
+      meetingCompletedCount: 4,
+    });
+
+    // Pinned exact score: (62.6̄ + 15) awarded over 115 active max → 67.53̄ → 68.
+    expect(r.score).toBe(68);
+    expect(r.score!).toBeGreaterThan(base.score!);
+    expect(r.parts.meetingAttendanceRate?.rate).toBe(1);
+    expect(r.parts.meetingAttendanceRate?.pointsAwarded).toBe(15);
+    expect(r.parts.meetingAttendanceRate?.pointsMax).toBe(15);
+  });
+
+  it('a perfect 30-day run stays exactly 100 with full meeting attendance', () => {
+    const checkins: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 30; i++) {
+      checkins.push(M(day(i)));
+      checkins.push(E(day(i), 'journal'));
+    }
+    // No meeting → 100 (existing contract, unchanged).
+    expect(computeEngagementScore({ checkins, streak: 30 }).score).toBe(100);
+    // All scheduled meetings validated + otherwise-perfect → still exactly 100.
+    const r = computeEngagementScore({
+      checkins,
+      streak: 30,
+      meetingScheduledCount: 8,
+      meetingCompletedCount: 8,
+    });
+    expect(r.score).toBe(100);
+    expect(r.parts.meetingAttendanceRate?.rate).toBe(1);
+  });
+
+  it('partial attendance sits strictly between zero and full', () => {
+    const checkins = fullishCheckins();
+    const none = computeEngagementScore({
+      checkins,
+      streak: 14,
+      meetingScheduledCount: 4,
+      meetingCompletedCount: 0,
+    });
+    const half = computeEngagementScore({
+      checkins,
+      streak: 14,
+      meetingScheduledCount: 4,
+      meetingCompletedCount: 2,
+    });
+    const full = computeEngagementScore({
+      checkins,
+      streak: 14,
+      meetingScheduledCount: 4,
+      meetingCompletedCount: 4,
+    });
+    expect(half.parts.meetingAttendanceRate?.rate).toBe(0.5);
+    expect(half.score!).toBeGreaterThan(none.score!);
+    expect(half.score!).toBeLessThan(full.score!);
+  });
+
+  it('clamps completedCount above scheduledCount to rate 1 (defensive, never > full)', () => {
+    const checkins = fullishCheckins();
+    // Should never happen (completed ≤ scheduled by construction) but the rate
+    // must clamp to 1 rather than exceed the weight.
+    const r = computeEngagementScore({
+      checkins,
+      streak: 14,
+      meetingScheduledCount: 4,
+      meetingCompletedCount: 99,
+    });
+    expect(r.parts.meetingAttendanceRate?.rate).toBe(1);
+    expect(r.parts.meetingAttendanceRate?.pointsAwarded).toBe(15);
+  });
+
+  it('insufficient check-in data still short-circuits (meeting does not rescue the guard)', () => {
+    const r = computeEngagementScore({
+      checkins: [],
+      streak: 0,
+      meetingScheduledCount: 8,
+      meetingCompletedCount: 8,
+    });
+    expect(r.score).toBeNull();
+    expect(r.reason).toBe('no_checkins');
+    expect(r.parts.meetingAttendanceRate).toBeNull();
+  });
+
+  it('is deterministic and orthogonal to the training sub-score (both addible)', () => {
+    const checkins = fullishCheckins();
+    // Training AND meeting both active → both renormalize against each other,
+    // each a pure addition; the result is deterministic.
+    const a = computeEngagementScore({
+      checkins,
+      streak: 14,
+      trainingActivityCount: 8,
+      meetingScheduledCount: 4,
+      meetingCompletedCount: 4,
+    });
+    const b = computeEngagementScore({
+      checkins,
+      streak: 14,
+      trainingActivityCount: 8,
+      meetingScheduledCount: 4,
+      meetingCompletedCount: 4,
+    });
+    expect(a.score).toBe(b.score);
+    expect(a.parts.trainingActivityRate).not.toBeNull();
+    expect(a.parts.meetingAttendanceRate).not.toBeNull();
+  });
+});

@@ -208,8 +208,10 @@ export async function enqueueMonthlyDebriefNotification(
 // whose EMISSION was never wired: the trigger engine created the delivery row
 // but enqueued no push, so a drift was only visible by PULL (opening the
 // dashboard). Push-only (see EMAIL_FALLBACK_SKIP_TYPES) — calm, ≤1/day
-// (engine anti-spam), opt-in preference. SPEC §2 / anti Black-Hat: the card
-// copy reframes calmly, never "you are tilting".
+// (engine anti-spam). Preference is default-on / opt-OUT (preferences.ts:38) —
+// an active member with a push subscription receives it without a new consent
+// gesture; they can disable it in notification preferences. SPEC §2 / anti
+// Black-Hat: the card copy reframes calmly, never "you are tilting".
 // =============================================================================
 
 export interface DouglasCardDeliveredPayload {

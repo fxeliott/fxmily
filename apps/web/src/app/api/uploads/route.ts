@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { logAudit, resolveUploadAuditAction } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
+import { uploadLimiter } from '@/lib/rate-limit/token-bucket';
 import { selectStorage } from '@/lib/storage';
 import { isAllowedMime, sniffImageMime } from '@/lib/storage/keys';
 import {
@@ -62,6 +63,19 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const userId = session.user.id;
+
+  // Session 3 hardening — per-member rate-limit BEFORE buffering the (up to
+  // 8 MiB) multipart body, so a throttled caller never costs memory/disk.
+  const decision = uploadLimiter.consume(userId);
+  if (!decision.allowed) {
+    return NextResponse.json(
+      { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil(decision.retryAfterMs / 1000)) },
+      },
+    );
+  }
 
   let formData: FormData;
   try {

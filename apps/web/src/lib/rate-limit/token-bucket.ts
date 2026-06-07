@@ -165,6 +165,26 @@ export const exportLimiter = new TokenBucketLimiter({
 });
 
 /**
+ * Session 3 hardening — `/api/uploads` POST per-member bucket.
+ *
+ * Each 8 MiB image is buffered in memory then written to storage; the route
+ * had no rate-limit, so a logged-in member could loop uploads unbounded
+ * (disk/R2 cost + memory pressure). Keyed by `userId` — one bucket per
+ * member, aggregate fan-out bounded by the cohort size.
+ *
+ * `bucketSize: 30` is generous for the heaviest legitimate session (log
+ * several trades, each with an entry + exit capture, plus a few drag-drop
+ * replacements/retries). `refillRate: 1/3` = one token every 3 s (~20/min
+ * sustained) — far above any human cadence, tight enough to cap a flood
+ * loop. The 429 is returned BEFORE `req.formData()` so the 8 MiB body is
+ * never buffered for a throttled caller.
+ */
+export const uploadLimiter = new TokenBucketLimiter({
+  bucketSize: 30,
+  refillRate: 1 / 3,
+});
+
+/**
  * J10 Phase I — Sentry tunnel route (`/monitoring`).
  *
  * **Reserved for V2** (J10 Phase O review B2 correction). The original

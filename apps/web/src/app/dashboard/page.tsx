@@ -30,6 +30,7 @@ import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expect
 import { PairTopFive } from '@/components/scoring/pair-top-five';
 import { RDistribution } from '@/components/scoring/r-distribution';
 import { ScoreGaugeGrid, ScoreGaugeGridSkeleton } from '@/components/scoring/score-gauge-grid';
+import { ScoreTrendChart, ScoreTrendChartSkeleton } from '@/components/scoring/score-trend-chart';
 import { SessionPerfBars } from '@/components/scoring/session-perf-bars';
 import { TrackRecordChart } from '@/components/scoring/track-record-chart';
 import {
@@ -46,7 +47,7 @@ import { countPendingAccessRequests } from '@/lib/access-request/service';
 import { getCheckinStatus, getStreak } from '@/lib/checkin/service';
 import { habitKindSchema } from '@/lib/schemas/habit-log';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
-import { getLatestBehavioralScore } from '@/lib/scoring/service';
+import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 import { countTradesByStatus } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
 
@@ -308,6 +309,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </h2>
           <Suspense fallback={<ScoreGaugeGridSkeleton />}>
             <ScoreGaugeGrid score={latestScore} />
+          </Suspense>
+        </section>
+
+        {/* Session 3 §28/§21 — behavioral scores OVER TIME. The gauges above
+            show today; this shows the trajectory (am I progressing?). Member's
+            own persisted scores only — posture §2 safe, no AI, no admin report.
+            The nightly cron fills the series; <2 snapshots → calm placeholder. */}
+        <section className="mb-6" aria-labelledby="score-trend-heading">
+          <h2 id="score-trend-heading" className="sr-only">
+            Évolution de tes scores comportementaux
+          </h2>
+          <Suspense fallback={<ScoreTrendChartSkeleton />}>
+            <ScoreTrendSection userId={userId!} />
           </Suspense>
         </section>
 
@@ -748,6 +762,11 @@ function ProfileStatusSkeleton() {
       aria-label="Chargement de ton profil"
     />
   );
+}
+
+async function ScoreTrendSection({ userId }: { userId: string }) {
+  const history = await getBehavioralScoreHistory(userId, { sinceDays: 90 });
+  return <ScoreTrendChart data={history} />;
 }
 
 async function TrackRecordSection({

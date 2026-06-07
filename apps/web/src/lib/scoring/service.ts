@@ -532,3 +532,48 @@ export async function getLatestBehavioralScore(
   });
   return row === null ? null : serializeBehavioralScore(row);
 }
+
+/** One point of the behavioral-score trend (4 dimensions over time). Scores are
+ *  `null` on days the dimension was `insufficient_data` — never a fabricated 0. */
+export interface BehavioralScoreTrendPoint {
+  /** Local-day anchor `YYYY-MM-DD`. */
+  date: string;
+  discipline: number | null;
+  emotionalStability: number | null;
+  consistency: number | null;
+  engagement: number | null;
+}
+
+/**
+ * Session 3 §28/§21 — behavioral-score history for the member's "progression
+ * over time" chart. The nightly cron persists one `BehavioralScore` per day
+ * (upsert on `(userId, date)`); this reads them ascending so the dashboard can
+ * draw the 4 dimensions as trend lines. Until this jalon the series was read
+ * ONLY by the RGPD export — the member could see today's gauges but never their
+ * trajectory. Lightweight projection (4 ints + date), user-scoped, no P&L.
+ */
+export async function getBehavioralScoreHistory(
+  userId: string,
+  options: { sinceDays?: number } = {},
+): Promise<BehavioralScoreTrendPoint[]> {
+  const sinceDays = options.sinceDays ?? 90;
+  const cutoff = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+  const rows = await db.behavioralScore.findMany({
+    where: { userId, date: { gte: cutoff } },
+    orderBy: { date: 'asc' },
+    select: {
+      date: true,
+      disciplineScore: true,
+      emotionalStabilityScore: true,
+      consistencyScore: true,
+      engagementScore: true,
+    },
+  });
+  return rows.map((r) => ({
+    date: r.date.toISOString().slice(0, 10),
+    discipline: r.disciplineScore,
+    emotionalStability: r.emotionalStabilityScore,
+    consistency: r.consistencyScore,
+    engagement: r.engagementScore,
+  }));
+}

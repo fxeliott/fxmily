@@ -40,6 +40,10 @@ import { nanoid } from 'nanoid';
 
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/auth/password';
+// `invitations.ts` is NOT `server-only` (verified) — safe to import in the
+// Playwright Node runtime, like `password` above. It mints a real Invitation
+// row (hashed token persisted) and returns the raw token for the onboarding URL.
+import { createInvitation } from '@/lib/auth/invitations';
 
 export const TEST_EMAIL_DOMAIN = 'e2e.test@fxmily.local';
 const TEST_EMAIL_RE = /\.e2e\.test@fxmily\.local$/i;
@@ -203,6 +207,75 @@ export async function cleanupTestUsers(): Promise<{ deleted: number }> {
 /** Type-guard for tests that want to verify they got a real test user. */
 export function isTestUserEmail(email: string): boolean {
   return TEST_EMAIL_RE.test(email);
+}
+
+// =============================================================================
+// V2.5 — Self-service access-request + invitation seeding (S2 DoD#1 e2e)
+// =============================================================================
+
+export interface SeededInvitation {
+  invitationId: string;
+  /** Plain (unhashed) token — only ever returned here, never persisted. */
+  plainToken: string;
+  email: string;
+  expiresAt: Date;
+}
+
+/**
+ * Mint a real `Invitation` row (hashed token persisted, raw token returned) so
+ * an E2E can drive `/onboarding/welcome?token=…` against real Postgres and
+ * exercise the production `completeOnboarding` account-creation path (which is
+ * `server-only` and cannot be called directly from this Node helper).
+ *
+ * `invitedById` must be a seeded admin (FK to User). Use a default
+ * `*.e2e.test@fxmily.local` email so the resulting member + invitation are
+ * caught by `cleanupTestUsers` (invitation cleanup is by `invitedById`).
+ */
+export async function seedInvitation(opts: {
+  email?: string;
+  invitedById: string;
+}): Promise<SeededInvitation> {
+  const email = opts.email ?? `${nanoid(8).toLowerCase()}.invite.e2e.test@fxmily.local`;
+  const { invitationId, plainToken, expiresAt } = await createInvitation({
+    email,
+    invitedById: opts.invitedById,
+  });
+  return { invitationId, plainToken, email, expiresAt };
+}
+
+/**
+ * Wipe `access_request` rows under the test email domain. They carry NO `userId`
+ * (created for not-yet-members), so `cleanupTestUsers` (which deletes by user id)
+ * cannot reach them — an E2E that submits `/rejoindre` must call this explicitly.
+ * Idempotent.
+ */
+export async function cleanupAccessRequests(): Promise<{ deleted: number }> {
+  const result = await db.accessRequest.deleteMany({
+    where: { email: { contains: '.e2e.test@fxmily.local' } },
+  });
+  return { deleted: result.count };
+}
+
+/** Read the latest access request for an email (E2E DB assertion helper). */
+export async function getAccessRequestByEmail(email: string) {
+  return db.accessRequest.findFirst({
+    where: { email: email.toLowerCase().trim() },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, status: true, email: true, invitationId: true },
+  });
+}
+
+/** Read a user by email (E2E DB assertion helper). */
+export async function getUserByEmail(email: string) {
+  return db.user.findFirst({
+    where: { email: email.toLowerCase().trim() },
+    select: { id: true, email: true, role: true, status: true, firstName: true, lastName: true },
+  });
+}
+
+/** Count invitations minted for an email (E2E DB assertion helper). */
+export async function countInvitationsForEmail(email: string): Promise<number> {
+  return db.invitation.count({ where: { email: email.toLowerCase().trim() } });
 }
 
 // =============================================================================

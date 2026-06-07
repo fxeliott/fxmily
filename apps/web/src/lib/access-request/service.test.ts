@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Real (unmocked) Prisma — the service's P2002 race guard checks
+// `err instanceof Prisma.PrismaClientKnownRequestError`, so the test must throw
+// a genuine instance (a bare `{ code: 'P2002' }` object would fail instanceof).
+import { Prisma } from '@/generated/prisma/client';
+
 /**
  * V2.5 — Service tests for the self-service access-request pipeline.
  *
@@ -155,6 +160,46 @@ describe('createAccessRequest', () => {
     // The user dedup query excludes soft-deleted accounts.
     const arg = userFindFirst.mock.calls[0]?.[0] as { where: { status: unknown } };
     expect(arg.where.status).toEqual({ not: 'deleted' });
+  });
+
+  it('treats a P2002 from a concurrent insert as a neutral dedup (partial-unique race guard)', async () => {
+    // Both layers of the fast-path dedup pass (no user, no pending) — the two
+    // concurrent submits both reach the insert; the DB partial UNIQUE index
+    // `(email) WHERE status='pending'` lets only one win, the loser raises P2002.
+    userFindFirst.mockResolvedValue(null);
+    accessRequestFindFirst.mockResolvedValue(null);
+    accessRequestCreate.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    const result = await createAccessRequest({
+      firstName: 'Eliot',
+      lastName: 'Pena',
+      email: 'race@fxmilyapp.com',
+    });
+
+    // The loser of the race is treated exactly like an existing pending request:
+    // neutral success (no enumeration), NOT created, NOT thrown.
+    expect(result).toEqual({ ok: true, created: false });
+    expect(accessRequestCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('rethrows a non-P2002 database error (never silently swallows real failures)', async () => {
+    userFindFirst.mockResolvedValue(null);
+    accessRequestFindFirst.mockResolvedValue(null);
+    accessRequestCreate.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Connection reset', {
+        code: 'P1001',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(
+      createAccessRequest({ firstName: 'Eliot', lastName: 'Pena', email: 'boom@fxmilyapp.com' }),
+    ).rejects.toThrow('Connection reset');
   });
 });
 

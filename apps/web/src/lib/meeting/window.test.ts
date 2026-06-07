@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { MEETING_WINDOW_DAYS, meetingWindowStart } from './window';
+import { floorMeetingWindowAtJoin, MEETING_WINDOW_DAYS, meetingWindowStart } from './window';
 
 describe('MEETING_WINDOW_DAYS', () => {
   it('is 30 (single window for declaration + rate + engagement, §30.7)', () => {
@@ -41,5 +41,38 @@ describe('meetingWindowStart', () => {
     // joined exactly 31 days before NOW → join-floor is older than now−30j → floor wins.
     const joinedAt = new Date('2026-04-29T08:00:00.000Z'); // 31 days ago
     expect(meetingWindowStart(NOW, joinedAt).toISOString()).toBe('2026-04-30T10:00:00.000Z');
+  });
+});
+
+describe('floorMeetingWindowAtJoin', () => {
+  // A report/scoring window start (UTC instant) chosen by the caller.
+  const WINDOW_START = new Date('2026-05-01T00:00:00.000Z');
+
+  it('returns the window start UNCHANGED for a member who joined before it (byte-identical)', () => {
+    const joinedAt = new Date('2026-01-15T09:00:00.000Z'); // long-standing member
+    expect(floorMeetingWindowAtJoin(WINDOW_START, joinedAt)).toBe(WINDOW_START);
+  });
+
+  it('returns the window start unchanged when the member joined ON the window-start day', () => {
+    // Paris midnight of 2026-05-01 is 2026-04-30T22:00Z, which is < WINDOW_START
+    // (00:00Z), so the window start is the later bound and wins.
+    const joinedAt = new Date('2026-05-01T08:00:00.000Z');
+    expect(floorMeetingWindowAtJoin(WINDOW_START, joinedAt)).toBe(WINDOW_START);
+  });
+
+  it('floors to Paris-local midnight of the join day for a mid-window joiner', () => {
+    // joined 2026-05-15 14:00Z → Paris day 2026-05-15 (CEST) → midnight 2026-05-14T22:00Z.
+    const joinedAt = new Date('2026-05-15T14:00:00.000Z');
+    expect(floorMeetingWindowAtJoin(WINDOW_START, joinedAt).toISOString()).toBe(
+      '2026-05-14T22:00:00.000Z',
+    );
+  });
+
+  it('gives a member who joined at 23h full credit for that civil day (Paris midnight snap)', () => {
+    // joined 2026-05-10 23:30Z → Paris day 2026-05-11 (CEST, +2h) → midnight 2026-05-10T22:00Z.
+    const joinedAt = new Date('2026-05-10T23:30:00.000Z');
+    expect(floorMeetingWindowAtJoin(WINDOW_START, joinedAt).toISOString()).toBe(
+      '2026-05-10T22:00:00.000Z',
+    );
   });
 });

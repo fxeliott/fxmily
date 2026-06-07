@@ -9,6 +9,10 @@ import { localDateOf, parseLocalDate } from '@/lib/checkin/timezone';
 // (§30.7) and is NOT a §21.5-isolated symbol, so this import is unrestricted
 // (scoring/service.ts + weekly-report/loader.ts already import it the same way).
 import { countMeetingAttendance } from '@/lib/meeting/service';
+// SPEC §30.7 T3-1 — floor the month window at the member's join day so a
+// mid-month joiner is not charged for pre-join meetings (byte-identical past
+// the first month).
+import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
 import { getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the monthly-debrief loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
@@ -138,11 +142,15 @@ export async function loadMonthlySliceForUser(
     // recency integer below — never a backtest P&L.
     countRecentTrainingActivity(userId, window.monthStartUtc, window.monthEndUtc),
     loadWeeklySummaries(userId, window),
-    // SPEC §28/§30 — meeting assiduité over the SAME civil-month window (the
-    // helper is half-open `[from, to)`; the monthly counters use this window
-    // for every other axis). Count-only ({ scheduledCount, completedCount });
-    // `lastDeclaredAt` is ignored here (recency is not a monthly counter).
-    countMeetingAttendance(userId, window.monthStartUtc, window.monthEndUtc),
+    // SPEC §28/§30 — meeting assiduité over the civil-month window, FLOORED at
+    // the member's join day (§30.7 T3-1) so a mid-month joiner is not charged
+    // for pre-join meetings. Half-open `[from, to)`; count-only
+    // ({ scheduledCount, completedCount }); `lastDeclaredAt` ignored here.
+    countMeetingAttendance(
+      userId,
+      floorMeetingWindowAtJoin(window.monthStartUtc, user.joinedAt),
+      window.monthEndUtc,
+    ),
   ]);
 
   // SPEC §25.3 — training slice = count/recency ONLY. `daysSinceLastBacktest`

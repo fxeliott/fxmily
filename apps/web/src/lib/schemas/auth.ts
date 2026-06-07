@@ -16,6 +16,7 @@ const emailSchema = z
   .string({ message: 'Email requis.' })
   .trim()
   .toLowerCase()
+  .max(254, 'Email trop long.') // RFC 5321 cap — bounds an unauthenticated input (defense-in-depth)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
   .email('Email invalide.');
 
@@ -80,6 +81,24 @@ export const inviteSchema = z.object({
   email: emailSchema,
 });
 export type InviteInput = z.infer<typeof inviteSchema>;
+
+/**
+ * Public `/rejoindre` self-service access request (V2.5 — front door).
+ *
+ * Reuses `nameSchema` (safeFreeText + bidi/zero-width refine = Trojan-Source
+ * canon Fxmily — these names are rendered back to the admin and could one day
+ * feed an LLM prompt) and `emailSchema` (trim + lowercase + bidi refine). The
+ * form is submitted UNAUTHENTICATED, so `.strict()` rejects any extra field a
+ * crafted request might smuggle in.
+ */
+export const accessRequestSchema = z
+  .object({
+    firstName: nameSchema,
+    lastName: nameSchema,
+    email: emailSchema,
+  })
+  .strict();
+export type AccessRequestInput = z.infer<typeof accessRequestSchema>;
 
 /**
  * /onboarding/welcome form.

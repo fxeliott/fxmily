@@ -75,6 +75,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           Cohorte privée · accès uniquement par invitation
         </p>
 
+        <p className="text-center text-[11px] text-[var(--t-4)]">
+          Pas encore membre ?{' '}
+          <Link href="/rejoindre" className="text-[var(--acc)] underline-offset-2 hover:underline">
+            Faire une demande
+          </Link>
+        </p>
+
         <p className="text-center text-[10px] text-[var(--t-4)] tabular-nums">
           <span className="inline-flex items-center gap-1">
             <Kbd>⌘</Kbd>

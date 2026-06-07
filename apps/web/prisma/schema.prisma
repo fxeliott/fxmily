@@ -33,6 +33,22 @@ enum UserStatus {
   deleted
 }
 
+/// Self-service access request lifecycle (V2.5 — public "Rejoindre" front door).
+/// A public visitor submits prénom/nom/email on `/rejoindre` → a `pending` row.
+/// The admin reviews it in `/admin/access-requests` and either:
+///   approved : an `Invitation` is minted (existing onboarding pipeline reused)
+///              and a premium "demande acceptée" email is sent. The created
+///              invitation id is stored on the request for traceability.
+///   rejected : terminal, no email, no account.
+/// RGPD: a non-member's name+email is PII stored before any consent — the
+/// `/api/cron/purge-access-requests` weekly cron purges resolved rows (and
+/// stale pending ones > 30d) so this surface never accumulates dormant PII.
+enum AccessRequestStatus {
+  pending
+  approved
+  rejected
+}
+
 /// Trade direction (J2). Long = buy, short = sell.
 enum TradeDirection {
   long
@@ -367,6 +383,10 @@ model User {
   // J9 — Web Push subscriptions (one row per browser/device) + per-category opt-out preferences.
   pushSubscriptions            PushSubscription[]
   notificationPreferences      NotificationPreference[]
+  // V2.5 — public self-service access requests reviewed by this admin
+  // (approve/reject). SetNull on the request so a deleted admin doesn't
+  // cascade-wipe the audit trail of who reviewed a non-member's request.
+  reviewedAccessRequests       AccessRequest[]               @relation("AccessRequestsReviewed")
 
   @@index([status])
   @@index([role])
@@ -2061,4 +2081,56 @@ model MeetingAttendance {
   /// unique prefix (repo convention: no redundant single-column index).
   @@index([userId, declaredAt(sort: Desc)])
   @@map("meeting_attendances")
+}
+
+// =============================================================================
+// V2.5 — Self-service access requests (public "Rejoindre" front door)
+// =============================================================================
+
+/// A public visitor's request to join Fxmily. Submitted unauthenticated on
+/// `/rejoindre` (prénom + nom + email), reviewed by the admin in
+/// `/admin/access-requests`. On approval the existing invitation/onboarding
+/// pipeline is reused (an `Invitation` is minted + a premium email sent) — this
+/// model NEVER creates an account itself.
+///
+/// PII (RGPD): `firstName` + `lastName` + `email` belong to a NON-member who has
+/// given no account-level consent. We minimise exposure : (a) the public action
+/// is anti-enumeration (same neutral success whether or not a row is created);
+/// (b) audit rows carry NO name/email (PII-free metadata); (c) the
+/// `/api/cron/purge-access-requests` weekly cron deletes resolved rows
+/// (approved/rejected) and stale pending rows (> 30d) so this table never
+/// accumulates dormant non-member PII.
+///
+/// `reviewedBy` is SetNull on admin delete (the request keeps its lifecycle
+/// trace even if the reviewing admin's account is later purged). `invitationId`
+/// is a loose pointer (no FK) to the invitation minted on approval — the
+/// invitation has its own TTL + purge path, so a dangling pointer after the
+/// invitation expires/is-purged is acceptable and intentional.
+model AccessRequest {
+  id        String              @id @default(cuid())
+  firstName String              @map("first_name")
+  lastName  String              @map("last_name")
+  email     String
+  status    AccessRequestStatus @default(pending)
+
+  /// When the admin approved/rejected the request (null while pending).
+  reviewedAt   DateTime? @map("reviewed_at")
+  /// The admin who reviewed it. SetNull so a purged admin doesn't erase the
+  /// request's lifecycle trace.
+  reviewedById String?   @map("reviewed_by_id")
+  reviewedBy   User?     @relation("AccessRequestsReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  /// Loose pointer (no FK) to the `Invitation` minted on approval. The
+  /// invitation has its own TTL + RGPD purge path; we don't cascade-couple
+  /// the two lifecycles.
+  invitationId String? @map("invitation_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Admin pending-queue read: filter by status, newest-first.
+  @@index([status, createdAt])
+  // Dedup lookup on submit (an active pending request for this email).
+  @@index([email])
+  @@map("access_requests")
 }

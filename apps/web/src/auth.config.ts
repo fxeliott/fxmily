@@ -12,7 +12,7 @@ import type { NextAuthConfig } from 'next-auth';
  */
 
 const PUBLIC_PREFIXES = ['/api/auth', '/legal', '/_next', '/favicon'];
-const PUBLIC_EXACT = new Set(['/', '/login', '/forgot-password']);
+const PUBLIC_EXACT = new Set(['/', '/login', '/forgot-password', '/rejoindre']);
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_EXACT.has(pathname)) return true;

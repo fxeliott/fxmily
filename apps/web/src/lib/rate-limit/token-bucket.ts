@@ -294,6 +294,27 @@ export const loginIpLimiter = new TokenBucketLimiter({
   maxKeys: 5000,
 });
 
+/**
+ * V2.5 — Public `/rejoindre` self-service access request (per-IP).
+ *
+ * Consumed PRE-AUTH (the form is unauthenticated) so the IP MUST be derived
+ * with `callerIdTrusted` (last-entry XFF from Caddy — non-spoofable), NOT
+ * `callerId` (first-entry, client-controlled). See the `callerIdTrusted`
+ * warning above.
+ *
+ * `bucketSize: 3` lets a genuine visitor retry a couple of times (typo on the
+ * email, network blip) without locking out; `refillRate: 1/(15*60)` = 1 token
+ * every 15 minutes throttles a bot spraying join requests to flood the admin
+ * pending queue + accumulate non-member PII (RGPD). Mirrors `exportLimiter`'s
+ * burst-3 / 15-min-refill envelope. `maxKeys: 5000` matches the LruMap default
+ * — far above any plausible legit cohort fan-out for a closed-cohort product.
+ */
+export const accessRequestIpLimiter = new TokenBucketLimiter({
+  bucketSize: 3,
+  refillRate: 1 / (15 * 60),
+  maxKeys: 5000,
+});
+
 // =============================================================================
 // Helpers — extract a stable per-caller identity from the request
 // =============================================================================

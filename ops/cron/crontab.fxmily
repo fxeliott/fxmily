@@ -24,6 +24,7 @@
 #   - fxmily-caddy-backup       Sunday 06:30 UTC                   (V1.12)
 #   - mindset-check-reminders   Monday 09:00 UTC                   (V1.5 §27)
 #   - generate-meetings         weekdays 06:00 UTC                 (V1.7 §30)
+#   - purge-access-requests     Sunday 04:00 UTC                   (V2.5 RGPD)
 #
 # Log : every run appends one line to /var/log/fxmily/cron.log via the
 # wrapper. The DB audit row (`cron.<route>.scan`) is the canonical
@@ -84,3 +85,10 @@ MAILTO=""
 # Shares the 06:00 slot with dispatch-douglas (0 0,6,12,18) — both are short
 # (a createMany / a temporal scan), no contention on the CX22.
 0 6 * * 1-5                  fxmily   /usr/local/bin/fxmily-cron generate-meetings
+
+# V2.5 — Self-service access requests RGPD purge : Sunday 04:00 UTC. Deletes
+# rejected rows + pending/approved rows older than 30 days so the table never
+# accumulates dormant non-member PII (name+email without account consent). The
+# 04:00 Sunday slot shares the hour with the daily purge-audit-log (04:00) but
+# they hit disjoint tables; both are short deleteMany scans, no CX22 contention.
+0 4 * * 0                    fxmily   /usr/local/bin/fxmily-cron purge-access-requests

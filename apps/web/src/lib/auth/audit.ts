@@ -297,7 +297,26 @@ export type AuditAction =
   // free-text (posture §2 + audit-PII-free invariant §30.7), mirror of the
   // V2.1 `admin.note.*` admin-scoped pattern.
   | 'meeting.generated'
-  | 'admin.meeting.cancelled';
+  | 'admin.meeting.cancelled'
+  // V2.5 — Self-service access requests (public "Rejoindre" front door).
+  // PII-FREE metadata invariant (BLOCKING): these rows NEVER carry the
+  // requester's name or email — only opaque ids. The `AccessRequest` row
+  // itself holds the PII (with the RGPD purge cron path), so re-logging it
+  // as plaintext audit metadata serves no purpose and breaks data
+  // minimisation (mirror `invitation.created` :104-105).
+  //   - access_request.created     : public action, NO id (anti-enumeration —
+  //                                  same neutral audit whether or not a row
+  //                                  was actually created). `metadata: {}`.
+  //   - access_request.approved    : admin action, `{requestId}` only.
+  //   - access_request.rejected    : admin action, `{requestId}` only.
+  //   - admin.access_requests.listed : admin page view, `{count}` only.
+  //   - cron.purge_access_requests.scan : weekly RGPD purge heartbeat,
+  //                                  counts + threshold + ranAt only.
+  | 'access_request.created'
+  | 'access_request.approved'
+  | 'access_request.rejected'
+  | 'admin.access_requests.listed'
+  | 'cron.purge_access_requests.scan';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the
 // public Track Record was split out to a standalone repo

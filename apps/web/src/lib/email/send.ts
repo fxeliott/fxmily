@@ -2,6 +2,7 @@ import 'server-only';
 
 import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
+import { AccessApprovedEmail } from '@/lib/email/templates/access-approved';
 import { AnnotationReceivedEmail } from '@/lib/email/templates/annotation-received';
 import { InvitationEmail } from '@/lib/email/templates/invitation';
 import { MonthlyDebriefEmail } from '@/lib/email/templates/monthly-debrief';
@@ -49,6 +50,57 @@ export async function sendInvitationEmail({
       inviteUrl,
       ``,
       `Si tu n'as pas demandé cette invitation, ignore ce message — aucun compte ne sera créé.`,
+    ].join('\n'),
+  });
+}
+
+// ----- V2.5 — access request approved (premium front-door email) -----------
+
+export interface SendAccessApprovedParams {
+  to: string;
+  firstName: string | null | undefined;
+  plainToken: string;
+  expiresAt: Date;
+}
+
+/**
+ * Send the premium "demande acceptée" email after an admin approves a public
+ * `/rejoindre` access request (V2.5). REUSES the existing onboarding pipeline:
+ * the CTA points at `/onboarding/welcome?token=…` via `buildInviteUrl`, exactly
+ * like `sendInvitationEmail` — the account is created by the existing flow, not
+ * reinvented.
+ *
+ * Delivery is NOT best-effort here: the CALLER
+ * (`app/admin/access-requests/actions.ts`) treats a throw as an email failure
+ * and rolls back (delete the invitation + revert the request to pending),
+ * mirroring `invite/actions.ts:92-100`.
+ */
+export async function sendAccessApprovedEmail({
+  to,
+  firstName,
+  plainToken,
+  expiresAt,
+}: SendAccessApprovedParams): Promise<{ id: string | null; delivered: boolean }> {
+  const inviteUrl = buildInviteUrl(plainToken);
+  const expiresInDays = Math.max(
+    1,
+    Math.round((expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000)),
+  );
+  const name = firstName?.trim() || null;
+
+  return sendEmail({
+    to,
+    subject: 'Ta demande est acceptée — bienvenue dans Fxmily',
+    react: AccessApprovedEmail({ inviteUrl, firstName, expiresInDays }),
+    text: [
+      name ? `Salut ${name},` : `Bonjour,`,
+      ``,
+      `Ta demande pour rejoindre Fxmily est acceptée — bienvenue dans la cohorte.`,
+      `Il ne te reste qu'une étape : créer ton compte avec ce lien (expire dans ${expiresInDays} jour${expiresInDays > 1 ? 's' : ''}) :`,
+      ``,
+      inviteUrl,
+      ``,
+      `Le lien est unique et ne peut servir qu'une seule fois. Si tu n'es plus intéressé·e, ignore ce message — aucun compte ne sera créé.`,
     ].join('\n'),
   });
 }

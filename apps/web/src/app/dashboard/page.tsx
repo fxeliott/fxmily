@@ -2,6 +2,7 @@ import {
   ArrowRight,
   Check,
   GraduationCap,
+  Inbox,
   LineChart as LineChartIcon,
   LogOut,
   Moon,
@@ -40,6 +41,7 @@ import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { Kbd } from '@/components/ui/kbd';
 import { Pill } from '@/components/ui/pill';
+import { countPendingAccessRequests } from '@/lib/access-request/service';
 import { getCheckinStatus, getStreak } from '@/lib/checkin/service';
 import { habitKindSchema } from '@/lib/schemas/habit-log';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
@@ -129,6 +131,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const firstName = fullName.split(' ')[0]!;
   const isAdmin = session.user.role === 'admin';
   const totalTrades = counts.open + counts.closed;
+
+  // V2.5 — pending self-service access requests count for the admin card badge.
+  const pendingAccessRequests = isAdmin ? await countPendingAccessRequests() : 0;
 
   return (
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
@@ -493,6 +498,32 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <h3 className="t-h3 text-[var(--t-1)]">Inviter un membre</h3>
                       <p className="t-cap mt-0.5 text-[var(--t-3)]">
                         Lien personnel valable 7 jours, unique.
+                      </p>
+                    </div>
+                    <ArrowRight
+                      className="mt-1.5 h-3.5 w-3.5 shrink-0 text-[var(--t-4)]"
+                      strokeWidth={1.75}
+                    />
+                  </Card>
+                </Link>
+              </HoverLift>
+              <HoverLift className="block">
+                <Link href="/admin/access-requests" className="block">
+                  <Card interactive className="flex items-start gap-3 p-4">
+                    <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+                      <Inbox className="h-4 w-4" strokeWidth={1.75} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="t-h3 text-[var(--t-1)]">Demandes d&apos;accès</h3>
+                        {pendingAccessRequests > 0 ? (
+                          <Pill tone="acc">{pendingAccessRequests}</Pill>
+                        ) : null}
+                      </div>
+                      <p className="t-cap mt-0.5 text-[var(--t-3)]">
+                        {pendingAccessRequests > 0
+                          ? `${pendingAccessRequests} demande${pendingAccessRequests > 1 ? 's' : ''} en attente.`
+                          : 'Valider les demandes publiques /rejoindre.'}
                       </p>
                     </div>
                     <ArrowRight

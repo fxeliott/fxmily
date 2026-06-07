@@ -144,6 +144,28 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
   lines.push(
     `- Coaching reçu : ${r.annotationsReceived} corrections (${r.annotationsViewed} vues) · ${r.douglasCardsDelivered} fiches Mark Douglas (${r.douglasCardsSeen} lues, ${r.douglasCardsHelpful} utiles)`,
   );
+  // SPEC §28/§21 — Session-2 process/habit axes as EXPLICIT NAMED rates so le
+  // débrief mensuel peut raisonner sur chaque axe nommément (ex : "oublis sur
+  // 3/10 trades", "formation 5/7 soirs") au lieu de seulement via les scores
+  // agrégés. COUNT-ONLY (posture §2) : ils mesurent l'ACTE (prép/process/
+  // formation/présence a eu lieu), JAMAIS un résultat ni un conseil. `n/a` =
+  // axe non renseigné ce mois (jamais un faux "0 %"). Ces axes restent dans la
+  // section RÉELLE (discipline/engagement), distincts de l'effort training §21.5.
+  lines.push(
+    `- Axes process & habitudes (Session-2 — discipline/engagement, l'acte jamais le P&L) :`,
+  );
+  lines.push(
+    `  · Process complété ("oublis") : ${formatRate(r.processCompleteRate)} des trades clôturés renseignés · Analyse marché faite : ${formatRate(r.marketAnalysisDoneRate)} des matins renseignés · Routine matinale : ${formatRate(r.morningRoutineCompletedRate)} des matins renseignés · Formation suivie : ${formatRate(r.formationFollowedRate)} des soirs renseignés.`,
+  );
+  if (r.meetingAttendance.scheduled > 0) {
+    lines.push(
+      `  · Assiduité réunions : ${r.meetingAttendance.completed}/${r.meetingAttendance.scheduled} validées (${formatRate(r.meetingAttendance.rate)}).`,
+    );
+  } else {
+    lines.push(
+      `  · Assiduité réunions : aucune réunion programmée ce mois (pas de taux — jamais de faux "0 %").`,
+    );
+  }
   lines.push(``);
 
   // --- (B) Section TRAINING — 🚨 §21.5 firewall : effort/récence ONLY ------

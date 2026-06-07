@@ -3,6 +3,12 @@ import 'server-only';
 import { db } from '@/lib/db';
 import type { SerializedCheckin } from '@/lib/checkin/service';
 import { localDateOf, parseLocalDate } from '@/lib/checkin/timezone';
+// SPEC §28/§30 — count-only meeting attendance primitive ({ scheduledCount,
+// completedCount }; no meeting body, no P&L). Feeds the explicit
+// `meetingAttendance` REAL counter. Meeting assiduité touches no real edge
+// (§30.7) and is NOT a §21.5-isolated symbol, so this import is unrestricted
+// (scoring/service.ts + weekly-report/loader.ts already import it the same way).
+import { countMeetingAttendance } from '@/lib/meeting/service';
 import { getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the monthly-debrief loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
@@ -119,6 +125,7 @@ export async function loadMonthlySliceForUser(
     latestScore,
     trainingActivity,
     weeklySummaries,
+    meeting,
   ] = await Promise.all([
     loadTrades(userId, window),
     loadCheckins(userId, window),
@@ -131,6 +138,11 @@ export async function loadMonthlySliceForUser(
     // recency integer below — never a backtest P&L.
     countRecentTrainingActivity(userId, window.monthStartUtc, window.monthEndUtc),
     loadWeeklySummaries(userId, window),
+    // SPEC §28/§30 — meeting assiduité over the SAME civil-month window (the
+    // helper is half-open `[from, to)`; the monthly counters use this window
+    // for every other axis). Count-only ({ scheduledCount, completedCount });
+    // `lastDeclaredAt` is ignored here (recency is not a monthly counter).
+    countMeetingAttendance(userId, window.monthStartUtc, window.monthEndUtc),
   ]);
 
   // SPEC §25.3 — training slice = count/recency ONLY. `daysSinceLastBacktest`
@@ -182,6 +194,11 @@ export async function loadMonthlySliceForUser(
     annotationsViewed: annotations.viewed,
     latestScore: latestScore === null ? null : toScoreSnapshot(latestScore),
     weeklySummaries,
+    // SPEC §28/§30 — meeting assiduité counts (count-only). The aggregator
+    // turns them into the explicit `meetingAttendance` REAL counter ; 0/0 →
+    // `null` rate.
+    meetingScheduledCount: meeting.scheduledCount,
+    meetingCompletedCount: meeting.completedCount,
     // 🚨 §21.5 — effort COUNT + recency only. The pure aggregator relays
     // this verbatim; the snapshot schema `.strict()` structurally rejects a
     // smuggled backtest P&L key.

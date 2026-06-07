@@ -45,6 +45,18 @@ export interface BuilderInput {
    * trigger, not here (SPEC line is "volume pratique").
    */
   trainingActivityCount?: number;
+  /**
+   * SPEC §28/§30 — meeting (réunion Fxmily) attendance over the report window.
+   * Two integer COUNTS sourced by the loader from the count-only primitive
+   * `countMeetingAttendance` ({ scheduledCount, completedCount }) — no meeting
+   * body, no P&L. The builder turns them into the explicit
+   * `meetingAttendance` counter (count-only behavioural assiduité signal,
+   * posture §2). Optional: absent → the builder defaults both to 0 (existing
+   * fixtures + pre-§28 callers stay valid; a 0/0 window yields a `null` rate,
+   * never a fake "0 %").
+   */
+  meetingScheduledCount?: number;
+  meetingCompletedCount?: number;
   latestScore: BehavioralScoreSnapshot | null;
 }
 

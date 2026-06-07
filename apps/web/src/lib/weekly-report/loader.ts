@@ -2,6 +2,12 @@ import 'server-only';
 
 import { db } from '@/lib/db';
 import type { SerializedCheckin } from '@/lib/checkin/service';
+// SPEC §28/§30 — count-only meeting attendance primitive ({ scheduledCount,
+// completedCount }; no meeting body, no P&L). Feeds the explicit
+// `meetingAttendance` snapshot counter. Meeting assiduité touches no real edge
+// (§30.7) and is NOT a §21.5-isolated symbol, so this import is unrestricted
+// (scoring/service.ts already imports it the same way).
+import { countMeetingAttendance } from '@/lib/meeting/service';
 import { getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the weekly-report loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
@@ -88,7 +94,7 @@ export async function loadWeeklySliceForUser(
     ? computePreviousFullWeekWindow(now, user.timezone)
     : computeReportingWeek(now, user.timezone);
 
-  const [trades, checkins, deliveries, annotations, latestScore, trainingActivity] =
+  const [trades, checkins, deliveries, annotations, latestScore, trainingActivity, meeting] =
     await Promise.all([
       loadTrades(userId, window),
       loadCheckins(userId, window),
@@ -100,6 +106,11 @@ export async function loadWeeklySliceForUser(
       // window (loader trade query uses the same gte/lte bounds). Only
       // `.count` is consumed — never a backtest P&L.
       countRecentTrainingActivity(userId, window.weekStartUtc, window.weekEndUtc),
+      // SPEC §28/§30 — meeting assiduité over the SAME report window (the
+      // helper is half-open `[from, to)`; the weekly counters use this window
+      // for every other axis). Count-only ({ scheduledCount, completedCount });
+      // `lastDeclaredAt` is ignored here (recency is not a weekly counter).
+      countMeetingAttendance(userId, window.weekStartUtc, window.weekEndUtc),
     ]);
 
   const builderInput: BuilderInput = {
@@ -115,6 +126,10 @@ export async function loadWeeklySliceForUser(
     // 🚨 §21.5 — effort COUNT only (volume de pratique). Recency is handled
     // by the no_training_activity_in_window trigger, not the report.
     trainingActivityCount: trainingActivity.count,
+    // SPEC §28/§30 — meeting assiduité counts (count-only). The builder turns
+    // them into the explicit `meetingAttendance` counter ; 0/0 → `null` rate.
+    meetingScheduledCount: meeting.scheduledCount,
+    meetingCompletedCount: meeting.completedCount,
     latestScore: latestScore === null ? null : toScoreSnapshot(latestScore),
   };
 

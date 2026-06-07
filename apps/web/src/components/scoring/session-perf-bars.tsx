@@ -33,11 +33,11 @@ export function SessionPerfBars({ sessions }: SessionPerfBarsProps) {
                   <span
                     className={cn(
                       't-mono-cap',
-                      s.winRate >= 0.55
-                        ? 'text-[var(--ok)]'
-                        : s.winRate >= 0.45
-                          ? 'text-[var(--t-1)]'
-                          : 'text-[var(--bad)]',
+                      // Posture §2 — win-rate JAMAIS rouge (le membre observe, ne se
+                      // fait pas punir ; un win-rate bas peut être sain avec un gros
+                      // payoff R:R). Vert = renforcement positif autorisé ; sinon
+                      // neutre. Aligné sur les cartes pre-trade (cf. dashboard).
+                      s.winRate >= 0.55 ? 'text-[var(--ok)]' : 'text-[var(--t-3)]',
                     )}
                   >
                     {(s.winRate * 100).toFixed(0)}%

@@ -45,11 +45,9 @@ export function PairTopFive({ pairs }: PairTopFiveProps) {
                   <span
                     className={cn(
                       't-mono-cap',
-                      p.winRate >= 0.55
-                        ? 'text-[var(--ok)]'
-                        : p.winRate >= 0.45
-                          ? 'text-[var(--t-1)]'
-                          : 'text-[var(--bad)]',
+                      // Posture §2 — win-rate JAMAIS rouge (cohérence avec les cartes
+                      // pre-trade : le membre observe, ne se fait pas punir).
+                      p.winRate >= 0.55 ? 'text-[var(--ok)]' : 'text-[var(--t-3)]',
                     )}
                   >
                     {(p.winRate * 100).toFixed(0)}%

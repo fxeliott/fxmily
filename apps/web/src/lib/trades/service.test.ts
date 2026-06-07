@@ -13,15 +13,27 @@
 import { Prisma } from '@/generated/prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Shared spy for the storage adapter's `delete` (AX1-F1 sweep). `vi.hoisted`
+// lets the `vi.mock` factory reference it despite hoisting.
+const { storageDelete } = vi.hoisted(() => ({ storageDelete: vi.fn() }));
+
 vi.mock('@/lib/db', () => ({
   db: {
     $transaction: vi.fn(),
+    trade: {
+      findFirst: vi.fn(),
+      deleteMany: vi.fn(),
+    },
   },
+}));
+
+vi.mock('@/lib/storage', () => ({
+  selectStorage: () => ({ delete: storageDelete }),
 }));
 
 import { db } from '@/lib/db';
 
-import { closeTrade, type CloseTradeInput } from './service';
+import { closeTrade, deleteTrade, type CloseTradeInput } from './service';
 
 /** A realistic post-Zod close input (the schema already collapsed the form). */
 function closeInput(processComplete: boolean | null): CloseTradeInput {
@@ -154,5 +166,41 @@ describe('closeTrade — processComplete ("oublis" axis, SPEC §28/§21)', () =>
       const serialized = await closeTrade('user-1', 'trade-1', closeInput(value));
       expect(serialized.processComplete).toBe(value);
     }
+  });
+});
+
+describe('deleteTrade — storage sweep (AX1-F1, RGPD §17)', () => {
+  it('best-effort deletes the trade row + every attached media key (entry, exit, annotations), skipping nulls', async () => {
+    storageDelete.mockResolvedValue(undefined);
+    vi.mocked(db.trade.findFirst).mockResolvedValue({
+      screenshotEntryKey: 'trades/user-1/entry.png',
+      screenshotExitKey: 'trades/user-1/exit.png',
+      annotations: [{ mediaKey: 'annotations/trade-1/a.png' }, { mediaKey: null }],
+    } as never);
+    vi.mocked(db.trade.deleteMany).mockResolvedValue({ count: 1 } as never);
+
+    await deleteTrade('user-1', 'trade-1');
+
+    // Ownership-scoped read + delete (defense in depth).
+    expect(db.trade.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'trade-1', userId: 'user-1' } }),
+    );
+    expect(db.trade.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'trade-1', userId: 'user-1' },
+    });
+    // Entry + exit + the non-null annotation media = 3 ; the null mediaKey is skipped.
+    expect(storageDelete).toHaveBeenCalledTimes(3);
+    expect(storageDelete).toHaveBeenCalledWith('trades/user-1/entry.png');
+    expect(storageDelete).toHaveBeenCalledWith('trades/user-1/exit.png');
+    expect(storageDelete).toHaveBeenCalledWith('annotations/trade-1/a.png');
+  });
+
+  it('throws TradeNotFoundError and never touches storage when the trade is absent / not owned', async () => {
+    storageDelete.mockResolvedValue(undefined);
+    vi.mocked(db.trade.findFirst).mockResolvedValue(null as never);
+
+    await expect(deleteTrade('user-1', 'missing')).rejects.toThrow();
+    expect(db.trade.deleteMany).not.toHaveBeenCalled();
+    expect(storageDelete).not.toHaveBeenCalled();
   });
 });

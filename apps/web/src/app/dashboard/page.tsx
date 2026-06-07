@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  CalendarRange,
   Check,
   GraduationCap,
   Inbox,
@@ -550,6 +551,40 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             dashboard avec un dot accent blue pour signaler la destination. */}
         <section className="mb-6" aria-label="Module REFLECT">
           <DashboardReflectWidget userId={session.user.id} />
+        </section>
+
+        {/* Session 3 — Découvrabilité du débrief mensuel. La synthèse IA
+            mensuelle (/debrief-mensuel) n'était atteignable que par push / email
+            / URL directe : aucun point d'entrée sur le hub. Carte calme
+            anti-Black-Hat (pas de badge/streak/fanfare), posture §2 (prendre du
+            recul, jamais de conseil de marché). S'auto-explique même sans
+            débrief encore généré (la page porte son propre empty-state). */}
+        <section className="mb-6" aria-label="Débrief mensuel">
+          <HoverLift className="block">
+            <Link
+              href="/debrief-mensuel"
+              className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)]">
+                    <CalendarRange className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="t-eyebrow text-[var(--t-3)]">Débrief mensuel</span>
+                    <p className="text-[15px] font-semibold text-[var(--t-1)]">
+                      Ta synthèse du mois
+                    </p>
+                    <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
+                      Progression, trading réel et entraînement — pour prendre du recul. Aucun
+                      conseil de marché.
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden="true" />
+              </div>
+            </Link>
+          </HoverLift>
         </section>
 
         {/* §23 full-width — TRACK + slot formation tuilés 2-up sur grand écran

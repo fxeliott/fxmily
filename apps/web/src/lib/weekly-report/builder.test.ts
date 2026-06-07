@@ -164,6 +164,13 @@ describe('buildWeeklySnapshot — empty input', () => {
     expect(snap.counters.realizedRMean).toBeNull();
     expect(snap.counters.planRespectRate).toBeNull();
     expect(snap.counters.hedgeRespectRate).toBeNull();
+    // SPEC §28/§21 — Session-2 process/habit axes: empty window → null rates
+    // (no fake 0 %), meeting attendance 0/0 with null rate.
+    expect(snap.counters.processCompleteRate).toBeNull();
+    expect(snap.counters.formationFollowedRate).toBeNull();
+    expect(snap.counters.marketAnalysisDoneRate).toBeNull();
+    expect(snap.counters.morningRoutineCompletedRate).toBeNull();
+    expect(snap.counters.meetingAttendance).toEqual({ scheduled: 0, completed: 0, rate: null });
     expect(snap.counters.morningCheckinsCount).toBe(0);
     expect(snap.counters.eveningCheckinsCount).toBe(0);
     expect(snap.counters.streakDays).toBe(0);
@@ -492,6 +499,98 @@ describe('buildWeeklySnapshot — annotations pass-through', () => {
     const snap = buildWeeklySnapshot(input);
     expect(snap.counters.annotationsReceived).toBe(3);
     expect(snap.counters.annotationsViewed).toBe(2);
+  });
+});
+
+// =============================================================================
+// SPEC §28/§21 — Session-2 process/habit axes as EXPLICIT NAMED COUNTERS
+// =============================================================================
+
+describe('buildWeeklySnapshot — Session-2 axis counters (§28 — count-only, by name)', () => {
+  it('processCompleteRate = true / answered over CLOSED trades (null when unanswered)', () => {
+    const input = emptyInput();
+    input.trades = [
+      closedTrade('win', 1, { id: 'p1', processComplete: true }),
+      closedTrade('loss', -1, { id: 'p2', processComplete: true }),
+      closedTrade('win', 1, { id: 'p3', processComplete: false }),
+      closedTrade('break_even', 0, { id: 'p4', processComplete: null }), // unanswered — excluded
+      makeTrade({ id: 'p5_open', isClosed: false, processComplete: true }), // open — excluded
+    ];
+    const snap = buildWeeklySnapshot(input);
+    // 2 true over 3 answered closed trades.
+    expect(snap.counters.processCompleteRate).toBeCloseTo(2 / 3, 4);
+  });
+
+  it('processCompleteRate is null when no closed trade answered the question', () => {
+    const input = emptyInput();
+    input.trades = [
+      closedTrade('win', 1, { id: 'n1', processComplete: null }),
+      makeTrade({ id: 'n2_open', isClosed: false, processComplete: true }),
+    ];
+    expect(buildWeeklySnapshot(input).counters.processCompleteRate).toBeNull();
+  });
+
+  it('formationFollowedRate = true / answered over EVENING checkins', () => {
+    const input = emptyInput();
+    input.checkins = [
+      makeCheckin('evening', { id: 'f1', formationFollowed: true }),
+      makeCheckin('evening', { id: 'f2', formationFollowed: false }),
+      makeCheckin('evening', { id: 'f3', formationFollowed: null }), // unanswered — excluded
+      makeCheckin('morning', { id: 'f4', formationFollowed: true }), // wrong slot — excluded
+    ];
+    expect(buildWeeklySnapshot(input).counters.formationFollowedRate).toBe(0.5);
+  });
+
+  it('marketAnalysisDoneRate + morningRoutineCompletedRate = true / answered over MORNINGS', () => {
+    const input = emptyInput();
+    input.checkins = [
+      makeCheckin('morning', {
+        id: 'a1',
+        marketAnalysisDone: true,
+        morningRoutineCompleted: true,
+      }),
+      makeCheckin('morning', {
+        id: 'a2',
+        marketAnalysisDone: true,
+        morningRoutineCompleted: false,
+      }),
+      makeCheckin('morning', {
+        id: 'a3',
+        marketAnalysisDone: false,
+        morningRoutineCompleted: null, // routine unanswered — excluded from its denom
+      }),
+      makeCheckin('evening', { id: 'a4', marketAnalysisDone: true }), // wrong slot — excluded
+    ];
+    const snap = buildWeeklySnapshot(input);
+    expect(snap.counters.marketAnalysisDoneRate).toBeCloseTo(2 / 3, 4); // 2 true / 3 answered
+    expect(snap.counters.morningRoutineCompletedRate).toBe(0.5); // 1 true / 2 answered
+  });
+
+  it('meetingAttendance reflects scheduled/completed counts + rate', () => {
+    const input = emptyInput();
+    input.meetingScheduledCount = 4;
+    input.meetingCompletedCount = 3;
+    expect(buildWeeklySnapshot(input).counters.meetingAttendance).toEqual({
+      scheduled: 4,
+      completed: 3,
+      rate: 0.75,
+    });
+  });
+
+  it('meetingAttendance rate is null when nothing was scheduled (no fake 0 %)', () => {
+    const input = emptyInput();
+    input.meetingScheduledCount = 0;
+    input.meetingCompletedCount = 0;
+    expect(buildWeeklySnapshot(input).counters.meetingAttendance).toEqual({
+      scheduled: 0,
+      completed: 0,
+      rate: null,
+    });
+  });
+
+  it('all five axes default gracefully when the loader did not wire meeting counts', () => {
+    const snap = buildWeeklySnapshot(emptyInput());
+    expect(snap.counters.meetingAttendance).toEqual({ scheduled: 0, completed: 0, rate: null });
   });
 });
 

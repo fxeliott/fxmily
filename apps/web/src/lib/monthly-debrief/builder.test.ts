@@ -91,6 +91,61 @@ describe('buildMonthlySnapshot — passthrough + shape', () => {
     expect(r.sleepHoursMedian).toBeNull();
     expect(r.moodMedian).toBeNull();
     expect(r.distinctCheckinDays).toBe(0);
+    // SPEC §28/§21 — Session-2 process/habit axes: empty month → null rates
+    // (no fake 0 %), meeting attendance 0/0 with null rate.
+    expect(r.processCompleteRate).toBeNull();
+    expect(r.formationFollowedRate).toBeNull();
+    expect(r.marketAnalysisDoneRate).toBeNull();
+    expect(r.morningRoutineCompletedRate).toBeNull();
+    expect(r.meetingAttendance).toEqual({ scheduled: 0, completed: 0, rate: null });
+  });
+});
+
+describe('buildMonthlySnapshot — Session-2 axis counters (§28 — count-only, by name)', () => {
+  it('process/formation/marketAnalysis/morningRoutine rates = true / answered (null when unanswered)', () => {
+    const r = buildMonthlySnapshot(
+      baseInput({
+        trades: [
+          trade({ processComplete: true }),
+          trade({ processComplete: false }),
+          trade({ processComplete: null }), // unanswered — excluded
+          trade({ isClosed: false, outcome: null, processComplete: true }), // open — excluded
+        ],
+        checkins: [
+          checkin({ slot: 'morning', marketAnalysisDone: true, morningRoutineCompleted: true }),
+          checkin({ slot: 'morning', marketAnalysisDone: false, morningRoutineCompleted: null }),
+          checkin({ slot: 'evening', formationFollowed: true }),
+          checkin({ slot: 'evening', formationFollowed: false }),
+          checkin({ slot: 'evening', formationFollowed: null }), // unanswered — excluded
+        ],
+      }),
+    ).real;
+    expect(r.processCompleteRate).toBe(0.5); // 1 true / 2 answered closed
+    expect(r.marketAnalysisDoneRate).toBe(0.5); // 1 true / 2 answered mornings
+    expect(r.morningRoutineCompletedRate).toBe(1); // 1 true / 1 answered morning
+    expect(r.formationFollowedRate).toBe(0.5); // 1 true / 2 answered evenings
+  });
+
+  it('meetingAttendance reflects scheduled/completed + rate, null rate when none scheduled', () => {
+    const withMeetings = buildMonthlySnapshot(
+      baseInput({ meetingScheduledCount: 5, meetingCompletedCount: 4 }),
+    ).real;
+    expect(withMeetings.meetingAttendance).toEqual({ scheduled: 5, completed: 4, rate: 0.8 });
+
+    const none = buildMonthlySnapshot(baseInput()).real;
+    expect(none.meetingAttendance).toEqual({ scheduled: 0, completed: 0, rate: null });
+  });
+
+  it('the new axes keep the snapshot schema-valid (.strict() preserved)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        trades: [trade({ processComplete: true })],
+        checkins: [checkin({ slot: 'evening', formationFollowed: true })],
+        meetingScheduledCount: 2,
+        meetingCompletedCount: 1,
+      }),
+    );
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });
 

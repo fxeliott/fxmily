@@ -66,6 +66,19 @@ export interface MonthlyBuilderInput {
   annotationsReceived: number;
   annotationsViewed: number;
   latestScore: BehavioralScoreSnapshot | null;
+  /**
+   * SPEC §28/§30 — meeting (réunion Fxmily) attendance over the civil-month
+   * window. Two integer COUNTS sourced by the loader from the count-only
+   * primitive `countMeetingAttendance` ({ scheduledCount, completedCount }) —
+   * no meeting body, no P&L. The aggregator turns them into the explicit
+   * `meetingAttendance` REAL counter (count-only assiduité signal, posture §2).
+   * Optional: absent → the aggregator defaults both to 0 (existing fixtures
+   * stay valid; a 0/0 window yields a `null` rate, never a fake "0 %").
+   * Meeting assiduité is NOT §21.5-isolated (§30.7) — this is a real-edge-side
+   * engagement counter, mirror of the weekly `meetingAttendance`.
+   */
+  meetingScheduledCount?: number;
+  meetingCompletedCount?: number;
   /// ≤4 weekly AI summaries of the civil month — INPUT context only (SPEC
   /// §25.3, never an FK). Newest-first; the builder caps + re-hardens.
   weeklySummaries: string[];

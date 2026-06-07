@@ -78,6 +78,44 @@ function buildRealCounters(input: MonthlyBuilderInput): MonthlySnapshot['real'] 
   const eveningCheckins = input.checkins.filter((c) => c.slot === 'evening');
   const distinctCheckinDays = new Set(input.checkins.map((c) => c.date)).size;
 
+  // SPEC §28/§21 — Session-2 process/habit axes surfaced as EXPLICIT NAMED
+  // RATES (count-only, posture §2 — the ACT, never P&L) so the autonomous
+  // monthly Claude run can reason on each axis BY NAME, not only via the
+  // rolled-up discipline/engagement scores. Denominators mirror the scoring
+  // sub-scores EXACTLY: "answered" only (`!== null`), `null` when nobody
+  // answered (no fake 0 %). Carbon of the weekly builder.
+  const processAnswered = closed.filter((t) => t.processComplete !== null);
+  const processCompleteRate =
+    processAnswered.length > 0
+      ? processAnswered.filter((t) => t.processComplete === true).length / processAnswered.length
+      : null;
+
+  const formationAnswered = eveningCheckins.filter((c) => c.formationFollowed !== null);
+  const formationFollowedRate =
+    formationAnswered.length > 0
+      ? formationAnswered.filter((c) => c.formationFollowed === true).length /
+        formationAnswered.length
+      : null;
+
+  const marketAnalysisAnswered = morningCheckins.filter((c) => c.marketAnalysisDone !== null);
+  const marketAnalysisDoneRate =
+    marketAnalysisAnswered.length > 0
+      ? marketAnalysisAnswered.filter((c) => c.marketAnalysisDone === true).length /
+        marketAnalysisAnswered.length
+      : null;
+
+  const routineAnswered = morningCheckins.filter((c) => c.morningRoutineCompleted !== null);
+  const morningRoutineCompletedRate =
+    routineAnswered.length > 0
+      ? routineAnswered.filter((c) => c.morningRoutineCompleted === true).length /
+        routineAnswered.length
+      : null;
+
+  const meetingScheduled = input.meetingScheduledCount ?? 0;
+  const meetingCompleted = input.meetingCompletedCount ?? 0;
+  const meetingAttendanceRate =
+    meetingScheduled > 0 ? Math.min(1, meetingCompleted / meetingScheduled) : null;
+
   const sleepHours = morningCheckins
     .map((c) => parseNumberOrNull(c.sleepHours))
     .filter((n): n is number => n !== null);
@@ -110,6 +148,19 @@ function buildRealCounters(input: MonthlyBuilderInput): MonthlySnapshot['real'] 
     realizedRMean: realizedRMean === null ? null : roundTo(realizedRMean, 4),
     planRespectRate: planRespectRate === null ? null : roundTo(planRespectRate, 4),
     hedgeRespectRate: hedgeRespectRate === null ? null : roundTo(hedgeRespectRate, 4),
+    // SPEC §28/§21 — Session-2 process/habit axes as explicit named rates.
+    processCompleteRate: processCompleteRate === null ? null : roundTo(processCompleteRate, 4),
+    formationFollowedRate:
+      formationFollowedRate === null ? null : roundTo(formationFollowedRate, 4),
+    marketAnalysisDoneRate:
+      marketAnalysisDoneRate === null ? null : roundTo(marketAnalysisDoneRate, 4),
+    morningRoutineCompletedRate:
+      morningRoutineCompletedRate === null ? null : roundTo(morningRoutineCompletedRate, 4),
+    meetingAttendance: {
+      scheduled: meetingScheduled,
+      completed: meetingCompleted,
+      rate: meetingAttendanceRate === null ? null : roundTo(meetingAttendanceRate, 4),
+    },
     morningCheckinsCount: morningCheckins.length,
     eveningCheckinsCount: eveningCheckins.length,
     distinctCheckinDays,

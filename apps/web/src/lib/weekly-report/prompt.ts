@@ -151,6 +151,36 @@ export function buildWeeklyReportUserPrompt(snapshot: WeeklySnapshot): string {
   }
   lines.push(``);
 
+  // SPEC §28/§21 — Session-2 process/habit axes as EXPLICIT NAMED rates so the
+  // analyse autonome peut raisonner sur chaque axe nommément (ex : "oublis sur
+  // 3/10 trades", "formation 5/7 soirs") au lieu de seulement via les scores
+  // agrégés. COUNT-ONLY (posture §2) : ils mesurent l'ACTE (prép/process/
+  // formation a eu lieu), JAMAIS un résultat ni un conseil de trade. `n/a` =
+  // axe non renseigné cette semaine (jamais un faux "0 %").
+  lines.push(`## Axes process & habitudes (Session-2 — signaux discipline/engagement)`);
+  lines.push(
+    `- Process complété ("oublis") : ${formatRate(c.processCompleteRate)} des trades clôturés où la question a été renseignée — l'exécution du process (checklist) a-t-elle été faite, pas le P&L.`,
+  );
+  lines.push(
+    `- Analyse de marché faite : ${formatRate(c.marketAnalysisDoneRate)} des matins renseignés — préparation effectuée (l'acte de préparer, jamais la qualité de l'analyse).`,
+  );
+  lines.push(
+    `- Routine matinale complétée : ${formatRate(c.morningRoutineCompletedRate)} des matins renseignés.`,
+  );
+  lines.push(
+    `- Formation suivie : ${formatRate(c.formationFollowedRate)} des soirs renseignés — régularité de l'étude (effort de formation).`,
+  );
+  if (c.meetingAttendance.scheduled > 0) {
+    lines.push(
+      `- Assiduité réunions : ${c.meetingAttendance.completed}/${c.meetingAttendance.scheduled} réunions validées (${formatRate(c.meetingAttendance.rate)}) — présence/replay, signal d'engagement.`,
+    );
+  } else {
+    lines.push(
+      `- Assiduité réunions : aucune réunion programmée dans la fenêtre (pas de taux — jamais de faux "0 %").`,
+    );
+  }
+  lines.push(``);
+
   lines.push(`## Coaching reçu`);
   lines.push(
     `- Annotations admin : ${c.annotationsReceived} reçues, ${c.annotationsViewed} consultées`,

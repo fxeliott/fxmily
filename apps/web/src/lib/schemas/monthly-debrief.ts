@@ -182,6 +182,26 @@ const realCounterSliceSchema = z
     realizedRMean: z.number().nullable(),
     planRespectRate: z.number().min(0).max(1).nullable(),
     hedgeRespectRate: z.number().min(0).max(1).nullable(),
+    /// SPEC §28/§21 — Session-2 process/habit axes as EXPLICIT NAMED COUNTERS
+    /// (count-only behavioural rates, posture §2 — the ACT, never P&L) so the
+    /// autonomous monthly Claude run can reason on each axis BY NAME instead of
+    /// only via the rolled-up discipline/engagement scores. `true / answered`
+    /// over the month, `null` when nobody answered (no fake "0 %"). Always
+    /// present (the aggregator always computes them). Carbon of weekly.
+    processCompleteRate: z.number().min(0).max(1).nullable(),
+    formationFollowedRate: z.number().min(0).max(1).nullable(),
+    marketAnalysisDoneRate: z.number().min(0).max(1).nullable(),
+    morningRoutineCompletedRate: z.number().min(0).max(1).nullable(),
+    /// `meetingAttendance` — completed / scheduled Fxmily meetings in the
+    /// month (count-only primitive `countMeetingAttendance`, §30.4). `rate` is
+    /// `null` when `scheduled === 0` (honest empty state, never a fake "0 %").
+    meetingAttendance: z
+      .object({
+        scheduled: z.number().int().min(0),
+        completed: z.number().int().min(0),
+        rate: z.number().min(0).max(1).nullable(),
+      })
+      .strict(),
     morningCheckinsCount: z.number().int().min(0),
     eveningCheckinsCount: z.number().int().min(0),
     distinctCheckinDays: z.number().int().min(0),

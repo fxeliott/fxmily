@@ -158,6 +158,31 @@ const counterSliceSchema = z
     realizedRMean: z.number().nullable(),
     planRespectRate: z.number().min(0).max(1).nullable(),
     hedgeRespectRate: z.number().min(0).max(1).nullable(),
+    /// SPEC §28/§21 — Session-2 process/habit axes as EXPLICIT NAMED COUNTERS
+    /// (count-only behavioural rates, posture §2 — they measure the ACT, never
+    /// P&L), so the autonomous Claude analyses can reason on each axis BY NAME
+    /// instead of only via the rolled-up discipline/engagement scores. Each is
+    /// `true / answered` over the window, `null` when nobody answered (no fake
+    /// "0 %", mirror `planRespectRate`). Always present (the builder always
+    /// computes them) — additive to the snapshot.
+    ///   - `processCompleteRate` ("oublis") : closed trades, `processComplete`.
+    processCompleteRate: z.number().min(0).max(1).nullable(),
+    ///   - `formationFollowedRate` : evenings, `formationFollowed`.
+    formationFollowedRate: z.number().min(0).max(1).nullable(),
+    ///   - `marketAnalysisDoneRate` : mornings, `marketAnalysisDone`.
+    marketAnalysisDoneRate: z.number().min(0).max(1).nullable(),
+    ///   - `morningRoutineCompletedRate` : mornings, `morningRoutineCompleted`.
+    morningRoutineCompletedRate: z.number().min(0).max(1).nullable(),
+    /// `meetingAttendance` — completed / scheduled Fxmily meetings in the
+    /// window (count-only primitive `countMeetingAttendance`, §30.4). `rate`
+    /// is `null` when `scheduled === 0` (honest empty state, never a fake "0 %").
+    meetingAttendance: z
+      .object({
+        scheduled: z.number().int().min(0),
+        completed: z.number().int().min(0),
+        rate: z.number().min(0).max(1).nullable(),
+      })
+      .strict(),
     morningCheckinsCount: z.number().int().min(0),
     eveningCheckinsCount: z.number().int().min(0),
     streakDays: z.number().int().min(0),

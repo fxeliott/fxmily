@@ -18,7 +18,7 @@ vi.mock('@/lib/auth/audit', () => ({
   logAudit: vi.fn(async () => undefined),
 }));
 
-const { enqueueCheckinReminder } = await import('./enqueue');
+const { enqueueCheckinReminder, enqueueDouglasDeliveryNotification } = await import('./enqueue');
 
 afterEach(() => {
   findFirstMock.mockReset();
@@ -102,6 +102,39 @@ describe('enqueueCheckinReminder', () => {
     createMock.mockRejectedValueOnce(new Error('connection lost'));
 
     const id = await enqueueCheckinReminder('user_1', { slot: 'evening', date: '2026-05-07' });
+
+    expect(id).toBeNull();
+  });
+});
+
+/**
+ * Session 3 §28 — drift alert emission (completes the J9 reception chain).
+ */
+describe('enqueueDouglasDeliveryNotification', () => {
+  it('enqueues a douglas_card_delivered row and returns its id', async () => {
+    createMock.mockResolvedValueOnce({ id: 'notif_douglas_1' });
+
+    const id = await enqueueDouglasDeliveryNotification('user_1', {
+      deliveryId: 'del_1',
+      cardSlug: 'sortir-du-tilt',
+    });
+
+    expect(id).toBe('notif_douglas_1');
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(createMock.mock.calls[0]?.[0]?.data).toMatchObject({
+      userId: 'user_1',
+      type: 'douglas_card_delivered',
+      payload: { deliveryId: 'del_1', cardSlug: 'sortir-du-tilt' },
+    });
+  });
+
+  it('returns null on a DB error (best-effort — never throws, never rolls back the delivery)', async () => {
+    createMock.mockRejectedValueOnce(new Error('queue down'));
+
+    const id = await enqueueDouglasDeliveryNotification('user_1', {
+      deliveryId: 'del_2',
+      cardSlug: 'anything',
+    });
 
     expect(id).toBeNull();
   });

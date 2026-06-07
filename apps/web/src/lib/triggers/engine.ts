@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { Prisma } from '@/generated/prisma/client';
 import { localDateOf, parseLocalDate, shiftLocalDate } from '@/lib/checkin/timezone';
 import { logAudit } from '@/lib/auth/audit';
+import { enqueueDouglasDeliveryNotification } from '@/lib/notifications/enqueue';
 // 🚨 §21.5 — the ONLY symbol the trigger engine may import from the training
 // module: the count-only primitive. Anything else (a serialized backtest,
 // `db.trainingTrade`, a P&L field) is a statistical-isolation breach.
@@ -256,6 +257,15 @@ export async function evaluateAndDispatchForUser(
         priority: winner.priority,
         hatClass: winner.hatClass,
       },
+    });
+    // Session 3 §28 — emit the "alerté immédiatement en cas de dérive" push.
+    // Best-effort (the helper never throws — returns null on failure), so a
+    // queue hiccup never undoes the delivery. The web-push dispatcher's
+    // reception path (TTL/urgency/preference/copy) was already wired (J9); only
+    // this emission was missing → a drift was previously PULL-only (dashboard).
+    await enqueueDouglasDeliveryNotification(userId, {
+      deliveryId: row.id,
+      cardSlug: winner.cardSlug,
     });
     return {
       delivered: {

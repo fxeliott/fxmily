@@ -203,6 +203,67 @@ export async function enqueueMonthlyDebriefNotification(
 }
 
 // =============================================================================
+// Session 3 §28 — Mark Douglas drift alert delivered (member-facing immediate
+// nudge). Completes the J9 reception chain (enum/buildPayload/TTL/preference)
+// whose EMISSION was never wired: the trigger engine created the delivery row
+// but enqueued no push, so a drift was only visible by PULL (opening the
+// dashboard). Push-only (see EMAIL_FALLBACK_SKIP_TYPES) — calm, ≤1/day
+// (engine anti-spam), opt-in preference. SPEC §2 / anti Black-Hat: the card
+// copy reframes calmly, never "you are tilting".
+// =============================================================================
+
+export interface DouglasCardDeliveredPayload {
+  /** The `MarkDouglasDelivery` row just created (audit trail / dedup). */
+  deliveryId: string;
+  /** Card slug — deep-links `/library/<slug>` (dispatcher `buildPayload`). */
+  cardSlug: string;
+}
+
+/**
+ * Enqueue a "Mark Douglas card delivered" push for the member when the trigger
+ * engine surfaces a drift card. Carbon mirror of
+ * {@link enqueueMonthlyDebriefNotification}: best-effort (returns the row id,
+ * or null if the write failed — logged, never thrown, so a real-time/cron
+ * dispatch never rolls back the delivery over a queue hiccup). PII-free
+ * payload: ids + slug only, never the trigger snapshot's counts/P&L.
+ */
+export async function enqueueDouglasDeliveryNotification(
+  recipientUserId: string,
+  payload: DouglasCardDeliveredPayload,
+  tx?: Prisma.TransactionClient,
+): Promise<string | null> {
+  const client = tx ?? db;
+  try {
+    const row = await client.notificationQueue.create({
+      data: {
+        userId: recipientUserId,
+        type: 'douglas_card_delivered',
+        payload: payload as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+
+    if (!tx) {
+      await logAudit({
+        action: 'notification.enqueued',
+        userId: recipientUserId,
+        metadata: {
+          notificationId: row.id,
+          type: 'douglas_card_delivered',
+          deliveryId: payload.deliveryId,
+          cardSlug: payload.cardSlug,
+        },
+      });
+    }
+
+    return row.id;
+  } catch (err) {
+    console.error('[notifications.enqueue] douglas delivery failed', err);
+    return null;
+  }
+}
+
+// =============================================================================
 // V1.5 §27 — Mindset check ready (member-facing weekly nudge, mirror J9)
 // =============================================================================
 

@@ -298,8 +298,10 @@ describe('shouldSendFallbackEmail (V1.6 SPEC §18.2 freq cap)', () => {
 });
 
 describe('shouldSkipFallbackEmailForType + EMAIL_FALLBACK_SKIP_TYPES (V1.5.1 §27.6 push-only)', () => {
-  it('returns true for mindset_check_ready (anti-FOMO push-only invariant)', () => {
+  it('returns true for push-only slugs (mindset anti-FOMO + Session 3 drift alert)', () => {
     expect(shouldSkipFallbackEmailForType('mindset_check_ready')).toBe(true);
+    // Session 3 §28 — drift alert is push-only (near-daily, anti email-fatigue).
+    expect(shouldSkipFallbackEmailForType('douglas_card_delivered')).toBe(true);
   });
 
   it('returns false for slugs NOT in the skip allowlist (regression guard)', () => {
@@ -307,15 +309,14 @@ describe('shouldSkipFallbackEmailForType + EMAIL_FALLBACK_SKIP_TYPES (V1.5.1 §2
     expect(shouldSkipFallbackEmailForType('training_annotation_received')).toBe(false);
     expect(shouldSkipFallbackEmailForType('checkin_morning_reminder')).toBe(false);
     expect(shouldSkipFallbackEmailForType('checkin_evening_reminder')).toBe(false);
-    expect(shouldSkipFallbackEmailForType('douglas_card_delivered')).toBe(false);
     expect(shouldSkipFallbackEmailForType('weekly_report_ready')).toBe(false);
     expect(shouldSkipFallbackEmailForType('monthly_debrief_ready')).toBe(false);
   });
 
   it('EMAIL_FALLBACK_SKIP_TYPES contains exactly the documented push-only slugs', () => {
     expect(EMAIL_FALLBACK_SKIP_TYPES.has('mindset_check_ready')).toBe(true);
-    // V1.5.1 ships with mindset_check_ready as the sole entry. Future slugs
-    // join only when product invariant declares push-only no email.
-    expect(EMAIL_FALLBACK_SKIP_TYPES.size).toBe(1);
+    // Session 3 §28 — drift alert joined as the 2nd push-only slug.
+    expect(EMAIL_FALLBACK_SKIP_TYPES.has('douglas_card_delivered')).toBe(true);
+    expect(EMAIL_FALLBACK_SKIP_TYPES.size).toBe(2);
   });
 });

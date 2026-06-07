@@ -15,6 +15,8 @@ import { db } from '@/lib/db';
 // Returns two integers ({ scheduledCount, completedCount }); no meeting body,
 // no P&L. Feeds engagement ONLY (SPEC §30.7 — assiduité touches no real edge).
 import { countMeetingAttendance } from '@/lib/meeting/service';
+// §30.7 T3-1 — floors the meeting denominator at the member's join day.
+import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
 import { reportWarning } from '@/lib/observability';
 // 🚨 §21.5 — the ONLY symbol scoring may import from the training module: a
 // count-only primitive. Importing anything else (a serialized backtest,
@@ -82,6 +84,14 @@ export interface ComputeScoresOptions {
   windowDays?: number;
   /** Override the user's stored timezone. Used by tests. */
   timezone?: string;
+  /**
+   * The member's join day. Supplied by the cron loop (alongside `timezone`) so
+   * the per-user `db.user` round-trip stays skipped, and used to FLOOR the
+   * meeting-attendance window at join (§30.7 T3-1) — a mid-window joiner is not
+   * charged for meetings scheduled before they existed. When omitted, the
+   * single-user path reads it from the same `db.user` query as `timezone`.
+   */
+  joinedAt?: Date;
 }
 
 /**
@@ -109,9 +119,14 @@ export async function computeScoresForUser(
     ? null
     : await db.user.findUnique({
         where: { id: userId },
-        select: { timezone: true },
+        select: { timezone: true, joinedAt: true },
       });
   const timezone = options.timezone ?? user?.timezone ?? 'Europe/Paris';
+  // §30.7 T3-1 — join day for the meeting-window floor. From options (cron path,
+  // which supplies it alongside `timezone` to keep the per-user query skipped)
+  // or the single-user query above. `null` ⇒ no floor (byte-identical to the
+  // pre-fix behaviour), so a caller that passes only `timezone` is unaffected.
+  const joinedAt = options.joinedAt ?? user?.joinedAt ?? null;
 
   // Anchor to yesterday-local by default — today is incomplete.
   const today = localDateOf(new Date(), timezone);
@@ -120,6 +135,12 @@ export async function computeScoresForUser(
 
   const windowStartUtc = parseLocalDate(windowStart);
   const windowEndExclusive = parseLocalDate(shiftLocalDate(anchor, 1));
+  // §30.7 T3-1 — meeting denominator floored at the member's join day so a
+  // mid-window joiner's engagement sub-score is not deflated by meetings held
+  // before they existed. `null` joinedAt ⇒ unchanged window (byte-identical).
+  const meetingFrom = joinedAt
+    ? floorMeetingWindowAtJoin(windowStartUtc, joinedAt)
+    : windowStartUtc;
 
   // Parallel fetch — anti-waterfall.
   const [trades, checkins, trainingActivity, meetingActivity] = await Promise.all([
@@ -189,7 +210,8 @@ export async function computeScoresForUser(
     // engagement dimension stays internally coherent (one window drives every
     // sub-score). Returns { scheduledCount, completedCount } integers — feeds the
     // ADDITION-PURE `meetingAttendanceRate` sub-score and nothing else (§30.7).
-    countMeetingAttendance(userId, windowStartUtc, windowEndExclusive),
+    // `meetingFrom` floors the window start at the member's join day (T3-1).
+    countMeetingAttendance(userId, meetingFrom, windowEndExclusive),
   ]);
 
   // Map to scoring inputs.
@@ -414,7 +436,9 @@ export async function recomputeAllActiveMembers(
 
   const users = await db.user.findMany({
     where: { status: 'active' },
-    select: { id: true, timezone: true },
+    // §30.7 T3-1 — joinedAt rides the SAME findMany (no extra query) so each
+    // per-user recompute can floor the meeting window without re-hitting the DB.
+    select: { id: true, timezone: true, joinedAt: true },
   });
 
   let computed = 0;
@@ -426,7 +450,13 @@ export async function recomputeAllActiveMembers(
   for (let i = 0; i < users.length; i += batchSize) {
     const slice = users.slice(i, i + batchSize);
     const results = await Promise.allSettled(
-      slice.map((u) => recomputeAndPersist(u.id, undefined, { ...options, timezone: u.timezone })),
+      slice.map((u) =>
+        recomputeAndPersist(u.id, undefined, {
+          ...options,
+          timezone: u.timezone,
+          joinedAt: u.joinedAt,
+        }),
+      ),
     );
     for (let j = 0; j < results.length; j++) {
       const r = results[j];

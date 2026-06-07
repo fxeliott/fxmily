@@ -8,6 +8,10 @@ import type { SerializedCheckin } from '@/lib/checkin/service';
 // (§30.7) and is NOT a §21.5-isolated symbol, so this import is unrestricted
 // (scoring/service.ts already imports it the same way).
 import { countMeetingAttendance } from '@/lib/meeting/service';
+// SPEC §30.7 T3-1 — floor the report window at the member's join day so a member
+// who joined mid-week is never charged for meetings scheduled before they
+// existed (byte-identical for everyone past their first week).
+import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
 import { getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the weekly-report loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
@@ -77,6 +81,8 @@ export async function loadWeeklySliceForUser(
       id: true,
       timezone: true,
       status: true,
+      // SPEC §30.7 T3-1 — join day, to floor the meeting-attendance window.
+      joinedAt: true,
       // J8 perf TIER 2 (T2.1) — pull email metadata in same round-trip so
       // downstream `maybeSendEmail` doesn't re-query for member label.
       email: true,
@@ -106,11 +112,15 @@ export async function loadWeeklySliceForUser(
       // window (loader trade query uses the same gte/lte bounds). Only
       // `.count` is consumed — never a backtest P&L.
       countRecentTrainingActivity(userId, window.weekStartUtc, window.weekEndUtc),
-      // SPEC §28/§30 — meeting assiduité over the SAME report window (the
-      // helper is half-open `[from, to)`; the weekly counters use this window
-      // for every other axis). Count-only ({ scheduledCount, completedCount });
-      // `lastDeclaredAt` is ignored here (recency is not a weekly counter).
-      countMeetingAttendance(userId, window.weekStartUtc, window.weekEndUtc),
+      // SPEC §28/§30 — meeting assiduité over the report window, FLOORED at the
+      // member's join day (§30.7 T3-1) so a mid-week joiner is not charged for
+      // pre-join meetings. Half-open `[from, to)`; count-only
+      // ({ scheduledCount, completedCount }); `lastDeclaredAt` ignored here.
+      countMeetingAttendance(
+        userId,
+        floorMeetingWindowAtJoin(window.weekStartUtc, user.joinedAt),
+        window.weekEndUtc,
+      ),
     ]);
 
   const builderInput: BuilderInput = {

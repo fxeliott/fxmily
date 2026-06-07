@@ -43,6 +43,27 @@ export function meetingWindowStart(now: Date, joinedAt: Date): Date {
   return joinFloor.getTime() > windowFloor.getTime() ? joinFloor : windowFloor;
 }
 
+/**
+ * Floor an EXTERNALLY-chosen window start (a report's week/month bound, or the
+ * scoring rolling window) at the member's join day — the SAME T3-1 join-floor
+ * invariant as `meetingWindowStart`, applied to a caller-supplied bound instead
+ * of the rolling 30-day one.
+ *
+ * Meetings are platform-wide entities (admin-scheduled, independent of the
+ * member), so counting those held BEFORE a member joined would unfairly deflate
+ * their assiduité rate + engagement sub-score in their first window. The report
+ * counters (#254) and the scoring engagement sub-score (J-M4) each pick a
+ * per-window bound for coherence with every other axis; this floors that bound
+ * so the meeting denominator still never reaches before the member existed.
+ *
+ * Byte-identical (returns `windowStartUtc` unchanged) for any member who joined
+ * on or before the window start — i.e. everyone past their first window.
+ */
+export function floorMeetingWindowAtJoin(windowStartUtc: Date, joinedAt: Date): Date {
+  const joinFloor = startOfDayParis(joinedAt);
+  return joinFloor.getTime() > windowStartUtc.getTime() ? joinFloor : windowStartUtc;
+}
+
 /** UTC instant of Paris-local midnight on the civil day containing `instant`. */
 function startOfDayParis(instant: Date): Date {
   return localInstantToUtc(localDateOf(instant, MEETING_TIMEZONE), 0, 0, 0, 0, MEETING_TIMEZONE);

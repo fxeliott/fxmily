@@ -11,6 +11,7 @@ import type {
 import type { TradeModel } from '@/generated/prisma/models/Trade';
 
 import { db } from '@/lib/db';
+import { selectStorage } from '@/lib/storage';
 import { computeRealizedR } from '@/lib/trading/calculations';
 
 import { mergeNotes } from './notes';
@@ -322,9 +323,39 @@ export async function listTradesForUser(
 }
 
 export async function deleteTrade(userId: string, tradeId: string): Promise<void> {
+  // Read the media keys (ownership-scoped) BEFORE deleting so we can sweep the
+  // stored files. The row delete cascades the TradeAnnotation rows but never
+  // their bytes — the trade's own entry/exit captures + every admin-authored
+  // annotation media would otherwise orphan on disk indefinitely (no janitor
+  // cron exists). RGPD §17: a member's images must not survive their trade.
+  const trade = await db.trade.findFirst({
+    where: { id: tradeId, userId },
+    select: {
+      screenshotEntryKey: true,
+      screenshotExitKey: true,
+      annotations: { select: { mediaKey: true } },
+    },
+  });
+  if (!trade) {
+    throw new TradeNotFoundError();
+  }
+
   const result = await db.trade.deleteMany({ where: { id: tradeId, userId } });
   if (result.count === 0) {
+    // Lost a race (deleted between the read and here) — treat as not found.
     throw new TradeNotFoundError();
+  }
+
+  // Best-effort storage sweep — never fail the deletion if a file is already
+  // gone (mirror of the admin annotation cleanup pattern).
+  const storage = selectStorage();
+  const keys = [
+    trade.screenshotEntryKey,
+    trade.screenshotExitKey,
+    ...trade.annotations.map((a) => a.mediaKey),
+  ].filter((key): key is string => key !== null);
+  for (const key of keys) {
+    void storage.delete(key).catch(() => undefined);
   }
 }
 

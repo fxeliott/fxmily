@@ -3,6 +3,7 @@ import { Pill } from '@/components/ui/pill';
 import type { SerializedBehavioralScore } from '@/lib/scoring';
 
 import { SampleSizeDisclaimer } from './sample-size-disclaimer';
+import { ScoreBreakdown } from './score-breakdown';
 import { ScoreGauge } from './score-gauge';
 
 /**
@@ -100,6 +101,10 @@ export function ScoreGaugeGrid({ score }: ScoreGaugeGridProps) {
           reason={reasonOf(score.components.engagement)}
         />
       </div>
+
+      {/* §21 « sur quoi travailler » — collapsible sub-score breakdown (the
+          gauges' drill-down was wired but never bound). Calm, weakest-first. */}
+      <ScoreBreakdown score={score} />
     </Card>
   );
 }

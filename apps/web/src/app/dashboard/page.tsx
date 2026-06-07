@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  CalendarRange,
   Check,
   GraduationCap,
   Inbox,
@@ -29,6 +30,7 @@ import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expect
 import { PairTopFive } from '@/components/scoring/pair-top-five';
 import { RDistribution } from '@/components/scoring/r-distribution';
 import { ScoreGaugeGrid, ScoreGaugeGridSkeleton } from '@/components/scoring/score-gauge-grid';
+import { ScoreTrendChart, ScoreTrendChartSkeleton } from '@/components/scoring/score-trend-chart';
 import { SessionPerfBars } from '@/components/scoring/session-perf-bars';
 import { TrackRecordChart } from '@/components/scoring/track-record-chart';
 import {
@@ -45,7 +47,7 @@ import { countPendingAccessRequests } from '@/lib/access-request/service';
 import { getCheckinStatus, getStreak } from '@/lib/checkin/service';
 import { habitKindSchema } from '@/lib/schemas/habit-log';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
-import { getLatestBehavioralScore } from '@/lib/scoring/service';
+import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 import { countTradesByStatus } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
 
@@ -310,6 +312,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </Suspense>
         </section>
 
+        {/* Session 3 §28/§21 — behavioral scores OVER TIME. The gauges above
+            show today; this shows the trajectory (am I progressing?). Member's
+            own persisted scores only — posture §2 safe, no AI, no admin report.
+            The nightly cron fills the series; <2 snapshots → calm placeholder. */}
+        <section className="mb-6" aria-labelledby="score-trend-heading">
+          <h2 id="score-trend-heading" className="sr-only">
+            Évolution de tes scores comportementaux
+          </h2>
+          <Suspense fallback={<ScoreTrendChartSkeleton />}>
+            <ScoreTrendSection userId={userId!} />
+          </Suspense>
+        </section>
+
         {/* J6 — Track record (R cumulé + R-dist + expectancy + DD) */}
         <section className="mb-6 flex flex-col gap-3" aria-labelledby="track-record-heading">
           <div className="flex items-center gap-2">
@@ -552,6 +567,40 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <DashboardReflectWidget userId={session.user.id} />
         </section>
 
+        {/* Session 3 — Découvrabilité du débrief mensuel. La synthèse IA
+            mensuelle (/debrief-mensuel) n'était atteignable que par push / email
+            / URL directe : aucun point d'entrée sur le hub. Carte calme
+            anti-Black-Hat (pas de badge/streak/fanfare), posture §2 (prendre du
+            recul, jamais de conseil de marché). S'auto-explique même sans
+            débrief encore généré (la page porte son propre empty-state). */}
+        <section className="mb-6" aria-label="Débrief mensuel">
+          <HoverLift className="block">
+            <Link
+              href="/debrief-mensuel"
+              className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)]">
+                    <CalendarRange className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="t-eyebrow text-[var(--t-3)]">Débrief mensuel</span>
+                    <p className="text-[15px] font-semibold text-[var(--t-1)]">
+                      Ta synthèse du mois
+                    </p>
+                    <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
+                      Progression, trading réel et entraînement — pour prendre du recul. Aucun
+                      conseil de marché.
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden="true" />
+              </div>
+            </Link>
+          </HoverLift>
+        </section>
+
         {/* §23 full-width — TRACK + slot formation tuilés 2-up sur grand écran
             (évite les bandeaux étirés vides). TRACK reste DS-v2 lime
             (discipline forte) — pas de V18 overlay ; le slot formation reste
@@ -713,6 +762,11 @@ function ProfileStatusSkeleton() {
       aria-label="Chargement de ton profil"
     />
   );
+}
+
+async function ScoreTrendSection({ userId }: { userId: string }) {
+  const history = await getBehavioralScoreHistory(userId, { sinceDays: 90 });
+  return <ScoreTrendChart data={history} />;
 }
 
 async function TrackRecordSection({

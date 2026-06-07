@@ -92,6 +92,10 @@ export const URGENCY_BY_TYPE: Record<NotificationTypeSlug, 'low' | 'normal'> = {
  */
 export const EMAIL_FALLBACK_SKIP_TYPES: ReadonlySet<NotificationTypeSlug> = new Set([
   'mindset_check_ready',
+  // Session 3 §28 — drift alert is push-only: a near-daily, calm in-app nudge
+  // must never spawn a fallback email (anti email-fatigue, respects §18.2 cap;
+  // the card lives in /library, the push is the immediate signal).
+  'douglas_card_delivered',
 ]);
 
 /**

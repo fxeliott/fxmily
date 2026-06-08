@@ -154,4 +154,91 @@ describe('detectAMFViolation — MUST NOT FLAG', () => {
   it('undefined input', () => {
     expect(detectAMFViolation(undefined).suspected).toBe(false);
   });
+
+  // ── Anti-FP post-review §2 ──────────────────────────────────────────────
+  it('coaching motivation: "ta confiance va monter avec le temps"', () => {
+    expect(flag('ta confiance va monter avec le temps')).toBe(false);
+  });
+
+  it('coaching motivation: "ta motivation va monter en flèche"', () => {
+    expect(flag('ta motivation va monter en flèche')).toBe(false);
+  });
+
+  it('coaching stress: "ton stress va descendre"', () => {
+    expect(flag('ton stress va descendre')).toBe(false);
+  });
+
+  it('coaching fatigue: "le niveau de fatigue va baisser"', () => {
+    expect(flag('le niveau de fatigue va baisser')).toBe(false);
+  });
+
+  it('coaching réfléchi: "vends-toi mieux"', () => {
+    expect(flag('vends-toi mieux')).toBe(false);
+  });
+
+  it('coaching réfléchi: "tu te vends bien"', () => {
+    expect(flag('tu te vends bien')).toBe(false);
+  });
+
+  it('coaching tendance personnelle: "ta tendance à hésiter sous pression diminue"', () => {
+    expect(flag('ta tendance à hésiter sous pression diminue')).toBe(false);
+  });
+
+  it('coaching zone de confort: "zone de confort"', () => {
+    expect(flag('zone de confort')).toBe(false);
+  });
+
+  it('coaching double vigilance: "double ta vigilance après une perte"', () => {
+    expect(flag('double ta vigilance après une perte')).toBe(false);
+  });
+});
+
+// =============================================================================
+// MUST FLAG — anti-FN post-review §2 (G. TA vocabulary)
+// =============================================================================
+
+describe('detectAMFViolation — MUST FLAG (post-review §2 TA vocabulary)', () => {
+  it('tendance haussière: "La tendance est haussière."', () => {
+    expect(flag('La tendance est haussière.')).toBe(true);
+  });
+
+  it('tendance baissière: "tendance baissière sur le CAC"', () => {
+    expect(flag('tendance baissière sur le CAC')).toBe(true);
+  });
+
+  it('RSI survendu: "Le RSI est survendu."', () => {
+    expect(flag('Le RSI est survendu.')).toBe(true);
+  });
+
+  it('RSI surachetê: "le RSI est suracheté"', () => {
+    expect(flag('le RSI est suracheté')).toBe(true);
+  });
+
+  it('retracement: "attends le retracement pour entrer"', () => {
+    expect(flag('attends le retracement pour entrer')).toBe(true);
+  });
+
+  it('chart pattern tête-épaules: "le pattern tête-épaules se forme"', () => {
+    expect(flag('le pattern tête-épaules se forme')).toBe(true);
+  });
+
+  it('chart pattern double top: "double top confirmé"', () => {
+    expect(flag('double top confirmé')).toBe(true);
+  });
+
+  it('zone prix: "surveiller la zone 1.0850"', () => {
+    expect(flag('surveiller la zone 1.0850')).toBe(true);
+  });
+
+  it('régression va_monter_price_target: "L\'EURUSD va monter vers 1.15."', () => {
+    expect(flag("L'EURUSD va monter vers 1.15.")).toBe(true);
+  });
+
+  it('régression price_will_fall: "Ça va descendre."', () => {
+    expect(flag('Ça va descendre.')).toBe(true);
+  });
+
+  it('régression price_will_rise: "Le marché va monter."', () => {
+    expect(flag('Le marché va monter.')).toBe(true);
+  });
 });

@@ -62,6 +62,7 @@ interface AMFPatternRule {
 //  D. Prédictions de mouvement de prix
 //  E. Breakout / cassure directionnelle
 //  F. Cibles de prix ("vers 1.15")
+//  G. Vocabulaire d'analyse technique (FN fermés post-review §2)
 // =============================================================================
 
 export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
@@ -111,10 +112,9 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
   },
   {
     label: 'directive_vends',
-    // "Vends l'EURUSD" — imperative; but NOT "il a vendu" (passé composé / indicatif)
-    // NOT "tu as vendu" (passé composé), NOT "il avait vendu"
-    // Match "vends" only when NOT preceded by "a " or "as " or "avait " (auxiliary)
-    pattern: /(?<!\p{L})(?<!(?:a|as|avait|avez|ont|avaient)\s)vend[sz](?!\p{L})/iu,
+    // Impératif "Vends l'EURUSD" ; PAS "il a vendu" (passé), PAS "vends-toi mieux"
+    // / "tu te vends bien" (réfléchi métaphorique coaching).
+    pattern: /(?<!\p{L})(?<!(?:a|as|avait|avez|ont|avaient|te|se|me|nous|vous)\s)vend[sz](?![-\s]*(?:toi|te|vous|nous))(?!\p{L})/iu,
   },
   {
     label: 'directive_buy_english',
@@ -196,24 +196,21 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
       /(?<!\p{L})(?:ça|le\s+marché|les?\s+prix?)\s+va\s+(?:descendre|baisser)(?!\p{L})/iu,
   },
   {
-    label: 'prevision_haussiere',
-    // "Prévision haussière" / "prévision baissière"
-    pattern: /(?<!\p{L})pr[eé]vision\s+(?:hausse|baissi[eè]re|hausse)(?!\p{L})/iu,
-  },
-  {
-    label: 'prevision_haussiere_alt',
+    label: 'prevision_directionnelle',
     // "prévision haussière sur le CAC" — capture the directional adjective
     pattern: /(?<!\p{L})pr[eé]vision\s+(?:haussi[eè]re|baissi[eè]re)(?!\p{L})/iu,
   },
   {
-    label: 'va_monter_generic',
-    // "va monter vers 1.15" — generic subject + monter
-    pattern: /(?<!\p{L})va\s+monter(?:\s+vers\s+\d)?(?!\p{L})/iu,
+    label: 'va_monter_price_target',
+    // "va monter vers 1.15" / "va remonter à 4300" — prédiction de niveau de prix.
+    // PAS "ta confiance va monter" (aucun niveau → coaching légitime).
+    pattern: /(?<!\p{L})va\s+(?:re)?monter\s+(?:vers|jusqu['']?\s*à|à)\s*\d/iu,
   },
   {
-    label: 'va_descendre_generic',
-    // "Ça va descendre" — broad fallback
-    pattern: /(?<!\p{L})va\s+descendre(?!\p{L})/iu,
+    label: 'va_descendre_price_target',
+    // "va descendre vers 1.10" / "va baisser à 100" — prédiction de niveau de prix.
+    // PAS "ton stress va descendre" (aucun niveau → coaching légitime).
+    pattern: /(?<!\p{L})va\s+(?:descendre|baisser|chuter)\s+(?:vers|jusqu['']?\s*à|à)\s*\d/iu,
   },
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -251,6 +248,40 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     // "vers 1.15" / "vers 4300" — price-level target (≥3 digit or decimal)
     // anchored: must be a decimal number (price format) not a date
     pattern: /(?<!\p{L})vers\s+\d+[.,]\d+(?!\p{L})/iu,
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // G. Vocabulaire d'analyse technique (FN fermés post-review §2).
+  //    "tendance haussière" / "RSI survendu" / "retracement" / "tête-épaules" /
+  //    "zone 1.0850". Ce sont des termes d'ANALYSE de marché → interdits §2.
+  //    Patterns volontairement étroits pour éviter les FP coaching.
+  // ──────────────────────────────────────────────────────────────────────────
+  {
+    label: 'tendance_directionnelle',
+    // "tendance haussière/baissière" / "tendance est haussière" ; PAS "ta tendance à hésiter"
+    pattern: /(?<!\p{L})tendance\s+(?:est\s+)?(?:haussi[eè]re|baissi[eè]re|haussier|baissier)(?!\p{L})/iu,
+  },
+  {
+    label: 'indicateur_technique',
+    pattern: /(?<!\p{L})(?:rsi|macd|stochastique|bollinger|ichimoku|fibonacci|fibo)(?!\p{L})/iu,
+  },
+  {
+    label: 'survendu_surachete',
+    pattern: /(?<!\p{L})(?:survendu|surachet[eé]|oversold|overbought)(?!\p{L})/iu,
+  },
+  {
+    label: 'retracement_pullback',
+    // termes d'analyse ; "point d'entrée" inclus (signal). PAS "entrer en position" (exécution).
+    pattern: /(?<!\p{L})(?:retracement|pullback|point\s+d['']entr[eé]e)(?!\p{L})/iu,
+  },
+  {
+    label: 'chart_pattern',
+    pattern: /(?<!\p{L})(?:t[eê]te[\s-]?[eé]paules|double\s+(?:top|bottom|sommet|creux)|biseau|fanion|drapeau\s+(?:haussier|baissier))(?!\p{L})/iu,
+  },
+  {
+    label: 'zone_prix',
+    // "zone 1.0850" ; PAS "zone de confort" (zone + chiffre requis)
+    pattern: /(?<!\p{L})zone\s+\d+(?:[.,]\d+)?(?!\p{L})/iu,
   },
 ];
 

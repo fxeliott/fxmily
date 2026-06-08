@@ -169,9 +169,31 @@ test.describe('Session 5 — Ton aujourd’hui (guidage quotidien) on /dashboard
         calendarInstrumentVersion: CURRENT_CALENDAR_INSTRUMENT_VERSION,
       },
     });
+
+    // §30 meeting today (platform-wide, admin-generated) so the panel's
+    // "réunion aujourd'hui" row renders at runtime. 10:00 UTC = 12:00 Paris (CEST).
+    // createMany + skipDuplicates: beforeAll runs once per Playwright project
+    // (chromium + mobile) against the SAME DB, and a meeting is platform-wide (no
+    // userId → NOT removed by cleanupTestUsers), so a plain create would hit the
+    // @@unique([date, slot]) on the 2nd project. Idempotent here = CI-safe.
+    await db.meeting.createMany({
+      data: [
+        {
+          date: parseLocalDate(today),
+          slot: 'midday',
+          scheduledAt: new Date(`${today}T10:00:00.000Z`),
+        },
+      ],
+      skipDuplicates: true,
+    });
   });
 
   test.afterAll(async () => {
+    // The platform-wide meeting isn't tied to a test user — clean it explicitly
+    // so it can't leak into other specs querying meetings on the same DB.
+    await db.meeting.deleteMany({
+      where: { date: parseLocalDate(localDateOf(new Date(), PARIS_TZ)), slot: 'midday' },
+    });
     await cleanupTestUsers();
     member = memberNoCal = null;
   });
@@ -204,6 +226,10 @@ test.describe('Session 5 — Ton aujourd’hui (guidage quotidien) on /dashboard
     await expect(
       panel.locator('[data-slot="guidance-action"][data-kind="checkin"]').first(),
     ).toBeVisible();
+    // Meeting-today row (§30, platform-wide) renders at runtime.
+    await expect(panel.locator('[data-slot="guidance-action"][data-kind="meeting"]')).toBeVisible();
+    // Weekly mindset QCM row renders (this member has no mindset check this week).
+    await expect(panel.locator('[data-slot="guidance-action"][data-kind="mindset"]')).toBeVisible();
 
     // No Next.js runtime error overlay + no console errors (frontend gate).
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);

@@ -191,6 +191,26 @@ describe('detectAMFViolation — MUST NOT FLAG', () => {
   it('coaching double vigilance: "double ta vigilance après une perte"', () => {
     expect(flag('double ta vigilance après une perte')).toBe(false);
   });
+
+  // ── Anti-FP carve-outs Session 4 ──────────────────────────────────────────
+
+  it('élision datif: "Le mindset probabiliste t\'achète quelque chose de précieux : la sérénité."', () => {
+    expect(flag("Le mindset probabiliste t'achète quelque chose de précieux : la sérénité.")).toBe(
+      false,
+    );
+  });
+
+  it('quoted discourse price_will_rise: "ton cerveau crée une histoire (\\"le marché va monter\\")"', () => {
+    expect(flag('ton cerveau crée une histoire ("le marché va monter")')).toBe(false);
+  });
+
+  it('quoted discourse ça va monter: "tu entres en trade en pensant \\"ça va monter\\""', () => {
+    expect(flag('tu entres en trade en pensant "ça va monter"')).toBe(false);
+  });
+
+  it('TP labels without price: "écris ta TP1 et ta TP2 avant l\'entrée"', () => {
+    expect(flag("écris ta TP1 et ta TP2 avant l'entrée")).toBe(false);
+  });
 });
 
 // =============================================================================
@@ -240,5 +260,23 @@ describe('detectAMFViolation — MUST FLAG (post-review §2 TA vocabulary)', () 
 
   it('régression price_will_rise: "Le marché va monter."', () => {
     expect(flag('Le marché va monter.')).toBe(true);
+  });
+
+  // ── Regression must-flag carve-out session 4 ──────────────────────────────
+
+  it('TP with decimal price still flags: "TP 1.0850 puis trail."', () => {
+    expect(flag('TP 1.0850 puis trail.')).toBe(true);
+  });
+
+  it('price_will_rise unquoted assertion still flags: "Le marché va monter."', () => {
+    expect(flag('Le marché va monter.')).toBe(true);
+  });
+
+  it('price_will_fall unquoted assertion still flags: "Ça va descendre."', () => {
+    expect(flag('Ça va descendre.')).toBe(true);
+  });
+
+  it('vous-imperative still flags: "Achetez maintenant !"', () => {
+    expect(flag('Achetez maintenant !')).toBe(true);
   });
 });

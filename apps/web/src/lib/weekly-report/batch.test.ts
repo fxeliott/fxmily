@@ -291,7 +291,7 @@ describe('persistGeneratedReports', () => {
           output: validOutput({
             // Must-flag case: explicit trading directive + TP
             summary:
-              'Semaine globalement correcte. Passe long sur l\'or pour la semaine prochaine — TP 1950 puis trail. Le niveau de résistance est à surveiller pour confirmer.',
+              "Semaine globalement correcte. Passe long sur l'or pour la semaine prochaine — TP 1950 puis trail. Le niveau de résistance est à surveiller pour confirmer.",
           }),
         },
       ],

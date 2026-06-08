@@ -3836,15 +3836,15 @@ Sub-agent perf-profiler (`acd3f906265728a4d`) verdict V1 SHIP-ACCEPTABLE — 0 T
 
 ### Fichiers créés / modifiés
 
-| Fichier | Changement |
-|---|---|
-| `src/lib/safety/amf-detection.ts` | Nouveau module pur (0 dep serveur). `detectAMFViolation(text)` + `AMF_VIOLATION_PATTERNS` (28 règles). 6 groupes : directives directionnelles, TP/SL/objectif prix, support/résistance, prédictions de mouvement, breakout/cassure, cibles prix. Calibré sur la matrice TDD. |
-| `src/lib/safety/amf-detection.test.ts` | 31 tests TDD (17 must-flag + 14 must-not-flag). Matrice complète Session 4. |
-| `src/lib/monthly-debrief/batch.ts` | +import `detectAMFViolation`. +gate AMF après le gate crisis (même corpus `amfCorpus`). `skipped +=1` + audit `monthly_debrief.batch.amf_violation` + `reportWarning` si `suspected`. |
-| `src/lib/weekly-report/batch.ts` | Idem pour le pipeline hebdomadaire. Slug `weekly_report.batch.amf_violation`. |
-| `src/lib/auth/audit.ts` | +2 slugs union : `weekly_report.batch.amf_violation` + `monthly_debrief.batch.amf_violation`. |
-| `src/lib/monthly-debrief/batch.test.ts` | +2 tests AMF (cas-piégé violant + cas-trap-words conformes). |
-| `src/lib/weekly-report/batch.test.ts` | +2 tests AMF (idem). |
+| Fichier                                 | Changement                                                                                                                                                                                                                                                                   |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/safety/amf-detection.ts`       | Nouveau module pur (0 dep serveur). `detectAMFViolation(text)` + `AMF_VIOLATION_PATTERNS` (28 règles). 6 groupes : directives directionnelles, TP/SL/objectif prix, support/résistance, prédictions de mouvement, breakout/cassure, cibles prix. Calibré sur la matrice TDD. |
+| `src/lib/safety/amf-detection.test.ts`  | 31 tests TDD (17 must-flag + 14 must-not-flag). Matrice complète Session 4.                                                                                                                                                                                                  |
+| `src/lib/monthly-debrief/batch.ts`      | +import `detectAMFViolation`. +gate AMF après le gate crisis (même corpus `amfCorpus`). `skipped +=1` + audit `monthly_debrief.batch.amf_violation` + `reportWarning` si `suspected`.                                                                                        |
+| `src/lib/weekly-report/batch.ts`        | Idem pour le pipeline hebdomadaire. Slug `weekly_report.batch.amf_violation`.                                                                                                                                                                                                |
+| `src/lib/auth/audit.ts`                 | +2 slugs union : `weekly_report.batch.amf_violation` + `monthly_debrief.batch.amf_violation`.                                                                                                                                                                                |
+| `src/lib/monthly-debrief/batch.test.ts` | +2 tests AMF (cas-piégé violant + cas-trap-words conformes).                                                                                                                                                                                                                 |
+| `src/lib/weekly-report/batch.test.ts`   | +2 tests AMF (idem).                                                                                                                                                                                                                                                         |
 
 ### Patterns AMF (groupes)
 

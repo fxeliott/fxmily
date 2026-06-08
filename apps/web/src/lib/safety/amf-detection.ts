@@ -114,7 +114,8 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     label: 'directive_vends',
     // Impératif "Vends l'EURUSD" ; PAS "il a vendu" (passé), PAS "vends-toi mieux"
     // / "tu te vends bien" (réfléchi métaphorique coaching).
-    pattern: /(?<!\p{L})(?<!(?:a|as|avait|avez|ont|avaient|te|se|me|nous|vous)\s)vend[sz](?![-\s]*(?:toi|te|vous|nous))(?!\p{L})/iu,
+    pattern:
+      /(?<!\p{L})(?<!(?:a|as|avait|avez|ont|avaient|te|se|me|nous|vous)\s)vend[sz](?![-\s]*(?:toi|te|vous|nous))(?!\p{L})/iu,
   },
   {
     label: 'directive_buy_english',
@@ -192,8 +193,7 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
   {
     label: 'price_will_fall',
     // "va descendre" / "va baisser" — price movement prediction
-    pattern:
-      /(?<!\p{L})(?:ça|le\s+marché|les?\s+prix?)\s+va\s+(?:descendre|baisser)(?!\p{L})/iu,
+    pattern: /(?<!\p{L})(?:ça|le\s+marché|les?\s+prix?)\s+va\s+(?:descendre|baisser)(?!\p{L})/iu,
   },
   {
     label: 'prevision_directionnelle',
@@ -234,7 +234,8 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     label: 'cassure_avec_instrument',
     // "Vends l'EURUSD à la cassure" — "cassure" in a trade directive context
     // (preceded or followed by instrument/action hints)
-    pattern: /(?<!\p{L})(?:vend[sz]?|achète[sz]?|buy|sell)\s+.{0,40}?\s*à\s+la\s+cassure(?!\p{L})/iu,
+    pattern:
+      /(?<!\p{L})(?:vend[sz]?|achète[sz]?|buy|sell)\s+.{0,40}?\s*à\s+la\s+cassure(?!\p{L})/iu,
   },
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -259,7 +260,8 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
   {
     label: 'tendance_directionnelle',
     // "tendance haussière/baissière" / "tendance est haussière" ; PAS "ta tendance à hésiter"
-    pattern: /(?<!\p{L})tendance\s+(?:est\s+)?(?:haussi[eè]re|baissi[eè]re|haussier|baissier)(?!\p{L})/iu,
+    pattern:
+      /(?<!\p{L})tendance\s+(?:est\s+)?(?:haussi[eè]re|baissi[eè]re|haussier|baissier)(?!\p{L})/iu,
   },
   {
     label: 'indicateur_technique',
@@ -276,7 +278,8 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
   },
   {
     label: 'chart_pattern',
-    pattern: /(?<!\p{L})(?:t[eê]te[\s-]?[eé]paules|double\s+(?:top|bottom|sommet|creux)|biseau|fanion|drapeau\s+(?:haussier|baissier))(?!\p{L})/iu,
+    pattern:
+      /(?<!\p{L})(?:t[eê]te[\s-]?[eé]paules|double\s+(?:top|bottom|sommet|creux)|biseau|fanion|drapeau\s+(?:haussier|baissier))(?!\p{L})/iu,
   },
   {
     label: 'zone_prix',

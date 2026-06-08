@@ -1,5 +1,5 @@
 /**
- * V2.4 — Onboarding interview safety filters (Session β Phase A.2 — 3 couches
+ * V2.5 — Onboarding interview safety filters (Session β Phase A.2 — 3 couches
  * anti-hallucination Claude §J Anthropic profilage).
  *
  * Pure module — no DB, no env, no `server-only` — consumed by both the batch
@@ -22,83 +22,28 @@
  *     (`dépression/anxiété généralisée/trouble/pathologie/diagnostic`)
  *   - Evidence-grounded — chaque `highlight.evidence[i]` est verbatim
  *     substring NFC-normalisé du corpus answerTexts
+ *
+ * AMF DETECTION — single source of truth:
+ *   `detectAMFViolation` and `AMF_VIOLATION_PATTERNS` are re-exported from
+ *   `@/lib/safety/amf-detection` (the context-anchored, FP-hardened canonical
+ *   detector, Session 4). The naive duplicate patterns that lived here until
+ *   v2.4 have been removed to prevent false positives on legitimate coaching
+ *   text such as "raisonne sur le long terme" or "a vendu trop tôt".
  */
 
 import type {
   MemberProfileOutput,
   OnboardingInterviewSnapshot,
 } from '@/lib/schemas/onboarding-interview';
+import { detectAMFViolation, AMF_VIOLATION_PATTERNS } from '@/lib/safety/amf-detection';
 
 // =============================================================================
 // AMF regex post-gen filter (couche 2 anti-hallu §J)
+// Single source of truth — canonical, context-anchored, FP-hardened detector.
 // =============================================================================
 
-/**
- * AMF / CIF violation patterns — Claude doit JAMAIS générer une
- * recommandation marché individualisée dans summary/highlights/axes.
- *
- * Regex unicode-aware, case-insensitive. Patterns canoniques :
- *   - Directional advice : `LONG`, `SHORT`, `BUY`, `SELL`, `achetez`,
- *     `vendez`, `strike`
- *   - Specific levels : `TP \d+`, `stop[- ]?loss à \d+`, `niveau de
- *     support`, `niveau de résistance`
- *   - Forward-looking : `objectif à \d+`, `prévision`, `va monter`,
- *     `va descendre`
- *
- * Audit-safe labels (no raw text) — pour `onboarding.batch.amf_violation`
- * audit slug + Sentry `reportWarning`.
- */
-export const AMF_VIOLATION_PATTERNS: ReadonlyArray<{
-  readonly label: string;
-  readonly regex: RegExp;
-}> = [
-  { label: 'directional_long_short', regex: /\b(?:long|short)\b/i },
-  { label: 'directional_buy_sell', regex: /\b(?:buy|sell|achet(?:ez|er|é)|vend(?:ez|re|u))\b/i },
-  { label: 'strike_target', regex: /\b(?:strike|frappe)\b/i },
-  { label: 'tp_specific_level', regex: /\bTP\s*\d+/i },
-  { label: 'stop_loss_specific_level', regex: /\bstop[\s-]?loss\s+à\s+\d+/i },
-  {
-    label: 'support_resistance_specific',
-    regex: /\bniveau\s+de\s+(?:support|résistance|resistance)\b/i,
-  },
-  { label: 'objective_specific_level', regex: /\bobjectif\s+à\s+\d+/i },
-  {
-    label: 'forward_looking_prediction',
-    regex:
-      /\b(?:va\s+(?:monter|descendre|baisser|exploser|chuter)|prévision\s+(?:haussière|baissière|à\s+la\s+hausse|à\s+la\s+baisse))\b/i,
-  },
-];
-
-export interface AMFViolationResult {
-  readonly suspected: boolean;
-  readonly matchedLabels: readonly string[];
-}
-
-/**
- * Scan a corpus for AMF / CIF violation patterns. Returns canonical labels
- * only — never returns raw matched text (audit-safe).
- *
- * Use case : Claude output `MemberProfile` (summary + flatMap(highlights.
- * evidence) + axes_prioritaires.join(' ')). If `suspected === true`, batch
- * REJECTS the profile, audit `onboarding.batch.amf_violation`, Sentry
- * `reportWarning`.
- */
-export function detectAMFViolation(text: string): AMFViolationResult {
-  if (typeof text !== 'string' || text.length === 0) {
-    return { suspected: false, matchedLabels: [] };
-  }
-  const normalized = text.normalize('NFC');
-  const matchedLabels: string[] = [];
-  for (const { label, regex } of AMF_VIOLATION_PATTERNS) {
-    if (regex.test(normalized)) {
-      matchedLabels.push(label);
-    }
-  }
-  return {
-    suspected: matchedLabels.length > 0,
-    matchedLabels,
-  };
-}
+export { detectAMFViolation, AMF_VIOLATION_PATTERNS };
+export type { AMFViolationResult } from '@/lib/safety/amf-detection';
 
 // =============================================================================
 // Anti-clinical wording detection (posture §J Anthropic)

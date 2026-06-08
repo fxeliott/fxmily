@@ -3,7 +3,7 @@ import 'server-only';
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
 import { parseLocalDate } from '@/lib/checkin/timezone';
-import { detectAMFViolation } from '@/lib/onboarding-interview/safety';
+import { detectAMFViolation } from '@/lib/safety/amf-detection';
 import { reportError, reportWarning } from '@/lib/observability';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
 import {

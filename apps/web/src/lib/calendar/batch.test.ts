@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mocks must be hoisted BEFORE importing the module under test.
 //
 // detectCrisis (@/lib/safety/crisis-detection) and detectAMFViolation
-// (@/lib/onboarding-interview/safety) are PURE and run REAL so the crisis +
+// (@/lib/safety/amf-detection) are PURE and run REAL so the crisis +
 // AMF gates are genuinely exercised. parseLocalDate + Zod run real too.
 // ---------------------------------------------------------------------------
 
@@ -323,7 +323,7 @@ describe('persistGeneratedCalendars', () => {
           userId: 'user-active-1',
           output: validOutput({
             weeklyFocus:
-              'Cette semaine je te conseille d acheter des l ouverture de Londres pour viser le sommet, le marche est porteur.',
+              'Cette semaine je te conseille : Achetez dès l ouverture de Londres pour viser le sommet, le marche est porteur.',
           }),
         },
       ],

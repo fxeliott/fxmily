@@ -1,16 +1,13 @@
 import {
   ArrowRight,
   CalendarRange,
-  Check,
   GraduationCap,
   Inbox,
   LineChart as LineChartIcon,
   LogOut,
-  Moon,
   Plus,
   Shield,
   ShieldCheck,
-  Sun,
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -23,6 +20,7 @@ import { StreakCard } from '@/components/checkin/streak-card';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DrawnRule } from '@/components/dashboard/drawn-rule';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
+import { TodayGuidance } from '@/components/dashboard/today-guidance';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
 import { ProfileStatusWidget } from '@/components/onboarding/profile-status-widget';
 import { EmotionPerfTable } from '@/components/scoring/emotion-perf-table';
@@ -44,7 +42,7 @@ import { HoverLift } from '@/components/ui/hover-lift';
 import { Kbd } from '@/components/ui/kbd';
 import { Pill } from '@/components/ui/pill';
 import { countPendingAccessRequests } from '@/lib/access-request/service';
-import { getCheckinStatus, getStreak } from '@/lib/checkin/service';
+import { getStreak } from '@/lib/checkin/service';
 import { habitKindSchema } from '@/lib/schemas/habit-log';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
@@ -115,19 +113,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ? new URLSearchParams({ range: parseRange(sp.range) }).toString()
     : '';
 
-  const [counts, checkinStatus, streak, latestScore] = userId
+  // NOTE — the daily check-in status is read INSIDE the "Ton aujourd'hui" panel
+  // (getDailyGuidance) now, not here: the old static check-in card was removed
+  // (the panel owns the time-aware check-in surfacing, no duplicate query).
+  const [counts, streak, latestScore] = userId
     ? await Promise.all([
         countTradesByStatus(userId),
-        getCheckinStatus(userId, timezone),
         getStreak(userId, timezone),
         getLatestBehavioralScore(userId),
       ])
-    : [
-        { open: 0, closed: 0 },
-        { today: '', morningSubmitted: false, eveningSubmitted: false },
-        { current: 0, todayFilled: false, today: '' },
-        null,
-      ];
+    : [{ open: 0, closed: 0 }, { current: 0, todayFilled: false, today: '' }, null];
 
   const fullName = session.user.name?.trim() || session.user.email?.split('@')[0] || 'Membre';
   const firstName = fullName.split(' ')[0]!;
@@ -232,45 +227,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        {/* J5 — Check-in du jour */}
-        <section
-          className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]"
-          aria-labelledby="checkin-heading"
-        >
-          <Card primary glass className="@container flex flex-col gap-4 p-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <h2 id="checkin-heading" className="t-eyebrow">
-                  Check-in du jour
-                </h2>
-                <Pill tone="acc" dot="live">
-                  ACTIF
-                </Pill>
-              </div>
-              <Link
-                href="/checkin"
-                className="inline-flex items-center gap-1 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
-              >
-                Tout voir
-                <ArrowRight className="h-3 w-3" strokeWidth={1.75} />
-              </Link>
-            </div>
-            <div className="grid gap-3 @[20rem]:grid-cols-2">
-              <CheckinSlotChip
-                slot="morning"
-                submitted={checkinStatus.morningSubmitted}
-                href="/checkin/morning"
-              />
-              <CheckinSlotChip
-                slot="evening"
-                submitted={checkinStatus.eveningSubmitted}
-                href="/checkin/evening"
-              />
-            </div>
-          </Card>
-
+        {/* Session 5 — Guidage quotidien « Ton aujourd'hui » (DoD §30 #3). THE
+            single time-aware "now" hub: the check-in due for the current slot,
+            TODAY's calendar blocks, a meeting today, the Monday mindset QCM. It
+            REPLACES the old static "Check-in du jour" card (the panel owns the
+            check-in surfacing now — no duplicate call-to-action on the page).
+            Posture §2 + anti-Black-Hat (§31.2). StreakCard rides alongside. */}
+        <div className="mb-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+          <Suspense fallback={<TodayGuidanceSkeleton />}>
+            <TodayGuidance userId={userId!} timezone={timezone} />
+          </Suspense>
           <StreakCard streak={streak.current} todayFilled={streak.todayFilled} />
-        </section>
+        </div>
 
         {/* V2.4 — Onboarding profile status (Session 2 hardening). The profiling
             pipeline (30-q interview → batch local Claude Opus 4.8 → MemberProfile
@@ -753,6 +721,17 @@ function CalendarStatusSkeleton() {
   );
 }
 
+function TodayGuidanceSkeleton() {
+  return (
+    <div
+      className="skel rounded-card h-[280px] border border-[var(--b-default)] bg-[var(--bg-1)]"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement de ton aujourd'hui"
+    />
+  );
+}
+
 function ProfileStatusSkeleton() {
   return (
     <div
@@ -865,56 +844,5 @@ function KpiCell({
         </span>
       ) : null}
     </div>
-  );
-}
-
-function CheckinSlotChip({
-  slot,
-  submitted,
-  href,
-}: {
-  slot: 'morning' | 'evening';
-  submitted: boolean;
-  href: '/checkin/morning' | '/checkin/evening';
-}) {
-  const isMorning = slot === 'morning';
-  const Icon = isMorning ? Sun : Moon;
-  const label = isMorning ? 'Matin' : 'Soir';
-  const sub = isMorning ? 'Sommeil · routine' : 'Discipline · stress';
-  return (
-    <Link href={href} className="block">
-      <div
-        className={cn(
-          'rounded-control flex items-center gap-3 border bg-[var(--bg-1)] px-3 py-2.5 transition-all',
-          submitted
-            ? 'border-[var(--b-acc)] bg-[var(--acc-dim-2)]'
-            : 'border-[var(--b-default)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
-        )}
-      >
-        <div
-          className={cn(
-            'rounded-control grid h-8 w-8 shrink-0 place-items-center border',
-            submitted
-              ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)]'
-              : 'border-[var(--b-default)] text-[var(--t-3)]',
-          )}
-        >
-          <Icon className="h-4 w-4" strokeWidth={1.75} />
-        </div>
-        <div className="flex flex-1 flex-col leading-tight">
-          <span className="text-[13px] font-semibold text-[var(--t-1)]">{label}</span>
-          <span className="t-cap text-[var(--t-4)]">{sub}</span>
-        </div>
-        {submitted ? (
-          <Check className="h-4 w-4 text-[var(--acc)]" strokeWidth={2} aria-label="fait" />
-        ) : (
-          <ArrowRight
-            className="h-3.5 w-3.5 text-[var(--t-4)]"
-            strokeWidth={1.75}
-            aria-label="à faire"
-          />
-        )}
-      </div>
-    </Link>
   );
 }

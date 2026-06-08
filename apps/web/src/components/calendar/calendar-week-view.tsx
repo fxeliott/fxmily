@@ -1,10 +1,5 @@
-import type { CalendarSlotValue } from '@/lib/calendar/instrument-v1';
-import {
-  CALENDAR_OUTPUT_SLOTS,
-  type CalendarBlockCategoryValue,
-  type CalendarDay,
-} from '@/lib/schemas/adaptive-calendar';
-import { C } from '@/lib/theme-colors';
+import { categoryMetaFor, slotLabelFor, slotOrderIndex } from '@/components/calendar/calendar-meta';
+import { type CalendarDay } from '@/lib/schemas/adaptive-calendar';
 import { cn } from '@/lib/utils';
 
 /**
@@ -21,38 +16,11 @@ import { cn } from '@/lib/utils';
  * Posture (anti-Black-Hat Yu-kai Chou + §2):
  *   - The ONLY signal is each block's `priority` (visual weight: bar thickness
  *     + opacity), NEVER a red "pas fait", NEVER a streak/score/timer.
- *   - Category colours are HEX from `@/lib/theme-colors` (`C.*`), NEVER
- *     `var(--token)` — inline-style colours must resolve in iOS WebView
- *     (J6.6 BLOCKER B1). RED (`C.bad`) is never used for a category.
+ *   - Category colours + labels come from the shared `calendar-meta` SSOT
+ *     (HEX `C.*`, never `var(--token)` — iOS WebView, J6.6 BLOCKER B1).
  *   - WCAG 1.4.1 (Use of Color): the colour is decorative reinforcement; the
  *     category is ALWAYS conveyed as TEXT in the chip caption.
  */
-
-/** Category → calm hex colour + FR label. No RED (anti-Black-Hat). */
-const CATEGORY_META: Record<CalendarBlockCategoryValue, { label: string; color: string }> = {
-  live_trading: { label: 'Session live', color: C.acc }, // blue — core practice
-  backtest: { label: 'Entraînement', color: C.cy }, // cyan — §21.7 training identity
-  mark_douglas_review: { label: 'Mark Douglas', color: C.ok }, // green — psychology / growth
-  // meeting/checkin/rest/free are NEUTRAL on purpose: AMBER is reserved for the
-  // warnings rail, so a meeting block never reads as a "caution" (avoids the
-  // meeting↔warning amber collision, ui audit T2). The category is ALWAYS
-  // conveyed as TEXT in the caption — the colour is decorative reinforcement.
-  meeting: { label: 'Réunion', color: C.t2 }, // neutral light — §30 commitment
-  checkin: { label: 'Check-in', color: C.t3 }, // neutral — daily routine
-  rest: { label: 'Repos', color: C.t4 }, // neutral muted — calm by design
-  free: { label: 'Temps libre', color: C.t4 }, // neutral muted — unscheduled
-};
-
-const SLOT_LABELS: Record<CalendarSlotValue, string> = {
-  morning: 'Matin',
-  afternoon: 'Après-midi',
-  evening: 'Soir',
-};
-
-/** Canonical slot order (morning → afternoon → evening). */
-const SLOT_ORDER = new Map<CalendarSlotValue, number>(
-  CALENDAR_OUTPUT_SLOTS.map((slot, index) => [slot, index]),
-);
 
 const FMT_DAY = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
@@ -66,32 +34,8 @@ function formatDayDate(iso: string): string {
   return FMT_DAY.format(new Date(Date.UTC(y, m - 1, d)));
 }
 
-/** Calm neutral shown if a persisted block carries an out-of-enum category. */
-const FALLBACK_CATEGORY = { label: 'Bloc', color: C.t3 } as const;
-
-/**
- * Defensive category lookup. The persisted `schedule` is cast from a JSONB
- * column (`service.serializeCalendar`), so a legacy/drifted row — e.g. after a
- * future instrument-v2 enum change — could carry a category outside the current
- * 7 values despite the compile-time type. Fall back to a calm neutral instead of
- * crashing the whole page (mirrors the `SLOT_ORDER.get(...) ?? 0` guard below).
- */
-function categoryMetaFor(category: string): { label: string; color: string } {
-  return (
-    (CATEGORY_META as Record<string, { label: string; color: string }>)[category] ??
-    FALLBACK_CATEGORY
-  );
-}
-
-/** Defensive slot label lookup (same JSONB-drift rationale). */
-function slotLabelFor(slot: string): string {
-  return (SLOT_LABELS as Record<string, string>)[slot] ?? slot;
-}
-
 function DayCard({ day }: { day: CalendarDay }) {
-  const blocks = [...day.blocks].sort(
-    (a, b) => (SLOT_ORDER.get(a.slot) ?? 0) - (SLOT_ORDER.get(b.slot) ?? 0),
-  );
+  const blocks = [...day.blocks].sort((a, b) => slotOrderIndex(a.slot) - slotOrderIndex(b.slot));
 
   return (
     <div className="rounded-card flex h-full flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-4">

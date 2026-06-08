@@ -311,6 +311,38 @@ export async function declareMeetingAttendance(
   };
 }
 
+// Session 5 (guidage quotidien) — "réunion aujourd'hui" ----------------------
+
+/** One scheduled meeting on a given civil day, for the daily-guidance panel. */
+export interface TodayMeetingView {
+  id: string;
+  slot: MeetingSlotName;
+  /** Exact UTC instant of the 12h/20h Paris slot, ISO. */
+  scheduledAt: string;
+}
+
+/**
+ * List the SCHEDULED (non-cancelled) meetings whose civil day (Europe/Paris,
+ * `@db.Date`) equals `localDate` (YYYY-MM-DD), ordered by slot time. Read-only,
+ * platform-wide (meetings are admin-generated, not per-member) — used by the
+ * "Ton aujourd'hui" guidance to surface "réunion aujourd'hui à 12h / 20h"
+ * without any P&L or attendance content (posture §2). Cancelled slots are
+ * excluded (a member is never nudged toward a slot Eliot did not run). Hits the
+ * `@@unique([date, slot])` index directly.
+ */
+export async function listScheduledMeetingsOn(localDate: string): Promise<TodayMeetingView[]> {
+  const rows = await db.meeting.findMany({
+    where: { date: parseLocalDate(localDate), status: 'scheduled' },
+    orderBy: { scheduledAt: 'asc' },
+    select: { id: true, slot: true, scheduledAt: true },
+  });
+  return rows.map((m) => ({
+    id: m.id,
+    slot: m.slot as MeetingSlotName,
+    scheduledAt: m.scheduledAt.toISOString(),
+  }));
+}
+
 // J-M3 — admin surface + cron generation ------------------------------------
 
 /** Counts returned by the idempotent generation pass (cron heartbeat). */

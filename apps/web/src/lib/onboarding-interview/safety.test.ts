@@ -83,7 +83,8 @@ describe('detectAMFViolation', () => {
 
   it('detects buy/sell + achetez/vendez verbs FR + EN', () => {
     expect(detectAMFViolation('Achetez maintenant !').suspected).toBe(true);
-    expect(detectAMFViolation('Vendez à la cassure.').suspected).toBe(true);
+    // Canonical detector matches imperative "Vends" (vend[sz]) in trade context
+    expect(detectAMFViolation("Vends l'EURUSD à la cassure.").suspected).toBe(true);
     expect(detectAMFViolation('Buy the dip.').suspected).toBe(true);
     expect(detectAMFViolation('Sell the rally.').suspected).toBe(true);
   });
@@ -111,6 +112,30 @@ describe('detectAMFViolation', () => {
       // Labels are snake_case canonical, never raw text
       expect(label).toMatch(/^[a-z_]+$/);
     }
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Anti-FP regression tests (Session 4 — fix for naive duplicate detector)
+  //
+  // These phrases triggered false positives with the old naïve patterns
+  // (directional_long_short on "long terme", directional_buy_sell on "vendu").
+  // The canonical context-anchored detector must NOT flag them.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('anti-FP: "long terme" temporal must NOT be flagged', () => {
+    expect(
+      detectAMFViolation(
+        'Le membre raisonne sur le long terme et a vendu sa position trop tôt par peur.',
+      ).suspected,
+    ).toBe(false);
+  });
+
+  it('anti-FP: "tout au long du mois" idiomatic must NOT be flagged', () => {
+    expect(detectAMFViolation('tout au long du mois il garde sa discipline').suspected).toBe(false);
+  });
+
+  it('anti-FP: "il a acheté du recul" past tense / figurative must NOT be flagged', () => {
+    expect(detectAMFViolation('il a acheté du recul ce mois-ci').suspected).toBe(false);
   });
 });
 

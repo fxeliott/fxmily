@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mocks must be hoisted BEFORE importing the module under test. Carbon of
@@ -36,15 +36,16 @@ import { persistGeneratedReports } from './batch';
 // (progressionNarrative ≥120, summaryReal/summaryTraining ≥80, ≥1 reco).
 // ---------------------------------------------------------------------------
 
-function validOutput(overrides: { progressionNarrative?: string } = {}) {
+function validOutput(overrides: { progressionNarrative?: string; summaryReal?: string } = {}) {
   return {
     progressionNarrative:
       overrides.progressionNarrative ??
-      'Sur le mois, la discipline a progressé : le respect du plan est passé de soixante-cinq à quatre-vingts pour cent, signe d’une exécution plus posée et régulière.',
+      "Sur le mois, la discipline a progressé : le respect du plan est passé de soixante-cinq à quatre-vingts pour cent, signe d'une exécution plus posée et régulière.",
     summaryReal:
+      overrides.summaryReal ??
       'Douze trades réels ce mois, huit alignés au plan, deux pertes maîtrisées sous la zone de risque définie.',
     summaryTraining:
-      'Pratique d’entraînement régulière ce mois : le volume de backtests reste constant, un bon rythme d’effort.',
+      "Pratique d'entraînement régulière ce mois : le volume de backtests reste constant, un bon rythme d'effort.",
     risks: ['Surveille la fatigue accumulée en fin de mois sur les sessions du soir.'],
     recommendations: [
       'Maintiens ta routine du matin (check-in puis revue du plan) chaque jour de trading.',
@@ -279,5 +280,63 @@ describe('persistGeneratedReports (monthly)', () => {
         .mocked(logAudit)
         .mock.calls.some(([arg]) => arg.action === 'monthly_debrief.batch.persist_failed'),
     ).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Session 4 — AMF output gate (SPEC §2 posture invariant)
+  // ---------------------------------------------------------------------------
+
+  it('AMF gate: rejects output with directional advice in summaryReal → skipped=1, amf_violation audit, reportWarning', async () => {
+    const result = await persistGeneratedReports({
+      monthStart: '2026-04-01',
+      monthEnd: '2026-04-30',
+      results: [
+        {
+          userId: 'user-active-1',
+          output: validOutput({
+            // summaryReal contains a blatant directional advice (must-flag case)
+            summaryReal:
+              'Ce mois, le membre a bien progressé. Prends position LONG sur EURUSD pour capitaliser sur la tendance. Stop-loss à 1.0750.',
+          }),
+        },
+      ],
+    });
+
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(db.monthlyDebrief.upsert).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(logAudit)
+        .mock.calls.some(([arg]) => arg.action === 'monthly_debrief.batch.amf_violation'),
+    ).toBe(true);
+    // Must emit reportWarning (never reportError for AMF — content policy, not crisis)
+    expect(reportWarning).toHaveBeenCalled();
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it('AMF gate: output with coaching words "long terme" and "a vendu" DOES NOT flag → persisted=1', async () => {
+    const result = await persistGeneratedReports({
+      monthStart: '2026-04-01',
+      monthEnd: '2026-04-30',
+      results: [
+        {
+          userId: 'user-active-1',
+          output: validOutput({
+            // Coaching/psychology language with trap words — must NOT flag
+            summaryReal:
+              'Douze trades réels ce mois, huit alignés au plan. Il a vendu sa position trop tôt par peur ce mois. Sur le long terme, ta discipline progresse nettement.',
+          }),
+        },
+      ],
+    });
+
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+    expect(db.monthlyDebrief.upsert).toHaveBeenCalledOnce();
+    expect(
+      vi
+        .mocked(logAudit)
+        .mock.calls.some(([arg]) => arg.action === 'monthly_debrief.batch.amf_violation'),
+    ).toBe(false);
+    expect(reportWarning).not.toHaveBeenCalled();
   });
 });

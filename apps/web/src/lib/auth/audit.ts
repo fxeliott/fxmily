@@ -75,6 +75,13 @@ export type AuditAction =
   | 'weekly_report.batch.persist_failed'
   // V1.7.1 — crisis routing wire on the batch output (safety)
   | 'weekly_report.batch.crisis_detected'
+  // Session 4 — AMF output gate (SPEC §2 posture invariant). Emitted when
+  // the weekly AI output contains AMF/CIF-regulated content (directional
+  // advice, entry/exit signals, price targets, breakout calls). PII-FREE:
+  // carries only `matchedLabels` (canonical pattern ids), never the raw
+  // output text (RGPD §16). `skipped` counter (not `errors`) — content-
+  // policy reject, not a technical failure. Pairs with `reportWarning`.
+  | 'weekly_report.batch.amf_violation'
   | 'admin.weekly_report.viewed'
   | 'cron.weekly_reports.scan'
   | 'cron.weekly_reports.batch_done'
@@ -182,6 +189,10 @@ export type AuditAction =
   | 'monthly_debrief.batch.invalid_output'
   | 'monthly_debrief.batch.persist_failed'
   | 'monthly_debrief.batch.crisis_detected'
+  // Session 4 — AMF output gate (SPEC §2 posture invariant). Mirror of
+  // `weekly_report.batch.amf_violation` for the monthly pipeline. PII-FREE:
+  // carries `matchedLabels` + `monthStart` + `ranAt` — never the AI text.
+  | 'monthly_debrief.batch.amf_violation'
   // V1.5 — QCM athlète / auto-évaluation mindset (SPEC §27, jalon #3 séquence
   // §21.6). ONE slug only: the instrument is 100 % closed (Likert) — ZERO
   // free-text ⇒ NO crisis/injection surface (§27.6/§27.7), so there is NO

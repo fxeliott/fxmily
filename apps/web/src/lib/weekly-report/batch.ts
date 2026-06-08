@@ -11,6 +11,7 @@ import {
 
 import { reportError, reportWarning } from '@/lib/observability';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
+import { detectAMFViolation } from '@/lib/safety/amf-detection';
 
 import { buildWeeklySnapshot, pseudonymizeMember } from './builder';
 import { loadWeeklySliceForUser } from './loader';
@@ -396,7 +397,9 @@ export async function persistGeneratedReports(
     // Note : `detectCrisis` already excludes trading slang ("tout perdre sur
     // ce trade", "tuer ma position", "en finir avec ça", "dépression du
     // marché") so a normal trading-loss summary won't trip the gate.
-    const crisisCorpus = [
+    // Concatenate every free-text channel the AI can write (both crisis AND
+    // AMF gates share this corpus — built once, used twice).
+    const amfCorpus = [
       output.summary,
       ...output.risks,
       ...output.recommendations,
@@ -407,6 +410,7 @@ export async function persistGeneratedReports(
     ]
       .filter(Boolean)
       .join('\n');
+    const crisisCorpus = amfCorpus;
     const crisis = detectCrisis(crisisCorpus);
     if (crisis.level === 'high' || crisis.level === 'medium') {
       skipped += 1;
@@ -439,6 +443,32 @@ export async function persistGeneratedReports(
       }
       continue;
     }
+
+    // Session 4 — AMF output gate (SPEC §2 posture invariant).
+    // Scan the SAME corpus for AMF/CIF-regulated content: directional market
+    // advice, entry/exit signals, price targets, breakout calls. Any match
+    // means the AI output violated the §2 posture and MUST NOT be persisted.
+    // `skipped` (not `errors`) — content-policy reject, not a technical failure.
+    const amf = detectAMFViolation(amfCorpus);
+    if (amf.suspected) {
+      skipped += 1;
+      await logAudit({
+        action: 'weekly_report.batch.amf_violation',
+        userId: entry.userId,
+        metadata: {
+          ranAt,
+          weekStart: request.weekStart,
+          matchedLabels: amf.matchedLabels,
+        },
+      });
+      reportWarning('weekly_report.batch', 'amf_violation_in_ai_output', {
+        userId: entry.userId,
+        weekStart: request.weekStart,
+        matchedLabels: amf.matchedLabels,
+      });
+      continue;
+    }
+
     const usage = entry.usage ?? { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
     // V1.7 fix (code-reviewer Round 16 BLOQUANT 5) : pin the model to the
     // local-Claude sentinel by default. Reject any external model name the

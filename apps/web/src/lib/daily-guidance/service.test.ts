@@ -189,3 +189,33 @@ describe('getDailyGuidance — meeting / mindset / douglas', () => {
     expect(g.actions.some((a) => a.state === 'todo')).toBe(false);
   });
 });
+
+describe('getDailyGuidance — Paris anchoring + JSONB drift hardening (re-challenge #3)', () => {
+  // 2026-06-09T03:00:00Z = 05:00 Paris (Tuesday 06-09) but 23:00 New York
+  // (Monday 06-08). The calendar/meeting/mindset are Paris-keyed, so `today`
+  // must follow Paris (06-09), NOT the member's NY day (06-08).
+  const NY_NIGHT = new Date('2026-06-09T03:00:00Z');
+
+  it('anchors today on Paris even for a non-Paris member (calendar is Paris-keyed)', async () => {
+    vi.mocked(getQuestionnaireForUser).mockResolvedValue({ instrumentVersion: 1 } as never);
+    vi.mocked(getCalendarForUser).mockResolvedValue(
+      calendarWith([
+        { date: '2026-06-08', blocks: [aBlock({ label: 'NY-day-Monday' })] },
+        { date: '2026-06-09', blocks: [aBlock({ label: 'Paris-day-Tuesday' })] },
+      ]),
+    );
+    const g = await getDailyGuidance(USER, 'America/New_York', NY_NIGHT);
+    expect(g.today).toBe('2026-06-09'); // Paris civil day, not NY's 06-08
+    expect(g.todayBlocks).toHaveLength(1);
+    expect(g.todayBlocks[0]?.label).toBe('Paris-day-Tuesday');
+  });
+
+  it('does not crash if the persisted schedule.days drifted (not a 7-array)', async () => {
+    vi.mocked(getQuestionnaireForUser).mockResolvedValue({ instrumentVersion: 1 } as never);
+    // Simulate a drifted JSONB row (days missing) cast past the read boundary.
+    vi.mocked(getCalendarForUser).mockResolvedValue({ schedule: {} } as never);
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    expect(g.calendarState).toBe('generated');
+    expect(g.todayBlocks).toEqual([]);
+  });
+});

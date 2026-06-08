@@ -97,10 +97,17 @@ export async function getDailyGuidance(
   timezone: string = 'Europe/Paris',
   now: Date = new Date(),
 ): Promise<DailyGuidance> {
-  const today = localDateOf(now, timezone);
+  // `today` is anchored on Europe/Paris because every surface it indexes is
+  // Paris-keyed: the adaptive calendar (generated for the Paris week), the §30
+  // meetings (`date` = Paris civil day), and the mindset/questionnaire week
+  // (Monday Paris). The check-in below stays on the member timezone (a check-in
+  // row IS the member's local day), as does `slot` (the member's "moment"). In
+  // V1 the cohort is 100% Europe/Paris so the two coincide (byte-identical); but
+  // pinning `today` to Paris keeps the calendar/meeting/mindset lookups correct
+  // even if a non-Paris member ever exists — the `timezone` param then only
+  // governs the member-local check-in + slot, never the Paris-keyed reads.
+  const today = localDateOf(now, 'Europe/Paris');
   const slot = currentDaySlot(now, timezone);
-  // Calendar + mindset both anchor on the Monday of the Europe/Paris week
-  // (identical helpers); one anchor keeps the surfaces in lock-step.
   const weekStart = currentParisWeekStart(now);
   const isMonday = parseLocalDate(today).getUTCDay() === 1;
 
@@ -117,8 +124,13 @@ export async function getDailyGuidance(
   let todayBlocks: CalendarBlock[] = [];
   if (calendar) {
     calendarState = 'generated';
-    const day = calendar.schedule.days.find((d) => d.date === today);
-    todayBlocks = day ? [...day.blocks] : [];
+    // Defensive against JSONB drift (a future instrument-v2 or a manual DB edit
+    // could yield a schedule whose `days`/`blocks` is not the expected shape) —
+    // guard before `.find`, mirroring the calendar-meta category/slot fallbacks.
+    // Reads never re-validate the JSONB (only writes `.strict()`-parse it).
+    const days = Array.isArray(calendar.schedule?.days) ? calendar.schedule.days : [];
+    const day = days.find((d) => d.date === today);
+    todayBlocks = day && Array.isArray(day.blocks) ? [...day.blocks] : [];
   } else if (questionnaire) {
     calendarState = 'preparing';
   } else {

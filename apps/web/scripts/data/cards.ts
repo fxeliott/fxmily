@@ -1,7 +1,7 @@
 /**
  * Mark Douglas card seed data (J7 + J7.5 + J7.6 + J7.8).
  *
- * V1 ships **50 fiches** couvrant les 7 triggers canoniques SPEC §7.6
+ * V1 ships **51 fiches** couvrant les 7 triggers canoniques SPEC §7.6
  * (tilt, plan-violations, sleep-deficit, emotion-logged FOMO, 4 peurs,
  * sur-confiance, hedge-violation, recovery-streak) + 8 piliers catalogue
  * (acceptance, probabilities, process, ego, fear, loss, consistency,

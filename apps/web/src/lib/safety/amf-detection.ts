@@ -105,10 +105,9 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
   },
   {
     label: 'directive_imperative_achete',
-    // "Achète" stand-alone imperative but NOT "achète du recul" (coaching metaphor)
-    // and NOT "tu as acheté" (passé composé — handled by "as acheté" check below)
+    // Impératif "Achète" ; PAS "achète du recul/dip" (métaphore) ni "t'/m'/l'achète" (datif figuré "te donne")
     pattern:
-      /(?<!\p{L})(?<!\btu\s+as\s+)achète(?!\s+du\s+recul)(?!\s+du\s+dip)(?!\p{L})(?!\s+son)(?!\s+sa)(?!\s+leur)/iu,
+      /(?<!\p{L})(?<!['‘’])(?<!\btu\s+as\s+)achète(?!\s+du\s+recul)(?!\s+du\s+dip)(?!\p{L})(?!\s+son)(?!\s+sa)(?!\s+leur)/iu,
   },
   {
     label: 'directive_vends',
@@ -138,8 +137,8 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
 
   {
     label: 'tp_price_target',
-    // TP followed by a number (price level)
-    pattern: /(?<!\p{L})tp\s*\d/iu,
+    // "TP 1.0850" / "TP 4250" niveau de prix ; PAS "TP1"/"TP2" (labels de discipline collés, sans prix)
+    pattern: /(?<!\p{L})tp\s*\d+[.,]\d|(?<!\p{L})tp\s+\d+/iu,
   },
   {
     label: 'sl_price_target',
@@ -187,13 +186,15 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
 
   {
     label: 'price_will_rise',
-    // "va monter" / "va remonter" — price movement prediction
-    pattern: /(?<!\p{L})(?:ça|le\s+marché|les?\s+prix?)\s+va\s+(?:re)?monter(?!\p{L})/iu,
+    // “le marché va monter” prédiction ; PAS cité entre guillemets (piège pédagogique Mark Douglas)
+    // ni dans discours rapporté introduit par “que” (ex: “je pense que ça va monter”)
+    pattern:
+      /(?<!\p{L})(?<!["“«»‹›”“’‘'])(?<!que\s)(?:ça|le\s+marché|les?\s+prix?)\s+va\s+(?:re)?monter(?!\p{L})/iu,
   },
   {
     label: 'price_will_fall',
-    // "va descendre" / "va baisser" — price movement prediction
-    pattern: /(?<!\p{L})(?:ça|le\s+marché|les?\s+prix?)\s+va\s+(?:descendre|baisser)(?!\p{L})/iu,
+    pattern:
+      /(?<!\p{L})(?<!["“«»‹›”“’‘'])(?<!que\s)(?:ça|le\s+marché|les?\s+prix?)\s+va\s+(?:descendre|baisser)(?!\p{L})/iu,
   },
   {
     label: 'prevision_directionnelle',

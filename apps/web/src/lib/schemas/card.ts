@@ -22,6 +22,7 @@
 
 import { z } from 'zod';
 
+import { detectAMFViolation } from '@/lib/safety/amf-detection';
 import { containsBidiOrZeroWidth, graphemeCount, safeFreeText } from '@/lib/text/safe';
 import { triggerRuleSchema } from '@/lib/triggers/schema';
 
@@ -154,7 +155,24 @@ export const cardCreateSchema = z
     priority: prioritySchema.default(5),
     published: z.boolean().default(false),
   })
-  .strict();
+  .strict()
+  .superRefine((card, ctx) => {
+    // SPEC §2 posture invariant — no market-analysis advice in member-facing content.
+    // Concatenate every text field the member reads and run the AMF detector.
+    const exerciseText = card.exercises.flatMap((ex) => [ex.label, ex.description]).join('\n\n');
+    const corpus = [card.title, card.quote, card.paraphrase, exerciseText]
+      .filter(Boolean)
+      .join('\n\n');
+    const result = detectAMFViolation(corpus);
+    if (result.suspected) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "Contenu interdit (§2) : une fiche ne peut pas contenir de conseil d'analyse de marché.",
+        path: ['paraphrase'],
+      });
+    }
+  });
 
 export type CardCreateInput = z.infer<typeof cardCreateSchema>;
 

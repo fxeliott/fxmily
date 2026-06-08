@@ -13,6 +13,7 @@ import {
 
 import { reportError, reportWarning } from '@/lib/observability';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
+import { detectAMFViolation } from '@/lib/safety/amf-detection';
 
 import { buildMonthlySnapshot } from './builder';
 import { loadMonthlySliceForUser } from './loader';
@@ -443,7 +444,9 @@ export async function persistGeneratedReports(
     // ⚠️ This is the OUTPUT-IA skip path (mirror weekly batch.ts), NOT the
     // REFLECT "persist-quand-même" path (which only applies to member-
     // written text — here nothing is member-written).
-    const crisisCorpus = [
+    // Concatenate every free-text channel the AI can write (both crisis AND
+    // AMF gates share this corpus — built once, used twice).
+    const amfCorpus = [
       output.progressionNarrative,
       output.summaryReal,
       output.summaryTraining,
@@ -456,6 +459,7 @@ export async function persistGeneratedReports(
     ]
       .filter(Boolean)
       .join('\n');
+    const crisisCorpus = amfCorpus;
     const crisis = detectCrisis(crisisCorpus);
     if (crisis.level === 'high' || crisis.level === 'medium') {
       skipped += 1;
@@ -486,6 +490,32 @@ export async function persistGeneratedReports(
           matchedLabels: crisis.matches.map((m) => m.label),
         });
       }
+      continue;
+    }
+
+    // Session 4 — AMF output gate (SPEC §2 posture invariant).
+    // Scan the SAME corpus for AMF/CIF-regulated content: directional market
+    // advice, entry/exit signals, price targets, breakout calls. Any match
+    // means the AI output violated the §2 posture and MUST NOT be persisted.
+    // `skipped` (not `errors`) — this is a content-policy reject, not a
+    // technical failure. Audit + reportWarning (PII-free: labels only).
+    const amf = detectAMFViolation(amfCorpus);
+    if (amf.suspected) {
+      skipped += 1;
+      await logAudit({
+        action: 'monthly_debrief.batch.amf_violation',
+        userId: entry.userId,
+        metadata: {
+          ranAt,
+          monthStart: request.monthStart,
+          matchedLabels: amf.matchedLabels,
+        },
+      });
+      reportWarning('monthly_debrief.batch', 'amf_violation_in_ai_output', {
+        userId: entry.userId,
+        monthStart: request.monthStart,
+        matchedLabels: amf.matchedLabels,
+      });
       continue;
     }
 

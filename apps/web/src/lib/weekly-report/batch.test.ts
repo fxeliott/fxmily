@@ -276,4 +276,61 @@ describe('persistGeneratedReports', () => {
         .mock.calls.some(([arg]) => arg.action === 'weekly_report.batch.persist_failed'),
     ).toBe(true);
   });
+
+  // ---------------------------------------------------------------------------
+  // Session 4 — AMF output gate (SPEC §2 posture invariant)
+  // ---------------------------------------------------------------------------
+
+  it('AMF gate: rejects output with directional advice in summary → skipped=1, amf_violation audit, reportWarning', async () => {
+    const result = await persistGeneratedReports({
+      weekStart: '2026-05-05',
+      weekEnd: '2026-05-11',
+      results: [
+        {
+          userId: 'user-active-1',
+          output: validOutput({
+            // Must-flag case: explicit trading directive + TP
+            summary:
+              "Semaine globalement correcte. Passe long sur l'or pour la semaine prochaine — TP 1950 puis trail. Le niveau de résistance est à surveiller pour confirmer.",
+          }),
+        },
+      ],
+    });
+
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(db.weeklyReport.upsert).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(logAudit)
+        .mock.calls.some(([arg]) => arg.action === 'weekly_report.batch.amf_violation'),
+    ).toBe(true);
+    // Must emit reportWarning (never reportError — AMF is content policy, not crisis)
+    expect(reportWarning).toHaveBeenCalled();
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it('AMF gate: output with coaching trap words "à long terme" and "vendu" DOES NOT flag → persisted=1', async () => {
+    const result = await persistGeneratedReports({
+      weekStart: '2026-05-05',
+      weekEnd: '2026-05-11',
+      results: [
+        {
+          userId: 'user-active-1',
+          output: validOutput({
+            summary:
+              'Semaine calme, sept trades alignés au plan. Il a vendu sa position trop tôt par peur. À long terme, sa discipline progresse : le stress est descendu nettement.',
+          }),
+        },
+      ],
+    });
+
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+    expect(db.weeklyReport.upsert).toHaveBeenCalledOnce();
+    expect(
+      vi
+        .mocked(logAudit)
+        .mock.calls.some(([arg]) => arg.action === 'weekly_report.batch.amf_violation'),
+    ).toBe(false);
+    expect(reportWarning).not.toHaveBeenCalled();
+  });
 });

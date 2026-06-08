@@ -3830,6 +3830,42 @@ Sub-agent perf-profiler (`acd3f906265728a4d`) verdict V1 SHIP-ACCEPTABLE — 0 T
 - **`logAudit` await blocant Server Action** — `await logAudit(...)` ajoute ~5-20ms latency DB par mutation. Cohérent pattern J5/J6 (changer T5 seul = inconsistance). V2 candidate `unstable_after` Next.js 16 pour audits non-critiques.
 - **`revalidateTag` granularité** — actions utilisent `revalidatePath('/admin/track-record')` qui invalide page entière. V2 `revalidateTag('public-trade:list')` + `fetch(..., { next: { tags } })` pour révalidation granulaire. À 1000+ rows.
 
+## Session 4 — AMF output gate (SPEC §2 posture invariant)
+
+**Objectif** : câbler une défense output-layer AMF/CIF sur les 2 pipelines de rapports IA (`weekly-report` + `monthly-debrief`) pour que la posture SPEC §2 ("jamais de conseil d'analyse de marché") soit prouvable et testée, pas juste déclarative au niveau prompt.
+
+### Fichiers créés / modifiés
+
+| Fichier                                 | Changement                                                                                                                                                                                                                                                                   |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/safety/amf-detection.ts`       | Nouveau module pur (0 dep serveur). `detectAMFViolation(text)` + `AMF_VIOLATION_PATTERNS` (28 règles). 6 groupes : directives directionnelles, TP/SL/objectif prix, support/résistance, prédictions de mouvement, breakout/cassure, cibles prix. Calibré sur la matrice TDD. |
+| `src/lib/safety/amf-detection.test.ts`  | 31 tests TDD (17 must-flag + 14 must-not-flag). Matrice complète Session 4.                                                                                                                                                                                                  |
+| `src/lib/monthly-debrief/batch.ts`      | +import `detectAMFViolation`. +gate AMF après le gate crisis (même corpus `amfCorpus`). `skipped +=1` + audit `monthly_debrief.batch.amf_violation` + `reportWarning` si `suspected`.                                                                                        |
+| `src/lib/weekly-report/batch.ts`        | Idem pour le pipeline hebdomadaire. Slug `weekly_report.batch.amf_violation`.                                                                                                                                                                                                |
+| `src/lib/auth/audit.ts`                 | +2 slugs union : `weekly_report.batch.amf_violation` + `monthly_debrief.batch.amf_violation`.                                                                                                                                                                                |
+| `src/lib/monthly-debrief/batch.test.ts` | +2 tests AMF (cas-piégé violant + cas-trap-words conformes).                                                                                                                                                                                                                 |
+| `src/lib/weekly-report/batch.test.ts`   | +2 tests AMF (idem).                                                                                                                                                                                                                                                         |
+
+### Patterns AMF (groupes)
+
+- **A. Directives directionnelles** : `directive_long_position`, `directive_short_position`, `directive_long_instrument`, `directive_imperative_achetez`, `directive_imperative_achete`, `directive_vends`, `directive_buy_english`, `directive_sell_english`
+- **B. TP/SL/objectif prix** : `tp_price_target`, `sl_price_target`, `objectif_price_number`
+- **C. Support/résistance** : `support_level`, `resistance_level`, `resistance_at_price`
+- **D. Prédictions de mouvement** : `price_will_rise`, `price_will_fall`, `prevision_haussiere`, `prevision_haussiere_alt`, `va_monter_generic`, `va_descendre_generic`
+- **E. Breakout/cassure** : `breakout`, `cassure_directionnelle`, `cassure_avec_instrument`
+- **F. Cibles de prix** : `price_target_vers`
+
+### Principes de calibration
+
+- Mots ambigus (`long`/`short`/`achète`/`vends`) ancrés dans un **contexte de trading/impératif** (lookarounds sur auxiliaires passés, carve-out « long terme », « achète du recul »).
+- Patterns déjà spécifiques (TP \d, stop-loss à \d, objectif à \d, niveau de support/résistance, va monter/descendre) conservés tels quels.
+- « breakout » est considéré AMF-violant dans TOUT contexte (terme purement technique-analyse).
+- « prévision haussière/baissière » idem.
+
+### Audit slugs (PII-free)
+
+`weekly_report.batch.amf_violation` et `monthly_debrief.batch.amf_violation` portent `{ ranAt, weekStart|monthStart, matchedLabels }` — jamais le texte brut (RGPD §16).
+
 ## V1.12 P7 — A11y landmark hierarchy `/dashboard` scope minimal (livré 2026-05-25, PR #176 `21c8ae3`)
 
 > **Jalon build a11y atomique**. WCAG 1.3.1 (Info and Relationships) + 2.4.1 (Bypass Blocks) + 2.4.6 (Headings and Labels) landmarks `<section aria-labelledby>` exposés via SR rotor "régions". Pattern réutilisable scope élargi V1.12 P9+ autres surfaces (`/journal`, `/account`, `/library`, etc.) si Eliot décide.

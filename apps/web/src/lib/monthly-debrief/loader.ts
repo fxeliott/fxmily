@@ -114,9 +114,12 @@ export async function loadMonthlySliceForUser(
   });
   if (!user || user.status !== 'active') return null;
 
-  // SPEC §25.4 — the batch fires early on the 1st of the month for the
-  // just-ended civil month. `computeReportingMonth` anchors on `now − 24h`
-  // (exact carbon of `computeReportingWeek`), multi-TZ-safe.
+  // SPEC §25.4 — the batch reports the just-ended civil month.
+  // `computeReportingMonth` returns the last FULLY-completed civil month in the
+  // member's TZ, robust to a multi-day-delayed manual run (Session 5 defect-B
+  // fix: was `now − 24h`-anchored, which mis-targeted the current month for any
+  // run past the 1st — it now shares the exact source the overdue net uses, so
+  // batch and net always agree). `currentMonth` (rare preview) → the in-progress month.
   const window = options.currentMonth
     ? computeMonthWindow(now, user.timezone)
     : computeReportingMonth(now, user.timezone);

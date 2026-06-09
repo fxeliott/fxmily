@@ -181,12 +181,43 @@ describe('persistAdaptiveCalendar', () => {
 
     const call = vi.mocked(db.adaptiveCalendar.upsert).mock.calls[0];
     if (!call) throw new Error('expected upsert');
-    const arg = call[0] as { create: { primaryCategory: string | null; costEur: unknown } };
+    const arg = call[0] as {
+      create: { primaryCategory: string | null; costEur: unknown };
+      update: { generatedAt: unknown };
+    };
     expect(arg.create.primaryCategory).toBe('backtest');
     expect(arg.create.costEur).toBeInstanceOf(Prisma.Decimal);
     // Prisma.Decimal('0.022200').toString() normalises trailing zeros → '0.0222'.
     expect(res.costEur).toBe('0.0222');
     expect(res.primaryCategory).toBe('backtest');
+  });
+
+  it('refreshes `generatedAt` on the UPDATE branch (DoD#1 defect-D — freshness convergence)', async () => {
+    // `generatedAt` is `@default(now())` → only set on INSERT. A regeneration
+    // (upsert UPDATE) MUST bump it, otherwise the batch loader's freshness gate
+    // (`questionnaire.updatedAt > calendar.generatedAt`) would stay true forever
+    // and re-generate the member on every run. The UPDATE branch must therefore
+    // carry a fresh `generatedAt` Date so `generatedAt > updatedAt` holds after a
+    // regeneration → the member is excluded on the next run (idempotence).
+    vi.mocked(db.adaptiveCalendar.upsert).mockResolvedValue(calendarRow() as never);
+    const before = Date.now();
+
+    await persistAdaptiveCalendar({
+      userId: 'user-1',
+      weekStart: '2026-06-08',
+      output: calendarOutput('backtest'),
+      claudeModel: 'claude-opus-4-8',
+      inputTokens: 3200,
+      outputTokens: 950,
+      costEur: '0.022200',
+      calendarInstrumentVersion: 1,
+    });
+
+    const call = vi.mocked(db.adaptiveCalendar.upsert).mock.calls[0];
+    if (!call) throw new Error('expected upsert');
+    const arg = call[0] as { update: { generatedAt: unknown } };
+    expect(arg.update.generatedAt).toBeInstanceOf(Date);
+    expect((arg.update.generatedAt as Date).getTime()).toBeGreaterThanOrEqual(before);
   });
 });
 

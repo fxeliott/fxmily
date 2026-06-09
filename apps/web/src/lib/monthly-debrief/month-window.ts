@@ -71,30 +71,34 @@ export function computeMonthWindow(now: Date, timezone: string): MonthWindow {
 }
 
 /**
- * "Reporting month" — the most-recently-completed civil month in the
- * member's local timezone, for the 1st-of-month batch run. **Exact carbon
- * of `computeReportingWeek`** (SPEC §25.4 "ancre now − Xj multi-TZ-safe
- * comme computeReportingWeek"): anchor on `now − 24h`, then take the civil
- * month *containing* that instant.
+ * "Reporting month" — le DERNIER MOIS CIVIL COMPLÉTÉ en local-TZ membre,
+ * cible du batch mensuel. **Robuste à un run retardé de plusieurs jours**
+ * (batch manuel sans cron, SPEC §25.4 — l'admin lance le script à la main
+ * « le 1er du mois », mais en pratique le 5, le 20, ou le dernier jour).
  *
- * Contract (mirror weekly's "fires Sunday 21:00 UTC"): the batch is
- * ops-scheduled to fire **early on the 1st of the month**. `now − 24h`
- * then lands on the last day of the just-ended month for every realistic
- * timezone (Baker UTC−12 .. Kiribati UTC+14, since the last day ∓ 14h is
- * still inside a ≥28-day month), so `computeMonthWindow` returns exactly
- * the month to report. One rule, no branching, DST-safe (24h ≫ the ±1h
- * DST jump) — identical robustness envelope as `computeReportingWeek`
- * (which likewise does not special-case a multi-day-delayed run; the
- * idempotent `(userId, monthStart)` upsert covers any re-run).
+ * Implémentation (canon `overdue.lastCompletedMonth`) : prends le mois civil
+ * COURANT contenant `now`, recule de 1ms avant son début (→ dernier instant
+ * du mois précédent), reprends le mois civil contenant cet instant. Une seule
+ * règle, sans branchement, DST-safe (l'arithmétique passe par les bornes UTC
+ * du mois courant, jamais par un offset fixe).
  *
- * Why NOT "previous month of today_local": for a timezone west of UTC a
- * batch firing 02:00 UTC on the 1st is still the previous month's last
- * day *locally* — stepping back another month would skip to two-months-
- * ago (caught by `month-window.test.ts` multi-TZ NY case).
+ * Pourquoi PAS l'ancien `now − 24h` : cette ancre n'est correcte QUE pour un
+ * run très tôt le 1er. Lancé le 5 juin, `now − 24h` = 4 juin → mois COURANT
+ * (juin, incomplet) au lieu de mai → le batch génère le mauvais mois, mai
+ * n'est jamais générée et le nudge overdue (qui, lui, calcule le vrai dernier
+ * mois complété) tourne en boucle. Le nouveau calcul converge avec l'overdue
+ * net QUEL QUE SOIT le jour du run :
+ *   - 1er juin 00:05 Paris → mois courant juin → recul 1ms → MAI ✓
+ *   - 5 / 20 / dernier jour de juin → mois courant juin → recul 1ms → MAI ✓
+ *
+ * Multi-TZ-safe : pour une TZ à l'ouest d'UTC, un run 02:00 UTC le 1er est
+ * encore le mois précédent *localement* — on part du mois courant LOCAL, donc
+ * pas de saut à deux-mois-avant (couvert par le cas multi-TZ NY du test).
  */
 export function computeReportingMonth(now: Date, timezone: string): MonthWindow {
-  const anchored = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  return computeMonthWindow(anchored, timezone);
+  const current = computeMonthWindow(now, timezone);
+  const prevAnchor = new Date(current.monthStartUtc.getTime() - 1);
+  return computeMonthWindow(prevAnchor, timezone);
 }
 
 /**

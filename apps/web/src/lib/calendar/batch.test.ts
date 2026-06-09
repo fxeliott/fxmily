@@ -441,20 +441,34 @@ describe('loadAllSnapshotsForCalendarGeneration', () => {
     vi.mocked(logAudit).mockResolvedValue(undefined as never);
   });
 
-  it('emits only members WITH a questionnaire AND WITHOUT a calendar (idempotency double-net)', async () => {
-    // u1 : questionnaire, no calendar → eligible.
-    // u2 : questionnaire, ALREADY has a calendar → idempotency skip.
+  it('emits members WITH a questionnaire whose calendar is missing OR stale, skips up-to-date ones (DoD#1 freshness gate)', async () => {
+    // u1 : questionnaire, no calendar → eligible (première génération).
+    // u2 : questionnaire INCHANGÉ depuis la génération du calendrier (updatedAt
+    //      <= generatedAt) → calendrier à jour → EXCLU (idempotence, pas de
+    //      re-coût Claude). [garde le cas « calendrier à jour → exclu »]
     // u3 : no questionnaire → skip.
+    // u4 : questionnaire RÉ-UPSERTÉ APRÈS la génération (updatedAt >
+    //      generatedAt → calendrier périmé) → RÉ-INCLUS (defect-D fix).
     vi.mocked(db.user.findMany).mockResolvedValue([
       { id: 'u1' } as never,
       { id: 'u2' } as never,
       { id: 'u3' } as never,
+      { id: 'u4' } as never,
     ]);
     vi.mocked(db.weeklyScheduleQuestionnaire.findMany).mockResolvedValue([
-      { userId: 'u1' } as never,
-      { userId: 'u2' } as never,
+      // u1 : pas de calendrier, l'instant exact n'a pas d'importance.
+      { userId: 'u1', updatedAt: new Date('2026-06-08T09:00:00.000Z') } as never,
+      // u2 : questionnaire figé AVANT/À la génération → à jour.
+      { userId: 'u2', updatedAt: new Date('2026-06-08T08:00:00.000Z') } as never,
+      // u4 : re-soumission MARDI, bien après la génération de LUNDI.
+      { userId: 'u4', updatedAt: new Date('2026-06-09T14:00:00.000Z') } as never,
     ]);
-    vi.mocked(db.adaptiveCalendar.findMany).mockResolvedValue([{ userId: 'u2' } as never]);
+    vi.mocked(db.adaptiveCalendar.findMany).mockResolvedValue([
+      // u2 : calendrier généré APRÈS la dernière soumission de son questionnaire.
+      { userId: 'u2', generatedAt: new Date('2026-06-08T08:30:00.000Z') } as never,
+      // u4 : calendrier généré LUNDI matin, avant la re-soumission de MARDI.
+      { userId: 'u4', generatedAt: new Date('2026-06-08T08:30:00.000Z') } as never,
+    ]);
     vi.mocked(loadCalendarSnapshotForUser).mockImplementation(async (userId: string) =>
       fakeSnapshot(userId),
     );
@@ -462,28 +476,79 @@ describe('loadAllSnapshotsForCalendarGeneration', () => {
     const envelope = await loadAllSnapshotsForCalendarGeneration({ weekStart: WEEK_START });
 
     expect(envelope.weekStart).toBe(WEEK_START);
-    expect(envelope.entries).toHaveLength(1);
-    expect(envelope.entries[0]?.userId).toBe('u1');
-    expect(envelope.entries[0]?.hasQuestionnaire).toBe(true);
+    // u1 (missing) + u4 (stale) sont candidats ; u2 (à jour) + u3 (no Q) exclus.
+    expect(envelope.entries.map((e) => e.userId).sort()).toEqual(['u1', 'u4']);
+    expect(envelope.entries.every((e) => e.hasQuestionnaire === true)).toBe(true);
     expect(envelope.systemPrompt.length).toBeGreaterThan(0);
-    // u2 (already generated) + u3 (no questionnaire) are never read.
-    expect(loadCalendarSnapshotForUser).toHaveBeenCalledTimes(1);
+    // u2 (à jour) + u3 (no questionnaire) ne sont jamais lus.
+    expect(loadCalendarSnapshotForUser).toHaveBeenCalledTimes(2);
     expect(loadCalendarSnapshotForUser).toHaveBeenCalledWith('u1', WEEK_START, expect.any(Date));
+    expect(loadCalendarSnapshotForUser).toHaveBeenCalledWith('u4', WEEK_START, expect.any(Date));
+    expect(loadCalendarSnapshotForUser).not.toHaveBeenCalledWith(
+      'u2',
+      WEEK_START,
+      expect.any(Date),
+    );
     expect(
       vi
         .mocked(logAudit)
         .mock.calls.some(
           ([a]) =>
             a.action === 'calendar.batch.pulled' &&
-            (a.metadata as { entriesCount?: number })?.entriesCount === 1,
+            (a.metadata as { entriesCount?: number })?.entriesCount === 2,
         ),
     ).toBe(true);
+  });
+
+  it('EXCLUDES a member whose calendar is up to date (questionnaire unchanged since generation — no needless re-cost)', async () => {
+    // Garde explicite du cas « calendrier à jour → exclu » : le happy-path
+    // idempotent ne doit JAMAIS régénérer un calendrier frais (zéro re-coût
+    // Claude). updatedAt <= generatedAt → le plan reflète déjà la dernière
+    // intention du membre.
+    vi.mocked(db.user.findMany).mockResolvedValue([{ id: 'u1' } as never]);
+    vi.mocked(db.weeklyScheduleQuestionnaire.findMany).mockResolvedValue([
+      { userId: 'u1', updatedAt: new Date('2026-06-08T08:00:00.000Z') } as never,
+    ]);
+    vi.mocked(db.adaptiveCalendar.findMany).mockResolvedValue([
+      { userId: 'u1', generatedAt: new Date('2026-06-08T08:00:30.000Z') } as never,
+    ]);
+    vi.mocked(loadCalendarSnapshotForUser).mockImplementation(async (userId: string) =>
+      fakeSnapshot(userId),
+    );
+
+    const envelope = await loadAllSnapshotsForCalendarGeneration({ weekStart: WEEK_START });
+
+    expect(envelope.entries).toHaveLength(0);
+    expect(loadCalendarSnapshotForUser).not.toHaveBeenCalled();
+  });
+
+  it('RE-INCLUDES a member who re-submitted the questionnaire AFTER generation (updatedAt > generatedAt → stale → regenerate, DoD#1)', async () => {
+    // Le cœur du defect-D : mardi le membre re-remplit le questionnaire (dispo
+    // changée), `updatedAt` saute APRÈS le `generatedAt` de lundi → le
+    // calendrier est périmé → le membre DOIT redevenir candidat pour que le
+    // batch régénère (l'UPSERT de persistAdaptiveCalendar écrasera la ligne).
+    vi.mocked(db.user.findMany).mockResolvedValue([{ id: 'u1' } as never]);
+    vi.mocked(db.weeklyScheduleQuestionnaire.findMany).mockResolvedValue([
+      { userId: 'u1', updatedAt: new Date('2026-06-09T14:00:00.000Z') } as never, // mardi
+    ]);
+    vi.mocked(db.adaptiveCalendar.findMany).mockResolvedValue([
+      { userId: 'u1', generatedAt: new Date('2026-06-08T08:30:00.000Z') } as never, // lundi
+    ]);
+    vi.mocked(loadCalendarSnapshotForUser).mockImplementation(async (userId: string) =>
+      fakeSnapshot(userId),
+    );
+
+    const envelope = await loadAllSnapshotsForCalendarGeneration({ weekStart: WEEK_START });
+
+    expect(envelope.entries).toHaveLength(1);
+    expect(envelope.entries[0]?.userId).toBe('u1');
+    expect(loadCalendarSnapshotForUser).toHaveBeenCalledWith('u1', WEEK_START, expect.any(Date));
   });
 
   it('drops a member whose snapshot vanished mid-run (defensive null)', async () => {
     vi.mocked(db.user.findMany).mockResolvedValue([{ id: 'u1' } as never]);
     vi.mocked(db.weeklyScheduleQuestionnaire.findMany).mockResolvedValue([
-      { userId: 'u1' } as never,
+      { userId: 'u1', updatedAt: new Date('2026-06-08T09:00:00.000Z') } as never,
     ]);
     vi.mocked(db.adaptiveCalendar.findMany).mockResolvedValue([]);
     vi.mocked(loadCalendarSnapshotForUser).mockResolvedValue(null);

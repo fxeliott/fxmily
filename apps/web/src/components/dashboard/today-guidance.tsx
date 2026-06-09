@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+import { AIGeneratedBanner } from '@/components/ai-generated-banner';
 import { categoryMetaFor, slotLabelFor, slotOrderIndex } from '@/components/calendar/calendar-meta';
 import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
@@ -133,6 +134,14 @@ function TodayBlocksList({ blocks }: { blocks: CalendarBlock[] }) {
   const sorted = [...blocks].sort((a, b) => slotOrderIndex(a.slot) - slotOrderIndex(b.slot));
   return (
     <section aria-label="Ton plan du jour" className="flex flex-col gap-2">
+      {/* EU AI Act 50(1) — `block.label` is free AI prose (schema
+          `adaptive-calendar.ts` `label: safeText`, Claude-generated), so it MUST
+          carry the disclosure, identical to the twin `/calendrier` surface
+          (calendrier/page.tsx:137) and `monthly-debrief-reader`/admin panels. The
+          deterministic `meta.label` (category) is NOT AI — only this list is
+          covered. Same `variant="inline"` + `/legal/ai-disclosure` link as the
+          other 5 surfaces (DS + posture §2: calm cyan note, never alarm). */}
+      <AIGeneratedBanner variant="inline" />
       <span className="t-eyebrow text-[var(--t-3)]">Ton plan du jour</span>
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {sorted.map((block, idx) => {

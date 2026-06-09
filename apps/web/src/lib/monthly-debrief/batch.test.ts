@@ -265,6 +265,52 @@ describe('persistGeneratedReports (monthly)', () => {
     expect(upsertCall?.create.costEur).toBe('0.000000');
   });
 
+  it('FIX E: ignores an incoherent client monthEnd and persists the SERVICE-computed last day', async () => {
+    // Anti-tamper SSOT (schema.prisma:1372-1374) : monthEnd est TOUJOURS
+    // recalculé côté serveur depuis monthStart, jamais accepté du client. Ici
+    // le client envoie un monthEnd ANTÉRIEUR au monthStart (10 avr < 1er mai) —
+    // calendairement valide en soi mais incohérent. Il doit être IGNORÉ et la
+    // valeur persistée = 2026-05-31 (vrai dernier jour civil de mai).
+    const result = await persistGeneratedReports({
+      monthStart: '2026-05-01',
+      monthEnd: '2026-04-10', // incohérent — ne doit PAS être persisté
+      results: [{ userId: 'user-active-1', output: validOutput() }],
+    });
+
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+    const upsertCall = vi.mocked(db.monthlyDebrief.upsert).mock.calls[0]?.[0] as
+      | { create: { monthStart: Date; monthEnd: Date }; update: { monthEnd: Date } }
+      | undefined;
+    // Persisté en UTC-midnight (@db.Date), cohérent avec monthStart.
+    expect(upsertCall?.create.monthStart.toISOString()).toBe('2026-05-01T00:00:00.000Z');
+    expect(upsertCall?.create.monthEnd.toISOString()).toBe('2026-05-31T00:00:00.000Z');
+    // Le branch update partage la même valeur service-computed.
+    expect(upsertCall?.update.monthEnd.toISOString()).toBe('2026-05-31T00:00:00.000Z');
+  });
+
+  it('FIX E: still rejects a calendar-INVALID monthStart (parseLocalDate throws first)', async () => {
+    // Le recalcul de monthEnd ne doit PAS affaiblir le rejet existant des dates
+    // calendairement invalides : parseLocalDate(monthStart) lève AVANT le
+    // recompute → chemin invalid_month_window inchangé.
+    const result = await persistGeneratedReports({
+      monthStart: '2026-02-30', // pas une vraie date
+      monthEnd: '2026-02-28',
+      results: [{ userId: 'user-active-1', output: validOutput() }],
+    });
+
+    expect(result).toEqual({ persisted: 0, skipped: 0, errors: 1 });
+    expect(db.monthlyDebrief.upsert).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(logAudit)
+        .mock.calls.some(
+          ([arg]) =>
+            arg.action === 'monthly_debrief.batch.invalid_output' &&
+            (arg.metadata as { reason?: string })?.reason === 'invalid_month_window',
+        ),
+    ).toBe(true);
+  });
+
   it('counts upsert exceptions as errors + emits persist_failed audit (no propagation)', async () => {
     vi.mocked(db.monthlyDebrief.upsert).mockRejectedValueOnce(new Error('Postgres pool exhausted'));
 

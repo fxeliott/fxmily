@@ -34,6 +34,7 @@ vi.mock('./service', () => ({
 
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
+import { shiftLocalDate } from '@/lib/checkin/timezone';
 import { reportError, reportWarning } from '@/lib/observability';
 
 import { loadAllSnapshotsForCalendarGeneration, persistGeneratedCalendars } from './batch';
@@ -158,6 +159,52 @@ describe('persistGeneratedCalendars', () => {
       errors: 0,
       total: 1,
     });
+  });
+
+  // --- Gate 4b — date integrity (Session 5, defect-#6 fix) -------------------
+
+  it('re-anchors drifted day dates by index (off-by-one model drift) and still persists', async () => {
+    // Model fumbled every date by +1 day, but echoed the correct weekStart.
+    const drifted = validOutput();
+    drifted.days = drifted.days.map((d) => ({ ...d, date: shiftLocalDate(d.date, 1) }));
+
+    const result = await persistGeneratedCalendars({
+      weekStart: WEEK_START,
+      results: [{ userId: 'user-active-1', output: drifted }],
+    });
+
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+    // The persisted calendar carries the canonical Mon..Sun dates, NOT the
+    // model's drifted ones → daily-guidance `find(d => d.date === today)` works.
+    const persistedArg = vi.mocked(persistAdaptiveCalendar).mock.calls[0]?.[0] as {
+      output: { days: Array<{ date: string }> };
+    };
+    expect(persistedArg.output.days.map((d) => d.date)).toEqual(WEEK_DATES);
+    expect(
+      vi.mocked(reportWarning).mock.calls.some(([, msg]) => msg === 'day_dates_realigned'),
+    ).toBe(true);
+  });
+
+  it('skips an entry whose output.weekStart targets a different week (week_misalignment)', async () => {
+    const wrongWeek = validOutput();
+    wrongWeek.weekStart = '2026-06-01'; // a different Monday than the request
+
+    const result = await persistGeneratedCalendars({
+      weekStart: WEEK_START,
+      results: [{ userId: 'user-active-1', output: wrongWeek }],
+    });
+
+    expect(result).toEqual({ persisted: 0, skipped: 1, errors: 0 });
+    expect(persistAdaptiveCalendar).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(logAudit)
+        .mock.calls.some(
+          ([a]) =>
+            a.action === 'calendar.batch.invalid_output' &&
+            (a.metadata as { reason?: string })?.reason === 'week_misalignment',
+        ),
+    ).toBe(true);
   });
 
   it('rejects malformed output via Zod safeParse (overview too short)', async () => {

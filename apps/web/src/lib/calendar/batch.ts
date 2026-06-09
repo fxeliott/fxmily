@@ -2,7 +2,7 @@ import 'server-only';
 
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
-import { parseLocalDate } from '@/lib/checkin/timezone';
+import { parseLocalDate, shiftLocalDate } from '@/lib/checkin/timezone';
 import { detectAMFViolation } from '@/lib/safety/amf-detection';
 import { reportError, reportWarning } from '@/lib/observability';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
@@ -372,7 +372,63 @@ export async function persistGeneratedCalendars(
       continue;
     }
     const output = parsed.data;
-    const corpus = composeCalendarOutputCorpus(output);
+
+    // Gate 4b — date integrity (Session 5, defect-#6 fix). The 7 day dates are
+    // a SERVER ground-truth (weekStart + 0..6), NOT a value the LLM should
+    // decide. The Zod schema only validates the FORMAT (YYYY-MM-DD), so a model
+    // drift (off-by-one, wrong month/year, duplicate) would persist well-formed
+    // but WRONG dates — and the daily-guidance panel ("Ton aujourd'hui",
+    // `days.find((d) => d.date === today)`) would silently render "Journée
+    // libre" every day while the row exists. Close it deterministically :
+    //   - a whole-week drift (`output.weekStart !== request.weekStart`) is a
+    //     gross error (the prose targets another week) → skip + audit ; the
+    //     overdue-alert (cron.calendar_overdue) will surface it for a re-run.
+    //   - otherwise re-anchor each day's date by index to the canonical
+    //     `weekStart + i` (mirrors the Mock client's `addDaysIso`), so the
+    //     calendar is ALWAYS consumable even if the model fumbled a date.
+    if (output.weekStart !== request.weekStart) {
+      skipped += 1;
+      await logAudit({
+        action: 'calendar.batch.invalid_output',
+        userId: entry.userId,
+        metadata: {
+          ranAt,
+          weekStart: request.weekStart,
+          reason: 'week_misalignment',
+          outputWeekStart: output.weekStart,
+        },
+      });
+      reportWarning('calendar.batch', 'week_misalignment_in_ai_output', {
+        userId: entry.userId,
+        weekStart: request.weekStart,
+        outputWeekStart: output.weekStart,
+      });
+      continue;
+    }
+
+    const datesDrifted = output.days.some(
+      (day, i) => day.date !== shiftLocalDate(request.weekStart, i),
+    );
+    const aligned = datesDrifted
+      ? {
+          ...output,
+          days: output.days.map((day, i) => ({
+            ...day,
+            date: shiftLocalDate(request.weekStart, i),
+          })),
+        }
+      : output;
+    if (datesDrifted) {
+      // Observability — the calendar is still persisted (re-anchored), but we
+      // flag that the model fumbled the deterministic dates so the prompt can
+      // be tightened if it recurs. PII-free (counts/labels only, no member text).
+      reportWarning('calendar.batch', 'day_dates_realigned', {
+        userId: entry.userId,
+        weekStart: request.weekStart,
+      });
+    }
+
+    const corpus = composeCalendarOutputCorpus(aligned);
 
     // Gate 5 — crisis routing on the AI OUTPUT (mirror V1.7.1). This is the
     // OUTPUT-IA skip path (NOT the REFLECT persist-anyway path): nothing here
@@ -457,7 +513,7 @@ export async function persistGeneratedCalendars(
       await persistAdaptiveCalendar({
         userId: entry.userId,
         weekStart: request.weekStart,
-        output,
+        output: aligned,
         claudeModel,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,

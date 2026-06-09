@@ -4,6 +4,7 @@ import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
 import { AccessApprovedEmail } from '@/lib/email/templates/access-approved';
 import { AnnotationReceivedEmail } from '@/lib/email/templates/annotation-received';
+import { CalendarOverdueAlertEmail } from '@/lib/email/templates/calendar-overdue-alert';
 import { InvitationEmail } from '@/lib/email/templates/invitation';
 import { MonthlyDebriefEmail } from '@/lib/email/templates/monthly-debrief';
 import { NotificationFallbackEmail } from '@/lib/email/templates/notification-fallback';
@@ -123,6 +124,13 @@ export function buildTradeDetailUrl(tradeId: string): string {
 export function buildAdminReportUrl(reportId: string): string {
   const base = env.AUTH_URL.replace(/\/+$/, '');
   return `${base}/admin/reports/${encodeURIComponent(reportId)}`;
+}
+
+/** Build the absolute URL to the admin dashboard — used by the §26 calendar
+ * overdue ops nudge (Session 5). */
+export function buildAdminDashboardUrl(): string {
+  const base = env.AUTH_URL.replace(/\/+$/, '');
+  return `${base}/admin`;
 }
 
 /** Build the absolute URL to the MEMBER monthly debrief page (V1.4 §25).
@@ -446,5 +454,59 @@ export async function sendMonthlyDebriefReadyEmail({
       claudeModel: debrief.claudeModel,
     }),
     text: lines.join('\n'),
+  });
+}
+
+// ----- §26 Session 5 — calendar overdue ADMIN nudge (DoD#4 permanence) ------
+
+export interface SendCalendarOverdueAlertParams {
+  /** Admin recipient (resolved by the caller from `WEEKLY_REPORT_RECIPIENT`). */
+  to: string;
+  /** Members with a filled questionnaire but no generated calendar. */
+  overdueCount: number;
+  /** Total questionnaires submitted this week (context). */
+  questionnaireCount: number;
+  /** Human FR week range, e.g. "8 juin → 14 juin". */
+  weekRange: string;
+}
+
+/**
+ * Notify the ADMIN that members are waiting on a calendar (Session 5 DoD#4
+ * permanence safety-net). ONLY the operator gets this — no member PII, counts
+ * only. Best-effort: the caller (`lib/calendar/overdue.ts`) degrades to a
+ * Sentry warning + audit if delivery throws, so the alert is never lost.
+ */
+export async function sendCalendarOverdueAlertEmail({
+  to,
+  overdueCount,
+  questionnaireCount,
+  weekRange,
+}: SendCalendarOverdueAlertParams): Promise<{ id: string | null; delivered: boolean }> {
+  const adminUrl = buildAdminDashboardUrl();
+  const plural = overdueCount > 1;
+  const subject = `${overdueCount} calendrier${plural ? 's' : ''} en attente · Semaine du ${weekRange}`;
+
+  return sendEmail({
+    to,
+    subject,
+    react: CalendarOverdueAlertEmail({ overdueCount, questionnaireCount, weekRange, adminUrl }),
+    text: [
+      `Fxmily — rappel de permanence (calendrier adaptatif).`,
+      ``,
+      `${overdueCount} membre${plural ? 's' : ''} ${plural ? 'ont' : 'a'} rempli le questionnaire`,
+      `d'organisation de la semaine du ${weekRange}, mais ${plural ? 'leurs calendriers ne sont' : 'son calendrier n’est'} pas`,
+      `encore généré${plural ? 's' : ''} (${overdueCount} en attente sur ${questionnaireCount} organisés).`,
+      ``,
+      `À faire — depuis ton PC :`,
+      `  1. Lance /calendar-batch (ou ops/scripts/calendar-batch-local.sh).`,
+      `  2. Claude Opus 4.8 génère les calendriers en local ($0), persistés après les garde-fous §2.`,
+      `  3. Les membres voient leur calendrier dès la fin du batch.`,
+      ``,
+      `Ouvre l'admin : ${adminUrl}`,
+      ``,
+      `Rappel automatique — envoyé uniquement quand des calendriers sont en attente passé le délai`,
+      `de courtoisie. Aucun calendrier n'est généré sur un serveur (le batch reste manuel, par`,
+      `sécurité du compte).`,
+    ].join('\n'),
   });
 }

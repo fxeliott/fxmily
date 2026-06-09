@@ -25,6 +25,7 @@
 #   - mindset-check-reminders   Monday 09:00 UTC                   (V1.5 §27)
 #   - generate-meetings         weekdays 06:00 UTC                 (V1.7 §30)
 #   - purge-access-requests     Sunday 04:00 UTC                   (V2.5 RGPD)
+#   - calendar-overdue-alert    daily 11:00 UTC                    (S5 §26 perm.)
 #
 # Log : every run appends one line to /var/log/fxmily/cron.log via the
 # wrapper. The DB audit row (`cron.<route>.scan`) is the canonical
@@ -92,3 +93,13 @@ MAILTO=""
 # 04:00 Sunday slot shares the hour with the daily purge-audit-log (04:00) but
 # they hit disjoint tables; both are short deleteMany scans, no CX22 contention.
 0 4 * * 0                    fxmily   /usr/local/bin/fxmily-cron purge-access-requests
+
+# Session 5 §26 — calendar overdue admin nudge : daily 11:00 UTC (13:00 Paris).
+# DETECTION-ONLY safety-net for the MANUAL calendar batch (ban-risk human-in-the-
+# loop §5.4 — the generation is NEVER cronned). Scans the current Paris week for
+# members with a filled questionnaire but no generated calendar past the grace
+# window, and emails the admin so nothing slips silently (DoD#4 permanence). Pure
+# read + idempotent ; emits cron.calendar_overdue.scan heartbeat (monitored by
+# lib/system/health.ts). 11:00 UTC is a free midday slot — no overlap with the
+# 02:00-06:00 nightly jobs nor the 07:00-08:00 check-in windows.
+0 11 * * *                   fxmily   /usr/local/bin/fxmily-cron calendar-overdue-alert

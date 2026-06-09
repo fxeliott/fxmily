@@ -140,9 +140,28 @@ const SNAPSHOT_BATCH_CONCURRENCY = 5;
  *   1. the member submitted a `WeeklyScheduleQuestionnaire` for `weekStart`
  *      (nothing to generate from otherwise — `loadCalendarSnapshotForUser`
  *      returns null without one) ;
- *   2. the member does NOT already have an `AdaptiveCalendar` for `weekStart`
- *      (idempotency — double-net with the `persistAdaptiveCalendar` upsert, so
- *      a re-run never regenerates an existing calendar nor re-bills Claude).
+ *   2. the member's calendar for `weekStart` is MISSING **or STALE** — c.-à-d.
+ *      soit aucun `AdaptiveCalendar` n'existe encore (première génération),
+ *      soit le questionnaire a été ré-upserté APRÈS la génération
+ *      (`questionnaire.updatedAt > calendar.generatedAt` → le plan est périmé).
+ *
+ *      ⚠️ DoD#1 (Session 5, defect-D fix) — l'ancien filtre excluait
+ *      INCONDITIONNELLEMENT tout membre ayant déjà un calendrier cette semaine.
+ *      Conséquence : un membre qui re-remplissait le questionnaire en cours de
+ *      semaine (sa dispo a changé : examen / jour off) via « Mettre à jour mes
+ *      réponses » voyait son questionnaire ré-upserté MAIS restait filtré au
+ *      prochain run → calendrier jamais régénéré, plan périmé toute la semaine,
+ *      alors que l'UI promet « C'est noté ». DoD#1 exige que la re-soumission du
+ *      questionnaire mette RÉELLEMENT à jour le calendrier. On compare donc la
+ *      fraîcheur : un calendrier dont le questionnaire n'a pas bougé depuis la
+ *      génération reste EXCLU (pas de re-génération inutile, pas de re-coût
+ *      Claude — l'idempotence du happy-path est préservée).
+ *
+ *      Note de scope — ceci N'EST PAS la décision V2 « édition directe des
+ *      blocs du calendrier par le membre » (hors scope ici) : on régénère
+ *      depuis le questionnaire ré-soumis, on ne laisse pas le membre éditer le
+ *      plan. Le persist (`persistAdaptiveCalendar`) est un UPSERT → il
+ *      RÉGÉNÈRE bien la ligne (userId, weekStart) une fois le membre ré-inclus.
  *
  * `weekStart` defaults to the current Europe/Paris week (server-authority via
  * `currentParisWeekStart`, never a client instant — scar PR#96).
@@ -161,21 +180,39 @@ export async function loadAllSnapshotsForCalendarGeneration(
       select: { id: true },
       orderBy: { joinedAt: 'asc' },
     }),
+    // `updatedAt` (@updatedAt) = instant de la dernière (ré-)soumission du
+    // questionnaire → c'est l'horloge de fraîcheur côté intention membre.
     db.weeklyScheduleQuestionnaire.findMany({
       where: { weekStart: weekStartDb },
-      select: { userId: true },
+      select: { userId: true, updatedAt: true },
     }),
+    // `generatedAt` (@default(now())) = instant de génération du calendrier →
+    // l'horloge de fraîcheur côté plan produit. On le compare à `updatedAt`.
     db.adaptiveCalendar.findMany({
       where: { weekStart: weekStartDb },
-      select: { userId: true },
+      select: { userId: true, generatedAt: true },
     }),
   ]);
 
-  const haveQuestionnaire = new Set(questionnaireRows.map((r) => r.userId));
-  const alreadyGenerated = new Set(calendarRows.map((r) => r.userId));
-  const candidates = users.filter(
-    (u) => haveQuestionnaire.has(u.id) && !alreadyGenerated.has(u.id),
-  );
+  // Map userId → instant de (ré-)soumission du questionnaire.
+  const questionnaireUpdatedAt = new Map(questionnaireRows.map((r) => [r.userId, r.updatedAt]));
+  // Map userId → instant de génération du calendrier existant (absente = pas
+  // de calendrier cette semaine).
+  const calendarGeneratedAt = new Map(calendarRows.map((r) => [r.userId, r.generatedAt]));
+
+  // DoD#1 (defect-D) — un membre est candidat s'il a un questionnaire ET que
+  // son calendrier est MANQUANT ou PÉRIMÉ. « Périmé » = le questionnaire a été
+  // ré-upserté après la génération du calendrier (`updatedAt > generatedAt`).
+  // Comparaison sur des `Date` (instants UTC, pas des strings) → robuste aux
+  // fuseaux. Égalité stricte `>` : un calendrier généré au même instant (ou
+  // après) que la dernière soumission est à jour → reste exclu (idempotence).
+  const candidates = users.filter((u) => {
+    const qUpdatedAt = questionnaireUpdatedAt.get(u.id);
+    if (qUpdatedAt === undefined) return false; // pas de questionnaire → rien à générer
+    const calGeneratedAt = calendarGeneratedAt.get(u.id);
+    if (calGeneratedAt === undefined) return true; // aucun calendrier → première génération
+    return qUpdatedAt.getTime() > calGeneratedAt.getTime(); // calendrier périmé → régénérer
+  });
 
   const entries: CalendarBatchSnapshotEntry[] = [];
   for (let i = 0; i < candidates.length; i += SNAPSHOT_BATCH_CONCURRENCY) {

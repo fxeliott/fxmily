@@ -37,11 +37,22 @@ const NOW = new Date('2026-06-09T10:00:00.000Z');
 // now = 2026-06-02 → still within the 4d post-month-end grace for May.
 const WITHIN_GRACE = new Date('2026-06-02T10:00:00.000Z');
 
-function mockDb(opts: { activeIds: string[]; debriefIds: string[] }) {
+/**
+ * `debriefIds` = membres avec un débrief DÉLIVRÉ (sentToMemberAt non-null) →
+ * comptés couverts. `undeliveredIds` (FIX TIER2) = membres avec une row
+ * persistée mais NON délivrée (sentToMemberAt=null, dispatch échouée) → la row
+ * existe mais le membre doit rester OVERDUE.
+ */
+function mockDb(opts: { activeIds: string[]; debriefIds: string[]; undeliveredIds?: string[] }) {
   vi.mocked(db.user.findMany).mockResolvedValue(opts.activeIds.map((id) => ({ id })) as never);
-  vi.mocked(db.monthlyDebrief.findMany).mockResolvedValue(
-    opts.debriefIds.map((userId) => ({ userId })) as never,
-  );
+  const rows = [
+    ...opts.debriefIds.map((userId) => ({
+      userId,
+      sentToMemberAt: new Date('2026-06-01T00:00:00Z'),
+    })),
+    ...(opts.undeliveredIds ?? []).map((userId) => ({ userId, sentToMemberAt: null })),
+  ];
+  vi.mocked(db.monthlyDebrief.findMany).mockResolvedValue(rows as never);
 }
 
 beforeEach(() => {
@@ -69,8 +80,25 @@ describe('scanOverdueMonthlyDebriefs — candidate logic', () => {
     expect(scan.overdueCount).toBe(1); // only u2
   });
 
-  it('returns 0 overdue when every active member has a debrief', async () => {
+  it('returns 0 overdue when every active member has a DELIVERED debrief', async () => {
     mockDb({ activeIds: ['u1', 'u2'], debriefIds: ['u1', 'u2'] });
+    const scan = await scanOverdueMonthlyDebriefs({ now: NOW });
+    expect(scan.overdueCount).toBe(0);
+  });
+
+  it('FIX C: a persisted-but-NOT-delivered debrief (sentToMemberAt=null) stays OVERDUE', async () => {
+    // u1 a une row mais la dispatch a échoué (sentToMemberAt=null) → la simple
+    // existence de la row ne suffit PAS : la couverture = délivrance (DoD#2).
+    // u1 doit rester overdue → l'admin re-lance le batch → re-tente la dispatch.
+    mockDb({ activeIds: ['u1', 'u2'], debriefIds: ['u2'], undeliveredIds: ['u1'] });
+    const scan = await scanOverdueMonthlyDebriefs({ now: NOW });
+    expect(scan.overdueCount).toBe(1); // only u1 (row présente mais non délivrée)
+    expect(scan.expectedCount).toBe(2);
+  });
+
+  it('FIX C: a debrief with sentToMemberAt != null counts as COVERED', async () => {
+    // Le symétrique : une row DÉLIVRÉE couvre bien le membre (pas de faux overdue).
+    mockDb({ activeIds: ['u1'], debriefIds: ['u1'] });
     const scan = await scanOverdueMonthlyDebriefs({ now: NOW });
     expect(scan.overdueCount).toBe(0);
   });

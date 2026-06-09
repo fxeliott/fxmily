@@ -17,6 +17,7 @@ import { detectAMFViolation } from '@/lib/safety/amf-detection';
 
 import { buildMonthlySnapshot } from './builder';
 import { loadMonthlySliceForUser } from './loader';
+import { monthWindowFromMonthStart } from './month-window';
 import { CLAUDE_CODE_LOCAL_MODEL, computeCostEur } from './pricing';
 import {
   MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA,
@@ -359,8 +360,20 @@ export async function persistGeneratedReports(
   let monthStartDb: Date;
   let monthEndDb: Date;
   try {
+    // `monthStart` est la SSOT : on le parse (UTC-midnight `@db.Date`).
     monthStartDb = parseLocalDate(request.monthStart);
-    monthEndDb = parseLocalDate(request.monthEnd);
+    // 🔒 SSOT / anti-tamper (schema.prisma:1372-1374 + SPEC §25.3/§25.7) :
+    // `monthEnd` est TOUJOURS service-computed, JAMAIS accepté du client. On
+    // RECALCULE le dernier jour civil depuis `monthStart` au lieu de faire
+    // confiance à `request.monthEnd` (la route Zod n'en valide que le FORMAT,
+    // pas la cohérence). `monthWindowFromMonthStart` dérive 28/29/30/31 sans
+    // table de lookup (Date.UTC(y, m, 0), leap-safe). TZ = COHORT_TZ Europe/
+    // Paris (canon V1) : le dernier jour CIVIL est TZ-indépendant, et on
+    // persiste `parseLocalDate(monthEndLocal)` (UTC-midnight) pour rester
+    // parfaitement cohérent avec la façon dont `monthStart` est stocké juste
+    // au-dessus. Un `request.monthEnd` incohérent est donc simplement ignoré.
+    const window = monthWindowFromMonthStart(request.monthStart, 'Europe/Paris');
+    monthEndDb = parseLocalDate(window.monthEndLocal);
   } catch (err) {
     await logAudit({
       action: 'monthly_debrief.batch.invalid_output',

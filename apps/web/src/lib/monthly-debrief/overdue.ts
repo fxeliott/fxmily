@@ -8,7 +8,7 @@ import { env } from '@/lib/env';
 import { reportWarning } from '@/lib/observability';
 
 import { formatMonthLabelFr } from './format';
-import { computeMonthWindow, type MonthWindow } from './month-window';
+import { computeReportingMonth, type MonthWindow } from './month-window';
 
 /**
  * V1.4 §25 monthly debrief — permanence safety-net (Session 5, DoD#2
@@ -43,15 +43,24 @@ const COHORT_TZ = 'Europe/Paris';
 
 /**
  * The most-recently-COMPLETED civil month relative to `now` (Europe/Paris).
- * Distinct from `computeReportingMonth` (which is `now − 24h`-anchored for the
- * 1st-of-month batch run): here we always want the FULL previous month, even
- * mid-month — step back 1ms before the current month's start and take the
- * civil month containing that instant.
+ *
+ * DÉLÈGUE désormais à `computeReportingMonth` (zéro duplication) : depuis le
+ * fix TIER1, ce dernier renvoie EXACTEMENT le dernier mois civil complété de
+ * façon robuste, quel que soit le jour du run. C'est volontaire et critique :
+ * le batch (loader → `computeReportingMonth`) et le net overdue (cette fonction)
+ * DOIVENT cibler le même `monthStart`, sinon l'admin génère un mois et le nudge
+ * en attend un autre → boucle de nudge infinie (le défaut B d'origine). En
+ * partageant la même source, batch et net convergent par construction.
+ *
+ * ⚠️ Caveat multi-TZ (cohorte Paris V1) : convergence GARANTIE pour la cohorte
+ * 100 % Europe/Paris. Le net force `COHORT_TZ='Europe/Paris'` alors que le batch
+ * utilise `user.timezone` (loader) — pour un membre non-Paris, batch et net
+ * pourraient cibler des mois différents à la frontière de mois. Divergence
+ * PRÉEXISTANTE (non introduite par le fix B), inerte tant que la cohorte est
+ * mono-TZ ; à fermer (passer la TZ membre au scan) si une cohorte multi-TZ naît.
  */
 function lastCompletedMonth(now: Date): MonthWindow {
-  const current = computeMonthWindow(now, COHORT_TZ);
-  const prevAnchor = new Date(current.monthStartUtc.getTime() - 1);
-  return computeMonthWindow(prevAnchor, COHORT_TZ);
+  return computeReportingMonth(now, COHORT_TZ);
 }
 
 export interface OverdueMonthlyScan {
@@ -59,10 +68,13 @@ export interface OverdueMonthlyScan {
   monthStart: string;
   /** Human FR month label, e.g. "mai 2026" — for the admin email/audit. */
   monthLabel: string;
-  /** Active members (joined on/before the month ended) with NO MonthlyDebrief
-   *  for `monthStart`. Mirror of the batch's "every active member gets one"
-   *  (SPEC §25.4), floored at `joinedAt` so a member who joined AFTER the month
-   *  is never falsely flagged. 0 while within the grace window. */
+  /** Active members (joined on/before the month ended) dont le débrief n'a PAS
+   *  été DÉLIVRÉ pour `monthStart`. La couverture est la DÉLIVRANCE au membre
+   *  (`sentToMemberAt !== null`), PAS la simple existence d'une row — DoD#2
+   *  exige la délivrance, pas seulement la génération. Mirror de la promesse
+   *  batch « chaque membre actif reçoit le sien » (SPEC §25.4), floored à
+   *  `joinedAt` pour ne jamais flagger à tort un membre arrivé APRÈS le mois.
+   *  0 tant qu'on est dans la fenêtre de grâce. */
   overdueCount: number;
   /** Active members expected a debrief for the month (joined on/before its end). */
   expectedCount: number;
@@ -96,11 +108,21 @@ export async function scanOverdueMonthlyDebriefs(
     }),
     db.monthlyDebrief.findMany({
       where: { monthStart: parseLocalDate(monthStart) },
-      select: { userId: true },
+      // On lit `sentToMemberAt` : la couverture = DÉLIVRANCE, pas existence de
+      // row (FIX TIER2). Si la dispatch a échoué (batch outer catch →
+      // reportWarning Sentry-only, `sentToMemberAt` reste null), la row existe
+      // mais le membre n'a rien reçu — il doit redevenir overdue.
+      select: { userId: true, sentToMemberAt: true },
     }),
   ]);
 
-  const haveDebrief = new Set(debriefRows.map((r) => r.userId));
+  // Un membre n'est COUVERT que si un débrief DÉLIVRÉ existe. Une row persistée-
+  // mais-non-délivrée (`sentToMemberAt === null`) redevient overdue → l'admin
+  // re-lance le batch → la dispatch se re-tente (le batch ne dispatch que si
+  // `sentToMemberAt === null`) → self-heal convergent (DoD#2).
+  const haveDebrief = new Set(
+    debriefRows.filter((r) => r.sentToMemberAt !== null).map((r) => r.userId),
+  );
   const missing = activeUsers.filter((u) => !haveDebrief.has(u.id)).length;
 
   return {

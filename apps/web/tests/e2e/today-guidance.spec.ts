@@ -222,6 +222,15 @@ test.describe('Session 5 — Ton aujourd’hui (guidage quotidien) on /dashboard
     await expect(panel.getByText(TODAY_MARKER)).toBeVisible();
     // "Ton plan du jour" sub-header present (today has blocks).
     await expect(panel.getByText('Ton plan du jour')).toBeVisible();
+    // EU AI Act 50(1): `block.label` is AI prose, so the disclosure banner MUST
+    // render with the blocks — same as the twin `/calendrier` surface.
+    await expect(
+      panel.getByRole('note', { name: 'Avis sur le contenu généré par IA' }),
+    ).toBeVisible();
+    await expect(panel.getByRole('link', { name: /En savoir plus/ })).toHaveAttribute(
+      'href',
+      '/legal/ai-disclosure',
+    );
     // A time-aware check-in action is rendered inside the panel.
     await expect(
       panel.locator('[data-slot="guidance-action"][data-kind="checkin"]').first(),
@@ -251,5 +260,10 @@ test.describe('Session 5 — Ton aujourd’hui (guidage quotidien) on /dashboard
     // No calendar yet → the calm "pas encore organisée" framing (the questionnaire
     // CTA lives in CalendarStatusWidget below, not duplicated in the panel).
     await expect(panel.getByText(/pas encore organis/i)).toBeVisible();
+    // No AI prose is shown in this state, so the disclosure banner must be ABSENT
+    // (it gates strictly on the AI `block.label` list, never on the calm framing).
+    await expect(
+      panel.getByRole('note', { name: 'Avis sur le contenu généré par IA' }),
+    ).toHaveCount(0);
   });
 });

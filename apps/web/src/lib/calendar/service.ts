@@ -262,6 +262,15 @@ export async function persistAdaptiveCalendar(
       outputTokens: input.outputTokens,
       costEur,
       calendarInstrumentVersion: input.calendarInstrumentVersion,
+      // DoD#1 freshness convergence (Session 5 defect-D) — `generatedAt` is
+      // `@default(now())`, which only fires on INSERT, so an upsert UPDATE would
+      // leave it FROZEN at the first generation. The batch loader re-includes a
+      // member when `questionnaire.updatedAt > calendar.generatedAt` (a stale
+      // plan); if a regeneration did not bump `generatedAt`, that predicate
+      // would stay true forever → the member would be regenerated on EVERY run
+      // (repeat Claude cost + schedule churn). Refreshing it here closes the
+      // loop: after a regeneration, `generatedAt > updatedAt` → excluded next run.
+      generatedAt: new Date(),
       // Preserve `aiDisclosureShownAt` — a re-generation must not reset the
       // EU AI Act 50(1) disclosure timestamp the member already saw.
     },

@@ -86,24 +86,53 @@ describe('computeReportingMonth — previous full civil month', () => {
     ['Asia/Tokyo', '2026-05-01', '2026-05-31'],
     ['America/New_York', '2026-05-01', '2026-05-31'],
     ['UTC', '2026-05-01', '2026-05-31'],
-  ])('multi-TZ %s: 1 June batch resolves to the full May', (tz, start, end) => {
-    const w = computeReportingMonth(new Date('2026-06-01T02:00:00Z'), tz);
+  ])('multi-TZ %s: a June run resolves to the full completed May', (tz, start, end) => {
+    // Ancre 2 juin 12:00 UTC : c'est juin local pour TOUTES les TZ testées
+    // (NY = 2 juin 08:00, Tokyo = 2 juin 21:00) — donc le mois courant est juin
+    // partout et le recul 1ms cible mai sans ambiguïté. (L'ancien test ancrait
+    // 1er juin 02:00 UTC, instant où NY est encore le 31 mai : avec la sémantique
+    // robuste « dernier mois COMPLÉTÉ en local », mai n'est PAS encore terminé
+    // pour NY à cet instant — l'ancienne ancre `now − 24h` masquait ce fait. On
+    // teste donc un instant opérationnellement réaliste pour un membre far-west.)
+    const w = computeReportingMonth(new Date('2026-06-02T12:00:00Z'), tz);
     expect(w.monthStartLocal).toBe(start);
     expect(w.monthEndLocal).toBe(end);
   });
 
-  it('the 24h anchor matches computeReportingWeek (fires-on-the-1st contract)', () => {
-    // Identical envelope to computeReportingWeek: a batch firing anywhere in
-    // the early hours of the 1st resolves to the just-ended month for the V1
-    // cohort. A multi-day-delayed run is out of contract (same limitation as
-    // weekly's Sunday-21:00 anchor) — the (userId, monthStart) upsert covers
-    // a re-run, never a wrong-month duplicate.
-    expect(computeReportingMonth(new Date('2026-06-01T00:30:00Z'), PARIS).monthStartLocal).toBe(
-      '2026-05-01',
-    );
-    expect(
-      computeReportingMonth(new Date('2026-06-01T06:00:00Z'), 'Asia/Tokyo').monthStartLocal,
-    ).toBe('2026-05-01');
+  it('early-1st run (00:05 Paris) targets the just-completed month', () => {
+    // Le batch lancé tôt le 1er juin (00:05 Paris = 31 mai 22:05 UTC en CEST)
+    // doit cibler MAI — le mois courant est juin, recul 1ms → mai.
+    const w = computeReportingMonth(new Date('2026-05-31T22:05:00Z'), PARIS);
+    expect(w.monthStartLocal).toBe('2026-05-01');
+    expect(w.monthEndLocal).toBe('2026-05-31');
+  });
+
+  it.each([
+    ['5 juin (run retardé de 4j)', '2026-06-05T08:00:00Z'],
+    ['20 juin (run retardé de 19j)', '2026-06-20T08:00:00Z'],
+    ['dernier jour du mois (30 juin 23:00 Paris)', '2026-06-30T21:00:00Z'],
+  ])(
+    'DELAYED run %s still targets the previous completed month (May), never the current (June)',
+    (_label, iso) => {
+      // RÉGRESSION FIX TIER1 : l'ancien `now − 24h` ciblait JUIN (mois courant
+      // incomplet) pour tout run après ~le 1er → mai jamais générée + boucle de
+      // nudge infinie. Le calcul « mois courant → recul 1ms » est robuste quel
+      // que soit le délai du run : le mois courant reste juin → on cible mai.
+      const w = computeReportingMonth(new Date(iso), PARIS);
+      expect(w.monthStartLocal).toBe('2026-05-01');
+      expect(w.monthEndLocal).toBe('2026-05-31');
+    },
+  );
+
+  it('batch et net overdue convergent : même monthStart pour un run early-1st ET retardé', () => {
+    // Le coeur du fix B : `computeReportingMonth` (source du batch via le
+    // loader) et `lastCompletedMonth` (net overdue, qui délègue désormais à
+    // `computeReportingMonth`) renvoient le MÊME mois quel que soit le jour —
+    // donc plus de divergence batch/net → plus de boucle de nudge.
+    const early = computeReportingMonth(new Date('2026-05-31T22:05:00Z'), PARIS);
+    const delayed = computeReportingMonth(new Date('2026-06-05T08:00:00Z'), PARIS);
+    expect(early.monthStartLocal).toBe(delayed.monthStartLocal);
+    expect(delayed.monthStartLocal).toBe('2026-05-01');
   });
 });
 

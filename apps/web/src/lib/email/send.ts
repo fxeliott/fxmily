@@ -548,7 +548,7 @@ export async function sendMonthlyDebriefOverdueAlertEmail({
     text: [
       `Fxmily — rappel de permanence (débrief mensuel).`,
       ``,
-      `Le mois de ${monthLabel} est terminé, mais ${overdueCount} membre${plural ? 's' : ''} actif${plural ? 's' : ''}`,
+      `Le mois de ${monthLabel.toLowerCase()} est terminé, mais ${overdueCount} membre${plural ? 's' : ''} actif${plural ? 's' : ''}`,
       `${expectedCount > overdueCount ? `(sur ${expectedCount}) ` : ''}${plural ? "n'ont" : "n'a"} pas encore reçu leur débrief mensuel.`,
       `Chaque membre actif doit en recevoir un (SPEC §25.4).`,
       ``,

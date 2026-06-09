@@ -62,7 +62,8 @@ export function MonthlyDebriefOverdueAlertEmail({
           </Heading>
 
           <Text style={paragraph}>
-            Le mois de <strong>{monthLabel}</strong> est terminé, mais {overdueCount} membre
+            Le mois de <strong>{monthLabel.toLowerCase()}</strong> est terminé, mais {overdueCount}{' '}
+            membre
             {plural ? 's' : ''} actif{plural ? 's' : ''}
             {expectedCount > overdueCount ? ` (sur ${expectedCount})` : ''} n&apos;
             {plural ? 'ont' : 'a'} pas encore reçu leur débrief mensuel. Chaque membre actif doit en

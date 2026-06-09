@@ -69,6 +69,11 @@ describe('getCronHealthReport', () => {
         _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
       },
       {
+        // Session 5 §26 — calendar overdue nudge (daily, age 12h → green).
+        action: 'cron.calendar_overdue.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
         // J10 Phase O fix B3 — the watcher's own heartbeat (period=1h,
         // tolerance=4h) needs a fresh row to land green.
         action: 'cron.health.scan',
@@ -79,7 +84,7 @@ describe('getCronHealthReport', () => {
     const report = await getCronHealthReport(now);
 
     expect(report.overall).toBe('green');
-    expect(report.entries).toHaveLength(9);
+    expect(report.entries).toHaveLength(10);
     expect(report.entries.every((e) => e.status === 'green')).toBe(true);
     expect(report.ranAt).toBe(now.toISOString());
   });
@@ -177,14 +182,16 @@ describe('getCronHealthReport', () => {
    * update to `EXPECTATIONS` — drift between code + crontab is a high-
    * risk class of bug.
    */
-  it('always returns exactly 9 entries (J10 V2-roadmap — added cron.purge_audit_log.scan)', async () => {
+  it('always returns exactly 10 entries (Session 5 — added cron.calendar_overdue.scan)', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);
     const report = await getCronHealthReport();
-    expect(report.entries).toHaveLength(9);
-    // 8th entry — self-monitoring of the watcher (cron-watch.yml).
+    expect(report.entries).toHaveLength(10);
+    // self-monitoring of the watcher (cron-watch.yml).
     expect(report.entries.map((e) => e.action)).toContain('cron.health.scan');
-    // 9th entry — audit_log retention purge (V2-roadmap reclassed).
+    // audit_log retention purge (V2-roadmap reclassed).
     expect(report.entries.map((e) => e.action)).toContain('cron.purge_audit_log.scan');
+    // Session 5 §26 — calendar overdue safety-net heartbeat.
+    expect(report.entries.map((e) => e.action)).toContain('cron.calendar_overdue.scan');
   });
 });
 

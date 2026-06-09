@@ -327,7 +327,10 @@ export type AuditAction =
   | 'access_request.approved'
   | 'access_request.rejected'
   | 'admin.access_requests.listed'
-  | 'cron.purge_access_requests.scan';
+  | 'cron.purge_access_requests.scan'
+  // Session 5 §26 — calendar overdue safety-net (DoD#4 permanence). Heartbeat
+  // on EVERY run; counts + weekStart + emailOutcome only, PII-free.
+  | 'cron.calendar_overdue.scan';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the
 // public Track Record was split out to a standalone repo

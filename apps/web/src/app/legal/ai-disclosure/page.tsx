@@ -37,14 +37,15 @@ export default function AIDisclosurePage(): React.ReactElement {
     <LegalLayout
       eyebrow="Transparence IA"
       title="Comment Fxmily utilise l'IA"
-      lastUpdatedIso="2026-05-23"
+      lastUpdatedIso="2026-06-09"
       summary={
         <>
           Fxmily utilise une IA générative (Claude, Anthropic) pour{' '}
-          <strong>deux cas d&apos;usage</strong> : rédiger un rapport hebdomadaire (que{' '}
-          <strong>seul Eliot</strong> reçoit, pour assurer ton suivi) et ton débrief mensuel (que tu
-          consultes), à partir de tes propres données. Pas de conseil de trade, pas de décision
-          autonome, pas de remplacement du coaching humain.
+          <strong>trois cas d&apos;usage</strong> : rédiger un rapport hebdomadaire (que{' '}
+          <strong>seul Eliot</strong> reçoit, pour assurer ton suivi), ton débrief mensuel (que tu
+          consultes) et ton calendrier d&apos;organisation hebdomadaire (que tu consultes), à partir
+          de tes propres données. Pas de conseil de trade, pas de décision autonome, pas de
+          remplacement du coaching humain.
         </>
       }
     >
@@ -60,25 +61,29 @@ export default function AIDisclosurePage(): React.ReactElement {
       <h2>2. Quel modèle on utilise, pour quoi</h2>
       <ul>
         <li>
-          <strong>Modèle</strong> — Claude (famille Sonnet), édité par Anthropic PBC. Les rapports
-          sont générés via l&apos;abonnement personnel Max d&apos;Eliot (pas d&apos;API Anthropic
-          facturée par requête côté Fxmily — voir{' '}
+          <strong>Modèle</strong> — Claude (famille Opus, actuellement Opus 4.8), édité par
+          Anthropic PBC. Les contenus sont générés via l&apos;abonnement personnel Max d&apos;Eliot
+          (pas d&apos;API Anthropic facturée par requête côté Fxmily — voir{' '}
           <a href="/legal/privacy">Politique de confidentialité §3</a> pour les sous-traitants).
         </li>
         <li>
-          <strong>Deux usages</strong> — (a) rédaction d&apos;un <em>rapport hebdomadaire</em> que{' '}
+          <strong>Trois usages</strong> — (a) un <em>rapport hebdomadaire</em> que{' '}
           <strong>seul Eliot (admin)</strong> reçoit chaque dimanche par email, pour assurer ton
-          suivi — tu ne le reçois pas directement ; il s&apos;affiche dans l&apos;onglet Admin pour
-          Eliot ; (b) rédaction du <em>débrief mensuel</em> (V1.4, SPEC §25.4) consultable sur ta
-          page <a href="/debrief-mensuel">/debrief-mensuel</a> et dans l&apos;onglet Admin (
-          <code>?tab=monthly-debrief</code>). Les deux synthétisent{' '}
-          <strong>tes propres données</strong> (trades, check-ins, notes, progression mois sur mois)
-          en un texte lisible.
+          suivi — tu ne le reçois pas directement ; il s&apos;affiche dans l&apos;onglet Admin ; (b)
+          ton <em>débrief mensuel</em> (V1.4, SPEC §25.4) consultable sur ta page{' '}
+          <a href="/debrief-mensuel">/debrief-mensuel</a> et dans l&apos;onglet Admin (
+          <code>?tab=monthly-debrief</code>) — il synthétise <strong>tes propres données</strong>{' '}
+          (trades, check-ins, notes, progression mois sur mois) ; (c) ton{' '}
+          <em>calendrier d&apos;organisation hebdomadaire</em> (§26) consultable sur{' '}
+          <a href="/calendrier">/calendrier</a>, généré à partir de ton questionnaire de
+          disponibilité et d&apos;un instantané chiffré de ton activité — il organise ton{' '}
+          <strong>temps</strong> de pratique (sessions, entraînement, repos), jamais le marché.
         </li>
         <li>
-          <strong>Volume</strong> — 1 appel par utilisateur par semaine (rapport hebdo) + 1 appel
-          par utilisateur par mois (débrief mensuel), plafonnés à $5 de tokens par run (garde-fou
-          technique côté Eliot pour éviter toute dérive de coût).
+          <strong>Volume</strong> — au plus 1 appel par utilisateur par semaine (rapport hebdo) + 1
+          par mois (débrief mensuel) + 1 par semaine pour le calendrier (uniquement si tu remplis le
+          questionnaire d&apos;organisation), plafonnés à $5 de tokens par run (garde-fou technique
+          côté Eliot pour éviter toute dérive de coût).
         </li>
       </ul>
 
@@ -132,8 +137,9 @@ export default function AIDisclosurePage(): React.ReactElement {
           requête est refusée et journalisée. Garantie de non-explosion de coûts.
         </li>
         <li>
-          <strong>Banner de transparence</strong> — chaque contenu généré par IA (rapport admin,
-          email hebdomadaire) affiche le bandeau « Généré par IA — pas substitut coaching humain ».
+          <strong>Banner de transparence</strong> — chaque contenu généré par IA (rapport hebdo
+          admin, débrief mensuel, calendrier d&apos;organisation, emails) affiche un bandeau «
+          Généré par IA — pas substitut coaching humain ».
         </li>
       </ul>
 

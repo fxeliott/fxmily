@@ -33,6 +33,7 @@ interface CronExpectation {
     | 'cron.purge_deleted.scan'
     | 'cron.purge_push_subscriptions.scan'
     | 'cron.purge_audit_log.scan'
+    | 'cron.calendar_overdue.scan'
     | 'cron.health.scan';
   /** Human-readable label for the dashboard. */
   label: string;
@@ -94,6 +95,17 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.purge_audit_log.scan',
     label: 'Audit log retention purge',
     periodMs: DAY, // 04:00 UTC daily
+  },
+  {
+    // Session 5 §26 — calendar overdue safety-net (DoD#4 permanence). Daily
+    // detection-only cron that nudges the admin when members have a filled
+    // questionnaire but no generated calendar past the grace window. Monitored
+    // here so a broken nudge cron (the very thing guaranteeing permanence)
+    // surfaces red instead of silently failing — and it gives the 4 manual IA
+    // batches at least one monitored proxy (calendar) in the cron dashboard.
+    action: 'cron.calendar_overdue.scan',
+    label: 'Calendar overdue nudge',
+    periodMs: DAY, // crontab: daily 11:00 UTC (13:00 Paris)
   },
   {
     // J10 Phase O fix B3 : self-monitor the watcher itself. If `cron-watch.yml`

@@ -432,8 +432,8 @@ function NutritionNotesStep({ draft, setDraft, headingRef }: StepProps) {
           Une note pour toi ?
         </h2>
         <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
-          Optionnel. Si tu veux noter un contexte (repas sauté, fringale, écart), ça nourrit ton
-          rapport hebdo IA dimanche.
+          Optionnel. Si tu veux noter un contexte (repas sauté, fringale, écart), tu le gardes avec
+          ton suivi.
         </p>
       </header>
 

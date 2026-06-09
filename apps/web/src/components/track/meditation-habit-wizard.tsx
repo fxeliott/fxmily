@@ -488,7 +488,7 @@ function MeditationNotesStep({ draft, setDraft, headingRef }: StepProps) {
         </h2>
         <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
           Optionnel. Si tu veux noter un contexte (mental agité, séance avant la session, focus
-          difficile), ça nourrit ton rapport hebdo IA dimanche.
+          difficile), tu le gardes avec ton suivi.
         </p>
       </header>
 

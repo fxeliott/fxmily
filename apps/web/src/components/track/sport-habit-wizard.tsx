@@ -454,8 +454,8 @@ function SportNotesStep({ draft, setDraft, headingRef }: StepProps) {
           Une note pour toi ?
         </h2>
         <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
-          Optionnel. Si tu veux noter un contexte (séance écourtée, courbatures, gros effort), ça
-          nourrit ton rapport hebdo IA dimanche.
+          Optionnel. Si tu veux noter un contexte (séance écourtée, courbatures, gros effort), tu le
+          gardes avec ton suivi.
         </p>
       </header>
 

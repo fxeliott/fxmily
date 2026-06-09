@@ -34,6 +34,7 @@ interface CronExpectation {
     | 'cron.purge_push_subscriptions.scan'
     | 'cron.purge_audit_log.scan'
     | 'cron.calendar_overdue.scan'
+    | 'cron.monthly_debrief_overdue.scan'
     | 'cron.health.scan';
   /** Human-readable label for the dashboard. */
   label: string;
@@ -106,6 +107,15 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.calendar_overdue.scan',
     label: 'Calendar overdue nudge',
     periodMs: DAY, // crontab: daily 11:00 UTC (13:00 Paris)
+  },
+  {
+    // Session 5 §25 — monthly debrief overdue safety-net (DoD#2 permanence).
+    // Daily detection-only cron that nudges the admin when the last completed
+    // month's member debriefs are missing past the grace window. Monitored
+    // here so a broken nudge cron surfaces red instead of silently failing.
+    action: 'cron.monthly_debrief_overdue.scan',
+    label: 'Monthly debrief overdue nudge',
+    periodMs: DAY, // crontab: daily 11:10 UTC (13:10 Paris)
   },
   {
     // J10 Phase O fix B3 : self-monitor the watcher itself. If `cron-watch.yml`

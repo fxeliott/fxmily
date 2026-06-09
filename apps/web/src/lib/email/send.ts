@@ -7,6 +7,7 @@ import { AnnotationReceivedEmail } from '@/lib/email/templates/annotation-receiv
 import { CalendarOverdueAlertEmail } from '@/lib/email/templates/calendar-overdue-alert';
 import { InvitationEmail } from '@/lib/email/templates/invitation';
 import { MonthlyDebriefEmail } from '@/lib/email/templates/monthly-debrief';
+import { MonthlyDebriefOverdueAlertEmail } from '@/lib/email/templates/monthly-debrief-overdue-alert';
 import { NotificationFallbackEmail } from '@/lib/email/templates/notification-fallback';
 import { WeeklyDigestEmail } from '@/lib/email/templates/weekly-digest';
 import { formatMonthLabelFr } from '@/lib/monthly-debrief/format';
@@ -506,6 +507,60 @@ export async function sendCalendarOverdueAlertEmail({
       ``,
       `Rappel automatique — envoyé uniquement quand des calendriers sont en attente passé le délai`,
       `de courtoisie. Aucun calendrier n'est généré sur un serveur (le batch reste manuel, par`,
+      `sécurité du compte).`,
+    ].join('\n'),
+  });
+}
+
+// ----- §25 Session 5 — monthly debrief overdue ADMIN nudge (DoD#2 permanence) -
+
+export interface SendMonthlyDebriefOverdueAlertParams {
+  /** Admin recipient (resolved by the caller from `WEEKLY_REPORT_RECIPIENT`). */
+  to: string;
+  /** Active members with no monthly debrief for the completed month. */
+  overdueCount: number;
+  /** Active members expected a debrief for the month (joined ≤ month end). */
+  expectedCount: number;
+  /** Human FR month label, e.g. "mai 2026". */
+  monthLabel: string;
+}
+
+/**
+ * Notify the ADMIN that members are waiting on their monthly debrief (Session 5
+ * DoD#2 permanence safety-net). ONLY the operator gets this — no member PII,
+ * counts only. Best-effort: the caller (`lib/monthly-debrief/overdue.ts`)
+ * degrades to a Sentry warning + audit if delivery throws.
+ */
+export async function sendMonthlyDebriefOverdueAlertEmail({
+  to,
+  overdueCount,
+  expectedCount,
+  monthLabel,
+}: SendMonthlyDebriefOverdueAlertParams): Promise<{ id: string | null; delivered: boolean }> {
+  const adminUrl = buildAdminDashboardUrl();
+  const plural = overdueCount > 1;
+  const subject = `${overdueCount} débrief${plural ? 's' : ''} mensuel${plural ? 's' : ''} en attente · ${monthLabel}`;
+
+  return sendEmail({
+    to,
+    subject,
+    react: MonthlyDebriefOverdueAlertEmail({ overdueCount, expectedCount, monthLabel, adminUrl }),
+    text: [
+      `Fxmily — rappel de permanence (débrief mensuel).`,
+      ``,
+      `Le mois de ${monthLabel} est terminé, mais ${overdueCount} membre${plural ? 's' : ''} actif${plural ? 's' : ''}`,
+      `${expectedCount > overdueCount ? `(sur ${expectedCount}) ` : ''}${plural ? "n'ont" : "n'a"} pas encore reçu leur débrief mensuel.`,
+      `Chaque membre actif doit en recevoir un (SPEC §25.4).`,
+      ``,
+      `À faire — depuis ton PC :`,
+      `  1. Lance /monthly-batch (ou ops/scripts/monthly-batch-local.sh).`,
+      `  2. Claude Opus 4.8 rédige les débriefs en local ($0), persistés après les garde-fous §2.`,
+      `  3. Les membres reçoivent leur débrief (push + email) dès la fin du batch.`,
+      ``,
+      `Ouvre l'admin : ${adminUrl}`,
+      ``,
+      `Rappel automatique — envoyé uniquement quand des débriefs sont en attente passé le délai`,
+      `de courtoisie. Aucun débrief n'est généré sur un serveur (le batch reste manuel, par`,
       `sécurité du compte).`,
     ].join('\n'),
   });

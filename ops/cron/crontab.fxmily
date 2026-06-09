@@ -26,6 +26,7 @@
 #   - generate-meetings         weekdays 06:00 UTC                 (V1.7 §30)
 #   - purge-access-requests     Sunday 04:00 UTC                   (V2.5 RGPD)
 #   - calendar-overdue-alert    daily 11:00 UTC                    (S5 §26 perm.)
+#   - monthly-debrief-overdue-alert daily 11:10 UTC                (S5 §25 perm.)
 #
 # Log : every run appends one line to /var/log/fxmily/cron.log via the
 # wrapper. The DB audit row (`cron.<route>.scan`) is the canonical
@@ -103,3 +104,12 @@ MAILTO=""
 # lib/system/health.ts). 11:00 UTC is a free midday slot — no overlap with the
 # 02:00-06:00 nightly jobs nor the 07:00-08:00 check-in windows.
 0 11 * * *                   fxmily   /usr/local/bin/fxmily-cron calendar-overdue-alert
+
+# Session 5 §25 — monthly debrief overdue admin nudge : daily 11:10 UTC (13:10 Paris).
+# DETECTION-ONLY safety-net for the MANUAL monthly debrief batch (ban-risk human-
+# in-the-loop §5.4 — the generation is NEVER cronned). Scans the last completed
+# civil month for active members with no debrief past the grace window, and emails
+# the admin so no member silently loses their monthly debrief (DoD#2, SPEC §25.4).
+# Pure read + idempotent ; emits cron.monthly_debrief_overdue.scan heartbeat
+# (monitored by lib/system/health.ts). 11:10 UTC offsets the 11:00 calendar nudge.
+10 11 * * *                  fxmily   /usr/local/bin/fxmily-cron monthly-debrief-overdue-alert

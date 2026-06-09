@@ -177,10 +177,9 @@ describe('getCronHealthReport', () => {
   });
 
   /**
-   * Why this matters : the report's entries.length is fixed at 7 (one
-   * per known cron action). Adding a new cron must require an explicit
-   * update to `EXPECTATIONS` — drift between code + crontab is a high-
-   * risk class of bug.
+   * Why this matters : the report's entries.length is fixed at 10 (one per
+   * known cron action). Adding a new cron must require an explicit update to
+   * `EXPECTATIONS` — drift between code + crontab is a high-risk class of bug.
    */
   it('always returns exactly 10 entries (Session 5 — added cron.calendar_overdue.scan)', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);

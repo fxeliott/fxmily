@@ -35,8 +35,8 @@ import { currentParisWeekStart, formatWeekRangeFr } from './week';
  * Grace window (hours) before a filled questionnaire is considered "overdue".
  * The batch is meant to run early in the week ; we never nudge the admin the
  * instant a member submits — they get a calm buffer to run it. 18h means a
- * Monday-morning fill won't surface until the Tuesday cron pass. Mirrors the
- * "give the operator a beat" cadence of the weekly digest (`sentToAdminAt`).
+ * Monday-morning fill won't surface until the next daily cron pass (~Tuesday).
+ * Mirrors the "give the operator a beat" cadence of the weekly digest.
  */
 const OVERDUE_GRACE_HOURS = 18;
 
@@ -48,9 +48,14 @@ export interface OverdueCalendarScan {
   /** Human FR range, e.g. "8 juin → 14 juin" — for the admin email/audit. */
   weekRange: string;
   /** Active members who filled the questionnaire > grace ago AND still have no
-   *  AdaptiveCalendar for this week. This is EXACTLY the set the batch would
-   *  generate (mirror of `loadAllSnapshotsForCalendarGeneration` candidates)
-   *  minus the freshly-filled (grace) ones. */
+   *  AdaptiveCalendar for this week. Mirrors the batch candidate filter
+   *  (`loadAllSnapshotsForCalendarGeneration`: `active ∩ has-questionnaire ∩
+   *  no-calendar`) for the CURRENT week, minus the freshly-filled (grace) ones.
+   *  High-confidence (not absolute) predictor of batch output: it counts rows,
+   *  whereas the batch additionally drops a member whose snapshot vanishes
+   *  mid-run (questionnaire deleted) — a benign transient that self-heals next
+   *  pass. The scan only ever looks at the current week (the batch can be
+   *  pulled for a past week explicitly; the nudge intentionally does not). */
   overdueCount: number;
   /** Total questionnaires submitted for this week (any age) — context for the
    *  admin ("3 attendent sur 5 organisés"). */

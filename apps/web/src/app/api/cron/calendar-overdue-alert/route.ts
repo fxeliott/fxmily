@@ -17,7 +17,7 @@ import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
  * Claude, never touches the ban-risk path : it only counts rows and emails the
  * operator. See {@link runCalendarOverdueAlert}.
  *
- * Wiring expected in production : Hetzner crontab Tue + Thu 07:05 UTC →
+ * Wiring expected in production : Hetzner crontab daily 11:00 UTC (13:00 Paris) →
  *   curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
  *        https://app.fxmilyapp.com/api/cron/calendar-overdue-alert
  *

@@ -64,6 +64,8 @@ Fxmily a **21+ sessions de build réel** derrière lui et tourne **LIVE en produ
 
 **Règle d'or** : ne jamais affirmer un état sans l'avoir vérifié (Read / build / `gh` / WebFetch). Ce fichier date ses affirmations et cite ses preuves.
 
+**Convention de versionnement (lire AVANT d'interpréter un hash)** : chaque entrée **`MAJ-N`** (blockquotes en tête de fichier) cite le commit **feature** qu'elle documente — PAS le commit _docs_ qui introduit la `MAJ-N` elle-même (un fichier ne peut pas citer le hash du commit qui le crée). Donc le « dernier `origin/main` » affiché dans la `MAJ-N` la plus récente est **décalé d'un commit docs** par rapport au HEAD réel. Le **HEAD courant exact** de `origin/main` vit dans `~/.claude/projects/D--Fxmily/memory/auto_session_resume.md` (hand-off de reprise). Ex. : MAJ-21 cite `775c103` (feature #284) ; le HEAD réel après le commit docs #285 est `4cf6ebf`. Le `Snapshot` §1 ci-dessous est un instantané **daté** volontairement figé — l'état courant est porté par les `MAJ-N`, pas par lui.
+
 ---
 
 ## 1. Réalité vérifiée — snapshot daté (2026-06-05)

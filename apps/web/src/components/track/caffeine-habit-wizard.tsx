@@ -407,8 +407,8 @@ function CaffeineNotesStep({ draft, setDraft, headingRef }: StepProps) {
           Une note pour toi ?
         </h2>
         <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
-          Optionnel. Si tu veux noter un contexte (café tardif, double dose avant session), ça
-          nourrit ton rapport hebdo IA dimanche.
+          Optionnel. Si tu veux noter un contexte (café tardif, double dose avant session), tu le
+          gardes avec ton suivi.
         </p>
       </header>
 

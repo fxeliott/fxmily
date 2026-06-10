@@ -289,6 +289,13 @@ model User {
   pushSubscription Json?     @map("push_subscription") // J9
   consentRgpdAt    DateTime? @map("consent_rgpd_at")
 
+  /// S3 — number of broker accounts the vision pipeline detected from the
+  /// member's MT5 proof uploads (Claude counts distinct account headers across
+  /// proofs). Null = never analysed. Denormalised convenience for the admin
+  /// "réalité vs déclaré" view; the source of truth is the `BrokerAccount`
+  /// rows themselves.
+  detectedAccountCount Int? @map("detected_account_count")
+
   // Lifecycle timestamps
   joinedAt   DateTime  @default(now()) @map("joined_at")
   lastSeenAt DateTime? @map("last_seen_at")
@@ -387,6 +394,16 @@ model User {
   // (approve/reject). SetNull on the request so a deleted admin doesn't
   // cascade-wipe the audit trail of who reviewed a non-member's request.
   reviewedAccessRequests       AccessRequest[]               @relation("AccessRequestsReviewed")
+  // S3 — Vérification & Honnêteté radicale (preuve MT5 + score de constance).
+  // All cascade on User delete (RGPD §17 data minimisation, schema-wide).
+  brokerAccounts               BrokerAccount[]
+  mt5AccountProofs             Mt5AccountProof[]
+  discrepancies                Discrepancy[]
+  constancyScores              ConstancyScore[]
+  scoreEvents                  ScoreEvent[]
+  alerts                       Alert[]
+  // S3/S8 — training-session containers (firewall §21.5: training world only).
+  trainingSessions             TrainingSession[]
 
   @@index([status])
   @@index([role])
@@ -596,12 +613,38 @@ model Trade {
   /// null — used by /journal queries to split the list visually.
   closedAt DateTime? @map("closed_at")
 
+  // ----- S3 — Vérification & Honnêteté radicale (preuve par la réalité) -----
+
+  /// S3 — provenance of this journal entry. Every pre-S3 trade is implicitly
+  /// declarative, hence the `self_declared` default (SQL DEFAULT backfills
+  /// existing rows without a table rewrite). `mt5_verified` is set by the S3
+  /// reconciliation engine once the trade has been matched against an
+  /// `ExtractedPosition` coming from an MT5 history screenshot (vision
+  /// pipeline). Posture §2: verification concerns the FACT of the trade
+  /// (existence, direction, timing, volume), never its analysis.
+  source TradeSource @default(self_declared)
+
+  /// S3 — when the reconciliation engine confirmed this trade against the
+  /// member's real MT5 history. Null = never confronted yet.
+  verifiedAt DateTime? @map("verified_at")
+
+  /// S3 — outcome of the declarative ↔ reality confrontation. Null = not yet
+  /// confronted (legacy rows / no proof uploaded for the period). `mismatch`
+  /// rows also materialise a `Discrepancy` for follow-up.
+  matchStatus TradeMatchStatus? @map("match_status")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // J4 — admin annotations attached to this trade. Cascade so a member
   // cleanup wipes its annotations too (RGPD: data minimisation).
   annotations TradeAnnotation[]
+  // S3 — multi-capture attachments (entry/exit/other). The legacy
+  // `screenshotEntryKey`/`screenshotExitKey` columns stay untouched
+  // (backward compat); new multi-photo flows append here.
+  media TradeMedia[]
+  // S3 — discrepancies referencing this trade as the declared side.
+  discrepancies Discrepancy[]
 
   // Indexes — userId-leading because every member-facing query is
   // user-scoped, and the secondary order is the dominant sort key in the UI.
@@ -752,6 +795,13 @@ model TrainingTrade {
   id     String @id @default(cuid())
   userId String @map("user_id")
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// S8 — optional parent backtest session ("crée une session de backtest").
+  /// SetNull: deleting a session container never destroys the entries logged
+  /// inside it. Lives 100% inside the §21.5 training world — `TrainingSession`
+  /// has NO link to any real-edge model.
+  sessionId       String?          @map("session_id")
+  trainingSession TrainingSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   /// One of the allowlisted symbols (lib/trading/pairs.ts), uppercase string,
   /// enforced at the Zod edge — mirror of `Trade.pair` (no DB enum).
@@ -1268,6 +1318,12 @@ model MarkDouglasDelivery {
   triggerSnapshot Json            @map("trigger_snapshot")
   /// Local-day anchor (matches DailyCheckin.date convention).
   triggeredOn     DateTime        @map("triggered_on") @db.Date
+  /// S3 — optional provenance link when this delivery was caused by a
+  /// repetition `Alert` (S3 → S5 coaching junction). SetNull keeps the
+  /// delivery history if the alert row is later purged. Null = delivery
+  /// triggered by the classic J7 evaluators, not by the constancy engine.
+  sourceAlertId   String?         @map("source_alert_id")
+  sourceAlert     Alert?          @relation(fields: [sourceAlertId], references: [id], onDelete: SetNull)
   seenAt          DateTime?       @map("seen_at")
   dismissedAt     DateTime?       @map("dismissed_at")
   helpful         Boolean?
@@ -2133,4 +2189,431 @@ model AccessRequest {
   // Dedup lookup on submit (an active pending request for this email).
   @@index([email])
   @@map("access_requests")
+}
+
+// =============================================================================
+// S3 — Vérification & Honnêteté radicale (preuve MT5 + score de constance)
+// =============================================================================
+//
+// Session 3 of the 10-session plan ("rendre le mensonge impossible" — the
+// truth is proven BY REALITY, not by declaration alone). Data layer only at
+// S1-Fondations time; the upload UI, vision pipeline (Claude Fable 5 local,
+// image input proven 2026-06-10), reconciliation engine, scoring service and
+// alert dispatch are built in the dedicated S3 session.
+//
+// Design invariants (PROJECT_STATE.md §13.3 + brief 03 §29-§31):
+//   - Cascade on User delete everywhere (RGPD §17 data minimisation).
+//   - Posture §2 BLOQUANT: verification concerns FACTS (a trade existed, a
+//     form was filled), NEVER the quality of an analysis. `Alert.category`
+//     is structurally pinned to `psychological` — there is no "trading
+//     advice" alert by construction.
+//   - Alerts fire on REPETITION ONLY (repeatCount >= threshold), never on a
+//     first slip (brief §31 DoD: "les alertes ne se déclenchent que lorsque
+//     les manquements se répètent").
+//   - Honest limit (decision Eliot 2026-06-10): a screenshot proof raises the
+//     cost of lying but is NOT forensic truth (cropping/demo accounts stay
+//     possible). True broker-API verification remains SPEC V3 roadmap.
+//   - Free-text emitted by Claude (`Discrepancy.claudeReasoning`) passes the
+//     §2/AMF + crisis gates at write time, like every other AI output.
+
+/// S3 — kind of broker account a member trades on. Lowercase values per repo
+/// enum convention (deviation from the §13.3 draft's uppercase, documented).
+enum BrokerAccountType {
+  prop_firm
+  personal
+}
+
+/// S3 — lifecycle of an uploaded MT5 proof through the vision pipeline.
+enum ProofOcrStatus {
+  pending
+  done
+  failed
+}
+
+/// S3 — provenance of an extracted position. Single value today (vision OCR
+/// of an MT5 history screenshot); a future V3 broker-API import becomes an
+/// additive enum value, not a new model.
+enum ExtractedPositionSource {
+  mt5_screen_ocr
+}
+
+/// S3 — provenance of a journal `Trade`. Every pre-S3 row is `self_declared`.
+enum TradeSource {
+  self_declared
+  mt5_verified
+}
+
+/// S3 — result of confronting a declared `Trade` with the extracted reality.
+enum TradeMatchStatus {
+  unmatched
+  matched
+  mismatch
+}
+
+/// S3 — kind of declarative ↔ reality gap the reconciliation engine found.
+///   missing_declared   : a real MT5 position has no declared trade (oubli).
+///   false_declared     : a declared trade has no real MT5 counterpart.
+///   mismatch           : both exist but the numbers/timing diverge.
+///   unfilled_no_reason : a required ritual (check-in, declaration…) was left
+///                        empty with no valid member reason (brief §29 —
+///                        "ne rien remplir sans motif valable n'est pas neutre").
+enum DiscrepancyType {
+  missing_declared
+  false_declared
+  mismatch
+  unfilled_no_reason
+}
+
+/// S3 — lifecycle of a discrepancy (open → member acknowledged → resolved).
+enum DiscrepancyStatus {
+  open
+  acknowledged
+  resolved
+}
+
+/// S3 — why a constancy score event was emitted.
+///   filled            : positive delta — the member did the work.
+///   forgot_no_reason  : negative delta — unfilled without a valid reason.
+///   reality_gap       : negative delta — declarative ↔ reality discrepancy.
+///   false_declaration : strongest negative delta — proven false declaration.
+enum ScoreEventReason {
+  filled
+  forgot_no_reason
+  reality_gap
+  false_declaration
+}
+
+/// S3 — alert category. Structurally single-valued: an alert is ALWAYS
+/// psychological (discipline / ego / honnêteté, à la Mark Douglas). Garde-fou
+/// §2: no enum value for trading advice can ever exist here.
+enum AlertCategory {
+  psychological
+}
+
+/// S3 — alert lifecycle. `delivered` = handed to the S5 coaching surface
+/// (Mark Douglas delivery / admin view), `dismissed` = closed without action.
+enum AlertStatus {
+  open
+  delivered
+  dismissed
+}
+
+/// S4/S7 — kind of a multi-capture trade attachment ("photos" pluriel §28).
+enum TradeMediaKind {
+  entry
+  exit
+  other
+}
+
+/// S3 — a broker account the member trades on (prop firm or personal). Rows
+/// are created either by the member (self-setup) or by the vision pipeline
+/// (`detectedByAI = true` + `confidence`) when Claude counts distinct account
+/// headers across the member's MT5 proofs ("détecte au plus précis le nombre
+/// exact de comptes" — brief §30).
+model BrokerAccount {
+  id       String @id @default(cuid())
+  memberId String @map("member_id")
+  member   User   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// Member-facing label ("FTMO 100k", "Compte perso IC Markets").
+  label      String
+  type       BrokerAccountType
+  /// Optional broker name as read from the proof header (free-text, short).
+  brokerName String?           @map("broker_name")
+
+  /// True when this account row was created by the vision pipeline rather
+  /// than declared by the member — the "réalité vs déclaré" signal.
+  detectedByAI Boolean @default(false) @map("detected_by_ai")
+  /// Vision confidence 0-1 for AI-detected accounts. Null for member-created.
+  confidence   Float?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  proofs    Mt5AccountProof[]
+  positions ExtractedPosition[]
+
+  @@index([memberId])
+  @@map("broker_accounts")
+}
+
+/// S3 — one uploaded MT5 history screenshot for one account. The vision
+/// pipeline (Claude Fable 5 local, 5th batch pipeline) consumes `pending`
+/// rows and extracts `ExtractedPosition` rows from the image.
+model Mt5AccountProof {
+  id       String @id @default(cuid())
+  memberId String @map("member_id")
+  member   User   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// The account this proof documents. Nullable: at upload time the member
+  /// may not have attached the proof to an account yet (the pipeline or the
+  /// member links it later). SetNull keeps the proof if the account row goes.
+  brokerAccountId String?        @map("broker_account_id")
+  brokerAccount   BrokerAccount? @relation(fields: [brokerAccountId], references: [id], onDelete: SetNull)
+
+  /// Storage key, `lib/storage` conventions (mirror `Trade.screenshotEntryKey`):
+  /// `proofs/{userId}/{nanoid}.{ext}`.
+  fileKey  String @map("file_key")
+  /// SHA-256 hex of the file bytes — anti-double-upload (a member cannot
+  /// submit the same screenshot twice as two "different" proofs) and a cheap
+  /// tamper trace. Uniqueness is per-member: two members CAN coincidentally
+  /// upload identical bytes (e.g. a shared demo image during testing).
+  fileHash String @map("file_hash")
+
+  /// Account type as declared at upload (cross-checked against detection).
+  accountType BrokerAccountType? @map("account_type")
+
+  ocrStatus   ProofOcrStatus @default(pending) @map("ocr_status")
+  /// Vision batch run identifier (mirror of the other pipelines' audit trail).
+  claudeRunId String?        @map("claude_run_id")
+
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  positions ExtractedPosition[]
+
+  @@unique([memberId, fileHash])
+  @@index([memberId, uploadedAt(sort: Desc)])
+  // Vision batch pull: oldest pending proofs first.
+  @@index([ocrStatus, uploadedAt])
+  @@map("mt5_account_proofs")
+}
+
+/// S3 — one position extracted by Claude vision from an MT5 proof. This is
+/// the REALITY side of the declarative ↔ reality confrontation. Numbers are
+/// Decimal (mirror `Trade` precision); `confidence` carries the vision
+/// reading confidence so the reconciliation engine can require human review
+/// below a threshold instead of auto-flagging a member.
+model ExtractedPosition {
+  id String @id @default(cuid())
+
+  brokerAccountId String        @map("broker_account_id")
+  brokerAccount   BrokerAccount @relation(fields: [brokerAccountId], references: [id], onDelete: Cascade)
+
+  /// Forensic provenance: which uploaded proof this position was read from.
+  /// SetNull — deleting a proof file row keeps the extracted history.
+  proofId String?          @map("proof_id")
+  proof   Mt5AccountProof? @relation(fields: [proofId], references: [id], onDelete: SetNull)
+
+  /// Instrument as printed by MT5 (uppercase string, no DB enum — mirror
+  /// `Trade.pair` rationale).
+  symbol String
+  side   TradeDirection
+
+  openTime  DateTime  @map("open_time")
+  closeTime DateTime? @map("close_time")
+
+  /// Lots, mirror `Trade.lotSize` precision.
+  volume     Decimal  @db.Decimal(12, 4)
+  entryPrice Decimal? @map("entry_price") @db.Decimal(20, 8)
+  exitPrice  Decimal? @map("exit_price") @db.Decimal(20, 8)
+  /// P&L in account currency as printed in the MT5 history (2 decimals).
+  pnl        Decimal? @db.Decimal(14, 2)
+
+  source     ExtractedPositionSource @default(mt5_screen_ocr)
+  /// Vision extraction confidence 0-1 for THIS row.
+  confidence Float?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  discrepancies Discrepancy[]
+
+  // Reconciliation hot-path: account-scoped, time-ordered window scans.
+  @@index([brokerAccountId, openTime])
+  @@map("extracted_positions")
+}
+
+/// S3 — one detected gap between what the member declared and the proven
+/// reality (or an unfilled ritual without a valid reason). Severity 1-3:
+/// 1 = minor (timing/size drift), 2 = notable (oubli), 3 = major (false
+/// declaration). `claudeReasoning` is AI-emitted free text → it passes the
+/// §2/AMF + crisis gates at write time (canon of every AI output) and is
+/// safeFreeText-sanitised. `memberReason` is the member's own explanation
+/// ("motif valable" — brief §29: an excused absence is NOT indiscipline);
+/// member free text → safeFreeText + crisis routing at the Zod boundary.
+model Discrepancy {
+  id       String @id @default(cuid())
+  memberId String @map("member_id")
+  member   User   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  type DiscrepancyType
+
+  /// Declared side (null for missing_declared / unfilled_no_reason).
+  declaredTradeId String? @map("declared_trade_id")
+  declaredTrade   Trade?  @relation(fields: [declaredTradeId], references: [id], onDelete: SetNull)
+
+  /// Reality side (null for false_declared / unfilled_no_reason).
+  extractedPositionId String?            @map("extracted_position_id")
+  extractedPosition   ExtractedPosition? @relation(fields: [extractedPositionId], references: [id], onDelete: SetNull)
+
+  /// 1 = minor, 2 = notable, 3 = major (drives the ScoreEvent delta).
+  severity Int
+  status   DiscrepancyStatus @default(open)
+
+  /// Claude's factual explanation of the gap (free text, §2/AMF + crisis
+  /// gated + safeFreeText at write — NEVER trading advice).
+  claudeReasoning String? @map("claude_reasoning") @db.Text
+
+  /// Member-provided valid reason ("j'étais malade", "panne internet").
+  /// Distinguishes an EXCUSED gap from indiscipline (brief §29 "sans motif
+  /// valable"). safeFreeText + crisis routing at the Zod boundary.
+  memberReason   String?   @map("member_reason") @db.Text
+  memberReasonAt DateTime? @map("member_reason_at")
+
+  detectedAt DateTime @default(now()) @map("detected_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  scoreEvents ScoreEvent[]
+
+  // Member + admin views: open discrepancies first.
+  @@index([memberId, status])
+  @@index([memberId, detectedAt(sort: Desc)])
+  @@map("discrepancies")
+}
+
+/// S3 — the constancy & work-investment score (DEDICATED model, decision
+/// Eliot 2026-06-10 — distinct from the 4 declarative `BehavioralScore`
+/// dimensions because THIS one is confronted with external reality).
+/// `value` 0-100; `breakdown` JSON `{ honesty, regularity, discipline }`
+/// mirrors the BehavioralScore `components` transparency pattern ("why is
+/// my score X?"). Window convention mirrors `WeeklyReport` (periodStart/
+/// periodEnd @db.Date + idempotent upsert per period).
+model ConstancyScore {
+  id       String @id @default(cuid())
+  memberId String @map("member_id")
+  member   User   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// 0-100. Float (not Int) — event-sourced fractional deltas accumulate;
+  /// the UI rounds for display.
+  value     Float
+  /// `{ honesty: number, regularity: number, discipline: number }` 0-100 each
+  /// — validated at the Zod boundary (lib/schemas, S3 session).
+  breakdown Json
+
+  periodStart DateTime @map("period_start") @db.Date
+  periodEnd   DateTime @map("period_end") @db.Date
+
+  computedAt DateTime @default(now()) @map("computed_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Idempotent recompute: one score row per (member, period).
+  @@unique([memberId, periodStart])
+  @@index([memberId, computedAt(sort: Desc)])
+  @@map("constancy_scores")
+}
+
+/// S3 — event-sourced journal of constancy deltas ("le score monte et
+/// descend correctement selon le comportement" — brief §31 DoD#3). Each row
+/// is one auditable reason why the score moved; the score recompute folds
+/// the window's events. Keeps the score explainable to the member without
+/// complaisance ni culpabilisation gratuite.
+model ScoreEvent {
+  id       String @id @default(cuid())
+  memberId String @map("member_id")
+  member   User   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// Signed delta applied to the constancy score (positive = filled/did the
+  /// work, negative = forgot/reality gap/false declaration).
+  delta  Float
+  reason ScoreEventReason
+
+  /// Audit link to the discrepancy that caused a negative event. SetNull —
+  /// purging a discrepancy keeps the score history intact.
+  relatedDiscrepancyId String?      @map("related_discrepancy_id")
+  relatedDiscrepancy   Discrepancy? @relation(fields: [relatedDiscrepancyId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([memberId, createdAt(sort: Desc)])
+  @@map("score_events")
+}
+
+/// S3 — repetition alert feeding the S5 coaching surface. Garde-fou §2 by
+/// construction: `category` is structurally `psychological` (single-value
+/// enum — no trading-advice alert can exist). An alert row is only created
+/// when `repeatCount >= threshold` (REPETITION ONLY — a single slip never
+/// alerts, brief §31 DoD#4). Downstream: a Mark Douglas delivery may carry
+/// `sourceAlertId` (S3 → S5 junction), and the weekly/monthly snapshots read
+/// count-only alert stats.
+model Alert {
+  id       String @id @default(cuid())
+  memberId String @map("member_id")
+  member   User   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// Slug of the repeated failure pattern, e.g. `forgot_no_reason_repeat`,
+  /// `reality_gap_repeat`, `false_declaration_repeat` (allowlist at the Zod
+  /// boundary, S3 session).
+  triggerType String @map("trigger_type")
+
+  /// How many times the pattern occurred in the evaluation window…
+  repeatCount Int @map("repeat_count")
+  /// …and the threshold that was crossed (kept for auditability: "3 oublis
+  /// sans motif en 14 jours").
+  threshold   Int
+
+  category AlertCategory @default(psychological)
+  status   AlertStatus   @default(open)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// S5 coaching deliveries this alert caused (Mark Douglas accompaniment).
+  douglasDeliveries MarkDouglasDelivery[]
+
+  @@index([memberId, status])
+  @@map("alerts")
+}
+
+/// S4/S7 — multi-capture trade attachment ("photos" pluriel, briefs §28/§29).
+/// The legacy single `screenshotEntryKey`/`screenshotExitKey` columns on
+/// `Trade` remain the V1 path (backward compat); this table is the additive
+/// 1-N path for multi-photo flows. Cascade with the trade (RGPD, mirror
+/// `TradeAnnotation`).
+model TradeMedia {
+  id      String @id @default(cuid())
+  tradeId String @map("trade_id")
+  trade   Trade  @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+
+  kind TradeMediaKind @default(entry)
+  /// Storage key, `lib/storage` conventions: `trades/{userId}/{nanoid}.{ext}`.
+  fileKey String @map("file_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tradeId])
+  @@map("trade_media")
+}
+
+/// S8 — backtest session container ("crée une session de backtest" — brief
+/// 08). Groups `TrainingTrade` entries logged during one practice sitting.
+/// FIREWALL §21.5: lives 100% inside the training world — NO link to `Trade`,
+/// `BehavioralScore` or any real-edge model, only the implicit User link.
+/// All free text safeFreeText-hardened at the Zod boundary.
+model TrainingSession {
+  id       String @id @default(cuid())
+  memberId String @map("member_id")
+  member   User   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// Member label ("Backtest GBPUSD janvier 2024").
+  label     String?
+  /// Practised instrument (uppercase string, mirror `TrainingTrade.pair`).
+  symbol    String?
+  /// Practised timeframe label ("M15", "H1") — free short string, no enum
+  /// (mirror `pair` rationale: list evolves without migration).
+  timeframe String?
+
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+  notes     String?   @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  trades TrainingTrade[]
+
+  @@index([memberId, startedAt(sort: Desc)])
+  @@map("training_sessions")
 }

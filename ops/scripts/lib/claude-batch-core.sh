@@ -32,9 +32,15 @@
 
 # --- Shared config defaults (env-overridable, validated below) ---------------
 
-# §8 — local Claude solicitations run at "extra" effort by default. Both are
-# env-overridable but default to the strongest persistable config.
-CLAUDE_MODEL="${FXMILY_CLAUDE_MODEL:-claude-opus-4-8}"
+# §8 / Session 1 plan-10 (2026-06-10) — local Claude solicitations are PINNED
+# on Claude Fable 5 (`claude-fable-5`, Mythos tier) at "extra" effort by
+# default : the brief mandates « toutes les sollicitations Claude en local
+# avec Fable 5, aucun basculement automatique vers Opus 4.8 » (Eliot go,
+# 2026-06-10). Fable 5 runs on the Max subscription ($0 marginal) and
+# requires CLI ≥ 2.1.170 (checked in core_sanity_checks). Both vars stay
+# env-overridable (Opus 4.8 remains allowlisted as the manual fallback —
+# never automatic).
+CLAUDE_MODEL="${FXMILY_CLAUDE_MODEL:-claude-fable-5}"
 CLAUDE_EFFORT="${FXMILY_CLAUDE_EFFORT:-xhigh}"
 
 # ≥2 required: extended thinking uses a turn before the JSON, so
@@ -45,8 +51,11 @@ MAX_TURNS="${FXMILY_MAX_TURNS:-8}"
 
 # §8 — financial circuit-breaker per `claude --print` call. On Max sub the
 # marginal cost is theoretical ($0 actual), but if Anthropic ever switches the
-# binary to billable API this caps damage per call.
-MAX_BUDGET_USD="${FXMILY_MAX_BUDGET_USD:-5.00}"
+# binary to billable API this caps damage per call. Recalibrated 5.00 → 15.00
+# for Fable 5 (2026-06-10) : $10/$50 MTok vs Sonnet $3/$15 — a typical xhigh
+# run (~10k in / ~20k out incl. thinking) ≈ $1.1 virtual, so 15.00 keeps a
+# >10× margin without letting a runaway loop burn unbounded.
+MAX_BUDGET_USD="${FXMILY_MAX_BUDGET_USD:-15.00}"
 
 SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
 SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
@@ -55,13 +64,13 @@ SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
 
 # Allowlist of acceptable Claude model slugs for `claude --model` — THE single
 # copy (was duplicated 4× across the orchestrators). Verified against
-# `claude --help` full names like 'claude-opus-4-8'.
+# `claude --help` full names like 'claude-fable-5' / 'claude-opus-4-8'.
 core_validate_model() {
   case "$CLAUDE_MODEL" in
-    claude-opus-4-8|claude-opus-4-7|claude-sonnet-4-6|claude-haiku-4-5) ;;
+    claude-fable-5|claude-opus-4-8|claude-opus-4-7|claude-sonnet-4-6|claude-haiku-4-5) ;;
     *)
       echo "ERROR: FXMILY_CLAUDE_MODEL=$CLAUDE_MODEL not in allowlist." >&2
-      echo "  Allowed: claude-opus-4-8, claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5" >&2
+      echo "  Allowed: claude-fable-5, claude-opus-4-8, claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5" >&2
       exit 1
       ;;
   esac
@@ -142,6 +151,22 @@ core_sanity_checks() {
   fi
   echo "Claude CLI: $(claude --version 2>&1 | head -1)"
   echo "Model: $CLAUDE_MODEL — effort: $CLAUDE_EFFORT (§8 full performance)"
+  # Fable 5 pre-flight : the model requires Claude Code CLI ≥ 2.1.170 (older
+  # CLIs do not resolve the slug → exit 1 mid-batch after the jittered sleep).
+  if [ "$CLAUDE_MODEL" = "claude-fable-5" ]; then
+    local cli_version
+    cli_version=$(claude --version 2>&1 | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    if [ -z "$cli_version" ]; then
+      echo "ERROR: cannot parse 'claude --version' output for the Fable 5 pre-flight." >&2
+      exit 1
+    fi
+    local min="2.1.170"
+    if [ "$(printf '%s\n%s\n' "$min" "$cli_version" | sort -V | head -1)" != "$min" ]; then
+      echo "ERROR: claude CLI $cli_version < $min — Claude Fable 5 requires CLI ≥ $min." >&2
+      echo "  Update via 'npm i -g @anthropic-ai/claude-code@latest' then restart the shell." >&2
+      exit 1
+    fi
+  fi
   command -v jq >/dev/null 2>&1 || {
     echo "ERROR: 'jq' not found in PATH (needed to parse the snapshot envelope)." >&2
     echo "  Install via 'choco install jq' (Windows) or 'apt install jq' (Linux)." >&2

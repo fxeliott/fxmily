@@ -239,9 +239,34 @@ describe('pricing — computeCostEur', () => {
     expect(sonnet / haiku).toBeCloseTo(3.75, 1);
   });
 
-  it('PRICING_USD_PER_MTOK contient les 3 modèles whitelistés env', () => {
+  it('PRICING_USD_PER_MTOK contient tous les modèles whitelistés env', () => {
     expect(PRICING_USD_PER_MTOK['claude-sonnet-4-6']).toBeDefined();
     expect(PRICING_USD_PER_MTOK['claude-haiku-4-5']).toBeDefined();
+    expect(PRICING_USD_PER_MTOK['claude-fable-5']).toBeDefined();
+    expect(PRICING_USD_PER_MTOK['claude-opus-4-8']).toBeDefined();
+    expect(PRICING_USD_PER_MTOK['claude-opus-4-7']).toBeDefined();
+  });
+
+  it('Fable 5 input = $10/Mtok × 0.93 EUR/USD (path API payant dormant)', () => {
+    const cost = computeCostEur('claude-fable-5', {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreateTokens: 0,
+    });
+    // 1M tok × $10 × 0.93 = $9.30 EUR
+    expect(Number(cost.costEur)).toBeCloseTo(9.3, 6);
+  });
+
+  it('Fable 5 output = $50/Mtok × 0.93 EUR/USD', () => {
+    const cost = computeCostEur('claude-fable-5', {
+      inputTokens: 0,
+      outputTokens: 1_000_000,
+      cacheReadTokens: 0,
+      cacheCreateTokens: 0,
+    });
+    // 1M tok × $50 × 0.93 = $46.50 EUR
+    expect(Number(cost.costEur)).toBeCloseTo(46.5, 6);
   });
 
   it('rejette tokens négatifs (validation Zod)', () => {

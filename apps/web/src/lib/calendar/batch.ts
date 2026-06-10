@@ -19,7 +19,12 @@ import {
   CALENDAR_SYSTEM_PROMPT,
   buildCalendarUserPrompt,
 } from './prompt';
-import { CLAUDE_CODE_LOCAL_MODEL, CLAUDE_OPUS_4_8_LOCAL_MODEL, computeCostEur } from './pricing';
+import {
+  CLAUDE_CODE_LOCAL_MODEL,
+  CLAUDE_FABLE_5_LOCAL_MODEL,
+  CLAUDE_OPUS_4_8_LOCAL_MODEL,
+  computeCostEur,
+} from './pricing';
 
 /**
  * §26 Calendrier adaptatif — Local-Claude batch helpers (J-C2). Carbone the
@@ -533,6 +538,7 @@ export async function persistGeneratedCalendars(
     // persists at $0 either way (Max subscription).
     const usage = entry.usage ?? { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
     const PRICING_KEYS: string[] = [
+      CLAUDE_FABLE_5_LOCAL_MODEL,
       CLAUDE_OPUS_4_8_LOCAL_MODEL,
       'claude-sonnet-4-6',
       CLAUDE_CODE_LOCAL_MODEL,

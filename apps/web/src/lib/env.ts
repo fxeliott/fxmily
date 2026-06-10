@@ -86,8 +86,15 @@ const envSchema = z.object({
   ANTHROPIC_MODEL: z
     .string()
     .refine(
-      (v) => ['claude-sonnet-4-6', 'claude-haiku-4-5', 'claude-opus-4-7'].includes(v),
-      'ANTHROPIC_MODEL doit être un modèle pricé (claude-sonnet-4-6, claude-haiku-4-5, claude-opus-4-7).',
+      (v) =>
+        [
+          'claude-fable-5',
+          'claude-opus-4-8',
+          'claude-opus-4-7',
+          'claude-sonnet-4-6',
+          'claude-haiku-4-5',
+        ].includes(v),
+      'ANTHROPIC_MODEL doit être un modèle pricé (claude-fable-5, claude-opus-4-8, claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5).',
     )
     .default('claude-sonnet-4-6'),
   /// Destinataire du digest hebdo IA admin. **REQUIS** en runtime (Phase T

@@ -53,8 +53,26 @@ export const CLAUDE_CODE_LOCAL_MODEL = 'claude-code-local' as const;
  */
 export const CLAUDE_OPUS_4_8_LOCAL_MODEL = 'claude-opus-4-8' as const;
 
+/**
+ * Session 1 plan-10 — the §8 default binary since 2026-06-10
+ * (`FXMILY_CLAUDE_MODEL=claude-fable-5`, pinned in
+ * `ops/scripts/lib/claude-batch-core.sh`). Priced at **0** like
+ * {@link CLAUDE_OPUS_4_8_LOCAL_MODEL} and for the same reason : it runs on
+ * the flat-fee Max subscription, so the marginal cost of a local batch
+ * generation is zero. A hypothetical future PAID Fable-5 API path must use
+ * the real rates (`lib/weekly-report/pricing.ts` : $10/$50 MTok) instead.
+ */
+export const CLAUDE_FABLE_5_LOCAL_MODEL = 'claude-fable-5' as const;
+
 export const PRICING_USD_PER_MTOK = {
   'claude-sonnet-4-6': SONNET_4_6,
+  // Local Fable 5 batch path : flat-rate Max subscription = 0 per-token.
+  [CLAUDE_FABLE_5_LOCAL_MODEL]: {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheCreate: 0,
+  },
   // Local Opus 4.8 batch path : flat-rate Max subscription = 0 per-token.
   [CLAUDE_OPUS_4_8_LOCAL_MODEL]: {
     input: 0,

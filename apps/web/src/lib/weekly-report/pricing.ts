@@ -2,6 +2,8 @@ import 'server-only';
 
 import { z } from 'zod';
 
+import type { ClaudeUsage } from '@/lib/ai/claude-response';
+
 /**
  * Claude Sonnet 4.6 pricing — early 2026 rates.
  *
@@ -48,6 +50,34 @@ export const PRICING_USD_PER_MTOK = {
     cacheRead: 0.08,
     cacheCreate: 1.0,
   },
+  // Session 1 plan-10 — Fable 5 (Mythos tier), the §8 local batch default
+  // since 2026-06-10. REAL API rates ($10/$50 MTok, Anthropic GA 2026-06-09)
+  // so the dormant paid path (`ANTHROPIC_API_KEY` set) bills honestly. The
+  // LOCAL batch path persists as `claude-code-local` at 0 (the orchestrators
+  // do not send a model field on weekly/monthly — Max flat fee, $0 marginal).
+  'claude-fable-5': {
+    input: 10.0,
+    output: 50.0,
+    cacheRead: 1.0, // 90% off base input
+    cacheCreate: 12.5, // 25% over base input (1h ephemeral cache write)
+  },
+  // Opus tier — closes the env.ts §11 dette (allowlist ⊆ pricing table).
+  // 4-7 rate anchored on the env.ts:82 comment ("opus-4-7 = 5× le coût" of
+  // Sonnet 3/15 → 15/75). 4-8 mirrors the 4-7 tier pending a verified
+  // Anthropic price — its only reachable path today is the local Max batch
+  // (persisted as `claude-code-local` at 0), so no real billing depends on it.
+  'claude-opus-4-7': {
+    input: 15.0,
+    output: 75.0,
+    cacheRead: 1.5,
+    cacheCreate: 18.75,
+  },
+  'claude-opus-4-8': {
+    input: 15.0,
+    output: 75.0,
+    cacheRead: 1.5,
+    cacheCreate: 18.75,
+  },
   // V1.7 local Claude Code path : flat-rate Max subscription = 0 per-token.
   [CLAUDE_CODE_LOCAL_MODEL]: {
     input: 0,
@@ -59,12 +89,9 @@ export const PRICING_USD_PER_MTOK = {
 
 export type SupportedModel = keyof typeof PRICING_USD_PER_MTOK;
 
-export interface ClaudeUsage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreateTokens: number;
-}
+// Shared type from `@/lib/ai/claude-response` — re-exported for backwards
+// compatibility (this module used to define its own copy).
+export type { ClaudeUsage };
 
 export interface CostBreakdown {
   costUsd: number;

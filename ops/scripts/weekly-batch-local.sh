@@ -4,28 +4,26 @@
 #
 # Pulls snapshots from prod via HTTP, generates reports locally via
 # `claude --print` (using Eliot's Claude Max subscription), pushes results
-# back via HTTP. Replaces the V1.7 SSH+docker-exec orchestration which was
-# non-functional in prod (the runtime container does not ship pnpm/tsx —
-# Next.js standalone build excludes devDeps). See `apps/web/CLAUDE.md`
-# section "V1.7 LIVE prod" for the architecture rationale.
+# back via HTTP. See `apps/web/CLAUDE.md` section "V1.7 LIVE prod" for the
+# architecture rationale.
 #
-# Ban-risk mitigation rules (unchanged from V1.7) :
+# Thin carbon over `ops/scripts/lib/claude-batch-core.sh` (Session 1 plan-10
+# DoD#3 §28 — the model/effort/flags/parsing/validations live in the core,
+# ONE copy for the 4 orchestrators). This file owns ONLY :
+#   - endpoints (/api/admin/weekly-batch/{pull,persist}) + token env name
+#   - the weekly workdir + `--current-week` flag
+#   - the hasActivity skip predicate (weekly-only token saver)
+#   - pseudonym regex `member-[A-Fa-f0-9]{6,8}` (legacy V1.5 6-char accommodated)
+#   - the weekly prompt header + results envelope shape (weekStart/weekEnd)
+#
+# Ban-risk mitigation rules (unchanged from V1.7, enforced by the core) :
 #   - Runs FROM Eliot's machine (his IP, his fingerprint, his Max account)
 #   - Spreads `claude --print` invocations across 60–120 s jittered sleeps
-#   - One invocation per member = fresh context per generation (no context
-#     bleed across members, no oversized single conversation)
+#   - One invocation per member = fresh context per generation
 #   - Snapshots are already pseudonymized (no PII reaches Anthropic)
-#   - System prompt + JSON schema travel WITH the envelope (no on-device
-#     tampering possible without committing to the repo)
+#   - System prompt + JSON schema travel WITH the envelope
 #   - No third-party wrappers — only the official `claude` binary
 #   - Audit row `weekly_report.batch.{pulled,persisted}` recorded in prod DB
-#     so DBA queries can spot abuse / mismatch
-#
-# V1.7.2 changes vs V1.7 :
-#   - Phase 1 pull  : curl POST /api/admin/weekly-batch/pull (was : ssh + docker exec)
-#   - Phase 3 persist : curl POST /api/admin/weekly-batch/persist (was : ssh + docker exec)
-#   - SSH dependency removed — only `curl`, `claude`, `jq` required
-#   - Auth via X-Admin-Token header (separate from CRON_SECRET, rotation independent)
 #
 # Usage :
 #   bash ops/scripts/weekly-batch-local.sh                # previous full week (default)
@@ -36,14 +34,11 @@
 # Required env :
 #   FXMILY_ADMIN_TOKEN    32+ char admin batch token (sync with prod ADMIN_BATCH_TOKEN)
 #
-# Optional env :
+# Optional env (shared defaults live in the core) :
 #   FXMILY_APP_URL        default 'https://app.fxmilyapp.com' (must be HTTPS in prod)
-#   FXMILY_CLAUDE_MODEL   default 'claude-opus-4-8' (§8 — Opus 4.8 for member analyses)
-#   FXMILY_CLAUDE_EFFORT  default 'xhigh' (§8 "en extra" ; low|medium|high|xhigh|max)
+#   FXMILY_CLAUDE_MODEL / FXMILY_CLAUDE_EFFORT / FXMILY_MAX_TURNS /
+#   FXMILY_MAX_BUDGET_USD / FXMILY_SLEEP_MIN_S / FXMILY_SLEEP_MAX_S
 #   FXMILY_BATCH_DIR      default '/tmp/fxmily-batch' (workdir)
-#   FXMILY_SLEEP_MIN_S    default 60 (floor 30 — ban-risk mitigation)
-#   FXMILY_SLEEP_MAX_S    default 120
-#   FXMILY_MAX_TURNS      default 1 (anti-bloat ; Claude reads prompt, writes JSON, done)
 #
 # Exit codes :
 #   0 = batch completed (some entries may have errored ; check report)
@@ -52,87 +47,20 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/claude-batch-core.sh
+source "$SCRIPT_DIR/lib/claude-batch-core.sh"
+
 # --- Config (env-overridable with strict validation) ------------------------
 APP_URL="${FXMILY_APP_URL:-https://app.fxmilyapp.com}"
 BATCH_DIR="${FXMILY_BATCH_DIR:-/tmp/fxmily-batch}"
-SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
-SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
-# ≥2 required: Opus 4.8 thinking uses a turn before the JSON, so `--max-turns 1`
-# aborts with "Reached max turns (1)" (validated via the §26 calendar batch real
-# e2e, 2026-06-04). `--max-budget-usd` below is the runaway circuit-breaker. NOT 1.
-MAX_TURNS="${FXMILY_MAX_TURNS:-8}"
-# §8 — local Claude solicitations run on Opus 4.8 at "extra" effort by default.
-# Both are env-overridable but default to the strongest persistable config.
-CLAUDE_MODEL="${FXMILY_CLAUDE_MODEL:-claude-opus-4-8}"
-CLAUDE_EFFORT="${FXMILY_CLAUDE_EFFORT:-xhigh}"
-MODEL_FLAG=""
-EFFORT_FLAG=""
+PSEUDONYM_REGEX='^member-[A-Fa-f0-9]{6,8}$'
 
-# V1.7.2 — required token. Refuse to run without it (refuse-by-default mirrors
-# the server-side 503).
-if [ -z "${FXMILY_ADMIN_TOKEN:-}" ]; then
-  echo "ERROR: FXMILY_ADMIN_TOKEN env not set." >&2
-  echo "  Generate via 'openssl rand -hex 32' and provision on Hetzner :" >&2
-  echo "    echo 'ADMIN_BATCH_TOKEN=<value>' >> /etc/fxmily/web.env" >&2
-  echo "    cd /opt/fxmily && docker compose -f docker-compose.prod.yml restart web" >&2
-  echo "  Then export FXMILY_ADMIN_TOKEN=<same value> in your local shell." >&2
-  exit 1
-fi
-
-# V1.7.2 — minimal URL sanity. We do NOT allow http:// in prod cadence
-# (token would travel in plaintext over the wire). Localhost http allowed
-# for local dev / docker-compose dev stack.
-case "$APP_URL" in
-  https://*) ;;
-  http://localhost:*|http://127.0.0.1:*) ;;
-  *)
-    echo "ERROR: FXMILY_APP_URL=$APP_URL must be HTTPS (or http://localhost:* for dev)." >&2
-    exit 1
-    ;;
-esac
-
-# Allowlist of acceptable Claude model slugs for `claude --model`. Opus 4.8 is
-# the §8 default; older slugs kept for back-compat / cost-tiering. Verified
-# against `claude --help` (CLI 2.1.154) : full names like 'claude-opus-4-8'.
-case "$CLAUDE_MODEL" in
-  claude-opus-4-8|claude-opus-4-7|claude-sonnet-4-6|claude-haiku-4-5) ;;
-  *)
-    echo "ERROR: FXMILY_CLAUDE_MODEL=$CLAUDE_MODEL not in allowlist." >&2
-    echo "  Allowed: claude-opus-4-8, claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5" >&2
-    exit 1
-    ;;
-esac
-MODEL_FLAG="--model ${CLAUDE_MODEL}"
-
-# §8 — effort level for `claude --print` (low|medium|high|xhigh|max, CLI 2.1.154).
-# Default 'xhigh' = deepest *persistable* reasoning ("en extra"). 'max' is NOT
-# the default — it is prone to overthinking / diminishing returns on a
-# single-shot generation (one prompt in, one JSON out).
-case "$CLAUDE_EFFORT" in
-  low|medium|high|xhigh|max) ;;
-  *)
-    echo "ERROR: FXMILY_CLAUDE_EFFORT=$CLAUDE_EFFORT invalid (low|medium|high|xhigh|max)." >&2
-    exit 1
-    ;;
-esac
-EFFORT_FLAG="--effort ${CLAUDE_EFFORT}"
-
-# V1.7 fix carry-over (code-reviewer Round 16 BLOQUANT 3 + security-auditor MED 12) :
-# sleep range validation + floor 30s. Without this, RANDOM % 0 div-by-zero or
-# negative modulo on inverted ranges silently breaks mid-batch.
-if ! [[ "$SLEEP_MIN" =~ ^[0-9]+$ ]] || ! [[ "$SLEEP_MAX" =~ ^[0-9]+$ ]]; then
-  echo "ERROR: FXMILY_SLEEP_MIN_S / MAX_S must be non-negative integers." >&2
-  exit 1
-fi
-if [ "$SLEEP_MIN" -lt 30 ]; then
-  echo "ERROR: FXMILY_SLEEP_MIN_S=$SLEEP_MIN must be ≥30 (ban-risk floor)." >&2
-  echo "  The whole point of this batch is the jittered sleep — don't bypass it." >&2
-  exit 1
-fi
-if [ "$SLEEP_MAX" -lt "$SLEEP_MIN" ]; then
-  echo "ERROR: FXMILY_SLEEP_MAX_S=$SLEEP_MAX < SLEEP_MIN=$SLEEP_MIN — invalid range." >&2
-  exit 1
-fi
+core_require_token FXMILY_ADMIN_TOKEN ADMIN_BATCH_TOKEN
+core_validate_app_url "$APP_URL"
+core_validate_model
+core_validate_effort
+core_validate_sleep_range
 
 CURRENT_WEEK_FLAG=""
 DRY_RUN=false
@@ -152,62 +80,15 @@ done
 
 # --- Sanity checks -----------------------------------------------------------
 
-command -v claude >/dev/null 2>&1 || {
-  echo "ERROR: 'claude' CLI not found in PATH." >&2
-  echo "  Install Claude Code from https://claude.com/code" >&2
-  exit 1
-}
-# V1.7.2 R5 polish : log claude version at start for diagnostics. Useful when
-# Anthropic ships a breaking CLI change (we've already had two — banned wrappers
-# 4 avr 2026 + `--bare` OAuth incompat caught in R4 empirical test).
-echo "Claude CLI: $(claude --version 2>&1 | head -1)"
-echo "Model: $CLAUDE_MODEL — effort: $CLAUDE_EFFORT (§8 full performance)"
-command -v jq >/dev/null 2>&1 || {
-  echo "ERROR: 'jq' not found in PATH (needed to parse the snapshot envelope)." >&2
-  echo "  Install via 'choco install jq' (Windows) or 'apt install jq' (Linux)." >&2
-  exit 1
-}
-command -v curl >/dev/null 2>&1 || {
-  echo "ERROR: 'curl' not found." >&2
-  exit 1
-}
-
-mkdir -p "$BATCH_DIR"
-ENVELOPE_FILE="$BATCH_DIR/envelope.json"
-RESULTS_NDJSON="$BATCH_DIR/results.ndjson"  # Append-only NDJSON for atomic writes
-RESULTS_FILE="$BATCH_DIR/results.json"
-ERRORS_LOG="$BATCH_DIR/claude-errors.log"
-
-# V1.7 fix carry-over (security-auditor Round 16 HIGH 5) : truncate the errors
-# log at each run + scrub older artifacts (>7 days). Without this, PII from
-# past Claude errors accumulates indefinitely on Eliot's disk.
-: >"$ERRORS_LOG"
-find "$BATCH_DIR" -type f -mtime +7 -delete 2>/dev/null || true
+core_sanity_checks
+core_init_workdir "$BATCH_DIR"
 
 # --- Phase 1 : pull snapshots from prod via HTTP -----------------------------
 
 if [ "$RESUME" = "false" ] || [ ! -s "$ENVELOPE_FILE" ]; then
   echo "[1/3] Pulling snapshots from $APP_URL..."
-  PULL_URL="${APP_URL}/api/admin/weekly-batch/pull${CURRENT_WEEK_FLAG}"
-  # `--fail-with-body` makes curl exit non-zero on HTTP 4xx/5xx but still
-  # streams the body so we can show the JSON error from the server.
-  if ! curl --fail-with-body --silent --show-error \
-            --max-time 90 \
-            -X POST \
-            -H "X-Admin-Token: ${FXMILY_ADMIN_TOKEN}" \
-            -H "Accept: application/json" \
-            "$PULL_URL" \
-            >"$ENVELOPE_FILE"; then
-    echo "ERROR: pull request failed. See $ENVELOPE_FILE for server response." >&2
-    cat "$ENVELOPE_FILE" >&2 || true
-    exit 1
-  fi
-  bytes=$(wc -c <"$ENVELOPE_FILE")
-  if [ "$bytes" -lt 32 ]; then
-    echo "ERROR: pull returned <32 bytes ($bytes). See $ENVELOPE_FILE" >&2
-    exit 1
-  fi
-  echo "  ✓ Wrote envelope to $ENVELOPE_FILE ($bytes bytes)"
+  core_pull_envelope "${APP_URL}/api/admin/weekly-batch/pull${CURRENT_WEEK_FLAG}" \
+                     "$FXMILY_ADMIN_TOKEN" "$ENVELOPE_FILE"
 else
   echo "[1/3] --resume : reusing existing $ENVELOPE_FILE"
 fi
@@ -224,16 +105,7 @@ echo "  Members: $ENTRY_COUNT total, $ACTIVE_COUNT active (only active are sent 
 
 echo "[2/3] Generating reports locally via 'claude --print' ($SLEEP_MIN-${SLEEP_MAX}s jittered)..."
 
-# Pull the system prompt + JSON schema out of the envelope ONCE
-SYSTEM_PROMPT_FILE="$BATCH_DIR/system-prompt.txt"
-SCHEMA_FILE="$BATCH_DIR/output-schema.json"
-jq -r '.systemPrompt' "$ENVELOPE_FILE" >"$SYSTEM_PROMPT_FILE"
-jq '.outputJsonSchema' "$ENVELOPE_FILE" >"$SCHEMA_FILE"
-
-# V1.7 fix carry-over (code-reviewer Round 16 BLOQUANT 4) : append-only NDJSON
-# instead of rewriting the whole results.json on every member. Atomic per-line
-# append = survives Ctrl-C and corruption-on-rename. Assembled into final JSON
-# at the end of the loop via `jq -s`.
+core_extract_prompt_and_schema
 : >"$RESULTS_NDJSON"
 
 i=0
@@ -244,27 +116,17 @@ skipped_inactive=0
 ENTRY_INDICES=$(jq '.entries | keys[]' "$ENVELOPE_FILE")
 for idx in $ENTRY_INDICES; do
   i=$((i + 1))
-  # V1.7.2 R4 Windows-portability fix : use --argjson + single quotes instead
-  # of bash interpolation `.entries[$idx]` inside double quotes. On Windows
-  # Git Bash, MSYS auto-conversion bricolait `[0]` (path-like detection) into
-  # the literal `.entries[0].userId    ` with trailing whitespace, breaking
-  # jq parse. --argjson passes the bash variable as a typed jq variable
-  # safely without any MSYS string-mangling.
   USER_ID=$(jq -r --argjson idx "$idx" '.entries[$idx].userId' "$ENVELOPE_FILE")
   PSEUDO=$(jq -r --argjson idx "$idx" '.entries[$idx].pseudonymLabel' "$ENVELOPE_FILE")
   HAS_ACTIVITY=$(jq -r --argjson idx "$idx" '.entries[$idx].hasActivity' "$ENVELOPE_FILE")
 
-  # V1.7 fix carry-over (security-auditor Round 16 BLOCKER 1 CVSS 8.1) :
-  # validate the pseudonymLabel as `member-[A-F0-9]{6,8}` before interpolating
-  # it into any path. Shell injection prevention via `pseudonymizeMember`
-  # output contract. Same defense for userId (cuid-safe alnum + _-).
-  if ! [[ "$PSEUDO" =~ ^member-[A-Fa-f0-9]{6,8}$ ]]; then
+  if ! core_validate_pseudonym "$PSEUDO" "$PSEUDONYM_REGEX"; then
     errored=$((errored + 1))
     echo "  [$i/$ENTRY_COUNT] SKIP (invalid pseudonymLabel format — possible compromise) : '${PSEUDO:0:32}'"
-    echo "{\"userId\":\"$USER_ID\",\"error\":\"invalid_pseudonym_format\"}" >>"$RESULTS_NDJSON"
+    core_append_error "$USER_ID" "invalid_pseudonym_format"
     continue
   fi
-  if ! [[ "$USER_ID" =~ ^[A-Za-z0-9_-]{1,128}$ ]]; then
+  if ! core_validate_user_id "$USER_ID"; then
     errored=$((errored + 1))
     echo "  [$i/$ENTRY_COUNT] SKIP (invalid userId format) : '${USER_ID:0:32}'"
     continue
@@ -276,98 +138,49 @@ for idx in $ENTRY_INDICES; do
     continue
   fi
 
-  # V1.7 fix carry-over (code-reviewer Round 16 LOW) : use index-based
-  # filenames to avoid pseudonymLabel collision (32-bit hex = 77k members
-  # before birthday).
+  # Index-based filenames to avoid pseudonymLabel collision (V1.7 fix).
   PROMPT_FILE="$BATCH_DIR/prompt-$i.txt"
   RESPONSE_FILE="$BATCH_DIR/response-$i.json"
   PARSED_FILE="$BATCH_DIR/parsed-$i.json"
 
-  {
-    echo "Tu dois analyser la semaine de trading d'un membre Fxmily."
-    echo ""
-    echo "Voici le snapshot pseudonymisé :"
-    echo ""
-    jq --argjson idx "$idx" '.entries[$idx].snapshot' "$ENVELOPE_FILE"
-    echo ""
-    echo "Réponds STRICTEMENT avec un JSON conforme à ce schéma (pas de markdown,"
-    echo "pas de fence, pas de prose hors JSON) :"
-    echo ""
-    cat "$SCHEMA_FILE"
-  } >"$PROMPT_FILE"
+  core_build_prompt_file \
+    "Tu dois analyser la semaine de trading d'un membre Fxmily." \
+    "Voici le snapshot pseudonymisé :" \
+    "$idx" "$PROMPT_FILE"
 
   echo "  [$i/$ENTRY_COUNT] $PSEUDO → generating..."
 
-  # V1.7 fix carry-over (code-reviewer Round 16 HIGH H3) : printf '%s' instead
-  # of $(cat) to prevent shell expansion of $variables and `$()` inside the
-  # system prompt. The file content is treated as a literal argument.
   set +e
-  SYSTEM_PROMPT_CONTENT=$(<"$SYSTEM_PROMPT_FILE")
-  # V1.7.2 R4 fix : `--bare` flag REMOVED. claude CLI 2.1.139 docs explicit :
-  # "--bare ... Anthropic auth is strictly ANTHROPIC_API_KEY or apiKeyHelper
-  # via --settings (OAuth and keychain are never read)". Eliot uses OAuth Max
-  # subscription (keychain) so --bare breaks auth → exit 1 with empty stderr.
-  # The Round 2 researcher subagent was wrong on this point. Empirical test
-  # confirmed via `echo test | claude --print --max-turns 1`. Without --bare,
-  # CLAUDE.md hierarchical loading happens but it's project config (not
-  # member data) so ban-risk rule #3 "fresh context per member" remains
-  # satisfied by `--max-turns 1` + single invocation per member.
-  #
-  # V1.7.2 R5 polish : `--max-budget-usd 5.00` financial circuit-breaker.
-  # On Max sub Eliot's marginal cost is theoretical ($0 actual), but if
-  # Anthropic ever switches the binary to billable API (silent migration
-  # has happened before — Sonnet upgrade Dec 2024) this caps damage at
-  # $5 per call (vs typical Sonnet 4.6 cost ~$0.02-0.05 = 100x margin).
-  # Researcher V1.7.2 R5 confirmed flag in CLI 2.1.139 --help output.
-  claude --print \
-    $MODEL_FLAG \
-    $EFFORT_FLAG \
-    --max-turns "$MAX_TURNS" \
-    --max-budget-usd 5.00 \
-    --setting-sources "" \
-    --system-prompt "$SYSTEM_PROMPT_CONTENT" \
-    --output-format text \
-    <"$PROMPT_FILE" \
-    >"$RESPONSE_FILE" 2>>"$ERRORS_LOG"
+  core_invoke_claude_print "$PROMPT_FILE" "$RESPONSE_FILE"
   CLAUDE_EXIT=$?
   set -e
 
   if [ $CLAUDE_EXIT -ne 0 ] || [ ! -s "$RESPONSE_FILE" ]; then
     errored=$((errored + 1))
     echo "    ✗ claude exited $CLAUDE_EXIT, response file empty or missing — see $ERRORS_LOG"
-    jq -nc --arg uid "$USER_ID" --arg err "claude_exit_$CLAUDE_EXIT" \
-       '{userId: $uid, error: $err}' >>"$RESULTS_NDJSON"
+    core_append_error "$USER_ID" "claude_exit_$CLAUDE_EXIT"
   else
-    # Strip leading/trailing markdown fences + whitespace
-    sed -E '1{/^```(json)?[[:space:]]*$/d}; ${/^```[[:space:]]*$/d}' "$RESPONSE_FILE" \
-      | sed -n '/^{/,$p' >"$PARSED_FILE" || true
-
-    if jq -e . "$PARSED_FILE" >/dev/null 2>&1; then
+    if core_parse_response "$RESPONSE_FILE" "$PARSED_FILE"; then
       generated=$((generated + 1))
       echo "    ✓ generated, JSON valid"
-      jq -nc --arg uid "$USER_ID" --slurpfile output "$PARSED_FILE" \
-         '{userId: $uid, output: $output[0]}' >>"$RESULTS_NDJSON"
+      core_append_success "$USER_ID" "$PARSED_FILE"
     else
       errored=$((errored + 1))
       echo "    ✗ output is not valid JSON — saved to $RESPONSE_FILE"
-      jq -nc --arg uid "$USER_ID" --arg err "invalid_json_response" \
-         '{userId: $uid, error: $err}' >>"$RESULTS_NDJSON"
+      core_append_error "$USER_ID" "invalid_json_response"
     fi
   fi
 
   # Sleep with jitter between requests (don't sleep after the last one)
   if [ "$i" -lt "$ENTRY_COUNT" ]; then
-    SLEEP_DUR=$((SLEEP_MIN + RANDOM % (SLEEP_MAX - SLEEP_MIN + 1)))
-    echo "    ⏱  sleeping ${SLEEP_DUR}s (jittered for ban-risk mitigation)"
-    sleep "$SLEEP_DUR"
+    core_jittered_sleep
   fi
 done
 
 echo "  Generated: $generated, errored: $errored, skipped inactive: $skipped_inactive"
 
-# V1.7 fix carry-over (code-reviewer Round 16 BLOQUANT 4) : assemble final
-# results.json from the append-only NDJSON. Single atomic write at the end —
-# Ctrl-C mid-loop preserves all completed generations in the NDJSON.
+# Assemble final results.json from the append-only NDJSON (single atomic write —
+# Ctrl-C mid-loop preserves all completed generations in the NDJSON).
 jq -s --arg ws "$WEEK_START" --arg we "$WEEK_END" \
    '{weekStart: $ws, weekEnd: $we, results: .}' \
    "$RESULTS_NDJSON" >"$RESULTS_FILE"
@@ -385,16 +198,9 @@ if [ "$generated" -eq 0 ]; then
 fi
 
 echo "[3/3] Persisting $generated reports to $APP_URL..."
-PERSIST_URL="${APP_URL}/api/admin/weekly-batch/persist"
-if ! curl --fail-with-body --silent --show-error \
-          --max-time 60 \
-          -X POST \
-          -H "X-Admin-Token: ${FXMILY_ADMIN_TOKEN}" \
-          -H "Content-Type: application/json" \
-          -H "Accept: application/json" \
-          --data-binary "@${RESULTS_FILE}" \
-          "$PERSIST_URL" \
-          | tee "$BATCH_DIR/persist-result.json"; then
+if ! core_persist_results "${APP_URL}/api/admin/weekly-batch/persist" \
+                          "$FXMILY_ADMIN_TOKEN" "$RESULTS_FILE" \
+                          "$BATCH_DIR/persist-result.json"; then
   echo "" >&2
   echo "ERROR: persist request failed. See $BATCH_DIR/persist-result.json for server response." >&2
   exit 2

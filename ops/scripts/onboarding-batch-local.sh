@@ -2,40 +2,39 @@
 #
 # V2.4 Phase A.2 — Onboarding interview batch local Claude Max orchestrator.
 #
-# Pattern carbone V1.7.2 `ops/scripts/weekly-batch-local.sh`. Runs on Eliot's
-# local Windows machine (Git Bash) using his Claude Max subscription via
-# `claude --print` headless CLI. Cost marginal Anthropic = 0€.
+# Thin carbon over `ops/scripts/lib/claude-batch-core.sh` (Session 1 plan-10
+# DoD#3 §28 — model/effort/flags/parsing/validations live in the core, ONE
+# copy for the 4 orchestrators). Runs on Eliot's local Windows machine
+# (Git Bash) using his Claude Max subscription via `claude --print` headless
+# CLI. Cost marginal Anthropic = 0€.
 #
-# WORKFLOW :
-#   1. Eliot triggers via `/onboarding-batch` slash command (Claude Code) OR
-#      runs this script directly with FXMILY_ADMIN_TOKEN exported.
-#   2. Script pulls the envelope from prod (or local dev) via HTTPS POST
-#      with X-Admin-Token authentication.
-#   3. For each entry in the envelope (N completed interviews not yet
-#      analyzed), the script :
-#        - Writes the pre-rendered `userPrompt` to `prompt-$i.txt`
-#        - Sleeps 60-120s RANDOM (anti-burst Anthropic detection)
-#        - Runs `claude --print --max-turns 1 --max-budget-usd 5.00
-#          --append-system-prompt "$SYSTEM_PROMPT" < prompt-$i.txt
-#          > response-$i.json`
-#        - Strips ```json fences defensively
-#        - Validates JSON has summary/highlights/axes_prioritaires fields
-#        - Appends to results.ndjson
-#   4. Script aggregates results.ndjson → results.json via jq -s atomic
-#      single write.
-#   5. POSTs results.json to /persist endpoint with X-Admin-Token.
-#   6. Prints summary { persisted, skipped, errors }.
+# Onboarding-specific deltas (owned by THIS file — deliberate divergences) :
+#   - Ephemeral workdir `$$`-suffixed + `trap rm -rf` at EXIT (interview
+#     answers are richer free-text than count-only snapshots → stricter PII
+#     hygiene : no artifacts survive the run).
+#   - `--dry-run` exits right after the pull (before any generation).
+#   - `--max-members N` cap + `--skip-sleep` (partial-cohort testing).
+#   - Jittered sleep BEFORE each call (except the first) instead of after.
+#   - The `userPrompt` is pre-rendered SERVER-side and travels in the envelope
+#     (no local prompt assembly from snapshot + schema).
+#   - Per-field JSON validation (`.summary and .highlights and
+#     .axes_prioritaires`) on top of the core parse.
+#   - Results entries carry `{userId, interviewId, output, model}` (the
+#     persist gate validates the model slug server-side).
+#   - Persist failure exits 1 (historical contract ; weekly/monthly/calendar
+#     exit 2).
+#   - No pseudonym-regex gate : the pseudonym is display-only here (files are
+#     indexed by position, never by label).
 #
-# Ban-risk mitigation (9 rules carbone V1.7) :
-#   1. Eliot's machine (his IP, his fingerprint, his Max account)
-#   2. 60-120s RANDOM-jittered sleeps (floor 30s)
-#   3. One `claude --print` per member = fresh context
-#   4. Snapshots pseudonymized V1.5.2 (server-side, label `member-XXXXXXXX`)
-#   5. System prompt + JSON schema travel WITH the envelope from repo
-#   6. Only official `claude` binary — no third-party wrappers
-#   7. Human-in-the-loop : manual trigger, no cron schedule
-#   8. Server double-net validation (Zod strict + safety gate)
-#   9. Audit log `onboarding.batch.*` records counts + ranAt (PII-free)
+# Unified CONSCIOUSLY with the core (previous divergences, resolved) :
+#   - `--output-format text` is now passed (it is the `--print` default —
+#     explicit everywhere, zero behavior change).
+#   - `--max-turns` now follows FXMILY_MAX_TURNS (same default 8, was
+#     hardcoded).
+#   - Sleep range now follows FXMILY_SLEEP_MIN_S/MAX_S (same default 60-120,
+#     was hardcoded).
+#
+# Ban-risk mitigation (9 rules carbone V1.7 — enforced by the core).
 #
 # Required env vars :
 #   FXMILY_ADMIN_TOKEN   — 32+ chars admin token (matches /etc/fxmily/web.env
@@ -44,14 +43,17 @@
 #                          override for local dev (http://localhost:3000)
 #
 # Optional :
-#   --dry-run            — pull envelope, build prompts, but DO NOT call
-#                          claude --print + DO NOT POST persist. Smoke-test
-#                          path Phase B+ readiness.
+#   --dry-run            — pull envelope, but DO NOT call claude --print +
+#                          DO NOT POST persist.
 #   --max-members N      — cap N entries (for partial-cohort testing)
 #   --skip-sleep         — for tests only ; bypass jittered sleeps
 #
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/claude-batch-core.sh
+source "$SCRIPT_DIR/lib/claude-batch-core.sh"
 
 # ============================================================================
 # Configuration
@@ -60,10 +62,8 @@ set -euo pipefail
 readonly BASE_URL="${FXMILY_BASE_URL:-https://app.fxmilyapp.com}"
 readonly ADMIN_TOKEN="${FXMILY_ADMIN_TOKEN:-}"
 readonly WORK_DIR="${TMPDIR:-/tmp}/fxmily-onboarding-batch-$$"
-readonly MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-5.00}"
-# §8 — local Claude solicitations run on Opus 4.8 at "extra" effort by default.
-readonly CLAUDE_MODEL="${FXMILY_CLAUDE_MODEL:-claude-opus-4-8}"
-readonly CLAUDE_EFFORT="${FXMILY_CLAUDE_EFFORT:-xhigh}"
+# Legacy env name honored (pre-core contract) ; falls back to the core default.
+MAX_BUDGET_USD="${CLAUDE_MAX_BUDGET_USD:-$MAX_BUDGET_USD}"
 
 # CLI args
 DRY_RUN=false
@@ -82,9 +82,9 @@ Usage: $0 [--dry-run] [--max-members N] [--skip-sleep]
 Environment variables :
   FXMILY_ADMIN_TOKEN    32+ chars admin token (required)
   FXMILY_BASE_URL       default https://app.fxmilyapp.com
-  CLAUDE_MAX_BUDGET_USD default 5.00
-  FXMILY_CLAUDE_MODEL   default claude-opus-4-8 (§8 — Opus 4.8 for profile analysis)
-  FXMILY_CLAUDE_EFFORT  default xhigh (§8 "en extra" ; low|medium|high|xhigh|max)
+  CLAUDE_MAX_BUDGET_USD default = core default (see lib/claude-batch-core.sh)
+  FXMILY_CLAUDE_MODEL / FXMILY_CLAUDE_EFFORT / FXMILY_MAX_TURNS /
+  FXMILY_SLEEP_MIN_S / FXMILY_SLEEP_MAX_S — shared core defaults
 
 Options :
   --dry-run             pull only, do not call claude or persist
@@ -101,46 +101,30 @@ done
 # Pre-flight checks
 # ============================================================================
 
-if [[ -z "$ADMIN_TOKEN" ]]; then
-  echo "[FATAL] FXMILY_ADMIN_TOKEN not set. Export it from /etc/fxmily/web.env." >&2
-  exit 1
-fi
-
+core_require_token FXMILY_ADMIN_TOKEN ADMIN_BATCH_TOKEN
 if [[ ${#ADMIN_TOKEN} -lt 32 ]]; then
   echo "[FATAL] FXMILY_ADMIN_TOKEN must be at least 32 chars." >&2
   exit 1
 fi
-
-for cmd in curl jq claude; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "[FATAL] Required command not found: $cmd" >&2
-    exit 1
-  fi
-done
-
-# Verify claude is the official Anthropic binary (not a third-party wrapper)
-if ! claude --version 2>&1 | grep -qi "claude"; then
-  echo "[FATAL] 'claude' binary does not look like official Anthropic CLI." >&2
-  exit 1
-fi
-
-# §8 — model + effort allowlist (verified `claude --help` CLI 2.1.154 : full
-# names like 'claude-opus-4-8' ; --effort low|medium|high|xhigh|max).
-case "$CLAUDE_MODEL" in
-  claude-opus-4-8|claude-opus-4-7|claude-sonnet-4-6|claude-haiku-4-5) ;;
-  *) echo "[FATAL] FXMILY_CLAUDE_MODEL=$CLAUDE_MODEL not in allowlist (claude-opus-4-8, claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5)." >&2; exit 1 ;;
-esac
-case "$CLAUDE_EFFORT" in
-  low|medium|high|xhigh|max) ;;
-  *) echo "[FATAL] FXMILY_CLAUDE_EFFORT=$CLAUDE_EFFORT invalid (low|medium|high|xhigh|max)." >&2; exit 1 ;;
-esac
+core_validate_app_url "$BASE_URL"
+core_validate_model
+core_validate_effort
+core_validate_sleep_range
+core_sanity_checks
 
 mkdir -p "$WORK_DIR"
 trap 'rm -rf "$WORK_DIR"' EXIT
+# Core artifact globals point inside the ephemeral workdir (ERRORS_LOG is
+# used by core_invoke_claude_print ; per-entry .err files are kept too).
+ENVELOPE_FILE="$WORK_DIR/envelope.json"
+RESULTS_NDJSON="$WORK_DIR/results.ndjson"
+RESULTS_FILE="$WORK_DIR/results.json"
+ERRORS_LOG="$WORK_DIR/claude-errors.log"
+SYSTEM_PROMPT_FILE="$WORK_DIR/system-prompt.txt"
+: >"$ERRORS_LOG"
 
 echo "[onboarding-batch] Work dir: $WORK_DIR"
 echo "[onboarding-batch] Base URL: $BASE_URL"
-echo "[onboarding-batch] Model: $CLAUDE_MODEL — effort: $CLAUDE_EFFORT (§8 full performance)"
 echo "[onboarding-batch] Dry-run: $DRY_RUN"
 echo "[onboarding-batch] Max members: ${MAX_MEMBERS:-(none)}"
 echo "[onboarding-batch] Started: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -152,24 +136,12 @@ echo "[onboarding-batch] Started: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo ""
 echo "[onboarding-batch] [1/4] Pulling envelope from $BASE_URL/api/admin/onboarding-batch/pull"
 
-PULL_RESP_FILE="$WORK_DIR/envelope.json"
-PULL_HTTP_CODE=$(curl -sS -w "%{http_code}" -o "$PULL_RESP_FILE" \
-  -X POST \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  --max-time 60 \
-  "$BASE_URL/api/admin/onboarding-batch/pull" \
-  || echo "000")
+core_pull_envelope "$BASE_URL/api/admin/onboarding-batch/pull" \
+                   "$ADMIN_TOKEN" "$ENVELOPE_FILE"
 
-if [[ "$PULL_HTTP_CODE" != "200" ]]; then
-  echo "[FATAL] Pull failed with HTTP $PULL_HTTP_CODE" >&2
-  cat "$PULL_RESP_FILE" >&2
-  exit 1
-fi
-
-ENTRIES_COUNT=$(jq '.entries | length' "$PULL_RESP_FILE")
-INSTRUMENT_VERSION=$(jq -r '.instrumentVersion' "$PULL_RESP_FILE")
-RAN_AT=$(jq -r '.ranAt' "$PULL_RESP_FILE")
+ENTRIES_COUNT=$(jq '.entries | length' "$ENVELOPE_FILE")
+INSTRUMENT_VERSION=$(jq -r '.instrumentVersion' "$ENVELOPE_FILE")
+RAN_AT=$(jq -r '.ranAt' "$ENVELOPE_FILE")
 
 echo "[onboarding-batch] Pulled $ENTRIES_COUNT entries (instrument v$INSTRUMENT_VERSION, ranAt=$RAN_AT)"
 
@@ -181,13 +153,13 @@ fi
 # Apply --max-members cap if set
 if [[ "$MAX_MEMBERS" -gt 0 && "$ENTRIES_COUNT" -gt "$MAX_MEMBERS" ]]; then
   echo "[onboarding-batch] Capping to first $MAX_MEMBERS entries (--max-members)"
-  jq --argjson n "$MAX_MEMBERS" '.entries |= .[:$n]' "$PULL_RESP_FILE" > "$WORK_DIR/envelope-capped.json"
-  PULL_RESP_FILE="$WORK_DIR/envelope-capped.json"
+  jq --argjson n "$MAX_MEMBERS" '.entries |= .[:$n]' "$ENVELOPE_FILE" > "$WORK_DIR/envelope-capped.json"
+  ENVELOPE_FILE="$WORK_DIR/envelope-capped.json"
   ENTRIES_COUNT="$MAX_MEMBERS"
 fi
 
-# Extract system prompt to a file (large string, easier to pass via flag)
-jq -r '.systemPrompt' "$PULL_RESP_FILE" > "$WORK_DIR/system-prompt.txt"
+# Extract system prompt to a file (large string, passed literally by the core)
+jq -r '.systemPrompt' "$ENVELOPE_FILE" > "$SYSTEM_PROMPT_FILE"
 
 if "$DRY_RUN"; then
   echo "[onboarding-batch] --dry-run set. Skipping claude --print + persist. Envelope saved at $WORK_DIR/envelope.json"
@@ -195,69 +167,54 @@ if "$DRY_RUN"; then
 fi
 
 # ============================================================================
-# Step 2 — Per-entry claude --print loop (60-120s jittered sleeps)
+# Step 2 — Per-entry claude --print loop (jittered sleeps)
 # ============================================================================
 
 echo ""
-echo "[onboarding-batch] [2/4] Running claude --print × $ENTRIES_COUNT (60-120s jittered)"
+echo "[onboarding-batch] [2/4] Running claude --print × $ENTRIES_COUNT ($SLEEP_MIN-${SLEEP_MAX}s jittered)"
 
-RESULTS_NDJSON="$WORK_DIR/results.ndjson"
 : > "$RESULTS_NDJSON" # truncate
 
 for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
-  ENTRY=$(jq -c ".entries[$i]" "$PULL_RESP_FILE")
-  USER_ID=$(echo "$ENTRY" | jq -r '.userId')
-  INTERVIEW_ID=$(echo "$ENTRY" | jq -r '.interviewId')
-  PSEUDONYM=$(echo "$ENTRY" | jq -r '.pseudonymLabel')
+  # --argjson idx (MSYS Git Bash Windows defense — see core_build_prompt_file).
+  USER_ID=$(jq -r --argjson idx "$i" '.entries[$idx].userId' "$ENVELOPE_FILE")
+  INTERVIEW_ID=$(jq -r --argjson idx "$i" '.entries[$idx].interviewId' "$ENVELOPE_FILE")
+  PSEUDONYM=$(jq -r --argjson idx "$i" '.entries[$idx].pseudonymLabel' "$ENVELOPE_FILE")
 
   PROMPT_FILE="$WORK_DIR/prompt-$i.txt"
   RESPONSE_FILE="$WORK_DIR/response-$i.json"
+  PARSED_FILE="$WORK_DIR/parsed-$i.json"
 
-  # Write pre-rendered user prompt (server-side built)
-  echo "$ENTRY" | jq -r '.userPrompt' > "$PROMPT_FILE"
+  # Write pre-rendered user prompt (server-side built — onboarding delta)
+  jq -r --argjson idx "$i" '.entries[$idx].userPrompt' "$ENVELOPE_FILE" > "$PROMPT_FILE"
 
   echo ""
   echo "[onboarding-batch] [$((i + 1))/$ENTRIES_COUNT] $PSEUDONYM (interview=$INTERVIEW_ID)"
 
-  # Jittered sleep BEFORE the call (except for first call)
+  # Jittered sleep BEFORE the call (except for first call — onboarding delta)
   if [[ "$i" -gt 0 && "$SKIP_SLEEP" != "true" ]]; then
-    SLEEP_SECONDS=$((60 + RANDOM % 61)) # 60-120s
-    echo "[onboarding-batch] Sleeping ${SLEEP_SECONDS}s anti-burst..."
-    sleep "$SLEEP_SECONDS"
+    core_jittered_sleep
   fi
 
-  # Run claude --print headless
+  # Run claude --print headless (flags + pure-generator isolation → core)
   echo "[onboarding-batch] Invoking claude --print..."
-  CLAUDE_EXIT=0
-  # Pure-generator isolation (see §26 calendar batch, real e2e validated
-  # 2026-06-04): --setting-sources "" drops the operator's CLAUDE.md + hooks
-  # (else conversational prose, not JSON); --system-prompt REPLACES the agent
-  # framing; --max-turns 8 (NOT 1 — Opus 4.8 thinking uses a turn before JSON,
-  # `--max-turns 1` aborts "Reached max turns"). --max-budget-usd caps runaway.
-  claude --print \
-    --model "$CLAUDE_MODEL" \
-    --effort "$CLAUDE_EFFORT" \
-    --max-turns 8 \
-    --max-budget-usd "$MAX_BUDGET_USD" \
-    --setting-sources "" \
-    --system-prompt "$(cat "$WORK_DIR/system-prompt.txt")" \
-    < "$PROMPT_FILE" \
-    > "$RESPONSE_FILE" 2> "$WORK_DIR/response-$i.err" || CLAUDE_EXIT=$?
+  set +e
+  core_invoke_claude_print "$PROMPT_FILE" "$RESPONSE_FILE"
+  CLAUDE_EXIT=$?
+  set -e
 
   if [[ "$CLAUDE_EXIT" -ne 0 ]]; then
     echo "[onboarding-batch] claude --print exit $CLAUDE_EXIT"
-    cat "$WORK_DIR/response-$i.err" >&2
+    tail -5 "$ERRORS_LOG" >&2 || true
     jq -n --arg uid "$USER_ID" --arg iid "$INTERVIEW_ID" --argjson exit "$CLAUDE_EXIT" \
       '{userId: $uid, interviewId: $iid, error: ("claude_exit_" + ($exit | tostring))}' \
       >> "$RESULTS_NDJSON"
     continue
   fi
 
-  # Strip ```json fences defensively
-  RESPONSE_CONTENT=$(sed -E 's/^```(json)?$//; s/^```$//' "$RESPONSE_FILE" | grep -v '^[[:space:]]*$' | tr -d '\r')
-
-  # Validate JSON
-  if ! echo "$RESPONSE_CONTENT" | jq -e '.summary and .highlights and .axes_prioritaires' >/dev/null 2>&1; then
+  # Core parse (fence-strip + JSON validity) + onboarding per-field validation
+  if ! core_parse_response "$RESPONSE_FILE" "$PARSED_FILE" \
+     || ! jq -e '.summary and .highlights and .axes_prioritaires' "$PARSED_FILE" >/dev/null 2>&1; then
     echo "[onboarding-batch] Invalid JSON response from claude"
     jq -n --arg uid "$USER_ID" --arg iid "$INTERVIEW_ID" \
       '{userId: $uid, interviewId: $iid, error: "invalid_json_response"}' \
@@ -269,9 +226,9 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
   jq -n \
     --arg uid "$USER_ID" \
     --arg iid "$INTERVIEW_ID" \
-    --argjson output "$RESPONSE_CONTENT" \
+    --slurpfile output "$PARSED_FILE" \
     --arg model "$CLAUDE_MODEL" \
-    '{userId: $uid, interviewId: $iid, output: $output, model: $model}' \
+    '{userId: $uid, interviewId: $iid, output: $output[0], model: $model}' \
     >> "$RESULTS_NDJSON"
 
   echo "[onboarding-batch] Captured response for $PSEUDONYM"
@@ -284,11 +241,10 @@ done
 echo ""
 echo "[onboarding-batch] [3/4] Aggregating results into single payload"
 
-RESULTS_JSON="$WORK_DIR/results.json"
-jq -s '{results: .}' "$RESULTS_NDJSON" > "$RESULTS_JSON"
+jq -s '{results: .}' "$RESULTS_NDJSON" > "$RESULTS_FILE"
 
-PAYLOAD_BYTES=$(wc -c < "$RESULTS_JSON")
-echo "[onboarding-batch] Payload: $PAYLOAD_BYTES bytes / $(jq '.results | length' "$RESULTS_JSON") entries"
+PAYLOAD_BYTES=$(wc -c < "$RESULTS_FILE")
+echo "[onboarding-batch] Payload: $PAYLOAD_BYTES bytes / $(jq '.results | length' "$RESULTS_FILE") entries"
 
 # ============================================================================
 # Step 4 — POST persist
@@ -298,18 +254,10 @@ echo ""
 echo "[onboarding-batch] [4/4] POSTing $BASE_URL/api/admin/onboarding-batch/persist"
 
 PERSIST_RESP_FILE="$WORK_DIR/persist-resp.json"
-PERSIST_HTTP_CODE=$(curl -sS -w "%{http_code}" -o "$PERSIST_RESP_FILE" \
-  -X POST \
-  -H "X-Admin-Token: $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  --data-binary "@$RESULTS_JSON" \
-  --max-time 120 \
-  "$BASE_URL/api/admin/onboarding-batch/persist" \
-  || echo "000")
-
-if [[ "$PERSIST_HTTP_CODE" != "200" ]]; then
-  echo "[FATAL] Persist failed with HTTP $PERSIST_HTTP_CODE" >&2
-  cat "$PERSIST_RESP_FILE" >&2
+if ! core_persist_results "$BASE_URL/api/admin/onboarding-batch/persist" \
+                          "$ADMIN_TOKEN" "$RESULTS_FILE" "$PERSIST_RESP_FILE" >/dev/null; then
+  echo "[FATAL] Persist failed." >&2
+  cat "$PERSIST_RESP_FILE" >&2 || true
   exit 1
 fi
 

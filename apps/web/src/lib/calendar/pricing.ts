@@ -2,6 +2,8 @@ import 'server-only';
 
 import { z } from 'zod';
 
+import type { ClaudeUsage } from '@/lib/ai/claude-response';
+
 /**
  * §26 Calendrier adaptatif — Claude cost pricing (J-C2). Carbone
  * `lib/weekly-report/pricing.ts` (a self-contained copy, NOT a re-export —
@@ -71,12 +73,9 @@ export const PRICING_USD_PER_MTOK = {
 
 export type SupportedModel = keyof typeof PRICING_USD_PER_MTOK;
 
-export interface ClaudeUsage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreateTokens: number;
-}
+// Shared type from `@/lib/ai/claude-response` — re-exported for backwards
+// compatibility (this module used to define its own copy).
+export type { ClaudeUsage };
 
 export interface CostBreakdown {
   costUsd: number;

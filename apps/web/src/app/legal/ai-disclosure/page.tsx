@@ -41,10 +41,11 @@ export default function AIDisclosurePage(): React.ReactElement {
       summary={
         <>
           Fxmily utilise une IA générative (Claude, Anthropic) pour{' '}
-          <strong>trois cas d&apos;usage</strong> : rédiger un rapport hebdomadaire (que{' '}
+          <strong>quatre cas d&apos;usage</strong> : rédiger un rapport hebdomadaire (que{' '}
           <strong>seul Eliot</strong> reçoit, pour assurer ton suivi), ton débrief mensuel (que tu
-          consultes) et ton calendrier d&apos;organisation hebdomadaire (que tu consultes), à partir
-          de tes propres données. Pas de conseil de trade, pas de décision autonome, pas de
+          consultes), ton calendrier d&apos;organisation hebdomadaire (que tu consultes) et
+          l&apos;analyse unique de ton questionnaire d&apos;entrée (ton profil membre), à partir de
+          tes propres données. Pas de conseil de trade, pas de décision autonome, pas de
           remplacement du coaching humain.
         </>
       }

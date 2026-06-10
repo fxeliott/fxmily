@@ -241,7 +241,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
 
         {/* V2.4 — Onboarding profile status (Session 2 hardening). The profiling
-            pipeline (30-q interview → batch local Claude Opus 4.8 → MemberProfile
+            pipeline (30-q interview → batch local Claude Fable 5 → MemberProfile
             → /profile) was fully built but had NO entry point in the member
             journey — /dashboard carried zero link to it, so new members never
             discovered the flagship "profilage initial" (SPEC §28). This calm

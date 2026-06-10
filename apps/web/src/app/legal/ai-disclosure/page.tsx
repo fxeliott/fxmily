@@ -37,7 +37,7 @@ export default function AIDisclosurePage(): React.ReactElement {
     <LegalLayout
       eyebrow="Transparence IA"
       title="Comment Fxmily utilise l'IA"
-      lastUpdatedIso="2026-06-09"
+      lastUpdatedIso="2026-06-10"
       summary={
         <>
           Fxmily utilise une IA générative (Claude, Anthropic) pour{' '}
@@ -61,9 +61,9 @@ export default function AIDisclosurePage(): React.ReactElement {
       <h2>2. Quel modèle on utilise, pour quoi</h2>
       <ul>
         <li>
-          <strong>Modèle</strong> — Claude (famille Opus, actuellement Opus 4.8), édité par
-          Anthropic PBC. Les contenus sont générés via l&apos;abonnement personnel Max d&apos;Eliot
-          (pas d&apos;API Anthropic facturée par requête côté Fxmily — voir{' '}
+          <strong>Modèle</strong> — Claude Fable 5 (identifiant exact <code>claude-fable-5</code>),
+          édité par Anthropic PBC. Les contenus sont générés via l&apos;abonnement personnel Max
+          d&apos;Eliot (pas d&apos;API Anthropic facturée par requête côté Fxmily — voir{' '}
           <a href="/legal/privacy">Politique de confidentialité §3</a> pour les sous-traitants).
         </li>
         <li>
@@ -82,7 +82,7 @@ export default function AIDisclosurePage(): React.ReactElement {
         <li>
           <strong>Volume</strong> — au plus 1 appel par utilisateur par semaine (rapport hebdo) + 1
           par mois (débrief mensuel) + 1 par semaine pour le calendrier (uniquement si tu remplis le
-          questionnaire d&apos;organisation), plafonnés à $5 de tokens par run (garde-fou technique
+          questionnaire d&apos;organisation), plafonnés à $15 de tokens par run (garde-fou technique
           côté Eliot pour éviter toute dérive de coût).
         </li>
       </ul>
@@ -133,7 +133,7 @@ export default function AIDisclosurePage(): React.ReactElement {
           contenu.
         </li>
         <li>
-          <strong>Budget plafonné</strong> — chaque appel IA est limité à $5 de tokens. Au-delà, la
+          <strong>Budget plafonné</strong> — chaque appel IA est limité à $15 de tokens. Au-delà, la
           requête est refusée et journalisée. Garantie de non-explosion de coûts.
         </li>
         <li>

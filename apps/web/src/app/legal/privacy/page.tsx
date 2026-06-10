@@ -140,8 +140,10 @@ export default function PrivacyPolicyPage(): React.ReactElement {
         </li>
         <li>
           <strong>Anthropic PBC</strong> (États-Unis, clauses contractuelles types) — modèle Claude
-          (famille Sonnet) utilisé pour générer le rapport hebdo Eliot uniquement. Les inputs ne
-          sont pas réutilisés pour entraîner un modèle (politique zero-retention Anthropic).
+          Fable 5 (<code>claude-fable-5</code>) utilisé pour générer le rapport hebdo (Eliot
+          uniquement), le débrief mensuel et le calendrier d&apos;organisation (voir{' '}
+          <a href="/legal/ai-disclosure">Transparence IA</a>). Les inputs ne sont pas réutilisés
+          pour entraîner un modèle (politique zero-retention Anthropic).
         </li>
       </ul>
 

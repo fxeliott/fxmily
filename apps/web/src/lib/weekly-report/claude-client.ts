@@ -1,10 +1,6 @@
 import 'server-only';
 
-import {
-  extractTextFromResponse,
-  extractUsage,
-  safeParseJson,
-} from '@/lib/ai/claude-response';
+import { extractTextFromResponse, extractUsage, safeParseJson } from '@/lib/ai/claude-response';
 import { env } from '@/lib/env';
 import { weeklyReportOutputSchema, type WeeklyReportOutput } from '@/lib/schemas/weekly-report';
 import type { WeeklySnapshot } from '@/lib/schemas/weekly-report';

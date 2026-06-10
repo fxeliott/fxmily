@@ -1,10 +1,6 @@
 import 'server-only';
 
-import {
-  extractTextFromResponse,
-  extractUsage,
-  safeParseJson,
-} from '@/lib/ai/claude-response';
+import { extractTextFromResponse, extractUsage, safeParseJson } from '@/lib/ai/claude-response';
 import { env } from '@/lib/env';
 import type { CalendarSnapshot } from '@/lib/calendar/snapshot';
 import {

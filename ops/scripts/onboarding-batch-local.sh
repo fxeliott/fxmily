@@ -34,6 +34,11 @@
 #     hardcoded).
 #   - Sleep range now follows FXMILY_SLEEP_MIN_S/MAX_S (same default 60-120,
 #     was hardcoded).
+#   - Response parsing now uses core_parse_response : fences are stripped on
+#     the first/last line only (was : anywhere + blank-line/CR scrub), but
+#     leading prose before the first `{` is now tolerated. This is the
+#     prod-validated behavior of the 3 other pipelines (calendar e2e
+#     2026-06-04) — trade-off assumed.
 #
 # Ban-risk mitigation (9 rules carbone V1.7 — enforced by the core).
 #
@@ -74,7 +79,14 @@ SKIP_SLEEP=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=true; shift ;;
-    --max-members) MAX_MEMBERS="$2"; shift 2 ;;
+    --max-members)
+      # Integer-validated BEFORE any [[ -gt ]] arithmetic context (symmetry
+      # with core_validate_numeric_knobs — operator-only input, defense in depth).
+      if ! [[ "${2:-}" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: --max-members expects a non-negative integer, got '${2:-}'." >&2
+        exit 1
+      fi
+      MAX_MEMBERS="$2"; shift 2 ;;
     --skip-sleep) SKIP_SLEEP=true; shift ;;
     --help|-h)
       cat <<EOF

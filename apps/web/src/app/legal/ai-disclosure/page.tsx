@@ -51,11 +51,11 @@ export default function AIDisclosurePage(): React.ReactElement {
     >
       <h2>1. Pourquoi cette page existe</h2>
       <p>
-        Le règlement européen sur l&apos;intelligence artificielle (EU AI Act, entré en vigueur le 2
-        août 2024) impose à toute application qui interagit avec une personne via une IA générative
-        d&apos;être <strong>explicite</strong> sur ce point. L&apos;article 50(1) du règlement est
-        d&apos;application directe à partir du <strong>2 août 2026</strong>. Cette page est notre
-        engagement de transparence avant cette échéance.
+        Le règlement européen sur l&apos;intelligence artificielle (EU AI Act, entré en vigueur le
+        1ᵉʳ août 2024) impose à toute application qui interagit avec une personne via une IA
+        générative d&apos;être <strong>explicite</strong> sur ce point. L&apos;article 50(1) du
+        règlement est d&apos;application directe à partir du <strong>2 août 2026</strong>. Cette
+        page est notre engagement de transparence avant cette échéance.
       </p>
 
       <h2>2. Quel modèle on utilise, pour quoi</h2>

@@ -22,10 +22,10 @@ import 'server-only';
 
 /** Token usage of a Claude completion (API or local batch ingest). */
 export interface ClaudeUsage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreateTokens: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadTokens: number;
+  readonly cacheCreateTokens: number;
 }
 
 /** Minimal structural view of an Anthropic SDK response (shape-drift safe). */

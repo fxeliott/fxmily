@@ -79,6 +79,21 @@ export const PRICING_USD_PER_MTOK = {
     cacheRead: 1.5,
     cacheCreate: 18.75,
   },
+  // Allowlist ⊆ pricing-table parity with `lib/weekly-report/pricing.ts` :
+  // every model accepted by `env.ANTHROPIC_MODEL` must be priced here too,
+  // otherwise the dormant paid path would mis-bill via the Sonnet fallback.
+  'claude-opus-4-7': {
+    input: 15.0,
+    output: 75.0,
+    cacheRead: 1.5,
+    cacheCreate: 18.75,
+  },
+  'claude-haiku-4-5': {
+    input: 0.8,
+    output: 4.0,
+    cacheRead: 0.08,
+    cacheCreate: 1.0,
+  },
   // Local Claude Code sentinel : flat-rate Max subscription = 0 per-token.
   [CLAUDE_CODE_LOCAL_MODEL]: {
     input: 0,

@@ -143,8 +143,9 @@ export default function PrivacyPolicyPage(): React.ReactElement {
           Fable 5 (<code>claude-fable-5</code>) utilisé pour générer le rapport hebdo (Eliot
           uniquement), le débrief mensuel, le calendrier d&apos;organisation et l&apos;analyse
           unique de ton questionnaire d&apos;entrée (profil membre, données pseudonymisées) (voir{' '}
-          <a href="/legal/ai-disclosure">Transparence IA</a>). Les inputs ne sont pas réutilisés
-          pour entraîner un modèle (politique zero-retention Anthropic).
+          <a href="/legal/ai-disclosure">Transparence IA</a>). Anthropic indique ne pas utiliser ces
+          contenus pour ré-entraîner ses modèles — détail et mises à jour sur la page{' '}
+          <a href="/legal/ai-disclosure">Transparence IA</a>.
         </li>
       </ul>
 

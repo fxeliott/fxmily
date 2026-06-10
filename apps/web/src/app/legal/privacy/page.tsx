@@ -141,7 +141,8 @@ export default function PrivacyPolicyPage(): React.ReactElement {
         <li>
           <strong>Anthropic PBC</strong> (États-Unis, clauses contractuelles types) — modèle Claude
           Fable 5 (<code>claude-fable-5</code>) utilisé pour générer le rapport hebdo (Eliot
-          uniquement), le débrief mensuel et le calendrier d&apos;organisation (voir{' '}
+          uniquement), le débrief mensuel, le calendrier d&apos;organisation et l&apos;analyse
+          unique de ton questionnaire d&apos;entrée (profil membre, données pseudonymisées) (voir{' '}
           <a href="/legal/ai-disclosure">Transparence IA</a>). Les inputs ne sont pas réutilisés
           pour entraîner un modèle (politique zero-retention Anthropic).
         </li>

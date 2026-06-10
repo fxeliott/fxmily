@@ -117,6 +117,20 @@ core_validate_app_url() {
   esac
 }
 
+# Numeric knobs validation. MAX_TURNS = positive integer ≥2 (thinking burns a
+# turn). MAX_BUDGET_USD = dot-decimal (a French-locale '15,00' would make every
+# `claude` call fail as claude_exit_N — catch it upfront instead).
+core_validate_numeric_knobs() {
+  if ! [[ "$MAX_TURNS" =~ ^[0-9]+$ ]] || [ "$MAX_TURNS" -lt 2 ]; then
+    echo "ERROR: FXMILY_MAX_TURNS=$MAX_TURNS must be an integer ≥2 (thinking uses a turn)." >&2
+    exit 1
+  fi
+  if ! [[ "$MAX_BUDGET_USD" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    echo "ERROR: FXMILY_MAX_BUDGET_USD=$MAX_BUDGET_USD must be a dot-decimal number (e.g. 15.00)." >&2
+    exit 1
+  fi
+}
+
 # Sleep range validation + floor 30s. Without this, RANDOM % 0 div-by-zero or
 # negative modulo on inverted ranges silently breaks mid-batch (V1.7 fix).
 core_validate_sleep_range() {

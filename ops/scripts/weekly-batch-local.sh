@@ -60,6 +60,7 @@ core_require_token FXMILY_ADMIN_TOKEN ADMIN_BATCH_TOKEN
 core_validate_app_url "$APP_URL"
 core_validate_model
 core_validate_effort
+core_validate_numeric_knobs
 core_validate_sleep_range
 
 CURRENT_WEEK_FLAG=""

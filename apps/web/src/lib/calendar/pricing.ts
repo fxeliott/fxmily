@@ -8,15 +8,16 @@ import type { ClaudeUsage } from '@/lib/ai/claude-response';
  * §26 Calendrier adaptatif — Claude cost pricing (J-C2). Carbone
  * `lib/weekly-report/pricing.ts` (a self-contained copy, NOT a re-export —
  * the calendar pipeline owns its own model allowlist : the LOCAL binary that
- * Eliot runs is Opus 4.8, not Sonnet 4.6).
+ * Eliot runs is Fable 5 since 2026-06-10, not Sonnet 4.6).
  *
  * Notes :
  *   - Prices in USD per **1 000 000 tokens**, converted USD → EUR at a fixed
  *     conservative rate (budget upper-bound, not FX accounting).
  *   - The §26 batch generates calendars via `claude --print` on Eliot's Claude
- *     Max subscription (flat fee), so the per-token marginal cost is **0**.
- *     Both the `claude-opus-4-8` entry (the real binary that runs) AND the
- *     `claude-code-local` sentinel price at zero — see their JSDoc below.
+ *     Max subscription (flat fee) WITHOUT sending a `model`/`usage` on the
+ *     wire ⇒ batch entries persist under the `claude-code-local` sentinel at
+ *     0 tokens = 0 cost. The named model entries below carry the REAL API
+ *     rates so the dormant paid path (`ANTHROPIC_API_KEY` set) bills honestly.
  */
 
 // USD → EUR : conservative spot rate, mirror weekly-report/pricing (budget
@@ -42,43 +43,41 @@ const SONNET_4_6 = {
 export const CLAUDE_CODE_LOCAL_MODEL = 'claude-code-local' as const;
 
 /**
- * The §8 default binary Eliot runs (`FXMILY_CLAUDE_MODEL=claude-opus-4-8`).
- * Priced at **0** here ON PURPOSE : it runs on the flat-fee Max subscription,
- * so the marginal cost of a local batch generation is zero. This entry exists
- * so the batch model allowlist (`PRICING_KEYS`) accepts the real binary name
- * without falling back to the sentinel + a `console.warn`. A hypothetical
- * future PAID Opus-4-8 API path (NOT reachable via `env.ANTHROPIC_MODEL`
- * today — its allowlist is sonnet/haiku/opus-4-7) must replace these zeros
- * with verified Anthropic pricing before billing real tokens.
+ * Former §8 default binary (`claude-opus-4-8`, superseded by Fable 5 on
+ * 2026-06-10). Priced at the REAL Anthropic API rates : since the env.ts
+ * allowlist now accepts this slug, the paid path (`ANTHROPIC_API_KEY` +
+ * `ANTHROPIC_MODEL=claude-opus-4-8`) is reachable and must bill honestly.
+ * The LOCAL batch path is unaffected : the calendar orchestrator never sends
+ * a `model` (nor `usage`) on the wire, so batch entries persist under the
+ * `claude-code-local` sentinel at 0 tokens ⇒ 0 cost (Max flat fee).
  */
 export const CLAUDE_OPUS_4_8_LOCAL_MODEL = 'claude-opus-4-8' as const;
 
 /**
  * Session 1 plan-10 — the §8 default binary since 2026-06-10
  * (`FXMILY_CLAUDE_MODEL=claude-fable-5`, pinned in
- * `ops/scripts/lib/claude-batch-core.sh`). Priced at **0** like
- * {@link CLAUDE_OPUS_4_8_LOCAL_MODEL} and for the same reason : it runs on
- * the flat-fee Max subscription, so the marginal cost of a local batch
- * generation is zero. A hypothetical future PAID Fable-5 API path must use
- * the real rates (`lib/weekly-report/pricing.ts` : $10/$50 MTok) instead.
+ * `ops/scripts/lib/claude-batch-core.sh`). Priced at the REAL API rates
+ * ($10/$50 MTok, Anthropic GA 2026-06-09) for the same reason as
+ * {@link CLAUDE_OPUS_4_8_LOCAL_MODEL} : the paid path must never record a
+ * 0 € cost for real billed tokens. Local batch cost stays 0 via the sentinel.
  */
 export const CLAUDE_FABLE_5_LOCAL_MODEL = 'claude-fable-5' as const;
 
 export const PRICING_USD_PER_MTOK = {
   'claude-sonnet-4-6': SONNET_4_6,
-  // Local Fable 5 batch path : flat-rate Max subscription = 0 per-token.
+  // Real Fable 5 API rates — mirror `lib/weekly-report/pricing.ts`.
   [CLAUDE_FABLE_5_LOCAL_MODEL]: {
-    input: 0,
-    output: 0,
-    cacheRead: 0,
-    cacheCreate: 0,
+    input: 10.0,
+    output: 50.0,
+    cacheRead: 1.0, // 90% off base input
+    cacheCreate: 12.5, // 25% over base input (1h ephemeral cache write)
   },
-  // Local Opus 4.8 batch path : flat-rate Max subscription = 0 per-token.
+  // Real Opus 4.8 API rates — mirror `lib/weekly-report/pricing.ts`.
   [CLAUDE_OPUS_4_8_LOCAL_MODEL]: {
-    input: 0,
-    output: 0,
-    cacheRead: 0,
-    cacheCreate: 0,
+    input: 15.0,
+    output: 75.0,
+    cacheRead: 1.5,
+    cacheCreate: 18.75,
   },
   // Local Claude Code sentinel : flat-rate Max subscription = 0 per-token.
   [CLAUDE_CODE_LOCAL_MODEL]: {

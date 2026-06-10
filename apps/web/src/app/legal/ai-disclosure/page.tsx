@@ -67,7 +67,7 @@ export default function AIDisclosurePage(): React.ReactElement {
           <a href="/legal/privacy">Politique de confidentialité §3</a> pour les sous-traitants).
         </li>
         <li>
-          <strong>Trois usages</strong> — (a) un <em>rapport hebdomadaire</em> que{' '}
+          <strong>Quatre usages</strong> — (a) un <em>rapport hebdomadaire</em> que{' '}
           <strong>seul Eliot (admin)</strong> reçoit chaque dimanche par email, pour assurer ton
           suivi — tu ne le reçois pas directement ; il s&apos;affiche dans l&apos;onglet Admin ; (b)
           ton <em>débrief mensuel</em> (V1.4, SPEC §25.4) consultable sur ta page{' '}
@@ -77,13 +77,16 @@ export default function AIDisclosurePage(): React.ReactElement {
           <em>calendrier d&apos;organisation hebdomadaire</em> (§26) consultable sur{' '}
           <a href="/calendrier">/calendrier</a>, généré à partir de ton questionnaire de
           disponibilité et d&apos;un instantané chiffré de ton activité — il organise ton{' '}
-          <strong>temps</strong> de pratique (sessions, entraînement, repos), jamais le marché.
+          <strong>temps</strong> de pratique (sessions, entraînement, repos), jamais le marché ; (d)
+          l&apos;<em>analyse unique de ton questionnaire d&apos;entrée</em> (entretien
+          d&apos;onboarding) qui construit ton profil membre — réponses pseudonymisées avant envoi.
         </li>
         <li>
           <strong>Volume</strong> — au plus 1 appel par utilisateur par semaine (rapport hebdo) + 1
           par mois (débrief mensuel) + 1 par semaine pour le calendrier (uniquement si tu remplis le
-          questionnaire d&apos;organisation), plafonnés à $15 de tokens par run (garde-fou technique
-          côté Eliot pour éviter toute dérive de coût).
+          questionnaire d&apos;organisation) + 1 appel unique à l&apos;arrivée (analyse du
+          questionnaire d&apos;entrée), plafonnés à $15 de tokens par run (garde-fou technique côté
+          Eliot pour éviter toute dérive de coût).
         </li>
       </ul>
 

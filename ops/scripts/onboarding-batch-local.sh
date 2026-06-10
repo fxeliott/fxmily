@@ -19,8 +19,9 @@
 #     (no local prompt assembly from snapshot + schema).
 #   - Per-field JSON validation (`.summary and .highlights and
 #     .axes_prioritaires`) on top of the core parse.
-#   - Results entries carry `{userId, interviewId, output, model}` (the
-#     persist gate validates the model slug server-side).
+#   - Results entries carry `{userId, interviewId, output, model}` (stored
+#     verbatim server-side for traceability — `z.string().max(80)`, the
+#     persist gate does NOT enforce a slug allowlist on this pipeline).
 #   - Persist failure exits 1 (historical contract ; weekly/monthly/calendar
 #     exit 2).
 #   - No pseudonym-regex gate : the pseudonym is display-only here (files are
@@ -109,13 +110,14 @@ fi
 core_validate_app_url "$BASE_URL"
 core_validate_model
 core_validate_effort
+core_validate_numeric_knobs
 core_validate_sleep_range
 core_sanity_checks
 
 mkdir -p "$WORK_DIR"
 trap 'rm -rf "$WORK_DIR"' EXIT
 # Core artifact globals point inside the ephemeral workdir (ERRORS_LOG is
-# used by core_invoke_claude_print ; per-entry .err files are kept too).
+# the single shared stderr sink used by core_invoke_claude_print).
 ENVELOPE_FILE="$WORK_DIR/envelope.json"
 RESULTS_NDJSON="$WORK_DIR/results.ndjson"
 RESULTS_FILE="$WORK_DIR/results.json"

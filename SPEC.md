@@ -1,8 +1,8 @@
 # SPEC — Fxmily App
 
-**Date initiale** : 2026-05-05 · **Dernière révision** : 2026-05-27 (v1.6 amendement, §29 Changelog v1.5 → v1.6 — pipeline auto-pilote DD→II 6/10 SHIPPED)
+**Date initiale** : 2026-05-05 · **Dernière révision** : 2026-06-10 (v1.8 amendement, §33 Vérification & Honnêteté radicale — preuve par screenshot MT5 + §34 Changelog v1.7 → v1.8)
 **Auteur** : Eliot Pena (interview structuré avec Claude Code, skill `/spec`)
-**Version** : **1.6** — voir §20 (v1.0→v1.1), §22 (v1.1→v1.2), §24 (v1.2→v1.3), §26 (v1.3→v1.4), §28 (v1.4→v1.5), §29 (v1.5→v1.6) pour les pivots stack et sous-jalons inventés en cours.
+**Version** : **1.8** — voir §20 (v1.0→v1.1), §22 (v1.1→v1.2), §24 (v1.2→v1.3), §26 (v1.3→v1.4), §28 (v1.4→v1.5), §29 (v1.5→v1.6), §32 (v1.6→v1.7), §34 (v1.7→v1.8) pour les pivots stack et sous-jalons inventés en cours.
 **Statut** : Reflète la réalité 2026-05-29 (V2.4 onboarding interview Phases A-C + §8 batch local Opus 4.8 LIVE prod Hetzner sur `app.fxmilyapp.com` ; **différenciateur Fxmily** pre-trade × outcome correlation per-reason déployé V2.3 ; **1618/1618 tests Vitest verts** ; pipeline débrief auto-pilote DD→MM 6/10 SHIPPED — 4 restantes JJ/KK/LL/MM).
 
 ---
@@ -613,7 +613,7 @@ C'est pas du "100% auto" mais c'est du "1-clic pour Eliot" avec qualité préser
 
 Pour cadrer le projet, voici ce qui est **explicitement EXCLU** de la V1 :
 
-- ❌ Connexion broker (MT4/MT5/cTrader) — le membre saisit ses trades manuellement
+- ❌ Connexion broker par **API** (MT4/MT5/cTrader, lecture automatique des trades) — le membre saisit ses trades manuellement. **Amendé v1.8** : la **vérification par screenshot MT5** (upload manuel de captures d'historique + extraction vision via Claude local) est, elle, **au scope V1** — voir §33. Seule la connexion **API** reste hors-scope (V3, §14).
 - ❌ Paiement intégré — invitation manuelle uniquement
 - ❌ Communauté entre membres (chat, forum, leaderboard public)
 - ❌ Multi-langue — full français
@@ -642,7 +642,7 @@ Pour cadrer le projet, voici ce qui est **explicitement EXCLU** de la V1 :
 
 ### V3 (à plus long terme)
 - Multi-admin (coachs assistants pour Eliot)
-- Connexion broker MT5 via API (lecture trades auto)
+- Connexion broker MT5 via API read-only (lecture trades auto) — l'étape **forensique** au-dessus de la vérification par screenshot V1 (§33.6 : un screenshot reste falsifiable ; seule l'API broker constitue une preuve absolue)
 - Communauté privée entre membres (chat asynchrone, modéré)
 - Onboarding self-service avec paiement Stripe
 - Multi-langue (EN d'abord)
@@ -1573,4 +1573,77 @@ Accepted post-1ᵉʳ run batch réel + validation Eliot §2 sur 5+ calendriers).
 
 ---
 
-**Fin du SPEC v1.7**
+## 33. Vérification & Honnêteté radicale — preuve par screenshot MT5 (spec V1.8 — 2026-06-10, Session S3 du plan 10-sessions)
+
+> Source : brief `03-SESSION-Verification-Honnetete.md` (plan 10-sessions, version Fable 5 du 2026-06-10) + design data-model `PROJECT_STATE.md §13.3` + **décisions Eliot 2026-06-10** : périmètre = **upload screenshots MT5 + vision Claude locale** (PAS d'API broker) ; **`ConstancyScore` dédié** (distinct de `BehavioralScore`) ; moteur épinglé **`claude-fable-5`**. Cette section résout le conflit historique avec §13 (hors-scope V1) : ce qui reste exclu de V1 est la connexion broker **API** — la vérification par **screenshot** est V1. **Impl = jalon S3 dédié post-`/clear`** (§18.4, feature multi-PR taille §21/§30).
+
+### 33.1 Vision en 1 phrase
+
+L'app rend le mensonge **confrontable à la réalité** : le membre téléverse des captures de son **historique MT5 pour chacun de ses comptes** (prop firm + perso), la **vision de Claude local** en extrait les positions et estime le nombre de comptes, le système **croise le déclaré (§7.3) avec le prouvé** et détecte écarts/oublis/fausses déclarations — un **score de constance dédié** (honnêteté, régularité, discipline) monte et descend en conséquence, et des **alertes psychologiques** (jamais de conseil de trading) se déclenchent **uniquement sur répétition**, à la Mark Douglas.
+
+### 33.2 Posture §2 + garde-fous (invariants BLOQUANTS)
+
+- La vérification porte sur des **faits** (positions prises, déclarations remplies ou non) — **jamais** sur la qualité des analyses : zéro conseil de marché/setup/tendance, le raisonnement Claude des écarts (`Discrepancy.claudeReasoning`) passe les gates `detectCrisis` + `detectAMFViolation` §2 comme les 4 pipelines existants.
+- **Anti Black-Hat strict** (canon §30/§31) : un écart détecté est restitué **fermement ancré dans la réalité mais sans honte** — ton calme, pas de rouge punitif, pas de streak/urgence ; les manquements isolés ne déclenchent **rien** (seuil de **répétition** obligatoire) ; l'accompagnement est **délégué au coaching Mark Douglas (S5)**, qui traite l'ego et l'honnêteté avec soi-même.
+- **Mensonge = signal psychologique**, pas un crime : le but est de mettre le membre **face à la réalité** pour qu'il progresse (brief S3 §29), pas de le punir.
+
+### 33.3 Modèle de données (cible — à raffiner en impl via `prisma-migration-runner`, migration ADD-only)
+
+- **`BrokerAccount`** : `id` · `memberId` (FK `User`, cascade RGPD) · `label` · `type` enum `PROP_FIRM | PERSONAL` · `brokerName?` · `detectedByAI Boolean` · `confidence Float?` · `createdAt`. + `User.detectedAccountCount Int?` (estimation IA du nombre de comptes).
+- **`Mt5AccountProof`** (preuve uploadée) : `id` · `memberId` · `brokerAccountId?` (FK) · `fileKey` (R2) · `fileHash` (SHA-256 — anti-doublon + détection de re-soumission) · `accountType` enum · `ocrStatus` enum `PENDING | DONE | FAILED` · `uploadedAt` · `claudeRunId?`.
+- **`ExtractedPosition`** (sortie vision) : `id` · `brokerAccountId` (FK) · `symbol` · `side` · `openTime` · `closeTime?` · `volume` · `entryPrice?` · `exitPrice?` · `pnl?` · `source` enum `MT5_SCREEN_OCR` · `confidence Float?`.
+- **`Trade.source`** enum `SELF_DECLARED | MT5_VERIFIED` (NEUF — tout `Trade` existant est implicitement déclaratif) + `Trade.verifiedAt DateTime?` + `Trade.matchStatus` enum `?` (résultat de réconciliation).
+- **`Discrepancy`** (écart détecté) : `id` · `memberId` · `type` enum `MISSING_DECLARED | FALSE_DECLARED | MISMATCH | UNFILLED_NO_REASON` · `declaredTradeId?` (FK) · `extractedPositionId?` (FK) · `severity` · `detectedAt` · `claudeReasoning` (texte, gates §2/AMF) · **`memberReason?` + `memberReasonAt?`** (motif saisi par le membre — distingue l'oubli **excusé** de l'indiscipline, exigence DoD S3 « sans motif valable » ; free-text passé par `safeFreeText`).
+- **`ConstancyScore`** (**dédié**, distinct de `BehavioralScore` : celui-ci est **confronté à la réalité externe**) : `id` · `memberId` · `value Float 0-100` · `breakdown Json {honesty, regularity, discipline}` · `period` · `computedAt`. + **`ScoreEvent`** (journal des deltas) : `id` · `memberId` · `delta` · `reason` enum `FILLED | FORGOT_NO_REASON | REALITY_GAP | FALSE_DECLARATION` · `relatedDiscrepancyId?` · `createdAt`.
+- **`Alert`** (sortie → coaching S5) : `id` · `memberId` · `triggerType` · `repeatCount Int` · `threshold Int` · `category` = `'PSYCHOLOGICAL'` (**jamais** trading) · `status` · `createdAt`. **Déclenchement uniquement sur RÉPÉTITION** (DoD S3). Jonction aval coaching : **`MarkDouglasDelivery.sourceAlertId?`** (FK nullable sur le canal coaching existant — pas de nouveau model `CoachingMessage`) ; snapshots `WeeklyReport`/`MonthlyDebrief` (compteurs count-only).
+
+### 33.4 Pipeline IA — 5ᵉ batch local vision (claude-fable-5, $0 API marginal)
+
+Carbone des 4 pipelines existants (weekly / monthly / calendar / onboarding §31.4) : `claude --print` local (abonnement Max, **modèle épinglé `claude-fable-5`**, CLI ≥ 2.1.170), routes admin token-gated `pull`/`persist`, gates au persist (active-user → Zod `.strict()` → `detectCrisis` → `detectAMFViolation` §2 → model allowlist), pseudonymisation `pseudonymizeMember`, human-in-the-loop (batch manuel, mitigation ban-risk §5.4 conservée). **Delta vision** : l'input n'est plus un snapshot JSON mais l'**image** de la preuve — **capacité PROUVÉE le 2026-06-10** (`claude --print --model claude-fable-5 --allowedTools Read` lit un PNG local et restitue le texte exact, [tool-output]).
+
+### 33.5 Réconciliation, score & alertes (déterministe là où c'est possible)
+
+- **Réconciliation** déclaré ↔ extrait : matching positions/trades par fenêtre temporelle + symbole + side (logique déterministe documentée en code, Claude en appoint pour les cas ambigus — le verdict final reste déterministe et auditable).
+- **`ConstancyScore`** : recalcul sur événements (upload preuve, écart détecté, déclaration manquante sans motif) — formules documentées en code, testées unitairement (pattern §7.11). Baisse sur `FORGOT_NO_REASON` / `REALITY_GAP` / `FALSE_DECLARATION`, remonte sur la régularité prouvée.
+- **Vérification généralisée** : « rien rempli / rien fait sans motif valable » = manque de discipline → `ScoreEvent` négatif — appliqué aux axes trackés S2 (check-ins, journal, présence réunions), **sans culpabilisation gratuite** (ton §33.2).
+- **Alertes** : seuil de répétition (`repeatCount >= threshold`) par `triggerType` ; la sortie est un **signal vers S5** (coaching Mark Douglas) + visibilité admin (S7) — jamais un push shame direct.
+
+### 33.6 Limites documentées honnêtement (anti-survente)
+
+- **Un screenshot reste falsifiable** (recadrage, compte démo, compte simplement non screené) : la V1 garantit la **confrontation systématique au déclaré** et un **signal psychologique fort**, PAS une preuve forensique absolue. « Rendre le mensonge impossible » au sens strict exige la **connexion broker API read-only = V3** (§14). Aucune surface ne doit afficher « vérifié à 100 % » — formulation honnête : « confronté à l'historique fourni ».
+- La **détection du nombre de comptes** est une **estimation IA** (`detectedByAI` + `confidence`) — l'admin garde le jugement final.
+
+### 33.7 Hors scope V1 (explicite — anti scope-creep)
+
+- Connexion broker API (MT5 investor password, API prop firm, Myfxbook) → **V3** (§14).
+- OCR temps réel à l'upload (le pipeline est un **batch** human-in-the-loop, comme les 4 existants).
+- Parsing de relevés PDF/CSV broker → V2 si besoin (V1 = screenshots).
+- Sanction automatique (suspension, blocage) sur écart détecté → jamais automatique ; décision humaine Eliot.
+
+### 33.8 Invariants (NON négociables)
+
+- **Posture §2 verrouillée** (33.2) + gates §2/AMF sur tout texte généré.
+- **Alertes : répétition obligatoire** — jamais sur un manquement isolé.
+- **`ConstancyScore` ≠ `BehavioralScore`** : le premier confronte la réalité externe, le second agrège le déclaratif ; pas de fusion silencieuse.
+- **RGPD** : cascade `User` delete sur toutes les nouvelles tables ; preuves R2 balayées à la purge de compte (pattern `deleteTrade` MAJ-10) ; audit PII-free.
+- **Moteur épinglé `claude-fable-5`** (un seul point de vérité par monde — core bash + env TS) ; mitigations anti-ban des batchs conservées (jitter, 1 invocation/membre, binaire officiel, human-in-the-loop).
+- **1 session = 1 jalon** (§18.4) : impl en sous-jalons dédiés (data layer → upload+R2 → pipeline vision → réconciliation+score → alertes+surfaces).
+
+### 33.9 Prochaine étape (recommandée)
+
+(1) Migration data-model ADD-only (fondation S1 — peut précéder le jalon S3). (2) Jalon S3 multi-PR : upload preuves → pipeline vision → réconciliation → `ConstancyScore`/`ScoreEvent` → `Alert` + surfaces membre/admin. (3) Brancher les sorties sur S4 (affichage), S5 (coaching), S6 (rapports), S7 (admin).
+
+---
+
+## 34. Changelog v1.7 → v1.8 (2026-06-10)
+
+- **§33 ajoutée** : Vérification & Honnêteté radicale — preuve par screenshot MT5 (Session S3 du plan 10-sessions, brief Fable 5). Décisions Eliot 2026-06-10 : périmètre **screenshots MT5 + vision Claude locale** (option (a) de `PROJECT_STATE.md §13.4`), **`ConstancyScore` dédié** + `ScoreEvent`, alertes **sur répétition uniquement**, accompagnement strictement psychologique délégué au coaching S5. **Capacité vision locale prouvée en réel** (claude-fable-5 lit un PNG et extrait le texte exact, 2026-06-10). **Limite documentée sans survente** (§33.6) : un screenshot reste falsifiable, la preuve forensique = API broker V3.
+- **§13 amendé** (résolution du conflit `PROJECT_STATE.md §13.4 #2`) : l'exclusion V1 porte sur la connexion broker **API** ; la vérification par **screenshot** entre au scope V1 (→ §33).
+- **§14 V3 précisé** : l'API broker read-only est l'étape forensique au-dessus du screenshot V1.
+- **Moteur IA** : modèle local épinglé **`claude-fable-5`** (décision Eliot 2026-06-10, « Fable 5 partout ») — concerne les 4 pipelines batch existants + le 5ᵉ pipeline vision (§33.4) ; mise en œuvre dans le jalon « service Claude central » (PROJECT_STATE §13.5).
+- **En-tête re-synchronisé** (v1.6 → v1.8) : le drift noté en §32 (« volontairement non corrigé ») est résolu ici puisque cette PR bump la version de toute façon ; pointeurs §32 + §34 ajoutés à la ligne Version.
+- **Extensions de schéma « fondations S1 »** (issues de la matrice de couverture champ-par-champ sessions 2→10, 2026-06-10) : `TradeMedia` 1-N (« photos » au pluriel des briefs S4/S7 — `Trade.screenshotEntryKey` reste, rétrocompat) ; `TrainingSession` conteneur + `TrainingTrade.sessionId?` (« crée une session de backtest », brief S8 — 100 % monde training, firewall §21.5 intact) ; `MarkDouglasDelivery.sourceAlertId?` (jonction Alert S3 → coaching S5) ; `Discrepancy.memberReason/memberReasonAt` (motif valable, §33.3). Migrées avec le data-model §33 (ADD-only).
+
+---
+
+**Fin du SPEC v1.8**

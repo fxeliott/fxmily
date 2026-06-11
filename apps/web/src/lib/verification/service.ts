@@ -166,6 +166,78 @@ export async function getVerificationOverview(memberId: string): Promise<Verific
   };
 }
 
+export class DiscrepancyNotFoundError extends Error {
+  override readonly name = 'DiscrepancyNotFoundError';
+  constructor() {
+    super('Discrepancy not found or access denied.');
+  }
+}
+
+export interface DiscrepancyView {
+  readonly id: string;
+  readonly type: 'missing_declared' | 'false_declared' | 'mismatch' | 'unfilled_no_reason';
+  readonly severity: number;
+  readonly status: 'open' | 'acknowledged' | 'resolved';
+  readonly reasoning: string | null;
+  readonly memberReason: string | null;
+  readonly detectedAt: Date;
+}
+
+/** Member-facing list — newest first, the excused ones stay visible (the
+ *  history doesn't rewrite itself; only the score forgives, §33.5). */
+export async function listDiscrepancies(memberId: string): Promise<readonly DiscrepancyView[]> {
+  const rows = await db.discrepancy.findMany({
+    where: { memberId },
+    orderBy: { detectedAt: 'desc' },
+    take: 50,
+    select: {
+      id: true,
+      type: true,
+      severity: true,
+      status: true,
+      claudeReasoning: true,
+      memberReason: true,
+      detectedAt: true,
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    severity: r.severity,
+    status: r.status,
+    reasoning: r.claudeReasoning,
+    memberReason: r.memberReason,
+    detectedAt: r.detectedAt,
+  }));
+}
+
+/**
+ * The member explains a gap (« motif valable » DoD §29). Sets the reason +
+ * flips `open → acknowledged`. The constancy fold then EXCLUDES the linked
+ * negative events — « le score remonte » when the member faces reality.
+ */
+export async function submitDiscrepancyReason(
+  memberId: string,
+  discrepancyId: string,
+  reason: string,
+): Promise<void> {
+  const row = await db.discrepancy.findUnique({
+    where: { id: discrepancyId },
+    select: { memberId: true, status: true },
+  });
+  if (!row || row.memberId !== memberId) {
+    throw new DiscrepancyNotFoundError();
+  }
+  await db.discrepancy.update({
+    where: { id: discrepancyId },
+    data: {
+      memberReason: safeFreeText(reason),
+      memberReasonAt: new Date(),
+      ...(row.status === 'open' ? { status: 'acknowledged' as const } : {}),
+    },
+  });
+}
+
 /**
  * Delete one of the member's proofs. The DB row is the source of truth — the
  * storage object is deleted best-effort (never blocks the user-facing flow;

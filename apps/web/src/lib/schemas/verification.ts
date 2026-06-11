@@ -64,6 +64,28 @@ export const brokerAccountCreateSchema = z
 
 export type BrokerAccountCreateInput = z.infer<typeof brokerAccountCreateSchema>;
 
+/**
+ * `submitDiscrepancyReasonAction` — the member explains a gap (« motif
+ * valable », DoD §29: an excused absence is NOT indiscipline). Free text →
+ * safeFreeText at the service + crisis routing at the action (member input).
+ */
+export const DISCREPANCY_REASON_MIN_CHARS = 5;
+export const DISCREPANCY_REASON_MAX_CHARS = 500;
+
+export const discrepancyReasonSchema = z
+  .object({
+    discrepancyId: z.string().regex(/^[a-z0-9]{8,40}$/),
+    reason: z
+      .string()
+      .trim()
+      .min(DISCREPANCY_REASON_MIN_CHARS, 'Explique en quelques mots (5 caractères minimum).')
+      .max(DISCREPANCY_REASON_MAX_CHARS, `Maximum ${DISCREPANCY_REASON_MAX_CHARS} caractères.`)
+      .refine((v) => !containsBidiOrZeroWidth(v), 'Le motif contient des caractères invalides.'),
+  })
+  .strict();
+
+export type DiscrepancyReasonInput = z.infer<typeof discrepancyReasonSchema>;
+
 // =============================================================================
 // S3 §33.4 — Vision pipeline output (one MT5-history proof → account header +
 // extracted positions). Shape validated against TWO real runtime probes

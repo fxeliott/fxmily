@@ -50,6 +50,14 @@ test.describe('S3 — /verification : comptes + preuves MT5 (real DB)', () => {
     await expect(page.getByRole('heading', { name: 'Ta réalité de trading' })).toBeVisible();
     await expect(page.getByText(/vérifié à 100\s?%/i)).toHaveCount(0);
 
+    // PR-C sections render their calm empty states for a fresh member —
+    // constancy (no score yet) + écarts (none detected). Anti-Black-Hat:
+    // nothing red, nothing urgent on a blank account.
+    await expect(page.getByRole('heading', { name: 'Ta constance' })).toBeVisible();
+    await expect(page.getByText(/il commence quand tu commences/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Tes écarts' })).toBeVisible();
+    await expect(page.getByText(/Aucun écart détecté/i)).toBeVisible();
+
     // --- 1. Declare a broker account through the real form.
     await page.getByLabel('Nom du compte').fill('FTMO Challenge 100k');
     await page.getByLabel('Broker (optionnel)').fill('FTMO');

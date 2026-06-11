@@ -120,6 +120,13 @@ export const MAX_PROOFS_PER_PULL = 25;
 // Pull side — pending proofs metadata (images travel via proof-image GET)
 // =============================================================================
 
+/** Runtime-validated extension (audit T3-3 — no lying cast): falls back to
+ *  png, which the script ALSO re-allowlists (defense in depth). */
+function proofFileExt(fileKey: string): 'jpg' | 'png' | 'webp' {
+  const ext = fileKey.split('.').pop();
+  return ext === 'jpg' || ext === 'png' || ext === 'webp' ? ext : 'png';
+}
+
 export async function loadPendingProofsEnvelope(
   options: { now?: Date } = {},
 ): Promise<VerificationBatchPullEnvelope> {
@@ -144,7 +151,7 @@ export async function loadPendingProofsEnvelope(
     proofId: p.id,
     userId: p.memberId,
     pseudonymLabel: pseudonymizeMember(p.memberId),
-    fileExt: (p.fileKey.split('.').pop() ?? 'png') as 'jpg' | 'png' | 'webp',
+    fileExt: proofFileExt(p.fileKey),
     declaredAccount: p.brokerAccount
       ? {
           id: p.brokerAccount.id,
@@ -257,7 +264,10 @@ export async function persistVisionResults(
     // is TRANSIENT → the proof stays `pending` and retries at the next run.
     if ('error' in entry) {
       skipped += 1;
-      if (entry.error === NOT_MT5_HISTORY_ERROR) {
+      // `pending` guard (adverse-review): a stale/contradictory second batch
+      // must never flip an already-analysed (`done`) proof back to `failed`
+      // while its positions remain — the verdict only applies pre-analysis.
+      if (entry.error === NOT_MT5_HISTORY_ERROR && proof.ocrStatus === 'pending') {
         await db.mt5AccountProof.update({
           where: { id: entry.proofId },
           data: { ocrStatus: 'failed', claudeRunId: ranAt },

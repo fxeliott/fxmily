@@ -5,12 +5,16 @@ import type { ZodError } from 'zod';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
-import { brokerAccountCreateSchema } from '@/lib/schemas/verification';
+import { reportWarning } from '@/lib/observability';
+import { detectCrisis } from '@/lib/safety/crisis-detection';
+import { brokerAccountCreateSchema, discrepancyReasonSchema } from '@/lib/schemas/verification';
 import {
   BrokerAccountLimitError,
+  DiscrepancyNotFoundError,
   ProofNotFoundError,
   createBrokerAccount,
   deleteProof,
+  submitDiscrepancyReason,
 } from '@/lib/verification/service';
 
 /**
@@ -89,6 +93,68 @@ export async function createBrokerAccountAction(
 
   revalidatePath('/verification');
   return { ok: true, accountId };
+}
+
+export interface SubmitDiscrepancyReasonActionState {
+  ok: boolean;
+  error?: 'unauthorized' | 'invalid_input' | 'not_found' | 'unknown';
+  fieldErrors?: Record<string, string>;
+}
+
+/**
+ * The member explains an écart (« motif valable » DoD §29). Persist-anyway +
+ * crisis routing on the member free text (carbon V1.8 REFLECT): a member in
+ * distress explaining a blank week must reach a human, never a silent skip.
+ */
+export async function submitDiscrepancyReasonAction(
+  _prev: SubmitDiscrepancyReasonActionState | null,
+  formData: FormData,
+): Promise<SubmitDiscrepancyReasonActionState> {
+  const session = await auth();
+  if (!session?.user?.id || session.user.status !== 'active') {
+    return { ok: false, error: 'unauthorized' };
+  }
+
+  const parsed = discrepancyReasonSchema.safeParse({
+    discrepancyId: getString(formData, 'discrepancyId'),
+    reason: getString(formData, 'reason'),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: 'invalid_input', fieldErrors: flattenFieldErrors(parsed.error) };
+  }
+
+  try {
+    await submitDiscrepancyReason(session.user.id, parsed.data.discrepancyId, parsed.data.reason);
+  } catch (err) {
+    if (err instanceof DiscrepancyNotFoundError) {
+      return { ok: false, error: 'not_found' };
+    }
+    console.error('[verification.submitDiscrepancyReason] failed', err);
+    return { ok: false, error: 'unknown' };
+  }
+
+  // Crisis routing on MEMBER free text — persist-anyway, separate signal.
+  const crisis = detectCrisis(parsed.data.reason);
+  if (crisis.level === 'high' || crisis.level === 'medium') {
+    reportWarning('verification.reason', 'crisis_signal_in_member_reason', {
+      userId: session.user.id,
+      discrepancyId: parsed.data.discrepancyId,
+      level: crisis.level,
+    });
+  }
+
+  await logAudit({
+    action: 'verification.discrepancy.reason_submitted',
+    userId: session.user.id,
+    metadata: {
+      discrepancyId: parsed.data.discrepancyId,
+      // PII-free: never the reason text; the crisis level is a closed enum.
+      crisisLevel: crisis.level,
+    },
+  });
+
+  revalidatePath('/verification');
+  return { ok: true };
 }
 
 export interface DeleteProofActionState {

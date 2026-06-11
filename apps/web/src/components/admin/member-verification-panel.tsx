@@ -1,0 +1,186 @@
+import { Card } from '@/components/ui/card';
+import { Pill } from '@/components/ui/pill';
+import { ConstancyScoreCard } from '@/components/verification/constancy-score-card';
+import type { ConstancyScoreView } from '@/lib/verification/constancy';
+import type { DiscrepancyView, VerificationOverview } from '@/lib/verification/service';
+
+/**
+ * S3 §33 — admin read-only « réalité vs déclaré » panel (S7 output:
+ * « admin : visibilité totale de la réalité & des écarts »). Carbone pattern
+ * §7.7: server-rendered, zero mutation, calm factual copy.
+ */
+
+const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'Europe/Paris',
+});
+
+const DISCREPANCY_LABELS: Record<DiscrepancyView['type'], string> = {
+  missing_declared: 'Position réelle non déclarée',
+  false_declared: 'Trade déclaré sans contrepartie',
+  mismatch: 'Écart de taille',
+  unfilled_no_reason: 'Journée sans suivi',
+};
+
+interface AlertView {
+  readonly id: string;
+  readonly triggerType: string;
+  readonly repeatCount: number;
+  readonly threshold: number;
+  readonly status: 'open' | 'delivered' | 'dismissed';
+  readonly createdAt: Date;
+}
+
+const ALERT_LABELS: Record<string, string> = {
+  forgot_no_reason_repeat: 'Journées sans suivi répétées',
+  reality_gap_repeat: 'Écarts déclaré/réalité répétés',
+  false_declaration_repeat: 'Fausses déclarations répétées',
+};
+
+interface MemberVerificationPanelProps {
+  overview: VerificationOverview;
+  constancy: ConstancyScoreView | null;
+  discrepancies: readonly DiscrepancyView[];
+  alerts: readonly AlertView[];
+  detectedAccountCount: number | null;
+}
+
+export function MemberVerificationPanel({
+  overview,
+  constancy,
+  discrepancies,
+  alerts,
+  detectedAccountCount,
+}: MemberVerificationPanelProps) {
+  const openCount = discrepancies.filter((d) => d.status === 'open').length;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* KPI strip */}
+      <div className="border-edge-top rounded-card relative grid grid-cols-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] sm:grid-cols-4">
+        <Metric label="Comptes (preuves)" value={String(detectedAccountCount ?? '—')} />
+        <Metric label="Preuves reçues" value={String(overview.proofs.length)} />
+        <Metric label="Écarts ouverts" value={String(openCount)} />
+        <Metric
+          label="Alertes actives"
+          value={String(alerts.filter((a) => a.status !== 'dismissed').length)}
+        />
+      </div>
+
+      <ConstancyScoreCard score={constancy} />
+
+      {/* Comptes */}
+      <section className="flex flex-col gap-2" aria-label="Comptes broker">
+        <h3 className="t-h3 text-[var(--t-1)]">Comptes</h3>
+        {overview.accounts.length === 0 ? (
+          <p className="t-body text-[var(--t-3)]">Aucun compte déclaré ni détecté.</p>
+        ) : (
+          overview.accounts.map((a) => (
+            <Card key={a.id} className="flex flex-wrap items-center gap-3 p-3">
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--t-1)]">
+                {a.label}
+                <span className="t-cap block text-[var(--t-4)]">
+                  {a.brokerName ?? '—'} · {a.proofsCount} preuve{a.proofsCount > 1 ? 's' : ''} ·{' '}
+                  {a.positionsCount} position{a.positionsCount > 1 ? 's' : ''}
+                </span>
+              </span>
+              {a.detectedByAI ? (
+                <Pill tone="cy">Détecté IA</Pill>
+              ) : (
+                <Pill tone="mute">Déclaré</Pill>
+              )}
+            </Card>
+          ))
+        )}
+      </section>
+
+      {/* Écarts */}
+      <section className="flex flex-col gap-2" aria-label="Écarts">
+        <h3 className="t-h3 text-[var(--t-1)]">Écarts</h3>
+        {discrepancies.length === 0 ? (
+          <p className="t-body text-[var(--t-3)]">Aucun écart détecté.</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {discrepancies.map((d) => (
+              <li key={d.id}>
+                <Card className="flex flex-col gap-1.5 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[13px] font-medium text-[var(--t-1)]">
+                      {DISCREPANCY_LABELS[d.type]}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="t-cap text-[var(--t-4)]">
+                        {DATE_FMT.format(d.detectedAt)}
+                      </span>
+                      {d.memberReason !== null ? (
+                        <Pill tone="cy">Motif donné</Pill>
+                      ) : d.status === 'open' ? (
+                        <Pill tone="warn">Ouvert</Pill>
+                      ) : (
+                        <Pill tone="mute">
+                          {d.status === 'resolved' ? 'Résolu' : 'Pris en compte'}
+                        </Pill>
+                      )}
+                    </span>
+                  </div>
+                  {d.reasoning ? (
+                    <p className="t-cap leading-[1.5] text-[var(--t-3)]">{d.reasoning}</p>
+                  ) : null}
+                  {d.memberReason !== null ? (
+                    <p className="t-cap text-[var(--t-4)]">Motif membre : {d.memberReason}</p>
+                  ) : null}
+                </Card>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Alertes */}
+      <section className="flex flex-col gap-2" aria-label="Alertes">
+        <h3 className="t-h3 text-[var(--t-1)]">Alertes (répétition)</h3>
+        {alerts.length === 0 ? (
+          <p className="t-body text-[var(--t-3)]">
+            Aucune alerte — un manquement isolé ne déclenche jamais rien.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {alerts.map((a) => (
+              <li key={a.id}>
+                <Card className="flex flex-wrap items-center justify-between gap-2 p-3">
+                  <span className="text-[13px] font-medium text-[var(--t-1)]">
+                    {ALERT_LABELS[a.triggerType] ?? a.triggerType}
+                    <span className="t-cap block text-[var(--t-4)]">
+                      {a.repeatCount}× en 14 jours (seuil {a.threshold}) ·{' '}
+                      {DATE_FMT.format(a.createdAt)}
+                    </span>
+                  </span>
+                  {a.status === 'delivered' ? (
+                    <Pill tone="cy">Fiche Douglas envoyée</Pill>
+                  ) : a.status === 'open' ? (
+                    <Pill tone="warn">Ouverte</Pill>
+                  ) : (
+                    <Pill tone="mute">Classée</Pill>
+                  )}
+                </Card>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 border-[var(--b-subtle)] p-3 not-last:border-r">
+      <span className="t-eyebrow text-[var(--t-4)]">{label}</span>
+      <span className="f-mono text-[18px] font-semibold text-[var(--t-1)] tabular-nums">
+        {value}
+      </span>
+    </div>
+  );
+}

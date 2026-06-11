@@ -28,6 +28,7 @@
 #   - calendar-overdue-alert    daily 11:00 UTC                    (S5 §26 perm.)
 #   - monthly-debrief-overdue-alert daily 11:10 UTC                (S5 §25 perm.)
 #   - onboarding-profile-overdue-alert daily 11:20 UTC             (S2 perm.)
+#   - verification-scan         daily 11:30 UTC                    (S3 §33.5)
 #
 # Log : every run appends one line to /var/log/fxmily/cron.log via the
 # wrapper. The DB audit row (`cron.<route>.scan`) is the canonical
@@ -124,3 +125,12 @@ MAILTO=""
 # idempotent ; emits cron.onboarding_profile_overdue.scan heartbeat (monitored
 # by lib/system/health.ts). 11:20 UTC offsets the 11:00/11:10 permanence nudges.
 20 11 * * *                  fxmily   /usr/local/bin/fxmily-cron onboarding-profile-overdue-alert
+
+# S3 §33.5 — daily verification scan : 11:30 UTC (13:30 Paris). DETERMINISTIC
+# fold of rows already produced (reconcile declared↔extracted, ritual events,
+# weekly ConstancyScore, repetition-only alerts + Mark Douglas dispatch). It
+# NEVER drives Claude — the vision batch stays manual (ban-risk human-in-the-
+# loop §5.4). Idempotent (deterministic event ids + identity-deduped écarts) ;
+# emits cron.verification_scan.scan heartbeat (monitored by
+# lib/system/health.ts). 11:30 UTC offsets the 11:00/11:10/11:20 nudges.
+30 11 * * *                  fxmily   /usr/local/bin/fxmily-cron verification-scan

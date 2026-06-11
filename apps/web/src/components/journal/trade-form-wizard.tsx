@@ -347,7 +347,7 @@ export function TradeFormWizard() {
                 i < step
                   ? 'bg-[var(--acc)]'
                   : i === step
-                    ? 'bg-[var(--acc)] shadow-[0_0_8px_oklch(0.879_0.231_130_/_0.55)]'
+                    ? 'bg-[var(--acc)] shadow-[0_0_8px_oklch(0.62_0.19_254_/_0.55)]'
                     : 'bg-[var(--b-default)]',
               )}
             />
@@ -781,7 +781,7 @@ function StepPlannedRR({
             −1R
           </div>
           <div
-            className="grid place-items-center bg-gradient-to-r from-[oklch(0.879_0.231_130_/_0.10)] to-[oklch(0.879_0.231_130_/_0.22)] font-mono text-[11px] font-semibold text-[var(--acc)] tabular-nums transition-[flex-basis]"
+            className="grid place-items-center bg-gradient-to-r from-[oklch(0.62_0.19_254_/_0.10)] to-[oklch(0.62_0.19_254_/_0.22)] font-mono text-[11px] font-semibold text-[var(--acc)] tabular-nums transition-[flex-basis]"
             style={{ flexBasis: `${(rr * 100) / (1 + rr)}%`, transitionDuration: '120ms' }}
           >
             +{rr.toFixed(1)}R
@@ -935,7 +935,7 @@ function StepPlannedRR({
                 className={cn(
                   'rounded-control p-1.5 text-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                   active
-                    ? 'border border-[var(--b-acc-strong)] bg-[var(--acc-dim)] shadow-[0_0_0_3px_oklch(0.879_0.231_130_/_0.10)]'
+                    ? 'border border-[var(--b-acc-strong)] bg-[var(--acc-dim)] shadow-[0_0_0_3px_oklch(0.62_0.19_254_/_0.10)]'
                     : close
                       ? 'border border-[var(--b-acc)] bg-[var(--acc-dim-2)]'
                       : 'border border-[var(--b-subtle)] hover:border-[var(--b-default)]',
@@ -1273,7 +1273,7 @@ function RadioGroup({
                 'rounded-pill inline-flex min-h-11 cursor-pointer items-center gap-2 border px-4 py-2 text-[13px] font-medium transition-all',
                 'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--acc)]',
                 active
-                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_3px_oklch(0.879_0.231_130_/_0.10)]'
+                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_3px_oklch(0.62_0.19_254_/_0.10)]'
                   : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]',
                 disabled && 'cursor-not-allowed opacity-60',
               )}

@@ -26,7 +26,7 @@ import { scanAlertsForAllMembers } from '@/lib/verification/alerts';
  * it only folds rows already produced. Heartbeat audit on EVERY run
  * (`cron.verification_scan.scan`, counts-only PII-free) → `health.ts`.
  *
- * Wiring expected in production : Hetzner crontab daily 11:20 UTC →
+ * Wiring expected in production : Hetzner crontab daily 11:30 UTC →
  *   curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
  *        https://app.fxmilyapp.com/api/cron/verification-scan
  *

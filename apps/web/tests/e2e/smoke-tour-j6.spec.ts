@@ -13,7 +13,7 @@
  * jalons.
  */
 
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import {
   cleanupTestUsers,
@@ -117,5 +117,42 @@ test.describe('Visual smoke-tour J6 — admin dashboard with seeded analytics', 
       path: 'test-results/captures/j6-07-dashboard-mobile-patterns.png',
       fullPage: true,
     });
+  });
+
+  // S4 — own test block (the visual tour above already runs close to the 30s
+  // budget; piggy-backing these steps onto it timed the whole tour out).
+  test('S4 — /verification at 375px + FAB vs legal footer geometry (DOD4-B1)', async ({
+    page,
+    request,
+  }) => {
+    if (!seeded) throw new Error('seed missing');
+    await loginAs(page, request, seeded.email, seeded.password);
+
+    // ─── /verification joins the 375px sweep (S3 surface, S4 DoD#4) ─────
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/verification');
+    await expect(page.getByRole('heading', { name: 'Ta réalité de trading' })).toBeVisible();
+    await page.screenshot({
+      path: 'test-results/captures/j6-08-verification-mobile-iphone-se.png',
+      fullPage: true,
+    });
+
+    // ─── DOD4-B1 regression lock — the Log-Express FAB must never cover
+    //     the legal footer nav (≥640px, where the nav is right-aligned). ──
+    await page.setViewportSize({ width: 800, height: 700 });
+    await page.goto('/dashboard');
+    const fab = page.locator('[data-slot="log-express-fab"]');
+    const mentions = page.getByRole('link', { name: 'Mentions légales' });
+    await expect(fab).toBeVisible();
+    await mentions.scrollIntoViewIfNeeded();
+    await expect(mentions).toBeVisible();
+    const fabBox = await fab.boundingBox();
+    const linkBox = await mentions.boundingBox();
+    if (!fabBox || !linkBox) throw new Error('FAB or legal link not measurable');
+    const horizontalOverlap =
+      linkBox.x < fabBox.x + fabBox.width && fabBox.x < linkBox.x + linkBox.width;
+    const verticalOverlap =
+      linkBox.y < fabBox.y + fabBox.height && fabBox.y < linkBox.y + linkBox.height;
+    expect(horizontalOverlap && verticalOverlap).toBe(false);
   });
 });

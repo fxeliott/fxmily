@@ -24,6 +24,15 @@ const DISCREPANCY_LABELS: Record<DiscrepancyView['type'], string> = {
   unfilled_no_reason: 'Journée sans suivi',
 };
 
+/** S4 (DOD3-T3-01) — `severity` drives the ScoreEvent delta but was rendered
+ *  nowhere: the admin had to open the DB to tell a major gap from a minor
+ *  one. Sober wording, factual (this panel stays zero-mutation). */
+const SEVERITY_LABELS: Record<number, string> = {
+  1: 'mineur',
+  2: 'notable',
+  3: 'majeur',
+};
+
 interface AlertView {
   readonly id: string;
   readonly triggerType: string;
@@ -114,6 +123,7 @@ export function MemberVerificationPanel({
                       <span className="t-cap text-[var(--t-4)]">
                         {DATE_FMT.format(d.detectedAt)}
                       </span>
+                      <Pill tone="mute">{SEVERITY_LABELS[d.severity] ?? `sév. ${d.severity}`}</Pill>
                       {d.memberReason !== null ? (
                         <Pill tone="cy">Motif donné</Pill>
                       ) : d.status === 'open' ? (

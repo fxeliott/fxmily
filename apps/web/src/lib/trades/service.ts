@@ -326,7 +326,10 @@ export async function listTradesForUser(
 
   const trades = await db.trade.findMany({
     where,
-    orderBy: { enteredAt: 'desc' },
+    // `enteredAt` is member input at minute precision (non-unique) — without
+    // the `id` tiebreaker, cursor pagination could skip or duplicate trades
+    // whose sort keys collide between two requests (S4 review finding).
+    orderBy: [{ enteredAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
     ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
   });

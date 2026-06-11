@@ -1169,3 +1169,16 @@
 .v18-dot-pop {
   animation: v18DotPop 320ms var(--e-overshoot);
 }
+
+/* S4 DOD4-B1 — the legal footer nav must never sit under the Log-Express FAB
+   (fixed bottom-right, 56px + 16px inset = 72px footprint). The FAB only
+   exists in the DOM on authenticated member screens (it returns null
+   elsewhere), so the clearance is conditional via :has() — login/legal pages
+   keep their balanced layout. ≥640px only: below sm the nav is left-aligned
+   on its own row and never reaches the FAB. Fallback (no :has support,
+   < Safari 15.4 = outside targets) degrades to the previous layout. */
+@media (min-width: 640px) {
+  body:has([data-slot='log-express-fab']) [data-slot='legal-footer-inner'] {
+    padding-right: 6.5rem; /* 104px > 72px FAB + 24px breathing room */
+  }
+}

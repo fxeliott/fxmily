@@ -80,6 +80,26 @@ export async function evaluateAndDispatchForUser(
   const timezone = user.timezone || 'Europe/Paris';
   const todayLocal = localDateOf(now, timezone);
 
+  // --- 1.5 Member-day cap (S4 DOD2-T2-1) -------------------------------------
+  // The documented invariant is « ≤ 1 fiche Douglas par membre par JOUR »
+  // (anti-spam, posture calme) — but the unique index `(userId, cardId,
+  // triggeredOn)` only enforces it PER CARD: with 4 cron ticks/day + the
+  // realtime scheduler, tick 2 could deliver a DIFFERENT matched card the
+  // same local day. Checked BEFORE the heavy context fetch — a member
+  // already served today skips the 5 parallel queries entirely (the common
+  // case on 3 of the 4 daily ticks). Best-effort against concurrent racers
+  // (no DB-level member-day unique without a migration); the 5s scheduler
+  // debounce makes the residual window negligible vs the previous fully
+  // uncapped behavior.
+  const triggeredOn = parseLocalDate(todayLocal);
+  const alreadyServedToday = await db.markDouglasDelivery.findFirst({
+    where: { userId, triggeredOn },
+    select: { id: true },
+  });
+  if (alreadyServedToday) {
+    return emptyResult();
+  }
+
   // --- 2. Fetch trades + checkins + cards + history (parallel) ---------------
   const tradesWindowStart = parseLocalDate(shiftLocalDate(todayLocal, -(TRADES_WINDOW_DAYS - 1)));
   const checkinsWindowStart = parseLocalDate(
@@ -234,7 +254,6 @@ export async function evaluateAndDispatchForUser(
   const winner = matches.find((m) => m.cardId === picked.cardId)!;
 
   // --- 6. Persist delivery (idempotent) -------------------------------------
-  const triggeredOn = parseLocalDate(todayLocal);
   try {
     const row = await db.markDouglasDelivery.create({
       data: {

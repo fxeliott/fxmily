@@ -224,9 +224,9 @@ export function ScreenshotUploader({
         onDrop={onDrop}
         className={cn(
           'rounded-card group flex min-h-44 cursor-pointer flex-col items-center justify-center gap-3 border border-dashed px-4 py-6 text-center transition-all',
-          'focus-within:border-[var(--acc)] focus-within:bg-[var(--acc-dim-2)] focus-within:shadow-[0_0_0_4px_oklch(0.879_0.231_130_/_0.18)]',
+          'focus-within:border-[var(--acc)] focus-within:bg-[var(--acc-dim-2)] focus-within:shadow-[0_0_0_4px_oklch(0.62_0.19_254_/_0.18)]',
           isDragOver
-            ? 'border-[var(--acc)] bg-[var(--acc-dim)] shadow-[0_0_24px_-4px_oklch(0.879_0.231_130_/_0.45)]'
+            ? 'border-[var(--acc)] bg-[var(--acc-dim)] shadow-[0_0_24px_-4px_oklch(0.62_0.19_254_/_0.45)]'
             : 'border-[var(--b-strong)] bg-[var(--bg-1)] hover:border-[var(--b-acc)] hover:bg-[var(--bg-2)]',
           disabled && 'cursor-not-allowed opacity-60',
         )}

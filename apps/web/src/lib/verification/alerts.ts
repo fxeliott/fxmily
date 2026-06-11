@@ -79,7 +79,11 @@ export async function scanAlertsForAllMembers(
 
   const members = await db.user.findMany({
     where: { status: 'active', role: 'member' },
-    select: { id: true },
+    // timezone: the member-day cap is an EXPERIENCE invariant — « aujourd'hui »
+    // must be the member's local day, exactly like the trigger engine
+    // (S4 review: a hardcoded Paris day leaked 2 cards into one member-day
+    // for non-Paris timezones around date boundaries).
+    select: { id: true, timezone: true },
   });
 
   let alertsCreated = 0;
@@ -88,7 +92,12 @@ export async function scanAlertsForAllMembers(
 
   for (const member of members) {
     try {
-      const result = await scanAlertsForMember(member.id, now, windowStart);
+      const result = await scanAlertsForMember(
+        member.id,
+        member.timezone || 'Europe/Paris',
+        now,
+        windowStart,
+      );
       alertsCreated += result.created;
       deliveriesDispatched += result.dispatched;
     } catch (err) {
@@ -106,6 +115,7 @@ export async function scanAlertsForAllMembers(
 
 async function scanAlertsForMember(
   memberId: string,
+  timezone: string,
   now: Date,
   windowStart: Date,
 ): Promise<{ created: number; dispatched: number }> {
@@ -143,6 +153,18 @@ async function scanAlertsForMember(
       if (existing.repeatCount !== count && existing.status !== 'dismissed') {
         await db.alert.update({ where: { id: existing.id }, data: { repeatCount: count } });
       }
+      // S4 — an alert created but never delivered (no published card in the
+      // category, or the member's daily Douglas slot was already used) is
+      // RETRIED at each daily scan instead of silently staying `open`
+      // forever. Still ≤1 fiche/membre/jour : the cap inside
+      // `dispatchDouglasForAlert` governs every attempt.
+      if (existing.status === 'open') {
+        const retried = await dispatchDouglasForAlert(memberId, timezone, existing.id, rule, now);
+        if (retried) {
+          dispatched += 1;
+          await db.alert.update({ where: { id: existing.id }, data: { status: 'delivered' } });
+        }
+      }
       continue;
     }
 
@@ -168,8 +190,10 @@ async function scanAlertsForMember(
     });
 
     // S5 junction — deliver a Mark Douglas card through the EXISTING coaching
-    // channel (calm push ≤1/day handled downstream; never a shame blast).
-    const dispatchedOk = await dispatchDouglasForAlert(memberId, alert.id, rule, now);
+    // channel (never a shame blast). The « ≤1 fiche/membre/jour » cap is
+    // enforced INSIDE `dispatchDouglasForAlert` (S4 DOD2-T2-1) — a member
+    // already served today gets the alert card at tomorrow's scan instead.
+    const dispatchedOk = await dispatchDouglasForAlert(memberId, timezone, alert.id, rule, now);
     if (dispatchedOk) {
       dispatched += 1;
       await db.alert.update({ where: { id: alert.id }, data: { status: 'delivered' } });
@@ -188,17 +212,30 @@ async function scanAlertsForMember(
  */
 async function dispatchDouglasForAlert(
   memberId: string,
+  timezone: string,
   alertId: string,
   rule: AlertRule,
   now: Date,
 ): Promise<boolean> {
+  // Member-local day — MUST match the trigger engine's `triggeredOn` canon
+  // (engine.ts computes it from `user.timezone`) or the two paths disagree
+  // on « aujourd'hui » and the shared member-day cap leaks.
+  const triggeredOn = parseLocalDate(localDateOf(now, timezone));
   const recent = await db.markDouglasDelivery.findMany({
     where: {
       userId: memberId,
       createdAt: { gte: new Date(now.getTime() - ALERT_WINDOW_DAYS * 86_400_000) },
     },
-    select: { cardId: true },
+    select: { cardId: true, triggeredOn: true },
   });
+
+  // S4 DOD2-T2-1 — member-day cap « ≤1 fiche Douglas par membre par jour » :
+  // if ANY card (routine engine or alert path) already went out today, the
+  // alert keeps its `open` status and the daily scan retries tomorrow.
+  if (recent.some((r) => r.triggeredOn.getTime() === triggeredOn.getTime())) {
+    return false;
+  }
+
   const recentCardIds = new Set(recent.map((r) => r.cardId));
 
   const cards = await db.markDouglasCard.findMany({
@@ -208,9 +245,17 @@ async function dispatchDouglasForAlert(
     take: 10,
   });
   const card = cards.find((c) => !recentCardIds.has(c.id)) ?? cards[0];
-  if (!card) return false;
-
-  const triggeredOn = parseLocalDate(localDateOf(now, 'Europe/Paris'));
+  if (!card) {
+    // S4 DOD2-T3-2 — an empty published catalogue in this category means the
+    // repetition alert can NEVER reach the member. Loud signal (Sentry), calm
+    // product behavior (alert stays `open`, retried daily, admin sees it).
+    reportError('verification.alerts', new Error('alert_dispatch_no_published_card'), {
+      memberId,
+      alertId,
+      cardCategory: rule.cardCategory,
+    });
+    return false;
+  }
   try {
     const row = await db.markDouglasDelivery.create({
       data: {

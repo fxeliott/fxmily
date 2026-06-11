@@ -319,7 +319,10 @@ export const WIZARD_STEPS = [
   ['tradeQuality', 'planRespected', 'hedgeRespected', 'emotionBefore'],
   // 5 — entry screenshot
   ['screenshotEntryKey'],
-  // 6 — outcome (optional, can be skipped to "save as open")
+  // 6 — outcome fields. NOT rendered by the open wizard (it caps at step 5 /
+  // « Étape X sur 6 ») — this entry documents the CLOSE flow's field group
+  // (`/journal/[id]/close`) so both flows share one field map (S4 DOD4-F1 :
+  // kept on purpose, not dead code).
   [
     'exitedAt',
     'exitPrice',

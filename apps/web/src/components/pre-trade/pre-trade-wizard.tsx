@@ -472,7 +472,7 @@ function StepProgress({
             i + 1 < current
               ? 'bg-[var(--acc)]'
               : i + 1 === current
-                ? 'bg-[var(--acc)] shadow-[0_0_8px_oklch(0.879_0.231_130_/_0.55)]'
+                ? 'bg-[var(--acc)] shadow-[0_0_8px_oklch(0.62_0.19_254_/_0.55)]'
                 : 'bg-[var(--b-default)]',
           )}
         />

@@ -112,6 +112,10 @@ export async function getVerificationOverview(memberId: string): Promise<Verific
     db.mt5AccountProof.findMany({
       where: { memberId },
       orderBy: { uploadedAt: 'desc' },
+      // Bounded like `listDiscrepancies` (take 50) — with the prescribed usage
+      // (regular captures per account) an unbounded list grows forever and
+      // each row renders a signed <img> on /verification (S4 DOD4-V3).
+      take: 48,
       select: {
         id: true,
         fileKey: true,
@@ -181,6 +185,15 @@ export interface DiscrepancyView {
   readonly reasoning: string | null;
   readonly memberReason: string | null;
   readonly detectedAt: Date;
+}
+
+/**
+ * Count of écarts still waiting for the member's attention (`status: open`).
+ * Powers the dashboard card teaser (S4 — « écarts de vérité au bon endroit »).
+ * Count-only, posture §33.2 : a factual number, never a guilt counter.
+ */
+export async function countOpenDiscrepancies(memberId: string): Promise<number> {
+  return db.discrepancy.count({ where: { memberId, status: 'open' } });
 }
 
 /** Member-facing list — newest first, the excused ones stay visible (the

@@ -215,7 +215,7 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
                   : 'border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-3)]',
               )}
             >
-              <Upload className="h-5 w-5" strokeWidth={1.75} />
+              <Upload className="h-5 w-5" strokeWidth={1.75} aria-hidden />
             </div>
             <div className="flex flex-col items-center gap-1">
               <span className="t-h3 text-[var(--t-1)]">
@@ -231,7 +231,7 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
 
       {status === 'success' ? (
         <p className="inline-flex items-center gap-1.5 text-[11px] text-[var(--ok)]" role="status">
-          <ImageIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <ImageIcon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
           Capture reçue — elle sera lue lors de la prochaine analyse.
         </p>
       ) : null}

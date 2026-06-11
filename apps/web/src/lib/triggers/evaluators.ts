@@ -1,5 +1,6 @@
 /**
- * The seven Mark Douglas trigger evaluators (J7, SPEC §7.6).
+ * The eight Mark Douglas trigger evaluators (J7, SPEC §7.6 +
+ * `no_training_activity_in_window` J-T4).
  *
  * Pure functions only — no Date.now(), no Prisma, no env. The engine
  * (`engine.ts`) builds a `TriggerContext` snapshot once, then dispatches to

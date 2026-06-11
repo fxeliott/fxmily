@@ -20,7 +20,7 @@ export function DiscrepancyReasonForm({ discrepancyId }: { discrepancyId: string
 
   return (
     <details className="group">
-      <summary className="rounded-control inline-flex h-9 cursor-pointer list-none items-center px-2 text-[12px] text-[var(--t-3)] transition-colors hover:bg-[var(--bg-2)] hover:text-[var(--t-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]">
+      <summary className="rounded-control inline-flex h-9 cursor-pointer list-none items-center px-2 text-[12px] text-[var(--t-3)] transition-colors hover:bg-[var(--bg-2)] hover:text-[var(--t-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] [&::-webkit-details-marker]:hidden">
         Donner un motif
       </summary>
       <form action={formAction} className="flex flex-col gap-2 pt-2">

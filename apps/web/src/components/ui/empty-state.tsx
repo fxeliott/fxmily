@@ -1,7 +1,8 @@
 import { Info, Target, type LucideIcon } from 'lucide-react';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import { Btn } from '@/components/ui/btn';
+import { Btn, btnVariants } from '@/components/ui/btn';
 import { cn } from '@/lib/utils';
 
 export interface EmptyStateProps {
@@ -19,6 +20,13 @@ export interface EmptyStateProps {
   ctaPrimary?: ReactNode;
   /** Optional secondary CTA (renders as Btn ghost). */
   ctaSecondary?: ReactNode;
+  /**
+   * Navigation target for the primary CTA — renders a `<Link>` styled as the
+   * primary Btn. A Server Component cannot pass `onPrimary` (functions don't
+   * serialize across the RSC boundary), so navigation CTAs MUST use this prop
+   * or the rendered button does nothing when clicked.
+   */
+  ctaHref?: string;
   /** Click handler for primary CTA. */
   onPrimary?: () => void;
   /** Click handler for secondary CTA. */
@@ -51,6 +59,7 @@ export function EmptyState({
   tip,
   ctaPrimary,
   ctaSecondary,
+  ctaHref,
   onPrimary,
   onSecondary,
   headingLevel = 'h2',
@@ -108,7 +117,11 @@ export function EmptyState({
       {/* Strate 6 : dual CTA */}
       {ctaPrimary || ctaSecondary ? (
         <div className="mt-5 flex gap-2">
-          {ctaPrimary ? (
+          {ctaPrimary && ctaHref ? (
+            <Link href={ctaHref} className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
+              {ctaPrimary}
+            </Link>
+          ) : ctaPrimary ? (
             <Btn kind="primary" size="m" onClick={onPrimary}>
               {ctaPrimary}
             </Btn>

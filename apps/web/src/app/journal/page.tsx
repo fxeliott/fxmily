@@ -19,7 +19,7 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 interface JournalPageProps {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; cursor?: string }>;
 }
 
 const FILTER_LABEL: Record<TradeStatusFilter, string> = {
@@ -32,15 +32,46 @@ function parseFilter(value: string | undefined): TradeStatusFilter {
   return value === 'open' || value === 'closed' ? value : 'all';
 }
 
+/**
+ * Trade ids are cuids — reject anything else BEFORE it reaches the Prisma
+ * cursor (a forged `?cursor=` must degrade to page 1, never to a 500).
+ */
+function parseCursor(value: string | undefined): string | undefined {
+  return value && /^[a-z0-9]{20,40}$/i.test(value) ? value : undefined;
+}
+
+function journalHref(status: TradeStatusFilter, cursor?: string): string {
+  const params = new URLSearchParams();
+  if (status !== 'all') params.set('status', status);
+  if (cursor) params.set('cursor', cursor);
+  const qs = params.toString();
+  return qs ? `/journal?${qs}` : '/journal';
+}
+
 export default async function JournalPage({ searchParams }: JournalPageProps) {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
-  const { status: rawStatus } = await searchParams;
+  const { status: rawStatus, cursor: rawCursor } = await searchParams;
   const status = parseFilter(rawStatus);
+  const cursor = parseCursor(rawCursor);
 
-  const [{ items }, totals, unseenByTrade] = await Promise.all([
-    listTradesForUser(session.user.id, { status, limit: 50 }),
+  // A well-formed cursor could still make the query fail — degrade to page 1
+  // instead of surfacing a server error. The net exists ONLY when a cursor is
+  // in play: catching every error would turn a DB outage into a /journal →
+  // /journal redirect loop instead of the error boundary (S4 review finding).
+  // The redirect stays OUTSIDE the catch — Next signals it by throwing.
+  let page: Awaited<ReturnType<typeof listTradesForUser>> | null = null;
+  try {
+    page = await listTradesForUser(session.user.id, { status, limit: 50, cursor });
+  } catch (err) {
+    if (!cursor) throw err;
+    page = null;
+  }
+  if (page === null) redirect(journalHref(status));
+
+  const { items, nextCursor } = page;
+  const [totals, unseenByTrade] = await Promise.all([
     countTradesByStatus(session.user.id),
     // J4 — Map<tradeId, unseenAnnotationsCount> for the "Nouvelle correction"
     // pill. Trades with no unread annotations simply aren't keyed, so the
@@ -124,7 +155,19 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
       </nav>
 
       {/* List or EmptyState */}
-      {items.length === 0 ? (
+      {items.length === 0 && cursor ? (
+        // Stale cursor (trade deleted since the link was rendered) — calm
+        // dead-end, never the "first trade" onboarding copy.
+        <Card primary className="py-2">
+          <EmptyState
+            icon={BookOpen}
+            headline="Fin du journal."
+            lead="Cette page ne contient plus de trades."
+            ctaPrimary="Revenir au début"
+            ctaHref={journalHref(status)}
+          />
+        </Card>
+      ) : items.length === 0 ? (
         <Card primary className="py-2">
           {status === 'open' ? (
             <EmptyState
@@ -143,6 +186,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
                   Logger un trade
                 </>
               }
+              ctaHref="/journal/new"
             />
           ) : status === 'closed' ? (
             <EmptyState
@@ -160,6 +204,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
                   Logger un trade
                 </>
               }
+              ctaHref="/journal/new"
             />
           ) : (
             <EmptyState
@@ -178,6 +223,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
                   Logger mon premier trade
                 </>
               }
+              ctaHref="/journal/new"
             />
           )}
         </Card>
@@ -191,12 +237,31 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
         </ul>
       )}
 
-      {/* Footer ref count */}
+      {/* Pagination + ref count */}
       {items.length > 0 ? (
-        <p className="t-foot border-t border-[var(--b-subtle)] pt-3 text-center text-[var(--t-4)]">
-          Affichage de {items.length} trade{items.length > 1 ? 's' : ''} ·{' '}
-          <span className="font-mono tabular-nums">limite 50 / page</span>
-        </p>
+        <footer className="flex flex-col items-center gap-3 border-t border-[var(--b-subtle)] pt-4">
+          {nextCursor ? (
+            <Link
+              href={journalHref(status, nextCursor)}
+              prefetch={false}
+              className={cn(btnVariants({ kind: 'ghost', size: 'm' }))}
+            >
+              Voir les trades plus anciens
+            </Link>
+          ) : null}
+          <p className="t-foot text-center text-[var(--t-4)]">
+            Affichage de {items.length} trade{items.length > 1 ? 's' : ''} ·{' '}
+            <span className="font-mono tabular-nums">50 par page</span>
+            {cursor ? (
+              <>
+                {' · '}
+                <Link href={journalHref(status)} className="underline hover:text-[var(--t-2)]">
+                  revenir au début
+                </Link>
+              </>
+            ) : null}
+          </p>
+        </footer>
       ) : null}
     </main>
   );

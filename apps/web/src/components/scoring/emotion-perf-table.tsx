@@ -56,64 +56,67 @@ export function EmotionPerfTable({ rows, totalTrades }: EmotionPerfTableProps) {
           Pas encore d&apos;émotion taguée sur des trades clôturés.
         </p>
       ) : (
-        <table className="w-full text-left">
-          <thead>
-            <tr className="t-mono-cap text-[var(--t-4)]">
-              <th className="py-1.5">Émotion</th>
-              <th className="py-1.5 text-right">n</th>
-              <th className="py-1.5 text-right">Win rate</th>
-              <th className="py-1.5 text-right">Wilson 95%</th>
-              <th className="py-1.5 text-right">Avg R</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((r) => {
-              const ci: WilsonInterval = winRateWithBand(r.wins, r.trades);
-              const avgR = r.rTrades > 0 ? r.sumR / r.rTrades : null;
-              return (
-                <tr key={r.slug} className="border-t border-[var(--b-subtle)]">
-                  <td className="py-2">
-                    <span className="text-[12px] text-[var(--t-1)]">{emotionLabel(r.slug)}</span>
-                  </td>
-                  <td className="py-2 text-right">
-                    <span className="t-mono-cap text-[var(--t-3)]">{r.trades}</span>
-                  </td>
-                  <td className="py-2 text-right">
-                    <span className="f-mono text-[12px] text-[var(--t-1)] tabular-nums">
-                      {(ci.point * 100).toFixed(0)}%
-                    </span>
-                  </td>
-                  <td className="py-2 text-right">
-                    <span
-                      className={
-                        'f-mono text-[11px] tabular-nums ' +
-                        (ci.sufficientSample ? 'text-[var(--t-3)]' : 'text-[var(--warn)]')
-                      }
-                    >
-                      [{(ci.lower * 100).toFixed(0)}–{(ci.upper * 100).toFixed(0)}%]
-                    </span>
-                  </td>
-                  <td className="py-2 text-right">
-                    <span
-                      className={
-                        'f-mono text-[12px] tabular-nums ' +
-                        (avgR === null
-                          ? 'text-[var(--t-4)]'
-                          : avgR > 0
-                            ? 'text-[var(--acc)]'
-                            : avgR < 0
-                              ? 'text-[var(--bad)]'
-                              : 'text-[var(--t-3)]')
-                      }
-                    >
-                      {avgR === null ? '—' : `${avgR > 0 ? '+' : ''}${avgR.toFixed(2)}R`}
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        // S4 DOD4-A1 — 5 columns at 320-375px: scroll, never squash/overlap.
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="t-mono-cap text-[var(--t-4)]">
+                <th className="py-1.5">Émotion</th>
+                <th className="py-1.5 text-right">n</th>
+                <th className="py-1.5 text-right">Win rate</th>
+                <th className="py-1.5 text-right">Wilson 95%</th>
+                <th className="py-1.5 text-right">Avg R</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((r) => {
+                const ci: WilsonInterval = winRateWithBand(r.wins, r.trades);
+                const avgR = r.rTrades > 0 ? r.sumR / r.rTrades : null;
+                return (
+                  <tr key={r.slug} className="border-t border-[var(--b-subtle)]">
+                    <td className="py-2">
+                      <span className="text-[12px] text-[var(--t-1)]">{emotionLabel(r.slug)}</span>
+                    </td>
+                    <td className="py-2 text-right">
+                      <span className="t-mono-cap text-[var(--t-3)]">{r.trades}</span>
+                    </td>
+                    <td className="py-2 text-right">
+                      <span className="f-mono text-[12px] text-[var(--t-1)] tabular-nums">
+                        {(ci.point * 100).toFixed(0)}%
+                      </span>
+                    </td>
+                    <td className="py-2 text-right">
+                      <span
+                        className={
+                          'f-mono text-[11px] tabular-nums ' +
+                          (ci.sufficientSample ? 'text-[var(--t-3)]' : 'text-[var(--warn)]')
+                        }
+                      >
+                        [{(ci.lower * 100).toFixed(0)}–{(ci.upper * 100).toFixed(0)}%]
+                      </span>
+                    </td>
+                    <td className="py-2 text-right">
+                      <span
+                        className={
+                          'f-mono text-[12px] tabular-nums ' +
+                          (avgR === null
+                            ? 'text-[var(--t-4)]'
+                            : avgR > 0
+                              ? 'text-[var(--acc)]'
+                              : avgR < 0
+                                ? 'text-[var(--bad)]'
+                                : 'text-[var(--t-3)]')
+                        }
+                      >
+                        {avgR === null ? '—' : `${avgR > 0 ? '+' : ''}${avgR.toFixed(2)}R`}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

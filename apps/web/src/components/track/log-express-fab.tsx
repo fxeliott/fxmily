@@ -114,6 +114,7 @@ export function LogExpressFab(): React.JSX.Element | null {
     <Sheet open={open} onOpenChange={setOpen}>
       <button
         type="button"
+        data-slot="log-express-fab"
         onClick={() => setOpen(true)}
         aria-label="Logger un pilier"
         aria-haspopup="dialog"

@@ -20,7 +20,10 @@ export function LegalFooter(): React.ReactElement {
       role="contentinfo"
       className="mt-auto border-t border-[var(--b-subtle)] bg-[var(--bg-1)]/40 backdrop-blur-sm"
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-5 text-xs text-[var(--t-3)] sm:flex-row sm:items-center sm:justify-between">
+      <div
+        data-slot="legal-footer-inner"
+        className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-5 text-xs text-[var(--t-3)] sm:flex-row sm:items-center sm:justify-between"
+      >
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-medium text-[var(--t-2)]">Fxmily</span>
           <span aria-hidden="true">·</span>

@@ -118,7 +118,7 @@ export function EmotionCheckinPicker({
                       'rounded-pill inline-flex min-h-11 items-center gap-1.5 border px-3 py-2 text-[12px] font-medium transition-all',
                       'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                       isSelected
-                        ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_2px_oklch(0.879_0.231_130_/_0.10)]'
+                        ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_2px_oklch(0.62_0.19_254_/_0.10)]'
                         : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]',
                       'disabled:cursor-not-allowed disabled:opacity-40',
                       'aria-disabled:hatch-disabled aria-disabled:cursor-not-allowed aria-disabled:opacity-40',

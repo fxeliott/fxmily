@@ -19,9 +19,10 @@
 #     (no local prompt assembly from snapshot + schema).
 #   - Per-field JSON validation (`.summary and .highlights and
 #     .axes_prioritaires`) on top of the core parse.
-#   - Results entries carry `{userId, interviewId, output, model}` (stored
-#     verbatim server-side for traceability — `z.string().max(80)`, the
-#     persist gate does NOT enforce a slug allowlist on this pipeline).
+#   - Results entries carry `{userId, interviewId, output, model}`. Since the
+#     2026-06-11 re-pin wave the persist gate PINS `model` to known slugs
+#     (mirror weekly BLOQUANT 5) — unknown strings fall back to the honest
+#     local sentinel, `mock:*` is preserved for the mock path.
 #   - Persist failure exits 1 (historical contract ; weekly/monthly/calendar
 #     exit 2).
 #   - No pseudonym-regex gate : the pseudonym is display-only here (files are
@@ -34,11 +35,11 @@
 #     hardcoded).
 #   - Sleep range now follows FXMILY_SLEEP_MIN_S/MAX_S (same default 60-120,
 #     was hardcoded).
-#   - Response parsing now uses core_parse_response : fences are stripped on
-#     the first/last line only (was : anywhere + blank-line/CR scrub), but
-#     leading prose before the first `{` is now tolerated. This is the
-#     prod-validated behavior of the 3 other pipelines (calendar e2e
-#     2026-06-04) — trade-off assumed.
+#   - Response parsing uses core_parse_response (hardened 2026-06-11) :
+#     fence lines are stripped ANYWHERE, surrounding prose is dropped
+#     (first-`{` to last-`}` block), and the parsed payload must be a SINGLE
+#     JSON document. Validated by the S2 runtime proof on the Opus 4.8
+#     default (prose + fenced JSON → persisted:1).
 #
 # Ban-risk mitigation (9 rules carbone V1.7 — enforced by the core).
 #

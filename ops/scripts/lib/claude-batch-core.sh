@@ -54,7 +54,7 @@ MAX_TURNS="${FXMILY_MAX_TURNS:-8}"
 # binary to billable API this caps damage per call. 15.00 was calibrated for
 # Fable 5 rates ($10/$50 MTok, 2026-06-10) and is KEPT for the Opus 4.8
 # default (re-pin 2026-06-11) : it still bounds a runaway loop while leaving
-# >10× margin for a typical xhigh run on either allowlisted model.
+# ~9× margin for a typical xhigh run at Opus 4.8 repo rates ($15/$75 MTok).
 MAX_BUDGET_USD="${FXMILY_MAX_BUDGET_USD:-15.00}"
 
 SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
@@ -351,7 +351,12 @@ core_parse_response() {
     | awk '/^\{/ { if (!s) s = NR } /^\}/ { e = NR } { l[NR] = $0 }
            END { if (s) { if (!e || e < s) e = NR; for (i = s; i <= e; i++) print l[i] } }' \
     >"$parsed_file" || true
-  jq -e . "$parsed_file" >/dev/null 2>&1
+  # Validity = valid JSON AND a SINGLE document. Without the `-s length==1`
+  # guard, a multi-document response ({"draft"} then {real}) passes `jq -e .`
+  # on the LAST document while `--slurpfile`'s `$output[0]` ships the FIRST —
+  # the local gate would validate one object and submit another (review
+  # finding 2026-06-11 ; the server Zod stays the final authority either way).
+  jq -e . "$parsed_file" >/dev/null 2>&1 && jq -e -s 'length == 1' "$parsed_file" >/dev/null 2>&1
 }
 
 # --- NDJSON append (atomic per-line — survives Ctrl-C) --------------------------

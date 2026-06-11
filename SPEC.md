@@ -1575,7 +1575,7 @@ Accepted post-1ᵉʳ run batch réel + validation Eliot §2 sur 5+ calendriers).
 
 ## 33. Vérification & Honnêteté radicale — preuve par screenshot MT5 (spec V1.8 — 2026-06-10, Session S3 du plan 10-sessions)
 
-> Source : brief `03-SESSION-Verification-Honnetete.md` (plan 10-sessions, version Fable 5 du 2026-06-10) + design data-model `PROJECT_STATE.md §13.3` + **décisions Eliot 2026-06-10** : périmètre = **upload screenshots MT5 + vision Claude locale** (PAS d'API broker) ; **`ConstancyScore` dédié** (distinct de `BehavioralScore`) ; moteur épinglé **`claude-fable-5`**. Cette section résout le conflit historique avec §13 (hors-scope V1) : ce qui reste exclu de V1 est la connexion broker **API** — la vérification par **screenshot** est V1. **Impl = jalon S3 dédié post-`/clear`** (§18.4, feature multi-PR taille §21/§30).
+> Source : brief `03-SESSION-Verification-Honnetete.md` (plan 10-sessions, version Fable 5 du 2026-06-10) + design data-model `PROJECT_STATE.md §13.3` + **décisions Eliot 2026-06-10** : périmètre = **upload screenshots MT5 + vision Claude locale** (PAS d'API broker) ; **`ConstancyScore` dédié** (distinct de `BehavioralScore`) ; moteur épinglé **`claude-fable-5`** *(historique — ré-épinglé `claude-opus-4-8` le 2026-06-11, cf. §35)*. Cette section résout le conflit historique avec §13 (hors-scope V1) : ce qui reste exclu de V1 est la connexion broker **API** — la vérification par **screenshot** est V1. **Impl = jalon S3 dédié post-`/clear`** (§18.4, feature multi-PR taille §21/§30).
 
 ### 33.1 Vision en 1 phrase
 
@@ -1599,7 +1599,7 @@ L'app rend le mensonge **confrontable à la réalité** : le membre téléverse 
 
 ### 33.4 Pipeline IA — 5ᵉ batch local vision (moteur §8 local, $0 API marginal)
 
-Carbone des 4 pipelines existants (weekly / monthly / calendar / onboarding §31.4) : `claude --print` local (abonnement Max, **modèle épinglé `claude-opus-4-8`** depuis v1.9 — re-pin 2026-06-11), routes admin token-gated `pull`/`persist`, gates au persist (active-user → Zod `.strict()` → `detectCrisis` → `detectAMFViolation` §2 → model allowlist), pseudonymisation `pseudonymizeMember`, human-in-the-loop (batch manuel, mitigation ban-risk §5.4 conservée). **Delta vision** : l'input n'est plus un snapshot JSON mais l'**image** de la preuve — **capacité PROUVÉE le 2026-06-10** (`claude --print --model claude-fable-5 --allowedTools Read` lit un PNG local et restitue le texte exact, [tool-output]).
+Carbone des 4 pipelines existants (weekly / monthly / calendar / onboarding §31.4) : `claude --print` local (abonnement Max, **modèle épinglé `claude-opus-4-8`** depuis v1.9 — re-pin 2026-06-11), routes admin token-gated `pull`/`persist`, gates au persist (active-user → Zod `.strict()` → `detectCrisis` → `detectAMFViolation` §2 → model allowlist), pseudonymisation `pseudonymizeMember`, human-in-the-loop (batch manuel, mitigation ban-risk §5.4 conservée). **Delta vision** : l'input n'est plus un snapshot JSON mais l'**image** de la preuve — **capacité PROUVÉE le 2026-06-10** (`claude --print --model claude-fable-5 --allowedTools Read` lit un PNG local et restitue le texte exact, [tool-output]) **et RE-PROUVÉE sur `claude-opus-4-8` le 2026-06-11** (même probe, texte exact restitué — cf. §35).
 
 ### 33.5 Réconciliation, score & alertes (déterministe là où c'est possible)
 

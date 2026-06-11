@@ -33,6 +33,10 @@ const KEY_REGEX_TRAINING = /^training\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\
 // `KEY_REGEX_TRAINING` — `training_annotations/` never starts with `training/`.
 const KEY_REGEX_TRAINING_ANNOTATION =
   /^training_annotations\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
+// S3 — MT5 account-history proof screenshot (SPEC §33.3 `Mt5AccountProof.
+// fileKey` convention `proofs/{userId}/{nanoid}.{ext}`). Capturing variant;
+// the userId segment is the uploading member (member-owned, mirror trades/).
+const KEY_REGEX_PROOF = /^proofs\/([a-z0-9]{8,40})\/([a-zA-Z0-9_-]{12,40})\.(jpg|png|webp)$/;
 
 /**
  * Single-source-of-truth pattern for annotation keys, exported for the Zod
@@ -59,6 +63,13 @@ export const TRAINING_KEY_PATTERN =
 
 export const TRAINING_ANNOTATION_KEY_PATTERN =
   /^training_annotations\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/;
+
+/**
+ * S3 — single-source-of-truth pattern for MT5 proof keys (SPEC §33), exported
+ * for the Zod schema in `lib/schemas/verification.ts`. Mirror of
+ * `ANNOTATION_KEY_PATTERN` with the `proofs/` prefix.
+ */
+export const PROOF_KEY_PATTERN = /^proofs\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/;
 
 const MIME_TO_EXT: Record<AllowedImageMime, 'jpg' | 'png' | 'webp'> = {
   'image/jpeg': 'jpg',
@@ -134,6 +145,20 @@ export function generateTrainingAnnotationKey(
   return `training_annotations/${trainingTradeId}/${id}.${MIME_TO_EXT[mime]}`;
 }
 
+/**
+ * S3 — MT5 proof key generator. Carbon mirror of `generateTradeKey`: the path
+ * component is the uploading member's id (the proof documents THE MEMBER's
+ * broker account, ownership resolves without a DB lookup). The `proofs/`
+ * prefix never overlaps the journal `trades/` surface.
+ */
+export function generateProofKey(userId: string, mime: AllowedImageMime): string {
+  if (!CUID_REGEX.test(userId)) {
+    throw new StorageError('userId is not safe for storage key', 'invalid_key');
+  }
+  const id = nanoid(32);
+  return `proofs/${userId}/${id}.${MIME_TO_EXT[mime]}`;
+}
+
 export interface ParsedTradeKey {
   kind: 'trade';
   userId: string;
@@ -162,11 +187,19 @@ export interface ParsedTrainingAnnotationKey {
   ext: 'jpg' | 'png' | 'webp';
 }
 
+export interface ParsedProofKey {
+  kind: 'proof';
+  userId: string;
+  filename: string;
+  ext: 'jpg' | 'png' | 'webp';
+}
+
 export type ParsedStorageKey =
   | ParsedTradeKey
   | ParsedAnnotationKey
   | ParsedTrainingKey
-  | ParsedTrainingAnnotationKey;
+  | ParsedTrainingAnnotationKey
+  | ParsedProofKey;
 
 export function parseTradeKey(key: string): ParsedTradeKey {
   const match = KEY_REGEX_TRADE.exec(key);
@@ -236,12 +269,31 @@ export function parseTrainingAnnotationKey(key: string): ParsedTrainingAnnotatio
 }
 
 /**
+ * S3 — parse an MT5 proof key. Mirror of `parseTradeKey` for the `proofs/`
+ * prefix. Throws `StorageError('invalid_key')` on mismatch. The captured
+ * `userId` is the path-owner used by the BOLA check (member OR admin).
+ */
+export function parseProofKey(key: string): ParsedProofKey {
+  const match = KEY_REGEX_PROOF.exec(key);
+  if (!match) {
+    throw new StorageError(`malformed proof key: ${key.slice(0, 80)}`, 'invalid_key');
+  }
+  return {
+    kind: 'proof',
+    userId: match[1] as string,
+    filename: match[2] as string,
+    ext: match[3] as 'jpg' | 'png' | 'webp',
+  };
+}
+
+/**
  * Unified parser used by route handlers that accept any prefix. Returns a
  * discriminated union so the caller can dispatch on `parsed.kind`.
  */
 export function parseStorageKey(key: string): ParsedStorageKey {
   if (key.startsWith('trades/')) return parseTradeKey(key);
   if (key.startsWith('annotations/')) return parseAnnotationKey(key);
+  if (key.startsWith('proofs/')) return parseProofKey(key);
   // `training_annotations/` is checked BEFORE `training/` (more specific
   // prefix first — defensive; the two are disjoint anyway since
   // `'training_annotations/'.startsWith('training/')` is false: char 8 is

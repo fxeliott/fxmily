@@ -5,9 +5,11 @@ import path from 'node:path';
 
 import {
   generateAnnotationKey,
+  generateProofKey,
   generateTradeKey,
   generateTrainingAnnotationKey,
   generateTrainingKey,
+  parseProofKey,
   parseStorageKey,
   parseTradeKey,
   parseTrainingKey,
@@ -17,6 +19,7 @@ import {
   type UploadInput,
   StorageError,
   type AllowedImageMime,
+  isProofUploadKind,
   isTradeUploadKind,
   isTrainingAnnotationUploadKind,
   isTrainingUploadKind,
@@ -83,7 +86,10 @@ export class LocalStorageAdapter implements StorageAdapter {
           ? // J-T3: path-owner is the parent trainingTradeId → the
             // `training_annotations/` prefix (NEVER `annotations/` — §21.5).
             generateTrainingAnnotationKey(input.pathOwner, mime)
-          : generateAnnotationKey(input.pathOwner, mime);
+          : isProofUploadKind(input.kind)
+            ? // S3: MT5 proof — member-owned `proofs/{userId}/…` (SPEC §33.3).
+              generateProofKey(input.pathOwner, mime)
+            : generateAnnotationKey(input.pathOwner, mime);
     const target = safePathFor(key);
     await fs.mkdir(path.dirname(target), { recursive: true });
     // `wx` → fail if the random key collides with an existing file (cosmic
@@ -158,6 +164,20 @@ export function keyBelongsTo(key: string, userId: string): boolean {
 export function trainingKeyBelongsTo(key: string, userId: string): boolean {
   try {
     return parseTrainingKey(key).userId === userId;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * S3 — owner check for **MT5 proof** keys only (SPEC §33). Carbon mirror of
+ * `keyBelongsTo`: returns true iff `key` is shaped `proofs/{userId}/...` AND
+ * the userId matches the session. Every other prefix returns false — the
+ * proof BOLA gate must never cross-accept a journal or training key.
+ */
+export function proofKeyBelongsTo(key: string, userId: string): boolean {
+  try {
+    return parseProofKey(key).userId === userId;
   } catch {
     return false;
   }

@@ -53,11 +53,24 @@ export type TrainingUploadKind = (typeof TRAINING_UPLOAD_KINDS)[number];
 export const TRAINING_ANNOTATION_UPLOAD_KINDS = ['training-annotation-image'] as const;
 export type TrainingAnnotationUploadKind = (typeof TRAINING_ANNOTATION_UPLOAD_KINDS)[number];
 
+/**
+ * S3 — Vérification & Honnêteté radicale (SPEC §33). MT5 account-history
+ * proof screenshot. Lives under `proofs/{userId}/…` (member-owned, exactly
+ * like a trade screenshot: the `Mt5AccountProof` row is created in the same
+ * request, keyed by the server-computed SHA-256 of the bytes). A DISTINCT
+ * kind so the audit slug + storage prefix never collide with the journal
+ * `trade-*` surface — a proof upload documents the REALITY side (§33.3),
+ * not a journal entry.
+ */
+export const PROOF_UPLOAD_KINDS = ['mt5-proof'] as const;
+export type ProofUploadKind = (typeof PROOF_UPLOAD_KINDS)[number];
+
 export const ALL_UPLOAD_KINDS = [
   ...TRADE_UPLOAD_KINDS,
   ...ANNOTATION_UPLOAD_KINDS,
   ...TRAINING_UPLOAD_KINDS,
   ...TRAINING_ANNOTATION_UPLOAD_KINDS,
+  ...PROOF_UPLOAD_KINDS,
 ] as const;
 export type UploadKind = (typeof ALL_UPLOAD_KINDS)[number];
 
@@ -79,6 +92,10 @@ export function isTrainingAnnotationUploadKind(
   kind: UploadKind,
 ): kind is TrainingAnnotationUploadKind {
   return (TRAINING_ANNOTATION_UPLOAD_KINDS as readonly UploadKind[]).includes(kind);
+}
+
+export function isProofUploadKind(kind: UploadKind): kind is ProofUploadKind {
+  return (PROOF_UPLOAD_KINDS as readonly UploadKind[]).includes(kind);
 }
 
 export interface UploadInput {

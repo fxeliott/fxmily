@@ -2,6 +2,7 @@ import 'server-only';
 
 import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { selectStorage } from '@/lib/storage';
 
 /**
  * J10 — RGPD account deletion lifecycle (article 17 right to erasure).
@@ -324,6 +325,26 @@ export async function purgeMaterialisedDeletions(
   let errors = 0;
   for (const u of stale) {
     try {
+      // S3 (SPEC §33.8) — sweep the member's MT5 proof files from storage
+      // BEFORE the cascade erases the `Mt5AccountProof` rows that hold the
+      // keys. Best-effort (mirror `deleteTrade` MAJ-10): a storage failure
+      // never blocks the RGPD hard-delete; a leftover file without any DB
+      // row is inert (the read route 403s without a matching session user).
+      const proofKeys = await db.mt5AccountProof.findMany({
+        where: { memberId: u.id },
+        select: { fileKey: true },
+      });
+      if (proofKeys.length > 0) {
+        const storage = selectStorage();
+        for (const proof of proofKeys) {
+          try {
+            await storage.delete(proof.fileKey);
+          } catch (err) {
+            console.warn('[account.deletion.purge] proof sweep failed (non-fatal)', err);
+          }
+        }
+      }
+
       await db.user.delete({ where: { id: u.id } });
       purgedIds.push(u.id);
     } catch (err) {

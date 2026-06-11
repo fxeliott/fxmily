@@ -6,6 +6,7 @@ import {
   LineChart as LineChartIcon,
   LogOut,
   Plus,
+  ScanSearch,
   Shield,
   ShieldCheck,
   Users,
@@ -560,6 +561,38 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
                       Progression, trading réel et entraînement — pour prendre du recul. Aucun
                       conseil de marché.
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden="true" />
+              </div>
+            </Link>
+          </HoverLift>
+        </section>
+
+        {/* S3 — Découvrabilité de la surface Vérification (SPEC §33). Carte
+            calme anti-Black-Hat, posture §33.2 : la confrontation déclaré ↔
+            réalité MT5 est un outil de lucidité, pas une sanction. Copy
+            honnête §33.6 (« historique fourni », jamais « vérifié 100 % »). */}
+        <section className="mb-6" aria-label="Vérification">
+          <HoverLift className="block">
+            <Link
+              href="/verification"
+              className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)]">
+                    <ScanSearch className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="t-eyebrow text-[var(--t-3)]">Vérification</span>
+                    <p className="text-[15px] font-semibold text-[var(--t-1)]">
+                      Ta réalité de trading
+                    </p>
+                    <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
+                      Tes comptes, tes preuves MT5 et ton déclaré mis en face de ton historique
+                      réel. Se voir tel qu&apos;on est, pour progresser.
                     </p>
                   </div>
                 </div>

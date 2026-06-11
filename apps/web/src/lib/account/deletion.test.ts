@@ -5,6 +5,8 @@ const findManyMock = vi.fn();
 const updateMock = vi.fn();
 const updateManyMock = vi.fn();
 const deleteMock = vi.fn();
+const proofFindManyMock = vi.fn();
+const storageDeleteMock = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -15,7 +17,20 @@ vi.mock('@/lib/db', () => ({
       updateMany: updateManyMock,
       delete: deleteMock,
     },
+    // S3 — the purge sweeps the member's MT5 proof files before the cascade.
+    mt5AccountProof: {
+      findMany: proofFindManyMock,
+    },
   },
+}));
+
+vi.mock('@/lib/storage', () => ({
+  selectStorage: () => ({
+    id: 'local' as const,
+    put: vi.fn(),
+    getReadUrl: vi.fn(),
+    delete: storageDeleteMock,
+  }),
 }));
 
 const {
@@ -36,6 +51,10 @@ beforeEach(() => {
   updateMock.mockReset();
   updateManyMock.mockReset();
   deleteMock.mockReset();
+  proofFindManyMock.mockReset();
+  storageDeleteMock.mockReset();
+  // Default: no proofs to sweep — the pre-S3 purge tests stay byte-identical.
+  proofFindManyMock.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -337,6 +356,30 @@ describe('purgeMaterialisedDeletions', () => {
       }),
     );
     expect(result.threshold).toBe(expectedThreshold.toISOString());
+  });
+
+  it('S3 — sweeps the member proof files from storage BEFORE the cascade, best-effort', async () => {
+    const now = new Date('2026-06-11T10:00:00.000Z');
+    findManyMock.mockResolvedValueOnce([{ id: 'u1' }]);
+    proofFindManyMock.mockResolvedValueOnce([
+      { fileKey: 'proofs/u1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png' },
+      { fileKey: 'proofs/u1/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png' },
+    ]);
+    // First file deletion fails — the sweep is best-effort: the second file
+    // is still attempted AND the user hard-delete still happens.
+    storageDeleteMock
+      .mockRejectedValueOnce(new Error('disk on fire'))
+      .mockResolvedValueOnce(undefined);
+    deleteMock.mockResolvedValue({});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const result = await purgeMaterialisedDeletions({ now });
+
+    expect(storageDeleteMock).toHaveBeenCalledTimes(2);
+    expect(deleteMock).toHaveBeenCalledWith({ where: { id: 'u1' } });
+    expect(result.purged).toBe(1);
+    expect(result.errors).toBe(0);
+    warnSpy.mockRestore();
   });
 
   it('counts errors and continues', async () => {

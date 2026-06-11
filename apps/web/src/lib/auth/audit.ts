@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { env } from '@/lib/env';
 import {
   isAnnotationUploadKind,
+  isProofUploadKind,
   isTrainingAnnotationUploadKind,
   isTrainingUploadKind,
   type UploadKind,
@@ -337,7 +338,40 @@ export type AuditAction =
   // S2 — onboarding profile overdue safety-net (profilage permanence, 3rd twin
   // of the §26 calendar / §25 monthly nets). Heartbeat on EVERY run; counts +
   // oldestCompletedAt + emailOutcome only, PII-free.
-  | 'cron.onboarding_profile_overdue.scan';
+  | 'cron.onboarding_profile_overdue.scan'
+  // S3 — Vérification & Honnêteté radicale (SPEC §33). Member-facing surface:
+  // broker accounts + MT5 proof uploads + member reasons on discrepancies.
+  // PII-FREE metadata invariant: rows carry opaque ids + enum-ish fields only
+  // (`{accountId, type}` / `{proofId, accountId, kind, key, mime, size}` /
+  // `{discrepancyId}`) — NEVER the account label, broker name free-text, the
+  // member's reason text, nor any extracted P&L. `verification.proof.uploaded`
+  // is a DISTINCT slug from `trade.screenshot.uploaded` ON PURPOSE: a proof
+  // documents the REALITY side (§33.3), never journal activity.
+  | 'verification.account.created'
+  | 'verification.proof.uploaded'
+  | 'verification.proof.deleted'
+  | 'verification.discrepancy.reason_submitted'
+  | 'admin.verification.viewed'
+  // S3 — vision batch pipeline (5th local Claude batch, carbon of the
+  // onboarding/weekly/monthly/calendar lifecycle — SPEC §33.4). PII-FREE
+  // metadata expected (mirror `onboarding.batch.*`): counts + ranAt + opaque
+  // ids + `matchedLabels`/`issuesCount` — NEVER the extracted positions
+  // payload, NEVER raw Claude output, NEVER the proof image bytes/labels.
+  | 'verification.batch.pulled'
+  | 'verification.batch.persisted'
+  | 'verification.batch.skipped'
+  | 'verification.batch.invalid_output'
+  | 'verification.batch.persist_failed'
+  | 'verification.batch.crisis_detected'
+  | 'verification.batch.amf_violation'
+  | 'verification.proof.analyzed'
+  // S3 — daily verification scan (généralisation preuve-par-la-réalité §33.5:
+  // unfilled rituals → discrepancies → ScoreEvents → ConstancyScore upsert →
+  // repetition alerts → Douglas dispatch). Heartbeat on EVERY run; counts +
+  // ranAt only, PII-free. Strict `cron.<name>.scan` convention (cron-watch).
+  | 'cron.verification_scan.scan'
+  | 'verification.alert.created'
+  | 'verification.score.computed';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the
 // public Track Record was split out to a standalone repo
@@ -366,6 +400,10 @@ export function resolveUploadAuditAction(kind: UploadKind): AuditAction {
   // for clarity; the §21.5 isolation is the slug value, not the order.
   if (isTrainingAnnotationUploadKind(kind)) return 'admin.training_annotation.media.uploaded';
   if (isTrainingUploadKind(kind)) return 'training_trade.screenshot.uploaded';
+  // S3: an MT5 proof upload traces the verification surface, never the
+  // journal — a proof must not inflate the `trade.screenshot.uploaded`
+  // engagement/forensic signal (mirror of the §21.5 training rationale).
+  if (isProofUploadKind(kind)) return 'verification.proof.uploaded';
   return 'trade.screenshot.uploaded';
 }
 

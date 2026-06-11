@@ -22,7 +22,7 @@ export function JournalShortcut(): null {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'n' && event.key !== 'N') return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || event.isComposing) return;
       const target = event.target;
       if (target instanceof HTMLElement) {
         if (

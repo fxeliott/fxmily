@@ -57,7 +57,9 @@ function arm({
   deliveries = [],
   cards = [CARD],
 }: Arm) {
-  vi.mocked(db.user.findMany).mockResolvedValue([{ id: 'member-1' }] as never);
+  vi.mocked(db.user.findMany).mockResolvedValue([
+    { id: 'member-1', timezone: 'Europe/Paris' },
+  ] as never);
   vi.mocked(db.discrepancy.findMany).mockResolvedValue(discrepancies as never);
   vi.mocked(db.alert.findMany).mockResolvedValue(existingAlerts as never);
   vi.mocked(db.alert.create).mockResolvedValue({ id: 'alert-new' } as never);
@@ -127,6 +129,22 @@ describe('scanAlertsForAllMembers — member-day cap + open-alert retry (S4)', (
           triggerType: 'false_declaration_repeat',
           repeatCount: 2,
           status: 'delivered',
+        },
+      ],
+    });
+    const r = await scanAlertsForAllMembers({ now: NOW });
+    expect(r.deliveriesDispatched).toBe(0);
+    expect(db.markDouglasDelivery.create).not.toHaveBeenCalled();
+  });
+
+  it('dismissed alert is NEVER retried (the member or admin closed it)', async () => {
+    arm({
+      existingAlerts: [
+        {
+          id: 'alert-dismissed',
+          triggerType: 'false_declaration_repeat',
+          repeatCount: 2,
+          status: 'dismissed',
         },
       ],
     });

@@ -56,13 +56,16 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
   const status = parseFilter(rawStatus);
   const cursor = parseCursor(rawCursor);
 
-  // A well-formed cursor can still point at a deleted trade — degrade to
-  // page 1 instead of surfacing a server error (redirect must stay OUTSIDE
-  // the catch: Next signals it by throwing).
+  // A well-formed cursor could still make the query fail — degrade to page 1
+  // instead of surfacing a server error. The net exists ONLY when a cursor is
+  // in play: catching every error would turn a DB outage into a /journal →
+  // /journal redirect loop instead of the error boundary (S4 review finding).
+  // The redirect stays OUTSIDE the catch — Next signals it by throwing.
   let page: Awaited<ReturnType<typeof listTradesForUser>> | null = null;
   try {
     page = await listTradesForUser(session.user.id, { status, limit: 50, cursor });
-  } catch {
+  } catch (err) {
+    if (!cursor) throw err;
     page = null;
   }
   if (page === null) redirect(journalHref(status));

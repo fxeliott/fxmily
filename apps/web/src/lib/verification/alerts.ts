@@ -79,7 +79,11 @@ export async function scanAlertsForAllMembers(
 
   const members = await db.user.findMany({
     where: { status: 'active', role: 'member' },
-    select: { id: true },
+    // timezone: the member-day cap is an EXPERIENCE invariant — « aujourd'hui »
+    // must be the member's local day, exactly like the trigger engine
+    // (S4 review: a hardcoded Paris day leaked 2 cards into one member-day
+    // for non-Paris timezones around date boundaries).
+    select: { id: true, timezone: true },
   });
 
   let alertsCreated = 0;
@@ -88,7 +92,12 @@ export async function scanAlertsForAllMembers(
 
   for (const member of members) {
     try {
-      const result = await scanAlertsForMember(member.id, now, windowStart);
+      const result = await scanAlertsForMember(
+        member.id,
+        member.timezone || 'Europe/Paris',
+        now,
+        windowStart,
+      );
       alertsCreated += result.created;
       deliveriesDispatched += result.dispatched;
     } catch (err) {
@@ -106,6 +115,7 @@ export async function scanAlertsForAllMembers(
 
 async function scanAlertsForMember(
   memberId: string,
+  timezone: string,
   now: Date,
   windowStart: Date,
 ): Promise<{ created: number; dispatched: number }> {
@@ -149,7 +159,7 @@ async function scanAlertsForMember(
       // forever. Still ≤1 fiche/membre/jour : the cap inside
       // `dispatchDouglasForAlert` governs every attempt.
       if (existing.status === 'open') {
-        const retried = await dispatchDouglasForAlert(memberId, existing.id, rule, now);
+        const retried = await dispatchDouglasForAlert(memberId, timezone, existing.id, rule, now);
         if (retried) {
           dispatched += 1;
           await db.alert.update({ where: { id: existing.id }, data: { status: 'delivered' } });
@@ -183,7 +193,7 @@ async function scanAlertsForMember(
     // channel (never a shame blast). The « ≤1 fiche/membre/jour » cap is
     // enforced INSIDE `dispatchDouglasForAlert` (S4 DOD2-T2-1) — a member
     // already served today gets the alert card at tomorrow's scan instead.
-    const dispatchedOk = await dispatchDouglasForAlert(memberId, alert.id, rule, now);
+    const dispatchedOk = await dispatchDouglasForAlert(memberId, timezone, alert.id, rule, now);
     if (dispatchedOk) {
       dispatched += 1;
       await db.alert.update({ where: { id: alert.id }, data: { status: 'delivered' } });
@@ -202,11 +212,15 @@ async function scanAlertsForMember(
  */
 async function dispatchDouglasForAlert(
   memberId: string,
+  timezone: string,
   alertId: string,
   rule: AlertRule,
   now: Date,
 ): Promise<boolean> {
-  const triggeredOn = parseLocalDate(localDateOf(now, 'Europe/Paris'));
+  // Member-local day — MUST match the trigger engine's `triggeredOn` canon
+  // (engine.ts computes it from `user.timezone`) or the two paths disagree
+  // on « aujourd'hui » and the shared member-day cap leaks.
+  const triggeredOn = parseLocalDate(localDateOf(now, timezone));
   const recent = await db.markDouglasDelivery.findMany({
     where: {
       userId: memberId,

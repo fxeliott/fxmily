@@ -41,8 +41,11 @@ export async function GET(req: Request): Promise<Response> {
     return NextResponse.json({ error: 'invalid_proof_id' }, { status: 400 });
   }
 
-  const proof = await db.mt5AccountProof.findUnique({
-    where: { id: proofId },
+  // Blast-radius scoping (security audit T2-2): the vision token only ever
+  // needs images the PULL can list — proofs of ACTIVE members. A stolen token
+  // must not page through soft-deleted members' history.
+  const proof = await db.mt5AccountProof.findFirst({
+    where: { id: proofId, member: { status: 'active' } },
     select: { fileKey: true },
   });
   if (!proof) {

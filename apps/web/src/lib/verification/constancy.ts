@@ -3,7 +3,12 @@ import 'server-only';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { reportError } from '@/lib/observability';
-import { localDateOf, parseLocalDate, shiftLocalDate } from '@/lib/checkin/timezone';
+import {
+  localDateOf,
+  localInstantToUtc,
+  parseLocalDate,
+  shiftLocalDate,
+} from '@/lib/checkin/timezone';
 
 /**
  * S3 §33.5 — Score de constance & d'investissement dans le travail.
@@ -80,8 +85,11 @@ export async function scanRitualsForAllMembers(
     where: {
       status: 'active',
       role: 'member',
-      // A member who joined yesterday or later owes nothing for yesterday.
-      createdAt: { lt: yesterdayDate },
+      // A member who joined yesterday or later owes nothing for yesterday —
+      // compared against PARIS midnight of that civil day (adverse-review:
+      // a UTC-midnight compare let a 00:00-02:00 CEST signup be scanned for
+      // their own signup day).
+      createdAt: { lt: localInstantToUtc(yesterday, 0, 0, 0, 0, 'Europe/Paris') },
     },
     select: { id: true },
   });
@@ -283,7 +291,7 @@ export async function recomputeConstancyForAllMembers(
           where: { memberId: member.id, createdAt: { gte: windowStart, lt: windowEnd } },
           select: {
             reason: true,
-            relatedDiscrepancy: { select: { memberReason: true } },
+            relatedDiscrepancy: { select: { memberReason: true, status: true } },
           },
         }),
         db.extractedPosition.count({ where: { brokerAccount: { memberId: member.id } } }),
@@ -299,7 +307,13 @@ export async function recomputeConstancyForAllMembers(
       const folded = foldConstancy(
         events.map((e) => ({
           reason: e.reason,
-          excused: e.relatedDiscrepancy?.memberReason != null,
+          // Excused = member gave a valid reason OR the accusation was
+          // RETRACTED by reality itself (reconcile resolved it — the proof
+          // arrived later and confirmed the trade; the member must not have
+          // to self-excuse for our own premature verdict).
+          excused:
+            e.relatedDiscrepancy?.memberReason != null ||
+            e.relatedDiscrepancy?.status === 'resolved',
         })),
         {
           everConfronted: confrontedCount > 0,

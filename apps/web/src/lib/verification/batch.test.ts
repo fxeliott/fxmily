@@ -185,6 +185,20 @@ describe('persistVisionResults — gates', () => {
     expect(m.proofUpdate.mock.calls[0]?.[0]?.data.ocrStatus).toBe('failed');
   });
 
+  it('🚨 adverse — not_mt5_history on an already-DONE proof never flips it back to failed', () => {
+    m.userFindMany.mockResolvedValue([{ id: MEMBER }]);
+    m.proofFindMany.mockResolvedValue([
+      { id: PROOF, memberId: MEMBER, ocrStatus: 'done', brokerAccountId: null, accountType: null },
+    ]);
+
+    return persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER, error: 'not_mt5_history' }],
+    }).then((r) => {
+      expect(r.skipped).toBe(1);
+      expect(m.proofUpdate).not.toHaveBeenCalled();
+    });
+  });
+
   it('Gate 3 — an already-analysed proof is never re-written (idempotency)', async () => {
     m.userFindMany.mockResolvedValue([{ id: MEMBER }]);
     m.proofFindMany.mockResolvedValue([

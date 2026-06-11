@@ -110,11 +110,14 @@ async function scanAlertsForMember(
   windowStart: Date,
 ): Promise<{ created: number; dispatched: number }> {
   // UNEXCUSED discrepancies in the window, grouped client-side (3 rules max).
+  // `resolved` excluded too: an accusation retracted by reality (the proof
+  // arrived and confirmed the trade) must never feed a repetition alert.
   const discrepancies = await db.discrepancy.findMany({
     where: {
       memberId,
       detectedAt: { gte: windowStart },
       memberReason: null,
+      status: { not: 'resolved' },
     },
     select: { type: true },
   });

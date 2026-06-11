@@ -22,6 +22,7 @@ function trade(overrides: Partial<ReconcileTradeInput> = {}): ReconcileTradeInpu
     enteredAt: T0,
     lotSize: 0.5,
     matchStatus: null,
+    isClosed: true,
     ...overrides,
   };
 }
@@ -122,5 +123,32 @@ describe('reconcileMember — écarts (DoD §31 #2)', () => {
   it('no positions at all → every declared trade is uncovered (nothing to confront)', () => {
     const verdicts = reconcileMember([trade()], []);
     expect(verdicts).toEqual([{ kind: 'uncovered', tradeId: 'trade1' }]);
+  });
+
+  it('🚨 adverse TIER1 — an OPEN trade is NEVER false_declared (vision extracts closed only)', () => {
+    // Routine flow: member declares at entry + uploads a proof the same day.
+    const verdicts = reconcileMember(
+      [trade({ id: 'open-trade', pair: 'USDJPY', isClosed: false })],
+      [position()],
+    );
+    expect(verdicts.some((v) => v.kind === 'false_declared')).toBe(false);
+    expect(verdicts.some((v) => v.kind === 'uncovered')).toBe(false);
+  });
+
+  it('an OPEN trade can still MATCH (declared at entry, already closed in MT5)', () => {
+    const verdicts = reconcileMember([trade({ isClosed: false })], [position()]);
+    expect(verdicts).toContainEqual({ kind: 'matched', tradeId: 'trade1', positionId: 'pos1' });
+  });
+
+  it('🚨 adverse TIER2 — disjoint proof epochs do NOT fuse: a trade between two distant clusters stays uncovered', () => {
+    const january = new Date('2026-01-10T10:00:00.000Z');
+    const june = new Date('2026-06-09T10:00:00.000Z');
+    const march = new Date('2026-03-15T10:00:00.000Z');
+    const verdicts = reconcileMember(
+      [trade({ id: 'march-trade', pair: 'USDJPY', enteredAt: march })],
+      [position({ id: 'p-jan', openTime: january }), position({ id: 'p-jun', openTime: june })],
+    );
+    expect(verdicts).toContainEqual({ kind: 'uncovered', tradeId: 'march-trade' });
+    expect(verdicts.some((v) => v.kind === 'false_declared')).toBe(false);
   });
 });

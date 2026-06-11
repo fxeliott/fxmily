@@ -44,6 +44,11 @@ export interface ReconcileTradeInput {
   readonly enteredAt: Date;
   readonly lotSize: number | null;
   readonly matchStatus: 'unmatched' | 'matched' | 'mismatch' | null;
+  /** Adverse-review TIER1 fix: the vision prompt extracts CLOSED positions
+   *  only, so an OPEN declared trade structurally has no counterpart yet —
+   *  it can MATCH (member declared at entry, closed in MT5 already) but must
+   *  NEVER be accused of `false_declared`. */
+  readonly isClosed: boolean;
 }
 
 export interface ReconcilePositionInput {
@@ -129,9 +134,13 @@ export function reconcileMember(
   }
 
   // Leftover trades — covered window ⇒ false_declared, else uncovered.
+  // OPEN trades emit NO verdict at all (adverse-review TIER1): they are not
+  // confrontable yet — the diligent member who declares at entry and proves
+  // the same day must never be flagged a liar.
   const windows = coverageWindows(positions);
   for (const trade of trades) {
     if (matchedTrades.has(trade.id)) continue;
+    if (!trade.isClosed) continue;
     const t = trade.enteredAt.getTime();
     const covered = windows.some(([start, end]) => t >= start && t <= end);
     verdicts.push(
@@ -144,14 +153,31 @@ export function reconcileMember(
   return verdicts;
 }
 
-/** Coverage = [min openTime − margin, max openTime + margin] per symbol-blind
- *  global window. V1 deliberately coarse (a proof shows a continuous history
- *  slice) — documented limit: a member screening only SOME days of a period
- *  can still hide a trade (§33.6: screenshot ≠ forensique absolue). */
+/** Max gap between two consecutive extracted positions inside ONE coverage
+ *  cluster. Beyond it, the windows split — a January proof and a June proof
+ *  must NOT fuse into one giant window that "covers" a never-screened March
+ *  (adverse-review TIER2: false accusation on unproven periods). */
+export const COVERAGE_CLUSTER_GAP_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** Coverage = clustered [min−margin, max+margin] windows over the extracted
+ *  positions' openTimes (split on gaps > COVERAGE_CLUSTER_GAP_MS). Documented
+ *  limit (§33.6): a member screening only SOME days can still hide a trade —
+ *  the screenshot is a confrontation signal, never absolute forensics. */
 function coverageWindows(positions: readonly ReconcilePositionInput[]): Array<[number, number]> {
   if (positions.length === 0) return [];
-  const times = positions.map((p) => p.openTime.getTime());
-  return [[Math.min(...times) - COVERAGE_MARGIN_MS, Math.max(...times) + COVERAGE_MARGIN_MS]];
+  const times = positions.map((p) => p.openTime.getTime()).sort((a, b) => a - b);
+  const windows: Array<[number, number]> = [];
+  let clusterStart = times[0] as number;
+  let clusterEnd = times[0] as number;
+  for (const t of times.slice(1)) {
+    if (t - clusterEnd > COVERAGE_CLUSTER_GAP_MS) {
+      windows.push([clusterStart - COVERAGE_MARGIN_MS, clusterEnd + COVERAGE_MARGIN_MS]);
+      clusterStart = t;
+    }
+    clusterEnd = t;
+  }
+  windows.push([clusterStart - COVERAGE_MARGIN_MS, clusterEnd + COVERAGE_MARGIN_MS]);
+  return windows;
 }
 
 // =============================================================================
@@ -229,6 +255,7 @@ async function reconcileOneMember(
         pair: true,
         direction: true,
         enteredAt: true,
+        exitedAt: true,
         lotSize: true,
         matchStatus: true,
       },
@@ -239,6 +266,7 @@ async function reconcileOneMember(
     }),
   ]);
 
+  const tradeStatusById = new Map(trades.map((t) => [t.id, t.matchStatus]));
   const verdicts = reconcileMember(
     trades.map((t) => ({
       id: t.id,
@@ -247,6 +275,7 @@ async function reconcileOneMember(
       enteredAt: t.enteredAt,
       lotSize: t.lotSize === null ? null : Number(t.lotSize),
       matchStatus: t.matchStatus,
+      isClosed: t.exitedAt !== null,
     })),
     positions.map((p) => ({
       id: p.id,
@@ -273,29 +302,60 @@ async function reconcileOneMember(
   for (const v of verdicts) {
     if (v.kind === 'matched') {
       matched += 1;
-      await db.trade.update({
-        where: { id: v.tradeId },
-        data: { matchStatus: 'matched', verifiedAt: now, source: 'mt5_verified' },
+      // `verifiedAt` only stamps the FIRST confirmation (re-runs are no-ops,
+      // no churn). RETRACTION (adverse-review TIER2): reality just confirmed
+      // this trade/position pair — auto-resolve any stale accusation that an
+      // earlier run produced before the matching proof arrived. The fold
+      // treats `resolved` discrepancies as excused → the score repairs
+      // itself without the innocent member having to self-excuse.
+      if (tradeStatusById.get(v.tradeId) !== 'matched') {
+        await db.trade.update({
+          where: { id: v.tradeId },
+          data: { matchStatus: 'matched', verifiedAt: now, source: 'mt5_verified' },
+        });
+      }
+      const retracted = await db.discrepancy.updateMany({
+        where: {
+          memberId,
+          status: { not: 'resolved' },
+          OR: [
+            { type: 'false_declared', declaredTradeId: v.tradeId },
+            { type: 'mismatch', declaredTradeId: v.tradeId },
+            { type: 'missing_declared', extractedPositionId: v.positionId },
+          ],
+        },
+        data: { status: 'resolved' },
       });
+      if (retracted.count > 0) {
+        await logAudit({
+          action: 'verification.batch.persisted',
+          userId: memberId,
+          metadata: { scope: 'retraction', tradeId: v.tradeId, retracted: retracted.count },
+        });
+      }
       continue;
     }
 
     if (v.kind === 'uncovered') {
       // Confronté mais hors fenêtre de preuve — honnêteté §33.6 : pas un
-      // mensonge prouvé, juste « pas encore confrontable ».
+      // mensonge prouvé, juste « pas encore confrontable ». State-consistency
+      // (adverse-review): a trade leaving `matched` also drops its verified
+      // stamps — `unmatched` + `mt5_verified` would be contradictory.
       await db.trade.update({
         where: { id: v.tradeId },
-        data: { matchStatus: 'unmatched' },
+        data: { matchStatus: 'unmatched', verifiedAt: null, source: 'self_declared' },
       });
       continue;
     }
 
     if (v.kind === 'mismatch') {
       mismatched += 1;
-      await db.trade.update({
-        where: { id: v.tradeId },
-        data: { matchStatus: 'mismatch', verifiedAt: now },
-      });
+      if (tradeStatusById.get(v.tradeId) !== 'mismatch') {
+        await db.trade.update({
+          where: { id: v.tradeId },
+          data: { matchStatus: 'mismatch', verifiedAt: now },
+        });
+      }
       const key = `mismatch|${v.tradeId}|${v.positionId}`;
       if (!existingKeys.has(key)) {
         existingKeys.add(key);
@@ -352,10 +412,10 @@ async function reconcileOneMember(
       continue;
     }
 
-    // false_declared
+    // false_declared — same state-consistency reset as `uncovered`.
     await db.trade.update({
       where: { id: v.tradeId },
-      data: { matchStatus: 'unmatched' },
+      data: { matchStatus: 'unmatched', verifiedAt: null, source: 'self_declared' },
     });
     const key = `false_declared|${v.tradeId}|`;
     if (!existingKeys.has(key)) {

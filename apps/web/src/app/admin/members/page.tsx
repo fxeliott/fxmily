@@ -117,6 +117,7 @@ export default async function AdminMembersPage() {
                 Envoyer la première invitation
               </>
             }
+            ctaHref="/admin/invite"
           />
         </Card>
       ) : (

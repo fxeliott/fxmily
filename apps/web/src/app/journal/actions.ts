@@ -126,7 +126,6 @@ export async function createTradeAction(
   }
 
   const data = parsed.data;
-  const continueToClose = formData.get('continueToClose') === 'true';
 
   // BOLA defence: the key shape was already validated by Zod, but we must
   // also enforce that the userId segment belongs to the *current session* —
@@ -196,12 +195,11 @@ export async function createTradeAction(
   scheduleDouglasDispatch(session.user.id, 'trade.created');
 
   // Navigate. We never reach the function's normal return on the success path.
+  // (S4 DOD4-F1 — the dead `continueToClose` branch was removed: no form ever
+  // posted that field; re-add it WITH its UI if a « log + close now » flow
+  // ships one day.)
   try {
-    if (continueToClose) {
-      redirect(`/journal/${tradeId}/close`);
-    } else {
-      redirect(`/journal/${tradeId}`);
-    }
+    redirect(`/journal/${tradeId}`);
   } catch (err) {
     if (isNextRedirect(err)) throw err;
     console.error('[journal.createTrade] redirect failed', err);

@@ -58,6 +58,36 @@ describe('tradeOpenSchema', () => {
     }
   });
 
+  // TIER1 regression (S2 audit 2026-06-11) — the wizard submits FormData, so
+  // planRespected arrives as a STRING. The old `z.coerce.boolean()` turned
+  // "false" into `true` (every declared plan violation persisted as respect).
+  it.each([
+    ['false', false],
+    ['true', true],
+  ] as const)('FormData planRespected = %s persists as %s (never inverted)', (wire, expected) => {
+    const result = tradeOpenSchema.safeParse({ ...baseOpen, planRespected: wire });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.planRespected).toBe(expected);
+    }
+  });
+
+  it.each([
+    [false, false],
+    [true, true],
+  ] as const)('native boolean planRespected = %s stays %s', (wire, expected) => {
+    const result = tradeOpenSchema.safeParse({ ...baseOpen, planRespected: wire });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.planRespected).toBe(expected);
+    }
+  });
+
+  it('rejects a non-boolean planRespected string instead of coercing it', () => {
+    const result = tradeOpenSchema.safeParse({ ...baseOpen, planRespected: 'yes' });
+    expect(result.success).toBe(false);
+  });
+
   it('rejects more than EMOTION_MAX_PER_MOMENT tags', () => {
     const result = tradeOpenSchema.safeParse({
       ...baseOpen,

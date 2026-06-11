@@ -184,6 +184,20 @@ export class TradeAlreadyClosedError extends Error {
   }
 }
 
+/**
+ * S2 audit 2026-06-11 — the only cross-field exit/entry check used to live in
+ * `tradeFullSchema` (dead code for the real close path) : `closeTrade` happily
+ * persisted `exitedAt < enteredAt`, poisoning durations, session attribution
+ * and the future S3 reconciliation. Enforced here, where the trade row (and
+ * its authoritative `enteredAt`) is loaded anyway.
+ */
+export class TradeExitBeforeEntryError extends Error {
+  constructor() {
+    super('exitedAt is before enteredAt');
+    this.name = 'TradeExitBeforeEntryError';
+  }
+}
+
 export async function createTrade(
   userId: string,
   input: CreateTradeInput,
@@ -233,6 +247,7 @@ export async function closeTrade(
         plannedRR: true,
         closedAt: true,
         notes: true,
+        enteredAt: true,
       },
     });
 
@@ -241,6 +256,9 @@ export async function closeTrade(
     }
     if (existing.closedAt !== null) {
       throw new TradeAlreadyClosedError();
+    }
+    if (input.exitedAt.getTime() < existing.enteredAt.getTime()) {
+      throw new TradeExitBeforeEntryError();
     }
 
     const realized = computeRealizedR({

@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { localDateOf } from '@/lib/checkin/timezone';
 import { listRecentHabitLogs } from '@/lib/habit/service';
 import type { HabitKind } from '@/lib/schemas/habit-log';
 import { cn } from '@/lib/utils';
@@ -70,16 +71,18 @@ const PILLARS: PillarMeta[] = [
 
 interface TodayHabitCardsProps {
   userId: string;
+  /** IANA timezone of the member (session.user.timezone, Europe/Paris default). */
+  timezone: string;
 }
 
-function localToday(): string {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-}
-
-export async function TodayHabitCards({ userId }: TodayHabitCardsProps) {
+export async function TodayHabitCards({ userId, timezone }: TodayHabitCardsProps) {
   const recent = await listRecentHabitLogs(userId, 1);
-  const today = localToday();
+  // TIER2 fix (S2 audit 2026-06-11, review pass) : this is an async SERVER
+  // component — local getters here would be the SERVER's day (UTC in prod),
+  // diverging from the client habit wizards (fixed to the member's local day).
+  // `localDateOf` resolves "today" in the MEMBER's timezone server-side — the
+  // canon pattern of `lib/schemas/habit-log.ts` / daily-guidance.
+  const today = localDateOf(new Date(), timezone);
   const loggedKinds = new Set<HabitKind>(
     recent.filter((log) => log.date === today).map((log) => log.kind),
   );

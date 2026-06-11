@@ -10,6 +10,7 @@ import {
   calendarBatchLimiter,
   callerIdTrusted,
   monthlyBatchLimiter,
+  verificationBatchLimiter,
 } from '@/lib/rate-limit/token-bucket';
 
 /**
@@ -164,6 +165,52 @@ export function requireCalendarAdminToken(req: Request): NextResponse | null {
   if (!provided || !verifyAdminToken(provided, env.CALENDAR_ADMIN_BATCH_TOKEN)) {
     const id = callerIdTrusted(req);
     const decision = calendarBatchLimiter.consume(id);
+    if (!decision.allowed) {
+      return NextResponse.json(
+        { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(Math.ceil(decision.retryAfterMs / 1000)) },
+        },
+      );
+    }
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  return null;
+}
+
+/**
+ * S3 §33.4 — per-request guard for the `/api/admin/verification-batch/*`
+ * routes (5th local Claude pipeline, MT5 vision).
+ *
+ * EXACT carbon of {@link requireCalendarAdminToken} with two deliberate swaps:
+ *   - reads `env.VERIFICATION_ADMIN_BATCH_TOKEN` (token separate from the
+ *     weekly/monthly/calendar tokens — this surface also serves the proof
+ *     IMAGES to the local script, a distinct compromise blast radius, so it
+ *     rotates independently)
+ *   - consumes the dedicated `verificationBatchLimiter` on the 401 path
+ *     (larger burst: the script downloads one image per pending proof)
+ *
+ * Same anti-accumulation rationale: `verifyAdminToken` (the pure constant-time
+ * compare) IS reused — only the env key + limiter differ. Same check order
+ * (503 → 401-consume-bucket → 429 → null) and same status semantics.
+ */
+export function requireVerificationAdminToken(req: Request): NextResponse | null {
+  if (!env.VERIFICATION_ADMIN_BATCH_TOKEN) {
+    return NextResponse.json(
+      {
+        error: 'verification_batch_disabled',
+        detail: 'VERIFICATION_ADMIN_BATCH_TOKEN not configured.',
+      },
+      { status: 503 },
+    );
+  }
+
+  const provided = req.headers.get('x-admin-token');
+  if (!provided || !verifyAdminToken(provided, env.VERIFICATION_ADMIN_BATCH_TOKEN)) {
+    const id = callerIdTrusted(req);
+    const decision = verificationBatchLimiter.consume(id);
     if (!decision.allowed) {
       return NextResponse.json(
         { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },

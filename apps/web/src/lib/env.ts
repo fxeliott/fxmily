@@ -195,6 +195,20 @@ const envSchema = z.object({
     .min(32, 'CALENDAR_ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
     .optional(),
 
+  /// S3 §33.4 — Token partagé entre la machine d'Eliot et
+  /// `/api/admin/verification-batch/*` (5ᵉ pipeline vision MT5). Sans ça, les
+  /// endpoints verification batch répondent 503 (refuse-by-default, mirror
+  /// des trois autres tokens batch). Génération : `openssl rand -hex 32`
+  /// (64 chars). Provisionner sur Hetzner via append à `/etc/fxmily/web.env`
+  /// (0600 owner fxmily) puis `docker compose -f docker-compose.prod.yml
+  /// restart web`. SÉPARÉ des trois autres : cette surface sert aussi les
+  /// IMAGES de preuve (téléchargement par le script local) — compromis
+  /// distinct, rotation indépendante.
+  VERIFICATION_ADMIN_BATCH_TOKEN: z
+    .string()
+    .min(32, 'VERIFICATION_ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
+    .optional(),
+
   /// V1.5 — Salt server-side pour la pseudonymisation `userId → memberLabel`
   /// dans `lib/weekly-report/builder.ts`. Sans salt, un attaquant qui connaît
   /// un cuid peut vérifier sa présence dans un export rapport hebdo en

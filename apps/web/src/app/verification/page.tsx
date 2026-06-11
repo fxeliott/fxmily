@@ -8,9 +8,10 @@ import { ConstancyScoreCard } from '@/components/verification/constancy-score-ca
 import { DeleteProofButton } from '@/components/verification/delete-proof-button';
 import { DiscrepancyReasonForm } from '@/components/verification/discrepancy-reason-form';
 import { ProofUploader } from '@/components/verification/proof-uploader';
+import { ScoreEventsHistory } from '@/components/verification/score-events-history';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
-import { getLatestConstancyScore } from '@/lib/verification/constancy';
+import { getLatestConstancyScore, listRecentScoreEvents } from '@/lib/verification/constancy';
 import { getVerificationOverview, listDiscrepancies } from '@/lib/verification/service';
 
 /**
@@ -76,10 +77,11 @@ export default async function VerificationPage() {
     redirect('/login');
   }
 
-  const [overview, constancy, discrepancies] = await Promise.all([
+  const [overview, constancy, discrepancies, scoreEvents] = await Promise.all([
     getVerificationOverview(session.user.id),
     getLatestConstancyScore(session.user.id),
     listDiscrepancies(session.user.id),
+    listRecentScoreEvents(session.user.id),
   ]);
   const openDiscrepancies = discrepancies.filter((d) => d.status === 'open');
   const handledDiscrepancies = discrepancies.filter((d) => d.status !== 'open');
@@ -91,7 +93,7 @@ export default async function VerificationPage() {
           href="/dashboard"
           className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
         >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
           Tableau de bord
         </Link>
         <div className="flex flex-col gap-1.5">
@@ -114,6 +116,9 @@ export default async function VerificationPage() {
           Ta constance
         </h2>
         <ConstancyScoreCard score={constancy} />
+        {/* S4 — « le score reste explicable au membre » (promesse du schéma
+            ScoreEvent) : les derniers événements, excusés neutralisés. */}
+        <ScoreEventsHistory events={scoreEvents} />
       </section>
 
       {/* Écarts détectés */}
@@ -190,7 +195,7 @@ export default async function VerificationPage() {
           {overview.accounts.map((account) => (
             <Card key={account.id} className="flex flex-wrap items-center gap-3 p-4">
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-3)]">
-                <ShieldCheck className="h-5 w-5" strokeWidth={1.75} />
+                <ShieldCheck className="h-5 w-5" strokeWidth={1.75} aria-hidden />
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate text-[14px] font-semibold text-[var(--t-1)]">
@@ -279,7 +284,7 @@ export default async function VerificationPage() {
         ) : (
           <div className="rounded-card border border-dashed border-[var(--b-default)] bg-[var(--bg-1)] px-4 py-6 text-center">
             <span className="inline-flex items-center gap-2 text-[13px] text-[var(--t-3)]">
-              <ScanSearch className="h-4 w-4" strokeWidth={1.75} />
+              <ScanSearch className="h-4 w-4" strokeWidth={1.75} aria-hidden />
               Aucune preuve pour l&apos;instant — ta première capture pose la base de ton suivi.
             </span>
           </div>

@@ -20,6 +20,7 @@ import { CalendarStatusWidget } from '@/components/calendar/calendar-status-widg
 import { StreakCard } from '@/components/checkin/streak-card';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DrawnRule } from '@/components/dashboard/drawn-rule';
+import { JournalShortcut } from '@/components/dashboard/journal-shortcut';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
 import { TodayGuidance } from '@/components/dashboard/today-guidance';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
@@ -48,6 +49,8 @@ import { habitKindSchema } from '@/lib/schemas/habit-log';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 import { countTradesByStatus } from '@/lib/trades/service';
+import { getLatestConstancyScore } from '@/lib/verification/constancy';
+import { countOpenDiscrepancies } from '@/lib/verification/service';
 import { cn } from '@/lib/utils';
 
 import { PreTradeAnalyticsCard } from '@/components/pre-trade/pre-trade-analytics-card';
@@ -117,13 +120,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   // NOTE — the daily check-in status is read INSIDE the "Ton aujourd'hui" panel
   // (getDailyGuidance) now, not here: the old static check-in card was removed
   // (the panel owns the time-aware check-in surfacing, no duplicate query).
-  const [counts, streak, latestScore] = userId
+  const [counts, streak, latestScore, constancy, openDiscrepancies] = userId
     ? await Promise.all([
         countTradesByStatus(userId),
         getStreak(userId, timezone),
         getLatestBehavioralScore(userId),
+        // S4 — the S3 outputs surface ON the hub (constancy teaser + open
+        // écarts count on the « Vérification » card), not only one click away.
+        getLatestConstancyScore(userId),
+        countOpenDiscrepancies(userId),
       ])
-    : [{ open: 0, closed: 0 }, { current: 0, todayFilled: false, today: '' }, null];
+    : [{ open: 0, closed: 0 }, { current: 0, todayFilled: false, today: '' }, null, null, 0];
 
   const fullName = session.user.name?.trim() || session.user.email?.split('@')[0] || 'Membre';
   const firstName = fullName.split(' ')[0]!;
@@ -137,6 +144,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
       {/* DS-v3 J3 — ambient mesh + drifting orbs behind the glass panels */}
       <DashboardAmbient />
+      {/* S4 DOD1-04 — makes the advertised `N` shortcut real (renders nothing) */}
+      <JournalShortcut />
       {/* Sticky header — full-bleed bar, content aligned to the body width */}
       <header className="sticky top-0 z-20 border-b border-[var(--b-default)] bg-[var(--bg)]/95 backdrop-blur">
         <div className="mx-auto flex h-12 w-full max-w-[var(--w-app)] items-center gap-3 px-4 lg:px-8 2xl:px-12">
@@ -210,7 +219,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <KpiCell
               label="Clôturés"
               value={counts.closed.toString()}
-              hint="ce mois"
+              hint="cumulés"
               tone={counts.closed > 0 ? 'ok' : 'mute'}
             />
             <KpiCell
@@ -594,9 +603,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       Tes comptes, tes preuves MT5 et ton déclaré mis en face de ton historique
                       réel. Se voir tel qu&apos;on est, pour progresser.
                     </p>
+                    {openDiscrepancies > 0 ? (
+                      <p className="text-[12px] font-medium text-[var(--t-2)]">
+                        {openDiscrepancies} écart{openDiscrepancies > 1 ? 's' : ''} à regarder
+                      </p>
+                    ) : null}
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden="true" />
+                <div className="flex shrink-0 items-center gap-3">
+                  {/* S4 — constancy teaser. Honesty rule §33.5 : no score until
+                      the member has been confronted at least once (no fake 100). */}
+                  {constancy ? (
+                    <div className="flex flex-col items-end">
+                      <span className="font-mono text-[22px] leading-none font-bold text-[var(--t-1)] tabular-nums">
+                        {Math.round(constancy.value)}
+                        <span className="text-[12px] font-medium text-[var(--t-4)]">/100</span>
+                      </span>
+                      <span className="t-foot mt-1 text-[var(--t-4)]">constance</span>
+                    </div>
+                  ) : null}
+                  <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden="true" />
+                </div>
               </div>
             </Link>
           </HoverLift>
@@ -685,13 +712,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </Suspense>
         </section>
 
-        {/* Footer kbd hint */}
+        {/* Footer kbd hint — only the shortcut that actually exists (S4
+            DOD1-04 : no fictional affordances; « ⌘? » had no handler). */}
         <footer className="mt-8 flex items-center justify-between border-t border-[var(--b-default)] pt-4 text-[10px] text-[var(--t-4)] tabular-nums">
           <span className="t-foot">Aucun conseil de marché. Discipline avant tout.</span>
           <span className="inline-flex items-center gap-1">
-            <Kbd>⌘</Kbd>
-            <Kbd>?</Kbd>
-            raccourcis
+            <Kbd>N</Kbd>
+            nouveau trade
           </span>
         </footer>
       </div>

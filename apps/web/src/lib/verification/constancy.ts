@@ -383,6 +383,48 @@ export interface ConstancyScoreView {
   readonly computedAt: Date;
 }
 
+export interface ScoreEventView {
+  readonly id: string;
+  readonly delta: number;
+  readonly reason: 'filled' | 'forgot_no_reason' | 'reality_gap' | 'false_declaration';
+  /** Mirror of the weekly fold's excusal rule — member reason given OR the
+   *  accusation was retracted by reality (`resolved`). */
+  readonly excused: boolean;
+  readonly createdAt: Date;
+}
+
+/**
+ * S4 (DOD3-T3-02) — the schema's promise « keeps the score explainable to
+ * the member » made real: the most recent events feeding « Pourquoi ton
+ * score bouge » on /verification. Applies the SAME excusal rule as the
+ * weekly fold (constancy stays one single story).
+ */
+export async function listRecentScoreEvents(
+  memberId: string,
+  take = 8,
+): Promise<readonly ScoreEventView[]> {
+  const rows = await db.scoreEvent.findMany({
+    where: { memberId },
+    orderBy: { createdAt: 'desc' },
+    take,
+    select: {
+      id: true,
+      delta: true,
+      reason: true,
+      createdAt: true,
+      relatedDiscrepancy: { select: { memberReason: true, status: true } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    delta: r.delta,
+    reason: r.reason,
+    excused:
+      r.relatedDiscrepancy?.memberReason != null || r.relatedDiscrepancy?.status === 'resolved',
+    createdAt: r.createdAt,
+  }));
+}
+
 export async function getLatestConstancyScore(
   memberId: string,
 ): Promise<ConstancyScoreView | null> {

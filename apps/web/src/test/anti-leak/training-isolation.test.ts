@@ -92,6 +92,11 @@ const REAL_EDGE_MODULES: string[] = [
   ...tsFilesIn('lib/analytics'),
   ...tsFilesIn('lib/trades'),
   ...tsFilesIn('lib/habit'),
+  // S3/S4 — the verification module reads `db.trade` (the real journal) and
+  // writes the member's ScoreEvents: a real-edge tree like any other. Added
+  // S4 (INT-F1) — the glob promise « any future file is covered by default »
+  // only holds if every new real-edge TREE joins the list at its birth.
+  ...tsFilesIn('lib/verification'),
   'lib/weekly-report/builder.ts',
 ].filter((f) => !(SANCTIONED_TOUCHPOINTS as readonly string[]).includes(f));
 

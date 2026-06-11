@@ -333,7 +333,11 @@ export type AuditAction =
   | 'cron.calendar_overdue.scan'
   // Session 5 §25 — monthly debrief overdue safety-net (DoD#2 permanence).
   // Heartbeat on EVERY run; counts + monthStart + emailOutcome only, PII-free.
-  | 'cron.monthly_debrief_overdue.scan';
+  | 'cron.monthly_debrief_overdue.scan'
+  // S2 — onboarding profile overdue safety-net (profilage permanence, 3rd twin
+  // of the §26 calendar / §25 monthly nets). Heartbeat on EVERY run; counts +
+  // oldestCompletedAt + emailOutcome only, PII-free.
+  | 'cron.onboarding_profile_overdue.scan';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the
 // public Track Record was split out to a standalone repo

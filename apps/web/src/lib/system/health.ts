@@ -35,6 +35,7 @@ interface CronExpectation {
     | 'cron.purge_audit_log.scan'
     | 'cron.calendar_overdue.scan'
     | 'cron.monthly_debrief_overdue.scan'
+    | 'cron.onboarding_profile_overdue.scan'
     | 'cron.health.scan';
   /** Human-readable label for the dashboard. */
   label: string;
@@ -116,6 +117,16 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.monthly_debrief_overdue.scan',
     label: 'Monthly debrief overdue nudge',
     periodMs: DAY, // crontab: daily 11:10 UTC (13:10 Paris)
+  },
+  {
+    // S2 — onboarding profile overdue safety-net (profilage permanence). Daily
+    // detection-only cron that nudges the admin when completed onboarding
+    // interviews are missing their MemberProfile past the 24h member-facing
+    // promise. Monitored here so a broken nudge cron surfaces red instead of
+    // silently failing.
+    action: 'cron.onboarding_profile_overdue.scan',
+    label: 'Onboarding profile overdue nudge',
+    periodMs: DAY, // crontab: daily 11:20 UTC (13:20 Paris)
   },
   {
     // J10 Phase O fix B3 : self-monitor the watcher itself. If `cron-watch.yml`

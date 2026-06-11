@@ -12,6 +12,7 @@ import { scheduleScoreRecompute } from '@/lib/scoring/scheduler';
 import { keyBelongsTo } from '@/lib/storage/local';
 import {
   TradeAlreadyClosedError,
+  TradeExitBeforeEntryError,
   TradeNotFoundError,
   closeTrade,
   createTrade,
@@ -271,6 +272,13 @@ export async function closeTradeAction(
   } catch (err) {
     if (err instanceof TradeNotFoundError) return { ok: false, error: 'not_found' };
     if (err instanceof TradeAlreadyClosedError) return { ok: false, error: 'already_closed' };
+    if (err instanceof TradeExitBeforeEntryError) {
+      return {
+        ok: false,
+        error: 'invalid_input',
+        fieldErrors: { exitedAt: 'La sortie ne peut pas précéder l’entrée du trade.' },
+      };
+    }
     console.error('[journal.closeTrade] failed', err);
     return { ok: false, error: 'unknown' };
   }

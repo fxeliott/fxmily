@@ -57,9 +57,15 @@ interface DraftState {
 
 const DRAFT_STORAGE_KEY = 'fxmily:track:sleep:draft:v1';
 
+// TIER2 fix (S2 audit 2026-06-11) : `toISOString()` is the UTC date — for a
+// Paris member between 00:00 and 02:00 the habit log was silently attributed
+// to YESTERDAY. The browser runs in the member's timezone, so the local
+// calendar day comes from the local getters (same pattern as the journal
+// wizard's `nowIsoLocal`).
 function localToday(): string {
   const d = new Date();
-  return d.toISOString().slice(0, 10);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function emptyDraft(today: string): DraftState {

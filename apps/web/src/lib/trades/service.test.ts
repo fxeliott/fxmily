@@ -33,7 +33,12 @@ vi.mock('@/lib/storage', () => ({
 
 import { db } from '@/lib/db';
 
-import { closeTrade, deleteTrade, type CloseTradeInput } from './service';
+import {
+  closeTrade,
+  deleteTrade,
+  TradeExitBeforeEntryError,
+  type CloseTradeInput,
+} from './service';
 
 /** A realistic post-Zod close input (the schema already collapsed the form). */
 function closeInput(processComplete: boolean | null): CloseTradeInput {
@@ -61,6 +66,7 @@ function openExisting() {
     plannedRR: new Prisma.Decimal(2),
     closedAt: null,
     notes: null,
+    enteredAt: new Date('2026-06-05T08:00:00.000Z'),
   };
 }
 
@@ -122,6 +128,30 @@ function wireTransaction(processComplete: boolean | null) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+});
+
+describe('closeTrade — exit-after-entry invariant (S2 audit 2026-06-11)', () => {
+  it('throws TradeExitBeforeEntryError when exitedAt precedes enteredAt', async () => {
+    wireTransaction(null);
+    const input = {
+      ...closeInput(null),
+      // entry mock is 2026-06-05T08:00Z — one hour BEFORE.
+      exitedAt: new Date('2026-06-05T07:00:00.000Z'),
+    };
+    await expect(closeTrade('user-1', 'trade-1', input)).rejects.toBeInstanceOf(
+      TradeExitBeforeEntryError,
+    );
+  });
+
+  it('accepts an exit at exactly the entry instant (0-duration edge)', async () => {
+    const updateMock = wireTransaction(null);
+    const input = {
+      ...closeInput(null),
+      exitedAt: new Date('2026-06-05T08:00:00.000Z'),
+    };
+    await closeTrade('user-1', 'trade-1', input);
+    expect(updateMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('closeTrade — processComplete ("oublis" axis, SPEC §28/§21)', () => {

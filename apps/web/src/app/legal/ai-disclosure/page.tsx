@@ -37,7 +37,7 @@ export default function AIDisclosurePage(): React.ReactElement {
     <LegalLayout
       eyebrow="Transparence IA"
       title="Comment Fxmily utilise l'IA"
-      lastUpdatedIso="2026-06-10"
+      lastUpdatedIso="2026-06-11"
       summary={
         <>
           Fxmily utilise une IA générative (Claude, Anthropic) pour{' '}
@@ -62,8 +62,8 @@ export default function AIDisclosurePage(): React.ReactElement {
       <h2>2. Quel modèle on utilise, pour quoi</h2>
       <ul>
         <li>
-          <strong>Modèle</strong> — Claude Fable 5 (identifiant exact <code>claude-fable-5</code>),
-          édité par Anthropic PBC. Les contenus sont générés via l&apos;abonnement personnel Max
+          <strong>Modèle</strong> — Claude Opus 4.8 (identifiant exact <code>claude-opus-4-8</code>
+          ), édité par Anthropic PBC. Les contenus sont générés via l&apos;abonnement personnel Max
           d&apos;Eliot (pas d&apos;API Anthropic facturée par requête côté Fxmily — voir{' '}
           <a href="/legal/privacy">Politique de confidentialité §3</a> pour les sous-traitants).
         </li>

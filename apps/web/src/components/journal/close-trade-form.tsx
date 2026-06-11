@@ -2,7 +2,7 @@
 
 import { Check, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 
 import { closeTradeAction, type CloseTradeActionState } from '@/app/journal/actions';
 import { Alert } from '@/components/alert';
@@ -15,18 +15,43 @@ import { cn } from '@/lib/utils';
 
 interface CloseTradeFormProps {
   tradeId: string;
-  defaultExitedAt: string;
+  /** Entry instant (ISO UTC) — the exit default is derived from it CLIENT-side. */
+  enteredAtIso: string;
 }
 
 const initialState: CloseTradeActionState = { ok: false };
 
-export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps) {
+/**
+ * B1 fix (S2 audit review 2026-06-11) : the default exit value MUST be
+ * computed in the BROWSER. The previous server-computed default used the
+ * server's wall clock (UTC in prod) ; once `submitWithUtcExit` re-interprets
+ * the datetime-local string in the member's timezone, a server-rendered
+ * default would shift the stored instant by the member's UTC offset on the
+ * most common path (close « now », default untouched). Browser getters =
+ * member timezone, end to end.
+ */
+function defaultExitLocalFrom(enteredAtIso: string): string {
+  const entered = new Date(enteredAtIso);
+  const proposed = new Date(Math.max(Date.now(), entered.getTime() + 60 * 60 * 1000));
+  const pad = (n: number) => `${n}`.padStart(2, '0');
+  return `${proposed.getFullYear()}-${pad(proposed.getMonth() + 1)}-${pad(proposed.getDate())}T${pad(proposed.getHours())}:${pad(proposed.getMinutes())}`;
+}
+
+export function CloseTradeForm({ tradeId, enteredAtIso }: CloseTradeFormProps) {
   const action = closeTradeAction.bind(null, tradeId);
   const [state, formAction, pending] = useActionState(action, initialState);
   const [emotionDuring, setEmotionDuring] = useState<string[]>([]);
   const [emotionAfter, setEmotionAfter] = useState<string[]>([]);
   const [screenshotKey, setScreenshotKey] = useState<string>('');
   const [tags, setTags] = useState<TradeTagSlug[]>([]);
+  // SSR-safe : empty on the server render, filled with the BROWSER-local
+  // default after mount (canon hydration pattern — setState in effect is the
+  // only way to deliver a client-clock value without an SSR mismatch).
+  const [exitedAtLocal, setExitedAtLocal] = useState<string>('');
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setExitedAtLocal(defaultExitLocalFrom(enteredAtIso));
+  }, [enteredAtIso]);
 
   const topError = state.ok
     ? null
@@ -48,8 +73,24 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
     emotionDuring.length === 0 ||
     emotionAfter.length === 0;
 
+  // TIER2 fix (S2 audit 2026-06-11) : the raw `datetime-local` string was
+  // POSTed verbatim and parsed SERVER-side (`z.coerce.date()`), i.e. in the
+  // server timezone (UTC in prod) — a Paris member's declared 18:30 exit was
+  // stored as 18:30 UTC (= 20:30 Paris), asymmetric with `enteredAt` which the
+  // entry wizard already converts in the browser (`new Date(...).toISOString()`,
+  // trade-form-wizard fd.set). Convert here too : the browser's Date parser
+  // interprets datetime-local in the MEMBER's timezone, restoring symmetry.
+  const submitWithUtcExit = (fd: FormData) => {
+    const raw = fd.get('exitedAt');
+    if (typeof raw === 'string' && raw.length > 0) {
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) fd.set('exitedAt', d.toISOString());
+    }
+    formAction(fd);
+  };
+
   return (
-    <form action={formAction} className="flex flex-col gap-5" noValidate>
+    <form action={submitWithUtcExit} className="flex flex-col gap-5" noValidate>
       {topError ? <Alert tone="danger">{topError}</Alert> : null}
 
       {/* Date sortie */}
@@ -61,7 +102,8 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
           id="exitedAt"
           name="exitedAt"
           type="datetime-local"
-          defaultValue={defaultExitedAt}
+          value={exitedAtLocal}
+          onChange={(e) => setExitedAtLocal(e.currentTarget.value)}
           required
           disabled={pending}
           aria-invalid={state.fieldErrors?.exitedAt ? 'true' : undefined}

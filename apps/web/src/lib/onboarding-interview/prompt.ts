@@ -187,6 +187,17 @@ export function buildOnboardingInterviewUserPrompt(snapshot: OnboardingInterview
   lines.push(`- axes_prioritaires 3-5 axes action-concrète pour Eliot`);
   lines.push(``);
   lines.push(`Toute analyse de marché ou diagnostic clinique = violation de posture.`);
+  lines.push(``);
+  // Format lockdown (S2 runtime proof 2026-06-11) : on the §8 local default
+  // (Opus 4.8), without this explicit lockdown the model wraps the JSON in
+  // conversational prose + markdown fences AND adds a top-level
+  // `pseudonymLabel` key — both break the strict pipeline (fence-parse +
+  // Zod `.strict()` Gate 3). Mirror of `core_build_prompt_file`'s wording.
+  lines.push(`FORMAT DE RÉPONSE (STRICT, non négociable) :`);
+  lines.push(`- Réponds avec UNIQUEMENT l'objet JSON : commence par { et termine par }.`);
+  lines.push(`- EXACTEMENT trois clés top-level : summary, highlights, axes_prioritaires.`);
+  lines.push(`- N'ajoute PAS pseudonymLabel ni aucune autre clé.`);
+  lines.push(`- Pas de markdown, pas de fence \`\`\`, pas de prose avant ou après le JSON.`);
 
   return lines.join('\n');
 }

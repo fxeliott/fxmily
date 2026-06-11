@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { reportError, reportWarning } from '@/lib/observability';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
+import { CLAUDE_LOCAL_SENTINEL, KNOWN_CLAUDE_MODEL_SLUGS } from '@/lib/ai/claude-response';
 import {
   memberProfileOutputSchema,
   type MemberProfileOutput,
@@ -668,7 +669,21 @@ export async function persistGeneratedProfiles(
 
     // Gate 6 — Upsert MemberProfile (idempotent on userId unique)
     const usage = entry.usage ?? { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
-    const model = entry.model ?? claudeModelVersion;
+    // Model attribution pin (mirror weekly/monthly/calendar "BLOQUANT 5") :
+    // the orchestrator laptop is untrusted (cf. Gates 1-2), so a wire-provided
+    // `model` is only recorded verbatim when it is a known executable slug,
+    // the local sentinel, or a `mock:*` marker (the mock path's `mocked` audit
+    // flag below depends on it). A FORGED string falls back to the honest
+    // sentinel — never to a named model that did not generate the content.
+    // Absent `model` keeps the historical env-derived default (mock path).
+    // Onboarding computes no cost ; the pin protects audit-traceability only.
+    const model = entry.model
+      ? KNOWN_CLAUDE_MODEL_SLUGS.includes(entry.model) ||
+        entry.model === CLAUDE_LOCAL_SENTINEL ||
+        entry.model.startsWith('mock:')
+        ? entry.model
+        : CLAUDE_LOCAL_SENTINEL
+      : claudeModelVersion;
 
     try {
       await db.memberProfile.upsert({

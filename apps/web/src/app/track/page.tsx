@@ -83,7 +83,10 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
 
       <TrackHero />
 
-      <TodayHabitCards userId={session.user.id} />
+      <TodayHabitCards
+        userId={session.user.id}
+        timezone={session.user.timezone || 'Europe/Paris'}
+      />
 
       <section aria-labelledby="track-corr-heading" className="flex flex-col gap-3">
         <div className="flex items-center gap-2">

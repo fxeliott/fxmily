@@ -2321,6 +2321,13 @@ model BrokerAccount {
   /// Optional broker name as read from the proof header (free-text, short).
   brokerName String?           @map("broker_name")
 
+  /// S3 vision — the MT5 login (account number) as printed in the proof
+  /// header. THE dedup key for "combien de comptes" (§30): two proofs of the
+  /// same login resolve to ONE account row. Null for member-declared rows
+  /// whose proofs haven't been analysed yet; backfilled by the vision persist
+  /// when a proof linked to this row reveals the login.
+  accountLogin String? @map("account_login")
+
   /// True when this account row was created by the vision pipeline rather
   /// than declared by the member — the "réalité vs déclaré" signal.
   detectedByAI Boolean @default(false) @map("detected_by_ai")
@@ -2333,6 +2340,9 @@ model BrokerAccount {
   proofs    Mt5AccountProof[]
   positions ExtractedPosition[]
 
+  // One account row per (member, MT5 login). Postgres treats NULLs as
+  // distinct, so member-declared rows without a login yet never collide.
+  @@unique([memberId, accountLogin])
   @@index([memberId])
   @@map("broker_accounts")
 }
@@ -2395,6 +2405,12 @@ model ExtractedPosition {
   /// SetNull — deleting a proof file row keeps the extracted history.
   proofId String?          @map("proof_id")
   proof   Mt5AccountProof? @relation(fields: [proofId], references: [id], onDelete: SetNull)
+
+  /// S3 vision — MT5 ticket/order number as printed in the history row.
+  /// Forensic provenance + the strongest dedup key when present (mobile
+  /// layouts don't print tickets → nullable; dedup then falls back to the
+  /// (symbol, side, openTime, volume) heuristic).
+  ticket String?
 
   /// Instrument as printed by MT5 (uppercase string, no DB enum — mirror
   /// `Trade.pair` rationale).

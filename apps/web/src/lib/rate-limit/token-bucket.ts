@@ -259,6 +259,22 @@ export const calendarBatchLimiter = new TokenBucketLimiter({
 });
 
 /**
+ * S3 §33.4 — `/api/admin/verification-batch/*` per-IP bucket (vision MT5).
+ *
+ * Carbon of `calendarBatchLimiter` with a LARGER burst: the legitimate flow
+ * is 1 pull + N proof-image downloads + 1 persist per run (one download per
+ * pending proof, sequential). Burst 40 covers a 25-proof batch + retries;
+ * refill 1-per-minute keeps a stolen-token bot far below useful throughput
+ * while never throttling Eliot's sequential script. Separate singleton so a
+ * flood on another batch surface never locks out the verification batch.
+ */
+export const verificationBatchLimiter = new TokenBucketLimiter({
+  bucketSize: 40,
+  refillRate: 1 / 60,
+  maxKeys: 256,
+});
+
+/**
  * V1.6 extras — `/api/health` endpoint rate-limit.
  *
  * Pre-existing security HIGH identified by Round 5 security-auditor audit :

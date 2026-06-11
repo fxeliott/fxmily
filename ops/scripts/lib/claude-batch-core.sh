@@ -60,6 +60,13 @@ MAX_BUDGET_USD="${FXMILY_MAX_BUDGET_USD:-15.00}"
 SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
 SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
 
+# S3 §33.4 — opt-in tool allowlist for VISION pipelines. Empty (the default)
+# keeps the historical pure-text invocation byte-identical for the 4 existing
+# orchestrators. The verification pipeline sets it to "Read" so the model can
+# read the downloaded proof image from the local disk. NEVER widen beyond
+# read-only tools (pure-generator isolation: no Bash, no Write, no network).
+CLAUDE_ALLOWED_TOOLS="${FXMILY_CLAUDE_ALLOWED_TOOLS:-}"
+
 # --- Validations --------------------------------------------------------------
 
 # Allowlist of acceptable Claude model slugs for `claude --model` — THE single
@@ -321,6 +328,13 @@ core_invoke_claude_print() {
   local prompt_file="$1" response_file="$2"
   local system_prompt_content
   system_prompt_content=$(<"$SYSTEM_PROMPT_FILE")
+  # S3 — vision opt-in: `--allowedTools` is appended ONLY when the caller set
+  # CLAUDE_ALLOWED_TOOLS (e.g. "Read" for the verification pipeline). The
+  # empty default keeps the 4 text pipelines byte-identical (no flag at all).
+  local extra_args=()
+  if [ -n "$CLAUDE_ALLOWED_TOOLS" ]; then
+    extra_args+=(--allowedTools "$CLAUDE_ALLOWED_TOOLS")
+  fi
   claude --print \
     --model "$CLAUDE_MODEL" \
     --effort "$CLAUDE_EFFORT" \
@@ -329,6 +343,7 @@ core_invoke_claude_print() {
     --setting-sources "" \
     --system-prompt "$system_prompt_content" \
     --output-format text \
+    "${extra_args[@]}" \
     <"$prompt_file" \
     >"$response_file" 2>>"$ERRORS_LOG"
 }

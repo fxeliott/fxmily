@@ -183,7 +183,20 @@ export const tradeOpenSchema = z
     /// stop-loss and lot size when the member knows their account size.
     riskPct: riskPctSchema.optional(),
     emotionBefore: emotionTagsRequired,
-    planRespected: z.coerce.boolean(),
+    /**
+     * TIER1 fix (S2 audit 2026-06-11) : the wizard submits FormData, so
+     * `planRespected` arrives as the STRING "false" when the member answers
+     * « Non » — and `z.coerce.boolean()` turns ANY non-empty string into
+     * `true` (`Boolean("false") === true`). Every declared plan violation was
+     * silently persisted as a plan respect, corrupting the flagship axis
+     * (discipline scoring, `planRespectRate` Claude counters, the
+     * `plan_violations_in_window` trigger). Same robust pattern as
+     * `hedgeRespected` below and `formBoolean` in `schemas/checkin.ts` —
+     * which already documents this exact footgun.
+     */
+    planRespected: z
+      .union([z.boolean(), z.literal('true'), z.literal('false')])
+      .transform((v) => (typeof v === 'string' ? v === 'true' : v)),
     /** Tri-state: true / false / null (= N/A). The form sends `'na'` for N/A. */
     hedgeRespected: z
       .union([z.boolean(), z.literal('na'), z.literal('true'), z.literal('false')])

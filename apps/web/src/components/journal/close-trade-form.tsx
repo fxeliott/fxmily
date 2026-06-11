@@ -48,8 +48,24 @@ export function CloseTradeForm({ tradeId, defaultExitedAt }: CloseTradeFormProps
     emotionDuring.length === 0 ||
     emotionAfter.length === 0;
 
+  // TIER2 fix (S2 audit 2026-06-11) : the raw `datetime-local` string was
+  // POSTed verbatim and parsed SERVER-side (`z.coerce.date()`), i.e. in the
+  // server timezone (UTC in prod) — a Paris member's declared 18:30 exit was
+  // stored as 18:30 UTC (= 20:30 Paris), asymmetric with `enteredAt` which the
+  // entry wizard already converts in the browser (`new Date(...).toISOString()`,
+  // trade-form-wizard fd.set). Convert here too : the browser's Date parser
+  // interprets datetime-local in the MEMBER's timezone, restoring symmetry.
+  const submitWithUtcExit = (fd: FormData) => {
+    const raw = fd.get('exitedAt');
+    if (typeof raw === 'string' && raw.length > 0) {
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) fd.set('exitedAt', d.toISOString());
+    }
+    formAction(fd);
+  };
+
   return (
-    <form action={formAction} className="flex flex-col gap-5" noValidate>
+    <form action={submitWithUtcExit} className="flex flex-col gap-5" noValidate>
       {topError ? <Alert tone="danger">{topError}</Alert> : null}
 
       {/* Date sortie */}

@@ -391,19 +391,45 @@ function QuestionStep({
     saveDraft(item.questionIndex, text);
   }, [item.questionIndex, text]);
 
-  // On successful submit, advance to next question (parent owns step state).
+  // On successful submit, advance to next question (parent owns step state) —
+  // UNLESS a safety signal came back. TIER1 fix (S2 audit 2026-06-11) : the
+  // crisis/injection banners are rendered by THIS step (below), so the old
+  // unconditional auto-advance unmounted the step in the same render cycle
+  // and the 3114 / SOS Amitié resources were NEVER visible to a member in
+  // distress. On a safety hold the member reads the banner and continues
+  // explicitly (the answer is already persisted — Q4=A persist-anyway).
+  // `crisisLevel === 'low'` is noise by design (no banner) → still advances.
   useEffect(() => {
-    if (state?.ok) {
+    if (!state?.ok) return;
+    const safetyHold =
+      state.crisisLevel === 'high' || state.crisisLevel === 'medium' || state.injectionSuspected;
+    if (!safetyHold) {
       onAdvance(text.length);
     }
     // We intentionally depend on state only — onAdvance is parent-stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
+  const safetyHold = Boolean(
+    state?.ok &&
+    (state.crisisLevel === 'high' || state.crisisLevel === 'medium' || state.injectionSuspected),
+  );
+  const continueBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  // Keyboard flow : when the hold engages, move focus to the explicit
+  // continue button (the banner itself announces via role="alert").
+  useEffect(() => {
+    if (safetyHold) continueBtnRef.current?.focus();
+  }, [safetyHold]);
+
   const trimmedLen = text.trim().length;
   const isUnderMin = trimmedLen > 0 && trimmedLen < ONBOARDING_ANSWER_MIN_CHARS;
   const isOverMax = trimmedLen > ONBOARDING_ANSWER_MAX_CHARS;
-  const canSubmit = trimmedLen >= ONBOARDING_ANSWER_MIN_CHARS && !isOverMax && !isPending;
+  // `!safetyHold` : during a crisis/injection hold the answer is ALREADY
+  // persisted — re-submitting would re-trigger detection and loop the hold.
+  // The explicit continue button is the only way forward.
+  const canSubmit =
+    trimmedLen >= ONBOARDING_ANSWER_MIN_CHARS && !isOverMax && !isPending && !safetyHold;
   const counterTone = isOverMax ? 'var(--bad)' : isUnderMin ? 'var(--warn)' : 'var(--t-3)';
   const fieldErrors = state?.fieldErrors;
   const remainingSec = estimateRemainingSeconds(questionIndex, recentAvgChars);
@@ -430,9 +456,21 @@ function QuestionStep({
       ) : null}
 
       {/* Crisis + injection banners — surfaced only on the JUST-submitted Q,
-          based on state.crisisLevel / state.injectionSuspected. */}
+          based on state.crisisLevel / state.injectionSuspected. The step is
+          HELD while they are visible (no auto-advance) — see safetyHold. */}
       {state?.crisisLevel ? <OnboardingCrisisBanner level={state.crisisLevel} /> : null}
       {state?.injectionSuspected ? <InjectionWarningBanner /> : null}
+      {safetyHold ? (
+        <button
+          ref={continueBtnRef}
+          type="button"
+          onClick={() => onAdvance(text.length)}
+          data-slot="onboarding-safety-continue"
+          className="rounded-control inline-flex h-11 items-center justify-center gap-1.5 bg-[var(--acc-btn)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none active:translate-y-0"
+        >
+          J&apos;ai lu, continuer l&apos;entretien
+        </button>
+      ) : null}
 
       <AnimatePresence mode="wait" initial={false}>
         <m.div

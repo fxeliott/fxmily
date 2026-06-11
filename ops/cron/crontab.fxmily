@@ -27,6 +27,7 @@
 #   - purge-access-requests     Sunday 04:00 UTC                   (V2.5 RGPD)
 #   - calendar-overdue-alert    daily 11:00 UTC                    (S5 §26 perm.)
 #   - monthly-debrief-overdue-alert daily 11:10 UTC                (S5 §25 perm.)
+#   - onboarding-profile-overdue-alert daily 11:20 UTC             (S2 perm.)
 #
 # Log : every run appends one line to /var/log/fxmily/cron.log via the
 # wrapper. The DB audit row (`cron.<route>.scan`) is the canonical
@@ -113,3 +114,13 @@ MAILTO=""
 # Pure read + idempotent ; emits cron.monthly_debrief_overdue.scan heartbeat
 # (monitored by lib/system/health.ts). 11:10 UTC offsets the 11:00 calendar nudge.
 10 11 * * *                  fxmily   /usr/local/bin/fxmily-cron monthly-debrief-overdue-alert
+
+# S2 — onboarding profile overdue admin nudge : daily 11:20 UTC (13:20 Paris).
+# DETECTION-ONLY safety-net for the MANUAL onboarding profiling batch (ban-risk
+# human-in-the-loop §5.4 — the generation is NEVER cronned). Scans for completed
+# onboarding interviews of active members with no MemberProfile past the 24h
+# grace (the member-facing « dans les prochaines 24h » promise), and emails the
+# admin so no member silently waits forever for their profile. Pure read +
+# idempotent ; emits cron.onboarding_profile_overdue.scan heartbeat (monitored
+# by lib/system/health.ts). 11:20 UTC offsets the 11:00/11:10 permanence nudges.
+20 11 * * *                  fxmily   /usr/local/bin/fxmily-cron onboarding-profile-overdue-alert

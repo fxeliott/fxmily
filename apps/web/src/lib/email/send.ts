@@ -9,6 +9,7 @@ import { InvitationEmail } from '@/lib/email/templates/invitation';
 import { MonthlyDebriefEmail } from '@/lib/email/templates/monthly-debrief';
 import { MonthlyDebriefOverdueAlertEmail } from '@/lib/email/templates/monthly-debrief-overdue-alert';
 import { NotificationFallbackEmail } from '@/lib/email/templates/notification-fallback';
+import { OnboardingProfileOverdueAlertEmail } from '@/lib/email/templates/onboarding-profile-overdue-alert';
 import { WeeklyDigestEmail } from '@/lib/email/templates/weekly-digest';
 import { formatMonthLabelFr } from '@/lib/monthly-debrief/format';
 import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
@@ -561,6 +562,72 @@ export async function sendMonthlyDebriefOverdueAlertEmail({
       ``,
       `Rappel automatique — envoyé uniquement quand des débriefs sont en attente passé le délai`,
       `de courtoisie. Aucun débrief n'est généré sur un serveur (le batch reste manuel, par`,
+      `sécurité du compte).`,
+    ].join('\n'),
+  });
+}
+
+// ----- S2 — onboarding profile overdue ADMIN nudge (profilage permanence) ---
+
+export interface SendOnboardingProfileOverdueAlertParams {
+  /** Admin recipient (resolved by the caller from `WEEKLY_REPORT_RECIPIENT`). */
+  to: string;
+  /** Completed interviews of active members with no MemberProfile past 24h. */
+  overdueCount: number;
+  /** ISO instant of the oldest overdue completion, or null. PII-free. */
+  oldestCompletedAt: string | null;
+}
+
+/**
+ * FR date label (Europe/Paris) for the oldest overdue interview completion —
+ * a bare calendar date, no member identity attached (PII-free invariant).
+ */
+function formatOldestCompletedFr(iso: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Europe/Paris',
+  }).format(new Date(iso));
+}
+
+/**
+ * Notify the ADMIN that members are waiting on their onboarding profile (S2
+ * profilage permanence safety-net, 3rd twin of the calendar/monthly nudges).
+ * ONLY the operator gets this — no member PII, counts + a date only.
+ * Best-effort: the caller (`lib/onboarding-interview/overdue.ts`) degrades to
+ * a Sentry warning + audit if delivery throws.
+ */
+export async function sendOnboardingProfileOverdueAlertEmail({
+  to,
+  overdueCount,
+  oldestCompletedAt,
+}: SendOnboardingProfileOverdueAlertParams): Promise<{ id: string | null; delivered: boolean }> {
+  const adminUrl = buildAdminDashboardUrl();
+  const plural = overdueCount > 1;
+  const oldestLabel = oldestCompletedAt ? formatOldestCompletedFr(oldestCompletedAt) : null;
+  const subject = `${overdueCount} profil${plural ? 's' : ''} d'onboarding en attente · promesse 24h dépassée`;
+
+  return sendEmail({
+    to,
+    subject,
+    react: OnboardingProfileOverdueAlertEmail({ overdueCount, oldestLabel, adminUrl }),
+    text: [
+      `Fxmily — rappel de permanence (profil d'onboarding).`,
+      ``,
+      `${overdueCount} membre${plural ? 's' : ''} actif${plural ? 's' : ''} ${plural ? 'ont' : 'a'} complété leur entretien d'onboarding`,
+      `il y a plus de 24h sans recevoir leur profil${oldestLabel ? ` (le plus ancien attend depuis le ${oldestLabel})` : ''}.`,
+      `L'app leur promet leur profil « dans les prochaines 24h ».`,
+      ``,
+      `À faire — depuis ton PC :`,
+      `  1. Lance bash ops/scripts/onboarding-batch-local.sh.`,
+      `  2. Le moteur Claude local ($0) synthétise les profils, persistés après les garde-fous §2.`,
+      `  3. Les membres voient leur profil dans « Mon profil » dès la fin du batch.`,
+      ``,
+      `Ouvre l'admin : ${adminUrl}`,
+      ``,
+      `Rappel automatique — envoyé uniquement quand des profils sont en attente passé le délai`,
+      `de courtoisie. Aucun profil n'est généré sur un serveur (le batch reste manuel, par`,
       `sécurité du compte).`,
     ].join('\n'),
   });

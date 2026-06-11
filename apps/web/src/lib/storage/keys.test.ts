@@ -2,22 +2,25 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ANNOTATION_KEY_PATTERN,
+  PROOF_KEY_PATTERN,
   TRAINING_ANNOTATION_KEY_PATTERN,
   TRAINING_KEY_PATTERN,
   extensionForMime,
   generateAnnotationKey,
+  generateProofKey,
   generateTradeKey,
   generateTrainingAnnotationKey,
   generateTrainingKey,
   isAllowedMime,
   parseAnnotationKey,
+  parseProofKey,
   parseStorageKey,
   parseTradeKey,
   parseTrainingAnnotationKey,
   parseTrainingKey,
   sniffImageMime,
 } from './keys';
-import { keyBelongsTo, trainingKeyBelongsTo } from './local';
+import { keyBelongsTo, proofKeyBelongsTo, trainingKeyBelongsTo } from './local';
 
 describe('isAllowedMime', () => {
   it.each(['image/jpeg', 'image/png', 'image/webp'])('accepts %s', (mime) => {
@@ -427,5 +430,66 @@ describe('sniffImageMime', () => {
       0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d,
     ]);
     expect(sniffImageMime(bytes)).toBeNull();
+  });
+});
+
+describe('generateProofKey (S3 — Vérification §33)', () => {
+  it('produces a key under the proofs/ prefix matching the canonical regex', () => {
+    const key = generateProofKey('clx0member1', 'image/png');
+    expect(key).toMatch(/^proofs\/clx0member1\/[a-zA-Z0-9_-]{32}\.png$/);
+    expect(key).toMatch(PROOF_KEY_PATTERN);
+  });
+
+  it('produces unique keys across calls', () => {
+    const a = generateProofKey('clx0member1', 'image/jpeg');
+    const b = generateProofKey('clx0member1', 'image/jpeg');
+    expect(a).not.toBe(b);
+  });
+
+  it('throws on a malformed userId', () => {
+    expect(() => generateProofKey('clx0../', 'image/jpeg')).toThrow();
+    expect(() => generateProofKey('UPPER', 'image/jpeg')).toThrow();
+  });
+});
+
+describe('parseProofKey + parseStorageKey dispatch (S3)', () => {
+  it('extracts userId, filename, ext from a valid proof key', () => {
+    const key = generateProofKey('clx0member1', 'image/webp');
+    const parsed = parseProofKey(key);
+    expect(parsed.kind).toBe('proof');
+    expect(parsed.userId).toBe('clx0member1');
+    expect(parsed.ext).toBe('webp');
+  });
+
+  it('parseStorageKey routes a proofs/ key to the proof branch', () => {
+    const key = generateProofKey('clx0member1', 'image/jpeg');
+    expect(parseStorageKey(key).kind).toBe('proof');
+  });
+
+  it('rejects a trade key (disjoint prefixes)', () => {
+    expect(() => parseProofKey('trades/clx0member1/aaaaaaaaaaaaaaaa.jpg')).toThrow();
+  });
+
+  it('rejects traversal attempts', () => {
+    expect(() => parseProofKey('proofs/../etc/passwd')).toThrow();
+    expect(() => parseProofKey('proofs/clx0member1/..%2F..%2Fx.jpg')).toThrow();
+  });
+});
+
+describe('proofKeyBelongsTo (S3 BOLA gate)', () => {
+  it('accepts only the owning member', () => {
+    const key = generateProofKey('clx0member1', 'image/png');
+    expect(proofKeyBelongsTo(key, 'clx0member1')).toBe(true);
+    expect(proofKeyBelongsTo(key, 'clx0member2')).toBe(false);
+  });
+
+  it('🚨 never cross-accepts a journal trade key (prefix isolation)', () => {
+    const tradeKey = generateTradeKey('clx0member1', 'image/png');
+    expect(proofKeyBelongsTo(tradeKey, 'clx0member1')).toBe(false);
+  });
+
+  it('keyBelongsTo never cross-accepts a proof key (reverse isolation)', () => {
+    const proofKey = generateProofKey('clx0member1', 'image/png');
+    expect(keyBelongsTo(proofKey, 'clx0member1')).toBe(false);
   });
 });

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
@@ -10,11 +12,13 @@ import {
   ALL_UPLOAD_KINDS,
   MAX_SCREENSHOT_BYTES,
   isAnnotationUploadKind,
+  isProofUploadKind,
   isTradeUploadKind,
   isTrainingAnnotationUploadKind,
   isTrainingUploadKind,
   type UploadKind,
 } from '@/lib/storage/types';
+import { PROOF_ACCOUNT_TYPES, type ProofAccountType } from '@/lib/schemas/verification';
 
 /**
  * POST /api/uploads
@@ -94,8 +98,41 @@ export async function POST(req: Request): Promise<Response> {
   // authorisation rule. Failing fast keeps malformed requests from reaching
   // the buffer/sniff pipeline.
   let pathOwner: string;
+  // S3 — MT5 proof: the `Mt5AccountProof` row is created in THIS request so
+  // the SHA-256 anti-double-upload hash is server-computed from the validated
+  // bytes (a client-supplied hash would be forgeable). Optional links parsed
+  // here, fail-fast before the buffer pipeline.
+  let proofAccountId: string | null = null;
+  let proofAccountType: ProofAccountType | null = null;
   if (isTradeUploadKind(kind)) {
     pathOwner = userId;
+  } else if (isProofUploadKind(kind)) {
+    // Member-owned, exactly like a trade screenshot. Optional `accountId`
+    // attaches the proof to one of the member's broker accounts (ownership
+    // enforced — BOLA); optional `accountType` records the declared type.
+    pathOwner = userId;
+    const accountIdRaw = formData.get('accountId');
+    if (typeof accountIdRaw === 'string' && accountIdRaw.length > 0) {
+      if (!/^[a-z0-9]{8,40}$/.test(accountIdRaw)) {
+        return NextResponse.json({ error: 'invalid_account_id' }, { status: 400 });
+      }
+      const account = await db.brokerAccount.findUnique({
+        where: { id: accountIdRaw },
+        select: { memberId: true },
+      });
+      // Absent + not-owner collapse into one error (no existence oracle).
+      if (!account || account.memberId !== userId) {
+        return NextResponse.json({ error: 'invalid_account_id' }, { status: 400 });
+      }
+      proofAccountId = accountIdRaw;
+    }
+    const accountTypeRaw = formData.get('accountType');
+    if (typeof accountTypeRaw === 'string' && accountTypeRaw.length > 0) {
+      if (!(PROOF_ACCOUNT_TYPES as readonly string[]).includes(accountTypeRaw)) {
+        return NextResponse.json({ error: 'invalid_account_type' }, { status: 400 });
+      }
+      proofAccountType = accountTypeRaw as ProofAccountType;
+    }
   } else if (isTrainingUploadKind(kind)) {
     // Mode Entraînement (SPEC §21) — member-owned, exactly like a trade
     // screenshot: the backtest row doesn't exist yet at upload time, so the
@@ -168,6 +205,22 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: 'invalid_bytes' }, { status: 415 });
   }
 
+  // S3 — anti-double-upload: the SHA-256 of the validated bytes is the
+  // per-member dedup key (`@@unique([memberId, fileHash])`). Checked BEFORE
+  // storing so a duplicate never costs disk; re-checked via P2002 after the
+  // create (two concurrent uploads of the same bytes — race-safe).
+  let proofFileHash: string | null = null;
+  if (isProofUploadKind(kind)) {
+    proofFileHash = createHash('sha256').update(buffer).digest('hex');
+    const existing = await db.mt5AccountProof.findUnique({
+      where: { memberId_fileHash: { memberId: userId, fileHash: proofFileHash } },
+      select: { id: true },
+    });
+    if (existing) {
+      return NextResponse.json({ error: 'duplicate_proof', proofId: existing.id }, { status: 409 });
+    }
+  }
+
   const storage = selectStorage();
   let key: string;
   let readUrl: string;
@@ -186,6 +239,35 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: 'storage_failed' }, { status: 500 });
   }
 
+  // S3 — create the proof row in the same request (server-derived hash).
+  let proofId: string | null = null;
+  if (isProofUploadKind(kind) && proofFileHash !== null) {
+    try {
+      const proof = await db.mt5AccountProof.create({
+        data: {
+          memberId: userId,
+          brokerAccountId: proofAccountId,
+          fileKey: key,
+          fileHash: proofFileHash,
+          accountType: proofAccountType,
+        },
+        select: { id: true },
+      });
+      proofId = proof.id;
+    } catch (err) {
+      // Best-effort cleanup of the just-stored file — the row is the source
+      // of truth, an orphaned file is swept by the janitor path later.
+      await storage.delete(key).catch(() => undefined);
+      const isUniqueViolation =
+        typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
+      if (isUniqueViolation) {
+        return NextResponse.json({ error: 'duplicate_proof' }, { status: 409 });
+      }
+      console.error('[uploads] proof row create failed', err);
+      return NextResponse.json({ error: 'storage_failed' }, { status: 500 });
+    }
+  }
+
   await logAudit({
     // §21.5 isolation: backtest uploads emit their own slug — see
     // `resolveUploadAuditAction` (unit-tested guard).
@@ -200,8 +282,12 @@ export async function POST(req: Request): Promise<Response> {
       ...(isAnnotationUploadKind(kind) ? { tradeId: pathOwner } : {}),
       // §21.5 PII-free: only the parent id, never the member's backtest P&L.
       ...(isTrainingAnnotationUploadKind(kind) ? { trainingTradeId: pathOwner } : {}),
+      // S3 PII-free: opaque ids only — never the account label/broker name.
+      ...(isProofUploadKind(kind) ? { proofId, accountId: proofAccountId } : {}),
     },
   });
 
-  return NextResponse.json({ key, readUrl }, { status: 201 });
+  return NextResponse.json(proofId !== null ? { key, readUrl, proofId } : { key, readUrl }, {
+    status: 201,
+  });
 }

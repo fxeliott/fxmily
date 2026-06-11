@@ -57,4 +57,13 @@ describe('resolveUploadAuditAction (J-T2 — §21.5 statistical-isolation guard)
     expect(slug).toBe('admin.training_annotation.media.uploaded');
     expect(slug).not.toBe('admin.annotation.media.uploaded');
   });
+
+  it('🚨 maps an MT5 proof upload to its OWN slug — NEVER trade.screenshot.uploaded (S3 §33)', () => {
+    // A proof documents the REALITY side of the verification surface — it
+    // must not inflate the journal screenshot-upload engagement/forensic
+    // signal (mirror of the §21.5 training rationale).
+    const slug = resolveUploadAuditAction('mt5-proof');
+    expect(slug).toBe('verification.proof.uploaded');
+    expect(slug).not.toBe('trade.screenshot.uploaded');
+  });
 });

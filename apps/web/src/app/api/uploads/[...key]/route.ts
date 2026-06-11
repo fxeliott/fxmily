@@ -73,6 +73,13 @@ export async function GET(_req: Request, { params }: RouteContext): Promise<Resp
     if (!isAdmin && parsed.userId !== session.user.id) {
       return new Response('Forbidden', { status: 403 });
     }
+  } else if (parsed.kind === 'proof') {
+    // S3 — `proofs/{userId}/...`, member-owned exactly like a trade
+    // screenshot. Admin may also read (the verification tab confronts the
+    // declared journal with the proof image).
+    if (!isAdmin && parsed.userId !== session.user.id) {
+      return new Response('Forbidden', { status: 403 });
+    }
   } else if (parsed.kind === 'training_annotation') {
     // J-T3 admin correction media — `training_annotations/{trainingTradeId}/`.
     // Mirror of the J4 annotation branch but through `TrainingTrade` (NEVER

@@ -27,7 +27,7 @@ export default function PrivacyPolicyPage(): React.ReactElement {
     <LegalLayout
       eyebrow="Confidentialité"
       title="Politique de confidentialité"
-      lastUpdatedIso="2026-05-08"
+      lastUpdatedIso="2026-06-11"
       summary={
         <>
           Fxmily est un outil interne de la formation Fxmily, réservé aux membres invités. Ce

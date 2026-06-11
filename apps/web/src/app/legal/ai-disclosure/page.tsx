@@ -37,7 +37,7 @@ export default function AIDisclosurePage(): React.ReactElement {
     <LegalLayout
       eyebrow="Transparence IA"
       title="Comment Fxmily utilise l'IA"
-      lastUpdatedIso="2026-06-10"
+      lastUpdatedIso="2026-06-11"
       summary={
         <>
           Fxmily utilise une IA générative (Claude, Anthropic) pour{' '}

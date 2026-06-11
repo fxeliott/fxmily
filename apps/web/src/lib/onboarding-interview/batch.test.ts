@@ -212,6 +212,68 @@ describe('persistGeneratedProfiles — happy path + error variant', () => {
   });
 });
 
+describe('persistGeneratedProfiles — model attribution pin (mirror weekly BLOQUANT 5)', () => {
+  beforeEach(() => {
+    setupSuccessMocks();
+  });
+
+  it('records a known wire-provided model verbatim (claude-opus-4-8)', async () => {
+    const entry = makeRequestEntry('output');
+    const request: BatchPersistRequest = {
+      results: [{ ...entry, model: 'claude-opus-4-8' } as BatchResultEntry],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.persisted).toBe(1);
+    expect(profileUpsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ claudeModelVersion: 'claude-opus-4-8' }),
+      }),
+    );
+  });
+
+  it('pins a FORGED wire-provided model to the honest local sentinel (untrusted laptop)', async () => {
+    const entry = makeRequestEntry('output');
+    const request: BatchPersistRequest = {
+      results: [{ ...entry, model: 'evil-injected-model-string' } as BatchResultEntry],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.persisted).toBe(1);
+    const call = profileUpsertMock.mock.calls[0]?.[0] as {
+      create: { claudeModelVersion: string };
+    };
+    // Never a named model that did not generate the content — the sentinel
+    // says "local Max binary, model unattributed" (mirror weekly BLOQUANT 5).
+    expect(call.create.claudeModelVersion).toBe('claude-code-local');
+  });
+
+  it('preserves a mock:* wire model (the mocked audit flag depends on it)', async () => {
+    const entry = makeRequestEntry('output');
+    const request: BatchPersistRequest = {
+      results: [{ ...entry, model: 'mock:onboarding-v1' } as BatchResultEntry],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.persisted).toBe(1);
+    const call = profileUpsertMock.mock.calls[0]?.[0] as {
+      create: { claudeModelVersion: string };
+    };
+    expect(call.create.claudeModelVersion).toBe('mock:onboarding-v1');
+  });
+
+  it('keeps the env-derived default when model is ABSENT (historical mock path)', async () => {
+    const entry = makeRequestEntry('output') as Extract<BatchResultEntry, { output: unknown }>;
+    const { model: _dropped, ...withoutModel } = entry;
+    const request: BatchPersistRequest = {
+      results: [withoutModel as BatchResultEntry],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.persisted).toBe(1);
+    const call = profileUpsertMock.mock.calls[0]?.[0] as {
+      create: { claudeModelVersion: string };
+    };
+    expect(call.create.claudeModelVersion).toBe(process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6');
+  });
+});
+
 describe('persistGeneratedProfiles — Gate 1: active user check', () => {
   it('skips entry when userId is not in active users set', async () => {
     setupSuccessMocks({ userIds: ['user_other'] }); // SUT requestUserIds will pre-fetch this

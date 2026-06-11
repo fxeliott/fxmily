@@ -93,7 +93,7 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
     {
       label: 'Rapports hebdo IA',
       count: reportCount,
-      description: 'Rapports générés à destination de l’admin (sortie Claude Fable 5).',
+      description: 'Rapports générés à destination de l’admin (sortie du moteur Claude local).',
     },
     {
       label: 'Notifications push',

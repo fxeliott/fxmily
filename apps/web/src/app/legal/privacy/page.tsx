@@ -27,7 +27,7 @@ export default function PrivacyPolicyPage(): React.ReactElement {
     <LegalLayout
       eyebrow="Confidentialité"
       title="Politique de confidentialité"
-      lastUpdatedIso="2026-05-08"
+      lastUpdatedIso="2026-06-11"
       summary={
         <>
           Fxmily est un outil interne de la formation Fxmily, réservé aux membres invités. Ce
@@ -140,7 +140,7 @@ export default function PrivacyPolicyPage(): React.ReactElement {
         </li>
         <li>
           <strong>Anthropic PBC</strong> (États-Unis, clauses contractuelles types) — modèle Claude
-          Fable 5 (<code>claude-fable-5</code>) utilisé pour générer le rapport hebdo (Eliot
+          Opus 4.8 (<code>claude-opus-4-8</code>) utilisé pour générer le rapport hebdo (Eliot
           uniquement), le débrief mensuel, le calendrier d&apos;organisation et l&apos;analyse
           unique de ton questionnaire d&apos;entrée (profil membre, données pseudonymisées) (voir{' '}
           <a href="/legal/ai-disclosure">Transparence IA</a>). Anthropic indique ne pas utiliser ces

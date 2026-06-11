@@ -32,15 +32,15 @@
 
 # --- Shared config defaults (env-overridable, validated below) ---------------
 
-# §8 / Session 1 plan-10 (2026-06-10) — local Claude solicitations are PINNED
-# on Claude Fable 5 (`claude-fable-5`, Mythos tier) at "extra" effort by
-# default : the brief mandates « toutes les sollicitations Claude en local
-# avec Fable 5, aucun basculement automatique vers Opus 4.8 » (Eliot go,
-# 2026-06-10). Fable 5 runs on the Max subscription ($0 marginal) and
-# requires CLI ≥ 2.1.170 (checked in core_sanity_checks). Both vars stay
-# env-overridable (Opus 4.8 remains allowlisted as the manual fallback —
-# never automatic).
-CLAUDE_MODEL="${FXMILY_CLAUDE_MODEL:-claude-fable-5}"
+# §8 — local Claude solicitations are PINNED on Claude Opus 4.8
+# (`claude-opus-4-8`) at "extra" effort by default (Eliot decision,
+# 2026-06-11) : Fable 5 leaves the Max subscription's included models after
+# 2026-06-22 (usage-credits only, $10/$50 MTok — anthropic.com/news/
+# claude-fable-5-mythos-5), while Opus 4.8 stays included ($0 marginal).
+# The durable $0 engine is therefore Opus 4.8. Both vars stay
+# env-overridable (`claude-fable-5` remains allowlisted for manual runs
+# while it is still included, until 2026-06-22 — never automatic).
+CLAUDE_MODEL="${FXMILY_CLAUDE_MODEL:-claude-opus-4-8}"
 CLAUDE_EFFORT="${FXMILY_CLAUDE_EFFORT:-xhigh}"
 
 # ≥2 required: extended thinking uses a turn before the JSON, so
@@ -51,10 +51,10 @@ MAX_TURNS="${FXMILY_MAX_TURNS:-8}"
 
 # §8 — financial circuit-breaker per `claude --print` call. On Max sub the
 # marginal cost is theoretical ($0 actual), but if Anthropic ever switches the
-# binary to billable API this caps damage per call. Recalibrated 5.00 → 15.00
-# for Fable 5 (2026-06-10) : $10/$50 MTok vs Sonnet $3/$15 — a typical xhigh
-# run (~10k in / ~20k out incl. thinking) ≈ $1.1 virtual, so 15.00 keeps a
-# >10× margin without letting a runaway loop burn unbounded.
+# binary to billable API this caps damage per call. 15.00 was calibrated for
+# Fable 5 rates ($10/$50 MTok, 2026-06-10) and is KEPT for the Opus 4.8
+# default (re-pin 2026-06-11) : it still bounds a runaway loop while leaving
+# ~9× margin for a typical xhigh run at Opus 4.8 repo rates ($15/$75 MTok).
 MAX_BUDGET_USD="${FXMILY_MAX_BUDGET_USD:-15.00}"
 
 SLEEP_MIN="${FXMILY_SLEEP_MIN_S:-60}"
@@ -333,13 +333,30 @@ core_invoke_claude_print() {
     >"$response_file" 2>>"$ERRORS_LOG"
 }
 
-# Strip leading/trailing markdown fences + leading prose, then validate JSON.
+# Strip markdown fences + surrounding prose, then validate JSON.
 # $1 = raw response file, $2 = parsed output file. Returns 0 iff valid JSON.
+#
+# Hardened 2026-06-11 (S2 runtime proof on the re-pinned Opus 4.8 default) :
+# Opus 4.8 can bury the fenced JSON under conversational prose DESPITE the
+# strict system prompt ("Voici le profil… ```json {…} ```"), where the old
+# parser only stripped a fence on the FIRST/LAST line → invalid_json_response
+# → 0 profile persisted for a completed interview. New strategy : drop ALL
+# fence lines wherever they appear, then keep the block from the first line
+# starting with '{' to the LAST line starting with '}' (trailing prose after
+# the closing fence is dropped too). Single-line/minified JSON keeps the old
+# "to end of file" behavior. `jq -e` stays the only validity authority.
 core_parse_response() {
   local response_file="$1" parsed_file="$2"
-  sed -E '1{/^```(json)?[[:space:]]*$/d}; ${/^```[[:space:]]*$/d}' "$response_file" \
-    | sed -n '/^{/,$p' >"$parsed_file" || true
-  jq -e . "$parsed_file" >/dev/null 2>&1
+  sed -E '/^```([a-zA-Z]+)?[[:space:]]*$/d' "$response_file" \
+    | awk '/^\{/ { if (!s) s = NR } /^\}/ { e = NR } { l[NR] = $0 }
+           END { if (s) { if (!e || e < s) e = NR; for (i = s; i <= e; i++) print l[i] } }' \
+    >"$parsed_file" || true
+  # Validity = valid JSON AND a SINGLE document. Without the `-s length==1`
+  # guard, a multi-document response ({"draft"} then {real}) passes `jq -e .`
+  # on the LAST document while `--slurpfile`'s `$output[0]` ships the FIRST —
+  # the local gate would validate one object and submit another (review
+  # finding 2026-06-11 ; the server Zod stays the final authority either way).
+  jq -e . "$parsed_file" >/dev/null 2>&1 && jq -e -s 'length == 1' "$parsed_file" >/dev/null 2>&1
 }
 
 # --- NDJSON append (atomic per-line — survives Ctrl-C) --------------------------

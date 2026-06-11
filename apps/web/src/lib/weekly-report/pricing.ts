@@ -50,8 +50,9 @@ export const PRICING_USD_PER_MTOK = {
     cacheRead: 0.08,
     cacheCreate: 1.0,
   },
-  // Session 1 plan-10 — Fable 5 (Mythos tier), the §8 local batch default
-  // since 2026-06-10. REAL API rates ($10/$50 MTok, Anthropic GA 2026-06-09)
+  // Fable 5 (Mythos tier) — §8 local batch default 2026-06-10 → 2026-06-11
+  // only (re-pinned to Opus 4.8 : Fable 5 leaves the Max plan's included
+  // models after 2026-06-22). REAL API rates ($10/$50 MTok, GA 2026-06-09)
   // so the dormant paid path (`ANTHROPIC_API_KEY` set) bills honestly. The
   // LOCAL batch path persists as `claude-code-local` at 0 (the orchestrators
   // do not send a model field on weekly/monthly — Max flat fee, $0 marginal).

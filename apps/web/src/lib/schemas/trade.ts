@@ -195,7 +195,9 @@ export const tradeOpenSchema = z
      * which already documents this exact footgun.
      */
     planRespected: z
-      .union([z.boolean(), z.literal('true'), z.literal('false')])
+      .union([z.boolean(), z.literal('true'), z.literal('false')], {
+        error: 'Réponds par oui ou non.',
+      })
       .transform((v) => (typeof v === 'string' ? v === 'true' : v)),
     /** Tri-state: true / false / null (= N/A). The form sends `'na'` for N/A. */
     hedgeRespected: z

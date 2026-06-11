@@ -18,13 +18,6 @@ interface CloseTradePageProps {
   params: Promise<{ id: string }>;
 }
 
-function defaultExitedAt(enteredAtIso: string): string {
-  const entered = new Date(enteredAtIso);
-  const proposed = new Date(Math.max(Date.now(), entered.getTime() + 60 * 60 * 1000));
-  const pad = (n: number) => `${n}`.padStart(2, '0');
-  return `${proposed.getFullYear()}-${pad(proposed.getMonth() + 1)}-${pad(proposed.getDate())}T${pad(proposed.getHours())}:${pad(proposed.getMinutes())}`;
-}
-
 export default async function CloseTradePage({ params }: CloseTradePageProps) {
   const session = await auth();
   if (!session?.user) redirect('/login');
@@ -66,7 +59,11 @@ export default async function CloseTradePage({ params }: CloseTradePageProps) {
       </header>
 
       <Card primary className="p-5 sm:p-6">
-        <CloseTradeForm tradeId={trade.id} defaultExitedAt={defaultExitedAt(trade.enteredAt)} />
+        {/* B1 fix (S2 audit review 2026-06-11) : the exit default is computed
+            CLIENT-side from the entry instant — a server-rendered wall-clock
+            default (UTC in prod) re-interpreted in the member's browser TZ
+            would shift the stored instant by the member's UTC offset. */}
+        <CloseTradeForm tradeId={trade.id} enteredAtIso={trade.enteredAt} />
       </Card>
 
       <p className="t-foot text-center text-[var(--t-4)]">

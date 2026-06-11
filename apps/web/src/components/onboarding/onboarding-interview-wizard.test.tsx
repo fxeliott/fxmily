@@ -147,6 +147,25 @@ describe('OnboardingInterviewWizard — safety hold (crisis / injection)', () =>
     expect(screen.queryByText(/tu n'es pas seul/i)).toBeNull();
   });
 
+  it('hold on the LAST question still reaches the finalize step via the continue button', async () => {
+    appendAnswerActionMock.mockResolvedValue({ ok: true, crisisLevel: 'high' });
+    const lastIndex = ONBOARDING_INSTRUMENT_V1.items.length - 1;
+    const lastText = ONBOARDING_INSTRUMENT_V1.items[lastIndex]!.text;
+    render(<OnboardingInterviewWizard initialStep={lastIndex} initialAnswers={{}} />);
+    expect(screen.getByRole('heading', { name: lastText })).toBeTruthy();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: ANSWER } });
+    fireEvent.click(screen.getByRole('button', { name: /Soumettre la dernière réponse/i }));
+
+    await screen.findByText(/tu n'es pas seul/i);
+    expect(screen.getByRole('heading', { name: lastText })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /continuer l'entretien/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Tu as terminé tes 30 questions/i })).toBeTruthy();
+    });
+  });
+
   it('crisisLevel=low (noise by design, no banner) still auto-advances', async () => {
     appendAnswerActionMock.mockResolvedValue({ ok: true, crisisLevel: 'low' });
     renderWizardAtQ0();

@@ -529,9 +529,11 @@ function QuestionStep({
       <p className="sr-only" role="status" aria-live="polite">
         {canSubmit
           ? ''
-          : isOverMax
-            ? `Ta réponse dépasse ${ONBOARDING_ANSWER_MAX_CHARS} caractères, raccourcis-la pour continuer.`
-            : `Écris au moins ${ONBOARDING_ANSWER_MIN_CHARS} caractères pour passer à la suivante.`}
+          : safetyHold
+            ? `Ta réponse est enregistrée. Utilise le bouton « Continuer l'entretien » quand tu es prêt·e.`
+            : isOverMax
+              ? `Ta réponse dépasse ${ONBOARDING_ANSWER_MAX_CHARS} caractères, raccourcis-la pour continuer.`
+              : `Écris au moins ${ONBOARDING_ANSWER_MIN_CHARS} caractères pour passer à la suivante.`}
       </p>
 
       <div

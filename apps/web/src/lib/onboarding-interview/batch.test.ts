@@ -212,6 +212,41 @@ describe('persistGeneratedProfiles — happy path + error variant', () => {
   });
 });
 
+describe('persistGeneratedProfiles — model attribution pin (mirror weekly BLOQUANT 5)', () => {
+  beforeEach(() => {
+    setupSuccessMocks();
+  });
+
+  it('records a known wire-provided model verbatim (claude-opus-4-8)', async () => {
+    const entry = makeRequestEntry('output');
+    const request: BatchPersistRequest = {
+      results: [{ ...entry, model: 'claude-opus-4-8' } as BatchResultEntry],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.persisted).toBe(1);
+    expect(profileUpsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ claudeModelVersion: 'claude-opus-4-8' }),
+      }),
+    );
+  });
+
+  it('pins an unknown wire-provided model to the env-derived default (untrusted laptop)', async () => {
+    const entry = makeRequestEntry('output');
+    const request: BatchPersistRequest = {
+      results: [{ ...entry, model: 'evil-injected-model-string' } as BatchResultEntry],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.persisted).toBe(1);
+    const call = profileUpsertMock.mock.calls[0]?.[0] as {
+      create: { claudeModelVersion: string };
+    };
+    expect(call.create.claudeModelVersion).not.toBe('evil-injected-model-string');
+    // Fallback = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6' (mock-path sentinel).
+    expect(call.create.claudeModelVersion).toBe(process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6');
+  });
+});
+
 describe('persistGeneratedProfiles — Gate 1: active user check', () => {
   it('skips entry when userId is not in active users set', async () => {
     setupSuccessMocks({ userIds: ['user_other'] }); // SUT requestUserIds will pre-fetch this

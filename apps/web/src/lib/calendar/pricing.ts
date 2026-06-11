@@ -8,7 +8,8 @@ import type { ClaudeUsage } from '@/lib/ai/claude-response';
  * §26 Calendrier adaptatif — Claude cost pricing (J-C2). Carbone
  * `lib/weekly-report/pricing.ts` (a self-contained copy, NOT a re-export —
  * the calendar pipeline owns its own model allowlist : the LOCAL binary that
- * Eliot runs is Fable 5 since 2026-06-10, not Sonnet 4.6).
+ * Eliot runs is Opus 4.8 again since 2026-06-11, not Sonnet 4.6 — Fable 5
+ * leaves the Max plan's included models after 2026-06-22).
  *
  * Notes :
  *   - Prices in USD per **1 000 000 tokens**, converted USD → EUR at a fixed
@@ -43,8 +44,8 @@ const SONNET_4_6 = {
 export const CLAUDE_CODE_LOCAL_MODEL = 'claude-code-local' as const;
 
 /**
- * Former §8 default binary (`claude-opus-4-8`, superseded by Fable 5 on
- * 2026-06-10). Priced at the REAL Anthropic API rates : since the env.ts
+ * The §8 default binary (re-pinned 2026-06-11 — briefly superseded by Fable 5
+ * on 2026-06-10). Priced at the REAL Anthropic API rates : since the env.ts
  * allowlist now accepts this slug, the paid path (`ANTHROPIC_API_KEY` +
  * `ANTHROPIC_MODEL=claude-opus-4-8`) is reachable and must bill honestly.
  * The LOCAL batch path is unaffected : the calendar orchestrator never sends
@@ -54,9 +55,10 @@ export const CLAUDE_CODE_LOCAL_MODEL = 'claude-code-local' as const;
 export const CLAUDE_OPUS_4_8_LOCAL_MODEL = 'claude-opus-4-8' as const;
 
 /**
- * Session 1 plan-10 — the §8 default binary since 2026-06-10
- * (`FXMILY_CLAUDE_MODEL=claude-fable-5`, pinned in
- * `ops/scripts/lib/claude-batch-core.sh`). Priced at the REAL API rates
+ * Fable 5 — §8 default binary 2026-06-10 → 2026-06-11 only (re-pinned to
+ * Opus 4.8 : Fable 5 leaves the Max plan's included models after 2026-06-22,
+ * usage-credits beyond). Stays allowlisted for MANUAL runs while included
+ * (`FXMILY_CLAUDE_MODEL=claude-fable-5`). Priced at the REAL API rates
  * ($10/$50 MTok, Anthropic GA 2026-06-09) for the same reason as
  * {@link CLAUDE_OPUS_4_8_LOCAL_MODEL} : the paid path must never record a
  * 0 € cost for real billed tokens. Local batch cost stays 0 via the sentinel.

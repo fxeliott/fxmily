@@ -157,7 +157,8 @@ ENTRIES_COUNT=$(jq '.entries | length' "$ENVELOPE_FILE")
 INSTRUMENT_VERSION=$(jq -r '.instrumentVersion' "$ENVELOPE_FILE")
 RAN_AT=$(jq -r '.ranAt' "$ENVELOPE_FILE")
 
-echo "[onboarding-batch] Pulled $ENTRIES_COUNT entries (instrument v$INSTRUMENT_VERSION, ranAt=$RAN_AT)"
+# $INSTRUMENT_VERSION already carries the 'v' prefix ('v1') — no extra 'v'.
+echo "[onboarding-batch] Pulled $ENTRIES_COUNT entries (instrument $INSTRUMENT_VERSION, ranAt=$RAN_AT)"
 
 if [[ "$ENTRIES_COUNT" == "0" ]]; then
   echo "[onboarding-batch] Nothing to process. Exiting cleanly."
@@ -236,13 +237,18 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
     continue
   fi
 
-  # Build the success entry { userId, interviewId, output, model }
+  # Build the success entry { userId, interviewId, output, model }.
+  # Deterministic projection onto the three expected top-level keys (S2
+  # runtime proof 2026-06-11) : the §8 default (Opus 4.8) may volunteer extra
+  # keys (e.g. `pseudonymLabel`) that the server-side Zod `.strict()` Gate 3
+  # would reject — projecting here is model-proof regardless of prompt
+  # compliance. Presence of the three keys was asserted just above.
   jq -n \
     --arg uid "$USER_ID" \
     --arg iid "$INTERVIEW_ID" \
     --slurpfile output "$PARSED_FILE" \
     --arg model "$CLAUDE_MODEL" \
-    '{userId: $uid, interviewId: $iid, output: $output[0], model: $model}' \
+    '{userId: $uid, interviewId: $iid, output: ($output[0] | {summary, highlights, axes_prioritaires}), model: $model}' \
     >> "$RESULTS_NDJSON"
 
   echo "[onboarding-batch] Captured response for $PSEUDONYM"

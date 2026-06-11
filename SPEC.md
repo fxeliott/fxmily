@@ -1,9 +1,9 @@
 # SPEC — Fxmily App
 
-**Date initiale** : 2026-05-05 · **Dernière révision** : 2026-06-10 (v1.8 amendement, §33 Vérification & Honnêteté radicale — preuve par screenshot MT5 + §34 Changelog v1.7 → v1.8)
+**Date initiale** : 2026-05-05 · **Dernière révision** : 2026-06-11 (v1.9 amendement, moteur §8 ré-épinglé `claude-opus-4-8` + §35 Changelog v1.8 → v1.9)
 **Auteur** : Eliot Pena (interview structuré avec Claude Code, skill `/spec`)
-**Version** : **1.8** — voir §20 (v1.0→v1.1), §22 (v1.1→v1.2), §24 (v1.2→v1.3), §26 (v1.3→v1.4), §28 (v1.4→v1.5), §29 (v1.5→v1.6), §32 (v1.6→v1.7), §34 (v1.7→v1.8) pour les pivots stack et sous-jalons inventés en cours.
-**Statut** : Reflète la réalité 2026-05-29 (V2.4 onboarding interview Phases A-C + §8 batch local Opus 4.8 LIVE prod Hetzner sur `app.fxmilyapp.com` ; **différenciateur Fxmily** pre-trade × outcome correlation per-reason déployé V2.3 ; **1618/1618 tests Vitest verts** ; pipeline débrief auto-pilote DD→MM 6/10 SHIPPED — 4 restantes JJ/KK/LL/MM).
+**Version** : **1.9** — voir §20 (v1.0→v1.1), §22 (v1.1→v1.2), §24 (v1.2→v1.3), §26 (v1.3→v1.4), §28 (v1.4→v1.5), §29 (v1.5→v1.6), §32 (v1.6→v1.7), §34 (v1.7→v1.8), §35 (v1.8→v1.9) pour les pivots stack et sous-jalons inventés en cours.
+**Statut** : Reflète la réalité 2026-06-11 (plan 10-sessions : S1 + S2 clôturées, data-model S3 migré, moteur §8 re-épinglé `claude-opus-4-8` ; 2233+ tests Vitest verts ; prod LIVE `app.fxmilyapp.com`). Snapshot historique précédent : 2026-05-29 (V2.4 onboarding interview Phases A-C + §8 batch local Opus 4.8 LIVE prod Hetzner sur `app.fxmilyapp.com` ; **différenciateur Fxmily** pre-trade × outcome correlation per-reason déployé V2.3 ; **1618/1618 tests Vitest verts** ; pipeline débrief auto-pilote DD→MM 6/10 SHIPPED — 4 restantes JJ/KK/LL/MM).
 
 ---
 
@@ -1597,9 +1597,9 @@ L'app rend le mensonge **confrontable à la réalité** : le membre téléverse 
 - **`ConstancyScore`** (**dédié**, distinct de `BehavioralScore` : celui-ci est **confronté à la réalité externe**) : `id` · `memberId` · `value Float 0-100` · `breakdown Json {honesty, regularity, discipline}` · `period` · `computedAt`. + **`ScoreEvent`** (journal des deltas) : `id` · `memberId` · `delta` · `reason` enum `FILLED | FORGOT_NO_REASON | REALITY_GAP | FALSE_DECLARATION` · `relatedDiscrepancyId?` · `createdAt`.
 - **`Alert`** (sortie → coaching S5) : `id` · `memberId` · `triggerType` · `repeatCount Int` · `threshold Int` · `category` = `'PSYCHOLOGICAL'` (**jamais** trading) · `status` · `createdAt`. **Déclenchement uniquement sur RÉPÉTITION** (DoD S3). Jonction aval coaching : **`MarkDouglasDelivery.sourceAlertId?`** (FK nullable sur le canal coaching existant — pas de nouveau model `CoachingMessage`) ; snapshots `WeeklyReport`/`MonthlyDebrief` (compteurs count-only).
 
-### 33.4 Pipeline IA — 5ᵉ batch local vision (claude-fable-5, $0 API marginal)
+### 33.4 Pipeline IA — 5ᵉ batch local vision (moteur §8 local, $0 API marginal)
 
-Carbone des 4 pipelines existants (weekly / monthly / calendar / onboarding §31.4) : `claude --print` local (abonnement Max, **modèle épinglé `claude-fable-5`**, CLI ≥ 2.1.170), routes admin token-gated `pull`/`persist`, gates au persist (active-user → Zod `.strict()` → `detectCrisis` → `detectAMFViolation` §2 → model allowlist), pseudonymisation `pseudonymizeMember`, human-in-the-loop (batch manuel, mitigation ban-risk §5.4 conservée). **Delta vision** : l'input n'est plus un snapshot JSON mais l'**image** de la preuve — **capacité PROUVÉE le 2026-06-10** (`claude --print --model claude-fable-5 --allowedTools Read` lit un PNG local et restitue le texte exact, [tool-output]).
+Carbone des 4 pipelines existants (weekly / monthly / calendar / onboarding §31.4) : `claude --print` local (abonnement Max, **modèle épinglé `claude-opus-4-8`** depuis v1.9 — re-pin 2026-06-11), routes admin token-gated `pull`/`persist`, gates au persist (active-user → Zod `.strict()` → `detectCrisis` → `detectAMFViolation` §2 → model allowlist), pseudonymisation `pseudonymizeMember`, human-in-the-loop (batch manuel, mitigation ban-risk §5.4 conservée). **Delta vision** : l'input n'est plus un snapshot JSON mais l'**image** de la preuve — **capacité PROUVÉE le 2026-06-10** (`claude --print --model claude-fable-5 --allowedTools Read` lit un PNG local et restitue le texte exact, [tool-output]).
 
 ### 33.5 Réconciliation, score & alertes (déterministe là où c'est possible)
 
@@ -1626,7 +1626,7 @@ Carbone des 4 pipelines existants (weekly / monthly / calendar / onboarding §31
 - **Alertes : répétition obligatoire** — jamais sur un manquement isolé.
 - **`ConstancyScore` ≠ `BehavioralScore`** : le premier confronte la réalité externe, le second agrège le déclaratif ; pas de fusion silencieuse.
 - **RGPD** : cascade `User` delete sur toutes les nouvelles tables ; preuves R2 balayées à la purge de compte (pattern `deleteTrade` MAJ-10) ; audit PII-free.
-- **Moteur épinglé `claude-fable-5`** (un seul point de vérité par monde — core bash + env TS) ; mitigations anti-ban des batchs conservées (jitter, 1 invocation/membre, binaire officiel, human-in-the-loop).
+- **Moteur épinglé `claude-opus-4-8`** (re-pin v1.9 ; un seul point de vérité par monde — core bash + env TS) ; mitigations anti-ban des batchs conservées (jitter, 1 invocation/membre, binaire officiel, human-in-the-loop).
 - **1 session = 1 jalon** (§18.4) : impl en sous-jalons dédiés (data layer → upload+R2 → pipeline vision → réconciliation+score → alertes+surfaces).
 
 ### 33.9 Prochaine étape (recommandée)
@@ -1646,4 +1646,12 @@ Carbone des 4 pipelines existants (weekly / monthly / calendar / onboarding §31
 
 ---
 
-**Fin du SPEC v1.8**
+## 35. Changelog v1.8 → v1.9 (2026-06-11)
+
+- **Moteur IA re-épinglé `claude-opus-4-8`** (décision Eliot 2026-06-11) : Anthropic retire Claude Fable 5 des modèles inclus dans les abonnements Pro/Max après le **22 juin 2026** (usage credits $10/$50 MTok au-delà — anthropic.com/news/claude-fable-5-mythos-5). Le moteur pérenne à $0 marginal sur Max x20 est donc **Opus 4.8**. Implémentation : défaut `ops/scripts/lib/claude-batch-core.sh` (SSOT), `claude-fable-5` reste allowlisté pour des runs manuels tant qu'il est inclus (jamais automatique). Pages légales (`/legal/ai-disclosure`, `/legal/privacy`) mises à jour en conséquence ; les mentions « Opus 4.8 §8 » historiques (§8/§31.4/§19) redeviennent exactes.
+- **Conséquence S3 (§33.4)** : la capacité vision, prouvée sur `claude-fable-5` le 2026-06-10, est **re-prouvée sur `claude-opus-4-8` le 2026-06-11** (`claude --print --model claude-opus-4-8 --allowedTools Read` lit un PNG local et restitue le texte exact, [tool-output]) — le pré-requis bloquant §33.4 du jalon S3 tient sur le moteur ré-épinglé.
+- **Durcissement attribution modèle (pipeline onboarding)** : le persist `persistGeneratedProfiles` épingle désormais le champ `model` fourni par l'orchestrateur à une allowlist de slugs connus (miroir du « BLOQUANT 5 » weekly/monthly/calendar — le laptop opérateur est non-trusté par design).
+
+---
+
+**Fin du SPEC v1.9**

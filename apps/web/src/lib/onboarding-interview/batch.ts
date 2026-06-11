@@ -668,7 +668,21 @@ export async function persistGeneratedProfiles(
 
     // Gate 6 — Upsert MemberProfile (idempotent on userId unique)
     const usage = entry.usage ?? { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
-    const model = entry.model ?? claudeModelVersion;
+    // Model attribution pin (mirror weekly/monthly/calendar "BLOQUANT 5") :
+    // the orchestrator laptop is untrusted (cf. Gates 1-2), so a wire-provided
+    // `model` is only recorded verbatim when it is a known slug. Unknown
+    // strings fall back to the env-derived default — onboarding computes no
+    // cost, the pin protects the audit-traceability fields only.
+    const KNOWN_MODEL_SLUGS = [
+      'claude-fable-5',
+      'claude-opus-4-8',
+      'claude-opus-4-7',
+      'claude-sonnet-4-6',
+      'claude-haiku-4-5',
+      'claude-code-local',
+    ];
+    const model =
+      entry.model && KNOWN_MODEL_SLUGS.includes(entry.model) ? entry.model : claudeModelVersion;
 
     try {
       await db.memberProfile.upsert({

@@ -36,6 +36,7 @@ interface CronExpectation {
     | 'cron.calendar_overdue.scan'
     | 'cron.monthly_debrief_overdue.scan'
     | 'cron.onboarding_profile_overdue.scan'
+    | 'cron.verification_scan.scan'
     | 'cron.health.scan';
   /** Human-readable label for the dashboard. */
   label: string;
@@ -127,6 +128,15 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.onboarding_profile_overdue.scan',
     label: 'Onboarding profile overdue nudge',
     periodMs: DAY, // crontab: daily 11:20 UTC (13:20 Paris)
+  },
+  {
+    // S3 §33.5 — daily verification scan (reconcile + rituals + constancy +
+    // repetition alerts). Deterministic fold, never drives Claude. Monitored
+    // here so a broken scan surfaces red instead of the honesty surface
+    // silently going stale.
+    action: 'cron.verification_scan.scan',
+    label: 'Verification daily scan',
+    periodMs: DAY, // crontab: daily 11:30 UTC (13:30 Paris)
   },
   {
     // J10 Phase O fix B3 : self-monitor the watcher itself. If `cron-watch.yml`

@@ -19,6 +19,10 @@ import { listReportsForMember } from '@/lib/weekly-report/service';
 import { listMonthlyDebriefsForMember } from '@/lib/monthly-debrief/service';
 import { listMeetingAttendanceForMember } from '@/lib/meeting/service';
 import { MemberPresencePanel } from '@/components/admin/member-presence-panel';
+import { MemberVerificationPanel } from '@/components/admin/member-verification-panel';
+import { getLatestConstancyScore } from '@/lib/verification/constancy';
+import { getVerificationOverview, listDiscrepancies } from '@/lib/verification/service';
+import { db } from '@/lib/db';
 import { loadMindsetDashboardData } from '@/lib/mindset/service';
 import { currentParisWeekStart } from '@/lib/mindset/week';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
@@ -73,6 +77,7 @@ function parseTab(
   | 'calendar'
   | 'profile'
   | 'presence'
+  | 'verification'
   | 'notes'
 > {
   if (value === 'trades') return 'trades';
@@ -84,6 +89,7 @@ function parseTab(
   if (value === 'calendar') return 'calendar';
   if (value === 'profile') return 'profile';
   if (value === 'presence') return 'presence';
+  if (value === 'verification') return 'verification';
   if (value === 'notes') return 'notes';
   return 'overview';
 }
@@ -172,6 +178,36 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // per-meeting detail over the rolling 30d window (cancelled slots greyed +
   // excluded from the rate, SPEC §30.4). Fetched only when the tab is active.
   const presence = tab === 'presence' ? await listMeetingAttendanceForMember(memberId) : null;
+
+  // S3 §33 — read-only « réalité vs déclaré » panel (S7 output). Fetched only
+  // when the tab is active; reuses the member-facing read services + raw
+  // alert rows (admin sees everything, the member never sees the alert rows
+  // directly — they receive the Douglas card).
+  const verification =
+    tab === 'verification'
+      ? await Promise.all([
+          getVerificationOverview(memberId),
+          getLatestConstancyScore(memberId),
+          listDiscrepancies(memberId),
+          db.alert.findMany({
+            where: { memberId },
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+            select: {
+              id: true,
+              triggerType: true,
+              repeatCount: true,
+              threshold: true,
+              status: true,
+              createdAt: true,
+            },
+          }),
+          db.user.findUnique({
+            where: { id: memberId },
+            select: { detectedAccountCount: true },
+          }),
+        ])
+      : null;
 
   // J6.5 — pull behavioral scores + analytics in parallel for the overview tab.
   // Skipped on the trades tab to keep its render path lean. J6.6 H1 fix —
@@ -296,6 +332,15 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
         />
       ) : null}
       {tab === 'presence' && presence !== null ? <MemberPresencePanel data={presence} /> : null}
+      {tab === 'verification' && verification !== null ? (
+        <MemberVerificationPanel
+          overview={verification[0]}
+          constancy={verification[1]}
+          discrepancies={verification[2]}
+          alerts={verification[3]}
+          detectedAccountCount={verification[4]?.detectedAccountCount ?? null}
+        />
+      ) : null}
       {tab === 'notes' && adminNotes !== null ? (
         <MemberAdminNotesPanel memberId={memberId} notes={adminNotes} />
       ) : null}

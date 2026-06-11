@@ -4,11 +4,14 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { AccountCreateForm } from '@/components/verification/account-create-form';
+import { ConstancyScoreCard } from '@/components/verification/constancy-score-card';
 import { DeleteProofButton } from '@/components/verification/delete-proof-button';
+import { DiscrepancyReasonForm } from '@/components/verification/discrepancy-reason-form';
 import { ProofUploader } from '@/components/verification/proof-uploader';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
-import { getVerificationOverview } from '@/lib/verification/service';
+import { getLatestConstancyScore } from '@/lib/verification/constancy';
+import { getVerificationOverview, listDiscrepancies } from '@/lib/verification/service';
 
 /**
  * S3 — `/verification` member surface (SPEC §33, Vérification & Honnêteté
@@ -43,13 +46,43 @@ const ACCOUNT_TYPE_LABELS = {
   personal: 'Compte perso',
 };
 
+/** Calm, factual labels — never punitive (§33.2). */
+const DISCREPANCY_META: Record<
+  'missing_declared' | 'false_declared' | 'mismatch' | 'unfilled_no_reason',
+  { label: string; description: string }
+> = {
+  missing_declared: {
+    label: 'Position réelle non déclarée',
+    description: 'Une position de ton historique MT5 n’apparaît pas dans ton journal.',
+  },
+  false_declared: {
+    label: 'Trade déclaré sans contrepartie',
+    description:
+      'Un trade de ton journal n’a pas de trace dans ton historique fourni, alors que la période est couverte.',
+  },
+  mismatch: {
+    label: 'Écart de taille',
+    description: 'Le trade et la position correspondent, mais les volumes divergent.',
+  },
+  unfilled_no_reason: {
+    label: 'Journée sans suivi',
+    description: 'Aucun check-in ce jour-là, sans motif pour l’instant.',
+  },
+};
+
 export default async function VerificationPage() {
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') {
     redirect('/login');
   }
 
-  const overview = await getVerificationOverview(session.user.id);
+  const [overview, constancy, discrepancies] = await Promise.all([
+    getVerificationOverview(session.user.id),
+    getLatestConstancyScore(session.user.id),
+    listDiscrepancies(session.user.id),
+  ]);
+  const openDiscrepancies = discrepancies.filter((d) => d.status === 'open');
+  const handledDiscrepancies = discrepancies.filter((d) => d.status !== 'open');
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">
@@ -74,6 +107,73 @@ export default async function VerificationPage() {
           </p>
         </div>
       </header>
+
+      {/* Score de constance */}
+      <section className="flex flex-col gap-3" aria-labelledby="constancy-heading">
+        <h2 id="constancy-heading" className="t-h2 text-[var(--t-1)]">
+          Ta constance
+        </h2>
+        <ConstancyScoreCard score={constancy} />
+      </section>
+
+      {/* Écarts détectés */}
+      <section className="flex flex-col gap-3" aria-labelledby="discrepancies-heading">
+        <h2 id="discrepancies-heading" className="t-h2 text-[var(--t-1)]">
+          Tes écarts
+        </h2>
+        {discrepancies.length === 0 ? (
+          <p className="t-body text-[var(--t-3)]">
+            Aucun écart détecté pour l&apos;instant entre ton déclaré et ta réalité. Continue comme
+            ça — c&apos;est la régularité qui compte.
+          </p>
+        ) : (
+          <>
+            <p className="t-body leading-[1.6] text-[var(--t-2)]">
+              Un écart n&apos;est pas une faute : c&apos;est une information. S&apos;il y a un motif
+              (maladie, coupure, semaine off), donne-le — un oubli expliqué n&apos;est pas de
+              l&apos;indiscipline.
+            </p>
+            <ul className="flex flex-col gap-2">
+              {[...openDiscrepancies, ...handledDiscrepancies].map((d) => {
+                const meta = DISCREPANCY_META[d.type];
+                return (
+                  <li key={d.id}>
+                    <Card className="flex flex-col gap-2 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[13px] font-semibold text-[var(--t-1)]">
+                          {meta.label}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <span className="t-cap text-[var(--t-4)]">
+                            {DATE_FMT.format(d.detectedAt)}
+                          </span>
+                          {d.memberReason !== null ? (
+                            <Pill tone="cy">Motif donné</Pill>
+                          ) : d.status === 'open' ? (
+                            <Pill tone="warn" dot>
+                              À regarder
+                            </Pill>
+                          ) : (
+                            <Pill tone="mute">Pris en compte</Pill>
+                          )}
+                        </span>
+                      </div>
+                      <p className="t-body leading-[1.5] text-[var(--t-3)]">
+                        {d.reasoning ?? meta.description}
+                      </p>
+                      {d.memberReason !== null ? (
+                        <p className="t-cap text-[var(--t-4)]">Ton motif : {d.memberReason}</p>
+                      ) : (
+                        <DiscrepancyReasonForm discrepancyId={d.id} />
+                      )}
+                    </Card>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </section>
 
       {/* Comptes broker */}
       <section className="flex flex-col gap-3" aria-labelledby="accounts-heading">

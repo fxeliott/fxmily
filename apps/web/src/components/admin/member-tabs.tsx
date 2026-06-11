@@ -12,6 +12,7 @@ export type MemberTabKey =
   | 'calendar'
   | 'profile'
   | 'presence'
+  | 'verification'
   | 'notes';
 
 interface MemberTabsProps {
@@ -42,6 +43,9 @@ const TABS: readonly TabDefinition[] = [
   // V1.7 §30 J-M3 — admin read-only view of the member's meeting attendance
   // (rate + per-meeting detail). Carbone pattern §7.7 admin-only read-only.
   { key: 'presence', label: 'Présence' },
+  // S3 §33 — admin view of the reality-vs-declared surface (accounts, proofs,
+  // écarts, constancy score, alerts). Carbone pattern §7.7 admin read-only.
+  { key: 'verification', label: 'Vérification' },
   { key: 'notes', label: 'Notes admin' },
 ];
 

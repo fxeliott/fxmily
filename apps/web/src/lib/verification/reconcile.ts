@@ -1,0 +1,401 @@
+import 'server-only';
+
+import { db } from '@/lib/db';
+import { logAudit } from '@/lib/auth/audit';
+import { reportError } from '@/lib/observability';
+
+/**
+ * S3 §33.5 — Réconciliation déclaré ↔ réalité (moteur DÉTERMINISTE).
+ *
+ * Croise les `Trade` déclarés (journal) avec les `ExtractedPosition` lues
+ * par la vision (preuves MT5) et matérialise :
+ *   - `Trade.matchStatus/verifiedAt/source` (matched / mismatch / unmatched)
+ *   - `Discrepancy` rows : missing_declared (position réelle jamais déclarée),
+ *     false_declared (trade déclaré sans contrepartie alors que la période
+ *     est couverte par des preuves), mismatch (les deux existent mais les
+ *     volumes divergent)
+ *   - `ScoreEvent` rows (reality_gap / false_declaration) liés aux écarts
+ *     NOUVELLEMENT créés (dédup par l'écart, jamais ré-émis)
+ *
+ * Choix déterministes documentés (le verdict doit rester auditable §33.5 —
+ * Claude n'intervient PAS ici) :
+ *   - clé de matching = symbole (uppercase exact) + side + |openTime −
+ *     enteredAt| ≤ 45 min + volume à ±15 % quand les deux sont connus.
+ *     JAMAIS le prix exact : la lecture OCR d'un digit peut dévier sur les
+ *     petites polices (probe mobile 2026-06-11) — le prix n'est pas une clé.
+ *   - greedy par distance temporelle croissante, appariement unique.
+ *   - HONNÊTETÉ anti-survente (§33.6) : un trade déclaré sans contrepartie
+ *     n'est `false_declared` QUE si sa date d'entrée tombe dans une fenêtre
+ *     couverte par les positions extraites (sinon il reste `unmatched` —
+ *     « pas encore confrontable », pas un mensonge prouvé).
+ */
+
+/** |openTime − enteredAt| tolerance — declared times are hand-entered. */
+export const MATCH_TIME_TOLERANCE_MS = 45 * 60 * 1000;
+/** Relative volume tolerance when both sides carry a size. */
+export const MATCH_VOLUME_TOLERANCE = 0.15;
+/** Coverage margin around the extracted-position window (§33.6 honesty). */
+export const COVERAGE_MARGIN_MS = 12 * 60 * 60 * 1000;
+
+export interface ReconcileTradeInput {
+  readonly id: string;
+  readonly pair: string;
+  readonly direction: 'long' | 'short';
+  readonly enteredAt: Date;
+  readonly lotSize: number | null;
+  readonly matchStatus: 'unmatched' | 'matched' | 'mismatch' | null;
+}
+
+export interface ReconcilePositionInput {
+  readonly id: string;
+  readonly symbol: string;
+  readonly side: 'long' | 'short';
+  readonly openTime: Date;
+  readonly volume: number;
+}
+
+export type ReconcileVerdict =
+  | { readonly kind: 'matched'; readonly tradeId: string; readonly positionId: string }
+  | { readonly kind: 'mismatch'; readonly tradeId: string; readonly positionId: string }
+  | { readonly kind: 'missing_declared'; readonly positionId: string }
+  | { readonly kind: 'false_declared'; readonly tradeId: string }
+  | { readonly kind: 'uncovered'; readonly tradeId: string };
+
+/**
+ * Pure matching core — unit-testable without a DB (pattern §7.11).
+ *
+ * Pass 1 matches on the full key (time + symbol + side + volume). Pass 2
+ * re-scans the leftovers on a relaxed key (time + symbol + side, volume
+ * divergent) → `mismatch` (both sides exist, the numbers diverge). Leftover
+ * positions → `missing_declared`. Leftover trades → `false_declared` when
+ * covered by a proof window, `uncovered` otherwise.
+ */
+export function reconcileMember(
+  trades: readonly ReconcileTradeInput[],
+  positions: readonly ReconcilePositionInput[],
+): ReconcileVerdict[] {
+  const verdicts: ReconcileVerdict[] = [];
+  const usedPositions = new Set<string>();
+  const matchedTrades = new Set<string>();
+
+  interface Candidate {
+    tradeId: string;
+    positionId: string;
+    distanceMs: number;
+    volumeOk: boolean;
+  }
+
+  const candidates: Candidate[] = [];
+  for (const trade of trades) {
+    const pair = trade.pair.toUpperCase();
+    for (const pos of positions) {
+      if (pos.symbol.toUpperCase() !== pair) continue;
+      if (pos.side !== trade.direction) continue;
+      const distanceMs = Math.abs(pos.openTime.getTime() - trade.enteredAt.getTime());
+      if (distanceMs > MATCH_TIME_TOLERANCE_MS) continue;
+      const volumeOk =
+        trade.lotSize === null ||
+        trade.lotSize <= 0 ||
+        Math.abs(pos.volume - trade.lotSize) <=
+          MATCH_VOLUME_TOLERANCE * Math.max(trade.lotSize, pos.volume);
+      candidates.push({ tradeId: trade.id, positionId: pos.id, distanceMs, volumeOk });
+    }
+  }
+
+  // Pass 1 — strict (volume agrees), closest first, unique pairing.
+  candidates.sort((a, b) => a.distanceMs - b.distanceMs);
+  for (const c of candidates) {
+    if (!c.volumeOk) continue;
+    if (matchedTrades.has(c.tradeId) || usedPositions.has(c.positionId)) continue;
+    matchedTrades.add(c.tradeId);
+    usedPositions.add(c.positionId);
+    verdicts.push({ kind: 'matched', tradeId: c.tradeId, positionId: c.positionId });
+  }
+
+  // Pass 2 — relaxed (volume diverges) → mismatch, still unique pairing.
+  for (const c of candidates) {
+    if (c.volumeOk) continue;
+    if (matchedTrades.has(c.tradeId) || usedPositions.has(c.positionId)) continue;
+    matchedTrades.add(c.tradeId);
+    usedPositions.add(c.positionId);
+    verdicts.push({ kind: 'mismatch', tradeId: c.tradeId, positionId: c.positionId });
+  }
+
+  // Leftover positions — real activity never declared (l'oubli).
+  for (const pos of positions) {
+    if (!usedPositions.has(pos.id)) {
+      verdicts.push({ kind: 'missing_declared', positionId: pos.id });
+    }
+  }
+
+  // Leftover trades — covered window ⇒ false_declared, else uncovered.
+  const windows = coverageWindows(positions);
+  for (const trade of trades) {
+    if (matchedTrades.has(trade.id)) continue;
+    const t = trade.enteredAt.getTime();
+    const covered = windows.some(([start, end]) => t >= start && t <= end);
+    verdicts.push(
+      covered
+        ? { kind: 'false_declared', tradeId: trade.id }
+        : { kind: 'uncovered', tradeId: trade.id },
+    );
+  }
+
+  return verdicts;
+}
+
+/** Coverage = [min openTime − margin, max openTime + margin] per symbol-blind
+ *  global window. V1 deliberately coarse (a proof shows a continuous history
+ *  slice) — documented limit: a member screening only SOME days of a period
+ *  can still hide a trade (§33.6: screenshot ≠ forensique absolue). */
+function coverageWindows(positions: readonly ReconcilePositionInput[]): Array<[number, number]> {
+  if (positions.length === 0) return [];
+  const times = positions.map((p) => p.openTime.getTime());
+  return [[Math.min(...times) - COVERAGE_MARGIN_MS, Math.max(...times) + COVERAGE_MARGIN_MS]];
+}
+
+// =============================================================================
+// DB orchestration
+// =============================================================================
+
+export interface ReconcileRunResult {
+  readonly membersScanned: number;
+  readonly tradesMatched: number;
+  readonly tradesMismatched: number;
+  readonly discrepanciesCreated: number;
+  readonly errors: number;
+}
+
+/** Negative deltas (§33.5) — formulas documented + unit-tested. */
+export const SCORE_DELTA_REALITY_GAP = -3;
+export const SCORE_DELTA_FALSE_DECLARATION = -8;
+
+/**
+ * Run the reconciliation for every member who has extracted positions.
+ * Idempotent: verdicts are recomputed from source data; discrepancies are
+ * deduplicated on their identity (member + type + declared/extracted ids)
+ * and ScoreEvents only fire for NEWLY created discrepancies.
+ */
+export async function reconcileAllMembers(
+  options: { now?: Date } = {},
+): Promise<ReconcileRunResult> {
+  const now = options.now ?? new Date();
+
+  const membersWithPositions = await db.brokerAccount.findMany({
+    where: { positions: { some: {} }, member: { status: 'active' } },
+    select: { memberId: true },
+    distinct: ['memberId'],
+  });
+
+  let tradesMatched = 0;
+  let tradesMismatched = 0;
+  let discrepanciesCreated = 0;
+  let errors = 0;
+
+  for (const { memberId } of membersWithPositions) {
+    try {
+      const result = await reconcileOneMember(memberId, now);
+      tradesMatched += result.matched;
+      tradesMismatched += result.mismatched;
+      discrepanciesCreated += result.discrepanciesCreated;
+    } catch (err) {
+      errors += 1;
+      reportError(
+        'verification.reconcile',
+        err instanceof Error ? err : new Error('reconcile_member_failed'),
+        { memberId },
+      );
+    }
+  }
+
+  return {
+    membersScanned: membersWithPositions.length,
+    tradesMatched,
+    tradesMismatched,
+    discrepanciesCreated,
+    errors,
+  };
+}
+
+async function reconcileOneMember(
+  memberId: string,
+  now: Date,
+): Promise<{ matched: number; mismatched: number; discrepanciesCreated: number }> {
+  const [trades, positions] = await Promise.all([
+    db.trade.findMany({
+      where: { userId: memberId },
+      select: {
+        id: true,
+        pair: true,
+        direction: true,
+        enteredAt: true,
+        lotSize: true,
+        matchStatus: true,
+      },
+    }),
+    db.extractedPosition.findMany({
+      where: { brokerAccount: { memberId } },
+      select: { id: true, symbol: true, side: true, openTime: true, volume: true },
+    }),
+  ]);
+
+  const verdicts = reconcileMember(
+    trades.map((t) => ({
+      id: t.id,
+      pair: t.pair,
+      direction: t.direction,
+      enteredAt: t.enteredAt,
+      lotSize: t.lotSize === null ? null : Number(t.lotSize),
+      matchStatus: t.matchStatus,
+    })),
+    positions.map((p) => ({
+      id: p.id,
+      symbol: p.symbol,
+      side: p.side,
+      openTime: p.openTime,
+      volume: Number(p.volume),
+    })),
+  );
+
+  // Existing discrepancies — identity-level dedup (re-runs never duplicate).
+  const existing = await db.discrepancy.findMany({
+    where: { memberId, type: { in: ['missing_declared', 'false_declared', 'mismatch'] } },
+    select: { type: true, declaredTradeId: true, extractedPositionId: true },
+  });
+  const existingKeys = new Set(
+    existing.map((d) => `${d.type}|${d.declaredTradeId ?? ''}|${d.extractedPositionId ?? ''}`),
+  );
+
+  let matched = 0;
+  let mismatched = 0;
+  let discrepanciesCreated = 0;
+
+  for (const v of verdicts) {
+    if (v.kind === 'matched') {
+      matched += 1;
+      await db.trade.update({
+        where: { id: v.tradeId },
+        data: { matchStatus: 'matched', verifiedAt: now, source: 'mt5_verified' },
+      });
+      continue;
+    }
+
+    if (v.kind === 'uncovered') {
+      // Confronté mais hors fenêtre de preuve — honnêteté §33.6 : pas un
+      // mensonge prouvé, juste « pas encore confrontable ».
+      await db.trade.update({
+        where: { id: v.tradeId },
+        data: { matchStatus: 'unmatched' },
+      });
+      continue;
+    }
+
+    if (v.kind === 'mismatch') {
+      mismatched += 1;
+      await db.trade.update({
+        where: { id: v.tradeId },
+        data: { matchStatus: 'mismatch', verifiedAt: now },
+      });
+      const key = `mismatch|${v.tradeId}|${v.positionId}`;
+      if (!existingKeys.has(key)) {
+        existingKeys.add(key);
+        const disc = await db.discrepancy.create({
+          data: {
+            memberId,
+            type: 'mismatch',
+            declaredTradeId: v.tradeId,
+            extractedPositionId: v.positionId,
+            severity: 1,
+            claudeReasoning:
+              'Le trade déclaré et la position MT5 correspondent (heure, sens, instrument) mais la taille diverge au-delà de la tolérance.',
+          },
+          select: { id: true },
+        });
+        await db.scoreEvent.create({
+          data: {
+            memberId,
+            delta: SCORE_DELTA_REALITY_GAP,
+            reason: 'reality_gap',
+            relatedDiscrepancyId: disc.id,
+          },
+        });
+        discrepanciesCreated += 1;
+      }
+      continue;
+    }
+
+    if (v.kind === 'missing_declared') {
+      const key = `missing_declared||${v.positionId}`;
+      if (!existingKeys.has(key)) {
+        existingKeys.add(key);
+        const disc = await db.discrepancy.create({
+          data: {
+            memberId,
+            type: 'missing_declared',
+            extractedPositionId: v.positionId,
+            severity: 2,
+            claudeReasoning:
+              "Une position fermée apparaît dans l'historique MT5 fourni mais n'a pas été déclarée dans le journal.",
+          },
+          select: { id: true },
+        });
+        await db.scoreEvent.create({
+          data: {
+            memberId,
+            delta: SCORE_DELTA_REALITY_GAP,
+            reason: 'reality_gap',
+            relatedDiscrepancyId: disc.id,
+          },
+        });
+        discrepanciesCreated += 1;
+      }
+      continue;
+    }
+
+    // false_declared
+    await db.trade.update({
+      where: { id: v.tradeId },
+      data: { matchStatus: 'unmatched' },
+    });
+    const key = `false_declared|${v.tradeId}|`;
+    if (!existingKeys.has(key)) {
+      existingKeys.add(key);
+      const disc = await db.discrepancy.create({
+        data: {
+          memberId,
+          type: 'false_declared',
+          declaredTradeId: v.tradeId,
+          severity: 3,
+          claudeReasoning:
+            "Un trade déclaré dans le journal n'a pas de contrepartie dans l'historique MT5 fourni, alors que la période est couverte par les preuves.",
+        },
+        select: { id: true },
+      });
+      await db.scoreEvent.create({
+        data: {
+          memberId,
+          delta: SCORE_DELTA_FALSE_DECLARATION,
+          reason: 'false_declaration',
+          relatedDiscrepancyId: disc.id,
+        },
+      });
+      discrepanciesCreated += 1;
+    }
+  }
+
+  if (matched + mismatched + discrepanciesCreated > 0) {
+    await logAudit({
+      action: 'verification.batch.persisted',
+      userId: memberId,
+      metadata: {
+        scope: 'reconcile',
+        matched,
+        mismatched,
+        discrepanciesCreated,
+        ranAt: now.toISOString(),
+      },
+    });
+  }
+
+  return { matched, mismatched, discrepanciesCreated };
+}

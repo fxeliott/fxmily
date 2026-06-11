@@ -68,7 +68,8 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
         idx: i,
         date: new Date(p.ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
         cumR: Number(p.cumR.toFixed(2)),
-        dd: Number((-p.drawdownFromPeak).toFixed(2)), // negative for visual cue
+        // S4 DOD4-F1 — the unplotted `dd` field was removed (no series nor
+        // tooltip ever read it; the drawdown story lives in DrawdownStreaksCard).
       })),
     [data],
   );

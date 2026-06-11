@@ -118,7 +118,7 @@ export function AccountCreateForm() {
       ) : null}
 
       <Btn type="submit" kind="secondary" size="m" loading={isPending} className="self-start">
-        <Plus className="h-4 w-4" strokeWidth={1.75} />
+        <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden />
         Déclarer ce compte
       </Btn>
     </form>

@@ -337,7 +337,7 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
                 i < step
                   ? 'bg-[var(--acc)]'
                   : i === step
-                    ? 'bg-[var(--acc)] shadow-[0_0_8px_oklch(0.879_0.231_130_/_0.55)]'
+                    ? 'bg-[var(--acc)] shadow-[0_0_8px_oklch(0.62_0.19_254_/_0.55)]'
                     : 'bg-[var(--b-default)]',
               )}
             />
@@ -796,7 +796,7 @@ function RadioGroup({
                 'rounded-pill inline-flex min-h-11 cursor-pointer items-center gap-2 border px-4 py-2 text-[13px] font-medium transition-all',
                 'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--acc)]',
                 active
-                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_3px_oklch(0.879_0.231_130_/_0.10)]'
+                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_3px_oklch(0.62_0.19_254_/_0.10)]'
                   : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]',
                 disabled && 'cursor-not-allowed opacity-60',
               )}

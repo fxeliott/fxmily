@@ -221,7 +221,11 @@ export function evalEmotionLogged(
     const enteredRecent = t.enteredAt >= cutoff;
     const exitedRecent = t.exitedAt !== null && t.exitedAt >= cutoff;
     if (!enteredRecent && !exitedRecent) return false;
-    return t.emotionBefore.includes(rule.tag) || t.emotionAfter.includes(rule.tag);
+    return (
+      t.emotionBefore.includes(rule.tag) ||
+      t.emotionDuring.includes(rule.tag) ||
+      t.emotionAfter.includes(rule.tag)
+    );
   });
 
   // Search today's check-ins for the tag.
@@ -250,6 +254,10 @@ export function evalEmotionLogged(
 }
 
 function labelForTag(tag: string): string {
+  // FR labels for member-facing `triggeredBy`. Values mirror the canonical
+  // catalogue `emotionLabel()` in lib/trading/emotions.ts (kept inline as a
+  // hardcoded switch so this stays a pure, dep-free module). Unknown tags fall
+  // back to the raw slug. FIX D S5 added the two missing cases below.
   switch (tag) {
     case 'fomo':
       return 'FOMO';
@@ -265,6 +273,12 @@ function labelForTag(tag: string): string {
       return 'Avidité';
     case 'doubt':
       return 'Doute';
+    // FIX D — previously missing FR labels (returned raw slug, displayed in
+    // member-facing UI which is 100% FR). Source: emotions.ts catalogue.
+    case 'revenge-trade':
+      return 'Vengeance';
+    case 'overconfident':
+      return 'Sur-confiance';
     default:
       return tag;
   }

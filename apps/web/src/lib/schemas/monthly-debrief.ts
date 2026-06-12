@@ -261,6 +261,21 @@ export const monthlySnapshotSchema = z
     accountAgeDaysInWindow: z.number().int().min(0),
     real: realCounterSliceSchema,
     training: trainingEffortSliceSchema,
+    /// FIX C S5 — Emotion tags (trade before/during/after + checkin emotionTags),
+    /// sorted by frequency descending, capped at 20. Carbon of the weekly
+    /// freeText.emotionTags slice. Enables the monthly Claude run to detect
+    /// dominant fears (FOMO, fear-loss, etc.) across the full month, matching
+    /// the weekly path. Empty array when no trades/checkins in the window.
+    emotionTags: z
+      .array(
+        z
+          .object({
+            tag: z.string().min(1).max(60),
+            count: z.number().int().min(1),
+          })
+          .strict(),
+      )
+      .max(20),
     /// ≤4 weekly AI summaries of the civil month, INPUT context only (SPEC
     /// §25.3 — never an FK). Already safeFreeText at weekly persist; the
     /// `.transform` re-hardens defense-in-depth (mirror builder journals).

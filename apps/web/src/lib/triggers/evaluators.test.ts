@@ -28,6 +28,7 @@ function trade(over: Partial<TriggerTradeInput> = {}): TriggerTradeInput {
     planRespected: true,
     hedgeRespected: null,
     emotionBefore: [],
+    emotionDuring: [],
     emotionAfter: [],
     ...over,
   };
@@ -313,6 +314,27 @@ describe('evalEmotionLogged', () => {
     const r = evalEmotionLogged({ kind: 'emotion_logged', tag: 'fomo' }, ctx);
     expect(r.matched).toBe(true);
   });
+
+  // FIX B — emotionDuring now consumed by the dispatch engine (§22 in-position affect).
+  it('matches a tag in trade.emotionDuring (calme before, neutre after)', () => {
+    const ctx = ctxAt(now, '2026-05-07');
+    ctx.recentAllTrades = [
+      trade({
+        enteredAt: new Date('2026-05-07T09:00:00Z'),
+        exitedAt: new Date('2026-05-07T10:00:00Z'),
+        closedAt: new Date('2026-05-07T10:00:00Z'),
+        emotionBefore: ['calm'], // not the tag we seek
+        emotionDuring: ['fomo'], // the tag IS here
+        emotionAfter: [], // not here either
+      }),
+    ];
+    const r = evalEmotionLogged({ kind: 'emotion_logged', tag: 'fomo' }, ctx);
+    expect(r.matched).toBe(true);
+    if (r.matched) {
+      expect(r.snapshot.details.tag).toBe('fomo');
+      expect(r.snapshot.details.tradeMatches).toBe(1);
+    }
+  });
 });
 
 // =============================================================================
@@ -525,6 +547,44 @@ describe('evaluateTrigger dispatcher', () => {
     ctx.recentClosedTrades = [trade({ outcome: 'loss' }), trade({ outcome: 'loss' })];
     const r = evaluateTrigger({ kind: 'after_n_consecutive_losses', n: 2, window: 'any' }, ctx);
     expect(r.matched).toBe(true);
+  });
+});
+
+// =============================================================================
+// FIX D — FR labels for revenge-trade and overconfident
+// =============================================================================
+
+describe('evalEmotionLogged — FR labels (FIX D S5 hardening)', () => {
+  const now = new Date('2026-05-07T12:00:00Z');
+
+  it('"revenge-trade" → label "Vengeance" (not raw slug)', () => {
+    const ctx = ctxAt(now, '2026-05-07');
+    ctx.recentAllTrades = [
+      trade({
+        enteredAt: new Date('2026-05-07T09:00:00Z'),
+        emotionBefore: ['revenge-trade'],
+      }),
+    ];
+    const r = evalEmotionLogged({ kind: 'emotion_logged', tag: 'revenge-trade' }, ctx);
+    expect(r.matched).toBe(true);
+    if (r.matched) {
+      expect(r.triggeredBy).toContain('Vengeance');
+    }
+  });
+
+  it('"overconfident" → label "Sur-confiance" (not raw slug)', () => {
+    const ctx = ctxAt(now, '2026-05-07');
+    ctx.recentAllTrades = [
+      trade({
+        enteredAt: new Date('2026-05-07T09:00:00Z'),
+        emotionBefore: ['overconfident'],
+      }),
+    ];
+    const r = evalEmotionLogged({ kind: 'emotion_logged', tag: 'overconfident' }, ctx);
+    expect(r.matched).toBe(true);
+    if (r.matched) {
+      expect(r.triggeredBy).toContain('Sur-confiance');
+    }
   });
 });
 

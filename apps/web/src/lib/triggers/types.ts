@@ -129,6 +129,8 @@ export interface TriggerTradeInput {
   hedgeRespected: boolean | null;
   /** Multi-tags selected before entry. */
   emotionBefore: string[];
+  /** Multi-tags recorded during the trade (in-position affect, §22). */
+  emotionDuring: string[];
   /** Multi-tags selected after exit. May be empty when still open. */
   emotionAfter: string[];
 }

@@ -129,3 +129,41 @@ describe('buildMonthlyDebriefUserPrompt — §28 process/habit axes reach the pr
     expect(prompt).toMatch(/Process complété \("oublis"\) : 0% des trades clôturés renseignés/);
   });
 });
+
+// =============================================================================
+// FIX C S5 — emotion tags reach the snapshot AND the prompt text
+// =============================================================================
+
+describe('buildMonthlyDebriefUserPrompt — emotionTags (FIX C S5 hardening)', () => {
+  it('emotion tags (fomo×3, fear-loss×2) appear in the prompt text', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        trades: [
+          trade({
+            emotionBefore: ['fomo', 'fear-loss'] as never,
+            emotionDuring: ['fomo'] as never,
+            emotionAfter: [] as never,
+          }),
+          trade({
+            emotionBefore: ['fomo'],
+            emotionDuring: ['fear-loss'] as never,
+            emotionAfter: [] as never,
+          }),
+        ],
+        checkins: [],
+      }),
+    );
+    const prompt = buildMonthlyDebriefUserPrompt(snap);
+    // fomo appears 3 times (before×2 + during×1)
+    expect(prompt).toContain('fomo×3');
+    // fear-loss: 1 from before + 1 from during = 2
+    expect(prompt).toContain('fear-loss×2');
+    // The line prefix must be present
+    expect(prompt).toContain('Émotions dominantes (fréquence)');
+  });
+
+  it('no emotion tags → the emotion line is absent from the prompt', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).not.toContain('Émotions dominantes (fréquence)');
+  });
+});

@@ -38,6 +38,31 @@ function cardCorpus(card: (typeof MARK_DOUGLAS_CARDS_SEED)[number]): string {
 }
 
 // =============================================================================
+// FIX F — catalogue category regression guard (DoD#2 alert-S3→coaching path)
+//
+// Asserts that the seed catalogue has ≥1 published card in 'discipline' and
+// ≥1 in 'ego'. Without this, the alert-S3→coaching dispatch (DoD#2) would
+// silently have no eligible card to deliver for those psychological categories.
+// Pure test — zero prod code changed.
+// =============================================================================
+
+describe('Mark Douglas cards — catalogue category regression guard (FIX F S5)', () => {
+  it('has at least 1 published card in category "discipline"', () => {
+    const disciplineCards = MARK_DOUGLAS_CARDS_SEED.filter(
+      (c) => c.published === true && c.category === 'discipline',
+    );
+    expect(disciplineCards.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('has at least 1 published card in category "ego"', () => {
+    const egoCards = MARK_DOUGLAS_CARDS_SEED.filter(
+      (c) => c.published === true && c.category === 'ego',
+    );
+    expect(egoCards.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// =============================================================================
 // §2 posture test — all 51 cards must be clean
 // =============================================================================
 

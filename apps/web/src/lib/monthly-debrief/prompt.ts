@@ -187,7 +187,20 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
   );
   lines.push(``);
 
+  // FIX C S5 — Emotion tags (trade before/during/after + checkin), dominant
+  // frequency. Carbon of the weekly prompt line (~l.149-151). Enables the
+  // autonomous monthly Claude run to detect dominant Douglas fears / states.
+  if (snapshot.emotionTags.length > 0) {
+    const tagLine = snapshot.emotionTags
+      .slice(0, 8)
+      .map((e) => `${e.tag}×${e.count}`)
+      .join(', ');
+    lines.push(`- Émotions dominantes (fréquence) : ${tagLine}`);
+    lines.push(``);
+  }
+
   lines.push(`## Scores comportementaux (snapshot le plus récent)`);
+  // Order mirrors the weekly carbon (Discipline first) — SPEC §25 symmetry.
   lines.push(`- Discipline : ${formatScore(s.discipline)}`);
   lines.push(`- Stabilité émotionnelle : ${formatScore(s.emotionalStability)}`);
   lines.push(`- Cohérence : ${formatScore(s.consistency)}`);

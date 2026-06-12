@@ -280,3 +280,191 @@ describe('detectAMFViolation — MUST FLAG (post-review §2 TA vocabulary)', () 
     expect(flag('Achetez maintenant !')).toBe(true);
   });
 });
+
+// =============================================================================
+// MUST FLAG — S5 hardening corpus (FN closed)
+// =============================================================================
+
+describe('detectAMFViolation — MUST FLAG (S5 hardening — FN fermés)', () => {
+  it('"Short le Nasdaq immédiatement"', () => {
+    expect(flag('Short le Nasdaq immédiatement')).toBe(true);
+  });
+
+  it('"Long le DAX dès l\'ouverture"', () => {
+    expect(flag("Long le DAX dès l'ouverture")).toBe(true);
+  });
+
+  it('"Reste long tant que la tendance le permet"', () => {
+    expect(flag('Reste long tant que la tendance le permet')).toBe(true);
+  });
+
+  it('"Je te conseille de shorter le DAX demain"', () => {
+    expect(flag('Je te conseille de shorter le DAX demain')).toBe(true);
+  });
+
+  it('"Prends un short sur le Nasdaq"', () => {
+    expect(flag('Prends un short sur le Nasdaq')).toBe(true);
+  });
+
+  it('"Place ton take profit à 1.0850"', () => {
+    expect(flag('Place ton take profit à 1.0850')).toBe(true);
+  });
+
+  it('"Vise les 1.15 sur la paire"', () => {
+    expect(flag('Vise les 1.15 sur la paire')).toBe(true);
+  });
+
+  it('"Cible 1.0900 ce matin"', () => {
+    expect(flag('Cible 1.0900 ce matin')).toBe(true);
+  });
+
+  it('"Le biais reste haussier sur le DAX"', () => {
+    expect(flag('Le biais reste haussier sur le DAX')).toBe(true);
+  });
+
+  it('"Privilégie un biais haussier cette semaine"', () => {
+    expect(flag('Privilégie un biais haussier cette semaine')).toBe(true);
+  });
+
+  it('"Le support se situe autour de 1.0850"', () => {
+    expect(flag('Le support se situe autour de 1.0850')).toBe(true);
+  });
+
+  it('"Le prix cassera la zone des 4300"', () => {
+    expect(flag('Le prix cassera la zone des 4300')).toBe(true);
+  });
+
+  // ── FN supplémentaires fermés sur re-review adversariale (verifier) ──
+  it('"Passe acheteur sur l\'or maintenant" (directive acheteur/vendeur)', () => {
+    expect(flag("Passe acheteur sur l'or maintenant")).toBe(true);
+  });
+
+  it('"Garde tes positions longues sur le DAX" (forme plurielle)', () => {
+    expect(flag('Garde tes positions longues sur le DAX cet après-midi')).toBe(true);
+  });
+
+  it('"On vise un retournement haussier dès cet après-midi" (retournement directionnel)', () => {
+    expect(flag('On vise un retournement haussier dès cet après-midi')).toBe(true);
+  });
+
+  it('"Achète-le maintenant avant la hausse" (directionnel — carve-out -toi ne sur-protège pas)', () => {
+    expect(flag('Achète-le maintenant avant la hausse')).toBe(true);
+  });
+});
+
+// =============================================================================
+// MUST NOT FLAG — S5 hardening corpus (FP carve-outs)
+// =============================================================================
+
+describe('detectAMFViolation — MUST NOT FLAG (S5 hardening — FP carve-outs)', () => {
+  it('"« ça va monter »" (cité entre guillemets français)', () => {
+    expect(flag('« ça va monter »')).toBe(false);
+  });
+
+  it('"il pense que ça va monter" (discours rapporté par que)', () => {
+    expect(flag('il pense que ça va monter')).toBe(false);
+  });
+
+  it('"objectif à atteindre : 3 sessions" (coaching goal, pas prix)', () => {
+    expect(flag('objectif à atteindre : 3 sessions')).toBe(false);
+  });
+
+  it('"niveau de confiance" (coaching, pas support/résistance)', () => {
+    expect(flag('niveau de confiance')).toBe(false);
+  });
+
+  it('"ta confiance va monter" (coaching motivation)', () => {
+    expect(flag('ta confiance va monter')).toBe(false);
+  });
+
+  it('"ton stress va descendre" (coaching)', () => {
+    expect(flag('ton stress va descendre')).toBe(false);
+  });
+
+  it('"tes résultats vont s\'améliorer" (coaching)', () => {
+    expect(flag("tes résultats vont s'améliorer")).toBe(false);
+  });
+
+  it('"TP1 puis TP2 sont des labels de discipline" (labels coaching sans prix)', () => {
+    expect(flag('TP1 puis TP2 sont des labels de discipline')).toBe(false);
+  });
+
+  it('"Reste dans ta zone 2 d\'effort, pas plus" (FIX zone_prix faux-positif)', () => {
+    expect(flag("Reste dans ta zone 2 d'effort, pas plus")).toBe(false);
+  });
+
+  it('"travaille dans la zone 3 de RPE" (zone effort/RPE, pas prix)', () => {
+    expect(flag('travaille dans la zone 3 de RPE')).toBe(false);
+  });
+
+  it('"zone de confort" (coaching)', () => {
+    expect(flag('zone de confort')).toBe(false);
+  });
+
+  it('"long terme" (temporel)', () => {
+    expect(flag('long terme')).toBe(false);
+  });
+
+  it('"vends-toi mieux" (réfléchi coaching)', () => {
+    expect(flag('vends-toi mieux')).toBe(false);
+  });
+
+  it('"je t\'achète un café" (datif figuré)', () => {
+    expect(flag("je t'achète un café")).toBe(false);
+  });
+
+  // ── Coaching FP carve-outs (resserrage post re-review : le 1er jet des patterns
+  //    directionnels flaggait ces phrases de coaching légitimes → débrief skippé). ──
+  it('"le chemin reste long mais tu avances" (coaching, pas "reste long sur/tant que")', () => {
+    expect(flag('le chemin reste long mais tu avances')).toBe(false);
+  });
+
+  it('"ça reste long à intégrer, sois patient" (coaching)', () => {
+    expect(flag('ça reste long à intégrer, sois patient')).toBe(false);
+  });
+
+  it('"je te conseille de prendre du recul" (coaching, "prendre" exclu)', () => {
+    expect(flag('je te conseille de prendre du recul')).toBe(false);
+  });
+
+  it('"je te conseille de prendre ton temps" (coaching)', () => {
+    expect(flag('je te conseille de prendre ton temps')).toBe(false);
+  });
+
+  it('"vise les 3 prochaines sessions cette semaine" (objectif coaching, pas prix)', () => {
+    expect(flag('vise les 3 prochaines sessions cette semaine')).toBe(false);
+  });
+
+  it('"vise les 100% de respect du plan" (objectif coaching)', () => {
+    expect(flag('vise les 100% de respect du plan')).toBe(false);
+  });
+
+  it('"ton support se situe dans ta routine du matin" (support=soutien, pas prix)', () => {
+    expect(flag('ton support se situe dans ta routine du matin')).toBe(false);
+  });
+
+  it('"le soutien de tes proches est un vrai support" (support=soutien)', () => {
+    expect(flag('le soutien de tes proches est un vrai support')).toBe(false);
+  });
+
+  it('"progresse le long du chemin de la discipline" (idiome "le long du")', () => {
+    expect(flag('progresse le long du chemin de la discipline')).toBe(false);
+  });
+
+  // ── FP supplémentaires carve-outés sur re-review adversariale ──
+  it('"Achète-toi un carnet dédié à tes revues de trades" (impératif pronominal réfléchi)', () => {
+    expect(flag('Achète-toi un carnet dédié à tes revues de trades')).toBe(false);
+  });
+
+  it('"Achète-toi du temps pour respirer" (coaching réflexif)', () => {
+    expect(flag('Achète-toi du temps pour respirer')).toBe(false);
+  });
+
+  it('"vise les 1.5R par trade" (risk-multiple, pas un prix)', () => {
+    expect(flag('vise les 1.5R par trade')).toBe(false);
+  });
+
+  it('"vise les 2.0 de ratio risque-récompense" (sizing coaching)', () => {
+    expect(flag('vise les 2.0 de ratio risque-récompense')).toBe(false);
+  });
+});

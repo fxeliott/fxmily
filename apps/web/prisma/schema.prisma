@@ -2213,8 +2213,12 @@ model AccessRequest {
 //   - Honest limit (decision Eliot 2026-06-10): a screenshot proof raises the
 //     cost of lying but is NOT forensic truth (cropping/demo accounts stay
 //     possible). True broker-API verification remains SPEC V3 roadmap.
-//   - Free-text emitted by Claude (`Discrepancy.claudeReasoning`) passes the
-//     §2/AMF + crisis gates at write time, like every other AI output.
+//   - `Discrepancy.claudeReasoning` contains STATIC §2-clean labels produced by
+//     the DETERMINISTIC reconciliation engine (reconcile.ts + constancy.ts) —
+//     NOT free-text emitted by Claude. The 4 write-sites write fixed French
+//     strings (e.g. "Un trade déclaré dans le journal n'a pas de contrepartie…").
+//     If a future change writes real Claude output here it MUST add
+//     detectAMFViolation + detectCrisis + safeFreeText at the write-site.
 
 /// S3 — kind of broker account a member trades on. Lowercase values per repo
 /// enum convention (deviation from the §13.3 draft's uppercase, documented).
@@ -2443,11 +2447,13 @@ model ExtractedPosition {
 /// S3 — one detected gap between what the member declared and the proven
 /// reality (or an unfilled ritual without a valid reason). Severity 1-3:
 /// 1 = minor (timing/size drift), 2 = notable (oubli), 3 = major (false
-/// declaration). `claudeReasoning` is AI-emitted free text → it passes the
-/// §2/AMF + crisis gates at write time (canon of every AI output) and is
-/// safeFreeText-sanitised. `memberReason` is the member's own explanation
-/// ("motif valable" — brief §29: an excused absence is NOT indiscipline);
-/// member free text → safeFreeText + crisis routing at the Zod boundary.
+/// declaration). `claudeReasoning` holds STATIC §2-clean labels written by the
+/// deterministic reconciliation engine (reconcile.ts + constancy.ts) — NOT
+/// AI-emitted free text. If a future change writes real Claude output here it
+/// MUST add detectAMFViolation + detectCrisis + safeFreeText at the write-site.
+/// `memberReason` is the member's own explanation ("motif valable" — brief §29:
+/// an excused absence is NOT indiscipline); member free text → safeFreeText +
+/// crisis routing at the Zod boundary.
 model Discrepancy {
   id       String @id @default(cuid())
   memberId String @map("member_id")
@@ -2467,8 +2473,11 @@ model Discrepancy {
   severity Int
   status   DiscrepancyStatus @default(open)
 
-  /// Claude's factual explanation of the gap (free text, §2/AMF + crisis
-  /// gated + safeFreeText at write — NEVER trading advice).
+  /// Static §2-clean label produced by the deterministic reconciliation engine
+  /// (reconcile.ts / constancy.ts). NOT free-text from Claude — the 4 write-
+  /// sites write fixed French strings (e.g. "Un trade déclaré dans le journal…").
+  /// If a future change writes real Claude output here it MUST add
+  /// detectAMFViolation + detectCrisis + safeFreeText at the write-site.
   claudeReasoning String? @map("claude_reasoning") @db.Text
 
   /// Member-provided valid reason ("j'étais malade", "panne internet").

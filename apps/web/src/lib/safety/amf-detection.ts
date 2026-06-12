@@ -26,13 +26,19 @@
  *      as the crisis module (commercial LLMs cannot be trusted as safety gates
  *      on their own output).
  *
- * CALIBRATION — matrice de tests (Session 4, TDD):
+ * CALIBRATION — matrice de tests (Session 4 + S5 hardening, TDD):
  *   Must flag  : directional imperatives (LONG/SHORT/BUY/SELL in trade context),
  *                TP/SL/objectif + number, support/resistance levels, monter/
- *                descendre price predictions, breakout calls, price targets.
+ *                descendre price predictions, breakout calls, price targets,
+ *                "Short le Nasdaq", "Long le DAX", "Reste long tant que…",
+ *                "Place ton take profit à 1.0850", "Vise les 1.15", "Cible 1.09",
+ *                "biais haussier/baissier", "Le support se situe autour de…",
+ *                "Le prix cassera la zone des 4300", "shorter le DAX".
  *   Must NOT flag: "long terme" temporel, coaching psychology, "a vendu" past,
  *                  "objectif du mois" coaching goal, "niveau de discipline",
- *                  "confiance plus longue", "stress descendu", "vont s'améliorer".
+ *                  "confiance plus longue", "stress descendu", "vont s'améliorer",
+ *                  "« ça va monter »" (cité), "il pense que ça va monter" (rapporté),
+ *                  "zone 2 d'effort", "zone 3 de RPE", "zone de confort".
  *
  * References:
  *   - AMF règlement général — art. 314-1 et s. (conseil en investissement)
@@ -99,15 +105,95 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     pattern: /(?<!\p{L})long\s+sur\s+(?:l[ae]?[''\s]|le\s|un\s)?\p{L}/iu,
   },
   {
+    label: 'directive_positions_directionnelles',
+    // "Garde tes positions longues sur le DAX" — plural form missed by long_instrument
+    pattern: /(?<!\p{L})positions?\s+(?:longues?|courtes?)\s+sur\b/iu,
+  },
+  {
+    label: 'directive_acheteur_vendeur',
+    // "Passe acheteur sur l'or" / "reste vendeur" / "acheteur sur l'EURUSD"
+    // Position directive via acheteur/vendeur (not in the imperatif patterns).
+    pattern:
+      /(?<!\p{L})(?:(?:passe[sz]?|reste[sz]?|deviens?|sois)\s+(?:acheteur|vendeur)|(?:acheteur|vendeur)\s+sur\s+l)/iu,
+  },
+  {
+    label: 'directive_long_short_instrument',
+    // "Short le Nasdaq immédiatement" / "Long le DAX dès l'ouverture"
+    // Protect: "long terme" (neg lookahead), "longue/longtemps" (boundary),
+    //   and the "le long de/du/des <X>" / "au long de" idioms (le/du/au lookbehinds
+    //   + connector excludes du/des → "le long du chemin" PASSES).
+    pattern:
+      /(?<!\p{L})(?<!au\s)(?<!le\s)(?<!du\s)(?:long|short)(?!\s+terme)(?!\p{L})\s+(?:(?:le|la|les|un|une)\s+\p{L}|l[''’]\p{L})/iu,
+  },
+  {
+    label: 'directive_reste_long_short',
+    // "Reste long tant que la tendance le permet" / "Reste short sur le DAX"
+    // Anchored on a TRADE context after long/short (sur / tant que / en position /
+    // jusqu) so coaching "le chemin reste long", "ça reste long à faire" PASS.
+    pattern: /(?<!\p{L})reste[sz]?\s+(?:long|short)\s+(?:sur\s|tant\s+que\s|en\s+position|jusqu)/iu,
+  },
+  {
+    label: 'directive_shorter_instrument',
+    // "shorter le DAX" / "Je te conseille de shorter"
+    pattern: /(?<!\p{L})short(?:e[rz]?|ez)(?!\p{L})/iu,
+  },
+  {
+    label: 'directive_prends_un_short',
+    // "Prends un short sur le Nasdaq"
+    pattern: /(?<!\p{L})prends\s+un\s+short(?!\p{L})/iu,
+  },
+  {
+    label: 'directive_conseille_trade',
+    // "Je te conseille de shorter / short / long le DAX" — directional only.
+    // EXCLUT acheter/vendre/prendre (FP: "conseille de prendre du recul/ton temps").
+    pattern: /(?<!\p{L})conseille[sz]?\s+de\s+(?:shorter|short|long)(?!\p{L})/iu,
+  },
+  {
+    label: 'directive_place_tp_sl',
+    // "Place ton take profit à 1.0850" / "Place ton stop loss à 4200"
+    pattern:
+      /(?<!\p{L})place[sz]?\s+(?:ton|votre|ta|le|la)\s+(?:take\s+profit|stop[\s-]?loss|tp|sl)(?!\p{L})/iu,
+  },
+  {
+    label: 'directive_vise_prix',
+    // "Vise les 1.15 sur la paire" — PRICE format only (>=4 digits OR >=2 decimals)
+    // so "vise les 3 sessions" / "vise les 100%" (coaching goals) AND "vise les
+    // 1.5R" / "vise les 2.0 de ratio" (risk-multiple sizing = coaching) PASS.
+    pattern: /(?<!\p{L})vise[sz]?\s+les\s+(?:\d{4,}|\d+[.,]\d{2,})/iu,
+  },
+  {
+    label: 'directive_cible_prix',
+    // "Cible 1.0900 ce matin"
+    pattern: /(?<!\p{L})cible\s+\d+[.,]\d/iu,
+  },
+  {
+    label: 'biais_directionnel',
+    // "Le biais reste haussier sur le DAX" / "Privilégie un biais haussier cette semaine"
+    pattern:
+      /(?<!\p{L})(?:biais\s+(?:reste\s+|est\s+)?|privil[eé]gi[ez]+\s+(?:un|le)\s+biais\s+)(?:haussi[eè]re?|baissi[eè]re?|haussier|baissier)(?!\p{L})/iu,
+  },
+  {
+    label: 'support_standalone',
+    // "Le support se situe autour de 1.0850" — bare "support" + level construct
+    // ANCHORED on a price-format number (decimal OR >=4 digits) so coaching
+    // "ton support se situe dans ta routine" / "le support de tes proches" PASS.
+    // ("Le prix cassera la zone des 4300" is caught by zone_prix below — no need
+    //  for a dedicated cassure pattern, which would FP on "casser une habitude".)
+    pattern:
+      /(?<!\p{L})(?<!de\s)support\s+(?:se\s+situe|est|à|autour|vers)[^.]{0,20}?(?:\d{4,}|\d+[.,]\d+)/iu,
+  },
+  {
     label: 'directive_imperative_achetez',
     // "Achetez maintenant" — vous-imperative unambiguous
     pattern: /(?<!\p{L})achetez(?!\p{L})/iu,
   },
   {
     label: 'directive_imperative_achete',
-    // Impératif "Achète" ; PAS "achète du recul/dip" (métaphore) ni "t'/m'/l'achète" (datif figuré "te donne")
+    // Impératif "Achète" ; PAS "achète du recul/dip" (métaphore), "t'/m'/l'achète"
+    // (datif figuré), ni "achète-toi/vous/nous/moi un carnet/du temps" (impératif
+    // pronominal réfléchi = coaching). "achète-le/la/les" reste flaggé (directionnel).
     pattern:
-      /(?<!\p{L})(?<!['‘’])(?<!\btu\s+as\s+)achète(?!\s+du\s+recul)(?!\s+du\s+dip)(?!\p{L})(?!\s+son)(?!\s+sa)(?!\s+leur)/iu,
+      /(?<!\p{L})(?<!['‘’])(?<!\btu\s+as\s+)achète(?!-(?:toi|vous|nous|moi))(?!\s+du\s+recul)(?!\s+du\s+dip)(?!\p{L})(?!\s+son)(?!\s+sa)(?!\s+leur)/iu,
   },
   {
     label: 'directive_vends',
@@ -187,14 +273,20 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
   {
     label: 'price_will_rise',
     // “le marché va monter” prédiction ; PAS cité entre guillemets (piège pédagogique Mark Douglas)
-    // ni dans discours rapporté introduit par “que” (ex: “je pense que ça va monter”)
-    pattern:
-      /(?<!\p{L})(?<!["“«»‹›”“’‘'])(?<!que\s)(?:ça|le\s+marché|les?\s+prix?)\s+va\s+(?:re)?monter(?!\p{L})/iu,
+    // ni dans discours rapporté introduit par “que” (ex: “je pense que ça va monter”).
+    // Variable-length lookbehind handles “« ça va monter »” (char before ça = space after «).
+    // U+00AB=«  U+201C/D=curly-double  U+2018/9=curly-single  U+2039=‹  U+0022=”  U+0027=’
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})(?<!(?:[«“‘‹”‹›’"])\s*)(?<!que\s)(?:ça|le\s+marché|les?\s+prix?)\s+va\s+(?:re)?monter(?!\p{L})`,
+      'iu',
+    ),
   },
   {
     label: 'price_will_fall',
-    pattern:
-      /(?<!\p{L})(?<!["“«»‹›”“’‘'])(?<!que\s)(?:ça|le\s+marché|les?\s+prix?)\s+va\s+(?:descendre|baisser)(?!\p{L})/iu,
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})(?<!(?:[«“‘‹”‹›’"])\s*)(?<!que\s)(?:ça|le\s+marché|les?\s+prix?)\s+va\s+(?:descendre|baisser)(?!\p{L})`,
+      'iu',
+    ),
   },
   {
     label: 'prevision_directionnelle',
@@ -265,6 +357,12 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
       /(?<!\p{L})tendance\s+(?:est\s+)?(?:haussi[eè]re|baissi[eè]re|haussier|baissier)(?!\p{L})/iu,
   },
   {
+    label: 'retournement_directionnel',
+    // "un retournement haussier dès cet après-midi" ; PAS "un retournement de situation"
+    pattern:
+      /(?<!\p{L})retournement\s+(?:haussi[eè]re?|baissi[eè]re?|haussier|baissier)(?!\p{L})/iu,
+  },
+  {
     label: 'indicateur_technique',
     pattern: /(?<!\p{L})(?:rsi|macd|stochastique|bollinger|ichimoku|fibonacci|fibo)(?!\p{L})/iu,
   },
@@ -284,8 +382,11 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
   },
   {
     label: 'zone_prix',
-    // "zone 1.0850" ; PAS "zone de confort" (zone + chiffre requis)
-    pattern: /(?<!\p{L})zone\s+\d+(?:[.,]\d+)?(?!\p{L})/iu,
+    // "zone 1.0850" / "zone des 4300" — price-format anchor (decimal OR ≥4 digits).
+    // PAS "zone de confort" (no digit), PAS "zone 2 d'effort" / "zone 3 de RPE"
+    //   (single digit ≤3 = effort/RPE level, not a Forex/index price).
+    // GARDE: "zone 1.0850" → flag (decimal) ; "zone 4300" → flag (≥4 digits).
+    pattern: /(?<!\p{L})zone\s+(?:des?\s+)?(?:\d{4,}|\d+[.,]\d+)(?!\p{L})/iu,
   },
 ];
 

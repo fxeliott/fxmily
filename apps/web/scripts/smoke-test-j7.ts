@@ -158,6 +158,7 @@ async function main() {
         planRespected: true,
         hedgeRespected: true,
         emotionBefore: true,
+        emotionDuring: true,
         emotionAfter: true,
       },
     });

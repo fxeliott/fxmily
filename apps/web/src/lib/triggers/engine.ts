@@ -125,6 +125,7 @@ export async function evaluateAndDispatchForUser(
         planRespected: true,
         hedgeRespected: true,
         emotionBefore: true,
+        emotionDuring: true,
         emotionAfter: true,
       },
     }),
@@ -170,6 +171,7 @@ export async function evaluateAndDispatchForUser(
       planRespected: t.planRespected,
       hedgeRespected: t.hedgeRespected,
       emotionBefore: t.emotionBefore,
+      emotionDuring: t.emotionDuring,
       emotionAfter: t.emotionAfter,
     })),
     recentAllTrades: trades.map((t) => ({
@@ -181,6 +183,7 @@ export async function evaluateAndDispatchForUser(
       planRespected: t.planRespected,
       hedgeRespected: t.hedgeRespected,
       emotionBefore: t.emotionBefore,
+      emotionDuring: t.emotionDuring,
       emotionAfter: t.emotionAfter,
     })),
     userCreatedAt: user.createdAt,

@@ -28,6 +28,8 @@ import { WEEKLY_CONTEXT_MAX, type MonthlySnapshot } from '@/lib/schemas/monthly-
 
 import type { MonthlyBuilderInput } from './types';
 
+const EMOTION_TAGS_MAX = 20;
+
 const WEEKLY_CONTEXT_ITEM_MAX_CHARS = 900;
 
 export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapshot {
@@ -45,6 +47,7 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
       daysSinceLastBacktest: input.training.daysSinceLastBacktest,
       hasEverPractised: input.training.hasEverPractised,
     },
+    emotionTags: collectEmotionTags(input),
     weeklySummaries: buildWeeklySummaries(input),
     scores: buildScores(input),
   };
@@ -209,6 +212,48 @@ function buildScores(input: MonthlyBuilderInput): MonthlySnapshot['scores'] {
     consistency: input.latestScore.consistency,
     engagement: input.latestScore.engagement,
   };
+}
+
+// =============================================================================
+// Emotion tags (carbon weekly `collectEmotionTags` — FIX C S5 hardening)
+// =============================================================================
+
+/**
+ * Collect emotion tags from trade before/during/after + checkin emotionTags,
+ * sorted by frequency descending, capped at EMOTION_TAGS_MAX. Carbon of the
+ * weekly builder's `collectEmotionTags` — idiom carbon accepted in this repo
+ * (a shared util would cross the real-edge/monthly boundary for ~6 lines).
+ */
+function collectEmotionTags(input: MonthlyBuilderInput): Array<{ tag: string; count: number }> {
+  const counts = new Map<string, number>();
+  // Trade emotions (before + during + after — full §22 axis).
+  for (const trade of input.trades) {
+    for (const tag of trade.emotionBefore) {
+      bumpCount(counts, tag);
+    }
+    if (Array.isArray(trade.emotionDuring)) {
+      for (const tag of trade.emotionDuring) {
+        bumpCount(counts, tag);
+      }
+    }
+    for (const tag of trade.emotionAfter) {
+      bumpCount(counts, tag);
+    }
+  }
+  // Check-in emotion tags.
+  for (const checkin of input.checkins) {
+    for (const tag of checkin.emotionTags) {
+      bumpCount(counts, tag);
+    }
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, EMOTION_TAGS_MAX)
+    .map(([tag, count]) => ({ tag, count }));
+}
+
+function bumpCount(map: Map<string, number>, key: string): void {
+  map.set(key, (map.get(key) ?? 0) + 1);
 }
 
 // =============================================================================

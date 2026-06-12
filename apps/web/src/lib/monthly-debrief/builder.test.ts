@@ -249,6 +249,63 @@ describe('buildMonthlySnapshot — §21.5 training firewall (count/recency only)
   });
 });
 
+// =============================================================================
+// FIX C S5 — emotion tags (trade before/during/after + checkin emotionTags)
+// =============================================================================
+
+describe('buildMonthlySnapshot — emotionTags (FIX C S5 hardening)', () => {
+  it('empty month → empty emotionTags array', () => {
+    const snap = buildMonthlySnapshot(baseInput());
+    expect(snap.emotionTags).toEqual([]);
+  });
+
+  it('collects tags from trade.emotionBefore, emotionDuring, emotionAfter + checkin.emotionTags', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        trades: [
+          trade({
+            emotionBefore: ['fomo', 'fear-loss'],
+            emotionDuring: ['fomo'] as never,
+            emotionAfter: ['calm'] as never,
+          }),
+          trade({
+            emotionBefore: ['fomo'],
+            emotionDuring: ['fear-loss'] as never,
+            emotionAfter: [] as never,
+          }),
+        ],
+        checkins: [checkin({ emotionTags: ['fomo', 'calm'] })],
+      }),
+    );
+    // fomo: 3 (before×2 + during×1 + checkin×1 = 4), fear-loss: 2, calm: 2
+    const tags = snap.emotionTags;
+    const fomoEntry = tags.find((e) => e.tag === 'fomo');
+    expect(fomoEntry).toBeDefined();
+    expect(fomoEntry!.count).toBe(4); // 2 from before, 1 from during, 1 from checkin
+    const fearLossEntry = tags.find((e) => e.tag === 'fear-loss');
+    expect(fearLossEntry).toBeDefined();
+    expect(fearLossEntry!.count).toBe(2); // 1 from before, 1 from during
+    // Result is sorted by frequency desc
+    expect(tags[0]!.tag).toBe('fomo');
+  });
+
+  it('emotionTags snapshot validates against monthlySnapshotSchema', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        trades: [
+          trade({
+            emotionBefore: ['fomo'] as never,
+            emotionDuring: ['fear-loss'] as never,
+            emotionAfter: ['calm'] as never,
+          }),
+        ],
+        checkins: [checkin({ emotionTags: ['fomo'] })],
+      }),
+    );
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});
+
 describe('buildMonthlySnapshot — weekly summaries context + scores', () => {
   it('caps weekly summaries to 4 and strips bidi/zero-width (Trojan Source)', () => {
     const snap = buildMonthlySnapshot(

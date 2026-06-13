@@ -1,12 +1,13 @@
 /**
  * Mark Douglas card seed data (J7 + J7.5 + J7.6 + J7.8).
  *
- * V1 ships **51 fiches** couvrant les 7 triggers canoniques SPEC §7.6
+ * V1 ships **53 fiches** couvrant les 7 triggers canoniques SPEC §7.6
  * (tilt, plan-violations, sleep-deficit, emotion-logged FOMO, 4 peurs,
  * sur-confiance, hedge-violation) + 8 piliers catalogue
  * (acceptance, probabilities, process, ego, fear, loss, consistency,
  * patience). Cible §7.6 atteinte. Distribution : 12 (J7) + 10 (J7.5) +
- * 9 (J7.6) + 19 (J7.8). Citations ≤30 mots fair use FR L122-5 +
+ * 9 (J7.6) + 19 (J7.8) + 2 (re-audit S5 : honnêteté + motivation/résilience,
+ * couvrant les 6 thèmes §29). Citations ≤30 mots fair use FR L122-5 +
  * `quoteSourceChapter` obligatoire + paraphrases 200-400 mots à la voix
  * d'Eliot + 1-3 exercises.
  *
@@ -551,6 +552,51 @@ Tous ces comportements ont la même racine : l'identité accrochée au résultat
     triggerRules: null,
     hatClass: 'white',
     priority: 8,
+    published: true,
+  },
+
+  {
+    // S5 Jalon F (E4, 12e challenge) : le thème §29 "MOTIVATION" n'avait aucune carte
+    //   dédiée (la seule mention, `discipline-architecture`, la dévalorise). Cette fiche
+    //   couvre la motivation/résilience à la Douglas : la motivation n'est pas un
+    //   carburant à invoquer mais le sous-produit de la confiance dans l'edge sur la
+    //   série — et la résilience après une série perdante. Quote = paraphrase attribuée.
+    slug: 'rester-dans-le-jeu-motivation-resilience',
+    title: 'Rester dans le jeu : motivation, résilience et la guerre longue',
+    category: 'consistency',
+    quote:
+      "La motivation n'est pas un carburant que tu invoques avant de trader : c'est ce qui reste quand tu fais confiance à ton edge sur la série, pas à un trade.",
+    quoteSourceChapter: 'Trading in the Zone (paraphrase)',
+    paraphrase: `Tu traverses une période sans résultats. L'envie baisse, la confiance vacille, une voix murmure « à quoi bon ». C'est le moment exact où la plupart abandonnent — et c'est précisément là que se joue ta progression.
+
+**La motivation n'est pas une émotion à attendre.** Le débutant croit qu'il tradera bien quand il « se sentira motivé ». Le pro sait que c'est l'inverse : on agit d'abord (on exécute le process), et la motivation suit les preuves accumulées. Compter sur la motivation comme déclencheur, c'est confier sa discipline à la météo intérieure du jour.
+
+**La résilience, c'est séparer une PÉRIODE perdante d'un EDGE cassé.** Mark Douglas le martèle : il y a une distribution aléatoire des gains et des pertes pour tout edge donné. Une série de pertes ne dit RIEN sur la validité de ton système — elle est mathématiquement attendue. Le trader résilient ne se démotive pas après 5 pertes, parce qu'il raisonne sur 100 trades, pas sur les 5 derniers. Confondre « je traverse une série perdante » et « mon edge ne marche plus » est l'erreur qui tue les carrières.
+
+**Comme un athlète d'élite.** Tu ne te juges pas sur le dernier match, mais sur la saison. Le marqueur de maturité : continuer à exécuter ton process avec le même soin un jour gris qu'un jour de gain. La motivation deviendra alors un effet, plus une cause.
+
+**Ce que fait le trader résilient :**
+
+- Il réduit la taille mais ne s'arrête pas : rester dans le jeu, en sécurité, bat l'abandon.
+- Il revient à son « pourquoi » écrit (pas à son P&L du jour) quand l'envie baisse.
+- Il célèbre l'exécution conforme, indépendamment du résultat — c'est le seul carburant durable.`,
+    exercises: [
+      {
+        id: 'pourquoi-ecrit',
+        label: 'Ancrer ton « pourquoi » par écrit',
+        description:
+          "Écris en 3 lignes pourquoi tu traverses cette discipline (pas le P&L : le sens). Relis-le les jours sans envie. La motivation durable vient du sens ancré, pas de l'humeur du jour.",
+      },
+      {
+        id: 'fenetre-100-trades',
+        label: 'Raisonner sur la fenêtre de 100 trades',
+        description:
+          "Après une série perdante, calcule ton expectancy sur tes 100 derniers trades, pas sur les 5 derniers. Si l'edge tient sur la série, la période perdante est du bruit attendu — pas un signal d'arrêt.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 6,
     published: true,
   },
 

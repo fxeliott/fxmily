@@ -4,7 +4,7 @@
  * For every Mark Douglas card in the seed, concatenates all member-facing
  * text fields and asserts that the AMF violation detector returns
  * `suspected: false`. With the corrected patterns (élision/quoted/TP-label
- * carve-outs), all 52 cards must pass clean.
+ * carve-outs), all 53 cards must pass clean.
  *
  * If a card is added in the future that genuinely contains market advice,
  * this test will surface it immediately — preventing a rogue admin entry
@@ -14,6 +14,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { detectAMFViolation } from '@/lib/safety/amf-detection';
+import { cardCreateSchema } from '@/lib/schemas/card';
 import { MARK_DOUGLAS_CARDS_SEED } from '../../../scripts/data/cards';
 
 // =============================================================================
@@ -63,7 +64,7 @@ describe('Mark Douglas cards — catalogue category regression guard (FIX F S5)'
 });
 
 // =============================================================================
-// §2 posture test — all 52 cards must be clean
+// §2 posture test — all 53 cards must be clean
 // =============================================================================
 
 describe('Mark Douglas cards — SPEC §2 posture invariant', () => {
@@ -75,6 +76,31 @@ describe('Mark Douglas cards — SPEC §2 posture invariant', () => {
         result.suspected,
         `card ${card.slug} viole §2: ${result.matchedLabels.join(', ')}`,
       ).toBe(false);
+    });
+  }
+});
+
+// =============================================================================
+// FULL SCHEMA gate — S5 13e challenge.
+//
+// The §2 test above only runs `detectAMFViolation`; it does NOT enforce the
+// rest of `cardCreateSchema` (quote ≤30 mots fair-use, lengths, structure).
+// The dedicated `scripts/validate-cards.ts` gate was dead (card.ts crashed at
+// import on `.partial()`), so a 31-word quote slipped into the seed unnoticed.
+// This validates EVERY seed card against the FULL `cardCreateSchema` in CI →
+// word-count / structure / §2 can never silently drift again.
+// =============================================================================
+
+describe('Mark Douglas cards — full cardCreateSchema validation (S5 13e)', () => {
+  for (const card of MARK_DOUGLAS_CARDS_SEED) {
+    it(`card "${card.slug}" satisfies cardCreateSchema (incl. quote ≤30 mots)`, () => {
+      const result = cardCreateSchema.safeParse(card);
+      expect(
+        result.success,
+        result.success
+          ? ''
+          : result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(' | '),
+      ).toBe(true);
     });
   }
 });

@@ -5,9 +5,10 @@
  * (tilt, plan-violations, sleep-deficit, emotion-logged FOMO, 4 peurs,
  * sur-confiance, hedge-violation) + 8 piliers catalogue
  * (acceptance, probabilities, process, ego, fear, loss, consistency,
- * patience). Cible §7.6 atteinte. Distribution : 12 (J7) + 10 (J7.5) +
- * 9 (J7.6) + 19 (J7.8) + 2 (re-audit S5 : honnêteté + motivation/résilience,
- * couvrant les 6 thèmes §29). Citations ≤30 mots fair use FR L122-5 +
+ * patience). Cible §7.6 atteinte. **53 = 51 (J7→J7.8) + 2 (re-audit S5 :
+ * honnêteté + motivation/résilience, couvrant les 6 thèmes §29).** Le compte
+ * fait foi (validé en CI par `cards-posture` full-schema + `validate-cards.ts`).
+ * Citations ≤30 mots fair use FR L122-5 (gate runtime actif) +
  * `quoteSourceChapter` obligatoire + paraphrases 200-400 mots à la voix
  * d'Eliot + 1-3 exercises.
  *
@@ -565,7 +566,7 @@ Tous ces comportements ont la même racine : l'identité accrochée au résultat
     title: 'Rester dans le jeu : motivation, résilience et la guerre longue',
     category: 'consistency',
     quote:
-      "La motivation n'est pas un carburant que tu invoques avant de trader : c'est ce qui reste quand tu fais confiance à ton edge sur la série, pas à un trade.",
+      "La motivation n'est pas un carburant à invoquer : c'est ce qui reste quand tu fais confiance à ton edge sur la série, pas sur un trade.",
     quoteSourceChapter: 'Trading in the Zone (paraphrase)',
     paraphrase: `Tu traverses une période sans résultats. L'envie baisse, la confiance vacille, une voix murmure « à quoi bon ». C'est le moment exact où la plupart abandonnent — et c'est précisément là que se joue ta progression.
 

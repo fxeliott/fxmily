@@ -32,6 +32,8 @@ const ACTIVE_SNAPSHOT = {
     tradesOpen: 0,
     realizedRSum: 2.5,
     realizedRMean: 0.625,
+    // D3-04 — reliability split of the aggregated R.
+    realizedRReliability: { computed: 3, estimated: 1 },
     planRespectRate: 0.75,
     hedgeRespectRate: 0.5,
     // SPEC §28/§21 — Session-2 process/habit axes (count-only named rates).
@@ -62,6 +64,8 @@ const ACTIVE_SNAPSHOT = {
   },
   freeText: {
     emotionTags: ['calm', 'focused', 'fomo'],
+    // D3-01 — declared behavioural bias tags (LESSOR/Steenbarger).
+    behaviorTags: [{ tag: 'overconfidence', count: 1 }],
     pairsTraded: ['EURUSD', 'XAUUSD'],
     sessionsTraded: [
       { session: 'london' as const, count: 2 },
@@ -91,6 +95,8 @@ const INACTIVE_SNAPSHOT = {
     tradesOpen: 0,
     realizedRSum: 0,
     realizedRMean: null,
+    // D3-04 — inactive member: no closed trade with an R.
+    realizedRReliability: { computed: 0, estimated: 0 },
     planRespectRate: null,
     hedgeRespectRate: null,
     // SPEC §28/§21 — Session-2 axes: inactive member → all null, meeting 0/0.
@@ -121,6 +127,8 @@ const INACTIVE_SNAPSHOT = {
   },
   freeText: {
     emotionTags: [],
+    // D3-01 — inactive member: no behavioural bias tags.
+    behaviorTags: [],
     pairsTraded: [],
     sessionsTraded: [],
     journalExcerpts: [],

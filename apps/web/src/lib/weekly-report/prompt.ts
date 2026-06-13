@@ -97,6 +97,11 @@ export function buildWeeklyReportUserPrompt(snapshot: WeeklySnapshot): string {
   lines.push(
     `- R réalisé cumulé : ${c.realizedRSum.toFixed(2)}R · moyen : ${c.realizedRMean === null ? 'n/a' : c.realizedRMean.toFixed(2) + 'R'}`,
   );
+  // D3-04 — fiabilité du R agrégé : combien de R viennent d'un vrai SL
+  // (computed) vs d'un fallback (estimated). Pondère la moyenne en conséquence.
+  lines.push(
+    `- Fiabilité du R agrégé : ${c.realizedRReliability.computed} calculé(s) / ${c.realizedRReliability.estimated} estimé(s) (pondère la moyenne R en conséquence).`,
+  );
   lines.push(
     `- Plan respecté : ${formatRate(c.planRespectRate)} · Hedge respecté : ${formatRate(c.hedgeRespectRate)}`,
   );
@@ -149,6 +154,13 @@ export function buildWeeklyReportUserPrompt(snapshot: WeeklySnapshot): string {
   if (t.emotionTags.length > 0) {
     lines.push(`- Émotions dominantes (fréquence): ${t.emotionTags.slice(0, 8).join(', ')}`);
   }
+  // D3-01 — biais cognitifs auto-déclarés (LESSOR/Steenbarger). POSTURE §2 :
+  // psychologie auto-déclarée, jamais un conseil/direction/prix de marché.
+  lines.push(
+    `- Biais comportementaux déclarés (auto-déclaration LESSOR) : ${
+      t.behaviorTags.map((b) => `${b.tag}×${b.count}`).join(', ') || 'aucun'
+    }`,
+  );
   lines.push(``);
 
   // SPEC §28/§21 — Session-2 process/habit axes as EXPLICIT NAMED rates so the

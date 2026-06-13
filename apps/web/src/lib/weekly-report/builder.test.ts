@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { SerializedDelivery } from '@/lib/cards/types';
 import type { SerializedCheckin } from '@/lib/checkin/service';
+import { weeklySnapshotSchema } from '@/lib/schemas/weekly-report';
 import type { SerializedTrade } from '@/lib/trades/service';
 
 import { buildWeeklySnapshot, pseudonymizeMember } from './builder';
@@ -39,7 +40,12 @@ function emptyInput(): BuilderInput {
   };
 }
 
-function makeTrade(partial: Partial<SerializedTrade> = {}): SerializedTrade {
+// D3-01 — the builder reads `trade.tags` (post-outcome bias tags), which the
+// shared `SerializedTrade` view does not surface; the loader serializes it
+// inline so `BuilderInput['trades']` is `SerializedTrade & { tags: string[] }`.
+type TradeFixture = SerializedTrade & { tags: string[] };
+
+function makeTrade(partial: Partial<TradeFixture> = {}): TradeFixture {
   return {
     id: partial.id ?? 'trade_1',
     userId: 'user_test_1',
@@ -72,6 +78,8 @@ function makeTrade(partial: Partial<SerializedTrade> = {}): SerializedTrade {
     createdAt: '2026-05-05T08:00:00.000Z',
     updatedAt: '2026-05-05T08:00:00.000Z',
     isClosed: false,
+    // D3-01 — post-outcome bias tags, default empty (V1 trades had none).
+    tags: [],
     ...partial,
   };
 }
@@ -79,8 +87,8 @@ function makeTrade(partial: Partial<SerializedTrade> = {}): SerializedTrade {
 function closedTrade(
   outcome: 'win' | 'loss' | 'break_even',
   realizedR: number,
-  partial: Partial<SerializedTrade> = {},
-): SerializedTrade {
+  partial: Partial<TradeFixture> = {},
+): TradeFixture {
   return makeTrade({
     outcome,
     realizedR: realizedR.toString(),
@@ -181,6 +189,9 @@ describe('buildWeeklySnapshot — empty input', () => {
     expect(snap.counters.douglasCardsSeen).toBe(0);
     expect(snap.counters.douglasCardsHelpful).toBe(0);
     expect(snap.freeText.emotionTags).toEqual([]);
+    // D3-01 — no trades → no behaviour tags. D3-04 — 0/0 reliability split.
+    expect(snap.freeText.behaviorTags).toEqual([]);
+    expect(snap.counters.realizedRReliability).toEqual({ computed: 0, estimated: 0 });
     expect(snap.freeText.pairsTraded).toEqual([]);
     expect(snap.freeText.sessionsTraded).toEqual([]);
     expect(snap.freeText.journalExcerpts).toEqual([]);
@@ -367,6 +378,78 @@ describe('buildWeeklySnapshot — free text aggregation', () => {
       'newyork',
     ]);
     expect(snap.freeText.sessionsTraded.find((s) => s.session === 'newyork')?.count).toBe(2);
+  });
+});
+
+// =============================================================================
+// D3-01 — behaviour bias tags (trade.tags — LESSOR/Steenbarger)
+// =============================================================================
+
+describe('buildWeeklySnapshot — behaviorTags (D3-01)', () => {
+  it('empty week → empty behaviorTags array', () => {
+    expect(buildWeeklySnapshot(emptyInput()).freeText.behaviorTags).toEqual([]);
+  });
+
+  it('collects trade.tags, counts occurrences, sorts by frequency desc', () => {
+    const input = emptyInput();
+    input.trades = [
+      closedTrade('loss', -1, { id: 't1', tags: ['revenge-trade', 'loss-aversion'] }),
+      closedTrade('loss', -1, { id: 't2', tags: ['revenge-trade'] }),
+      makeTrade({ id: 't3', tags: ['overconfidence', 'revenge-trade'] }),
+    ];
+    const tags = buildWeeklySnapshot(input).freeText.behaviorTags;
+    expect(tags[0]).toEqual({ tag: 'revenge-trade', count: 3 });
+    expect(tags.find((b) => b.tag === 'loss-aversion')).toEqual({ tag: 'loss-aversion', count: 1 });
+    expect(tags.find((b) => b.tag === 'overconfidence')).toEqual({
+      tag: 'overconfidence',
+      count: 1,
+    });
+  });
+
+  it('caps distinct behaviour tags at BEHAVIOR_TAGS_MAX (12)', () => {
+    const input = emptyInput();
+    input.trades = Array.from({ length: 15 }, (_, i) =>
+      makeTrade({ id: `t${i}`, tags: [`bias-${i}`] }),
+    );
+    const snap = buildWeeklySnapshot(input);
+    expect(snap.freeText.behaviorTags).toHaveLength(12);
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});
+
+// =============================================================================
+// D3-04 — realizedR reliability split (computed vs estimated)
+// =============================================================================
+
+describe('buildWeeklySnapshot — realizedRReliability (D3-04)', () => {
+  it('empty week → 0 computed / 0 estimated', () => {
+    expect(buildWeeklySnapshot(emptyInput()).counters.realizedRReliability).toEqual({
+      computed: 0,
+      estimated: 0,
+    });
+  });
+
+  it('counts computed vs estimated only among closed trades with a realizedR', () => {
+    const input = emptyInput();
+    input.trades = [
+      closedTrade('win', 1.5, { id: 'c1', realizedRSource: 'computed' }),
+      closedTrade('win', 2, { id: 'c2', realizedRSource: 'computed' }),
+      closedTrade('loss', -1, { id: 'e1', realizedRSource: 'estimated' }),
+      // closed but realizedR null → excluded from both buckets.
+      makeTrade({ id: 'x1', isClosed: true, realizedR: null, realizedRSource: 'estimated' }),
+      // open, no realizedR → excluded.
+      makeTrade({ id: 'o1', isClosed: false }),
+    ];
+    expect(buildWeeklySnapshot(input).counters.realizedRReliability).toEqual({
+      computed: 2,
+      estimated: 1,
+    });
+  });
+
+  it('keeps the snapshot schema-valid', () => {
+    const input = emptyInput();
+    input.trades = [closedTrade('win', 1, { id: 'c1', realizedRSource: 'computed' })];
+    expect(weeklySnapshotSchema.safeParse(buildWeeklySnapshot(input)).success).toBe(true);
   });
 });
 

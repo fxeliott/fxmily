@@ -50,6 +50,8 @@ function trade(over: Record<string, unknown> = {}): MonthlyBuilderInput['trades'
     hedgeRespected: null,
     emotionBefore: [],
     emotionAfter: [],
+    // D3-01 — post-outcome bias tags (default empty; the aggregator reads them).
+    tags: [],
     enteredAt: '2026-05-10T09:00:00.000Z',
     ...over,
     // Partial fixture: the pure aggregator reads only the subset above.
@@ -300,6 +302,82 @@ describe('buildMonthlySnapshot — emotionTags (FIX C S5 hardening)', () => {
           }),
         ],
         checkins: [checkin({ emotionTags: ['fomo'] })],
+      }),
+    );
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});
+
+// =============================================================================
+// D3-01 — behaviour bias tags (trade.tags — LESSOR/Steenbarger)
+// =============================================================================
+
+describe('buildMonthlySnapshot — behaviorTags (D3-01)', () => {
+  it('empty month → empty behaviorTags array', () => {
+    const snap = buildMonthlySnapshot(baseInput());
+    expect(snap.behaviorTags).toEqual([]);
+  });
+
+  it('collects trade.tags, counts occurrences, sorts by frequency desc', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        trades: [
+          trade({ tags: ['revenge-trade', 'loss-aversion'] }),
+          trade({ tags: ['revenge-trade'] }),
+          trade({ tags: ['overconfidence', 'revenge-trade'] }),
+        ],
+      }),
+    );
+    const tags = snap.behaviorTags;
+    expect(tags[0]).toEqual({ tag: 'revenge-trade', count: 3 });
+    const lossAversion = tags.find((b) => b.tag === 'loss-aversion');
+    expect(lossAversion).toEqual({ tag: 'loss-aversion', count: 1 });
+    const overconfidence = tags.find((b) => b.tag === 'overconfidence');
+    expect(overconfidence).toEqual({ tag: 'overconfidence', count: 1 });
+  });
+
+  it('caps distinct behaviour tags at BEHAVIOR_TAGS_MAX (12)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        trades: Array.from({ length: 15 }, (_, i) => trade({ id: `t${i}`, tags: [`bias-${i}`] })),
+      }),
+    );
+    expect(snap.behaviorTags).toHaveLength(12);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});
+
+// =============================================================================
+// D3-04 — realizedR reliability split (computed vs estimated)
+// =============================================================================
+
+describe('buildMonthlySnapshot — realizedRReliability (D3-04)', () => {
+  it('empty month → 0 computed / 0 estimated', () => {
+    const r = buildMonthlySnapshot(baseInput()).real;
+    expect(r.realizedRReliability).toEqual({ computed: 0, estimated: 0 });
+  });
+
+  it('counts computed vs estimated only among closed trades with a realizedR', () => {
+    const r = buildMonthlySnapshot(
+      baseInput({
+        trades: [
+          trade({ realizedR: '1.5', realizedRSource: 'computed' }),
+          trade({ realizedR: '2', realizedRSource: 'computed' }),
+          trade({ realizedR: '-1', realizedRSource: 'estimated' }),
+          // realizedR null → excluded from both buckets even if source set.
+          trade({ realizedR: null, realizedRSource: 'estimated' }),
+          // open trade with no realizedR → excluded.
+          trade({ isClosed: false, outcome: null, realizedR: null, realizedRSource: null }),
+        ],
+      }),
+    ).real;
+    expect(r.realizedRReliability).toEqual({ computed: 2, estimated: 1 });
+  });
+
+  it('keeps the snapshot schema-valid', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        trades: [trade({ realizedR: '1', realizedRSource: 'computed' })],
       }),
     );
     expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);

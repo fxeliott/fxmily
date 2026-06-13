@@ -138,6 +138,24 @@ export async function loadMonthlySliceForUser(
     ? computeMonthWindow(now, user.timezone)
     : computeReportingMonth(now, user.timezone);
 
+  // §29 « voir son évolution » — the civil month BEFORE the reported one, for the
+  // ConstancyScore month-over-month progression (mirror of the behavioural
+  // `scoreProgression` baseline). Same step-back as `computeReportingMonth`: 1ms
+  // before the reported month's start → the previous civil month.
+  const prevMonth = computeMonthWindow(new Date(window.monthStartUtc.getTime() - 1), user.timezone);
+
+  // The reported month's ConstancyScore LOWER bound = the ISO Monday of the week
+  // containing the 1st (a month often opens mid-week; that week's `periodStart`
+  // sits in the PREVIOUS civil month, so anchoring on the civil 1st would drop a
+  // first-partial-week score — review TIER2-1). This SAME boundary closes the
+  // previous-month range's UPPER bound (−1ms below) so the two reads are DISJOINT:
+  // the cross-boundary ISO week belongs to the reported month ONLY. Without this, a
+  // member whose sole constancy signal is that shared week would read the identical
+  // row as BOTH `constancy` and `constancyPrevious` → a fabricated "Δ+0" progression
+  // (review TIER1, both reviewers converged ; mirror of `buildScoreProgression`'s
+  // `previous === current` guard, builder.ts).
+  const reportedConstancyLowerBound = parseLocalDate(currentPeriodStart(window.monthStartUtc));
+
   const [
     trades,
     checkins,
@@ -151,6 +169,7 @@ export async function loadMonthlySliceForUser(
     constancyScores,
     openDiscrepancyCount,
     alertCount,
+    constancyScoresPrev,
   ] = await Promise.all([
     loadTrades(userId, window),
     loadCheckins(userId, window),
@@ -192,7 +211,7 @@ export async function loadMonthlySliceForUser(
     // on the civil 1st would drop a first-partial-week score (code-review TIER2-1).
     listConstancyScoresInRange(
       userId,
-      parseLocalDate(currentPeriodStart(window.monthStartUtc)),
+      reportedConstancyLowerBound,
       parseLocalDate(window.monthEndLocal),
     ),
     // CURRENT-STATE count (NOT period-scoped): écarts still `open` right now
@@ -202,6 +221,17 @@ export async function loadMonthlySliceForUser(
     // Alerts carry a real `createdAt` instant → the local-instant window bounds
     // are correct here (not the civil-day midnights).
     countAlertsInRange(userId, window.monthStartUtc, window.monthEndUtc),
+    // §29 evolution — the PREVIOUS civil month's ConstancyScore → the
+    // month-over-month progression baseline. UPPER bound = `reportedConstancyLowerBound − 1ms`
+    // (NOT `prevMonth.monthEndLocal`) so this range is DISJOINT from the reported
+    // month's: the cross-boundary ISO week is read as the reported month's ONLY,
+    // never double-counted as both current & previous → no fabricated Δ+0 (review
+    // TIER1). `.at(-1)` (latest full prev-month week) taken below.
+    listConstancyScoresInRange(
+      userId,
+      parseLocalDate(currentPeriodStart(prevMonth.monthStartUtc)),
+      new Date(reportedConstancyLowerBound.getTime() - 1),
+    ),
   ]);
 
   // SPEC §25.3 — training slice = count/recency ONLY. `daysSinceLastBacktest`
@@ -242,16 +272,32 @@ export async function loadMonthlySliceForUser(
   // month (~4-5 weeks) we surface the MOST RECENT in-range score = the member's
   // constancy state at the end of the reported month. `null` when no signal at
   // all in the window (no fake neutral score, §33.6). Count-only, posture §2.
-  const latestConstancy = constancyScores.at(-1) ?? null;
-  const verification = {
-    constancy: latestConstancy
+  // `constancyPrevious` (§29 evolution) = same, for the PREVIOUS civil month →
+  // the month-over-month progression baseline (the prompt renders the delta).
+  // Round each axis to 1 decimal (review TIER2): `value` is already 1-decimal,
+  // but `honesty` is integer and `regularity`/`discipline` are raw fractions
+  // (filled/total × 100 — e.g. 5/7×100 = 71.428…) straight from the fold. Without
+  // this the prompt would surface "régularité 71.42857142857143/100" and a noisy
+  // "Δ+14.285714…". 1 decimal matches `value`'s precision and keeps the schema
+  // bounds [0,100] valid.
+  const round1 = (n: number | null): number | null => (n === null ? null : Math.round(n * 10) / 10);
+  const toConstancyView = (
+    s: {
+      value: number;
+      breakdown: { honesty: number | null; regularity: number | null; discipline: number | null };
+    } | null,
+  ) =>
+    s
       ? {
-          value: latestConstancy.value,
-          honesty: latestConstancy.breakdown.honesty,
-          regularity: latestConstancy.breakdown.regularity,
-          discipline: latestConstancy.breakdown.discipline,
+          value: Math.round(s.value * 10) / 10,
+          honesty: round1(s.breakdown.honesty),
+          regularity: round1(s.breakdown.regularity),
+          discipline: round1(s.breakdown.discipline),
         }
-      : null,
+      : null;
+  const verification = {
+    constancy: toConstancyView(constancyScores.at(-1) ?? null),
+    constancyPrevious: toConstancyView(constancyScoresPrev.at(-1) ?? null),
     openDiscrepancyCount,
     alertCount,
   };

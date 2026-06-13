@@ -34,7 +34,12 @@ function baseInput(over: Partial<MonthlyBuilderInput> = {}): MonthlyBuilderInput
     training: { backtestCount: 0, daysSinceLastBacktest: null, hasEverPractised: false },
     // DOD3-01 / DoD#2 S6 — Session-3 counters default to the empty (no-signal)
     // shape; tests that exercise S3 override it.
-    verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 },
+    verification: {
+      constancy: null,
+      constancyPrevious: null,
+      openDiscrepancyCount: 0,
+      alertCount: 0,
+    },
     ...over,
   };
 }
@@ -575,6 +580,7 @@ describe('DOD3-01 / DoD#2 S6 — Session-3 verification counters', () => {
       baseInput({
         verification: {
           constancy: { value: 78.5, honesty: 85, regularity: 90, discipline: 60 },
+          constancyPrevious: { value: 70, honesty: 75, regularity: 88, discipline: 55 },
           openDiscrepancyCount: 2,
           alertCount: 1,
         },
@@ -582,6 +588,7 @@ describe('DOD3-01 / DoD#2 S6 — Session-3 verification counters', () => {
     );
     expect(snap.verification).toEqual({
       constancy: { value: 78.5, honesty: 85, regularity: 90, discipline: 60 },
+      constancyPrevious: { value: 70, honesty: 75, regularity: 88, discipline: 55 },
       openDiscrepancyCount: 2,
       alertCount: 1,
     });
@@ -590,7 +597,14 @@ describe('DOD3-01 / DoD#2 S6 — Session-3 verification counters', () => {
 
   it('accepts a null constancy (no signal — never a fake neutral score, §33.6)', () => {
     const snap = buildMonthlySnapshot(
-      baseInput({ verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 } }),
+      baseInput({
+        verification: {
+          constancy: null,
+          constancyPrevious: null,
+          openDiscrepancyCount: 0,
+          alertCount: 0,
+        },
+      }),
     );
     expect(snap.verification.constancy).toBeNull();
     expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);

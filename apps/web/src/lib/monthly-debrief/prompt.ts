@@ -254,6 +254,27 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
       `- Score de constance : pas encore de signal ce mois (le membre n'a pas encore confronté son déclaré à sa réalité — n'invente AUCUN score, encourage simplement à uploader ses preuves quand il le souhaite).`,
     );
   }
+  // §29 « voir son évolution » — month-over-month constancy progression (DEDICATED
+  // S3 score, real N-1 vs N delta), so the member sees IF they are improving in
+  // honesty/regularity/discipline. Rendered only when BOTH months have a signal
+  // (no fabricated trend, §33.6). Mirror of the behavioural scoreProgression line.
+  if (v.constancy !== null && v.constancyPrevious !== null) {
+    const cur = v.constancy;
+    const prev = v.constancyPrevious;
+    // 1-decimal delta (review TIER2): the axes are already 1-decimal-rounded at
+    // the loader boundary, but float subtraction (85.7 − 71.4) can still surface
+    // noise (14.299999…) — round the difference too.
+    const d = (p: number | null, c: number | null): number | null =>
+      p === null || c === null ? null : Math.round((c - p) * 10) / 10;
+    lines.push(
+      `- Évolution de la constance (vs mois précédent) : ` +
+        `globale ${formatProgDim(prev.value, cur.value, d(prev.value, cur.value))}, ` +
+        `honnêteté ${formatProgDim(prev.honesty, cur.honesty, d(prev.honesty, cur.honesty))}, ` +
+        `régularité ${formatProgDim(prev.regularity, cur.regularity, d(prev.regularity, cur.regularity))}, ` +
+        `discipline ${formatProgDim(prev.discipline, cur.discipline, d(prev.discipline, cur.discipline))} ` +
+        `— APPUIE le récit sur ces deltas RÉELS (le membre veut savoir s'il progresse), en posture Mark Douglas, JAMAIS d'avis marché.`,
+    );
+  }
   lines.push(
     `- Écarts de vérité encore ouverts : **${v.openDiscrepancyCount}** (à regarder ; le membre peut donner un motif pour chacun — « faire face », jamais une faute).`,
   );

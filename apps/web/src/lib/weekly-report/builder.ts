@@ -130,6 +130,10 @@ export function buildWeeklySnapshot(input: BuilderInput): WeeklySnapshot {
     counters: buildCounters(input),
     freeText: buildFreeText(input),
     scores: buildScores(input),
+    // DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters, relayed verbatim
+    // (the loader did the period-scoped read; the pure aggregator stays clock-free).
+    // COUNT-ONLY posture §2 — factual numbers, never a market view.
+    verification: input.verification,
   };
 }
 

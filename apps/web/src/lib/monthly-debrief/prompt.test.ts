@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildMonthlySnapshot } from './builder';
-import { buildMonthlyDebriefUserPrompt } from './prompt';
+import { buildMonthlyDebriefUserPrompt, MONTHLY_DEBRIEF_SYSTEM_PROMPT } from './prompt';
 import type { MonthlyBuilderInput } from './types';
 
 const LABEL = 'member-A1B2C3D4';
@@ -35,6 +35,9 @@ function baseInput(over: Partial<MonthlyBuilderInput> = {}): MonthlyBuilderInput
     monthStartLocal: '2026-05-01',
     weeklySummaries: [],
     training: { backtestCount: 0, daysSinceLastBacktest: null, hasEverPractised: false },
+    // DOD3-01 / DoD#2 S6 — Session-3 counters default to the empty (no-signal)
+    // shape; tests that exercise S3 override it.
+    verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 },
     ...over,
   };
 }
@@ -286,5 +289,60 @@ describe('buildMonthlyDebriefUserPrompt — behaviorTags + R reliability reach C
     );
     const prompt = buildMonthlyDebriefUserPrompt(snap);
     expect(prompt).toContain('Fiabilité du R agrégé : 2 calculé(s) / 1 estimé(s)');
+  });
+});
+
+describe('DOD3-01 / DoD#2 S6 — Session-3 verification section reaches the prompt', () => {
+  it('renders the constancy score + breakdown + écarts + alertes (count-only)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          verification: {
+            constancy: { value: 78, honesty: 85, regularity: 90, discipline: 60 },
+            openDiscrepancyCount: 2,
+            alertCount: 1,
+          },
+        }),
+      ),
+    );
+    expect(prompt).toContain('Vérification & constance');
+    expect(prompt).toContain('Score de constance : **78/100**');
+    expect(prompt).toContain('honnêteté 85/100');
+    expect(prompt).toContain('régularité 90/100');
+    expect(prompt).toContain('discipline 60/100');
+    expect(prompt).toContain('Écarts de vérité encore ouverts : **2**');
+    expect(prompt).toContain('Alertes psychologiques déclenchées ce mois : **1**');
+  });
+
+  it('renders the honest no-signal copy when constancy is null (no fabricated score)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({ verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 } }),
+      ),
+    );
+    expect(prompt).toContain('pas encore de signal');
+    expect(prompt).not.toContain('Score de constance : **');
+  });
+
+  it('renders insufficient_data for a null breakdown axis (never a fake 0)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          verification: {
+            constancy: { value: 70, honesty: null, regularity: 90, discipline: null },
+            openDiscrepancyCount: 0,
+            alertCount: 0,
+          },
+        }),
+      ),
+    );
+    expect(prompt).toContain('honnêteté insufficient_data');
+    expect(prompt).toContain('régularité 90/100');
+    expect(prompt).toContain('discipline insufficient_data');
+  });
+
+  it('the system prompt authorizes constancy/honesty commentary (posture §2 count-only)', () => {
+    expect(MONTHLY_DEBRIEF_SYSTEM_PROMPT).toContain('CONSTANCE');
+    expect(MONTHLY_DEBRIEF_SYSTEM_PROMPT).toContain('HONNÊTETÉ RADICALE');
   });
 });

@@ -32,6 +32,9 @@ function baseInput(over: Partial<MonthlyBuilderInput> = {}): MonthlyBuilderInput
     monthStartLocal: '2026-05-01',
     weeklySummaries: [],
     training: { backtestCount: 0, daysSinceLastBacktest: null, hasEverPractised: false },
+    // DOD3-01 / DoD#2 S6 — Session-3 counters default to the empty (no-signal)
+    // shape; tests that exercise S3 override it.
+    verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 },
     ...over,
   };
 }
@@ -563,5 +566,33 @@ describe('buildMonthlySnapshot — weekly summaries context + scores', () => {
       consistency: null,
       engagement: 65,
     });
+  });
+});
+
+describe('DOD3-01 / DoD#2 S6 — Session-3 verification counters', () => {
+  it('relays the verification slice verbatim into the snapshot (schema-valid)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        verification: {
+          constancy: { value: 78.5, honesty: 85, regularity: 90, discipline: 60 },
+          openDiscrepancyCount: 2,
+          alertCount: 1,
+        },
+      }),
+    );
+    expect(snap.verification).toEqual({
+      constancy: { value: 78.5, honesty: 85, regularity: 90, discipline: 60 },
+      openDiscrepancyCount: 2,
+      alertCount: 1,
+    });
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('accepts a null constancy (no signal — never a fake neutral score, §33.6)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({ verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 } }),
+    );
+    expect(snap.verification.constancy).toBeNull();
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });

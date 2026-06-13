@@ -25,6 +25,20 @@ import { countRecentTrainingActivity } from '@/lib/training/training-trade-servi
 // §21.5-clean. Importing it from `@/lib/weekly-report/builder` is the
 // sanctioned reuse (no extraction = no scope-creep into 3 stable files).
 import { pseudonymizeMember } from '@/lib/weekly-report/builder';
+// DOD3-01 / DoD#2 S6 — Session-3 counters (count-only, posture §2). Two scopings:
+//   • `constancy` (listConstancyScoresInRange) + `alertCount` (countAlertsInRange)
+//     are PERIOD-SCOPED to the reported month (never `getLatestConstancyScore`,
+//     which is the current ISO week → wrong score for a retrospective report).
+//   • `openDiscrepancyCount` (countOpenDiscrepancies) is a CURRENT-STATE count
+//     (écarts still `open` NOW, « encore ouverts / à regarder ») — point-in-time
+//     by design, NOT period-scoped.
+// `currentPeriodStart` anchors the constancy lower bound at the ISO Monday of the
+// week containing the 1st (so a first-partial-week score is not dropped).
+// All real-edge reads, NOT training (§21.5 firewall is training-isolation only —
+// verification is a sanctioned real-edge read like scoring/meeting).
+import { listConstancyScoresInRange, currentPeriodStart } from '@/lib/verification/constancy';
+import { countAlertsInRange } from '@/lib/verification/alerts';
+import { countOpenDiscrepancies } from '@/lib/verification/service';
 
 import { WEEKLY_CONTEXT_MAX } from '@/lib/schemas/monthly-debrief';
 
@@ -134,6 +148,9 @@ export async function loadMonthlySliceForUser(
     trainingActivity,
     weeklySummaries,
     meeting,
+    constancyScores,
+    openDiscrepancyCount,
+    alertCount,
   ] = await Promise.all([
     loadTrades(userId, window),
     loadCheckins(userId, window),
@@ -163,6 +180,28 @@ export async function loadMonthlySliceForUser(
       floorMeetingWindowAtJoin(window.monthStartUtc, user.joinedAt),
       window.monthEndUtc,
     ),
+    // DOD3-01 / DoD#2 S6 — Session-3 ConstancyScore, READ-ONLY & period-scoped.
+    // Folded per ISO-week, so the civil month yields ~4-5 rows; the builder takes
+    // the latest in range. The report pipeline NEVER recomputes (the cron
+    // `verification-scan` owns the writers) — it only reads.
+    // `periodStart` is UTC-midnight-of-the-civil-Monday (parseLocalDate), so the
+    // bounds use the same UTC-midnight-of-local-day convention (parseLocalDate),
+    // NOT the local-instant `...Utc` (TZ-shifted). LOWER bound = the ISO Monday of
+    // the week containing the 1st (`currentPeriodStart`) — a month often opens
+    // mid-week, and that week's `periodStart` is in the PREVIOUS month; anchoring
+    // on the civil 1st would drop a first-partial-week score (code-review TIER2-1).
+    listConstancyScoresInRange(
+      userId,
+      parseLocalDate(currentPeriodStart(window.monthStartUtc)),
+      parseLocalDate(window.monthEndLocal),
+    ),
+    // CURRENT-STATE count (NOT period-scoped): écarts still `open` right now
+    // (« encore ouverts / à regarder »). Point-in-time by design — distinct from
+    // the period-scoped constancy/alert reads.
+    countOpenDiscrepancies(userId),
+    // Alerts carry a real `createdAt` instant → the local-instant window bounds
+    // are correct here (not the civil-day midnights).
+    countAlertsInRange(userId, window.monthStartUtc, window.monthEndUtc),
   ]);
 
   // SPEC §25.3 — training slice = count/recency ONLY. `daysSinceLastBacktest`
@@ -199,6 +238,24 @@ export async function loadMonthlySliceForUser(
             86_400_000,
         ) + 1;
 
+  // DOD3-01 / DoD#2 S6 — the ConstancyScore is folded PER ISO-WEEK; for a civil
+  // month (~4-5 weeks) we surface the MOST RECENT in-range score = the member's
+  // constancy state at the end of the reported month. `null` when no signal at
+  // all in the window (no fake neutral score, §33.6). Count-only, posture §2.
+  const latestConstancy = constancyScores.at(-1) ?? null;
+  const verification = {
+    constancy: latestConstancy
+      ? {
+          value: latestConstancy.value,
+          honesty: latestConstancy.breakdown.honesty,
+          regularity: latestConstancy.breakdown.regularity,
+          discipline: latestConstancy.breakdown.discipline,
+        }
+      : null,
+    openDiscrepancyCount,
+    alertCount,
+  };
+
   const builderInput: MonthlyBuilderInput = {
     // SPEC §25.2 — pseudonym pre-computed by the loader at the Claude
     // boundary (8-char hex, salted via env.MEMBER_LABEL_SALT in prod).
@@ -231,6 +288,8 @@ export async function loadMonthlySliceForUser(
       daysSinceLastBacktest,
       hasEverPractised,
     },
+    // DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters (count-only).
+    verification,
   };
 
   return {

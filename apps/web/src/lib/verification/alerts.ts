@@ -113,6 +113,27 @@ export async function scanAlertsForAllMembers(
   return { membersScanned: members.length, alertsCreated, deliveriesDispatched, errors };
 }
 
+/**
+ * S6 (DOD3-01) — COUNT of the psychological alerts triggered for a member inside
+ * `[rangeStart, rangeEnd]` (by `createdAt`). A read-only primitive consumed by the
+ * retrospective reports (weekly/monthly) so they can surface « N alerte(s) » of
+ * the period. Count-only by construction — `Alert.category` is the mono-value
+ * enum `psychological` (a trading alert is structurally impossible) and an alert
+ * only exists on REPETITION (`repeatCount >= threshold`, §33.8), never on an
+ * isolated miss. Posture §2/§33.2 : a factual number, never a guilt counter, never
+ * market advice. NEVER call `scanAlertsForAllMembers` (a writer) from a report
+ * pipeline — this is the read counterpart.
+ */
+export async function countAlertsInRange(
+  memberId: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<number> {
+  return db.alert.count({
+    where: { memberId, createdAt: { gte: rangeStart, lte: rangeEnd } },
+  });
+}
+
 async function scanAlertsForMember(
   memberId: string,
   timezone: string,

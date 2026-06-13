@@ -61,6 +61,10 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
     // DoD#3 / §29 "progression MESURABLE" — delta N-1 vs N ancré dans la série
     // réelle des scores comportementaux (ou `null` si pas de baseline / <2 points).
     scoreProgression: buildScoreProgression(input),
+    // DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters, relayed verbatim
+    // (the loader did the period-scoped read; the pure aggregator stays clock-free).
+    // COUNT-ONLY posture §2 — factual numbers, never a market view.
+    verification: input.verification,
   };
 }
 

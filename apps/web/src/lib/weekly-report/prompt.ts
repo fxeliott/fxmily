@@ -25,7 +25,7 @@ Ton rôle : produire un rapport hebdomadaire **lisible par Eliot (admin)** sur l
 
 POSTURE NON-NÉGOCIABLE (SPEC §2 + framework Mark Douglas, *Trading in the Zone*, 2000) :
 - INTERDIT : analyser le marché, donner un avis sur un setup, prédire une tendance, recommander une paire ou une direction, parler de "niveau de support à X", "objectif à Y", "anticipation".
-- AUTORISÉ : commenter l'EXÉCUTION (sessions, hedge, plan, taille, sortie), la PSYCHOLOGIE (acceptation, probabilités, discipline, peurs, gestion du risque émotionnel), et la TRAJECTOIRE des scores comportementaux.
+- AUTORISÉ : commenter l'EXÉCUTION (sessions, hedge, plan, taille, sortie), la PSYCHOLOGIE (acceptation, probabilités, discipline, peurs, gestion du risque émotionnel), la TRAJECTOIRE des scores comportementaux, et la CONSTANCE & l'HONNÊTETÉ RADICALE du membre (regarde-t-il sa réalité en face : régularité du suivi, écarts entre le déclaré et son historique réel, fait-il face plutôt que fuir — registre Mark Douglas « accepter sa réalité, sans complaisance ni dramatisation »). Un écart ou une alerte = un comportement à surveiller calmement, jamais une faute ni un drame.
 - Si le snapshot mentionne une paire ou un sens, tu peux le citer factuellement (ex : "78% des trades en EURUSD") mais JAMAIS porter de jugement directionnel ou de recommandation marché.
 
 CADRE THÉORIQUE — 5 vérités fondamentales Mark Douglas (à utiliser comme grille d'analyse) :
@@ -207,6 +207,30 @@ export function buildWeeklyReportUserPrompt(snapshot: WeeklySnapshot): string {
   lines.push(`- Stabilité émotionnelle : ${formatScore(s.emotionalStability)}`);
   lines.push(`- Cohérence : ${formatScore(s.consistency)}`);
   lines.push(`- Engagement : ${formatScore(s.engagement)}`);
+  lines.push(``);
+
+  // DOD3-01 / DoD#2 S6 — Vérification & constance (Session 3). COUNT-ONLY,
+  // posture §2/§33.2 : le FAIT chiffré, jamais un avis marché, jamais un drame.
+  // C'est le ConstancyScore S3 DÉDIÉ (honnêteté/régularité/discipline confrontées
+  // à la réalité MT5), distinct de la "Cohérence" comportementale S2 ci-dessus.
+  const v = snapshot.verification;
+  lines.push(`## Vérification & constance du membre (Session 3 — le FAIT, jamais un avis marché)`);
+  if (v.constancy !== null) {
+    lines.push(
+      `- Score de constance : **${v.constancy.value}/100** ` +
+        `(honnêteté ${formatScore(v.constancy.honesty)}, régularité ${formatScore(v.constancy.regularity)}, discipline ${formatScore(v.constancy.discipline)}).`,
+    );
+  } else {
+    lines.push(
+      `- Score de constance : pas encore de signal cette semaine (le membre n'a pas encore confronté son déclaré à sa réalité — n'invente AUCUN score).`,
+    );
+  }
+  lines.push(
+    `- Écarts de vérité encore ouverts : **${v.openDiscrepancyCount}** (à regarder ; le membre peut donner un motif — « faire face », jamais une faute).`,
+  );
+  lines.push(
+    `- Alertes psychologiques déclenchées cette semaine : **${v.alertCount}** (uniquement sur RÉPÉTITION d'un même écart, jamais un oubli isolé ; registre Mark Douglas, jamais un conseil de marché).`,
+  );
   lines.push(``);
 
   if (t.journalExcerpts.length > 0) {

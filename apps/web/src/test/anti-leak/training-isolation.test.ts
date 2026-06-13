@@ -317,6 +317,8 @@ describe('§21.5 — weekly snapshot counters are volume-only', () => {
       annotationsReceived: 0,
       annotationsViewed: 0,
       latestScore: null,
+      // DOD3-01 / DoD#2 S6 — Session-3 counters (count-only, empty/no-signal here).
+      verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 },
     };
     return trainingActivityCount === undefined ? base : { ...base, trainingActivityCount };
   }

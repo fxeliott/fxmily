@@ -7,7 +7,8 @@ import { parseLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import { sendWeeklyDigestEmail } from '@/lib/email/send';
 import { env } from '@/lib/env';
-import { reportWarning } from '@/lib/observability';
+import { reportError, reportWarning } from '@/lib/observability';
+import { screenAiOutputText } from '@/lib/safety/ai-output-gate';
 import {
   weeklyReportOutputSchema,
   weeklySnapshotSchema,
@@ -61,7 +62,7 @@ export interface GenerateOptions {
 export type EmailOutcome = 'sent' | 'skipped' | 'failed' | 'not_attempted';
 
 export interface GenerateResult {
-  status: 'generated' | 'skipped_inactive' | 'skipped_no_user';
+  status: 'generated' | 'skipped_inactive' | 'skipped_no_user' | 'skipped_safety';
   report?: SerializedWeeklyReport;
   /** True if the underlying Claude path was the mock (no API call). */
   mocked?: boolean;
@@ -103,6 +104,70 @@ export async function generateWeeklyReportForUser(
   const hasActivity = c.tradesTotal > 0 || c.morningCheckinsCount > 0 || c.eveningCheckinsCount > 0;
   const client = hasActivity ? getWeeklyReportClient() : new MockWeeklyReportClient();
   const generation = await client.generate(validatedSnapshot);
+
+  // ── SPEC §2 + crisis output gate (S5 10e challenge — D4-01) ────────────────
+  // This LIVE cron path persisted Claude output with NO §2/crisis screen — the
+  // gate existed only in the manual batch path. Mock output is safe today, but
+  // the moment ANTHROPIC_API_KEY activates the live client, ungated text would
+  // reach the report. Screen EVERY free-text channel (same corpus as batch.ts)
+  // through the shared gate BEFORE persisting. A block is a content-policy skip
+  // (not a technical error) → status `skipped_safety`, no row written.
+  const out = generation.output;
+  const safetyCorpus = [
+    out.summary,
+    ...out.risks,
+    ...out.recommendations,
+    out.patterns.emotionPerf ?? '',
+    out.patterns.sleepPerf ?? '',
+    out.patterns.sessionFocus ?? '',
+    out.patterns.disciplineTrend ?? '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const screen = screenAiOutputText(safetyCorpus);
+  if (screen.blocked) {
+    await logAudit({
+      action:
+        screen.reason === 'amf' ? 'weekly_report.amf_violation' : 'weekly_report.crisis_detected',
+      userId,
+      metadata: {
+        weekStart: slice.window.weekStartLocal,
+        reason: screen.reason,
+        // Canonical labels only — never the raw text (RGPD §16).
+        matchedLabels:
+          screen.reason === 'amf'
+            ? screen.amf.matchedLabels
+            : screen.crisis.matches.map((m) => m.label),
+        mocked: generation.mocked,
+      },
+    });
+    // crisis_high → page-out (Error) ; crisis_medium / amf → warning.
+    if (screen.reason === 'crisis_high') {
+      reportError(
+        'weekly_report.generate',
+        new Error(
+          `crisis_signal_high_in_ai_output: ${screen.crisis.matches.map((m) => m.label).join(',')}`,
+        ),
+        { userId, weekStart: slice.window.weekStartLocal },
+      );
+    } else {
+      reportWarning(
+        'weekly_report.generate',
+        screen.reason === 'amf'
+          ? 'amf_violation_in_ai_output'
+          : 'crisis_signal_medium_in_ai_output',
+        {
+          userId,
+          weekStart: slice.window.weekStartLocal,
+          matchedLabels:
+            screen.reason === 'amf'
+              ? screen.amf.matchedLabels
+              : screen.crisis.matches.map((m) => m.label),
+        },
+      );
+    }
+    return { status: 'skipped_safety', mocked: generation.mocked };
+  }
 
   // Persist (upsert on (userId, weekStart) unique).
   const persisted = await persistReport(slice.window, userId, generation);

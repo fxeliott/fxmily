@@ -618,3 +618,156 @@ describe('detectAMFViolation — S5 12e challenge MUST NOT FLAG (anti-FP E1, ver
     expect(flag('Vise vers 3 sessions propres cette semaine.')).toBe(false);
   });
 });
+
+// =============================================================================
+// S5 — 14e challenge (red-team runtime 2026-06-13) : FN backstop fermés via la
+//   WHITELIST d'instruments (instrument NOMMÉ + direction/position/niveau).
+//   Voir amf-detection.ts groupe H. Contrôle primaire = system prompt §2.
+// =============================================================================
+
+describe('detectAMFViolation — S5 14e challenge MUST FLAG (instrument-anchored)', () => {
+  // Les 3 cas red-team du 14e challenge.
+  it('cas-1 "EURUSD va monter cette semaine, garde tes longs ouverts."', () => {
+    expect(flag('EURUSD va monter cette semaine, garde tes longs ouverts.')).toBe(true);
+  });
+  it('cas-2 "Place ton stop sous 1.0820 et vise 1.0950."', () => {
+    expect(flag('Place ton stop sous 1.0820 et vise 1.0950.')).toBe(true);
+  });
+  it('cas-3 "Augmente ta position sur le SP500, ça va repartir à la hausse."', () => {
+    expect(flag('Augmente ta position sur le SP500, ça va repartir à la hausse.')).toBe(true);
+  });
+  // Variantes directionnelles instrument-ancrées (Pattern A).
+  it('"Le DAX est haussier."', () => {
+    expect(flag('Le DAX est haussier.')).toBe(true);
+  });
+  it('"Bitcoin va grimper fort."', () => {
+    expect(flag('Bitcoin va grimper fort.')).toBe(true);
+  });
+  it('"Le Nasdaq monte, profites-en."', () => {
+    expect(flag('Le Nasdaq monte, profites-en.')).toBe(true);
+  });
+  it('"l\'or va chuter dans la journée."', () => {
+    expect(flag("L'or va chuter dans la journée.")).toBe(true);
+  });
+  it('"le pétrole repart à la baisse" → "pétrole va..." form', () => {
+    expect(flag('Le pétrole va plonger après le rapport.')).toBe(true);
+  });
+  // Position sur instrument nommé (Pattern B).
+  it('"garde ta position sur le DAX jusqu\'à demain"', () => {
+    expect(flag("Garde ta position sur le DAX jusqu'à demain.")).toBe(true);
+  });
+  // Niveau de stop chiffré (Pattern C).
+  it('"Place ton stop à 4250." (entier ≥4 chiffres)', () => {
+    expect(flag('Place ton stop à 4250.')).toBe(true);
+  });
+  // Prix Forex après "vise" sans "les" (Pattern D).
+  it('"vise 1.0850 sans hésiter." (≥3 décimales)', () => {
+    expect(flag('Vise 1.0850 sans hésiter.')).toBe(true);
+  });
+});
+
+describe('detectAMFViolation — S5 14e challenge MUST NOT FLAG (FP guards)', () => {
+  it('instrument cité factuellement (§2 l.34) : "tu as tradé l\'EURUSD trois fois"', () => {
+    expect(flag("Tu as tradé l'EURUSD trois fois ce mois, reste discipliné.")).toBe(false);
+  });
+  it("direction sur attribut psy, pas sur l'instrument", () => {
+    expect(
+      flag('Le DAX fait partie de ton univers, mais ta discipline va monter avec la pratique.'),
+    ).toBe(false);
+  });
+  it('"Bitcoin t\'a stressé le mois dernier, travaille ton acceptation."', () => {
+    expect(flag("Bitcoin t'a stressé le mois dernier, travaille ton acceptation.")).toBe(false);
+  });
+  it('position sur un non-instrument : "ta position sur le plan de trading"', () => {
+    expect(flag('Ta position sur le plan de trading doit rester ferme.')).toBe(false);
+  });
+  it('position sur "le marché" générique (non whitelisté)', () => {
+    expect(flag('Ta position sur le marché du travail est solide.')).toBe(false);
+  });
+  it('stop non chiffré-prix : "ton stop à 2 minutes de pause"', () => {
+    expect(flag('Fais un stop, mets ton stop à 2 minutes de pause.')).toBe(false);
+  });
+  it('ratio risque coaching : "vise 2.0R de gain"', () => {
+    expect(flag('Sur chaque trade, vise 2.0R de gain.')).toBe(false);
+  });
+  it('ratio coaching 2 décimales : "vise 1.50 de ratio R/R"', () => {
+    expect(flag('Vise 1.50 de ratio R/R sur tes setups validés.')).toBe(false);
+  });
+  it('"va monter" sans instrument : "ta motivation va monter"', () => {
+    expect(flag('Avec ces routines, ta motivation va monter.')).toBe(false);
+  });
+  it('mot contenant un token non borné : "Seth monte les marches"', () => {
+    expect(flag('Seth monte les marches du palais, comme toi ton mental.')).toBe(false);
+  });
+  it('"cacao" ne déclenche pas "cac" : "le cacao va monter en prix"', () => {
+    expect(flag('Le cacao va monter en prix au supermarché.')).toBe(false);
+  });
+});
+
+// 14e challenge — extension post-verifier adverse : FN résiduels instrument-ancrés
+//   fermés (A verbes manquants, B ordre inversé, C cible/objectif + niveau).
+describe('detectAMFViolation — S5 14e challenge MUST FLAG (verifier A/B/C résiduels)', () => {
+  // A — verbes directionnels ajoutés à DIR_AFTER_INSTRUMENT.
+  it('A "Le DAX accélère à la hausse, reste sur le mouvement."', () => {
+    expect(flag('Le DAX accélère à la hausse, reste sur le mouvement.')).toBe(true);
+  });
+  it('A "Le bitcoin repart fort aujourd\'hui."', () => {
+    expect(flag("Le bitcoin repart fort aujourd'hui.")).toBe(true);
+  });
+  it('A "Le bitcoin redémarre, reste positionné."', () => {
+    expect(flag('Le bitcoin redémarre, reste positionné.')).toBe(true);
+  });
+  it('A "Le Nasdaq à la hausse aujourd\'hui."', () => {
+    expect(flag("Le Nasdaq à la hausse aujourd'hui.")).toBe(true);
+  });
+  // B — ordre inversé direction→instrument.
+  it('B "Haussier sur le DAX aujourd\'hui."', () => {
+    expect(flag("Haussier sur le DAX aujourd'hui.")).toBe(true);
+  });
+  it('B "Bearish sur l\'EURUSD."', () => {
+    expect(flag("Bearish sur l'EURUSD.")).toBe(true);
+  });
+  // C — cible/objectif sur instrument + niveau (entier nu FP-safe via ancre instrument).
+  it('C "Mets ta cible sur l\'EURUSD à 1.0950."', () => {
+    expect(flag("Mets ta cible sur l'EURUSD à 1.0950.")).toBe(true);
+  });
+  it('C "Ta cible sur le DAX est à 18250."', () => {
+    expect(flag('Ta cible sur le DAX est à 18250.')).toBe(true);
+  });
+  it('C "Objectif sur le DAX : 18250 points."', () => {
+    expect(flag('Objectif sur le DAX : 18250 points.')).toBe(true);
+  });
+});
+
+// Corpus FP du verifier adverse (14e) baké en guards PERMANENTS (anti-récidive :
+//   ce sont les pièges exacts qui ont causé les 2 reverts canon + l'extension A/B/C).
+describe('detectAMFViolation — S5 14e challenge MUST NOT FLAG (verifier FP corpus)', () => {
+  it('instrument + direction-sur-psy : "tradé l\'EURUSD 3 fois, ta discipline va monter"', () => {
+    expect(flag("Tu as tradé l'EURUSD 3 fois cette semaine, ta discipline va monter.")).toBe(false);
+  });
+  it('"Sur le DAX tu as respecté ton plan, ta confiance va remonter peu à peu."', () => {
+    expect(flag('Sur le DAX tu as respecté ton plan, ta confiance va remonter peu à peu.')).toBe(
+      false,
+    );
+  });
+  it('token noyé : "reste régulier sur ton brentano de routine" (brent∈brentano)', () => {
+    expect(flag('Ta méthode est solide, reste régulier sur ton brentano de routine.')).toBe(false);
+  });
+  it('"cible/objectif sur le DAX : rester calme" (pas de chiffre après :)', () => {
+    expect(flag('Ton objectif sur le DAX : rester discipliné ce mois.')).toBe(false);
+  });
+  it('adjectif marché hors-liste sur instrument : "optimiste sur le DAX"', () => {
+    expect(flag('Reste optimiste sur le DAX de ta progression personnelle.')).toBe(false);
+  });
+  it('"haussier sur ta progression" (non-instrument après sur)', () => {
+    expect(flag("Garde un état d'esprit haussier sur ta progression.")).toBe(false);
+  });
+  it('position sur attribut psy : "ta position sur le marché émotionnel"', () => {
+    expect(flag('Ta position sur le marché émotionnel doit rester neutre avant la séance.')).toBe(
+      false,
+    );
+  });
+  it('"Garde ta position sur ton plan, pas sur tes émotions."', () => {
+    expect(flag('Garde ta position sur ton plan, pas sur tes émotions.')).toBe(false);
+  });
+});

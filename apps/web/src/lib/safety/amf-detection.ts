@@ -71,6 +71,25 @@ interface AMFPatternRule {
 //  G. Vocabulaire d'analyse technique (FN fermés post-review §2)
 // =============================================================================
 
+// -----------------------------------------------------------------------------
+// Instrument WHITELIST (S5 14e challenge — instrument-anchored detection).
+//
+// High-precision, proper-noun-ish market tokens. Anchoring direction/level
+// patterns on a NAMED instrument is the FP-safe path the integer-level residual
+// (`price_target_vers`) flagged as the only viable closure ("whitelist
+// d'instruments") — a legitimate coaching sentence never names EURUSD/DAX/SP500
+// + a direction. Deliberately EXCLUDES bare "or" (conjonction) and "argent"
+// (argent = monnaie en coaching) — only the unambiguous "l'or" gold form.
+// Covers : forex majors, EU/US/Asia indices, crypto, commodities.
+// -----------------------------------------------------------------------------
+const INSTRUMENT_TOKEN = String.raw`(?:eur[\/]?usd|gbp[\/]?usd|usd[\/]?jpy|usd[\/]?chf|usd[\/]?cad|aud[\/]?usd|nzd[\/]?usd|eur[\/]?gbp|eur[\/]?jpy|gbp[\/]?jpy|xau[\/]?usd|dax(?:\s?40)?|cac(?:\s?40)?|nasdaq|nikkei|footsie|ftse|russell|dow(?:\s+jones)?|sp\s?500|s&p\s?500|bitcoin|btc|ethereum|eth|p[ée]trole|brent|wti|l['’]or)`;
+
+// Directional verb/adjective IMMEDIATELY bound to the instrument token (a market
+// prediction). The strict adjacency is what keeps it FP-safe : "l'EURUSD va
+// monter" flags, but "tu as tradé l'EURUSD, ta discipline va monter" does NOT
+// (the direction sits after "discipline", not the instrument).
+const DIR_AFTER_INSTRUMENT = String.raw`(?:va\s+(?:re)?(?:monter|descendre|baisser|chuter|grimper|plonger|rebondir|repartir|reculer|d[ée]coller|exploser|corriger|acc[éèe]l[éèe]rer|red[ée]marrer|d[ée]visser|flamber|s['’]envoler|s['’]effondrer)|(?:re)?(?:monte|descend|baisse|chute|grimpe|plonge|rebondit|recule|d[ée]colle|explose|acc[éèe]l[éèe]re|repart|red[ée]marre|d[ée]visse|flambe)|s['’](?:envole|effondre)|(?:est|reste|devient|redevient|semble|para[iî]t)\s+(?:haussi[eè]re?|baissi[eè]re?|haussier|baissier|bullish|bearish)|[àa]\s+la\s+(?:hausse|baisse))`;
+
 export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
   // ──────────────────────────────────────────────────────────────────────────
   // A. Directional imperatives — trading context only.
@@ -445,6 +464,82 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     //   (single digit ≤3 = effort/RPE level, not a Forex/index price).
     // GARDE: "zone 1.0850" → flag (decimal) ; "zone 4300" → flag (≥4 digits).
     pattern: /(?<!\p{L})zone\s+(?:des?\s+)?(?:\d{4,}|\d+[.,]\d+)(?!\p{L})/iu,
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // H. Instrument-anchored directional / position / level (S5 14e challenge).
+  //
+  // Red-team runtime (14e challenge) a montré des FN réels que le backstop
+  // ratait : "EURUSD va monter, garde tes longs", "Augmente ta position sur le
+  // SP500, ça va repartir à la hausse", "Place ton stop sous 1.0820, vise
+  // 1.0950". Le contrôle PRIMAIRE (system prompt §2) les interdit déjà ; ces
+  // patterns durcissent le BACKSTOP via la WHITELIST d'instruments — la seule
+  // approche FP-safe (cf. note `price_target_vers` : un nombre/idiome sur lexique
+  // ouvert = FP TIER1, mais un instrument NOMMÉ + direction = violation §2 non
+  // ambiguë). Adjacence stricte instrument↔direction = pas de FP coaching.
+  // ──────────────────────────────────────────────────────────────────────────
+  {
+    label: 'instrument_directional',
+    // "EURUSD va monter" / "le DAX est haussier" / "bitcoin chute" / "le Nasdaq
+    // grimpe". L'instrument est IMMÉDIATEMENT suivi (≤séparateur , /espace) d'un
+    // verbe/adjectif directionnel → prédiction de marché. PAS "tu as tradé
+    // l'EURUSD, ta discipline va monter" (direction après "discipline", pas
+    // après l'instrument). PAS "Seth monte" ("eth" non borné).
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})${INSTRUMENT_TOKEN}(?!\p{L})[\s,]+${DIR_AFTER_INSTRUMENT}`,
+      'iu',
+    ),
+  },
+  {
+    label: 'directive_position_instrument',
+    // "Augmente ta position sur le SP500" / "garde ta position sur le DAX" —
+    // recommandation d'exposition sur un instrument NOMMÉ. PAS "ta position sur
+    // le plan / le marché / le risque" (non-instruments).
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})(?:positions?|exposition)\s+(?:\p{L}+['’]?\s+){0,2}?sur\s+(?:l[ea]\s+|l['’]\s*|du\s+|des\s+|un\s+|une\s+)?${INSTRUMENT_TOKEN}(?!\p{L})`,
+      'iu',
+    ),
+  },
+  {
+    label: 'directive_stop_level',
+    // "Place ton stop sous 1.0820" / "ton stop à 4250" — niveau de stop chiffré
+    // (prix Forex décimal OU entier ≥4 chiffres). Complète `sl_price_target` qui
+    // exige "stop-loss"/"sl" littéral. PAS "ton stop à 2 minutes" (pas un prix),
+    // PAS "le stop de la perte" ("de" ∉ prépositions de niveau).
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})(?:ton|ta|votre|vos|le|la|mon|ma|son|sa)\s+stops?\s+(?:à|sous|vers|au[\s-]?dessus|en[\s-]?dessous|au[\s-]?dessous)(?:\s+de)?\s*(?:\d{4,}|\d+[.,]\d+)(?!\p{L})`,
+      'iu',
+    ),
+  },
+  {
+    label: 'vise_price_decimal',
+    // "vise 1.0950" (≥3 décimales = prix Forex) — complète `directive_vise_prix`
+    // qui exige "vise LES". Les ratios coaching (1.5R, 2.0, 1.50 de RR) ont ≤2
+    // décimales → PASS ; ≥3 décimales = format prix non ambigu.
+    pattern: /(?<!\p{L})vise[sz]?\s+\d+[.,]\d{3,}(?!\p{L})/iu,
+  },
+  {
+    label: 'directional_adj_instrument',
+    // Ordre INVERSÉ direction→instrument : "Haussier sur le DAX" / "Bearish sur
+    // l'EURUSD" (Pattern A exige instrument PUIS direction). Adjectif marché +
+    // "sur" + instrument NOMMÉ = avis directionnel. Restreint à haussier/baissier/
+    // bullish/bearish (PAS "positif/optimiste" = FP coaching).
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})(?:haussi[eè]re?|baissi[eè]re?|haussier|baissier|bullish|bearish)\s+sur\s+(?:l[ea]\s+|l['’]\s*|le\s+|du\s+|des\s+)?${INSTRUMENT_TOKEN}(?!\p{L})`,
+      'iu',
+    ),
+  },
+  {
+    label: 'cible_objectif_instrument',
+    // "cible/objectif sur <instrument> à/: /est à <prix>" : "Mets ta cible sur
+    // l'EURUSD à 1.0950", "Objectif sur le DAX : 18250". L'ancre INSTRUMENT rend
+    // FP-safe la capture d'un niveau ENTIER nu (résiduel bare-level) quand un
+    // instrument est nommé. PAS "ton objectif sur le DAX : rester calme" (pas de
+    // chiffre après à/:/vers).
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})(?:cible|objectif)\s+(?:\p{L}+['’]?\s+){0,3}?sur\s+(?:l[ea]\s+|l['’]\s*|le\s+|du\s+|des\s+)?${INSTRUMENT_TOKEN}(?!\p{L})[^.]{0,20}?(?:[àa]|:|vers)\s*\d`,
+      'iu',
+    ),
   },
 ];
 

@@ -11,6 +11,7 @@ import { FavoriteToggle } from '@/components/library/favorite-toggle';
 import { HelpfulFeedback } from '@/components/library/helpful-feedback';
 import { SafeMarkdown } from '@/components/library/markdown';
 import { MarkSeenOnMount } from '@/components/library/mark-seen-on-mount';
+import { cleanQuoteSource, isParaphraseQuote } from '@/lib/library/quote-display';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import {
@@ -127,11 +128,19 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
             <Quote className="text-acc h-6 w-6 shrink-0" aria-hidden />
             <figure className="flex flex-col gap-3">
               <blockquote className="text-foreground text-lg leading-relaxed italic md:text-xl">
-                &laquo;&nbsp;{card.quote}&nbsp;&raquo;
+                {isParaphraseQuote(card.quoteSourceChapter) ? (
+                  card.quote
+                ) : (
+                  <>&laquo;&nbsp;{card.quote}&nbsp;&raquo;</>
+                )}
               </blockquote>
               <figcaption className="text-muted flex items-center gap-2 text-xs tracking-wide uppercase">
                 <BookOpen className="h-3 w-3" aria-hidden />
-                <span>Mark Douglas — {card.quoteSourceChapter}</span>
+                <span>
+                  {isParaphraseQuote(card.quoteSourceChapter)
+                    ? `D'après Mark Douglas — ${cleanQuoteSource(card.quoteSourceChapter)}`
+                    : `Mark Douglas — ${card.quoteSourceChapter}`}
+                </span>
               </figcaption>
             </figure>
           </div>

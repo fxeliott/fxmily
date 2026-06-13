@@ -180,6 +180,16 @@ const realCounterSliceSchema = z
     tradesOpen: z.number().int().min(0),
     realizedRSum: z.number(),
     realizedRMean: z.number().nullable(),
+    /// D3-04 — reliability split of the closed-trade R that fed the aggregates:
+    /// `computed` (derived from a real SL) vs `estimated` (fallback when the SL
+    /// was skipped). Lets Claude weight the mean R by trustworthiness. Always
+    /// present (the aggregator always computes the split).
+    realizedRReliability: z
+      .object({
+        computed: z.number().int().nonnegative(),
+        estimated: z.number().int().nonnegative(),
+      })
+      .strict(),
     planRespectRate: z.number().min(0).max(1).nullable(),
     hedgeRespectRate: z.number().min(0).max(1).nullable(),
     /// SPEC §28/§21 — Session-2 process/habit axes as EXPLICIT NAMED COUNTERS
@@ -276,6 +286,21 @@ export const monthlySnapshotSchema = z
           .strict(),
       )
       .max(20),
+    /// D3-01 — post-outcome behavioural bias tags (CFA LESSOR + Steenbarger:
+    /// revenge-trade, loss-aversion, overconfidence…) declared on the month's
+    /// trades, frequency-sorted, capped at 12. Mirror of `emotionTags`. These
+    /// are PSYCHOLOGICAL self-declarations (posture §2 — never a market signal).
+    /// Empty array when no trade carried a bias tag.
+    behaviorTags: z
+      .array(
+        z
+          .object({
+            tag: z.string().min(1).max(60),
+            count: z.number().int().min(1),
+          })
+          .strict(),
+      )
+      .max(12),
     /// ≤4 weekly AI summaries of the civil month, INPUT context only (SPEC
     /// §25.3 — never an FK). Already safeFreeText at weekly persist; the
     /// `.transform` re-hardens defense-in-depth (mirror builder journals).

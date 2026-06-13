@@ -39,7 +39,12 @@ function emptyInput(): BuilderInput {
   };
 }
 
-function makeTrade(partial: Partial<SerializedTrade> = {}): SerializedTrade {
+// D3-01 — the builder reads `trade.tags` (post-outcome bias tags), which the
+// shared `SerializedTrade` view does not surface; the loader serializes it
+// inline so `BuilderInput['trades']` is `SerializedTrade & { tags: string[] }`.
+type TradeFixture = SerializedTrade & { tags: string[] };
+
+function makeTrade(partial: Partial<TradeFixture> = {}): TradeFixture {
   return {
     id: partial.id ?? 'trade_1',
     userId: 'user_prompt_test',
@@ -71,6 +76,8 @@ function makeTrade(partial: Partial<SerializedTrade> = {}): SerializedTrade {
     createdAt: '2026-05-05T08:00:00.000Z',
     updatedAt: '2026-05-05T08:00:00.000Z',
     isClosed: false,
+    // D3-01 — post-outcome bias tags, default empty (V1 trades had none).
+    tags: [],
     ...partial,
   };
 }
@@ -78,8 +85,8 @@ function makeTrade(partial: Partial<SerializedTrade> = {}): SerializedTrade {
 function closedTrade(
   outcome: 'win' | 'loss' | 'break_even',
   realizedR: number,
-  partial: Partial<SerializedTrade> = {},
-): SerializedTrade {
+  partial: Partial<TradeFixture> = {},
+): TradeFixture {
   return makeTrade({
     outcome,
     realizedR: realizedR.toString(),
@@ -206,5 +213,37 @@ describe('buildWeeklyReportUserPrompt — §28 process/habit axes reach the prom
     const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(input));
     // 0 true / 2 answered → a genuine 0 %, NOT "n/a".
     expect(prompt).toMatch(/Process complété \("oublis"\) : 0% des trades clôturés/);
+  });
+});
+
+describe('buildWeeklyReportUserPrompt — behaviorTags + R reliability reach Claude (S5 Jalon C)', () => {
+  it('declared bias tags (revenge-trade×2, loss-aversion×1) appear in the prompt', () => {
+    const input = emptyInput();
+    input.trades = [
+      closedTrade('win', 1.5, { id: 'b1', tags: ['revenge-trade', 'loss-aversion'] }),
+      closedTrade('loss', -1, { id: 'b2', tags: ['revenge-trade'] }),
+    ];
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(input));
+    expect(prompt).toContain('Biais comportementaux déclarés');
+    expect(prompt).toContain('revenge-trade×2');
+    expect(prompt).toContain('loss-aversion×1');
+  });
+
+  it('no bias tags → the bias line renders "aucun" (never fabricates)', () => {
+    const input = emptyInput();
+    input.trades = [closedTrade('win', 1.5, { id: 'b3', tags: [] })];
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(input));
+    expect(prompt).toContain('Biais comportementaux déclarés (auto-déclaration LESSOR) : aucun');
+  });
+
+  it('R reliability split (computed vs estimated) reaches the prompt', () => {
+    const input = emptyInput();
+    input.trades = [
+      closedTrade('win', 1.5, { id: 'r1', realizedRSource: 'computed' }),
+      closedTrade('win', 2.0, { id: 'r2', realizedRSource: 'computed' }),
+      closedTrade('loss', -0.8, { id: 'r3', realizedRSource: 'estimated' }),
+    ];
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(input));
+    expect(prompt).toContain('Fiabilité du R agrégé : 2 calculé(s) / 1 estimé(s)');
   });
 });

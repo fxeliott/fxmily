@@ -199,6 +199,10 @@ async function loadTrades(userId: string, window: WeekWindow): Promise<BuilderIn
     outcome: trade.outcome,
     realizedR: trade.realizedR == null ? null : trade.realizedR.toString(),
     realizedRSource: trade.realizedRSource,
+    // D3-01 — post-outcome behavioural bias tags (LESSOR/Steenbarger). The
+    // shared `SerializedTrade` view drops this; serialize it inline so the
+    // weekly aggregator can surface declared biases to Claude.
+    tags: [...trade.tags],
     emotionDuring: [...trade.emotionDuring],
     emotionAfter: [...trade.emotionAfter],
     screenshotExitKey: trade.screenshotExitKey,

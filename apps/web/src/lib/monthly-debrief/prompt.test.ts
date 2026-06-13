@@ -53,6 +53,8 @@ function trade(over: Record<string, unknown> = {}): MonthlyBuilderInput['trades'
     hedgeRespected: null,
     emotionBefore: [],
     emotionAfter: [],
+    // D3-01 — post-outcome bias tags (default empty; the aggregator reads them).
+    tags: [],
     enteredAt: '2026-05-10T09:00:00.000Z',
     ...over,
   } as unknown as MonthlyBuilderInput['trades'][number];
@@ -165,5 +167,44 @@ describe('buildMonthlyDebriefUserPrompt — emotionTags (FIX C S5 hardening)', (
   it('no emotion tags → the emotion line is absent from the prompt', () => {
     const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
     expect(prompt).not.toContain('Émotions dominantes (fréquence)');
+  });
+});
+
+describe('buildMonthlyDebriefUserPrompt — behaviorTags + R reliability reach Claude (S5 Jalon C)', () => {
+  it('declared bias tags (revenge-trade×2, loss-aversion×1) appear in the prompt', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        trades: [
+          trade({ tags: ['revenge-trade', 'loss-aversion'] }),
+          trade({ tags: ['revenge-trade'] }),
+        ],
+        checkins: [],
+      }),
+    );
+    const prompt = buildMonthlyDebriefUserPrompt(snap);
+    expect(prompt).toContain('Biais comportementaux déclarés');
+    expect(prompt).toContain('revenge-trade×2');
+    expect(prompt).toContain('loss-aversion×1');
+  });
+
+  it('no bias tags → the bias line renders "aucun" (never fabricates)', () => {
+    const snap = buildMonthlySnapshot(baseInput({ trades: [trade({ tags: [] })], checkins: [] }));
+    const prompt = buildMonthlyDebriefUserPrompt(snap);
+    expect(prompt).toContain('Biais comportementaux déclarés (auto-déclaration LESSOR) : aucun');
+  });
+
+  it('R reliability split (computed vs estimated) reaches the prompt', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        trades: [
+          trade({ realizedR: '1.5', realizedRSource: 'computed' }),
+          trade({ realizedR: '2.0', realizedRSource: 'computed' }),
+          trade({ realizedR: '0.8', realizedRSource: 'estimated' }),
+        ],
+        checkins: [],
+      }),
+    );
+    const prompt = buildMonthlyDebriefUserPrompt(snap);
+    expect(prompt).toContain('Fiabilité du R agrégé : 2 calculé(s) / 1 estimé(s)');
   });
 });

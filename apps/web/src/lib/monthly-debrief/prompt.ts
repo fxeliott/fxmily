@@ -112,6 +112,11 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
   lines.push(
     `- R réalisé cumulé : ${r.realizedRSum.toFixed(2)}R · moyen : ${r.realizedRMean === null ? 'n/a' : r.realizedRMean.toFixed(2) + 'R'}`,
   );
+  // D3-04 — fiabilité du R agrégé : combien de R viennent d'un vrai SL
+  // (computed) vs d'un fallback (estimated). Pondère la moyenne en conséquence.
+  lines.push(
+    `- Fiabilité du R agrégé : ${r.realizedRReliability.computed} calculé(s) / ${r.realizedRReliability.estimated} estimé(s) (pondère la moyenne R en conséquence).`,
+  );
   lines.push(
     `- Plan respecté : ${formatRate(r.planRespectRate)} · Hedge respecté : ${formatRate(r.hedgeRespectRate)}`,
   );
@@ -198,6 +203,15 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
     lines.push(`- Émotions dominantes (fréquence) : ${tagLine}`);
     lines.push(``);
   }
+
+  // D3-01 — biais cognitifs auto-déclarés (LESSOR/Steenbarger). POSTURE §2 :
+  // psychologie auto-déclarée, jamais un conseil/direction/prix de marché.
+  lines.push(
+    `- Biais comportementaux déclarés (auto-déclaration LESSOR) : ${
+      snapshot.behaviorTags.map((b) => `${b.tag}×${b.count}`).join(', ') || 'aucun'
+    }`,
+  );
+  lines.push(``);
 
   lines.push(`## Scores comportementaux (snapshot le plus récent)`);
   // Order mirrors the weekly carbon (Discipline first) — SPEC §25 symmetry.

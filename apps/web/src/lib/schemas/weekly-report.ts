@@ -156,6 +156,16 @@ const counterSliceSchema = z
     tradesOpen: z.number().int().min(0),
     realizedRSum: z.number(),
     realizedRMean: z.number().nullable(),
+    /// D3-04 — reliability split of the closed-trade R that fed the aggregates:
+    /// `computed` (derived from a real SL) vs `estimated` (fallback when the SL
+    /// was skipped). Lets Claude weight the mean R by trustworthiness. Always
+    /// present (the builder always computes the split).
+    realizedRReliability: z
+      .object({
+        computed: z.number().int().nonnegative(),
+        estimated: z.number().int().nonnegative(),
+      })
+      .strict(),
     planRespectRate: z.number().min(0).max(1).nullable(),
     hedgeRespectRate: z.number().min(0).max(1).nullable(),
     /// SPEC §28/§21 — Session-2 process/habit axes as EXPLICIT NAMED COUNTERS
@@ -221,6 +231,22 @@ const freeTextSliceSchema = z
   .object({
     /// Top emotion tags observed this week (deduped, frequency-sorted).
     emotionTags: z.array(z.string().trim().min(1).max(40)).max(20),
+    /// D3-01 — post-outcome behavioural bias tags (CFA LESSOR + Steenbarger:
+    /// revenge-trade, loss-aversion, overconfidence…) declared on the week's
+    /// trades, frequency-sorted, capped at 12. Carried as `{ tag, count }` (vs
+    /// the bare-string `emotionTags`) so the prompt can render `tag×count`.
+    /// PSYCHOLOGICAL self-declarations (posture §2 — never a market signal).
+    /// Empty array when no trade carried a bias tag.
+    behaviorTags: z
+      .array(
+        z
+          .object({
+            tag: z.string().trim().min(1).max(40),
+            count: z.number().int().min(1),
+          })
+          .strict(),
+      )
+      .max(12),
     /// Top trading pairs traded this week (frequency-sorted).
     pairsTraded: z.array(z.string().trim().min(1).max(20)).max(10),
     /// Sessions traded (asia / london / overlap / newyork) with counts.

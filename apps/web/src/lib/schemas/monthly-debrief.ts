@@ -300,18 +300,23 @@ const scoreProgressionSchema = z
 /// (« à regarder », jamais une faute). `alertCount` = alertes PSYCHOLOGIQUES
 /// déclenchées dans la période (répétition uniquement §33.8 — `Alert.category`
 /// est l'enum mono-valeur `psychological`, un signal trading est structurellement
-/// impossible).
+/// impossible). `constancyPrevious` = le ConstancyScore DÉDIÉ du MOIS PRÉCÉDENT
+/// (§29 « voir son évolution ») — sert le récit de progression mois-sur-mois de
+/// la constance/honnêteté (miroir du `scoreProgression` comportemental). `null`
+/// si aucun signal le mois d'avant (le prompt omet alors la ligne d'évolution).
+const constancySnapshotSchema = z
+  .object({
+    value: z.number().min(0).max(100),
+    honesty: z.number().min(0).max(100).nullable(),
+    regularity: z.number().min(0).max(100).nullable(),
+    discipline: z.number().min(0).max(100).nullable(),
+  })
+  .strict();
+
 const verificationSliceSchema = z
   .object({
-    constancy: z
-      .object({
-        value: z.number().min(0).max(100),
-        honesty: z.number().min(0).max(100).nullable(),
-        regularity: z.number().min(0).max(100).nullable(),
-        discipline: z.number().min(0).max(100).nullable(),
-      })
-      .strict()
-      .nullable(),
+    constancy: constancySnapshotSchema.nullable(),
+    constancyPrevious: constancySnapshotSchema.nullable(),
     openDiscrepancyCount: z.number().int().min(0),
     alertCount: z.number().int().min(0),
   })

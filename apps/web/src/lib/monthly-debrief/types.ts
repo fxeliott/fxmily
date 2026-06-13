@@ -123,6 +123,17 @@ export interface MonthlyBuilderInput {
       regularity: number | null;
       discipline: number | null;
     } | null;
+    /// §29 "voir son évolution" — the DEDICATED ConstancyScore of the PREVIOUS
+    /// civil month (latest in-range), so the monthly debrief can anchor the
+    /// honesty/regularity trajectory on a real month-over-month delta (mirror of
+    /// the behavioural `scoreProgression`). `null` when no prior-month signal —
+    /// the prompt then omits the progression line (no fabricated trend, §33.6).
+    constancyPrevious: {
+      value: number;
+      honesty: number | null;
+      regularity: number | null;
+      discipline: number | null;
+    } | null;
     openDiscrepancyCount: number;
     alertCount: number;
   };

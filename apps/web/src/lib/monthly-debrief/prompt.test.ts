@@ -37,7 +37,12 @@ function baseInput(over: Partial<MonthlyBuilderInput> = {}): MonthlyBuilderInput
     training: { backtestCount: 0, daysSinceLastBacktest: null, hasEverPractised: false },
     // DOD3-01 / DoD#2 S6 — Session-3 counters default to the empty (no-signal)
     // shape; tests that exercise S3 override it.
-    verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 },
+    verification: {
+      constancy: null,
+      constancyPrevious: null,
+      openDiscrepancyCount: 0,
+      alertCount: 0,
+    },
     ...over,
   };
 }
@@ -299,6 +304,7 @@ describe('DOD3-01 / DoD#2 S6 — Session-3 verification section reaches the prom
         baseInput({
           verification: {
             constancy: { value: 78, honesty: 85, regularity: 90, discipline: 60 },
+            constancyPrevious: { value: 70, honesty: 75, regularity: 88, discipline: 55 },
             openDiscrepancyCount: 2,
             alertCount: 1,
           },
@@ -314,10 +320,70 @@ describe('DOD3-01 / DoD#2 S6 — Session-3 verification section reaches the prom
     expect(prompt).toContain('Alertes psychologiques déclenchées ce mois : **1**');
   });
 
+  it('§29 — renders the month-over-month constancy progression with real deltas', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          verification: {
+            constancy: { value: 78, honesty: 85, regularity: 90, discipline: 60 },
+            constancyPrevious: { value: 70, honesty: 75, regularity: 88, discipline: 55 },
+            openDiscrepancyCount: 0,
+            alertCount: 0,
+          },
+        }),
+      ),
+    );
+    expect(prompt).toContain('Évolution de la constance');
+    expect(prompt).toContain('globale 70→78 (Δ+8)');
+    expect(prompt).toContain('honnêteté 75→85 (Δ+10)');
+  });
+
+  it('§29 — renders 1-decimal deltas without float noise (review TIER2)', () => {
+    // 1-decimal axes (régularité): 85.7 − 71.4 = 14.299999… in float → must show Δ+14.3.
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          verification: {
+            constancy: { value: 78.5, honesty: 85, regularity: 85.7, discipline: 60 },
+            constancyPrevious: { value: 70, honesty: 75, regularity: 71.4, discipline: 55 },
+            openDiscrepancyCount: 0,
+            alertCount: 0,
+          },
+        }),
+      ),
+    );
+    expect(prompt).toContain('régularité 71.4→85.7 (Δ+14.3)');
+    expect(prompt).not.toMatch(/Δ[+-]\d+\.\d{3,}/); // no 3+ decimal float noise anywhere
+  });
+
+  it('§29 — omits the progression line when no previous-month signal (no fabricated trend)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          verification: {
+            constancy: { value: 78, honesty: 85, regularity: 90, discipline: 60 },
+            constancyPrevious: null,
+            openDiscrepancyCount: 0,
+            alertCount: 0,
+          },
+        }),
+      ),
+    );
+    expect(prompt).toContain('Score de constance : **78/100**');
+    expect(prompt).not.toContain('Évolution de la constance');
+  });
+
   it('renders the honest no-signal copy when constancy is null (no fabricated score)', () => {
     const prompt = buildMonthlyDebriefUserPrompt(
       buildMonthlySnapshot(
-        baseInput({ verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 } }),
+        baseInput({
+          verification: {
+            constancy: null,
+            constancyPrevious: null,
+            openDiscrepancyCount: 0,
+            alertCount: 0,
+          },
+        }),
       ),
     );
     expect(prompt).toContain('pas encore de signal');
@@ -330,6 +396,7 @@ describe('DOD3-01 / DoD#2 S6 — Session-3 verification section reaches the prom
         baseInput({
           verification: {
             constancy: { value: 70, honesty: null, regularity: 90, discipline: null },
+            constancyPrevious: null,
             openDiscrepancyCount: 0,
             alertCount: 0,
           },

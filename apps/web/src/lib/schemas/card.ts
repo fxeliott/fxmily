@@ -141,7 +141,12 @@ const prioritySchema = z.number().int().min(1).max(10);
 // Create / update
 // =============================================================================
 
-export const cardCreateSchema = z
+// Base object (NON-refined) — `.partial()` must apply to THIS, never to the
+//   refined schema. S5 13e challenge fix : `cardCreateSchema.partial()` crashait
+//   (zod refuse `.partial()` sur un ZodEffects/superRefine) → tout le module
+//   `card.ts` était un-importable au runtime, ce qui a aussi désactivé le SEUL
+//   gate de validation seed→schema (donc une quote 31 mots > cap est passée).
+const cardObjectSchema = z
   .object({
     slug: slugSchema,
     title: titleSchema,
@@ -155,28 +160,44 @@ export const cardCreateSchema = z
     priority: prioritySchema.default(5),
     published: z.boolean().default(false),
   })
-  .strict()
-  .superRefine((card, ctx) => {
-    // SPEC §2 posture invariant — no market-analysis advice in member-facing content.
-    // Concatenate every text field the member reads and run the AMF detector.
-    const exerciseText = card.exercises.flatMap((ex) => [ex.label, ex.description]).join('\n\n');
-    const corpus = [card.title, card.quote, card.paraphrase, exerciseText]
-      .filter(Boolean)
-      .join('\n\n');
-    const result = detectAMFViolation(corpus);
-    if (result.suspected) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "Contenu interdit (§2) : une fiche ne peut pas contenir de conseil d'analyse de marché.",
-        path: ['paraphrase'],
-      });
-    }
-  });
+  .strict();
+
+/**
+ * SPEC §2 posture invariant — no market-analysis advice in member-facing content.
+ * Concatenates every text field the member reads and runs the AMF detector.
+ * Null-safe (fields optional) so it works on BOTH create (full) and update (partial).
+ */
+function assertNoMarketAdvice(
+  card: {
+    title?: string | undefined;
+    quote?: string | undefined;
+    paraphrase?: string | undefined;
+    exercises?: ReadonlyArray<{ label: string; description: string }> | undefined;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  const exerciseText = (card.exercises ?? [])
+    .flatMap((ex) => [ex.label, ex.description])
+    .join('\n\n');
+  const corpus = [card.title, card.quote, card.paraphrase, exerciseText]
+    .filter(Boolean)
+    .join('\n\n');
+  if (detectAMFViolation(corpus).suspected) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        "Contenu interdit (§2) : une fiche ne peut pas contenir de conseil d'analyse de marché.",
+      path: ['paraphrase'],
+    });
+  }
+}
+
+export const cardCreateSchema = cardObjectSchema.superRefine(assertNoMarketAdvice);
 
 export type CardCreateInput = z.infer<typeof cardCreateSchema>;
 
-export const cardUpdateSchema = cardCreateSchema.partial();
+// `.partial()` on the UNREFINED object (no crash), then re-apply the §2 refine.
+export const cardUpdateSchema = cardObjectSchema.partial().superRefine(assertNoMarketAdvice);
 
 export type CardUpdateInput = z.infer<typeof cardUpdateSchema>;
 

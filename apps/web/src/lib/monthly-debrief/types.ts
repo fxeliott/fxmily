@@ -60,7 +60,14 @@ export interface MonthlyBuilderInput {
   /// account-age guard — "inscrit en cours de mois", SPEC §25.4).
   accountAgeDaysInWindow: number;
   // ----- (A) REAL section — legitimate real-trade P&L coaching ----------
-  trades: SerializedTrade[];
+  /// D3-01 — extends `SerializedTrade` with the post-outcome behavioural
+  /// `tags` (CFA LESSOR + Steenbarger biases: revenge-trade, loss-aversion,
+  /// overconfidence…). The field is collected in DB but `SerializedTrade`
+  /// (the shared UI-facing view) does not surface it, so the loader serializes
+  /// it inline here. Required `string[]` (the Prisma column is
+  /// `String[] @default([])`, never null). Psycho self-declaration only —
+  /// NEVER market advice (posture §2).
+  trades: Array<SerializedTrade & { tags: string[] }>;
   checkins: SerializedCheckin[];
   deliveries: SerializedDelivery[];
   annotationsReceived: number;

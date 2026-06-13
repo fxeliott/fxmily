@@ -30,6 +30,11 @@ import type { MonthlyBuilderInput } from './types';
 
 const EMOTION_TAGS_MAX = 20;
 
+// D3-01 — cap on the distinct behavioural bias tags (LESSOR/Steenbarger)
+// surfaced to Claude. Lower than EMOTION_TAGS_MAX (20) : the bias allowlist is
+// short (UI caps 3/trade) so 12 distinct tags is ample headroom for a month.
+const BEHAVIOR_TAGS_MAX = 12;
+
 const WEEKLY_CONTEXT_ITEM_MAX_CHARS = 900;
 
 export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapshot {
@@ -48,6 +53,9 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
       hasEverPractised: input.training.hasEverPractised,
     },
     emotionTags: collectEmotionTags(input),
+    // D3-01 — declared cognitive-bias tags (LESSOR/Steenbarger). Psycho
+    // self-declaration, NEVER market advice (posture §2).
+    behaviorTags: collectBehaviorTags(input),
     weeklySummaries: buildWeeklySummaries(input),
     scores: buildScores(input),
   };
@@ -69,6 +77,17 @@ function buildRealCounters(input: MonthlyBuilderInput): MonthlySnapshot['real'] 
     .filter((n): n is number => n !== null);
   const realizedRSum = realizedRs.reduce((s, n) => s + n, 0);
   const realizedRMean = realizedRs.length > 0 ? realizedRSum / realizedRs.length : null;
+
+  // D3-04 — split the closed trades that carry a `realizedR` by the reliability
+  // of that R (`realizedRSource`): `computed` (derived from a real SL) vs
+  // `estimated` (fallback when the member skipped the SL). Lets Claude weight
+  // the aggregated mean R by how trustworthy it is, instead of treating every
+  // R as equally precise.
+  const realizedRWithValue = closed.filter((t) => parseNumberOrNull(t.realizedR) !== null);
+  const realizedRReliability = {
+    computed: realizedRWithValue.filter((t) => t.realizedRSource === 'computed').length,
+    estimated: realizedRWithValue.filter((t) => t.realizedRSource === 'estimated').length,
+  };
 
   const planRespectedCount = closed.filter((t) => t.planRespected).length;
   const planRespectRate = closed.length > 0 ? planRespectedCount / closed.length : null;
@@ -149,6 +168,8 @@ function buildRealCounters(input: MonthlyBuilderInput): MonthlySnapshot['real'] 
     tradesOpen: open.length,
     realizedRSum: roundTo(realizedRSum, 4),
     realizedRMean: realizedRMean === null ? null : roundTo(realizedRMean, 4),
+    // D3-04 — reliability split of the aggregated R (computed vs estimated).
+    realizedRReliability,
     planRespectRate: planRespectRate === null ? null : roundTo(planRespectRate, 4),
     hedgeRespectRate: hedgeRespectRate === null ? null : roundTo(hedgeRespectRate, 4),
     // SPEC §28/§21 — Session-2 process/habit axes as explicit named rates.
@@ -249,6 +270,27 @@ function collectEmotionTags(input: MonthlyBuilderInput): Array<{ tag: string; co
   return Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, EMOTION_TAGS_MAX)
+    .map(([tag, count]) => ({ tag, count }));
+}
+
+/**
+ * D3-01 — Collect the post-outcome behavioural bias tags (CFA LESSOR +
+ * Steenbarger : revenge-trade, loss-aversion, overconfidence…) declared on the
+ * month's trades, sorted by frequency descending, capped at BEHAVIOR_TAGS_MAX.
+ * Mirror of `collectEmotionTags` (count Map → sort desc → slice → map). These
+ * are PSYCHOLOGICAL self-declarations, surfaced so Claude can name dominant
+ * biases — NEVER a market signal (posture §2).
+ */
+function collectBehaviorTags(input: MonthlyBuilderInput): Array<{ tag: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const trade of input.trades) {
+    for (const tag of trade.tags) {
+      bumpCount(counts, tag);
+    }
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, BEHAVIOR_TAGS_MAX)
     .map(([tag, count]) => ({ tag, count }));
 }
 

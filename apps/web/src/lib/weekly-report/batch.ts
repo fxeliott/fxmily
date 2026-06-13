@@ -476,7 +476,17 @@ export async function persistGeneratedReports(
     // local script tries to inject — only the 3 known entries of
     // `PRICING_USD_PER_MTOK` are accepted. This prevents a compromised laptop
     // from inflating `costEur` via a fake model name.
-    const PRICING_KEYS = ['claude-sonnet-4-6', 'claude-haiku-4-5', CLAUDE_CODE_LOCAL_MODEL];
+    // S5 Jalon D (D4-02) : inclure les 2 modèles RÉELS du moteur local (pin Opus
+    //   4.8 + Fable 5 allowlisté) — sinon `entry.model` était coercé vers le sentinel
+    //   local et l'attribution modèle member-facing perdait la vérité. Le calendrier
+    //   les inclut déjà ; `pricing.ts` price les deux.
+    const PRICING_KEYS = [
+      'claude-fable-5',
+      'claude-opus-4-8',
+      'claude-sonnet-4-6',
+      'claude-haiku-4-5',
+      CLAUDE_CODE_LOCAL_MODEL,
+    ];
     const claudeModel =
       entry.model && PRICING_KEYS.includes(entry.model) ? entry.model : CLAUDE_CODE_LOCAL_MODEL;
     const cost = computeCostEur(claudeModel, {

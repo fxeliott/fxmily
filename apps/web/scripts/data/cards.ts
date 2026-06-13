@@ -509,6 +509,52 @@ Tous ces comportements ont la même racine : l'identité accrochée au résultat
   },
 
   {
+    // S5 Jalon D décision (b) : fiche « honnêteté/auto-tromperie » dédiée. L'alerte
+    //   S3 « mensonge / écart déclaré-vs-réel » (false_declared → cardCategory 'ego')
+    //   n'avait dans le catalogue 'ego' que des thèmes post-victoire (arrogance) ;
+    //   l'auto-tromperie était absente. Priorité 8 pour surfacer tôt dans la rotation
+    //   ego (dispatchDouglasForAlert = priority desc + dédup récent). Quote = paraphrase
+    //   attribuée (canon Jalon B : pas de faux verbatim).
+    slug: 'honnetete-radicale-avec-soi',
+    title: "Honnêteté radicale : sortir de l'auto-tromperie",
+    category: 'ego',
+    quote:
+      "La première personne qu'un trader doit cesser de tromper, c'est lui-même : on ne corrige jamais une erreur qu'on refuse de regarder en face.",
+    quoteSourceChapter: 'The Disciplined Trader (paraphrase)',
+    paraphrase: `L'app vient de relever un écart entre ce que tu as déclaré et ce que montrent tes preuves. Ce n'est pas un reproche — c'est exactement le moment le plus précieux pour progresser, à condition de le regarder en face.
+
+**L'auto-tromperie est la panne n°1 du trader.** Pas le manque de stratégie : la stratégie existe. Le problème, c'est l'histoire qu'on se raconte pour ne pas affronter la réalité. « J'ai presque respecté mon plan. » « C'était un cas particulier. » « Je serai discipliné demain. » Chacune de ces phrases est un petit mensonge à soi-même, et leur accumulation rend toute amélioration impossible.
+
+**Pourquoi mentir à son journal ne coûte rien… sauf ta progression.** Le marché ne lit pas ton journal. La seule personne que tu trompes en arrondissant la vérité, c'est celle qui est censée s'améliorer grâce à ces données : toi. Un journal honnête mais moche bat un journal flatteur mais faux, à chaque fois.
+
+**Ce que fait le trader honnête avec lui-même :**
+
+- Il déclare l'erreur exactement comme elle s'est produite, sans adoucir : « j'ai déplacé mon stop par peur », pas « ajustement de gestion ».
+- Il distingue l'intention du résultat : avoir voulu bien faire ne transforme pas une déviation en respect du plan.
+- Il accueille l'écart relevé comme une information neutre, pas comme une accusation. La donnée n'a pas d'ego ; elle dit juste ce qui est.
+
+**Le marqueur d'avancement.** Le jour où tu déclares une faute SANS chercher à l'habiller — et où tu ressens du soulagement plutôt que de la honte — tu as gagné la bataille la plus difficile du trading : celle contre ton propre récit. La discipline commence là.`,
+    exercises: [
+      {
+        id: 'reformuler-sans-adoucir',
+        label: "Reformuler l'écart sans l'adoucir",
+        description:
+          "Reprends l'écart relevé et réécris-le en une phrase brutale et exacte, à la première personne (« j'ai… »), sans euphémisme ni justification. Relis-la à voix haute. C'est ta vérité de travail.",
+      },
+      {
+        id: 'audit-honnetete-journal',
+        label: 'Audit honnêteté du journal (hebdo)',
+        description:
+          "Une fois par semaine, relis 3 trades au hasard et demande-toi pour chacun : « Ai-je décrit ce qui s'est VRAIMENT passé, ou la version qui m'arrange ? » Corrige les entrées arrondies. Vise 0 trade flatté.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
+    priority: 8,
+    published: true,
+  },
+
+  {
     slug: 'accepter-la-perte-comme-cout',
     title: "Accepter la perte comme un coût d'opération",
     category: 'loss',

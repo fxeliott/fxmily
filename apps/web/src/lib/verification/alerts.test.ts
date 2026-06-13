@@ -47,7 +47,7 @@ interface Arm {
     repeatCount: number;
     status: string;
   }>;
-  deliveries?: Array<{ cardId: string; triggeredOn: Date }>;
+  deliveries?: Array<{ cardId: string; triggeredOn: Date; sourceAlertId?: string | null }>;
   cards?: Array<{ id: string; slug: string }>;
 }
 
@@ -90,8 +90,29 @@ describe('scanAlertsForAllMembers — member-day cap + open-alert retry (S4)', (
     });
   });
 
-  it('🚨 cap — a card already delivered TODAY blocks the alert card; alert stays open', async () => {
-    arm({ deliveries: [{ cardId: 'card-x', triggeredOn: TODAY_TRIGGERED_ON }] });
+  it('🚨 priority (Jalon D-a) — a ROUTINE card delivered TODAY does NOT block the alert', async () => {
+    // Routine engine card (sourceAlertId: null) went out this morning. The S3
+    // truth alert (mensonge/ego/discipline) must STILL reach the member same-day.
+    arm({
+      deliveries: [{ cardId: 'card-x', triggeredOn: TODAY_TRIGGERED_ON, sourceAlertId: null }],
+    });
+    const r = await scanAlertsForAllMembers({ now: NOW });
+    expect(r.alertsCreated).toBe(1);
+    expect(r.deliveriesDispatched).toBe(1);
+    expect(db.markDouglasDelivery.create).toHaveBeenCalledTimes(1);
+    expect(db.alert.update).toHaveBeenCalledWith({
+      where: { id: 'alert-new' },
+      data: { status: 'delivered' },
+    });
+  });
+
+  it('🚨 cap — an ALERT card already delivered TODAY blocks a second alert; alert stays open', async () => {
+    // ≤1 ALERT/day still holds: a same-day alert-sourced delivery blocks.
+    arm({
+      deliveries: [
+        { cardId: 'card-x', triggeredOn: TODAY_TRIGGERED_ON, sourceAlertId: 'alert-earlier' },
+      ],
+    });
     const r = await scanAlertsForAllMembers({ now: NOW });
     expect(r.alertsCreated).toBe(1);
     expect(r.deliveriesDispatched).toBe(0);

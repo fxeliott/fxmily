@@ -3,7 +3,7 @@
  *
  * V1 ships **51 fiches** couvrant les 7 triggers canoniques SPEC §7.6
  * (tilt, plan-violations, sleep-deficit, emotion-logged FOMO, 4 peurs,
- * sur-confiance, hedge-violation, recovery-streak) + 8 piliers catalogue
+ * sur-confiance, hedge-violation) + 8 piliers catalogue
  * (acceptance, probabilities, process, ego, fear, loss, consistency,
  * patience). Cible §7.6 atteinte. Distribution : 12 (J7) + 10 (J7.5) +
  * 9 (J7.6) + 19 (J7.8). Citations ≤30 mots fair use FR L122-5 +
@@ -68,8 +68,12 @@ L'edge ne fonctionne que si tu lui donnes le temps de jouer la loi des grands no
     slug: 'le-piege-de-la-deviation',
     title: 'Le piège de la déviation : quand le plan saute',
     category: 'discipline',
-    quote: 'The market never violates your rules — only you do.',
-    quoteSourceChapter: 'The Disciplined Trader, ch.4',
+    // S5 Jalon B (D5-01) : quote anglais FABRIQUÉE + chapitre non vérifiable, et qui
+    //   INVERSAIT l'enseignement de Douglas (le marché est un environnement SANS règles,
+    //   "boundary-less"). Remplacée par une paraphrase fidèle attribuée (researcher source-primaire).
+    quote:
+      "Le marché n'a aucune règle : c'est un environnement sans frontières. Les seules règles qui existent sont les tiennes, et tu es le seul à pouvoir les violer.",
+    quoteSourceChapter: 'Trading in the Zone (paraphrase)',
     paraphrase: `Tu as dévié de ton plan deux fois en une semaine. Pas trois, pas dix. Juste deux. Et c'est précisément le seuil à ne pas dépasser.
 
 **Pourquoi 2 déviations comptent autant.** Mark Douglas insiste : la consistance se construit dans l'invisible. Une déviation isolée peut être un signal (peut-être que ton plan a un trou). Deux déviations en peu de temps = un pattern. C'est ton mental qui négocie avec ta discipline.
@@ -107,8 +111,10 @@ L'edge ne fonctionne que si tu lui donnes le temps de jouer la loi des grands no
     slug: 'trader-fatigue-trader-emotionnel',
     title: 'Trader fatigué = trader émotionnel',
     category: 'fear',
-    quote: 'When the trader is not centered, the market becomes a mirror of his fears.',
-    quoteSourceChapter: 'The Disciplined Trader, ch.7',
+    // S5 Jalon B (D5-01) : quote FABRIQUÉE (introuvable en source primaire) → paraphrase fidèle attribuée.
+    quote:
+      "Quand tu n'es pas centré, tes peurs déforment ta lecture du marché : tu vois ce que tu redoutes, pas ce qui est réellement là.",
+    quoteSourceChapter: 'The Disciplined Trader (paraphrase)',
     paraphrase: `Tu as dormi moins de 6 heures cette nuit, et tu es en train de trader. Mark Douglas et toute la recherche moderne sur la performance (Steenbarger, Walker) convergent : c'est la situation la plus risquée du trader pro.
 
 **Ce qui change physiologiquement.** Sous 6h de sommeil, la fonction du cortex préfrontal — la zone qui maintient ta discipline et tes règles — chute jusqu'à 40%. La fonction du système limbique — la zone des peurs et des impulsions — augmente. Concrètement : ton plan est plus dur à suivre, et tes émotions sont plus fortes.
@@ -201,8 +207,10 @@ Le FOMO se gère par la répétition. Plus tu le passes, plus tu le passes facil
     slug: 'sur-confiance-le-piege-d-apres-victoire',
     title: "Sur-confiance : le piège d'après victoire",
     category: 'confidence',
-    quote: 'A winning streak can be more dangerous than a losing streak.',
-    quoteSourceChapter: 'Trading in the Zone, ch.5',
+    // S5 Jalon B (D5-01) : concept authentique (sur-confiance/casino) mais phrase NON verbatim → paraphrase attribuée.
+    quote:
+      "Une série gagnante peut être plus piégeuse qu'une série perdante : l'euphorie endort ta vigilance, alors que chaque trade reste indépendant et incertain.",
+    quoteSourceChapter: 'Trading in the Zone (paraphrase)',
     paraphrase: `Cinq trades gagnants d'affilée. Ton edge fonctionne, et tu le sens. C'est précisément le moment du piège que Mark Douglas appelle "le tilt euphorique" — plus coûteux statistiquement que le tilt classique.
 
 **Pourquoi c'est si piégeux.** L'euphorie ne ressemble pas à du danger. Elle ressemble à du flow, à la "zone". Tu te sens compétent, tu te sens dans le rythme. Le cerveau interprète ça comme une preuve que tu peux prendre plus de risque.
@@ -291,7 +299,7 @@ La consistance d'un trader pro se reconnait dans ce qu'il fait quand personne ne
     category: 'consistency',
     quote:
       "Sans pression, c'est ta routine qui parle. La régularité du backtest se construit les jours où rien ne t'y oblige.",
-    quoteSourceChapter: "paraphrase de l'argument — Mark Douglas, Trading in the Zone, ch.11",
+    quoteSourceChapter: 'Trading in the Zone, ch.11 (paraphrase)',
     paraphrase: `Un backtest isolé ne change pas un mindset. C'est la répétition qui installe les automatismes — exactement comme l'entraînement d'un athlète.
 
 **Pourquoi la régularité prime.** Le mode entraînement n'a de valeur que si tu y reviens. Une session unique te donne une sensation ; une séquence de sessions te donne une compétence. Mark Douglas insiste : la consistance ne naît pas d'un effort exceptionnel, mais d'un comportement répété quand rien ne t'y force.
@@ -883,8 +891,10 @@ Symptômes d'arrogance : tu prends des positions hors conditions parce que "tu s
     slug: 'the-fear-of-being-wrong',
     title: "La peur d'avoir tort",
     category: 'fear',
-    quote: 'The fear of being wrong is the most fundamental fear of all traders.',
-    quoteSourceChapter: 'Trading in the Zone, ch.5',
+    // S5 Jalon B (D5-01) : phrase exacte non verbatim (chapitre non vérifiable) → paraphrase fidèle aux 4 peurs canoniques.
+    quote:
+      "La peur d'avoir tort est l'une des quatre peurs fondamentales du trader : elle sabote ton objectivité et te fait hésiter au pire moment.",
+    quoteSourceChapter: 'Trading in the Zone (paraphrase)',
     paraphrase: `Tu hésites à couper une position perdante. Tu ajoutes au lieu de couper. Tu déplaces ton stop "pour donner de l'air". Diagnostic : tu n'as pas peur de perdre de l'argent. Tu as peur d'avoir tort.
 
 **La peur d'avoir tort est la peur fondamentale du trader.** Elle ne porte pas sur l'argent — elle porte sur l'identité. Couper la perte, c'est admettre que ton analyse était fausse. Déplacer le stop, c'est se donner une chance de "ne pas avoir eu tort". Mais le marché ne valide jamais l'analyse rétroactivement. Il valide uniquement l'exécution.

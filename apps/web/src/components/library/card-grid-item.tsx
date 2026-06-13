@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { Pill } from '@/components/ui/pill';
 import type { SerializedCard } from '@/lib/cards/types';
+import { cleanQuoteSource, isParaphraseQuote } from '@/lib/library/quote-display';
 
 import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_TONE } from './category-meta';
 import { FavoriteToggle } from './favorite-toggle';
@@ -71,9 +72,15 @@ export function CardGridItem({ card, favorited, hasUnread = false }: CardGridIte
         </h3>
 
         <blockquote className="border-acc/40 text-muted border-l-2 pl-3 text-sm italic">
-          &laquo;&nbsp;{card.quote}&nbsp;&raquo;
+          {isParaphraseQuote(card.quoteSourceChapter) ? (
+            card.quote
+          ) : (
+            <>&laquo;&nbsp;{card.quote}&nbsp;&raquo;</>
+          )}
           <footer className="text-muted mt-1 text-[10px] tracking-wide uppercase not-italic">
-            {card.quoteSourceChapter}
+            {isParaphraseQuote(card.quoteSourceChapter)
+              ? `D'après Mark Douglas — ${cleanQuoteSource(card.quoteSourceChapter)}`
+              : card.quoteSourceChapter}
           </footer>
         </blockquote>
       </Card>

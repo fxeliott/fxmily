@@ -106,6 +106,26 @@ export interface MonthlyBuilderInput {
   weeklySummaries: string[];
   // ----- (B) TRAINING section — §21.5 firewall: effort/recency only -----
   training: TrainingEffortInput;
+  // ----- (C) VERIFICATION & CONSTANCY — Session 3 (DOD3-01 / DoD#2 S6) -----
+  /// Count-only S3 counters PRE-COMPOSED by the loader. `constancy` + `alertCount`
+  /// are PERIOD-SCOPED to the reported month (the ConstancyScore OF that month +
+  /// the alerts triggered in it — NEVER `getLatestConstancyScore`, which is the
+  /// current week); `openDiscrepancyCount` is a CURRENT-STATE count (écarts still
+  /// open now), point-in-time by design. `constancy` is the DEDICATED S3 score
+  /// (honesty/regularity/discipline), not the `consistency` sub-score of
+  /// BehavioralScore (S2/S5). `null` when the member has no constancy signal for
+  /// the period (no fake neutral score, §33.6). Posture §2/§33.2 — factual numbers
+  /// only, never market advice.
+  verification: {
+    constancy: {
+      value: number;
+      honesty: number | null;
+      regularity: number | null;
+      discipline: number | null;
+    } | null;
+    openDiscrepancyCount: number;
+    alertCount: number;
+  };
 }
 
 export type { MonthlySnapshot, MonthlyDebriefOutput } from '@/lib/schemas/monthly-debrief';

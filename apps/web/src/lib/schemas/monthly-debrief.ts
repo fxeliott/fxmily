@@ -289,6 +289,34 @@ const scoreProgressionSchema = z
   })
   .strict();
 
+/// (C) VÉRIFICATION & CONSTANCE — Session 3 (DOD3-01, DoD#2 S6). COUNT-ONLY,
+/// posture §2/§33.2 : des nombres factuels (jamais un compteur de culpabilité,
+/// jamais un avis marché). `constancy` est le **ConstancyScore S3 DÉDIÉ**
+/// (event-sourced : honnêteté/régularité/discipline + écarts/alertes confrontés
+/// à la réalité MT5), STRICTEMENT DISTINCT du sous-score `consistency` de
+/// `BehavioralScore` (S2/S5, plus haut). `null` quand le membre n'a aucun signal
+/// de constance sur la période rapportée (pas de faux score neutre — anti-
+/// complaisance §33.6). `openDiscrepancyCount` = écarts de vérité encore OUVERTS
+/// (« à regarder », jamais une faute). `alertCount` = alertes PSYCHOLOGIQUES
+/// déclenchées dans la période (répétition uniquement §33.8 — `Alert.category`
+/// est l'enum mono-valeur `psychological`, un signal trading est structurellement
+/// impossible).
+const verificationSliceSchema = z
+  .object({
+    constancy: z
+      .object({
+        value: z.number().min(0).max(100),
+        honesty: z.number().min(0).max(100).nullable(),
+        regularity: z.number().min(0).max(100).nullable(),
+        discipline: z.number().min(0).max(100).nullable(),
+      })
+      .strict()
+      .nullable(),
+    openDiscrepancyCount: z.number().int().min(0),
+    alertCount: z.number().int().min(0),
+  })
+  .strict();
+
 const pseudonymLabelSchema = z
   .string()
   .regex(/^member-[A-F0-9]{8}$/, 'pseudonymLabel must match member-XXXXXXXX (uppercase hex).');
@@ -363,6 +391,12 @@ export const monthlySnapshotSchema = z
     /// never a fabricated progression). Surfaced to the prompt so the
     /// `progressionNarrative` rests on measured deltas, not a qualitative guess.
     scoreProgression: scoreProgressionSchema.nullable(),
+    /// DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters (count-only,
+    /// posture §2). The DEDICATED ConstancyScore + open truth-gaps + repetition
+    /// alerts of the reported period, fed to the prompt so the debrief can name
+    /// the member's honesty/regularity trajectory in Mark-Douglas terms — never
+    /// a market view. Always present (the loader defaults 0/null when no signal).
+    verification: verificationSliceSchema,
   })
   .strict();
 

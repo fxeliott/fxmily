@@ -65,6 +65,24 @@ export interface BuilderInput {
   meetingScheduledCount?: number;
   meetingCompletedCount?: number;
   latestScore: BehavioralScoreSnapshot | null;
+  /// DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters PRE-COMPOSED by
+  /// the loader. `constancy` + `alertCount` are PERIOD-SCOPED to the reported week
+  /// (the ConstancyScore OF that week + alerts triggered in it — NEVER
+  /// `getLatestConstancyScore`, which is the current ISO week); `openDiscrepancyCount`
+  /// is a CURRENT-STATE count (écarts still open now), point-in-time by design.
+  /// `constancy` is the DEDICATED S3 score (honesty/regularity/discipline), not the
+  /// `consistency` sub-score of BehavioralScore (S2/S5). `null` when no constancy
+  /// signal for the week (no fake neutral score, §33.6). Posture §2/§33.2 — facts only.
+  verification: {
+    constancy: {
+      value: number;
+      honesty: number | null;
+      regularity: number | null;
+      discipline: number | null;
+    } | null;
+    openDiscrepancyCount: number;
+    alertCount: number;
+  };
 }
 
 export type { WeeklySnapshot, WeeklyReportOutput } from '@/lib/schemas/weekly-report';

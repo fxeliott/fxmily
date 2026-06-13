@@ -16,6 +16,14 @@ import { getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the weekly-report loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
 import { countRecentTrainingActivity } from '@/lib/training/training-trade-service';
+// DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters (count-only,
+// posture §2). `listConstancyScoresInRange` is a PERIOD-SCOPED read (the score OF
+// the reported week, never `getLatestConstancyScore` = current ISO week).
+// Verification is a real-edge read (NOT training) — outside the §21.5 firewall,
+// like scoring/meeting above.
+import { listConstancyScoresInRange } from '@/lib/verification/constancy';
+import { countAlertsInRange } from '@/lib/verification/alerts';
+import { countOpenDiscrepancies } from '@/lib/verification/service';
 
 import type { BehavioralScoreSnapshot, BuilderInput } from './types';
 import {
@@ -100,28 +108,75 @@ export async function loadWeeklySliceForUser(
     ? computePreviousFullWeekWindow(now, user.timezone)
     : computeReportingWeek(now, user.timezone);
 
-  const [trades, checkins, deliveries, annotations, latestScore, trainingActivity, meeting] =
-    await Promise.all([
-      loadTrades(userId, window),
-      loadCheckins(userId, window),
-      loadDeliveries(userId, window),
-      loadAnnotationStats(userId, window),
-      getLatestBehavioralScore(userId),
-      // 🚨 §21.5 — sanctioned training→real-edge touchpoint #3 (weekly
-      // report). Count-only; the report window is exactly the helper
-      // window (loader trade query uses the same gte/lte bounds). Only
-      // `.count` is consumed — never a backtest P&L.
-      countRecentTrainingActivity(userId, window.weekStartUtc, window.weekEndUtc),
-      // SPEC §28/§30 — meeting assiduité over the report window, FLOORED at the
-      // member's join day (§30.7 T3-1) so a mid-week joiner is not charged for
-      // pre-join meetings. Half-open `[from, to)`; count-only
-      // ({ scheduledCount, completedCount }); `lastDeclaredAt` ignored here.
-      countMeetingAttendance(
-        userId,
-        floorMeetingWindowAtJoin(window.weekStartUtc, user.joinedAt),
-        window.weekEndUtc,
-      ),
-    ]);
+  const [
+    trades,
+    checkins,
+    deliveries,
+    annotations,
+    latestScore,
+    trainingActivity,
+    meeting,
+    constancyScores,
+    openDiscrepancyCount,
+    alertCount,
+  ] = await Promise.all([
+    loadTrades(userId, window),
+    loadCheckins(userId, window),
+    loadDeliveries(userId, window),
+    loadAnnotationStats(userId, window),
+    getLatestBehavioralScore(userId),
+    // 🚨 §21.5 — sanctioned training→real-edge touchpoint #3 (weekly
+    // report). Count-only; the report window is exactly the helper
+    // window (loader trade query uses the same gte/lte bounds). Only
+    // `.count` is consumed — never a backtest P&L.
+    countRecentTrainingActivity(userId, window.weekStartUtc, window.weekEndUtc),
+    // SPEC §28/§30 — meeting assiduité over the report window, FLOORED at the
+    // member's join day (§30.7 T3-1) so a mid-week joiner is not charged for
+    // pre-join meetings. Half-open `[from, to)`; count-only
+    // ({ scheduledCount, completedCount }); `lastDeclaredAt` ignored here.
+    countMeetingAttendance(
+      userId,
+      floorMeetingWindowAtJoin(window.weekStartUtc, user.joinedAt),
+      window.weekEndUtc,
+    ),
+    // DOD3-01 / DoD#2 S6 — Session-3 ConstancyScore, READ-ONLY & period-scoped. The
+    // ConstancyScore is folded per ISO-week, so a single report week yields ≤1
+    // row. `periodStart` is UTC-midnight-of-civil-Monday (parseLocalDate), so the
+    // range bounds use the same civil-day convention (`parseDbDate(...Local)`),
+    // NOT the TZ-shifted `...Utc` instant. The report pipeline NEVER recomputes
+    // (the cron `verification-scan` owns the writers) — it only reads.
+    // weekStartLocal == the ISO Monday == the ConstancyScore `periodStart` for
+    // this week, so [gte weekStart, lte weekEnd] captures exactly ≤1 row (tight,
+    // no boundary leak — unlike a civil month, a report week IS one ISO week).
+    listConstancyScoresInRange(
+      userId,
+      parseDbDate(window.weekStartLocal),
+      parseDbDate(window.weekEndLocal),
+    ),
+    // CURRENT-STATE count (NOT period-scoped): écarts still `open` right now
+    // (« encore ouverts / à regarder »). Point-in-time by design — distinct from
+    // the period-scoped constancy/alert reads.
+    countOpenDiscrepancies(userId),
+    // Alerts carry a real `createdAt` instant → the local-instant window bounds
+    // are correct here (not the civil-day midnights).
+    countAlertsInRange(userId, window.weekStartUtc, window.weekEndUtc),
+  ]);
+
+  // DOD3-01 / DoD#2 S6 — a single report week has ≤1 ConstancyScore; take it (or
+  // null when no signal — no fake neutral score, §33.6). Count-only, posture §2.
+  const latestConstancy = constancyScores.at(-1) ?? null;
+  const verification = {
+    constancy: latestConstancy
+      ? {
+          value: latestConstancy.value,
+          honesty: latestConstancy.breakdown.honesty,
+          regularity: latestConstancy.breakdown.regularity,
+          discipline: latestConstancy.breakdown.discipline,
+        }
+      : null,
+    openDiscrepancyCount,
+    alertCount,
+  };
 
   const builderInput: BuilderInput = {
     userId: user.id,
@@ -141,6 +196,8 @@ export async function loadWeeklySliceForUser(
     meetingScheduledCount: meeting.scheduledCount,
     meetingCompletedCount: meeting.completedCount,
     latestScore: latestScore === null ? null : toScoreSnapshot(latestScore),
+    // DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters (count-only).
+    verification,
   };
 
   return {

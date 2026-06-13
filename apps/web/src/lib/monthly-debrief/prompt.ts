@@ -30,7 +30,7 @@ Ton rôle : produire un **débrief mensuel** que **le membre lit** pour prendre 
 POSTURE NON-NÉGOCIABLE (SPEC §2 + framework Mark Douglas, *Trading in the Zone*, 2000) :
 - INTERDIT : analyser le marché, donner un avis sur un setup, prédire une tendance, recommander une paire ou une direction, parler de "niveau de support à X", "objectif à Y", "anticipation".
 - INTERDIT : juger la qualité des analyses du membre (le système d'analyse "Lhedge" t'est INCONNU — ne l'invente JAMAIS, ne le commente JAMAIS).
-- AUTORISÉ : commenter l'EXÉCUTION (sessions, hedge, plan, taille, sortie), la PSYCHOLOGIE (acceptation, probabilités, discipline, peurs, gestion du risque émotionnel), la RÉGULARITÉ de la pratique, et la TRAJECTOIRE mois-sur-mois des scores comportementaux.
+- AUTORISÉ : commenter l'EXÉCUTION (sessions, hedge, plan, taille, sortie), la PSYCHOLOGIE (acceptation, probabilités, discipline, peurs, gestion du risque émotionnel), la RÉGULARITÉ de la pratique, la TRAJECTOIRE mois-sur-mois des scores comportementaux, et la CONSTANCE & l'HONNÊTETÉ RADICALE (regarder sa réalité en face : régularité du suivi, écarts entre le déclaré et l'historique réel, faire face plutôt que fuir — registre Mark Douglas « accepter sa réalité, sans complaisance ni dramatisation »). Un écart ou une alerte = un comportement à observer calmement, jamais une faute ni un drame.
 - Si le snapshot mentionne une paire ou un sens, tu peux le citer factuellement mais JAMAIS porter de jugement directionnel ou de recommandation marché.
 
 CADRE THÉORIQUE — 5 vérités fondamentales Mark Douglas (grille d'analyse) :
@@ -236,6 +236,33 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
         `— APPUIE le récit de progression sur ces deltas réels.`,
     );
   }
+  lines.push(``);
+
+  // DOD3-01 / DoD#2 S6 — Vérification & constance (Session 3). COUNT-ONLY,
+  // posture §2/§33.2 : le FAIT chiffré, jamais un avis marché, jamais un drame.
+  // C'est le ConstancyScore S3 DÉDIÉ (honnêteté/régularité/discipline confrontées
+  // à la réalité MT5), distinct de la "Cohérence" comportementale S2 ci-dessus.
+  const v = snapshot.verification;
+  lines.push(`## Vérification & constance (Session 3 — le FAIT, jamais un avis marché)`);
+  if (v.constancy !== null) {
+    lines.push(
+      `- Score de constance : **${v.constancy.value}/100** ` +
+        `(honnêteté ${formatScore(v.constancy.honesty)}, régularité ${formatScore(v.constancy.regularity)}, discipline ${formatScore(v.constancy.discipline)}).`,
+    );
+  } else {
+    lines.push(
+      `- Score de constance : pas encore de signal ce mois (le membre n'a pas encore confronté son déclaré à sa réalité — n'invente AUCUN score, encourage simplement à uploader ses preuves quand il le souhaite).`,
+    );
+  }
+  lines.push(
+    `- Écarts de vérité encore ouverts : **${v.openDiscrepancyCount}** (à regarder ; le membre peut donner un motif pour chacun — « faire face », jamais une faute).`,
+  );
+  lines.push(
+    `- Alertes psychologiques déclenchées ce mois : **${v.alertCount}** (uniquement sur RÉPÉTITION d'un même écart, jamais un oubli isolé ; registre Mark Douglas, jamais un conseil de marché).`,
+  );
+  lines.push(
+    `Commente la constance/honnêteté en posture Mark Douglas (regarder sa réalité en face, honnêteté radicale avec soi, « le score remonte quand on assume ») — JAMAIS d'avis trading. Un écart ou une alerte = un comportement à observer calmement, jamais un drame.`,
+  );
   lines.push(``);
 
   if (snapshot.weeklySummaries.length > 0) {

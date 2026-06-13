@@ -298,6 +298,34 @@ const pseudonymLabelSchema = z
   .string()
   .regex(/^member-[A-F0-9]{8}$/, 'pseudonymLabel must match member-XXXXXXXX (uppercase hex).');
 
+/// (S3) VÉRIFICATION & CONSTANCE — Session 3 (DOD3-01, DoD#2 S6). COUNT-ONLY,
+/// posture §2/§33.2 : des nombres factuels (jamais un compteur de culpabilité,
+/// jamais un avis marché). `constancy` est le **ConstancyScore S3 DÉDIÉ**
+/// (honnêteté/régularité/discipline confrontées à la réalité MT5), STRICTEMENT
+/// DISTINCT du sous-score `consistency` de `BehavioralScore` (S2/S5, `scores`
+/// ci-dessous). `null` quand le membre n'a aucun signal de constance sur la
+/// semaine rapportée (pas de faux score neutre — anti-complaisance §33.6).
+/// `constancy` + `alertCount` sont period-scopés ; `openDiscrepancyCount` =
+/// écarts de vérité encore OUVERTS (« à regarder ») = état COURANT (point-in-time,
+/// non period-scopé). `alertCount` = alertes PSYCHOLOGIQUES déclenchées dans la
+/// semaine (répétition uniquement §33.8 — `Alert.category` est l'enum mono-valeur
+/// `psychological`).
+const verificationSliceSchema = z
+  .object({
+    constancy: z
+      .object({
+        value: z.number().min(0).max(100),
+        honesty: z.number().min(0).max(100).nullable(),
+        regularity: z.number().min(0).max(100).nullable(),
+        discipline: z.number().min(0).max(100).nullable(),
+      })
+      .strict()
+      .nullable(),
+    openDiscrepancyCount: z.number().int().min(0),
+    alertCount: z.number().int().min(0),
+  })
+  .strict();
+
 export const weeklySnapshotSchema = z
   .object({
     pseudonymLabel: pseudonymLabelSchema,
@@ -315,6 +343,13 @@ export const weeklySnapshotSchema = z
         engagement: z.number().int().min(0).max(100).nullable(),
       })
       .strict(),
+    /// DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters (count-only,
+    /// posture §2). The DEDICATED ConstancyScore + repetition alerts of the
+    /// reported week are period-scoped; the open-truth-gaps count is current-state
+    /// (still open now). Fed to the admin digest so Eliot sees each member's
+    /// honesty/regularity trajectory — never a market view. Always present (the
+    /// loader defaults 0/null when no signal).
+    verification: verificationSliceSchema,
   })
   .strict();
 

@@ -18,7 +18,7 @@ import type { SerializedCheckin } from '@/lib/checkin/service';
 import type { SerializedTrade } from '@/lib/trades/service';
 
 import { buildWeeklySnapshot } from './builder';
-import { buildWeeklyReportUserPrompt } from './prompt';
+import { buildWeeklyReportUserPrompt, WEEKLY_REPORT_SYSTEM_PROMPT } from './prompt';
 import type { BuilderInput } from './types';
 
 const WEEK_START = new Date('2026-05-04T00:00:00Z'); // Monday
@@ -36,6 +36,9 @@ function emptyInput(): BuilderInput {
     annotationsReceived: 0,
     annotationsViewed: 0,
     latestScore: null,
+    // DOD3-01 / DoD#2 S6 — Session-3 counters default to the empty (no-signal)
+    // shape; tests that exercise S3 override it.
+    verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 },
   };
 }
 
@@ -245,5 +248,36 @@ describe('buildWeeklyReportUserPrompt — behaviorTags + R reliability reach Cla
     ];
     const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(input));
     expect(prompt).toContain('Fiabilité du R agrégé : 2 calculé(s) / 1 estimé(s)');
+  });
+});
+
+describe('DOD3-01 / DoD#2 S6 — Session-3 verification section reaches the prompt', () => {
+  it('renders the constancy score + breakdown + écarts + alertes (count-only, 3e personne)', () => {
+    const prompt = buildWeeklyReportUserPrompt(
+      buildWeeklySnapshot({
+        ...emptyInput(),
+        verification: {
+          constancy: { value: 81, honesty: 80, regularity: 95, discipline: 70 },
+          openDiscrepancyCount: 1,
+          alertCount: 2,
+        },
+      }),
+    );
+    expect(prompt).toContain('Vérification & constance du membre');
+    expect(prompt).toContain('Score de constance : **81/100**');
+    expect(prompt).toContain('honnêteté 80/100');
+    expect(prompt).toContain('Écarts de vérité encore ouverts : **1**');
+    expect(prompt).toContain('Alertes psychologiques déclenchées cette semaine : **2**');
+  });
+
+  it('renders the honest no-signal copy when constancy is null', () => {
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(emptyInput()));
+    expect(prompt).toContain('pas encore de signal');
+    expect(prompt).not.toContain('Score de constance : **');
+  });
+
+  it('the system prompt authorizes constancy/honesty commentary (posture §2 count-only)', () => {
+    expect(WEEKLY_REPORT_SYSTEM_PROMPT).toContain('CONSTANCE');
+    expect(WEEKLY_REPORT_SYSTEM_PROMPT).toContain('HONNÊTETÉ RADICALE');
   });
 });

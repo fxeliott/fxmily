@@ -79,6 +79,12 @@ const ACTIVE_SNAPSHOT = {
     consistency: 72,
     engagement: 80,
   },
+  // DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters (count-only).
+  verification: {
+    constancy: { value: 78, honesty: 85, regularity: 90, discipline: 60 },
+    openDiscrepancyCount: 1,
+    alertCount: 0,
+  },
 };
 
 const INACTIVE_SNAPSHOT = {
@@ -139,6 +145,8 @@ const INACTIVE_SNAPSHOT = {
     consistency: null,
     engagement: null,
   },
+  // DOD3-01 / DoD#2 S6 — inactive member: no constancy signal yet.
+  verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 },
 };
 
 describe('MockWeeklyReportClient', () => {

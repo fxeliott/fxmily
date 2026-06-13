@@ -425,15 +425,13 @@ export async function listRecentScoreEvents(
   }));
 }
 
-export async function getLatestConstancyScore(
-  memberId: string,
-): Promise<ConstancyScoreView | null> {
-  const row = await db.constancyScore.findFirst({
-    where: { memberId },
-    orderBy: { periodStart: 'desc' },
-    select: { value: true, breakdown: true, periodStart: true, computedAt: true },
-  });
-  if (!row) return null;
+/** Map a `ConstancyScore` row (Json `breakdown`) to the count-only view. */
+function toConstancyScoreView(row: {
+  value: number;
+  breakdown: unknown;
+  periodStart: Date;
+  computedAt: Date;
+}): ConstancyScoreView {
   const breakdown = row.breakdown as {
     honesty?: unknown;
     regularity?: unknown;
@@ -450,4 +448,40 @@ export async function getLatestConstancyScore(
     periodStart: row.periodStart,
     computedAt: row.computedAt,
   };
+}
+
+export async function getLatestConstancyScore(
+  memberId: string,
+): Promise<ConstancyScoreView | null> {
+  const row = await db.constancyScore.findFirst({
+    where: { memberId },
+    orderBy: { periodStart: 'desc' },
+    select: { value: true, breakdown: true, periodStart: true, computedAt: true },
+  });
+  return row ? toConstancyScoreView(row) : null;
+}
+
+/**
+ * S6 (DOD3-01) — the ConstancyScore rows whose ISO-week `periodStart` falls in
+ * `[rangeStart, rangeEnd]` (inclusive), oldest→newest. Powers the **retrospective
+ * reports** (weekly/monthly): the score is folded PER ISO-WEEK
+ * (`recomputeConstancyForAllMembers` upserts on `(memberId, periodStart)`), so a
+ * report covering a PAST period must read the score OF THAT PERIOD — NOT
+ * `getLatestConstancyScore` (which always returns the current ISO week and would
+ * mis-label "ta constance de mai" with this week's value). The weekly report
+ * passes its single ISO week (≤1 row); the monthly report passes the civil month
+ * (~4-5 rows) and reads the latest in range. Count-only / posture §33.2 — the
+ * value + breakdown are factual numbers, never a guilt counter or market view.
+ */
+export async function listConstancyScoresInRange(
+  memberId: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<readonly ConstancyScoreView[]> {
+  const rows = await db.constancyScore.findMany({
+    where: { memberId, periodStart: { gte: rangeStart, lte: rangeEnd } },
+    orderBy: { periodStart: 'asc' },
+    select: { value: true, breakdown: true, periodStart: true, computedAt: true },
+  });
+  return rows.map(toConstancyScoreView);
 }

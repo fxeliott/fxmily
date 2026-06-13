@@ -37,6 +37,9 @@ function emptyInput(): BuilderInput {
     annotationsReceived: 0,
     annotationsViewed: 0,
     latestScore: null,
+    // DOD3-01 / DoD#2 S6 — Session-3 counters default to the empty (no-signal)
+    // shape; tests that exercise S3 override it.
+    verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 },
   };
 }
 
@@ -746,5 +749,30 @@ describe('pseudonymizeMember — V1.5 prompt boundary defense', () => {
     // TypeScript: snap.memberLabel was renamed to snap.pseudonymLabel in V1.5.2.
     // @ts-expect-error — `memberLabel` is no longer a property of WeeklySnapshot.
     expect(snap.memberLabel).toBeUndefined();
+  });
+});
+
+describe('DOD3-01 / DoD#2 S6 — Session-3 verification counters', () => {
+  it('relays the verification slice verbatim into the snapshot (schema-valid)', () => {
+    const snap = buildWeeklySnapshot({
+      ...emptyInput(),
+      verification: {
+        constancy: { value: 81, honesty: 80, regularity: 95, discipline: 70 },
+        openDiscrepancyCount: 1,
+        alertCount: 0,
+      },
+    });
+    expect(snap.verification).toEqual({
+      constancy: { value: 81, honesty: 80, regularity: 95, discipline: 70 },
+      openDiscrepancyCount: 1,
+      alertCount: 0,
+    });
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('accepts a null constancy (no signal — never a fake neutral score, §33.6)', () => {
+    const snap = buildWeeklySnapshot(emptyInput());
+    expect(snap.verification.constancy).toBeNull();
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });

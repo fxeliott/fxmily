@@ -256,6 +256,39 @@ const trainingEffortSliceSchema = z
   })
   .strict();
 
+/// One side (baseline N-1 OR current) of `scoreProgression` — the 4
+/// behavioural dimensions at a given anchor date. Each dimension is
+/// `number | null` (`insufficient_data` that day is NEVER a fabricated 0).
+const scoreProgressionSideSchema = z
+  .object({
+    discipline: z.number().nullable(),
+    emotionalStability: z.number().nullable(),
+    consistency: z.number().nullable(),
+    engagement: z.number().nullable(),
+  })
+  .strict();
+
+/// DoD#3 / §29 "progression MESURABLE" — month-over-month delta of the
+/// behavioural scores, ANCHORED in real N-1 vs N numbers (not a qualitative
+/// guess). `previous` = the member's entry-of-month score (the trend point
+/// closest BEFORE/ON the 1st), `current` = the most-recent trend point,
+/// `delta` = current − previous per dimension (ONLY when BOTH bounds are
+/// non-null, else `null` for that dimension). `null` (the whole object) when
+/// there is no baseline before month start OR fewer than 2 points — HONEST,
+/// the builder never fabricates a progression from a single snapshot.
+/// Posture §2: these are internal PSYCHOLOGICAL scores, never market data.
+const scoreProgressionSchema = z
+  .object({
+    previous: scoreProgressionSideSchema,
+    current: scoreProgressionSideSchema,
+    delta: scoreProgressionSideSchema,
+    /// `YYYY-MM-DD` anchor of the baseline (N-1) trend point.
+    previousDate: z.string(),
+    /// `YYYY-MM-DD` anchor of the current (N) trend point.
+    currentDate: z.string(),
+  })
+  .strict();
+
 const pseudonymLabelSchema = z
   .string()
   .regex(/^member-[A-F0-9]{8}$/, 'pseudonymLabel must match member-XXXXXXXX (uppercase hex).');
@@ -324,6 +357,12 @@ export const monthlySnapshotSchema = z
         engagement: z.number().int().min(0).max(100).nullable(),
       })
       .strict(),
+    /// DoD#3 / §29 — month-over-month progression of the behavioural scores,
+    /// anchored in REAL N-1 vs N numbers (`previous`/`current`/`delta`). `null`
+    /// when no baseline exists before month start or <2 trend points (honest —
+    /// never a fabricated progression). Surfaced to the prompt so the
+    /// `progressionNarrative` rests on measured deltas, not a qualitative guess.
+    scoreProgression: scoreProgressionSchema.nullable(),
   })
   .strict();
 

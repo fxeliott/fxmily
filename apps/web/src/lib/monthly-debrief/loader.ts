@@ -13,7 +13,7 @@ import { countMeetingAttendance } from '@/lib/meeting/service';
 // mid-month joiner is not charged for pre-join meetings (byte-identical past
 // the first month).
 import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
-import { getLatestBehavioralScore } from '@/lib/scoring/service';
+import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the monthly-debrief loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
 // (Pinned by the anti-leak suite Block A once this file is added to
@@ -130,6 +130,7 @@ export async function loadMonthlySliceForUser(
     deliveries,
     annotations,
     latestScore,
+    scoreHistory,
     trainingActivity,
     weeklySummaries,
     meeting,
@@ -139,6 +140,14 @@ export async function loadMonthlySliceForUser(
     loadDeliveries(userId, window),
     loadAnnotationStats(userId, window),
     getLatestBehavioralScore(userId),
+    // DoD#3 / §29 "progression MESURABLE" — la série ASCENDANTE des scores
+    // comportementaux sur ~75 jours (≈2 mois + marge) pour ancrer le récit de
+    // progression mois-sur-mois dans des chiffres N-1 vs N réels. `latestScore`
+    // (le plus récent) reste la photo "scores" du snapshot ; cette série fournit
+    // EN PLUS une BASELINE (score d'entrée de mois) + un DELTA. Le builder pur
+    // dérive `scoreProgression` (il ne touche pas l'horloge ; le loader passe la
+    // série + `monthStartLocal`).
+    getBehavioralScoreHistory(userId, { sinceDays: 75 }),
     // 🚨 §21.5 — sanctioned training→debrief touchpoint (the count-only
     // primitive). `.count` is consumed for the volume of practice ;
     // `lastEnteredAt` (all-time most-recent) is used ONLY to derive a
@@ -204,6 +213,10 @@ export async function loadMonthlySliceForUser(
     annotationsReceived: annotations.received,
     annotationsViewed: annotations.viewed,
     latestScore: latestScore === null ? null : toScoreSnapshot(latestScore),
+    // DoD#3 / §29 — série brute + ancre d'entrée de mois ; le builder pur en
+    // calcule la baseline N-1 et le delta (clock-free, fixture-replayable).
+    scoreHistory,
+    monthStartLocal: window.monthStartLocal,
     weeklySummaries,
     // SPEC §28/§30 — meeting assiduité counts (count-only). The aggregator
     // turns them into the explicit `meetingAttendance` REAL counter ; 0/0 →

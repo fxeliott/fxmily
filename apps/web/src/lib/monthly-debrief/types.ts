@@ -19,6 +19,7 @@
 
 import type { SerializedDelivery } from '@/lib/cards/types';
 import type { SerializedCheckin } from '@/lib/checkin/service';
+import type { BehavioralScoreTrendPoint } from '@/lib/scoring/service';
 import type { SerializedTrade } from '@/lib/trades/service';
 
 export interface BehavioralScoreSnapshot {
@@ -73,6 +74,20 @@ export interface MonthlyBuilderInput {
   annotationsReceived: number;
   annotationsViewed: number;
   latestScore: BehavioralScoreSnapshot | null;
+  /**
+   * DoD#3 / §29 "progression MESURABLE" — la série ASCENDANTE des scores
+   * comportementaux journaliers du membre sur ~75 jours (≈2 mois + marge),
+   * sourcée par le loader via `getBehavioralScoreHistory(userId, { sinceDays: 75 })`.
+   * Le builder en dérive `scoreProgression` : un point de BASELINE (score
+   * d'entrée de mois, le plus récent ≤ `monthStartLocal`) et le DELTA vers le
+   * point courant (le plus récent de la série). Chaque dimension reste
+   * `number | null` (`insufficient_data` un jour donné n'est JAMAIS un faux 0).
+   * Posture §2 : ce sont des scores PSYCHOLOGIQUES internes, jamais du marché.
+   */
+  scoreHistory: BehavioralScoreTrendPoint[];
+  /// `YYYY-MM-DD` (1er du mois civil local) — l'ancre qui sépare la baseline
+  /// N-1 (≤ cette date) du courant. Fourni par le loader (`window.monthStartLocal`).
+  monthStartLocal: string;
   /**
    * SPEC §28/§30 — meeting (réunion Fxmily) attendance over the civil-month
    * window. Two integer COUNTS sourced by the loader from the count-only

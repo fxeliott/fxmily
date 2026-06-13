@@ -58,6 +58,9 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
     behaviorTags: collectBehaviorTags(input),
     weeklySummaries: buildWeeklySummaries(input),
     scores: buildScores(input),
+    // DoD#3 / §29 "progression MESURABLE" — delta N-1 vs N ancré dans la série
+    // réelle des scores comportementaux (ou `null` si pas de baseline / <2 points).
+    scoreProgression: buildScoreProgression(input),
   };
 }
 
@@ -233,6 +236,88 @@ function buildScores(input: MonthlyBuilderInput): MonthlySnapshot['scores'] {
     consistency: input.latestScore.consistency,
     engagement: input.latestScore.engagement,
   };
+}
+
+// =============================================================================
+// DoD#3 / §29 "progression MESURABLE" — score progression (N-1 vs N delta)
+// =============================================================================
+
+/**
+ * Compute the month-over-month behavioural-score progression from the raw
+ * ascending trend series + the local month-start anchor.
+ *
+ * Sources (decision, documented):
+ *   - `current` = the LAST point of the series (the most recent ≤ now). It is
+ *     read from the SAME `scoreHistory` series as `previous` so both anchor
+ *     dates are mutually consistent and the per-dimension delta is meaningful.
+ *     (The snapshot's separate `scores` field keeps using `latestScore` /
+ *     `getLatestBehavioralScore` unchanged — that is the dashboard photo, this
+ *     is the trajectory.)
+ *   - `previous` (baseline N-1) = the trend point whose `date` is the latest one
+ *     `<= monthStartLocal` (string compare is correct on `YYYY-MM-DD`) — i.e. the
+ *     member's score AS THEY ENTERED the month.
+ *
+ * Returns `null` (HONEST — no fabrication) when:
+ *   - the series has < 2 points, OR
+ *   - no point exists at/before `monthStartLocal` (no entry-of-month baseline), OR
+ *   - the baseline and the current point are the SAME point (no movement to narrate).
+ *
+ * `delta` per dimension = `current − previous`, ONLY when BOTH values are
+ * non-null (a dimension that was `insufficient_data` on either anchor → `null`
+ * delta, never a fake number). Posture §2: internal psychological scores only.
+ */
+function buildScoreProgression(input: MonthlyBuilderInput): MonthlySnapshot['scoreProgression'] {
+  const series = input.scoreHistory;
+  if (series.length < 2) return null;
+
+  // The series is ascending (loader contract), so the last element is the most
+  // recent point = `current`.
+  const current = series[series.length - 1];
+  if (current === undefined) return null;
+
+  // Baseline = the latest point at/before the 1st of the reporting month. The
+  // series is ascending, so iterate from the end and take the first one whose
+  // local-date anchor is `<= monthStartLocal`.
+  let previous: (typeof series)[number] | undefined;
+  for (let i = series.length - 1; i >= 0; i -= 1) {
+    const point = series[i];
+    if (point !== undefined && point.date <= input.monthStartLocal) {
+      previous = point;
+      break;
+    }
+  }
+  if (previous === undefined) return null;
+  // Same anchor as current ⇒ a single in-window point, nothing to compare.
+  if (previous.date === current.date) return null;
+
+  return {
+    previous: {
+      discipline: previous.discipline,
+      emotionalStability: previous.emotionalStability,
+      consistency: previous.consistency,
+      engagement: previous.engagement,
+    },
+    current: {
+      discipline: current.discipline,
+      emotionalStability: current.emotionalStability,
+      consistency: current.consistency,
+      engagement: current.engagement,
+    },
+    delta: {
+      discipline: deltaOf(current.discipline, previous.discipline),
+      emotionalStability: deltaOf(current.emotionalStability, previous.emotionalStability),
+      consistency: deltaOf(current.consistency, previous.consistency),
+      engagement: deltaOf(current.engagement, previous.engagement),
+    },
+    previousDate: previous.date,
+    currentDate: current.date,
+  };
+}
+
+/** `current − previous` per dimension, ONLY when both bounds are non-null. */
+function deltaOf(current: number | null, previous: number | null): number | null {
+  if (current === null || previous === null) return null;
+  return current - previous;
 }
 
 // =============================================================================

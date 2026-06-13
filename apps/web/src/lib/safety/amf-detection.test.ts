@@ -468,3 +468,68 @@ describe('detectAMFViolation — MUST NOT FLAG (S5 hardening — FP carve-outs)'
     expect(flag('vise les 2.0 de ratio risque-récompense')).toBe(false);
   });
 });
+
+// =============================================================================
+// S5 — 10e challenge (re-audit adverse 2026-06-13) : régressions FP/asymétrie
+//   D1-F1 (price_target_vers % / R / risque), D1-F2 (tendance psy),
+//   D1-F3 (symétrie EN citée). Voir amf-detection.ts carve-outs.
+// =============================================================================
+
+describe('detectAMFViolation — S5 10e challenge MUST NOT FLAG (D1-F1/F2/F3)', () => {
+  // D1-F1 — "vers <décimal>" suivi d'un %/R/unité de risque = coaching de taille.
+  it('D1-F1 "Réduis ta taille vers 1.00% pour de la sérénité."', () => {
+    expect(flag('Réduis ta taille vers 1.00% pour de la sérénité.')).toBe(false);
+  });
+  it('D1-F1 "Ramène ton risque vers 1.0% par trade."', () => {
+    expect(flag('Ramène ton risque vers 1.0% par trade.')).toBe(false);
+  });
+  it('D1-F1 "reviens vers 1.5% de risque"', () => {
+    expect(flag('reviens vers 1.5% de risque')).toBe(false);
+  });
+  it('D1-F1 "tends vers 2.00R de gain"', () => {
+    expect(flag('tends vers 2.00R de gain')).toBe(false);
+  });
+  it('D1-F1 "Vise une perte max vers 0.50% du capital."', () => {
+    expect(flag('Vise une perte max vers 0.50% du capital.')).toBe(false);
+  });
+
+  // D1-F2 — tendance d'un attribut psy/comportemental = coaching (disciplineTrend).
+  it('D1-F2 "Ta discipline est sur une tendance haussière ce mois-ci."', () => {
+    expect(flag('Ta discipline est sur une tendance haussière ce mois-ci.')).toBe(false);
+  });
+  it('D1-F2 "On voit une tendance haussière de ta régularité."', () => {
+    expect(flag('On voit une tendance haussière de ta régularité.')).toBe(false);
+  });
+  it('D1-F2 "Ta constance affiche une tendance baissière à corriger."', () => {
+    expect(flag('Ta constance affiche une tendance baissière à corriger.')).toBe(false);
+  });
+
+  // D1-F3 — directive EN CITÉE / discours rapporté = pédagogie Douglas (symétrie FR).
+  it('D1-F3 "Ton cerveau fabrique l\'histoire « buy now » — observe-la."', () => {
+    expect(flag("Ton cerveau fabrique l'histoire « buy now » — observe-la.")).toBe(false);
+  });
+  it('D1-F3 "Le réflexe \'sell now\' est une peur, pas un signal."', () => {
+    expect(flag("Le réflexe 'sell now' est une peur, pas un signal.")).toBe(false);
+  });
+});
+
+describe('detectAMFViolation — S5 10e challenge MUST STILL FLAG (anti-FN)', () => {
+  it('D1-F1 anti-FN "Vise vers 1.0850 sur l\'euro." (prix Forex)', () => {
+    expect(flag("Vise vers 1.0850 sur l'euro.")).toBe(true);
+  });
+  it('D1-F1 anti-FN "Le prix file vers 4300.50 sur le DAX."', () => {
+    expect(flag('Le prix file vers 4300.50 sur le DAX.')).toBe(true);
+  });
+  it('D1-F2 anti-FN "La tendance est haussière sur le DAX." (marché)', () => {
+    expect(flag('La tendance est haussière sur le DAX.')).toBe(true);
+  });
+  it('D1-F2 anti-FN "Une tendance haussière se dessine sur le Nasdaq."', () => {
+    expect(flag('Une tendance haussière se dessine sur le Nasdaq.')).toBe(true);
+  });
+  it('D1-F3 anti-FN "Buy the dip maintenant sur le Nasdaq." (directive non citée)', () => {
+    expect(flag('Buy the dip maintenant sur le Nasdaq.')).toBe(true);
+  });
+  it('D1-F3 anti-FN "Sell the rally tout de suite." (directive non citée)', () => {
+    expect(flag('Sell the rally tout de suite.')).toBe(true);
+  });
+});

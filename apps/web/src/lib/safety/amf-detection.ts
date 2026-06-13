@@ -205,21 +205,22 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
   {
     label: 'directive_buy_english',
     // "Buy the dip" / "Buy now" — English imperatives.
-    // CARVE-OUT (S5 10e challenge — D1-F3) : SYMÉTRIE avec les patterns FR
-    //   price_will_rise/fall — une directive anglaise CITÉE (« buy now ») ou en
-    //   discours rapporté (l'histoire 'buy now' que ton cerveau crée) = pédagogie
-    //   Mark Douglas qui NOMME l'impulsion à éviter, pas un conseil → NON flaggé.
-    //   Sans ce carve-out, l'anglais bloquait la pédagogie que le FR laisse passer.
+    // CARVE-OUT (S5 10e challenge — D1-F3) : une directive anglaise CITÉE & CLOSE
+    //   (« buy now », l'histoire 'buy now') = pédagogie Douglas qui NOMME l'impulsion.
+    //   Le carve exige un guillemet FERMANT juste après l'impulsion courte — un simple
+    //   guillemet ouvrant ne suffit pas (re-review adverse : "« buy the dip sur
+    //   l'EURUSD" sans fermeture = vrai ordre → FLAG). L'instrument qui suit casse
+    //   l'enclosure donc reste détecté.
     pattern: new RegExp(
-      String.raw`(?<!\p{L})(?<!(?:[«“‘‹”›’"'])\s*)buy\s+(?:the\s+)?(?:dip|now|here|it|signal)(?!\p{L})`,
+      String.raw`(?<!\p{L})buy\s+(?:the\s+)?(?:dip|now|here|it|signal)(?!\s*[»”’›"'])(?!\p{L})`,
       'iu',
     ),
   },
   {
     label: 'directive_sell_english',
-    // "Sell the rally" / "Sell now" — voir D1-F3 (symétrie carve-out citation/rapporté).
+    // "Sell the rally" / "Sell now" — voir D1-F3 (carve = impulsion citée ET close).
     pattern: new RegExp(
-      String.raw`(?<!\p{L})(?<!(?:[«“‘‹”›’"'])\s*)sell\s+(?:the\s+)?(?:rally|now|here|it|signal)(?!\p{L})`,
+      String.raw`(?<!\p{L})sell\s+(?:the\s+)?(?:rally|now|here|it|signal)(?!\s*[»”’›"'])(?!\p{L})`,
       'iu',
     ),
   },
@@ -357,10 +358,14 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     //   explicitement le coaching d'exécution/size) → NE PAS flag. Le suffixe
     //   %/R/unité-de-risque distingue un % de risque d'un prix Forex/indice. Sans ce
     //   carve-out, un FP skip silencieusement TOUT le débrief mensuel (batch.ts).
-    // NOTE `(?![\d.,])` : ancre la FIN du nombre — sinon le moteur backtrack `\d+`
-    //   vers un nombre plus court ("1.00%" → "1.0") pour contourner le carve-out.
+    // Le carve (lookahead EN TÊTE, avant de consommer le nombre) ne s'active QUE
+    //   si le nombre est *risk-shaped* : 1-3 chiffres entiers + 1-2 décimales +
+    //   suffixe %/R/unité-de-risque ("1.00%", "1.5% de risque", "2.00R"). Un prix
+    //   Forex (1.0850 = 4 déc.) ou indice (4300) N'EST PAS risk-shaped → reste flag
+    //   même suivi d'un token parasite ("vers 1.0850 de risque" → FLAG, anti-FN
+    //   re-review adverse). Sans le test de forme, le carve neutralisait tout prix.
     pattern:
-      /(?<!\p{L})vers\s+\d+[.,]\d+(?![\d.,])(?!\s*(?:%|[rR](?!\p{L})|de\s+(?:risque|gain|perte|capital|marge)|(?:ta|ton|sa|son|votre)\s+(?:taille|risque|marge)))(?!\p{L})/iu,
+      /(?<!\p{L})vers\s+(?!\d{1,3}[.,]\d{1,2}\s*(?:%|[rR]\b|de\s+(?:risque|gain|perte|capital|marge)|(?:ta|ton|sa|son|votre)\s+(?:taille|risque|marge)))\d+[.,]\d+(?!\p{L})/iu,
   },
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -378,15 +383,17 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     //   `disciplineTrend` ; "ta discipline est sur une tendance haussière" est §2-conforme.
     //   Lookbehind possessif-personne ("ta/ton/sa…") + lookahead sujet-psy carvent ces cas
     //   sans relâcher "la tendance est haussière sur le DAX" (qui flag toujours).
-    // Lookbehind variable bornée (supportée par V8, comme les patterns FR ci-dessus) :
-    //   carve si un sujet PSY précède "tendance" dans la même phrase (≤40 chars sans
-    //   ponctuation forte) — "Ta discipline est sur une tendance haussière" PASSE.
-    //   Lookahead : carve si le sujet psy SUIT l'adjectif. "La tendance est haussière
-    //   sur le DAX" flag toujours (aucun sujet psy autour).
-    pattern: new RegExp(
-      String.raw`(?<!\p{L})(?<!(?:discipline|r[eé]gularit[eé]|constance|progression|confiance|motivation|ex[eé]cution|gestion|mental|rigueur|patience|s[eé]r[eé]nit[eé])[^.!?]{0,40})tendance\s+(?:est\s+)?(?:haussi[eè]re|baissi[eè]re|haussier|baissier)(?!\s+(?:de\s+(?:ta|ton|sa|la|votre)\s+)?(?:discipline|r[eé]gularit[eé]|constance|progression|confiance|motivation|ex[eé]cution|gestion|mental))(?!\p{L})`,
-      'iu',
-    ),
+    // Carve UNIQUEMENT le génitif psy IMMÉDIAT "tendance haussière de ta discipline"
+    //   (sujet psy directement après l'adjectif). La lookbehind variable précédente
+    //   sur-carvait : un mot psy n'importe où dans 40 chars avant désactivait la
+    //   détection marché ("Côté discipline, la tendance est haussière sur le DAX" →
+    //   FN). "La tendance est haussière sur le DAX" flag toujours (re-review adverse).
+    //   Le cas rare "ta discipline est sur une tendance haussière" reste FP-flag
+    //   (côté sûr du budget §2 ; le system prompt steere Claude vers "amélioration").
+    //   Carve restreint au POSSESSIF-PERSONNE ("de ta discipline") — pas l'article
+    //   générique ("de la discipline du Nasdaq" reste FLAG, anti-game re-review).
+    pattern:
+      /(?<!\p{L})tendance\s+(?:est\s+)?(?:haussi[eè]re|baissi[eè]re|haussier|baissier)(?!\s+(?:de\s+)?(?:ta|ton|tes|sa|ses|ma|mon|mes|votre|vos|notre|nos)\s+(?:discipline|r[eé]gularit[eé]|constance|progression|confiance|motivation|ex[eé]cution|gestion|mental))(?!\p{L})/iu,
   },
   {
     label: 'retournement_directionnel',

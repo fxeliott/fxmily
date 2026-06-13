@@ -82,7 +82,7 @@ interface AMFPatternRule {
 // (argent = monnaie en coaching) — only the unambiguous "l'or" gold form.
 // Covers : forex majors, EU/US/Asia indices, crypto, commodities.
 // -----------------------------------------------------------------------------
-const INSTRUMENT_TOKEN = String.raw`(?:eur[\/]?usd|gbp[\/]?usd|usd[\/]?jpy|usd[\/]?chf|usd[\/]?cad|aud[\/]?usd|nzd[\/]?usd|eur[\/]?gbp|eur[\/]?jpy|gbp[\/]?jpy|xau[\/]?usd|dax(?:\s?40)?|cac(?:\s?40)?|nasdaq|nikkei|footsie|ftse|russell|dow(?:\s+jones)?|sp\s?500|s&p\s?500|bitcoin|btc|ethereum|eth|p[ée]trole|brent|wti|l['’]or)`;
+const INSTRUMENT_TOKEN = String.raw`(?:eur[\/]?usd|gbp[\/]?usd|usd[\/]?jpy|usd[\/]?chf|usd[\/]?cad|aud[\/]?usd|nzd[\/]?usd|eur[\/]?gbp|eur[\/]?jpy|gbp[\/]?jpy|xau[\/]?usd|dax(?:\s?40)?|cac(?:\s?40)?|nasdaq|nikkei|footsie|ftse|russell|dow(?:\s+jones)?|sp\s?500|s&p\s?500|bitcoin|btc|ethereum|eth|p[ée]trole|brent|wti|gold|silver|oil|l['’]or)`;
 
 // Directional verb/adjective IMMEDIATELY bound to the instrument token (a market
 // prediction). The strict adjacency is what keeps it FP-safe : "l'EURUSD va
@@ -537,7 +537,52 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     // instrument est nommé. PAS "ton objectif sur le DAX : rester calme" (pas de
     // chiffre après à/:/vers).
     pattern: new RegExp(
-      String.raw`(?<!\p{L})(?:cible|objectif)\s+(?:\p{L}+['’]?\s+){0,3}?sur\s+(?:l[ea]\s+|l['’]\s*|le\s+|du\s+|des\s+)?${INSTRUMENT_TOKEN}(?!\p{L})[^.]{0,20}?(?:[àa]|:|vers)\s*\d`,
+      String.raw`(?<!\p{L})(?:cible|objectif|support|r[ée]sistance)\s+(?:\p{L}+['’]?\s+){0,3}?sur\s+(?:l[ea]\s+|l['’]\s*|le\s+|du\s+|des\s+)?${INSTRUMENT_TOKEN}(?!\p{L})[^.]{0,20}?(?:[àa]|:|vers)\s*\d`,
+      'iu',
+    ),
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // H-bis. Résiduel instrument-ancré fermé au 14e challenge (red-team empirique
+  //   post-jalon-1) : impératifs/directionnels ANGLAIS, modaux/conditionnels FR,
+  //   pari directionnel. Tous ancrés sur un instrument NOMMÉ → FP-safe (l'app est
+  //   FR ; un mot directionnel EN ou un pari + instrument = analyse de marché non
+  //   ambiguë). Reste hors-portée : niveaux ENTIERS NUS sans instrument (résiduel
+  //   backstop assumé, contrôle primaire = system prompt §2).
+  // ──────────────────────────────────────────────────────────────────────────
+  {
+    label: 'directive_english_instrument',
+    // "Buy EURUSD" / "Sell the DAX" / "Go long on the Nasdaq" / "Short gold" /
+    // "accumulate the SP500" / "load up on the DAX".
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})(?:buy|sell|go\s+long|go\s+short|long|short|accumulate|load\s+up\s+on|scoop\s+up)\s+(?:the\s+|on\s+the\s+|on\s+)?${INSTRUMENT_TOKEN}(?!\p{L})`,
+      'iu',
+    ),
+  },
+  {
+    label: 'instrument_english_directional',
+    // "The EURUSD is going up" / "Bitcoin will pump" / "Nasdaq rallying".
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})${INSTRUMENT_TOKEN}(?!\p{L})(?:['’]s)?\s+(?:is|are|will|gonna|going\s+to|keeps?|about\s+to)?\s*(?:going\s+(?:up|down|higher|lower)|pump(?:ing|s)?|dump(?:ing|s)?|rally(?:ing)?|moon(?:ing)?|tank(?:ing)?|surg(?:e|es|ing)|ris(?:e|es|ing)|fall(?:s|ing)?|rip(?:ping|s)?|bull(?:ish)?|bear(?:ish)?)(?!\p{L})`,
+      'iu',
+    ),
+  },
+  {
+    label: 'instrument_modal_directional',
+    // "le bitcoin devrait exploser" / "le DAX s'apprête à décoller" / "le Nasdaq
+    // pourrait grimper" / "l'or risque de chuter". Instrument + modal court + verbe
+    // directionnel infinitif. PAS "le bitcoin devrait t'inspirer" (verbe non directionnel).
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})${INSTRUMENT_TOKEN}(?!\p{L})[\s,]+(?:\p{L}+['’]?\s+){0,2}?(?:devrait|pourrait|va|risque\s+de|s['’]appr[êe]te\s+à|semble\s+(?:re)?pr[êe]t\s+à|est\s+pr[êe]t\s+à|menace\s+de|est\s+sur\s+le\s+point\s+de)\s+(?:re)?(?:monter|descendre|baisser|chuter|grimper|plonger|rebondir|repartir|reculer|d[ée]coller|exploser|corriger|acc[éèe]l[éèe]rer|red[ée]marrer|d[ée]visser|flamber|s['’]effondrer|s['’]envoler)`,
+      'iu',
+    ),
+  },
+  {
+    label: 'parier_hausse_instrument',
+    // "parie/mise sur une hausse/baisse du <instrument>". PAS "parie sur ta
+    // réussite" / "mise sur ta discipline" (pas de nom directionnel + instrument).
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})(?:pari[esz]+|parier|mise[sz]?|miser)\s+sur\s+(?:une?\s+|la\s+|le\s+|un\s+)?(?:hausse|baisse|mont[ée]e|chute|progression|correction|repli|rebond)\s+(?:du|de\s+l['’]|de\s+la|des)\s*${INSTRUMENT_TOKEN}(?!\p{L})`,
       'iu',
     ),
   },

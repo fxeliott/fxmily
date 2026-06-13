@@ -771,3 +771,108 @@ describe('detectAMFViolation — S5 14e challenge MUST NOT FLAG (verifier FP cor
     expect(flag('Garde ta position sur ton plan, pas sur tes émotions.')).toBe(false);
   });
 });
+
+// =============================================================================
+// S5 — 14e challenge (red-team empirique post-jalon-1) : résiduel instrument-ancré
+//   EN / modal-conditionnel FR / pari directionnel. Voir amf-detection.ts H-bis.
+// =============================================================================
+
+describe('detectAMFViolation — S5 14e challenge MUST FLAG (résiduel H-bis)', () => {
+  // EN imperatives + instrument.
+  it('EN "Buy EURUSD now."', () => {
+    expect(flag('Buy EURUSD now.')).toBe(true);
+  });
+  it('EN "Sell the DAX before close."', () => {
+    expect(flag('Sell the DAX before close.')).toBe(true);
+  });
+  it('EN "Go long on the Nasdaq."', () => {
+    expect(flag('Go long on the Nasdaq.')).toBe(true);
+  });
+  it('EN "Short gold here."', () => {
+    expect(flag('Short gold here.')).toBe(true);
+  });
+  // EN directional + instrument.
+  it('EN "The EURUSD is going up this week."', () => {
+    expect(flag('The EURUSD is going up this week.')).toBe(true);
+  });
+  it('EN "Bitcoin will pump hard."', () => {
+    expect(flag('Bitcoin will pump hard.')).toBe(true);
+  });
+  // FR modal/conditionnel + instrument.
+  it('FR modal "Le DAX s\'apprête à décoller."', () => {
+    expect(flag("Le DAX s'apprête à décoller.")).toBe(true);
+  });
+  it('FR conditionnel "Le bitcoin devrait exploser à la hausse."', () => {
+    expect(flag('Le bitcoin devrait exploser à la hausse.')).toBe(true);
+  });
+  it('FR conditionnel "Le Nasdaq pourrait grimper fort."', () => {
+    expect(flag('Le Nasdaq pourrait grimper fort.')).toBe(true);
+  });
+  it('FR "l\'or risque de chuter."', () => {
+    expect(flag("L'or risque de chuter cette semaine.")).toBe(true);
+  });
+  // Pari directionnel.
+  it('"Je parie sur une hausse du Nasdaq."', () => {
+    expect(flag('Je parie sur une hausse du Nasdaq.')).toBe(true);
+  });
+  it('"Mise sur une baisse de l\'EURUSD."', () => {
+    expect(flag("Mise sur une baisse de l'EURUSD.")).toBe(true);
+  });
+  // Support/résistance + instrument + niveau (ordre non-canonique).
+  it('"Résistance clé sur le DAX à 18000."', () => {
+    expect(flag('Résistance clé sur le DAX à 18000.')).toBe(true);
+  });
+  it('"Support majeur sur l\'EURUSD à 1.0800."', () => {
+    expect(flag("Support majeur sur l'EURUSD à 1.0800.")).toBe(true);
+  });
+});
+
+describe('detectAMFViolation — S5 14e challenge MUST NOT FLAG (FP guards H-bis)', () => {
+  // EN coaching words sans instrument.
+  it('"Stay long-term focused on your process."', () => {
+    expect(flag('Stay long-term focused on your process and your routine.')).toBe(false);
+  });
+  it('"Your confidence will rise with practice."', () => {
+    expect(flag('Your confidence will rise with practice.')).toBe(false);
+  });
+  it('"sell yourself on your own discipline" (pas d\'instrument)', () => {
+    expect(flag('You should sell yourself on your own discipline.')).toBe(false);
+  });
+  // modal + verbe NON directionnel sur instrument.
+  it('"le bitcoin devrait t\'inspirer à rester discipliné"', () => {
+    expect(flag("Le bitcoin devrait t'inspirer à rester discipliné.")).toBe(false);
+  });
+  it('"le DAX devrait rester ta référence d\'observation"', () => {
+    expect(flag('Le DAX devrait rester ta référence pour observer ta réaction.')).toBe(false);
+  });
+  // pari sur attribut psy.
+  it('"parie sur ta réussite"', () => {
+    expect(flag('Parie sur ta réussite, pas sur la chance.')).toBe(false);
+  });
+  it('"mise sur ta progression personnelle"', () => {
+    expect(flag('Mise sur ta progression personnelle ce mois-ci.')).toBe(false);
+  });
+  // "long terme" + instrument cité factuellement, pas un ordre.
+  it('"sur le long terme, l\'EURUSD t\'a appris la patience"', () => {
+    expect(flag("Sur le long terme, l'EURUSD t'a appris la patience.")).toBe(false);
+  });
+});
+
+// Closures finales 14e (post-verifier H-bis) : verbe EN "accumulate"/"load up on"
+//   + modal FR "semble prêt à". Point d'arrêt principiel : le reste = traîne
+//   lexique-ouvert (backstop non-exhaustif by-design, contrôle primaire prompt §2).
+describe('detectAMFViolation — S5 14e challenge MUST FLAG (closures finales)', () => {
+  it('EN "I would accumulate the SP500 here."', () => {
+    expect(flag('I would accumulate the SP500 here.')).toBe(true);
+  });
+  it('EN "Load up on the DAX now."', () => {
+    expect(flag('Load up on the DAX now.')).toBe(true);
+  });
+  it('FR modal "Le CAC me semble prêt à repartir."', () => {
+    expect(flag('Le CAC me semble prêt à repartir.')).toBe(true);
+  });
+  // FP-guard : "prêt à" sans instrument / verbe non directionnel reste clean.
+  it('FP "tu sembles prêt à reprendre confiance" (pas d\'instrument)', () => {
+    expect(flag('Tu sembles prêt à reprendre confiance en toi.')).toBe(false);
+  });
+});

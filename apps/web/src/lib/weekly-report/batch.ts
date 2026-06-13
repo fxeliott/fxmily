@@ -10,8 +10,7 @@ import {
 } from '@/lib/schemas/weekly-report';
 
 import { reportError, reportWarning } from '@/lib/observability';
-import { detectCrisis } from '@/lib/safety/crisis-detection';
-import { detectAMFViolation } from '@/lib/safety/amf-detection';
+import { screenAiOutputText } from '@/lib/safety/ai-output-gate';
 
 import { buildWeeklySnapshot, pseudonymizeMember } from './builder';
 import { loadWeeklySliceForUser } from './loader';
@@ -410,8 +409,10 @@ export async function persistGeneratedReports(
     ]
       .filter(Boolean)
       .join('\n');
-    const crisisCorpus = amfCorpus;
-    const crisis = detectCrisis(crisisCorpus);
+    // S5 10e challenge (D4-01) — both gates now share the single screen helper
+    // (`lib/safety/ai-output-gate.ts`), the same one the live cron path uses.
+    const screen = screenAiOutputText(amfCorpus);
+    const crisis = screen.crisis;
     if (crisis.level === 'high' || crisis.level === 'medium') {
       skipped += 1;
       await logAudit({
@@ -449,7 +450,7 @@ export async function persistGeneratedReports(
     // advice, entry/exit signals, price targets, breakout calls. Any match
     // means the AI output violated the §2 posture and MUST NOT be persisted.
     // `skipped` (not `errors`) — content-policy reject, not a technical failure.
-    const amf = detectAMFViolation(amfCorpus);
+    const amf = screen.amf;
     if (amf.suspected) {
       skipped += 1;
       await logAudit({

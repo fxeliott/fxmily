@@ -83,6 +83,12 @@ export type AuditAction =
   // output text (RGPD §16). `skipped` counter (not `errors`) — content-
   // policy reject, not a technical failure. Pairs with `reportWarning`.
   | 'weekly_report.batch.amf_violation'
+  // S5 10e challenge (D4-01) — same §2/crisis gate on the LIVE cron path
+  // (`service.ts generateWeeklyReportForUser`), which previously persisted AI
+  // output with no screen. Distinct slugs from the `.batch.*` family so the
+  // audit trail tells the two paths apart. PII-FREE (matchedLabels only).
+  | 'weekly_report.amf_violation'
+  | 'weekly_report.crisis_detected'
   | 'admin.weekly_report.viewed'
   | 'cron.weekly_reports.scan'
   | 'cron.weekly_reports.batch_done'

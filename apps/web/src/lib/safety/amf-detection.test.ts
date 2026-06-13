@@ -468,3 +468,102 @@ describe('detectAMFViolation — MUST NOT FLAG (S5 hardening — FP carve-outs)'
     expect(flag('vise les 2.0 de ratio risque-récompense')).toBe(false);
   });
 });
+
+// =============================================================================
+// S5 — 10e challenge (re-audit adverse 2026-06-13) : régressions FP/asymétrie
+//   D1-F1 (price_target_vers % / R / risque), D1-F2 (tendance psy),
+//   D1-F3 (symétrie EN citée). Voir amf-detection.ts carve-outs.
+// =============================================================================
+
+describe('detectAMFViolation — S5 10e challenge MUST NOT FLAG (D1-F1/F2/F3)', () => {
+  // D1-F1 — "vers <décimal>" suivi d'un %/R/unité de risque = coaching de taille.
+  it('D1-F1 "Réduis ta taille vers 1.00% pour de la sérénité."', () => {
+    expect(flag('Réduis ta taille vers 1.00% pour de la sérénité.')).toBe(false);
+  });
+  it('D1-F1 "Ramène ton risque vers 1.0% par trade."', () => {
+    expect(flag('Ramène ton risque vers 1.0% par trade.')).toBe(false);
+  });
+  it('D1-F1 "reviens vers 1.5% de risque"', () => {
+    expect(flag('reviens vers 1.5% de risque')).toBe(false);
+  });
+  it('D1-F1 "tends vers 2.00R de gain"', () => {
+    expect(flag('tends vers 2.00R de gain')).toBe(false);
+  });
+  it('D1-F1 "Vise une perte max vers 0.50% du capital."', () => {
+    expect(flag('Vise une perte max vers 0.50% du capital.')).toBe(false);
+  });
+
+  // D1-F2 — génitif possessif "tendance haussière de ta <psy>" = coaching.
+  //   (Le carve est volontairement restreint au possessif-personne pour ne PAS
+  //    pouvoir être gamé par "de la discipline du Nasdaq" — cf. anti-FN ci-dessous.)
+  it('D1-F2 "tendance haussière de ta régularité"', () => {
+    expect(flag('On voit une tendance haussière de ta régularité.')).toBe(false);
+  });
+  it('D1-F2 "tendance haussière de ta discipline ce mois-ci"', () => {
+    expect(flag('Ta constance : tendance haussière de ta discipline ce mois-ci.')).toBe(false);
+  });
+
+  // D1-F3 — directive EN CITÉE / discours rapporté = pédagogie Douglas (symétrie FR).
+  it('D1-F3 "Ton cerveau fabrique l\'histoire « buy now » — observe-la."', () => {
+    expect(flag("Ton cerveau fabrique l'histoire « buy now » — observe-la.")).toBe(false);
+  });
+  it('D1-F3 "Le réflexe \'sell now\' est une peur, pas un signal."', () => {
+    expect(flag("Le réflexe 'sell now' est une peur, pas un signal.")).toBe(false);
+  });
+});
+
+describe('detectAMFViolation — S5 10e challenge MUST STILL FLAG (anti-FN)', () => {
+  it('D1-F1 anti-FN "Vise vers 1.0850 sur l\'euro." (prix Forex)', () => {
+    expect(flag("Vise vers 1.0850 sur l'euro.")).toBe(true);
+  });
+  it('D1-F1 anti-FN "Le prix file vers 4300.50 sur le DAX."', () => {
+    expect(flag('Le prix file vers 4300.50 sur le DAX.')).toBe(true);
+  });
+  it('D1-F2 anti-FN "La tendance est haussière sur le DAX." (marché)', () => {
+    expect(flag('La tendance est haussière sur le DAX.')).toBe(true);
+  });
+  it('D1-F2 anti-FN "Une tendance haussière se dessine sur le Nasdaq."', () => {
+    expect(flag('Une tendance haussière se dessine sur le Nasdaq.')).toBe(true);
+  });
+  it('D1-F3 anti-FN "Buy the dip maintenant sur le Nasdaq." (directive non citée)', () => {
+    expect(flag('Buy the dip maintenant sur le Nasdaq.')).toBe(true);
+  });
+  it('D1-F3 anti-FN "Sell the rally tout de suite." (directive non citée)', () => {
+    expect(flag('Sell the rally tout de suite.')).toBe(true);
+  });
+});
+
+// Cas adverses trouvés par le verifier (re-review 2026-06-13) : les premiers
+// carve-outs ouvraient ces FN (carve sur présence d'un token, pas absence
+// d'ancre marché). Resserrés → ces vrais conseils directionnels flag à nouveau.
+describe('detectAMFViolation — S5 carve-out adversarial anti-FN (verifier)', () => {
+  it('D1-F1 "le prix repart vers 1.0850 de risque limité" (prix Forex + token parasite)', () => {
+    expect(flag('Le support tient, le prix repart vers 1.0850 de risque limité.')).toBe(true);
+  });
+  it('D1-F1 "L\'EURUSD se dirige vers 1.0850%." (prix Forex + % collé)', () => {
+    expect(flag("L'EURUSD se dirige vers 1.0850%.")).toBe(true);
+  });
+  it('D1-F1 "Ça remonte vers 1.0850 de marge."', () => {
+    expect(flag('Ça remonte vers 1.0850 de marge.')).toBe(true);
+  });
+  it('D1-F2 "Côté discipline, la tendance est haussière sur le DAX" (psy avant + marché)', () => {
+    expect(flag('Côté discipline, la tendance est haussière sur le DAX cette semaine.')).toBe(true);
+  });
+  it('D1-F2 "Garde la confiance: la tendance est baissière sur l\'or"', () => {
+    expect(
+      flag("Garde la confiance: la tendance est baissière sur l'or, attends la cassure."),
+    ).toBe(true);
+  });
+  it('D1-F2 "tendance haussière de la discipline du Nasdaq" (article générique gamé)', () => {
+    expect(flag('La tendance est haussière de la discipline du Nasdaq.')).toBe(true);
+  });
+  it('D1-F3 "« buy the dip sur l\'EURUSD" (guillemet ouvrant SANS fermeture)', () => {
+    expect(flag("Mon conseil: « buy the dip sur l'EURUSD dès l'ouverture.")).toBe(true);
+  });
+  it('D1-F3 "\'sell now le CAC" (apostrophe ouvrante seule)', () => {
+    expect(flag("'sell now le CAC avant la clôture.")).toBe(true);
+  });
+  it('D1-F3 "‘buy now and ride the trend on Nasdaq"', () => {
+    expect(flag('‘buy now and ride the trend on Nasdaq.')).toBe(true);
+  });
+});

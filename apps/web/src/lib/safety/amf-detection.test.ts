@@ -567,3 +567,54 @@ describe('detectAMFViolation — S5 carve-out adversarial anti-FN (verifier)', (
     expect(flag('‘buy now and ride the trend on Nasdaq.')).toBe(true);
   });
 });
+
+// =============================================================================
+// S5 — 12e challenge (re-audit adverse 2026-06-13) : trous backstop trouves par
+//   le red-team runtime. E1 niveaux entiers d'indice, E2 adverbe intercalé,
+//   E3 forme féminine. Voir amf-detection.ts.
+// =============================================================================
+
+describe('detectAMFViolation — S5 12e challenge MUST FLAG (E2/E3 backstop)', () => {
+  // NB E1 (niveaux entiers d'indice nus "vers 18250") = RÉSIDUEL backstop assumé
+  //   (2 tentatives FP-TIER1 → revert, cf. amf-detection.ts ; contrôle primaire =
+  //   system prompt §2). Pas de test ici (ne pas asserter false sur du directionnel réel).
+  it('E2 adverbe intercalé "tendance reste haussière"', () => {
+    expect(flag('Côté setup, la tendance reste haussière, profites-en.')).toBe(true);
+  });
+  it('E2 "tendance devient baissière sur l\'or"', () => {
+    expect(flag("La tendance devient baissière sur l'or.")).toBe(true);
+  });
+  it('E3 féminin "position acheteuse sur le Nasdaq"', () => {
+    expect(flag('Prends une position acheteuse sur le Nasdaq.')).toBe(true);
+  });
+  it('E3 féminin "je suis acheteuse sur l\'or"', () => {
+    expect(flag("Je suis acheteuse sur l'or.")).toBe(true);
+  });
+});
+
+describe('detectAMFViolation — S5 12e challenge MUST NOT FLAG (anti-FP E1, verifier)', () => {
+  // Le red-team a montré que l'entier-nu flaggait des nombres COACHING ≥4 chiffres
+  //   (montants €, comptes de trades, km…). E1 re-scopé sur l'ancre « sur le <X> »
+  //   les laisse tous passer.
+  it('montant € : "objectif 10000 € d\'épargne"', () => {
+    expect(flag("objectif 10000 € d'épargne")).toBe(false);
+  });
+  it('compte de trades : "objectif vers 1000 trades sur ta carrière"', () => {
+    expect(flag('objectif vers 1000 trades sur ta carrière')).toBe(false);
+  });
+  it('idiome FR : "objectif 5000 sur le plan financier"', () => {
+    expect(flag('objectif 5000 sur le plan financier')).toBe(false);
+  });
+  it('idiome FR : "vise 8000 sur le long terme"', () => {
+    expect(flag('vise 8000 sur le long terme de ta carrière')).toBe(false);
+  });
+  it('année après "vers" : "objectif vers 2025"', () => {
+    expect(flag('Fixe-toi un objectif vers 2025 pour ta discipline.')).toBe(false);
+  });
+  it('"objectif à 100% de respect" (pourcentage coaching)', () => {
+    expect(flag('Ton objectif à 100% de respect du plan est tenable.')).toBe(false);
+  });
+  it('petit entier non-prix : "vise vers 3 sessions propres"', () => {
+    expect(flag('Vise vers 3 sessions propres cette semaine.')).toBe(false);
+  });
+});

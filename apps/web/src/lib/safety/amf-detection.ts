@@ -113,8 +113,13 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     label: 'directive_acheteur_vendeur',
     // "Passe acheteur sur l'or" / "reste vendeur" / "acheteur sur l'EURUSD"
     // Position directive via acheteur/vendeur (not in the imperatif patterns).
+    // S5 12e challenge (E3) : formes FÉMININES "acheteuse"/"vendeuse" attrapées dans
+    //   les MÊMES contextes que le masculin : "passe/reste/deviens/sois acheteuse" OU
+    //   "acheteuse sur l'<instrument>" ("reste acheteuse sur le DAX", "je suis vendeuse
+    //   sur l'or"). "position acheteuse" seul (sans verbe ni "sur l'") reste non capté
+    //   (résiduel backstop) — avant, masculin seul (FN sur le féminin).
     pattern:
-      /(?<!\p{L})(?:(?:passe[sz]?|reste[sz]?|deviens?|sois)\s+(?:acheteur|vendeur)|(?:acheteur|vendeur)\s+sur\s+l)/iu,
+      /(?<!\p{L})(?:(?:passe[sz]?|reste[sz]?|deviens?|sois)\s+(?:acheteu(?:r|se)|vendeu(?:r|se))|(?:acheteu(?:r|se)|vendeu(?:r|se))\s+sur\s+l)/iu,
   },
   {
     label: 'directive_long_short_instrument',
@@ -245,9 +250,11 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
   },
   {
     label: 'objectif_price_number',
-    // "objectif à 1.20" / "objectif 1.20" — price number immediately after
-    // but NOT "objectif du mois" / "ton objectif" (coaching, no number follows)
-    pattern: /(?<!\p{L})objectif\s+à\s+\d/iu,
+    // "objectif à 1.20" — prix Forex décimal. PAS "objectif du mois"/"ton objectif"
+    //   (pas de nombre), PAS "objectif à 100%" (entier+%, coaching). S5 12e challenge :
+    //   décimale uniquement → supprime le FP latent "objectif à 100% de respect" (avant
+    //   `à \d` le flaggait) ; les niveaux ENTIERS d'indice passent par price_level_instrument.
+    pattern: /(?<!\p{L})objectif\s+à\s+\d+[.,]\d+/iu,
   },
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -364,6 +371,15 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     //   Forex (1.0850 = 4 déc.) ou indice (4300) N'EST PAS risk-shaped → reste flag
     //   même suivi d'un token parasite ("vers 1.0850 de risque" → FLAG, anti-FN
     //   re-review adverse). Sans le test de forme, le carve neutralisait tout prix.
+    // Décimale Forex uniquement (1.0850). S5 12e challenge : les niveaux ENTIERS
+    //   d'indice nus ("vers 18250") restent un RÉSIDUEL BACKSTOP ASSUMÉ — 2 tentatives
+    //   de les capter (entier nu, puis "entier + sur le <X>" avec blacklist d'idiomes)
+    //   ont chacune réintroduit un FP TIER1 (tout nombre coaching ≥4 chiffres : 10000 €,
+    //   1000 trades, "5000 sur la bonne voie" skippaient un débrief légitime). Une regex
+    //   ne distingue pas un niveau d'indice d'un montant/compte coaching sans whitelist
+    //   d'instruments. Stop-loss (CLAUDE.md) → revert. Contrôle primaire = system prompt
+    //   §2 (vérifié : interdit explicitement d'analyser le marché). Résiduel rejoint les
+    //   FN assumés (conditionnel, synonymes). Future option : whitelist d'instruments.
     pattern:
       /(?<!\p{L})vers\s+(?!\d{1,3}[.,]\d{1,2}\s*(?:%|[rR]\b|de\s+(?:risque|gain|perte|capital|marge)|(?:ta|ton|sa|son|votre)\s+(?:taille|risque|marge)))\d+[.,]\d+(?!\p{L})/iu,
   },
@@ -392,8 +408,11 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     //   (côté sûr du budget §2 ; le system prompt steere Claude vers "amélioration").
     //   Carve restreint au POSSESSIF-PERSONNE ("de ta discipline") — pas l'article
     //   générique ("de la discipline du Nasdaq" reste FLAG, anti-game re-review).
+    //   S5 12e challenge (E2) : adverbe intercalé ("tendance RESTE/DEMEURE/DEVIENT
+    //   haussière") attrapé — avant, seul "tendance (est) haussière" matchait, "reste"
+    //   cassait la détection marché (FN reel).
     pattern:
-      /(?<!\p{L})tendance\s+(?:est\s+)?(?:haussi[eè]re|baissi[eè]re|haussier|baissier)(?!\s+(?:de\s+)?(?:ta|ton|tes|sa|ses|ma|mon|mes|votre|vos|notre|nos)\s+(?:discipline|r[eé]gularit[eé]|constance|progression|confiance|motivation|ex[eé]cution|gestion|mental))(?!\p{L})/iu,
+      /(?<!\p{L})tendance\s+(?:(?:est|reste|demeure|devient|redevient|semble|para[iî]t)\s+)?(?:haussi[eè]re|baissi[eè]re|haussier|baissier)(?!\s+(?:de\s+)?(?:ta|ton|tes|sa|ses|ma|mon|mes|votre|vos|notre|nos)\s+(?:discipline|r[eé]gularit[eé]|constance|progression|confiance|motivation|ex[eé]cution|gestion|mental))(?!\p{L})/iu,
   },
   {
     label: 'retournement_directionnel',

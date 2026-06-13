@@ -226,13 +226,20 @@ async function dispatchDouglasForAlert(
       userId: memberId,
       createdAt: { gte: new Date(now.getTime() - ALERT_WINDOW_DAYS * 86_400_000) },
     },
-    select: { cardId: true, triggeredOn: true },
+    select: { cardId: true, triggeredOn: true, sourceAlertId: true },
   });
 
-  // S4 DOD2-T2-1 — member-day cap « ≤1 fiche Douglas par membre par jour » :
-  // if ANY card (routine engine or alert path) already went out today, the
-  // alert keeps its `open` status and the daily scan retries tomorrow.
-  if (recent.some((r) => r.triggeredOn.getTime() === triggeredOn.getTime())) {
+  // S5 Jalon D décision (a) — PRIORITÉ alerte-S3 sur la fiche routine du jour.
+  // Le cap reste « ≤1 fiche ALERTE par membre par jour » (anti-spam des alertes),
+  // mais une alerte vérité (mensonge/ego/discipline) N'EST PLUS étouffée par une
+  // fiche ROUTINE déjà partie le matin (dispatch-douglas 00/06 UTC court AVANT
+  // verification-scan 11:30 UTC). Avant : toute fiche du jour bloquait → alerte
+  // reportée J+1 par retry. Après : seule une autre alerte du jour bloque ; sur
+  // un jour de conflit le membre reçoit la routine PUIS l'alerte (≤2), l'urgence
+  // psychologique prime sur l'anti-spam strict (tradeoff tranché, réversible).
+  // La routine, elle, cède toujours (engine.ts skippe si une fiche est déjà partie).
+  const today = triggeredOn.getTime();
+  if (recent.some((r) => r.triggeredOn.getTime() === today && r.sourceAlertId !== null)) {
     return false;
   }
 

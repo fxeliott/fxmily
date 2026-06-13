@@ -27,6 +27,9 @@ function baseInput(over: Partial<MonthlyBuilderInput> = {}): MonthlyBuilderInput
     annotationsReceived: 0,
     annotationsViewed: 0,
     latestScore: null,
+    // DoD#3 / §29 — empty history + the local month-start anchor (Paris 2026-05-01).
+    scoreHistory: [],
+    monthStartLocal: '2026-05-01',
     weeklySummaries: [],
     training: { backtestCount: 0, daysSinceLastBacktest: null, hasEverPractised: false },
     ...over,
@@ -381,6 +384,145 @@ describe('buildMonthlySnapshot — realizedRReliability (D3-04)', () => {
       }),
     );
     expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});
+
+// =============================================================================
+// DoD#3 / §29 — scoreProgression (N-1 vs N delta, real numbers)
+// =============================================================================
+
+function point(
+  date: string,
+  over: Partial<{
+    discipline: number | null;
+    emotionalStability: number | null;
+    consistency: number | null;
+    engagement: number | null;
+  }> = {},
+): MonthlyBuilderInput['scoreHistory'][number] {
+  return {
+    date,
+    discipline: 50,
+    emotionalStability: 50,
+    consistency: 50,
+    engagement: 50,
+    ...over,
+  };
+}
+
+describe('buildMonthlySnapshot — scoreProgression (DoD#3 / §29 measurable progression)', () => {
+  it('empty history → null (no fabrication)', () => {
+    expect(buildMonthlySnapshot(baseInput()).scoreProgression).toBeNull();
+  });
+
+  it('single point → null (<2 points, nothing to compare)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({ scoreHistory: [point('2026-05-15', { discipline: 70 })] }),
+    );
+    expect(snap.scoreProgression).toBeNull();
+  });
+
+  it('no point at/before monthStart → null (no entry-of-month baseline)', () => {
+    // Both points are strictly AFTER the 2026-05-01 anchor.
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        scoreHistory: [point('2026-05-10'), point('2026-05-31')],
+      }),
+    );
+    expect(snap.scoreProgression).toBeNull();
+  });
+
+  it('baseline = latest point at/before monthStart; current = last point; delta = current − previous', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        scoreHistory: [
+          point('2026-04-15', {
+            discipline: 40,
+            emotionalStability: 50,
+            consistency: 60,
+            engagement: 70,
+          }),
+          // entry-of-month baseline (latest ≤ 2026-05-01)
+          point('2026-05-01', {
+            discipline: 60,
+            emotionalStability: 55,
+            consistency: 50,
+            engagement: 45,
+          }),
+          point('2026-05-20', {
+            discipline: 65,
+            emotionalStability: 58,
+            consistency: 52,
+            engagement: 48,
+          }),
+          // current (last point)
+          point('2026-05-31', {
+            discipline: 72,
+            emotionalStability: 50,
+            consistency: 61,
+            engagement: 40,
+          }),
+        ],
+      }),
+    );
+    const prog = snap.scoreProgression;
+    expect(prog).not.toBeNull();
+    expect(prog!.previousDate).toBe('2026-05-01');
+    expect(prog!.currentDate).toBe('2026-05-31');
+    expect(prog!.previous).toEqual({
+      discipline: 60,
+      emotionalStability: 55,
+      consistency: 50,
+      engagement: 45,
+    });
+    expect(prog!.current).toEqual({
+      discipline: 72,
+      emotionalStability: 50,
+      consistency: 61,
+      engagement: 40,
+    });
+    // delta = current − previous per dimension (72−60, 50−55, 61−50, 40−45).
+    expect(prog!.delta).toEqual({
+      discipline: 12,
+      emotionalStability: -5,
+      consistency: 11,
+      engagement: -5,
+    });
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('a null dimension on either bound → null delta (never a fabricated number)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        scoreHistory: [
+          // baseline: consistency insufficient_data that day
+          point('2026-05-01', { discipline: 60, consistency: null }),
+          // current: emotionalStability insufficient_data that day
+          point('2026-05-31', { discipline: 70, emotionalStability: null, consistency: 55 }),
+        ],
+      }),
+    );
+    const prog = snap.scoreProgression;
+    expect(prog).not.toBeNull();
+    expect(prog!.delta.discipline).toBe(10); // both non-null → 70 − 60
+    expect(prog!.delta.emotionalStability).toBeNull(); // current null
+    expect(prog!.delta.consistency).toBeNull(); // previous null
+    expect(prog!.delta.engagement).toBe(0); // 50 − 50
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('baseline point and current point identical date → null (single in-window point)', () => {
+    // Two points, but only ONE is at/before monthStart AND it is the last one
+    // too (e.g. history flattened to a single anchor). Guard: previous===current.
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        scoreHistory: [point('2026-04-20'), point('2026-04-20')],
+        monthStartLocal: '2026-05-01',
+      }),
+    );
+    // Both ≤ monthStart; last point is 2026-04-20, baseline is also 2026-04-20
+    // (same date) → null.
+    expect(snap.scoreProgression).toBeNull();
   });
 });
 

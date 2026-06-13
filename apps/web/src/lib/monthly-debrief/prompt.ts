@@ -219,6 +219,23 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
   lines.push(`- Stabilité émotionnelle : ${formatScore(s.emotionalStability)}`);
   lines.push(`- Cohérence : ${formatScore(s.consistency)}`);
   lines.push(`- Engagement : ${formatScore(s.engagement)}`);
+  // DoD#3 / §29 "progression MESURABLE" — ancre le récit de progression
+  // mois-sur-mois sur des deltas N-1 vs N RÉELS (score d'entrée de mois →
+  // score courant). Présent ⇒ une ligne X→Y (Δ±Z) par dimension. Absent
+  // (pas de baseline avant le 1er, ou <2 points) ⇒ on NE force PAS : le hedge
+  // existant ("base-toi sur les synthèses hebdo si fournies") reste la consigne.
+  // POSTURE §2 : scores PSYCHOLOGIQUES internes, JAMAIS du marché.
+  const prog = snapshot.scoreProgression;
+  if (prog !== null) {
+    lines.push(
+      `- Progression du score (vs début de mois, base ${prog.previousDate}) : ` +
+        `discipline ${formatProgDim(prog.previous.discipline, prog.current.discipline, prog.delta.discipline)}, ` +
+        `stabilité émotionnelle ${formatProgDim(prog.previous.emotionalStability, prog.current.emotionalStability, prog.delta.emotionalStability)}, ` +
+        `constance ${formatProgDim(prog.previous.consistency, prog.current.consistency, prog.delta.consistency)}, ` +
+        `engagement ${formatProgDim(prog.previous.engagement, prog.current.engagement, prog.delta.engagement)} ` +
+        `— APPUIE le récit de progression sur ces deltas réels.`,
+    );
+  }
   lines.push(``);
 
   if (snapshot.weeklySummaries.length > 0) {
@@ -324,4 +341,22 @@ function formatRate(rate: number | null): string {
 function formatScore(score: number | null): string {
   if (score === null) return 'insufficient_data';
   return `${score}/100`;
+}
+
+/**
+ * DoD#3 / §29 — render one progression dimension as `X→Y (Δ±Z)`. A bound that
+ * was `insufficient_data` (null) on an anchor day → `n/a`; when either bound is
+ * n/a the delta is null too → no fabricated `Δ`. Sign-prefixed so a regression
+ * (−4) is as visible as a gain (+7).
+ */
+function formatProgDim(
+  previous: number | null,
+  current: number | null,
+  delta: number | null,
+): string {
+  const prev = previous === null ? 'n/a' : `${previous}`;
+  const curr = current === null ? 'n/a' : `${current}`;
+  if (delta === null) return `${prev}→${curr}`;
+  const sign = delta >= 0 ? '+' : '';
+  return `${prev}→${curr} (Δ${sign}${delta})`;
 }

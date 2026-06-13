@@ -30,6 +30,9 @@ function baseInput(over: Partial<MonthlyBuilderInput> = {}): MonthlyBuilderInput
     annotationsReceived: 0,
     annotationsViewed: 0,
     latestScore: null,
+    // DoD#3 / §29 — empty history + the local month-start anchor (Paris 2026-05-01).
+    scoreHistory: [],
+    monthStartLocal: '2026-05-01',
     weeklySummaries: [],
     training: { backtestCount: 0, daysSinceLastBacktest: null, hasEverPractised: false },
     ...over,
@@ -167,6 +170,83 @@ describe('buildMonthlyDebriefUserPrompt — emotionTags (FIX C S5 hardening)', (
   it('no emotion tags → the emotion line is absent from the prompt', () => {
     const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
     expect(prompt).not.toContain('Émotions dominantes (fréquence)');
+  });
+});
+
+// =============================================================================
+// DoD#3 / §29 — scoreProgression reaches the prompt (measurable progression)
+// =============================================================================
+
+function point(
+  date: string,
+  over: Partial<{
+    discipline: number | null;
+    emotionalStability: number | null;
+    consistency: number | null;
+    engagement: number | null;
+  }> = {},
+): MonthlyBuilderInput['scoreHistory'][number] {
+  return {
+    date,
+    discipline: 50,
+    emotionalStability: 50,
+    consistency: 50,
+    engagement: 50,
+    ...over,
+  };
+}
+
+describe('buildMonthlyDebriefUserPrompt — scoreProgression (DoD#3 / §29)', () => {
+  it('renders the progression line with X→Y (Δ±Z) deltas when data is present', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        scoreHistory: [
+          point('2026-05-01', {
+            discipline: 60,
+            emotionalStability: 55,
+            consistency: 50,
+            engagement: 45,
+          }),
+          point('2026-05-31', {
+            discipline: 72,
+            emotionalStability: 50,
+            consistency: 61,
+            engagement: 45,
+          }),
+        ],
+      }),
+    );
+    const prompt = buildMonthlyDebriefUserPrompt(snap);
+    expect(prompt).toContain('Progression du score (vs début de mois, base 2026-05-01)');
+    expect(prompt).toContain('discipline 60→72 (Δ+12)');
+    expect(prompt).toContain('stabilité émotionnelle 55→50 (Δ-5)');
+    expect(prompt).toContain('constance 50→61 (Δ+11)');
+    expect(prompt).toContain('engagement 45→45 (Δ+0)');
+    expect(prompt).toContain('APPUIE le récit de progression sur ces deltas réels');
+  });
+
+  it('renders n/a for a dimension that was insufficient_data on an anchor (no fake Δ)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        scoreHistory: [
+          point('2026-05-01', { discipline: 60, consistency: null }),
+          point('2026-05-31', { discipline: 70, emotionalStability: null, consistency: 55 }),
+        ],
+      }),
+    );
+    const prompt = buildMonthlyDebriefUserPrompt(snap);
+    expect(prompt).toContain('discipline 60→70 (Δ+10)');
+    // current emotionalStability n/a → no Δ
+    expect(prompt).toContain('stabilité émotionnelle 50→n/a');
+    // baseline consistency n/a → no Δ
+    expect(prompt).toContain('constance n/a→55');
+  });
+
+  it('no baseline / empty history → the progression line is ABSENT (keeps the hedge)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).not.toContain('Progression du score');
+    // the existing weekly hedge stays the fallback narrative cue.
+    expect(prompt).toContain('base-toi sur les agrégats bruts ci-dessus');
   });
 });
 

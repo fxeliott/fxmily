@@ -11,6 +11,7 @@ import {
 } from '@/lib/admin/training-annotation-service';
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
+import { sendTrainingAnnotationReceivedEmail } from '@/lib/email/send';
 import { enqueueTrainingAnnotationNotification } from '@/lib/notifications/enqueue';
 import { trainingAnnotationCreateSchema } from '@/lib/schemas/training-annotation';
 import { parseTrainingAnnotationKey, selectStorage } from '@/lib/storage';
@@ -31,13 +32,13 @@ import { parseTrainingAnnotationKey, selectStorage } from '@/lib/storage';
  *   - Reads/writes go through `db.trainingTrade` / `db.trainingAnnotation`
  *     only; no `Trade`/`TradeAnnotation` reference.
  *
- * Scoped deviation from J4 (deliberate, documented): J4 ALSO fires an
- * immediate `sendAnnotationReceivedEmail`. SPEC §21.4 only requires the
- * member to RECEIVE the notification — the `enqueueTrainingAnnotation
- * Notification` push (J9-dispatched, with the email fallback wired in this
- * jalon's notification pipeline) fully satisfies that. The extra immediate
- * direct email is a J4 nicety beyond §21 scope (would add an email template
- * + send fn); deferred — "no edge no commit".
+ * Parity with J4 (S7 DoD#3 — « fonctionne sur le réel ET sur l'entraînement »):
+ * like the real-trade flow, this fires an IMMEDIATE best-effort
+ * `sendTrainingAnnotationReceivedEmail` in addition to the push enqueue. This
+ * closes the gap where a member WITHOUT a push subscription received NO
+ * notification at all for a training correction — the J9 dispatcher returns on
+ * `no_subscriptions` BEFORE its fallback email, so push-only left that member
+ * silent. The immediate email guarantees delivery regardless of push state.
  */
 
 export interface CreateTrainingAnnotationActionState {
@@ -137,7 +138,7 @@ export async function createTrainingAnnotationAction(
   // 500 later (mirror of the J4 trade lookup).
   const ttRow = await db.trainingTrade.findUnique({
     where: { id: trainingTradeId },
-    select: { userId: true },
+    select: { userId: true, user: { select: { email: true, firstName: true } } },
   });
   if (!ttRow || ttRow.userId !== memberId) {
     return { ok: false, error: 'training_trade_not_found' };
@@ -164,14 +165,25 @@ export async function createTrainingAnnotationAction(
     return { ok: false, error: 'unknown' };
   }
 
-  // Best-effort notify — never roll back the correction if it fails. The
-  // §21.4 "member receives the notification" requirement is met here (push,
-  // J9-dispatched, with the email fallback wired in this jalon).
+  // Best-effort notify — never roll back the correction if it fails. Push is
+  // J9-dispatched.
   await enqueueTrainingAnnotationNotification(memberId, {
     trainingAnnotationId,
     trainingTradeId,
     adminId: session.user.id,
     hasMedia: mediaKey !== null,
+  });
+
+  // S7 DoD#3 parity with the real-trade flow: immediate best-effort email so a
+  // member without a push subscription is still notified (the dispatcher
+  // returns on `no_subscriptions` before its fallback). §21.5: training copy,
+  // no pair/P&L, /training deep-link only.
+  void sendTrainingAnnotationReceivedEmail({
+    to: ttRow.user.email,
+    recipientFirstName: ttRow.user.firstName,
+    trainingTradeId,
+  }).catch((err) => {
+    console.error('[admin.trainingAnnotation.create] email failed', err);
   });
 
   // 🚨 §21.5 — PII-free: ids/flags only, NEVER the comment text or P&L.

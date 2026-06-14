@@ -53,7 +53,6 @@ interface MemberVerificationPanelProps {
   constancy: ConstancyScoreView | null;
   discrepancies: readonly DiscrepancyView[];
   alerts: readonly AlertView[];
-  detectedAccountCount: number | null;
 }
 
 export function MemberVerificationPanel({
@@ -61,15 +60,17 @@ export function MemberVerificationPanel({
   constancy,
   discrepancies,
   alerts,
-  detectedAccountCount,
 }: MemberVerificationPanelProps) {
   const openCount = discrepancies.filter((d) => d.status === 'open').length;
 
   return (
     <div className="flex flex-col gap-4">
-      {/* KPI strip */}
+      {/* KPI strip — « Comptes » derives from the source of truth
+          (overview.accounts = declared + AI-detected, same list shown below),
+          NOT the denormalised detectedAccountCount which was `—` until the
+          vision pipeline ran and contradicted the list. */}
       <div className="border-edge-top rounded-card relative grid grid-cols-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] sm:grid-cols-4">
-        <Metric label="Comptes (preuves)" value={String(detectedAccountCount ?? '—')} />
+        <Metric label="Comptes" value={String(overview.accounts.length)} />
         <Metric label="Preuves reçues" value={String(overview.proofs.length)} />
         <Metric label="Écarts ouverts" value={String(openCount)} />
         <Metric

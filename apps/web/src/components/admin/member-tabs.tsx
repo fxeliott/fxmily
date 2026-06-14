@@ -5,6 +5,7 @@ export type MemberTabKey =
   | 'trades'
   | 'training'
   | 'checkins'
+  | 'pretrade'
   | 'mark-douglas'
   | 'weekly-reports'
   | 'monthly-debrief'
@@ -30,6 +31,10 @@ const TABS: readonly TabDefinition[] = [
   { key: 'trades', label: 'Trades' },
   { key: 'training', label: 'Entraînement' },
   { key: 'checkins', label: 'Check-ins' },
+  // S7 §22-23 — admin read-only view of the member's pre-trade discipline
+  // (reason to trade, plan alignment, SL pre-defined, reason×outcome).
+  // Reuses the member-facing userId-scoped cards. Carbone pattern §7.7.
+  { key: 'pretrade', label: 'Pré-trade' },
   { key: 'mark-douglas', label: 'Mark Douglas' },
   { key: 'weekly-reports', label: 'Rapports IA' },
   { key: 'monthly-debrief', label: 'Débrief mensuel' },

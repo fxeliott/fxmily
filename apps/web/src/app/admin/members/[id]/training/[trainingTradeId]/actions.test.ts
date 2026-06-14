@@ -28,6 +28,10 @@ const logAuditMock = vi.fn<(arg: unknown) => Promise<void>>(async () => undefine
 const enqueueMock = vi.fn<(...args: unknown[]) => Promise<string | null>>(async () => 'notif_1');
 const findUniqueMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const storageDeleteMock = vi.fn<(...args: unknown[]) => Promise<void>>(async () => undefined);
+const sendTrainingEmailMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({
+  id: 'em_1',
+  delivered: true,
+}));
 
 class TrainingAnnotationNotFoundError extends Error {}
 
@@ -44,6 +48,9 @@ vi.mock('@/lib/notifications/enqueue', () => ({
   enqueueTrainingAnnotationNotification: enqueueMock,
 }));
 vi.mock('@/lib/db', () => ({ db: { trainingTrade: { findUnique: findUniqueMock } } }));
+vi.mock('@/lib/email/send', () => ({
+  sendTrainingAnnotationReceivedEmail: sendTrainingEmailMock,
+}));
 vi.mock('@/lib/storage', async () => {
   const actual = await vi.importActual<typeof import('@/lib/storage')>('@/lib/storage');
   return { ...actual, selectStorage: () => ({ delete: storageDeleteMock }) };
@@ -54,6 +61,7 @@ const { createTrainingAnnotationAction, deleteTrainingAnnotationAction } =
 
 const ADMIN_ID = 'clx0admin001';
 const MEMBER_ID = 'clx0member01';
+const MEMBER_EMAIL = 'member@e2e.test';
 const TT_ID = 'clx0tt000001';
 const OWN_MEDIA = `training_annotations/${TT_ID}/dddddddddddddddddddddddddddddddd.png`;
 const FOREIGN_MEDIA = 'training_annotations/clx0ttother9/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.png';
@@ -74,11 +82,15 @@ beforeEach(() => {
   enqueueMock.mockClear();
   findUniqueMock.mockReset();
   storageDeleteMock.mockClear();
+  sendTrainingEmailMock.mockClear();
 
   authMock.mockResolvedValue({
     user: { id: ADMIN_ID, status: 'active', role: 'admin' },
   });
-  findUniqueMock.mockResolvedValue({ userId: MEMBER_ID });
+  findUniqueMock.mockResolvedValue({
+    userId: MEMBER_ID,
+    user: { email: MEMBER_EMAIL, firstName: 'Alice' },
+  });
   createTrainingAnnotationMock.mockResolvedValue({ id: 'ta_1' });
 });
 
@@ -163,6 +175,14 @@ describe('createTrainingAnnotationAction — happy path + statistical isolation'
       trainingTradeId: TT_ID,
       adminId: ADMIN_ID,
       hasMedia: true,
+    });
+
+    // S7 DoD#3 parity: immediate email sent like the real-trade flow. §21.5 —
+    // the helper receives the trainingTradeId only (no comment, no P&L).
+    expect(sendTrainingEmailMock).toHaveBeenCalledWith({
+      to: MEMBER_EMAIL,
+      recipientFirstName: 'Alice',
+      trainingTradeId: TT_ID,
     });
 
     // 🚨 §21.5 — audit metadata is ids/flags ONLY, never the comment text.

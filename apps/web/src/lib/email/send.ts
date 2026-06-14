@@ -122,6 +122,13 @@ export function buildTradeDetailUrl(tradeId: string): string {
   return `${base}/journal/${encodeURIComponent(tradeId)}`;
 }
 
+/** Build the absolute URL to the MEMBER training detail (§21 mode entraînement).
+ *  Member-facing — points at /training, NEVER a real-edge surface (§21.5). */
+export function buildTrainingTradeDetailUrl(trainingTradeId: string): string {
+  const base = env.AUTH_URL.replace(/\/+$/, '');
+  return `${base}/training/${encodeURIComponent(trainingTradeId)}`;
+}
+
 /** Build the absolute URL to /admin/reports/[id] — used by the J8 weekly digest. */
 export function buildAdminReportUrl(reportId: string): string {
   const base = env.AUTH_URL.replace(/\/+$/, '');
@@ -284,6 +291,58 @@ export async function sendNotificationFallbackEmail({
       `Ce message t'arrive parce qu'une notification push n'a pas pu atteindre`,
       `ton appareil après plusieurs tentatives (Web Push iOS reste fragile en`,
       `2026). Tu peux ajuster les catégories de notification dans ton compte.`,
+    ].join('\n'),
+  });
+}
+
+// ----- S7 — training correction received (immediate, parity with real) -----
+
+export interface SendTrainingAnnotationReceivedParams {
+  to: string;
+  recipientFirstName: string | null | undefined;
+  trainingTradeId: string;
+}
+
+/**
+ * Notify the member that a correction has been left on one of their backtests
+ * (SPEC §21 — S7 DoD#3 parity with the real-trade flow). Immediate +
+ * unconditional, exactly like `sendAnnotationReceivedEmail`: closes the gap
+ * where a member WITHOUT a push subscription got NO notification at all for a
+ * training correction (the dispatcher returns on `no_subscriptions` before its
+ * fallback email). Best-effort — the caller never rolls back the correction if
+ * delivery fails.
+ *
+ * §21.5 statistical isolation: reuses the type-driven `training_annotation_
+ * received` copy (no pair, no P&L) and points only at /training. Distinct from
+ * `sendNotificationFallbackEmail` — no "push failed" caveat, since this is the
+ * primary channel, not a fallback.
+ */
+export async function sendTrainingAnnotationReceivedEmail({
+  to,
+  recipientFirstName,
+  trainingTradeId,
+}: SendTrainingAnnotationReceivedParams): Promise<{ id: string | null; delivered: boolean }> {
+  const trainingUrl = buildTrainingTradeDetailUrl(trainingTradeId);
+  const recipient = recipientFirstName?.trim() || 'Trader';
+  const type = 'training_annotation_received' as const;
+
+  return sendEmail({
+    to,
+    subject: FALLBACK_SUBJECT_BY_TYPE[type],
+    react: NotificationFallbackEmail({
+      recipientFirstName,
+      type,
+      deepUrl: trainingUrl,
+      channel: 'primary',
+    }),
+    text: [
+      `Salut ${recipient},`,
+      ``,
+      FALLBACK_BODY_BY_TYPE[type],
+      ``,
+      `${FALLBACK_CTA_BY_TYPE[type]} : ${trainingUrl}`,
+      ``,
+      `La correction est marquée comme lue dès que tu ouvres le backtest.`,
     ].join('\n'),
   });
 }

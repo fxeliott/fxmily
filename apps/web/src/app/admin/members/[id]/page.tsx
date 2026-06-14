@@ -7,6 +7,10 @@ import { MemberTabs, type MemberTabKey } from '@/components/admin/member-tabs';
 import { MemberAdminNotesPanel } from '@/components/admin/member-admin-notes-panel';
 import { MemberDouglasPanel } from '@/components/admin/member-douglas-panel';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
+import { MemberCheckinsPanel } from '@/components/admin/member-checkins-panel';
+import { listMemberCheckinsAsAdmin } from '@/lib/checkin/service';
+import { PreTradeAnalyticsCard } from '@/components/pre-trade/pre-trade-analytics-card';
+import { PreTradeCorrelationCard } from '@/components/pre-trade/pre-trade-correlation-card';
 import { MemberTrainingPanel } from '@/components/admin/member-training-panel';
 import {
   MemberTrainingDebriefsPanel,
@@ -60,7 +64,16 @@ const DATETIME_FMT = new Intl.DateTimeFormat('fr-FR', {
 
 interface DetailPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; cursor?: string }>;
+}
+
+/**
+ * Trade ids are cuids — reject anything else BEFORE it reaches the Prisma
+ * cursor (a forged `?cursor=` must degrade to page 1, never to a 500). Mirror
+ * of `journal/page.tsx:parseCursor`.
+ */
+function parseCursor(value: string | undefined): string | undefined {
+  return value && /^[a-z0-9]{20,40}$/i.test(value) ? value : undefined;
 }
 
 function parseTab(
@@ -70,6 +83,8 @@ function parseTab(
   | 'overview'
   | 'trades'
   | 'training'
+  | 'checkins'
+  | 'pretrade'
   | 'mark-douglas'
   | 'weekly-reports'
   | 'monthly-debrief'
@@ -82,6 +97,8 @@ function parseTab(
 > {
   if (value === 'trades') return 'trades';
   if (value === 'training') return 'training';
+  if (value === 'checkins') return 'checkins';
+  if (value === 'pretrade') return 'pretrade';
   if (value === 'mark-douglas') return 'mark-douglas';
   if (value === 'weekly-reports') return 'weekly-reports';
   if (value === 'monthly-debrief') return 'monthly-debrief';
@@ -99,8 +116,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   if (!session?.user || session.user.role !== 'admin') redirect('/login');
 
   const { id: memberId } = await params;
-  const { tab: rawTab } = await searchParams;
+  const { tab: rawTab, cursor: rawCursor } = await searchParams;
   const tab = parseTab(rawTab);
+  const cursor = tab === 'trades' ? parseCursor(rawCursor) : undefined;
 
   let detail;
   try {
@@ -110,10 +128,30 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
     throw err;
   }
 
-  const trades =
-    tab === 'trades' ? await listMemberTradesAsAdmin(memberId, { status: 'all' }) : null;
+  // Cursor-paginated (S7). A stale cursor (trade deleted since the link was
+  // rendered) returns an empty list (Prisma 7 — no throw), handled by the
+  // dead-end in MemberTradesList; a genuine DB error must surface, not loop.
+  // The net catches ONLY when a cursor is in play, mirroring /journal (S4
+  // review finding). `redirect` stays outside the catch — Next signals by
+  // throwing NEXT_REDIRECT.
+  let tradesPage: Awaited<ReturnType<typeof listMemberTradesAsAdmin>> | null = null;
+  if (tab === 'trades') {
+    try {
+      tradesPage = await listMemberTradesAsAdmin(memberId, { status: 'all', limit: 50, cursor });
+    } catch (err) {
+      if (!cursor) throw err;
+      tradesPage = null;
+    }
+    if (tradesPage === null) redirect(`/admin/members/${memberId}?tab=trades`);
+  }
 
   const trainingTrades = tab === 'training' ? await listTrainingTradesAsAdmin(memberId) : null;
+
+  // S7 §22-23 — read-only daily check-ins for the supervision panel. Capped at
+  // the 30 most recent days (admin-only, not a hot path, 30-member scale). §2:
+  // check-ins carry no market content (mindset + declarative discipline
+  // booleans only).
+  const checkins = tab === 'checkins' ? await listMemberCheckinsAsAdmin(memberId) : null;
 
   // V1.3 — read-only weekly debriefs for the training tab (SPEC §23.4). Stats
   // recomputed in parallel per debrief; capped at 12 (admin-only, not a hot
@@ -202,10 +240,6 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
               createdAt: true,
             },
           }),
-          db.user.findUnique({
-            where: { id: memberId },
-            select: { detectedAccountCount: true },
-          }),
         ])
       : null;
 
@@ -266,10 +300,10 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
             {initials}
           </div>
 
-          <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <h1
-                className="f-display h-rise text-[24px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
+                className="f-display h-rise text-[24px] leading-[1.05] font-bold tracking-[-0.03em] break-words text-[var(--t-1)] sm:text-[28px]"
                 style={{ fontFeatureSettings: '"ss01" 1' }}
               >
                 {detail.displayName}
@@ -287,9 +321,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
                 </Pill>
               ) : null}
             </div>
-            <p className="t-body inline-flex items-center gap-1.5 font-mono text-[var(--t-2)] tabular-nums">
-              <Mail className="h-3.5 w-3.5 text-[var(--t-4)]" strokeWidth={1.75} />
-              {detail.email}
+            <p className="t-body flex min-w-0 items-center gap-1.5 font-mono text-[var(--t-2)] tabular-nums">
+              <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--t-4)]" strokeWidth={1.75} />
+              <span className="min-w-0 break-all">{detail.email}</span>
             </p>
           </div>
         </div>
@@ -302,13 +336,28 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       {tab === 'overview' ? (
         <OverviewTab detail={detail} latestScore={latestScore} analytics={analytics} />
       ) : null}
-      {tab === 'trades' && trades ? <MemberTradesList memberId={memberId} trades={trades} /> : null}
+      {tab === 'trades' && tradesPage ? (
+        <MemberTradesList
+          memberId={memberId}
+          trades={tradesPage.items}
+          nextCursor={tradesPage.nextCursor}
+          cursor={cursor}
+          total={detail.tradesCount}
+        />
+      ) : null}
       {tab === 'training' && trainingTrades ? (
         <div className="flex flex-col gap-8">
           <MemberTrainingPanel memberId={memberId} trades={trainingTrades} />
           {trainingDebriefItems ? (
             <MemberTrainingDebriefsPanel items={trainingDebriefItems} />
           ) : null}
+        </div>
+      ) : null}
+      {tab === 'checkins' && checkins !== null ? <MemberCheckinsPanel checkins={checkins} /> : null}
+      {tab === 'pretrade' ? (
+        <div className="flex flex-col gap-4">
+          <PreTradeAnalyticsCard userId={memberId} />
+          <PreTradeCorrelationCard userId={memberId} />
         </div>
       ) : null}
       {tab === 'mark-douglas' && douglasData ? (
@@ -338,7 +387,6 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           constancy={verification[1]}
           discrepancies={verification[2]}
           alerts={verification[3]}
-          detectedAccountCount={verification[4]?.detectedAccountCount ?? null}
         />
       ) : null}
       {tab === 'notes' && adminNotes !== null ? (

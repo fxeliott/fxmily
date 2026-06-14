@@ -189,6 +189,18 @@ export function TradeDetailView({
             value={trade.hedgeRespected === null ? 'N/A' : trade.hedgeRespected ? 'Oui' : 'Non'}
             tone={trade.hedgeRespected === null ? 'neutral' : trade.hedgeRespected ? 'good' : 'bad'}
           />
+          {/* §22-23 — the "oublis" axis (SPEC §21/§28), captured at close. Shown
+              per-trade so the admin supervises process-completeness on EACH
+              trade (not only via the aggregate discipline sub-score), and the
+              member sees their own answer back. Tri-state: null (open / not
+              answered) renders « — », never a fabricated "Non". */}
+          <Stat
+            label="Process complet"
+            value={trade.processComplete === null ? '—' : trade.processComplete ? 'Oui' : 'Non'}
+            tone={
+              trade.processComplete === null ? 'neutral' : trade.processComplete ? 'good' : 'bad'
+            }
+          />
         </dl>
       </Card>
 

@@ -20,6 +20,13 @@ interface NotificationFallbackEmailProps {
   type: NotificationTypeSlug;
   /** Deep link to the relevant in-app surface (trade, checkin, fiche, report). */
   deepUrl: string;
+  /**
+   * Delivery channel. `'fallback'` (default) = this email is sent AFTER Web
+   * Push failed its retries (the historic use). `'primary'` = this email IS
+   * the primary, immediate channel (S7 training corrections) — the footer must
+   * NOT claim a push failure, which would be factually wrong.
+   */
+  channel?: 'fallback' | 'primary';
 }
 
 /**
@@ -38,6 +45,7 @@ export function NotificationFallbackEmail({
   recipientFirstName,
   type,
   deepUrl,
+  channel = 'fallback',
 }: NotificationFallbackEmailProps) {
   const recipient = recipientFirstName?.trim() ? recipientFirstName.trim() : 'Trader';
   const meta = META_BY_TYPE[type];
@@ -70,9 +78,9 @@ export function NotificationFallbackEmail({
           <Hr style={divider} />
 
           <Text style={footer}>
-            Cet email t&apos;est envoyé en repli quand une notification push n&apos;a pas pu être
-            délivrée à ton appareil (Web Push iOS reste fragile en 2026, SPEC §18.2). Tu peux
-            ajuster les catégories de notification dans ton compte.
+            {channel === 'primary'
+              ? 'Cet email accompagne ta notification dans l’app. Tu peux ajuster les catégories de notification dans ton compte.'
+              : 'Cet email t’est envoyé en repli quand une notification push n’a pas pu être délivrée à ton appareil (Web Push iOS reste fragile en 2026, SPEC §18.2). Tu peux ajuster les catégories de notification dans ton compte.'}
           </Text>
         </Container>
       </Body>

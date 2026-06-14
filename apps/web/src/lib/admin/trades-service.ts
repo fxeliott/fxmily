@@ -1,7 +1,11 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
-import { type SerializedTrade, type ListTradesOptions } from '@/lib/trades/service';
+import {
+  type SerializedTrade,
+  type ListTradesOptions,
+  type ListTradesResult,
+} from '@/lib/trades/service';
 import type { TradeModel } from '@/generated/prisma/models/Trade';
 
 /**
@@ -59,16 +63,25 @@ function toSerialized(trade: TradeModel): SerializedTrade {
 }
 
 /**
- * List a member's trades for the admin "Trades" tab.
+ * List a member's trades for the admin "Trades" tab — cursor-paginated.
  *
- * No pagination cursor for J3 — caps at 100 to keep the page fast on member
- * heavy users. We add a real cursor-paginated UI in J6 once the dashboard
- * needs trend graphs over the full history.
+ * Mirrors the member-facing `listTradesForUser` exactly: same 50/page size,
+ * same `[enteredAt desc, id desc]` tiebreaker (S4 review finding — `enteredAt`
+ * is minute-precision member input, non-unique, so the `id` tiebreaker stops
+ * the cursor from skipping/duplicating colliding rows), and the same
+ * `take: limit + 1` look-ahead to compute `nextCursor`.
+ *
+ * S7 requires the admin to reach and comment EVERY trade. The previous J3
+ * implementation hard-capped at 100 with no pagination UI, so on any member
+ * with >100 trades the oldest were silently undiscoverable to the admin while
+ * the member could already page through their full history. This restores
+ * parity.
  */
 export async function listMemberTradesAsAdmin(
   memberId: string,
-  options: Pick<ListTradesOptions, 'status'> = {},
-): Promise<SerializedTrade[]> {
+  options: ListTradesOptions = {},
+): Promise<ListTradesResult> {
+  const limit = Math.min(50, Math.max(1, options.limit ?? 50));
   const status = options.status ?? 'all';
   const trades = await db.trade.findMany({
     where: {
@@ -76,10 +89,16 @@ export async function listMemberTradesAsAdmin(
       ...(status === 'open' ? { closedAt: null } : {}),
       ...(status === 'closed' ? { closedAt: { not: null } } : {}),
     },
-    orderBy: { enteredAt: 'desc' },
-    take: 100,
+    orderBy: [{ enteredAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
+    ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
   });
-  return trades.map(toSerialized);
+  const hasMore = trades.length > limit;
+  const items = hasMore ? trades.slice(0, limit) : trades;
+  return {
+    items: items.map(toSerialized),
+    nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null,
+  };
 }
 
 export async function getMemberTradeAsAdmin(

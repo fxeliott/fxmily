@@ -272,6 +272,44 @@ export async function listRecentCheckinDays(
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
+/**
+ * List a member's recent check-ins for the admin supervision panel (S7
+ * §22-23 « TOUT tracker pour l'admin »). Read-only, newest day first, both
+ * slots (morning before evening within a day — enum order). The caller MUST
+ * gate the admin role; this function is userId-scoped only (no auth inside),
+ * same contract as the other admin read services.
+ *
+ * Capped by DAYS, not raw rows: a raw-row cap could return a day's morning but
+ * drop its evening (the next row), making the panel render a false « Soir : non
+ * rempli » on the oldest visible day. We take the most recent `days` distinct
+ * dates, then every slot for those dates — admin-only, 30-member scale, not a
+ * hot path.
+ *
+ * SPEC §2 posture: check-ins carry NO market content (intention is a one-line
+ * mindset note, `marketAnalysisDone`/`planRespectedToday`/`formationFollowed`
+ * are declarative discipline booleans — the act, never the content).
+ */
+export async function listMemberCheckinsAsAdmin(
+  memberId: string,
+  days = 30,
+): Promise<SerializedCheckin[]> {
+  const recentDates = await db.dailyCheckin.findMany({
+    where: { userId: memberId },
+    select: { date: true },
+    distinct: ['date'],
+    orderBy: { date: 'desc' },
+    take: days,
+  });
+  const cutoff = recentDates.at(-1)?.date;
+  if (!cutoff) return [];
+
+  const rows = await db.dailyCheckin.findMany({
+    where: { userId: memberId, date: { gte: cutoff } },
+    orderBy: [{ date: 'desc' }, { slot: 'asc' }],
+  });
+  return rows.map(toSerialized);
+}
+
 export async function getCheckinStatus(
   userId: string,
   timezone: string,

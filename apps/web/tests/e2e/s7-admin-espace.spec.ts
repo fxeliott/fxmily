@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import {
   cleanupTestUsers,
   seedAdminUser,
+  seedCheckinHistory,
   seedMemberUser,
   seedTradeHistory,
   type SeededUser,
@@ -46,6 +47,7 @@ const ADMIN_COMMENT =
 
 let admin: SeededUser | null = null;
 let member: SeededUser | null = null;
+let trainingTradeId: string | null = null;
 
 async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }> {
   const exec = chromium.executablePath();
@@ -78,12 +80,29 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
     // 55 trades > the old 100 cap is not needed to prove pagination — the page
     // size is 50, so 55 already forces a second page. Deterministic PRNG seed.
     await seedTradeHistory(member.id, { count: SEED_TRADE_COUNT, seed: 7 });
+    // Real check-ins so the admin Check-ins panel renders WITH data (not just
+    // the empty state) — proves the tri-state / day-grouping render at runtime.
+    await seedCheckinHistory(member.id, { days: 10, seed: 7 });
+    // A backtest so the training correction round-trip (DoD#3) is exercised
+    // end-to-end, at parity with the real-trade flow.
+    const tt = await db.trainingTrade.create({
+      data: {
+        userId: member.id,
+        pair: 'GBPUSD',
+        plannedRR: '2.00',
+        lessonLearned: 'Entrée anticipée — attendre la confirmation (seed e2e S7).',
+        enteredAt: new Date('2026-06-01T09:00:00.000Z'),
+      },
+      select: { id: true },
+    });
+    trainingTradeId = tt.id;
   });
 
   test.afterAll(async () => {
     await cleanupTestUsers();
     admin = null;
     member = null;
+    trainingTradeId = null;
   });
 
   test('A+B — pagination réelle + commentaire admin visible côté membre au bon endroit', async ({
@@ -172,18 +191,60 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
     await page.goto('/login');
     await loginAs(page, request, admin.email, admin.password);
 
-    // --- C. Check-ins: the tab is now active (aria-current) and renders the
-    // panel (empty state for a member with no check-ins) — DoD#4 dead-tab fix.
+    // --- C. Check-ins: tab active (aria-current, was a dead link) AND the panel
+    // renders WITH data — the member has seeded check-ins, so the day summary
+    // appears (proves the parseTab fix + the day-grouping render at runtime).
     await page.goto(`/admin/members/${member.id}?tab=checkins`);
     const checkinsTab = page.getByRole('link', { name: 'Check-ins' });
     await expect(checkinsTab).toHaveAttribute('aria-current', 'page');
-    await expect(
-      page.getByText("n'a encore rempli aucun check-in", { exact: false }),
-    ).toBeVisible();
+    await expect(page.getByText(/jour.* avec check-in/)).toBeVisible();
+    await expect(page.getByText("n'a encore rempli aucun check-in")).toBeHidden();
 
     // --- D. Pré-trade: the new supervision tab is active + renders.
     await page.goto(`/admin/members/${member.id}?tab=pretrade`);
     const pretradeTab = page.getByRole('link', { name: 'Pré-trade' });
     await expect(pretradeTab).toHaveAttribute('aria-current', 'page');
+  });
+
+  test('E — round-trip correction entraînement admin → membre (DoD#3 parité)', async ({
+    page,
+    request,
+  }) => {
+    if (!admin || !member || !trainingTradeId) {
+      throw new Error('seed missing — beforeAll did not run');
+    }
+    const ttId = trainingTradeId;
+    const TRAINING_COMMENT = 'Backtest propre, mais entrée 2 bougies trop tôt (correction e2e S7).';
+
+    await dismissCookieBanner(page);
+    await page.goto('/login');
+    await loginAs(page, request, admin.email, admin.password);
+
+    // --- ADMIN corrects the backtest (mirror of the real-trade flow).
+    await page.goto(`/admin/members/${member.id}/training/${ttId}`);
+    await page.getByRole('button', { name: 'Corriger ce backtest' }).click();
+    const box = page.getByLabel('Correction');
+    await expect(box).toBeVisible();
+    await box.fill(TRAINING_COMMENT);
+    await page.getByRole('button', { name: /Envoyer correction/ }).click();
+    // Wait for the Sheet to close (Server Action success), then assert the
+    // rendered correction (same racy-textarea guard as the real flow).
+    await expect(page.getByLabel('Correction')).toBeHidden({ timeout: 60_000 });
+    await expect(page.getByText(TRAINING_COMMENT)).toBeVisible();
+
+    // §21.5 isolation: the correction is a TrainingAnnotation, never a real one.
+    const annotation = await db.trainingAnnotation.findFirst({
+      where: { trainingTradeId: ttId, adminId: admin.id },
+      select: { comment: true },
+    });
+    expect(annotation?.comment).toBe(TRAINING_COMMENT);
+
+    // --- MEMBER sees it at /training/[id] under « Corrections reçues ».
+    await page.context().clearCookies();
+    await page.goto('/login');
+    await loginAs(page, request, member.email, member.password);
+    await page.goto(`/training/${ttId}`);
+    await expect(page.getByText('Corrections reçues')).toBeVisible();
+    await expect(page.getByText(TRAINING_COMMENT)).toBeVisible();
   });
 });

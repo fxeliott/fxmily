@@ -66,7 +66,7 @@ export function MemberCheckinsPanel({ checkins }: MemberCheckinsPanelProps) {
     <div className="flex flex-col gap-3">
       <p className="t-cap text-[var(--t-4)]">
         {days.length} jour{days.length > 1 ? 's' : ''} avec check-in · {checkins.length} entrée
-        {checkins.length > 1 ? 's' : ''} (30 derniers jours)
+        {checkins.length > 1 ? 's' : ''}
       </p>
 
       {days.map((day) => (

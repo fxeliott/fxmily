@@ -22,7 +22,7 @@ vi.mock('@/lib/db', () => ({
 
 import { db } from '@/lib/db';
 
-import { submitEveningCheckin } from './service';
+import { listMemberCheckinsAsAdmin, submitEveningCheckin } from './service';
 import type { EveningCheckinInput } from '@/lib/schemas/checkin';
 
 /** A realistic post-Zod evening input (the schema already collapsed the form). */
@@ -76,6 +76,52 @@ function eveningRow(formationFollowed: boolean | null) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+});
+
+describe('listMemberCheckinsAsAdmin — cap par JOURS (anti-split de slot)', () => {
+  const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
+
+  it('cape par N jours distincts puis fetch tous les slots de la fenêtre (date >= cutoff)', async () => {
+    // Query 1: the N most recent distinct dates (desc). days=3 → cutoff = oldest.
+    vi.mocked(db.dailyCheckin.findMany)
+      .mockResolvedValueOnce([
+        { date: d('2026-06-05') },
+        { date: d('2026-06-04') },
+        { date: d('2026-06-03') },
+      ] as never)
+      // Query 2: every slot of every day in the window (a raw-row cap would have
+      // amputated the oldest day's evening — this proves it cannot).
+      .mockResolvedValueOnce([eveningRow(true), eveningRow(false), eveningRow(null)] as never);
+
+    const out = await listMemberCheckinsAsAdmin('user-1', 3);
+
+    const call1 = vi.mocked(db.dailyCheckin.findMany).mock.calls[0]?.[0] as {
+      distinct?: unknown;
+      take?: number;
+      where?: unknown;
+    };
+    expect(call1.distinct).toEqual(['date']);
+    expect(call1.take).toBe(3);
+    expect(call1.where).toEqual({ userId: 'user-1' });
+
+    // The second query is date-windowed from the OLDEST capped date forward, so
+    // no day can lose a slot to the cap.
+    const call2 = vi.mocked(db.dailyCheckin.findMany).mock.calls[1]?.[0] as {
+      where?: { userId?: string; date?: { gte?: Date } };
+    };
+    expect(call2.where).toEqual({ userId: 'user-1', date: { gte: d('2026-06-03') } });
+
+    expect(out).toHaveLength(3);
+  });
+
+  it('retourne [] sans crash et sans 2e requête quand 0 check-in', async () => {
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([] as never);
+
+    const out = await listMemberCheckinsAsAdmin('user-1', 30);
+
+    expect(out).toEqual([]);
+    expect(vi.mocked(db.dailyCheckin.findMany)).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('submitEveningCheckin — formationFollowed (SPEC §28/§22)', () => {

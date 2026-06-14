@@ -31,7 +31,7 @@ const redirectMock = vi.fn<(url: string) => never>((url: string) => {
 });
 const revalidatePathMock = vi.fn<(path: string) => void>();
 const createTrainingTradeMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
-const trainingSessionBelongsToUserMock = vi.fn<(...args: unknown[]) => Promise<boolean>>();
+const getTrainingSessionMetaMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const logAuditMock = vi.fn<(arg: unknown) => Promise<void>>(async () => undefined);
 
 vi.mock('@/auth', () => ({ auth: authMock }));
@@ -41,7 +41,7 @@ vi.mock('@/lib/training/training-trade-service', () => ({
   createTrainingTrade: createTrainingTradeMock,
 }));
 vi.mock('@/lib/training/training-session-service', () => ({
-  trainingSessionBelongsToUser: trainingSessionBelongsToUserMock,
+  getTrainingSessionMeta: getTrainingSessionMetaMock,
 }));
 vi.mock('@/lib/auth/audit', () => ({ logAudit: logAuditMock }));
 
@@ -78,13 +78,18 @@ beforeEach(() => {
   redirectMock.mockClear();
   revalidatePathMock.mockReset();
   createTrainingTradeMock.mockReset();
-  trainingSessionBelongsToUserMock.mockReset();
+  getTrainingSessionMetaMock.mockReset();
   logAuditMock.mockClear();
 
   authMock.mockResolvedValue({ user: { id: MEMBER_ID, status: 'active' } });
   createTrainingTradeMock.mockResolvedValue({ id: 'tt_1' });
-  // Default: any session id provided is owned by the member (overridden per-test).
-  trainingSessionBelongsToUserMock.mockResolvedValue(true);
+  // Default: any session id provided is owned by the member AND still open
+  // (overridden per-test for the not-owned / ended cases).
+  getTrainingSessionMetaMock.mockResolvedValue({
+    id: 'clx0session0000000001',
+    label: null,
+    isEnded: false,
+  });
 });
 
 afterEach(() => {
@@ -222,17 +227,17 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
   });
 });
 
-describe('createTrainingTradeAction — S8 session attach (ownership)', () => {
+describe('createTrainingTradeAction — S8 session attach (ownership + open-state)', () => {
   const SESSION_ID = 'clx0session0000000001';
 
-  it('attaches an OWNED session, audits inSession:true, revalidates + redirects to the session', async () => {
-    trainingSessionBelongsToUserMock.mockResolvedValue(true);
+  it('attaches an OWNED+OPEN session, audits inSession:true, revalidates + redirects to the session', async () => {
+    getTrainingSessionMetaMock.mockResolvedValue({ id: SESSION_ID, label: 'X', isEnded: false });
 
     await expect(
       createTrainingTradeAction(null, validForm({ sessionId: SESSION_ID })),
     ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
 
-    expect(trainingSessionBelongsToUserMock).toHaveBeenCalledWith(SESSION_ID, MEMBER_ID);
+    expect(getTrainingSessionMetaMock).toHaveBeenCalledWith(SESSION_ID, MEMBER_ID);
     expect(createTrainingTradeMock).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: SESSION_ID }),
     );
@@ -245,8 +250,21 @@ describe('createTrainingTradeAction — S8 session attach (ownership)', () => {
     expect(redirectMock.mock.calls[0]?.[0]).toBe(`/training/sessions/${SESSION_ID}`);
   });
 
-  it('rejects a session id NOT owned by the member (BOLA) — no create, no redirect', async () => {
-    trainingSessionBelongsToUserMock.mockResolvedValue(false);
+  it('rejects a session id NOT owned by the member (BOLA, meta=null) — no create, no redirect', async () => {
+    getTrainingSessionMetaMock.mockResolvedValue(null);
+
+    const result = await createTrainingTradeAction(null, validForm({ sessionId: SESSION_ID }));
+    expect(result.ok).toBe(false);
+    if (result.ok === false) {
+      expect(result.error).toBe('invalid_input');
+      expect(result.fieldErrors?.sessionId).toBeDefined();
+    }
+    expect(createTrainingTradeMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an ENDED session (consistency with /training/new) — no create, no redirect', async () => {
+    getTrainingSessionMetaMock.mockResolvedValue({ id: SESSION_ID, label: 'X', isEnded: true });
 
     const result = await createTrainingTradeAction(null, validForm({ sessionId: SESSION_ID }));
     expect(result.ok).toBe(false);
@@ -262,7 +280,7 @@ describe('createTrainingTradeAction — S8 session attach (ownership)', () => {
     const result = await createTrainingTradeAction(null, validForm({ sessionId: 'nope!!' }));
     expect(result.ok).toBe(false);
     if (result.ok === false) expect(result.error).toBe('invalid_input');
-    expect(trainingSessionBelongsToUserMock).not.toHaveBeenCalled();
+    expect(getTrainingSessionMetaMock).not.toHaveBeenCalled();
     expect(createTrainingTradeMock).not.toHaveBeenCalled();
   });
 });

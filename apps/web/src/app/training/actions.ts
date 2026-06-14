@@ -8,7 +8,7 @@ import { logAudit } from '@/lib/auth/audit';
 import { trainingSessionIdSchema } from '@/lib/schemas/training-session';
 import { trainingTradeCreateSchema } from '@/lib/schemas/training-trade';
 import { trainingKeyBelongsTo } from '@/lib/storage/local';
-import { trainingSessionBelongsToUser } from '@/lib/training/training-session-service';
+import { getTrainingSessionMeta } from '@/lib/training/training-session-service';
 import { createTrainingTrade } from '@/lib/training/training-trade-service';
 
 /**
@@ -106,20 +106,27 @@ export async function createTrainingTradeAction(
   }
 
   // S8 — optional parent backtest session. Validate the id shape, then enforce
-  // OWNERSHIP: a member must never attach a backtest to another member's
-  // session (§21.5 + BOLA). A stale/forged id resolves to invalid_input rather
-  // than a silent cross-member write.
+  // OWNERSHIP **and** open-state: a member must never attach a backtest to
+  // another member's session (§21.5 + BOLA), nor to an ENDED session (mirror
+  // of `/training/new` which drops an ended/foreign id — the UI hides the CTA,
+  // so a hit here is a stale tab or a crafted request). A stale/forged/ended id
+  // resolves to invalid_input, never a silent cross-member or ended-container
+  // write. `getTrainingSessionMeta` is the same owner-scoped single-query read
+  // (`findFirst { id, memberId }`) the page uses, so BOLA is identical.
   const sessionIdParsed = trainingSessionIdSchema.safeParse(formData.get('sessionId'));
   if (!sessionIdParsed.success) {
     return { ok: false, error: 'invalid_input', fieldErrors: { sessionId: 'Session invalide.' } };
   }
   const sessionId = sessionIdParsed.data;
-  if (sessionId !== null && !(await trainingSessionBelongsToUser(sessionId, session.user.id))) {
-    return {
-      ok: false,
-      error: 'invalid_input',
-      fieldErrors: { sessionId: 'Session introuvable.' },
-    };
+  if (sessionId !== null) {
+    const parentMeta = await getTrainingSessionMeta(sessionId, session.user.id);
+    if (!parentMeta || parentMeta.isEnded) {
+      return {
+        ok: false,
+        error: 'invalid_input',
+        fieldErrors: { sessionId: 'Session introuvable ou terminée.' },
+      };
+    }
   }
 
   let trainingTradeId: string;

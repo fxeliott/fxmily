@@ -176,7 +176,7 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
   // --- (B) Section TRAINING — 🚨 §21.5 firewall : effort/récence ONLY ------
   lines.push(`## SECTION 2 — Pratique d'entraînement (§21 — effort uniquement)`);
   lines.push(
-    `- Backtests ce mois : **${tr.backtestCount}** session${tr.backtestCount === 1 ? '' : 's'} (volume de pratique).`,
+    `- Backtests ce mois : **${tr.backtestCount}** backtest${tr.backtestCount === 1 ? '' : 's'} journalisé${tr.backtestCount === 1 ? '' : 's'} (volume de pratique).`,
   );
   if (!tr.hasEverPractised) {
     lines.push(

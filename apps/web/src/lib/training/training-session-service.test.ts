@@ -23,7 +23,6 @@ import {
   getTrainingSessionWithTradesById,
   listTrainingSessionsForUser,
   serializeTrainingSession,
-  trainingSessionBelongsToUser,
 } from './training-session-service';
 
 function makeSessionRow(overrides: Record<string, unknown> = {}) {
@@ -226,25 +225,6 @@ describe('getTrainingSessionMeta', () => {
 
     vi.mocked(db.trainingSession.findFirst).mockResolvedValueOnce(null as never);
     expect(await getTrainingSessionMeta('nope', 'user-1')).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// trainingSessionBelongsToUser (BOLA primitive)
-// ---------------------------------------------------------------------------
-
-describe('trainingSessionBelongsToUser', () => {
-  it('counts (id, memberId) and returns true only when > 0', async () => {
-    vi.mocked(db.trainingSession.count).mockResolvedValueOnce(1 as never);
-    expect(await trainingSessionBelongsToUser('ts-1', 'user-1')).toBe(true);
-
-    const arg = vi.mocked(db.trainingSession.count).mock.calls[0]![0] as {
-      where: { id: string; memberId: string };
-    };
-    expect(arg.where).toEqual({ id: 'ts-1', memberId: 'user-1' });
-
-    vi.mocked(db.trainingSession.count).mockResolvedValueOnce(0 as never);
-    expect(await trainingSessionBelongsToUser('ts-2', 'user-1')).toBe(false);
   });
 });
 

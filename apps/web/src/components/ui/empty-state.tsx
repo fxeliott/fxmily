@@ -110,7 +110,13 @@ export function EmptyState({
             className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--cy)]"
             strokeWidth={1.75}
           />
-          <span className="t-cap text-[var(--t-2)]">{tip}</span>
+          {/* `.t-cap` bakes `color:var(--t-3)` and is UNLAYERED (after `@layer
+              base` l.342) so it shadows `text-[var(--t-1)]` — runtime measured
+              rgb(122,130,142)=--t-3 = 4.17:1 on the Card-primary gradient worst
+              stop. Reproduce the caption inline (no baked colour) so `--t-1`
+              actually paints (~13:1 on the dark stop), AA-clear + the legibility
+              the pedagogical tip deserves. */}
+          <span className="text-[11px] leading-[1.45] text-[var(--t-1)]">{tip}</span>
         </div>
       ) : null}
 

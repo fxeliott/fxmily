@@ -25,7 +25,7 @@
 /* =============================================================
  * FXMILY — Design System v2 (Sprint #1)
  * -------------------------------------------------------------
- * Posture athlète discipline. Lime accent unique sur deep space.
+ * Posture athlète discipline. Accent bleu lumineux unique sur deep space (DS-v3).
  * - Anti-AI-slop : pas de purple gradient, pas de 16px uniform.
  * - Typo : Geist (display) + Inter (body) + JetBrains Mono (numerics).
  * - Charts/jauges secondary : cyan saturé. Sémantiques préservées
@@ -190,10 +190,12 @@
   /* ─── FOCUS RING (accessibilité non négociable) ─────────────── */
   --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--acc);
 
-  /* ─── LEGACY ALIASES (transitoire — Phase 2 migrera les call-sites)
-     Conserve la compat des classes Tailwind utilisées dans J0-J3
-     (bg-primary, bg-card, text-foreground, etc) tout en pointant
-     vers la nouvelle palette lime. ─────────────────────────────── */
+  /* ─── LEGACY ALIASES (load-bearing — NE PAS supprimer sans migration)
+     Conserve la compat des classes Tailwind utilisées dans J0-J3 ET
+     consommées aujourd'hui par la couche shadcn résiduelle (dialog /
+     sheet / tooltip : bg-background, text-foreground, bg-card, etc).
+     Pointent vers la palette bleue DS-v3. Les retirer casserait ces
+     composants en prod → migration des call-sites d'abord. ───────── */
   --background: var(--bg);
   --foreground: var(--t-1);
   --primary: var(--acc);
@@ -230,6 +232,7 @@
   --color-acc: var(--acc);
   --color-acc-hi: var(--acc-hi);
   --color-acc-fg: var(--acc-fg);
+  --color-acc-dim: var(--acc-dim);
   --color-cy: var(--cy);
   --color-ok: var(--ok);
   --color-bad: var(--bad);
@@ -305,7 +308,7 @@
     text-rendering: optimizeLegibility;
   }
 
-  /* Lime selection */
+  /* Blue accent selection */
   ::selection {
     background: oklch(0.62 0.19 254 / 0.25);
     color: var(--acc-hi);
@@ -315,7 +318,7 @@
     color: var(--acc-hi);
   }
 
-  /* Lime caret */
+  /* Blue accent caret */
   input,
   textarea {
     caret-color: var(--acc);
@@ -607,7 +610,7 @@
   );
 }
 
-/* Custom scrollbars (lime translucide) */
+/* Custom scrollbars (blue accent translucide) */
 .scroll-thin::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -844,7 +847,7 @@
   animation: cookieRise 220ms var(--e-smooth) both;
 }
 
-/* Row hover slide-in indicator (left edge bar lime) */
+/* Row hover slide-in indicator (left edge bar accent) */
 .row-hover {
   position: relative;
 }
@@ -931,6 +934,34 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* =============================================================
+ * FORCED COLORS (Windows High Contrast — WCAG 2.2 + frontend-elite gate)
+ * -------------------------------------------------------------
+ * In forced-colors mode the UA forces box-shadow/glow to `none`, so any
+ * focus ring or selected/accent-edged surface signalled ONLY by a
+ * box-shadow disappears. Guarantee a SYSTEM-coloured outline for keyboard
+ * focus and a real outline for box-shadow-only "selected/glow" surfaces.
+ * Tailwind `outline-hidden` (dialog/sheet close) already emits a
+ * transparent outline that becomes visible here — this rule covers the
+ * rest of the app + the bespoke `.glow-edge` / data-selected surfaces.
+ * Decorative drifting orbs add nothing in High Contrast — drop their cost.
+ * ============================================================= */
+@media (forced-colors: active) {
+  *:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  .glow-edge,
+  [data-selected='true'],
+  [aria-selected='true'] {
+    outline: 1px solid Highlight;
+  }
+  .ds-orb,
+  .v18-orb {
+    display: none;
   }
 }
 

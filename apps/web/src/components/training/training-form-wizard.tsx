@@ -92,7 +92,10 @@ function nowIsoLocal(): string {
 function emptyDraft(): TrainingDraftState {
   return {
     pair: '',
-    enteredAt: nowIsoLocal(),
+    // SSR-safe: empty on the server render so the datetime-local `value` is
+    // deterministic across SSR + hydration. Filled with the browser-local
+    // clock after mount in the restore effect (canon: close-trade-form.tsx).
+    enteredAt: '',
     entryScreenshotKey: '',
     entryScreenshotReadUrl: '',
     plannedRR: 2,
@@ -170,8 +173,14 @@ export function TrainingFormWizard({
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
+    const restored = loadDraft();
+    // Browser-local default for the entry time, applied post-mount so the SSR
+    // render stays deterministic (no hydration mismatch on the datetime-local).
+    if (!restored.enteredAt) {
+      restored.enteredAt = nowIsoLocal();
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDraft(loadDraft());
+    setDraft(restored);
     setHydrated(true);
   }, []);
 

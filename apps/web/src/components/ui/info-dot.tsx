@@ -33,7 +33,9 @@ export function InfoDot({ tip, side = 'top', width = 240, className }: InfoDotPr
           type="button"
           aria-label="Plus d'informations"
           className={cn(
-            'inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full text-[var(--t-4)] transition-colors hover:text-[var(--acc)]',
+            // 24px hit area (WCAG 2.5.8) without growing the visual icon: the
+            // -m-1.5 cancels the extra box so inline layout is unchanged.
+            '-m-1.5 inline-flex h-6 w-6 cursor-help items-center justify-center rounded-full text-[var(--t-4)] transition-colors hover:text-[var(--acc-hi)]',
             className,
           )}
         >

@@ -49,8 +49,15 @@ export function SampleSizeDisclaimer({
   return (
     <span
       className={cn(
-        't-mono-cap inline-flex items-center gap-1.5',
-        sufficient ? 'text-[var(--t-4)]' : 'text-[var(--warn)]',
+        // `.t-mono-cap` bakes `color:var(--t-3)` and is UNLAYERED (defined after
+        // `@layer base` closes l.342) so it WINS the cascade over any colour
+        // utility — the warn token never painted (runtime
+        // measured rgb(122,130,142)=--t-3 → 3.77:1 @ /dashboard). Reproduce the
+        // mono caption inline (no baked colour) so the colour utility below
+        // actually applies: `--warn-hi` on the dark card ≈ 10:1 — the dev's
+        // intended yellow warning, now real AND AA-clear (no chip needed).
+        'inline-flex items-center gap-1.5 font-mono text-[11px] leading-[1.3] tabular-nums',
+        sufficient ? 'text-[var(--t-3)]' : 'text-[var(--warn-hi)]',
         variant === 'pill' && 'rounded-pill border px-2 py-0.5',
         variant === 'pill' &&
           (sufficient

@@ -179,7 +179,7 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
               {card.exercises.map((ex, idx) => (
                 <li key={ex.id} className="flex items-start gap-3">
                   <span
-                    className="border-acc/40 bg-acc-dim text-acc mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-[11px] font-semibold tabular-nums"
+                    className="border-acc/40 bg-acc-dim text-acc-hi mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-[11px] font-semibold tabular-nums"
                     aria-hidden
                   >
                     {idx + 1}

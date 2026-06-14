@@ -563,6 +563,7 @@ function StepBody({ draft, update, fieldErrors, disabled }: StepProps) {
             <input
               id="sportType"
               type="text"
+              aria-label="Type de sport"
               value={draft.sportType}
               onChange={(e) => update('sportType', e.target.value)}
               disabled={disabled}
@@ -588,6 +589,7 @@ function StepBody({ draft, update, fieldErrors, disabled }: StepProps) {
             <input
               id="sportDurationMin"
               type="number"
+              aria-label="Durée du sport (minutes)"
               value={draft.sportDurationMin}
               onChange={(e) => update('sportDurationMin', e.target.value)}
               disabled={disabled}

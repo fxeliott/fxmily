@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
  * Radial 0–100 gauge for behavioral scores (J6).
  *
  * SVG-native (no Tremor / Recharts) so we keep full control over the
- * design system tokens (lime/cyan/warn/bad), the entrance animation
+ * design system tokens (blue/cyan/warn/bad), the entrance animation
  * (`stroke-dashoffset` interpolation), and bundle weight (~1KB gzipped).
  *
  * Posture:
@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
  *   - score < 50    → tone "bad" (rouge — critique).
  *   - 50–69         → tone "warn" (orangé — à renforcer).
  *   - 70–84         → tone "cy" (cyan — solide).
- *   - 85+           → tone "acc" (lime — excellent).
+ *   - 85+           → tone "acc" (blue — excellent).
  *
  * Mark Douglas alignment: the labels are framed around process execution
  * ("À renforcer", "Solide", "Excellent"), never market prediction.
@@ -97,7 +97,10 @@ function toneFor(score: number | null): Tone {
   return {
     key: 'acc',
     stroke: 'var(--acc)',
-    glow: 'var(--acc-glow)',
+    // `glow` feeds `background:` on the blurred halo div below. Must be a
+    // COLOR, not the `--acc-glow` box-shadow token (that rendered nothing —
+    // box-shadow syntax is invalid as a background → Excellent tier had no halo).
+    glow: 'var(--acc)',
     text: 'text-[var(--acc)]',
     band: 'Excellent',
   };

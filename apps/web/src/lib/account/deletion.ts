@@ -345,6 +345,39 @@ export async function purgeMaterialisedDeletions(
         }
       }
 
+      // S8 (audit d6 / SPEC §21.5 + RGPD art.17) — sweep the member's
+      // Mode-Entraînement files BEFORE the cascade erases the rows that hold
+      // their keys: backtest entry screenshots (`TrainingTrade.entryScreenshotKey`,
+      // `training/…`) + admin-correction media (`TrainingAnnotation.mediaKey`,
+      // `training_annotations/…`). Best-effort, same rationale as the proof
+      // sweep above. (Not a §21.5 leak: this is an infra/RGPD purge, never an
+      // edge-statistic read — `lib/account` is outside the anti-leak glob.)
+      const trainingKeys: string[] = [];
+      const trainingTrades = await db.trainingTrade.findMany({
+        where: { userId: u.id },
+        select: { entryScreenshotKey: true },
+      });
+      for (const t of trainingTrades) {
+        if (t.entryScreenshotKey) trainingKeys.push(t.entryScreenshotKey);
+      }
+      const trainingMedia = await db.trainingAnnotation.findMany({
+        where: { trainingTrade: { is: { userId: u.id } } },
+        select: { mediaKey: true },
+      });
+      for (const m of trainingMedia) {
+        if (m.mediaKey) trainingKeys.push(m.mediaKey);
+      }
+      if (trainingKeys.length > 0) {
+        const storage = selectStorage();
+        for (const key of trainingKeys) {
+          try {
+            await storage.delete(key);
+          } catch (err) {
+            console.warn('[account.deletion.purge] training sweep failed (non-fatal)', err);
+          }
+        }
+      }
+
       await db.user.delete({ where: { id: u.id } });
       purgedIds.push(u.id);
     } catch (err) {

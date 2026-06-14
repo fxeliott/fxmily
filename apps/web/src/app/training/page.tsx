@@ -1,14 +1,16 @@
-import { ArrowLeft, GraduationCap, Plus } from 'lucide-react';
+import { ArrowLeft, GraduationCap, Layers, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { TrainingSessionCard } from '@/components/training/training-session-card';
 import { TrainingStatsBar } from '@/components/training/training-stats-bar';
 import { TrainingTradeCardLinkable } from '@/components/training/training-trade-card-linkable';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { countUnseenTrainingAnnotationsByTrainingTrade } from '@/lib/training/training-annotation-member-service';
+import { listTrainingSessionsForUser } from '@/lib/training/training-session-service';
 import { listTrainingTradesForUser } from '@/lib/training/training-trade-service';
 import { cn } from '@/lib/utils';
 
@@ -25,9 +27,10 @@ export default async function TrainingPage() {
   // weaker than its own Server Action (`createTrainingTradeAction`).
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
-  const [trades, unseenMap] = await Promise.all([
+  const [trades, unseenMap, sessions] = await Promise.all([
     listTrainingTradesForUser(session.user.id),
     countUnseenTrainingAnnotationsByTrainingTrade(session.user.id),
+    listTrainingSessionsForUser(session.user.id),
   ]);
 
   return (
@@ -55,10 +58,19 @@ export default async function TrainingPage() {
               Mes backtests
             </h1>
           </div>
-          <Link href="/training/new" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
-            <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-            Nouveau backtest
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/training/sessions/new"
+              className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}
+            >
+              <Layers className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Nouvelle session
+            </Link>
+            <Link href="/training/new" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
+              <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Nouveau backtest
+            </Link>
+          </div>
         </div>
 
         {/* Isolation banner — pedagogical (Mark Douglas) + honest: practice is
@@ -70,6 +82,36 @@ export default async function TrainingPage() {
         </p>
       </header>
 
+      {/* Sessions de backtest — regroupent les backtests d'une même séance de
+          replay (S8). Affichées seulement s'il en existe ; sinon le bouton
+          "Nouvelle session" du header suffit (pas d'empty-state redondant). */}
+      {sessions.length > 0 ? (
+        <section aria-labelledby="training-sessions-heading" className="flex flex-col gap-3">
+          <h2
+            id="training-sessions-heading"
+            className="t-h3 flex items-center gap-2 text-[var(--t-1)]"
+          >
+            <Layers className="h-4 w-4 text-[var(--cy)]" strokeWidth={1.75} />
+            Séances de backtest
+            <span className="t-cap text-[var(--t-4)] tabular-nums">({sessions.length})</span>
+          </h2>
+          <ul className="flex flex-col gap-3">
+            {sessions.map((s) => (
+              <li key={s.id}>
+                <Link
+                  href={`/training/sessions/${s.id}`}
+                  aria-label={`Ouvrir la session ${s.label?.trim() || 'sans nom'} (${s.tradeCount} backtest${s.tradeCount > 1 ? 's' : ''})`}
+                  className="rounded-card block transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
+                >
+                  <TrainingSessionCard session={s} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {/* Tous les backtests (standalone + ceux des séances) */}
       {trades.length === 0 ? (
         <Card primary className="py-2">
           <EmptyState
@@ -77,8 +119,8 @@ export default async function TrainingPage() {
             headline="Aucun backtest pour l'instant."
             lead="L'entraînement, c'est répéter le geste hors risque réel pour ancrer ton process."
             guides={[
+              'Ouvre une session pour regrouper les backtests d’une même séance de replay.',
               'Capture ton analyse TradingView avant de noter le backtest.',
-              'Renseigne ton R:R prévu et si tu as respecté ton système.',
               'Note la leçon tirée — c’est elle qui fait progresser, pas le résultat.',
             ]}
             tip="Le résultat d'un backtest ne dit rien de ta valeur de trader. Ce qu'on mesure ici, c'est la discipline du process — anything can happen, ton geste reste propre."
@@ -86,6 +128,12 @@ export default async function TrainingPage() {
         </Card>
       ) : (
         <>
+          {sessions.length > 0 ? (
+            <h2 className="t-h3 flex items-center gap-2 text-[var(--t-1)]">
+              <GraduationCap className="h-4 w-4 text-[var(--cy)]" strokeWidth={1.75} />
+              Tous les backtests
+            </h2>
+          ) : null}
           <TrainingStatsBar trades={trades} />
           <ul className="flex flex-col gap-3">
             {trades.map((trade) => (

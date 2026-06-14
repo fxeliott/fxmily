@@ -31,6 +31,7 @@ const redirectMock = vi.fn<(url: string) => never>((url: string) => {
 });
 const revalidatePathMock = vi.fn<(path: string) => void>();
 const createTrainingTradeMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
+const trainingSessionBelongsToUserMock = vi.fn<(...args: unknown[]) => Promise<boolean>>();
 const logAuditMock = vi.fn<(arg: unknown) => Promise<void>>(async () => undefined);
 
 vi.mock('@/auth', () => ({ auth: authMock }));
@@ -38,6 +39,9 @@ vi.mock('next/navigation', () => ({ redirect: redirectMock }));
 vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }));
 vi.mock('@/lib/training/training-trade-service', () => ({
   createTrainingTrade: createTrainingTradeMock,
+}));
+vi.mock('@/lib/training/training-session-service', () => ({
+  trainingSessionBelongsToUser: trainingSessionBelongsToUserMock,
 }));
 vi.mock('@/lib/auth/audit', () => ({ logAudit: logAuditMock }));
 
@@ -74,10 +78,13 @@ beforeEach(() => {
   redirectMock.mockClear();
   revalidatePathMock.mockReset();
   createTrainingTradeMock.mockReset();
+  trainingSessionBelongsToUserMock.mockReset();
   logAuditMock.mockClear();
 
   authMock.mockResolvedValue({ user: { id: MEMBER_ID, status: 'active' } });
   createTrainingTradeMock.mockResolvedValue({ id: 'tt_1' });
+  // Default: any session id provided is owned by the member (overridden per-test).
+  trainingSessionBelongsToUserMock.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -170,15 +177,17 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
       systemRespected: true,
       lessonLearned: 'Entrée patiente, respect du plan.',
       enteredAt: expect.any(Date),
+      // S8 — standalone backtest (no session field in the form) → null.
+      sessionId: null,
     });
 
-    // 🚨 §21.5 — audit metadata is EXACTLY { trainingTradeId }. Never the
-    // P&L / behavioural payload.
+    // 🚨 §21.5 — audit metadata is ids/flags ONLY. Never the P&L / behavioural
+    // payload. `inSession` is a boolean flag, not member content.
     expect(logAuditMock).toHaveBeenCalledTimes(1);
     expect(logAuditMock).toHaveBeenCalledWith({
       action: 'training_trade.created',
       userId: MEMBER_ID,
-      metadata: { trainingTradeId: 'tt_1' },
+      metadata: { trainingTradeId: 'tt_1', inSession: false },
     });
 
     // 🚨 §21.5 — only the training surface is revalidated; the real edge is
@@ -187,7 +196,7 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
     expect(revalidatePathMock).not.toHaveBeenCalledWith('/journal');
     expect(revalidatePathMock).not.toHaveBeenCalledWith('/dashboard');
 
-    // Redirect target is the training landing.
+    // Redirect target is the training landing (standalone backtest).
     const thrown = redirectMock.mock.calls[0]?.[0];
     expect(thrown).toBe('/training');
   });
@@ -201,7 +210,7 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
     ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
 
     const auditArg = logAuditMock.mock.calls[0]?.[0] as { metadata: Record<string, unknown> };
-    expect(Object.keys(auditArg.metadata)).toEqual(['trainingTradeId']);
+    expect(Object.keys(auditArg.metadata).sort()).toEqual(['inSession', 'trainingTradeId']);
     expect(auditArg.metadata).not.toHaveProperty('resultR');
     expect(auditArg.metadata).not.toHaveProperty('outcome');
     expect(auditArg.metadata).not.toHaveProperty('lessonLearned');
@@ -210,6 +219,51 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
     expect(createTrainingTradeMock).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'win', resultR: 1.8 }),
     );
+  });
+});
+
+describe('createTrainingTradeAction — S8 session attach (ownership)', () => {
+  const SESSION_ID = 'clx0session0000000001';
+
+  it('attaches an OWNED session, audits inSession:true, revalidates + redirects to the session', async () => {
+    trainingSessionBelongsToUserMock.mockResolvedValue(true);
+
+    await expect(
+      createTrainingTradeAction(null, validForm({ sessionId: SESSION_ID })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    expect(trainingSessionBelongsToUserMock).toHaveBeenCalledWith(SESSION_ID, MEMBER_ID);
+    expect(createTrainingTradeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: SESSION_ID }),
+    );
+    expect(logAuditMock).toHaveBeenCalledWith({
+      action: 'training_trade.created',
+      userId: MEMBER_ID,
+      metadata: { trainingTradeId: 'tt_1', inSession: true },
+    });
+    expect(revalidatePathMock).toHaveBeenCalledWith(`/training/sessions/${SESSION_ID}`);
+    expect(redirectMock.mock.calls[0]?.[0]).toBe(`/training/sessions/${SESSION_ID}`);
+  });
+
+  it('rejects a session id NOT owned by the member (BOLA) — no create, no redirect', async () => {
+    trainingSessionBelongsToUserMock.mockResolvedValue(false);
+
+    const result = await createTrainingTradeAction(null, validForm({ sessionId: SESSION_ID }));
+    expect(result.ok).toBe(false);
+    if (result.ok === false) {
+      expect(result.error).toBe('invalid_input');
+      expect(result.fieldErrors?.sessionId).toBeDefined();
+    }
+    expect(createTrainingTradeMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed session id at the Zod layer before any ownership read', async () => {
+    const result = await createTrainingTradeAction(null, validForm({ sessionId: 'nope!!' }));
+    expect(result.ok).toBe(false);
+    if (result.ok === false) expect(result.error).toBe('invalid_input');
+    expect(trainingSessionBelongsToUserMock).not.toHaveBeenCalled();
+    expect(createTrainingTradeMock).not.toHaveBeenCalled();
   });
 });
 

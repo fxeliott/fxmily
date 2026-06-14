@@ -170,6 +170,13 @@ export type AuditAction =
   | 'admin.training_annotation.deleted'
   | 'admin.training_annotation.media.uploaded'
   | 'admin.training_trade.viewed'
+  // S8 — backtest SESSION container ("crée une session de backtest", brief §31
+  // DoD#1). STATISTICAL ISOLATION: metadata carries ids/flags ONLY
+  // (`trainingSessionId`, `hasSymbol`, `hasTimeframe`) — NEVER the member's
+  // free text (`label` / `notes`) nor any backtest P&L. A session container
+  // never touches the real edge (§21.5 invariant).
+  | 'training_session.created'
+  | 'training_session.ended'
   // V1.3 — Débrief Training dédié (SPEC §23, jalon #1 séquence §21.6).
   // Mirror of the V1.8 REFLECT `*.submitted` / `*.crisis_detected` pair:
   // `training_debrief.submitted` carries `weekStart` + `crisisLevel` +

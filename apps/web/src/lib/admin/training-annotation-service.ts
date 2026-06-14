@@ -143,3 +143,23 @@ export async function getTrainingAnnotationById(
   const row = await db.trainingAnnotation.findUnique({ where: { id } });
   return row ? serializeTrainingAnnotation(row) : null;
 }
+
+/**
+ * S8 admin triage — total corrections per backtest for `memberId`, as a `Map`
+ * for O(1) lookup (backtests with zero corrections are simply absent). Powers
+ * the "N correction(s)" / "À corriger" badge on the admin training list so the
+ * admin can prioritise which backtests still need a correction WITHOUT opening
+ * each one (audit S8 d2). Scoped through the parent `TrainingTrade.userId`
+ * relation — never another member's data. §21.5-safe: count-only, training
+ * surface only, no P&L.
+ */
+export async function countTrainingAnnotationsByMember(
+  memberId: string,
+): Promise<Map<string, number>> {
+  const grouped = await db.trainingAnnotation.groupBy({
+    by: ['trainingTradeId'],
+    where: { trainingTrade: { is: { userId: memberId } } },
+    _count: { _all: true },
+  });
+  return new Map(grouped.map((g) => [g.trainingTradeId, g._count._all]));
+}

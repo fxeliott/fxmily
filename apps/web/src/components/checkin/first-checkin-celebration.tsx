@@ -27,7 +27,10 @@ import { useState } from 'react';
  *     motion guard in globals.css.
  *   - Dismissible / non-blocking: a tap-to-dismiss close button; nothing here
  *     gates navigation, and the StreakCard + slot cards render underneath
- *     regardless. role="status" so it's announced, not alarming.
+ *     regardless. NOT a live region: the check-in confirmation banner
+ *     (checkin/page.tsx, role="status") already announces the result to AT —
+ *     a second status here would double-announce and shift the `.first()`
+ *     status node, colliding with that confirmation (J5 e2e).
  */
 export function FirstCheckinCelebration({ slot }: { slot: 'morning' | 'evening' }) {
   const prefersReducedMotion = useReducedMotion();
@@ -39,7 +42,6 @@ export function FirstCheckinCelebration({ slot }: { slot: 'morning' | 'evening' 
 
   return (
     <m.div
-      role="status"
       initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{

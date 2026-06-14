@@ -159,20 +159,6 @@ export async function getTrainingSessionMeta(
 }
 
 /**
- * Verify a session id belongs to `userId`. Used by the backtest Server Action
- * before attaching a new `TrainingTrade.sessionId`: a member must never attach
- * a backtest to another member's session (§21.5 + BOLA). Single `count` query,
- * no row read.
- */
-export async function trainingSessionBelongsToUser(
-  sessionId: string,
-  userId: string,
-): Promise<boolean> {
-  const n = await db.trainingSession.count({ where: { id: sessionId, memberId: userId } });
-  return n > 0;
-}
-
-/**
  * Mark a session as ended (set `endedAt = now`) for its owner. Idempotent:
  * `updateMany({ id, memberId })` returns `{ count: 0 }` (not a throw) when the
  * session is absent or not owned — the caller treats 0 as "not found". A

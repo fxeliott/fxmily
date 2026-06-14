@@ -960,7 +960,12 @@
     outline: 1px solid Highlight;
   }
   .ds-orb,
-  .v18-orb {
+  .v18-orb,
+  .login-orb {
+    display: none;
+  }
+  /* S9.1 — decorative celebration halo adds nothing in High Contrast. */
+  .celebrate-halo::after {
     display: none;
   }
 }
@@ -1211,5 +1216,241 @@
 @media (min-width: 640px) {
   body:has([data-slot='log-express-fab']) [data-slot='legal-footer-inner'] {
     padding-right: 6.5rem; /* 104px > 72px FAB + 24px breathing room */
+  }
+}
+
+/* =============================================================
+ * S9.1 "WAVE WOW" — premium ADDITIVE craft (login aurora,
+ * non-toxic celebrations, first-run reveal).
+ * -------------------------------------------------------------
+ * Invariants (frontend-elite + Mark Douglas non-toxic):
+ *   - Compositor-only: every keyframe below animates ONLY transform +
+ *     opacity. Glows are painted ONCE (box-shadow on the element) and the
+ *     PULSE rides a `::after` pseudo animated in opacity+scale — the shadow
+ *     itself never re-paints in a loop (tobiasahlin / web.dev animations).
+ *   - prefers-reduced-motion: the global filet (animation-duration 0.01ms +
+ *     iteration-count 1) already neutralises these; reveal keyframes use a
+ *     `both`/`forwards` fill so AT users still land on the final visible
+ *     state instantly (the proven `.word-rise` pattern). Extra explicit
+ *     guards below for the continuous + celebration loops.
+ *   - forced-colors: decorative orbs/halo dropped (extended block above
+ *     covers `.login-orb` + `.celebrate-halo`).
+ *   - Brand colours only (--acc / --acc-hi), no rainbow, no FOMO. A
+ *     celebration is a calm spring on a real accomplishment, <600ms, then
+ *     it settles — it never blocks, never punishes, never ratchets.
+ * ============================================================= */
+
+/* ---- Login aurora — drifting orbs (premium, slower than .ds-orb) ----
+   Reuses the .ds-orb compositor pattern but with two bespoke drift paths so
+   the login backplate feels alive without ever looping a paint property. */
+@keyframes loginOrbA {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate3d(26px, 30px, 0) scale(1.12);
+    opacity: 0.7;
+  }
+}
+@keyframes loginOrbB {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.04);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translate3d(-30px, -22px, 0) scale(0.92);
+    opacity: 0.6;
+  }
+}
+.login-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(58px);
+  pointer-events: none;
+  opacity: 0.55;
+  will-change: transform, opacity;
+}
+.login-orb-a {
+  animation: loginOrbA 32s var(--e-smooth) infinite;
+}
+.login-orb-b {
+  animation: loginOrbB 38s var(--e-smooth) infinite;
+}
+/* Mobile keeps a single orb (perf — mirrors the .v18-orb 640px gate). */
+@media (max-width: 640px) {
+  .login-orb-extra {
+    display: none;
+  }
+}
+
+/* ---- Reveal — h-rise stagger (translateY + opacity, CSS-only) ----
+   Set `--rise-delay` per element for a staggered entrance. `both` fill so the
+   element is hidden BEFORE its delay elapses, then locks the final state
+   (reduced-motion lands there instantly via the global filet). */
+@keyframes wowRise {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.wow-rise {
+  opacity: 0;
+  animation: wowRise 620ms var(--e-smooth) both;
+  animation-delay: var(--rise-delay, 0ms);
+}
+
+/* ---- Non-toxic celebration — spring checkmark + breathing brand halo ----
+   The checkmark pops once (overshoot spring scale, no bounce loop). The halo
+   is a painted box-shadow on `::before` (once) whose VISIBILITY breathes 3×
+   via opacity on `::after` (scale+opacity only). Calm, brand blue, settles. */
+@keyframes celebratePop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.celebrate-pop {
+  animation: celebratePop 460ms var(--e-overshoot) both;
+}
+/* Brand-blue halo behind the celebration mark. The shadow is painted once on
+   the base; the breathing ring is a pseudo animated in opacity + scale (3
+   pulses then stop — never an infinite anxious throb). */
+.celebrate-halo {
+  position: relative;
+}
+.celebrate-halo::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  border: 1.5px solid var(--acc);
+  opacity: 0;
+  transform: scale(0.8);
+  pointer-events: none;
+  animation: celebrateRing 1300ms var(--e-smooth) 200ms 2 forwards;
+}
+@keyframes celebrateRing {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+/* ---- Streak milestone — calm crossing accent (entrance only) ----
+   When a member just crosses a 7/14/30 milestone, the streak number gets a
+   single warm scale-settle on entry (NOT a loop). Brand/warn-toned, discreet. */
+@keyframes milestoneSettle {
+  0% {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.milestone-settle {
+  animation: milestoneSettle 560ms var(--e-overshoot) both;
+}
+
+/* ---- Scroll-driven reveal (E) — opt-in `.wow-reveal` ----
+   Progressive enhancement: where `animation-timeline: view()` is supported the
+   element fades+rises as it scrolls into view; everywhere else (and under
+   reduced-motion) it is simply visible (opacity 1, no transform). No JS, no
+   IntersectionObserver, no "stranded at the bottom" bug. Compositor-only. */
+.wow-reveal {
+  opacity: 1;
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes wowReveal {
+      0% {
+        opacity: 0;
+        transform: translateY(18px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .wow-reveal {
+      opacity: 0;
+      animation: wowReveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 42%;
+    }
+  }
+}
+
+/* ---- Hover glow-edge (E) — `.wow-hover-glow` ----
+   A luminous brand edge that fades in on hover via a `::after` pseudo animated
+   in OPACITY only (the box-shadow + border are painted once, never re-laid-out).
+   Pair with HoverLift (transform) for a premium lift+glow without paint thrash. */
+.wow-hover-glow {
+  position: relative;
+}
+.wow-hover-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  border: 1px solid var(--b-acc-strong);
+  box-shadow: var(--acc-glow);
+  transition: opacity 200ms var(--e-smooth);
+}
+.wow-hover-glow:hover::after,
+.wow-hover-glow:focus-within::after {
+  opacity: 1;
+}
+
+/* ---- Reduced-motion: belt-and-braces for the continuous login orbs +
+   celebration loops. The global filet already handles duration/iteration;
+   here we also pin the orbs to their resting transform so no residual frame
+   leaks, and reveal/celebration elements to their final visible state. ---- */
+@media (prefers-reduced-motion: reduce) {
+  .login-orb-a,
+  .login-orb-b {
+    animation: none;
+    transform: none;
+  }
+  .wow-rise,
+  .milestone-settle,
+  .celebrate-pop,
+  .wow-reveal {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+  .celebrate-halo::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* ---- forced-colors: the hover glow is a box-shadow (forced to none) — drop
+   the pseudo entirely so no empty 1px artefact lingers in High Contrast. ---- */
+@media (forced-colors: active) {
+  .wow-hover-glow::after {
+    display: none;
   }
 }

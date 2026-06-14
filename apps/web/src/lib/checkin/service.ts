@@ -328,6 +328,18 @@ export async function getCheckinStatus(
   };
 }
 
+/**
+ * Lifetime count of check-in rows for a member (any slot, any day).
+ *
+ * Used by the celebration surface (S9.1) to detect the member's *very first*
+ * check-in (count === 1 right after their first submit) so we can show a calm,
+ * one-time "you posted your routine" moment — never a recurring fanfare. Cheap
+ * single indexed COUNT (`userId`).
+ */
+export async function countCheckins(userId: string): Promise<number> {
+  return db.dailyCheckin.count({ where: { userId } });
+}
+
 export async function getStreak(
   userId: string,
   timezone: string,

@@ -1,6 +1,7 @@
 import { Flame } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
+import { STREAK_MILESTONES as MILESTONES } from '@/lib/checkin/streak';
 import { cn } from '@/lib/utils';
 
 interface StreakCardProps {
@@ -10,6 +11,14 @@ interface StreakCardProps {
   todayFilled: boolean;
   /** Compact = inline KPI in the dashboard ; full = standalone card on /checkin. */
   compact?: boolean;
+  /**
+   * S9.1 "wave wow" — set to the milestone threshold (7/14/30) the member
+   * JUST crossed with their latest check-in, to play a one-time calm entrance
+   * celebration (CSS `.milestone-settle`, no loop). `null`/undefined = no
+   * celebration. Non-toxic: this marks an accomplishment, it NEVER warns about
+   * a streak about to break.
+   */
+  justCrossed?: number | null;
 }
 
 /**
@@ -33,12 +42,13 @@ interface StreakCardProps {
  * Compact variant lives in the dashboard KPI strip; full variant on /checkin.
  */
 
-const MILESTONES = [7, 14, 30, 100] as const;
-
-export function StreakCard({ streak, todayFilled, compact }: StreakCardProps) {
+export function StreakCard({ streak, todayFilled, compact, justCrossed }: StreakCardProps) {
   const noStreak = streak === 0;
   const ablaze = streak >= 7;
   const deepHabit = streak >= 30;
+  // Only celebrate in the full (non-compact) card, and only when the crossed
+  // milestone actually matches the current streak (defence against stale props).
+  const celebrating = !compact && justCrossed != null && justCrossed === streak;
 
   const flameColor = noStreak
     ? 'text-[var(--t-3)]'
@@ -88,15 +98,24 @@ export function StreakCard({ streak, todayFilled, compact }: StreakCardProps) {
   const previousMilestone = [0, ...MILESTONES].filter((m) => m <= streak).at(-1) ?? 0;
 
   return (
-    <Card primary className="flex flex-col gap-4 p-5">
-      <div className="flex items-start justify-between">
+    <Card primary className="relative flex flex-col gap-4 p-5">
+      <div className="flex items-start justify-between gap-2">
         <span className="t-eyebrow">Streak check-in</span>
-        <Flame
-          className={cn('h-5 w-5 shrink-0', flameColor, flameAnim)}
-          strokeWidth={1.75}
-          style={flameFilter ? { filter: flameFilter } : undefined}
-          aria-hidden
-        />
+        <div className="flex items-center gap-2">
+          {/* S9.1 — calm "palier franchi" acknowledgement on the crossing
+              check-in only. Brand blue, no exclamation, dismissed on next load. */}
+          {celebrating ? (
+            <span className="milestone-settle rounded-pill inline-flex items-center gap-1 border border-[var(--b-acc-strong)] bg-[var(--acc-dim)] px-2 py-0.5 text-[10px] font-semibold tracking-[0.06em] text-[var(--acc-hi)] uppercase">
+              Palier {justCrossed} j franchi
+            </span>
+          ) : null}
+          <Flame
+            className={cn('h-5 w-5 shrink-0', flameColor, flameAnim)}
+            strokeWidth={1.75}
+            style={flameFilter ? { filter: flameFilter } : undefined}
+            aria-hidden
+          />
+        </div>
       </div>
 
       <div className="flex items-baseline gap-2">
@@ -104,6 +123,7 @@ export function StreakCard({ streak, todayFilled, compact }: StreakCardProps) {
           className={cn(
             'f-mono text-[44px] leading-none font-bold tracking-[-0.04em] tabular-nums',
             noStreak ? 'text-[var(--t-3)]' : 'text-[var(--acc)]',
+            celebrating && 'milestone-settle',
           )}
           style={
             noStreak ? undefined : { filter: 'drop-shadow(0 0 12px oklch(0.62 0.19 254 / 0.40))' }
@@ -115,6 +135,13 @@ export function StreakCard({ streak, todayFilled, compact }: StreakCardProps) {
           jour{streak > 1 ? 's' : ''} consécutif{streak > 1 ? 's' : ''}
         </span>
       </div>
+
+      {/* Accessible, non-visual confirmation of the milestone for AT users. */}
+      {celebrating ? (
+        <span className="sr-only" role="status">
+          Palier de {justCrossed} jours franchi. Belle régularité.
+        </span>
+      ) : null}
 
       {/* Milestone progress strip — 4 ticks at 7 / 14 / 30 / 100 days. */}
       <div className="flex flex-col gap-1.5">

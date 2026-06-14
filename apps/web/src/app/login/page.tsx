@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import type { CSSProperties } from 'react';
 
 import { auth } from '@/auth';
 import { Alert } from '@/components/alert';
 import { Card } from '@/components/ui/card';
 import { Kbd } from '@/components/ui/kbd';
 
+import { LoginAurora } from './login-aurora';
 import { LoginForm } from './login-form';
 
 export const metadata = {
@@ -31,19 +33,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const showOnboardingNotice = onboardingFlag === 'success';
 
   return (
-    <main className="aurora relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 py-10">
-      <div
-        aria-hidden
-        className="orb pointer-events-none absolute -top-32 -right-32 h-[420px] w-[420px] rounded-full opacity-20"
-        style={{
-          background: 'radial-gradient(circle, oklch(0.62 0.19 254 / 0.20) 0%, transparent 70%)',
-        }}
-      />
+    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10">
+      {/* S9.1 — premium drifting aurora backplate (decorative, zero JS). */}
+      <LoginAurora />
 
       <section className="relative z-10 flex w-full max-w-sm flex-col gap-6">
         <Link
           href="/"
-          className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-80"
+          className="wow-rise flex items-center justify-center gap-2.5 transition-opacity hover:opacity-80"
         >
           <div className="grid h-8 w-8 place-items-center rounded-[6px] border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[12px] font-bold text-[var(--acc)]">
             F
@@ -51,7 +48,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <span className="f-display text-[15px] font-semibold tracking-[-0.01em]">Fxmily</span>
         </Link>
 
-        <Card primary className="px-6 py-7">
+        <Card
+          primary
+          className="wow-rise px-6 py-7"
+          style={{ '--rise-delay': '90ms' } as CSSProperties}
+        >
           <header className="mb-6 flex flex-col items-center gap-2">
             <h1
               className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
@@ -71,18 +72,27 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <LoginForm />
         </Card>
 
-        <p className="text-center text-[11px] text-[var(--t-4)] tabular-nums">
+        <p
+          className="wow-rise text-center text-[11px] text-[var(--t-4)] tabular-nums"
+          style={{ '--rise-delay': '170ms' } as CSSProperties}
+        >
           Cohorte privée · accès uniquement par invitation
         </p>
 
-        <p className="text-center text-[11px] text-[var(--t-4)]">
+        <p
+          className="wow-rise text-center text-[11px] text-[var(--t-4)]"
+          style={{ '--rise-delay': '230ms' } as CSSProperties}
+        >
           Pas encore membre ?{' '}
           <Link href="/rejoindre" className="text-[var(--acc)] underline-offset-2 hover:underline">
             Faire une demande
           </Link>
         </p>
 
-        <p className="text-center text-[10px] text-[var(--t-4)] tabular-nums">
+        <p
+          className="wow-rise text-center text-[10px] text-[var(--t-4)] tabular-nums"
+          style={{ '--rise-delay': '290ms' } as CSSProperties}
+        >
           <span className="inline-flex items-center gap-1">
             <Kbd>⌘</Kbd>
             <Kbd>?</Kbd>

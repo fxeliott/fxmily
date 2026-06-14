@@ -20,6 +20,7 @@ import { CalendarStatusWidget } from '@/components/calendar/calendar-status-widg
 import { StreakCard } from '@/components/checkin/streak-card';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DrawnRule } from '@/components/dashboard/drawn-rule';
+import { FirstRunWelcome } from '@/components/dashboard/first-run-welcome';
 import { JournalShortcut } from '@/components/dashboard/journal-shortcut';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
 import { TodayGuidance } from '@/components/dashboard/today-guidance';
@@ -136,6 +137,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const firstName = fullName.split(' ')[0]!;
   const isAdmin = session.user.role === 'admin';
   const totalTrades = counts.open + counts.closed;
+  // S9.1 "wave wow" — brand-new member (no trade, no streak) gets a warm,
+  // animated first-run welcome instead of a wall of empty analytics.
+  const isFirstRun = totalTrades === 0 && streak.current === 0;
 
   // V2.5 — pending self-service access requests count for the admin card badge.
   const pendingAccessRequests = isAdmin ? await countPendingAccessRequests() : 0;
@@ -198,6 +202,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </p>
           <DrawnRule className="mt-1 max-w-[220px]" />
         </section>
+
+        {/* S9.1 — first-run welcome (new member only): warm, animated reveal,
+            posture Mark Douglas. Renders ABOVE the KPI strip so the very first
+            thing a new member sees is an invitation, not zeros. */}
+        {isFirstRun ? (
+          <section className="mb-6" aria-labelledby="first-run-heading">
+            <h2 id="first-run-heading" className="sr-only">
+              Bienvenue sur Fxmily
+            </h2>
+            <FirstRunWelcome />
+          </section>
+        ) : null}
 
         {/* KPI strip 4-cell — counts + streak */}
         <section className="mb-6" aria-labelledby="kpi-heading">
@@ -341,7 +357,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <HoverLift className="block">
             <Link
               href="/pre-trade/new"
-              className="rounded-card block border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              className="wow-hover-glow rounded-card block border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
             >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
                 <div className="flex items-start gap-3">

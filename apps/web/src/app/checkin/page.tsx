@@ -3,11 +3,13 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { FirstCheckinCelebration } from '@/components/checkin/first-checkin-celebration';
 import { StreakCard } from '@/components/checkin/streak-card';
 import { TrendCard } from '@/components/checkin/trend-card';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
-import { getCheckinStatus, getLast7Days, getStreak } from '@/lib/checkin/service';
+import { countCheckins, getCheckinStatus, getLast7Days, getStreak } from '@/lib/checkin/service';
+import { crossedMilestone } from '@/lib/checkin/streak';
 import { formatLocalDate } from '@/lib/checkin/timezone';
 import { cn } from '@/lib/utils';
 
@@ -40,6 +42,12 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
   const justDone = params.done === '1';
   const justDoneSlot = params.slot === 'morning' || params.slot === 'evening' ? params.slot : null;
 
+  // S9.1 "wave wow" — detect the member's VERY FIRST check-in to show a
+  // one-time non-toxic celebration (Mark Douglas: name the action, no fanfare).
+  // Only query the lifetime count when we actually just completed a check-in —
+  // otherwise it's wasted work on every landing visit.
+  const isFirstEver = justDone && justDoneSlot ? (await countCheckins(userId)) === 1 : false;
+
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:py-10">
       <header className="flex flex-col gap-3">
@@ -66,9 +74,22 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
         </div>
       </header>
 
-      {justDone && justDoneSlot ? <DoneBanner slot={justDoneSlot} streak={streak.current} /> : null}
+      {justDone && justDoneSlot ? (
+        <>
+          {/* DoneBanner is ALWAYS the confirmation status (role="status",
+              "Check-in matin enregistré · streak N") — the J5 e2e asserts on it
+              and assistive tech reads it. The first-ever celebration is an
+              additive visual bonus ABOVE it, never a replacement. */}
+          {isFirstEver ? <FirstCheckinCelebration slot={justDoneSlot} /> : null}
+          <DoneBanner slot={justDoneSlot} streak={streak.current} />
+        </>
+      ) : null}
 
-      <StreakCard streak={streak.current} todayFilled={streak.todayFilled} />
+      <StreakCard
+        streak={streak.current}
+        todayFilled={streak.todayFilled}
+        justCrossed={justDone ? crossedMilestone(streak.current) : null}
+      />
 
       <TrendCard days={last7} />
 

@@ -65,3 +65,29 @@ export function computeStreak(days: readonly CheckinDay[], today: LocalDateStrin
 
   return streak;
 }
+
+/**
+ * Streak milestones surfaced across the check-in UI (S9.1 "wave wow").
+ *
+ * Single source of truth for both the StreakCard progress strip and the
+ * "palier franchi" calm celebration. Keep ascending — `crossedMilestone`
+ * relies on exact equality, and `StreakCard` renders them in order.
+ */
+export const STREAK_MILESTONES = [7, 14, 30, 100] as const;
+
+export type StreakMilestone = (typeof STREAK_MILESTONES)[number];
+
+/**
+ * Pure milestone detector (S9.1). Returns the milestone the member JUST landed
+ * on iff `streak` matches one EXACTLY (7 / 14 / 30 / 100), else `null`.
+ *
+ * Deliberately exact-match, not threshold-crossing: the celebration fires only
+ * on the day the streak equals an anchor (right after that check-in), never as
+ * a recurring "you're past 7" nag and never as a loss-anxiety trigger. The
+ * caller already gates on "a check-in just happened".
+ */
+export function crossedMilestone(streak: number): StreakMilestone | null {
+  return (STREAK_MILESTONES as readonly number[]).includes(streak)
+    ? (streak as StreakMilestone)
+    : null;
+}

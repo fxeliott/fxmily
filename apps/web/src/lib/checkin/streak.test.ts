@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeStreak, type CheckinDay } from './streak';
+import { computeStreak, crossedMilestone, STREAK_MILESTONES, type CheckinDay } from './streak';
 
 /**
  * Streak counter (J5, SPEC §7.4 — "Streaks visibles" + scoring engagement J6).
@@ -108,5 +108,37 @@ describe('computeStreak', () => {
       day('2026-05-05'),
     ];
     expect(computeStreak(days, '2026-05-06')).toBe(2);
+  });
+});
+
+/**
+ * S9.1 "wave wow" — milestone detection is the SSOT shared by /checkin
+ * (FirstCheckin/DoneBanner branch) and StreakCard. Exact-match by design:
+ * the calm celebration fires only on the day the streak LANDS on an anchor,
+ * never as a recurring "you're past 7" nag.
+ */
+describe('crossedMilestone', () => {
+  it('returns the milestone when the streak lands exactly on 7 / 14 / 30 / 100', () => {
+    expect(crossedMilestone(7)).toBe(7);
+    expect(crossedMilestone(14)).toBe(14);
+    expect(crossedMilestone(30)).toBe(30);
+    expect(crossedMilestone(100)).toBe(100);
+  });
+
+  it('returns null one step before or after each milestone', () => {
+    expect(crossedMilestone(6)).toBeNull();
+    expect(crossedMilestone(8)).toBeNull();
+    expect(crossedMilestone(15)).toBeNull();
+    expect(crossedMilestone(31)).toBeNull();
+    expect(crossedMilestone(99)).toBeNull();
+    expect(crossedMilestone(101)).toBeNull();
+  });
+
+  it('returns null for a 0 streak (no celebration before the first anchor)', () => {
+    expect(crossedMilestone(0)).toBeNull();
+  });
+
+  it('exposes the canonical milestone anchors in ascending order', () => {
+    expect(STREAK_MILESTONES).toEqual([7, 14, 30, 100]);
   });
 });

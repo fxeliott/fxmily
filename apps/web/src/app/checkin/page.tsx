@@ -75,11 +75,14 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
       </header>
 
       {justDone && justDoneSlot ? (
-        isFirstEver ? (
-          <FirstCheckinCelebration slot={justDoneSlot} />
-        ) : (
+        <>
+          {/* DoneBanner is ALWAYS the confirmation status (role="status",
+              "Check-in matin enregistré · streak N") — the J5 e2e asserts on it
+              and assistive tech reads it. The first-ever celebration is an
+              additive visual bonus ABOVE it, never a replacement. */}
+          {isFirstEver ? <FirstCheckinCelebration slot={justDoneSlot} /> : null}
           <DoneBanner slot={justDoneSlot} streak={streak.current} />
-        )
+        </>
       ) : null}
 
       <StreakCard

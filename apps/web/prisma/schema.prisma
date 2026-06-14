@@ -845,6 +845,11 @@ model TrainingTrade {
   // userId-leading + enteredAt DESC: every member-facing training query is
   // user-scoped and sorts newest-first (SPEC §21.3).
   @@index([userId, enteredAt(sort: Desc)])
+  // S8 — the backtest-session detail joins the entries by `session_id` then
+  // sorts them newest-first (`getTrainingSessionWithTrades*`). Index the FK so
+  // the now-live join never seq-scans `training_trades` (the other hot FKs are
+  // all indexed; this was the only un-indexed one — audit S8 d6).
+  @@index([sessionId, enteredAt(sort: Desc)])
   @@map("training_trades")
 }
 
@@ -989,7 +994,11 @@ model NotificationQueue {
   // J9 dispatcher hot-path: claim rows ready to be sent (status in pending|dispatching
   // AND nextAttemptAt <= now). The partial WHERE clause is added in the migration
   // SQL (Prisma 7 doesn't model partial indexes natively; same pattern as the J5
-  // `notification_queue_pending_checkin_dedup` partial unique index).
+  // `notification_queue_pending_checkin_dedup` partial unique index). The index is
+  // named by Prisma's default (`notification_queue_status_next_attempt_at_idx`);
+  // the S8 index migration reconciled a pre-existing name drift (the J9 SQL had
+  // hand-named it `pending_dispatch_idx` while the schema declared no `map:`) via
+  // a safe `ALTER INDEX … RENAME` that preserves the partial predicate.
   @@index([status, nextAttemptAt])
   // User-scoped admin/debug queries.
   @@index([userId, createdAt(sort: Desc)])

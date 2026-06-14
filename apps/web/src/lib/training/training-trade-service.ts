@@ -35,6 +35,10 @@ export interface CreateTrainingTradeInput {
   systemRespected: boolean | null;
   lessonLearned: string;
   enteredAt: Date;
+  /** Optional parent backtest session (S8 — "crée une session de backtest").
+   * The Server Action must have already verified the session belongs to
+   * `userId` (BOLA + §21.5). `null` = a standalone backtest (unchanged). */
+  sessionId?: string | null;
 }
 
 /**
@@ -96,6 +100,7 @@ export async function createTrainingTrade(
       systemRespected: input.systemRespected,
       lessonLearned: input.lessonLearned,
       enteredAt: input.enteredAt,
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
     },
   });
   return serializeTrainingTrade(row);

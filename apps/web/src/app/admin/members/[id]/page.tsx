@@ -12,6 +12,7 @@ import { listMemberCheckinsAsAdmin } from '@/lib/checkin/service';
 import { PreTradeAnalyticsCard } from '@/components/pre-trade/pre-trade-analytics-card';
 import { PreTradeCorrelationCard } from '@/components/pre-trade/pre-trade-correlation-card';
 import { MemberTrainingPanel } from '@/components/admin/member-training-panel';
+import { MemberTrainingSessionsPanel } from '@/components/admin/member-training-sessions-panel';
 import {
   MemberTrainingDebriefsPanel,
   type MemberTrainingDebriefItem,
@@ -38,6 +39,8 @@ import { aggregateMemberDeliveryStats, listMemberDeliveries } from '@/lib/admin/
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
 import { listTrainingTradesAsAdmin } from '@/lib/training/training-trade-admin-service';
+import { listTrainingSessionsAsAdmin } from '@/lib/training/training-session-admin-service';
+import { countTrainingAnnotationsByMember } from '@/lib/admin/training-annotation-service';
 import { getProfileForUser, getInterviewForUser } from '@/lib/onboarding-interview/service';
 import { MemberProfileViewerAdmin } from '@/components/admin/member-profile-viewer-admin';
 import { getLatestCalendarForUser } from '@/lib/calendar/service';
@@ -146,6 +149,16 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   }
 
   const trainingTrades = tab === 'training' ? await listTrainingTradesAsAdmin(memberId) : null;
+
+  // S8 — backtest sessions (containers) for the training tab. Read-only admin
+  // supervision (§27 output to S7). §21.5: training-only reads.
+  const trainingSessions = tab === 'training' ? await listTrainingSessionsAsAdmin(memberId) : null;
+
+  // S8 audit (d2) — corrections-per-backtest rollup so the admin can triage
+  // which backtests still need a correction ("À corriger") without opening each.
+  // §21.5-safe: count-only, training surface only.
+  const trainingCorrectionsCount =
+    tab === 'training' ? await countTrainingAnnotationsByMember(memberId) : null;
 
   // S7 §22-23 — read-only daily check-ins for the supervision panel. Capped at
   // the 30 most recent days (admin-only, not a hot path, 30-member scale). §2:
@@ -347,7 +360,20 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       ) : null}
       {tab === 'training' && trainingTrades ? (
         <div className="flex flex-col gap-8">
-          <MemberTrainingPanel memberId={memberId} trades={trainingTrades} />
+          {trainingSessions !== null ? (
+            <section className="flex flex-col gap-3">
+              <h2 className="t-h3 text-foreground">Séances de backtest</h2>
+              <MemberTrainingSessionsPanel memberId={memberId} sessions={trainingSessions} />
+            </section>
+          ) : null}
+          <section className="flex flex-col gap-3">
+            <h2 className="t-h3 text-foreground">Tous les backtests</h2>
+            <MemberTrainingPanel
+              memberId={memberId}
+              trades={trainingTrades}
+              correctionsCount={trainingCorrectionsCount ?? undefined}
+            />
+          </section>
           {trainingDebriefItems ? (
             <MemberTrainingDebriefsPanel items={trainingDebriefItems} />
           ) : null}

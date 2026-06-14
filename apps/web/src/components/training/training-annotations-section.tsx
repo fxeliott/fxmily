@@ -19,9 +19,9 @@ import { DeleteTrainingAnnotationButton } from './delete-training-annotation-but
  * 🚨 STATISTICAL ISOLATION (§21.5): consumes `SerializedTrainingAnnotation`
  * only; `selectStorage().getReadUrl` resolves a `training_annotations/` key
  * (served by the GET route's training_annotation branch). Zero real-edge
- * reference. The "CORRECTION" pill is cyan (`--cy`) — NOT the journal's lime
- * `acc` — so the member never confuses a backtest correction with a
- * real-trade correction (non-confusability, Mark Douglas).
+ * reference. The "CORRECTION" pill is cyan (`--cy`) — NOT the journal's shared
+ * blue `--acc` accent — so the member never confuses a backtest correction with
+ * a real-trade correction (non-confusability, Mark Douglas).
  */
 
 const DATETIME_FMT = new Intl.DateTimeFormat('fr-FR', {

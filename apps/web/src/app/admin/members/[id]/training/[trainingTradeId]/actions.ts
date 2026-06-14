@@ -265,12 +265,16 @@ export async function deleteTrainingAnnotationAction(
     },
   });
 
+  // 🚨 §21.5 — training surfaces ONLY. The member-facing paths depend only on
+  // `annotation.trainingTradeId` (always known), so revalidate them
+  // unconditionally; the admin paths need the owner id. Splitting avoids the
+  // asymmetry where a (cascade-guaranteed-unreachable) null `trainingTrade`
+  // returned ok:true while leaving every surface stale.
+  revalidatePath(`/training/${annotation.trainingTradeId}`);
+  revalidatePath('/training');
   if (trainingTrade) {
-    // 🚨 §21.5 — training surfaces ONLY.
     revalidatePath(`/admin/members/${trainingTrade.userId}/training/${annotation.trainingTradeId}`);
     revalidatePath(`/admin/members/${trainingTrade.userId}`);
-    revalidatePath(`/training/${annotation.trainingTradeId}`);
-    revalidatePath('/training');
   }
 
   return { ok: true };

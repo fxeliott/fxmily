@@ -5,8 +5,10 @@ import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
+import { trainingSessionIdSchema } from '@/lib/schemas/training-session';
 import { trainingTradeCreateSchema } from '@/lib/schemas/training-trade';
 import { trainingKeyBelongsTo } from '@/lib/storage/local';
+import { trainingSessionBelongsToUser } from '@/lib/training/training-session-service';
 import { createTrainingTrade } from '@/lib/training/training-trade-service';
 
 /**
@@ -103,6 +105,23 @@ export async function createTrainingTradeAction(
     };
   }
 
+  // S8 — optional parent backtest session. Validate the id shape, then enforce
+  // OWNERSHIP: a member must never attach a backtest to another member's
+  // session (§21.5 + BOLA). A stale/forged id resolves to invalid_input rather
+  // than a silent cross-member write.
+  const sessionIdParsed = trainingSessionIdSchema.safeParse(formData.get('sessionId'));
+  if (!sessionIdParsed.success) {
+    return { ok: false, error: 'invalid_input', fieldErrors: { sessionId: 'Session invalide.' } };
+  }
+  const sessionId = sessionIdParsed.data;
+  if (sessionId !== null && !(await trainingSessionBelongsToUser(sessionId, session.user.id))) {
+    return {
+      ok: false,
+      error: 'invalid_input',
+      fieldErrors: { sessionId: 'Session introuvable.' },
+    };
+  }
+
   let trainingTradeId: string;
   try {
     const trade = await createTrainingTrade({
@@ -115,6 +134,7 @@ export async function createTrainingTradeAction(
       systemRespected: data.systemRespected,
       lessonLearned: data.lessonLearned,
       enteredAt: data.enteredAt,
+      sessionId,
     });
     trainingTradeId = trade.id;
   } catch (err) {
@@ -122,18 +142,21 @@ export async function createTrainingTradeAction(
     return { ok: false, error: 'unknown' };
   }
 
-  // 🚨 §21.5 — PII-free: ONLY the id. Never resultR/outcome/lessonLearned.
+  // 🚨 §21.5 — PII-free: ids/flags ONLY. Never resultR/outcome/lessonLearned.
   await logAudit({
     action: 'training_trade.created',
     userId: session.user.id,
-    metadata: { trainingTradeId },
+    metadata: { trainingTradeId, inSession: sessionId !== null },
   });
 
   // 🚨 §21.5 — training surface ONLY. Never /journal or /dashboard.
   revalidatePath('/training');
+  if (sessionId !== null) revalidatePath(`/training/sessions/${sessionId}`);
 
   try {
-    redirect('/training');
+    // Logged inside a session → return to that session (the member keeps
+    // adding backtests to the same sitting); otherwise the standalone list.
+    redirect(sessionId !== null ? `/training/sessions/${sessionId}` : '/training');
   } catch (err) {
     if (isNextRedirect(err)) throw err;
     console.error('[training.createTrainingTrade] redirect failed', err);

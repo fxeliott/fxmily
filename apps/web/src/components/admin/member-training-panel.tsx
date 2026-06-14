@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { TrainingTradeCard } from '@/components/training/training-trade-card';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Pill } from '@/components/ui/pill';
 import type { SerializedTrainingTrade } from '@/lib/training/training-trade-service';
 
 /**
@@ -32,9 +33,13 @@ const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
 export function MemberTrainingPanel({
   memberId,
   trades,
+  correctionsCount,
 }: {
   memberId: string;
   trades: SerializedTrainingTrade[];
+  /** trainingTradeId → total corrections (S8 audit d2). Absent key = 0 → the
+   * backtest still needs a correction ("À corriger"). */
+  correctionsCount?: Map<string, number> | undefined;
 }) {
   if (trades.length === 0) {
     return (
@@ -50,17 +55,37 @@ export function MemberTrainingPanel({
 
   return (
     <ul className="flex flex-col gap-3">
-      {trades.map((trade) => (
-        <li key={trade.id}>
-          <Link
-            href={`/admin/members/${memberId}/training/${trade.id}`}
-            aria-label={`Voir le backtest ${trade.pair} du ${DATE_FMT.format(new Date(trade.enteredAt))}`}
-            className="rounded-card block transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
-          >
-            <TrainingTradeCard trade={trade} />
-          </Link>
-        </li>
-      ))}
+      {trades.map((trade) => {
+        const corrections = correctionsCount?.get(trade.id) ?? 0;
+        return (
+          <li key={trade.id}>
+            <Link
+              href={`/admin/members/${memberId}/training/${trade.id}`}
+              aria-label={`Corriger le backtest ${trade.pair} du ${DATE_FMT.format(new Date(trade.enteredAt))} — ${
+                corrections === 0
+                  ? 'aucune correction'
+                  : `${corrections} correction${corrections > 1 ? 's' : ''}`
+              }`}
+              className="rounded-card block transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
+            >
+              <TrainingTradeCard trade={trade} />
+              {correctionsCount ? (
+                <div className="mt-1.5 flex justify-end">
+                  {corrections === 0 ? (
+                    <Pill tone="warn" dot>
+                      À corriger
+                    </Pill>
+                  ) : (
+                    <Pill tone="cy">
+                      {corrections} correction{corrections > 1 ? 's' : ''}
+                    </Pill>
+                  )}
+                </div>
+              ) : null}
+            </Link>
+          </li>
+        );
+      })}
     </ul>
   );
 }

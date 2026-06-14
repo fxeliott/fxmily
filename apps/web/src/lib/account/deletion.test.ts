@@ -6,6 +6,8 @@ const updateMock = vi.fn();
 const updateManyMock = vi.fn();
 const deleteMock = vi.fn();
 const proofFindManyMock = vi.fn();
+const trainingTradeFindManyMock = vi.fn();
+const trainingAnnotationFindManyMock = vi.fn();
 const storageDeleteMock = vi.fn();
 
 vi.mock('@/lib/db', () => ({
@@ -20,6 +22,14 @@ vi.mock('@/lib/db', () => ({
     // S3 — the purge sweeps the member's MT5 proof files before the cascade.
     mt5AccountProof: {
       findMany: proofFindManyMock,
+    },
+    // S8 — the purge also sweeps the member's training storage (backtest
+    // captures + admin-correction media) before the cascade.
+    trainingTrade: {
+      findMany: trainingTradeFindManyMock,
+    },
+    trainingAnnotation: {
+      findMany: trainingAnnotationFindManyMock,
     },
   },
 }));
@@ -52,9 +62,13 @@ beforeEach(() => {
   updateManyMock.mockReset();
   deleteMock.mockReset();
   proofFindManyMock.mockReset();
+  trainingTradeFindManyMock.mockReset();
+  trainingAnnotationFindManyMock.mockReset();
   storageDeleteMock.mockReset();
-  // Default: no proofs to sweep — the pre-S3 purge tests stay byte-identical.
+  // Default: nothing to sweep — the pre-S3/S8 purge tests stay byte-identical.
   proofFindManyMock.mockResolvedValue([]);
+  trainingTradeFindManyMock.mockResolvedValue([]);
+  trainingAnnotationFindManyMock.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -396,6 +410,47 @@ describe('purgeMaterialisedDeletions', () => {
     // Only u2 succeeded; u1 failed and is excluded from purgedIds.
     expect(result.purgedIds).toEqual(['u2']);
     errSpy.mockRestore();
+  });
+
+  it('S8 — sweeps the member training storage (backtest captures + correction media) before the cascade, best-effort', async () => {
+    const now = new Date('2026-06-14T10:00:00.000Z');
+    findManyMock.mockResolvedValueOnce([{ id: 'u1' }]);
+    trainingTradeFindManyMock.mockResolvedValueOnce([
+      { entryScreenshotKey: 'training/u1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png' },
+      { entryScreenshotKey: null }, // a repaired backtest with no capture → skipped
+    ]);
+    trainingAnnotationFindManyMock.mockResolvedValueOnce([
+      { mediaKey: 'training_annotations/tt1/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png' },
+      { mediaKey: null }, // a text-only correction → skipped
+    ]);
+    // First deletion fails — best-effort: the others still run AND the hard-delete happens.
+    storageDeleteMock.mockRejectedValueOnce(new Error('disk on fire')).mockResolvedValue(undefined);
+    deleteMock.mockResolvedValue({});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const result = await purgeMaterialisedDeletions({ now });
+
+    // Scoped reads: trades by userId, annotation media through the parent trade relation.
+    expect(trainingTradeFindManyMock).toHaveBeenCalledWith({
+      where: { userId: 'u1' },
+      select: { entryScreenshotKey: true },
+    });
+    expect(trainingAnnotationFindManyMock).toHaveBeenCalledWith({
+      where: { trainingTrade: { is: { userId: 'u1' } } },
+      select: { mediaKey: true },
+    });
+    // Exactly the 2 non-null keys are swept (nulls skipped); the hard-delete still runs.
+    expect(storageDeleteMock).toHaveBeenCalledWith(
+      'training/u1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png',
+    );
+    expect(storageDeleteMock).toHaveBeenCalledWith(
+      'training_annotations/tt1/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png',
+    );
+    expect(storageDeleteMock).toHaveBeenCalledTimes(2);
+    expect(deleteMock).toHaveBeenCalledWith({ where: { id: 'u1' } });
+    expect(result.purged).toBe(1);
+    expect(result.errors).toBe(0);
+    warnSpy.mockRestore();
   });
 });
 

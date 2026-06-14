@@ -80,6 +80,11 @@ export default async function NewTrainingDebriefPage() {
           <DrawnRule tone="cyan" className="max-w-[220px]" />
         </header>
 
+        {/* Heading anchor so the SR heading map stays h1 → h2 → h3 (the stats
+            panel's own title is a visual eyebrow + four <h3> section titles; in
+            the admin context it already lives under an <h2>, here the member
+            page must supply one — a11y WCAG 1.3.1 / 2.4.10, audit S8). */}
+        <h2 className="sr-only">Tes statistiques de pratique de la semaine</h2>
         <TrainingDebriefStatsPanel stats={stats} weekRangeLabel={weekRange} />
 
         <TrainingDebriefWizard weekStart={weekStart} {...(prefill ? { prefill } : {})} />

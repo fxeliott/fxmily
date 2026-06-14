@@ -109,6 +109,16 @@ const BREACH_TOKENS = [
   'TrainingTrade',
   'db.trainingTrade',
   '@/lib/training',
+  // S8 — backtest SESSION container ("crée une session de backtest", brief
+  // §31 DoD#1). It lives 100% inside the §21.5 training world (no FK to any
+  // real-edge model). The existing `TrainingTrade` token does NOT match
+  // `TrainingSession` (distinct identifier), and `@/lib/training` only catches
+  // an import path — so the model name + the db accessor are listed explicitly
+  // to forbid a real-edge module from ever referencing the session container.
+  // (`db.trainingSession` is the Prisma accessor; `TrainingSession` catches the
+  // model, its `Serialized*`/`*Model` types and a serializer reference.)
+  'TrainingSession',
+  'db.trainingSession',
   // V1.3 — SPEC §23 Débrief Training dédié. The debrief + its computed stats
   // must never reach a real-edge surface (§21.5, §23.5/§23.7 BLOCKING).
   'TrainingDebrief',
@@ -637,5 +647,63 @@ describe('§21.5/§27.7 — MindsetCheck is fully isolated (psychology-pure, 0 c
         ).not.toContain(token);
       }
     }
+  });
+});
+
+// =============================================================================
+// Block I — S8 TrainingSession container stays §21.5-isolated
+// =============================================================================
+
+/**
+ * S8 — the backtest-SESSION container (`TrainingSession`) is a pure
+ * organisational grouping that lives 100% inside the training world. Block A
+ * (BREACH_TOKENS extended with `TrainingSession` / `db.trainingSession`)
+ * already proves no real-edge module references it. Block I pins the session
+ * module side: its services + Server Action import no real edge, never
+ * revalidate `/dashboard`, and the real-edge ACTIVITY channel still counts
+ * BACKTESTS (`db.trainingTrade`), never sessions — a container changes nothing
+ * on the engagement / trigger / report signal.
+ */
+describe('§21.5 — TrainingSession container is training-isolated', () => {
+  const SESSION_MODULE = [
+    'lib/training/training-session-service.ts',
+    'lib/training/training-session-admin-service.ts',
+    'app/training/sessions/actions.ts',
+  ] as const;
+  const REAL_EDGE_IMPORTS = [
+    '@/lib/scoring',
+    '@/lib/analytics',
+    '@/lib/trades',
+    '@/lib/habit',
+    '@/lib/weekly-report',
+    '@/lib/verification',
+  ] as const;
+
+  it('the session module imports no real-edge module', () => {
+    for (const rel of SESSION_MODULE) {
+      const code = readSrcCode(rel);
+      for (const imp of REAL_EDGE_IMPORTS) {
+        expect(code, `${rel} must not import ${imp} (§21.5)`).not.toContain(imp);
+      }
+    }
+  });
+
+  it('the session Server Action never revalidates the real-edge dashboard', () => {
+    const actionCode = readSrcCode('app/training/sessions/actions.ts');
+    expect(
+      actionCode,
+      "the session Server Action must not revalidatePath('/dashboard') (§21.5)",
+    ).not.toContain("revalidatePath('/dashboard')");
+  });
+
+  it('the real-edge activity channel still counts BACKTESTS, never sessions', () => {
+    // Wiring a session container must NOT redirect the engagement signal onto
+    // sessions: the sanctioned primitive keeps counting `db.trainingTrade`.
+    const full = readSrc('lib/training/training-trade-service.ts');
+    const start = full.indexOf('export async function countRecentTrainingActivity');
+    expect(start).toBeGreaterThan(-1);
+    const body = full.slice(start);
+    expect(body).toContain('db.trainingTrade.count(');
+    expect(body).not.toContain('db.trainingSession');
   });
 });

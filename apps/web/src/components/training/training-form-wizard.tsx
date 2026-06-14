@@ -8,12 +8,13 @@ import {
   Calendar,
   Camera,
   GraduationCap,
+  Layers,
   ShieldCheck,
   Target,
   Trophy,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { type KeyboardEvent, useEffect, useRef, useState, useTransition } from 'react';
 
 import {
   createTrainingTradeAction,
@@ -144,7 +145,14 @@ function serverErrorMessage(state: CreateTrainingTradeActionState): string {
   }
 }
 
-export function TrainingFormWizard() {
+export function TrainingFormWizard({
+  sessionId = null,
+  sessionLabel = null,
+}: {
+  /** S8 — when set, the backtest is logged inside this parent session. */
+  sessionId?: string | null;
+  sessionLabel?: string | null;
+} = {}) {
   const [draft, setDraft] = useState<TrainingDraftState>(() => emptyDraft());
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState<StepIndex>(0);
@@ -153,6 +161,12 @@ export function TrainingFormWizard() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [pending, startTransition] = useTransition();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // Skip the FIRST heading focus (the post-hydration pass) so a screen-reader
+  // user reads the page chrome (eyebrow "Mode entraînement" + step counter)
+  // before the heading — focus only moves on real step changes (next/prev).
+  // Mirrors the REFLECT BUG-2 canon already applied in the débrief wizard
+  // (WCAG 2.4.3 Focus Order / 3.2.1 On Focus).
+  const skipInitialFocus = useRef(true);
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
@@ -167,6 +181,10 @@ export function TrainingFormWizard() {
 
   useEffect(() => {
     if (!hydrated) return;
+    if (skipInitialFocus.current) {
+      skipInitialFocus.current = false;
+      return;
+    }
     headingRef.current?.focus();
   }, [step, hydrated]);
 
@@ -246,6 +264,9 @@ export function TrainingFormWizard() {
     if (draft.resultR !== '') fd.set('resultR', draft.resultR);
     fd.set('systemRespected', draft.systemRespected || 'na');
     fd.set('lessonLearned', draft.lessonLearned);
+    // S8 — attach to the parent backtest session when present (server re-checks
+    // ownership). Absent → standalone backtest (unchanged behaviour).
+    if (sessionId) fd.set('sessionId', sessionId);
 
     startTransition(async () => {
       const result: CreateTrainingTradeActionState = await createTrainingTradeAction(null, fd);
@@ -268,7 +289,7 @@ export function TrainingFormWizard() {
       <header className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <Link
-            href="/training"
+            href={sessionId ? `/training/sessions/${sessionId}` : '/training'}
             className="inline-flex items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
           >
             <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -287,6 +308,16 @@ export function TrainingFormWizard() {
           <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} />
           Mode entraînement — backtest isolé du réel
         </span>
+
+        {sessionId ? (
+          <p className="rounded-control inline-flex w-fit items-center gap-1.5 border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] px-2.5 py-1.5 text-[12px] text-[var(--t-2)]">
+            <Layers className="h-3.5 w-3.5 shrink-0 text-[var(--cy)]" strokeWidth={1.75} />
+            Dans la session :{' '}
+            <strong className="font-semibold text-[var(--t-1)]">
+              {sessionLabel?.trim() || 'Session sans nom'}
+            </strong>
+          </p>
+        ) : null}
 
         <div className="flex items-center gap-2.5">
           <div className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] text-[var(--cy)]">
@@ -566,7 +597,50 @@ function StepPlannedRR({ draft, update, fieldErrors, disabled }: StepProps) {
   );
 }
 
+const OUTCOME_OPTIONS = [
+  { v: 'win', label: 'Gagnant', tone: 'ok' },
+  { v: 'break_even', label: 'Break-even', tone: 'cy' },
+  { v: 'loss', label: 'Perdant', tone: 'bad' },
+] as const;
+
 function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
+  // WAI-ARIA radiogroup keyboard pattern (APG): ONE tab stop (the selected
+  // option, or the first when none is chosen) + Arrow/Home/End move focus AND
+  // selection. Clicking still toggles to clear (analysis-only backtest).
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedIndex = OUTCOME_OPTIONS.findIndex((o) => o.v === draft.outcome);
+
+  const moveTo = (next: number) => {
+    const v = OUTCOME_OPTIONS[next]?.v;
+    if (!v) return;
+    update('outcome', v);
+    optionRefs.current[next]?.focus();
+  };
+
+  const onRadioKeyDown = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const last = OUTCOME_OPTIONS.length - 1;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        e.preventDefault();
+        moveTo((i + 1) % OUTCOME_OPTIONS.length);
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        e.preventDefault();
+        moveTo((i - 1 + OUTCOME_OPTIONS.length) % OUTCOME_OPTIONS.length);
+        break;
+      case 'Home':
+        e.preventDefault();
+        moveTo(0);
+        break;
+      case 'End':
+        e.preventDefault();
+        moveTo(last);
+        break;
+    }
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <p className="t-cap text-[var(--t-4)]">
@@ -576,21 +650,23 @@ function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
       <fieldset className="flex flex-col gap-2">
         <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">Résultat</legend>
         <div role="radiogroup" aria-label="Résultat du backtest" className="grid grid-cols-3 gap-2">
-          {(
-            [
-              { v: 'win', label: 'Gagnant', tone: 'ok' as const },
-              { v: 'break_even', label: 'Break-even', tone: 'cy' as const },
-              { v: 'loss', label: 'Perdant', tone: 'bad' as const },
-            ] as const
-          ).map((o) => {
+          {OUTCOME_OPTIONS.map((o, i) => {
             const active = draft.outcome === o.v;
+            // Roving tabindex: the selected option is the tab stop; with no
+            // selection the first option is reachable by Tab (APG radiogroup).
+            const tabbable = selectedIndex === -1 ? i === 0 : active;
             return (
               <button
                 key={o.v}
+                ref={(el) => {
+                  optionRefs.current[i] = el;
+                }}
                 type="button"
                 role="radio"
                 aria-checked={active}
+                tabIndex={tabbable ? 0 : -1}
                 onClick={() => update('outcome', active ? '' : o.v)}
+                onKeyDown={(e) => onRadioKeyDown(e, i)}
                 disabled={disabled}
                 className={cn(
                   'rounded-card flex min-h-14 items-center justify-center border bg-[var(--bg-1)] px-2 py-2 text-[13px] font-semibold transition-all',
@@ -610,7 +686,9 @@ function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
             );
           })}
         </div>
-        <p className="t-cap text-[var(--t-4)]">Re-clique pour effacer (= analyse sans résultat).</p>
+        <p className="t-cap text-[var(--t-4)]">
+          Flèches pour choisir, re-clique pour effacer (= analyse sans résultat).
+        </p>
       </fieldset>
 
       <NumericField

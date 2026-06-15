@@ -54,6 +54,14 @@ const GOTO_TIMEOUT = 120_000;
 const BENIGN_PAGEERROR = [
   /ResizeObserver loop/i,
   /Hydration failed/i, // dev-only hydration warning surfaces as console, not a crash; kept lenient
+  // DEV-ONLY Turbopack/Next noise that does NOT exist in a prod `next start`
+  // build — a transient HMR chunk fetch + the dev error-overlay stack-frame
+  // probe (blocked by CORS). Surfaced on mobile under cold-compile navigation.
+  // Targeted patterns (hmr-client / dev overlay) so a REAL app chunk failure
+  // is still caught.
+  /hmr-client/i,
+  /__nextjs_original-stack-frames/i,
+  /browser_dev_/i,
 ];
 
 async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }> {

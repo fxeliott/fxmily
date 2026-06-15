@@ -34,7 +34,16 @@ import { loginAs } from '@/test/e2e-auth';
 
 const GOTO_TIMEOUT = 120_000;
 
-const BENIGN_PAGEERROR = [/ResizeObserver loop/i, /Hydration failed/i];
+const BENIGN_PAGEERROR = [
+  /ResizeObserver loop/i,
+  /Hydration failed/i,
+  // DEV-ONLY Turbopack/Next noise absent from a prod `next start` build (HMR
+  // chunk fetch + dev error-overlay stack-frame probe). Targeted so a REAL app
+  // chunk failure is still caught.
+  /hmr-client/i,
+  /__nextjs_original-stack-frames/i,
+  /browser_dev_/i,
+];
 
 async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }> {
   const exec = chromium.executablePath();

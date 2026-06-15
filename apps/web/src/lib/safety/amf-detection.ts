@@ -544,7 +544,28 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
       // matched the NOUN "maintien" ("le maintien de ta position…" = factual → FP).
       // Both dropped — `r[ée]duis(?:es)?|r[ée]duire` and `maintiens|maintenir` keep
       // every intended present/imperative/infinitive form, past/noun now PASS.
-      String.raw`(?<!\p{L})(?:augmente[sz]?|augmenter|r[ée]duis(?:es)?|r[ée]duire|garde[sz]?|garder|conserve[sz]?|conserver|ouvre[sz]?|ouvrir|prends?|prendre|coupe[sz]?|couper|all[èe]ge[sz]?|all[ée]ger|renforce[sz]?|renforcer|accumule[sz]?|accumuler|charge[sz]?|charger|liquide[sz]?|liquider|vend[sz]?|vendre|ach[èe]te[sz]?|acheter|d[ée]noue[sz]?|d[ée]nouer|cl[ôo]ture[sz]?|cl[ôo]turer|allonge[sz]?|allonger|maintiens|maintenir)\s+(?:\p{L}+['’]?\s+){0,3}?(?:positions?|exposition)\s+(?:\p{L}+['’]?\s+){0,2}?sur\s+(?:l[ea]\s+|l['’]\s*|du\s+|des\s+|un\s+|une\s+)?${INSTRUMENT_TOKEN}(?!\p{L})`,
+      // S10 5th-pass fix (D4): the verb whitelist missed common exposure directives
+      // (ajoute/double/reprends/inverse/etoffe/solde) -> "Double ta position sur le
+      // Nasdaq" leaked. Added them. A second negative lookbehind `(?<!le|la|...)` is
+      // prepended so the NOUN homonyms ("le double / le solde / la charge / la garde
+      // de ta position") still PASS while the imperative/present verb forms flag
+      // (an imperative is never preceded by an article/possessive).
+      String.raw`(?<!\p{L})(?<!(?:le|la|les|du|mon|ton|son|ma|ta|sa)\s)(?:ajoute[sz]?|ajouter|double[sz]?|doubler|reprends?|reprendre|inverse[sz]?|inverser|[ée]toffe[sz]?|[ée]toffer|solde[sz]?|solder|augmente[sz]?|augmenter|r[ée]duis(?:es)?|r[ée]duire|garde[sz]?|garder|conserve[sz]?|conserver|ouvre[sz]?|ouvrir|prends?|prendre|coupe[sz]?|couper|all[èe]ge[sz]?|all[ée]ger|renforce[sz]?|renforcer|accumule[sz]?|accumuler|charge[sz]?|charger|liquide[sz]?|liquider|vend[sz]?|vendre|ach[èe]te[sz]?|acheter|d[ée]noue[sz]?|d[ée]nouer|cl[ôo]ture[sz]?|cl[ôo]turer|allonge[sz]?|allonger|maintiens|maintenir)\s+(?:\p{L}+['’]?\s+){0,3}?(?:positions?|exposition)\s+(?:\p{L}+['’]?\s+){0,2}?sur\s+(?:l[ea]\s+|l['’]\s*|du\s+|des\s+|un\s+|une\s+)?${INSTRUMENT_TOKEN}(?!\p{L})`,
+      'iu',
+    ),
+  },
+  {
+    label: 'directive_sell_buy_instrument_fr',
+    // S10 5th-pass fix (D2): "Tu vends le DAX" / "Il vend l'EURUSD" / "On vend le
+    // Nasdaq" / "Vends l'or" / "Tu vends tout sur le Nasdaq" — verbe FR de vente/achat
+    // lié DIRECTEMENT à un instrument NOMMÉ. Comble le FN ouvert par le carve
+    // `directive_vends` (qui exempte désormais le sujet présent tu/il/elle/on pour
+    // laisser passer le descriptif "tu vends trop tôt quand tu as peur"). L'ancre
+    // INSTRUMENT_TOKEN rend le pronom sans objet : une description comportementale ne
+    // nomme jamais un instrument juste après le verbe. Le carve réflexif tient
+    // ("vends-toi mieux" = tiret pas d'espace ; "tu te vends bien" = pas d'instrument).
+    pattern: new RegExp(
+      String.raw`(?<!\p{L})(?:vend[sz]?|ach[èe]te[sz]?)\s+(?:tout\s+sur\s+)?(?:l[ea]\s+|l['’]\s*|le\s+|du\s+|des\s+|un\s+|une\s+)?${INSTRUMENT_TOKEN}(?!\p{L})`,
       'iu',
     ),
   },

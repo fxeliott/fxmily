@@ -990,3 +990,68 @@ describe('detectAMFViolation — S10 residual MUST FLAG (anti-FN : conseils rée
     expect(flag('objectif à 1.0850 de gain')).toBe(true);
   });
 });
+
+// =============================================================================
+// S10 5th-pass regression fix (fix/s10-5th-pass) — the AMF LOOSENING of the 3rd
+//   pass (PR #326) reopened two false-NEGATIVE leaks on the legal §2 gate, found
+//   by the regression audit + an independent probe. Both directions locked here.
+//   D2: directive_vends carve also exempted real sell directives naming an
+//       instrument ("Tu vends le DAX") -> new directive_sell_buy_instrument_fr.
+//   D4: directive_position_instrument verb whitelist missed common exposure
+//       directives (ajoute/double/reprends/inverse/etoffe/solde) -> extended +
+//       a determiner lookbehind so the noun homonyms ("le solde / le double") pass.
+// =============================================================================
+
+describe('detectAMFViolation — S10 5th-pass MUST FLAG (anti-FN: reopened leaks)', () => {
+  it('D2 "Tu vends le DAX maintenant."', () => {
+    expect(flag('Tu vends le DAX maintenant.')).toBe(true);
+  });
+  it('D2 "Tu vends tout sur le Nasdaq."', () => {
+    expect(flag('Tu vends tout sur le Nasdaq.')).toBe(true);
+  });
+  it('D2 "On vends l\'or tout de suite."', () => {
+    expect(flag("On vends l'or tout de suite.")).toBe(true);
+  });
+  it('D2 "Il vend le DAX à 18000."', () => {
+    expect(flag('Il vend le DAX à 18000.')).toBe(true);
+  });
+  it('D4 "Double ta position sur le Nasdaq."', () => {
+    expect(flag('Double ta position sur le Nasdaq.')).toBe(true);
+  });
+  it('D4 "Ajoute à ta position sur le SP500."', () => {
+    expect(flag('Ajoute à ta position sur le SP500.')).toBe(true);
+  });
+  it('D4 "Solde ta position sur le DAX."', () => {
+    expect(flag('Solde ta position sur le DAX.')).toBe(true);
+  });
+  it('D4 "Reprends ta position sur l\'EURUSD."', () => {
+    expect(flag("Reprends ta position sur l'EURUSD.")).toBe(true);
+  });
+  it('D4 "Inverse ta position sur le bitcoin."', () => {
+    expect(flag('Inverse ta position sur le bitcoin.')).toBe(true);
+  });
+  it('D4 "Étoffe ta position sur le CAC."', () => {
+    expect(flag('Étoffe ta position sur le CAC.')).toBe(true);
+  });
+});
+
+describe('detectAMFViolation — S10 5th-pass MUST NOT FLAG (no new FP)', () => {
+  it('D2 carve "Tu vends trop tôt quand tu as peur."', () => {
+    expect(flag('Tu vends trop tôt quand tu as peur.')).toBe(false);
+  });
+  it('D2 carve "Tu te vends bien en entretien."', () => {
+    expect(flag('Tu te vends bien en entretien.')).toBe(false);
+  });
+  it('D2 carve "Vends-toi mieux auprès des autres."', () => {
+    expect(flag('Vends-toi mieux auprès des autres.')).toBe(false);
+  });
+  it('D2 carve "Tu vends ton or trop tôt." (bare "or" ∉ instrument token)', () => {
+    expect(flag('Tu vends ton or trop tôt.')).toBe(false);
+  });
+  it('D4 noun "Le solde de ta position sur le DAX était positif."', () => {
+    expect(flag('Le solde de ta position sur le DAX était positif.')).toBe(false);
+  });
+  it('D4 noun "Le double de ta position sur le DAX te fait peur."', () => {
+    expect(flag('Le double de ta position sur le DAX te fait peur.')).toBe(false);
+  });
+});

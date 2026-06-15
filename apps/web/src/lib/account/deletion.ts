@@ -378,6 +378,42 @@ export async function purgeMaterialisedDeletions(
         }
       }
 
+      // RGPD art.17 (S3 5th-pass review) — sweep the member's REAL-trade media
+      // BEFORE the cascade erases the Trade/TradeAnnotation rows that hold the keys:
+      // entry/exit screenshots (`Trade.screenshotEntryKey`/`screenshotExitKey`,
+      // `trades/…`) + admin-correction annotations (`TradeAnnotation.mediaKey`,
+      // `annotations/…`). Mirror of the per-trade `deleteTrade` sweep (trades/
+      // service.ts:346-381) and the proof/training sweeps above — best-effort, never
+      // blocks the hard-delete. Without it the now-persistent uploads volume retains
+      // broker-screenshot PII (real name/account/balance/P&L) indefinitely after a
+      // member exercises their right to erasure.
+      const tradeKeys: string[] = [];
+      const tradeMedia = await db.trade.findMany({
+        where: { userId: u.id },
+        select: {
+          screenshotEntryKey: true,
+          screenshotExitKey: true,
+          annotations: { select: { mediaKey: true } },
+        },
+      });
+      for (const t of tradeMedia) {
+        if (t.screenshotEntryKey) tradeKeys.push(t.screenshotEntryKey);
+        if (t.screenshotExitKey) tradeKeys.push(t.screenshotExitKey);
+        for (const a of t.annotations) {
+          if (a.mediaKey) tradeKeys.push(a.mediaKey);
+        }
+      }
+      if (tradeKeys.length > 0) {
+        const storage = selectStorage();
+        for (const key of tradeKeys) {
+          try {
+            await storage.delete(key);
+          } catch (err) {
+            console.warn('[account.deletion.purge] trade media sweep failed (non-fatal)', err);
+          }
+        }
+      }
+
       await db.user.delete({ where: { id: u.id } });
       purgedIds.push(u.id);
     } catch (err) {

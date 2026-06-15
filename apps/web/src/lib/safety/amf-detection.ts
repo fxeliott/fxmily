@@ -223,8 +223,16 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     label: 'directive_vends',
     // Impératif "Vends l'EURUSD" ; PAS "il a vendu" (passé), PAS "vends-toi mieux"
     // / "tu te vends bien" (réfléchi métaphorique coaching).
+    //
+    // FP-FIX (S10 residual hardening) : le lookbehind n'excluait que le PASSÉ
+    //   (a/as/avait…) et les pronoms réfléchis, pas le PRÉSENT-INDICATIF
+    //   comportemental "tu vends" → flaggait "Tu vends trop tôt quand tu as peur."
+    //   (description Mark Douglas canonique = §2-légitime). Ajout de
+    //   `tu|il|elle|on` au lookbehind : le présent 2e/3e personne descriptif PASSE,
+    //   l'impératif nu "Vends l'EURUSD à la cassure" (pas de pronom devant) FLAG
+    //   toujours.
     pattern:
-      /(?<!\p{L})(?<!(?:a|as|avait|avez|ont|avaient|te|se|me|nous|vous)\s)vend[sz](?![-\s]*(?:toi|te|vous|nous))(?!\p{L})/iu,
+      /(?<!\p{L})(?<!(?:a|as|avait|avez|ont|avaient|te|se|me|nous|vous|tu|il|elle|on)\s)vend[sz](?![-\s]*(?:toi|te|vous|nous))(?!\p{L})/iu,
   },
   {
     label: 'directive_buy_english',
@@ -273,7 +281,18 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
     //   (pas de nombre), PAS "objectif à 100%" (entier+%, coaching). S5 12e challenge :
     //   décimale uniquement → supprime le FP latent "objectif à 100% de respect" (avant
     //   `à \d` le flaggait) ; les niveaux ENTIERS d'indice passent par price_level_instrument.
-    pattern: /(?<!\p{L})objectif\s+à\s+\d+[.,]\d+/iu,
+    //
+    // FP-FIX (S10 residual hardening) : `objectif à \d+[.,]\d+` flaggait les
+    //   objectifs COACHING à décimale ("objectif à 1.5 trade/jour", "objectif à 2.5
+    //   séances", "objectif à 1.5 séance/semaine") → débrief légitime skippé.
+    //   Négative lookahead UNIT-AWARE : si le nombre décimal est immédiatement suivi
+    //   d'une unité de coaching (%/R/trades/séances/sessions/jours/semaines/fois/mois/
+    //   de risque|gain|perte|capital|marge) → PASS. Un prix Forex/indice ("1.20 sur
+    //   EURUSD", "1.0850", "4300.50 sur le DAX") n'a pas de suffixe-unité → FLAG. Le
+    //   carve est anti-FN-robuste par backtracking : "objectif à 1.0850 de gain" FLAG
+    //   toujours (le moteur matche 1.085 + "0" ∉ unité), cf. price_target_vers.
+    pattern:
+      /(?<!\p{L})objectif\s+à\s+\d+[.,]\d+(?!\s*(?:%|[rR]\b|trades?|s[ée]ances?|sessions?|jours?|semaines?|fois|mois|de\s+(?:risque|gain|perte|capital|marge)))/iu,
   },
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -492,11 +511,40 @@ export const AMF_VIOLATION_PATTERNS: AMFPatternRule[] = [
   },
   {
     label: 'directive_position_instrument',
-    // "Augmente ta position sur le SP500" / "garde ta position sur le DAX" —
-    // recommandation d'exposition sur un instrument NOMMÉ. PAS "ta position sur
-    // le plan / le marché / le risque" (non-instruments).
+    // "Augmente ta position sur le SP500" / "garde ta position sur le DAX" /
+    // "tu devrais renforcer ta position sur le Nasdaq" — recommandation
+    // d'exposition sur un instrument NOMMÉ.
+    //
+    // FP-FIX (S10 residual hardening) : la version précédente matchait
+    //   `positions?|exposition … sur … INSTRUMENT` SANS exiger de verbe directif,
+    //   ce qui flaggait des phrases §2-LÉGITIMES autorisées par les prompts
+    //   (monthly-debrief/prompt.ts l.34, weekly-report/prompt.ts l.29 : "tu peux
+    //   citer une paire/un sens factuellement") :
+    //     - "Tu as bien géré ta position sur le DAX ce mois-ci." (comportemental, passé)
+    //     - "Tu as gardé ta position sur l'or trop longtemps." (psychologie pure)
+    //     - "78% de tes positions sur le DAX étaient alignées au plan." (statistique)
+    //   → débrief LÉGITIME silencieusement skippé (perte produit).
+    //
+    // FIX : ancrer sur un VERBE D'EXPOSITION DIRECTIF qui PRÉCÈDE position/exposition.
+    //   `EXPO_VERB` n'admet QUE les formes présent / impératif 2e sg / infinitif
+    //   (augmente·s/augmenter, réduis/réduire, renforce·s/renforcer, garde·s/garder,
+    //    conserve·s, ouvre·s/ouvrir, prends/prendre, coupe·s, allège·s, accumule·s,
+    //    charge·s, liquide·s, vend·s/vendre, achète·s/acheter, dénoue·s, clôture·s,
+    //    allonge·s, maintiens/maintenir). Couvre donc l'impératif ("Augmente ta
+    //    position"), le présent 2e pers ("tu réduis ta position") ET les tournures
+    //    modales suivies d'infinitif ("tu devrais augmenter…", "il faut renforcer…").
+    //   Le PARTICIPE PASSÉ est volontairement EXCLU (pas de -é/-ée/-és/-ées dans
+    //   l'alternation) : "as géré / as gardé / a été coupée" = factuel/passé → PASS.
+    //   FN résiduel assumé : verbe directif séparé de "position" par >3 mots
+    //   ("Augmente progressivement et calmement ta position…") — backstop non
+    //   exhaustif by-design, contrôle primaire = system prompt §2.
     pattern: new RegExp(
-      String.raw`(?<!\p{L})(?:positions?|exposition)\s+(?:\p{L}+['’]?\s+){0,2}?sur\s+(?:l[ea]\s+|l['’]\s*|du\s+|des\s+|un\s+|une\s+)?${INSTRUMENT_TOKEN}(?!\p{L})`,
+      // S10 review fix: `r[ée]dui[st]` also matched the PAST PARTICIPLE "réduit"
+      // ("tu as réduit ta position…" = factual past → would FP) and `maintiens?`
+      // matched the NOUN "maintien" ("le maintien de ta position…" = factual → FP).
+      // Both dropped — `r[ée]duis(?:es)?|r[ée]duire` and `maintiens|maintenir` keep
+      // every intended present/imperative/infinitive form, past/noun now PASS.
+      String.raw`(?<!\p{L})(?:augmente[sz]?|augmenter|r[ée]duis(?:es)?|r[ée]duire|garde[sz]?|garder|conserve[sz]?|conserver|ouvre[sz]?|ouvrir|prends?|prendre|coupe[sz]?|couper|all[èe]ge[sz]?|all[ée]ger|renforce[sz]?|renforcer|accumule[sz]?|accumuler|charge[sz]?|charger|liquide[sz]?|liquider|vend[sz]?|vendre|ach[èe]te[sz]?|acheter|d[ée]noue[sz]?|d[ée]nouer|cl[ôo]ture[sz]?|cl[ôo]turer|allonge[sz]?|allonger|maintiens|maintenir)\s+(?:\p{L}+['’]?\s+){0,3}?(?:positions?|exposition)\s+(?:\p{L}+['’]?\s+){0,2}?sur\s+(?:l[ea]\s+|l['’]\s*|du\s+|des\s+|un\s+|une\s+)?${INSTRUMENT_TOKEN}(?!\p{L})`,
       'iu',
     ),
   },

@@ -543,6 +543,44 @@
     radial-gradient(40% 32% at 98% 6%, oklch(0.62 0.19 254 / 0.06) 0%, transparent 70%);
 }
 
+/* =============================================================
+ * APP-WIDE AMBIENT BACKPLATE (§245 — "prend tout l'écran, jamais coincé
+ * au milieu"). Guarantees NO route ever shows a flat letterbox gutter on
+ * large / ultra-wide screens.
+ * -------------------------------------------------------------
+ * Rendered ONCE in the root layout (`app/layout.tsx`) as a `position:fixed`
+ * viewport layer at `z-index:-1`: it paints ON TOP of the opaque `<body>`
+ * deep-space base but BEHIND all content. Two regimes compose correctly with
+ * ZERO double-aurora, by construction:
+ *   - Pages whose `<main>` owns an OPAQUE `bg-[var(--bg)]` + a hero
+ *     `DashboardAmbient` / `login-aurora` / `.v18-aurora` (dashboard, library,
+ *     mindset, training-debrief, login, reflect) fully COVER this layer → only
+ *     their richer hero ambient shows.
+ *   - Pages whose `<main>` is transparent (forms, journal list, admin tables)
+ *     REVEAL it through their side gutters → the deep-space mesh fills the
+ *     ultra-wide screen instead of a dead flat band.
+ * Edge-biased gradients (corners) so the gutters read as deep space while the
+ * centre (always under content) stays near-zero — never competes with text,
+ * never shifts contrast. Static (zero JS / zero animation → no perf, no
+ * reduced-motion cost); decorative (`aria-hidden`, `pointer-events:none`);
+ * dropped under forced-colors (a glow adds nothing in High Contrast). */
+.app-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(48% 36% at 50% -8%, oklch(0.62 0.19 254 / 0.08) 0%, transparent 62%),
+    radial-gradient(34% 46% at -2% 10%, oklch(0.5 0.21 262 / 0.07) 0%, transparent 68%),
+    radial-gradient(34% 46% at 102% 4%, oklch(0.7 0.13 217 / 0.05) 0%, transparent 70%),
+    radial-gradient(46% 50% at 88% 104%, oklch(0.5 0.21 262 / 0.06) 0%, transparent 68%);
+}
+@media (forced-colors: active) {
+  .app-ambient {
+    display: none;
+  }
+}
+
 /* Drifting orb seen through the glass — slow GPU parallax. Mobile
    keeps a single orb (perf — carbone .v18-orb 640px gate). */
 @keyframes dsOrbDrift {
@@ -1216,6 +1254,27 @@
 @media (min-width: 640px) {
   body:has([data-slot='log-express-fab']) [data-slot='legal-footer-inner'] {
     padding-right: 6.5rem; /* 104px > 72px FAB + 24px breathing room */
+  }
+}
+
+/* Cookie banner vs Log-Express FAB (§243 "aucun chevauchement — ni module sur
+   module"). Both are `fixed` bottom elements at `z-40`. The banner is
+   `inset-x-3 mx-auto max-w-2xl` (672px): full-width below ~696px, centred above.
+   Geometry — the banner's right edge reaches the FAB (left edge ≈ viewport
+   −4.5rem) for any viewport narrower than ~816px (672px banner: vw/2+336 >
+   vw−72 ⟺ vw < 816). So ONLY on those small/tablet widths, AND only when the
+   FAB is actually mounted (authenticated, non-wizard route), lift the banner
+   ABOVE the FAB (FAB top ≈ 4.75rem from bottom: 1.25rem inset + 3.5rem height)
+   so the two never collide. ≥816px the centred banner never reaches the FAB →
+   no rule, no layout shift. */
+@media (max-width: 815px) {
+  body:has([data-slot='log-express-fab']) [data-slot='cookie-banner'] {
+    /* Lift above the FAB. FAB top ≈ max(1.25rem, safe-area) + 3.5rem (h-14).
+       `max(5.5rem, safe-area + 4.75rem)` clears it on every device: 5.5rem
+       (88px) on non-notch (FAB top 76px), and safe-area+4.75rem on notched
+       phones (e.g. 34px → 110px > FAB top 90px). Verified present in the
+       served CSSOM. */
+    bottom: max(5.5rem, calc(env(safe-area-inset-bottom) + 4.75rem));
   }
 }
 

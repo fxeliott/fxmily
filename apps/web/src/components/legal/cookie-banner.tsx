@@ -70,9 +70,18 @@ export function CookieBanner(): React.ReactElement | null {
     <div
       role="region"
       aria-label="Information cookies"
+      data-slot="cookie-banner"
       // `motion-safe:animate-cookie-rise` triggers a 200 ms slide+fade-in
       // from below on first paint. `motion-safe` honours `prefers-reduced-
       // motion` (WCAG 2.3.3). Keyframe defined in globals.css.
+      //
+      // `data-slot="cookie-banner"` is load-bearing: a globals.css `:has()`
+      // rule lifts the banner ABOVE the Log-Express FAB (also `fixed bottom-4
+      // right-4 z-40`) on narrow viewports where the full-width banner would
+      // otherwise collide with the FAB's bottom-right corner (§243 "aucun
+      // chevauchement — ni module sur module"). On ≥sm the banner is a centred
+      // `max-w-2xl` card that never reaches the FAB, so the rule is scoped to
+      // small screens only.
       className="motion-safe:animate-cookie-rise fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-2xl items-start gap-3 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-3)] p-4 shadow-[var(--sh-toast)] sm:p-5"
     >
       <span

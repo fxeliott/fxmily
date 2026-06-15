@@ -40,7 +40,7 @@ export default async function NewMindsetCheckPage() {
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* DS-v3 J3 — ambient mesh + drifting orbs behind the glass wizard */}
       <DashboardAmbient />
-      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
+      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
         <header className="flex flex-col gap-4">
           <Link
             href="/mindset"

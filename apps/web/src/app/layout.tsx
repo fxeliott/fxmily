@@ -76,6 +76,17 @@ export default function RootLayout({
         >
           Aller au contenu principal
         </a>
+        {/*
+          App-wide ambient backplate (§245 "prend tout l'écran, jamais coincé
+          au milieu"). A single fixed `z-index:-1` deep-space mesh painted behind
+          ALL content so no route ever shows a flat letterbox gutter on large /
+          ultra-wide screens. Pages that own an opaque-bg `<main>` + a hero
+          ambient (dashboard, library, login, reflect…) fully cover it → no
+          double aurora; transparent-`<main>` pages (forms, journal, admin)
+          reveal it through their gutters. Full rationale: `.app-ambient` in
+          globals.css. Decorative → aria-hidden, pointer-events:none.
+        */}
+        <div className="app-ambient" aria-hidden="true" />
         <TooltipProvider>
           <MotionProvider>
             <div id="main-content" tabIndex={-1} className="flex min-h-full flex-1 flex-col">

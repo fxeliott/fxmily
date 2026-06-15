@@ -13,7 +13,13 @@ import { countRecentTrainingActivity } from '@/lib/training/training-trade-servi
 import { isOnCooldown, pickBestMatch, type DeliveryHistoryEntry } from './cooldown';
 import { evaluateTrigger } from './evaluators';
 import { parseTriggerRule } from './schema';
-import { isHatClass, type HatClass, type TriggerContext, type TriggerEvalResult } from './types';
+import {
+  isHatClass,
+  type HatClass,
+  type TriggerContext,
+  type TriggerEvalResult,
+  type TriggerRule,
+} from './types';
 
 /**
  * Mark Douglas dispatch engine (J7).
@@ -44,6 +50,61 @@ import { isHatClass, type HatClass, type TriggerContext, type TriggerEvalResult 
 export interface EvaluateOptions {
   /** Inject `now` for tests. */
   now?: Date;
+  /**
+   * S10 perf — the bulk cron passes the published trigger cards pre-fetched +
+   * pre-parsed ONCE (they are member-INDEPENDENT: the query has no `userId`), so
+   * the per-member path skips the redundant `markDouglasCard.findMany` + per-card
+   * `parseTriggerRule`. Absent on the single-user realtime path (the Server-Action
+   * scheduler), which self-fetches so its behaviour is byte-identical.
+   */
+  preparsedCards?: readonly PreparsedCard[];
+}
+
+/** A published trigger card with its rule already validated (rule never null). */
+export type PreparsedCard = {
+  readonly id: string;
+  readonly slug: string;
+  readonly priority: number;
+  readonly hatClass: string;
+  readonly rule: TriggerRule;
+};
+
+const PUBLISHED_TRIGGER_CARD_SELECT = {
+  id: true,
+  slug: true,
+  priority: true,
+  hatClass: true,
+  triggerRules: true,
+} as const;
+
+/**
+ * Fetch + parse the published trigger cards ONCE. Cards are member-independent,
+ * so the bulk dispatch (`dispatchForAllActiveMembers`) loads them a single time
+ * instead of re-querying + re-parsing per member — mirrors the scoring cron's
+ * member-independent-data-through-options pattern (`scoring/service.ts`). Invalid
+ * rules are skipped + warned once per card per run (not per member).
+ */
+async function loadPublishedTriggerCards(): Promise<PreparsedCard[]> {
+  const rows = await db.markDouglasCard.findMany({
+    where: { published: true, triggerRules: { not: Prisma.JsonNull } },
+    select: PUBLISHED_TRIGGER_CARD_SELECT,
+  });
+  const cards: PreparsedCard[] = [];
+  for (const row of rows) {
+    const rule = parseTriggerRule(row.triggerRules);
+    if (!rule) {
+      console.warn('[douglas.engine] invalid triggerRules', { cardId: row.id });
+      continue;
+    }
+    cards.push({
+      id: row.id,
+      slug: row.slug,
+      priority: row.priority,
+      hatClass: row.hatClass,
+      rule,
+    });
+  }
+  return cards;
 }
 
 export interface DispatchResult {
@@ -107,7 +168,13 @@ export async function evaluateAndDispatchForUser(
   );
   const historyCutoff = new Date(now.getTime() - HISTORY_WINDOW_DAYS * 24 * 3600 * 1000);
 
-  const [trades, checkins, cards, deliveries, trainingActivity] = await Promise.all([
+  // S10 perf — reuse the bulk cron's pre-parsed, member-independent cards when
+  // provided; otherwise self-fetch so the single-user realtime path is identical.
+  const cardsPromise: Promise<readonly PreparsedCard[]> = options.preparsedCards
+    ? Promise.resolve(options.preparsedCards)
+    : loadPublishedTriggerCards();
+
+  const [trades, checkins, activeCards, deliveries, trainingActivity] = await Promise.all([
     db.trade.findMany({
       where: {
         userId,
@@ -140,10 +207,7 @@ export async function evaluateAndDispatchForUser(
         emotionTags: true,
       },
     }),
-    db.markDouglasCard.findMany({
-      where: { published: true, triggerRules: { not: Prisma.JsonNull } },
-      select: { id: true, slug: true, priority: true, hatClass: true, triggerRules: true },
-    }),
+    cardsPromise,
     db.markDouglasDelivery.findMany({
       where: { userId, createdAt: { gte: historyCutoff } },
       select: { cardId: true, createdAt: true },
@@ -213,14 +277,9 @@ export async function evaluateAndDispatchForUser(
   };
   const matches: Match[] = [];
   let evaluated = 0;
-  for (const card of cards) {
-    const rule = parseTriggerRule(card.triggerRules);
-    if (!rule) {
-      console.warn('[douglas.engine] invalid triggerRules', { cardId: card.id });
-      continue;
-    }
+  for (const card of activeCards) {
     evaluated++;
-    const result = evaluateTrigger(rule, ctx);
+    const result = evaluateTrigger(card.rule, ctx);
     if (result.matched) {
       const hat: HatClass = isHatClass(card.hatClass) ? card.hatClass : 'white';
       matches.push({
@@ -340,10 +399,13 @@ export async function dispatchForAllActiveMembers(now?: Date): Promise<BulkDispa
   const ranAt = (now ?? new Date()).toISOString();
   const batchSize = 25;
 
-  const users = await db.user.findMany({
-    where: { status: 'active' },
-    select: { id: true },
-  });
+  // S10 perf — the published trigger cards are member-independent, so load +
+  // parse them ONCE here instead of once per member inside the loop (was an
+  // O(members) redundant findMany + Zod parse on every 00:00 UTC tick).
+  const [users, preparsedCards] = await Promise.all([
+    db.user.findMany({ where: { status: 'active' }, select: { id: true } }),
+    loadPublishedTriggerCards(),
+  ]);
 
   let delivered = 0;
   let matched = 0;
@@ -352,7 +414,9 @@ export async function dispatchForAllActiveMembers(now?: Date): Promise<BulkDispa
   for (let i = 0; i < users.length; i += batchSize) {
     const slice = users.slice(i, i + batchSize);
     const results = await Promise.allSettled(
-      slice.map((u) => evaluateAndDispatchForUser(u.id, now ? { now } : {})),
+      slice.map((u) =>
+        evaluateAndDispatchForUser(u.id, { ...(now ? { now } : {}), preparsedCards }),
+      ),
     );
     for (const r of results) {
       if (r.status === 'fulfilled') {

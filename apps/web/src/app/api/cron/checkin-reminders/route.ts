@@ -1,7 +1,6 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
-
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { constantTimeEqual } from '@/lib/auth/constant-time';
 import { runCheckinReminderScan } from '@/lib/checkin/reminders';
 import { env } from '@/lib/env';
 import { flushSentry, reportError } from '@/lib/observability';
@@ -35,17 +34,6 @@ import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/**
- * Constant-time secret comparison. Both inputs are SHA-256 hashed so they
- * always have the same length (32 bytes), which sidesteps the
- * length-leak pitfall flagged by Cloudflare in their `timingSafeEqual` guide.
- */
-function verifyCronSecret(provided: string, expected: string): boolean {
-  const a = createHash('sha256').update(provided, 'utf8').digest();
-  const b = createHash('sha256').update(expected, 'utf8').digest();
-  return timingSafeEqual(a, b);
-}
-
 export async function POST(req: NextRequest) {
   if (!env.CRON_SECRET) {
     return NextResponse.json(
@@ -73,7 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   const provided = req.headers.get('x-cron-secret');
-  if (!provided || !verifyCronSecret(provided, env.CRON_SECRET)) {
+  if (!provided || !constantTimeEqual(provided, env.CRON_SECRET)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 

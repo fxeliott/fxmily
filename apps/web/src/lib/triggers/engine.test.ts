@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db', () => ({
   db: {
-    user: { findUnique: vi.fn() },
+    user: { findUnique: vi.fn(), findMany: vi.fn() },
     trade: { findMany: vi.fn() },
     dailyCheckin: { findMany: vi.fn() },
     markDouglasCard: { findMany: vi.fn() },
@@ -29,7 +29,7 @@ vi.mock('@/lib/training/training-trade-service', () => ({
 
 import { db } from '@/lib/db';
 
-import { evaluateAndDispatchForUser } from './engine';
+import { dispatchForAllActiveMembers, evaluateAndDispatchForUser } from './engine';
 
 // 10:00 UTC in June = 12:00 Paris → todayLocal (Paris) = 2026-06-11. The
 // `triggeredOn` column materializes the local day at UTC midnight
@@ -107,5 +107,34 @@ describe('evaluateAndDispatchForUser — member-day cap (S4 DOD2-T2-1)', () => {
     arm({ deliveredToday: null });
     const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
     expect(r.delivered?.cardId).toBe('card-A');
+  });
+});
+
+describe('dispatchForAllActiveMembers — S10 perf: member-independent cards fetched ONCE', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('queries markDouglasCard.findMany exactly once regardless of member count', async () => {
+    // 3 active members, all unserved today → all run the full per-member pipeline.
+    vi.mocked(db.user.findMany).mockResolvedValue([
+      { id: 'm1' },
+      { id: 'm2' },
+      { id: 'm3' },
+    ] as never);
+    vi.mocked(db.user.findUnique).mockResolvedValue(USER as never);
+    vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.markDouglasCard.findMany).mockResolvedValue([CARD] as never);
+    vi.mocked(db.markDouglasDelivery.findFirst).mockResolvedValue(null as never);
+    vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.markDouglasDelivery.create).mockResolvedValue({ id: 'delivery-new' } as never);
+
+    const r = await dispatchForAllActiveMembers(NOW);
+
+    expect(r.scanned).toBe(3);
+    // The published cards are member-independent: the bulk path loads + parses
+    // them ONCE, the per-member path reuses the pre-parsed list (no re-query).
+    expect(db.markDouglasCard.findMany).toHaveBeenCalledTimes(1);
   });
 });

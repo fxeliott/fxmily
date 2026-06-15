@@ -1,9 +1,8 @@
 import 'server-only';
 
-import { createHash, timingSafeEqual } from 'node:crypto';
-
 import { NextResponse } from 'next/server';
 
+import { constantTimeEqual } from '@/lib/auth/constant-time';
 import { env } from '@/lib/env';
 import {
   adminBatchLimiter,
@@ -30,9 +29,7 @@ import {
  * length.
  */
 export function verifyAdminToken(provided: string, expected: string): boolean {
-  const a = createHash('sha256').update(provided, 'utf8').digest();
-  const b = createHash('sha256').update(expected, 'utf8').digest();
-  return timingSafeEqual(a, b);
+  return constantTimeEqual(provided, expected);
 }
 
 /**

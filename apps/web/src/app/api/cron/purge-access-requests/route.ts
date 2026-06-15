@@ -1,9 +1,8 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
-
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
+import { constantTimeEqual } from '@/lib/auth/constant-time';
 import { env } from '@/lib/env';
 import { flushSentry, reportError } from '@/lib/observability';
 import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
@@ -36,12 +35,6 @@ export const dynamic = 'force-dynamic';
 /** Resolved rows older than this (in days) are purged. Pending rows too. */
 const PURGE_AFTER_DAYS = 30;
 
-function verifyCronSecret(provided: string, expected: string): boolean {
-  const a = createHash('sha256').update(provided, 'utf8').digest();
-  const b = createHash('sha256').update(expected, 'utf8').digest();
-  return timingSafeEqual(a, b);
-}
-
 export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!env.CRON_SECRET) {
     return NextResponse.json(
@@ -63,7 +56,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const provided = req.headers.get('x-cron-secret');
-  if (!provided || !verifyCronSecret(provided, env.CRON_SECRET)) {
+  if (!provided || !constantTimeEqual(provided, env.CRON_SECRET)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 

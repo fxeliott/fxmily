@@ -1,9 +1,8 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
-
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { localDateOf } from '@/lib/checkin/timezone';
 import { logAudit } from '@/lib/auth/audit';
+import { constantTimeEqual } from '@/lib/auth/constant-time';
 import { env } from '@/lib/env';
 import { MEETING_TIMEZONE } from '@/lib/meeting/occurrence';
 import { generateMeetingsForWindow } from '@/lib/meeting/service';
@@ -52,17 +51,6 @@ export const dynamic = 'force-dynamic';
  */
 const GENERATION_WINDOW_DAYS = 7;
 
-/**
- * Constant-time secret comparison via SHA-256-then-timingSafeEqual.
- * Sidesteps the length-leak pitfall flagged by Cloudflare in their
- * `timingSafeEqual` guide (CWE-208).
- */
-function verifyCronSecret(provided: string, expected: string): boolean {
-  const a = createHash('sha256').update(provided, 'utf8').digest();
-  const b = createHash('sha256').update(expected, 'utf8').digest();
-  return timingSafeEqual(a, b);
-}
-
 export async function POST(req: NextRequest) {
   if (!env.CRON_SECRET) {
     return NextResponse.json(
@@ -85,7 +73,7 @@ export async function POST(req: NextRequest) {
   }
 
   const provided = req.headers.get('x-cron-secret');
-  if (!provided || !verifyCronSecret(provided, env.CRON_SECRET)) {
+  if (!provided || !constantTimeEqual(provided, env.CRON_SECRET)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 

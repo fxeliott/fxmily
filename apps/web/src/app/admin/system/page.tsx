@@ -168,17 +168,26 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
         </ul>
       </section>
 
-      <p className="mt-8 flex items-center gap-1.5 text-[11px] text-[var(--t-3)]">
-        <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5 text-[var(--acc-hi)]" />
-        Page accessible aux <strong>admin</strong> uniquement. Le workflow GitHub{' '}
-        <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
-          cron-watch.yml
-        </code>{' '}
-        appelle le même endpoint{' '}
-        <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
-          /api/cron/health
-        </code>{' '}
-        toutes les heures et ouvre une issue si statut rouge.
+      {/* items-start + shrink-0 icon + wrapping <span> : a `flex items-center`
+          on the whole sentence forced icon + text + both <code> onto ONE
+          non-wrapping line → ~481px horizontal overflow at 390px (§243).
+          The text now lives in a single flex item that wraps internally. */}
+      <p className="mt-8 flex items-start gap-1.5 text-[11px] text-[var(--t-3)]">
+        <ShieldCheck
+          aria-hidden="true"
+          className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--acc-hi)]"
+        />
+        <span>
+          Page accessible aux <strong>admin</strong> uniquement. Le workflow GitHub{' '}
+          <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
+            cron-watch.yml
+          </code>{' '}
+          appelle le même endpoint{' '}
+          <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
+            /api/cron/health
+          </code>{' '}
+          toutes les heures et ouvre une issue si statut rouge.
+        </span>
       </p>
     </main>
   );

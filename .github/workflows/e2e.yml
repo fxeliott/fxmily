@@ -170,6 +170,20 @@ jobs:
       # mobile-iphone-15 project is skipped in CI — adds ~30% runtime
       # without exercising a distinct DOM tree. iPhone-specific UX is
       # validated by real-device smoke (cf. SPEC §15 J9 iOS Safari 18.4+).
+      #
+      # S10 NOTE — CRON_SECRET is deliberately NOT set here. Setting it makes the
+      # secret-gated crons ACTIVE, which has two CI side effects that break more
+      # than they help: (a) the ~50 secret-gate POSTs (checkin / recompute-scores
+      # / push-notifications / session10-cron-permanence) then consume the shared
+      # per-IP `cronLimiter` (next dev collapses every request to IP 'unknown')
+      # and start returning 429 instead of the expected 401/503; (b) the
+      # anti-mensonge chain's repetition alert needs a published Mark Douglas card
+      # which the CI seed does not create (`alert_dispatch_no_published_card`).
+      # So `session10-anti-mensonge-chain.spec.ts` SKIPS in CI by design — the S3
+      # chain is proven LOCALLY (CRON_SECRET injected, 3/3 chromium + mobile) and
+      # by the verification core unit tests (reconcile/constancy/alerts). Running
+      # it in CI would need per-test synthetic IPs + a Mark-Douglas-card seed step
+      # (backlog, low value).
       - name: Run Playwright tests (chromium project only)
         run: pnpm --filter @fxmily/web exec playwright test --project=chromium
 

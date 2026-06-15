@@ -94,6 +94,27 @@ export async function scanRitualsForAllMembers(
     select: { id: true },
   });
 
+  // S10 perf — batch yesterday's check-ins for ALL scanned members in ONE
+  // query instead of a findMany per member (was O(members) round-trips on a
+  // daily cron — the only trivially-batchable N+1 in the verification scan).
+  // Grouped into a Map<userId, Set<slot>>; the per-member loop below keeps its
+  // own try/catch + deterministic event ids, so robustness + idempotence are
+  // byte-identical to the per-member read.
+  const memberIds = members.map((m) => m.id);
+  const allCheckins = await db.dailyCheckin.findMany({
+    where: { userId: { in: memberIds }, date: yesterdayDate },
+    select: { userId: true, slot: true },
+  });
+  const checkinsByMember = new Map<string, Set<string>>();
+  for (const c of allCheckins) {
+    let set = checkinsByMember.get(c.userId);
+    if (!set) {
+      set = new Set<string>();
+      checkinsByMember.set(c.userId, set);
+    }
+    set.add(c.slot);
+  }
+
   let filledEvents = 0;
   let forgotEvents = 0;
   let blankDayDiscrepancies = 0;
@@ -101,11 +122,7 @@ export async function scanRitualsForAllMembers(
 
   for (const member of members) {
     try {
-      const checkins = await db.dailyCheckin.findMany({
-        where: { userId: member.id, date: yesterdayDate },
-        select: { slot: true },
-      });
-      const filledSlots = new Set(checkins.map((c) => c.slot));
+      const filledSlots = checkinsByMember.get(member.id) ?? new Set<string>();
 
       // A FULLY blank day materialises ONE excusable discrepancy FIRST, so
       // the day's `forgot` events can reference it — giving a « motif

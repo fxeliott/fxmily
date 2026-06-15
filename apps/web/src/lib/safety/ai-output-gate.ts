@@ -1,19 +1,28 @@
 /**
  * Shared AI-output safety gate (SPEC §2 posture invariant + crisis backstop).
  *
- * SINGLE SOURCE OF TRUTH for "is this AI-generated text safe to persist /
- * surface to a member ?". Every path that turns Claude output into a stored,
- * member- or admin-facing artifact (weekly report, monthly debrief, calendar,
- * onboarding, verification) MUST screen its free-text through this helper
- * BEFORE persisting — that is the contract PROJECT_STATE §9 #1
- * ("Tout output IA passe le gate detectAMFViolation").
+ * Crisis+AMF aggregation helper for "is this AI-generated text safe to persist /
+ * surface to a member ?".
  *
- * Why this module exists (S5 10e challenge — D4-01) : the gate used to be
- * inlined per-pipeline. The live weekly-report cron path (`service.ts`) had no
- * gate at all — a contract violation that would leak ungated Claude text the
- * moment `ANTHROPIC_API_KEY` activates the live client. Centralising the screen
- * here makes the gate impossible to forget and impossible to drift between
- * paths.
+ * The TRUE single source of truth for the §2 posture is the pair of pure
+ * DETECTORS `detectAMFViolation` + `detectCrisis` — and EVERY path that turns
+ * Claude output into a stored, member-/admin-facing artifact (weekly report,
+ * monthly debrief, calendar, onboarding, verification) DOES screen its free-text
+ * through those detectors before persisting (contract PROJECT_STATE §9 #1
+ * "Tout output IA passe le gate detectAMFViolation"). That is verified.
+ *
+ * This module wraps the crisis→AMF PRECEDENCE in one place. As of S10, only the
+ * weekly-report path consumes `screenAiOutputText` (service.ts); the other four
+ * pipelines (monthly/calendar/verification/onboarding) still inline the same
+ * crisis→AMF order against the same shared detectors. The detectors cannot
+ * drift (single definition); only the precedence wrapper is not yet shared.
+ * BACKLOG (S10 2nd-pass, LOW): migrate the 4 inline pipelines onto this helper
+ * so the precedence is provably identical everywhere.
+ *
+ * Why this module exists (S5 10e challenge — D4-01) : the live weekly-report
+ * cron path (`service.ts`) had no gate at all — a contract violation that would
+ * leak ungated Claude text the moment `ANTHROPIC_API_KEY` activates the live
+ * client. This helper closed that gap for weekly and standardises the order.
  *
  * Pure, side-effect free, no server-only / DB / env deps — mirrors
  * `amf-detection.ts` and `crisis-detection.ts`. Callers own their audit/report

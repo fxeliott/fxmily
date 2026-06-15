@@ -37,6 +37,11 @@ interface CronExpectation {
     | 'cron.monthly_debrief_overdue.scan'
     | 'cron.onboarding_profile_overdue.scan'
     | 'cron.verification_scan.scan'
+    // S10 — three wired prod crons that were emitting a heartbeat but were NOT
+    // monitored here, so a silent failure of any of them never surfaced red.
+    | 'meeting.generated' // generate-meetings (admin slug, see lib/auth/audit.ts:312)
+    | 'cron.mindset_check_reminders.scan'
+    | 'cron.purge_access_requests.scan'
     | 'cron.health.scan';
   /** Human-readable label for the dashboard. */
   label: string;
@@ -137,6 +142,36 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.verification_scan.scan',
     label: 'Verification daily scan',
     periodMs: DAY, // crontab: daily 11:30 UTC (13:30 Paris)
+  },
+  {
+    // S10 — V1.7 §30 meeting slot generation (crontab: weekdays 06:00 UTC).
+    // Emits the `meeting.generated` admin-slug heartbeat (lib/auth/audit.ts:312),
+    // NOT a `cron.*.scan` slug. Previously absent from EXPECTATIONS → a silent
+    // failure left /reunions to slowly empty with no red on the dashboard.
+    // periodMs=DAY but it only runs Mon–Fri, so the normal Fri→Mon gap is ~72h;
+    // toleranceMultiplier 4 (→96h) keeps the weekend amber-at-worst, red only
+    // after a genuinely missed weekday run.
+    action: 'meeting.generated',
+    label: 'Meeting slot generation',
+    periodMs: DAY,
+    toleranceMultiplier: 4,
+  },
+  {
+    // S10 — V1.5 §27 weekly mindset reminder (crontab: Monday 09:00 UTC).
+    // Emits `cron.mindset_check_reminders.scan` (lib/mindset/reminders.ts:76).
+    // Previously unmonitored despite being a wired prod cron.
+    action: 'cron.mindset_check_reminders.scan',
+    label: 'Weekly mindset reminder',
+    periodMs: WEEK,
+  },
+  {
+    // S10 — V2.5 access-request RGPD purge (crontab: Sunday 04:00 UTC). Emits
+    // `cron.purge_access_requests.scan` (purge-access-requests/route.ts:99).
+    // Previously unmonitored — a silent failure would let dormant non-member
+    // PII (name+email without account consent) accumulate undetected.
+    action: 'cron.purge_access_requests.scan',
+    label: 'Access-request RGPD purge',
+    periodMs: WEEK,
   },
   {
     // J10 Phase O fix B3 : self-monitor the watcher itself. If `cron-watch.yml`

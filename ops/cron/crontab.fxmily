@@ -13,7 +13,7 @@
 #
 # Wired routes (POST + X-Cron-Secret SHA-256 verify timingSafeEqual) :
 #
-#   - checkin-reminders         every 15 min, 7-9 AM + 8-10 PM UTC (J5)
+#   - checkin-reminders         every 15 min, 05-07 + 18-20 UTC (Paris windows, J5)
 #   - recompute-scores          daily 02:00 UTC                    (J6)
 #   - dispatch-douglas          every 6 h                          (J7)
 #   - weekly-reports            Sunday 21:00 UTC                   (J8)
@@ -40,8 +40,17 @@ MAILTO=""
 
 # m h dom mon dow user command
 
-# J5 — check-in reminders : every 15 min in 2 windows, 07:00→09:00 + 20:00→22:00 UTC.
-0,15,30,45 7-8,20-21 * * *   fxmily   /usr/local/bin/fxmily-cron checkin-reminders
+# J5 — check-in reminders : every 15 min, anchored to the Paris-LOCAL due windows
+# 07:30→09:00 + 20:30→22:00 (lib/checkin/timezone.ts) across BOTH DST offsets. The
+# reminder scan early-returns when outside the Paris window, so the UTC hours below
+# are a SUPERSET: morning [05:30,08:00) (CEST 05:30→07:00 ∪ CET 06:30→08:00),
+# evening [18:30,21:00) (CEST 18:30→20:00 ∪ CET 19:30→21:00). The in-window guard +
+# DB dedup make the extra ticks harmless no-ops.
+# S10 FIX (TIER1): the previous `7-8,20-21` UTC window only overlapped the Paris
+# window in WINTER (CET); all SUMMER (CEST) the first tick 07:00 UTC = 09:00 Paris
+# was already past the 09:00 exclusive end → 0 reminders fired ~7 months/yr,
+# silently (heartbeat stayed green). Guarded by reminder-cron-window.test.ts.
+0,15,30,45 5-7,18-20 * * *   fxmily   /usr/local/bin/fxmily-cron checkin-reminders
 
 # J6 — behavioral score recompute : nightly 02:00 UTC.
 0 2 * * *                    fxmily   /usr/local/bin/fxmily-cron recompute-scores

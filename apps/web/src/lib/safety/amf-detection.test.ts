@@ -876,3 +876,117 @@ describe('detectAMFViolation — S5 14e challenge MUST FLAG (closures finales)',
     expect(flag('Tu sembles prêt à reprendre confiance en toi.')).toBe(false);
   });
 });
+
+// =============================================================================
+// S10 — residual hardening (fix/s10-residual-hardening) : 3 FAUX-POSITIFS réels
+//   confirmés par audit adverse (regex exécutées), corrigés en préservant 0 FN.
+//   FP#1 directive_position_instrument (verbe directif requis, pas le passé),
+//   FP#2 directive_vends (présent "tu/il/elle/on" exclu du lookbehind),
+//   FP#3 objectif_price_number (lookahead unit-aware). Bidirectionnel par fix.
+// =============================================================================
+
+describe('detectAMFViolation — S10 residual MUST NOT FLAG (FP corrigés)', () => {
+  // ── FP#1 — position sans verbe directif = comportemental/passé/statistique ──
+  it('FP1 passé "Tu as bien géré ta position sur le DAX ce mois-ci."', () => {
+    expect(flag('Tu as bien géré ta position sur le DAX ce mois-ci.')).toBe(false);
+  });
+  it('FP1 psychologie "Tu as gardé ta position sur l\'or trop longtemps par espoir."', () => {
+    expect(flag("Tu as gardé ta position sur l'or trop longtemps par espoir.")).toBe(false);
+  });
+  it('FP1 statistique "78% de tes positions sur le DAX étaient alignées au plan."', () => {
+    expect(flag('78% de tes positions sur le DAX étaient alignées au plan.')).toBe(false);
+  });
+  it('FP1 passif "Ta position sur le DAX a été coupée trop tôt."', () => {
+    expect(flag('Ta position sur le DAX a été coupée trop tôt.')).toBe(false);
+  });
+  it('FP1 passé "Tu as ouvert ta position sur l\'or au mauvais moment."', () => {
+    expect(flag("Tu as ouvert ta position sur l'or au mauvais moment.")).toBe(false);
+  });
+  // S10 review — past participle "réduit" (≠ impératif "réduis") + noun "maintien".
+  it('FP1 passé "Tu as réduit ta position sur le DAX par peur."', () => {
+    expect(flag('Tu as réduit ta position sur le DAX par peur.')).toBe(false);
+  });
+  it('FP1 nom "Le maintien de ta position sur le DAX a coûté cher."', () => {
+    expect(flag('Le maintien de ta position sur le DAX a coûté cher.')).toBe(false);
+  });
+
+  // ── FP#2 — présent indicatif comportemental (Mark Douglas) ──
+  it('FP2 présent "Tu vends trop tôt quand tu as peur."', () => {
+    expect(flag('Tu vends trop tôt quand tu as peur.')).toBe(false);
+  });
+  it('FP2 "On vend toujours au pire moment sous pression."', () => {
+    expect(flag('On vend toujours au pire moment sous pression.')).toBe(false);
+  });
+
+  // ── FP#3 — objectif coaching à décimale + unité ──
+  it('FP3 "objectif à 1.5 trade/jour"', () => {
+    expect(flag('objectif à 1.5 trade/jour')).toBe(false);
+  });
+  it('FP3 "objectif à 2.5 séances"', () => {
+    expect(flag('objectif à 2.5 séances')).toBe(false);
+  });
+  it('FP3 "objectif à 1.5 séance/semaine"', () => {
+    expect(flag('objectif à 1.5 séance/semaine')).toBe(false);
+  });
+  it('FP3 "objectif à 0.5% de risque"', () => {
+    expect(flag('objectif à 0.5% de risque')).toBe(false);
+  });
+  it('FP3 "objectif à 2.0R de gain"', () => {
+    expect(flag('objectif à 2.0R de gain')).toBe(false);
+  });
+});
+
+describe('detectAMFViolation — S10 residual MUST FLAG (anti-FN : conseils réels)', () => {
+  // ── FP#1 — verbe directif (impératif / présent / infinitif via modal) ──
+  it('FP1 impératif "Augmente ta position sur le SP500"', () => {
+    expect(flag('Augmente ta position sur le SP500')).toBe(true);
+  });
+  it('FP1 impératif "Garde ta position sur le DAX"', () => {
+    expect(flag('Garde ta position sur le DAX')).toBe(true);
+  });
+  it('FP1 modal+infinitif "tu devrais augmenter ta position sur le DAX"', () => {
+    expect(flag('tu devrais augmenter ta position sur le DAX')).toBe(true);
+  });
+  it('FP1 "il faut renforcer ta position sur le Nasdaq"', () => {
+    expect(flag('il faut renforcer ta position sur le Nasdaq')).toBe(true);
+  });
+  it('FP1 impératif "Réduis ta position sur l\'or maintenant."', () => {
+    expect(flag("Réduis ta position sur l'or maintenant.")).toBe(true);
+  });
+  it('FP1 présent directif "Tu liquides ta position sur le Nasdaq."', () => {
+    expect(flag('Tu liquides ta position sur le Nasdaq.')).toBe(true);
+  });
+  it('FP1 pluriel "Allège tes positions sur le bitcoin avant la clôture."', () => {
+    expect(flag('Allège tes positions sur le bitcoin avant la clôture.')).toBe(true);
+  });
+  // S10 review — imperative "Maintiens" (the verb) must still flag after dropping
+  // the noun "maintien" from the alternation.
+  it('FP1 impératif "Maintiens ta position sur le SP500 jusqu\'à la cassure."', () => {
+    expect(flag("Maintiens ta position sur le SP500 jusqu'à la cassure.")).toBe(true);
+  });
+  it('FP1 impératif "Réduis ta position sur le DAX."', () => {
+    expect(flag('Réduis ta position sur le DAX.')).toBe(true);
+  });
+
+  // ── FP#2 — impératif vendre (sans pronom devant) ──
+  it('FP2 impératif "Vends l\'EURUSD à la cassure."', () => {
+    expect(flag("Vends l'EURUSD à la cassure.")).toBe(true);
+  });
+  it('FP2 impératif "Vends le DAX maintenant."', () => {
+    expect(flag('Vends le DAX maintenant.')).toBe(true);
+  });
+
+  // ── FP#3 — objectif prix Forex / indice (pas d'unité de coaching) ──
+  it('FP3 "objectif à 1.20 sur EURUSD"', () => {
+    expect(flag('objectif à 1.20 sur EURUSD')).toBe(true);
+  });
+  it('FP3 "objectif à 1.0850"', () => {
+    expect(flag('objectif à 1.0850')).toBe(true);
+  });
+  it('FP3 "objectif à 4300.50 sur le DAX"', () => {
+    expect(flag('objectif à 4300.50 sur le DAX')).toBe(true);
+  });
+  it('FP3 anti-FN prix + token parasite "objectif à 1.0850 de gain"', () => {
+    expect(flag('objectif à 1.0850 de gain')).toBe(true);
+  });
+});

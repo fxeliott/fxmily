@@ -89,9 +89,15 @@ ENV NODE_ENV=production \
 
 # Run as a non-root, non-shell user. UID 1001 keeps host-side bind mounts
 # (`/etc/fxmily/web.env`) easy to reason about — chown them to 1001:1001.
+# S10 — pre-create `/app/.uploads` OWNED BY fxmily(1001) so that when the
+# `fxmily-uploads` named volume (docker-compose.prod.yml) is first mounted here,
+# Docker copies this dir's ownership into the fresh volume. Without it the empty
+# volume root is root-owned → the non-root runtime (uid 1001) gets EACCES on the
+# first `fs.mkdir('/app/.uploads/…')` (storage/local.ts) → uploads 500. The
+# volume gives the proofs durability; this line gives the app write access to it.
 RUN addgroup --system --gid 1001 fxmily \
  && adduser --system --uid 1001 --ingroup fxmily fxmily \
- && mkdir -p /app/public /app/.next/static \
+ && mkdir -p /app/public /app/.next/static /app/.uploads \
  && chown -R fxmily:fxmily /app
 
 # Pull only what `next/standalone` traced at build time — the standalone

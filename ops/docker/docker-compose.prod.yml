@@ -68,6 +68,17 @@ services:
         condition: service_healthy
     expose:
       - '3000'
+    # S10 hardening (TIER1 data-loss fix) — member uploads (trade screenshots,
+    # MT5 proofs = the S3 anti-lie evidence, training shots, annotations) are
+    # written by LocalStorageAdapter to `<cwd>/.uploads` = `/app/.uploads`
+    # (apps/web/src/lib/storage/local.ts:44). Without a persistent volume that
+    # path lives in the container's EPHEMERAL writable layer and is WIPED on
+    # every `docker compose up -d web` (i.e. every deploy) → the uploaded image
+    # binaries vanish while their DB rows survive → 404 on read. A Docker-managed
+    # named volume keeps the proofs across container recreation. (Long-term: the
+    # R2 adapter in apps/web/src/lib/storage/r2.ts replaces this once implemented.)
+    volumes:
+      - fxmily-uploads:/app/.uploads
     networks:
       - internal
     deploy:
@@ -102,6 +113,9 @@ volumes:
     name: fxmily-caddy-data
   caddy_config:
     name: fxmily-caddy-config
+  # S10 — persists member uploads (/app/.uploads) across `web` recreation.
+  fxmily-uploads:
+    name: fxmily-uploads
 
 networks:
   internal:

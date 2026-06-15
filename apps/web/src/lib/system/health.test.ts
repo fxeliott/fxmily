@@ -89,6 +89,21 @@ describe('getCronHealthReport', () => {
         _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
       },
       {
+        // S10 — meeting slot generation (period DAY, age 12h → green).
+        action: 'meeting.generated',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
+        // S10 — weekly mindset reminder (period WEEK, age 2d → green).
+        action: 'cron.mindset_check_reminders.scan',
+        _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
+      },
+      {
+        // S10 — access-request RGPD purge (period WEEK, age 1d → green).
+        action: 'cron.purge_access_requests.scan',
+        _max: { createdAt: new Date(now.getTime() - DAY) },
+      },
+      {
         // J10 Phase O fix B3 — the watcher's own heartbeat (period=1h,
         // tolerance=4h) needs a fresh row to land green.
         action: 'cron.health.scan',
@@ -99,7 +114,7 @@ describe('getCronHealthReport', () => {
     const report = await getCronHealthReport(now);
 
     expect(report.overall).toBe('green');
-    expect(report.entries).toHaveLength(13);
+    expect(report.entries).toHaveLength(16);
     expect(report.entries.every((e) => e.status === 'green')).toBe(true);
     expect(report.ranAt).toBe(now.toISOString());
   });
@@ -192,14 +207,17 @@ describe('getCronHealthReport', () => {
   });
 
   /**
-   * Why this matters : the report's entries.length is fixed at 10 (one per
-   * known cron action). Adding a new cron must require an explicit update to
+   * Why this matters : the report's entries.length is fixed (one per known cron
+   * action). Adding a new cron must require an explicit update to
    * `EXPECTATIONS` — drift between code + crontab is a high-risk class of bug.
+   * S10 raised the count 13 → 16 (the 3 wired prod crons that were emitting a
+   * heartbeat but were not being monitored: generate-meetings,
+   * mindset-check-reminders, purge-access-requests).
    */
-  it('always returns exactly 13 entries (S3 — added the daily verification scan)', async () => {
+  it('always returns exactly 16 entries (S10 — added the 3 unmonitored wired crons)', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);
     const report = await getCronHealthReport();
-    expect(report.entries).toHaveLength(13);
+    expect(report.entries).toHaveLength(16);
     // self-monitoring of the watcher (cron-watch.yml).
     expect(report.entries.map((e) => e.action)).toContain('cron.health.scan');
     // audit_log retention purge (V2-roadmap reclassed).
@@ -212,6 +230,10 @@ describe('getCronHealthReport', () => {
     expect(report.entries.map((e) => e.action)).toContain('cron.onboarding_profile_overdue.scan');
     // S3 §33.5 — daily verification scan heartbeat.
     expect(report.entries.map((e) => e.action)).toContain('cron.verification_scan.scan');
+    // S10 — the three crons promoted to monitored this session.
+    expect(report.entries.map((e) => e.action)).toContain('meeting.generated');
+    expect(report.entries.map((e) => e.action)).toContain('cron.mindset_check_reminders.scan');
+    expect(report.entries.map((e) => e.action)).toContain('cron.purge_access_requests.scan');
   });
 });
 

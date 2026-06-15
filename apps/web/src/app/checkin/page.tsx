@@ -7,6 +7,7 @@ import { FirstCheckinCelebration } from '@/components/checkin/first-checkin-cele
 import { StreakCard } from '@/components/checkin/streak-card';
 import { TrendCard } from '@/components/checkin/trend-card';
 import { Card } from '@/components/ui/card';
+import { HoverLift } from '@/components/ui/hover-lift';
 import { Pill } from '@/components/ui/pill';
 import { countCheckins, getCheckinStatus, getLast7Days, getStreak } from '@/lib/checkin/service';
 import { crossedMilestone } from '@/lib/checkin/streak';
@@ -130,40 +131,42 @@ function SlotCard({
   const sub = isMorning ? 'Sommeil · routine · intention' : 'Discipline · stress · journal';
 
   return (
-    <Link href={href} className="block">
-      <Card
-        interactive
-        className={cn(
-          'relative flex flex-col gap-3 p-5 transition-all',
-          submitted && 'border-[var(--b-acc)] bg-[var(--acc-dim-2)]',
-        )}
-      >
-        <div className="flex items-start justify-between">
-          <div className="rounded-control grid h-10 w-10 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
-            <Icon className="h-5 w-5" strokeWidth={1.75} />
+    <HoverLift className="block">
+      <Link href={href} className="block">
+        <Card
+          interactive
+          className={cn(
+            'relative flex flex-col gap-3 p-5 transition-colors',
+            submitted && 'border-[var(--b-acc)] bg-[var(--acc-dim-2)]',
+          )}
+        >
+          <div className="flex items-start justify-between">
+            <div className="rounded-control grid h-10 w-10 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+              <Icon className="h-5 w-5" strokeWidth={1.75} />
+            </div>
+            {submitted ? (
+              <Pill tone="acc" dot="live">
+                FAIT
+              </Pill>
+            ) : (
+              <Pill tone="cy">À FAIRE</Pill>
+            )}
           </div>
-          {submitted ? (
-            <Pill tone="acc" dot="live">
-              FAIT
-            </Pill>
-          ) : (
-            <Pill tone="cy">À FAIRE</Pill>
-          )}
-        </div>
-        <div className="flex flex-col gap-1">
-          <h3 className="t-h3 text-[var(--t-1)]">{title}</h3>
-          <p className="t-cap text-[var(--t-3)]">{sub}</p>
-        </div>
-        <div className="mt-1 flex items-center justify-between text-[12px] text-[var(--t-3)]">
-          <span>{submitted ? 'Voir / éditer' : '~3 minutes'}</span>
-          {submitted ? (
-            <Check className="h-4 w-4 text-[var(--acc)]" strokeWidth={2} />
-          ) : (
-            <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
-          )}
-        </div>
-      </Card>
-    </Link>
+          <div className="flex flex-col gap-1">
+            <h3 className="t-h3 text-[var(--t-1)]">{title}</h3>
+            <p className="t-cap text-[var(--t-3)]">{sub}</p>
+          </div>
+          <div className="mt-1 flex items-center justify-between text-[12px] text-[var(--t-3)]">
+            <span>{submitted ? 'Voir / éditer' : '~3 minutes'}</span>
+            {submitted ? (
+              <Check className="h-4 w-4 text-[var(--acc)]" strokeWidth={2} />
+            ) : (
+              <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
+            )}
+          </div>
+        </Card>
+      </Link>
+    </HoverLift>
   );
 }
 

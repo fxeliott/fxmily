@@ -29,11 +29,11 @@ export function MemberDouglasPanel({ deliveries, stats }: MemberDouglasPanelProp
       {/* Stats strip */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Card className="p-4">
-          <p className="text-muted text-[11px] tracking-wide uppercase">Reçues</p>
+          <p className="t-eyebrow text-[var(--t-3)]">Reçues</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">{stats.total}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-muted text-[11px] tracking-wide uppercase">Non lues</p>
+          <p className="t-eyebrow text-[var(--t-3)]">Non lues</p>
           <p
             className={
               'mt-1 text-xl font-semibold tabular-nums ' +
@@ -44,15 +44,15 @@ export function MemberDouglasPanel({ deliveries, stats }: MemberDouglasPanelProp
           </p>
         </Card>
         <Card className="p-4">
-          <p className="text-muted text-[11px] tracking-wide uppercase">Utiles</p>
+          <p className="t-eyebrow text-[var(--t-3)]">Utiles</p>
           <p className="text-acc mt-1 text-xl font-semibold tabular-nums">{stats.helpful}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-muted text-[11px] tracking-wide uppercase">Pas utiles</p>
+          <p className="t-eyebrow text-[var(--t-3)]">Pas utiles</p>
           <p className="text-warn mt-1 text-xl font-semibold tabular-nums">{stats.notHelpful}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-muted text-[11px] tracking-wide uppercase">Ignorées</p>
+          <p className="t-eyebrow text-[var(--t-3)]">Ignorées</p>
           <p className="text-muted mt-1 text-xl font-semibold tabular-nums">{stats.dismissed}</p>
         </Card>
       </div>
@@ -69,10 +69,10 @@ export function MemberDouglasPanel({ deliveries, stats }: MemberDouglasPanelProp
         </Card>
       ) : (
         <Card className="p-0">
-          <header className="border-border flex items-center justify-between border-b px-5 py-4">
+          <header className="flex items-center justify-between border-b border-[var(--b-default)] px-5 py-4">
             <div className="flex items-center gap-2">
               <BookOpen className="text-acc h-4 w-4" aria-hidden />
-              <h2 className="text-sm font-semibold">Timeline des fiches reçues</h2>
+              <h2 className="t-h3 text-[var(--t-1)]">Timeline des fiches reçues</h2>
               <Pill tone="mute">{deliveries.length}</Pill>
             </div>
           </header>
@@ -95,7 +95,7 @@ export function MemberDouglasPanel({ deliveries, stats }: MemberDouglasPanelProp
               return (
                 <li
                   key={d.id}
-                  className="border-border flex flex-col gap-2 border-b px-5 py-4 last:border-b-0"
+                  className="flex flex-col gap-2 border-b border-[var(--b-default)] px-5 py-4 last:border-b-0"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <Icon className="text-acc h-3.5 w-3.5" aria-hidden />
@@ -123,17 +123,17 @@ export function MemberDouglasPanel({ deliveries, stats }: MemberDouglasPanelProp
                       href={`/library/${d.cardSlug}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="hover:text-acc text-base leading-snug font-semibold"
+                      className="t-h3 leading-snug text-[var(--t-1)] hover:text-[var(--acc-hi)]"
                     >
                       {d.cardTitle}
                     </Link>
-                    <span className="text-muted text-xs">
+                    <span className="t-cap text-[var(--t-3)]">
                       <EyeOff className="mr-1 inline h-3 w-3" aria-hidden />
                       {DT.format(new Date(d.createdAt))}
                     </span>
                   </div>
-                  <p className="text-muted text-xs">
-                    Trigger : <span className="text-foreground/80">{d.triggeredBy}</span>
+                  <p className="t-cap text-[var(--t-3)]">
+                    Trigger : <span className="text-[var(--t-2)]">{d.triggeredBy}</span>
                   </p>
                 </li>
               );

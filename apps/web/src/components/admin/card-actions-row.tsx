@@ -95,11 +95,11 @@ export function CardActionsRow({ cardId, initialPublished, cardTitle }: CardActi
         aria-pressed={published}
         title={published ? 'Dépublier' : 'Publier'}
         className={cn(
-          'rounded-pill inline-flex h-11 items-center gap-1.5 border px-3 text-xs font-medium transition-all',
+          'rounded-pill inline-flex h-11 items-center gap-1.5 border px-3 text-xs font-medium transition-[background-color,border-color,color]',
           published
-            ? 'border-acc/40 bg-acc/15 text-acc'
-            : 'border-border bg-bg-1 text-muted hover:border-acc/40 hover:text-foreground',
-          'focus-visible:outline-acc focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
+            ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc-hi)]'
+            : 'border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)] hover:border-[var(--b-acc)] hover:text-[var(--t-1)]',
+          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
           'disabled:opacity-50',
         )}
       >
@@ -112,11 +112,11 @@ export function CardActionsRow({ cardId, initialPublished, cardTitle }: CardActi
         disabled={pending}
         aria-label={`Supprimer la fiche « ${cardTitle} »`}
         className={cn(
-          'rounded-pill inline-flex h-11 items-center gap-1.5 border px-3 text-xs font-medium transition-all',
+          'rounded-pill inline-flex h-11 items-center gap-1.5 border px-3 text-xs font-medium transition-[background-color,border-color,color]',
           confirmingDelete
-            ? 'border-bad bg-bad/15 text-bad'
-            : 'border-border bg-bg-1 text-muted hover:border-bad/40 hover:text-bad',
-          'focus-visible:outline-bad focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
+            ? 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)]'
+            : 'border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)] hover:border-[var(--b-danger)] hover:text-[var(--bad)]',
+          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--bad)]',
           'disabled:opacity-50',
         )}
       >

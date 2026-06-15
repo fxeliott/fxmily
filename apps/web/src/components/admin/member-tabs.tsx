@@ -66,7 +66,7 @@ export function MemberTabs({ memberId, active }: MemberTabsProps) {
   return (
     <nav
       aria-label="Onglets membre"
-      className="flex flex-wrap items-center gap-1 border-b border-[var(--border)]"
+      className="flex flex-wrap items-center gap-1 border-b border-[var(--b-default)]"
     >
       {TABS.map((tab) => {
         const isActive = tab.key === active;
@@ -74,8 +74,8 @@ export function MemberTabs({ memberId, active }: MemberTabsProps) {
         const baseClasses = [
           'inline-flex min-h-11 items-center gap-2 rounded-t-md px-3 py-2 text-xs font-medium transition-colors',
           isActive
-            ? 'border-accent bg-accent/10 text-foreground border-b-2 font-semibold'
-            : 'text-muted hover:text-foreground border-b-2 border-transparent',
+            ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--t-1)] border-b-2 font-semibold'
+            : 'text-[var(--t-3)] hover:text-[var(--t-1)] border-b-2 border-transparent',
         ].join(' ');
 
         const href =

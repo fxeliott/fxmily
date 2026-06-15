@@ -55,7 +55,7 @@ export function MonthlyDebriefTimeline({
             <Link
               href={`/debrief-mensuel?id=${d.id}`}
               aria-current={isSelected ? 'true' : undefined}
-              className={`rounded-card block border bg-[var(--bg-1)] p-4 transition-colors focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none ${
+              className={`wow-hover-glow rounded-card block border bg-[var(--bg-1)] p-4 transition-colors focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none ${
                 isSelected
                   ? 'border-[var(--b-acc)]'
                   : 'border-[var(--b-default)] hover:border-[var(--b-strong)]'

@@ -81,7 +81,7 @@ export async function DouglasInboxWidget({ userId }: DouglasInboxWidgetProps) {
               <li key={d.id}>
                 <Link
                   href={`/library/${d.cardSlug}`}
-                  className="rounded-control group flex items-start gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-3 transition-colors hover:border-[var(--b-acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                  className="wow-hover-glow rounded-control group flex items-start gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-3 transition-colors hover:border-[var(--b-acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
                 >
                   <span
                     className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--acc-dim)] text-[var(--acc)]"

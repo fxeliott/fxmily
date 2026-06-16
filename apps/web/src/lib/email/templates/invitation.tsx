@@ -30,7 +30,7 @@ interface InvitationEmailProps {
  * Posture athlète discipline : signature Robin Neon, mono-accent CTA lime.
  */
 export function InvitationEmail({ inviteUrl, invitedByName, expiresInDays }: InvitationEmailProps) {
-  const inviter = invitedByName?.trim() ? invitedByName.trim() : 'Eliot';
+  const inviter = invitedByName?.trim() ? invitedByName.trim() : 'Eliott';
 
   return (
     <Html lang="fr">
@@ -127,7 +127,7 @@ export function InvitationEmail({ inviteUrl, invitedByName, expiresInDays }: Inv
 
 InvitationEmail.PreviewProps = {
   inviteUrl: 'https://app.fxmilyapp.com/onboarding/welcome?token=preview',
-  invitedByName: 'Eliot',
+  invitedByName: 'Eliott',
   expiresInDays: 7,
 } satisfies InvitationEmailProps;
 

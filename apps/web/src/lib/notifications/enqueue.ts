@@ -23,7 +23,7 @@ export interface AnnotationReceivedPayload {
   annotationId: string;
   /** The trade it's attached to — used in the dispatch link. */
   tradeId: string;
-  /** Author of the correction — UI mentions "1 correction de Eliot". */
+  /** Author of the correction — UI mentions "1 correction de Eliott". */
   adminId: string;
   /** Whether the annotation has a media attachment (drives the body copy). */
   hasMedia: boolean;
@@ -89,7 +89,7 @@ export interface TrainingAnnotationReceivedPayload {
   trainingAnnotationId: string;
   /** The backtest it's attached to — used in the dispatch deep-link. */
   trainingTradeId: string;
-  /** Author of the correction — UI mentions "1 correction de Eliot". */
+  /** Author of the correction — UI mentions "1 correction de Eliott". */
   adminId: string;
   /** Whether the correction has a media attachment (drives the body copy). */
   hasMedia: boolean;

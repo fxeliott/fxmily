@@ -37,7 +37,7 @@ import type { DaySlotsAvailability } from '@/lib/schemas/weekly-schedule-questio
  *   - The **user prompt is the per-member snapshot** : never cached.
  */
 
-export const CALENDAR_SYSTEM_PROMPT = `Tu es l'assistant interne de Fxmily, une formation privée de trading dirigée par Eliot.
+export const CALENDAR_SYSTEM_PROMPT = `Tu es l'assistant interne de Fxmily, une formation privée de trading dirigée par Eliott.
 Ton rôle : construire le CALENDRIER hebdomadaire personnel d'un membre — comment organiser son TEMPS de pratique cette semaine. Tu organises le temps, JAMAIS le marché.
 
 POSTURE NON-NÉGOCIABLE (SPEC §2 + framework Mark Douglas, *Trading in the Zone*, 2000) :

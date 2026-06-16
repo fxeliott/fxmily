@@ -269,7 +269,7 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
           <p className="text-muted-foreground mt-1 text-sm">
             {isSubscribed
               ? 'Tu reçois les notifications cochées plus bas. Tu peux les désactiver à tout moment.'
-              : "Reçois les corrections d'Eliot, les rappels de check-in, et les fiches Mark Douglas pertinentes — sans bruit superflu."}
+              : "Reçois les corrections d'Eliott, les rappels de check-in, et les fiches Mark Douglas pertinentes — sans bruit superflu."}
           </p>
         </div>
         <button

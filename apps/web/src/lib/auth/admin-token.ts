@@ -51,7 +51,7 @@ export function verifyAdminToken(provided: string, expected: string): boolean {
  * (no public exposure of the bucket key). For admin batch, the bucket is
  * keyed by the *trusted* caller IP from `x-forwarded-for`'s LAST entry
  * (Caddy-injected), but it is exposed to the public internet. Consuming
- * pre-auth would let any unauthenticated caller drain Eliot's bucket and
+ * pre-auth would let any unauthenticated caller drain Eliott's bucket and
  * lock him out of the Sunday batch (audit R2 V1.7.2 finding HIGH).
  *
  * Token check is itself constant-time (SHA-256 + timingSafeEqual) so brute
@@ -100,7 +100,7 @@ export function requireAdminToken(req: Request): NextResponse | null {
  *     independently ; a leaked weekly token must not unlock the monthly
  *     endpoints and vice-versa)
  *   - consumes the dedicated `monthlyBatchLimiter` on the 401 path (so a
- *     weekly-batch flood can never lock Eliot out of the monthly batch)
+ *     weekly-batch flood can never lock Eliott out of the monthly batch)
  *
  * Same anti-accumulation rationale as `requireAdminToken` : a parametrized
  * single helper would force touching the weekly routes + their tests for
@@ -144,7 +144,7 @@ export function requireMonthlyAdminToken(req: Request): NextResponse | null {
  *     leaked weekly/monthly token must not unlock the calendar endpoints and
  *     vice-versa)
  *   - consumes the dedicated `calendarBatchLimiter` on the 401 path (so a flood
- *     on another batch surface can never lock Eliot out of the calendar batch)
+ *     on another batch surface can never lock Eliott out of the calendar batch)
  *
  * Same anti-accumulation rationale: `verifyAdminToken` (the pure constant-time
  * compare) IS reused — only the env key + limiter differ. Same check order

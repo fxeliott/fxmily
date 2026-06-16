@@ -661,7 +661,7 @@ function resolveRecipient(options: GenerateOptions): string {
   const isProdRuntime = env.NODE_ENV === 'production' || env.AUTH_URL.startsWith('https://');
   if (options.recipientOverride && !isProdRuntime) return options.recipientOverride;
   // Phase T security hardening (2026-05-09) : retiré le hardcoded fallback
-  // sur l'email perso d'Eliot (phishing surface dans repo public). Le
+  // sur l'email perso d'Eliott (phishing surface dans repo public). Le
   // env var `WEEKLY_REPORT_RECIPIENT` est désormais REQUIS en runtime ; si
   // absent, on throw au lieu d'envoyer à un fallback en dur. Le runner
   // saura immédiatement que l'env est mal configurée.

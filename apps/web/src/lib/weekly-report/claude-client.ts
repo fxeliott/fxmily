@@ -18,7 +18,7 @@ import { computeCostEur, type ClaudeUsage, type CostBreakdown } from './pricing'
  * Two implementations behind a single interface :
  *   - **`MockWeeklyReportClient`** — deterministic, zero-cost, no SDK import.
  *     The cron uses this when `ANTHROPIC_API_KEY` is not set (V1 ship default
- *     until Eliot adds the key). Returns a Zod-valid {@link WeeklyReportOutput}
+ *     until Eliott adds the key). Returns a Zod-valid {@link WeeklyReportOutput}
  *     derived from the snapshot counters so the smoke test is meaningful.
  *   - **`LiveWeeklyReportClient`** — backed by `@anthropic-ai/sdk`. Activates
  *     when `ANTHROPIC_API_KEY` is set. Lazy-loads the SDK so the bundle stays
@@ -96,7 +96,7 @@ export function resetClaudeClient(): void {
  * without hitting the Anthropic API.
  *
  * The output is **not** a substitute for Claude's qualitative judgment — it's
- * a contract-level smoke fixture. The intent is "the email lands in Eliot's
+ * a contract-level smoke fixture. The intent is "the email lands in Eliott's
  * inbox with a structured report, and once ANTHROPIC_API_KEY is set the same
  * pipeline produces real Claude output".
  */
@@ -206,7 +206,7 @@ function renderMockOutput(snapshot: WeeklySnapshot): WeeklyReportOutput {
  * doesn't pull the SDK into the bundle / dev startup.
  *
  * **NOT smoke-tested in this PR** — V1 ships with `ANTHROPIC_API_KEY` empty,
- * the mock client is the smoke-test path. The first time Eliot sets the key,
+ * the mock client is the smoke-test path. The first time Eliott sets the key,
  * point the cron at one user with `?dryRun=true` (cron route flag) to verify
  * cost numbers + content quality before the next Sunday cadence.
  *

@@ -11,7 +11,7 @@ import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
  *
  * Mirrors `weekly-review.ts` (member free-text → DB, never to Claude in V1.3,
  * but Trojan-Source hardened anyway: the text renders in the member's own
- * timeline + Eliot's admin read-only view, and a future V2 chatbot may surface
+ * timeline + Eliott's admin read-only view, and a future V2 chatbot may surface
  * excerpts in an IA context). Distinct concept though — this is the member's
  * BACKTEST-practice debrief, statistically isolated from the real edge (§21.5).
  *

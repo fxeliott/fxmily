@@ -12,7 +12,7 @@ import type { SerializedMonthlyDebrief } from './types';
  * monthly debrief is an **AI synthesis written by the batch pipeline**
  * (J-M2 `persistGeneratedReports`), never by the member — there is no
  * member `submit`/upsert here. This layer only serializes persisted rows
- * for the member page (`/debrief-mensuel`) and Eliot's read-only admin
+ * for the member page (`/debrief-mensuel`) and Eliott's read-only admin
  * panel (`/admin/members/[id]?tab=monthly-debrief`, SPEC §25.4/§25.6).
  *
  * User-scoped strict — every function takes a `userId`/`memberId` and never
@@ -132,7 +132,7 @@ export async function listMyRecentMonthlyDebriefs(
 }
 
 /**
- * List every monthly debrief of a member for Eliot's READ-ONLY admin view
+ * List every monthly debrief of a member for Eliott's READ-ONLY admin view
  * (`/admin/members/[id]?tab=monthly-debrief`, SPEC §25.4/§25.6 — lecture
  * seule, aucune action). Admin-scoping is the caller's responsibility (the
  * admin page already gates `role === 'admin'`); this is a plain user-scoped

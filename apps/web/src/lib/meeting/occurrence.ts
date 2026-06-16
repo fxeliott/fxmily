@@ -32,7 +32,7 @@ export const MEETING_TIMEZONE = 'Europe/Paris';
 export const MEETING_SLOTS = ['midday', 'evening'] as const;
 export type MeetingSlotName = (typeof MEETING_SLOTS)[number];
 
-/** Wall-clock hour (Europe/Paris) of each slot — verbatim Eliot "12h et 20h". */
+/** Wall-clock hour (Europe/Paris) of each slot — verbatim Eliott "12h et 20h". */
 const SLOT_HOUR: Record<MeetingSlotName, number> = {
   midday: 12,
   evening: 20,

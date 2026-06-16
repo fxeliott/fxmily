@@ -18,7 +18,7 @@ import type { SerializedAdminNote } from '@/lib/admin/admin-notes-service';
 /**
  * Admin "Notes admin" tab panel (V2.1, SPEC §7.7).
  *
- * Eliot's private coaching memory about a member — an add form on top, a
+ * Eliott's private coaching memory about a member — an add form on top, a
  * newest-first timeline below. **The member never sees this** (the panel
  * is rendered only inside the admin member-detail page, the service is
  * `server-only` admin-scoped, and the Server Action re-checks
@@ -26,7 +26,7 @@ import type { SerializedAdminNote } from '@/lib/admin/admin-notes-service';
  *
  * DS-v2 (lime / deep-space) — NOT the `.v18-theme` overlay (that scope is
  * REFLECT V1.8 only). Posture Mark Douglas: calm, neutral chrome; the
- * note content itself is free text (these are Eliot's own observations).
+ * note content itself is free text (these are Eliott's own observations).
  *
  * Patterns carbone:
  *   - add form  → `annotate-trade-button` (useActionState + submit-with-

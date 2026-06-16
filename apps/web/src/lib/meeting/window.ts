@@ -17,7 +17,7 @@ import { MEETING_TIMEZONE } from './occurrence';
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
- * Rolling window length. 30 days = the rattrapage budget Eliot set (members
+ * Rolling window length. 30 days = the rattrapage budget Eliott set (members
  * are expected to catch up on replays, but a 3-month bulk catch-up would
  * distort the effort/regularity signal — SPEC §30.2 T1-3). The SAME bound is
  * reused everywhere (declaration + rate + engagement) for strict coherence.

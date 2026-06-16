@@ -100,7 +100,7 @@ const envSchema = z.object({
   /// Destinataire du digest hebdo IA admin. **REQUIS** en runtime (Phase T
   /// security hardening 2026-05-09 — l'email perso hardcoded a été retiré
   /// du repo public). Tant que `fxmilyapp.com` n'est pas domain-verified
-  /// Resend Console, set la valeur à l'email owner du compte Resend Eliot
+  /// Resend Console, set la valeur à l'email owner du compte Resend Eliott
   /// (free-tier limit). Une fois verify : `eliot@fxmilyapp.com` ou similaire.
   WEEKLY_REPORT_RECIPIENT: z.string().email().optional(),
 
@@ -156,19 +156,19 @@ const envSchema = z.object({
   // l'endpoint cron répond 503 (refuse de tourner sans authentification).
   CRON_SECRET: z.string().min(24, 'CRON_SECRET ≥ 24 chars (openssl rand -hex 24)').optional(),
 
-  /// V1.7.2 — Token partagé entre la machine d'Eliot et `/api/admin/weekly-batch/*`.
+  /// V1.7.2 — Token partagé entre la machine d'Eliott et `/api/admin/weekly-batch/*`.
   /// Sans ça, les endpoints admin batch répondent 503 (refuse-by-default).
   /// Génération : `openssl rand -hex 32` (64 chars). Provisionner sur Hetzner
   /// via append à `/etc/fxmily/web.env` (0600 owner fxmily) puis
   /// `docker compose -f docker-compose.prod.yml restart web`.
   /// SÉPARÉ de `CRON_SECRET` car l'admin batch est invoqué depuis le PC
-  /// d'Eliot (compromis ≠ compromis serveur Hetzner). Rotation indépendante.
+  /// d'Eliott (compromis ≠ compromis serveur Hetzner). Rotation indépendante.
   ADMIN_BATCH_TOKEN: z
     .string()
     .min(32, 'ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
     .optional(),
 
-  /// V1.4 §25 — Token partagé entre la machine d'Eliot et
+  /// V1.4 §25 — Token partagé entre la machine d'Eliott et
   /// `/api/admin/monthly-batch/*` (débrief mensuel IA). Sans ça, les
   /// endpoints monthly batch répondent 503 (refuse-by-default, mirror
   /// ADMIN_BATCH_TOKEN). Génération : `openssl rand -hex 32` (64 chars).
@@ -181,7 +181,7 @@ const envSchema = z.object({
     .min(32, 'MONTHLY_ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
     .optional(),
 
-  /// §26 — Token partagé entre la machine d'Eliot et
+  /// §26 — Token partagé entre la machine d'Eliott et
   /// `/api/admin/calendar-batch/*` (calendrier adaptatif, J-C2). Sans ça, les
   /// endpoints calendar batch répondent 503 (refuse-by-default, mirror
   /// ADMIN_BATCH_TOKEN / MONTHLY_ADMIN_BATCH_TOKEN). Génération :
@@ -189,13 +189,13 @@ const envSchema = z.object({
   /// `/etc/fxmily/web.env` (0600 owner fxmily) puis
   /// `docker compose -f docker-compose.prod.yml restart web`.
   /// SÉPARÉ des deux autres : cadence + compromis distincts, rotation
-  /// indépendante (le calendrier est aussi déclenché depuis le PC d'Eliot).
+  /// indépendante (le calendrier est aussi déclenché depuis le PC d'Eliott).
   CALENDAR_ADMIN_BATCH_TOKEN: z
     .string()
     .min(32, 'CALENDAR_ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
     .optional(),
 
-  /// S3 §33.4 — Token partagé entre la machine d'Eliot et
+  /// S3 §33.4 — Token partagé entre la machine d'Eliott et
   /// `/api/admin/verification-batch/*` (5ᵉ pipeline vision MT5). Sans ça, les
   /// endpoints verification batch répondent 503 (refuse-by-default, mirror
   /// des trois autres tokens batch). Génération : `openssl rand -hex 32`
@@ -214,7 +214,7 @@ const envSchema = z.object({
   /// un cuid peut vérifier sa présence dans un export rapport hebdo en
   /// hashant 1 candidate (audit M1, security-auditor 2026-05-09).
   /// Optional en V1 (default empty string = behavior actuel, OK si rapports
-  /// jamais exportés hors Eliot). REQUIS en prod si export externe envisagé.
+  /// jamais exportés hors Eliott). REQUIS en prod si export externe envisagé.
   /// Génération : `openssl rand -hex 32` (64 chars). Ne JAMAIS rotater une
   /// fois la cohorte démarrée — perte de continuité des labels historiques.
   MEMBER_LABEL_SALT: z

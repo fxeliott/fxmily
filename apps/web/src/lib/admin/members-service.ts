@@ -30,7 +30,7 @@ export interface MemberSummary {
 }
 
 export interface MemberDetail extends MemberSummary {
-  /** Full name reconstructed for display ("Eliot Pena" or fallback to email). */
+  /** Full name reconstructed for display ("Eliott Pena" or fallback to email). */
   displayName: string;
   /** ISO timestamps for the last trade activity (any state). */
   lastTradeAt: string | null;

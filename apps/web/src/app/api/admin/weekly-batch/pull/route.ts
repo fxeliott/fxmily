@@ -9,7 +9,7 @@ import { loadAllSnapshotsForActiveMembers } from '@/lib/weekly-report/batch';
  * V1.7.2 — POST `/api/admin/weekly-batch/pull`.
  *
  * Returns a `BatchPullEnvelope` JSON describing every active member's
- * pseudonymized weekly snapshot. Designed to be `curl`'d from Eliot's local
+ * pseudonymized weekly snapshot. Designed to be `curl`'d from Eliott's local
  * machine by `ops/scripts/weekly-batch-local.sh` :
  *
  *   curl --fail-with-body --silent -X POST \
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   if (guard) return guard;
 
   // V1.7.2 audit fix : the batch is the canonical "external export" path
-  // (snapshots leave the host and reach Eliot's laptop, then Anthropic).
+  // (snapshots leave the host and reach Eliott's laptop, then Anthropic).
   // `lib/env.ts` JSDoc says MEMBER_LABEL_SALT is "REQUIS en prod si export
   // externe envisagé" — refuse here in production NODE_ENV if the salt is
   // not configured, otherwise unsalted pseudonyms would leak. Dev/test

@@ -174,7 +174,7 @@ const memberProfileHighlightSchema = z
  *   - `summary` 100-800 chars FR descriptif-comportemental (PAS clinique).
  *   - `highlights[].evidence[]` MUST be verbatim substring of answer corpus
  *     (NFC-normalized) — validated post-gen at batch layer.
- *   - `axes_prioritaires` 3-5 axes pour coach Eliot.
+ *   - `axes_prioritaires` 3-5 axes pour coach Eliott.
  *
  * Anti-clinical wording (anti-pattern detection at batch layer) + AMF regex
  * post-gen + crisis routing pre-persist mirror V1.7.1.

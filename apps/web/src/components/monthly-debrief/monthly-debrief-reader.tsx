@@ -4,7 +4,7 @@ import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 /**
  * V1.4 — shared READ-ONLY renderer for a persisted monthly debrief
  * (SPEC §25.4). One presentational source of truth used by BOTH the member
- * page (`/debrief-mensuel`) and Eliot's admin panel
+ * page (`/debrief-mensuel`) and Eliott's admin panel
  * (`/admin/members/[id]?tab=monthly-debrief`) — so the §21.7 cyan boundary
  * + the EU AI Act 50(1) banner render identically and are a single audit
  * surface (anti-dup; a11y + posture reviewed once).

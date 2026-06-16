@@ -28,7 +28,7 @@ import { type ReactNode } from 'react';
  *
  * Posture Mark Douglas (anti-anthropomorphization) :
  *   - NEVER write "Claude pense que..." / "L IA recommande..." in body copy.
- *   - The banner explicitly says "ne remplace ni un coaching humain" — Eliot
+ *   - The banner explicitly says "ne remplace ni un coaching humain" — Eliott
  *     stays the human coach ; the AI is an executor of his prompt.
  *
  * Accessibility :

@@ -78,7 +78,7 @@ export default async function OnboardingWelcomePage({ searchParams }: PageProps)
         </Card>
 
         <p className="text-center text-[10px] text-[var(--t-4)] tabular-nums">
-          Cohorte privée · Eliot t&apos;a invité personnellement
+          Cohorte privée · Eliott t&apos;a invité personnellement
         </p>
       </section>
     </main>
@@ -97,9 +97,9 @@ function InvalidTokenView({
       case 'missing':
         return "Ce lien est incomplet. Vérifie l'URL reçue par email — elle doit contenir un token complet.";
       case 'unknown':
-        return "Ce lien d'invitation n'existe pas ou n'est plus valide. Demande à Eliot une nouvelle invitation.";
+        return "Ce lien d'invitation n'existe pas ou n'est plus valide. Demande à Eliott une nouvelle invitation.";
       case 'expired':
-        return 'Les invitations expirent au bout de 7 jours. Demande à Eliot un nouveau lien.';
+        return 'Les invitations expirent au bout de 7 jours. Demande à Eliott un nouveau lien.';
       case 'already_used':
         return 'Tu as déjà créé ton compte avec ce lien. Connecte-toi pour accéder à ton espace.';
     }

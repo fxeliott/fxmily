@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
  * The "absent" state is an admin signal (coaching), shown calmly with an icon +
  * text label (WCAG 1.4.1 — never colour alone), never as a shame surface. A
  * cancelled slot is greyed + excluded from the rate (a member is never
- * penalised when Eliot was away). NO Ichor content — booleans only.
+ * penalised when Eliott was away). NO Ichor content — booleans only.
  */
 
 const SLOT_TIME: Record<MeetingSlotName, string> = { midday: '12h', evening: '20h' };

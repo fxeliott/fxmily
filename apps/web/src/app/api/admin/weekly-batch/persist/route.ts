@@ -9,7 +9,7 @@ import { persistGeneratedReports, type BatchPersistRequest } from '@/lib/weekly-
 /**
  * V1.7.2 — POST `/api/admin/weekly-batch/persist`.
  *
- * Accepts a `BatchPersistRequest` JSON body produced by Eliot's local script
+ * Accepts a `BatchPersistRequest` JSON body produced by Eliott's local script
  * after `claude --print` generation. Validates with the same strict Zod
  * schema as the previous standalone `weekly-batch-persist.ts` script (now
  * deleted ; replaced by this route — see `apps/web/CLAUDE.md` section
@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...result, total });
   } catch (err) {
     // V1.7.2 audit fix : emit `weekly_report.batch.persist_failed` so a
-    // mid-flight throw leaves an operational trace (without it, Eliot
+    // mid-flight throw leaves an operational trace (without it, Eliott
     // sees the 500 in curl but no audit row to investigate from). This
     // complements the per-entry `persist_failed` already emitted by
     // `persistGeneratedReports` when an individual upsert throws.

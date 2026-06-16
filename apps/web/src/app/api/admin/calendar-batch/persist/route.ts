@@ -9,7 +9,7 @@ import { persistGeneratedCalendars, type CalendarBatchPersistRequest } from '@/l
 /**
  * §26 — POST `/api/admin/calendar-batch/persist` (J-C2).
  *
- * Accepts a `CalendarBatchPersistRequest` JSON body produced by Eliot's local
+ * Accepts a `CalendarBatchPersistRequest` JSON body produced by Eliott's local
  * script after `claude --print` generation. Re-validates with a strict Zod
  * schema, then calls `persistGeneratedCalendars` (the canonical helper that
  * gates active-user + questionnaire-exists + double-net Zod + crisis routing +

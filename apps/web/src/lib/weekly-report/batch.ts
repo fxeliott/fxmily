@@ -19,14 +19,14 @@ import { buildWeeklyReportUserPrompt, WEEKLY_REPORT_SYSTEM_PROMPT } from './prom
 import type { WeekWindow } from './week-window';
 
 /**
- * V1.7 — Local-Claude weekly batch helpers (Eliot's Max subscription path).
+ * V1.7 — Local-Claude weekly batch helpers (Eliott's Max subscription path).
  *
- * Architecture decision (2026-05-13) : Eliot refuses to pay for Anthropic API
+ * Architecture decision (2026-05-13) : Eliott refuses to pay for Anthropic API
  * tokens. Instead, the weekly reports are generated via `claude --print`
- * (headless Claude Code CLI) running on Eliot's local Windows machine using
+ * (headless Claude Code CLI) running on Eliott's local Windows machine using
  * his Claude Max subscription. The Hetzner cron is disabled; the workflow is:
  *
- *   1. Eliot runs `ops/scripts/weekly-batch-local.sh` from his Fxmily worktree
+ *   1. Eliott runs `ops/scripts/weekly-batch-local.sh` from his Fxmily worktree
  *   2. The local script SSHs into Hetzner, calls `pull-snapshots.ts` which
  *      uses {@link loadAllSnapshotsForActiveMembers}
  *   3. For each pseudo'd snapshot the local script invokes `claude --print`
@@ -390,7 +390,7 @@ export async function persistGeneratedReports(
     //
     // Why pre-persist : we never want a "summary" containing suicidal content
     // to land in the admin dashboard / digest email — the audit row + Sentry
-    // warning surfaces it for Eliot to handle out-of-band (call the member,
+    // warning surfaces it for Eliott to handle out-of-band (call the member,
     // surface 3114 + SOS Amitié + Suicide Écoute).
     //
     // Note : `detectCrisis` already excludes trading slang ("tout perdre sur

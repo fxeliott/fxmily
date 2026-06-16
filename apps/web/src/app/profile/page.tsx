@@ -89,7 +89,7 @@ export default async function ProfilePage() {
           title="Commence par te raconter."
           body={
             <>
-              Un entretien guidé de 30 questions (~30 min) pour qu&apos;Eliot puisse te coacher au
+              Un entretien guidé de 30 questions (~30 min) pour qu&apos;Eliott puisse te coacher au
               plus juste. Tes réponses restent confidentielles, l&apos;IA en tire un profil
               descriptif.
             </>
@@ -144,7 +144,7 @@ export default async function ProfilePage() {
                 Ton profil est en cours d&apos;analyse.
               </h2>
               <p className="t-body mt-2 text-[var(--t-2)]">
-                Tu as terminé ton entretien. Eliot et l&apos;IA prennent le temps de relire tes 30
+                Tu as terminé ton entretien. Eliott et l&apos;IA prennent le temps de relire tes 30
                 réponses — ton profil descriptif sera disponible dans les prochaines 24h. Reviens
                 demain.
               </p>
@@ -246,7 +246,7 @@ export default async function ProfilePage() {
                       Axes prioritaires
                     </h2>
                     <p className="t-cap mt-1 text-[var(--t-3)]">
-                      Les points sur lesquels Eliot va te coacher en priorité.
+                      Les points sur lesquels Eliott va te coacher en priorité.
                     </p>
                   </div>
                 </div>

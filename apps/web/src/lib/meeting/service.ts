@@ -32,7 +32,7 @@ export interface MeetingAttendanceCounts {
    * Scheduled (non-cancelled) meetings whose `scheduledAt` falls in the
    * half-open window `[fromUtc, toUtc)` = the attendance-rate DENOMINATOR.
    * Cancelled meetings are excluded (a member is never penalised for a slot
-   * Eliot did not run — SPEC §30.2).
+   * Eliott did not run — SPEC §30.2).
    */
   scheduledCount: number;
   /**
@@ -252,7 +252,7 @@ export interface DeclaredMeetingAttendance {
  * HARD GUARD (SPEC §30.7) — the declaration is REFUSED (throws
  * {@link MeetingNotDeclarableError}) when the meeting is:
  *   - unknown (`not_found`),
- *   - cancelled (`cancelled`) — a member is never credited for a slot Eliot
+ *   - cancelled (`cancelled`) — a member is never credited for a slot Eliott
  *     didn't run, and never penalised either,
  *   - in the future (`future`, `scheduledAt > now`),
  *   - outside the rolling 30d window (`out_of_window`,
@@ -327,7 +327,7 @@ export interface TodayMeetingView {
  * platform-wide (meetings are admin-generated, not per-member) — used by the
  * "Ton aujourd'hui" guidance to surface "réunion aujourd'hui à 12h / 20h"
  * without any P&L or attendance content (posture §2). Cancelled slots are
- * excluded (a member is never nudged toward a slot Eliot did not run). Hits the
+ * excluded (a member is never nudged toward a slot Eliott did not run). Hits the
  * `@@unique([date, slot])` index directly.
  */
 export async function listScheduledMeetingsOn(localDate: string): Promise<TodayMeetingView[]> {
@@ -416,7 +416,7 @@ export interface CancelledMeeting {
  * `status` to `cancelled` and stores an optional admin note (`safeFreeText`-
  * sanitised — NFC + bidi/zero-width stripping, SPEC §30.6). A cancelled slot is
  * excluded from EVERY member's rate denominator (the count/list queries filter
- * `status='scheduled'`), so a member is never penalised when Eliot is away.
+ * `status='scheduled'`), so a member is never penalised when Eliott is away.
  *
  * Cancellation NEVER cascades to `MeetingAttendance` (SPEC §30.4/§30.7): a row a
  * member declared in good faith before the cancellation is kept (audit trace),

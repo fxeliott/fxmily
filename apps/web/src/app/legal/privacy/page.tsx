@@ -6,12 +6,12 @@ import { LegalLayout } from '@/components/legal/legal-layout';
  * `/legal/privacy` — Politique de confidentialité (RGPD).
  *
  * Server Component. Texte rédigé sur mesure pour Fxmily V1 :
- *  - cohorte privée (formation Eliot, 30 → 100 → milliers)
+ *  - cohorte privée (formation Eliott, 30 → 100 → milliers)
  *  - aucun tracker tiers, aucun pixel publicitaire (SPEC §16)
  *  - Resend (emails), Hetzner (hosting EU), Cloudflare R2 (médias),
  *    Sentry (monitoring), Anthropic (rapports admin uniquement)
  *
- * Le ton reste authentique (Eliot parle), pas de juridisme robotique. La
+ * Le ton reste authentique (Eliott parle), pas de juridisme robotique. La
  * section "Tes droits RGPD" pointe vers `/account/data` et `/account/delete`,
  * tous deux livrés en Phase A.5/A.6 du même jalon.
  */
@@ -38,8 +38,8 @@ export default function PrivacyPolicyPage(): React.ReactElement {
     >
       <h2>1. Qui traite tes données ?</h2>
       <p>
-        Le responsable de traitement est <strong>Eliot Pena</strong>, éditeur et utilisateur unique
-        de Fxmily, joignable à <a href="mailto:eliot@fxmilyapp.com">eliot@fxmilyapp.com</a>. Voir
+        Le responsable de traitement est <strong>Eliott Pena</strong>, éditeur et utilisateur unique
+        de Fxmily, joignable à <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>. Voir
         aussi nos <a href="/legal/mentions">mentions légales</a> pour l&apos;hébergeur et
         l&apos;adresse postale.
       </p>
@@ -90,7 +90,7 @@ export default function PrivacyPolicyPage(): React.ReactElement {
       <p>
         Trois finalités, et c&apos;est tout : (1) faire fonctionner le compte (auth, journal,
         check-ins), (2) calculer ton score comportemental et te le restituer dans le dashboard, (3)
-        générer un rapport hebdomadaire que <strong>seul Eliot</strong> reçoit, pour mieux
+        générer un rapport hebdomadaire que <strong>seul Eliott</strong> reçoit, pour mieux
         t&apos;accompagner en formation. Aucune donnée n&apos;est utilisée pour de la publicité, de
         la revente, ou de l&apos;entraînement de modèle d&apos;IA tiers.
       </p>
@@ -140,7 +140,7 @@ export default function PrivacyPolicyPage(): React.ReactElement {
         </li>
         <li>
           <strong>Anthropic PBC</strong> (États-Unis, clauses contractuelles types) — modèle Claude
-          Opus 4.8 (<code>claude-opus-4-8</code>) utilisé pour générer le rapport hebdo (Eliot
+          Opus 4.8 (<code>claude-opus-4-8</code>) utilisé pour générer le rapport hebdo (Eliott
           uniquement), le débrief mensuel, le calendrier d&apos;organisation et l&apos;analyse
           unique de ton questionnaire d&apos;entrée (profil membre, données pseudonymisées) (voir{' '}
           <a href="/legal/ai-disclosure">Transparence IA</a>). Anthropic indique ne pas utiliser ces
@@ -168,8 +168,8 @@ export default function PrivacyPolicyPage(): React.ReactElement {
         </li>
         <li>
           <strong>Rectification &amp; opposition</strong> — par email à{' '}
-          <a href="mailto:eliot@fxmilyapp.com">eliot@fxmilyapp.com</a>, réponse sous 30 jours
-          (article 12 RGPD).
+          <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>, réponse sous 30 jours (article
+          12 RGPD).
         </li>
         <li>
           <strong>Réclamation</strong> — si tu estimes que tes droits ne sont pas respectés, tu peux

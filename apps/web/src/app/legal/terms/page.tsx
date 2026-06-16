@@ -9,7 +9,7 @@ import { LegalLayout } from '@/components/legal/legal-layout';
  *   ❌ Pas de conseil sur les analyses de trade
  *   ✅ Outil pédagogique sur l'exécution + la psychologie (Mark Douglas)
  *
- * Ce document protège Eliot et le membre :
+ * Ce document protège Eliott et le membre :
  *   - cadre l'usage strictement à l'auto-suivi (pas un signal service)
  *   - décline toute responsabilité sur les pertes financières
  *   - documente les conditions de suspension et de suppression de compte
@@ -67,7 +67,7 @@ export default function TermsPage(): React.ReactElement {
 
       <h2>3. Accès</h2>
       <p>
-        L&apos;accès est <strong>sur invitation uniquement</strong>, émise par Eliot ou un admin
+        L&apos;accès est <strong>sur invitation uniquement</strong>, émise par Eliott ou un admin
         autorisé. Le compte est strictement personnel et non transférable. Tu t&apos;engages à
         garder ton mot de passe confidentiel et à signaler tout accès suspect.
       </p>
@@ -84,7 +84,7 @@ export default function TermsPage(): React.ReactElement {
         </li>
         <li>
           ne pas redistribuer publiquement les fiches Mark Douglas reçues (citations sous fair use
-          FR L122-5, paraphrases écrites par Eliot) ;
+          FR L122-5, paraphrases écrites par Eliott) ;
         </li>
         <li>ne pas tenter d&apos;extraire la base de données ou de la rétro-ingénier ;</li>
         <li>
@@ -96,7 +96,7 @@ export default function TermsPage(): React.ReactElement {
       <h2>5. Propriété intellectuelle</h2>
       <p>
         Le code, le design DS v2, les paraphrases Mark Douglas et les marques Fxmily sont la
-        propriété d&apos;Eliot Pena. Tes données personnelles (trades, check-ins, journal) restent
+        propriété d&apos;Eliott Pena. Tes données personnelles (trades, check-ins, journal) restent
         ta propriété — tu peux les exporter ou les effacer à tout moment depuis{' '}
         <a href="/account/data">/account/data</a> et <a href="/account/delete">/account/delete</a>.
       </p>
@@ -112,7 +112,7 @@ export default function TermsPage(): React.ReactElement {
 
       <h2>7. Suspension &amp; résiliation</h2>
       <p>
-        Eliot se réserve le droit de <strong>suspendre</strong> un compte en cas de violation des
+        Eliott se réserve le droit de <strong>suspendre</strong> un compte en cas de violation des
         présentes CGU (notamment §4) ou de comportement portant atteinte aux autres membres. Tu peux
         de ton côté supprimer ton compte à tout moment depuis{' '}
         <a href="/account/delete">/account/delete</a>. Soft-delete immédiat, hard-delete sous 30
@@ -121,7 +121,7 @@ export default function TermsPage(): React.ReactElement {
 
       <h2>8. Responsabilité</h2>
       <p>
-        Eliot s&apos;engage à fournir Fxmily avec un soin raisonnable. Sa responsabilité ne peut
+        Eliott s&apos;engage à fournir Fxmily avec un soin raisonnable. Sa responsabilité ne peut
         toutefois être engagée pour les pertes financières liées à tes décisions de trade, les
         indisponibilités liées à un sous-traitant (Hetzner, Cloudflare, Resend), ou un cas de force
         majeure. Si une clause des présentes CGU était jugée nulle, les autres resteraient

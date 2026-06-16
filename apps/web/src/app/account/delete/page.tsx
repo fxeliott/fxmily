@@ -160,10 +160,10 @@ function ActiveAccountPanel(): React.ReactElement {
         <p className="mt-2 text-xs leading-relaxed text-[var(--t-3)]">
           Pour annuler après le compte à rebours, contacte{' '}
           <a
-            href="mailto:eliot@fxmilyapp.com"
+            href="mailto:fxeliott@fxmily.fr"
             className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
           >
-            eliot@fxmilyapp.com
+            fxeliott@fxmily.fr
           </a>{' '}
           dans les {ACCOUNT_HARD_PURGE_DAYS} jours qui suivent. Au-delà, la suppression est
           définitive : aucune sauvegarde ne sera restaurée.
@@ -213,7 +213,7 @@ function ScheduledPanel({
           </p>
           <p className="mt-2 text-xs text-[var(--t-3)]">
             Au passage du compte à rebours, tu seras déconnecté. Tu auras encore{' '}
-            <strong>{ACCOUNT_HARD_PURGE_DAYS} jours</strong> pour contacter Eliot et restaurer le
+            <strong>{ACCOUNT_HARD_PURGE_DAYS} jours</strong> pour contacter Eliott et restaurer le
             compte avant la suppression définitive.
           </p>
         </div>

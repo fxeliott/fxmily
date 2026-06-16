@@ -30,7 +30,7 @@ import {
  *
  * Architecture (carbone V1.7 `weekly-report/batch.ts` 525 LOC strict) :
  *
- *   Eliot local Windows                 Hetzner prod (Caddy → fxmily-web)
+ *   Eliott local Windows                 Hetzner prod (Caddy → fxmily-web)
  *   ════════════════════                ════════════════════════════════════
  *      /onboarding-batch (slash)
  *      │
@@ -75,7 +75,7 @@ import {
  *     clinique §J).
  *
  * Ban-risk mitigation rules (carbone V1.7) :
- *   1. Eliot's machine (TON IP, TON fingerprint, TON Max account)
+ *   1. Eliott's machine (TON IP, TON fingerprint, TON Max account)
  *   2. 60-120s RANDOM-jittered sleeps (local script)
  *   3. One `claude --print` per member = fresh context
  *   4. Snapshots pseudonymized V1.5.2 8-char hex
@@ -181,7 +181,7 @@ const SNAPSHOT_BATCH_CONCURRENCY = 5;
  *   - `OnboardingInterview.status === 'completed'`
  *   - User `status === 'active'` (skip suspended/deleted)
  *   - No existing `MemberProfile` row for this interview (idempotency —
- *     if Eliot re-runs the batch, only un-analyzed interviews are picked)
+ *     if Eliott re-runs the batch, only un-analyzed interviews are picked)
  *
  * Performance : `SNAPSHOT_BATCH_CONCURRENCY`-by-5 Promise.allSettled
  * carbone V1.7. At 30 completed interviews ~1.8s expected. At 1000 ~60s.

@@ -142,7 +142,7 @@ export function AccessApprovedEmail({
 
 AccessApprovedEmail.PreviewProps = {
   inviteUrl: 'https://app.fxmilyapp.com/onboarding/welcome?token=preview',
-  firstName: 'Eliot',
+  firstName: 'Eliott',
   expiresInDays: 7,
 } satisfies AccessApprovedEmailProps;
 

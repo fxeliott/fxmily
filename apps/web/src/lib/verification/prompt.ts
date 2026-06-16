@@ -115,7 +115,7 @@ export const VERIFICATION_VISION_OUTPUT_JSON_SCHEMA = {
 
 /**
  * Per-proof user prompt. `localImagePath` is the path where the ORCHESTRATOR
- * (bash, on Eliot's machine) saved the downloaded proof — it is rendered into
+ * (bash, on Eliott's machine) saved the downloaded proof — it is rendered into
  * the prompt at run time by the script via the `__IMAGE_PATH__` placeholder
  * (the server cannot know the operator's temp dir).
  */

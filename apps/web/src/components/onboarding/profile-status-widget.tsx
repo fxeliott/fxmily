@@ -86,7 +86,7 @@ export async function ProfileStatusWidget({ userId }: { userId: string }) {
             <span className="t-eyebrow text-[var(--t-3)]">Mon profil</span>
             <h3 className="text-[15px] font-semibold text-[var(--t-1)]">Ton profil se prépare</h3>
             <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
-              Tu as terminé ton entretien. Eliot et l&apos;IA relisent tes réponses — ton profil
+              Tu as terminé ton entretien. Eliott et l&apos;IA relisent tes réponses — ton profil
               descriptif arrive bientôt.
             </p>
           </div>
@@ -110,7 +110,7 @@ export async function ProfileStatusWidget({ userId }: { userId: string }) {
   const title = inProgress ? 'Reprends ton entretien' : 'Établis ton profil de trader';
   const body = inProgress
     ? 'Tes réponses sont sauvegardées. Termine ton entretien quand tu te sens prêt·e pour activer ton profil personnalisé.'
-    : 'Un entretien guidé (~30 questions) pour qu’Eliot te coache au plus juste. Tes réponses restent confidentielles — aucun avis sur le marché.';
+    : 'Un entretien guidé (~30 questions) pour qu’Eliott te coache au plus juste. Tes réponses restent confidentielles — aucun avis sur le marché.';
   const cta = inProgress ? 'Reprendre' : 'Commencer';
 
   return (

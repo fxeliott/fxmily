@@ -37,7 +37,7 @@ export interface EngagementCheckinInput {
    */
   sleepQuality?: number | null;
   /**
-   * Evening only (SPEC §28/§22). Did the member study Eliot's COURSE today?
+   * Evening only (SPEC §28/§22). Did the member study Eliott's COURSE today?
    * Tri-state: `true` (studied), `false` (skipped), `null`/absent (not asked /
    * legacy row). A course-adherence habit signal — we score THAT they studied,
    * never the content (SPEC §2). 🔒 Firewall-clean: a plain check-in boolean,

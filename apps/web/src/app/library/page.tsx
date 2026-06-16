@@ -133,8 +133,8 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
               }
               lead={
                 cat
-                  ? "Eliot publiera de nouvelles fiches dans cette thématique très bientôt. Reviens d'ici quelques jours."
-                  : 'Eliot prépare la première vague de fiches Mark Douglas. Tu y auras accès dès la publication.'
+                  ? "Eliott publiera de nouvelles fiches dans cette thématique très bientôt. Reviens d'ici quelques jours."
+                  : 'Eliott prépare la première vague de fiches Mark Douglas. Tu y auras accès dès la publication.'
               }
               tip="En attendant, fais un check-in de qualité aujourd'hui : c'est ce qui nourrit le système qui te poussera la bonne fiche au bon moment."
             />

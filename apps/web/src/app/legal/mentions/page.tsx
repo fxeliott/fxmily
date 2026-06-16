@@ -31,17 +31,17 @@ export default function MentionsPage(): React.ReactElement {
     >
       <h2>Éditeur</h2>
       <p>
-        <strong>Eliot Pena</strong>, éditeur du service Fxmily.
+        <strong>Eliott Pena</strong>, éditeur du service Fxmily.
         <br />
-        Adresse postale : Cournonterral, France (communiquée sur demande à
-        <a href="mailto:eliot@fxmilyapp.com">&nbsp;eliot@fxmilyapp.com</a>, conformément à
+        Adresse postale communiquée sur demande à
+        <a href="mailto:fxeliott@fxmily.fr">&nbsp;fxeliott@fxmily.fr</a>, conformément à
         l&apos;article 6 III 2° de la LCEN — particulier non-professionnel).
         <br />
-        Contact : <a href="mailto:eliot@fxmilyapp.com">eliot@fxmilyapp.com</a>
+        Contact : <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>
       </p>
 
       <h2>Directeur de la publication</h2>
-      <p>Eliot Pena, en sa qualité d&apos;éditeur.</p>
+      <p>Eliott Pena, en sa qualité d&apos;éditeur.</p>
 
       <h2>Hébergeur</h2>
       <p>
@@ -70,8 +70,8 @@ export default function MentionsPage(): React.ReactElement {
       <h2>Signalement</h2>
       <p>
         Tout contenu illicite hébergé sur Fxmily peut être signalé par email à{' '}
-        <a href="mailto:eliot@fxmilyapp.com">eliot@fxmilyapp.com</a>. Conformément à l&apos;article
-        6 I 2° de la LCEN, l&apos;éditeur retirera ou rendra inaccessible le contenu manifestement
+        <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>. Conformément à l&apos;article 6
+        I 2° de la LCEN, l&apos;éditeur retirera ou rendra inaccessible le contenu manifestement
         illicite dès qu&apos;il en aura connaissance.
       </p>
 

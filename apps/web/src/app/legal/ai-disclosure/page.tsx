@@ -21,8 +21,8 @@ import { LegalLayout } from '@/components/legal/legal-layout';
  *
  * **Posture éditoriale** :
  *  - Anti-anthropomorphisation stricte : l'IA est un *exécuteur de prompt*,
- *    pas un acteur autonome. Eliot reste le coach humain.
- *  - Pas de jargon juridique robotique : Eliot parle directement.
+ *    pas un acteur autonome. Eliott reste le coach humain.
+ *  - Pas de jargon juridique robotique : Eliott parle directement.
  *  - Conforme au principe SPEC §2 (pas de conseil sur analyses de trade).
  */
 
@@ -42,7 +42,7 @@ export default function AIDisclosurePage(): React.ReactElement {
         <>
           Fxmily utilise une IA générative (Claude, Anthropic) pour{' '}
           <strong>quatre cas d&apos;usage</strong> : rédiger un rapport hebdomadaire (que{' '}
-          <strong>seul Eliot</strong> reçoit, pour assurer ton suivi), ton débrief mensuel (que tu
+          <strong>seul Eliott</strong> reçoit, pour assurer ton suivi), ton débrief mensuel (que tu
           consultes), ton calendrier d&apos;organisation hebdomadaire (que tu consultes) et
           l&apos;analyse unique de ton questionnaire d&apos;entrée (ton profil membre), à partir de
           tes propres données. Pas de conseil de trade, pas de décision autonome, pas de
@@ -64,12 +64,12 @@ export default function AIDisclosurePage(): React.ReactElement {
         <li>
           <strong>Modèle</strong> — Claude Opus 4.8 (identifiant exact <code>claude-opus-4-8</code>
           ), édité par Anthropic PBC. Les contenus sont générés via l&apos;abonnement personnel Max
-          d&apos;Eliot (pas d&apos;API Anthropic facturée par requête côté Fxmily — voir{' '}
+          d&apos;Eliott (pas d&apos;API Anthropic facturée par requête côté Fxmily — voir{' '}
           <a href="/legal/privacy">Politique de confidentialité §3</a> pour les sous-traitants).
         </li>
         <li>
           <strong>Quatre usages</strong> — (a) un <em>rapport hebdomadaire</em> que{' '}
-          <strong>seul Eliot (admin)</strong> reçoit chaque dimanche par email, pour assurer ton
+          <strong>seul Eliott (admin)</strong> reçoit chaque dimanche par email, pour assurer ton
           suivi — tu ne le reçois pas directement ; il s&apos;affiche dans l&apos;onglet Admin ; (b)
           ton <em>débrief mensuel</em> (V1.4, SPEC §25.4) consultable sur ta page{' '}
           <a href="/debrief-mensuel">/debrief-mensuel</a> et dans l&apos;onglet Admin (
@@ -87,7 +87,7 @@ export default function AIDisclosurePage(): React.ReactElement {
           par mois (débrief mensuel) + 1 par semaine pour le calendrier (uniquement si tu remplis le
           questionnaire d&apos;organisation) + 1 appel unique à l&apos;arrivée (analyse du
           questionnaire d&apos;entrée), plafonnés à $15 de tokens par run (garde-fou technique côté
-          Eliot pour éviter toute dérive de coût).
+          Eliott pour éviter toute dérive de coût).
         </li>
       </ul>
 
@@ -109,9 +109,9 @@ export default function AIDisclosurePage(): React.ReactElement {
           contenus, pas de profilage marketing, pas de scoring de personnalité).
         </li>
         <li>
-          <strong>Aucun remplacement du coaching humain.</strong> Eliot reste ton interlocuteur
-          humain. L&apos;IA produit un brouillon ; Eliot le lit, le corrige, ou l&apos;ignore. Si tu
-          as une question sur ton parcours, tu écris à Eliot, pas au rapport IA.
+          <strong>Aucun remplacement du coaching humain.</strong> Eliott reste ton interlocuteur
+          humain. L&apos;IA produit un brouillon ; Eliott le lit, le corrige, ou l&apos;ignore. Si
+          tu as une question sur ton parcours, tu écris à Eliott, pas au rapport IA.
         </li>
         <li>
           <strong>Aucun audio, aucune voix.</strong> Pas de TTS, pas d&apos;enregistrement, pas
@@ -133,7 +133,7 @@ export default function AIDisclosurePage(): React.ReactElement {
           marqueurs de détresse psychologique (mots-clés FR, regex unicode-aware exclusive des
           expressions argot trading), un message t&apos;orientant vers les ressources de soutien
           national (3114, SOS Amitié, Suicide Écoute) s&apos;affiche, et la donnée est conservée
-          mais marquée pour revue humaine par Eliot. L&apos;IA n&apos;est pas appelée sur ce
+          mais marquée pour revue humaine par Eliott. L&apos;IA n&apos;est pas appelée sur ce
           contenu.
         </li>
         <li>
@@ -165,12 +165,12 @@ export default function AIDisclosurePage(): React.ReactElement {
           <a href="/account/notifications">tes préférences de notifications</a> (toggle{' '}
           <code>monthly_debrief_ready</code>). Le contenu désactivé ne sera plus envoyé ni affiché
           pour toi. Le <em>rapport hebdomadaire</em>, lui, ne t&apos;est pas adressé — il est
-          réservé à Eliot pour assurer ton suivi.
+          réservé à Eliott pour assurer ton suivi.
         </li>
         <li>
           <strong>Droit de signaler une erreur</strong> — si un rapport contient une affirmation
           fausse ou inappropriée, signale-le à{' '}
-          <a href="mailto:eliot@fxmilyapp.com">eliot@fxmilyapp.com</a>. Eliot revoit manuellement et
+          <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>. Eliott revoit manuellement et
           ajuste le prompt si nécessaire.
         </li>
       </ul>
@@ -219,7 +219,7 @@ export default function AIDisclosurePage(): React.ReactElement {
         Toute évolution du modèle IA utilisé, du périmètre d&apos;usage, ou de la chaîne de
         traitement sera reflétée ici dans les 30 jours. La date de dernière mise à jour est indiquée
         en haut de page. Pour toute question, écris à{' '}
-        <a href="mailto:eliot@fxmilyapp.com">eliot@fxmilyapp.com</a>.
+        <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>.
       </p>
 
       <h2>9. Références légales</h2>

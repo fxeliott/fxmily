@@ -7,8 +7,8 @@ import type { MonthlySnapshot } from '@/lib/schemas/monthly-debrief';
  *
  * Carbon of `weekly-report/prompt.ts` with two §25 deltas :
  *   - **Member-facing** (SPEC §25.2). Unlike the weekly digest (read by
- *     Eliot, 3rd-person "le membre"), the monthly debrief is read BY the
- *     member (Eliot sees it read-only — ONE text, no second angle). The
+ *     Eliott, 3rd-person "le membre"), the monthly debrief is read BY the
+ *     member (Eliott sees it read-only — ONE text, no second angle). The
  *     posture Mark Douglas applies to that single member-facing text :
  *     calm, process-language, anti Black-Hat (no fanfare, no XP, no
  *     anxiogenic framing).
@@ -24,8 +24,8 @@ import type { MonthlySnapshot } from '@/lib/schemas/monthly-debrief';
  * the user prompt is the per-member snapshot (never cached).
  */
 
-export const MONTHLY_DEBRIEF_SYSTEM_PROMPT = `Tu es l'assistant interne de Fxmily, une formation privée de trading dirigée par Eliot.
-Ton rôle : produire un **débrief mensuel** que **le membre lit** pour prendre du recul sur son mois écoulé (Eliot le consulte aussi, en lecture seule, pour le coaching). UN SEUL texte, adressé au membre.
+export const MONTHLY_DEBRIEF_SYSTEM_PROMPT = `Tu es l'assistant interne de Fxmily, une formation privée de trading dirigée par Eliott.
+Ton rôle : produire un **débrief mensuel** que **le membre lit** pour prendre du recul sur son mois écoulé (Eliott le consulte aussi, en lecture seule, pour le coaching). UN SEUL texte, adressé au membre.
 
 POSTURE NON-NÉGOCIABLE (SPEC §2 + framework Mark Douglas, *Trading in the Zone*, 2000) :
 - INTERDIT : analyser le marché, donner un avis sur un setup, prédire une tendance, recommander une paire ou une direction, parler de "niveau de support à X", "objectif à Y", "anticipation".

@@ -226,7 +226,7 @@ export const eveningCheckinSchema = z.object({
   hedgeRespectedToday: triStateBoolean,
 
   // SPEC §28/§22 — evening "bilan": has the member studied / progressed in
-  // Eliot's COURSE (la formation) today? OPTIONAL tri-state (true/false/na →
+  // Eliott's COURSE (la formation) today? OPTIONAL tri-state (true/false/na →
   // null when unanswered/omitted) so it never blocks the wizard. §2 posture:
   // a declarative ACT only — NEVER the studied content. Distinct from the §21
   // Entraînement/TrainingTrade module (no `@/lib/training` coupling).

@@ -15,7 +15,7 @@ import {
 interface AnnotationReceivedEmailProps {
   /** Member's first name — falls back to "Trader" if missing. */
   recipientFirstName: string | null | undefined;
-  /** Admin display name — falls back to "Eliot" (V1 sole admin). */
+  /** Admin display name — falls back to "Eliott" (V1 sole admin). */
   adminName: string | null | undefined;
   /** Trade pair (eg "EURUSD") — shown in the headline so the email is scannable. */
   tradePair: string;
@@ -40,7 +40,7 @@ export function AnnotationReceivedEmail({
   tradeUrl,
 }: AnnotationReceivedEmailProps) {
   const recipient = recipientFirstName?.trim() ? recipientFirstName.trim() : 'Trader';
-  const author = adminName?.trim() ? adminName.trim() : 'Eliot';
+  const author = adminName?.trim() ? adminName.trim() : 'Eliott';
 
   return (
     <Html lang="fr">
@@ -107,7 +107,7 @@ export function AnnotationReceivedEmail({
 
 AnnotationReceivedEmail.PreviewProps = {
   recipientFirstName: 'Sophie',
-  adminName: 'Eliot',
+  adminName: 'Eliott',
   tradePair: 'EURUSD',
   hasMedia: true,
   tradeUrl: 'https://app.fxmilyapp.com/journal/clx0trade1',

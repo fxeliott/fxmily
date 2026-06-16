@@ -33,7 +33,7 @@ const SONNET_4_6 = {
 export const USD_TO_EUR = 0.93;
 
 /**
- * V1.7 sentinel — reports generated locally via `claude --print` on Eliot's
+ * V1.7 sentinel — reports generated locally via `claude --print` on Eliott's
  * Claude Max subscription. Subscription is a flat fee, so per-token cost = 0.
  * Keep the entry here so `computeCostEur` returns a deterministic 0.000000
  * without taking the SONNET_4_6 fallback branch (which would `console.warn`).

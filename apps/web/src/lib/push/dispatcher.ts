@@ -153,7 +153,7 @@ export function buildPayload(
     case 'annotation_received': {
       const tradeId = typeof payload.tradeId === 'string' ? payload.tradeId : '';
       title = 'Nouvelle correction reçue';
-      body = "Eliot a laissé une correction sur l'un de tes trades.";
+      body = "Eliott a laissé une correction sur l'un de tes trades.";
       path = tradeId ? `/journal/${tradeId}` : '/journal';
       break;
     }
@@ -163,7 +163,7 @@ export function buildPayload(
       const trainingTradeId =
         typeof payload.trainingTradeId === 'string' ? payload.trainingTradeId : '';
       title = 'Correction reçue (entraînement)';
-      body = "Eliot a laissé une correction sur l'un de tes backtests.";
+      body = "Eliott a laissé une correction sur l'un de tes backtests.";
       path = trainingTradeId ? `/training/${trainingTradeId}` : '/training';
       break;
     }

@@ -82,7 +82,7 @@ interface SafeMarkdownProps {
 
 /**
  * Render trusted-but-still-sanitized markdown. The source is admin-provided
- * (cards seeded by Eliot or written through `/admin/cards`), but we apply
+ * (cards seeded by Eliott or written through `/admin/cards`), but we apply
  * defense-in-depth: a leaked admin password shouldn't translate to client XSS.
  */
 export function SafeMarkdown({

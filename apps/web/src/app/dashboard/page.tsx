@@ -103,6 +103,15 @@ export default async function DashboardPage() {
     null;
   const allDone = guidance !== null && !guidance.actions.some((a) => a.state === 'todo');
 
+  // Complétude du jour (anneau hero) : fraction des gestes ACTIONNABLES faits.
+  // Les actions 'info' (ni à faire ni faites — ex. réunion) sont exclues du
+  // dénominateur, sinon le ratio mentirait. Jamais rendu si 0 actionnable.
+  const dayActions = guidance ? guidance.actions.filter((a) => a.state !== 'info') : [];
+  const dayProgress =
+    dayActions.length > 0
+      ? { done: dayActions.filter((a) => a.state === 'done').length, total: dayActions.length }
+      : null;
+
   const fullName = session.user.name?.trim() || session.user.email?.split('@')[0] || 'Membre';
   const firstName = fullName.split(' ')[0]!;
   const totalTrades = counts.open + counts.closed;
@@ -129,6 +138,7 @@ export default async function DashboardPage() {
           streak={{ current: streak.current, todayFilled: streak.todayFilled }}
           primaryAction={primaryAction}
           allDone={allDone}
+          dayProgress={dayProgress}
         />
 
         {/* S9.1 — first-run welcome (new member only). */}

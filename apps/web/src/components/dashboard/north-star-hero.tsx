@@ -21,6 +21,8 @@ import type { GuidanceAction, GuidanceKind } from '@/lib/daily-guidance/service'
 import type { BehavioralScoreTrendPoint, SerializedBehavioralScore } from '@/lib/scoring/service';
 import { cn } from '@/lib/utils';
 
+import { DailyCompletionRing } from './daily-completion-ring';
+
 /**
  * V2 refonte — J1 "north-star hero" : le panneau d'en-tête du dashboard
  * membre. Il remplace l'ancien title-row + absorbe le streak, et établit
@@ -144,6 +146,8 @@ interface NorthStarHeroProps {
   primaryAction: GuidanceAction | null;
   /** True when no `todo` action remains for the current slot. */
   allDone: boolean;
+  /** Today's actionable-guidance completion (done/total, excl. `info`), or null. */
+  dayProgress: { done: number; total: number } | null;
 }
 
 export function NorthStarHero({
@@ -155,6 +159,7 @@ export function NorthStarHero({
   streak,
   primaryAction,
   allDone,
+  dayProgress,
 }: NorthStarHeroProps) {
   const disciplinePoints = history.map((p) => p.discipline).filter((n): n is number => n !== null);
   const disciplineValue = score?.disciplineScore ?? null;
@@ -236,6 +241,16 @@ export function NorthStarHero({
               />
 
               <StreakCard streak={streak.current} todayFilled={streak.todayFilled} compact />
+
+              {dayProgress && dayProgress.total > 0 ? (
+                <>
+                  <div
+                    aria-hidden="true"
+                    className="hidden h-12 w-px self-center bg-[var(--b-default)] sm:block"
+                  />
+                  <DailyCompletionRing done={dayProgress.done} total={dayProgress.total} />
+                </>
+              ) : null}
             </div>
           </div>
 

@@ -82,10 +82,14 @@ interface BreakdownEntry {
 export function ScoreBreakdown({ score }: { score: SerializedBehavioralScore }) {
   const entries: BreakdownEntry[] = [];
 
+  // Robustesse : un snapshot ANCIEN peut avoir un `components` JSON sans toutes
+  // ses dimensions → lecture défensive (sinon `result.status` crashait la page).
+  const components = score.components as Partial<SerializedBehavioralScore['components']>;
   for (const dim of Object.keys(DIMENSION_LABEL) as DimKey[]) {
-    const result = score.components[dim];
-    // Skip dimensions without enough data — never surface a fabricated 0.
-    if (result.status !== 'ok') continue;
+    const result = components[dim];
+    // Skip dimensions sans assez de données (ou absentes d'un vieux snapshot) —
+    // never surface a fabricated 0.
+    if (!result || result.status !== 'ok') continue;
     // `parts` is the typed `*Parts` object; index it by key. Null parts were
     // renormalized away (data absent) → skipped.
     const parts = result.parts as unknown as Record<string, SubScore | null>;

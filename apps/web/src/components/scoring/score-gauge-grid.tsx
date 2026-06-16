@@ -56,8 +56,17 @@ export function ScoreGaugeGrid({ score }: ScoreGaugeGridProps) {
   if (score === null) return <EmptyScoresGrid />;
 
   const reasonOf = (
-    s: SerializedBehavioralScore['components'][keyof SerializedBehavioralScore['components']],
-  ) => s.reason ?? undefined;
+    s:
+      | SerializedBehavioralScore['components'][keyof SerializedBehavioralScore['components']]
+      | undefined,
+  ) => s?.reason ?? undefined;
+
+  // Robustesse : un snapshot ANCIEN (calculé avant l'ajout des sous-champs
+  // `sampleSize.checkins`) a un JSON sans `checkins` → l'accès direct crashait
+  // toute la page (RSC 500). On lit en défensif et on masque le disclaimer
+  // quand la donnée d'échantillon n'est pas disponible.
+  const checkinDays = (score.sampleSize as { checkins?: { days?: number } } | undefined)?.checkins
+    ?.days;
 
   return (
     <Card primary className="flex flex-col gap-3 p-5" aria-labelledby="scores-heading">
@@ -67,12 +76,14 @@ export function ScoreGaugeGrid({ score }: ScoreGaugeGridProps) {
             Scores comportementaux
           </h2>
         </div>
-        <SampleSizeDisclaimer
-          current={score.sampleSize.checkins.days}
-          minimum={14}
-          unit="jours"
-          context={`fenêtre ${score.windowDays} j`}
-        />
+        {checkinDays != null ? (
+          <SampleSizeDisclaimer
+            current={checkinDays}
+            minimum={14}
+            unit="jours"
+            context={`fenêtre ${score.windowDays} j`}
+          />
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

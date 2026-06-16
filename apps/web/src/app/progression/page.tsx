@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { BehaviorRadar } from '@/components/scoring/behavior-radar';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
 import { RDistribution } from '@/components/scoring/r-distribution';
 import { ScoreGaugeGrid } from '@/components/scoring/score-gauge-grid';
@@ -74,6 +75,15 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
             discipline dans le temps. Tu observes, tu ne te fais pas punir.
           </p>
         </header>
+
+        {/* Profil comportemental — la forme memorisable (4 dimensions + ghost
+            ~30 j) AVANT le detail chiffre des jauges. Posture §2 : jamais punitif. */}
+        <section className="mb-6" aria-labelledby="radar-heading">
+          <h2 id="radar-heading" className="sr-only">
+            Ton profil comportemental
+          </h2>
+          <BehaviorRadar score={latestScore} history={scoreHistory} />
+        </section>
 
         {/* Scores comportementaux du jour (4 jauges) */}
         <section className="mb-6" aria-labelledby="scores-heading">

@@ -1,4 +1,4 @@
-import { ArrowRight, Plus, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Plus, ScanSearch, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
@@ -22,6 +22,8 @@ import { getDailyGuidance } from '@/lib/daily-guidance/service';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 import { countTradesByStatus } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
+import { getLatestConstancyScore } from '@/lib/verification/constancy';
+import { countOpenDiscrepancies } from '@/lib/verification/service';
 
 import { MarkDouglasCard } from './mark-douglas-card';
 
@@ -71,15 +73,27 @@ export default async function DashboardPage() {
   // données du hub : compteurs trades, streak, dernier score + trajectoire (pour
   // le hero), et le guidage du jour. `getDailyGuidance` + `getBehavioralScoreHistory`
   // lus une fois, partagés hero/TodayGuidance — pas de N+1.
-  const [counts, streak, latestScore, guidance, scoreHistory] = userId
+  const [counts, streak, latestScore, guidance, scoreHistory, constancy, openDiscrepancies] = userId
     ? await Promise.all([
         countTradesByStatus(userId),
         getStreak(userId, timezone),
         getLatestBehavioralScore(userId),
         getDailyGuidance(userId, timezone),
         getBehavioralScoreHistory(userId, { sinceDays: 90 }),
+        // S4 — the S3 outputs surface ON the hub (constancy teaser + open
+        // discrepancies bridge to /verification). Read once here, no N+1.
+        getLatestConstancyScore(userId),
+        countOpenDiscrepancies(userId),
       ])
-    : [{ open: 0, closed: 0 }, { current: 0, todayFilled: false, today: '' }, null, null, []];
+    : [
+        { open: 0, closed: 0 },
+        { current: 0, todayFilled: false, today: '' },
+        null,
+        null,
+        [],
+        null,
+        0,
+      ];
 
   // North-star hero — la seule action la plus « maintenant » (primary todo first),
   // + un flag « tout fait » calme. Posture §2 / anti-Black-Hat (§31.2).
@@ -157,6 +171,57 @@ export default async function DashboardPage() {
             <TodayGuidance guidance={guidance} />
           </div>
         ) : null}
+
+        {/* S3/S4 — Découvrabilité de la surface Vérification (SPEC §33) + teaser
+            constance. Carte calme anti-Black-Hat (§33.2) : la confrontation
+            déclaré ↔ réalité MT5 est un outil de lucidité, pas une sanction.
+            Restaurée sur le hub dé-densifié = le pont dashboard → /verification
+            (copy honnête §33.6, score absent tant que non confronté). */}
+        <section className="mb-6" aria-label="Vérification">
+          <HoverLift className="block">
+            <Link
+              href="/verification"
+              className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)]">
+                    <ScanSearch className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="t-eyebrow text-[var(--t-3)]">Vérification</span>
+                    <p className="text-[15px] font-semibold text-[var(--t-1)]">
+                      Ta réalité de trading
+                    </p>
+                    <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
+                      Tes comptes, tes preuves MT5 et ton déclaré mis en face de ton historique
+                      réel. Se voir tel qu&apos;on est, pour progresser.
+                    </p>
+                    {openDiscrepancies > 0 ? (
+                      <p className="text-[12px] font-medium text-[var(--t-2)]">
+                        {openDiscrepancies} écart{openDiscrepancies > 1 ? 's' : ''} à regarder
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  {/* S4 — constancy teaser. Honesty rule §33.5 : no score until
+                      the member has been confronted at least once (no fake 100). */}
+                  {constancy ? (
+                    <div className="flex flex-col items-end">
+                      <span className="font-mono text-[22px] leading-none font-bold text-[var(--t-1)] tabular-nums">
+                        {Math.round(constancy.value)}
+                        <span className="text-[12px] font-medium text-[var(--t-4)]">/100</span>
+                      </span>
+                      <span className="t-foot mt-1 text-[var(--t-4)]">constance</span>
+                    </div>
+                  ) : null}
+                  <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden="true" />
+                </div>
+              </div>
+            </Link>
+          </HoverLift>
+        </section>
 
         {/* V2.4 — Onboarding profile status : le pont vers le profilage initial. */}
         <section className="mb-6" aria-labelledby="profile-widget-heading">

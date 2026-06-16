@@ -202,7 +202,11 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
 
     // --- D. Pré-trade: the new supervision tab is active + renders.
     await page.goto(`/admin/members/${member.id}?tab=pretrade`);
-    const pretradeTab = page.getByRole('link', { name: 'Pré-trade' });
+    // Scoped to <main> : the global AppShell sidebar now also renders a
+    // "Pré-trade" nav link (/pre-trade/new), so a page-wide getByRole would
+    // match 2 elements (strict-mode violation). The admin member tab lives
+    // inside the page <main>, the nav <aside> does not.
+    const pretradeTab = page.getByRole('main').getByRole('link', { name: 'Pré-trade' });
     await expect(pretradeTab).toHaveAttribute('aria-current', 'page');
   });
 

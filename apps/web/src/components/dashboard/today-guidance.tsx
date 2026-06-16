@@ -18,7 +18,7 @@ import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { Pill } from '@/components/ui/pill';
 import {
-  getDailyGuidance,
+  type DailyGuidance,
   type GuidanceAction,
   type GuidanceKind,
 } from '@/lib/daily-guidance/service';
@@ -198,8 +198,13 @@ function CalendarStateLine({ state }: { state: 'generated' | 'preparing' | 'none
   );
 }
 
-export async function TodayGuidance({ userId, timezone }: { userId: string; timezone: string }) {
-  const guidance = await getDailyGuidance(userId, timezone);
+/**
+ * V2 refonte J1 — now a pure presentational Server Component. The page fetches
+ * `getDailyGuidance` ONCE and shares the result with the north-star hero (which
+ * elevates the single primary action), so this panel renders the full picture
+ * without a second DB round-trip (no N+1) and no Suspense boundary.
+ */
+export function TodayGuidance({ guidance }: { guidance: DailyGuidance }) {
   const SlotIcon = SLOT_ICON[guidance.slot];
   const hasTodo = guidance.actions.some((a) => a.state === 'todo');
   const hasTodayBlocks = guidance.calendarState === 'generated' && guidance.todayBlocks.length > 0;

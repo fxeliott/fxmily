@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 
 import { auth } from '@/auth';
 import { Alert } from '@/components/alert';
+import { BrandMark } from '@/components/brand/brand-mark';
 import { Card } from '@/components/ui/card';
 import { Kbd } from '@/components/ui/kbd';
 
@@ -42,8 +43,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           href="/"
           className="wow-rise flex items-center justify-center gap-2.5 transition-opacity hover:opacity-80"
         >
-          <div className="grid h-8 w-8 place-items-center rounded-[6px] border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[12px] font-bold text-[var(--acc)]">
-            F
+          <div className="grid h-8 w-8 place-items-center rounded-[6px] border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+            <BrandMark className="w-[19px]" />
           </div>
           <span className="f-display text-[15px] font-semibold tracking-[-0.01em]">Fxmily</span>
         </Link>

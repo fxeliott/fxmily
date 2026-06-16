@@ -637,6 +637,26 @@
     var(--acc-glow);
 }
 
+/* V2 refonte J1 — north-star hero scoped accent bloom. The Card already brings
+   the glass + accent edge (.glass-panel + .glow-edge) ; this adds ONE soft
+   radial bloom in the upper-right, behind the content, for a premium "lit
+   panel" feel — NOT a second heavy aurora (DashboardAmbient already animates
+   behind the glass). Decorative, non-animated (no INP/CLS cost), clipped by the
+   card's overflow-hidden. Kept low-alpha so the left-column text stays ≥4.5:1. */
+.dash-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 85% at 94% -12%, oklch(0.62 0.19 254 / 0.16), transparent 58%);
+}
+@media (forced-colors: active) {
+  .dash-hero::before {
+    display: none;
+  }
+}
+
 /* Hatch pattern for disabled */
 .hatch-disabled {
   background-image: repeating-linear-gradient(
@@ -996,6 +1016,14 @@
   [data-selected='true'],
   [aria-selected='true'] {
     outline: 1px solid Highlight;
+  }
+  /* AppShell — l'item de nav actif n'est signalé que par bg-color + scale
+     (aplatis en High Contrast). On rend l'état courant visible via un outline
+     système sur le lien lui-même (a11y review M1, même pattern qu'au-dessus). */
+  aside[aria-label='Navigation principale'] a[aria-current='page'],
+  [data-slot='app-bottom-nav'] a[aria-current='page'] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
   }
   .ds-orb,
   .v18-orb,
@@ -1477,8 +1505,11 @@
   box-shadow: var(--acc-glow);
   transition: opacity 200ms var(--e-smooth);
 }
+/* `:focus-visible` (pas `:focus-within`) : le glow s'aligne sur le ring clavier
+   et n'apparaît PLUS au clic souris sans ring (ui-designer review). Tous les
+   call-sites sont des <a>/Link focusables directs → changement sûr. */
 .wow-hover-glow:hover::after,
-.wow-hover-glow:focus-within::after {
+.wow-hover-glow:focus-visible::after {
   opacity: 1;
 }
 
@@ -1511,5 +1542,315 @@
 @media (forced-colors: active) {
   .wow-hover-glow::after {
     display: none;
+  }
+}
+
+/* =============================================================
+ * SPLASH — public welcome screen (`/`) — V2 refonte
+ * -------------------------------------------------------------
+ * Posture : première impression épurée (PAS un dashboard). Un seul
+ * élément signature animé (le brand emblem orbital) + entrance staggers.
+ * Invariants frontend-elite :
+ *   - Compositor-only : chaque keyframe n'anime QUE transform / opacity
+ *     (les rotations tournent autour de `transform-box: fill-box` +
+ *     `transform-origin: center` pour les groupes SVG). L'arc se dessine
+ *     via stroke-dashoffset (pathLength=1) une seule fois (entrance).
+ *   - prefers-reduced-motion : le filet global neutralise déjà
+ *     duration/iteration ; le bloc dédié plus bas épingle les boucles
+ *     continues (rotation/breathe/float) à leur état de repos et
+ *     termine l'arc instantanément (état final visible).
+ *   - forced-colors : les orbes décoratives + le glow sont retirés.
+ * ============================================================= */
+@keyframes splashSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes splashSpinRev {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+@keyframes splashBreathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.045);
+  }
+}
+@keyframes splashDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes splashFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Emblem float wrapper — slow vertical drift + pointer-parallax offset.
+   The parallax translate is supplied by JS via `--px`/`--py` (clamped, rAF
+   throttled, reduced-motion guarded at the call-site) and composes with the
+   float through a single transform on a child wrapper. */
+.splash-float {
+  animation: splashFloat 9s var(--e-smooth) infinite;
+  will-change: transform;
+}
+.splash-parallax {
+  transform: translate3d(var(--px, 0px), var(--py, 0px), 0);
+  transition: transform 220ms var(--e-smooth);
+  will-change: transform;
+}
+
+/* Rotating SVG ring groups (orbiting dots ride inside them). `view-box`
+   reference box + an explicit 100px,100px origin pin the rotation to the TRUE
+   geometric centre of the 200×200 viewBox — independent of each group's bbox
+   (an orbiting dot would otherwise skew a fill-box centre and wobble the ring). */
+.splash-ring-slow {
+  transform-box: view-box;
+  transform-origin: 100px 100px;
+  animation: splashSpin 48s linear infinite;
+}
+.splash-ring-rev {
+  transform-box: view-box;
+  transform-origin: 100px 100px;
+  animation: splashSpinRev 64s linear infinite;
+}
+
+/* Accent arc — draws itself once on entrance (pathLength=1 → dasharray 1).
+   900ms delay : se dessine APRÈS que le titre se soit posé, comme une réponse
+   au mot « Fxmily » (lecture « plan exécuté ») — ui-designer review. */
+.splash-arc-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: splashDraw 1800ms var(--e-data) 900ms forwards;
+}
+
+/* Luminous core + halo — breathe in opacity + scale (both centred at 100,100,
+   so the same view-box origin scales them around the emblem centre). The glow
+   is painted once on the element; only opacity/scale animate. */
+.splash-core {
+  transform-box: view-box;
+  transform-origin: 100px 100px;
+  animation: splashBreathe 6s var(--e-smooth) infinite;
+}
+
+/* Decorative drifting orbs (reuse the .login-orb compositor pattern). */
+.splash-orb {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  filter: blur(60px);
+  will-change: transform, opacity;
+}
+@media (max-width: 640px) {
+  .splash-orb-extra {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-float,
+  .splash-ring-slow,
+  .splash-ring-rev,
+  .splash-core {
+    animation: none;
+    transform: none;
+  }
+  .splash-parallax {
+    transition: none;
+    transform: none;
+  }
+  .splash-arc-draw {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+  /* Couverture explicite du titre word-rise (le filet global le neutralise
+     déjà via duration 0.01ms + forwards, mais on épingle l'état final visible
+     sans ambiguïté — a11y review). */
+  .word-rise {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    animation: none;
+  }
+}
+@media (forced-colors: active) {
+  .splash-orb {
+    display: none;
+  }
+}
+
+/* =============================================================
+ * SPLASH v3 « WOW » — enrichissement lumineux premium (ADDITIF)
+ * -------------------------------------------------------------
+ * Renforce la présence « bleu lumineux qui ressort » + la
+ * profondeur/vie de l'accueil sans toucher aux invariants :
+ *   - compositor-only : chaque keyframe n'anime QUE transform / opacity ;
+ *   - prefers-reduced-motion -> tout au repos (états finaux visibles) ;
+ *   - forced-colors -> décor lumineux retiré ;
+ *   - contraste texte INCHANGÉ : ces couches sont purement décoratives,
+ *     z-index auto (< contenu z-10), aria-hidden + pointer-events:none.
+ * ============================================================= */
+
+/* Aurora enrichie — le bleu ressort franchement (vs .ds-aurora discret). */
+.splash-aurora-rich {
+  background:
+    radial-gradient(60% 44% at 50% -8%, oklch(0.62 0.19 254 / 0.2) 0%, transparent 60%),
+    radial-gradient(46% 40% at 4% 12%, oklch(0.5 0.21 262 / 0.16) 0%, transparent 66%),
+    radial-gradient(44% 42% at 97% 6%, oklch(0.7 0.13 217 / 0.1) 0%, transparent 68%),
+    radial-gradient(72% 56% at 50% 120%, oklch(0.5 0.21 262 / 0.1) 0%, transparent 62%), var(--bg);
+}
+
+/* Rayons coniques lumineux derrière l'emblème — l'unique grand effet de
+   lumière. Rotation lente (compositor) ; masque radial pour fondre les
+   bords. La translation de centrage est portée par la propriété `translate`
+   (individuelle) et compose proprement avec l'`animation` sur `transform`. */
+@keyframes splashSweepSpin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.splash-sweep {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  width: min(150vw, 1180px);
+  aspect-ratio: 1 / 1;
+  translate: -50% -50%;
+  pointer-events: none;
+  opacity: 0.5;
+  border-radius: 999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    oklch(0.62 0.19 254 / 0.16) 38deg,
+    transparent 104deg,
+    oklch(0.7 0.13 217 / 0.1) 192deg,
+    transparent 244deg,
+    oklch(0.5 0.21 262 / 0.14) 314deg,
+    transparent 360deg
+  );
+  -webkit-mask-image: radial-gradient(
+    closest-side,
+    #000 6%,
+    oklch(0 0 0 / 0.5) 40%,
+    transparent 72%
+  );
+  mask-image: radial-gradient(closest-side, #000 6%, oklch(0 0 0 / 0.5) 40%, transparent 72%);
+  animation: splashSweepSpin 64s linear infinite;
+  will-change: transform;
+}
+
+/* Champ d'étoiles — profondeur « deep space » (langage DS existant). Les
+   <circle> sont peints une fois ; une partie scintille en opacité seulement. */
+.splash-stars {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+@keyframes splashTwinkle {
+  0%,
+  100% {
+    opacity: var(--tw-min, 0.18);
+  }
+  50% {
+    opacity: var(--tw-max, 0.85);
+  }
+}
+.splash-twinkle {
+  animation: splashTwinkle var(--tw-dur, 4s) var(--e-smooth) infinite;
+  animation-delay: var(--tw-delay, 0s);
+}
+
+/* Pulse de nœud SVG générique (opacité + scale, fill-box) — nœuds vivants des
+   illustrations splash sous le pli. Compositor-only. */
+@keyframes fxPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+.fx-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fxPulse 2.8s var(--e-smooth) infinite;
+}
+
+/* Indice de défilement — léger rebond vertical (réutilise le pattern float). */
+@keyframes fxBob {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateY(5px);
+    opacity: 1;
+  }
+}
+.fx-bob {
+  animation: fxBob 2.2s var(--e-smooth) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-sweep {
+    animation: none;
+  }
+  .splash-twinkle {
+    animation: none;
+    opacity: 0.4;
+  }
+  .fx-pulse {
+    animation: none;
+    opacity: 0.85;
+  }
+  .fx-bob {
+    animation: none;
+  }
+}
+@media (forced-colors: active) {
+  .splash-sweep,
+  .splash-stars {
+    display: none;
+  }
+}
+
+/* =============================================================
+ * APP SHELL — clearances mobile sous la bottom tab bar
+ * -------------------------------------------------------------
+ * La bottom-nav (`[data-slot="app-bottom-nav"]`) est `fixed bottom-0` sur
+ * mobile (<lg). Sans dégagement, elle masquerait : (a) le bas du contenu +
+ * le footer légal (en flux), (b) le Log-Express FAB (fixed bottom-right),
+ * (c) le cookie banner (fixed bottom). On décale ces 3 éléments au-dessus
+ * d'elle UNIQUEMENT quand elle est montée (`body:has(...)`) et seulement
+ * <lg — même pattern `:has()` que les règles FAB/cookie existantes (§§ plus
+ * haut). Hauteur nav ≈ 56px (h-14) + safe-area. forced-colors / desktop : RAS.
+ * ============================================================= */
+@media (max-width: 1023px) {
+  body:has([data-slot='app-bottom-nav']) {
+    padding-bottom: calc(3.5rem + env(safe-area-inset-bottom));
+  }
+  body:has([data-slot='app-bottom-nav']) [data-slot='log-express-fab'] {
+    bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+  body:has([data-slot='app-bottom-nav']) [data-slot='cookie-banner'] {
+    bottom: calc(4.25rem + env(safe-area-inset-bottom));
   }
 }

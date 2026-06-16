@@ -1,305 +1,471 @@
 'use client';
 
-import { ArrowUp, Brain, Lock, Shield, Upload, Zap } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { type CSSProperties, useEffect, useRef } from 'react';
 
+import { BrandMark, FX_PATH } from '@/components/brand/brand-mark';
 import { btnVariants } from '@/components/ui/btn';
-import { Card } from '@/components/ui/card';
-import { Kbd } from '@/components/ui/kbd';
-import { Pill } from '@/components/ui/pill';
-import { Sparkline } from '@/components/ui/sparkline';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 /**
- * Splash hero — client component pour les animations (word-rise stagger,
- * count-up sync, sparkline draw 1400ms locked, drift orb).
+ * Splash / accueil public — `/` (V4 refonte « welcome-only »).
  *
- * Posture athlète discipline. Mono-accent lime. Anti-AI-slop strict.
+ * Porte d'entrée ÉPURÉE, UN seul écran (100dvh) : emblème de marque orbital
+ * animé + « Bienvenue sur la Fxmily » + EXACTEMENT deux actions (se connecter
+ * / demander un accès) + ligne de confiance discrète. Aucun récit marketing
+ * sous le pli — directive : l'accueil ne doit PAS ressembler à une app interne.
+ *
+ * Invariants frontend-elite : compositor-only (transform/opacity), aurora
+ * deep-space scopée, entrée `.wow-rise` + emblème `.splash-float`.
+ * prefers-reduced-motion et forced-colors gérés dans globals.css
+ * (`.splash-*`, `.wow-*`, `.fx-*`). Route publique.
  */
 export function SplashHero() {
-  const [start, setStart] = useState(false);
+  const parallaxRef = useRef<HTMLDivElement>(null);
+
+  // Pointer-parallax discret sur l'emblème : rAF-throttlé, et désactivé sous
+  // prefers-reduced-motion OU pointeur grossier (tactile) — l'emblème garde
+  // alors son flottement CSS seul. Compositor-only (translate3d via --px/--py).
   useEffect(() => {
-    const t = setTimeout(() => setStart(true), 240);
-    return () => clearTimeout(t);
+    const el = parallaxRef.current;
+    if (!el) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const fine = window.matchMedia('(hover: hover) and (pointer: fine)');
+    if (reduce.matches || !fine.matches) return;
+
+    let raf = 0;
+    const onMove = (e: MouseEvent) => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const dx = (e.clientX / window.innerWidth - 0.5) * 2;
+        const dy = (e.clientY / window.innerHeight - 0.5) * 2;
+        const max = 10;
+        el.style.setProperty('--px', `${(dx * max).toFixed(2)}px`);
+        el.style.setProperty('--py', `${(dy * max).toFixed(2)}px`);
+      });
+    };
+    window.addEventListener('mousemove', onMove, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
 
-  // Demo telemetry — strictly NOT real data, just a discipline signature
-  // (steady upward trajectory). Public splash, no real KPIs.
-  const demoData = [0, 0.4, 0.3, 0.7, 0.9, 0.8, 1.2, 1.5, 1.4, 1.8, 2.1, 2.0, 2.4, 2.7, 3.0];
-
   return (
-    <main className="relative flex min-h-screen flex-col overflow-hidden">
-      {/* Aurora hero ambient (subtle lime + indigo radial gradients) */}
-      <div aria-hidden className="aurora pointer-events-none absolute inset-0" />
+    <main className="relative flex min-h-dvh flex-col overflow-x-hidden bg-[var(--bg)]">
+      {/* ═══════════════ HERO (premier écran, ambiance deep-space scopée) ═══════════════ */}
+      <section className="splash-aurora-rich relative flex min-h-[100svh] flex-col overflow-hidden">
+        {/* Ambient backplate : champ d'étoiles + rayons coniques + orbes lents + grain
+            (couches décoratives, z auto < contenu z-10). */}
+        <StarField />
+        <div aria-hidden className="splash-sweep" />
+        <div
+          aria-hidden
+          className="splash-orb login-orb-a absolute -top-40 -left-32 h-[520px] w-[520px] sm:h-[620px] sm:w-[620px]"
+          style={{
+            opacity: 0.62,
+            background: 'radial-gradient(circle, oklch(0.62 0.19 254 / 0.3) 0%, transparent 70%)',
+          }}
+        />
+        <div
+          aria-hidden
+          className="splash-orb splash-orb-extra login-orb-b absolute -right-44 -bottom-44 h-[640px] w-[640px]"
+          style={{
+            opacity: 0.55,
+            background: 'radial-gradient(circle, oklch(0.5 0.21 262 / 0.26) 0%, transparent 70%)',
+          }}
+        />
+        <div
+          aria-hidden
+          className="splash-orb splash-orb-extra absolute top-1/3 left-1/2 h-[460px] w-[460px] -translate-x-1/2"
+          style={{
+            opacity: 0.34,
+            background: 'radial-gradient(circle, oklch(0.7 0.13 217 / 0.2) 0%, transparent 70%)',
+          }}
+        />
+        <SplashGrain />
 
-      {/* Drift orbs (slow loops) — blue + indigo mesh depth behind the hero.
-          CSS-class driven (`.orb`) so prefers-reduced-motion neutralises them. */}
-      <div
-        aria-hidden
-        className="orb pointer-events-none absolute -top-32 -left-32 h-[460px] w-[460px] rounded-full opacity-40 blur-[40px]"
-        style={{
-          background: 'radial-gradient(circle, oklch(0.62 0.19 254 / 0.22) 0%, transparent 70%)',
-        }}
-      />
-      <div
-        aria-hidden
-        className="orb pointer-events-none absolute -right-40 -bottom-40 h-[520px] w-[520px] rounded-full opacity-30 blur-[56px]"
-        style={{
-          background: 'radial-gradient(circle, oklch(0.5 0.21 262 / 0.18) 0%, transparent 70%)',
-          animationDelay: '-9s',
-        }}
-      />
-
-      {/* Header */}
-      <header className="relative z-10 flex items-center justify-between px-5 pt-7 sm:px-12">
-        <div className="flex items-center gap-2.5">
-          <div className="grid h-[22px] w-[22px] place-items-center rounded-[5px] border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[10px] font-bold text-[var(--acc)]">
-            F
-          </div>
-          <span className="f-display text-[14px] font-semibold tracking-[-0.01em]">Fxmily</span>
-          <Pill className="ml-1.5">v1 · BETA</Pill>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 text-[10px] text-[var(--t-3)] tabular-nums">
-            <span
-              className="live-dot h-1.5 w-1.5 rounded-full"
-              style={{ background: 'var(--ok)' }}
-            />
-            opérationnel
-          </span>
-          <Pill className="hidden sm:inline-flex">ACCÈS · INVITATION</Pill>
-        </div>
-      </header>
-
-      {/* Hero grid */}
-      <div className="relative z-10 grid flex-1 items-center gap-7 px-5 py-6 sm:gap-12 sm:px-12 sm:py-10 lg:grid-cols-[1.05fr_1fr]">
-        {/* Copy */}
-        <div className="flex flex-col gap-5">
-          <div className="flex items-center gap-2 text-[10px] font-medium tracking-[0.14em] text-[var(--acc)] uppercase">
-            <span className="h-1 w-1 rounded-full bg-current" />
-            <span>Journal · Discipline · Mental</span>
-            <span className="h-3 w-px bg-current opacity-30" />
-            <span className="text-[var(--t-3)]">Saison · Mai 2026</span>
-          </div>
-
-          <h1
-            className="f-display text-[40px] leading-[0.94] font-bold tracking-[-0.045em] text-[var(--t-1)] sm:text-[68px]"
-            style={{ fontFeatureSettings: '"ss01" 1' }}
-          >
-            <span className="word-rise inline-block" style={{ animationDelay: '120ms' }}>
-              Trade
-            </span>{' '}
-            <span className="word-rise inline-block" style={{ animationDelay: '200ms' }}>
-              comme
-            </span>{' '}
-            <span className="word-rise inline-block" style={{ animationDelay: '280ms' }}>
-              un
-            </span>{' '}
-            <span
-              className="word-rise inline-block text-[var(--acc)]"
-              style={{ animationDelay: '440ms' }}
-            >
-              athlète,
-            </span>{' '}
-            <span className="word-rise inline-block" style={{ animationDelay: '560ms' }}>
-              pas
-            </span>{' '}
-            <span className="word-rise inline-block" style={{ animationDelay: '640ms' }}>
-              un
-            </span>{' '}
-            <span className="word-rise inline-block" style={{ animationDelay: '720ms' }}>
-              spectateur.
+        {/* ── Marque (minimal, top-left) ── */}
+        <header className="relative z-10 flex items-center justify-between px-5 pt-7 sm:px-10">
+          <div className="flex items-center gap-2.5">
+            <span className="rounded-control grid h-[26px] w-[26px] place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+              <BrandMark className="w-[16px]" />
             </span>
-          </h1>
+            <span className="f-display text-[15px] font-semibold tracking-[-0.01em] text-[var(--t-1)]">
+              Fxmily
+            </span>
+          </div>
+          <span className="t-eyebrow hidden sm:inline" style={{ color: 'var(--t-2)' }}>
+            Cohorte privée
+          </span>
+        </header>
 
-          <p className="t-lead max-w-[36ch] sm:max-w-[44ch]">
-            Le seul journal qui ignore le marché. On mesure ton plan, ta discipline, ton mental —
-            pas les bougies.
-          </p>
-
-          <div className="flex flex-col gap-2.5 pt-1 sm:flex-row">
-            <Link href="/login" className={cn(btnVariants({ kind: 'primary', size: 'l' }))}>
-              Se connecter
-              <Kbd inline className="ml-1">
-                ↵
-              </Kbd>
-            </Link>
-            {/* Phase P review WCAG B4 — secondary CTA was a Btn with no
-                onClick/href (inert at keyboard + mouse). Use a mailto link
-                styled as a button so it actually does something. */}
-            <a
-              href="mailto:eliot@fxmilyapp.com?subject=Demande%20d%27acc%C3%A8s%20Fxmily"
-              className={cn(btnVariants({ kind: 'secondary', size: 'l' }))}
-            >
-              Demander un accès
-            </a>
+        {/* ── Bienvenue centrée ── */}
+        <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-8 px-5 py-10 text-center">
+          {/* Élément signature : emblème de marque orbital animé */}
+          <div ref={parallaxRef} className="splash-parallax">
+            <div className="splash-float">
+              <BrandEmblem />
+            </div>
           </div>
 
-          {/* Trust strip — 5 items pédago */}
-          <ul className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-[11px] text-[var(--t-3)] tabular-nums">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <li className="inline-flex cursor-help items-center gap-1">
-                  <Lock className="h-[11px] w-[11px]" strokeWidth={1.75} />
-                  Chiffré E2E
-                </li>
-              </TooltipTrigger>
-              <TooltipContent
-                side="top"
-                style={{ maxWidth: 240 }}
-                className="rounded-tooltip border border-[var(--b-strong)] bg-[var(--bg-3)] px-2.5 py-2 text-left text-[11px] leading-[1.45] font-normal tracking-normal text-[var(--t-2)] normal-case shadow-[var(--sh-tooltip)]"
-              >
-                AES-256 sur les screenshots et notes mentales. Personne d&apos;autre que toi ne lit
-                tes trades.
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <li className="inline-flex cursor-help items-center gap-1">
-                  <Shield className="h-[11px] w-[11px]" strokeWidth={1.75} />
-                  Cohorte privée
-                </li>
-              </TooltipTrigger>
-              <TooltipContent
-                side="top"
-                style={{ maxWidth: 220 }}
-                className="rounded-tooltip border border-[var(--b-strong)] bg-[var(--bg-3)] px-2.5 py-2 text-left text-[11px] leading-[1.45] font-normal tracking-normal text-[var(--t-2)] normal-case shadow-[var(--sh-tooltip)]"
-              >
-                Cohorte fermée — accès uniquement par invitation d&apos;un membre actif.
-              </TooltipContent>
-            </Tooltip>
-            <li className="inline-flex items-center gap-1">
-              <Zap className="h-[11px] w-[11px]" strokeWidth={1.75} />
-              &lt;200ms · p99
-            </li>
-            <li className="inline-flex items-center gap-1">
-              <Brain className="h-[11px] w-[11px]" strokeWidth={1.75} />
-              Aucun signal de marché
-            </li>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <li className="inline-flex cursor-help items-center gap-1">
-                  <Upload className="h-[11px] w-[11px]" strokeWidth={1.75} />
-                  Export libre
-                </li>
-              </TooltipTrigger>
-              <TooltipContent
-                side="top"
-                style={{ maxWidth: 240 }}
-                className="rounded-tooltip border border-[var(--b-strong)] bg-[var(--bg-3)] px-2.5 py-2 text-left text-[11px] leading-[1.45] font-normal tracking-normal text-[var(--t-2)] normal-case shadow-[var(--sh-tooltip)]"
-              >
-                Export brut JSON / CSV à tout moment. Tes données ne sont pas captives.
-              </TooltipContent>
-            </Tooltip>
-          </ul>
-        </div>
-
-        {/* Hero bento (desktop only — mobile gets simplified card after) */}
-        <div className="hidden lg:block">
-          <Card
-            primary
-            className="ml-auto max-w-[480px] overflow-hidden p-5 transition-all duration-300 ease-[var(--e-smooth)] hover:-translate-y-1 hover:shadow-[var(--sh-card-hover)]"
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <span className="t-eyebrow">Discipline · 30 jours</span>
-              <Pill tone="acc" dot="live">
-                LIVE
-              </Pill>
-            </div>
-
-            {/* Big telemetry signature (NOT real KPIs — public splash) */}
-            <div className="flex items-baseline gap-3">
+          <div className="flex flex-col items-center gap-4">
+            <h1
+              className="f-display font-bold tracking-[-0.04em] text-[var(--t-1)]"
+              style={{
+                fontFeatureSettings: '"ss01" 1',
+                fontSize: 'clamp(2.1rem, 1.5rem + 3vw, 3.75rem)',
+                lineHeight: 1.02,
+              }}
+            >
+              <span className="word-rise inline-block" style={{ animationDelay: '90ms' }}>
+                Bienvenue
+              </span>{' '}
+              <span className="word-rise inline-block" style={{ animationDelay: '180ms' }}>
+                sur
+              </span>{' '}
+              <span className="word-rise inline-block" style={{ animationDelay: '260ms' }}>
+                la
+              </span>{' '}
               <span
-                className="f-mono text-[56px] leading-none font-semibold tracking-[-0.045em] text-[var(--acc)] tabular-nums"
+                className="word-rise inline-block text-[var(--acc-hi)]"
                 style={{
-                  filter: 'drop-shadow(0 0 18px oklch(0.62 0.19 254 / 0.4))',
+                  animationDelay: '380ms',
+                  textShadow: '0 0 32px oklch(0.62 0.19 254 / 0.45)',
                 }}
               >
-                +91%
+                Fxmily
               </span>
-              <span className="mb-1.5 inline-flex items-center gap-0.5 font-mono text-[12px] text-[var(--ok)] tabular-nums">
-                <ArrowUp className="h-[11px] w-[11px]" strokeWidth={1.75} />
-                plan respecté
-              </span>
-            </div>
+            </h1>
 
-            <p className="t-cap mt-2.5">
-              Métrique signature Fxmily — discipline mesurée par adhérence au plan, pas par P&amp;L.
+            <p
+              className="wow-rise t-lead max-w-[42ch] text-balance"
+              style={{ '--rise-delay': '560ms' } as CSSProperties}
+            >
+              Le journal qui ignore le marché. On mesure ton plan, ta discipline et ton mental — pas
+              les bougies.
             </p>
+          </div>
 
-            <div className="mt-3.5 flex items-end justify-between gap-3">
-              <Sparkline
-                data={demoData}
-                width={300}
-                height={36}
-                color="var(--acc)"
-                fill
-                showLastDot
-                animate={start}
-                ariaLabel="Tendance discipline 30 derniers jours"
+          {/* EXACTEMENT deux actions (role=group plutôt que <nav> : 2 liens d'action
+              ne constituent pas un landmark de navigation — a11y review) */}
+          <div
+            role="group"
+            aria-label="Accès à l'application"
+            className="wow-rise flex w-full max-w-sm flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center"
+            style={{ '--rise-delay': '680ms' } as CSSProperties}
+          >
+            <Link
+              href="/login"
+              className={cn(btnVariants({ kind: 'primary', size: 'l' }), 'wow-hover-glow group')}
+            >
+              Se connecter
+              <ArrowRight
+                className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+                strokeWidth={2}
+                aria-hidden="true"
               />
-              <div className="flex shrink-0 flex-col items-end">
-                <span className="t-mono-cap">cible</span>
-                <span className="font-mono text-[10px] text-[var(--t-3)] tabular-nums">≥ 80%</span>
-              </div>
-            </div>
+            </Link>
+            <Link
+              href="/rejoindre"
+              className={cn(btnVariants({ kind: 'secondary', size: 'l' }), 'wow-hover-glow')}
+            >
+              Demander un accès
+            </Link>
+          </div>
 
-            <div className="mt-2 flex items-center gap-1.5 font-mono text-[10px] text-[var(--t-4)] tabular-nums">
-              <span className="live-dot h-1 w-1 rounded-full" style={{ background: 'var(--ok)' }} />
-              démo · données illustratives
-            </div>
-          </Card>
+          {/* Une ligne de confiance discrète (pas un strip dense) */}
+          <p
+            className="wow-rise t-cap flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1"
+            style={{ '--rise-delay': '820ms', color: 'var(--t-2)' } as CSSProperties}
+          >
+            <span>Accès sur invitation</span>
+            <span aria-hidden className="text-[var(--t-4)]/60">
+              ·
+            </span>
+            <span>Données chiffrées</span>
+            <span aria-hidden className="text-[var(--t-4)]/60">
+              ·
+            </span>
+            <span>Aucun conseil de marché</span>
+          </p>
         </div>
 
-        {/* Mobile bento simplified */}
-        <div className="lg:hidden">
-          <Card primary className="p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="t-eyebrow">Discipline</span>
-              <Pill tone="acc" dot="live">
-                LIVE
-              </Pill>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="f-mono text-[40px] leading-none font-semibold tracking-[-0.04em] text-[var(--acc)] tabular-nums">
-                +91%
-              </span>
-              <span className="font-mono text-[11px] text-[var(--ok)] tabular-nums">plan</span>
-            </div>
-            <p className="t-cap mt-2">Démo · adhérence plan, pas P&amp;L.</p>
-            <div className="mt-3">
-              <Sparkline
-                data={demoData}
-                width={300}
-                height={32}
-                color="var(--acc)"
-                fill
-                animate={start}
-                ariaLabel="Tendance discipline"
-              />
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <footer className="relative z-10 flex items-center justify-between border-t border-[var(--b-default)] px-5 py-3.5 text-[10px] sm:px-12 sm:py-4 sm:text-[11px]">
-        <div className="flex items-center gap-3 text-[var(--t-4)] tabular-nums">
-          <span>© 2026 Fxmily</span>
-          <span>·</span>
-          <span className="t-foot">Aucun conseil de marché</span>
-        </div>
-        <div className="flex items-center gap-3 text-[var(--t-4)] tabular-nums">
-          <span className="hidden sm:inline">Cohorte privée</span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>⌘</Kbd>
-            <Kbd>?</Kbd>
-            raccourcis
+        {/* ── Footer minimal, intégré au bas de l'écran d'accueil (la landing est
+            désormais UN seul écran : bienvenue + 2 actions, pas de récit marketing
+            sous le pli — directive « accueil épuré, pas une app interne »). Les
+            liens légaux RGPD restent accessibles ici (le LegalFooter global se
+            retire sur `/` pour ne pas créer un 2e écran résiduel). ── */}
+        <footer className="relative z-10 flex flex-col items-center justify-center gap-2 px-5 pb-7 text-[10px] tabular-nums sm:flex-row sm:gap-3">
+          <span className="t-foot" style={{ color: 'var(--t-2)' }}>
+            © 2026 Fxmily — Discipline avant le marché.
           </span>
-        </div>
-      </footer>
+          <span aria-hidden className="hidden text-[var(--t-4)] sm:inline">
+            ·
+          </span>
+          <nav aria-label="Liens légaux" className="flex items-center gap-x-1">
+            <Link
+              href="/legal/privacy"
+              className="inline-flex min-h-6 items-center rounded px-1.5 py-1 transition-colors hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              style={{ color: 'var(--t-2)' }}
+            >
+              Confidentialité
+            </Link>
+            <span aria-hidden className="text-[var(--t-4)]">
+              ·
+            </span>
+            <Link
+              href="/legal/terms"
+              className="inline-flex min-h-6 items-center rounded px-1.5 py-1 transition-colors hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              style={{ color: 'var(--t-2)' }}
+            >
+              CGU
+            </Link>
+            <span aria-hidden className="text-[var(--t-4)]">
+              ·
+            </span>
+            <Link
+              href="/legal/mentions"
+              className="inline-flex min-h-6 items-center rounded px-1.5 py-1 transition-colors hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              style={{ color: 'var(--t-2)' }}
+            >
+              Mentions légales
+            </Link>
+          </nav>
+        </footer>
+      </section>
     </main>
+  );
+}
+
+/**
+ * Grain léger (SVG feTurbulence) posé sur l'aurora — casse le « dégradé propre »
+ * (anti-AI-slop). Statique, décoratif, mix-blend pour fondre dans le fond.
+ */
+function SplashGrain() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.04] mix-blend-overlay"
+      preserveAspectRatio="none"
+    >
+      <filter id="splashNoise">
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="0.82"
+          numOctaves={2}
+          stitchTiles="stitch"
+        />
+      </filter>
+      <rect width="100%" height="100%" filter="url(#splashNoise)" />
+    </svg>
+  );
+}
+
+/**
+ * Champ d'étoiles déterministe (zéro Math.random → stable SSR/CSR, aucun
+ * mismatch d'hydratation). Positions en %, rayon en px. Une partie scintille
+ * (opacité only, .splash-twinkle) ; le reste est statique. Purement décoratif
+ * (aria-hidden + pointer-events via .splash-stars). Biais bords/haut/bas pour
+ * laisser le centre (emblème + titre) respirer.
+ */
+function StarField() {
+  type Star = {
+    x: number;
+    y: number;
+    r: number;
+    o: number;
+    tw?: boolean;
+    dur?: number;
+    delay?: number;
+    cyan?: boolean;
+  };
+  const CY = 'oklch(0.82 0.12 217)';
+  const WHITE = 'oklch(0.92 0.03 250)';
+  const stars: readonly Star[] = [
+    { x: 6, y: 12, r: 1.2, o: 0.5, tw: true, dur: 4.4, delay: 0.1 },
+    { x: 14, y: 22, r: 0.9, o: 0.35 },
+    { x: 24, y: 8, r: 1.0, o: 0.45, tw: true, dur: 5.2, delay: 0.6 },
+    { x: 33, y: 18, r: 0.8, o: 0.3 },
+    { x: 46, y: 7, r: 1.1, o: 0.5, tw: true, dur: 3.8, delay: 1.1, cyan: true },
+    { x: 58, y: 14, r: 0.9, o: 0.4 },
+    { x: 68, y: 6, r: 1.0, o: 0.45, tw: true, dur: 4.9, delay: 0.3 },
+    { x: 78, y: 16, r: 1.2, o: 0.5, tw: true, dur: 5.6, delay: 0.9 },
+    { x: 88, y: 9, r: 0.9, o: 0.35 },
+    { x: 94, y: 20, r: 1.0, o: 0.45, tw: true, dur: 4.2, delay: 1.4 },
+    { x: 4, y: 34, r: 1.0, o: 0.4, tw: true, dur: 5.0, delay: 0.5 },
+    { x: 10, y: 48, r: 0.8, o: 0.3 },
+    { x: 7, y: 60, r: 1.1, o: 0.45, tw: true, dur: 4.6, delay: 1.2 },
+    { x: 92, y: 36, r: 1.0, o: 0.4, tw: true, dur: 5.3, delay: 0.2, cyan: true },
+    { x: 96, y: 52, r: 0.9, o: 0.35 },
+    { x: 89, y: 62, r: 1.2, o: 0.5, tw: true, dur: 4.0, delay: 0.8 },
+    { x: 8, y: 80, r: 1.0, o: 0.4, tw: true, dur: 4.8, delay: 0.4 },
+    { x: 18, y: 90, r: 0.9, o: 0.35 },
+    { x: 28, y: 76, r: 1.1, o: 0.45, tw: true, dur: 5.4, delay: 1.0 },
+    { x: 40, y: 92, r: 0.8, o: 0.3 },
+    { x: 52, y: 84, r: 1.0, o: 0.45, tw: true, dur: 4.3, delay: 0.7, cyan: true },
+    { x: 62, y: 94, r: 0.9, o: 0.35 },
+    { x: 72, y: 80, r: 1.2, o: 0.5, tw: true, dur: 5.1, delay: 0.2 },
+    { x: 82, y: 90, r: 1.0, o: 0.4, tw: true, dur: 4.7, delay: 1.3 },
+    { x: 90, y: 78, r: 0.8, o: 0.3 },
+    { x: 36, y: 40, r: 0.7, o: 0.22 },
+    { x: 64, y: 44, r: 0.7, o: 0.24 },
+    { x: 50, y: 62, r: 0.8, o: 0.26, tw: true, dur: 6.0, delay: 0.5 },
+  ];
+  return (
+    <svg aria-hidden="true" className="splash-stars" preserveAspectRatio="none">
+      {stars.map((s, i) => (
+        <circle
+          key={i}
+          cx={`${s.x}%`}
+          cy={`${s.y}%`}
+          r={s.r}
+          fill={s.cyan ? CY : WHITE}
+          className={s.tw ? 'splash-twinkle' : undefined}
+          style={
+            s.tw
+              ? ({
+                  '--tw-dur': `${s.dur ?? 4}s`,
+                  '--tw-delay': `${s.delay ?? 0}s`,
+                } as CSSProperties)
+              : { opacity: s.o }
+          }
+        />
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * Emblème de marque orbital — l'unique élément signature de l'accueil.
+ * Anneaux orbitaux lents désynchronisés + arc accent qui se dessine à
+ * l'entrée + cœur lumineux portant le monogramme FX. Tout est SVG (zéro
+ * lien cassé, theme-able). Rotations pinnées au centre du viewBox via
+ * `.splash-ring-*` (transform-box: view-box). PUREMENT DÉCORATIF : la marque
+ * « Fxmily » est déjà portée par le wordmark du header + le <h1>, donc
+ * `aria-hidden` (pas de redondance pour lecteur d'écran — a11y review).
+ */
+function BrandEmblem() {
+  return (
+    <svg
+      viewBox="0 0 200 200"
+      aria-hidden="true"
+      focusable="false"
+      className="h-auto w-[208px] sm:w-[268px]"
+    >
+      <defs>
+        <radialGradient id="splashCoreGrad" cx="50%" cy="38%" r="72%">
+          <stop offset="0%" stopColor="oklch(0.86 0.14 246)" />
+          <stop offset="55%" stopColor="oklch(0.55 0.2 258)" />
+          <stop offset="100%" stopColor="oklch(0.3 0.13 268)" />
+        </radialGradient>
+        <radialGradient id="splashHaloGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="oklch(0.62 0.19 254 / 0.62)" />
+          <stop offset="58%" stopColor="oklch(0.62 0.19 254 / 0.1)" />
+          <stop offset="100%" stopColor="oklch(0.62 0.19 254 / 0)" />
+        </radialGradient>
+      </defs>
+
+      {/* Halo ambiant — respire (opacity + scale) */}
+      <circle className="splash-core" cx="100" cy="100" r="94" fill="url(#splashHaloGrad)" />
+
+      {/* Anneau externe (rotation lente) + points orbitaux lumineux (cyan + accent) */}
+      <g className="splash-ring-slow">
+        <circle
+          cx="100"
+          cy="100"
+          r="84"
+          fill="none"
+          strokeWidth="1"
+          strokeDasharray="2 9"
+          style={{ stroke: 'var(--b-strong)' }}
+        />
+        <circle
+          cx="100"
+          cy="16"
+          r="3.2"
+          style={{
+            fill: 'var(--cy)',
+            filter: 'drop-shadow(0 0 6px oklch(0.789 0.139 217 / 0.85))',
+          }}
+        />
+        <circle
+          cx="100"
+          cy="184"
+          r="1.8"
+          style={{
+            fill: 'var(--acc-hi)',
+            filter: 'drop-shadow(0 0 4px oklch(0.74 0.16 250 / 0.7))',
+          }}
+        />
+      </g>
+
+      {/* Anneau médian : trace faible complète + arc accent qui se dessine */}
+      <circle
+        cx="100"
+        cy="100"
+        r="62"
+        fill="none"
+        strokeWidth="1"
+        style={{ stroke: 'var(--b-default)' }}
+      />
+      <circle
+        className="splash-arc-draw"
+        cx="100"
+        cy="100"
+        r="62"
+        pathLength={1}
+        fill="none"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        transform="rotate(-90 100 100)"
+        style={{ stroke: 'var(--acc)' }}
+      />
+
+      {/* Anneau interne (rotation inverse) + point orbital accent */}
+      <g className="splash-ring-rev">
+        <circle
+          cx="100"
+          cy="100"
+          r="44"
+          fill="none"
+          strokeWidth="1"
+          strokeDasharray="1 7"
+          style={{ stroke: 'var(--b-strong)' }}
+        />
+        <circle
+          cx="100"
+          cy="56"
+          r="2.8"
+          style={{
+            fill: 'var(--acc-hi)',
+            filter: 'drop-shadow(0 0 5px oklch(0.74 0.16 250 / 0.85))',
+          }}
+        />
+      </g>
+
+      {/* Cœur lumineux + monogramme FX (logo officiel vectorisé) */}
+      <circle
+        cx="100"
+        cy="100"
+        r="30"
+        fill="url(#splashCoreGrad)"
+        strokeWidth="1"
+        style={{ stroke: 'var(--b-acc-strong)' }}
+      />
+      <svg
+        x="80"
+        y="84"
+        width="40"
+        height="32"
+        viewBox="118 115 363 295"
+        preserveAspectRatio="xMidYMid meet"
+        overflow="visible"
+      >
+        <path fillRule="evenodd" d={FX_PATH} fill="oklch(0.98 0.01 247)" />
+      </svg>
+    </svg>
   );
 }

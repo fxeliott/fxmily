@@ -4,6 +4,7 @@ import { animate, m, useMotionValue, useReducedMotion, useTransform } from 'fram
 import { Info, Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
 
+import { Sparkline } from '@/components/ui/sparkline';
 import { cn } from '@/lib/utils';
 
 /**
@@ -44,6 +45,8 @@ interface ScoreGaugeProps {
   onClick?: () => void;
   /** Optional id used by `aria-describedby`. */
   describedById?: string;
+  /** Optional 30-day micro-trend (nulls pre-filtered) for an inline sparkline. */
+  trend?: number[];
 }
 
 const REASON_TEXT: Record<NonNullable<ScoreGaugeProps['reason']>, string> = {
@@ -118,6 +121,7 @@ export function ScoreGauge({
   reason,
   onClick,
   describedById,
+  trend,
 }: ScoreGaugeProps) {
   const tone = toneFor(score);
   const prefersReducedMotion = useReducedMotion();
@@ -260,6 +264,24 @@ export function ScoreGauge({
           </span>
         ) : null}
       </div>
+
+      {/* Micro-tendance 30j (jalon 2b). Couleur DÉCOUPLÉE du ton de la jauge :
+          toujours l'accent calme, JAMAIS rouge même si le score est bas — une
+          série en repli s'observe, ne se punit pas (posture §2). Le primitif
+          rend `null` sous 2 points (fallback silencieux, pas de trou trompeur). */}
+      {score !== null && trend && trend.length >= 2 ? (
+        <Sparkline
+          data={trend}
+          width={132}
+          height={26}
+          color="var(--acc)"
+          strokeWidth={1.5}
+          fill
+          showLastDot
+          ariaLabel={`Micro-tendance de ${label.toLowerCase()} sur ${trend.length} relevés`}
+          className="mt-0.5"
+        />
+      ) : null}
     </Wrapper>
   );
 }

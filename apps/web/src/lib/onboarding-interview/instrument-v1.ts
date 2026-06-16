@@ -451,7 +451,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
 const METADATA_V1: OnboardingInstrumentMetadata = {
   version: 'v1',
   createdAt: '2026-05-28',
-  author: 'Eliott Pena (Fxmily) — instrument design + posture validation',
+  author: 'Fxmily — instrument design + posture validation',
   primarySources: [
     {
       title: 'Trading in the Zone',

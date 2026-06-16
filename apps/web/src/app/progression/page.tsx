@@ -90,7 +90,7 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
           <h2 id="scores-heading" className="sr-only">
             Scores comportementaux
           </h2>
-          <ScoreGaugeGrid score={latestScore} />
+          <ScoreGaugeGrid score={latestScore} history={scoreHistory} />
         </section>
 
         {/* Trajectoire des scores dans le temps */}

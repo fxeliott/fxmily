@@ -1,6 +1,7 @@
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import type { SerializedBehavioralScore } from '@/lib/scoring';
+import type { BehavioralScoreTrendPoint } from '@/lib/scoring/service';
 
 import { SampleSizeDisclaimer } from './sample-size-disclaimer';
 import { ScoreBreakdown } from './score-breakdown';
@@ -20,6 +21,8 @@ import { ScoreGauge } from './score-gauge';
  */
 interface ScoreGaugeGridProps {
   score: SerializedBehavioralScore | null;
+  /** 30-day behavioral-score history for inline per-dimension sparklines. */
+  history?: BehavioralScoreTrendPoint[];
 }
 
 /**
@@ -52,8 +55,13 @@ function EmptyScoresGrid() {
   );
 }
 
-export function ScoreGaugeGrid({ score }: ScoreGaugeGridProps) {
+export function ScoreGaugeGrid({ score, history }: ScoreGaugeGridProps) {
   if (score === null) return <EmptyScoresGrid />;
+
+  // Micro-tendance par dimension (nulls pré-filtrés — jamais converti en 0).
+  const trendFor = (
+    key: 'discipline' | 'emotionalStability' | 'consistency' | 'engagement',
+  ): number[] => (history ?? []).map((p) => p[key]).filter((v): v is number => v !== null);
 
   const reasonOf = (
     s:
@@ -92,24 +100,28 @@ export function ScoreGaugeGrid({ score }: ScoreGaugeGridProps) {
           label="Discipline"
           hint="Plan + hedge + routine"
           reason={reasonOf(score.components.discipline)}
+          trend={trendFor('discipline')}
         />
         <ScoreGauge
           score={score.emotionalStabilityScore}
           label="Stabilité"
           hint="Variance + stress + tilt"
           reason={reasonOf(score.components.emotionalStability)}
+          trend={trendFor('emotionalStability')}
         />
         <ScoreGauge
           score={score.consistencyScore}
           label="Cohérence"
           hint="Expectancy + DD + sessions"
           reason={reasonOf(score.components.consistency)}
+          trend={trendFor('consistency')}
         />
         <ScoreGauge
           score={score.engagementScore}
           label="Engagement"
           hint="Fill rate + streak + journal"
           reason={reasonOf(score.components.engagement)}
+          trend={trendFor('engagement')}
         />
       </div>
 

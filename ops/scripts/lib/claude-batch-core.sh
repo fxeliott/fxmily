@@ -33,7 +33,7 @@
 # --- Shared config defaults (env-overridable, validated below) ---------------
 
 # §8 — local Claude solicitations are PINNED on Claude Opus 4.8
-# (`claude-opus-4-8`) at "extra" effort by default (Eliot decision,
+# (`claude-opus-4-8`) at "xhigh" effort by default (Eliott decision,
 # 2026-06-11) : Fable 5 leaves the Max subscription's included models after
 # 2026-06-22 (usage-credits only, $10/$50 MTok — anthropic.com/news/
 # claude-fable-5-mythos-5), while Opus 4.8 stays included ($0 marginal).

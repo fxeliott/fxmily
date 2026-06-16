@@ -1,5 +1,7 @@
 import { ImageResponse } from 'next/og';
 
+import { FX_PATH, FX_VIEWBOX } from '@/components/brand/brand-mark';
+
 /**
  * J10 Phase K — Apple Touch Icon (J9 reclassed polish promoted to J10).
  *
@@ -40,14 +42,11 @@ export default function AppleIcon(): ImageResponse {
         // dominating the home screen tile.
         backgroundImage:
           'radial-gradient(circle at 100% 100%, rgba(59,130,246,0.18) 0%, transparent 55%)',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        color: '#3b82f6',
-        fontWeight: 700,
-        fontSize: 96,
-        letterSpacing: '-0.04em',
       }}
     >
-      f
+      <svg width={108} height={88} viewBox={FX_VIEWBOX} xmlns="http://www.w3.org/2000/svg">
+        <path fillRule="evenodd" d={FX_PATH} fill="#ffffff" />
+      </svg>
     </div>,
     { ...size },
   );

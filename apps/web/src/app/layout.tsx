@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { GeistSans } from 'geist/font/sans';
+import { auth, signOut } from '@/auth';
 import { CookieBanner } from '@/components/legal/cookie-banner';
 import { LegalFooter } from '@/components/legal/legal-footer';
 import { MotionProvider } from '@/components/motion-provider';
+import { AppShell } from '@/components/nav/app-shell';
 import { LogExpressFab } from '@/components/track/log-express-fab';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import './globals.css';
@@ -52,11 +54,29 @@ export const viewport: Viewport = {
   colorScheme: 'dark',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Session lue UNE fois ici pour piloter l'AppShell (nav globale). L'appel à
+  // auth() rend le layout dynamique — acceptable pour une app privée (cohorte
+  // fermée, robots noindex). L'AppShell se retire de lui-même sur les routes
+  // publiques / hors session (il rend alors uniquement `children`).
+  const session = await auth();
+  const sessionLite = session?.user
+    ? {
+        name: session.user.name?.trim() || session.user.email?.split('@')[0] || 'Membre',
+        email: session.user.email ?? '',
+        isAdmin: session.user.role === 'admin',
+      }
+    : null;
+
+  async function handleSignOut() {
+    'use server';
+    await signOut({ redirectTo: '/login' });
+  }
+
   return (
     <html
       lang="fr"
@@ -89,9 +109,11 @@ export default function RootLayout({
         <div className="app-ambient" aria-hidden="true" />
         <TooltipProvider>
           <MotionProvider>
-            <div id="main-content" tabIndex={-1} className="flex min-h-full flex-1 flex-col">
-              {children}
-            </div>
+            <AppShell session={sessionLite} signOutAction={handleSignOut}>
+              <div id="main-content" tabIndex={-1} className="flex min-h-full flex-1 flex-col">
+                {children}
+              </div>
+            </AppShell>
           </MotionProvider>
           <LogExpressFab />
           <LegalFooter />

@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 /**
  * Global footer wired from `app/layout.tsx`. Surfaces the three RGPD legal
@@ -8,12 +11,16 @@ import Link from 'next/link';
  *  - `/legal/terms`   — CGU
  *  - `/legal/mentions` — Mentions légales
  *
- * Plus a `mailto:` link to the editor (Eliot) and the build year.
- *
- * Server Component, zero JS shipped to the client. Visible site-wide because
- * a working RGPD claim cannot be one-click-away from any page.
+ * V4 refonte : self-hide sur la landing publique `/` UNIQUEMENT — cet accueil
+ * est un écran unique (100dvh) qui porte son propre pied de page minimal avec
+ * les mêmes liens légaux (splash-hero), donc le footer global y créerait un 2e
+ * écran résiduel « allure d'app ». Il reste rendu partout ailleurs (RGPD : les
+ * liens légaux restent à un clic de toute autre page). Client minimal pour lire
+ * le pathname (même pattern que LogExpressFab), zéro logique au-delà.
  */
-export function LegalFooter(): React.ReactElement {
+export function LegalFooter(): React.ReactElement | null {
+  const pathname = usePathname();
+  if (pathname === '/') return null;
   const year = new Date().getFullYear();
   return (
     <footer

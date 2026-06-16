@@ -177,7 +177,7 @@ export const tradeOpenSchema = z
     stopLossPrice: positivePrice.optional().nullable(),
     plannedRR,
     /// V1.5 — Optional setup quality classification. Wizard UI capture
-    /// position TBD (dedicated step or inline in step 4) — Eliot to validate.
+    /// position TBD (dedicated step or inline in step 4) — Eliott to validate.
     tradeQuality: z.enum(TRADE_QUALITIES).optional(),
     /// V1.5 — Optional risk percentage of account. Capture in step 3 alongside
     /// stop-loss and lot size when the member knows their account size.

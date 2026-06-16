@@ -4,6 +4,7 @@ node_modules/
 
 # Builds & caches
 .next/
+.next-trash*/
 out/
 dist/
 build/

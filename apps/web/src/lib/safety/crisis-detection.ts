@@ -23,7 +23,7 @@
  *   1. `lib/weekly-report/claude-client.ts` LiveWeeklyReportClient.generate()
  *      — call detectCrisis() on output BEFORE persisting. If level >= medium,
  *      abort the generation, audit `safety.crisis_detected`, escalate to
- *      Eliot via email + Sentry, fall back to a static "we noticed something"
+ *      Eliott via email + Sentry, fall back to a static "we noticed something"
  *      reply with the resource block.
  *   2. `app/checkin/actions.ts` submitMorning/EveningCheckinAction —
  *      call detectCrisis() on `journalNote` + `intention` + `gratitudeItems`

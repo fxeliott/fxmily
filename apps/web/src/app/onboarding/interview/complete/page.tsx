@@ -60,7 +60,7 @@ export default async function OnboardingInterviewCompletePage() {
         </div>
 
         <p className="t-body text-[var(--t-2)]">
-          Tu as terminé tes 30 questions. Eliot lit chaque réponse personnellement. L&apos;IA va
+          Tu as terminé tes 30 questions. Eliott lit chaque réponse personnellement. L&apos;IA va
           maintenant analyser l&apos;ensemble pour en tirer un profil descriptif qui servira à
           personnaliser ton coaching.
         </p>

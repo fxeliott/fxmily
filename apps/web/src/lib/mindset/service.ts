@@ -208,7 +208,7 @@ export async function listMyRecentMindsetChecks(
 }
 
 /**
- * List every check of a member for Eliot's READ-ONLY admin view
+ * List every check of a member for Eliott's READ-ONLY admin view
  * (`/admin/members/[id]`, SPEC §27.4). Admin-scoping is the caller's
  * responsibility (the admin page gates `role === 'admin'`); this is a plain
  * user-scoped read by `memberId`, newest first, bounded.

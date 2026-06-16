@@ -8,13 +8,13 @@ import type { ClaudeUsage } from '@/lib/ai/claude-response';
  * §26 Calendrier adaptatif — Claude cost pricing (J-C2). Carbone
  * `lib/weekly-report/pricing.ts` (a self-contained copy, NOT a re-export —
  * the calendar pipeline owns its own model allowlist : the LOCAL binary that
- * Eliot runs is Opus 4.8 again since 2026-06-11, not Sonnet 4.6 — Fable 5
+ * Eliott runs is Opus 4.8 again since 2026-06-11, not Sonnet 4.6 — Fable 5
  * leaves the Max plan's included models after 2026-06-22).
  *
  * Notes :
  *   - Prices in USD per **1 000 000 tokens**, converted USD → EUR at a fixed
  *     conservative rate (budget upper-bound, not FX accounting).
- *   - The §26 batch generates calendars via `claude --print` on Eliot's Claude
+ *   - The §26 batch generates calendars via `claude --print` on Eliott's Claude
  *     Max subscription (flat fee) WITHOUT sending a `model`/`usage` on the
  *     wire ⇒ batch entries persist under the `claude-code-local` sentinel at
  *     0 tokens = 0 cost. The named model entries below carry the REAL API
@@ -36,7 +36,7 @@ const SONNET_4_6 = {
 };
 
 /**
- * §26 sentinel — calendars generated locally via `claude --print` on Eliot's
+ * §26 sentinel — calendars generated locally via `claude --print` on Eliott's
  * Claude Max subscription. Subscription is a flat fee ⇒ per-token cost = 0.
  * Keep the entry here so `computeCostEur` returns a deterministic 0.000000
  * without taking the Sonnet fallback branch (which would `console.warn`).

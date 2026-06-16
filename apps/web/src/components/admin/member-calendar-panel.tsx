@@ -11,7 +11,7 @@ import type { SerializedAdaptiveCalendar } from '@/lib/calendar/service';
 
 /**
  * §26 Calendrier adaptatif — admin READ-ONLY calendar section (J-C4) for the
- * member detail `?tab=calendar`. Eliot reads the member's latest generated
+ * member detail `?tab=calendar`. Eliott reads the member's latest generated
  * calendar (the SAME overview / week-view / warnings the member sees, incl. the
  * EU AI Act banner) with **NO action / NO mutation** — the disclosure stamp is
  * the MEMBER's first-view concern only (the admin view never stamps it).

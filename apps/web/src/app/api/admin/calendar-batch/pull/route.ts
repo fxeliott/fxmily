@@ -11,7 +11,7 @@ import { loadAllSnapshotsForCalendarGeneration } from '@/lib/calendar/batch';
  * Returns a `CalendarBatchPullEnvelope` JSON describing every eligible member's
  * pseudonymized weekly snapshot (members who filled the questionnaire this week
  * and don't already have a generated calendar). Designed to be `curl`'d from
- * Eliot's local machine by `ops/scripts/calendar-batch-local.sh` :
+ * Eliott's local machine by `ops/scripts/calendar-batch-local.sh` :
  *
  *   curl --fail-with-body --silent -X POST \
  *        -H "X-Admin-Token: $FXMILY_CALENDAR_TOKEN" \
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   if (guard) return guard;
 
   // The batch is an "external export" path (pseudonymized snapshots leave the
-  // host → Eliot's laptop → Anthropic). `lib/env.ts` JSDoc says
+  // host → Eliott's laptop → Anthropic). `lib/env.ts` JSDoc says
   // MEMBER_LABEL_SALT is "REQUIS en prod si export externe envisagé" — refuse
   // in production NODE_ENV if the salt is unset, else unsalted pseudonyms leak.
   // Dev/test exempt (V1 single-user dev with seed cuids). Carbon weekly pull.

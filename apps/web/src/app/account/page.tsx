@@ -67,7 +67,7 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
         </h1>
         <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
           Tout ce que tu peux régler tout seul depuis l&apos;app — notifications, export de tes
-          données, suppression du compte. Aucune action ici n&apos;exige Eliot.
+          données, suppression du compte. Aucune action ici n&apos;exige Eliott.
         </p>
       </header>
 
@@ -102,10 +102,10 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
         <p>
           Une question ?{' '}
           <a
-            href="mailto:eliot@fxmilyapp.com"
+            href="mailto:fxeliott@fxmily.fr"
             className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
           >
-            eliot@fxmilyapp.com
+            fxeliott@fxmily.fr
           </a>
           . Voir aussi la{' '}
           <Link

@@ -28,8 +28,8 @@ import {
  * `weekly-report/claude-client.ts`) :
  *   - **`MockOnboardingProfileClient`** — deterministic, zero-cost, no SDK
  *     import. The batch uses this when `ANTHROPIC_API_KEY` is not set (V1
- *     default — Eliot runs locally via `claude --print` Claude Max, so the
- *     batch endpoint reads the SDK only if Eliot opts in to API billing).
+ *     default — Eliott runs locally via `claude --print` Claude Max, so the
+ *     batch endpoint reads the SDK only if Eliott opts in to API billing).
  *     Returns a Zod-valid {@link MemberProfileOutput} derived from the
  *     snapshot so smoke-test live can prove the full chain without API call.
  *   - **`LiveOnboardingProfileClient`** — backed by `@anthropic-ai/sdk`.
@@ -236,7 +236,7 @@ function renderMockOutput(snapshot: OnboardingInterviewSnapshot): MemberProfileO
   const axes = [
     `Activer ANTHROPIC_API_KEY ou le pipeline batch local Claude Max pour obtenir une analyse qualitative réelle (mock actuel).`,
     `Vérifier que les ${snapshot.answers.length} questions de l'entretien sont toutes exploitables (≥30 chars) avant le batch production.`,
-    `Recouper les patterns émergents avec le coaching style préféré du membre [28] pour calibrer le mode de feedback Eliot.`,
+    `Recouper les patterns émergents avec le coaching style préféré du membre [28] pour calibrer le mode de feedback Eliott.`,
   ];
 
   return {
@@ -255,7 +255,7 @@ function renderMockOutput(snapshot: OnboardingInterviewSnapshot): MemberProfileO
  * doesn't pull the SDK into the bundle / dev startup.
  *
  * **NOT smoke-tested in this PR** — V1 ships with `ANTHROPIC_API_KEY` empty,
- * the mock client is the smoke-test path. The first time Eliot sets the key
+ * the mock client is the smoke-test path. The first time Eliott sets the key
  * (OR moves to direct API billing for onboarding batch), point the batch
  * route at 1 user with `?dryRun=true` to verify cost numbers + content
  * quality before the next cohort cadence.

@@ -38,11 +38,11 @@ interface WeeklyDigestEmailProps {
 }
 
 /**
- * Weekly digest email — sent to Eliot (admin) every Sunday after the cron
+ * Weekly digest email — sent to Eliott (admin) every Sunday after the cron
  * generates the per-member reports (J8, SPEC §7.10).
  *
  * Posture athlète/discipline. The summary is structured (summary + risks +
- * recommendations + patterns) so Eliot can scan in 30 seconds and decide
+ * recommendations + patterns) so Eliott can scan in 30 seconds and decide
  * whether to message the member.
  *
  * Email-safe inline hex (cf. `annotation-received.tsx` + `invitation.tsx`).

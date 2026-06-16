@@ -18,7 +18,7 @@ const ACCOUNT_TYPE_LABELS: Record<ProofAccountType, string> = {
 const TOP_ERROR_LABELS: Record<string, string> = {
   unauthorized: 'Session expirée, reconnecte-toi.',
   invalid_input: 'Vérifie les champs ci-dessous.',
-  limit_reached: 'Tu as atteint la limite de comptes — contacte Eliot si besoin.',
+  limit_reached: 'Tu as atteint la limite de comptes — contacte Eliott si besoin.',
   unknown: 'Échec de l’enregistrement, réessaie.',
 };
 

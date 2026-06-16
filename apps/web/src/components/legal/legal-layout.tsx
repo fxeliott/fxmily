@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 interface LegalLayoutProps {
   /** Top-level legal page heading (h1). */
   title: string;
-  /** Date the document was last reviewed by the editor (Eliot). Format ISO `YYYY-MM-DD`. */
+  /** Date the document was last reviewed by the editor (Eliott). Format ISO `YYYY-MM-DD`. */
   lastUpdatedIso: string;
   /** Short eyebrow above the heading — e.g. "Confidentialité", "CGU". */
   eyebrow: string;

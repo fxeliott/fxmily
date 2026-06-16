@@ -8,7 +8,7 @@ import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 
 /**
  * V1.4 — admin READ-ONLY monthly-debrief section (SPEC §25.4/§25.6) for the
- * member detail `?tab=monthly-debrief`. Eliot reads the member's persisted
+ * member detail `?tab=monthly-debrief`. Eliott reads the member's persisted
  * AI syntheses (the SAME `<MonthlyDebriefReader>` the member sees, incl. the
  * EU AI Act banner) with **NO action** — annotation/notif on the monthly
  * debrief is a deferred §21.6 follow-up (§25.6, mirror §23.6).

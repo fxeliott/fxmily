@@ -23,7 +23,7 @@ import { reportError } from '@/lib/observability';
  * then POSTs results to the `/persist` endpoint.
  *
  * Idempotency : the pull filters out interviews already analyzed
- * (`MemberProfile.interviewId` row exists). So Eliot can run the batch
+ * (`MemberProfile.interviewId` row exists). So Eliott can run the batch
  * multiple times safely — only un-analyzed completed interviews are picked.
  */
 

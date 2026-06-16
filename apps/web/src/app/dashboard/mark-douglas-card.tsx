@@ -12,7 +12,7 @@ import { Pill } from '@/components/ui/pill';
  * Affiche une rotation des 5 Fundamental Truths de *Trading in the Zone*
  * (Mark Douglas, Penguin/NYIF 2000, Chapter 11 "Thinking Like a Trader").
  * Les `short` sont les **citations canoniques** en VO (≤30 mots, fair-use),
- * les `full` sont des paraphrases francisées dans la voix Eliot.
+ * les `full` sont des paraphrases francisées dans la voix Eliott.
  *
  * Audit J5 fix (TIER 4 follow-up): les truths #2, #3, #4 étaient tronquées
  * ou réécrites — restaurées au texte original. Le `<cite>` reflète maintenant

@@ -9,7 +9,7 @@ import { loadAllSnapshotsForActiveMembers } from '@/lib/monthly-debrief/batch';
  * V1.4 §25 — POST `/api/admin/monthly-batch/pull`.
  *
  * Returns a `MonthlyBatchPullEnvelope` JSON describing every active member's
- * pseudonymized civil-month snapshot. `curl`'d from Eliot's local machine by
+ * pseudonymized civil-month snapshot. `curl`'d from Eliott's local machine by
  * `ops/scripts/monthly-batch-local.sh` :
  *
  *   curl --fail-with-body --silent -X POST \
@@ -18,7 +18,7 @@ import { loadAllSnapshotsForActiveMembers } from '@/lib/monthly-debrief/batch';
  *
  * Carbon of `/api/admin/weekly-batch/pull` (V1.7.2) — same auth surface,
  * same Node.js runtime + force-dynamic, same MEMBER_LABEL_SALT prod guard
- * (snapshots leave the host → reach Eliot's laptop → Anthropic). Separate
+ * (snapshots leave the host → reach Eliott's laptop → Anthropic). Separate
  * token (`MONTHLY_ADMIN_BATCH_TOKEN`) for independent rotation (SPEC §25.2).
  *
  * Query params :
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   if (guard) return guard;
 
   // The batch is the canonical "external export" path (snapshots leave the
-  // host and reach Eliot's laptop, then Anthropic). MEMBER_LABEL_SALT must
+  // host and reach Eliott's laptop, then Anthropic). MEMBER_LABEL_SALT must
   // be configured in production before exposing pseudonymized snapshots
   // externally (mirror weekly pull route).
   if (env.NODE_ENV === 'production' && !env.MEMBER_LABEL_SALT) {

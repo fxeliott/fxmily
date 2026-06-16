@@ -596,7 +596,7 @@ function FinalizeStep() {
           <p className="t-eyebrow-lg text-[var(--t-3)]">Étape finale</p>
           <h2 className="t-h1 mt-1 text-[var(--t-1)]">Tu as terminé tes 30 questions.</h2>
           <p className="t-body mt-2 text-[var(--t-2)]">
-            Eliot lit chaque réponse personnellement. Ton profil sera analysé dans les prochaines
+            Eliott lit chaque réponse personnellement. Ton profil sera analysé dans les prochaines
             24h. Tu peux le retrouver à tout moment sur{' '}
             <span className="font-medium text-[var(--t-1)]">/profile</span>.
           </p>

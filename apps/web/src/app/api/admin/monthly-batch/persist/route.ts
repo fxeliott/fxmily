@@ -12,7 +12,7 @@ import {
 /**
  * V1.4 §25 — POST `/api/admin/monthly-batch/persist`.
  *
- * Accepts a `MonthlyBatchPersistRequest` JSON body produced by Eliot's
+ * Accepts a `MonthlyBatchPersistRequest` JSON body produced by Eliott's
  * local script after `claude --print` generation. Carbon of
  * `/api/admin/weekly-batch/persist` (V1.7.2) : strict top-level Zod, 16 MiB
  * body cap (Content-Length cheap check + byte-length re-verify), then

@@ -5,7 +5,7 @@ import type { StorageAdapter, UploadInput } from './types';
 /**
  * Cloudflare R2 storage adapter — STUB (J2).
  *
- * Will be wired when Eliot provides the R2 keys (env vars `R2_ACCOUNT_ID`,
+ * Will be wired when Eliott provides the R2 keys (env vars `R2_ACCOUNT_ID`,
  * `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL`).
  *
  * Implementation outline (kept here as a checklist, not a TODO sprawl):

@@ -9,7 +9,7 @@ import { generateWeeklyReportsForAllActiveMembers } from '@/lib/weekly-report/se
 
 /**
  * Cron endpoint — generate the weekly AI report for every active member and
- * email the digest to Eliot (J8, SPEC §7.10).
+ * email the digest to Eliott (J8, SPEC §7.10).
  *
  * Wiring expected in production : Hetzner crontab "0 21 * * 0" (every Sunday
  * at 21:00 UTC) →
@@ -18,7 +18,7 @@ import { generateWeeklyReportsForAllActiveMembers } from '@/lib/weekly-report/se
  *
  * Why Sunday 21:00 UTC : that's 22:00 Paris winter / 23:00 Paris summer — late
  * enough for the local-week to be effectively over (markets closed), early
- * enough for Eliot to read the digest Sunday evening before Monday open.
+ * enough for Eliott to read the digest Sunday evening before Monday open.
  *
  * Auth/rate-limit/dev-window : carbon-copy of the J5/J6/J7 crons. See
  *   - `lib/rate-limit/token-bucket.ts` (5 burst, 1/min refill, LRU-capped)

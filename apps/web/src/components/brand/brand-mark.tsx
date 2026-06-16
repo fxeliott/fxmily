@@ -2,7 +2,7 @@
  * Marque Fxmily — monogramme « FX » officiel (jalon logo).
  *
  * Source UNIQUE du logo : le tracé vectoriel ci-dessous est la vectorisation
- * fidèle du logo fourni par Eliot (`logo fxmily.jpg`, potrace, fond détouré).
+ * fidèle du logo fourni par Eliott (`logo fxmily.jpg`, potrace, fond détouré).
  * Vecteur → net à toute taille (favicon 16px → splash 200px), zéro artefact
  * raster, `fill="currentColor"` → se teinte via la couleur de texte du parent
  * (bleu accent dans les chips, blanc sur le cœur du splash / les favicons).

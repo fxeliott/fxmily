@@ -183,7 +183,7 @@ export async function listMyRecentTrainingDebriefs(
 }
 
 /**
- * List every debrief of a member for Eliot's READ-ONLY admin view
+ * List every debrief of a member for Eliott's READ-ONLY admin view
  * (`/admin/members/[id]?tab=training`, SPEC §23.4). Admin-scoping is the
  * caller's responsibility (the admin page already gates `role === 'admin'`);
  * this is a plain user-scoped read by `memberId`, newest first. Bounded so a

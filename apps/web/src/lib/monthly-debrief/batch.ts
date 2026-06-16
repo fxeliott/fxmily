@@ -27,16 +27,16 @@ import {
 import { toSerializedMonthlyDebrief } from './service';
 
 /**
- * V1.4 §25 — Local-Claude monthly debrief batch (Eliot's Max subscription
+ * V1.4 §25 — Local-Claude monthly debrief batch (Eliott's Max subscription
  * path). EXACT carbon of `weekly-report/batch.ts` adapted to the monthly
  * cadence + the §25 dual-section output.
  *
- * Architecture (mirror V1.7.2) : Eliot refuses to pay for Anthropic API
+ * Architecture (mirror V1.7.2) : Eliott refuses to pay for Anthropic API
  * tokens. The monthly debriefs are generated via `claude --print` (headless
- * Claude Code CLI) on Eliot's local Windows machine using his Claude Max
+ * Claude Code CLI) on Eliott's local Windows machine using his Claude Max
  * subscription. The workflow :
  *
- *   1. Eliot runs `ops/scripts/monthly-batch-local.sh` (1st of the month)
+ *   1. Eliott runs `ops/scripts/monthly-batch-local.sh` (1st of the month)
  *   2. The script curl-POSTs `/api/admin/monthly-batch/pull` →
  *      {@link loadAllSnapshotsForActiveMembers} → pseudonymized snapshots
  *   3. For each member the script invokes `claude --print` with the

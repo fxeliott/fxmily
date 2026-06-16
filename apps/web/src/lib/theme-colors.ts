@@ -17,7 +17,7 @@
  *
  * Fxmily V1 is dark-only with a fixed token palette. Hardcoding the hex
  * mirrors of `globals.css` here is the simplest, fastest, SSR-safe path.
- * Source of truth stays the CSS — we just reflect it. When Eliot tweaks a
+ * Source of truth stays the CSS — we just reflect it. When Eliott tweaks a
  * token, this file gets the hex update too (one-line PR).
  *
  * Hex values are the comments in `apps/web/src/app/globals.css` (the OKLCH

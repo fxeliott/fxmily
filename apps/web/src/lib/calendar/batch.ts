@@ -31,12 +31,12 @@ import {
  * STRUCTURE of `lib/weekly-report/batch.ts` (+ `monthly-debrief/batch.ts`),
  * adapted to the calendar cadence + the §26 questionnaire-gated pipeline.
  *
- * Architecture (mirror V1.7.2 weekly / V1.4 monthly) : Eliot refuses to pay
+ * Architecture (mirror V1.7.2 weekly / V1.4 monthly) : Eliott refuses to pay
  * for Anthropic API tokens. Calendars are generated via `claude --print`
- * (headless Claude Code CLI, Opus 4.8 §8) on Eliot's local machine using his
+ * (headless Claude Code CLI, Opus 4.8 §8) on Eliott's local machine using his
  * Claude Max subscription ($0 marginal). The workflow :
  *
- *   1. Eliot runs `ops/scripts/calendar-batch-local.sh` (Monday morning)
+ *   1. Eliott runs `ops/scripts/calendar-batch-local.sh` (Monday morning)
  *   2. The script curl-POSTs `/api/admin/calendar-batch/pull` →
  *      {@link loadAllSnapshotsForCalendarGeneration} → pseudonymized snapshots
  *   3. For each member the script invokes `claude --print` with the canonical

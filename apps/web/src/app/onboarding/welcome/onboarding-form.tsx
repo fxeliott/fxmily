@@ -26,7 +26,7 @@ export function OnboardingForm({ token, email }: OnboardingFormProps) {
       case 'invalid_token':
         return "Ce lien d'invitation n'est pas valide.";
       case 'expired':
-        return 'Ce lien a expiré. Demande à Eliot une nouvelle invitation.';
+        return 'Ce lien a expiré. Demande à Eliott une nouvelle invitation.';
       case 'already_used':
         return 'Ce lien a déjà été utilisé.';
       case 'email_taken':

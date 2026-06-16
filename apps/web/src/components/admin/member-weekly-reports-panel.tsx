@@ -35,7 +35,7 @@ function isMockedModel(model: string): boolean {
  *
  * Read-only timeline of the AI-generated weekly digests, newest first. Each
  * row links to the full report at /admin/reports/[id]. Pills show :
- *   - Mock vs Live model (so Eliot can tell at a glance if the digest is the
+ *   - Mock vs Live model (so Eliott can tell at a glance if the digest is the
  *     deterministic fixture or real Claude output)
  *   - Email delivery state (pending vs sent)
  */

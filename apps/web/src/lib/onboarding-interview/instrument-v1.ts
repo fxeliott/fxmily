@@ -49,7 +49,7 @@
  *  - `summary` (100-800 chars FR) — descriptif-comportemental, pas clinique.
  *  - `highlights[i].evidence: string[]` — each evidence is verbatim substring
  *    of concatenated answerTexts (NFC-normalized), validated post-gen.
- *  - `axes_prioritaires: string[]` — 3-5 axes pour le coach Eliot.
+ *  - `axes_prioritaires: string[]` — 3-5 axes pour le coach Eliott.
  */
 
 export type OnboardingDimensionId =
@@ -440,7 +440,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'coaching_preference',
     phase: 'reflective_close',
     questionIndex: 29,
-    text: "Y a-t-il quelque chose qu'on n'a pas abordé dans ces questions et que tu veux qu'Eliot sache à ton sujet — sur ton trading, ta vie autour, ce qui te freine ou t'élève ? Pas obligatoire. Si rien : \"rien\" suffit.",
+    text: "Y a-t-il quelque chose qu'on n'a pas abordé dans ces questions et que tu veux qu'Eliott sache à ton sujet — sur ton trading, ta vie autour, ce qui te freine ou t'élève ? Pas obligatoire. Si rien : \"rien\" suffit.",
   },
 ] as const;
 
@@ -451,7 +451,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
 const METADATA_V1: OnboardingInstrumentMetadata = {
   version: 'v1',
   createdAt: '2026-05-28',
-  author: 'Eliot Pena (Fxmily) — instrument design + posture validation',
+  author: 'Eliott Pena (Fxmily) — instrument design + posture validation',
   primarySources: [
     {
       title: 'Trading in the Zone',
@@ -495,7 +495,7 @@ const METADATA_V1: OnboardingInstrumentMetadata = {
 export const ONBOARDING_INSTRUMENT_V1: OnboardingInstrument = {
   version: 'v1',
   preamble:
-    "Bienvenue. Cet entretien d'onboarding sert à mieux te connaître — ton trading, ton profil mental, tes routines. Il n'y a pas de bonne ni de mauvaise réponse. Eliot lit chaque réponse personnellement et l'IA en tire un profil descriptif pour personnaliser ton coaching. Tu peux quitter et reprendre à tout moment — tes réponses sont sauvegardées au fur et à mesure. Compte ~30 min répartis sur une ou deux sessions selon ton rythme. Sois honnête, pas idéaliste — la valeur de l'exercice dépend uniquement de ça.",
+    "Bienvenue. Cet entretien d'onboarding sert à mieux te connaître — ton trading, ton profil mental, tes routines. Il n'y a pas de bonne ni de mauvaise réponse. Eliott lit chaque réponse personnellement et l'IA en tire un profil descriptif pour personnaliser ton coaching. Tu peux quitter et reprendre à tout moment — tes réponses sont sauvegardées au fur et à mesure. Compte ~30 min répartis sur une ou deux sessions selon ton rythme. Sois honnête, pas idéaliste — la valeur de l'exercice dépend uniquement de ça.",
   dimensions: DIMENSIONS_V1,
   items: ITEMS_V1,
   metadata: METADATA_V1,

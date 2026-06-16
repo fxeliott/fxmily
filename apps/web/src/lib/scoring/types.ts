@@ -159,7 +159,7 @@ export interface EngagementParts {
   sleepQualityRate: SubScore | null;
   /**
    * SPEC §28/§22 — course-adherence habit signal: evening check-ins where the
-   * member declares they studied Eliot's COURSE (`formationFollowed=true`) /
+   * member declares they studied Eliott's COURSE (`formationFollowed=true`) /
    * evenings where they were asked (`formationFollowed !== null`). A true
    * fill-rate (sibling of `journalDepthRate`), engagement-side because it's a
    * curriculum-interaction habit, NOT a trading-process discipline. `null`

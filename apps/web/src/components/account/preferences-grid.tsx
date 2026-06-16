@@ -15,7 +15,7 @@ import { NOTIFICATION_TYPES, type NotificationTypeSlug } from '@/lib/schemas/pus
  * Admin-only category (`weekly_report_ready`) is hidden for members.
  *
  * Mark Douglas posture (no-FOMO, no-pressure):
- * - Labels are factual ("Corrections d'Eliot") not anxious ("Tu rates ce setup !").
+ * - Labels are factual ("Corrections d'Eliott") not anxious ("Tu rates ce setup !").
  * - Descriptions explain WHEN the push fires + the value, no urgency stick.
  * - No counter / "X messages non lus" badge — those go on `/dashboard` already.
  *
@@ -41,13 +41,13 @@ type CategoryMeta = {
 const CATEGORIES: CategoryMeta[] = [
   {
     type: 'annotation_received',
-    label: "Corrections d'Eliot sur tes trades",
+    label: "Corrections d'Eliott sur tes trades",
     description:
       "Tu es notifié dès qu'une correction texte ou vidéo est ajoutée sur l'un de tes trades.",
   },
   {
     type: 'training_annotation_received',
-    label: "Corrections d'Eliot sur tes backtests",
+    label: "Corrections d'Eliott sur tes backtests",
     description:
       "Tu es notifié dès qu'une correction est ajoutée sur l'un de tes backtests en mode entraînement.",
   },

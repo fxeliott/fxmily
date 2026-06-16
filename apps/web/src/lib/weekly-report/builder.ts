@@ -82,7 +82,7 @@ const SESSIONS_ALL: readonly TradeSession[] = ['asia', 'london', 'newyork', 'ove
  *   - V1.5.2+ rows carry **8-char pseudonymLabels**.
  *   - The two formats coexist by design (pure schema-level concern, no DB
  *     column to migrate — `WeeklyReport.userId` is the FK, not the label).
- *   - When Eliot opens an admin report from before the V1.5.2 cutoff, the
+ *   - When Eliott opens an admin report from before the V1.5.2 cutoff, the
  *     UI / email shows the 6-char label as it was generated. New runs of
  *     `generateWeeklyReportForUser` always produce 8-char labels.
  *   - **No replay required** : the label is a prompt-boundary artefact, not

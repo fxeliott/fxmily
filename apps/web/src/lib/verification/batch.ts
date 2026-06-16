@@ -27,7 +27,7 @@ import {
  *
  * Carbon of `onboarding-interview/batch.ts` with the vision delta:
  *
- *   Eliot local Windows                 Hetzner prod (Caddy → fxmily-web)
+ *   Eliott local Windows                 Hetzner prod (Caddy → fxmily-web)
  *   ════════════════════                ════════════════════════════════════
  *      /verification-batch (slash)
  *      bash ops/scripts/verification-batch-local.sh

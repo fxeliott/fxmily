@@ -14,7 +14,7 @@ import type { StorageAdapter } from './types';
  * vars are set; otherwise we fall back to the local-filesystem adapter.
  *
  * Note: at J2 the R2 implementation is a stub that throws on every call.
- * Until Eliot provisions the keys, the selection will always resolve to
+ * Until Eliott provisions the keys, the selection will always resolve to
  * local. This is intentional — see `lib/storage/r2.ts` for the migration
  * checklist.
  */

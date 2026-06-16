@@ -31,7 +31,7 @@ import type { MetadataRoute } from 'next';
  * - `description` = neutral one-liner, no "best", no "trader power", no exhort
  *
  * SPEC §2 alignment: this file ships the visible PWA identity for the
- * formation Fxmily. Eliot's preference (memory `feedback_premium_frontend.md`)
+ * formation Fxmily. Eliott's preference (memory `feedback_premium_frontend.md`)
  * is enforced by the lime accent + mercury shadows of the launched app, not
  * by the manifest itself — the manifest is the soberest of all the surfaces.
  */

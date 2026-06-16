@@ -77,7 +77,7 @@ export default async function OnboardingInterviewLandingPage() {
           <span className="text-[var(--t-1)]">
             Il n&apos;y a pas de bonne ni de mauvaise réponse.
           </span>{' '}
-          Eliot lit chaque réponse personnellement et l&apos;IA en tire un profil descriptif pour
+          Eliott lit chaque réponse personnellement et l&apos;IA en tire un profil descriptif pour
           personnaliser ton coaching.
         </p>
         <p className="t-body text-[var(--t-2)]">
@@ -112,7 +112,7 @@ export default async function OnboardingInterviewLandingPage() {
             </span>
             <span>
               <span className="text-[var(--t-1)]">Confidentiel</span> — analyse IA locale (pas
-              d&apos;API tierce), profil descriptif pour Eliot uniquement.
+              d&apos;API tierce), profil descriptif pour Eliott uniquement.
             </span>
           </li>
         </ul>

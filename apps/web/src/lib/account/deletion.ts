@@ -15,7 +15,7 @@ import { selectStorage } from '@/lib/storage';
  *      The user can log in, see the countdown, and cancel.
  *   3. Soft-deleted (matrl.)  — `status='deleted', deletedAt = materialisation time`
  *      PII has been scrubbed. Login refused (auth.ts gates on `status==='active'`).
- *      Eliot can still match audit logs to the row by `id` (cuid is opaque).
+ *      Eliott can still match audit logs to the row by `id` (cuid is opaque).
  *   4. Hard-purged             — row gone via cascade. Trades, check-ins, push
  *      subscriptions, etc. all disappear with `onDelete: Cascade` on the FK.
  *
@@ -152,7 +152,7 @@ export async function requestAccountDeletion(
 /**
  * Cancel a scheduled deletion. Only valid while `status='active'` AND
  * `deletedAt` is in the future. Once the cron has materialised the deletion
- * (status='deleted'), cancellation requires Eliot intervention via support.
+ * (status='deleted'), cancellation requires Eliott intervention via support.
  *
  * Atomicity (J10 Phase L review B2 — race fix to mirror `requestAccountDeletion`
  * Phase I H1) : the previous `findUnique` + `update` combo opened a race
@@ -175,7 +175,7 @@ export async function cancelAccountDeletion(
   // still has a legitimate cancel right (no actual destruction has
   // happened yet). If the cron has run, `status` is already 'deleted'
   // and the predicate misses → we throw `NotPending` and tell them to
-  // contact Eliot for a manual restore (within the 30d window).
+  // contact Eliott for a manual restore (within the 30d window).
   // The `now` parameter is kept for API symmetry with `requestAccountDeletion`
   // — used only by the disambiguation read below if needed.
   void now;

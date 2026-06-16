@@ -17,7 +17,7 @@ Public : 30 → 100 → milliers de membres. Mobile-first PWA (V1) → Capacitor
 Détails complets dans SPEC.md §4. En pratique :
 
 - **Next.js 16** (App Router) + **React 19** + **TypeScript strict**
-- **Tailwind CSS 4** + **shadcn/ui** + **Framer Motion** + **Recharts** (pivot J6.6 — Tremor abandonné pour bundle plus léger + control DS, cf. SPEC §20.1)
+- **Tailwind CSS 4** + composants **shadcn/ui** (CLI générateur sur primitives **`radix-ui`** — le paquet npm réel) + **Framer Motion** + **Recharts** (pivot J6.6 — Tremor abandonné pour bundle plus léger + control DS, cf. SPEC §20.1)
 - **Prisma 7** (Rust-free, driver adapter `@prisma/adapter-pg`) + **PostgreSQL 17**
 - **Auth.js v5** (email + password + magic link)
 - **Cloudflare R2** (médias) + **Resend** (emails) + **Sentry** (monitoring) + **Claude en local** (`claude --print` batch Claude Max, $0 API marginal — rapports IA + analyse onboarding, Opus 4.8 §8 ; chemin SDK API payant dormant)

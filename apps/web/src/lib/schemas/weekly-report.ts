@@ -346,7 +346,7 @@ export const weeklySnapshotSchema = z
     /// DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters (count-only,
     /// posture §2). The DEDICATED ConstancyScore + repetition alerts of the
     /// reported week are period-scoped; the open-truth-gaps count is current-state
-    /// (still open now). Fed to the admin digest so Eliot sees each member's
+    /// (still open now). Fed to the admin digest so Eliott sees each member's
     /// honesty/regularity trajectory — never a market view. Always present (the
     /// loader defaults 0/null when no signal).
     verification: verificationSliceSchema,

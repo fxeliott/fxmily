@@ -82,7 +82,7 @@ function polar(angleDeg: number, r: number): { x: number; y: number } {
  * Deterministic ambient drift field — fixed positions/timings so SSR and
  * client render identically (no `Math.random` at render = no hydration
  * mismatch). Each particle slow-drifts on its own CSS loop ; static
- * opacity ≤ 0.32 so the field reads as texture, never clutter (Eliot
+ * opacity ≤ 0.32 so the field reads as texture, never clutter (Eliott
  * "ultra premium mais ultra simple"). Positioned by polar angle/radius,
  * kept clear of the central "TOI" glyph zone (r ≥ 60).
  */

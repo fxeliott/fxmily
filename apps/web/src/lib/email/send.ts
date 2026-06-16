@@ -47,7 +47,7 @@ export async function sendInvitationEmail({
     text: [
       `Bienvenue sur Fxmily.`,
       ``,
-      `${invitedByName?.trim() || 'Eliot'} t'a invité·e à rejoindre l'espace de suivi comportemental.`,
+      `${invitedByName?.trim() || 'Eliott'} t'a invité·e à rejoindre l'espace de suivi comportemental.`,
       `Active ton compte avec ce lien (expire dans ${expiresInDays} jour${expiresInDays > 1 ? 's' : ''}) :`,
       ``,
       inviteUrl,
@@ -176,7 +176,7 @@ export async function sendAnnotationReceivedEmail({
 }: SendAnnotationReceivedParams): Promise<{ id: string | null; delivered: boolean }> {
   const tradeUrl = buildTradeDetailUrl(tradeId);
   const recipient = recipientFirstName?.trim() || 'Trader';
-  const author = adminName?.trim() || 'Eliot';
+  const author = adminName?.trim() || 'Eliott';
 
   return sendEmail({
     to,
@@ -224,9 +224,9 @@ const FALLBACK_SUBJECT_BY_TYPE: Record<NotificationTypeSlug, string> = {
 
 const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
   annotation_received:
-    "Eliot a laissé une correction sur l'un de tes trades. Elle t'attend dans ton journal — la correction sera marquée comme lue dès que tu ouvres le trade.",
+    "Eliott a laissé une correction sur l'un de tes trades. Elle t'attend dans ton journal — la correction sera marquée comme lue dès que tu ouvres le trade.",
   training_annotation_received:
-    "Eliot a laissé une correction sur l'un de tes backtests. Elle t'attend dans ton espace entraînement — marquée comme lue dès que tu ouvres le backtest.",
+    "Eliott a laissé une correction sur l'un de tes backtests. Elle t'attend dans ton espace entraînement — marquée comme lue dès que tu ouvres le backtest.",
   checkin_morning_reminder:
     'Trois minutes pour poser ton intention du jour. Pas de rattrapage — si la fenêtre est passée, on se retrouve ce soir.',
   checkin_evening_reminder:

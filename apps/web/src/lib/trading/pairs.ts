@@ -6,7 +6,7 @@
  * a schema migration. The allowlist is enforced at the form (Zod) and
  * Server Action (defense in depth) edges instead.
  *
- * Eliot validated the V1 set on 2026-05-05: 7 forex majors + 2 metals + 3
+ * Eliott validated the V1 set on 2026-05-05: 7 forex majors + 2 metals + 3
  * US indices. Crypto and exotic pairs are explicitly out of scope.
  */
 

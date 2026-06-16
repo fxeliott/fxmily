@@ -107,7 +107,7 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
             </div>
             <p className="text-muted-foreground mt-1 text-sm">
               Les notifications push sont en cours de mise en service. Reviens dans quelques minutes
-              — ou demande à Eliot si l&apos;attente persiste.
+              — ou demande à Eliott si l&apos;attente persiste.
             </p>
           </div>
         )}

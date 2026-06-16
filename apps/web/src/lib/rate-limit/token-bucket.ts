@@ -209,7 +209,7 @@ export const sentryTunnelLimiter = new TokenBucketLimiter({
 /**
  * V1.7.2 — `/api/admin/weekly-batch/{pull,persist}` per-IP bucket.
  *
- * Eliot triggers the batch from his local machine ; legitimate flow = 1 pull
+ * Eliott triggers the batch from his local machine ; legitimate flow = 1 pull
  * + 1 persist per week (Sunday). Burst 10 covers `--resume` retries +
  * dev iteration without locking him out. Refill 1 token / 5 min sustained
  * is well below any human cadence but tight enough to throttle a bot
@@ -227,7 +227,7 @@ export const adminBatchLimiter = new TokenBucketLimiter({
 /**
  * V1.4 §25 — `/api/admin/monthly-batch/{pull,persist}` per-IP bucket.
  *
- * Carbon of `adminBatchLimiter` (weekly). Eliot triggers the monthly batch
+ * Carbon of `adminBatchLimiter` (weekly). Eliott triggers the monthly batch
  * from his local machine ; legitimate flow = 1 pull + 1 persist per month.
  * Same burst 10 / refill 1-per-5-min envelope as the weekly batch — well
  * below any human cadence, tight enough to throttle a bot brute-forcing the
@@ -244,12 +244,12 @@ export const monthlyBatchLimiter = new TokenBucketLimiter({
 /**
  * §26 — `/api/admin/calendar-batch/{pull,persist}` per-IP bucket (J-C2).
  *
- * Carbon of `monthlyBatchLimiter`. Eliot triggers the calendar batch from his
+ * Carbon of `monthlyBatchLimiter`. Eliott triggers the calendar batch from his
  * local machine ; legitimate flow = 1 pull + 1 persist per week. Same burst 10
  * / refill 1-per-5-min envelope — well below any human cadence, tight enough to
  * throttle a bot brute-forcing the 32-char `CALENDAR_ADMIN_BATCH_TOKEN`.
  * Separate singleton (not shared with the weekly/monthly buckets) so a flood on
- * one batch surface never locks Eliot out of another — independent surfaces,
+ * one batch surface never locks Eliott out of another — independent surfaces,
  * independent buckets.
  */
 export const calendarBatchLimiter = new TokenBucketLimiter({
@@ -265,7 +265,7 @@ export const calendarBatchLimiter = new TokenBucketLimiter({
  * is 1 pull + N proof-image downloads + 1 persist per run (one download per
  * pending proof, sequential). Burst 40 covers a 25-proof batch + retries;
  * refill 1-per-minute keeps a stolen-token bot far below useful throughput
- * while never throttling Eliot's sequential script. Separate singleton so a
+ * while never throttling Eliott's sequential script. Separate singleton so a
  * flood on another batch surface never locks out the verification batch.
  */
 export const verificationBatchLimiter = new TokenBucketLimiter({
@@ -314,7 +314,7 @@ export const healthLimiter = new TokenBucketLimiter({
  * (anti-enumeration). Audit row `auth.login.rate_limited` with metadata
  * `{ kind: 'email' | 'ip', retryAfterMs }` (no email in plaintext).
  *
- * `bucketSize: 5/10` is generous enough that a typo-prone Eliot won't lock
+ * `bucketSize: 5/10` is generous enough that a typo-prone Eliott won't lock
  * himself out, but tight enough that a bot doing 60 req/min still trips
  * after the 11th attempt.
  */

@@ -48,7 +48,7 @@ interface DraftState {
   date: string;
   planRespectedToday: boolean | null;
   hedgeRespectedToday: 'true' | 'false' | 'na' | '';
-  // SPEC §28/§22 — evening "bilan": studied Eliot's course today? Optional
+  // SPEC §28/§22 — evening "bilan": studied Eliott's course today? Optional
   // tri-state ('' = unanswered → submits as null). Never required to advance.
   formationFollowed: 'true' | 'false' | '';
   caffeineMl: string;

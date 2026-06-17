@@ -268,76 +268,95 @@ export async function scanMeetingNoShowsForAllMembers(
     select: { id: true, joinedAt: true },
   });
 
-  let discrepanciesCreated = 0;
-  let errors = 0;
+  const memberIds = members.map((mem) => mem.id);
+  const meetingIds = meetings.map((m) => m.id);
 
-  for (const member of members) {
-    try {
-      const joinFloor = meetingJoinFloor(member.joinedAt).getTime();
-      // Expected = meetings held on/after the member's join day (they existed).
-      const expected = meetings.filter((m) => m.scheduledAt.getTime() >= joinFloor);
-      if (expected.length === 0) continue;
-      const expectedIds = expected.map((m) => m.id);
+  try {
+    // BATCHED reads (S10 N+1 canon — the ritual scan above batches the same way):
+    // ONE query for every member's COMPLETE attendances over the closing
+    // meetings, ONE for the gaps already materialised. No per-member round-trip.
+    const [completeAttendances, existingGaps] = await Promise.all([
+      db.meetingAttendance.findMany({
+        where: {
+          userId: { in: memberIds },
+          meetingId: { in: meetingIds },
+          // Complete = attended (live OR replay) AND content reviewed (mirror service.ts).
+          attendanceMode: { not: null },
+          contentReviewed: true,
+        },
+        select: { userId: true, meetingId: true },
+      }),
+      db.discrepancy.findMany({
+        where: { memberId: { in: memberIds }, meetingId: { in: meetingIds } },
+        select: { memberId: true, meetingId: true },
+      }),
+    ]);
 
-      const attendances = await db.meetingAttendance.findMany({
-        where: { userId: member.id, meetingId: { in: expectedIds } },
-        select: { meetingId: true, attendanceMode: true, contentReviewed: true },
-      });
-      // Complete = attended (live OR replay) AND content reviewed (mirror service.ts).
-      const completed = new Set(
-        attendances
-          .filter((a) => a.attendanceMode !== null && a.contentReviewed === true)
-          .map((a) => a.meetingId),
-      );
-      const missed = expected.filter((m) => !completed.has(m.id));
-      if (missed.length === 0) continue;
-
-      // Dedup on (member, meeting) — a re-run never duplicates a gap.
-      const existing = await db.discrepancy.findMany({
-        where: { memberId: member.id, meetingId: { in: missed.map((m) => m.id) } },
-        select: { meetingId: true },
-      });
-      const existingSet = new Set(existing.map((d) => d.meetingId));
-
-      for (const m of missed) {
-        if (existingSet.has(m.id)) continue;
-        try {
-          await db.discrepancy.create({
-            data: {
-              memberId: member.id,
-              type: 'meeting_missed_no_reason',
-              meetingId: m.id,
-              severity: 1,
-              // Detection instant (≈ window close) so the gap lands in the
-              // constancy (28d) + alert (14d) windows, not the old meeting date.
-              detectedAt: now,
-              claudeReasoning: `Une réunion programmée le ${MEETING_DATE_FMT.format(m.scheduledAt)} n'a pas été suivie (ni en direct ni en replay) dans le délai de rattrapage de 30 jours, sans motif déclaré.`,
-            },
-          });
-          discrepanciesCreated += 1;
-        } catch (err) {
-          // P2002 — a concurrent run grabbed this (member, meeting). Benign.
-          const isUnique =
-            typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
-          if (!isUnique) throw err;
-        }
+    const completeByMember = new Map<string, Set<string>>();
+    for (const a of completeAttendances) {
+      let set = completeByMember.get(a.userId);
+      if (!set) {
+        set = new Set<string>();
+        completeByMember.set(a.userId, set);
       }
-    } catch (err) {
-      errors += 1;
-      reportError(
-        'verification.constancy.meetings',
-        err instanceof Error ? err : new Error('meeting_noshow_scan_failed'),
-        { memberId: member.id },
-      );
+      set.add(a.meetingId);
     }
-  }
+    const existingKeys = new Set(existingGaps.map((d) => `${d.memberId}|${d.meetingId}`));
 
-  return {
-    membersScanned: members.length,
-    meetingsClosed: meetings.length,
-    discrepanciesCreated,
-    errors,
-  };
+    // Build every gap in memory; the `@@unique([memberId, meetingId])` index +
+    // `skipDuplicates` make the insert idempotent (a re-run / band overlap
+    // inserts 0 duplicates), so no per-row try/catch and no per-member dedup
+    // query are needed — the whole scan is now ~3 constant-count queries.
+    const toCreate = members.flatMap((member) => {
+      const joinFloor = meetingJoinFloor(member.joinedAt).getTime();
+      const completed = completeByMember.get(member.id);
+      return meetings
+        .filter(
+          (m) =>
+            // Expected (held on/after the join day) + no complete attendance + fresh.
+            m.scheduledAt.getTime() >= joinFloor &&
+            !completed?.has(m.id) &&
+            !existingKeys.has(`${member.id}|${m.id}`),
+        )
+        .map((m) => ({
+          memberId: member.id,
+          type: 'meeting_missed_no_reason' as const,
+          meetingId: m.id,
+          severity: 1,
+          // Detection instant (≈ window close) so the gap lands in the constancy
+          // (28d) + alert (14d) windows, not the old meeting date.
+          detectedAt: now,
+          claudeReasoning: `Une réunion programmée le ${MEETING_DATE_FMT.format(m.scheduledAt)} n'a pas été suivie (ni en direct ni en replay) dans le délai de rattrapage de 30 jours, sans motif déclaré.`,
+        }));
+    });
+
+    let discrepanciesCreated = 0;
+    if (toCreate.length > 0) {
+      const result = await db.discrepancy.createMany({ data: toCreate, skipDuplicates: true });
+      discrepanciesCreated = result.count;
+    }
+
+    return {
+      membersScanned: members.length,
+      meetingsClosed: meetings.length,
+      discrepanciesCreated,
+      errors: 0,
+    };
+  } catch (err) {
+    // Isolate a scan failure from the rest of the cron (mirror the sibling
+    // scans' error-count contract — never 500 the whole verification run).
+    reportError(
+      'verification.constancy.meetings',
+      err instanceof Error ? err : new Error('meeting_noshow_scan_failed'),
+      { meetingsClosed: meetings.length },
+    );
+    return {
+      membersScanned: members.length,
+      meetingsClosed: meetings.length,
+      discrepanciesCreated: 0,
+      errors: 1,
+    };
+  }
 }
 
 // =============================================================================

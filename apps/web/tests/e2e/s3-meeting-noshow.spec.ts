@@ -167,4 +167,43 @@ test.describe.serial('S3 §31 — no-show réunion → écart de constance (real
     await expect(page.getByText(/vérifié à 100\s?%/i)).toHaveCount(0);
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
   });
+
+  test('4) répétition — 3 no-shows non excusés → alerte psychologique (répétition only, S3 → S5)', async ({
+    request,
+  }) => {
+    if (!member || !cronSecret) throw new Error('precondition missing');
+    const closed = new Date(Date.now() - 31 * DAY); // in the scan band
+
+    // Two MORE missed scheduled meetings (total 3 with the beforeAll one) → ≥ threshold 3.
+    for (const [date, slot] of [
+      ['2019-02-07T00:00:00.000Z', 'midday'],
+      ['2019-02-07T00:00:00.000Z', 'evening'],
+    ] as const) {
+      const row = await db.meeting.create({
+        data: { date: new Date(date), slot, scheduledAt: closed, status: 'scheduled' },
+        select: { id: true },
+      });
+      meetingIds.push(row.id);
+    }
+
+    const res = await request.post('/api/cron/verification-scan', {
+      headers: { 'x-cron-secret': cronSecret },
+      failOnStatusCode: false,
+    });
+    expect(res.status()).toBe(200);
+
+    const gaps = await db.discrepancy.count({
+      where: { memberId: member.id, type: 'meeting_missed_no_reason' },
+    });
+    expect(gaps, 'three meetings missed without reason').toBe(3);
+
+    // Repetition (≥3 in 14d) raises the alert; a single miss never would (§33.8).
+    const alert = await db.alert.findFirst({
+      where: { memberId: member.id, triggerType: 'meeting_missed_repeat' },
+    });
+    expect(alert, 'repeated no-shows must raise a discipline alert').not.toBeNull();
+    expect(alert!.repeatCount).toBeGreaterThanOrEqual(3);
+    // §2 firewall by construction — an alert is ALWAYS psychological, never trading advice.
+    expect(alert!.category).toBe('psychological');
+  });
 });

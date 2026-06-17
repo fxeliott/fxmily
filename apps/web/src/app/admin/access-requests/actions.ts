@@ -12,7 +12,8 @@ import {
   rollbackApproval,
 } from '@/lib/access-request/service';
 import { logAudit } from '@/lib/auth/audit';
-import { sendAccessApprovedEmail } from '@/lib/email/send';
+import { sendAccessApprovedEmail, sendAccessRejectedEmail } from '@/lib/email/send';
+import { reportWarning } from '@/lib/observability';
 
 /**
  * Admin actions for the self-service access-request queue (V2.5).
@@ -78,7 +79,17 @@ export async function approveAccessRequestAction(
       expiresAt: approval.expiresAt,
     });
   } catch (err) {
-    await rollbackApproval(requestId, approval.invitationId).catch(() => undefined);
+    // Email failed → revert (delete invitation + back to pending). If the
+    // rollback ITSELF fails (e.g. a correlated infra outage saturating the
+    // pool), the request would be stranded 'approved' + invisible from the
+    // pending queue with no invite delivered — so OBSERVE that case (PII-free)
+    // instead of swallowing it, mirroring the reject/create-notify warnings.
+    await rollbackApproval(requestId, approval.invitationId).catch((rollbackErr) => {
+      reportWarning('access-request.approve', 'rollback_failed', {
+        requestId,
+        error: rollbackErr instanceof Error ? rollbackErr.message.slice(0, 200) : 'unknown',
+      });
+    });
     console.error('[access-request] approval email failed — rolled back', err);
     return {
       ok: false,
@@ -104,8 +115,9 @@ export async function rejectAccessRequestAction(
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: 'forbidden', message: 'Accès refusé.' };
 
+  let rejection;
   try {
-    await rejectAccessRequest(requestId, admin.id);
+    rejection = await rejectAccessRequest(requestId, admin.id);
   } catch (err) {
     if (err instanceof AccessRequestNotFoundError) {
       return { ok: false, error: 'not_found', message: 'Demande introuvable.' };
@@ -117,6 +129,20 @@ export async function rejectAccessRequestAction(
     return { ok: false, error: 'unknown', message: 'Impossible de traiter la demande, réessaie.' };
   }
 
+  // §26.4 — refusal email, BEST-EFFORT: the rejection is already committed, so
+  // an email hiccup must NOT undo it (unlike approval which rolls back). A
+  // failure is observed (PII-free warning), never surfaced as an error banner.
+  let emailDelivered = true;
+  try {
+    await sendAccessRejectedEmail({ to: rejection.email, firstName: rejection.firstName });
+  } catch (err) {
+    emailDelivered = false;
+    reportWarning('access-request.reject', 'rejection_email_failed', {
+      requestId,
+      error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+    });
+  }
+
   await logAudit({
     action: 'access_request.rejected',
     userId: admin.id,
@@ -124,5 +150,8 @@ export async function rejectAccessRequestAction(
   });
 
   revalidatePath('/admin/access-requests');
-  return { ok: true, message: 'Demande refusée.' };
+  return {
+    ok: true,
+    message: emailDelivered ? 'Demande refusée — email envoyé.' : 'Demande refusée.',
+  };
 }

@@ -13,21 +13,51 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const createAccessRequestMock = vi.fn<(...args: unknown[]) => unknown>();
+const countPendingMock = vi.fn<(...args: unknown[]) => unknown>();
 const headersMock = vi.fn<(...args: unknown[]) => Promise<Headers>>();
 const accessRequestConsumeMock = vi.fn<(...args: unknown[]) => unknown>();
 const logAuditMock = vi.fn<(arg: unknown) => Promise<void>>(async () => undefined);
+const sendAdminNotifMock = vi.fn<(...args: unknown[]) => unknown>();
+const reportWarningMock = vi.fn();
 
 vi.mock('@/lib/access-request/service', () => ({
   createAccessRequest: createAccessRequestMock,
+  countPendingAccessRequests: countPendingMock,
 }));
 
 vi.mock('next/headers', () => ({
   headers: headersMock,
 }));
 
+// `after()` defers the admin notification off the response path (anti-timing-
+// oracle). Capture the callbacks so the tests can flush them deterministically.
+const afterCallbacks: Array<() => unknown | Promise<unknown>> = [];
+async function flushAfter(): Promise<void> {
+  const cbs = afterCallbacks.splice(0);
+  for (const cb of cbs) await cb();
+}
+vi.mock('next/server', () => ({
+  after: (cb: () => unknown) => {
+    afterCallbacks.push(cb);
+  },
+}));
+
 vi.mock('@/lib/auth/audit', () => ({
   logAudit: logAuditMock,
 }));
+
+vi.mock('@/lib/email/send', () => ({
+  sendAccessRequestReceivedAlertEmail: sendAdminNotifMock,
+}));
+
+vi.mock('@/lib/observability', () => ({ reportWarning: reportWarningMock }));
+
+// Force a configured admin recipient so the §26.2 notify branch is exercised
+// (it short-circuits when WEEKLY_REPORT_RECIPIENT is unset).
+vi.mock('@/lib/env', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/env')>('@/lib/env');
+  return { ...actual, env: { ...actual.env, WEEKLY_REPORT_RECIPIENT: 'admin@fxmily.test' } };
+});
 
 vi.mock('@/lib/rate-limit/token-bucket', async () => {
   const actual = await vi.importActual<typeof import('@/lib/rate-limit/token-bucket')>(
@@ -43,13 +73,19 @@ const { requestAccessAction } = await import('./actions');
 
 beforeEach(() => {
   createAccessRequestMock.mockReset();
+  countPendingMock.mockReset();
   headersMock.mockReset();
   accessRequestConsumeMock.mockReset();
   logAuditMock.mockClear();
+  sendAdminNotifMock.mockReset();
+  reportWarningMock.mockReset();
+  afterCallbacks.length = 0;
 
   headersMock.mockResolvedValue(new Headers({ 'x-forwarded-for': '203.0.113.42' }));
   accessRequestConsumeMock.mockReturnValue({ allowed: true, remaining: 2, retryAfterMs: 0 });
   createAccessRequestMock.mockResolvedValue({ ok: true, created: true });
+  countPendingMock.mockResolvedValue(1);
+  sendAdminNotifMock.mockResolvedValue({ id: 'email-1', delivered: true });
 });
 
 function makeForm(fields: Record<string, string>): FormData {
@@ -98,6 +134,58 @@ describe('requestAccessAction — happy path', () => {
 
     // Identical to the created:true branch — caller can't distinguish.
     expect(result).toEqual({ ok: true, message: 'demande en attente' });
+  });
+});
+
+describe('requestAccessAction — admin notification (§26.2 "par email ET sur son profil")', () => {
+  it('notifies the admin BY EMAIL (count-only) when a NEW request is created', async () => {
+    createAccessRequestMock.mockResolvedValue({ ok: true, created: true });
+    countPendingMock.mockResolvedValue(3);
+
+    await requestAccessAction(
+      null,
+      makeForm({ firstName: 'Eliot', lastName: 'Pena', email: 'new@prospect.com' }),
+    );
+    // Notification is deferred via after() — flush it to observe the side effect.
+    await flushAfter();
+
+    // §26.2 — the operator gets a count-only email, NO requester PII passed here.
+    expect(sendAdminNotifMock).toHaveBeenCalledWith({ to: 'admin@fxmily.test', pendingCount: 3 });
+  });
+
+  it('schedules NOTHING on the response path when the service dedups (anti-enumeration + no timing oracle)', async () => {
+    createAccessRequestMock.mockResolvedValue({ ok: true, created: false });
+
+    const result = await requestAccessAction(
+      null,
+      makeForm({ firstName: 'Eliot', lastName: 'Pena', email: 'already@member.com' }),
+    );
+
+    expect(result).toEqual({ ok: true, message: 'demande en attente' });
+    // created:false → no after() callback queued at all (constant-time response).
+    expect(afterCallbacks).toHaveLength(0);
+    await flushAfter();
+    expect(sendAdminNotifMock).not.toHaveBeenCalled();
+  });
+
+  it('still returns success (best-effort) when the admin notification email fails', async () => {
+    createAccessRequestMock.mockResolvedValue({ ok: true, created: true });
+    sendAdminNotifMock.mockRejectedValue(new Error('Resend down'));
+
+    const result = await requestAccessAction(
+      null,
+      makeForm({ firstName: 'Eliot', lastName: 'Pena', email: 'new@prospect.com' }),
+    );
+
+    // A delivery failure must NEVER break the public request — and the failure
+    // happens in the deferred after() callback, never on the response path.
+    expect(result).toEqual({ ok: true, message: 'demande en attente' });
+    await flushAfter();
+    expect(reportWarningMock).toHaveBeenCalledWith(
+      'access-request.create',
+      'admin_notify_failed',
+      expect.objectContaining({ error: expect.any(String) }),
+    );
   });
 });
 

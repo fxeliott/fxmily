@@ -1,9 +1,13 @@
 'use server';
 
 import { headers } from 'next/headers';
+import { after } from 'next/server';
 
-import { createAccessRequest } from '@/lib/access-request/service';
+import { countPendingAccessRequests, createAccessRequest } from '@/lib/access-request/service';
 import { logAudit } from '@/lib/auth/audit';
+import { sendAccessRequestReceivedAlertEmail } from '@/lib/email/send';
+import { env } from '@/lib/env';
+import { reportWarning } from '@/lib/observability';
 import { accessRequestIpLimiter, callerIdTrusted } from '@/lib/rate-limit/token-bucket';
 import { accessRequestSchema } from '@/lib/schemas/auth';
 
@@ -65,11 +69,38 @@ export async function requestAccessAction(
     return { ok: false, error: 'invalid_input', fieldErrors };
   }
 
+  let created = false;
   try {
-    await createAccessRequest(parsed.data);
+    ({ created } = await createAccessRequest(parsed.data));
   } catch (err) {
     console.error('[access-request] createAccessRequest failed', err);
     return { ok: false, error: 'unknown', message: 'Une erreur est survenue, réessaie.' };
+  }
+
+  // §26.2 — notify the admin BY EMAIL (the other half of "email ET profil").
+  // ONLY when a NEW row was actually created (`created`) — preserves
+  // anti-enumeration: a dedup'd/raced submit sends nothing.
+  //
+  // Deferred via `after()` (post-response) so the awaited count+email network
+  // round-trip is NOT on the response path: without this, the created:true
+  // branch would return ~hundreds of ms slower than the dedup'd created:false
+  // branch, leaking a TIMING oracle that would defeat the anti-enumeration
+  // invariant the rest of this action upholds. BEST-EFFORT + count-only (no
+  // requester PII): a delivery failure never breaks the public request.
+  if (created) {
+    const recipient = env.WEEKLY_REPORT_RECIPIENT;
+    if (recipient) {
+      after(async () => {
+        try {
+          const pendingCount = await countPendingAccessRequests();
+          await sendAccessRequestReceivedAlertEmail({ to: recipient, pendingCount });
+        } catch (err) {
+          reportWarning('access-request.create', 'admin_notify_failed', {
+            error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+          });
+        }
+      });
+    }
   }
 
   // RGPD: NO PII in audit metadata (no email/name). The `AccessRequest` row

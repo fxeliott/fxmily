@@ -350,33 +350,46 @@ describe('rollbackApproval', () => {
 // ---------------------------------------------------------------------------
 
 describe('rejectAccessRequest', () => {
-  it('flips a pending request to rejected with reviewer metadata', async () => {
-    accessRequestUpdateMany.mockResolvedValue({ count: 1 });
+  it('flips a pending request to rejected with reviewer metadata + returns the requester email/firstName (§26.4)', async () => {
+    accessRequestFindUnique.mockResolvedValue({
+      id: 'ar-1',
+      status: 'pending',
+      email: 'ana@example.com',
+      firstName: 'Ana',
+    });
+    accessRequestUpdate.mockResolvedValue({ id: 'ar-1' });
 
-    await rejectAccessRequest('ar-1', 'admin-1');
+    const result = await rejectAccessRequest('ar-1', 'admin-1');
 
-    const arg = accessRequestUpdateMany.mock.calls[0]?.[0] as {
-      where: { id: string; status: string };
+    const arg = accessRequestUpdate.mock.calls[0]?.[0] as {
+      where: { id: string };
       data: { status: string; reviewedById: string };
     };
-    expect(arg.where).toEqual({ id: 'ar-1', status: 'pending' });
+    expect(arg.where).toEqual({ id: 'ar-1' });
     expect(arg.data.status).toBe('rejected');
     expect(arg.data.reviewedById).toBe('admin-1');
+    // Email recipient + greeting are carried back to the caller (refusal email).
+    expect(result).toEqual({ email: 'ana@example.com', firstName: 'Ana' });
   });
 
-  it('throws AccessRequestNotFoundError when nothing matched and the row is absent', async () => {
-    accessRequestUpdateMany.mockResolvedValue({ count: 0 });
+  it('throws AccessRequestNotFoundError when the row is absent (no update, no email)', async () => {
     accessRequestFindUnique.mockResolvedValue(null);
     await expect(rejectAccessRequest('nope', 'admin-1')).rejects.toBeInstanceOf(
       AccessRequestNotFoundError,
     );
+    expect(accessRequestUpdate).not.toHaveBeenCalled();
   });
 
   it('throws AccessRequestNotPendingError when the row exists but is already resolved', async () => {
-    accessRequestUpdateMany.mockResolvedValue({ count: 0 });
-    accessRequestFindUnique.mockResolvedValue({ id: 'ar-1' });
+    accessRequestFindUnique.mockResolvedValue({
+      id: 'ar-1',
+      status: 'approved',
+      email: 'ana@example.com',
+      firstName: 'Ana',
+    });
     await expect(rejectAccessRequest('ar-1', 'admin-1')).rejects.toBeInstanceOf(
       AccessRequestNotPendingError,
     );
+    expect(accessRequestUpdate).not.toHaveBeenCalled();
   });
 });

@@ -7,6 +7,7 @@ const logAuditMock = vi.fn();
 const startInterviewMock = vi.fn();
 const appendAnswerMock = vi.fn();
 const finalizeInterviewMock = vi.fn();
+const getInterviewCompletenessMock = vi.fn();
 const detectCrisisMock = vi.fn();
 const detectInjectionMock = vi.fn();
 const reportErrorMock = vi.fn();
@@ -24,6 +25,7 @@ vi.mock('@/lib/onboarding-interview/service', () => ({
   startInterview: startInterviewMock,
   appendAnswer: appendAnswerMock,
   finalizeInterview: finalizeInterviewMock,
+  getInterviewCompleteness: getInterviewCompletenessMock,
   OnboardingInstrumentMismatchError: class OnboardingInstrumentMismatchError extends Error {
     constructor(message: string) {
       super(message);
@@ -51,6 +53,7 @@ afterEach(() => {
   startInterviewMock.mockReset();
   appendAnswerMock.mockReset();
   finalizeInterviewMock.mockReset();
+  getInterviewCompletenessMock.mockReset();
   detectCrisisMock.mockReset();
   detectInjectionMock.mockReset();
   reportErrorMock.mockReset();
@@ -477,6 +480,15 @@ describe('finalizeInterviewAction — auth gate', () => {
 describe('finalizeInterviewAction — no interview (defensive)', () => {
   it('returns no_interview when finalizeInterview returns null', async () => {
     authMock.mockResolvedValueOnce(ACTIVE_SESSION);
+    // No interview exists → completeness gate is skipped (exists:false), the
+    // finalize call then returns null → no_interview.
+    getInterviewCompletenessMock.mockResolvedValueOnce({
+      exists: false,
+      alreadyCompleted: false,
+      answered: 0,
+      required: 0,
+      complete: false,
+    });
     finalizeInterviewMock.mockResolvedValueOnce(null);
 
     const result = await finalizeInterviewAction(null, makeFormData({}));
@@ -487,9 +499,36 @@ describe('finalizeInterviewAction — no interview (defensive)', () => {
   });
 });
 
+describe('finalizeInterviewAction — completeness gate (§30)', () => {
+  it('refuses to finalize a near-empty interview (incomplete), never calls finalize', async () => {
+    authMock.mockResolvedValueOnce(ACTIVE_SESSION);
+    getInterviewCompletenessMock.mockResolvedValueOnce({
+      exists: true,
+      alreadyCompleted: false,
+      answered: 3,
+      required: 30,
+      complete: false,
+    });
+
+    const result = await finalizeInterviewAction(null, makeFormData({}));
+
+    expect(result).toEqual({ ok: false, error: 'incomplete' });
+    expect(finalizeInterviewMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('finalizeInterviewAction — happy path', () => {
   it('audits completed, revalidates /profile, redirects /onboarding/interview/complete', async () => {
     authMock.mockResolvedValueOnce(ACTIVE_SESSION);
+    getInterviewCompletenessMock.mockResolvedValueOnce({
+      exists: true,
+      alreadyCompleted: false,
+      answered: 30,
+      required: 30,
+      complete: true,
+    });
     finalizeInterviewMock.mockResolvedValueOnce({
       ...FROZEN_INTERVIEW,
       status: 'completed',

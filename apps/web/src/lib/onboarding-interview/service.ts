@@ -323,6 +323,50 @@ export async function finalizeInterview(
 }
 
 /**
+ * Completeness gate for finalize (§30 — « ~30 questions »). The wizard already
+ * enforces all-questions-before-finalize client-side (`currentStep >= TOTAL`),
+ * but the finalize Server Action is directly invocable (POST), so a crafted
+ * request could finalize a near-empty interview → an empty MemberProfile (the
+ * batch even mocks « aucune réponse exploitable »). This is the SERVER-side
+ * guard the Action consults before finalizing.
+ *
+ * - `alreadyCompleted` → `complete: true` (idempotent finalize must still pass).
+ * - Unknown instrument version → `required: 0` → `complete: true` (FAIL-OPEN:
+ *   never brick finalize on a version mismatch; `appendAnswer` already rejects
+ *   unknown versions at write-time, so such a row can't hold answers anyway).
+ */
+export interface InterviewCompleteness {
+  exists: boolean;
+  alreadyCompleted: boolean;
+  answered: number;
+  required: number;
+  complete: boolean;
+}
+
+export async function getInterviewCompleteness(userId: string): Promise<InterviewCompleteness> {
+  const interview = await db.onboardingInterview.findUnique({ where: { userId } });
+  if (!interview) {
+    return { exists: false, alreadyCompleted: false, answered: 0, required: 0, complete: false };
+  }
+  if (interview.status === 'completed') {
+    return { exists: true, alreadyCompleted: true, answered: 0, required: 0, complete: true };
+  }
+  const instrument = getOnboardingInstrument(interview.instrumentVersion);
+  const required = instrument?.items.length ?? 0;
+  const answered = await db.onboardingInterviewAnswer.count({
+    where: { interviewId: interview.id },
+  });
+  return {
+    exists: true,
+    alreadyCompleted: false,
+    answered,
+    required,
+    // required===0 (unknown version) → fail-open: don't block finalize.
+    complete: required === 0 ? true : answered >= required,
+  };
+}
+
+/**
  * Read the current onboarding interview state for `userId`. Returns null if
  * no interview started yet.
  */

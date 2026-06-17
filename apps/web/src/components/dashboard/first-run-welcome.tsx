@@ -1,4 +1,4 @@
-import { ArrowRight, Compass, NotebookPen, Sunrise } from 'lucide-react';
+import { ArrowRight, BookOpen, Compass, NotebookPen, Sunrise } from 'lucide-react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -99,6 +99,13 @@ export function FirstRunWelcome() {
           <Link href="/journal/new" className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}>
             <NotebookPen className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
             Logger un trade
+          </Link>
+          <Link
+            href="/guide"
+            className="inline-flex items-center gap-1.5 px-1 text-[13px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
+          >
+            <BookOpen className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            Comment ça marche
           </Link>
         </div>
       </div>

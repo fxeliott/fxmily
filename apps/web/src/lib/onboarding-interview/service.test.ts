@@ -22,6 +22,7 @@ const interviewCreateMock = vi.fn();
 const interviewFindUniqueMock = vi.fn();
 const interviewUpdateMock = vi.fn();
 const answerUpsertMock = vi.fn();
+const answerCountMock = vi.fn();
 const profileFindUniqueMock = vi.fn();
 
 vi.mock('@/lib/db', () => ({
@@ -33,6 +34,7 @@ vi.mock('@/lib/db', () => ({
     },
     onboardingInterviewAnswer: {
       upsert: answerUpsertMock,
+      count: answerCountMock,
     },
     memberProfile: {
       findUnique: profileFindUniqueMock,
@@ -58,6 +60,7 @@ const {
   startInterview,
   appendAnswer,
   finalizeInterview,
+  getInterviewCompleteness,
   getInterviewForUser,
   getProfileForUser,
   DEFAULT_INSTRUMENT_VERSION,
@@ -69,6 +72,7 @@ afterEach(() => {
   interviewFindUniqueMock.mockReset();
   interviewUpdateMock.mockReset();
   answerUpsertMock.mockReset();
+  answerCountMock.mockReset();
   profileFindUniqueMock.mockReset();
 });
 
@@ -342,5 +346,70 @@ describe('getProfileForUser', () => {
     expect(result?.id).toBe('mp_1');
     expect(result?.summary).toMatch(/discipline/);
     expect(result?.analyzedAt).toBe('2026-05-27T17:00:00.000Z');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getInterviewCompleteness — §30 finalize gate
+// ---------------------------------------------------------------------------
+
+describe('getInterviewCompleteness', () => {
+  const REQUIRED = CURRENT_ONBOARDING_INSTRUMENT.items.length; // 30
+
+  it('returns exists:false when no interview started', async () => {
+    interviewFindUniqueMock.mockResolvedValueOnce(null);
+    const result = await getInterviewCompleteness('user_1');
+    expect(result).toEqual({
+      exists: false,
+      alreadyCompleted: false,
+      answered: 0,
+      required: 0,
+      complete: false,
+    });
+    expect(answerCountMock).not.toHaveBeenCalled();
+  });
+
+  it('treats an already-completed interview as complete (idempotent finalize)', async () => {
+    interviewFindUniqueMock.mockResolvedValueOnce({
+      id: 'oi_1',
+      status: 'completed',
+      instrumentVersion: DEFAULT_INSTRUMENT_VERSION,
+    });
+    const result = await getInterviewCompleteness('user_1');
+    expect(result.alreadyCompleted).toBe(true);
+    expect(result.complete).toBe(true);
+    // No need to count answers for an already-completed row.
+    expect(answerCountMock).not.toHaveBeenCalled();
+  });
+
+  it('is NOT complete when fewer than the catalog answers are present', async () => {
+    interviewFindUniqueMock.mockResolvedValueOnce({
+      id: 'oi_1',
+      status: 'in_progress',
+      instrumentVersion: DEFAULT_INSTRUMENT_VERSION,
+    });
+    answerCountMock.mockResolvedValueOnce(3);
+    const result = await getInterviewCompleteness('user_1');
+    expect(result).toEqual({
+      exists: true,
+      alreadyCompleted: false,
+      answered: 3,
+      required: REQUIRED,
+      complete: false,
+    });
+    expect(answerCountMock).toHaveBeenCalledWith({ where: { interviewId: 'oi_1' } });
+  });
+
+  it('is complete when all catalog questions are answered', async () => {
+    interviewFindUniqueMock.mockResolvedValueOnce({
+      id: 'oi_1',
+      status: 'in_progress',
+      instrumentVersion: DEFAULT_INSTRUMENT_VERSION,
+    });
+    answerCountMock.mockResolvedValueOnce(REQUIRED);
+    const result = await getInterviewCompleteness('user_1');
+    expect(result.complete).toBe(true);
+    expect(result.answered).toBe(REQUIRED);
+    expect(result.required).toBe(REQUIRED);
   });
 });

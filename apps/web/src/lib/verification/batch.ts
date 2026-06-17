@@ -21,6 +21,7 @@ import {
   VERIFICATION_VISION_SYSTEM_PROMPT,
   VERIFICATION_VISION_USER_PROMPT_TEMPLATE,
 } from './prompt';
+import { ALERT_WINDOW_DAYS, scanAlertsForMember } from './alerts';
 
 /**
  * S3 §33.4 — MT5-proof VISION batch (5th local Claude pipeline).
@@ -226,6 +227,10 @@ export async function persistVisionResults(
   let persisted = 0;
   let skipped = 0;
   let errors = 0;
+  // S4 §30 — members whose proof persisted this run ; each is alert-scanned
+  // ONCE after the loop (event-driven), never per-proof, to avoid redundant
+  // scans when a member uploads several proofs in the same batch.
+  const touchedMemberIds = new Set<string>();
 
   for (const entry of request.results) {
     const proof = proofById.get(entry.proofId);
@@ -370,6 +375,7 @@ export async function persistVisionResults(
       });
 
       persisted += 1;
+      touchedMemberIds.add(entry.userId);
       await logAudit({
         action: 'verification.proof.analyzed',
         userId: entry.userId,
@@ -402,6 +408,39 @@ export async function persistVisionResults(
         err instanceof Error ? err : new Error('verification_persist_failed_unknown'),
         { userId: entry.userId, proofId: entry.proofId },
       );
+    }
+  }
+
+  // S4 §30 «alerte sans délai» — event-driven alert scan for every member
+  // whose proof persisted this run, so a REPEATED discrepancy raises its Mark
+  // Douglas card immediately instead of waiting for the next 11:30 UTC cron.
+  // Isolated per member (a scan failure never undoes a committed persist) and
+  // idempotent (Alert dedup per window + P2002 on delivery) so the cron's later
+  // pass adds nothing. The repetition gating (thresholds ≥2/3, §31#4 anti-honte)
+  // is untouched — only the LATENCY shrinks.
+  if (touchedMemberIds.size > 0) {
+    const alertsNow = new Date();
+    const windowStart = new Date(alertsNow.getTime() - ALERT_WINDOW_DAYS * 86_400_000);
+    const memberTimezones = await db.user.findMany({
+      where: { id: { in: [...touchedMemberIds] } },
+      select: { id: true, timezone: true },
+    });
+    const tzById = new Map(memberTimezones.map((u) => [u.id, u.timezone || 'Europe/Paris']));
+    for (const memberId of touchedMemberIds) {
+      try {
+        await scanAlertsForMember(
+          memberId,
+          tzById.get(memberId) ?? 'Europe/Paris',
+          alertsNow,
+          windowStart,
+        );
+      } catch (alertErr) {
+        reportError(
+          'verification.batch.alert_scan',
+          alertErr instanceof Error ? alertErr : new Error('post_persist_alert_scan_failed'),
+          { userId: memberId },
+        );
+      }
     }
   }
 

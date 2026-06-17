@@ -19,6 +19,7 @@ const m = vi.hoisted(() => ({
   positionFindMany: vi.fn(),
   positionCreateMany: vi.fn(),
   logAudit: vi.fn(),
+  scanAlertsForMember: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -46,6 +47,14 @@ vi.mock('@/lib/observability', () => ({
 
 vi.mock('@/lib/weekly-report/builder', () => ({
   pseudonymizeMember: (id: string) => `member-${id.slice(0, 8).toUpperCase()}`,
+}));
+
+// S4 §30 — the event-driven alert scan fired after a successful persist. Mocked
+// so these unit tests stay on the persist branching logic (the scan's own
+// behavior is covered by alerts/reconcile tests + the e2e).
+vi.mock('./alerts', () => ({
+  scanAlertsForMember: m.scanAlertsForMember,
+  ALERT_WINDOW_DAYS: 14,
 }));
 
 import { persistVisionResults } from './batch';
@@ -115,6 +124,43 @@ function seedHappyMocks() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe('persistVisionResults — event-driven alert scan (S4 §30 «sans délai»)', () => {
+  it('scans the member for alerts once after a successful persist', async () => {
+    seedHappyMocks();
+    const r = await persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER, output: probeOutput() }],
+    });
+    expect(r.persisted).toBe(1);
+    expect(m.scanAlertsForMember).toHaveBeenCalledTimes(1);
+    expect(m.scanAlertsForMember).toHaveBeenCalledWith(
+      MEMBER,
+      expect.any(String),
+      expect.any(Date),
+      expect.any(Date),
+    );
+  });
+
+  it('a scan failure leaves the persisted proof intact (isolated, never rolls back)', async () => {
+    seedHappyMocks();
+    m.scanAlertsForMember.mockRejectedValue(new Error('scan_fail'));
+    const r = await persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER, output: probeOutput() }],
+    });
+    expect(r.persisted).toBe(1);
+    expect(r.errors).toBe(0);
+  });
+
+  it('does not scan when nothing persisted (all skipped)', async () => {
+    m.userFindMany.mockResolvedValue([]);
+    m.proofFindMany.mockResolvedValue([]);
+    const r = await persistVisionResults({
+      results: [{ proofId: PROOF, userId: 'forged0001', output: probeOutput() }],
+    });
+    expect(r.persisted).toBe(0);
+    expect(m.scanAlertsForMember).not.toHaveBeenCalled();
+  });
 });
 
 describe('persistVisionResults — gates', () => {

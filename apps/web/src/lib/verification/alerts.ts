@@ -143,7 +143,13 @@ export async function countAlertsInRange(
   });
 }
 
-async function scanAlertsForMember(
+/**
+ * S4 §30 — exported so the verification batch can fire it event-driven right
+ * after `persistVisionResults`, instead of waiting for the 11:30 UTC cron.
+ * Idempotent by construction (Alert dedup per triggerType in the window +
+ * P2002 on the delivery), so the cron's later pass adds nothing.
+ */
+export async function scanAlertsForMember(
   memberId: string,
   timezone: string,
   now: Date,

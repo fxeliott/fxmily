@@ -9,6 +9,7 @@ import { logAudit } from '@/lib/auth/audit';
 import {
   appendAnswer,
   finalizeInterview,
+  getInterviewCompleteness,
   OnboardingInstrumentMismatchError,
   startInterview,
 } from '@/lib/onboarding-interview/service';
@@ -81,7 +82,7 @@ export interface AppendAnswerActionState {
 
 export interface FinalizeInterviewActionState {
   ok: boolean;
-  error?: 'unauthorized' | 'no_interview' | 'unknown';
+  error?: 'unauthorized' | 'no_interview' | 'incomplete' | 'unknown';
 }
 
 // =============================================================================
@@ -382,6 +383,21 @@ export async function finalizeInterviewAction(
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') {
     return { ok: false, error: 'unauthorized' };
+  }
+
+  // §30 completeness gate (defense-in-depth on top of the wizard's
+  // `currentStep >= TOTAL`): refuse to finalize a near-empty interview, which
+  // would yield an empty/mock MemberProfile. Skipped for an already-completed
+  // interview (idempotent). Fails OPEN on unknown instrument version.
+  let completeness;
+  try {
+    completeness = await getInterviewCompleteness(session.user.id);
+  } catch (err) {
+    reportError('onboarding.interview.finalize', err);
+    return { ok: false, error: 'unknown' };
+  }
+  if (completeness.exists && !completeness.complete) {
+    return { ok: false, error: 'incomplete' };
   }
 
   let interview;

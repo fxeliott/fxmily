@@ -307,28 +307,46 @@ export async function rollbackApproval(requestId: string, invitationId: string):
   });
 }
 
+/** Result of rejecting a request — fed to the caller to send the refusal email
+ *  (§26.4). Mirrors `ApproveAccessRequestResult`'s email-carrying shape. */
+export interface RejectAccessRequestResult {
+  /** The requester's email (the refusal email recipient). */
+  email: string;
+  /** The requester's first name (for the email greeting). */
+  firstName: string;
+}
+
 /**
- * Reject a pending access request. Terminal — no email, no account. Throws
+ * Reject a pending access request. Terminal — no account is ever created. Since
+ * §26.4 (« le membre reçoit alors un e-mail d'acceptation OU de refus ») a
+ * refusal email IS now sent, this returns the requester's `{email, firstName}`
+ * so the CALLER (Server Action) can send it BEST-EFFORT (a rejection stands
+ * even if the email fails — unlike approval which rolls back). Throws
  * `AccessRequestNotFoundError` / `AccessRequestNotPendingError` so the Server
- * Action can surface the right banner.
+ * Action can surface the right banner. Transaction mirror of
+ * `approveAccessRequest` (find → assert pending → update, atomic).
  */
-export async function rejectAccessRequest(requestId: string, adminId: string): Promise<void> {
-  const result = await db.accessRequest.updateMany({
-    where: { id: requestId, status: 'pending' },
-    data: {
-      status: 'rejected',
-      reviewedAt: new Date(),
-      reviewedById: adminId,
-    },
-  });
+export async function rejectAccessRequest(
+  requestId: string,
+  adminId: string,
+): Promise<RejectAccessRequestResult> {
+  return db.$transaction(async (tx) => {
+    const request = await tx.accessRequest.findUnique({
+      where: { id: requestId },
+      select: { id: true, status: true, email: true, firstName: true },
+    });
+    if (!request) throw new AccessRequestNotFoundError();
+    if (request.status !== 'pending') throw new AccessRequestNotPendingError();
 
-  if (result.count === 1) return;
+    await tx.accessRequest.update({
+      where: { id: request.id },
+      data: {
+        status: 'rejected',
+        reviewedAt: new Date(),
+        reviewedById: adminId,
+      },
+    });
 
-  // count===0 — disambiguate "not found" vs "not pending" for the UI.
-  const existing = await db.accessRequest.findUnique({
-    where: { id: requestId },
-    select: { id: true },
+    return { email: request.email, firstName: request.firstName };
   });
-  if (!existing) throw new AccessRequestNotFoundError();
-  throw new AccessRequestNotPendingError();
 }

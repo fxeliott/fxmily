@@ -611,6 +611,12 @@ function FinalizeStep() {
           Aucun entretien actif. Retourne sur la page de démarrage pour recommencer.
         </Alert>
       ) : null}
+      {state?.error === 'incomplete' ? (
+        <Alert tone="danger">
+          Il reste des questions sans réponse. Reprends l&apos;entretien pour toutes les compléter
+          avant de le valider — ton profil a besoin de tes réponses.
+        </Alert>
+      ) : null}
       {state?.error === 'unknown' ? (
         <Alert tone="danger">
           {`Quelque chose s'est mal passé côté serveur. Réessaie dans un instant.`}

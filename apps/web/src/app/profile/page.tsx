@@ -60,6 +60,13 @@ export default async function ProfilePage() {
     getProfileForUser(session.user.id),
   ]);
 
+  // A mock profile (batch ran without ANTHROPIC_API_KEY → placeholder sentinel
+  // `mock:<model>`, claude-client.ts) is NOT the real Claude analysis (§30).
+  // Surface it as "analyse en cours" so a member never mistakes the placeholder
+  // for their real profile — the real one lands when the local `claude --print`
+  // batch runs ($0, human-in-the-loop §5.4).
+  const isMockProfile = !!profile?.claudeModelVersion?.startsWith('mock:');
+
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-4">
@@ -121,7 +128,7 @@ export default async function ProfilePage() {
       {/* State : interview completed but analysis pending (batch hasn't  */}
       {/* run yet — calm pending placeholder)                             */}
       {/* ============================================================== */}
-      {interview?.status === 'completed' && !profile ? (
+      {interview?.status === 'completed' && (!profile || isMockProfile) ? (
         <section
           className="rounded-card-lg flex flex-col gap-4 border border-[var(--b-acc)] bg-[var(--bg-2)] p-6"
           aria-labelledby="profile-pending-heading"
@@ -155,8 +162,9 @@ export default async function ProfilePage() {
 
       {/* ============================================================== */}
       {/* State : profile analyzed — render content + AI banner            */}
+      {/* (mock placeholder profiles are handled by the pending state above)*/}
       {/* ============================================================== */}
-      {profile ? (
+      {profile && !isMockProfile ? (
         <>
           <AIGeneratedBanner
             variant="inline"

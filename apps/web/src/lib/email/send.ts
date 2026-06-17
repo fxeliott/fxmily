@@ -3,6 +3,8 @@ import 'server-only';
 import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
 import { AccessApprovedEmail } from '@/lib/email/templates/access-approved';
+import { AccessRejectedEmail } from '@/lib/email/templates/access-rejected';
+import { AccessRequestReceivedAlertEmail } from '@/lib/email/templates/access-request-received-alert';
 import { AnnotationReceivedEmail } from '@/lib/email/templates/annotation-received';
 import { CalendarOverdueAlertEmail } from '@/lib/email/templates/calendar-overdue-alert';
 import { InvitationEmail } from '@/lib/email/templates/invitation';
@@ -108,10 +110,88 @@ export async function sendAccessApprovedEmail({
   });
 }
 
+/**
+ * Send the "demande non retenue" email after an admin REJECTS a public
+ * `/rejoindre` access request (§26.4 — parcours d'accès complet). Unlike
+ * `sendAccessApprovedEmail` (which rolls back on failure), this is BEST-EFFORT
+ * at the call site: a rejection is terminal, so an email hiccup must not undo
+ * it — the caller (`app/admin/access-requests/actions.ts`) catches + warns.
+ * No token, no link: the requester has no further action.
+ */
+export async function sendAccessRejectedEmail({
+  to,
+  firstName,
+}: {
+  to: string;
+  firstName: string | null | undefined;
+}): Promise<{ id: string | null; delivered: boolean }> {
+  const name = firstName?.trim() || null;
+
+  return sendEmail({
+    to,
+    subject: 'Suite à ta demande d’accès Fxmily',
+    react: AccessRejectedEmail({ firstName }),
+    text: [
+      name ? `Bonjour ${name},` : `Bonjour,`,
+      ``,
+      `Merci d'avoir fait une demande d'accès à Fxmily. Après examen, nous ne pouvons pas y donner`,
+      `suite pour le moment.`,
+      ``,
+      `Ce n'est pas un jugement sur ton potentiel : la cohorte est privée et le nombre de places est`,
+      `volontairement limité pour garder un suivi de qualité.`,
+      ``,
+      `Une question ? Écris à fxeliott@fxmily.fr.`,
+      ``,
+      `— L'équipe Fxmily`,
+    ].join('\n'),
+  });
+}
+
+/**
+ * Notify the ADMIN that a NEW public access request was created (§26.2 « par
+ * EMAIL ET sur son profil admin »). ONLY the operator
+ * (`WEEKLY_REPORT_RECIPIENT`) gets it — count-only, ZERO requester PII (name/
+ * email live in the `AccessRequest` row with its own purge cron). Best-effort:
+ * the caller (`app/rejoindre/actions.ts`) never fails the public request if
+ * delivery throws.
+ */
+export async function sendAccessRequestReceivedAlertEmail({
+  to,
+  pendingCount,
+}: {
+  to: string;
+  pendingCount: number;
+}): Promise<{ id: string | null; delivered: boolean }> {
+  const adminUrl = buildAccessRequestsAdminUrl();
+  const plural = pendingCount > 1;
+
+  return sendEmail({
+    to,
+    subject: `Nouvelle demande d'accès Fxmily · ${pendingCount} en attente`,
+    react: AccessRequestReceivedAlertEmail({ pendingCount, adminUrl }),
+    text: [
+      `Fxmily — nouvelle demande d'accès.`,
+      ``,
+      `${pendingCount} demande${plural ? 's' : ''} ${plural ? 'sont' : 'est'} en attente de validation dans ta file d'accès.`,
+      `Tu peux les accepter ou les refuser depuis ton espace admin.`,
+      ``,
+      `Ouvre la file : ${adminUrl}`,
+      ``,
+      `Le détail (prénom, nom, email du demandeur) reste dans l'espace admin, jamais dans cet email.`,
+    ].join('\n'),
+  });
+}
+
 export function buildInviteUrl(plainToken: string): string {
   const base = env.AUTH_URL.replace(/\/+$/, '');
   const token = encodeURIComponent(plainToken);
   return `${base}/onboarding/welcome?token=${token}`;
+}
+
+/** Build the absolute URL to the admin access-request queue (§26.2 email CTA). */
+export function buildAccessRequestsAdminUrl(): string {
+  const base = env.AUTH_URL.replace(/\/+$/, '');
+  return `${base}/admin/access-requests`;
 }
 
 /** Build the absolute URL to the member's trade detail page (/journal/[id]).

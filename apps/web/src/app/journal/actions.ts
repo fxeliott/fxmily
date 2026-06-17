@@ -146,9 +146,16 @@ export async function createTradeAction(
   // are raw repeated FormData fields), so cap + BOLA them here exactly like the
   // primary capture. `keyBelongsTo` validates BOTH the `trades/{userId}/…` shape
   // and ownership (it returns false on any other prefix / forged userId).
-  const extraEntryKeys = formData
-    .getAll('extraEntryKey')
-    .filter((v): v is string => typeof v === 'string' && v.length > 0);
+  const extraEntryKeys = [
+    ...new Set(
+      formData
+        .getAll('extraEntryKey')
+        .filter((v): v is string => typeof v === 'string' && v.length > 0),
+    ),
+    // Dedupe + drop the primary key: two TradeMedia rows pointing at the same
+    // file would let deleting one trade sweep the bytes out from under another
+    // (self-inflicted, but cheap to prevent).
+  ].filter((k) => k !== data.screenshotEntryKey);
   if (extraEntryKeys.length > MAX_ENTRY_MEDIA) {
     return {
       ok: false,

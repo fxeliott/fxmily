@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
+import { selectStorage } from '@/lib/storage';
 import {
   type SerializedTrade,
   type ListTradesOptions,
@@ -22,11 +23,15 @@ import type { TradeModel } from '@/generated/prisma/models/Trade';
  * defense in depth.
  */
 
-function toSerialized(trade: TradeModel): SerializedTrade {
+function toSerialized(
+  trade: TradeModel,
+  media?: ReadonlyArray<{ id: string; kind: string; fileKey: string; createdAt: Date }>,
+): SerializedTrade {
   // Duplicated from lib/trades/service.ts on purpose: the service-private
   // mapper is not exported, and re-exporting it would couple the two scopes.
   // The two views must stay shape-compatible — that contract is enforced by
   // the SerializedTrade interface, not by code reuse.
+  const storage = selectStorage();
   return {
     id: trade.id,
     userId: trade.userId,
@@ -59,6 +64,14 @@ function toSerialized(trade: TradeModel): SerializedTrade {
     createdAt: trade.createdAt.toISOString(),
     updatedAt: trade.updatedAt.toISOString(),
     isClosed: trade.closedAt !== null,
+    // §31 — the admin must see the member's additional analysis photos (the
+    // whole point of the trade-review surface, §22 "l'admin voit tout").
+    media: (media ?? []).map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      readUrl: storage.getReadUrl(m.fileKey),
+      createdAt: m.createdAt.toISOString(),
+    })),
   };
 }
 
@@ -96,7 +109,8 @@ export async function listMemberTradesAsAdmin(
   const hasMore = trades.length > limit;
   const items = hasMore ? trades.slice(0, limit) : trades;
   return {
-    items: items.map(toSerialized),
+    // not `.map(toSerialized)` — `.map` passes the index as the media arg.
+    items: items.map((t) => toSerialized(t)),
     nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null,
   };
 }
@@ -105,10 +119,18 @@ export async function getMemberTradeAsAdmin(
   memberId: string,
   tradeId: string,
 ): Promise<SerializedTrade | null> {
-  const trade = await db.trade.findUnique({ where: { id: tradeId } });
+  const trade = await db.trade.findUnique({
+    where: { id: tradeId },
+    include: {
+      media: {
+        select: { id: true, kind: true, fileKey: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
   // Belt-and-braces: even with admin role we still scope the lookup to the
   // declared `memberId` so a typo in the URL surfaces as 404, never as
   // "another member's trade leaks into this admin view".
   if (!trade || trade.userId !== memberId) return null;
-  return toSerialized(trade);
+  return toSerialized(trade, trade.media);
 }

@@ -21,57 +21,61 @@ export function PairTopFive({ pairs }: PairTopFiveProps) {
       {pairs.length === 0 ? (
         <p className="t-cap py-6 text-center text-[var(--t-4)]">Pas encore de trades clôturés.</p>
       ) : (
-        <table className="w-full">
-          <thead className="sr-only">
-            <tr>
-              <th>Paire</th>
-              <th>Trades</th>
-              <th>Win rate</th>
-              <th>R moyen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pairs.map((p) => (
-              <tr key={p.pair} className="border-t border-[var(--b-subtle)]">
-                <td className="py-2">
-                  <span className="f-mono text-[13px] font-semibold text-[var(--t-1)]">
-                    {p.pair}
-                  </span>
-                </td>
-                <td className="py-2 text-right">
-                  <span className="t-cap text-[var(--t-3)]">{p.trades} t</span>
-                </td>
-                <td className="py-2 text-right">
-                  <span
-                    className={cn(
-                      't-mono-cap',
-                      // Posture §2 — win-rate JAMAIS rouge (cohérence avec les cartes
-                      // pre-trade : le membre observe, ne se fait pas punir).
-                      p.winRate >= 0.55 ? 'text-[var(--ok)]' : 'text-[var(--t-3)]',
-                    )}
-                  >
-                    {(p.winRate * 100).toFixed(0)}%
-                  </span>
-                </td>
-                <td className="py-2 text-right">
-                  <span
-                    className={cn(
-                      'f-mono text-[12px] tabular-nums',
-                      p.avgR > 0
-                        ? 'text-[var(--acc)]'
-                        : p.avgR < 0
-                          ? 'text-[var(--bad)]'
-                          : 'text-[var(--t-3)]',
-                    )}
-                  >
-                    {p.avgR > 0 ? '+' : ''}
-                    {p.avgR.toFixed(2)}R
-                  </span>
-                </td>
+        // Multi-column table: on 320-375px it scrolls instead of squashing the
+        // row (project canon, mirror emotion-perf-table / habit-heatmap).
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="sr-only">
+              <tr>
+                <th>Paire</th>
+                <th>Trades</th>
+                <th>Win rate</th>
+                <th>R moyen</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {pairs.map((p) => (
+                <tr key={p.pair} className="border-t border-[var(--b-subtle)]">
+                  <td className="py-2">
+                    <span className="f-mono text-[13px] font-semibold text-[var(--t-1)]">
+                      {p.pair}
+                    </span>
+                  </td>
+                  <td className="py-2 text-right">
+                    <span className="t-cap text-[var(--t-3)]">{p.trades} t</span>
+                  </td>
+                  <td className="py-2 text-right">
+                    <span
+                      className={cn(
+                        't-mono-cap',
+                        // Posture §2 — win-rate JAMAIS rouge (cohérence avec les cartes
+                        // pre-trade : le membre observe, ne se fait pas punir).
+                        p.winRate >= 0.55 ? 'text-[var(--ok)]' : 'text-[var(--t-3)]',
+                      )}
+                    >
+                      {(p.winRate * 100).toFixed(0)}%
+                    </span>
+                  </td>
+                  <td className="py-2 text-right">
+                    <span
+                      className={cn(
+                        'f-mono text-[12px] tabular-nums',
+                        p.avgR > 0
+                          ? 'text-[var(--acc)]'
+                          : p.avgR < 0
+                            ? 'text-[var(--bad)]'
+                            : 'text-[var(--t-3)]',
+                      )}
+                    >
+                      {p.avgR > 0 ? '+' : ''}
+                      {p.avgR.toFixed(2)}R
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

@@ -22,6 +22,7 @@ import {
   VERIFICATION_VISION_USER_PROMPT_TEMPLATE,
 } from './prompt';
 import { ALERT_WINDOW_DAYS, scanAlertsForMember } from './alerts';
+import { reconcileOneMember } from './reconcile';
 
 /**
  * S3 §33.4 — MT5-proof VISION batch (5th local Claude pipeline).
@@ -411,26 +412,29 @@ export async function persistVisionResults(
     }
   }
 
-  // S4 §30 «alerte sans délai» — event-driven alert scan for every member
-  // whose proof persisted this run, so a REPEATED discrepancy raises its Mark
-  // Douglas card immediately instead of waiting for the next 11:30 UTC cron.
-  // Isolated per member (a scan failure never undoes a committed persist) and
-  // idempotent (Alert dedup per window + P2002 on delivery) so the cron's later
-  // pass adds nothing. The repetition gating (thresholds ≥2/3, §31#4 anti-honte)
-  // is untouched — only the LATENCY shrinks.
+  // S4 §30 «alerte sans délai» — for every member whose proof persisted this
+  // run, RECONCILE the freshly inserted positions THEN scan for repetition
+  // alerts, mirroring the 11:30 UTC cron's reconcile→alerts order. Without the
+  // reconcile, the scan would read the discrepancy table as the last cron left
+  // it (the new positions haven't surfaced their gaps yet) and the «sans délai»
+  // alert would never actually fire — only the latency would *look* reduced.
+  // Per member, isolated (a failure never undoes a committed persist) and
+  // idempotent (the cron re-runs both daily; Alert dedup + P2002 on delivery),
+  // scoped to role:'member' to match the cron's eligibility predicate exactly.
+  // Repetition gating (thresholds ≥2/3, §31#4 anti-honte) is untouched.
   if (touchedMemberIds.size > 0) {
     const alertsNow = new Date();
     const windowStart = new Date(alertsNow.getTime() - ALERT_WINDOW_DAYS * 86_400_000);
-    const memberTimezones = await db.user.findMany({
-      where: { id: { in: [...touchedMemberIds] } },
+    const members = await db.user.findMany({
+      where: { id: { in: [...touchedMemberIds] }, role: 'member' },
       select: { id: true, timezone: true },
     });
-    const tzById = new Map(memberTimezones.map((u) => [u.id, u.timezone || 'Europe/Paris']));
-    for (const memberId of touchedMemberIds) {
+    for (const member of members) {
       try {
+        await reconcileOneMember(member.id, alertsNow);
         await scanAlertsForMember(
-          memberId,
-          tzById.get(memberId) ?? 'Europe/Paris',
+          member.id,
+          member.timezone || 'Europe/Paris',
           alertsNow,
           windowStart,
         );
@@ -438,7 +442,7 @@ export async function persistVisionResults(
         reportError(
           'verification.batch.alert_scan',
           alertErr instanceof Error ? alertErr : new Error('post_persist_alert_scan_failed'),
-          { userId: memberId },
+          { userId: member.id },
         );
       }
     }

@@ -131,7 +131,7 @@ export function SetupQualityCard({ setupQuality, riskDiscipline }: SetupQualityC
               </ResponsiveContainer>
             </figure>
 
-            <ul className="flex gap-4">
+            <ul className="flex flex-wrap gap-x-4 gap-y-2">
               {qualityData.map((q) => (
                 <li key={q.label} className="flex flex-col gap-0.5">
                   <span

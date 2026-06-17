@@ -20,6 +20,7 @@ const m = vi.hoisted(() => ({
   positionCreateMany: vi.fn(),
   logAudit: vi.fn(),
   scanAlertsForMember: vi.fn(),
+  reconcileOneMember: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -55,6 +56,12 @@ vi.mock('@/lib/weekly-report/builder', () => ({
 vi.mock('./alerts', () => ({
   scanAlertsForMember: m.scanAlertsForMember,
   ALERT_WINDOW_DAYS: 14,
+}));
+
+// S4 §30 — the per-member reconcile fired before the alert scan (mocked: its
+// own behavior is covered by reconcile.test.ts / reconcile-db.test.ts).
+vi.mock('./reconcile', () => ({
+  reconcileOneMember: m.reconcileOneMember,
 }));
 
 import { persistVisionResults } from './batch';
@@ -127,18 +134,23 @@ beforeEach(() => {
 });
 
 describe('persistVisionResults — event-driven alert scan (S4 §30 «sans délai»)', () => {
-  it('scans the member for alerts once after a successful persist', async () => {
+  it('reconciles THEN scans the member once after a successful persist', async () => {
     seedHappyMocks();
     const r = await persistVisionResults({
       results: [{ proofId: PROOF, userId: MEMBER, output: probeOutput() }],
     });
     expect(r.persisted).toBe(1);
+    expect(m.reconcileOneMember).toHaveBeenCalledTimes(1);
     expect(m.scanAlertsForMember).toHaveBeenCalledTimes(1);
     expect(m.scanAlertsForMember).toHaveBeenCalledWith(
       MEMBER,
       expect.any(String),
       expect.any(Date),
       expect.any(Date),
+    );
+    // The reconcile MUST run before the scan, or the scan reads stale gaps.
+    expect(m.reconcileOneMember.mock.invocationCallOrder[0]!).toBeLessThan(
+      m.scanAlertsForMember.mock.invocationCallOrder[0]!,
     );
   });
 

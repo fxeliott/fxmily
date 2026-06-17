@@ -201,7 +201,7 @@ export default async function VerificationPage() {
                 découvrable depuis l'endroit même où le membre voit ses écarts. */}
             <Link
               href="/library/inbox"
-              className="rounded-card inline-flex items-center gap-1.5 self-start text-[12px] text-[var(--t-3)] underline-offset-2 transition-colors hover:text-[var(--t-1)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              className="rounded-card inline-flex min-h-[24px] items-center gap-1.5 self-start py-1 text-[12px] text-[var(--t-3)] underline-offset-2 transition-colors hover:text-[var(--t-1)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
             >
               Quand un écart se répète, une fiche choisie pour toi t&apos;attend dans ta
               bibliothèque

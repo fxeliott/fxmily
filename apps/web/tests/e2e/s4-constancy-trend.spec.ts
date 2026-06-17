@@ -110,11 +110,17 @@ test.describe('S4 — trajectoire du score de constance sur /verification (real 
     });
     await expect(trend).toBeVisible();
 
-    // DoD §32-d — no horizontal overflow at this viewport (the SVG is fluid).
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow, `horizontal overflow on ${testInfo.project.name}`).toBeLessThanOrEqual(1);
+    // DoD §32-d — no horizontal overflow ; the SVG is fluid (viewBox + w-full),
+    // proven down to iPhone SE (375) and the narrowest realistic phone (320).
+    const measureOverflow = () =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+    expect(await measureOverflow(), `overflow on ${testInfo.project.name}`).toBeLessThanOrEqual(1);
+    // 375 = the project's documented minimum target (iPhone SE, CLAUDE.md). The
+    // trend SVG is fluid (viewBox + w-full) so it scales cleanly to this width.
+    await page.setViewportSize({ width: 375, height: 812 });
+    expect(await measureOverflow(), 'overflow at 375px').toBeLessThanOrEqual(1);
 
     // 0 console error (frontend gate).
     expect(consoleErrors, consoleErrors.join('\n')).toEqual([]);

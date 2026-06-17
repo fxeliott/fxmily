@@ -43,7 +43,6 @@ export function ConstancyTrend({ history }: { history: readonly ConstancyScoreVi
     .map(([px, py], i) => `${i === 0 ? 'M' : 'L'}${px.toFixed(1)} ${py.toFixed(1)}`)
     .join(' ');
   const area = `${line} L${(VB_W - PAD).toFixed(1)} ${VB_H} L${PAD} ${VB_H} Z`;
-  const lastPoint = points[points.length - 1]!;
 
   return (
     <div className="rounded-card flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
@@ -77,7 +76,6 @@ export function ConstancyTrend({ history }: { history: readonly ConstancyScoreVi
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
         />
-        <circle cx={lastPoint[0]} cy={lastPoint[1]} r="2.5" fill="var(--cy)" />
       </svg>
 
       <div className="flex items-baseline justify-between gap-3">

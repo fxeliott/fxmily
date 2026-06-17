@@ -2406,8 +2406,12 @@ model Mt5AccountProof {
 /// S3 — one position extracted by Claude vision from an MT5 proof. This is
 /// the REALITY side of the declarative ↔ reality confrontation. Numbers are
 /// Decimal (mirror `Trade` precision); `confidence` carries the vision
-/// reading confidence so the reconciliation engine can require human review
-/// below a threshold instead of auto-flagging a member.
+/// reading confidence (drives `BrokerAccount.confidence`, shown to the admin).
+/// NOTE: the anti-survente guarantee (§33.6 "ne pas accuser à tort") is NOT
+/// enforced through this confidence today — it is the reconciliation COVERAGE
+/// WINDOW (uncovered vs false_declared, reconcile.ts) that shields an honest
+/// member. A per-row confidence gate (a `needs_review` status) stays a possible
+/// V2, once the vision emits per-LINE confidence (today it is global per proof).
 model ExtractedPosition {
   id String @id @default(cuid())
 
@@ -2478,7 +2482,9 @@ model Discrepancy {
   extractedPositionId String?            @map("extracted_position_id")
   extractedPosition   ExtractedPosition? @relation(fields: [extractedPositionId], references: [id], onDelete: SetNull)
 
-  /// 1 = minor, 2 = notable, 3 = major (drives the ScoreEvent delta).
+  /// 1 = minor, 2 = notable, 3 = major. Display/sort signal only — the
+  /// ScoreEvent delta is a fixed per-reason constant (reconcile.ts), NOT
+  /// derived from this severity.
   severity Int
   status   DiscrepancyStatus @default(open)
 
@@ -2549,8 +2555,12 @@ model ScoreEvent {
   memberId String @map("member_id")
   member   User   @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
-  /// Signed delta applied to the constancy score (positive = filled/did the
-  /// work, negative = forgot/reality gap/false declaration).
+  /// Signed per-event weight (positive = filled/did the work, negative =
+  /// forgot / reality gap / false declaration). It records the event's
+  /// direction and relative magnitude; it is NOT summed into the score
+  /// directly — the weekly fold (constancy.ts) recomputes `value` from the
+  /// event REASONS via the honesty/regularity/discipline formulas, so a stored
+  /// `-8` does not mean "-8 points on the 0-100 score".
   delta  Float
   reason ScoreEventReason
 
@@ -2578,8 +2588,9 @@ model Alert {
   member   User   @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   /// Slug of the repeated failure pattern, e.g. `forgot_no_reason_repeat`,
-  /// `reality_gap_repeat`, `false_declaration_repeat` (allowlist at the Zod
-  /// boundary, S3 session).
+  /// `reality_gap_repeat`, `false_declaration_repeat`. Bounded server-side by
+  /// the `ALERT_RULES` constant (alerts.ts) — the single write-site — not by a
+  /// Zod allowlist.
   triggerType String @map("trigger_type")
 
   /// How many times the pattern occurred in the evaluation window…

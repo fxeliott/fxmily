@@ -5,13 +5,18 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { AccountCreateForm } from '@/components/verification/account-create-form';
 import { ConstancyScoreCard } from '@/components/verification/constancy-score-card';
+import { ConstancyTrend } from '@/components/verification/constancy-trend';
 import { DeleteProofButton } from '@/components/verification/delete-proof-button';
 import { DiscrepancyReasonForm } from '@/components/verification/discrepancy-reason-form';
 import { ProofUploader } from '@/components/verification/proof-uploader';
 import { ScoreEventsHistory } from '@/components/verification/score-events-history';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
-import { getLatestConstancyScore, listRecentScoreEvents } from '@/lib/verification/constancy';
+import {
+  getLatestConstancyScore,
+  listRecentConstancyScores,
+  listRecentScoreEvents,
+} from '@/lib/verification/constancy';
 import { getVerificationOverview, listDiscrepancies } from '@/lib/verification/service';
 
 /**
@@ -86,9 +91,10 @@ export default async function VerificationPage() {
     redirect('/login');
   }
 
-  const [overview, constancy, discrepancies, scoreEvents] = await Promise.all([
+  const [overview, constancy, constancyHistory, discrepancies, scoreEvents] = await Promise.all([
     getVerificationOverview(session.user.id),
     getLatestConstancyScore(session.user.id),
+    listRecentConstancyScores(session.user.id),
     listDiscrepancies(session.user.id),
     listRecentScoreEvents(session.user.id),
   ]);
@@ -125,6 +131,10 @@ export default async function VerificationPage() {
           Ta constance
         </h2>
         <ConstancyScoreCard score={constancy} />
+        {/* S4 — trajectoire de constance (brief §29 « voir l'évolution ») : ferme
+            l'asymétrie avec les scores comportementaux qui ont déjà une courbe.
+            Rendu seulement à partir de 2 semaines suivies (sinon null). */}
+        <ConstancyTrend history={constancyHistory} />
         {/* S4 — « le score reste explicable au membre » (promesse du schéma
             ScoreEvent) : les derniers événements, excusés neutralisés. */}
         <ScoreEventsHistory events={scoreEvents} />
@@ -185,6 +195,18 @@ export default async function VerificationPage() {
                 );
               })}
             </ul>
+            {/* S4 — pont écart → travail psychologique (§26 « lien partenaire »).
+                Quand un écart se répète, une fiche Mark Douglas est livrée dans la
+                bibliothèque ; ce lien calme (anti Black-Hat §33.2) la rend
+                découvrable depuis l'endroit même où le membre voit ses écarts. */}
+            <Link
+              href="/library/inbox"
+              className="rounded-card inline-flex min-h-[24px] items-center gap-1.5 self-start py-1 text-[12px] text-[var(--t-3)] underline-offset-2 transition-colors hover:text-[var(--t-1)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              Quand un écart se répète, une fiche choisie pour toi t&apos;attend dans ta
+              bibliothèque
+              <ArrowLeft className="h-3.5 w-3.5 rotate-180" strokeWidth={1.75} aria-hidden />
+            </Link>
           </>
         )}
       </section>

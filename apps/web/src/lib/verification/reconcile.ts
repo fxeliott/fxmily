@@ -264,7 +264,13 @@ export async function reconcileAllMembers(
   };
 }
 
-async function reconcileOneMember(
+/**
+ * S4 §30 — exported so the verification batch can reconcile a member's freshly
+ * persisted positions BEFORE the event-driven alert scan (mirrors the cron's
+ * reconcile→alerts order). Idempotent: the cron already re-runs it daily, so an
+ * extra event-driven pass creates no duplicate discrepancies.
+ */
+export async function reconcileOneMember(
   memberId: string,
   now: Date,
 ): Promise<{ matched: number; mismatched: number; discrepanciesCreated: number }> {

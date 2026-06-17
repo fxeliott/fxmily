@@ -659,3 +659,26 @@ export async function listConstancyScoresInRange(
   });
   return rows.map(toConstancyScoreView);
 }
+
+/**
+ * S4 — the last `take` weekly `ConstancyScore` rows, oldest→newest, for the
+ * MEMBER trajectory on `/verification` (« voir l'évolution », brief §29). The
+ * snapshot (`getLatestConstancyScore`) answers « où j'en suis cette semaine » ;
+ * this answers « comment ça bouge dans le temps » — the same gap the behavioral
+ * `ScoreTrendChart` already fills on `/progression`. Take-based (not date-range)
+ * so it returns exactly the most recent weeks regardless of gaps in the fold.
+ * Posture §33.2 : factual numbers, never a streak or a guilt curve.
+ */
+export async function listRecentConstancyScores(
+  memberId: string,
+  take = 12,
+): Promise<readonly ConstancyScoreView[]> {
+  const rows = await db.constancyScore.findMany({
+    where: { memberId },
+    orderBy: { periodStart: 'desc' },
+    take,
+    select: { value: true, breakdown: true, periodStart: true, computedAt: true },
+  });
+  // DB returns newest→oldest for the `take`; the trajectory reads oldest→newest.
+  return rows.reverse().map(toConstancyScoreView);
+}

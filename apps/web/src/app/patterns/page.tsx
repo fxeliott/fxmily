@@ -8,6 +8,7 @@ import { PreTradeCorrelationCard } from '@/components/pre-trade/pre-trade-correl
 import { EmotionPerfTable } from '@/components/scoring/emotion-perf-table';
 import { PairTopFive } from '@/components/scoring/pair-top-five';
 import { SessionPerfBars } from '@/components/scoring/session-perf-bars';
+import { SetupQualityCard } from '@/components/scoring/setup-quality-card';
 import {
   HabitCorrelationSection,
   HabitCorrelationSkeleton,
@@ -88,6 +89,19 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
           </Suspense>
         </section>
 
+        {/* Qualité de setup (Steenbarger) + plafond de risque (Tharp) — mesure
+            l'ACTE de grader/sizer, jamais le P&L (posture §2). */}
+        <section className="mb-6 flex flex-col gap-3" aria-labelledby="setup-quality-heading">
+          <div className="flex items-center gap-2">
+            <h2 id="setup-quality-heading" className="t-eyebrow">
+              Qualité de setup &amp; risque
+            </h2>
+          </div>
+          <Suspense fallback={<SetupQualitySkeleton />}>
+            <SetupQualitySection userId={userId} timezone={timezone} range={range} />
+          </Suspense>
+        </section>
+
         {/* Pré-trade — exécution honnête + corrélation raison×performance */}
         <section className="mb-6 flex flex-col gap-3" aria-labelledby="patterns-pretrade-heading">
           <div className="flex items-center gap-2">
@@ -157,6 +171,40 @@ function PatternsSkeleton() {
         <div className="skel rounded-card-lg h-[280px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
         <div className="skel rounded-card-lg h-[240px] border border-[var(--b-default)] bg-[var(--bg-1)] lg:col-span-2" />
       </div>
+    </div>
+  );
+}
+
+async function SetupQualitySection({
+  userId,
+  timezone,
+  range,
+}: {
+  userId: string;
+  timezone: string;
+  range: RangeKey;
+}) {
+  // Same (userId, timezone, range) as PatternsSection → React 19 cache() dedup,
+  // zero extra DB query.
+  const analytics = await getDashboardAnalytics(userId, timezone, range);
+  return (
+    <SetupQualityCard
+      setupQuality={analytics.setupQuality}
+      riskDiscipline={analytics.riskDiscipline}
+    />
+  );
+}
+
+function SetupQualitySkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-3"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement de la qualité de setup"
+    >
+      <div className="skel rounded-card-lg h-[240px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
+      <div className="skel rounded-card-lg h-[120px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
     </div>
   );
 }

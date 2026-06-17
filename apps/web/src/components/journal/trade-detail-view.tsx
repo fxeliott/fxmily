@@ -335,9 +335,11 @@ function Stat({
           ? 'text-[var(--t-3)]'
           : 'text-[var(--t-1)]';
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex min-w-0 flex-col gap-0.5">
       <dt className="t-mono-cap text-[var(--t-4)]">{label}</dt>
-      <dd className={cn('text-[14px] tabular-nums', mono && 'f-mono', toneClass)}>{value}</dd>
+      <dd className={cn('text-[14px] break-words tabular-nums', mono && 'f-mono', toneClass)}>
+        {value}
+      </dd>
     </div>
   );
 }

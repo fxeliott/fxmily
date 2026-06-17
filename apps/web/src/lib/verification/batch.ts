@@ -21,6 +21,8 @@ import {
   VERIFICATION_VISION_SYSTEM_PROMPT,
   VERIFICATION_VISION_USER_PROMPT_TEMPLATE,
 } from './prompt';
+import { ALERT_WINDOW_DAYS, scanAlertsForMember } from './alerts';
+import { reconcileOneMember } from './reconcile';
 
 /**
  * S3 §33.4 — MT5-proof VISION batch (5th local Claude pipeline).
@@ -226,6 +228,10 @@ export async function persistVisionResults(
   let persisted = 0;
   let skipped = 0;
   let errors = 0;
+  // S4 §30 — members whose proof persisted this run ; each is alert-scanned
+  // ONCE after the loop (event-driven), never per-proof, to avoid redundant
+  // scans when a member uploads several proofs in the same batch.
+  const touchedMemberIds = new Set<string>();
 
   for (const entry of request.results) {
     const proof = proofById.get(entry.proofId);
@@ -370,6 +376,7 @@ export async function persistVisionResults(
       });
 
       persisted += 1;
+      touchedMemberIds.add(entry.userId);
       await logAudit({
         action: 'verification.proof.analyzed',
         userId: entry.userId,
@@ -402,6 +409,42 @@ export async function persistVisionResults(
         err instanceof Error ? err : new Error('verification_persist_failed_unknown'),
         { userId: entry.userId, proofId: entry.proofId },
       );
+    }
+  }
+
+  // S4 §30 «alerte sans délai» — for every member whose proof persisted this
+  // run, RECONCILE the freshly inserted positions THEN scan for repetition
+  // alerts, mirroring the 11:30 UTC cron's reconcile→alerts order. Without the
+  // reconcile, the scan would read the discrepancy table as the last cron left
+  // it (the new positions haven't surfaced their gaps yet) and the «sans délai»
+  // alert would never actually fire — only the latency would *look* reduced.
+  // Per member, isolated (a failure never undoes a committed persist) and
+  // idempotent (the cron re-runs both daily; Alert dedup + P2002 on delivery),
+  // scoped to role:'member' to match the cron's eligibility predicate exactly.
+  // Repetition gating (thresholds ≥2/3, §31#4 anti-honte) is untouched.
+  if (touchedMemberIds.size > 0) {
+    const alertsNow = new Date();
+    const windowStart = new Date(alertsNow.getTime() - ALERT_WINDOW_DAYS * 86_400_000);
+    const members = await db.user.findMany({
+      where: { id: { in: [...touchedMemberIds] }, role: 'member' },
+      select: { id: true, timezone: true },
+    });
+    for (const member of members) {
+      try {
+        await reconcileOneMember(member.id, alertsNow);
+        await scanAlertsForMember(
+          member.id,
+          member.timezone || 'Europe/Paris',
+          alertsNow,
+          windowStart,
+        );
+      } catch (alertErr) {
+        reportError(
+          'verification.batch.alert_scan',
+          alertErr instanceof Error ? alertErr : new Error('post_persist_alert_scan_failed'),
+          { userId: member.id },
+        );
+      }
     }
   }
 

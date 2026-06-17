@@ -90,6 +90,17 @@ const DRAFT_STORAGE_KEY = 'fxmily:journal:draft:v1';
  *  mandatory primary `screenshotEntryKey`. Capped to keep the gallery sane. */
 const MAX_ENTRY_MEDIA = 4;
 
+/**
+ * Whitelist a thumbnail URL to our own upload route before it reaches an
+ * `href`/`src`. The readUrl comes from the `/api/uploads` fetch response, so
+ * this guarantees a tampered/unexpected value can never become a `javascript:`
+ * href (CodeQL js/xss-through-dom — defense in depth; the route is ours and
+ * always returns `/api/uploads/…`).
+ */
+function safeUploadUrl(url: string | undefined): string {
+  return url && url.startsWith('/api/uploads/') ? url : '';
+}
+
 function nowIsoLocal(): string {
   const d = new Date();
   const pad = (n: number) => `${n}`.padStart(2, '0');
@@ -1103,14 +1114,14 @@ function StepEntryScreenshot({ draft, update, fieldErrors, disabled }: StepProps
             {extraKeys.map((key, i) => (
               <li key={key} className="relative">
                 <a
-                  href={extraUrls[i] ?? '#'}
+                  href={safeUploadUrl(extraUrls[i]) || '#'}
                   target="_blank"
                   rel="noreferrer"
                   className="rounded-card block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={extraUrls[i] ?? ''}
+                    src={safeUploadUrl(extraUrls[i])}
                     alt={`Photo d'analyse additionnelle ${i + 1}`}
                     loading="lazy"
                     className="rounded-card aspect-[16/9] w-full border border-[var(--b-default)] object-cover"

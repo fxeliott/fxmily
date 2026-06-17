@@ -209,8 +209,11 @@ test.describe('S4 — surfaces S3 espace membre : teaser dashboard + /verificati
     await expect(
       constancySection.getByText('Écart entre ton déclaré et ton historique réel'),
     ).toHaveCount(2);
-    await expect(constancySection.getByText('+1', { exact: true })).toBeVisible();
-    await expect(constancySection.getByText('-3', { exact: true })).toHaveCount(2);
+    // Honest impact column (audit 2026-06-17): direction + relative weight,
+    // NOT a raw signed delta that would misstate the real score impact.
+    await expect(constancySection.getByText('Compte pour toi', { exact: true })).toBeVisible(); // filled
+    await expect(constancySection.getByText('Pèse', { exact: true })).toHaveCount(1); // the open reality_gap
+    await expect(constancySection.getByText('Neutralisé', { exact: true })).toHaveCount(1); // the excused one
 
     // EXACTLY ONE event is excused (the one linked to the écart with a
     // memberReason) — visibly neutralized, never silently dropped (« l'histoire

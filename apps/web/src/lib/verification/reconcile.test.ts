@@ -78,6 +78,20 @@ describe('reconcileMember — matching', () => {
     expect(verdicts.some((v) => v.kind === 'matched')).toBe(false);
   });
 
+  it('🚨 §33.6 — a broker-server timezone offset (MT5 EET vs Paris) still matches, never accuses', () => {
+    // The MT5 history prints the broker server clock (EET = UTC+2/+3); after
+    // the vision "assume Europe/Paris" fallback the position openTime lands ~1
+    // to 3 h off the member's real enteredAt. With everything else aligned
+    // (symbol + side + volume) this MUST stay a match — an honest trade must
+    // never be flagged false_declared over a clock offset (§33.6 anti-survente).
+    // 90 min is well past the old 45-min window and inside the timezone-safe one.
+    const verdicts = reconcileMember(
+      [trade()],
+      [position({ openTime: new Date(T0.getTime() + 90 * 60 * 1000) })],
+    );
+    expect(verdicts).toEqual([{ kind: 'matched', tradeId: 'trade1', positionId: 'pos1' }]);
+  });
+
   it('side mismatch is never a match (long ≠ short)', () => {
     const verdicts = reconcileMember([trade({ direction: 'long' })], [position({ side: 'short' })]);
     expect(verdicts.some((v) => v.kind === 'matched' || v.kind === 'mismatch')).toBe(false);

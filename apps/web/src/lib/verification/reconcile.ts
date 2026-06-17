@@ -30,8 +30,28 @@ import { reportError } from '@/lib/observability';
  *     « pas encore confrontable », pas un mensonge prouvé).
  */
 
-/** |openTime − enteredAt| tolerance — declared times are hand-entered. */
-export const MATCH_TIME_TOLERANCE_MS = 45 * 60 * 1000;
+/**
+ * |openTime − enteredAt| tolerance — declared times are hand-entered AND the
+ * two clocks rarely agree:
+ *   - `Trade.enteredAt` is the member's real instant (Paris datetime-local →
+ *     UTC), accurate to the minute they typed;
+ *   - `ExtractedPosition.openTime` comes from the MT5 history header, printed
+ *     in the BROKER SERVER timezone (FTMO & most prop firms run EET = UTC+2/+3)
+ *     and usually WITHOUT a visible offset. The vision prompt then falls back
+ *     to "assume Europe/Paris" (prompt.ts) → a systematic ~1-3 h residual for
+ *     any non-Paris server.
+ *
+ * A 45-min window let that residual flip an HONEST trade to `false_declared` /
+ * its position to `missing_declared` — the exact false accusation §33.6
+ * forbids ("préférer ne pas accuser"). Until the per-account server timezone is
+ * captured and `openTime` normalised to UTC (BrokerAccount.serverUtcOffset, V2),
+ * the window is widened to 3 h: it absorbs every realistic broker-vs-Paris
+ * offset while the symbol + side + volume(±15 %) keys remain the real
+ * discriminators (a fabricated trade still needs the same instrument, side and
+ * size as a real position within 3 h to escape detection — and erring toward a
+ * missed lie over a false accusation is precisely the §33.6 trade-off).
+ */
+export const MATCH_TIME_TOLERANCE_MS = 3 * 60 * 60 * 1000;
 /** Relative volume tolerance when both sides carry a size. */
 export const MATCH_VOLUME_TOLERANCE = 0.15;
 /** Coverage margin around the extracted-position window (§33.6 honesty). */

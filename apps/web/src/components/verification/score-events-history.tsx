@@ -6,10 +6,18 @@ import { cn } from '@/lib/utils';
  * member-readable. The `ScoreEvent` schema promises the score « stays
  * explainable to the member » — this is the surface that keeps the promise.
  *
- * Calm, anti-Black-Hat §33.2: factual labels, no shaming red wall — a
- * negative delta renders in quiet mono text, an EXCUSED event is visibly
- * neutralized (the member sees that giving a reason worked). Native markup
- * only (0-JS canon, mirror `ConstancyScoreCard`).
+ * Calm, anti-Black-Hat §33.2: factual labels, no shaming red wall — an EXCUSED
+ * event is visibly neutralized (the member sees that giving a reason worked).
+ * Native markup only (0-JS canon, mirror `ConstancyScoreCard`).
+ *
+ * HONESTY (§27, audit 2026-06-17): the right column shows the event's DIRECTION
+ * and relative weight, NOT a signed points number. The stored `ScoreEvent.delta`
+ * (−3/−8) is a per-event weight, but the weekly fold recomputes the 0-100 score
+ * from event REASONS via the honesty/regularity formulas (a false declaration
+ * actually drops honesty by 40, not 8). Surfacing a raw `-8` next to a score
+ * that moves differently would mislead — exactly what an honesty surface must
+ * not do. The axis touched (régularité vs honnêteté) is carried by the reason
+ * label on the left, so the right side only needs direction + magnitude.
  */
 
 const REASON_LABEL: Record<ScoreEventView['reason'], string> = {
@@ -19,16 +27,29 @@ const REASON_LABEL: Record<ScoreEventView['reason'], string> = {
   false_declaration: 'Trade déclaré sans contrepartie dans ton historique',
 };
 
+/** Honest direction + relative weight per reason (no fake /100 points). */
+const IMPACT: Record<
+  ScoreEventView['reason'],
+  { label: string; tone: 'pos' | 'soft' | 'neg' | 'strong' }
+> = {
+  filled: { label: 'Compte pour toi', tone: 'pos' },
+  forgot_no_reason: { label: 'Pèse un peu', tone: 'soft' },
+  reality_gap: { label: 'Pèse', tone: 'neg' },
+  false_declaration: { label: 'Pèse fort', tone: 'strong' },
+};
+
+const IMPACT_TONE_CLASS: Record<'pos' | 'soft' | 'neg' | 'strong', string> = {
+  pos: 'text-[var(--cy)]',
+  soft: 'text-[var(--t-4)]',
+  neg: 'text-[var(--t-3)]',
+  strong: 'text-[var(--t-2)]',
+};
+
 const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'short',
   timeZone: 'Europe/Paris',
 });
-
-function formatDelta(delta: number): string {
-  const rounded = Math.round(delta * 10) / 10;
-  return `${rounded > 0 ? '+' : ''}${rounded}`;
-}
 
 export function ScoreEventsHistory({ events }: { events: readonly ScoreEventView[] }) {
   if (events.length === 0) return null;
@@ -64,15 +85,13 @@ export function ScoreEventsHistory({ events }: { events: readonly ScoreEventView
             </span>
             <span
               className={cn(
-                'f-mono shrink-0 text-[12px] tabular-nums',
+                'shrink-0 text-[12px]',
                 event.excused
                   ? 'text-[var(--t-4)] line-through'
-                  : event.delta > 0
-                    ? 'text-[var(--cy)]'
-                    : 'text-[var(--t-3)]',
+                  : IMPACT_TONE_CLASS[IMPACT[event.reason].tone],
               )}
             >
-              {formatDelta(event.delta)}
+              {event.excused ? 'Neutralisé' : IMPACT[event.reason].label}
             </span>
           </li>
         ))}

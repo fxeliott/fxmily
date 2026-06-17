@@ -31,6 +31,9 @@ import {
  *   - Re-throw `NEXT_REDIRECT` errors so navigation isn't swallowed.
  */
 
+/** §31 — server-side cap on additional entry photos (mirror the wizard's UI cap). */
+const MAX_ENTRY_MEDIA = 4;
+
 export interface CreateTradeActionState {
   ok: boolean;
   error?: 'unauthorized' | 'invalid_input' | 'unknown';
@@ -139,6 +142,28 @@ export async function createTradeAction(
     };
   }
 
+  // §31 — additional entry analysis photos. These bypass the Zod schema (they
+  // are raw repeated FormData fields), so cap + BOLA them here exactly like the
+  // primary capture. `keyBelongsTo` validates BOTH the `trades/{userId}/…` shape
+  // and ownership (it returns false on any other prefix / forged userId).
+  const extraEntryKeys = formData
+    .getAll('extraEntryKey')
+    .filter((v): v is string => typeof v === 'string' && v.length > 0);
+  if (extraEntryKeys.length > MAX_ENTRY_MEDIA) {
+    return {
+      ok: false,
+      error: 'invalid_input',
+      fieldErrors: { extraEntryKeys: `Maximum ${MAX_ENTRY_MEDIA} photos additionnelles.` },
+    };
+  }
+  if (extraEntryKeys.some((k) => !keyBelongsTo(k, session.user.id))) {
+    return {
+      ok: false,
+      error: 'invalid_input',
+      fieldErrors: { extraEntryKeys: 'Capture invalide.' },
+    };
+  }
+
   let tradeId: string;
   try {
     const trade = await createTrade(session.user.id, {
@@ -158,6 +183,7 @@ export async function createTradeAction(
       hedgeRespected: data.hedgeRespected,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
       screenshotEntryKey: data.screenshotEntryKey,
+      extraEntryKeys,
     });
     tradeId = trade.id;
   } catch (err) {

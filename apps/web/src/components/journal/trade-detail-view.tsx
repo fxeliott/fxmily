@@ -231,6 +231,36 @@ export function TradeDetailView({
         </section>
       ) : null}
 
+      {/* §31 — additional analysis photos. Click opens the full image in a new
+          tab (same calm pattern as the /verification MT5 proofs, no modal). */}
+      {(trade.media ?? []).length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="t-eyebrow">
+            Photos d&apos;analyse additionnelles ({(trade.media ?? []).length})
+          </h2>
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {(trade.media ?? []).map((m, i) => (
+              <li key={m.id}>
+                <a
+                  href={m.readUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-card block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={m.readUrl}
+                    alt={`Photo d'analyse ${i + 1} du trade ${trade.pair}`}
+                    loading="lazy"
+                    className="rounded-card aspect-[16/9] w-full border border-[var(--b-default)] object-cover"
+                  />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {/* Sortie (closed only) */}
       {trade.isClosed ? (
         <>

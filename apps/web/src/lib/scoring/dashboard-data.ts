@@ -19,7 +19,15 @@ import {
   type LocalDateString,
 } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
+import {
+  aggregateRiskDiscipline,
+  aggregateSetupQuality,
+  type RiskDiscipline,
+  type SetupQualityDist,
+} from '@/lib/scoring/setup-quality';
 import { SESSION_LABEL } from '@/lib/trading/sessions';
+
+export type { RiskDiscipline, SetupQualityDist } from '@/lib/scoring/setup-quality';
 
 /**
  * Dashboard analytics aggregator (J6, SPEC §7.5).
@@ -64,6 +72,10 @@ export interface DashboardAnalytics {
   /** Total closed trades in the window. */
   closedCount: number;
   estimatedCount: number;
+  /** V1.5 — Steenbarger setup-quality distribution (A/B/C). NULL excluded. */
+  setupQuality: SetupQualityDist;
+  /** V1.5 — Tharp risk-ceiling discipline (riskPct ≤ 2 %). NULL excluded. */
+  riskDiscipline: RiskDiscipline;
 }
 
 export interface EmotionPerfRow {
@@ -138,6 +150,9 @@ async function _getDashboardAnalyticsImpl(
       closedAt: true,
       exitedAt: true,
       emotionBefore: true,
+      // V1.5 process metrics (Steenbarger / Tharp) — set at entry time.
+      tradeQuality: true,
+      riskPct: true,
     },
     orderBy: { exitedAt: 'asc' },
   });
@@ -145,6 +160,7 @@ async function _getDashboardAnalyticsImpl(
   const tradesNorm = trades.map((t) => ({
     ...t,
     realizedR: t.realizedR == null ? null : t.realizedR.toString(),
+    riskPct: t.riskPct == null ? null : t.riskPct.toString(),
     closedAt: t.closedAt!.toISOString(),
     exitedAt: t.exitedAt ? t.exitedAt.toISOString() : null,
     emotionBefore: [...(t.emotionBefore ?? [])],
@@ -164,6 +180,8 @@ async function _getDashboardAnalyticsImpl(
 
   const closedCount = tradesNorm.length;
   const estimatedCount = tradesNorm.filter((t) => t.realizedRSource === 'estimated').length;
+  const setupQuality = aggregateSetupQuality(tradesNorm);
+  const riskDiscipline = aggregateRiskDiscipline(tradesNorm);
 
   return {
     asOf: anchor,
@@ -178,6 +196,8 @@ async function _getDashboardAnalyticsImpl(
     streaks: { observedMaxLoss, observedMaxWin },
     closedCount,
     estimatedCount,
+    setupQuality,
+    riskDiscipline,
   };
 }
 

@@ -195,6 +195,18 @@ export default async function VerificationPage() {
                 );
               })}
             </ul>
+            {/* S4 — pont écart → travail psychologique (§26 « lien partenaire »).
+                Quand un écart se répète, une fiche Mark Douglas est livrée dans la
+                bibliothèque ; ce lien calme (anti Black-Hat §33.2) la rend
+                découvrable depuis l'endroit même où le membre voit ses écarts. */}
+            <Link
+              href="/library/inbox"
+              className="rounded-card inline-flex items-center gap-1.5 self-start text-[12px] text-[var(--t-3)] underline-offset-2 transition-colors hover:text-[var(--t-1)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              Quand un écart se répète, une fiche choisie pour toi t&apos;attend dans ta
+              bibliothèque
+              <ArrowLeft className="h-3.5 w-3.5 rotate-180" strokeWidth={1.75} aria-hidden />
+            </Link>
           </>
         )}
       </section>

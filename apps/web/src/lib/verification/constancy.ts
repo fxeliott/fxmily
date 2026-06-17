@@ -9,6 +9,7 @@ import {
   parseLocalDate,
   shiftLocalDate,
 } from '@/lib/checkin/timezone';
+import { MEETING_WINDOW_DAYS, meetingJoinFloor } from '@/lib/meeting/window';
 
 /**
  * S3 §33.5 — Score de constance & d'investissement dans le travail.
@@ -198,6 +199,143 @@ export async function scanRitualsForAllMembers(
     filledEvents,
     forgotEvents,
     blankDayDiscrepancies,
+    errors,
+  };
+}
+
+// =============================================================================
+// 1bis. Meeting no-show scan (vérification généralisée §31 — beyond check-ins)
+// =============================================================================
+
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Daily cron re-scans the band of meetings whose 30-day rattrapage window JUST
+ * closed. 2 days wide so a single missed cron run is recovered; the
+ * `@@unique([memberId, meetingId])` dedup makes the overlap a no-op.
+ */
+export const MEETING_MISS_SCAN_LOOKBACK_DAYS = 2;
+
+const MEETING_DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'Europe/Paris',
+});
+
+export interface MeetingNoShowScanResult {
+  readonly membersScanned: number;
+  readonly meetingsClosed: number;
+  readonly discrepanciesCreated: number;
+  readonly errors: number;
+}
+
+/**
+ * S3 §31 — "applique le même principe à l'ensemble des données, pas seulement
+ * les trades ; quand rien n'est fait sans motif valable → manque de discipline".
+ * A SCHEDULED meeting the member neither attended (live OR replay + content
+ * reviewed) nor excused, once its 30-day rattrapage window has CLOSED, becomes a
+ * `meeting_missed_no_reason` Discrepancy — EXCUSABLE (`memberReason` → the score
+ * recovers, §29) and strictly fed into the existing discipline axis + repetition
+ * alert. NEVER fires while the meeting is still rattrapable (the window is open)
+ * nor for a `cancelled` slot (§30.2/§33.6 — no unjust accusation).
+ *
+ * Mirrors the ritual blank-day pattern: idempotent, deterministic, §2-clean
+ * static `claudeReasoning` (NOT Claude output), no positive event needed (the
+ * discipline axis = addressed/total discrepancies, so the gap alone moves it).
+ */
+export async function scanMeetingNoShowsForAllMembers(
+  options: { now?: Date } = {},
+): Promise<MeetingNoShowScanResult> {
+  const now = options.now ?? new Date();
+  const windowMs = MEETING_WINDOW_DAYS * MS_PER_DAY;
+  // Window closes at scheduledAt + 30d → scan scheduledAt ∈ [now−(30+LB)d, now−30d).
+  const closedFrom = new Date(
+    now.getTime() - windowMs - MEETING_MISS_SCAN_LOOKBACK_DAYS * MS_PER_DAY,
+  );
+  const closedTo = new Date(now.getTime() - windowMs);
+
+  const meetings = await db.meeting.findMany({
+    where: { status: 'scheduled', scheduledAt: { gte: closedFrom, lt: closedTo } },
+    select: { id: true, scheduledAt: true },
+    orderBy: { scheduledAt: 'asc' },
+  });
+  if (meetings.length === 0) {
+    return { membersScanned: 0, meetingsClosed: 0, discrepanciesCreated: 0, errors: 0 };
+  }
+
+  const members = await db.user.findMany({
+    where: { status: 'active', role: 'member' },
+    select: { id: true, joinedAt: true },
+  });
+
+  let discrepanciesCreated = 0;
+  let errors = 0;
+
+  for (const member of members) {
+    try {
+      const joinFloor = meetingJoinFloor(member.joinedAt).getTime();
+      // Expected = meetings held on/after the member's join day (they existed).
+      const expected = meetings.filter((m) => m.scheduledAt.getTime() >= joinFloor);
+      if (expected.length === 0) continue;
+      const expectedIds = expected.map((m) => m.id);
+
+      const attendances = await db.meetingAttendance.findMany({
+        where: { userId: member.id, meetingId: { in: expectedIds } },
+        select: { meetingId: true, attendanceMode: true, contentReviewed: true },
+      });
+      // Complete = attended (live OR replay) AND content reviewed (mirror service.ts).
+      const completed = new Set(
+        attendances
+          .filter((a) => a.attendanceMode !== null && a.contentReviewed === true)
+          .map((a) => a.meetingId),
+      );
+      const missed = expected.filter((m) => !completed.has(m.id));
+      if (missed.length === 0) continue;
+
+      // Dedup on (member, meeting) — a re-run never duplicates a gap.
+      const existing = await db.discrepancy.findMany({
+        where: { memberId: member.id, meetingId: { in: missed.map((m) => m.id) } },
+        select: { meetingId: true },
+      });
+      const existingSet = new Set(existing.map((d) => d.meetingId));
+
+      for (const m of missed) {
+        if (existingSet.has(m.id)) continue;
+        try {
+          await db.discrepancy.create({
+            data: {
+              memberId: member.id,
+              type: 'meeting_missed_no_reason',
+              meetingId: m.id,
+              severity: 1,
+              // Detection instant (≈ window close) so the gap lands in the
+              // constancy (28d) + alert (14d) windows, not the old meeting date.
+              detectedAt: now,
+              claudeReasoning: `Une réunion programmée le ${MEETING_DATE_FMT.format(m.scheduledAt)} n'a pas été suivie (ni en direct ni en replay) dans le délai de rattrapage de 30 jours, sans motif déclaré.`,
+            },
+          });
+          discrepanciesCreated += 1;
+        } catch (err) {
+          // P2002 — a concurrent run grabbed this (member, meeting). Benign.
+          const isUnique =
+            typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
+          if (!isUnique) throw err;
+        }
+      }
+    } catch (err) {
+      errors += 1;
+      reportError(
+        'verification.constancy.meetings',
+        err instanceof Error ? err : new Error('meeting_noshow_scan_failed'),
+        { memberId: member.id },
+      );
+    }
+  }
+
+  return {
+    membersScanned: members.length,
+    meetingsClosed: meetings.length,
+    discrepanciesCreated,
     errors,
   };
 }

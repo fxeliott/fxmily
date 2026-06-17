@@ -2104,6 +2104,8 @@ model Meeting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   attendances MeetingAttendance[]
+  /// S3 §31 — `meeting_missed_no_reason` gaps materialised for no-shows.
+  discrepancies Discrepancy[]
 
   /// Idempotent cron generation: at most one meeting per slot per civil day.
   /// Doubles as the `date >=` / `scheduledAt` denominator filter index.
@@ -2275,6 +2277,10 @@ enum DiscrepancyType {
   false_declared
   mismatch
   unfilled_no_reason
+  /// S3 §31 généralisée — a SCHEDULED meeting the member neither attended (live
+  /// or replay) nor excused before its 30-day rattrapage window closed. Cancelled
+  /// slots are NEVER counted (no unjust accusation, §30.2/§33.6).
+  meeting_missed_no_reason
 }
 
 /// S3 — lifecycle of a discrepancy (open → member acknowledged → resolved).
@@ -2482,6 +2488,15 @@ model Discrepancy {
   extractedPositionId String?            @map("extracted_position_id")
   extractedPosition   ExtractedPosition? @relation(fields: [extractedPositionId], references: [id], onDelete: SetNull)
 
+  /// S3 §31 généralisée — the SCHEDULED meeting this `meeting_missed_no_reason`
+  /// gap refers to (null for every other type). THE dedup key: one gap per
+  /// (member, meeting). SetNull keeps the gap's lifecycle if the meeting row is
+  /// later purged. `detectedAt` is the DETECTION instant (≈ when the rattrapage
+  /// window closed, ~30 j after the meeting) so the gap lands inside the
+  /// constancy (28 j) + alert (14 j) windows — NOT the old meeting date.
+  meetingId String?  @map("meeting_id")
+  meeting   Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+
   /// 1 = minor, 2 = notable, 3 = major. Display/sort signal only — the
   /// ScoreEvent delta is a fixed per-reason constant (reconcile.ts), NOT
   /// derived from this severity.
@@ -2510,6 +2525,9 @@ model Discrepancy {
   // Member + admin views: open discrepancies first.
   @@index([memberId, status])
   @@index([memberId, detectedAt(sort: Desc)])
+  // One meeting-miss gap per (member, meeting) — the scan dedup key. NULL
+  // meetingId rows (every other type) never collide (Postgres NULLs distinct).
+  @@unique([memberId, meetingId])
   @@map("discrepancies")
 }
 

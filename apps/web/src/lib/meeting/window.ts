@@ -68,3 +68,13 @@ export function floorMeetingWindowAtJoin(windowStartUtc: Date, joinedAt: Date): 
 function startOfDayParis(instant: Date): Date {
   return localInstantToUtc(localDateOf(instant, MEETING_TIMEZONE), 0, 0, 0, 0, MEETING_TIMEZONE);
 }
+
+/**
+ * UTC instant of the member's Paris-local JOIN day — the "expected since" floor
+ * for the §31 meeting no-show scan (constancy.ts). A member is only expected at
+ * meetings held on or after this instant. Reuses the SAME `startOfDayParis` as
+ * `meetingWindowStart`'s join-floor so the two can never drift.
+ */
+export function meetingJoinFloor(joinedAt: Date): Date {
+  return startOfDayParis(joinedAt);
+}

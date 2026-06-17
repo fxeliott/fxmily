@@ -31,6 +31,7 @@ export interface AlertRule {
     | 'missing_declared'
     | 'mismatch'
     | 'false_declared'
+    | 'meeting_missed_no_reason'
   )[];
   readonly threshold: number;
   /** Coaching card category (S5 junction) — Mark Douglas territory only. */
@@ -61,6 +62,14 @@ export const ALERT_RULES: readonly AlertRule[] = [
     threshold: 2,
     cardCategory: 'ego',
     triggeredByLabel: 'Des trades déclarés sans contrepartie réelle, plusieurs fois',
+  },
+  {
+    // §31 généralisée — repeated unexcused meeting no-shows (discipline, not ego).
+    triggerType: 'meeting_missed_repeat',
+    discrepancyTypes: ['meeting_missed_no_reason'],
+    threshold: 3,
+    cardCategory: 'discipline',
+    triggeredByLabel: 'Plusieurs réunions manquées sans motif',
   },
 ];
 

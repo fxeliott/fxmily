@@ -22,6 +22,7 @@ const DISCREPANCY_LABELS: Record<DiscrepancyView['type'], string> = {
   false_declared: 'Trade déclaré sans contrepartie',
   mismatch: 'Écart de taille',
   unfilled_no_reason: 'Journée sans suivi',
+  meeting_missed_no_reason: 'Réunion manquée',
 };
 
 /** S4 (DOD3-T3-01) — `severity` drives the ScoreEvent delta but was rendered

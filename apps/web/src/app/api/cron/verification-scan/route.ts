@@ -8,6 +8,7 @@ import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
 import { reconcileAllMembers } from '@/lib/verification/reconcile';
 import {
   recomputeConstancyForAllMembers,
+  scanMeetingNoShowsForAllMembers,
   scanRitualsForAllMembers,
 } from '@/lib/verification/constancy';
 import { scanAlertsForAllMembers } from '@/lib/verification/alerts';
@@ -74,6 +75,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const reconcile = await reconcileAllMembers(opts);
     const rituals = await scanRitualsForAllMembers(opts);
+    // §31 généralisée — meeting no-shows whose rattrapage window just closed.
+    // BEFORE the fold so the new gaps land in this run's constancy + alerts.
+    const meetingNoShows = await scanMeetingNoShowsForAllMembers(opts);
     const constancy = await recomputeConstancyForAllMembers(opts);
     const alerts = await scanAlertsForAllMembers(opts);
 
@@ -87,10 +91,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         discrepanciesCreated: reconcile.discrepanciesCreated,
         ritualMembers: rituals.membersScanned,
         forgotEvents: rituals.forgotEvents,
+        meetingsClosed: meetingNoShows.meetingsClosed,
+        meetingMissDiscrepancies: meetingNoShows.discrepanciesCreated,
         scoresUpserted: constancy.scoresUpserted,
         alertsCreated: alerts.alertsCreated,
         deliveriesDispatched: alerts.deliveriesDispatched,
-        errors: reconcile.errors + rituals.errors + constancy.errors + alerts.errors,
+        errors:
+          reconcile.errors +
+          rituals.errors +
+          meetingNoShows.errors +
+          constancy.errors +
+          alerts.errors,
       },
     });
 
@@ -98,6 +109,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       ok: true,
       reconcile,
       rituals,
+      meetingNoShows,
       constancy,
       alerts,
     });

@@ -20,7 +20,8 @@ import { reportError } from '@/lib/observability';
  * Choix déterministes documentés (le verdict doit rester auditable §33.5 —
  * Claude n'intervient PAS ici) :
  *   - clé de matching = symbole (uppercase exact) + side + |openTime −
- *     enteredAt| ≤ 45 min + volume à ±15 % quand les deux sont connus.
+ *     enteredAt| ≤ 3 h (tolérance fuseau serveur broker, cf.
+ *     MATCH_TIME_TOLERANCE_MS) + volume à ±15 % quand les deux sont connus.
  *     JAMAIS le prix exact : la lecture OCR d'un digit peut dévier sur les
  *     petites polices (probe mobile 2026-06-11) — le prix n'est pas une clé.
  *   - greedy par distance temporelle croissante, appariement unique.

@@ -49,7 +49,11 @@ const ACCOUNT_TYPE_LABELS = {
 
 /** Calm, factual labels — never punitive (§33.2). */
 const DISCREPANCY_META: Record<
-  'missing_declared' | 'false_declared' | 'mismatch' | 'unfilled_no_reason',
+  | 'missing_declared'
+  | 'false_declared'
+  | 'mismatch'
+  | 'unfilled_no_reason'
+  | 'meeting_missed_no_reason',
   { label: string; description: string }
 > = {
   missing_declared: {
@@ -68,6 +72,11 @@ const DISCREPANCY_META: Record<
   unfilled_no_reason: {
     label: 'Journée sans suivi',
     description: 'Aucun check-in ce jour-là, sans motif pour l’instant.',
+  },
+  meeting_missed_no_reason: {
+    label: 'Réunion manquée',
+    description:
+      'Une réunion programmée n’a pas été suivie (ni en direct ni en replay) dans le délai, sans motif. Donne-en un s’il y a lieu.',
   },
 };
 

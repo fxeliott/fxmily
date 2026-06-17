@@ -179,7 +179,12 @@ export class DiscrepancyNotFoundError extends Error {
 
 export interface DiscrepancyView {
   readonly id: string;
-  readonly type: 'missing_declared' | 'false_declared' | 'mismatch' | 'unfilled_no_reason';
+  readonly type:
+    | 'missing_declared'
+    | 'false_declared'
+    | 'mismatch'
+    | 'unfilled_no_reason'
+    | 'meeting_missed_no_reason';
   readonly severity: number;
   readonly status: 'open' | 'acknowledged' | 'resolved';
   readonly reasoning: string | null;

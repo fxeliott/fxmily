@@ -1992,6 +1992,11 @@ model WeeklyScheduleQuestionnaire {
 
   @@unique([userId, weekStart])
   @@index([userId, weekStart(sort: Desc)])
+  /// The calendar batch filters by `weekStart` ALONE (loadAllSnapshots /
+  /// persistGeneratedCalendars). The composite above is userId-led, so Postgres
+  /// can't use it for a weekStart-only scan — this single-column index keeps the
+  /// weekly batch index-bound as the questionnaire history grows (S6 audit).
+  @@index([weekStart])
   @@map("weekly_schedule_questionnaires")
 }
 
@@ -2035,6 +2040,10 @@ model AdaptiveCalendar {
   @@unique([userId, weekStart])
   @@index([userId, weekStart(sort: Desc)])
   @@index([generatedAt(sort: Desc)])
+  /// Same rationale as WeeklyScheduleQuestionnaire — the batch reads existing
+  /// calendars by `weekStart` alone (freshness gate). Keeps it index-bound at
+  /// scale (S6 audit).
+  @@index([weekStart])
   @@map("adaptive_calendars")
 }
 

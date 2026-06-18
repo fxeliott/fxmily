@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { Prisma } from '@/generated/prisma/client';
 import { localDateOf, parseLocalDate, shiftLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
@@ -183,15 +185,23 @@ export async function submitWeeklyScheduleQuestionnaire(
   return { questionnaire: serializeQuestionnaire(row), wasNew: existing === null };
 }
 
-export async function getQuestionnaireForUser(
-  userId: string,
-  weekStart: string,
-): Promise<SerializedWeeklyScheduleQuestionnaire | null> {
-  const row = await db.weeklyScheduleQuestionnaire.findUnique({
-    where: { userId_weekStart: { userId, weekStart: parseLocalDate(weekStart) } },
-  });
-  return row ? serializeQuestionnaire(row) : null;
-}
+/**
+ * `cache()`-wrapped so the dashboard render tree dedupes the read: both
+ * `getDailyGuidance` and `CalendarStatusWidget` ask for the SAME
+ * `(userId, weekStart)` in one pass — React de-duplicates to a single query
+ * per request (S6 audit). No-op outside an RSC request scope.
+ */
+export const getQuestionnaireForUser = cache(
+  async (
+    userId: string,
+    weekStart: string,
+  ): Promise<SerializedWeeklyScheduleQuestionnaire | null> => {
+    const row = await db.weeklyScheduleQuestionnaire.findUnique({
+      where: { userId_weekStart: { userId, weekStart: parseLocalDate(weekStart) } },
+    });
+    return row ? serializeQuestionnaire(row) : null;
+  },
+);
 
 export async function getLatestQuestionnaireForUser(
   userId: string,
@@ -207,15 +217,17 @@ export async function getLatestQuestionnaireForUser(
 // Calendar — read + persist + disclosure
 // =============================================================================
 
-export async function getCalendarForUser(
-  userId: string,
-  weekStart: string,
-): Promise<SerializedAdaptiveCalendar | null> {
-  const row = await db.adaptiveCalendar.findUnique({
-    where: { userId_weekStart: { userId, weekStart: parseLocalDate(weekStart) } },
-  });
-  return row ? serializeCalendar(row) : null;
-}
+/** `cache()`-wrapped — same dashboard de-dup rationale as
+ * {@link getQuestionnaireForUser} (read by `getDailyGuidance` + the calendar
+ * page in one render pass). */
+export const getCalendarForUser = cache(
+  async (userId: string, weekStart: string): Promise<SerializedAdaptiveCalendar | null> => {
+    const row = await db.adaptiveCalendar.findUnique({
+      where: { userId_weekStart: { userId, weekStart: parseLocalDate(weekStart) } },
+    });
+    return row ? serializeCalendar(row) : null;
+  },
+);
 
 export async function getLatestCalendarForUser(
   userId: string,

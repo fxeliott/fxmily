@@ -4,7 +4,7 @@
  * For every Mark Douglas card in the seed, concatenates all member-facing
  * text fields and asserts that the AMF violation detector returns
  * `suspected: false`. With the corrected patterns (élision/quoted/TP-label
- * carve-outs), all 53 cards must pass clean.
+ * carve-outs), all 54 cards must pass clean.
  *
  * If a card is added in the future that genuinely contains market advice,
  * this test will surface it immediately — preventing a rogue admin entry
@@ -64,7 +64,7 @@ describe('Mark Douglas cards — catalogue category regression guard (FIX F S5)'
 });
 
 // =============================================================================
-// §2 posture test — all 53 cards must be clean
+// §2 posture test — all 54 cards must be clean
 // =============================================================================
 
 describe('Mark Douglas cards — SPEC §2 posture invariant', () => {

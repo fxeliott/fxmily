@@ -1,13 +1,14 @@
 /**
  * Mark Douglas card seed data (J7 + J7.5 + J7.6 + J7.8).
  *
- * V1 ships **53 fiches** couvrant les 7 triggers canoniques SPEC §7.6
+ * V1 ships **54 fiches** couvrant les 7 triggers canoniques SPEC §7.6
  * (tilt, plan-violations, sleep-deficit, emotion-logged FOMO, 4 peurs,
  * sur-confiance, hedge-violation) + 8 piliers catalogue
  * (acceptance, probabilities, process, ego, fear, loss, consistency,
- * patience). Cible §7.6 atteinte. **53 = 51 (J7→J7.8) + 2 (re-audit S5 :
- * honnêteté + motivation/résilience, couvrant les 6 thèmes §29).** Le compte
- * fait foi (validé en CI par `cards-posture` full-schema + `validate-cards.ts`).
+ * patience). Cible §7.6 atteinte. **54 = 51 (J7→J7.8) + 3 (re-audit S5 :
+ * honnêteté + motivation/résilience + les 7 Principes de Consistance de
+ * Douglas, couvrant les 6 thèmes §29).** Le compte fait foi (validé en CI par
+ * `cards-posture` full-schema + `validate-cards.ts`).
  * Citations ≤30 mots fair use FR L122-5 (gate runtime actif) +
  * `quoteSourceChapter` obligatoire + paraphrases 200-400 mots à la voix
  * d'Eliot + 1-3 exercises.
@@ -1906,6 +1907,64 @@ B gagne plus. B dort mieux. B peut tenir son régime sur 5 ans. A burnout en 18 
     ],
     triggerRules: null,
     hatClass: 'black',
+    priority: 8,
+    published: true,
+  },
+
+  {
+    // Re-audit S5 : les « 7 Principes de Consistance » (Trading in the Zone, 2e
+    //   pilier, le pendant des 5 Vérités Fondamentales) étaient ABSENTS du
+    //   catalogue. Le catalogue 'consistency' couvrait la consistance comme
+    //   état d'esprit (consistance-vs-perfection) et le lien règle/croyance
+    //   (pourquoi-tu-trahis-ton-plan), mais pas le CREDO en 7 affirmations que
+    //   Douglas demande de réciter comme un athlète son protocole. Cette fiche le
+    //   matérialise en paraphrase à la voix d'Eliot. Quote = paraphrase attribuée
+    //   (canon Jalon B : pas de faux verbatim ; le credo original est une liste).
+    //   POSTURE §2 : zéro analyse de marché — discipline/process pur (l'« edge »
+    //   est cité comme objet à identifier, jamais analysé ni orienté).
+    slug: 'les-sept-principes-de-consistance',
+    title: 'Les 7 principes de consistance de Mark Douglas',
+    category: 'consistency',
+    quote:
+      "La consistance, c'est un état d'esprit : exécuter les mêmes principes, de la même façon, à chaque fois — pas un résultat à forcer.",
+    quoteSourceChapter: 'Trading in the Zone, ch.11 (paraphrase du credo)',
+    paraphrase: `Mark Douglas clôt *Trading in the Zone* sur un credo en sept principes — le pendant pratique de ses cinq vérités fondamentales. Ce n'est pas une théorie à comprendre : c'est un protocole à réciter et à incarner, comme un athlète déroule son échauffement. Le voici, à ta voix.
+
+**« Je suis un trader régulier parce que… »**
+
+1. **J'identifie mon edge avec précision.** Je sais exactement ce qui définit mon setup — pas une intuition floue, une définition que je peux écrire et reconnaître à chaque fois.
+2. **Je prédéfinis mon risque sur chaque trade.** Avant d'entrer, je sais ce que je suis prêt à perdre. Le risque n'est jamais une découverte en cours de route.
+3. **J'accepte complètement ce risque.** Pas « je tolère », pas « j'espère que ça ne touchera pas » : j'accepte la perte possible avant qu'elle arrive, sereinement.
+4. **J'agis sur mon edge sans hésitation.** Quand les conditions sont réunies, j'exécute. L'hésitation est une déviation, au même titre que l'impulsion.
+5. **Je me paie quand le marché met l'argent à disposition.** Je prends ce qui m'est offert selon mon plan, sans laisser l'avidité réécrire ma sortie.
+6. **Je surveille en permanence ma propension à l'erreur.** Je sais que mon mental cherchera à négocier avec ma discipline. Je reste l'observateur de mes propres failles.
+7. **Je ne viole jamais ces principes.** C'est le principe qui scelle les six autres : leur valeur vient de leur application sans exception.
+
+**Pourquoi un credo, et pas une simple liste de règles.** Une règle reste extérieure ; un credo récité devient une identité. Douglas insiste : la consistance n'est pas un objectif qu'on atteint, c'est un état d'esprit qu'on entretient. Tu n'as pas besoin de savoir ce qui va se passer ensuite pour exécuter — tu as besoin de faire confiance à ton process, principe après principe.
+
+**Comment t'en servir.** Ne cherche pas à tout tenir d'un coup. Relis les sept ce matin, puis choisis-en UN sur lequel tu étais le plus faible hier. Travaille-le aujourd'hui. La consistance se construit un principe à la fois, répété jusqu'à ce qu'il devienne un automatisme.`,
+    exercises: [
+      {
+        id: 'reciter-les-sept',
+        label: 'Réciter les 7 principes avant la session',
+        description:
+          "Avant d'ouvrir ta plateforme, lis les sept principes à voix haute, à la première personne. 60 secondes. Comme un athlète son protocole : le but n'est pas de réfléchir, c'est d'ancrer l'identité « trader régulier » avant le premier trade.",
+      },
+      {
+        id: 'noter-le-principe-faible',
+        label: 'Cibler le principe le plus faible du jour',
+        description:
+          "Chaque soir au check-in, note lequel des sept principes tu as le moins respecté aujourd'hui (1 à 7). Demain, fais-en ta priorité unique. Sur une semaine, tu verras lequel revient — c'est ton chantier prioritaire de discipline.",
+      },
+      {
+        id: 'auditer-le-principe-7',
+        label: 'Audit du principe 7 (zéro violation)',
+        description:
+          "En fin de semaine, compte les exceptions que tu t'es accordées sur les six premiers principes. Le principe 7 dit : aucune. Chaque exception notée, sans te juger, est une donnée pour la semaine suivante. Vise 0, mesure l'écart honnêtement.",
+      },
+    ],
+    triggerRules: null,
+    hatClass: 'white',
     priority: 8,
     published: true,
   },

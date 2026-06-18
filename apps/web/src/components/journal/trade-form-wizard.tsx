@@ -10,6 +10,7 @@ import {
   Info,
   Sliders,
   Target,
+  Trash2,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
@@ -78,9 +79,31 @@ interface DraftState {
   notes: string;
   screenshotEntryKey: string;
   screenshotEntryReadUrl: string;
+  /** §31 — additional entry analysis captures (TradeMedia kind=entry). */
+  extraEntryKeys: string[];
+  extraEntryReadUrls: string[];
 }
 
 const DRAFT_STORAGE_KEY = 'fxmily:journal:draft:v1';
+
+/** §31 « photos » pluriel — additional entry analysis captures, on top of the
+ *  mandatory primary `screenshotEntryKey`. Capped to keep the gallery sane. */
+const MAX_ENTRY_MEDIA = 4;
+
+/**
+ * Whitelist a thumbnail URL to our own upload route before it reaches an
+ * `href`/`src`. The readUrl comes from the `/api/uploads` fetch response, so
+ * this guarantees a tampered/unexpected value can never become a `javascript:`
+ * href (CodeQL js/xss-through-dom — defense in depth; the route is ours and the
+ * key is server-generated `trades/{userId}/{nanoid}.{ext}`). An anchored regex
+ * test (vs `startsWith`) is what CodeQL recognises as a sanitising barrier.
+ */
+// Same-origin path under our upload route only — no `:` means no `javascript:`
+// / `data:` scheme, anchored start means no `//host` protocol-relative URL.
+const UPLOAD_URL_RX = /^\/api\/uploads\/[\w./-]+$/;
+function safeUploadUrl(url: string | undefined): string {
+  return url && UPLOAD_URL_RX.test(url) ? url : '';
+}
 
 function nowIsoLocal(): string {
   const d = new Date();
@@ -109,6 +132,8 @@ function emptyDraft(): DraftState {
     notes: '',
     screenshotEntryKey: '',
     screenshotEntryReadUrl: '',
+    extraEntryKeys: [],
+    extraEntryReadUrls: [],
   };
 }
 
@@ -283,6 +308,7 @@ export function TradeFormWizard() {
     fd.set('hedgeRespected', draft.hedgeRespected);
     if (draft.notes) fd.set('notes', draft.notes);
     fd.set('screenshotEntryKey', draft.screenshotEntryKey);
+    for (const key of draft.extraEntryKeys) fd.append('extraEntryKey', key);
 
     startTransition(async () => {
       const result: CreateTradeActionState = await createTradeAction(null, fd);
@@ -1046,28 +1072,106 @@ function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepPr
 }
 
 function StepEntryScreenshot({ draft, update, fieldErrors, disabled }: StepProps) {
+  const extraKeys = draft.extraEntryKeys;
+  const extraUrls = draft.extraEntryReadUrls;
+  const canAddMore = extraKeys.length < MAX_ENTRY_MEDIA;
   return (
-    <div className="flex flex-col gap-3">
-      <p className="t-body text-[var(--t-2)]">
-        Capture obligatoire avant entrée — preuve que tu as analysé le setup. C&apos;est la couche
-        d&apos;audit comportemental la plus solide.
-      </p>
-      <ScreenshotUploader
-        kind="trade-entry"
-        name="screenshotEntryKey"
-        initialKey={draft.screenshotEntryKey || null}
-        initialReadUrl={draft.screenshotEntryReadUrl || null}
-        disabled={disabled}
-        error={fieldErrors.screenshotEntryKey}
-        onUploaded={({ key, readUrl }) => {
-          update('screenshotEntryKey', key);
-          update('screenshotEntryReadUrl', readUrl);
-        }}
-        onCleared={() => {
-          update('screenshotEntryKey', '');
-          update('screenshotEntryReadUrl', '');
-        }}
-      />
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3">
+        <p className="t-body text-[var(--t-2)]">
+          Capture obligatoire avant entrée — preuve que tu as analysé le setup. C&apos;est la couche
+          d&apos;audit comportemental la plus solide.
+        </p>
+        <ScreenshotUploader
+          kind="trade-entry"
+          name="screenshotEntryKey"
+          initialKey={draft.screenshotEntryKey || null}
+          initialReadUrl={draft.screenshotEntryReadUrl || null}
+          disabled={disabled}
+          error={fieldErrors.screenshotEntryKey}
+          onUploaded={({ key, readUrl }) => {
+            update('screenshotEntryKey', key);
+            update('screenshotEntryReadUrl', readUrl);
+          }}
+          onCleared={() => {
+            update('screenshotEntryKey', '');
+            update('screenshotEntryReadUrl', '');
+          }}
+        />
+      </div>
+
+      {/* §31 « photos » pluriel — additional analysis captures (multi-TF, zone,
+          plan). Optional, on top of the mandatory primary capture above. */}
+      <div className="flex flex-col gap-2 border-t border-[var(--b-subtle)] pt-4">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="t-eyebrow text-[var(--t-3)]">Photos d&apos;analyse additionnelles</span>
+          <span className="t-cap font-mono text-[var(--t-4)] tabular-nums">
+            {extraKeys.length}/{MAX_ENTRY_MEDIA} · optionnel
+          </span>
+        </div>
+        <p className="t-cap text-[var(--t-4)]">
+          Plusieurs unités de temps, ta zone, ton plan — documente ton analyse autant que tu veux.
+        </p>
+
+        {extraKeys.length > 0 ? (
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {extraKeys.map((key, i) => (
+              <li key={key} className="relative">
+                <a
+                  href={safeUploadUrl(extraUrls[i]) || '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-card block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={safeUploadUrl(extraUrls[i])}
+                    alt={`Photo d'analyse additionnelle ${i + 1}`}
+                    loading="lazy"
+                    className="rounded-card aspect-[16/9] w-full border border-[var(--b-default)] object-cover"
+                  />
+                </a>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    update(
+                      'extraEntryKeys',
+                      extraKeys.filter((_, j) => j !== i),
+                    );
+                    update(
+                      'extraEntryReadUrls',
+                      extraUrls.filter((_, j) => j !== i),
+                    );
+                  }}
+                  aria-label={`Retirer la photo additionnelle ${i + 1}`}
+                  className="absolute top-1 right-1 grid h-7 w-7 place-items-center rounded-full border border-[var(--b-default)] bg-[var(--bg)]/80 text-[var(--t-2)] backdrop-blur transition-colors hover:border-[oklch(0.7_0.165_22_/_0.35)] hover:text-[var(--bad)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {canAddMore ? (
+          <ScreenshotUploader
+            // Remount after each successful add so the dropzone resets cleanly.
+            key={extraKeys.length}
+            kind="trade-entry"
+            name=""
+            disabled={disabled}
+            onUploaded={({ key, readUrl }) => {
+              update('extraEntryKeys', [...extraKeys, key]);
+              update('extraEntryReadUrls', [...extraUrls, readUrl]);
+            }}
+          />
+        ) : (
+          <p className="t-cap text-[var(--t-4)]">
+            Maximum {MAX_ENTRY_MEDIA} photos additionnelles atteint.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -394,6 +394,8 @@ export async function purgeMaterialisedDeletions(
           screenshotEntryKey: true,
           screenshotExitKey: true,
           annotations: { select: { mediaKey: true } },
+          // §31 — additional entry photos (TradeMedia) sweep with the trade.
+          media: { select: { fileKey: true } },
         },
       });
       for (const t of tradeMedia) {
@@ -401,6 +403,9 @@ export async function purgeMaterialisedDeletions(
         if (t.screenshotExitKey) tradeKeys.push(t.screenshotExitKey);
         for (const a of t.annotations) {
           if (a.mediaKey) tradeKeys.push(a.mediaKey);
+        }
+        for (const m of t.media) {
+          tradeKeys.push(m.fileKey);
         }
       }
       if (tradeKeys.length > 0) {

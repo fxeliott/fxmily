@@ -52,6 +52,10 @@ export interface CreateTradeInput {
   hedgeRespected: boolean | null;
   notes: string | undefined;
   screenshotEntryKey: string;
+  /// §31 — additional entry analysis captures (TradeMedia kind=entry). The
+  /// primary `screenshotEntryKey` stays the mandatory anchor; these are extra.
+  /// Already cap-checked + BOLA-validated by the Server Action.
+  extraEntryKeys?: string[];
 }
 
 export interface CloseTradeInput {
@@ -78,6 +82,15 @@ export interface CloseTradeInput {
  * Prisma `Decimal` → `string`, `Date` → `string` (ISO 8601). Booleans and
  * enums are passed through.
  */
+/** §31 — a serialized additional trade photo (only the client-needed fields:
+ *  the raw `fileKey` is never exposed, only its `readUrl`). */
+export interface SerializedTradeMedia {
+  id: string;
+  kind: string;
+  readUrl: string;
+  createdAt: string;
+}
+
 export interface SerializedTrade {
   id: string;
   userId: string;
@@ -114,6 +127,9 @@ export interface SerializedTrade {
   updatedAt: string;
   /** True iff `closedAt` is set. Convenience flag for UI. */
   isClosed: boolean;
+  /** §31 — additional entry analysis photos. Only `getTradeById` (the detail
+   *  view) populates them; list/close/report serializations omit it. */
+  media?: SerializedTradeMedia[];
 }
 
 export type TradeStatusFilter = 'all' | 'open' | 'closed';
@@ -133,7 +149,11 @@ export interface ListTradesResult {
 
 // ----- Helpers ----------------------------------------------------------------
 
-function toSerialized(trade: TradeModel): SerializedTrade {
+function toSerialized(
+  trade: TradeModel,
+  media?: ReadonlyArray<{ id: string; kind: string; fileKey: string; createdAt: Date }>,
+): SerializedTrade {
+  const storage = selectStorage();
   return {
     id: trade.id,
     userId: trade.userId,
@@ -165,6 +185,12 @@ function toSerialized(trade: TradeModel): SerializedTrade {
     createdAt: trade.createdAt.toISOString(),
     updatedAt: trade.updatedAt.toISOString(),
     isClosed: trade.closedAt !== null,
+    media: (media ?? []).map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      readUrl: storage.getReadUrl(m.fileKey),
+      createdAt: m.createdAt.toISOString(),
+    })),
   };
 }
 
@@ -221,6 +247,11 @@ export async function createTrade(
       hedgeRespected: input.hedgeRespected,
       notes: input.notes ?? null,
       screenshotEntryKey: input.screenshotEntryKey,
+      // §31 — additional entry photos written atomically with the trade via the
+      // nested create (kind defaults to `entry`). Empty/absent → no media rows.
+      ...(input.extraEntryKeys && input.extraEntryKeys.length > 0
+        ? { media: { create: input.extraEntryKeys.map((fileKey) => ({ fileKey })) } }
+        : {}),
     },
   });
   return toSerialized(trade);
@@ -308,9 +339,19 @@ export async function getTradeById(
   userId: string,
   tradeId: string,
 ): Promise<SerializedTrade | null> {
-  const trade = await db.trade.findUnique({ where: { id: tradeId } });
+  const trade = await db.trade.findUnique({
+    where: { id: tradeId },
+    // §31 — the detail view is the only surface that renders the additional
+    // entry photos ; list/close views keep `media: []` (no include).
+    include: {
+      media: {
+        select: { id: true, kind: true, fileKey: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  });
   if (!trade || trade.userId !== userId) return null;
-  return toSerialized(trade);
+  return toSerialized(trade, trade.media);
 }
 
 export async function listTradesForUser(
@@ -338,7 +379,9 @@ export async function listTradesForUser(
   const items = hasMore ? trades.slice(0, limit) : trades;
 
   return {
-    items: items.map(toSerialized),
+    // NB: not `.map(toSerialized)` — `.map` would pass the index as the second
+    // `media` arg. The list view never renders the gallery anyway.
+    items: items.map((t) => toSerialized(t)),
     nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null,
   };
 }
@@ -355,6 +398,9 @@ export async function deleteTrade(userId: string, tradeId: string): Promise<void
       screenshotEntryKey: true,
       screenshotExitKey: true,
       annotations: { select: { mediaKey: true } },
+      // §31 — the additional entry photos cascade as ROWS, but their stored
+      // bytes must be swept too (RGPD §17), exactly like the scalar captures.
+      media: { select: { fileKey: true } },
     },
   });
   if (!trade) {
@@ -374,6 +420,7 @@ export async function deleteTrade(userId: string, tradeId: string): Promise<void
     trade.screenshotEntryKey,
     trade.screenshotExitKey,
     ...trade.annotations.map((a) => a.mediaKey),
+    ...trade.media.map((m) => m.fileKey),
   ].filter((key): key is string => key !== null);
   for (const key of keys) {
     void storage.delete(key).catch(() => undefined);

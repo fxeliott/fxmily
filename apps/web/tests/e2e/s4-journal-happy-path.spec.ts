@@ -172,7 +172,9 @@ test.describe('S4 — /journal happy-path : empty-state CTA + wizard + photo + p
     await expect(page.getByText('Ajoute la capture pour activer la sauvegarde.')).toBeVisible();
 
     // --- 3. Upload a real PNG through the real POST /api/uploads pipeline.
-    await page.locator('input[type="file"]').setInputFiles(FIXTURE_PNG);
+    // `.first()` — step 6 now has TWO file inputs (primary capture + the §31
+    // additional-photos gallery uploader). The primary is first in the DOM.
+    await page.locator('input[type="file"]').first().setInputFiles(FIXTURE_PNG);
     // The uploader preview confirms the 201 + readUrl round-trip.
     await expect(page.getByAltText('Capture avant entrée')).toBeVisible({ timeout: 15_000 });
     await expect(submitBtn).toBeEnabled();

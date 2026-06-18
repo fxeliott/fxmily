@@ -200,12 +200,14 @@ describe('closeTrade — processComplete ("oublis" axis, SPEC §28/§21)', () =>
 });
 
 describe('deleteTrade — storage sweep (AX1-F1, RGPD §17)', () => {
-  it('best-effort deletes the trade row + every attached media key (entry, exit, annotations), skipping nulls', async () => {
+  it('best-effort deletes the trade row + every attached media key (entry, exit, annotations, §31 photos), skipping nulls', async () => {
     storageDelete.mockResolvedValue(undefined);
     vi.mocked(db.trade.findFirst).mockResolvedValue({
       screenshotEntryKey: 'trades/user-1/entry.png',
       screenshotExitKey: 'trades/user-1/exit.png',
       annotations: [{ mediaKey: 'annotations/trade-1/a.png' }, { mediaKey: null }],
+      // §31 — additional entry photos must sweep too (RGPD §17).
+      media: [{ fileKey: 'trades/user-1/extra1.png' }, { fileKey: 'trades/user-1/extra2.png' }],
     } as never);
     vi.mocked(db.trade.deleteMany).mockResolvedValue({ count: 1 } as never);
 
@@ -218,11 +220,13 @@ describe('deleteTrade — storage sweep (AX1-F1, RGPD §17)', () => {
     expect(db.trade.deleteMany).toHaveBeenCalledWith({
       where: { id: 'trade-1', userId: 'user-1' },
     });
-    // Entry + exit + the non-null annotation media = 3 ; the null mediaKey is skipped.
-    expect(storageDelete).toHaveBeenCalledTimes(3);
+    // Entry + exit + 1 annotation + 2 §31 photos = 5 ; the null mediaKey is skipped.
+    expect(storageDelete).toHaveBeenCalledTimes(5);
     expect(storageDelete).toHaveBeenCalledWith('trades/user-1/entry.png');
     expect(storageDelete).toHaveBeenCalledWith('trades/user-1/exit.png');
     expect(storageDelete).toHaveBeenCalledWith('annotations/trade-1/a.png');
+    expect(storageDelete).toHaveBeenCalledWith('trades/user-1/extra1.png');
+    expect(storageDelete).toHaveBeenCalledWith('trades/user-1/extra2.png');
   });
 
   it('throws TradeNotFoundError and never touches storage when the trade is absent / not owned', async () => {

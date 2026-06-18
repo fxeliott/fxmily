@@ -469,9 +469,16 @@ describe('purgeMaterialisedDeletions', () => {
         screenshotEntryKey: 'trades/u1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png',
         screenshotExitKey: 'trades/u1/cccccccccccccccccccccccccccccccc.png',
         annotations: [{ mediaKey: 'annotations/t1/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png' }],
+        // §31 — additional entry photos sweep too (RGPD §17).
+        media: [{ fileKey: 'trades/u1/dddddddddddddddddddddddddddddddd.png' }],
       },
       // a trade with no captures + a text-only annotation → every key skipped
-      { screenshotEntryKey: null, screenshotExitKey: null, annotations: [{ mediaKey: null }] },
+      {
+        screenshotEntryKey: null,
+        screenshotExitKey: null,
+        annotations: [{ mediaKey: null }],
+        media: [],
+      },
     ]);
     // First delete fails — best-effort: the rest still run AND the hard-delete happens.
     storageDeleteMock.mockRejectedValueOnce(new Error('disk on fire')).mockResolvedValue(undefined);
@@ -487,9 +494,11 @@ describe('purgeMaterialisedDeletions', () => {
         screenshotEntryKey: true,
         screenshotExitKey: true,
         annotations: { select: { mediaKey: true } },
+        media: { select: { fileKey: true } },
       },
     });
-    // The 3 non-null trade media keys are swept (nulls skipped); hard-delete still runs.
+    // entry + exit + 1 annotation + 1 §31 photo = 4 keys swept (nulls skipped);
+    // hard-delete still runs despite the first delete failing.
     expect(storageDeleteMock).toHaveBeenCalledWith(
       'trades/u1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png',
     );
@@ -499,7 +508,10 @@ describe('purgeMaterialisedDeletions', () => {
     expect(storageDeleteMock).toHaveBeenCalledWith(
       'annotations/t1/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png',
     );
-    expect(storageDeleteMock).toHaveBeenCalledTimes(3);
+    expect(storageDeleteMock).toHaveBeenCalledWith(
+      'trades/u1/dddddddddddddddddddddddddddddddd.png',
+    );
+    expect(storageDeleteMock).toHaveBeenCalledTimes(4);
     expect(deleteMock).toHaveBeenCalledWith({ where: { id: 'u1' } });
     expect(result.purged).toBe(1);
     expect(result.errors).toBe(0);

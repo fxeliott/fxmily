@@ -218,6 +218,16 @@ const realCounterSliceSchema = z
     sleepHoursMedian: z.number().min(0).max(24).nullable(),
     moodMedian: z.number().min(1).max(10).nullable(),
     stressMedian: z.number().min(1).max(10).nullable(),
+    /// SPEC §7.10/§30 — routine & lifestyle signals (count-only, posture §2 —
+    /// l'ACTE/la routine, jamais un résultat marché). `null`/0 honnête quand
+    /// l'axe n'est pas renseigné (jamais un faux "0"). Axe mode-de-vie/routines
+    /// Mark Douglas (§23/§30 — régulation émotionnelle & discipline). Always
+    /// present (the aggregator always computes them). Carbon of weekly.
+    sleepQualityMedian: z.number().min(1).max(10).nullable(),
+    meditationMinMedian: z.number().min(0).nullable(),
+    meditationDaysCount: z.number().int().min(0),
+    sportDaysCount: z.number().int().min(0),
+    gratitudeDaysCount: z.number().int().min(0),
     annotationsReceived: z.number().int().min(0),
     annotationsViewed: z.number().int().min(0),
     douglasCardsDelivered: z.number().int().min(0),
@@ -322,6 +332,81 @@ const verificationSliceSchema = z
   })
   .strict();
 
+// =============================================================================
+// (D) Member onboarding profile — REFERENCE read-only context (TASK B)
+// =============================================================================
+
+/// SPEC §25.2 — the member's own onboarding profile (their words), surfaced to
+/// Claude as REFERENCE CONTEXT for the TEXT only — NEVER fed to scoring/edge
+/// (posture §2: progress on the member's OWN entry axes, psycho/process, never
+/// a market view). 0 cross-member leak (the loader reads `getProfileForUser`
+/// for THIS member only). Truncated by the loader/builder (summary ~600 chars,
+/// ≤5 axes, ≤5 highlight labels) + `safeFreeText` re-hardened defense-in-depth
+/// (the highlight `evidence[]` verbatim is intentionally DROPPED here — only the
+/// short, member-authored labels reach the prompt). `null` = no profile yet
+/// (Phase A.2 batch not run / member onboarded pre-feature) → the prompt omits
+/// the section (no fabricated axes, §33.6).
+const memberProfileSnapshotSchema = z
+  .object({
+    /// May be empty when the defensive loader coercion found no usable summary
+    /// but kept axes/labels — the prompt then skips the summary line only.
+    summary: z
+      .string()
+      .trim()
+      .max(600)
+      .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+      .transform(safeFreeText),
+    /// The member's prioritised entry axes (their words). Capped ≤5; each ≤200.
+    axesPrioritaires: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(200)
+          .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+          .transform(safeFreeText),
+      )
+      .max(5),
+    /// Durable-trait labels Claude inferred at onboarding (their words). Labels
+    /// ONLY — the verbatim `evidence[]` is dropped at the loader boundary so no
+    /// raw answer text travels (data minimisation). Capped ≤5; each ≤100.
+    highlightLabels: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(100)
+          .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+          .transform(safeFreeText),
+      )
+      .max(5),
+  })
+  .strict();
+
+// =============================================================================
+// (E) Douglas-card usefulness breakdown by category — count-only (TASK E)
+// =============================================================================
+
+/// SPEC §28/§30 — per-`cardCategory` "fiche utile" breakdown (count-only,
+/// posture §2 — the ACT of finding a card useful, NEVER a market view). One
+/// entry per category that had ≥1 card SEEN in the month, frequency-sorted by
+/// total-seen desc. `helpful` ≤ `seen` by construction (a card is "useful" only
+/// once seen). Empty array when no card was seen. Lets the debrief name the
+/// Douglas theme that resonates (discipline / ego / fear…) without any judgement.
+const helpfulByCategorySchema = z
+  .array(
+    z
+      .object({
+        category: z.string().min(1).max(40),
+        helpful: z.number().int().min(0),
+        seen: z.number().int().min(0),
+      })
+      .strict(),
+  )
+  .max(20);
+
 const pseudonymLabelSchema = z
   .string()
   .regex(/^member-[A-F0-9]{8}$/, 'pseudonymLabel must match member-XXXXXXXX (uppercase hex).');
@@ -402,6 +487,29 @@ export const monthlySnapshotSchema = z
     /// the member's honesty/regularity trajectory in Mark-Douglas terms — never
     /// a market view. Always present (the loader defaults 0/null when no signal).
     verification: verificationSliceSchema,
+    /// TASK B (SPEC §25.2) — the member's onboarding profile (their words),
+    /// REFERENCE context for the TEXT only (never scoring/edge — posture §2).
+    /// `null` when no profile yet → the prompt omits the section.
+    memberProfile: memberProfileSnapshotSchema.nullable(),
+    /// TASK D — recent member journal verbatim (auto-declared free-text), ≤10
+    /// excerpts, recency-sorted, `safeFreeText` + truncated ~200 chars by the
+    /// builder (carbon weekly `collectJournalExcerpts`). DATA, never instructions
+    /// (wrapped untrusted at the prompt boundary). Empty array when no journal.
+    journalExcerpts: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(WEEKLY_CONTEXT_ITEM_MAX_CHARS)
+          .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+          .transform(safeFreeText),
+      )
+      .max(10),
+    /// TASK E (SPEC §28/§30) — per-category "fiche utile" breakdown (count-only,
+    /// posture §2). Lets the debrief calmly name the Douglas theme that resonates
+    /// (discipline / ego / fear…) without any judgement. Empty when none seen.
+    helpfulByCategory: helpfulByCategorySchema,
   })
   .strict();
 

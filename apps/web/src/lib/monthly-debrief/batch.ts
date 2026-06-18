@@ -141,7 +141,9 @@ const SNAPSHOT_BATCH_CONCURRENCY = 5;
  *
  * `currentMonth` defaults to `false` — the cadence is "1st of the month,
  * generate debriefs for the month that just ended" (`computeReportingMonth`,
- * `now − 24h` anchored). Pass `true` to preview the in-progress month.
+ * anchored by a 1 ms step-back before the current month start — robust to a
+ * run delayed past the 1st; never `now − 24h`, cf. loader defect-B fix). Pass
+ * `true` to preview the in-progress month.
  *
  * SPEC §25.4 — UNLIKE the weekly batch, members with no activity are NOT
  * filtered out: every active member gets a debrief (the AI produces an
@@ -190,14 +192,45 @@ export async function loadAllSnapshotsForActiveMembers(
         } satisfies MonthlyBatchSnapshotEntry;
       }),
     );
-    for (const res of results) {
+    // `Promise.allSettled` preserves order, so `results[i]` ↔ `chunk[i]` — zip
+    // them to recover the failing member's id for the observability path below.
+    for (let j = 0; j < results.length; j += 1) {
+      const res = results[j];
+      if (res === undefined) continue;
       if (res.status === 'fulfilled' && res.value !== null) {
         monthStart ??= res.value.monthStart;
         monthEnd ??= res.value.monthEnd;
         entries.push(res.value);
+        continue;
       }
-      // Rejected promises are silently dropped — individual member load
-      // failures (corrupt timezone, etc.) must not fail the whole batch.
+      // TASK G-monthly — a REJECTED per-member load (corrupt timezone, transient
+      // DB error, etc.) must NOT fail the whole batch, but it must NOT be a
+      // SILENT drop either: surface it (Sentry warning + PII-free audit) so an
+      // operator can spot a member who is repeatedly missing their debrief.
+      // Mirror the module's observability imports + the existing
+      // `monthly_debrief.batch.skipped` slug (best-effort PII-minimised:
+      // reason = error.message truncated to 200 chars — `error.message` is not
+      // guaranteed PII-free, the 200-char truncation is the only safeguard; the
+      // read-only surface makes the exposure low. Never the AI text, never a
+      // P&L, RGPD §16). A `fulfilled`-with-
+      // `null` slice is an intentional drop (suspended / not-found user) and
+      // stays silent — only `rejected` is the unexpected failure we report.
+      if (res.status === 'rejected') {
+        const memberId = chunk[j]?.id ?? null;
+        const reason =
+          res.reason instanceof Error
+            ? res.reason.message.slice(0, 200)
+            : String(res.reason).slice(0, 200);
+        reportWarning('monthly_debrief.batch', 'member_snapshot_load_failed', {
+          userId: memberId,
+          reason,
+        });
+        await logAudit({
+          action: 'monthly_debrief.batch.skipped',
+          userId: memberId,
+          metadata: { ranAt, monthStart: monthStart ?? null, reason },
+        });
+      }
     }
   }
 

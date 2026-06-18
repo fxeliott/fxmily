@@ -115,6 +115,25 @@ export async function scanOverdueWeeklyReports(
   // admin-facing, no per-member delivery field — DoD is generation, not member
   // delivery). A missing row → the member is overdue → the admin re-runs the
   // batch → the upsert fills it → self-heal convergent.
+  //
+  // ⚠️ Operating-mode assumption (S6 pass-4 finding A — deliberately NOT floored
+  // on activity). `expectedCount` is EVERY active member, with NO activity floor.
+  // This is correct because the DEPLOYED row-source is the live Sunday-21:00-UTC
+  // `weekly-reports` cron (crontab.fxmily), which calls
+  // `generateWeeklyReportsForAllActiveMembers` → writes a `WeeklyReport` row for
+  // EVERY active member (the Mock client emits a deterministic "no activity"
+  // report for inactive members too). So in prod every active member has a row
+  // and the net converges to 0.
+  //   The MANUAL `claude --print` batch (weekly-batch-local.sh), by contrast,
+  // SKIPS inactive members to save subscription tokens — so a PURE-manual-batch
+  // operating mode (Sunday cron disabled) would leave inactive members rowless
+  // and this net would over-fire (non-converging nudge). The fix THEN is to floor
+  // `expectedCount` on the week's activity (≥1 trade OR ≥1 morning/evening
+  // check-in, mirror batch.ts hasActivity). It is NOT applied now ON PURPOSE:
+  // while the Sunday cron is the row-source (writes ALL), flooring would UNDER-
+  // count — a genuinely-missing inactive member's row (Sunday cron partial
+  // failure) would no longer be flagged. Reconcile the two row-sources before
+  // changing this; an unconditional floor is a regression, not a fix.
   const haveReport = new Set(reportRows.map((r) => r.userId));
   const missing = activeUsers.filter((u) => !haveReport.has(u.id)).length;
 

@@ -323,4 +323,96 @@ describe('calendar pipeline — questionnaire → calendar chain (DoD §32 #1)',
     const second = await loadAllSnapshotsForCalendarGeneration({ weekStart: WEEK_START });
     expect(second.entries).toHaveLength(0);
   });
+
+  it('should_re_include_a_member_re_submitted_DURING_the_batch_when_persisted_with_snapshotTakenAt (finding B — pull→re-submit→persist race)', async () => {
+    // The lost-update race the freshness gate did NOT cover: a re-submission that
+    // lands AFTER the pull froze the snapshot but BEFORE the (minutes-later)
+    // persist. With the old `generatedAt = new Date()` the persist stamps the row
+    // fresher than the re-submit → the member is silently excluded next run and
+    // the plan stays stale ALL WEEK while the UI confirmed "C'est noté".
+    const PULL = new Date('2026-06-08T09:00:00Z');
+    seedUser('u1');
+    seedQuestionnaire('u1', new Date('2026-06-08T08:00:00Z')); // no calendar yet → first-gen candidate
+
+    // Act 1 — pull at 09:00 ; the snapshot freezes the 08:00 questionnaire.
+    const envelope = await loadAllSnapshotsForCalendarGeneration({
+      weekStart: WEEK_START,
+      now: PULL,
+    });
+    expect(envelope.entries.map((e) => e.userId)).toEqual(['u1']);
+    expect(envelope.ranAt).toBe(PULL.toISOString());
+
+    // Act 2 — the member RE-SUBMITS at 09:15, mid-batch (dispo changed). The
+    // snapshot already generating still reflects the 08:00 answers.
+    store.questionnaires[0]!.updatedAt = new Date('2026-06-08T09:15:00Z');
+
+    // Act 3 — persist minutes later, echoing the pull instant (`ranAt`) back.
+    const generation = await new MockCalendarClient().generate(envelope.entries[0]!.snapshot);
+    const result = await persistGeneratedCalendars({
+      weekStart: WEEK_START,
+      snapshotTakenAt: envelope.ranAt,
+      results: [{ userId: 'u1', output: generation.output }],
+    });
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+
+    // Assert — `generatedAt` was stamped at the SNAPSHOT instant (09:00), NOT the
+    // persist instant, so the 09:15 re-submit (> 09:00) RE-INCLUDES u1 next run.
+    // The re-submission is NOT lost. (Pre-fix this returned [] → bug.)
+    const second = await loadAllSnapshotsForCalendarGeneration({
+      weekStart: WEEK_START,
+      now: new Date('2026-06-08T10:00:00Z'),
+    });
+    expect(second.entries.map((e) => e.userId)).toEqual(['u1']);
+  });
+
+  it('should_stay_idempotent_with_snapshotTakenAt_when_no_resubmit (finding B — happy path preserved)', async () => {
+    // No re-submit during the batch → `updatedAt` (08:00) <= snapshot instant
+    // (09:00) → excluded next run (no needless regen, defect-D idempotence holds
+    // even though `generatedAt` is now the snapshot instant, not the persist one).
+    const PULL = new Date('2026-06-08T09:00:00Z');
+    seedUser('u1');
+    seedQuestionnaire('u1', new Date('2026-06-08T08:00:00Z'));
+
+    const envelope = await loadAllSnapshotsForCalendarGeneration({
+      weekStart: WEEK_START,
+      now: PULL,
+    });
+    const generation = await new MockCalendarClient().generate(envelope.entries[0]!.snapshot);
+    await persistGeneratedCalendars({
+      weekStart: WEEK_START,
+      snapshotTakenAt: envelope.ranAt,
+      results: [{ userId: 'u1', output: generation.output }],
+    });
+
+    const second = await loadAllSnapshotsForCalendarGeneration({
+      weekStart: WEEK_START,
+      now: new Date('2026-06-08T10:00:00Z'),
+    });
+    expect(second.entries).toHaveLength(0);
+  });
+
+  it('should_clamp_a_future_snapshotTakenAt_to_the_persist_instant (finding B — anti perpetual-fresh)', async () => {
+    // A future-dated `snapshotTakenAt` (clock skew / forged) must NOT stamp the
+    // calendar perpetually-fresh (which would exclude the member forever). It is
+    // clamped to the persist instant, so a genuine later re-submit still wins.
+    const PULL = new Date('2026-06-08T09:00:00Z');
+    seedUser('u1');
+    seedQuestionnaire('u1', new Date('2026-06-08T08:00:00Z'));
+
+    const envelope = await loadAllSnapshotsForCalendarGeneration({
+      weekStart: WEEK_START,
+      now: PULL,
+    });
+    const generation = await new MockCalendarClient().generate(envelope.entries[0]!.snapshot);
+    await persistGeneratedCalendars({
+      weekStart: WEEK_START,
+      snapshotTakenAt: '2999-01-01T00:00:00.000Z', // absurd future
+      results: [{ userId: 'u1', output: generation.output }],
+    });
+
+    // generatedAt was clamped to ~persist-now (≫ the 08:00 questionnaire), so no
+    // re-submit → excluded (the clamp did not make it stale-forever either).
+    const second = await loadAllSnapshotsForCalendarGeneration({ weekStart: WEEK_START });
+    expect(second.entries).toHaveLength(0);
+  });
 });

@@ -114,6 +114,15 @@ export type CalendarBatchResultEntry =
 export interface CalendarBatchPersistRequest {
   /** YYYY-MM-DD, must match the pull envelope's weekStart. */
   weekStart: string;
+  /**
+   * ISO instant the snapshots were FROZEN at the pull (the envelope's `ranAt`).
+   * The local script echoes it back; the persist stamps each calendar's
+   * `generatedAt` with it (vs the persist instant) so a questionnaire re-submitted
+   * DURING the minutes-long batch is not silently lost (finding B). Optional —
+   * a future-dated or absent value falls back to the persist instant (back-compat
+   * with an older local script).
+   */
+  snapshotTakenAt?: string;
   results: CalendarBatchResultEntry[];
 }
 
@@ -314,7 +323,23 @@ function composeCalendarOutputCorpus(output: AdaptiveCalendarOutput): string {
 export async function persistGeneratedCalendars(
   request: CalendarBatchPersistRequest,
 ): Promise<CalendarBatchPersistResult> {
-  const ranAt = new Date().toISOString();
+  const persistInstant = new Date();
+  const ranAt = persistInstant.toISOString();
+
+  // Finding B — resolve the freshness clock for every calendar in this batch.
+  // `snapshotTakenAt` (the pull `ranAt`) is the instant the data was frozen.
+  // Trust it ONLY if it parses AND is not in the future: a future value (clock
+  // skew / forged) would stamp the calendar perpetually-fresh and exclude the
+  // member from every future regeneration → clamp to the persist instant. Absent
+  // / invalid → undefined → `persistAdaptiveCalendar` falls back to `new Date()`
+  // (prior behaviour, back-compat with an older local script).
+  let snapshotGeneratedAt: Date | undefined;
+  if (request.snapshotTakenAt) {
+    const parsed = new Date(request.snapshotTakenAt);
+    if (!Number.isNaN(parsed.getTime())) {
+      snapshotGeneratedAt = parsed.getTime() > persistInstant.getTime() ? persistInstant : parsed;
+    }
+  }
 
   // Gate 1 — week window parses (whole-batch guard).
   let weekStartDb: Date;
@@ -562,6 +587,9 @@ export async function persistGeneratedCalendars(
         outputTokens: usage.outputTokens,
         costEur: cost.costEur,
         calendarInstrumentVersion: instrumentVersion,
+        // Finding B — freshness clock = the snapshot instant (when supplied),
+        // so a re-submit racing this persist re-includes the member next run.
+        ...(snapshotGeneratedAt ? { generatedAt: snapshotGeneratedAt } : {}),
       });
       persisted += 1;
     } catch (err) {

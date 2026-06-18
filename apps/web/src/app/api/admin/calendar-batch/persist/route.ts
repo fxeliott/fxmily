@@ -67,6 +67,11 @@ const calendarBatchResultEntrySchema = z.union([
 const calendarBatchPersistRequestSchema = z
   .object({
     weekStart: z.string().regex(localDatePattern, 'weekStart must be YYYY-MM-DD'),
+    // Finding B — the pull envelope's `ranAt` echoed back so the persist stamps
+    // `generatedAt` with the snapshot instant (freshness clock), not the persist
+    // instant. ISO-8601; optional (back-compat with an older local script). A
+    // future value is clamped server-side in `persistGeneratedCalendars`.
+    snapshotTakenAt: z.string().datetime({ offset: true }).optional(),
     // V1 30 members × 1 weekly = 30 entries ; V2 1000 × 1 = 1000. Above that is
     // malicious/corrupted. Bounds JSON.parse heap amplification (carbon weekly H4).
     results: z.array(calendarBatchResultEntrySchema).max(1000),

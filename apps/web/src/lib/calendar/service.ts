@@ -82,6 +82,19 @@ export interface PersistAdaptiveCalendarInput {
   /** EUR cost — a number or a 6-decimal string; wrapped in Prisma.Decimal. */
   costEur: number | string;
   calendarInstrumentVersion: number;
+  /**
+   * Instant the snapshot data was FROZEN (the batch pull `ranAt`). When provided,
+   * it becomes the calendar's `generatedAt` — the freshness clock the batch loader
+   * compares against `questionnaire.updatedAt`. This closes the pull→re-submit→
+   * persist lost-update race (S6 pass-4 finding B): a questionnaire re-submitted
+   * AFTER the snapshot was pulled but BEFORE the (minutes-later) persist would,
+   * with the old `generatedAt = new Date()`, be stamped fresher than the re-submit
+   * → silently excluded next run → plan stale all week. Anchoring `generatedAt` to
+   * the snapshot instant means a later `updatedAt` correctly re-includes the member
+   * (worst case = one redundant regen, never a lost update). Omitted → `new Date()`
+   * (back-compat: an older local script that doesn't send it keeps prior behaviour).
+   */
+  generatedAt?: Date;
 }
 
 // =============================================================================
@@ -252,6 +265,10 @@ export async function persistAdaptiveCalendar(
   const scheduleJson = input.output as unknown as Prisma.InputJsonValue;
   const primaryCategory = deriveDominantBlockCategory(input.output);
   const costEur = new Prisma.Decimal(input.costEur);
+  // Freshness clock = the snapshot instant when provided (finding B), else now().
+  // Used for BOTH create and update so a re-submit during a FIRST-generation run
+  // is covered too (no calendar yet → still a candidate by the gate).
+  const generatedAt = input.generatedAt ?? new Date();
 
   const row = await db.adaptiveCalendar.upsert({
     where: { userId_weekStart: { userId: input.userId, weekStart: weekStartDb } },
@@ -265,6 +282,9 @@ export async function persistAdaptiveCalendar(
       outputTokens: input.outputTokens,
       costEur,
       calendarInstrumentVersion: input.calendarInstrumentVersion,
+      // Anchor `generatedAt` to the snapshot instant (vs the `@default(now())`)
+      // so a re-submit racing a first-generation persist re-includes correctly.
+      generatedAt,
     },
     update: {
       schedule: scheduleJson,
@@ -274,15 +294,20 @@ export async function persistAdaptiveCalendar(
       outputTokens: input.outputTokens,
       costEur,
       calendarInstrumentVersion: input.calendarInstrumentVersion,
-      // DoD#1 freshness convergence (Session 5 defect-D) — `generatedAt` is
-      // `@default(now())`, which only fires on INSERT, so an upsert UPDATE would
-      // leave it FROZEN at the first generation. The batch loader re-includes a
-      // member when `questionnaire.updatedAt > calendar.generatedAt` (a stale
-      // plan); if a regeneration did not bump `generatedAt`, that predicate
-      // would stay true forever → the member would be regenerated on EVERY run
-      // (repeat Claude cost + schedule churn). Refreshing it here closes the
-      // loop: after a regeneration, `generatedAt > updatedAt` → excluded next run.
-      generatedAt: new Date(),
+      // DoD#1 freshness convergence (Session 5 defect-D + S6 pass-4 finding B) —
+      // `generatedAt` is `@default(now())`, which only fires on INSERT, so an
+      // upsert UPDATE would leave it FROZEN at the first generation. The batch
+      // loader re-includes a member when `questionnaire.updatedAt >
+      // calendar.generatedAt` (a stale plan). We set it to the SNAPSHOT instant
+      // (`input.generatedAt`, the pull `ranAt`) rather than `new Date()`: the
+      // persist runs minutes after the snapshot was frozen, so `new Date()` could
+      // stamp the row fresher than a questionnaire re-submitted DURING the batch
+      // window → that re-submit would be silently lost (plan stale all week).
+      // Anchoring to the snapshot instant means a later `updatedAt` re-triggers a
+      // regeneration next run (converges: worst case one redundant regen). On the
+      // happy path `updatedAt <= snapshot instant` so the member stays excluded
+      // (idempotence preserved). Falls back to `new Date()` when not provided.
+      generatedAt,
       // Preserve `aiDisclosureShownAt` — a re-generation must not reset the
       // EU AI Act 50(1) disclosure timestamp the member already saw.
     },

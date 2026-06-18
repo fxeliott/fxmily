@@ -85,6 +85,12 @@ fi
 
 ENTRY_COUNT=$(jq '.entries | length' "$ENVELOPE_FILE")
 WEEK_START=$(jq -r '.weekStart' "$ENVELOPE_FILE")
+# Finding B — the instant the snapshots were frozen (pull `ranAt`). Echoed back
+# in the persist payload so the server stamps each calendar's `generatedAt` with
+# it (the freshness clock) instead of the persist instant, closing the
+# pull→re-submit→persist lost-update race. Empty string if an older envelope
+# lacks it → the server falls back to its persist instant (back-compat).
+RAN_AT=$(jq -r '.ranAt // empty' "$ENVELOPE_FILE")
 
 echo "  Week: $WEEK_START (Europe/Paris)"
 echo "  Members with a questionnaire this week: $ENTRY_COUNT"
@@ -169,9 +175,12 @@ done
 echo "  Generated: $generated, errored: $errored, skipped (no questionnaire): $skipped_no_questionnaire"
 
 # Assemble final results.json from the append-only NDJSON (single atomic write).
-# Calendar persist request = { weekStart, results } — NO weekEnd column.
-jq -s --arg ws "$WEEK_START" \
-   '{weekStart: $ws, results: .}' \
+# Calendar persist request = { weekStart, snapshotTakenAt?, results } — NO weekEnd.
+# `snapshotTakenAt` is added ONLY when `RAN_AT` is non-empty: the route schema
+# validates it as an ISO datetime, so an empty string would 400 — omit the key
+# entirely (it is `.optional()`) to keep the back-compat fallback path clean.
+jq -s --arg ws "$WEEK_START" --arg sta "$RAN_AT" \
+   '{weekStart: $ws, results: .} + (if $sta == "" then {} else {snapshotTakenAt: $sta} end)' \
    "$RESULTS_NDJSON" >"$RESULTS_FILE"
 
 # --- Phase 3 : persist to prod via HTTP -------------------------------------

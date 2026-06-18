@@ -1,0 +1,150 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * Session 6 — DoD §32 #2 coverage : the weekly-report loader injects the
+ * Session-3 VERIFICATION counters over the CORRECT period window.
+ *
+ * The loader (`loadWeeklySliceForUser`) derives a Mon→Sun window via
+ * `computeReportingWeek(now, timezone)` (real) and then feeds three S3 reads :
+ *   - `listConstancyScoresInRange(userId, parseDbDate(weekStartLocal),
+ *      parseDbDate(weekEndLocal))` — CIVIL-day midnights (the ConstancyScore
+ *      `periodStart` convention) ;
+ *   - `countAlertsInRange(userId, weekStartUtc, weekEndUtc)` — local-instant
+ *      UTC bounds (alerts carry a real `createdAt`) ;
+ *   - `countOpenDiscrepancies(userId)` — CURRENT-STATE, no period bound.
+ *
+ * A wrong bound here would silently mis-scope the honesty/regularity counters
+ * in the weekly email, so this pins each call's arguments to the window the
+ * loader computed. Every other dependency (DB tables + the scoring/training/
+ * meeting reads) is stubbed so the test isolates the S3 injection. Carbone the
+ * batch.test.ts mock style (vi.mock @/lib/db, hoisted, vi.fn per dep).
+ */
+
+const TZ = 'Europe/Paris';
+// Sunday 21:00 UTC = the cron instant. `computeReportingWeek` anchors on
+// `now - 24h` (= Saturday 21:00 UTC) so the reported week is the Mon→Sun that
+// just ended. 2026-06-07 is a Sunday → reported week = 2026-06-01..2026-06-07.
+const CRON_NOW = new Date('2026-06-07T21:00:00Z');
+
+vi.mock('@/lib/db', () => ({
+  db: {
+    user: { findUnique: vi.fn() },
+    trade: { findMany: vi.fn(async () => []) },
+    dailyCheckin: { findMany: vi.fn(async () => []) },
+    markDouglasDelivery: { findMany: vi.fn(async () => []) },
+    tradeAnnotation: { findMany: vi.fn(async () => []) },
+  },
+}));
+
+// Non-S3 reads the loader fans out — stubbed to inert values so the slice
+// builds without touching a real DB.
+vi.mock('@/lib/scoring/service', () => ({ getLatestBehavioralScore: vi.fn(async () => null) }));
+vi.mock('@/lib/training/training-trade-service', () => ({
+  countRecentTrainingActivity: vi.fn(async () => ({ count: 0, lastEnteredAt: null })),
+}));
+vi.mock('@/lib/meeting/service', () => ({
+  countMeetingAttendance: vi.fn(async () => ({ scheduledCount: 0, completedCount: 0 })),
+}));
+// `floorMeetingWindowAtJoin` runs REAL (pure) — but the join date is far in the
+// past so it returns the window bound unchanged (byte-identical path).
+
+// 🎯 The S3 verification reads under test.
+vi.mock('@/lib/verification/constancy', () => ({
+  listConstancyScoresInRange: vi.fn(async () => []),
+}));
+vi.mock('@/lib/verification/alerts', () => ({ countAlertsInRange: vi.fn(async () => 0) }));
+vi.mock('@/lib/verification/service', () => ({ countOpenDiscrepancies: vi.fn(async () => 0) }));
+
+import { db } from '@/lib/db';
+import { countAlertsInRange } from '@/lib/verification/alerts';
+import { listConstancyScoresInRange } from '@/lib/verification/constancy';
+import { countOpenDiscrepancies } from '@/lib/verification/service';
+
+import { loadWeeklySliceForUser } from './loader';
+import { computeReportingWeek } from './week-window';
+
+/** Mirror the loader's private `parseDbDate` — UTC-midnight Date of a YYYY-MM-DD. */
+function parseDbDate(local: string): Date {
+  const [y, m, d] = local.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(db.user.findUnique).mockResolvedValue({
+    id: 'user-1',
+    timezone: TZ,
+    status: 'active',
+    joinedAt: new Date('2025-01-01T00:00:00Z'),
+    email: 'm@example.com',
+    firstName: 'Mem',
+    lastName: 'Ber',
+  } as never);
+});
+
+describe('loadWeeklySliceForUser — Session-3 verification injection (DoD §32 #2)', () => {
+  it('should_query_constancy_with_civil_day_window_bounds_when_loading_the_slice', async () => {
+    // Arrange — the expected window the loader derives from (now, tz).
+    const window = computeReportingWeek(CRON_NOW, TZ);
+
+    // Act
+    await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+
+    // Assert — constancy is PERIOD-SCOPED on civil-day midnights (parseDbDate).
+    expect(listConstancyScoresInRange).toHaveBeenCalledTimes(1);
+    expect(listConstancyScoresInRange).toHaveBeenCalledWith(
+      'user-1',
+      parseDbDate(window.weekStartLocal),
+      parseDbDate(window.weekEndLocal),
+    );
+  });
+
+  it('should_query_alerts_with_local_instant_utc_window_bounds_when_loading_the_slice', async () => {
+    // Arrange
+    const window = computeReportingWeek(CRON_NOW, TZ);
+
+    // Act
+    await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+
+    // Assert — alerts carry a real `createdAt` → local-instant UTC bounds.
+    expect(countAlertsInRange).toHaveBeenCalledTimes(1);
+    expect(countAlertsInRange).toHaveBeenCalledWith(
+      'user-1',
+      window.weekStartUtc,
+      window.weekEndUtc,
+    );
+  });
+
+  it('should_query_open_discrepancies_point_in_time_without_a_period_bound', async () => {
+    // Act
+    await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+
+    // Assert — open discrepancies are CURRENT-STATE (no window), userId only.
+    expect(countOpenDiscrepancies).toHaveBeenCalledTimes(1);
+    expect(countOpenDiscrepancies).toHaveBeenCalledWith('user-1');
+  });
+
+  it('should_fold_the_S3_counters_into_builderInput_verification_when_the_slice_loads', async () => {
+    // Arrange — a single ConstancyScore row for the reported week.
+    vi.mocked(listConstancyScoresInRange).mockResolvedValue([
+      {
+        value: 72,
+        breakdown: { honesty: 90, regularity: 60, discipline: 66 },
+        periodStart: parseDbDate(computeReportingWeek(CRON_NOW, TZ).weekStartLocal),
+        computedAt: CRON_NOW,
+      },
+    ] as never);
+    vi.mocked(countAlertsInRange).mockResolvedValue(2);
+    vi.mocked(countOpenDiscrepancies).mockResolvedValue(1);
+
+    // Act
+    const slice = await loadWeeklySliceForUser('user-1', { now: CRON_NOW });
+
+    // Assert — the loader composes them into `builderInput.verification`.
+    expect(slice?.builderInput.verification).toEqual({
+      constancy: { value: 72, honesty: 90, regularity: 60, discipline: 66 },
+      openDiscrepancyCount: 1,
+      alertCount: 2,
+    });
+  });
+});

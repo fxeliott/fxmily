@@ -76,7 +76,9 @@ export interface BatchSnapshotEntry {
   weekStart: string;
   /** Local-Sunday-23:59 ISO date (YYYY-MM-DD). */
   weekEnd: string;
-  /** Builder output (zod-validated). Free text already sanitized. */
+  /** Builder output (compile-time typed via the snapshot schema; free text
+   *  already sanitized at the builder via safeFreeText). The snapshot schema is
+   *  type-only (`z.infer`) — it is NOT `.parse()`d at runtime here. */
   snapshot: WeeklySnapshot;
   /** True iff the member had any activity in the week. Inactive members are
    *  skipped by the local script to save subscription tokens. */
@@ -215,7 +217,12 @@ export async function loadAllSnapshotsForActiveMembers(
         } satisfies BatchSnapshotEntry;
       }),
     );
-    for (const r of results) {
+    // `Promise.allSettled` preserves order, so `results[j]` ↔ `chunk[j]` — zip
+    // them to recover the failing member's id for the observability path below
+    // (mirror of the monthly G-monthly loop).
+    for (let j = 0; j < results.length; j += 1) {
+      const r = results[j];
+      if (r === undefined) continue;
       if (r.status === 'fulfilled' && r.value !== null) {
         weekStart ??= r.value.weekStart;
         weekEnd ??= r.value.weekEnd;
@@ -226,18 +233,25 @@ export async function loadAllSnapshotsForActiveMembers(
       // (corrupt timezone, slice exception, etc.). It must NOT fail the whole
       // batch, but it must NOT be dropped silently either: surface it for
       // operator visibility (`reportWarning`) + an audit row, so a member who
-      // never gets a report is detectable instead of vanishing. Best-effort
-      // PII-minimised: the audit/Sentry payloads carry only the error reason
-      // (= `error.message` truncated to 200 chars — not guaranteed PII-free, the
-      // 200-char truncation is the only safeguard) + ranAt; the read-only surface
-      // makes the exposure low. Never the userId, email, or any snapshot content
-      // (RGPD §16, posture §2).
+      // never gets a report is detectable instead of vanishing. `userId` is a
+      // canonical structured audit column (audit.ts:446 `userId: userId ?? null`),
+      // NOT free-text PII — logging it (mirror G-monthly) is what lets an operator
+      // spot the SPECIFIC member who repeatedly misses their report. The error
+      // reason is best-effort PII-minimised (`error.message` truncated to 200
+      // chars — not guaranteed PII-free, the truncation is the only safeguard).
+      // Never the snapshot content, never a P&L (RGPD §16, posture §2).
       if (r.status === 'rejected') {
+        const memberId = chunk[j]?.id ?? null;
         const reason =
           r.reason instanceof Error ? r.reason.message.slice(0, 200) : 'unknown_load_failure';
-        reportWarning('weekly_report.batch', 'snapshot_load_failed', { ranAt, reason });
+        reportWarning('weekly_report.batch', 'snapshot_load_failed', {
+          ranAt,
+          reason,
+          userId: memberId,
+        });
         await logAudit({
           action: 'weekly_report.batch.skipped',
+          userId: memberId,
           metadata: { ranAt, reason: `snapshot_load_failed: ${reason}` },
         });
       }

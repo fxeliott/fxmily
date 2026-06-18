@@ -47,6 +47,11 @@ import { countAlertsInRange } from '@/lib/verification/alerts';
 import { countOpenDiscrepancies } from '@/lib/verification/service';
 
 import { WEEKLY_CONTEXT_MAX } from '@/lib/schemas/monthly-debrief';
+// TASK C — filter the profile axes/labels on the REAL sanitization the builder
+// applies (`safeFreeText`), not a bare `.trim()`: a 100% zero-width/bidi
+// (U+200B/U+200E/U+200F) axis survives `.trim()` but `safeFreeText` strips it to
+// "", so a `.trim()`-only filter would let a doomed empty string through.
+import { safeFreeText } from '@/lib/text/safe';
 
 import { computeMonthWindow, computeReportingMonth, type MonthWindow } from './month-window';
 import type { BehavioralScoreSnapshot, MemberProfileReference, MonthlyBuilderInput } from './types';
@@ -598,7 +603,12 @@ function toMemberProfileReference(
 
   const axesPrioritaires = Array.isArray(row.axesPrioritaires)
     ? row.axesPrioritaires
-        .filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
+        // TASK C — filter on the REAL sanitization (`safeFreeText`), not a bare
+        // `.trim()`: a 100% zero-width/bidi axis survives `.trim()` but
+        // `safeFreeText` strips it to "" at the builder, which would then fail
+        // the schema's `min(1)`. Aligning the filter on `safeFreeText` drops it
+        // here instead of surfacing a doomed empty axis.
+        .filter((a): a is string => typeof a === 'string' && safeFreeText(a).length > 0)
         .slice(0, PROFILE_AXES_MAX)
         .map((a) => a.trim().slice(0, PROFILE_AXIS_MAX_CHARS))
     : [];
@@ -614,7 +624,10 @@ function toMemberProfileReference(
             ? (h as { label: string }).label.trim()
             : '',
         )
-        .filter((label) => label.length > 0)
+        // TASK C — same as axesPrioritaires: filter on `safeFreeText` (the real
+        // builder sanitization), not a bare `.length > 0`, so a zero-width-only
+        // label is dropped here instead of becoming an empty string at the builder.
+        .filter((label) => safeFreeText(label).length > 0)
         .slice(0, PROFILE_HIGHLIGHT_LABELS_MAX)
         .map((label) => label.slice(0, PROFILE_HIGHLIGHT_LABEL_MAX_CHARS))
     : [];

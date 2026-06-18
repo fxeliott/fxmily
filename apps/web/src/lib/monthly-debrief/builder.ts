@@ -42,6 +42,13 @@ const WEEKLY_CONTEXT_ITEM_MAX_CHARS = 900;
 const JOURNAL_EXCERPT_MAX_CHARS = 200;
 const JOURNAL_EXCERPTS_MAX = 10;
 
+// TASK A — recent member MORNING intention verbatim (twin of `collectJournalExcerpts`,
+// the SOIR/journalNote path): same recency sort, same safeFreeText + truncate ~200
+// chars, same cap. Reads `intention` (written the MATIN) on `slot === 'morning'`
+// check-ins — Mark Douglas material (intention vs execution, process vs outcome).
+const MORNING_INTENTION_MAX_CHARS = 200;
+const MORNING_INTENTIONS_MAX = 10;
+
 // TASK E — cap on the distinct Douglas card categories surfaced in the
 // usefulness breakdown (the enum has 11 categories — 20 is ample headroom).
 const HELPFUL_BY_CATEGORY_MAX = 20;
@@ -81,6 +88,10 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
     // TASK D — recent member journal verbatim (auto-declared DATA, never
     // instructions — wrapped untrusted at the prompt boundary).
     journalExcerpts: collectJournalExcerpts(input),
+    // TASK A — recent member MORNING intentions (twin of journalExcerpts, the
+    // MATIN free-text). Auto-declared DATA, never instructions — wrapped
+    // untrusted at the prompt boundary.
+    morningIntentions: collectMorningIntentions(input),
     // TASK E — per-category "fiche utile" breakdown (count-only, posture §2).
     helpfulByCategory: collectHelpfulByCategory(input),
   };
@@ -475,6 +486,46 @@ function collectJournalExcerpts(input: MonthlyBuilderInput): string[] {
     excerpts.push(safe);
   }
   return excerpts;
+}
+
+// =============================================================================
+// TASK A — morning intentions (twin of `collectJournalExcerpts`, the MATIN path)
+// =============================================================================
+
+/**
+ * TASK A — collect the member's recent MORNING intentions from the month's
+ * check-ins: most-recent first, `slot === 'morning'` + non-empty `intention`
+ * only, `safeFreeText` + truncate to ~200 chars, capped at
+ * {@link MORNING_INTENTIONS_MAX}. EXACT twin of {@link collectJournalExcerpts}
+ * — same recency sort, same sanitization, same anti-empty guard — but reads the
+ * MATIN free-text (`c.intention`, written at the start of the day) on the
+ * `morning` slot instead of the SOIR `journalNote`. The loader already
+ * serializes `intention` for the monthly slice. Mark Douglas material
+ * (intention vs execution, process vs outcome). These are auto-declared member
+ * DATA, never instructions — the prompt wraps them in the canonical
+ * `<member_reflection_untrusted>` envelope for defense-in-depth.
+ */
+function collectMorningIntentions(input: MonthlyBuilderInput): string[] {
+  const sorted = [...input.checkins].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  const intentions: string[] = [];
+  for (const checkin of sorted) {
+    if (intentions.length >= MORNING_INTENTIONS_MAX) break;
+    if (checkin.slot !== 'morning') continue;
+    if (typeof checkin.intention !== 'string') continue;
+    const trimmed = checkin.intention.trim();
+    if (trimmed.length === 0) continue;
+    const truncated =
+      trimmed.length > MORNING_INTENTION_MAX_CHARS
+        ? trimmed.slice(0, MORNING_INTENTION_MAX_CHARS) + '…'
+        : trimmed;
+    // Defense-in-depth: safeFreeText again here (belt-and-suspenders, prompt
+    // injection). Re-check post-sanitization: a zero-width-only intention passes
+    // the `trimmed` guard but `safeFreeText` strips it to "" — never push empty.
+    const safe = safeFreeText(truncated);
+    if (safe.length === 0) continue;
+    intentions.push(safe);
+  }
+  return intentions;
 }
 
 // =============================================================================

@@ -87,6 +87,7 @@ function checkin(over: Record<string, unknown> = {}): MonthlyBuilderInput['check
     meditationMin: null,
     sportType: null,
     sportDurationMin: null,
+    intention: null,
     gratitudeItems: [],
     journalNote: null,
     emotionTags: [],
@@ -681,6 +682,50 @@ describe('buildMonthlySnapshot — journalExcerpts (TASK D)', () => {
       }),
     );
     expect(snap.journalExcerpts).toHaveLength(10);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});
+
+// =============================================================================
+// TASK A — morning intentions (MATIN twin of journalExcerpts)
+// =============================================================================
+
+describe('buildMonthlySnapshot — morningIntentions (TASK A)', () => {
+  it('empty month → empty morningIntentions array (section absent)', () => {
+    expect(buildMonthlySnapshot(baseInput()).morningIntentions).toEqual([]);
+  });
+
+  it('collects 2 distinct morning intentions, most-recent first (morning slot + non-empty only)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        checkins: [
+          checkin({
+            slot: 'morning',
+            submittedAt: '2026-05-01T07:00:00.000Z',
+            intention: 'Respecter mon plan aujourd’hui.',
+          }),
+          checkin({
+            slot: 'morning',
+            submittedAt: '2026-05-03T07:00:00.000Z',
+            intention: 'Rester patient, ne pas forcer.',
+          }),
+          // evening slot carries an intention → excluded (MATIN-only path).
+          checkin({
+            slot: 'evening',
+            submittedAt: '2026-05-04T20:00:00.000Z',
+            intention: 'Intention du soir ignorée.',
+          }),
+          // morning but blank → skipped.
+          checkin({ slot: 'morning', submittedAt: '2026-05-02T07:00:00.000Z', intention: '   ' }),
+          // morning but null → skipped.
+          checkin({ slot: 'morning', submittedAt: '2026-05-05T07:00:00.000Z', intention: null }),
+        ],
+      }),
+    );
+    expect(snap.morningIntentions).toEqual([
+      'Rester patient, ne pas forcer.',
+      'Respecter mon plan aujourd’hui.',
+    ]);
     expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });

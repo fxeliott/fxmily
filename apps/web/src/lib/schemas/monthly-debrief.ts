@@ -506,6 +506,22 @@ export const monthlySnapshotSchema = z
           .transform(safeFreeText),
       )
       .max(10),
+    /// TASK A — recent member MORNING intentions (auto-declared free-text, the
+    /// MATIN twin of `journalExcerpts`), ≤10 entries, recency-sorted,
+    /// `safeFreeText` + truncated ~200 chars by the builder. DATA, never
+    /// instructions (wrapped untrusted at the prompt boundary). Empty array when
+    /// no morning intention. Mark Douglas material (intention vs execution).
+    morningIntentions: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(WEEKLY_CONTEXT_ITEM_MAX_CHARS)
+          .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+          .transform(safeFreeText),
+      )
+      .max(10),
     /// TASK E (SPEC §28/§30) — per-category "fiche utile" breakdown (count-only,
     /// posture §2). Lets the debrief calmly name the Douglas theme that resonates
     /// (discipline / ego / fear…) without any judgement. Empty when none seen.

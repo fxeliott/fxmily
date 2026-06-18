@@ -94,11 +94,15 @@ const MAX_ENTRY_MEDIA = 4;
  * Whitelist a thumbnail URL to our own upload route before it reaches an
  * `href`/`src`. The readUrl comes from the `/api/uploads` fetch response, so
  * this guarantees a tampered/unexpected value can never become a `javascript:`
- * href (CodeQL js/xss-through-dom — defense in depth; the route is ours and
- * always returns `/api/uploads/…`).
+ * href (CodeQL js/xss-through-dom — defense in depth; the route is ours and the
+ * key is server-generated `trades/{userId}/{nanoid}.{ext}`). An anchored regex
+ * test (vs `startsWith`) is what CodeQL recognises as a sanitising barrier.
  */
+// Same-origin path under our upload route only — no `:` means no `javascript:`
+// / `data:` scheme, anchored start means no `//host` protocol-relative URL.
+const UPLOAD_URL_RX = /^\/api\/uploads\/[\w./-]+$/;
 function safeUploadUrl(url: string | undefined): string {
-  return url && url.startsWith('/api/uploads/') ? url : '';
+  return url && UPLOAD_URL_RX.test(url) ? url : '';
 }
 
 function nowIsoLocal(): string {

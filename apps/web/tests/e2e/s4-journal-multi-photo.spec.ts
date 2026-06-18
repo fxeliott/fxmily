@@ -119,6 +119,12 @@ test.describe('S4 — /journal multi-photo : plusieurs captures d’analyse à l
     await page.locator('input[type="file"]').nth(1).setInputFiles(FIXTURE_PNG);
     await expect(removeButtons).toHaveCount(2);
     await expect(page.getByText('2/4 · optionnel')).toBeVisible();
+    // The whitelisted thumbnail src still resolves to our upload route — proves
+    // the CodeQL safeUploadUrl guard didn't blank a legitimate URL.
+    await expect(page.getByAltText(/Photo d.analyse additionnelle 1/)).toHaveAttribute(
+      'src',
+      /^\/api\/uploads\/trades\//,
+    );
 
     // Submit → detail page.
     await submitBtn.click();

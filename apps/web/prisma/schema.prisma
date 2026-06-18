@@ -1463,6 +1463,12 @@ model MonthlyDebrief {
   sentToMemberAt    DateTime? @map("sent_to_member_at")
   sentToMemberEmail String?   @map("sent_to_member_email")
   pushEnqueuedAt    DateTime? @map("push_enqueued_at")
+  /// First time the member opened this debrief on /debrief-mensuel (S6 audit
+  /// enrichment). Drives the calm dashboard "ton débrief est prêt" nudge: the
+  /// widget surfaces only the latest UNREAD debrief and goes quiet once read
+  /// (anti-Black-Hat §25.2 — acknowledge, never nag). Mirror of
+  /// MarkDouglasDelivery.seenAt + the calendar aiDisclosureShownAt stamp.
+  seenAt            DateTime? @map("seen_at")
 
   @@unique([userId, monthStart])
   @@index([userId, monthStart(sort: Desc)])

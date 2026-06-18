@@ -6,7 +6,11 @@ import { auth } from '@/auth';
 import { MonthlyDebriefReader } from '@/components/monthly-debrief/monthly-debrief-reader';
 import { MonthlyDebriefTimeline } from '@/components/monthly-debrief/monthly-debrief-timeline';
 import { formatMonthLabelFr } from '@/lib/monthly-debrief/format';
-import { getMonthlyDebriefById, listMyRecentMonthlyDebriefs } from '@/lib/monthly-debrief/service';
+import {
+  getMonthlyDebriefById,
+  listMyRecentMonthlyDebriefs,
+  markMonthlyDebriefSeen,
+} from '@/lib/monthly-debrief/service';
 import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 
 export const metadata = {
@@ -45,6 +49,18 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
     selected = recent.find((d) => d.id === sp.id) ?? (await getMonthlyDebriefById(userId, sp.id));
   }
   selected ??= recent[0] ?? null;
+
+  // S6 audit — stamp the first view so the dashboard "débrief prêt" nudge goes
+  // quiet once the member has read it (anti-Black-Hat §25.2). Best-effort: a
+  // transient DB hiccup must never 500 the member's debrief page; the nudge
+  // simply re-shows next time. Idempotent (stamps only when seenAt is null).
+  if (selected && selected.seenAt === null) {
+    try {
+      await markMonthlyDebriefSeen(userId, selected.id);
+    } catch {
+      // non-fatal — the seen stamp is a convenience, not load-bearing.
+    }
+  }
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">

@@ -202,4 +202,6 @@ export interface SerializedMonthlyDebrief {
   sentToMemberAt: string | null;
   sentToMemberEmail: string | null;
   pushEnqueuedAt: string | null;
+  /** First time the member opened this debrief (drives the dashboard nudge). */
+  seenAt: string | null;
 }

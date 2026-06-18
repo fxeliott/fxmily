@@ -29,6 +29,7 @@ vi.mock('@/lib/meeting/service', () => ({ listScheduledMeetingsOn: vi.fn() }));
 const USER = 'user_1';
 const TZ = 'Europe/Paris';
 const MON_MORNING = new Date('2026-06-08T07:00:00Z'); // 09:00 Paris, Monday
+const MON_AFTERNOON = new Date('2026-06-08T13:00:00Z'); // 15:00 Paris, Monday (afternoon slot)
 const MON_EVENING = new Date('2026-06-08T18:00:00Z'); // 20:00 Paris, Monday
 const TUE_MORNING = new Date('2026-06-09T07:00:00Z'); // 09:00 Paris, Tuesday
 
@@ -70,6 +71,27 @@ describe('getDailyGuidance — slot + check-in', () => {
       state: 'todo',
     });
     // secondary evening check-in is also surfaced while undone
+    expect(g.actions.some((a) => a.key === 'checkin-evening' && a.emphasis === 'secondary')).toBe(
+      true,
+    );
+  });
+
+  it('should_make_morning_checkin_primary_when_slot_is_afternoon (primaryCheckinSlot afternoon → morning)', async () => {
+    // Arrange — 15:00 Paris falls in the afternoon bucket (12 ≤ h < 18).
+    // `primaryCheckinSlot('afternoon')` maps to 'morning' (slot.ts:58-60), so
+    // the morning check-in (market-prep / routine) stays the primary nudge.
+
+    // Act
+    const g = await getDailyGuidance(USER, TZ, MON_AFTERNOON);
+
+    // Assert
+    expect(g.slot).toBe('afternoon');
+    expect(g.actions[0]).toMatchObject({
+      key: 'checkin-morning',
+      emphasis: 'primary',
+      state: 'todo',
+    });
+    // the evening check-in is still surfaced as secondary while undone
     expect(g.actions.some((a) => a.key === 'checkin-evening' && a.emphasis === 'secondary')).toBe(
       true,
     );

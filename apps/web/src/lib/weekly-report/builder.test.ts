@@ -559,6 +559,46 @@ describe('buildWeeklySnapshot — journal excerpts sanitization', () => {
   });
 });
 
+describe('buildWeeklySnapshot — morning intentions (TASK A, MATIN twin)', () => {
+  it('empty week → empty morningIntentions array (section absent)', () => {
+    const snap = buildWeeklySnapshot(emptyInput());
+    expect(snap.freeText.morningIntentions).toEqual([]);
+  });
+
+  it('collects 2 distinct morning intentions, most-recent first (morning slot + non-empty only)', () => {
+    const input = emptyInput();
+    input.checkins = [
+      makeCheckin('morning', {
+        id: 'm1',
+        date: '2026-05-04',
+        submittedAt: '2026-05-04T08:00:00Z',
+        intention: 'Respecter mon plan aujourd’hui.',
+      }),
+      makeCheckin('morning', {
+        id: 'm2',
+        date: '2026-05-06',
+        submittedAt: '2026-05-06T08:00:00Z',
+        intention: 'Rester patient, ne pas forcer.',
+      }),
+      // evening slot carries an intention → excluded (MATIN-only path).
+      makeCheckin('evening', {
+        id: 'e1',
+        date: '2026-05-07',
+        submittedAt: '2026-05-07T20:00:00Z',
+        intention: 'Intention du soir ignorée.',
+      }),
+      // morning but blank / null → skipped.
+      makeCheckin('morning', { id: 'm3', date: '2026-05-05', intention: '   ' }),
+      makeCheckin('morning', { id: 'm4', date: '2026-05-03', intention: null }),
+    ];
+    const snap = buildWeeklySnapshot(input);
+    expect(snap.freeText.morningIntentions).toEqual([
+      'Rester patient, ne pas forcer.',
+      'Respecter mon plan aujourd’hui.',
+    ]);
+  });
+});
+
 describe('buildWeeklySnapshot — scores pass-through', () => {
   it('null score → all-null', () => {
     const snap = buildWeeklySnapshot(emptyInput());

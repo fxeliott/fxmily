@@ -78,6 +78,8 @@ const ACTIVE_SNAPSHOT = {
       { session: 'newyork' as const, count: 2 },
     ],
     journalExcerpts: ['Journée propre, plan respecté.'],
+    // TASK A — MATIN intention twin of journalExcerpts.
+    morningIntentions: ['Respecter mon plan, rester patient.'],
   },
   scores: {
     discipline: 75,
@@ -150,6 +152,8 @@ const INACTIVE_SNAPSHOT = {
     pairsTraded: [],
     sessionsTraded: [],
     journalExcerpts: [],
+    // TASK A — inactive member: no morning intention.
+    morningIntentions: [],
   },
   scores: {
     discipline: null,

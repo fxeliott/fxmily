@@ -32,6 +32,12 @@ import type { BuilderInput, WeeklySnapshot } from './types';
 
 const JOURNAL_EXCERPT_MAX_CHARS = 200;
 const JOURNAL_EXCERPTS_MAX = 5;
+// TASK A — recent member MORNING intention verbatim (twin of journalExcerpts,
+// the SOIR/journalNote path): same recency sort, same safeFreeText + truncate
+// ~200 chars, same cap. Reads `intention` (written the MATIN) on the `morning`
+// slot — Mark Douglas material (intention vs execution, process vs outcome).
+const MORNING_INTENTION_MAX_CHARS = 200;
+const MORNING_INTENTIONS_MAX = 5;
 const EMOTION_TAGS_MAX = 20;
 // D3-01 — cap on the distinct behavioural bias tags (LESSOR/Steenbarger)
 // surfaced to Claude. Lower than EMOTION_TAGS_MAX (20) : the bias allowlist is
@@ -360,6 +366,10 @@ function buildFreeText(input: BuilderInput): WeeklySnapshot['freeText'] {
     pairsTraded: collectPairs(input),
     sessionsTraded: collectSessions(input),
     journalExcerpts: collectJournalExcerpts(input),
+    // TASK A — recent member MORNING intentions (twin of journalExcerpts, the
+    // MATIN free-text). Auto-declared DATA, never instructions — wrapped
+    // untrusted at the prompt boundary.
+    morningIntentions: collectMorningIntentions(input),
   };
 }
 
@@ -460,6 +470,41 @@ function collectJournalExcerpts(input: BuilderInput): string[] {
     excerpts.push(safe);
   }
   return excerpts;
+}
+
+/**
+ * TASK A — collect the member's recent MORNING intentions from the week's
+ * check-ins: most-recent first, `slot === 'morning'` + non-empty `intention`
+ * only, sanitize + truncate to 200 chars, capped at {@link MORNING_INTENTIONS_MAX}.
+ * EXACT twin of {@link collectJournalExcerpts} — same recency sort, same
+ * sanitization, same anti-empty guard — but reads the MATIN free-text
+ * (`c.intention`, written at the start of the day) on the `morning` slot instead
+ * of the SOIR `journalNote`. Mark Douglas material (intention vs execution).
+ * Auto-declared member DATA, never instructions — the prompt wraps each in the
+ * canonical `<member_reflection_untrusted>` envelope (defense-in-depth).
+ */
+function collectMorningIntentions(input: BuilderInput): string[] {
+  const sorted = [...input.checkins].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  const intentions: string[] = [];
+  for (const checkin of sorted) {
+    if (intentions.length >= MORNING_INTENTIONS_MAX) break;
+    if (checkin.slot !== 'morning') continue;
+    if (typeof checkin.intention !== 'string') continue;
+    const trimmed = checkin.intention.trim();
+    if (trimmed.length === 0) continue;
+    const truncated =
+      trimmed.length > MORNING_INTENTION_MAX_CHARS
+        ? trimmed.slice(0, MORNING_INTENTION_MAX_CHARS) + '…'
+        : trimmed;
+    // Defense-in-depth: safeFreeText again here even though service layer
+    // should have done it on read. Belt-and-suspenders for prompt injection.
+    // Re-check post-sanitization: a zero-width-only intention passes the
+    // `trimmed` guard above but `safeFreeText` strips it to "" — never push empty.
+    const safe = safeFreeText(truncated);
+    if (safe.length === 0) continue;
+    intentions.push(safe);
+  }
+  return intentions;
 }
 
 // =============================================================================

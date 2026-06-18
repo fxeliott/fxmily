@@ -72,7 +72,9 @@ export interface MonthlyBatchSnapshotEntry {
   monthStart: string;
   /** Local last-calendar-day ISO date (YYYY-MM-DD). */
   monthEnd: string;
-  /** Pure aggregator output (zod-valid). Free text already sanitized. */
+  /** Pure aggregator output (compile-time typed via the snapshot schema; free
+   *  text already sanitized at the builder via safeFreeText). The snapshot
+   *  schema is type-only (`z.infer`) — it is NOT `.parse()`d at runtime here. */
   snapshot: MonthlySnapshot;
   /** True iff the member had any real OR training activity in the month.
    *  Informational only — UNLIKE the weekly batch, the monthly script does

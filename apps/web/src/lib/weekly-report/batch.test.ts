@@ -375,22 +375,27 @@ describe('loadAllSnapshotsForActiveMembers — rejected member loads are surface
     // The batch still succeeds — one bad member never fails the whole pull.
     expect(envelope.entries).toEqual([]);
 
-    // Observability: the rejection is surfaced (not silently dropped).
+    // Observability: the rejection is surfaced (not silently dropped) AND it
+    // carries the failing member's id (TASK B — aligned on G-monthly) so an
+    // operator can spot WHICH member repeatedly misses their report.
     expect(reportWarning).toHaveBeenCalledWith(
       'weekly_report.batch',
       'snapshot_load_failed',
-      expect.objectContaining({ reason: expect.stringContaining('corrupt timezone payload') }),
+      expect.objectContaining({
+        reason: expect.stringContaining('corrupt timezone payload'),
+        userId: 'user-broken',
+      }),
     );
 
     const skipAudit = vi
       .mocked(logAudit)
       .mock.calls.find(([arg]) => arg.action === 'weekly_report.batch.skipped');
     expect(skipAudit).toBeDefined();
-    const meta = skipAudit?.[0].metadata as { reason?: string; userId?: string } | undefined;
+    const meta = skipAudit?.[0].metadata as { reason?: string } | undefined;
     expect(meta?.reason).toContain('snapshot_load_failed');
-    // PII-FREE: never the userId/email in the rejection audit row.
-    expect(skipAudit?.[0].userId ?? null).toBeNull();
-    expect(meta).not.toHaveProperty('userId');
+    // TASK B — `userId` IS logged on the canonical structured audit column
+    // (mirror G-monthly), pinpointing the member who missed their report.
+    expect(skipAudit?.[0].userId).toBe('user-broken');
   });
 
   it('does NOT emit a skip warning when every member loads cleanly (null slices only)', async () => {

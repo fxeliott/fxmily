@@ -270,6 +270,12 @@ const freeTextSliceSchema = z
       .max(4),
     /// Sample of journal note excerpts — already safeFreeText-sanitized.
     journalExcerpts: z.array(safePatternValueSchema).max(5),
+    /// TASK A — recent member MORNING intentions (auto-declared free-text, the
+    /// MATIN twin of `journalExcerpts`), recency-sorted, ≤5, already
+    /// safeFreeText-sanitized + truncated ~200 chars by the builder. DATA, never
+    /// instructions (wrapped untrusted at the prompt boundary). Empty when no
+    /// morning intention. Mark Douglas material (intention vs execution).
+    morningIntentions: z.array(safePatternValueSchema).max(5),
   })
   .strict();
 

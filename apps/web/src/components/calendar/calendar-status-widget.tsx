@@ -39,7 +39,7 @@ export async function CalendarStatusWidget({ userId }: { userId: string }) {
               <CalendarRange className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <span className="t-eyebrow text-[var(--acc)]">
+              <span className="t-eyebrow text-[var(--acc-hi)]">
                 Calendrier · Semaine du {weekRange}
               </span>
               <h3 className="text-[15px] font-semibold text-[var(--t-1)]">Organise ta semaine</h3>
@@ -49,7 +49,7 @@ export async function CalendarStatusWidget({ userId }: { userId: string }) {
               </p>
             </div>
             <span
-              className="rounded-control mt-0.5 inline-flex h-7 shrink-0 items-center gap-1 px-2.5 text-[12px] font-semibold text-[var(--acc)]"
+              className="rounded-control mt-0.5 inline-flex h-7 shrink-0 items-center gap-1 px-2.5 text-[12px] font-semibold text-[var(--acc-hi)]"
               aria-hidden="true"
             >
               Commencer
@@ -86,7 +86,7 @@ export async function CalendarStatusWidget({ userId }: { userId: string }) {
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Link
           href="/calendrier"
-          className="rounded-control inline-flex h-9 items-center gap-1.5 border border-[var(--b-acc)] bg-[var(--acc-dim)] px-3 text-[12px] font-semibold text-[var(--acc)] transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          className="rounded-control inline-flex h-9 items-center gap-1.5 border border-[var(--b-acc)] bg-[var(--acc-dim)] px-3 text-[12px] font-semibold text-[var(--acc-hi)] transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
         >
           Voir mon calendrier
           <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />

@@ -32,7 +32,7 @@ export function CalendarOverview({
       </section>
 
       <section className="rounded-card-lg border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5">
-        <p className="t-eyebrow-lg text-[var(--acc)]">Focus de la semaine</p>
+        <p className="t-eyebrow-lg text-[var(--acc-hi)]">Focus de la semaine</p>
         <p className="t-body mt-2 leading-[1.65] whitespace-pre-line text-[var(--t-1)]">
           {schedule.weeklyFocus}
         </p>

@@ -14,10 +14,16 @@
  *     `plannedRR` / `resultR`) to the snapshot without editing this type — and
  *     the anti-leak test pins that. Claude is told WHEN the member is active,
  *     never WHETHER they win or lose. Posture §2: the calendar organises TIME.
- *   - `meetingsAttendedLast4w` is intentionally ABSENT in J-C1: the §30
- *     réunions models (`Meeting` / `MeetingAttendance`) are not on `main` yet
- *     (PR open, unmerged). When §30 lands, add the counter here + in the
- *     service — additive, no breaking change to the schema.
+ *   - A meeting-attendance counter (`meetingsAttendedLast4w`) is intentionally
+ *     ABSENT. NOTE (S6 pass-3): the §30 réunions models (`Meeting` /
+ *     `MeetingAttendance`) ARE on `main` and LIVE in prod — the count-only
+ *     `countMeetingAttendance` primitive already feeds the weekly/monthly
+ *     loaders + daily-guidance. Wiring a past-attendance signal into THIS
+ *     calendar snapshot (so Claude can size the week against the member's real
+ *     meeting rhythm) is a deliberate §30-enrichment DECISION still pending
+ *     (`meetingsAttendedLast4w` via the same primitive — additive, §2-safe,
+ *     no schema change). The questionnaire today captures only the FORWARD
+ *     intent (`meeting_commitment`), not past assiduité.
  */
 
 import type { WeeklyScheduleResponses } from '@/lib/schemas/weekly-schedule-questionnaire';

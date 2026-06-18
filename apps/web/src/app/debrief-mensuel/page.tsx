@@ -11,6 +11,7 @@ import {
   listMyRecentMonthlyDebriefs,
   markMonthlyDebriefSeen,
 } from '@/lib/monthly-debrief/service';
+import { reportWarning } from '@/lib/observability';
 import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 
 export const metadata = {
@@ -58,7 +59,14 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
     try {
       await markMonthlyDebriefSeen(userId, selected.id);
     } catch {
-      // non-fatal — the seen stamp is a convenience, not load-bearing.
+      // Non-fatal — the seen stamp is a convenience, not load-bearing (the page
+      // still renders; the nudge simply re-shows next visit). But align with the
+      // documented mirror (`markAdaptiveCalendarDisclosureShown`, calendrier/
+      // page.tsx) and emit a Sentry warning so a CHRONIC write failure (e.g. a
+      // `seen_at` column not migrated on some env, a constraint/deadlock) is
+      // visible to ops instead of silently re-flashing the dashboard nudge
+      // forever. PII-free (userId is a structured audit column, never free-text).
+      reportWarning('monthly-debrief.seen', 'stamp_failed', { userId });
     }
   }
 

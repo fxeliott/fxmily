@@ -169,6 +169,24 @@ export async function loadMonthlySliceForUser(
   // `previous === current` guard, builder.ts).
   const reportedConstancyLowerBound = parseLocalDate(currentPeriodStart(window.monthStartUtc));
 
+  // S6 pass-3 fix (DoD §32-2) — the reported month's ConstancyScore UPPER bound
+  // MUST mirror the disjointness the previous-month range already enforces (its
+  // upper = `reportedConstancyLowerBound − 1ms`, below). Using `monthEndLocal`
+  // here was ASYMMETRIC: when a civil month ends mid-week (last day Mon–Sat,
+  // ~6 months out of 7) the ISO week that contains the NEXT month's 1st has its
+  // `periodStart` ≤ `monthEndLocal`, so it fell INSIDE the reported range — and
+  // since the builder takes `constancyScores.at(-1)` that mostly-next-month week
+  // became this month's surfaced « constance du mois ». Worse, the SAME folded
+  // row was re-read by the next month's report as its earliest in-range score →
+  // one week attributed to two month labels (and a fabricated §29 baseline).
+  // Capping at the next month's ISO-Monday − 1ms attributes every folded ISO week
+  // to EXACTLY one civil month (the one whose lower bound ≤ its periodStart),
+  // disjoint and complete, symmetric with `constancyPrevious`.
+  const nextMonth = computeMonthWindow(new Date(window.monthEndUtc.getTime() + 1), user.timezone);
+  const reportedConstancyUpperBound = new Date(
+    parseLocalDate(currentPeriodStart(nextMonth.monthStartUtc)).getTime() - 1,
+  );
+
   const [
     trades,
     checkins,
@@ -223,11 +241,7 @@ export async function loadMonthlySliceForUser(
     // the week containing the 1st (`currentPeriodStart`) — a month often opens
     // mid-week, and that week's `periodStart` is in the PREVIOUS month; anchoring
     // on the civil 1st would drop a first-partial-week score (code-review TIER2-1).
-    listConstancyScoresInRange(
-      userId,
-      reportedConstancyLowerBound,
-      parseLocalDate(window.monthEndLocal),
-    ),
+    listConstancyScoresInRange(userId, reportedConstancyLowerBound, reportedConstancyUpperBound),
     // CURRENT-STATE count (NOT period-scoped): écarts still `open` right now
     // (« encore ouverts / à regarder »). Point-in-time by design — distinct from
     // the period-scoped constancy/alert reads.

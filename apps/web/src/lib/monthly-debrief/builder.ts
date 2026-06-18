@@ -37,6 +37,15 @@ const BEHAVIOR_TAGS_MAX = 12;
 
 const WEEKLY_CONTEXT_ITEM_MAX_CHARS = 900;
 
+// TASK D — recent member journal verbatim (carbon weekly `collectJournalExcerpts`):
+// recency-sorted, safeFreeText + truncate ~200 chars, cap at JOURNAL_EXCERPTS_MAX.
+const JOURNAL_EXCERPT_MAX_CHARS = 200;
+const JOURNAL_EXCERPTS_MAX = 10;
+
+// TASK E — cap on the distinct Douglas card categories surfaced in the
+// usefulness breakdown (the enum has 11 categories — 20 is ample headroom).
+const HELPFUL_BY_CATEGORY_MAX = 20;
+
 export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapshot {
   return {
     pseudonymLabel: input.pseudonymLabel,
@@ -65,6 +74,15 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
     // (the loader did the period-scoped read; the pure aggregator stays clock-free).
     // COUNT-ONLY posture §2 — factual numbers, never a market view.
     verification: input.verification,
+    // TASK B (SPEC §25.2) — onboarding profile REFERENCE relayed (the loader
+    // truncated it; safeFreeText re-hardens at the snapshot boundary). TEXT-only
+    // context — NEVER scoring/edge (posture §2). `null` → the prompt omits it.
+    memberProfile: buildMemberProfile(input),
+    // TASK D — recent member journal verbatim (auto-declared DATA, never
+    // instructions — wrapped untrusted at the prompt boundary).
+    journalExcerpts: collectJournalExcerpts(input),
+    // TASK E — per-category "fiche utile" breakdown (count-only, posture §2).
+    helpfulByCategory: collectHelpfulByCategory(input),
   };
 }
 
@@ -153,6 +171,36 @@ function buildRealCounters(input: MonthlyBuilderInput): MonthlySnapshot['real'] 
     .map((c) => c.stressScore)
     .filter((n): n is number => n !== null);
 
+  // SPEC §7.10/§30 — routine & lifestyle signals (count-only, posture §2 — the
+  // ACT/the routine, NEVER a market view). These were collected at check-in
+  // (morning: sleepQuality/meditation/sport ; evening: gratitude) but never
+  // surfaced to the autonomous run. Honest medians/counts: `null`/0 when the
+  // axis isn't filled (never a fake "0"). Mark Douglas mode-de-vie/routines
+  // axis (§23/§30 — emotional regulation & discipline), never P&L. Carbon weekly.
+  const sleepQualityScores = morningCheckins
+    .map((c) => c.sleepQuality)
+    .filter((n): n is number => n !== null);
+  const meditationMinutes = morningCheckins
+    .map((c) => c.meditationMin)
+    .filter((n): n is number => n !== null && n > 0);
+  const meditationDaysCount = new Set(
+    morningCheckins
+      .filter((c) => c.meditationMin !== null && c.meditationMin > 0)
+      .map((c) => c.date),
+  ).size;
+  const sportDaysCount = new Set(
+    morningCheckins
+      .filter(
+        (c) =>
+          (c.sportDurationMin !== null && c.sportDurationMin > 0) ||
+          (c.sportType !== null && c.sportType.trim() !== ''),
+      )
+      .map((c) => c.date),
+  ).size;
+  const gratitudeDaysCount = new Set(
+    eveningCheckins.filter((c) => c.gratitudeItems.length > 0).map((c) => c.date),
+  ).size;
+
   const cardsSeen = input.deliveries.filter((d) => d.seenAt !== null).length;
   const cardsHelpful = input.deliveries.filter((d) => d.helpful === true).length;
 
@@ -198,6 +246,12 @@ function buildRealCounters(input: MonthlyBuilderInput): MonthlySnapshot['real'] 
     sleepHoursMedian: median(sleepHours),
     moodMedian: median(moodScores),
     stressMedian: median(stressScores),
+    // SPEC §7.10/§30 — routine & lifestyle counters (count-only, posture §2).
+    sleepQualityMedian: median(sleepQualityScores),
+    meditationMinMedian: median(meditationMinutes),
+    meditationDaysCount,
+    sportDaysCount,
+    gratitudeDaysCount,
     annotationsReceived: input.annotationsReceived,
     annotationsViewed: input.annotationsViewed,
     douglasCardsDelivered: input.deliveries.length,
@@ -385,6 +439,93 @@ function collectBehaviorTags(input: MonthlyBuilderInput): Array<{ tag: string; c
 
 function bumpCount(map: Map<string, number>, key: string): void {
   map.set(key, (map.get(key) ?? 0) + 1);
+}
+
+// =============================================================================
+// TASK D — journal excerpts (carbon weekly `collectJournalExcerpts`)
+// =============================================================================
+
+/**
+ * TASK D — collect the member's recent journal verbatim from the month's
+ * check-ins: most-recent first, non-empty `journalNote` only, `safeFreeText`
+ * + truncate to ~200 chars, capped at {@link JOURNAL_EXCERPTS_MAX}. EXACT carbon
+ * of `weekly-report/builder.ts collectJournalExcerpts` (the loader already
+ * serializes `journalNote` for the monthly slice). These are auto-declared
+ * member DATA, never instructions — the prompt wraps them in the canonical
+ * `<member_reflection_untrusted>` envelope (TASK F) for defense-in-depth.
+ */
+function collectJournalExcerpts(input: MonthlyBuilderInput): string[] {
+  const sorted = [...input.checkins].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  const excerpts: string[] = [];
+  for (const checkin of sorted) {
+    if (excerpts.length >= JOURNAL_EXCERPTS_MAX) break;
+    if (typeof checkin.journalNote !== 'string') continue;
+    const trimmed = checkin.journalNote.trim();
+    if (trimmed.length === 0) continue;
+    const truncated =
+      trimmed.length > JOURNAL_EXCERPT_MAX_CHARS
+        ? trimmed.slice(0, JOURNAL_EXCERPT_MAX_CHARS) + '…'
+        : trimmed;
+    // Defense-in-depth: safeFreeText again here even though service/loader
+    // should have done it on read. Belt-and-suspenders for prompt injection.
+    // Re-check post-sanitization: a zero-width-only note passes the `trimmed`
+    // guard above but `safeFreeText` strips it to "" — never push an empty extract.
+    const safe = safeFreeText(truncated);
+    if (safe.length === 0) continue;
+    excerpts.push(safe);
+  }
+  return excerpts;
+}
+
+// =============================================================================
+// TASK E — Douglas-card usefulness breakdown by category (count-only)
+// =============================================================================
+
+/**
+ * TASK E (SPEC §28/§30) — fold the month's Douglas-card deliveries into a
+ * per-`cardCategory` usefulness breakdown (count-only, posture §2 — the ACT of
+ * finding a card useful, NEVER a market view). One entry per category that had
+ * ≥1 card SEEN, frequency-sorted by total-seen desc. Mirror of the
+ * `collectBehaviorTags` idiom (Map → sort desc → slice → map). `helpful` ≤
+ * `seen` by construction (a card is only "useful" once seen). Empty array when
+ * no card was seen this month (honest empty state, never a fabricated entry).
+ */
+function collectHelpfulByCategory(
+  input: MonthlyBuilderInput,
+): Array<{ category: string; helpful: number; seen: number }> {
+  const seenByCat = new Map<string, number>();
+  const helpfulByCat = new Map<string, number>();
+  for (const delivery of input.deliveries) {
+    if (delivery.seenAt === null) continue; // breakdown is over SEEN cards only
+    bumpCount(seenByCat, delivery.cardCategory);
+    if (delivery.helpful === true) bumpCount(helpfulByCat, delivery.cardCategory);
+  }
+  return Array.from(seenByCat.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, HELPFUL_BY_CATEGORY_MAX)
+    .map(([category, seen]) => ({ category, helpful: helpfulByCat.get(category) ?? 0, seen }));
+}
+
+// =============================================================================
+// TASK B — onboarding profile reference (relay + re-harden via safeFreeText)
+// =============================================================================
+
+/**
+ * TASK B (SPEC §25.2) — relay the loader-truncated onboarding profile into the
+ * snapshot, re-hardening every free-text field with `safeFreeText`
+ * (defense-in-depth — the schema also transforms, neither relies on the other).
+ * REFERENCE CONTEXT for the prompt TEXT only — this value is NEVER read by the
+ * scoring/edge path (posture §2). `null` in → `null` out (the prompt then omits
+ * the whole section, no fabricated axes §33.6).
+ */
+function buildMemberProfile(input: MonthlyBuilderInput): MonthlySnapshot['memberProfile'] {
+  const p = input.memberProfile;
+  if (p === null) return null;
+  return {
+    summary: safeFreeText(p.summary),
+    axesPrioritaires: p.axesPrioritaires.map((a) => safeFreeText(a)),
+    highlightLabels: p.highlightLabels.map((l) => safeFreeText(l)),
+  };
 }
 
 // =============================================================================

@@ -299,6 +299,57 @@ describe('buildWeeklySnapshot — checkin medians + streak', () => {
   });
 });
 
+// =============================================================================
+// SPEC §7.10/§30 — routine & lifestyle counters (count-only, posture §2)
+// =============================================================================
+
+describe('buildWeeklySnapshot — routine & lifestyle counters (§7.10/§30 — count-only)', () => {
+  it('aggregates sleepQuality median + meditation/sport/gratitude day counts (honest)', () => {
+    const input = emptyInput();
+    input.checkins = [
+      makeCheckin('morning', {
+        id: 'r1',
+        date: '2026-05-04',
+        sleepQuality: 8,
+        meditationMin: 10,
+        sportType: 'course',
+        sportDurationMin: 30,
+      }),
+      makeCheckin('morning', {
+        id: 'r2',
+        date: '2026-05-05',
+        sleepQuality: 6,
+        meditationMin: 0, // logged 0 → NOT a meditation day
+        sportType: null,
+        sportDurationMin: null,
+      }),
+      makeCheckin('morning', {
+        id: 'r3',
+        date: '2026-05-06',
+        sleepQuality: null, // unanswered → excluded from the median
+        meditationMin: 20,
+      }),
+      makeCheckin('evening', { id: 'r4', date: '2026-05-04', gratitudeItems: ['ma famille'] }),
+      makeCheckin('evening', { id: 'r5', date: '2026-05-05', gratitudeItems: [] }), // empty → no day
+    ];
+    const c = buildWeeklySnapshot(input).counters;
+    expect(c.sleepQualityMedian).toBe(7); // median(8,6) — null excluded
+    expect(c.meditationDaysCount).toBe(2); // 10 & 20 (the 0 is excluded)
+    expect(c.meditationMinMedian).toBe(15); // median(10,20)
+    expect(c.sportDaysCount).toBe(1); // only 2026-05-04 logged sport
+    expect(c.gratitudeDaysCount).toBe(1); // only 2026-05-04 has a non-empty list
+  });
+
+  it('empty week → routine counters null/0 (no fake 0)', () => {
+    const c = buildWeeklySnapshot(emptyInput()).counters;
+    expect(c.sleepQualityMedian).toBeNull();
+    expect(c.meditationMinMedian).toBeNull();
+    expect(c.meditationDaysCount).toBe(0);
+    expect(c.sportDaysCount).toBe(0);
+    expect(c.gratitudeDaysCount).toBe(0);
+  });
+});
+
 describe('buildWeeklySnapshot — Mark Douglas deliveries', () => {
   it('counts delivered / seen / helpful', () => {
     const input = emptyInput();

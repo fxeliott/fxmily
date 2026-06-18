@@ -243,6 +243,36 @@ function buildCounters(input: BuilderInput): WeeklySnapshot['counters'] {
     .map((c) => c.stressScore)
     .filter((n): n is number => n !== null);
 
+  // SPEC §7.10/§30 — routine & lifestyle signals (count-only, posture §2 — the
+  // ACT/the routine, NEVER a market view). These were collected at check-in
+  // (morning: sleepQuality/meditation/sport ; evening: gratitude) but never
+  // surfaced to the autonomous run. Honest medians/counts: `null`/0 when the
+  // axis isn't filled (never a fake "0"). Mark Douglas mode-de-vie/routines
+  // axis (§23/§30 — emotional regulation & discipline), never P&L. Carbon monthly.
+  const sleepQualityScores = morningCheckins
+    .map((c) => c.sleepQuality)
+    .filter((n): n is number => n !== null);
+  const meditationMinutes = morningCheckins
+    .map((c) => c.meditationMin)
+    .filter((n): n is number => n !== null && n > 0);
+  const meditationDaysCount = new Set(
+    morningCheckins
+      .filter((c) => c.meditationMin !== null && c.meditationMin > 0)
+      .map((c) => c.date),
+  ).size;
+  const sportDaysCount = new Set(
+    morningCheckins
+      .filter(
+        (c) =>
+          (c.sportDurationMin !== null && c.sportDurationMin > 0) ||
+          (c.sportType !== null && c.sportType.trim() !== ''),
+      )
+      .map((c) => c.date),
+  ).size;
+  const gratitudeDaysCount = new Set(
+    eveningCheckins.filter((c) => c.gratitudeItems.length > 0).map((c) => c.date),
+  ).size;
+
   // Mark Douglas deliveries — split by state.
   const cardsSeen = input.deliveries.filter((d) => d.seenAt !== null).length;
   const cardsHelpful = input.deliveries.filter((d) => d.helpful === true).length;
@@ -291,6 +321,12 @@ function buildCounters(input: BuilderInput): WeeklySnapshot['counters'] {
     sleepHoursMedian: median(sleepHours),
     moodMedian: median(moodScores),
     stressMedian: median(stressScores),
+    // SPEC §7.10/§30 — routine & lifestyle counters (count-only, posture §2).
+    sleepQualityMedian: median(sleepQualityScores),
+    meditationMinMedian: median(meditationMinutes),
+    meditationDaysCount,
+    sportDaysCount,
+    gratitudeDaysCount,
     annotationsReceived: input.annotationsReceived,
     annotationsViewed: input.annotationsViewed,
     douglasCardsDelivered: input.deliveries.length,
@@ -417,7 +453,11 @@ function collectJournalExcerpts(input: BuilderInput): string[] {
         : trimmed;
     // Defense-in-depth: safeFreeText again here even though service layer
     // should have done it on read. Belt-and-suspenders for prompt injection.
-    excerpts.push(safeFreeText(truncated));
+    // Re-check post-sanitization: a zero-width-only note passes the `trimmed`
+    // guard above but `safeFreeText` strips it to "" — never push an empty extract.
+    const safe = safeFreeText(truncated);
+    if (safe.length === 0) continue;
+    excerpts.push(safe);
   }
   return excerpts;
 }

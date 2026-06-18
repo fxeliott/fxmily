@@ -30,6 +30,20 @@ export interface BehavioralScoreSnapshot {
 }
 
 /**
+ * TASK B (SPEC §25.2) — the truncated onboarding-profile reference the loader
+ * pre-shapes from `getProfileForUser`. REFERENCE CONTEXT for the prompt TEXT
+ * only — NEVER scoring/edge (posture §2). The loader truncates (summary ~600
+ * chars, ≤5 axes, ≤5 labels) and DROPS the verbatim `evidence[]` (only the
+ * short member-authored `label`s travel). The builder relays it verbatim; the
+ * snapshot schema re-hardens (`safeFreeText` + bidi refine) defense-in-depth.
+ */
+export interface MemberProfileReference {
+  summary: string;
+  axesPrioritaires: string[];
+  highlightLabels: string[];
+}
+
+/**
  * 🚨 §21.5 — the ONLY shape by which training reaches the monthly snapshot.
  * Effort/recency only; structurally NO `resultR` / `outcome` / `plannedRR`.
  * The loader derives `daysSinceLastBacktest` from the primitive's
@@ -104,6 +118,19 @@ export interface MonthlyBuilderInput {
   /// ≤4 weekly AI summaries of the civil month — INPUT context only (SPEC
   /// §25.3, never an FK). Newest-first; the builder caps + re-hardens.
   weeklySummaries: string[];
+  /**
+   * TASK B (SPEC §25.2) — the member's OWN onboarding profile (their words),
+   * pre-loaded by the loader via `getProfileForUser(userId)` (read-only, in the
+   * Promise.all) and pre-truncated at the loader boundary (summary ~600 chars,
+   * ≤5 axes, ≤5 highlight labels; the verbatim `evidence[]` is dropped — only
+   * the short member-authored labels travel, data minimisation). REFERENCE
+   * CONTEXT for the TEXT only: it anchors « progresse-t-il sur SES axes d'entrée »
+   * (psycho/process, posture §2) and is NEVER fed to the scoring/edge. 0
+   * cross-member leak (THIS member's profile only). `null` when no profile yet
+   * (Phase A.2 batch not run / onboarded pre-feature) → the prompt omits the
+   * section (no fabricated axes, §33.6).
+   */
+  memberProfile: MemberProfileReference | null;
   // ----- (B) TRAINING section — §21.5 firewall: effort/recency only -----
   training: TrainingEffortInput;
   // ----- (C) VERIFICATION & CONSTANCY — Session 3 (DOD3-01 / DoD#2 S6) -----

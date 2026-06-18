@@ -264,13 +264,34 @@ export async function loadAllSnapshotsForCompletedInterviews(
     const results = await Promise.allSettled(
       chunk.map((interview) => buildSnapshotForInterview(interview, CURRENT_ONBOARDING_INSTRUMENT)),
     );
-    for (const r of results) {
-      if (r.status === 'fulfilled' && r.value !== null) {
-        entries.push(r.value);
+    for (let j = 0; j < results.length; j += 1) {
+      const r = results[j];
+      if (r === undefined) continue;
+      if (r.status === 'fulfilled') {
+        if (r.value !== null) entries.push(r.value);
+        continue;
       }
-      // Rejected promises silently dropped — individual interview load
-      // failures (missing instrument version, etc.) shouldn't fail the
-      // whole batch.
+      // Rejected promise — a single interview's snapshot build threw (DB error,
+      // etc.). We still don't fail the whole batch, but we no longer drop it
+      // silently : a completed interview that yields no snapshot must surface
+      // for human review, not vanish. PII-FREE metadata only (§16) — the
+      // rejection reason can carry a stack/DB string, so we audit a bounded
+      // 200-char slice internally and send NOTHING reason-derived to the
+      // external Sentry sink (mirror the persist-side anti-skip guardrail).
+      const interview = chunk[j];
+      await logAudit({
+        action: 'onboarding.batch.skipped',
+        userId: interview?.userId ?? null,
+        metadata: {
+          ranAt,
+          interviewId: interview?.id ?? null,
+          reason: 'snapshot_build_rejected',
+          error: r.reason instanceof Error ? r.reason.message.slice(0, 200) : 'unknown',
+        },
+      });
+      reportWarning('onboarding-interview.batch', 'snapshot_build_rejected_review_needed', {
+        interviewId: interview?.id ?? null,
+      });
     }
   }
 

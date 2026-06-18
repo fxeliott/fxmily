@@ -13,6 +13,12 @@ import { countMeetingAttendance } from '@/lib/meeting/service';
 // mid-month joiner is not charged for pre-join meetings (byte-identical past
 // the first month).
 import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
+// TASK B (SPEC §25.2) — the member's OWN onboarding profile (their words), a
+// READ-ONLY REFERENCE for the prompt TEXT only (never scoring/edge — posture
+// §2). `getProfileForUser(userId)` reads THIS member's `MemberProfile` row, so
+// there is 0 cross-member leak. NOT a §21.5-isolated symbol (onboarding answers
+// are real self-declaration, not training-backtest P&L) — unrestricted import.
+import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the monthly-debrief loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
@@ -43,7 +49,7 @@ import { countOpenDiscrepancies } from '@/lib/verification/service';
 import { WEEKLY_CONTEXT_MAX } from '@/lib/schemas/monthly-debrief';
 
 import { computeMonthWindow, computeReportingMonth, type MonthWindow } from './month-window';
-import type { BehavioralScoreSnapshot, MonthlyBuilderInput } from './types';
+import type { BehavioralScoreSnapshot, MemberProfileReference, MonthlyBuilderInput } from './types';
 
 /**
  * J-M2 — DB loader for the V1.4 monthly AI debrief (SPEC §25).
@@ -94,9 +100,11 @@ export interface LoadOptions {
   /// `now` reference (batch pass-through). Defaults to `new Date()`.
   now?: Date;
   /// `false` (default) → the just-ended civil month (`computeReportingMonth`,
-  /// `now − 24h` anchored — the canonical "1st of the month, report the
-  /// month that ended" cadence). `true` → the in-progress civil month
-  /// (`computeMonthWindow`, rare preview). Mirror weekly `previousFullWeek`.
+  /// anchored by a 1 ms step-back before the current month start — the
+  /// canonical "1st of the month, report the month that ended" cadence,
+  /// robust to a delayed run; never `now − 24h`, cf. defect-B fix below).
+  /// `true` → the in-progress civil month (`computeMonthWindow`, rare
+  /// preview). Mirror weekly `previousFullWeek`.
   currentMonth?: boolean;
 }
 
@@ -170,6 +178,7 @@ export async function loadMonthlySliceForUser(
     openDiscrepancyCount,
     alertCount,
     constancyScoresPrev,
+    memberProfileRow,
   ] = await Promise.all([
     loadTrades(userId, window),
     loadCheckins(userId, window),
@@ -232,6 +241,15 @@ export async function loadMonthlySliceForUser(
       parseLocalDate(currentPeriodStart(prevMonth.monthStartUtc)),
       new Date(reportedConstancyLowerBound.getTime() - 1),
     ),
+    // TASK B (SPEC §25.2) — THIS member's onboarding profile (their words),
+    // READ-ONLY reference for the prompt TEXT only (never scoring/edge). `null`
+    // until the Phase A.2 onboarding batch has run (honest absence, no fabrication).
+    // "Graceful degradation" applies to a NULL/absent row only (the prompt omits
+    // the section). A read FAILURE (throw) is NOT swallowed here: it rejects this
+    // member's whole slice, caught one level up by the batch `allSettled` +
+    // TASK G-monthly (member surfaced via Sentry/audit, never a silent drop) —
+    // consistent with the 13 other parallel reads in this `Promise.all`.
+    getProfileForUser(userId),
   ]);
 
   // SPEC §25.3 — training slice = count/recency ONLY. `daysSinceLastBacktest`
@@ -302,6 +320,17 @@ export async function loadMonthlySliceForUser(
     alertCount,
   };
 
+  // TASK B (SPEC §25.2) — shape THIS member's onboarding profile into the
+  // truncated REFERENCE the prompt TEXT consumes (never scoring/edge — posture
+  // §2). The loader owns the truncation (summary ~600 chars, ≤5 axes, ≤5 highlight
+  // LABELS) and DROPS the verbatim `evidence[]` entirely — only the short,
+  // member-authored labels travel (data minimisation; the snapshot schema
+  // re-hardens with safeFreeText/bidi-refine defense-in-depth). `highlights` /
+  // `axesPrioritaires` are Prisma JSON (`unknown`) so we coerce defensively; a
+  // malformed/empty profile collapses to `null` (the prompt then omits the
+  // section — no fabricated axes, §33.6).
+  const memberProfile = toMemberProfileReference(memberProfileRow);
+
   const builderInput: MonthlyBuilderInput = {
     // SPEC §25.2 — pseudonym pre-computed by the loader at the Claude
     // boundary (8-char hex, salted via env.MEMBER_LABEL_SALT in prod).
@@ -336,6 +365,8 @@ export async function loadMonthlySliceForUser(
     },
     // DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters (count-only).
     verification,
+    // TASK B (SPEC §25.2) — onboarding profile REFERENCE (TEXT only, never edge).
+    memberProfile,
   };
 
   return {
@@ -534,4 +565,64 @@ function toScoreSnapshot(latest: {
     consistency: latest.consistencyScore,
     engagement: latest.engagementScore,
   };
+}
+
+// TASK B truncation caps (SPEC §25.2). Match the snapshot schema bounds so the
+// truncated reference always validates: summary ≤600, ≤5 axes (≤200 each),
+// ≤5 highlight labels (≤100 each). The pure aggregator stays clock/IO-free,
+// so the loader owns the truncation (mirror `daysSinceLastBacktest`/constancy).
+const PROFILE_SUMMARY_MAX_CHARS = 600;
+const PROFILE_AXES_MAX = 5;
+const PROFILE_AXIS_MAX_CHARS = 200;
+const PROFILE_HIGHLIGHT_LABELS_MAX = 5;
+const PROFILE_HIGHLIGHT_LABEL_MAX_CHARS = 100;
+
+/**
+ * TASK B (SPEC §25.2) — coerce the `SerializedMemberProfile` row into the
+ * truncated {@link MemberProfileReference} the prompt TEXT consumes. The row's
+ * `highlights` / `axesPrioritaires` are Prisma JSON (typed `unknown`), so each
+ * is defensively narrowed; anything malformed is dropped, never invented. Only
+ * the short member-authored `label` of each highlight is kept — the verbatim
+ * `evidence[]` (raw onboarding answer substrings) is intentionally DROPPED here
+ * (data minimisation: no raw answer text crosses into the monthly snapshot).
+ * Returns `null` when the row is absent OR when nothing usable survives (the
+ * prompt then omits the whole profile section — no fabricated axes, §33.6).
+ */
+function toMemberProfileReference(
+  row: { summary: string; highlights: unknown; axesPrioritaires: unknown } | null,
+): MemberProfileReference | null {
+  if (row === null) return null;
+
+  const summary =
+    typeof row.summary === 'string' ? row.summary.trim().slice(0, PROFILE_SUMMARY_MAX_CHARS) : '';
+
+  const axesPrioritaires = Array.isArray(row.axesPrioritaires)
+    ? row.axesPrioritaires
+        .filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
+        .slice(0, PROFILE_AXES_MAX)
+        .map((a) => a.trim().slice(0, PROFILE_AXIS_MAX_CHARS))
+    : [];
+
+  // `highlights` is `Array<{ key, label, evidence[] }>` (MemberProfileOutput).
+  // Keep the `label` ONLY (drop the verbatim evidence — data minimisation).
+  const highlightLabels = Array.isArray(row.highlights)
+    ? row.highlights
+        .map((h) =>
+          h !== null &&
+          typeof h === 'object' &&
+          typeof (h as { label?: unknown }).label === 'string'
+            ? (h as { label: string }).label.trim()
+            : '',
+        )
+        .filter((label) => label.length > 0)
+        .slice(0, PROFILE_HIGHLIGHT_LABELS_MAX)
+        .map((label) => label.slice(0, PROFILE_HIGHLIGHT_LABEL_MAX_CHARS))
+    : [];
+
+  // Nothing usable → null (the prompt omits the section; no fabricated axes).
+  if (summary.length === 0 && axesPrioritaires.length === 0 && highlightLabels.length === 0) {
+    return null;
+  }
+
+  return { summary, axesPrioritaires, highlightLabels };
 }

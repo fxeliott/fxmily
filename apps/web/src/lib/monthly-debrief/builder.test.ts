@@ -31,6 +31,9 @@ function baseInput(over: Partial<MonthlyBuilderInput> = {}): MonthlyBuilderInput
     scoreHistory: [],
     monthStartLocal: '2026-05-01',
     weeklySummaries: [],
+    // TASK B — onboarding profile defaults to absent (null); tests that exercise
+    // it override with a truncated reference.
+    memberProfile: null,
     training: { backtestCount: 0, daysSinceLastBacktest: null, hasEverPractised: false },
     // DOD3-01 / DoD#2 S6 — Session-3 counters default to the empty (no-signal)
     // shape; tests that exercise S3 override it.
@@ -78,6 +81,13 @@ function checkin(over: Record<string, unknown> = {}): MonthlyBuilderInput['check
     moodScore: 7,
     stressScore: null,
     sleepHours: '7.5',
+    // Routine/lifestyle fields — prod-shaped defaults (loader always sets them;
+    // `gratitudeItems` is a non-null `String[]`). The aggregator reads these.
+    sleepQuality: null,
+    meditationMin: null,
+    sportType: null,
+    sportDurationMin: null,
+    gratitudeItems: [],
     journalNote: null,
     emotionTags: [],
     submittedAt: '2026-05-10T07:00:00.000Z',
@@ -223,6 +233,53 @@ describe('buildMonthlySnapshot — REAL counter maths (carbon weekly)', () => {
     expect(r.tradesQualityCaptured).toBe(2);
     expect(r.riskPctMedian).toBe(2); // median(1,3)
     expect(r.riskPctOverTwoCount).toBe(1); // 3 > 2
+  });
+
+  it('SPEC §7.10/§30 — routine & lifestyle counters (count-only, honest)', () => {
+    const r = buildMonthlySnapshot(
+      baseInput({
+        checkins: [
+          checkin({
+            date: '2026-05-01',
+            slot: 'morning',
+            sleepQuality: 8,
+            meditationMin: 10,
+            sportType: 'course',
+            sportDurationMin: 30,
+          }),
+          checkin({
+            date: '2026-05-02',
+            slot: 'morning',
+            sleepQuality: 6,
+            meditationMin: 0, // logged 0 → NOT a meditation day
+            sportType: null,
+            sportDurationMin: null,
+          }),
+          checkin({
+            date: '2026-05-03',
+            slot: 'morning',
+            sleepQuality: null, // unanswered → excluded from the median
+            meditationMin: 20,
+          }),
+          checkin({ date: '2026-05-01', slot: 'evening', gratitudeItems: ['ma famille'] }),
+          checkin({ date: '2026-05-02', slot: 'evening', gratitudeItems: [] }), // empty → no day
+        ],
+      }),
+    ).real;
+    expect(r.sleepQualityMedian).toBe(7); // median(8,6) — null excluded
+    expect(r.meditationDaysCount).toBe(2); // 10 & 20 (the 0 is excluded)
+    expect(r.meditationMinMedian).toBe(15); // median(10,20)
+    expect(r.sportDaysCount).toBe(1); // only 2026-05-01 logged sport
+    expect(r.gratitudeDaysCount).toBe(1); // only 2026-05-01 has a non-empty list
+  });
+
+  it('SPEC §7.10/§30 — empty month → routine counters null/0 (no fake 0)', () => {
+    const r = buildMonthlySnapshot(baseInput()).real;
+    expect(r.sleepQualityMedian).toBeNull();
+    expect(r.meditationMinMedian).toBeNull();
+    expect(r.meditationDaysCount).toBe(0);
+    expect(r.sportDaysCount).toBe(0);
+    expect(r.gratitudeDaysCount).toBe(0);
   });
 });
 
@@ -571,6 +628,153 @@ describe('buildMonthlySnapshot — weekly summaries context + scores', () => {
       consistency: null,
       engagement: 65,
     });
+  });
+});
+
+// =============================================================================
+// TASK D — journal excerpts (recency-sorted, safeFreeText + truncate ~200)
+// =============================================================================
+
+describe('buildMonthlySnapshot — journalExcerpts (TASK D)', () => {
+  it('empty month → empty journalExcerpts array', () => {
+    expect(buildMonthlySnapshot(baseInput()).journalExcerpts).toEqual([]);
+  });
+
+  it('collects non-empty journalNote, most-recent first, skipping null/blank', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        checkins: [
+          checkin({ submittedAt: '2026-05-01T07:00:00.000Z', journalNote: 'Premier jour calme.' }),
+          checkin({ submittedAt: '2026-05-03T07:00:00.000Z', journalNote: 'Trois jours après.' }),
+          checkin({ submittedAt: '2026-05-02T07:00:00.000Z', journalNote: null }), // skipped
+          checkin({ submittedAt: '2026-05-04T07:00:00.000Z', journalNote: '   ' }), // blank → skipped
+        ],
+      }),
+    );
+    expect(snap.journalExcerpts).toEqual(['Trois jours après.', 'Premier jour calme.']);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('truncates a long note to ~200 chars + ellipsis and strips bidi (Trojan Source)', () => {
+    const long = 'a'.repeat(250);
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        checkins: [checkin({ journalNote: `${long}‮` })],
+      }),
+    );
+    const first = snap.journalExcerpts[0]!;
+    expect(first.startsWith('a'.repeat(200))).toBe(true);
+    expect(first.endsWith('…')).toBe(true);
+    expect(first).not.toContain('‮');
+  });
+
+  it('caps the journal excerpts at JOURNAL_EXCERPTS_MAX (10)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        checkins: Array.from({ length: 14 }, (_, i) =>
+          checkin({
+            date: `2026-05-${String(i + 1).padStart(2, '0')}`,
+            submittedAt: `2026-05-${String(i + 1).padStart(2, '0')}T07:00:00.000Z`,
+            journalNote: `note ${i}`,
+          }),
+        ),
+      }),
+    );
+    expect(snap.journalExcerpts).toHaveLength(10);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});
+
+// =============================================================================
+// TASK E — Douglas-card usefulness breakdown by category (count-only)
+// =============================================================================
+
+function delivery(over: Record<string, unknown> = {}): MonthlyBuilderInput['deliveries'][number] {
+  return {
+    id: 'd-cuid',
+    userId: 'u',
+    cardId: 'c',
+    cardSlug: 'slug',
+    cardTitle: 'Title',
+    cardCategory: 'discipline',
+    triggeredBy: 'system',
+    triggeredOn: '2026-05-10',
+    seenAt: '2026-05-10T08:00:00.000Z',
+    dismissedAt: null,
+    helpful: null,
+    createdAt: '2026-05-10T08:00:00.000Z',
+    ...over,
+  } as unknown as MonthlyBuilderInput['deliveries'][number];
+}
+
+describe('buildMonthlySnapshot — helpfulByCategory (TASK E, count-only)', () => {
+  it('empty month → empty breakdown', () => {
+    expect(buildMonthlySnapshot(baseInput()).helpfulByCategory).toEqual([]);
+  });
+
+  it('folds helpful/seen per category over SEEN cards only, sorted by seen desc', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        deliveries: [
+          delivery({ cardCategory: 'discipline', helpful: true }),
+          delivery({ cardCategory: 'discipline', helpful: true }),
+          delivery({ cardCategory: 'discipline', helpful: false }),
+          delivery({ cardCategory: 'ego', helpful: false }),
+          delivery({ cardCategory: 'ego', helpful: null }),
+          // NOT seen → excluded from the breakdown entirely.
+          delivery({ cardCategory: 'fear', seenAt: null, helpful: true }),
+        ],
+      }),
+    );
+    expect(snap.helpfulByCategory).toEqual([
+      { category: 'discipline', helpful: 2, seen: 3 },
+      { category: 'ego', helpful: 0, seen: 2 },
+    ]);
+    expect(snap.helpfulByCategory.find((c) => c.category === 'fear')).toBeUndefined();
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});
+
+// =============================================================================
+// TASK B — onboarding profile reference (relay + re-harden, never edge)
+// =============================================================================
+
+describe('buildMonthlySnapshot — memberProfile (TASK B reference, never scoring)', () => {
+  it('null profile → null memberProfile (prompt omits the section)', () => {
+    expect(buildMonthlySnapshot(baseInput()).memberProfile).toBeNull();
+  });
+
+  it('relays the truncated profile + re-hardens free-text via safeFreeText', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        memberProfile: {
+          summary: 'Trader rigoureux, sujet au FOMO en fin de session.',
+          axesPrioritaires: ['Tenir mon plan', 'Réduire le FOMO'],
+          highlightLabels: ['Discipline matinale', 'Tendance au revenge-trade'],
+        },
+      }),
+    );
+    expect(snap.memberProfile).toEqual({
+      summary: 'Trader rigoureux, sujet au FOMO en fin de session.',
+      axesPrioritaires: ['Tenir mon plan', 'Réduire le FOMO'],
+      highlightLabels: ['Discipline matinale', 'Tendance au revenge-trade'],
+    });
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('strips bidi/zero-width from profile free-text (Trojan Source defense-in-depth)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        memberProfile: {
+          summary: 'Profil‮ inversé.',
+          axesPrioritaires: ['axe​ caché'],
+          highlightLabels: [],
+        },
+      }),
+    );
+    expect(snap.memberProfile!.summary).not.toContain('‮');
+    expect(snap.memberProfile!.axesPrioritaires[0]).not.toContain('​');
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });
 

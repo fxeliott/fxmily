@@ -58,8 +58,17 @@ const CARD = {
 function arm(options: {
   /** What the member-day cap probe (`findFirst({userId, triggeredOn})`) returns. */
   deliveredToday: { id: string } | null;
-  /** 14-day cooldown history (`findMany`). */
-  history?: Array<{ cardId: string; createdAt: Date }>;
+  /**
+   * 14-day delivery history (`findMany`). `seenAt`/`sourceAlertId` are optional
+   * for the legacy cooldown cases; TASK C reads them for routine saturation
+   * (undefined → null-equivalent, matching the engine's `?:` extraction).
+   */
+  history?: Array<{
+    cardId: string;
+    createdAt: Date;
+    seenAt?: Date | null;
+    sourceAlertId?: string | null;
+  }>;
 }) {
   vi.mocked(db.user.findUnique).mockResolvedValue(USER as never);
   vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
@@ -107,6 +116,81 @@ describe('evaluateAndDispatchForUser — member-day cap (S4 DOD2-T2-1)', () => {
     arm({ deliveredToday: null });
     const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
     expect(r.delivered?.cardId).toBe('card-A');
+  });
+});
+
+describe('evaluateAndDispatchForUser — routine-cadence adaptive spacing (TASK C, §26)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Days before NOW (2026-06-11). Cooldown for card-other is irrelevant here:
+  // the seeded ROUTINE deliveries are for OTHER cards than the matching card-A.
+  function past(daysAgo: number): Date {
+    return new Date(NOW.getTime() - daysAgo * 24 * 3600 * 1000);
+  }
+
+  // (a) ENGAGED MEMBER — last routine deliveries were SEEN → cadence unchanged.
+  it('engaged member (recent routine deliveries seen) → card still dispatched', async () => {
+    arm({
+      deliveredToday: null,
+      history: [
+        { cardId: 'r1', createdAt: past(2), seenAt: past(2), sourceAlertId: null },
+        { cardId: 'r2', createdAt: past(4), seenAt: null, sourceAlertId: null },
+        { cardId: 'r3', createdAt: past(6), seenAt: null, sourceAlertId: null },
+      ],
+    });
+    const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
+    expect(r.delivered?.cardId).toBe('card-A');
+    expect(db.markDouglasDelivery.create).toHaveBeenCalledTimes(1);
+  });
+
+  // (b) SATURATED MEMBER — K unseen routine deliveries in a row → spaced (skip).
+  it('saturated member (K routine deliveries all unseen) → routine fiche skipped', async () => {
+    arm({
+      deliveredToday: null,
+      history: [
+        { cardId: 'r1', createdAt: past(2), seenAt: null, sourceAlertId: null },
+        { cardId: 'r2', createdAt: past(4), seenAt: null, sourceAlertId: null },
+        { cardId: 'r3', createdAt: past(6), seenAt: null, sourceAlertId: null },
+      ],
+    });
+    const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
+    expect(r.delivered).toBeNull();
+    // The card DID match (matched > 0) but was spaced out, not persisted.
+    expect(r.matched).toBeGreaterThan(0);
+    expect(db.markDouglasDelivery.create).not.toHaveBeenCalled();
+  });
+
+  // ALERTE deliveries must never be counted → never cause spacing.
+  it('saturation ignores ALERTE deliveries (sourceAlertId !== null)', async () => {
+    arm({
+      deliveredToday: null,
+      // 3 unseen ALERTE + 2 unseen ROUTINE → < K routine → NOT saturated.
+      history: [
+        { cardId: 'a1', createdAt: past(1), seenAt: null, sourceAlertId: 'alert-1' },
+        { cardId: 'a2', createdAt: past(2), seenAt: null, sourceAlertId: 'alert-2' },
+        { cardId: 'a3', createdAt: past(3), seenAt: null, sourceAlertId: 'alert-3' },
+        { cardId: 'r1', createdAt: past(5), seenAt: null, sourceAlertId: null },
+        { cardId: 'r2', createdAt: past(7), seenAt: null, sourceAlertId: null },
+      ],
+    });
+    const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
+    expect(r.delivered?.cardId).toBe('card-A');
+  });
+
+  // (c) NEW MEMBER — insufficient routine history → OFF-equivalent (dispatches).
+  it('new member (fewer than K routine deliveries) → behaves as before (dispatch)', async () => {
+    arm({
+      deliveredToday: null,
+      history: [
+        { cardId: 'r1', createdAt: past(2), seenAt: null, sourceAlertId: null },
+        { cardId: 'r2', createdAt: past(4), seenAt: null, sourceAlertId: null },
+      ],
+    });
+    const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
+    expect(r.delivered?.cardId).toBe('card-A');
+    expect(db.markDouglasDelivery.create).toHaveBeenCalledTimes(1);
   });
 });
 

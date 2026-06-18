@@ -220,10 +220,27 @@ export async function loadAllSnapshotsForActiveMembers(
         weekStart ??= r.value.weekStart;
         weekEnd ??= r.value.weekEnd;
         entries.push(r.value);
+        continue;
       }
-      // Rejected promises are silently dropped — they're individual member
-      // load failures (corrupt timezone, etc.) and shouldn't fail the whole
-      // batch. Audit emit downstream if needed.
+      // G-weekly — a rejected promise is an individual member load failure
+      // (corrupt timezone, slice exception, etc.). It must NOT fail the whole
+      // batch, but it must NOT be dropped silently either: surface it for
+      // operator visibility (`reportWarning`) + an audit row, so a member who
+      // never gets a report is detectable instead of vanishing. Best-effort
+      // PII-minimised: the audit/Sentry payloads carry only the error reason
+      // (= `error.message` truncated to 200 chars — not guaranteed PII-free, the
+      // 200-char truncation is the only safeguard) + ranAt; the read-only surface
+      // makes the exposure low. Never the userId, email, or any snapshot content
+      // (RGPD §16, posture §2).
+      if (r.status === 'rejected') {
+        const reason =
+          r.reason instanceof Error ? r.reason.message.slice(0, 200) : 'unknown_load_failure';
+        reportWarning('weekly_report.batch', 'snapshot_load_failed', { ranAt, reason });
+        await logAudit({
+          action: 'weekly_report.batch.skipped',
+          metadata: { ranAt, reason: `snapshot_load_failed: ${reason}` },
+        });
+      }
     }
   }
 

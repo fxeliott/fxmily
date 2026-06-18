@@ -199,6 +199,16 @@ const counterSliceSchema = z
     sleepHoursMedian: z.number().min(0).max(24).nullable(),
     moodMedian: z.number().min(1).max(10).nullable(),
     stressMedian: z.number().min(1).max(10).nullable(),
+    /// SPEC §7.10/§30 — routine & lifestyle signals (count-only, posture §2 —
+    /// l'ACTE/la routine, jamais un résultat marché). `null`/0 honnête quand
+    /// l'axe n'est pas renseigné (jamais un faux "0"). Axe mode-de-vie/routines
+    /// Mark Douglas (§23/§30 — régulation émotionnelle & discipline). Always
+    /// present (the builder always computes them). Carbon of monthly.
+    sleepQualityMedian: z.number().min(1).max(10).nullable(),
+    meditationMinMedian: z.number().min(0).nullable(),
+    meditationDaysCount: z.number().int().min(0),
+    sportDaysCount: z.number().int().min(0),
+    gratitudeDaysCount: z.number().int().min(0),
     annotationsReceived: z.number().int().min(0),
     annotationsViewed: z.number().int().min(0),
     douglasCardsDelivered: z.number().int().min(0),

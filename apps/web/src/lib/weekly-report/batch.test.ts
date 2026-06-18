@@ -24,11 +24,20 @@ vi.mock('@/lib/observability', () => ({
   reportWarning: vi.fn(),
 }));
 
+// G-weekly — the pull side (`loadAllSnapshotsForActiveMembers`) fans out over
+// `loadWeeklySliceForUser`. Mock the loader so we can force one member's slice
+// to reject and assert the rejection is surfaced (reportWarning + audit), not
+// silently dropped.
+vi.mock('./loader', () => ({
+  loadWeeklySliceForUser: vi.fn(),
+}));
+
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
 import { reportError, reportWarning } from '@/lib/observability';
 
-import { persistGeneratedReports } from './batch';
+import { loadAllSnapshotsForActiveMembers, persistGeneratedReports } from './batch';
+import { loadWeeklySliceForUser } from './loader';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -332,5 +341,77 @@ describe('persistGeneratedReports', () => {
         .mock.calls.some(([arg]) => arg.action === 'weekly_report.batch.amf_violation'),
     ).toBe(false);
     expect(reportWarning).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G-weekly — pull-side rejected-promise observability
+// ---------------------------------------------------------------------------
+
+describe('loadAllSnapshotsForActiveMembers — rejected member loads are surfaced, never dropped', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(db.user.findMany).mockResolvedValue([
+      { id: 'user-ok', timezone: 'Europe/Paris' } as never,
+      { id: 'user-broken', timezone: 'Europe/Paris' } as never,
+    ]);
+    vi.mocked(logAudit).mockResolvedValue(undefined);
+  });
+
+  it('emits reportWarning + a PII-free audit row when a member slice load rejects', async () => {
+    // `user-ok` → null slice (filtered out, no snapshot build needed).
+    // `user-broken` → throws, which surfaces as a rejected settled promise.
+    vi.mocked(loadWeeklySliceForUser).mockImplementation(async (userId: string) => {
+      if (userId === 'user-broken') {
+        throw new Error('corrupt timezone payload');
+      }
+      return null;
+    });
+
+    const envelope = await loadAllSnapshotsForActiveMembers({
+      now: new Date('2026-05-11T09:00:00Z'),
+    });
+
+    // The batch still succeeds — one bad member never fails the whole pull.
+    expect(envelope.entries).toEqual([]);
+
+    // Observability: the rejection is surfaced (not silently dropped).
+    expect(reportWarning).toHaveBeenCalledWith(
+      'weekly_report.batch',
+      'snapshot_load_failed',
+      expect.objectContaining({ reason: expect.stringContaining('corrupt timezone payload') }),
+    );
+
+    const skipAudit = vi
+      .mocked(logAudit)
+      .mock.calls.find(([arg]) => arg.action === 'weekly_report.batch.skipped');
+    expect(skipAudit).toBeDefined();
+    const meta = skipAudit?.[0].metadata as { reason?: string; userId?: string } | undefined;
+    expect(meta?.reason).toContain('snapshot_load_failed');
+    // PII-FREE: never the userId/email in the rejection audit row.
+    expect(skipAudit?.[0].userId ?? null).toBeNull();
+    expect(meta).not.toHaveProperty('userId');
+  });
+
+  it('does NOT emit a skip warning when every member loads cleanly (null slices only)', async () => {
+    vi.mocked(loadWeeklySliceForUser).mockResolvedValue(null);
+
+    const envelope = await loadAllSnapshotsForActiveMembers({
+      now: new Date('2026-05-11T09:00:00Z'),
+    });
+
+    expect(envelope.entries).toEqual([]);
+    expect(reportWarning).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(logAudit)
+        .mock.calls.some(
+          ([arg]) =>
+            arg.action === 'weekly_report.batch.skipped' &&
+            String((arg.metadata as { reason?: string })?.reason ?? '').includes(
+              'snapshot_load_failed',
+            ),
+        ),
+    ).toBe(false);
   });
 });

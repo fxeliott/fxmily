@@ -8,6 +8,7 @@ import { CalendarStatusWidget } from '@/components/calendar/calendar-status-widg
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { FirstRunWelcome } from '@/components/dashboard/first-run-welcome';
 import { JournalShortcut } from '@/components/dashboard/journal-shortcut';
+import { MonthlyDebriefWidget } from '@/components/dashboard/monthly-debrief-widget';
 import { NorthStarHero } from '@/components/dashboard/north-star-hero';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
 import { TodayGuidance } from '@/components/dashboard/today-guidance';
@@ -252,6 +253,13 @@ export default async function DashboardPage() {
             <CalendarStatusWidget userId={userId!} />
           </Suspense>
         </section>
+
+        {/* §30 — guidage calme vers le débrief mensuel frais (S6 audit). Le widget
+            rend sa propre section (avec heading) ou rien si tout est déjà lu :
+            fallback null pour ne jamais flasher un skeleton qui disparaît. */}
+        <Suspense fallback={null}>
+          <MonthlyDebriefWidget userId={userId!} />
+        </Suspense>
 
         {/* V2.3 — Pré-trade circuit breaker (ADR-003 Trigger A). Nudge calme « pause
             30s » au-dessus du journal. Non-bloquant — un miroir, pas une barrière.

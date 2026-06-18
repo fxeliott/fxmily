@@ -79,6 +79,11 @@ describe('getCronHealthReport', () => {
         _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
       },
       {
+        // S6 audit §30 — weekly report overdue nudge (daily, age 12h → green).
+        action: 'cron.weekly_report_overdue.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
         // S2 — onboarding profile overdue nudge (daily, age 12h → green).
         action: 'cron.onboarding_profile_overdue.scan',
         _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
@@ -114,7 +119,7 @@ describe('getCronHealthReport', () => {
     const report = await getCronHealthReport(now);
 
     expect(report.overall).toBe('green');
-    expect(report.entries).toHaveLength(16);
+    expect(report.entries).toHaveLength(17);
     expect(report.entries.every((e) => e.status === 'green')).toBe(true);
     expect(report.ranAt).toBe(now.toISOString());
   });
@@ -213,11 +218,13 @@ describe('getCronHealthReport', () => {
    * S10 raised the count 13 → 16 (the 3 wired prod crons that were emitting a
    * heartbeat but were not being monitored: generate-meetings,
    * mindset-check-reminders, purge-access-requests).
+   * S6 audit raised it 16 → 17 (the weekly-report overdue safety-net, the 4th
+   * overdue net alongside calendar/monthly/onboarding).
    */
-  it('always returns exactly 16 entries (S10 — added the 3 unmonitored wired crons)', async () => {
+  it('always returns exactly 17 entries (S6 — added the weekly-report overdue net)', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);
     const report = await getCronHealthReport();
-    expect(report.entries).toHaveLength(16);
+    expect(report.entries).toHaveLength(17);
     // self-monitoring of the watcher (cron-watch.yml).
     expect(report.entries.map((e) => e.action)).toContain('cron.health.scan');
     // audit_log retention purge (V2-roadmap reclassed).
@@ -226,6 +233,8 @@ describe('getCronHealthReport', () => {
     expect(report.entries.map((e) => e.action)).toContain('cron.calendar_overdue.scan');
     // Session 5 §25 — monthly debrief overdue safety-net heartbeat.
     expect(report.entries.map((e) => e.action)).toContain('cron.monthly_debrief_overdue.scan');
+    // S6 audit §30 — weekly report overdue safety-net heartbeat (4th overdue net).
+    expect(report.entries.map((e) => e.action)).toContain('cron.weekly_report_overdue.scan');
     // S2 — onboarding profile overdue safety-net heartbeat.
     expect(report.entries.map((e) => e.action)).toContain('cron.onboarding_profile_overdue.scan');
     // S3 §33.5 — daily verification scan heartbeat.

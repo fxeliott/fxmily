@@ -36,6 +36,7 @@ interface CronExpectation {
     | 'cron.calendar_overdue.scan'
     | 'cron.monthly_debrief_overdue.scan'
     | 'cron.onboarding_profile_overdue.scan'
+    | 'cron.weekly_report_overdue.scan'
     | 'cron.verification_scan.scan'
     // S10 — three wired prod crons that were emitting a heartbeat but were NOT
     // monitored here, so a silent failure of any of them never surfaced red.
@@ -133,6 +134,15 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.onboarding_profile_overdue.scan',
     label: 'Onboarding profile overdue nudge',
     periodMs: DAY, // crontab: daily 11:20 UTC (13:20 Paris)
+  },
+  {
+    // J8 — weekly report overdue safety-net (digest permanence). Daily
+    // detection-only cron that nudges the admin when the last completed week's
+    // member reports are missing past the grace window. Monitored here so a
+    // broken nudge cron surfaces red instead of silently failing.
+    action: 'cron.weekly_report_overdue.scan',
+    label: 'Weekly report overdue nudge',
+    periodMs: DAY, // crontab: daily 11:40 UTC (13:40 Paris)
   },
   {
     // S3 §33.5 — daily verification scan (reconcile + rituals + constancy +

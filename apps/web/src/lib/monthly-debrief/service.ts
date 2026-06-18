@@ -11,9 +11,11 @@ import type { SerializedMonthlyDebrief } from './types';
  * Carbon of `training-debrief/service.ts` reads, minus the mutations: a
  * monthly debrief is an **AI synthesis written by the batch pipeline**
  * (J-M2 `persistGeneratedReports`), never by the member — there is no
- * member `submit`/upsert here. This layer only serializes persisted rows
- * for the member page (`/debrief-mensuel`) and Eliott's read-only admin
- * panel (`/admin/members/[id]?tab=monthly-debrief`, SPEC §25.4/§25.6).
+ * member `submit`/upsert here. This layer serializes persisted rows for the
+ * member page (`/debrief-mensuel`) and Eliott's read-only admin panel
+ * (`/admin/members/[id]?tab=monthly-debrief`, SPEC §25.4/§25.6). The lone
+ * write is `markMonthlyDebriefSeen` (S6 audit) — a first-view acknowledgement
+ * stamp, NOT content authoring (mirror of the calendar disclosure stamp).
  *
  * User-scoped strict — every function takes a `userId`/`memberId` and never
  * crosses members (defence-in-depth on top of the page's `auth()` /
@@ -52,6 +54,7 @@ export function toSerializedMonthlyDebrief(row: {
   sentToMemberAt: Date | null;
   sentToMemberEmail: string | null;
   pushEnqueuedAt: Date | null;
+  seenAt: Date | null;
 }): SerializedMonthlyDebrief {
   // `risks`/`recommendations`/`patterns` are persisted ONLY through
   // `monthlyDebriefOutputSchema.strict()` (J-M2 batch persist double-net), so
@@ -90,6 +93,7 @@ export function toSerializedMonthlyDebrief(row: {
     sentToMemberAt: row.sentToMemberAt ? row.sentToMemberAt.toISOString() : null,
     sentToMemberEmail: row.sentToMemberEmail,
     pushEnqueuedAt: row.pushEnqueuedAt ? row.pushEnqueuedAt.toISOString() : null,
+    seenAt: row.seenAt ? row.seenAt.toISOString() : null,
   };
 }
 
@@ -149,4 +153,46 @@ export async function listMonthlyDebriefsForMember(
     take: Math.max(1, Math.min(limit, 24)),
   });
   return rows.map(toSerializedMonthlyDebrief);
+}
+
+/**
+ * The member's most recent debrief that they have NOT yet opened (`seenAt`
+ * null), or `null` if none. Powers the calm dashboard nudge
+ * (`MonthlyDebriefWidget`) — the widget surfaces only the freshest unread
+ * synthesis and goes quiet once read (anti-Black-Hat §25.2, no nagging).
+ * User-scoped; newest unread first.
+ */
+export async function getLatestUnreadMonthlyDebrief(
+  userId: string,
+): Promise<SerializedMonthlyDebrief | null> {
+  const row = await db.monthlyDebrief.findFirst({
+    where: { userId, seenAt: null },
+    orderBy: { monthStart: 'desc' },
+  });
+  return row ? toSerializedMonthlyDebrief(row) : null;
+}
+
+// =============================================================================
+// Seen stamp (member view) — the ONLY member-triggered write in this file.
+// Mirrors the calendar `markAdaptiveCalendarDisclosureShown` stamp: a member
+// reading their debrief on `/debrief-mensuel` records the first-view instant.
+// This is a view acknowledgement, NOT content authoring (the AI synthesis
+// itself is still write-once by the batch). It carries no P&L → no §21.5 leak.
+// =============================================================================
+
+/**
+ * Stamp `seenAt = now()` the FIRST time the member opens a given debrief.
+ * Idempotent + user-scoped via `updateMany({ id, userId, seenAt: null })` —
+ * a re-view never overwrites the original timestamp, and a foreign `id` matches
+ * zero rows (no cross-member write, no enumeration oracle). Returns whether a
+ * row was freshly stamped (`true` only on the first view). Best-effort: callers
+ * wrap it so a transient DB hiccup never 500s the member's debrief page.
+ */
+export async function markMonthlyDebriefSeen(userId: string, id: string): Promise<boolean> {
+  if (id.length === 0 || id.length > 64) return false;
+  const res = await db.monthlyDebrief.updateMany({
+    where: { id, userId, seenAt: null },
+    data: { seenAt: new Date() },
+  });
+  return res.count > 0;
 }

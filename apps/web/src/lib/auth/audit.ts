@@ -352,6 +352,10 @@ export type AuditAction =
   // of the §26 calendar / §25 monthly nets). Heartbeat on EVERY run; counts +
   // oldestCompletedAt + emailOutcome only, PII-free.
   | 'cron.onboarding_profile_overdue.scan'
+  // J8 — weekly report overdue safety-net (digest permanence, 4th twin of the
+  // §26 calendar / §25 monthly / S2 onboarding nets). Heartbeat on EVERY run;
+  // counts + weekStart + emailOutcome only, PII-free.
+  | 'cron.weekly_report_overdue.scan'
   // S3 — Vérification & Honnêteté radicale (SPEC §33). Member-facing surface:
   // broker accounts + MT5 proof uploads + member reasons on discrepancies.
   // PII-FREE metadata invariant: rows carry opaque ids + enum-ish fields only

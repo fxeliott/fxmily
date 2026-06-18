@@ -13,6 +13,7 @@ import { MonthlyDebriefOverdueAlertEmail } from '@/lib/email/templates/monthly-d
 import { NotificationFallbackEmail } from '@/lib/email/templates/notification-fallback';
 import { OnboardingProfileOverdueAlertEmail } from '@/lib/email/templates/onboarding-profile-overdue-alert';
 import { WeeklyDigestEmail } from '@/lib/email/templates/weekly-digest';
+import { WeeklyReportOverdueAlertEmail } from '@/lib/email/templates/weekly-report-overdue-alert';
 import { formatMonthLabelFr } from '@/lib/monthly-debrief/format';
 import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 import type { NotificationTypeSlug } from '@/lib/schemas/push-subscription';
@@ -701,6 +702,61 @@ export async function sendMonthlyDebriefOverdueAlertEmail({
       ``,
       `Rappel automatique — envoyé uniquement quand des débriefs sont en attente passé le délai`,
       `de courtoisie. Aucun débrief n'est généré sur un serveur (le batch reste manuel, par`,
+      `sécurité du compte).`,
+    ].join('\n'),
+  });
+}
+
+// ----- J8 — weekly report overdue ADMIN nudge (digest permanence) -----------
+
+export interface SendWeeklyReportOverdueAlertParams {
+  /** Admin recipient (resolved by the caller from `WEEKLY_REPORT_RECIPIENT`). */
+  to: string;
+  /** Active members with no weekly report for the completed week. */
+  overdueCount: number;
+  /** Active members expected a report for the week (joined ≤ week end). */
+  expectedCount: number;
+  /** Human FR week range, e.g. "8 juin → 14 juin". */
+  weekRange: string;
+}
+
+/**
+ * Notify the ADMIN that the weekly digest is missing for the last completed week
+ * (J8 permanence safety-net, 4th twin of the calendar/monthly/onboarding
+ * nudges). ONLY the operator gets this — no member PII, counts only.
+ * Best-effort: the caller (`lib/weekly-report/overdue.ts`) degrades to a Sentry
+ * warning + audit if delivery throws.
+ */
+export async function sendWeeklyReportOverdueAlertEmail({
+  to,
+  overdueCount,
+  expectedCount,
+  weekRange,
+}: SendWeeklyReportOverdueAlertParams): Promise<{ id: string | null; delivered: boolean }> {
+  const adminUrl = buildAdminDashboardUrl();
+  const plural = overdueCount > 1;
+  const subject = `${overdueCount} rapport${plural ? 's' : ''} hebdo en attente · Semaine du ${weekRange}`;
+
+  return sendEmail({
+    to,
+    subject,
+    react: WeeklyReportOverdueAlertEmail({ overdueCount, expectedCount, weekRange, adminUrl }),
+    text: [
+      `Fxmily — rappel de permanence (rapport hebdomadaire).`,
+      ``,
+      `La semaine du ${weekRange} est terminée, mais ${overdueCount} membre${plural ? 's' : ''} actif${plural ? 's' : ''}`,
+      `${expectedCount > overdueCount ? `(sur ${expectedCount}) ` : ''}${plural ? "n'ont" : "n'a"} pas encore leur rapport hebdomadaire.`,
+      `Le digest n'a pas été généré pour cette semaine.`,
+      ``,
+      `À faire — depuis ton PC :`,
+      `  1. Lance le batch ops/scripts/weekly-batch-local.sh.`,
+      `  2. Claude Opus 4.8 rédige les rapports en local ($0), persistés après les garde-fous §2.`,
+      `  3. Le digest admin est prêt dès la fin du batch.`,
+      ``,
+      `Ouvre l'admin : ${adminUrl}`,
+      ``,
+      `Rappel automatique — envoyé uniquement quand des rapports hebdo sont en attente passé le délai`,
+      `de courtoisie. Aucun rapport n'est généré sur un serveur (le batch reste manuel, par`,
       `sécurité du compte).`,
     ].join('\n'),
   });

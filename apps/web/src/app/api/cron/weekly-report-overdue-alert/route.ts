@@ -1,0 +1,90 @@
+import { NextResponse, type NextRequest } from 'next/server';
+
+import { constantTimeEqual } from '@/lib/auth/constant-time';
+import { env } from '@/lib/env';
+import { flushSentry, reportError } from '@/lib/observability';
+import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
+import { runWeeklyReportOverdueAlert } from '@/lib/weekly-report/overdue';
+
+/**
+ * Cron endpoint — J8 weekly report overdue ADMIN nudge (permanence safety-net).
+ *
+ * Read-only safety-net for the manual weekly digest batch. The batch is
+ * triggered by hand (`ops/scripts/weekly-batch-local.sh`, ban-risk human-in-
+ * the-loop §5.4) ; this cron makes that design RELIABLE by nudging the admin
+ * when the last completed week's reports are missing past the grace window — so
+ * the weekly digest never silently goes ungenerated (SPEC §7.10). It never
+ * drives Claude : it only counts rows and emails the operator. See
+ * {@link runWeeklyReportOverdueAlert}.
+ *
+ * Wiring expected in production : Hetzner crontab daily 11:40 UTC (13:40 Paris) →
+ *   curl -fsS -X POST -H "X-Cron-Secret: $CRON_SECRET" \
+ *        https://app.fxmilyapp.com/api/cron/weekly-report-overdue-alert
+ *
+ * Auth/rate-limit/dev-window : carbon-copy of `monthly-debrief-overdue-alert`.
+ *   - SHA-256 + `timingSafeEqual` (CWE-208 length-leak defense)
+ *   - Token bucket (5 burst, 1/min, LRU 1024) BEFORE secret check
+ *   - 503 if `CRON_SECRET` missing, 401 on bad secret, 405 on GET, 429 on rate
+ */
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  if (!env.CRON_SECRET) {
+    return NextResponse.json(
+      { error: 'cron_disabled', detail: 'CRON_SECRET not configured.' },
+      { status: 503 },
+    );
+  }
+
+  const id = callerIdTrusted(req);
+  const decision = cronLimiter.consume(id);
+  if (!decision.allowed) {
+    return NextResponse.json(
+      { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil(decision.retryAfterMs / 1000)) },
+      },
+    );
+  }
+
+  const provided = req.headers.get('x-cron-secret');
+  if (!provided || !constantTimeEqual(provided, env.CRON_SECRET)) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  // ?at=ISO dev override (double-gated against accidental prod activation,
+  // strict T-required to avoid ambiguous date-only inputs). Mirror purge-deleted.
+  const isProdRuntime = env.NODE_ENV === 'production' || env.AUTH_URL.startsWith('https://');
+  const url = new URL(req.url);
+  const atParam = url.searchParams.get('at');
+  let now: Date | undefined;
+  if (!isProdRuntime && atParam && /[Tt ]/.test(atParam)) {
+    const parsed = new Date(atParam);
+    if (!Number.isNaN(parsed.getTime())) now = parsed;
+  }
+
+  try {
+    const result = await runWeeklyReportOverdueAlert(now ? { now } : {});
+    return NextResponse.json({
+      ok: true,
+      weekStart: result.weekStart,
+      overdueCount: result.overdueCount,
+      expectedCount: result.expectedCount,
+      withinGrace: result.withinGrace,
+      emailOutcome: result.emailOutcome,
+    });
+  } catch (err) {
+    reportError('cron.weekly-report-overdue-alert', err, {
+      route: '/api/cron/weekly-report-overdue-alert',
+    });
+    await flushSentry();
+    return NextResponse.json({ ok: false, error: 'scan_failed' }, { status: 500 });
+  }
+}
+
+export function GET(): NextResponse {
+  return NextResponse.json({ error: 'method_not_allowed' }, { status: 405 });
+}

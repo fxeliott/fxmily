@@ -32,6 +32,12 @@ vi.mock('@/lib/onboarding-interview/service', () => ({
       this.name = 'OnboardingInstrumentMismatchError';
     }
   },
+  OnboardingInterviewCompletedError: class OnboardingInterviewCompletedError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'OnboardingInterviewCompletedError';
+    }
+  },
 }));
 vi.mock('@/lib/safety/crisis-detection', () => ({ detectCrisis: detectCrisisMock }));
 vi.mock('@/lib/ai/injection-detector', () => ({ detectInjection: detectInjectionMock }));
@@ -44,8 +50,9 @@ vi.mock('next/navigation', () => ({ redirect: redirectMock }));
 
 const { startInterviewAction, appendAnswerAction, finalizeInterviewAction } =
   await import('./actions');
-// Same (mocked) class the SUT checks against via `instanceof`.
-const { OnboardingInstrumentMismatchError } = await import('@/lib/onboarding-interview/service');
+// Same (mocked) classes the SUT checks against via `instanceof`.
+const { OnboardingInstrumentMismatchError, OnboardingInterviewCompletedError } =
+  await import('@/lib/onboarding-interview/service');
 
 afterEach(() => {
   authMock.mockReset();
@@ -456,6 +463,39 @@ describe('appendAnswerAction — service failure', () => {
       'onboarding.interview.append',
       'instrument_mismatch_rejected',
       expect.objectContaining({ questionIndex: 40 }),
+    );
+    expect(reportErrorMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('maps OnboardingInterviewCompletedError to invalid_input (answerText) + reportWarning (not reportError)', async () => {
+    authMock.mockResolvedValueOnce(ACTIVE_SESSION);
+    appendAnswerMock.mockRejectedValueOnce(
+      new OnboardingInterviewCompletedError(
+        'Cet entretien est déjà finalisé : les réponses ne sont plus modifiables.',
+      ),
+    );
+
+    const fd = makeFormData({
+      instrumentVersion: 'v1',
+      questionIndex: '0',
+      questionKey: 'parcours_origin',
+      answerText: SAFE_ANSWER_TEXT,
+    });
+
+    const result = await appendAnswerAction(null, fd);
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'invalid_input',
+      fieldErrors: {
+        answerText: 'Cet entretien est déjà finalisé : les réponses ne sont plus modifiables.',
+      },
+    });
+    expect(reportWarningMock).toHaveBeenCalledWith(
+      'onboarding.interview.append',
+      'interview_already_completed_rejected',
+      expect.objectContaining({ questionIndex: 0 }),
     );
     expect(reportErrorMock).not.toHaveBeenCalled();
     expect(logAuditMock).not.toHaveBeenCalled();

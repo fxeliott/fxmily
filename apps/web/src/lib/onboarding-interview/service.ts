@@ -68,6 +68,29 @@ export class OnboardingInstrumentMismatchError extends Error {
   }
 }
 
+/**
+ * Thrown by `appendAnswer` when the interview is already `completed`. NARROWS
+ * (does not eliminate) a micro-TOCTOU : `finalizeInterview` flips status
+ * started/in_progress → completed, but the answer upsert never gated on status,
+ * so a crafted POST could edit an answer AFTER finalize. Because the batch
+ * re-derives the evidence corpus from the DB at persist-time (deliberate
+ * laptop-untrusted SECURITY choice), a post-finalize answer edit could shift
+ * which member text a Claude `evidence[]` substring validates against between
+ * the snapshot pull and the persist re-derive. This guard rejects the
+ * ALREADY-completed-at-read case at write-time; it does NOT close the window
+ * fully — the read (`startInterview` findUnique) and the upsert are NOT atomic
+ * (no transaction / row-lock), so a finalize landing BETWEEN this read and the
+ * upsert still races on a stale status. The residual window is sub-ms and
+ * requires a concurrent crafted POST; the legitimate wizard never POSTs
+ * concurrently, so the guard is a worthwhile narrowing in practice.
+ * The Server Action maps this to an `invalid_input` field error (never a 500). */
+export class OnboardingInterviewCompletedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OnboardingInterviewCompletedError';
+  }
+}
+
 // =============================================================================
 // Serialization types
 // =============================================================================
@@ -248,6 +271,22 @@ export async function appendAnswer(
   const interview = await startInterview(userId, {
     instrumentVersion: input.instrumentVersion,
   });
+
+  // Status guard (micro-TOCTOU NARROW, not a full close). `finalizeInterview`
+  // is directly POST-invocable, so an answer edit can race a finalize : without
+  // this gate a crafted request could upsert an answer AFTER the interview is
+  // completed, shifting the DB corpus that the batch re-derives at persist-time
+  // for evidence-substring validation. This rejects edits that are
+  // ALREADY-completed at read; it does NOT eliminate the race — `startInterview`
+  // read above and this upsert are NOT atomic (no transaction / row-lock), so a
+  // finalize landing in the sub-ms gap between them still passes on a stale
+  // status. Residual exposure requires a concurrent crafted POST; the legitimate
+  // wizard never POSTs concurrently. Happy-path (started/in_progress) is untouched.
+  if (interview.status === 'completed') {
+    throw new OnboardingInterviewCompletedError(
+      'Cet entretien est déjà finalisé : les réponses ne sont plus modifiables.',
+    );
+  }
 
   // Upsert answer on the unique (interviewId, questionIndex) constraint. Both
   // questionKey and questionText come from the catalog item (server authority)

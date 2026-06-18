@@ -67,10 +67,15 @@ vi.mock('@/lib/weekly-report/builder', () => ({
   pseudonymizeMember: (userId: string) => `member-${userId.slice(0, 8)}`,
 }));
 
-const { persistGeneratedProfiles, canonicalizeBatchErrorCategory } = await import('./batch');
+const {
+  persistGeneratedProfiles,
+  canonicalizeBatchErrorCategory,
+  loadAllSnapshotsForCompletedInterviews,
+} = await import('./batch');
 
 import type { BatchPersistRequest, BatchResultEntry } from './batch';
 import type { MemberProfileOutput } from '@/lib/schemas/onboarding-interview';
+import { CURRENT_ONBOARDING_INSTRUMENT } from './instrument-v1';
 
 // =============================================================================
 // Test fixtures
@@ -484,6 +489,81 @@ describe('persistGeneratedProfiles — summary audit', () => {
     );
     expect(persistedSummary).toBeDefined();
     expect(persistedSummary?.[0].metadata.total).toBe(2);
+  });
+});
+
+describe('loadAllSnapshotsForCompletedInterviews — TASK G rejected-promise observability', () => {
+  it('audits + Sentry-warns a rejected snapshot build instead of dropping it silently', async () => {
+    const version = CURRENT_ONBOARDING_INSTRUMENT.version;
+    // Step 1 — one completed interview, on the CURRENT instrument version (so
+    // buildSnapshotForInterview proceeds past the version-skip early return).
+    interviewFindManyMock.mockResolvedValueOnce([
+      {
+        id: 'iv_reject',
+        userId: 'user_reject',
+        instrumentVersion: version,
+        startedAt: new Date('2026-05-28T10:00:00Z'),
+        completedAt: new Date('2026-05-28T10:30:00Z'),
+      },
+    ]);
+    // Step 2 — not yet analyzed.
+    profileFindManyMock.mockResolvedValueOnce([]);
+    // Step 3 — force buildSnapshotForInterview to REJECT (answers fetch throws).
+    answerFindManyMock.mockRejectedValueOnce(new Error('DB connection lost mid-snapshot'));
+
+    const envelope = await loadAllSnapshotsForCompletedInterviews();
+
+    // The rejected entry is excluded from the wire envelope (still no crash).
+    expect(envelope.entries).toHaveLength(0);
+
+    // It is NO LONGER silently dropped : a PII-free audit row surfaces it.
+    const skippedCall = logAuditMock.mock.calls.find(
+      (c) =>
+        c[0].action === 'onboarding.batch.skipped' &&
+        c[0].metadata.reason === 'snapshot_build_rejected',
+    );
+    expect(skippedCall).toBeDefined();
+    expect(skippedCall?.[0].userId).toBe('user_reject');
+    expect(skippedCall?.[0].metadata.interviewId).toBe('iv_reject');
+    expect(skippedCall?.[0].metadata.error).toContain('DB connection lost');
+
+    // Sentry warning carries NO reason-derived free-text (only the interviewId).
+    const warnCall = reportWarningMock.mock.calls.find(
+      (c) => c[1] === 'snapshot_build_rejected_review_needed',
+    );
+    expect(warnCall).toBeDefined();
+    expect(warnCall?.[2]).toEqual({ interviewId: 'iv_reject' });
+    expect(warnCall?.[2]).not.toHaveProperty('error');
+  });
+
+  it('does not warn when all snapshot builds succeed (no false positives)', async () => {
+    const version = CURRENT_ONBOARDING_INSTRUMENT.version;
+    interviewFindManyMock.mockResolvedValueOnce([
+      {
+        id: 'iv_ok',
+        userId: 'user_ok',
+        instrumentVersion: version,
+        startedAt: new Date('2026-05-28T10:00:00Z'),
+        completedAt: new Date('2026-05-28T10:30:00Z'),
+      },
+    ]);
+    profileFindManyMock.mockResolvedValueOnce([]);
+    answerFindManyMock.mockResolvedValueOnce([
+      {
+        questionIndex: 0,
+        questionKey: 'parcours_origin',
+        questionText: 'Question',
+        answerText: "J'ai démarré le trading en 2022 avec un compte démo.",
+      },
+    ]);
+
+    const envelope = await loadAllSnapshotsForCompletedInterviews();
+
+    expect(envelope.entries).toHaveLength(1);
+    const warnCall = reportWarningMock.mock.calls.find(
+      (c) => c[1] === 'snapshot_build_rejected_review_needed',
+    );
+    expect(warnCall).toBeUndefined();
   });
 });
 

@@ -65,6 +65,7 @@ const {
   getProfileForUser,
   DEFAULT_INSTRUMENT_VERSION,
   OnboardingInstrumentMismatchError,
+  OnboardingInterviewCompletedError,
 } = await import('./service');
 
 afterEach(() => {
@@ -259,6 +260,54 @@ describe('appendAnswer', () => {
       }),
     ).rejects.toBeInstanceOf(OnboardingInstrumentMismatchError);
     expect(answerUpsertMock).not.toHaveBeenCalled();
+  });
+
+  // --- Status guard (TASK H — micro-TOCTOU close) ---------------------------
+
+  it('rejects an append on an already-completed interview (no upsert, no status flip)', async () => {
+    const i0 = itemAt(0);
+    // `startInterview` (called internally) findUnique → returns the completed row.
+    interviewFindUniqueMock.mockResolvedValueOnce(
+      makeInterviewRow({ status: 'completed', completedAt: NOW }),
+    );
+
+    await expect(
+      appendAnswer('user_1', {
+        instrumentVersion: 'v1',
+        questionIndex: 0,
+        questionKey: i0.id,
+        answerText: 'A post-finalize edit attempt that must be rejected',
+      }),
+    ).rejects.toBeInstanceOf(OnboardingInterviewCompletedError);
+
+    // Catalog validation passed (valid index/key), the gate is the STATUS check.
+    expect(answerUpsertMock).not.toHaveBeenCalled();
+    expect(interviewUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('still appends normally when the interview is in_progress (happy path untouched)', async () => {
+    const i0 = itemAt(0);
+    interviewFindUniqueMock.mockResolvedValueOnce(makeInterviewRow({ status: 'in_progress' }));
+    answerUpsertMock.mockResolvedValueOnce({
+      id: 'oia_ok',
+      interviewId: 'oi_1',
+      userId: 'user_1',
+      questionIndex: 0,
+      questionKey: i0.id,
+      questionText: i0.text,
+      answerText: 'A valid in-progress answer that must persist',
+      createdAt: NOW,
+    });
+
+    const result = await appendAnswer('user_1', {
+      instrumentVersion: 'v1',
+      questionIndex: 0,
+      questionKey: i0.id,
+      answerText: 'A valid in-progress answer that must persist',
+    });
+
+    expect(answerUpsertMock).toHaveBeenCalledTimes(1);
+    expect(result.answer.answerText).toBe('A valid in-progress answer that must persist');
   });
 });
 

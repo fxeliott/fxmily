@@ -11,6 +11,7 @@ import {
   finalizeInterview,
   getInterviewCompleteness,
   OnboardingInstrumentMismatchError,
+  OnboardingInterviewCompletedError,
   startInterview,
 } from '@/lib/onboarding-interview/service';
 import { reportError, reportWarning } from '@/lib/observability';
@@ -258,6 +259,20 @@ export async function appendAnswerAction(
         ok: false,
         error: 'invalid_input',
         fieldErrors: { questionIndex: err.message },
+      };
+    }
+    if (err instanceof OnboardingInterviewCompletedError) {
+      // Post-finalize answer edit = wizard race or a crafted POST. The legit
+      // wizard never appends after finalize, so this never fires on the happy
+      // path. Surface as a field error (not a 500) + reportWarning for forensics
+      // — NOT reportError (it is not a server fault).
+      reportWarning('onboarding.interview.append', 'interview_already_completed_rejected', {
+        questionIndex: parsed.data.questionIndex,
+      });
+      return {
+        ok: false,
+        error: 'invalid_input',
+        fieldErrors: { answerText: err.message },
       };
     }
     reportError('onboarding.interview.append', err);

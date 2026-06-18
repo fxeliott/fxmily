@@ -1,12 +1,32 @@
 import { describe, expect, it } from 'vitest';
 
-import { isOnCooldown, pickBestMatch, type DeliveryHistoryEntry } from './cooldown';
+import {
+  isOnCooldown,
+  isRoutineSaturated,
+  pickBestMatch,
+  ROUTINE_SATURATION_K,
+  type DeliveryHistoryEntry,
+  type RoutineEngagementEntry,
+} from './cooldown';
 
 const NOW = new Date('2026-05-07T12:00:00Z');
 const ONE_DAY_MS = 24 * 3600 * 1000;
 
 function entry(cardId: string, daysAgo: number): DeliveryHistoryEntry {
   return { cardId, createdAtMs: NOW.getTime() - daysAgo * ONE_DAY_MS };
+}
+
+/** Routine-engagement builder: a delivery N days ago, optionally seen + alert. */
+function rEntry(
+  daysAgo: number,
+  opts: { seen?: boolean; alert?: boolean } = {},
+): RoutineEngagementEntry {
+  const createdAtMs = NOW.getTime() - daysAgo * ONE_DAY_MS;
+  return {
+    createdAtMs,
+    seenAtMs: opts.seen ? createdAtMs + 3600 * 1000 : null,
+    isRoutine: !opts.alert,
+  };
 }
 
 describe('isOnCooldown', () => {
@@ -92,5 +112,67 @@ describe('pickBestMatch', () => {
       now: NOW,
     });
     expect(r?.cardId).toBe('alpha');
+  });
+});
+
+describe('isRoutineSaturated (TASK C — adaptive routine cadence)', () => {
+  it('default K is the conservative 3', () => {
+    expect(ROUTINE_SATURATION_K).toBe(3);
+  });
+
+  // (c) NEW MEMBER / insufficient history → OFF-equivalent (current behaviour).
+  it('empty history → not saturated (OFF-equivalent)', () => {
+    expect(isRoutineSaturated([])).toBe(false);
+  });
+
+  it('fewer than K routine deliveries (even all unseen) → not saturated', () => {
+    expect(isRoutineSaturated([rEntry(1), rEntry(2)])).toBe(false);
+  });
+
+  // (b) SATURATED MEMBER → spacing engages.
+  it('K most-recent routine deliveries all unseen → saturated', () => {
+    expect(isRoutineSaturated([rEntry(1), rEntry(2), rEntry(3)])).toBe(true);
+  });
+
+  it('more than K, the K most-recent all unseen → saturated', () => {
+    // 4 routine deliveries, the 3 newest unseen (oldest seen, irrelevant).
+    expect(isRoutineSaturated([rEntry(1), rEntry(2), rEntry(3), rEntry(10, { seen: true })])).toBe(
+      true,
+    );
+  });
+
+  // (a) ENGAGED MEMBER → cadence unchanged.
+  it('one of the K most-recent routine deliveries was seen → not saturated', () => {
+    expect(isRoutineSaturated([rEntry(1, { seen: true }), rEntry(2), rEntry(3)])).toBe(false);
+  });
+
+  it('most-recent ordering is by createdAt, not array order', () => {
+    // Newest (1d) seen but passed last in the array → still must count as recent.
+    expect(isRoutineSaturated([rEntry(3), rEntry(2), rEntry(1, { seen: true })])).toBe(false);
+  });
+
+  it('ALERTE deliveries (sourceAlertId !== null) never count toward saturation', () => {
+    // 3 unseen ALERTE + only 2 unseen ROUTINE → < K routine → not saturated.
+    expect(
+      isRoutineSaturated([
+        rEntry(1, { alert: true }),
+        rEntry(2, { alert: true }),
+        rEntry(3, { alert: true }),
+        rEntry(4),
+        rEntry(5),
+      ]),
+    ).toBe(false);
+  });
+
+  it('unseen ALERTE between routine ones is skipped, not counted as a recent slot', () => {
+    // 3 unseen routine exist but a newer unseen alert sits "in front" — the
+    // alert is filtered out, so the 3 routine are still the K most-recent.
+    expect(isRoutineSaturated([rEntry(1, { alert: true }), rEntry(2), rEntry(3), rEntry(4)])).toBe(
+      true,
+    );
+  });
+
+  it('k <= 0 → never saturated (guard)', () => {
+    expect(isRoutineSaturated([rEntry(1), rEntry(2), rEntry(3)], 0)).toBe(false);
   });
 });

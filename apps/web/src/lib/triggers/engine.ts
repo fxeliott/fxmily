@@ -10,7 +10,13 @@ import { enqueueDouglasDeliveryNotification } from '@/lib/notifications/enqueue'
 // `db.trainingTrade`, a P&L field) is a statistical-isolation breach.
 import { countRecentTrainingActivity } from '@/lib/training/training-trade-service';
 
-import { isOnCooldown, pickBestMatch, type DeliveryHistoryEntry } from './cooldown';
+import {
+  isOnCooldown,
+  isRoutineSaturated,
+  pickBestMatch,
+  type DeliveryHistoryEntry,
+  type RoutineEngagementEntry,
+} from './cooldown';
 import { evaluateTrigger } from './evaluators';
 import { parseTriggerRule } from './schema';
 import {
@@ -210,7 +216,12 @@ export async function evaluateAndDispatchForUser(
     cardsPromise,
     db.markDouglasDelivery.findMany({
       where: { userId, createdAt: { gte: historyCutoff } },
-      select: { cardId: true, createdAt: true },
+      // TASK C (§26) — `seenAt` + `sourceAlertId` added (additive) so the
+      // routine-saturation check can read engagement. `sourceAlertId` separates
+      // ROUTINE deliveries (null = classic evaluators) from ALERTE ones (S3
+      // constancy engine) — the latter are NEVER spaced. `cardId` + `createdAt`
+      // remain for the unchanged hatClass-cooldown path.
+      select: { cardId: true, createdAt: true, seenAt: true, sourceAlertId: true },
     }),
     // 🚨 §21.5 — sanctioned training→real-edge touchpoint #2 (trigger
     // engine). Count-only primitive; the inactivity trigger is recency-only
@@ -294,6 +305,25 @@ export async function evaluateAndDispatchForUser(
 
   if (matches.length === 0) {
     return { delivered: null, matched: 0, evaluated, skippedCooldown: 0 };
+  }
+
+  // --- 4.5 Routine-cadence adaptive spacing (TASK C, §26) -------------------
+  // CONSERVATIVE engagement gate. Every card this engine dispatches is a
+  // ROUTINE fiche (`sourceAlertId === null`); ALERTE fiches come from the S3
+  // constancy engine (`lib/verification/alerts.ts`) and are never routed here,
+  // so they are never spaced. If the K most-recent ROUTINE deliveries were ALL
+  // left unseen, the member is saturated → skip today's routine fiche (one
+  // less nudge, never one more). OFF-equivalent when routine history < K, so
+  // new + lightly-served members keep the exact pre-TASK-C behaviour. Reversible:
+  // delete this block to restore byte-identical old cadence. NEVER touches the
+  // ≤1-fiche/day cap, the hatClass cooldown, or any ALERTE delivery.
+  const routineEngagement: RoutineEngagementEntry[] = deliveries.map((d) => ({
+    createdAtMs: d.createdAt.getTime(),
+    seenAtMs: d.seenAt ? d.seenAt.getTime() : null,
+    isRoutine: d.sourceAlertId === null,
+  }));
+  if (isRoutineSaturated(routineEngagement)) {
+    return { delivered: null, matched: matches.length, evaluated, skippedCooldown: 0 };
   }
 
   // --- 5. Cooldown filter + pick best ---------------------------------------

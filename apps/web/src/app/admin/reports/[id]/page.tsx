@@ -11,7 +11,7 @@ import { logAudit } from '@/lib/auth/audit';
 import { getReportByIdForAdmin } from '@/lib/weekly-report/service';
 
 export const metadata = {
-  title: 'Rapport hebdo · Fxmily Admin',
+  title: 'Rapport hebdo · Admin',
 };
 
 export const dynamic = 'force-dynamic';

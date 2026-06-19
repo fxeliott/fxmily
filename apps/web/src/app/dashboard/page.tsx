@@ -29,7 +29,7 @@ import { countOpenDiscrepancies } from '@/lib/verification/service';
 import { MarkDouglasCard } from './mark-douglas-card';
 
 export const metadata = {
-  title: 'Tableau de bord · Fxmily',
+  title: 'Tableau de bord',
 };
 export const dynamic = 'force-dynamic';
 

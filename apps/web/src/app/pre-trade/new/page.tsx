@@ -6,7 +6,7 @@ import { auth } from '@/auth';
 import { PreTradeCheckWizard } from '@/components/pre-trade/pre-trade-wizard';
 
 export const metadata = {
-  title: 'Pause pré-trade · Fxmily',
+  title: 'Pause pré-trade',
 };
 
 export const dynamic = 'force-dynamic';

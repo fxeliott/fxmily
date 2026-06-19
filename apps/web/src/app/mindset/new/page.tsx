@@ -10,7 +10,7 @@ import { getMindsetCheck } from '@/lib/mindset/service';
 import { currentParisWeekStart, formatWeekRangeFr } from '@/lib/mindset/week';
 
 export const metadata = {
-  title: 'Auto-évaluation mindset · Fxmily',
+  title: 'Auto-évaluation mindset',
 };
 
 export const dynamic = 'force-dynamic';

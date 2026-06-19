@@ -11,7 +11,7 @@ import { getMemberDetail, MemberNotFoundError } from '@/lib/admin/members-servic
 import { getTrainingSessionWithTradesAsAdmin } from '@/lib/training/training-session-admin-service';
 
 export const metadata = {
-  title: 'Session de backtest · Fxmily Admin',
+  title: 'Session de backtest · Admin',
 };
 
 export const dynamic = 'force-dynamic';

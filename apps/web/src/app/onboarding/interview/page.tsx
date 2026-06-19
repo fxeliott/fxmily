@@ -9,7 +9,7 @@ import { getInterviewForUser } from '@/lib/onboarding-interview/service';
 import { cn } from '@/lib/utils';
 
 export const metadata = {
-  title: 'Entretien onboarding · Fxmily',
+  title: 'Entretien onboarding',
 };
 
 export const dynamic = 'force-dynamic';

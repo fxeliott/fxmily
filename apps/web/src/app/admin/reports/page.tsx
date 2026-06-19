@@ -16,7 +16,7 @@ import {
 } from '@/lib/weekly-report/service';
 
 export const metadata = {
-  title: 'Rapports IA · Fxmily Admin',
+  title: 'Rapports IA · Admin',
 };
 
 export const dynamic = 'force-dynamic';

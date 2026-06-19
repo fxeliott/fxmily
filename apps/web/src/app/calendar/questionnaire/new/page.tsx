@@ -13,7 +13,7 @@ import { getQuestionnaireForUser } from '@/lib/calendar/service';
 import { currentParisWeekStart, formatWeekRangeFr } from '@/lib/calendar/week';
 
 export const metadata = {
-  title: 'Organise ta semaine · Fxmily',
+  title: 'Organise ta semaine',
 };
 
 export const dynamic = 'force-dynamic';

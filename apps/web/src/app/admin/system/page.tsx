@@ -28,7 +28,7 @@ import {
  */
 
 export const metadata: Metadata = {
-  title: 'État système · Fxmily Admin',
+  title: 'État système · Admin',
   description: 'Dashboard observability prod — cron heartbeats + cohort snapshot + audit volume.',
 };
 export const dynamic = 'force-dynamic';

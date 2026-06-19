@@ -13,7 +13,7 @@ import type { TradeStatusFilter } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
 
 export const metadata = {
-  title: 'Journal de trading · Fxmily',
+  title: 'Journal de trading',
 };
 
 export const dynamic = 'force-dynamic';

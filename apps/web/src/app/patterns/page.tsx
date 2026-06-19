@@ -28,7 +28,7 @@ import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-da
  * coefficient fabriqué).
  */
 export const metadata = {
-  title: 'Patterns · Fxmily',
+  title: 'Patterns',
 };
 export const dynamic = 'force-dynamic';
 

@@ -13,7 +13,7 @@ import { currentParisWeekStart, formatWeekRangeFr } from '@/lib/training-debrief
 import { cn } from '@/lib/utils';
 
 export const metadata = {
-  title: 'Débrief training · Fxmily',
+  title: 'Débrief training',
 };
 
 export const dynamic = 'force-dynamic';

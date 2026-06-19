@@ -15,7 +15,7 @@ import { reportWarning } from '@/lib/observability';
 import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 
 export const metadata = {
-  title: 'Débrief mensuel · Fxmily',
+  title: 'Débrief mensuel',
 };
 
 export const dynamic = 'force-dynamic';

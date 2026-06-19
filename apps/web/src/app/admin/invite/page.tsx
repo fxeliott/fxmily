@@ -9,7 +9,7 @@ import { Pill } from '@/components/ui/pill';
 import { InviteForm } from './invite-form';
 
 export const metadata = {
-  title: 'Inviter un membre · Fxmily Admin',
+  title: 'Inviter un membre · Admin',
 };
 
 export default async function AdminInvitePage() {

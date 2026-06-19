@@ -30,7 +30,7 @@ import { listSafeSubscriptionsForUser } from '@/lib/push/service';
  */
 
 export const metadata = {
-  title: 'Notifications · Fxmily',
+  title: 'Notifications',
 };
 export const dynamic = 'force-dynamic';
 

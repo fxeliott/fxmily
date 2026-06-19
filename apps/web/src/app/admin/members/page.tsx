@@ -13,7 +13,7 @@ import { logAudit } from '@/lib/auth/audit';
 import { cn } from '@/lib/utils';
 
 export const metadata = {
-  title: 'Membres · Fxmily Admin',
+  title: 'Membres · Admin',
 };
 
 export const dynamic = 'force-dynamic';

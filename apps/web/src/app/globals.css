@@ -1353,6 +1353,26 @@
   }
 }
 
+/* S9 verif/optim — desktop sidebar (w-64 fixed left, z-30, opaque) clearance.
+   The cookie banner (fixed, z-40) and legal footer (flow) are mounted OUTSIDE
+   AppShell's `lg:pl-64` content wrapper (layout.tsx: both are <body> siblings
+   of <AppShell>), so on ≥lg app screens they span the FULL viewport and
+   collide with the 16rem sidebar: the centred 672px banner's left edge sits
+   under the sidebar on 1024–1184px and paints OVER it (module-on-module, §243),
+   and the footer's left content is occluded UNDER the opaque sidebar. :has()
+   scopes the offset to pages that actually render the sidebar (public/login
+   pages have none → untouched), exactly like the FAB/nav rules above. ≥1024px
+   only: below lg the sidebar is `display:none` and the mobile clearances apply,
+   so this never shifts the mobile layout. */
+@media (min-width: 1024px) {
+  body:has([data-slot='app-sidebar']) [data-slot='cookie-banner'] {
+    left: calc(16rem + 0.75rem); /* clear the 16rem sidebar, keep the inset-x-3 gutter */
+  }
+  body:has([data-slot='app-sidebar']) [data-slot='legal-footer'] {
+    padding-left: 16rem; /* mirror lg:pl-64 so footer content sits right of the sidebar */
+  }
+}
+
 /* =============================================================
  * S9.1 "WAVE WOW" — premium ADDITIVE craft (login aurora,
  * non-toxic celebrations, first-run reveal).

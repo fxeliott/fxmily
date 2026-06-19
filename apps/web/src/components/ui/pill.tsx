@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 const pillVariants = cva(
-  'inline-flex items-center gap-1 rounded-pill border text-[10px] font-medium uppercase leading-none tracking-[0.10em] tabular-nums px-1.5 py-0.5 h-[18px]',
+  'inline-flex items-center gap-1 rounded-pill border text-[11px] font-medium uppercase leading-none tracking-[0.10em] tabular-nums px-1.5 py-0.5 h-[18px]',
   {
     variants: {
       tone: {

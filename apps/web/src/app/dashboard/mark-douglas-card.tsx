@@ -1,6 +1,7 @@
 'use client';
 
 import { Brain, ChevronRight } from 'lucide-react';
+import { useReducedMotion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 
 import { Card } from '@/components/ui/card';
@@ -19,7 +20,10 @@ import { Pill } from '@/components/ui/pill';
  * "citations + paraphrases" plutôt que "paraphrasé" (qui ambiguïsait le
  * statut sémantique du `short` vs `full`).
  *
- * Rotation client-side toutes les 8s (gated reduced-motion via CSS).
+ * Rotation client-side toutes les 8s, PAUSÉE pour les utilisateurs
+ * reduced-motion (`useReducedMotion` — ils gardent les dots manuels) ; chaque
+ * changement de vérité fait un fondu d'entrée (`.wow-rise`, neutralisé sous
+ * reduced-motion par le filet global).
  */
 
 const TRUTHS = [
@@ -62,13 +66,18 @@ const TRUTHS = [
 
 export function MarkDouglasCard() {
   const [idx, setIdx] = useState(0);
+  const prefersReduced = useReducedMotion();
 
+  // Auto-rotate every 8s, but PAUSE for reduced-motion users — the old JSDoc
+  // claimed a CSS gate that never existed; the interval fired regardless. AT
+  // users keep the manual progress dots below to step through the 5 truths.
   useEffect(() => {
+    if (prefersReduced) return;
     const id = setInterval(() => {
       setIdx((i) => (i + 1) % TRUTHS.length);
     }, 8000);
     return () => clearInterval(id);
-  }, []);
+  }, [prefersReduced]);
 
   const truth = TRUTHS[idx]!;
 
@@ -84,7 +93,7 @@ export function MarkDouglasCard() {
         </Pill>
       </div>
 
-      <blockquote className="flex flex-col gap-2">
+      <blockquote key={idx} className="wow-rise flex flex-col gap-2">
         <p
           className="f-display text-[20px] leading-[1.25] font-semibold tracking-[-0.015em] text-[var(--t-1)]"
           style={{ fontFeatureSettings: '"ss01" 1' }}

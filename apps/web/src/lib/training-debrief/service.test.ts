@@ -17,7 +17,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/db', () => ({
   db: {
     trainingTrade: { findMany: vi.fn() },
-    trainingAnnotation: { count: vi.fn() },
+    trainingAnnotation: { count: vi.fn(), groupBy: vi.fn() },
     trainingDebrief: { findUnique: vi.fn(), upsert: vi.fn() },
   },
 }));
@@ -25,7 +25,11 @@ vi.mock('@/lib/db', () => ({
 import { parseLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 
-import { loadTrainingDebriefStats, submitTrainingDebrief } from './service';
+import {
+  loadTrainingDebriefStats,
+  loadTrainingDebriefStatsForWeeks,
+  submitTrainingDebrief,
+} from './service';
 
 const WEEK_START = '2026-05-04'; // a Monday; loadTrainingDebriefStats doesn't re-validate
 
@@ -99,6 +103,72 @@ describe('loadTrainingDebriefStats (§21.5 safe projection, runtime-pinned)', ()
     vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
     await loadTrainingDebriefStats('user-1', WEEK_START);
     expect(db.trainingAnnotation.count).not.toHaveBeenCalled();
+  });
+});
+
+describe('loadTrainingDebriefStatsForWeeks (§21.5 batched, runtime-pinned)', () => {
+  it('returns an empty Map for no weeks, with no query', async () => {
+    const res = await loadTrainingDebriefStatsForWeeks('user-1', []);
+    expect(res.size).toBe(0);
+    expect(db.trainingTrade.findMany).not.toHaveBeenCalled();
+    expect(db.trainingAnnotation.groupBy).not.toHaveBeenCalled();
+  });
+
+  it('runs exactly ONE findMany (safe projection) over the union [min-1d, max+8d] window', async () => {
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+
+    await loadTrainingDebriefStatsForWeeks('user-1', ['2026-05-11', '2026-05-04', '2026-05-18']);
+
+    // ONE findMany for ALL weeks — never per-week (the N+1 we removed).
+    expect(db.trainingTrade.findMany).toHaveBeenCalledTimes(1);
+    const arg = vi.mocked(db.trainingTrade.findMany).mock.calls[0]![0] as {
+      where: { userId: string; enteredAt: { gte: Date; lte: Date } };
+      select: Record<string, unknown>;
+    };
+    expect(arg.where.userId).toBe('user-1');
+    // 🚨 §21.5 — IDENTICAL safe projection as the single-week loader.
+    expect(Object.keys(arg.select).sort()).toEqual(
+      ['enteredAt', 'id', 'lessonLearned', 'pair', 'systemRespected'].sort(),
+    );
+    expect(arg.select).not.toHaveProperty('resultR');
+    expect(arg.select).not.toHaveProperty('outcome');
+    expect(arg.select).not.toHaveProperty('plannedRR');
+    // Union window: min = 2026-05-04 (−1d), max = 2026-05-18 (+8d).
+    const from = parseLocalDate('2026-05-04');
+    from.setUTCDate(from.getUTCDate() - 1);
+    const to = parseLocalDate('2026-05-18');
+    to.setUTCDate(to.getUTCDate() + 8);
+    expect(arg.where.enteredAt.gte).toEqual(from);
+    expect(arg.where.enteredAt.lte).toEqual(to);
+    // No in-range backtest → no annotation groupBy at all.
+    expect(db.trainingAnnotation.groupBy).not.toHaveBeenCalled();
+  });
+
+  it('rolls up annotations with ONE bare groupBy count and keys the result by week', async () => {
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([
+      {
+        id: 'tt-1',
+        enteredAt: new Date('2026-05-06T12:00:00.000Z'), // Wed, inside the 2026-05-04 Paris week
+        pair: 'EURUSD',
+        systemRespected: true,
+        lessonLearned: 'ok',
+      },
+    ] as never);
+    vi.mocked(db.trainingAnnotation.groupBy).mockResolvedValue([
+      { trainingTradeId: 'tt-1', _count: { _all: 3 } },
+    ] as never);
+
+    const res = await loadTrainingDebriefStatsForWeeks('user-1', ['2026-05-04']);
+
+    // ONE groupBy for ALL backtests — never a per-week count, never a findMany.
+    expect(db.trainingAnnotation.groupBy).toHaveBeenCalledTimes(1);
+    const gbArg = vi.mocked(db.trainingAnnotation.groupBy).mock.calls[0]![0] as {
+      by: string[];
+      where: { trainingTradeId: { in: string[] } };
+    };
+    expect(gbArg.by).toEqual(['trainingTradeId']);
+    expect(gbArg.where.trainingTradeId.in).toContain('tt-1');
+    expect(res.has('2026-05-04')).toBe(true);
   });
 });
 

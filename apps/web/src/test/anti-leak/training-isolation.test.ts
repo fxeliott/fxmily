@@ -413,9 +413,12 @@ describe('§21.5 — TrainingDebrief stats are process-only (no backtest P&L)', 
     // would silently re-create the real-edge coupling §21.5 forbids — with a
     // green suite. Pin it here (security-auditor V1.3 finding).
     for (const rel of [
-      'lib/training-debrief/stats.ts',
-      'lib/training-debrief/service.ts',
-      'lib/training-debrief/week.ts',
+      // Auto-glob the lib/ tree so a FUTURE `lib/training-debrief/*.ts` file is
+      // covered by default (closes the hardcoded-list fragility — backlog item
+      // #2 MAJ-36, S8 verif-layer). `tsFilesIn` excludes *.test.ts. The Server
+      // Action lives under app/** (the glob scans lib/ only) so it stays pinned
+      // explicitly. training-debrief is 100% training → blanket no-real-edge.
+      ...tsFilesIn('lib/training-debrief'),
       'app/training/debrief/actions.ts',
     ]) {
       const raw = readSrc(rel);
@@ -532,6 +535,38 @@ describe('§21.5 — MonthlyDebrief is §21.5-safe (training count-only, no back
           code,
           `${rel} must not couple to ${forbidden} (§25.7 no new edge coupling)`,
         ).not.toContain(forbidden);
+      }
+    }
+  });
+
+  it('the WHOLE monthly-debrief tree reaches training ONLY via the count-only primitive (auto-glob)', () => {
+    // Auto-glob the lib/ tree so a FUTURE `lib/monthly-debrief/*.ts` file is
+    // covered by default (closes the hardcoded-MONTHLY_FOUNDATION fragility —
+    // backlog item #2 MAJ-36, S8 verif-layer: prompt.ts / batch.ts / service.ts
+    // / overdue.ts / format.ts / pricing.ts were NOT pinned, exactly where a dev
+    // would add a `db.trainingTrade` to "enrich" the training slice). This check
+    // forbids ONLY the training-specific tokens — DELIBERATELY not MonthlyDebrief's
+    // own identifiers (the module self-references them) nor `outcome` (the real
+    // section legitimately reads `SerializedTrade.outcome`, §25.3). `loader.ts` is
+    // the sanctioned touchpoint (imports `countRecentTrainingActivity`) and is
+    // excluded — pinned instead by Block A's SANCTIONED_TOUCHPOINTS.
+    const SANCTIONED = ['lib/monthly-debrief/loader.ts'];
+    const monthlyFiles = tsFilesIn('lib/monthly-debrief').filter((f) => !SANCTIONED.includes(f));
+    expect(monthlyFiles.length).toBeGreaterThanOrEqual(6);
+    for (const rel of monthlyFiles) {
+      const code = readSrcCode(rel);
+      for (const token of [
+        'TrainingTrade',
+        'db.trainingTrade',
+        '@/lib/training',
+        '@/lib/training-debrief',
+        'TrainingDebrief',
+        'db.trainingDebrief',
+      ]) {
+        expect(
+          code,
+          `${rel} must not reference "${token}" in code (§25.7 — training only via the count primitive)`,
+        ).not.toContain(token);
       }
     }
   });

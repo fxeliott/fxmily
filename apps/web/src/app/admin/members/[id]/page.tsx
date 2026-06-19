@@ -50,7 +50,7 @@ import { getLatestCalendarForUser } from '@/lib/calendar/service';
 import { MemberCalendarPanel } from '@/components/admin/member-calendar-panel';
 import {
   listTrainingDebriefsForMember,
-  loadTrainingDebriefStats,
+  loadTrainingDebriefStatsForWeeks,
 } from '@/lib/training-debrief/service';
 import { logAudit } from '@/lib/auth/audit';
 import { getDashboardAnalytics } from '@/lib/scoring/dashboard-data';
@@ -159,7 +159,6 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // surface, not loop — the net catches ONLY when a cursor is in play (mirror
   // of the trades tab above). `redirect` stays outside the catch.
   let trainingPage: Awaited<ReturnType<typeof listTrainingTradesAsAdmin>> | null = null;
-  let trainingTradesTotal = 0;
   if (tab === 'training') {
     try {
       trainingPage = await listTrainingTradesAsAdmin(memberId, { limit: 50, cursor });
@@ -168,38 +167,46 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       trainingPage = null;
     }
     if (trainingPage === null) redirect(`/admin/members/${memberId}?tab=training`);
-    trainingTradesTotal = await countTrainingTradesAsAdmin(memberId);
   }
 
-  // S8 — backtest sessions (containers) for the training tab. Read-only admin
-  // supervision (§27 output to S7). §21.5: training-only reads.
-  const trainingSessions = tab === 'training' ? await listTrainingSessionsAsAdmin(memberId) : null;
-
-  // S8 audit (d2) — corrections-per-backtest rollup so the admin can triage
-  // which backtests still need a correction ("À corriger") without opening each.
-  // §21.5-safe: count-only, training surface only.
-  const trainingCorrectionsCount =
-    tab === 'training' ? await countTrainingAnnotationsByMember(memberId) : null;
-
-  // S7 §22-23 — read-only daily check-ins for the supervision panel. Capped at
-  // the 30 most recent days (admin-only, not a hot path, 30-member scale). §2:
-  // check-ins carry no market content (mindset + declarative discipline
-  // booleans only).
-  const checkins = tab === 'checkins' ? await listMemberCheckinsAsAdmin(memberId) : null;
-
-  // V1.3 — read-only weekly debriefs for the training tab (SPEC §23.4). Stats
-  // recomputed in parallel per debrief; capped at 12 (admin-only, not a hot
-  // path, 30-member scale — same bound as the weekly-reports panel). §21.5:
-  // `loadTrainingDebriefStats` never selects `resultR`/`outcome`.
-  const trainingDebriefItems: MemberTrainingDebriefItem[] | null =
-    tab === 'training'
-      ? await Promise.all(
-          (await listTrainingDebriefsForMember(memberId, 12)).map(async (debrief) => ({
+  // S8 verif-layer (perf) — the 4 remaining training-tab reads are mutually
+  // independent, so run them as ONE parallel batch (were 4 serial awaits + an
+  // N+1 over debrief weeks). The trades list stays separate above for its
+  // cursor-stale redirect. The debrief stats are batched into 2 queries by
+  // `loadTrainingDebriefStatsForWeeks` (closes backlog P2 MAJ-36 "N+1 onglet
+  // training"). §21.5: every read is training-only and memberId-scoped; the
+  // batched debrief loader keeps the same safe projection (no resultR/outcome).
+  let trainingTradesTotal = 0;
+  let trainingSessions: Awaited<ReturnType<typeof listTrainingSessionsAsAdmin>> | null = null;
+  let trainingCorrectionsCount: Awaited<
+    ReturnType<typeof countTrainingAnnotationsByMember>
+  > | null = null;
+  let trainingDebriefItems: MemberTrainingDebriefItem[] | null = null;
+  if (tab === 'training') {
+    [trainingTradesTotal, trainingSessions, trainingCorrectionsCount, trainingDebriefItems] =
+      await Promise.all([
+        countTrainingTradesAsAdmin(memberId),
+        listTrainingSessionsAsAdmin(memberId),
+        countTrainingAnnotationsByMember(memberId),
+        (async (): Promise<MemberTrainingDebriefItem[]> => {
+          const debriefs = await listTrainingDebriefsForMember(memberId, 12);
+          const statsByWeek = await loadTrainingDebriefStatsForWeeks(
+            memberId,
+            debriefs.map((d) => d.weekStart),
+          );
+          // Every weekStart is a key of statsByWeek (built from the same list).
+          return debriefs.map((debrief) => ({
             debrief,
-            stats: await loadTrainingDebriefStats(memberId, debrief.weekStart),
-          })),
-        )
-      : null;
+            stats: statsByWeek.get(debrief.weekStart)!,
+          }));
+        })(),
+      ]);
+  }
+
+  // S7 §22-23 — read-only daily check-ins for the supervision panel (separate
+  // tab). Capped at the 30 most recent days (admin-only, not a hot path). §2:
+  // check-ins carry no market content (mindset + declarative booleans only).
+  const checkins = tab === 'checkins' ? await listMemberCheckinsAsAdmin(memberId) : null;
 
   const douglasData =
     tab === 'mark-douglas'

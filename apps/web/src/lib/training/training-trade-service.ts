@@ -58,6 +58,10 @@ export interface SerializedTrainingTrade {
   enteredAt: string;
   createdAt: string;
   updatedAt: string;
+  /** Parent backtest session (S8 grouping), or null for a standalone backtest.
+   * A training-only id (FK to `TrainingSession`) — never a real-edge identifier;
+   * powers the "back to the session" navigation on the member detail view. */
+  sessionId: string | null;
 }
 
 // ----- Helpers ----------------------------------------------------------------
@@ -77,6 +81,7 @@ export function serializeTrainingTrade(row: TrainingTradeModel): SerializedTrain
     enteredAt: row.enteredAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    sessionId: row.sessionId ?? null,
   };
 }
 

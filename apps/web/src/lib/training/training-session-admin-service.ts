@@ -37,6 +37,10 @@ export async function listTrainingSessionsAsAdmin(
     where: { memberId },
     orderBy: { startedAt: 'desc' },
     include: { _count: { select: { trades: true } } },
+    // Bound the payload (S8 verif-layer) — mirror of `listTrainingSessionsForUser`;
+    // the admin tab renders every row with its `_count`, so cap at the 50 most
+    // recent (sessions grow slowly; same convention as the debrief lists).
+    take: 50,
   });
   return rows.map(serializeTrainingSession);
 }

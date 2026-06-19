@@ -35,10 +35,10 @@ interface MonthlyDebriefEmailProps {
  * V1.4 §25 — Monthly AI debrief email, sent to the MEMBER (SPEC §25.2 — push
  * + member email; NO admin monthly email by design).
  *
- * Carbon of `weekly-digest.tsx` (email-safe inline hex, DS-v2 lime on deep
+ * Carbon of `weekly-digest.tsx` (email-safe inline hex, DS-v3 blue on deep
  * space) but member-facing and dual-section:
  *   - progression narrative (the V1.4 value-add vs the weekly digest)
- *   - Trading réel section — lime (legitimate real-P&L coaching, the product)
+ *   - Trading réel section — DS-v3 blue accent (legitimate real-P&L coaching, the product)
  *   - Entraînement section — **cyan #22d3ee accent (§21.7 boundary stays
  *     visible)**, §21.5-safe text (effort/regularity only, never backtest P&L)
  *   - EU AI Act 50(1) disclaimer banner (mirror weekly aiBanner, mandatory
@@ -237,9 +237,9 @@ const logoBadge: React.CSSProperties = {
   lineHeight: '24px',
   textAlign: 'center',
   borderRadius: 6,
-  border: '1px solid rgba(163, 230, 53, 0.42)',
-  backgroundColor: 'rgba(163, 230, 53, 0.14)',
-  color: '#a3e635',
+  border: '1px solid rgba(59, 130, 246, 0.42)',
+  backgroundColor: 'rgba(59, 130, 246, 0.14)',
+  color: '#3b82f6',
   fontWeight: 700,
   fontSize: 12,
   marginRight: 10,
@@ -255,7 +255,7 @@ const brandName: React.CSSProperties = {
 };
 
 const eyebrow: React.CSSProperties = {
-  color: '#a3e635',
+  color: '#3b82f6',
   fontSize: 10,
   fontWeight: 500,
   letterSpacing: '0.14em',
@@ -312,7 +312,7 @@ const trainingSection: React.CSSProperties = {
 };
 
 const sectionLabel: React.CSSProperties = {
-  color: '#a3e635',
+  color: '#3b82f6',
   fontSize: 11,
   fontWeight: 600,
   letterSpacing: '0.10em',
@@ -351,7 +351,7 @@ const listItem: React.CSSProperties = {
 };
 
 const bulletAcc: React.CSSProperties = {
-  color: '#a3e635',
+  color: '#3b82f6',
   fontWeight: 700,
   marginRight: 8,
 };
@@ -391,8 +391,8 @@ const ctaSection: React.CSSProperties = {
 
 const cta: React.CSSProperties = {
   display: 'inline-block',
-  backgroundColor: '#a3e635',
-  color: '#0a1006',
+  backgroundColor: '#3364db',
+  color: '#f3f9ff',
   fontSize: 13,
   fontWeight: 700,
   letterSpacing: '0.005em',
@@ -400,7 +400,7 @@ const cta: React.CSSProperties = {
   padding: '12px 22px',
   borderRadius: 6,
   boxShadow:
-    '0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 0 0 1px rgba(163, 230, 53, 0.65), 0 8px 16px -4px rgba(163, 230, 53, 0.30)',
+    '0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 0 0 1px rgba(59, 130, 246, 0.65), 0 8px 16px -4px rgba(59, 130, 246, 0.30)',
 };
 
 const hr: React.CSSProperties = {

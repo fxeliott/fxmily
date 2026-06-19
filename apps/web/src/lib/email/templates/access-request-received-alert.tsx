@@ -92,7 +92,7 @@ export default AccessRequestReceivedAlertEmail;
 
 // ============================================================
 // STYLES (email-safe inline, hex translated from OKLCH tokens)
-// Mirror de access-approved.tsx (même DS deep-space + CTA lime).
+// Mirror de access-approved.tsx (même DS deep-space + CTA blue).
 // ============================================================
 
 const body: React.CSSProperties = {
@@ -124,9 +124,9 @@ const logoBadge: React.CSSProperties = {
   lineHeight: '24px',
   textAlign: 'center',
   borderRadius: 6,
-  border: '1px solid rgba(163, 230, 53, 0.42)', // --b-acc
-  backgroundColor: 'rgba(163, 230, 53, 0.14)', // --acc-dim
-  color: '#a3e635', // --acc
+  border: '1px solid rgba(59, 130, 246, 0.42)', // --b-acc
+  backgroundColor: 'rgba(59, 130, 246, 0.14)', // --acc-dim
+  color: '#3b82f6', // --acc
   fontWeight: 700,
   fontSize: 12,
   marginRight: 10,
@@ -172,8 +172,8 @@ const ctaSection: React.CSSProperties = {
 };
 
 const button: React.CSSProperties = {
-  backgroundColor: '#a3e635', // --acc lime
-  color: '#0a1006', // --acc-fg
+  backgroundColor: '#3364db', // --acc-btn (DS-v3 blue CTA)
+  color: '#f3f9ff', // --acc-fg
   fontSize: 14,
   fontWeight: 700,
   letterSpacing: '0.005em',
@@ -182,7 +182,7 @@ const button: React.CSSProperties = {
   borderRadius: 6,
   display: 'inline-block',
   boxShadow:
-    '0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 0 0 1px rgba(163, 230, 53, 0.65), 0 8px 16px -4px rgba(163, 230, 53, 0.30)',
+    '0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 0 0 1px rgba(59, 130, 246, 0.65), 0 8px 16px -4px rgba(59, 130, 246, 0.30)',
 };
 
 const hr: React.CSSProperties = {

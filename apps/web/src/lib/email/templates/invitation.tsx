@@ -19,15 +19,15 @@ interface InvitationEmailProps {
 }
 
 /**
- * Email d'invitation Fxmily — design system v2 lime sur deep space.
+ * Email d'invitation Fxmily — DS-v3 blue sur deep space.
  *
  * Email-safe : valeurs hex inline (pas de CSS variables, pas de OKLCH —
  * support email client encore patchy en 2026). Couleurs traduites depuis
  * tokens.css :
- *   --bg #07090f, --bg-1 #0f131c, --acc #a3e635, --acc-fg #0a1006
+ *   --bg #07090f, --bg-1 #0f131c, --acc #3b82f6, --acc-fg #f3f9ff
  *   --t-1 #ecedf2, --t-2 #b8bdc9, --t-4 #74798a (WCAG AA bumpé)
  *
- * Posture athlète discipline : signature Robin Neon, mono-accent CTA lime.
+ * Posture athlète discipline : signature Robin Neon, mono-accent CTA blue.
  */
 export function InvitationEmail({ inviteUrl, invitedByName, expiresInDays }: InvitationEmailProps) {
   const inviter = invitedByName?.trim() ? invitedByName.trim() : 'Eliott';
@@ -166,9 +166,9 @@ const logoBadge: React.CSSProperties = {
   lineHeight: '24px',
   textAlign: 'center',
   borderRadius: 6,
-  border: '1px solid rgba(163, 230, 53, 0.42)', // --b-acc
-  backgroundColor: 'rgba(163, 230, 53, 0.14)', // --acc-dim
-  color: '#a3e635', // --acc
+  border: '1px solid rgba(59, 130, 246, 0.42)', // --b-acc
+  backgroundColor: 'rgba(59, 130, 246, 0.14)', // --acc-dim
+  color: '#3b82f6', // --acc
   fontWeight: 700,
   fontSize: 12,
   marginRight: 10,
@@ -227,8 +227,8 @@ const ctaSection: React.CSSProperties = {
 };
 
 const button: React.CSSProperties = {
-  backgroundColor: '#a3e635', // --acc lime
-  color: '#0a1006', // --acc-fg
+  backgroundColor: '#3364db', // --acc-btn (DS-v3 blue CTA)
+  color: '#f3f9ff', // --acc-fg
   fontSize: 14,
   fontWeight: 700,
   letterSpacing: '0.005em',
@@ -237,11 +237,11 @@ const button: React.CSSProperties = {
   borderRadius: 6, // --r-control
   display: 'inline-block',
   boxShadow:
-    '0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 0 0 1px rgba(163, 230, 53, 0.65), 0 8px 16px -4px rgba(163, 230, 53, 0.30)',
+    '0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 0 0 1px rgba(59, 130, 246, 0.65), 0 8px 16px -4px rgba(59, 130, 246, 0.30)',
 };
 
 const link: React.CSSProperties = {
-  color: '#a3e635', // --acc
+  color: '#3b82f6', // --acc
   textDecoration: 'underline',
 };
 
@@ -256,7 +256,7 @@ const principlesSection: React.CSSProperties = {
 
 const principlesEyebrow: React.CSSProperties = {
   ...eyebrow,
-  color: '#a3e635', // accent eyebrow
+  color: '#3b82f6', // accent eyebrow
   margin: '0 0 10px 0',
 };
 
@@ -276,7 +276,7 @@ const principleText: React.CSSProperties = {
 };
 
 const principleDot: React.CSSProperties = {
-  color: '#a3e635',
+  color: '#3b82f6',
   marginRight: 8,
   fontWeight: 700,
 };

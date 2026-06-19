@@ -685,7 +685,7 @@ function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
                       ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)]'
                       : o.tone === 'bad'
                         ? 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)]'
-                        : 'border-[var(--cy)] bg-[var(--cy-dim-2)] text-[var(--cy)]'
+                        : 'border-[var(--cy)] bg-[var(--cy-dim-strong)] text-[var(--cy)]'
                     : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
                   disabled && 'cursor-not-allowed opacity-60',
                 )}

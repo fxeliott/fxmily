@@ -1,6 +1,6 @@
 'use client';
 
-import { m } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 
 import { V18_SPRING_TIGHT } from '@/components/v18/motion-presets';
 import { cn } from '@/lib/utils';
@@ -34,6 +34,13 @@ export function TrainingDebriefStepProgress({
 }: TrainingDebriefStepProgressProps) {
   const safeCurrent = Math.max(1, Math.min(current, total));
   const percent = safeCurrent / total;
+  // Gate the JS-driven scaleX spring on prefers-reduced-motion. The global
+  // `@media (prefers-reduced-motion)` CSS rule only neutralises CSS
+  // animation/transition durations — framer-motion's WAAPI/inline-style
+  // transforms are NOT touched by it, so the bar would still spring. Mirror of
+  // the gate already in both parent wizards (training-debrief-wizard,
+  // training-form-wizard).
+  const reduceMotion = useReducedMotion();
 
   return (
     <div
@@ -67,7 +74,7 @@ export function TrainingDebriefStepProgress({
           }}
           initial={false}
           animate={{ scaleX: percent }}
-          transition={V18_SPRING_TIGHT}
+          transition={reduceMotion ? { duration: 0 } : V18_SPRING_TIGHT}
           aria-hidden="true"
         />
       </div>

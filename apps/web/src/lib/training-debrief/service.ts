@@ -269,3 +269,79 @@ export async function loadTrainingDebriefStats(
 
   return computeTrainingDebriefStats(inWeek, annotationCount, weekStart);
 }
+
+/**
+ * Batched variant of `loadTrainingDebriefStats` for the admin training tab,
+ * which renders up to 12 weekly debriefs at once (SPEC §23.4). Instead of N+1
+ * (1 `findMany` + 1 `count` PER week = up to 25 queries), this runs exactly TWO
+ * queries — one `findMany` over the union window [min−1d, max+8d] and one
+ * annotation `groupBy` over all in-range backtest ids — then dispatches per week
+ * in memory via the pure `selectWeekTrades` (S8 verif-layer; closes backlog P2
+ * MAJ-36 "N+1 onglet training", held in S7 by §21.5 prudence).
+ *
+ * 🚨 §21.5 (BLOCKING) — IDENTICAL safe contract as `loadTrainingDebriefStats`:
+ * the `db.trainingTrade` query selects ONLY the four safe columns (NEVER
+ * `resultR`/`outcome`/`plannedRR`) and the annotation rollup is a bare
+ * `groupBy` count (no comment text, no P&L). Block F's source-grep + the new
+ * `service.test.ts` runtime assertion pin this query shape.
+ */
+export async function loadTrainingDebriefStatsForWeeks(
+  userId: string,
+  weekStarts: string[],
+): Promise<Map<string, TrainingDebriefStats>> {
+  if (weekStarts.length === 0) return new Map();
+
+  // Union fetch window covering every requested week: [min−1d, max+8d] UTC —
+  // same asymmetric Paris-DST slack as the single-week loader, applied to the
+  // earliest/latest Monday so `selectWeekTrades` can narrow each week precisely.
+  const bases = weekStarts.map((w) => parseLocalDate(w));
+  const minBase = bases.reduce((a, b) => (a < b ? a : b));
+  const maxBase = bases.reduce((a, b) => (a > b ? a : b));
+  const fetchFrom = new Date(minBase);
+  fetchFrom.setUTCDate(fetchFrom.getUTCDate() - 1);
+  const fetchTo = new Date(maxBase);
+  fetchTo.setUTCDate(fetchTo.getUTCDate() + 8);
+
+  const rows = await db.trainingTrade.findMany({
+    where: { userId, enteredAt: { gte: fetchFrom, lte: fetchTo } },
+    // 🚨 §21.5 — EXPLICIT safe projection. NEVER add resultR/outcome/plannedRR.
+    select: {
+      id: true,
+      enteredAt: true,
+      pair: true,
+      systemRespected: true,
+      lessonLearned: true,
+    },
+  });
+
+  const candidates: TrainingDebriefStatTrade[] = rows.map((r) => ({
+    id: r.id,
+    enteredAt: r.enteredAt.toISOString(),
+    pair: r.pair,
+    systemRespected: r.systemRespected,
+    lessonLearned: r.lessonLearned,
+  }));
+
+  // ONE groupBy for ALL in-range backtests — bare count, never findMany of
+  // comments/P&L. Empty range → no query (mirror the single-week guard).
+  const annByTrade =
+    candidates.length === 0
+      ? new Map<string, number>()
+      : new Map(
+          (
+            await db.trainingAnnotation.groupBy({
+              by: ['trainingTradeId'],
+              where: { trainingTradeId: { in: candidates.map((c) => c.id) } },
+              _count: { _all: true },
+            })
+          ).map((g) => [g.trainingTradeId, g._count._all]),
+        );
+
+  const out = new Map<string, TrainingDebriefStats>();
+  for (const weekStart of weekStarts) {
+    const inWeek = selectWeekTrades(candidates, weekStart);
+    const annotationCount = inWeek.reduce((sum, t) => sum + (annByTrade.get(t.id) ?? 0), 0);
+    out.set(weekStart, computeTrainingDebriefStats(inWeek, annotationCount, weekStart));
+  }
+  return out;
+}

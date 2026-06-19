@@ -1,7 +1,11 @@
-import type { SerializedTrainingTrade } from '@/lib/training/training-trade-service';
+import type { TrainingTradeStats } from '@/lib/training/training-trade-service';
 
 /**
  * Aggregate backtest stats for the `/training` landing (J-T2, SPEC §21).
+ *
+ * Fed a FULL-HISTORY SQL aggregate (`getTrainingTradeStatsForUser`) rather than
+ * the rendered trade array, so the figures stay exact once the list is
+ * cursor-paginated (S8 verification-layer fix).
  *
  * 🚨 These numbers are TRAINING-ONLY and never leave this surface
  * (statistical isolation §21.5). Posture (anti-Black-Hat / Mark Douglas):
@@ -21,23 +25,25 @@ function StatBlock({ label, value, hint }: { label: string; value: string; hint:
   );
 }
 
-export function TrainingStatsBar({ trades }: { trades: SerializedTrainingTrade[] }) {
-  const total = trades.length;
+export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
+  const {
+    total,
+    decidedCount,
+    winCount,
+    withRCount,
+    avgR: avgRNum,
+    systemDecidedCount,
+    systemKeptCount,
+  } = stats;
 
-  const decided = trades.filter((t) => t.outcome === 'win' || t.outcome === 'loss');
-  const wins = decided.filter((t) => t.outcome === 'win').length;
-  const winRate = decided.length === 0 ? '—' : `${Math.round((wins / decided.length) * 100)} %`;
+  const winRate = decidedCount === 0 ? '—' : `${Math.round((winCount / decidedCount) * 100)} %`;
 
-  const withR = trades
-    .map((t) => (t.resultR == null ? null : Number(t.resultR)))
-    .filter((r): r is number => r != null && Number.isFinite(r));
-  const avgRNum = withR.length === 0 ? null : withR.reduce((a, b) => a + b, 0) / withR.length;
   const avgR = avgRNum == null ? '—' : `${avgRNum >= 0 ? '+' : ''}${avgRNum.toFixed(2)} R`;
 
-  const systemDecided = trades.filter((t) => t.systemRespected != null);
-  const systemKept = systemDecided.filter((t) => t.systemRespected === true).length;
   const systemRate =
-    systemDecided.length === 0 ? '—' : `${Math.round((systemKept / systemDecided.length) * 100)} %`;
+    systemDecidedCount === 0
+      ? '—'
+      : `${Math.round((systemKeptCount / systemDecidedCount) * 100)} %`;
 
   return (
     <section
@@ -53,20 +59,20 @@ export function TrainingStatsBar({ trades }: { trades: SerializedTrainingTrade[]
         label="Win rate"
         value={winRate}
         hint={
-          decided.length === 0
+          decidedCount === 0
             ? 'aucun résultat noté'
-            : `sur ${decided.length} décidé${decided.length > 1 ? 's' : ''}`
+            : `sur ${decidedCount} décidé${decidedCount > 1 ? 's' : ''}`
         }
       />
       <StatBlock
         label="R moyen"
         value={avgR}
-        hint={withR.length === 0 ? 'aucun R renseigné' : `sur ${withR.length}`}
+        hint={withRCount === 0 ? 'aucun R renseigné' : `sur ${withRCount}`}
       />
       <StatBlock
         label="Système tenu"
         value={systemRate}
-        hint={systemDecided.length === 0 ? 'non renseigné' : `sur ${systemDecided.length}`}
+        hint={systemDecidedCount === 0 ? 'non renseigné' : `sur ${systemDecidedCount}`}
       />
     </section>
   );

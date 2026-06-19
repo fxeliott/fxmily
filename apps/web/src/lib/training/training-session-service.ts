@@ -113,6 +113,11 @@ export async function listTrainingSessionsForUser(
     where: { memberId: userId },
     orderBy: { startedAt: 'desc' },
     include: { _count: { select: { trades: true } } },
+    // Bound the payload (S8 verif-layer) — each row carries a `_count` subquery,
+    // so an unbounded list is O(N) round-trips on the member's most-frequent page.
+    // Sessions grow slowly (one per practice sitting) so the 50 most recent cover
+    // any realistic member; same `take`-cap convention as the debrief lists.
+    take: 50,
   });
   return rows.map(serializeTrainingSession);
 }

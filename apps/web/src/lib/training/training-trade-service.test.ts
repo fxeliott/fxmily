@@ -7,6 +7,8 @@ vi.mock('@/lib/db', () => ({
       findMany: vi.fn(),
       findFirst: vi.fn(),
       count: vi.fn(),
+      groupBy: vi.fn(),
+      aggregate: vi.fn(),
     },
   },
 }));
@@ -20,6 +22,7 @@ import {
   countRecentTrainingActivity,
   createTrainingTrade,
   getTrainingTradeById,
+  getTrainingTradeStatsForUser,
   listTrainingTradesForUser,
 } from './training-trade-service';
 
@@ -123,25 +126,142 @@ describe('createTrainingTrade', () => {
 // listTrainingTradesForUser
 // ---------------------------------------------------------------------------
 
-describe('listTrainingTradesForUser', () => {
-  it('queries user-scoped, newest-first by enteredAt', async () => {
+describe('listTrainingTradesForUser (cursor-paginated)', () => {
+  it('queries user-scoped, newest-first with an id tiebreaker, take=limit+1, no cursor on page 1', async () => {
     vi.mocked(db.trainingTrade.findMany).mockResolvedValue([makeRow()] as never);
 
-    const result = await listTrainingTradesForUser('user-1');
+    const result = await listTrainingTradesForUser('user-1', { limit: 50 });
 
     const call = vi.mocked(db.trainingTrade.findMany).mock.calls[0];
     if (!call) throw new Error('expected findMany to be called');
-    const arg = call[0] as { where: { userId: string }; orderBy: { enteredAt: string } };
+    const arg = call[0] as {
+      where: { userId: string };
+      orderBy: Array<Record<string, string>>;
+      take: number;
+    };
     expect(arg.where).toEqual({ userId: 'user-1' });
-    expect(arg.orderBy).toEqual({ enteredAt: 'desc' });
-    expect(result).toHaveLength(1);
-    expect(result[0]?.userId).toBe('user-1');
-    expect(result[0]?.plannedRR).toBe('2.5');
+    expect(arg.orderBy).toEqual([{ enteredAt: 'desc' }, { id: 'desc' }]);
+    expect(arg.take).toBe(51);
+    expect(arg).not.toHaveProperty('cursor');
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.userId).toBe('user-1');
+    expect(result.items[0]?.plannedRR).toBe('2.5');
+    expect(result.nextCursor).toBeNull();
   });
 
-  it('returns an empty array when the user has no backtests', async () => {
+  it('defaults limit to 20 and clamps to [1, 50] (take = clamped + 1)', async () => {
     vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
-    expect(await listTrainingTradesForUser('user-1')).toEqual([]);
+    await listTrainingTradesForUser('user-1'); // default 20
+    await listTrainingTradesForUser('user-1', { limit: 999 }); // clamp 50
+    await listTrainingTradesForUser('user-1', { limit: 0 }); // clamp 1
+    const calls = vi.mocked(db.trainingTrade.findMany).mock.calls;
+    expect((calls[0]![0] as { take: number }).take).toBe(21);
+    expect((calls[1]![0] as { take: number }).take).toBe(51);
+    expect((calls[2]![0] as { take: number }).take).toBe(2);
+  });
+
+  it('sets nextCursor to the last kept id and trims the extra probe row', async () => {
+    // limit 2, DB returns 3 (take=3) → hasMore, drop the 3rd, cursor = 2nd id.
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([
+      makeRow({ id: 'a' }),
+      makeRow({ id: 'b' }),
+      makeRow({ id: 'c' }),
+    ] as never);
+
+    const result = await listTrainingTradesForUser('user-1', { limit: 2 });
+    expect(result.items.map((t) => t.id)).toEqual(['a', 'b']);
+    expect(result.nextCursor).toBe('b');
+  });
+
+  it('forwards a cursor with skip:1 (the cursor row is excluded from the page)', async () => {
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    await listTrainingTradesForUser('user-1', { limit: 50, cursor: 'cur-1' });
+    const arg = vi.mocked(db.trainingTrade.findMany).mock.calls[0]![0] as {
+      cursor: { id: string };
+      skip: number;
+    };
+    expect(arg.cursor).toEqual({ id: 'cur-1' });
+    expect(arg.skip).toBe(1);
+  });
+
+  it('returns empty items + null cursor when the user has no backtests', async () => {
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    expect(await listTrainingTradesForUser('user-1')).toEqual({ items: [], nextCursor: null });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getTrainingTradeStatsForUser — §21.5 TRAINING-ONLY full-history aggregate
+//
+// The /training stats bar reads these SQL aggregates so the figures stay exact
+// once the list is paginated. resultR/outcome are read ONLY for the member's
+// own practice stats (already surfaced on /training) — never a real-edge channel.
+// ---------------------------------------------------------------------------
+
+describe('getTrainingTradeStatsForUser (§21.5 training-only aggregate)', () => {
+  it('derives stats from count + groupBy(outcome) + groupBy(system) + avg(resultR), user-scoped', async () => {
+    vi.mocked(db.trainingTrade.count).mockResolvedValue(10 as never);
+    vi.mocked(db.trainingTrade.groupBy)
+      .mockResolvedValueOnce([
+        { outcome: 'win', _count: { _all: 4 } },
+        { outcome: 'loss', _count: { _all: 3 } },
+        { outcome: null, _count: { _all: 3 } },
+      ] as never)
+      .mockResolvedValueOnce([
+        { systemRespected: true, _count: { _all: 5 } },
+        { systemRespected: false, _count: { _all: 2 } },
+        { systemRespected: null, _count: { _all: 3 } },
+      ] as never);
+    vi.mocked(db.trainingTrade.aggregate).mockResolvedValue({
+      _avg: { resultR: new Prisma.Decimal('0.5') },
+      _count: { resultR: 6 },
+    } as never);
+
+    const stats = await getTrainingTradeStatsForUser('user-1');
+
+    expect(stats).toEqual({
+      total: 10,
+      decidedCount: 7,
+      winCount: 4,
+      withRCount: 6,
+      avgR: 0.5,
+      systemDecidedCount: 7,
+      systemKeptCount: 5,
+    });
+
+    // §21.5 — every read is user-scoped on db.trainingTrade; the avg only ever
+    // targets resultR for the member's own training surface.
+    expect(vi.mocked(db.trainingTrade.count).mock.calls[0]![0]).toEqual({
+      where: { userId: 'user-1' },
+    });
+    const aggArg = vi.mocked(db.trainingTrade.aggregate).mock.calls[0]![0] as {
+      where: { userId: string; resultR: unknown };
+      _avg: Record<string, boolean>;
+    };
+    expect(aggArg.where.userId).toBe('user-1');
+    expect(aggArg._avg).toEqual({ resultR: true });
+  });
+
+  it('returns null avgR and zeroed rates when there is no decided backtest', async () => {
+    vi.mocked(db.trainingTrade.count).mockResolvedValue(0 as never);
+    vi.mocked(db.trainingTrade.groupBy)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([] as never);
+    vi.mocked(db.trainingTrade.aggregate).mockResolvedValue({
+      _avg: { resultR: null },
+      _count: { resultR: 0 },
+    } as never);
+
+    const stats = await getTrainingTradeStatsForUser('user-1');
+    expect(stats).toEqual({
+      total: 0,
+      decidedCount: 0,
+      winCount: 0,
+      withRCount: 0,
+      avgR: null,
+      systemDecidedCount: 0,
+      systemKeptCount: 0,
+    });
   });
 });
 

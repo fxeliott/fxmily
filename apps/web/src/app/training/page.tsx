@@ -1,4 +1,4 @@
-import { ArrowLeft, GraduationCap, Layers, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, GraduationCap, Layers, NotebookPen, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -11,7 +11,10 @@ import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { countUnseenTrainingAnnotationsByTrainingTrade } from '@/lib/training/training-annotation-member-service';
 import { listTrainingSessionsForUser } from '@/lib/training/training-session-service';
-import { listTrainingTradesForUser } from '@/lib/training/training-trade-service';
+import {
+  getTrainingTradeStatsForUser,
+  listTrainingTradesForUser,
+} from '@/lib/training/training-trade-service';
 import { cn } from '@/lib/utils';
 
 export const metadata = {
@@ -20,15 +23,47 @@ export const metadata = {
 
 export const dynamic = 'force-dynamic';
 
-export default async function TrainingPage() {
+interface TrainingPageProps {
+  searchParams: Promise<{ cursor?: string }>;
+}
+
+/** Backtest ids are cuids — a forged `?cursor=` must degrade to page 1, never
+ * to a 500 (mirror `/journal` `parseCursor`). */
+function parseTrainingCursor(value: string | undefined): string | undefined {
+  return value && /^[a-z0-9]{20,40}$/i.test(value) ? value : undefined;
+}
+
+function trainingHref(cursor?: string): string {
+  return cursor ? `/training?cursor=${cursor}` : '/training';
+}
+
+export default async function TrainingPage({ searchParams }: TrainingPageProps) {
   const session = await auth();
   // Defense-in-depth, mirroring the modern member-wizard canon (track/review):
   // the status gate is also enforced by `proxy.ts`, but the page must not be
   // weaker than its own Server Action (`createTrainingTradeAction`).
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
-  const [trades, unseenMap, sessions] = await Promise.all([
-    listTrainingTradesForUser(session.user.id),
+  const { cursor: rawCursor } = await searchParams;
+  const cursor = parseTrainingCursor(rawCursor);
+
+  // A well-formed cursor can still fail the query (e.g. the backtest was
+  // deleted) — degrade to page 1 instead of a 500. The net exists ONLY when a
+  // cursor is in play, so a real DB outage on page 1 still surfaces the error
+  // boundary rather than looping (mirror `/journal`). The redirect throws
+  // outside the catch.
+  let page: Awaited<ReturnType<typeof listTrainingTradesForUser>> | null = null;
+  try {
+    page = await listTrainingTradesForUser(session.user.id, { limit: 50, cursor });
+  } catch (err) {
+    if (!cursor) throw err;
+    page = null;
+  }
+  if (page === null) redirect(trainingHref());
+
+  const { items, nextCursor } = page;
+  const [stats, unseenMap, sessions] = await Promise.all([
+    getTrainingTradeStatsForUser(session.user.id),
     countUnseenTrainingAnnotationsByTrainingTrade(session.user.id),
     listTrainingSessionsForUser(session.user.id),
   ]);
@@ -80,6 +115,31 @@ export default async function TrainingPage() {
           ton trading réel : aucun résultat de backtest ne touche ton track-record, ton score ou tes
           statistiques. Ici, c&apos;est la régularité de la pratique qui compte — pas le P&amp;L.
         </p>
+
+        {/* Entry point to the weekly training debrief (SPEC §23). The page is
+            rich (timeline + crisis banner) but was otherwise only reachable by
+            typing the URL — surface it here, on the training landing, without
+            crowding the primary CTA row. */}
+        <Link
+          href="/training/debrief"
+          className="rounded-control group flex items-center justify-between gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] px-4 py-3 transition-colors hover:border-[var(--cy)] hover:bg-[var(--cy-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
+        >
+          <span className="flex items-center gap-2.5">
+            <NotebookPen className="h-4 w-4 shrink-0 text-[var(--cy)]" strokeWidth={1.75} />
+            <span className="flex flex-col">
+              <span className="text-[13px] font-semibold text-[var(--t-1)]">
+                Débrief hebdo d&apos;entraînement
+              </span>
+              <span className="t-cap text-[var(--t-3)]">
+                Prends du recul sur ta semaine de pratique
+              </span>
+            </span>
+          </span>
+          <ArrowRight
+            className="h-4 w-4 shrink-0 text-[var(--t-3)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--cy)]"
+            strokeWidth={1.75}
+          />
+        </Link>
       </header>
 
       {/* Sessions de backtest — regroupent les backtests d'une même séance de
@@ -112,7 +172,7 @@ export default async function TrainingPage() {
       ) : null}
 
       {/* Tous les backtests (standalone + ceux des séances) */}
-      {trades.length === 0 ? (
+      {stats.total === 0 ? (
         <Card primary className="py-2">
           <EmptyState
             icon={GraduationCap}
@@ -126,6 +186,19 @@ export default async function TrainingPage() {
             tip="Le résultat d'un backtest ne dit rien de ta valeur de trader. Ce qu'on mesure ici, c'est la discipline du process — anything can happen, ton geste reste propre."
           />
         </Card>
+      ) : items.length === 0 ? (
+        // Stale cursor — a backtest was deleted since this paginated link was
+        // rendered. Calm dead-end (the member DOES have backtests, just none on
+        // this page), never the onboarding copy.
+        <Card primary className="py-2">
+          <EmptyState
+            icon={GraduationCap}
+            headline="Plus rien à afficher ici."
+            lead="Tu es arrivé au bout de ta liste de backtests."
+            ctaPrimary="Revenir au début"
+            ctaHref="/training"
+          />
+        </Card>
       ) : (
         <>
           {sessions.length > 0 ? (
@@ -134,9 +207,9 @@ export default async function TrainingPage() {
               Tous les backtests
             </h2>
           ) : null}
-          <TrainingStatsBar trades={trades} />
+          <TrainingStatsBar stats={stats} />
           <ul className="flex flex-col gap-3">
-            {trades.map((trade) => (
+            {items.map((trade) => (
               <li key={trade.id}>
                 <TrainingTradeCardLinkable
                   trade={trade}
@@ -146,10 +219,29 @@ export default async function TrainingPage() {
               </li>
             ))}
           </ul>
-          <p className="t-foot border-t border-[var(--b-subtle)] pt-3 text-center text-[var(--t-4)]">
-            {trades.length} backtest{trades.length > 1 ? 's' : ''} enregistré
-            {trades.length > 1 ? 's' : ''}
-          </p>
+          <footer className="flex flex-col items-center gap-3 border-t border-[var(--b-subtle)] pt-4">
+            {nextCursor ? (
+              <Link
+                href={trainingHref(nextCursor)}
+                prefetch={false}
+                className={cn(btnVariants({ kind: 'ghost', size: 'm' }))}
+              >
+                Voir les backtests plus anciens
+              </Link>
+            ) : null}
+            <p className="t-foot text-center text-[var(--t-4)]">
+              {items.length} backtest{items.length > 1 ? 's' : ''} affiché
+              {items.length > 1 ? 's' : ''} sur {stats.total}
+              {cursor ? (
+                <>
+                  {' · '}
+                  <Link href="/training" className="underline hover:text-[var(--t-2)]">
+                    revenir au début
+                  </Link>
+                </>
+              ) : null}
+            </p>
+          </footer>
         </>
       )}
     </main>

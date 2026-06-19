@@ -69,11 +69,11 @@ export default async function MemberTrainingTradeDetailPage({
           cyan training surface (§21.5 non-confusable). */}
       <header className="flex flex-col gap-3">
         <Link
-          href="/training"
+          href={trade.sessionId ? `/training/sessions/${trade.sessionId}` : '/training'}
           className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
         >
           <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Mes backtests
+          {trade.sessionId ? 'Retour à la séance' : 'Mes backtests'}
         </Link>
         <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="f-mono text-[28px] leading-none font-semibold tracking-[0.01em] text-[var(--t-1)] sm:text-[32px]">

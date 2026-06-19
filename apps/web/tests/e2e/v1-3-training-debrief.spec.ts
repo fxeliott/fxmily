@@ -19,7 +19,9 @@
  * wizard UI (hidden inputs + localStorage → fragile selectors). The capture
  * layer is covered by the Vitest Zod/Server-Action/aggregator unit tests.
  * Crisis routing (`?crisis=` redirect + persist-anyway) is covered by the
- * Vitest action mirror; the anon auth-bounce is asserted below.
+ * Vitest action mirror `app/training/debrief/actions.test.ts` (S8 verif-layer)
+ * and the §21.5 projection by `lib/training-debrief/service.test.ts`; the anon
+ * auth-bounce is asserted below.
  *
  * Cleanup : `TrainingDebrief` declares `onDelete: Cascade` AND
  * `cleanupTestUsers` now wipes it explicitly (`db-helpers.ts`,

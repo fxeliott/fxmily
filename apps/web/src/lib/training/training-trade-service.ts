@@ -58,6 +58,10 @@ export interface SerializedTrainingTrade {
   enteredAt: string;
   createdAt: string;
   updatedAt: string;
+  /** Parent backtest session (S8 grouping), or null for a standalone backtest.
+   * A training-only id (FK to `TrainingSession`) — never a real-edge identifier;
+   * powers the "back to the session" navigation on the member detail view. */
+  sessionId: string | null;
 }
 
 // ----- Helpers ----------------------------------------------------------------
@@ -77,6 +81,7 @@ export function serializeTrainingTrade(row: TrainingTradeModel): SerializedTrain
     enteredAt: row.enteredAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    sessionId: row.sessionId ?? null,
   };
 }
 
@@ -106,18 +111,50 @@ export async function createTrainingTrade(
   return serializeTrainingTrade(row);
 }
 
+export interface ListTrainingTradesOptions {
+  /** Page size, clamped to [1, 50]. Defaults to 20. */
+  limit?: number;
+  /** Opaque cursor = the `id` of the last item of the previous page.
+   * `| undefined` explicit for `exactOptionalPropertyTypes` (mirror
+   * `ListTradesOptions`), so the page can pass a parsed `cursor` directly. */
+  cursor?: string | undefined;
+}
+
+export interface ListTrainingTradesResult {
+  items: SerializedTrainingTrade[];
+  /** `id` to pass as the next `cursor`, or null when the list is exhausted. */
+  nextCursor: string | null;
+}
+
 /**
- * List every backtest for `userId`, newest-first by entry timestamp
- * (matches the `(userId, enteredAt DESC)` index, SPEC §21.3).
+ * List a member's backtests, newest-first by entry timestamp, CURSOR-paginated.
+ * Mirror of the real `listTradesForUser` and the admin `listTrainingTradesAsAdmin`
+ * — the member landing was the ONLY training list still loading the whole
+ * history on every render (S8 verification-layer parity fix). The
+ * `(userId, enteredAt DESC)` index (SPEC §21.3) plus the `id` tiebreaker keep
+ * the page stable: `enteredAt` is member input at minute precision (non-unique),
+ * so without the tiebreaker cursor pagination could skip or duplicate backtests
+ * whose sort keys collide between two requests.
+ *
+ * 🚨 §21.5 — still `db.trainingTrade` only; never joins the real edge.
  */
 export async function listTrainingTradesForUser(
   userId: string,
-): Promise<SerializedTrainingTrade[]> {
+  options: ListTrainingTradesOptions = {},
+): Promise<ListTrainingTradesResult> {
+  const limit = Math.min(50, Math.max(1, options.limit ?? 20));
   const rows = await db.trainingTrade.findMany({
     where: { userId },
-    orderBy: { enteredAt: 'desc' },
+    orderBy: [{ enteredAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
+    ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
   });
-  return rows.map(serializeTrainingTrade);
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  return {
+    items: items.map(serializeTrainingTrade),
+    nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null,
+  };
 }
 
 /**
@@ -134,6 +171,66 @@ export async function getTrainingTradeById(
   return row ? serializeTrainingTrade(row) : null;
 }
 
+/**
+ * Full-history aggregate of a member's backtests, for the `/training` stats bar.
+ * SQL aggregates (count + groupBy + avg) so the numbers stay EXACT once the list
+ * itself is cursor-paginated — never reduced over a single truncated page.
+ *
+ * 🚨 §21.5 — TRAINING-ONLY. These figures (incl. the avg `resultR`) are the
+ * member's OWN practice stats, shown ONLY on `/training`, where each backtest
+ * already surfaces its own R. They NEVER feed a real-edge channel: no sanctioned
+ * touchpoint imports this fn — the single training→real bridge stays
+ * `countRecentTrainingActivity` (count/recency only, pinned below). Kept ABOVE
+ * that primitive on purpose: the anti-leak Block B/I slice the file from
+ * `countRecentTrainingActivity` to EOF and forbid `resultR`/`outcome`/`findMany`
+ * there, so a P&L-reading aggregate must live before it.
+ */
+export interface TrainingTradeStats {
+  total: number;
+  /** Backtests with a decided outcome (win|loss). */
+  decidedCount: number;
+  winCount: number;
+  /** Backtests carrying a result in R. */
+  withRCount: number;
+  /** Mean result in R over `withRCount`, or null when none is set. */
+  avgR: number | null;
+  /** Backtests where the system was explicitly kept/broken (non-null). */
+  systemDecidedCount: number;
+  systemKeptCount: number;
+}
+
+export async function getTrainingTradeStatsForUser(userId: string): Promise<TrainingTradeStats> {
+  const [total, byOutcome, rAgg, bySystem] = await Promise.all([
+    db.trainingTrade.count({ where: { userId } }),
+    db.trainingTrade.groupBy({ by: ['outcome'], where: { userId }, _count: { _all: true } }),
+    db.trainingTrade.aggregate({
+      where: { userId, resultR: { not: null } },
+      _avg: { resultR: true },
+      _count: { resultR: true },
+    }),
+    db.trainingTrade.groupBy({
+      by: ['systemRespected'],
+      where: { userId },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const winCount = byOutcome.find((g) => g.outcome === 'win')?._count._all ?? 0;
+  const lossCount = byOutcome.find((g) => g.outcome === 'loss')?._count._all ?? 0;
+  const systemKeptCount = bySystem.find((g) => g.systemRespected === true)?._count._all ?? 0;
+  const systemBrokenCount = bySystem.find((g) => g.systemRespected === false)?._count._all ?? 0;
+
+  return {
+    total,
+    decidedCount: winCount + lossCount,
+    winCount,
+    withRCount: rAgg._count.resultR,
+    avgR: rAgg._avg.resultR == null ? null : Number(rAgg._avg.resultR),
+    systemDecidedCount: systemKeptCount + systemBrokenCount,
+    systemKeptCount,
+  };
+}
+
 // ----- §21.5 isolation primitive ---------------------------------------------
 
 /**
@@ -143,10 +240,12 @@ export async function getTrainingTradeById(
  * SINGLE sanctioned shape by which training data reaches a real-edge surface
  * (engagement scoring, the Mark Douglas inactivity trigger, the weekly-report
  * volume line). It carries ONLY a count and a recency timestamp — never a
- * backtest P&L (`resultR` / `outcome` / `plannedRR`). The three call sites
- * (`lib/scoring/service.ts`, `lib/triggers/engine.ts`,
- * `lib/weekly-report/loader.ts`) import `countRecentTrainingActivity` and
- * NOTHING else from this module.
+ * backtest P&L (`resultR` / `outcome` / `plannedRR`). The sanctioned call
+ * sites (`lib/scoring/service.ts`, `lib/triggers/engine.ts`,
+ * `lib/weekly-report/loader.ts`, `lib/monthly-debrief/loader.ts`,
+ * `lib/calendar/service.ts`) import `countRecentTrainingActivity` and NOTHING
+ * else from this module. (Their count-only import contract is pinned by the
+ * blocking anti-leak suites — `training-isolation` + `calendar-isolation`.)
  */
 export interface RecentTrainingActivity {
   /** Backtests with `enteredAt` in the requested window. */

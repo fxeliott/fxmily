@@ -87,7 +87,7 @@ export function EndTrainingSessionButton({ sessionId }: { sessionId: string }) {
           onClick={onEnd}
           disabled={pending}
           aria-busy={pending || undefined}
-          className="rounded-control inline-flex h-11 items-center gap-1.5 bg-[var(--cy)] px-4 text-[12px] font-semibold text-[var(--acc-fg)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-control inline-flex h-11 items-center gap-1.5 bg-[var(--cy)] px-4 text-[12px] font-semibold text-[var(--bg)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? <Spinner size={12} /> : null}
           {pending ? 'Clôture…' : 'Confirmer'}

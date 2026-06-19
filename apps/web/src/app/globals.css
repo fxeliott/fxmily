@@ -806,19 +806,36 @@
   animation: thresholdPulse 600ms var(--e-data);
 }
 
-/* Live dot pulse */
+/* Live dot / live edge pulse. Compositor-only (S9 verification layer): the
+   glow is painted ONCE as a static box-shadow on a ::after pseudo, then only
+   the pseudo's OPACITY breathes — no per-frame box-shadow repaint (frontend-
+   elite gate "never animate box-shadow direct = INP/CLS cost"). Calm breathe,
+   not an expanding radar throb, matching the S9.1 non-toxic-motion ethos.
+   Generic over shape: the pseudo inherits the host's border-radius, so it
+   works for both the round pill dot (pill.tsx) and the trade-card status edge
+   (trade-card.tsx, clipped by the card's overflow-hidden exactly as before).
+   reduced-motion: the global net (animation-iteration-count:1) settles it at
+   opacity 0 → the glow disappears while the host dot/edge stays visible. */
 @keyframes livePulse {
   0%,
   100% {
-    opacity: 1;
-    box-shadow: 0 0 0 0 oklch(0.62 0.19 254 / 0.6);
+    opacity: 0;
   }
   50% {
-    opacity: 0.85;
-    box-shadow: 0 0 0 6px oklch(0.62 0.19 254 / 0);
+    opacity: 1;
   }
 }
 .live-dot {
+  position: relative;
+}
+.live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 5px oklch(0.62 0.19 254 / 0.5);
+  opacity: 0;
+  pointer-events: none;
   animation: livePulse 2s var(--e-data) infinite;
 }
 
@@ -1852,5 +1869,22 @@
   }
   body:has([data-slot='app-bottom-nav']) [data-slot='cookie-banner'] {
     bottom: calc(4.25rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* §243 fix (S9 verification layer): when the bottom-nav is mounted it RAISES
+   the FAB to `bottom: calc(4.75rem + safe-area)` (rule above) → FAB top ≈
+   8.25rem + safe-area (≈132px). The two equal-specificity (0,2,1) :has() rules
+   above — FAB-clearance `max(5.5rem,…)`≈88px (@≤815px) and nav-clearance
+   `4.25rem`≈68px (@≤1023px) — resolve by source order to 68px, which left the
+   full-width cookie banner (<816px) overlapping the RAISED FAB (76→132px) on
+   every authenticated phone (verified: cookie-fab-mobile shot, FAB occluded).
+   This double-:has() rule has higher specificity (0,3,1) so it wins regardless
+   of order and is the single source of truth for the FAB+nav case: it clears
+   the FAB's raised top, with safe-area folded in for notched devices. */
+@media (max-width: 815px) {
+  body:has([data-slot='app-bottom-nav']):has([data-slot='log-express-fab'])
+    [data-slot='cookie-banner'] {
+    bottom: calc(env(safe-area-inset-bottom) + 8.5rem); /* ≈136px > FAB top ≈132px */
   }
 }

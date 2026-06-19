@@ -21,19 +21,58 @@ import { serializeTrainingTrade, type SerializedTrainingTrade } from './training
  * symbol rather than a silent leak (mirror of the J3/J4 split).
  */
 
+export interface ListTrainingTradesAsAdminOptions {
+  limit?: number;
+  cursor?: string | undefined;
+}
+
+export interface ListTrainingTradesAsAdminResult {
+  items: SerializedTrainingTrade[];
+  nextCursor: string | null;
+}
+
 /**
- * List every backtest authored by `memberId`, newest-first by entry instant
- * (matches the `(userId, enteredAt DESC)` index — same order as the member's
- * own `/training` list).
+ * List a member's backtests for the admin "training" tab — cursor-paginated.
+ *
+ * Mirrors `listMemberTradesAsAdmin` exactly: same 50/page size, the same
+ * `[enteredAt desc, id desc]` tiebreaker (`enteredAt` is minute-precision
+ * member input, non-unique — the `id` tiebreaker stops the cursor from
+ * skipping/duplicating colliding rows), and the same `take: limit + 1`
+ * look-ahead to compute `nextCursor`.
+ *
+ * S7 requires the admin to reach and correct EVERY backtest. The previous
+ * implementation loaded the member's FULL training history in one unbounded
+ * `findMany` — on an intensive backtester (training is a high-volume surface
+ * by design, §21) the oldest backtests inflated the payload + render with no
+ * UI to page through them. This restores parity with the real-trade list.
+ * §21.5: every read still touches ONLY `db.trainingTrade`.
  */
 export async function listTrainingTradesAsAdmin(
   memberId: string,
-): Promise<SerializedTrainingTrade[]> {
+  options: ListTrainingTradesAsAdminOptions = {},
+): Promise<ListTrainingTradesAsAdminResult> {
+  const limit = Math.min(50, Math.max(1, options.limit ?? 50));
   const rows = await db.trainingTrade.findMany({
     where: { userId: memberId },
-    orderBy: { enteredAt: 'desc' },
+    orderBy: [{ enteredAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
+    ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
   });
-  return rows.map(serializeTrainingTrade);
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  return {
+    items: items.map(serializeTrainingTrade),
+    nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null,
+  };
+}
+
+/**
+ * Total backtest count for a member — powers the admin training-list footer
+ * ("X au total") so a paginated page is never mistaken for the whole history.
+ * §21.5: count-only on `db.trainingTrade`.
+ */
+export async function countTrainingTradesAsAdmin(memberId: string): Promise<number> {
+  return db.trainingTrade.count({ where: { userId: memberId } });
 }
 
 /**

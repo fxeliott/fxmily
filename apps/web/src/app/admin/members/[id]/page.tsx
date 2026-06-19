@@ -38,7 +38,10 @@ import { listAdminNotesForMember } from '@/lib/admin/admin-notes-service';
 import { aggregateMemberDeliveryStats, listMemberDeliveries } from '@/lib/admin/cards-service';
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
-import { listTrainingTradesAsAdmin } from '@/lib/training/training-trade-admin-service';
+import {
+  listTrainingTradesAsAdmin,
+  countTrainingTradesAsAdmin,
+} from '@/lib/training/training-trade-admin-service';
 import { listTrainingSessionsAsAdmin } from '@/lib/training/training-session-admin-service';
 import { countTrainingAnnotationsByMember } from '@/lib/admin/training-annotation-service';
 import { getProfileForUser, getInterviewForUser } from '@/lib/onboarding-interview/service';
@@ -121,7 +124,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   const { id: memberId } = await params;
   const { tab: rawTab, cursor: rawCursor } = await searchParams;
   const tab = parseTab(rawTab);
-  const cursor = tab === 'trades' ? parseCursor(rawCursor) : undefined;
+  // Shared `?cursor=` param — only one of the two paginated tabs (trades /
+  // training) is ever active at a time, so they cannot collide.
+  const cursor = tab === 'trades' || tab === 'training' ? parseCursor(rawCursor) : undefined;
 
   let detail;
   try {
@@ -148,7 +153,23 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
     if (tradesPage === null) redirect(`/admin/members/${memberId}?tab=trades`);
   }
 
-  const trainingTrades = tab === 'training' ? await listTrainingTradesAsAdmin(memberId) : null;
+  // Cursor-paginated (S7 parity with the real-trade list). A stale cursor (a
+  // backtest deleted since the link was rendered) returns an empty page,
+  // handled by the dead-end in MemberTrainingPanel; a genuine DB error must
+  // surface, not loop — the net catches ONLY when a cursor is in play (mirror
+  // of the trades tab above). `redirect` stays outside the catch.
+  let trainingPage: Awaited<ReturnType<typeof listTrainingTradesAsAdmin>> | null = null;
+  let trainingTradesTotal = 0;
+  if (tab === 'training') {
+    try {
+      trainingPage = await listTrainingTradesAsAdmin(memberId, { limit: 50, cursor });
+    } catch (err) {
+      if (!cursor) throw err;
+      trainingPage = null;
+    }
+    if (trainingPage === null) redirect(`/admin/members/${memberId}?tab=training`);
+    trainingTradesTotal = await countTrainingTradesAsAdmin(memberId);
+  }
 
   // S8 — backtest sessions (containers) for the training tab. Read-only admin
   // supervision (§27 output to S7). §21.5: training-only reads.
@@ -358,7 +379,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           total={detail.tradesCount}
         />
       ) : null}
-      {tab === 'training' && trainingTrades ? (
+      {tab === 'training' && trainingPage ? (
         <div className="flex flex-col gap-8">
           {trainingSessions !== null ? (
             <section className="flex flex-col gap-3">
@@ -370,7 +391,10 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
             <h2 className="t-h3 text-foreground">Tous les backtests</h2>
             <MemberTrainingPanel
               memberId={memberId}
-              trades={trainingTrades}
+              trades={trainingPage.items}
+              nextCursor={trainingPage.nextCursor}
+              cursor={cursor}
+              total={trainingTradesTotal}
               correctionsCount={trainingCorrectionsCount ?? undefined}
             />
           </section>

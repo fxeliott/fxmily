@@ -155,11 +155,16 @@ export async function createTrainingAnnotationAction(
     });
     trainingAnnotationId = created.id;
   } catch (err) {
-    // Orphan media: the upload landed but the row insert failed. The J10
-    // janitor cron sweeps unreferenced media; best-effort delete now.
+    // Orphan media: the upload landed but the row insert failed. Best-effort
+    // delete; log a failed cleanup so a recurring R2 leak is observable
+    // (the janitor sweep is a backstop, not a guarantee).
     if (mediaKey !== null) {
       const storage = selectStorage();
-      void storage.delete(mediaKey).catch(() => undefined);
+      void storage
+        .delete(mediaKey)
+        .catch((e) =>
+          console.error('[admin.trainingAnnotation.create] orphan media cleanup failed', e),
+        );
     }
     console.error('[admin.trainingAnnotation.create] db insert failed', err);
     return { ok: false, error: 'unknown' };

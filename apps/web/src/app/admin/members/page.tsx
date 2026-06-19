@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus, Sparkles, Users } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Sparkles, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -8,7 +8,7 @@ import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
-import { listMembersForAdmin } from '@/lib/admin/members-service';
+import { getMemberDirectoryStats, listMembersForAdmin } from '@/lib/admin/members-service';
 import { logAudit } from '@/lib/auth/audit';
 import { cn } from '@/lib/utils';
 
@@ -18,21 +18,67 @@ export const metadata = {
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminMembersPage() {
+interface MembersPageProps {
+  searchParams: Promise<{ q?: string; cursor?: string }>;
+}
+
+/** Member ids are cuids — reject anything else BEFORE it reaches the Prisma
+ *  cursor (a forged `?cursor=` must degrade to page 1, never to a 500). */
+function parseCursor(value: string | undefined): string | undefined {
+  return value && /^[a-z0-9]{20,40}$/i.test(value) ? value : undefined;
+}
+
+/** Trim + hard-cap the search term (anti-DoS on the Postgres ILIKE planner).
+ *  Empty → undefined so the service skips the OR filter entirely. */
+function parseQuery(value: string | undefined): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const q = value.trim().slice(0, 100);
+  return q.length > 0 ? q : undefined;
+}
+
+/** Build the members href, carrying the active search + an optional cursor. */
+function membersHref(query: string | undefined, cursor?: string | null): string {
+  const params = new URLSearchParams();
+  if (query) params.set('q', query);
+  if (cursor) params.set('cursor', cursor);
+  const qs = params.toString();
+  return qs ? `/admin/members?${qs}` : '/admin/members';
+}
+
+export default async function AdminMembersPage({ searchParams }: MembersPageProps) {
   const session = await auth();
   if (!session?.user || session.user.role !== 'admin') redirect('/login');
 
-  const members = await listMembersForAdmin();
+  const { q: rawQuery, cursor: rawCursor } = await searchParams;
+  const query = parseQuery(rawQuery);
+  const cursor = parseCursor(rawCursor);
+
+  // Cohort-wide stats (independent of search/page) + the current page in one
+  // round of parallel reads. A stale cursor returns an empty page (handled by
+  // the dead-end below); a genuine DB error must surface, not loop — the net
+  // catches ONLY when a cursor is in play (mirror of the trades tab).
+  let page: Awaited<ReturnType<typeof listMembersForAdmin>> | null = null;
+  let stats: Awaited<ReturnType<typeof getMemberDirectoryStats>>;
+  try {
+    [stats, page] = await Promise.all([
+      getMemberDirectoryStats(),
+      listMembersForAdmin({ query, limit: 50, cursor }),
+    ]);
+  } catch (err) {
+    if (!cursor) throw err;
+    stats = await getMemberDirectoryStats();
+    page = null;
+  }
+  if (page === null) redirect(membersHref(query));
 
   await logAudit({
     action: 'admin.members.listed',
     userId: session.user.id,
-    metadata: { count: members.length },
+    metadata: { count: page.items.length, search: query ? 1 : 0 },
   });
 
-  const totalActive = members.filter((m) => m.status === 'active').length;
-  const totalSuspended = members.filter((m) => m.status === 'suspended').length;
-  const totalTradesAcrossMembers = members.reduce((s, m) => s + (m.tradesCount ?? 0), 0);
+  const isEmptyCohort = stats.total === 0;
+  const isSearchMiss = !isEmptyCohort && page.items.length === 0;
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[var(--w-app)] flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
@@ -71,35 +117,82 @@ export default async function AdminMembersPage() {
           </div>
         </div>
 
-        {/* Top stats strip */}
+        {/* Top stats strip — cohort-wide, unaffected by search/pagination. */}
         <div className="border-edge-top rounded-card relative grid grid-cols-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] shadow-[var(--sh-card)] sm:grid-cols-4">
           <StatCell
             label="Total"
-            value={members.length}
-            hint={members.length > 0 ? 'membres' : 'aucun encore'}
+            value={stats.total}
+            hint={stats.total > 0 ? 'membres' : 'aucun encore'}
           />
           <StatCell
             label="Actifs"
-            value={totalActive}
+            value={stats.active}
             hint="connectés"
-            tone={totalActive > 0 ? 'ok' : 'mute'}
+            tone={stats.active > 0 ? 'ok' : 'mute'}
           />
           <StatCell
             label="Suspendus"
-            value={totalSuspended}
-            hint={totalSuspended > 0 ? 'à revoir' : '—'}
-            tone={totalSuspended > 0 ? 'bad' : 'mute'}
+            value={stats.suspended}
+            hint={stats.suspended > 0 ? 'à revoir' : '—'}
+            tone={stats.suspended > 0 ? 'bad' : 'mute'}
           />
           <StatCell
             label="Trades cumulés"
-            value={totalTradesAcrossMembers}
+            value={stats.totalTrades}
             hint="tous membres"
-            tone={totalTradesAcrossMembers > 0 ? 'acc' : 'mute'}
+            tone={stats.totalTrades > 0 ? 'acc' : 'mute'}
           />
         </div>
+
+        {/* Search — server-rendered GET form (works without JS, accessible).
+            Submitting drops any cursor → back to page 1 of the new query. */}
+        {!isEmptyCohort ? (
+          <form method="get" action="/admin/members" role="search" className="flex flex-col gap-2">
+            <label htmlFor="member-search" className="sr-only">
+              Rechercher un membre par nom ou email
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search
+                  className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--t-4)]"
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                />
+                <input
+                  id="member-search"
+                  type="search"
+                  name="q"
+                  defaultValue={query ?? ''}
+                  placeholder="Rechercher un membre (nom, email)…"
+                  autoComplete="off"
+                  maxLength={100}
+                  className="rounded-card h-11 w-full border border-[var(--b-default)] bg-[var(--bg)] pr-3 pl-9 font-sans text-[14px] text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                />
+              </div>
+              <button type="submit" className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}>
+                Rechercher
+              </button>
+              {query ? (
+                <Link
+                  href="/admin/members"
+                  className={cn(btnVariants({ kind: 'ghost', size: 'm' }))}
+                  aria-label="Effacer la recherche"
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Effacer
+                </Link>
+              ) : null}
+            </div>
+            {query ? (
+              <p className="t-cap text-[var(--t-3)]" role="status">
+                Résultats pour «&nbsp;{query}&nbsp;»
+              </p>
+            ) : null}
+          </form>
+        ) : null}
       </header>
 
-      {members.length === 0 ? (
+      {isEmptyCohort ? (
         <Card primary className="py-2">
           <EmptyState
             icon={Users}
@@ -120,27 +213,59 @@ export default async function AdminMembersPage() {
             ctaHref="/admin/invite"
           />
         </Card>
-      ) : (
-        <ul className="grid gap-3 xl:grid-cols-2 [&>li]:h-full">
-          {members.map((member) => (
-            <li key={member.id}>
-              <MemberRow member={member} />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {members.length === 0 ? (
-        <div className="flex justify-center">
-          {/* Phase P review WCAG B2 — Link wrapping Btn nests <a><button>
-              (invalid HTML5 + double tab-stop). Use btnVariants on the
-              Link directly so it renders as a single <a>. */}
-          <Link href="/admin/invite" className={btnVariants({ kind: 'primary', size: 'm' })}>
-            <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-            Envoyer la première invitation
+      ) : isSearchMiss ? (
+        <div className="rounded-card flex flex-col items-center gap-2 border border-[var(--b-default)] bg-[var(--bg-1)] px-6 py-10 text-center">
+          <p className="text-sm text-[var(--t-1)]">
+            {cursor ? 'Fin de la liste.' : `Aucun membre ne correspond à « ${query} ».`}
+          </p>
+          <Link
+            href={membersHref(cursor ? query : undefined)}
+            className="text-xs text-[var(--acc-hi)] underline hover:text-[var(--acc)]"
+          >
+            {cursor ? 'Revenir au début' : 'Réinitialiser la recherche'}
           </Link>
         </div>
-      ) : null}
+      ) : (
+        <div className="flex flex-col gap-4">
+          <ul className="grid gap-3 xl:grid-cols-2 [&>li]:h-full">
+            {page.items.map((member) => (
+              <li key={member.id}>
+                <MemberRow member={member} />
+              </li>
+            ))}
+          </ul>
+
+          {/* Pagination — cursor through the cohort while keeping the search. */}
+          <footer className="flex flex-col items-center gap-3 border-t border-[var(--b-subtle)] pt-2">
+            {page.nextCursor ? (
+              <Link
+                href={membersHref(query, page.nextCursor)}
+                prefetch={false}
+                className={cn(btnVariants({ kind: 'ghost', size: 'm' }))}
+              >
+                Voir les membres plus anciens
+              </Link>
+            ) : null}
+            <p className="t-foot text-center text-[var(--t-4)]">
+              Affichage de {page.items.length} membre{page.items.length > 1 ? 's' : ''}
+              {!query ? (
+                <>
+                  {' '}
+                  · <span className="font-mono tabular-nums">{stats.total} au total</span>
+                </>
+              ) : null}
+              {cursor ? (
+                <>
+                  {' · '}
+                  <Link href={membersHref(query)} className="underline hover:text-[var(--t-2)]">
+                    revenir au début
+                  </Link>
+                </>
+              ) : null}
+            </p>
+          </footer>
+        </div>
+      )}
     </main>
   );
 }

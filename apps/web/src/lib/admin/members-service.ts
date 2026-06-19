@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
+import type { Prisma } from '@/generated/prisma/client';
 import type { UserRole, UserStatus } from '@/generated/prisma/enums';
 
 /**
@@ -42,21 +43,89 @@ export interface MemberDetail extends MemberSummary {
   timezone: string;
 }
 
+export interface ListMembersForAdminOptions {
+  /** Case-insensitive search across firstName / lastName / email. */
+  query?: string | undefined;
+  limit?: number;
+  cursor?: string | undefined;
+}
+
+export interface ListMembersForAdminResult {
+  items: MemberSummary[];
+  nextCursor: string | null;
+}
+
+export interface MemberDirectoryStats {
+  total: number;
+  active: number;
+  suspended: number;
+  totalTrades: number;
+}
+
 /**
- * List every member visible from the admin dashboard. Includes admins so the
- * admin can see their own row (handy for sanity checks during onboarding).
- *
- * Sort order : `joinedAt DESC` — newest first because that's typically what the
- * admin looks at after sending an invitation.
+ * Cohort-wide directory stats for the members landing strip. Deliberately
+ * INDEPENDENT of the active search / pagination so the totals always reflect
+ * the whole non-deleted cohort (the strip is an overview, not a page summary).
+ * Two bounded aggregates — never a full member scan.
  */
-export async function listMembersForAdmin(): Promise<MemberSummary[]> {
+export async function getMemberDirectoryStats(): Promise<MemberDirectoryStats> {
+  const [byStatus, totalTrades] = await Promise.all([
+    db.user.groupBy({
+      by: ['status'],
+      where: { status: { not: 'deleted' } },
+      _count: { _all: true },
+    }),
+    db.trade.count({ where: { user: { status: { not: 'deleted' } } } }),
+  ]);
+
+  let total = 0;
+  let active = 0;
+  let suspended = 0;
+  for (const r of byStatus) {
+    total += r._count._all;
+    if (r.status === 'active') active = r._count._all;
+    else if (r.status === 'suspended') suspended = r._count._all;
+  }
+  return { total, active, suspended, totalTrades };
+}
+
+/**
+ * List members for the admin dashboard — cursor-paginated + searchable (S7
+ * optimization). Includes admins so the admin sees their own row. Sort order
+ * `[joinedAt desc, id desc]` (newest first; the `id` tiebreaker keeps the
+ * cursor stable when two members share a `joinedAt`). An optional `query`
+ * filters case-insensitively across first name / last name / email so the admin
+ * can find a member instantly at cohort scale (30 -> 1000, SPEC §13/§30).
+ *
+ * The open/closed trade counts are scoped to the CURRENT page's member ids, so
+ * the per-page work stays O(page size) regardless of cohort size.
+ */
+export async function listMembersForAdmin(
+  options: ListMembersForAdminOptions = {},
+): Promise<ListMembersForAdminResult> {
+  const limit = Math.min(50, Math.max(1, options.limit ?? 50));
+  const query = options.query?.trim();
+
+  // Soft-deleted users are hidden by default. Reactivating one is a manual DB
+  // op for now (no admin UI for it).
+  const where: Prisma.UserWhereInput = {
+    status: { not: 'deleted' },
+    ...(query
+      ? {
+          OR: [
+            { firstName: { contains: query, mode: 'insensitive' } },
+            { lastName: { contains: query, mode: 'insensitive' } },
+            { email: { contains: query, mode: 'insensitive' } },
+          ],
+        }
+      : {}),
+  };
+
   const rows = await db.user.findMany({
-    where: {
-      // Soft-deleted users are hidden by default. Reactivating one is a manual
-      // DB op for now (no admin UI for it in J3).
-      status: { not: 'deleted' },
-    },
-    orderBy: { joinedAt: 'desc' },
+    where,
+    orderBy: [{ joinedAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
+    ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
     select: {
       id: true,
       email: true,
@@ -69,25 +138,42 @@ export async function listMembersForAdmin(): Promise<MemberSummary[]> {
     },
   });
 
-  if (rows.length === 0) return [];
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  if (pageRows.length === 0) return { items: [], nextCursor: null };
 
-  // One groupBy gives us (open, closed) counts per user in a single round-trip.
-  const counts = await db.trade.groupBy({
-    by: ['userId', 'closedAt'],
-    where: { userId: { in: rows.map((r) => r.id) } },
-    _count: { _all: true },
-  });
+  // Two bounded `groupBy(['userId'])` (open / closed) for THIS page's members —
+  // O(page size) rows. A `groupBy(['userId', 'closedAt'])` would emit one row
+  // per distinct closedAt timestamp (DateTime). Covered by
+  // @@index([userId, closedAt]).
+  const ids = pageRows.map((r) => r.id);
+  const [openCounts, closedCounts] = await Promise.all([
+    db.trade.groupBy({
+      by: ['userId'],
+      where: { userId: { in: ids }, closedAt: null },
+      _count: { _all: true },
+    }),
+    db.trade.groupBy({
+      by: ['userId'],
+      where: { userId: { in: ids }, closedAt: { not: null } },
+      _count: { _all: true },
+    }),
+  ]);
 
   type CountAcc = { open: number; closed: number };
   const byUser = new Map<string, CountAcc>();
-  for (const row of counts) {
+  for (const row of openCounts) {
     const acc = byUser.get(row.userId) ?? { open: 0, closed: 0 };
-    if (row.closedAt === null) acc.open += row._count._all;
-    else acc.closed += row._count._all;
+    acc.open += row._count._all;
+    byUser.set(row.userId, acc);
+  }
+  for (const row of closedCounts) {
+    const acc = byUser.get(row.userId) ?? { open: 0, closed: 0 };
+    acc.closed += row._count._all;
     byUser.set(row.userId, acc);
   }
 
-  return rows.map((row) => {
+  const items: MemberSummary[] = pageRows.map((row) => {
     const c = byUser.get(row.id) ?? { open: 0, closed: 0 };
     return {
       id: row.id,
@@ -103,6 +189,11 @@ export async function listMembersForAdmin(): Promise<MemberSummary[]> {
       tradesClosedCount: c.closed,
     };
   });
+
+  return {
+    items,
+    nextCursor: hasMore ? (pageRows[pageRows.length - 1]?.id ?? null) : null,
+  };
 }
 
 export class MemberNotFoundError extends Error {
@@ -135,26 +226,19 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
   });
   if (!row || row.status === 'deleted') throw new MemberNotFoundError();
 
-  // Aggregate counts + last activity in two parallel queries.
-  const [tradeCounts, lastTrade] = await Promise.all([
-    db.trade.groupBy({
-      by: ['closedAt'],
-      where: { userId: memberId },
-      _count: { _all: true },
-    }),
+  // Aggregate counts + last activity in parallel. Two bounded `count`s (open /
+  // closed) rather than a `groupBy(['closedAt'])` — the latter emits one row
+  // per distinct closure timestamp (DateTime). Same pattern as
+  // `countTradesByStatus`; covered by @@index([userId, closedAt]).
+  const [open, closed, lastTrade] = await Promise.all([
+    db.trade.count({ where: { userId: memberId, closedAt: null } }),
+    db.trade.count({ where: { userId: memberId, closedAt: { not: null } } }),
     db.trade.findFirst({
       where: { userId: memberId },
       orderBy: { enteredAt: 'desc' },
       select: { enteredAt: true },
     }),
   ]);
-
-  let open = 0;
-  let closed = 0;
-  for (const c of tradeCounts) {
-    if (c.closedAt === null) open += c._count._all;
-    else closed += c._count._all;
-  }
 
   const fullName = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
 

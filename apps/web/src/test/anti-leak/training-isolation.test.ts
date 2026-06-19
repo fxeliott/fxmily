@@ -669,6 +669,11 @@ describe('§21.5 — TrainingSession container is training-isolated', () => {
     'lib/training/training-session-service.ts',
     'lib/training/training-session-admin-service.ts',
     'app/training/sessions/actions.ts',
+    // S8 verif-layer — `app/training/actions.ts` is the PRIMARY backtest-write
+    // Server Action (`createTrainingTradeAction`) and was the only one of the 3
+    // training Server Actions whose anti-`/dashboard` revalidate + no-real-edge
+    // import contract was not pinned (debrief is in Block F, sessions above).
+    'app/training/actions.ts',
   ] as const;
   const REAL_EDGE_IMPORTS = [
     '@/lib/scoring',
@@ -688,12 +693,19 @@ describe('§21.5 — TrainingSession container is training-isolated', () => {
     }
   });
 
-  it('the session Server Action never revalidates the real-edge dashboard', () => {
-    const actionCode = readSrcCode('app/training/sessions/actions.ts');
-    expect(
-      actionCode,
-      "the session Server Action must not revalidatePath('/dashboard') (§21.5)",
-    ).not.toContain("revalidatePath('/dashboard')");
+  it('the training Server Actions never revalidate the real-edge dashboard', () => {
+    // Both the session container action AND the primary backtest-write action:
+    // a backtest write must revalidate the training surface ONLY, never the
+    // real-edge dashboard/journal (§21.5).
+    for (const rel of ['app/training/sessions/actions.ts', 'app/training/actions.ts']) {
+      const actionCode = readSrcCode(rel);
+      expect(actionCode, `${rel} must not revalidatePath('/dashboard') (§21.5)`).not.toContain(
+        "revalidatePath('/dashboard')",
+      );
+      expect(actionCode, `${rel} must not revalidatePath('/journal') (§21.5)`).not.toContain(
+        "revalidatePath('/journal')",
+      );
+    }
   });
 
   it('the real-edge activity channel still counts BACKTESTS, never sessions', () => {

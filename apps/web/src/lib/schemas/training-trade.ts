@@ -46,6 +46,23 @@ const plannedRRSchema = z.coerce
   .gte(0.25, 'Le R:R minimum est 0.25.')
   .lte(20, 'Le R:R maximum est 20.');
 
+/** Backtest result in R — OPTIONAL/nullable (a backtest may be logged before
+ * its result is set, mirroring the real open/close split). Bounded to the
+ * `resultR Decimal(6, 2)` DB column (`schema.prisma`): an out-of-range or
+ * over-precise entry now surfaces a CLEAR field error instead of a generic
+ * Postgres `numeric field overflow` swallowed as `error:'unknown'`. Unlike
+ * `plannedRR`, a result may be NEGATIVE (a losing backtest). The `nullable`
+ * short-circuits null (an empty/absent result) before the numeric checks. */
+const resultRSchema = z.coerce
+  .number({ message: 'Résultat R invalide.' })
+  .gte(-9999.99, 'Le résultat R doit être compris entre -9999.99 et 9999.99.')
+  .lte(9999.99, 'Le résultat R doit être compris entre -9999.99 et 9999.99.')
+  .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, {
+    message: 'Maximum 2 décimales (ex. 1.25).',
+  })
+  .nullable()
+  .optional();
+
 /** Entry-analysis screenshot key. Pattern sourced from `lib/storage/keys` so
  * the validation layer and the (J-T2) path-generation layer never drift —
  * same approach as `annotation.ts`. */
@@ -86,7 +103,7 @@ export const trainingTradeCreateSchema = z.object({
   entryScreenshotKey: trainingScreenshotKeySchema,
   plannedRR: plannedRRSchema,
   outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }).nullable().optional(),
-  resultR: z.coerce.number({ message: 'Résultat R invalide.' }).nullable().optional(),
+  resultR: resultRSchema,
   systemRespected: systemRespectedSchema,
   lessonLearned: lessonLearnedSchema,
   enteredAt: enteredAtSchema,

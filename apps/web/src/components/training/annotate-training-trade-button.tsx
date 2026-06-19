@@ -102,9 +102,14 @@ export function AnnotateTrainingTradeButton({
                 Correction
               </label>
               <span
+                id={`${formId}-comment-counter`}
                 className={`t-cap tabular-nums ${remaining < 0 ? 'text-[var(--bad)]' : 'text-[var(--t-4)]'}`}
               >
                 {remaining}
+                <span className="sr-only">
+                  {' '}
+                  caractères restants sur {TRAINING_ANNOTATION_COMMENT_MAX}
+                </span>
               </span>
             </div>
             <textarea
@@ -118,9 +123,21 @@ export function AnnotateTrainingTradeButton({
               placeholder="Ex. R:R 1:2 prévu, mais entrée anticipée avant la confirmation — travaille la patience d'exécution (cf. fiche Douglas « attendre son setup »)."
               className="rounded-card resize-y border border-[var(--b-default)] bg-[var(--bg)] px-3 py-2.5 font-sans text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
               aria-invalid={state?.fieldErrors?.comment ? 'true' : undefined}
+              aria-describedby={
+                [
+                  `${formId}-comment-counter`,
+                  state?.fieldErrors?.comment ? `${formId}-comment-error` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
             />
             {state?.fieldErrors?.comment ? (
-              <p role="alert" className="text-[11px] text-[var(--bad)]">
+              <p
+                id={`${formId}-comment-error`}
+                role="alert"
+                className="text-[11px] text-[var(--bad)]"
+              >
                 {state.fieldErrors.comment}
               </p>
             ) : null}

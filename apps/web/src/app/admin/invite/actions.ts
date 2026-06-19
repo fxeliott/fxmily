@@ -22,7 +22,11 @@ export async function createInvitationAction(
   formData: FormData,
 ): Promise<InviteActionState> {
   const session = await auth();
-  if (!session?.user || session.user.role !== 'admin') {
+  // Role AND status: a demoted/suspended admin holding a still-valid JWT must
+  // not be able to mint invitations (parity with access-requests/actions.ts:42
+  // and the other admin actions — the page-level proxy gate covers reads, but
+  // Server Actions are invoked via POST RSC outside the /admin proxy matcher).
+  if (!session?.user || session.user.role !== 'admin' || session.user.status !== 'active') {
     return { ok: false, message: 'Accès refusé.' };
   }
 

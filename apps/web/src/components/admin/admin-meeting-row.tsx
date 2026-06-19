@@ -101,7 +101,10 @@ export function AdminMeetingRow({ meeting }: { meeting: AdminMeetingView }) {
         <input type="hidden" name="action" value={nextAction} />
 
         {message ? (
-          <p role="status" className="t-cap text-[var(--t-2)]">
+          // `feedbackMessage` returns a string only on failure, so this line is
+          // assertive (role="alert", WCAG 4.1.3) — success is signalled by the
+          // server revalidatePath, never by this span.
+          <p role="alert" className="t-cap text-[var(--t-2)]">
             {message}
           </p>
         ) : null}

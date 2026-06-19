@@ -24,7 +24,6 @@ export function MemberMindsetChecksPanel({ data }: { data: MindsetDashboardData 
           icon={Brain}
           headline="Aucune auto-évaluation mindset pour ce membre."
           lead="Le profil mental apparaîtra ici dès qu'il aura rempli sa première auto-évaluation hebdomadaire."
-          headingLevel="h3"
         />
       </Card>
     );

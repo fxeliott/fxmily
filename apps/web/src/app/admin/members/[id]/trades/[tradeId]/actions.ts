@@ -151,11 +151,14 @@ export async function createAnnotationAction(
     });
     annotationId = created.id;
   } catch (err) {
-    // Orphan media: the upload landed but the row insert failed. The
-    // janitor cron (J10) sweeps unreferenced annotation media.
+    // Orphan media: the upload landed but the row insert failed. Best-effort
+    // delete; log a failed cleanup so a recurring R2 leak is observable
+    // (the janitor sweep is a backstop, not a guarantee).
     if (mediaKey !== null) {
       const storage = selectStorage();
-      void storage.delete(mediaKey).catch(() => undefined);
+      void storage
+        .delete(mediaKey)
+        .catch((e) => console.error('[admin.annotation.create] orphan media cleanup failed', e));
     }
     console.error('[admin.annotation.create] db insert failed', err);
     return { ok: false, error: 'unknown' };
@@ -260,11 +263,16 @@ export async function deleteAnnotationAction(
     },
   });
 
+  // Member surfaces always revalidate from the known annotation.tradeId — even
+  // if the parent trade vanished between the read and the delete (cascade),
+  // the member's /journal cache must not keep a stale correction. Mirrors
+  // deleteTrainingAnnotationAction. The admin overview/detail paths need the
+  // owner id, so they stay guarded by `if (trade)`.
+  revalidatePath(`/journal/${annotation.tradeId}`);
+  revalidatePath('/journal');
   if (trade) {
     revalidatePath(`/admin/members/${trade.userId}/trades/${annotation.tradeId}`);
     revalidatePath(`/admin/members/${trade.userId}`);
-    revalidatePath(`/journal/${annotation.tradeId}`);
-    revalidatePath('/journal');
   }
 
   return { ok: true };

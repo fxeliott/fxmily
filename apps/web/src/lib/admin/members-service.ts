@@ -71,19 +71,35 @@ export async function listMembersForAdmin(): Promise<MemberSummary[]> {
 
   if (rows.length === 0) return [];
 
-  // One groupBy gives us (open, closed) counts per user in a single round-trip.
-  const counts = await db.trade.groupBy({
-    by: ['userId', 'closedAt'],
-    where: { userId: { in: rows.map((r) => r.id) } },
-    _count: { _all: true },
-  });
+  // Two bounded `groupBy(['userId'])` (open / closed) — O(members) rows each.
+  // A single `groupBy(['userId', 'closedAt'])` would emit ONE row per distinct
+  // closedAt timestamp (DateTime, high cardinality), so a member with N closed
+  // trades transferred ~N rows. Both queries are covered by the composite
+  // @@index([userId, closedAt]).
+  const ids = rows.map((r) => r.id);
+  const [openCounts, closedCounts] = await Promise.all([
+    db.trade.groupBy({
+      by: ['userId'],
+      where: { userId: { in: ids }, closedAt: null },
+      _count: { _all: true },
+    }),
+    db.trade.groupBy({
+      by: ['userId'],
+      where: { userId: { in: ids }, closedAt: { not: null } },
+      _count: { _all: true },
+    }),
+  ]);
 
   type CountAcc = { open: number; closed: number };
   const byUser = new Map<string, CountAcc>();
-  for (const row of counts) {
+  for (const row of openCounts) {
     const acc = byUser.get(row.userId) ?? { open: 0, closed: 0 };
-    if (row.closedAt === null) acc.open += row._count._all;
-    else acc.closed += row._count._all;
+    acc.open += row._count._all;
+    byUser.set(row.userId, acc);
+  }
+  for (const row of closedCounts) {
+    const acc = byUser.get(row.userId) ?? { open: 0, closed: 0 };
+    acc.closed += row._count._all;
     byUser.set(row.userId, acc);
   }
 
@@ -135,26 +151,19 @@ export async function getMemberDetail(memberId: string): Promise<MemberDetail> {
   });
   if (!row || row.status === 'deleted') throw new MemberNotFoundError();
 
-  // Aggregate counts + last activity in two parallel queries.
-  const [tradeCounts, lastTrade] = await Promise.all([
-    db.trade.groupBy({
-      by: ['closedAt'],
-      where: { userId: memberId },
-      _count: { _all: true },
-    }),
+  // Aggregate counts + last activity in parallel. Two bounded `count`s (open /
+  // closed) rather than a `groupBy(['closedAt'])` — the latter emits one row
+  // per distinct closure timestamp (DateTime). Same pattern as
+  // `countTradesByStatus`; covered by @@index([userId, closedAt]).
+  const [open, closed, lastTrade] = await Promise.all([
+    db.trade.count({ where: { userId: memberId, closedAt: null } }),
+    db.trade.count({ where: { userId: memberId, closedAt: { not: null } } }),
     db.trade.findFirst({
       where: { userId: memberId },
       orderBy: { enteredAt: 'desc' },
       select: { enteredAt: true },
     }),
   ]);
-
-  let open = 0;
-  let closed = 0;
-  for (const c of tradeCounts) {
-    if (c.closedAt === null) open += c._count._all;
-    else closed += c._count._all;
-  }
 
   const fullName = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
 

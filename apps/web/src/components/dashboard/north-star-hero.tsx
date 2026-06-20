@@ -16,6 +16,7 @@ import Link from 'next/link';
 
 import { StreakCard } from '@/components/checkin/streak-card';
 import { Card } from '@/components/ui/card';
+import { InfoDot } from '@/components/ui/info-dot';
 import { Sparkline } from '@/components/ui/sparkline';
 import type { GuidanceAction, GuidanceKind } from '@/lib/daily-guidance/service';
 import type { BehavioralScoreTrendPoint, SerializedBehavioralScore } from '@/lib/scoring/service';
@@ -141,7 +142,7 @@ interface NorthStarHeroProps {
   dateLabel: string;
   score: SerializedBehavioralScore | null;
   history: BehavioralScoreTrendPoint[];
-  streak: { current: number; todayFilled: boolean };
+  streak: { current: number; todayFilled: boolean; justCrossed?: number | null };
   /** The single most-"now" action to surface (already chosen by the page). */
   primaryAction: GuidanceAction | null;
   /** True when no `todo` action remains for the current slot. */
@@ -205,7 +206,14 @@ export function NorthStarHero({
             {/* Discipline trajectory + streak — calm, never punitive. */}
             <div className="mt-1 flex flex-wrap items-center gap-x-6 gap-y-4">
               <div className="flex flex-col gap-1.5">
-                <span className="t-eyebrow text-[var(--t-3)]">Discipline</span>
+                <span className="t-eyebrow inline-flex items-center gap-1 text-[var(--t-3)]">
+                  Discipline
+                  <InfoDot
+                    label="le score de discipline"
+                    side="top"
+                    tip="La discipline mesure ta régularité de process — check-ins tenus, plan respecté, exécution complète — sur une échelle de 0 à 100. Elle monte avec la constance, jamais avec ton profit."
+                  />
+                </span>
                 <div className="flex items-end gap-2.5">
                   <span className="f-mono text-[28px] leading-none font-bold tracking-[-0.03em] text-[var(--t-1)] tabular-nums">
                     {disciplineValue === null ? '—' : disciplineValue}
@@ -240,7 +248,12 @@ export function NorthStarHero({
                 className="hidden h-12 w-px self-center bg-[var(--b-default)] sm:block"
               />
 
-              <StreakCard streak={streak.current} todayFilled={streak.todayFilled} compact />
+              <StreakCard
+                streak={streak.current}
+                todayFilled={streak.todayFilled}
+                justCrossed={streak.justCrossed ?? null}
+                compact
+              />
 
               {dayProgress && dayProgress.total > 0 ? (
                 <>

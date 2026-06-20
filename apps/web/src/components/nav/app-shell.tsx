@@ -1,6 +1,6 @@
 'use client';
 
-import { LogOut, Menu as MenuIcon } from 'lucide-react';
+import { LogOut, Menu as MenuIcon, Search } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
+import { CommandPalette } from './command-palette';
 import { BOTTOM_NAV, isNavItemActive, NAV_GROUPS, type NavItem } from './nav-items';
 
 interface SessionLite {
@@ -44,6 +45,7 @@ interface AppShellProps {
 export function AppShell({ session, signOutAction, children }: AppShellProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
 
   if (!session || isPublicPath(pathname)) {
@@ -61,6 +63,9 @@ export function AppShell({ session, signOutAction, children }: AppShellProps) {
         className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-[var(--b-default)] bg-[var(--bg)]/95 backdrop-blur lg:flex"
       >
         <Brand />
+        <div className="px-3 pt-3">
+          <SearchTrigger onClick={() => setCmdOpen(true)} />
+        </div>
         <nav aria-label="Sections" className="scroll-thin flex-1 overflow-y-auto px-3 py-3">
           {groups.map((group) => (
             <div key={group.label ?? 'root'} className="mb-4 last:mb-0">
@@ -119,6 +124,14 @@ export function AppShell({ session, signOutAction, children }: AppShellProps) {
             <SheetDescription>Accède à toutes les sections de Fxmily.</SheetDescription>
           </SheetHeader>
           <Brand />
+          <div className="px-3 pt-3">
+            <SearchTrigger
+              onClick={() => {
+                closeMenu();
+                setCmdOpen(true);
+              }}
+            />
+          </div>
           <nav
             aria-label="Toutes les sections"
             className="scroll-thin flex-1 overflow-y-auto px-3 py-3"
@@ -145,7 +158,34 @@ export function AppShell({ session, signOutAction, children }: AppShellProps) {
           <UserFooter session={session} signOutAction={signOutAction} />
         </SheetContent>
       </Sheet>
+
+      {/* ── ⌘K command palette (global, role-gated) ────────────────── */}
+      <CommandPalette isAdmin={session.isAdmin} open={cmdOpen} onOpenChange={setCmdOpen} />
     </>
+  );
+}
+
+/** Search affordance that opens the ⌘K palette — so touch users (no keyboard)
+ *  can reach it too. Visible in the desktop sidebar + the mobile drawer. */
+function SearchTrigger({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-keyshortcuts="Control+K Meta+K"
+      aria-haspopup="dialog"
+      className="rounded-control flex w-full items-center gap-2.5 border border-[var(--b-default)] bg-[var(--bg-2)] px-2.5 py-2 text-[13px] text-[var(--t-3)] transition-colors hover:border-[var(--b-acc)] hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--acc)]"
+    >
+      <Search
+        className="h-[18px] w-[18px] shrink-0 text-[var(--t-4)]"
+        strokeWidth={1.75}
+        aria-hidden
+      />
+      <span className="flex-1 text-left">Rechercher…</span>
+      <kbd className="rounded border border-[var(--b-strong)] bg-[var(--bg-1)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--t-4)]">
+        ⌘K
+      </kbd>
+    </button>
   );
 }
 

@@ -56,7 +56,7 @@ export default async function ObjectifsPage() {
         </header>
 
         {/* 1. Où j'en suis + ma prochaine étape */}
-        <section aria-labelledby="hero-heading">
+        <section className="wow-reveal" aria-labelledby="hero-heading">
           <h2 id="hero-heading" className="sr-only">
             Où j’en suis aujourd’hui
           </h2>
@@ -64,7 +64,7 @@ export default async function ObjectifsPage() {
         </section>
 
         {/* 2. Mes objectifs de process (anneaux vers la Maîtrise) */}
-        <section className="flex flex-col gap-3" aria-labelledby="rings-heading">
+        <section className="wow-reveal flex flex-col gap-3" aria-labelledby="rings-heading">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <h2 id="rings-heading" className="t-eyebrow">
               Tes objectifs de process
@@ -79,7 +79,7 @@ export default async function ObjectifsPage() {
         </section>
 
         {/* 3. Où je vais — projection de trajectoire */}
-        <section className="flex flex-col gap-3" aria-labelledby="trajectory-heading">
+        <section className="wow-reveal flex flex-col gap-3" aria-labelledby="trajectory-heading">
           <h2 id="trajectory-heading" className="sr-only">
             Ta trajectoire vers la Maîtrise
           </h2>
@@ -87,10 +87,14 @@ export default async function ObjectifsPage() {
         </section>
 
         {/* 4. Le chemin — parcours en 4 paliers */}
-        <JourneyRoadmap stages={view.journey} cap={view.cap} />
+        <div className="wow-reveal">
+          <JourneyRoadmap stages={view.journey} cap={view.cap} />
+        </div>
 
         {/* 5. Ce que tu dois faire */}
-        <NextSteps actions={view.nextActions} focus={view.focus} />
+        <div className="wow-reveal">
+          <NextSteps actions={view.nextActions} focus={view.focus} />
+        </div>
       </div>
     </main>
   );

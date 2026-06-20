@@ -81,14 +81,18 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
         </div>
       ) : null}
 
-      <TrackHero />
+      <div className="wow-reveal">
+        <TrackHero />
+      </div>
 
-      <TodayHabitCards
-        userId={session.user.id}
-        timezone={session.user.timezone || 'Europe/Paris'}
-      />
+      <div className="wow-reveal">
+        <TodayHabitCards
+          userId={session.user.id}
+          timezone={session.user.timezone || 'Europe/Paris'}
+        />
+      </div>
 
-      <section aria-labelledby="track-corr-heading" className="flex flex-col gap-3">
+      <section aria-labelledby="track-corr-heading" className="wow-reveal flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <span id="track-corr-heading" className="t-eyebrow">
             Corrélations habitudes × trading

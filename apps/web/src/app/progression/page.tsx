@@ -10,6 +10,9 @@ import { RDistribution } from '@/components/scoring/r-distribution';
 import { ScoreGaugeGrid } from '@/components/scoring/score-gauge-grid';
 import { ScoreTrendChart } from '@/components/scoring/score-trend-chart';
 import { TrackRecordChart } from '@/components/scoring/track-record-chart';
+import { DisciplineYearHeatmap } from '@/components/track/discipline-year-heatmap';
+import { Card } from '@/components/ui/card';
+import { getDisciplineYearHeatmap } from '@/lib/checkin/service';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 
@@ -50,9 +53,10 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
   // Scores du jour + trajectoire lus au top (légers) ; le track record (analytics
   // lourdes) stream via Suspense pour garder le shell rapide (pas de N+1 : 1 fetch
   // analytics dans TrackRecordSection).
-  const [latestScore, scoreHistory] = await Promise.all([
+  const [latestScore, scoreHistory, yearHeatmap] = await Promise.all([
     getLatestBehavioralScore(userId),
     getBehavioralScoreHistory(userId, { sinceDays: 90 }),
+    getDisciplineYearHeatmap(userId, timezone),
   ]);
 
   return (
@@ -78,7 +82,7 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
 
         {/* Profil comportemental — la forme memorisable (4 dimensions + ghost
             ~30 j) AVANT le detail chiffre des jauges. Posture §2 : jamais punitif. */}
-        <section className="mb-6" aria-labelledby="radar-heading">
+        <section className="wow-reveal mb-6" aria-labelledby="radar-heading">
           <h2 id="radar-heading" className="sr-only">
             Ton profil comportemental
           </h2>
@@ -86,15 +90,26 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
         </section>
 
         {/* Scores comportementaux du jour (4 jauges) */}
-        <section className="mb-6" aria-labelledby="scores-heading">
-          <h2 id="scores-heading" className="sr-only">
+        <section className="wow-reveal mb-6" aria-labelledby="progression-scores-heading">
+          <h2 id="progression-scores-heading" className="sr-only">
             Scores comportementaux
           </h2>
           <ScoreGaugeGrid score={latestScore} history={scoreHistory} />
         </section>
 
+        {/* Régularité année — heatmap calendaire des check-ins (GitHub-style,
+            non-punitive §31.2). Miroir calme de la constance. */}
+        <section className="wow-reveal mb-6" aria-labelledby="year-heatmap-heading">
+          <h2 id="year-heatmap-heading" className="sr-only">
+            Régularité des check-ins sur 12 mois
+          </h2>
+          <Card primary className="p-5">
+            <DisciplineYearHeatmap heatmap={yearHeatmap} />
+          </Card>
+        </section>
+
         {/* Trajectoire des scores dans le temps */}
-        <section className="mb-6" aria-labelledby="score-trend-heading">
+        <section className="wow-reveal mb-6" aria-labelledby="score-trend-heading">
           <h2 id="score-trend-heading" className="sr-only">
             Évolution de tes scores comportementaux
           </h2>
@@ -102,7 +117,10 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
         </section>
 
         {/* Track record — R cumulé + expectancy + drawdown + distribution R */}
-        <section className="mb-6 flex flex-col gap-3" aria-labelledby="track-record-heading">
+        <section
+          className="wow-reveal mb-6 flex flex-col gap-3"
+          aria-labelledby="track-record-heading"
+        >
           <div className="flex items-center gap-2">
             <LineChartIcon
               className="h-3.5 w-3.5 text-[var(--t-3)]"

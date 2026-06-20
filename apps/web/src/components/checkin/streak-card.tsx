@@ -46,9 +46,11 @@ export function StreakCard({ streak, todayFilled, compact, justCrossed }: Streak
   const noStreak = streak === 0;
   const ablaze = streak >= 7;
   const deepHabit = streak >= 30;
-  // Only celebrate in the full (non-compact) card, and only when the crossed
+  // Celebrate in BOTH variants (S11 — the dashboard compact strip now carries
+  // the calm "palier franchi" acknowledgement too), and only when the crossed
   // milestone actually matches the current streak (defence against stale props).
-  const celebrating = !compact && justCrossed != null && justCrossed === streak;
+  // Still anti-Black-Hat (§31.2): a one-time calm settle, never a looping fanfare.
+  const celebrating = justCrossed != null && justCrossed === streak;
 
   const flameColor = noStreak
     ? 'text-[var(--t-3)]'
@@ -70,12 +72,15 @@ export function StreakCard({ streak, todayFilled, compact, justCrossed }: Streak
   if (compact) {
     return (
       <div className="flex items-center gap-2.5">
-        <Flame
-          className={cn('h-4 w-4 shrink-0', flameColor, flameAnim)}
-          strokeWidth={1.75}
-          style={flameFilter ? { filter: flameFilter } : undefined}
-          aria-hidden
-        />
+        {/* S11 — on the crossing day the flame gets a calm 2-pulse halo
+            (.celebrate-halo, compositor-only, then stops). No looping fanfare. */}
+        <span className={cn('inline-flex shrink-0', celebrating && 'celebrate-halo')} aria-hidden>
+          <Flame
+            className={cn('h-4 w-4', flameColor, flameAnim)}
+            strokeWidth={1.75}
+            style={flameFilter ? { filter: flameFilter } : undefined}
+          />
+        </span>
         <div className="flex flex-col leading-tight">
           <span
             className={cn(
@@ -85,10 +90,28 @@ export function StreakCard({ streak, todayFilled, compact, justCrossed }: Streak
           >
             {streak} jour{streak > 1 ? 's' : ''}
           </span>
-          <span className="t-mono-cap text-[var(--t-3)]">
-            {noStreak ? 'à démarrer' : todayFilled ? 'consécutifs' : 'à confirmer aujourd’hui'}
+          <span
+            className={cn(
+              't-mono-cap',
+              celebrating ? 'font-semibold text-[var(--acc-hi)]' : 'text-[var(--t-3)]',
+            )}
+          >
+            {celebrating
+              ? `palier ${justCrossed} j franchi`
+              : noStreak
+                ? 'à démarrer'
+                : todayFilled
+                  ? streak > 1
+                    ? 'consécutifs'
+                    : 'consécutif'
+                  : 'à confirmer aujourd’hui'}
           </span>
         </div>
+        {celebrating ? (
+          <span className="sr-only" role="status">
+            Palier de {justCrossed} jours franchi. Belle régularité.
+          </span>
+        ) : null}
       </div>
     );
   }

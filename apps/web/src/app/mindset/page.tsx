@@ -108,13 +108,15 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
           </div>
         ) : null}
 
-        <MindsetDashboard
-          latestProfile={latestProfile}
-          trend={trend}
-          instrumentVersion={CURRENT_MINDSET_INSTRUMENT_VERSION}
-        />
+        <div className="wow-reveal">
+          <MindsetDashboard
+            latestProfile={latestProfile}
+            trend={trend}
+            instrumentVersion={CURRENT_MINDSET_INSTRUMENT_VERSION}
+          />
+        </div>
 
-        <section className="flex flex-col gap-4">
+        <section className="wow-reveal flex flex-col gap-4">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="t-h2 text-[var(--t-1)]">Tes auto-évaluations récentes</h2>
             <p className="t-cap text-[var(--t-3)]">

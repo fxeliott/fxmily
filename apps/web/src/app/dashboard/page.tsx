@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 
 import { auth } from '@/auth';
 import { CalendarStatusWidget } from '@/components/calendar/calendar-status-widget';
+import { MorningIntentionRecall } from '@/components/checkin/morning-intention-recall';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { FirstRunWelcome } from '@/components/dashboard/first-run-welcome';
 import { JournalShortcut } from '@/components/dashboard/journal-shortcut';
@@ -19,7 +20,7 @@ import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { Kbd } from '@/components/ui/kbd';
-import { getStreak } from '@/lib/checkin/service';
+import { getCheckin, getStreak, todayFor } from '@/lib/checkin/service';
 import { getTodayMilestone } from '@/lib/checkin/milestone';
 import { getDailyGuidance } from '@/lib/daily-guidance/service';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
@@ -76,7 +77,16 @@ export default async function DashboardPage() {
   // données du hub : compteurs trades, streak, dernier score + trajectoire (pour
   // le hero), et le guidage du jour. `getDailyGuidance` + `getBehavioralScoreHistory`
   // lus une fois, partagés hero/TodayGuidance — pas de N+1.
-  const [counts, streak, latestScore, guidance, scoreHistory, constancy, openDiscrepancies] = userId
+  const [
+    counts,
+    streak,
+    latestScore,
+    guidance,
+    scoreHistory,
+    constancy,
+    openDiscrepancies,
+    morningCheckin,
+  ] = userId
     ? await Promise.all([
         countTradesByStatus(userId),
         getStreak(userId, timezone),
@@ -87,6 +97,9 @@ export default async function DashboardPage() {
         // discrepancies bridge to /verification). Read once here, no N+1.
         getLatestConstancyScore(userId),
         countOpenDiscrepancies(userId),
+        // S12 — today's morning check-in, only to echo the member's own
+        // intention back to them (day-loop close). Indexed (userId,date,slot).
+        getCheckin(userId, todayFor(timezone), 'morning'),
       ])
     : [
         { open: 0, closed: 0 },
@@ -96,6 +109,7 @@ export default async function DashboardPage() {
         [],
         null,
         0,
+        null,
       ];
 
   // North-star hero — la seule action la plus « maintenant » (primary todo first),
@@ -194,6 +208,10 @@ export default async function DashboardPage() {
             />
           </div>
         </section>
+
+        {/* S12 — echo the member's OWN morning intention back during the day
+            (day-loop close). Read-only, renders nothing if no intention set. */}
+        <MorningIntentionRecall intention={morningCheckin?.intention} className="mb-6" />
 
         {/* Session 5 — Guidage quotidien « Ton aujourd'hui » (DoD §30 #3). Le hub
             time-aware : check-in du créneau, blocs calendrier du jour, réunion,

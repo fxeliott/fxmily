@@ -107,6 +107,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/admin/members', label: 'Membres', icon: Users, admin: true },
       { href: '/admin/access-requests', label: 'Demandes', icon: Inbox, admin: true },
+      { href: '/admin/cards', label: 'Fiches Douglas', icon: Library, admin: true },
       { href: '/admin/reunions', label: 'Réunions', icon: CalendarRange, admin: true },
       { href: '/admin/reports', label: 'Rapports', icon: FileBarChart, admin: true },
       { href: '/admin/system', label: 'Système', icon: Settings, admin: true },

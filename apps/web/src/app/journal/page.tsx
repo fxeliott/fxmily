@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { TradeCard } from '@/components/journal/trade-card';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
@@ -80,189 +81,207 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
   ]);
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[var(--w-app)] flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
-      {/* Header */}
-      <header className="flex flex-col gap-4">
-        <Link
-          href="/dashboard"
-          className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Tableau de bord
-        </Link>
+    <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
+      {/* S11 — DS-v3 ambient mesh + drifting orbs depth backplate (same zero-JS
+          server component the hub uses). Turns the most-visited surface from a
+          flat black list into a living execution log, without a single new
+          query. Decorative: aria-hidden + pointer-events:none + reduced-motion. */}
+      <DashboardAmbient />
 
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="flex flex-col gap-1.5">
-            <span className="t-eyebrow">Journal</span>
-            <h1
-              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-              style={{ fontFeatureSettings: '"ss01" 1' }}
-            >
-              Mes trades
-            </h1>
-          </div>
-          <Link href="/journal/new" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
-            <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-            Nouveau trade
+      {/* `dash-stagger` cascades the header / filters / list / footer in on load
+          (wowRise, compositor-only, reduced-motion-safe) — the hub's "alive
+          arrival" pattern, now on the journal too. */}
+      <div className="dash-stagger relative mx-auto flex w-full max-w-[var(--w-app)] flex-1 flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
+        {/* Header */}
+        <header className="flex flex-col gap-4">
+          <Link
+            href="/dashboard"
+            className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Tableau de bord
           </Link>
-        </div>
-      </header>
 
-      {/* Filter pills + counter */}
-      <nav
-        aria-label="Filtres"
-        className="flex flex-wrap items-center gap-2 border-b border-[var(--b-default)] pb-3"
-      >
-        {(['all', 'open', 'closed'] as const).map((f) => {
-          const active = status === f;
-          const count =
-            f === 'open'
-              ? totals.open
-              : f === 'closed'
-                ? totals.closed
-                : totals.open + totals.closed;
-          return (
-            <Link
-              key={f}
-              href={f === 'all' ? '/journal' : `/journal?status=${f}`}
-              prefetch={false}
-              aria-current={active ? 'page' : undefined}
-              className={cn(
-                'rounded-pill inline-flex h-9 items-center gap-1.5 border px-3 text-[12px] font-medium transition-[color,border-color,transform] hover:-translate-y-px active:translate-y-0 active:scale-[0.98]',
-                active
-                  ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]'
-                  : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:text-[var(--t-1)]',
-              )}
-            >
-              {FILTER_LABEL[f]}
-              <span
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span className="t-eyebrow">Journal</span>
+              <h1
+                className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+                style={{ fontFeatureSettings: '"ss01" 1' }}
+              >
+                Mes trades
+              </h1>
+            </div>
+            <Link href="/journal/new" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
+              <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Nouveau trade
+            </Link>
+          </div>
+        </header>
+
+        {/* Filter pills + counter */}
+        <nav
+          aria-label="Filtres"
+          className="flex flex-wrap items-center gap-2 border-b border-[var(--b-default)] pb-3"
+        >
+          {(['all', 'open', 'closed'] as const).map((f) => {
+            const active = status === f;
+            const count =
+              f === 'open'
+                ? totals.open
+                : f === 'closed'
+                  ? totals.closed
+                  : totals.open + totals.closed;
+            return (
+              <Link
+                key={f}
+                href={f === 'all' ? '/journal' : `/journal?status=${f}`}
+                prefetch={false}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'rounded-pill px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+                  'rounded-pill inline-flex h-9 items-center gap-1.5 border px-3 text-[12px] font-medium transition-[color,border-color,transform] hover:-translate-y-px active:translate-y-0 active:scale-[0.98]',
                   active
-                    ? 'bg-[var(--bg)] text-[var(--acc)]'
-                    : 'bg-[var(--bg-2)] text-[var(--t-4)]',
+                    ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]'
+                    : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:text-[var(--t-1)]',
                 )}
               >
-                {count}
-              </span>
-            </Link>
-          );
-        })}
+                {FILTER_LABEL[f]}
+                <span
+                  className={cn(
+                    'rounded-pill px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+                    active
+                      ? 'bg-[var(--bg)] text-[var(--acc)]'
+                      : 'bg-[var(--bg-2)] text-[var(--t-4)]',
+                  )}
+                >
+                  {count}
+                </span>
+              </Link>
+            );
+          })}
 
-        <div className="ml-auto inline-flex items-center gap-2 font-mono text-[11px] text-[var(--t-4)] tabular-nums">
-          <span>{totals.open + totals.closed} cumulés</span>
-        </div>
-      </nav>
+          <div className="ml-auto inline-flex items-center gap-2 font-mono text-[11px] text-[var(--t-4)] tabular-nums">
+            <span>{totals.open + totals.closed} cumulés</span>
+          </div>
+        </nav>
 
-      {/* List or EmptyState */}
-      {items.length === 0 && cursor ? (
-        // Stale cursor (trade deleted since the link was rendered) — calm
-        // dead-end, never the "first trade" onboarding copy.
-        <Card primary className="py-2">
-          <EmptyState
-            icon={BookOpen}
-            headline="Fin du journal."
-            lead="Cette page ne contient plus de trades."
-            ctaPrimary="Revenir au début"
-            ctaHref={journalHref(status)}
-          />
-        </Card>
-      ) : items.length === 0 ? (
-        <Card primary className="py-2">
-          {status === 'open' ? (
-            <EmptyState
-              icon={Target}
-              headline="Aucun trade ouvert."
-              lead="Les trades ouverts attendent leur clôture (prix sortie, outcome, capture)."
-              guides={[
-                "Les ordres en cours doivent être loggués au moment de l'entrée.",
-                'À la sortie, ouvre /journal/[id]/close pour finaliser le R réalisé.',
-                'Tu peux cumuler plusieurs trades ouverts simultanément.',
-              ]}
-              tip="Discipline : ne pas ouvrir un nouveau trade sans avoir clôturé proprement le précédent quand c'est possible."
-              ctaPrimary={
-                <>
-                  <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  Logger un trade
-                </>
-              }
-              ctaHref="/journal/new"
-            />
-          ) : status === 'closed' ? (
+        {/* List or EmptyState */}
+        {items.length === 0 && cursor ? (
+          // Stale cursor (trade deleted since the link was rendered) — calm
+          // dead-end, never the "first trade" onboarding copy.
+          <Card primary className="py-2">
             <EmptyState
               icon={BookOpen}
-              headline="Aucun trade clôturé."
-              lead="Tes trades clôturés apparaîtront ici avec leur R réalisé et leur plan score."
-              guides={[
-                'Logge un trade ouvert en passant par /journal/new.',
-                'Au moment de la sortie, clôture-le avec le résultat.',
-                'Le R réalisé est calculé automatiquement (computed) ou estimé (fallback).',
-              ]}
-              ctaPrimary={
-                <>
-                  <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  Logger un trade
-                </>
-              }
-              ctaHref="/journal/new"
+              headline="Fin du journal."
+              lead="Cette page ne contient plus de trades."
+              ctaPrimary="Revenir au début"
+              ctaHref={journalHref(status)}
             />
-          ) : (
-            <EmptyState
-              icon={Target}
-              headline="Ton journal est vide."
-              lead="Tes 5 premiers trades calibrent ton baseline. À partir du 6e, on déverrouille les scores discipline et le R cumulé."
-              guides={[
-                "Logge ton plan AVANT d'entrer (R:R visé, lot, scénario, capture).",
-                'Note ton R:R réel ET ta discipline post-clôture.',
-                'Mental check J+1 — discipline + sérénité, pas le résultat.',
-              ]}
-              tip="Le marché peut faire ce qu'il veut. Toi, tu restes propre. C'est ça qu'on mesure ici — anything can happen, mais ton process reste."
-              ctaPrimary={
-                <>
-                  <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  Logger mon premier trade
-                </>
-              }
-              ctaHref="/journal/new"
-            />
-          )}
-        </Card>
-      ) : (
-        <ul className="grid items-start gap-3 xl:grid-cols-2">
-          {items.map((trade) => (
-            <li key={trade.id}>
-              <TradeCard trade={trade} unseenAnnotationsCount={unseenByTrade.get(trade.id) ?? 0} />
-            </li>
-          ))}
-        </ul>
-      )}
+          </Card>
+        ) : items.length === 0 ? (
+          <Card primary className="py-2">
+            {status === 'open' ? (
+              <EmptyState
+                icon={Target}
+                headline="Aucun trade ouvert."
+                lead="Les trades ouverts attendent leur clôture (prix sortie, outcome, capture)."
+                guides={[
+                  "Les ordres en cours doivent être loggués au moment de l'entrée.",
+                  'À la sortie, ouvre /journal/[id]/close pour finaliser le R réalisé.',
+                  'Tu peux cumuler plusieurs trades ouverts simultanément.',
+                ]}
+                tip="Discipline : ne pas ouvrir un nouveau trade sans avoir clôturé proprement le précédent quand c'est possible."
+                ctaPrimary={
+                  <>
+                    <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Logger un trade
+                  </>
+                }
+                ctaHref="/journal/new"
+              />
+            ) : status === 'closed' ? (
+              <EmptyState
+                icon={BookOpen}
+                headline="Aucun trade clôturé."
+                lead="Tes trades clôturés apparaîtront ici avec leur R réalisé et leur plan score."
+                guides={[
+                  'Logge un trade ouvert en passant par /journal/new.',
+                  'Au moment de la sortie, clôture-le avec le résultat.',
+                  'Le R réalisé est calculé automatiquement (computed) ou estimé (fallback).',
+                ]}
+                ctaPrimary={
+                  <>
+                    <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Logger un trade
+                  </>
+                }
+                ctaHref="/journal/new"
+              />
+            ) : (
+              <EmptyState
+                icon={Target}
+                headline="Ton journal est vide."
+                lead="Tes 5 premiers trades calibrent ton baseline. À partir du 6e, on déverrouille les scores discipline et le R cumulé."
+                guides={[
+                  "Logge ton plan AVANT d'entrer (R:R visé, lot, scénario, capture).",
+                  'Note ton R:R réel ET ta discipline post-clôture.',
+                  'Mental check J+1 — discipline + sérénité, pas le résultat.',
+                ]}
+                tip="Le marché peut faire ce qu'il veut. Toi, tu restes propre. C'est ça qu'on mesure ici — anything can happen, mais ton process reste."
+                ctaPrimary={
+                  <>
+                    <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Logger mon premier trade
+                  </>
+                }
+                ctaHref="/journal/new"
+              />
+            )}
+          </Card>
+        ) : (
+          <ul className="grid items-start gap-3 xl:grid-cols-2">
+            {items.map((trade) => (
+              // `wow-reveal` — each trade fades+rises as it scrolls into view
+              // (scroll-driven, zero-JS, @supports-gated, reduced-motion-safe →
+              // degrades to fully visible). The "jamais statique" of the brief on
+              // the long list a trader scrolls daily.
+              <li key={trade.id} className="wow-reveal">
+                <TradeCard
+                  trade={trade}
+                  unseenAnnotationsCount={unseenByTrade.get(trade.id) ?? 0}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
 
-      {/* Pagination + ref count */}
-      {items.length > 0 ? (
-        <footer className="flex flex-col items-center gap-3 border-t border-[var(--b-subtle)] pt-4">
-          {nextCursor ? (
-            <Link
-              href={journalHref(status, nextCursor)}
-              prefetch={false}
-              className={cn(btnVariants({ kind: 'ghost', size: 'm' }), 'active:scale-[0.98]')}
-            >
-              Voir les trades plus anciens
-            </Link>
-          ) : null}
-          <p className="t-foot text-center text-[var(--t-4)]">
-            Affichage de {items.length} trade{items.length > 1 ? 's' : ''} ·{' '}
-            <span className="font-mono tabular-nums">50 par page</span>
-            {cursor ? (
-              <>
-                {' · '}
-                <Link href={journalHref(status)} className="underline hover:text-[var(--t-2)]">
-                  revenir au début
-                </Link>
-              </>
+        {/* Pagination + ref count */}
+        {items.length > 0 ? (
+          <footer className="flex flex-col items-center gap-3 border-t border-[var(--b-subtle)] pt-4">
+            {nextCursor ? (
+              <Link
+                href={journalHref(status, nextCursor)}
+                prefetch={false}
+                className={cn(btnVariants({ kind: 'ghost', size: 'm' }), 'active:scale-[0.98]')}
+              >
+                Voir les trades plus anciens
+              </Link>
             ) : null}
-          </p>
-        </footer>
-      ) : null}
+            <p className="t-foot text-center text-[var(--t-4)]">
+              Affichage de {items.length} trade{items.length > 1 ? 's' : ''} ·{' '}
+              <span className="font-mono tabular-nums">50 par page</span>
+              {cursor ? (
+                <>
+                  {' · '}
+                  <Link href={journalHref(status)} className="underline hover:text-[var(--t-2)]">
+                    revenir au début
+                  </Link>
+                </>
+              ) : null}
+            </p>
+          </footer>
+        ) : null}
+      </div>
     </main>
   );
 }

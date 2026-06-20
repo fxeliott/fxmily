@@ -9,6 +9,7 @@ import type { EveningCheckinInput, MorningCheckinInput } from '@/lib/schemas/che
 
 import { computeStreak, type CheckinDay } from './streak';
 import { localDateOf, parseLocalDate, shiftLocalDate, type LocalDateString } from './timezone';
+import { buildYearHeatmap, type HeatLevel, type YearHeatmap } from './year-heatmap';
 
 /**
  * Domain error: the submitted check-in date is outside the allowed window
@@ -350,6 +351,27 @@ export async function getStreak(
   const current = computeStreak(days, today);
   const todayFilled = days.some((d) => d.date === today && d.slots.length > 0);
   return { current, todayFilled, today };
+}
+
+/**
+ * Year "régularité" heatmap (S11) — daily check-in activity over the last 53
+ * weeks, GitHub-contributions style. Level = number of slots filed that day
+ * (0/1/2). Anti-Black-Hat (§31.2): a calm mirror of constancy, empty days muted
+ * never red. One windowed query (380 days), then the pure grid builder.
+ */
+export async function getDisciplineYearHeatmap(
+  userId: string,
+  timezone: string,
+  now: Date = new Date(),
+): Promise<YearHeatmap> {
+  const today = todayFor(timezone, now);
+  const days = await listRecentCheckinDays(userId, today, 380);
+  const levelByDate = new Map<LocalDateString, HeatLevel>();
+  for (const d of days) {
+    const level = Math.min(d.slots.length, 2) as HeatLevel;
+    if (level > 0) levelByDate.set(d.date, level);
+  }
+  return buildYearHeatmap(levelByDate, today);
 }
 
 export async function getCheckin(

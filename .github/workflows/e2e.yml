@@ -48,10 +48,22 @@ permissions:
 
 jobs:
   e2e:
-    name: Playwright (chromium)
+    name: Playwright shard ${{ matrix.shard }}/4
     if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
+    # Shard the suite across 4 parallel jobs so each `next dev` webServer handles
+    # ~1/4 of the specs and never reaches the compile-on-demand memory saturation
+    # that cascaded the single-job run into a 30-min timeout (a flaky REQUIRED
+    # check — see the 2026-06-20 S10 pass). Each shard gets its OWN Postgres
+    # service + seed below, so the workers:1 / shared-DB invariant still holds
+    # WITHIN a shard. `fail-fast:false` lets every shard report independently; the
+    # `Playwright (chromium)` aggregator job at the bottom is the actual REQUIRED
+    # status check and stays green only when all four shards pass.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     permissions:
       contents: read
 
@@ -184,13 +196,37 @@ jobs:
       # by the verification core unit tests (reconcile/constancy/alerts). Running
       # it in CI would need per-test synthetic IPs + a Mark-Douglas-card seed step
       # (backlog, low value).
-      - name: Run Playwright tests (chromium project only)
-        run: pnpm --filter @fxmily/web exec playwright test --project=chromium
+      - name: Run Playwright tests (chromium project, sharded)
+        run: pnpm --filter @fxmily/web exec playwright test --project=chromium --shard=${{ matrix.shard }}/4
 
       - name: Upload Playwright report (on failure)
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report
+          # Per-shard name — four shards uploading the same artifact name would
+          # collide and fail the upload.
+          name: playwright-report-shard-${{ matrix.shard }}
           path: apps/web/playwright-report/
           retention-days: 7
+
+  # Aggregator gate. This job's name MUST stay EXACTLY "Playwright (chromium)"
+  # because that is the REQUIRED status check in `main`'s branch protection.
+  # Renaming it (or removing it) would silently un-gate the whole E2E suite and
+  # let un-tested code merge. It succeeds only when every shard above succeeded,
+  # so the required check keeps its full meaning while the work runs in parallel.
+  e2e-required:
+    name: Playwright (chromium)
+    needs: [e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Fail unless every E2E shard succeeded
+        run: |
+          if [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "::error::At least one Playwright shard did not succeed (matrix result=${{ needs.e2e.result }})."
+            exit 1
+          fi
+          echo "All Playwright shards passed."

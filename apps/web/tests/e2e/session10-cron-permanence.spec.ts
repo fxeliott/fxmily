@@ -20,6 +20,9 @@
  * fast (no page cold-compile).
  */
 
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { expect, test } from '@playwright/test';
 
 /**
@@ -28,26 +31,31 @@ import { expect, test } from '@playwright/test';
  * external monitor, NOT public liveness. The PUBLIC liveness probe is the
  * separate `/api/health` (asserted below).
  */
-const PROTECTED_CRONS = [
-  'checkin-reminders',
-  'dispatch-notifications',
-  'dispatch-douglas',
-  'recompute-scores',
-  'weekly-reports',
-  'mindset-check-reminders',
-  'generate-meetings',
-  'verification-scan',
-  'calendar-overdue-alert',
-  'monthly-debrief-overdue-alert',
-  'onboarding-profile-overdue-alert',
-  'purge-audit-log',
-  'purge-deleted',
-  'purge-push-subscriptions',
-  'purge-access-requests',
-  'health',
-];
+// S10 re-verif — DERIVED FROM THE FILESYSTEM, never hardcoded. Every directory
+// under `src/app/api/cron` that ships a `route.ts` is a secret-gated endpoint and
+// is therefore covered here automatically. A previous static list had silently
+// dropped `weekly-report-overdue-alert` (a real gated route), letting its gate go
+// untested; deriving the list makes that whole class of gap impossible — any cron
+// added in the future is gate-tested the moment its route lands. Playwright runs
+// from the `apps/web` package root (`pnpm --filter`), so `process.cwd()` resolves
+// the app source tree in both local and CI runs. The `≥17` guard test below fails
+// loudly if the derivation ever resolves an empty list (wrong cwd).
+const CRON_DIR = join(process.cwd(), 'src', 'app', 'api', 'cron');
+const PROTECTED_CRONS = readdirSync(CRON_DIR, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && existsSync(join(CRON_DIR, entry.name, 'route.ts')))
+  .map((entry) => entry.name)
+  .sort();
 
 test.describe('S10 — permanence : tous les crons protégés sont gated (runtime)', () => {
+  // Guard: a broken filesystem derivation (wrong cwd -> empty list) must FAIL
+  // loudly here, never silently pass with zero crons asserted.
+  test('la liste des crons protégés est bien dérivée du filesystem (au moins 17, anti-liste-vide)', () => {
+    expect(
+      PROTECTED_CRONS.length,
+      `derived only ${PROTECTED_CRONS.length} crons from ${CRON_DIR} -- derivation broken?`,
+    ).toBeGreaterThanOrEqual(17);
+  });
+
   for (const cron of PROTECTED_CRONS) {
     test(`cron/${cron} — POST sans secret rejeté (401/503), GET rejeté (405)`, async ({
       request,

@@ -1,6 +1,7 @@
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { ConstancyScoreCard } from '@/components/verification/constancy-score-card';
+import { ALERT_LABELS } from '@/lib/verification/alert-labels';
 import type { ConstancyScoreView } from '@/lib/verification/constancy';
 import type { DiscrepancyView, VerificationOverview } from '@/lib/verification/service';
 
@@ -42,12 +43,6 @@ interface AlertView {
   readonly status: 'open' | 'delivered' | 'dismissed';
   readonly createdAt: Date;
 }
-
-const ALERT_LABELS: Record<string, string> = {
-  forgot_no_reason_repeat: 'Journées sans suivi répétées',
-  reality_gap_repeat: 'Écarts déclaré/réalité répétés',
-  false_declaration_repeat: 'Fausses déclarations répétées',
-};
 
 interface MemberVerificationPanelProps {
   overview: VerificationOverview;

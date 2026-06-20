@@ -78,7 +78,7 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
         </header>
 
         {/* Patterns — émotion×résultat + sessions + paires */}
-        <section className="mb-6 flex flex-col gap-3" aria-labelledby="patterns-heading">
+        <section className="wow-reveal mb-6 flex flex-col gap-3" aria-labelledby="patterns-heading">
           <div className="flex items-center gap-2">
             <h2 id="patterns-heading" className="t-eyebrow">
               Patterns d’exécution
@@ -91,7 +91,10 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
 
         {/* Qualité de setup (Steenbarger) + plafond de risque (Tharp) — mesure
             l'ACTE de grader/sizer, jamais le P&L (posture §2). */}
-        <section className="mb-6 flex flex-col gap-3" aria-labelledby="setup-quality-heading">
+        <section
+          className="wow-reveal mb-6 flex flex-col gap-3"
+          aria-labelledby="setup-quality-heading"
+        >
           <div className="flex items-center gap-2">
             <h2 id="setup-quality-heading" className="t-eyebrow">
               Qualité de setup &amp; risque
@@ -103,7 +106,10 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
         </section>
 
         {/* Pré-trade — exécution honnête + corrélation raison×performance */}
-        <section className="mb-6 flex flex-col gap-3" aria-labelledby="patterns-pretrade-heading">
+        <section
+          className="wow-reveal mb-6 flex flex-col gap-3"
+          aria-labelledby="patterns-pretrade-heading"
+        >
           <div className="flex items-center gap-2">
             <h2 id="patterns-pretrade-heading" className="t-eyebrow">
               Pré-trade
@@ -116,7 +122,10 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
         </section>
 
         {/* Corrélations habitudes × trading (différenciateur Fxmily) */}
-        <section className="mb-6 flex flex-col gap-3" aria-labelledby="habit-corr-heading">
+        <section
+          className="wow-reveal mb-6 flex flex-col gap-3"
+          aria-labelledby="habit-corr-heading"
+        >
           <div className="flex items-center gap-2">
             <span id="habit-corr-heading" className="t-eyebrow">
               Corrélations habitudes × trading

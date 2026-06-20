@@ -78,7 +78,7 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
 
         {/* Profil comportemental — la forme memorisable (4 dimensions + ghost
             ~30 j) AVANT le detail chiffre des jauges. Posture §2 : jamais punitif. */}
-        <section className="mb-6" aria-labelledby="radar-heading">
+        <section className="wow-reveal mb-6" aria-labelledby="radar-heading">
           <h2 id="radar-heading" className="sr-only">
             Ton profil comportemental
           </h2>
@@ -86,15 +86,15 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
         </section>
 
         {/* Scores comportementaux du jour (4 jauges) */}
-        <section className="mb-6" aria-labelledby="scores-heading">
-          <h2 id="scores-heading" className="sr-only">
+        <section className="wow-reveal mb-6" aria-labelledby="progression-scores-heading">
+          <h2 id="progression-scores-heading" className="sr-only">
             Scores comportementaux
           </h2>
           <ScoreGaugeGrid score={latestScore} history={scoreHistory} />
         </section>
 
         {/* Trajectoire des scores dans le temps */}
-        <section className="mb-6" aria-labelledby="score-trend-heading">
+        <section className="wow-reveal mb-6" aria-labelledby="score-trend-heading">
           <h2 id="score-trend-heading" className="sr-only">
             Évolution de tes scores comportementaux
           </h2>
@@ -102,7 +102,10 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
         </section>
 
         {/* Track record — R cumulé + expectancy + drawdown + distribution R */}
-        <section className="mb-6 flex flex-col gap-3" aria-labelledby="track-record-heading">
+        <section
+          className="wow-reveal mb-6 flex flex-col gap-3"
+          aria-labelledby="track-record-heading"
+        >
           <div className="flex items-center gap-2">
             <LineChartIcon
               className="h-3.5 w-3.5 text-[var(--t-3)]"

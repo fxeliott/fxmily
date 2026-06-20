@@ -102,7 +102,7 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
       </header>
 
       {selected ? (
-        <article className="flex flex-col gap-5">
+        <article className="wow-reveal flex flex-col gap-5">
           <h2 className="t-h2 text-[var(--t-1)]">{formatMonthLabelFr(selected.monthStart)}</h2>
           <MonthlyDebriefReader debrief={selected} />
         </article>
@@ -118,7 +118,7 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
         </div>
       )}
 
-      <section className="flex flex-col gap-4">
+      <section className="wow-reveal flex flex-col gap-4">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="t-h2 text-[var(--t-1)]">Tes débriefs</h2>
           <p className="t-cap text-[var(--t-3)]">{recent.length} / 12</p>

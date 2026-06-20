@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, Compass, NotebookPen, Sunrise } from 'lucide-react';
+import { ArrowRight, BookOpen, Compass, NotebookPen, Sparkles, Sunrise } from 'lucide-react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -13,9 +13,9 @@ import { cn } from '@/lib/utils';
  * `prefers-reduced-motion` filet (AT members land on the final state instantly).
  *
  * Posture (Mark Douglas, non-toxic): warm, oriented toward the FIRST real
- * action — no score, no streak guilt, no "don't break the chain". Two calm
- * next steps (poser ta routine / logger un trade), framed as a practice the
- * member owns. Brand blue only.
+ * action — no score, no streak guilt, no "don't break the chain". Three calm
+ * next steps (routine du matin / premier trade / entretien de profilage),
+ * framed as a practice the member owns. Brand blue only.
  */
 const STEPS = [
   {
@@ -27,6 +27,11 @@ const STEPS = [
     icon: NotebookPen,
     title: 'Logge ton premier trade',
     body: 'Capture ton plan et ton intention. Le journal est un miroir, jamais un juge.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Apprends à te connaître',
+    body: 'Un entretien guidé : l’app cerne ton profil pour t’accompagner au plus juste. À ton rythme.',
   },
 ] as const;
 
@@ -60,10 +65,10 @@ export function FirstRunWelcome() {
           style={{ '--rise-delay': '180ms' } as CSSProperties}
         >
           Ici, on construit la régularité avant la performance. Pas de chiffres à battre aujourd’hui
-          — juste un premier geste à poser. Commence par l’un des deux, à ton rythme.
+          — juste un premier geste à poser. Commence par où tu veux, à ton rythme.
         </p>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           {STEPS.map((step, i) => {
             const Icon = step.icon;
             return (
@@ -99,6 +104,13 @@ export function FirstRunWelcome() {
           <Link href="/journal/new" className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}>
             <NotebookPen className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
             Logger un trade
+          </Link>
+          <Link
+            href="/onboarding/interview"
+            className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}
+          >
+            <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            Faire mon profil
           </Link>
           <Link
             href="/guide"

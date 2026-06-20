@@ -8,6 +8,7 @@ import { CalendarStatusWidget } from '@/components/calendar/calendar-status-widg
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { FirstRunWelcome } from '@/components/dashboard/first-run-welcome';
 import { JournalShortcut } from '@/components/dashboard/journal-shortcut';
+import { MilestoneBanner } from '@/components/dashboard/milestone-banner';
 import { MonthlyDebriefWidget } from '@/components/dashboard/monthly-debrief-widget';
 import { NorthStarHero } from '@/components/dashboard/north-star-hero';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
@@ -19,6 +20,7 @@ import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { Kbd } from '@/components/ui/kbd';
 import { getStreak } from '@/lib/checkin/service';
+import { getTodayMilestone } from '@/lib/checkin/milestone';
 import { getDailyGuidance } from '@/lib/daily-guidance/service';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 import { countTradesByStatus } from '@/lib/trades/service';
@@ -116,6 +118,13 @@ export default async function DashboardPage() {
   const fullName = session.user.name?.trim() || session.user.email?.split('@')[0] || 'Membre';
   const firstName = fullName.split(' ')[0]!;
   const totalTrades = counts.open + counts.closed;
+  // S11 — did TODAY's check-in land the streak exactly on a 7/14/30/100 anchor?
+  // Pure + synchronous (no extra DB) ; drives both the hero StreakCard halo and
+  // the dismissible MilestoneBanner. Anti-Black-Hat: calm, one day only.
+  const todayMilestone = getTodayMilestone({
+    current: streak.current,
+    todayFilled: streak.todayFilled,
+  });
   // S9.1 "wave wow" — brand-new member (no trade, no streak) gets a warm,
   // animated first-run welcome instead of a wall of empty analytics.
   const isFirstRun = totalTrades === 0 && streak.current === 0;
@@ -136,11 +145,23 @@ export default async function DashboardPage() {
           dateLabel={frenchToday()}
           score={latestScore}
           history={scoreHistory}
-          streak={{ current: streak.current, todayFilled: streak.todayFilled }}
+          streak={{
+            current: streak.current,
+            todayFilled: streak.todayFilled,
+            justCrossed: todayMilestone,
+          }}
           primaryAction={primaryAction}
           allDone={allDone}
           dayProgress={dayProgress}
         />
+
+        {/* S11 — calm streak-milestone celebration, only on the crossing day.
+            Mutually exclusive with first-run (milestone ⇒ streak ≥ 7). */}
+        {todayMilestone ? (
+          <section className="mb-6" aria-label="Palier de régularité franchi">
+            <MilestoneBanner milestone={todayMilestone} streak={streak.current} />
+          </section>
+        ) : null}
 
         {/* S9.1 — first-run welcome (new member only). */}
         {isFirstRun ? (

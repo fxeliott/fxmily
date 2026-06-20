@@ -141,7 +141,7 @@ interface NorthStarHeroProps {
   dateLabel: string;
   score: SerializedBehavioralScore | null;
   history: BehavioralScoreTrendPoint[];
-  streak: { current: number; todayFilled: boolean };
+  streak: { current: number; todayFilled: boolean; justCrossed?: number | null };
   /** The single most-"now" action to surface (already chosen by the page). */
   primaryAction: GuidanceAction | null;
   /** True when no `todo` action remains for the current slot. */
@@ -240,7 +240,12 @@ export function NorthStarHero({
                 className="hidden h-12 w-px self-center bg-[var(--b-default)] sm:block"
               />
 
-              <StreakCard streak={streak.current} todayFilled={streak.todayFilled} compact />
+              <StreakCard
+                streak={streak.current}
+                todayFilled={streak.todayFilled}
+                justCrossed={streak.justCrossed ?? null}
+                compact
+              />
 
               {dayProgress && dayProgress.total > 0 ? (
                 <>

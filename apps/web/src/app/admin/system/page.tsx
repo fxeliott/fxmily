@@ -56,12 +56,12 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
     <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-6 sm:py-10 lg:px-8 2xl:px-12">
       <header className="mb-6">
         <Link
-          href="/admin"
+          href="/admin/members"
           className={btnVariants({ kind: 'ghost', size: 'm' })}
-          aria-label="Retour à l’admin"
+          aria-label="Retour aux membres"
         >
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-          Admin
+          Membres
         </Link>
         <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
           Observability

@@ -316,8 +316,15 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
     hue = (hue * 31 + detail.email.charCodeAt(i)) % 360;
   }
 
+  // S12 — widened from max-w-3xl (768px) to max-w-6xl (1152px) + responsive
+  // padding: the deepest supervision surface ("admin voit tout", 14 tabs) was
+  // stranded in a narrow column on ultra-wide while every sibling admin surface
+  // (members/reports lists, system, cards) uses a full shell (§23). 1152px (not
+  // --w-app 1600px) is deliberate: it gives the lg: score/edge grids real room
+  // and de-voids the page WITHOUT stranding the hand-bordered 3-col metric grid
+  // or stretching the AI-report prose past a readable measure.
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col gap-6 px-4 py-8 lg:px-8">
       {/* Back link */}
       <Link
         href="/admin/members"

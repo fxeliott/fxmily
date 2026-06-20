@@ -146,7 +146,10 @@ function ProfileRadar({
         </figcaption>
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={data} outerRadius="72%">
-            <PolarGrid stroke={C.bSubtle} />
+            {/* bStrong (0.22) not bSubtle (0.08): mirror the behavioral radar so
+                the concentric rings + spider web read against the 0/25/50/75/100
+                ticks. At 0.08 on --bg-1 the reference grid is near-invisible. */}
+            <PolarGrid stroke={C.bStrong} />
             <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 11, fill: C.t3 }} />
             <PolarRadiusAxis
               angle={90}

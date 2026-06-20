@@ -106,7 +106,10 @@ export function EmotionPicker({
                     aria-label={tag.hint ? `${tag.label} — ${tag.hint}` : tag.label}
                     title={tag.hint}
                     className={cn(
-                      'rounded-pill inline-flex min-h-9 items-center gap-1.5 border px-3 py-1.5 text-[12px] font-medium transition-all',
+                      // min-h-11 (44px) clears WCAG 2.5.5 + matches the audited
+                      // check-in twin (emotion-checkin-picker) — was min-h-9
+                      // (36px), the defect J5 H1 already fixed on the sibling.
+                      'rounded-pill inline-flex min-h-11 items-center gap-1.5 border px-3 py-2 text-[12px] font-medium transition-all',
                       'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                       isSelected
                         ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_2px_oklch(0.62_0.19_254_/_0.10)]'

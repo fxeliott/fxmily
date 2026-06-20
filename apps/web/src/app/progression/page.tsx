@@ -24,7 +24,7 @@ import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scori
  * (projection, objectifs) arrive en J4/J5.
  */
 export const metadata = {
-  title: 'Où j’en suis · Fxmily',
+  title: 'Où j’en suis',
 };
 export const dynamic = 'force-dynamic';
 

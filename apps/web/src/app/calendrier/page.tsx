@@ -21,7 +21,7 @@ import { currentParisWeekStart } from '@/lib/calendar/week';
 import { reportWarning } from '@/lib/observability';
 
 export const metadata = {
-  title: 'Mon calendrier · Fxmily',
+  title: 'Mon calendrier',
 };
 
 export const dynamic = 'force-dynamic';

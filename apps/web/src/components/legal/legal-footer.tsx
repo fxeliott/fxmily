@@ -24,6 +24,7 @@ export function LegalFooter(): React.ReactElement | null {
   const year = new Date().getFullYear();
   return (
     <footer
+      data-slot="legal-footer"
       role="contentinfo"
       className="mt-auto border-t border-[var(--b-subtle)] bg-[var(--bg-1)]/40 backdrop-blur-sm"
     >

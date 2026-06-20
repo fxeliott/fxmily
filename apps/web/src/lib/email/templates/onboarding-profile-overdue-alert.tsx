@@ -151,9 +151,9 @@ const logoBadge: React.CSSProperties = {
   lineHeight: '24px',
   textAlign: 'center',
   borderRadius: 6,
-  border: '1px solid rgba(163, 230, 53, 0.42)',
-  backgroundColor: 'rgba(163, 230, 53, 0.14)',
-  color: '#a3e635',
+  border: '1px solid rgba(59, 130, 246, 0.42)',
+  backgroundColor: 'rgba(59, 130, 246, 0.14)',
+  color: '#3b82f6',
   fontWeight: 700,
   fontSize: 12,
   marginRight: 10,
@@ -194,8 +194,8 @@ const paragraph: React.CSSProperties = {
 };
 
 const actionCard: React.CSSProperties = {
-  backgroundColor: 'rgba(163, 230, 53, 0.06)',
-  border: '1px solid rgba(163, 230, 53, 0.24)',
+  backgroundColor: 'rgba(59, 130, 246, 0.06)',
+  border: '1px solid rgba(59, 130, 246, 0.24)',
   borderRadius: 12,
   padding: '16px 18px',
   margin: '0 0 8px 0',
@@ -203,7 +203,7 @@ const actionCard: React.CSSProperties = {
 
 const actionEyebrow: React.CSSProperties = {
   ...eyebrow,
-  color: '#a3e635',
+  color: '#3b82f6',
   margin: '0 0 10px 0',
 };
 
@@ -214,7 +214,7 @@ const actionStep: React.CSSProperties = {
   margin: '0 0 6px 0',
 };
 
-const dot: React.CSSProperties = { color: '#a3e635', marginRight: 8, fontWeight: 700 };
+const dot: React.CSSProperties = { color: '#3b82f6', marginRight: 8, fontWeight: 700 };
 
 const code: React.CSSProperties = {
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
@@ -228,8 +228,8 @@ const code: React.CSSProperties = {
 const ctaSection: React.CSSProperties = { textAlign: 'center', margin: '24px 0 4px 0' };
 
 const button: React.CSSProperties = {
-  backgroundColor: '#a3e635',
-  color: '#0a1006',
+  backgroundColor: '#3364db',
+  color: '#f3f9ff',
   fontSize: 14,
   fontWeight: 700,
   letterSpacing: '0.005em',
@@ -238,7 +238,7 @@ const button: React.CSSProperties = {
   borderRadius: 6,
   display: 'inline-block',
   boxShadow:
-    '0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 0 0 1px rgba(163, 230, 53, 0.65), 0 8px 16px -4px rgba(163, 230, 53, 0.30)',
+    '0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 0 0 1px rgba(59, 130, 246, 0.65), 0 8px 16px -4px rgba(59, 130, 246, 0.30)',
 };
 
 const hr: React.CSSProperties = {

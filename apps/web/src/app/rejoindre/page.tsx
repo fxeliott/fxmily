@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 
 export const metadata = {
-  title: 'Rejoindre Fxmily',
+  title: 'Rejoindre',
   description: 'Demande ton accès à la cohorte privée Fxmily — le journal qui ignore le marché.',
   // V1 closed cohort — no SEO discovery (mirror /login).
   robots: { index: false, follow: false },

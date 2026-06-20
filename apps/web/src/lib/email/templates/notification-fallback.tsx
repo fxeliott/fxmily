@@ -35,7 +35,7 @@ interface NotificationFallbackEmailProps {
  * échoué côté infrastructure, pas côté membre — ton serene, factuel,
  * actionable. Pas de "TU N'AS PAS REÇU !!" anxiogène.
  *
- * Email-safe inline hex (cf. invitation.tsx). Design DS-v2 lime sur deep space
+ * Email-safe inline hex (cf. invitation.tsx). Design DS-v3 blue sur deep space
  * — réutilise les tokens visuels d'`annotation-received.tsx`.
  *
  * 1 template générique avec mapping `type` → headline + body + cta. DRY pour
@@ -194,8 +194,8 @@ const logoBadge: React.CSSProperties = {
   width: '32px',
   height: '32px',
   borderRadius: '8px',
-  backgroundColor: '#bef264',
-  color: '#0b0d12',
+  backgroundColor: '#3364db',
+  color: '#f3f9ff',
   fontWeight: 700,
   fontSize: '18px',
   textAlign: 'center',
@@ -237,8 +237,8 @@ const ctaSection: React.CSSProperties = {
 };
 
 const button: React.CSSProperties = {
-  backgroundColor: '#bef264',
-  color: '#0b0d12',
+  backgroundColor: '#3364db',
+  color: '#f3f9ff',
   borderRadius: '8px',
   padding: '12px 20px',
   fontSize: '15px',

@@ -25,7 +25,7 @@ interface AccessRejectedEmailProps {
  * décision produit 2026-06-16 : conformité §26).
  *
  * Même palette email-safe inline que `access-approved.tsx` (DS v2 deep-space)
- * mais SANS CTA lime (aucune action côté demandeur) — ton respectueux, sobre,
+ * mais SANS CTA blue (aucune action côté demandeur) — ton respectueux, sobre,
  * sans faux espoir. Privacy §26 : AUCUNE donnée perso autre que le prénom (en
  * salutation) et l'adresse de contact `fxeliott@fxmily.fr`. Aucun lien, aucun
  * token, aucune raison de refus détaillée (data minimisation).
@@ -129,9 +129,9 @@ const logoBadge: React.CSSProperties = {
   lineHeight: '24px',
   textAlign: 'center',
   borderRadius: 6,
-  border: '1px solid rgba(163, 230, 53, 0.42)', // --b-acc
-  backgroundColor: 'rgba(163, 230, 53, 0.14)', // --acc-dim
-  color: '#a3e635', // --acc
+  border: '1px solid rgba(59, 130, 246, 0.42)', // --b-acc
+  backgroundColor: 'rgba(59, 130, 246, 0.14)', // --acc-dim
+  color: '#3b82f6', // --acc
   fontWeight: 700,
   fontSize: 12,
   marginRight: 10,
@@ -182,7 +182,7 @@ const hr: React.CSSProperties = {
 };
 
 const link: React.CSSProperties = {
-  color: '#a3e635', // --acc
+  color: '#3b82f6', // --acc
   textDecoration: 'underline',
 };
 

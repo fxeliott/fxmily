@@ -56,6 +56,7 @@ export function AppShell({ session, signOutAction, children }: AppShellProps) {
     <>
       {/* ── Sidebar desktop (≥ lg) ─────────────────────────────────── */}
       <aside
+        data-slot="app-sidebar"
         aria-label="Navigation principale"
         className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-[var(--b-default)] bg-[var(--bg)]/95 backdrop-blur lg:flex"
       >

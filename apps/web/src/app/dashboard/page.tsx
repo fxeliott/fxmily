@@ -29,7 +29,7 @@ import { countOpenDiscrepancies } from '@/lib/verification/service';
 import { MarkDouglasCard } from './mark-douglas-card';
 
 export const metadata = {
-  title: 'Tableau de bord · Fxmily',
+  title: 'Tableau de bord',
 };
 export const dynamic = 'force-dynamic';
 
@@ -127,7 +127,7 @@ export default async function DashboardPage() {
       {/* S4 DOD1-04 — makes the advertised `N` shortcut real (renders nothing) */}
       <JournalShortcut />
 
-      <div className="relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
+      <div className="dash-stagger relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
         {/* V2 refonte J1 — north-star hero : point focal unique (état du jour +
             prochaine action). Remplace l'ancien title-row dense et absorbe le streak. */}
         <NorthStarHero

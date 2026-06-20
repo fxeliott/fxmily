@@ -14,7 +14,7 @@ import { getTrainingDebrief, loadTrainingDebriefStats } from '@/lib/training-deb
 import { currentParisWeekStart, formatWeekRangeFr } from '@/lib/training-debrief/week';
 
 export const metadata = {
-  title: 'Nouveau débrief training · Fxmily',
+  title: 'Nouveau débrief training',
 };
 
 export const dynamic = 'force-dynamic';

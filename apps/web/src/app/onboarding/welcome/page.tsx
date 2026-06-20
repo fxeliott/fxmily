@@ -9,7 +9,7 @@ import { findInvitationByToken } from '@/lib/auth/invitations';
 import { OnboardingForm } from './onboarding-form';
 
 export const metadata = {
-  title: 'Bienvenue sur Fxmily',
+  title: 'Bienvenue',
   robots: { index: false, follow: false },
 };
 

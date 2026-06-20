@@ -5,7 +5,7 @@ import { EveningCheckinWizard } from '@/components/checkin/evening-checkin-wizar
 import { todayFor } from '@/lib/checkin/service';
 
 export const metadata = {
-  title: 'Check-in soir · Fxmily',
+  title: 'Check-in soir',
 };
 
 export const dynamic = 'force-dynamic';

@@ -58,7 +58,7 @@ import { getLatestBehavioralScore, type SerializedBehavioralScore } from '@/lib/
 import { cn } from '@/lib/utils';
 
 export const metadata = {
-  title: 'Profil membre · Fxmily Admin',
+  title: 'Profil membre · Admin',
 };
 
 export const dynamic = 'force-dynamic';

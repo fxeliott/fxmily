@@ -153,9 +153,9 @@ function HofmannAnchor({ durationMin }: { durationMin: number | null }) {
         className="rounded-input relative h-7 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-2)]"
       >
         <div
-          className="absolute top-0 left-0 h-full transition-[width] duration-150"
+          className="absolute top-0 left-0 h-full w-full origin-left transition-transform duration-150"
           style={{
-            width: `${fillPct}%`,
+            transform: `scaleX(${fillPct / 100})`,
             background: reached ? 'var(--acc-dim)' : 'var(--cy-dim)',
           }}
         />

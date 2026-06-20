@@ -8,7 +8,7 @@ import { getInterviewForUser } from '@/lib/onboarding-interview/service';
 import { cn } from '@/lib/utils';
 
 export const metadata = {
-  title: 'Entretien terminé · Fxmily',
+  title: 'Entretien terminé',
 };
 
 export const dynamic = 'force-dynamic';

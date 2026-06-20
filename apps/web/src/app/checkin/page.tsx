@@ -15,7 +15,7 @@ import { formatLocalDate } from '@/lib/checkin/timezone';
 import { cn } from '@/lib/utils';
 
 export const metadata = {
-  title: 'Check-in quotidien · Fxmily',
+  title: 'Check-in quotidien',
 };
 
 // Reads cookies (auth) + DB — must be dynamic so each member sees fresh state.

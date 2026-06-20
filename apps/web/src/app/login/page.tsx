@@ -12,7 +12,7 @@ import { LoginAurora } from './login-aurora';
 import { LoginForm } from './login-form';
 
 export const metadata = {
-  title: 'Connexion · Fxmily',
+  title: 'Connexion',
   // Phase T security — V1 closed cohort, no SEO discovery.
   robots: { index: false, follow: false },
 };

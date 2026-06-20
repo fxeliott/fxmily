@@ -18,7 +18,7 @@ import {
 import { cn } from '@/lib/utils';
 
 export const metadata = {
-  title: 'Entraînement · Fxmily',
+  title: 'Entraînement',
 };
 
 export const dynamic = 'force-dynamic';

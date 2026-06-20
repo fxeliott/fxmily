@@ -52,9 +52,10 @@ export function JourneyRoadmap({
           {/* Desktop : rail horizontal */}
           <div className="absolute top-[18px] right-[12%] left-[12%] hidden h-[3px] rounded-full bg-[var(--b-default)] sm:block">
             <m.div
-              className="h-full rounded-full bg-[linear-gradient(90deg,var(--acc),var(--acc-hi))]"
-              initial={prefersReduced ? { width: `${fraction * 100}%` } : { width: 0 }}
-              whileInView={{ width: `${fraction * 100}%` }}
+              className="h-full w-full rounded-full bg-[linear-gradient(90deg,var(--acc),var(--acc-hi))]"
+              style={{ transformOrigin: '0% 50%' }}
+              initial={prefersReduced ? { scaleX: fraction } : { scaleX: 0 }}
+              whileInView={{ scaleX: fraction }}
               viewport={{ once: true }}
               transition={
                 prefersReduced
@@ -66,9 +67,10 @@ export function JourneyRoadmap({
           {/* Mobile : rail vertical */}
           <div className="absolute top-[12px] bottom-[12px] left-[18px] w-[3px] rounded-full bg-[var(--b-default)] sm:hidden">
             <m.div
-              className="w-full rounded-full bg-[linear-gradient(180deg,var(--acc),var(--acc-hi))]"
-              initial={prefersReduced ? { height: `${fraction * 100}%` } : { height: 0 }}
-              whileInView={{ height: `${fraction * 100}%` }}
+              className="h-full w-full rounded-full bg-[linear-gradient(180deg,var(--acc),var(--acc-hi))]"
+              style={{ transformOrigin: '50% 0%' }}
+              initial={prefersReduced ? { scaleY: fraction } : { scaleY: 0 }}
+              whileInView={{ scaleY: fraction }}
               viewport={{ once: true }}
               transition={
                 prefersReduced

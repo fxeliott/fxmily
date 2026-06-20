@@ -11,7 +11,7 @@ import { listMeetingsForAdmin } from '@/lib/meeting/service';
 import { cn } from '@/lib/utils';
 
 export const metadata = {
-  title: 'Réunions · Fxmily Admin',
+  title: 'Réunions · Admin',
 };
 
 export const dynamic = 'force-dynamic';

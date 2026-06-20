@@ -9,7 +9,7 @@ import { Pill } from '@/components/ui/pill';
 import { getTradeById } from '@/lib/trades/service';
 
 export const metadata = {
-  title: 'Clôturer le trade · Fxmily',
+  title: 'Clôturer le trade',
 };
 
 export const dynamic = 'force-dynamic';

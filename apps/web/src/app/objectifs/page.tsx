@@ -20,7 +20,7 @@ import { getProcessObjectives } from '@/lib/objectives/service';
  * suis » (/progression).
  */
 export const metadata = {
-  title: 'Mes objectifs · Fxmily',
+  title: 'Mes objectifs',
 };
 export const dynamic = 'force-dynamic';
 

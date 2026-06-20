@@ -13,7 +13,7 @@ import type { TradeStatusFilter } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
 
 export const metadata = {
-  title: 'Journal de trading · Fxmily',
+  title: 'Journal de trading',
 };
 
 export const dynamic = 'force-dynamic';
@@ -128,7 +128,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
               prefetch={false}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'rounded-pill inline-flex h-9 items-center gap-1.5 border px-3 text-[12px] font-medium transition-colors',
+                'rounded-pill inline-flex h-9 items-center gap-1.5 border px-3 text-[12px] font-medium transition-[color,border-color,transform] hover:-translate-y-px active:translate-y-0 active:scale-[0.98]',
                 active
                   ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]'
                   : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:text-[var(--t-1)]',
@@ -244,7 +244,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
             <Link
               href={journalHref(status, nextCursor)}
               prefetch={false}
-              className={cn(btnVariants({ kind: 'ghost', size: 'm' }))}
+              className={cn(btnVariants({ kind: 'ghost', size: 'm' }), 'active:scale-[0.98]')}
             >
               Voir les trades plus anciens
             </Link>

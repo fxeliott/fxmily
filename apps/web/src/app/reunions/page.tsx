@@ -8,7 +8,7 @@ import { listMeetingsForMember } from '@/lib/meeting/service';
 import { MEETING_WINDOW_DAYS } from '@/lib/meeting/window';
 
 export const metadata = {
-  title: 'Réunions · Fxmily',
+  title: 'Réunions',
 };
 
 export const dynamic = 'force-dynamic';

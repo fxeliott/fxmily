@@ -89,14 +89,14 @@ export function SessionPerfBars({ sessions }: SessionPerfBarsProps) {
               <div className="rounded-pill h-1.5 overflow-hidden bg-[var(--bg-2)]">
                 <div
                   className={cn(
-                    'rounded-pill h-full transition-[width]',
+                    'rounded-pill h-full w-full origin-left transition-transform',
                     s.avgR > 0
                       ? 'bg-[var(--acc)]'
                       : s.avgR < 0
                         ? 'bg-[var(--bad)]'
                         : 'bg-[var(--t-4)]',
                   )}
-                  style={{ width: `${Math.max(2, volPct)}%` }}
+                  style={{ transform: `scaleX(${Math.max(2, volPct) / 100})` }}
                   aria-hidden="true"
                 />
               </div>

@@ -11,7 +11,7 @@ import { listPendingAccessRequests } from '@/lib/access-request/service';
 import { logAudit } from '@/lib/auth/audit';
 
 export const metadata = {
-  title: 'Demandes d’accès · Fxmily Admin',
+  title: 'Demandes d’accès · Admin',
 };
 
 export const dynamic = 'force-dynamic';

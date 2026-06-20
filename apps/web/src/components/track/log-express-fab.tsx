@@ -79,6 +79,19 @@ const HIDDEN_PREFIXES: readonly string[] = [
   '/journal/new',
   '/review/new',
   '/reflect/new',
+  // S12.1 — single-step-bar wizards whose `sticky bottom-0` CTA pins the
+  // primary button to the bottom-right. On short viewports (≈≤700px, e.g. a
+  // 1366×768 laptop, tablet landscape) the form exceeds the viewport so the bar
+  // pins at the viewport bottom and the `z-40` FAB physically covers the primary
+  // button corner (measured 18×44px overlap @1100×600) — a real "0 chevauchement
+  // module" breach. A full-screen wizard never needs quick-log anyway. Each maps
+  // to exactly one route (verified): NOT `/mindset`/`/training`/`/calendrier`
+  // (their dashboards/lists keep the FAB).
+  '/pre-trade/new',
+  '/mindset/new',
+  '/training/new',
+  '/training/debrief/new',
+  '/calendar/questionnaire/new',
 ];
 
 /**

@@ -27,7 +27,8 @@
  *      truth — accounts, écarts, the repetition alert (S3 → S7).
  *
  * Matching/threshold constants verified against lib/verification/{reconcile,
- * constancy,alerts}.ts (45-min window, ±15% volume, ±12h coverage, false-decl
+ * constancy,alerts}.ts (3h match window — MATCH_TIME_TOLERANCE_MS, widened from
+ * 45 min in MAJ-51 for the MT5/EET tz bias; ±15% volume, ±12h coverage, false-decl
  * threshold 2, ego card category for that alert — 4 ego cards are published in
  * dev). Member is created today → excluded from the ritual scan, so regularity
  * stays null and the score isolates the HONESTY axis (no ritual noise).
@@ -102,7 +103,7 @@ test.describe.serial('S10 — chaîne anti-mensonge S3 bout-en-bout (real DB + r
         brokerAccountId: acctProp.id,
         symbol: 'EURUSD',
         side: 'long',
-        openTime: new Date(now - 2 * H + 5 * MIN), // +5 min ≤ 45 min
+        openTime: new Date(now - 2 * H + 5 * MIN), // +5 min ≤ 3h match window
         volume: 0.5, // exact volume → matched
       },
     });

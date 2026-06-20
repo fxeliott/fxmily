@@ -23,9 +23,11 @@
  * mindset) render real content instead of pure empty states. NEVER a
  * `'server-only'` import (scar GG-CI).
  *
- * Runtime cost: this sweep visits ~30 routes serially. Under `next dev` each
+ * Runtime cost: this sweep visits ~37 routes serially. Under `next dev` each
  * route cold-compiles once (slow D: disk), so generous per-goto timeouts are
- * used. It runs on chromium only — mobile rendering is already proven by S9.
+ * used. It runs on BOTH the chromium and the mobile-iphone-15 (webkit) projects
+ * since S10 MAJ-42 closed the mobile blind spot — the only webkit-specific
+ * divergence (insecure-origin Service Worker noise) is in `BENIGN_PAGEERROR`.
  */
 
 import { existsSync } from 'node:fs';
@@ -62,6 +64,16 @@ const BENIGN_PAGEERROR = [
   /hmr-client/i,
   /__nextjs_original-stack-frames/i,
   /browser_dev_/i,
+  // WebKit-only + dev-only (the mobile-iphone-15 project runs webkit on
+  // http://localhost): registering the Service Worker on /account/notifications
+  // (sw-register.tsx) rejects with "/sw.js due to access control checks" because
+  // WebKit refuses SW script loads on an insecure http origin under `next dev`.
+  // The app already swallows this (sw-register.tsx:49 .catch → console.warn) and
+  // prod is HTTPS (`next start`) where Safari registers the SW normally — proven
+  // by the iOS real-device smoke (SPEC §15 J9). Chromium passes the very same
+  // route, and CI is chromium-only (e2e.yml). So it is dev/WebKit transport
+  // noise on an insecure origin, NOT an app rupture.
+  /sw\.js.*access control/i,
 ];
 
 async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }> {

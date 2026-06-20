@@ -2,6 +2,7 @@ import { ArrowLeft, ShieldCheck, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 
 import { AnnotationsSection } from '@/components/journal/annotations-section';
+import { TradeRiskSchema } from '@/components/journal/trade-risk-schema';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
@@ -202,6 +203,25 @@ export function TradeDetailView({
             }
           />
         </dl>
+
+        {/* S11 — animated entry / stop / target geometry. Renders only when a
+            stop-loss exists (else the dl above already carries the numbers).
+            Descriptive diagram of the member's own plan — no market call (§2). */}
+        {trade.stopLossPrice ? (
+          <div className="mt-4 border-t border-[var(--b-default)] pt-4">
+            <h3 className="t-mono-cap mb-2 text-[var(--t-4)]">Géométrie du plan</h3>
+            <TradeRiskSchema
+              trade={{
+                entryPrice: Number(trade.entryPrice),
+                stopLossPrice: Number(trade.stopLossPrice),
+                plannedRR: Number(trade.plannedRR),
+                direction: trade.direction,
+                exitPrice: trade.exitPrice != null ? Number(trade.exitPrice) : null,
+                realizedR: trade.realizedR != null ? Number(trade.realizedR) : null,
+              }}
+            />
+          </div>
+        ) : null}
       </Card>
 
       {/* Émotion avant */}

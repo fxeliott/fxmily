@@ -33,6 +33,13 @@ describe('isLogExpressHidden', () => {
       '/review/new',
       '/reflect/new',
       '/journal/clx123abc/close',
+      // S12.1 — single-step-bar wizards whose sticky CTA the FAB would overlap
+      // on short viewports. Each maps to exactly one route.
+      '/pre-trade/new',
+      '/mindset/new',
+      '/training/new',
+      '/training/debrief/new',
+      '/calendar/questionnaire/new',
     ]) {
       expect(isLogExpressHidden(p)).toBe(true);
     }
@@ -53,6 +60,13 @@ describe('isLogExpressHidden', () => {
       '/checkin',
       '/review',
       '/reflect',
+      // S12.1 — the wizards' parent dashboards/lists keep the FAB: only the
+      // exact `/<x>/new` wizard route is hidden, never the hub. This locks the
+      // precision of the S12.1 hide so it can never over-suppress.
+      '/mindset',
+      '/training',
+      '/training/debrief',
+      '/calendrier',
     ]) {
       expect(isLogExpressHidden(p)).toBe(false);
     }

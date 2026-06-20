@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/card';
+import { InfoDot } from '@/components/ui/info-dot';
 import { Pill } from '@/components/ui/pill';
 import type { SerializedBehavioralScore } from '@/lib/scoring';
 import type { BehavioralScoreTrendPoint } from '@/lib/scoring/service';
@@ -83,6 +84,12 @@ export function ScoreGaugeGrid({ score, history }: ScoreGaugeGridProps) {
           <h2 id="scores-heading" className="t-eyebrow">
             Scores comportementaux
           </h2>
+          <InfoDot
+            label="les 4 scores comportementaux"
+            side="bottom"
+            width={272}
+            tip="4 scores de process (0–100), jamais basés sur ton P&L : Discipline (plan, hedge, routine), Stabilité (variance, stress, tilt), Cohérence (expectancy, drawdown, sessions) et Engagement (check-ins, streak, journal). Recalculés chaque nuit et en live après chaque action."
+          />
         </div>
         {checkinDays != null ? (
           <SampleSizeDisclaimer

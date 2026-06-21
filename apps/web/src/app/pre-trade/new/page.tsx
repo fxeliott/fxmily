@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { PauseRing } from '@/components/pre-trade/pause-ring';
 import { PreTradeCheckWizard } from '@/components/pre-trade/pre-trade-wizard';
 
 export const metadata = {
@@ -31,35 +33,44 @@ export default async function NewPreTradeCheckPage() {
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
-      <header className="flex flex-col gap-4">
-        <Link
-          href="/dashboard"
-          className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Tableau de bord
-        </Link>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
-            <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-            Pré-trade · Pause de discipline
-          </span>
-          <h1
-            id="ptw-heading"
-            className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-            style={{ fontFeatureSettings: '"ss01" 1' }}
+    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
+      <DashboardAmbient />
+      <div className="relative mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
+        <header className="flex flex-col gap-4">
+          <Link
+            href="/dashboard"
+            className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
           >
-            Avant d&apos;entrer, on regarde.
-          </h1>
-          <p className="t-cap text-[var(--t-3)]">
-            Tu peux fermer cette page à tout moment. Le wizard est un miroir, pas une barrière.
-          </p>
-        </div>
-      </header>
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Tableau de bord
+          </Link>
 
-      <PreTradeCheckWizard />
+          <div className="flex items-start gap-4">
+            {/* Breathing pause glyph — symbolises the 30s look, not a timer
+                (ADR-003 miroir, pas barrière). Decorative, aria-hidden. */}
+            <PauseRing className="mt-0.5 h-16 w-16 shrink-0 sm:h-20 sm:w-20" />
+
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
+                <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                Pré-trade · Pause de discipline
+              </span>
+              <h1
+                id="ptw-heading"
+                className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+                style={{ fontFeatureSettings: '"ss01" 1' }}
+              >
+                Avant d&apos;entrer, on regarde.
+              </h1>
+              <p className="t-cap text-[var(--t-3)]">
+                Tu peux fermer cette page à tout moment. Le wizard est un miroir, pas une barrière.
+              </p>
+            </div>
+          </div>
+        </header>
+
+        <PreTradeCheckWizard />
+      </div>
     </main>
   );
 }

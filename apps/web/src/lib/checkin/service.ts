@@ -61,6 +61,8 @@ export interface SerializedCheckin {
 
   planRespectedToday: boolean | null;
   hedgeRespectedToday: boolean | null;
+  /** #13 — evening: did the member keep this morning's intention? Tri-state. */
+  intentionKept: boolean | null;
   /** SPEC §28/§22 — evening "bilan": did the member study the course today? */
   formationFollowed: boolean | null;
   caffeineMl: number | null;
@@ -110,6 +112,7 @@ function toSerialized(row: DailyCheckinModel): SerializedCheckin {
     intention: row.intention,
     planRespectedToday: row.planRespectedToday,
     hedgeRespectedToday: row.hedgeRespectedToday,
+    intentionKept: row.intentionKept,
     formationFollowed: row.formationFollowed,
     caffeineMl: row.caffeineMl,
     waterLiters: row.waterLiters == null ? null : row.waterLiters.toString(),
@@ -211,6 +214,7 @@ export async function submitEveningCheckin(
   const updateData = {
     planRespectedToday: input.planRespectedToday,
     hedgeRespectedToday: input.hedgeRespectedToday,
+    intentionKept: input.intentionKept,
     formationFollowed: input.formationFollowed,
     caffeineMl: input.caffeineMl,
     waterLiters: input.waterLiters == null ? null : new Prisma.Decimal(input.waterLiters),

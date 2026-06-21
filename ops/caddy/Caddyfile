@@ -51,9 +51,16 @@ app.fxmilyapp.com {
 		-Server
 	}
 
-	# Compress everything text-y. Brotli > gzip > zstd in compression
-	# ratio for HTML / JS bundles ; Caddy negotiates per-Accept-Encoding.
-	encode zstd br gzip
+	# Compress everything text-y. Caddy negotiates per-Accept-Encoding.
+	# NOTE: `br` (brotli) is intentionally NOT listed — the official
+	# `caddy:2-alpine` image ships WITHOUT the brotli encoder module
+	# (`http.encoders.br` is not registered), so `encode zstd br gzip`
+	# makes `caddy adapt`/reload FAIL ("module not registered: http.encoders.br")
+	# and leaves the proxy unable to serve TLS (origin 522). The prod host
+	# Caddyfile was hot-patched to `zstd gzip`; this keeps the repo (IaC source
+	# of truth) in sync so a future deploy/reload never re-breaks the edge.
+	# To re-enable brotli, build a custom caddy image with the brotli plugin first.
+	encode zstd gzip
 
 	# Per-domain access log (in addition to the global log block).
 	log {

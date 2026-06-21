@@ -526,29 +526,29 @@ model Trade {
   /// One of the 12 allowlisted symbols (see lib/trading/pairs.ts). Stored as
   /// uppercase string rather than an enum so adding pairs doesn't require a
   /// DB migration — the allowlist is enforced at the Zod / Server Action edge.
-  pair           String
-  direction      TradeDirection
-  session        TradeSession
+  pair            String
+  direction       TradeDirection
+  session         TradeSession
   /// User-provided trade entry timestamp, persisted in UTC. The wizard
   /// pre-fills this from `Date.now()` but the user can override (useful when
   /// logging trades retroactively).
-  enteredAt      DateTime       @map("entered_at")
-  entryPrice     Decimal        @map("entry_price") @db.Decimal(20, 8)
+  enteredAt       DateTime       @map("entered_at")
+  entryPrice      Decimal        @map("entry_price") @db.Decimal(20, 8)
   /// Position size in lots (forex/metals) or contracts (indices). Decimal(12,4)
   /// covers micro-lots (0.01) up to institutional sizes.
-  lotSize        Decimal        @map("lot_size") @db.Decimal(12, 4)
+  lotSize         Decimal        @map("lot_size") @db.Decimal(12, 4)
   /// Optional stop-loss price. Strongly encouraged: enables exact `realizedR`.
-  stopLossPrice  Decimal?       @map("stop_loss_price") @db.Decimal(20, 8)
+  stopLossPrice   Decimal?       @map("stop_loss_price") @db.Decimal(20, 8)
   /// Planned reward-to-risk ratio (e.g. 2.5 means "risk 1 to make 2.5").
   /// Slider in the UI clamps to [0.5, 10] with 0.25 step.
-  plannedRR      Decimal        @map("planned_rr") @db.Decimal(6, 2)
+  plannedRR       Decimal        @map("planned_rr") @db.Decimal(6, 2)
   /// Multi-select tag slugs (FR labels, EN slugs). See lib/trading/emotions.ts.
   /// UI caps the selection at 3 tags; we don't enforce in DB to allow future
   /// expansion without a migration.
-  emotionBefore  String[]       @map("emotion_before")
-  planRespected  Boolean        @map("plan_respected")
+  emotionBefore   String[]       @map("emotion_before")
+  planRespected   Boolean        @map("plan_respected")
   /// `null` = N/A (no hedge applicable on this trade). Tri-state per SPEC §7.3.
-  hedgeRespected Boolean?       @map("hedge_respected")
+  hedgeRespected  Boolean?       @map("hedge_respected")
   /// SPEC §28/§21 — "oublis" tracking axis (master prompt §28: "exécution en
   /// position réelle (respect du plan, oublis)" / §21: "s'il oublie des choses
   /// ou non"). Positive framing (anti-Black-Hat): `true` = "j'ai suivi tout mon
@@ -557,8 +557,8 @@ model Trade {
   /// and parallel to `planRespected`/`hedgeRespected`. SPEC §2 posture: we track
   /// the ACT of completeness/forgetting, NEVER advise on the trade itself. Pure
   /// additive nullable Boolean — exact mirror of `DailyCheckin.marketAnalysisDone`.
-  processComplete Boolean?      @map("process_complete")
-  notes          String?        @db.Text
+  processComplete Boolean?       @map("process_complete")
+  notes           String?        @db.Text
 
   /// Storage key for the pre-entry screenshot (mandatory at creation, but the
   /// column is nullable to allow administrative repairs). Format follows
@@ -638,11 +638,11 @@ model Trade {
 
   // J4 — admin annotations attached to this trade. Cascade so a member
   // cleanup wipes its annotations too (RGPD: data minimisation).
-  annotations TradeAnnotation[]
+  annotations   TradeAnnotation[]
   // S3 — multi-capture attachments (entry/exit/other). The legacy
   // `screenshotEntryKey`/`screenshotExitKey` columns stay untouched
   // (backward compat); new multi-photo flows append here.
-  media TradeMedia[]
+  media         TradeMedia[]
   // S3 — discrepancies referencing this trade as the declared side.
   discrepancies Discrepancy[]
 
@@ -1149,6 +1149,16 @@ model DailyCheckin {
 
   /// Did the member respect their trading plan today?
   planRespectedToday  Boolean? @map("plan_respected_today")
+  /// SPEC §28/§22 — did the member KEEP the intention they set this morning?
+  /// Answered in the EVENING (the morning sets `intention`, the evening closes
+  /// the loop), sibling of `planRespectedToday`. Tri-state: true (kept), false
+  /// (not kept — a calm effort signal, NEVER a punitive verdict §31.2), null
+  /// (no morning intention that day / unanswered / legacy row). We score THAT
+  /// the intention was kept, never the intention CONTENT (SPEC §2). Pure
+  /// additive nullable Boolean, mirror of `marketAnalysisDone`/`processComplete`
+  /// — the existing discipline weights are NEVER rebalanced. The S12 morning
+  /// recall stays a verdict-free echo; THIS is a distinct evening self-report.
+  intentionKept       Boolean? @map("intention_kept")
   /// Did the member respect their hedge plan? Null = N/A (no hedge today).
   hedgeRespectedToday Boolean? @map("hedge_respected_today")
   /// Estimated caffeine intake in mL, capped at 2000.
@@ -1939,6 +1949,15 @@ model MemberProfile {
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
 
+  /// V2.5 (#17) — member-written if-then recovery protocol (Mark Douglas §18,
+  /// Gollwitzer implementation-intention). Re-served READ-ONLY on the
+  /// `after_n_consecutive_losses` trigger (JITAI) so the member meets their OWN
+  /// cold-state plan at the exact hot moment. Closed shape validated by
+  /// `recoveryProtocolSchema`. SPEC §2: discipline recovery (stop/cooldown/
+  /// self-talk) ONLY — never market re-entry timing/setup. §31.2: non-punitive,
+  /// no broker lock. NULL = not set; NEVER a scoring input (firewall-clean).
+  recoveryProtocol Json? @map("recovery_protocol")
+
   @@map("member_profiles")
 }
 
@@ -2118,7 +2137,7 @@ model Meeting {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  attendances MeetingAttendance[]
+  attendances   MeetingAttendance[]
   /// S3 §31 — `meeting_missed_no_reason` gaps materialised for no-shows.
   discrepancies Discrepancy[]
 
@@ -2537,12 +2556,12 @@ model Discrepancy {
 
   scoreEvents ScoreEvent[]
 
-  // Member + admin views: open discrepancies first.
-  @@index([memberId, status])
-  @@index([memberId, detectedAt(sort: Desc)])
   // One meeting-miss gap per (member, meeting) — the scan dedup key. NULL
   // meetingId rows (every other type) never collide (Postgres NULLs distinct).
   @@unique([memberId, meetingId])
+  // Member + admin views: open discrepancies first.
+  @@index([memberId, status])
+  @@index([memberId, detectedAt(sort: Desc)])
   @@map("discrepancies")
 }
 
@@ -2655,9 +2674,9 @@ model TradeMedia {
   tradeId String @map("trade_id")
   trade   Trade  @relation(fields: [tradeId], references: [id], onDelete: Cascade)
 
-  kind TradeMediaKind @default(entry)
+  kind    TradeMediaKind @default(entry)
   /// Storage key, `lib/storage` conventions: `trades/{userId}/{nanoid}.{ext}`.
-  fileKey String @map("file_key")
+  fileKey String         @map("file_key")
 
   createdAt DateTime @default(now()) @map("created_at")
 

@@ -27,14 +27,21 @@ const M = (
   morningRoutineCompleted: routine,
   intention,
   marketAnalysisDone,
+  // #13 — morning rows never carry the evening "intention kept" answer.
+  intentionKept: null,
 });
 
-const E = (planRespected: boolean | null): DisciplineCheckinInput => ({
+const E = (
+  planRespected: boolean | null,
+  intentionKept: boolean | null = null,
+): DisciplineCheckinInput => ({
   slot: 'evening',
   planRespectedToday: planRespected,
   morningRoutineCompleted: null,
   intention: null,
   marketAnalysisDone: null,
+  // #13 — defaults to null so EVERY existing E(...) call is byte-identical.
+  intentionKept,
 });
 
 describe('computeDisciplineScore', () => {
@@ -360,5 +367,62 @@ describe('computeDisciplineScore — process complete / "oublis" (SPEC §28/§21
     const r = computeDisciplineScore({ trades, checkins: [] });
     expect(r.parts.processComplete?.numerator).toBe(1);
     expect(r.parts.processComplete?.denominator).toBe(1);
+  });
+});
+
+describe('computeDisciplineScore — intention kept (#13, ADDITION PURE)', () => {
+  it('BYTE-IDENTICAL: the 68 anchor is unchanged and intentionKept is null', () => {
+    // Exact replica of the "respects partial sub-scores" anchor (score 68),
+    // proving the #13 addition is invisible when no evening carries intentionKept.
+    const trades: DisciplineTradeInput[] = [
+      ...Array.from({ length: 6 }, () => T(true, true)),
+      ...Array.from({ length: 6 }, () => T(false, true)),
+    ];
+    const r = computeDisciplineScore({ trades, checkins: [] });
+    expect(r.score).toBe(68);
+    expect(r.parts.intentionKept).toBeNull();
+  });
+
+  it('null-skipped: 14 perfect mornings + evenings without intentionKept stay at 100', () => {
+    const checkins: DisciplineCheckinInput[] = [
+      ...Array.from({ length: 14 }, () => M('intention', true)),
+      ...Array.from({ length: 14 }, () => E(true)), // intentionKept defaults null
+    ];
+    const r = computeDisciplineScore({ trades: [], checkins });
+    expect(r.score).toBe(100);
+    expect(r.parts.intentionKept).toBeNull();
+  });
+
+  it('present + all kept: surfaces the sub-score at rate 1 and keeps 100', () => {
+    const checkins: DisciplineCheckinInput[] = Array.from({ length: 14 }, () => E(true, true));
+    const r = computeDisciplineScore({ trades: [], checkins });
+    // Only eveningPlan (25) + intentionKept (10) active, both perfect → 100.
+    expect(r.score).toBe(100);
+    expect(r.parts.intentionKept?.rate).toBe(1);
+    expect(r.parts.intentionKept?.pointsMax).toBe(10);
+    expect(r.parts.intentionKept?.denominator).toBe(14);
+  });
+
+  it('a false lowers the rate (calm effort signal), never crashes', () => {
+    // 14 evenings, planRespectedToday=true (eveningPlan ×25 = full), intentionKept
+    // all false → intentionKept rate 0 (×10 = 0). Active weights = 25+10 = 35,
+    // awarded = 25 → 25/35×100 ≈ 71.43 → 71.
+    const checkins: DisciplineCheckinInput[] = Array.from({ length: 14 }, () => E(true, false));
+    const r = computeDisciplineScore({ trades: [], checkins });
+    expect(r.score).toBe(71);
+    expect(r.parts.intentionKept?.rate).toBe(0);
+    expect(r.parts.intentionKept?.numerator).toBe(0);
+    expect(r.parts.intentionKept?.denominator).toBe(14);
+  });
+
+  it('null evenings are excluded from the denominator', () => {
+    const checkins: DisciplineCheckinInput[] = [
+      ...Array.from({ length: 7 }, () => E(true, true)),
+      ...Array.from({ length: 7 }, () => E(true, null)),
+    ];
+    const r = computeDisciplineScore({ trades: [], checkins });
+    expect(r.parts.intentionKept?.denominator).toBe(7);
+    expect(r.parts.intentionKept?.numerator).toBe(7);
+    expect(r.parts.intentionKept?.rate).toBe(1);
   });
 });

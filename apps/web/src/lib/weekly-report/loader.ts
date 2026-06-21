@@ -302,6 +302,7 @@ async function loadCheckins(userId: string, window: WeekWindow): Promise<Seriali
     intention: row.intention,
     planRespectedToday: row.planRespectedToday,
     hedgeRespectedToday: row.hedgeRespectedToday,
+    intentionKept: row.intentionKept,
     formationFollowed: row.formationFollowed,
     caffeineMl: row.caffeineMl,
     waterLiters: row.waterLiters == null ? null : row.waterLiters.toString(),

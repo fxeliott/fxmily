@@ -24,7 +24,10 @@ export default async function EveningCheckinPage() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:py-10">
       <MorningIntentionRecall intention={morning?.intention} context="evening" />
-      <EveningCheckinWizard today={today} />
+      <EveningCheckinWizard
+        today={today}
+        hasMorningIntention={Boolean(morning?.intention?.trim())}
+      />
     </main>
   );
 }

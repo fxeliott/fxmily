@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { TrainingAnnotationsSection } from '@/components/training/training-annotations-section';
 import { TrainingTradeCard } from '@/components/training/training-trade-card';
 import { Card } from '@/components/ui/card';
@@ -64,47 +65,50 @@ export default async function MemberTrainingTradeDetailPage({
   const screenshotUrl = safeReadUrl(trade.entryScreenshotKey);
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-5 px-4 py-6 sm:py-10">
-      {/* Hero — J4 TradeDetailView-parity focal point (h1 + identity), on the
-          cyan training surface (§21.5 non-confusable). */}
-      <header className="flex flex-col gap-3">
-        <Link
-          href={trade.sessionId ? `/training/sessions/${trade.sessionId}` : '/training'}
-          className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          {trade.sessionId ? 'Retour à la séance' : 'Mes backtests'}
-        </Link>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="f-mono text-[28px] leading-none font-semibold tracking-[0.01em] text-[var(--t-1)] sm:text-[32px]">
-            {trade.pair}
-          </h1>
-          <span className="t-eyebrow inline-flex items-center gap-1.5 text-[var(--cy)]">
-            <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} />
-            Mode entraînement
-          </span>
-        </div>
-      </header>
+    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
+      <DashboardAmbient tone="cyan" />
+      <div className="dash-stagger relative mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-6 sm:py-10">
+        {/* Hero — J4 TradeDetailView-parity focal point (h1 + identity), on the
+            cyan training surface (§21.5 non-confusable). */}
+        <header className="flex flex-col gap-3">
+          <Link
+            href={trade.sessionId ? `/training/sessions/${trade.sessionId}` : '/training'}
+            className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            {trade.sessionId ? 'Retour à la séance' : 'Mes backtests'}
+          </Link>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="f-mono h-rise text-[28px] leading-none font-semibold tracking-[0.01em] text-[var(--t-1)] sm:text-[32px]">
+              {trade.pair}
+            </h1>
+            <span className="t-eyebrow inline-flex items-center gap-1.5 text-[var(--cy)]">
+              <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} />
+              Mode entraînement
+            </span>
+          </div>
+        </header>
 
-      <TrainingTradeCard trade={trade} />
+        <TrainingTradeCard trade={trade} />
 
-      {screenshotUrl ? (
-        <Card className="flex flex-col gap-2 p-4">
-          <h2 className="t-eyebrow-lg text-[var(--t-3)]">Ton analyse</h2>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={screenshotUrl}
-            alt="Capture de ton analyse TradingView"
-            className="rounded-card max-h-[32rem] w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
-          />
-        </Card>
-      ) : null}
+        {screenshotUrl ? (
+          <Card className="flex flex-col gap-2 p-4">
+            <h2 className="t-eyebrow-lg text-[var(--t-3)]">Ton analyse</h2>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={screenshotUrl}
+              alt="Capture de ton analyse TradingView"
+              className="rounded-card max-h-[32rem] w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
+            />
+          </Card>
+        ) : null}
 
-      <TrainingAnnotationsSection
-        annotations={annotations}
-        isAdmin={false}
-        currentUserId={session.user.id}
-      />
+        <TrainingAnnotationsSection
+          annotations={annotations}
+          isAdmin={false}
+          currentUserId={session.user.id}
+        />
+      </div>
     </main>
   );
 }

@@ -2257,3 +2257,166 @@
     bottom: calc(env(safe-area-inset-bottom) + 8.5rem); /* ≈136px > FAB top ≈132px */
   }
 }
+
+/* =============================================================
+ * INCREMENT 2 — WOW PRIMITIVES (S17 frontend-v2) — couche premium ADDITIVE
+ * -------------------------------------------------------------
+ * Support CSS des primitives React neuves : Tilt3D / Magnetic / AnimatedNumber
+ * gèrent leur transform en JS (compositor-only) ; Spotlight + GradientBorder
+ * sont pilotées ici. Plus deux washes de couleur décoratifs qui exploitent
+ * enfin --acc-2 indigo et --grad-brand sous-utilisés (audit S17) SANS toucher
+ * le mono-accent CTA (--acc bleu reste le seul bouton primaire). Invariants
+ * frontend-elite :
+ *   - compositor-only (transform/opacity) ; glow peint, jamais animé direct ;
+ *   - prefers-reduced-motion : boucles coupées (filet global + gardes), état
+ *     final lisible ;
+ *   - forced-colors : décor lumineux retiré / remplacé par system colors ;
+ *   - couches décoratives sous le contenu (z-index), contraste texte intact.
+ * ============================================================= */
+
+/* ---- Spotlight curseur (spotlight.tsx) — lueur radiale bleue qui suit la
+   souris. Le composant met à jour --spot-x/--spot-y (px) au pointermove :
+   seule une custom prop change => repaint du mask, zéro layout, zéro re-render.
+   Le glow est peint sur ::before en z-0 (au-dessus du fond de carte) ; le
+   contenu réel est remonté en z-1 => le texte reste TOUJOURS au-dessus du glow
+   (contraste intact). ---- */
+.spotlight-surface {
+  position: relative;
+}
+.spotlight-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 260ms var(--e-smooth);
+  background: radial-gradient(
+    240px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    oklch(0.62 0.19 254 / 0.14),
+    transparent 68%
+  );
+}
+.spotlight-surface:hover::before,
+.spotlight-surface:focus-within::before {
+  opacity: 1;
+}
+.spotlight-surface > * {
+  position: relative;
+  z-index: 1;
+}
+.light .spotlight-surface::before {
+  background: radial-gradient(
+    240px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    oklch(0.52 0.2 260 / 0.1),
+    transparent 68%
+  );
+}
+@media (forced-colors: active) {
+  .spotlight-surface::before {
+    display: none;
+  }
+}
+
+/* ---- GradientBorder (gradient-border.tsx) — anneau de marque --grad-brand
+   (bleu→indigo→cyan) qui peut tourner. @property enregistre l'angle conique
+   pour l'interpoler ; sans support (rare en 2026, Firefox 128+) l'anneau reste
+   statique = fallback gracieux. DÉCORATIF only (jamais un CTA). ---- */
+@property --gb-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+.gradient-border {
+  position: relative;
+  padding: 1px;
+  border-radius: var(--gb-radius, var(--r-card-lg));
+  isolation: isolate;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--gb-angle),
+    oklch(0.62 0.19 254 / 0.9),
+    oklch(0.55 0.21 262 / 0.9),
+    oklch(0.7 0.13 217 / 0.9),
+    oklch(0.55 0.21 262 / 0.9),
+    oklch(0.62 0.19 254 / 0.9)
+  );
+}
+.gradient-border-inner {
+  height: 100%;
+  border-radius: calc(var(--gb-radius, var(--r-card-lg)) - 1px);
+  background: var(--bg-1);
+}
+@keyframes gbSpin {
+  to {
+    --gb-angle: 360deg;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .gradient-border[data-trigger='always']::before {
+    animation: gbSpin 6s linear infinite;
+  }
+  .gradient-border[data-trigger='hover']::before {
+    animation: gbSpin 6s linear infinite;
+    animation-play-state: paused;
+  }
+  .gradient-border[data-trigger='hover']:hover::before,
+  .gradient-border[data-trigger='hover']:focus-within::before {
+    animation-play-state: running;
+  }
+}
+@media (forced-colors: active) {
+  .gradient-border::before {
+    background: none;
+    border: 1px solid CanvasText;
+  }
+}
+
+/* ---- Texte dégradé de marque (héros ponctuels uniquement — JAMAIS un CTA ni
+   un lien d'action). bg-clip-text sur --grad-brand. À réserver aux gros titres
+   display (seuil contraste « grand texte » 3:1, atteint sur les 2 modes — les
+   stops light sont assombris). Fallback couleur pleine + forced-colors. ---- */
+.text-grad-brand {
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.light .text-grad-brand {
+  background: linear-gradient(
+    135deg,
+    oklch(0.5 0.2 262),
+    oklch(0.5 0.21 264) 52%,
+    oklch(0.5 0.12 220)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .text-grad-brand {
+    color: var(--acc-hi);
+    -webkit-text-fill-color: currentColor;
+  }
+}
+@media (forced-colors: active) {
+  .text-grad-brand {
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+    background: none;
+  }
+}
+
+/* ---- Wash de couleur décoratif — fond dégradé de marque très doux (alpha
+   ≤0.14 via --grad-brand-soft) pour des panneaux héros qui « respirent la
+   couleur » sans virer au flashy ni concurrencer le texte. Décoratif. ---- */
+.surf-grad-soft {
+  background-image: var(--grad-brand-soft);
+}

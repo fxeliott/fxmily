@@ -153,7 +153,7 @@ function AccountCard({
     <li>
       <Link
         href={href}
-        className={`rounded-card-lg group block h-full border border-[var(--b-default)] bg-[var(--bg-1)] p-5 transition-colors ${borderHover}`}
+        className={`spotlight-surface rounded-card-lg group block h-full border border-[var(--b-default)] bg-[var(--bg-1)] p-5 transition-[color,background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--sh-card-hover)] motion-reduce:transform-none ${borderHover}`}
       >
         <div className="flex items-start gap-3">
           <span

@@ -17,6 +17,7 @@ import { TodayGuidance } from '@/components/dashboard/today-guidance';
 import { WeeklyInsightCard } from '@/components/dashboard/weekly-insight-card';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
 import { ProfileStatusWidget } from '@/components/onboarding/profile-status-widget';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
@@ -268,7 +269,7 @@ export default async function DashboardPage() {
                   {constancy ? (
                     <div className="flex flex-col items-end">
                       <span className="font-mono text-[22px] leading-none font-bold text-[var(--t-1)] tabular-nums">
-                        {Math.round(constancy.value)}
+                        <AnimatedNumber value={Math.round(constancy.value)} />
                         <span className="text-[12px] font-medium text-[var(--t-4)]">/100</span>
                       </span>
                       <span className="t-foot mt-1 text-[var(--t-4)]">constance</span>

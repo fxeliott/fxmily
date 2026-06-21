@@ -53,7 +53,13 @@ export function RouteFocusAnnouncer() {
   }, [pathname]);
 
   return (
-    <div aria-live="polite" role="status" className="sr-only">
+    // aria-live="polite" alone IS a live region — it announces on content change.
+    // We deliberately DON'T use role="status" here: the app's page-level toasts
+    // already own role="status", and this announcer is mounted first in the DOM,
+    // so role="status" would make it the `.first()` status on every route and
+    // shadow those toasts (e2e regression checkin-happy-path). aria-atomic so the
+    // whole page title is read as one unit.
+    <div aria-live="polite" aria-atomic="true" className="sr-only">
       {message}
     </div>
   );

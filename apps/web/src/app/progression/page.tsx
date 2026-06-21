@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { WeeklyRecapCard } from '@/components/progression/weekly-recap-card';
 import { BehaviorRadar } from '@/components/scoring/behavior-radar';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
 import { RDistribution } from '@/components/scoring/r-distribution';
@@ -15,6 +16,7 @@ import { Card } from '@/components/ui/card';
 import { getDisciplineYearHeatmap } from '@/lib/checkin/service';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
+import { getMemberWeeklyRecap } from '@/lib/weekly-report/member-recap';
 
 /**
  * « Où j'en suis » — V2 refonte J2 (intention de guidage #1).
@@ -80,6 +82,20 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
           </p>
         </header>
 
+        {/* Récap hebdo CHIFFRÉ — « Ta semaine en chiffres » (S14). Première
+            surface membre avec un delta semaine-vs-semaine calme (réutilise
+            l'agrégation de l'email weekly-digest). Stream via Suspense : les 2
+            slices hebdo (~6 queries chacune) ne bloquent pas le shell. Posture
+            §2 + anti-Black-Hat : delta vert si hausse, gris sinon, jamais rouge. */}
+        <section className="wow-reveal mb-6" aria-labelledby="weekly-recap-heading">
+          <h2 id="weekly-recap-heading" className="sr-only">
+            Ta semaine en chiffres
+          </h2>
+          <Suspense fallback={<WeeklyRecapSkeleton />}>
+            <WeeklyRecapSection userId={userId} />
+          </Suspense>
+        </section>
+
         {/* Profil comportemental — la forme memorisable (4 dimensions + ghost
             ~30 j) AVANT le detail chiffre des jauges. Posture §2 : jamais punitif. */}
         <section className="wow-reveal mb-6" aria-labelledby="radar-heading">
@@ -137,6 +153,25 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
         </section>
       </div>
     </main>
+  );
+}
+
+async function WeeklyRecapSection({ userId }: { userId: string }) {
+  const recap = await getMemberWeeklyRecap(userId);
+  // Inactive member / no current slice → render nothing (the rest of the page
+  // still shows the member's scores). Never a fabricated empty card.
+  if (recap === null) return null;
+  return <WeeklyRecapCard current={recap.current} previous={recap.previous} />;
+}
+
+function WeeklyRecapSkeleton() {
+  return (
+    <div
+      className="skel rounded-card h-[208px] border border-[var(--b-default)] bg-[var(--bg-1)] sm:h-[188px]"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement de ta semaine en chiffres"
+    />
   );
 }
 

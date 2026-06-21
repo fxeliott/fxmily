@@ -9,6 +9,89 @@ import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 
 /**
+ * FiveTruthsGlyph — petit schéma conceptuel d'appoint à côté de l'eyebrow.
+ *
+ * Les 5 Fundamental Truths comme 5 nœuds reliés en constellation (un « edge »
+ * abstrait : un réseau de probabilités, pas une ligne droite déterministe).
+ * Le nœud actif s'illumine en suivant la vérité affichée (`activeIdx`), les
+ * autres respirent faiblement — renforce le concept sans voler l'attention au
+ * texte. `aria-hidden` : purement décoratif d'appoint, le texte porte le sens.
+ *
+ * Compositor-only (opacity/transform). Sous `prefers-reduced-motion` le filet
+ * global fige tout ; double-garde locale → état figé lisible (nœud actif net,
+ * pas de pulsation). `forced-colors` : les glows tombent, les traits restent.
+ */
+function FiveTruthsGlyph({ activeIdx }: { activeIdx: number }) {
+  // 5 nodes on a circle, 0deg = top, clockwise (a calm pentagon "edge graph").
+  const r = 9.5;
+  const c = 13;
+  const nodes = Array.from({ length: 5 }, (_, i) => {
+    const a = ((i * 72 - 90) * Math.PI) / 180;
+    return { x: c + r * Math.cos(a), y: c + r * Math.sin(a) };
+  });
+
+  return (
+    <svg
+      width="26"
+      height="26"
+      viewBox="0 0 26 26"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      className="md-glyph shrink-0"
+    >
+      {/* Faint links between every pair — the "web of probabilities". */}
+      <g stroke="var(--b-acc)" strokeWidth="0.6" opacity="0.55">
+        {nodes.map((p, i) =>
+          nodes
+            .slice(i + 1)
+            .map((q, j) => <line key={`l-${i}-${j}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y} />),
+        )}
+      </g>
+      {/* Breathing core. */}
+      <circle className="md-glyph-core" cx={c} cy={c} r="2" fill="var(--acc)" opacity="0.5" />
+      {/* The 5 truth nodes. The active one is fully lit; others dimmed. */}
+      {nodes.map((p, i) => {
+        const active = i === ((activeIdx % 5) + 5) % 5;
+        return (
+          <circle
+            key={`n-${i}`}
+            cx={p.x}
+            cy={p.y}
+            r={active ? 2.4 : 1.6}
+            fill={active ? 'var(--acc-hi)' : 'var(--acc)'}
+            opacity={active ? 1 : 0.45}
+            className={active ? 'md-glyph-active' : undefined}
+            style={{ transition: 'r 600ms var(--e-smooth), opacity 600ms var(--e-smooth)' }}
+          />
+        );
+      })}
+      <style>{`
+        .md-glyph-core {
+          transform-box: fill-box;
+          transform-origin: center;
+          will-change: opacity, transform;
+          animation: mdGlyphBreathe 4.8s var(--e-smooth) infinite;
+        }
+        .md-glyph-active { will-change: opacity; animation: mdGlyphActive 8s var(--e-smooth) infinite; }
+        @keyframes mdGlyphBreathe {
+          0%, 100% { opacity: 0.4; transform: scale(0.92); }
+          50% { opacity: 0.7; transform: scale(1.06); }
+        }
+        @keyframes mdGlyphActive {
+          0%, 100% { opacity: 0.85; }
+          50% { opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .md-glyph-core { animation: none; opacity: 0.5; }
+          .md-glyph-active { animation: none; opacity: 1; }
+        }
+      `}</style>
+    </svg>
+  );
+}
+
+/**
  * Mark Douglas card — pédagogie embeddable dashboard.
  *
  * Affiche une rotation des 5 Fundamental Truths de *Trading in the Zone*
@@ -88,6 +171,7 @@ export function MarkDouglasCard() {
         <div className="flex items-center gap-2">
           <Brain className="h-3.5 w-3.5 text-[var(--acc)]" strokeWidth={1.75} />
           <span className="t-eyebrow">Mark Douglas · 5 truths</span>
+          <FiveTruthsGlyph activeIdx={idx} />
         </div>
         <Pill tone="cy">
           {truth.n} / {TRUTHS.length}

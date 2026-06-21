@@ -16,6 +16,7 @@ import { redirect } from 'next/navigation';
 import type { CSSProperties } from 'react';
 
 import { auth } from '@/auth';
+import { DisciplineLoop } from '@/components/illustrations/discipline-loop';
 import { Card } from '@/components/ui/card';
 import { btnVariants } from '@/components/ui/btn';
 import { cn } from '@/lib/utils';
@@ -160,6 +161,22 @@ export default async function GuidePage() {
             t’accompagne dans le temps — rien à entasser d’un coup, juste une pratique régulière que
             tu construis.
           </p>
+        </div>
+      </Card>
+
+      {/* La boucle — schéma pédagogique du process répétable (Mark Douglas §2). */}
+      <Card glass className="rounded-card-lg p-6 sm:p-7">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-0.5">
+            <span className="t-eyebrow text-[var(--acc-hi)]">La boucle</span>
+            <h2 className="t-h2 text-[var(--t-1)]">Un cycle, pas une prédiction.</h2>
+            <p className="t-body mt-2 text-[var(--t-2)]">
+              Tout l’app tient dans une routine qui se répète chaque jour. Pas besoin de deviner le
+              marché : il suffit de boucler ce cycle, encore et encore. C’est la régularité qui
+              construit ton edge.
+            </p>
+          </div>
+          <DisciplineLoop className="pt-1" />
         </div>
       </Card>
 

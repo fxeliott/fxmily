@@ -61,7 +61,7 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
         <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
           Mon espace
         </p>
-        <h1 className="mt-2 flex items-center gap-3 text-2xl font-semibold tracking-tight text-[var(--t-1)] sm:text-3xl">
+        <h1 className="t-h1 mt-2 flex items-center gap-3 text-[var(--t-1)]">
           <UserCircle aria-hidden="true" className="h-7 w-7 text-[var(--acc-hi)]" />
           Mon compte
         </h1>
@@ -153,7 +153,7 @@ function AccountCard({
     <li>
       <Link
         href={href}
-        className={`group block h-full rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 transition-colors ${borderHover}`}
+        className={`rounded-card-lg group block h-full border border-[var(--b-default)] bg-[var(--bg-1)] p-5 transition-colors ${borderHover}`}
       >
         <div className="flex items-start gap-3">
           <span

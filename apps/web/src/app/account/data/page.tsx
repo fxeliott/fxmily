@@ -122,9 +122,7 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
         <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
           RGPD · Article 20
         </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--t-1)] sm:text-3xl">
-          Mes données
-        </h1>
+        <h1 className="t-h1 mt-2 text-[var(--t-1)]">Mes données</h1>
         <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
           Tu peux télécharger l&apos;intégralité de tes données Fxmily à n&apos;importe quel moment,
           au format JSON. Le fichier reste lisible (indenté), téléchargement immédiat, aucune
@@ -134,7 +132,7 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
 
       <section
         aria-labelledby="export-summary-heading"
-        className="rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
+        className="rounded-card-lg border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
       >
         <div className="flex items-start gap-3">
           <span
@@ -158,7 +156,7 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
           {sections.map((s) => (
             <li
               key={s.label}
-              className="rounded-xl border border-[var(--b-subtle)] bg-[var(--bg-2)] p-3"
+              className="rounded-card border border-[var(--b-subtle)] bg-[var(--bg-2)] p-3"
             >
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-sm font-medium text-[var(--t-1)]">{s.label}</p>

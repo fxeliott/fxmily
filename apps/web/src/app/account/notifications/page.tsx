@@ -71,10 +71,8 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
           Dashboard
         </Link>
-        <h1 className="text-foreground mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">
-          Notifications
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
+        <h1 className="t-h1 mt-3 text-[var(--t-1)]">Notifications</h1>
+        <p className="mt-2 text-sm text-[var(--t-2)]">
           Reste informé sur ce qui compte, sans être noyé. Tu choisis ce qui mérite une notification
           — et tu peux tout couper en un clic.
         </p>
@@ -91,7 +89,7 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
       </header>
 
       <section className="mb-8 space-y-3">
-        <h2 className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+        <h2 className="text-xs font-medium tracking-widest text-[var(--t-3)] uppercase">
           Activation
         </h2>
         {isConfigured ? (
@@ -100,12 +98,12 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
             initialSubscriptionCount={subscriptions.length}
           />
         ) : (
-          <div className="border-warning/30 bg-card rounded-lg border p-4">
-            <div className="text-foreground flex items-center gap-2 text-sm font-medium">
-              <ShieldCheck aria-hidden="true" className="text-warning h-4 w-4" />
+          <div className="rounded-card border border-[oklch(0.834_0.158_80_/_0.30)] bg-[var(--warn-dim)] p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-[var(--t-1)]">
+              <ShieldCheck aria-hidden="true" className="h-4 w-4 text-[var(--warn)]" />
               Configuration en attente
             </div>
-            <p className="text-muted-foreground mt-1 text-sm">
+            <p className="mt-1 text-sm text-[var(--t-2)]">
               Les notifications push sont en cours de mise en service. Reviens dans quelques minutes
               — ou demande à Eliott si l&apos;attente persiste.
             </p>
@@ -114,33 +112,33 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
       </section>
 
       <section className="mb-8 space-y-3">
-        <h2 className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+        <h2 className="text-xs font-medium tracking-widest text-[var(--t-3)] uppercase">
           Catégories
         </h2>
         <PreferencesGrid initialPreferences={preferences} isAdmin={isAdmin} />
-        <p className="text-muted-foreground text-xs">
+        <p className="text-xs text-[var(--t-3)]">
           Toutes les catégories sont activées par défaut. Bascule un toggle pour suspendre une
           catégorie sans toucher aux autres.
         </p>
       </section>
 
       <section className="mb-8 space-y-3">
-        <h2 className="text-muted-foreground text-xs font-medium tracking-widest uppercase">
+        <h2 className="text-xs font-medium tracking-widest text-[var(--t-3)] uppercase">
           Comment ça marche
         </h2>
-        <div className="border-border bg-card text-muted-foreground space-y-2 rounded-lg border p-4 text-sm">
+        <div className="rounded-card space-y-2 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 text-sm text-[var(--t-2)]">
           <p>
-            <strong className="text-foreground">Pas de cloches inutiles.</strong> Fxmily
+            <strong className="text-[var(--t-1)]">Pas de cloches inutiles.</strong> Fxmily
             n&apos;envoie jamais de promo, jamais de FOMO, jamais d&apos;analyse de marché.
             Uniquement ce qui sert ta discipline.
           </p>
           <p>
-            <strong className="text-foreground">Ton choix prime.</strong> Si tu désactives une
+            <strong className="text-[var(--t-1)]">Ton choix prime.</strong> Si tu désactives une
             catégorie, le serveur vérifie systématiquement avant d&apos;envoyer — aucun message ne
             te parvient en contradiction avec tes réglages.
           </p>
           <p>
-            <strong className="text-foreground">Aucun audio.</strong> Les notifications restent
+            <strong className="text-[var(--t-1)]">Aucun audio.</strong> Les notifications restent
             visuelles et haptiques (vibration système). Pas de sonneries Fxmily-specific.
           </p>
         </div>

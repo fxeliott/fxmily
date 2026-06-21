@@ -224,6 +224,7 @@ function CronRow({ entry }: { entry: CronHealthEntry }): React.ReactElement {
     <li className="flex flex-col gap-2 border-b border-[var(--b-subtle)] py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
+          <CronHeartbeatDot status={entry.status} />
           <p className="text-sm font-medium text-[var(--t-1)]">{entry.label}</p>
           <CronStatusPill status={entry.status} />
         </div>
@@ -233,6 +234,16 @@ function CronRow({ entry }: { entry: CronHealthEntry }): React.ReactElement {
           </code>{' '}
           · période {formatDuration(entry.periodMs)} · tolérance {formatDuration(entry.toleranceMs)}
         </p>
+        {/* Age vs tolerance, visual. The Pill says *which* bucket; this bar
+            says *how close to red* — a cron at 95% of tolerance reads amber
+            but the near-full bar warns the operator before it flips. Only when
+            the cron has actually run and a finite tolerance exists. */}
+        <CronAgeBar
+          status={entry.status}
+          ageMs={entry.ageMs}
+          periodMs={entry.periodMs}
+          toleranceMs={entry.toleranceMs}
+        />
       </div>
       <div className="text-right text-xs text-[var(--t-2)]">
         {entry.lastRanAt ? (
@@ -247,6 +258,105 @@ function CronRow({ entry }: { entry: CronHealthEntry }): React.ReactElement {
         )}
       </div>
     </li>
+  );
+}
+
+/**
+ * Per-cron LED. Green (healthy) pulses (motion-safe — the global
+ * `prefers-reduced-motion` filet stops `animate-pulse` at iteration 1 so it
+ * settles solid, never hidden). Amber / red / never_ran are FIXED on purpose :
+ * a blinking red would read as alarm/anxiety (anti-Black-Hat, §2) whereas a
+ * steady, saturated red dot still jumps out against the calm UI. forced-colors
+ * keeps the dot (background-color survives High Contrast) so the signal never
+ * disappears for High-Contrast users.
+ */
+function CronHeartbeatDot({ status }: { status: CronStatus }): React.ReactElement {
+  const color =
+    status === 'green'
+      ? 'var(--ok)'
+      : status === 'amber'
+        ? 'var(--warn)'
+        : status === 'red'
+          ? 'var(--bad)'
+          : 'var(--t-3)'; // never_ran — neutral, not red (it hasn't failed, it has no data)
+  const labelText =
+    status === 'green'
+      ? 'Sain'
+      : status === 'amber'
+        ? 'Lent'
+        : status === 'red'
+          ? 'Bloqué'
+          : 'Jamais exécuté';
+  return (
+    <span
+      role="img"
+      aria-label={`État : ${labelText}`}
+      title={labelText}
+      className="relative grid h-3.5 w-3.5 shrink-0 place-items-center"
+    >
+      {/* Healthy crons get a soft breathing halo; unhealthy ones stay still. */}
+      {status === 'green' ? (
+        <span
+          aria-hidden="true"
+          className="absolute inline-flex h-3.5 w-3.5 rounded-full opacity-50 motion-safe:animate-ping"
+          style={{ backgroundColor: color }}
+        />
+      ) : null}
+      <span
+        aria-hidden="true"
+        className={`relative inline-flex h-2 w-2 rounded-full ${
+          status === 'green' ? 'motion-safe:animate-pulse' : ''
+        }`}
+        style={{ backgroundColor: color }}
+      />
+    </span>
+  );
+}
+
+/**
+ * Mini age/tolerance bar. Pure presentational view of `ageMs / toleranceMs`
+ * (both already computed server-side). Fill colour mirrors the status bucket
+ * and never animates — it's a static gauge, not a moving alarm.
+ */
+function CronAgeBar({
+  status,
+  ageMs,
+  periodMs,
+  toleranceMs,
+}: {
+  status: CronStatus;
+  ageMs: number | null;
+  periodMs: number;
+  toleranceMs: number;
+}): React.ReactElement | null {
+  if (ageMs === null || toleranceMs <= 0) return null;
+
+  const pct = Math.min(100, Math.max(0, (ageMs / toleranceMs) * 100));
+  const fill = status === 'green' ? 'var(--ok)' : status === 'amber' ? 'var(--warn)' : 'var(--bad)';
+  // Where "green→amber" sits on the bar (age = 1.5× période), so the operator
+  // can read the two thresholds at a glance.
+  const greenThresholdPct = Math.min(100, ((periodMs * 1.5) / toleranceMs) * 100);
+
+  return (
+    <div className="mt-2 max-w-[18rem]">
+      <div
+        className="relative h-1 overflow-hidden rounded-full bg-[var(--bg-2)]"
+        role="img"
+        aria-label={`Âge ${formatDuration(ageMs)} sur tolérance ${formatDuration(toleranceMs)} (${Math.round(pct)} %)`}
+        title={`${Math.round(pct)} % de la tolérance`}
+      >
+        <div
+          className="h-full rounded-full transition-[width]"
+          style={{ width: `${pct}%`, backgroundColor: fill }}
+        />
+        {/* Tick marking the green→amber boundary. */}
+        <span
+          aria-hidden="true"
+          className="absolute top-0 bottom-0 w-px bg-[var(--b-default)]"
+          style={{ left: `${greenThresholdPct}%` }}
+        />
+      </div>
+    </div>
   );
 }
 

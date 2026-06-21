@@ -200,7 +200,7 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
 
   if (state === 'loading') {
     return (
-      <div className="border-border bg-card text-muted-foreground rounded-lg border p-4 text-sm">
+      <div className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-4 text-sm text-[var(--t-2)]">
         Vérification du support des notifications…
       </div>
     );
@@ -208,12 +208,12 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
 
   if (state === 'unsupported') {
     return (
-      <div className="border-border bg-card rounded-lg border p-4">
-        <div className="text-foreground flex items-center gap-2 text-sm font-medium">
+      <div className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
+        <div className="flex items-center gap-2 text-sm font-medium text-[var(--t-1)]">
           <BellOff aria-hidden="true" className="h-4 w-4" />
           Navigateur non compatible
         </div>
-        <p className="text-muted-foreground mt-1 text-sm">
+        <p className="mt-1 text-sm text-[var(--t-2)]">
           Ton navigateur ne supporte pas les notifications push. Sur iOS, ouvre Fxmily depuis Safari
           (≥16.4). Sur Android, utilise Chrome ou Firefox récent.
         </p>
@@ -223,12 +223,12 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
 
   if (state === 'not-standalone') {
     return (
-      <div className="border-border bg-card rounded-lg border p-4">
-        <div className="text-foreground flex items-center gap-2 text-sm font-medium">
+      <div className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
+        <div className="flex items-center gap-2 text-sm font-medium text-[var(--t-1)]">
           <Smartphone aria-hidden="true" className="h-4 w-4" />
           Installe Fxmily sur ton écran d&apos;accueil
         </div>
-        <p className="text-muted-foreground mt-2 text-sm">
+        <p className="mt-2 text-sm text-[var(--t-2)]">
           iOS demande que Fxmily soit ajouté à ton écran d&apos;accueil avant d&apos;autoriser les
           notifications. Ouvre le menu <strong>Partager</strong> de Safari, choisis{' '}
           <strong>Sur l&apos;écran d&apos;accueil</strong>, puis lance Fxmily depuis l&apos;icône
@@ -240,12 +240,12 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
 
   if (state === 'permission-denied') {
     return (
-      <div className="border-warning/30 bg-card rounded-lg border p-4">
-        <div className="text-foreground flex items-center gap-2 text-sm font-medium">
-          <BellOff aria-hidden="true" className="text-warning h-4 w-4" />
+      <div className="rounded-card border border-[oklch(0.834_0.158_80_/_0.30)] bg-[var(--warn-dim)] p-4">
+        <div className="flex items-center gap-2 text-sm font-medium text-[var(--t-1)]">
+          <BellOff aria-hidden="true" className="h-4 w-4 text-[var(--warn)]" />
           Notifications bloquées au niveau du système
         </div>
-        <p className="text-muted-foreground mt-2 text-sm">
+        <p className="mt-2 text-sm text-[var(--t-2)]">
           Sur iOS, désinstalle Fxmily depuis ton écran d&apos;accueil puis réinstalle-le pour
           réautoriser les notifications. Sur Android et desktop, ouvre les{' '}
           <strong>réglages du site</strong> (icône cadenas dans la barre d&apos;adresse) et réactive
@@ -259,14 +259,14 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
   const isSubscribed = state === 'subscribed';
 
   return (
-    <div className="border-border bg-card rounded-lg border p-4">
+    <div className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
       <div className="flex items-start gap-3">
         <div className="flex-1">
-          <div className="text-foreground flex items-center gap-2 text-sm font-medium">
+          <div className="flex items-center gap-2 text-sm font-medium text-[var(--t-1)]">
             <Bell aria-hidden="true" className="h-4 w-4" />
             {isSubscribed ? 'Notifications activées' : 'Activer les notifications'}
           </div>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <p className="mt-1 text-sm text-[var(--t-2)]">
             {isSubscribed
               ? 'Tu reçois les notifications cochées plus bas. Tu peux les désactiver à tout moment.'
               : "Reçois les corrections d'Eliott, les rappels de check-in, et les fiches Mark Douglas pertinentes — sans bruit superflu."}
@@ -282,7 +282,7 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
           disabled={isPending}
           aria-busy={isPending || undefined}
           aria-pressed={isSubscribed}
-          className="bg-primary text-primary-foreground focus-visible:ring-primary inline-flex h-11 min-w-11 items-center gap-2 rounded-md px-4 text-sm font-medium transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
+          className="rounded-control inline-flex h-11 min-w-11 items-center gap-2 bg-[var(--acc-btn)] px-4 text-sm font-medium text-[var(--acc-fg)] transition hover:bg-[var(--acc-btn-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-60"
         >
           {isPending ? '…' : isSubscribed ? 'Désactiver' : 'Activer'}
         </button>

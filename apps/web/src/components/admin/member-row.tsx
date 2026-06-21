@@ -11,8 +11,35 @@ const DATETIME_FMT = new Intl.DateTimeFormat('fr-FR', {
   year: 'numeric',
 });
 
+const DAY_MS = 86_400_000;
+
 interface MemberRowProps {
   member: MemberSummary;
+}
+
+/**
+ * Presence freshness from `lastSeenAt`. A coaching signal — "who is drifting
+ * away" — NOT a verdict (SPEC §2 : never punitive, never anxiogenic). Hence
+ * neutral copy ("Présence récente / il y a longtemps / inconnue") and a calm
+ * green→amber→grey ramp. Grey (not red) for stale/unknown : an absent member
+ * isn't *failing*, they're just out of sight.
+ */
+function presenceFrom(lastSeenAt: string | null): {
+  color: string;
+  label: string;
+} {
+  if (!lastSeenAt) {
+    return { color: 'var(--t-4)', label: 'Présence inconnue' };
+  }
+  const ageDays = (Date.now() - new Date(lastSeenAt).getTime()) / DAY_MS;
+  const relative = DATETIME_FMT.format(new Date(lastSeenAt));
+  if (ageDays < 7) {
+    return { color: 'var(--ok)', label: `Vu récemment · ${relative}` };
+  }
+  if (ageDays < 14) {
+    return { color: 'var(--warn)', label: `Vu il y a 1-2 semaines · ${relative}` };
+  }
+  return { color: 'var(--t-3)', label: `Vu il y a plus de 2 semaines · ${relative}` };
 }
 
 /**
@@ -33,6 +60,7 @@ export function MemberRow({ member }: MemberRowProps) {
   const displayName = fullName.length > 0 ? fullName : member.email;
   const isAdmin = member.role === 'admin';
   const isSuspended = member.status === 'suspended';
+  const presence = presenceFrom(member.lastSeenAt);
 
   return (
     <HoverLift className="block h-full">
@@ -43,6 +71,13 @@ export function MemberRow({ member }: MemberRowProps) {
       >
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex flex-wrap items-center gap-2">
+            <span
+              role="img"
+              aria-label={presence.label}
+              title={presence.label}
+              className="inline-block h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: presence.color }}
+            />
             <span className="t-h3 truncate text-[var(--t-1)]">{displayName}</span>
             {isAdmin ? (
               <Pill tone="acc">

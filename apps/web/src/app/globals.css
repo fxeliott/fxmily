@@ -1327,7 +1327,12 @@
    on its own row and never reaches the FAB. Fallback (no :has support,
    < Safari 15.4 = outside targets) degrades to the previous layout. */
 @media (min-width: 640px) {
-  body:has([data-slot='log-express-fab']) [data-slot='legal-footer-inner'] {
+  body:has([data-slot='log-express-fab']) [data-slot='legal-footer-inner'],
+  /* S13 — the dashboard kbd-hint footer ("N nouveau trade", right-aligned) sat
+     under the same FAB at 1024–1599px (in-flow footer, no fixed clearance).
+     Same geometry, same fix: clear the FAB on ≥sm rows. Below sm it stacks
+     (handled in dashboard/page.tsx) so this width gate never squishes mobile. */
+  body:has([data-slot='log-express-fab']) [data-slot='dashboard-footer-inner'] {
     padding-right: 6.5rem; /* 104px > 72px FAB + 24px breathing room */
   }
 }

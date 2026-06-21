@@ -3,9 +3,12 @@ import { Suspense } from 'react';
 
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { EmotionPhasePicker } from '@/components/patterns/emotion-phase-picker';
+import { type EmotionPhase, isEmotionPhase } from '@/lib/patterns/emotion-phase';
 import { PreTradeAnalyticsCard } from '@/components/pre-trade/pre-trade-analytics-card';
 import { PreTradeCorrelationCard } from '@/components/pre-trade/pre-trade-correlation-card';
 import { EmotionPerfTable } from '@/components/scoring/emotion-perf-table';
+import { HourlyRhythm } from '@/components/scoring/hourly-rhythm';
 import { PairTopFive } from '@/components/scoring/pair-top-five';
 import { SessionPerfBars } from '@/components/scoring/session-perf-bars';
 import { SetupQualityCard } from '@/components/scoring/setup-quality-card';
@@ -39,7 +42,7 @@ function parseRange(input: string | undefined): RangeKey {
 }
 
 interface PatternsPageProps {
-  searchParams: Promise<{ range?: string; corr?: string }>;
+  searchParams: Promise<{ range?: string; corr?: string; phase?: string }>;
 }
 
 export default async function PatternsPage({ searchParams }: PatternsPageProps) {
@@ -52,9 +55,18 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
   const range = parseRange(sp?.range);
   const corrParsed = habitKindSchema.safeParse(sp?.corr);
   const corrKind = corrParsed.success ? corrParsed.data : 'sleep';
-  const corrPreserved = sp?.range
-    ? new URLSearchParams({ range: parseRange(sp.range) }).toString()
-    : '';
+  const phase: EmotionPhase = isEmotionPhase(sp?.phase) ? sp.phase : 'before';
+
+  // Each picker preserves the OTHER pickers' params across its own switch.
+  const buildPreserved = (drop: 'corr' | 'phase'): string => {
+    const params = new URLSearchParams();
+    if (sp?.range) params.set('range', parseRange(sp.range));
+    if (drop !== 'corr' && corrParsed.success) params.set('corr', corrKind);
+    if (drop !== 'phase' && isEmotionPhase(sp?.phase)) params.set('phase', phase);
+    return params.toString();
+  };
+  const corrPreserved = buildPreserved('corr');
+  const phasePreserved = buildPreserved('phase');
 
   return (
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
@@ -77,15 +89,21 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
           </p>
         </header>
 
-        {/* Patterns — émotion×résultat + sessions + paires */}
+        {/* Patterns — émotion×résultat (3 moments) + rythmes + sessions + paires */}
         <section className="wow-reveal mb-6 flex flex-col gap-3" aria-labelledby="patterns-heading">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 id="patterns-heading" className="t-eyebrow">
               Patterns d’exécution
             </h2>
+            <EmotionPhasePicker
+              selected={phase}
+              labelId="patterns-heading"
+              pathname="/patterns"
+              preservedQuery={phasePreserved}
+            />
           </div>
-          <Suspense fallback={<PatternsSkeleton />}>
-            <PatternsSection userId={userId} timezone={timezone} range={range} />
+          <Suspense key={phase} fallback={<PatternsSkeleton />}>
+            <PatternsSection userId={userId} timezone={timezone} range={range} phase={phase} />
           </Suspense>
         </section>
 
@@ -150,16 +168,25 @@ async function PatternsSection({
   userId,
   timezone,
   range,
+  phase,
 }: {
   userId: string;
   timezone: string;
   range: RangeKey;
+  phase: EmotionPhase;
 }) {
   const analytics = await getDashboardAnalytics(userId, timezone, range);
+  const emotionRows =
+    phase === 'during'
+      ? analytics.emotionPerfDuring
+      : phase === 'after'
+        ? analytics.emotionPerfAfter
+        : analytics.emotionPerf;
   return (
     <div className="grid gap-3 lg:grid-cols-2">
-      <EmotionPerfTable rows={analytics.emotionPerf} totalTrades={analytics.closedCount} />
+      <EmotionPerfTable rows={emotionRows} totalTrades={analytics.closedCount} />
       <SessionPerfBars sessions={analytics.sessionPerf} />
+      <HourlyRhythm hours={analytics.hourlyPerf} />
       <div className="lg:col-span-2">
         <PairTopFive pairs={analytics.pairTopFive} />
       </div>
@@ -176,6 +203,7 @@ function PatternsSkeleton() {
       aria-label="Chargement des patterns"
     >
       <div className="grid gap-3 lg:grid-cols-2">
+        <div className="skel rounded-card-lg h-[280px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
         <div className="skel rounded-card-lg h-[280px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
         <div className="skel rounded-card-lg h-[280px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
         <div className="skel rounded-card-lg h-[240px] border border-[var(--b-default)] bg-[var(--bg-1)] lg:col-span-2" />

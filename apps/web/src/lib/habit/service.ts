@@ -205,6 +205,14 @@ export interface TradeForCorrelation {
   realizedR: number;
   /** Present only when the member graded the setup (V1.5). */
   tradeQuality?: 'A' | 'B' | 'C';
+  /**
+   * `Trade.planRespected` — the member's own "did I respect my plan?" judgement
+   * (NON-NULL Boolean in the schema). Feeds the habit × discipline correlation
+   * (point-biserial). Kept as a real boolean (never coerced) so the pure layer
+   * can decide pairing; SPEC §2: this is the ACT of plan-respect, never advice
+   * on the trade.
+   */
+  planRespected: boolean;
 }
 
 export interface HabitTradeCorrelationData {
@@ -261,7 +269,7 @@ export async function loadHabitTradeCorrelationData(
         realizedRSource: 'computed',
         enteredAt: { gte: horizon },
       },
-      select: { enteredAt: true, realizedR: true, tradeQuality: true },
+      select: { enteredAt: true, realizedR: true, tradeQuality: true, planRespected: true },
       orderBy: { enteredAt: 'desc' },
     }),
   ]);
@@ -274,6 +282,7 @@ export async function loadHabitTradeCorrelationData(
     trades.push({
       enteredAt: row.enteredAt.toISOString(),
       realizedR,
+      planRespected: row.planRespected,
       ...(row.tradeQuality ? { tradeQuality: row.tradeQuality } : {}),
     });
   }

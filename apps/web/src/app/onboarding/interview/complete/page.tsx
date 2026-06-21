@@ -47,6 +47,7 @@ export default async function OnboardingInterviewCompletePage() {
             background: 'var(--acc-dim)',
             borderColor: 'var(--b-acc)',
             color: 'var(--acc)',
+            boxShadow: 'var(--acc-glow)',
           }}
         >
           <Sparkles className="h-5 w-5" strokeWidth={2.2} />
@@ -54,7 +55,7 @@ export default async function OnboardingInterviewCompletePage() {
 
         <div className="flex flex-col gap-2">
           <p className="t-eyebrow-lg text-[var(--t-3)]">Entretien terminé</p>
-          <h1 id="oic-heading" className="t-h1 text-[var(--t-1)]">
+          <h1 id="oic-heading" className="f-display h-rise t-h1 text-[var(--t-1)]">
             Merci pour ton honnêteté.
           </h1>
         </div>

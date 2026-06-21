@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { TradeDetailView } from '@/components/journal/trade-detail-view';
 import {
   listAnnotationsForTradeAsMember,
@@ -44,15 +45,24 @@ export default async function TradeDetailPage({ params }: DetailPageProps) {
 
   const annotations = await listAnnotationsForTradeAsMember(session.user.id, id);
 
+  // S13 — ambient depth backplate for the MEMBER trade detail only. Mounted at
+  // the page level (never inside the shared <TradeDetailView>, which the admin
+  // route also renders) so the admin variant stays flat. The opaque host masks
+  // the app-wide app-ambient → no double aurora; the transparent <main> the view
+  // renders sits above the -z-10 mesh and reveals it through its gutters.
+  // Decorative: aria-hidden + pointer-events:none + reduced-motion (DashboardAmbient).
   return (
-    <TradeDetailView
-      trade={trade}
-      backHref="/journal"
-      backLabel="Journal"
-      closeHref={`/journal/${trade.id}/close`}
-      annotations={annotations}
-      currentUserId={session.user.id}
-      footerSlot={<DeleteTradeButton tradeId={trade.id} />}
-    />
+    <div className="relative bg-[var(--bg)]">
+      <DashboardAmbient />
+      <TradeDetailView
+        trade={trade}
+        backHref="/journal"
+        backLabel="Journal"
+        closeHref={`/journal/${trade.id}/close`}
+        annotations={annotations}
+        currentUserId={session.user.id}
+        footerSlot={<DeleteTradeButton tradeId={trade.id} />}
+      />
+    </div>
   );
 }

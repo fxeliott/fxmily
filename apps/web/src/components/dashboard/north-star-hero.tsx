@@ -125,7 +125,7 @@ function HeroNextActionCard({ action }: { action: GuidanceAction }) {
         <span className="text-[15px] leading-tight font-semibold text-[var(--t-1)]">
           {action.title}
         </span>
-        <span className="t-cap leading-snug text-[var(--t-2)]">{action.detail}</span>
+        <span className="t-cap line-clamp-2 leading-snug text-[var(--t-2)]">{action.detail}</span>
       </span>
       <ArrowRight
         className="h-4 w-4 shrink-0 text-[var(--acc)] transition-transform group-hover:translate-x-0.5"

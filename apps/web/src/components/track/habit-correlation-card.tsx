@@ -1,6 +1,7 @@
 import { SampleSizeDisclaimer } from '@/components/scoring/sample-size-disclaimer';
 import {
   type CorrelationInterpretation,
+  type CorrelationStatus,
   type HabitTradeCorrelationResult,
   SPEARMAN_PEARSON_DIVERGENCE,
   SUFFICIENT_SAMPLE_MIN,
@@ -59,13 +60,44 @@ const INTERPRETATION_FR: Record<CorrelationInterpretation, string> = {
   strong_negative: 'Lien négatif fort',
 };
 
+/**
+ * Discipline (= plan-respect) interpretation copy. Strictly DESCRIPTIVE and
+ * day-of-pairing framed ("va de pair avec", "sur N jours") — never causal,
+ * never predictive, never advice (SPEC §2 / Mark Douglas). "plus de {noun}"
+ * reads naturally for every pillar ("plus de sommeil", "plus de café") and the
+ * direction is factual, not normative: a negative caffeine link is reported as
+ * "moins de respect du plan", not "tu bois trop de café".
+ */
+const DISCIPLINE_INTERPRETATION_FR: Record<
+  CorrelationInterpretation,
+  (noun: string, n: number) => string
+> = {
+  strong_positive: (noun, n) =>
+    `Sur ${n} jours, plus de ${noun} va de pair avec un meilleur respect du plan.`,
+  moderate_positive: (noun, n) =>
+    `Sur ${n} jours, plus de ${noun} tend à aller de pair avec un meilleur respect du plan.`,
+  weak: (noun, n) => `Sur ${n} jours, pas de tendance nette entre ${noun} et respect du plan.`,
+  moderate_negative: (noun, n) =>
+    `Sur ${n} jours, plus de ${noun} tend à aller de pair avec un moindre respect du plan.`,
+  strong_negative: (noun, n) =>
+    `Sur ${n} jours, plus de ${noun} va de pair avec un moindre respect du plan.`,
+};
+
 interface HabitCorrelationCardProps {
   result: HabitTradeCorrelationResult;
+  /**
+   * Optional habit × *discipline* (plan-respect) correlation over the same
+   * window/kind (point-biserial). When provided, a calm descriptive line is
+   * shown in addition to the habit × R correlation. Same honesty union:
+   * `insufficient_data` renders a pedagogical hint, never a fabricated score.
+   */
+  discipline?: CorrelationStatus;
 }
 
-export function HabitCorrelationCard({ result }: HabitCorrelationCardProps) {
+export function HabitCorrelationCard({ result, discipline }: HabitCorrelationCardProps) {
   const { correlation, heatmap, habitKind, windowDays } = result;
   const kindLabel = KIND_LABEL_FR[habitKind];
+  const kindNoun = KIND_NOUN_FR[habitKind];
 
   return (
     <section
@@ -142,6 +174,33 @@ export function HabitCorrelationCard({ result }: HabitCorrelationCardProps) {
           </p>
         </div>
       )}
+
+      {discipline ? (
+        <div className="flex flex-col gap-1.5 border-t border-[var(--b-default)] pt-4">
+          <p className="t-eyebrow text-[var(--cy)]">{kindLabel} × respect du plan</p>
+          {discipline.status === 'insufficient_data' ? (
+            <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
+              Pas encore assez de trades notés « plan respecté » sur des jours {kindNoun} loggués (
+              {discipline.n}/{discipline.minRequired}) pour un lien fiable. Chaque trade clôturé
+              avec son auto-évaluation rapproche la carte.
+            </p>
+          ) : (
+            <>
+              <p className="text-[14px] leading-relaxed text-[var(--t-2)]">
+                {DISCIPLINE_INTERPRETATION_FR[discipline.interpretation](kindNoun, discipline.n)}
+              </p>
+              <p className="t-mono-cap text-[var(--t-4)]">
+                r {fmt(discipline.r)} · ρ {fmt(discipline.rSpearman)} · n {discipline.n}
+                {discipline.confidence === 'low' ? ' · échantillon limité, à confirmer' : ''}
+              </p>
+              <p className="t-cap leading-relaxed text-[var(--t-4)]">
+                Descriptif, pas causal : tes habitudes et ton respect du plan bougent peut-être
+                ensemble — ça ne prouve pas que l&apos;un provoque l&apos;autre.
+              </p>
+            </>
+          )}
+        </div>
+      ) : null}
 
       <div className="border-t border-[var(--b-default)] pt-4">
         <HabitHeatmap days={heatmap} />

@@ -18,6 +18,7 @@ import { submitEveningCheckinAction, type CheckinActionState } from '@/app/check
 import { Alert } from '@/components/alert';
 import { EmotionCheckinPicker } from '@/components/checkin/emotion-checkin-picker';
 import { ScoreSlider } from '@/components/checkin/score-slider';
+import { StressZonesBar } from '@/components/checkin/stress-zones-bar';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
@@ -380,16 +381,23 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
               />
             ) : null}
             {step === 2 ? (
-              <ScoreSlider
-                name="stressScore"
-                value={draft.stressScore}
-                onChange={(v) => update('stressScore', v)}
-                label="Stress moyen aujourd’hui"
-                describeAt={STRESS_LABEL}
-                tone="warn"
-                disabled={pending}
-                hint="1 = très calme, 10 = sous tension constante. Un signal pour ton futur toi."
-              />
+              <div className="flex flex-col gap-5">
+                <ScoreSlider
+                  name="stressScore"
+                  value={draft.stressScore}
+                  onChange={(v) => update('stressScore', v)}
+                  label="Stress moyen aujourd’hui"
+                  describeAt={STRESS_LABEL}
+                  tone="warn"
+                  disabled={pending}
+                  hint="1 = très calme, 10 = sous tension constante. Un signal pour ton futur toi."
+                />
+                <StressZonesBar
+                  value={draft.stressScore}
+                  direction="stress"
+                  caption="Un niveau élevé n’est pas un échec — c’est une donnée. La voir aujourd’hui éclaire la session de demain."
+                />
+              </div>
             ) : null}
             {step === 3 ? (
               <StepMind
@@ -544,6 +552,14 @@ function StepMind({ draft, update, disabled }: StepProps) {
         disabled={disabled}
         hint="Moyenne sur la journée — pas un score à gonfler ni à minimiser, juste un signal."
       />
+
+      <StressZonesBar
+        value={draft.moodScore}
+        direction="clarity"
+        title="Zones d’état mental"
+        caption="Un miroir de ton humeur, pas une note. Les jours « brouillard » se traversent — les voir suffit."
+      />
+
       <EmotionCheckinPicker
         value={draft.emotionTags}
         onChange={(v) => update('emotionTags', v)}

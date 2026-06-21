@@ -20,6 +20,7 @@ import { Alert } from '@/components/alert';
 import { EmotionCheckinPicker } from '@/components/checkin/emotion-checkin-picker';
 import { ScoreSlider } from '@/components/checkin/score-slider';
 import { SleepZonesBar } from '@/components/checkin/sleep-zones-bar';
+import { StressZonesBar } from '@/components/checkin/stress-zones-bar';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
@@ -634,6 +635,13 @@ function StepMind({ draft, update, disabled }: StepProps) {
         tone="acc"
         disabled={disabled}
         hint="Sensation présente — ni anticipation, ni rétrospective."
+      />
+
+      <StressZonesBar
+        value={draft.moodScore}
+        direction="clarity"
+        title="Zones d’état mental"
+        caption="Un miroir de ton humeur, pas une note. Les jours « brouillard » se traversent — les voir suffit."
       />
 
       <EmotionCheckinPicker

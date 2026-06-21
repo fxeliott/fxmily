@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, Compass, MessageCircleHeart } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import type { CSSProperties } from 'react';
 
 import { startInterviewFormAction } from '@/app/onboarding/interview/actions';
 import { auth } from '@/auth';
@@ -45,8 +46,18 @@ export default async function OnboardingInterviewLandingPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 px-4 py-8">
-      <header className="flex flex-col gap-4">
+    <main className="relative mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 px-4 py-8">
+      {/* J3 — discrete radial glow anchored to the masthead (welcome-style depth),
+          decorative + zero-JS, sits below the content (-z-10), pointer-events none. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 -top-12 -z-10 h-72 [mask-image:radial-gradient(60%_60%_at_50%_0%,#000,transparent)]"
+        style={{
+          background:
+            'radial-gradient(48% 60% at 50% 0%, oklch(0.62 0.19 254 / 0.18) 0%, transparent 72%)',
+        }}
+      />
+      <header className="dash-stagger flex flex-col gap-4">
         <Link
           href="/dashboard"
           className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
@@ -60,7 +71,9 @@ export default async function OnboardingInterviewLandingPage() {
             <Compass className="h-3.5 w-3.5" strokeWidth={2} />
             Onboarding · Entretien profilage
           </span>
-          <h1 className="t-h1 text-[var(--t-1)]">Apprends à te connaître en profondeur.</h1>
+          <h1 className="f-display h-rise t-h1 text-[var(--t-1)]">
+            Apprends à te connaître en profondeur.
+          </h1>
         </div>
       </header>
 
@@ -88,37 +101,41 @@ export default async function OnboardingInterviewLandingPage() {
         </p>
 
         <ul className="t-body flex flex-col gap-2 text-[var(--t-2)]">
-          <li className="flex items-start gap-2">
+          <li className="rounded-control flex items-start gap-2 border border-transparent p-2 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)]/50">
             <span aria-hidden="true" className="mt-1 text-[var(--acc)]">
               ·
             </span>
             <span>
-              <span className="text-[var(--t-1)]">30 questions</span> sur ton parcours, tes
-              routines, ton rapport au risque et au plan.
+              <span className="font-semibold text-[var(--acc)]">30 questions</span> sur ton
+              parcours, tes routines, ton rapport au risque et au plan.
             </span>
           </li>
-          <li className="flex items-start gap-2">
+          <li className="rounded-control flex items-start gap-2 border border-transparent p-2 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)]/50">
             <span aria-hidden="true" className="mt-1 text-[var(--acc)]">
               ·
             </span>
             <span>
-              <span className="text-[var(--t-1)]">3 phases</span> — échauffement, cœur de
-              l&apos;entretien, clôture réflexive.
+              <span className="font-semibold text-[var(--acc)]">3 phases</span> — échauffement, cœur
+              de l&apos;entretien, clôture réflexive.
             </span>
           </li>
-          <li className="flex items-start gap-2">
+          <li className="rounded-control flex items-start gap-2 border border-transparent p-2 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)]/50">
             <span aria-hidden="true" className="mt-1 text-[var(--acc)]">
               ·
             </span>
             <span>
-              <span className="text-[var(--t-1)]">Confidentiel</span> — analyse IA locale (pas
-              d&apos;API tierce), profil descriptif pour Eliott uniquement.
+              <span className="font-semibold text-[var(--acc)]">Confidentiel</span> — analyse IA
+              locale (pas d&apos;API tierce), profil descriptif pour Eliott uniquement.
             </span>
           </li>
         </ul>
       </section>
 
-      <form action={startInterviewFormAction} className="flex w-full">
+      <form
+        action={startInterviewFormAction}
+        className="wow-rise flex w-full"
+        style={{ '--rise-delay': '180ms' } as CSSProperties}
+      >
         <button
           type="submit"
           className={cn(btnVariants({ kind: 'primary', size: 'l' }), 'w-full justify-center')}

@@ -1,6 +1,15 @@
 'use client';
 
-import { CornerDownLeft, Moon, Plus, Search, Sun, type LucideIcon } from 'lucide-react';
+import {
+  CornerDownLeft,
+  Heart,
+  Moon,
+  Plus,
+  Search,
+  Sparkles,
+  Sun,
+  type LucideIcon,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -32,6 +41,18 @@ const QUICK_ACTIONS: readonly CmdItem[] = [
   { href: '/journal/new', label: 'Nouveau trade', icon: Plus, group: 'Actions rapides' },
   { href: '/checkin/morning', label: 'Check-in du matin', icon: Sun, group: 'Actions rapides' },
   { href: '/checkin/evening', label: 'Check-in du soir', icon: Moon, group: 'Actions rapides' },
+  {
+    href: '/library/inbox',
+    label: 'Nouvelles fiches Douglas',
+    icon: Sparkles,
+    group: 'Actions rapides',
+  },
+  {
+    href: '/library/favorites',
+    label: 'Mes fiches favorites',
+    icon: Heart,
+    group: 'Actions rapides',
+  },
 ];
 
 /** Accent- and case-insensitive normalise so "reunion" matches "Réunions". */

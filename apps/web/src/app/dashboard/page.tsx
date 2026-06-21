@@ -14,6 +14,7 @@ import { MonthlyDebriefWidget } from '@/components/dashboard/monthly-debrief-wid
 import { NorthStarHero } from '@/components/dashboard/north-star-hero';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
 import { TodayGuidance } from '@/components/dashboard/today-guidance';
+import { WeeklyInsightCard } from '@/components/dashboard/weekly-insight-card';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
 import { ProfileStatusWidget } from '@/components/onboarding/profile-status-widget';
 import { btnVariants } from '@/components/ui/btn';
@@ -213,6 +214,13 @@ export default async function DashboardPage() {
             (day-loop close). Read-only, renders nothing if no intention set. */}
         <MorningIntentionRecall intention={morningCheckin?.intention} className="mb-6" />
 
+        {/* D — Insight hebdo déterministe (aha-moment, SPEC §7.5). Lecture PURE
+            des 7 derniers scores comportementaux du membre (pas d'IA). Intégrité
+            statistique : sous le seuil de jours notés → état vide pédagogique,
+            jamais un constat fabriqué. Anti-Black-Hat : constat factuel + un
+            micro-encouragement Mark Douglas, jamais de verdict punitif. */}
+        <WeeklyInsightCard history={scoreHistory} className="mb-6" />
+
         {/* Session 5 — Guidage quotidien « Ton aujourd'hui » (DoD §30 #3). Le hub
             time-aware : check-in du créneau, blocs calendrier du jour, réunion,
             QCM mindset du lundi. Full-width. Posture §2 + anti-Black-Hat. */}
@@ -401,8 +409,15 @@ export default async function DashboardPage() {
           <DashboardReflectWidget userId={session.user.id} />
         </section>
 
-        {/* Footer kbd hint */}
-        <footer className="mt-8 flex items-center justify-between border-t border-[var(--b-default)] pt-4 text-[10px] text-[var(--t-4)] tabular-nums">
+        {/* Footer kbd hint. S13 — `data-slot` + sm-stack: the Log-Express FAB
+            (fixed bottom-right, z-40) was occluding the right-aligned "N nouveau
+            trade" hint at 1024–1599px. Below sm the row stacks (hint on its own
+            left-aligned line, never reaches the FAB); ≥640px a :has() clearance
+            in globals.css adds padding-right. Mirrors the legal-footer rule. */}
+        <footer
+          data-slot="dashboard-footer-inner"
+          className="mt-8 flex flex-col gap-1.5 border-t border-[var(--b-default)] pt-4 text-[10px] text-[var(--t-4)] tabular-nums sm:flex-row sm:items-center sm:justify-between sm:gap-2"
+        >
           <span className="t-foot">Aucun conseil de marché. Discipline avant tout.</span>
           <span className="inline-flex items-center gap-1">
             <Kbd>N</Kbd>

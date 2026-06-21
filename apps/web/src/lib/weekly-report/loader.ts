@@ -12,7 +12,7 @@ import { countMeetingAttendance } from '@/lib/meeting/service';
 // who joined mid-week is never charged for meetings scheduled before they
 // existed (byte-identical for everyone past their first week).
 import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
-import { getLatestBehavioralScore } from '@/lib/scoring/service';
+import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the weekly-report loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
 import { countRecentTrainingActivity } from '@/lib/training/training-trade-service';
@@ -114,6 +114,7 @@ export async function loadWeeklySliceForUser(
     deliveries,
     annotations,
     latestScore,
+    scoreHistory,
     trainingActivity,
     meeting,
     constancyScores,
@@ -125,6 +126,9 @@ export async function loadWeeklySliceForUser(
     loadDeliveries(userId, window),
     loadAnnotationStats(userId, window),
     getLatestBehavioralScore(userId),
+    // S15 #6/#7 — 90d daily score history for the snapshot's momentum signal
+    // (sustained multi-week declines). User-scoped, count-only (0–100, no P&L).
+    getBehavioralScoreHistory(userId, { sinceDays: 90 }),
     // 🚨 §21.5 — sanctioned training→real-edge touchpoint #3 (weekly
     // report). Count-only; the report window is exactly the helper
     // window (loader trade query uses the same gte/lte bounds). Only
@@ -196,6 +200,8 @@ export async function loadWeeklySliceForUser(
     meetingScheduledCount: meeting.scheduledCount,
     meetingCompletedCount: meeting.completedCount,
     latestScore: latestScore === null ? null : toScoreSnapshot(latestScore),
+    // S15 #6/#7 — score history feeds the snapshot momentum signal (count-only).
+    scoreHistory,
     // DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters (count-only).
     verification,
   };

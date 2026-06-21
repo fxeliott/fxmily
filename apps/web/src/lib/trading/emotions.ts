@@ -136,3 +136,31 @@ export function emotionLabel(slug: string): string {
 
 /** Maximum tags selectable for a single emotional moment (before / after). */
 export const EMOTION_MAX_PER_MOMENT = 3;
+
+/**
+ * S15 #5 — semantic poles for the "emotion-arc degradation" signal (entering a
+ * trade composed, then losing composure during/after — the Mark Douglas marker
+ * of a psychologically mishandled trade, independent of P&L).
+ *
+ * NEGATIVE = the four core fears + all behavioural biases + the negative
+ * `states` (anxious/frustrated/euphoric/doubt/hesitant). `euphoric` counts as
+ * negative (loss-of-discipline pole). `bored` is intentionally EXCLUDED: boredom
+ * is a pre-trade restlessness axis, not a "contrarié" exit state.
+ */
+export const NEGATIVE_TRADING_EMOTIONS: ReadonlySet<string> = new Set<string>([
+  'fear-loss',
+  'fear-wrong',
+  'fomo',
+  'fear-leaving-money',
+  'anxious',
+  'frustrated',
+  'euphoric',
+  'doubt',
+  'hesitant',
+  'revenge-trade',
+  'overconfident',
+  'impatient',
+]);
+
+/** SERENE = a composed entry ("entered calm"). */
+export const SERENE_ENTRY_EMOTIONS: ReadonlySet<string> = new Set<string>(['calm', 'confident']);

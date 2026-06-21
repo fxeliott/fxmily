@@ -20,6 +20,8 @@ import {
 } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import {
+  emotionArcDegradation,
+  type EmotionArcDegradation,
   type EmotionPerfRow,
   type HourlyPerf,
   perEmotionField,
@@ -82,6 +84,8 @@ export interface DashboardAnalytics {
   emotionPerfDuring: EmotionPerfRow[];
   /** Emotion×outcome on the AFTER moment (recalled at close). */
   emotionPerfAfter: EmotionPerfRow[];
+  /** S15 #5 — trades entered serene that turned contrarié during/after. */
+  emotionArc: EmotionArcDegradation;
   streaks: { observedMaxLoss: number; observedMaxWin: number };
   /** Total closed trades in the window. */
   closedCount: number;
@@ -193,6 +197,7 @@ async function _getDashboardAnalyticsImpl(
   const emotionPerf = perEmotionField(tradesNorm, 'emotionBefore');
   const emotionPerfDuring = perEmotionField(tradesNorm, 'emotionDuring');
   const emotionPerfAfter = perEmotionField(tradesNorm, 'emotionAfter');
+  const emotionArc = emotionArcDegradation(tradesNorm);
 
   const closedCount = tradesNorm.length;
   const estimatedCount = tradesNorm.filter((t) => t.realizedRSource === 'estimated').length;
@@ -212,6 +217,7 @@ async function _getDashboardAnalyticsImpl(
     emotionPerf,
     emotionPerfDuring,
     emotionPerfAfter,
+    emotionArc,
     streaks: { observedMaxLoss, observedMaxWin },
     closedCount,
     estimatedCount,

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { wrapUntrustedMemberInput } from '@/lib/ai/prompt-builder';
 import type { WeeklySnapshot } from '@/lib/schemas/weekly-report';
+import { emotionLabel } from '@/lib/trading/emotions';
 
 /**
  * Prompt construction for the J8 weekly report (Phase C).
@@ -228,6 +229,52 @@ export function buildWeeklyReportUserPrompt(snapshot: WeeklySnapshot): string {
   lines.push(`- Cohérence : ${formatScore(s.consistency)}`);
   lines.push(`- Engagement : ${formatScore(s.engagement)}`);
   lines.push(``);
+
+  // S15 #7 — pattern cross-cuts (behaviour→outcome) the autonomous run never had.
+  // Sample-gated by the builder (a sub-signal is present ONLY above its honest
+  // threshold). Posture §2: psychological/process cross-cuts, NEVER a market view.
+  const p = snapshot.patternSignals;
+  if (
+    p &&
+    (p.topEntryEmotion ||
+      p.topHourBand ||
+      p.emotionArc ||
+      (p.momentumDeclines && p.momentumDeclines.length > 0))
+  ) {
+    lines.push(
+      `## Patterns comportementaux (signaux croisés — psycho/process, jamais un avis marché)`,
+    );
+    lines.push(
+      `Croisements comportement→résultat déjà calculés, filtrés par seuil d'échantillon honnête (jamais un taux sur 1 trade). Sers-t'en pour NOMMER un pattern (process/psycho, Mark Douglas), jamais pour conseiller un marché ou un setup.`,
+    );
+    if (p.topEntryEmotion) {
+      const e = p.topEntryEmotion;
+      lines.push(
+        `- Émotion d'entrée dominante : **${emotionLabel(e.slug)}** sur ${e.trades} trade${e.trades > 1 ? 's' : ''}${e.winRatePct !== null ? ` (winrate ${e.winRatePct}%)` : ''}.`,
+      );
+    }
+    if (p.topHourBand) {
+      const h = p.topHourBand;
+      lines.push(
+        `- Plage horaire la plus active : **${h.label}** — ${h.trades} trade${h.trades > 1 ? 's' : ''}, winrate ${h.winRatePct}%, R moyen ${h.avgR.toFixed(2)}R.`,
+      );
+    }
+    if (p.emotionArc && p.emotionArc.count > 0) {
+      const a = p.emotionArc;
+      lines.push(
+        `- Contrôle émotionnel intra-trade : **${a.count}** trade${a.count > 1 ? 's' : ''} entré(s) serein(s) puis sorti(s) contrarié(s) (sur ${a.considered} entrée${a.considered > 1 ? 's' : ''} sereine${a.considered > 1 ? 's' : ''}) — marqueur Mark Douglas du trade mal géré psychologiquement, indépendant du P&L.`,
+      );
+    }
+    if (p.momentumDeclines && p.momentumDeclines.length > 0) {
+      lines.push(
+        `- Dérive multi-semaines (pente calme, ≥ 6 points d'historique) — un CONSTAT de tendance à cadrer en process, jamais un verdict alarmiste :`,
+      );
+      for (const d of p.momentumDeclines) {
+        lines.push(`  - ${d.label} : ${d.weeklySlope.toFixed(1)} pt/sem sur ${d.points} points.`);
+      }
+    }
+    lines.push(``);
+  }
 
   // DOD3-01 / DoD#2 S6 — Vérification & constance (Session 3). COUNT-ONLY,
   // posture §2/§33.2 : le FAIT chiffré, jamais un avis marché, jamais un drame.

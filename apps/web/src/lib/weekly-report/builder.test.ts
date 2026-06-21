@@ -867,3 +867,53 @@ describe('DOD3-01 / DoD#2 S6 — Session-3 verification counters', () => {
     expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });
+
+describe('buildWeeklySnapshot — patternSignals (S15 #7)', () => {
+  it('omits patternSignals entirely when nothing clears its threshold', () => {
+    const snap = buildWeeklySnapshot(emptyInput());
+    expect(snap.patternSignals).toBeUndefined();
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('surfaces sample-gated cross-cuts (emotion, hour band, arc, momentum)', () => {
+    const input = emptyInput();
+    // 6 closed losses entered calm → exited frustrated, all in the Paris morning band.
+    input.trades = Array.from({ length: 6 }, (_, i) =>
+      closedTrade('loss', -1, {
+        id: `l${i}`,
+        emotionBefore: ['calm'],
+        emotionAfter: ['frustrated'],
+      }),
+    );
+    // Declining emotionalStability over 7 daily points (~ -2/day ≈ -14/week).
+    input.scoreHistory = Array.from({ length: 7 }, (_, i) => ({
+      date: `2026-05-0${i + 1}`,
+      discipline: 70,
+      emotionalStability: 90 - i * 2,
+      consistency: null,
+      engagement: null,
+    }));
+
+    const snap = buildWeeklySnapshot(input);
+    const p = snap.patternSignals;
+    expect(p).toBeDefined();
+    expect(p!.topEntryEmotion).toEqual({ slug: 'calm', trades: 6, winRatePct: 0 });
+    expect(p!.topHourBand?.slot).toBe('morning');
+    expect(p!.topHourBand?.trades).toBe(6);
+    expect(p!.emotionArc).toEqual({ count: 6, considered: 6 });
+    expect(p!.momentumDeclines?.[0]?.dimension).toBe('emotionalStability');
+    // The whole snapshot must still satisfy the strict schema.
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('omits the slice when every sub-signal is below its threshold', () => {
+    const input = emptyInput();
+    // Only 2 closed losses → below HOURLY_MIN_SAMPLE (5) and EMOTION_ARC_MIN (3),
+    // and no score history → no momentum.
+    input.trades = [
+      closedTrade('loss', -1, { id: 'a', emotionBefore: ['calm'], emotionAfter: ['frustrated'] }),
+      closedTrade('loss', -1, { id: 'b', emotionBefore: ['calm'], emotionAfter: ['frustrated'] }),
+    ];
+    expect(buildWeeklySnapshot(input).patternSignals).toBeUndefined();
+  });
+});

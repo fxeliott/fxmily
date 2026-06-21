@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  emotionArcDegradation,
+  EMOTION_ARC_MIN_TO_SURFACE,
   type EmotionField,
   HOURLY_MIN_SAMPLE,
   type HourSlot,
@@ -199,5 +201,74 @@ describe('perHour', () => {
 
   it('exposes a non-fabrication threshold for the surface to flag thin bands', () => {
     expect(HOURLY_MIN_SAMPLE).toBe(5);
+  });
+});
+
+// =============================================================================
+// emotionArcDegradation (S15 #5) — entered serene → lost composure
+// =============================================================================
+
+type ArcTrade = {
+  emotionBefore: readonly string[] | null;
+  emotionDuring: readonly string[] | null;
+  emotionAfter: readonly string[] | null;
+};
+
+function arc(
+  before: readonly string[] | null,
+  during: readonly string[] | null,
+  after: readonly string[] | null,
+): ArcTrade {
+  return { emotionBefore: before, emotionDuring: during, emotionAfter: after };
+}
+
+describe('emotionArcDegradation', () => {
+  it('counts a serene→negative trade and records the transition example', () => {
+    const res = emotionArcDegradation([arc(['calm'], [], ['frustrated'])]);
+    expect(res.count).toBe(1);
+    expect(res.considered).toBe(1);
+    expect(res.examples).toEqual([{ from: 'calm', to: 'frustrated' }]);
+  });
+
+  it('detects the negative tag on emotionDuring as well as emotionAfter', () => {
+    const res = emotionArcDegradation([arc(['confident'], ['revenge-trade'], ['calm'])]);
+    expect(res.count).toBe(1);
+    expect(res.examples[0]).toEqual({ from: 'confident', to: 'revenge-trade' });
+  });
+
+  it('does NOT count a trade that stayed serene throughout', () => {
+    const res = emotionArcDegradation([arc(['calm'], ['confident'], ['calm'])]);
+    expect(res.count).toBe(0);
+    expect(res.considered).toBe(1); // entered serene, just didn't degrade
+  });
+
+  it('ignores trades that entered already-negative (not "entered calm")', () => {
+    const res = emotionArcDegradation([arc(['calm', 'anxious'], [], ['frustrated'])]);
+    expect(res.count).toBe(0);
+    expect(res.considered).toBe(0); // mixed entry → not a serene entry
+  });
+
+  it('ignores trades with no entry emotion', () => {
+    const res = emotionArcDegradation([arc(null, ['frustrated'], ['frustrated'])]);
+    expect(res.count).toBe(0);
+    expect(res.considered).toBe(0);
+  });
+
+  it('treats euphoric as a negative (loss-of-discipline) exit but bored as neutral', () => {
+    const euphoric = emotionArcDegradation([arc(['calm'], [], ['euphoric'])]);
+    expect(euphoric.count).toBe(1);
+    const bored = emotionArcDegradation([arc(['calm'], [], ['bored'])]);
+    expect(bored.count).toBe(0);
+  });
+
+  it('caps examples at 3 while counting all degraded trades', () => {
+    const trades = Array.from({ length: 5 }, () => arc(['calm'], [], ['frustrated']));
+    const res = emotionArcDegradation(trades);
+    expect(res.count).toBe(5);
+    expect(res.examples).toHaveLength(3);
+  });
+
+  it('exposes a calm surfacing threshold', () => {
+    expect(EMOTION_ARC_MIN_TO_SURFACE).toBe(3);
   });
 });

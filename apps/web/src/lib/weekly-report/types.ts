@@ -12,6 +12,7 @@
 
 import type { SerializedDelivery } from '@/lib/cards/types';
 import type { SerializedCheckin } from '@/lib/checkin/service';
+import type { MomentumHistoryPoint } from '@/lib/scoring/momentum';
 import type { SerializedTrade } from '@/lib/trades/service';
 
 /// Behavioral score snapshot mirror — pure type, decoupled from Prisma.
@@ -65,6 +66,13 @@ export interface BuilderInput {
   meetingScheduledCount?: number;
   meetingCompletedCount?: number;
   latestScore: BehavioralScoreSnapshot | null;
+  /**
+   * S15 #6/#7 — daily behavioral-score history (≤ 90 d, ascending) for the
+   * snapshot's momentum signal (sustained multi-week declines). Optional →
+   * defaults to `[]` in the builder (zero-regression for existing fixtures /
+   * pre-S15 callers). COUNT-ONLY posture: scores 0–100, never P&L.
+   */
+  scoreHistory?: MomentumHistoryPoint[];
   /// DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters PRE-COMPOSED by
   /// the loader. `constancy` + `alertCount` are PERIOD-SCOPED to the reported week
   /// (the ConstancyScore OF that week + alerts triggered in it — NEVER

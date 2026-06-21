@@ -1,4 +1,4 @@
-import { BookOpen, Heart, Sparkles } from 'lucide-react';
+import { BookOpen, Heart, Search, Sparkles, X } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -8,9 +8,11 @@ import { DrawnRule } from '@/components/dashboard/drawn-rule';
 import { AnimatedCardGrid } from '@/components/library/animated-card-grid';
 import { CategoryFilterTabs } from '@/components/library/category-filter-tabs';
 import { CATEGORY_LABEL } from '@/components/library/category-meta';
+import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
+import { cn } from '@/lib/utils';
 import {
   countUnseenDeliveries,
   listMyFavorites,
@@ -121,8 +123,78 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
           <CategoryFilterTabs entries={categories} active={cat} totalCount={totalCount} />
         </div>
 
+        {/* Search — the `q` param was read server-side and wired to
+            `listPublishedCards`, but there was NO input to set it (dead feature).
+            Server-rendered GET form (works without JS, accessible). The hidden
+            `cat` preserves the active category across the search. */}
+        <form method="get" action="/library" role="search" className="mb-6 flex flex-col gap-2">
+          <label htmlFor="library-search" className="sr-only">
+            Rechercher une fiche par titre ou contenu
+          </label>
+          <input type="hidden" name="cat" value={cat ?? ''} />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search
+                className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--t-4)]"
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
+              <input
+                id="library-search"
+                type="search"
+                name="q"
+                defaultValue={q ?? ''}
+                placeholder="Rechercher une fiche…"
+                autoComplete="off"
+                maxLength={100}
+                className="rounded-card h-11 w-full border border-[var(--b-default)] bg-[var(--bg)] pr-3 pl-9 font-sans text-[14px] text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              />
+            </div>
+            <button type="submit" className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}>
+              Rechercher
+            </button>
+            {q ? (
+              <Link
+                href={cat ? `/library?cat=${cat}` : '/library'}
+                className={cn(btnVariants({ kind: 'ghost', size: 'm' }))}
+                aria-label="Effacer la recherche"
+              >
+                <X className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                Effacer
+              </Link>
+            ) : null}
+          </div>
+          {q ? (
+            <p className="t-cap text-[var(--t-3)]" role="status">
+              Résultats pour «&nbsp;{q}&nbsp;»
+            </p>
+          ) : null}
+        </form>
+
         {/* Grid */}
-        {cards.length === 0 ? (
+        {cards.length === 0 && q ? (
+          // Search miss — the catalogue exists, the query just matched nothing.
+          // Honest copy + a reset CTA (preserving the active category), never
+          // the misleading "le catalogue arrive bientôt".
+          <Card className="p-6">
+            <EmptyState
+              icon={Search}
+              headline={`Aucune fiche pour « ${q} »`}
+              lead={
+                cat
+                  ? `Aucune fiche de « ${CATEGORY_LABEL[cat]} » ne correspond à cette recherche. Essaie un autre mot, ou élargis à tout le catalogue.`
+                  : 'Essaie un autre mot-clé, ou parcours simplement le catalogue par thématique.'
+              }
+              ctaPrimary={
+                <>
+                  <X className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                  Effacer la recherche
+                </>
+              }
+              ctaHref={cat ? `/library?cat=${cat}` : '/library'}
+            />
+          </Card>
+        ) : cards.length === 0 ? (
           <Card className="p-6">
             <EmptyState
               icon={BookOpen}

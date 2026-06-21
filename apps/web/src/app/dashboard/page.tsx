@@ -14,6 +14,7 @@ import { MonthlyDebriefWidget } from '@/components/dashboard/monthly-debrief-wid
 import { NorthStarHero } from '@/components/dashboard/north-star-hero';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
 import { TodayGuidance } from '@/components/dashboard/today-guidance';
+import { WeeklyInsightCard } from '@/components/dashboard/weekly-insight-card';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
 import { ProfileStatusWidget } from '@/components/onboarding/profile-status-widget';
 import { btnVariants } from '@/components/ui/btn';
@@ -212,6 +213,13 @@ export default async function DashboardPage() {
         {/* S12 — echo the member's OWN morning intention back during the day
             (day-loop close). Read-only, renders nothing if no intention set. */}
         <MorningIntentionRecall intention={morningCheckin?.intention} className="mb-6" />
+
+        {/* D — Insight hebdo déterministe (aha-moment, SPEC §7.5). Lecture PURE
+            des 7 derniers scores comportementaux du membre (pas d'IA). Intégrité
+            statistique : sous le seuil de jours notés → état vide pédagogique,
+            jamais un constat fabriqué. Anti-Black-Hat : constat factuel + un
+            micro-encouragement Mark Douglas, jamais de verdict punitif. */}
+        <WeeklyInsightCard history={scoreHistory} className="mb-6" />
 
         {/* Session 5 — Guidage quotidien « Ton aujourd'hui » (DoD §30 #3). Le hub
             time-aware : check-in du créneau, blocs calendrier du jour, réunion,

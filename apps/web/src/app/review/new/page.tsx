@@ -2,11 +2,25 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { WeeklyFocusRecall } from '@/components/review/weekly-focus-recall';
 import { WeeklyReviewWizard } from '@/components/review/weekly-review-wizard';
 import { V18Aurora } from '@/components/v18/aurora';
 import { V18ThemeScope } from '@/components/v18/theme-scope';
+import { listMyRecentReviews } from '@/lib/weekly-review/service';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Current ISO week Monday (UTC) — mirrors `lastMondayUTC()` in the wizard so the
+ * recall filter and the draft's `weekStart` agree on "this week" (BUG-1 fix
+ * carbone weekly-review-wizard.tsx:72-82: compute in UTC, never local getDay()).
+ */
+function currentWeekStartUTC(): string {
+  const d = new Date();
+  const offset = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+  d.setUTCDate(d.getUTCDate() - offset);
+  return d.toISOString().slice(0, 10);
+}
 
 /**
  * V1.8 REFLECT — `/review/new` host page.
@@ -24,6 +38,14 @@ export default async function NewWeeklyReviewPage() {
     redirect('/login');
   }
 
+  // S15 #15 — week-level intention loop: recall the focus the member set in his
+  // LAST review. Fetch the 2 newest and pick the most recent strictly BEFORE
+  // this week's Monday, so re-editing the current week's review never echoes its
+  // own focus back. Read-only, zero new column (reuses listMyRecentReviews).
+  const thisWeek = currentWeekStartUTC();
+  const recent = await listMyRecentReviews(session.user.id, 2);
+  const previousFocus = recent.find((r) => r.weekStart < thisWeek)?.nextWeekFocus ?? null;
+
   return (
     <V18ThemeScope>
       <V18Aurora />
@@ -36,6 +58,8 @@ export default async function NewWeeklyReviewPage() {
             ← Revues hebdomadaires
           </Link>
         </nav>
+
+        <WeeklyFocusRecall focus={previousFocus} />
 
         <WeeklyReviewWizard />
       </main>

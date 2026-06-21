@@ -323,7 +323,9 @@ export default async function DashboardPage() {
                     <ShieldCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="t-eyebrow text-[var(--acc)]">Pré-trade</span>
+                    {/* S15 #25 — --acc-hi (not --acc) clears WCAG 1.4.3 AA on the
+                        --acc-dim fill (--acc is ~3.15:1 on tinted surfaces). */}
+                    <span className="t-eyebrow text-[var(--acc-hi)]">Pré-trade</span>
                     <h2
                       id="pre-trade-heading"
                       className="text-[15px] font-semibold text-[var(--t-1)]"
@@ -343,7 +345,7 @@ export default async function DashboardPage() {
                   {['Raison', 'Émotion', 'Plan', 'Stop-loss'].map((q) => (
                     <li
                       key={q}
-                      className="rounded-pill inline-flex items-center border border-[var(--b-acc)] bg-[var(--acc-dim-2)] px-2.5 py-1 text-[11px] font-medium text-[var(--acc)]"
+                      className="rounded-pill inline-flex items-center border border-[var(--b-acc)] bg-[var(--acc-dim-2)] px-2.5 py-1 text-[11px] font-medium text-[var(--acc-hi)]"
                     >
                       {q}
                     </li>
@@ -399,14 +401,20 @@ export default async function DashboardPage() {
           <MarkDouglasCard />
         </section>
 
-        {/* J7.7 — Mark Douglas widget (entrée bibliothèque) */}
+        {/* J7.7 — Mark Douglas widget (entrée bibliothèque). S15 #20 — Suspense
+            like its neighbours (profile/calendar/monthly) so its 2 queries no
+            longer block the hub's first flush (the hero streams ahead). */}
         <section className="mb-6" aria-label="Module Mark Douglas">
-          <DouglasInboxWidget userId={session.user.id} />
+          <Suspense fallback={<DouglasInboxSkeleton />}>
+            <DouglasInboxWidget userId={session.user.id} />
+          </Suspense>
         </section>
 
-        {/* V1.8 — entrée module REFLECT (revue/réflexion) */}
+        {/* V1.8 — entrée module REFLECT (revue/réflexion). S15 #20 — Suspense. */}
         <section className="mb-6" aria-label="Module REFLECT">
-          <DashboardReflectWidget userId={session.user.id} />
+          <Suspense fallback={<ReflectWidgetSkeleton />}>
+            <DashboardReflectWidget userId={session.user.id} />
+          </Suspense>
         </section>
 
         {/* Footer kbd hint. S13 — `data-slot` + sm-stack: the Log-Express FAB
@@ -450,6 +458,33 @@ function CalendarStatusSkeleton() {
       aria-live="polite"
       aria-label="Chargement de l'organisation de la semaine"
     />
+  );
+}
+
+/** S15 #20 — Mark Douglas inbox skeleton. Single card band approximating the
+ *  widget's p-5 Card (header + ~3 delivery rows) to keep CLS minimal. */
+function DouglasInboxSkeleton() {
+  return (
+    <div
+      className="skel rounded-card-lg h-[196px] border border-[var(--b-default)] bg-[var(--bg-1)]"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement du module Mark Douglas"
+    />
+  );
+}
+
+/** S15 #20 — REFLECT skeleton. Mirrors the widget's 2-up grid (eyebrow + two
+ *  ~128px doorway cards) so the layout doesn't shift when it streams in. */
+function ReflectWidgetSkeleton() {
+  return (
+    <div aria-busy="true" aria-live="polite" aria-label="Chargement du module REFLECT">
+      <div className="skel mb-3 h-3 w-32 rounded-full" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="skel rounded-card-lg h-[128px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
+        <div className="skel rounded-card-lg h-[128px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
+      </div>
+    </div>
   );
 }
 

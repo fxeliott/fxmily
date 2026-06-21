@@ -108,7 +108,9 @@ export default async function ObjectifsPage() {
                   <Target className="h-4 w-4" strokeWidth={2.2} />
                 </span>
                 <div className="flex min-w-0 flex-col gap-1">
-                  <span className="t-eyebrow text-[var(--acc)]">
+                  {/* S15 #25 — --acc-hi clears WCAG 1.4.3 AA on the --acc-dim card
+                      (--acc is ~3.15:1 on tinted surfaces; --acc-hi ≥4.5:1). */}
+                  <span className="t-eyebrow text-[var(--acc-hi)]">
                     Ton axe de coaching cette semaine
                   </span>
                   <h2
@@ -121,7 +123,7 @@ export default async function ObjectifsPage() {
                     Issu de ton profil.{' '}
                     <a
                       href="/profile"
-                      className="font-medium text-[var(--acc)] underline decoration-[var(--b-acc)] decoration-2 underline-offset-2 transition-colors hover:text-[var(--acc-hi)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                      className="font-medium text-[var(--acc-hi)] underline decoration-[var(--b-acc)] decoration-2 underline-offset-2 transition-colors hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
                     >
                       Voir tous tes axes →
                     </a>

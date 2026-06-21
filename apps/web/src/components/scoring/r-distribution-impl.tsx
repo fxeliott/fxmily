@@ -1,6 +1,7 @@
 'use client';
 
 import { m, useReducedMotion } from 'framer-motion';
+import { BarChart3 } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -54,7 +55,11 @@ export function RDistribution({ buckets }: RDistributionProps) {
       </div>
       {total === 0 ? (
         <div className="grid h-[200px] place-items-center text-[var(--t-4)]">
-          <span className="t-cap">Pas encore de trades clôturés.</span>
+          {/* S15 #2 — muted icon above the copy (no ghost bars: §33.5). */}
+          <div className="flex flex-col items-center gap-2">
+            <BarChart3 className="h-7 w-7 text-[var(--t-4)]" strokeWidth={1.5} aria-hidden="true" />
+            <span className="t-cap">Pas encore de trades clôturés.</span>
+          </div>
         </div>
       ) : (
         <figure

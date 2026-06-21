@@ -39,7 +39,8 @@ export function MorningIntentionRecall({
         <Sunrise className="h-4 w-4" strokeWidth={1.75} />
       </span>
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="t-eyebrow text-[var(--acc)]">{label}</span>
+        {/* S15 #25 — --acc-hi clears WCAG 1.4.3 AA on the --acc-dim aside fill. */}
+        <span className="t-eyebrow text-[var(--acc-hi)]">{label}</span>
         <p className="t-body leading-[1.5] break-words text-[var(--t-1)]">«&nbsp;{text}&nbsp;»</p>
       </div>
     </aside>

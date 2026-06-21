@@ -9,7 +9,6 @@ import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
-import { Reveal } from '@/components/ui/reveal';
 import { getMemberDirectoryStats, listMembersForAdmin } from '@/lib/admin/members-service';
 import { logAudit } from '@/lib/auth/audit';
 import { cn } from '@/lib/utils';
@@ -230,14 +229,12 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
       ) : (
         <div className="flex flex-col gap-4">
           <ul className="grid gap-3 xl:grid-cols-2 [&>li]:h-full">
-            {page.items.map((member, i) => (
-              <li key={member.id}>
-                {/* Calm staggered scroll-in (capped so long cohorts don't
-                    trail). MemberRow already carries its own HoverLift spring —
-                    Reveal only handles the arrival, no double hover. */}
-                <Reveal delay={Math.min(i, 6) * 55} className="h-full">
-                  <MemberRow member={member} />
-                </Reveal>
+            {page.items.map((member) => (
+              // `.wow-reveal` class (not a framer wrapper) so `ul > li > a`
+              // structure stays intact for the admin e2e; MemberRow keeps its
+              // own HoverLift spring. CSS reveal is no-JS + reduced-motion safe.
+              <li key={member.id} className="wow-reveal h-full">
+                <MemberRow member={member} />
               </li>
             ))}
           </ul>

@@ -8,7 +8,6 @@ import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
-import { Reveal } from '@/components/ui/reveal';
 import { listMeetingsForAdmin } from '@/lib/meeting/service';
 import { cn } from '@/lib/utils';
 
@@ -106,14 +105,12 @@ export default async function AdminReunionsPage() {
           </Card>
         ) : (
           <ul className="flex flex-col gap-3">
-            {meetings.map((meeting, i) => (
-              <li key={meeting.id}>
-                {/* Calm staggered scroll-in (capped). The Reveal wrapper only
-                    animates its own opacity 0→1; a cancelled row keeps its
-                    inner `opacity-60` (greyed, posture §30.7) untouched. */}
-                <Reveal delay={Math.min(i, 6) * 55}>
-                  <AdminMeetingRow meeting={meeting} />
-                </Reveal>
+            {meetings.map((meeting) => (
+              // `.wow-reveal` class (not a framer wrapper) keeps the list
+              // structure intact for the admin e2e; a cancelled row keeps its
+              // inner `opacity-60` (greyed, posture §30.7) untouched. No-JS safe.
+              <li key={meeting.id} className="wow-reveal">
+                <AdminMeetingRow meeting={meeting} />
               </li>
             ))}
           </ul>

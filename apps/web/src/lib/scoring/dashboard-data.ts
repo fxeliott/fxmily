@@ -20,6 +20,12 @@ import {
 } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import {
+  type EmotionPerfRow,
+  type HourlyPerf,
+  perEmotionField,
+  perHour,
+} from '@/lib/scoring/pattern-rhythms';
+import {
   aggregateRiskDiscipline,
   aggregateSetupQuality,
   type RiskDiscipline,
@@ -28,6 +34,7 @@ import {
 import { SESSION_LABEL } from '@/lib/trading/sessions';
 
 export type { RiskDiscipline, SetupQualityDist } from '@/lib/scoring/setup-quality';
+export type { EmotionPerfRow, HourlyPerf } from '@/lib/scoring/pattern-rhythms';
 
 /**
  * Dashboard analytics aggregator (J6, SPEC §7.5).
@@ -67,7 +74,14 @@ export interface DashboardAnalytics {
   rDistribution: RDistributionBucket[];
   pairTopFive: PairPerf[];
   sessionPerf: SessionPerf[];
+  /** Entry-time rhythm in 4 Paris-wall-clock bands (finer than sessions). */
+  hourlyPerf: HourlyPerf[];
+  /** Emotion×outcome on the BEFORE moment (anchor table). */
   emotionPerf: EmotionPerfRow[];
+  /** Emotion×outcome on the DURING moment (recalled at close). */
+  emotionPerfDuring: EmotionPerfRow[];
+  /** Emotion×outcome on the AFTER moment (recalled at close). */
+  emotionPerfAfter: EmotionPerfRow[];
   streaks: { observedMaxLoss: number; observedMaxWin: number };
   /** Total closed trades in the window. */
   closedCount: number;
@@ -76,14 +90,6 @@ export interface DashboardAnalytics {
   setupQuality: SetupQualityDist;
   /** V1.5 — Tharp risk-ceiling discipline (riskPct ≤ 2 %). NULL excluded. */
   riskDiscipline: RiskDiscipline;
-}
-
-export interface EmotionPerfRow {
-  slug: string;
-  trades: number;
-  wins: number;
-  sumR: number;
-  rTrades: number;
 }
 
 export interface RDistributionBucket {
@@ -149,7 +155,11 @@ async function _getDashboardAnalyticsImpl(
       realizedRSource: true,
       closedAt: true,
       exitedAt: true,
+      enteredAt: true,
       emotionBefore: true,
+      // V2 §7.5 — the during/after moments, captured at close (master prompt §22).
+      emotionDuring: true,
+      emotionAfter: true,
       // V1.5 process metrics (Steenbarger / Tharp) — set at entry time.
       tradeQuality: true,
       riskPct: true,
@@ -163,7 +173,10 @@ async function _getDashboardAnalyticsImpl(
     riskPct: t.riskPct == null ? null : t.riskPct.toString(),
     closedAt: t.closedAt!.toISOString(),
     exitedAt: t.exitedAt ? t.exitedAt.toISOString() : null,
+    enteredAt: t.enteredAt ? t.enteredAt.toISOString() : null,
     emotionBefore: [...(t.emotionBefore ?? [])],
+    emotionDuring: [...(t.emotionDuring ?? [])],
+    emotionAfter: [...(t.emotionAfter ?? [])],
   }));
 
   const expectancy = computeExpectancy(tradesNorm);
@@ -176,7 +189,10 @@ async function _getDashboardAnalyticsImpl(
   const rDistribution = bucketRMultiples(tradesNorm);
   const pairTopFive = topNPairs(tradesNorm, 5);
   const sessionPerf = perSession(tradesNorm);
-  const emotionPerf = perEmotion(tradesNorm);
+  const hourlyPerf = perHour(tradesNorm, timezone);
+  const emotionPerf = perEmotionField(tradesNorm, 'emotionBefore');
+  const emotionPerfDuring = perEmotionField(tradesNorm, 'emotionDuring');
+  const emotionPerfAfter = perEmotionField(tradesNorm, 'emotionAfter');
 
   const closedCount = tradesNorm.length;
   const estimatedCount = tradesNorm.filter((t) => t.realizedRSource === 'estimated').length;
@@ -192,41 +208,16 @@ async function _getDashboardAnalyticsImpl(
     rDistribution,
     pairTopFive,
     sessionPerf,
+    hourlyPerf,
     emotionPerf,
+    emotionPerfDuring,
+    emotionPerfAfter,
     streaks: { observedMaxLoss, observedMaxWin },
     closedCount,
     estimatedCount,
     setupQuality,
     riskDiscipline,
   };
-}
-
-function perEmotion(
-  trades: ReadonlyArray<{
-    emotionBefore: readonly string[];
-    outcome: 'win' | 'loss' | 'break_even' | null;
-    realizedR: string | null;
-    realizedRSource: 'computed' | 'estimated' | null;
-  }>,
-): EmotionPerfRow[] {
-  const stats = new Map<string, { trades: number; wins: number; sumR: number; rTrades: number }>();
-  for (const t of trades) {
-    if (!t.emotionBefore || t.emotionBefore.length === 0) continue;
-    for (const slug of t.emotionBefore) {
-      const e = stats.get(slug) ?? { trades: 0, wins: 0, sumR: 0, rTrades: 0 };
-      e.trades++;
-      if (t.outcome === 'win') e.wins++;
-      if (t.realizedRSource === 'computed' && t.realizedR !== null) {
-        const r = Number(t.realizedR);
-        if (Number.isFinite(r)) {
-          e.sumR += r;
-          e.rTrades++;
-        }
-      }
-      stats.set(slug, e);
-    }
-  }
-  return Array.from(stats.entries()).map(([slug, e]) => ({ slug, ...e }));
 }
 
 // ----- Helpers ---------------------------------------------------------------

@@ -5,6 +5,7 @@ import { auth, signOut } from '@/auth';
 import { CookieBanner } from '@/components/legal/cookie-banner';
 import { LegalFooter } from '@/components/legal/legal-footer';
 import { MotionProvider } from '@/components/motion-provider';
+import { RouteFocusAnnouncer } from '@/components/route-focus-announcer';
 import { AppShell } from '@/components/nav/app-shell';
 import { LogExpressFab } from '@/components/track/log-express-fab';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -111,6 +112,10 @@ export default async function RootLayout({
           <MotionProvider>
             <AppShell session={sessionLite} signOutAction={handleSignOut}>
               <div id="main-content" tabIndex={-1} className="flex min-h-full flex-1 flex-col">
+                {/* S15 #23 — SPA focus reset + sr-only route announcement. Mounted
+                    here (persists across navigations) so usePathname changes are
+                    observed without remounting. */}
+                <RouteFocusAnnouncer />
                 {children}
               </div>
             </AppShell>

@@ -61,7 +61,7 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       <DashboardAmbient />
-      <div className="relative mx-auto w-full max-w-3xl px-4 pt-4 pb-24 md:pt-8">
+      <div className="relative mx-auto w-full max-w-4xl px-4 pt-4 pb-24 md:pt-8 lg:px-8">
         {/* Mark linked delivery seen if we came from a contextual push. */}
         {delivery ? <MarkSeenOnMount deliveryId={delivery.id} /> : null}
 

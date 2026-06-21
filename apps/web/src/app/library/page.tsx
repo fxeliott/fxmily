@@ -69,7 +69,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       <DashboardAmbient />
-      <div className="relative mx-auto w-full max-w-5xl px-4 pt-6 pb-24 md:pt-10">
+      <div className="relative mx-auto w-full max-w-6xl px-4 pt-6 pb-24 md:pt-10 lg:px-8">
         {/* Hero header */}
         <header className="mb-6 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-4">

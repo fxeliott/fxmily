@@ -55,6 +55,23 @@ const RADIUS = 130;
 const NODE_RADIUS = 30;
 const CENTER_RADIUS = 36;
 
+// V2.1.6 overlap fix — the pillar labels used to be centred on a radial line
+// at r = 148, i.e. INSIDE the node circles' outer edge (RADIUS + NODE_RADIUS =
+// 160). The text therefore rendered on top of every node (Eliott : « le texte
+// chevauche l'illustration »). Labels are now anchored OUTSIDE each node with a
+// per-node text-anchor (left nodes → end, right nodes → start, vertical nodes →
+// middle) and the viewBox is widened so the long words ("Méditation",
+// "Nutrition") have horizontal breathing room without clipping. Geometry of the
+// nodes/glow/animation is untouched (compositor-safe, DA preserved).
+const LABEL_GAP = 10; // px clearance between a node's edge and its label
+// Widened drawing box : the centred composition stays at CENTER (200,200) but
+// the box extends left/right so anchored labels never clip (computed extents
+// ≈ x[-30..423], y[21..309] → margin-padded).
+const VIEW_MIN_X = -44;
+const VIEW_MIN_Y = -6;
+const VIEW_W = 488;
+const VIEW_H = 412;
+
 interface Pillar {
   kind: HabitKind;
   label: string;
@@ -122,7 +139,7 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
           `aria-hidden` already removes this subtree from the a11y tree, so
           NO `role="img"`/`aria-label` on the svg (would be dead code never
           read by SR — a11y audit V2.1.0 TIER 3). */}
-      <svg viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`} className="h-auto w-full">
+      <svg viewBox={`${VIEW_MIN_X} ${VIEW_MIN_Y} ${VIEW_W} ${VIEW_H}`} className="h-auto w-full">
         <defs>
           {/* Radial glow gradient for the center node — lime → transparent. */}
           {/* `--acc-glow` is a box-shadow token (globals.css), NOT a color —
@@ -281,9 +298,31 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
         {PILLARS.map((p, i) => {
           const pos = polar(p.angleDeg, RADIUS);
           const logged = loggedToday?.has(p.kind) ?? false;
-          // Position label outward from the node along the radial direction.
-          const labelOffsetR = NODE_RADIUS + 18;
-          const labelPos = polar(p.angleDeg, RADIUS + labelOffsetR - NODE_RADIUS);
+          // V2.1.6 — anchor the label OUTSIDE the node circle (the old radial
+          // r=148 placement sat inside the node's outer edge at r=160 → the
+          // text overlapped the illustration). `cos` of the node angle tells us
+          // which side the node is on : near-vertical (top/bottom) → centred
+          // label clear of the node ; left/right → label flush to the node edge
+          // with an `end`/`start` anchor so long words grow away from the disc.
+          const cos = Math.cos((p.angleDeg * Math.PI) / 180);
+          const sin = Math.sin((p.angleDeg * Math.PI) / 180);
+          const NEAR_VERTICAL = 0.25; // |cos| below this ⇒ treat as top/bottom
+          let labelX: number;
+          let labelY: number;
+          let labelAnchor: 'start' | 'middle' | 'end';
+          if (Math.abs(cos) < NEAR_VERTICAL) {
+            labelAnchor = 'middle';
+            labelX = pos.x;
+            labelY = pos.y + (sin > 0 ? NODE_RADIUS + 20 : -(NODE_RADIUS + 12));
+          } else if (cos > 0) {
+            labelAnchor = 'start';
+            labelX = pos.x + NODE_RADIUS + LABEL_GAP;
+            labelY = pos.y + 4;
+          } else {
+            labelAnchor = 'end';
+            labelX = pos.x - NODE_RADIUS - LABEL_GAP;
+            labelY = pos.y + 4;
+          }
           return (
             <m.g
               key={`pillar-${p.kind}`}
@@ -332,11 +371,11 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
                   }}
                 />
               </foreignObject>
-              {/* Label — positioned radially outward from the node */}
+              {/* Label — anchored just OUTSIDE the node, never over it. */}
               <text
-                x={labelPos.x}
-                y={labelPos.y + 4}
-                textAnchor="middle"
+                x={labelX}
+                y={labelY}
+                textAnchor={labelAnchor}
                 className="fill-[var(--t-2)]"
                 fontSize="12"
                 fontWeight="500"

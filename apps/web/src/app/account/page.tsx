@@ -48,7 +48,7 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
   const isDeletionScheduled = deletionState.kind === 'scheduled';
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
+    <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:py-10 lg:px-8">
       <header className="mb-6">
         <Link
           href="/dashboard"
@@ -71,7 +71,7 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
         </p>
       </header>
 
-      <ul className="grid gap-4 sm:grid-cols-2">
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <AccountCard
           href="/account/notifications"
           title="Notifications"
@@ -153,7 +153,7 @@ function AccountCard({
     <li>
       <Link
         href={href}
-        className={`spotlight-surface rounded-card-lg group block h-full border border-[var(--b-default)] bg-[var(--bg-1)] p-5 transition-[color,background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--sh-card-hover)] motion-reduce:transform-none ${borderHover}`}
+        className={`rounded-card-lg group block h-full border border-[var(--b-default)] bg-[var(--bg-1)] p-5 transition-[color,background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--sh-card-hover)] motion-reduce:transform-none ${borderHover}`}
       >
         <div className="flex items-start gap-3">
           <span

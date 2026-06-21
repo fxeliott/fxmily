@@ -6,7 +6,6 @@ import { useActionState } from 'react';
 
 import { Alert } from '@/components/alert';
 import { Btn } from '@/components/ui/btn';
-import { Magnetic } from '@/components/ui/magnetic';
 import { Reveal } from '@/components/ui/reveal';
 import { cn } from '@/lib/utils';
 
@@ -82,21 +81,16 @@ export function RequestAccessForm() {
         disabled={pending}
       />
 
-      {/* Primary CTA gently pulled toward the cursor (mouse-only, reduced-motion
-          safe). `block` so the magnetic wrapper owns the full-width box and the
-          button keeps its layout. */}
-      <Magnetic strength={0.25} className="block">
-        <Btn
-          type="submit"
-          kind="primary"
-          size="l"
-          loading={pending}
-          kbd={pending ? undefined : '↵'}
-          className="w-full"
-        >
-          {pending ? 'Envoi…' : 'Envoyer ma demande'}
-        </Btn>
-      </Magnetic>
+      <Btn
+        type="submit"
+        kind="primary"
+        size="l"
+        loading={pending}
+        kbd={pending ? undefined : '↵'}
+        className="w-full"
+      >
+        {pending ? 'Envoi…' : 'Envoyer ma demande'}
+      </Btn>
     </form>
   );
 }

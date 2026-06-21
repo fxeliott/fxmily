@@ -55,7 +55,7 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
   return (
     <V18ThemeScope>
       <V18Aurora />
-      <main className="relative mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12">
+      <main className="relative mx-auto flex w-full max-w-[var(--w-app)] flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8 2xl:px-12">
         <header className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
             <p className="t-eyebrow text-[var(--t-3)]">Module REFLECT</p>
@@ -128,14 +128,17 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
               </p>
             </div>
           ) : (
-            <ul className="flex flex-col gap-2.5" data-slot="recent-reflections">
+            <ul
+              className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3"
+              data-slot="recent-reflections"
+            >
               {recent.map((r) => (
-                <li key={r.id}>
-                  <HoverLift className="block">
+                <li key={r.id} className="h-full">
+                  <HoverLift className="block h-full">
                     <Link
                       href={`/reflect/${r.id}`}
                       aria-labelledby={`ref-${r.id}-date`}
-                      className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
+                      className="rounded-card block h-full border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
                     >
                       <header className="flex items-baseline justify-between gap-3">
                         <p className="t-eyebrow text-[var(--t-3)]" id={`ref-${r.id}-date`}>

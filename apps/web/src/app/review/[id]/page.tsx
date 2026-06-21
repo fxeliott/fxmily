@@ -94,7 +94,7 @@ export default async function ReviewDetailPage({ params }: ReviewDetailProps) {
   return (
     <V18ThemeScope>
       <V18Aurora />
-      <main className="relative mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
+      <main className="relative mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
         <nav aria-label="Fil d'Ariane" className="flex items-center gap-2">
           <Link
             href="/review"
@@ -124,14 +124,14 @@ export default async function ReviewDetailPage({ params }: ReviewDetailProps) {
           </p>
         </header>
 
-        <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {sections.map((section) => {
             if (!section.content) return null;
             const Icon = section.icon;
             return (
               <article
                 key={section.title}
-                className="rounded-card-lg border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]"
+                className="rounded-card-lg flex flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]"
                 aria-labelledby={`section-${section.title}`}
               >
                 <header className="flex items-start gap-3">

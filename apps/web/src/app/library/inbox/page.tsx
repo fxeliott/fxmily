@@ -27,7 +27,7 @@ export default async function InboxPage() {
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       <DashboardAmbient />
-      <div className="relative mx-auto w-full max-w-3xl px-4 pt-6 pb-24 md:pt-10">
+      <div className="relative mx-auto w-full max-w-6xl px-4 pt-6 pb-24 md:pt-10 lg:px-8">
         {/* Hero header */}
         <header className="mb-6 flex flex-col gap-3">
           <Link
@@ -72,7 +72,7 @@ export default async function InboxPage() {
                 >
                   Non lues ({unread.length})
                 </h2>
-                <ul className="flex flex-col gap-3">
+                <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {unread.map((d) => (
                     <DeliveryItem key={d.id} delivery={d} unread />
                   ))}
@@ -87,7 +87,7 @@ export default async function InboxPage() {
                 >
                   Déjà lues
                 </h2>
-                <ul className="flex flex-col gap-3">
+                <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {read.map((d) => (
                     <DeliveryItem key={d.id} delivery={d} />
                   ))}
@@ -111,11 +111,11 @@ function DeliveryItem({
   const Icon = CATEGORY_ICON[d.cardCategory];
   const tone = CATEGORY_TONE[d.cardCategory];
   return (
-    <li>
-      <HoverLift className="block">
+    <li className="h-full">
+      <HoverLift className="block h-full">
         <Card
           interactive
-          className="focus-within:ring-acc p-4 focus-within:ring-2 focus-within:ring-offset-2"
+          className="focus-within:ring-acc h-full p-4 focus-within:ring-2 focus-within:ring-offset-2"
         >
           <Link href={`/library/${d.cardSlug}`} className="block">
             <div className="flex items-start gap-3">

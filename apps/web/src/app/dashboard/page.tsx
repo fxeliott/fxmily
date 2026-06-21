@@ -240,7 +240,7 @@ export default async function DashboardPage() {
           <HoverLift className="block">
             <Link
               href="/verification"
-              className="spotlight-surface rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-start gap-3">

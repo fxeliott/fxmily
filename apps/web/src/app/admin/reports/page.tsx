@@ -184,7 +184,7 @@ export default async function AdminReportsPage() {
                       <li key={report.id}>
                         <Link
                           href={`/admin/reports/${report.id}`}
-                          className="spotlight-surface rounded-card focus-visible:outline-acc flex h-full flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-4 shadow-[var(--sh-card)] transition-colors hover:border-[var(--b-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                          className="rounded-card focus-visible:outline-acc flex h-full flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-4 shadow-[var(--sh-card)] transition-colors hover:border-[var(--b-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="f-display text-[15px] font-semibold text-[var(--t-1)]">

@@ -71,7 +71,7 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col gap-6 px-4 py-8 lg:px-8">
       <header className="flex flex-col gap-4">
         <Link
           href="/dashboard"

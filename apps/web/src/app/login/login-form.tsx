@@ -5,7 +5,6 @@ import { useActionState } from 'react';
 
 import { Alert } from '@/components/alert';
 import { Btn } from '@/components/ui/btn';
-import { Magnetic } from '@/components/ui/magnetic';
 import { RevealGroup } from '@/components/ui/reveal';
 import { cn } from '@/lib/utils';
 
@@ -55,18 +54,16 @@ export function LoginForm() {
         />
       </RevealGroup>
 
-      <Magnetic strength={0.25} className="block w-full">
-        <Btn
-          type="submit"
-          kind="primary"
-          size="l"
-          loading={pending}
-          kbd={pending ? undefined : '↵'}
-          className="w-full"
-        >
-          {pending ? 'Connexion…' : 'Se connecter'}
-        </Btn>
-      </Magnetic>
+      <Btn
+        type="submit"
+        kind="primary"
+        size="l"
+        loading={pending}
+        kbd={pending ? undefined : '↵'}
+        className="w-full"
+      >
+        {pending ? 'Connexion…' : 'Se connecter'}
+      </Btn>
     </form>
   );
 }

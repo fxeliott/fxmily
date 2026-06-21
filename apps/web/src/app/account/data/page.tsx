@@ -109,7 +109,7 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
   ];
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
+    <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:py-10 lg:px-8">
       <header className="mb-6">
         <Link
           href="/dashboard"
@@ -152,7 +152,7 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
           </div>
         </div>
 
-        <ul className="mt-5 grid gap-3 sm:grid-cols-2">
+        <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {sections.map((s) => (
             <li
               key={s.label}

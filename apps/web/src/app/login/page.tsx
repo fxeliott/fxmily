@@ -7,7 +7,6 @@ import { Alert } from '@/components/alert';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Card } from '@/components/ui/card';
 import { Kbd } from '@/components/ui/kbd';
-import { Tilt3D } from '@/components/ui/tilt-3d';
 
 import { LoginAurora } from './login-aurora';
 import { LoginForm } from './login-form';
@@ -50,31 +49,29 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <span className="f-display text-[15px] font-semibold tracking-[-0.01em]">Fxmily</span>
         </Link>
 
-        <Tilt3D maxDeg={5}>
-          <Card
-            primary
-            className="spotlight-surface wow-rise px-6 py-7"
-            style={{ '--rise-delay': '90ms' } as CSSProperties}
-          >
-            <header className="mb-6 flex flex-col items-center gap-2">
-              <h1
-                className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-                style={{ fontFeatureSettings: '"ss01" 1' }}
-              >
-                Connexion
-              </h1>
-              <p className="t-body text-center text-[var(--t-3)]">Accède à ton espace de suivi.</p>
-            </header>
+        <Card
+          primary
+          className="wow-rise px-6 py-7"
+          style={{ '--rise-delay': '90ms' } as CSSProperties}
+        >
+          <header className="mb-6 flex flex-col items-center gap-2">
+            <h1
+              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              style={{ fontFeatureSettings: '"ss01" 1' }}
+            >
+              Connexion
+            </h1>
+            <p className="t-body text-center text-[var(--t-3)]">Accède à ton espace de suivi.</p>
+          </header>
 
-            {showOnboardingNotice ? (
-              <div className="mb-5">
-                <Alert tone="success">Compte créé. Connecte-toi pour continuer.</Alert>
-              </div>
-            ) : null}
+          {showOnboardingNotice ? (
+            <div className="mb-5">
+              <Alert tone="success">Compte créé. Connecte-toi pour continuer.</Alert>
+            </div>
+          ) : null}
 
-            <LoginForm />
-          </Card>
-        </Tilt3D>
+          <LoginForm />
+        </Card>
 
         <p
           className="wow-rise text-center text-[11px] text-[var(--t-4)] tabular-nums"

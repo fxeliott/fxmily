@@ -1,6 +1,7 @@
 'use client';
 
 import { m, useReducedMotion } from 'framer-motion';
+import { LineChart } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useTransition } from 'react';
 import {
@@ -115,7 +116,12 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
 
       {formatted.length === 0 ? (
         <div className="grid h-[260px] place-items-center text-[var(--t-4)]">
-          <span className="t-cap">Pas encore de trades clôturés sur cette plage.</span>
+          {/* S15 #2 — muted icon above the existing copy (no ghost curve: that
+              would fabricate data, §33.5). Decorative — the text carries meaning. */}
+          <div className="flex flex-col items-center gap-2">
+            <LineChart className="h-7 w-7 text-[var(--t-4)]" strokeWidth={1.5} aria-hidden="true" />
+            <span className="t-cap">Pas encore de trades clôturés sur cette plage.</span>
+          </div>
         </div>
       ) : (
         <figure

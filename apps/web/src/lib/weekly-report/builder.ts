@@ -25,6 +25,14 @@ import { createHash } from 'node:crypto';
 
 import type { TradeSession } from '@/generated/prisma/client.js';
 
+import { detectMomentum } from '@/lib/scoring/momentum';
+import {
+  EMOTION_ARC_MIN_TO_SURFACE,
+  emotionArcDegradation,
+  HOURLY_MIN_SAMPLE,
+  perEmotionField,
+  perHour,
+} from '@/lib/scoring/pattern-rhythms';
 import type { SerializedTrade } from '@/lib/trades/service';
 import { safeFreeText } from '@/lib/text/safe';
 
@@ -128,6 +136,9 @@ export function pseudonymizeMember(userId: string, salt?: string): string {
 // =============================================================================
 
 export function buildWeeklySnapshot(input: BuilderInput): WeeklySnapshot {
+  // S15 #7 — behaviour→outcome cross-cuts (sample-gated). Omitted entirely when
+  // nothing clears its honest threshold (exactOptionalPropertyTypes → spread).
+  const patternSignals = buildPatternSignals(input);
   return {
     pseudonymLabel: pseudonymizeMember(input.userId),
     timezone: input.timezone,
@@ -140,6 +151,81 @@ export function buildWeeklySnapshot(input: BuilderInput): WeeklySnapshot {
     // (the loader did the period-scoped read; the pure aggregator stays clock-free).
     // COUNT-ONLY posture §2 — factual numbers, never a market view.
     verification: input.verification,
+    ...(patternSignals ? { patternSignals } : {}),
+  };
+}
+
+// =============================================================================
+// Pattern signals slice — behaviour→outcome cross-cuts (S15 #7)
+// =============================================================================
+
+/**
+ * Sample-gated pattern cross-cuts fed to the autonomous Claude run, which until
+ * now saw only counters. Each sub-signal is built from data ALREADY loaded
+ * (closed trades + the score history the loader passes) by the SAME pure
+ * aggregators the member UI uses, with the SAME honest sample thresholds —
+ * never a win-rate over 1 trade (§7.5 anti-noise). Posture §2: psychological &
+ * process cross-cuts, never a market view. Returns `undefined` when nothing
+ * clears its threshold.
+ */
+function buildPatternSignals(input: BuilderInput): WeeklySnapshot['patternSignals'] {
+  const closed = input.trades.filter((t) => t.isClosed);
+
+  // Top ENTRY emotion by volume (≥ sample gate) — emotion×outcome anchor.
+  let topEntryEmotion: NonNullable<WeeklySnapshot['patternSignals']>['topEntryEmotion'];
+  const topEmo = perEmotionField(closed, 'emotionBefore')
+    .filter((r) => r.trades >= HOURLY_MIN_SAMPLE)
+    .sort((a, b) => b.trades - a.trades)[0];
+  if (topEmo) {
+    topEntryEmotion = {
+      slug: topEmo.slug,
+      trades: topEmo.trades,
+      winRatePct: topEmo.trades > 0 ? Math.round((topEmo.wins / topEmo.trades) * 100) : null,
+    };
+  }
+
+  // Most-traded entry-hour band (≥ HOURLY_MIN_SAMPLE).
+  let topHourBand: NonNullable<WeeklySnapshot['patternSignals']>['topHourBand'];
+  const topBand = perHour(closed, input.timezone)
+    .filter((b) => b.trades >= HOURLY_MIN_SAMPLE)
+    .sort((a, b) => b.trades - a.trades)[0];
+  if (topBand) {
+    topHourBand = {
+      slot: topBand.slot,
+      label: topBand.label,
+      trades: topBand.trades,
+      winRatePct: Math.round(topBand.winRate * 100),
+      avgR: roundTo(topBand.avgR, 2),
+    };
+  }
+
+  // Intra-trade composure loss (entered serene → exited contrarié).
+  let emotionArc: NonNullable<WeeklySnapshot['patternSignals']>['emotionArc'];
+  const arc = emotionArcDegradation(closed);
+  if (arc.count >= EMOTION_ARC_MIN_TO_SURFACE) {
+    emotionArc = { count: arc.count, considered: arc.considered };
+  }
+
+  // Sustained multi-week declines (calm momentum signal). Empty → omit.
+  const declines = detectMomentum(input.scoreHistory ?? []);
+  const momentumDeclines =
+    declines.length > 0
+      ? declines.map((d) => ({
+          dimension: d.dimension,
+          label: d.label,
+          weeklySlope: d.weeklySlope,
+          points: d.points,
+        }))
+      : undefined;
+
+  if (!topEntryEmotion && !topHourBand && !emotionArc && !momentumDeclines) {
+    return undefined;
+  }
+  return {
+    ...(topEntryEmotion ? { topEntryEmotion } : {}),
+    ...(topHourBand ? { topHourBand } : {}),
+    ...(emotionArc ? { emotionArc } : {}),
+    ...(momentumDeclines ? { momentumDeclines } : {}),
   };
 }
 

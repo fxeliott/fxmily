@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { EmotionArcNote } from '@/components/patterns/emotion-arc-note';
 import { EmotionPhasePicker } from '@/components/patterns/emotion-phase-picker';
 import { type EmotionPhase, isEmotionPhase } from '@/lib/patterns/emotion-phase';
 import { PreTradeAnalyticsCard } from '@/components/pre-trade/pre-trade-analytics-card';
@@ -187,6 +188,9 @@ async function PatternsSection({
       <EmotionPerfTable rows={emotionRows} totalTrades={analytics.closedCount} />
       <SessionPerfBars sessions={analytics.sessionPerf} />
       <HourlyRhythm hours={analytics.hourlyPerf} />
+      {/* S15 #5 — intra-trade emotion-arc degradation (renders nothing below the
+          calm sample threshold). Phase-independent (always before→during/after). */}
+      <EmotionArcNote arc={analytics.emotionArc} />
       <div className="lg:col-span-2">
         <PairTopFive pairs={analytics.pairTopFive} />
       </div>

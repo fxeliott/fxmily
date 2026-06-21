@@ -342,6 +342,66 @@ const verificationSliceSchema = z
   })
   .strict();
 
+/// (S15 #7) PATTERN SIGNALS — behaviour→outcome cross-cuts the autonomous run
+/// previously never received (it saw counters only). Every field is OPTIONAL and
+/// SAMPLE-GATED by the builder: a sub-signal is present ONLY when its honest
+/// sample threshold is met (≥ HOURLY_MIN_SAMPLE etc.), so Claude never reasons on
+/// a win-rate over 1 trade. Posture §2: emotion/hour/discipline cross-cuts and
+/// composure/momentum — psychological & process patterns, NEVER a market view.
+/// `.strict()` structurally rejects any stray P&L key. The whole slice is
+/// optional → omitted entirely when nothing clears its threshold (zero noise).
+const patternSignalsSchema = z
+  .object({
+    /// Top ENTRY emotion by trade volume (n ≥ sample gate). winRatePct null when
+    /// the win-rate is not honestly reportable.
+    topEntryEmotion: z
+      .object({
+        slug: z.string().min(1).max(40),
+        trades: z.number().int().min(0),
+        winRatePct: z.number().int().min(0).max(100).nullable(),
+      })
+      .strict()
+      .optional(),
+    /// Most-traded entry-hour band (trades ≥ HOURLY_MIN_SAMPLE).
+    topHourBand: z
+      .object({
+        slot: z.enum(['night', 'morning', 'afternoon', 'evening']),
+        label: z.string().min(1).max(40),
+        trades: z.number().int().min(0),
+        winRatePct: z.number().int().min(0).max(100),
+        avgR: z.number(),
+      })
+      .strict()
+      .optional(),
+    /// Intra-trade composure loss (entered serene → exited contrarié). Present
+    /// only at/above the calm surfacing threshold.
+    emotionArc: z
+      .object({
+        count: z.number().int().min(0),
+        considered: z.number().int().min(0),
+      })
+      .strict()
+      .optional(),
+    /// Sustained multi-week declines per dimension (calm momentum signal — the
+    /// "your stability has been drifting" cross-cut). Empty array omitted.
+    momentumDeclines: z
+      .array(
+        z
+          .object({
+            dimension: z.enum(['discipline', 'emotionalStability', 'consistency', 'engagement']),
+            label: z.string().min(1).max(40),
+            weeklySlope: z.number(),
+            points: z.number().int().min(0),
+          })
+          .strict(),
+      )
+      .max(4)
+      .optional(),
+  })
+  .strict();
+
+export type WeeklyPatternSignals = z.infer<typeof patternSignalsSchema>;
+
 export const weeklySnapshotSchema = z
   .object({
     pseudonymLabel: pseudonymLabelSchema,
@@ -350,6 +410,8 @@ export const weeklySnapshotSchema = z
     weekEnd: z.date(),
     counters: counterSliceSchema,
     freeText: freeTextSliceSchema,
+    /// S15 #7 — behaviour→outcome pattern cross-cuts (sample-gated, optional).
+    patternSignals: patternSignalsSchema.optional(),
     /// Behavioral score snapshot from `lib/scoring`. Null = `insufficient_data`.
     scores: z
       .object({

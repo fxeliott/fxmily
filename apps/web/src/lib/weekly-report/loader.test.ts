@@ -38,7 +38,11 @@ vi.mock('@/lib/db', () => ({
 
 // Non-S3 reads the loader fans out — stubbed to inert values so the slice
 // builds without touching a real DB.
-vi.mock('@/lib/scoring/service', () => ({ getLatestBehavioralScore: vi.fn(async () => null) }));
+vi.mock('@/lib/scoring/service', () => ({
+  getLatestBehavioralScore: vi.fn(async () => null),
+  // S15 #6/#7 — loader now also reads the 90d score history for the momentum signal.
+  getBehavioralScoreHistory: vi.fn(async () => []),
+}));
 vi.mock('@/lib/training/training-trade-service', () => ({
   countRecentTrainingActivity: vi.fn(async () => ({ count: 0, lastEnteredAt: null })),
 }));

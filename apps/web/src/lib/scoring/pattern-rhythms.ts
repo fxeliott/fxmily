@@ -20,6 +20,8 @@
  *     module inventing a win-rate over 1 trade. We never fabricate a metric.
  */
 
+import { NEGATIVE_TRADING_EMOTIONS, SERENE_ENTRY_EMOTIONS } from '@/lib/trading/emotions';
+
 export interface EmotionPerfRow {
   /** Emotion tag slug (e.g. 'fomo', 'calm'). */
   slug: string;
@@ -183,4 +185,71 @@ export function perHour(
       avgR: e.nR > 0 ? e.sumR / e.nR : 0,
     };
   });
+}
+
+// -----------------------------------------------------------------------------
+// S15 #5 — emotion-arc degradation (entered serene → lost composure)
+// -----------------------------------------------------------------------------
+
+/** Below this many degraded trades the surface stays silent (anti-noise: a
+ *  single occurrence is not a pattern). Calm threshold, mirrors the repo's
+ *  MIN_SAMPLE culture without claiming a win-rate. */
+export const EMOTION_ARC_MIN_TO_SURFACE = 3;
+
+export interface EmotionArcExample {
+  /** Serene entry slug (e.g. 'calm'). */
+  from: string;
+  /** First negative slug found during/after (e.g. 'frustrated'). */
+  to: string;
+}
+
+export interface EmotionArcDegradation {
+  /** Trades entered serene that turned contrarié during or after. */
+  count: number;
+  /** Trades that entered serene at all (the population at risk — honest denominator). */
+  considered: number;
+  /** Up to 3 transition examples (slugs), for a concrete, non-fabricated illustration. */
+  examples: EmotionArcExample[];
+}
+
+/**
+ * Count trades where the member ENTERED composed (≥1 serene tag and NO negative
+ * tag on `emotionBefore`) but lost composure DURING or AFTER (≥1 negative tag on
+ * `emotionDuring ∪ emotionAfter`). This is the intra-trade emotional-control
+ * marker (Mark Douglas) — independent of outcome/P&L, pure process mirror.
+ *
+ * No I/O, no DB, deterministic → Vitest-safe. Returns counts + a few concrete
+ * transition examples; the surface adds the sample guard
+ * (`EMOTION_ARC_MIN_TO_SURFACE`) and a CALM, non-judgmental wording (§2).
+ */
+export function emotionArcDegradation(
+  trades: ReadonlyArray<{
+    emotionBefore: readonly string[] | null;
+    emotionDuring: readonly string[] | null;
+    emotionAfter: readonly string[] | null;
+  }>,
+): EmotionArcDegradation {
+  let count = 0;
+  let considered = 0;
+  const examples: EmotionArcExample[] = [];
+
+  for (const t of trades) {
+    const before = t.emotionBefore ?? [];
+    if (before.length === 0) continue;
+
+    const sereneEntry = before.find((s) => SERENE_ENTRY_EMOTIONS.has(s));
+    const hasNegativeEntry = before.some((s) => NEGATIVE_TRADING_EMOTIONS.has(s));
+    // "Entered serene" = at least one serene tag AND no negative tag at entry.
+    if (sereneEntry === undefined || hasNegativeEntry) continue;
+    considered++;
+
+    const post = [...(t.emotionDuring ?? []), ...(t.emotionAfter ?? [])];
+    const firstNegative = post.find((s) => NEGATIVE_TRADING_EMOTIONS.has(s));
+    if (firstNegative === undefined) continue;
+
+    count++;
+    if (examples.length < 3) examples.push({ from: sereneEntry, to: firstNegative });
+  }
+
+  return { count, considered, examples };
 }

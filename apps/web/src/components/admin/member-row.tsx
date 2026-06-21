@@ -18,28 +18,38 @@ interface MemberRowProps {
 }
 
 /**
- * Presence freshness from `lastSeenAt`. A coaching signal — "who is drifting
- * away" — NOT a verdict (SPEC §2 : never punitive, never anxiogenic). Hence
- * neutral copy ("Présence récente / il y a longtemps / inconnue") and a calm
- * green→amber→grey ramp. Grey (not red) for stale/unknown : an absent member
- * isn't *failing*, they're just out of sight.
+ * Last-LOGIN freshness from `User.lastSeenAt`. A coaching signal — "who is
+ * drifting away" — NOT a verdict (SPEC §2 : never punitive, never anxiogenic).
+ * Calm green→amber→grey ramp; grey (not red) for stale/unknown : an absent
+ * member isn't *failing*, they're just out of sight.
+ *
+ * HONESTY (S14 re-challenge): `User.lastSeenAt` is written ONLY at credential
+ * login (`authorize-credentials.ts`), never on in-app activity. With ~30-day
+ * JWT sessions a daily-active member who doesn't re-log keeps an old timestamp.
+ * So the copy says "Connexion" (login), NOT "Vu"/"actif" — it must not claim an
+ * activity it doesn't measure. Directionally correct for fully-absent members
+ * (they never log in). Exported for unit testing the thresholds (`now` injected
+ * for determinism).
  */
-function presenceFrom(lastSeenAt: string | null): {
+export function presenceFrom(
+  lastSeenAt: string | null,
+  now: number = Date.now(),
+): {
   color: string;
   label: string;
 } {
   if (!lastSeenAt) {
-    return { color: 'var(--t-4)', label: 'Présence inconnue' };
+    return { color: 'var(--t-4)', label: 'Jamais connecté' };
   }
-  const ageDays = (Date.now() - new Date(lastSeenAt).getTime()) / DAY_MS;
+  const ageDays = (now - new Date(lastSeenAt).getTime()) / DAY_MS;
   const relative = DATETIME_FMT.format(new Date(lastSeenAt));
   if (ageDays < 7) {
-    return { color: 'var(--ok)', label: `Vu récemment · ${relative}` };
+    return { color: 'var(--ok)', label: `Connexion récente · ${relative}` };
   }
   if (ageDays < 14) {
-    return { color: 'var(--warn)', label: `Vu il y a 1-2 semaines · ${relative}` };
+    return { color: 'var(--warn)', label: `Connexion il y a 1-2 semaines · ${relative}` };
   }
-  return { color: 'var(--t-3)', label: `Vu il y a plus de 2 semaines · ${relative}` };
+  return { color: 'var(--t-3)', label: `Connexion il y a +2 semaines · ${relative}` };
 }
 
 /**

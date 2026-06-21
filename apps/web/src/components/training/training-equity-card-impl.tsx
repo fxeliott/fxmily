@@ -41,6 +41,38 @@ export interface TrainingEquityPoint {
   systemRespected: boolean | null;
 }
 
+export interface CumulativeKeptPoint {
+  idx: number;
+  date: string;
+  /** Running count of `systemRespected === true` up to and including this point. */
+  kept: number;
+}
+
+/**
+ * Pure, deterministic cumulative "système tenu" series (oldest→newest), a
+ * single O(n) running total. §21.5: only `systemRespected` is read, NEVER
+ * `resultR`/`outcome`. `null`/`false` answers DON'T increment (and never
+ * decrement — the curve only rises or plateaus, anti-Black-Hat). Exported
+ * DB-free so the discipline-signal logic is unit-tested independently of
+ * Recharts/DOM.
+ */
+export function buildCumulativeKept(
+  points: ReadonlyArray<TrainingEquityPoint>,
+): CumulativeKeptPoint[] {
+  const ordered = [...points].sort(
+    (a, b) => new Date(a.enteredAt).getTime() - new Date(b.enteredAt).getTime(),
+  );
+  let running = 0;
+  return ordered.map((p, i) => {
+    if (p.systemRespected === true) running += 1;
+    return {
+      idx: i + 1,
+      date: new Date(p.enteredAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+      kept: running,
+    };
+  });
+}
+
 export function TrainingEquityCardChart({
   points,
 }: {
@@ -48,25 +80,7 @@ export function TrainingEquityCardChart({
 }) {
   const prefersReducedMotion = useReducedMotion();
 
-  const formatted = useMemo(() => {
-    // Oldest → newest so the curve reads left-to-right like a real timeline.
-    const ordered = [...points].sort(
-      (a, b) => new Date(a.enteredAt).getTime() - new Date(b.enteredAt).getTime(),
-    );
-    // Cumulative count of "système tenu", computed without a mutated closure
-    // var (react-hooks/immutability): each point's running total is the count
-    // of kept-system rows up to and including its index.
-    return ordered.map((p, i) => ({
-      idx: i + 1,
-      date: new Date(p.enteredAt).toLocaleDateString('fr-FR', {
-        day: 'numeric',
-        month: 'short',
-      }),
-      kept: ordered
-        .slice(0, i + 1)
-        .reduce((acc, q) => acc + (q.systemRespected === true ? 1 : 0), 0),
-    }));
-  }, [points]);
+  const formatted = useMemo(() => buildCumulativeKept(points), [points]);
 
   const last = formatted[formatted.length - 1];
 

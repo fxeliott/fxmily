@@ -71,8 +71,9 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
           <OverallStatusPill status={report.overall} />
         </h1>
         <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
-          Dernier scan {formatRelative(report.ranAt)}. Couverture : 7 crons, soft-delete pipeline,
-          audit log volume 24h. Source de vérité = audit_logs (gap depuis le dernier{' '}
+          Dernier scan {formatRelative(report.ranAt)}. Couverture : {report.entries.length} crons,
+          soft-delete pipeline, audit log volume 24h. Source de vérité = audit_logs (gap depuis le
+          dernier{' '}
           <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
             cron.X.scan
           </code>

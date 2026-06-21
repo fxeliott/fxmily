@@ -44,6 +44,15 @@ export function ConstancyTrend({ history }: { history: readonly ConstancyScoreVi
     .join(' ');
   const area = `${line} L${(VB_W - PAD).toFixed(1)} ${VB_H} L${PAD} ${VB_H} Z`;
 
+  // Terminal point ("où tu en es maintenant") emphasised by a crisp HTML dot
+  // OVERLAID on the SVG. The SVG uses preserveAspectRatio="none" (non-uniform
+  // scale) so an in-SVG <circle> would render as an ellipse — an HTML overlay
+  // positioned by % stays a true circle at any width. Static + calm (no pulse,
+  // §33.2): it marks the latest level, never dramatises it.
+  const [lastX, lastY] = points[points.length - 1]!;
+  const lastLeftPct = (lastX / VB_W) * 100;
+  const lastTopPct = (lastY / VB_H) * 100;
+
   return (
     <div className="rounded-card flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
       <div className="flex items-baseline justify-between gap-3">
@@ -53,30 +62,41 @@ export function ConstancyTrend({ history }: { history: readonly ConstancyScoreVi
         </span>
       </div>
 
-      <svg
-        viewBox={`0 0 ${VB_W} ${VB_H}`}
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={`Évolution de ton score de constance sur ${n} semaines : de ${values[0]} sur 100 (semaine du ${PERIOD_FMT.format(first.periodStart)}) à ${values[n - 1]} sur 100 (semaine du ${PERIOD_FMT.format(last.periodStart)}).`}
-        className="h-16 w-full"
-      >
-        <defs>
-          <linearGradient id="constancy-trend-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="var(--cy)" stopOpacity="0.22" />
-            <stop offset="1" stopColor="var(--cy)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={area} fill="url(#constancy-trend-fill)" />
-        <path
-          d={line}
-          fill="none"
-          stroke="var(--cy)"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
+      <div className="relative h-16 w-full">
+        <svg
+          viewBox={`0 0 ${VB_W} ${VB_H}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={`Évolution de ton score de constance sur ${n} semaines : de ${values[0]} sur 100 (semaine du ${PERIOD_FMT.format(first.periodStart)}) à ${values[n - 1]} sur 100 (semaine du ${PERIOD_FMT.format(last.periodStart)}).`}
+          className="h-full w-full"
+        >
+          <defs>
+            <linearGradient id="constancy-trend-fill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stopColor="var(--cy)" stopOpacity="0.22" />
+              <stop offset="1" stopColor="var(--cy)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path d={area} fill="url(#constancy-trend-fill)" />
+          <path
+            d={line}
+            fill="none"
+            stroke="var(--cy)"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        {/* Terminal dot — crisp HTML overlay (true circle despite the SVG's
+            non-uniform scale). The contrast ring lifts it off the area fill.
+            Static + calm, no pulse (§33.2): it marks "où tu en es", never
+            dramatises it. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--cy)] ring-[3px] ring-[var(--bg-1)]"
+          style={{ left: `${lastLeftPct}%`, top: `${lastTopPct}%` }}
         />
-      </svg>
+      </div>
 
       <div className="flex items-baseline justify-between gap-3">
         <span className="t-foot text-[var(--t-4)]">

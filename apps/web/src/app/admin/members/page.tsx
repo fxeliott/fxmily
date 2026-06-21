@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { MemberRow } from '@/components/admin/member-row';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -229,7 +230,10 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
         <div className="flex flex-col gap-4">
           <ul className="grid gap-3 xl:grid-cols-2 [&>li]:h-full">
             {page.items.map((member) => (
-              <li key={member.id}>
+              // `.wow-reveal` class (not a framer wrapper) so `ul > li > a`
+              // structure stays intact for the admin e2e; MemberRow keeps its
+              // own HoverLift spring. CSS reveal is no-JS + reduced-motion safe.
+              <li key={member.id} className="wow-reveal h-full">
                 <MemberRow member={member} />
               </li>
             ))}
@@ -297,14 +301,10 @@ function StatCell({
   return (
     <div className="flex flex-col gap-1 border-r border-b border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r">
       <span className="t-eyebrow">{label}</span>
-      <span
-        className={cn(
-          'f-mono text-[22px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
-          valColor,
-        )}
-      >
-        {value}
-      </span>
+      <AnimatedNumber
+        value={value}
+        className={cn('f-mono text-[22px] leading-none font-semibold tracking-[-0.02em]', valColor)}
+      />
       {hint ? <span className="t-mono-cap">{hint}</span> : null}
     </div>
   );

@@ -36,7 +36,7 @@ export default async function ReunionsPage() {
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* DS-v3 J3 — ambient mesh + drifting orbs behind the masthead */}
       <DashboardAmbient />
-      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
+      <div className="relative mx-auto flex w-full max-w-[var(--w-app)] flex-1 flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
         <header className="flex flex-col gap-4">
           <Link
             href="/dashboard"
@@ -58,7 +58,7 @@ export default async function ReunionsPage() {
             >
               Tes réunions
             </h1>
-            <p className="t-cap text-[var(--t-3)]">
+            <p className="t-cap max-w-prose text-[var(--t-3)]">
               Déclare ta présence — en live ou en rediffusion — et que tu as lu l&apos;analyse (12h)
               ou le bilan (20h). Tu peux rattraper une réunion dans les {MEETING_WINDOW_DAYS} jours.
             </p>
@@ -68,7 +68,7 @@ export default async function ReunionsPage() {
         {/* Attendance rate — neutral, honest. Never a fake "0 %". */}
         <section
           aria-labelledby="reunions-rate-heading"
-          className="wow-reveal rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
+          className="wow-reveal rounded-card w-full max-w-sm border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
         >
           <h2 id="reunions-rate-heading" className="t-eyebrow-lg text-[var(--t-3)]">
             Ton assiduité · {MEETING_WINDOW_DAYS} derniers jours
@@ -92,7 +92,8 @@ export default async function ReunionsPage() {
           )}
         </section>
 
-        {/* Meeting list — newest first. */}
+        {/* Meeting list — newest first. Reflows into a responsive grid so the
+            cards fill the desktop instead of stacking in a narrow column. */}
         <section aria-labelledby="reunions-list-heading" className="wow-reveal flex flex-col gap-3">
           <h2 id="reunions-list-heading" className="sr-only">
             Liste des réunions
@@ -106,7 +107,11 @@ export default async function ReunionsPage() {
               </p>
             </div>
           ) : (
-            meetings.map((meeting) => <MeetingItem key={meeting.id} meeting={meeting} />)
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {meetings.map((meeting) => (
+                <MeetingItem key={meeting.id} meeting={meeting} />
+              ))}
+            </div>
           )}
         </section>
       </div>

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 import { BrandMark } from '@/components/brand/brand-mark';
+import { ThemeToggle } from '@/components/theme-toggle';
 import {
   Sheet,
   SheetContent,
@@ -49,7 +50,14 @@ export function AppShell({ session, signOutAction, children }: AppShellProps) {
   const closeMenu = () => setMenuOpen(false);
 
   if (!session || isPublicPath(pathname)) {
-    return <>{children}</>;
+    // Surfaces publiques (splash / login / onboarding / legal) : aucun chrome,
+    // mais le toggle de thème reste accessible via un bouton flottant discret.
+    return (
+      <>
+        {children}
+        <ThemeToggle variant="floating" />
+      </>
+    );
   }
 
   const groups = NAV_GROUPS.filter((g) => !g.admin || session.isAdmin);
@@ -305,6 +313,7 @@ function UserFooter({
           </p>
         </div>
       </div>
+      <ThemeToggle variant="inline" />
       <form action={signOutAction}>
         <button
           type="submit"

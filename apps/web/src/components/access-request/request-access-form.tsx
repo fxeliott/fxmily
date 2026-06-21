@@ -1,10 +1,12 @@
 'use client';
 
-import { Check, Mail, User } from 'lucide-react';
+import { m, useReducedMotion } from 'framer-motion';
+import { Mail, User } from 'lucide-react';
 import { useActionState } from 'react';
 
 import { Alert } from '@/components/alert';
 import { Btn } from '@/components/ui/btn';
+import { Reveal } from '@/components/ui/reveal';
 import { cn } from '@/lib/utils';
 
 import { requestAccessAction, type RequestAccessActionState } from '@/app/rejoindre/actions';
@@ -22,17 +24,11 @@ const initialState: RequestAccessActionState = { ok: false };
 export function RequestAccessForm() {
   const [state, formAction, pending] = useActionState(requestAccessAction, initialState);
 
-  // Success state: calm confirmation, no form. Mirror invite-form Alert tone.
+  // Success state: a real calm moment. A check that draws itself inside a soft
+  // accent halo, then settles — NO confetti, no fanfare (Mark Douglas posture).
+  // The draw completes under ~600ms and stops; the message reveals just after.
   if (state.ok) {
-    return (
-      <Alert tone="success" className="flex items-start gap-2.5">
-        <Check className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
-        <span>
-          Ta demande est en attente de validation. Tu recevras un email dès qu&apos;elle est
-          acceptée.
-        </span>
-      </Alert>
-    );
+    return <RequestAccessSuccess />;
   }
 
   const topError = (() => {
@@ -96,6 +92,60 @@ export function RequestAccessForm() {
         {pending ? 'Envoi…' : 'Envoyer ma demande'}
       </Btn>
     </form>
+  );
+}
+
+/**
+ * Calm success moment — the inverse of gamified fanfare (Mark Douglas posture).
+ *
+ * A single check strokes itself inside a soft accent halo (compositor-only:
+ * the SVG `pathLength` + `opacity`/`scale` are GPU-driven, no layout), the draw
+ * lands in ~520ms and STOPS — no loop, no confetti, no streak. The confirming
+ * sentence reveals just after, polite (`role="status"` via Alert tone).
+ * Reduced-motion users get the final, fully-drawn state instantly.
+ */
+function RequestAccessSuccess() {
+  const reduced = useReducedMotion();
+
+  return (
+    <div className="flex flex-col items-center gap-4 py-2 text-center">
+      <div className="relative grid h-14 w-14 place-items-center">
+        {/* Soft accent halo — a posed glow, not a pulse. Decorative. */}
+        <m.span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full bg-[var(--acc-dim)]"
+          initial={reduced ? false : { opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+        />
+        <span className="relative grid h-11 w-11 place-items-center rounded-full border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            className="h-5 w-5"
+            stroke="currentColor"
+            strokeWidth={2.25}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <m.path
+              d="M5 12.5l4.2 4.2L19 7"
+              initial={reduced ? false : { pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1], delay: 0.18 }}
+            />
+          </svg>
+        </span>
+      </div>
+
+      <Reveal delay={reduced ? 0 : 360} y={8} className="w-full">
+        <Alert tone="success" className="text-center">
+          Ta demande est en attente de validation. Tu recevras un email dès qu&apos;elle est
+          acceptée.
+        </Alert>
+      </Reveal>
+    </div>
   );
 }
 

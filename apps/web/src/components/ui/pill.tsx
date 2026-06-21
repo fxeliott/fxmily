@@ -8,12 +8,12 @@ const pillVariants = cva(
   {
     variants: {
       tone: {
-        mute: 'border-[var(--b-default)] text-[var(--t-3)] bg-[oklch(0.604_0.02_257_/_0.04)]',
+        mute: 'border-[var(--b-default)] text-[var(--t-3)] bg-[var(--mute-dim)]',
         acc: 'border-[var(--b-acc)] text-[var(--acc-hi)] bg-[var(--acc-dim)]',
-        ok: 'border-[oklch(0.804_0.181_145_/_0.35)] text-[var(--ok)] bg-[var(--ok-dim)]',
-        bad: 'border-[oklch(0.7_0.165_22_/_0.35)] text-[var(--bad)] bg-[var(--bad-dim)]',
-        warn: 'border-[oklch(0.834_0.158_80_/_0.35)] text-[var(--warn)] bg-[var(--warn-dim)]',
-        cy: 'border-[oklch(0.789_0.139_217_/_0.30)] text-[var(--cy)] bg-[var(--cy-dim)]',
+        ok: 'border-[var(--ok-edge)] text-[var(--ok)] bg-[var(--ok-dim)]',
+        bad: 'border-[var(--bad-edge)] text-[var(--bad)] bg-[var(--bad-dim)]',
+        warn: 'border-[var(--warn-edge)] text-[var(--warn)] bg-[var(--warn-dim)]',
+        cy: 'border-[var(--cy-edge-soft)] text-[var(--cy)] bg-[var(--cy-dim)]',
         solid: 'border-[var(--acc)] text-[var(--acc-fg)] bg-[var(--acc-btn)]',
       },
     },

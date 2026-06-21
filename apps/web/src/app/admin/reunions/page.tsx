@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { AdminMeetingRow } from '@/components/admin/admin-meeting-row';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
@@ -105,7 +106,10 @@ export default async function AdminReunionsPage() {
         ) : (
           <ul className="flex flex-col gap-3">
             {meetings.map((meeting) => (
-              <li key={meeting.id}>
+              // `.wow-reveal` class (not a framer wrapper) keeps the list
+              // structure intact for the admin e2e; a cancelled row keeps its
+              // inner `opacity-60` (greyed, posture §30.7) untouched. No-JS safe.
+              <li key={meeting.id} className="wow-reveal">
                 <AdminMeetingRow meeting={meeting} />
               </li>
             ))}
@@ -143,14 +147,10 @@ function StatCell({
   return (
     <div className="flex flex-col gap-1 border-r border-[var(--b-default)] p-4 last:border-r-0">
       <span className="t-eyebrow">{label}</span>
-      <span
-        className={cn(
-          'f-mono text-[22px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
-          valColor,
-        )}
-      >
-        {value}
-      </span>
+      <AnimatedNumber
+        value={value}
+        className={cn('f-mono text-[22px] leading-none font-semibold tracking-[-0.02em]', valColor)}
+      />
       {hint ? <span className="t-mono-cap">{hint}</span> : null}
     </div>
   );

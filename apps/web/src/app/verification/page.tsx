@@ -108,7 +108,7 @@ export default async function VerificationPage() {
           graphiques cyan existants (ConstancyScoreCard / ConstancyTrend) et la
           posture §33.2 « miroir, pas sanction » (jamais de rouge punitif). */}
       <DashboardAmbient tone="cyan" />
-      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
+      <div className="relative mx-auto flex w-full max-w-[var(--w-app)] flex-1 flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
         <header className="flex flex-col gap-4">
           <Link
             href="/dashboard"
@@ -122,7 +122,7 @@ export default async function VerificationPage() {
             <h1 className="f-display h-rise text-[28px] leading-[1.05] font-bold text-[var(--t-1)]">
               Ta réalité de trading
             </h1>
-            <p className="t-body leading-[1.6] text-[var(--t-2)]">
+            <p className="t-body max-w-prose leading-[1.6] text-[var(--t-2)]">
               Ici, ton trading déclaré est mis en face de ton historique MT5 réel. Pas pour te juger
               — pour t&apos;aider à te voir tel que tu es, et progresser à partir de là. Ce qui est
               confronté, c&apos;est l&apos;historique que tu fournis : jamais tes analyses, jamais
@@ -137,11 +137,15 @@ export default async function VerificationPage() {
           <h2 id="constancy-heading" className="t-h2 text-[var(--t-1)]">
             Ta constance
           </h2>
-          <ConstancyScoreCard score={constancy} />
-          {/* S4 — trajectoire de constance (brief §29 « voir l'évolution ») : ferme
-              l'asymétrie avec les scores comportementaux qui ont déjà une courbe.
-              Rendu seulement à partir de 2 semaines suivies (sinon null). */}
-          <ConstancyTrend history={constancyHistory} />
+          {/* On desktop, the score and its trajectory sit side-by-side so the
+              section fills the width instead of stacking in a centred column. */}
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-start">
+            <ConstancyScoreCard score={constancy} />
+            {/* S4 — trajectoire de constance (brief §29 « voir l'évolution ») : ferme
+                l'asymétrie avec les scores comportementaux qui ont déjà une courbe.
+                Rendu seulement à partir de 2 semaines suivies (sinon null). */}
+            <ConstancyTrend history={constancyHistory} />
+          </div>
           {/* S4 — « le score reste explicable au membre » (promesse du schéma
               ScoreEvent) : les derniers événements, excusés neutralisés. */}
           <ScoreEventsHistory events={scoreEvents} />
@@ -154,18 +158,18 @@ export default async function VerificationPage() {
             Tes écarts
           </h2>
           {discrepancies.length === 0 ? (
-            <p className="t-body text-[var(--t-3)]">
+            <p className="t-body max-w-prose text-[var(--t-3)]">
               Aucun écart détecté pour l&apos;instant entre ton déclaré et ta réalité. Continue
               comme ça — c&apos;est la régularité qui compte.
             </p>
           ) : (
             <>
-              <p className="t-body leading-[1.6] text-[var(--t-2)]">
+              <p className="t-body max-w-prose leading-[1.6] text-[var(--t-2)]">
                 Un écart n&apos;est pas une faute : c&apos;est une information. S&apos;il y a un
                 motif (maladie, coupure, semaine off), donne-le — un oubli expliqué n&apos;est pas
                 de l&apos;indiscipline.
               </p>
-              <ul className="flex flex-col gap-2">
+              <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2 xl:grid-cols-3">
                 {[...openDiscrepancies, ...handledDiscrepancies].map((d) => {
                   const meta = DISCREPANCY_META[d.type];
                   return (
@@ -225,12 +229,12 @@ export default async function VerificationPage() {
             Tes comptes
           </h2>
           {overview.accounts.length === 0 ? (
-            <p className="t-body text-[var(--t-3)]">
+            <p className="t-body max-w-prose text-[var(--t-3)]">
               Déclare chacun de tes comptes — prop firm et perso. C&apos;est la base du suivi : un
               compte non déclaré finit toujours par se voir dans les écarts.
             </p>
           ) : null}
-          <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {overview.accounts.map((account) => (
               <Card key={account.id} className="flex flex-wrap items-center gap-3 p-4">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-3)]">
@@ -257,7 +261,7 @@ export default async function VerificationPage() {
               </Card>
             ))}
           </div>
-          <Card className="flex flex-col gap-3 p-4">
+          <Card className="flex w-full max-w-xl flex-col gap-3 p-4">
             <span className="t-h3 text-[var(--t-1)]">Déclarer un compte</span>
             <AccountCreateForm />
           </Card>
@@ -268,20 +272,20 @@ export default async function VerificationPage() {
           <h2 id="proofs-heading" className="t-h2 text-[var(--t-1)]">
             Tes preuves MT5
           </h2>
-          <p className="t-body leading-[1.6] text-[var(--t-2)]">
+          <p className="t-body max-w-prose leading-[1.6] text-[var(--t-2)]">
             Téléverse une capture de l&apos;onglet « Historique » de MT5 pour{' '}
             <strong className="font-semibold text-[var(--t-1)]">chacun</strong> de tes comptes.
             L&apos;analyse lit les positions affichées et les confronte à ton journal. Une capture
             reste une capture — c&apos;est la régularité de tes preuves qui construit la confiance.
           </p>
-          <Card className="flex flex-col gap-3 p-4">
+          <Card className="flex w-full max-w-xl flex-col gap-3 p-4">
             <ProofUploader
               accounts={overview.accounts.map((a) => ({ id: a.id, label: a.label }))}
             />
           </Card>
 
           {overview.proofs.length > 0 ? (
-            <ul className="flex flex-col gap-2">
+            <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2 xl:grid-cols-3">
               {overview.proofs.map((proof) => {
                 const statusMeta = OCR_STATUS_META[proof.ocrStatus];
                 const account = proof.brokerAccountId
@@ -332,7 +336,7 @@ export default async function VerificationPage() {
           )}
         </section>
 
-        <p className="wow-reveal t-foot text-[var(--t-4)]">
+        <p className="wow-reveal t-foot max-w-prose text-[var(--t-4)]">
           Les positions extraites sont confrontées à ton journal déclaré. Ce suivi se base sur
           l&apos;historique que tu fournis — il vaut ce que vaut ta régularité, et c&apos;est
           exactement ce qu&apos;il mesure.

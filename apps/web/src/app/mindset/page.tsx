@@ -53,7 +53,7 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* DS-v3 J3 — ambient mesh + drifting orbs behind the masthead */}
       <DashboardAmbient />
-      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
+      <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 lg:px-8">
         <header className="flex flex-col gap-4">
           <Link
             href="/dashboard"
@@ -85,7 +85,7 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
 
           <DrawnRule className="max-w-[220px]" />
 
-          <p className="rounded-control border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 text-[12px] leading-[1.5] text-[var(--t-2)]">
+          <p className="rounded-control max-w-prose border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 text-[12px] leading-[1.5] text-[var(--t-2)]">
             Un point hebdomadaire sur ton{' '}
             <strong className="text-[var(--t-1)]">état d&apos;esprit</strong> d&apos;athlète-trader
             (cadre Mark Douglas). Pas de bonne ni de mauvaise réponse, pas de P&amp;L, pas

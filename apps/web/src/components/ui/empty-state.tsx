@@ -104,7 +104,7 @@ export function EmptyState({
 
       {/* Strate 5 : cyan tip box */}
       {tip ? (
-        <div className="rounded-control mt-4 flex max-w-[42ch] items-start gap-2 border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] px-3 py-2 text-left">
+        <div className="rounded-control mt-4 flex max-w-[42ch] items-start gap-2 border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] px-3 py-2 text-left">
           <Info
             aria-hidden
             className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--cy)]"

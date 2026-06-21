@@ -1,9 +1,11 @@
 import { Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
+import { BrandMark } from '@/components/brand/brand-mark';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { ErrorState } from '@/components/ui/error-state';
+import { Reveal } from '@/components/ui/reveal';
 import { findInvitationByToken } from '@/lib/auth/invitations';
 
 import { OnboardingForm } from './onboarding-form';
@@ -42,44 +44,50 @@ export default async function OnboardingWelcomePage({ searchParams }: PageProps)
       />
 
       <section className="relative z-10 mx-auto flex w-full max-w-md flex-col gap-6">
-        <Link
-          href="/"
-          className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-80"
-        >
-          <div className="grid h-8 w-8 place-items-center rounded-[6px] border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[12px] font-bold text-[var(--acc)]">
-            F
-          </div>
-          <span className="f-display text-[15px] font-semibold tracking-[-0.01em]">Fxmily</span>
-        </Link>
+        <Reveal y={10}>
+          <Link
+            href="/"
+            className="flex items-center justify-center gap-2.5 transition-opacity hover:opacity-80"
+          >
+            <span className="grid h-8 w-8 place-items-center rounded-[6px] border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+              <BrandMark className="h-4 w-4" />
+            </span>
+            <span className="f-display text-[15px] font-semibold tracking-[-0.01em]">Fxmily</span>
+          </Link>
+        </Reveal>
 
-        <Card primary className="px-6 py-7">
-          <header className="mb-6 flex flex-col items-center gap-2">
-            <div className="relative mb-1.5">
-              <div
-                aria-hidden
-                className="absolute inset-0 rounded-full bg-[var(--acc-dim)] blur-xl"
-              />
-              <div className="relative grid h-12 w-12 place-items-center rounded-full border border-[var(--b-acc)] bg-[var(--bg-2)] text-[var(--acc)]">
-                <Sparkles className="h-5 w-5" strokeWidth={1.75} />
+        <Reveal y={14} delay={90}>
+          <Card primary className="px-6 py-7">
+            <header className="mb-6 flex flex-col items-center gap-2">
+              <div className="relative mb-1.5">
+                <div
+                  aria-hidden
+                  className="absolute inset-0 rounded-full bg-[var(--acc-dim)] blur-xl"
+                />
+                <div className="relative grid h-12 w-12 place-items-center rounded-full border border-[var(--b-acc)] bg-[var(--bg-2)] text-[var(--acc)]">
+                  <Sparkles className="h-5 w-5" strokeWidth={1.75} />
+                </div>
               </div>
-            </div>
-            <h1
-              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-              style={{ fontFeatureSettings: '"ss01" 1' }}
-            >
-              Bienvenue.
-            </h1>
-            <p className="t-body text-center text-[var(--t-3)]">
-              Active ton accès. La discipline avant le marché.
-            </p>
-          </header>
+              <h1
+                className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+                style={{ fontFeatureSettings: '"ss01" 1' }}
+              >
+                Bienvenue.
+              </h1>
+              <p className="t-body text-center text-[var(--t-3)]">
+                Active ton accès. La discipline avant le marché.
+              </p>
+            </header>
 
-          <OnboardingForm token={token} email={lookup.invitation.email} />
-        </Card>
+            <OnboardingForm token={token} email={lookup.invitation.email} />
+          </Card>
+        </Reveal>
 
-        <p className="text-center text-[10px] text-[var(--t-4)] tabular-nums">
-          Cohorte privée · Eliott t&apos;a invité personnellement
-        </p>
+        <Reveal y={8} delay={180}>
+          <p className="text-center text-[10px] text-[var(--t-4)] tabular-nums">
+            Cohorte privée · Eliott t&apos;a invité personnellement
+          </p>
+        </Reveal>
       </section>
     </main>
   );

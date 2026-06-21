@@ -242,9 +242,10 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
           <ul className="grid items-start gap-3 xl:grid-cols-2">
             {items.map((trade) => (
               // `wow-reveal` — each trade fades+rises as it scrolls into view
-              // (scroll-driven, zero-JS, @supports-gated, reduced-motion-safe →
-              // degrades to fully visible). The "jamais statique" of the brief on
-              // the long list a trader scrolls daily.
+              // (scroll-driven CSS, zero-JS, @supports-gated, reduced-motion-safe
+              // → degrades to fully visible). Kept as a class (not a framer
+              // wrapper) so the `main ul > li > a` structure the e2e relies on
+              // stays intact (a wrapper div would break the direct-child path).
               <li key={trade.id} className="wow-reveal">
                 <TradeCard
                   trade={trade}

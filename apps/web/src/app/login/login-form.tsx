@@ -5,6 +5,7 @@ import { useActionState } from 'react';
 
 import { Alert } from '@/components/alert';
 import { Btn } from '@/components/ui/btn';
+import { RevealGroup } from '@/components/ui/reveal';
 import { cn } from '@/lib/utils';
 
 import { signInAction, type SignInActionState } from './actions';
@@ -30,26 +31,28 @@ export function LoginForm() {
     <form action={formAction} className="flex flex-col gap-5" noValidate>
       {topError ? <Alert tone="danger">{topError}</Alert> : null}
 
-      <Field
-        name="email"
-        type="email"
-        label="Email"
-        autoComplete="email"
-        required
-        icon={<Mail className="h-4 w-4" strokeWidth={1.75} />}
-        error={state.fieldErrors?.email}
-        disabled={pending}
-      />
-      <Field
-        name="password"
-        type="password"
-        label="Mot de passe"
-        autoComplete="current-password"
-        required
-        icon={<Lock className="h-4 w-4" strokeWidth={1.75} />}
-        error={state.fieldErrors?.password}
-        disabled={pending}
-      />
+      <RevealGroup className="flex flex-col gap-5" stagger={90} y={10}>
+        <Field
+          name="email"
+          type="email"
+          label="Email"
+          autoComplete="email"
+          required
+          icon={<Mail className="h-4 w-4" strokeWidth={1.75} />}
+          error={state.fieldErrors?.email}
+          disabled={pending}
+        />
+        <Field
+          name="password"
+          type="password"
+          label="Mot de passe"
+          autoComplete="current-password"
+          required
+          icon={<Lock className="h-4 w-4" strokeWidth={1.75} />}
+          error={state.fieldErrors?.password}
+          disabled={pending}
+        />
+      </RevealGroup>
 
       <Btn
         type="submit"

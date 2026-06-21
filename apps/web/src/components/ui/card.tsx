@@ -50,12 +50,12 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
         glass
           ? cn('glass-panel backdrop-blur-[16px] backdrop-saturate-150', primary && 'glow-edge')
           : primary
-            ? 'border-[var(--b-strong)] bg-gradient-to-br from-[var(--bg-2)] to-[var(--bg-1)] shadow-[var(--sh-card-primary)]'
-            : 'border-[var(--b-default)] bg-[var(--bg-1)] shadow-[var(--sh-card)]',
-        selected && '!border-[var(--b-acc)] shadow-[var(--sh-card-selected)]',
+            ? 'border-[color:var(--b-strong)] bg-gradient-to-br from-[var(--bg-2)] to-[var(--bg-1)] shadow-[var(--sh-card-primary)]'
+            : 'border-[color:var(--b-default)] bg-[var(--bg-1)] shadow-[var(--sh-card)]',
+        selected && '!border-[color:var(--b-acc)] shadow-[var(--sh-card-selected)]',
         interactive &&
           !selected &&
-          'cursor-pointer hover:border-[var(--b-strong)] hover:shadow-[var(--sh-card-hover)]',
+          'cursor-pointer hover:border-[color:var(--b-strong)] hover:shadow-[var(--sh-card-hover)]',
         edge && 'border-edge-top relative',
         className,
       )}

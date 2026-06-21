@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
@@ -121,26 +122,23 @@ export default async function AdminReportsPage() {
         <div className="border-edge-top rounded-card relative grid grid-cols-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] shadow-[var(--sh-card)] sm:grid-cols-4">
           <StatCell
             label="Rapports"
-            value={String(stats.totalReports)}
+            value={stats.totalReports}
             hint={stats.lastWeekStart ? `dernier ${stats.lastWeekStart}` : 'aucun encore'}
           />
           <StatCell
             label="Coût cumulé"
-            value={`${Number(stats.totalCostEur).toFixed(2)} €`}
+            value={Number(stats.totalCostEur)}
+            format={(v) => `${v.toFixed(2)} €`}
             hint="depuis J8"
             tone="acc"
           />
           <StatCell
             label="Emails envoyés"
-            value={String(stats.emailsDelivered)}
+            value={stats.emailsDelivered}
             hint={stats.emailsPending > 0 ? `${stats.emailsPending} en attente` : 'tous envoyés'}
             tone={stats.emailsDelivered > 0 ? 'ok' : 'mute'}
           />
-          <StatCell
-            label="Membres semaine"
-            value={String(stats.membersInLastWeek)}
-            hint="dernière vague"
-          />
+          <StatCell label="Membres semaine" value={stats.membersInLastWeek} hint="dernière vague" />
         </div>
       </header>
 
@@ -161,7 +159,11 @@ export default async function AdminReportsPage() {
           {weeks.map(([weekStart, list]) => {
             const weekEnd = list[0]?.weekEnd ?? weekStart;
             return (
-              <section key={weekStart} className="flex flex-col gap-2">
+              <section
+                key={weekStart}
+                aria-label={`Semaine du ${weekStart}`}
+                className="wow-reveal flex flex-col gap-2"
+              >
                 <div className="flex flex-wrap items-baseline gap-3">
                   <CalendarDays className="h-4 w-4 text-[var(--acc)]" strokeWidth={1.75} />
                   <h2 className="f-display text-[18px] font-semibold tracking-[-0.02em] text-[var(--t-1)]">
@@ -243,11 +245,14 @@ export default async function AdminReportsPage() {
 function StatCell({
   label,
   value,
+  format,
   hint,
   tone = 'default',
 }: {
   label: string;
-  value: string;
+  value: number;
+  /** Optional formatter (e.g. append " €"). Default: rounded fr-FR integer. */
+  format?: (v: number) => string;
   hint?: string;
   tone?: 'default' | 'mute' | 'ok' | 'warn' | 'bad' | 'acc';
 }) {
@@ -267,14 +272,11 @@ function StatCell({
   return (
     <div className="flex flex-col gap-1 border-r border-b border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r">
       <span className="t-eyebrow">{label}</span>
-      <span
-        className={cn(
-          'f-mono text-[20px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
-          valColor,
-        )}
-      >
-        {value}
-      </span>
+      <AnimatedNumber
+        value={value}
+        format={format}
+        className={cn('f-mono text-[20px] leading-none font-semibold tracking-[-0.02em]', valColor)}
+      />
       {hint ? <span className="t-mono-cap">{hint}</span> : null}
     </div>
   );

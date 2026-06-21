@@ -135,7 +135,7 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
   const visibleCategories = CATEGORIES.filter((c) => isAdmin || !c.adminOnly);
 
   return (
-    <ul className="divide-border border-border bg-card divide-y rounded-lg border">
+    <ul className="rounded-card divide-y divide-[var(--b-subtle)] border border-[var(--b-default)] bg-[var(--bg-1)]">
       {visibleCategories.map((cat) => {
         const id = `pref-${cat.type}`;
         const enabled = preferences[cat.type];
@@ -143,10 +143,10 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
         return (
           <li key={cat.type} className="flex items-start gap-3 p-4">
             <div className="flex-1">
-              <label htmlFor={id} className="text-foreground block text-sm font-medium">
+              <label htmlFor={id} className="block text-sm font-medium text-[var(--t-1)]">
                 {cat.label}
               </label>
-              <p id={`${id}-desc`} className="text-muted-foreground mt-1 text-sm">
+              <p id={`${id}-desc`} className="mt-1 text-sm text-[var(--t-2)]">
                 {cat.description}
               </p>
               {error !== undefined && (
@@ -181,11 +181,11 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
               <span
                 aria-hidden="true"
                 className={`relative h-6 w-11 rounded-full transition ${
-                  enabled ? 'bg-primary' : 'bg-[var(--bg-2)]'
+                  enabled ? 'bg-[var(--acc)]' : 'bg-[var(--bg-2)]'
                 }`}
               >
                 <span
-                  className={`bg-background absolute top-0.5 h-5 w-5 rounded-full shadow transition ${
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-[var(--bg)] shadow transition ${
                     enabled ? 'left-[1.375rem]' : 'left-0.5'
                   }`}
                 />

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { FirstCheckinCelebration } from '@/components/checkin/first-checkin-celebration';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { StreakCard } from '@/components/checkin/streak-card';
 import { TrendCard } from '@/components/checkin/trend-card';
 import { Card } from '@/components/ui/card';
@@ -50,68 +51,77 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
   const isFirstEver = justDone && justDoneSlot ? (await countCheckins(userId)) === 1 : false;
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:py-10">
-      <header className="flex flex-col gap-3">
-        <Link
-          href="/dashboard"
-          className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Retour au tableau
-        </Link>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="t-eyebrow">{formatLocalDate(status.today)}</span>
-          <h1
-            className="f-display text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-            style={{ fontFeatureSettings: '"ss01" 1' }}
+    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
+      {/* DS-v3 — ambient mesh + drifting orbs behind the hub (tone blue défaut,
+          comme dashboard/profile). Le hub 2×/jour mérite la même profondeur que
+          ses propres enfants StreakCard/TrendCard. */}
+      <DashboardAmbient />
+      <div className="relative mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8 lg:py-10">
+        <header className="flex flex-col gap-3">
+          <Link
+            href="/dashboard"
+            className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
           >
-            Check-in quotidien
-          </h1>
-          <p className="t-lead">
-            Deux temps : matin pour cadrer, soir pour réfléchir. Trois minutes chacun. C&apos;est ce
-            qui construit le score discipline.
-          </p>
-        </div>
-      </header>
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Retour au tableau
+          </Link>
 
-      {justDone && justDoneSlot ? (
-        <>
-          {/* DoneBanner is ALWAYS the confirmation status (role="status",
-              "Check-in matin enregistré · streak N") — the J5 e2e asserts on it
-              and assistive tech reads it. The first-ever celebration is an
-              additive visual bonus ABOVE it, never a replacement. */}
-          {isFirstEver ? <FirstCheckinCelebration slot={justDoneSlot} /> : null}
-          <DoneBanner slot={justDoneSlot} streak={streak.current} />
-        </>
-      ) : null}
+          <div className="flex flex-col gap-1.5">
+            <span className="t-eyebrow">{formatLocalDate(status.today)}</span>
+            <h1
+              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              style={{ fontFeatureSettings: '"ss01" 1' }}
+            >
+              Check-in quotidien
+            </h1>
+            <p className="t-lead">
+              Deux temps : matin pour cadrer, soir pour réfléchir. Trois minutes chacun. C&apos;est
+              ce qui construit le score discipline.
+            </p>
+          </div>
+        </header>
 
-      <StreakCard
-        streak={streak.current}
-        todayFilled={streak.todayFilled}
-        justCrossed={justDone ? crossedMilestone(streak.current) : null}
-      />
+        {justDone && justDoneSlot ? (
+          <>
+            {/* DoneBanner is ALWAYS the confirmation status (role="status",
+                "Check-in matin enregistré · streak N") — the J5 e2e asserts on it
+                and assistive tech reads it. The first-ever celebration is an
+                additive visual bonus ABOVE it, never a replacement. */}
+            {isFirstEver ? <FirstCheckinCelebration slot={justDoneSlot} /> : null}
+            <DoneBanner slot={justDoneSlot} streak={streak.current} />
+          </>
+        ) : null}
 
-      <TrendCard days={last7} />
+        <StreakCard
+          streak={streak.current}
+          todayFilled={streak.todayFilled}
+          justCrossed={justDone ? crossedMilestone(streak.current) : null}
+        />
 
-      <section className="grid gap-4 sm:grid-cols-2">
-        <SlotCard slot="morning" submitted={status.morningSubmitted} href="/checkin/morning" />
-        <SlotCard slot="evening" submitted={status.eveningSubmitted} href="/checkin/evening" />
-      </section>
+        <TrendCard days={last7} />
 
-      <section>
-        <Card className="flex flex-col gap-2 p-5">
-          <span className="t-eyebrow">Pourquoi deux fois par jour ?</span>
-          <p className="t-body text-[var(--t-2)]">
-            Le matin capture ton état physique et ton intention <em>avant</em> le marché. Le soir
-            mesure ce qui s&apos;est passé : discipline, stress, émotions. Croisés sur 30 jours, ces
-            deux signaux révèlent les patterns qui dégradent ton edge.
-          </p>
-          <p className="t-cap text-[var(--t-4)]">
-            Tu peux passer un slot — mais le streak ne tient que si tu en fais au moins un par jour.
-          </p>
-        </Card>
-      </section>
+        {/* dash-stagger : les 2 slots (matin/soir) arrivent en cascade — DIRECT
+            children animés (compositor-only, reduced-motion neutralisé globalement). */}
+        <section className="dash-stagger grid gap-4 sm:grid-cols-2">
+          <SlotCard slot="morning" submitted={status.morningSubmitted} href="/checkin/morning" />
+          <SlotCard slot="evening" submitted={status.eveningSubmitted} href="/checkin/evening" />
+        </section>
+
+        <section>
+          <Card className="flex flex-col gap-2 p-5">
+            <span className="t-eyebrow">Pourquoi deux fois par jour ?</span>
+            <p className="t-body text-[var(--t-2)]">
+              Le matin capture ton état physique et ton intention <em>avant</em> le marché. Le soir
+              mesure ce qui s&apos;est passé : discipline, stress, émotions. Croisés sur 30 jours,
+              ces deux signaux révèlent les patterns qui dégradent ton edge.
+            </p>
+            <p className="t-cap text-[var(--t-4)]">
+              Tu peux passer un slot — mais le streak ne tient que si tu en fais au moins un par
+              jour.
+            </p>
+          </Card>
+        </section>
+      </div>
     </main>
   );
 }

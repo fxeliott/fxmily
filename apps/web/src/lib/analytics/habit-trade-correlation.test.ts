@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildHabitHeatmap,
+  computeHabitDisciplineCorrelation,
   computeHabitTradeCorrelation,
   extractHabitScalar,
+  type HabitDisciplinePair,
   type HabitLogLike,
   type HabitTradePair,
   interpretCoefficient,
   MIN_CORRELATION_PAIRS,
+  pairHabitLogsToDiscipline,
   pairHabitLogsToTrades,
   SUFFICIENT_SAMPLE_MIN,
   type TradeLike,
@@ -378,5 +381,204 @@ describe('V2.2 — 5-kind round-trip (pair → compute)', () => {
       minRequired: MIN_CORRELATION_PAIRS,
     });
     expect('r' in res.correlation).toBe(false); // union structurally forbids a coefficient
+  });
+});
+
+// =============================================================================
+// V2.3 — habit × DISCIPLINE (plan-respect, point-biserial) — SPEC §7.5
+// =============================================================================
+
+/**
+ * The strongest Fxmily differentiator: does a logged habit move with whether
+ * the member RESPECTED THEIR PLAN (`Trade.planRespected`, NON-NULL Boolean)?
+ * Y is binary (0/1) → point-biserial, which is exactly a Pearson r on a binary
+ * Y, so we reuse `correlations.ts` + `computeHabitTradeCorrelation` verbatim:
+ * SAME `MIN_CORRELATION_PAIRS` floor, SAME confidence tier, SAME discriminated
+ * `insufficient_data | sufficient` union (no coefficient when the sample is
+ * thin OR Y has zero variance).
+ */
+
+// Build discipline pairs straight from x / binary-y arrays (date irrelevant to
+// the coefficient). Mirrors `mkPairs` but for the binary discipline Y.
+function mkDiscPairs(xs: number[], ys: Array<0 | 1>): HabitDisciplinePair[] {
+  return xs.map((x, i) => ({
+    date: `2026-04-${String((i % 28) + 1).padStart(2, '0')}`,
+    habitValue: x,
+    disciplineY: ys[i]!,
+  }));
+}
+
+describe('pairHabitLogsToDiscipline', () => {
+  const tz = 'Europe/Paris';
+
+  it('Y is binary: planRespected=true -> 1, false -> 0', () => {
+    const habitLogs: HabitLogLike[] = [
+      { date: '2026-05-15', kind: 'sleep', value: { durationMin: 420 } },
+      { date: '2026-05-16', kind: 'sleep', value: { durationMin: 300 } },
+    ];
+    const trades: TradeLike[] = [
+      { enteredAt: '2026-05-15T08:00:00Z', realizedR: 1.5, planRespected: true },
+      { enteredAt: '2026-05-16T08:00:00Z', realizedR: -1, planRespected: false },
+    ];
+    const pairs = pairHabitLogsToDiscipline(habitLogs, trades, 'sleep', tz);
+    expect(pairs).toEqual([
+      { date: '2026-05-16', habitValue: 5, disciplineY: 0 },
+      { date: '2026-05-15', habitValue: 7, disciplineY: 1 },
+    ]); // sorted ascending by habitValue
+  });
+
+  it('uses Paris wall-clock for the day boundary, not a UTC slice', () => {
+    // 2026-05-15T23:15Z is already 2026-05-16 01:15 in Paris (CEST = UTC+2).
+    const habitLogs: HabitLogLike[] = [
+      { date: '2026-05-16', kind: 'sleep', value: { durationMin: 480 } },
+      { date: '2026-05-15', kind: 'sleep', value: { durationMin: 300 } },
+    ];
+    const trades: TradeLike[] = [
+      { enteredAt: '2026-05-15T23:15:00Z', realizedR: 2, planRespected: true },
+    ];
+    const pairs = pairHabitLogsToDiscipline(habitLogs, trades, 'sleep', tz);
+    expect(pairs).toEqual([{ date: '2026-05-16', habitValue: 8, disciplineY: 1 }]);
+  });
+
+  it('SKIPS a trade with no planRespected judgement (never coerces it to 0)', () => {
+    const habitLogs: HabitLogLike[] = [
+      { date: '2026-05-15', kind: 'sleep', value: { durationMin: 420 } },
+      { date: '2026-05-16', kind: 'sleep', value: { durationMin: 480 } },
+    ];
+    const trades: TradeLike[] = [
+      { enteredAt: '2026-05-15T08:00:00Z', realizedR: 1, planRespected: true },
+      // planRespected absent → must NOT become a disciplineY:0 false-failure.
+      { enteredAt: '2026-05-16T08:00:00Z', realizedR: -2 },
+    ];
+    const pairs = pairHabitLogsToDiscipline(habitLogs, trades, 'sleep', tz);
+    expect(pairs).toEqual([{ date: '2026-05-15', habitValue: 7, disciplineY: 1 }]);
+  });
+
+  it('does NOT gate on realizedR finiteness (discipline is independent of R)', () => {
+    // A NaN realizedR still carries a real planRespected judgement — kept.
+    const habitLogs: HabitLogLike[] = [
+      { date: '2026-05-15', kind: 'sleep', value: { durationMin: 420 } },
+    ];
+    const trades: TradeLike[] = [
+      { enteredAt: '2026-05-15T08:00:00Z', realizedR: Number.NaN, planRespected: false },
+    ];
+    const pairs = pairHabitLogsToDiscipline(habitLogs, trades, 'sleep', tz);
+    expect(pairs).toEqual([{ date: '2026-05-15', habitValue: 7, disciplineY: 0 }]);
+  });
+
+  it('filters by kind and skips days without a matching habit log', () => {
+    const habitLogs: HabitLogLike[] = [
+      { date: '2026-05-15', kind: 'caffeine', value: { cups: 3 } },
+    ];
+    const trades: TradeLike[] = [
+      { enteredAt: '2026-05-15T08:00:00Z', realizedR: 1, planRespected: true },
+      { enteredAt: '2026-05-20T08:00:00Z', realizedR: -1, planRespected: false }, // no log
+    ];
+    expect(pairHabitLogsToDiscipline(habitLogs, trades, 'sleep', tz)).toEqual([]);
+    expect(pairHabitLogsToDiscipline(habitLogs, trades, 'caffeine', tz)).toEqual([
+      { date: '2026-05-15', habitValue: 3, disciplineY: 1 },
+    ]);
+  });
+
+  it('a multi-trade day yields one pair per trade (same x, per-trade Y)', () => {
+    const habitLogs: HabitLogLike[] = [
+      { date: '2026-05-15', kind: 'sleep', value: { durationMin: 360 } },
+    ];
+    const trades: TradeLike[] = [
+      { enteredAt: '2026-05-15T08:00:00Z', realizedR: 1, planRespected: true },
+      { enteredAt: '2026-05-15T13:00:00Z', realizedR: -2, planRespected: false },
+    ];
+    const pairs = pairHabitLogsToDiscipline(habitLogs, trades, 'sleep', tz);
+    expect(pairs).toHaveLength(2);
+    expect(pairs.every((p) => p.habitValue === 6)).toBe(true);
+    expect(pairs.map((p) => p.disciplineY).sort()).toEqual([0, 1]);
+  });
+});
+
+describe('computeHabitDisciplineCorrelation', () => {
+  it('matches the point-biserial golden value (Pearson on binary Y, n=10)', () => {
+    // X = sleep hours, Y = plan respected (0/1). Verified against a reference
+    // Pearson implementation (point-biserial == Pearson on a binary Y):
+    //   pearson([5,5.5,..,9.5], [0,0,0,1,0,1,1,1,1,1]) -> 0.7817359599705717
+    // X strictly increasing → Spearman ρ equals the same value here.
+    const xs = [5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5];
+    const ys: Array<0 | 1> = [0, 0, 0, 1, 0, 1, 1, 1, 1, 1];
+    const res = computeHabitDisciplineCorrelation(mkDiscPairs(xs, ys), 'sleep', 30);
+    expect(res.status).toBe('sufficient');
+    if (res.status !== 'sufficient') throw new Error('unreachable');
+    expect(res.r).toBeCloseTo(0.7817359599705717, 10);
+    expect(res.rSpearman).toBeCloseTo(0.7817359599705717, 10);
+    expect(res.n).toBe(10);
+    expect(res.interpretation).toBe('strong_positive');
+    expect(res.confidence).toBe('low'); // 10 < SUFFICIENT_SAMPLE_MIN (20)
+  });
+
+  it('a perfect binary split gives r = +1 (every high-sleep day plan-respected)', () => {
+    const xs = [1, 2, 3, 4, 5, 6, 7, 8];
+    const ys: Array<0 | 1> = [0, 0, 0, 0, 1, 1, 1, 1];
+    const res = computeHabitDisciplineCorrelation(mkDiscPairs(xs, ys), 'sleep', 30);
+    if (res.status !== 'sufficient') throw new Error('expected sufficient');
+    // pearson([1..8], [0,0,0,0,1,1,1,1]) -> 0.8728715609439693 (clean median split)
+    expect(res.r).toBeCloseTo(0.8728715609439693, 10);
+    expect(res.interpretation).toBe('strong_positive');
+  });
+
+  it('n < MIN_CORRELATION_PAIRS -> insufficient_data, NO coefficient field', () => {
+    const xs = [1, 2, 3, 4, 5, 6, 7]; // 7 < 8
+    const ys: Array<0 | 1> = [0, 1, 0, 1, 0, 1, 0];
+    const res = computeHabitDisciplineCorrelation(mkDiscPairs(xs, ys), 'sleep', 30);
+    expect(res).toEqual({
+      status: 'insufficient_data',
+      n: 7,
+      minRequired: MIN_CORRELATION_PAIRS,
+    });
+    // The discriminated union structurally forbids a coefficient in this branch.
+    expect('r' in res).toBe(false);
+    expect('rSpearman' in res).toBe(false);
+    expect('interpretation' in res).toBe(false);
+  });
+
+  it('zero variance in Y (plan ALWAYS respected) -> insufficient_data, never a fake r', () => {
+    // The member respected their plan on every paired trade: Y is constant, so
+    // a coefficient is undefined — the honesty gate must NOT manufacture r=±1.
+    const xs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const ys: Array<0 | 1> = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+    const res = computeHabitDisciplineCorrelation(mkDiscPairs(xs, ys), 'sleep', 30);
+    expect(res.status).toBe('insufficient_data');
+    expect('r' in res).toBe(false);
+  });
+
+  it('confidence "adequate" at >= SUFFICIENT_SAMPLE_MIN paired days', () => {
+    const xs = Array.from({ length: 20 }, (_, i) => i + 1);
+    const ys = xs.map((_, i): 0 | 1 => (i < 10 ? 0 : 1));
+    const res = computeHabitDisciplineCorrelation(mkDiscPairs(xs, ys), 'sleep', 30);
+    if (res.status !== 'sufficient') throw new Error('expected sufficient');
+    expect(res.n).toBe(20);
+    expect(res.confidence).toBe('adequate');
+  });
+
+  it('full round-trip (pair -> compute) excludes judgement-less trades from n', () => {
+    const tz = 'Europe/Paris';
+    const day = (d: number) => `2026-05-${String(d).padStart(2, '0')}`;
+    const logs: HabitLogLike[] = [];
+    const trades: TradeLike[] = [];
+    // 8 days with a real judgement (alternating respected), enough to be sufficient.
+    for (let i = 1; i <= 8; i++) {
+      logs.push({ date: day(i), kind: 'sleep', value: { durationMin: 300 + i * 30 } });
+      trades.push({
+        enteredAt: `${day(i)}T08:00:00Z`,
+        realizedR: i,
+        planRespected: i % 2 === 0,
+      });
+    }
+    // A 9th day logged + traded but with NO planRespected → must not inflate n.
+    logs.push({ date: day(9), kind: 'sleep', value: { durationMin: 600 } });
+    trades.push({ enteredAt: `${day(9)}T08:00:00Z`, realizedR: 3 });
+
+    const pairs = pairHabitLogsToDiscipline(logs, trades, 'sleep', tz);
+    expect(pairs).toHaveLength(8); // the judgement-less day is excluded
+    const res = computeHabitDisciplineCorrelation(pairs, 'sleep', 30);
+    if (res.status !== 'sufficient') throw new Error('expected sufficient');
+    expect(res.n).toBe(8);
   });
 });

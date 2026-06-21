@@ -85,6 +85,17 @@ export interface TradeLike {
    *  Callers MUST pre-filter to `realizedRSource='computed'`. */
   realizedR: number;
   tradeQuality?: 'A' | 'B' | 'C';
+  /**
+   * Whether the member judged they respected their trading plan on this
+   * trade (`Trade.planRespected`, a NON-NULL Boolean in the schema).
+   *
+   * Optional here ON PURPOSE: the realized-R correlation (`pairHabitLogsToTrades`)
+   * never reads it, so existing callers that don't serialize it keep working
+   * unchanged. The discipline correlation (`pairHabitLogsToDiscipline`) is the
+   * only consumer — and it SKIPS any trade where this is `undefined` rather
+   * than guessing a value (an absent judgement is not a discipline failure).
+   */
+  planRespected?: boolean;
 }
 
 /** One paired observation feeding the coefficient + scatter. */
@@ -247,6 +258,81 @@ export function pairHabitLogsToTrades(
 }
 
 // =============================================================================
+// Discipline pairing (habit × plan-respect — SPEC §7.5 "médiation × discipline")
+// =============================================================================
+
+/**
+ * One paired observation for the habit × *discipline* correlation. Same
+ * shape contract as {@link HabitTradePair} except the Y axis is binary:
+ * `disciplineY = planRespected ? 1 : 0`.
+ *
+ * Correlating a continuous habit scalar (X) against a 0/1 outcome (Y) is a
+ * **point-biserial** correlation — which is mathematically *exactly* a
+ * Pearson r computed on a binary Y (Spearman likewise reduces to the
+ * rank-biserial). So we reuse the SAME `correlations.ts` primitives and the
+ * SAME honesty machinery; only the Y source differs.
+ */
+export interface HabitDisciplinePair {
+  /** Paris-local civil date of the trade entry (= the habit day). */
+  date: LocalDateString;
+  /** Extracted numeric scalar for the habit kind (e.g. sleep hours). */
+  habitValue: number;
+  /** `1` = member respected their plan on this trade, `0` = did not. */
+  disciplineY: 0 | 1;
+}
+
+/**
+ * Build the `(habitValue, disciplineY)` pairs for one habit kind, where
+ * `disciplineY = trade.planRespected ? 1 : 0` (point-biserial Y).
+ *
+ * Identical day-matching rule as {@link pairHabitLogsToTrades}: a trade is
+ * matched to the habit logged on its **entry day** in the member's timezone
+ * (the day the decision was made under that day's conditions). The unit of
+ * analysis is "habit state on the decision day vs whether the plan held that
+ * trade".
+ *
+ * Two deliberate honesty guards, distinct from the R pairing:
+ *   - A trade with `planRespected === undefined` is SKIPPED, never coerced.
+ *     The realized-R loader may not serialize the field, and an absent
+ *     judgement is not a discipline failure — silently bucketing it as `0`
+ *     would manufacture a downward bias. (`pairHabitLogsToTrades` has no
+ *     such field, so this is new surface, not a behavior change.)
+ *   - We do NOT gate on `realizedR` here: discipline is independent of the
+ *     trade's magnitude/source. A `realizedRSource='estimated'` trade still
+ *     carries a real `planRespected` judgement. Callers that want the same
+ *     `computed`-only population simply pass the same pre-filtered list.
+ *
+ * Sorted ascending by `habitValue` (render determinism only — the
+ * coefficient is order-invariant).
+ */
+export function pairHabitLogsToDiscipline(
+  habitLogs: readonly HabitLogLike[],
+  trades: readonly TradeLike[],
+  kind: HabitKind,
+  timezone: string,
+): HabitDisciplinePair[] {
+  const scalarByDate = new Map<string, number>();
+  for (const log of habitLogs) {
+    if (log.kind !== kind) continue;
+    const scalar = extractHabitScalar(kind, log.value);
+    if (scalar === null) continue;
+    scalarByDate.set(log.date, scalar);
+  }
+
+  const pairs: HabitDisciplinePair[] = [];
+  for (const trade of trades) {
+    if (trade.planRespected === undefined) continue; // no judgement → excluded
+    const day = localDateOf(new Date(trade.enteredAt), timezone);
+    const habitValue = scalarByDate.get(day);
+    if (habitValue === undefined) continue;
+    pairs.push({ date: day, habitValue, disciplineY: trade.planRespected ? 1 : 0 });
+  }
+
+  pairs.sort((a, b) => a.habitValue - b.habitValue);
+  return pairs;
+}
+
+// =============================================================================
 // Interpretation + compute
 // =============================================================================
 
@@ -311,6 +397,38 @@ export function computeHabitTradeCorrelation(
       pairs: [...pairs],
     },
   };
+}
+
+/**
+ * Discipline correlation (habit × plan-respect), reusing
+ * {@link computeHabitTradeCorrelation} verbatim — same `MIN_CORRELATION_PAIRS`
+ * floor, same `SUFFICIENT_SAMPLE_MIN` confidence tier, same Pearson/Spearman
+ * primitives, same discriminated `insufficient_data | sufficient` union.
+ *
+ * Mechanism: a point-biserial r IS a Pearson r on a binary Y, so we feed the
+ * discipline pairs through the existing compute path with `disciplineY` placed
+ * in the `realizedR` slot. The zero-variance guard inside
+ * `computeHabitTradeCorrelation` doubles as the correct honesty gate here: if
+ * the member respected (or broke) their plan on EVERY paired trade, Y has no
+ * variance → `insufficient_data`, never a fabricated `r = ±1`.
+ *
+ * Returns only the `CorrelationStatus` (the section owns the single shared
+ * heatmap + window metadata — no second heatmap render). The `pairs` carried
+ * inside the `sufficient` branch hold `disciplineY` in their `realizedR`
+ * field; the discipline UI reads the effect-size *words* + n, not a scatter,
+ * so the field name is an internal reuse detail, never surfaced.
+ */
+export function computeHabitDisciplineCorrelation(
+  pairs: readonly HabitDisciplinePair[],
+  kind: HabitKind,
+  windowDays: number,
+): CorrelationStatus {
+  const asTradePairs: HabitTradePair[] = pairs.map((p) => ({
+    date: p.date,
+    habitValue: p.habitValue,
+    realizedR: p.disciplineY,
+  }));
+  return computeHabitTradeCorrelation(asTradePairs, kind, windowDays, []).correlation;
 }
 
 // =============================================================================

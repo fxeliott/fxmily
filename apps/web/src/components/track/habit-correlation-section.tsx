@@ -1,7 +1,9 @@
 import { localDateOf } from '@/lib/checkin/timezone';
 import {
   buildHabitHeatmap,
+  computeHabitDisciplineCorrelation,
   computeHabitTradeCorrelation,
+  pairHabitLogsToDiscipline,
   pairHabitLogsToTrades,
 } from '@/lib/analytics/habit-trade-correlation';
 import { loadHabitTradeCorrelationData } from '@/lib/habit/service';
@@ -45,7 +47,14 @@ export async function HabitCorrelationSection({
   const heatmap = buildHabitHeatmap(habitLogs, today, HEATMAP_DAYS);
   const result = computeHabitTradeCorrelation(pairs, habitKind, windowDays, heatmap);
 
-  return <HabitCorrelationCard result={result} />;
+  // SPEC §7.5 "médiation × discipline" : la MÊME donnée (logs + trades déjà
+  // chargés) alimente une 2e corrélation point-bisériale habitude × respect
+  // du plan. Pur, déterministe, zéro requête DB supplémentaire. Mêmes seuils
+  // d'honnêteté (le `sufficient`/`insufficient_data` est structurel).
+  const disciplinePairs = pairHabitLogsToDiscipline(habitLogs, trades, habitKind, timezone);
+  const discipline = computeHabitDisciplineCorrelation(disciplinePairs, habitKind, windowDays);
+
+  return <HabitCorrelationCard result={result} discipline={discipline} />;
 }
 
 /**

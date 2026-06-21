@@ -17,7 +17,7 @@ export const btnVariants = cva(
         ghost:
           'bg-transparent text-[var(--t-3)] border border-transparent hover:text-[var(--t-1)] hover:bg-[var(--bg-2)] disabled:opacity-40 disabled:cursor-not-allowed',
         danger:
-          'bg-transparent text-[var(--bad)] border border-[oklch(0.7_0.165_22_/_0.35)] hover:bg-[var(--bad-dim)] hover:border-[var(--bad)] disabled:opacity-40 disabled:cursor-not-allowed',
+          'bg-transparent text-[var(--bad)] border border-[var(--bad-edge)] hover:bg-[var(--bad-dim)] hover:border-[var(--bad)] disabled:opacity-40 disabled:cursor-not-allowed',
       },
       size: {
         s: 'h-8 px-3 text-[12px] gap-1',

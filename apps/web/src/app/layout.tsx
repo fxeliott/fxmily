@@ -6,6 +6,7 @@ import { CookieBanner } from '@/components/legal/cookie-banner';
 import { LegalFooter } from '@/components/legal/legal-footer';
 import { MotionProvider } from '@/components/motion-provider';
 import { RouteFocusAnnouncer } from '@/components/route-focus-announcer';
+import { ThemeProvider } from '@/components/theme-provider';
 import { AppShell } from '@/components/nav/app-shell';
 import { LogExpressFab } from '@/components/track/log-express-fab';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -49,10 +50,15 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#07090f',
+  // Light + dark : la couleur de chrome UA/PWA suit la préférence OS (le thème
+  // in-app est piloté par le toggle next-themes, dark par défaut).
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)', color: '#07090f' },
+    { media: '(prefers-color-scheme: light)', color: '#f1f3f7' },
+  ],
   width: 'device-width',
   initialScale: 1,
-  colorScheme: 'dark',
+  colorScheme: 'dark light',
 };
 
 export default async function RootLayout({
@@ -81,23 +87,27 @@ export default async function RootLayout({
   return (
     <html
       lang="fr"
+      // next-themes écrit la classe .dark/.light côté client avant le paint →
+      // le SSR (sans classe) diffère : suppressHydrationWarning est obligatoire.
+      suppressHydrationWarning
       className={`${GeistSans.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="bg-background text-foreground flex min-h-full flex-col font-sans">
-        {/*
+        <ThemeProvider>
+          {/*
           Skip-link (J10 Phase I — a11y H1 / WCAG 2.4.1 Bypass Blocks). Hidden
           off-screen until focused via Tab from page-load ; clicking it jumps
           straight to the main content, bypassing the global header/footer.
           `tabindex="-1"` on the target lets the link focus a non-interactive
           container without making it tab-stoppable in the regular flow.
         */}
-        <a
-          href="#main-content"
-          className="absolute top-2 left-2 z-50 -translate-y-16 rounded-md bg-[var(--acc-btn)] px-3 py-2 text-[12px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-toast)] transition-transform focus:translate-y-0"
-        >
-          Aller au contenu principal
-        </a>
-        {/*
+          <a
+            href="#main-content"
+            className="absolute top-2 left-2 z-50 -translate-y-16 rounded-md bg-[var(--acc-btn)] px-3 py-2 text-[12px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-toast)] transition-transform focus:translate-y-0"
+          >
+            Aller au contenu principal
+          </a>
+          {/*
           App-wide ambient backplate (§245 "prend tout l'écran, jamais coincé
           au milieu"). A single fixed `z-index:-1` deep-space mesh painted behind
           ALL content so no route ever shows a flat letterbox gutter on large /
@@ -107,23 +117,24 @@ export default async function RootLayout({
           reveal it through their gutters. Full rationale: `.app-ambient` in
           globals.css. Decorative → aria-hidden, pointer-events:none.
         */}
-        <div className="app-ambient" aria-hidden="true" />
-        <TooltipProvider>
-          <MotionProvider>
-            <AppShell session={sessionLite} signOutAction={handleSignOut}>
-              <div id="main-content" tabIndex={-1} className="flex min-h-full flex-1 flex-col">
-                {/* S15 #23 — SPA focus reset + sr-only route announcement. Mounted
+          <div className="app-ambient" aria-hidden="true" />
+          <TooltipProvider>
+            <MotionProvider>
+              <AppShell session={sessionLite} signOutAction={handleSignOut}>
+                <div id="main-content" tabIndex={-1} className="flex min-h-full flex-1 flex-col">
+                  {/* S15 #23 — SPA focus reset + sr-only route announcement. Mounted
                     here (persists across navigations) so usePathname changes are
                     observed without remounting. */}
-                <RouteFocusAnnouncer />
-                {children}
-              </div>
-            </AppShell>
-          </MotionProvider>
-          <LogExpressFab />
-          <LegalFooter />
-        </TooltipProvider>
-        <CookieBanner />
+                  <RouteFocusAnnouncer />
+                  {children}
+                </div>
+              </AppShell>
+            </MotionProvider>
+            <LogExpressFab />
+            <LegalFooter />
+          </TooltipProvider>
+          <CookieBanner />
+        </ThemeProvider>
       </body>
     </html>
   );

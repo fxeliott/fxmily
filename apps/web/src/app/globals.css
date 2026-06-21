@@ -22,6 +22,14 @@
 @import 'tailwindcss' source(none);
 @source '..';
 
+/* Class-based dark variant (next-themes attribute="class"). Without this, the
+   Tailwind v4 default `dark:` keys off `prefers-color-scheme`; here it keys off
+   the `.dark` class next-themes writes on <html> (defaultTheme dark). The 7
+   residual shadcn `dark:` utilities (button.tsx / tabs.tsx) thus stay
+   deterministic across the explicit light/dark toggle instead of following the
+   OS. `:where()` keeps specificity at 0 so it never wins a token override. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* =============================================================
  * FXMILY — Design System v2 (Sprint #1)
  * -------------------------------------------------------------
@@ -118,6 +126,39 @@
   --cy-glow: 0 0 24px -4px oklch(0.789 0.139 217 / 0.45);
   --cy-glow-strong: 0 0 32px -2px oklch(0.789 0.139 217 / 0.65);
 
+  /* ─── ACCENT-2 INDIGO — secondary data / category chips (JAMAIS CTA) ──────
+     Promu depuis la réserve indigo déjà présente dans les auroras (.ds-aurora
+     l.531, .app-ambient l.574) et le ramp .v18 (hue 262). Reste STRICTEMENT
+     dans le spectre cool autorisé bleu(254)→indigo(262)→cyan(217) — pas de
+     purple/violet (anti-AI-slop, globals.css:30). Le SEUL CTA reste --acc bleu
+     (discipline mono-accent Anthropic). Sert à différencier une 2e série de
+     données (charts qui se blurrent) et les chips de catégorie. ───────────── */
+  --acc-2: oklch(0.55 0.21 262); /* #5b5bd6 — indigo secondaire */
+  --acc-2-hi: oklch(0.66 0.19 260); /* #7d84f2 — hover / text-accent-2 */
+  --acc-2-dim: oklch(0.55 0.21 262 / 0.16);
+  --acc-2-dim-2: oklch(0.55 0.21 262 / 0.06);
+  --acc-2-edge: oklch(0.55 0.21 262 / 0.42);
+  --acc-2-glow: 0 0 24px -4px oklch(0.55 0.21 262 / 0.45);
+
+  /* ─── BRAND GRADIENT — multi-stop cool (décoratif hero / fills) ───────────
+     Généralise le 3-stop oklch du splash-hero (246→258→268) en token unique :
+     bleu → indigo → cyan-teal. DÉCORATIF uniquement (heros, halos, edges) — le
+     CTA solide garde --acc-btn comme background (le gradient n'est JAMAIS le bg
+     d'un bouton primaire, pour préserver le mono-accent + le contraste AA du
+     label blanc). `-soft` = mêmes hues en alpha 0.12 pour des fills subtils. ── */
+  --grad-brand: linear-gradient(
+    135deg,
+    oklch(0.62 0.19 254) 0%,
+    oklch(0.55 0.21 262) 52%,
+    oklch(0.7 0.13 217) 100%
+  );
+  --grad-brand-soft: linear-gradient(
+    135deg,
+    oklch(0.62 0.19 254 / 0.14) 0%,
+    oklch(0.55 0.21 262 / 0.12) 52%,
+    oklch(0.7 0.13 217 / 0.12) 100%
+  );
+
   /* ─── SEMANTIC: state colors ────────────────────────────────── */
   --ok: oklch(0.804 0.181 145); /* #4ade80 — long, gain */
   --ok-hi: oklch(0.866 0.151 146); /* #86efac */
@@ -131,6 +172,16 @@
   --bad-hi: oklch(0.785 0.121 19); /* #fca5a5 */
   --bad-dim: oklch(0.7 0.165 22 / 0.1);
   --bad-dim-2: oklch(0.7 0.165 22 / 0.18);
+
+  /* ─── STATE EDGE tokens — borders d'état (centralisent les oklch jusque-là
+     bakés dans les primitives pill/btn/empty-state). --cy-edge / --cy-edge-soft
+     existent déjà (l.112,117). Ces tokens permettent au light-mode de flipper
+     ces bordures (un oklch baké dans une classe Tailwind ne suit PAS un override
+     de token). Valeurs byte-identiques aux call-sites migrés. ─────────────── */
+  --ok-edge: oklch(0.804 0.181 145 / 0.35);
+  --bad-edge: oklch(0.7 0.165 22 / 0.35);
+  --warn-edge: oklch(0.834 0.158 80 / 0.35);
+  --mute-dim: oklch(0.604 0.02 257 / 0.04);
 
   /* ─── RADII (sémantiques — JAMAIS uniforme) ─────────────────── */
   --r-control: 6px; /* Btn, Kbd badge */
@@ -233,6 +284,9 @@
   --color-acc-hi: var(--acc-hi);
   --color-acc-fg: var(--acc-fg);
   --color-acc-dim: var(--acc-dim);
+  --color-acc-2: var(--acc-2);
+  --color-acc-2-hi: var(--acc-2-hi);
+  --color-acc-2-dim: var(--acc-2-dim);
   --color-cy: var(--cy);
   --color-ok: var(--ok);
   --color-bad: var(--bad);
@@ -292,6 +346,231 @@
   --ease-smooth: var(--e-smooth);
   --ease-data: var(--e-data);
   --ease-overshoot: var(--e-overshoot);
+}
+
+/* =============================================================
+ * LIGHT THEME (.light) — override des tokens sémantiques sous classe
+ * -------------------------------------------------------------
+ * next-themes (attribute="class", defaultTheme="dark") écrit `.light` sur
+ * <html> quand le membre bascule en clair. :root reste le DARK par défaut
+ * (identité DS-v3, zéro régression si JS off) ; ce bloc REDÉCLARE uniquement
+ * les ~40 tokens sémantiques (surfaces / textes / borders / accent / état /
+ * ombres) — exactement le pattern prouvé par .v18-theme. Les 3137 var(--)
+ * consommateurs suivent automatiquement (zéro refactor).
+ *
+ * Ce N'EST PAS une inversion mécanique du dark : chaque paire fg/bg est
+ * re-calibrée pour fond clair (validée WCAG 2.2 AA au runtime), suivant les
+ * références premium (Linear / Stripe / Mercury en clair) :
+ *   - canvas = gris-bleu doux (PAS blanc pur) ; cartes = blanc ; élévation
+ *     portée par l'OMBRE (pas par « plus clair que blanc »).
+ *   - accent bleu ASSOMBRI (le #3b82f6 ne passe pas 4.5:1 en texte sur blanc) ;
+ *     reste le seul CTA. Indigo --acc-2 et cyan/teal idem assombris.
+ *   - grammaire finance INVARIANTE : long=vert / short=rouge — re-saturés
+ *     (les pastels s'effondrent en gris pour les CVD sur fond clair), jamais
+ *     inversés.
+ *   - ombres : highlights blancs `oklch(1 0 0)` retirés (invisibles sur clair),
+ *     ombres noires adoucies (alpha 0.06-0.18, une seule direction de lumière).
+ * Le spectre cool bleu→indigo→cyan et la triade chaude restent les seuls hues.
+ * ============================================================= */
+.light {
+  /* ─── SURFACES (canvas gris-bleu doux, cartes blanches) ─────── */
+  --bg: oklch(0.968 0.005 256); /* #f1f3f7 — canvas */
+  --bg-1: oklch(1 0 0); /* #ffffff — card default */
+  --bg-2: oklch(0.947 0.007 256); /* #e9ecf2 — hover / sticky header / elevated */
+  --bg-3: oklch(1 0 0); /* #ffffff — tooltip / popover / modal (ombre = élévation) */
+
+  /* ─── TEXT (5 niveaux, AA recalculé sur blanc/canvas) ───────── */
+  --t-1: oklch(0.24 0.02 262); /* #20283a — primary, ~13:1 sur blanc */
+  --t-2: oklch(0.42 0.02 260); /* #4a5366 — secondary, ~7:1 */
+  --t-3: oklch(0.5 0.022 258); /* #5b6478 — tertiary, ~5.3:1 */
+  --t-4: oklch(0.48 0.022 258); /* #555e70 — muted hints/captions, ≥4.5:1 sur canvas */
+  --t-disabled: oklch(0.5 0.022 258 / 0.5);
+
+  /* ─── BORDERS (neutres assombris — visibles sur blanc) ──────── */
+  --b-subtle: oklch(0.4 0.02 258 / 0.08);
+  --b-default: oklch(0.4 0.02 258 / 0.14);
+  --b-strong: oklch(0.4 0.02 258 / 0.22);
+  --b-stronger: oklch(0.4 0.02 258 / 0.34);
+  --b-acc: oklch(0.52 0.2 260 / 0.42);
+  --b-acc-strong: oklch(0.52 0.2 260 / 0.62);
+  --b-danger: oklch(0.53 0.2 25 / 0.42);
+
+  /* ─── ACCENT (bleu assombri — seul CTA, AA texte+bouton) ────── */
+  --acc: oklch(0.52 0.2 260); /* #2563eb — accent text/icon, ~4.6:1 sur blanc */
+  --acc-hi: oklch(0.46 0.2 262); /* #1d4ed8 — hover/active accent, ~6.4:1 */
+  --acc-fg: oklch(0.99 0.01 247); /* near-white label sur --acc-btn */
+  --acc-dim: oklch(0.52 0.2 260 / 0.1);
+  --acc-dim-2: oklch(0.52 0.2 260 / 0.05);
+  --acc-edge: var(--b-acc);
+  --acc-glow: 0 0 20px -6px oklch(0.52 0.2 260 / 0.3);
+  --acc-glow-strong: 0 0 28px -4px oklch(0.52 0.2 260 / 0.42);
+  --acc-btn: oklch(0.5 0.2 262); /* #2456cf — white label ~5.3:1 AA */
+  --acc-btn-hover: oklch(0.45 0.2 263); /* #1c47c0 — hover deepens (~6.6:1) */
+
+  /* ─── ACCENT-2 INDIGO (assombri pour fond clair) ────────────── */
+  --acc-2: oklch(0.5 0.21 264); /* #4f46e5 — 2e série data */
+  --acc-2-hi: oklch(0.44 0.2 266); /* #4338ca — hover */
+  --acc-2-dim: oklch(0.5 0.21 264 / 0.12);
+  --acc-2-dim-2: oklch(0.5 0.21 264 / 0.05);
+  --acc-2-edge: oklch(0.5 0.21 264 / 0.42);
+  --acc-2-glow: 0 0 20px -6px oklch(0.5 0.21 264 / 0.3);
+
+  /* ─── CYAN → TEAL (le cyan clair est illisible sur blanc) ───── */
+  --cy: oklch(0.52 0.12 220); /* #0e7c99 teal — texte/info ~4.7:1 */
+  --cy-dim: oklch(0.52 0.12 220 / 0.1);
+  --cy-dim-strong: oklch(0.52 0.12 220 / 0.14);
+  --cy-edge-soft: oklch(0.52 0.12 220 / 0.3);
+  --cy-edge: oklch(0.52 0.12 220 / 0.42);
+  --cy-glow: 0 0 20px -6px oklch(0.52 0.12 220 / 0.3);
+  --cy-glow-strong: 0 0 28px -4px oklch(0.52 0.12 220 / 0.42);
+
+  /* ─── STATE (finance grammar — re-saturée, JAMAIS inversée) ──── */
+  --ok: oklch(0.52 0.17 150); /* #18914e — vert, ~4.7:1 sur blanc */
+  --ok-hi: oklch(0.46 0.16 152); /* #157a43 */
+  --ok-dim: oklch(0.52 0.17 150 / 0.12);
+  --ok-dim-2: oklch(0.52 0.17 150 / 0.18);
+  --ok-edge: oklch(0.52 0.17 150 / 0.4);
+  --warn: oklch(0.56 0.13 78); /* #936713 — ambre lisible, ~4.6:1 */
+  --warn-hi: oklch(0.5 0.12 78); /* #7d5810 */
+  --warn-dim: oklch(0.56 0.13 78 / 0.12);
+  --warn-dim-2: oklch(0.56 0.13 78 / 0.2);
+  --warn-edge: oklch(0.56 0.13 78 / 0.42);
+  --bad: oklch(0.53 0.2 25); /* #c92a26 — rouge, ~4.7:1 sur blanc */
+  --bad-hi: oklch(0.47 0.19 25); /* #b01f1d */
+  --bad-dim: oklch(0.53 0.2 25 / 0.1);
+  --bad-dim-2: oklch(0.53 0.2 25 / 0.18);
+  --bad-edge: oklch(0.53 0.2 25 / 0.4);
+  --mute-dim: oklch(0.4 0.02 258 / 0.05);
+
+  /* ─── SHADOWS (douces, 1 direction, sans highlight blanc) ────── */
+  --sh-card: 0 1px 2px oklch(0.28 0.04 260 / 0.06), 0 1px 1px oklch(0.28 0.04 260 / 0.04);
+  --sh-card-hover:
+    0 0 0 1px oklch(0.52 0.2 260 / 0.08), 0 4px 12px -2px oklch(0.28 0.04 260 / 0.1),
+    0 2px 4px oklch(0.28 0.04 260 / 0.06);
+  --sh-card-primary:
+    0 0 0 1px oklch(0.52 0.2 260 / 0.1), 0 6px 18px -6px oklch(0.5 0.2 262 / 0.2),
+    0 1px 2px oklch(0.28 0.04 260 / 0.06);
+  --sh-card-selected:
+    0 0 0 1px var(--acc-edge), 0 0 0 4px var(--acc-dim-2), 0 6px 18px -6px oklch(0.5 0.2 262 / 0.22);
+  --sh-modal:
+    0 24px 48px -12px oklch(0.2 0.03 260 / 0.2), 0 8px 16px -6px oklch(0.2 0.03 260 / 0.12),
+    0 0 0 1px oklch(0.4 0.02 258 / 0.08);
+  --sh-tooltip:
+    0 8px 20px -6px oklch(0.2 0.03 260 / 0.2), 0 2px 4px oklch(0.2 0.03 260 / 0.1),
+    0 0 0 1px oklch(0.4 0.02 258 / 0.08);
+  --sh-toast:
+    0 16px 40px -12px oklch(0.2 0.03 260 / 0.22), 0 6px 12px -6px oklch(0.2 0.03 260 / 0.12),
+    0 0 0 1px oklch(0.52 0.2 260 / 0.1);
+  --sh-btn-pri: 0 1px 2px oklch(0.2 0.03 260 / 0.12), 0 2px 6px -1px oklch(0.5 0.2 262 / 0.32);
+  --sh-btn-pri-hover:
+    0 2px 4px oklch(0.2 0.03 260 / 0.14), 0 6px 16px -2px oklch(0.5 0.2 262 / 0.42);
+
+  /* ─── LEGACY ALIASES (var()→var(), suivent déjà ; ré-épinglés clairs) ── */
+  --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--acc);
+
+  color-scheme: light;
+}
+
+/* Selection en clair — teinte bleue douce, texte accent assombri lisible */
+.light ::selection {
+  background: oklch(0.52 0.2 260 / 0.16);
+  color: var(--acc-hi);
+}
+.light ::-moz-selection {
+  background: oklch(0.52 0.2 260 / 0.16);
+  color: var(--acc-hi);
+}
+
+/* Glass panels : le fond translucide est SOMBRE par défaut (calibré pour fond
+   noir) — en clair il faut un verre clair, sinon carte sombre sur page claire. */
+.light .glass-panel {
+  background: oklch(1 0 0 / 0.72);
+  border: 1px solid oklch(0.4 0.02 258 / 0.1);
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 0.5),
+    var(--sh-card);
+}
+.light .v18-glass {
+  background: oklch(1 0 0 / 0.72);
+  border-color: oklch(0.4 0.02 258 / 0.08);
+}
+.light .glow-edge {
+  border-color: var(--b-acc);
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 0.6),
+    inset 0 0 0 1px oklch(0.52 0.2 260 / 0.1),
+    var(--acc-glow);
+}
+
+/* Le liseré supérieur (.border-edge-top) est un dégradé BLANC (invisible sur
+   clair) — le passer en neutre sombre pour garder le détail Linear. */
+.light .border-edge-top::before {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(0.3 0.04 260 / 0.1) 30%,
+    oklch(0.3 0.04 260 / 0.1) 70%,
+    transparent 100%
+  );
+}
+
+/* Auroras/ambient : halos bleus calibrés pour fond noir → trop présents sur
+   clair. On atténue (l' identité « couleur, jamais fade » reste, en plus doux).
+   Décoratifs, sous contenu opaque → contraste texte intact. */
+.light .app-ambient,
+.light .ds-aurora,
+.light .ds-aurora-cy,
+.light .splash-aurora-rich,
+.light .v18-aurora {
+  opacity: 0.5;
+}
+.light .ds-orb,
+.light .v18-orb,
+.light .login-orb,
+.light .splash-orb {
+  opacity: 0.3;
+  mix-blend-mode: multiply; /* sur clair, multiply garde la teinte lisible sans laver */
+}
+
+/* =============================================================
+ * LIGHT × REFLECT scope (.light .v18-theme) — 2e système de tokens
+ * -------------------------------------------------------------
+ * .v18-theme (REFLECT /review /reflect) redéclare --bg/--t/--acc en slate
+ * SOMBRE. Sans variante claire, ces routes resteraient sombres en mode clair.
+ * On re-redéclare les surfaces en clair bleu-teinté (posture introspective
+ * calme conservée) + accent/texte assombris AA, comme .light. ─────────────── */
+.light .v18-theme {
+  --bg: oklch(0.97 0.008 250); /* canvas clair légèrement bleuté */
+  --bg-1: oklch(1 0 0);
+  --bg-2: oklch(0.95 0.01 250);
+  --bg-3: oklch(1 0 0);
+  --t-1: oklch(0.24 0.02 262);
+  --t-2: oklch(0.42 0.02 260);
+  --t-3: oklch(0.5 0.022 258);
+  --t-4: oklch(0.48 0.022 258);
+  --t-disabled: oklch(0.5 0.022 258 / 0.5);
+  --b-subtle: oklch(0.4 0.02 258 / 0.08);
+  --b-default: oklch(0.4 0.02 258 / 0.14);
+  --b-strong: oklch(0.4 0.02 258 / 0.22);
+  --b-stronger: oklch(0.4 0.02 258 / 0.34);
+  --b-acc: oklch(0.52 0.2 260 / 0.42);
+  --b-acc-strong: oklch(0.52 0.2 260 / 0.62);
+  --acc: oklch(0.52 0.2 260);
+  --acc-hi: oklch(0.46 0.2 262);
+  --acc-fg: oklch(0.99 0.01 247);
+  --acc-dim: oklch(0.52 0.2 260 / 0.1);
+  --acc-dim-2: oklch(0.52 0.2 260 / 0.05);
+  --acc-edge: var(--b-acc);
+  --acc-glow: 0 0 22px -6px oklch(0.52 0.2 260 / 0.32);
+  --acc-glow-strong: 0 0 30px -4px oklch(0.52 0.2 260 / 0.44);
+  --sh-card: 0 1px 2px oklch(0.28 0.04 260 / 0.06), 0 1px 1px oklch(0.28 0.04 260 / 0.04);
+  --sh-card-hover:
+    0 0 0 1px oklch(0.52 0.2 260 / 0.08), 0 4px 12px -2px oklch(0.28 0.04 260 / 0.1),
+    0 2px 4px oklch(0.28 0.04 260 / 0.06);
+  --sh-card-primary:
+    0 0 0 1px oklch(0.52 0.2 260 / 0.1), 0 6px 18px -6px oklch(0.5 0.2 262 / 0.2),
+    0 1px 2px oklch(0.28 0.04 260 / 0.06);
+  --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--acc);
 }
 
 /* =============================================================

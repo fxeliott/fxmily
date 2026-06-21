@@ -44,6 +44,7 @@ export const CHART_COLORS = {
 
   // Semantic
   acc: '#3b82f6', // blue — process / discipline scores (DS-v3)
+  acc2: '#5b5bd6', // indigo — 2nd data series (mirror of --acc-2, anti-fade multi-series)
   cy: '#22d3ee', // cyan — secondary / charts secondary
   ok: '#4ade80', // green — outcome / gain
   warn: '#fbbf24', // amber — caution

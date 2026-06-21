@@ -2,6 +2,7 @@
 
 import { Brain, ChevronRight } from 'lucide-react';
 import { useReducedMotion } from 'framer-motion';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { Card } from '@/components/ui/card';
@@ -107,13 +108,13 @@ export function MarkDouglasCard() {
         <cite className="t-foot text-[var(--t-3)] not-italic">
           Trading in the Zone — Mark Douglas (2000), citations + paraphrases
         </cite>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 text-[11px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
+        <Link
+          href="/library"
+          className="inline-flex items-center gap-1 rounded-[var(--r-control)] text-[11px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
         >
           Bibliothèque
           <ChevronRight className="h-3 w-3" strokeWidth={1.75} />
-        </button>
+        </Link>
       </footer>
 
       {/* Progress dots */}

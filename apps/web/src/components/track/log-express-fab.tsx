@@ -63,6 +63,7 @@ const HIDDEN_PREFIXES: readonly string[] = [
   // `/reset-password` are forward-compat placeholders (J1.5 magic-link
   // deferred — no live route yet) kept in sync defensively.
   '/login',
+  '/rejoindre',
   '/onboarding',
   '/forgot-password',
   '/reset-password',

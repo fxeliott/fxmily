@@ -8,6 +8,7 @@ describe('isLogExpressHidden', () => {
     for (const p of [
       '/',
       '/login',
+      '/rejoindre',
       '/onboarding',
       '/onboarding/welcome',
       '/forgot-password',

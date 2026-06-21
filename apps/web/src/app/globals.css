@@ -2423,3 +2423,22 @@
 .surf-grad-soft {
   background-image: var(--grad-brand-soft);
 }
+
+/* ---- Card border-color via data-attributes (ROBUST fix for the "white border")
+   The Card primitive carries a base `border` (width only) plus an arbitrary
+   `border-[var(--b-*)]` colour utility per variant. `cn()` (tailwind-merge) groups
+   `border` and `border-[var(...)]` together and DROPS the colour one, so the
+   border falls back to `currentColor` — a bright near-white 1px hairline on dark
+   surfaces (Eliott's "bordure blanche sur les modules"). Setting the colour here
+   on the data-slot is immune to class-merging and guarantees the DS token.
+   Scoped `:not([data-glass])` so glass cards keep their .glass-panel / .glow-edge
+   edge. Light mode follows via the re-declared --b-* tokens. ---- */
+[data-slot='card']:not([data-glass]) {
+  border-color: var(--b-default);
+}
+[data-slot='card'][data-primary]:not([data-glass]) {
+  border-color: var(--b-strong);
+}
+[data-slot='card'][data-selected]:not([data-glass]) {
+  border-color: var(--b-acc);
+}

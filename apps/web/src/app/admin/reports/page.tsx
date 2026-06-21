@@ -3,9 +3,11 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
+import { Reveal } from '@/components/ui/reveal';
 import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
 import { cn } from '@/lib/utils';
@@ -121,26 +123,23 @@ export default async function AdminReportsPage() {
         <div className="border-edge-top rounded-card relative grid grid-cols-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] shadow-[var(--sh-card)] sm:grid-cols-4">
           <StatCell
             label="Rapports"
-            value={String(stats.totalReports)}
+            value={stats.totalReports}
             hint={stats.lastWeekStart ? `dernier ${stats.lastWeekStart}` : 'aucun encore'}
           />
           <StatCell
             label="Coût cumulé"
-            value={`${Number(stats.totalCostEur).toFixed(2)} €`}
+            value={Number(stats.totalCostEur)}
+            format={(v) => `${v.toFixed(2)} €`}
             hint="depuis J8"
             tone="acc"
           />
           <StatCell
             label="Emails envoyés"
-            value={String(stats.emailsDelivered)}
+            value={stats.emailsDelivered}
             hint={stats.emailsPending > 0 ? `${stats.emailsPending} en attente` : 'tous envoyés'}
             tone={stats.emailsDelivered > 0 ? 'ok' : 'mute'}
           />
-          <StatCell
-            label="Membres semaine"
-            value={String(stats.membersInLastWeek)}
-            hint="dernière vague"
-          />
+          <StatCell label="Membres semaine" value={stats.membersInLastWeek} hint="dernière vague" />
         </div>
       </header>
 
@@ -158,80 +157,82 @@ export default async function AdminReportsPage() {
         </Card>
       ) : (
         <div className="flex flex-col gap-6">
-          {weeks.map(([weekStart, list]) => {
+          {weeks.map(([weekStart, list], wi) => {
             const weekEnd = list[0]?.weekEnd ?? weekStart;
             return (
-              <section key={weekStart} className="flex flex-col gap-2">
-                <div className="flex flex-wrap items-baseline gap-3">
-                  <CalendarDays className="h-4 w-4 text-[var(--acc)]" strokeWidth={1.75} />
-                  <h2 className="f-display text-[18px] font-semibold tracking-[-0.02em] text-[var(--t-1)]">
-                    Semaine {formatPeriod(weekStart, weekEnd)}
-                  </h2>
-                  <span className="t-mono-cap">
-                    {list.length} rapport{list.length > 1 ? 's' : ''}
-                  </span>
-                </div>
-                {/* §23 full-width — cards verticales (résumé + méta) : 2-up
+              <Reveal key={weekStart} delay={Math.min(wi, 5) * 60}>
+                <section aria-label={`Semaine du ${weekStart}`} className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-baseline gap-3">
+                    <CalendarDays className="h-4 w-4 text-[var(--acc)]" strokeWidth={1.75} />
+                    <h2 className="f-display text-[18px] font-semibold tracking-[-0.02em] text-[var(--t-1)]">
+                      Semaine {formatPeriod(weekStart, weekEnd)}
+                    </h2>
+                    <span className="t-mono-cap">
+                      {list.length} rapport{list.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {/* §23 full-width — cards verticales (résumé + méta) : 2-up
                     dès lg, 3-up à 2xl. `[&>li]:h-full` → hauteurs égales par
                     rangée malgré des résumés de longueurs différentes. */}
-                <ul className="grid gap-2 lg:grid-cols-2 2xl:grid-cols-3 [&>li]:h-full">
-                  {list.map((report) => {
-                    const mocked = isMockedModel(report.claudeModel);
-                    const label = memberLabel.get(report.userId) ?? 'Membre supprimé';
-                    return (
-                      <li key={report.id}>
-                        <Link
-                          href={`/admin/reports/${report.id}`}
-                          className="rounded-card focus-visible:outline-acc flex h-full flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-4 shadow-[var(--sh-card)] transition-colors hover:border-[var(--b-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="f-display text-[15px] font-semibold text-[var(--t-1)]">
-                              {label}
-                            </span>
-                            {mocked ? (
-                              <Pill tone="warn">
-                                <span aria-label="Source : mock déterministe">MOCK</span>
-                              </Pill>
-                            ) : (
-                              <Pill tone="acc">
-                                <span aria-label="Source : Claude API live">LIVE</span>
-                              </Pill>
-                            )}
-                            {report.sentToAdminAt ? (
-                              <Pill tone="ok">
-                                <Mail className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
-                                <span aria-label="Email digest envoyé">ENVOYÉ</span>
-                              </Pill>
-                            ) : (
-                              <Pill tone="mute">
-                                <Mail className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
-                                <span aria-label="Email digest en attente">EN ATTENTE</span>
-                              </Pill>
-                            )}
-                          </div>
-                          <p className="mt-2 line-clamp-2 text-[13.5px] leading-snug text-[var(--t-2)]">
-                            {report.summary}
-                          </p>
-                          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--t-3)]">
-                            <span className="f-mono tabular-nums">
-                              {report.inputTokens} in / {report.outputTokens} out ·{' '}
-                              {Number(report.costEur).toFixed(4)} €
-                            </span>
-                            <span className="t-mono-cap">
-                              Généré {GENERATED_FMT.format(new Date(report.generatedAt))}
-                            </span>
-                            <span className="t-mono-cap">
-                              {report.risks.length} risque{report.risks.length > 1 ? 's' : ''} ·{' '}
-                              {report.recommendations.length} reco
-                              {report.recommendations.length > 1 ? 's' : ''}
-                            </span>
-                          </div>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
+                  <ul className="grid gap-2 lg:grid-cols-2 2xl:grid-cols-3 [&>li]:h-full">
+                    {list.map((report) => {
+                      const mocked = isMockedModel(report.claudeModel);
+                      const label = memberLabel.get(report.userId) ?? 'Membre supprimé';
+                      return (
+                        <li key={report.id}>
+                          <Link
+                            href={`/admin/reports/${report.id}`}
+                            className="spotlight-surface rounded-card focus-visible:outline-acc flex h-full flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-4 shadow-[var(--sh-card)] transition-colors hover:border-[var(--b-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="f-display text-[15px] font-semibold text-[var(--t-1)]">
+                                {label}
+                              </span>
+                              {mocked ? (
+                                <Pill tone="warn">
+                                  <span aria-label="Source : mock déterministe">MOCK</span>
+                                </Pill>
+                              ) : (
+                                <Pill tone="acc">
+                                  <span aria-label="Source : Claude API live">LIVE</span>
+                                </Pill>
+                              )}
+                              {report.sentToAdminAt ? (
+                                <Pill tone="ok">
+                                  <Mail className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
+                                  <span aria-label="Email digest envoyé">ENVOYÉ</span>
+                                </Pill>
+                              ) : (
+                                <Pill tone="mute">
+                                  <Mail className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
+                                  <span aria-label="Email digest en attente">EN ATTENTE</span>
+                                </Pill>
+                              )}
+                            </div>
+                            <p className="mt-2 line-clamp-2 text-[13.5px] leading-snug text-[var(--t-2)]">
+                              {report.summary}
+                            </p>
+                            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--t-3)]">
+                              <span className="f-mono tabular-nums">
+                                {report.inputTokens} in / {report.outputTokens} out ·{' '}
+                                {Number(report.costEur).toFixed(4)} €
+                              </span>
+                              <span className="t-mono-cap">
+                                Généré {GENERATED_FMT.format(new Date(report.generatedAt))}
+                              </span>
+                              <span className="t-mono-cap">
+                                {report.risks.length} risque{report.risks.length > 1 ? 's' : ''} ·{' '}
+                                {report.recommendations.length} reco
+                                {report.recommendations.length > 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              </Reveal>
             );
           })}
         </div>
@@ -243,11 +244,14 @@ export default async function AdminReportsPage() {
 function StatCell({
   label,
   value,
+  format,
   hint,
   tone = 'default',
 }: {
   label: string;
-  value: string;
+  value: number;
+  /** Optional formatter (e.g. append " €"). Default: rounded fr-FR integer. */
+  format?: (v: number) => string;
   hint?: string;
   tone?: 'default' | 'mute' | 'ok' | 'warn' | 'bad' | 'acc';
 }) {
@@ -267,14 +271,11 @@ function StatCell({
   return (
     <div className="flex flex-col gap-1 border-r border-b border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r">
       <span className="t-eyebrow">{label}</span>
-      <span
-        className={cn(
-          'f-mono text-[20px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
-          valColor,
-        )}
-      >
-        {value}
-      </span>
+      <AnimatedNumber
+        value={value}
+        format={format}
+        className={cn('f-mono text-[20px] leading-none font-semibold tracking-[-0.02em]', valColor)}
+      />
       {hint ? <span className="t-mono-cap">{hint}</span> : null}
     </div>
   );

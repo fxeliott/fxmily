@@ -8,6 +8,7 @@ import { BrandMark } from '@/components/brand/brand-mark';
 import { RequestAccessForm } from '@/components/access-request/request-access-form';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { Tilt3D } from '@/components/ui/tilt-3d';
 
 import { RejoindreAurora } from './rejoindre-aurora';
 
@@ -47,34 +48,41 @@ export default async function RejoindrePage() {
           <span className="f-display text-[15px] font-semibold tracking-[-0.01em]">Fxmily</span>
         </Link>
 
-        <Card
-          primary
-          className="wow-rise px-6 py-7"
-          style={{ '--rise-delay': '90ms' } as CSSProperties}
-        >
-          <header className="mb-6 flex flex-col gap-2.5">
-            <div className="flex items-center gap-2">
-              <Pill tone="acc">COHORTE PRIVÉE</Pill>
-              <span className="t-eyebrow">Demande d&apos;accès</span>
-            </div>
-            <h1
-              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-              style={{ fontFeatureSettings: '"ss01" 1' }}
-            >
-              Rejoindre Fxmily
-            </h1>
-            <p className="t-lead">
-              Le seul journal qui mesure ton plan, ta discipline et ton mental — pas les bougies.
-              Laisse tes coordonnées : ta demande sera étudiée et tu recevras un email dès
-              qu&apos;elle est acceptée.
-            </p>
-          </header>
+        {/* Signature 3D float on the hero card — the single Tilt per page
+            (mirror of the premium /login front door). Subtle 6deg max so it
+            reads as calm depth, never a kitsch parallax toy. The `wow-rise`
+            entrance (opacity+translateY) lives on the Card and never collides
+            with the tilt's rotateX/rotateY (compositor-only, distinct axes). */}
+        <Tilt3D maxDeg={6}>
+          <Card
+            primary
+            className="wow-rise px-6 py-7"
+            style={{ '--rise-delay': '90ms' } as CSSProperties}
+          >
+            <header className="mb-6 flex flex-col gap-2.5">
+              <div className="flex items-center gap-2">
+                <Pill tone="acc">COHORTE PRIVÉE</Pill>
+                <span className="t-eyebrow">Demande d&apos;accès</span>
+              </div>
+              <h1
+                className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+                style={{ fontFeatureSettings: '"ss01" 1' }}
+              >
+                Rejoindre Fxmily
+              </h1>
+              <p className="t-lead">
+                Le seul journal qui mesure ton plan, ta discipline et ton mental — pas les bougies.
+                Laisse tes coordonnées : ta demande sera étudiée et tu recevras un email dès
+                qu&apos;elle est acceptée.
+              </p>
+            </header>
 
-          <RequestAccessForm />
-        </Card>
+            <RequestAccessForm />
+          </Card>
+        </Tilt3D>
 
         <div
-          className="wow-rise rounded-control flex items-start gap-2.5 border border-[var(--b-default)] bg-[var(--bg-1)] px-3 py-2.5"
+          className="spotlight-surface wow-rise rounded-control flex items-start gap-2.5 border border-[var(--b-default)] bg-[var(--bg-1)] px-3 py-2.5"
           style={{ '--rise-delay': '170ms' } as CSSProperties}
         >
           <ShieldCheck

@@ -76,8 +76,8 @@ export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps)
   const ariaLabel = `Trade ${trade.pair} ${trade.direction} du ${DATETIME_FMT.format(new Date(trade.enteredAt))}, ${statusLabel}${unseenLabel}`;
 
   return (
-    <Link href={`/journal/${trade.id}`} aria-label={ariaLabel} className="block">
-      <Card interactive className="group wow-hover-glow row-hover relative overflow-hidden p-0">
+    <Link href={`/journal/${trade.id}`} aria-label={ariaLabel} className="group block">
+      <Card interactive className="wow-hover-glow row-hover relative overflow-hidden p-0">
         <div className="grid grid-cols-[3px_1fr_auto] items-stretch gap-0">
           {/* Status bar left edge */}
           <div

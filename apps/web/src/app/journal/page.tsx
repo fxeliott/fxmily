@@ -8,6 +8,7 @@ import { TradeCard } from '@/components/journal/trade-card';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Reveal } from '@/components/ui/reveal';
 import { countUnseenAnnotationsByTrade } from '@/lib/annotations/member-service';
 import { countTradesByStatus, listTradesForUser } from '@/lib/trades/service';
 import type { TradeStatusFilter } from '@/lib/trades/service';
@@ -240,16 +241,20 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
           </Card>
         ) : (
           <ul className="grid items-start gap-3 xl:grid-cols-2">
-            {items.map((trade) => (
-              // `wow-reveal` — each trade fades+rises as it scrolls into view
-              // (scroll-driven, zero-JS, @supports-gated, reduced-motion-safe →
-              // degrades to fully visible). The "jamais statique" of the brief on
-              // the long list a trader scrolls daily.
-              <li key={trade.id} className="wow-reveal">
-                <TradeCard
-                  trade={trade}
-                  unseenAnnotationsCount={unseenByTrade.get(trade.id) ?? 0}
-                />
+            {items.map((trade, i) => (
+              // Each trade fades+rises as it scrolls into view via `Reveal`
+              // (framer-motion `whileInView`, cross-browser, compositor-only,
+              // reduced-motion → static). Replaces the CSS `wow-reveal` so the
+              // rows can cascade with a short, capped stagger instead of all
+              // firing at once — the "jamais statique" of the brief on the long
+              // list a trader scrolls daily, without double-animating.
+              <li key={trade.id}>
+                <Reveal delay={Math.min(i, 6) * 55}>
+                  <TradeCard
+                    trade={trade}
+                    unseenAnnotationsCount={unseenByTrade.get(trade.id) ?? 0}
+                  />
+                </Reveal>
               </li>
             ))}
           </ul>

@@ -1,3 +1,4 @@
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import type { ConstancyScoreView } from '@/lib/verification/constancy';
 
 /**
@@ -57,7 +58,7 @@ export function ConstancyScoreCard({ score }: { score: ConstancyScoreView | null
           </span>
         </div>
         <span className="f-mono text-[28px] font-bold text-[var(--t-1)] tabular-nums">
-          {Math.round(score.value)}
+          <AnimatedNumber value={Math.round(score.value)} />
           <span className="text-[14px] font-normal text-[var(--t-4)]">/100</span>
         </span>
       </div>
@@ -83,8 +84,14 @@ export function ConstancyScoreCard({ score }: { score: ConstancyScoreView | null
               >
                 {pct !== null ? (
                   <div
-                    className="rounded-pill h-full bg-[var(--cy)]"
-                    style={{ width: `${Math.max(2, pct)}%` }}
+                    className="rounded-pill h-full origin-left bg-[var(--cy)]"
+                    style={{
+                      width: `${Math.max(2, pct)}%`,
+                      // scaleX fill on first paint (compositor-only). The global
+                      // prefers-reduced-motion filet (duration→0.01ms) lands it
+                      // instantly at the final state; `both` locks scaleX(1).
+                      animation: 'v18StepBarFill 700ms var(--e-data) both',
+                    }}
                   />
                 ) : null}
               </div>

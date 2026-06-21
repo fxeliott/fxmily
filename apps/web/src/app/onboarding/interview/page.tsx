@@ -100,8 +100,8 @@ export default async function OnboardingInterviewLandingPage() {
           l&apos;exercice dépend uniquement de ça.
         </p>
 
-        <ul className="t-body flex flex-col gap-2 text-[var(--t-2)]">
-          <li className="rounded-control flex items-start gap-2 border border-transparent p-2 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)]/50">
+        <ul className="dash-stagger t-body flex flex-col gap-2.5 text-[var(--t-2)]">
+          <li className="spotlight-surface rounded-control flex items-start gap-2.5 border border-[var(--b-default)] bg-[var(--bg-1)]/40 p-3 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)]/70">
             <span aria-hidden="true" className="mt-1 text-[var(--acc)]">
               ·
             </span>
@@ -110,7 +110,7 @@ export default async function OnboardingInterviewLandingPage() {
               parcours, tes routines, ton rapport au risque et au plan.
             </span>
           </li>
-          <li className="rounded-control flex items-start gap-2 border border-transparent p-2 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)]/50">
+          <li className="spotlight-surface rounded-control flex items-start gap-2.5 border border-[var(--b-default)] bg-[var(--bg-1)]/40 p-3 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)]/70">
             <span aria-hidden="true" className="mt-1 text-[var(--acc)]">
               ·
             </span>
@@ -119,7 +119,7 @@ export default async function OnboardingInterviewLandingPage() {
               de l&apos;entretien, clôture réflexive.
             </span>
           </li>
-          <li className="rounded-control flex items-start gap-2 border border-transparent p-2 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)]/50">
+          <li className="spotlight-surface rounded-control flex items-start gap-2.5 border border-[var(--b-default)] bg-[var(--bg-1)]/40 p-3 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)]/70">
             <span aria-hidden="true" className="mt-1 text-[var(--acc)]">
               ·
             </span>

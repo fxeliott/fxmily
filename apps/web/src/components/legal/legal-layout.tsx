@@ -28,9 +28,11 @@ interface LegalLayoutProps {
  * lean (these pages are visited rarely but must stay reachable from the
  * authenticated app and the public surface).
  *
- * Visual posture : DS v2 deep-space card, lime accent on eyebrow + last
- * updated pill, generous reading width (max-w-3xl), prose-style spacing on
- * children. No hero animation : these pages exist to inform, not to sell.
+ * Visual posture : DS-v3 token-driven card, blue `--acc` accent on eyebrow +
+ * last-updated pill, generous reading width (max-w-3xl), prose-style spacing on
+ * children. A very discreet brand wash sits behind the header and the content
+ * fades in softly on entrance — sober only : these pages exist to inform, not
+ * to sell. No hero, no tilt, no gradient border.
  */
 export function LegalLayout({
   title,
@@ -42,8 +44,16 @@ export function LegalLayout({
   children,
 }: LegalLayoutProps): React.ReactElement {
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
-      <header className="mb-6">
+    <main className="relative mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
+      {/* Ambient brand wash — purely decorative, sits behind the header only.
+          Very low opacity + a top-to-transparent mask so it reads as a faint
+          tint of colour, never a marketing banner. `aria-hidden`, no pointer
+          interaction. Sober elevation for an "inform, not sell" surface. */}
+      <div
+        aria-hidden="true"
+        className="surf-grad-soft pointer-events-none absolute inset-x-0 top-0 -z-10 h-48 [mask-image:linear-gradient(to_bottom,black,transparent)] opacity-50"
+      />
+      <header className="wow-reveal mb-6">
         <Link
           href={backHref}
           className={btnVariants({ kind: 'ghost', size: 'm' })}
@@ -69,8 +79,8 @@ export function LegalLayout({
 
       <article
         className={cn(
-          'rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-7',
-          // Compact prose ramp aligned with DS v2 spacing tokens. h2 ramp
+          'wow-reveal rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-7',
+          // Compact prose ramp aligned with DS-v3 spacing tokens. h2 ramp
           // bumped from text-base to text-[15px] sm:text-base for a stronger
           // hierarchy contrast vs the h1 (24-30 px) on long legal pages
           // (UI designer T2-6 — J10 Phase I).

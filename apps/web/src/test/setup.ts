@@ -22,3 +22,27 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
       dispatchEvent: () => false,
     }) as MediaQueryList;
 }
+
+// jsdom ships no `IntersectionObserver`. framer-motion's `useInView`
+// (consumed by AnimatedNumber's count-up gate, and any future scroll-reveal
+// component) instantiates one in a mount effect and throws without it. Provide
+// an inert stub: `observe` never fires the callback, so in-view stays false and
+// the component renders its final/SSR value — exactly the untriggered state we
+// assert in unit tests (the real intersection behaviour is proven in-browser).
+if (typeof window !== 'undefined' && typeof window.IntersectionObserver !== 'function') {
+  class IntersectionObserverStub implements IntersectionObserver {
+    readonly root: Element | Document | null = null;
+    readonly rootMargin: string = '';
+    readonly scrollMargin: string = '';
+    readonly thresholds: ReadonlyArray<number> = [];
+    constructor(_cb: IntersectionObserverCallback, _opts?: IntersectionObserverInit) {}
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+  window.IntersectionObserver = IntersectionObserverStub;
+  globalThis.IntersectionObserver = IntersectionObserverStub;
+}

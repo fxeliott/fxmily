@@ -1,6 +1,7 @@
 import { ArrowRight, Sparkles, Target } from 'lucide-react';
 import Link from 'next/link';
 
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Sparkline } from '@/components/ui/sparkline';
 import { btnVariants } from '@/components/ui/btn';
 import type { ProcessObjectivesView } from '@/lib/objectives/service';
@@ -27,7 +28,7 @@ export function ObjectivesHero({ view }: { view: ProcessObjectivesView }) {
         <span className="t-eyebrow text-[var(--t-3)]">Où j’en suis aujourd’hui</span>
         <div className="flex items-end gap-3">
           <span className="f-display text-[clamp(2.75rem,2.2rem+2.4vw,4rem)] leading-[0.95] font-bold tracking-[-0.03em] text-[var(--t-1)] tabular-nums">
-            {cap ?? '—'}
+            {cap !== null ? <AnimatedNumber value={cap} /> : '—'}
           </span>
           <span className="t-h3 mb-1.5 text-[var(--t-4)]">/ 100</span>
           <span

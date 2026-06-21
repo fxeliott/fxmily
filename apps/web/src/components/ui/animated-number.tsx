@@ -43,7 +43,7 @@ const EASE = [0.4, 0, 0.2, 1] as const;
 export interface AnimatedNumberProps {
   value: number;
   /** Formatteur. Défaut: Math.round(v).toLocaleString('fr-FR'). */
-  format?: (v: number) => string;
+  format?: ((v: number) => string) | undefined;
   className?: string;
   /** Durée du count-up en ms. Défaut 900. */
   durationMs?: number;

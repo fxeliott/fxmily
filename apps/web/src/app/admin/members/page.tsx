@@ -4,10 +4,12 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { MemberRow } from '@/components/admin/member-row';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
+import { Reveal } from '@/components/ui/reveal';
 import { getMemberDirectoryStats, listMembersForAdmin } from '@/lib/admin/members-service';
 import { logAudit } from '@/lib/auth/audit';
 import { cn } from '@/lib/utils';
@@ -228,9 +230,14 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
       ) : (
         <div className="flex flex-col gap-4">
           <ul className="grid gap-3 xl:grid-cols-2 [&>li]:h-full">
-            {page.items.map((member) => (
+            {page.items.map((member, i) => (
               <li key={member.id}>
-                <MemberRow member={member} />
+                {/* Calm staggered scroll-in (capped so long cohorts don't
+                    trail). MemberRow already carries its own HoverLift spring —
+                    Reveal only handles the arrival, no double hover. */}
+                <Reveal delay={Math.min(i, 6) * 55} className="h-full">
+                  <MemberRow member={member} />
+                </Reveal>
               </li>
             ))}
           </ul>
@@ -297,14 +304,10 @@ function StatCell({
   return (
     <div className="flex flex-col gap-1 border-r border-b border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r">
       <span className="t-eyebrow">{label}</span>
-      <span
-        className={cn(
-          'f-mono text-[22px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
-          valColor,
-        )}
-      >
-        {value}
-      </span>
+      <AnimatedNumber
+        value={value}
+        className={cn('f-mono text-[22px] leading-none font-semibold tracking-[-0.02em]', valColor)}
+      />
       {hint ? <span className="t-mono-cap">{hint}</span> : null}
     </div>
   );

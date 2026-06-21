@@ -240,7 +240,7 @@ export default async function DashboardPage() {
           <HoverLift className="block">
             <Link
               href="/verification"
-              className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              className="spotlight-surface rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-start gap-3">
@@ -510,14 +510,13 @@ function TradeStat({
           : 'text-[var(--t-1)]';
   return (
     <span className="inline-flex items-baseline gap-1.5">
-      <span
+      <AnimatedNumber
+        value={value}
         className={cn(
           'f-mono text-[18px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
           valColor,
         )}
-      >
-        {value}
-      </span>
+      />
       <span className="t-cap text-[var(--t-3)]">{label}</span>
     </span>
   );

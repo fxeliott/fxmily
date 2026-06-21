@@ -18,6 +18,7 @@ import { StreakCard } from '@/components/checkin/streak-card';
 import { Card } from '@/components/ui/card';
 import { InfoDot } from '@/components/ui/info-dot';
 import { Sparkline } from '@/components/ui/sparkline';
+import { Tilt3D } from '@/components/ui/tilt-3d';
 import type { GuidanceAction, GuidanceKind } from '@/lib/daily-guidance/service';
 import type { BehavioralScoreTrendPoint, SerializedBehavioralScore } from '@/lib/scoring/service';
 import { cn } from '@/lib/utils';
@@ -179,124 +180,130 @@ export function NorthStarHero({
 
   return (
     <section aria-labelledby="hero-greeting" className="mb-6">
-      <Card
-        primary
-        glass
-        edge={false}
-        className="dash-hero relative overflow-hidden p-6 backdrop-blur-[16px] backdrop-saturate-150 lg:p-8"
-      >
-        <div className="relative grid gap-6 lg:grid-cols-[1.5fr_1fr] lg:items-center lg:gap-8">
-          {/* ---- LEFT — état du jour ---- */}
-          <div className="flex flex-col gap-4">
-            <div className="t-eyebrow flex items-center gap-2">
-              <span>{dateLabel}</span>
-            </div>
-            <h1
-              id="hero-greeting"
-              className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
-              style={{
-                fontFeatureSettings: '"ss01" 1',
-                fontSize: 'clamp(1.875rem, 1.5rem + 1.6vw, 2.5rem)',
-              }}
-            >
-              {greeting} {firstName}.
-            </h1>
-            <p className="t-lead max-w-[46ch]">{standing}</p>
+      {/* S17 — subtle 3D pointer-tilt on the flagship hero card (mouse-only,
+          reduced-motion → static via the primitive). One signature surface
+          per page ; maxDeg 4 keeps it premium-calm, never the kitsch parallax.
+          Compositor-only rotate, contained by the Card's own overflow-hidden. */}
+      <Tilt3D maxDeg={4}>
+        <Card
+          primary
+          glass
+          edge={false}
+          className="dash-hero relative overflow-hidden p-6 backdrop-blur-[16px] backdrop-saturate-150 lg:p-8"
+        >
+          <div className="relative grid gap-6 lg:grid-cols-[1.5fr_1fr] lg:items-center lg:gap-8">
+            {/* ---- LEFT — état du jour ---- */}
+            <div className="flex flex-col gap-4">
+              <div className="t-eyebrow flex items-center gap-2">
+                <span>{dateLabel}</span>
+              </div>
+              <h1
+                id="hero-greeting"
+                className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+                style={{
+                  fontFeatureSettings: '"ss01" 1',
+                  fontSize: 'clamp(1.875rem, 1.5rem + 1.6vw, 2.5rem)',
+                }}
+              >
+                {greeting} {firstName}.
+              </h1>
+              <p className="t-lead max-w-[46ch]">{standing}</p>
 
-            {/* Discipline trajectory + streak — calm, never punitive. */}
-            <div className="mt-1 flex flex-wrap items-center gap-x-6 gap-y-4">
-              <div className="flex flex-col gap-1.5">
-                <span className="t-eyebrow inline-flex items-center gap-1 text-[var(--t-3)]">
-                  Discipline
-                  <InfoDot
-                    label="le score de discipline"
-                    side="top"
-                    tip="La discipline mesure ta régularité de process — check-ins tenus, plan respecté, exécution complète — sur une échelle de 0 à 100. Elle monte avec la constance, jamais avec ton profit."
-                  />
-                </span>
-                <div className="flex items-end gap-2.5">
-                  <span className="f-mono text-[28px] leading-none font-bold tracking-[-0.03em] text-[var(--t-1)] tabular-nums">
-                    {disciplineValue === null ? '—' : disciplineValue}
-                    {disciplineValue !== null ? (
-                      <span className="text-[15px] font-medium text-[var(--t-3)]">/100</span>
-                    ) : null}
+              {/* Discipline trajectory + streak — calm, never punitive. */}
+              <div className="mt-1 flex flex-wrap items-center gap-x-6 gap-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <span className="t-eyebrow inline-flex items-center gap-1 text-[var(--t-3)]">
+                    Discipline
+                    <InfoDot
+                      label="le score de discipline"
+                      side="top"
+                      tip="La discipline mesure ta régularité de process — check-ins tenus, plan respecté, exécution complète — sur une échelle de 0 à 100. Elle monte avec la constance, jamais avec ton profit."
+                    />
                   </span>
-                  {trend ? <TrendBadge trend={trend} /> : null}
+                  <div className="flex items-end gap-2.5">
+                    <span className="f-mono text-[28px] leading-none font-bold tracking-[-0.03em] text-[var(--t-1)] tabular-nums">
+                      {disciplineValue === null ? '—' : disciplineValue}
+                      {disciplineValue !== null ? (
+                        <span className="text-[15px] font-medium text-[var(--t-3)]">/100</span>
+                      ) : null}
+                    </span>
+                    {trend ? <TrendBadge trend={trend} /> : null}
+                  </div>
+                  {hasSpark ? (
+                    <Sparkline
+                      data={disciplinePoints}
+                      width={180}
+                      height={34}
+                      fill
+                      showLastDot
+                      color="var(--acc)"
+                      className="mt-1"
+                      ariaLabel={`Trajectoire de ton score discipline : ${disciplinePoints.length} relevés, de ${disciplinePoints[0]} à ${disciplinePoints[disciplinePoints.length - 1]} sur 100.`}
+                    />
+                  ) : (
+                    <span className="t-cap mt-1 text-[var(--t-3)]">
+                      {disciplineValue === null
+                        ? 'En préparation'
+                        : 'Trajectoire dès quelques jours de recul'}
+                    </span>
+                  )}
                 </div>
-                {hasSpark ? (
-                  <Sparkline
-                    data={disciplinePoints}
-                    width={180}
-                    height={34}
-                    fill
-                    showLastDot
-                    color="var(--acc)"
-                    className="mt-1"
-                    ariaLabel={`Trajectoire de ton score discipline : ${disciplinePoints.length} relevés, de ${disciplinePoints[0]} à ${disciplinePoints[disciplinePoints.length - 1]} sur 100.`}
-                  />
-                ) : (
-                  <span className="t-cap mt-1 text-[var(--t-3)]">
-                    {disciplineValue === null
-                      ? 'En préparation'
-                      : 'Trajectoire dès quelques jours de recul'}
-                  </span>
-                )}
+
+                <div
+                  aria-hidden="true"
+                  className="hidden h-12 w-px self-center bg-[var(--b-default)] sm:block"
+                />
+
+                <StreakCard
+                  streak={streak.current}
+                  todayFilled={streak.todayFilled}
+                  justCrossed={streak.justCrossed ?? null}
+                  compact
+                />
+
+                {dayProgress && dayProgress.total > 0 ? (
+                  <>
+                    <div
+                      aria-hidden="true"
+                      className="hidden h-12 w-px self-center bg-[var(--b-default)] sm:block"
+                    />
+                    <DailyCompletionRing done={dayProgress.done} total={dayProgress.total} />
+                  </>
+                ) : null}
               </div>
+            </div>
 
-              <div
-                aria-hidden="true"
-                className="hidden h-12 w-px self-center bg-[var(--b-default)] sm:block"
-              />
-
-              <StreakCard
-                streak={streak.current}
-                todayFilled={streak.todayFilled}
-                justCrossed={streak.justCrossed ?? null}
-                compact
-              />
-
-              {dayProgress && dayProgress.total > 0 ? (
-                <>
-                  <div
-                    aria-hidden="true"
-                    className="hidden h-12 w-px self-center bg-[var(--b-default)] sm:block"
-                  />
-                  <DailyCompletionRing done={dayProgress.done} total={dayProgress.total} />
-                </>
-              ) : null}
+            {/* ---- RIGHT — prochaine étape ---- */}
+            <div className="flex flex-col gap-2.5">
+              <span className="t-eyebrow text-[var(--t-3)]">Prochaine étape</span>
+              {primaryAction ? (
+                <HeroNextActionCard action={primaryAction} />
+              ) : (
+                <div className="rounded-card flex items-center gap-3.5 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
+                  <span className="rounded-control grid h-11 w-11 shrink-0 place-items-center border border-[var(--b-default)] text-[var(--ok)]">
+                    <Check className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="text-[15px] leading-tight font-semibold text-[var(--t-1)]">
+                      Tu es à jour
+                    </span>
+                    <span className="t-cap leading-snug text-[var(--t-3)]">
+                      Rien d’urgent pour ce moment — avance à ton rythme.
+                    </span>
+                  </span>
+                </div>
+              )}
+              <Link
+                href="/journal/new"
+                className="inline-flex min-h-[24px] w-fit items-center gap-1 py-1 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              >
+                Logger un trade
+                <ArrowRight className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
+              </Link>
             </div>
           </div>
-
-          {/* ---- RIGHT — prochaine étape ---- */}
-          <div className="flex flex-col gap-2.5">
-            <span className="t-eyebrow text-[var(--t-3)]">Prochaine étape</span>
-            {primaryAction ? (
-              <HeroNextActionCard action={primaryAction} />
-            ) : (
-              <div className="rounded-card flex items-center gap-3.5 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
-                <span className="rounded-control grid h-11 w-11 shrink-0 place-items-center border border-[var(--b-default)] text-[var(--ok)]">
-                  <Check className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-[15px] leading-tight font-semibold text-[var(--t-1)]">
-                    Tu es à jour
-                  </span>
-                  <span className="t-cap leading-snug text-[var(--t-3)]">
-                    Rien d’urgent pour ce moment — avance à ton rythme.
-                  </span>
-                </span>
-              </div>
-            )}
-            <Link
-              href="/journal/new"
-              className="inline-flex min-h-[24px] w-fit items-center gap-1 py-1 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-            >
-              Logger un trade
-              <ArrowRight className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
-            </Link>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      </Tilt3D>
     </section>
   );
 }

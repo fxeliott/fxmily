@@ -1,6 +1,7 @@
 import { ArrowRight, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import type { CSSProperties } from 'react';
 
 import { auth } from '@/auth';
 import { btnVariants } from '@/components/ui/btn';
@@ -40,9 +41,20 @@ export default async function OnboardingInterviewCompletePage() {
         className="rounded-card-lg relative flex flex-col items-start gap-5 border border-[var(--b-acc)] bg-[var(--bg-2)] p-6 sm:p-8"
         aria-labelledby="oic-heading"
       >
+        {/* Calm reveal halo — discreet brand glow anchored to the badge, decorative,
+            zero-JS, sits behind the content, never punitive (Mark Douglas). */}
         <div
           aria-hidden="true"
-          className="rounded-pill flex h-12 w-12 items-center justify-center border"
+          className="pointer-events-none absolute inset-x-0 -top-8 h-40 [mask-image:radial-gradient(55%_60%_at_24%_0%,#000,transparent)]"
+          style={{
+            background:
+              'radial-gradient(42% 60% at 24% 0%, oklch(0.62 0.19 254 / 0.16) 0%, transparent 72%)',
+          }}
+        />
+
+        <div
+          aria-hidden="true"
+          className="celebrate-pop celebrate-halo rounded-pill relative flex h-12 w-12 items-center justify-center border"
           style={{
             background: 'var(--acc-dim)',
             borderColor: 'var(--b-acc)',
@@ -53,26 +65,38 @@ export default async function OnboardingInterviewCompletePage() {
           <Sparkles className="h-5 w-5" strokeWidth={2.2} />
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div
+          className="wow-rise flex flex-col gap-2"
+          style={{ '--rise-delay': '120ms' } as CSSProperties}
+        >
           <p className="t-eyebrow-lg text-[var(--t-3)]">Entretien terminé</p>
-          <h1 id="oic-heading" className="f-display h-rise t-h1 text-[var(--t-1)]">
+          <h1 id="oic-heading" className="f-display t-h1 text-[var(--t-1)]">
             Merci pour ton honnêteté.
           </h1>
         </div>
 
-        <p className="t-body text-[var(--t-2)]">
+        <p
+          className="wow-rise t-body text-[var(--t-2)]"
+          style={{ '--rise-delay': '210ms' } as CSSProperties}
+        >
           Tu as terminé tes 30 questions. Eliott lit chaque réponse personnellement. L&apos;IA va
           maintenant analyser l&apos;ensemble pour en tirer un profil descriptif qui servira à
           personnaliser ton coaching.
         </p>
-        <p className="t-body text-[var(--t-2)]">
+        <p
+          className="wow-rise t-body text-[var(--t-2)]"
+          style={{ '--rise-delay': '290ms' } as CSSProperties}
+        >
           <span className="text-[var(--t-1)]">
             Ton profil sera disponible dans les prochaines 24h
           </span>{' '}
           sur ta page profil. Tu peux y retourner quand tu veux — pas besoin de rester là.
         </p>
 
-        <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:gap-3">
+        <div
+          className="wow-rise flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:gap-3"
+          style={{ '--rise-delay': '370ms' } as CSSProperties}
+        >
           <Link href="/profile" className={cn(btnVariants({ kind: 'primary', size: 'l' }))}>
             Voir mon profil
             <ArrowRight className="h-4 w-4" strokeWidth={1.75} />

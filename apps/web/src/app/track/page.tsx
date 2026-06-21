@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import {
   HabitCorrelationSection,
   HabitCorrelationSkeleton,
@@ -58,62 +59,69 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
   const corrKind = corrParsed.success ? corrParsed.data : 'sleep';
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6">
-      <header className="space-y-2">
-        <p className="t-eyebrow-lg text-[var(--acc)]">Suivi des habitudes</p>
-        <h1 className="text-[28px] font-semibold tracking-tight text-[var(--t-1)] sm:text-[32px]">
-          Tes 5 piliers de pratique
-        </h1>
-        <p className="text-[14px] leading-relaxed text-[var(--t-2)]">
-          Loguer ces piliers révèle les conditions biologiques qui alimentent ton exécution. Aucun
-          jugement, aucun comparatif — juste le miroir de ta pratique quotidienne.
-        </p>
-      </header>
+    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
+      {/* DS-v3 J3 — ambient mesh + drifting orbs behind the masthead */}
+      <DashboardAmbient />
+      <div className="relative mx-auto w-full max-w-3xl space-y-8 px-4 py-6">
+        <header className="space-y-2">
+          <p className="t-eyebrow-lg text-[var(--acc)]">Suivi des habitudes</p>
+          <h1
+            className="f-display h-rise text-[28px] font-semibold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+            style={{ fontFeatureSettings: '"ss01" 1' }}
+          >
+            Tes 5 piliers de pratique
+          </h1>
+          <p className="text-[14px] leading-relaxed text-[var(--t-2)]">
+            Loguer ces piliers révèle les conditions biologiques qui alimentent ton exécution. Aucun
+            jugement, aucun comparatif — juste le miroir de ta pratique quotidienne.
+          </p>
+        </header>
 
-      {justLogged ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="rounded-input border border-[var(--b-acc)] bg-[var(--acc-dim)] px-4 py-3 text-[13px] text-[var(--t-1)]"
-        >
-          <strong className="font-semibold">{KIND_LABELS_FR[sp.kind as string]} loggué.</strong>{' '}
-          C&apos;est dans le miroir. Reviens demain.
+        {justLogged ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-input border border-[var(--b-acc)] bg-[var(--acc-dim)] px-4 py-3 text-[13px] text-[var(--t-1)]"
+          >
+            <strong className="font-semibold">{KIND_LABELS_FR[sp.kind as string]} loggué.</strong>{' '}
+            C&apos;est dans le miroir. Reviens demain.
+          </div>
+        ) : null}
+
+        <div className="wow-reveal">
+          <TrackHero />
         </div>
-      ) : null}
 
-      <div className="wow-reveal">
-        <TrackHero />
-      </div>
-
-      <div className="wow-reveal">
-        <TodayHabitCards
-          userId={session.user.id}
-          timezone={session.user.timezone || 'Europe/Paris'}
-        />
-      </div>
-
-      <section aria-labelledby="track-corr-heading" className="wow-reveal flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <span id="track-corr-heading" className="t-eyebrow">
-            Corrélations habitudes × trading
-          </span>
-        </div>
-        <HabitKindTabPicker
-          selected={corrKind}
-          labelId="track-corr-heading"
-          pathname="/track"
-          preservedQuery=""
-        />
-        <Suspense key={corrKind} fallback={<HabitCorrelationSkeleton />}>
-          <HabitCorrelationSection
+        <div className="wow-reveal">
+          <TodayHabitCards
             userId={session.user.id}
             timezone={session.user.timezone || 'Europe/Paris'}
-            habitKind={corrKind}
           />
-        </Suspense>
-      </section>
+        </div>
 
-      <HabitKindPicker />
+        <section aria-labelledby="track-corr-heading" className="wow-reveal flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span id="track-corr-heading" className="t-eyebrow">
+              Corrélations habitudes × trading
+            </span>
+          </div>
+          <HabitKindTabPicker
+            selected={corrKind}
+            labelId="track-corr-heading"
+            pathname="/track"
+            preservedQuery=""
+          />
+          <Suspense key={corrKind} fallback={<HabitCorrelationSkeleton />}>
+            <HabitCorrelationSection
+              userId={session.user.id}
+              timezone={session.user.timezone || 'Europe/Paris'}
+              habitKind={corrKind}
+            />
+          </Suspense>
+        </section>
+
+        <HabitKindPicker />
+      </div>
     </main>
   );
 }

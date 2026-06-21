@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { auth } from '@/auth';
 import { AIGeneratedBanner } from '@/components/ai-generated-banner';
 import { CalendarOverview } from '@/components/calendar/calendar-overview';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { CalendarWarnings } from '@/components/calendar/calendar-warnings';
 import { CalendarWeekView } from '@/components/calendar/calendar-week-view';
 import { btnVariants } from '@/components/ui/btn';
@@ -79,7 +80,7 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
         </div>
         <Link
           href="/calendar/questionnaire/new"
-          className={btnVariants({ kind: 'primary', size: 'l' })}
+          className={`${btnVariants({ kind: 'primary', size: 'l' })} wow-hover-glow`}
         >
           Organiser ma semaine
           <ArrowRight className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
@@ -104,7 +105,7 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
         </div>
         <Link
           href="/calendar/questionnaire/new"
-          className={btnVariants({ kind: 'ghost', size: 'm' })}
+          className={`${btnVariants({ kind: 'ghost', size: 'm' })} wow-hover-glow`}
         >
           <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
           Modifier mes réponses
@@ -136,11 +137,17 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
       <div className="flex flex-col gap-5">
         <AIGeneratedBanner variant="inline" modelName={modelDisplay(calendar.claudeModel)} />
         <CalendarOverview schedule={calendar.schedule} weekStart={calendar.weekStart} />
-        <CalendarWeekView days={calendar.schedule.days} />
-        <CalendarWarnings warnings={calendar.schedule.warnings} />
+        <div className="wow-reveal">
+          <CalendarWeekView days={calendar.schedule.days} />
+        </div>
+        {calendar.schedule.warnings.length > 0 ? (
+          <div className="wow-reveal">
+            <CalendarWarnings warnings={calendar.schedule.warnings} />
+          </div>
+        ) : null}
         <Link
           href="/calendar/questionnaire/new"
-          className={`${btnVariants({ kind: 'ghost', size: 'm' })} self-start`}
+          className={`${btnVariants({ kind: 'ghost', size: 'm' })} wow-hover-glow self-start`}
         >
           <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
           Mettre à jour mes réponses
@@ -150,53 +157,57 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">
-      <header className="flex flex-col gap-4">
-        <Link
-          href="/dashboard"
-          className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Tableau de bord
-        </Link>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
-            <CalendarRange className="h-3.5 w-3.5" strokeWidth={2} />
-            Calendrier
-          </span>
-          <h1
-            className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-            style={{ fontFeatureSettings: '"ss01" 1' }}
+    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
+      {/* DS-v3 J3 — ambient mesh + drifting orbs behind the masthead */}
+      <DashboardAmbient />
+      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
+        <header className="flex flex-col gap-4">
+          <Link
+            href="/dashboard"
+            className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
           >
-            Mon calendrier de la semaine
-          </h1>
-        </div>
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Tableau de bord
+          </Link>
 
-        <p className="t-body leading-[1.6] text-[var(--t-2)]">
-          Un plan calme de ton temps de pratique — sessions, entraînement, psychologie, réunions,
-          repos. Aucune analyse de marché, aucun conseil de trade : seulement comment organiser ta
-          semaine.
-        </p>
-      </header>
+          <div className="flex flex-col gap-1.5">
+            <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
+              <CalendarRange className="h-3.5 w-3.5" strokeWidth={2} />
+              Calendrier
+            </span>
+            <h1
+              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              style={{ fontFeatureSettings: '"ss01" 1' }}
+            >
+              Mon calendrier de la semaine
+            </h1>
+          </div>
 
-      {justSubmitted ? (
-        <div
-          role="status"
-          className="rounded-card flex items-center gap-2 border border-[var(--b-acc)] bg-[var(--acc-dim)] px-4 py-3"
-        >
-          <Check
-            className="h-4 w-4 shrink-0 text-[var(--acc)]"
-            strokeWidth={2}
-            aria-hidden="true"
-          />
-          <p className="t-body text-[var(--t-1)]">
-            C&apos;est noté. Ton organisation de la semaine est enregistrée.
+          <p className="t-body leading-[1.6] text-[var(--t-2)]">
+            Un plan calme de ton temps de pratique — sessions, entraînement, psychologie, réunions,
+            repos. Aucune analyse de marché, aucun conseil de trade : seulement comment organiser ta
+            semaine.
           </p>
-        </div>
-      ) : null}
+        </header>
 
-      {body}
+        {justSubmitted ? (
+          <div
+            role="status"
+            className="rounded-card flex items-center gap-2 border border-[var(--b-acc)] bg-[var(--acc-dim)] px-4 py-3"
+          >
+            <Check
+              className="h-4 w-4 shrink-0 text-[var(--acc)]"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+            <p className="t-body text-[var(--t-1)]">
+              C&apos;est noté. Ton organisation de la semaine est enregistrée.
+            </p>
+          </div>
+        ) : null}
+
+        {body}
+      </div>
     </main>
   );
 }

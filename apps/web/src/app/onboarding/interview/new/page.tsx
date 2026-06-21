@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { OnboardingInterviewWizard } from '@/components/onboarding/onboarding-interview-wizard';
 import { db } from '@/lib/db';
 import { getInterviewForUser } from '@/lib/onboarding-interview/service';
@@ -69,18 +70,24 @@ export default async function OnboardingInterviewNewPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6">
-      <header className="flex flex-col gap-3">
-        <Link
-          href="/onboarding/interview"
-          className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Présentation
-        </Link>
-      </header>
+    <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
+      {/* J3 — ambient mesh + drifting orbs behind the wizard (zero-JS, -z-10).
+          The host is opaque to avoid double-aurora with the app-wide backplate. */}
+      <DashboardAmbient />
 
-      <OnboardingInterviewWizard initialStep={initialStep} initialAnswers={initialAnswers} />
+      <div className="relative mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+        <header className="flex flex-col gap-3">
+          <Link
+            href="/onboarding/interview"
+            className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Présentation
+          </Link>
+        </header>
+
+        <OnboardingInterviewWizard initialStep={initialStep} initialAnswers={initialAnswers} />
+      </div>
     </main>
   );
 }

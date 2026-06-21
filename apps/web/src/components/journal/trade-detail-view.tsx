@@ -64,7 +64,7 @@ export function TradeDetailView({
   const isAdmin = !!contextBadge;
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-5 px-4 py-6 sm:py-10">
+    <main className="dash-stagger mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-5 px-4 py-6 sm:py-10">
       {/* Header */}
       <header className="flex flex-col gap-3">
         <Link
@@ -265,7 +265,7 @@ export function TradeDetailView({
                   href={m.readUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-card block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                  className="wow-hover-glow rounded-card block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img

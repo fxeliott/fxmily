@@ -56,6 +56,15 @@ export interface DisciplineCheckinInput {
   slot: 'morning' | 'evening';
   /** Evening only. */
   planRespectedToday: boolean | null;
+  /**
+   * SPEC §28/§22 — evening "intention kept?" self-report (#13). Tri-state:
+   * `true` (kept the morning intention), `false` (did not — a calm effort
+   * signal, NEVER a punitive verdict §31.2), `null` (no morning intention that
+   * day / not asked / legacy row). An execution ACT — we score THAT it was
+   * kept, never the intention content (SPEC §2). Evening-side (the morning sets
+   * the intention, the evening closes the loop), sibling of `planRespectedToday`.
+   */
+  intentionKept: boolean | null;
   /** Morning only. */
   morningRoutineCompleted: boolean | null;
   /** Morning only. */
@@ -107,6 +116,17 @@ const WEIGHT_MARKET_ANALYSIS = 10;
  * meaningful but non-dominant execution-discipline act vs plan respect (35).
  */
 const WEIGHT_PROCESS_COMPLETE = 10;
+
+/**
+ * #13 — "intention kept" sub-score weight. PURE ADDITION exactly like
+ * `WEIGHT_MARKET_ANALYSIS`/`WEIGHT_PROCESS_COMPLETE`: the five base weights are
+ * NOT rebalanced. `aggregateDimension` normalizes by the *active* `pointsMax`,
+ * so when no evening carries `intentionKept` the part is `null` and the
+ * dimension renormalizes to EXACTLY its pre-#13 value — provable zero
+ * regression. Sized 10 (sibling of `intentionFilled`/`routineCompleted`): a
+ * meaningful but non-dominant loop-closing act vs plan respect (35).
+ */
+const WEIGHT_INTENTION_KEPT = 10;
 
 export function computeDisciplineScore(input: DisciplineInput): ScoreResult<DisciplineParts> {
   const closed = input.trades.filter((t) => t.closedAt !== null);
@@ -187,6 +207,21 @@ export function computeDisciplineScore(input: DisciplineInput): ScoreResult<Disc
     WEIGHT_PROCESS_COMPLETE,
   );
 
+  // #13 — "intention kept" axis. Carbon-copy of marketAnalysis (field-presence
+  // null-skip) but EVENING-side: the denominator skips evenings where the
+  // member was NOT asked (`intentionKept === null` — no morning intention that
+  // day, or legacy) so an unanswered evening never penalizes the rate.
+  // Numerator = evenings the member kept the morning intention.
+  const intentionKeptApplicable = evening.filter((c) => c.intentionKept !== null);
+  const intentionKeptDoneCount = intentionKeptApplicable.filter(
+    (c) => c.intentionKept === true,
+  ).length;
+  const intentionKeptRate = rateSubScore(
+    intentionKeptDoneCount,
+    intentionKeptApplicable.length,
+    WEIGHT_INTENTION_KEPT,
+  );
+
   const parts: DisciplineParts = {
     planRespect,
     hedgeRespect,
@@ -199,6 +234,9 @@ export function computeDisciplineScore(input: DisciplineInput): ScoreResult<Disc
     // SPEC §28/§21 — same transparency rule: surfaced only when at least one
     // closed trade carried the "oublis" answer.
     processComplete: processCompleteApplicable.length > 0 ? processCompleteRate : null,
+    // #13 — surfaced only when at least one evening carried the "intention kept"
+    // answer; null otherwise so the UI shows no phantom 0-of-0 metric.
+    intentionKept: intentionKeptApplicable.length > 0 ? intentionKeptRate : null,
   };
 
   // Renormalize: sub-scores whose denominator=0 are "not applicable".
@@ -214,6 +252,9 @@ export function computeDisciplineScore(input: DisciplineInput): ScoreResult<Disc
     // SPEC §28/§21 — null-skip on field presence: byte-identical when no closed
     // trade carries `processComplete` (every pre-§28 / legacy trade).
     processCompleteApplicable.length > 0 ? processCompleteRate : null,
+    // #13 — null-skip on field presence: byte-identical when no evening carries
+    // `intentionKept` (every pre-#13 / legacy evening).
+    intentionKeptApplicable.length > 0 ? intentionKeptRate : null,
   ];
 
   const score = aggregateDimension(partsForAggregate);
@@ -271,5 +312,8 @@ function emptyParts(): DisciplineParts {
     // SPEC §28/§21 — null on the insufficient-data branch (no closed trade → the
     // "oublis" axis was never asked), mirroring `marketAnalysisDone`.
     processComplete: null,
+    // #13 — null on the insufficient-data branch (no evening data → the
+    // "intention kept" axis was never asked), mirroring `marketAnalysisDone`.
+    intentionKept: null,
   };
 }

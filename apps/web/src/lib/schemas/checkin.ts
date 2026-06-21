@@ -225,6 +225,14 @@ export const eveningCheckinSchema = z.object({
   planRespectedToday: formBoolean,
   hedgeRespectedToday: triStateBoolean,
 
+  // #13 — evening "intention kept?": did the member keep the intention they set
+  // this morning? OPTIONAL tri-state (true/false/na → null when there was no
+  // morning intention / unanswered / omitted) so it never blocks the wizard.
+  // §2: the ACT of keeping it, never the intention content. §31.2: a `false`
+  // is a calm effort signal, never a punitive verdict. Mirror of
+  // `formationFollowed`. Closes the day loop the S12 morning recall opened.
+  intentionKept: optionalTriStateBoolean,
+
   // SPEC §28/§22 — evening "bilan": has the member studied / progressed in
   // Eliott's COURSE (la formation) today? OPTIONAL tri-state (true/false/na →
   // null when unanswered/omitted) so it never blocks the wizard. §2 posture:

@@ -31,6 +31,7 @@ function eveningInput(formationFollowed: boolean | null): EveningCheckinInput {
     date: '2026-06-05',
     planRespectedToday: true,
     hedgeRespectedToday: null,
+    intentionKept: null,
     formationFollowed,
     caffeineMl: null,
     waterLiters: null,

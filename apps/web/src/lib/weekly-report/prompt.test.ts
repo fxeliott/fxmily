@@ -121,6 +121,7 @@ function makeCheckin(
     intention: null,
     planRespectedToday: null,
     hedgeRespectedToday: null,
+    intentionKept: null,
     formationFollowed: null,
     caffeineMl: null,
     waterLiters: null,

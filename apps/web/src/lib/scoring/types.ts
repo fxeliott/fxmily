@@ -77,6 +77,19 @@ export interface DisciplineParts {
    * NEVER rebalanced — mirror of `marketAnalysisDone`).
    */
   processComplete: SubScore | null;
+  /**
+   * #13 — evening check-ins with `intentionKept=true` / evenings where the
+   * member was asked (`intentionKept !== null`). Did they KEEP the morning
+   * intention? A loop-closing execution ACT (sibling of `intentionFilled`),
+   * keyed on field-PRESENCE like the hedge N/A skip: an evening where the member
+   * wasn't asked (no morning intention / legacy) never penalizes the rate; a
+   * `false` counts and lowers it (the calm effort signal §31.2). SPEC §2: the
+   * ACT of keeping it, never the intention content. `null` when NO evening
+   * carries the field → `aggregateDimension` renormalizes it away (ADDITION
+   * PURE — byte-identical to pre-#13 when absent; existing weights NEVER
+   * rebalanced — mirror of `marketAnalysisDone`/`processComplete`).
+   */
+  intentionKept: SubScore | null;
 }
 
 // ----- Emotional Stability --------------------------------------------------

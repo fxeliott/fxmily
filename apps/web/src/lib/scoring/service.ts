@@ -187,6 +187,8 @@ export async function computeScoresForUser(
         planRespectedToday: true,
         morningRoutineCompleted: true,
         intention: true,
+        // #13 — evening "intention kept" self-report (discipline sub-score).
+        intentionKept: true,
         journalNote: true,
         // DoD#3 — morning prep act (discipline) + sleep self-care (engagement).
         marketAnalysisDone: true,
@@ -232,6 +234,9 @@ export async function computeScoresForUser(
     // DoD#3 — morning prep act. Tri-state passed through verbatim (null → not
     // asked → skipped → byte-identical to pre-DoD#3).
     marketAnalysisDone: c.marketAnalysisDone,
+    // #13 — evening "intention kept" act. Tri-state verbatim (null → not asked
+    // → skipped → byte-identical to pre-#13).
+    intentionKept: c.intentionKept,
   }));
 
   const emotionalCheckins: EmotionalStabilityCheckinInput[] = checkins.map((c) => ({

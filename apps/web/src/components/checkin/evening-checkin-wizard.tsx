@@ -49,6 +49,10 @@ interface DraftState {
   date: string;
   planRespectedToday: boolean | null;
   hedgeRespectedToday: 'true' | 'false' | 'na' | '';
+  // #13 — evening "intention kept?": did the member keep this morning's
+  // intention? Optional tri-state ('' = unanswered → submits as null). Only
+  // shown when a morning intention exists. Never required to advance.
+  intentionKept: 'true' | 'false' | '';
   // SPEC §28/§22 — evening "bilan": studied Eliott's course today? Optional
   // tri-state ('' = unanswered → submits as null). Never required to advance.
   formationFollowed: 'true' | 'false' | '';
@@ -68,6 +72,7 @@ function emptyDraft(today: string): DraftState {
     date: today,
     planRespectedToday: null,
     hedgeRespectedToday: '',
+    intentionKept: '',
     formationFollowed: '',
     caffeineMl: '',
     waterLiters: '',
@@ -141,9 +146,15 @@ const MOOD_LABEL = (v: number): string => {
 
 interface EveningCheckinWizardProps {
   today: string;
+  /** #13 — true when the member set a morning intention today; gates the
+   *  "intention kept?" evening question (meaningless without an intention). */
+  hasMorningIntention?: boolean;
 }
 
-export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
+export function EveningCheckinWizard({
+  today,
+  hasMorningIntention = false,
+}: EveningCheckinWizardProps) {
   const [draft, setDraft] = useState<DraftState>(() => emptyDraft(today));
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState<StepIndex>(0);
@@ -245,6 +256,9 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
       draft.planRespectedToday === null ? '' : String(draft.planRespectedToday),
     );
     fd.set('hedgeRespectedToday', draft.hedgeRespectedToday);
+    // #13 — optional "intention kept?" self-report. Empty string → schema maps
+    // to null ("unanswered/no morning intention"); never blocks submit.
+    fd.set('intentionKept', draft.intentionKept);
     // SPEC §28/§22 — optional course self-report. Empty string → schema maps
     // to null ("unanswered"); never blocks submit (no validateStep gate).
     fd.set('formationFollowed', draft.formationFollowed);
@@ -414,6 +428,7 @@ export function EveningCheckinWizard({ today }: EveningCheckinWizardProps) {
                 updateGratitude={updateGratitude}
                 fieldErrors={fieldErrors}
                 disabled={pending}
+                hasMorningIntention={hasMorningIntention}
               />
             ) : null}
           </m.div>
@@ -577,13 +592,33 @@ function StepReflection({
   updateGratitude,
   fieldErrors,
   disabled,
+  hasMorningIntention,
 }: StepProps & {
   updateGratitude: (idx: 0 | 1 | 2, value: string) => void;
+  hasMorningIntention: boolean;
 }) {
   const journalChars = draft.journalNote.length;
   const isCharLimitNear = journalChars > 3500;
   return (
     <div className="flex flex-col gap-5">
+      {/* #13 — close the day loop: only when a morning intention was set.
+          OPTIONAL (no validateStep gate, '' → null). §31.2: "Pas tout à fait"
+          carries no judgement — it's a calm process signal, never a verdict. */}
+      {hasMorningIntention ? (
+        <RadioGroup
+          legend="As-tu tenu ton intention du matin ?"
+          name="intentionKept"
+          value={draft.intentionKept}
+          options={[
+            { value: 'true', label: 'Oui' },
+            { value: 'false', label: 'Pas tout à fait' },
+          ]}
+          onChange={(v) => update('intentionKept', v as DraftState['intentionKept'])}
+          disabled={disabled}
+          error={fieldErrors.intentionKept}
+        />
+      ) : null}
+
       {/* SPEC §28/§22 — evening "bilan" course self-report. OPTIONAL (no
           validateStep gate, '' submits as null). §2 posture: we track the ACT
           of studying, never the content. Anti-Black-Hat wording — "Pas

@@ -13,8 +13,10 @@
  * On mobile only the primary orb renders (`.login-orb-extra` 640px gate) for
  * battery/fps — the visual identity survives while the GPU cost halves.
  *
- * tone 'blue' (default brand glow). NOT cyan — cyan is reserved for the
- * training-debrief surface (§21.7), never the acquisition front door.
+ * The DOMINANT glow is brand blue/indigo (the acquisition front door reads
+ * as Fxmily blue, never the §21.7 training-debrief cyan tone). A single
+ * tertiary orb carries a faint cyan *whisper* (~0.4 alpha, desktop-only) for
+ * depth only — it never becomes the principal hue, so the brand rule holds.
  */
 export function RejoindreAurora() {
   return (

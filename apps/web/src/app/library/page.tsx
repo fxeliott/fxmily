@@ -129,7 +129,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
             `cat` preserves the active category across the search. */}
         <form method="get" action="/library" role="search" className="mb-6 flex flex-col gap-2">
           <label htmlFor="library-search" className="sr-only">
-            Rechercher une fiche par titre ou contenu
+            Rechercher une fiche par titre
           </label>
           <input type="hidden" name="cat" value={cat ?? ''} />
           <div className="flex items-center gap-2">

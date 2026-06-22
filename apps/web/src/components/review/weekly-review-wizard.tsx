@@ -443,7 +443,7 @@ function StepWeekIntro({ weekStart }: { weekStart: string }) {
         <span className="text-[var(--t-1)]">Pas de P&amp;L</span>, pas d&apos;analyse de marché —
         juste ton exécution.
       </p>
-      <div className="glow-edge rounded-card-lg border bg-[oklch(0.62_0.19_254_/_0.08)] p-4">
+      <div className="glow-edge rounded-card-lg border bg-[var(--acc-dim)] p-4">
         <p className="t-eyebrow text-[var(--t-3)]">Semaine couverte</p>
         <p className="t-h2 mt-1 font-mono text-[var(--t-1)]">{period}</p>
       </div>

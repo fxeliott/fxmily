@@ -2244,6 +2244,13 @@
   height: 100%;
   pointer-events: none;
 }
+/* S19.2 — the splash starfield is a deep-space cue: its dots are painted in
+   var(--t-1), which flips to navy on the light canvas (#f1f3f7) and reads as
+   stray artefacts. Light mode leans on the auroras + orbs for depth instead, so
+   hide the stars there. (Dark mode unchanged.) */
+.light .splash-stars {
+  display: none;
+}
 @keyframes splashTwinkle {
   0%,
   100% {

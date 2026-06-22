@@ -26,6 +26,19 @@ interface CheckinLandingPageProps {
   searchParams: Promise<{ slot?: string; done?: string }>;
 }
 
+// S19.2 — local hour in the member's timezone, to gently surface the slot that
+// fits the current moment (morning before 14h, evening after). `now = new Date()`
+// default param keeps the Server Component pure for the react-hooks lint.
+function currentHourIn(timezone: string, now = new Date()): number {
+  return Number(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: timezone,
+      hour: '2-digit',
+      hour12: false,
+    }).format(now),
+  );
+}
+
 export default async function CheckinLandingPage({ searchParams }: CheckinLandingPageProps) {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
@@ -39,6 +52,10 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
     getStreak(userId, timezone),
     getLast7Days(userId, timezone),
   ]);
+
+  // Slot qui correspond au moment présent (calme, jamais bloquant — les deux
+  // restent cliquables ; le slot "maintenant" reçoit juste un liseré accent).
+  const relevantSlot: 'morning' | 'evening' = currentHourIn(timezone) < 14 ? 'morning' : 'evening';
 
   const params = await searchParams;
   const justDone = params.done === '1';
@@ -103,8 +120,18 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
         {/* dash-stagger : les 2 slots (matin/soir) arrivent en cascade — DIRECT
             children animés (compositor-only, reduced-motion neutralisé globalement). */}
         <section className="dash-stagger grid gap-4 sm:grid-cols-2">
-          <SlotCard slot="morning" submitted={status.morningSubmitted} href="/checkin/morning" />
-          <SlotCard slot="evening" submitted={status.eveningSubmitted} href="/checkin/evening" />
+          <SlotCard
+            slot="morning"
+            submitted={status.morningSubmitted}
+            href="/checkin/morning"
+            isNow={relevantSlot === 'morning'}
+          />
+          <SlotCard
+            slot="evening"
+            submitted={status.eveningSubmitted}
+            href="/checkin/evening"
+            isNow={relevantSlot === 'evening'}
+          />
         </section>
 
         <section>
@@ -130,15 +157,21 @@ function SlotCard({
   slot,
   submitted,
   href,
+  isNow = false,
 }: {
   slot: 'morning' | 'evening';
   submitted: boolean;
   href: '/checkin/morning' | '/checkin/evening';
+  /** Slot fitting the current moment — gets a calm accent ring + "moment" cue. */
+  isNow?: boolean;
 }) {
   const isMorning = slot === 'morning';
   const Icon = isMorning ? Sun : Moon;
   const title = isMorning ? 'Matin' : 'Soir';
   const sub = isMorning ? 'Sommeil · routine · intention' : 'Discipline · stress · journal';
+  // The accent ring fires only when this slot is BOTH the current moment AND not
+  // yet done — never a pressure cue once filled (anti-Black-Hat §31.2).
+  const highlightNow = isNow && !submitted;
 
   return (
     <HoverLift className="block">
@@ -147,7 +180,9 @@ function SlotCard({
           interactive
           className={cn(
             'relative flex flex-col gap-3 p-5 transition-colors',
-            submitted && 'border-[var(--b-acc)] bg-[var(--acc-dim-2)]',
+            submitted
+              ? 'border-[var(--b-acc)] bg-[var(--acc-dim-2)]'
+              : highlightNow && 'ring-1 ring-[var(--b-acc-strong)] ring-inset',
           )}
         >
           <div className="flex items-start justify-between">
@@ -155,11 +190,11 @@ function SlotCard({
               <Icon className="h-5 w-5" strokeWidth={1.75} />
             </div>
             {submitted ? (
-              <Pill tone="acc" dot="live">
+              <Pill tone="acc" dot>
                 FAIT
               </Pill>
             ) : (
-              <Pill tone="cy">À FAIRE</Pill>
+              <Pill tone={highlightNow ? 'acc' : 'cy'}>À FAIRE</Pill>
             )}
           </div>
           <div className="flex flex-col gap-1">
@@ -167,7 +202,13 @@ function SlotCard({
             <p className="t-cap text-[var(--t-3)]">{sub}</p>
           </div>
           <div className="mt-1 flex items-center justify-between text-[12px] text-[var(--t-3)]">
-            <span>{submitted ? 'Voir / éditer' : '~3 minutes'}</span>
+            <span className={cn(highlightNow && 'font-medium text-[var(--acc-hi)]')}>
+              {submitted
+                ? 'Voir / éditer'
+                : highlightNow
+                  ? 'C’est le moment · ~3 min'
+                  : '~3 minutes'}
+            </span>
             {submitted ? (
               <Check className="h-4 w-4 text-[var(--acc)]" strokeWidth={2} />
             ) : (

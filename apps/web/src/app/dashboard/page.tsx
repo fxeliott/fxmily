@@ -224,7 +224,9 @@ export default async function DashboardPage() {
             Activité de trading
           </h2>
           <div className="grid grid-cols-3 gap-3">
-            <TradeStatCard label="Trades" value={totalTrades} tone="acc" />
+            {/* S19.1 — indigo data tint (--acc-2) for the non-actionable count,
+                freeing the blue (--acc) for genuine CTAs (mono-accent). */}
+            <TradeStatCard label="Trades" value={totalTrades} tone="acc2" />
             <TradeStatCard
               label="En cours"
               value={counts.open}
@@ -510,8 +512,9 @@ function ReflectWidgetSkeleton() {
 /** A single trade-count mini-card in the activity strip below the hero (S18).
  *  Counts only — never P&L (posture §2). A solid tinted surface (NOT glass) so
  *  the HoverGlowLift's spring lift + colored halo can apply (compositor-only).
- *  `acc` = neutral count tint ; `ok`/`warn` reuse the existing tone semantics
- *  (clôturés vert calme, en-cours ambre) without ever recolouring a P&L. */
+ *  `acc2` = indigo data tint for non-actionable counts (S19.1 — frees the blue
+ *  --acc for genuine CTAs / mono-accent) ; `ok`/`warn` reuse the existing tone
+ *  semantics (clôturés vert calme, en-cours ambre) without ever recolouring a P&L. */
 function TradeStatCard({
   label,
   value,
@@ -519,7 +522,7 @@ function TradeStatCard({
 }: {
   label: string;
   value: number;
-  tone?: 'acc' | 'mute' | 'warn' | 'ok';
+  tone?: 'acc' | 'acc2' | 'mute' | 'warn' | 'ok';
 }) {
   // Surface tint + value colour pairs. All token-driven so they flip in light.
   const surface =
@@ -529,7 +532,9 @@ function TradeStatCard({
         ? 'border-[var(--warn-edge)] bg-[var(--warn-dim)]'
         : tone === 'mute'
           ? 'border-[var(--b-default)] bg-[var(--bg-1)]'
-          : 'border-[var(--b-acc)] bg-[var(--acc-dim)]';
+          : tone === 'acc2'
+            ? 'border-[var(--acc-2-edge)] bg-[var(--acc-2-dim)]'
+            : 'border-[var(--b-acc)] bg-[var(--acc-dim)]';
   const valColor =
     tone === 'ok'
       ? 'text-[var(--ok)]'
@@ -537,8 +542,10 @@ function TradeStatCard({
         ? 'text-[var(--warn)]'
         : tone === 'mute'
           ? 'text-[var(--t-2)]'
-          : 'text-[var(--t-1)]';
-  const glowTone = tone === 'ok' ? 'cy' : tone === 'mute' ? 'indigo' : 'acc';
+          : tone === 'acc2'
+            ? 'text-[var(--t-1)]'
+            : 'text-[var(--t-1)]';
+  const glowTone = tone === 'ok' ? 'cy' : tone === 'mute' || tone === 'acc2' ? 'indigo' : 'acc';
   return (
     <HoverGlowLift
       tone={glowTone}

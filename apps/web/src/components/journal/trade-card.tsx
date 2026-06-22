@@ -38,11 +38,11 @@ const OUTCOME_TONE: Record<NonNullable<SerializedTrade['outcome']>, 'ok' | 'bad'
  * TradeCard — row dense premium pour `/journal` liste + admin member trades.
  *
  * Structure 3-cell : barre status couleur (left edge) + content + R-réalisé.
- * Hover row-hover (slide-in lime 2px left edge, 120ms). Card interactive.
+ * Hover row-hover (slide-in accent bleu DS-v3, 2px left edge, 120ms). Card interactive.
  *
- * Sémantique long=ok (vert) / short=bad (rouge) préservée. Lime reste signal
- * système (CTAs, accents), pas signal financier. R-réalisé en JetBrains Mono
- * tabular-nums avec drop-shadow lime/red selon outcome.
+ * Sémantique long=ok (vert) / short=bad (rouge) préservée. L'accent bleu DS-v3
+ * reste signal système (CTAs, accents), pas signal financier. R-réalisé en JetBrains Mono
+ * tabular-nums avec drop-shadow accent/red selon outcome.
  */
 export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps) {
   const isClosed = trade.isClosed;
@@ -112,7 +112,7 @@ export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps)
                 // Mobile-first copy: short uppercase pill avoids wrapping the
                 // trade card top row at iPhone SE width when N is large.
                 // Singular keeps "nouvelle" for clarity; plural compresses
-                // to "+N CORRECTIONS" since the lime tone + live dot already
+                // to "+N CORRECTIONS" since the accent tone + live dot already
                 // signal "fresh, requires attention".
                 <Pill tone="acc" dot="live">
                   <MessageSquare className="h-2.5 w-2.5" strokeWidth={2} />

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
 import { Pill } from '@/components/ui/pill';
 import {
@@ -59,37 +60,41 @@ export default async function AccountDeletePage(): Promise<React.ReactElement> {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
-      <header className="mb-6">
-        <Link
-          href="/dashboard"
-          className={btnVariants({ kind: 'ghost', size: 'm' })}
-          aria-label="Retour au dashboard"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-          Dashboard
-        </Link>
-        <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--bad)] uppercase">
-          RGPD · Article 17
-        </p>
-        <h1 className="t-h1 mt-2 text-[var(--t-1)]">Supprimer mon compte</h1>
-      </header>
-
-      {state.kind === 'scheduled' ? <ScheduledPanel state={state} /> : <ActiveAccountPanel />}
-
-      <footer className="mt-10 border-t border-[var(--b-subtle)] pt-5 text-xs text-[var(--t-3)]">
-        <p>
-          Si tu cherches juste à <strong>récupérer tes données</strong> avant de partir, exporte
-          tout en JSON depuis{' '}
+    <main className="relative bg-[var(--bg)]">
+      {/* S19.1 ambient anti-fade backplate (decorative, -z-10, reduced-motion-safe). */}
+      <DashboardAmbient />
+      <div className="relative mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
+        <header className="mb-6">
           <Link
-            href="/account/data"
-            className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
+            href="/dashboard"
+            className={btnVariants({ kind: 'ghost', size: 'm' })}
+            aria-label="Retour au dashboard"
           >
-            /account/data
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            Dashboard
           </Link>
-          . Pas besoin de supprimer pour exporter.
-        </p>
-      </footer>
+          <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--bad)] uppercase">
+            RGPD · Article 17
+          </p>
+          <h1 className="t-h1 mt-2 text-[var(--t-1)]">Supprimer mon compte</h1>
+        </header>
+
+        {state.kind === 'scheduled' ? <ScheduledPanel state={state} /> : <ActiveAccountPanel />}
+
+        <footer className="mt-10 border-t border-[var(--b-subtle)] pt-5 text-xs text-[var(--t-3)]">
+          <p>
+            Si tu cherches juste à <strong>récupérer tes données</strong> avant de partir, exporte
+            tout en JSON depuis{' '}
+            <Link
+              href="/account/data"
+              className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
+            >
+              /account/data
+            </Link>
+            . Pas besoin de supprimer pour exporter.
+          </p>
+        </footer>
+      </div>
     </main>
   );
 }

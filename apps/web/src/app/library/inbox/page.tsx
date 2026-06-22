@@ -113,9 +113,10 @@ function DeliveryItem({
   return (
     <li className="h-full">
       <HoverLift className="block h-full">
+        {/* S19.1 hover/clamp parity avec le catalogue: halo accent au survol */}
         <Card
           interactive
-          className="focus-within:ring-acc h-full p-4 focus-within:ring-2 focus-within:ring-offset-2"
+          className="wow-hover-glow focus-within:ring-acc h-full p-4 focus-within:ring-2 focus-within:ring-offset-2"
         >
           <Link href={`/library/${d.cardSlug}`} className="block">
             <div className="flex items-start gap-3">
@@ -134,7 +135,8 @@ function DeliveryItem({
                     </Pill>
                   )}
                 </div>
-                <h3 className="text-base leading-snug font-semibold">{d.cardTitle}</h3>
+                {/* S19.1 line-clamp-2: homogeneise les hauteurs de carte */}
+                <h3 className="line-clamp-2 text-base leading-snug font-semibold">{d.cardTitle}</h3>
                 <p className="text-muted text-xs">{d.triggeredBy}</p>
                 <p className="text-muted text-[10px] tracking-wide uppercase">
                   {DT.format(new Date(d.createdAt))}

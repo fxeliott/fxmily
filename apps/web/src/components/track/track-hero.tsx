@@ -16,8 +16,8 @@ import type { HabitKind } from '@/lib/schemas/habit-log';
  *
  * Design canon (subagent V2.1 research) :
  *   - SVG inline > Lottie (bundle, indexable, GPU-cheap, Framer-friendly)
- *   - Lime accent DS-v2 + deep-space gradient (PAS V18 blue/black overlay,
- *     TRACK reste aligné app principale lime/discipline forte)
+ *   - Accent bleu DS-v3 (--acc) + deep-space gradient (PAS V18 blue/black overlay,
+ *     TRACK reste aligné app principale mono-accent bleu/discipline forte)
  *   - Pentagon layout : center node + 5 nodes radial
  *   - Entrance : Framer Motion `pathLength`/scale stagger — FINITE
  *     (≤ 0.8 s, no `repeat`), gated by `animate` (= !reduceMotion)
@@ -46,7 +46,7 @@ import type { HabitKind } from '@/lib/schemas/habit-log';
  *   - Pas de "X/5 piliers complétés aujourd'hui" counter visible ici
  *   - Pas de couleur rouge sur les piliers non-logués (calm slate)
  *   - États logged vs pending indiqués subtilement (opacité + halo
- *     lime sur logged) sans signal de manque
+ *     accent bleu DS-v3 sur logged) sans signal de manque
  */
 
 const VIEWBOX_SIZE = 400;
@@ -141,7 +141,7 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
           read by SR — a11y audit V2.1.0 TIER 3). */}
       <svg viewBox={`${VIEW_MIN_X} ${VIEW_MIN_Y} ${VIEW_W} ${VIEW_H}`} className="h-auto w-full">
         <defs>
-          {/* Radial glow gradient for the center node — lime → transparent. */}
+          {/* Radial glow gradient for the center node — accent bleu DS-v3 → transparent. */}
           {/* `--acc-glow` is a box-shadow token (globals.css), NOT a color —
               feeding it to `stopColor` yields an invalid value (ui-designer
               audit V2.1.0 §1). Use `--acc` directly ; the per-stop
@@ -334,7 +334,7 @@ export function TrackHero({ loggedToday }: TrackHeroProps) {
                 ease: [0.22, 1, 0.36, 1],
               }}
             >
-              {/* Logged halo (subtle lime glow) — only when habit is logged today */}
+              {/* Logged halo (subtle accent-blue DS-v3 glow) — only when habit is logged today */}
               {logged ? (
                 <circle
                   cx={pos.x}

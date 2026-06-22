@@ -150,10 +150,17 @@ export function ScoreBreakdown({ score }: { score: SerializedBehavioralScore }) 
               >
                 <div
                   className={cn(
-                    'rounded-pill h-full',
+                    'rounded-pill h-full origin-left',
                     pct >= 55 ? 'bg-[var(--acc)]' : 'bg-[var(--t-4)]',
                   )}
-                  style={{ width: `${Math.max(2, pct)}%` }}
+                  style={{
+                    width: `${Math.max(2, pct)}%`,
+                    // S19.1 anim barres = parité ConstancyScoreCard : scaleX fill
+                    // on first paint (compositor-only). The global
+                    // prefers-reduced-motion filet lands it instantly; `both`
+                    // locks scaleX(1) at the final state.
+                    animation: 'v18StepBarFill 700ms var(--e-data) both',
+                  }}
                 />
               </div>
             </li>

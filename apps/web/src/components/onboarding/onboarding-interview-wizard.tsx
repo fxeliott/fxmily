@@ -31,7 +31,7 @@ import { cn } from '@/lib/utils';
  * 30-question deep-interview wizard backing `/onboarding/interview/new`.
  * Pattern carbone hybride per Round 3 audit hardcore (3 sub-agents convergence):
  *
- *   - **80% V1.5 `MindsetCheckWizard`** — DS-v2 NEUTRAL/lime identity (NEVER
+ *   - **80% V1.5 `MindsetCheckWizard`** — DS-v3 NEUTRAL/accent-blue identity (NEVER
  *     `.v18-theme` REFLECT-only, NEVER `--cy` §21.7 training-only), Framer
  *     `m.*` + `AnimatePresence mode="wait"`, `useReducedMotion` gating,
  *     hidden-input "submit everything", APG focus-on-step-change heading,
@@ -40,7 +40,7 @@ import { cn } from '@/lib/utils';
  *   - **15% V1.8 REFLECT** — crisis routing UX (FR resources `3114` + SOS
  *     Amitié + Suicide Écoute), persist-anyway Q4=A on crisis MEDIUM/HIGH
  *     (silent skip would break the wizard), calm copy "Si tu traverses un
- *     moment difficile" non-alarmist. Crisis banner rendered DS-v2 lime
+ *     moment difficile" non-alarmist. Crisis banner rendered DS-v3 accent-blue
  *     (forks `V18CrisisBanner` → `--bad`/`--warn` tokens, not v18 OKLCH
  *     literals).
  *
@@ -201,7 +201,7 @@ function formatRemainingMinutes(seconds: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Crisis banner — DS-v2 lime/neutral fork of `V18CrisisBanner`
+// Crisis banner — DS-v3 accent-blue/neutral fork of `V18CrisisBanner`
 // ---------------------------------------------------------------------------
 
 interface OnboardingCrisisBannerProps {
@@ -836,7 +836,7 @@ function PhaseProgress({
         </p>
       </div>
 
-      {/* Active-phase fill (lime). */}
+      {/* Active-phase fill (accent bleu DS-v3). */}
       <div
         className="relative h-[3px] w-full overflow-hidden rounded-full bg-[var(--b-default)]"
         data-slot="phase-bar"

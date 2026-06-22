@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
 import { Code } from '@/components/ui/code';
 import { Pill } from '@/components/ui/pill';
@@ -110,102 +111,108 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
   ];
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:py-10 lg:px-8">
-      <header className="mb-6">
-        <Link
-          href="/dashboard"
-          className={btnVariants({ kind: 'ghost', size: 'm' })}
-          aria-label="Retour au dashboard"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-          Dashboard
-        </Link>
-        <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
-          RGPD · Article 20
-        </p>
-        <h1 className="t-h1 mt-2 text-[var(--t-1)]">Mes données</h1>
-        <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
-          Tu peux télécharger l&apos;intégralité de tes données Fxmily à n&apos;importe quel moment,
-          au format JSON. Le fichier reste lisible (indenté), téléchargement immédiat, aucune
-          attente.
-        </p>
-      </header>
-
-      <section
-        aria-labelledby="export-summary-heading"
-        className="glow-edge rounded-card-lg relative border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
-      >
-        <div className="flex items-start gap-3">
-          <span
-            aria-hidden="true"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[var(--acc-dim)] to-[var(--cy-dim)] text-[var(--acc-hi)] ring-1 ring-[var(--b-acc)] ring-inset"
+    <main className="relative bg-[var(--bg)]">
+      {/* S19.1 ambient anti-fade backplate (decorative, -z-10, reduced-motion-safe). */}
+      <DashboardAmbient />
+      <div className="relative mx-auto w-full max-w-5xl px-4 py-6 sm:py-10 lg:px-8">
+        <header className="mb-6">
+          <Link
+            href="/dashboard"
+            className={btnVariants({ kind: 'ghost', size: 'm' })}
+            aria-label="Retour au dashboard"
           >
-            <Database className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <h2 id="export-summary-heading" className="text-base font-semibold text-[var(--t-1)]">
-              Ce que contient l&apos;export
-            </h2>
-            <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
-              Format : <Code>application/json</Code> · Schéma versionné · Champs sensibles exclus
-              (mot de passe, clés push, hash IP).
-            </p>
-          </div>
-        </div>
-
-        <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {sections.map((s) => (
-            // Hover affordance on every section tile : cool border + lift
-            // (compositor-only transform), reduced-motion safe.
-            <li
-              key={s.label}
-              className="rounded-card border border-[var(--b-subtle)] bg-[var(--bg-2)] p-3 transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)] hover:shadow-[var(--sh-card)] motion-reduce:transform-none motion-reduce:transition-none"
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="text-sm font-medium text-[var(--t-1)]">{s.label}</p>
-                {/* Neutral COUNT badge in cool §21.7 cyan (never a CTA). */}
-                <Pill tone="cy">{s.count}</Pill>
-              </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-[var(--t-3)]">{s.description}</p>
-            </li>
-          ))}
-        </ul>
-
-        <form action="/api/account/data/export" method="POST" className="mt-6">
-          <button
-            type="submit"
-            className={btnVariants({ kind: 'primary', size: 'l' })}
-            aria-label="Télécharger l’export JSON de mes données"
-          >
-            <Download aria-hidden="true" className="h-4 w-4" />
-            Télécharger l&apos;export JSON
-          </button>
-          <p className="mt-3 flex items-center gap-1.5 text-[11px] text-[var(--t-3)]">
-            <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5 text-[var(--acc-hi)]" />
-            Chaque export est tracé dans tes logs (action <Code>account.data.exported</Code>).
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            Dashboard
+          </Link>
+          <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
+            RGPD · Article 20
           </p>
-        </form>
-      </section>
+          <h1 className="t-h1 mt-2 text-[var(--t-1)]">Mes données</h1>
+          <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
+            Tu peux télécharger l&apos;intégralité de tes données Fxmily à n&apos;importe quel
+            moment, au format JSON. Le fichier reste lisible (indenté), téléchargement immédiat,
+            aucune attente.
+          </p>
+        </header>
 
-      <section className="mt-8 text-xs text-[var(--t-3)]">
-        <p>
-          Tu veux plutôt <strong>supprimer ton compte</strong> ? Voir{' '}
-          <Link
-            href="/account/delete"
-            className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
-          >
-            /account/delete
-          </Link>
-          . Plus de détails dans la{' '}
-          <Link
-            href="/legal/privacy"
-            className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
-          >
-            politique de confidentialité
-          </Link>
-          .
-        </p>
-      </section>
+        <section
+          aria-labelledby="export-summary-heading"
+          className="glow-edge rounded-card-lg relative border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
+        >
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[var(--acc-dim)] to-[var(--cy-dim)] text-[var(--acc-hi)] ring-1 ring-[var(--b-acc)] ring-inset"
+            >
+              <Database className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 id="export-summary-heading" className="text-base font-semibold text-[var(--t-1)]">
+                Ce que contient l&apos;export
+              </h2>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
+                Format : <Code>application/json</Code> · Schéma versionné · Champs sensibles exclus
+                (mot de passe, clés push, hash IP).
+              </p>
+            </div>
+          </div>
+
+          <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {sections.map((s) => (
+              // Hover affordance on every section tile : cool border + lift
+              // (compositor-only transform), reduced-motion safe.
+              <li
+                key={s.label}
+                className="rounded-card border border-[var(--b-subtle)] bg-[var(--bg-2)] p-3 transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)] hover:shadow-[var(--sh-card)] motion-reduce:transform-none motion-reduce:transition-none"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-sm font-medium text-[var(--t-1)]">{s.label}</p>
+                  {/* Neutral COUNT badge in cool §21.7 cyan (never a CTA). */}
+                  <Pill tone="cy">{s.count}</Pill>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-[var(--t-3)]">
+                  {s.description}
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          <form action="/api/account/data/export" method="POST" className="mt-6">
+            <button
+              type="submit"
+              className={btnVariants({ kind: 'primary', size: 'l' })}
+              aria-label="Télécharger l’export JSON de mes données"
+            >
+              <Download aria-hidden="true" className="h-4 w-4" />
+              Télécharger l&apos;export JSON
+            </button>
+            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-[var(--t-3)]">
+              <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5 text-[var(--acc-hi)]" />
+              Chaque export est tracé dans tes logs (action <Code>account.data.exported</Code>).
+            </p>
+          </form>
+        </section>
+
+        <section className="mt-8 text-xs text-[var(--t-3)]">
+          <p>
+            Tu veux plutôt <strong>supprimer ton compte</strong> ? Voir{' '}
+            <Link
+              href="/account/delete"
+              className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
+            >
+              /account/delete
+            </Link>
+            . Plus de détails dans la{' '}
+            <Link
+              href="/legal/privacy"
+              className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
+            >
+              politique de confidentialité
+            </Link>
+            .
+          </p>
+        </section>
+      </div>
     </main>
   );
 }

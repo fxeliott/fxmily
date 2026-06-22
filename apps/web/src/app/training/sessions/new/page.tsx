@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { TrainingSessionForm } from '@/components/training/training-session-form';
 
 export const metadata = {
@@ -15,8 +16,12 @@ export default async function NewTrainingSessionPage() {
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
-      <TrainingSessionForm />
+    <main className="relative mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
+      {/* S19.2 — cyan ambient (§21.7 training identity), matching /training. */}
+      <DashboardAmbient tone="cyan" />
+      <div className="relative">
+        <TrainingSessionForm />
+      </div>
     </main>
   );
 }

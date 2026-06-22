@@ -178,10 +178,17 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
                 onChange={(e) => handleToggle(cat.type, e.target.checked)}
                 className="peer absolute inset-0 cursor-pointer opacity-0"
               />
+              {/* S19.2 — WCAG 1.4.11 (non-text contrast ≥3:1): the OFF track was
+                  --bg-2 on a --bg-1 card (~1.1:1, invisible). A solid neutral
+                  border (theme-stable, ~4:1 both modes) gives the control a
+                  perceivable boundary; --bg-3 fill lifts it off the card. State
+                  stays dual-cued (track colour + thumb position, 1.4.1). */}
               <span
                 aria-hidden="true"
-                className={`relative h-6 w-11 rounded-full transition ${
-                  enabled ? 'bg-[var(--acc)]' : 'bg-[var(--bg-2)]'
+                className={`relative h-6 w-11 rounded-full border transition ${
+                  enabled
+                    ? 'border-transparent bg-[var(--acc)]'
+                    : 'border-[var(--n-400)] bg-[var(--bg-3)]'
                 }`}
               >
                 <span

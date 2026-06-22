@@ -491,6 +491,30 @@
   color-scheme: light;
 }
 
+/* S18.1 — Pill text contrast in LIGHT (runtime-audit: ~155 fails). The base tone
+   tokens (--ok/--bad/--warn/--cy/--t-3, L≈0.50-0.56) were calibrated for ≥4.5:1
+   on PURE WHITE, but a Pill sits on its own tinted `-dim` background, so at 11px
+   the ratio drops to 4.08-4.45:1 (< WCAG 1.4.3 AA). Darken the pill text to the
+   already-defined -hi variants (darker in light) — exactly what the `acc` tone
+   already does (--acc-hi, which passed). Scoped to .light + the pill slot, so
+   DARK pills (bright tone on deep bg, already AA) are untouched. cy has no -hi
+   token → a dedicated darker teal; mute → --t-2 (~7:1). */
+.light [data-slot='pill'][data-tone='ok'] {
+  color: var(--ok-hi);
+}
+.light [data-slot='pill'][data-tone='bad'] {
+  color: var(--bad-hi);
+}
+.light [data-slot='pill'][data-tone='warn'] {
+  color: var(--warn-hi);
+}
+.light [data-slot='pill'][data-tone='cy'] {
+  color: oklch(0.44 0.12 222); /* darker teal — ~6:1 on --cy-dim over white */
+}
+.light [data-slot='pill'][data-tone='mute'] {
+  color: var(--t-2);
+}
+
 /* Selection en clair — teinte bleue douce, texte accent assombri lisible */
 .light ::selection {
   background: oklch(0.52 0.2 260 / 0.16);

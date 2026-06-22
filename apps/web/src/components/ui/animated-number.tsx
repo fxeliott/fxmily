@@ -1,7 +1,7 @@
 'use client';
 
 import { animate, useInView, useReducedMotion } from 'framer-motion';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -42,8 +42,20 @@ const EASE = [0.4, 0, 0.2, 1] as const;
 
 export interface AnimatedNumberProps {
   value: number;
-  /** Formatteur. Défaut: Math.round(v).toLocaleString('fr-FR'). */
+  /**
+   * Formatteur fonction. Défaut: Math.round(v).toLocaleString('fr-FR').
+   * ⚠️ Une fonction NE PEUT PAS franchir la frontière Server→Client Component
+   * (Next.js RSC lève "Functions cannot be passed to Client Components"). Depuis
+   * un Server Component, n'utilise PAS `format` : passe `decimals`/`prefix`/`suffix`
+   * (sérialisables) ci-dessous — AnimatedNumber construit le formatteur côté client.
+   */
   format?: ((v: number) => string) | undefined;
+  /** Alt SÉRIALISABLE à `format` (server-safe) : nb de décimales fr-FR. Ignoré si `format` est fourni. */
+  decimals?: number | undefined;
+  /** Préfixe sérialisable (ex. ''). Ignoré si `format` est fourni. */
+  prefix?: string | undefined;
+  /** Suffixe sérialisable (ex. ' €', ' %'). Ignoré si `format` est fourni. */
+  suffix?: string | undefined;
   className?: string;
   /** Durée du count-up en ms. Défaut 900. */
   durationMs?: number;
@@ -53,7 +65,10 @@ export interface AnimatedNumberProps {
 
 export function AnimatedNumber({
   value,
-  format = DEFAULT_FORMAT,
+  format,
+  decimals,
+  prefix,
+  suffix,
   className,
   durationMs = 900,
   startOnView = true,
@@ -62,6 +77,22 @@ export function AnimatedNumber({
   const hasRun = useRef(false);
   const prefersReducedMotion = useReducedMotion();
   const isInView = useInView(ref, { once: true, amount: 0.4 });
+
+  // Formatteur effectif. `format` (fonction) prime — mais ne peut venir que d'un
+  // Client Component. Sinon on dérive un formatteur SÉRIALISABLE à partir de
+  // decimals/prefix/suffix (le cas server-safe), avec fallback fr-FR entier.
+  const fmt = useMemo<(v: number) => string>(() => {
+    if (format) return format;
+    if (decimals !== undefined || prefix !== undefined || suffix !== undefined) {
+      const d = decimals ?? 0;
+      return (v: number) =>
+        `${prefix ?? ''}${v.toLocaleString('fr-FR', {
+          minimumFractionDigits: d,
+          maximumFractionDigits: d,
+        })}${suffix ?? ''}`;
+    }
+    return DEFAULT_FORMAT;
+  }, [format, decimals, prefix, suffix]);
 
   useEffect(() => {
     const node = ref.current;
@@ -77,16 +108,16 @@ export function AnimatedNumber({
       duration: durationMs / 1000,
       ease: EASE,
       onUpdate: (latest) => {
-        node.textContent = format(latest);
+        node.textContent = fmt(latest);
       },
     });
 
     return () => controls.stop();
-  }, [isInView, value, format, durationMs, prefersReducedMotion, startOnView]);
+  }, [isInView, value, fmt, durationMs, prefersReducedMotion, startOnView]);
 
   return (
     <span ref={ref} suppressHydrationWarning className={cn('tabular-nums', className)}>
-      {format(value)}
+      {fmt(value)}
     </span>
   );
 }

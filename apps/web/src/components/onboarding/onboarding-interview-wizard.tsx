@@ -485,7 +485,7 @@ function QuestionStep({
             id={`oiw-heading-${item.id}`}
             ref={headingRef}
             tabIndex={-1}
-            className="t-h1 text-[var(--t-1)] outline-none"
+            className="t-question text-[var(--t-1)] outline-none"
           >
             {item.text}
           </h2>
@@ -500,7 +500,7 @@ function QuestionStep({
               maxLength={ONBOARDING_ANSWER_MAX_CHARS + 200}
               placeholder="Prends ton temps. Quelques phrases honnêtes valent mieux qu'un long discours idéalisé."
               aria-describedby={`${counterId}${fieldErrors?.answerText ? ' ' + errorId : ''}`}
-              className="rounded-control min-h-[160px] w-full resize-y border border-[var(--b-strong)] bg-[var(--bg-2)] p-3 font-sans text-[15px] leading-[1.55] text-[var(--t-1)] placeholder:text-[var(--t-3)] focus-visible:border-[var(--b-acc)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
+              className="rounded-control min-h-[160px] w-full resize-y border border-[var(--b-strong)] bg-[var(--bg-2)] p-3 font-sans text-[15px] leading-[1.55] text-[var(--t-1)] transition-colors duration-150 placeholder:text-[var(--t-3)] hover:border-[var(--b-acc)] focus-visible:border-[var(--b-acc)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
             />
             <div className="flex items-baseline justify-between gap-3 text-[12px]">
               <span
@@ -536,31 +536,43 @@ function QuestionStep({
               : `Écris au moins ${ONBOARDING_ANSWER_MIN_CHARS} caractères pour passer à la suivante.`}
       </p>
 
-      <div
-        className="sticky bottom-0 z-10 -mx-4 mt-2 flex items-center gap-3 border-t border-[var(--b-default)] bg-[var(--bg)]/85 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
-      >
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          className={cn(
-            'rounded-control inline-flex h-11 flex-1 items-center justify-center gap-1.5 text-[14px] font-semibold transition-[background-color,box-shadow,transform] duration-150',
-            canSubmit
-              ? 'bg-[var(--acc-btn)] text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
-              : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
-          )}
-          aria-busy={isPending || undefined}
+      {/* Sticky bottom CTA bar — hidden during a safety-hold so the lone action
+          is the top "J'ai lu, continuer" button (single action point, §safety).
+          Carries a persistent question-counter so progress stays visible while a
+          long answer scrolls the top PhaseProgress out of view (S19.2). */}
+      {!safetyHold ? (
+        <div
+          className="sticky bottom-0 z-10 -mx-4 mt-2 flex items-center gap-3 border-t border-[var(--b-default)] bg-[var(--bg)]/85 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
         >
-          {isPending ? 'Envoi…' : isLast ? 'Soumettre la dernière réponse' : 'Suivant'}
-          {!isPending ? (
-            isLast ? (
-              <Check size={14} aria-hidden="true" />
-            ) : (
-              <ArrowRight size={14} aria-hidden="true" />
-            )
-          ) : null}
-        </button>
-      </div>
+          <span
+            className="shrink-0 font-mono text-[12px] text-[var(--t-3)] tabular-nums"
+            aria-hidden="true"
+          >
+            {questionIndex + 1}/{TOTAL_QUESTIONS}
+          </span>
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className={cn(
+              'rounded-control inline-flex h-11 flex-1 items-center justify-center gap-1.5 text-[14px] font-semibold whitespace-nowrap transition-[background-color,box-shadow,transform] duration-150',
+              canSubmit
+                ? 'bg-[var(--acc-btn)] text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
+            )}
+            aria-busy={isPending || undefined}
+          >
+            {isPending ? 'Envoi…' : isLast ? 'Soumettre la dernière réponse' : 'Suivant'}
+            {!isPending ? (
+              isLast ? (
+                <Check size={14} aria-hidden="true" />
+              ) : (
+                <ArrowRight size={14} aria-hidden="true" />
+              )
+            ) : null}
+          </button>
+        </div>
+      ) : null}
     </form>
   );
 }

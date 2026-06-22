@@ -5,10 +5,14 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { CardActionsRow } from '@/components/admin/card-actions-row';
 import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_TONE } from '@/components/library/category-meta';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
 import { Pill } from '@/components/ui/pill';
 import { getCatalogStats, listAllCards } from '@/lib/admin/cards-service';
+import { cn } from '@/lib/utils';
 import type { DouglasCategory } from '@/generated/prisma/enums';
 
 export const dynamic = 'force-dynamic';
@@ -54,43 +58,35 @@ export default async function AdminCardsPage({ searchParams }: AdminCardsPagePro
   ]);
 
   return (
-    <main className="mx-auto w-full max-w-[var(--w-app)] px-4 pt-6 pb-24 md:pt-10 lg:px-8 2xl:px-12">
-      <header className="mb-6 flex flex-col gap-3">
+    <main className="relative mx-auto w-full max-w-[var(--w-app)] px-4 pt-6 pb-24 md:pt-10 lg:px-8 2xl:px-12">
+      {/* S19.2 — align on the modern admin canon (members/reports): ambient mesh
+          + f-display masthead + animated stat cells. Was the flattest admin page. */}
+      <DashboardAmbient />
+      <header className="relative mb-6 flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <span className="bg-acc-dim text-acc inline-flex h-9 w-9 items-center justify-center rounded-full">
-            <BookOpen className="h-4 w-4" aria-hidden />
+          <span className="rounded-control grid h-9 w-9 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+            <BookOpen className="h-4 w-4" strokeWidth={1.75} aria-hidden />
           </span>
           <Pill tone="acc">Admin</Pill>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+        <h1
+          className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+          style={{ fontFeatureSettings: '"ss01" 1' }}
+        >
           Bibliothèque Mark Douglas
         </h1>
-        <p className="text-muted text-sm">
+        <p className="t-body max-w-prose text-[var(--t-2)]">
           Catalogue des fiches éducatives. Active <strong>Publié</strong> pour exposer une fiche aux
           membres ; les triggers ne ciblent que les fiches publiées.
         </p>
       </header>
 
-      {/* Stats strip */}
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Card className="p-4">
-          <p className="text-muted text-[11px] tracking-wide uppercase">Total</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{stats.totalCards}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-muted text-[11px] tracking-wide uppercase">Publiées</p>
-          <p className="text-acc mt-1 text-2xl font-semibold tabular-nums">
-            {stats.publishedCards}
-          </p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-muted text-[11px] tracking-wide uppercase">Brouillons</p>
-          <p className="text-muted mt-1 text-2xl font-semibold tabular-nums">{stats.draftCards}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-muted text-[11px] tracking-wide uppercase">Avec triggers</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{stats.cardsWithTriggers}</p>
-        </Card>
+      {/* Stats strip — animated, tone-tinted, premium hover (admin canon). */}
+      <div className="relative mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <CardStat label="Total" value={stats.totalCards} tone="acc" />
+        <CardStat label="Publiées" value={stats.publishedCards} tone="ok" />
+        <CardStat label="Brouillons" value={stats.draftCards} tone="mute" />
+        <CardStat label="Avec triggers" value={stats.cardsWithTriggers} tone="cy" />
       </div>
 
       {/* Filter strip */}
@@ -198,5 +194,47 @@ export default async function AdminCardsPage({ searchParams }: AdminCardsPagePro
         </ul>
       )}
     </main>
+  );
+}
+
+/** S19.2 — animated, tone-tinted stat cell for the catalogue strip (admin canon,
+ *  mirrors the members/reports pattern). Solid surface + premium colored hover. */
+function CardStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: 'acc' | 'ok' | 'mute' | 'cy';
+}) {
+  const surface =
+    tone === 'ok'
+      ? 'border-[var(--ok-edge)] bg-[var(--ok-dim)]'
+      : tone === 'cy'
+        ? 'border-[var(--cy-edge-soft)] bg-[var(--cy-dim)]'
+        : tone === 'mute'
+          ? 'border-[var(--b-default)] bg-[var(--bg-1)]'
+          : 'border-[var(--b-acc)] bg-[var(--acc-dim)]';
+  const valColor =
+    tone === 'ok'
+      ? 'text-[var(--ok)]'
+      : tone === 'cy'
+        ? 'text-[var(--cy)]'
+        : tone === 'mute'
+          ? 'text-[var(--t-2)]'
+          : 'text-[var(--t-1)]';
+  const glowTone = tone === 'cy' ? 'cy' : tone === 'mute' ? 'indigo' : 'acc';
+  return (
+    <HoverGlowLift
+      tone={glowTone}
+      className={cn('rounded-card flex flex-col gap-1 border p-4 transition-colors', surface)}
+    >
+      <p className="t-cap tracking-wide text-[var(--t-3)] uppercase">{label}</p>
+      <AnimatedNumber
+        value={value}
+        className={cn('f-mono text-[26px] leading-none font-bold tabular-nums', valColor)}
+      />
+    </HoverGlowLift>
   );
 }

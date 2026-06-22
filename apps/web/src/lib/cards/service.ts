@@ -110,6 +110,21 @@ export async function countUnseenDeliveries(userId: string): Promise<number> {
   return db.markDouglasDelivery.count({ where: { userId, seenAt: null } });
 }
 
+/**
+ * S19.2 — card ids with at least one UNSEEN delivery, so the catalogue grid can
+ * light the existing "Nouvelle" badge (the `hasUnread` prop was dead — never fed).
+ * Distinct by card (a card may have several deliveries). Read-only, indexed on
+ * (userId, seenAt) like `countUnseenDeliveries`.
+ */
+export async function listUnseenDeliveryCardIds(userId: string): Promise<string[]> {
+  const rows = await db.markDouglasDelivery.findMany({
+    where: { userId, seenAt: null },
+    select: { cardId: true },
+    distinct: ['cardId'],
+  });
+  return rows.map((r) => r.cardId);
+}
+
 export async function getDelivery(
   userId: string,
   deliveryId: string,

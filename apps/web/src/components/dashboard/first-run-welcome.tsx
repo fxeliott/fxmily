@@ -35,7 +35,7 @@ const STEPS = [
   },
 ] as const;
 
-export function FirstRunWelcome() {
+export function FirstRunWelcome({ needsProfile = false }: { needsProfile?: boolean }) {
   return (
     <Card
       primary
@@ -96,22 +96,42 @@ export function FirstRunWelcome() {
           className="wow-rise flex flex-wrap items-center gap-2"
           style={{ '--rise-delay': '400ms' } as CSSProperties}
         >
-          <Link href="/checkin/morning" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
+          {/* S19.2 — §28 : when no profile exists yet, the onboarding interview
+              becomes the primary first step (it personalises all coaching), with
+              the daily gestures right after. Otherwise the daily check-in leads. */}
+          {needsProfile ? (
+            <Link
+              href="/onboarding/interview"
+              className={cn(btnVariants({ kind: 'primary', size: 'm' }))}
+            >
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+              Commencer par mon profil
+              <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            </Link>
+          ) : null}
+          <Link
+            href="/checkin/morning"
+            className={cn(btnVariants({ kind: needsProfile ? 'secondary' : 'primary', size: 'm' }))}
+          >
             <Sunrise className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
             Commencer mon check-in
-            <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            {needsProfile ? null : (
+              <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            )}
           </Link>
           <Link href="/journal/new" className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}>
             <NotebookPen className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
             Logger un trade
           </Link>
-          <Link
-            href="/onboarding/interview"
-            className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}
-          >
-            <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-            Faire mon profil
-          </Link>
+          {needsProfile ? null : (
+            <Link
+              href="/onboarding/interview"
+              className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}
+            >
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+              Faire mon profil
+            </Link>
+          )}
           <Link
             href="/guide"
             className="inline-flex items-center gap-1.5 px-1 text-[13px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"

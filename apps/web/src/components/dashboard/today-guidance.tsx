@@ -72,7 +72,7 @@ function ActionRow({ action }: { action: GuidanceAction }) {
       : KIND_ICON[action.kind];
   const isPrimary = action.emphasis === 'primary';
   const isDone = action.state === 'done';
-  // The "primary + not done" row is the only one on the lime `acc-dim` ground;
+  // The "primary + not done" row is the only one on the blue `acc-dim` ground;
   // its caption needs `--t-2` to clear WCAG 1.4.3 4.5:1 (a11y audit) — `--t-3`
   // dips to 4.43:1 on that blue-tinted ground.
   const detailTone = isPrimary && !isDone ? 'text-[var(--t-2)]' : 'text-[var(--t-3)]';
@@ -203,10 +203,26 @@ function CalendarStateLine({ state }: { state: 'generated' | 'preparing' | 'none
  * `getDailyGuidance` ONCE and shares the result with the north-star hero (which
  * elevates the single primary action), so this panel renders the full picture
  * without a second DB round-trip (no N+1) and no Suspense boundary.
+ *
+ * S19.2 — `excludeKey`: the north-star hero already elevates the single primary
+ * action as the page's focal CTA. Passing that action's key here drops it from
+ * the list so the same "next action" is not rendered twice ~200px apart (the
+ * "one focal point" principle). `hasTodo` stays computed on the FULL list so the
+ * "tu es à jour" ack only shows when truly nothing is pending (incl. the hero's
+ * action). Omit the prop and the panel renders every action (unchanged).
  */
-export function TodayGuidance({ guidance }: { guidance: DailyGuidance }) {
+export function TodayGuidance({
+  guidance,
+  excludeKey,
+}: {
+  guidance: DailyGuidance;
+  excludeKey?: string | undefined;
+}) {
   const SlotIcon = SLOT_ICON[guidance.slot];
   const hasTodo = guidance.actions.some((a) => a.state === 'todo');
+  const listActions = excludeKey
+    ? guidance.actions.filter((a) => a.key !== excludeKey)
+    : guidance.actions;
   const hasTodayBlocks = guidance.calendarState === 'generated' && guidance.todayBlocks.length > 0;
 
   return (
@@ -236,11 +252,12 @@ export function TodayGuidance({ guidance }: { guidance: DailyGuidance }) {
         <CalendarStateLine state={guidance.calendarState} />
       )}
 
-      {/* Time-aware actions (ordered most-"now" first). */}
-      {guidance.actions.length > 0 ? (
+      {/* Time-aware actions (ordered most-"now" first). The hero-elevated primary
+          action is dropped here when `excludeKey` is passed (no double-render). */}
+      {listActions.length > 0 ? (
         <section aria-label="Tes actions du jour" className="flex flex-col gap-2">
           <span className="t-eyebrow text-[var(--t-3)]">À ton rythme</span>
-          {guidance.actions.map((action) => (
+          {listActions.map((action) => (
             <ActionRow key={action.key} action={action} />
           ))}
         </section>

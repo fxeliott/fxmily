@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { MemberRow } from '@/components/admin/member-row';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
@@ -82,8 +83,10 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
   const isSearchMiss = !isEmptyCohort && page.items.length === 0;
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[var(--w-app)] flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
-      <header className="flex flex-col gap-4">
+    <main className="relative mx-auto flex min-h-dvh w-full max-w-[var(--w-app)] flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
+      {/* S19.2 — ambient mesh for admin-surface coherence (cards/system/hub). */}
+      <DashboardAmbient />
+      <header className="relative flex flex-col gap-4">
         <Link
           href="/dashboard"
           className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
@@ -200,11 +203,11 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
             headline="Pas encore de membres."
             lead="La cohorte se construit à l'invitation. Chaque membre actif peut activer un trader qu'il connaît."
             guides={[
-              'Vérifie que l&apos;email du futur membre est correct.',
-              'Le lien expire après 7 jours, il est unique et ne peut servir qu&apos;une fois.',
-              'Tu peux inviter à nouveau quelqu&apos;un dont l&apos;invitation a expiré.',
+              'Vérifie que l’email du futur membre est correct.',
+              'Le lien expire après 7 jours, il est unique et ne peut servir qu’une fois.',
+              'Tu peux inviter à nouveau quelqu’un dont l’invitation a expiré.',
             ]}
-            tip="Cohorte privée = qualité &gt; quantité. Mieux vaut 30 traders sérieux que 300 curieux."
+            tip="Cohorte privée = qualité > quantité. Mieux vaut 30 traders sérieux que 300 curieux."
             ctaPrimary={
               <>
                 <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />

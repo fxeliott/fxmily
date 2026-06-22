@@ -733,6 +733,20 @@
   letter-spacing: -0.005em;
   font-weight: 600;
 }
+/* S19.2 — long-prose question heading (wizard prompts run 150-220 chars). t-h1
+   (32px / lh 1.05) is calibrated for SHORT titles and turns a real question into
+   a cramped wall of text on 375px. This variant is fluid 21→26px with an airy
+   1.3 line-height for multi-line legibility, and wraps hostile long tokens.
+   Reused by the onboarding interview + any data-driven question prompt. */
+.t-question {
+  font-family: var(--font-display);
+  font-size: clamp(1.3125rem, 1.05rem + 1.1vw, 1.625rem);
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
 .t-lead {
   font-family: var(--font-sans);
   font-size: 16px;
@@ -2229,6 +2243,13 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
+}
+/* S19.2 — the splash starfield is a deep-space cue: its dots are painted in
+   var(--t-1), which flips to navy on the light canvas (#f1f3f7) and reads as
+   stray artefacts. Light mode leans on the auroras + orbs for depth instead, so
+   hide the stars there. (Dark mode unchanged.) */
+.light .splash-stars {
+  display: none;
 }
 @keyframes splashTwinkle {
   0%,

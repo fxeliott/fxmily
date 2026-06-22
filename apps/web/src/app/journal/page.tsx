@@ -161,7 +161,15 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
           })}
 
           <div className="ml-auto inline-flex items-center gap-2 font-mono text-[11px] text-[var(--t-4)] tabular-nums">
-            <span>{totals.open + totals.closed} cumulés</span>
+            {/* S19.2 — §11 : the "5 trades calibrate your baseline, the 6th
+                unlocks scores" promise (empty-state) vanished after the 1st
+                trade. Keep it visible as a calm segmented progress until the
+                baseline is met, so the member always knows where they are. */}
+            {totals.open + totals.closed >= 1 && totals.open + totals.closed < 6 ? (
+              <BaselineProgress done={totals.open + totals.closed} />
+            ) : (
+              <span>{totals.open + totals.closed} cumulés</span>
+            )}
           </div>
         </nav>
 
@@ -284,5 +292,32 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
         ) : null}
       </div>
     </main>
+  );
+}
+
+/** S19.2 — calm 5-segment baseline meter shown in the journal counter while the
+ *  member is still calibrating (1–5 trades). Mirrors the empty-state promise so
+ *  the "where am I" cue survives the first trade. The label carries the meaning;
+ *  the segments are decorative (aria-hidden). Never a pressure cue. */
+function BaselineProgress({ done }: { done: number }) {
+  const filled = Math.min(done, 5);
+  return (
+    <span
+      className="inline-flex items-center gap-2"
+      title="Tes 5 premiers trades calibrent ton baseline ; le 6e déverrouille tes scores."
+    >
+      <span className="inline-flex items-center gap-[3px]" aria-hidden="true">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <span
+            key={i}
+            className={cn(
+              'h-1 w-3 rounded-full transition-colors',
+              i < filled ? 'bg-[var(--acc)]' : 'bg-[var(--b-strong)]',
+            )}
+          />
+        ))}
+      </span>
+      <span className="text-[var(--acc-hi)]">Baseline {filled}/5</span>
+    </span>
   );
 }

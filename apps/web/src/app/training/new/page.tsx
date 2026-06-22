@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { TrainingFormWizard } from '@/components/training/training-form-wizard';
 import { getTrainingSessionMeta } from '@/lib/training/training-session-service';
 
@@ -38,11 +39,16 @@ export default async function NewTrainingTradePage({ searchParams }: NewTraining
   const activeSession = parentSession && !parentSession.isEnded ? parentSession : null;
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
-      <TrainingFormWizard
-        sessionId={activeSession?.id ?? null}
-        sessionLabel={activeSession?.label ?? null}
-      />
+    <main className="relative mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
+      {/* S19.2 — cyan ambient (§21.7 training identity) so the backtest wizard
+          matches the depth of /training instead of sitting on a flat bg. */}
+      <DashboardAmbient tone="cyan" />
+      <div className="relative">
+        <TrainingFormWizard
+          sessionId={activeSession?.id ?? null}
+          sessionLabel={activeSession?.label ?? null}
+        />
+      </div>
     </main>
   );
 }

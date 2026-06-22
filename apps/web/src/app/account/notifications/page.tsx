@@ -75,7 +75,10 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
             <ArrowLeft aria-hidden="true" className="h-4 w-4" />
             Dashboard
           </Link>
-          <h1 className="t-h1 mt-3 text-[var(--t-1)]">Notifications</h1>
+          {/* S19.2 — masthead eyebrow for parity with the sibling account pages
+              (the page was the flattest of the account group). */}
+          <p className="t-eyebrow mt-4 text-[var(--acc-hi)]">Compte</p>
+          <h1 className="t-h1 mt-1 text-[var(--t-1)]">Notifications</h1>
           <p className="mt-2 text-sm text-[var(--t-2)]">
             Reste informé sur ce qui compte, sans être noyé. Tu choisis ce qui mérite une
             notification — et tu peux tout couper en un clic.

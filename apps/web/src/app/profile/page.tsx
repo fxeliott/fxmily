@@ -287,6 +287,19 @@ export default async function ProfilePage() {
                 year: 'numeric',
               })}
             </p>
+
+            {/* S19.2 — §11 : ne pas finir en cul-de-sac. Le profil pointe les axes
+                de coaching ; /objectifs les transforme en plan actionnable. */}
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <Link href="/objectifs" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
+                <Target className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                Voir mon plan d&apos;objectifs
+                <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+              <Link href="/dashboard" className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}>
+                Retour au tableau de bord
+              </Link>
+            </div>
           </>
         ) : null}
       </div>

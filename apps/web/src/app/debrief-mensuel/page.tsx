@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { MonthlyDebriefReader } from '@/components/monthly-debrief/monthly-debrief-reader';
 import { MonthlyDebriefTimeline } from '@/components/monthly-debrief/monthly-debrief-timeline';
 import { formatMonthLabelFr } from '@/lib/monthly-debrief/format';
@@ -71,8 +72,12 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-4xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <header className="flex flex-col gap-4">
+    <main className="relative mx-auto flex min-h-dvh w-full max-w-4xl flex-col gap-6 px-4 py-8 lg:px-8">
+      {/* S19.2 — the only top-level member route that lacked the ambient mesh
+          backplate; add it so the deep-space depth is consistent (page stays
+          otherwise calm — it's a reading surface, §25.2). */}
+      <DashboardAmbient />
+      <header className="relative flex flex-col gap-4">
         <Link
           href="/dashboard"
           className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"

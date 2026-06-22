@@ -155,6 +155,23 @@ export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps)
                 }
               />
             </dl>
+
+            {/* S19.2 — micro R:R bar : risk vs reward proportional to plannedRR
+                (risk = 1/(1+R), red ; reward = R/(1+R), green — finance grammar).
+                Decorative: the "R:R prévu" number above carries the value. */}
+            {Number(trade.plannedRR) > 0 ? (
+              <div
+                aria-hidden="true"
+                className="mt-1.5 flex h-1 overflow-hidden rounded-full"
+                title={`Risque vs objectif (R:R ${Number(trade.plannedRR).toFixed(2)})`}
+              >
+                <span
+                  className="bg-[var(--bad)]"
+                  style={{ width: `${(100 / (1 + Number(trade.plannedRR))).toFixed(1)}%` }}
+                />
+                <span className="flex-1 bg-[var(--ok)]" />
+              </div>
+            ) : null}
           </div>
 
           {/* R réalisé hero (right cell) */}

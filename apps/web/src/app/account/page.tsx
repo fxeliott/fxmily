@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
 import { Pill } from '@/components/ui/pill';
 import { deriveDeletionState } from '@/lib/account/deletion';
@@ -48,75 +49,79 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
   const isDeletionScheduled = deletionState.kind === 'scheduled';
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:py-10 lg:px-8">
-      <header className="mb-6">
-        <Link
-          href="/dashboard"
-          className={btnVariants({ kind: 'ghost', size: 'm' })}
-          aria-label="Retour au dashboard"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-          Dashboard
-        </Link>
-        <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
-          Mon espace
-        </p>
-        <h1 className="t-h1 mt-2 flex items-center gap-3 text-[var(--t-1)]">
-          <UserCircle aria-hidden="true" className="h-7 w-7 text-[var(--acc-hi)]" />
-          Mon compte
-        </h1>
-        <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
-          Tout ce que tu peux régler tout seul depuis l&apos;app — notifications, export de tes
-          données, suppression du compte. Aucune action ici n&apos;exige Eliott.
-        </p>
-      </header>
-
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <AccountCard
-          href="/account/notifications"
-          title="Notifications"
-          description="Active ou coupe les notifications push, choisis par catégorie. Désactivable d'un clic à tout moment."
-          icon={<Bell aria-hidden="true" className="h-5 w-5" />}
-        />
-        <AccountCard
-          href="/account/data"
-          title="Mes données"
-          description="Exporte 100% de ton compte au format JSON (RGPD article 20). Téléchargement immédiat, sans friction."
-          icon={<Database aria-hidden="true" className="h-5 w-5" />}
-        />
-        <AccountCard
-          href="/account/delete"
-          title="Supprimer mon compte"
-          description={
-            isDeletionScheduled
-              ? 'Suppression programmée — annule depuis cette page tant que le compte à rebours 24h n’est pas écoulé.'
-              : 'Soft-delete immédiat puis suppression définitive sous 30 jours (RGPD article 17). Compte à rebours 24h pour annuler.'
-          }
-          icon={<Trash2 aria-hidden="true" className="h-5 w-5" />}
-          tone={isDeletionScheduled ? 'warn' : 'danger'}
-          badge={isDeletionScheduled ? <Pill tone="warn">En cours · annulable</Pill> : undefined}
-        />
-      </ul>
-
-      <footer className="mt-10 border-t border-[var(--b-subtle)] pt-5 text-xs text-[var(--t-3)]">
-        <p>
-          Une question ?{' '}
-          <a
-            href="mailto:fxeliott@fxmily.fr"
-            className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
-          >
-            fxeliott@fxmily.fr
-          </a>
-          . Voir aussi la{' '}
+    <main className="relative bg-[var(--bg)]">
+      {/* S19.1 ambient anti-fade backplate (decorative, -z-10, reduced-motion-safe). */}
+      <DashboardAmbient />
+      <div className="relative mx-auto w-full max-w-5xl px-4 py-6 sm:py-10 lg:px-8">
+        <header className="mb-6">
           <Link
-            href="/legal/privacy"
-            className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
+            href="/dashboard"
+            className={btnVariants({ kind: 'ghost', size: 'm' })}
+            aria-label="Retour au dashboard"
           >
-            politique de confidentialité
-          </Link>{' '}
-          si tu veux savoir comment on traite tes données.
-        </p>
-      </footer>
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            Dashboard
+          </Link>
+          <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
+            Mon espace
+          </p>
+          <h1 className="t-h1 mt-2 flex items-center gap-3 text-[var(--t-1)]">
+            <UserCircle aria-hidden="true" className="h-7 w-7 text-[var(--acc-hi)]" />
+            Mon compte
+          </h1>
+          <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
+            Tout ce que tu peux régler tout seul depuis l&apos;app — notifications, export de tes
+            données, suppression du compte. Aucune action ici n&apos;exige Eliott.
+          </p>
+        </header>
+
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <AccountCard
+            href="/account/notifications"
+            title="Notifications"
+            description="Active ou coupe les notifications push, choisis par catégorie. Désactivable d'un clic à tout moment."
+            icon={<Bell aria-hidden="true" className="h-5 w-5" />}
+          />
+          <AccountCard
+            href="/account/data"
+            title="Mes données"
+            description="Exporte 100% de ton compte au format JSON (RGPD article 20). Téléchargement immédiat, sans friction."
+            icon={<Database aria-hidden="true" className="h-5 w-5" />}
+          />
+          <AccountCard
+            href="/account/delete"
+            title="Supprimer mon compte"
+            description={
+              isDeletionScheduled
+                ? 'Suppression programmée — annule depuis cette page tant que le compte à rebours 24h n’est pas écoulé.'
+                : 'Soft-delete immédiat puis suppression définitive sous 30 jours (RGPD article 17). Compte à rebours 24h pour annuler.'
+            }
+            icon={<Trash2 aria-hidden="true" className="h-5 w-5" />}
+            tone={isDeletionScheduled ? 'warn' : 'danger'}
+            badge={isDeletionScheduled ? <Pill tone="warn">En cours · annulable</Pill> : undefined}
+          />
+        </ul>
+
+        <footer className="mt-10 border-t border-[var(--b-subtle)] pt-5 text-xs text-[var(--t-3)]">
+          <p>
+            Une question ?{' '}
+            <a
+              href="mailto:fxeliott@fxmily.fr"
+              className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
+            >
+              fxeliott@fxmily.fr
+            </a>
+            . Voir aussi la{' '}
+            <Link
+              href="/legal/privacy"
+              className="text-[var(--acc-hi)] underline underline-offset-2 hover:text-[var(--acc)]"
+            >
+              politique de confidentialité
+            </Link>{' '}
+            si tu veux savoir comment on traite tes données.
+          </p>
+        </footer>
+      </div>
     </main>
   );
 }

@@ -6,6 +6,7 @@ import { auth } from '@/auth';
 import { PreferencesGrid } from '@/components/account/preferences-grid';
 import { PushToggle } from '@/components/account/push-toggle';
 import { ServiceWorkerRegister } from '@/components/account/sw-register';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
 import { Pill } from '@/components/ui/pill';
 import { env } from '@/lib/env';
@@ -59,90 +60,94 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
   const isConfigured = vapidPublicKey.length > 0;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-10 lg:px-8">
-      <ServiceWorkerRegister />
+    <main className="relative bg-[var(--bg)]">
+      {/* S19.1 ambient anti-fade backplate (decorative, -z-10, reduced-motion-safe). */}
+      <DashboardAmbient />
+      <div className="relative mx-auto w-full max-w-3xl px-4 py-6 sm:py-10 lg:px-8">
+        <ServiceWorkerRegister />
 
-      <header className="mb-6">
-        <Link
-          href="/dashboard"
-          className={btnVariants({ kind: 'ghost', size: 'm' })}
-          aria-label="Retour au dashboard"
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-          Dashboard
-        </Link>
-        <h1 className="t-h1 mt-3 text-[var(--t-1)]">Notifications</h1>
-        <p className="mt-2 text-sm text-[var(--t-2)]">
-          Reste informé sur ce qui compte, sans être noyé. Tu choisis ce qui mérite une notification
-          — et tu peux tout couper en un clic.
-        </p>
-        <div className="mt-3 flex items-center gap-2">
-          <Pill tone="acc">
-            <Bell aria-hidden="true" className="h-3 w-3" />
-            {subscriptions.length === 0
-              ? 'Aucun appareil abonné'
-              : subscriptions.length === 1
-                ? '1 appareil abonné'
-                : `${subscriptions.length} appareils abonnés`}
-          </Pill>
-        </div>
-      </header>
+        <header className="mb-6">
+          <Link
+            href="/dashboard"
+            className={btnVariants({ kind: 'ghost', size: 'm' })}
+            aria-label="Retour au dashboard"
+          >
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            Dashboard
+          </Link>
+          <h1 className="t-h1 mt-3 text-[var(--t-1)]">Notifications</h1>
+          <p className="mt-2 text-sm text-[var(--t-2)]">
+            Reste informé sur ce qui compte, sans être noyé. Tu choisis ce qui mérite une
+            notification — et tu peux tout couper en un clic.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <Pill tone="acc">
+              <Bell aria-hidden="true" className="h-3 w-3" />
+              {subscriptions.length === 0
+                ? 'Aucun appareil abonné'
+                : subscriptions.length === 1
+                  ? '1 appareil abonné'
+                  : `${subscriptions.length} appareils abonnés`}
+            </Pill>
+          </div>
+        </header>
 
-      <section className="mb-8 space-y-3">
-        <h2 className="text-xs font-medium tracking-widest text-[var(--t-3)] uppercase">
-          Activation
-        </h2>
-        {isConfigured ? (
-          <PushToggle
-            vapidPublicKey={vapidPublicKey}
-            initialSubscriptionCount={subscriptions.length}
-          />
-        ) : (
-          <div className="rounded-card border border-[var(--warn-edge)] bg-[var(--warn-dim)] p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-[var(--t-1)]">
-              <ShieldCheck aria-hidden="true" className="h-4 w-4 text-[var(--warn)]" />
-              Configuration en attente
+        <section className="mb-8 space-y-3">
+          <h2 className="text-xs font-medium tracking-widest text-[var(--t-3)] uppercase">
+            Activation
+          </h2>
+          {isConfigured ? (
+            <PushToggle
+              vapidPublicKey={vapidPublicKey}
+              initialSubscriptionCount={subscriptions.length}
+            />
+          ) : (
+            <div className="rounded-card border border-[var(--warn-edge)] bg-[var(--warn-dim)] p-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-[var(--t-1)]">
+                <ShieldCheck aria-hidden="true" className="h-4 w-4 text-[var(--warn)]" />
+                Configuration en attente
+              </div>
+              <p className="mt-1 text-sm text-[var(--t-2)]">
+                Les notifications push sont en cours de mise en service. Reviens dans quelques
+                minutes — ou demande à Eliott si l&apos;attente persiste.
+              </p>
             </div>
-            <p className="mt-1 text-sm text-[var(--t-2)]">
-              Les notifications push sont en cours de mise en service. Reviens dans quelques minutes
-              — ou demande à Eliott si l&apos;attente persiste.
+          )}
+        </section>
+
+        <section className="mb-8 space-y-3">
+          <h2 className="text-xs font-medium tracking-widest text-[var(--t-3)] uppercase">
+            Catégories
+          </h2>
+          <PreferencesGrid initialPreferences={preferences} isAdmin={isAdmin} />
+          <p className="text-xs text-[var(--t-3)]">
+            Toutes les catégories sont activées par défaut. Bascule un toggle pour suspendre une
+            catégorie sans toucher aux autres.
+          </p>
+        </section>
+
+        <section className="mb-8 space-y-3">
+          <h2 className="text-xs font-medium tracking-widest text-[var(--t-3)] uppercase">
+            Comment ça marche
+          </h2>
+          <div className="rounded-card space-y-2 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 text-sm text-[var(--t-2)] transition-[border-color,box-shadow] duration-200 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card)]">
+            <p>
+              <strong className="text-[var(--t-1)]">Pas de cloches inutiles.</strong> Fxmily
+              n&apos;envoie jamais de promo, jamais de FOMO, jamais d&apos;analyse de marché.
+              Uniquement ce qui sert ta discipline.
+            </p>
+            <p>
+              <strong className="text-[var(--t-1)]">Ton choix prime.</strong> Si tu désactives une
+              catégorie, le serveur vérifie systématiquement avant d&apos;envoyer — aucun message ne
+              te parvient en contradiction avec tes réglages.
+            </p>
+            <p>
+              <strong className="text-[var(--t-1)]">Aucun audio.</strong> Les notifications restent
+              visuelles et haptiques (vibration système). Pas de sonneries Fxmily-specific.
             </p>
           </div>
-        )}
-      </section>
-
-      <section className="mb-8 space-y-3">
-        <h2 className="text-xs font-medium tracking-widest text-[var(--t-3)] uppercase">
-          Catégories
-        </h2>
-        <PreferencesGrid initialPreferences={preferences} isAdmin={isAdmin} />
-        <p className="text-xs text-[var(--t-3)]">
-          Toutes les catégories sont activées par défaut. Bascule un toggle pour suspendre une
-          catégorie sans toucher aux autres.
-        </p>
-      </section>
-
-      <section className="mb-8 space-y-3">
-        <h2 className="text-xs font-medium tracking-widest text-[var(--t-3)] uppercase">
-          Comment ça marche
-        </h2>
-        <div className="rounded-card space-y-2 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 text-sm text-[var(--t-2)] transition-[border-color,box-shadow] duration-200 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card)]">
-          <p>
-            <strong className="text-[var(--t-1)]">Pas de cloches inutiles.</strong> Fxmily
-            n&apos;envoie jamais de promo, jamais de FOMO, jamais d&apos;analyse de marché.
-            Uniquement ce qui sert ta discipline.
-          </p>
-          <p>
-            <strong className="text-[var(--t-1)]">Ton choix prime.</strong> Si tu désactives une
-            catégorie, le serveur vérifie systématiquement avant d&apos;envoyer — aucun message ne
-            te parvient en contradiction avec tes réglages.
-          </p>
-          <p>
-            <strong className="text-[var(--t-1)]">Aucun audio.</strong> Les notifications restent
-            visuelles et haptiques (vibration système). Pas de sonneries Fxmily-specific.
-          </p>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
   );
 }

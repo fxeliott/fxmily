@@ -167,11 +167,34 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
 function PatternsHero() {
   // 4 lentilles d'analyse. Teintes via tokens data-viz catégoriels NEUTRES
   // (flippent en light) — décoratives, jamais une grammaire direction/P&L.
+  // S19.1 — lentilles cliquables = mini-sommaire + wow : chaque lentille pointe
+  // vers l'ancre de la section qu'elle annonce (émotions/sessions/paires vivent
+  // dans la section « Patterns d'exécution », habitudes dans sa propre section).
   const lenses = [
-    { label: 'Émotions', Icon: Heart, surf: 'border-[var(--dv-1-edge)] bg-[var(--dv-1-dim)]' },
-    { label: 'Sessions', Icon: Clock, surf: 'border-[var(--dv-2-edge)] bg-[var(--dv-2-dim)]' },
-    { label: 'Paires', Icon: Layers, surf: 'border-[var(--dv-3-edge)] bg-[var(--dv-3-dim)]' },
-    { label: 'Habitudes', Icon: Coffee, surf: 'border-[var(--dv-1-edge)] bg-[var(--dv-1-dim)]' },
+    {
+      label: 'Émotions',
+      Icon: Heart,
+      href: '#patterns-heading',
+      surf: 'border-[var(--dv-1-edge)] bg-[var(--dv-1-dim)]',
+    },
+    {
+      label: 'Sessions',
+      Icon: Clock,
+      href: '#patterns-heading',
+      surf: 'border-[var(--dv-2-edge)] bg-[var(--dv-2-dim)]',
+    },
+    {
+      label: 'Paires',
+      Icon: Layers,
+      href: '#patterns-heading',
+      surf: 'border-[var(--dv-3-edge)] bg-[var(--dv-3-dim)]',
+    },
+    {
+      label: 'Habitudes',
+      Icon: Coffee,
+      href: '#habit-corr-heading',
+      surf: 'border-[var(--dv-1-edge)] bg-[var(--dv-1-dim)]',
+    },
   ] as const;
 
   return (
@@ -206,22 +229,27 @@ function PatternsHero() {
           </div>
 
           {/* ---- Droite : les 4 lentilles d'analyse ---- */}
+          {/* S19.1 — mini-sommaire : chaque lentille est un lien d'ancre vers sa
+              section. Hover/focus compositor-safe (border/bg + translate sous
+              transition-transform), focus-visible:outline pour l'a11y clavier. */}
           <ul
             className="grid grid-cols-2 gap-2.5"
-            aria-label="Les axes d’analyse de cette page : émotions, sessions, paires, habitudes"
+            aria-label="Aller à une section d’analyse : émotions, sessions, paires, habitudes"
           >
-            {lenses.map(({ label, Icon, surf }) => (
-              <li
-                key={label}
-                className={`rounded-card flex items-center gap-2.5 border p-3 ${surf}`}
-              >
-                <span
-                  aria-hidden="true"
-                  className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-2)]"
+            {lenses.map(({ label, Icon, href, surf }) => (
+              <li key={label}>
+                <a
+                  href={href}
+                  className={`rounded-card flex items-center gap-2.5 border p-3 transition-[colors,transform] duration-200 ease-out hover:-translate-y-px hover:border-[var(--b-acc)] hover:bg-[var(--acc-dim-2)] focus-visible:-translate-y-px focus-visible:border-[var(--b-acc)] focus-visible:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] ${surf}`}
                 >
-                  <Icon className="h-4 w-4" strokeWidth={1.75} />
-                </span>
-                <span className="text-[13px] font-semibold text-[var(--t-1)]">{label}</span>
+                  <span
+                    aria-hidden="true"
+                    className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-2)]"
+                  >
+                    <Icon className="h-4 w-4" strokeWidth={1.75} />
+                  </span>
+                  <span className="text-[13px] font-semibold text-[var(--t-1)]">{label}</span>
+                </a>
               </li>
             ))}
           </ul>

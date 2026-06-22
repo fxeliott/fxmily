@@ -1,4 +1,4 @@
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight, Compass, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { CSSProperties } from 'react';
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 /**
  * V2.4 Phase B — `/onboarding/interview/complete` calm reveal (M3 directive).
  *
- * Server Component, DS-v2 lime neutral. Surfaced post-`finalizeInterviewAction`
+ * Server Component, DS-v3 accent-blue neutral. Surfaced post-`finalizeInterviewAction`
  * redirect. Mark Douglas posture : no fanfare, no badge unlock, no XP — calm
  * reveal "ton entretien est posé, ton profil sera analysé dans les 24h".
  *
@@ -101,8 +101,13 @@ export default async function OnboardingInterviewCompletePage() {
             Voir mon profil
             <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
           </Link>
-          <Link href="/dashboard" className={cn(btnVariants({ kind: 'ghost', size: 'l' }))}>
-            Retour au tableau de bord
+          {/* S19.1 — ferme la boucle profil -> plan : oriente le membre vers son
+              espace plan (axes + roadmap) plutot que vers un cul-de-sac dashboard.
+              Posture Mark Douglas : invitation calme, aucune pression. */}
+          <Link href="/objectifs" className={cn(btnVariants({ kind: 'secondary', size: 'l' }))}>
+            <Compass className="h-4 w-4" strokeWidth={1.75} />
+            Découvrir mon plan
+            <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
           </Link>
         </div>
       </section>

@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { EveningCheckinWizard } from '@/components/checkin/evening-checkin-wizard';
 import { MorningIntentionRecall } from '@/components/checkin/morning-intention-recall';
-import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { getCheckin, todayFor } from '@/lib/checkin/service';
 
 export const metadata = {
@@ -23,17 +22,12 @@ export default async function EveningCheckinPage() {
   const morning = await getCheckin(session.user.id, today, 'morning');
 
   return (
-    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
-      {/* S19 — ambient depth (parité avec le check-in matin + ses pages sœurs).
-          Décoratif, reduced-motion-safe. */}
-      <DashboardAmbient />
-      <div className="relative mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8 lg:py-10">
-        <MorningIntentionRecall intention={morning?.intention} context="evening" />
-        <EveningCheckinWizard
-          today={today}
-          hasMorningIntention={Boolean(morning?.intention?.trim())}
-        />
-      </div>
+    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:py-10">
+      <MorningIntentionRecall intention={morning?.intention} context="evening" />
+      <EveningCheckinWizard
+        today={today}
+        hasMorningIntention={Boolean(morning?.intention?.trim())}
+      />
     </main>
   );
 }

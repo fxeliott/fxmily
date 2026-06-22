@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
 import { Pill } from '@/components/ui/pill';
 import { logAudit } from '@/lib/auth/audit';
@@ -53,8 +54,11 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
   });
 
   return (
-    <main className="mx-auto w-full max-w-[var(--w-app)] px-4 py-6 sm:py-10 lg:px-8 2xl:px-12">
-      <header className="mb-6">
+    <main className="relative mx-auto w-full max-w-[var(--w-app)] px-4 py-6 sm:py-10 lg:px-8 2xl:px-12">
+      {/* S19.2 — align the system header on the admin canon (members/reports):
+          ambient mesh + f-display masthead. Body LEDs stay deliberately sober. */}
+      <DashboardAmbient />
+      <header className="relative mb-6">
         <Link
           href="/admin/members"
           className={btnVariants({ kind: 'ghost', size: 'm' })}
@@ -66,7 +70,10 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
         <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
           Observability
         </p>
-        <h1 className="mt-2 flex items-center gap-3 text-2xl font-semibold tracking-tight text-[var(--t-1)] sm:text-3xl">
+        <h1
+          className="f-display h-rise mt-2 flex items-center gap-3 text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+          style={{ fontFeatureSettings: '"ss01" 1' }}
+        >
           État système
           <OverallStatusPill status={report.overall} />
         </h1>

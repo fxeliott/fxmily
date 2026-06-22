@@ -44,7 +44,10 @@ export default async function AdminReunionsPage() {
   const totalUpcoming = meetings.filter((m) => !m.isPast && m.status === 'scheduled').length;
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col gap-6 px-4 py-8 lg:px-8">
+      {/* S19.2 — widened from max-w-3xl (768px, stranded on ultra-wide) so the
+          md:2 / xl:3 meeting grid below can actually breathe; sibling admin
+          surfaces are full-width. */}
       <header className="flex flex-col gap-4">
         <Link
           href="/admin/members"

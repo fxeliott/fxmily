@@ -32,7 +32,11 @@ export interface PillProps extends VariantProps<typeof pillVariants> {
 
 export function Pill({ tone, children, dot, className }: PillProps) {
   return (
-    <span data-slot="pill" className={cn(pillVariants({ tone }), className)}>
+    <span
+      data-slot="pill"
+      data-tone={tone ?? 'mute'}
+      className={cn(pillVariants({ tone }), className)}
+    >
       {dot && (
         <span
           aria-hidden

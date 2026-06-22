@@ -128,7 +128,8 @@ export default async function AdminReportsPage() {
           <StatCell
             label="Coût cumulé"
             value={Number(stats.totalCostEur)}
-            format={(v) => `${v.toFixed(2)} €`}
+            decimals={2}
+            suffix=" €"
             hint="depuis J8"
             tone="acc"
           />
@@ -249,14 +250,18 @@ export default async function AdminReportsPage() {
 function StatCell({
   label,
   value,
-  format,
+  decimals,
+  suffix,
   hint,
   tone = 'default',
 }: {
   label: string;
   value: number;
-  /** Optional formatter (e.g. append " €"). Default: rounded fr-FR integer. */
-  format?: (v: number) => string;
+  /** Serializable formatting (RSC-safe — no function across the server→client
+   * boundary into AnimatedNumber): decimal places (fr-FR). Default: integer. */
+  decimals?: number;
+  /** Serializable suffix (e.g. " €"). RSC-safe. */
+  suffix?: string;
   hint?: string;
   tone?: 'default' | 'mute' | 'ok' | 'warn' | 'bad' | 'acc';
 }) {
@@ -315,7 +320,8 @@ function StatCell({
       <span className="t-eyebrow">{label}</span>
       <AnimatedNumber
         value={value}
-        format={format}
+        decimals={decimals}
+        suffix={suffix}
         className={cn(
           'f-mono origin-left text-[20px] leading-none font-semibold tracking-[-0.02em] transition-transform duration-200 group-hover/stat:scale-[1.06] motion-reduce:transition-none motion-reduce:group-hover/stat:scale-100',
           valColor,

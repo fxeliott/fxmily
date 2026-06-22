@@ -555,7 +555,7 @@ function QuestionStep({
             type="submit"
             disabled={!canSubmit}
             className={cn(
-              'rounded-control inline-flex h-11 flex-1 items-center justify-center gap-1.5 text-[14px] font-semibold transition-[background-color,box-shadow,transform] duration-150',
+              'rounded-control inline-flex h-11 flex-1 items-center justify-center gap-1.5 text-[14px] font-semibold whitespace-nowrap transition-[background-color,box-shadow,transform] duration-150',
               canSubmit
                 ? 'bg-[var(--acc-btn)] text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',

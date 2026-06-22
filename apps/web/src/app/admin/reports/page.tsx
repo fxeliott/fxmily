@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -90,8 +91,10 @@ export default async function AdminReportsPage() {
   const weeks = Array.from(grouped.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[var(--w-app)] flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
-      <header className="flex flex-col gap-4">
+    <main className="relative mx-auto flex min-h-dvh w-full max-w-[var(--w-app)] flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
+      {/* S19.2 — ambient mesh for admin-surface coherence (cards/system/hub). */}
+      <DashboardAmbient />
+      <header className="relative flex flex-col gap-4">
         <Link
           href="/admin/members"
           aria-label="Retour à la liste des membres"

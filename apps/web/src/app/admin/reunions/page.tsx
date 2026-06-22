@@ -45,9 +45,9 @@ export default async function AdminReunionsPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col gap-6 px-4 py-8 lg:px-8">
-      {/* S19.2 — widened from max-w-3xl (768px, stranded on ultra-wide) so the
-          md:2 / xl:3 meeting grid below can actually breathe; sibling admin
-          surfaces are full-width. */}
+      {/* S19.2 — widened from max-w-3xl (768px) and the single-column créneaux
+          list now tiles 2-up from sm so it USES the extra width instead of
+          stretching one row across ~1024px (parity with sibling admin pages). */}
       <header className="flex flex-col gap-4">
         <Link
           href="/admin/members"
@@ -107,7 +107,7 @@ export default async function AdminReunionsPage() {
             />
           </Card>
         ) : (
-          <ul className="flex flex-col gap-3">
+          <ul className="grid gap-3 sm:grid-cols-2">
             {meetings.map((meeting) => (
               // `.wow-reveal` class (not a framer wrapper) keeps the list
               // structure intact for the admin e2e; a cancelled row keeps its

@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 
 import type { TrainingDebriefStats } from '@/lib/training-debrief/stats';
-import { C } from '@/lib/theme-colors';
+import { useChartColors } from '@/lib/use-chart-colors';
 import { cn } from '@/lib/utils';
 
 /**
@@ -53,6 +53,10 @@ export function TrainingDebriefStatsPanel({
   className,
 }: TrainingDebriefStatsPanelProps) {
   const prefersReducedMotion = useReducedMotion();
+  // S19 — theme-aware chart colors (was static dark `C`): the 2 Recharts +
+  // legend swatches now flip to the light hex set (cyan→teal, axes AA, white
+  // surfaces) instead of staying neon-on-white in light mode. SSR-safe hook.
+  const C = useChartColors();
   const { volume, systemRespect, diversity, lessons } = stats;
   const empty = volume.backtestCount === 0;
 
@@ -155,7 +159,9 @@ export function TrainingDebriefStatsPanel({
                     animationDuration={700}
                   >
                     {barData.map((entry) => (
-                      <Cell key={entry.day} fill={entry.count > 0 ? C.cy : C.bg3} />
+                      // S19 — empty day uses bg2 (not bg3=#fff in light → invisible
+                      // on the white card); bg2 stays distinct from the card in both themes.
+                      <Cell key={entry.day} fill={entry.count > 0 ? C.cy : C.bg2} />
                     ))}
                   </Bar>
                 </BarChart>

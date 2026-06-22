@@ -139,8 +139,10 @@ export default async function ReviewDetailPage({ params }: ReviewDetailProps) {
                     aria-hidden="true"
                     className="rounded-pill mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center border border-[var(--b-acc)]"
                     style={{
-                      background: 'oklch(0.62 0.19 254 / 0.14)',
-                      color: 'oklch(0.82 0.115 247)',
+                      // S19 — tokens (was fixed dark oklch → faint in light); both
+                      // flip via .light .v18-theme (--acc-hi ~6.4:1 AA on the dim bg).
+                      background: 'var(--acc-dim)',
+                      color: 'var(--acc-hi)',
                     }}
                   >
                     <Icon size={15} strokeWidth={2.2} />

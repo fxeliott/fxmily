@@ -100,7 +100,10 @@ export function ABCDHero({ className }: { className?: string }) {
             cx={n.cx}
             cy={n.cy}
             r={n.r}
-            fill="oklch(0.18 0.03 254 / 0.85)"
+            // S19 — token fill (was opaque dark oklch 0.18): flips to white in
+            // light (.light .v18-theme --bg-3) so nodes aren't dark blobs on a
+            // light card. The colored stroke + label carry the meaning in both.
+            fill="var(--bg-3)"
             stroke={n.color}
             strokeWidth="2"
             filter={i === 3 ? 'url(#v18-abcd-glow)' : undefined}
@@ -116,7 +119,9 @@ export function ABCDHero({ className }: { className?: string }) {
             fontFamily="var(--font-display)"
             fontSize="15"
             fontWeight="700"
-            fill={i === 3 ? 'oklch(0.95 0.01 247)' : 'oklch(0.84 0.01 250)'}
+            // S19 — token text (was fixed light grays → invisible on white node
+            // in light mode); --t-1/--t-2 flip to dark on the light node.
+            fill={i === 3 ? 'var(--t-1)' : 'var(--t-2)'}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.5 + i * 0.35 }}

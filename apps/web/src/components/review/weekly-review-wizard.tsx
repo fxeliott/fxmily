@@ -407,8 +407,10 @@ function StepHeader({ step, eyebrow, headingRef }: StepHeaderProps) {
         aria-hidden="true"
         className="rounded-pill mt-1 flex h-10 w-10 shrink-0 items-center justify-center border border-[var(--b-acc)]"
         style={{
-          background: 'oklch(0.62 0.19 254 / 0.14)',
-          color: 'oklch(0.82 0.115 247)',
+          // S19 — tokens (was fixed dark oklch → faint in light); flip via
+          // .light .v18-theme, --acc-hi clears AA on the dim ground.
+          background: 'var(--acc-dim)',
+          color: 'var(--acc-hi)',
           boxShadow: 'var(--acc-glow)',
         }}
       >

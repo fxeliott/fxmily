@@ -200,11 +200,11 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
             headline="Pas encore de membres."
             lead="La cohorte se construit à l'invitation. Chaque membre actif peut activer un trader qu'il connaît."
             guides={[
-              'Vérifie que l&apos;email du futur membre est correct.',
-              'Le lien expire après 7 jours, il est unique et ne peut servir qu&apos;une fois.',
-              'Tu peux inviter à nouveau quelqu&apos;un dont l&apos;invitation a expiré.',
+              'Vérifie que l’email du futur membre est correct.',
+              'Le lien expire après 7 jours, il est unique et ne peut servir qu’une fois.',
+              'Tu peux inviter à nouveau quelqu’un dont l’invitation a expiré.',
             ]}
-            tip="Cohorte privée = qualité &gt; quantité. Mieux vaut 30 traders sérieux que 300 curieux."
+            tip="Cohorte privée = qualité > quantité. Mieux vaut 30 traders sérieux que 300 curieux."
             ctaPrimary={
               <>
                 <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />

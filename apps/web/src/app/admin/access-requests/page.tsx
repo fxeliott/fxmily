@@ -89,11 +89,11 @@ export default async function AdminAccessRequestsPage() {
             headline="Boîte vide."
             lead="Les demandes envoyées depuis la page publique /rejoindre apparaîtront ici, à valider une par une."
             guides={[
-              'Accepter crée une invitation (lien 7 jours) et envoie l&apos;email premium.',
-              'Refuser est définitif — pas d&apos;email, pas de compte.',
+              'Accepter crée une invitation (lien 7 jours) et envoie l’email premium.',
+              'Refuser est définitif — pas d’email, pas de compte.',
               'Les demandes traitées sont purgées automatiquement (RGPD).',
             ]}
-            tip="Cohorte privée = qualité &gt; quantité. Mieux vaut 30 traders sérieux que 300 curieux."
+            tip="Cohorte privée = qualité > quantité. Mieux vaut 30 traders sérieux que 300 curieux."
           />
         </Card>
       ) : (

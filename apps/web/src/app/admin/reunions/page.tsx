@@ -144,12 +144,51 @@ function StatCell({
               ? 'text-[var(--t-3)]'
               : 'text-[var(--t-1)]';
 
+  // Colored top liseré + hover wash, per tone. Compositor-only (number scales
+  // via transform; cell tints via bg-color). The liseré is a child span so the
+  // 3-col border-reset (border-r last:border-r-0) below stays intact.
+  const accentBar =
+    tone === 'ok'
+      ? 'bg-[var(--ok)]'
+      : tone === 'warn'
+        ? 'bg-[var(--warn)]'
+        : tone === 'bad'
+          ? 'bg-[var(--bad)]'
+          : tone === 'acc'
+            ? 'bg-[var(--acc)]'
+            : 'bg-[var(--b-strong)]';
+  const hoverWash =
+    tone === 'ok'
+      ? 'hover:bg-[var(--ok-dim)]'
+      : tone === 'warn'
+        ? 'hover:bg-[var(--warn-dim)]'
+        : tone === 'bad'
+          ? 'hover:bg-[var(--bad-dim)]'
+          : tone === 'acc'
+            ? 'hover:bg-[var(--acc-dim)]'
+            : 'hover:bg-[var(--bg-2)]';
+
   return (
-    <div className="flex flex-col gap-1 border-r border-[var(--b-default)] p-4 last:border-r-0">
+    <div
+      className={cn(
+        'group/stat relative flex flex-col gap-1 overflow-hidden border-r border-[var(--b-default)] p-4 transition-colors duration-200 last:border-r-0',
+        hoverWash,
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 transition-transform duration-300 ease-out group-hover/stat:scale-x-100 motion-reduce:transition-none',
+          accentBar,
+        )}
+      />
       <span className="t-eyebrow">{label}</span>
       <AnimatedNumber
         value={value}
-        className={cn('f-mono text-[22px] leading-none font-semibold tracking-[-0.02em]', valColor)}
+        className={cn(
+          'f-mono origin-left text-[22px] leading-none font-semibold tracking-[-0.02em] transition-transform duration-200 group-hover/stat:scale-[1.06] motion-reduce:transition-none motion-reduce:group-hover/stat:scale-100',
+          valColor,
+        )}
       />
       {hint ? <span className="t-mono-cap">{hint}</span> : null}
     </div>

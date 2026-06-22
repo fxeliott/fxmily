@@ -59,7 +59,7 @@ export function MonthlyDebriefReader({ debrief }: { debrief: SerializedMonthlyDe
       {/* §21.7 — the entraînement section keeps the cyan boundary visible
           even inside a mixed debrief. §21.5-safe: régularité/pratique only,
           the snapshot fed to the AI carried no backtest P&L. */}
-      <section className="rounded-card-lg border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] p-5">
+      <section className="rounded-card-lg border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] p-5">
         <p className="t-eyebrow-lg text-[var(--cy)]">Entraînement</p>
         <p className="t-body mt-2 leading-[1.65] whitespace-pre-line text-[var(--t-2)]">
           {debrief.summaryTraining}

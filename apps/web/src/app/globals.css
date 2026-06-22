@@ -140,6 +140,23 @@
   --acc-2-edge: oklch(0.55 0.21 262 / 0.42);
   --acc-2-glow: 0 0 24px -4px oklch(0.55 0.21 262 / 0.45);
 
+  /* ─── DATA-VIZ CATEGORY (S18) — séries NEUTRES uniquement, JAMAIS P&L/direction ──
+     Trio cool pour différencier des séries catégorielles (dimensions
+     comportementales, charts multi-séries, familles de KPI/cartes). --dv-1
+     bleu(254) / --dv-2 indigo(262) / --dv-3 cyan(217) : 3 hues du spectre
+     autorisé, distincts en HUE *et* luminance (sécurité daltonien). La
+     grammaire finance vert/rouge reste HORS de ce set. Pur alias → flippe
+     automatiquement en .light (--acc/--acc-2/--cy y sont redéclarés). */
+  --dv-1: var(--acc);
+  --dv-2: var(--acc-2);
+  --dv-3: var(--cy);
+  --dv-1-dim: var(--acc-dim);
+  --dv-2-dim: var(--acc-2-dim);
+  --dv-3-dim: var(--cy-dim-strong);
+  --dv-1-edge: var(--acc-edge);
+  --dv-2-edge: var(--acc-2-edge);
+  --dv-3-edge: var(--cy-edge);
+
   /* ─── BRAND GRADIENT — multi-stop cool (décoratif hero / fills) ───────────
      Généralise le 3-stop oklch du splash-hero (246→258→268) en token unique :
      bleu → indigo → cyan-teal. DÉCORATIF uniquement (heros, halos, edges) — le
@@ -214,8 +231,8 @@
   --sh-card:
     0 1px 0 oklch(1 0 0 / 0.04) inset, 0 0 0 1px oklch(1 0 0 / 0.01), 0 1px 2px oklch(0 0 0 / 0.18);
   --sh-card-hover:
-    0 1px 0 oklch(1 0 0 / 0.06) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.04),
-    0 4px 8px -2px oklch(0 0 0 / 0.24), 0 12px 28px -8px oklch(0.62 0.19 254 / 0.1);
+    0 1px 0 oklch(1 0 0 / 0.06) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.08),
+    0 4px 8px -2px oklch(0 0 0 / 0.24), 0 14px 32px -8px oklch(0.62 0.19 254 / 0.18);
   --sh-card-primary:
     0 1px 0 oklch(1 0 0 / 0.06) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.06),
     0 8px 24px -8px oklch(0.62 0.19 254 / 0.18), 0 2px 6px -1px oklch(0 0 0 / 0.3);
@@ -288,6 +305,9 @@
   --color-acc-2-hi: var(--acc-2-hi);
   --color-acc-2-dim: var(--acc-2-dim);
   --color-cy: var(--cy);
+  --color-dv-1: var(--dv-1);
+  --color-dv-2: var(--dv-2);
+  --color-dv-3: var(--dv-3);
   --color-ok: var(--ok);
   --color-bad: var(--bad);
   --color-warn: var(--warn);
@@ -522,13 +542,16 @@
 .light .ds-aurora-cy,
 .light .splash-aurora-rich,
 .light .v18-aurora {
-  opacity: 0.5;
+  /* S18 — remonté 0.5 → 0.62 : en clair la couleur doit ressortir aussi
+     (demande "mode clair parfait + plus de couleur"), sans laver le texte
+     (couches edge-biased sous contenu opaque). */
+  opacity: 0.62;
 }
 .light .ds-orb,
 .light .v18-orb,
 .light .login-orb,
 .light .splash-orb {
-  opacity: 0.3;
+  opacity: 0.4;
   mix-blend-mode: multiply; /* sur clair, multiply garde la teinte lisible sans laver */
 }
 
@@ -805,10 +828,12 @@
 /* Ambient mesh aurora — blue + indigo depth backplate behind the
    glass panels. Static gradient, zero JS, paints under content. */
 .ds-aurora {
+  /* S18 — backplate hero densifié (bleu→indigo→cyan plus présents). Sous des
+     panneaux glass/opaques → contraste texte intact. */
   background:
-    radial-gradient(58% 34% at 50% -8%, oklch(0.62 0.19 254 / 0.16) 0%, transparent 62%),
-    radial-gradient(42% 30% at 4% 16%, oklch(0.5 0.21 262 / 0.12) 0%, transparent 68%),
-    radial-gradient(40% 32% at 98% 6%, oklch(0.7 0.13 217 / 0.08) 0%, transparent 70%);
+    radial-gradient(58% 34% at 50% -8%, oklch(0.62 0.19 254 / 0.2) 0%, transparent 62%),
+    radial-gradient(42% 30% at 4% 16%, oklch(0.5 0.21 262 / 0.15) 0%, transparent 68%),
+    radial-gradient(40% 32% at 98% 6%, oklch(0.7 0.13 217 / 0.11) 0%, transparent 70%);
 }
 
 /* Cyan-forward variant — §21.7 training-debrief "Mode entraînement". Same
@@ -848,14 +873,32 @@
   inset: 0;
   z-index: -1;
   pointer-events: none;
+  /* S18 — densifié (la couleur ressort plus franchement, demande "moins fade").
+     Reste EDGE-BIASED (coins) : le centre — toujours sous le contenu — reste
+     quasi-nul, donc contraste texte intact par construction. +1 stop cyan
+     bas-gauche pour équilibrer le spectre cool bleu→indigo→cyan dans les 4 coins. */
   background:
-    radial-gradient(48% 36% at 50% -8%, oklch(0.62 0.19 254 / 0.08) 0%, transparent 62%),
-    radial-gradient(34% 46% at -2% 10%, oklch(0.5 0.21 262 / 0.07) 0%, transparent 68%),
-    radial-gradient(34% 46% at 102% 4%, oklch(0.7 0.13 217 / 0.05) 0%, transparent 70%),
-    radial-gradient(46% 50% at 88% 104%, oklch(0.5 0.21 262 / 0.06) 0%, transparent 68%);
+    radial-gradient(48% 36% at 50% -8%, oklch(0.62 0.19 254 / 0.12) 0%, transparent 62%),
+    radial-gradient(36% 48% at -2% 10%, oklch(0.5 0.21 262 / 0.11) 0%, transparent 68%),
+    radial-gradient(36% 48% at 102% 4%, oklch(0.7 0.13 217 / 0.09) 0%, transparent 70%),
+    radial-gradient(40% 44% at 4% 102%, oklch(0.7 0.13 217 / 0.07) 0%, transparent 66%),
+    radial-gradient(46% 50% at 88% 104%, oklch(0.5 0.21 262 / 0.1) 0%, transparent 68%);
+}
+/* S18 — grain anti-banding (technique Stripe/Apple, opacité ≤3% — confirmée
+   best-practice 2026 par la veille). Tue le banding sRGB des grands dégradés
+   ambient sans les ternir. Décoratif : pointer-events:none, retiré en High
+   Contrast. fractalNoise SVG inline (zéro requête, theme-agnostique). */
+.app-ambient::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.022;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 @media (forced-colors: active) {
-  .app-ambient {
+  .app-ambient,
+  .app-ambient::after {
     display: none;
   }
 }
@@ -1900,6 +1943,20 @@
 .wow-hover-glow:hover::after,
 .wow-hover-glow:focus-visible::after {
   opacity: 1;
+}
+
+/* S18 — variantes de teinte cool du glow hover, pour différencier les FAMILLES
+   de modules (training=cyan §21.7, séries data=indigo) sans casser le mono-accent
+   (le CTA plein reste --acc bleu ; ces classes ne colorent qu'un halo de survol
+   décoratif). À composer avec .wow-hover-glow : `class="wow-hover-glow wow-hover-glow-cy"`.
+   Spécificité (0,2,0) > la règle de base (0,1,0) → override propre de la teinte. */
+.wow-hover-glow.wow-hover-glow-cy::after {
+  border-color: var(--cy-edge);
+  box-shadow: var(--cy-glow);
+}
+.wow-hover-glow.wow-hover-glow-2::after {
+  border-color: var(--acc-2-edge);
+  box-shadow: var(--acc-2-glow);
 }
 
 /* ---- Reduced-motion: belt-and-braces for the continuous login orbs +

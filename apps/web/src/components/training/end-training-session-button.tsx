@@ -61,7 +61,7 @@ export function EndTrainingSessionButton({ sessionId }: { sessionId: string }) {
       role="alertdialog"
       aria-labelledby={promptId}
       aria-describedby={promptId}
-      className="rounded-control flex w-full flex-col gap-2 border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] p-3"
+      className="rounded-control flex w-full flex-col gap-2 border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] p-3"
     >
       <p id={promptId} className="t-cap text-[var(--t-2)]">
         Marquer cette séance comme terminée ? Tu pourras toujours la consulter ; tes backtests sont

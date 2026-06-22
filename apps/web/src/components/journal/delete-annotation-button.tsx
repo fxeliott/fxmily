@@ -71,7 +71,7 @@ export function DeleteAnnotationButton({ annotationId }: DeleteAnnotationButtonP
       role="alertdialog"
       aria-labelledby={promptId}
       aria-describedby={promptId}
-      className="rounded-control flex w-full flex-col gap-2 border border-[oklch(0.7_0.165_22_/_0.30)] bg-[var(--bad-dim)] p-3"
+      className="rounded-control flex w-full flex-col gap-2 border border-[var(--bad-edge)] bg-[var(--bad-dim)] p-3"
     >
       <p id={promptId} className="t-cap text-[var(--t-2)]">
         Supprimer cette correction définitivement ? Le membre ne la verra plus.

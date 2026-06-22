@@ -101,8 +101,7 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
             role="status"
             className="rounded-card-lg border border-[var(--b-acc)] p-4"
             style={{
-              background:
-                'linear-gradient(135deg, oklch(0.62 0.19 254 / 0.16) 0%, oklch(0.13 0.028 254 / 0.85) 80%)',
+              background: 'linear-gradient(135deg, var(--acc-dim) 0%, var(--bg-2) 80%)',
             }}
           >
             <p className="t-eyebrow text-[var(--t-3)]">Enregistrée</p>
@@ -152,13 +151,13 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
                       </header>
                       <dl className="mt-2 space-y-1.5">
                         <div className="flex items-baseline gap-2">
-                          <dt className="t-eyebrow w-7 shrink-0 text-[oklch(0.46_0.21_263)]">A</dt>
+                          <dt className="t-eyebrow w-7 shrink-0 text-[var(--acc-2)]">A</dt>
                           <dd className="t-body line-clamp-1 text-[var(--t-2)]">
                             {r.triggerEvent}
                           </dd>
                         </div>
                         <div className="flex items-baseline gap-2">
-                          <dt className="t-eyebrow w-7 shrink-0 text-[oklch(0.82_0.115_247)]">D</dt>
+                          <dt className="t-eyebrow w-7 shrink-0 text-[var(--cy)]">D</dt>
                           <dd className="t-body line-clamp-1 text-[var(--t-1)]">{r.disputation}</dd>
                         </div>
                       </dl>

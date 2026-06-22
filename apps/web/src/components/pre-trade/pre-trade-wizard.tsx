@@ -237,6 +237,32 @@ export function PreTradeCheckWizard() {
   const stepValid = isStepValid(step);
   const safeStep = Math.max(0, Math.min(step, TOTAL_STEPS - 1));
 
+  // Micro-feedback: a one-shot confirm flash on the step body + an accent pulse
+  // on the Suivant button the moment the current step becomes valid (an answer
+  // is chosen). Compositor/one-shot only; the global reduced-motion net settles
+  // both animations instantly. The key is `${step}` so the effect re-runs (and
+  // re-arms) on each step change, and the local flag fires the flash only on the
+  // first render of a step where the answer is present — i.e. the moment it
+  // flips valid — not on every keystroke once already valid.
+  const [confirmPulse, setConfirmPulse] = useState(false);
+  const armedStepRef = useRef<number | null>(null);
+  useEffect(() => {
+    // Skip if we already flashed for this step instance, or the step is not yet
+    // valid (waiting for the user to answer).
+    if (!stepValid || armedStepRef.current === step) return undefined;
+    armedStepRef.current = step;
+    setConfirmPulse(true);
+    const t = setTimeout(() => setConfirmPulse(false), 700);
+    return () => clearTimeout(t);
+  }, [stepValid, step]);
+
+  // Re-arm when leaving a step so coming back re-flashes its confirmation.
+  useEffect(() => {
+    return () => {
+      armedStepRef.current = null;
+    };
+  }, [step]);
+
   const formError = state?.error;
   const errors = state?.fieldErrors;
 
@@ -309,7 +335,7 @@ export function PreTradeCheckWizard() {
               duration: reduceMotion ? 0 : 0.3,
               ease: [0.22, 1, 0.36, 1],
             }}
-            className="flex flex-col gap-6"
+            className={cn('rounded-card flex flex-col gap-6', confirmPulse && 'confirm-flash')}
           >
             {safeStep === 0 ? (
               <StepCardGroup
@@ -412,6 +438,7 @@ export function PreTradeCheckWizard() {
               stepValid
                 ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
+              confirmPulse && stepValid && 'threshold-pulse',
             )}
           >
             Suivant
@@ -597,7 +624,7 @@ function StepCardGroup({
               onClick={() => onChange(opt.value)}
               data-name={name}
               className={cn(
-                'rounded-card flex min-h-[88px] items-start gap-3 border p-4 text-left transition-colors',
+                'wow-hover-glow rounded-card flex min-h-[88px] items-start gap-3 border p-4 text-left transition-[color,background-color,border-color,transform] duration-150 hover:-translate-y-px',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] focus-visible:outline-solid',
                 checked
                   ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)]'
@@ -756,7 +783,7 @@ function StepBoolean({
               onClick={() => onChange(opt.bool)}
               data-name={name}
               className={cn(
-                'rounded-card flex min-h-[60px] items-center justify-center gap-2 border px-4 py-3 text-[14px] font-semibold transition-colors',
+                'wow-hover-glow rounded-card flex min-h-[60px] items-center justify-center gap-2 border px-4 py-3 text-[14px] font-semibold transition-[color,background-color,border-color,transform] duration-150 hover:-translate-y-px',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] focus-visible:outline-solid',
                 checked
                   ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)]'

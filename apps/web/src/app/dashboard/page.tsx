@@ -20,6 +20,7 @@ import { ProfileStatusWidget } from '@/components/onboarding/profile-status-widg
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
+import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { Kbd } from '@/components/ui/kbd';
 import { getCheckin, getStreak, todayFor } from '@/lib/checkin/service';
@@ -189,21 +190,22 @@ export default async function DashboardPage() {
           </section>
         ) : null}
 
-        {/* V2 refonte J1 — slim activity strip (streak dans le hero). */}
+        {/* V2 refonte J1 — slim activity strip (streak dans le hero). S18 — passée
+            de spans nus à 3 mini-cartes acc-dim vivantes (AnimatedNumber + micro
+            count-up). 3 stats MAX, jamais de P&L brut (posture §2) : un compteur
+            d'activité, pas un mur d'analytics. Hover lift premium sur chacune. */}
         <section className="mb-6" aria-labelledby="activity-heading">
           <h2 id="activity-heading" className="sr-only">
             Activité de trading
           </h2>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <TradeStat label="Trades" value={totalTrades} />
-            <StatDot />
-            <TradeStat
+          <div className="grid grid-cols-3 gap-3">
+            <TradeStatCard label="Trades" value={totalTrades} tone="acc" />
+            <TradeStatCard
               label="En cours"
               value={counts.open}
               tone={counts.open > 0 ? 'warn' : 'mute'}
             />
-            <StatDot />
-            <TradeStat
+            <TradeStatCard
               label="Clôturés"
               value={counts.closed}
               tone={counts.closed > 0 ? 'ok' : 'mute'}
@@ -489,40 +491,54 @@ function ReflectWidgetSkeleton() {
   );
 }
 
-/** A single trade-count stat in the slim strip below the hero. Counts only —
- *  never P&L (posture §2). */
-function TradeStat({
+/** A single trade-count mini-card in the activity strip below the hero (S18).
+ *  Counts only — never P&L (posture §2). A solid tinted surface (NOT glass) so
+ *  the HoverGlowLift's spring lift + colored halo can apply (compositor-only).
+ *  `acc` = neutral count tint ; `ok`/`warn` reuse the existing tone semantics
+ *  (clôturés vert calme, en-cours ambre) without ever recolouring a P&L. */
+function TradeStatCard({
   label,
   value,
-  tone = 'default',
+  tone = 'acc',
 }: {
   label: string;
   value: number;
-  tone?: 'default' | 'mute' | 'warn' | 'ok';
+  tone?: 'acc' | 'mute' | 'warn' | 'ok';
 }) {
+  // Surface tint + value colour pairs. All token-driven so they flip in light.
+  const surface =
+    tone === 'ok'
+      ? 'border-[var(--ok-edge)] bg-[var(--ok-dim)]'
+      : tone === 'warn'
+        ? 'border-[var(--warn-edge)] bg-[var(--warn-dim)]'
+        : tone === 'mute'
+          ? 'border-[var(--b-default)] bg-[var(--bg-1)]'
+          : 'border-[var(--b-acc)] bg-[var(--acc-dim)]';
   const valColor =
     tone === 'ok'
       ? 'text-[var(--ok)]'
       : tone === 'warn'
         ? 'text-[var(--warn)]'
         : tone === 'mute'
-          ? 'text-[var(--t-3)]'
+          ? 'text-[var(--t-2)]'
           : 'text-[var(--t-1)]';
+  const glowTone = tone === 'ok' ? 'cy' : tone === 'mute' ? 'indigo' : 'acc';
   return (
-    <span className="inline-flex items-baseline gap-1.5">
+    <HoverGlowLift
+      tone={glowTone}
+      className={cn(
+        'rounded-card flex flex-col items-start gap-1 border p-3.5 transition-colors',
+        surface,
+      )}
+    >
       <AnimatedNumber
         value={value}
         className={cn(
-          'f-mono text-[18px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
+          'f-mono text-[26px] leading-none font-bold tracking-[-0.03em] tabular-nums',
           valColor,
         )}
       />
       <span className="t-cap text-[var(--t-3)]">{label}</span>
-    </span>
+    </HoverGlowLift>
   );
-}
-
-/** Subtle separator dot between strip stats. */
-function StatDot() {
-  return <span aria-hidden="true" className="h-1 w-1 rounded-full bg-[var(--b-strong)]" />;
 }

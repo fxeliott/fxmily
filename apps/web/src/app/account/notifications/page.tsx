@@ -98,7 +98,7 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
             initialSubscriptionCount={subscriptions.length}
           />
         ) : (
-          <div className="rounded-card border border-[oklch(0.834_0.158_80_/_0.30)] bg-[var(--warn-dim)] p-4">
+          <div className="rounded-card border border-[var(--warn-edge)] bg-[var(--warn-dim)] p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-[var(--t-1)]">
               <ShieldCheck aria-hidden="true" className="h-4 w-4 text-[var(--warn)]" />
               Configuration en attente
@@ -126,7 +126,7 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
         <h2 className="text-xs font-medium tracking-widest text-[var(--t-3)] uppercase">
           Comment ça marche
         </h2>
-        <div className="rounded-card space-y-2 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 text-sm text-[var(--t-2)]">
+        <div className="rounded-card space-y-2 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 text-sm text-[var(--t-2)] transition-[border-color,box-shadow] duration-200 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card)]">
           <p>
             <strong className="text-[var(--t-1)]">Pas de cloches inutiles.</strong> Fxmily
             n&apos;envoie jamais de promo, jamais de FOMO, jamais d&apos;analyse de marché.

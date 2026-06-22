@@ -124,18 +124,23 @@ export function CaffeineZonesBar({ cups }: CaffeineZonesBarProps) {
           );
         })}
 
-        {/* Caret */}
+        {/* Caret — compositor-only: a full-width layer is translated by
+            `caretPct%` of its OWN width (= the bar width), so the position
+            animates via `transform` instead of the layout-triggering `left`. */}
         {caretPct !== null ? (
           <div
             aria-hidden
-            className="absolute top-0 h-full w-0.5 transition-[left] duration-150"
-            style={{
-              left: `${caretPct}%`,
-              transform: 'translateX(-50%)',
-              background: currentZone?.color ?? 'var(--t-1)',
-              boxShadow: '0 0 8px -1px currentColor',
-            }}
-          />
+            className="pointer-events-none absolute inset-y-0 left-0 w-full transition-transform duration-150 will-change-transform"
+            style={{ transform: `translateX(${caretPct}%)` }}
+          >
+            <div
+              className="absolute top-0 h-full w-0.5 -translate-x-1/2"
+              style={{
+                background: currentZone?.color ?? 'var(--t-1)',
+                boxShadow: '0 0 8px -1px currentColor',
+              }}
+            />
+          </div>
         ) : null}
       </div>
 

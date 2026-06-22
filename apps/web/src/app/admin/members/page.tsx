@@ -298,12 +298,53 @@ function StatCell({
               ? 'text-[var(--t-3)]'
               : 'text-[var(--t-1)]';
 
+  // Colored top liseré + hover wash, per tone. Compositor-only (the number
+  // micro-scales via `transform`; the cell tints via bg-color). The liseré is
+  // a 2px ::before-like top bar built with a child span so we never touch the
+  // grid's border-reset logic below.
+  const accentBar =
+    tone === 'ok'
+      ? 'bg-[var(--ok)]'
+      : tone === 'warn'
+        ? 'bg-[var(--warn)]'
+        : tone === 'bad'
+          ? 'bg-[var(--bad)]'
+          : tone === 'acc'
+            ? 'bg-[var(--acc)]'
+            : 'bg-[var(--b-strong)]';
+  const hoverWash =
+    tone === 'ok'
+      ? 'hover:bg-[var(--ok-dim)]'
+      : tone === 'warn'
+        ? 'hover:bg-[var(--warn-dim)]'
+        : tone === 'bad'
+          ? 'hover:bg-[var(--bad-dim)]'
+          : tone === 'acc'
+            ? 'hover:bg-[var(--acc-dim)]'
+            : 'hover:bg-[var(--bg-2)]';
+
   return (
-    <div className="flex flex-col gap-1 border-r border-b border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r">
+    <div
+      className={cn(
+        'group/stat relative flex flex-col gap-1 overflow-hidden p-4 transition-colors duration-200',
+        'border-r border-b border-[var(--b-default)] last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r',
+        hoverWash,
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 transition-transform duration-300 ease-out group-hover/stat:scale-x-100 motion-reduce:transition-none',
+          accentBar,
+        )}
+      />
       <span className="t-eyebrow">{label}</span>
       <AnimatedNumber
         value={value}
-        className={cn('f-mono text-[22px] leading-none font-semibold tracking-[-0.02em]', valColor)}
+        className={cn(
+          'f-mono origin-left text-[22px] leading-none font-semibold tracking-[-0.02em] transition-transform duration-200 group-hover/stat:scale-[1.06] motion-reduce:transition-none motion-reduce:group-hover/stat:scale-100',
+          valColor,
+        )}
       />
       {hint ? <span className="t-mono-cap">{hint}</span> : null}
     </div>

@@ -182,10 +182,10 @@ function SearchTrigger({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       aria-keyshortcuts="Control+K Meta+K"
       aria-haspopup="dialog"
-      className="rounded-control flex w-full items-center gap-2.5 border border-[var(--b-default)] bg-[var(--bg-2)] px-2.5 py-2 text-[13px] text-[var(--t-3)] transition-colors hover:border-[var(--b-acc)] hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--acc)]"
+      className="rounded-control group flex w-full items-center gap-2.5 border border-[var(--b-default)] bg-[var(--bg-2)] px-2.5 py-2 text-[13px] text-[var(--t-3)] transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--acc-dim-2)] hover:text-[var(--acc-hi)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--acc)]"
     >
       <Search
-        className="h-[18px] w-[18px] shrink-0 text-[var(--t-4)]"
+        className="h-[18px] w-[18px] shrink-0 text-[var(--t-4)] transition-colors group-hover:text-[var(--acc-hi)]"
         strokeWidth={1.75}
         aria-hidden
       />
@@ -207,9 +207,9 @@ function Brand() {
   return (
     <Link
       href="/dashboard"
-      className="flex shrink-0 items-center gap-2.5 border-b border-[var(--b-default)] px-4 py-3.5 transition-opacity hover:opacity-90"
+      className="surf-grad-soft group relative flex shrink-0 items-center gap-2.5 overflow-hidden border-b border-[var(--b-default)] px-4 py-3.5 transition-opacity hover:opacity-95"
     >
-      <span className="rounded-control grid h-7 w-7 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[var(--acc-glow)]">
+      <span className="rounded-control grid h-7 w-7 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[var(--acc-glow)] transition-transform duration-300 group-hover:scale-105">
         <BrandMark className="w-[17px]" />
       </span>
       <span className="f-display text-[15px] font-semibold tracking-[-0.01em] text-[var(--t-1)]">
@@ -235,10 +235,10 @@ function NavLink({
       aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
       className={cn(
-        'rounded-control group relative flex items-center gap-3 px-2.5 py-2 text-[13px] font-medium transition-[color,background-color] duration-150',
+        'rounded-control group relative flex items-center gap-3 overflow-hidden px-2.5 py-2 text-[13px] font-medium transition-[color,background-color] duration-150',
         active
-          ? 'bg-[var(--acc-dim)] text-[var(--acc-hi)]'
-          : 'text-[var(--t-2)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]',
+          ? 'bg-gradient-to-r from-[var(--acc-dim)] to-[var(--acc-2-dim)] text-[var(--acc-hi)]'
+          : 'text-[var(--t-2)] hover:bg-[var(--acc-dim-2)] hover:text-[var(--t-1)]',
       )}
     >
       {/* barre d'accent active (gauche) */}
@@ -251,13 +251,17 @@ function NavLink({
       />
       <Icon
         className={cn(
-          'h-[18px] w-[18px] shrink-0 transition-transform duration-200 group-hover:scale-110',
-          active ? 'text-[var(--acc)]' : 'text-[var(--t-3)] group-hover:text-[var(--t-2)]',
+          'h-[18px] w-[18px] shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:scale-110',
+          active
+            ? 'text-[var(--acc)] drop-shadow-[0_0_8px_var(--acc)]'
+            : 'text-[var(--t-3)] group-hover:text-[var(--acc-hi)]',
         )}
         strokeWidth={1.75}
         aria-hidden
       />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate transition-transform duration-200 group-hover:translate-x-0.5">
+        {item.label}
+      </span>
     </Link>
   );
 }
@@ -317,9 +321,13 @@ function UserFooter({
       <form action={signOutAction}>
         <button
           type="submit"
-          className="rounded-control flex w-full items-center gap-2.5 px-2.5 py-2 text-[13px] font-medium text-[var(--t-3)] transition-colors hover:bg-[var(--bg-2)] hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--acc)]"
+          className="rounded-control group flex w-full items-center gap-2.5 border border-transparent px-2.5 py-2 text-[13px] font-medium text-[var(--t-3)] transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--acc-dim-2)] hover:text-[var(--acc-hi)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--acc)]"
         >
-          <LogOut className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} aria-hidden />
+          <LogOut
+            className="h-[18px] w-[18px] shrink-0 transition-colors group-hover:text-[var(--acc-hi)]"
+            strokeWidth={1.75}
+            aria-hidden
+          />
           Déconnexion
         </button>
       </form>

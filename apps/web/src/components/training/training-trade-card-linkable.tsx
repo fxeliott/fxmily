@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
 import { Pill } from '@/components/ui/pill';
 import type { SerializedTrainingTrade } from '@/lib/training/training-trade-service';
 
@@ -27,19 +28,24 @@ export function TrainingTradeCardLinkable({
   unseenAnnotationsCount?: number;
 }) {
   return (
-    <Link
-      href={href}
-      className="rounded-card block transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
-    >
-      <TrainingTradeCard trade={trade} />
-      {unseenAnnotationsCount > 0 ? (
-        <div className="mt-1.5 flex justify-end">
-          <Pill tone="cy" dot="live">
-            {unseenAnnotationsCount} correction{unseenAnnotationsCount > 1 ? 's' : ''} non lue
-            {unseenAnnotationsCount > 1 ? 's' : ''}
-          </Pill>
-        </div>
-      ) : null}
-    </Link>
+    // S18 — identité CYAN training (§21.7) : lift spring + halo cyan au survol,
+    // remplace le `hover:opacity-90` plat. Jamais le bleu CTA --acc ici
+    // (non-confusabilité §21.5). HoverGlowLift gère reduced-motion + forced-colors.
+    <HoverGlowLift tone="cy" className="rounded-card block">
+      <Link
+        href={href}
+        className="rounded-card block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
+      >
+        <TrainingTradeCard trade={trade} />
+        {unseenAnnotationsCount > 0 ? (
+          <div className="mt-1.5 flex justify-end">
+            <Pill tone="cy" dot="live">
+              {unseenAnnotationsCount} correction{unseenAnnotationsCount > 1 ? 's' : ''} non lue
+              {unseenAnnotationsCount > 1 ? 's' : ''}
+            </Pill>
+          </div>
+        ) : null}
+      </Link>
+    </HoverGlowLift>
   );
 }

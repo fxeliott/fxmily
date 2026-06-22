@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 
 import type { MindsetDimensionTrend, MindsetProfile } from '@/lib/mindset/profile';
-import { C } from '@/lib/theme-colors';
+import { useChartColors } from '@/lib/use-chart-colors';
 
 /**
  * V1.5 — MindsetCheck premium dashboard (SPEC §27.4 — "ultra-visuel premium",
@@ -124,6 +124,7 @@ function ProfileRadar({
   dims: readonly { readonly label: string; readonly score: number }[];
   prefersReducedMotion: boolean;
 }) {
+  const C = useChartColors();
   const data = dims.map((d) => ({
     dimension: d.label,
     score: d.score,
@@ -244,6 +245,7 @@ function DimensionTrends({
   instrumentVersion: number;
   prefersReducedMotion: boolean;
 }) {
+  const C = useChartColors();
   const dims = trend
     .map((t) => ({ trend: t, series: densifyLatestSegment(t, instrumentVersion) }))
     .filter((d) => d.series.length > 0);

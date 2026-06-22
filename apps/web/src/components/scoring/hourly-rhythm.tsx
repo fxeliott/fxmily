@@ -1,3 +1,4 @@
+import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
 import { HOURLY_MIN_SAMPLE, type HourlyPerf } from '@/lib/scoring/pattern-rhythms';
 import { cn } from '@/lib/utils';
 
@@ -26,7 +27,10 @@ export function HourlyRhythm({ hours }: HourlyRhythmProps) {
   const totalTrades = hours.reduce((sum, h) => sum + h.trades, 0);
 
   return (
-    <div className="rounded-card-lg flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
+    <HoverGlowLift
+      tone="acc"
+      className="rounded-card-lg flex h-full flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-colors hover:border-[var(--b-acc)]"
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="t-eyebrow">Tes rythmes (heure d’entrée)</span>
         <SampleSizeDisclaimer
@@ -89,8 +93,10 @@ export function HourlyRhythm({ hours }: HourlyRhythmProps) {
                 <div
                   className={cn(
                     'rounded-pill h-full w-full origin-left transition-transform',
+                    // Posture §2 — avgR positif = ratio de process (pas un P&L) :
+                    // dégradé cool acc→cyan. Perte rouge, neutre si nul.
                     h.avgR > 0
-                      ? 'bg-[var(--acc)]'
+                      ? 'bg-gradient-to-r from-[var(--acc)] to-[var(--dv-3)]'
                       : h.avgR < 0
                         ? 'bg-[var(--bad)]'
                         : 'bg-[var(--t-4)]',
@@ -103,6 +109,6 @@ export function HourlyRhythm({ hours }: HourlyRhythmProps) {
           );
         })}
       </ul>
-    </div>
+    </HoverGlowLift>
   );
 }

@@ -282,8 +282,8 @@ function StarField() {
     delay?: number;
     cyan?: boolean;
   };
-  const CY = 'oklch(0.82 0.12 217)';
-  const WHITE = 'oklch(0.92 0.03 250)';
+  const CY = 'var(--cy)';
+  const WHITE = 'var(--t-1)';
   const stars: readonly Star[] = [
     { x: 6, y: 12, r: 1.2, o: 0.5, tw: true, dur: 4.4, delay: 0.1 },
     { x: 14, y: 22, r: 0.9, o: 0.35 },

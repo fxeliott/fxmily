@@ -54,7 +54,24 @@ export function MeetingItem({ meeting }: { meeting: MemberMeetingView }) {
   const isCancelled = meeting.status === 'cancelled';
 
   return (
-    <Card className={cn('flex flex-col gap-3 p-4', isCancelled ? 'opacity-60' : 'wow-hover-glow')}>
+    <Card
+      className={cn(
+        'group relative flex flex-col gap-3 p-4',
+        isCancelled ? 'opacity-60' : 'wow-hover-glow',
+      )}
+    >
+      {/* S18 — liseré supérieur cool décoratif (acc), neutre §30.7 (jamais rouge),
+          s'intensifie au survol. Masqué sur une réunion annulée (déjà grisée). */}
+      {!isCancelled ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-0 right-3 left-3 z-10 h-px opacity-70 transition-opacity duration-200 group-hover:opacity-100"
+          style={{
+            background:
+              'linear-gradient(90deg, transparent 0%, var(--acc-edge) 50%, transparent 100%)',
+          }}
+        />
+      ) : null}
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <h3 className="t-body font-medium text-[var(--t-1)]">{title}</h3>

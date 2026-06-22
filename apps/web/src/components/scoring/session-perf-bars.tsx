@@ -1,3 +1,4 @@
+import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
 import type { SessionPerf } from '@/lib/scoring/dashboard-data';
 import { cn } from '@/lib/utils';
 
@@ -26,7 +27,10 @@ export function SessionPerfBars({ sessions }: SessionPerfBarsProps) {
   const totalTrades = sessions.reduce((sum, s) => sum + s.trades, 0);
 
   return (
-    <div className="rounded-card-lg flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
+    <HoverGlowLift
+      tone="acc"
+      className="rounded-card-lg flex h-full flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-colors hover:border-[var(--b-acc)]"
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="t-eyebrow">Performance par session</span>
         <SampleSizeDisclaimer
@@ -90,8 +94,12 @@ export function SessionPerfBars({ sessions }: SessionPerfBarsProps) {
                 <div
                   className={cn(
                     'rounded-pill h-full w-full origin-left transition-transform',
+                    // Posture §2 — un avgR positif n'est PAS un gain P&L (c'est un
+                    // ratio de process) : on peut donc le styliser sur le spectre
+                    // cool acc→cyan. Une perte reste rouge (grammaire finance),
+                    // un avgR nul reste neutre.
                     s.avgR > 0
-                      ? 'bg-[var(--acc)]'
+                      ? 'bg-gradient-to-r from-[var(--acc)] to-[var(--dv-3)]'
                       : s.avgR < 0
                         ? 'bg-[var(--bad)]'
                         : 'bg-[var(--t-4)]',
@@ -104,6 +112,6 @@ export function SessionPerfBars({ sessions }: SessionPerfBarsProps) {
           );
         })}
       </ul>
-    </div>
+    </HoverGlowLift>
   );
 }

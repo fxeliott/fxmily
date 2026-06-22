@@ -3,7 +3,7 @@
 import { m, useReducedMotion } from 'framer-motion';
 import { LineChart } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useMemo, useTransition } from 'react';
+import { useId, useMemo, useTransition } from 'react';
 import {
   Area,
   AreaChart,
@@ -14,7 +14,7 @@ import {
   YAxis,
 } from 'recharts';
 
-import { C } from '@/lib/theme-colors';
+import { useChartColors } from '@/lib/use-chart-colors';
 import { cn } from '@/lib/utils';
 
 import type { RangeKey } from '@/lib/scoring/dashboard-data';
@@ -49,7 +49,9 @@ const RANGE_LABELS: Record<RangeKey, string> = {
 const RANGE_ORDER: RangeKey[] = ['7d', '30d', '3m', '6m', 'all'];
 
 export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChartProps) {
+  const C = useChartColors();
   const prefersReducedMotion = useReducedMotion();
+  const gradientId = useId();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -146,10 +148,15 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
             <AreaChart data={formatted} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
               <defs>
                 {/* J6.6 BLOCKER B1 fix — hex literals instead of var(--token) so
-                    Safari/iOS WebView resolves the gradient correctly. */}
-                <linearGradient id="cumR-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={C.acc} stopOpacity={0.5} />
-                  <stop offset="100%" stopColor={C.acc} stopOpacity={0} />
+                    Safari/iOS WebView resolves the gradient correctly. S18: hex
+                    now theme-aware via useChartColors(); gradient id per-instance
+                    (useId) so two equity charts never collide. Richer cool fill
+                    (0.32 → 0.04) reads as a deep premium area without overpowering
+                    the line. Stays mono-accent (--acc) = finance grammar safe. */}
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={C.acc} stopOpacity={0.32} />
+                  <stop offset="55%" stopColor={C.acc} stopOpacity={0.12} />
+                  <stop offset="100%" stopColor={C.acc} stopOpacity={0.04} />
                 </linearGradient>
               </defs>
               <CartesianGrid stroke={C.bSubtle} strokeDasharray="3 3" vertical={false} />
@@ -192,7 +199,7 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
                 dataKey="cumR"
                 stroke={C.acc}
                 strokeWidth={2}
-                fill="url(#cumR-fill)"
+                fill={`url(#${gradientId})`}
                 isAnimationActive={!prefersReducedMotion}
                 animationDuration={900}
               />

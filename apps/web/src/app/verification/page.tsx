@@ -174,7 +174,17 @@ export default async function VerificationPage() {
                   const meta = DISCREPANCY_META[d.type];
                   return (
                     <li key={d.id}>
-                      <Card className="flex flex-col gap-2 p-4">
+                      {/* S18 — hover glow cool (acc) + liseré cool décoratif. Posture
+                          anti-punitive §33.2 : JAMAIS de rouge, le halo reste neutre. */}
+                      <Card className="wow-hover-glow group relative flex flex-col gap-2 p-4">
+                        <span
+                          aria-hidden
+                          className="pointer-events-none absolute top-0 right-3 left-3 z-10 h-px opacity-70 transition-opacity duration-200 group-hover:opacity-100"
+                          style={{
+                            background:
+                              'linear-gradient(90deg, transparent 0%, var(--cy-edge) 50%, transparent 100%)',
+                          }}
+                        />
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="text-[13px] font-semibold text-[var(--t-1)]">
                             {meta.label}
@@ -236,7 +246,10 @@ export default async function VerificationPage() {
           ) : null}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {overview.accounts.map((account) => (
-              <Card key={account.id} className="flex flex-wrap items-center gap-3 p-4">
+              <Card
+                key={account.id}
+                className="wow-hover-glow flex flex-wrap items-center gap-3 p-4"
+              >
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-3)]">
                   <ShieldCheck className="h-5 w-5" strokeWidth={1.75} aria-hidden />
                 </div>
@@ -293,7 +306,7 @@ export default async function VerificationPage() {
                   : undefined;
                 return (
                   <li key={proof.id}>
-                    <Card className="flex flex-wrap items-center gap-3 p-4">
+                    <Card className="wow-hover-glow flex flex-wrap items-center gap-3 p-4">
                       <a
                         href={proof.readUrl}
                         target="_blank"

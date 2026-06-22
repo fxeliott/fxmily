@@ -214,6 +214,49 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
     return Object.keys(errs).length === 0;
   };
 
+  // Pure, side-effect-free validity check for the CURRENT step — mirrors
+  // `validateStep` but never calls `setFieldErrors`, so it is safe to read
+  // during render for the micro-feedback pulse. Steps 3 (Mental) and 4
+  // (Intention) carry no required field → always valid.
+  const isStepValid = (s: StepIndex): boolean => {
+    if (s === 0) {
+      if (draft.sleepHours === '') return false;
+      const n = parseLocaleNumber(draft.sleepHours);
+      return !(Number.isNaN(n) || n < 0 || n > 24);
+    }
+    if (s === 1) {
+      return draft.morningRoutineCompleted !== null && draft.marketAnalysisDone !== null;
+    }
+    if (s === 2) {
+      const med = parseLocaleNumber(draft.meditationMin);
+      if (Number.isNaN(med) || med < 0 || med > 240) return false;
+      const hasType = draft.sportType.trim().length > 0;
+      const hasDuration = draft.sportDurationMin.trim().length > 0;
+      return hasType === hasDuration;
+    }
+    return true;
+  };
+  const stepValid = isStepValid(step);
+
+  // Micro-feedback: one-shot confirm flash on the step body + accent pulse on
+  // the Suivant button the moment the current step flips valid. Compositor/
+  // one-shot; the global reduced-motion net settles both instantly. Re-armed on
+  // step change so revisiting a valid step re-confirms (see pre-trade wizard).
+  const [confirmPulse, setConfirmPulse] = useState(false);
+  const armedStepRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!stepValid || armedStepRef.current === step) return undefined;
+    armedStepRef.current = step;
+    setConfirmPulse(true);
+    const t = setTimeout(() => setConfirmPulse(false), 700);
+    return () => clearTimeout(t);
+  }, [stepValid, step]);
+  useEffect(() => {
+    return () => {
+      armedStepRef.current = null;
+    };
+  }, [step]);
+
   const next = () => {
     if (!validateStep(step)) return;
     if (step < 4) goToStep((step + 1) as StepIndex);
@@ -350,7 +393,7 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
               duration: prefersReducedMotion ? 0 : 0.3,
               ease: [0.22, 1, 0.36, 1],
             }}
-            className="flex flex-col gap-5"
+            className={cn('rounded-card flex flex-col gap-5', confirmPulse && 'confirm-flash')}
           >
             {step === 0 ? (
               <StepSleep
@@ -413,7 +456,14 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
           </Btn>
 
           {step < 4 ? (
-            <Btn kind="primary" size="m" onClick={next} disabled={pending} type="button">
+            <Btn
+              kind="primary"
+              size="m"
+              onClick={next}
+              disabled={pending}
+              type="button"
+              className={cn(confirmPulse && stepValid && 'threshold-pulse')}
+            >
               Suivant
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
             </Btn>
@@ -872,11 +922,11 @@ function RadioGroup({
             <label
               key={opt.value}
               className={cn(
-                'rounded-pill inline-flex min-h-11 cursor-pointer items-center gap-2 border px-4 py-2 text-[13px] font-medium transition-all',
+                'wow-hover-glow rounded-pill inline-flex min-h-11 cursor-pointer items-center gap-2 border px-4 py-2 text-[13px] font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-150 hover:-translate-y-px',
                 'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--acc)]',
                 active
                   ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_3px_oklch(0.62_0.19_254_/_0.10)]'
-                  : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]',
+                  : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-acc)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]',
                 disabled && 'cursor-not-allowed opacity-60',
               )}
             >

@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 
 import type { BehavioralScoreTrendPoint, SerializedBehavioralScore } from '@/lib/scoring/service';
-import { C } from '@/lib/theme-colors';
+import { useChartColors } from '@/lib/use-chart-colors';
 
 /**
  * « Ton profil comportemental » — radar des 4 dimensions (jalon 2, enrichissement).
@@ -75,6 +75,7 @@ function RadarTooltip({
   active?: boolean;
   payload?: BehaviorRadarTooltipPayload[];
 }) {
+  const C = useChartColors();
   if (!active || !payload || payload.length === 0) return null;
   const row = payload[0]?.payload;
   if (!row) return null;
@@ -101,6 +102,7 @@ export function BehaviorRadar({
   score: SerializedBehavioralScore | null;
   history: BehavioralScoreTrendPoint[];
 }) {
+  const C = useChartColors();
   const prefersReduced = useReducedMotion();
 
   // Point de comparaison : le plus proche de « il y a ~30 j » AVANT la date du

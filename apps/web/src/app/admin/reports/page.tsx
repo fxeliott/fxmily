@@ -169,9 +169,10 @@ export default async function AdminReportsPage() {
                   <h2 className="f-display text-[18px] font-semibold tracking-[-0.02em] text-[var(--t-1)]">
                     Semaine {formatPeriod(weekStart, weekEnd)}
                   </h2>
-                  <span className="t-mono-cap">
+                  {/* Neutral count badge in the cool §21.7 cyan (never a CTA). */}
+                  <Pill tone="cy">
                     {list.length} rapport{list.length > 1 ? 's' : ''}
-                  </span>
+                  </Pill>
                 </div>
                 {/* §23 full-width — cards verticales (résumé + méta) : 2-up
                     dès lg, 3-up à 2xl. `[&>li]:h-full` → hauteurs égales par
@@ -184,7 +185,7 @@ export default async function AdminReportsPage() {
                       <li key={report.id}>
                         <Link
                           href={`/admin/reports/${report.id}`}
-                          className="rounded-card focus-visible:outline-acc flex h-full flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-4 shadow-[var(--sh-card)] transition-colors hover:border-[var(--b-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                          className="rounded-card focus-visible:outline-acc flex h-full flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-4 shadow-[var(--sh-card)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transform-none motion-reduce:transition-none"
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="f-display text-[15px] font-semibold text-[var(--t-1)]">
@@ -215,8 +216,11 @@ export default async function AdminReportsPage() {
                             {report.summary}
                           </p>
                           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[var(--t-3)]">
+                            {/* Neutral token counts in cool cyan (§21.7) — info,
+                                not a CTA; cost stays muted. */}
                             <span className="f-mono tabular-nums">
-                              {report.inputTokens} in / {report.outputTokens} out ·{' '}
+                              <span className="text-[var(--cy)]">{report.inputTokens}</span> in /{' '}
+                              <span className="text-[var(--cy)]">{report.outputTokens}</span> out ·{' '}
                               {Number(report.costEur).toFixed(4)} €
                             </span>
                             <span className="t-mono-cap">
@@ -269,13 +273,53 @@ function StatCell({
               ? 'text-[var(--t-3)]'
               : 'text-[var(--t-1)]';
 
+  // Colored top liseré + hover wash, per tone. Compositor-only (number scales
+  // via transform; cell tints via bg-color). The liseré is a child span so the
+  // grid's border-reset logic below is untouched.
+  const accentBar =
+    tone === 'ok'
+      ? 'bg-[var(--ok)]'
+      : tone === 'warn'
+        ? 'bg-[var(--warn)]'
+        : tone === 'bad'
+          ? 'bg-[var(--bad)]'
+          : tone === 'acc'
+            ? 'bg-[var(--acc)]'
+            : 'bg-[var(--b-strong)]';
+  const hoverWash =
+    tone === 'ok'
+      ? 'hover:bg-[var(--ok-dim)]'
+      : tone === 'warn'
+        ? 'hover:bg-[var(--warn-dim)]'
+        : tone === 'bad'
+          ? 'hover:bg-[var(--bad-dim)]'
+          : tone === 'acc'
+            ? 'hover:bg-[var(--acc-dim)]'
+            : 'hover:bg-[var(--bg-2)]';
+
   return (
-    <div className="flex flex-col gap-1 border-r border-b border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r">
+    <div
+      className={cn(
+        'group/stat relative flex flex-col gap-1 overflow-hidden p-4 transition-colors duration-200',
+        'border-r border-b border-[var(--b-default)] last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r',
+        hoverWash,
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 transition-transform duration-300 ease-out group-hover/stat:scale-x-100 motion-reduce:transition-none',
+          accentBar,
+        )}
+      />
       <span className="t-eyebrow">{label}</span>
       <AnimatedNumber
         value={value}
         format={format}
-        className={cn('f-mono text-[20px] leading-none font-semibold tracking-[-0.02em]', valColor)}
+        className={cn(
+          'f-mono origin-left text-[20px] leading-none font-semibold tracking-[-0.02em] transition-transform duration-200 group-hover/stat:scale-[1.06] motion-reduce:transition-none motion-reduce:group-hover/stat:scale-100',
+          valColor,
+        )}
       />
       {hint ? <span className="t-mono-cap">{hint}</span> : null}
     </div>

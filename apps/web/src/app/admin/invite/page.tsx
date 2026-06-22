@@ -51,7 +51,7 @@ export default async function AdminInvitePage() {
         <InviteForm />
       </Card>
 
-      <div className="rounded-control flex items-start gap-2.5 border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] px-3 py-2.5">
+      <div className="rounded-control flex items-start gap-2.5 border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] px-3 py-2.5">
         <Send className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--cy)]" strokeWidth={1.75} />
         <p className="t-cap text-[var(--t-2)]">
           Si Resend n&apos;est pas configuré en dev, le lien d&apos;invitation est loggué dans la

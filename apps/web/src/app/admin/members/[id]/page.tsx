@@ -311,10 +311,18 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       .slice(0, 2)
       .map((s) => s[0]?.toUpperCase() ?? '')
       .join('') || 'M';
-  let hue = 0;
+  // Deterministic per-member hue from the email hash, CLAMPED into the cool
+  // band [210, 265] (blue→indigo) so the avatar gradient can NEVER drift into
+  // purple/violet (mono-accent invariant §3) — the raw 0-359 hash regularly
+  // landed in 270-300 (violet). The 56°-wide band keeps members visually
+  // distinguishable while staying on-brand. Saturation is kept modest (22%) so
+  // the chip reads premium, not candy, and the white initials stay AA in both
+  // themes.
+  let hash = 0;
   for (let i = 0; i < detail.email.length; i++) {
-    hue = (hue * 31 + detail.email.charCodeAt(i)) % 360;
+    hash = (hash * 31 + detail.email.charCodeAt(i)) % 360;
   }
+  const hue = 210 + (hash % 56);
 
   // S12 — widened from max-w-3xl (768px) to max-w-6xl (1152px) + responsive
   // padding: the deepest supervision surface ("admin voit tout", 14 tabs) was
@@ -341,7 +349,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           <div
             className="rounded-card grid h-16 w-16 shrink-0 place-items-center border border-[var(--b-strong)] text-[20px] font-semibold text-[var(--t-1)]"
             style={{
-              background: `linear-gradient(135deg, hsl(${hue}, 28%, 28%), hsl(${(hue + 30) % 360}, 28%, 18%))`,
+              // Both stops stay in the cool band (217 teal → 265 indigo): the
+              // 2nd stop shifts toward blue (hue-12), never up into violet.
+              background: `linear-gradient(135deg, hsl(${hue}, 22%, 28%), hsl(${hue - 12}, 22%, 18%))`,
             }}
             aria-hidden
           >
@@ -535,14 +545,45 @@ function Metric({
           ? 'text-[var(--t-3)]'
           : 'text-[var(--t-1)]';
 
+  // Colored top liseré + hover wash, per tone (carbone des StatCell admin).
+  // Compositor-only : the numeric value micro-scales via transform (skipped on
+  // `mono` cells, which hold dates/strings, not a hero number); the cell tints
+  // via bg-color. The liseré is a child span so the dense 6-col nth-child
+  // border-reset below is untouched (avoids the double-border trap §1).
+  const accentBar =
+    tone === 'ok'
+      ? 'bg-[var(--ok)]'
+      : tone === 'warn'
+        ? 'bg-[var(--warn)]'
+        : 'bg-[var(--b-strong)]';
+  const hoverWash =
+    tone === 'ok'
+      ? 'hover:bg-[var(--ok-dim)]'
+      : tone === 'warn'
+        ? 'hover:bg-[var(--warn-dim)]'
+        : 'hover:bg-[var(--bg-2)]';
+
   return (
-    <div className="flex flex-col gap-1 border-r border-b border-[var(--b-default)] p-4 last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r [&:nth-child(3)]:border-r-0 sm:[&:nth-child(3)]:border-r-0 sm:[&:nth-child(3)]:border-b [&:nth-child(4)]:border-b-0 sm:[&:nth-child(4)]:border-r [&:nth-child(5)]:border-r [&:nth-child(5)]:border-b-0 [&:nth-child(6)]:border-r-0 [&:nth-child(6)]:border-b-0">
+    <div
+      className={cn(
+        'group/stat relative flex flex-col gap-1 overflow-hidden p-4 transition-colors duration-200',
+        'border-r border-b border-[var(--b-default)] last:border-r-0 sm:border-b-0 [&:nth-child(2)]:border-r-0 [&:nth-child(2)]:border-b-0 sm:[&:nth-child(2)]:border-r [&:nth-child(3)]:border-r-0 sm:[&:nth-child(3)]:border-r-0 sm:[&:nth-child(3)]:border-b [&:nth-child(4)]:border-b-0 sm:[&:nth-child(4)]:border-r [&:nth-child(5)]:border-r [&:nth-child(5)]:border-b-0 [&:nth-child(6)]:border-r-0 [&:nth-child(6)]:border-b-0',
+        hoverWash,
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 transition-transform duration-300 ease-out group-hover/stat:scale-x-100 motion-reduce:transition-none',
+          accentBar,
+        )}
+      />
       <span className="t-eyebrow">{label}</span>
       <span
         className={cn(
           mono
             ? 'f-mono text-[13px] tabular-nums'
-            : 'f-mono text-[22px] leading-none font-semibold tracking-[-0.02em] tabular-nums',
+            : 'f-mono origin-left text-[22px] leading-none font-semibold tracking-[-0.02em] tabular-nums transition-transform duration-200 group-hover/stat:scale-[1.06] motion-reduce:transition-none motion-reduce:group-hover/stat:scale-100',
           valColor,
         )}
       >

@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { GradientBorder } from '@/components/ui/gradient-border';
 import { cn } from '@/lib/utils';
 
 import { NAV_GROUPS } from './nav-items';
@@ -57,6 +58,30 @@ const QUICK_ACTIONS: readonly CmdItem[] = [
 
 /** Accent- and case-insensitive normalise so "reunion" matches "Réunions". */
 const norm = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/**
+ * Surligne le segment de `label` qui correspond à la requête, en conservant la
+ * casse et les accents d'origine. La recherche se fait sur la forme normalisée
+ * (accent/casse-insensible) puis on re-projette les indices sur la chaîne brute
+ * — `norm()` est un mapping 1:1 par caractère (NFD ne change pas la longueur
+ * pour le latin de l'app), donc les offsets restent alignés. Décoratif : la
+ * structure (texte complet, troncature) est préservée pour l'a11y et les tests. */
+function highlightMatch(label: string, query: string): React.ReactNode {
+  const q = norm(query.trim());
+  if (!q) return label;
+  const start = norm(label).indexOf(q);
+  if (start === -1) return label;
+  const end = start + q.length;
+  return (
+    <>
+      {label.slice(0, start)}
+      <mark className="bg-transparent font-semibold text-[var(--acc-hi)]">
+        {label.slice(start, end)}
+      </mark>
+      {label.slice(end)}
+    </>
+  );
+}
 
 export function CommandPalette({
   isAdmin,
@@ -167,7 +192,7 @@ export function CommandPalette({
             e.preventDefault();
             inputRef.current?.focus();
           }}
-          className="data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 rounded-card-lg fixed top-[12vh] left-1/2 z-50 w-[92vw] max-w-lg -translate-x-1/2 overflow-hidden border border-[var(--b-strong)] bg-[var(--bg-2)] shadow-[var(--sh-tooltip)] outline-none"
+          className="data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 fixed top-[12vh] left-1/2 z-50 w-[92vw] max-w-lg -translate-x-1/2 outline-none"
         >
           <DialogPrimitive.Title className="sr-only">Palette de commandes</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">
@@ -175,85 +200,98 @@ export function CommandPalette({
             Échap pour fermer.
           </DialogPrimitive.Description>
 
-          <div className="flex items-center gap-2.5 border-b border-[var(--b-default)] px-4">
-            <Search className="h-4 w-4 shrink-0 text-[var(--t-3)]" strokeWidth={1.75} aria-hidden />
-            <input
-              ref={inputRef}
-              type="text"
-              role="combobox"
-              aria-expanded
-              aria-controls="cmdk-list"
-              aria-label="Rechercher une page ou une action"
-              aria-activedescendant={filtered[active] ? `cmdk-opt-${active}` : undefined}
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setActive(0);
-              }}
-              onKeyDown={onInputKeyDown}
-              placeholder="Rechercher une page ou une action…"
-              className="h-12 flex-1 bg-transparent text-[14px] text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:outline-none"
-            />
-          </div>
-
-          <div
-            id="cmdk-list"
-            role="listbox"
-            aria-label="Résultats"
-            ref={listRef}
-            className="scroll-thin max-h-[52vh] overflow-y-auto p-1.5"
+          <GradientBorder
+            trigger="hover"
+            radius="var(--r-card-lg)"
+            className="shadow-[var(--sh-tooltip)]"
+            innerClassName="overflow-hidden bg-[var(--bg-2)]"
           >
-            {filtered.length === 0 ? (
-              <p className="px-3 py-6 text-center text-[13px] text-[var(--t-3)]">
-                Aucun résultat pour «&nbsp;{query.trim()}&nbsp;».
-              </p>
-            ) : (
-              groups.map(([groupLabel, items]) => (
-                <div key={groupLabel} className="mb-1 last:mb-0">
-                  <p className="t-eyebrow px-2.5 pt-2 pb-1 text-[var(--t-4)]">{groupLabel}</p>
-                  {items.map((it) => {
-                    runningIdx += 1;
-                    const idx = runningIdx;
-                    const isActive = idx === active;
-                    const Icon = it.icon;
-                    return (
-                      <button
-                        key={`${it.group}-${it.href}-${it.label}`}
-                        id={`cmdk-opt-${idx}`}
-                        data-idx={idx}
-                        role="option"
-                        aria-selected={isActive}
-                        type="button"
-                        onMouseMove={() => setActive(idx)}
-                        onClick={() => go(it.href)}
-                        className={cn(
-                          'rounded-control flex w-full items-center gap-3 px-2.5 py-2 text-left text-[13px] transition-colors',
-                          isActive ? 'bg-[var(--acc-dim)] text-[var(--t-1)]' : 'text-[var(--t-2)]',
-                        )}
-                      >
-                        <Icon
+            <div className="flex items-center gap-2.5 border-b border-[var(--b-default)] px-4">
+              <Search
+                className="h-4 w-4 shrink-0 text-[var(--t-3)]"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <input
+                ref={inputRef}
+                type="text"
+                role="combobox"
+                aria-expanded
+                aria-controls="cmdk-list"
+                aria-label="Rechercher une page ou une action"
+                aria-activedescendant={filtered[active] ? `cmdk-opt-${active}` : undefined}
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setActive(0);
+                }}
+                onKeyDown={onInputKeyDown}
+                placeholder="Rechercher une page ou une action…"
+                className="h-12 flex-1 bg-transparent text-[14px] text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:outline-none"
+              />
+            </div>
+
+            <div
+              id="cmdk-list"
+              role="listbox"
+              aria-label="Résultats"
+              ref={listRef}
+              className="scroll-thin max-h-[52vh] overflow-y-auto p-1.5"
+            >
+              {filtered.length === 0 ? (
+                <p className="px-3 py-6 text-center text-[13px] text-[var(--t-3)]">
+                  Aucun résultat pour «&nbsp;{query.trim()}&nbsp;».
+                </p>
+              ) : (
+                groups.map(([groupLabel, items]) => (
+                  <div key={groupLabel} className="mb-1 last:mb-0">
+                    <p className="t-eyebrow px-2.5 pt-2 pb-1 text-[var(--t-4)]">{groupLabel}</p>
+                    {items.map((it) => {
+                      runningIdx += 1;
+                      const idx = runningIdx;
+                      const isActive = idx === active;
+                      const Icon = it.icon;
+                      return (
+                        <button
+                          key={`${it.group}-${it.href}-${it.label}`}
+                          id={`cmdk-opt-${idx}`}
+                          data-idx={idx}
+                          role="option"
+                          aria-selected={isActive}
+                          type="button"
+                          onMouseMove={() => setActive(idx)}
+                          onClick={() => go(it.href)}
                           className={cn(
-                            'h-[18px] w-[18px] shrink-0',
-                            isActive ? 'text-[var(--acc)]' : 'text-[var(--t-3)]',
+                            'rounded-control flex w-full items-center gap-3 px-2.5 py-2 text-left text-[13px] transition-colors',
+                            isActive
+                              ? 'bg-[var(--acc-dim)] text-[var(--t-1)]'
+                              : 'text-[var(--t-2)]',
                           )}
-                          strokeWidth={1.75}
-                          aria-hidden
-                        />
-                        <span className="flex-1 truncate">{it.label}</span>
-                        {isActive ? (
-                          <CornerDownLeft
-                            className="h-3.5 w-3.5 shrink-0 text-[var(--t-4)]"
+                        >
+                          <Icon
+                            className={cn(
+                              'h-[18px] w-[18px] shrink-0',
+                              isActive ? 'text-[var(--acc)]' : 'text-[var(--t-3)]',
+                            )}
                             strokeWidth={1.75}
                             aria-hidden
                           />
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))
-            )}
-          </div>
+                          <span className="flex-1 truncate">{highlightMatch(it.label, query)}</span>
+                          {isActive ? (
+                            <CornerDownLeft
+                              className="h-3.5 w-3.5 shrink-0 text-[var(--t-4)]"
+                              strokeWidth={1.75}
+                              aria-hidden
+                            />
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))
+              )}
+            </div>
+          </GradientBorder>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

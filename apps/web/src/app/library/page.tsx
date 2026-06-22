@@ -147,7 +147,10 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
                 placeholder="Rechercher une fiche…"
                 autoComplete="off"
                 maxLength={100}
-                className="rounded-card h-11 w-full border border-[var(--b-default)] bg-[var(--bg)] pr-3 pl-9 font-sans text-[14px] text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                // S18 — input glass-panel frosté (révèle l'ambient mesh) + focus
+                // ring acc. `.glass-panel` apporte bg translucide + border ; le
+                // focus override la border en --acc.
+                className="glass-panel rounded-card h-11 w-full pr-3 pl-9 font-sans text-[14px] text-[var(--t-1)] backdrop-blur-[16px] backdrop-saturate-150 transition-colors duration-200 placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
               />
             </div>
             <button type="submit" className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}>

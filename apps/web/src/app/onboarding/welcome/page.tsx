@@ -1,6 +1,7 @@
 import { Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
+import { LoginAurora } from '@/app/login/login-aurora';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
@@ -34,14 +35,11 @@ export default async function OnboardingWelcomePage({ searchParams }: PageProps)
   }
 
   return (
-    <main className="aurora relative flex min-h-dvh flex-col items-center overflow-hidden px-4 py-10">
-      <div
-        aria-hidden
-        className="orb pointer-events-none absolute -top-32 -left-32 h-[420px] w-[420px] rounded-full opacity-25"
-        style={{
-          background: 'radial-gradient(circle, oklch(0.62 0.19 254 / 0.20) 0%, transparent 70%)',
-        }}
-      />
+    <main className="relative flex min-h-dvh flex-col items-center overflow-hidden bg-[var(--bg)] px-4 py-10">
+      {/* S18 — premium drifting aurora backplate, lifted to /login parity (the
+          first post-invitation screen now reads as alive, not a flat opacity-25
+          orb). Decorative, zero JS, aria-hidden, perf-gated on mobile. */}
+      <LoginAurora />
 
       <section className="relative z-10 mx-auto flex w-full max-w-md flex-col gap-6">
         <Reveal y={10}>

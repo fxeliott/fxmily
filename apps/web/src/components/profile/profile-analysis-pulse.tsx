@@ -32,9 +32,9 @@ export function ProfileAnalysisPulse() {
       <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full overflow-visible">
         <defs>
           <radialGradient id="profilePulseCore" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="oklch(0.74 0.16 250 / 0.9)" />
-            <stop offset="55%" stopColor="oklch(0.62 0.19 254 / 0.55)" />
-            <stop offset="100%" stopColor="oklch(0.62 0.19 254 / 0)" />
+            <stop offset="0%" stopColor="var(--acc-hi)" stopOpacity={0.9} />
+            <stop offset="55%" stopColor="var(--acc)" stopOpacity={0.55} />
+            <stop offset="100%" stopColor="var(--acc)" stopOpacity={0} />
           </radialGradient>
         </defs>
 

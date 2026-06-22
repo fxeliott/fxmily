@@ -98,7 +98,9 @@ function ActiveAccountPanel(): React.ReactElement {
   return (
     <section
       aria-labelledby="delete-heading"
-      className="rounded-card-lg border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
+      // DANGER surface : hover stays in the red grammar (var(--b-danger)),
+      // never cool, never a lift — sober, on-grammar affordance only.
+      className="rounded-card-lg border border-[var(--b-default)] bg-[var(--bg-1)] p-5 transition-[border-color,box-shadow] duration-200 hover:border-[var(--b-danger)] sm:p-6"
     >
       <div className="flex items-start gap-3">
         <span

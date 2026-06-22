@@ -38,8 +38,8 @@ export async function DashboardReflectWidget({ userId }: DashboardReflectWidgetP
           aria-hidden="true"
           className="inline-block h-2 w-2 rounded-full"
           style={{
-            background: 'oklch(0.62 0.19 254)',
-            boxShadow: '0 0 8px oklch(0.62 0.19 254 / 0.5)',
+            background: 'var(--acc)',
+            boxShadow: 'var(--acc-glow)',
           }}
         />
         <span className="t-eyebrow">Module REFLECT</span>
@@ -55,8 +55,8 @@ export async function DashboardReflectWidget({ userId }: DashboardReflectWidgetP
               aria-hidden="true"
               className="rounded-pill flex h-9 w-9 items-center justify-center"
               style={{
-                background: 'oklch(0.62 0.19 254 / 0.16)',
-                color: 'oklch(0.82 0.115 247)',
+                background: 'var(--acc-dim)',
+                color: 'var(--acc-hi)',
               }}
             >
               <NotebookPen size={16} strokeWidth={2.2} />
@@ -93,8 +93,8 @@ export async function DashboardReflectWidget({ userId }: DashboardReflectWidgetP
               aria-hidden="true"
               className="rounded-pill flex h-9 w-9 items-center justify-center"
               style={{
-                background: 'oklch(0.62 0.19 254 / 0.16)',
-                color: 'oklch(0.82 0.115 247)',
+                background: 'var(--acc-dim)',
+                color: 'var(--acc-hi)',
               }}
             >
               <BrainCircuit size={16} strokeWidth={2.2} />

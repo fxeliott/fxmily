@@ -223,6 +223,28 @@ export function SleepHabitWizard() {
 
   const sleepHoursNum = parseLocaleNumber(draft.sleepHours);
   const hasValidHours = !Number.isNaN(sleepHoursNum);
+
+  // Micro-feedback: one-shot confirm flash on the step body + accent pulse on
+  // the Suivant button the moment the current step flips valid. `validateStep`
+  // is pure (no setState) so it is safe to read in render. Compositor/one-shot;
+  // the global reduced-motion net settles both instantly. Re-armed on step
+  // change so revisiting a valid step re-confirms.
+  const stepValid = validateStep(step, draft) === null;
+  const [confirmPulse, setConfirmPulse] = useState(false);
+  const armedStepRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!stepValid || armedStepRef.current === step) return undefined;
+    armedStepRef.current = step;
+    setConfirmPulse(true);
+    const t = setTimeout(() => setConfirmPulse(false), 700);
+    return () => clearTimeout(t);
+  }, [stepValid, step]);
+  useEffect(() => {
+    return () => {
+      armedStepRef.current = null;
+    };
+  }, [step]);
+
   const StepIcon = STEP_ICONS[step]!;
   const totalSteps = STEP_TITLES.length;
   const animate = hasMounted && !prefersReducedMotion;
@@ -294,6 +316,7 @@ export function SleepHabitWizard() {
                 setDraft={setDraft}
                 stepError={stepError}
                 headingRef={headingRef}
+                confirmFlash={confirmPulse}
               />
             ) : (
               <SleepNotesStep draft={draft} setDraft={setDraft} headingRef={headingRef} />
@@ -329,6 +352,7 @@ export function SleepHabitWizard() {
             onClick={handleNext}
             disabled={isPending}
             aria-label="Étape suivante"
+            className={cn(confirmPulse && stepValid && 'threshold-pulse')}
           >
             <span>Suivant</span>
             <ArrowRight className="h-4 w-4" aria-hidden />
@@ -383,14 +407,16 @@ interface StepProps {
   setDraft: (updater: (prev: DraftState) => DraftState) => void;
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   stepError?: string | null;
+  /** One-shot accent flash when the step's required field becomes valid. */
+  confirmFlash?: boolean;
 }
 
-function SleepDurationStep({ draft, setDraft, stepError, headingRef }: StepProps) {
+function SleepDurationStep({ draft, setDraft, stepError, headingRef, confirmFlash }: StepProps) {
   const hours = parseLocaleNumber(draft.sleepHours);
   const hoursForBar = Number.isNaN(hours) ? null : hours;
 
   return (
-    <Card className="space-y-5 p-4">
+    <Card className={cn('space-y-5 p-4', confirmFlash && 'confirm-flash')}>
       <header className="space-y-1">
         <h2
           ref={headingRef}
@@ -419,7 +445,7 @@ function SleepDurationStep({ draft, setDraft, stepError, headingRef }: StepProps
             value={draft.sleepHours}
             onChange={(e) => setDraft((d) => ({ ...d, sleepHours: e.target.value }))}
             placeholder="7,5"
-            className="rounded-input w-28 border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 font-mono text-[18px] text-[var(--t-1)] tabular-nums outline-none focus-visible:border-[var(--b-acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            className="rounded-input w-28 border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 font-mono text-[18px] text-[var(--t-1)] tabular-nums transition-[border-color] duration-150 outline-none hover:border-[var(--b-strong)] focus-visible:border-[var(--b-acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
             aria-invalid={stepError ? 'true' : 'false'}
             aria-describedby={stepError ? 'sleep-hours-error' : undefined}
           />
@@ -479,7 +505,7 @@ function SleepNotesStep({ draft, setDraft, headingRef }: StepProps) {
           }
           maxLength={HABIT_NOTES_MAX_CHARS}
           placeholder="Réveil 3h, lait écrémé avant lit, écran arrêté à 22h…"
-          className="rounded-input w-full resize-y border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 text-[14px] leading-relaxed text-[var(--t-1)] outline-none focus-visible:border-[var(--b-acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          className="rounded-input w-full resize-y border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 text-[14px] leading-relaxed text-[var(--t-1)] transition-[border-color] duration-150 outline-none hover:border-[var(--b-strong)] focus-visible:border-[var(--b-acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
         />
         <p
           className={cn(

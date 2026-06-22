@@ -32,7 +32,18 @@ export function TrainingTradeCard({ trade }: { trade: SerializedTrainingTrade })
   const outcomeTone = trade.outcome === 'win' ? 'ok' : trade.outcome === 'loss' ? 'bad' : 'cy';
 
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <Card className="group/tt relative flex flex-col gap-3 p-4">
+      {/* S18 — identité CYAN training (§21.7) : liseré supérieur décoratif cyan
+          (var(--cy-edge)), pointer-events:none, s'intensifie quand la carte est
+          survolée via le Link/HoverGlowLift parent. JAMAIS le bleu CTA. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-0 right-3 left-3 z-10 h-px opacity-70 transition-opacity duration-200 group-hover/tt:opacity-100"
+        style={{
+          background:
+            'linear-gradient(90deg, transparent 0%, var(--cy-edge) 50%, transparent 100%)',
+        }}
+      />
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <span className="f-mono text-[15px] font-semibold tracking-[0.04em] text-[var(--t-1)]">

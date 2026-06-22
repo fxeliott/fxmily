@@ -16,8 +16,10 @@ import { redirect } from 'next/navigation';
 import type { CSSProperties } from 'react';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DisciplineLoop } from '@/components/illustrations/discipline-loop';
 import { Card } from '@/components/ui/card';
+import { HoverLift } from '@/components/ui/hover-lift';
 import { btnVariants } from '@/components/ui/btn';
 import { cn } from '@/lib/utils';
 
@@ -118,148 +120,180 @@ export default async function GuidePage() {
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col gap-6 px-4 py-8 lg:px-8">
-      <header className="flex flex-col gap-4">
+    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
+      {/* DS-v3 — ambient mesh + drifting orbs (own hero glow, like progression/track) */}
+      <DashboardAmbient />
+      <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 pt-6 pb-[max(2rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8">
         <Link
           href="/dashboard"
-          className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
+          className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
         >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
           Tableau de bord
         </Link>
 
-        <div className="flex flex-col gap-1.5">
-          <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
-            <BookOpen className="h-3.5 w-3.5" strokeWidth={2} />
-            Guide d’utilisation
-          </span>
-          <h1 className="t-h1 text-[var(--t-1)]">Comment utiliser Fxmily.</h1>
-        </div>
-      </header>
-
-      {/* Le principe — ce que l'app est, et n'est pas (posture §2). */}
-      <Card primary glass className="rounded-card-lg p-6 sm:p-7">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <span
-              aria-hidden
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)]"
-            >
-              <Compass className="h-5 w-5" strokeWidth={1.75} />
+        {/* S19 — hero glass (était un <header> texte nu = zone la plus fade du
+            cluster guidage). Cohérent avec ProgressionHero / NorthStarHero. */}
+        <Card
+          primary
+          glass
+          edge={false}
+          className="dash-hero relative overflow-hidden p-6 sm:p-7 lg:p-8"
+        >
+          <div className="relative flex flex-col gap-3">
+            <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--acc-hi)]">
+              <BookOpen className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+              Guide d’utilisation
             </span>
-            <div className="flex flex-col gap-0.5">
-              <span className="t-eyebrow text-[var(--acc-hi)]">Le principe</span>
-              <h2 className="t-h2 text-[var(--t-1)]">Un miroir, jamais un juge.</h2>
-            </div>
-          </div>
-          <p className="t-body text-[var(--t-2)]">
-            Fxmily mesure <strong className="font-semibold text-[var(--t-1)]">ton plan</strong>, ta{' '}
-            <strong className="font-semibold text-[var(--t-1)]">discipline</strong> et ton{' '}
-            <strong className="font-semibold text-[var(--t-1)]">mental</strong> — pas les bougies du
-            marché. L’app ne te dira jamais quoi trader : elle t’aide à mieux exécuter, à tenir ton
-            plan et à travailler ta psychologie. Tu nourris l’app un peu chaque jour, et elle
-            t’accompagne dans le temps — rien à entasser d’un coup, juste une pratique régulière que
-            tu construis.
-          </p>
-        </div>
-      </Card>
-
-      {/* La boucle — schéma pédagogique du process répétable (Mark Douglas §2). */}
-      <Card glass className="rounded-card-lg p-6 sm:p-7">
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-0.5">
-            <span className="t-eyebrow text-[var(--acc-hi)]">La boucle</span>
-            <h2 className="t-h2 text-[var(--t-1)]">Un cycle, pas une prédiction.</h2>
-            <p className="t-body mt-2 text-[var(--t-2)]">
-              Tout l’app tient dans une routine qui se répète chaque jour. Pas besoin de deviner le
-              marché : il suffit de boucler ce cycle, encore et encore. C’est la régularité qui
-              construit ton edge.
+            <h1
+              className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+              style={{
+                fontFeatureSettings: '"ss01" 1',
+                fontSize: 'clamp(1.875rem, 1.5rem + 1.6vw, 2.5rem)',
+              }}
+            >
+              Comment utiliser Fxmily.
+            </h1>
+            <p className="t-lead max-w-[60ch]">
+              Ton mode d’emploi, pilier par pilier — pour ne jamais être perdu, du premier jour à la
+              routine installée. Tu sais toujours quoi faire, quand, et pourquoi.
             </p>
           </div>
-          <DisciplineLoop className="pt-1" />
-        </div>
-      </Card>
+        </Card>
 
-      {/* Les piliers, un par un. */}
-      <section className="grid gap-4 sm:grid-cols-2" aria-label="Les piliers de l’app">
-        {PILLARS.map((pillar) => {
-          const Icon = pillar.icon;
-          return (
-            <Card key={pillar.title} className="rounded-card-lg h-full p-6">
-              <div className="flex h-full flex-col gap-4">
-                <div className="flex items-center gap-3">
-                  <span
-                    aria-hidden
-                    className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]"
-                  >
-                    <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-                  </span>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="t-eyebrow text-[var(--t-3)]">{pillar.eyebrow}</span>
-                    <h2 className="t-h3 text-[var(--t-1)]">{pillar.title}</h2>
-                  </div>
-                </div>
+        {/* Le principe — ce que l'app est, et n'est pas (posture §2). */}
+        <Card primary glass className="rounded-card-lg p-6 sm:p-7">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)]"
+              >
+                <Compass className="h-5 w-5" strokeWidth={1.75} />
+              </span>
+              <div className="flex flex-col gap-0.5">
+                <span className="t-eyebrow text-[var(--acc-hi)]">Le principe</span>
+                <h2 className="t-h2 text-[var(--t-1)]">Un miroir, jamais un juge.</h2>
+              </div>
+            </div>
+            <p className="t-body text-[var(--t-2)]">
+              Fxmily mesure <strong className="font-semibold text-[var(--t-1)]">ton plan</strong>,
+              ta <strong className="font-semibold text-[var(--t-1)]">discipline</strong> et ton{' '}
+              <strong className="font-semibold text-[var(--t-1)]">mental</strong> — pas les bougies
+              du marché. L’app ne te dira jamais quoi trader : elle t’aide à mieux exécuter, à tenir
+              ton plan et à travailler ta psychologie. Tu nourris l’app un peu chaque jour, et elle
+              t’accompagne dans le temps — rien à entasser d’un coup, juste une pratique régulière
+              que tu construis.
+            </p>
+          </div>
+        </Card>
 
-                <p className="t-body text-[var(--t-2)]">{pillar.body}</p>
+        {/* La boucle — schéma pédagogique du process répétable (Mark Douglas §2). */}
+        <Card glass className="rounded-card-lg p-6 sm:p-7">
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-0.5">
+              <span className="t-eyebrow text-[var(--acc-hi)]">La boucle</span>
+              <h2 className="t-h2 text-[var(--t-1)]">Un cycle, pas une prédiction.</h2>
+              <p className="t-body mt-2 text-[var(--t-2)]">
+                Tout l’app tient dans une routine qui se répète chaque jour. Pas besoin de deviner
+                le marché : il suffit de boucler ce cycle, encore et encore. C’est la régularité qui
+                construit ton edge.
+              </p>
+            </div>
+            <DisciplineLoop className="pt-1" />
+          </div>
+        </Card>
 
-                <ul className="flex flex-col gap-2">
-                  {pillar.points.map((point) => (
-                    <li key={point} className="flex items-start gap-2.5">
+        {/* Les piliers, un par un. S19 — 3-up sur desktop (remplit l'espace large),
+          hover-lift + glow-edge premium (jamais statique), icône qui s'anime. */}
+        <section
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+          aria-label="Les piliers de l’app"
+        >
+          {PILLARS.map((pillar) => {
+            const Icon = pillar.icon;
+            return (
+              <HoverLift key={pillar.title} className="h-full">
+                <Card className="wow-hover-glow rounded-card-lg group/pillar h-full p-6">
+                  <div className="flex h-full flex-col gap-4">
+                    <div className="flex items-center gap-3">
                       <span
                         aria-hidden
-                        className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--acc)]"
-                      />
-                      <span className="t-cap text-[var(--t-3)]">{point}</span>
-                    </li>
-                  ))}
-                </ul>
+                        className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)] transition-transform duration-300 group-hover/pillar:scale-110"
+                      >
+                        <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="t-eyebrow text-[var(--t-3)]">{pillar.eyebrow}</span>
+                        <h2 className="t-h3 text-[var(--t-1)]">{pillar.title}</h2>
+                      </div>
+                    </div>
 
-                {pillar.cta ? (
-                  <div className="mt-auto pt-1">
-                    <Link
-                      href={pillar.cta.href}
-                      className={cn(btnVariants({ kind: 'secondary', size: 's' }))}
-                    >
-                      <pillar.cta.icon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-                      {pillar.cta.label}
-                    </Link>
+                    <p className="t-body text-[var(--t-2)]">{pillar.body}</p>
+
+                    <ul className="flex flex-col gap-2">
+                      {pillar.points.map((point) => (
+                        <li key={point} className="flex items-start gap-2.5">
+                          <span
+                            aria-hidden
+                            className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--acc)]"
+                          />
+                          <span className="t-cap text-[var(--t-3)]">{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {pillar.cta ? (
+                      <div className="mt-auto pt-1">
+                        <Link
+                          href={pillar.cta.href}
+                          className={cn(btnVariants({ kind: 'secondary', size: 's' }))}
+                        >
+                          <pillar.cta.icon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                          {pillar.cta.label}
+                        </Link>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
-            </Card>
-          );
-        })}
-      </section>
+                </Card>
+              </HoverLift>
+            );
+          })}
+        </section>
 
-      {/* Premier pas. */}
-      <Card primary glass className="rounded-card-lg p-6 sm:p-7">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="t-eyebrow text-[var(--acc-hi)]">Et maintenant</span>
-            <h2 className="t-h2 text-[var(--t-1)]">Commence par un seul geste.</h2>
-          </div>
-          <p className="t-body text-[var(--t-2)]">
-            Pas besoin de tout faire aujourd’hui. Pose ta routine du matin, ou logge ton premier
-            trade. Le reste viendra, à ton rythme.
-          </p>
-          <div
-            className="flex flex-wrap items-center gap-2"
-            style={{ '--rise-delay': '0ms' } as CSSProperties}
-          >
-            <Link
-              href="/checkin/morning"
-              className={cn(btnVariants({ kind: 'primary', size: 'm' }))}
+        {/* Premier pas. */}
+        <Card primary glass className="rounded-card-lg p-6 sm:p-7">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="t-eyebrow text-[var(--acc-hi)]">Et maintenant</span>
+              <h2 className="t-h2 text-[var(--t-1)]">Commence par un seul geste.</h2>
+            </div>
+            <p className="t-body text-[var(--t-2)]">
+              Pas besoin de tout faire aujourd’hui. Pose ta routine du matin, ou logge ton premier
+              trade. Le reste viendra, à ton rythme.
+            </p>
+            <div
+              className="flex flex-wrap items-center gap-2"
+              style={{ '--rise-delay': '0ms' } as CSSProperties}
             >
-              <Sunrise className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-              Commencer mon check-in
-            </Link>
-            <Link href="/journal/new" className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}>
-              <NotebookPen className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-              Logger un trade
-            </Link>
+              <Link
+                href="/checkin/morning"
+                className={cn(btnVariants({ kind: 'primary', size: 'm' }))}
+              >
+                <Sunrise className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                Commencer mon check-in
+              </Link>
+              <Link
+                href="/journal/new"
+                className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}
+              >
+                <NotebookPen className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                Logger un trade
+              </Link>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
     </main>
   );
 }

@@ -73,19 +73,33 @@ interface TodayHabitCardsProps {
   userId: string;
   /** IANA timezone of the member (session.user.timezone, Europe/Paris default). */
   timezone: string;
+  /**
+   * S19 — optional precomputed "logged today" set. When the parent page already
+   * derived it (to also feed `TrackHero`), pass it here to skip a duplicate
+   * `listRecentHabitLogs` query. Falls back to its own fetch when omitted
+   * (backward-compatible).
+   */
+  loggedKinds?: ReadonlySet<HabitKind>;
 }
 
-export async function TodayHabitCards({ userId, timezone }: TodayHabitCardsProps) {
-  const recent = await listRecentHabitLogs(userId, 1);
+export async function TodayHabitCards({
+  userId,
+  timezone,
+  loggedKinds: precomputed,
+}: TodayHabitCardsProps) {
   // TIER2 fix (S2 audit 2026-06-11, review pass) : this is an async SERVER
   // component — local getters here would be the SERVER's day (UTC in prod),
   // diverging from the client habit wizards (fixed to the member's local day).
   // `localDateOf` resolves "today" in the MEMBER's timezone server-side — the
   // canon pattern of `lib/schemas/habit-log.ts` / daily-guidance.
   const today = localDateOf(new Date(), timezone);
-  const loggedKinds = new Set<HabitKind>(
-    recent.filter((log) => log.date === today).map((log) => log.kind),
-  );
+  const loggedKinds =
+    precomputed ??
+    new Set<HabitKind>(
+      (await listRecentHabitLogs(userId, 1))
+        .filter((log) => log.date === today)
+        .map((log) => log.kind),
+    );
 
   return (
     <section aria-labelledby="today-habits-heading" className="space-y-3">
@@ -110,7 +124,7 @@ export async function TodayHabitCards({ userId, timezone }: TodayHabitCardsProps
                   : `Logger ${p.label.toLowerCase()} aujourd'hui.`
               }
             >
-              <Card className="group relative flex h-full flex-col gap-2 p-3.5 transition-colors focus-within:ring-2 focus-within:ring-[var(--acc)] focus-within:ring-offset-2 focus-within:ring-offset-[var(--bg)] hover:bg-[var(--bg-3)]">
+              <Card className="wow-hover-glow group relative flex h-full flex-col gap-2 p-3.5 transition-colors focus-within:ring-2 focus-within:ring-[var(--acc)] focus-within:ring-offset-2 focus-within:ring-offset-[var(--bg)] hover:bg-[var(--bg-3)]">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <p.Icon

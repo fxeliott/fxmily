@@ -1,4 +1,5 @@
-import { Target } from 'lucide-react';
+import { ArrowLeft, Target } from 'lucide-react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
@@ -167,6 +168,19 @@ export default async function ObjectifsPage() {
         <div className="wow-reveal">
           <NextSteps actions={view.nextActions} focus={view.focus} />
         </div>
+
+        {/* S19 — pont réciproque vers le pendant RÉTROSPECTIF (« Où j'en suis »). */}
+        <Link
+          href="/progression"
+          className="rounded-card group flex items-center gap-2 self-start text-[13px] font-medium text-[var(--t-3)] transition-colors hover:text-[var(--acc-hi)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+        >
+          <ArrowLeft
+            className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5"
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
+          Le détail de tes scores et ta trajectoire passée — Où j’en suis
+        </Link>
       </div>
     </main>
   );

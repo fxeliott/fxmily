@@ -73,7 +73,7 @@ export function MindsetTimeline({ checks }: { checks: readonly SerializedMindset
         return (
           <li
             key={c.id}
-            className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
+            className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-2)]"
           >
             <header className="flex items-baseline justify-between gap-3">
               <p className="t-eyebrow-lg text-[var(--t-3)]">

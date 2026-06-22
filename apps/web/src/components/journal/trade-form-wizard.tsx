@@ -1255,7 +1255,7 @@ function TradeQualitySelector({
                   ? opt.tone === 'ok'
                     ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)] shadow-[0_0_0_3px_oklch(0.804_0.181_145_/_0.10)]'
                     : opt.tone === 'cy'
-                      ? 'border-[var(--cy)] bg-[var(--cy-dim-2)] text-[var(--cy)] shadow-[0_0_0_3px_oklch(0.78_0.16_240_/_0.10)]'
+                      ? 'border-[var(--cy)] bg-[var(--cy-dim-strong)] text-[var(--cy)] shadow-[0_0_0_3px_oklch(0.78_0.16_240_/_0.10)]'
                       : 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)] shadow-[0_0_0_3px_oklch(0.7_0.165_22_/_0.10)]'
                   : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
                 disabled && 'cursor-not-allowed opacity-60',

@@ -10,7 +10,9 @@ import { HabitKindPicker } from '@/components/track/habit-kind-picker';
 import { HabitKindTabPicker } from '@/components/track/habit-kind-tab-picker';
 import { TodayHabitCards } from '@/components/track/today-habit-cards';
 import { TrackHero } from '@/components/track/track-hero';
-import { habitKindSchema } from '@/lib/schemas/habit-log';
+import { localDateOf } from '@/lib/checkin/timezone';
+import { listRecentHabitLogs } from '@/lib/habit/service';
+import { type HabitKind, habitKindSchema } from '@/lib/schemas/habit-log';
 import { auth } from '@/auth';
 
 /**
@@ -58,6 +60,19 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
   const corrParsed = habitKindSchema.safeParse(sp.corr);
   const corrKind = corrParsed.success ? corrParsed.data : 'sleep';
 
+  // S19 — compute "logged today" ONCE here (was only computed inside
+  // TodayHabitCards, so TrackHero's `loggedToday` halo was never fed → the
+  // pentagon "completed" styling was dead code, finding #1a). Same source +
+  // member-timezone day as TodayHabitCards; shared with it to avoid a double
+  // fetch. `listRecentHabitLogs(_, 1)` = 1-day window, tiny indexed query.
+  const timezone = session.user.timezone || 'Europe/Paris';
+  const today = localDateOf(new Date(), timezone);
+  const loggedToday = new Set<HabitKind>(
+    (await listRecentHabitLogs(session.user.id, 1))
+      .filter((log) => log.date === today)
+      .map((log) => log.kind),
+  );
+
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* DS-v3 J3 — ambient mesh + drifting orbs behind the masthead */}
@@ -89,14 +104,11 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
         ) : null}
 
         <div className="wow-reveal">
-          <TrackHero />
+          <TrackHero loggedToday={loggedToday} />
         </div>
 
         <div className="wow-reveal">
-          <TodayHabitCards
-            userId={session.user.id}
-            timezone={session.user.timezone || 'Europe/Paris'}
-          />
+          <TodayHabitCards userId={session.user.id} timezone={timezone} loggedKinds={loggedToday} />
         </div>
 
         <section aria-labelledby="track-corr-heading" className="wow-reveal flex flex-col gap-3">

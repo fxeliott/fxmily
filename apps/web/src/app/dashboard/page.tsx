@@ -27,6 +27,7 @@ import { Kbd } from '@/components/ui/kbd';
 import { getCheckin, getStreak, todayFor } from '@/lib/checkin/service';
 import { getTodayMilestone } from '@/lib/checkin/milestone';
 import { getDailyGuidance } from '@/lib/daily-guidance/service';
+import { getInterviewForUser } from '@/lib/onboarding-interview/service';
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 import { countTradesByStatus } from '@/lib/trades/service';
@@ -155,6 +156,13 @@ export default async function DashboardPage() {
   // S9.1 "wave wow" — brand-new member (no trade, no streak) gets a warm,
   // animated first-run welcome instead of a wall of empty analytics.
   const isFirstRun = totalTrades === 0 && streak.current === 0;
+  // S19.2 — §28 : a brand-new member is never actively routed to the onboarding
+  // interview (its starting point). Surface it as the FIRST first-run step when
+  // no completed interview exists. Only the rare first-run path pays this read;
+  // no hard redirect (anti-Black-Hat — an invitation, not a gate).
+  const needsProfile = isFirstRun
+    ? await getInterviewForUser(userId!).then((iv) => !iv || iv.status !== 'completed')
+    : false;
 
   return (
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
@@ -196,7 +204,7 @@ export default async function DashboardPage() {
             <h2 id="first-run-heading" className="sr-only">
               Bienvenue sur Fxmily
             </h2>
-            <FirstRunWelcome />
+            <FirstRunWelcome needsProfile={needsProfile} />
           </section>
         ) : null}
 
@@ -206,7 +214,9 @@ export default async function DashboardPage() {
             où je vais / sur quoi bosser » répondus dès l'arrivée sur le hub. */}
         {guidance ? (
           <div className="mb-6">
-            <TodayGuidance guidance={guidance} />
+            {/* S19.2 — the hero already elevates `primaryAction` as the focal CTA;
+                exclude it here so the same next-action isn't rendered twice. */}
+            <TodayGuidance guidance={guidance} excludeKey={primaryAction?.key} />
           </div>
         ) : null}
         {objectives ? (
@@ -302,25 +312,30 @@ export default async function DashboardPage() {
           </HoverLift>
         </section>
 
-        {/* V2.4 — Onboarding profile status : le pont vers le profilage initial. */}
-        <section className="mb-6" aria-labelledby="profile-widget-heading">
-          <h2 id="profile-widget-heading" className="sr-only">
-            Mon profil de trader
-          </h2>
-          <Suspense fallback={<ProfileStatusSkeleton />}>
-            <ProfileStatusWidget userId={userId!} />
-          </Suspense>
-        </section>
+        {/* S19.2 — de-density (§11 "pas un mur") : the two compact status
+            widgets (profile bridge + weekly calendar) pair side-by-side on lg
+            instead of stacking, shortening the hub scroll. Stacked on mobile. */}
+        <div className="mb-6 grid items-start gap-4 lg:grid-cols-2">
+          {/* V2.4 — Onboarding profile status : le pont vers le profilage initial. */}
+          <section aria-labelledby="profile-widget-heading">
+            <h2 id="profile-widget-heading" className="sr-only">
+              Mon profil de trader
+            </h2>
+            <Suspense fallback={<ProfileStatusSkeleton />}>
+              <ProfileStatusWidget userId={userId!} />
+            </Suspense>
+          </section>
 
-        {/* §26 — Calendrier adaptatif : statut du questionnaire de la semaine. */}
-        <section className="mb-6" aria-labelledby="calendar-widget-heading">
-          <h2 id="calendar-widget-heading" className="sr-only">
-            Organisation de la semaine
-          </h2>
-          <Suspense fallback={<CalendarStatusSkeleton />}>
-            <CalendarStatusWidget userId={userId!} />
-          </Suspense>
-        </section>
+          {/* §26 — Calendrier adaptatif : statut du questionnaire de la semaine. */}
+          <section aria-labelledby="calendar-widget-heading">
+            <h2 id="calendar-widget-heading" className="sr-only">
+              Organisation de la semaine
+            </h2>
+            <Suspense fallback={<CalendarStatusSkeleton />}>
+              <CalendarStatusWidget userId={userId!} />
+            </Suspense>
+          </section>
+        </div>
 
         {/* §30 — guidage calme vers le débrief mensuel frais (S6 audit). Le widget
             rend sa propre section (avec heading) ou rien si tout est déjà lu :
@@ -531,7 +546,9 @@ function TradeStatCard({
       : tone === 'warn'
         ? 'border-[var(--warn-edge)] bg-[var(--warn-dim)]'
         : tone === 'mute'
-          ? 'border-[var(--b-default)] bg-[var(--bg-1)]'
+          ? // S19.2 — a whisper of cool indigo instead of flat --bg-1 (the 0-count
+            // card read dead-grey); stays subdued, AA preserved on --t-2.
+            'border-[var(--b-default)] bg-[var(--acc-2-dim-2)]'
           : tone === 'acc2'
             ? 'border-[var(--acc-2-edge)] bg-[var(--acc-2-dim)]'
             : 'border-[var(--b-acc)] bg-[var(--acc-dim)]';

@@ -6,6 +6,8 @@ import { btnVariants } from '@/components/ui/btn';
 import { Pill } from '@/components/ui/pill';
 import { cn } from '@/lib/utils';
 
+import { LegalToc } from './legal-toc';
+
 interface LegalLayoutProps {
   /** Top-level legal page heading (h1). */
   title: string;
@@ -106,7 +108,12 @@ export function LegalLayout({
         </p>
       </header>
 
+      {/* S19.2 — progressive-enhancement TOC (sibling of the article so the
+          prose `[&_a]` styles don't bleed into its links). */}
+      <LegalToc />
+
       <article
+        data-legal-body
         className={cn(
           'wow-reveal rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 transition-colors duration-200 hover:border-[var(--b-acc)] sm:p-7',
           // Accent liseré on hover of each prose section : the h2 grows a soft

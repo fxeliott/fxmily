@@ -18,6 +18,7 @@ import {
   listMyFavorites,
   listPublishedCards,
   listPublishedCategories,
+  listUnseenDeliveryCardIds,
 } from '@/lib/cards/service';
 import type { DouglasCategory } from '@/generated/prisma/enums';
 
@@ -53,7 +54,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
   const q =
     typeof params.q === 'string' && params.q.trim().length > 0 ? params.q.trim() : undefined;
 
-  const [cards, categories, favorites, unseenCount] = await Promise.all([
+  const [cards, categories, favorites, unseenCount, unreadCardIds] = await Promise.all([
     listPublishedCards({
       ...(cat ? { category: cat } : {}),
       ...(q ? { q } : {}),
@@ -61,6 +62,8 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
     listPublishedCategories(),
     listMyFavorites(session.user.id),
     countUnseenDeliveries(session.user.id),
+    // S19.2 — feed the catalogue's dead "Nouvelle" badge with the real unseen set.
+    listUnseenDeliveryCardIds(session.user.id),
   ]);
 
   const favoriteIds = new Set(favorites.map((f) => f.cardId));
@@ -215,7 +218,11 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
             />
           </Card>
         ) : (
-          <AnimatedCardGrid cards={cards} favoritedIds={Array.from(favoriteIds)} />
+          <AnimatedCardGrid
+            cards={cards}
+            favoritedIds={Array.from(favoriteIds)}
+            unreadIds={unreadCardIds}
+          />
         )}
       </div>
     </main>

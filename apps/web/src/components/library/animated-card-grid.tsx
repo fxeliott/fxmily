@@ -10,6 +10,8 @@ interface AnimatedCardGridProps {
   cards: SerializedCard[];
   /** Card IDs the current member has favorited. Serialized array (Sets aren't JSON-safe). */
   favoritedIds: string[];
+  /** S19.2 — card IDs with an unseen delivery, to light the "Nouvelle" badge. */
+  unreadIds?: string[];
 }
 
 /**
@@ -23,9 +25,10 @@ interface AnimatedCardGridProps {
  * Respects `prefers-reduced-motion` — when set, `initial="show"` makes the
  * grid render immediately without animation.
  */
-export function AnimatedCardGrid({ cards, favoritedIds }: AnimatedCardGridProps) {
+export function AnimatedCardGrid({ cards, favoritedIds, unreadIds = [] }: AnimatedCardGridProps) {
   const prefersReducedMotion = useReducedMotion();
   const favoritedSet = new Set(favoritedIds);
+  const unreadSet = new Set(unreadIds);
 
   const containerVariants = prefersReducedMotion
     ? { hidden: { opacity: 1 }, show: { opacity: 1 } }
@@ -57,7 +60,11 @@ export function AnimatedCardGrid({ cards, favoritedIds }: AnimatedCardGridProps)
     >
       {cards.map((card) => (
         <m.li key={card.id} variants={itemVariants}>
-          <CardGridItem card={card} favorited={favoritedSet.has(card.id)} />
+          <CardGridItem
+            card={card}
+            favorited={favoritedSet.has(card.id)}
+            hasUnread={unreadSet.has(card.id)}
+          />
         </m.li>
       ))}
     </m.ul>

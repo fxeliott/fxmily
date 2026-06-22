@@ -124,7 +124,7 @@ export async function TodayHabitCards({
                   : `Logger ${p.label.toLowerCase()} aujourd'hui.`
               }
             >
-              <Card className="group relative flex h-full flex-col gap-2 p-3.5 transition-colors focus-within:ring-2 focus-within:ring-[var(--acc)] focus-within:ring-offset-2 focus-within:ring-offset-[var(--bg)] hover:bg-[var(--bg-3)]">
+              <Card className="wow-hover-glow group relative flex h-full flex-col gap-2 p-3.5 transition-colors focus-within:ring-2 focus-within:ring-[var(--acc)] focus-within:ring-offset-2 focus-within:ring-offset-[var(--bg)] hover:bg-[var(--bg-3)]">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <p.Icon

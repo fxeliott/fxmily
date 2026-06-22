@@ -243,7 +243,7 @@ export function WeeklyInsightCard({
 
   return (
     <aside
-      className={`rounded-card flex items-start gap-3 border border-[var(--b-acc)] bg-[var(--acc-dim)] p-4 ${className}`.trim()}
+      className={`wow-hover-glow rounded-card flex items-start gap-3 border border-[var(--b-acc)] bg-[var(--acc-dim)] p-4 ${className}`.trim()}
       aria-label="Insight de la semaine"
       data-slot="weekly-insight-card"
     >

@@ -305,7 +305,7 @@ export function ScreenshotUploader({
           type="button"
           onClick={clear}
           disabled={disabled}
-          className="rounded-control inline-flex h-9 items-center gap-1.5 self-start border border-transparent px-2 text-[11px] text-[var(--t-3)] transition-colors hover:border-[oklch(0.7_0.165_22_/_0.35)] hover:bg-[var(--bad-dim)] hover:text-[var(--bad)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          className="rounded-control inline-flex h-9 items-center gap-1.5 self-start border border-transparent px-2 text-[11px] text-[var(--t-3)] transition-colors hover:border-[var(--bad-edge)] hover:bg-[var(--bad-dim)] hover:text-[var(--bad)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
         >
           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
           Retirer la capture

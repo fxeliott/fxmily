@@ -71,6 +71,11 @@ export function MemberRow({ member }: MemberRowProps) {
   const isAdmin = member.role === 'admin';
   const isSuspended = member.status === 'suspended';
   const presence = presenceFrom(member.lastSeenAt);
+  // Soft breathing halo ONLY for a fresh login (green) — carbone du pattern
+  // `animate-ping` de admin/system. A drifting/absent member's dot stays still
+  // (calm coaching signal, never an alarm — SPEC §2).
+  const isPresenceFresh = presence.color === 'var(--ok)';
+  const hasOpenTrades = member.tradesOpenCount > 0;
 
   return (
     <HoverLift className="block h-full">
@@ -81,13 +86,24 @@ export function MemberRow({ member }: MemberRowProps) {
       >
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span
-              role="img"
-              aria-label={presence.label}
-              title={presence.label}
-              className="inline-block h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: presence.color }}
-            />
+            {/* Presence dot keeps its role/aria/title (e2e + a11y depend on it);
+                the halo is a sibling aria-hidden ping behind it. */}
+            <span className="relative inline-flex h-2 w-2 shrink-0 items-center justify-center">
+              {isPresenceFresh ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute inline-flex h-2 w-2 rounded-full opacity-60 motion-safe:animate-ping"
+                  style={{ backgroundColor: presence.color }}
+                />
+              ) : null}
+              <span
+                role="img"
+                aria-label={presence.label}
+                title={presence.label}
+                className="relative inline-block h-2 w-2 rounded-full"
+                style={{ backgroundColor: presence.color }}
+              />
+            </span>
             <span className="t-h3 truncate text-[var(--t-1)]">{displayName}</span>
             {isAdmin ? (
               <Pill tone="acc">
@@ -115,7 +131,11 @@ export function MemberRow({ member }: MemberRowProps) {
             <dd
               className={[
                 'f-mono tabular-nums',
-                member.tradesOpenCount > 0 ? 'text-[var(--warn)]' : 'text-[var(--t-3)]',
+                // Open positions get a soft warn-dim chip (en cours, never an
+                // alarm — grammaire finance: warn = streak/en cours, SPEC §2).
+                hasOpenTrades
+                  ? 'rounded-pill bg-[var(--warn-dim)] px-1.5 text-[var(--warn)]'
+                  : 'text-[var(--t-3)]',
               ].join(' ')}
             >
               {member.tradesOpenCount}

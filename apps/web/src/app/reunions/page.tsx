@@ -65,11 +65,21 @@ export default async function ReunionsPage() {
           </div>
         </header>
 
-        {/* Attendance rate — neutral, honest. Never a fake "0 %". */}
+        {/* Attendance rate — neutral, honest. Never a fake "0 %".
+            S18 — hover glow cool (acc) + liseré supérieur cool décoratif. Posture
+            neutre §30.7 : jamais de rouge, le halo reste un bleu calme. */}
         <section
           aria-labelledby="reunions-rate-heading"
-          className="wow-reveal rounded-card w-full max-w-sm border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
+          className="wow-reveal wow-hover-glow rounded-card group relative w-full max-w-sm border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
         >
+          <span
+            aria-hidden
+            className="pointer-events-none absolute top-0 right-3 left-3 z-10 h-px opacity-70 transition-opacity duration-200 group-hover:opacity-100"
+            style={{
+              background:
+                'linear-gradient(90deg, transparent 0%, var(--acc-edge) 50%, transparent 100%)',
+            }}
+          />
           <h2 id="reunions-rate-heading" className="t-eyebrow-lg text-[var(--t-3)]">
             Ton assiduité · {MEETING_WINDOW_DAYS} derniers jours
           </h2>

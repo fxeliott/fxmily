@@ -53,7 +53,36 @@ export function LegalLayout({
         aria-hidden="true"
         className="surf-grad-soft pointer-events-none absolute inset-x-0 top-0 -z-10 h-48 [mask-image:linear-gradient(to_bottom,black,transparent)] opacity-50"
       />
-      <header className="wow-reveal mb-6">
+      <header className="wow-reveal relative mb-6">
+        {/* Discreet brand emblem — a small token-driven SVG sigil (a stylised
+            "F" stroke inside a soft ring) anchored top-right of the header. Pure
+            decoration (aria-hidden), token colours so it flips in light + folds
+            under forced-colors via currentColor. It signs the page as Fxmily
+            without ever reading as a marketing hero. */}
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 48 48"
+          className="pointer-events-none absolute top-0 right-0 hidden h-12 w-12 opacity-70 sm:block"
+        >
+          <circle cx="24" cy="24" r="21" fill="none" stroke="var(--b-acc)" strokeWidth="1.25" />
+          <circle
+            cx="24"
+            cy="24"
+            r="15"
+            fill="none"
+            stroke="var(--b-acc)"
+            strokeWidth="0.75"
+            opacity="0.6"
+          />
+          <path
+            d="M18 32V16h12M18 24h9"
+            fill="none"
+            stroke="var(--acc)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
         <Link
           href={backHref}
           className={btnVariants({ kind: 'ghost', size: 'm' })}
@@ -79,7 +108,12 @@ export function LegalLayout({
 
       <article
         className={cn(
-          'wow-reveal rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-7',
+          'wow-reveal rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 transition-colors duration-200 hover:border-[var(--b-acc)] sm:p-7',
+          // Accent liseré on hover of each prose section : the h2 grows a soft
+          // left rule in --acc-dim, a discreet cue that signs the section as
+          // brand-accented without shifting layout (border on the existing
+          // padding box). Compositor-safe (colour only), folds in forced-colors.
+          '[&_h2]:-ml-3 [&_h2]:border-l-2 [&_h2]:border-l-transparent [&_h2]:pl-3 [&_h2]:transition-colors [&_h2]:duration-200 hover:[&_h2]:border-l-[var(--acc-dim)]',
           // Compact prose ramp aligned with DS-v3 spacing tokens. h2 ramp
           // bumped from text-base to text-[15px] sm:text-base for a stronger
           // hierarchy contrast vs the h1 (24-30 px) on long legal pages

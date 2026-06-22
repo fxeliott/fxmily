@@ -141,15 +141,19 @@ export function ScoreSlider({
           aria-hidden
           className="rounded-pill absolute top-1/2 right-0 left-0 h-1.5 -translate-y-1/2 border border-[var(--b-subtle)] bg-[var(--bg-2)]"
         />
-        {/* Track filled gradient */}
+        {/* Track filled gradient — compositor-only: full width, scaled on X via
+            transform (origin left) instead of animating the layout `width`.
+            No transition: it snaps with the thumb on each discrete 1–10 step so
+            the two stay perfectly in sync (the thumb position is a static `left`
+            with no glide — see below). */}
         <div
           aria-hidden
-          className="rounded-pill absolute top-1/2 left-0 h-1.5 -translate-y-1/2"
+          className="rounded-pill absolute top-1/2 left-0 h-1.5 w-full"
           style={{
-            width: `${pct}%`,
             background: fillStyle,
             boxShadow: trackGlow,
-            transition: 'width 80ms cubic-bezier(0.4,0,0.2,1)',
+            transform: `translateY(-50%) scaleX(${pct / 100})`,
+            transformOrigin: 'left center',
           }}
         />
         {/* Tick marks (visible at every integer) */}
@@ -177,10 +181,15 @@ export function ScoreSlider({
           aria-valuetext={valueText}
           className="peer absolute inset-0 w-full cursor-grab opacity-0 active:cursor-grabbing disabled:cursor-not-allowed"
         />
-        {/* Custom thumb — picks up focus state from the peer input.
+        {/* Custom thumb — picks up focus state from the peer input (must stay a
+            direct sibling of the <input> for the `peer-focus-visible` ring).
             Touch target 24×24 (WCAG 2.5.8 AA): the visible thumb is 20×20 but
             the underlying input.range covers the full bar. Arrow/Home/End
-            keyboard control comes from the native <input>. */}
+            keyboard control comes from the native <input>.
+            Compositor: the discrete 1–10 position is set via static `left` (no
+            layout-animating `left` transition — invariant); only `transform`
+            (the centering translate) and `box-shadow` (the focus ring) ever
+            transition, so each step snaps cleanly without paint thrash. */}
         <div
           aria-hidden
           className={cn(
@@ -191,7 +200,6 @@ export function ScoreSlider({
           style={{
             left: `${pct}%`,
             boxShadow: thumbHalo,
-            transition: 'left 80ms cubic-bezier(0.4,0,0.2,1)',
           }}
         />
       </div>

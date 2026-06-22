@@ -55,5 +55,43 @@ export const CHART_COLORS = {
 
 export type ChartColorKey = keyof typeof CHART_COLORS;
 
-/** Sugar — same shape, named for ergonomics in JSX. */
+/**
+ * LIGHT mirror (S18). Hex values are the `.light` block annotations in
+ * `globals.css` (the recalibrated WCAG-AA light tokens). Same keys/shape as
+ * CHART_COLORS so consumers can swap the whole object. Surfaces become
+ * white/soft-grey, accent/cyan/state hues DARKEN to clear 4.5:1 on white,
+ * finance grammar (ok/bad) re-saturated never inverted, tooltip *Hi tones get
+ * DARKER (the tooltip bg is now white). Keep in sync with globals.css `.light`.
+ */
+export const CHART_COLORS_LIGHT = {
+  // Surfaces (light)
+  bg: '#f1f3f7',
+  bg1: '#ffffff',
+  bg2: '#e9ecf2',
+  bg3: '#ffffff',
+
+  // Text gradient (AA on white)
+  t1: '#20283a',
+  t2: '#4a5366',
+  t3: '#5b6478',
+  t4: '#555e70',
+
+  // Borders (rgba on the light neutral oklch(0.4 0.02 258) ≈ #4a5263)
+  bSubtle: 'rgba(74, 82, 99, 0.1)',
+  bDefault: 'rgba(74, 82, 99, 0.16)',
+  bStrong: 'rgba(74, 82, 99, 0.26)',
+
+  // Semantic (darkened for white canvas)
+  acc: '#2563eb', // blue — process / discipline (light --acc)
+  acc2: '#4f46e5', // indigo — 2nd data series (light --acc-2)
+  cy: '#0e7c99', // teal — cyan illegible on white → teal (light --cy)
+  ok: '#18914e', // green — gain (light --ok)
+  warn: '#936713', // amber — caution (light --warn)
+  warnHi: '#7d5810', // darker amber for the now-white tooltip bg (light --warn-hi)
+  bad: '#c92a26', // red — loss (light --bad)
+  badHi: '#b01f1d', // darker red for the now-white tooltip bg (light --bad-hi)
+} as const satisfies Record<ChartColorKey, string>;
+
+/** Sugar — same shape, named for ergonomics in JSX. DARK set (SSR-safe default).
+ * For theme-aware charts use `useChartColors()` (use-chart-colors.ts). */
 export const C = CHART_COLORS;

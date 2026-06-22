@@ -76,7 +76,7 @@ export function TrainingSessionForm() {
           Mode entraînement — nouvelle séance
         </span>
         <div className="flex items-center gap-2.5">
-          <div className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] text-[var(--cy)]">
+          <div className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] text-[var(--cy)]">
             <Layers className="h-4 w-4" strokeWidth={1.75} />
           </div>
           <h1

@@ -110,12 +110,12 @@ export function TradeRiskSchema({ trade }: { trade: TradeRiskInput }) {
       >
         <defs>
           <linearGradient id="rewardGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="oklch(0.62 0.19 254 / 0.55)" />
-            <stop offset="100%" stopColor="oklch(0.62 0.19 254 / 0.12)" />
+            <stop offset="0%" stopColor="var(--acc)" stopOpacity={0.55} />
+            <stop offset="100%" stopColor="var(--acc)" stopOpacity={0.12} />
           </linearGradient>
           <linearGradient id="riskGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="oklch(0.7 0.165 22 / 0.12)" />
-            <stop offset="100%" stopColor="oklch(0.7 0.165 22 / 0.45)" />
+            <stop offset="0%" stopColor="var(--bad)" stopOpacity={0.12} />
+            <stop offset="100%" stopColor="var(--bad)" stopOpacity={0.45} />
           </linearGradient>
         </defs>
 

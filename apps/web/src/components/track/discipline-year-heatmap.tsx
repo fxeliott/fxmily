@@ -36,7 +36,7 @@ function cellClass(level: HeatLevel): string {
     return 'border-[var(--b-strong)] bg-[var(--bg-3)] forced-colors:border-[CanvasText] forced-colors:bg-[Canvas]';
   }
   if (level === 1) {
-    return 'border-[var(--b-acc)] bg-[oklch(0.62_0.19_254_/_0.38)] forced-colors:bg-[Highlight]';
+    return 'border-[var(--b-acc)] bg-[var(--acc-dim)] forced-colors:bg-[Highlight]';
   }
   return 'border-[var(--b-acc)] bg-[var(--acc)] forced-colors:bg-[Highlight]';
 }

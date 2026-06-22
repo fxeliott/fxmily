@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { btnVariants } from '@/components/ui/btn';
 import { Code } from '@/components/ui/code';
+import { Pill } from '@/components/ui/pill';
 import { db } from '@/lib/db';
 
 /**
@@ -132,12 +133,12 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
 
       <section
         aria-labelledby="export-summary-heading"
-        className="rounded-card-lg border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
+        className="glow-edge rounded-card-lg relative border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
       >
         <div className="flex items-start gap-3">
           <span
             aria-hidden="true"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--acc-dim)] text-[var(--acc-hi)]"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[var(--acc-dim)] to-[var(--cy-dim)] text-[var(--acc-hi)] ring-1 ring-[var(--b-acc)] ring-inset"
           >
             <Database className="h-4 w-4" />
           </span>
@@ -154,13 +155,16 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
 
         <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {sections.map((s) => (
+            // Hover affordance on every section tile : cool border + lift
+            // (compositor-only transform), reduced-motion safe.
             <li
               key={s.label}
-              className="rounded-card border border-[var(--b-subtle)] bg-[var(--bg-2)] p-3"
+              className="rounded-card border border-[var(--b-subtle)] bg-[var(--bg-2)] p-3 transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)] hover:shadow-[var(--sh-card)] motion-reduce:transform-none motion-reduce:transition-none"
             >
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-sm font-medium text-[var(--t-1)]">{s.label}</p>
-                <span className="font-mono text-xs text-[var(--acc-hi)]">{s.count}</span>
+                {/* Neutral COUNT badge in cool §21.7 cyan (never a CTA). */}
+                <Pill tone="cy">{s.count}</Pill>
               </div>
               <p className="mt-1 text-[11px] leading-relaxed text-[var(--t-3)]">{s.description}</p>
             </li>

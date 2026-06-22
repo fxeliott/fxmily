@@ -20,7 +20,8 @@ export const dynamic = 'force-dynamic';
  * V2.4 Phase B — `/profile` member-facing profile page (M3 directive).
  *
  * Standalone first-class route (Round 3 decision §D arbitrage #5 vs nested
- * `/account/profile`). Server Component, DS-v2 lime neutral.
+ * `/account/profile`). Server Component, DS-v3 token-driven with the brand
+ * blue `--acc` accent (no legacy lime) — neutral surfaces, blue highlights.
  *
  * States :
  *   - No interview yet → CTA to start `/onboarding/interview`.
@@ -135,7 +136,7 @@ export default async function ProfilePage() {
         {/* ============================================================== */}
         {interview?.status === 'completed' && (!profile || isMockProfile) ? (
           <section
-            className="rounded-card-lg flex flex-col gap-4 border border-[var(--b-acc)] bg-[var(--bg-2)] p-6"
+            className="spotlight-surface rounded-card-lg flex flex-col gap-4 border border-[var(--b-acc)] bg-[var(--bg-2)] p-6 transition-colors duration-200 hover:border-[var(--b-acc-strong)]"
             aria-labelledby="profile-pending-heading"
           >
             <div className="flex items-start gap-3">
@@ -167,11 +168,11 @@ export default async function ProfilePage() {
             />
 
             <section
-              className="rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6"
+              className="spotlight-surface rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6 transition-colors duration-200 hover:border-[var(--b-strong)]"
               aria-labelledby="profile-summary-heading"
             >
-              <header className="flex items-baseline justify-between gap-3">
-                <h2 id="profile-summary-heading" className="t-h2 text-[var(--t-1)]">
+              <header className="flex items-baseline justify-between gap-3 border-b border-[var(--b-default)] pb-3">
+                <h2 id="profile-summary-heading" className="t-h2 text-grad-brand">
                   Synthèse
                 </h2>
                 <span className="t-cap text-[var(--t-3)]">
@@ -187,10 +188,13 @@ export default async function ProfilePage() {
               if (highlights.length === 0) return null;
               return (
                 <section
-                  className="rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6"
+                  className="spotlight-surface rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6 transition-colors duration-200 hover:border-[var(--b-strong)]"
                   aria-labelledby="profile-highlights-heading"
                 >
-                  <h2 id="profile-highlights-heading" className="t-h2 text-[var(--t-1)]">
+                  <h2
+                    id="profile-highlights-heading"
+                    className="t-h2 text-grad-brand border-b border-[var(--b-default)] pb-3"
+                  >
                     Traits saillants
                   </h2>
                   <ul className="flex flex-col gap-4">
@@ -230,7 +234,7 @@ export default async function ProfilePage() {
               if (axes.length === 0) return null;
               return (
                 <section
-                  className="rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6"
+                  className="spotlight-surface rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6 transition-colors duration-200 hover:border-[var(--b-strong)]"
                   aria-labelledby="profile-axes-heading"
                 >
                   <div className="flex items-start gap-3">
@@ -246,7 +250,7 @@ export default async function ProfilePage() {
                       <Target className="h-4 w-4" strokeWidth={2.2} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h2 id="profile-axes-heading" className="t-h2 text-[var(--t-1)]">
+                      <h2 id="profile-axes-heading" className="t-h2 text-grad-brand">
                         Axes prioritaires
                       </h2>
                       <p className="t-cap mt-1 text-[var(--t-3)]">
@@ -305,11 +309,11 @@ interface ProfilePlaceholderProps {
 function ProfilePlaceholder({ eyebrow, title, body, ctaHref, ctaLabel }: ProfilePlaceholderProps) {
   return (
     <section
-      className="rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6"
+      className="spotlight-surface rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6 transition-colors duration-200 hover:border-[var(--b-strong)]"
       aria-labelledby="profile-placeholder-heading"
     >
       <p className="t-eyebrow-lg text-[var(--t-3)]">{eyebrow}</p>
-      <h2 id="profile-placeholder-heading" className="t-h2 text-[var(--t-1)]">
+      <h2 id="profile-placeholder-heading" className="t-h2 text-grad-brand">
         {title}
       </h2>
       <p className="t-body text-[var(--t-2)]">{body}</p>

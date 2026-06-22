@@ -1,7 +1,7 @@
 'use client';
 
 import { m, useReducedMotion } from 'framer-motion';
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import {
   Area,
   CartesianGrid,
@@ -15,7 +15,7 @@ import {
 } from 'recharts';
 
 import type { TrajectoryProjection } from '@/lib/objectives/service';
-import { C } from '@/lib/theme-colors';
+import { useChartColors } from '@/lib/use-chart-colors';
 
 /**
  * « Vers où je vais » — projection de la trajectoire discipline (jalon J4).
@@ -59,6 +59,7 @@ function TrajectoryTooltip({
   active?: boolean;
   payload?: TooltipPayloadItem[];
 }) {
+  const C = useChartColors();
   if (!active || !payload || payload.length === 0) return null;
   const row = payload[0]?.payload;
   if (!row) return null;
@@ -80,7 +81,9 @@ function TrajectoryTooltip({
 }
 
 export function TrajectoryChart({ trajectory }: { trajectory: TrajectoryProjection }) {
+  const C = useChartColors();
   const prefersReduced = useReducedMotion();
+  const bandId = useId();
   const { history, projected, target, etaLabel, insufficient, trend } = trajectory;
 
   const rows = useMemo<Row[]>(() => {
@@ -163,6 +166,17 @@ export function TrajectoryChart({ trajectory }: { trajectory: TrajectoryProjecti
         </figcaption>
         <ResponsiveContainer width="100%" height={240} debounce={1}>
           <ComposedChart data={rows} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
+            <defs>
+              {/* S18 — theme-aware premium fan fill for the prediction band.
+                  Hex (not var()) for iOS WebView; per-instance id via useId so
+                  two trajectories never share a gradient. Mono-accent (--acc),
+                  fades 0.18 → 0.03 so the uncertainty cone reads as a soft cool
+                  haze, never a hard block. */}
+              <linearGradient id={bandId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={C.acc} stopOpacity={0.18} />
+                <stop offset="100%" stopColor={C.acc} stopOpacity={0.03} />
+              </linearGradient>
+            </defs>
             <CartesianGrid stroke={C.bSubtle} strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="label"
@@ -203,8 +217,7 @@ export function TrajectoryChart({ trajectory }: { trajectory: TrajectoryProjecti
               type="monotone"
               dataKey="band"
               stroke="none"
-              fill={C.acc}
-              fillOpacity={0.1}
+              fill={`url(#${bandId})`}
               connectNulls
               dot={false}
               activeDot={false}

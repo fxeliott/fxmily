@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/card';
+import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
 import { InfoDot } from '@/components/ui/info-dot';
 import { Pill } from '@/components/ui/pill';
 import type { SerializedBehavioralScore } from '@/lib/scoring';
@@ -78,64 +79,66 @@ export function ScoreGaugeGrid({ score, history }: ScoreGaugeGridProps) {
     ?.days;
 
   return (
-    <Card primary className="flex flex-col gap-3 p-5" aria-labelledby="scores-heading">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 id="scores-heading" className="t-eyebrow">
-            Scores comportementaux
-          </h2>
-          <InfoDot
-            label="les 4 scores comportementaux"
-            side="bottom"
-            width={272}
-            tip="4 scores de process (0–100), jamais basés sur ton P&L : Discipline (plan, hedge, routine), Stabilité (variance, stress, tilt), Cohérence (expectancy, drawdown, sessions) et Engagement (check-ins, streak, journal). Recalculés chaque nuit et en live après chaque action."
+    <HoverGlowLift tone="acc">
+      <Card primary className="flex flex-col gap-3 p-5" aria-labelledby="scores-heading">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 id="scores-heading" className="t-eyebrow">
+              Scores comportementaux
+            </h2>
+            <InfoDot
+              label="les 4 scores comportementaux"
+              side="bottom"
+              width={272}
+              tip="4 scores de process (0–100), jamais basés sur ton P&L : Discipline (plan, hedge, routine), Stabilité (variance, stress, tilt), Cohérence (expectancy, drawdown, sessions) et Engagement (check-ins, streak, journal). Recalculés chaque nuit et en live après chaque action."
+            />
+          </div>
+          {checkinDays != null ? (
+            <SampleSizeDisclaimer
+              current={checkinDays}
+              minimum={14}
+              unit="jours"
+              context={`fenêtre ${score.windowDays} j`}
+            />
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <ScoreGauge
+            score={score.disciplineScore}
+            label="Discipline"
+            hint="Plan + hedge + routine"
+            reason={reasonOf(score.components.discipline)}
+            trend={trendFor('discipline')}
+          />
+          <ScoreGauge
+            score={score.emotionalStabilityScore}
+            label="Stabilité"
+            hint="Variance + stress + tilt"
+            reason={reasonOf(score.components.emotionalStability)}
+            trend={trendFor('emotionalStability')}
+          />
+          <ScoreGauge
+            score={score.consistencyScore}
+            label="Cohérence"
+            hint="Expectancy + DD + sessions"
+            reason={reasonOf(score.components.consistency)}
+            trend={trendFor('consistency')}
+          />
+          <ScoreGauge
+            score={score.engagementScore}
+            label="Engagement"
+            hint="Fill rate + streak + journal"
+            reason={reasonOf(score.components.engagement)}
+            trend={trendFor('engagement')}
           />
         </div>
-        {checkinDays != null ? (
-          <SampleSizeDisclaimer
-            current={checkinDays}
-            minimum={14}
-            unit="jours"
-            context={`fenêtre ${score.windowDays} j`}
-          />
-        ) : null}
-      </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <ScoreGauge
-          score={score.disciplineScore}
-          label="Discipline"
-          hint="Plan + hedge + routine"
-          reason={reasonOf(score.components.discipline)}
-          trend={trendFor('discipline')}
-        />
-        <ScoreGauge
-          score={score.emotionalStabilityScore}
-          label="Stabilité"
-          hint="Variance + stress + tilt"
-          reason={reasonOf(score.components.emotionalStability)}
-          trend={trendFor('emotionalStability')}
-        />
-        <ScoreGauge
-          score={score.consistencyScore}
-          label="Cohérence"
-          hint="Expectancy + DD + sessions"
-          reason={reasonOf(score.components.consistency)}
-          trend={trendFor('consistency')}
-        />
-        <ScoreGauge
-          score={score.engagementScore}
-          label="Engagement"
-          hint="Fill rate + streak + journal"
-          reason={reasonOf(score.components.engagement)}
-          trend={trendFor('engagement')}
-        />
-      </div>
-
-      {/* §21 « sur quoi travailler » — collapsible sub-score breakdown (the
+        {/* §21 « sur quoi travailler » — collapsible sub-score breakdown (the
           gauges' drill-down was wired but never bound). Calm, weakest-first. */}
-      <ScoreBreakdown score={score} />
-    </Card>
+        <ScoreBreakdown score={score} />
+      </Card>
+    </HoverGlowLift>
   );
 }
 

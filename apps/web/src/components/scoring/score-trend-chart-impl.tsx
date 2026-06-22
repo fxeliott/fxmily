@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 
 import type { BehavioralScoreTrendPoint } from '@/lib/scoring/service';
-import { C } from '@/lib/theme-colors';
+import { useChartColors } from '@/lib/use-chart-colors';
 
 /**
  * Session 3 §28/§21 — behavioral-score trend (the 4 dimensions over time).
@@ -29,11 +29,20 @@ import { C } from '@/lib/theme-colors';
  * good/bad coloring of a dimension, no fanfare.
  */
 
+/**
+ * S18 — neutral cool palette only. These 4 dimensions are PROCESS metrics, not
+ * gain/loss, so they must NOT borrow the finance grammar (ok=green / warn=amber).
+ * We map them to the cool spectrum trio + one desaturated neutral, keeping a
+ * clear luminance ladder so the lines stay distinguishable for colour-blind
+ * readers (bright blue → indigo → bright cyan → muted neutral). `colorKey` is a
+ * key of the theme-aware set so colours flip in light mode (resolved at render
+ * via useChartColors).
+ */
 const DIMENSIONS = [
-  { key: 'discipline', label: 'Discipline', color: C.acc },
-  { key: 'emotionalStability', label: 'Stabilité', color: C.cy },
-  { key: 'consistency', label: 'Cohérence', color: C.ok },
-  { key: 'engagement', label: 'Engagement', color: C.warn },
+  { key: 'discipline', label: 'Discipline', colorKey: 'acc' },
+  { key: 'emotionalStability', label: 'Stabilité', colorKey: 'cy' },
+  { key: 'consistency', label: 'Cohérence', colorKey: 'acc2' },
+  { key: 'engagement', label: 'Engagement', colorKey: 't2' },
 ] as const;
 
 function frenchShort(isoDate: string): string {
@@ -47,6 +56,7 @@ function frenchShort(isoDate: string): string {
 }
 
 export function ScoreTrendChart({ data }: { data: ReadonlyArray<BehavioralScoreTrendPoint> }) {
+  const C = useChartColors();
   const prefersReducedMotion = useReducedMotion();
 
   const formatted = useMemo(() => data.map((p) => ({ ...p, label: frenchShort(p.date) })), [data]);
@@ -89,7 +99,7 @@ export function ScoreTrendChart({ data }: { data: ReadonlyArray<BehavioralScoreT
             <li key={dim.key} className="inline-flex items-center gap-1.5">
               <span
                 className="inline-block h-2 w-2 rounded-full"
-                style={{ backgroundColor: dim.color }}
+                style={{ backgroundColor: C[dim.colorKey] }}
                 aria-hidden="true"
               />
               <span className="t-mono-cap text-[var(--t-3)]">{dim.label}</span>
@@ -151,7 +161,7 @@ export function ScoreTrendChart({ data }: { data: ReadonlyArray<BehavioralScoreT
                 type="monotone"
                 dataKey={dim.key}
                 name={dim.label}
-                stroke={dim.color}
+                stroke={C[dim.colorKey]}
                 strokeWidth={2}
                 dot={false}
                 connectNulls

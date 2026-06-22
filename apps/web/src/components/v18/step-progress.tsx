@@ -57,8 +57,8 @@ export function V18StepProgress({ current, total, labels, className }: V18StepPr
           style={{
             width: '100%',
             background:
-              'linear-gradient(90deg, var(--v18-b-700) 0%, var(--v18-b-500) 55%, var(--v18-b-400) 100%)',
-            boxShadow: '0 0 12px -2px oklch(0.62 0.19 254 / 0.55)',
+              'linear-gradient(90deg, var(--acc-btn) 0%, var(--acc) 55%, var(--acc-hi) 100%)',
+            boxShadow: 'var(--acc-glow)',
           }}
           initial={false}
           animate={{ scaleX: percent }}

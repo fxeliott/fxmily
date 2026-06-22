@@ -95,9 +95,9 @@ export function PairAutocomplete({
             hasError
               ? error
                 ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
-                : 'border-[oklch(0.834_0.158_80_/_0.50)] focus-visible:border-[var(--warn)]'
+                : 'border-[var(--warn-edge)] focus-visible:border-[var(--warn)]'
               : isValid
-                ? 'border-[oklch(0.804_0.181_145_/_0.50)] focus-visible:border-[var(--ok)]'
+                ? 'border-[var(--ok-edge)] focus-visible:border-[var(--ok)]'
                 : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
             'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
             'disabled:cursor-not-allowed disabled:opacity-60',

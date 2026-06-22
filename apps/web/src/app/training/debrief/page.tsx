@@ -102,8 +102,7 @@ export default async function TrainingDebriefLandingPage({ searchParams }: Debri
             data-slot="training-debrief-done"
             className="rounded-card-lg border border-[var(--cy-edge-soft)] p-4"
             style={{
-              background:
-                'linear-gradient(135deg, oklch(0.789 0.139 217 / 0.16) 0%, oklch(0.12 0.02 240 / 0.85) 80%)',
+              background: 'linear-gradient(135deg, var(--cy-dim-strong) 0%, var(--bg-2) 80%)',
             }}
           >
             <p className="t-eyebrow text-[var(--t-3)]">Enregistré</p>

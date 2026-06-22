@@ -66,7 +66,10 @@ export function AdminMeetingRow({ meeting }: { meeting: AdminMeetingView }) {
   const nextAction = isCancelled ? 'uncancel' : 'cancel';
 
   return (
-    <Card className={cn('flex flex-col gap-3 p-4', isCancelled && 'opacity-60')}>
+    // `interactive` (border-strong + shadow-hover, NO transform) — the card
+    // holds a <form>, so a spring/lift would conflict; the hover affordance is
+    // shadow + border only. Cancelled rows keep their greyed `opacity-60`.
+    <Card interactive className={cn('flex flex-col gap-3 p-4', isCancelled && 'opacity-60')}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <h3 className="t-body font-medium text-[var(--t-1)]">{title}</h3>
@@ -83,14 +86,18 @@ export function AdminMeetingRow({ meeting }: { meeting: AdminMeetingView }) {
         </div>
       </div>
 
-      {/* Informational attendance counts (count-only, neutral). */}
-      <p className="t-cap inline-flex items-center gap-1.5 text-[var(--t-3)]">
+      {/* Informational attendance counts (count-only, neutral). The figures are
+          surfaced as cool §21.7 cyan badges (a neutral COUNT, never a CTA). */}
+      <p className="t-cap inline-flex flex-wrap items-center gap-1.5 text-[var(--t-3)]">
         <Users className="h-3.5 w-3.5 text-[var(--t-4)]" strokeWidth={1.75} aria-hidden="true" />
-        {meeting.completedCount} présence{meeting.completedCount > 1 ? 's' : ''} complète
-        {meeting.completedCount > 1 ? 's' : ''}
-        {meeting.declaredCount > meeting.completedCount
-          ? ` · ${meeting.declaredCount} déclaration${meeting.declaredCount > 1 ? 's' : ''}`
-          : ''}
+        <Pill tone="cy">
+          {meeting.completedCount} présence{meeting.completedCount > 1 ? 's' : ''}
+        </Pill>
+        {meeting.declaredCount > meeting.completedCount ? (
+          <Pill tone="cy">
+            {meeting.declaredCount} déclaration{meeting.declaredCount > 1 ? 's' : ''}
+          </Pill>
+        ) : null}
       </p>
 
       <form

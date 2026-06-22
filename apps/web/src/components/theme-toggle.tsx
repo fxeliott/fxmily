@@ -49,7 +49,7 @@ export function ThemeToggle({ variant = 'inline' }: { variant?: 'inline' | 'floa
         onClick={() => mounted && setTheme(next)}
         aria-label={mounted ? label : 'Changer de thème'}
         title={mounted ? label : 'Changer de thème'}
-        className="fixed top-[max(0.75rem,env(safe-area-inset-top))] right-3 z-40 grid h-10 w-10 place-items-center rounded-full border border-[var(--b-default)] bg-[var(--bg-2)]/80 text-[var(--t-2)] shadow-[var(--sh-card)] backdrop-blur-md backdrop-saturate-150 transition-[color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] hover:text-[var(--acc-hi)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+        className="fixed top-[max(0.75rem,env(safe-area-inset-top))] right-3 z-40 grid h-10 w-10 place-items-center rounded-full border border-[var(--b-default)] bg-[var(--bg-2)]/80 text-[var(--t-2)] shadow-[var(--sh-card)] backdrop-blur-md backdrop-saturate-150 transition-[color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] hover:text-[var(--acc-hi)] hover:shadow-[var(--acc-glow)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
       >
         <ToggleIcons mounted={mounted} isDark={isDark} />
       </button>

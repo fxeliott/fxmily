@@ -1,5 +1,7 @@
 import { Sparkles, TrendingUp } from 'lucide-react';
 
+import { Sparkline } from '@/components/ui/sparkline';
+
 /**
  * WeeklyInsightCard (D) — a calm, deterministic weekly "aha" on the dashboard.
  *
@@ -233,6 +235,12 @@ export function WeeklyInsightCard({
       ? `Sur tes 7 derniers jours, ta ${insight.label.toLowerCase()} gagne ${insight.delta} point${insight.delta > 1 ? 's' : ''} (moyenne ${insight.average}/100). Un trader gagnant, c'est d'abord une exécution répétée — continue à dérouler ton process.`
       : `Sur tes 7 derniers jours, ta ${insight.label.toLowerCase()} tient le mieux (moyenne ${insight.average}/100). C'est ton ancre du moment : la régularité du process compte plus que le résultat d'un trade isolé.`;
 
+  // Micro-tendance de la dimension mise en avant (7 derniers jours). Nulls
+  // (jours `insufficient_data`) déjà filtrés par `valuesFor` — jamais lus comme
+  // 0. La Sparkline ne se rend qu'avec ≥ 2 points (cf. primitive) : ce qui
+  // alimente le constat alimente aussi le tracé, zéro divergence.
+  const trendValues = valuesFor(history.slice(-7), insight.dimension);
+
   return (
     <aside
       className={`rounded-card flex items-start gap-3 border border-[var(--b-acc)] bg-[var(--acc-dim)] p-4 ${className}`.trim()}
@@ -249,10 +257,24 @@ export function WeeklyInsightCard({
           <Sparkles className="h-4 w-4" strokeWidth={1.75} />
         )}
       </span>
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="t-eyebrow text-[var(--acc-hi)]">Insight de la semaine</span>
-        <p className="text-[15px] font-semibold text-[var(--t-1)]">{headline}</p>
-        <p className="t-body leading-[1.5] text-[var(--t-2)]">{body}</p>
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="t-eyebrow text-[var(--acc-hi)]">Insight de la semaine</span>
+          <p className="text-[15px] font-semibold text-[var(--t-1)]">{headline}</p>
+          <p className="t-body leading-[1.5] text-[var(--t-2)]">{body}</p>
+        </div>
+        {trendValues.length >= 2 ? (
+          <Sparkline
+            data={trendValues}
+            width={132}
+            height={40}
+            fill
+            showLastDot
+            color="var(--acc)"
+            className="shrink-0 self-end sm:self-center"
+            ariaLabel={`Tendance de ta ${insight.label.toLowerCase()} sur tes ${trendValues.length} derniers jours notés, de ${trendValues[0]} à ${trendValues[trendValues.length - 1]} sur 100.`}
+          />
+        ) : null}
       </div>
     </aside>
   );

@@ -22,7 +22,10 @@ export function ObjectivesHero({ view }: { view: ProcessObjectivesView }) {
   const primaryAction = nextActions.find((a) => a.state === 'todo') ?? nextActions[0] ?? null;
 
   return (
-    <div className="glass-panel glow-edge rounded-card-lg relative grid gap-5 overflow-hidden p-5 lg:grid-cols-[1.5fr_1fr] lg:gap-7 lg:p-7">
+    // S18 — `.wow-hover-glow` (halo ::after, opacité-seule, compositor-safe) donne
+    // une affordance de survol premium SANS lift : on n'applique JAMAIS de
+    // transform à une surface glass (conflit backdrop-filter, cf. HoverGlowLift).
+    <div className="glass-panel glow-edge wow-hover-glow rounded-card-lg relative grid gap-5 overflow-hidden p-5 lg:grid-cols-[1.5fr_1fr] lg:gap-7 lg:p-7">
       {/* ── Gauche : ton cap aujourd'hui ── */}
       <div className="flex flex-col gap-3">
         <span className="t-eyebrow text-[var(--t-3)]">Où j’en suis aujourd’hui</span>

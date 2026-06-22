@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 
 import type { RDistributionBucket } from '@/lib/scoring/dashboard-data';
-import { C } from '@/lib/theme-colors';
+import { useChartColors } from '@/lib/use-chart-colors';
 
 /**
  * Histogram of R-multiples grouped in 0.5R buckets, clipped to [-3R, +3R+].
@@ -29,9 +29,13 @@ interface RDistributionProps {
 }
 
 export function RDistribution({ buckets }: RDistributionProps) {
+  const C = useChartColors();
   const prefersReducedMotion = useReducedMotion();
-  // J6.6 BLOCKER B1 fix — hex literals (Safari fill bug). Floating-point
-  // epsilon test for the "0R" bucket boundary.
+  // J6.6 BLOCKER B1 fix — hex literals (Safari fill bug), now theme-aware (S18).
+  // FINANCE GRAMMAR INVARIANT: loss buckets stay red (C.bad), win buckets stay
+  // accent blue (C.acc), the break-even 0R bucket is neutral (C.t4). Never cool-
+  // recoloured — the sign IS the meaning here. Floating-point epsilon test for
+  // the "0R" bucket boundary.
   const data = buckets.map((b) => ({
     label: b.label,
     count: b.count,

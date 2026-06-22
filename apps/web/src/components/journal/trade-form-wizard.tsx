@@ -381,7 +381,7 @@ export function TradeFormWizard() {
                 i < step
                   ? 'bg-[var(--acc)]'
                   : i === step
-                    ? 'bg-[var(--acc)] shadow-[0_0_8px_oklch(0.62_0.19_254_/_0.55)]'
+                    ? 'bg-[var(--acc)] shadow-[var(--acc-glow)]'
                     : 'bg-[var(--b-default)]',
               )}
             />
@@ -795,8 +795,8 @@ function StepPlannedRR({
             )}
             style={{
               filter: isLowRR
-                ? 'drop-shadow(0 0 14px oklch(0.7 0.165 22 / 0.32))'
-                : 'drop-shadow(0 0 14px oklch(0.62 0.19 254 / 0.40))',
+                ? 'drop-shadow(0 0 14px var(--bad-dim-2))'
+                : 'drop-shadow(0 0 14px var(--acc-dim))',
             }}
           >
             1:{rr.toFixed(2)}
@@ -809,13 +809,13 @@ function StepPlannedRR({
           aria-hidden
         >
           <div
-            className="grid place-items-center border-r border-[var(--b-default)] bg-gradient-to-r from-[oklch(0.7_0.165_22_/_0.20)] to-[oklch(0.7_0.165_22_/_0.10)] font-mono text-[11px] font-semibold text-[var(--bad)] tabular-nums transition-[flex-basis]"
+            className="grid place-items-center border-r border-[var(--b-default)] bg-gradient-to-r from-[var(--bad-dim-2)] to-[var(--bad-dim)] font-mono text-[11px] font-semibold text-[var(--bad)] tabular-nums transition-[flex-basis]"
             style={{ flexBasis: `${100 / (1 + rr)}%`, transitionDuration: '120ms' }}
           >
             −1R
           </div>
           <div
-            className="grid place-items-center bg-gradient-to-r from-[oklch(0.62_0.19_254_/_0.10)] to-[oklch(0.62_0.19_254_/_0.22)] font-mono text-[11px] font-semibold text-[var(--acc)] tabular-nums transition-[flex-basis]"
+            className="grid place-items-center bg-gradient-to-r from-[var(--acc-dim-2)] to-[var(--acc-dim)] font-mono text-[11px] font-semibold text-[var(--acc)] tabular-nums transition-[flex-basis]"
             style={{ flexBasis: `${(rr * 100) / (1 + rr)}%`, transitionDuration: '120ms' }}
           >
             +{rr.toFixed(1)}R
@@ -836,7 +836,7 @@ function StepPlannedRR({
             style={{
               width: `${pct}%`,
               background: 'linear-gradient(90deg, var(--cy) 0%, var(--acc) 80%)',
-              boxShadow: '0 0 10px -2px oklch(0.62 0.19 254 / 0.50)',
+              boxShadow: 'var(--acc-glow)',
               transition: 'width 80ms cubic-bezier(0.4,0,0.2,1)',
             }}
           />
@@ -869,7 +869,7 @@ function StepPlannedRR({
             className="pointer-events-none absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--bg)] bg-[var(--acc)] transition-shadow"
             style={{
               left: `${pct}%`,
-              boxShadow: '0 0 0 4px oklch(0.62 0.19 254 / 0.18), 0 2px 4px oklch(0 0 0 / 0.4)',
+              boxShadow: '0 0 0 4px var(--acc-dim), 0 2px 4px oklch(0 0 0 / 0.4)',
               transition: 'left 80ms cubic-bezier(0.4,0,0.2,1)',
             }}
           >
@@ -969,7 +969,7 @@ function StepPlannedRR({
                 className={cn(
                   'rounded-control p-1.5 text-center transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                   active
-                    ? 'border border-[var(--b-acc-strong)] bg-[var(--acc-dim)] shadow-[0_0_0_3px_oklch(0.62_0.19_254_/_0.10)]'
+                    ? 'border border-[var(--b-acc-strong)] bg-[var(--acc-dim)] shadow-[0_0_0_3px_var(--acc-dim)]'
                     : close
                       ? 'border border-[var(--b-acc)] bg-[var(--acc-dim-2)]'
                       : 'border border-[var(--b-subtle)] hover:border-[var(--b-default)]',
@@ -1145,7 +1145,7 @@ function StepEntryScreenshot({ draft, update, fieldErrors, disabled }: StepProps
                     );
                   }}
                   aria-label={`Retirer la photo additionnelle ${i + 1}`}
-                  className="absolute top-1 right-1 grid h-7 w-7 place-items-center rounded-full border border-[var(--b-default)] bg-[var(--bg)]/80 text-[var(--t-2)] backdrop-blur transition-colors hover:border-[oklch(0.7_0.165_22_/_0.35)] hover:text-[var(--bad)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+                  className="absolute top-1 right-1 grid h-7 w-7 place-items-center rounded-full border border-[var(--b-default)] bg-[var(--bg)]/80 text-[var(--t-2)] backdrop-blur transition-colors hover:border-[var(--b-danger)] hover:text-[var(--bad)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
                 >
                   <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
                 </button>

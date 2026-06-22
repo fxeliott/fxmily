@@ -28,9 +28,9 @@ export function V18CbtDisclaimerBanner() {
       aria-label="Avis pédagogique CBT"
       className="rounded-card-lg border p-4 sm:p-5"
       style={{
-        background: 'oklch(0.18 0.03 254 / 0.6)',
+        background: 'var(--bg-3)',
         borderColor: 'var(--b-default)',
-        boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.04)',
+        boxShadow: 'inset 0 1px 0 var(--b-default)',
       }}
     >
       <div className="flex items-start gap-3">
@@ -38,8 +38,8 @@ export function V18CbtDisclaimerBanner() {
           aria-hidden="true"
           className="rounded-pill mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center"
           style={{
-            background: 'oklch(0.62 0.19 254 / 0.14)',
-            color: 'oklch(0.82 0.115 247)',
+            background: 'var(--acc-dim)',
+            color: 'var(--acc-hi)',
           }}
         >
           <BookOpen size={16} strokeWidth={2} aria-hidden="true" />

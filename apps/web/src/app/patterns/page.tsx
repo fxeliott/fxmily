@@ -1,3 +1,4 @@
+import { Activity, Clock, Coffee, Heart, Layers } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
@@ -17,6 +18,7 @@ import {
   HabitCorrelationSection,
   HabitCorrelationSkeleton,
 } from '@/components/track/habit-correlation-section';
+import { Card } from '@/components/ui/card';
 import { HabitKindTabPicker } from '@/components/track/habit-kind-tab-picker';
 import { habitKindSchema } from '@/lib/schemas/habit-log';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
@@ -73,22 +75,7 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
       <DashboardAmbient />
       <div className="relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
-        <header className="mb-6 flex flex-col gap-2">
-          <span className="t-eyebrow text-[var(--t-3)]">Ma progression</span>
-          <h1
-            className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
-            style={{
-              fontFeatureSettings: '"ss01" 1',
-              fontSize: 'clamp(1.75rem, 1.45rem + 1.3vw, 2.25rem)',
-            }}
-          >
-            Patterns
-          </h1>
-          <p className="t-lead max-w-[62ch]">
-            Ce que tes données révèlent sur ton exécution : émotions, sessions, paires, et le lien
-            entre tes habitudes et ton trading. Une lecture honnête — jamais un verdict.
-          </p>
-        </header>
+        <PatternsHero />
 
         {/* Patterns — émotion×résultat (3 moments) + rythmes + sessions + paires */}
         <section className="wow-reveal mb-6 flex flex-col gap-3" aria-labelledby="patterns-heading">
@@ -162,6 +149,85 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
         </section>
       </div>
     </main>
+  );
+}
+
+/**
+ * PatternsHero (S18) — remplace le `<header>` texte nu (zone fade) par une carte
+ * hero glass cohérente avec le NorthStarHero du dashboard. La page Patterns n'a
+ * AUCUNE métrique chiffrée chargée au top-level (tout stream via Suspense), donc
+ * plutôt qu'inventer un nombre (interdit, posture honnêteté), le récap est une
+ * série de « lentilles » colorées : les 4 axes que la page va révéler. Chaque
+ * lentille porte une teinte du spectre cool autorisé (bleu/indigo/cyan) — jamais
+ * un hue hors-spectre. Présentationnel pur, zéro query ajoutée.
+ *
+ * Posture §2 / anti-Black-Hat : aucun verdict, aucune couleur P&L ; les chips
+ * sont des repères d'orientation, pas des scores.
+ */
+function PatternsHero() {
+  // 4 lentilles d'analyse. Teintes via tokens data-viz catégoriels NEUTRES
+  // (flippent en light) — décoratives, jamais une grammaire direction/P&L.
+  const lenses = [
+    { label: 'Émotions', Icon: Heart, surf: 'border-[var(--dv-1-edge)] bg-[var(--dv-1-dim)]' },
+    { label: 'Sessions', Icon: Clock, surf: 'border-[var(--dv-2-edge)] bg-[var(--dv-2-dim)]' },
+    { label: 'Paires', Icon: Layers, surf: 'border-[var(--dv-3-edge)] bg-[var(--dv-3-dim)]' },
+    { label: 'Habitudes', Icon: Coffee, surf: 'border-[var(--dv-1-edge)] bg-[var(--dv-1-dim)]' },
+  ] as const;
+
+  return (
+    <section aria-labelledby="patterns-hero-heading" className="wow-reveal mb-6">
+      <Card
+        primary
+        glass
+        edge={false}
+        className="dash-hero relative overflow-hidden p-6 backdrop-blur-[16px] backdrop-saturate-150 lg:p-7"
+      >
+        <div className="relative grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:items-center lg:gap-8">
+          {/* ---- Gauche : intro ---- */}
+          <div className="flex flex-col gap-2">
+            <span className="t-eyebrow inline-flex items-center gap-1.5 text-[var(--t-3)]">
+              <Activity className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+              Ma progression
+            </span>
+            <h1
+              id="patterns-hero-heading"
+              className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+              style={{
+                fontFeatureSettings: '"ss01" 1',
+                fontSize: 'clamp(1.75rem, 1.45rem + 1.3vw, 2.25rem)',
+              }}
+            >
+              Patterns
+            </h1>
+            <p className="t-lead max-w-[58ch]">
+              Ce que tes données révèlent sur ton exécution : émotions, sessions, paires, et le lien
+              entre tes habitudes et ton trading. Une lecture honnête — jamais un verdict.
+            </p>
+          </div>
+
+          {/* ---- Droite : les 4 lentilles d'analyse ---- */}
+          <ul
+            className="grid grid-cols-2 gap-2.5"
+            aria-label="Les axes d’analyse de cette page : émotions, sessions, paires, habitudes"
+          >
+            {lenses.map(({ label, Icon, surf }) => (
+              <li
+                key={label}
+                className={`rounded-card flex items-center gap-2.5 border p-3 ${surf}`}
+              >
+                <span
+                  aria-hidden="true"
+                  className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-2)]"
+                >
+                  <Icon className="h-4 w-4" strokeWidth={1.75} />
+                </span>
+                <span className="text-[13px] font-semibold text-[var(--t-1)]">{label}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Card>
+    </section>
   );
 }
 

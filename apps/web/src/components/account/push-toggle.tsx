@@ -240,7 +240,7 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
 
   if (state === 'permission-denied') {
     return (
-      <div className="rounded-card border border-[oklch(0.834_0.158_80_/_0.30)] bg-[var(--warn-dim)] p-4">
+      <div className="rounded-card border border-[var(--warn-edge)] bg-[var(--warn-dim)] p-4">
         <div className="flex items-center gap-2 text-sm font-medium text-[var(--t-1)]">
           <BellOff aria-hidden="true" className="h-4 w-4 text-[var(--warn)]" />
           Notifications bloquées au niveau du système

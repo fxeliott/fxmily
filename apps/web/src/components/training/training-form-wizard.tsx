@@ -319,7 +319,7 @@ export function TrainingFormWizard({
         </span>
 
         {sessionId ? (
-          <p className="rounded-control inline-flex w-fit items-center gap-1.5 border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] px-2.5 py-1.5 text-[12px] text-[var(--t-2)]">
+          <p className="rounded-control inline-flex w-fit items-center gap-1.5 border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] px-2.5 py-1.5 text-[12px] text-[var(--t-2)]">
             <Layers className="h-3.5 w-3.5 shrink-0 text-[var(--cy)]" strokeWidth={1.75} />
             Dans la session :{' '}
             <strong className="font-semibold text-[var(--t-1)]">
@@ -329,7 +329,7 @@ export function TrainingFormWizard({
         ) : null}
 
         <div className="flex items-center gap-2.5">
-          <div className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[oklch(0.789_0.139_217_/_0.30)] bg-[var(--cy-dim)] text-[var(--cy)]">
+          <div className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] text-[var(--cy)]">
             <StepIcon className="h-4 w-4" strokeWidth={1.75} />
           </div>
           <h1
@@ -871,7 +871,7 @@ function RadioGroup({
                 'rounded-pill inline-flex min-h-11 cursor-pointer items-center gap-2 border px-4 py-2 text-[13px] font-medium transition-all',
                 'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--cy)]',
                 active
-                  ? 'border-[oklch(0.789_0.139_217_/_0.40)] bg-[var(--cy-dim)] text-[var(--cy)] shadow-[0_0_0_3px_oklch(0.789_0.139_217_/_0.10)]'
+                  ? 'border-[var(--cy-edge)] bg-[var(--cy-dim)] text-[var(--cy)] shadow-[0_0_0_3px_oklch(0.789_0.139_217_/_0.10)]'
                   : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]',
                 disabled && 'cursor-not-allowed opacity-60',
               )}

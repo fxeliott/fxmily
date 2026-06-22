@@ -52,6 +52,9 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
     return FMT_WEEKDAY_LONG_UTC.format(dt);
   };
 
+  // Per-letter cool progression A→D, 100% tokens so it flips in light/dark
+  // (AA in both). A=indigo --acc-2, B=blue --acc, C=blue-hi --acc-hi, D=cyan
+  // --cy ; mono-accent cool spectre, the only CTA stays --acc elsewhere.
   const sections = [
     {
       letter: 'A',
@@ -59,7 +62,7 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
       eyebrow: 'Faits',
       icon: Zap,
       content: entry.triggerEvent,
-      color: 'oklch(0.46 0.21 263)',
+      color: 'var(--acc-2)',
     },
     {
       letter: 'B',
@@ -67,7 +70,7 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
       eyebrow: 'Belief',
       icon: MessageCircleQuestion,
       content: entry.beliefAuto,
-      color: 'oklch(0.53 0.21 259)',
+      color: 'var(--acc)',
     },
     {
       letter: 'C',
@@ -75,7 +78,7 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
       eyebrow: 'Consequence',
       icon: HeartPulse,
       content: entry.consequence,
-      color: 'oklch(0.62 0.19 254)',
+      color: 'var(--acc-hi)',
     },
     {
       letter: 'D',
@@ -83,7 +86,7 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
       eyebrow: 'Disputation',
       icon: Sparkles,
       content: entry.disputation,
-      color: 'oklch(0.82 0.115 247)',
+      color: 'var(--cy)',
     },
   ] as const;
 
@@ -117,7 +120,7 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
             return (
               <article
                 key={s.letter}
-                className="rounded-card-lg flex flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]"
+                className="rounded-card-lg flex flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)] transition-[border-color,box-shadow] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)]"
                 aria-labelledby={`abcd-${s.letter}`}
               >
                 <header className="flex items-start gap-3">
@@ -125,7 +128,7 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
                     aria-hidden="true"
                     className="rounded-pill flex h-11 w-11 shrink-0 items-center justify-center border"
                     style={{
-                      background: 'oklch(0.18 0.03 254 / 0.85)',
+                      background: 'var(--bg-2)',
                       borderColor: s.color,
                       color: s.color,
                     }}

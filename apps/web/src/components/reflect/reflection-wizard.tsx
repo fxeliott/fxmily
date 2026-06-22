@@ -311,12 +311,14 @@ function ABCDHeader({
   headingRef: React.RefObject<HTMLHeadingElement | null>;
 }) {
   const Icon = def.icon;
-  // Color progression A→B→C→D (deep→light) matching ABCDHero
+  // Color progression A→B→C→D (deep→light) matching ABCDHero — 100% tokens so
+  // it flips light/dark (AA both). A=indigo --acc-2, B=blue --acc, C=blue-hi
+  // --acc-hi, D=cyan --cy ; cool spectre, the only CTA stays --acc.
   const colorByLetter: Record<StepDef['letter'], string> = {
-    A: 'oklch(0.46 0.21 263)',
-    B: 'oklch(0.53 0.21 259)',
-    C: 'oklch(0.62 0.19 254)',
-    D: 'oklch(0.82 0.115 247)',
+    A: 'var(--acc-2)',
+    B: 'var(--acc)',
+    C: 'var(--acc-hi)',
+    D: 'var(--cy)',
   };
   return (
     <header className="flex items-start gap-3">
@@ -324,7 +326,7 @@ function ABCDHeader({
         aria-hidden="true"
         className="rounded-pill mt-1 flex h-12 w-12 shrink-0 items-center justify-center border"
         style={{
-          background: 'oklch(0.18 0.03 254 / 0.85)',
+          background: 'var(--bg-2)',
           borderColor: colorByLetter[def.letter],
           color: colorByLetter[def.letter],
           boxShadow: 'var(--acc-glow)',
@@ -387,9 +389,9 @@ function FreeTextField(props: FreeTextFieldProps) {
         placeholder={placeholder}
         maxLength={REFLECTION_TEXT_MAX_CHARS + 100}
         rows={6}
-        className="rounded-input w-full resize-y border bg-[var(--bg-2)] px-3.5 py-3 text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:border-[var(--b-acc-strong)] focus:shadow-[0_0_0_3px_oklch(0.62_0.19_254_/_0.16)] focus:outline-none"
+        className="rounded-input w-full resize-y border bg-[var(--bg-2)] px-3.5 py-3 text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus:border-[var(--b-acc-strong)] focus:shadow-[0_0_0_3px_var(--acc-dim)] focus:outline-none"
         style={{
-          borderColor: error ? 'oklch(0.7 0.165 22 / 0.55)' : 'var(--b-strong)',
+          borderColor: error ? 'var(--bad)' : 'var(--b-strong)',
           minHeight: '180px',
         }}
         aria-invalid={error ? 'true' : undefined}

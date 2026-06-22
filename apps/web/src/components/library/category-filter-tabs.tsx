@@ -29,12 +29,17 @@ interface CategoryFilterTabsProps {
  * 2-3 lines. `aria-current="page"` marks the active tab for SR users.
  */
 export function CategoryFilterTabs({ entries, active, totalCount }: CategoryFilterTabsProps) {
+  // S18 — onglet actif : fond acc-dim + glow acc (mono-accent, le seul accent
+  // plein autorisé). Transition limitée aux couleurs (compositor/paint léger) —
+  // jamais `transition-all` (invariant anim). Le glow est peint sur l'état actif
+  // (changement de route = re-render), pas une animation continue.
   const tabClass = (selected: boolean) =>
     cn(
-      'inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-sm transition-all',
+      'inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-sm',
+      'transition-[color,background-color,border-color] duration-200',
       'min-h-11 whitespace-nowrap',
       selected
-        ? 'border-acc/60 bg-acc/15 text-acc shadow-[0_0_0_1px_var(--b-acc)]'
+        ? 'bg-acc-dim text-acc border-acc/60 shadow-[var(--acc-glow)]'
         : 'border-border bg-bg-1 text-foreground/85 hover:border-strong hover:bg-bg-2',
       'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acc',
     );

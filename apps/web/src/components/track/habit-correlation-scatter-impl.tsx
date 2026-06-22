@@ -13,7 +13,7 @@ import {
   YAxis,
 } from 'recharts';
 
-import { C } from '@/lib/theme-colors';
+import { useChartColors } from '@/lib/use-chart-colors';
 
 /**
  * Habit × R scatter — V2.1.3.
@@ -53,6 +53,7 @@ interface HabitCorrelationScatterProps {
 }
 
 export function HabitCorrelationScatter({ points, xLabel, summary }: HabitCorrelationScatterProps) {
+  const C = useChartColors();
   const prefersReducedMotion = useReducedMotion();
 
   const data = useMemo(

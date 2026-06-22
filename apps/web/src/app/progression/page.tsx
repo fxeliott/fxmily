@@ -1,4 +1,4 @@
-import { LineChart as LineChartIcon } from 'lucide-react';
+import { ArrowUpRight, LineChart as LineChartIcon, Minus, TrendingUp } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
@@ -12,10 +12,17 @@ import { ScoreGaugeGrid } from '@/components/scoring/score-gauge-grid';
 import { ScoreTrendChart } from '@/components/scoring/score-trend-chart';
 import { TrackRecordChart } from '@/components/scoring/track-record-chart';
 import { DisciplineYearHeatmap } from '@/components/track/discipline-year-heatmap';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
+import { Sparkline } from '@/components/ui/sparkline';
 import { getDisciplineYearHeatmap } from '@/lib/checkin/service';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
-import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
+import {
+  getBehavioralScoreHistory,
+  getLatestBehavioralScore,
+  type BehavioralScoreTrendPoint,
+} from '@/lib/scoring/service';
+import type { SerializedBehavioralScore } from '@/lib/scoring';
 import { getMemberWeeklyRecap } from '@/lib/weekly-report/member-recap';
 
 /**
@@ -65,22 +72,7 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
       <DashboardAmbient />
       <div className="relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
-        <header className="mb-6 flex flex-col gap-2">
-          <span className="t-eyebrow text-[var(--t-3)]">Ma progression</span>
-          <h1
-            className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
-            style={{
-              fontFeatureSettings: '"ss01" 1',
-              fontSize: 'clamp(1.75rem, 1.45rem + 1.3vw, 2.25rem)',
-            }}
-          >
-            Où j’en suis
-          </h1>
-          <p className="t-lead max-w-[62ch]">
-            Tes scores comportementaux, leur trajectoire et ton track record — la photo de ta
-            discipline dans le temps. Tu observes, tu ne te fais pas punir.
-          </p>
-        </header>
+        <ProgressionHero score={latestScore} history={scoreHistory} />
 
         {/* Récap hebdo CHIFFRÉ — « Ta semaine en chiffres » (S14). Première
             surface membre avec un delta semaine-vs-semaine calme (réutilise
@@ -153,6 +145,113 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
         </section>
       </div>
     </main>
+  );
+}
+
+/**
+ * ProgressionHero (S18) — remplace le `<header>` texte nu (zone la plus fade) par
+ * une carte hero glass cohérente avec le NorthStarHero du dashboard : eyebrow +
+ * titre display + lead À GAUCHE, récap chiffré coloré (score discipline +
+ * micro-trajectoire + delta calme) À DROITE. Présentationnel pur — réutilise les
+ * données déjà fetchées en tête de page (aucune query ajoutée).
+ *
+ * Posture §2 / anti-Black-Hat : la discipline est un score de PROCESS, jamais un
+ * P&L. Le delta monte en vert `--ok` (renforcement positif autorisé) et reste
+ * gris neutre `--t-3` à plat OU en repli — JAMAIS rouge, jamais punitif (miroir
+ * exact du TrendBadge du hero dashboard).
+ */
+function ProgressionHero({
+  score,
+  history,
+}: {
+  score: SerializedBehavioralScore | null;
+  history: BehavioralScoreTrendPoint[];
+}) {
+  const points = history.map((p) => p.discipline).filter((n): n is number => n !== null);
+  const value = score?.disciplineScore ?? null;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const delta = first !== undefined && last !== undefined ? last - first : null;
+  const rising = delta !== null && delta >= 2;
+  const hasSpark = points.length >= 2;
+
+  return (
+    <section aria-labelledby="progression-hero-heading" className="wow-reveal mb-6">
+      <Card
+        primary
+        glass
+        edge={false}
+        className="dash-hero relative overflow-hidden p-6 backdrop-blur-[16px] backdrop-saturate-150 lg:p-7"
+      >
+        <div className="relative grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:items-center lg:gap-8">
+          {/* ---- Gauche : intro ---- */}
+          <div className="flex flex-col gap-2">
+            <span className="t-eyebrow text-[var(--t-3)]">Ma progression</span>
+            <h1
+              id="progression-hero-heading"
+              className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+              style={{
+                fontFeatureSettings: '"ss01" 1',
+                fontSize: 'clamp(1.75rem, 1.45rem + 1.3vw, 2.25rem)',
+              }}
+            >
+              Où j’en suis
+            </h1>
+            <p className="t-lead max-w-[58ch]">
+              Tes scores comportementaux, leur trajectoire et ton track record — la photo de ta
+              discipline dans le temps. Tu observes, tu ne te fais pas punir.
+            </p>
+          </div>
+
+          {/* ---- Droite : récap chiffré discipline ---- */}
+          <div className="rounded-card flex flex-col gap-2.5 border border-[var(--b-acc)] bg-[var(--acc-dim)] p-4 lg:p-5">
+            <span className="t-eyebrow text-[var(--acc-hi)]">Discipline du moment</span>
+            <div className="flex items-end gap-3">
+              <span className="f-mono text-[40px] leading-none font-bold tracking-[-0.03em] text-[var(--t-1)] tabular-nums">
+                {value === null ? '—' : <AnimatedNumber value={value} />}
+                {value !== null ? (
+                  <span className="text-[18px] font-medium text-[var(--t-3)]">/100</span>
+                ) : null}
+              </span>
+              {delta !== null ? (
+                <span
+                  className={`mb-1 inline-flex items-center gap-1 text-[12px] font-semibold ${
+                    rising ? 'text-[var(--ok)]' : 'text-[var(--t-3)]'
+                  }`}
+                >
+                  {rising ? (
+                    <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                  ) : (
+                    <Minus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                  )}
+                  {rising ? `+${delta}` : 'stable'}
+                  <span className="sr-only">
+                    {rising ? 'en hausse sur la période' : 'tendance stable sur la période'}
+                  </span>
+                </span>
+              ) : null}
+            </div>
+            {hasSpark ? (
+              <Sparkline
+                data={points}
+                width={210}
+                height={44}
+                fill
+                showLastDot
+                color="var(--acc)"
+                className="mt-0.5 w-full"
+                ariaLabel={`Trajectoire de ton score discipline : ${points.length} relevés, de ${first} à ${last} sur 100.`}
+              />
+            ) : (
+              <p className="t-cap inline-flex items-center gap-1.5 text-[var(--t-3)]">
+                <TrendingUp className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                Ta trajectoire apparaît dès quelques jours de recul.
+              </p>
+            )}
+          </div>
+        </div>
+      </Card>
+    </section>
   );
 }
 

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
 import { emotionLabel } from '@/lib/trading/emotions';
 import { winRateWithBand, type WilsonInterval } from '@/lib/analytics';
 
@@ -40,7 +41,10 @@ export function EmotionPerfTable({ rows, totalTrades }: EmotionPerfTableProps) {
   const sorted = [...rows].filter((r) => r.trades > 0).sort((a, b) => b.trades - a.trades);
 
   return (
-    <div className="rounded-card-lg flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
+    <HoverGlowLift
+      tone="acc"
+      className="rounded-card-lg flex h-full flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-colors hover:border-[var(--b-acc)]"
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="t-eyebrow">Émotion × outcome</span>
         <SampleSizeDisclaimer
@@ -118,6 +122,6 @@ export function EmotionPerfTable({ rows, totalTrades }: EmotionPerfTableProps) {
           </table>
         </div>
       )}
-    </div>
+    </HoverGlowLift>
   );
 }

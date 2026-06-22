@@ -106,8 +106,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
             role="status"
             className="rounded-card-lg border border-[var(--b-acc)] p-4"
             style={{
-              background:
-                'linear-gradient(135deg, oklch(0.62 0.19 254 / 0.16) 0%, oklch(0.13 0.028 254 / 0.85) 80%)',
+              background: 'linear-gradient(135deg, var(--acc-dim) 0%, var(--bg-2) 80%)',
             }}
           >
             <p className="t-eyebrow text-[var(--t-3)]">Enregistrée</p>

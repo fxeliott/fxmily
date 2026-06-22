@@ -168,9 +168,9 @@ function Field({ name, type, label, autoComplete, required, error, disabled, ico
       <label htmlFor={id} className="t-eyebrow-lg text-[var(--t-3)]">
         {label}
       </label>
-      <div className="relative">
+      <div className="group relative">
         {icon ? (
-          <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--t-4)]">
+          <span className="pointer-events-none absolute top-1/2 left-3 z-[1] -translate-y-1/2 text-[var(--t-4)] transition-colors duration-150 group-focus-within:text-[var(--acc)] group-hover:text-[var(--acc)]">
             {icon}
           </span>
         ) : null}
@@ -188,9 +188,9 @@ function Field({ name, type, label, autoComplete, required, error, disabled, ico
             icon ? 'pl-10' : 'pl-3',
             error
               ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
-              : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+              : 'border-[var(--b-default)] hover:border-[var(--b-acc)] hover:shadow-[0_0_0_3px_var(--acc-dim)] focus-visible:border-[var(--acc)]',
             'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
-            'disabled:cursor-not-allowed disabled:opacity-60',
+            'disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-[var(--b-default)] disabled:hover:shadow-none',
           )}
         />
       </div>

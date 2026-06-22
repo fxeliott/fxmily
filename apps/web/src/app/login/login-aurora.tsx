@@ -60,6 +60,11 @@ export function LoginAurora() {
           animationDelay: '-12s',
         }}
       />
+      {/* S18 — centred soft brand wash behind the card. `surf-grad-soft` is a
+          token-driven cool gradient (alpha ≤0.14, flips in light); the radial
+          mask keeps it a faint halo around the form so the card stays in vedette
+          and contrast is never touched. Static (no animation) = zero added GPU. */}
+      <div className="surf-grad-soft absolute top-1/2 left-1/2 h-[70vmin] max-h-[640px] w-[70vmin] max-w-[640px] -translate-x-1/2 -translate-y-1/2 [mask-image:radial-gradient(circle,black,transparent_70%)] opacity-60" />
     </div>
   );
 }

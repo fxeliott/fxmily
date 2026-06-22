@@ -143,7 +143,9 @@ function AccountCard({
       ? 'bg-[var(--bad-dim)] text-[var(--bad)]'
       : tone === 'warn'
         ? 'bg-[var(--warn-dim)] text-[var(--warn)]'
-        : 'bg-[var(--acc-dim)] text-[var(--acc-hi)]';
+        : // Cool acc→cy gradient pastille (both stops are var tokens so it flips
+          // in light); the icon stays --acc-hi for AA against the tint.
+          'bg-gradient-to-br from-[var(--acc-dim)] to-[var(--cy-dim)] text-[var(--acc-hi)] ring-1 ring-[var(--b-acc)] ring-inset';
   const borderHover =
     tone === 'danger'
       ? 'hover:border-[var(--b-danger)]'

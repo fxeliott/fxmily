@@ -26,7 +26,18 @@ export function TrainingSessionCard({ session }: { session: SerializedTrainingSe
   const isEnded = session.endedAt != null;
 
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <Card className="group/ts relative flex flex-col gap-3 p-4">
+      {/* S18 — identité CYAN training (§21.7) : liseré supérieur décoratif cyan,
+          décoratif (pointer-events:none), s'intensifie quand la carte est survolée
+          via le Link parent. JAMAIS le bleu CTA --acc (non-confusabilité §21.5). */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-0 right-3 left-3 z-10 h-px opacity-70 transition-opacity duration-200 group-hover/ts:opacity-100"
+        style={{
+          background:
+            'linear-gradient(90deg, transparent 0%, var(--cy-edge) 50%, transparent 100%)',
+        }}
+      />
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="t-eyebrow inline-flex items-center gap-1.5 text-[var(--cy)]">

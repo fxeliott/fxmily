@@ -102,8 +102,8 @@ export function HelpfulFeedback({ deliveryId, initialHelpful }: HelpfulFeedbackP
             'rounded-pill inline-flex h-11 flex-1 items-center justify-center gap-2 px-4',
             'border text-sm font-medium transition-[border-color,background-color,box-shadow] duration-200',
             helpful === false
-              ? 'border-[oklch(0.834_0.158_80_/_0.40)] bg-[var(--warn-dim)] text-[var(--warn)]'
-              : 'border-[var(--b-default)] bg-[var(--bg-1)]/60 text-[var(--t-1)] hover:border-[oklch(0.834_0.158_80_/_0.40)]',
+              ? 'border-[var(--warn-edge)] bg-[var(--warn-dim)] text-[var(--warn)]'
+              : 'border-[var(--b-default)] bg-[var(--bg-1)]/60 text-[var(--t-1)] hover:border-[var(--warn-edge)]',
             'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--warn)]',
             'disabled:opacity-50',
           )}

@@ -111,7 +111,7 @@ export function TradeDetailView({
 
       {/* Open warning + close CTA */}
       {!trade.isClosed && closeHref ? (
-        <div className="rounded-card border border-[oklch(0.834_0.158_80_/_0.30)] bg-[var(--warn-dim)] p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
+        <div className="rounded-card border border-[var(--warn-edge)] bg-[var(--warn-dim)] p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
           <div className="flex flex-col gap-1">
             <span className="t-eyebrow text-[var(--warn)]">Trade ouvert</span>
             <p className="t-body text-[var(--t-2)]">

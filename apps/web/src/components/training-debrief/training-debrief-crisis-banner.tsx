@@ -30,6 +30,11 @@ interface TrainingDebriefCrisisBannerProps {
  */
 export function TrainingDebriefCrisisBanner({ level }: TrainingDebriefCrisisBannerProps) {
   const isHigh = level === 'high';
+  // Severity must read the same everywhere — universal safety colours via
+  // tokens that flip in light/dark (carbone `OnboardingCrisisBanner`). `--bad`
+  // for HIGH, `--warn` for MEDIUM ; NOT the cyan training identity (only the
+  // neutral tel: CTA below keeps the cyan accent, for surface coherence).
+  const toneVar = isHigh ? '--bad' : '--warn';
   return (
     <div
       role="alert"
@@ -38,22 +43,19 @@ export function TrainingDebriefCrisisBanner({ level }: TrainingDebriefCrisisBann
       data-level={level}
       className="rounded-card-lg relative overflow-hidden border p-5"
       style={{
-        background: isHigh
-          ? 'linear-gradient(135deg, oklch(0.21 0.06 22 / 0.55) 0%, oklch(0.12 0.02 240 / 0.92) 60%)'
-          : 'linear-gradient(135deg, oklch(0.18 0.07 80 / 0.4) 0%, oklch(0.12 0.02 240 / 0.92) 70%)',
-        borderColor: isHigh ? 'oklch(0.7 0.165 22 / 0.45)' : 'oklch(0.834 0.158 80 / 0.45)',
-        boxShadow: isHigh
-          ? '0 12px 32px -8px oklch(0.7 0.165 22 / 0.2), 0 0 0 1px oklch(0.7 0.165 22 / 0.18)'
-          : '0 12px 32px -8px oklch(0.834 0.158 80 / 0.18), 0 0 0 1px oklch(0.834 0.158 80 / 0.16)',
+        background: 'var(--bg-2)',
+        borderColor: `var(${toneVar})`,
+        boxShadow: `0 12px 32px -8px var(${toneVar}-dim-2, var(--bg-3)), 0 0 0 1px var(${toneVar}-dim, var(--b-default))`,
       }}
     >
       <div className="flex items-start gap-3">
         <div
           aria-hidden="true"
-          className="rounded-pill flex h-10 w-10 shrink-0 items-center justify-center"
+          className="rounded-pill flex h-10 w-10 shrink-0 items-center justify-center border"
           style={{
-            background: isHigh ? 'oklch(0.7 0.165 22 / 0.18)' : 'oklch(0.834 0.158 80 / 0.18)',
-            color: isHigh ? 'oklch(0.785 0.121 19)' : 'oklch(0.875 0.14 84)',
+            background: 'var(--bg-3)',
+            borderColor: `var(${toneVar})`,
+            color: `var(${toneVar})`,
           }}
         >
           <AlertTriangle aria-hidden="true" size={20} strokeWidth={2.2} />
@@ -74,15 +76,7 @@ export function TrainingDebriefCrisisBanner({ level }: TrainingDebriefCrisisBann
               <li key={r.phone} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <a
                   href={`tel:${r.phone}`}
-                  className="rounded-pill inline-flex min-h-11 items-center gap-2 px-3.5 py-2 text-[13px] font-semibold transition-[background-color,box-shadow] duration-150 hover:bg-[oklch(0.789_0.139_217_/_0.32)]"
-                  style={{
-                    color: 'oklch(0.97 0.02 210)',
-                    background: 'oklch(0.789 0.139 217 / 0.22)',
-                    // WCAG 1.4.11 Non-text Contrast — 0.85 alpha border so the
-                    // CTA boundary clears ≥ 3:1 on the banner gradient. The
-                    // 3 FR tel: CTAs are the vital path (carbon REFLECT B4).
-                    border: '1px solid oklch(0.789 0.139 217 / 0.85)',
-                  }}
+                  className="rounded-pill inline-flex min-h-11 items-center gap-2 border border-[var(--cy-edge)] bg-[var(--cy-dim-strong)] px-3.5 py-2 text-[13px] font-semibold text-[var(--cy)] transition-[background-color,box-shadow] duration-150 hover:bg-[var(--cy-dim)] focus-visible:ring-2 focus-visible:ring-[var(--cy)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
                   aria-label={`Appeler ${r.name}, ${r.description}, ${r.hours}`}
                 >
                   <Phone aria-hidden="true" size={14} strokeWidth={2.2} />

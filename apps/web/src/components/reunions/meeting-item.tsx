@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 /**
  * V1.7 §30 J-M2 — one meeting row on `/reunions` (Server Component).
  *
- * Neutral DS-v2 lime tone (anti Black-Hat, SPEC §30.7): the state badge uses
+ * Neutral DS-v3 accent-blue tone (anti Black-Hat, SPEC §30.7): the state badge uses
  * an icon + a text label (WCAG 1.4.1 — never colour alone) and NEVER the red
  * `bad` tone. A cancelled meeting is greyed and shows no declaration form.
  */

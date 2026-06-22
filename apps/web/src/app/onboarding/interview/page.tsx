@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
 /**
  * V2.4 Phase B — `/onboarding/interview` landing (M3 directive 2026-05-27).
  *
- * Server Component, DS-v2 lime neutral (Round 3 decision verrouillée vs V18
+ * Server Component, DS-v3 accent-blue neutral (Round 3 decision verrouillée vs V18
  * REFLECT blue+black). Auth gate `status='active'` (carbone V1.5/V1.8/V2.3).
  *
  * Routing decisions :

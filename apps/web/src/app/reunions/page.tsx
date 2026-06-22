@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 /**
  * V1.7 §30 J-M2 — `/reunions` member landing.
  *
- * Server Component, DS-v2 NEUTRAL/lime (never `.v18-theme`, never cyan §21.7).
+ * Server Component, DS-v3 NEUTRAL/accent bleu (never `.v18-theme`, never cyan §21.7).
  * Auth-gated `status === 'active'`. Lists the member's meetings over the
  * rolling 30d window (scheduled + cancelled-greyed) with their attendance
  * state + a neutral, honest attendance rate.

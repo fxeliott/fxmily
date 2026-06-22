@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 /**
  * V2.4 Phase B — `/onboarding/interview/new` host wizard (M3 directive).
  *
- * Server Component, DS-v2 lime neutral. Reads server-truth interview state +
+ * Server Component, DS-v3 accent-blue neutral. Reads server-truth interview state +
  * existing answers from Prisma, derives `initialStep` (= answers.length, first
  * unanswered Q), passes to `<OnboardingInterviewWizard>`.
  *

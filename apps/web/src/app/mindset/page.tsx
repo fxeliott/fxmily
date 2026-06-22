@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Brain, ClipboardCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Brain, ClipboardCheck, LineChart, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -124,6 +124,58 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
             </p>
           </div>
           <MindsetTimeline checks={recent} />
+        </section>
+
+        {/* S19.2 — §11 : ferme le cul-de-sac mindset. L'auto-évaluation est un
+            recul ; ces deux portes le transforment en pratique (réflexion du jour
+            / revue de la semaine). Doorways bi-ton (bleu + indigo) — pas des CTA
+            primaires, donc le mono-accent CTA reste intact. */}
+        <section className="wow-reveal flex flex-col gap-3" aria-labelledby="mindset-next-heading">
+          <h2 id="mindset-next-heading" className="t-eyebrow-lg text-[var(--t-3)]">
+            Et maintenant ?
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Link
+              href="/reflect"
+              className="group rounded-card flex items-center gap-3 border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              <span className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
+                <Sparkles className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-[14px] font-semibold text-[var(--t-1)]">
+                  Réflexion guidée
+                </span>
+                <span className="t-cap text-[var(--t-3)]">
+                  Transformer ce recul en intention concrète
+                </span>
+              </span>
+              <ArrowRight
+                className="h-4 w-4 shrink-0 text-[var(--t-4)] transition-transform group-hover:translate-x-0.5"
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
+            </Link>
+            <Link
+              href="/review"
+              className="group rounded-card flex items-center gap-3 border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--acc-2-edge)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc-2-hi)]"
+            >
+              <span className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--acc-2-edge)] bg-[var(--acc-2-dim)] text-[var(--acc-2-hi)]">
+                <LineChart className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-[14px] font-semibold text-[var(--t-1)]">
+                  Revue de la semaine
+                </span>
+                <span className="t-cap text-[var(--t-3)]">Faire le point sur ton exécution</span>
+              </span>
+              <ArrowRight
+                className="h-4 w-4 shrink-0 text-[var(--t-4)] transition-transform group-hover:translate-x-0.5"
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
+            </Link>
+          </div>
         </section>
       </div>
     </main>

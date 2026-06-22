@@ -1,4 +1,11 @@
-import { ArrowUpRight, LineChart as LineChartIcon, Minus, TrendingUp } from 'lucide-react';
+import {
+  ArrowRight,
+  ArrowUpRight,
+  LineChart as LineChartIcon,
+  Minus,
+  TrendingUp,
+} from 'lucide-react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
@@ -143,6 +150,29 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
             <TrackRecordSection userId={userId} timezone={timezone} range={range} />
           </Suspense>
         </section>
+
+        {/* S19 — pont réciproque vers le pendant PROSPECTIF. « Où j'en suis »
+            (rétrospectif) et « Mes objectifs » (où je vais) sont jumelles mais
+            ne se liaient pas : le membre ignorait que la 2e moitié existe. */}
+        <Link
+          href="/objectifs"
+          className="wow-hover-glow rounded-card group flex items-center justify-between gap-3 border border-[var(--b-acc)] bg-[var(--acc-dim-2)] p-4 transition-colors hover:bg-[var(--acc-dim)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] sm:p-5"
+        >
+          <div className="flex flex-col gap-0.5">
+            <span className="t-eyebrow text-[var(--acc-hi)]">Et maintenant</span>
+            <span className="text-[15px] font-semibold text-[var(--t-1)]">
+              Où tout ça te mène — Mes objectifs
+            </span>
+            <span className="t-cap text-[var(--t-3)]">
+              Ton cap, ta trajectoire vers la Maîtrise et tes prochains gestes.
+            </span>
+          </div>
+          <ArrowRight
+            className="h-5 w-5 shrink-0 text-[var(--acc)] transition-transform duration-200 group-hover:translate-x-0.5"
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
+        </Link>
       </div>
     </main>
   );

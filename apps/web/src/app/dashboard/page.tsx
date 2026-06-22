@@ -12,6 +12,7 @@ import { JournalShortcut } from '@/components/dashboard/journal-shortcut';
 import { MilestoneBanner } from '@/components/dashboard/milestone-banner';
 import { MonthlyDebriefWidget } from '@/components/dashboard/monthly-debrief-widget';
 import { NorthStarHero } from '@/components/dashboard/north-star-hero';
+import { DashboardProgressBridge } from '@/components/dashboard/progress-bridge';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
 import { TodayGuidance } from '@/components/dashboard/today-guidance';
 import { WeeklyInsightCard } from '@/components/dashboard/weekly-insight-card';
@@ -26,6 +27,7 @@ import { Kbd } from '@/components/ui/kbd';
 import { getCheckin, getStreak, todayFor } from '@/lib/checkin/service';
 import { getTodayMilestone } from '@/lib/checkin/milestone';
 import { getDailyGuidance } from '@/lib/daily-guidance/service';
+import { getProcessObjectives } from '@/lib/objectives/service';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 import { countTradesByStatus } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
@@ -89,6 +91,7 @@ export default async function DashboardPage() {
     constancy,
     openDiscrepancies,
     morningCheckin,
+    objectives,
   ] = userId
     ? await Promise.all([
         countTradesByStatus(userId),
@@ -103,6 +106,12 @@ export default async function DashboardPage() {
         // S12 — today's morning check-in, only to echo the member's own
         // intention back to them (day-loop close). Indexed (userId,date,slot).
         getCheckin(userId, todayFor(timezone), 'morning'),
+        // S19 — process-objectives view (tier / journey / ETA / focus lever) to
+        // surface the "where am I / where am I going / what to work on" bridge on
+        // the hub. Run IN this parallel batch (no added wall-clock; it re-reads
+        // some score/streak/guidance rows concurrently — acceptable on a small
+        // cohort, all indexed). The full roadmap stays on /objectifs.
+        getProcessObjectives(userId, timezone),
       ])
     : [
         { open: 0, closed: 0 },
@@ -112,6 +121,7 @@ export default async function DashboardPage() {
         [],
         null,
         0,
+        null,
         null,
       ];
 
@@ -190,6 +200,21 @@ export default async function DashboardPage() {
           </section>
         ) : null}
 
+        {/* S19 — « Maintenant » : la liste du jour (remontée de la 7e position, où
+            elle était noyée) + le pont parcours (palier / ETA / levier du moment)
+            placés directement sous le hero → « quoi faire » et « où j'en suis /
+            où je vais / sur quoi bosser » répondus dès l'arrivée sur le hub. */}
+        {guidance ? (
+          <div className="mb-6">
+            <TodayGuidance guidance={guidance} />
+          </div>
+        ) : null}
+        {objectives ? (
+          <section className="mb-6" aria-label="Ta progression">
+            <DashboardProgressBridge view={objectives} />
+          </section>
+        ) : null}
+
         {/* V2 refonte J1 — slim activity strip (streak dans le hero). S18 — passée
             de spans nus à 3 mini-cartes acc-dim vivantes (AnimatedNumber + micro
             count-up). 3 stats MAX, jamais de P&L brut (posture §2) : un compteur
@@ -223,15 +248,6 @@ export default async function DashboardPage() {
             jamais un constat fabriqué. Anti-Black-Hat : constat factuel + un
             micro-encouragement Mark Douglas, jamais de verdict punitif. */}
         <WeeklyInsightCard history={scoreHistory} className="mb-6" />
-
-        {/* Session 5 — Guidage quotidien « Ton aujourd'hui » (DoD §30 #3). Le hub
-            time-aware : check-in du créneau, blocs calendrier du jour, réunion,
-            QCM mindset du lundi. Full-width. Posture §2 + anti-Black-Hat. */}
-        {guidance ? (
-          <div className="mb-6">
-            <TodayGuidance guidance={guidance} />
-          </div>
-        ) : null}
 
         {/* S3/S4 — Découvrabilité de la surface Vérification (SPEC §33) + teaser
             constance. Carte calme anti-Black-Hat (§33.2) : la confrontation

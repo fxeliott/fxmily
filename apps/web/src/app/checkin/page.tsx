@@ -57,6 +57,13 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
   // restent cliquables ; le slot "maintenant" reçoit juste un liseré accent).
   const relevantSlot: 'morning' | 'evening' = currentHourIn(timezone) < 14 ? 'morning' : 'evening';
 
+  // S19.x f7 — pont doux vers le slot complémentaire : quand UN slot est fait et
+  // l'autre non, le slot restant reçoit un cue calme « reste à faire aujourd'hui ».
+  // Jamais quand les deux sont faits ou les deux vides (pas de pression, pas de
+  // compte-à-rebours — anti-Black-Hat §31.2). Exactement un seul des deux flags
+  // peut être vrai.
+  const oneSlotDone = status.morningSubmitted !== status.eveningSubmitted;
+
   const params = await searchParams;
   const justDone = params.done === '1';
   const justDoneSlot = params.slot === 'morning' || params.slot === 'evening' ? params.slot : null;
@@ -109,13 +116,18 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
           </>
         ) : null}
 
-        <StreakCard
-          streak={streak.current}
-          todayFilled={streak.todayFilled}
-          justCrossed={justDone ? crossedMilestone(streak.current) : null}
-        />
+        {/* dash-stagger : la lecture du moment (streak puis tendance 7 j) arrive
+            en cascade douce — DIRECT children animés (compositor-only, reduced-
+            motion neutralisé globalement par la classe utilitaire). */}
+        <section className="dash-stagger flex flex-col gap-6">
+          <StreakCard
+            streak={streak.current}
+            todayFilled={streak.todayFilled}
+            justCrossed={justDone ? crossedMilestone(streak.current) : null}
+          />
 
-        <TrendCard days={last7} />
+          <TrendCard days={last7} />
+        </section>
 
         {/* dash-stagger : les 2 slots (matin/soir) arrivent en cascade — DIRECT
             children animés (compositor-only, reduced-motion neutralisé globalement). */}
@@ -125,16 +137,20 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
             submitted={status.morningSubmitted}
             href="/checkin/morning"
             isNow={relevantSlot === 'morning'}
+            complementaryPending={oneSlotDone && !status.morningSubmitted}
           />
           <SlotCard
             slot="evening"
             submitted={status.eveningSubmitted}
             href="/checkin/evening"
             isNow={relevantSlot === 'evening'}
+            complementaryPending={oneSlotDone && !status.eveningSubmitted}
           />
         </section>
 
-        <section>
+        {/* wow-reveal : la carte explicative est sous le fold — fade+rise au
+            scroll (progressive, compositor-only, reduced-motion géré par la classe). */}
+        <section className="wow-reveal">
           <Card className="flex flex-col gap-2 p-5">
             <span className="t-eyebrow">Pourquoi deux fois par jour ?</span>
             <p className="t-body text-[var(--t-2)]">
@@ -158,12 +174,19 @@ function SlotCard({
   submitted,
   href,
   isNow = false,
+  complementaryPending = false,
 }: {
   slot: 'morning' | 'evening';
   submitted: boolean;
   href: '/checkin/morning' | '/checkin/evening';
   /** Slot fitting the current moment — gets a calm accent ring + "moment" cue. */
   isNow?: boolean;
+  /**
+   * f7 — l'autre slot du jour est déjà fait : ce slot restant reçoit un cue
+   * DOUX (liseré accent + micro-label « reste à faire aujourd'hui »), jamais une
+   * pression ni un compte-à-rebours (anti-Black-Hat §31.2).
+   */
+  complementaryPending?: boolean;
 }) {
   const isMorning = slot === 'morning';
   const Icon = isMorning ? Sun : Moon;
@@ -172,6 +195,10 @@ function SlotCard({
   // The accent ring fires only when this slot is BOTH the current moment AND not
   // yet done — never a pressure cue once filled (anti-Black-Hat §31.2).
   const highlightNow = isNow && !submitted;
+  // Pont vers le slot complémentaire : ne s'affiche que sur un slot non fait dont
+  // le jumeau est fait. On évite de doubler le liseré quand le slot est déjà le
+  // "moment" mis en avant (highlightNow porte déjà l'affordance accent).
+  const showComplementary = complementaryPending && !submitted && !highlightNow;
 
   return (
     <HoverLift className="block">
@@ -179,12 +206,24 @@ function SlotCard({
         <Card
           interactive
           className={cn(
-            'relative flex flex-col gap-3 p-5 transition-colors',
+            // wow-hover-glow : lift + halo bleu au survol (mono-accent OK), en
+            // plus du HoverLift wrapper — affordance premium sur le CTA du hub.
+            'wow-hover-glow relative flex flex-col gap-3 overflow-hidden p-5 transition-colors',
             submitted
               ? 'border-[var(--b-acc)] bg-[var(--acc-dim-2)]'
-              : highlightNow && 'ring-1 ring-[var(--b-acc-strong)] ring-inset',
+              : highlightNow
+                ? 'ring-1 ring-[var(--b-acc-strong)] ring-inset'
+                : showComplementary && 'border-[var(--b-acc)]',
           )}
         >
+          {/* Liseré accent top décoratif — cue doux « reste à faire » sur le slot
+              complémentaire restant (identité §21.7, pointer-events-none). */}
+          {showComplementary ? (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--b-acc-strong)] to-transparent"
+            />
+          ) : null}
           <div className="flex items-start justify-between">
             <div className="rounded-control grid h-10 w-10 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
               <Icon className="h-5 w-5" strokeWidth={1.75} />
@@ -202,12 +241,18 @@ function SlotCard({
             <p className="t-cap text-[var(--t-3)]">{sub}</p>
           </div>
           <div className="mt-1 flex items-center justify-between text-[12px] text-[var(--t-3)]">
-            <span className={cn(highlightNow && 'font-medium text-[var(--acc-hi)]')}>
+            <span
+              className={cn(
+                (highlightNow || showComplementary) && 'font-medium text-[var(--acc-hi)]',
+              )}
+            >
               {submitted
                 ? 'Voir / éditer'
                 : highlightNow
                   ? 'C’est le moment · ~3 min'
-                  : '~3 minutes'}
+                  : showComplementary
+                    ? 'Reste à faire aujourd’hui'
+                    : '~3 minutes'}
             </span>
             {submitted ? (
               <Check className="h-4 w-4 text-[var(--acc)]" strokeWidth={2} />

@@ -22,7 +22,10 @@ export default async function NewTradePage() {
           track et pre-trade : la page était plate, seule du groupe journal sans mesh).
           Décoratif (aria-hidden, pointer-events:none, reduced-motion-safe). */}
       <DashboardAmbient />
-      <div className="relative mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
+      {/* S20 — max-w-xl (was 2xl) so the pre-trade banner shares the wizard's
+          gutter (TradeFormWizard is internally max-w-xl); the banner was wider
+          than the form below it = desktop misalignment. */}
+      <div className="relative mx-auto w-full max-w-xl px-4 py-6 sm:py-10">
         {/* V2.3 — Pre-trade circuit breaker trigger (ADR-003 Trigger B).
           Optional banner ABOVE the trade form. Calm tone, non-coercive,
           one-tap dismiss via the inline "Continuer sans pause" link below

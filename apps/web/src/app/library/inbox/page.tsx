@@ -6,6 +6,7 @@ import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DrawnRule } from '@/components/dashboard/drawn-rule';
 import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_TONE } from '@/components/library/category-meta';
+import { DeliveryItemActions } from '@/components/library/delivery-item-actions';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { HoverLift } from '@/components/ui/hover-lift';
@@ -116,9 +117,15 @@ function DeliveryItem({
         {/* S19.1 hover/clamp parity avec le catalogue: halo accent au survol */}
         <Card
           interactive
-          className="wow-hover-glow focus-within:ring-acc h-full p-4 focus-within:ring-2 focus-within:ring-offset-2"
+          className="wow-hover-glow focus-within:ring-acc relative flex h-full flex-col gap-3 p-4 focus-within:ring-2 focus-within:ring-offset-2"
         >
-          <Link href={`/library/${d.cardSlug}`} className="block">
+          {/* La carte entière est cliquable via le ::before overlay du Link ; les
+              actions de gestion (f1) restent HORS de cet overlay (z-10) pour ne
+              pas voler le clic d'ouverture. */}
+          <Link
+            href={`/library/${d.cardSlug}`}
+            className="block before:absolute before:inset-0 before:z-0 before:content-[''] focus-visible:outline-none"
+          >
             <div className="flex items-start gap-3">
               <span
                 className="bg-acc-dim text-acc inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
@@ -127,7 +134,7 @@ function DeliveryItem({
                 <Icon className="h-3.5 w-3.5" />
               </span>
               <div className="flex flex-1 flex-col gap-1">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="relative z-10 flex flex-wrap items-center gap-2">
                   <Pill tone={tone}>{CATEGORY_LABEL[d.cardCategory]}</Pill>
                   {unread && (
                     <Pill tone="acc" dot="live">
@@ -144,6 +151,11 @@ function DeliveryItem({
               </div>
             </div>
           </Link>
+          {unread && (
+            <div className="mt-auto border-t border-[var(--b-default)] pt-3">
+              <DeliveryItemActions deliveryId={d.id} />
+            </div>
+          )}
         </Card>
       </HoverLift>
     </li>

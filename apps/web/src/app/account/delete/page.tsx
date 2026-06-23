@@ -63,7 +63,7 @@ export default async function AccountDeletePage(): Promise<React.ReactElement> {
     <main className="relative bg-[var(--bg)]">
       {/* S19.1 ambient anti-fade backplate (decorative, -z-10, reduced-motion-safe). */}
       <DashboardAmbient />
-      <div className="relative mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
+      <div className="dash-stagger relative mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
         <header className="mb-6">
           <Link
             href="/dashboard"

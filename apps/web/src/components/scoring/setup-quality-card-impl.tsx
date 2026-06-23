@@ -5,7 +5,7 @@ import { ShieldCheck, TrendingUp } from 'lucide-react';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import type { RiskDiscipline, SetupQualityDist } from '@/lib/scoring/setup-quality';
-import { C } from '@/lib/theme-colors';
+import { useChartColors } from '@/lib/use-chart-colors';
 
 import { SampleSizeDisclaimer } from './sample-size-disclaimer';
 
@@ -28,6 +28,7 @@ interface SetupQualityCardProps {
 
 export function SetupQualityCard({ setupQuality, riskDiscipline }: SetupQualityCardProps) {
   const prefersReducedMotion = useReducedMotion();
+  const C = useChartColors();
   const { A, B, C: cCount, captured } = setupQuality;
   const { overTwoCount, median, capturedCount } = riskDiscipline;
 

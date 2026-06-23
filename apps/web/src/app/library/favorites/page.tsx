@@ -6,6 +6,7 @@ import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DrawnRule } from '@/components/dashboard/drawn-rule';
 import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_TONE } from '@/components/library/category-meta';
+import { FavoriteToggle } from '@/components/library/favorite-toggle';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { HoverLift } from '@/components/ui/hover-lift';
@@ -69,10 +70,21 @@ export default async function FavoritesPage() {
                     {/* S19.1 hover/clamp parity avec le catalogue: halo accent au survol */}
                     <Card
                       interactive
-                      className="wow-hover-glow focus-within:ring-acc h-full p-4 focus-within:ring-2 focus-within:ring-offset-2"
+                      className="wow-hover-glow focus-within:ring-acc group relative h-full p-4 focus-within:ring-2 focus-within:ring-offset-2"
                     >
-                      <Link href={`/library/${f.cardSlug}`} className="block">
-                        <div className="flex items-center gap-3">
+                      {/* f7 — retrait rapide d'un favori sans ouvrir la fiche : toggle
+                          icon-only en overlay top-right, posé HORS du <Link> overlay
+                          (z-10) pour ne pas voler le clic d'ouverture. Le de-toggle
+                          revalide /library (layout) → la carte disparaît au prochain
+                          rendu. */}
+                      <div className="absolute top-2 right-2 z-10">
+                        <FavoriteToggle cardId={f.cardId} initialFavorited />
+                      </div>
+                      <Link
+                        href={`/library/${f.cardSlug}`}
+                        className="block before:absolute before:inset-0 before:z-0 before:content-[''] focus-visible:outline-none"
+                      >
+                        <div className="flex items-center gap-3 pr-12">
                           <span
                             className="bg-acc-dim text-acc inline-flex h-8 w-8 items-center justify-center rounded-full"
                             aria-hidden

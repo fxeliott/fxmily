@@ -2,6 +2,8 @@
 
 import { m, useReducedMotion } from 'framer-motion';
 
+import { useIsLightTheme } from '@/lib/use-chart-colors';
+
 /**
  * V1.8 REFLECT — `ABCDHero` SVG illustration for the CBT Ellis wizard.
  *
@@ -22,17 +24,37 @@ import { m, useReducedMotion } from 'framer-motion';
  *
  * Reduced-motion : single-frame final state via `useReducedMotion()`.
  */
+// Node coordinates — placed on a soft sine curve for visual rhythm.
+// S20 — DARK keeps the dark→bright progression (resolution = brightest blue D on
+// deep space). LIGHT can't go "brighter than white", so the progression INVERTS
+// to deepen toward D: A light blue → D deepest/most-saturated (~6.5:1 on white) =
+// the climax still stands out, but visible (the old 0.82/0.62 stops washed to
+// ~1.7-3.5:1 on the white .light .v18-theme card). Hex chosen at runtime by theme
+// → WebView-safe (no var() in SVG attr). Cool blue spectrum only, decorative
+// aria-hidden (no CTA / mono-accent untouched).
+const NODES_DARK = [
+  { label: 'A', cx: 60, cy: 130, color: 'oklch(0.46 0.21 263)', r: 22 },
+  { label: 'B', cx: 145, cy: 90, color: 'oklch(0.53 0.21 259)', r: 22 },
+  { label: 'C', cx: 230, cy: 130, color: 'oklch(0.62 0.19 254)', r: 22 },
+  { label: 'D', cx: 320, cy: 90, color: 'oklch(0.82 0.115 247)', r: 26 },
+] as const;
+const NODES_LIGHT = [
+  { label: 'A', cx: 60, cy: 130, color: 'oklch(0.62 0.16 263)', r: 22 },
+  { label: 'B', cx: 145, cy: 90, color: 'oklch(0.56 0.18 260)', r: 22 },
+  { label: 'C', cx: 230, cy: 130, color: 'oklch(0.5 0.2 256)', r: 22 },
+  { label: 'D', cx: 320, cy: 90, color: 'oklch(0.46 0.21 262)', r: 26 },
+] as const;
+
 export function ABCDHero({ className }: { className?: string }) {
   const reduceMotion = useReducedMotion();
+  const isLight = useIsLightTheme();
   const dur = reduceMotion ? 0.001 : 0.7;
 
-  // Node coordinates — placed on a soft sine curve for visual rhythm
-  const nodes = [
-    { label: 'A', cx: 60, cy: 130, color: 'oklch(0.46 0.21 263)', r: 22 },
-    { label: 'B', cx: 145, cy: 90, color: 'oklch(0.53 0.21 259)', r: 22 },
-    { label: 'C', cx: 230, cy: 130, color: 'oklch(0.62 0.19 254)', r: 22 },
-    { label: 'D', cx: 320, cy: 90, color: 'oklch(0.82 0.115 247)', r: 26 },
-  ] as const;
+  const nodes = isLight ? NODES_LIGHT : NODES_DARK;
+  // Connecting paths + climax breathing ring — also theme-flipped so they stay
+  // visible on the white light card (the dark oklch 0.74/0.82 washed out).
+  const pathStroke = isLight ? 'oklch(0.5 0.2 260 / 0.5)' : 'oklch(0.74 0.16 250 / 0.5)';
+  const climaxStroke = isLight ? 'oklch(0.46 0.21 262 / 0.5)' : 'oklch(0.82 0.115 247 / 0.45)';
 
   return (
     <svg
@@ -68,7 +90,7 @@ export function ABCDHero({ className }: { className?: string }) {
             key={`path-${i}`}
             d={d}
             fill="none"
-            stroke="oklch(0.74 0.16 250 / 0.5)"
+            stroke={pathStroke}
             strokeWidth="2"
             strokeLinecap="round"
             strokeDasharray={i === 2 ? '0 0' : '0 0'}
@@ -138,7 +160,7 @@ export function ABCDHero({ className }: { className?: string }) {
           cy={nodes[3].cy}
           r={nodes[3].r + 10}
           fill="none"
-          stroke="oklch(0.82 0.115 247 / 0.45)"
+          stroke={climaxStroke}
           strokeWidth="1"
           className="v18-mirror-pulse"
           style={{ transformOrigin: `${nodes[3].cx}px ${nodes[3].cy}px` }}

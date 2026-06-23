@@ -1,6 +1,7 @@
 import { ArrowLeft, Target, Sparkles, Lightbulb, Check } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import type { CSSProperties } from 'react';
 
 import { auth } from '@/auth';
 import { V18Aurora } from '@/components/v18/aurora';
@@ -58,6 +59,9 @@ export default async function ReviewDetailPage({ params }: ReviewDetailProps) {
     content: string | null;
     icon: typeof Sparkles;
     eyebrow: string;
+    /** Spans both columns — the next-step engagement deserves the emphasis
+        and absorbs the orphan row when an even number of cards precede it. */
+    emphasis?: boolean;
   }> = [
     {
       title: 'Ta plus grande victoire',
@@ -88,6 +92,7 @@ export default async function ReviewDetailPage({ params }: ReviewDetailProps) {
       content: review.nextWeekFocus,
       icon: Target,
       eyebrow: 'Engagement',
+      emphasis: true,
     },
   ];
 
@@ -125,41 +130,45 @@ export default async function ReviewDetailPage({ params }: ReviewDetailProps) {
         </header>
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {sections.map((section) => {
-            if (!section.content) return null;
-            const Icon = section.icon;
-            return (
-              <article
-                key={section.title}
-                className="rounded-card-lg flex flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]"
-                aria-labelledby={`section-${section.title}`}
-              >
-                <header className="flex items-start gap-3">
-                  <div
-                    aria-hidden="true"
-                    className="rounded-pill mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center border border-[var(--b-acc)]"
-                    style={{
-                      // S19 — tokens (was fixed dark oklch → faint in light); both
-                      // flip via .light .v18-theme (--acc-hi ~6.4:1 AA on the dim bg).
-                      background: 'var(--acc-dim)',
-                      color: 'var(--acc-hi)',
-                    }}
-                  >
-                    <Icon size={15} strokeWidth={2.2} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="t-eyebrow text-[var(--t-3)]">{section.eyebrow}</p>
-                    <h2 id={`section-${section.title}`} className="t-h2 mt-0.5 text-[var(--t-1)]">
-                      {section.title}
-                    </h2>
-                  </div>
-                </header>
-                <p className="t-body mt-3 whitespace-pre-wrap text-[var(--t-1)]">
-                  {section.content}
-                </p>
-              </article>
-            );
-          })}
+          {sections
+            .filter((section) => Boolean(section.content))
+            .map((section, i) => {
+              const Icon = section.icon;
+              return (
+                <article
+                  key={section.title}
+                  className={`wow-rise rounded-card-lg flex flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)] transition-[border-color,box-shadow] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] ${
+                    section.emphasis ? 'lg:col-span-2' : ''
+                  }`}
+                  style={{ '--rise-delay': `${i * 70}ms` } as CSSProperties}
+                  aria-labelledby={`section-${section.title}`}
+                >
+                  <header className="flex items-start gap-3">
+                    <div
+                      aria-hidden="true"
+                      className="rounded-pill mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center border border-[var(--b-acc)]"
+                      style={{
+                        // S19 — tokens (was fixed dark oklch → faint in light); both
+                        // flip via .light .v18-theme (--acc-hi ~6.4:1 AA on the dim bg).
+                        background: 'var(--acc-dim)',
+                        color: 'var(--acc-hi)',
+                      }}
+                    >
+                      <Icon size={15} strokeWidth={2.2} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="t-eyebrow text-[var(--t-3)]">{section.eyebrow}</p>
+                      <h2 id={`section-${section.title}`} className="t-h2 mt-0.5 text-[var(--t-1)]">
+                        {section.title}
+                      </h2>
+                    </div>
+                  </header>
+                  <p className="t-body mt-3 whitespace-pre-wrap text-[var(--t-1)]">
+                    {section.content}
+                  </p>
+                </article>
+              );
+            })}
         </div>
       </main>
     </V18ThemeScope>

@@ -148,9 +148,9 @@ export function TradeDetailView({
                 )}
                 style={
                   isWin
-                    ? { filter: 'drop-shadow(0 0 18px oklch(0.804 0.181 145 / 0.32))' }
+                    ? { filter: 'drop-shadow(0 0 18px var(--ok-glow))' }
                     : isLoss
-                      ? { filter: 'drop-shadow(0 0 18px oklch(0.7 0.165 22 / 0.28))' }
+                      ? { filter: 'drop-shadow(0 0 18px var(--bad-glow))' }
                       : undefined
                 }
               >
@@ -242,12 +242,21 @@ export function TradeDetailView({
       {entryUrl ? (
         <section className="flex flex-col gap-2">
           <h2 className="t-eyebrow">Capture avant entrée</h2>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={entryUrl}
-            alt={`Capture avant entrée du trade ${trade.pair}`}
-            className="rounded-card w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
-          />
+          {/* S20 — open full-size in a new tab + hover affordance, same calm
+              pattern as the additional photos below (was a static, non-zoomable img). */}
+          <a
+            href={entryUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="wow-hover-glow rounded-card block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={entryUrl}
+              alt={`Capture avant entrée du trade ${trade.pair}`}
+              className="rounded-card w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
+            />
+          </a>
         </section>
       ) : null}
 
@@ -328,12 +337,20 @@ export function TradeDetailView({
           {exitUrl ? (
             <section className="flex flex-col gap-2">
               <h2 className="t-eyebrow">Capture après sortie</h2>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={exitUrl}
-                alt={`Capture après sortie du trade ${trade.pair}`}
-                className="rounded-card w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
-              />
+              {/* S20 — open full-size + hover affordance (parity with entry capture). */}
+              <a
+                href={exitUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="wow-hover-glow rounded-card block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={exitUrl}
+                  alt={`Capture après sortie du trade ${trade.pair}`}
+                  className="rounded-card w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
+                />
+              </a>
             </section>
           ) : null}
         </>

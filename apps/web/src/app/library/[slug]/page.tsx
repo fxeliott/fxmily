@@ -1,4 +1,4 @@
-import { ArrowLeft, BookOpen, Quote, Target } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Quote, Target } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
@@ -6,18 +6,23 @@ import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DrawnRule } from '@/components/dashboard/drawn-rule';
+import { CardGridItem } from '@/components/library/card-grid-item';
 import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_TONE } from '@/components/library/category-meta';
 import { FavoriteToggle } from '@/components/library/favorite-toggle';
 import { HelpfulFeedback } from '@/components/library/helpful-feedback';
 import { SafeMarkdown } from '@/components/library/markdown';
 import { MarkSeenOnMount } from '@/components/library/mark-seen-on-mount';
 import { cleanQuoteSource, isParaphraseQuote } from '@/lib/library/quote-display';
+import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { cn } from '@/lib/utils';
 import {
   getDeliveryByCardSlug,
   getPublishedCardBySlug,
   isFavorite,
+  listMyFavorites,
+  listPublishedCards,
   markDeliveriesForCardSeen,
 } from '@/lib/cards/service';
 
@@ -40,11 +45,18 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
   // Bulk-mark all unseen deliveries for this card as seen — same pattern as
   // J4 trade detail page (`markAnnotationsSeenForTrade`). Member opens the
   // card → all unseen deliveries for it are dismissed from the badge.
-  const [favorited, delivery, bulkSeenCount] = await Promise.all([
+  const [favorited, delivery, bulkSeenCount, sameCategory, myFavorites] = await Promise.all([
     isFavorite(userId, card.id),
     getDeliveryByCardSlug(userId, slug),
     markDeliveriesForCardSeen(userId, card.id),
+    // f2 — « Continuer » : autres fiches publiées de la même catégorie.
+    listPublishedCards({ category: card.category }),
+    listMyFavorites(userId),
   ]);
+
+  // f2 — exclut la fiche courante, garde 3 suggestions max.
+  const favoriteIds = new Set(myFavorites.map((f) => f.cardId));
+  const relatedCards = sameCategory.filter((c) => c.id !== card.id).slice(0, 3);
 
   // Audit if any deliveries were marked seen by opening this card (J7 BLOQUANT #2 fix).
   if (bulkSeenCount > 0) {
@@ -200,6 +212,46 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
 
         {/* Helpful feedback (only when this view came from a delivery) */}
         {delivery && <HelpfulFeedback deliveryId={delivery.id} initialHelpful={delivery.helpful} />}
+
+        {/* f2 — « Continuer » : la fiche n'est plus un cul-de-sac. On propose
+            d'autres fiches de la même catégorie (réutilise CardGridItem). À
+            défaut de fiche sœur, au minimum un lien vers le catalogue filtré. */}
+        {relatedCards.length > 0 ? (
+          <section className="mt-12" aria-labelledby="continue-heading">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2
+                id="continue-heading"
+                className="text-muted text-xs font-semibold tracking-wide uppercase"
+              >
+                Continuer · {CATEGORY_LABEL[card.category]}
+              </h2>
+              <Link
+                href={`/library?cat=${card.category}`}
+                className="text-acc hover:text-acc-hi inline-flex items-center gap-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              >
+                <span>Voir tout</span>
+                <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+            </div>
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {relatedCards.map((c) => (
+                <li key={c.id} className="h-full">
+                  <CardGridItem card={c} favorited={favoriteIds.has(c.id)} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : (
+          <div className="mt-12">
+            <Link
+              href={`/library?cat=${card.category}`}
+              className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}
+            >
+              <span>Voir les autres fiches {CATEGORY_LABEL[card.category]}</span>
+              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            </Link>
+          </div>
+        )}
       </div>
     </main>
   );

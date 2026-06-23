@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 
@@ -18,8 +19,10 @@ export default async function AdminInvitePage() {
   if (session.user.role !== 'admin') redirect('/dashboard');
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col gap-8 px-4 py-10">
-      <header className="flex flex-col gap-4">
+    <main className="relative mx-auto flex min-h-dvh w-full max-w-xl flex-col gap-8 px-4 py-10">
+      {/* S19.x — ambient mesh for admin-surface coherence (members/cards/reports). */}
+      <DashboardAmbient />
+      <header className="relative flex flex-col gap-4">
         <Link
           href="/dashboard"
           className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"

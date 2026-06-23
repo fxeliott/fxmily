@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { AccessRequestRow } from '@/components/admin/access-request-row';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
@@ -47,8 +48,10 @@ export default async function AdminAccessRequestsPage() {
   });
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col gap-8 px-4 py-10">
-      <header className="flex flex-col gap-4">
+    <main className="relative mx-auto flex min-h-dvh w-full max-w-xl flex-col gap-8 px-4 py-10">
+      {/* S19.x — ambient mesh for admin-surface coherence (members/cards/reports). */}
+      <DashboardAmbient />
+      <header className="relative flex flex-col gap-4">
         <Link
           href="/dashboard"
           className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
@@ -99,7 +102,7 @@ export default async function AdminAccessRequestsPage() {
       ) : (
         <ul className="flex flex-col gap-3">
           {pending.map((req) => (
-            <li key={req.id}>
+            <li key={req.id} className="wow-reveal">
               <AccessRequestRow
                 id={req.id}
                 fullName={formatFullName(req.firstName, req.lastName)}

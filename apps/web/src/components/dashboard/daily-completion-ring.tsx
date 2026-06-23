@@ -3,7 +3,7 @@
 import { m, useReducedMotion } from 'framer-motion';
 import { Check } from 'lucide-react';
 
-import { C } from '@/lib/theme-colors';
+import { useChartColors } from '@/lib/use-chart-colors';
 
 /**
  * Anneau de complétude du jour (jalon 2b — style « Apple Activity » honnête).
@@ -34,6 +34,7 @@ const CENTER = SIZE / 2;
 
 export function DailyCompletionRing({ done, total }: { done: number; total: number }) {
   const prefersReduced = useReducedMotion();
+  const C = useChartColors();
 
   // `total === 0` ne doit jamais arriver (le parent ne rend pas l'anneau dans
   // ce cas) — garde défensive pour ne jamais diviser par zéro / fabriquer 100 %.

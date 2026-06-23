@@ -198,6 +198,12 @@
   --ok-edge: oklch(0.804 0.181 145 / 0.35);
   --bad-edge: oklch(0.7 0.165 22 / 0.35);
   --warn-edge: oklch(0.834 0.158 80 / 0.35);
+  /* S20 — GLOW colors for ok/bad drop-shadow halos (trade-card / trade-detail
+     direction badge). Were baked dark oklch in inline `filter:drop-shadow()` and
+     stayed neon on the white light card → tokenised so they flip. Color token
+     only (the blur radius stays inline per call-site: 8px card, 18px detail). */
+  --ok-glow: oklch(0.804 0.181 145 / 0.32);
+  --bad-glow: oklch(0.7 0.165 22 / 0.28);
   --mute-dim: oklch(0.604 0.02 257 / 0.04);
 
   /* ─── RADII (sémantiques — JAMAIS uniforme) ─────────────────── */
@@ -460,6 +466,10 @@
   --bad-dim: oklch(0.53 0.2 25 / 0.1);
   --bad-dim-2: oklch(0.53 0.2 25 / 0.18);
   --bad-edge: oklch(0.53 0.2 25 / 0.4);
+  /* S20 — light mirror of the ok/bad glow colors (darkened, re-saturated for the
+     white canvas, never inverted — finance grammar held). */
+  --ok-glow: oklch(0.52 0.17 150 / 0.32);
+  --bad-glow: oklch(0.53 0.2 25 / 0.3);
   --mute-dim: oklch(0.4 0.02 258 / 0.05);
 
   /* ─── SHADOWS (douces, 1 direction, sans highlight blanc) ────── */
@@ -513,6 +523,41 @@
 }
 .light [data-slot='pill'][data-tone='mute'] {
   color: var(--t-2);
+}
+
+/* S20 — TRACK/checkin zone-bar SEGMENT labels (10px) paint a tone ON their own
+   tinted `-dim` segment. The base tones are calibrated ~4.6:1 on the SOLID canvas,
+   but on the tint they fall to 3.66-4.45:1 in LIGHT (10px text < WCAG 1.4.3 AA;
+   runtime-audit S20). Same root cause + remedy as the pill fix above: in LIGHT,
+   darken the label to the `-hi` variant (cy has no -hi token -> the same darker
+   teal the pill uses). DARK keeps the bright tone (already AA on the deep -dim).
+   Scoped via `data-zone-label` (the segment-fill colour stays the base token). */
+[data-zone-label='cy'] {
+  color: var(--cy);
+}
+[data-zone-label='acc'] {
+  color: var(--acc);
+}
+[data-zone-label='warn'] {
+  color: var(--warn);
+}
+[data-zone-label='bad'] {
+  color: var(--bad);
+}
+.light [data-zone-label='cy'] {
+  color: oklch(0.44 0.12 222); /* darker teal — AA on --cy-dim over white */
+}
+.light [data-zone-label='acc'] {
+  color: var(--acc-hi);
+}
+.light [data-zone-label='warn'] {
+  /* --warn-hi (#885800) only reached 4.2:1 composited on the amber --warn-dim-2
+     tint (runtime re-audit). Amber is the hardest tone to clear at 10px on its
+     own warm tint → a dedicated darker amber, measured ≥4.9:1 on that beige. */
+  color: oklch(0.4 0.1 78);
+}
+.light [data-zone-label='bad'] {
+  color: var(--bad-hi);
 }
 
 /* Selection en clair — teinte bleue douce, texte accent assombri lisible */
@@ -648,6 +693,18 @@
   input,
   textarea {
     caret-color: var(--acc);
+  }
+
+  /* S20 — legible placeholder default. Without a rule, the UA paints the
+     placeholder as the input `color` (--t-1) at ~54% opacity → ~3.12:1 in LIGHT
+     (runtime-audit S20, track inputs). Pin it to the tertiary token at full
+     opacity so it clears WCAG 1.4.3 AA in both themes (--t-3 ≈ 5.3:1 light /
+     AA dark) while staying visibly a placeholder. Tailwind `placeholder:` utils
+     keep winning where a call-site sets one explicitly. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--t-3);
+    opacity: 1;
   }
 
   /* Focus visible — accent ring */
@@ -1842,6 +1899,14 @@
     opacity: 1;
   }
 }
+/* S20 — a dash-stagger child that runs its OWN framer entrance (the celebration
+   banners: MilestoneBanner / FirstRunWelcome) must opt OUT of the parent wowRise,
+   else the two compose into a double fade-in. Marked `data-self-animate`: it lands
+   at opacity 1 immediately, then its inner animation plays alone. */
+.dash-stagger > [data-self-animate] {
+  opacity: 1;
+  animation: none;
+}
 
 /* ---- Reveal — h-rise stagger (translateY + opacity, CSS-only) ----
    Set `--rise-delay` per element for a staggered entrance. `both` fill so the
@@ -2524,6 +2589,29 @@
    couleur » sans virer au flashy ni concurrencer le texte. Décoratif. ---- */
 .surf-grad-soft {
   background-image: var(--grad-brand-soft);
+}
+/* S20 — flip LIGHT du wash de marque. Les stops :root (oklch L≈0.55-0.7) sont
+   calibrés deep-space ; sur le canvas clair le halo --grad-brand-soft devient
+   quasi invisible / fade (login-aurora, rejoindre-aurora, legal-layout, sidebar
+   footer). On redéclare les 2 tokens en clair avec des stops ASSOMBRIS — mêmes
+   hues cool bleu(262)→indigo(264)→teal(220), alpha décoratif ≤0.12 — pour que la
+   couleur ressorte aussi en clair (« mode clair parfait + plus de couleur »)
+   SANS toucher le contraste texte (couche décorative sous cartes opaques).
+   Miroir exact de .light .text-grad-brand (l.2498). Invariant-safe : spectre cool
+   only, jamais un CTA. */
+.light {
+  --grad-brand: linear-gradient(
+    135deg,
+    oklch(0.5 0.2 262) 0%,
+    oklch(0.5 0.21 264) 52%,
+    oklch(0.5 0.12 220) 100%
+  );
+  --grad-brand-soft: linear-gradient(
+    135deg,
+    oklch(0.5 0.2 262 / 0.12) 0%,
+    oklch(0.5 0.21 264 / 0.1) 52%,
+    oklch(0.5 0.12 220 / 0.1) 100%
+  );
 }
 
 /* ---- Card border-color via data-attributes (ROBUST fix for the "white border")

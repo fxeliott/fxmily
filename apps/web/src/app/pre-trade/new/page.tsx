@@ -62,9 +62,7 @@ export default async function NewPreTradeCheckPage() {
               >
                 Avant d&apos;entrer, on regarde.
               </h1>
-              <p className="t-cap text-[var(--t-3)]">
-                Tu peux fermer cette page à tout moment. Le wizard est un miroir, pas une barrière.
-              </p>
+              <p className="t-cap text-[var(--t-3)]">Tu peux fermer cette page à tout moment.</p>
             </div>
           </div>
         </header>

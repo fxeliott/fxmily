@@ -1,9 +1,9 @@
-import { ArrowLeft, Mail, Shield, ShieldAlert } from 'lucide-react';
+import { ChevronRight, Mail, Shield, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
-import { MemberTabs, type MemberTabKey } from '@/components/admin/member-tabs';
+import { MemberTabs, MEMBER_TAB_LABEL, type MemberTabKey } from '@/components/admin/member-tabs';
 import { MemberAdminNotesPanel } from '@/components/admin/member-admin-notes-panel';
 import { MemberDouglasPanel } from '@/components/admin/member-douglas-panel';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
@@ -333,14 +333,40 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // or stretching the AI-report prose past a readable measure.
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col gap-6 px-4 py-8 lg:px-8">
-      {/* Back link */}
-      <Link
-        href="/admin/members"
-        className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
+      {/* Breadcrumb — « Admin › Membres › {Nom} › {Onglet} ». Parent levels are
+          links; the member name + active tab are the trailing (current) crumbs.
+          The tab crumb is omitted on the default `overview` (it IS this page). */}
+      <nav
+        aria-label="Fil d'Ariane"
+        className="flex w-fit flex-wrap items-center gap-1 text-[12px] text-[var(--t-3)]"
       >
-        <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-        Membres
-      </Link>
+        <Link href="/admin" className="transition-colors hover:text-[var(--t-1)]">
+          Admin
+        </Link>
+        <ChevronRight className="h-3 w-3 text-[var(--t-4)]" strokeWidth={1.75} aria-hidden />
+        <Link href="/admin/members" className="transition-colors hover:text-[var(--t-1)]">
+          Membres
+        </Link>
+        <ChevronRight className="h-3 w-3 text-[var(--t-4)]" strokeWidth={1.75} aria-hidden />
+        {tab === 'overview' ? (
+          <span aria-current="page" className="max-w-[14rem] truncate text-[var(--t-2)]">
+            {detail.displayName}
+          </span>
+        ) : (
+          <>
+            <Link
+              href={`/admin/members/${memberId}`}
+              className="max-w-[14rem] truncate transition-colors hover:text-[var(--t-1)]"
+            >
+              {detail.displayName}
+            </Link>
+            <ChevronRight className="h-3 w-3 text-[var(--t-4)]" strokeWidth={1.75} aria-hidden />
+            <span aria-current="page" className="text-[var(--t-2)]">
+              {MEMBER_TAB_LABEL[tab]}
+            </span>
+          </>
+        )}
+      </nav>
 
       {/* Hero header card */}
       <Card primary className="p-5">

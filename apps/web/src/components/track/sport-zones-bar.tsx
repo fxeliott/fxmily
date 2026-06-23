@@ -31,10 +31,10 @@ interface SportZonesBarProps {
  */
 
 const ZONES = [
-  { upper: 15, label: 'Léger', color: 'var(--cy)', bg: 'var(--cy-dim)' },
-  { upper: 45, label: 'Cible', color: 'var(--acc)', bg: 'var(--acc-dim)' },
-  { upper: 90, label: 'Soutenu', color: 'var(--warn)', bg: 'var(--warn-dim-2)' },
-  { upper: 120, label: 'Intense', color: 'var(--bad)', bg: 'var(--bad-dim-2)' },
+  { upper: 15, label: 'Léger', color: 'var(--cy)', bg: 'var(--cy-dim)', tone: 'cy' },
+  { upper: 45, label: 'Cible', color: 'var(--acc)', bg: 'var(--acc-dim)', tone: 'acc' },
+  { upper: 90, label: 'Soutenu', color: 'var(--warn)', bg: 'var(--warn-dim-2)', tone: 'warn' },
+  { upper: 120, label: 'Intense', color: 'var(--bad)', bg: 'var(--bad-dim-2)', tone: 'bad' },
 ] as const;
 
 const SCALE_MAX = 120;
@@ -83,11 +83,11 @@ export function SportZonesBar({ durationMin }: SportZonesBarProps) {
         <span className="t-eyebrow-lg text-[var(--t-3)]">Zones d&apos;activité</span>
         {currentZone ? (
           <span
+            data-zone-label={currentZone.tone}
             className={cn(
               'font-mono text-[11px] font-semibold tracking-[0.08em] uppercase tabular-nums',
               pulse && 'threshold-pulse',
             )}
-            style={{ color: currentZone.color }}
             aria-live="polite"
           >
             {currentZone.label}
@@ -117,8 +117,8 @@ export function SportZonesBar({ durationMin }: SportZonesBarProps) {
               }}
             >
               <span
+                data-zone-label={z.tone}
                 className="hidden font-mono text-[10px] font-semibold tracking-[0.10em] uppercase sm:inline"
-                style={{ color: z.color }}
               >
                 {z.label}
               </span>

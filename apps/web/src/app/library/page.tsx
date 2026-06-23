@@ -11,7 +11,6 @@ import { CATEGORY_LABEL } from '@/components/library/category-meta';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Pill } from '@/components/ui/pill';
 import { cn } from '@/lib/utils';
 import {
   countUnseenDeliveries,
@@ -23,6 +22,8 @@ import {
 import type { DouglasCategory } from '@/generated/prisma/enums';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata = { title: 'Bibliothèque' };
 
 const VALID_CATEGORIES: ReadonlySet<DouglasCategory> = new Set([
   'acceptance',
@@ -73,25 +74,29 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       <DashboardAmbient />
       <div className="relative mx-auto w-full max-w-6xl px-4 pt-6 pb-24 md:pt-10 lg:px-8">
-        {/* Hero header */}
+        {/* Hero header — aligné sur la grammaire DS des pages sœurs
+            (eyebrow t-eyebrow-lg + h1 f-display h-rise + lead t-lead). */}
         <header className="mb-6 flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <span
-                className="bg-acc-dim text-acc inline-flex h-9 w-9 items-center justify-center rounded-full shadow-[var(--acc-glow)]"
-                aria-hidden
-              >
-                <BookOpen className="h-4 w-4" />
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-1.5">
+              <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
+                <BookOpen className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                Module Mark Douglas
               </span>
-              <Pill tone="acc">Module Mark Douglas</Pill>
+              <h1
+                className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+                style={{ fontFeatureSettings: '"ss01" 1' }}
+              >
+                Ta bibliothèque psychologie trader
+              </h1>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               {unseenCount > 0 && (
                 <Link
                   href="/library/inbox"
-                  className="rounded-pill border-acc/40 bg-acc/10 text-acc inline-flex h-9 items-center gap-2 border px-3 text-xs font-medium transition-all hover:scale-105"
+                  className="rounded-pill inline-flex h-9 items-center gap-2 border border-[var(--b-acc)] bg-[var(--acc-dim)] px-3 text-xs font-medium text-[var(--acc-hi)] transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
                 >
-                  <Sparkles className="h-3.5 w-3.5" />
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>
                     {unseenCount} nouvelle{unseenCount > 1 ? 's' : ''}
                   </span>
@@ -100,9 +105,9 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
               {favorites.length > 0 && (
                 <Link
                   href="/library/favorites"
-                  className="rounded-pill border-border bg-bg-1 text-foreground hover:border-acc/40 inline-flex h-9 items-center gap-2 border px-3 text-xs font-medium transition-all"
+                  className="rounded-pill inline-flex h-9 items-center gap-2 border border-[var(--b-default)] bg-[var(--bg-1)] px-3 text-xs font-medium text-[var(--t-1)] transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
                 >
-                  <Heart className="h-3.5 w-3.5" />
+                  <Heart className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>
                     {favorites.length} favori{favorites.length > 1 ? 's' : ''}
                   </span>
@@ -110,10 +115,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
               )}
             </div>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-            Ta bibliothèque psychologie trader
-          </h1>
-          <p className="text-muted max-w-2xl text-sm leading-relaxed">
+          <p className="t-lead max-w-2xl text-[var(--t-2)]">
             Fiches inspirées de <em>Trading in the Zone</em> et <em>The Disciplined Trader</em> de
             Mark Douglas. Tu reçois automatiquement les fiches qui correspondent à ton état
             comportemental — et tu peux parcourir tout le catalogue à ta guise.

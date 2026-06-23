@@ -55,7 +55,7 @@ export function ScoreEventsHistory({ events }: { events: readonly ScoreEventView
   if (events.length === 0) return null;
 
   return (
-    <div className="rounded-card flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
+    <div className="rounded-card flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-colors hover:border-[var(--b-acc)]">
       <div className="flex flex-col gap-0.5">
         <span className="t-eyebrow text-[var(--t-3)]">Pourquoi ton score bouge</span>
         <span className="t-cap text-[var(--t-4)]">

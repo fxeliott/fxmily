@@ -1,15 +1,20 @@
-import { ArrowRight, BrainCircuit } from 'lucide-react';
+import { ArrowRight, BrainCircuit, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { ABCDHero } from '@/components/reflect/abcd-hero';
+import { V18CrisisBanner } from '@/components/review/crisis-banner';
+import { Card } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { V18Aurora } from '@/components/v18/aurora';
 import { V18ThemeScope } from '@/components/v18/theme-scope';
 import { listRecentReflections } from '@/lib/reflection/service';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata = { title: 'Réflexion' };
 
 // V1.9 TIER F — hoisted at module level (timeline can render up to 30 rows,
 // each previously instantiated 2 formatters).
@@ -48,6 +53,8 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
   }
 
   const sp = await searchParams;
+  const crisisLevel =
+    sp.crisis === 'high' || sp.crisis === 'medium' ? (sp.crisis as 'high' | 'medium') : null;
   const justSubmitted = sp.done === '1';
 
   const recent = await listRecentReflections(session.user.id, 30);
@@ -96,10 +103,16 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
           </div>
         </header>
 
-        {justSubmitted ? (
+        {/* CRISIS BANNER (conditional). `key={crisisLevel}` forces a clean
+            remount when the level changes so `aria-live="polite"` re-announces
+            only on region-change. Aligned with /review — the action redirect
+            carries `?crisis=` and the landing mounts the banner here. */}
+        {crisisLevel ? <V18CrisisBanner key={crisisLevel} level={crisisLevel} /> : null}
+
+        {justSubmitted && !crisisLevel ? (
           <div
             role="status"
-            className="rounded-card-lg border border-[var(--b-acc)] p-4"
+            className="wow-rise rounded-card-lg border border-[var(--b-acc)] p-4"
             style={{
               background: 'linear-gradient(135deg, var(--acc-dim) 0%, var(--bg-2) 80%)',
             }}
@@ -114,18 +127,26 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
         <section className="flex flex-col gap-4">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="t-h2 text-[var(--t-1)]">Tes réflexions (30 derniers jours)</h2>
-            <p className="t-cap text-[var(--t-3)]">{recent.length} réflexion·s</p>
+            <p className="t-cap text-[var(--t-3)]">{recent.length} sur 30 derniers jours</p>
           </div>
 
           {recent.length === 0 ? (
-            <div
-              className="rounded-card-lg border border-dashed border-[var(--b-strong)] p-6 text-center"
-              data-empty="true"
-            >
-              <p className="t-body text-[var(--t-2)]">
-                Aucune réflexion enregistrée. La prochaine pensée éclair sera la bonne.
-              </p>
-            </div>
+            <Card primary className="py-2" data-empty="true">
+              <EmptyState
+                icon={Sparkles}
+                headline="Aucune réflexion enregistrée."
+                lead="La prochaine pensée éclair sera la bonne — le formulaire ci-dessus t'attend."
+              />
+              <div className="flex justify-center pb-8">
+                <Link
+                  href="/reflect/new"
+                  className="rounded-control inline-flex h-11 items-center gap-1.5 border border-[var(--b-strong)] bg-transparent px-4 text-[13px] font-medium text-[var(--t-2)] transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]"
+                >
+                  Démarrer une réflexion
+                  <ArrowRight size={14} strokeWidth={2.2} aria-hidden="true" />
+                </Link>
+              </div>
+            </Card>
           ) : (
             <ul
               className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3"

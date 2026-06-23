@@ -39,3 +39,17 @@ export function useChartColors(): ChartColors {
   const mounted = useMounted();
   return mounted && resolvedTheme === 'light' ? CHART_COLORS_LIGHT : CHART_COLORS;
 }
+
+/**
+ * useIsLightTheme — S20 : même garde anti-mismatch que useChartColors, mais
+ * expose juste le booléen « thème clair résolu (après mount) ». Sert aux
+ * illustrations SVG client (MirrorHero / ABCDHero) qui choisissent un jeu de
+ * couleurs hex selon le thème — hex en attribut SVG = WebView-safe (le caveat
+ * `var()`-in-SVG ne s'applique pas), tout en flippant en clair. Faux au SSR et
+ * au 1er rendu client (defaultTheme="dark") → zéro flash, zéro mismatch.
+ */
+export function useIsLightTheme(): boolean {
+  const { resolvedTheme } = useTheme();
+  const mounted = useMounted();
+  return mounted && resolvedTheme === 'light';
+}

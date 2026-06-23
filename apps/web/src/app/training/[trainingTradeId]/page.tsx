@@ -6,6 +6,7 @@ import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { TrainingAnnotationsSection } from '@/components/training/training-annotations-section';
 import { TrainingTradeCard } from '@/components/training/training-trade-card';
+import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { selectStorage } from '@/lib/storage';
 import {
@@ -108,6 +109,23 @@ export default async function MemberTrainingTradeDetailPage({
           isAdmin={false}
           currentUserId={session.user.id}
         />
+
+        {/* Wayfinding — un détail de backtest n'est pas un cul-de-sac : on relance
+            la pratique (noter le suivant) ou on revient à la liste. Liens
+            SECONDAIRES cyan, jamais un 2e CTA primaire (§21.5 non-confusable). */}
+        <footer className="flex flex-col gap-2 border-t border-[var(--b-subtle)] pt-4 sm:flex-row sm:items-center sm:justify-center">
+          <Link
+            href={trade.sessionId ? `/training/new?sessionId=${trade.sessionId}` : '/training/new'}
+            className={btnVariants({ kind: 'secondary', size: 'm' })}
+          >
+            <GraduationCap className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Noter un nouveau backtest
+          </Link>
+          <Link href="/training" className={btnVariants({ kind: 'ghost', size: 'm' })}>
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Retour à mes backtests
+          </Link>
+        </footer>
       </div>
     </main>
   );

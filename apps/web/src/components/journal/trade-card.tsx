@@ -186,11 +186,11 @@ export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps)
                   style={
                     isWin
                       ? {
-                          filter: 'drop-shadow(0 0 8px oklch(0.804 0.181 145 / 0.32))',
+                          filter: 'drop-shadow(0 0 8px var(--ok-glow))',
                         }
                       : isLoss
                         ? {
-                            filter: 'drop-shadow(0 0 8px oklch(0.7 0.165 22 / 0.28))',
+                            filter: 'drop-shadow(0 0 8px var(--bad-glow))',
                           }
                         : undefined
                   }

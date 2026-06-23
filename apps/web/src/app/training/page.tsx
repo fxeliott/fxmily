@@ -10,6 +10,7 @@ import { TrainingTradeCardLinkable } from '@/components/training/training-trade-
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
 import { countUnseenTrainingAnnotationsByTrainingTrade } from '@/lib/training/training-annotation-member-service';
 import { listTrainingSessionsForUser } from '@/lib/training/training-session-service';
 import {
@@ -173,13 +174,19 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
             <ul className="flex flex-col gap-3">
               {sessions.map((s) => (
                 <li key={s.id}>
-                  <Link
-                    href={`/training/sessions/${s.id}`}
-                    aria-label={`Ouvrir la session ${s.label?.trim() || 'sans nom'} (${s.tradeCount} backtest${s.tradeCount > 1 ? 's' : ''})`}
-                    className="rounded-card block transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
-                  >
-                    <TrainingSessionCard session={s} />
-                  </Link>
+                  {/* Cyan training identity (§21.7) : lift spring + halo cyan au
+                      survol, comme TrainingTradeCardLinkable — remplace le
+                      `hover:opacity-90` plat (HoverGlowLift gère reduced-motion +
+                      forced-colors). */}
+                  <HoverGlowLift tone="cy" className="rounded-card block">
+                    <Link
+                      href={`/training/sessions/${s.id}`}
+                      aria-label={`Ouvrir la session ${s.label?.trim() || 'sans nom'} (${s.tradeCount} backtest${s.tradeCount > 1 ? 's' : ''})`}
+                      className="rounded-card block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
+                    >
+                      <TrainingSessionCard session={s} />
+                    </Link>
+                  </HoverGlowLift>
                 </li>
               ))}
             </ul>

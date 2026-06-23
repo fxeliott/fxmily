@@ -66,12 +66,18 @@ export function TrainingDebriefTimeline({
   }
 
   return (
-    <ul className="flex flex-col gap-2.5" data-slot="training-debrief-timeline">
+    <ul className="dash-stagger flex flex-col gap-2.5" data-slot="training-debrief-timeline">
       {debriefs.map((d) => (
         <li
           key={d.id}
-          className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
+          className="rounded-card relative block overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
         >
+          {/* Liseré cyan décoratif (identité §21.7 training) — read-only, pas de
+              hover-lift (la timeline est un miroir de recul, pas un scoreboard). */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--cy-edge)] to-transparent"
+          />
           <header className="flex items-baseline justify-between gap-3">
             <p className="t-eyebrow text-[var(--cy)]">
               Semaine du <FormattedRange weekStart={d.weekStart} />

@@ -31,7 +31,7 @@ describe('AIGeneratedBanner', () => {
       expect(
         screen.getByText(/Ce rapport est généré par une intelligence artificielle/),
       ).toBeInTheDocument();
-      expect(screen.getByText(/Claude \(famille Sonnet\)/)).toBeInTheDocument();
+      expect(screen.getByText(/Claude \(famille Opus\)/)).toBeInTheDocument();
       expect(screen.getByText(/Anthropic/)).toBeInTheDocument();
       // Posture Mark Douglas — must explicitly disclaim coaching substitution
       expect(screen.getByText(/ne remplace ni un coaching humain/)).toBeInTheDocument();

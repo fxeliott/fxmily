@@ -164,8 +164,8 @@ export function TradeTagsPicker({ value, onChange, disabled }: TradeTagsPickerPr
                 'rounded-pill group relative inline-flex min-h-11 items-center gap-1.5 border px-3.5 py-2 text-[12px] font-semibold tracking-[0.06em] uppercase transition-[background-color,border-color,color,box-shadow,transform] duration-150 focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none',
                 isOn
                   ? isPositive
-                    ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)] shadow-[0_0_0_3px_oklch(0.804_0.181_145_/_0.12)]'
-                    : 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc-hi)] shadow-[0_0_0_3px_oklch(0.62_0.19_254_/_0.12)]'
+                    ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)] shadow-[0_0_0_3px_var(--ok-dim)]'
+                    : 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc-hi)] shadow-[0_0_0_3px_var(--acc-dim)]'
                   : 'border-[var(--b-default)] bg-transparent text-[var(--t-2)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]',
                 isAtCap && 'hatch-disabled cursor-not-allowed opacity-40 hover:bg-transparent',
                 disabled && 'cursor-not-allowed opacity-40',

@@ -42,7 +42,7 @@ export function TrendCard({ days }: TrendCardProps) {
       <div className="flex items-center justify-between">
         <span className="t-eyebrow">Tendance 7 jours</span>
         <span className="font-mono text-[10px] text-[var(--t-3)] tabular-nums">
-          {filledDays}/7 jours filled
+          {filledDays}/7 jours remplis
         </span>
       </div>
 

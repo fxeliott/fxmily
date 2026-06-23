@@ -49,7 +49,7 @@ export function ConstancyScoreCard({ score }: { score: ConstancyScoreView | null
   }
 
   return (
-    <div className="rounded-card flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
+    <div className="rounded-card flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-colors hover:border-[var(--b-acc)]">
       <div className="flex items-baseline justify-between gap-3">
         <div className="flex flex-col gap-0.5">
           <span className="t-eyebrow text-[var(--t-3)]">Score de constance</span>

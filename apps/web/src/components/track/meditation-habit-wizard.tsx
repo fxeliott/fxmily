@@ -270,6 +270,27 @@ export function MeditationHabitWizard() {
     Number.isInteger(durationNum) &&
     durationNum >= 0 &&
     durationNum <= 180;
+
+  // Micro-feedback: one-shot confirm flash on the step body + accent pulse on
+  // the Suivant button the moment the current step flips valid (carbon
+  // `<SleepHabitWizard>`). `validateStep` is pure so it is safe to read in
+  // render. Compositor/one-shot; reduced-motion net settles both instantly.
+  const stepValid = validateStep(step, draft) === null;
+  const [confirmPulse, setConfirmPulse] = useState(false);
+  const armedStepRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!stepValid || armedStepRef.current === step) return undefined;
+    armedStepRef.current = step;
+    setConfirmPulse(true);
+    const t = setTimeout(() => setConfirmPulse(false), 700);
+    return () => clearTimeout(t);
+  }, [stepValid, step]);
+  useEffect(() => {
+    return () => {
+      armedStepRef.current = null;
+    };
+  }, [step]);
+
   const StepIcon = STEP_ICONS[step]!;
   const totalSteps = STEP_TITLES.length;
   const animate = hasMounted && !prefersReducedMotion;
@@ -335,6 +356,7 @@ export function MeditationHabitWizard() {
                 stepError={stepError}
                 headingRef={headingRef}
                 durationForBar={durationForBar}
+                confirmFlash={confirmPulse}
               />
             ) : (
               <MeditationNotesStep draft={draft} setDraft={setDraft} headingRef={headingRef} />
@@ -369,6 +391,7 @@ export function MeditationHabitWizard() {
             onClick={handleNext}
             disabled={isPending}
             aria-label="Étape suivante"
+            className={cn(confirmPulse && stepValid && 'threshold-pulse')}
           >
             <span>Suivant</span>
             <ArrowRight className="h-4 w-4" aria-hidden />
@@ -419,11 +442,20 @@ interface StepProps {
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   stepError?: string | null;
   durationForBar?: number | null;
+  /** One-shot accent flash when the step's required field becomes valid. */
+  confirmFlash?: boolean;
 }
 
-function MeditationStep({ draft, setDraft, stepError, headingRef, durationForBar }: StepProps) {
+function MeditationStep({
+  draft,
+  setDraft,
+  stepError,
+  headingRef,
+  durationForBar,
+  confirmFlash,
+}: StepProps) {
   return (
-    <Card className="space-y-5 p-4">
+    <Card className={cn('space-y-5 p-4', confirmFlash && 'confirm-flash')}>
       <header className="space-y-1">
         <h2
           ref={headingRef}

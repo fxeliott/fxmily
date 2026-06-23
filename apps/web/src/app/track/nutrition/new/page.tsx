@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { Apple, ArrowLeft } from 'lucide-react';
 
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { NutritionHabitWizard } from '@/components/track/nutrition-habit-wizard';
@@ -35,12 +35,20 @@ export default async function TrackNutritionNewPage() {
             Retour au suivi
           </Link>
           <p className="t-eyebrow-lg text-[var(--acc)]">Pilier nutrition</p>
-          <h1
-            className="f-display h-rise text-[24px] font-semibold tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
-            style={{ fontFeatureSettings: '"ss01" 1' }}
-          >
-            Logger ta nutrition
-          </h1>
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="rounded-control grid h-12 w-12 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]"
+            >
+              <Apple className="h-6 w-6" strokeWidth={1.75} />
+            </span>
+            <h1
+              className="f-display h-rise text-[24px] font-semibold tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
+              style={{ fontFeatureSettings: '"ss01" 1' }}
+            >
+              Logger ta nutrition
+            </h1>
+          </div>
           <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
             Des repas réguliers stabilisent ta glycémie : moins d&apos;à-coups d&apos;énergie, moins
             de décisions impulsives en session. On note le nombre de repas et la qualité ressentie —

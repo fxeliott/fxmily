@@ -1,6 +1,7 @@
 import { ArrowLeft, HeartPulse, MessageCircleQuestion, Sparkles, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import type { CSSProperties } from 'react';
 
 import { auth } from '@/auth';
 import { V18Aurora } from '@/components/v18/aurora';
@@ -115,12 +116,13 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
         </header>
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {sections.map((s) => {
+          {sections.map((s, i) => {
             const Icon = s.icon;
             return (
               <article
                 key={s.letter}
-                className="rounded-card-lg flex flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)] transition-[border-color,box-shadow] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)]"
+                className="wow-rise rounded-card-lg flex flex-col border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)] transition-[border-color,box-shadow] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)]"
+                style={{ '--rise-delay': `${i * 70}ms` } as CSSProperties}
                 aria-labelledby={`abcd-${s.letter}`}
               >
                 <header className="flex items-start gap-3">

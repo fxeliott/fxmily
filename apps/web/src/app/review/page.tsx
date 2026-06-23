@@ -1,16 +1,20 @@
-import { ArrowRight, NotebookPen } from 'lucide-react';
+import { ArrowRight, CalendarCheck, NotebookPen } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { V18CrisisBanner } from '@/components/review/crisis-banner';
 import { MirrorHero } from '@/components/review/mirror-hero';
+import { Card } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { V18Aurora } from '@/components/v18/aurora';
 import { V18ThemeScope } from '@/components/v18/theme-scope';
 import { listMyRecentReviews } from '@/lib/weekly-review/service';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata = { title: 'Revue hebdo' };
 
 // V1.9 TIER F — hoisted at module level so the 12 timeline rows don't each
 // instantiate a new `Intl.DateTimeFormat` (per-row cost ~0.5 ms × N rows).
@@ -104,7 +108,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
         {justSubmitted && !crisisLevel ? (
           <div
             role="status"
-            className="rounded-card-lg border border-[var(--b-acc)] p-4"
+            className="wow-rise rounded-card-lg border border-[var(--b-acc)] p-4"
             style={{
               background: 'linear-gradient(135deg, var(--acc-dim) 0%, var(--bg-2) 80%)',
             }}
@@ -124,14 +128,13 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
           </div>
 
           {recent.length === 0 ? (
-            <div
-              className="rounded-card-lg border border-dashed border-[var(--b-strong)] p-6 text-center"
-              data-empty="true"
-            >
-              <p className="t-body text-[var(--t-2)]">
-                Aucune revue pour l&apos;instant. Dimanche soir est un bon moment.
-              </p>
-            </div>
+            <Card primary className="py-2" data-empty="true">
+              <EmptyState
+                icon={CalendarCheck}
+                headline="Aucune revue pour l'instant."
+                lead="Dimanche soir est un bon moment — le bouton ci-dessus ouvre ta première revue."
+              />
+            </Card>
           ) : (
             <ul
               className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3"

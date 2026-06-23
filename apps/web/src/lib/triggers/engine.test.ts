@@ -17,6 +17,8 @@ vi.mock('@/lib/db', () => ({
     dailyCheckin: { findMany: vi.fn() },
     markDouglasCard: { findMany: vi.fn() },
     markDouglasDelivery: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+    // T1 — `getBehavioralScoreHistory` (score_drift) reads this in the engine.
+    behavioralScore: { findMany: vi.fn() },
   },
 }));
 vi.mock('@/lib/auth/audit', () => ({ logAudit: vi.fn() }));
@@ -77,6 +79,7 @@ function arm(options: {
   vi.mocked(db.markDouglasDelivery.findFirst).mockResolvedValue(options.deliveredToday as never);
   vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue((options.history ?? []) as never);
   vi.mocked(db.markDouglasDelivery.create).mockResolvedValue({ id: 'delivery-new' } as never);
+  vi.mocked(db.behavioralScore.findMany).mockResolvedValue([] as never);
 }
 
 describe('evaluateAndDispatchForUser — member-day cap (S4 DOD2-T2-1)', () => {
@@ -213,6 +216,7 @@ describe('dispatchForAllActiveMembers — S10 perf: member-independent cards fet
     vi.mocked(db.markDouglasDelivery.findFirst).mockResolvedValue(null as never);
     vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([] as never);
     vi.mocked(db.markDouglasDelivery.create).mockResolvedValue({ id: 'delivery-new' } as never);
+    vi.mocked(db.behavioralScore.findMany).mockResolvedValue([] as never);
 
     const r = await dispatchForAllActiveMembers(NOW);
 
@@ -220,5 +224,102 @@ describe('dispatchForAllActiveMembers — S10 perf: member-independent cards fet
     // The published cards are member-independent: the bulk path loads + parses
     // them ONCE, the per-member path reuses the pre-parsed list (no re-query).
     expect(db.markDouglasCard.findMany).toHaveBeenCalledTimes(1);
+  });
+});
+
+// =============================================================================
+// T1 "cerveau actif" — score_drift end-to-end through the FULL engine pipeline.
+//
+// Proves the brain ACTS: a sustained slow decline of the behavioral score
+// (loaded by getBehavioralScoreHistory → ctx.scoreHistory → evalScoreDrift via
+// detectMomentum) results in a real MarkDouglasDelivery, not just a matched
+// evaluator. This is the runtime proof that the wiring (engine fetch + ctx
+// injection + schema) holds, beyond the pure unit test.
+// =============================================================================
+
+describe('evaluateAndDispatchForUser — score_drift end-to-end (T1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const DRIFT_CARD = {
+    id: 'card-drift',
+    slug: 'process-vs-outcome',
+    priority: 6,
+    hatClass: 'white',
+    triggerRules: { kind: 'score_drift', minDecliningDimensions: 1 },
+  };
+
+  // 7 weekly points, emotionalStability dropping ~3 pts/week (past the -0.5
+  // threshold), the other 3 flat. detectMomentum anchors on the point dates.
+  const DECLINING_HISTORY = [
+    '2026-04-24',
+    '2026-05-01',
+    '2026-05-08',
+    '2026-05-15',
+    '2026-05-22',
+    '2026-05-29',
+    '2026-06-05',
+  ].map((dateStr, i) => ({
+    date: new Date(`${dateStr}T00:00:00.000Z`),
+    disciplineScore: 70,
+    emotionalStabilityScore: [80, 77, 74, 71, 68, 65, 62][i]!,
+    consistencyScore: 70,
+    engagementScore: 70,
+  }));
+
+  it('delivers the calm white-hat card when the score drifts down', async () => {
+    vi.mocked(db.user.findUnique).mockResolvedValue(USER as never);
+    vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
+    // A check-in TODAY suppresses the no_checkin_streak fallback — score_drift
+    // is the only matchable rule, so the delivery is unambiguously its doing.
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValue([
+      {
+        date: new Date('2026-06-11T00:00:00.000Z'),
+        slot: 'morning',
+        moodScore: 6,
+        sleepHours: 7,
+        planRespectedToday: null,
+        emotionTags: [],
+      },
+    ] as never);
+    vi.mocked(db.markDouglasCard.findMany).mockResolvedValue([DRIFT_CARD] as never);
+    vi.mocked(db.markDouglasDelivery.findFirst).mockResolvedValue(null as never);
+    vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.markDouglasDelivery.create).mockResolvedValue({ id: 'delivery-drift' } as never);
+    vi.mocked(db.behavioralScore.findMany).mockResolvedValue(DECLINING_HISTORY as never);
+
+    const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
+
+    expect(r.delivered?.cardId).toBe('card-drift');
+    expect(r.delivered?.triggeredBy).toContain('Stabilité');
+    expect(db.markDouglasDelivery.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT deliver when the score is flat (no drift)', async () => {
+    vi.mocked(db.user.findUnique).mockResolvedValue(USER as never);
+    vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValue([
+      {
+        date: new Date('2026-06-11T00:00:00.000Z'),
+        slot: 'morning',
+        moodScore: 6,
+        sleepHours: 7,
+        planRespectedToday: null,
+        emotionTags: [],
+      },
+    ] as never);
+    vi.mocked(db.markDouglasCard.findMany).mockResolvedValue([DRIFT_CARD] as never);
+    vi.mocked(db.markDouglasDelivery.findFirst).mockResolvedValue(null as never);
+    vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.markDouglasDelivery.create).mockResolvedValue({ id: 'x' } as never);
+    vi.mocked(db.behavioralScore.findMany).mockResolvedValue(
+      DECLINING_HISTORY.map((p) => ({ ...p, emotionalStabilityScore: 70 })) as never,
+    );
+
+    const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
+
+    expect(r.delivered).toBeNull();
+    expect(db.markDouglasDelivery.create).not.toHaveBeenCalled();
   });
 });

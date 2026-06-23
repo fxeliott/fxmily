@@ -29,6 +29,7 @@
  */
 
 import type { TradeOutcome, TradeSession } from '@/generated/prisma/enums';
+import type { MomentumHistoryPoint } from '@/lib/scoring/momentum';
 
 // =============================================================================
 // Trigger rule discriminated union
@@ -106,6 +107,24 @@ export type TriggerRule =
        */
       kind: 'no_training_activity_in_window';
       days: number;
+    }
+  | {
+      /**
+       * T1 "cerveau actif" — fires when the member's behavioral score is in a
+       * SUSTAINED slow decline that only the data can see. Delegates to the
+       * pure `detectMomentum` (least-squares slope over a 42-day window,
+       * threshold -0.5 pts/week, ≥6 points) and matches when at least
+       * `minDecliningDimensions` of the 4 dimensions (discipline, emotional
+       * stability, consistency, engagement) are drifting down.
+       *
+       * Until now `detectMomentum` only fed the dashboard MomentumCard +
+       * admin/AI reports — a drift was DISPLAYED but never turned into a calm
+       * Mark Douglas nudge. This makes the brain ACT: a slow slide now
+       * surfaces a white-hat card automatically (deterministic, no AI, §2-safe
+       * — a process signal, never a verdict on the member's market reads).
+       */
+      kind: 'score_drift';
+      minDecliningDimensions: number;
     };
 
 export type TriggerKind = TriggerRule['kind'];
@@ -180,6 +199,15 @@ export interface TriggerContext {
    * `countRecentTrainingActivity().lastEnteredAt`.
    */
   lastTrainingActivityLocalDate?: string | null;
+  /**
+   * T1 "cerveau actif" — the member's behavioral-score trend points, ascending
+   * by date (as from `getBehavioralScoreHistory`), consumed ONLY by the
+   * `score_drift` evaluator via the pure `detectMomentum`. `undefined` when the
+   * engine did not load score history (the evaluator then skips defensively);
+   * optional so the other evaluators + every existing test fixture compile
+   * unchanged. Structurally `MomentumHistoryPoint[]` (date + 4 nullable dims).
+   */
+  scoreHistory?: MomentumHistoryPoint[];
 }
 
 // =============================================================================

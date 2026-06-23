@@ -11,7 +11,13 @@ import {
   submitEveningCheckin,
   submitMorningCheckin,
 } from '@/lib/checkin/service';
-import { eveningCheckinSchema, morningCheckinSchema } from '@/lib/schemas/checkin';
+import { reportError, reportWarning } from '@/lib/observability';
+import { detectCrisis } from '@/lib/safety/crisis-detection';
+import {
+  buildCheckinCrisisCorpus,
+  eveningCheckinSchema,
+  morningCheckinSchema,
+} from '@/lib/schemas/checkin';
 import { scheduleDouglasDispatch } from '@/lib/cards/scheduler';
 import { scheduleScoreRecompute } from '@/lib/scoring/scheduler';
 
@@ -81,6 +87,13 @@ export async function submitMorningCheckinAction(
     };
   }
 
+  // T1 safety — scan the member's free-text (morning = `intention`) for crisis
+  // signals BEFORE persisting. Pure + non-blocking: we ALWAYS persist, then
+  // surface a calm resource banner on the redirect (never silent-skip member
+  // input). Numeric/structured fields are never scanned.
+  const crisis = detectCrisis(buildCheckinCrisisCorpus({ intention: parsed.data.intention }));
+  const crisisMatchedLabels = crisis.matches.map((m) => m.label);
+
   try {
     const row = await submitMorningCheckin(session.user.id, parsed.data, {
       timezone: session.user.timezone,
@@ -93,8 +106,36 @@ export async function submitMorningCheckinAction(
         date: row.date,
         moodScore: row.moodScore,
         sleepQuality: row.sleepQuality,
+        crisisLevel: crisis.level,
       },
     });
+    if (crisis.level === 'high' || crisis.level === 'medium') {
+      await logAudit({
+        action: 'checkin.crisis_detected',
+        userId: session.user.id,
+        metadata: {
+          checkinId: row.id,
+          date: row.date,
+          level: crisis.level,
+          matchedLabels: crisisMatchedLabels,
+          source: 'checkin',
+        },
+      });
+      if (crisis.level === 'high') {
+        reportError(
+          'checkin.crisis',
+          new Error(`crisis_signal_high_in_checkin: ${crisisMatchedLabels.join(',')}`),
+          { userId: session.user.id, checkinId: row.id, slot: 'morning' },
+        );
+      } else {
+        reportWarning('checkin.crisis', 'crisis_signal_medium_in_checkin', {
+          userId: session.user.id,
+          checkinId: row.id,
+          slot: 'morning',
+          matchedLabels: crisisMatchedLabels,
+        });
+      }
+    }
     scheduleDouglasDispatch(session.user.id, 'checkin.morning.submitted');
   } catch (err) {
     if (err instanceof CheckinDateOutOfWindowError) {
@@ -124,7 +165,11 @@ export async function submitMorningCheckinAction(
   // doesn't throw (Next bug), letting the bug surface is preferable to
   // silently returning `{ ok: true }` and leaving the wizard hanging.
   // Audit J5 H2 fix.
-  redirect('/checkin?slot=morning&done=1');
+  const qs = new URLSearchParams({ slot: 'morning', done: '1' });
+  if (crisis.level === 'high' || crisis.level === 'medium') {
+    qs.set('crisis', crisis.level);
+  }
+  redirect(`/checkin?${qs.toString()}`);
 }
 
 export async function submitEveningCheckinAction(
@@ -160,6 +205,18 @@ export async function submitEveningCheckinAction(
     };
   }
 
+  // T1 safety — scan the member's free-text (evening = `journalNote` +
+  // `gratitudeItems`) for crisis signals BEFORE persisting. Pure +
+  // non-blocking: we ALWAYS persist, then surface a calm resource banner on
+  // the redirect (never silent-skip member input).
+  const crisis = detectCrisis(
+    buildCheckinCrisisCorpus({
+      journalNote: parsed.data.journalNote,
+      gratitudeItems: parsed.data.gratitudeItems,
+    }),
+  );
+  const crisisMatchedLabels = crisis.matches.map((m) => m.label);
+
   try {
     const row = await submitEveningCheckin(session.user.id, parsed.data, {
       timezone: session.user.timezone,
@@ -173,8 +230,36 @@ export async function submitEveningCheckinAction(
         moodScore: row.moodScore,
         stressScore: row.stressScore,
         planRespected: row.planRespectedToday,
+        crisisLevel: crisis.level,
       },
     });
+    if (crisis.level === 'high' || crisis.level === 'medium') {
+      await logAudit({
+        action: 'checkin.crisis_detected',
+        userId: session.user.id,
+        metadata: {
+          checkinId: row.id,
+          date: row.date,
+          level: crisis.level,
+          matchedLabels: crisisMatchedLabels,
+          source: 'checkin',
+        },
+      });
+      if (crisis.level === 'high') {
+        reportError(
+          'checkin.crisis',
+          new Error(`crisis_signal_high_in_checkin: ${crisisMatchedLabels.join(',')}`),
+          { userId: session.user.id, checkinId: row.id, slot: 'evening' },
+        );
+      } else {
+        reportWarning('checkin.crisis', 'crisis_signal_medium_in_checkin', {
+          userId: session.user.id,
+          checkinId: row.id,
+          slot: 'evening',
+          matchedLabels: crisisMatchedLabels,
+        });
+      }
+    }
     scheduleDouglasDispatch(session.user.id, 'checkin.evening.submitted');
   } catch (err) {
     if (err instanceof CheckinDateOutOfWindowError) {
@@ -201,5 +286,9 @@ export async function submitEveningCheckinAction(
   );
 
   // See morning action — `redirect()` always throws, no try/catch needed.
-  redirect('/checkin?slot=evening&done=1');
+  const qs = new URLSearchParams({ slot: 'evening', done: '1' });
+  if (crisis.level === 'high' || crisis.level === 'medium') {
+    qs.set('crisis', crisis.level);
+  }
+  redirect(`/checkin?${qs.toString()}`);
 }

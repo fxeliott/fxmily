@@ -696,7 +696,12 @@ Le P&L est la conséquence. Le process est la cause. Travaille sur la cause.`,
           'Fixe une cible de score process pour le mois prochain (+5 pts vs ce mois). Affiche-la. Mesure-la chaque dimanche. Le P&L se débrouillera.',
       },
     ],
-    triggerRules: null,
+    // T1 "cerveau actif" — this card is the calm white-hat answer to a SUSTAINED
+    // slow decline of the behavioral score (≥1 dimension drifting down per
+    // `detectMomentum`). Its validated "process > outcome" content is the exact
+    // posture momentum.ts prescribes for a drift. White-hat (7d cooldown) + the
+    // ≤1-card/day cap + routine-saturation gate keep it gentle, never nagging.
+    triggerRules: { kind: 'score_drift', minDecliningDimensions: 1 },
     hatClass: 'white',
     priority: 6,
     published: true,

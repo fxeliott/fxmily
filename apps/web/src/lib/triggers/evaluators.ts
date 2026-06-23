@@ -19,6 +19,7 @@
  */
 
 import { localDateOf, shiftLocalDate, type LocalDateString } from '@/lib/checkin/timezone';
+import { detectMomentum } from '@/lib/scoring/momentum';
 
 import type {
   ConsecutiveLossesWindow,
@@ -55,6 +56,8 @@ export function evaluateTrigger(rule: TriggerRule, ctx: TriggerContext): Trigger
       return evalHedgeViolation(rule, ctx);
     case 'no_training_activity_in_window':
       return evalNoTrainingActivityInWindow(rule, ctx);
+    case 'score_drift':
+      return evalScoreDrift(rule, ctx);
   }
 }
 
@@ -465,6 +468,61 @@ export function evalNoTrainingActivityInWindow(
     };
   }
   return { matched: false };
+}
+
+// =============================================================================
+// 9. score_drift — T1 "cerveau actif" (sustained slow behavioral decline)
+//
+// Delegates entirely to the pure `detectMomentum` (least-squares slope over a
+// 42-day window, -0.5 pts/week threshold, ≥6 points) so the whole app agrees on
+// what "drifting down calmly" means. Fires when at least
+// `rule.minDecliningDimensions` of the 4 dimensions are declining. Defensive
+// not-loaded skip mirrors `no_training_activity_in_window`: `ctx.scoreHistory`
+// is optional, so an engine that didn't load history (or any existing fixture)
+// yields `matched: false`. POSTURE: a CALM process signal — the card content
+// stays "process > outcome", never an alarmist verdict.
+// =============================================================================
+
+export function evalScoreDrift(
+  rule: Extract<TriggerRule, { kind: 'score_drift' }>,
+  ctx: TriggerContext,
+): TriggerEvalResult {
+  // Engine didn't inject score history → nothing to evaluate. The field is
+  // optional on TriggerContext so the other evaluators + fixtures compile.
+  if (ctx.scoreHistory === undefined) {
+    return { matched: false };
+  }
+
+  const declines = detectMomentum(ctx.scoreHistory);
+  if (declines.length < rule.minDecliningDimensions) {
+    return { matched: false };
+  }
+
+  // `detectMomentum` returns declines sorted steepest-first; lead with it.
+  const steepest = declines[0]!;
+  const triggeredBy =
+    declines.length === 1
+      ? `« ${steepest.label} » en repli progressif ces dernières semaines`
+      : `${declines.length} dimensions en repli progressif ces dernières semaines`;
+
+  return {
+    matched: true,
+    triggeredBy,
+    snapshot: {
+      kind: rule.kind,
+      rule,
+      details: {
+        decliningCount: declines.length,
+        requiredN: rule.minDecliningDimensions,
+        // Per-dimension slope (pts/7j) + sample count — no PII, no P&L.
+        declines: declines.map((d) => ({
+          dimension: d.dimension,
+          weeklySlope: d.weeklySlope,
+          points: d.points,
+        })),
+      },
+    },
+  };
 }
 
 // =============================================================================

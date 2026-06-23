@@ -10,6 +10,7 @@ import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { FirstRunWelcome } from '@/components/dashboard/first-run-welcome';
 import { JournalShortcut } from '@/components/dashboard/journal-shortcut';
 import { MilestoneBanner } from '@/components/dashboard/milestone-banner';
+import { MomentumCard } from '@/components/dashboard/momentum-card';
 import { MonthlyDebriefWidget } from '@/components/dashboard/monthly-debrief-widget';
 import { NorthStarHero } from '@/components/dashboard/north-star-hero';
 import { DashboardProgressBridge } from '@/components/dashboard/progress-bridge';
@@ -260,6 +261,13 @@ export default async function DashboardPage() {
             jamais un constat fabriqué. Anti-Black-Hat : constat factuel + un
             micro-encouragement Mark Douglas, jamais de verdict punitif. */}
         <WeeklyInsightCard history={scoreHistory} className="mb-6" />
+
+        {/* S22 — Momentum : la dérive lente que SEULES les données voient, surfacée
+            au membre (avant, `detectMomentum` était enfermé dans le rapport IA
+            admin). N'apparaît QUE si une dimension décline de façon soutenue sur
+            ~6 semaines ; sinon rien (pas de bruit). Ton calme/process Mark Douglas,
+            jamais alarmiste (§2/§31.2). 0 requête ajoutée (réutilise scoreHistory). */}
+        <MomentumCard history={scoreHistory} className="mb-6" />
 
         {/* S3/S4 — Découvrabilité de la surface Vérification (SPEC §33) + teaser
             constance. Carte calme anti-Black-Hat (§33.2) : la confrontation

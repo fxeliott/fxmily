@@ -50,8 +50,9 @@ export interface AIGeneratedBannerProps {
   variant?: AIGeneratedBannerVariant;
   /**
    * Optional override of the model display name. Default reads "Claude
-   * (famille Sonnet)" — anti-drift if the specific model version changes
-   * over time (V2026 trigger : Sonnet 4.6 → 5.0 etc.).
+   * (famille Opus)" — anti-drift if the specific model version changes
+   * over time (V2026 trigger : Opus 4.8 → 5.0 etc.). Stays aligned with the
+   * exact model named in /legal/ai-disclosure and /legal/privacy (Opus 4.8).
    */
   modelName?: string;
   /**
@@ -60,7 +61,7 @@ export interface AIGeneratedBannerProps {
   className?: string;
 }
 
-const DEFAULT_MODEL_NAME = 'Claude (famille Sonnet)';
+const DEFAULT_MODEL_NAME = 'Claude (famille Opus)';
 
 /**
  * Render the AI-generated disclaimer banner. Pure stateless component, no

@@ -11,6 +11,7 @@ import {
   RadarChart,
   ResponsiveContainer,
   Tooltip,
+  YAxis,
 } from 'recharts';
 
 import type { MindsetDimensionTrend, MindsetProfile } from '@/lib/mindset/profile';
@@ -303,6 +304,11 @@ function DimensionTrends({
                 </figcaption>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={series} margin={{ top: 6, right: 6, left: -28, bottom: 0 }}>
+                    {/* charts4 — pin the scale to 0–100 (hidden, no layout cost)
+                        so the six small-multiples share one comparable y-domain:
+                        a flat line near 30 reads as low and a line near 90 reads
+                        as high, instead of each chart auto-fitting its own range. */}
+                    <YAxis hide domain={[0, 100]} />
                     <Line
                       type="monotone"
                       dataKey="score"

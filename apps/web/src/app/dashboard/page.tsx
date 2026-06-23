@@ -193,14 +193,14 @@ export default async function DashboardPage() {
         {/* S11 — calm streak-milestone celebration, only on the crossing day.
             Mutually exclusive with first-run (milestone ⇒ streak ≥ 7). */}
         {todayMilestone ? (
-          <section className="mb-6" aria-label="Palier de régularité franchi">
+          <section className="mb-6" data-self-animate aria-label="Palier de régularité franchi">
             <MilestoneBanner milestone={todayMilestone} streak={streak.current} />
           </section>
         ) : null}
 
         {/* S9.1 — first-run welcome (new member only). */}
         {isFirstRun ? (
-          <section className="mb-6" aria-labelledby="first-run-heading">
+          <section className="mb-6" data-self-animate aria-labelledby="first-run-heading">
             <h2 id="first-run-heading" className="sr-only">
               Bienvenue sur Fxmily
             </h2>

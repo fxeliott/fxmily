@@ -6,7 +6,6 @@ import { auth } from '@/auth';
 import { Alert } from '@/components/alert';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Card } from '@/components/ui/card';
-import { Kbd } from '@/components/ui/kbd';
 
 import { LoginAurora } from './login-aurora';
 import { LoginForm } from './login-form';
@@ -88,17 +87,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <Link href="/rejoindre" className="text-[var(--acc)] underline-offset-2 hover:underline">
             Faire une demande
           </Link>
-        </p>
-
-        <p
-          className="wow-rise text-center text-[10px] text-[var(--t-4)] tabular-nums"
-          style={{ '--rise-delay': '290ms' } as CSSProperties}
-        >
-          <span className="inline-flex items-center gap-1">
-            <Kbd>⌘</Kbd>
-            <Kbd>?</Kbd>
-            raccourcis
-          </span>
         </p>
       </section>
     </main>

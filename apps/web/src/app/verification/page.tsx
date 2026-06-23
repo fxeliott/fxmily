@@ -35,6 +35,8 @@ import { getVerificationOverview, listDiscrepancies } from '@/lib/verification/s
 
 export const dynamic = 'force-dynamic';
 
+export const metadata = { title: 'Vérification' };
+
 const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'short',
@@ -117,18 +119,71 @@ export default async function VerificationPage() {
             <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
             Tableau de bord
           </Link>
-          <div className="flex flex-col gap-1.5">
-            <span className="t-eyebrow-lg text-[var(--t-3)]">Vérification</span>
-            <h1 className="f-display h-rise text-[28px] leading-[1.05] font-bold text-[var(--t-1)]">
-              Ta réalité de trading
-            </h1>
-            <p className="t-body max-w-prose leading-[1.6] text-[var(--t-2)]">
-              Ici, ton trading déclaré est mis en face de ton historique MT5 réel. Pas pour te juger
-              — pour t&apos;aider à te voir tel que tu es, et progresser à partir de là. Ce qui est
-              confronté, c&apos;est l&apos;historique que tu fournis : jamais tes analyses, jamais
-              de conseil de marché.
-            </p>
-          </div>
+          {/* S19 — hero glass carbone (cohérent PatternsHero / GuideHero) : ferme
+              l'asymétrie du cluster (seule page sans panel glass). Tone CYAN
+              (jamais d'accent CTA ici, posture miroir §33.2). Le récap chiffré à
+              droite reste CALME — il réutilise overview/constancy DÉJÀ fetchés
+              (0 query ajoutée) et ne montre jamais de rouge. */}
+          <Card
+            primary
+            glass
+            edge={false}
+            className="dash-hero relative overflow-hidden p-6 backdrop-blur-[16px] backdrop-saturate-150 lg:p-7"
+          >
+            <div className="relative grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:items-center lg:gap-8">
+              <div className="flex flex-col gap-2">
+                <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
+                  <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                  Vérification
+                </span>
+                <h1
+                  className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+                  style={{
+                    fontFeatureSettings: '"ss01" 1',
+                    fontSize: 'clamp(1.75rem, 1.45rem + 1.3vw, 2.25rem)',
+                  }}
+                >
+                  Ta réalité de trading
+                </h1>
+                <p className="t-lead max-w-[58ch]">
+                  Ici, ton trading déclaré est mis en face de ton historique MT5 réel. Pas pour te
+                  juger — pour t&apos;aider à te voir tel que tu es, et progresser à partir de là.
+                  Ce qui est confronté, c&apos;est l&apos;historique que tu fournis : jamais tes
+                  analyses, jamais de conseil de marché.
+                </p>
+              </div>
+
+              {/* Récap chiffré CALME : score de constance + écarts à regarder +
+                  preuves. tone cyan/neutre, 0 rouge (anti Black-Hat §33.2). */}
+              <dl className="grid grid-cols-3 gap-2.5 lg:grid-cols-1">
+                <div className="rounded-card flex flex-col gap-0.5 border border-[var(--cy-edge)] bg-[var(--bg-1)] p-3">
+                  <dt className="t-cap text-[var(--t-4)]">Constance</dt>
+                  <dd className="f-mono text-[20px] leading-none font-bold text-[var(--cy)] tabular-nums">
+                    {constancy ? Math.round(constancy.value) : '—'}
+                    <span className="text-[12px] font-normal text-[var(--t-4)]">/100</span>
+                  </dd>
+                </div>
+                <div className="rounded-card flex flex-col gap-0.5 border border-[var(--b-default)] bg-[var(--bg-1)] p-3">
+                  <dt className="t-cap text-[var(--t-4)]">À regarder</dt>
+                  <dd className="f-mono text-[20px] leading-none font-bold text-[var(--t-1)] tabular-nums">
+                    {openDiscrepancies.length}
+                    <span className="text-[12px] font-normal text-[var(--t-4)]">
+                      {openDiscrepancies.length > 1 ? ' écarts' : ' écart'}
+                    </span>
+                  </dd>
+                </div>
+                <div className="rounded-card flex flex-col gap-0.5 border border-[var(--b-default)] bg-[var(--bg-1)] p-3">
+                  <dt className="t-cap text-[var(--t-4)]">Preuves</dt>
+                  <dd className="f-mono text-[20px] leading-none font-bold text-[var(--t-1)] tabular-nums">
+                    {overview.proofs.length}
+                    <span className="text-[12px] font-normal text-[var(--t-4)]">
+                      {overview.proofs.length > 1 ? ' fournies' : ' fournie'}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </Card>
         </header>
 
         {/* Score de constance — au-dessus du fold, visible immédiatement (pas de

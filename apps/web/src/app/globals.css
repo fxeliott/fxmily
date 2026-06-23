@@ -1852,6 +1852,14 @@
     opacity: 1;
   }
 }
+/* S20 — a dash-stagger child that runs its OWN framer entrance (the celebration
+   banners: MilestoneBanner / FirstRunWelcome) must opt OUT of the parent wowRise,
+   else the two compose into a double fade-in. Marked `data-self-animate`: it lands
+   at opacity 1 immediately, then its inner animation plays alone. */
+.dash-stagger > [data-self-animate] {
+  opacity: 1;
+  animation: none;
+}
 
 /* ---- Reveal — h-rise stagger (translateY + opacity, CSS-only) ----
    Set `--rise-delay` per element for a staggered entrance. `both` fill so the

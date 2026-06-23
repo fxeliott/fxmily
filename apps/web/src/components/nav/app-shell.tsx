@@ -48,6 +48,11 @@ export function AppShell({ session, signOutAction, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
+  // S20 — mobile wayfinding : ~15 routes live ONLY in the drawer, so on those
+  // the bottom bar showed no "you are here" anchor at all. When the current path
+  // matches no bottom-nav tab, light up the Menu button (the entry to that
+  // section) with the same active affordance as the tabs.
+  const onDeepRoute = !BOTTOM_NAV.some((item) => isNavItemActive(pathname, item.href));
 
   if (!session || isPublicPath(pathname)) {
     // Surfaces publiques (splash / login / onboarding / legal) : aucun chrome,
@@ -110,10 +115,23 @@ export function AppShell({ session, signOutAction, children }: AppShellProps) {
           onClick={() => setMenuOpen(true)}
           aria-haspopup="dialog"
           aria-expanded={menuOpen}
-          className="group flex h-14 flex-col items-center justify-center gap-0.5 text-[var(--t-3)] transition-colors hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--acc)]"
+          className={cn(
+            'group relative flex h-14 flex-col items-center justify-center gap-0.5 transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--acc)]',
+            onDeepRoute ? 'text-[var(--acc-hi)]' : 'text-[var(--t-3)] hover:text-[var(--t-1)]',
+          )}
         >
+          <span
+            aria-hidden
+            className={cn(
+              'absolute top-0 h-0.5 w-8 rounded-full bg-[var(--acc)] transition-transform duration-200',
+              onDeepRoute ? 'scale-x-100' : 'scale-x-0',
+            )}
+          />
           <MenuIcon
-            className="h-5 w-5 transition-transform duration-200 group-active:scale-90"
+            className={cn(
+              'h-5 w-5 transition-transform duration-200 group-active:scale-90',
+              onDeepRoute ? 'text-[var(--acc)]' : '',
+            )}
             strokeWidth={1.75}
             aria-hidden
           />

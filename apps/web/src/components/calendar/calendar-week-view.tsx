@@ -1,6 +1,39 @@
+import {
+  Activity,
+  CheckCircle2,
+  type LucideIcon,
+  Minus,
+  Moon,
+  Repeat,
+  Target,
+  Users,
+} from 'lucide-react';
+
 import { categoryMetaFor, slotLabelFor, slotOrderIndex } from '@/components/calendar/calendar-meta';
 import { type CalendarDay } from '@/lib/schemas/adaptive-calendar';
 import { cn } from '@/lib/utils';
+
+/**
+ * Category → lucide micro-icon (J-S20 visuals fix). The four neutral categories
+ * (réunion / check-in / repos / temps libre) share the same `--t-*` rail tint
+ * and were near-indistinguishable; a glyph at the head of each chip carries the
+ * signal WITHOUT introducing a second colour (mono-accent intact — the bar +
+ * the icon are both decorative reinforcement, the category stays TEXT in the
+ * caption, WCAG 1.4.1). Defensive lookup mirrors `categoryMetaFor` (JSONB drift).
+ */
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  live_trading: Activity, // pulse — core practice
+  backtest: Repeat, // training rep loop (§21.7)
+  mark_douglas_review: Target, // psychology focus
+  meeting: Users, // §30 commitment
+  checkin: CheckCircle2, // daily routine
+  rest: Moon, // calm by design
+  free: Minus, // unscheduled
+};
+
+function categoryIconFor(category: string): LucideIcon {
+  return CATEGORY_ICONS[category] ?? Minus;
+}
 
 /**
  * §26 Calendrier adaptatif — the 7-day color-coded week grid (J-C4).
@@ -50,6 +83,7 @@ function DayCard({ day }: { day: CalendarDay }) {
         <ul className="flex flex-col gap-2">
           {blocks.map((block, idx) => {
             const meta = categoryMetaFor(block.category);
+            const CategoryIcon = categoryIconFor(block.category);
             return (
               <li
                 key={`${block.slot}-${idx}`}
@@ -67,7 +101,12 @@ function DayCard({ day }: { day: CalendarDay }) {
                   style={{ backgroundColor: meta.color }}
                 />
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="t-cap text-[var(--t-3)]">
+                  <span className="t-cap inline-flex items-center gap-1.5 text-[var(--t-3)]">
+                    <CategoryIcon
+                      className="h-3.5 w-3.5 shrink-0"
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
                     {meta.label} · {slotLabelFor(block.slot)} · {block.durationMin} min
                   </span>
                   <span className="text-[13px] leading-snug text-[var(--t-1)]">

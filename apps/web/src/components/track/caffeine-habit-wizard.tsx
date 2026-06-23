@@ -184,6 +184,27 @@ export function CaffeineHabitWizard() {
   const cupsForBar = Number.isNaN(cupsNum) ? null : cupsNum;
   const hasValidCups =
     !Number.isNaN(cupsNum) && Number.isInteger(cupsNum) && cupsNum >= 0 && cupsNum <= 20;
+
+  // Micro-feedback: one-shot confirm flash on the step body + accent pulse on
+  // the Suivant button the moment the current step flips valid (carbon
+  // `<SleepHabitWizard>`). `validateStep` is pure so it is safe to read in
+  // render. Compositor/one-shot; reduced-motion net settles both instantly.
+  const stepValid = validateStep(step, draft) === null;
+  const [confirmPulse, setConfirmPulse] = useState(false);
+  const armedStepRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!stepValid || armedStepRef.current === step) return undefined;
+    armedStepRef.current = step;
+    setConfirmPulse(true);
+    const t = setTimeout(() => setConfirmPulse(false), 700);
+    return () => clearTimeout(t);
+  }, [stepValid, step]);
+  useEffect(() => {
+    return () => {
+      armedStepRef.current = null;
+    };
+  }, [step]);
+
   const StepIcon = STEP_ICONS[step]!;
   const totalSteps = STEP_TITLES.length;
   const animate = hasMounted && !prefersReducedMotion;
@@ -249,6 +270,7 @@ export function CaffeineHabitWizard() {
                 stepError={stepError}
                 headingRef={headingRef}
                 cupsForBar={cupsForBar}
+                confirmFlash={confirmPulse}
               />
             ) : (
               <CaffeineNotesStep draft={draft} setDraft={setDraft} headingRef={headingRef} />
@@ -283,6 +305,7 @@ export function CaffeineHabitWizard() {
             onClick={handleNext}
             disabled={isPending}
             aria-label="Étape suivante"
+            className={cn(confirmPulse && stepValid && 'threshold-pulse')}
           >
             <span>Suivant</span>
             <ArrowRight className="h-4 w-4" aria-hidden />
@@ -337,11 +360,20 @@ interface StepProps {
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   stepError?: string | null;
   cupsForBar?: number | null;
+  /** One-shot accent flash when the step's required field becomes valid. */
+  confirmFlash?: boolean;
 }
 
-function CaffeineStep({ draft, setDraft, stepError, headingRef, cupsForBar }: StepProps) {
+function CaffeineStep({
+  draft,
+  setDraft,
+  stepError,
+  headingRef,
+  cupsForBar,
+  confirmFlash,
+}: StepProps) {
   return (
-    <Card className="space-y-5 p-4">
+    <Card className={cn('space-y-5 p-4', confirmFlash && 'confirm-flash')}>
       <header className="space-y-1">
         <h2
           ref={headingRef}

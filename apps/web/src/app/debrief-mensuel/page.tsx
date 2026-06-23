@@ -72,64 +72,68 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
   }
 
   return (
-    <main className="relative mx-auto flex min-h-dvh w-full max-w-4xl flex-col gap-6 px-4 py-8 lg:px-8">
+    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* S19.2 — the only top-level member route that lacked the ambient mesh
           backplate; add it so the deep-space depth is consistent (page stays
-          otherwise calm — it's a reading surface, §25.2). */}
+          otherwise calm — it's a reading surface, §25.2). The mesh now spans
+          the full viewport (mirrors `/mindset`, `/dashboard`) instead of being
+          clipped to the centered `max-w-4xl` reading column — no gutters. */}
       <DashboardAmbient />
-      <header className="relative flex flex-col gap-4">
-        <Link
-          href="/dashboard"
-          className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Tableau de bord
-        </Link>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
-            <CalendarRange className="h-3.5 w-3.5" strokeWidth={2} />
-            Débrief mensuel
-          </span>
-          <h1
-            className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
-            style={{ fontFeatureSettings: '"ss01" 1' }}
+      <div className="relative mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8 lg:px-8">
+        <header className="relative flex flex-col gap-4">
+          <Link
+            href="/dashboard"
+            className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
           >
-            Mon débrief mensuel
-          </h1>
-        </div>
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Tableau de bord
+          </Link>
 
-        <p className="t-body leading-[1.6] text-[var(--t-2)]">
-          Une synthèse de ton mois écoulé — progression, trading réel et pratique
-          d&apos;entraînement — pour prendre du recul. Aucune analyse de marché, aucun conseil de
-          trade : seulement ton comportement et ton exécution.
-        </p>
-      </header>
+          <div className="flex flex-col gap-1.5">
+            <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
+              <CalendarRange className="h-3.5 w-3.5" strokeWidth={2} />
+              Débrief mensuel
+            </span>
+            <h1
+              className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
+              style={{ fontFeatureSettings: '"ss01" 1' }}
+            >
+              Mon débrief mensuel
+            </h1>
+          </div>
 
-      {selected ? (
-        <article className="wow-reveal flex flex-col gap-5">
-          <h2 className="t-h2 text-[var(--t-1)]">{formatMonthLabelFr(selected.monthStart)}</h2>
-          <MonthlyDebriefReader debrief={selected} />
-        </article>
-      ) : (
-        <div
-          className="rounded-card-lg border border-dashed border-[var(--b-strong)] p-6 text-center"
-          data-empty="true"
-        >
-          <p className="t-body text-[var(--t-2)]">
-            Ton premier débrief mensuel arrivera au début du mois prochain. Il fait le point sur ta
-            progression — ce n&apos;est pas un score, c&apos;est un recul.
+          <p className="t-body leading-[1.6] text-[var(--t-2)]">
+            Une synthèse de ton mois écoulé — progression, trading réel et pratique
+            d&apos;entraînement — pour prendre du recul. Aucune analyse de marché, aucun conseil de
+            trade : seulement ton comportement et ton exécution.
           </p>
-        </div>
-      )}
+        </header>
 
-      <section className="wow-reveal flex flex-col gap-4">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="t-h2 text-[var(--t-1)]">Tes débriefs</h2>
-          <p className="t-cap text-[var(--t-3)]">{recent.length} / 12</p>
-        </div>
-        <MonthlyDebriefTimeline debriefs={recent} selectedId={selected?.id} />
-      </section>
+        {selected ? (
+          <article className="wow-reveal flex flex-col gap-5">
+            <h2 className="t-h2 text-[var(--t-1)]">{formatMonthLabelFr(selected.monthStart)}</h2>
+            <MonthlyDebriefReader debrief={selected} />
+          </article>
+        ) : (
+          <div
+            className="rounded-card-lg border border-dashed border-[var(--b-strong)] p-6 text-center"
+            data-empty="true"
+          >
+            <p className="t-body text-[var(--t-2)]">
+              Ton premier débrief mensuel arrivera au début du mois prochain. Il fait le point sur
+              ta progression — ce n&apos;est pas un score, c&apos;est un recul.
+            </p>
+          </div>
+        )}
+
+        <section className="wow-reveal flex flex-col gap-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="t-h2 text-[var(--t-1)]">Tes débriefs</h2>
+            <p className="t-cap text-[var(--t-3)]">{recent.length} / 12</p>
+          </div>
+          <MonthlyDebriefTimeline debriefs={recent} selectedId={selected?.id} />
+        </section>
+      </div>
     </main>
   );
 }

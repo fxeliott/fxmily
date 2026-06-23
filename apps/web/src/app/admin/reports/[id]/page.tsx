@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, Mail, Sparkles, User } from 'lucide-react';
+import { CalendarDays, ChevronRight, Mail, Sparkles, User } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
@@ -79,14 +79,24 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-5 px-4 py-8">
-      <Link
-        href="/admin/reports"
-        aria-label="Retour à la liste des rapports"
-        className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
+      {/* Breadcrumb — « Admin › Rapports › {Membre} ». Parent levels are links;
+          the member name is the trailing (current) crumb. */}
+      <nav
+        aria-label="Fil d'Ariane"
+        className="flex w-fit flex-wrap items-center gap-1 text-[12px] text-[var(--t-3)]"
       >
-        <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-        Tous les rapports
-      </Link>
+        <Link href="/admin" className="transition-colors hover:text-[var(--t-1)]">
+          Admin
+        </Link>
+        <ChevronRight className="h-3 w-3 text-[var(--t-4)]" strokeWidth={1.75} aria-hidden />
+        <Link href="/admin/reports" className="transition-colors hover:text-[var(--t-1)]">
+          Rapports
+        </Link>
+        <ChevronRight className="h-3 w-3 text-[var(--t-4)]" strokeWidth={1.75} aria-hidden />
+        <span aria-current="page" className="max-w-[16rem] truncate text-[var(--t-2)]">
+          {memberLabel}
+        </span>
+      </nav>
 
       <Card primary className="p-5">
         <div className="flex flex-wrap items-center gap-2">
@@ -151,14 +161,14 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
       />
 
       {/* Summary */}
-      <section className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]">
+      <section className="wow-reveal rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]">
         <h2 className="t-eyebrow text-[var(--acc)]">Synthèse</h2>
         <p className="mt-2 text-[15px] leading-[23px] text-[var(--t-1)]">{report.summary}</p>
       </section>
 
       {/* Risks */}
       {report.risks.length > 0 ? (
-        <section className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]">
+        <section className="wow-reveal rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]">
           <h2 className="t-eyebrow text-[var(--warn)]">
             Risques à surveiller ({report.risks.length})
           </h2>
@@ -176,7 +186,7 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
       ) : null}
 
       {/* Recommendations */}
-      <section className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]">
+      <section className="wow-reveal rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]">
         <h2 className="t-eyebrow text-[var(--acc)]">
           Recommandations ({report.recommendations.length})
         </h2>
@@ -194,7 +204,7 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
 
       {/* Patterns */}
       {patternEntries.length > 0 ? (
-        <section className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]">
+        <section className="wow-reveal rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]">
           <h2 className="t-eyebrow">Patterns observés</h2>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             {patternEntries.map(([label, value]) => (
@@ -211,7 +221,7 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
       ) : null}
 
       {/* Meta */}
-      <section className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]">
+      <section className="wow-reveal rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]">
         <h2 className="t-eyebrow">Génération</h2>
         <dl className="mt-3 grid gap-2 text-[12.5px] text-[var(--t-2)] sm:grid-cols-2">
           <Meta label="Modèle" value={report.claudeModel} mono />

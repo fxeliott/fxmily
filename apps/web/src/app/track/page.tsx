@@ -35,6 +35,8 @@ import { auth } from '@/auth';
  * miroir" (M4 metaphor extension V1.8 carbone).
  */
 
+export const metadata = { title: 'Habitudes' };
+
 export const dynamic = 'force-dynamic';
 
 interface TrackPageProps {

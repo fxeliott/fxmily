@@ -111,10 +111,10 @@ export default async function AdminCardsPage({ searchParams }: AdminCardsPagePro
             href={f.href}
             aria-current={f.active ? 'page' : undefined}
             className={
-              'rounded-pill inline-flex h-9 items-center border px-4 text-xs font-medium transition-all ' +
+              'rounded-pill inline-flex h-9 items-center border px-4 text-xs font-medium transition-[background-color,border-color,color] ' +
               (f.active
-                ? 'border-acc/60 bg-acc/15 text-acc'
-                : 'border-border bg-bg-1 text-foreground/85 hover:border-acc/40')
+                ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc-hi)]'
+                : 'border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-2)] hover:border-[var(--b-acc)]')
             }
           >
             {f.label}
@@ -148,7 +148,11 @@ export default async function AdminCardsPage({ searchParams }: AdminCardsPagePro
             const Icon = CATEGORY_ICON[card.category];
             const tone = CATEGORY_TONE[card.category];
             return (
-              <li key={card.id}>
+              // `.wow-reveal` class (not a framer wrapper) so `ul > li` structure
+              // stays intact; the publish/delete buttons inside keep their own
+              // hit-targets. CSS reveal is no-JS + reduced-motion safe (just the
+              // appearance — no spring-lift, per finding f9).
+              <li key={card.id} className="wow-reveal h-full">
                 <Card className="h-full p-4">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="flex flex-1 flex-col gap-2">

@@ -321,7 +321,7 @@ export function WeeklyRecapCard({
           return (
             <div
               key={metric.key}
-              className="rounded-card flex min-w-0 flex-col gap-1.5 border border-[var(--b-default)] bg-[var(--bg-2)] p-3"
+              className="rounded-card flex min-w-0 flex-col gap-1.5 border border-[var(--b-default)] bg-[var(--bg-2)] p-3 transition-colors hover:border-[var(--b-acc)]"
               data-metric={metric.key}
             >
               <dt className="flex items-center gap-1.5">

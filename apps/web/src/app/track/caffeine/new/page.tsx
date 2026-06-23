@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Coffee } from 'lucide-react';
 
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { CaffeineHabitWizard } from '@/components/track/caffeine-habit-wizard';
@@ -35,12 +35,20 @@ export default async function TrackCaffeineNewPage() {
             Retour au suivi
           </Link>
           <p className="t-eyebrow-lg text-[var(--acc)]">Pilier café</p>
-          <h1
-            className="f-display h-rise text-[24px] font-semibold tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
-            style={{ fontFeatureSettings: '"ss01" 1' }}
-          >
-            Logger ta caféine
-          </h1>
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="rounded-control grid h-12 w-12 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]"
+            >
+              <Coffee className="h-6 w-6" strokeWidth={1.75} />
+            </span>
+            <h1
+              className="f-display h-rise text-[24px] font-semibold tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
+              style={{ fontFeatureSettings: '"ss01" 1' }}
+            >
+              Logger ta caféine
+            </h1>
+          </div>
           <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
             Bjorness &amp; Greene, <em>Sleep Medicine Reviews</em>, 2009 — la caféine a une demi-vie
             de ~6 h. Un café à 16 h pèse encore sur ton sommeil à 22 h, et le sommeil finance la

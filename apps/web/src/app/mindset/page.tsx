@@ -1,4 +1,12 @@
-import { ArrowLeft, ArrowRight, Brain, ClipboardCheck, LineChart, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Brain,
+  Check,
+  ClipboardCheck,
+  LineChart,
+  Sparkles,
+} from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -98,9 +106,16 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
           <div
             role="status"
             data-slot="mindset-done"
-            className="rounded-card-lg border border-[var(--b-acc)] bg-[var(--acc-dim-2)] p-4"
+            className="rounded-card-lg border border-[var(--b-acc)] bg-[var(--acc-dim)] p-4"
           >
-            <p className="t-eyebrow-lg text-[var(--t-3)]">Enregistré</p>
+            <p className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
+              <Check
+                className="h-3.5 w-3.5 text-[var(--acc)]"
+                strokeWidth={2.25}
+                aria-hidden="true"
+              />
+              Enregistré
+            </p>
             <p className="t-h3 mt-1 text-[var(--t-1)]">
               Ton auto-évaluation de la semaine est posée. Reviens lundi prochain prendre le même
               recul, sans pression.

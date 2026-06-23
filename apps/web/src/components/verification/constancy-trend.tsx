@@ -54,7 +54,7 @@ export function ConstancyTrend({ history }: { history: readonly ConstancyScoreVi
   const lastTopPct = (lastY / VB_H) * 100;
 
   return (
-    <div className="rounded-card flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
+    <div className="rounded-card flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-colors hover:border-[var(--cy-edge)]">
       <div className="flex items-baseline justify-between gap-3">
         <span className="t-eyebrow text-[var(--t-3)]">Ton évolution</span>
         <span className="t-cap text-[var(--t-4)]">

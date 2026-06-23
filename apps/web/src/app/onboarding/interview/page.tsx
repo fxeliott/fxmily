@@ -79,7 +79,8 @@ export default async function OnboardingInterviewLandingPage() {
 
       <section
         aria-labelledby="oil-intro-heading"
-        className="rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-5"
+        className="wow-rise rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-5"
+        style={{ '--rise-delay': '120ms' } as CSSProperties}
       >
         <h2 id="oil-intro-heading" className="sr-only">
           Présentation de l&apos;entretien

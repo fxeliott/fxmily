@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Dumbbell } from 'lucide-react';
 
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { SportHabitWizard } from '@/components/track/sport-habit-wizard';
@@ -35,12 +35,20 @@ export default async function TrackSportNewPage() {
             Retour au suivi
           </Link>
           <p className="t-eyebrow-lg text-[var(--acc)]">Pilier sport</p>
-          <h1
-            className="f-display h-rise text-[24px] font-semibold tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
-            style={{ fontFeatureSettings: '"ss01" 1' }}
-          >
-            Logger ton activité
-          </h1>
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="rounded-control grid h-12 w-12 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]"
+            >
+              <Dumbbell className="h-6 w-6" strokeWidth={1.75} />
+            </span>
+            <h1
+              className="f-display h-rise text-[24px] font-semibold tracking-[-0.03em] text-[var(--t-1)] sm:text-[28px]"
+              style={{ fontFeatureSettings: '"ss01" 1' }}
+            >
+              Logger ton activité
+            </h1>
+          </div>
           <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
             ACSM — ≥ 150 min/semaine d&apos;activité modérée à soutenue (cadre FITT-VP). La
             régularité, pas le volume d&apos;une séance, stabilise ton humeur et ta régulation

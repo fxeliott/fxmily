@@ -55,6 +55,15 @@ const TABS: readonly TabDefinition[] = [
 ];
 
 /**
+ * Label lookup for a tab key — single source of truth shared with the
+ * member-detail breadcrumb (so the « Onglet » crumb never drifts from the tab
+ * strip). Derived from `TABS` so adding a tab keeps both in sync.
+ */
+export const MEMBER_TAB_LABEL: Readonly<Record<MemberTabKey, string>> = Object.fromEntries(
+  TABS.map((t) => [t.key, t.label]),
+) as Record<MemberTabKey, string>;
+
+/**
  * Tab strip for the admin member detail page (SPEC §7.7).
  *
  * Every tab is a real route: `overview` is the default page, the rest are
@@ -66,7 +75,7 @@ export function MemberTabs({ memberId, active }: MemberTabsProps) {
   return (
     <nav
       aria-label="Onglets membre"
-      className="flex flex-wrap items-center gap-1 border-b border-[var(--b-default)]"
+      className="flex snap-x snap-mandatory [scrollbar-width:none] items-center gap-1 overflow-x-auto border-b border-[var(--b-default)] [-ms-overflow-style:none] md:flex-wrap md:overflow-visible [&>a]:shrink-0 [&>a]:snap-start"
     >
       {TABS.map((tab) => {
         const isActive = tab.key === active;

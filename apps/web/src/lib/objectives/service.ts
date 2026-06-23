@@ -3,8 +3,10 @@ import 'server-only';
 import { getStreak } from '@/lib/checkin/service';
 import { STREAK_MILESTONES } from '@/lib/checkin/streak';
 import { getDailyGuidance, type GuidanceAction } from '@/lib/daily-guidance/service';
+import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 
+import { coerceAxes, pickWeeklyAxis } from './coaching-axis';
 import {
   DIMENSION_META,
   JOURNEY_STAGES,
@@ -61,17 +63,29 @@ export interface ProcessObjectivesView {
   journey: JourneyStage[];
   /** Actions concrètes (todo-first) issues du guidage du jour. */
   nextActions: GuidanceAction[];
+  /**
+   * S24 — l'axe de coaching PERSONNEL du membre cette semaine, issu de son profil
+   * d'onboarding (`MemberProfile.axesPrioritaires`, analyse Claude), en rotation
+   * hebdomadaire. `null` tant qu'aucun profil n'existe. AI-derived ⇒ les surfaces
+   * qui l'affichent portent le `AIGeneratedBanner` (AI Act §50). Posture §2 :
+   * descriptif (un axe de process), jamais un signal de marché.
+   */
+  coachingAxis: string | null;
 }
 
 export async function getProcessObjectives(
   userId: string,
   timezone: string,
 ): Promise<ProcessObjectivesView> {
-  const [latestScore, scoreHistory, streak, guidance] = await Promise.all([
+  const [latestScore, scoreHistory, streak, guidance, profile] = await Promise.all([
     getLatestBehavioralScore(userId),
     getBehavioralScoreHistory(userId, { sinceDays: 90 }),
     getStreak(userId, timezone),
     getDailyGuidance(userId, timezone),
+    // S24 — le profil d'onboarding porte les `axesPrioritaires` (analyse Claude).
+    // Lu dans le même batch parallèle (un `findUnique` indexé, pas de N+1) pour
+    // dériver l'axe de coaching de la semaine, désormais partagé hub + /objectifs.
+    getProfileForUser(userId),
   ]);
 
   const dimValue = (key: ObjectiveDimension): number | null => {
@@ -139,6 +153,10 @@ export async function getProcessObjectives(
     .sort((a, b) => stateRank(a.state) - stateRank(b.state))
     .slice(0, 4);
 
+  // S24 — l'axe de coaching personnel de la semaine (rotation hebdo sur les axes
+  // du profil). `null` sans profil ⇒ la surface ne rend rien (jamais d'axe inventé).
+  const coachingAxis = pickWeeklyAxis(coerceAxes(profile?.axesPrioritaires));
+
   return {
     hasScores: latestScore !== null,
     cap,
@@ -149,6 +167,7 @@ export async function getProcessObjectives(
     streak: { current: streak.current, todayFilled: streak.todayFilled, nextMilestone },
     journey,
     nextActions,
+    coachingAxis,
   };
 }
 

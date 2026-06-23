@@ -9,6 +9,9 @@ import { enqueueDouglasDeliveryNotification } from '@/lib/notifications/enqueue'
 // module: the count-only primitive. Anything else (a serialized backtest,
 // `db.trainingTrade`, a P&L field) is a statistical-isolation breach.
 import { countRecentTrainingActivity } from '@/lib/training/training-trade-service';
+// T1 "cerveau actif" — score history feeds the pure `score_drift` evaluator
+// (via `detectMomentum`). User-scoped trend points (date + 4 dims), no P&L.
+import { getBehavioralScoreHistory } from '@/lib/scoring/service';
 
 import {
   isOnCooldown,
@@ -180,55 +183,59 @@ export async function evaluateAndDispatchForUser(
     ? Promise.resolve(options.preparsedCards)
     : loadPublishedTriggerCards();
 
-  const [trades, checkins, activeCards, deliveries, trainingActivity] = await Promise.all([
-    db.trade.findMany({
-      where: {
-        userId,
-        OR: [
-          { closedAt: { gte: tradesWindowStart } },
-          { closedAt: null, enteredAt: { gte: tradesWindowStart } },
-        ],
-      },
-      select: {
-        closedAt: true,
-        exitedAt: true,
-        enteredAt: true,
-        outcome: true,
-        session: true,
-        planRespected: true,
-        hedgeRespected: true,
-        emotionBefore: true,
-        emotionDuring: true,
-        emotionAfter: true,
-      },
-    }),
-    db.dailyCheckin.findMany({
-      where: { userId, date: { gte: checkinsWindowStart } },
-      select: {
-        date: true,
-        slot: true,
-        moodScore: true,
-        sleepHours: true,
-        planRespectedToday: true,
-        emotionTags: true,
-      },
-    }),
-    cardsPromise,
-    db.markDouglasDelivery.findMany({
-      where: { userId, createdAt: { gte: historyCutoff } },
-      // TASK C (§26) — `seenAt` + `sourceAlertId` added (additive) so the
-      // routine-saturation check can read engagement. `sourceAlertId` separates
-      // ROUTINE deliveries (null = classic evaluators) from ALERTE ones (S3
-      // constancy engine) — the latter are NEVER spaced. `cardId` + `createdAt`
-      // remain for the unchanged hatClass-cooldown path.
-      select: { cardId: true, createdAt: true, seenAt: true, sourceAlertId: true },
-    }),
-    // 🚨 §21.5 — sanctioned training→real-edge touchpoint #2 (trigger
-    // engine). Count-only primitive; the inactivity trigger is recency-only
-    // so only `.lastEnteredAt` is consumed. NEVER a backtest P&L. Reuses the
-    // 30d trade window start as the (unused-for-recency) count bound.
-    countRecentTrainingActivity(userId, tradesWindowStart),
-  ]);
+  const [trades, checkins, activeCards, deliveries, trainingActivity, scoreHistory] =
+    await Promise.all([
+      db.trade.findMany({
+        where: {
+          userId,
+          OR: [
+            { closedAt: { gte: tradesWindowStart } },
+            { closedAt: null, enteredAt: { gte: tradesWindowStart } },
+          ],
+        },
+        select: {
+          closedAt: true,
+          exitedAt: true,
+          enteredAt: true,
+          outcome: true,
+          session: true,
+          planRespected: true,
+          hedgeRespected: true,
+          emotionBefore: true,
+          emotionDuring: true,
+          emotionAfter: true,
+        },
+      }),
+      db.dailyCheckin.findMany({
+        where: { userId, date: { gte: checkinsWindowStart } },
+        select: {
+          date: true,
+          slot: true,
+          moodScore: true,
+          sleepHours: true,
+          planRespectedToday: true,
+          emotionTags: true,
+        },
+      }),
+      cardsPromise,
+      db.markDouglasDelivery.findMany({
+        where: { userId, createdAt: { gte: historyCutoff } },
+        // TASK C (§26) — `seenAt` + `sourceAlertId` added (additive) so the
+        // routine-saturation check can read engagement. `sourceAlertId` separates
+        // ROUTINE deliveries (null = classic evaluators) from ALERTE ones (S3
+        // constancy engine) — the latter are NEVER spaced. `cardId` + `createdAt`
+        // remain for the unchanged hatClass-cooldown path.
+        select: { cardId: true, createdAt: true, seenAt: true, sourceAlertId: true },
+      }),
+      // 🚨 §21.5 — sanctioned training→real-edge touchpoint #2 (trigger
+      // engine). Count-only primitive; the inactivity trigger is recency-only
+      // so only `.lastEnteredAt` is consumed. NEVER a backtest P&L. Reuses the
+      // 30d trade window start as the (unused-for-recency) count bound.
+      countRecentTrainingActivity(userId, tradesWindowStart),
+      // T1 — behavioral-score trend (ascending, 90d default) for `score_drift`.
+      // detectMomentum needs ≥6 points over a 42d window; 90d covers it with slack.
+      getBehavioralScoreHistory(userId),
+    ]);
 
   // --- 3. Build TriggerContext -----------------------------------------------
   const closedTrades = trades.filter((t) => t.closedAt !== null);
@@ -268,6 +275,10 @@ export async function evaluateAndDispatchForUser(
     lastTrainingActivityLocalDate: trainingActivity.lastEnteredAt
       ? localDateOf(new Date(trainingActivity.lastEnteredAt), timezone)
       : null,
+    // T1 "cerveau actif" — trend points (date + 4 dims) consumed by the pure
+    // `score_drift` evaluator via `detectMomentum`. Structurally a
+    // MomentumHistoryPoint[]; passed straight through (no P&L, user-scoped).
+    scoreHistory,
     recentCheckins: checkins.map((c) => ({
       date: c.date.toISOString().slice(0, 10),
       slot: c.slot,

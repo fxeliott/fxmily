@@ -103,6 +103,16 @@ const noTrainingActivityInWindowSchema = z
   })
   .strict();
 
+// T1 "cerveau actif" — sustained slow behavioral decline. `minDecliningDimensions`
+// 1–4 = how many of the 4 score dimensions must drift down (per `detectMomentum`)
+// before the card fires.
+const scoreDriftSchema = z
+  .object({
+    kind: z.literal('score_drift'),
+    minDecliningDimensions: positiveInt(4),
+  })
+  .strict();
+
 // =============================================================================
 // Union — single entry point
 // =============================================================================
@@ -116,6 +126,7 @@ export const triggerRuleSchema: z.ZodType<TriggerRule> = z.discriminatedUnion('k
   noCheckinStreakSchema,
   hedgeViolationSchema,
   noTrainingActivityInWindowSchema,
+  scoreDriftSchema,
 ]);
 
 /**

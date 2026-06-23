@@ -8,10 +8,12 @@ import {
   evalNoCheckinStreak,
   evalNoTrainingActivityInWindow,
   evalPlanViolationsInWindow,
+  evalScoreDrift,
   evalSleepDeficitThenTrade,
   evalWinStreak,
   evaluateTrigger,
 } from './evaluators';
+import type { MomentumHistoryPoint } from '@/lib/scoring/momentum';
 import type { TriggerCheckinInput, TriggerContext, TriggerTradeInput } from './types';
 
 // =============================================================================
@@ -547,6 +549,109 @@ describe('evaluateTrigger dispatcher', () => {
     ctx.recentClosedTrades = [trade({ outcome: 'loss' }), trade({ outcome: 'loss' })];
     const r = evaluateTrigger({ kind: 'after_n_consecutive_losses', n: 2, window: 'any' }, ctx);
     expect(r.matched).toBe(true);
+  });
+
+  it('routes score_drift to evalScoreDrift', () => {
+    const ctx = ctxAt(new Date('2026-05-07T12:00:00Z'));
+    ctx.scoreHistory = decliningHistory('discipline');
+    const r = evaluateTrigger({ kind: 'score_drift', minDecliningDimensions: 1 }, ctx);
+    expect(r.matched).toBe(true);
+    if (r.matched) expect(r.snapshot.kind).toBe('score_drift');
+  });
+});
+
+// =============================================================================
+// 9. score_drift — T1 "cerveau actif" (sustained slow behavioral decline)
+// =============================================================================
+
+/** 7 weekly points within the 42-day window anchored on 2026-05-07. The named
+ *  dimension drops ~3 pts/week (well past the -0.5 threshold); the other three
+ *  stay flat at 70 (slope 0 → not flagged). */
+function decliningHistory(dim: keyof Omit<MomentumHistoryPoint, 'date'>): MomentumHistoryPoint[] {
+  const dates = [
+    '2026-03-27',
+    '2026-04-03',
+    '2026-04-10',
+    '2026-04-17',
+    '2026-04-24',
+    '2026-05-01',
+    '2026-05-07',
+  ];
+  const declining = [80, 77, 74, 71, 68, 65, 62];
+  return dates.map((date, i) => ({
+    date,
+    discipline: dim === 'discipline' ? declining[i]! : 70,
+    emotionalStability: dim === 'emotionalStability' ? declining[i]! : 70,
+    consistency: dim === 'consistency' ? declining[i]! : 70,
+    engagement: dim === 'engagement' ? declining[i]! : 70,
+  }));
+}
+
+describe('evalScoreDrift', () => {
+  const now = new Date('2026-05-07T12:00:00Z');
+
+  it('does NOT match when the engine did not load history (undefined)', () => {
+    const ctx = ctxAt(now); // scoreHistory left undefined
+    const r = evalScoreDrift({ kind: 'score_drift', minDecliningDimensions: 1 }, ctx);
+    expect(r.matched).toBe(false);
+  });
+
+  it('matches when ≥1 dimension drifts down (default minDecliningDimensions=1)', () => {
+    const ctx = ctxAt(now);
+    ctx.scoreHistory = decliningHistory('emotionalStability');
+    const r = evalScoreDrift({ kind: 'score_drift', minDecliningDimensions: 1 }, ctx);
+    expect(r.matched).toBe(true);
+    if (r.matched) {
+      // FR label of the steepest decline surfaces in the calm triggeredBy.
+      expect(r.triggeredBy).toContain('Stabilité');
+      expect(r.snapshot.details.decliningCount).toBe(1);
+    }
+  });
+
+  it('does NOT match when fewer dims decline than required', () => {
+    const ctx = ctxAt(now);
+    ctx.scoreHistory = decliningHistory('discipline'); // only 1 declines
+    const r = evalScoreDrift({ kind: 'score_drift', minDecliningDimensions: 2 }, ctx);
+    expect(r.matched).toBe(false);
+  });
+
+  it('matches when 2 dims decline and 2 are required', () => {
+    const ctx = ctxAt(now);
+    // Merge two declining dimensions into one history.
+    const a = decliningHistory('discipline');
+    const b = decliningHistory('engagement');
+    ctx.scoreHistory = a.map((p, i) => ({ ...p, engagement: b[i]!.engagement }));
+    const r = evalScoreDrift({ kind: 'score_drift', minDecliningDimensions: 2 }, ctx);
+    expect(r.matched).toBe(true);
+    if (r.matched) expect(r.snapshot.details.decliningCount).toBe(2);
+  });
+
+  it('does NOT match a flat trend (no sustained decline)', () => {
+    const ctx = ctxAt(now);
+    ctx.scoreHistory = [
+      '2026-03-27',
+      '2026-04-03',
+      '2026-04-10',
+      '2026-04-17',
+      '2026-04-24',
+      '2026-05-01',
+      '2026-05-07',
+    ].map((date) => ({
+      date,
+      discipline: 70,
+      emotionalStability: 70,
+      consistency: 70,
+      engagement: 70,
+    }));
+    const r = evalScoreDrift({ kind: 'score_drift', minDecliningDimensions: 1 }, ctx);
+    expect(r.matched).toBe(false);
+  });
+
+  it('does NOT match with too few points (<6, detectMomentum returns [])', () => {
+    const ctx = ctxAt(now);
+    ctx.scoreHistory = decliningHistory('discipline').slice(0, 4);
+    const r = evalScoreDrift({ kind: 'score_drift', minDecliningDimensions: 1 }, ctx);
+    expect(r.matched).toBe(false);
   });
 });
 

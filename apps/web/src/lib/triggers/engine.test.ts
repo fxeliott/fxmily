@@ -17,6 +17,8 @@ vi.mock('@/lib/db', () => ({
     dailyCheckin: { findMany: vi.fn() },
     markDouglasCard: { findMany: vi.fn() },
     markDouglasDelivery: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+    // T1 — `getBehavioralScoreHistory` (score_drift) reads this in the engine.
+    behavioralScore: { findMany: vi.fn() },
   },
 }));
 vi.mock('@/lib/auth/audit', () => ({ logAudit: vi.fn() }));
@@ -77,6 +79,7 @@ function arm(options: {
   vi.mocked(db.markDouglasDelivery.findFirst).mockResolvedValue(options.deliveredToday as never);
   vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue((options.history ?? []) as never);
   vi.mocked(db.markDouglasDelivery.create).mockResolvedValue({ id: 'delivery-new' } as never);
+  vi.mocked(db.behavioralScore.findMany).mockResolvedValue([] as never);
 }
 
 describe('evaluateAndDispatchForUser — member-day cap (S4 DOD2-T2-1)', () => {
@@ -213,6 +216,7 @@ describe('dispatchForAllActiveMembers — S10 perf: member-independent cards fet
     vi.mocked(db.markDouglasDelivery.findFirst).mockResolvedValue(null as never);
     vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([] as never);
     vi.mocked(db.markDouglasDelivery.create).mockResolvedValue({ id: 'delivery-new' } as never);
+    vi.mocked(db.behavioralScore.findMany).mockResolvedValue([] as never);
 
     const r = await dispatchForAllActiveMembers(NOW);
 

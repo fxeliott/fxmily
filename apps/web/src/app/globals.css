@@ -198,6 +198,12 @@
   --ok-edge: oklch(0.804 0.181 145 / 0.35);
   --bad-edge: oklch(0.7 0.165 22 / 0.35);
   --warn-edge: oklch(0.834 0.158 80 / 0.35);
+  /* S20 — GLOW colors for ok/bad drop-shadow halos (trade-card / trade-detail
+     direction badge). Were baked dark oklch in inline `filter:drop-shadow()` and
+     stayed neon on the white light card → tokenised so they flip. Color token
+     only (the blur radius stays inline per call-site: 8px card, 18px detail). */
+  --ok-glow: oklch(0.804 0.181 145 / 0.32);
+  --bad-glow: oklch(0.7 0.165 22 / 0.28);
   --mute-dim: oklch(0.604 0.02 257 / 0.04);
 
   /* ─── RADII (sémantiques — JAMAIS uniforme) ─────────────────── */
@@ -460,6 +466,10 @@
   --bad-dim: oklch(0.53 0.2 25 / 0.1);
   --bad-dim-2: oklch(0.53 0.2 25 / 0.18);
   --bad-edge: oklch(0.53 0.2 25 / 0.4);
+  /* S20 — light mirror of the ok/bad glow colors (darkened, re-saturated for the
+     white canvas, never inverted — finance grammar held). */
+  --ok-glow: oklch(0.52 0.17 150 / 0.32);
+  --bad-glow: oklch(0.53 0.2 25 / 0.3);
   --mute-dim: oklch(0.4 0.02 258 / 0.05);
 
   /* ─── SHADOWS (douces, 1 direction, sans highlight blanc) ────── */
@@ -2524,6 +2534,29 @@
    couleur » sans virer au flashy ni concurrencer le texte. Décoratif. ---- */
 .surf-grad-soft {
   background-image: var(--grad-brand-soft);
+}
+/* S20 — flip LIGHT du wash de marque. Les stops :root (oklch L≈0.55-0.7) sont
+   calibrés deep-space ; sur le canvas clair le halo --grad-brand-soft devient
+   quasi invisible / fade (login-aurora, rejoindre-aurora, legal-layout, sidebar
+   footer). On redéclare les 2 tokens en clair avec des stops ASSOMBRIS — mêmes
+   hues cool bleu(262)→indigo(264)→teal(220), alpha décoratif ≤0.12 — pour que la
+   couleur ressorte aussi en clair (« mode clair parfait + plus de couleur »)
+   SANS toucher le contraste texte (couche décorative sous cartes opaques).
+   Miroir exact de .light .text-grad-brand (l.2498). Invariant-safe : spectre cool
+   only, jamais un CTA. */
+.light {
+  --grad-brand: linear-gradient(
+    135deg,
+    oklch(0.5 0.2 262) 0%,
+    oklch(0.5 0.21 264) 52%,
+    oklch(0.5 0.12 220) 100%
+  );
+  --grad-brand-soft: linear-gradient(
+    135deg,
+    oklch(0.5 0.2 262 / 0.12) 0%,
+    oklch(0.5 0.21 264 / 0.1) 52%,
+    oklch(0.5 0.12 220 / 0.1) 100%
+  );
 }
 
 /* ---- Card border-color via data-attributes (ROBUST fix for the "white border")

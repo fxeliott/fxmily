@@ -2,6 +2,8 @@
 
 import { m, useReducedMotion } from 'framer-motion';
 
+import { useIsLightTheme } from '@/lib/use-chart-colors';
+
 /**
  * V1.8 REFLECT — `MirrorHero` SVG illustration.
  *
@@ -24,11 +26,25 @@ import { m, useReducedMotion } from 'framer-motion';
  */
 export function MirrorHero({ className }: { className?: string }) {
   const reduceMotion = useReducedMotion();
+  const isLight = useIsLightTheme();
 
   // Stagger draw animations across the SVG so the illustration "wakes up"
   // smoothly on first render rather than popping in. Reduced-motion users
   // get the final frame instantly.
   const baseDuration = reduceMotion ? 0.001 : 1.4;
+
+  // S20 — theme-flipped decorative blues. DARK = bright-on-deep-space (original);
+  // LIGHT = deepened so the arcs/axis/ray stay visible on the white
+  // .light .v18-theme card (the old 0.74-0.82 stops washed to ~1.7-2.3:1). Hex
+  // chosen at runtime → WebView-safe (no var() in SVG attr). Cool blue spectrum,
+  // decorative aria-hidden (mono-accent untouched).
+  const cBright1 = isLight ? 'oklch(0.55 0.2 260)' : 'oklch(0.82 0.115 247)';
+  const cBright2 = isLight ? 'oklch(0.46 0.21 262)' : 'oklch(0.62 0.19 254)';
+  const cMid = isLight ? 'oklch(0.5 0.2 260)' : 'oklch(0.74 0.16 250)';
+  const cDeep = isLight ? 'oklch(0.42 0.21 263)' : 'oklch(0.46 0.21 263)';
+  const pulse1 = isLight ? 'oklch(0.46 0.21 262 / 0.55)' : 'oklch(0.62 0.19 254 / 0.55)';
+  const pulse2 = isLight ? 'oklch(0.5 0.2 260 / 0.4)' : 'oklch(0.74 0.16 250 / 0.4)';
+  const rayStroke = isLight ? 'oklch(0.46 0.21 262 / 0.5)' : 'oklch(0.82 0.115 247 / 0.5)';
 
   return (
     <svg
@@ -40,17 +56,17 @@ export function MirrorHero({ className }: { className?: string }) {
     >
       <defs>
         <linearGradient id="v18-mirror-bright" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="oklch(0.82 0.115 247)" stopOpacity="0.95" />
-          <stop offset="100%" stopColor="oklch(0.62 0.19 254)" stopOpacity="0.45" />
+          <stop offset="0%" stopColor={cBright1} stopOpacity="0.95" />
+          <stop offset="100%" stopColor={cBright2} stopOpacity="0.45" />
         </linearGradient>
         <linearGradient id="v18-mirror-dim" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="oklch(0.62 0.19 254)" stopOpacity="0.55" />
-          <stop offset="100%" stopColor="oklch(0.46 0.21 263)" stopOpacity="0.18" />
+          <stop offset="0%" stopColor={cBright2} stopOpacity="0.55" />
+          <stop offset="100%" stopColor={cDeep} stopOpacity="0.18" />
         </linearGradient>
         <radialGradient id="v18-mirror-center" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0%" stopColor="oklch(0.82 0.115 247)" stopOpacity="0.85" />
-          <stop offset="60%" stopColor="oklch(0.62 0.19 254)" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="oklch(0.46 0.21 263)" stopOpacity="0" />
+          <stop offset="0%" stopColor={cBright1} stopOpacity="0.85" />
+          <stop offset="60%" stopColor={cBright2} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={cDeep} stopOpacity="0" />
         </radialGradient>
         <filter id="v18-mirror-soft" x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur stdDeviation="0.6" />
@@ -82,7 +98,7 @@ export function MirrorHero({ className }: { className?: string }) {
       <m.path
         d="M 130 120 A 70 70 0 0 1 270 120"
         fill="none"
-        stroke="oklch(0.74 0.16 250)"
+        stroke={cMid}
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeDasharray="2 4"
@@ -106,7 +122,7 @@ export function MirrorHero({ className }: { className?: string }) {
       <m.path
         d="M 130 120 A 70 70 0 0 0 270 120"
         fill="none"
-        stroke="oklch(0.62 0.19 254)"
+        stroke={cBright2}
         strokeWidth="1.2"
         strokeLinecap="round"
         strokeDasharray="1 3"
@@ -122,7 +138,7 @@ export function MirrorHero({ className }: { className?: string }) {
         y1="120"
         x2="360"
         y2="120"
-        stroke="oklch(0.74 0.16 250)"
+        stroke={cMid}
         strokeWidth="1.5"
         strokeLinecap="round"
         filter="url(#v18-mirror-soft)"
@@ -151,7 +167,7 @@ export function MirrorHero({ className }: { className?: string }) {
             cy="120"
             r="6"
             fill="none"
-            stroke="oklch(0.62 0.19 254 / 0.55)"
+            stroke={pulse1}
             strokeWidth="1"
             className="v18-mirror-pulse"
           />
@@ -160,7 +176,7 @@ export function MirrorHero({ className }: { className?: string }) {
             cy="120"
             r="6"
             fill="none"
-            stroke="oklch(0.74 0.16 250 / 0.4)"
+            stroke={pulse2}
             strokeWidth="1"
             className="v18-mirror-pulse"
             style={{ animationDelay: '1.8s' }}
@@ -190,7 +206,7 @@ export function MirrorHero({ className }: { className?: string }) {
         y1="60"
         x2="200"
         y2="120"
-        stroke="oklch(0.82 0.115 247 / 0.5)"
+        stroke={rayStroke}
         strokeWidth="1"
         strokeDasharray="2 3"
         initial={{ pathLength: 0 }}

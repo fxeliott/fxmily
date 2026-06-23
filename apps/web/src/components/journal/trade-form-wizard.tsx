@@ -585,8 +585,8 @@ function StepDirectionSession({ draft, update, fieldErrors, disabled }: StepProp
                   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                   active
                     ? d === 'long'
-                      ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)] shadow-[0_0_0_3px_oklch(0.804_0.181_145_/_0.10)]'
-                      : 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)] shadow-[0_0_0_3px_oklch(0.7_0.165_22_/_0.10)]'
+                      ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)] shadow-[0_0_0_3px_var(--ok-dim)]'
+                      : 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)] shadow-[0_0_0_3px_var(--bad-dim)]'
                     : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
                   disabled && 'cursor-not-allowed opacity-60',
                 )}
@@ -1253,10 +1253,10 @@ function TradeQualitySelector({
                 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                 active
                   ? opt.tone === 'ok'
-                    ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)] shadow-[0_0_0_3px_oklch(0.804_0.181_145_/_0.10)]'
+                    ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)] shadow-[0_0_0_3px_var(--ok-dim)]'
                     : opt.tone === 'cy'
-                      ? 'border-[var(--cy)] bg-[var(--cy-dim-strong)] text-[var(--cy)] shadow-[0_0_0_3px_oklch(0.78_0.16_240_/_0.10)]'
-                      : 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)] shadow-[0_0_0_3px_oklch(0.7_0.165_22_/_0.10)]'
+                      ? 'border-[var(--cy)] bg-[var(--cy-dim-strong)] text-[var(--cy)] shadow-[0_0_0_3px_var(--cy-dim)]'
+                      : 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)] shadow-[0_0_0_3px_var(--bad-dim)]'
                   : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
                 disabled && 'cursor-not-allowed opacity-60',
               )}
@@ -1385,7 +1385,7 @@ function RadioGroup({
                 'rounded-pill inline-flex min-h-11 cursor-pointer items-center gap-2 border px-4 py-2 text-[13px] font-medium transition-all',
                 'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--acc)]',
                 active
-                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_3px_oklch(0.62_0.19_254_/_0.10)]'
+                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_3px_var(--acc-dim)]'
                   : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]',
                 disabled && 'cursor-not-allowed opacity-60',
               )}

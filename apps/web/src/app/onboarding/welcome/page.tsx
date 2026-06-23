@@ -112,11 +112,16 @@ function InvalidTokenView({
   })();
 
   return (
-    <main className="aurora relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 py-10">
+    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10">
+      {/* S20 — same premium backplate as the happy-path (was a generic faint
+          `.aurora`): the error branch shouldn't read as a downgraded screen. */}
+      <LoginAurora />
       <section className="relative z-10 mx-auto flex w-full max-w-md flex-col gap-5">
-        <Card primary className="py-2">
-          <ErrorState headline={headline} action={action} />
-        </Card>
+        <Reveal>
+          <Card primary className="py-2">
+            <ErrorState headline={headline} action={action} />
+          </Card>
+        </Reveal>
         <div className="flex justify-center">
           {/* Phase P review WCAG B2 — Link wrapping Btn nests <a><button>
               (invalid HTML5 + double tab-stop). Use btnVariants on the

@@ -148,9 +148,9 @@ export function TradeDetailView({
                 )}
                 style={
                   isWin
-                    ? { filter: 'drop-shadow(0 0 18px oklch(0.804 0.181 145 / 0.32))' }
+                    ? { filter: 'drop-shadow(0 0 18px var(--ok-glow))' }
                     : isLoss
-                      ? { filter: 'drop-shadow(0 0 18px oklch(0.7 0.165 22 / 0.28))' }
+                      ? { filter: 'drop-shadow(0 0 18px var(--bad-glow))' }
                       : undefined
                 }
               >

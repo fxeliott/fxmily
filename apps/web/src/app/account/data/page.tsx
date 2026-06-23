@@ -28,7 +28,7 @@ import { db } from '@/lib/db';
 export const metadata: Metadata = {
   title: 'Mes données',
   description:
-    'Exporte 100% de tes données Fxmily au format JSON. Téléchargement immédiat, sans friction.',
+    'Exporte l’intégralité de tes données Fxmily au format JSON. Téléchargement immédiat, sans friction.',
 };
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +40,9 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
   const userId = session.user.id;
 
   // Live counts — give the user an honest preview of what they're about to
-  // download. Cheap aggregate queries; no actual rows materialised.
+  // download. Cheap aggregate queries; no actual rows materialised. Session 21:
+  // the preview now mirrors the full export (the behavioural / psychological
+  // surface), so "l'intégralité" on the page is literally true.
   const [
     tradeCount,
     checkinCount,
@@ -50,6 +52,25 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
     reportCount,
     pushCount,
     auditCount,
+    weeklyReviewCount,
+    reflectionCount,
+    habitCount,
+    trainingTradeCount,
+    trainingDebriefCount,
+    trainingSessionCount,
+    monthlyDebriefCount,
+    mindsetCount,
+    preTradeCount,
+    onboardingCount,
+    profileCount,
+    calendarCount,
+    questionnaireCount,
+    meetingCount,
+    proofCount,
+    brokerCount,
+    discrepancyCount,
+    constancyCount,
+    alertCount,
   ] = await Promise.all([
     db.trade.count({ where: { userId } }),
     db.dailyCheckin.count({ where: { userId } }),
@@ -59,6 +80,25 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
     db.weeklyReport.count({ where: { userId } }),
     db.pushSubscription.count({ where: { userId } }),
     db.auditLog.count({ where: { userId } }),
+    db.weeklyReview.count({ where: { userId } }),
+    db.reflectionEntry.count({ where: { userId } }),
+    db.habitLog.count({ where: { userId } }),
+    db.trainingTrade.count({ where: { userId } }),
+    db.trainingDebrief.count({ where: { userId } }),
+    db.trainingSession.count({ where: { memberId: userId } }),
+    db.monthlyDebrief.count({ where: { userId } }),
+    db.mindsetCheck.count({ where: { userId } }),
+    db.preTradeCheck.count({ where: { userId } }),
+    db.onboardingInterview.count({ where: { userId } }),
+    db.memberProfile.count({ where: { userId } }),
+    db.adaptiveCalendar.count({ where: { userId } }),
+    db.weeklyScheduleQuestionnaire.count({ where: { userId } }),
+    db.meetingAttendance.count({ where: { userId } }),
+    db.mt5AccountProof.count({ where: { memberId: userId } }),
+    db.brokerAccount.count({ where: { memberId: userId } }),
+    db.discrepancy.count({ where: { memberId: userId } }),
+    db.constancyScore.count({ where: { memberId: userId } }),
+    db.alert.count({ where: { memberId: userId } }),
   ]);
 
   const sections: Array<{ label: string; count: number; description: string }> = [
@@ -107,6 +147,59 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
       label: "Logs d'audit",
       count: auditCount,
       description: 'Actions sensibles (login, export, suppression) — IP non incluse (hash sel).',
+    },
+    {
+      label: 'Réflexions & revues',
+      count: weeklyReviewCount + reflectionCount,
+      description: 'Revues hebdo du dimanche + entrées de réflexion (méthode ABC d’Ellis).',
+    },
+    {
+      label: 'Habitudes',
+      count: habitCount,
+      description: 'Sommeil, sport, nutrition, caféine, méditation (module TRACK).',
+    },
+    {
+      label: 'Auto-évaluations mindset',
+      count: mindsetCount,
+      description: 'QCM hebdomadaire d’auto-évaluation du mindset (déterministe).',
+    },
+    {
+      label: 'Checks pré-trade',
+      count: preTradeCount,
+      description:
+        'Pauses anti-FOMO avant trade (4 questions, ~30s) et leur lien éventuel au trade.',
+    },
+    {
+      label: 'Mode Entraînement',
+      count: trainingTradeCount + trainingDebriefCount + trainingSessionCount,
+      description: 'Backtests TradingView, sessions d’entraînement et débriefs dédiés.',
+    },
+    {
+      label: 'Débriefs mensuels IA',
+      count: monthlyDebriefCount,
+      description: 'Synthèses mensuelles générées par le moteur Claude local.',
+    },
+    {
+      label: 'Profil d’accompagnement',
+      count: onboardingCount + profileCount,
+      description:
+        'Entretien d’onboarding + profil psychologique/process généré (posture Mark Douglas).',
+    },
+    {
+      label: 'Calendrier adaptatif',
+      count: calendarCount + questionnaireCount,
+      description: 'Questionnaires hebdo de disponibilité + calendriers personnels générés.',
+    },
+    {
+      label: 'Présence aux réunions',
+      count: meetingCount,
+      description: 'Déclarations de présence aux réunions Fxmily.',
+    },
+    {
+      label: 'Vérification & honnêteté',
+      count: proofCount + brokerCount + discrepancyCount + constancyCount + alertCount,
+      description:
+        'Preuves MT5 téléversées, comptes détectés, écarts déclaratifs, score de constance et alertes.',
     },
   ];
 

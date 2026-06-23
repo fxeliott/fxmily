@@ -94,6 +94,11 @@ describe('getCronHealthReport', () => {
         _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
       },
       {
+        // S21 — verification proof overdue nudge (daily, age 12h → green).
+        action: 'cron.verification_overdue.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      {
         // S10 — meeting slot generation (period DAY, age 12h → green).
         action: 'meeting.generated',
         _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
@@ -119,7 +124,7 @@ describe('getCronHealthReport', () => {
     const report = await getCronHealthReport(now);
 
     expect(report.overall).toBe('green');
-    expect(report.entries).toHaveLength(17);
+    expect(report.entries).toHaveLength(18);
     expect(report.entries.every((e) => e.status === 'green')).toBe(true);
     expect(report.ranAt).toBe(now.toISOString());
   });
@@ -220,11 +225,13 @@ describe('getCronHealthReport', () => {
    * mindset-check-reminders, purge-access-requests).
    * S6 audit raised it 16 → 17 (the weekly-report overdue safety-net, the 4th
    * overdue net alongside calendar/monthly/onboarding).
+   * S21 raised it 17 → 18 (the verification-proof overdue safety-net, closing
+   * the last AI pipeline that had no anti-forget net — §33).
    */
-  it('always returns exactly 17 entries (S6 — added the weekly-report overdue net)', async () => {
+  it('always returns exactly 18 entries (S21 — added the verification overdue net)', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);
     const report = await getCronHealthReport();
-    expect(report.entries).toHaveLength(17);
+    expect(report.entries).toHaveLength(18);
     // self-monitoring of the watcher (cron-watch.yml).
     expect(report.entries.map((e) => e.action)).toContain('cron.health.scan');
     // audit_log retention purge (V2-roadmap reclassed).
@@ -239,6 +246,8 @@ describe('getCronHealthReport', () => {
     expect(report.entries.map((e) => e.action)).toContain('cron.onboarding_profile_overdue.scan');
     // S3 §33.5 — daily verification scan heartbeat.
     expect(report.entries.map((e) => e.action)).toContain('cron.verification_scan.scan');
+    // S21 §33 — verification-proof overdue safety-net heartbeat (5th overdue net).
+    expect(report.entries.map((e) => e.action)).toContain('cron.verification_overdue.scan');
     // S10 — the three crons promoted to monitored this session.
     expect(report.entries.map((e) => e.action)).toContain('meeting.generated');
     expect(report.entries.map((e) => e.action)).toContain('cron.mindset_check_reminders.scan');

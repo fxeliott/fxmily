@@ -118,3 +118,75 @@ describe('envSchemaWithRefines — VAPID cross-var refines (J9 E2)', () => {
     expect(r.success).toBe(false);
   });
 });
+
+/**
+ * Jalon 5 hardening — `CRON_SECRET` requis en production.
+ *
+ * Sans secret en prod, tous les `/api/cron/*` répondent 503 `cron_disabled`
+ * en silence (rappels/dispatch/recompute/purge RGPD morts). Le refine top-level
+ * détecte la prod via `NODE_ENV === 'production'` OU `AUTH_URL` en HTTPS — le
+ * même signal que le reste du fichier (cf. le refine `AUTH_URL`). On exerce les
+ * deux signaux de prod, et on garde dev/test non bloqués.
+ */
+const VALID_CRON_SECRET = 'a'.repeat(24); // 24 chars exactement (borne min)
+
+describe('envSchemaWithRefines — CRON_SECRET prod requirement (J5 hardening)', () => {
+  it('rejects prod (NODE_ENV=production) without CRON_SECRET', () => {
+    const r = envSchemaWithRefines.safeParse({
+      ...BASE_VALID_ENV,
+      NODE_ENV: 'production',
+      AUTH_URL: 'https://app.fxmilyapp.com',
+      // CRON_SECRET absent → boot bloqué
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(JSON.stringify(r.error.issues)).toContain('CRON_SECRET');
+    }
+  });
+
+  it('rejects prod (AUTH_URL en HTTPS, NODE_ENV non-prod) without CRON_SECRET', () => {
+    // Le signal HTTPS seul doit suffire à exiger le secret, même si NODE_ENV
+    // n'est pas 'production' (build runtime où NODE_ENV peut diverger).
+    const r = envSchemaWithRefines.safeParse({
+      ...BASE_VALID_ENV,
+      AUTH_URL: 'https://app.fxmilyapp.com',
+      // CRON_SECRET absent → boot bloqué
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(JSON.stringify(r.error.issues)).toContain('CRON_SECRET');
+    }
+  });
+
+  it('accepts prod with CRON_SECRET ≥ 24 chars', () => {
+    const r = envSchemaWithRefines.safeParse({
+      ...BASE_VALID_ENV,
+      NODE_ENV: 'production',
+      AUTH_URL: 'https://app.fxmilyapp.com',
+      CRON_SECRET: VALID_CRON_SECRET,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects prod with CRON_SECRET too short (< 24 chars) — field-level min(24)', () => {
+    const r = envSchemaWithRefines.safeParse({
+      ...BASE_VALID_ENV,
+      NODE_ENV: 'production',
+      AUTH_URL: 'https://app.fxmilyapp.com',
+      CRON_SECRET: 'a'.repeat(23),
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(JSON.stringify(r.error.issues)).toContain('CRON_SECRET');
+    }
+  });
+
+  it('accepts dev (http localhost) without CRON_SECRET — reste optional hors prod', () => {
+    const r = envSchemaWithRefines.safeParse({
+      ...BASE_VALID_ENV,
+      // NODE_ENV=development + AUTH_URL=http://localhost:3000 (BASE_VALID_ENV)
+      // → pas de signal prod → CRON_SECRET non requis
+    });
+    expect(r.success).toBe(true);
+  });
+});

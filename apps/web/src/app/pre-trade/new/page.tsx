@@ -6,6 +6,9 @@ import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { PauseRing } from '@/components/pre-trade/pause-ring';
 import { PreTradeCheckWizard } from '@/components/pre-trade/pre-trade-wizard';
+import type { CorrelationByReason } from '@/lib/pre-trade/correlation';
+import { loadPreTradeCorrelationData } from '@/lib/pre-trade/service';
+import { reportWarning } from '@/lib/observability';
 
 export const metadata = {
   title: 'Pause pré-trade',
@@ -31,6 +34,24 @@ export const dynamic = 'force-dynamic';
 export default async function NewPreTradeCheckPage() {
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
+
+  // Session 21 elevation — empirical mirror at the decision moment. The
+  // member's own per-reason outcome stats (the Fxmily differentiator, already
+  // shown post-hoc on /patterns) are surfaced AT the pause, the instant a
+  // reason is picked. Best-effort: a load failure must never block the
+  // discipline instrument itself, so we fall back to no mirror (honest
+  // silence) rather than erroring the page.
+  let correlation: CorrelationByReason | null = null;
+  let correlationWindowDays = 30;
+  try {
+    const data = await loadPreTradeCorrelationData(session.user.id);
+    correlation = data.perReason;
+    correlationWindowDays = data.windowDays;
+  } catch (err) {
+    reportWarning('pre_trade', 'correlation_load_failed', {
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
@@ -67,7 +88,10 @@ export default async function NewPreTradeCheckPage() {
           </div>
         </header>
 
-        <PreTradeCheckWizard />
+        <PreTradeCheckWizard
+          correlation={correlation}
+          correlationWindowDays={correlationWindowDays}
+        />
       </div>
     </main>
   );

@@ -30,6 +30,7 @@
 #   - onboarding-profile-overdue-alert daily 11:20 UTC             (S2 perm.)
 #   - verification-scan         daily 11:30 UTC                    (S3 §33.5)
 #   - weekly-report-overdue-alert daily 11:40 UTC                  (J8 perm.)
+#   - verification-batch-overdue-alert daily 11:50 UTC            (AUTONOMY-1 perm.)
 #
 # Log : every run appends one line to /var/log/fxmily/cron.log via the
 # wrapper. The DB audit row (`cron.<route>.scan`) is the canonical
@@ -155,3 +156,15 @@ MAILTO=""
 # heartbeat (monitored by lib/system/health.ts). 11:40 UTC offsets the
 # 11:00/11:10/11:20 permanence nudges and the 11:30 verification scan.
 40 11 * * *                  fxmily   /usr/local/bin/fxmily-cron weekly-report-overdue-alert
+
+# AUTONOMY-1 — MT5 proof vision overdue admin nudge : daily 11:50 UTC (13:50 Paris).
+# DETECTION-ONLY safety-net for the MANUAL MT5 vision batch (ban-risk human-in-the-
+# loop §5.4 — ops/scripts/verification-batch-local.sh, the analysis is NEVER cronned).
+# 5th twin of the calendar/monthly/onboarding/weekly nets : the vision batch was the
+# only local Claude pipeline without an anti-oubli nudge. Scans for MT5 proofs of
+# active members still `pending` past the 24h grace, and emails the admin so no
+# member silently waits forever for their account/positions to be extracted. Pure
+# read + idempotent ; emits cron.verification_overdue.scan heartbeat (monitored by
+# lib/system/health.ts). 11:50 UTC offsets the 11:00/11:10/11:20/11:40 permanence
+# nudges and the 11:30 verification scan.
+50 11 * * *                  fxmily   /usr/local/bin/fxmily-cron verification-batch-overdue-alert

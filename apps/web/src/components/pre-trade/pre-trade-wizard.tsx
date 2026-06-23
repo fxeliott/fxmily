@@ -19,6 +19,11 @@ import { useActionState, useEffect, useId, useRef, useState, type ComponentType 
 import { submitPreTradeCheckAction, type PreTradeCheckActionState } from '@/app/pre-trade/actions';
 import { Alert } from '@/components/alert';
 import {
+  type CorrelationByReason,
+  MIN_SAMPLE_PER_REASON_CORRELATION,
+  type PerReasonStats,
+} from '@/lib/pre-trade/correlation';
+import {
   PRE_TRADE_EMOTIONS,
   PRE_TRADE_REASONS,
   type PreTradeEmotion,
@@ -189,7 +194,15 @@ function clearDraft() {
 // Wizard
 // ============================================================================
 
-export function PreTradeCheckWizard() {
+export function PreTradeCheckWizard({
+  correlation = null,
+  correlationWindowDays = 30,
+}: {
+  /** Member's own per-reason outcome stats (Session 21 mirror). `null` when
+   * the load failed — the wizard degrades to no mirror (honest silence). */
+  correlation?: CorrelationByReason | null;
+  correlationWindowDays?: number;
+} = {}) {
   const reduceMotion = useReducedMotion();
   const [draft, setDraft] = useState<DraftState>(() => emptyDraft());
   const [hydrated, setHydrated] = useState(false);
@@ -338,17 +351,30 @@ export function PreTradeCheckWizard() {
             className={cn('rounded-card flex flex-col gap-6', confirmPulse && 'confirm-flash')}
           >
             {safeStep === 0 ? (
-              <StepCardGroup
-                headingRef={headingRef}
-                eyebrow="Étape 1 sur 4"
-                title="Pourquoi tu prends ce trade ?"
-                description="La première raison qui te vient. Pas la version polie."
-                name="reasonToTrade__radio"
-                value={draft.reasonToTrade}
-                onChange={(v) => setField('reasonToTrade', v as PreTradeReason)}
-                options={REASON_OPTIONS}
-                error={errors?.reasonToTrade}
-              />
+              <>
+                <StepCardGroup
+                  headingRef={headingRef}
+                  eyebrow="Étape 1 sur 4"
+                  title="Pourquoi tu prends ce trade ?"
+                  description="La première raison qui te vient. Pas la version polie."
+                  name="reasonToTrade__radio"
+                  value={draft.reasonToTrade}
+                  onChange={(v) => setField('reasonToTrade', v as PreTradeReason)}
+                  options={REASON_OPTIONS}
+                  error={errors?.reasonToTrade}
+                />
+                {/* Session 21 — empirical mirror the instant a reason is picked. */}
+                {hydrated && correlation && draft.reasonToTrade !== '' ? (
+                  <ReasonMirror
+                    stats={correlation[draft.reasonToTrade]}
+                    label={
+                      REASON_OPTIONS.find((o) => o.value === draft.reasonToTrade)?.label ??
+                      draft.reasonToTrade
+                    }
+                    windowDays={correlationWindowDays}
+                  />
+                ) : null}
+              </>
             ) : null}
             {safeStep === 1 ? (
               <StepCardGroup
@@ -464,6 +490,105 @@ export function PreTradeCheckWizard() {
 
       <p className="t-cap text-center text-[var(--t-4)]">Le trade peut attendre — toi non.</p>
     </form>
+  );
+}
+
+// ============================================================================
+// Reason mirror (Session 21 elevation — empirical, fact-only, posture §2)
+// ============================================================================
+
+export interface ReasonMirrorContent {
+  /** `fact` = enough linked trades, show the empirical breakdown ; `pending`
+   * = honest "not enough data yet" (never fabricate a stat). */
+  tone: 'fact' | 'pending';
+  text: string;
+}
+
+/**
+ * Build the member's own empirical mirror for a freshly-picked reason.
+ *
+ * Pure (no Date / no I/O) so it is unit-testable. Posture §2 strict : the
+ * output is FACT-ONLY ("tes trades fomo : 30% gagnants, 60% perdants, n=12") —
+ * never a verdict, never "évite", never a trade suggestion. The member reads
+ * what the number means. Honest absence below the per-reason sample floor
+ * (`MIN_SAMPLE_PER_REASON_CORRELATION`) — we surface the progress, not a
+ * fabricated rate.
+ */
+export function buildReasonMirror(
+  stats: PerReasonStats,
+  label: string,
+  windowDays: number,
+): ReasonMirrorContent {
+  const reasonText = label.toLowerCase();
+  if (stats.kind === 'insufficient_data') {
+    if (stats.reason === 'no_linked_trades') {
+      return {
+        tone: 'pending',
+        text: `Aucun trade « ${reasonText} » relié pour l'instant — ton miroir apparaîtra dès que tu en auras quelques-uns.`,
+      };
+    }
+    const remaining = MIN_SAMPLE_PER_REASON_CORRELATION - stats.sampleSize;
+    return {
+      tone: 'pending',
+      text: `Encore ${remaining} trade${remaining > 1 ? 's' : ''} « ${reasonText} » reliés et ton miroir s'affichera (${stats.sampleSize}/${MIN_SAMPLE_PER_REASON_CORRELATION}).`,
+    };
+  }
+
+  const winPct = Math.round(stats.winRate * 100);
+  const lossPct = Math.round(stats.lossRate * 100);
+  let text = `Sur tes ${stats.sampleSize} trades « ${reasonText} » des ${windowDays} derniers jours : ${winPct}% gagnants · ${lossPct}% perdants`;
+  if (stats.avgRealizedR !== null) {
+    const avg = stats.avgRealizedR;
+    const signed = `${avg >= 0 ? '+' : ''}${avg.toFixed(1)}`;
+    text += ` · ${signed}R en moyenne (n=${stats.avgRSampleSize})`;
+  }
+  text += '.';
+  return { tone: 'fact', text };
+}
+
+function ReasonMirror({
+  stats,
+  label,
+  windowDays,
+}: {
+  stats: PerReasonStats;
+  label: string;
+  windowDays: number;
+}) {
+  const content = buildReasonMirror(stats, label, windowDays);
+  // aria-live so screen-reader users hear the mirror appear after the choice.
+  return (
+    <aside
+      aria-live="polite"
+      data-slot="reason-mirror"
+      data-tone={content.tone}
+      className={cn(
+        'rounded-card flex items-start gap-3 border p-4 transition-colors duration-200',
+        content.tone === 'fact'
+          ? 'border-[var(--b-acc)] bg-[var(--acc-dim)]'
+          : 'border-[var(--b-default)] bg-[var(--bg-2)]',
+      )}
+    >
+      <Sparkles
+        className={cn(
+          'mt-0.5 h-4 w-4 shrink-0',
+          content.tone === 'fact' ? 'text-[var(--acc)]' : 'text-[var(--t-3)]',
+        )}
+        strokeWidth={1.75}
+        aria-hidden="true"
+      />
+      <div className="flex min-w-0 flex-col gap-1">
+        {content.tone === 'fact' ? (
+          <p className="t-eyebrow-lg text-[var(--t-3)]">Ton miroir empirique</p>
+        ) : null}
+        <p className="t-body text-[var(--t-2)]">{content.text}</p>
+        {content.tone === 'fact' ? (
+          <p className="t-cap text-[var(--t-3)]">
+            Juste une observation de tes propres données. À toi de lire ce qu&apos;elle raconte.
+          </p>
+        ) : null}
+      </div>
+    </aside>
   );
 }
 

@@ -382,6 +382,12 @@ export type AuditAction =
   | 'verification.batch.crisis_detected'
   | 'verification.batch.amf_violation'
   | 'verification.proof.analyzed'
+  // AUTONOMY-1 — verification overdue safety-net (5th twin of the §26 calendar /
+  // §25 monthly / S2 onboarding / J8 weekly nets — the VISION batch is the only
+  // local Claude pipeline that lacked an anti-oubli nudge). Heartbeat on EVERY
+  // run; counts + oldestUploadedAt + emailOutcome only, PII-free (NEVER a
+  // proofId, memberId, broker label, nor extracted P&L).
+  | 'cron.verification_overdue.scan'
   // S3 — daily verification scan (généralisation preuve-par-la-réalité §33.5:
   // unfilled rituals → discrepancies → ScoreEvents → ConstancyScore upsert →
   // repetition alerts → Douglas dispatch). Heartbeat on EVERY run; counts +

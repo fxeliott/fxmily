@@ -38,6 +38,7 @@ interface CronExpectation {
     | 'cron.onboarding_profile_overdue.scan'
     | 'cron.weekly_report_overdue.scan'
     | 'cron.verification_scan.scan'
+    | 'cron.verification_overdue.scan'
     // S10 — three wired prod crons that were emitting a heartbeat but were NOT
     // monitored here, so a silent failure of any of them never surfaced red.
     | 'meeting.generated' // generate-meetings (admin slug, see lib/auth/audit.ts:312)
@@ -143,6 +144,17 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     action: 'cron.weekly_report_overdue.scan',
     label: 'Weekly report overdue nudge',
     periodMs: DAY, // crontab: daily 11:40 UTC (13:40 Paris)
+  },
+  {
+    // AUTONOMY-1 — MT5 proof vision overdue safety-net (vérification permanence,
+    // 5th twin of the calendar/monthly/onboarding/weekly nets — the vision batch
+    // was the only local Claude pipeline without an anti-oubli nudge). Daily
+    // detection-only cron that nudges the admin when uploaded MT5 proofs stay
+    // `pending` past the 24h grace. Monitored here so a broken nudge cron
+    // surfaces red instead of silently failing.
+    action: 'cron.verification_overdue.scan',
+    label: 'Verification overdue nudge',
+    periodMs: DAY, // crontab: daily 11:50 UTC (13:50 Paris)
   },
   {
     // S3 §33.5 — daily verification scan (reconcile + rituals + constancy +

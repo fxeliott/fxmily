@@ -57,7 +57,9 @@ COPY . .
 # placeholder set or `prisma generate` exits 1 with PrismaConfigEnvError).
 # Real secrets get injected by docker-compose at runtime (env_file).
 # Values below ONLY satisfy the Zod schema so `next build` doesn't crash.
-# `AUTH_URL` MUST be HTTPS in `production`.
+# `AUTH_URL` MUST be HTTPS in `production`. `CRON_SECRET` is now required in
+# production too (S21 boot-assertion, env.ts) — a build-time placeholder keeps
+# `next build` happy; the real secret is injected at runtime via env_file.
 # Sentry source maps run during `next build` IF SENTRY_AUTH_TOKEN is passed
 # via `--build-arg` — see deploy.yml workflow.
 ARG SENTRY_AUTH_TOKEN=""
@@ -70,7 +72,8 @@ ENV SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN} \
     NEXT_TELEMETRY_DISABLED=1 \
     DATABASE_URL=postgresql://placeholder:placeholder@build-time-only:5432/placeholder \
     AUTH_SECRET=build_time_only_placeholder_must_be_at_least_32_chars \
-    AUTH_URL=https://build.fxmily.invalid
+    AUTH_URL=https://build.fxmily.invalid \
+    CRON_SECRET=build_time_only_placeholder_cron_secret_min_24
 
 # Prisma client (Rust-free, driver adapter — generated under
 # `apps/web/src/generated/prisma/`).

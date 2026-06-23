@@ -100,10 +100,12 @@ jobs:
       - name: Build
         env:
           # `next build` runs with NODE_ENV=production. Our env validation
-          # (apps/web/src/lib/env.ts) requires HTTPS for AUTH_URL in prod,
-          # so the placeholder must use https:// even in CI.
+          # (apps/web/src/lib/env.ts) requires HTTPS for AUTH_URL in prod AND
+          # (S21 boot-assertion) a CRON_SECRET ≥24 chars in prod — so both
+          # placeholders must be present for the production-mode build.
           AUTH_SECRET: ci_placeholder_secret_must_be_at_least_32_characters_long
           AUTH_URL: https://ci.fxmily.invalid
+          CRON_SECRET: ci_placeholder_cron_secret_at_least_24_chars
           # J10 — Sentry source-map upload runs INSIDE `pnpm build` via the
           # `withSentryConfig` plugin. We only inject the auth token here on
           # `main` pushes (release builds) so PR builds stay free of side

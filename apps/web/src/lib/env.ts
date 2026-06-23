@@ -272,6 +272,32 @@ export const envSchemaWithRefines = envSchema
         'NEXT_PUBLIC_SENTRY_DSN must mirror SENTRY_DSN exactly (set both to the same DSN URL).',
       path: ['NEXT_PUBLIC_SENTRY_DSN'],
     },
+  )
+  /**
+   * Jalon 5 hardening — `CRON_SECRET` est REQUIS en production.
+   *
+   * Le champ reste `optional()` (dev/test n'ont pas besoin d'authentifier les
+   * crons), mais sans lui en prod TOUS les endpoints `/api/cron/*` répondent
+   * 503 `cron_disabled` en silence : rappels, dispatch push, recompute et
+   * purge RGPD meurent sans erreur visible. On préfère bloquer le boot.
+   *
+   * Détection prod via le même signal que le reste du fichier : soit
+   * `NODE_ENV === 'production'`, soit `AUTH_URL` en HTTPS (cf. le refine
+   * `AUTH_URL` plus haut). On dérive le signal de l'objet PARSÉ (pas du
+   * `isProd` module-level) pour rester testable via `safeParse` synthétique.
+   * La contrainte de longueur (`≥ 24 chars`) est déjà portée par le `.min(24)`
+   * sur le champ — ici on garantit seulement la PRÉSENCE en prod.
+   */
+  .refine(
+    (e) => {
+      const inProd = e.NODE_ENV === 'production' || e.AUTH_URL.startsWith('https://');
+      return !inProd || e.CRON_SECRET !== undefined;
+    },
+    {
+      message:
+        'CRON_SECRET est requis en production (sinon /api/cron/* répond 503 cron_disabled et les rappels/dispatch/recompute/purge RGPD sont morts en silence).',
+      path: ['CRON_SECRET'],
+    },
   );
 
 const parsed = envSchemaWithRefines.safeParse(process.env);

@@ -153,15 +153,53 @@ jobs:
             cat /etc/fxmily/ghcr.token | docker login ghcr.io \
               -u ${{ github.repository_owner }} --password-stdin
 
+            # FIX-2 — post-deploy health gate state. `1` = healthy so far ; any
+            # failing step below flips it to `0`, and the single decision block
+            # at the end either prunes (success) or rolls back + fails the job.
+            # Declared up-front so `set -u` never trips on an unset reference.
+            HEALTH_OK=1
+
             # 2. Pull the freshly-published image (SHA tag pinned for
             # observability ; `latest` is also updated by the build job).
             export FXMILY_IMAGE=ghcr.io/${{ github.repository_owner }}/fxmily:${{ needs.build-and-push.outputs.image-tag }}
+
+            # FIX-2 (rollback target) : capture the image the `web` container is
+            # CURRENTLY running BEFORE we roll the new one. If the post-deploy
+            # health gate fails we re-up exactly this digest. We resolve the
+            # immutable image ID (sha256:…) of the live container — it is still
+            # present locally because the prune at step 5 keeps images younger
+            # than 72h (the last ~3 deploys), so the rollback `up` finds it
+            # without a network pull. On the very first deploy there is no prior
+            # container ; PREV_IMAGE stays empty and rollback degrades to a clear
+            # "no previous image to roll back to" message instead of a re-up.
+            PREV_IMAGE="$(docker inspect --format '{{.Image}}' fxmily-web 2>/dev/null || true)"
+            echo "Previous web image (rollback target) : ${PREV_IMAGE:-<none — first deploy>}"
+
             docker compose -f docker-compose.prod.yml pull web
 
-            # 3. Roll the new image. `--remove-orphans` cleans up if a
-            # service was renamed in the compose file.
-            docker compose -f docker-compose.prod.yml up -d \
-              --remove-orphans web
+            # 3. Roll the new image. `--remove-orphans` cleans up if a service
+            # was renamed in the compose file. `--wait` blocks until the `web`
+            # container reaches its Dockerfile HEALTHCHECK `healthy` state (or
+            # the timeout trips) instead of returning the instant the container
+            # is merely *created* — without it the migrate + health steps below
+            # would race a still-booting Next.js server. `--wait-timeout 120`
+            # caps the wait at 2 min (Caddy's lb_try_duration is 60s ; a boot
+            # that needs >120s is a real failure, not a slow start).
+            if ! docker compose -f docker-compose.prod.yml up -d \
+              --remove-orphans --wait --wait-timeout 120 web; then
+              echo "::error::compose up --wait timed out or container went unhealthy."
+              # Surface the recent container logs to make the failure diagnosable
+              # straight from the Actions run, then fall through to the rollback
+              # block below by tripping the same gate the curl loop uses.
+              docker compose -f docker-compose.prod.yml logs --tail 50 web || true
+              HEALTH_OK=0
+            fi
+
+            # Steps 3.5 + 4 (prisma refresh + migrate) only make sense once the
+            # new container is actually up. If `--wait` already failed above we
+            # skip straight to the rollback decision block — running a migration
+            # against a half-booted image would compound the failure.
+            if [ "$HEALTH_OK" = "1" ]; then
 
             # 3.5. Refresh /opt/fxmily/prisma/ from the newly pulled image.
             # ============================================================
@@ -236,10 +274,68 @@ jobs:
                 npx prisma migrate deploy --schema=./schema.prisma
               "
 
-            # 5. Reap dangling images so the 40 GB CX22 disk doesn't fill
-            # over time. Keeps the last 3 versions for quick rollback.
-            docker image prune -af --filter "label!=keep=true" \
-              --filter "until=72h" || true
+            # 4.5. POST-DEPLOY HEALTH GATE (FIX-2). `--wait` only proves the
+            # container's own Dockerfile HEALTHCHECK passed ; this proves the
+            # FULL public path (Caddy TLS → web → Prisma `SELECT 1`) actually
+            # answers 200 on the same endpoint external monitors hit
+            # (`https://app.fxmilyapp.com/api/health`, the public liveness probe
+            # from SPEC §12.4 — also used by ops/verify-s10-runtime.sh). We retry
+            # with linear backoff to absorb Caddy's lb_try_duration (60s) and a
+            # cold first request, then mark the gate failed if it never goes 200.
+            HEALTH_URL="https://app.fxmilyapp.com/api/health"
+            echo "Health gate — polling $HEALTH_URL (up to ~75s)..."
+            HEALTH_PASS=0
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+              if curl -fsS --max-time 10 -o /dev/null "$HEALTH_URL"; then
+                echo "Health gate OK on attempt ${attempt}."
+                HEALTH_PASS=1
+                break
+              fi
+              echo "  attempt ${attempt}/10 not healthy yet — retrying in ${attempt}s..."
+              sleep "$attempt"
+            done
+            if [ "$HEALTH_PASS" != "1" ]; then
+              echo "::error::Health gate FAILED — $HEALTH_URL did not return 200 after 10 retries."
+              docker compose -f docker-compose.prod.yml logs --tail 50 web || true
+              HEALTH_OK=0
+            fi
+
+            fi  # end of "$HEALTH_OK" = "1" guard (steps 3.5 → 4.5)
+
+            # 5. DECISION — either reap old images (healthy deploy) or roll back
+            # to the previously-running image and FAIL the job (FIX-2).
+            if [ "$HEALTH_OK" = "1" ]; then
+              # Reap dangling images so the 40 GB CX22 disk doesn't fill over
+              # time. Keeps the last 3 versions for quick rollback (so the
+              # PREV_IMAGE captured above is still present on the next deploy).
+              docker image prune -af --filter "label!=keep=true" \
+                --filter "until=72h" || true
+            else
+              echo "::error::Deploy of ${{ needs.build-and-push.outputs.image-tag }} is UNHEALTHY — rolling back."
+              if [ -n "$PREV_IMAGE" ]; then
+                echo "Re-upping previous image: $PREV_IMAGE"
+                # Pin the compose `web` image to the exact previous digest and
+                # roll it back, waiting for it to report healthy. We do NOT run
+                # `migrate deploy` on rollback : `migrate deploy` is forward-only
+                # + non-destructive, so the schema stays at the migrated state ;
+                # re-applying nothing is correct and re-running it would be a
+                # no-op at best. The disk-prune is intentionally SKIPPED so the
+                # broken new image is kept for post-mortem.
+                export FXMILY_IMAGE="$PREV_IMAGE"
+                if docker compose -f docker-compose.prod.yml up -d \
+                  --remove-orphans --wait --wait-timeout 120 web; then
+                  echo "Rollback to $PREV_IMAGE complete — prod restored to the last good image."
+                else
+                  echo "::error::ROLLBACK ALSO FAILED — manual intervention required on the host."
+                  docker compose -f docker-compose.prod.yml logs --tail 80 web || true
+                fi
+              else
+                echo "::error::No previous image to roll back to (first deploy) — manual intervention required."
+              fi
+              # Fail the SSH step loudly. `notify` (needs ssh-deploy.result) will
+              # therefore report failure, never a false success.
+              exit 1
+            fi
 
   notify:
     name: Notify deploy outcome

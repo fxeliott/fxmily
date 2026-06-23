@@ -551,7 +551,10 @@
   color: var(--acc-hi);
 }
 .light [data-zone-label='warn'] {
-  color: var(--warn-hi);
+  /* --warn-hi (#885800) only reached 4.2:1 composited on the amber --warn-dim-2
+     tint (runtime re-audit). Amber is the hardest tone to clear at 10px on its
+     own warm tint → a dedicated darker amber, measured ≥4.9:1 on that beige. */
+  color: oklch(0.4 0.1 78);
 }
 .light [data-zone-label='bad'] {
   color: var(--bad-hi);

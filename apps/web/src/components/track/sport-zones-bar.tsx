@@ -83,11 +83,11 @@ export function SportZonesBar({ durationMin }: SportZonesBarProps) {
         <span className="t-eyebrow-lg text-[var(--t-3)]">Zones d&apos;activité</span>
         {currentZone ? (
           <span
+            data-zone-label={currentZone.tone}
             className={cn(
               'font-mono text-[11px] font-semibold tracking-[0.08em] uppercase tabular-nums',
               pulse && 'threshold-pulse',
             )}
-            style={{ color: currentZone.color }}
             aria-live="polite"
           >
             {currentZone.label}

@@ -3,7 +3,12 @@ import { existsSync } from 'node:fs';
 import { chromium, expect, test, type ConsoleMessage, type Page } from '@playwright/test';
 
 import { db } from '@/lib/db';
-import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
+import {
+  cleanupTestUsers,
+  seedMemberUser,
+  seedTradeHistory,
+  type SeededUser,
+} from '@/test/db-helpers';
 import { loginAs } from '@/test/e2e-auth';
 
 /**
@@ -25,6 +30,7 @@ import { loginAs } from '@/test/e2e-auth';
 let fresh: SeededUser | null = null;
 let stopped: SeededUser | null = null;
 let profiled: SeededUser | null = null;
+let traded: SeededUser | null = null;
 
 /** The two onboarding axes seeded for the `profiled` member (weekly-rotated). */
 const SEEDED_AXES = ['Tenir mon plan sans dévier', 'Réduire le FOMO'] as const;
@@ -133,6 +139,10 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
     await seedLossToday(stopped.id);
     profiled = await seedMemberUser({ firstName: 'Profiled' });
     await seedProfileWithAxes(profiled.id, SEEDED_AXES);
+    traded = await seedMemberUser({ firstName: 'Traded' });
+    // 12 trades across the last 12 days → ≥ MIN_ENTERED, all inside the 30-day
+    // mirror window → the method-fidelity card renders its rules (not the empty state).
+    await seedTradeHistory(traded.id, { count: 12 });
   });
 
   test.afterAll(async () => {
@@ -140,6 +150,7 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
     fresh = null;
     stopped = null;
     profiled = null;
+    traded = null;
   });
 
   test('la timeline rend toujours, desktop + mobile, sans overflow ni erreur', async ({
@@ -247,6 +258,45 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
     // AI Act §50 — the AI-derived axis carries the disclosure note.
     await expect(card.getByRole('note')).toBeVisible();
     // POSTURE §2 — an axis is a process focus, never a market call.
+    await expect(card).not.toContainText(/ach[èe]te|vends?/i);
+
+    expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toEqual([]);
+    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([]);
+  });
+
+  test('le membre actif voit le miroir de fidélité à la méthode sur /progression', async ({
+    page,
+    request,
+  }) => {
+    if (!traded) throw new Error('seed missing — beforeAll did not run');
+
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('console', (msg: ConsoleMessage) => {
+      if (msg.type() === 'error' && !isBenignConsoleError(msg.text())) {
+        consoleErrors.push(msg.text());
+      }
+    });
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+
+    await dismissCookieBanner(page);
+    await page.goto('/login');
+    await loginAs(page, request, traded.email, traded.password);
+
+    await page.goto('/progression');
+
+    // Streamed via Suspense → :visible scopes past the stream buffer (strict mode).
+    const card = page.locator('[data-slot="method-mirror-card"]:visible');
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(/Ta fidélité à la méthode/i);
+    // The four hard rules of the method are each mirrored.
+    await expect(card).toContainText(/Fenêtre 13h–16h/);
+    await expect(card).toContainText(/Un trade par jour/);
+    await expect(card).toContainText(/Coupure 20h/);
+    await expect(card).toContainText(/Visée RR 3/);
+    // At least one rule shows a percentage (real data, not the empty state).
+    await expect(card).toContainText(/%/);
+    // POSTURE §2 — a fidelity mirror, never a market call.
     await expect(card).not.toContainText(/ach[èe]te|vends?/i);
 
     expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toEqual([]);

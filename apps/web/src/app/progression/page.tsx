@@ -11,6 +11,7 @@ import { Suspense } from 'react';
 
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { MethodMirrorCard } from '@/components/progression/method-mirror-card';
 import { WeeklyRecapCard } from '@/components/progression/weekly-recap-card';
 import { BehaviorRadar } from '@/components/scoring/behavior-radar';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
@@ -23,6 +24,7 @@ import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
 import { Sparkline } from '@/components/ui/sparkline';
 import { getDisciplineYearHeatmap } from '@/lib/checkin/service';
+import { getMethodMirror } from '@/lib/method-mirror/service';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
 import {
   getBehavioralScoreHistory,
@@ -121,6 +123,20 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
           <Card primary className="p-5">
             <DisciplineYearHeatmap heatmap={yearHeatmap} />
           </Card>
+        </section>
+
+        {/* S24 — « Ta fidélité à la méthode » : miroir d'adhérence aux règles
+            dures (fenêtre 13-16h, 1 trade/jour, coupure 20h, visée RR3) sur 30
+            jours. Comble le gap « statut-jour only » : SessionTimeline montre la
+            règle DU JOUR, ceci l'agrège dans le temps. Stream via Suspense (1
+            query). Posture §2 + §31.2 : process, calme, jamais rouge punitif. */}
+        <section className="wow-reveal mb-6" aria-labelledby="method-mirror-section-heading">
+          <h2 id="method-mirror-section-heading" className="sr-only">
+            Ta fidélité à la méthode
+          </h2>
+          <Suspense fallback={<MethodMirrorSkeleton />}>
+            <MethodMirrorSection userId={userId} />
+          </Suspense>
         </section>
 
         {/* Trajectoire des scores dans le temps */}
@@ -282,6 +298,22 @@ function ProgressionHero({
         </div>
       </Card>
     </section>
+  );
+}
+
+async function MethodMirrorSection({ userId }: { userId: string }) {
+  const mirror = await getMethodMirror(userId);
+  return <MethodMirrorCard mirror={mirror} />;
+}
+
+function MethodMirrorSkeleton() {
+  return (
+    <div
+      className="skel rounded-card-lg h-[316px] border border-[var(--b-default)] bg-[var(--bg-1)]"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement de ta fidélité à la méthode"
+    />
   );
 }
 

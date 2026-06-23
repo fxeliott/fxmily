@@ -15,6 +15,7 @@ import { MonthlyDebriefWidget } from '@/components/dashboard/monthly-debrief-wid
 import { NorthStarHero } from '@/components/dashboard/north-star-hero';
 import { DashboardProgressBridge } from '@/components/dashboard/progress-bridge';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
+import { SessionTimeline } from '@/components/dashboard/session-timeline';
 import { TodayGuidance } from '@/components/dashboard/today-guidance';
 import { WeeklyInsightCard } from '@/components/dashboard/weekly-insight-card';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
@@ -31,6 +32,7 @@ import { getDailyGuidance } from '@/lib/daily-guidance/service';
 import { getInterviewForUser } from '@/lib/onboarding-interview/service';
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
+import { getSessionRoutine } from '@/lib/session-routine/service';
 import { countTradesByStatus } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
 import { getLatestConstancyScore } from '@/lib/verification/constancy';
@@ -94,6 +96,7 @@ export default async function DashboardPage() {
     openDiscrepancies,
     morningCheckin,
     objectives,
+    sessionRoutine,
   ] = userId
     ? await Promise.all([
         countTradesByStatus(userId),
@@ -114,6 +117,10 @@ export default async function DashboardPage() {
         // some score/streak/guidance rows concurrently — acceptable on a small
         // cohort, all indexed). The full roadmap stays on /objectifs.
         getProcessObjectives(userId, timezone),
+        // S24 — journée-type trader : the method's canonical session routine
+        // (analyse/exécution/gestion/coupure, Paris-fixed) + today's discipline
+        // facts derived from existing Trade rows (0 migration). Two indexed reads.
+        getSessionRoutine(userId),
       ])
     : [
         { open: 0, closed: 0 },
@@ -123,6 +130,7 @@ export default async function DashboardPage() {
         [],
         null,
         0,
+        null,
         null,
         null,
       ];
@@ -208,6 +216,14 @@ export default async function DashboardPage() {
             <FirstRunWelcome needsProfile={needsProfile} />
           </section>
         ) : null}
+
+        {/* S24 — « Ta journée de trader » : la routine horaire CANONIQUE de la
+            méthode (analyse → exécution → gestion → coupure 20h) rendue active et
+            visible, placée juste sous le hero car c'est le cœur opérationnel qui
+            guide le membre heure par heure. Posture §2 : process/discipline, jamais
+            un signal de marché. Toujours présente (même pour un nouveau membre :
+            elle enseigne le rythme de la méthode). */}
+        {sessionRoutine ? <SessionTimeline routine={sessionRoutine} className="mb-6" /> : null}
 
         {/* S19 — « Maintenant » : la liste du jour (remontée de la 7e position, où
             elle était noyée) + le pont parcours (palier / ETA / levier du moment)

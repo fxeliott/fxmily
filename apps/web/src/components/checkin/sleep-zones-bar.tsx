@@ -34,10 +34,10 @@ interface SleepZonesBarProps {
  */
 
 const ZONES = [
-  { upper: 5, label: 'Dette', color: 'var(--bad)', bg: 'var(--bad-dim-2)' },
-  { upper: 6.5, label: 'Court', color: 'var(--warn)', bg: 'var(--warn-dim-2)' },
-  { upper: 9, label: 'Cible', color: 'var(--acc)', bg: 'var(--acc-dim)' },
-  { upper: 12, label: 'Long', color: 'var(--cy)', bg: 'var(--cy-dim)' },
+  { upper: 5, label: 'Dette', color: 'var(--bad)', bg: 'var(--bad-dim-2)', tone: 'bad' },
+  { upper: 6.5, label: 'Court', color: 'var(--warn)', bg: 'var(--warn-dim-2)', tone: 'warn' },
+  { upper: 9, label: 'Cible', color: 'var(--acc)', bg: 'var(--acc-dim)', tone: 'acc' },
+  { upper: 12, label: 'Long', color: 'var(--cy)', bg: 'var(--cy-dim)', tone: 'cy' },
 ] as const;
 
 const SCALE_MAX = 12;
@@ -119,8 +119,8 @@ export function SleepZonesBar({ hours }: SleepZonesBarProps) {
               }}
             >
               <span
+                data-zone-label={z.tone}
                 className="hidden font-mono text-[10px] font-semibold tracking-[0.10em] uppercase sm:inline"
-                style={{ color: z.color }}
               >
                 {z.label}
               </span>

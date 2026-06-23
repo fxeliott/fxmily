@@ -32,10 +32,10 @@ interface CaffeineZonesBarProps {
  */
 
 const ZONES = [
-  { upper: 2, label: 'Légère', color: 'var(--cy)', bg: 'var(--cy-dim)' },
-  { upper: 4, label: 'Optimale', color: 'var(--acc)', bg: 'var(--acc-dim)' },
-  { upper: 6, label: 'Élevée', color: 'var(--warn)', bg: 'var(--warn-dim-2)' },
-  { upper: 10, label: 'Excessive', color: 'var(--bad)', bg: 'var(--bad-dim-2)' },
+  { upper: 2, label: 'Légère', color: 'var(--cy)', bg: 'var(--cy-dim)', tone: 'cy' },
+  { upper: 4, label: 'Optimale', color: 'var(--acc)', bg: 'var(--acc-dim)', tone: 'acc' },
+  { upper: 6, label: 'Élevée', color: 'var(--warn)', bg: 'var(--warn-dim-2)', tone: 'warn' },
+  { upper: 10, label: 'Excessive', color: 'var(--bad)', bg: 'var(--bad-dim-2)', tone: 'bad' },
 ] as const;
 
 const SCALE_MAX = 10;
@@ -115,8 +115,8 @@ export function CaffeineZonesBar({ cups }: CaffeineZonesBarProps) {
               }}
             >
               <span
+                data-zone-label={z.tone}
                 className="hidden font-mono text-[10px] font-semibold tracking-[0.10em] uppercase sm:inline"
-                style={{ color: z.color }}
               >
                 {z.label}
               </span>

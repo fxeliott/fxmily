@@ -525,6 +525,38 @@
   color: var(--t-2);
 }
 
+/* S20 — TRACK/checkin zone-bar SEGMENT labels (10px) paint a tone ON their own
+   tinted `-dim` segment. The base tones are calibrated ~4.6:1 on the SOLID canvas,
+   but on the tint they fall to 3.66-4.45:1 in LIGHT (10px text < WCAG 1.4.3 AA;
+   runtime-audit S20). Same root cause + remedy as the pill fix above: in LIGHT,
+   darken the label to the `-hi` variant (cy has no -hi token -> the same darker
+   teal the pill uses). DARK keeps the bright tone (already AA on the deep -dim).
+   Scoped via `data-zone-label` (the segment-fill colour stays the base token). */
+[data-zone-label='cy'] {
+  color: var(--cy);
+}
+[data-zone-label='acc'] {
+  color: var(--acc);
+}
+[data-zone-label='warn'] {
+  color: var(--warn);
+}
+[data-zone-label='bad'] {
+  color: var(--bad);
+}
+.light [data-zone-label='cy'] {
+  color: oklch(0.44 0.12 222); /* darker teal — AA on --cy-dim over white */
+}
+.light [data-zone-label='acc'] {
+  color: var(--acc-hi);
+}
+.light [data-zone-label='warn'] {
+  color: var(--warn-hi);
+}
+.light [data-zone-label='bad'] {
+  color: var(--bad-hi);
+}
+
 /* Selection en clair — teinte bleue douce, texte accent assombri lisible */
 .light ::selection {
   background: oklch(0.52 0.2 260 / 0.16);
@@ -658,6 +690,18 @@
   input,
   textarea {
     caret-color: var(--acc);
+  }
+
+  /* S20 — legible placeholder default. Without a rule, the UA paints the
+     placeholder as the input `color` (--t-1) at ~54% opacity → ~3.12:1 in LIGHT
+     (runtime-audit S20, track inputs). Pin it to the tertiary token at full
+     opacity so it clears WCAG 1.4.3 AA in both themes (--t-3 ≈ 5.3:1 light /
+     AA dark) while staying visibly a placeholder. Tailwind `placeholder:` utils
+     keep winning where a call-site sets one explicitly. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--t-3);
+    opacity: 1;
   }
 
   /* Focus visible — accent ring */

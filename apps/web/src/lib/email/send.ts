@@ -12,6 +12,7 @@ import { MonthlyDebriefEmail } from '@/lib/email/templates/monthly-debrief';
 import { MonthlyDebriefOverdueAlertEmail } from '@/lib/email/templates/monthly-debrief-overdue-alert';
 import { NotificationFallbackEmail } from '@/lib/email/templates/notification-fallback';
 import { OnboardingProfileOverdueAlertEmail } from '@/lib/email/templates/onboarding-profile-overdue-alert';
+import { VerificationOverdueAlertEmail } from '@/lib/email/templates/verification-overdue-alert';
 import { WeeklyDigestEmail } from '@/lib/email/templates/weekly-digest';
 import { WeeklyReportOverdueAlertEmail } from '@/lib/email/templates/weekly-report-overdue-alert';
 import { formatMonthLabelFr } from '@/lib/monthly-debrief/format';
@@ -823,6 +824,60 @@ export async function sendOnboardingProfileOverdueAlertEmail({
       ``,
       `Rappel automatique — envoyé uniquement quand des profils sont en attente passé le délai`,
       `de courtoisie. Aucun profil n'est généré sur un serveur (le batch reste manuel, par`,
+      `sécurité du compte).`,
+    ].join('\n'),
+  });
+}
+
+// ----- AUTONOMY-1 — MT5 proof vision overdue ADMIN nudge (vérif. permanence) -
+
+export interface SendVerificationOverdueAlertParams {
+  /** Admin recipient (resolved by the caller from `WEEKLY_REPORT_RECIPIENT`). */
+  to: string;
+  /** Pending MT5 proofs of active members past the grace window (no batch run). */
+  overdueCount: number;
+  /** ISO instant of the oldest overdue upload, or null. PII-free. */
+  oldestUploadedAt: string | null;
+}
+
+/**
+ * Notify the ADMIN that members are waiting on their MT5 proof analysis
+ * (AUTONOMY-1 vérification permanence safety-net, 5th twin of the
+ * calendar/monthly/onboarding/weekly nudges). ONLY the operator gets this —
+ * no member PII, counts + a date only. Best-effort: the caller
+ * (`lib/verification/overdue.ts`) degrades to a Sentry warning + audit if
+ * delivery throws.
+ */
+export async function sendVerificationOverdueAlertEmail({
+  to,
+  overdueCount,
+  oldestUploadedAt,
+}: SendVerificationOverdueAlertParams): Promise<{ id: string | null; delivered: boolean }> {
+  const adminUrl = buildAdminDashboardUrl();
+  const plural = overdueCount > 1;
+  const oldestLabel = oldestUploadedAt ? formatOldestCompletedFr(oldestUploadedAt) : null;
+  const subject = `${overdueCount} preuve${plural ? 's' : ''} MT5 en attente d'analyse · vision batch`;
+
+  return sendEmail({
+    to,
+    subject,
+    react: VerificationOverdueAlertEmail({ overdueCount, oldestLabel, adminUrl }),
+    text: [
+      `Fxmily — rappel de permanence (vérification MT5 / vision).`,
+      ``,
+      `${overdueCount} membre${plural ? 's' : ''} actif${plural ? 's' : ''} ${plural ? 'ont' : 'a'} envoyé une preuve de compte MT5`,
+      `il y a plus de 24h sans qu'elle soit analysée${oldestLabel ? ` (la plus ancienne attend depuis le ${oldestLabel})` : ''}.`,
+      `Tant que le batch vision n'est pas lancé, le compte et les positions ne sont jamais extraits.`,
+      ``,
+      `À faire — depuis ton PC :`,
+      `  1. Lance /verification-batch (ou bash ops/scripts/verification-batch-local.sh).`,
+      `  2. Le moteur Claude local ($0) lit les preuves et extrait comptes + positions, persistés après les garde-fous §2.`,
+      `  3. Les membres voient leur vérification à jour dès la fin du batch.`,
+      ``,
+      `Ouvre l'admin : ${adminUrl}`,
+      ``,
+      `Rappel automatique — envoyé uniquement quand des preuves MT5 sont en attente d'analyse passé le`,
+      `délai de courtoisie. Aucune preuve n'est analysée sur un serveur (le batch reste manuel, par`,
       `sécurité du compte).`,
     ].join('\n'),
   });

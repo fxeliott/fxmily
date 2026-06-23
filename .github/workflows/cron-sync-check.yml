@@ -1,0 +1,74 @@
+name: Cron Sync Check
+
+# FIX-4 — drift guard between the cron ROUTES shipped in the image
+# (apps/web/src/app/api/cron/*/route.ts) and the host-side SCHEDULE that fires
+# them (ops/cron/crontab.fxmily + the ops/cron/fxmily-cron wrapper allowlist).
+#
+# WHY A CI CHECK RATHER THAN AN SSH PUSH. `deploy.yml` deliberately never touches
+# the host cron files — the schedule is host-state, synced by hand via
+# `ops/sync-cron-host.sh` (auto-pushing crontab from CI would mutate prod on every
+# deploy and could silently enable/disable a destructive purge). So instead of
+# touching prod, this job is PURE + READ-ONLY : it fails the PR when a new cron
+# route lands in code without its matching crontab line + allowlist entry (the
+# exact class of drift that made a route ship-but-never-fire — caught at PR time,
+# zero production side-effect). The actual host sync stays a deliberate manual
+# `bash ops/sync-cron-host.sh <ssh-host>` step.
+#
+# The check logic + its unit/integration tests live in
+# `scripts/check-cron-crontab-sync.mjs` (+ apps/web/src/lib/cron/crontab-sync.test.ts).
+
+on:
+  push:
+    branches: [main]
+    # Only the three inputs of the check can change the outcome — restrict the
+    # trigger to them so the job doesn't burn Actions minutes on unrelated commits.
+    paths:
+      - 'apps/web/src/app/api/cron/**'
+      - 'ops/cron/crontab.fxmily'
+      - 'ops/cron/fxmily-cron'
+      - 'scripts/check-cron-crontab-sync.mjs'
+      - '.github/workflows/cron-sync-check.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/src/app/api/cron/**'
+      - 'ops/cron/crontab.fxmily'
+      - 'ops/cron/fxmily-cron'
+      - 'scripts/check-cron-crontab-sync.mjs'
+      - '.github/workflows/cron-sync-check.yml'
+  workflow_dispatch:
+
+# Cancel superseded PR runs ; never cancel a `main` run (mirrors ci.yml).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Strict read-only default — the check only reads files already in the checkout.
+permissions:
+  contents: read
+
+jobs:
+  cron-sync:
+    name: Cron routes ↔ crontab in sync
+    if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Don't persist GITHUB_TOKEN in `.git/config` post-step (zizmor
+          # artipacked defense — mirrors ci.yml / deploy.yml).
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Verify cron routes are scheduled + allowlisted
+        # Zero dependencies — the script only uses node:fs / node:path, so we
+        # skip `pnpm install` entirely and run it straight off the checkout.
+        run: node scripts/check-cron-crontab-sync.mjs

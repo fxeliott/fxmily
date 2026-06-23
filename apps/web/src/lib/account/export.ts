@@ -10,6 +10,14 @@ import { db } from '@/lib/db';
  * (interactive) and any future support tooling (e.g. emailing a user their
  * own data).
  *
+ * Coverage contract (Session 21) — the export MUST cover **every** user-owned
+ * relation declared on the Prisma `User` model. The two arrays
+ * `EXPORTED_USER_RELATIONS` / `EXCLUDED_USER_RELATIONS` enumerate that
+ * classification, and `export.test.ts` parses `prisma/schema.prisma` and fails
+ * if any `User` relation is neither exported nor explicitly whitelisted-excluded.
+ * This turns a silent portability gap (a behavioural/psychological table missing
+ * from the download) into a hard test failure.
+ *
  * Sensitive-field policy — stripped before returning :
  *   - `passwordHash` (argon2id) — never leaves the DB.
  *   - `pushSubscription.p256dhKey` / `pushSubscription.authKey` — exposing
@@ -23,12 +31,86 @@ import { db } from '@/lib/db';
  *     `metadata`, `createdAt` only.
  *   - `verificationToken.token` — single-use auth secrets, irrelevant once
  *     consumed.
+ *   - OAuth `Account` tokens + `Session` rows — auth plumbing, not
+ *     member-generated content; excluded from portability (see
+ *     `EXCLUDED_USER_RELATIONS`).
+ *
+ * The behavioural / psychological tables added in Session 21 (training,
+ * mindset, reflections, habits, pre-trade checks, onboarding profile, calendar,
+ * meetings, MT5 verification) carry **no auth secret** — they are member-owned
+ * content (the very heart of the "athlete tracking"), so they are exported as
+ * full rows, exactly like `trades` / `dailyCheckins`. Storage keys (e.g.
+ * `Mt5AccountProof.fileKey`, `TrainingTrade.entryScreenshotKey`) are opaque
+ * references to the member's own uploads, not credentials.
  *
  * Output shape is versioned via `schemaVersion` so a future J11+ schema
  * change is non-breaking for users who keep historical exports.
  */
 
-export const EXPORT_SCHEMA_VERSION = 1 as const;
+export const EXPORT_SCHEMA_VERSION = 2 as const;
+
+/**
+ * `User` relation fields whose data is included in the portability export.
+ * Note: `tradeAnnotations` / `trainingAnnotations` are exported as derived
+ * buckets (the corrections a member RECEIVED, queried via the parent trade's
+ * `userId`); the matching `User` relations `annotationsAuthored` /
+ * `trainingAnnotationsAuthored` are the *admin-authored* side and live in
+ * `EXCLUDED_USER_RELATIONS`.
+ */
+export const EXPORTED_USER_RELATIONS = [
+  'auditLogs',
+  'trades',
+  'notificationsQueued',
+  'dailyCheckins',
+  'behavioralScores',
+  'douglasDeliveries',
+  'douglasFavorites',
+  'weeklyReports',
+  'pushSubscriptions',
+  'notificationPreferences',
+  'weeklyReviews',
+  'reflectionEntries',
+  'habitLogs',
+  'trainingTrades',
+  'trainingDebriefs',
+  'trainingSessions',
+  'monthlyDebriefs',
+  'mindsetChecks',
+  'preTradeChecks',
+  'onboardingInterview',
+  'onboardingAnswers',
+  'memberProfile',
+  'weeklyScheduleQuestionnaires',
+  'adaptiveCalendars',
+  'meetingAttendances',
+  'brokerAccounts',
+  'mt5AccountProofs',
+  'discrepancies',
+  'constancyScores',
+  'scoreEvents',
+  'alerts',
+] as const;
+
+/**
+ * `User` relations deliberately NOT in the member's self-service portability
+ * export, each with a documented reason. Keeping this explicit (rather than
+ * implicit-by-omission) is what lets the guard test prove total coverage.
+ */
+export const EXCLUDED_USER_RELATIONS: Readonly<Record<string, string>> = {
+  // Auth plumbing — OAuth tokens are secrets; not member-generated content.
+  accounts: 'OAuth account rows hold access/refresh tokens (secrets).',
+  sessions: 'Ephemeral auth sessions — not portable member content.',
+  // Admin-authored data — the member is the SUBJECT, not the author.
+  invitationsSent: 'Invitations are authored by the admin, never by a member.',
+  annotationsAuthored:
+    'Admin-authored trade corrections. The corrections a member RECEIVED are exported as the derived `tradeAnnotations` bucket.',
+  trainingAnnotationsAuthored:
+    'Admin-authored training corrections. Received ones are exported as the derived `trainingAnnotations` bucket.',
+  adminNotesAbout:
+    'Admin private coaching notes (SPEC §7.7) — controller-internal, not member self-service portability.',
+  adminNotesAuthored: 'Admin-authored private notes — only the admin user owns these.',
+  reviewedAccessRequests: 'Admin review actions on public access requests — not member data.',
+} as const;
 
 export interface UserDataExport {
   schemaVersion: typeof EXPORT_SCHEMA_VERSION;
@@ -50,6 +132,30 @@ export interface UserDataExport {
   notificationPreferences: SafeNotificationPreference[];
   notificationQueue: SafeNotificationQueueRow[];
   auditLogs: SafeAuditLog[];
+  // Session 21 — behavioural / psychological tracking surface (previously
+  // absent from the export despite the UI promising "100% of your data").
+  weeklyReviews: SafeWeeklyReview[];
+  reflectionEntries: SafeReflectionEntry[];
+  habitLogs: SafeHabitLog[];
+  trainingTrades: SafeTrainingTrade[];
+  trainingAnnotations: SafeTrainingAnnotation[];
+  trainingDebriefs: SafeTrainingDebrief[];
+  trainingSessions: SafeTrainingSession[];
+  monthlyDebriefs: SafeMonthlyDebrief[];
+  mindsetChecks: SafeMindsetCheck[];
+  preTradeChecks: SafePreTradeCheck[];
+  onboardingInterview: SafeOnboardingInterview | null;
+  onboardingAnswers: SafeOnboardingAnswer[];
+  memberProfile: SafeMemberProfile | null;
+  weeklyScheduleQuestionnaires: SafeWeeklyScheduleQuestionnaire[];
+  adaptiveCalendars: SafeAdaptiveCalendar[];
+  meetingAttendances: SafeMeetingAttendance[];
+  brokerAccounts: SafeBrokerAccount[];
+  mt5AccountProofs: SafeMt5AccountProof[];
+  discrepancies: SafeDiscrepancy[];
+  constancyScores: SafeConstancyScore[];
+  scoreEvents: SafeScoreEvent[];
+  alerts: SafeAlert[];
 }
 
 // Whitelist DTOs : explicit `Pick<>` (or shaped literal) per row so a future
@@ -87,6 +193,36 @@ type SafeNotificationPreference = Awaited<
 >[number];
 type SafeNotificationQueueRow = Awaited<ReturnType<typeof db.notificationQueue.findMany>>[number];
 
+// Session 21 — member-owned content tables (no auth secret → full row).
+type SafeWeeklyReview = Awaited<ReturnType<typeof db.weeklyReview.findMany>>[number];
+type SafeReflectionEntry = Awaited<ReturnType<typeof db.reflectionEntry.findMany>>[number];
+type SafeHabitLog = Awaited<ReturnType<typeof db.habitLog.findMany>>[number];
+type SafeTrainingTrade = Awaited<ReturnType<typeof db.trainingTrade.findMany>>[number];
+type SafeTrainingAnnotation = Awaited<ReturnType<typeof db.trainingAnnotation.findMany>>[number];
+type SafeTrainingDebrief = Awaited<ReturnType<typeof db.trainingDebrief.findMany>>[number];
+type SafeTrainingSession = Awaited<ReturnType<typeof db.trainingSession.findMany>>[number];
+type SafeMonthlyDebrief = Awaited<ReturnType<typeof db.monthlyDebrief.findMany>>[number];
+type SafeMindsetCheck = Awaited<ReturnType<typeof db.mindsetCheck.findMany>>[number];
+type SafePreTradeCheck = Awaited<ReturnType<typeof db.preTradeCheck.findMany>>[number];
+type SafeOnboardingInterview = NonNullable<
+  Awaited<ReturnType<typeof db.onboardingInterview.findFirst>>
+>;
+type SafeOnboardingAnswer = Awaited<
+  ReturnType<typeof db.onboardingInterviewAnswer.findMany>
+>[number];
+type SafeMemberProfile = NonNullable<Awaited<ReturnType<typeof db.memberProfile.findFirst>>>;
+type SafeWeeklyScheduleQuestionnaire = Awaited<
+  ReturnType<typeof db.weeklyScheduleQuestionnaire.findMany>
+>[number];
+type SafeAdaptiveCalendar = Awaited<ReturnType<typeof db.adaptiveCalendar.findMany>>[number];
+type SafeMeetingAttendance = Awaited<ReturnType<typeof db.meetingAttendance.findMany>>[number];
+type SafeBrokerAccount = Awaited<ReturnType<typeof db.brokerAccount.findMany>>[number];
+type SafeMt5AccountProof = Awaited<ReturnType<typeof db.mt5AccountProof.findMany>>[number];
+type SafeDiscrepancy = Awaited<ReturnType<typeof db.discrepancy.findMany>>[number];
+type SafeConstancyScore = Awaited<ReturnType<typeof db.constancyScore.findMany>>[number];
+type SafeScoreEvent = Awaited<ReturnType<typeof db.scoreEvent.findMany>>[number];
+type SafeAlert = Awaited<ReturnType<typeof db.alert.findMany>>[number];
+
 type SafePushSubscription = {
   id: string;
   endpoint: string;
@@ -116,12 +252,35 @@ export interface ExportSummary {
   notificationPreferenceCount: number;
   notificationQueueCount: number;
   auditLogCount: number;
+  weeklyReviewCount: number;
+  reflectionEntryCount: number;
+  habitLogCount: number;
+  trainingTradeCount: number;
+  trainingAnnotationCount: number;
+  trainingDebriefCount: number;
+  trainingSessionCount: number;
+  monthlyDebriefCount: number;
+  mindsetCheckCount: number;
+  preTradeCheckCount: number;
+  onboardingInterviewCount: number;
+  onboardingAnswerCount: number;
+  memberProfileCount: number;
+  weeklyScheduleQuestionnaireCount: number;
+  adaptiveCalendarCount: number;
+  meetingAttendanceCount: number;
+  brokerAccountCount: number;
+  mt5AccountProofCount: number;
+  discrepancyCount: number;
+  constancyScoreCount: number;
+  scoreEventCount: number;
+  alertCount: number;
 }
 
 export async function buildUserDataExport(userId: string): Promise<UserDataExport> {
   // All user-scoped reads are run in parallel — they hit different tables
   // and Postgres handles the fan-out fine. At 30 → 1000 members per user
-  // dataset this stays sub-second.
+  // dataset this stays sub-second. Split into two batches purely for
+  // readability; both fan out concurrently.
   const [
     user,
     trades,
@@ -192,6 +351,62 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     }),
   ]);
 
+  // Session 21 — behavioural / psychological surface. Filter key matches the
+  // schema FK: `userId` for the member-facing modules, `memberId` for the S3
+  // verification + training-session containers. `trainingAnnotations` mirrors
+  // `tradeAnnotations`: the corrections RECEIVED, queried via the parent
+  // training trade's `userId` (admin-authored relation excluded by policy).
+  const [
+    weeklyReviews,
+    reflectionEntries,
+    habitLogs,
+    trainingTrades,
+    trainingAnnotations,
+    trainingDebriefs,
+    trainingSessions,
+    monthlyDebriefs,
+    mindsetChecks,
+    preTradeChecks,
+    onboardingInterview,
+    onboardingAnswers,
+    memberProfile,
+    weeklyScheduleQuestionnaires,
+    adaptiveCalendars,
+    meetingAttendances,
+    brokerAccounts,
+    mt5AccountProofs,
+    discrepancies,
+    constancyScores,
+    scoreEvents,
+    alerts,
+  ] = await Promise.all([
+    db.weeklyReview.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    db.reflectionEntry.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    db.habitLog.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    db.trainingTrade.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    db.trainingAnnotation.findMany({
+      where: { trainingTrade: { is: { userId } } },
+      orderBy: { createdAt: 'asc' },
+    }),
+    db.trainingDebrief.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    db.trainingSession.findMany({ where: { memberId: userId }, orderBy: { createdAt: 'asc' } }),
+    db.monthlyDebrief.findMany({ where: { userId }, orderBy: { monthStart: 'asc' } }),
+    db.mindsetCheck.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    db.preTradeCheck.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    db.onboardingInterview.findFirst({ where: { userId } }),
+    db.onboardingInterviewAnswer.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    db.memberProfile.findFirst({ where: { userId } }),
+    db.weeklyScheduleQuestionnaire.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    db.adaptiveCalendar.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    db.meetingAttendance.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    db.brokerAccount.findMany({ where: { memberId: userId }, orderBy: { createdAt: 'asc' } }),
+    db.mt5AccountProof.findMany({ where: { memberId: userId }, orderBy: { createdAt: 'asc' } }),
+    db.discrepancy.findMany({ where: { memberId: userId }, orderBy: { createdAt: 'asc' } }),
+    db.constancyScore.findMany({ where: { memberId: userId }, orderBy: { createdAt: 'asc' } }),
+    db.scoreEvent.findMany({ where: { memberId: userId }, orderBy: { createdAt: 'asc' } }),
+    db.alert.findMany({ where: { memberId: userId }, orderBy: { createdAt: 'asc' } }),
+  ]);
+
   return {
     schemaVersion: EXPORT_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
@@ -213,6 +428,28 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     notificationPreferences: preferences,
     notificationQueue: queue,
     auditLogs: auditLogs as SafeAuditLog[],
+    weeklyReviews,
+    reflectionEntries,
+    habitLogs,
+    trainingTrades,
+    trainingAnnotations,
+    trainingDebriefs,
+    trainingSessions,
+    monthlyDebriefs,
+    mindsetChecks,
+    preTradeChecks,
+    onboardingInterview: onboardingInterview as SafeOnboardingInterview | null,
+    onboardingAnswers,
+    memberProfile: memberProfile as SafeMemberProfile | null,
+    weeklyScheduleQuestionnaires,
+    adaptiveCalendars,
+    meetingAttendances,
+    brokerAccounts,
+    mt5AccountProofs,
+    discrepancies,
+    constancyScores,
+    scoreEvents,
+    alerts,
   };
 }
 
@@ -230,6 +467,28 @@ export function summariseExport(snapshot: UserDataExport): ExportSummary {
     notificationPreferenceCount: snapshot.notificationPreferences.length,
     notificationQueueCount: snapshot.notificationQueue.length,
     auditLogCount: snapshot.auditLogs.length,
+    weeklyReviewCount: snapshot.weeklyReviews.length,
+    reflectionEntryCount: snapshot.reflectionEntries.length,
+    habitLogCount: snapshot.habitLogs.length,
+    trainingTradeCount: snapshot.trainingTrades.length,
+    trainingAnnotationCount: snapshot.trainingAnnotations.length,
+    trainingDebriefCount: snapshot.trainingDebriefs.length,
+    trainingSessionCount: snapshot.trainingSessions.length,
+    monthlyDebriefCount: snapshot.monthlyDebriefs.length,
+    mindsetCheckCount: snapshot.mindsetChecks.length,
+    preTradeCheckCount: snapshot.preTradeChecks.length,
+    onboardingInterviewCount: snapshot.onboardingInterview ? 1 : 0,
+    onboardingAnswerCount: snapshot.onboardingAnswers.length,
+    memberProfileCount: snapshot.memberProfile ? 1 : 0,
+    weeklyScheduleQuestionnaireCount: snapshot.weeklyScheduleQuestionnaires.length,
+    adaptiveCalendarCount: snapshot.adaptiveCalendars.length,
+    meetingAttendanceCount: snapshot.meetingAttendances.length,
+    brokerAccountCount: snapshot.brokerAccounts.length,
+    mt5AccountProofCount: snapshot.mt5AccountProofs.length,
+    discrepancyCount: snapshot.discrepancies.length,
+    constancyScoreCount: snapshot.constancyScores.length,
+    scoreEventCount: snapshot.scoreEvents.length,
+    alertCount: snapshot.alerts.length,
   };
 }
 

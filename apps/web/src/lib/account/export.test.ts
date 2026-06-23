@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const userFindUnique = vi.fn();
@@ -12,6 +15,29 @@ const pushSubscriptionFindMany = vi.fn();
 const notificationPreferenceFindMany = vi.fn();
 const notificationQueueFindMany = vi.fn();
 const auditLogFindMany = vi.fn();
+// Session 21 — behavioural / psychological surface.
+const weeklyReviewFindMany = vi.fn();
+const reflectionEntryFindMany = vi.fn();
+const habitLogFindMany = vi.fn();
+const trainingTradeFindMany = vi.fn();
+const trainingAnnotationFindMany = vi.fn();
+const trainingDebriefFindMany = vi.fn();
+const trainingSessionFindMany = vi.fn();
+const monthlyDebriefFindMany = vi.fn();
+const mindsetCheckFindMany = vi.fn();
+const preTradeCheckFindMany = vi.fn();
+const onboardingInterviewFindFirst = vi.fn();
+const onboardingInterviewAnswerFindMany = vi.fn();
+const memberProfileFindFirst = vi.fn();
+const weeklyScheduleQuestionnaireFindMany = vi.fn();
+const adaptiveCalendarFindMany = vi.fn();
+const meetingAttendanceFindMany = vi.fn();
+const brokerAccountFindMany = vi.fn();
+const mt5AccountProofFindMany = vi.fn();
+const discrepancyFindMany = vi.fn();
+const constancyScoreFindMany = vi.fn();
+const scoreEventFindMany = vi.fn();
+const alertFindMany = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -27,60 +53,150 @@ vi.mock('@/lib/db', () => ({
     notificationPreference: { findMany: notificationPreferenceFindMany },
     notificationQueue: { findMany: notificationQueueFindMany },
     auditLog: { findMany: auditLogFindMany },
+    weeklyReview: { findMany: weeklyReviewFindMany },
+    reflectionEntry: { findMany: reflectionEntryFindMany },
+    habitLog: { findMany: habitLogFindMany },
+    trainingTrade: { findMany: trainingTradeFindMany },
+    trainingAnnotation: { findMany: trainingAnnotationFindMany },
+    trainingDebrief: { findMany: trainingDebriefFindMany },
+    trainingSession: { findMany: trainingSessionFindMany },
+    monthlyDebrief: { findMany: monthlyDebriefFindMany },
+    mindsetCheck: { findMany: mindsetCheckFindMany },
+    preTradeCheck: { findMany: preTradeCheckFindMany },
+    onboardingInterview: { findFirst: onboardingInterviewFindFirst },
+    onboardingInterviewAnswer: { findMany: onboardingInterviewAnswerFindMany },
+    memberProfile: { findFirst: memberProfileFindFirst },
+    weeklyScheduleQuestionnaire: { findMany: weeklyScheduleQuestionnaireFindMany },
+    adaptiveCalendar: { findMany: adaptiveCalendarFindMany },
+    meetingAttendance: { findMany: meetingAttendanceFindMany },
+    brokerAccount: { findMany: brokerAccountFindMany },
+    mt5AccountProof: { findMany: mt5AccountProofFindMany },
+    discrepancy: { findMany: discrepancyFindMany },
+    constancyScore: { findMany: constancyScoreFindMany },
+    scoreEvent: { findMany: scoreEventFindMany },
+    alert: { findMany: alertFindMany },
   },
 }));
 
-const { EXPORT_SCHEMA_VERSION, buildExportFilename, buildUserDataExport, summariseExport } =
-  await import('./export');
+const {
+  EXPORT_SCHEMA_VERSION,
+  EXPORTED_USER_RELATIONS,
+  EXCLUDED_USER_RELATIONS,
+  buildExportFilename,
+  buildUserDataExport,
+  summariseExport,
+} = await import('./export');
+
+const ALL_FIND_MANY = [
+  tradeFindMany,
+  tradeAnnotationFindMany,
+  dailyCheckinFindMany,
+  behavioralScoreFindMany,
+  douglasDeliveryFindMany,
+  douglasFavoriteFindMany,
+  weeklyReportFindMany,
+  pushSubscriptionFindMany,
+  notificationPreferenceFindMany,
+  notificationQueueFindMany,
+  auditLogFindMany,
+  weeklyReviewFindMany,
+  reflectionEntryFindMany,
+  habitLogFindMany,
+  trainingTradeFindMany,
+  trainingAnnotationFindMany,
+  trainingDebriefFindMany,
+  trainingSessionFindMany,
+  monthlyDebriefFindMany,
+  mindsetCheckFindMany,
+  preTradeCheckFindMany,
+  onboardingInterviewAnswerFindMany,
+  weeklyScheduleQuestionnaireFindMany,
+  adaptiveCalendarFindMany,
+  meetingAttendanceFindMany,
+  brokerAccountFindMany,
+  mt5AccountProofFindMany,
+  discrepancyFindMany,
+  constancyScoreFindMany,
+  scoreEventFindMany,
+  alertFindMany,
+];
 
 beforeEach(() => {
   userFindUnique.mockReset();
-  tradeFindMany.mockReset();
-  tradeAnnotationFindMany.mockReset();
-  dailyCheckinFindMany.mockReset();
-  behavioralScoreFindMany.mockReset();
-  douglasDeliveryFindMany.mockReset();
-  douglasFavoriteFindMany.mockReset();
-  weeklyReportFindMany.mockReset();
-  pushSubscriptionFindMany.mockReset();
-  notificationPreferenceFindMany.mockReset();
-  notificationQueueFindMany.mockReset();
-  auditLogFindMany.mockReset();
+  onboardingInterviewFindFirst.mockReset();
+  memberProfileFindFirst.mockReset();
+  for (const fn of ALL_FIND_MANY) fn.mockReset();
 
   // Default empty results for all readers — tests override what they need.
   userFindUnique.mockResolvedValue(null);
-  tradeFindMany.mockResolvedValue([]);
-  tradeAnnotationFindMany.mockResolvedValue([]);
-  dailyCheckinFindMany.mockResolvedValue([]);
-  behavioralScoreFindMany.mockResolvedValue([]);
-  douglasDeliveryFindMany.mockResolvedValue([]);
-  douglasFavoriteFindMany.mockResolvedValue([]);
-  weeklyReportFindMany.mockResolvedValue([]);
-  pushSubscriptionFindMany.mockResolvedValue([]);
-  notificationPreferenceFindMany.mockResolvedValue([]);
-  notificationQueueFindMany.mockResolvedValue([]);
-  auditLogFindMany.mockResolvedValue([]);
+  onboardingInterviewFindFirst.mockResolvedValue(null);
+  memberProfileFindFirst.mockResolvedValue(null);
+  for (const fn of ALL_FIND_MANY) fn.mockResolvedValue([]);
 });
+
+const SAFE_USER = {
+  id: 'u1',
+  email: 'eliot@example.com',
+  emailVerified: null,
+  firstName: 'Eliot',
+  lastName: 'Pena',
+  image: null,
+  role: 'member',
+  status: 'active',
+  timezone: 'Europe/Paris',
+  consentRgpdAt: null,
+  joinedAt: new Date('2026-05-05T08:00:00Z'),
+  lastSeenAt: null,
+  createdAt: new Date('2026-05-05T08:00:00Z'),
+  updatedAt: new Date('2026-05-05T08:00:00Z'),
+  deletedAt: null,
+};
+
+// Complete empty snapshot — every required field present so fixtures stay
+// type-safe as the export shape grows.
+const EMPTY_SNAPSHOT = {
+  schemaVersion: EXPORT_SCHEMA_VERSION,
+  exportedAt: '2026-05-08T10:00:00.000Z',
+  notes: { source: 's', contact: 'c', schemaDocumentation: 'd' },
+  user: null,
+  trades: [],
+  tradeAnnotations: [],
+  dailyCheckins: [],
+  behavioralScores: [],
+  douglasDeliveries: [],
+  douglasFavorites: [],
+  weeklyReports: [],
+  pushSubscriptions: [],
+  notificationPreferences: [],
+  notificationQueue: [],
+  auditLogs: [],
+  weeklyReviews: [],
+  reflectionEntries: [],
+  habitLogs: [],
+  trainingTrades: [],
+  trainingAnnotations: [],
+  trainingDebriefs: [],
+  trainingSessions: [],
+  monthlyDebriefs: [],
+  mindsetChecks: [],
+  preTradeChecks: [],
+  onboardingInterview: null,
+  onboardingAnswers: [],
+  memberProfile: null,
+  weeklyScheduleQuestionnaires: [],
+  adaptiveCalendars: [],
+  meetingAttendances: [],
+  brokerAccounts: [],
+  mt5AccountProofs: [],
+  discrepancies: [],
+  constancyScores: [],
+  scoreEvents: [],
+  alerts: [],
+} satisfies Parameters<typeof summariseExport>[0];
 
 describe('buildUserDataExport', () => {
   it('returns the schema-versioned snapshot with empty arrays on a fresh user', async () => {
-    userFindUnique.mockResolvedValueOnce({
-      id: 'u1',
-      email: 'eliot@example.com',
-      emailVerified: null,
-      firstName: 'Eliot',
-      lastName: 'Pena',
-      image: null,
-      role: 'member',
-      status: 'active',
-      timezone: 'Europe/Paris',
-      consentRgpdAt: null,
-      joinedAt: new Date('2026-05-05T08:00:00Z'),
-      lastSeenAt: null,
-      createdAt: new Date('2026-05-05T08:00:00Z'),
-      updatedAt: new Date('2026-05-05T08:00:00Z'),
-      deletedAt: null,
-    });
+    userFindUnique.mockResolvedValueOnce(SAFE_USER);
 
     const snap = await buildUserDataExport('u1');
 
@@ -126,10 +242,9 @@ describe('buildUserDataExport', () => {
     });
   });
 
-  it('queries every domain with a userId filter (defense in depth)', async () => {
+  it('queries every domain with the correct ownership filter (defense in depth)', async () => {
     await buildUserDataExport('u1');
-    // Each finder receives `{ where: { userId: 'u1' } }` (annotations use the
-    // `trade` relation filter).
+    // `userId`-keyed modules.
     expect(tradeFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
     expect(tradeAnnotationFindMany.mock.calls[0]?.[0]?.where).toEqual({ trade: { userId: 'u1' } });
     expect(dailyCheckinFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
@@ -141,30 +256,153 @@ describe('buildUserDataExport', () => {
     expect(notificationPreferenceFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
     expect(notificationQueueFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
     expect(auditLogFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(weeklyReviewFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(reflectionEntryFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(habitLogFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(trainingTradeFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(trainingAnnotationFindMany.mock.calls[0]?.[0]?.where).toEqual({
+      trainingTrade: { is: { userId: 'u1' } },
+    });
+    expect(trainingDebriefFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(monthlyDebriefFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(mindsetCheckFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(preTradeCheckFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(onboardingInterviewFindFirst.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(onboardingInterviewAnswerFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(memberProfileFindFirst.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(weeklyScheduleQuestionnaireFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(adaptiveCalendarFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(meetingAttendanceFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    // `memberId`-keyed modules (S3 verification + training-session containers).
+    expect(trainingSessionFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
+    expect(brokerAccountFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
+    expect(mt5AccountProofFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
+    expect(discrepancyFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
+    expect(constancyScoreFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
+    expect(scoreEventFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
+    expect(alertFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
+  });
+
+  it('exports the behavioural / psychological surface added in Session 21', async () => {
+    userFindUnique.mockResolvedValueOnce(SAFE_USER);
+    mindsetCheckFindMany.mockResolvedValueOnce([{ id: 'm1' }, { id: 'm2' }]);
+    reflectionEntryFindMany.mockResolvedValueOnce([{ id: 'r1' }]);
+    onboardingInterviewFindFirst.mockResolvedValueOnce({ id: 'oi1' });
+    memberProfileFindFirst.mockResolvedValueOnce({ id: 'mp1' });
+    alertFindMany.mockResolvedValueOnce([{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }]);
+
+    const snap = await buildUserDataExport('u1');
+
+    expect(snap.mindsetChecks).toHaveLength(2);
+    expect(snap.reflectionEntries).toHaveLength(1);
+    expect(snap.onboardingInterview).toEqual({ id: 'oi1' });
+    expect(snap.memberProfile).toEqual({ id: 'mp1' });
+    expect(snap.alerts).toHaveLength(3);
+
+    const summary = summariseExport(snap);
+    expect(summary.mindsetCheckCount).toBe(2);
+    expect(summary.onboardingInterviewCount).toBe(1);
+    expect(summary.memberProfileCount).toBe(1);
+    expect(summary.alertCount).toBe(3);
+  });
+});
+
+// =============================================================================
+// Session 21 — RGPD portability COVERAGE CONTRACT
+// =============================================================================
+
+describe('export coverage contract — every User relation is classified', () => {
+  // Why this guard matters : the previous export silently covered only 12 of
+  // the ~39 `User` relations while the UI promised "100% of your data" — a
+  // GDPR art.20 misrepresentation. This test parses the live Prisma schema and
+  // fails if ANY `User` relation is neither exported nor explicitly
+  // whitelisted-excluded, turning a silent drift into a hard failure.
+  //
+  // NOTE: if a future change adds a new *enum*-typed field to `User`, add it to
+  // `USER_ENUM_TYPES` below (the parser can't tell a custom enum from a model
+  // relation by syntax alone). A failure here means "classify the new relation".
+  const SCALAR_TYPES = new Set([
+    'String',
+    'Int',
+    'BigInt',
+    'Float',
+    'Decimal',
+    'Boolean',
+    'DateTime',
+    'Json',
+    'Bytes',
+  ]);
+  const USER_ENUM_TYPES = new Set(['UserRole', 'UserStatus']);
+
+  function parseUserRelationFields(): string[] {
+    const schemaPath = fileURLToPath(new URL('../../../prisma/schema.prisma', import.meta.url));
+    const schema = readFileSync(schemaPath, 'utf8');
+    const block = schema.match(/^model User \{([\s\S]*?)^\}/m)?.[1];
+    if (!block) throw new Error('Could not locate `model User` block in schema.prisma');
+
+    const fields: string[] = [];
+    for (const rawLine of block.split('\n')) {
+      const m = rawLine.match(/^\s+([a-zA-Z][a-zA-Z0-9_]*)\s+([A-Za-z][A-Za-z0-9_]*)(\[\]|\?)?/);
+      if (!m) continue; // comments (//, ///), @@attributes, blank lines
+      const field = m[1]!;
+      const type = m[2]!;
+      if (SCALAR_TYPES.has(type) || USER_ENUM_TYPES.has(type)) continue;
+      fields.push(field);
+    }
+    return fields;
+  }
+
+  it('parses a plausible number of User relations from the schema', () => {
+    const relations = parseUserRelationFields();
+    // Sanity floor — if the parser silently matches nothing, the coverage
+    // assertions below would pass vacuously.
+    expect(relations.length).toBeGreaterThan(20);
+  });
+
+  it('classifies every User relation as exported XOR excluded (no silent gap)', () => {
+    const relations = parseUserRelationFields();
+    const exported = new Set<string>(EXPORTED_USER_RELATIONS);
+    const excluded = new Set<string>(Object.keys(EXCLUDED_USER_RELATIONS));
+
+    const unclassified = relations.filter((r) => !exported.has(r) && !excluded.has(r));
+    expect(unclassified, `Unclassified User relations: ${unclassified.join(', ')}`).toEqual([]);
+  });
+
+  it('has no stale entries in the exported/excluded lists (must exist in schema)', () => {
+    const relations = new Set(parseUserRelationFields());
+    const stale = [...EXPORTED_USER_RELATIONS, ...Object.keys(EXCLUDED_USER_RELATIONS)].filter(
+      (r) => !relations.has(r),
+    );
+    expect(stale, `Listed relations absent from schema: ${stale.join(', ')}`).toEqual([]);
+  });
+
+  it('keeps exported and excluded sets disjoint', () => {
+    const excluded = new Set(Object.keys(EXCLUDED_USER_RELATIONS));
+    const overlap = EXPORTED_USER_RELATIONS.filter((r) => excluded.has(r));
+    expect(overlap, `Relations both exported and excluded: ${overlap.join(', ')}`).toEqual([]);
   });
 });
 
 describe('summariseExport', () => {
   it('counts every section', () => {
     const summary = summariseExport({
-      schemaVersion: 1,
-      exportedAt: '2026-05-08T10:00:00.000Z',
-      notes: { source: 's', contact: 'c', schemaDocumentation: 'd' },
-      user: null,
+      ...EMPTY_SNAPSHOT,
       trades: [{}, {}, {}] as never,
       tradeAnnotations: [{}] as never,
       dailyCheckins: [{}, {}] as never,
-      behavioralScores: [],
       douglasDeliveries: [{}] as never,
-      douglasFavorites: [],
       weeklyReports: [{}] as never,
       pushSubscriptions: [{}, {}] as never,
       notificationPreferences: [{}] as never,
-      notificationQueue: [],
       auditLogs: [{}, {}, {}, {}] as never,
+      habitLogs: [{}, {}, {}] as never,
+      mindsetChecks: [{}, {}] as never,
+      onboardingInterview: { id: 'oi' } as never,
+      memberProfile: { id: 'mp' } as never,
+      alerts: [{}, {}] as never,
     });
     expect(summary).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: EXPORT_SCHEMA_VERSION,
       tradeCount: 3,
       tradeAnnotationCount: 1,
       dailyCheckinCount: 2,
@@ -176,6 +414,11 @@ describe('summariseExport', () => {
       notificationPreferenceCount: 1,
       notificationQueueCount: 0,
       auditLogCount: 4,
+      habitLogCount: 3,
+      mindsetCheckCount: 2,
+      onboardingInterviewCount: 1,
+      memberProfileCount: 1,
+      alertCount: 2,
     });
   });
 });
@@ -183,23 +426,7 @@ describe('summariseExport', () => {
 describe('buildExportFilename', () => {
   it('uses the last 6 characters of the userId + the local-day date', () => {
     const filename = buildExportFilename(
-      {
-        schemaVersion: 1,
-        exportedAt: '2026-05-08T10:24:00.000Z',
-        notes: { source: 's', contact: 'c', schemaDocumentation: 'd' },
-        user: null,
-        trades: [],
-        tradeAnnotations: [],
-        dailyCheckins: [],
-        behavioralScores: [],
-        douglasDeliveries: [],
-        douglasFavorites: [],
-        weeklyReports: [],
-        pushSubscriptions: [],
-        notificationPreferences: [],
-        notificationQueue: [],
-        auditLogs: [],
-      },
+      { ...EMPTY_SNAPSHOT, exportedAt: '2026-05-08T10:24:00.000Z' },
       'cuid_abcdefghij',
     );
     // userId is 15 chars, slice(-6) takes the last 6 → "efghij".
@@ -211,24 +438,6 @@ describe('buildExportFilename', () => {
 // J10 Phase A — extended edge cases (added 2026-05-09)
 // =============================================================================
 
-const EMPTY_SNAPSHOT_FIELDS = {
-  schemaVersion: 1 as const,
-  exportedAt: '2026-05-08T10:00:00.000Z',
-  notes: { source: 's', contact: 'c', schemaDocumentation: 'd' },
-  user: null,
-  trades: [],
-  tradeAnnotations: [],
-  dailyCheckins: [],
-  behavioralScores: [],
-  douglasDeliveries: [],
-  douglasFavorites: [],
-  weeklyReports: [],
-  pushSubscriptions: [],
-  notificationPreferences: [],
-  notificationQueue: [],
-  auditLogs: [],
-};
-
 describe('buildUserDataExport — fresh-user / empty-state', () => {
   // Why this edge case matters : a user that just signed up but never
   // submitted any trade or check-in must still get a valid, schema-versioned
@@ -236,21 +445,11 @@ describe('buildUserDataExport — fresh-user / empty-state', () => {
   // snapshot must NOT throw because every section is empty.
   it('returns valid empty-array sections for a brand-new user with zero data anywhere', async () => {
     userFindUnique.mockResolvedValueOnce({
+      ...SAFE_USER,
       id: 'u_fresh',
       email: 'fresh@example.com',
-      emailVerified: null,
       firstName: null,
       lastName: null,
-      image: null,
-      role: 'member',
-      status: 'active',
-      timezone: 'Europe/Paris',
-      consentRgpdAt: null,
-      joinedAt: new Date('2026-05-08T08:00:00Z'),
-      lastSeenAt: null,
-      createdAt: new Date('2026-05-08T08:00:00Z'),
-      updatedAt: new Date('2026-05-08T08:00:00Z'),
-      deletedAt: null,
     });
 
     const snap = await buildUserDataExport('u_fresh');
@@ -267,12 +466,19 @@ describe('buildUserDataExport — fresh-user / empty-state', () => {
     expect(snap.notificationPreferences).toEqual([]);
     expect(snap.notificationQueue).toEqual([]);
     expect(snap.auditLogs).toEqual([]);
+    expect(snap.habitLogs).toEqual([]);
+    expect(snap.trainingTrades).toEqual([]);
+    expect(snap.constancyScores).toEqual([]);
+    // Singular relations are null, not throwing.
+    expect(snap.onboardingInterview).toBeNull();
+    expect(snap.memberProfile).toBeNull();
     // User itself is hydrated.
     expect(snap.user?.email).toBe('fresh@example.com');
     // Summary on a fresh snapshot must be all zeros.
     const summary = summariseExport(snap);
     expect(summary.tradeCount).toBe(0);
     expect(summary.auditLogCount).toBe(0);
+    expect(summary.onboardingInterviewCount).toBe(0);
   });
 
   // Why this edge case matters : a heavy-trader with thousands of trades
@@ -301,21 +507,11 @@ describe('buildUserDataExport — fresh-user / empty-state', () => {
     }));
     tradeFindMany.mockResolvedValueOnce(largeTrades);
     userFindUnique.mockResolvedValueOnce({
+      ...SAFE_USER,
       id: 'u_power',
       email: 'power@example.com',
-      emailVerified: null,
       firstName: null,
       lastName: null,
-      image: null,
-      role: 'member',
-      status: 'active',
-      timezone: 'Europe/Paris',
-      consentRgpdAt: null,
-      joinedAt: new Date('2026-01-01T00:00:00Z'),
-      lastSeenAt: null,
-      createdAt: new Date('2026-01-01T00:00:00Z'),
-      updatedAt: new Date('2026-05-08T08:00:00Z'),
-      deletedAt: null,
     });
 
     const snap = await buildUserDataExport('u_power');
@@ -338,7 +534,7 @@ describe('summariseExport — defensive shape handling', () => {
   // that the function only reads the well-known keys it knows about.
   it('ignores foreign / unknown fields on the snapshot (forward-compat)', () => {
     const snap = {
-      ...EMPTY_SNAPSHOT_FIELDS,
+      ...EMPTY_SNAPSHOT,
       trades: [{}, {}] as never,
       // Foreign field that doesn't exist in the type — added by a hypothetical
       // future schema. The summariser must remain a pure projection.
@@ -363,6 +559,28 @@ describe('summariseExport — defensive shape handling', () => {
       'notificationPreferenceCount',
       'notificationQueueCount',
       'auditLogCount',
+      'weeklyReviewCount',
+      'reflectionEntryCount',
+      'habitLogCount',
+      'trainingTradeCount',
+      'trainingAnnotationCount',
+      'trainingDebriefCount',
+      'trainingSessionCount',
+      'monthlyDebriefCount',
+      'mindsetCheckCount',
+      'preTradeCheckCount',
+      'onboardingInterviewCount',
+      'onboardingAnswerCount',
+      'memberProfileCount',
+      'weeklyScheduleQuestionnaireCount',
+      'adaptiveCalendarCount',
+      'meetingAttendanceCount',
+      'brokerAccountCount',
+      'mt5AccountProofCount',
+      'discrepancyCount',
+      'constancyScoreCount',
+      'scoreEventCount',
+      'alertCount',
     ]);
   });
 });
@@ -374,7 +592,7 @@ describe('buildExportFilename — userId edge cases', () => {
   // 5-char userId, slice(-6) returns the entire string (5 chars).
   it('handles a userId shorter than 6 chars by using the whole string', () => {
     const filename = buildExportFilename(
-      { ...EMPTY_SNAPSHOT_FIELDS, exportedAt: '2026-05-08T10:00:00.000Z' },
+      { ...EMPTY_SNAPSHOT, exportedAt: '2026-05-08T10:00:00.000Z' },
       'u1234',
     );
     expect(filename).toBe('fxmily-data-u1234-2026-05-08.json');
@@ -385,7 +603,7 @@ describe('buildExportFilename — userId edge cases', () => {
   // (e.g. forgetting the slice fallback) is caught.
   it('still produces a valid filename for a 1-char userId', () => {
     const filename = buildExportFilename(
-      { ...EMPTY_SNAPSHOT_FIELDS, exportedAt: '2026-05-08T10:00:00.000Z' },
+      { ...EMPTY_SNAPSHOT, exportedAt: '2026-05-08T10:00:00.000Z' },
       'a',
     );
     expect(filename).toBe('fxmily-data-a-2026-05-08.json');

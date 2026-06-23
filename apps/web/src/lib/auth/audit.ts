@@ -47,6 +47,13 @@ export type AuditAction =
   // J5 — daily check-ins
   | 'checkin.morning.submitted'
   | 'checkin.evening.submitted'
+  // T1 "cerveau actif" — crisis routing wire on the member's free-text
+  // (morning `intention`, evening `journalNote` + `gratitudeItems`). The
+  // `*.submitted` rows carry `crisisLevel` in metadata; `*.crisis_detected`
+  // duplicates the signal with `matchedLabels` + `source` for forensic
+  // alerting (mirror of the V1.8 REFLECT / training_debrief pair). The wiring
+  // target was reserved in `lib/safety/crisis-detection.ts:28`.
+  | 'checkin.crisis_detected'
   | 'cron.checkin_reminders.scan'
   // J6 — behavioral score snapshot
   | 'score.computed'

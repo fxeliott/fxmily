@@ -279,3 +279,27 @@ export const eveningCheckinSchema = z.object({
 });
 
 export type EveningCheckinInput = z.infer<typeof eveningCheckinSchema>;
+
+// =============================================================================
+// Crisis-routing corpus (T1 "cerveau actif" — SPEC §18.2 safety)
+// =============================================================================
+
+/**
+ * Assemble the member's FREE-TEXT from a check-in into a single corpus for
+ * `detectCrisis()`. Morning carries `intention`; evening carries `journalNote`
+ * + `gratitudeItems`. Pure + null-safe so each slot's Server Action passes its
+ * own parsed fields. Structured/numeric fields (mood, stress, sleep…) are never
+ * scanned — only what the member typed. Mirror of `buildReflectionCorpus`.
+ *
+ * Empty / null entries are dropped so an all-numeric check-in yields `''`
+ * (→ `detectCrisis` returns `{ level: 'none' }`, no false banner).
+ */
+export function buildCheckinCrisisCorpus(fields: {
+  intention?: string | null;
+  journalNote?: string | null;
+  gratitudeItems?: readonly string[];
+}): string {
+  return [fields.intention, fields.journalNote, ...(fields.gratitudeItems ?? [])]
+    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+    .join('\n');
+}

@@ -5,6 +5,13 @@ import { CRISIS_RESOURCES_FR } from '@/lib/safety/crisis-detection';
 interface V18CrisisBannerProps {
   /** Crisis severity surfaced via URL query (`?crisis=high|medium`). */
   level: 'high' | 'medium';
+  /**
+   * Opening confirmation sentence, slot-accurate per surface. Defaults to the
+   * REFLECT/review wording ("Ta revue a été enregistrée.") so existing
+   * call-sites stay byte-identical; the daily check-in passes its own
+   * ("Ton check-in a été enregistré.").
+   */
+  confirmationText?: string;
 }
 
 /**
@@ -29,7 +36,10 @@ interface V18CrisisBannerProps {
  * RGPD §16 / SPEC §16 — zero data leaked (no userId, no labels). Pure
  * static content based on `level` prop.
  */
-export function V18CrisisBanner({ level }: V18CrisisBannerProps) {
+export function V18CrisisBanner({
+  level,
+  confirmationText = 'Ta revue a été enregistrée.',
+}: V18CrisisBannerProps) {
   const isHigh = level === 'high';
   // Severity reads the same everywhere — universal safety colours via tokens
   // that flip in light/dark (carbone `OnboardingCrisisBanner`). `--bad` for
@@ -66,7 +76,7 @@ export function V18CrisisBanner({ level }: V18CrisisBannerProps) {
             Si tu traverses un moment difficile, tu n&apos;es pas seul·e.
           </h2>
           <p className="t-body mt-2 text-[var(--t-2)]">
-            Ta revue a été enregistrée. Ces lignes d&apos;écoute sont gratuites, confidentielles et
+            {confirmationText} Ces lignes d&apos;écoute sont gratuites, confidentielles et
             disponibles 24/7. Appeler quelqu&apos;un, c&apos;est aussi une discipline
             d&apos;exécution.
           </p>

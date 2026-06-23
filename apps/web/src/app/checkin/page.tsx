@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { FirstCheckinCelebration } from '@/components/checkin/first-checkin-celebration';
+import { V18CrisisBanner } from '@/components/review/crisis-banner';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { StreakCard } from '@/components/checkin/streak-card';
 import { TrendCard } from '@/components/checkin/trend-card';
@@ -23,7 +24,7 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 interface CheckinLandingPageProps {
-  searchParams: Promise<{ slot?: string; done?: string }>;
+  searchParams: Promise<{ slot?: string; done?: string; crisis?: string }>;
 }
 
 // S19.2 — local hour in the member's timezone, to gently surface the slot that
@@ -68,6 +69,12 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
   const justDone = params.done === '1';
   const justDoneSlot = params.slot === 'morning' || params.slot === 'evening' ? params.slot : null;
 
+  // T1 safety — the check-in Server Action ran `detectCrisis` on the member's
+  // free-text and carried the level via `?crisis=high|medium`. We surface the
+  // same calm resource banner as REFLECT/review (3114 + SOS Amitié + Suicide
+  // Écoute), slot-accurate copy. Never alarmist; the check-in was still saved.
+  const crisisLevel = params.crisis === 'high' || params.crisis === 'medium' ? params.crisis : null;
+
   // S9.1 "wave wow" — detect the member's VERY FIRST check-in to show a
   // one-time non-toxic celebration (Mark Douglas: name the action, no fanfare).
   // Only query the lifetime count when we actually just completed a check-in —
@@ -104,6 +111,17 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
             </p>
           </div>
         </header>
+
+        {/* T1 safety — crisis resources surface ABOVE the confirmation when the
+            member's free-text tripped detectCrisis. Calm, non-blocking; the
+            check-in was still saved (the DoneBanner below confirms it). */}
+        {crisisLevel ? (
+          <V18CrisisBanner
+            key={crisisLevel}
+            level={crisisLevel}
+            confirmationText="Ton check-in a été enregistré."
+          />
+        ) : null}
 
         {justDone && justDoneSlot ? (
           <>

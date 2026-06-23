@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { eveningCheckinSchema, localDateSchema, morningCheckinSchema } from './checkin';
+import { detectCrisis } from '@/lib/safety/crisis-detection';
+
+import {
+  buildCheckinCrisisCorpus,
+  eveningCheckinSchema,
+  localDateSchema,
+  morningCheckinSchema,
+} from './checkin';
 
 /**
  * Zod schemas for the daily check-in flows (J5, SPEC §6.4 + §7.4).
@@ -334,5 +341,42 @@ describe('eveningCheckinSchema', () => {
     expect(eveningCheckinSchema.safeParse({ ...validEvening, date: '1999-01-01' }).success).toBe(
       false,
     );
+  });
+});
+
+describe('buildCheckinCrisisCorpus (T1 safety)', () => {
+  it('returns the morning intention as the corpus', () => {
+    expect(buildCheckinCrisisCorpus({ intention: "Rester process, pas d'ego." })).toBe(
+      "Rester process, pas d'ego.",
+    );
+  });
+
+  it('joins evening journalNote + gratitudeItems with newlines', () => {
+    expect(
+      buildCheckinCrisisCorpus({
+        journalNote: 'Discipline tenue malgré le drawdown.',
+        gratitudeItems: ['Ma routine', 'Mon plan'],
+      }),
+    ).toBe('Discipline tenue malgré le drawdown.\nMa routine\nMon plan');
+  });
+
+  it('drops null / undefined / blank entries (all-numeric check-in → empty)', () => {
+    expect(buildCheckinCrisisCorpus({ intention: null })).toBe('');
+    expect(buildCheckinCrisisCorpus({})).toBe('');
+    expect(buildCheckinCrisisCorpus({ journalNote: '   ', gratitudeItems: ['', '  '] })).toBe('');
+  });
+
+  it('feeds detectCrisis end-to-end: a HIGH signal in the journal surfaces', () => {
+    const corpus = buildCheckinCrisisCorpus({
+      journalNote: "Je pense au suicide, je n'en peux plus.",
+    });
+    expect(detectCrisis(corpus).level).toBe('high');
+  });
+
+  it('does NOT trip on trading slang (capital ≠ life)', () => {
+    const corpus = buildCheckinCrisisCorpus({
+      intention: 'Je vais tout perdre sur ce trade si je respecte pas le stop.',
+    });
+    expect(detectCrisis(corpus).level).toBe('none');
   });
 });

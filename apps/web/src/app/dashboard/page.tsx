@@ -19,6 +19,7 @@ import { SessionTimeline } from '@/components/dashboard/session-timeline';
 import { TodayGuidance } from '@/components/dashboard/today-guidance';
 import { WeeklyInsightCard } from '@/components/dashboard/weekly-insight-card';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
+import { CoachingAxisCard } from '@/components/objectives/coaching-axis-card';
 import { ProfileStatusWidget } from '@/components/onboarding/profile-status-widget';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { btnVariants } from '@/components/ui/btn';
@@ -240,6 +241,14 @@ export default async function DashboardPage() {
           <section className="mb-6" aria-label="Ta progression">
             <DashboardProgressBridge view={objectives} />
           </section>
+        ) : null}
+        {/* S24 — l'axe de coaching PERSONNEL du membre (issu de son profil
+            d'onboarding), surfacé sur le hub pour qu'il retrouve « sa chose à
+            travailler » sans naviguer. Complète le levier MESURÉ du bridge
+            ci-dessus par l'intention STATED du membre. Badge IA, §2-safe. Rend
+            null sans profil (jamais d'axe inventé). */}
+        {objectives ? (
+          <CoachingAxisCard axis={objectives.coachingAxis} variant="compact" className="mb-6" />
         ) : null}
 
         {/* V2 refonte J1 — slim activity strip (streak dans le hero). S18 — passée

@@ -24,6 +24,10 @@ import { loginAs } from '@/test/e2e-auth';
 
 let fresh: SeededUser | null = null;
 let stopped: SeededUser | null = null;
+let profiled: SeededUser | null = null;
+
+/** The two onboarding axes seeded for the `profiled` member (weekly-rotated). */
+const SEEDED_AXES = ['Tenir mon plan sans dévier', 'Réduire le FOMO'] as const;
 
 async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }> {
   const exec = chromium.executablePath();
@@ -82,6 +86,32 @@ async function seedLossToday(userId: string): Promise<void> {
   });
 }
 
+/**
+ * Seed an onboarding interview + MemberProfile carrying `axes` so the
+ * dashboard's CoachingAxisCard has a real, AI-derived axis to surface. The
+ * interview is upserted (its `userId` is @unique) to stay idempotent.
+ */
+async function seedProfileWithAxes(userId: string, axes: readonly string[]): Promise<void> {
+  const interview = await db.onboardingInterview.upsert({
+    where: { userId },
+    create: { userId, status: 'completed', instrumentVersion: 'v1' },
+    update: { status: 'completed' },
+  });
+  await db.memberProfile.upsert({
+    where: { userId },
+    create: {
+      userId,
+      interviewId: interview.id,
+      summary: 'Profil de test e2e S24.',
+      highlights: [],
+      axesPrioritaires: [...axes],
+      claudeModelVersion: 'claude-opus-4-8',
+      instrumentVersion: 'v1',
+    },
+    update: { axesPrioritaires: [...axes] },
+  });
+}
+
 /** Assert the timeline renders cleanly with NO horizontal overflow at `width`. */
 async function expectNoOverflow(page: Page, width: number): Promise<void> {
   await page.setViewportSize({ width, height: 900 });
@@ -101,12 +131,15 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
     fresh = await seedMemberUser({ firstName: 'Freshstart' });
     stopped = await seedMemberUser({ firstName: 'Stopped' });
     await seedLossToday(stopped.id);
+    profiled = await seedMemberUser({ firstName: 'Profiled' });
+    await seedProfileWithAxes(profiled.id, SEEDED_AXES);
   });
 
   test.afterAll(async () => {
     await cleanupTestUsers();
     fresh = null;
     stopped = null;
+    profiled = null;
   });
 
   test('la timeline rend toujours, desktop + mobile, sans overflow ni erreur', async ({
@@ -179,5 +212,44 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
     await expect(timeline).not.toContainText(/fais mieux|tu as échoué|verdict/i);
 
     expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toEqual([]);
+  });
+
+  test('le membre profilé voit son axe de coaching personnel sur le hub', async ({
+    page,
+    request,
+  }) => {
+    if (!profiled) throw new Error('seed missing — beforeAll did not run');
+
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('console', (msg: ConsoleMessage) => {
+      if (msg.type() === 'error' && !isBenignConsoleError(msg.text())) {
+        consoleErrors.push(msg.text());
+      }
+    });
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+
+    await dismissCookieBanner(page);
+    await page.goto('/login');
+    await loginAs(page, request, profiled.email, profiled.password);
+
+    await page.goto('/dashboard');
+
+    // `:visible` scopes to the live node only: during RSC streaming the card can
+    // momentarily exist twice (the hidden Suspense-stream buffer copy + the placed
+    // node), which trips strict mode. The app mounts it exactly once — the filter
+    // makes the assertion robust to the streaming window, not lenient about a dup.
+    const card = page.locator('[data-slot="coaching-axis-card"]:visible');
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(/Ton axe de coaching cette semaine/i);
+    // The weekly-rotated axis is ONE of the two seeded — never empty, never invented.
+    await expect(card).toContainText(new RegExp(SEEDED_AXES.join('|')));
+    // AI Act §50 — the AI-derived axis carries the disclosure note.
+    await expect(card.getByRole('note')).toBeVisible();
+    // POSTURE §2 — an axis is a process focus, never a market call.
+    await expect(card).not.toContainText(/ach[èe]te|vends?/i);
+
+    expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toEqual([]);
+    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([]);
   });
 });

@@ -1,35 +1,16 @@
-import { ArrowLeft, Target } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
-import { AIGeneratedBanner } from '@/components/ai-generated-banner';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { CoachingAxisCard } from '@/components/objectives/coaching-axis-card';
 import { JourneyRoadmap } from '@/components/objectives/journey-roadmap';
 import { NextSteps } from '@/components/objectives/next-steps';
 import { ObjectiveRings } from '@/components/objectives/objective-rings';
 import { ObjectivesHero } from '@/components/objectives/objectives-hero';
 import { TrajectoryChart } from '@/components/objectives/trajectory-chart';
 import { getProcessObjectives } from '@/lib/objectives/service';
-import { getProfileForUser } from '@/lib/onboarding-interview/service';
-
-/** Coerce the JSON `axesPrioritaires` blob to a clean string list (mirrors /profile). */
-function asStringArray(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
-}
-
-/**
- * Pick ONE axis to surface, rotating weekly so all axes are seen over time.
- * `now = new Date()` lives in the default param (same pattern as the dashboard's
- * `greeting()`/`frenchToday()`) — keeps the clock read out of the render body so
- * the react-hooks/purity rule stays happy.
- */
-function pickCoachingAxis(axes: string[], now = new Date()): string | null {
-  if (axes.length === 0) return null;
-  const week = Math.floor(now.getTime() / (7 * 86_400_000));
-  return axes[week % axes.length] ?? null;
-}
 
 /**
  * « Mes objectifs · Où je vais » — jalon J4 (intention de guidage #2).
@@ -53,17 +34,10 @@ export default async function ObjectifsPage() {
   if (!userId) redirect('/login');
   const timezone = session.user.timezone || 'Europe/Paris';
 
-  const [view, profile] = await Promise.all([
-    getProcessObjectives(userId, timezone),
-    getProfileForUser(userId),
-  ]);
-
-  // S12 — surface ONE coaching axis from the onboarding profile, rotating weekly,
-  // so the personalised "points à travailler" finally appears in normal use
-  // instead of dead-ending on /profile. Descriptive (process / discipline),
-  // never a market call — same data already shown verbatim on /profile + admin +
-  // monthly debrief. AI-derived ⇒ carries the AIGeneratedBanner (EU AI Act §50).
-  const coachingAxis = pickCoachingAxis(asStringArray(profile?.axesPrioritaires));
+  // S24 — the weekly coaching axis (from the onboarding profile) is now derived
+  // ONCE inside `getProcessObjectives` (shared with the dashboard hub), so the
+  // page no longer reads the profile itself nor owns the coercion/rotation.
+  const view = await getProcessObjectives(userId, timezone);
 
   return (
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
@@ -95,44 +69,12 @@ export default async function ObjectifsPage() {
           <ObjectivesHero view={view} />
         </section>
 
-        {/* 1.5 — S12 : l'axe de coaching de la semaine (issu du profil onboarding).
-            Ferme le cul-de-sac « axes jamais revus en usage normal ». Descriptif,
-            §2-safe, badge IA (axes dérivés Claude). */}
-        {coachingAxis ? (
+        {/* 1.5 — S12/S24 : l'axe de coaching de la semaine (issu du profil
+            onboarding), désormais rendu via le composant partagé `CoachingAxisCard`
+            (même surface sur le dashboard). Descriptif, §2-safe, badge IA. */}
+        {view.coachingAxis ? (
           <section className="wow-reveal" aria-labelledby="coaching-axis-heading">
-            <div className="rounded-card-lg flex flex-col gap-3 border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5">
-              <div className="flex items-start gap-3">
-                <span
-                  aria-hidden="true"
-                  className="rounded-control mt-0.5 grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--bg-1)]/50 text-[var(--acc)]"
-                >
-                  <Target className="h-4 w-4" strokeWidth={2.2} />
-                </span>
-                <div className="flex min-w-0 flex-col gap-1">
-                  {/* S15 #25 — --acc-hi clears WCAG 1.4.3 AA on the --acc-dim card
-                      (--acc is ~3.15:1 on tinted surfaces; --acc-hi ≥4.5:1). */}
-                  <span className="t-eyebrow text-[var(--acc-hi)]">
-                    Ton axe de coaching cette semaine
-                  </span>
-                  <h2
-                    id="coaching-axis-heading"
-                    className="t-body leading-[1.5] font-semibold break-words text-[var(--t-1)]"
-                  >
-                    {coachingAxis}
-                  </h2>
-                  <p className="t-cap text-[var(--t-3)]">
-                    Issu de ton profil.{' '}
-                    <a
-                      href="/profile"
-                      className="font-medium text-[var(--acc-hi)] underline decoration-[var(--b-acc)] decoration-2 underline-offset-2 transition-colors hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-                    >
-                      Voir tous tes axes →
-                    </a>
-                  </p>
-                </div>
-              </div>
-              <AIGeneratedBanner variant="badge" />
-            </div>
+            <CoachingAxisCard axis={view.coachingAxis} variant="full" />
           </section>
         ) : null}
 

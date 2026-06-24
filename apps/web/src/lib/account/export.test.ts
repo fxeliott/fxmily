@@ -38,6 +38,9 @@ const discrepancyFindMany = vi.fn();
 const constancyScoreFindMany = vi.fn();
 const scoreEventFindMany = vi.fn();
 const alertFindMany = vi.fn();
+// V2 S2 — universal tracking engine.
+const trackingEntryFindMany = vi.fn();
+const trackingScheduleFindMany = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -75,6 +78,8 @@ vi.mock('@/lib/db', () => ({
     constancyScore: { findMany: constancyScoreFindMany },
     scoreEvent: { findMany: scoreEventFindMany },
     alert: { findMany: alertFindMany },
+    trackingEntry: { findMany: trackingEntryFindMany },
+    trackingSchedule: { findMany: trackingScheduleFindMany },
   },
 }));
 
@@ -119,6 +124,8 @@ const ALL_FIND_MANY = [
   constancyScoreFindMany,
   scoreEventFindMany,
   alertFindMany,
+  trackingEntryFindMany,
+  trackingScheduleFindMany,
 ];
 
 beforeEach(() => {
@@ -192,6 +199,8 @@ const EMPTY_SNAPSHOT = {
   constancyScores: [],
   scoreEvents: [],
   alerts: [],
+  trackingEntries: [],
+  trackingSchedules: [],
 } satisfies Parameters<typeof summariseExport>[0];
 
 describe('buildUserDataExport', () => {
@@ -281,6 +290,9 @@ describe('buildUserDataExport', () => {
     expect(constancyScoreFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
     expect(scoreEventFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
     expect(alertFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
+    // V2 S2 — universal tracking engine (member-owned, `userId`-keyed).
+    expect(trackingEntryFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    expect(trackingScheduleFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
   });
 
   it('exports the behavioural / psychological surface added in Session 21', async () => {
@@ -581,6 +593,8 @@ describe('summariseExport — defensive shape handling', () => {
       'constancyScoreCount',
       'scoreEventCount',
       'alertCount',
+      'trackingEntryCount',
+      'trackingScheduleCount',
     ]);
   });
 });

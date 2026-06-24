@@ -39,7 +39,8 @@ enum UserStatus {
 ///   approved : an `Invitation` is minted (existing onboarding pipeline reused)
 ///              and a premium "demande acceptée" email is sent. The created
 ///              invitation id is stored on the request for traceability.
-///   rejected : terminal, no email, no account.
+///   rejected : terminal, a refusal email IS sent (§26.4 — no longer a silent
+///              refusal), but no account is ever created.
 /// RGPD: a non-member's name+email is PII stored before any consent — the
 /// `/api/cron/purge-access-requests` weekly cron purges resolved rows (and
 /// stale pending ones > 30d) so this surface never accumulates dormant PII.
@@ -404,6 +405,11 @@ model User {
   alerts                       Alert[]
   // S3/S8 — training-session containers (firewall §21.5: training world only).
   trainingSessions             TrainingSession[]
+  // V2 S2 — universal tracking engine (recurring code-defined instruments).
+  // §21.5/§27.7 isolated: NO FK to Trade/BehavioralScore — captured responses +
+  // D1/D2/D3 metadata only, feeds nothing into the real edge. Cascade on delete.
+  trackingEntries              TrackingEntry[]
+  trackingSchedules            TrackingSchedule[]
 
   @@index([status])
   @@index([role])
@@ -1979,6 +1985,158 @@ model MemberProfile {
   recoveryProtocol Json? @map("recovery_protocol")
 
   @@map("member_profiles")
+}
+
+// =============================================================================
+// V2 S2 — Universal tracking engine (SPEC §2 posture / longitudinal invariant)
+// =============================================================================
+//
+// Generic, recurring, code-defined-instrument capture layer. ANY behavioural /
+// process axis (execution, risk-discipline, training, meetings, emotions...)
+// is tracked by a FROZEN, VERSIONED instrument declared in code
+// (`lib/tracking/instruments/<key>-v<n>.ts`) — the SAME longitudinal-validity
+// invariant as `MindsetCheck` / `OnboardingInterview`: instruments are STATIC
+// and VERSIONED, NEVER mutated in place. The DB stores only captured RESPONSES
+// + the instrument key/version pin, never the instrument body.
+//
+// STATISTICAL ISOLATION (SPEC §21.5 / §27.7 — BLOQUANT): these two models carry
+// NO FK to `Trade` / `BehavioralScore` / `PreTradeCheck`. They are a structured
+// capture + reliability (D2) + confidence (D3) + completeness (D1) surface that
+// feeds NOTHING back into the real edge. Only the `userId` cascade link exists
+// (RGPD §17). Enforced by `test/anti-leak/tracking-isolation.test.ts`.
+//
+// POSTURE §2 (BLOQUANT): instruments capture PROCESS / PSYCHOLOGY only — THAT an
+// act happened (cut at 20h? one risk-trade today? SL predefined?), NEVER market-
+// analysis CONTENT. No instrument asks "what setup / which direction". The
+// `responses` JSON is a CLOSED Zod-validated shape (`lib/tracking/schema.ts`) —
+// no raw edge free-text — and the instrument labels run through the existing
+// `detectAMFViolation` guard in tests (`lib/tracking/instruments/*.test.ts`).
+
+/// Reliability dimension (D2) of a capture: WHEN/HOW it was answered. Lets the
+/// member dashboard and S3 confrontation weight a hot, in-the-moment answer
+/// differently from a cold retrospective one. NEVER a scoring input.
+enum CaptureContext {
+  /// In-the-moment (pre-trade decision, live during a session).
+  hot
+  /// Retrospective (evening review, end-of-week recall).
+  cold
+  /// Engine-prompted at the instrument's scheduled due time.
+  scheduled
+}
+
+/// Canonical tracking taxonomy (FR labels in `lib/tracking/axes.ts`). Covers the
+/// full méthodo surface with ZERO loss (DoD case 5): execution, risk-discipline,
+/// market-analysis prep, entraînement/backtest, la formation, réunions §30,
+/// emotions+confidence, sleep/lifestyle, evening "bilan", travail sur soi,
+/// routine. Pure analytics dimension — a `TrackingEntry.axis` is NOT a scoring
+/// input. Append a value here only additively (Postgres: new enum value is
+/// non-destructive; never reuse/rename an existing one — longitudinal contract).
+enum TrackingAxis {
+  execution
+  risk_discipline
+  market_analysis
+  training
+  formation
+  meeting_presence
+  emotions_confidence
+  sleep_lifestyle
+  evening_review
+  self_work
+  routine
+}
+
+/// V2 S2 — one captured response set for one recurring instrument occurrence.
+///
+/// Idempotency: `@@unique([userId, instrumentKey, occurrenceKey])`. The service
+/// upserts on this composite key — re-submitting the same occurrence overwrites
+/// (never duplicates), so the spread/recurring collection (DoD case 4) is safe
+/// against double-taps and retries. `occurrenceKey` is the canonical slot the
+/// entry answers ("2026-06-24" daily, "2026-W26" weekly, or a pre-trade nonce).
+///
+/// Confrontable S3 + consumable S4–S7 (DoD case 6): the read contract lives in
+/// `lib/tracking/service.ts` (count-only / per-axis aggregates, NO P&L join).
+model TrackingEntry {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Stable slug of the code-defined instrument (e.g. "process-fidelity"). The
+  /// instrument body lives in `lib/tracking/instruments/<key>-v<n>.ts` — NEVER
+  /// in the DB (frozen-instrument invariant).
+  instrumentKey     String @map("instrument_key")
+  /// Instrument version at capture time. Pinning per row keeps longitudinal
+  /// comparisons valid across bumps (mirror MindsetCheck.instrumentVersion).
+  instrumentVersion String @default("v1") @map("instrument_version")
+
+  /// Behavioural/process axis (taxonomy `lib/tracking/axes.ts`). NOT a score input.
+  axis TrackingAxis
+
+  /// Idempotency discriminator — the canonical occurrence this entry answers.
+  occurrenceKey String @map("occurrence_key")
+
+  /// Structured answers, validated by the instrument's Zod schema BEFORE persist
+  /// (`lib/tracking/schema.ts`). CLOSED shape per instrument — no raw edge
+  /// free-text (SPEC §2). Shape = `{ [questionKey]: answerValue }`.
+  responses Json
+
+  // ----- D3 — emotion + confidence (simple recurring scale) -----------------
+  /// Optional 1–5 confidence self-rating attached to this capture (D3). Null =
+  /// the instrument didn't ask, or unanswered. NEVER a scoring input.
+  confidenceLevel Int? @map("confidence_level")
+
+  // ----- D2 — reliability metadata ------------------------------------------
+  /// hot (in-the-moment) / cold (retrospective) / scheduled (engine-prompted).
+  captureContext    CaptureContext? @map("capture_context")
+  /// Milliseconds between prompt render and submit — a reliability signal
+  /// (rushed vs considered). Null = not measured. NEVER a scoring input.
+  responseLatencyMs Int?            @map("response_latency_ms")
+  /// When the engine prompted this capture (D2 — paired with `submittedAt`).
+  promptedAt        DateTime?       @map("prompted_at")
+
+  submittedAt DateTime @default(now()) @map("submitted_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Idempotent append: one entry per (user, instrument, occurrence).
+  @@unique([userId, instrumentKey, occurrenceKey])
+  // Per-axis dashboard + S3 confrontation reads (most-recent first).
+  @@index([userId, axis, submittedAt(sort: Desc)])
+  // Per-instrument longitudinal reads.
+  @@index([userId, instrumentKey, submittedAt(sort: Desc)])
+  @@map("tracking_entries")
+}
+
+/// V2 S2 — per-(member, instrument) cadence bookkeeping for the recurring engine.
+///
+/// The engine reads `nextDueAt` to surface a CALM action via `getDailyGuidance`
+/// (SPEC §2 posture: no streak, no urgency, no punitive nudge §31.2). The member
+/// can snooze via `pausedUntil` — anti-overload so captures are SPREAD over time,
+/// never piled up (DoD case 4). One row per (user, instrument).
+model TrackingSchedule {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  instrumentKey String @map("instrument_key")
+
+  /// Next time this instrument is due for the member.
+  nextDueAt       DateTime  @map("next_due_at")
+  /// Last completed occurrence timestamp (null = never completed).
+  lastCompletedAt DateTime? @map("last_completed_at")
+  /// Opaque cadence bookkeeping owned by `lib/tracking/cadence.ts`
+  /// (e.g. consecutive-skips, adaptive interval). Null = default cadence.
+  cadenceState    Json?     @map("cadence_state")
+  /// Member-set snooze — the engine skips this instrument until `pausedUntil`.
+  pausedUntil     DateTime? @map("paused_until")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, instrumentKey])
+  // Engine sweep: "what is due for this member now?"
+  @@index([userId, nextDueAt])
+  @@map("tracking_schedules")
 }
 
 // =============================================================================

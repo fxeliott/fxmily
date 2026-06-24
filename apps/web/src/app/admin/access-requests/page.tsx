@@ -76,7 +76,8 @@ export default async function AdminAccessRequestsPage() {
               <>
                 <span className="font-mono text-[var(--t-1)] tabular-nums">{pending.length}</span>{' '}
                 demande{pending.length > 1 ? 's' : ''} à étudier. Accepter mint une invitation et
-                envoie un email premium ; refuser est définitif (aucun email, aucun compte).
+                envoie un email premium ; refuser envoie un email de refus soigné, sans créer de
+                compte.
               </>
             ) : (
               <>Aucune demande en attente pour le moment.</>
@@ -93,7 +94,7 @@ export default async function AdminAccessRequestsPage() {
             lead="Les demandes envoyées depuis la page publique /rejoindre apparaîtront ici, à valider une par une."
             guides={[
               'Accepter crée une invitation (lien 7 jours) et envoie l’email premium.',
-              'Refuser est définitif — pas d’email, pas de compte.',
+              'Refuser envoie un email de refus soigné — aucun compte n’est créé.',
               'Les demandes traitées sont purgées automatiquement (RGPD).',
             ]}
             tip="Cohorte privée = qualité > quantité. Mieux vaut 30 traders sérieux que 300 curieux."

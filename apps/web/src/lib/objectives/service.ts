@@ -3,10 +3,12 @@ import 'server-only';
 import { getStreak } from '@/lib/checkin/service';
 import { STREAK_MILESTONES } from '@/lib/checkin/streak';
 import { getDailyGuidance, type GuidanceAction } from '@/lib/daily-guidance/service';
+import { getMethodMirror } from '@/lib/method-mirror/service';
 import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 
 import { coerceAxes, pickWeeklyAxis } from './coaching-axis';
+import { deriveMethodGoal, type DerivedMethodGoal } from './derived-goals';
 import {
   DIMENSION_META,
   JOURNEY_STAGES,
@@ -71,13 +73,22 @@ export interface ProcessObjectivesView {
    * descriptif (un axe de process), jamais un signal de marché.
    */
   coachingAxis: string | null;
+  /**
+   * S25 — l'objectif de méthode DÉRIVÉ de la donnée réelle du membre et ÉVOLUTIF :
+   * la règle dure où il est le plus faible (sur 30j), avec un palier doux juste
+   * au-dessus. `null` tant qu'il n'a pas assez de trades, ou s'il est déjà fidèle
+   * partout (≥ 90 %). Déterministe ⇒ pas de badge IA. Complète l'axe STATED
+   * (`coachingAxis`, intention d'onboarding) par un objectif MESURÉ qui bouge avec
+   * sa pratique. Posture §2 : une cible de process, jamais de P&L.
+   */
+  methodGoal: DerivedMethodGoal | null;
 }
 
 export async function getProcessObjectives(
   userId: string,
   timezone: string,
 ): Promise<ProcessObjectivesView> {
-  const [latestScore, scoreHistory, streak, guidance, profile] = await Promise.all([
+  const [latestScore, scoreHistory, streak, guidance, profile, methodMirror] = await Promise.all([
     getLatestBehavioralScore(userId),
     getBehavioralScoreHistory(userId, { sinceDays: 90 }),
     getStreak(userId, timezone),
@@ -86,6 +97,10 @@ export async function getProcessObjectives(
     // Lu dans le même batch parallèle (un `findUnique` indexé, pas de N+1) pour
     // dériver l'axe de coaching de la semaine, désormais partagé hub + /objectifs.
     getProfileForUser(userId),
+    // S25 — le miroir de fidélité à la méthode (1 findMany indexé sur enteredAt,
+    // fenêtre 30j) ⇒ dérive l'objectif de méthode évolutif (`methodGoal`). Lu dans
+    // le même batch (pas de wall-clock ajouté).
+    getMethodMirror(userId),
   ]);
 
   const dimValue = (key: ObjectiveDimension): number | null => {
@@ -157,6 +172,10 @@ export async function getProcessObjectives(
   // du profil). `null` sans profil ⇒ la surface ne rend rien (jamais d'axe inventé).
   const coachingAxis = pickWeeklyAxis(coerceAxes(profile?.axesPrioritaires));
 
+  // S25 — l'objectif de méthode dérivé/évolutif (règle la plus faible → palier
+  // doux). `null` tant qu'il n'a pas assez de trades ou qu'il est fidèle partout.
+  const methodGoal = deriveMethodGoal(methodMirror);
+
   return {
     hasScores: latestScore !== null,
     cap,
@@ -168,6 +187,7 @@ export async function getProcessObjectives(
     journey,
     nextActions,
     coachingAxis,
+    methodGoal,
   };
 }
 

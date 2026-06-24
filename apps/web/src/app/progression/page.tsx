@@ -12,6 +12,7 @@ import { Suspense } from 'react';
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { MethodMirrorCard } from '@/components/progression/method-mirror-card';
+import { PostLossReactionCard } from '@/components/progression/post-loss-reaction-card';
 import { WeeklyRecapCard } from '@/components/progression/weekly-recap-card';
 import { BehaviorRadar } from '@/components/scoring/behavior-radar';
 import { DrawdownStreaksCard, ExpectancyCard } from '@/components/scoring/expectancy-card';
@@ -26,6 +27,7 @@ import { Sparkline } from '@/components/ui/sparkline';
 import { getDisciplineYearHeatmap } from '@/lib/checkin/service';
 import { getMethodMirror } from '@/lib/method-mirror/service';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
+import { getPostLossReaction } from '@/lib/scoring/post-loss-reaction-data';
 import {
   getBehavioralScoreHistory,
   getLatestBehavioralScore,
@@ -136,6 +138,21 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
           </h2>
           <Suspense fallback={<MethodMirrorSkeleton />}>
             <MethodMirrorSection userId={userId} />
+          </Suspense>
+        </section>
+
+        {/* S25 #6 — « Reprendre après un SL » : miroir de la réaction INTRADAY à
+            une perte (reprise le même jour + délai médian), le signal de tilt le
+            plus net. Comble le « signal calculé puis jeté » : les timestamps
+            entered/closed existent déjà. Stream via Suspense (1 query, 90j).
+            Posture §2 (timing, jamais un signal) + §31.2 (calme : positif si pas
+            de reprise, ambre jamais rouge sinon). */}
+        <section className="wow-reveal mb-6" aria-labelledby="post-loss-section-heading">
+          <h2 id="post-loss-section-heading" className="sr-only">
+            Ta réaction après une perte
+          </h2>
+          <Suspense fallback={<PostLossReactionSkeleton />}>
+            <PostLossReactionSection userId={userId} />
           </Suspense>
         </section>
 
@@ -313,6 +330,22 @@ function MethodMirrorSkeleton() {
       aria-busy="true"
       aria-live="polite"
       aria-label="Chargement de ta fidélité à la méthode"
+    />
+  );
+}
+
+async function PostLossReactionSection({ userId }: { userId: string }) {
+  const reaction = await getPostLossReaction(userId);
+  return <PostLossReactionCard reaction={reaction} />;
+}
+
+function PostLossReactionSkeleton() {
+  return (
+    <div
+      className="skel rounded-card-lg h-[148px] border border-[var(--b-default)] bg-[var(--bg-1)]"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement de ta réaction après une perte"
     />
   );
 }

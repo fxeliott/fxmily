@@ -39,6 +39,8 @@ Ce principe guide toutes les décisions de design : si une feature ne contribue 
 
 ## 4. Stack technique
 
+> **Revue versions + sécurité (par lib)** : voir [`docs/STACK.md`](docs/STACK.md) — version installée, version stable courante, statut current/behind/beta-risk, revue CVE et verdict actionnable (vérifié 2026-06-24). Ce tableau-ci reste la justification _qualitative_ des choix.
+
 | Couche | Choix | Rationale |
 |---|---|---|
 | **Frontend / Backend** | Next.js 16 (App Router) + React 19 + TypeScript strict | Un seul codebase web + mobile (via PWA puis Capacitor), énorme écosystème, support IA optimal. Note J0 : la majeure 16 (sortie 21 oct 2025) renomme `middleware.ts` → `proxy.ts`, Turbopack devient stable par défaut. Version installée : 16.2.6. |

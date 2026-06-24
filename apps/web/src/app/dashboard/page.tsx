@@ -22,6 +22,7 @@ import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
 import { CoachingAxisCard } from '@/components/objectives/coaching-axis-card';
 import { MethodGoalCard } from '@/components/objectives/method-goal-card';
 import { ProfileStatusWidget } from '@/components/onboarding/profile-status-widget';
+import { TrackingCoverageWidget } from '@/components/tracking/tracking-coverage-widget';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
@@ -397,6 +398,17 @@ export default async function DashboardPage() {
           </section>
         </div>
 
+        {/* V2 S2 — Universal tracking engine : jauge de complétude (10 axes méthodo,
+            count/recency only, §21.5) + sollicitation calme de l'instrument dû. */}
+        <section aria-labelledby="tracking-widget-heading" className="mb-6">
+          <h2 id="tracking-widget-heading" className="sr-only">
+            Vue d&apos;ensemble de mon suivi
+          </h2>
+          <Suspense fallback={<TrackingCoverageSkeleton />}>
+            <TrackingCoverageWidget userId={userId!} />
+          </Suspense>
+        </section>
+
         {/* §30 — guidage calme vers le débrief mensuel frais (S6 audit). Le widget
             rend sa propre section (avec heading) ou rien si tout est déjà lu :
             fallback null pour ne jamais flasher un skeleton qui disparaît. */}
@@ -553,6 +565,17 @@ function CalendarStatusSkeleton() {
       aria-busy="true"
       aria-live="polite"
       aria-label="Chargement de l'organisation de la semaine"
+    />
+  );
+}
+
+function TrackingCoverageSkeleton() {
+  return (
+    <div
+      className="skel rounded-card h-[188px] border border-[var(--b-default)] bg-[var(--bg-1)]"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement de la vue d'ensemble de ton suivi"
     />
   );
 }

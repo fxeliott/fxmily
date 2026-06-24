@@ -401,7 +401,15 @@ export type AuditAction =
   // ranAt only, PII-free. Strict `cron.<name>.scan` convention (cron-watch).
   | 'cron.verification_scan.scan'
   | 'verification.alert.created'
-  | 'verification.score.computed';
+  | 'verification.score.computed'
+  // V2 S2 — Universal tracking engine member capture (`/tracking/[instrument]`).
+  // ONE slug: the instrument is 100% CLOSED (boolean/likert/scale/choice, ZERO
+  // free-text by design — `lib/tracking/types.ts`) ⇒ NO crisis/injection
+  // surface, so NO `*.crisis_detected` counterpart (mirror V1.5 mindset_check /
+  // V2.3 pre_trade_check). PII-FREE metadata: `{instrumentKey, instrumentVersion,
+  // occurrenceKey, axis, wasNew}` — NEVER the `responses` payload, NEVER a P&L,
+  // NEVER anything from the real edge (§21.5/§2 statistical isolation).
+  | 'tracking_entry.submitted';
 
 // T5 audit slugs (`admin.public_trade.*`) were REMOVED 2026-05-25 when the
 // public Track Record was split out to a standalone repo

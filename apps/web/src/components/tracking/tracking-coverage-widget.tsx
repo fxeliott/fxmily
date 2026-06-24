@@ -9,7 +9,7 @@ import { getDueTrackingInstruments, getTrackingCoverage } from '@/lib/tracking/s
  * surface that turns the universal engine's two reads into ONE glanceable card :
  *
  *   - **D1 completeness gauge** (`getTrackingCoverage`) — how much of the
- *     10-axis méthodo surface the member has fed in the last 30 days. COUNT /
+ *     11-axis méthodo surface the member has fed in the last 30 days. COUNT /
  *     RECENCY only (§21.5 isolation), so it is a calm "where am I" read, never
  *     a score, a streak or a P&L (§2 / §31.2).
  *   - **Due prompt** (`getDueTrackingInstruments`) — the recurring instrument(s)

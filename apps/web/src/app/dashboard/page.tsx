@@ -398,7 +398,7 @@ export default async function DashboardPage() {
           </section>
         </div>
 
-        {/* V2 S2 — Universal tracking engine : jauge de complétude (10 axes méthodo,
+        {/* V2 S2 — Universal tracking engine : jauge de complétude (11 axes méthodo,
             count/recency only, §21.5) + sollicitation calme de l'instrument dû. */}
         <section aria-labelledby="tracking-widget-heading" className="mb-6">
           <h2 id="tracking-widget-heading" className="sr-only">

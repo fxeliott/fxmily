@@ -178,6 +178,17 @@ test.describe('V2 S2 — universal tracking engine member loop (capture + dashbo
     expect((entry.responses as Record<string, unknown>).cut_20h).toBe(true);
     // D3 confidence captured (first option = 1), persisted OUTSIDE responses.
     expect(entry.confidenceLevel).toBe(1);
+    // D2 reliability metadata persisted EN RÉEL (DoD#7 + Tâche D.2 : « contexte de
+    // saisie à chaud/à froid et latence … stockés avec la donnée »). Read back
+    // from the SAME real DB row: the wizard measures the mount→submit latency
+    // and injects it (tracking-wizard.tsx), so it is always a finite ms ≥ 0; the
+    // capture context defaults to the instrument's 'cold' retrospective
+    // (process-fidelity-v1.ts). `promptedAt` is null by construction in this
+    // self-initiated path (no scheduled push sends it — a future S3+ contract).
+    expect(entry.captureContext).toBe('cold');
+    expect(typeof entry.responseLatencyMs).toBe('number');
+    expect(entry.responseLatencyMs).toBeGreaterThanOrEqual(0);
+    expect(entry.promptedAt).toBeNull();
 
     expect(pageErrors, `uncaught page errors: ${pageErrors.join(' | ')}`).toEqual([]);
     expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([]);
@@ -215,6 +226,14 @@ test.describe('V2 S2 — universal tracking engine member loop (capture + dashbo
     await expect(widget).toBeVisible();
     const covered = widget.locator('[data-covered="true"]', { hasText: 'Gestion du risque' });
     await expect(covered).toBeVisible();
+
+    // DoD l.285 « collecte étalée, SANS ENTASSEMENT » proven at the browser:
+    // once captured this week, the weekly instrument leaves the due set
+    // (nextDueAt advances to next Monday), so the widget flips to the calm
+    // "à jour" state and the due CTA is gone — the negative half of the cadence,
+    // until now only unit-tested, asserted here on the real rendered dashboard.
+    await expect(widget).toHaveAttribute('data-state', 'current');
+    await expect(widget).not.toContainText(/Faire mon point/i);
 
     expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([]);
   });

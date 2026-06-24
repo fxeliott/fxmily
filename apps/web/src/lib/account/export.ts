@@ -89,6 +89,10 @@ export const EXPORTED_USER_RELATIONS = [
   'constancyScores',
   'scoreEvents',
   'alerts',
+  // V2 S2 — universal tracking engine: member-owned captured responses +
+  // per-instrument cadence rows (no auth secret, no admin-only field → exported).
+  'trackingEntries',
+  'trackingSchedules',
 ] as const;
 
 /**
@@ -156,6 +160,9 @@ export interface UserDataExport {
   constancyScores: SafeConstancyScore[];
   scoreEvents: SafeScoreEvent[];
   alerts: SafeAlert[];
+  // V2 S2 — universal tracking engine captures + per-instrument cadence rows.
+  trackingEntries: SafeTrackingEntry[];
+  trackingSchedules: SafeTrackingSchedule[];
 }
 
 // Whitelist DTOs : explicit `Pick<>` (or shaped literal) per row so a future
@@ -222,6 +229,8 @@ type SafeDiscrepancy = Awaited<ReturnType<typeof db.discrepancy.findMany>>[numbe
 type SafeConstancyScore = Awaited<ReturnType<typeof db.constancyScore.findMany>>[number];
 type SafeScoreEvent = Awaited<ReturnType<typeof db.scoreEvent.findMany>>[number];
 type SafeAlert = Awaited<ReturnType<typeof db.alert.findMany>>[number];
+type SafeTrackingEntry = Awaited<ReturnType<typeof db.trackingEntry.findMany>>[number];
+type SafeTrackingSchedule = Awaited<ReturnType<typeof db.trackingSchedule.findMany>>[number];
 
 type SafePushSubscription = {
   id: string;
@@ -274,6 +283,8 @@ export interface ExportSummary {
   constancyScoreCount: number;
   scoreEventCount: number;
   alertCount: number;
+  trackingEntryCount: number;
+  trackingScheduleCount: number;
 }
 
 export async function buildUserDataExport(userId: string): Promise<UserDataExport> {
@@ -379,6 +390,8 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     constancyScores,
     scoreEvents,
     alerts,
+    trackingEntries,
+    trackingSchedules,
   ] = await Promise.all([
     db.weeklyReview.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
     db.reflectionEntry.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
@@ -405,6 +418,8 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     db.constancyScore.findMany({ where: { memberId: userId }, orderBy: { createdAt: 'asc' } }),
     db.scoreEvent.findMany({ where: { memberId: userId }, orderBy: { createdAt: 'asc' } }),
     db.alert.findMany({ where: { memberId: userId }, orderBy: { createdAt: 'asc' } }),
+    db.trackingEntry.findMany({ where: { userId }, orderBy: { submittedAt: 'asc' } }),
+    db.trackingSchedule.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
   ]);
 
   return {
@@ -450,6 +465,8 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     constancyScores,
     scoreEvents,
     alerts,
+    trackingEntries,
+    trackingSchedules,
   };
 }
 
@@ -489,6 +506,8 @@ export function summariseExport(snapshot: UserDataExport): ExportSummary {
     constancyScoreCount: snapshot.constancyScores.length,
     scoreEventCount: snapshot.scoreEvents.length,
     alertCount: snapshot.alerts.length,
+    trackingEntryCount: snapshot.trackingEntries.length,
+    trackingScheduleCount: snapshot.trackingSchedules.length,
   };
 }
 

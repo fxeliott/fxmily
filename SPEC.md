@@ -2,7 +2,7 @@
 
 **Date initiale** : 2026-05-05 · **Dernière révision** : 2026-06-11 (v1.9 amendement, moteur §8 ré-épinglé `claude-opus-4-8` + §35 Changelog v1.8 → v1.9)
 **Auteur** : Eliot Pena (interview structuré avec Claude Code, skill `/spec`)
-**Version** : **1.9** — voir §20 (v1.0→v1.1), §22 (v1.1→v1.2), §24 (v1.2→v1.3), §26 (v1.3→v1.4), §28 (v1.4→v1.5), §29 (v1.5→v1.6), §32 (v1.6→v1.7), §34 (v1.7→v1.8), §35 (v1.8→v1.9) pour les pivots stack et sous-jalons inventés en cours.
+**Version** : **1.10** — voir §20 (v1.0→v1.1), §22 (v1.1→v1.2), §24 (v1.2→v1.3), §26 (v1.3→v1.4), §28 (v1.4→v1.5), §29 (v1.5→v1.6), §32 (v1.6→v1.7), §34 (v1.7→v1.8), §35 (v1.8→v1.9), §36 (v1.9→v1.10 — moteur de tracking universel) pour les pivots stack et sous-jalons inventés en cours.
 **Statut** : Reflète la réalité 2026-06-11 (plan 10-sessions : S1 + S2 clôturées, data-model S3 migré, moteur §8 re-épinglé `claude-opus-4-8` ; 2233+ tests Vitest verts ; prod LIVE `app.fxmilyapp.com`). Snapshot historique précédent : 2026-05-29 (V2.4 onboarding interview Phases A-C + §8 batch local Opus 4.8 LIVE prod Hetzner sur `app.fxmilyapp.com` ; **différenciateur Fxmily** pre-trade × outcome correlation per-reason déployé V2.3 ; **1618/1618 tests Vitest verts** ; pipeline débrief auto-pilote DD→MM 6/10 SHIPPED — 4 restantes JJ/KK/LL/MM).
 
 ---
@@ -1656,4 +1656,16 @@ Carbone des 4 pipelines existants (weekly / monthly / calendar / onboarding §31
 
 ---
 
-**Fin du SPEC v1.9**
+## 36. Changelog v1.9 → v1.10 (2026-06-24)
+
+- **§36 ajoutée — Moteur de tracking universel (V2 Session 2, `src/lib/tracking/`)** : socle générique pour capturer N'IMPORTE quel instrument de suivi récurrent (au-delà du QCM mindset §27 et du tracking quotidien §7.4), à cadence configurable. 2 tables additives (`TrackingEntry` réponses + `TrackingSchedule` cadence), 11 axes méthodo (`enum TrackingAxis`), contexte de capture (`enum CaptureContext`, D2) + niveau de confiance (D3). Migration `20260624150234_v2_s2_universal_tracking_engine` **ADD-only** (0 table existante touchée).
+- **Invariant longitudinal (NON négociable, miroir §27.7)** : un instrument est **STATIC + VERSIONNÉ** — les `id` de question sont immuables ; tout changement de formulation/échelle ⇒ un NOUVEAU fichier de version (`<key>-v2.ts`), jamais une édition en place. Les tendances ne se comparent qu'**intra-version**. 1er instrument livré : `process-fidelity` v1 (« Fidélité à ton cadre », hebdo, 10 items discipline/psycho).
+- **Isolation statistique (§2/§21.5/§27.7, BLOQUANT)** : `TrackingEntry`/`TrackingSchedule` ont **ZÉRO clé étrangère vers `Trade`/`BehavioralScore`/`ScoreEvent`** (FK uniquement vers `User`, cascade RGPD). La jauge de complétude (D1) agrège les surfaces existantes en **count-only** — jamais de lecture de P&L. La validité du contenu reste indépendante du résultat marché.
+- **Garde-fou Mark Douglas (§2, BLOQUANT)** : aucun item d'instrument ne référence un setup, une direction, une paire, un prix ou une prévision — on suit QUE le respect du cadre. Verrouillé par test (`process-fidelity-v1.test.ts` : corpus de labels clean sous `detectAMFViolation`). Préambule non-punitif (§31.2).
+- **Validation** : schéma Zod `.strict()` construit depuis l'instrument (SSOT wizard ⇄ re-validation serveur, 0 clé inconnue) ; `occurrenceKey` re-dérivé côté serveur (anti-tamper) ; upsert idempotent (`@@unique(userId,instrumentKey,occurrenceKey)`).
+- **RGPD (art.20)** : `trackingEntries`/`trackingSchedules` classées EXPORTED dans le contrat de portabilité (`lib/account/export.ts`) — member-owned, 0 secret.
+- **Profilage onboarding** : in-app par défaut = mock déterministe ($0, prod) ; analyse qualitative réelle = batch LOCAL Claude Opus 4.8 human-in-the-loop (`claude --print`, hors app), ou SDK opt-in `ANTHROPIC_API_KEY`. L'instrument d'entretien onboarding existant reste inchangé (jugé adéquat vs les axes méthodo).
+
+---
+
+**Fin du SPEC v1.10**

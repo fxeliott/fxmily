@@ -44,13 +44,24 @@ function questionValueSchema(q: TrackingQuestion): z.ZodTypeAny {
     }
     case 'multi_tag': {
       const values = q.options.map((o) => o.value);
-      let arr = z
-        .array(z.string().refine((v) => values.includes(v), { message: 'unknown_option' }))
-        .refine((xs) => new Set(xs).size === xs.length, { message: 'duplicate_tag' });
-      if (typeof q.maxSelected === 'number') {
-        arr = arr.refine((xs) => xs.length <= q.maxSelected!, { message: 'too_many_tags' });
-      }
-      return arr;
+      const element = z.string().refine((v) => values.includes(v), { message: 'unknown_option' });
+      const baseArray = z.array(element);
+      // The server is the SOLE authority on "answered": a REQUIRED multi_tag must
+      // carry ≥1 tag, so a tampered literal `[]` can't pass as a non-answer (the
+      // wizard already sends '' for an empty selection → absent → required-missing,
+      // but Zod must close the hole too). `.min(1)` lives on the base ZodArray —
+      // after a `.refine` the type widens to ZodEffects without `.min`. An OPTIONAL
+      // multi_tag may legitimately be empty. The chain stays typed (no widening to
+      // ZodTypeAny) so the refine callbacks see `string[]`.
+      const required = q.required !== false;
+      const deduped = (required ? baseArray.min(1, { message: 'required' }) : baseArray).refine(
+        (xs) => new Set(xs).size === xs.length,
+        { message: 'duplicate_tag' },
+      );
+      const cap = q.maxSelected;
+      return typeof cap === 'number'
+        ? deduped.refine((xs) => xs.length <= cap, { message: 'too_many_tags' })
+        : deduped;
     }
   }
 }

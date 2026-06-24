@@ -90,6 +90,31 @@ describe('buildResponsesSchema', () => {
     );
     expect(schema.safeParse({ b: true, l: 4, s: 2, n: 1.5, c: 'x', m: ['p'] }).success).toBe(false);
   });
+
+  it('rejects an empty array for a REQUIRED multi_tag (server is authority on "answered")', () => {
+    // The wizard sends '' for an empty selection (→ absent → required-missing),
+    // but a tampered literal `[]` must not slip through as a non-answer.
+    const r = schema.safeParse({ b: true, l: 4, s: 2, n: 30, c: 'x', m: [] });
+    expect(r.success).toBe(false);
+  });
+
+  it('accepts an empty array for an OPTIONAL multi_tag (not over-restricted)', () => {
+    const optional: TrackingInstrument = {
+      ...KITCHEN_SINK,
+      questions: [
+        {
+          id: 'mo',
+          kind: 'multi_tag',
+          label: 'mo',
+          required: false,
+          options: [{ value: 'p', label: 'P' }],
+        },
+      ],
+    };
+    const s = buildResponsesSchema(optional);
+    expect(s.safeParse({ mo: [] }).success).toBe(true); // present-but-empty is fine
+    expect(s.safeParse({}).success).toBe(true); // omitted is fine
+  });
 });
 
 describe('buildSubmissionSchema', () => {

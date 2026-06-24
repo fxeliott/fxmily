@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { DEFAULT_ANTHROPIC_MODEL, KNOWN_CLAUDE_MODEL_SLUGS } from './ai/models';
+
 /**
  * Schéma de validation des variables d'environnement.
  * Au-delà de la sécurité, ça nous donne un type fort pour `env.*` dans tout le code.
@@ -80,23 +82,17 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   /// Modèle Claude pour le rapport hebdo IA (J8). Allowlist refine pour
   /// bloquer un drift accidentel (typo dans l'env qui ferait facturer
-  /// `claude-opus-4-7` au lieu de `claude-sonnet-4-6` = 5× le coût). La
-  /// liste matche `PRICING_USD_PER_MTOK` (`lib/weekly-report/pricing.ts`).
-  /// Étendre ici quand un nouveau modèle est ajouté à la pricing table.
+  /// `claude-opus-4-7` au lieu de `claude-sonnet-4-6` = 5× le coût). La liste
+  /// est désormais l'unique SSOT `lib/ai/models.ts` (`KNOWN_CLAUDE_MODEL_SLUGS`),
+  /// elle-même tenue en parité avec l'allowlist bash et la pricing table par
+  /// `models.parity.test.ts`. Ajouter un modèle = l'ajouter dans `models.ts`.
   ANTHROPIC_MODEL: z
     .string()
     .refine(
-      (v) =>
-        [
-          'claude-fable-5',
-          'claude-opus-4-8',
-          'claude-opus-4-7',
-          'claude-sonnet-4-6',
-          'claude-haiku-4-5',
-        ].includes(v),
+      (v) => KNOWN_CLAUDE_MODEL_SLUGS.includes(v),
       'ANTHROPIC_MODEL doit être un modèle pricé (claude-fable-5, claude-opus-4-8, claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5).',
     )
-    .default('claude-sonnet-4-6'),
+    .default(DEFAULT_ANTHROPIC_MODEL),
   /// Destinataire du digest hebdo IA admin. **REQUIS** en runtime (Phase T
   /// security hardening 2026-05-09 — l'email perso hardcoded a été retiré
   /// du repo public). Tant que `fxmilyapp.com` n'est pas domain-verified

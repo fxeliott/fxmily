@@ -334,6 +334,11 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
+  /* Alias API shadcn (`bg-destructive`/`border-destructive`/`ring-destructive`
+     dans button.tsx, état aria-invalid + variant destructive). Pointe sur la
+     racine danger canonique `--bad` — sans cet alias, ces classes Tailwind 4
+     résolvent à vide (bordure/ring transparents). Cf. app/_design/TOKENS.md. */
+  --color-destructive: var(--bad);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--acc);

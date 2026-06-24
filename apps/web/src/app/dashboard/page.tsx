@@ -20,6 +20,7 @@ import { TodayGuidance } from '@/components/dashboard/today-guidance';
 import { WeeklyInsightCard } from '@/components/dashboard/weekly-insight-card';
 import { DouglasInboxWidget } from '@/components/library/douglas-inbox-widget';
 import { CoachingAxisCard } from '@/components/objectives/coaching-axis-card';
+import { MethodGoalCard } from '@/components/objectives/method-goal-card';
 import { ProfileStatusWidget } from '@/components/onboarding/profile-status-widget';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { btnVariants } from '@/components/ui/btn';
@@ -144,6 +145,24 @@ export default async function DashboardPage() {
     null;
   const allDone = guidance !== null && !guidance.actions.some((a) => a.state === 'todo');
 
+  // S25 #1 — un SEUL fil conducteur contextuel à l'heure. Pendant la session
+  // vivante (12h–20h Paris : analyse/exécution/gestion), le focal du hero devient
+  // le MOMENT de process de la méthode (pas un QCM admin) ; l'action admin passe
+  // alors en secondaire. Hors session (before/closed) : comportement inchangé.
+  // Dérivé de `sessionRoutine` déjà lu (0 requête ajoutée). Posture §2 (process
+  // pur, jamais un signal) + §31.2 (calme, pas de countdown).
+  const sessionFocus =
+    sessionRoutine &&
+    (sessionRoutine.phase === 'analysis' ||
+      sessionRoutine.phase === 'execution' ||
+      sessionRoutine.phase === 'management')
+      ? {
+          headline: sessionRoutine.guidance.headline,
+          line: sessionRoutine.guidance.line,
+          phase: sessionRoutine.phase,
+        }
+      : null;
+
   // Complétude du jour (anneau hero) : fraction des gestes ACTIONNABLES faits.
   // Les actions 'info' (ni à faire ni faites — ex. réunion) sont exclues du
   // dénominateur, sinon le ratio mentirait. Jamais rendu si 0 actionnable.
@@ -198,6 +217,7 @@ export default async function DashboardPage() {
           primaryAction={primaryAction}
           allDone={allDone}
           dayProgress={dayProgress}
+          sessionFocus={sessionFocus}
         />
 
         {/* S11 — calm streak-milestone celebration, only on the crossing day.
@@ -249,6 +269,13 @@ export default async function DashboardPage() {
             null sans profil (jamais d'axe inventé). */}
         {objectives ? (
           <CoachingAxisCard axis={objectives.coachingAxis} variant="compact" className="mb-6" />
+        ) : null}
+        {/* S25 — l'objectif de méthode DÉRIVÉ + ÉVOLUTIF (règle la plus faible sur
+            30j → palier doux). Surfacé compact sur le hub pour que le membre voie
+            « MON objectif issu de MA donnée, et j'avance dessus » sans naviguer.
+            Déterministe, §2-safe. Rend null sans assez de trades / déjà fidèle. */}
+        {objectives ? (
+          <MethodGoalCard goal={objectives.methodGoal} variant="compact" className="mb-6" />
         ) : null}
 
         {/* V2 refonte J1 — slim activity strip (streak dans le hero). S18 — passée

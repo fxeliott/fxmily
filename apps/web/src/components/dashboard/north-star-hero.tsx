@@ -1,4 +1,5 @@
 import {
+  Activity,
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
@@ -8,6 +9,8 @@ import {
   Check,
   Minus,
   Moon,
+  ScanSearch,
+  ShieldCheck,
   Sun,
   Users,
   type LucideIcon,
@@ -20,7 +23,19 @@ import { InfoDot } from '@/components/ui/info-dot';
 import { Sparkline } from '@/components/ui/sparkline';
 import type { GuidanceAction, GuidanceKind } from '@/lib/daily-guidance/service';
 import type { BehavioralScoreTrendPoint, SerializedBehavioralScore } from '@/lib/scoring/service';
+import type { SessionPhase } from '@/lib/session-routine/phase';
 import { cn } from '@/lib/utils';
+
+/** The three phases during which the trading session is LIVE (12h–20h Paris).
+ *  Only these reach the hero as a focal — `before`/`closed` keep the admin CTA. */
+type TradingPhase = Extract<SessionPhase, 'analysis' | 'execution' | 'management'>;
+
+/** Calm, non-aggressive glyph per live phase (no crosshair/target — §2/§31.2). */
+const PHASE_ICON: Record<TradingPhase, LucideIcon> = {
+  analysis: ScanSearch,
+  execution: Activity,
+  management: ShieldCheck,
+};
 
 import { DailyCompletionRing } from './daily-completion-ring';
 
@@ -136,6 +151,55 @@ function HeroNextActionCard({ action }: { action: GuidanceAction }) {
   );
 }
 
+/** S25 #1 — the LIVE trading moment, rendered as the hero's focal during the
+ *  session hours so the "now" thread is contextual to the trading clock (not an
+ *  admin task). Informational (not a link) — the actual CTAs (log a trade,
+ *  check-in) stay available below; this just says WHICH moment of the method's
+ *  day it is. Posture §2 : the copy is pure process/discipline. §31.2 : calm,
+ *  no countdown, no red — the same `--acc-dim` calm surface as the next-action. */
+function HeroSessionFocus({
+  focus,
+}: {
+  focus: { headline: string; line: string; phase: TradingPhase };
+}) {
+  const Icon = PHASE_ICON[focus.phase];
+  return (
+    <div
+      data-slot="hero-session-focus"
+      data-phase={focus.phase}
+      className="rounded-card flex items-start gap-3.5 border border-[var(--b-acc)] bg-[var(--acc-dim)] p-4"
+    >
+      <span className="rounded-control grid h-11 w-11 shrink-0 place-items-center border border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]">
+        <Icon className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-[15px] leading-tight font-semibold text-[var(--t-1)]">
+          {focus.headline}
+        </span>
+        <span className="t-cap leading-snug text-[var(--t-2)]">{focus.line}</span>
+      </span>
+    </div>
+  );
+}
+
+/** S25 #1 — when the session focus owns the hero, an outstanding admin action is
+ *  demoted to a quiet secondary line (never lost, never competing for the eye).
+ *  §31.2 : muted tone, no red, no "en retard". */
+function HeroSecondaryAction({ action }: { action: GuidanceAction }) {
+  return (
+    <Link
+      href={action.href}
+      data-slot="hero-secondary-action"
+      data-kind={action.kind}
+      className="rounded-control inline-flex w-fit items-center gap-1.5 px-1 py-1 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+    >
+      <span className="text-[var(--t-4)]">Aussi à faire :</span>
+      <span className="font-medium">{action.title}</span>
+      <ArrowRight className="h-3 w-3 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+    </Link>
+  );
+}
+
 interface NorthStarHeroProps {
   greeting: string;
   firstName: string;
@@ -149,6 +213,11 @@ interface NorthStarHeroProps {
   allDone: boolean;
   /** Today's actionable-guidance completion (done/total, excl. `info`), or null. */
   dayProgress: { done: number; total: number } | null;
+  /** S25 #1 — when the trading session is LIVE (12h–20h Paris), the calm process
+   *  moment of the method's day. It becomes the hero focal so the "now" thread is
+   *  contextual to the trading clock; the admin `primaryAction` is then demoted to
+   *  a quiet secondary line. Null off-hours → unchanged behaviour. */
+  sessionFocus: { headline: string; line: string; phase: TradingPhase } | null;
 }
 
 export function NorthStarHero({
@@ -161,6 +230,7 @@ export function NorthStarHero({
   primaryAction,
   allDone,
   dayProgress,
+  sessionFocus,
 }: NorthStarHeroProps) {
   const disciplinePoints = history.map((p) => p.discipline).filter((n): n is number => n !== null);
   const disciplineValue = score?.disciplineScore ?? null;
@@ -267,10 +337,19 @@ export function NorthStarHero({
             </div>
           </div>
 
-          {/* ---- RIGHT — prochaine étape ---- */}
+          {/* ---- RIGHT — prochaine étape / moment de session ---- */}
           <div className="flex flex-col gap-2.5">
-            <span className="t-eyebrow text-[var(--t-3)]">Prochaine étape</span>
-            {primaryAction ? (
+            {/* S25 #1 — during the live session the eyebrow + focal track the
+                trading clock ("En ce moment"); off-hours it's the next admin step. */}
+            <span className="t-eyebrow text-[var(--t-3)]">
+              {sessionFocus ? 'En ce moment' : 'Prochaine étape'}
+            </span>
+            {sessionFocus ? (
+              <>
+                <HeroSessionFocus focus={sessionFocus} />
+                {primaryAction ? <HeroSecondaryAction action={primaryAction} /> : null}
+              </>
+            ) : primaryAction ? (
               <HeroNextActionCard action={primaryAction} />
             ) : (
               <div className="rounded-card flex items-center gap-3.5 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">

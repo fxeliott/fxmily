@@ -6,6 +6,7 @@ import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { CoachingAxisCard } from '@/components/objectives/coaching-axis-card';
 import { JourneyRoadmap } from '@/components/objectives/journey-roadmap';
+import { MethodGoalCard } from '@/components/objectives/method-goal-card';
 import { NextSteps } from '@/components/objectives/next-steps';
 import { ObjectiveRings } from '@/components/objectives/objective-rings';
 import { ObjectivesHero } from '@/components/objectives/objectives-hero';
@@ -75,6 +76,17 @@ export default async function ObjectifsPage() {
         {view.coachingAxis ? (
           <section className="wow-reveal" aria-labelledby="coaching-axis-heading">
             <CoachingAxisCard axis={view.coachingAxis} variant="full" />
+          </section>
+        ) : null}
+
+        {/* 1.7 — S25 : l'objectif de méthode DÉRIVÉ de sa donnée réelle (la règle
+            dure la plus faible sur 30j) + palier doux. Complète l'axe STATED
+            ci-dessus (intention onboarding) par un objectif MESURÉ qui évolue avec
+            sa pratique. Déterministe (pas de badge IA), §2-safe. Rend null tant
+            qu'il n'a pas assez de trades / est déjà fidèle partout. */}
+        {view.methodGoal ? (
+          <section className="wow-reveal" aria-label="Ton objectif de méthode du moment">
+            <MethodGoalCard goal={view.methodGoal} variant="full" />
           </section>
         ) : null}
 

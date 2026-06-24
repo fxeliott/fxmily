@@ -41,7 +41,10 @@ import {
 } from './service';
 
 /** A realistic post-Zod close input (the schema already collapsed the form). */
-function closeInput(processComplete: boolean | null): CloseTradeInput {
+function closeInput(
+  processComplete: boolean | null,
+  management: Partial<Pick<CloseTradeInput, 'slPerRule' | 'movedToBe' | 'partialAtTarget'>> = {},
+): CloseTradeInput {
   return {
     exitedAt: new Date('2026-06-05T11:00:00.000Z'),
     exitPrice: 1.105,
@@ -49,6 +52,10 @@ function closeInput(processComplete: boolean | null): CloseTradeInput {
     emotionDuring: ['calm'],
     emotionAfter: ['confident'],
     processComplete,
+    // S26 — management-fidelity acts (default: not answered).
+    slPerRule: management.slPerRule ?? null,
+    movedToBe: management.movedToBe ?? null,
+    partialAtTarget: management.partialAtTarget ?? null,
     tags: [],
     notes: undefined,
     screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',
@@ -90,6 +97,9 @@ function closedRow(processComplete: boolean | null) {
     planRespected: true,
     hedgeRespected: null,
     processComplete,
+    slPerRule: null,
+    movedToBe: null,
+    partialAtTarget: null,
     notes: null,
     screenshotEntryKey: 'trades/clx0abc1234/abcdef0123456789abcdef0123456789.jpg',
     exitedAt: now,
@@ -196,6 +206,52 @@ describe('closeTrade — processComplete ("oublis" axis, SPEC §28/§21)', () =>
       const serialized = await closeTrade('user-1', 'trade-1', closeInput(value));
       expect(serialized.processComplete).toBe(value);
     }
+  });
+});
+
+describe('closeTrade — S26 management-fidelity acts (SPEC §2: the ACT only)', () => {
+  it('PERSISTS the 3 management acts verbatim in the update payload', async () => {
+    const updateMock = wireTransaction(null);
+
+    await closeTrade(
+      'user-1',
+      'trade-1',
+      closeInput(null, { slPerRule: true, movedToBe: false, partialAtTarget: true }),
+    );
+
+    const call = updateMock.mock.calls[0];
+    if (!call) throw new Error('expected tx.trade.update to be called');
+    const arg = call[0] as {
+      data: {
+        slPerRule: boolean | null;
+        movedToBe: boolean | null;
+        partialAtTarget: boolean | null;
+      };
+    };
+    expect(arg.data.slPerRule).toBe(true);
+    expect(arg.data.movedToBe).toBe(false);
+    expect(arg.data.partialAtTarget).toBe(true);
+  });
+
+  it('passes null through unchanged (not answered — never coerced to false)', async () => {
+    const updateMock = wireTransaction(null);
+
+    await closeTrade('user-1', 'trade-1', closeInput(null));
+
+    const call = updateMock.mock.calls[0];
+    if (!call) throw new Error('expected tx.trade.update to be called');
+    const arg = call[0] as {
+      data: {
+        slPerRule: boolean | null;
+        movedToBe: boolean | null;
+        partialAtTarget: boolean | null;
+      };
+    };
+    // Identical null-passthrough to processComplete: an unanswered act is never
+    // fabricated into a "rule broken" signal the member never gave.
+    expect(arg.data.slPerRule).toBeNull();
+    expect(arg.data.movedToBe).toBeNull();
+    expect(arg.data.partialAtTarget).toBeNull();
   });
 });
 

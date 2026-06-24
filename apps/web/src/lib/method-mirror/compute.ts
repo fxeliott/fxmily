@@ -33,7 +33,16 @@ const TARGET_RR = 3;
 /** Below this many entered trades, we don't mirror (anti-fabrication). */
 const MIN_ENTERED = 5;
 
-export type MethodRuleKey = 'window' | 'oneADay' | 'cut' | 'targetRR';
+export type MethodRuleKey =
+  // S24 — derived from timestamps/plannedRR (entry & timing phase).
+  | 'window'
+  | 'oneADay'
+  | 'cut'
+  | 'targetRR'
+  // S26 — captured at close (management phase). Tri-state self-declared ACTS.
+  | 'slRule'
+  | 'beAtR1'
+  | 'partial';
 
 /** A trade reduced to exactly what the mirror needs (Prisma-Decimal-free). */
 export interface MirrorTrade {
@@ -41,6 +50,15 @@ export interface MirrorTrade {
   closedAt: Date | null;
   /** Planned reward:risk, as a plain number (Prisma Decimal → Number at the seam). */
   plannedRR: number;
+  /**
+   * S26 — management-fidelity acts, answered at close. Tri-state each: `true`
+   * (followed the rule), `false` (did not), `null` (not answered / open trade /
+   * legacy). Optional so older callers / open trades omit them. SPEC §2: the ACT
+   * of following the member's OWN execution rule, never a market call.
+   */
+  slPerRule?: boolean | null;
+  movedToBe?: boolean | null;
+  partialAtTarget?: boolean | null;
 }
 
 export interface MethodRule {
@@ -109,6 +127,20 @@ export function computeMethodMirror(
     if (sameDay && localHour(closedAt, timezone) < CUT_HOUR) cutRespected += 1;
   }
 
+  // S26 — management-phase rules (captured at close). Each is a tri-state ACT:
+  // the denominator counts ONLY trades where the member answered (field !== null,
+  // which implies closed), so an open/unanswered/legacy trade never penalises the
+  // rate — exact null-skip parity with `processComplete`. `rate()` returns null
+  // when nothing has been answered yet → the card shows "—" calmly.
+  const answered = (pick: (t: MirrorTrade) => boolean | null | undefined) =>
+    trades.filter((t) => pick(t) !== null && pick(t) !== undefined);
+  const slAnswered = answered((t) => t.slPerRule);
+  const beAnswered = answered((t) => t.movedToBe);
+  const partialAnswered = answered((t) => t.partialAtTarget);
+  const slGood = slAnswered.filter((t) => t.slPerRule === true).length;
+  const beGood = beAnswered.filter((t) => t.movedToBe === true).length;
+  const partialGood = partialAnswered.filter((t) => t.partialAtTarget === true).length;
+
   const rules: MethodRule[] = [
     {
       key: 'window',
@@ -141,6 +173,33 @@ export function computeMethodMirror(
       good: targetingRR,
       total: entered,
       rate: rate(targetingRR, entered),
+    },
+    // S26 — management phase (self-declared at close). Faithful to the method
+    // transcript ("gestion de trades technique"). Process ACTS, never a market
+    // call : we mirror that the member followed HIS OWN rule, never where.
+    {
+      key: 'slRule',
+      label: 'Stop selon ta règle',
+      hint: 'Tes stops posés selon ta règle (au-delà de ton dernier extrême), jamais au hasard.',
+      good: slGood,
+      total: slAnswered.length,
+      rate: rate(slGood, slAnswered.length),
+    },
+    {
+      key: 'beAtR1',
+      label: 'Break-even à RR 1',
+      hint: 'Les trades où tu as sécurisé au break-even dès le RR 1, comme prévu.',
+      good: beGood,
+      total: beAnswered.length,
+      rate: rate(beGood, beAnswered.length),
+    },
+    {
+      key: 'partial',
+      label: 'Sécurisation au TP',
+      hint: 'Tes clôtures partielles au TP (90 %), le reste laissé courir jusqu’à 20h.',
+      good: partialGood,
+      total: partialAnswered.length,
+      rate: rate(partialGood, partialAnswered.length),
     },
   ];
 

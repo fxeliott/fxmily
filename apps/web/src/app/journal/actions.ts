@@ -261,6 +261,11 @@ export async function closeTradeAction(
     // SPEC §28/§21 — "oublis" axis. OPTIONAL: absent/'' → schema maps to null
     // (not answered — no required-field gate, CANON). Mirror of hedgeRespected.
     processComplete: formData.get('processComplete') ?? undefined,
+    // S26 — « Fidélité à la gestion » : 3 management acts. OPTIONAL, same null
+    // mapping as processComplete (absent/'' → null, no required-field gate).
+    slPerRule: formData.get('slPerRule') ?? undefined,
+    movedToBe: formData.get('movedToBe') ?? undefined,
+    partialAtTarget: formData.get('partialAtTarget') ?? undefined,
     // V1.8 — post-outcome bias tags (CFA LESSOR + Steenbarger). Optional ;
     // the Zod schema defaults to `[]` if missing.
     tags: formData.getAll('tags').filter((v): v is string => typeof v === 'string'),
@@ -296,6 +301,9 @@ export async function closeTradeAction(
       emotionDuring: data.emotionDuring,
       emotionAfter: data.emotionAfter,
       processComplete: data.processComplete,
+      slPerRule: data.slPerRule,
+      movedToBe: data.movedToBe,
+      partialAtTarget: data.partialAtTarget,
       tags: data.tags,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
       screenshotExitKey: data.screenshotExitKey,

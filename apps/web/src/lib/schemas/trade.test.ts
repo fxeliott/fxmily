@@ -257,6 +257,34 @@ describe('tradeCloseSchema', () => {
       expect(result.success).toBe(false);
     });
   });
+
+  // S26 — « Fidélité à la gestion ». Same tri-state coercion as processComplete,
+  // for the 3 management acts. OPTIONAL (no required-field gate, CANON).
+  describe('management-fidelity acts (S26)', () => {
+    const FIELDS = ['slPerRule', 'movedToBe', 'partialAtTarget'] as const;
+
+    it.each(FIELDS)('%s defaults to null when omitted (OPTIONAL)', (field) => {
+      const result = tradeCloseSchema.safeParse(baseClose);
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data[field]).toBeNull();
+    });
+
+    it.each(FIELDS)('%s coerces "true"/"false" and maps "na"/"" → null', (field) => {
+      expect(tradeCloseSchema.safeParse({ ...baseClose, [field]: 'true' }).success).toBe(true);
+      const yes = tradeCloseSchema.safeParse({ ...baseClose, [field]: 'true' });
+      if (yes.success) expect(yes.data[field]).toBe(true);
+      const no = tradeCloseSchema.safeParse({ ...baseClose, [field]: 'false' });
+      if (no.success) expect(no.data[field]).toBe(false);
+      const na = tradeCloseSchema.safeParse({ ...baseClose, [field]: 'na' });
+      if (na.success) expect(na.data[field]).toBeNull();
+      const empty = tradeCloseSchema.safeParse({ ...baseClose, [field]: '' });
+      if (empty.success) expect(empty.data[field]).toBeNull();
+    });
+
+    it.each(FIELDS)('%s rejects an unknown value (closed tri-state union)', (field) => {
+      expect(tradeCloseSchema.safeParse({ ...baseClose, [field]: 'maybe' }).success).toBe(false);
+    });
+  });
 });
 
 describe('tradeFullSchema cross-validation', () => {

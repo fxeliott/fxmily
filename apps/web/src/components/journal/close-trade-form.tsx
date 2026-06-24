@@ -218,6 +218,91 @@ export function CloseTradeForm({ tradeId, enteredAtIso }: CloseTradeFormProps) {
         </div>
       </fieldset>
 
+      {/* S26 — « Fidélité à ta gestion » : les 3 règles de gestion dures de la
+          méthode (stop selon la règle, break-even à RR1, sécurisation 90/10 au
+          TP). Toutes OPTIONNELLES (no submit gate, CANON). Posture §2 : on note
+          l'ACTE d'avoir suivi TA propre règle d'exécution, jamais un signal de
+          marché. §31.2 : cadre calme, jamais punitif. */}
+      <div className="rounded-card flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-2)]/40 p-3.5">
+        <div className="flex flex-col gap-0.5">
+          <span className="t-eyebrow-lg text-[var(--t-3)]">
+            Fidélité à ta gestion{' '}
+            <span className="font-normal text-[var(--t-4)] normal-case">(optionnel)</span>
+          </span>
+          <span className="t-foot text-[var(--t-4)]">
+            As-tu tenu tes règles de gestion sur ce trade ? Un miroir, pas un jugement.
+          </span>
+        </div>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="t-foot mb-1 text-[var(--t-3)]">
+            Stop placé selon ta règle (au-delà de ton dernier extrême) ?
+          </legend>
+          <div
+            role="radiogroup"
+            aria-label="Stop placé selon ta règle"
+            className="grid grid-cols-2 gap-2"
+          >
+            <ManagementAdherenceCard
+              name="slPerRule"
+              value="true"
+              label="Oui, selon ma règle"
+              disabled={pending}
+            />
+            <ManagementAdherenceCard
+              name="slPerRule"
+              value="false"
+              label="Non, au hasard"
+              disabled={pending}
+            />
+          </div>
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="t-foot mb-1 text-[var(--t-3)]">
+            Passage au break-even dès le RR 1 ?
+          </legend>
+          <div role="radiogroup" aria-label="Break-even à RR 1" className="grid grid-cols-2 gap-2">
+            <ManagementAdherenceCard
+              name="movedToBe"
+              value="true"
+              label="Oui, BE à RR 1"
+              disabled={pending}
+            />
+            <ManagementAdherenceCard
+              name="movedToBe"
+              value="false"
+              label="Non"
+              disabled={pending}
+            />
+          </div>
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-2">
+          <legend className="t-foot mb-1 text-[var(--t-3)]">
+            Sécurisation au TP (90 % clôturés, 10 % jusqu’à 20h) ?
+          </legend>
+          <div
+            role="radiogroup"
+            aria-label="Sécurisation partielle au TP"
+            className="grid grid-cols-2 gap-2"
+          >
+            <ManagementAdherenceCard
+              name="partialAtTarget"
+              value="true"
+              label="Oui, 90/10"
+              disabled={pending}
+            />
+            <ManagementAdherenceCard
+              name="partialAtTarget"
+              value="false"
+              label="Non"
+              disabled={pending}
+            />
+          </div>
+        </fieldset>
+      </div>
+
       {/* V1.8 — Post-outcome bias tags (LESSOR + Steenbarger) */}
       <TradeTagsPicker value={tags} onChange={setTags} disabled={pending} />
       {state.fieldErrors?.tags ? (
@@ -381,6 +466,46 @@ function ProcessCompleteCard({
         disabled={disabled}
         className="peer sr-only"
       />
+      <span aria-hidden className="absolute top-2 right-2 hidden peer-checked:inline">
+        <Check className="h-3 w-3" strokeWidth={2.5} />
+      </span>
+      <span>{label}</span>
+    </label>
+  );
+}
+
+/**
+ * S26 — radio card for a management-fidelity act. Parametrised by `name` (one
+ * radiogroup per act). Exact visual clone of {@link ProcessCompleteCard}: green
+ * tone on the positive answer, accent on the negative — calm (§31.2), never red.
+ */
+function ManagementAdherenceCard({
+  name,
+  value,
+  label,
+  disabled,
+}: {
+  name: string;
+  value: 'true' | 'false';
+  label: string;
+  disabled?: boolean;
+}) {
+  const toneChecked =
+    value === 'true'
+      ? 'has-[:checked]:border-[var(--ok)] has-[:checked]:bg-[var(--ok-dim-2)] has-[:checked]:text-[var(--ok)]'
+      : 'has-[:checked]:border-[var(--b-acc)] has-[:checked]:bg-[var(--acc-dim)] has-[:checked]:text-[var(--t-1)]';
+
+  return (
+    <label
+      className={cn(
+        'rounded-card relative flex min-h-12 cursor-pointer items-center justify-center gap-1.5 border bg-[var(--bg-1)] px-3 py-3 text-center text-[12px] font-semibold tracking-[0.06em] text-[var(--t-3)] uppercase transition-all',
+        'border-[var(--b-default)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
+        'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--acc)]',
+        toneChecked,
+        disabled && 'cursor-not-allowed opacity-60',
+      )}
+    >
+      <input type="radio" name={name} value={value} disabled={disabled} className="peer sr-only" />
       <span aria-hidden className="absolute top-2 right-2 hidden peer-checked:inline">
         <Check className="h-3 w-3" strokeWidth={2.5} />
       </span>

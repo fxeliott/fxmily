@@ -79,6 +79,71 @@ describe('computeMethodMirror — winter DST (Paris = UTC+1, January)', () => {
   });
 });
 
+describe('computeMethodMirror — S26 management rules (captured at close)', () => {
+  // 4 trades, management acts partly answered:
+  //  T1 all three true ; T2 sl true / be false / partial null ; T3 all false ;
+  //  T4 all null (open / unanswered → excluded from every management denominator).
+  const trades: MirrorTrade[] = [
+    {
+      enteredAt: new Date('2026-06-10T12:00:00Z'),
+      closedAt: new Date('2026-06-10T15:00:00Z'),
+      plannedRR: 3,
+      slPerRule: true,
+      movedToBe: true,
+      partialAtTarget: true,
+    },
+    {
+      enteredAt: new Date('2026-06-11T12:00:00Z'),
+      closedAt: new Date('2026-06-11T15:00:00Z'),
+      plannedRR: 3,
+      slPerRule: true,
+      movedToBe: false,
+      partialAtTarget: null,
+    },
+    {
+      enteredAt: new Date('2026-06-12T12:00:00Z'),
+      closedAt: new Date('2026-06-12T15:00:00Z'),
+      plannedRR: 3,
+      slPerRule: false,
+      movedToBe: false,
+      partialAtTarget: false,
+    },
+    {
+      enteredAt: new Date('2026-06-13T12:00:00Z'),
+      closedAt: null,
+      plannedRR: 3,
+    },
+  ];
+  const mirror = computeMethodMirror(trades, 30);
+
+  it('SL-per-rule: 2 of 3 answered are true (null-skip excludes the open trade)', () => {
+    const r = ruleByKey(mirror, 'slRule');
+    expect([r.good, r.total, r.rate]).toEqual([2, 3, 67]);
+  });
+
+  it('break-even at RR1: 1 of 3 answered true', () => {
+    const r = ruleByKey(mirror, 'beAtR1');
+    expect([r.good, r.total, r.rate]).toEqual([1, 3, 33]);
+  });
+
+  it('partial secure at TP: only 2 answered (T2 + T4 null skipped), 1 true', () => {
+    const r = ruleByKey(mirror, 'partial');
+    expect([r.good, r.total, r.rate]).toEqual([1, 2, 50]);
+  });
+
+  it('a rule nobody answered yet has a null rate (never fabricated)', () => {
+    const noneAnswered = computeMethodMirror(
+      [
+        { enteredAt: new Date('2026-06-10T12:00:00Z'), closedAt: null, plannedRR: 3 },
+        { enteredAt: new Date('2026-06-11T12:00:00Z'), closedAt: null, plannedRR: 3 },
+      ],
+      30,
+    );
+    const r = ruleByKey(noneAnswered, 'beAtR1');
+    expect([r.good, r.total, r.rate]).toEqual([0, 0, null]);
+  });
+});
+
 describe('computeMethodMirror — guards', () => {
   it('empty input → every rate is null, never fabricated', () => {
     const m = computeMethodMirror([], 30);

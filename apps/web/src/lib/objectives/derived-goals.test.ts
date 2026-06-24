@@ -92,4 +92,28 @@ describe('deriveMethodGoal', () => {
     const goal = deriveMethodGoal(mirror([rule('cut', 60, 5)], true, 30));
     expect(goal).toMatchObject({ rule: 'cut', current: 60, good: 3, total: 5, windowDays: 30 });
   });
+
+  it('S26 — a management rule (e.g. break-even) can become the unique objective', () => {
+    // The member is solid on entry/timing but weakest on his management acts:
+    // the auto-derived objective must surface the management gap, no extra wiring.
+    const m = mirror([
+      rule('window', 85, 10),
+      rule('oneADay', 90, 10),
+      rule('cut', 80, 10),
+      rule('targetRR', 88, 10),
+      rule('slRule', 70, 6),
+      rule('beAtR1', 45, 6), // weakest
+      rule('partial', 60, 5),
+    ]);
+    const goal = deriveMethodGoal(m);
+    expect(goal?.rule).toBe('beAtR1');
+    expect(goal?.current).toBe(45);
+    expect(goal?.target).toBe(50);
+  });
+
+  it('S26 — a management rule with too few answers (< 3) cannot win the objective', () => {
+    // beAtR1 0% but only 2 answers → anti-noise floor excludes it; cut wins.
+    const m = mirror([rule('beAtR1', 0, 2), rule('cut', 55, 10)]);
+    expect(deriveMethodGoal(m)?.rule).toBe('cut');
+  });
 });

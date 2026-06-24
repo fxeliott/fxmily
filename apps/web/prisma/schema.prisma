@@ -558,7 +558,27 @@ model Trade {
   /// the ACT of completeness/forgetting, NEVER advise on the trade itself. Pure
   /// additive nullable Boolean — exact mirror of `DailyCheckin.marketAnalysisDone`.
   processComplete Boolean?       @map("process_complete")
-  notes           String?        @db.Text
+
+  /// S26 — « Fidélité à la gestion ». Three management hard-rules of Eliott's
+  /// method (transcript "gestion de trades technique"), answered at CLOSE next to
+  /// `processComplete`. Tri-state each: `true` (followed the rule), `false` (did
+  /// not), `null` (not answered — OPTIONAL, NO required-field gate, CANON). SPEC
+  /// §2 posture (identical to `processComplete`/`marketAnalysisDone`): we track
+  /// the ACT of following YOUR OWN execution rule, NEVER the trade content / a
+  /// market call (no level, no direction, no setup). Pure additive nullable
+  /// Booleans → null-skip everywhere → byte-identical for legacy trades.
+
+  /// Method rule: "SL placé en M15, toujours au-delà de mon dernier extrême,
+  /// jamais au hasard". The ACT of placing the stop per the member's OWN rule.
+  slPerRule       Boolean? @map("sl_per_rule")
+  /// Method rule: "dès le RR 1, je passe mon SL au break-even (légèrement
+  /// positif)". The ACT of moving to break-even at RR 1 as planned.
+  movedToBe       Boolean? @map("moved_to_be")
+  /// Method rule: "au TP (RR 2–3), je clôture 90 % et laisse 10 % courir jusqu'à
+  /// la bougie 20h". The ACT of the planned partial secure at target.
+  partialAtTarget Boolean? @map("partial_at_target")
+
+  notes String? @db.Text
 
   /// Storage key for the pre-entry screenshot (mandatory at creation, but the
   /// column is nullable to allow administrative repairs). Format follows

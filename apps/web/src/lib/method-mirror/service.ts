@@ -21,7 +21,15 @@ export async function getMethodMirror(
   const since = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
   const rows = await db.trade.findMany({
     where: { userId, enteredAt: { gte: since } },
-    select: { enteredAt: true, closedAt: true, plannedRR: true },
+    select: {
+      enteredAt: true,
+      closedAt: true,
+      plannedRR: true,
+      // S26 — management-fidelity acts (tri-state, null until answered at close).
+      slPerRule: true,
+      movedToBe: true,
+      partialAtTarget: true,
+    },
   });
   return computeMethodMirror(
     rows.map((t) => ({
@@ -29,6 +37,9 @@ export async function getMethodMirror(
       closedAt: t.closedAt,
       // Prisma Decimal → number. plannedRR is required (non-null) on Trade.
       plannedRR: Number(t.plannedRR),
+      slPerRule: t.slPerRule,
+      movedToBe: t.movedToBe,
+      partialAtTarget: t.partialAtTarget,
     })),
     LOOKBACK_DAYS,
     PARIS_TZ,

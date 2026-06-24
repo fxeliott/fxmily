@@ -152,6 +152,22 @@ const storageKey = z
   .regex(/^trades\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/, 'Clé fichier invalide.');
 
 /**
+ * S26 — tri-state management-adherence answer, answered at close. Verbatim clone
+ * of `processComplete`'s coercion: `true`/`false` from the radio, `'na'`/`''`/
+ * absent → `null` (not answered). OPTIONAL — a new required field would break the
+ * shared-wizard e2e (CANON). SPEC §2: the ACT of following the member's OWN
+ * execution rule, never a market call.
+ */
+const managementAdherence = z
+  .union([z.boolean(), z.literal('na'), z.literal('true'), z.literal('false'), z.literal('')])
+  .optional()
+  .transform((v) => {
+    if (v === undefined || v === 'na' || v === '') return null;
+    if (typeof v === 'string') return v === 'true';
+    return v;
+  });
+
+/**
  * Pre-entry block (steps 1–6 of the wizard).
  *
  * The screenshot is mandatory by SPEC §7.3 ("Screen avant entrée — upload
@@ -267,6 +283,13 @@ export const tradeCloseSchema = z
         if (typeof v === 'string') return v === 'true';
         return v;
       }),
+    /// S26 — « Fidélité à la gestion » (3 management hard-rules of the method).
+    /// Each is an EXACT clone of `processComplete`'s tri-state coercion: optional,
+    /// absent/''/'na' → null (not answered — NO required-field gate, CANON). SPEC
+    /// §2: the ACT of following YOUR OWN execution rule, never a market call.
+    slPerRule: managementAdherence,
+    movedToBe: managementAdherence,
+    partialAtTarget: managementAdherence,
     /// V1.8 REFLECT — post-outcome bias tags (CFA LESSOR + Steenbarger).
     /// Optional: V1 trades closed before V1.8 stay valid; UI defaults to empty.
     /// Member self-assigned at close (Q3=A) — see `TRADE_TAG_SLUGS` allowlist.

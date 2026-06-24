@@ -71,6 +71,14 @@ export interface CloseTradeInput {
    * Mirror of `hedgeRespected`. SPEC §2: the ACT of completeness only.
    */
   processComplete: boolean | null;
+  /**
+   * S26 — « Fidélité à la gestion ». Three management hard-rules of the method,
+   * answered at close. Tri-state each (`true`/`false`/`null` = not answered).
+   * SPEC §2: the ACT of following the member's OWN execution rule only.
+   */
+  slPerRule: boolean | null;
+  movedToBe: boolean | null;
+  partialAtTarget: boolean | null;
   /** V1.8 — post-outcome LESSOR + Steenbarger bias tags (max 3, allowlisted Zod-side). */
   tags?: readonly string[];
   notes: string | undefined;
@@ -111,6 +119,10 @@ export interface SerializedTrade {
   hedgeRespected: boolean | null;
   /** SPEC §28/§21 — "oublis" axis (tri-state: true / false / null=not answered). */
   processComplete: boolean | null;
+  /** S26 — management-fidelity acts (tri-state each: true / false / null). */
+  slPerRule: boolean | null;
+  movedToBe: boolean | null;
+  partialAtTarget: boolean | null;
   notes: string | null;
   screenshotEntryKey: string | null;
   // Post-exit (nullable until closed)
@@ -171,6 +183,9 @@ function toSerialized(
     planRespected: trade.planRespected,
     hedgeRespected: trade.hedgeRespected,
     processComplete: trade.processComplete,
+    slPerRule: trade.slPerRule,
+    movedToBe: trade.movedToBe,
+    partialAtTarget: trade.partialAtTarget,
     notes: trade.notes,
     screenshotEntryKey: trade.screenshotEntryKey,
     exitedAt: trade.exitedAt ? trade.exitedAt.toISOString() : null,
@@ -321,6 +336,12 @@ export async function closeTrade(
         // fabricate a "forgot" signal the member never gave). Mirror of
         // hedgeRespected / marketAnalysisDone null-handling.
         processComplete: input.processComplete,
+        // S26 — persist the 3 management-fidelity acts. Same null-passthrough as
+        // processComplete: null (not answered) is NEVER coerced to false, which
+        // would fabricate a "rule broken" signal the member never gave.
+        slPerRule: input.slPerRule,
+        movedToBe: input.movedToBe,
+        partialAtTarget: input.partialAtTarget,
         // V1.8 — persist post-outcome bias tags. Defaults to `[]` so V1 trades
         // closed before V1.8 stay valid ; explicit `[]` overrides any prior
         // value (admin edits go through a dedicated path).

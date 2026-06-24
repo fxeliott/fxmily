@@ -5,7 +5,12 @@ import { useActionState, useEffect, useId, useRef, useState } from 'react';
 
 import { submitTrackingInstrumentAction } from '@/app/tracking/[instrument]/actions';
 import { Alert } from '@/components/alert';
-import type { TrackingInstrument, TrackingQuestion } from '@/lib/tracking/types';
+import type {
+  MultiTagQuestion,
+  NumericQuestion,
+  TrackingInstrument,
+  TrackingQuestion,
+} from '@/lib/tracking/types';
 import { cn } from '@/lib/utils';
 
 /**
@@ -71,7 +76,7 @@ function choicesFor(q: TrackingQuestion): Choice[] | null {
     case 'single_choice':
       return q.options.map((o) => ({ value: o.value, label: o.label }));
     default:
-      return null; // multi_tag / numeric — no shipped instrument uses these yet
+      return null; // multi_tag / numeric are rendered upstream by QuestionField
   }
 }
 
@@ -95,6 +100,11 @@ function emptyDraft(instrument: TrackingInstrument, prefill?: TrackingPrefill): 
   if (usePrefill) {
     for (const [k, v] of Object.entries(prefill.responses)) {
       if (typeof v === 'boolean') responses[k] = v ? 'true' : 'false';
+      // multi_tag answers persist as a string[]; the draft holds them as a JSON
+      // string so a single hidden input round-trips them (the action JSON.parses
+      // it back). An empty selection is stored as '' so completeness reads it as
+      // unanswered, never as the literal "[]".
+      else if (Array.isArray(v)) responses[k] = v.length ? JSON.stringify(v) : '';
       else if (typeof v === 'number' || typeof v === 'string') responses[k] = String(v);
     }
   }
@@ -309,7 +319,6 @@ interface QuestionFieldProps {
 }
 
 function QuestionField({ index, question, value, onChange, error }: QuestionFieldProps) {
-  const choices = choicesFor(question);
   const optional = question.required === false;
 
   const label = (
@@ -320,9 +329,41 @@ function QuestionField({ index, question, value, onChange, error }: QuestionFiel
     </span>
   );
 
+  // Multi-select tags (e.g. "coche tout ce qui s'applique") — a group of
+  // independently-toggleable buttons (APG toggle-button pattern), distinct from
+  // the single-pick radiogroup below.
+  if (question.kind === 'multi_tag') {
+    return (
+      <MultiTagField
+        label={label}
+        help={question.help}
+        question={question}
+        value={value}
+        onChange={onChange}
+        error={error}
+      />
+    );
+  }
+
+  // Bounded number (e.g. "combien de trades cette semaine ?").
+  if (question.kind === 'numeric') {
+    return (
+      <NumericField
+        label={label}
+        help={question.help}
+        question={question}
+        value={value}
+        onChange={onChange}
+        error={error}
+      />
+    );
+  }
+
+  const choices = choicesFor(question);
   if (!choices) {
-    // Defensive: no shipped instrument uses multi_tag/numeric. Surface clearly
-    // rather than render a silent dead field.
+    // Truly defensive: every TrackingQuestion kind is now handled above. This
+    // only ever fires if a new kind is added without a renderer — surface it
+    // clearly rather than render a silent dead field.
     return (
       <div className="flex flex-col gap-2">
         {label}
@@ -470,6 +511,184 @@ function ChoiceField({ label, help, choices, value, onChange, error, columns }: 
             </button>
           );
         })}
+      </div>
+      {error ? (
+        <p id={errorId} role="alert" className="t-cap text-[var(--bad)]">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Multi-tag field — APG toggle-button group (independent multi-select)
+// ---------------------------------------------------------------------------
+
+interface MultiTagFieldProps {
+  label: React.ReactNode;
+  help?: string | undefined;
+  question: MultiTagQuestion;
+  /** JSON string of the selected `value[]`, or '' when none (so completeness
+   *  reads an empty selection as unanswered, never the literal "[]"). */
+  value: string | undefined;
+  onChange: (value: string) => void;
+  error?: string | undefined;
+}
+
+/** Parse the draft's JSON-string tag list back to a string[] (never throws). */
+function parseTags(value: string | undefined): string[] {
+  if (!value) return [];
+  try {
+    const arr: unknown = JSON.parse(value);
+    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function MultiTagField({ label, help, question, value, onChange, error }: MultiTagFieldProps) {
+  const labelId = useId();
+  const helpId = useId();
+  const errorId = useId();
+  const selected = parseTags(value);
+  const cap = question.maxSelected;
+  const atCap = typeof cap === 'number' && selected.length >= cap;
+
+  function toggle(v: string) {
+    const has = selected.includes(v);
+    // At cap, an unselected tag is aria-disabled (still focusable, APG) and a
+    // toggle is a no-op — the member must deselect one first.
+    if (!has && atCap) return;
+    const next = has ? selected.filter((x) => x !== v) : [...selected, v];
+    onChange(next.length ? JSON.stringify(next) : '');
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <p id={labelId}>{label}</p>
+      {help ? (
+        <p id={helpId} className="t-cap -mt-1 text-[var(--t-3)]">
+          {help}
+        </p>
+      ) : null}
+      <div
+        role="group"
+        aria-labelledby={labelId}
+        aria-describedby={cn(help ? helpId : undefined, error ? errorId : undefined) || undefined}
+        className="flex flex-wrap gap-1.5"
+      >
+        {question.options.map((opt) => {
+          const checked = selected.includes(opt.value);
+          const blocked = !checked && atCap;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              aria-pressed={checked}
+              aria-disabled={blocked || undefined}
+              onClick={() => toggle(opt.value)}
+              className={cn(
+                'rounded-control inline-flex min-h-11 items-center gap-1.5 border px-3 py-2 text-[13px] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none',
+                checked
+                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc-btn)] text-[var(--acc-fg)]'
+                  : blocked
+                    ? // Cap reached: aria-disabled but still focusable (APG), so this
+                      // is NOT an "inactive" component — its label must stay AA-legible
+                      // (no opacity dimming, which would drop --t-3 to ~2.5:1). The
+                      // blocked status reads from aria-disabled + the muted border +
+                      // cursor, not from a contrast-killing fade.
+                      'cursor-not-allowed border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-3)]'
+                    : 'border-[var(--b-strong)] bg-[var(--bg-2)] text-[var(--t-2)] hover:border-[var(--b-acc)] hover:text-[var(--t-1)]',
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'grid h-4 w-4 shrink-0 place-items-center rounded-[5px] border',
+                  checked ? 'border-[var(--acc-fg)]' : 'border-[var(--b-strong)]',
+                )}
+              >
+                {checked ? <Check size={11} strokeWidth={3} /> : null}
+              </span>
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+      {typeof cap === 'number' ? (
+        <p className="t-cap text-[var(--t-3)]" role="status" aria-live="polite">
+          {selected.length}/{cap} sélectionné{selected.length > 1 ? 's' : ''}
+          {atCap ? ' — maximum atteint' : ''}
+        </p>
+      ) : null}
+      {error ? (
+        <p id={errorId} role="alert" className="t-cap text-[var(--bad)]">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Numeric field — bounded number input
+// ---------------------------------------------------------------------------
+
+interface NumericFieldProps {
+  label: React.ReactNode;
+  help?: string | undefined;
+  question: NumericQuestion;
+  value: string | undefined;
+  onChange: (value: string) => void;
+  error?: string | undefined;
+}
+
+function NumericField({ label, help, question, value, onChange, error }: NumericFieldProps) {
+  const labelId = useId();
+  const helpId = useId();
+  const errorId = useId();
+  const unitId = useId();
+  const inputId = useId();
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <label id={labelId} htmlFor={inputId}>
+        {label}
+      </label>
+      {help ? (
+        <p id={helpId} className="t-cap -mt-1 text-[var(--t-3)]">
+          {help}
+        </p>
+      ) : null}
+      <div className="flex items-center gap-2">
+        <input
+          id={inputId}
+          type="number"
+          inputMode={question.integer ? 'numeric' : 'decimal'}
+          min={question.min}
+          max={question.max}
+          step={question.integer ? 1 : 'any'}
+          value={value ?? ''}
+          onChange={(e) => onChange(e.target.value)}
+          aria-describedby={
+            cn(
+              help ? helpId : undefined,
+              question.unit ? unitId : undefined,
+              error ? errorId : undefined,
+            ) || undefined
+          }
+          aria-invalid={error ? true : undefined}
+          className={cn(
+            'rounded-control h-11 w-28 border bg-[var(--bg-2)] px-3 text-[14px] text-[var(--t-1)] tabular-nums transition-colors focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none',
+            error ? 'border-[var(--bad)]' : 'border-[var(--b-strong)] hover:border-[var(--b-acc)]',
+          )}
+        />
+        {question.unit ? (
+          <span id={unitId} className="t-body text-[var(--t-3)]">
+            {question.unit}
+          </span>
+        ) : null}
       </div>
       {error ? (
         <p id={errorId} role="alert" className="t-cap text-[var(--bad)]">

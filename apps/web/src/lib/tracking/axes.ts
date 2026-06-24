@@ -1,5 +1,5 @@
 /**
- * V2 S2 — Universal tracking taxonomy (the 10-axis méthodo surface, FR labels).
+ * V2 S2 — Universal tracking taxonomy (the 11-axis méthodo surface, FR labels).
  *
  * PURE data + pure helpers ONLY. No DB, no env, no `server-only` — this module
  * is consumed by BOTH the server service and the client wizard (mirror

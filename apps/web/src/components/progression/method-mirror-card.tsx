@@ -118,7 +118,8 @@ export function MethodMirrorCard({
         <p className="t-body leading-[1.5] text-[var(--t-2)]">
           Dès que tu auras journalisé quelques trades, tu verras ici, calmement, à quel point tu
           tiens les règles dures de la méthode : la fenêtre d’exécution, un trade par jour, la
-          coupure de 20h et ta visée de RR. Un miroir pour progresser, jamais une sanction.
+          coupure de 20h, ta visée de RR et ta gestion (stop selon ta règle, break-even,
+          sécurisation au TP). Un miroir pour progresser, jamais une sanction.
         </p>
       )}
     </section>

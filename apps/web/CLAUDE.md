@@ -136,21 +136,21 @@ Wired dans `next.config.ts` `headers()` (réponse à toute route via `source: '/
 - `Cross-Origin-Opener-Policy: same-origin`
 - `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` (prod uniquement)
 
-## Theme (Tailwind 4) — DS-v2 (palette pivot Sprint #1, lime + Geist + Mercury shadows)
+## Theme (Tailwind 4) — DS-v3 (accent bleu, light + dark)
 
-Variables CSS dans `src/app/globals.css`. Mode sombre uniquement V1.
+> **Contrat SSOT des tokens = [`src/app/_design/TOKENS.md`](src/app/_design/TOKENS.md)** (inventaire complet light/dark, règles d'usage, Tailwind 4). Lis-le avant tout travail visuel. La SSOT runtime reste `src/app/globals.css`.
 
-- **Deep-space backgrounds** : `--bg`, `--bg-2`, `--bg-3` (du plus sombre au moins).
-- **Text tokens tone-aware** : `--t-1`, `--t-2`, `--t-3`, `--t-4` (du plus contrasté au plus muté ; tous WCAG AA-validés).
-- **Lime accent** : `--acc`, `--acc-hi` (hover), `--acc-dim` / `--acc-dim-2` (halos), `--acc-fg` (foreground sur fond lime).
-- **Sémantique** : `--bad`, `--bad-dim`, `--cy` (info), `--cy-dim`.
-- **Borders** : `--b-default`, `--b-strong`, `--b-acc`, `--b-danger`.
-- **Typo** : `Geist` (sans + mono), tailles `t-h1`, `t-h2`, `t-body`, `t-cap`.
-- **Mercury shadows** : `--sh-btn-pri`, `--sh-btn-pri-hover`, `--sh-tooltip`, `--sh-toast`.
-- **Curves** : `--e-smooth` (220ms ease-out), `--e-spring`.
-- `@layer base` pour les resets globaux + `@media (prefers-reduced-motion: reduce)` actif.
+Variables CSS dans `src/app/globals.css` : tokens privés (`:root` sombre + `.light` clair) ré-exportés en `--color-*`/`--radius-*`/etc. via `@theme inline` (seuls les tokens `@theme` génèrent des classes Tailwind).
 
-> Note historique : la palette SPEC §8.1 (bleu `#2563eb`/`#0a0e1a`) a été remplacée par DS-v2 lime/deep-space pendant le Sprint #1 (handoff Claude Design 2026-05-06). Validée visuellement par Eliot. Voir SPEC §20.1 pivot row "Palette".
+- **Surfaces** : `--bg`, `--bg-1`, `--bg-2`, `--bg-3` (fond app → carte → élévation ; montent au blanc en clair).
+- **Texte** : `--t-1`..`--t-4` (primaire → muté ; tous WCAG AA-validés, light + dark).
+- **Accent bleu** : `--acc` (#3b82f6 dark / #2563eb light), `--acc-hi` (hover), `--acc-dim` (halo), `--acc-fg` (texte sur accent) ; **`--acc-2`** indigo + **`--cy`** cyan/teal (datavis `--dv-1/2/3`).
+- **États** : `--ok` (succès/gain), `--bad` (erreur/perte/danger ; alias `--color-danger`/`--color-destructive`), `--warn`.
+- **Typo** : `--font-display` (Geist), `--font-sans` (Inter), `--font-mono` (JetBrains Mono).
+- **Rayons / ombres / eases** : `--radius-*`, `--shadow-*` (Mercury multi-couches), `--ease-*` — cf. TOKENS.md §5.
+- `@layer base` resets + `@media (prefers-reduced-motion: reduce)` actif.
+
+> Note historique : palette SPEC §8.1 (bleu) → DS-v2 lime/deep-space (Sprint #1, 2026-05-06) → **DS-v3 bleu + light/dark** (S9→S20, emails+UI migrés lime→bleu). Les sections changelog V2.x ci-dessous mentionnant « DS-v2 lime » sont **historiques** (état au moment de la session), pas l'état courant.
 
 ## Conventions composants
 

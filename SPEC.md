@@ -41,12 +41,12 @@ Ce principe guide toutes les décisions de design : si une feature ne contribue 
 
 | Couche | Choix | Rationale |
 |---|---|---|
-| **Frontend / Backend** | Next.js 16 (App Router) + React 19 + TypeScript strict | Un seul codebase web + mobile (via PWA puis Capacitor), énorme écosystème, support IA optimal. Note J0 : la majeure 16 (sortie 21 oct 2025) renomme `middleware.ts` → `proxy.ts`, Turbopack devient stable par défaut. Version installée : 16.2.4. |
+| **Frontend / Backend** | Next.js 16 (App Router) + React 19 + TypeScript strict | Un seul codebase web + mobile (via PWA puis Capacitor), énorme écosystème, support IA optimal. Note J0 : la majeure 16 (sortie 21 oct 2025) renomme `middleware.ts` → `proxy.ts`, Turbopack devient stable par défaut. Version installée : 16.2.6. |
 | **CSS** | Tailwind CSS 4 | Standard 2026, parfait pour thème custom bleu/noir |
 | **Composants UI** | shadcn/ui | Open-source, ownership total du code, customisable, accessible |
 | **Animations** | Framer Motion | Standard React, courbes premium, faciles à orchestrer |
-| **Charts** | Tremor (basé Recharts) | Très joli par défaut, optimisé dashboards trader, gratuit |
-| **Auth** | Auth.js v5 (NextAuth) avec strategie email magic link + sessions DB | Self-hosted, gratuit, parfait pour invitation par email unique |
+| **Charts** | Recharts ^3.8.1 | Pivot J6.6 : Tremor abandonné (friction Tailwind 4 / peer-deps) au profit de Recharts en direct, plus de contrôle sur le DS-v3 |
+| **Auth** | Auth.js v5 (NextAuth) — Credentials (mot de passe argon2id) + stratégie **JWT** | Pivot : magic-link/sessions-DB → Credentials+JWT (login direct membre, pas de dépendance email à chaque connexion) |
 | **ORM** | Prisma | Schema-first, migrations gérées, type-safe avec TS |
 | **Base de données** | PostgreSQL 17 self-hosted Hetzner | Robuste, scale facilement, gratuit |
 | **Stockage médias** | Cloudflare R2 (S3-compatible) | 10 Go gratuits, 0€ frais de sortie, standard industrie |
@@ -54,8 +54,8 @@ Ce principe guide toutes les décisions de design : si une feature ne contribue 
 | **Validation runtime** | Zod | Standard TS pour valider input API + formulaires |
 | **Formulaires** | React Hook Form + Zod | Combo standard React, performant, accessible |
 | **Notifications push** | Web Push API + VAPID + service worker | Standard W3C, fonctionne iOS 16.4+ et Android, gratuit |
-| **PWA** | next-pwa (ou @ducanh2912/next-pwa) | Génère manifest + service worker, "Ajouter à l'écran d'accueil" |
-| **IA backend (rapports hebdo)** | API Claude (Sonnet 4.6 par défaut, escalade Opus 4.7 si besoin) via SDK officiel | Coût maîtrisé, excellent pour analyse de patterns |
+| **PWA** | Service Worker manuel (`public/sw.js`) + `manifest` | next-pwa écarté (incompat Next 16/Turbopack) ; SW écrit à la main = contrôle total cache + Web Push |
+| **IA backend (rapports hebdo)** | Claude en **LOCAL** : `claude --print` (abonnement Max, modèle **Opus 4.8**, ~0 € marginal) via `ops/scripts/lib/claude-batch-core.sh`. Chemin SDK `@anthropic-ai/sdk` **dormant** (mock par défaut, V1 ships sans `ANTHROPIC_API_KEY`). Allowlist modèles = SSOT `lib/ai/models.ts` | Coût marginal nul (abo Max), human-in-the-loop (génération jamais cronnée, anti-ban) |
 | **Tests unitaires & intégration** | Vitest + React Testing Library | Standard 2026, ultra rapide |
 | **Tests E2E** | Playwright | Référence pour parcours utilisateur multi-écrans |
 | **Monitoring erreurs** | Sentry plan gratuit | 5000 erreurs/mois gratuits, alerting email |
@@ -83,7 +83,7 @@ Ce principe guide toutes les décisions de design : si une feature ne contribue 
                    │
                    ▼
 ┌──────────────────────────────────────────────────────┐
-│  Next.js 15 (Hetzner)                                │
+│  Next.js 16 (Hetzner)                                │
 │  - Pages SSR + Server Components                     │
 │  - API Routes                                        │
 │  - Service Worker (PWA + Web Push)                   │

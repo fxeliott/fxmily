@@ -18,8 +18,9 @@
  *      `completeOnboarding` account-creation path against Postgres).
  *
  * Pre-requisites (same as checkin-happy-path): real Postgres at DATABASE_URL,
- * migrations applied. The suite is skipped automatically when the DB env is
- * missing (global-setup), like every other DB-backed e2e here.
+ * migrations applied. Without `DATABASE_URL` the suite fails fast — the
+ * `@/lib/env` Zod validation throws at import (`global-setup` only loads
+ * dotenv; there is NO graceful DB-env skip), like every other DB-backed e2e.
  */
 
 import { expect, test } from '@playwright/test';

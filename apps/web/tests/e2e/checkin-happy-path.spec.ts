@@ -13,7 +13,7 @@
  *   - All migrations applied (J1 init + J2 trade + J4 annotation + J5 +
  *     J5_dedup).
  *
- * Run (skipped automatically by the suite when DB env is missing):
+ * Run (requires `DATABASE_URL`; without it the suite fails fast at import):
  *   pnpm --filter @fxmily/web test:e2e checkin-happy-path
  */
 

@@ -13,7 +13,7 @@ import {
   listDispatchableSubscriptionsForUser,
 } from '@/lib/push/service';
 import { getWebPushClient, type SendOptions, type SendResult } from '@/lib/push/web-push-client';
-import { type NotificationTypeSlug } from '@/lib/schemas/push-subscription';
+import { NOTIFICATION_TYPES, type NotificationTypeSlug } from '@/lib/schemas/push-subscription';
 
 /**
  * Web Push dispatcher (J9 phase C).
@@ -60,6 +60,7 @@ export const TTL_BY_TYPE: Record<NotificationTypeSlug, number> = {
   weekly_report_ready: 21600, // 6h — admin Sunday digest, can wait until morning
   monthly_debrief_ready: 86400, // 24h — monthly recul tool, not time-critical
   mindset_check_ready: 86400, // 24h — weekly mindset recul, not time-critical (§27.6)
+  verification_gentle_reminder: 86400, // 24h — S3 §33 benevolent nudge, calm, never urgent
 };
 
 /// RFC 8030 urgency. `low` = battery-friendly (reminders that aren't critical).
@@ -72,6 +73,7 @@ export const URGENCY_BY_TYPE: Record<NotificationTypeSlug, 'low' | 'normal'> = {
   weekly_report_ready: 'low',
   monthly_debrief_ready: 'low', // calm, anti-FOMO — a monthly recul, never urgent
   mindset_check_ready: 'low', // calm weekly recul, anti-FOMO §27.6 (no fanfare)
+  verification_gentle_reminder: 'low', // S3 §33 — a gentle nudge, never a pressure stick
 };
 
 /**
@@ -96,6 +98,11 @@ export const EMAIL_FALLBACK_SKIP_TYPES: ReadonlySet<NotificationTypeSlug> = new 
   // must never spawn a fallback email (anti email-fatigue, respects §18.2 cap;
   // the card lives in /library, the push is the immediate signal).
   'douglas_card_delivered',
+  // S3 §33 — the « micro-relance avant l'alerte » is a SINGLE benevolent nudge
+  // (« rappel bienveillant unique … sans harcèlement »). Escalating an isolated
+  // below-threshold gap to email would be the harassment the brief forbids; the
+  // gap is already visible on /verification. Push-only, no email fallback.
+  'verification_gentle_reminder',
 ]);
 
 /**
@@ -210,6 +217,20 @@ export function buildPayload(
       title = 'Auto-évaluation mindset prête';
       body = 'Ton QCM hebdo de 2 minutes pour mesurer où tu en es.';
       path = '/mindset/new';
+      break;
+    }
+    case 'verification_gentle_reminder': {
+      // S3 §33 « micro-relance avant l'alerte » — a SINGLE benevolent nudge on
+      // an isolated unexcused gap, BEFORE any repetition alert escalates. Asks
+      // the member to look + give a motif if there is one. Deep-link to
+      // `/verification` (where the reason is entered). Strictly psychological
+      // (honnêteté/discipline, Mark Douglas) — NEVER a trading advice, NEVER a
+      // guilt stick. Payload carries only a discrepancyId (PII-free §21.5/§16),
+      // so the copy stays generic rather than naming the gap.
+      title = 'Un point rapide sur ton suivi';
+      body =
+        'Un élément est resté de côté. Un coup d’œil quand tu peux — et dis-nous s’il y a une raison.';
+      path = '/verification';
       break;
     }
   }
@@ -396,6 +417,32 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
     return { status: 'failed', reason: 'row_disappeared_after_claim' };
   }
   const slug = row.type as NotificationTypeSlug;
+
+  // 2b. Defence-in-depth (S3 re-challenge): the queue may hold a `NotificationType`
+  // Prisma-enum value that was NEVER registered as a dispatchable slug (the exact
+  // class of bug that let `verification_gentle_reminder` ship enqueued-but-orphan:
+  // absent from NOTIFICATION_TYPES → no `buildPayload` case → undefined title/body
+  // + `navigate=…undefined`). The `as` cast above launders that past the compiler,
+  // so we guard at runtime: an unregistered slug is marked `failed` LOUDLY (audit +
+  // warning) instead of emitting a malformed push or looping as a stuck row. The
+  // parity unit test (NOTIFICATION_TYPES ↔ Prisma enum) is the primary gate; this
+  // is the belt-and-suspenders so the failure is never silent.
+  if (!(NOTIFICATION_TYPES as readonly string[]).includes(slug)) {
+    await db.notificationQueue.update({
+      where: { id: row.id },
+      data: { status: 'failed', failureReason: 'unknown_type', lastErrorCode: 'unknown_type' },
+    });
+    reportWarning('push.dispatcher', 'unregistered_notification_type', {
+      notificationId: row.id,
+      type: row.type,
+    });
+    await logAudit({
+      action: 'notification.dispatch.skipped',
+      userId: row.userId,
+      metadata: { notificationId: row.id, type: row.type, reason: 'unknown_type' },
+    });
+    return { status: 'failed', reason: 'unknown_type' };
+  }
 
   // 3. Check preferences. If opted out, mark failed-with-skip and audit.
   const prefs = await getEffectivePreferences(row.userId);

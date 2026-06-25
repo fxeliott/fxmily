@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { NotificationType } from '@/generated/prisma/enums';
+
 import {
   NOTIFICATION_TYPES,
   pushSubscriptionInputSchema,
@@ -271,7 +273,7 @@ describe('unsubscribePushInputSchema', () => {
 });
 
 describe('NOTIFICATION_TYPES const', () => {
-  it('contains exactly the 8 notification categories', () => {
+  it('contains exactly the 9 notification categories', () => {
     expect(NOTIFICATION_TYPES).toEqual([
       'annotation_received',
       'training_annotation_received',
@@ -281,12 +283,33 @@ describe('NOTIFICATION_TYPES const', () => {
       'weekly_report_ready',
       'monthly_debrief_ready',
       'mindset_check_ready',
+      'verification_gentle_reminder',
     ]);
   });
 
   it('is readonly (typed as `as const`)', () => {
     // Compile-time assertion mirror via TS — we just sanity-check the runtime
     // value is frozen-equivalent (cannot mutate without a cast).
-    expect(Object.isFrozen(NOTIFICATION_TYPES) || NOTIFICATION_TYPES.length === 8).toBe(true);
+    expect(Object.isFrozen(NOTIFICATION_TYPES) || NOTIFICATION_TYPES.length === 9).toBe(true);
+  });
+
+  // ── S3 re-challenge — drift firewall ──────────────────────────────────────
+  // The exact class of bug this kills: `verification_gentle_reminder` shipped as
+  // a Prisma `NotificationType` enum value (so `enqueueGentleVerificationReminder`
+  // could write a queue row) but was NEVER registered in NOTIFICATION_TYPES →
+  // absent from buildPayload/TTL/URGENCY/preferences → an undeliverable push
+  // (`navigate=…undefined`). This test forces 1:1 parity: any value added to the
+  // Prisma enum WITHOUT wiring it here (or vice-versa) FAILS the suite. Sets, so
+  // order-independent and duplicate-proof.
+  it('is in 1:1 parity with the Prisma NotificationType enum (no orphan slug)', () => {
+    const prismaEnum = new Set<string>(Object.values(NotificationType));
+    const registered = new Set<string>(NOTIFICATION_TYPES);
+
+    const inPrismaNotRegistered = [...prismaEnum].filter((t) => !registered.has(t));
+    const registeredNotInPrisma = [...registered].filter((t) => !prismaEnum.has(t));
+
+    expect(inPrismaNotRegistered, 'Prisma enum values with NO dispatcher wiring').toEqual([]);
+    expect(registeredNotInPrisma, 'registered slugs absent from the Prisma enum').toEqual([]);
+    expect(registered.size).toBe(prismaEnum.size);
   });
 });

@@ -87,6 +87,12 @@ const CATEGORIES: CategoryMeta[] = [
     description:
       'Rappel hebdo (lundi matin) pour ton QCM de 2 minutes — mindset, discipline, patience. Calme et sans pression.',
   },
+  {
+    type: 'verification_gentle_reminder',
+    label: 'Rappel bienveillant de suivi',
+    description:
+      'Un unique rappel calme quand un élément de ton suivi reste de côté — l’occasion de t’expliquer s’il y a une raison, avant toute relance. Jamais insistant.',
+  },
 ];
 
 export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.ReactNode {
@@ -100,6 +106,7 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
       weekly_report_ready: true,
       monthly_debrief_ready: true,
       mindset_check_ready: true,
+      verification_gentle_reminder: true,
     };
     for (const type of NOTIFICATION_TYPES) {
       if (initialPreferences[type] !== undefined) {

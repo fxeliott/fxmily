@@ -302,6 +302,8 @@ const FALLBACK_SUBJECT_BY_TYPE: Record<NotificationTypeSlug, string> = {
   // V1.5 §27.6 dispose "push-only, no email" — defense-in-depth copy if the
   // fallback ever fires (push failed 3× + non-transactional + cap not reached).
   mindset_check_ready: 'Auto-évaluation mindset prête · Fxmily',
+  // S3 §33 — push-only (EMAIL_FALLBACK_SKIP_TYPES). Defense-in-depth copy only.
+  verification_gentle_reminder: 'Un point rapide sur ton suivi · Fxmily',
 };
 
 const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
@@ -320,6 +322,8 @@ const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
     'Une synthèse du mois écoulé t’attend — progression, trading réel, entraînement. Un moment pour prendre du recul.',
   mindset_check_ready:
     'Ton QCM hebdo de 2 minutes pour mesurer où tu en es — mindset, discipline, patience. Calme et sans pression.',
+  verification_gentle_reminder:
+    'Un élément de ton suivi est resté de côté. Un coup d’œil quand tu peux — et indique s’il y a une raison. Rien de grave : juste rester honnête avec toi-même.',
 };
 
 const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
@@ -331,6 +335,7 @@ const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
   weekly_report_ready: 'Ouvrir le rapport',
   monthly_debrief_ready: 'Ouvrir mon débrief',
   mindset_check_ready: 'Faire mon QCM hebdo',
+  verification_gentle_reminder: 'Voir mon suivi',
 };
 
 export interface SendNotificationFallbackParams {

@@ -325,6 +325,65 @@ export async function enqueueMindsetCheckNotification(
 }
 
 // =============================================================================
+// S3 §33 — Micro-relance avant l'alerte (member-facing gentle nudge, mirror J9)
+// =============================================================================
+
+export interface GentleVerificationReminderPayload {
+  /** The isolated unexcused gap this single benevolent nudge is about —
+   *  deep-links `/verification` (where the member gives a motif). PII-free:
+   *  an id only, never the capture content or any P&L (§21.5/RGPD §16). */
+  discrepancyId: string;
+}
+
+/**
+ * Enqueue ONE gentle « micro-relance » push for the member when an isolated
+ * unexcused gap appears BELOW the repetition threshold (SPEC §33 enrichment :
+ * « avant de faire monter une alerte, l'app envoie d'abord un rappel
+ * bienveillant unique avec demande de motif »). The accompaniment is strictly
+ * psychological (honnêteté/discipline, Mark Douglas) — NEVER a trading advice.
+ *
+ * Carbon mirror of {@link enqueueMindsetCheckNotification}: best-effort
+ * (returns the row id, or null if the write failed — logged, never thrown, so a
+ * gentle-scan hiccup never breaks the verification run). Idempotency is the
+ * SCAN's job (it stamps `Discrepancy.gentleReminderAt` so a gap is nudged at
+ * most once) — no dedup index needed. PII-free payload : a discrepancy id only.
+ */
+export async function enqueueGentleVerificationReminder(
+  recipientUserId: string,
+  payload: GentleVerificationReminderPayload,
+  tx?: Prisma.TransactionClient,
+): Promise<string | null> {
+  const client = tx ?? db;
+  try {
+    const row = await client.notificationQueue.create({
+      data: {
+        userId: recipientUserId,
+        type: 'verification_gentle_reminder',
+        payload: payload as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+
+    if (!tx) {
+      await logAudit({
+        action: 'notification.enqueued',
+        userId: recipientUserId,
+        metadata: {
+          notificationId: row.id,
+          type: 'verification_gentle_reminder',
+          discrepancyId: payload.discrepancyId,
+        },
+      });
+    }
+
+    return row.id;
+  } catch (err) {
+    console.error('[notifications.enqueue] gentle verification reminder failed', err);
+    return null;
+  }
+}
+
+// =============================================================================
 // J5 — Check-in reminders
 // =============================================================================
 

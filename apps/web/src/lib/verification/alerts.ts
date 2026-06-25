@@ -3,7 +3,10 @@ import 'server-only';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { reportError } from '@/lib/observability';
-import { enqueueDouglasDeliveryNotification } from '@/lib/notifications/enqueue';
+import {
+  enqueueDouglasDeliveryNotification,
+  enqueueGentleVerificationReminder,
+} from '@/lib/notifications/enqueue';
 import { localDateOf, parseLocalDate } from '@/lib/checkin/timezone';
 
 /**
@@ -348,4 +351,132 @@ async function dispatchDouglasForAlert(
     );
     return false;
   }
+}
+
+// =============================================================================
+// S3 §33 enrichment — « Micro-relance avant l'alerte »
+// =============================================================================
+
+/**
+ * The alert rule that governs a given discrepancy type (the same mapping the
+ * repetition alerts use). Every discrepancy type is covered by exactly one rule
+ * → the gentle reminder and the alert share the SAME threshold notion, so they
+ * are complementary by construction: below the threshold → gentle nudge, at the
+ * threshold → alert.
+ */
+function ruleForDiscrepancyType(type: string): AlertRule | undefined {
+  return ALERT_RULES.find((r) => (r.discrepancyTypes as readonly string[]).includes(type));
+}
+
+export interface GentleReminderScanResult {
+  readonly membersScanned: number;
+  readonly remindersSent: number;
+  readonly errors: number;
+}
+
+/**
+ * S3 §33 — send the « micro-relance » : a single benevolent nudge (with a
+ * « donne un motif s'il y a lieu » deep-link) on an ISOLATED unexcused gap, sent
+ * BEFORE any repetition alert escalates. Idempotent ≤1 per gap via
+ * `Discrepancy.gentleReminderAt`. Strictly metadata (§21.5 : reads the gap's
+ * type + flags, never capture content). Strictly psychological (Mark Douglas) —
+ * the copy lives in the J9 dispatcher, this only queues the intent.
+ */
+export async function scanGentleRemindersForAllMembers(
+  options: { now?: Date } = {},
+): Promise<GentleReminderScanResult> {
+  const now = options.now ?? new Date();
+  const windowStart = new Date(now.getTime() - ALERT_WINDOW_DAYS * 86_400_000);
+
+  const members = await db.user.findMany({
+    where: { status: 'active', role: 'member' },
+    select: { id: true },
+  });
+
+  let remindersSent = 0;
+  let errors = 0;
+
+  for (const member of members) {
+    try {
+      const result = await scanGentleRemindersForMember(member.id, now, windowStart);
+      remindersSent += result.remindersSent;
+    } catch (err) {
+      errors += 1;
+      reportError(
+        'verification.alerts',
+        err instanceof Error ? err : new Error('gentle_reminder_scan_failed'),
+        { memberId: member.id },
+      );
+    }
+  }
+
+  return { membersScanned: members.length, remindersSent, errors };
+}
+
+/**
+ * Per-member gentle reminder pass. Exported so the verification batch can fire
+ * it event-driven right after `persistVisionResults` (mirror
+ * {@link scanAlertsForMember}). For each FRESH (never-reminded) unexcused gap
+ * whose rule count is STILL below the alert threshold, enqueue exactly one
+ * gentle reminder and stamp `gentleReminderAt`. A gap already at/over the
+ * threshold is left to the alert path (no double-touch).
+ */
+export async function scanGentleRemindersForMember(
+  memberId: string,
+  now: Date,
+  windowStart: Date,
+): Promise<{ remindersSent: number }> {
+  // Fresh gaps only: unexcused (memberReason null), not retracted by reality
+  // (status != resolved), and never nudged before (gentleReminderAt null).
+  const fresh = await db.discrepancy.findMany({
+    where: {
+      memberId,
+      detectedAt: { gte: windowStart },
+      memberReason: null,
+      status: { not: 'resolved' },
+      gentleReminderAt: null,
+    },
+    orderBy: { detectedAt: 'asc' },
+    select: { id: true, type: true },
+  });
+  if (fresh.length === 0) return { remindersSent: 0 };
+
+  // Full unexcused set (incl. already-reminded) → the repetition state per rule.
+  const allUnexcused = await db.discrepancy.findMany({
+    where: {
+      memberId,
+      detectedAt: { gte: windowStart },
+      memberReason: null,
+      status: { not: 'resolved' },
+    },
+    select: { type: true },
+  });
+
+  let remindersSent = 0;
+  for (const gap of fresh) {
+    const rule = ruleForDiscrepancyType(gap.type);
+    if (!rule) continue;
+    const count = allUnexcused.filter((d) =>
+      (rule.discrepancyTypes as readonly string[]).includes(d.type),
+    ).length;
+    // At/over the threshold → alert territory, the repetition alert handles it.
+    if (count >= rule.threshold) continue;
+
+    const enqueued = await enqueueGentleVerificationReminder(memberId, { discrepancyId: gap.id });
+    if (enqueued === null) continue; // best-effort: a queue hiccup → retry next scan.
+
+    // Stamp AFTER a successful enqueue so a failed push is retried, never lost.
+    await db.discrepancy.update({
+      where: { id: gap.id },
+      data: { gentleReminderAt: now },
+    });
+    remindersSent += 1;
+    await logAudit({
+      action: 'verification.gentle_reminder.sent',
+      userId: memberId,
+      metadata: { discrepancyId: gap.id, discrepancyType: gap.type },
+    });
+  }
+
+  return { remindersSent };
 }

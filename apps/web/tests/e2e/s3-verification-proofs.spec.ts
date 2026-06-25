@@ -93,6 +93,23 @@ test.describe('S3 — /verification : comptes + preuves MT5 (real DB)', () => {
     // The proof list renders the pending status pill after refresh.
     await expect(page.getByText('En attente d’analyse')).toBeVisible({ timeout: 10_000 });
 
+    // --- S3 §33 enrichments render at REAL render (DoD #5):
+    // (a) « journal de preuves horodaté & inaltérable » — the uploaded proof now
+    //     shows its SHA-256 empreinte (truncated) next to the timestamp.
+    await expect(page.getByText(/Empreinte\s+[a-f0-9]{10}/).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // (b) « badge de niveau de confiance/cohérence par compte » — appears once
+    //     the account is AI-detected with a confidence (the réalité-vs-déclaré
+    //     signal). Promote the declared account and reload the server component.
+    await db.brokerAccount.update({
+      where: { id: account!.id },
+      data: { detectedByAI: true, confidence: 0.9 },
+    });
+    await page.reload();
+    await expect(page.getByText('Cohérence élevée').first()).toBeVisible({ timeout: 10_000 });
+
     // --- 3. Same bytes again → anti-double-upload 409, calm UI message.
     await page.locator('input[type="file"]').setInputFiles(FIXTURE_A);
     await expect(page.getByText(/déjà été envoyée/i)).toBeVisible({ timeout: 15_000 });

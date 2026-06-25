@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import type { SerializedAnnotation } from '@/lib/admin/annotations-service';
 import { selectStorage } from '@/lib/storage';
+import { splitNotes } from '@/lib/trades/notes';
 import type { SerializedTrade } from '@/lib/trades/service';
 import { SESSION_LABEL } from '@/lib/trading/sessions';
 import { cn } from '@/lib/utils';
@@ -57,6 +58,15 @@ export function TradeDetailView({
   const storage = selectStorage();
   const entryUrl = trade.screenshotEntryKey ? storage.getReadUrl(trade.screenshotEntryKey) : null;
   const exitUrl = trade.screenshotExitKey ? storage.getReadUrl(trade.screenshotExitKey) : null;
+
+  // S4 §33 #2 — split the merged notes back into the pre-entry intention and the
+  // post-exit débrief so the arc lays each next to the right moment. A
+  // delimiter-less note is ambiguous on a CLOSED trade (could be either) → kept
+  // as a neutral « Notes » card ; on an OPEN trade it can only be the entry note.
+  const splitNote = splitNotes(trade.notes);
+  const entryNote = splitNote.hasSections ? splitNote.entry : trade.isClosed ? null : splitNote.raw;
+  const debrief = splitNote.hasSections ? splitNote.debrief : null;
+  const looseNote = !splitNote.hasSections && trade.isClosed ? splitNote.raw : null;
 
   const realizedR = trade.realizedR ? Number(trade.realizedR) : null;
   const isWin = realizedR !== null && realizedR > 0;
@@ -224,38 +234,22 @@ export function TradeDetailView({
         ) : null}
       </Card>
 
-      {/* S4 §33 (enrichissement #2) — l'arc émotionnel avant → pendant → après
-          assemblé en un seul bloc lisible (les trois moments étaient dispersés
-          dans la fiche). Composant partagé membre/admin ; gère l'état « ouvert »
-          (pendant/après se renseignent à la clôture, jamais « manquant »). */}
+      {/* S4 §33 (enrichissement #2) — le parcours du trade assemblé en un bloc :
+          émotion + capture par moment (avant/pendant/après) + lecture écrite
+          (intention d'entrée, débrief de sortie). Avant, ces dimensions étaient
+          dispersées dans la fiche. Composant partagé membre/admin ; gère l'état
+          « ouvert » (pendant/après se renseignent à la clôture, jamais « manquant »). */}
       <TradePsychologyTriad
         before={trade.emotionBefore}
         during={trade.emotionDuring}
         after={trade.emotionAfter}
         isClosed={trade.isClosed}
+        entryPhotoUrl={entryUrl}
+        exitPhotoUrl={exitUrl}
+        entryNote={entryNote}
+        debrief={debrief}
+        pair={trade.pair}
       />
-
-      {/* Capture entrée */}
-      {entryUrl ? (
-        <section className="flex flex-col gap-2">
-          <h2 className="t-eyebrow">Capture avant entrée</h2>
-          {/* S20 — open full-size in a new tab + hover affordance, same calm
-              pattern as the additional photos below (was a static, non-zoomable img). */}
-          <a
-            href={entryUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="wow-hover-glow rounded-card block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={entryUrl}
-              alt={`Capture avant entrée du trade ${trade.pair}`}
-              className="rounded-card w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
-            />
-          </a>
-        </section>
-      ) : null}
 
       {/* §31 — additional analysis photos. Click opens the full image in a new
           tab (same calm pattern as the /verification MT5 proofs, no modal). */}
@@ -287,52 +281,33 @@ export function TradeDetailView({
         </section>
       ) : null}
 
-      {/* Sortie (closed only) */}
+      {/* Sortie (closed only) — les chiffres bruts de sortie. La capture de sortie
+          et le débrief ont rejoint « Le parcours de ce trade » ci-dessus (§33 #2). */}
       {trade.isClosed ? (
-        <>
-          <Card className="p-4">
-            <h2 className="t-eyebrow mb-3">Sortie</h2>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-              <Stat
-                label="Date sortie"
-                value={trade.exitedAt ? DATETIME_FMT.format(new Date(trade.exitedAt)) : '—'}
-              />
-              <Stat
-                label="Prix sortie"
-                value={trade.exitPrice ? NUMBER_FMT.format(Number(trade.exitPrice)) : '—'}
-                mono
-              />
-            </dl>
-          </Card>
-
-          {exitUrl ? (
-            <section className="flex flex-col gap-2">
-              <h2 className="t-eyebrow">Capture après sortie</h2>
-              {/* S20 — open full-size + hover affordance (parity with entry capture). */}
-              <a
-                href={exitUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="wow-hover-glow rounded-card block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={exitUrl}
-                  alt={`Capture après sortie du trade ${trade.pair}`}
-                  className="rounded-card w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
-                />
-              </a>
-            </section>
-          ) : null}
-        </>
+        <Card className="p-4">
+          <h2 className="t-eyebrow mb-3">Sortie</h2>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+            <Stat
+              label="Date sortie"
+              value={trade.exitedAt ? DATETIME_FMT.format(new Date(trade.exitedAt)) : '—'}
+            />
+            <Stat
+              label="Prix sortie"
+              value={trade.exitPrice ? NUMBER_FMT.format(Number(trade.exitPrice)) : '—'}
+              mono
+            />
+          </dl>
+        </Card>
       ) : null}
 
-      {/* Notes */}
-      {trade.notes ? (
+      {/* Notes — seulement le cas AMBIGU : une note sans délimiteur sur un trade
+          clôturé (impossible de prouver « avant » vs « débrief »). Les notes
+          scindées sont rendues, étiquetées, dans le parcours ci-dessus (§33 #2). */}
+      {looseNote ? (
         <Card className="p-4">
           <h2 className="t-eyebrow mb-2">Notes</h2>
           <p className="t-body leading-relaxed whitespace-pre-wrap text-[var(--t-2)]">
-            {trade.notes}
+            {looseNote}
           </p>
         </Card>
       ) : null}

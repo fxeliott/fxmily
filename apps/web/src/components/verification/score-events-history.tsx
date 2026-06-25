@@ -1,4 +1,7 @@
+import { TrendingDown, TrendingUp } from 'lucide-react';
+
 import type { ScoreEventView } from '@/lib/verification/constancy';
+import { pickDominantSignals, type SignalReason } from '@/lib/verification/dominant-signals';
 import { cn } from '@/lib/utils';
 
 /**
@@ -25,6 +28,14 @@ const REASON_LABEL: Record<ScoreEventView['reason'], string> = {
   forgot_no_reason: 'Journée sans suivi, sans motif',
   reality_gap: 'Écart entre ton déclaré et ton historique réel',
   false_declaration: 'Trade déclaré sans contrepartie dans ton historique',
+};
+
+/** Short chip labels for the « 2-3 signaux dominants » summary (CONTEXTE GLOBAL). */
+const SHORT_LABEL: Record<SignalReason, string> = {
+  filled: 'Suivi rempli',
+  forgot_no_reason: 'Journées sans suivi',
+  reality_gap: 'Écarts déclaré ↔ réel',
+  false_declaration: 'Trades sans contrepartie',
 };
 
 /** Honest direction + relative weight per reason (no fake /100 points). */
@@ -54,6 +65,10 @@ const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
 export function ScoreEventsHistory({ events }: { events: readonly ScoreEventView[] }) {
   if (events.length === 0) return null;
 
+  // CONTEXTE GLOBAL « Scoring » — lead with the 2-3 signals that moved the score
+  // most (severity × frequency), before the full chronological feed below.
+  const dominant = pickDominantSignals(events);
+
   return (
     <div className="rounded-card flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-colors hover:border-[var(--b-acc)]">
       <div className="flex flex-col gap-0.5">
@@ -62,6 +77,37 @@ export function ScoreEventsHistory({ events }: { events: readonly ScoreEventView
           Les derniers événements pris en compte — un motif donné neutralise l&apos;événement.
         </span>
       </div>
+
+      {/* « Ce qui a le plus compté » : les 2-3 signaux dominants. Posture §33.2 —
+          « up » (suivi rempli) en cyan positif, « down » en gris neutre, JAMAIS de
+          rouge punitif. Un résumé factuel, pas un verdict. */}
+      {dominant.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="t-foot text-[var(--t-4)]">Ce qui a le plus compté</span>
+          <ul className="flex flex-wrap gap-1.5">
+            {dominant.map((signal) => (
+              <li key={signal.reason}>
+                <span
+                  className={cn(
+                    'rounded-pill inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] leading-tight',
+                    signal.direction === 'up'
+                      ? 'border-[var(--cy-edge)] text-[var(--cy)]'
+                      : 'border-[var(--b-default)] text-[var(--t-3)]',
+                  )}
+                >
+                  {signal.direction === 'up' ? (
+                    <TrendingUp className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden />
+                  )}
+                  {SHORT_LABEL[signal.reason]}
+                  <span className="text-[var(--t-4)] tabular-nums">×{signal.count}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <ul className="flex flex-col">
         {events.map((event) => (

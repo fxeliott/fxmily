@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { AccountCreateForm } from '@/components/verification/account-create-form';
+import { ConstancyObjectiveBridge } from '@/components/verification/constancy-objective-bridge';
 import { ConstancyScoreCard } from '@/components/verification/constancy-score-card';
 import { ConstancyTrend } from '@/components/verification/constancy-trend';
 import { DeleteProofButton } from '@/components/verification/delete-proof-button';
@@ -15,6 +16,7 @@ import { RealityVsDeclared } from '@/components/verification/reality-vs-declared
 import { ScoreEventsHistory } from '@/components/verification/score-events-history';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { getProcessObjectives } from '@/lib/objectives/service';
 import { listRecentAlertsForMember } from '@/lib/verification/alerts';
 import {
   getLatestConstancyScore,
@@ -115,7 +117,8 @@ export default async function VerificationPage() {
     redirect('/login');
   }
 
-  const [overview, constancy, constancyHistory, discrepancies, scoreEvents, alerts] =
+  const timezone = session.user.timezone || 'Europe/Paris';
+  const [overview, constancy, constancyHistory, discrepancies, scoreEvents, alerts, objectives] =
     await Promise.all([
       getVerificationOverview(session.user.id),
       getLatestConstancyScore(session.user.id),
@@ -123,6 +126,10 @@ export default async function VerificationPage() {
       listDiscrepancies(session.user.id),
       listRecentScoreEvents(session.user.id),
       listRecentAlertsForMember(session.user.id),
+      // S4 (CONTEXTE « Scoring ») — relie le score de constance à l'objectif du
+      // membre (cause → effet → prochain pas). Même lecture que le hub (DRY),
+      // dérivée des signaux déjà calculés (0 nouvelle table). Lu en parallèle.
+      getProcessObjectives(session.user.id, timezone),
     ]);
   const openDiscrepancies = discrepancies.filter((d) => d.status === 'open');
   const handledDiscrepancies = discrepancies.filter((d) => d.status !== 'open');
@@ -227,6 +234,14 @@ export default async function VerificationPage() {
           {/* S4 — « le score reste explicable au membre » (promesse du schéma
               ScoreEvent) : les derniers événements, excusés neutralisés. */}
           <ScoreEventsHistory events={scoreEvents} />
+          {/* S4 (CONTEXTE « Scoring ») — relie le score à l'objectif personnel :
+              cause (ta constance) → effet (le levier qu'elle nourrit) → prochain
+              pas (/objectifs). Rend null sans score ou sans objectif. */}
+          <ConstancyObjectiveBridge
+            score={constancy}
+            focus={objectives.focus}
+            coachingAxis={objectives.coachingAxis}
+          />
         </section>
 
         {/* Écarts détectés — wow-reveal : fade+rise au scroll (progressive

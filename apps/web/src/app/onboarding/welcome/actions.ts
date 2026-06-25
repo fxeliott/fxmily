@@ -71,12 +71,18 @@ export async function completeOnboardingAction(
     return { ok: false, error: result.reason };
   }
 
-  // Auto-login the freshly-created user.
+  // Auto-login the freshly-created user, then land them on the profiling
+  // interview — NOT the dashboard. The acceptance link is "le lien vers les
+  // premières étapes de création du profil — c'est là que commence
+  // l'accumulation de données" (S2 brief, CONTEXTE GLOBAL › Onboarding & accès):
+  // data accumulation must START here, guided. The interview landing explains
+  // the step and lets the member begin when ready (with a calm /dashboard
+  // escape), so no one is dropped on an empty dashboard wondering what to do.
   try {
     await signIn('credentials', {
       email: result.email,
       password: parsed.data.password,
-      redirectTo: '/dashboard',
+      redirectTo: '/onboarding/interview',
     });
     return { ok: true };
   } catch (err) {

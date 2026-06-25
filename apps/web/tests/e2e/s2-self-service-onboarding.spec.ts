@@ -124,8 +124,11 @@ test.describe('S2 DoD#1 — self-service signup → confirmation → onboarding 
     await page.getByRole('checkbox').check();
     await page.getByRole('button', { name: /Créer mon compte/i }).click();
 
-    // 3. Auto sign-in lands them on the dashboard (the member now has a space).
-    await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
+    // 3. Auto sign-in lands them on the PROFILING INTERVIEW — data accumulation
+    //    starts at the acceptance link (S2 brief), not on an empty dashboard.
+    //    The member space exists either way (asserted from the DB below).
+    await page.waitForURL(/\/onboarding\/interview/, { timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: /Apprends à te connaître/i })).toBeVisible();
 
     // 4. Real DB: an active member account was created from the invitation.
     const user = await getUserByEmail(email);

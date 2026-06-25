@@ -161,6 +161,14 @@ const META_BY_TYPE: Record<
     body: 'Ton QCM hebdo de 2 minutes pour mesurer où tu en es — mindset, discipline, patience. Calme et sans pression.',
     ctaLabel: 'Faire mon QCM hebdo →',
   },
+  // S3 §33 — push-only (EMAIL_FALLBACK_SKIP_TYPES). Defense-in-depth copy only.
+  verification_gentle_reminder: {
+    title: 'Un point rapide sur ton suivi',
+    preview: 'Un élément de ton suivi est resté de côté.',
+    eyebrow: 'SUIVI · RAPPEL',
+    body: 'Un élément de ton suivi est resté de côté. Un coup d’œil quand tu peux — et indique s’il y a une raison. Rien de grave : juste rester honnête avec toi-même.',
+    ctaLabel: 'Voir mon suivi →',
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

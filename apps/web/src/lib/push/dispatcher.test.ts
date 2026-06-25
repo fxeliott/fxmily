@@ -12,6 +12,7 @@ import {
   URGENCY_BY_TYPE,
 } from './dispatcher';
 import type { SendResult } from './web-push-client';
+import { NOTIFICATION_TYPES } from '@/lib/schemas/push-subscription';
 
 /**
  * J9 — Tests TDD pure-functions du dispatcher.
@@ -79,6 +80,26 @@ describe('buildPayload', () => {
     expect(out.type).toBe('mindset_check_ready');
   });
 
+  it('builds verification_gentle_reminder with deep-link /verification (S3 §33)', () => {
+    // The « micro-relance avant l'alerte » — without this case, the slug fell
+    // through to undefined title/body and `navigate=…undefined` (the orphan bug).
+    const out = buildPayload('verification_gentle_reminder', 'v1', {
+      discrepancyId: 'disc_abc',
+    });
+    expect(out.notification.title).toBe('Un point rapide sur ton suivi');
+    expect(out.notification.body).toBeTruthy();
+    expect(out.notification.navigate).toBe('http://localhost:3000/verification');
+    expect(out.notification.tag).toBe('verification_gentle_reminder');
+    expect(out.type).toBe('verification_gentle_reminder');
+  });
+
+  it('uses calm Mark Douglas copy (no pressure / no trading content) for the gentle reminder', () => {
+    const out = buildPayload('verification_gentle_reminder', 'v2', { discrepancyId: 'd' });
+    const text = `${out.notification.title} ${out.notification.body}`.toLowerCase();
+    // GARDE-FOU §33 — strictly psychological nudge, never anxiety/urgency.
+    expect(text).not.toMatch(/urgent|vite|attention|tu rates|obligatoire|dépêche/);
+  });
+
   it('uses custom appBaseUrl when provided', () => {
     const out = buildPayload(
       'annotation_received',
@@ -94,6 +115,25 @@ describe('buildPayload', () => {
     // Strict shape: silent=false (no audio cue), no `sound` field, no `vibrate` instruction.
     expect(out.notification).not.toHaveProperty('sound');
     expect(out.notification).not.toHaveProperty('vibrate');
+  });
+
+  // ── S3 re-challenge — orphan-slug junction guard ──────────────────────────
+  // Drives buildPayload with EVERY registered slug (empty payload = worst case)
+  // and asserts a well-formed push for each. The orphan bug
+  // (`verification_gentle_reminder` enqueued but absent from buildPayload's
+  // switch) produced `title=undefined` + `navigate=…undefined`; this loop fails
+  // loudly the day a new slug is added to NOTIFICATION_TYPES without a case.
+  it('produces a deliverable payload for EVERY registered slug (no undefined nav/title)', () => {
+    for (const slug of NOTIFICATION_TYPES) {
+      const out = buildPayload(slug, `id_${slug}`, {});
+      expect(out.notification.title, `${slug} title`).toBeTruthy();
+      expect(out.notification.body, `${slug} body`).toBeTruthy();
+      expect(out.notification.navigate, `${slug} nav present`).toBeTruthy();
+      // The exact orphan-bug signature: a literal "undefined" in the URL path.
+      expect(out.notification.navigate, `${slug} nav has no undefined`).not.toContain('undefined');
+      expect(out.notification.tag, `${slug} tag`).toBe(slug);
+      expect(out.type, `${slug} type`).toBe(slug);
+    }
   });
 });
 
@@ -226,7 +266,7 @@ describe('nextAttemptDelay', () => {
 });
 
 describe('TTL_BY_TYPE / URGENCY_BY_TYPE config tables', () => {
-  it('TTL covers exactly the 8 NotificationType slugs', () => {
+  it('TTL covers exactly the 9 NotificationType slugs', () => {
     expect(Object.keys(TTL_BY_TYPE).sort()).toEqual([
       'annotation_received',
       'checkin_evening_reminder',
@@ -235,8 +275,13 @@ describe('TTL_BY_TYPE / URGENCY_BY_TYPE config tables', () => {
       'mindset_check_ready',
       'monthly_debrief_ready',
       'training_annotation_received',
+      'verification_gentle_reminder',
       'weekly_report_ready',
     ]);
+  });
+
+  it('URGENCY covers exactly the same 9 slugs as TTL (no map drift)', () => {
+    expect(Object.keys(URGENCY_BY_TYPE).sort()).toEqual(Object.keys(TTL_BY_TYPE).sort());
   });
 
   it('mindset_check_ready TTL = 24h (weekly cadence, calm V1.5 §27.6)', () => {
@@ -298,10 +343,13 @@ describe('shouldSendFallbackEmail (V1.6 SPEC §18.2 freq cap)', () => {
 });
 
 describe('shouldSkipFallbackEmailForType + EMAIL_FALLBACK_SKIP_TYPES (V1.5.1 §27.6 push-only)', () => {
-  it('returns true for push-only slugs (mindset anti-FOMO + Session 3 drift alert)', () => {
+  it('returns true for push-only slugs (mindset anti-FOMO + Session 3 drift alert + gentle reminder)', () => {
     expect(shouldSkipFallbackEmailForType('mindset_check_ready')).toBe(true);
     // Session 3 §28 — drift alert is push-only (near-daily, anti email-fatigue).
     expect(shouldSkipFallbackEmailForType('douglas_card_delivered')).toBe(true);
+    // S3 §33 — the gentle reminder is a SINGLE benevolent nudge; escalating it to
+    // email would be the harassment the brief forbids. Push-only.
+    expect(shouldSkipFallbackEmailForType('verification_gentle_reminder')).toBe(true);
   });
 
   it('returns false for slugs NOT in the skip allowlist (regression guard)', () => {
@@ -317,6 +365,8 @@ describe('shouldSkipFallbackEmailForType + EMAIL_FALLBACK_SKIP_TYPES (V1.5.1 §2
     expect(EMAIL_FALLBACK_SKIP_TYPES.has('mindset_check_ready')).toBe(true);
     // Session 3 §28 — drift alert joined as the 2nd push-only slug.
     expect(EMAIL_FALLBACK_SKIP_TYPES.has('douglas_card_delivered')).toBe(true);
-    expect(EMAIL_FALLBACK_SKIP_TYPES.size).toBe(2);
+    // S3 §33 — the gentle reminder is the 3rd push-only slug (no email harassment).
+    expect(EMAIL_FALLBACK_SKIP_TYPES.has('verification_gentle_reminder')).toBe(true);
+    expect(EMAIL_FALLBACK_SKIP_TYPES.size).toBe(3);
   });
 });

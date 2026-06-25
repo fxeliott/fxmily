@@ -98,15 +98,23 @@ export const subscribePushInputSchema = pushSubscriptionInputSchema.extend({
 });
 export type SubscribePushInput = z.infer<typeof subscribePushInputSchema>;
 
-/// The 8 notification categories a member can toggle. Mirrors the
-/// `NotificationType` enum in `prisma/schema.prisma`. `training_annotation_
-/// received` (J-T3) is DISTINCT from `annotation_received` on purpose: a
-/// backtest correction must never conflate with a real-trade correction
-/// (statistical isolation §21.5). `monthly_debrief_ready` (V1.4 §25) is the
-/// member-facing monthly AI synthesis push (distinct from the admin-only
+/// The 9 notification categories a member can toggle. Mirrors the
+/// `NotificationType` enum in `prisma/schema.prisma` 1:1 — the parity is
+/// enforced by a unit test (`push-subscription.test.ts`) so a value added to
+/// the Prisma enum but NOT registered here FAILS the suite. This kills the
+/// drift class that had let `verification_gentle_reminder` (S3 §33) ship as a
+/// Prisma enum value with NO dispatcher wiring (absent here → absent from
+/// `buildPayload`/TTL/URGENCY/preferences → an undeliverable push). `training_
+/// annotation_received` (J-T3) is DISTINCT from `annotation_received` on
+/// purpose: a backtest correction must never conflate with a real-trade
+/// correction (statistical isolation §21.5). `monthly_debrief_ready` (V1.4 §25)
+/// is the member-facing monthly AI synthesis push (distinct from the admin-only
 /// `weekly_report_ready`). `mindset_check_ready` (V1.5 §27) is the weekly
 /// gentle nudge for the 12-item QCM athlète mindset wizard, calm anti-FOMO
-/// (no email, no fanfare — §27.4/§27.6).
+/// (no email, no fanfare — §27.4/§27.6). `verification_gentle_reminder` (S3 §33)
+/// is the single benevolent nudge on an isolated unexcused gap BEFORE any
+/// repetition alert — push-only, calm, strictly psychological (Mark Douglas),
+/// never a trading advice.
 export const NOTIFICATION_TYPES = [
   'annotation_received',
   'training_annotation_received',
@@ -116,6 +124,7 @@ export const NOTIFICATION_TYPES = [
   'weekly_report_ready',
   'monthly_debrief_ready',
   'mindset_check_ready',
+  'verification_gentle_reminder',
 ] as const;
 export type NotificationTypeSlug = (typeof NOTIFICATION_TYPES)[number];
 

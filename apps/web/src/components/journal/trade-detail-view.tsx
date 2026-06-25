@@ -2,6 +2,7 @@ import { ArrowLeft, ShieldCheck, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 
 import { AnnotationsSection } from '@/components/journal/annotations-section';
+import { TradePsychologyTriad } from '@/components/journal/trade-psychology-triad';
 import { TradeRiskSchema } from '@/components/journal/trade-risk-schema';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
@@ -9,7 +10,6 @@ import { Pill } from '@/components/ui/pill';
 import type { SerializedAnnotation } from '@/lib/admin/annotations-service';
 import { selectStorage } from '@/lib/storage';
 import type { SerializedTrade } from '@/lib/trades/service';
-import { emotionLabel } from '@/lib/trading/emotions';
 import { SESSION_LABEL } from '@/lib/trading/sessions';
 import { cn } from '@/lib/utils';
 
@@ -224,19 +224,16 @@ export function TradeDetailView({
         ) : null}
       </Card>
 
-      {/* Émotion avant */}
-      {trade.emotionBefore.length > 0 ? (
-        <Card className="p-4">
-          <h2 className="t-eyebrow mb-3">Émotion avant</h2>
-          <ul className="flex flex-wrap gap-1.5">
-            {trade.emotionBefore.map((slug) => (
-              <li key={slug}>
-                <Pill tone="mute">{emotionLabel(slug)}</Pill>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
+      {/* S4 §33 (enrichissement #2) — l'arc émotionnel avant → pendant → après
+          assemblé en un seul bloc lisible (les trois moments étaient dispersés
+          dans la fiche). Composant partagé membre/admin ; gère l'état « ouvert »
+          (pendant/après se renseignent à la clôture, jamais « manquant »). */}
+      <TradePsychologyTriad
+        before={trade.emotionBefore}
+        during={trade.emotionDuring}
+        after={trade.emotionAfter}
+        isClosed={trade.isClosed}
+      />
 
       {/* Capture entrée */}
       {entryUrl ? (
@@ -307,32 +304,6 @@ export function TradeDetailView({
               />
             </dl>
           </Card>
-
-          {trade.emotionDuring.length > 0 ? (
-            <Card className="p-4">
-              <h2 className="t-eyebrow mb-3">Émotion pendant</h2>
-              <ul className="flex flex-wrap gap-1.5">
-                {trade.emotionDuring.map((slug) => (
-                  <li key={slug}>
-                    <Pill tone="mute">{emotionLabel(slug)}</Pill>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ) : null}
-
-          {trade.emotionAfter.length > 0 ? (
-            <Card className="p-4">
-              <h2 className="t-eyebrow mb-3">Émotion après</h2>
-              <ul className="flex flex-wrap gap-1.5">
-                {trade.emotionAfter.map((slug) => (
-                  <li key={slug}>
-                    <Pill tone="mute">{emotionLabel(slug)}</Pill>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ) : null}
 
           {exitUrl ? (
             <section className="flex flex-col gap-2">

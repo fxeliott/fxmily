@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
+import { ALERT_LABELS } from './alert-labels';
 import { logAudit } from '@/lib/auth/audit';
 import { reportError } from '@/lib/observability';
 import {
@@ -479,4 +480,69 @@ export async function scanGentleRemindersForMember(
   }
 
   return { remindersSent };
+}
+
+// =============================================================================
+// S4 §33/§34 — Surface membre des alertes de dérive (lecture seule)
+// =============================================================================
+
+export type AlertStatusView = 'open' | 'delivered' | 'dismissed';
+
+export interface AlertView {
+  readonly id: string;
+  readonly triggerType: string;
+  /** Libellé d'affichage FR canonique (ALERT_LABELS, parité testée vs ALERT_RULES). */
+  readonly label: string;
+  readonly repeatCount: number;
+  readonly threshold: number;
+  readonly status: AlertStatusView;
+  readonly createdAt: Date;
+}
+
+const ALERT_FEED_WINDOW_DAYS = 30;
+const ALERT_FEED_CAP = 20;
+
+/**
+ * S4 §33/§34 — flux membre des alertes de RÉPÉTITION déclenchées pour le membre,
+ * du plus récent au plus ancien. Fenêtre 30 j, plafonné à 20 lignes (liste bornée,
+ * pas de scroll infini). DoD §34 : « les alertes de dérive se déclenchent ET
+ * s'affichent » côté membre — c'est le read manquant qui rend cette case vraie.
+ *
+ * Read-only par construction (aucun scan/writer appelé) — sûr dans n'importe quel
+ * RSC. Le libellé vient de la carte canonique {@link ALERT_LABELS} (parité testée
+ * vs `ALERT_RULES`), jamais d'une dérivation maison. `Alert.category` est l'enum
+ * mono-valeur `psychological` : ce flux ne peut JAMAIS exposer un signal de marché
+ * (§2 / §33.2) — il liste des FAITS de répétition, le coaching Mark Douglas étant
+ * livré par le canal existant (`MarkDouglasDelivery.sourceAlertId`).
+ */
+export async function listRecentAlertsForMember(
+  memberId: string,
+  options: { now?: Date } = {},
+): Promise<readonly AlertView[]> {
+  const now = options.now ?? new Date();
+  const since = new Date(now.getTime() - ALERT_FEED_WINDOW_DAYS * 86_400_000);
+
+  const rows = await db.alert.findMany({
+    where: { memberId, createdAt: { gte: since } },
+    orderBy: { createdAt: 'desc' },
+    take: ALERT_FEED_CAP,
+    select: {
+      id: true,
+      triggerType: true,
+      repeatCount: true,
+      threshold: true,
+      status: true,
+      createdAt: true,
+    },
+  });
+
+  return rows.map((r) => ({
+    id: r.id,
+    triggerType: r.triggerType,
+    label: ALERT_LABELS[r.triggerType] ?? r.triggerType,
+    repeatCount: r.repeatCount,
+    threshold: r.threshold,
+    status: r.status as AlertStatusView,
+    createdAt: r.createdAt,
+  }));
 }

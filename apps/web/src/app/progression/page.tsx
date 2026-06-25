@@ -20,12 +20,14 @@ import { RDistribution } from '@/components/scoring/r-distribution';
 import { ScoreGaugeGrid } from '@/components/scoring/score-gauge-grid';
 import { ScoreTrendChart } from '@/components/scoring/score-trend-chart';
 import { TrackRecordChart } from '@/components/scoring/track-record-chart';
+import { TrackRecordTimeline } from '@/components/scoring/track-record-timeline';
 import { DisciplineYearHeatmap } from '@/components/track/discipline-year-heatmap';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
 import { Sparkline } from '@/components/ui/sparkline';
 import { getDisciplineYearHeatmap } from '@/lib/checkin/service';
 import { getMethodMirror } from '@/lib/method-mirror/service';
+import { listTrackRecordTimeline } from '@/lib/trades/track-record-timeline';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
 import { getPostLossReaction } from '@/lib/scoring/post-loss-reaction-data';
 import {
@@ -182,6 +184,18 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
           <Suspense fallback={<TrackRecordSkeleton />}>
             <TrackRecordSection userId={userId} timezone={timezone} range={range} />
           </Suspense>
+
+          {/* S4 §33 (enrichissement #1) — la FRISE chronologique : chaque trade
+              clôturé relié à sa photo (via le lien vers la fiche), à son respect
+              du plan et à l'écart de vérité S3 associé. Donne « les séries d'un
+              coup d'œil » que la courbe agrégée ne montre pas. Stream via
+              Suspense (1 read borné), aucun recalcul S2/S3. */}
+          <div className="flex flex-col gap-2">
+            <h3 className="t-mono-cap text-[var(--t-4)]">Tes dernières séries</h3>
+            <Suspense fallback={<TrackRecordTimelineSkeleton />}>
+              <TrackRecordTimelineSection userId={userId} />
+            </Suspense>
+          </div>
         </section>
 
         {/* S19 — pont réciproque vers le pendant PROSPECTIF. « Où j'en suis »
@@ -398,6 +412,22 @@ async function TrackRecordSection({
         <RDistribution buckets={analytics.rDistribution} />
       </div>
     </div>
+  );
+}
+
+async function TrackRecordTimelineSection({ userId }: { userId: string }) {
+  const items = await listTrackRecordTimeline(userId);
+  return <TrackRecordTimeline items={items} />;
+}
+
+function TrackRecordTimelineSkeleton() {
+  return (
+    <div
+      className="skel rounded-card h-[112px] border border-[var(--b-default)] bg-[var(--bg-1)]"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement de tes dernières séries"
+    />
   );
 }
 

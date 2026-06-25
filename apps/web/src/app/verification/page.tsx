@@ -9,11 +9,13 @@ import { ConstancyScoreCard } from '@/components/verification/constancy-score-ca
 import { ConstancyTrend } from '@/components/verification/constancy-trend';
 import { DeleteProofButton } from '@/components/verification/delete-proof-button';
 import { DiscrepancyReasonForm } from '@/components/verification/discrepancy-reason-form';
+import { DriftAlertsCard } from '@/components/verification/drift-alerts-card';
 import { ProofUploader } from '@/components/verification/proof-uploader';
 import { RealityVsDeclared } from '@/components/verification/reality-vs-declared';
 import { ScoreEventsHistory } from '@/components/verification/score-events-history';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { listRecentAlertsForMember } from '@/lib/verification/alerts';
 import {
   getLatestConstancyScore,
   listRecentConstancyScores,
@@ -113,13 +115,15 @@ export default async function VerificationPage() {
     redirect('/login');
   }
 
-  const [overview, constancy, constancyHistory, discrepancies, scoreEvents] = await Promise.all([
-    getVerificationOverview(session.user.id),
-    getLatestConstancyScore(session.user.id),
-    listRecentConstancyScores(session.user.id),
-    listDiscrepancies(session.user.id),
-    listRecentScoreEvents(session.user.id),
-  ]);
+  const [overview, constancy, constancyHistory, discrepancies, scoreEvents, alerts] =
+    await Promise.all([
+      getVerificationOverview(session.user.id),
+      getLatestConstancyScore(session.user.id),
+      listRecentConstancyScores(session.user.id),
+      listDiscrepancies(session.user.id),
+      listRecentScoreEvents(session.user.id),
+      listRecentAlertsForMember(session.user.id),
+    ]);
   const openDiscrepancies = discrepancies.filter((d) => d.status === 'open');
   const handledDiscrepancies = discrepancies.filter((d) => d.status !== 'open');
 
@@ -311,6 +315,16 @@ export default async function VerificationPage() {
               </Link>
             </>
           )}
+        </section>
+
+        {/* Alertes de dérive — wow-reveal. Couche au-dessus des écarts : quand un
+            même type d'écart se répète au-delà de son seuil, une fiche Mark Douglas
+            est préparée. Lecture seule, posture miroir §33.2 (jamais de rouge). */}
+        <section className="wow-reveal flex flex-col gap-3" aria-labelledby="alerts-heading">
+          <h2 id="alerts-heading" className="t-h2 text-[var(--t-1)]">
+            Tes alertes de dérive
+          </h2>
+          <DriftAlertsCard alerts={alerts} />
         </section>
 
         {/* Comptes broker — wow-reveal */}

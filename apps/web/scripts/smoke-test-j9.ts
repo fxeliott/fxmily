@@ -101,6 +101,25 @@ async function main() {
     });
     console.log(`[smoke:j9] step 3 — notif id=${notif.id} status=${notif.status}`);
 
+    // S3 §33 — also enqueue the gentle verification reminder so the SAME single
+    // cron POST proves its full delivery path (the slug that shipped orphaned:
+    // enqueued but absent from the dispatcher → undeliverable). One extra queue
+    // row, dispatched by the same `dispatchAllReady` walk — no extra cron POST,
+    // so the dev-server rate limiter is untouched (cf. step 6 rationale).
+    console.log('[smoke:j9] step 3b — enqueueing notification (verification_gentle_reminder)');
+    const gentleNotif = await db.notificationQueue.create({
+      data: {
+        userId: member.id,
+        type: 'verification_gentle_reminder',
+        payload: { discrepancyId: 'smoke-discrepancy-1' },
+        status: 'pending',
+      },
+      select: { id: true, status: true },
+    });
+    console.log(
+      `[smoke:j9] step 3b — gentle notif id=${gentleNotif.id} status=${gentleNotif.status}`,
+    );
+
     // --- Step 4: trigger the cron dispatcher -----------------------------------
     console.log('[smoke:j9] step 4 — POST /api/cron/dispatch-notifications');
     const cronUrl = `${APP_URL}/api/cron/dispatch-notifications`;
@@ -144,6 +163,27 @@ async function main() {
       process.exit(1);
     }
     console.log(`[smoke:j9] step 5 — queue.status=sent, audit row OK`);
+
+    // S3 §33 — the gentle reminder must travel the SAME path: claimed by the
+    // dispatcher, a well-formed payload built (slug registered → no
+    // `unknown_type` failure, no undefined navigate), flipped to `sent`.
+    console.log('[smoke:j9] step 5b — verifying gentle-reminder queue state');
+    const gentleUpdated = await db.notificationQueue.findUnique({
+      where: { id: gentleNotif.id },
+      select: { status: true, dispatchedAt: true, failureReason: true },
+    });
+    if (gentleUpdated?.status !== 'sent') {
+      console.error(
+        '[smoke:j9] step 5b — expected gentle reminder status=sent, got:',
+        gentleUpdated,
+      );
+      process.exit(1);
+    }
+    if (gentleUpdated.dispatchedAt === null) {
+      console.error('[smoke:j9] step 5b — expected gentle reminder dispatchedAt to be set');
+      process.exit(1);
+    }
+    console.log('[smoke:j9] step 5b — gentle reminder delivered (status=sent, dispatchedAt set)');
 
     // --- Step 6: idempotency — DB-side assertion ----------------------------
     // Note: a 2nd cron POST to validate idempotency consumes another token

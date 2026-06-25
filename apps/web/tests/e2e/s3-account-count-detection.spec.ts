@@ -21,8 +21,9 @@
  *
  * Pre-requisites (same as the other DB-backed e2e): real Postgres at
  * DATABASE_URL with migrations applied + `VERIFICATION_ADMIN_BATCH_TOKEN`
- * configured (the persist route 503s without it) — skipped automatically
- * otherwise, exactly like the cron-driven session10 chain test.
+ * configured (the persist route 503s without it). Without `DATABASE_URL` the
+ * suite fails fast at import; when only the token is absent the persist test is
+ * `test.skip`-ped, like the cron-driven session10 chain test.
  */
 
 import { expect, test } from '@playwright/test';

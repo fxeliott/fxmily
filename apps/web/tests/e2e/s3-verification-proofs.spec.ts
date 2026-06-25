@@ -15,7 +15,8 @@
  * magic-byte sniff passes like a genuine member capture would.
  *
  * Pre-requisites (same as the other DB-backed e2e): real Postgres at
- * DATABASE_URL with migrations applied; skipped automatically otherwise.
+ * DATABASE_URL with migrations applied; without it the suite fails fast at
+ * import (the `@/lib/env` Zod validation throws).
  */
 
 import path from 'node:path';

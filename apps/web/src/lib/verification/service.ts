@@ -69,6 +69,14 @@ export interface VerificationProofView {
   readonly uploadedAt: Date;
   readonly brokerAccountId: string | null;
   readonly extractedPositionsCount: number;
+  /**
+   * SHA-256 hex of the file bytes (DoD §33 enrichment « journal de preuves
+   * horodaté & inaltérable » — empreinte/audit trail). Surfaced so the member
+   * sees a tamper trace next to the timestamp, materialising the « inaltérable »
+   * promise. NOT a secret: it is a one-way fingerprint of an image the member
+   * uploaded themselves.
+   */
+  readonly fileHash: string;
 }
 
 export interface VerificationAccountView {
@@ -119,6 +127,7 @@ export async function getVerificationOverview(memberId: string): Promise<Verific
       select: {
         id: true,
         fileKey: true,
+        fileHash: true,
         accountType: true,
         ocrStatus: true,
         uploadedAt: true,
@@ -165,6 +174,7 @@ export async function getVerificationOverview(memberId: string): Promise<Verific
       uploadedAt: p.uploadedAt,
       brokerAccountId: p.brokerAccountId,
       extractedPositionsCount: positionsCountByProof.get(p.id) ?? 0,
+      fileHash: p.fileHash,
     })),
     pendingProofsCount: proofs.filter((p) => p.ocrStatus === 'pending').length,
   };
@@ -175,6 +185,32 @@ export class DiscrepancyNotFoundError extends Error {
   constructor() {
     super('Discrepancy not found or access denied.');
   }
+}
+
+/**
+ * The DECLARED side of a discrepancy (the member's journal trade) — serialized
+ * for the « Réalité vs Déclaré » face-à-face (DoD §33). Decimals are converted
+ * to numbers at this boundary so the presentation layer never touches Prisma's
+ * Decimal. Null when the gap has no declared side (missing_declared / the
+ * non-trade rituals).
+ */
+export interface DiscrepancyDeclaredSide {
+  readonly pair: string;
+  readonly direction: 'long' | 'short';
+  readonly lotSize: number;
+  readonly enteredAt: Date;
+}
+
+/**
+ * The REALITY side of a discrepancy (the position read from the MT5 proof).
+ * Null when the gap has no reality side (false_declared / the rituals).
+ */
+export interface DiscrepancyRealitySide {
+  readonly symbol: string;
+  readonly side: 'long' | 'short';
+  readonly volume: number;
+  readonly openTime: Date;
+  readonly pnl: number | null;
 }
 
 export interface DiscrepancyView {
@@ -191,6 +227,10 @@ export interface DiscrepancyView {
   readonly reasoning: string | null;
   readonly memberReason: string | null;
   readonly detectedAt: Date;
+  /** Declared side for the face-à-face (null = no journal trade on this gap). */
+  readonly declared: DiscrepancyDeclaredSide | null;
+  /** Reality side for the face-à-face (null = no extracted position on this gap). */
+  readonly reality: DiscrepancyRealitySide | null;
 }
 
 /**
@@ -217,6 +257,16 @@ export async function listDiscrepancies(memberId: string): Promise<readonly Disc
       claudeReasoning: true,
       memberReason: true,
       detectedAt: true,
+      // « Réalité vs Déclaré » face-à-face (DoD §33) — the two concrete sides,
+      // metadata only (pair/size/time/pnl), NEVER the capture content (§21.5:
+      // the reconciliation already ignores OCR prices; the UI shows the rows it
+      // matched, not the screenshot text).
+      declaredTrade: {
+        select: { pair: true, direction: true, lotSize: true, enteredAt: true },
+      },
+      extractedPosition: {
+        select: { symbol: true, side: true, volume: true, openTime: true, pnl: true },
+      },
     },
   });
   return rows.map((r) => ({
@@ -227,6 +277,23 @@ export async function listDiscrepancies(memberId: string): Promise<readonly Disc
     reasoning: r.claudeReasoning,
     memberReason: r.memberReason,
     detectedAt: r.detectedAt,
+    declared: r.declaredTrade
+      ? {
+          pair: r.declaredTrade.pair,
+          direction: r.declaredTrade.direction,
+          lotSize: Number(r.declaredTrade.lotSize),
+          enteredAt: r.declaredTrade.enteredAt,
+        }
+      : null,
+    reality: r.extractedPosition
+      ? {
+          symbol: r.extractedPosition.symbol,
+          side: r.extractedPosition.side,
+          volume: Number(r.extractedPosition.volume),
+          openTime: r.extractedPosition.openTime,
+          pnl: r.extractedPosition.pnl !== null ? Number(r.extractedPosition.pnl) : null,
+        }
+      : null,
   }));
 }
 

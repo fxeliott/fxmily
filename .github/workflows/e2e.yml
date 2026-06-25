@@ -109,6 +109,13 @@ jobs:
       # is exactly that scenario — Playwright fetches via base URL but the
       # request reaches Next via localhost.
       AUTH_TRUST_HOST: 'true'
+      # Placeholder admin-batch token (≥32 chars, like AUTH_SECRET above). NOT a
+      # real secret — both the test runner and the `next dev` webServer read it
+      # from this same job env, so the constant-time compare in the persist route
+      # passes. Its presence UN-SKIPS s3-account-count-detection.spec.ts so the
+      # DoD §32-a multi-account HTTP path (real Postgres dedup → exact count) is
+      # proven on EVERY CI run, not only locally.
+      VERIFICATION_ADMIN_BATCH_TOKEN: ci_placeholder_verification_admin_batch_token_min_32_chars
       CI: 'true'
 
     steps:

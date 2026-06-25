@@ -138,6 +138,12 @@ enum NotificationType {
   weekly_report_ready
   monthly_debrief_ready
   mindset_check_ready
+  /// S3 §33 enrichment — « micro-relance avant l'alerte ». A single gentle,
+  /// benevolent push on an ISOLATED unexcused gap (below the alert threshold),
+  /// asking the member to look and give a reason if there is one — BEFORE any
+  /// repetition alert escalates. Strictly psychological (honnêteté/discipline,
+  /// Mark Douglas), never a trading advice. ≤1 per gap (Discrepancy.gentleReminderAt).
+  verification_gentle_reminder
 }
 
 /// Daily check-in slot (J5, SPEC §6.4 + §7.4).
@@ -2741,6 +2747,12 @@ model Discrepancy {
   /// valable"). safeFreeText + crisis routing at the Zod boundary.
   memberReason   String?   @map("member_reason") @db.Text
   memberReasonAt DateTime? @map("member_reason_at")
+
+  /// S3 §33 « micro-relance avant l'alerte » — set the instant a single gentle
+  /// reminder was pushed for THIS gap (≤1 ever). Null = never reminded yet. The
+  /// gentle scan stamps it so a benevolent nudge is sent at most once per gap,
+  /// BEFORE any repetition alert escalates. Completion metadata only (§21.5).
+  gentleReminderAt DateTime? @map("gentle_reminder_at")
 
   detectedAt DateTime @default(now()) @map("detected_at")
   createdAt  DateTime @default(now()) @map("created_at")

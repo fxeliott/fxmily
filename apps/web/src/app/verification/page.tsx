@@ -10,6 +10,7 @@ import { ConstancyTrend } from '@/components/verification/constancy-trend';
 import { DeleteProofButton } from '@/components/verification/delete-proof-button';
 import { DiscrepancyReasonForm } from '@/components/verification/discrepancy-reason-form';
 import { ProofUploader } from '@/components/verification/proof-uploader';
+import { RealityVsDeclared } from '@/components/verification/reality-vs-declared';
 import { ScoreEventsHistory } from '@/components/verification/score-events-history';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
@@ -54,6 +55,18 @@ const ACCOUNT_TYPE_LABELS = {
   prop_firm: 'Prop firm',
   personal: 'Compte perso',
 };
+
+/**
+ * DoD §33 enrichment — « badge de niveau de confiance/cohérence par compte ».
+ * `confidence` is the vision detection confidence (0-1) for AI-detected
+ * accounts. Surfaced with an HONEST qualitative label (never a raw %, never a
+ * red « faible ») — posture §33.2 : informer, jamais accabler.
+ */
+function accountConfidenceLabel(confidence: number): string {
+  if (confidence >= 0.8) return 'Cohérence élevée';
+  if (confidence >= 0.5) return 'Cohérence correcte';
+  return 'À confirmer';
+}
 
 /** Calm, factual labels — never punitive (§33.2). */
 const DISCREPANCY_META: Record<
@@ -268,6 +281,12 @@ export default async function VerificationPage() {
                         <p className="t-body leading-[1.5] text-[var(--t-3)]">
                           {d.reasoning ?? meta.description}
                         </p>
+                        {/* « Réalité vs Déclaré » face-à-face (DoD §33) : les deux
+                            côtés posés ligne par ligne. Rendu seulement quand l'écart
+                            porte un côté trade (mismatch / position non déclarée /
+                            trade sans contrepartie) ; les oublis de rituel n'en ont
+                            pas et le composant renvoie null. */}
+                        <RealityVsDeclared declared={d.declared} reality={d.reality} />
                         {d.memberReason !== null ? (
                           <p className="t-cap text-[var(--t-4)]">Ton motif : {d.memberReason}</p>
                         ) : (
@@ -327,11 +346,16 @@ export default async function VerificationPage() {
                       : ''}
                   </span>
                 </div>
-                {account.detectedByAI ? (
-                  <Pill tone="cy">Détecté par l&apos;analyse</Pill>
-                ) : (
-                  <Pill tone="mute">Déclaré</Pill>
-                )}
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  {account.detectedByAI ? (
+                    <Pill tone="cy">Détecté par l&apos;analyse</Pill>
+                  ) : (
+                    <Pill tone="mute">Déclaré</Pill>
+                  )}
+                  {account.confidence !== null ? (
+                    <Pill tone="cy">{accountConfidenceLabel(account.confidence)}</Pill>
+                  ) : null}
+                </div>
               </Card>
             ))}
           </div>
@@ -392,6 +416,16 @@ export default async function VerificationPage() {
                         </span>
                         <span>
                           <Pill tone={statusMeta.tone}>{statusMeta.label}</Pill>
+                        </span>
+                        {/* Empreinte SHA-256 (DoD §33 « horodatage ET empreinte,
+                            audit trail inaltérable ») : trace de non-altération
+                            posée à côté de l'horodatage. Tronquée à l'écran, hash
+                            complet au survol. */}
+                        <span
+                          className="f-mono t-cap truncate text-[var(--t-4)]"
+                          title={`Empreinte SHA-256 : ${proof.fileHash}`}
+                        >
+                          Empreinte {proof.fileHash.slice(0, 10)}…
                         </span>
                       </div>
                       <DeleteProofButton proofId={proof.id} />

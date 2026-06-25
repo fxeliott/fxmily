@@ -401,6 +401,10 @@ export type AuditAction =
   // ranAt only, PII-free. Strict `cron.<name>.scan` convention (cron-watch).
   | 'cron.verification_scan.scan'
   | 'verification.alert.created'
+  // S3 §33 « micro-relance » — one benevolent nudge sent on an isolated
+  // below-threshold gap BEFORE any alert escalates. PII-free metadata
+  // (`{discrepancyId, discrepancyType}`), counts-grade like the alert slug.
+  | 'verification.gentle_reminder.sent'
   | 'verification.score.computed'
   // V2 S2 — Universal tracking engine member capture (`/tracking/[instrument]`).
   // ONE slug: the instrument is 100% CLOSED (boolean/likert/scale/choice, ZERO

@@ -12,7 +12,10 @@ import {
   scanRitualsForAllMembers,
   scanTrackingSkipsForAllMembers,
 } from '@/lib/verification/constancy';
-import { scanAlertsForAllMembers } from '@/lib/verification/alerts';
+import {
+  scanAlertsForAllMembers,
+  scanGentleRemindersForAllMembers,
+} from '@/lib/verification/alerts';
 
 /**
  * Cron endpoint — S3 §33.5 daily verification scan.
@@ -25,9 +28,12 @@ import { scanAlertsForAllMembers } from '@/lib/verification/alerts';
  *                      unfilled past their grace (discipline metadata, §21.5-clean)
  *   5. constancy     — weekly ConstancyScore fold + upsert
  *   6. alerts        — repetition-only alerts + Mark Douglas dispatch (S5)
+ *   7. gentleReminders— §33 « micro-relance » : a single benevolent nudge on an
+ *                      ISOLATED below-threshold gap (BEFORE any alert escalates)
  *
  * Scans 3-4 run BEFORE the fold so their fresh gaps land in this run's
- * constancy + alerts.
+ * constancy + alerts. Scan 7 runs after alerts (complementary by threshold: a
+ * gap below the alert threshold gets a gentle nudge, a gap at it gets an alert).
  *
  * It NEVER drives Claude (the vision batch stays human-in-the-loop §5.4) —
  * it only folds rows already produced. Heartbeat audit on EVERY run
@@ -90,6 +96,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const trackingSkips = await scanTrackingSkipsForAllMembers(opts);
     const constancy = await recomputeConstancyForAllMembers(opts);
     const alerts = await scanAlertsForAllMembers(opts);
+    // §33 micro-relance — one benevolent nudge on isolated below-threshold gaps.
+    const gentleReminders = await scanGentleRemindersForAllMembers(opts);
 
     // Heartbeat on EVERY run — `health.ts` monitors this slug.
     await logAudit({
@@ -108,13 +116,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         scoresUpserted: constancy.scoresUpserted,
         alertsCreated: alerts.alertsCreated,
         deliveriesDispatched: alerts.deliveriesDispatched,
+        gentleRemindersSent: gentleReminders.remindersSent,
         errors:
           reconcile.errors +
           rituals.errors +
           meetingNoShows.errors +
           trackingSkips.errors +
           constancy.errors +
-          alerts.errors,
+          alerts.errors +
+          gentleReminders.errors,
       },
     });
 
@@ -126,6 +136,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       trackingSkips,
       constancy,
       alerts,
+      gentleReminders,
     });
   } catch (err) {
     reportError('cron.verification-scan', err, { route: '/api/cron/verification-scan' });

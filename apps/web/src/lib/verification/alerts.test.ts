@@ -187,4 +187,36 @@ describe('scanAlertsForAllMembers — member-day cap + open-alert retry (S4)', (
         ),
     ).toBe(true);
   });
+
+  // §32 généralisée — the tracking-skip repetition rule fires through the SAME
+  // engine as every other pattern (discipline territory, threshold 3, §33.8).
+  it('🚨 §32 — 3 unexcused tracking skips fire `tracking_skipped_repeat` + a discipline card', async () => {
+    arm({
+      discrepancies: [
+        { type: 'tracking_skipped_no_reason' },
+        { type: 'tracking_skipped_no_reason' },
+        { type: 'tracking_skipped_no_reason' },
+      ],
+    });
+    const r = await scanAlertsForAllMembers({ now: NOW });
+    expect(r.alertsCreated).toBe(1);
+    expect(r.deliveriesDispatched).toBe(1);
+    const data = vi.mocked(db.alert.create).mock.calls[0]![0] as {
+      data: { triggerType: string; threshold: number };
+    };
+    expect(data.data.triggerType).toBe('tracking_skipped_repeat');
+    expect(data.data.threshold).toBe(3);
+  });
+
+  it('§32 — an ISOLATED pair of skips stays below threshold → no alert (« jamais sur un manquement isolé »)', async () => {
+    arm({
+      discrepancies: [
+        { type: 'tracking_skipped_no_reason' },
+        { type: 'tracking_skipped_no_reason' },
+      ],
+    });
+    const r = await scanAlertsForAllMembers({ now: NOW });
+    expect(r.alertsCreated).toBe(0);
+    expect(db.alert.create).not.toHaveBeenCalled();
+  });
 });

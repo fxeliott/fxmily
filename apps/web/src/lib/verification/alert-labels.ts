@@ -16,4 +16,5 @@ export const ALERT_LABELS: Record<string, string> = {
   reality_gap_repeat: 'Écarts déclaré/réalité répétés',
   false_declaration_repeat: 'Fausses déclarations répétées',
   meeting_missed_repeat: 'Réunions manquées répétées',
+  tracking_skipped_repeat: 'Outils de suivi régulièrement laissés de côté',
 };

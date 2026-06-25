@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeNextDueAt, computeOccurrenceKey, isDue } from './cadence';
+import { computeNextDueAt, computeOccurrenceKey, isDue, listClosedOccurrences } from './cadence';
 import type { TrackingCadence } from './types';
 
 const TZ = 'Europe/Paris';
@@ -96,6 +96,66 @@ describe('isDue', () => {
         now,
       ),
     ).toBe(true);
+  });
+});
+
+describe('listClosedOccurrences — the inverse of computeNextDueAt (S3 §32 skip scan)', () => {
+  // Fixed clock: Thursday 2026-06-25 12:00 UTC (= 14:00 Paris), ISO week 26.
+  const NOW = new Date('2026-06-25T12:00:00.000Z');
+  const DAY = 86_400_000;
+
+  it('weekly → only ISO weeks whose period closed past the grace, within lookback, newest first', () => {
+    const occ = listClosedOccurrences({ kind: 'weekly', anchorDow: 1 }, NOW, TZ, {
+      graceMs: 7 * DAY,
+      lookbackMs: 28 * DAY,
+    });
+    // W26 (current) is open; W25 ended 06-22 but is still inside the 7-day grace;
+    // W22 (Mon 05-25) starts before now−28d. Only W24 + W23 are closed & in range.
+    expect(occ.map((o) => o.key)).toEqual(['2026-W24', '2026-W23']);
+    // Keys are byte-identical to computeOccurrenceKey for a date inside the week.
+    expect(computeOccurrenceKey({ kind: 'weekly', anchorDow: 1 }, occ[0]!.periodStartUtc, TZ)).toBe(
+      '2026-W24',
+    );
+    // Period bounds are UTC-midnight of the ISO week (Mon inclusive → next Mon exclusive).
+    expect(occ[0]!.periodStartUtc.toISOString()).toBe('2026-06-08T00:00:00.000Z');
+    expect(occ[0]!.periodEndUtc.toISOString()).toBe('2026-06-15T00:00:00.000Z');
+  });
+
+  it('weekly → a shorter grace exposes the just-ended week', () => {
+    const occ = listClosedOccurrences({ kind: 'weekly', anchorDow: 1 }, NOW, TZ, {
+      graceMs: 1 * DAY,
+      lookbackMs: 28 * DAY,
+    });
+    // W25 ended 2026-06-22; +1d grace = 06-23 ≤ now → now closed.
+    expect(occ.map((o) => o.key)).toContain('2026-W25');
+    expect(occ.map((o) => o.key)).not.toContain('2026-W26'); // current week still open
+  });
+
+  it('daily → closed local days past a 2-day grace, newest first', () => {
+    const occ = listClosedOccurrences({ kind: 'daily' }, NOW, TZ, {
+      graceMs: 2 * DAY,
+      lookbackMs: 28 * DAY,
+    });
+    // 06-25..06-23 are still within (period_end + 2d); the newest closed day is 06-22.
+    expect(occ[0]!.key).toBe('2026-06-22');
+    expect(occ.map((o) => o.key)).not.toContain('2026-06-23');
+    expect(occ[0]!.periodStartUtc.toISOString()).toBe('2026-06-22T00:00:00.000Z');
+    expect(occ[0]!.periodEndUtc.toISOString()).toBe('2026-06-23T00:00:00.000Z');
+  });
+
+  it('lookback bounds how far back the scan ever accuses', () => {
+    const tight = listClosedOccurrences({ kind: 'weekly', anchorDow: 1 }, NOW, TZ, {
+      graceMs: 7 * DAY,
+      lookbackMs: 10 * DAY, // oldest start = 06-15 → only W24 (start 06-08) excluded too
+    });
+    // now−10d = 06-15; W24 starts 06-08 < 06-15 → out of range. Nothing closed remains.
+    expect(tight).toEqual([]);
+  });
+
+  it('per_trade / manual → never schedule-swept, so never a skip', () => {
+    const opts = { graceMs: 0, lookbackMs: 365 * DAY };
+    expect(listClosedOccurrences({ kind: 'per_trade' }, NOW, TZ, opts)).toEqual([]);
+    expect(listClosedOccurrences({ kind: 'manual' }, NOW, TZ, opts)).toEqual([]);
   });
 });
 

@@ -32,6 +32,7 @@ export interface AlertRule {
     | 'mismatch'
     | 'false_declared'
     | 'meeting_missed_no_reason'
+    | 'tracking_skipped_no_reason'
   )[];
   readonly threshold: number;
   /** Coaching card category (S5 junction) — Mark Douglas territory only. */
@@ -70,6 +71,15 @@ export const ALERT_RULES: readonly AlertRule[] = [
     threshold: 3,
     cardCategory: 'discipline',
     triggeredByLabel: 'Plusieurs réunions manquées sans motif',
+  },
+  {
+    // §32 généralisée — repeated unexcused skips of a DUE recurring tracking
+    // instrument (S2 universal engine). Discipline territory, never ego/trading.
+    triggerType: 'tracking_skipped_repeat',
+    discrepancyTypes: ['tracking_skipped_no_reason'],
+    threshold: 3,
+    cardCategory: 'discipline',
+    triggeredByLabel: 'Plusieurs outils de suivi laissés de côté sans motif',
   },
 ];
 

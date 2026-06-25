@@ -10,6 +10,8 @@ import {
   shiftLocalDate,
 } from '@/lib/checkin/timezone';
 import { MEETING_WINDOW_DAYS, meetingJoinFloor } from '@/lib/meeting/window';
+import { listClosedOccurrences, localDateToUtcMidnight } from '@/lib/tracking/cadence';
+import { getCurrentInstruments } from '@/lib/tracking/registry';
 
 /**
  * S3 §33.5 — Score de constance & d'investissement dans le travail.
@@ -353,6 +355,266 @@ export async function scanMeetingNoShowsForAllMembers(
     return {
       membersScanned: members.length,
       meetingsClosed: meetings.length,
+      discrepanciesCreated: 0,
+      errors: 1,
+    };
+  }
+}
+
+// =============================================================================
+// 1ter. Tracking-instrument skip scan (vérification généralisée §32 — the S2
+//        universal tracking engine, beyond check-ins/meetings)
+// =============================================================================
+
+/**
+ * Rattrapage grace AFTER a recurring tracking occurrence's period closes before a
+ * skip becomes a discrepancy. A FULL extra period for weekly (the member had the
+ * whole week the instrument was due, PLUS the following week) — calm, §31.2: never
+ * accused the instant the period ends.
+ */
+export const TRACKING_SKIP_GRACE_DAYS = 7;
+const DAILY_TRACKING_SKIP_GRACE_DAYS = 2;
+/** Never back-accuse a skip older than the discipline window (aligned 28 j). */
+export const TRACKING_SKIP_LOOKBACK_DAYS = DISCIPLINE_WINDOW_DAYS;
+
+export interface TrackingSkipScanResult {
+  readonly membersScanned: number;
+  readonly instrumentsScanned: number;
+  readonly discrepanciesCreated: number;
+  readonly errors: number;
+}
+
+/**
+ * THE dedup key of a tracking skip — one gap per (member, instrument, occurrence).
+ * Stored in `Discrepancy.trackingRef`; the `@@unique([memberId, trackingRef])`
+ * index makes a re-run / band overlap a no-op (NULL for every other type).
+ */
+export function trackingSkipRef(instrumentKey: string, occurrenceKey: string): string {
+  return `${instrumentKey}@${occurrenceKey}`;
+}
+
+// Period labels are formatted in the UTC frame because `periodStartUtc` /
+// `periodEndUtc` are UTC-midnight PINS of the civil date (see cadence.ts) — a
+// member-facing date, never the raw ISO occurrence key (`2026-W24`).
+const TRACKING_PERIOD_DAY_FMT = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+const TRACKING_PERIOD_FULL_FMT = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/** Human FR period label for a skip — « du 8 au 14 juin 2026 » (weekly) or
+ *  « du 18 juin 2026 » (daily). The ISO key stays in `trackingRef` for dedup. */
+function trackingSkipPeriodLabel(
+  periodStartUtc: Date,
+  periodEndUtc: Date,
+  isWeekly: boolean,
+): string {
+  if (!isWeekly) return `du ${TRACKING_PERIOD_FULL_FMT.format(periodStartUtc)}`;
+  // The displayed last day is the Sunday: the period end pin is the NEXT Monday.
+  const lastDay = new Date(periodEndUtc.getTime() - MS_PER_DAY);
+  return `de la semaine du ${TRACKING_PERIOD_DAY_FMT.format(periodStartUtc)} au ${TRACKING_PERIOD_FULL_FMT.format(lastDay)}`;
+}
+
+/**
+ * S3 §32 — "applique le même principe de preuve à l'ensemble des données, pas
+ * seulement les trades ; quand le membre ne remplit rien sans motif valable → un
+ * manque de discipline qui fait baisser son score de constance". The S2 universal
+ * tracking engine (recurring instruments, e.g. the weekly `process-fidelity`) is
+ * member-declarative data exactly like a check-in or a meeting — a DUE occurrence
+ * left unfilled past its rattrapage grace, without a reason, becomes a
+ * `tracking_skipped_no_reason` Discrepancy: EXCUSABLE (`memberReason` → the score
+ * recovers, §29), strictly fed into the existing DISCIPLINE axis + repetition
+ * alert. NEVER fires while the occurrence is still in grace nor for a SNOOZED
+ * instrument (calm self-pacing is never penalised, §2).
+ *
+ * Mirrors the meeting no-show scan: idempotent, deterministic, §2-clean static
+ * `claudeReasoning` (NOT Claude output), no positive ScoreEvent (the discipline
+ * axis = addressed/total discrepancies, so the gap alone moves it). Batched reads
+ * (S10 N+1 canon → ~constant query count).
+ *
+ * 🚨 STATISTICAL ISOLATION (§21.5): this scan reads tracking COMPLETION metadata
+ * ONLY — the existence of an occurrence key (`userId`/`instrumentKey`/
+ * `occurrenceKey`) and the snooze date. It NEVER selects `responses` /
+ * `confidenceLevel` / any capture CONTENT, so no tracked self-assessment can leak
+ * into scoring. Occurrence keys are computed in the MEMBER's timezone — identical
+ * to how `submitTrackingEntry` keys their entries — so existence checks line up.
+ */
+export async function scanTrackingSkipsForAllMembers(
+  options: { now?: Date } = {},
+): Promise<TrackingSkipScanResult> {
+  const now = options.now ?? new Date();
+
+  // Only recurring (schedule-swept) instruments can be "skipped" on a cadence.
+  const instruments = getCurrentInstruments().filter(
+    (i) => i.cadence.kind === 'weekly' || i.cadence.kind === 'daily',
+  );
+  if (instruments.length === 0) {
+    return { membersScanned: 0, instrumentsScanned: 0, discrepanciesCreated: 0, errors: 0 };
+  }
+
+  const members = await db.user.findMany({
+    where: { status: 'active', role: 'member' },
+    select: { id: true, joinedAt: true, createdAt: true, timezone: true },
+  });
+  if (members.length === 0) {
+    return {
+      membersScanned: 0,
+      instrumentsScanned: instruments.length,
+      discrepanciesCreated: 0,
+      errors: 0,
+    };
+  }
+
+  try {
+    interface SkipCandidate {
+      readonly memberId: string;
+      readonly instrumentKey: string;
+      readonly occurrenceKey: string;
+      readonly ref: string;
+      readonly instrumentTitle: string;
+      readonly periodStartUtc: Date;
+      readonly periodEndUtc: Date;
+      readonly isWeekly: boolean;
+    }
+    const candidates: SkipCandidate[] = [];
+    const memberIds = members.map((m) => m.id);
+
+    for (const member of members) {
+      const tz = member.timezone || 'Europe/Paris';
+      // Owe an occurrence only if the member's LOCAL join day is on/before the
+      // period's start day. Floor the join to the SAME frame as `periodStartUtc`
+      // (UTC-midnight pin of the civil date in the member's own timezone) so the
+      // comparison is an exact civil-date one. A raw timestamp would mis-bucket a
+      // member west of UTC whose join instant crosses the UTC-midnight pin —
+      // mirrors the meeting scan's `meetingJoinFloor` day-floor invariant.
+      const joinFloorMs = localDateToUtcMidnight(
+        localDateOf(member.joinedAt ?? member.createdAt, tz),
+      ).getTime();
+      for (const instrument of instruments) {
+        const isWeekly = instrument.cadence.kind === 'weekly';
+        const graceMs =
+          (isWeekly ? TRACKING_SKIP_GRACE_DAYS : DAILY_TRACKING_SKIP_GRACE_DAYS) * MS_PER_DAY;
+        const occurrences = listClosedOccurrences(instrument.cadence, now, tz, {
+          graceMs,
+          lookbackMs: TRACKING_SKIP_LOOKBACK_DAYS * MS_PER_DAY,
+        });
+        for (const occ of occurrences) {
+          if (occ.periodStartUtc.getTime() < joinFloorMs) continue;
+          candidates.push({
+            memberId: member.id,
+            instrumentKey: instrument.key,
+            occurrenceKey: occ.key,
+            ref: trackingSkipRef(instrument.key, occ.key),
+            instrumentTitle: instrument.title,
+            periodStartUtc: occ.periodStartUtc,
+            periodEndUtc: occ.periodEndUtc,
+            isWeekly,
+          });
+        }
+      }
+    }
+
+    if (candidates.length === 0) {
+      return {
+        membersScanned: members.length,
+        instrumentsScanned: instruments.length,
+        discrepanciesCreated: 0,
+        errors: 0,
+      };
+    }
+
+    const instrumentKeys = [...new Set(candidates.map((c) => c.instrumentKey))];
+    const occurrenceKeys = [...new Set(candidates.map((c) => c.occurrenceKey))];
+    const refs = [...new Set(candidates.map((c) => c.ref))];
+
+    // BATCHED reads (constant query count regardless of member count):
+    //  1. occurrences the member ALREADY filled — completion metadata ONLY
+    //     (no `responses`/`confidenceLevel`, §21.5 isolation by construction);
+    //  2. instruments the member SNOOZED (a calm pause is never penalised, §2);
+    //  3. skip discrepancies already materialised (idempotence backstop on top
+    //     of the `@@unique([memberId, trackingRef])` index).
+    const [filledEntries, schedules, existingSkips] = await Promise.all([
+      db.trackingEntry.findMany({
+        where: {
+          userId: { in: memberIds },
+          instrumentKey: { in: instrumentKeys },
+          occurrenceKey: { in: occurrenceKeys },
+        },
+        select: { userId: true, instrumentKey: true, occurrenceKey: true },
+      }),
+      db.trackingSchedule.findMany({
+        where: { userId: { in: memberIds }, instrumentKey: { in: instrumentKeys } },
+        select: { userId: true, instrumentKey: true, pausedUntil: true },
+      }),
+      db.discrepancy.findMany({
+        where: { memberId: { in: memberIds }, trackingRef: { in: refs } },
+        select: { memberId: true, trackingRef: true },
+      }),
+    ]);
+
+    const filledKeys = new Set(
+      filledEntries.map((e) => `${e.userId}|${e.instrumentKey}|${e.occurrenceKey}`),
+    );
+    const pausedUntilByKey = new Map<string, Date | null>();
+    for (const s of schedules) {
+      pausedUntilByKey.set(`${s.userId}|${s.instrumentKey}`, s.pausedUntil);
+    }
+    const existingRefs = new Set(existingSkips.map((d) => `${d.memberId}|${d.trackingRef}`));
+
+    const toCreate = candidates
+      .filter((c) => {
+        // Already filled → not a skip.
+        if (filledKeys.has(`${c.memberId}|${c.instrumentKey}|${c.occurrenceKey}`)) return false;
+        // Snoozed THROUGH the period end → calm pause, never accused (§2/§33.6).
+        const paused = pausedUntilByKey.get(`${c.memberId}|${c.instrumentKey}`);
+        if (paused && paused.getTime() >= c.periodEndUtc.getTime()) return false;
+        // Already materialised (idempotent).
+        if (existingRefs.has(`${c.memberId}|${c.ref}`)) return false;
+        return true;
+      })
+      .map((c) => ({
+        memberId: c.memberId,
+        type: 'tracking_skipped_no_reason' as const,
+        trackingRef: c.ref,
+        severity: 1,
+        // Detection instant (≈ grace close) so the gap lands in the constancy
+        // (28 j) + alert (14 j) windows — mirror the meeting no-show scan.
+        detectedAt: now,
+        claudeReasoning: `L'instrument de suivi « ${c.instrumentTitle} » ${trackingSkipPeriodLabel(
+          c.periodStartUtc,
+          c.periodEndUtc,
+          c.isWeekly,
+        )} n'a pas été rempli dans le délai de rattrapage, sans motif déclaré.`,
+      }));
+
+    let discrepanciesCreated = 0;
+    if (toCreate.length > 0) {
+      const result = await db.discrepancy.createMany({ data: toCreate, skipDuplicates: true });
+      discrepanciesCreated = result.count;
+    }
+
+    return {
+      membersScanned: members.length,
+      instrumentsScanned: instruments.length,
+      discrepanciesCreated,
+      errors: 0,
+    };
+  } catch (err) {
+    // Isolate a scan failure (mirror the sibling scans' error-count contract —
+    // never 500 the whole verification run).
+    reportError(
+      'verification.constancy.tracking',
+      err instanceof Error ? err : new Error('tracking_skip_scan_failed'),
+      { instruments: instruments.length },
+    );
+    return {
+      membersScanned: members.length,
+      instrumentsScanned: instruments.length,
       discrepanciesCreated: 0,
       errors: 1,
     };

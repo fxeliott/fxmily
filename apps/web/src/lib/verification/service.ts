@@ -184,7 +184,8 @@ export interface DiscrepancyView {
     | 'false_declared'
     | 'mismatch'
     | 'unfilled_no_reason'
-    | 'meeting_missed_no_reason';
+    | 'meeting_missed_no_reason'
+    | 'tracking_skipped_no_reason';
   readonly severity: number;
   readonly status: 'open' | 'acknowledged' | 'resolved';
   readonly reasoning: string | null;

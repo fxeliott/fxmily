@@ -24,6 +24,7 @@ const DISCREPANCY_LABELS: Record<DiscrepancyView['type'], string> = {
   mismatch: 'Écart de taille',
   unfilled_no_reason: 'Journée sans suivi',
   meeting_missed_no_reason: 'Réunion manquée',
+  tracking_skipped_no_reason: 'Outil de suivi laissé de côté',
 };
 
 /** S4 (DOD3-T3-01) — `severity` drives the ScoreEvent delta but was rendered

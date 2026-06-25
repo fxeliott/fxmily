@@ -98,7 +98,7 @@ export function computeNextDueAt(
 }
 
 /** UTC-midnight `Date` of a local `YYYY-MM-DD` (no `parseLocalDate` import cycle). */
-function localDateToUtcMidnight(localDate: string): Date {
+export function localDateToUtcMidnight(localDate: string): Date {
   const parts = localDate.split('-');
   const y = Number(parts[0]);
   const m = Number(parts[1]);
@@ -120,4 +120,85 @@ export function isDue(schedule: ScheduleState, now: Date): boolean {
     return false;
   }
   return now.getTime() >= schedule.nextDueAt.getTime();
+}
+
+/** Local day-of-week of a `YYYY-MM-DD` (0 = Sunday … 6 = Saturday). */
+function dayOfWeek(localDate: string): number {
+  const parts = localDate.split('-');
+  return new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))).getUTCDay();
+}
+
+/** One recurring occurrence whose civil period is bounded in UTC-midnight terms. */
+export interface ClosedOccurrence {
+  /** Canonical occurrence key — IDENTICAL to what `computeOccurrenceKey` emits. */
+  readonly key: string;
+  /** UTC-midnight `Date` of the local period start (inclusive). */
+  readonly periodStartUtc: Date;
+  /** UTC-midnight `Date` of the local period end (exclusive). */
+  readonly periodEndUtc: Date;
+}
+
+/**
+ * Enumerate the recurring occurrences whose civil period has FULLY CLOSED past a
+ * `grace` delay at `now`, bounded to a recent `lookback`. The inverse of
+ * `computeNextDueAt`: instead of "when is the next one", it answers "which past
+ * occurrences are now closed and judgeable". Newest period first.
+ *
+ * An occurrence is included iff:
+ *   - `periodEnd + grace <= now`  (the period is over AND its rattrapage grace
+ *     has elapsed — the member had the whole period plus the grace to act), and
+ *   - `periodStart >= now - lookback`  (never back-accuse ancient history).
+ *
+ * PURE + deterministic (every boundary derived from the explicit `now`/`timezone`
+ * via the local-date helpers, no ambient clock). Consumed by the S3 verification
+ * scan to spot a DUE instrument left unfilled — it reads completion metadata
+ * ONLY (whether an occurrence key exists), never the capture content (§21.5).
+ * `per_trade` / `manual` cadences have no schedule sweep → `[]`.
+ */
+export function listClosedOccurrences(
+  cadence: TrackingCadence,
+  now: Date,
+  timezone: string,
+  opts: { graceMs: number; lookbackMs: number },
+): ClosedOccurrence[] {
+  if (cadence.kind === 'per_trade' || cadence.kind === 'manual') return [];
+
+  const nowMs = now.getTime();
+  const oldestStartMs = nowMs - opts.lookbackMs;
+  const today = localDateOf(now, timezone);
+  const out: ClosedOccurrence[] = [];
+
+  if (cadence.kind === 'daily') {
+    let cursor = today;
+    // Bound the walk defensively (lookback in days + a small margin).
+    for (let i = 0; i < 400; i += 1) {
+      const periodStartUtc = localDateToUtcMidnight(cursor);
+      if (periodStartUtc.getTime() < oldestStartMs) break;
+      const periodEndUtc = localDateToUtcMidnight(shiftLocalDate(cursor, 1));
+      if (periodEndUtc.getTime() + opts.graceMs <= nowMs) {
+        out.push({ key: cursor, periodStartUtc, periodEndUtc });
+      }
+      cursor = shiftLocalDate(cursor, -1);
+    }
+    return out;
+  }
+
+  // weekly — period = the ISO week (Mon..Sun) containing `cursor`.
+  let monday = today;
+  while (dayOfWeek(monday) !== 1) monday = shiftLocalDate(monday, -1);
+  for (let i = 0; i < 60; i += 1) {
+    const periodStartUtc = localDateToUtcMidnight(monday);
+    if (periodStartUtc.getTime() < oldestStartMs) break;
+    const periodEndUtc = localDateToUtcMidnight(shiftLocalDate(monday, 7));
+    if (periodEndUtc.getTime() + opts.graceMs <= nowMs) {
+      const { year, week } = isoWeekOf(monday);
+      out.push({
+        key: `${year}-W${String(week).padStart(2, '0')}`,
+        periodStartUtc,
+        periodEndUtc,
+      });
+    }
+    monday = shiftLocalDate(monday, -7);
+  }
+  return out;
 }

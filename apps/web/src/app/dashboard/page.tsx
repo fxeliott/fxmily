@@ -8,6 +8,7 @@ import { CalendarStatusWidget } from '@/components/calendar/calendar-status-widg
 import { MorningIntentionRecall } from '@/components/checkin/morning-intention-recall';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { FirstRunWelcome } from '@/components/dashboard/first-run-welcome';
+import { HubDriftSignal } from '@/components/dashboard/hub-drift-signal';
 import { JournalShortcut } from '@/components/dashboard/journal-shortcut';
 import { MilestoneBanner } from '@/components/dashboard/milestone-banner';
 import { MomentumCard } from '@/components/dashboard/momentum-card';
@@ -38,6 +39,7 @@ import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scori
 import { getSessionRoutine } from '@/lib/session-routine/service';
 import { countTradesByStatus } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
+import { listRecentAlertsForMember } from '@/lib/verification/alerts';
 import { getLatestConstancyScore } from '@/lib/verification/constancy';
 import { countOpenDiscrepancies } from '@/lib/verification/service';
 
@@ -100,6 +102,7 @@ export default async function DashboardPage() {
     morningCheckin,
     objectives,
     sessionRoutine,
+    driftAlerts,
   ] = userId
     ? await Promise.all([
         countTradesByStatus(userId),
@@ -124,6 +127,10 @@ export default async function DashboardPage() {
         // (analyse/exécution/gestion/coupure, Paris-fixed) + today's discipline
         // facts derived from existing Trade rows (0 migration). Two indexed reads.
         getSessionRoutine(userId),
+        // S4 §32/§33 — les alertes de dérive « sans qu'il ait à les chercher » :
+        // surfacées au point d'entrée (hub) en plus de /verification. Même feed
+        // lecture-seule (fenêtre 30j, cap 20), 0 nouvelle table. Lu en parallèle.
+        listRecentAlertsForMember(userId),
       ])
     : [
         { open: 0, closed: 0 },
@@ -136,6 +143,7 @@ export default async function DashboardPage() {
         null,
         null,
         null,
+        [],
       ];
 
   // North-star hero — la seule action la plus « maintenant » (primary todo first),
@@ -278,6 +286,12 @@ export default async function DashboardPage() {
         {objectives ? (
           <MethodGoalCard goal={objectives.methodGoal} variant="compact" className="mb-6" />
         ) : null}
+
+        {/* S4 §32/§33 — « alertes immédiates en cas de dérive, sans qu'il ait à les
+            chercher » : surfacées au point d'entrée (avant, elles ne vivaient que
+            sur /verification). Strip calme (ambre = attention, JAMAIS rouge §31.2/
+            §33.2) qui pointe vers le feed complet. Rend null sans alerte active. */}
+        <HubDriftSignal alerts={driftAlerts} className="mb-6" />
 
         {/* V2 refonte J1 — slim activity strip (streak dans le hero). S18 — passée
             de spans nus à 3 mini-cartes acc-dim vivantes (AnimatedNumber + micro

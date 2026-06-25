@@ -3,17 +3,20 @@ import { Pill } from '@/components/ui/pill';
 import { emotionLabel } from '@/lib/trading/emotions';
 
 /**
- * S4 §33 (enrichissement #2) — l'arc émotionnel d'un trade assemblé en un seul
- * endroit : avant → pendant → après. Les trois moments existaient déjà mais
- * dispersés dans la fiche (avant le détail, pendant/après après la sortie) ; le
- * membre (et l'admin qui supervise) ne lisait jamais le parcours d'un coup
- * d'œil — alors que c'est LE cœur de la méthode (Mark Douglas, master prompt §22).
+ * S4 §33 (enrichissement #2) — le parcours d'un trade assemblé en un seul endroit,
+ * avant → pendant → après, en RAPPROCHANT la capture, l'émotion et le débrief pour
+ * que le membre (et l'admin qui supervise) relise le trade comme une histoire.
  *
- * Posture §2 / §33.2 : purement DESCRIPTIF. On affiche l'état déclaré, jamais une
- * lecture de marché, jamais un jugement, jamais de rouge punitif (pills neutres
- * `mute`, comme les trois cartes d'origine). « Pendant » et « après » se
- * renseignent à la clôture → tant que le trade est ouvert, ils sont en attente,
- * pas « manquants ».
+ * Avant, ces trois dimensions vivaient dispersées dans la fiche : l'arc émotionnel
+ * d'un côté, la capture d'entrée plus bas, la capture de sortie encore plus bas, le
+ * débrief tout en bas. Ce composant les réunit : chaque moment porte son émotion ET
+ * sa capture, et la lecture écrite (intention d'entrée + débrief de sortie) suit
+ * juste en dessous, étiquetée.
+ *
+ * Posture §2 / §33.2 : purement DESCRIPTIF. On affiche l'état déclaré et les
+ * captures du membre, jamais une lecture de marché, jamais un jugement, jamais de
+ * rouge punitif (pills neutres `mute`). « Pendant » et « après » se renseignent à
+ * la clôture → tant que le trade est ouvert, ils sont en attente, pas « manquants ».
  *
  * Composant PARTAGÉ (membre + admin) via `TradeDetailView` : aucune branche
  * conditionnelle sur le rôle, le rendu est identique pour les deux.
@@ -25,6 +28,16 @@ interface TradePsychologyTriadProps {
   after: readonly string[];
   /** Open trades only capture « avant » ; during/after come at close. */
   isClosed: boolean;
+  /** Capture avant entrée (clé résolue en URL signée par l'appelant). */
+  entryPhotoUrl?: string | null;
+  /** Capture après sortie (présente seulement à la clôture). */
+  exitPhotoUrl?: string | null;
+  /** Note d'intention pré-entrée (côté « avant » du débrief scindé). */
+  entryNote?: string | null;
+  /** Débrief de sortie (côté « après » du débrief scindé). */
+  debrief?: string | null;
+  /** Paire — utilisée pour les `alt` accessibles des captures. */
+  pair: string;
 }
 
 export function TradePsychologyTriad({
@@ -32,32 +45,50 @@ export function TradePsychologyTriad({
   during,
   after,
   isClosed,
+  entryPhotoUrl = null,
+  exitPhotoUrl = null,
+  entryNote = null,
+  debrief = null,
+  pair,
 }: TradePsychologyTriadProps) {
-  // Hide entirely when nothing was logged across the arc (parité avec les trois
-  // cartes d'origine, qui se masquaient chacune si vide).
-  if (before.length === 0 && during.length === 0 && after.length === 0) {
+  const hasEmotions = before.length > 0 || during.length > 0 || after.length > 0;
+  const hasWritten = entryNote !== null || debrief !== null;
+  // Render the arc as soon as ANY dimension exists (émotion, capture ou écrit) —
+  // parité avec les sections d'origine, chacune masquée si vide.
+  if (!hasEmotions && !entryPhotoUrl && !exitPhotoUrl && !hasWritten) {
     return null;
   }
 
   const phases = [
-    { key: 'before', label: 'Avant', emotions: before, pending: 'Rien noté' },
+    {
+      key: 'before',
+      label: 'Avant',
+      emotions: before,
+      pending: 'Rien noté',
+      photoUrl: entryPhotoUrl,
+      photoAlt: `Capture avant entrée du trade ${pair}`,
+    },
     {
       key: 'during',
       label: 'Pendant',
       emotions: during,
       pending: isClosed ? 'Rien noté' : 'Se renseigne à la clôture',
+      photoUrl: null,
+      photoAlt: '',
     },
     {
       key: 'after',
       label: 'Après',
       emotions: after,
       pending: isClosed ? 'Rien noté' : 'Se renseigne à la clôture',
+      photoUrl: exitPhotoUrl,
+      photoAlt: `Capture après sortie du trade ${pair}`,
     },
   ] as const;
 
   return (
     <Card className="p-4">
-      <h2 className="t-eyebrow mb-3">Parcours émotionnel</h2>
+      <h2 className="t-eyebrow mb-3">Le parcours de ce trade</h2>
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {phases.map((phase) => (
           <div
@@ -76,9 +107,49 @@ export function TradePsychologyTriad({
             ) : (
               <span className="t-cap text-[var(--t-4)]">{phase.pending}</span>
             )}
+            {phase.photoUrl ? (
+              <a
+                href={phase.photoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="wow-hover-glow rounded-card mt-0.5 block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={phase.photoUrl}
+                  alt={phase.photoAlt}
+                  loading="lazy"
+                  className="rounded-card aspect-[16/9] w-full border border-[var(--b-default)] object-cover"
+                />
+              </a>
+            ) : null}
           </div>
         ))}
       </div>
+
+      {/* Lecture écrite du parcours — l'intention d'entrée puis le débrief de
+          sortie, étiquetés et séparés (avant, ils étaient fondus dans un seul
+          bloc « Notes » en bas de fiche). §33.2 : neutre, jamais un jugement. */}
+      {hasWritten ? (
+        <div className="mt-3 flex flex-col gap-3 border-t border-[var(--b-default)] pt-3">
+          {entryNote !== null ? (
+            <div className="flex flex-col gap-1">
+              <span className="t-mono-cap text-[var(--t-4)]">Avant le trade</span>
+              <p className="t-body leading-relaxed whitespace-pre-wrap text-[var(--t-2)]">
+                {entryNote}
+              </p>
+            </div>
+          ) : null}
+          {debrief !== null ? (
+            <div className="flex flex-col gap-1">
+              <span className="t-mono-cap text-[var(--t-4)]">Débrief</span>
+              <p className="t-body leading-relaxed whitespace-pre-wrap text-[var(--t-2)]">
+                {debrief}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </Card>
   );
 }

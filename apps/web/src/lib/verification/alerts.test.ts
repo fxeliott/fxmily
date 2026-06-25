@@ -26,7 +26,7 @@ vi.mock('@/lib/notifications/enqueue', () => ({
 import { db } from '@/lib/db';
 import { reportError } from '@/lib/observability';
 
-import { scanAlertsForAllMembers } from './alerts';
+import { listRecentAlertsForMember, scanAlertsForAllMembers } from './alerts';
 
 // 10:00 UTC in June = 12:00 Paris → triggeredOn (Paris) = 2026-06-11 at UTC
 // midnight (`parseLocalDate` canon).
@@ -218,5 +218,78 @@ describe('scanAlertsForAllMembers — member-day cap + open-alert retry (S4)', (
     const r = await scanAlertsForAllMembers({ now: NOW });
     expect(r.alertsCreated).toBe(0);
     expect(db.alert.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('listRecentAlertsForMember — member-facing read (S4 §33/§34)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('maps rows to AlertView with the canonical ALERT_LABELS label', async () => {
+    vi.mocked(db.alert.findMany).mockResolvedValue([
+      {
+        id: 'a1',
+        triggerType: 'false_declaration_repeat',
+        repeatCount: 2,
+        threshold: 2,
+        status: 'delivered',
+        createdAt: new Date('2026-06-10T08:00:00.000Z'),
+      },
+      {
+        id: 'a2',
+        triggerType: 'forgot_no_reason_repeat',
+        repeatCount: 3,
+        threshold: 3,
+        status: 'open',
+        createdAt: new Date('2026-06-09T08:00:00.000Z'),
+      },
+    ] as never);
+
+    const out = await listRecentAlertsForMember('member-1', { now: NOW });
+
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual({
+      id: 'a1',
+      triggerType: 'false_declaration_repeat',
+      label: 'Fausses déclarations répétées',
+      repeatCount: 2,
+      threshold: 2,
+      status: 'delivered',
+      createdAt: new Date('2026-06-10T08:00:00.000Z'),
+    });
+    expect(out[1]!.label).toBe('Journées sans suivi répétées');
+    expect(out[1]!.status).toBe('open');
+  });
+
+  it('queries a 30-day window, newest-first, capped at 20, scoped to the member', async () => {
+    vi.mocked(db.alert.findMany).mockResolvedValue([] as never);
+    await listRecentAlertsForMember('member-1', { now: NOW });
+    const args = vi.mocked(db.alert.findMany).mock.calls[0]![0] as {
+      where: { memberId: string; createdAt: { gte: Date } };
+      orderBy: { createdAt: string };
+      take: number;
+    };
+    expect(args.where.memberId).toBe('member-1');
+    expect(args.orderBy).toEqual({ createdAt: 'desc' });
+    expect(args.take).toBe(20);
+    const expectedSince = new Date(NOW.getTime() - 30 * 86_400_000);
+    expect(args.where.createdAt.gte.getTime()).toBe(expectedSince.getTime());
+  });
+
+  it('falls back to the raw trigger slug when no label is registered (never throws)', async () => {
+    vi.mocked(db.alert.findMany).mockResolvedValue([
+      {
+        id: 'a3',
+        triggerType: 'some_future_rule',
+        repeatCount: 4,
+        threshold: 3,
+        status: 'dismissed',
+        createdAt: NOW,
+      },
+    ] as never);
+    const out = await listRecentAlertsForMember('member-1', { now: NOW });
+    expect(out[0]!.label).toBe('some_future_rule');
+    expect(out[0]!.status).toBe('dismissed');
   });
 });

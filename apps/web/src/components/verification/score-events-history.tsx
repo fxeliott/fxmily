@@ -30,9 +30,14 @@ const REASON_LABEL: Record<ScoreEventView['reason'], string> = {
   false_declaration: 'Trade déclaré sans contrepartie dans ton historique',
 };
 
-/** Short chip labels for the « 2-3 signaux dominants » summary (CONTEXTE GLOBAL). */
+/**
+ * Short chip labels for the « 2-3 signaux dominants » summary (CONTEXTE GLOBAL).
+ * All PLURAL — they summarise a COUNT (`×N`), and staying plural keeps each chip
+ * label textually distinct from the singular per-event `REASON_LABEL` above (a
+ * collision on « Suivi rempli » would make `getByText` ambiguous on /verification).
+ */
 const SHORT_LABEL: Record<SignalReason, string> = {
-  filled: 'Suivi rempli',
+  filled: 'Suivis remplis',
   forgot_no_reason: 'Journées sans suivi',
   reality_gap: 'Écarts déclaré ↔ réel',
   false_declaration: 'Trades sans contrepartie',

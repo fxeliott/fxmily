@@ -1,6 +1,7 @@
 import { ArrowRight, Target } from 'lucide-react';
 import Link from 'next/link';
 
+import { AIGeneratedBanner } from '@/components/ai-generated-banner';
 import type { ProcessObjective } from '@/lib/objectives/service';
 import type { ConstancyScoreView } from '@/lib/verification/constancy';
 
@@ -16,6 +17,12 @@ import type { ConstancyScoreView } from '@/lib/verification/constancy';
  * Posture §2 : the objective is a PROCESS lever (discipline / stabilité /
  * constance / engagement) or the member's STATED coaching axis — never a P&L
  * target. §33.2 : encouraging, never punitive, never red — a bridge, not a verdict.
+ *
+ * AI Act §50 : the derived `focus.label` is deterministic, but the fallback
+ * `coachingAxis` is Claude-derived (`MemberProfile.axesPrioritaires`), so any
+ * surface that shows it must carry the `AIGeneratedBanner` (invariant documented
+ * on the field, objectives/service.ts) — mirrored from the canonical
+ * `CoachingAxisCard`. The badge renders ONLY when the coachingAxis branch runs.
  *
  * Renders `null` when there's nothing honest to bridge: no score yet (§33.5 — no
  * fabricated 100), or no objective signal to point at.
@@ -41,6 +48,8 @@ export function ConstancyObjectiveBridge({
   const effet = focus
     ? `elle nourrit ton levier du moment : ${focus.label}`
     : `elle soutient ce sur quoi tu travailles : ${coachingAxis}`;
+  // The fallback branch surfaces the Claude-derived coachingAxis → AI Act §50.
+  const showsAiAxis = !focus;
 
   return (
     <Link
@@ -57,6 +66,7 @@ export function ConstancyObjectiveBridge({
           Ta constance ({Math.round(score.value)}/100) mesure ta régularité et ton honnêteté —{' '}
           {effet}. Prochain pas : voir comment progresser dessus.
         </p>
+        {showsAiAxis ? <AIGeneratedBanner variant="badge" className="mt-0.5 self-start" /> : null}
         <span className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-medium text-[var(--t-3)] transition-colors group-hover:text-[var(--t-1)]">
           Mes objectifs
           <ArrowRight

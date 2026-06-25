@@ -10,17 +10,24 @@ import {
   recomputeConstancyForAllMembers,
   scanMeetingNoShowsForAllMembers,
   scanRitualsForAllMembers,
+  scanTrackingSkipsForAllMembers,
 } from '@/lib/verification/constancy';
 import { scanAlertsForAllMembers } from '@/lib/verification/alerts';
 
 /**
  * Cron endpoint — S3 §33.5 daily verification scan.
  *
- * Four DETERMINISTIC sub-scans, in dependency order :
+ * Six DETERMINISTIC sub-scans, in dependency order :
  *   1. reconcile     — declared trades ↔ extracted positions (gaps → écarts)
  *   2. rituals       — yesterday's check-ins (filled / forgot events, idempotent)
- *   3. constancy     — weekly ConstancyScore fold + upsert
- *   4. alerts        — repetition-only alerts + Mark Douglas dispatch (S5)
+ *   3. meetingNoShows— §31 généralisée : meetings whose rattrapage window closed
+ *   4. trackingSkips — §32 généralisée : DUE recurring tracking instruments left
+ *                      unfilled past their grace (discipline metadata, §21.5-clean)
+ *   5. constancy     — weekly ConstancyScore fold + upsert
+ *   6. alerts        — repetition-only alerts + Mark Douglas dispatch (S5)
+ *
+ * Scans 3-4 run BEFORE the fold so their fresh gaps land in this run's
+ * constancy + alerts.
  *
  * It NEVER drives Claude (the vision batch stays human-in-the-loop §5.4) —
  * it only folds rows already produced. Heartbeat audit on EVERY run
@@ -78,6 +85,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // §31 généralisée — meeting no-shows whose rattrapage window just closed.
     // BEFORE the fold so the new gaps land in this run's constancy + alerts.
     const meetingNoShows = await scanMeetingNoShowsForAllMembers(opts);
+    // §32 généralisée — recurring tracking instruments left unfilled past their
+    // grace. ALSO before the fold so the new gaps feed this run's discipline axis.
+    const trackingSkips = await scanTrackingSkipsForAllMembers(opts);
     const constancy = await recomputeConstancyForAllMembers(opts);
     const alerts = await scanAlertsForAllMembers(opts);
 
@@ -93,6 +103,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         forgotEvents: rituals.forgotEvents,
         meetingsClosed: meetingNoShows.meetingsClosed,
         meetingMissDiscrepancies: meetingNoShows.discrepanciesCreated,
+        trackingInstrumentsScanned: trackingSkips.instrumentsScanned,
+        trackingSkipDiscrepancies: trackingSkips.discrepanciesCreated,
         scoresUpserted: constancy.scoresUpserted,
         alertsCreated: alerts.alertsCreated,
         deliveriesDispatched: alerts.deliveriesDispatched,
@@ -100,6 +112,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           reconcile.errors +
           rituals.errors +
           meetingNoShows.errors +
+          trackingSkips.errors +
           constancy.errors +
           alerts.errors,
       },
@@ -110,6 +123,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       reconcile,
       rituals,
       meetingNoShows,
+      trackingSkips,
       constancy,
       alerts,
     });

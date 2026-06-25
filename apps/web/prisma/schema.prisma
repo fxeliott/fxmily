@@ -2420,7 +2420,7 @@ model AccessRequest {
 //
 // Session 3 of the 10-session plan ("rendre le mensonge impossible" — the
 // truth is proven BY REALITY, not by declaration alone). Data layer only at
-// S1-Fondations time; the upload UI, vision pipeline (Claude Fable 5 local,
+// S1-Fondations time; the upload UI, vision pipeline (Claude Opus 4.8 local,
 // image input proven 2026-06-10), reconciliation engine, scoring service and
 // alert dispatch are built in the dedicated S3 session.
 //
@@ -2493,6 +2493,12 @@ enum DiscrepancyType {
   /// or replay) nor excused before its 30-day rattrapage window closed. Cancelled
   /// slots are NEVER counted (no unjust accusation, §30.2/§33.6).
   meeting_missed_no_reason
+  /// S3 §32 généralisée — a DUE recurring tracking instrument (S2 universal
+  /// engine, e.g. the weekly process-fidelity) the member left unfilled past its
+  /// rattrapage grace, without a reason. Snoozed instruments are NEVER counted
+  /// (calm self-pacing, §2). Excusable like every other gap; feeds the discipline
+  /// axis only (completion metadata — never the capture content, §21.5).
+  tracking_skipped_no_reason
 }
 
 /// S3 — lifecycle of a discrepancy (open → member acknowledged → resolved).
@@ -2579,7 +2585,7 @@ model BrokerAccount {
 }
 
 /// S3 — one uploaded MT5 history screenshot for one account. The vision
-/// pipeline (Claude Fable 5 local, 5th batch pipeline) consumes `pending`
+/// pipeline (Claude Opus 4.8 local, 5th batch pipeline) consumes `pending`
 /// rows and extracts `ExtractedPosition` rows from the image.
 model Mt5AccountProof {
   id       String @id @default(cuid())
@@ -2709,6 +2715,14 @@ model Discrepancy {
   meetingId String?  @map("meeting_id")
   meeting   Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
 
+  /// S3 §32 généralisée — THE dedup ref of a `tracking_skipped_no_reason` gap:
+  /// "<instrumentKey>@<occurrenceKey>" (e.g. "process-fidelity@2026-W26"), null for
+  /// every other type. `detectedAt` is the DETECTION instant (≈ when the rattrapage
+  /// grace closed) so the gap lands inside the constancy (28 j) + alert (14 j)
+  /// windows. No FK to the tracking engine (§21.5 isolation: the verification side
+  /// references a skipped occurrence by an opaque string, never by a tracking row).
+  trackingRef String? @map("tracking_ref")
+
   /// 1 = minor, 2 = notable, 3 = major. Display/sort signal only — the
   /// ScoreEvent delta is a fixed per-reason constant (reconcile.ts), NOT
   /// derived from this severity.
@@ -2737,6 +2751,9 @@ model Discrepancy {
   // One meeting-miss gap per (member, meeting) — the scan dedup key. NULL
   // meetingId rows (every other type) never collide (Postgres NULLs distinct).
   @@unique([memberId, meetingId])
+  // One tracking-skip gap per (member, instrument@occurrence). NULL trackingRef
+  // rows (every other type) never collide (Postgres NULLs distinct).
+  @@unique([memberId, trackingRef])
   // Member + admin views: open discrepancies first.
   @@index([memberId, status])
   @@index([memberId, detectedAt(sort: Desc)])

@@ -61,7 +61,8 @@ const DISCREPANCY_META: Record<
   | 'false_declared'
   | 'mismatch'
   | 'unfilled_no_reason'
-  | 'meeting_missed_no_reason',
+  | 'meeting_missed_no_reason'
+  | 'tracking_skipped_no_reason',
   { label: string; description: string }
 > = {
   missing_declared: {
@@ -85,6 +86,11 @@ const DISCREPANCY_META: Record<
     label: 'Réunion manquée',
     description:
       'Une réunion programmée n’a pas été suivie (ni en direct ni en replay) dans le délai, sans motif. Donne-en un s’il y a lieu.',
+  },
+  tracking_skipped_no_reason: {
+    label: 'Outil de suivi laissé de côté',
+    description:
+      'Un outil de suivi attendu n’a pas été rempli dans le délai, sans motif. Donne-en un s’il y a lieu.',
   },
 };
 

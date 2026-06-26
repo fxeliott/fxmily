@@ -4,6 +4,7 @@ import { getCalendarForUser, getQuestionnaireForUser } from '@/lib/calendar/serv
 import { getCheckinStatus } from '@/lib/checkin/service';
 import { listScheduledMeetingsOn } from '@/lib/meeting/service';
 import { getMindsetCheck } from '@/lib/mindset/service';
+import { getDueTrackingInstruments } from '@/lib/tracking/service';
 
 import { getDailyGuidance } from './service';
 
@@ -25,6 +26,7 @@ vi.mock('@/lib/calendar/service', () => ({
 vi.mock('@/lib/checkin/service', () => ({ getCheckinStatus: vi.fn() }));
 vi.mock('@/lib/mindset/service', () => ({ getMindsetCheck: vi.fn() }));
 vi.mock('@/lib/meeting/service', () => ({ listScheduledMeetingsOn: vi.fn() }));
+vi.mock('@/lib/tracking/service', () => ({ getDueTrackingInstruments: vi.fn() }));
 
 const USER = 'user_1';
 const TZ = 'Europe/Paris';
@@ -59,7 +61,16 @@ beforeEach(() => {
   vi.mocked(getQuestionnaireForUser).mockResolvedValue(null);
   vi.mocked(getMindsetCheck).mockResolvedValue(null);
   vi.mocked(listScheduledMeetingsOn).mockResolvedValue([]);
+  vi.mocked(getDueTrackingInstruments).mockResolvedValue([]);
 });
+
+/** Minimal DueTrackingInstrument list — the service reads only key + title. */
+function dueTracking(...pairs: Array<[key: string, title: string]>) {
+  return pairs.map(([key, title]) => ({
+    instrument: { key, title },
+    dueSince: '2026-06-08T07:00:00Z',
+  })) as unknown as Awaited<ReturnType<typeof getDueTrackingInstruments>>;
+}
 
 describe('getDailyGuidance — slot + check-in', () => {
   it('morning: the morning check-in is the primary action (todo)', async () => {
@@ -239,5 +250,84 @@ describe('getDailyGuidance — Paris anchoring + JSONB drift hardening (re-chall
     const g = await getDailyGuidance(USER, TZ, MON_MORNING);
     expect(g.calendarState).toBe('generated');
     expect(g.todayBlocks).toEqual([]);
+  });
+});
+
+describe('getDailyGuidance — S6 §32-2 (plan du jour consolidé : missed / timing / tracking)', () => {
+  it('the morning check-in becomes a calm "missed" catch-up in the evening', async () => {
+    // Evening slot, neither check-in submitted: the morning one's moment has
+    // passed → `missed` (amber/rattrapable), never red — and stays secondary.
+    const g = await getDailyGuidance(USER, TZ, MON_EVENING);
+    const morning = g.actions.find((a) => a.key === 'checkin-morning');
+    expect(morning?.state).toBe('missed');
+    expect(morning?.emphasis).toBe('secondary');
+    expect(morning?.detail).toMatch(/rattraper/i);
+  });
+
+  it('the morning check-in is plain "todo" (never missed) earlier in the day', async () => {
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    expect(g.actions.find((a) => a.key === 'checkin-morning')?.state).toBe('todo');
+    expect(g.actions.some((a) => a.state === 'missed')).toBe(false);
+  });
+
+  it('a submitted morning check-in is never "missed" in the evening', async () => {
+    vi.mocked(getCheckinStatus).mockResolvedValue({
+      today: '2026-06-08',
+      morningSubmitted: true,
+      eveningSubmitted: false,
+    });
+    const g = await getDailyGuidance(USER, TZ, MON_EVENING);
+    // Done other-slot check-in is not repeated, so it is absent (not missed).
+    expect(g.actions.some((a) => a.key === 'checkin-morning')).toBe(false);
+    expect(g.actions.some((a) => a.state === 'missed')).toBe(false);
+  });
+
+  it('tags the FIRST pending action "current" and the SECOND "next"', async () => {
+    // Monday morning, nothing submitted → pending = [checkin-morning, mindset, checkin-evening].
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    const pending = g.actions.filter((a) => a.state === 'todo' || a.state === 'missed');
+    expect(pending[0]?.timing).toBe('current');
+    expect(pending[1]?.timing).toBe('next');
+    expect(g.actions.filter((a) => a.timing === 'current')).toHaveLength(1);
+    expect(g.actions.filter((a) => a.timing === 'next')).toHaveLength(1);
+  });
+
+  it('done / info actions never carry a timing marker', async () => {
+    vi.mocked(listScheduledMeetingsOn).mockResolvedValue([
+      { id: 'm2', slot: 'evening', scheduledAt: '2026-06-08T18:00:00Z' },
+    ]);
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    const meeting = g.actions.find((a) => a.kind === 'meeting');
+    expect(meeting?.state).toBe('info');
+    expect(meeting?.timing).toBeUndefined();
+  });
+
+  it('surfaces the TOP due tracking relevé as a calm secondary nudge', async () => {
+    vi.mocked(getDueTrackingInstruments).mockResolvedValue(
+      dueTracking(['process-fidelity', 'Fidélité à ton cadre']),
+    );
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    expect(g.actions.find((a) => a.kind === 'tracking')).toMatchObject({
+      key: 'tracking-process-fidelity',
+      title: 'Fidélité à ton cadre',
+      href: '/tracking/process-fidelity',
+      state: 'todo',
+      emphasis: 'secondary',
+    });
+  });
+
+  it('surfaces ONLY the top due relevé even when several are due (no entassement, §31.2)', async () => {
+    vi.mocked(getDueTrackingInstruments).mockResolvedValue(
+      dueTracking(['a', 'Relevé A'], ['b', 'Relevé B'], ['c', 'Relevé C']),
+    );
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    const tracking = g.actions.filter((a) => a.kind === 'tracking');
+    expect(tracking).toHaveLength(1);
+    expect(tracking[0]?.key).toBe('tracking-a');
+  });
+
+  it('no tracking action when nothing is due', async () => {
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    expect(g.actions.some((a) => a.kind === 'tracking')).toBe(false);
   });
 });

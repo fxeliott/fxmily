@@ -6,6 +6,7 @@ import { getCheckinStatus } from '@/lib/checkin/service';
 import { formatLocalDate, localDateOf, parseLocalDate } from '@/lib/checkin/timezone';
 import { listScheduledMeetingsOn } from '@/lib/meeting/service';
 import { getMindsetCheck } from '@/lib/mindset/service';
+import { getDueTrackingInstruments } from '@/lib/tracking/service';
 import type { CalendarBlock } from '@/lib/schemas/adaptive-calendar';
 
 import { currentDaySlot, primaryCheckinSlot, type DaySlot } from './slot';
@@ -13,12 +14,15 @@ import { currentDaySlot, primaryCheckinSlot, type DaySlot } from './slot';
 /**
  * Session 5 — Guidage quotidien : the "Ton aujourd'hui" derivation layer (DoD
  * §30 #3 — "le guidage quotidien affiche les bonnes actions AU BON MOMENT").
+ * S6 §32-2 extends it into the consolidated "plan du jour" : the SINGLE place a
+ * member finds everything due, with the current + next action highlighted, a
+ * calm `missed` catch-up state, and any due tracking relevé folded in.
  *
  * Aggregates, for one member at a given Europe/Paris instant, the calm,
- * time-aware "what to do now" picture: the check-in due for the current slot,
- * TODAY's adaptive-calendar blocks, a meeting happening today, the weekly
- * mindset QCM (emphasised Monday), the weekly schedule questionnaire (if not
- * filled), and any unread Mark Douglas card.
+ * time-aware "what to do now" picture: the check-in due for the current slot
+ * (the other slot becomes a calm catch-up once its moment has passed), TODAY's
+ * adaptive-calendar blocks, a meeting happening today, the weekly mindset QCM
+ * (emphasised Monday), and any process-relevé due today (§28 tracking).
  *
  * ARCHITECTURE (§3/§24). This module is a READ-ONLY UI orchestration layer. It
  * lives OUTSIDE the real-edge tree (`lib/{scoring,analytics,trades,habit}`), so
@@ -35,8 +39,20 @@ import { currentDaySlot, primaryCheckinSlot, type DaySlot } from './slot';
  * reward fanfare.
  */
 
-export type GuidanceState = 'todo' | 'done' | 'info';
-export type GuidanceKind = 'checkin' | 'meeting' | 'mindset' | 'questionnaire' | 'douglas';
+/**
+ * S6 §32-2 — the daily-plan action lifecycle. `missed` is the brief's explicit
+ * "manqué" state: an action whose moment has clearly passed unfilled. It is
+ * NEVER rendered red/punitive (anti-Black-Hat §31.2) — it is amber "rattrapable"
+ * (see `today-guidance.tsx`). `info` (a meeting nudge) is neither to-do nor done.
+ */
+export type GuidanceState = 'todo' | 'done' | 'info' | 'missed';
+export type GuidanceKind =
+  | 'checkin'
+  | 'meeting'
+  | 'mindset'
+  | 'questionnaire'
+  | 'douglas'
+  | 'tracking';
 
 export interface GuidanceAction {
   /** Stable key for the React list + e2e selectors. */
@@ -49,6 +65,13 @@ export interface GuidanceAction {
   state: GuidanceState;
   /** `primary` = relevant to the current moment; `secondary` = still useful. */
   emphasis: 'primary' | 'secondary';
+  /**
+   * S6 §32-2 — "met en évidence l'action en cours et l'action suivante". An
+   * orthogonal axis to `state`: `current` is the first still-pending action,
+   * `next` the one after it. `undefined` for everything else (incl. done/info).
+   * Explicit `| undefined` for the repo's `exactOptionalPropertyTypes`.
+   */
+  timing?: 'current' | 'next' | undefined;
 }
 
 /** Whether THIS week's calendar can be shown, is being prepared, or is absent. */
@@ -111,12 +134,13 @@ export async function getDailyGuidance(
   const weekStart = currentParisWeekStart(now);
   const isMonday = parseLocalDate(today).getUTCDay() === 1;
 
-  const [checkin, calendar, questionnaire, mindset, meetings] = await Promise.all([
+  const [checkin, calendar, questionnaire, mindset, meetings, dueTracking] = await Promise.all([
     getCheckinStatus(userId, timezone, now),
     getCalendarForUser(userId, weekStart),
     getQuestionnaireForUser(userId, weekStart),
     getMindsetCheck(userId, weekStart),
     listScheduledMeetingsOn(today),
+    getDueTrackingInstruments(userId, now),
   ]);
 
   // --- TODAY's calendar blocks + calendar state -----------------------------
@@ -194,25 +218,64 @@ export async function getDailyGuidance(
     });
   }
 
-  // (4) Secondary check-in (the other slot) — only if still to do.
+  // (4) Secondary check-in (the other slot) — only if still to do. In the
+  // evening the MORNING check-in becomes a calm "missed" catch-up (its moment
+  // has passed — see slot.ts), surfaced amber-benevolent, NEVER red/punitive
+  // (anti-Black-Hat §31.2). The evening check-in is never "missed" while the
+  // member is still inside the evening slot (the day isn't over for them).
   if (!submitted[otherSlot]) {
+    const isMissedMorning = otherSlot === 'morning' && slot === 'evening';
     actions.push({
       key: `checkin-${otherSlot}`,
       kind: 'checkin',
       title: CHECKIN_META[otherSlot].title,
-      detail: CHECKIN_META[otherSlot].detail,
+      detail: isMissedMorning
+        ? 'Pas encore fait ce matin — tu peux le rattraper tranquillement.'
+        : CHECKIN_META[otherSlot].detail,
       href: CHECKIN_META[otherSlot].href,
+      state: isMissedMorning ? 'missed' : 'todo',
+      emphasis: 'secondary',
+    });
+  }
+
+  // (5) Due tracking relevé (§28 daily/weekly cadence) — the §32-2 "plan du jour"
+  // is the SINGLE place the member looks, so the due process-relevé is surfaced
+  // here as a calm nudge. Only the TOP-due instrument is shown (parity with the
+  // widget's old `due[0]`): a fresh member is due on every instrument, and a wall
+  // of relevé rows would be the very "entassement"/pressure §31.2 forbids. Its
+  // dashboard widget (TrackingCoverageWidget) keeps ONLY its coverage gauge — the
+  // CTA lives here now, so the same action is never offered twice (ui-review: no
+  // overlap). Process-only, never P&L: the anti-leak firewall keeps `lib/tracking`
+  // out of the real edge entirely.
+  const topDue = dueTracking[0];
+  if (topDue) {
+    actions.push({
+      key: `tracking-${topDue.instrument.key}`,
+      kind: 'tracking',
+      title: topDue.instrument.title,
+      detail: 'Un court relevé de ton process à compléter quand tu veux.',
+      href: `/tracking/${topDue.instrument.key}`,
       state: 'todo',
       emphasis: 'secondary',
     });
   }
 
+  // --- Timing highlight (§32-2 "action en cours" + "action suivante") -------
+  // Orthogonal to `state`: the FIRST still-pending action (todo or missed) is
+  // the one to do now → `current`; the SECOND → `next`. Pure wayfinding, never
+  // a countdown/urgency (§2). A meeting (`info`) is never "pending". The filter
+  // returns the SAME object references held by `actions`, so tagging them here
+  // tags the rendered list (no copy). Done/info actions stay `timing:undefined`.
+  const pending = actions.filter((a) => a.state === 'todo' || a.state === 'missed');
+  if (pending[0]) pending[0].timing = 'current';
+  if (pending[1]) pending[1].timing = 'next';
+
   // NOTE — the weekly questionnaire CTA and the unread Mark Douglas inbox are
   // intentionally NOT surfaced here: they keep their dedicated, richer dashboard
   // widgets (CalendarStatusWidget / DouglasInboxWidget). This panel owns the
-  // TIME-of-day-sensitive actions only, so the dashboard never shows the same
-  // call-to-action twice (ui-review: no overlap). The `none` calendar state
-  // points the member to the questionnaire widget below.
+  // TIME-of-day-sensitive actions + due tracking relevés only, so the dashboard
+  // never shows the same call-to-action twice (ui-review: no overlap). The
+  // `none` calendar state points the member to the questionnaire widget below.
 
   return {
     todayLabel: capitalizeFirst(formatLocalDate(today)),

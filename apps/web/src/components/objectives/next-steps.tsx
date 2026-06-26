@@ -1,4 +1,4 @@
-import { ArrowUpRight, Check, CircleDot, Info } from 'lucide-react';
+import { ArrowUpRight, Check, CircleDot, Info, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 
 import type { GuidanceAction } from '@/lib/daily-guidance/service';
@@ -19,6 +19,13 @@ const STATE_META: Record<
   todo: { label: 'À faire', Icon: CircleDot, cls: 'text-[var(--acc-hi)]', dot: 'bg-[var(--acc)]' },
   done: { label: 'Fait', Icon: Check, cls: 'text-[var(--ok)]', dot: 'bg-[var(--ok)]' },
   info: { label: 'Info', Icon: Info, cls: 'text-[var(--t-3)]', dot: 'bg-[var(--t-4)]' },
+  // S6 §32-2 — a calm amber catch-up, NEVER red/punitive (anti-Black-Hat §31.2).
+  missed: {
+    label: 'À rattraper',
+    Icon: RotateCcw,
+    cls: 'text-[var(--warn)]',
+    dot: 'bg-[var(--warn)]',
+  },
 };
 
 export function NextSteps({

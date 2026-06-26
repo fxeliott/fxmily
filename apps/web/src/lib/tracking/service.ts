@@ -321,10 +321,11 @@ export async function getTrackingCoverage(
 
 /**
  * Which recurring instruments are DUE for the member right now (past
- * `nextDueAt`, not snoozed). Drives the calm due-prompt in the dashboard
- * `TrackingCoverageWidget` (its sole consumer) — no streak, no urgency (SPEC
- * §2). A member with no schedule row yet for a current
- * instrument is considered due (first-run), so the engine self-bootstraps.
+ * `nextDueAt`, not snoozed). Drives the calm due-relevé nudge in the S6 §32-2
+ * consolidated « plan du jour » (`getDailyGuidance`, its sole consumer since the
+ * CTA moved off `TrackingCoverageWidget`) — no streak, no urgency (SPEC §2). A
+ * member with no schedule row yet for a current instrument is considered due
+ * (first-run), so the engine self-bootstraps.
  */
 export async function getDueTrackingInstruments(
   userId: string,

@@ -1,38 +1,32 @@
-import { ArrowRight, ClipboardList } from 'lucide-react';
-import Link from 'next/link';
+import { ClipboardList } from 'lucide-react';
 
-import { HoverLift } from '@/components/ui/hover-lift';
-import { getDueTrackingInstruments, getTrackingCoverage } from '@/lib/tracking/service';
+import { getTrackingCoverage } from '@/lib/tracking/service';
 
 /**
- * V2 S2 — Dashboard tracking-coverage widget (member-facing). The single calm
- * surface that turns the universal engine's two reads into ONE glanceable card :
+ * V2 S2 — Dashboard tracking-coverage widget (member-facing). The calm
+ * « vue d'ensemble » of how much of the 11-axis méthodo surface the member has
+ * fed in the last 30 days (`getTrackingCoverage`) — COUNT / RECENCY only (§21.5
+ * isolation), so it is a reflective "where am I" read, never a score, a streak
+ * or a P&L (§2 / §31.2).
  *
- *   - **D1 completeness gauge** (`getTrackingCoverage`) — how much of the
- *     11-axis méthodo surface the member has fed in the last 30 days. COUNT /
- *     RECENCY only (§21.5 isolation), so it is a calm "where am I" read, never
- *     a score, a streak or a P&L (§2 / §31.2).
- *   - **Due prompt** (`getDueTrackingInstruments`) — the recurring instrument(s)
- *     waiting for a capture right now, offered as a soft CTA into
- *     `/tracking/[instrument]`. No urgency, no red-on-empty (anti-Black-Hat,
- *     Yu-kai Chou) — "tout est à jour" when nothing is due.
+ * S6 §32-2 — the DUE relevé CTA moved to the consolidated « plan du jour »
+ * (`TodayGuidance`, the single top-of-dashboard place the member looks for "what
+ * to do now"), so this widget now shows ONLY the reflective coverage gauge: the
+ * same « faire mon point » action is never offered twice on one page
+ * (ui-review: no overlap). The due read therefore lives in `getDailyGuidance`
+ * alone — this widget no longer queries it (one fewer DB round-trip).
  *
  * Server Component, DS-v3 NEUTRAL/accent (never `--cy`/REFLECT). Mirrors the
  * structure + posture of `ProfileStatusWidget`. Mounted under `<Suspense>` on
  * the dashboard, beside the profile + calendar status widgets.
  */
 export async function TrackingCoverageWidget({ userId }: { userId: string }) {
-  const [coverage, due] = await Promise.all([
-    getTrackingCoverage(userId),
-    getDueTrackingInstruments(userId),
-  ]);
-
-  const top = due[0];
+  const coverage = await getTrackingCoverage(userId);
 
   return (
     <div
       data-slot="tracking-coverage-widget"
-      data-state={top ? 'due' : 'current'}
+      data-state={coverage.coveredCount === 0 ? 'empty' : 'covered'}
       className="rounded-card border border-[var(--b-default)] bg-[var(--bg-2)] p-5"
     >
       <div className="flex items-start gap-3">
@@ -80,36 +74,6 @@ export async function TrackingCoverageWidget({ userId }: { userId: string }) {
             </span>
           ))}
         </div>
-      </div>
-
-      {/* Due prompt → soft CTA, or a calm "à jour" acknowledgement. */}
-      <div className="mt-4">
-        {top ? (
-          <HoverLift className="block">
-            <Link
-              href={`/tracking/${top.instrument.key}`}
-              className="rounded-control flex items-center gap-2 border border-[var(--b-acc)] bg-[var(--acc-dim)] px-3 py-2.5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-            >
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="text-[12px] font-semibold text-[var(--acc-hi)]">
-                  Faire mon point · {top.instrument.title}
-                </span>
-                <span className="truncate text-[11px] text-[var(--t-3)]">
-                  Quelques questions calmes, quand tu te sens prêt·e.
-                </span>
-              </div>
-              <ArrowRight
-                className="h-3.5 w-3.5 shrink-0 text-[var(--acc-hi)]"
-                strokeWidth={2}
-                aria-hidden="true"
-              />
-            </Link>
-          </HoverLift>
-        ) : (
-          <p className="text-[12px] text-[var(--t-3)]">
-            Ton suivi est à jour — rien à remplir pour l&apos;instant.
-          </p>
-        )}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import {
   Brain,
   CalendarRange,
   Check,
+  ClipboardList,
   Minus,
   Moon,
   ScanSearch,
@@ -62,6 +63,7 @@ const KIND_ICON: Record<GuidanceKind, LucideIcon> = {
   mindset: Brain,
   questionnaire: CalendarRange,
   douglas: BookOpen,
+  tracking: ClipboardList,
 };
 
 type Trend = 'up' | 'flat' | 'down';

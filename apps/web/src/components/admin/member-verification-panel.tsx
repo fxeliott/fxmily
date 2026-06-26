@@ -1,6 +1,7 @@
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { ConstancyScoreCard } from '@/components/verification/constancy-score-card';
+import { ConstancyTrend } from '@/components/verification/constancy-trend';
 import { ALERT_LABELS } from '@/lib/verification/alert-labels';
 import type { ConstancyScoreView } from '@/lib/verification/constancy';
 import type { DiscrepancyView, VerificationOverview } from '@/lib/verification/service';
@@ -50,6 +51,14 @@ interface MemberVerificationPanelProps {
   constancy: ConstancyScoreView | null;
   discrepancies: readonly DiscrepancyView[];
   alerts: readonly AlertView[];
+  /**
+   * S6 chantier E — the member's recent weekly constancy scores (oldest→newest).
+   * Mirrors the member-side `/verification` layout so the admin sees the
+   * trajectory (« comment ça bouge »), not just the latest snapshot. Required
+   * (always supplied by the page) per the repo's `exactOptionalPropertyTypes`
+   * posture. `ConstancyTrend` self-guards on `< 2` rows → renders nothing.
+   */
+  history: readonly ConstancyScoreView[];
 }
 
 export function MemberVerificationPanel({
@@ -57,6 +66,7 @@ export function MemberVerificationPanel({
   constancy,
   discrepancies,
   alerts,
+  history,
 }: MemberVerificationPanelProps) {
   const openCount = discrepancies.filter((d) => d.status === 'open').length;
 
@@ -77,6 +87,7 @@ export function MemberVerificationPanel({
       </div>
 
       <ConstancyScoreCard score={constancy} />
+      <ConstancyTrend history={history} />
 
       {/* Comptes */}
       <section className="flex flex-col gap-2" aria-label="Comptes broker">

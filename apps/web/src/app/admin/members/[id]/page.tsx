@@ -25,7 +25,7 @@ import { listMonthlyDebriefsForMember } from '@/lib/monthly-debrief/service';
 import { listMeetingAttendanceForMember } from '@/lib/meeting/service';
 import { MemberPresencePanel } from '@/components/admin/member-presence-panel';
 import { MemberVerificationPanel } from '@/components/admin/member-verification-panel';
-import { getLatestConstancyScore } from '@/lib/verification/constancy';
+import { getLatestConstancyScore, listRecentConstancyScores } from '@/lib/verification/constancy';
 import { getVerificationOverview, listDiscrepancies } from '@/lib/verification/service';
 import { db } from '@/lib/db';
 import { loadMindsetDashboardData } from '@/lib/mindset/service';
@@ -281,6 +281,11 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
               createdAt: true,
             },
           }),
+          // S6 chantier E — recent weekly constancy scores (oldest→newest) so the
+          // admin sees the trajectory under the snapshot card (parity with the
+          // member-facing `/verification` layout). Same indexed read as the
+          // snapshot, batched in this Promise.all (no extra round-trip cost).
+          listRecentConstancyScores(memberId, 12),
         ])
       : null;
 
@@ -487,6 +492,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           constancy={verification[1]}
           discrepancies={verification[2]}
           alerts={verification[3]}
+          history={verification[4]}
         />
       ) : null}
       {tab === 'notes' && adminNotes !== null ? (

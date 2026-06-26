@@ -1,4 +1,6 @@
 import { AIGeneratedBanner } from '@/components/ai-generated-banner';
+import { CompletionOverview } from '@/components/reports/completion-overview';
+import type { CompletionSummary } from '@/lib/reports/completion';
 import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 
 /**
@@ -35,11 +37,24 @@ function patternEntriesOf(patterns: SerializedMonthlyDebrief['patterns']): Array
   return entries;
 }
 
-export function MonthlyDebriefReader({ debrief }: { debrief: SerializedMonthlyDebrief }) {
+export function MonthlyDebriefReader({
+  debrief,
+  completion,
+}: {
+  debrief: SerializedMonthlyDebrief;
+  /**
+   * S6 §32-3 — deterministic completion + continuity snapshot for the month,
+   * recomputed at render from the member's check-ins (never persisted). Optional
+   * so the admin read-only panel (which does not load it) stays unchanged; when
+   * present it renders ABOVE the AI banner (it is a factual block, not AI prose).
+   */
+  completion?: CompletionSummary;
+}) {
   const patternEntries = patternEntriesOf(debrief.patterns);
 
   return (
     <div className="flex flex-col gap-5" data-slot="monthly-debrief-reader">
+      {completion ? <CompletionOverview summary={completion} periodLabel="mois" /> : null}
       <AIGeneratedBanner variant="inline" modelName={modelDisplay(debrief.claudeModel)} />
 
       <section className="rounded-card-lg border border-[var(--b-default)] p-5">

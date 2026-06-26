@@ -14,6 +14,8 @@ import {
 } from '@/lib/monthly-debrief/service';
 import { reportWarning } from '@/lib/observability';
 import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
+import { loadCompletionSummary } from '@/lib/reports/completion-loader';
+import type { CompletionSummary } from '@/lib/reports/completion';
 
 export const metadata = {
   title: 'Débrief mensuel',
@@ -56,6 +58,20 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
   // quiet once the member has read it (anti-Black-Hat §25.2). Best-effort: a
   // transient DB hiccup must never 500 the member's debrief page; the nudge
   // simply re-shows next time. Idempotent (stamps only when seenAt is null).
+  // S6 §32-3 — deterministic completion + continuity snapshot for the selected
+  // month, recomputed at render from the member's check-ins (no persisted
+  // column, no migration; never drifts from the SSOT). Best-effort: a transient
+  // DB hiccup must never 500 the debrief reading surface — fall back to no
+  // overview block rather than failing the page.
+  let completion: CompletionSummary | undefined;
+  if (selected) {
+    try {
+      completion = await loadCompletionSummary(userId, selected.monthStart, selected.monthEnd);
+    } catch {
+      reportWarning('monthly-debrief.completion', 'load_failed', { userId });
+    }
+  }
+
   if (selected && selected.seenAt === null) {
     try {
       await markMonthlyDebriefSeen(userId, selected.id);
@@ -112,7 +128,7 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
         {selected ? (
           <article className="wow-reveal flex flex-col gap-5">
             <h2 className="t-h2 text-[var(--t-1)]">{formatMonthLabelFr(selected.monthStart)}</h2>
-            <MonthlyDebriefReader debrief={selected} />
+            <MonthlyDebriefReader debrief={selected} {...(completion ? { completion } : {})} />
           </article>
         ) : (
           <div

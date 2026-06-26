@@ -76,7 +76,7 @@ function sameDay(a: Date, b: Date): boolean {
 }
 
 /** Minimal WeeklyScheduleResponses — same shape as batch.test.ts's fixture. */
-function responsesFixture() {
+function responsesFixture(overrides: Record<string, unknown> = {}) {
   return {
     profile: 'salarie',
     sessionGoal: 3,
@@ -96,6 +96,7 @@ function responsesFixture() {
     meetingCommitment: 'occasional',
     practiceFocus: 'balanced',
     constraint: 'none',
+    ...overrides,
   };
 }
 
@@ -103,14 +104,18 @@ function seedUser(id: string): void {
   store.users.push({ id, status: 'active', joinedAt: new Date('2026-01-01T00:00:00Z') });
 }
 
-function seedQuestionnaire(userId: string, updatedAt: Date): void {
+function seedQuestionnaire(
+  userId: string,
+  updatedAt: Date,
+  responses: unknown = responsesFixture(),
+): void {
   store.questionnaires.push({
     id: `q-${userId}`,
     userId,
     weekStart: WEEK_START_DB,
     instrumentVersion: 1,
     energyPeakSlot: 'morning',
-    responses: responsesFixture(),
+    responses,
     createdAt: updatedAt,
     updatedAt,
   });
@@ -153,6 +158,7 @@ vi.mock('@/lib/db', () => ({
             userId: q.userId,
             updatedAt: q.updatedAt,
             instrumentVersion: q.instrumentVersion,
+            responses: q.responses,
           })),
       ),
       findUnique: vi.fn(
@@ -414,5 +420,61 @@ describe('calendar pipeline — questionnaire → calendar chain (DoD §32 #1)',
     // re-submit → excluded (the clamp did not make it stale-forever either).
     const second = await loadAllSnapshotsForCalendarGeneration({ weekStart: WEEK_START });
     expect(second.entries).toHaveLength(0);
+  });
+
+  it('should_fold_a_deterministic_conflict_into_the_persisted_warnings (§32-1 end-to-end)', async () => {
+    // u1 declared Monday FULLY unavailable, yet the plan places a live session
+    // on Monday morning → the deterministic detector must fold a calm
+    // "indisponible" warning into the PERSISTED calendar (never left to the
+    // model). Proves batch.ts threads responses → detect → merge → re-parse →
+    // persist, and that the warning is readable on the member's calendar.
+    seedUser('u1');
+    seedQuestionnaire(
+      'u1',
+      new Date('2026-06-08T08:00:00Z'),
+      responsesFixture({
+        weekdayAvailability: {
+          monday: { morning: false, afternoon: false, evening: false },
+          tuesday: { morning: true, afternoon: true, evening: true },
+          wednesday: { morning: true, afternoon: true, evening: true },
+          thursday: { morning: true, afternoon: true, evening: true },
+          friday: { morning: true, afternoon: true, evening: true },
+        },
+      }),
+    );
+
+    const conflictingOutput = {
+      weekStart: WEEK_START,
+      overview:
+        'Une semaine calme et régulière, pensée pour avancer pas à pas sur ta pratique sans te surcharger ni rien précipiter cette semaine.',
+      weeklyFocus: 'Garder un rythme tenable et régulier toute la semaine, étape par étape.',
+      warnings: [] as string[],
+      days: Array.from({ length: 7 }, (_, i) => ({
+        date: `2026-06-${String(8 + i).padStart(2, '0')}`,
+        dayLabel: `Jour ${i + 1}`,
+        blocks:
+          i === 0
+            ? [
+                {
+                  slot: 'morning' as const,
+                  category: 'live_trading' as const,
+                  durationMin: 90,
+                  label: 'Session du matin',
+                  priority: 'high' as const,
+                },
+              ]
+            : [],
+      })),
+    };
+
+    const result = await persistGeneratedCalendars({
+      weekStart: WEEK_START,
+      results: [{ userId: 'u1', output: conflictingOutput }],
+    });
+    expect(result).toEqual({ persisted: 1, skipped: 0, errors: 0 });
+
+    const cal = await getCalendarForUser('u1', WEEK_START);
+    expect(cal).not.toBeNull();
+    expect(cal?.schedule.warnings.some((w) => w.includes('indisponible'))).toBe(true);
   });
 });

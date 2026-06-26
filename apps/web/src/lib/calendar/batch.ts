@@ -10,7 +10,12 @@ import {
   adaptiveCalendarOutputSchema,
   type AdaptiveCalendarOutput,
 } from '@/lib/schemas/adaptive-calendar';
+import {
+  weeklyScheduleResponsesSchema,
+  type WeeklyScheduleResponses,
+} from '@/lib/schemas/weekly-schedule-questionnaire';
 
+import { detectCalendarConflicts, mergeWarnings } from './conflicts';
 import { currentParisWeekStart } from './week';
 import { loadCalendarSnapshotForUser, persistAdaptiveCalendar } from './service';
 import type { CalendarSnapshot } from './snapshot';
@@ -370,13 +375,23 @@ export async function persistGeneratedCalendars(
 
   // Gate 3 prep — questionnaires for this week → userId → instrumentVersion.
   // The instrument version traces which questionnaire fed the calendar.
+  // S6 §32-1 — also pull the closed `responses` so the deterministic conflict
+  // detector (`detectCalendarConflicts`) can compare the member's DECLARED
+  // availability/commitments against the GENERATED plan at persist time. The
+  // batch result entry carries only `output` (no snapshot — `CalendarBatchResultEntry`),
+  // so the responses are re-read server-side here (§2-safe: closed answers, 0 P&L).
   const questionnaireRows = await db.weeklyScheduleQuestionnaire.findMany({
     where: { weekStart: weekStartDb },
-    select: { userId: true, instrumentVersion: true },
+    select: { userId: true, instrumentVersion: true, responses: true },
   });
   const instrumentVersionByUser = new Map(
     questionnaireRows.map((r) => [r.userId, r.instrumentVersion]),
   );
+  const responsesByUser = new Map<string, WeeklyScheduleResponses>();
+  for (const row of questionnaireRows) {
+    const parsedResponses = weeklyScheduleResponsesSchema.safeParse(row.responses);
+    if (parsedResponses.success) responsesByUser.set(row.userId, parsedResponses.data);
+  }
 
   let persisted = 0;
   let skipped = 0;
@@ -495,7 +510,25 @@ export async function persistGeneratedCalendars(
       });
     }
 
-    const corpus = composeCalendarOutputCorpus(aligned);
+    // S6 §32-1 — fold DETERMINISTIC conflicts into the `warnings[]` channel
+    // before the crisis/AMF scan + persist. The detector is pure; the merge is
+    // capped at 3 (model warnings kept after the factual conflicts). The merged
+    // output is NOT covered by the Gate-4 parse (that ran on `entry.output`), so
+    // re-parse defensively — a conflict >200c or a 4th warning would otherwise
+    // reach the DB. On the (impossible-by-construction) re-parse failure, fall
+    // back to `aligned`: a warning enrichment must NEVER break the persist.
+    const responses = responsesByUser.get(entry.userId);
+    let finalOutput = aligned;
+    if (responses) {
+      const conflicts = detectCalendarConflicts(responses, aligned);
+      if (conflicts.length > 0) {
+        const candidate = { ...aligned, warnings: mergeWarnings(aligned.warnings, conflicts) };
+        const reparsed = adaptiveCalendarOutputSchema.safeParse(candidate);
+        finalOutput = reparsed.success ? reparsed.data : aligned;
+      }
+    }
+
+    const corpus = composeCalendarOutputCorpus(finalOutput);
 
     // Gate 5 — crisis routing on the AI OUTPUT (mirror V1.7.1). This is the
     // OUTPUT-IA skip path (NOT the REFLECT persist-anyway path): nothing here
@@ -581,7 +614,7 @@ export async function persistGeneratedCalendars(
       await persistAdaptiveCalendar({
         userId: entry.userId,
         weekStart: request.weekStart,
-        output: aligned,
+        output: finalOutput,
         claudeModel,
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,

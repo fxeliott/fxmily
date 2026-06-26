@@ -4,7 +4,9 @@ import {
   Brain,
   CalendarRange,
   Check,
+  ClipboardList,
   Moon,
+  RotateCcw,
   Sun,
   Sunrise,
   Users,
@@ -32,17 +34,20 @@ import { cn } from '@/lib/utils';
  * MOMENT"). It is the single "now" hub at the top of `/dashboard`.
  *
  * Pure Server Component (no client island) — one `getDailyGuidance` read,
- * everything derived server-side. Surfaces, in one glance: the check-in due for
- * the current slot, TODAY's adaptive-calendar blocks, a meeting today, and the
- * weekly mindset QCM (emphasised Monday). The weekly questionnaire + the Mark
- * Douglas inbox keep their dedicated richer widgets below (CalendarStatusWidget
- * / DouglasInboxWidget) — the panel deliberately does NOT duplicate them, it
- * owns the time-of-day-sensitive actions.
+ * everything derived server-side. S6 §32-2 turns it into the consolidated "plan
+ * du jour". Surfaces, in one glance: the check-in due for the current slot,
+ * TODAY's adaptive-calendar blocks, a meeting today, the weekly mindset QCM
+ * (emphasised Monday), and any due tracking relevé — with the current + next
+ * action highlighted (`Maintenant` / `Ensuite`). The weekly questionnaire + the
+ * Mark Douglas inbox keep their dedicated richer widgets below
+ * (CalendarStatusWidget / DouglasInboxWidget) — the panel deliberately does NOT
+ * duplicate them, it owns the time-of-day-sensitive actions + due relevés.
  *
  * Posture §2 + anti-Black-Hat (§31.2, BLOQUANT): organises TIME, never the
  * market. NO streak, NO score, NO red "pas fait", NO countdown — `done` is a
- * quiet ack (muted + check), `todo` a calm accent row, `info` neutral. The slot
- * label is the only "moment" cue. Mobile-first (375 → 2-up blocks on sm).
+ * quiet ack (muted + check), `todo` a calm accent row, `missed` a calm amber
+ * "rattrapable" catch-up (never red), `info` neutral. The slot label is the
+ * only "moment" cue. Mobile-first (375 → 2-up blocks on sm).
  */
 
 const SLOT_ICON: Record<DaySlot, LucideIcon> = {
@@ -57,25 +62,31 @@ const KIND_ICON: Record<GuidanceKind, LucideIcon> = {
   mindset: Brain,
   questionnaire: CalendarRange,
   douglas: BookOpen,
+  tracking: ClipboardList,
 };
 
 function ActionRow({ action }: { action: GuidanceAction }) {
+  const isPrimary = action.emphasis === 'primary';
+  const isDone = action.state === 'done';
+  // S6 §32-2 — `missed` = a calm, amber "rattrapable" catch-up (NEVER red/
+  // punitive — anti-Black-Hat §31.2). It outranks `primary` visually so the one
+  // thing that slipped reads first; its glyph is the "go-back" RotateCcw.
+  const isMissed = action.state === 'missed';
   // Check-in derives its glyph from the slot (morning → Sun, evening → Moon) to
   // match `CheckinSlotChip`'s convention; everything else maps by kind. Inline
   // lookup (not a helper returning a component) to satisfy the
   // no-component-created-during-render lint.
-  const Icon =
-    action.kind === 'checkin'
+  const Icon = isMissed
+    ? RotateCcw
+    : action.kind === 'checkin'
       ? action.key.endsWith('evening')
         ? Moon
         : Sun
       : KIND_ICON[action.kind];
-  const isPrimary = action.emphasis === 'primary';
-  const isDone = action.state === 'done';
-  // The "primary + not done" row is the only one on the blue `acc-dim` ground;
-  // its caption needs `--t-2` to clear WCAG 1.4.3 4.5:1 (a11y audit) — `--t-3`
-  // dips to 4.43:1 on that blue-tinted ground.
-  const detailTone = isPrimary && !isDone ? 'text-[var(--t-2)]' : 'text-[var(--t-3)]';
+  // The "primary + not done" row sits on the blue `acc-dim` ground and the
+  // `missed` row on the amber `warn-dim` ground; both captions need `--t-2` to
+  // clear WCAG 1.4.3 4.5:1 (a11y audit) — `--t-3` dips below on those tints.
+  const detailTone = isMissed || (isPrimary && !isDone) ? 'text-[var(--t-2)]' : 'text-[var(--t-3)]';
 
   return (
     <HoverLift className="block">
@@ -88,9 +99,11 @@ function ActionRow({ action }: { action: GuidanceAction }) {
           'rounded-control flex items-center gap-3 border p-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
           isDone
             ? 'border-[var(--b-default)] bg-[var(--bg-1)]'
-            : isPrimary
-              ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] hover:bg-[var(--acc-dim-2)]'
-              : 'border-[var(--b-default)] bg-[var(--bg-2)] hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)]',
+            : isMissed
+              ? 'border-[var(--warn-edge)] bg-[var(--warn-dim)] hover:border-[var(--warn)]'
+              : isPrimary
+                ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] hover:bg-[var(--acc-dim-2)]'
+                : 'border-[var(--b-default)] bg-[var(--bg-2)] hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)]',
         )}
       >
         <div
@@ -98,22 +111,37 @@ function ActionRow({ action }: { action: GuidanceAction }) {
             'rounded-control grid h-9 w-9 shrink-0 place-items-center border',
             isDone
               ? 'border-[var(--b-default)] text-[var(--t-3)]'
-              : isPrimary
-                ? 'border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]'
-                : 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]',
+              : isMissed
+                ? 'border-[var(--warn-edge)] bg-[var(--warn-dim)] text-[var(--warn)]'
+                : isPrimary
+                  ? 'border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]'
+                  : 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]',
           )}
         >
           <Icon className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span
-            className={cn(
-              'text-[13px] font-semibold',
-              isDone ? 'text-[var(--t-3)]' : 'text-[var(--t-1)]',
-            )}
-          >
-            {action.title}
-          </span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span
+              className={cn(
+                'truncate text-[13px] font-semibold',
+                isDone ? 'text-[var(--t-3)]' : 'text-[var(--t-1)]',
+              )}
+            >
+              {action.title}
+            </span>
+            {/* §32-2 — "action en cours" / "action suivante" wayfinding. Calm
+                marker, never a countdown/urgency (§2). */}
+            {action.timing === 'current' ? (
+              <Pill tone="acc" className="shrink-0">
+                Maintenant
+              </Pill>
+            ) : action.timing === 'next' ? (
+              <Pill tone="mute" className="shrink-0">
+                Ensuite
+              </Pill>
+            ) : null}
+          </div>
           <span className={cn('t-cap leading-snug', detailTone)}>{action.detail}</span>
         </div>
         {isDone ? (
@@ -122,7 +150,7 @@ function ActionRow({ action }: { action: GuidanceAction }) {
           <ArrowRight
             className="h-4 w-4 shrink-0 text-[var(--t-4)]"
             strokeWidth={1.75}
-            aria-label="à faire"
+            aria-label={isMissed ? 'à rattraper' : 'à faire'}
           />
         )}
       </Link>
@@ -219,7 +247,9 @@ export function TodayGuidance({
   excludeKey?: string | undefined;
 }) {
   const SlotIcon = SLOT_ICON[guidance.slot];
-  const hasTodo = guidance.actions.some((a) => a.state === 'todo');
+  // A `missed` catch-up counts as pending, so the "tu es à jour" ack only shows
+  // when nothing is left to do OR rattraper (S6 §32-2).
+  const hasTodo = guidance.actions.some((a) => a.state === 'todo' || a.state === 'missed');
   const listActions = excludeKey
     ? guidance.actions.filter((a) => a.key !== excludeKey)
     : guidance.actions;

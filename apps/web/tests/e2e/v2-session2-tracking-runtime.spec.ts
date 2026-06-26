@@ -22,9 +22,10 @@ import { loginAs } from '@/test/e2e-auth';
  *   2. (submit)  filling every radiogroup enables the CTA; submitting persists
  *      ONE `TrackingEntry` (real DB row, axis = risk_discipline), lands on
  *      `?done=1` with the calm acknowledgement, and re-renders in edit mode.
- *   3. (gauge)   `/dashboard` shows the completeness widget — the due prompt for
- *      a fresh member, and the « Gestion du risque » axis as covered once a
- *      capture exists.
+ *   3. (gauge)   `/dashboard` shows the completeness widget (reflective coverage
+ *      gauge) AND — S6 §32-2 — surfaces the due relevé nudge in the consolidated
+ *      « plan du jour », which disappears once the weekly capture exists; the
+ *      « Gestion du risque » axis then reads as covered in the gauge.
  *
  * Determinism (canon J-C3): every assertion gates on an auto-waiting
  * `expect(locator)`, `:visible` past the RSC stream buffer, no `networkidle`.
@@ -194,7 +195,16 @@ test.describe('V2 S2 — universal tracking engine member loop (capture + dashbo
     expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([]);
   });
 
-  test('gauge — le dashboard rend le widget de complétude (CTA dû à blanc, axe couvert après capture)', async ({
+  // S6 §32-2 — the DUE relevé CTA moved from the coverage widget to the
+  // consolidated « plan du jour » (`TodayGuidance` / north-star hero) so the same
+  // « faire mon point » action is never offered twice on one page. The widget now
+  // owns the reflective coverage GAUGE only; the due nudge (and its disappearance
+  // after a weekly capture) is asserted on the guidance surface via
+  // `[data-kind="tracking"]` (matches whether it lands in the list or the hero).
+  const TRACKING_NUDGE =
+    '[data-slot="guidance-action"][data-kind="tracking"], [data-slot="hero-next-action"][data-kind="tracking"]';
+
+  test('gauge — le dashboard rend la jauge de complétude + le relevé dû dans le plan du jour, qui disparaît après capture', async ({
     page,
     request,
   }) => {
@@ -206,7 +216,8 @@ test.describe('V2 S2 — universal tracking engine member loop (capture + dashbo
         consoleErrors.push(msg.text());
     });
 
-    // (a) Fresh member — nothing captured → calm due prompt into the wizard.
+    // (a) Fresh member — nothing captured → the coverage gauge renders AND the
+    // consolidated plan du jour surfaces the due relevé nudge (§32-2).
     await dismissCookieBanner(page);
     await page.goto('/login');
     await loginAs(page, request, freshMember.email, freshMember.password);
@@ -214,8 +225,10 @@ test.describe('V2 S2 — universal tracking engine member loop (capture + dashbo
     await page.goto('/dashboard');
     const freshWidget = page.locator('[data-slot="tracking-coverage-widget"]:visible');
     await expect(freshWidget).toBeVisible();
-    await expect(freshWidget).toContainText(/Faire mon point/i);
     await expect(freshWidget.getByRole('progressbar')).toBeVisible();
+    await expect(freshWidget).toHaveAttribute('data-state', 'empty');
+    // The due relevé nudge lives in the plan du jour now (single place to look).
+    await expect(page.locator(TRACKING_NUDGE).first()).toBeVisible();
 
     // (b) Member who captured — the risk_discipline axis reads as covered.
     await page.goto('/login');
@@ -224,16 +237,16 @@ test.describe('V2 S2 — universal tracking engine member loop (capture + dashbo
     await page.goto('/dashboard');
     const widget = page.locator('[data-slot="tracking-coverage-widget"]:visible');
     await expect(widget).toBeVisible();
+    await expect(widget).toHaveAttribute('data-state', 'covered');
     const covered = widget.locator('[data-covered="true"]', { hasText: 'Gestion du risque' });
     await expect(covered).toBeVisible();
 
     // DoD l.285 « collecte étalée, SANS ENTASSEMENT » proven at the browser:
     // once captured this week, the weekly instrument leaves the due set
-    // (nextDueAt advances to next Monday), so the widget flips to the calm
-    // "à jour" state and the due CTA is gone — the negative half of the cadence,
-    // until now only unit-tested, asserted here on the real rendered dashboard.
-    await expect(widget).toHaveAttribute('data-state', 'current');
-    await expect(widget).not.toContainText(/Faire mon point/i);
+    // (nextDueAt advances to next Monday), so the plan du jour no longer offers
+    // the relevé nudge — the negative half of the cadence, until now only
+    // unit-tested, asserted here on the real rendered dashboard.
+    await expect(page.locator(TRACKING_NUDGE)).toHaveCount(0);
 
     expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([]);
   });

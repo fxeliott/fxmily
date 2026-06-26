@@ -4,10 +4,13 @@ import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { AIGeneratedBanner } from '@/components/ai-generated-banner';
+import { CompletionOverview } from '@/components/reports/completion-overview';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
+import { loadCompletionSummary } from '@/lib/reports/completion-loader';
+import type { CompletionSummary } from '@/lib/reports/completion';
 import { getReportByIdForAdmin } from '@/lib/weekly-report/service';
 
 export const metadata = {
@@ -65,6 +68,17 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
     userId: session.user.id,
     metadata: { reportId: id, surface: 'detail' },
   });
+
+  // S6 §32-3 — deterministic completion + continuity snapshot for the reported
+  // week, recomputed at render from the member's check-ins (no persisted column,
+  // no migration; never drifts from the SSOT). Best-effort: a transient DB
+  // hiccup must never 500 the admin report view — fall back to no overview.
+  let completion: CompletionSummary | undefined;
+  try {
+    completion = await loadCompletionSummary(report.userId, report.weekStart, report.weekEnd);
+  } catch {
+    completion = undefined;
+  }
 
   const mocked = report.claudeModel.startsWith('mock:');
   const patternEntries: Array<[string, string]> = [];
@@ -147,6 +161,11 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
           </Link>
         ) : null}
       </Card>
+
+      {/* S6 §32-3 — deterministic completion + continuity overview. Placed
+          ABOVE the AI banner: it is a factual check-in snapshot, not AI prose,
+          so the banner still introduces only the model-generated sections. */}
+      {completion ? <CompletionOverview summary={completion} periodLabel="semaine" /> : null}
 
       {/* V1.7.1 — EU AI Act 50(1) chatbot transparency disclaimer
           (deadline 2 août 2026, €15M / 3% CA Art. 99(4)). The model name is

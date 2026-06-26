@@ -161,12 +161,17 @@ export default async function DashboardPage() {
       ];
 
   // North-star hero — la seule action la plus « maintenant » (primary todo first),
-  // + un flag « tout fait » calme. Posture §2 / anti-Black-Hat (§31.2).
+  // + un flag « tout fait » calme. Posture §2 / anti-Black-Hat (§31.2). S6 §32-2 :
+  // si tout est fait sauf un geste `missed` (ex. check-in du matin non rempli le
+  // soir), il devient le focal en dernier recours — calme, jamais rouge — sinon
+  // le hero afficherait « tu es à jour » alors qu'un rattrapage reste possible.
   const primaryAction =
     guidance?.actions.find((a) => a.emphasis === 'primary' && a.state === 'todo') ??
     guidance?.actions.find((a) => a.state === 'todo') ??
+    guidance?.actions.find((a) => a.state === 'missed') ??
     null;
-  const allDone = guidance !== null && !guidance.actions.some((a) => a.state === 'todo');
+  const allDone =
+    guidance !== null && !guidance.actions.some((a) => a.state === 'todo' || a.state === 'missed');
 
   // S25 #1 — un SEUL fil conducteur contextuel à l'heure. Pendant la session
   // vivante (12h–20h Paris : analyse/exécution/gestion), le focal du hero devient

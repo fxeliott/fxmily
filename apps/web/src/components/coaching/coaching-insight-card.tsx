@@ -22,17 +22,22 @@ import { cn } from '@/lib/utils';
  * LLM — ici c'est de l'arithmétique + de la copie curée).
  */
 
-const TONE: Record<MentalTone, { label: string; chip: string }> = {
+/** `pill` = tonalité canonique du slot pill → hérite du correctif de contraste light
+ *  S18.1 (`.light [data-slot='pill'][data-tone]` assombrit le texte vers `-hi`, AA). */
+const TONE: Record<MentalTone, { label: string; pill: string; chip: string }> = {
   alert: {
     label: 'À renforcer',
+    pill: 'warn',
     chip: 'border-[var(--warn-edge)] bg-[var(--warn-dim)] text-[var(--warn)]',
   },
   watch: {
     label: 'À surveiller',
+    pill: 'acc',
     chip: 'border-[var(--b-acc)] bg-[var(--acc-dim-2)] text-[var(--acc-hi)]',
   },
   positive: {
     label: 'Solide',
+    pill: 'ok',
     chip: 'border-[var(--ok-edge)] bg-[var(--ok-dim)] text-[var(--ok)]',
   },
 };
@@ -91,6 +96,8 @@ export function CoachingInsightCard({
           <div className="flex items-start justify-between gap-2">
             <span className="t-eyebrow text-[var(--acc-hi)]">Ton coaching du moment</span>
             <span
+              data-slot="pill"
+              data-tone={tone.pill}
               className={cn(
                 'rounded-pill inline-flex shrink-0 items-center border px-2 py-0.5 text-[10px] font-semibold',
                 tone.chip,

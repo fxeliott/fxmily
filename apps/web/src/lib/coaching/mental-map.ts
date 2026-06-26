@@ -63,10 +63,28 @@ export interface MentalMapInput {
   readonly dominantSignals: readonly DominantSignal[];
   /** Breakdown de constance courant (honnêteté/régularité/discipline), ou `null`. */
   readonly constancy: ConstancyBreakdown | null;
+  /**
+   * S5 §32-C — axes psychologiques que le membre s'est fixés à l'onboarding (profil
+   * S2), déjà mappés depuis le texte libre par `classifyPriorityAxes`. Sert de
+   * tie-break de priorisation (jamais surfacé en texte ⇒ §50/§2-safe). Absent ⇒
+   * aucune influence (rétro-compatible : la carte reste triée par gravité curée).
+   */
+  readonly priorityAxes?: readonly MentalAxis[];
 }
 
 /** Au plus 4 entrées : impactant, jamais une liste qui noie le message (§33.2). */
 export const MAX_MENTAL_MAP_ENTRIES = 4;
+
+/**
+ * S5 §32-C — boost de priorisation quand une entrée porte sur un axe que le membre
+ * s'est fixé (profil S2). BORNÉ < 1 par INVARIANT (testé) : (a) il ne franchit
+ * JAMAIS une frontière de tonalité (alerte ≥ 103, vigilance ≥ 11, positif = 0 :
+ * écart ≥ 88) — une vigilance ne peut donc jamais passer devant une alerte ; (b) il
+ * ne renverse JAMAIS la gravité curée entre deux poids de base distincts (écart
+ * minimal = 1). Il ne fait que DÉPARTAGER des entrées de MÊME poids de base, en
+ * surfaçant en premier l'axe que le membre a lui-même choisi de travailler.
+ */
+const PRIORITY_BOOST = 0.5;
 
 type SignalReason = ScoreEventView['reason'];
 
@@ -176,6 +194,13 @@ const POSITIVE_COPY: SignalCopy = {
   weight: 0,
 };
 
+/**
+ * Trigger types couverts par une copie d'accompagnement (clés de `ALERT_COPY`).
+ * Exposé pour le contrat de couverture §32-B : `alert-coverage.test.ts` vérifie que
+ * CHAQUE `ALERT_RULES.triggerType` y figure (0 alerte orpheline). Canon S10.
+ */
+export const MENTAL_MAP_ALERT_TRIGGERS: readonly string[] = Object.keys(ALERT_COPY);
+
 /** Le signal-of-process qu'une alerte couvre déjà (évite le doublon alerte ↔ watch). */
 const ALERT_COVERS_REASON: Record<string, SignalReason> = {
   false_declaration_repeat: 'false_declaration',
@@ -197,6 +222,9 @@ const ALERT_COVERS_REASON: Record<string, SignalReason> = {
  */
 export function buildMentalMap(input: MentalMapInput): MentalMapEntry[] {
   const entries: Array<MentalMapEntry & { weight: number }> = [];
+  // §32-C — tie-break par axe prioritaire du membre (profil S2), borné (cf. PRIORITY_BOOST).
+  const priority = input.priorityAxes ?? [];
+  const boost = (axis: MentalAxis): number => (priority.includes(axis) ? PRIORITY_BOOST : 0);
 
   // 1) Alertes de répétition S3 — la matière prioritaire (déjà escaladée, §32-B).
   const alertedReasons = new Set<SignalReason>();
@@ -216,7 +244,7 @@ export function buildMentalMap(input: MentalMapInput): MentalMapEntry[] {
       axis: copy.axis,
       tone: 'alert',
       source: { kind: 'alert', alertId: alert.id, triggerType: alert.triggerType },
-      weight: 100 + copy.weight,
+      weight: 100 + copy.weight + boost(copy.axis),
     });
   }
 
@@ -236,7 +264,7 @@ export function buildMentalMap(input: MentalMapInput): MentalMapEntry[] {
       axis: copy.axis,
       tone: 'watch',
       source: { kind: 'signal', reason: signal.reason },
-      weight: 10 + copy.weight,
+      weight: 10 + copy.weight + boost(copy.axis),
     });
   }
 
@@ -255,7 +283,7 @@ export function buildMentalMap(input: MentalMapInput): MentalMapEntry[] {
       axis: POSITIVE_COPY.axis,
       tone: 'positive',
       source: { kind: 'positive', reason: 'filled' },
-      weight: POSITIVE_COPY.weight,
+      weight: POSITIVE_COPY.weight + boost(POSITIVE_COPY.axis),
     });
   }
 

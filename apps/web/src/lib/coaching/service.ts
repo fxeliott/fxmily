@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { coerceAxes } from '@/lib/objectives/coaching-axis';
+import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { detectMomentum } from '@/lib/scoring/momentum';
 import { getBehavioralScoreHistory } from '@/lib/scoring/service';
 import { listRecentAlertsForMember } from '@/lib/verification/alerts';
@@ -15,6 +17,7 @@ import {
 } from './engine';
 import { buildMentalMap, type MentalMapEntry } from './mental-map';
 import { getMicroObjectiveProgress, getOpenMicroObjective } from './micro-objective';
+import { classifyPriorityAxes } from './priority-axis';
 
 /**
  * S5 §32-E1 — seam serveur de la « carte mentale » du membre.
@@ -35,16 +38,19 @@ import { getMicroObjectiveProgress, getOpenMicroObjective } from './micro-object
  * l'enum mono-valeur `psychological`, `ScoreEvent.reason` est un enum de process).
  */
 export async function getMentalMap(userId: string): Promise<MentalMapEntry[]> {
-  const [alerts, scoreEvents, constancy] = await Promise.all([
+  const [alerts, scoreEvents, constancy, profile] = await Promise.all([
     listRecentAlertsForMember(userId),
     listRecentScoreEvents(userId),
     getLatestConstancyScore(userId),
+    getProfileForUser(userId),
   ]);
 
   return buildMentalMap({
     alerts,
     dominantSignals: pickDominantSignals(scoreEvents),
     constancy: constancy?.breakdown ?? null,
+    // §32-C — priorités d'onboarding (profil S2) → tie-break de priorisation.
+    priorityAxes: classifyPriorityAxes(coerceAxes(profile?.axesPrioritaires)),
   });
 }
 
@@ -63,24 +69,30 @@ async function gatherCoachingInput(
   userId: string,
   range?: { start: Date; end: Date },
 ): Promise<CoachingInsightInput> {
-  const [alerts, scoreEvents, constancy, microProgress, scoreHistory] = await Promise.all([
+  const [alerts, scoreEvents, constancy, microProgress, scoreHistory, profile] = await Promise.all([
     listRecentAlertsForMember(userId),
     listRecentScoreEvents(userId),
     getLatestConstancyScore(userId),
     getMicroObjectiveProgress(userId, range),
     getBehavioralScoreHistory(userId, { sinceDays: 90 }),
+    getProfileForUser(userId),
   ]);
   const dominantSignals = pickDominantSignals(scoreEvents);
+  // §32-C — exploite le profil S2 RÉELLEMENT : ses axes prioritaires (texte libre
+  // d'onboarding) mappés vers l'enum mental, jamais surfacés bruts (§50/§2-safe).
+  const priorityAxes = classifyPriorityAxes(coerceAxes(profile?.axesPrioritaires));
   return {
     mentalMap: buildMentalMap({
       alerts,
       dominantSignals,
       constancy: constancy?.breakdown ?? null,
+      priorityAxes,
     }),
     microProgress,
     constancy,
     dominantSignals,
     momentum: detectMomentum(scoreHistory),
+    priorityAxes,
   };
 }
 

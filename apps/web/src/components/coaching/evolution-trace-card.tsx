@@ -18,24 +18,33 @@ import { cn } from '@/lib/utils';
  * lecture, pas une action.
  */
 
-const STATUS: Record<MicroObjectiveStatusView, { label: string; chip: string; dot: string }> = {
+/** `pill` = tonalité du slot pill → hérite du correctif de contraste light S18.1
+ *  (`.light [data-slot='pill'][data-tone]` assombrit le texte vers `-hi`/`--t-2`, AA). */
+const STATUS: Record<
+  MicroObjectiveStatusView,
+  { label: string; pill: string; chip: string; dot: string }
+> = {
   open: {
     label: 'En cours',
+    pill: 'acc',
     chip: 'border-[var(--b-acc)] bg-[var(--acc-dim-2)] text-[var(--acc-hi)]',
     dot: 'bg-[var(--acc)]',
   },
   kept: {
     label: 'Tenu',
+    pill: 'ok',
     chip: 'border-[var(--ok-edge)] bg-[var(--ok-dim)] text-[var(--ok)]',
     dot: 'bg-[var(--ok)]',
   },
   missed: {
     label: 'Pas tenu',
+    pill: 'warn',
     chip: 'border-[var(--warn-edge)] bg-[var(--warn-dim)] text-[var(--warn)]',
     dot: 'bg-[var(--warn)]',
   },
   dismissed: {
     label: 'Écarté',
+    pill: 'mute',
     chip: 'border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-3)]',
     dot: 'bg-[var(--t-4)]',
   },
@@ -105,6 +114,8 @@ export function EvolutionTraceCard({
                 <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                   <p className="t-body min-w-0 font-medium text-[var(--t-1)]">{item.title}</p>
                   <span
+                    data-slot="pill"
+                    data-tone={status.pill}
                     className={cn(
                       'rounded-pill inline-flex shrink-0 items-center border px-2 py-0.5 text-[10px] font-semibold',
                       status.chip,

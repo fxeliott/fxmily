@@ -183,6 +183,42 @@ describe('buildCoachingInsight — moteur PUR (S5 §32-C)', () => {
   });
 });
 
+describe('buildCoachingInsight — alignement profil S2 (S5 §32-C)', () => {
+  it('trace l’alignement quand l’axe dominant ∈ priorités du membre', () => {
+    const result = buildCoachingInsight(
+      input({ mentalMap: [entry({ axis: 'discipline' })], priorityAxes: ['discipline'] }),
+    );
+    expect(result?.basis).toContain('En lien avec une priorité que tu t’es fixée');
+    // L'origine (traçabilité E2/B) reste en tête, jamais sacrifiée par l'alignement.
+    expect(result?.basis[0]).toContain('Alerte');
+  });
+
+  it('n’ajoute aucune trace quand l’axe dominant n’est pas une priorité', () => {
+    const result = buildCoachingInsight(
+      input({ mentalMap: [entry({ axis: 'discipline' })], priorityAxes: ['honesty'] }),
+    );
+    expect(result?.basis.some((b) => b.includes('priorité que tu t’es fixée'))).toBe(false);
+  });
+
+  it('reste rétro-compatible sans priorityAxes (aucune trace ajoutée)', () => {
+    const result = buildCoachingInsight(input({ mentalMap: [entry()] }));
+    expect(result?.basis.some((b) => b.includes('priorité que tu t’es fixée'))).toBe(false);
+  });
+
+  it('§50/§2 — la trace est une copie FIGÉE, jamais le texte libre de l’axe du membre', () => {
+    const result = buildCoachingInsight(
+      input({
+        mentalMap: [entry({ axis: 'discipline' })],
+        // Le texte libre du profil n'arrive JAMAIS jusqu'ici : seul l'enum d'axe.
+        priorityAxes: ['discipline'],
+      }),
+    ) as CoachingInsight;
+    const align = result.basis.filter((b) => b.includes('priorité'));
+    expect(align).toEqual(['En lien avec une priorité que tu t’es fixée']);
+    expect(result.basis.join(' · ')).not.toMatch(MARKET_TERMS);
+  });
+});
+
 describe('buildCoachingReportContext — contexte rapport S6 (S5 §32-D)', () => {
   it('renvoie null sans insight (rien à transmettre)', () => {
     expect(

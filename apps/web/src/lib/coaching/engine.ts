@@ -71,6 +71,13 @@ export interface CoachingInsightInput {
   readonly dominantSignals: readonly DominantSignal[];
   /** Déclins comportementaux soutenus (detectMomentum — déclins uniquement). */
   readonly momentum: readonly DimensionMomentum[];
+  /**
+   * S5 §32-C — axes que le membre s'est fixés à l'onboarding (profil S2), mappés
+   * depuis le texte libre. Sert à tracer l'alignement de l'insight dominant avec une
+   * priorité du membre (trace CURÉE, jamais le texte libre ⇒ §50/§2-safe). Absent ⇒
+   * pas de trace d'alignement (rétro-compatible).
+   */
+  readonly priorityAxes?: readonly MentalAxis[];
 }
 
 /** Cap Mark Douglas par axe (court, jamais un verdict). */
@@ -113,6 +120,14 @@ const ALERT_LABEL: Record<string, string> = {
   meeting_missed_repeat: 'réunions manquées',
   tracking_skipped_repeat: 'suivis sautés',
 };
+
+/**
+ * Trigger types disposant d'un libellé de traçabilité (clés de `ALERT_LABEL`).
+ * Exposé pour le contrat de couverture §32-B : `alert-coverage.test.ts` vérifie que
+ * CHAQUE `ALERT_RULES.triggerType` y figure (sinon le `basis` retombe sur le
+ * fallback générique « discipline »). Canon S10.
+ */
+export const COACHING_BASIS_ALERT_TRIGGERS: readonly string[] = Object.keys(ALERT_LABEL);
 
 function trendForAxis(
   momentum: readonly DimensionMomentum[],
@@ -184,6 +199,13 @@ function buildBasis(input: CoachingInsightInput, top: MentalMapEntry): string[] 
   // 4) Déclin comportemental le plus marqué (s'il y en a un).
   const steepest = input.momentum[0];
   if (steepest) basis.push(`${steepest.label} en recul`);
+  // 5) §32-C — alignement profil S2 : trace CURÉE (jamais le texte libre de l'axe,
+  //    donc §50-safe — aucun contenu AI-dérivé surfacé) quand l'insight dominant
+  //    porte sur un axe que le membre s'est fixé à l'onboarding. Insérée juste après
+  //    l'origine pour rester visible malgré le plafond à 3.
+  if ((input.priorityAxes ?? []).includes(top.axis)) {
+    basis.splice(1, 0, 'En lien avec une priorité que tu t’es fixée');
+  }
   return basis.slice(0, 3);
 }
 

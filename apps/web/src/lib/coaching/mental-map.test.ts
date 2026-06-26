@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import type { AlertView } from '@/lib/verification/alerts';
 import type { DominantSignal, SignalReason } from '@/lib/verification/dominant-signals';
 import type { ConstancyBreakdown } from '@/lib/verification/constancy';
-import { buildMentalMap, MAX_MENTAL_MAP_ENTRIES, type MentalMapEntry } from './mental-map';
+import {
+  buildMentalMap,
+  MAX_MENTAL_MAP_ENTRIES,
+  type MentalAxis,
+  type MentalMapEntry,
+} from './mental-map';
 
 let seq = 0;
 function alert(triggerType: string, opts: Partial<AlertView> = {}): AlertView {
@@ -31,12 +36,14 @@ function map(
     alerts: readonly AlertView[];
     dominantSignals: readonly DominantSignal[];
     constancy: ConstancyBreakdown | null;
+    priorityAxes: readonly MentalAxis[];
   }> = {},
 ): MentalMapEntry[] {
   return buildMentalMap({
     alerts: input.alerts ?? [],
     dominantSignals: input.dominantSignals ?? [],
     constancy: input.constancy ?? null,
+    ...(input.priorityAxes ? { priorityAxes: input.priorityAxes } : {}),
   });
 }
 
@@ -202,5 +209,51 @@ describe('buildMentalMap', () => {
     for (const term of FORBIDDEN) {
       expect(corpus, term).not.toContain(term);
     }
+  });
+});
+
+// S5 §32-C — le profil S2 (axes prioritaires) départage la priorisation, SANS jamais
+// renverser la gravité curée. INVARIANT borné (PRIORITY_BOOST < 1).
+describe('buildMentalMap — tie-break par axe prioritaire (§32-C)', () => {
+  it('rétro-compatible : sans priorityAxes, l’ordre reste celui de la gravité curée', () => {
+    const a = map({ alerts: [alert('forgot_no_reason_repeat'), alert('meeting_missed_repeat')] });
+    // Deux alertes discipline de même poids → ordre d'insertion (tri stable).
+    expect(a.map((e) => e.source.kind === 'alert' && e.source.triggerType)).toEqual([
+      'forgot_no_reason_repeat',
+      'meeting_missed_repeat',
+    ]);
+  });
+
+  it('départage des alertes de MÊME poids en faveur de l’axe prioritaire du membre', () => {
+    const base = map({
+      alerts: [alert('forgot_no_reason_repeat'), alert('tracking_skipped_repeat')],
+    });
+    expect(base[0]?.axis).toBe('discipline'); // forgot (discipline) en tête par défaut
+
+    const prioritised = map({
+      alerts: [alert('forgot_no_reason_repeat'), alert('tracking_skipped_repeat')],
+      priorityAxes: ['consistency'],
+    });
+    // tracking (consistency, prioritaire) passe devant forgot (discipline) — même poids.
+    expect(prioritised[0]?.axis).toBe('consistency');
+  });
+
+  it('NE renverse JAMAIS la gravité entre poids distincts (honnêteté > discipline)', () => {
+    const prioritised = map({
+      alerts: [alert('false_declaration_repeat'), alert('forgot_no_reason_repeat')],
+      priorityAxes: ['discipline'],
+    });
+    // Même avec discipline prioritaire, l'alerte honnêteté (plus grave) reste en tête.
+    expect(prioritised[0]?.axis).toBe('honesty');
+  });
+
+  it('une vigilance prioritaire ne passe JAMAIS devant une alerte (frontière de tonalité)', () => {
+    const entries = map({
+      alerts: [alert('forgot_no_reason_repeat')], // alerte discipline
+      dominantSignals: [signal('reality_gap', 'down', 1)], // vigilance ego
+      priorityAxes: ['ego'],
+    });
+    expect(entries[0]?.tone).toBe('alert');
+    expect(entries[1]?.tone).toBe('watch');
   });
 });

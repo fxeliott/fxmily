@@ -21,22 +21,26 @@ import { cn } from '@/lib/utils';
  * `compact` — une carte resserrée pour le hub : la SEULE entrée la plus prioritaire.
  */
 
-const TONE: Record<MentalTone, { label: string; chip: string; geste: string }> = {
+/** `pill` = tonalité du slot pill → hérite du correctif de contraste light S18.1. */
+const TONE: Record<MentalTone, { label: string; pill: string; chip: string; geste: string }> = {
   // Alerte de répétition (déjà escaladée) — attention douce, JAMAIS rouge (§31.2).
   alert: {
     label: 'À renforcer',
+    pill: 'warn',
     chip: 'border-[var(--warn-edge)] bg-[var(--warn-dim)] text-[var(--warn)]',
     geste: 'text-[var(--warn)]',
   },
   // Vigilance sous le seuil — neutre/accent, on réancre tant que c'est facile.
   watch: {
     label: 'À surveiller',
+    pill: 'acc',
     chip: 'border-[var(--b-acc)] bg-[var(--acc-dim-2)] text-[var(--acc-hi)]',
     geste: 'text-[var(--acc-hi)]',
   },
   // Renfort positif — la constance qui se construit.
   positive: {
     label: 'Solide',
+    pill: 'ok',
     chip: 'border-[var(--ok-edge)] bg-[var(--ok-dim)] text-[var(--ok)]',
     geste: 'text-[var(--ok)]',
   },
@@ -103,6 +107,8 @@ export function MentalMapCard({
                   {entry.observation}
                 </p>
                 <span
+                  data-slot="pill"
+                  data-tone={tone.pill}
                   className={cn(
                     'rounded-pill inline-flex shrink-0 items-center border px-2 py-0.5 text-[10px] font-semibold',
                     tone.chip,

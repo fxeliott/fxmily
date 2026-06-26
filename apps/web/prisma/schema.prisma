@@ -2933,6 +2933,12 @@ model MentalMicroObjective {
 
   // "What is the member's open micro-objective?" + closed-history reads.
   @@index([memberId, status])
+  // S5 re-challenge #3 — partial UNIQUE index `mental_micro_objectives_one_open_per_member`
+  // ON (member_id) WHERE status = 'open' enforces the E3 invariant « ≤1 open per member »
+  // at the DB level (kills the ensure() read-then-create race). Created in the migration
+  // SQL only — Prisma 7 doesn't model partial-index predicates declaratively (same pattern
+  // as `access_requests_email_pending_uniq` / `notification_queue` partials). NOT declared
+  // as `@@unique` here to avoid Prisma generating a duplicate full unique index + drift.
   @@map("mental_micro_objectives")
 }
 

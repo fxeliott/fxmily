@@ -133,6 +133,38 @@ describe('ensureMicroObjectiveForMember', () => {
     expect(res).toEqual({ created: false, objectiveId: null });
     expect(m.create).not.toHaveBeenCalled();
   });
+
+  it('race perdue (re-challenge #3) — un create rejeté P2002 retombe en no-op sur le gagnant', async () => {
+    // Deux passages `after()` quasi simultanés lisent TOUS DEUX « aucun ouvert » ; le
+    // 2e `create` viole l'index partiel `..._one_open_per_member` → P2002. On NE doit
+    // PAS propager : on relit l'ouvert gagnant et on rend {created:false}. C'est l'index
+    // DB (pas le findFirst) qui garantit l'invariant « ≤1 ouvert » multi-process.
+    m.findFirst
+      .mockResolvedValueOnce(null) // notre court-circuit perf : rien d'ouvert
+      .mockResolvedValueOnce({ id: 'winner1' }); // relecture post-P2002 : l'autre a gagné
+    m.getMentalMap.mockResolvedValue([alertEntry()]);
+    m.create.mockRejectedValue({ code: 'P2002' });
+    const res = await ensureMicroObjectiveForMember('member1');
+    expect(res).toEqual({ created: false, objectiveId: 'winner1' });
+    expect(m.create).toHaveBeenCalledTimes(1);
+    expect(m.findFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it('race perdue P2002 SANS gagnant relisible → objectiveId null (jamais un throw)', async () => {
+    // Cas dégénéré (le gagnant a été refermé entre-temps) : on reste défensif, no-op.
+    m.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    m.getMentalMap.mockResolvedValue([alertEntry()]);
+    m.create.mockRejectedValue({ code: 'P2002' });
+    const res = await ensureMicroObjectiveForMember('member1');
+    expect(res).toEqual({ created: false, objectiveId: null });
+  });
+
+  it('une erreur DB NON-P2002 est propagée (jamais avalée en silence)', async () => {
+    m.findFirst.mockResolvedValue(null);
+    m.getMentalMap.mockResolvedValue([alertEntry()]);
+    m.create.mockRejectedValue(new Error('connection reset'));
+    await expect(ensureMicroObjectiveForMember('member1')).rejects.toThrow('connection reset');
+  });
 });
 
 describe('closeMicroObjective', () => {

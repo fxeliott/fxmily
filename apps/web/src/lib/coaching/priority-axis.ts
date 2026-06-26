@@ -131,7 +131,14 @@ const AXIS_KEYWORDS: ReadonlyArray<readonly [MentalAxis, readonly string[]]> = [
       'plan', // tenir / respecter / suivre mon plan
       'process', // process-focus
       'focus',
-      'regle',
+      // « règle / règles / règlement / respecter une règle » = discipline-as-rule.
+      // ANCRÉ avec une espace de tête : le stem nu 'regle' est un substring de
+      // 'déréglé' / 'dérèglement' (un axe SOMMEIL/mode-de-vie « mon sommeil est
+      // déréglé », brief §130/§262 = axe lifestyle DISTINCT de discipline-process).
+      // Le préfixe « dé- » colle « de » + « regle » SANS espace → ' regle' matche
+      // « mes règles » mais jamais « déréglé », tuant le faux positif qui surfaçait
+      // une trace d'alignement MENSONGÈRE (§0/honnêteté).
+      ' regle',
       'methode',
       'patience',
       'execution',

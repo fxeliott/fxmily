@@ -49,6 +49,44 @@ describe('classifyPriorityAxes — pont profil S2 → axe mental (§32-C)', () =
 });
 
 /**
+ * S5 re-challenge #3 — ANTI-COLLISION du stem « regle » (défaut TROUVÉ DANS mon
+ * propre correctif MAJ-93). Le groupe `discipline` ancre désormais ' regle' (avec une
+ * espace de tête) au lieu du stem nu 'regle' : le préfixe « dé- » colle « de » + « regle »
+ * SANS espace, donc 'déréglé' / 'dérèglement' (axes SOMMEIL/mode-de-vie, brief §130/§262,
+ * DISTINCTS de discipline-process) ne doivent PLUS être classés `discipline`. Un faux
+ * positif ici surfaçait une trace d'alignement MENSONGÈRE (« en lien avec une priorité
+ * que tu t'es fixée ») → violation §0/honnêteté. On verrouille les DEUX directions :
+ * les vraies « règles » restent capturées, les « déréglé » ne le sont jamais.
+ */
+describe('classifyPriorityAxes — anti-collision « regle » / « déréglé » (re-challenge #3)', () => {
+  it('NE classe PAS un axe sommeil/lifestyle « déréglé » comme discipline (0 fausse trace)', () => {
+    expect(classifyPriorityAxes(['Stabiliser mon sommeil complètement déréglé'])).toEqual([]);
+    expect(classifyPriorityAxes(['Reprendre un rythme de vie, là tout est dérèglement'])).toEqual(
+      [],
+    );
+    // Variante sans accent (le fold neutralise déjà les diacritiques) → même garde.
+    expect(classifyPriorityAxes(['mon sommeil est deregle'])).toEqual([]);
+  });
+
+  it('capture TOUJOURS les vraies « règles » de discipline (le rappel n’est pas cassé)', () => {
+    expect(classifyPriorityAxes(['Tenir mes règles strictes'])).toEqual(['discipline']);
+    expect(classifyPriorityAxes(['Respecter mes règles de gestion du risque'])).toEqual([
+      'discipline',
+    ]);
+    expect(classifyPriorityAxes(['Suivre une règle simple avant chaque entrée'])).toEqual([
+      'discipline',
+    ]);
+  });
+
+  it('un axe sommeil « déréglé » SEUL ne fabrique pas discipline (seul l’axe légitime ressort)', () => {
+    // Si une autre dimension légitime co-existe, elle seule doit ressortir — pas discipline.
+    expect(classifyPriorityAxes(['Mon sommeil déréglé', 'Plus de régularité'])).toEqual([
+      'consistency',
+    ]);
+  });
+});
+
+/**
  * S5 §32-C / §33#3 — ANTI-INERTIE (régression du 2e re-challenge). Le brief exige
  * que le moteur exploite le profil S2 « vérifié sur données RÉALISTES ». Or les VRAIS
  * `axes_prioritaires` produits par le pipeline d'onboarding ne sont PAS des mots-clés

@@ -96,11 +96,26 @@ export interface EnsureMicroObjectiveResult {
   readonly objectiveId: string | null;
 }
 
+/** Prisma unique-constraint violation (P2002), détectée sans tirer `@prisma/client`. */
+function isUniqueConstraintError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
+}
+
 /**
  * Garantit qu'un membre a AU PLUS un micro-objectif ouvert. Idempotent : si une
  * boucle est déjà ouverte, on ne touche à rien (le membre la referme d'abord au
  * prochain passage). Sinon on en sème un depuis sa carte mentale courante. Sûr à
  * appeler à chaque passage du membre OU depuis le batch de vérification (D).
+ *
+ * 🛡️ INVARIANT « ≤1 ouvert » DURABLE (re-challenge S5 #3). Le `findFirst` n'est qu'un
+ * court-circuit perf : entre lui et le `create`, deux passages `after()` quasi
+ * simultanés (deux actions membre rapprochées — `scheduler.ts`) interlacent leurs
+ * `await` et liraient TOUS DEUX « aucun ouvert » → deux insertions → un orphelin
+ * ouvert permanent. Le vrai garant est l'index unique PARTIEL
+ * `mental_micro_objectives_one_open_per_member` (Postgres, `WHERE status='open'`,
+ * cluster-wide, donc multi-process/multi-instance) : la 2e insertion concurrente
+ * échoue en P2002, qu'on récupère ici en no-op (on relit l'ouvert gagnant). 0 doublon
+ * possible, jamais.
  */
 export async function ensureMicroObjectiveForMember(
   memberId: string,
@@ -114,18 +129,32 @@ export async function ensureMicroObjectiveForMember(
   const seed = selectMicroObjectiveSeed(await getMentalMap(memberId));
   if (!seed) return { created: false, objectiveId: null };
 
-  const row = await db.mentalMicroObjective.create({
-    data: {
-      memberId,
-      axis: seed.axis,
-      sourceKind: seed.sourceKind,
-      sourceRef: seed.sourceRef,
-      title: seed.title,
-      intention: seed.intention,
-    },
-    select: { id: true },
-  });
-  return { created: true, objectiveId: row.id };
+  try {
+    const row = await db.mentalMicroObjective.create({
+      data: {
+        memberId,
+        axis: seed.axis,
+        sourceKind: seed.sourceKind,
+        sourceRef: seed.sourceRef,
+        title: seed.title,
+        intention: seed.intention,
+      },
+      select: { id: true },
+    });
+    return { created: true, objectiveId: row.id };
+  } catch (err) {
+    // Course perdue : un autre passage a semé la boucle entre notre `findFirst` et
+    // notre `create` (l'index partiel l'a rejetée). On relit l'ouvert gagnant — la
+    // boucle existe bien, on n'en a juste pas été l'auteur.
+    if (isUniqueConstraintError(err)) {
+      const winner = await db.mentalMicroObjective.findFirst({
+        where: { memberId, status: 'open' },
+        select: { id: true },
+      });
+      return { created: false, objectiveId: winner?.id ?? null };
+    }
+    throw err;
+  }
 }
 
 /**

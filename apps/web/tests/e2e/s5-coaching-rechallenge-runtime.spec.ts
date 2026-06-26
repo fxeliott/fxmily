@@ -31,6 +31,8 @@ import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-hel
 import { loginAs } from '@/test/e2e-auth';
 
 let member: SeededUser | null = null;
+/** Membre au profil lifestyle « déréglé » (sceau du fix anti-collision regle/déréglé). */
+let memberLifestyle: SeededUser | null = null;
 
 /** Trace d'alignement attendue — apostrophe typographique U+2019 (identique engine.ts). */
 const ALIGNMENT_TRACE = 'En lien avec une priorité que tu t’es fixée';
@@ -47,6 +49,20 @@ const RAW_AXIS_DISCIPLINE =
   "Renforcer la rigueur d'exécution du plan — suivre le process défini et la checklist avant d'agir plutôt que d'improviser sous l'impulsion [12].";
 const RAW_AXIS_EGO =
   "Travailler le détachement du résultat — accepter qu'un trade exécuté à la lettre reste un bon process, même perdant (5 vérités #3, cf. [9]).";
+
+/**
+ * S5 re-challenge #3 — axes prioritaires LIFESTYLE/sommeil. Le 1er contient « déréglé »,
+ * dont le stem `regle` était (avant le correctif MAJ-93→#3) un substring qui le classait
+ * à TORT en `discipline`. Mappés correctement, ces deux axes ne donnent AUCUN axe mental
+ * (`[]` — sonde tsx vérifiée). Le membre garde une alerte discipline dominante : l'insight
+ * existe donc, mais la trace d'alignement NE doit PAS s'afficher (l'axe `discipline` n'est
+ * PAS une de SES priorités). Avant le fix, « déréglé »→discipline aurait surfacé une trace
+ * « En lien avec une priorité que tu t'es fixée » MENSONGÈRE (§0/honnêteté).
+ */
+const RAW_AXIS_LIFE_1 =
+  'Stabiliser mon sommeil complètement déréglé qui sabote mes matinées de trading [3].';
+const RAW_AXIS_LIFE_2 =
+  'Reprendre une hygiène de vie saine — me coucher tôt au lieu de veiller [9].';
 
 async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }> {
   const exec = chromium.executablePath();
@@ -103,6 +119,42 @@ test.describe('S5 re-challenge — profil S2 exploité + contraste chips light',
     await db.alert.create({
       data: {
         memberId: member.id,
+        triggerType: 'forgot_no_reason_repeat',
+        repeatCount: 3,
+        threshold: 3,
+        status: 'delivered',
+        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      },
+    });
+
+    // re-challenge #3 — 2e membre : profil lifestyle « déréglé » + MÊME alerte discipline.
+    // L'insight dominera sur `discipline` (l'alerte), mais ses priorités mappent `[]` →
+    // PAS de trace d'alignement (sinon : trace mensongère due à la collision regle/déréglé).
+    memberLifestyle = await seedMemberUser({ firstName: 'S5Lifestyle' });
+    const interviewLife = await db.onboardingInterview.create({
+      data: {
+        userId: memberLifestyle.id,
+        status: 'completed',
+        completedAt: new Date(),
+        instrumentVersion: 'v1',
+      },
+      select: { id: true },
+    });
+    await db.memberProfile.create({
+      data: {
+        userId: memberLifestyle.id,
+        interviewId: interviewLife.id,
+        summary: 'Profil lifestyle de test runtime (re-challenge S5 #3).',
+        highlights: [],
+        axesPrioritaires: [RAW_AXIS_LIFE_1, RAW_AXIS_LIFE_2],
+        claudeModelVersion: 'claude-opus-4-8',
+        instrumentVersion: 'v1',
+        analyzedAt: new Date(),
+      },
+    });
+    await db.alert.create({
+      data: {
+        memberId: memberLifestyle.id,
         triggerType: 'forgot_no_reason_repeat',
         repeatCount: 3,
         threshold: 3,
@@ -189,5 +241,36 @@ test.describe('S5 re-challenge — profil S2 exploité + contraste chips light',
     // Le correctif s'applique : le chip calcule la variante -hi (AA), pas la base.
     expect(result.chipColor).toBe(result.hi);
     expect(result.chipColor).not.toBe(result.base);
+  });
+
+  test('C — anti-collision (re-challenge #3) : un profil « déréglé » n’affiche PAS de fausse trace', async ({
+    page,
+    request,
+  }) => {
+    if (!memberLifestyle) throw new Error('seed lifestyle manquant — beforeAll n’a pas tourné');
+    const consoleErrors: string[] = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error') consoleErrors.push(m.text());
+    });
+
+    await dismissCookieBanner(page);
+    await page.goto('/login');
+    await loginAs(page, request, memberLifestyle.email, memberLifestyle.password);
+    await page.goto('/progression');
+
+    // L'insight EXISTE (l'alerte discipline domine la carte mentale) — on attend l'ancre.
+    await expect(page.getByRole('heading', { name: 'Ton coaching du moment' })).toBeVisible();
+
+    // CŒUR DU FIX L1 — l'axe dominant `discipline` n'est PAS une priorité de CE membre
+    // (ses axes lifestyle « déréglé » mappent `[]`). La trace d'alignement doit être
+    // ABSENTE. Avant le correctif, « déréglé » matchait le stem `regle` → discipline →
+    // cette trace s'affichait à tort (mensonge §0/honnêteté). On prouve son absence.
+    await expect(page.getByText(ALIGNMENT_TRACE)).toHaveCount(0);
+
+    // §50/§2 — le texte libre brut du profil ne fuite jamais à l'écran non plus.
+    await expect(page.getByText('Stabiliser mon sommeil')).toHaveCount(0);
+    await expect(page.getByText('hygiène de vie')).toHaveCount(0);
+
+    expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([]);
   });
 });

@@ -100,4 +100,38 @@ describe('NorthStarHero — fil conducteur contextuel (S25 #1, posture §2)', ()
     expect(document.querySelector('[data-slot="hero-session-focus"]')).toBeNull();
     expect(document.querySelector('[data-slot="hero-next-action"]')).toBeNull();
   });
+
+  it('promu au hero, un rattrapage « missed » garde l’affordance AMBRE (jamais bleu ni rouge)', () => {
+    // S6 §32-2 — quand rien n'est `todo` mais qu'un geste a glissé, le `missed`
+    // devient le focal. Il doit lire « à rattraper » en ambre calme, pas une
+    // nouvelle tâche bleue, et surtout PAS « tu es à jour » (sinon le hero
+    // mentirait sur un rattrapage encore possible).
+    const MISSED_CATCHUP: GuidanceAction = {
+      key: 'checkin-morning',
+      kind: 'checkin',
+      title: 'Check-in du matin',
+      detail: 'Pas encore fait ce matin — tu peux le rattraper tranquillement.',
+      href: '/checkin/morning',
+      state: 'missed',
+      emphasis: 'secondary',
+    };
+    render(
+      <NorthStarHero
+        {...BASE_PROPS}
+        primaryAction={MISSED_CATCHUP}
+        allDone={false}
+        sessionFocus={null}
+      />,
+    );
+
+    const focal = document.querySelector('[data-slot="hero-next-action"]');
+    expect(focal).not.toBeNull();
+    expect(focal?.getAttribute('data-state')).toBe('missed');
+    // §31.2 — amber-benevolent, NEVER the blue todo (`acc-dim`) nor red (`--bad`).
+    expect(focal?.className ?? '').toMatch(/warn/);
+    expect(focal?.className ?? '').not.toMatch(/acc-dim/);
+    expect(focal?.className ?? '').not.toMatch(/--bad/);
+    expect(document.querySelector('[aria-label="à rattraper"]')).not.toBeNull();
+    expect(screen.queryByText('Tu es à jour')).not.toBeInTheDocument();
+  });
 });

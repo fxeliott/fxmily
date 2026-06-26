@@ -104,4 +104,45 @@ describe('TodayGuidance — plan du jour consolidé (S6 §32-2, posture §2/§31
     render(<TodayGuidance guidance={guidance([done])} />);
     expect(screen.getByText(/Tu es à jour/i)).toBeInTheDocument();
   });
+
+  it('sur la ligne missed, le pill de timing prend le ton AMBRE (contraste WCAG, jamais rouge)', () => {
+    // MORNING_MISSED porte timing:'next' → pill « Ensuite » sur le fond ambre.
+    // Le ton `mute`/`acc` par défaut chute sous 4.5:1 sur `--warn-dim` ; `warn`
+    // est la paire vettée à fort contraste, et reste ambre-calme (§31.2).
+    render(<TodayGuidance guidance={guidance([EVENING_TODO, MORNING_MISSED])} />);
+    const ensuite = screen.getByText('Ensuite');
+    expect(ensuite.getAttribute('data-slot')).toBe('pill');
+    expect(ensuite.getAttribute('data-tone')).toBe('warn');
+  });
+
+  it('marque le bloc du créneau courant avec « Maintenant » (§32-1 « au bon moment »)', () => {
+    const withBlocks: DailyGuidance = {
+      ...base,
+      slot: 'evening',
+      calendarState: 'generated',
+      todayBlocks: [
+        {
+          slot: 'morning',
+          category: 'backtest',
+          durationMin: 60,
+          label: 'Backtest matinal',
+          priority: 'medium',
+        },
+        {
+          slot: 'evening',
+          category: 'mark_douglas_review',
+          durationMin: 30,
+          label: 'Revue Mark Douglas',
+          priority: 'high',
+        },
+      ],
+      actions: [],
+    };
+    render(<TodayGuidance guidance={withBlocks} />);
+    // Seul le bloc du soir (créneau courant) porte le marqueur calme.
+    const nowBlocks = document.querySelectorAll('li[data-now="true"]');
+    expect(nowBlocks).toHaveLength(1);
+    expect(nowBlocks[0]?.textContent ?? '').toMatch(/Revue Mark Douglas/);
+    expect(screen.getByText('Maintenant')).toBeInTheDocument();
+  });
 });

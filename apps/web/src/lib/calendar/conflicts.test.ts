@@ -103,6 +103,21 @@ describe('detectCalendarConflicts — pure deterministic conflicts (§32-1)', ()
       expect(detectCalendarConflicts(r, plan)).toEqual([]);
     });
 
+    it('names EVERY unavailable slot when a SINGLE day stacks several', () => {
+      // Monday fully off; a morning AND an evening demanding block both clash.
+      // The message must name both slots — naming only the first would let the
+      // member shift "le matin" and wrongly believe the day is now clear.
+      const r = responses({
+        weekdayAvailability: { monday: off, tuesday: on, wednesday: on, thursday: on, friday: on },
+      });
+      const plan = output([[block('morning', 'live_trading'), block('evening', 'backtest')]]);
+      const conflict = detectCalendarConflicts(r, plan).find((m) => m.includes('indisponible'));
+      expect(conflict).toBeDefined();
+      expect(conflict).toContain('lundi');
+      expect(conflict).toContain('le matin');
+      expect(conflict).toContain('le soir');
+    });
+
     it('aggregates multiple unavailable days into ONE message', () => {
       const r = responses({
         weekdayAvailability: {

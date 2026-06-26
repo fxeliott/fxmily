@@ -131,13 +131,17 @@ function ActionRow({ action }: { action: GuidanceAction }) {
               {action.title}
             </span>
             {/* §32-2 — "action en cours" / "action suivante" wayfinding. Calm
-                marker, never a countdown/urgency (§2). */}
+                marker, never a countdown/urgency (§2). On a `missed` (amber)
+                row the pill takes the `warn` tone: the default `mute`/`acc`
+                pill text dips below WCAG 1.4.3 4.5:1 on the `--warn-dim` ground
+                (a11y audit), whereas `warn` text is the vetted high-contrast
+                pairing — and it stays amber-calm, never red (§31.2). */}
             {action.timing === 'current' ? (
-              <Pill tone="acc" className="shrink-0">
+              <Pill tone={isMissed ? 'warn' : 'acc'} className="shrink-0">
                 Maintenant
               </Pill>
             ) : action.timing === 'next' ? (
-              <Pill tone="mute" className="shrink-0">
+              <Pill tone={isMissed ? 'warn' : 'mute'} className="shrink-0">
                 Ensuite
               </Pill>
             ) : null}
@@ -158,7 +162,13 @@ function ActionRow({ action }: { action: GuidanceAction }) {
   );
 }
 
-function TodayBlocksList({ blocks }: { blocks: CalendarBlock[] }) {
+function TodayBlocksList({
+  blocks,
+  currentSlot,
+}: {
+  blocks: CalendarBlock[];
+  currentSlot: DaySlot;
+}) {
   const sorted = [...blocks].sort((a, b) => slotOrderIndex(a.slot) - slotOrderIndex(b.slot));
   return (
     <section aria-label="Ton plan du jour" className="flex flex-col gap-2">
@@ -174,11 +184,18 @@ function TodayBlocksList({ blocks }: { blocks: CalendarBlock[] }) {
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {sorted.map((block, idx) => {
           const meta = categoryMetaFor(block.category);
+          // §32-1 — "chaque créneau émet un rappel AU BON MOMENT" : the block(s)
+          // whose slot is the member's current moment get a calm `Maintenant`
+          // marker (same wayfinding token as the action rows). In-app cue only,
+          // no countdown/push (§31.2, Chantier B deliberately not built).
+          const isNow = block.slot === currentSlot;
           return (
             <li
               key={`${block.slot}-${idx}`}
+              data-now={isNow ? 'true' : undefined}
               className={cn(
-                'rounded-control flex items-stretch gap-2.5 border border-[var(--b-default)] bg-[var(--bg-1)] p-2.5',
+                'rounded-control flex items-stretch gap-2.5 border bg-[var(--bg-1)] p-2.5',
+                isNow ? 'border-[var(--b-acc)]' : 'border-[var(--b-default)]',
                 block.priority === 'low' && 'opacity-70',
               )}
             >
@@ -191,8 +208,15 @@ function TodayBlocksList({ blocks }: { blocks: CalendarBlock[] }) {
                 style={{ backgroundColor: meta.color }}
               />
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="t-cap text-[var(--t-3)]">
-                  {meta.label} · {slotLabelFor(block.slot)} · {block.durationMin} min
+                <span className="t-cap flex items-center gap-1.5 text-[var(--t-3)]">
+                  <span className="truncate">
+                    {meta.label} · {slotLabelFor(block.slot)} · {block.durationMin} min
+                  </span>
+                  {isNow ? (
+                    <Pill tone="acc" className="shrink-0">
+                      Maintenant
+                    </Pill>
+                  ) : null}
                 </span>
                 <span className="text-[13px] leading-snug text-[var(--t-1)]">
                   {block.label}
@@ -277,7 +301,7 @@ export function TodayGuidance({
           is generated with blocks today, show them; otherwise a single calm
           framing line (preparing / none / free day). */}
       {hasTodayBlocks ? (
-        <TodayBlocksList blocks={guidance.todayBlocks} />
+        <TodayBlocksList blocks={guidance.todayBlocks} currentSlot={guidance.slot} />
       ) : (
         <CalendarStateLine state={guidance.calendarState} />
       )}

@@ -111,6 +111,21 @@ function joinDays(indices: readonly number[]): string {
   return `${names.slice(0, 3).join(', ')}…`;
 }
 
+/** Slot display order so an enumerated list always reads chronologically. */
+const SLOT_ORDER: readonly CalendarSlotValue[] = ['morning', 'afternoon', 'evening'];
+
+/**
+ * Join slot labels in day order: "le matin", "le matin et le soir",
+ * "le matin, l'après-midi et le soir". So a single conflicting day names EVERY
+ * unavailable slot, not just the first (a member who only sees "le matin" might
+ * shift it and wrongly believe the day is clear while another slot still clashes).
+ */
+function joinSlots(slots: ReadonlySet<CalendarSlotValue>): string {
+  const labels = SLOT_ORDER.filter((s) => slots.has(s)).map((s) => SLOT_LABEL_FR[s]);
+  if (labels.length <= 1) return labels[0] ?? '';
+  return `${labels.slice(0, -1).join(', ')} et ${labels[labels.length - 1]}`;
+}
+
 /** Defensive clamp so a built message can never breach the Zod warning bound. */
 function clamp(message: string): string {
   return message.length <= WARNING_MAX
@@ -134,25 +149,41 @@ export function detectCalendarConflicts(
   // ("créneau qui chevauche une obligation déclarée travail/études"). The
   // strongest, fully-deterministic conflict. Aggregate to ONE calm message so
   // we never spam (anti-Black-Hat); collect the distinct day indices touched.
-  const unavailableDays = new Set<number>();
-  let firstSlotLabel: string | null = null;
+  const unavailableSlotsByDay = new Map<number, Set<CalendarSlotValue>>();
   output.days.forEach((day, dayIndex) => {
     for (const block of day.blocks) {
       if (!DEMANDING_CATEGORIES.has(block.category)) continue;
       if (!isSlotAvailable(responses, dayIndex, block.slot)) {
-        unavailableDays.add(dayIndex);
-        firstSlotLabel ??= SLOT_LABEL_FR[block.slot];
+        let slots = unavailableSlotsByDay.get(dayIndex);
+        if (!slots) {
+          slots = new Set<CalendarSlotValue>();
+          unavailableSlotsByDay.set(dayIndex, slots);
+        }
+        slots.add(block.slot);
       }
     }
   });
-  if (unavailableDays.size > 0) {
-    const indices = [...unavailableDays].sort((a, b) => a - b);
-    if (indices.length === 1 && firstSlotLabel) {
-      messages.push(
-        clamp(
-          `Un créneau de pratique est prévu ${DAY_NAMES_FR[indices[0]!]} ${firstSlotLabel}, un moment où tu t'es dit indisponible. Pense à le décaler ou à ajuster ta disponibilité.`,
-        ),
-      );
+  if (unavailableSlotsByDay.size > 0) {
+    const indices = [...unavailableSlotsByDay.keys()].sort((a, b) => a - b);
+    const onlyDay = indices.length === 1 ? indices[0] : undefined;
+    const onlyDaySlots = onlyDay !== undefined ? unavailableSlotsByDay.get(onlyDay) : undefined;
+    if (onlyDay !== undefined && onlyDaySlots) {
+      // ONE conflicting day — name EVERY unavailable slot of that day (not just
+      // the first), so the member can't fix one and miss another (§31.2 calm).
+      const slotList = joinSlots(onlyDaySlots);
+      if (onlyDaySlots.size === 1) {
+        messages.push(
+          clamp(
+            `Un créneau de pratique est prévu ${DAY_NAMES_FR[onlyDay]} ${slotList}, un moment où tu t'es dit indisponible. Pense à le décaler ou à ajuster ta disponibilité.`,
+          ),
+        );
+      } else {
+        messages.push(
+          clamp(
+            `Des créneaux de pratique sont prévus ${DAY_NAMES_FR[onlyDay]} ${slotList}, des moments où tu t'es dit indisponible. Pense à les décaler ou à ajuster ta disponibilité.`,
+          ),
+        );
+      }
     } else {
       messages.push(
         clamp(

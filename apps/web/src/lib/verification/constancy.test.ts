@@ -7,8 +7,15 @@ vi.mock('@/lib/notifications/enqueue', () => ({
   enqueueDouglasDeliveryNotification: vi.fn(),
 }));
 
+import { db } from '@/lib/db';
+
 import { ALERT_RULES } from './alerts';
-import { currentPeriodStart, foldConstancy, ritualEventId } from './constancy';
+import {
+  currentPeriodStart,
+  foldConstancy,
+  listRecentConstancyScores,
+  ritualEventId,
+} from './constancy';
 
 /**
  * S3 §33.5 — pure constancy fold (DoD §31 #3 « le score monte et descend
@@ -143,5 +150,53 @@ describe('ALERT_RULES — répétition obligatoire (DoD §31 #4 / §33.8)', () =
       // The member-visible label is calm French copy — no market vocabulary.
       expect(rule.triggeredByLabel).not.toMatch(/achat|vente|long|short|setup|niveau|objectif/i);
     }
+  });
+});
+
+describe('listRecentConstancyScores — trajectoire oldest→newest (S4/S6)', () => {
+  it('inverse le take DB (newest→oldest) en une trajectoire croissante', async () => {
+    // Le sparkline de constance (membre /verification + panneau admin) se lit du
+    // plus ancien au plus récent ; la requête prend newest-first puis `.reverse()`.
+    // Ce test VERROUILLE cet invariant — un refacto retirant `.reverse()`
+    // inverserait silencieusement la courbe (aucun autre test ne le rougirait).
+    const rowsDescFromDb = [
+      {
+        value: 70,
+        breakdown: {},
+        periodStart: new Date('2026-06-15'),
+        computedAt: new Date('2026-06-15'),
+      },
+      {
+        value: 60,
+        breakdown: {},
+        periodStart: new Date('2026-06-08'),
+        computedAt: new Date('2026-06-08'),
+      },
+      {
+        value: 50,
+        breakdown: {},
+        periodStart: new Date('2026-06-01'),
+        computedAt: new Date('2026-06-01'),
+      },
+    ];
+    const findMany = vi.fn().mockResolvedValue(rowsDescFromDb);
+    (db as unknown as { constancyScore: { findMany: typeof findMany } }).constancyScore = {
+      findMany,
+    };
+
+    const result = await listRecentConstancyScores('u1', 12);
+
+    // La requête demande bien le plus récent d'abord (orderBy desc, take borné).
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { memberId: 'u1' },
+        orderBy: { periodStart: 'desc' },
+        take: 12,
+      }),
+    );
+    const times = result.map((r) => r.periodStart.getTime());
+    expect(times).toEqual([...times].sort((a, b) => a - b)); // strictement croissant
+    expect(result[0]?.value).toBe(50); // le plus ancien en premier
+    expect(result[result.length - 1]?.value).toBe(70); // le plus récent en dernier
   });
 });

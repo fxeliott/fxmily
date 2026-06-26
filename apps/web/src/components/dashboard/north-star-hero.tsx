@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Minus,
   Moon,
+  RotateCcw,
   ScanSearch,
   ShieldCheck,
   Sun,
@@ -119,11 +120,20 @@ function TrendBadge({ trend }: { trend: Trend }) {
 /** The single most-"now" action, rendered as a calm, prominent hero CTA.
  *  Posture §2 : no countdown, no pressure — an invitation, not a command. */
 function HeroNextActionCard({ action }: { action: GuidanceAction }) {
+  // S6 §32-2 — a `missed` catch-up promoted to the hero (3rd-choice focal, when
+  // nothing is `todo` but a slipped geste remains) keeps the SAME calm amber
+  // "rattrapable" affordance as today-guidance's ActionRow — never the blue
+  // todo treatment (which would read as a fresh task), never red/punitive
+  // (§31.2). Its glyph is the go-back RotateCcw. Surfacing it (vs hiding it)
+  // is deliberate: the hero must not claim "tu es à jour" while a rattrapage
+  // is still possible.
+  const isMissed = action.state === 'missed';
   // Inline icon lookup (capitalised var, no helper-call) to satisfy the
   // react-hooks/static-components lint — same convention as today-guidance's
   // ActionRow. Check-in derives its glyph from the slot (evening → Moon).
-  const Icon =
-    action.kind === 'checkin'
+  const Icon = isMissed
+    ? RotateCcw
+    : action.kind === 'checkin'
       ? action.key.endsWith('evening')
         ? Moon
         : Sun
@@ -133,9 +143,22 @@ function HeroNextActionCard({ action }: { action: GuidanceAction }) {
       href={action.href}
       data-slot="hero-next-action"
       data-kind={action.kind}
-      className="wow-hover-glow rounded-card group flex items-center gap-3.5 border border-[var(--b-acc)] bg-[var(--acc-dim)] p-4 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+      data-state={action.state}
+      className={cn(
+        'wow-hover-glow rounded-card group flex items-center gap-3.5 border p-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
+        isMissed
+          ? 'border-[var(--warn-edge)] bg-[var(--warn-dim)] hover:border-[var(--warn)]'
+          : 'border-[var(--b-acc)] bg-[var(--acc-dim)] hover:bg-[var(--acc-dim-2)]',
+      )}
     >
-      <span className="rounded-control grid h-11 w-11 shrink-0 place-items-center border border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]">
+      <span
+        className={cn(
+          'rounded-control grid h-11 w-11 shrink-0 place-items-center border',
+          isMissed
+            ? 'border-[var(--warn-edge)] bg-[var(--warn-dim)] text-[var(--warn)]'
+            : 'border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]',
+        )}
+      >
         <Icon className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -145,9 +168,13 @@ function HeroNextActionCard({ action }: { action: GuidanceAction }) {
         <span className="t-cap line-clamp-2 leading-snug text-[var(--t-2)]">{action.detail}</span>
       </span>
       <ArrowRight
-        className="h-4 w-4 shrink-0 text-[var(--acc)] transition-transform group-hover:translate-x-0.5"
+        className={cn(
+          'h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5',
+          isMissed ? 'text-[var(--warn)]' : 'text-[var(--acc)]',
+        )}
         strokeWidth={2}
-        aria-hidden="true"
+        aria-label={isMissed ? 'à rattraper' : undefined}
+        aria-hidden={isMissed ? undefined : true}
       />
     </Link>
   );

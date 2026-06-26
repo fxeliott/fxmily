@@ -9,6 +9,7 @@ import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scori
 
 import { coerceAxes, pickWeeklyAxis } from './coaching-axis';
 import { deriveMethodGoal, type DerivedMethodGoal } from './derived-goals';
+import { orderGuidanceActions } from './next-actions';
 import {
   DIMENSION_META,
   JOURNEY_STAGES,
@@ -162,11 +163,10 @@ export async function getProcessObjectives(
     return { ...stage, current: idx === lastReachedIdx };
   });
 
-  // Prochaines actions : todo d'abord, puis info ; on en garde 4 max, ordre du
-  // guidage déjà trié "most-now-first".
-  const nextActions = [...guidance.actions]
-    .sort((a, b) => stateRank(a.state) - stateRank(b.state))
-    .slice(0, 4);
+  // Prochaines actions : todo → missed → info → done (helper pur, testé en
+  // isolation), on en garde `MAX_NEXT_ACTIONS` ; le guidage est déjà trié
+  // "most-now-first" en entrée, le tri par état est stable.
+  const nextActions = orderGuidanceActions(guidance.actions);
 
   // S24 — l'axe de coaching personnel de la semaine (rotation hebdo sur les axes
   // du profil). `null` sans profil ⇒ la surface ne rend rien (jamais d'axe inventé).
@@ -189,8 +189,4 @@ export async function getProcessObjectives(
     coachingAxis,
     methodGoal,
   };
-}
-
-function stateRank(state: GuidanceAction['state']): number {
-  return state === 'todo' ? 0 : state === 'info' ? 1 : 2;
 }

@@ -137,7 +137,13 @@ function trendForAxis(
   const dim = AXIS_DIMENSION[axis];
   // detectMomentum ne renvoie QUE des déclins soutenus → présence = 'down'.
   if (dim && momentum.some((m) => m.dimension === dim)) return 'down';
-  // Pas de déclin : un signal « présence » en hausse autorise un 'up' honnête.
+  // Honnêteté du badge (même classe que le découplage du taux MAJ-93) : ne JAMAIS
+  // afficher « en progrès ↑ » tant qu'UNE dimension comportementale décline, même si
+  // ce n'est pas celle de l'axe dominant. Un 'up' tiré du signal « présence » pendant
+  // qu'un autre axe recule serait une réassurance trompeuse (§0 / §31.2). Dans le
+  // doute (un déclin existe ailleurs) on n'affiche pas de flèche.
+  if (momentum.length > 0) return null;
+  // Aucun déclin nulle part : un signal « présence » en hausse autorise un 'up' honnête.
   if (dominantSignals.some((s) => s.reason === 'filled' && s.direction === 'up')) return 'up';
   return null;
 }

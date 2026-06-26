@@ -162,6 +162,22 @@ describe('buildCoachingInsight — moteur PUR (S5 §32-C)', () => {
     expect(result?.progression?.trend).toBeNull();
   });
 
+  it('GARDE honnêteté (re-challenge #3) — un « up » présence NE masque PAS un déclin ailleurs', () => {
+    // Cas précis du fix L2 : présence au suivi en hausse (filled+up) MAIS un déclin
+    // comportemental soutenu sur une AUTRE dimension. Afficher « ↑ » serait une
+    // réassurance trompeuse (§0/§31.2) — on suspend la flèche tant qu'un déclin existe
+    // quelque part. SANS la garde, ce cas renvoyait 'up'.
+    const result = buildCoachingInsight(
+      input({
+        mentalMap: [entry({ axis: 'discipline' })],
+        constancy: constancy(),
+        dominantSignals: [signal({ reason: 'filled', direction: 'up' })],
+        momentum: [momentum({ dimension: 'consistency', label: 'Régularité' })],
+      }),
+    );
+    expect(result?.progression?.trend).toBeNull();
+  });
+
   it('basis trace les signaux RÉELS (origine + constance + boucles), plafonné à 3', () => {
     const result = buildCoachingInsight(
       input({

@@ -93,6 +93,10 @@ export const EXPORTED_USER_RELATIONS = [
   // per-instrument cadence rows (no auth secret, no admin-only field → exported).
   'trackingEntries',
   'trackingSchedules',
+  // S5 §32-E3 — mental micro-objectives: the member's own psychological
+  // engagement loops (axis + curated intention + outcome). Member-owned
+  // content, no auth secret, no link to the trading edge (§21.5) → exported.
+  'mentalMicroObjectives',
 ] as const;
 
 /**
@@ -163,6 +167,8 @@ export interface UserDataExport {
   // V2 S2 — universal tracking engine captures + per-instrument cadence rows.
   trackingEntries: SafeTrackingEntry[];
   trackingSchedules: SafeTrackingSchedule[];
+  // S5 §32-E3 — member's mental micro-objective engagement loops.
+  mentalMicroObjectives: SafeMentalMicroObjective[];
 }
 
 // Whitelist DTOs : explicit `Pick<>` (or shaped literal) per row so a future
@@ -231,6 +237,10 @@ type SafeScoreEvent = Awaited<ReturnType<typeof db.scoreEvent.findMany>>[number]
 type SafeAlert = Awaited<ReturnType<typeof db.alert.findMany>>[number];
 type SafeTrackingEntry = Awaited<ReturnType<typeof db.trackingEntry.findMany>>[number];
 type SafeTrackingSchedule = Awaited<ReturnType<typeof db.trackingSchedule.findMany>>[number];
+// S5 §32-E3 — mental micro-objective loops (member-owned, no auth secret).
+type SafeMentalMicroObjective = Awaited<
+  ReturnType<typeof db.mentalMicroObjective.findMany>
+>[number];
 
 type SafePushSubscription = {
   id: string;
@@ -285,6 +295,7 @@ export interface ExportSummary {
   alertCount: number;
   trackingEntryCount: number;
   trackingScheduleCount: number;
+  mentalMicroObjectiveCount: number;
 }
 
 export async function buildUserDataExport(userId: string): Promise<UserDataExport> {
@@ -392,6 +403,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     alerts,
     trackingEntries,
     trackingSchedules,
+    mentalMicroObjectives,
   ] = await Promise.all([
     db.weeklyReview.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
     db.reflectionEntry.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
@@ -420,6 +432,11 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     db.alert.findMany({ where: { memberId: userId }, orderBy: { createdAt: 'asc' } }),
     db.trackingEntry.findMany({ where: { userId }, orderBy: { submittedAt: 'asc' } }),
     db.trackingSchedule.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    // S5 §32-E3 — `memberId`-keyed, like the S3 verification surface.
+    db.mentalMicroObjective.findMany({
+      where: { memberId: userId },
+      orderBy: { createdAt: 'asc' },
+    }),
   ]);
 
   return {
@@ -467,6 +484,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     alerts,
     trackingEntries,
     trackingSchedules,
+    mentalMicroObjectives,
   };
 }
 
@@ -508,6 +526,7 @@ export function summariseExport(snapshot: UserDataExport): ExportSummary {
     alertCount: snapshot.alerts.length,
     trackingEntryCount: snapshot.trackingEntries.length,
     trackingScheduleCount: snapshot.trackingSchedules.length,
+    mentalMicroObjectiveCount: snapshot.mentalMicroObjectives.length,
   };
 }
 

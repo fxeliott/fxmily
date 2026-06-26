@@ -3,6 +3,7 @@ import 'server-only';
 import { after } from 'next/server';
 
 import { logAudit } from '@/lib/auth/audit';
+import { ensureMicroObjectiveForMember } from '@/lib/coaching/micro-objective';
 import { reportWarning } from '@/lib/observability';
 import { evaluateAndDispatchForUser } from '@/lib/triggers/engine';
 
@@ -54,6 +55,21 @@ export type DouglasDispatchReason =
  */
 export function scheduleDouglasDispatch(userId: string, reason: DouglasDispatchReason): void {
   after(async () => {
+    // S5 §32-E3 — every member passage (trade/check-in action) is a chance to keep
+    // exactly ONE open mental micro-objective. Idempotent + cheap (a single indexed
+    // read short-circuits when one is already open). Runs BEFORE the douglas debounce
+    // below (different cadence: the loop must stay seeded even when a card dispatch
+    // is coalesced). Isolated so a hiccup here never blocks the dispatch.
+    try {
+      await ensureMicroObjectiveForMember(userId);
+    } catch (err) {
+      reportWarning('coaching.microObjective', 'ensure_failed', {
+        userId,
+        reason,
+        error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+      });
+    }
+
     const last = lastDispatchAt.get(userId) ?? 0;
     const now = Date.now();
     if (now - last < DISPATCH_DEBOUNCE_MS) {

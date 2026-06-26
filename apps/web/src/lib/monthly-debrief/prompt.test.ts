@@ -11,6 +11,8 @@
 
 import { describe, expect, it } from 'vitest';
 
+import type { CoachingReportContext } from '@/lib/coaching/engine';
+
 import { buildMonthlySnapshot } from './builder';
 import { buildMonthlyDebriefUserPrompt, MONTHLY_DEBRIEF_SYSTEM_PROMPT } from './prompt';
 import type { MonthlyBuilderInput } from './types';
@@ -618,5 +620,61 @@ describe('DOD3-01 / DoD#2 S6 — Session-3 verification section reaches the prom
   it('the system prompt authorizes constancy/honesty commentary (posture §2 count-only)', () => {
     expect(MONTHLY_DEBRIEF_SYSTEM_PROMPT).toContain('CONSTANCE');
     expect(MONTHLY_DEBRIEF_SYSTEM_PROMPT).toContain('HONNÊTETÉ RADICALE');
+  });
+});
+
+// =============================================================================
+// S5 §32-C/D — coaching psychologique reaches the monthly prompt
+// =============================================================================
+
+describe('buildMonthlyDebriefUserPrompt — coaching psychologique reaches the prompt (S5 §32-C/D)', () => {
+  const coachingCtx: CoachingReportContext = {
+    insight: {
+      axis: 'consistency',
+      tone: 'watch',
+      headline: 'Ton focus mental : la régularité',
+      observation: 'Quelques suivis sautés en milieu de mois.',
+      meaning: 'La régularité est l’edge silencieux : elle se construit un jour à la fois.',
+      nextStep: 'Réancre un suivi court ce soir, sans chercher la perfection.',
+      progression: {
+        label: 'Constance',
+        value: 68,
+        unit: '/100',
+        trend: null,
+        detail: 'honnêteté 80 · régularité 60',
+      },
+      basis: ['Signal « bilans oubliés »', 'Constance 68/100'],
+    },
+    openObjective: { axis: 'consistency', title: 'Faire de la régularité ton edge silencieux' },
+    closedOutcomes: { kept: 2, missed: 1, dismissed: 1 },
+  };
+
+  it('renders the coaching synthesis end-to-end (input → builder → prompt) with its posture lock', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(baseInput({ coaching: coachingCtx })),
+    );
+    expect(prompt).toContain('## Signal de coaching psychologique');
+    expect(prompt).toContain('- Axe dominant : régularité');
+    expect(prompt).toContain('- Observé : Quelques suivis sautés');
+    expect(prompt).toContain('- Progression mesurée : Constance — 68/100');
+    expect(prompt).toContain('- Micro-objectif mental en cours : Faire de la régularité');
+    expect(prompt).toMatch(/2 tenue\(s\), 1 manquée\(s\), 1 écartée\(s\)/);
+    expect(prompt).toContain('Rappel posture');
+    expect(prompt).toMatch(/jamais un conseil de marché/i);
+  });
+
+  it('omits the coaching section entirely when the member has no insight (snapshot.coaching absent)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).not.toContain('## Signal de coaching psychologique');
+  });
+
+  it('GARDE-FOU §2 — the rendered coaching block never surfaces a market term', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(baseInput({ coaching: coachingCtx })),
+    );
+    const block = prompt.slice(prompt.indexOf('## Signal de coaching psychologique'));
+    expect(block).not.toMatch(
+      /\b(setup|achat|vente|buy|sell|long|short|pip|lots?|support|résistance|bougie|take[- ]?profit|stop[- ]?loss)\b/i,
+    );
   });
 });

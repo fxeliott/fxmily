@@ -22,6 +22,7 @@
  * Pure — no DB, no `Date.now()`, no I/O. Vitest-replayable on a fixture.
  */
 
+import { renderCoachingContextSection } from '@/lib/coaching/engine';
 import { safeFreeText } from '@/lib/text/safe';
 
 import { WEEKLY_CONTEXT_MAX, type MonthlySnapshot } from '@/lib/schemas/monthly-debrief';
@@ -94,6 +95,11 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
     morningIntentions: collectMorningIntentions(input),
     // TASK E — per-category "fiche utile" breakdown (count-only, posture §2).
     helpfulByCategory: collectHelpfulByCategory(input),
+    // S5 §32-C/D — synthèse de coaching psychologique. Le loader fournit le
+    // contexte STRUCTURÉ (DB) ; ici (pur) on le rend en bloc Markdown via le
+    // moteur (SSOT du format). Absent → slice omis (exactOptionalPropertyTypes).
+    // §2-safe : la copie est curée par le moteur (jamais un terme de marché).
+    ...(input.coaching ? { coaching: renderCoachingContextSection(input.coaching) } : {}),
   };
 }
 

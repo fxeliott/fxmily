@@ -2,6 +2,11 @@ import 'server-only';
 
 import { db } from '@/lib/db';
 import type { SerializedCheckin } from '@/lib/checkin/service';
+// S5 §32-C/D — coaching psychologique. `getCoachingReportContext` agrège des
+// signaux de PROCESS (carte mentale, constance, micro-objectifs, momentum) —
+// aucun training, aucun P&L, aucun edge réel : hors firewall §21.5, comme
+// scoring/meeting/verification.
+import { getCoachingReportContext } from '@/lib/coaching/service';
 // SPEC §28/§30 — count-only meeting attendance primitive ({ scheduledCount,
 // completedCount }; no meeting body, no P&L). Feeds the explicit
 // `meetingAttendance` snapshot counter. Meeting assiduité touches no real edge
@@ -120,6 +125,7 @@ export async function loadWeeklySliceForUser(
     constancyScores,
     openDiscrepancyCount,
     alertCount,
+    coaching,
   ] = await Promise.all([
     loadTrades(userId, window),
     loadCheckins(userId, window),
@@ -164,6 +170,10 @@ export async function loadWeeklySliceForUser(
     // Alerts carry a real `createdAt` instant → the local-instant window bounds
     // are correct here (not the civil-day midnights).
     countAlertsInRange(userId, window.weekStartUtc, window.weekEndUtc),
+    // S5 §32-C/D — synthèse de coaching psychologique (process/mental only),
+    // boucles de micro-objectifs period-scopées à la semaine rapportée. `null`
+    // quand le membre n'a aucun insight à synthétiser (carte mentale vide).
+    getCoachingReportContext(userId, { start: window.weekStartUtc, end: window.weekEndUtc }),
   ]);
 
   // DOD3-01 / DoD#2 S6 — a single report week has ≤1 ConstancyScore; take it (or
@@ -204,6 +214,9 @@ export async function loadWeeklySliceForUser(
     scoreHistory,
     // DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters (count-only).
     verification,
+    // S5 §32-C/D — coaching psychologique structuré (le builder le rend en bloc
+    // Markdown dans le snapshot ; `null` → slice omis). §2-safe (copie curée).
+    coaching,
   };
 
   return {

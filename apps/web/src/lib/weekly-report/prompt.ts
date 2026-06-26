@@ -300,6 +300,17 @@ export function buildWeeklyReportUserPrompt(snapshot: WeeklySnapshot): string {
   );
   lines.push(``);
 
+  // S5 §32-C/D — synthèse de coaching psychologique pré-rendue par le moteur
+  // déterministe (axe Mark Douglas dominant + observé/sens/prochain pas +
+  // progression MESURÉE + boucles de micro-objectifs). Curé/§2-safe (jamais un
+  // terme de marché — invariant testé côté moteur). Absent quand le membre n'a
+  // aucun signal mental à synthétiser. Le bloc porte déjà son propre rappel de
+  // posture (« intègre calmement, jamais un conseil marché »).
+  if (snapshot.coaching) {
+    lines.push(snapshot.coaching);
+    lines.push(``);
+  }
+
   if (t.journalExcerpts.length > 0) {
     // F-weekly — member free-text. Each excerpt is wrapped in the canonical
     // <member_reflection_untrusted> XML envelope (carbon of calendar/prompt.ts

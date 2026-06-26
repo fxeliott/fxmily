@@ -332,6 +332,17 @@ const verificationSliceSchema = z
   })
   .strict();
 
+/// S5 §32-C/D — COACHING. Bloc Markdown PRÉ-RENDU (déterministe, par le moteur
+/// `lib/coaching/engine.ts` via `renderCoachingContextSection`) : la synthèse
+/// psychologique du membre (axe dominant Mark Douglas + observé/sens/prochain pas
+/// + progression MESURÉE + boucles de micro-objectifs refermées sur la période).
+/// OPTIONNEL : omis quand la carte mentale est vide. Curé/factuel/numérique ⇒
+/// ZÉRO PII et §2-safe par construction (le rendu n'émet jamais de terme de
+/// marché — invariant testé côté moteur). Une string (et non un objet structuré)
+/// : son SEUL usage est l'injection verbatim dans le prompt, format en un SSOT
+/// unique (le moteur), sans second schéma à maintenir en phase.
+const coachingSliceSchema = z.string().min(1).max(2000);
+
 // =============================================================================
 // (D) Member onboarding profile — REFERENCE read-only context (TASK B)
 // =============================================================================
@@ -487,6 +498,8 @@ export const monthlySnapshotSchema = z
     /// the member's honesty/regularity trajectory in Mark-Douglas terms — never
     /// a market view. Always present (the loader defaults 0/null when no signal).
     verification: verificationSliceSchema,
+    /// S5 §32-C/D — synthèse de coaching psychologique pré-rendue (optionnelle).
+    coaching: coachingSliceSchema.optional(),
     /// TASK B (SPEC §25.2) — the member's onboarding profile (their words),
     /// REFERENCE context for the TEXT only (never scoring/edge — posture §2).
     /// `null` when no profile yet → the prompt omits the section.

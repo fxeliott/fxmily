@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SerializedCheckin } from '@/lib/checkin/service';
+import type { CoachingReportContext } from '@/lib/coaching/engine';
 import type { SerializedTrade } from '@/lib/trades/service';
 
 import { buildWeeklySnapshot } from './builder';
@@ -390,5 +391,58 @@ describe('7P-weekly — Mark Douglas 7 Principes de Consistance cited in the sys
   it('keeps the 5 vérités block alongside the 7 principes (additive, not a replacement)', () => {
     expect(WEEKLY_REPORT_SYSTEM_PROMPT).toContain('5 vérités fondamentales Mark Douglas');
     expect(WEEKLY_REPORT_SYSTEM_PROMPT).toContain('7 Principes de Consistance Mark Douglas');
+  });
+});
+
+describe('buildWeeklyReportUserPrompt — coaching psychologique reaches the prompt (S5 §32-C/D)', () => {
+  const coachingCtx: CoachingReportContext = {
+    insight: {
+      axis: 'discipline',
+      tone: 'alert',
+      headline: 'Ton focus mental : la discipline',
+      observation: 'Plusieurs journées sans suivi, sans motif (×3).',
+      meaning: 'Éviter de regarder son travail, c’est souvent fuir une vérité inconfortable.',
+      nextStep: 'Ce soir, remplis ton bilan — même en une seule ligne.',
+      progression: {
+        label: 'Micro-objectifs tenus',
+        value: 75,
+        unit: '%',
+        trend: 'up',
+        detail: '3 tenus sur 4 refermés',
+      },
+      basis: ['Alerte « bilans oubliés »', 'Constance 72/100'],
+    },
+    openObjective: { axis: 'discipline', title: 'Tenir ta routine, un jour à la fois' },
+    closedOutcomes: { kept: 3, missed: 1, dismissed: 0 },
+  };
+
+  it('renders the coaching synthesis end-to-end (input → builder → prompt) with its posture lock', () => {
+    const prompt = buildWeeklyReportUserPrompt(
+      buildWeeklySnapshot({ ...emptyInput(), coaching: coachingCtx }),
+    );
+    expect(prompt).toContain('## Signal de coaching psychologique');
+    expect(prompt).toContain('- Axe dominant : discipline');
+    expect(prompt).toContain('- Observé : Plusieurs journées sans suivi');
+    expect(prompt).toContain('- Progression mesurée : Micro-objectifs tenus — 75%');
+    expect(prompt).toContain('- Micro-objectif mental en cours : Tenir ta routine');
+    expect(prompt).toMatch(/3 tenue\(s\), 1 manquée\(s\), 0 écartée\(s\)/);
+    // The block carries its OWN posture lock for Claude.
+    expect(prompt).toContain('Rappel posture');
+    expect(prompt).toMatch(/jamais un conseil de marché/i);
+  });
+
+  it('omits the coaching section entirely when the member has no insight (snapshot.coaching absent)', () => {
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(emptyInput()));
+    expect(prompt).not.toContain('## Signal de coaching psychologique');
+  });
+
+  it('GARDE-FOU §2 — the rendered coaching block never surfaces a market term', () => {
+    const prompt = buildWeeklyReportUserPrompt(
+      buildWeeklySnapshot({ ...emptyInput(), coaching: coachingCtx }),
+    );
+    const block = prompt.slice(prompt.indexOf('## Signal de coaching psychologique'));
+    expect(block).not.toMatch(
+      /\b(setup|achat|vente|buy|sell|long|short|pip|lots?|support|résistance|bougie|take[- ]?profit|stop[- ]?loss)\b/i,
+    );
   });
 });

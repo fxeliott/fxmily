@@ -3,6 +3,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { EvolutionTraceCard } from '@/components/coaching/evolution-trace-card';
+import { MentalMapCard } from '@/components/coaching/mental-map-card';
+import { MicroObjectiveCard } from '@/components/coaching/micro-objective-card';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { CoachingAxisCard } from '@/components/objectives/coaching-axis-card';
 import { JourneyRoadmap } from '@/components/objectives/journey-roadmap';
@@ -11,6 +14,8 @@ import { NextSteps } from '@/components/objectives/next-steps';
 import { ObjectiveRings } from '@/components/objectives/objective-rings';
 import { ObjectivesHero } from '@/components/objectives/objectives-hero';
 import { TrajectoryChart } from '@/components/objectives/trajectory-chart';
+import { getOpenMicroObjective, listRecentMicroObjectives } from '@/lib/coaching/micro-objective';
+import { getMentalMap } from '@/lib/coaching/service';
 import { getProcessObjectives } from '@/lib/objectives/service';
 
 /**
@@ -38,7 +43,16 @@ export default async function ObjectifsPage() {
   // S24 — the weekly coaching axis (from the onboarding profile) is now derived
   // ONCE inside `getProcessObjectives` (shared with the dashboard hub), so the
   // page no longer reads the profile itself nor owns the coercion/rotation.
-  const view = await getProcessObjectives(userId, timezone);
+  // S5 §32 — the psychological coaching surfaces (E1 mental map, E3 open micro-
+  // objective, E2 evolution trace) are loaded page-specifically here, in parallel
+  // (no added wall-clock; all indexed reads). They live on /objectifs because this
+  // is the "where I'm going / what to work on" prospective surface.
+  const [view, mentalMap, openMicroObjective, microObjectiveTrace] = await Promise.all([
+    getProcessObjectives(userId, timezone),
+    getMentalMap(userId),
+    getOpenMicroObjective(userId),
+    listRecentMicroObjectives(userId),
+  ]);
 
   return (
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
@@ -87,6 +101,32 @@ export default async function ObjectifsPage() {
         {view.methodGoal ? (
           <section className="wow-reveal" aria-label="Ton objectif de méthode du moment">
             <MethodGoalCard goal={view.methodGoal} variant="full" />
+          </section>
+        ) : null}
+
+        {/* 1.8 — S5 §32-E1 : « Ta carte mentale ». Pour chaque signal de process,
+            le triptyque observé → ce que ça signifie (Mark Douglas) → ton geste.
+            Rend null sans signal (pas de conseil fabriqué). §2/§31.2-safe. */}
+        {mentalMap.length > 0 ? (
+          <section className="wow-reveal" aria-label="Ta carte mentale">
+            <MentalMapCard entries={mentalMap} variant="full" />
+          </section>
+        ) : null}
+
+        {/* 1.9 — S5 §32-E3 : le micro-objectif mental OUVERT (un seul à la fois) +
+            le suivi qui referme la boucle au prochain passage. Rend null si aucune
+            boucle ouverte. Déterministe, §2-safe. */}
+        {openMicroObjective ? (
+          <section className="wow-reveal" aria-label="Ton micro-objectif du moment">
+            <MicroObjectiveCard objective={openMicroObjective} variant="full" />
+          </section>
+        ) : null}
+
+        {/* 1.10 — S5 §32-E2 : la trace HORODATÉE des micro-objectifs (créé → refermé),
+            lecture de l'évolution psychologique dans le temps. Rend null sans histo. */}
+        {microObjectiveTrace.length > 0 ? (
+          <section className="wow-reveal" aria-label="Ton évolution dans le temps">
+            <EvolutionTraceCard items={microObjectiveTrace} timezone={timezone} />
           </section>
         ) : null}
 

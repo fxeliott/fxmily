@@ -58,6 +58,12 @@ vi.mock('@/lib/verification/constancy', () => ({
 }));
 vi.mock('@/lib/verification/alerts', () => ({ countAlertsInRange: vi.fn(async () => 0) }));
 vi.mock('@/lib/verification/service', () => ({ countOpenDiscrepancies: vi.fn(async () => 0) }));
+// S5 §32-C/D — coaching synthesis read (process/mental). Stubbed inert (null =
+// no insight) so this S3-injection test stays isolated; the builder then omits
+// the `coaching` slice. Coaching wiring has its own dedicated tests.
+vi.mock('@/lib/coaching/service', () => ({
+  getCoachingReportContext: vi.fn(async () => null),
+}));
 
 import { db } from '@/lib/db';
 import { countAlertsInRange } from '@/lib/verification/alerts';

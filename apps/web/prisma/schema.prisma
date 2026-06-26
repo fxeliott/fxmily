@@ -409,6 +409,10 @@ model User {
   constancyScores              ConstancyScore[]
   scoreEvents                  ScoreEvent[]
   alerts                       Alert[]
+  // S5 §32-E3 — mental micro-objective engagement loop (Mark Douglas). Cascade
+  // on User delete (RGPD §17). Firewall §21.5: psychological/process only, no
+  // FK to the real edge (only this implicit memberId link).
+  mentalMicroObjectives        MentalMicroObjective[]
   // S3/S8 — training-session containers (firewall §21.5: training world only).
   trainingSessions             TrainingSession[]
   // V2 S2 — universal tracking engine (recurring code-defined instruments).
@@ -2541,6 +2545,20 @@ enum AlertStatus {
   dismissed
 }
 
+/// S5 §32-E3 — lifecycle of a mental micro-objective (Mark Douglas engagement
+/// loop). `open` = proposed, awaiting the member's next-visit follow-up. The
+/// three closed states record HOW the loop closed, never a verdict (§33.2):
+///   kept      : the member followed through (the loop's healthy outcome).
+///   missed    : not yet done — a progression DATUM, not a reproach.
+///   dismissed : the member set it aside.
+/// Garde-fou §2: every value is process/mental — no trading outcome can exist here.
+enum MentalObjectiveStatus {
+  open
+  kept
+  missed
+  dismissed
+}
+
 /// S4/S7 — kind of a multi-capture trade attachment ("photos" pluriel §28).
 enum TradeMediaKind {
   entry
@@ -2869,6 +2887,53 @@ model Alert {
 
   @@index([memberId, status])
   @@map("alerts")
+}
+
+/// S5 §32-E3 — a mental/discipline micro-objective the coaching engine proposes
+/// to the member, then closes at the next visit (the "boucle d'engagement saine").
+/// Created from the member's strongest live mental signal (top mental-map entry,
+/// itself derived from an S3 alert or a dominant score signal — traced via
+/// `sourceKind`/`sourceRef`, E2/B). The member follows up next visit → the loop
+/// closes with an `outcome`-bearing status. Measurable progression (livrable C) =
+/// kept / (kept+missed) over closed objectives.
+///
+/// Garde-fou §2/§33.2 BY CONSTRUCTION: every field is psychological/process —
+/// `axis` ∈ {discipline, honesty, ego, consistency} (mirror `MentalAxis` in
+/// lib/coaching/mental-map.ts, bounded server-side like `Alert.triggerType`),
+/// `title`/`intention` are CURATED Mark Douglas copy (deterministic, never free
+/// LLM text → no AIGeneratedBanner), NO P&L / market field can exist. Firewall
+/// §21.5: the ONLY relation is to User (cascade RGPD §17) — no FK to Trade /
+/// BehavioralScore / ScoreEvent / Alert, so nothing flows back into the real edge.
+model MentalMicroObjective {
+  id       String @id @default(cuid())
+  memberId String @map("member_id")
+  member   User   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  /// Mental axis trained — mirror of `MentalAxis` (lib/coaching/mental-map.ts).
+  /// Bounded by the coaching layer (single write-site), not a Zod allowlist.
+  axis String
+
+  /// Origin motif (E2/B traceability). `sourceKind` ∈ {alert, signal};
+  /// `sourceRef` = the alert id (alert) or the score reason (signal). Kept for
+  /// the evolution trace, never a FK (firewall §21.5 — no link to the edge).
+  sourceKind String @map("source_kind")
+  sourceRef  String @map("source_ref")
+
+  /// Curated member-facing copy captured at creation (longitudinal snapshot —
+  /// a later code change to the copy must not rewrite a past objective).
+  title     String
+  intention String
+
+  status MentalObjectiveStatus @default(open)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  /// Set when the loop closes (status leaves `open`). Null while open.
+  closedAt  DateTime? @map("closed_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  // "What is the member's open micro-objective?" + closed-history reads.
+  @@index([memberId, status])
+  @@map("mental_micro_objectives")
 }
 
 /// S4/S7 — multi-capture trade attachment ("photos" pluriel, briefs §28/§29).

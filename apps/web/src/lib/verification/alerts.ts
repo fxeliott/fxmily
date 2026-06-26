@@ -209,7 +209,14 @@ export async function scanAlertsForMember(
       // forever. Still ≤1 fiche/membre/jour : the cap inside
       // `dispatchDouglasForAlert` governs every attempt.
       if (existing.status === 'open') {
-        const retried = await dispatchDouglasForAlert(memberId, timezone, existing.id, rule, now);
+        const retried = await dispatchDouglasForAlert(
+          memberId,
+          timezone,
+          existing.id,
+          rule,
+          count,
+          now,
+        );
         if (retried) {
           dispatched += 1;
           await db.alert.update({ where: { id: existing.id }, data: { status: 'delivered' } });
@@ -243,7 +250,14 @@ export async function scanAlertsForMember(
     // channel (never a shame blast). The « ≤1 fiche/membre/jour » cap is
     // enforced INSIDE `dispatchDouglasForAlert` (S4 DOD2-T2-1) — a member
     // already served today gets the alert card at tomorrow's scan instead.
-    const dispatchedOk = await dispatchDouglasForAlert(memberId, timezone, alert.id, rule, now);
+    const dispatchedOk = await dispatchDouglasForAlert(
+      memberId,
+      timezone,
+      alert.id,
+      rule,
+      count,
+      now,
+    );
     if (dispatchedOk) {
       dispatched += 1;
       await db.alert.update({ where: { id: alert.id }, data: { status: 'delivered' } });
@@ -265,6 +279,7 @@ async function dispatchDouglasForAlert(
   timezone: string,
   alertId: string,
   rule: AlertRule,
+  repeatCount: number,
   now: Date,
 ): Promise<boolean> {
   // Member-local day — MUST match the trigger engine's `triggeredOn` canon
@@ -319,7 +334,22 @@ async function dispatchDouglasForAlert(
         userId: memberId,
         cardId: card.id,
         triggeredBy: rule.triggeredByLabel,
-        triggerSnapshot: { kind: 'verification_alert', triggerType: rule.triggerType },
+        // S5 §32-B/E2 — le snapshot trace le MOTIF d'origine (le pattern de
+        // discrepancies qui a fait franchir le seuil), pour que l'accompagnement
+        // psychologique (carte mentale E1, trace d'évolution E2) remonte au
+        // « pourquoi » SANS nouvelle table. Métadonnée pure (types + comptage),
+        // jamais de contenu de capture (firewall §21.5). Rétro-compatible :
+        // l'ancien shape `{ kind, triggerType }` reste un sous-ensemble valide.
+        triggerSnapshot: {
+          kind: 'verification_alert',
+          triggerType: rule.triggerType,
+          motif: {
+            discrepancyTypes: [...rule.discrepancyTypes],
+            repeatCount,
+            threshold: rule.threshold,
+            cardCategory: rule.cardCategory,
+          },
+        },
         triggeredOn,
         sourceAlertId: alertId,
       },

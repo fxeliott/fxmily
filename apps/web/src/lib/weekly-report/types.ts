@@ -12,6 +12,7 @@
 
 import type { SerializedDelivery } from '@/lib/cards/types';
 import type { SerializedCheckin } from '@/lib/checkin/service';
+import type { CoachingReportContext } from '@/lib/coaching/engine';
 import type { MomentumHistoryPoint } from '@/lib/scoring/momentum';
 import type { SerializedTrade } from '@/lib/trades/service';
 
@@ -91,6 +92,14 @@ export interface BuilderInput {
     openDiscrepancyCount: number;
     alertCount: number;
   };
+  /// S5 §32-C/D — contexte coaching psychologique STRUCTURÉ, pré-composé par le
+  /// loader via `getCoachingReportContext` (DB), period-scopé à la semaine. Le
+  /// builder PUR le rend en bloc Markdown (`renderCoachingContextSection`) dans
+  /// le snapshot. Optionnel : `null`/absent quand le membre n'a aucun insight à
+  /// synthétiser (carte mentale vide) → le builder n'émet pas le slice (zéro
+  /// régression pour les fixtures existantes). §2-safe : copie curée, jamais de
+  /// marché ni de P&L (invariant porté par le moteur).
+  coaching?: CoachingReportContext | null;
 }
 
 export type { WeeklySnapshot, WeeklyReportOutput } from '@/lib/schemas/weekly-report';

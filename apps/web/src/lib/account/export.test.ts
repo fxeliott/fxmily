@@ -41,6 +41,8 @@ const alertFindMany = vi.fn();
 // V2 S2 — universal tracking engine.
 const trackingEntryFindMany = vi.fn();
 const trackingScheduleFindMany = vi.fn();
+// S5 §32-E3 — mental micro-objective loops.
+const mentalMicroObjectiveFindMany = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -80,6 +82,7 @@ vi.mock('@/lib/db', () => ({
     alert: { findMany: alertFindMany },
     trackingEntry: { findMany: trackingEntryFindMany },
     trackingSchedule: { findMany: trackingScheduleFindMany },
+    mentalMicroObjective: { findMany: mentalMicroObjectiveFindMany },
   },
 }));
 
@@ -126,6 +129,7 @@ const ALL_FIND_MANY = [
   alertFindMany,
   trackingEntryFindMany,
   trackingScheduleFindMany,
+  mentalMicroObjectiveFindMany,
 ];
 
 beforeEach(() => {
@@ -201,6 +205,7 @@ const EMPTY_SNAPSHOT = {
   alerts: [],
   trackingEntries: [],
   trackingSchedules: [],
+  mentalMicroObjectives: [],
 } satisfies Parameters<typeof summariseExport>[0];
 
 describe('buildUserDataExport', () => {
@@ -293,6 +298,8 @@ describe('buildUserDataExport', () => {
     // V2 S2 — universal tracking engine (member-owned, `userId`-keyed).
     expect(trackingEntryFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
     expect(trackingScheduleFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
+    // S5 §32-E3 — mental micro-objectives (member-owned, `memberId`-keyed).
+    expect(mentalMicroObjectiveFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
   });
 
   it('exports the behavioural / psychological surface added in Session 21', async () => {
@@ -595,6 +602,7 @@ describe('summariseExport — defensive shape handling', () => {
       'alertCount',
       'trackingEntryCount',
       'trackingScheduleCount',
+      'mentalMicroObjectiveCount',
     ]);
   });
 });

@@ -406,6 +406,12 @@ export type AuditAction =
   // (`{discrepancyId, discrepancyType}`), counts-grade like the alert slug.
   | 'verification.gentle_reminder.sent'
   | 'verification.score.computed'
+  // S5 §32-E3 — mental micro-objective engagement loop (coaching psychologique).
+  // Emitted when the member closes a loop ("l'as-tu tenu ?"). PII-FREE metadata:
+  // `{microObjectiveId, outcome}` — an opaque id + a closed enum
+  // (`kept|missed|dismissed`). NEVER the curated title/intention copy, NEVER any
+  // P&L (the loop is process/mental only, firewall §21.5 / posture §2).
+  | 'objectives.micro.closed'
   // V2 S2 — Universal tracking engine member capture (`/tracking/[instrument]`).
   // ONE slug: the instrument is 100% CLOSED (boolean/likert/scale/choice, ZERO
   // free-text by design — `lib/tracking/types.ts`) ⇒ NO crisis/injection

@@ -19,6 +19,7 @@
 
 import type { SerializedDelivery } from '@/lib/cards/types';
 import type { SerializedCheckin } from '@/lib/checkin/service';
+import type { CoachingReportContext } from '@/lib/coaching/engine';
 import type { BehavioralScoreTrendPoint } from '@/lib/scoring/service';
 import type { SerializedTrade } from '@/lib/trades/service';
 
@@ -164,6 +165,13 @@ export interface MonthlyBuilderInput {
     openDiscrepancyCount: number;
     alertCount: number;
   };
+  // ----- (S5 §32-C/D) COACHING psychologique — moteur d'analyses autonomes -----
+  /// Contexte coaching STRUCTURÉ pré-composé par le loader via
+  /// `getCoachingReportContext` (DB), period-scopé au mois. Le builder PUR le rend
+  /// en bloc Markdown (`renderCoachingContextSection`) dans le snapshot. Optionnel :
+  /// `null`/absent quand la carte mentale est vide → le builder n'émet pas le slice
+  /// (zéro régression fixtures). §2-safe : copie curée, jamais de marché ni de P&L.
+  coaching?: CoachingReportContext | null;
 }
 
 export type { MonthlySnapshot, MonthlyDebriefOutput } from '@/lib/schemas/monthly-debrief';

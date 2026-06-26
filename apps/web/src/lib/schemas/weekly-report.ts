@@ -402,6 +402,18 @@ const patternSignalsSchema = z
 
 export type WeeklyPatternSignals = z.infer<typeof patternSignalsSchema>;
 
+/// S5 §32-C/D — COACHING. Bloc Markdown PRÉ-RENDU (déterministe, par le moteur
+/// `lib/coaching/engine.ts` via `renderCoachingContextSection`) : la synthèse
+/// psychologique du membre (axe dominant Mark Douglas + observé/sens/prochain pas
+/// + progression MESURÉE + boucles de micro-objectifs refermées). OPTIONNEL :
+/// omis quand le membre n'a aucun signal mental à synthétiser (carte mentale
+/// vide). Curé/factuel/numérique ⇒ ZÉRO PII et §2-safe par construction (le
+/// rendu n'émet jamais de terme de marché — invariant testé côté moteur). Une
+/// string et non un objet structuré : son SEUL usage est l'injection verbatim
+/// dans le prompt, et le format vit en un point unique (le moteur), sans second
+/// SSOT à maintenir en phase.
+const coachingSliceSchema = z.string().min(1).max(2000);
+
 export const weeklySnapshotSchema = z
   .object({
     pseudonymLabel: pseudonymLabelSchema,
@@ -428,6 +440,8 @@ export const weeklySnapshotSchema = z
     /// honesty/regularity trajectory — never a market view. Always present (the
     /// loader defaults 0/null when no signal).
     verification: verificationSliceSchema,
+    /// S5 §32-C/D — synthèse de coaching psychologique pré-rendue (optionnelle).
+    coaching: coachingSliceSchema.optional(),
   })
   .strict();
 

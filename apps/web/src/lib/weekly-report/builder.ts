@@ -25,6 +25,7 @@ import { createHash } from 'node:crypto';
 
 import type { TradeSession } from '@/generated/prisma/client.js';
 
+import { renderCoachingContextSection } from '@/lib/coaching/engine';
 import { detectMomentum } from '@/lib/scoring/momentum';
 import {
   EMOTION_ARC_MIN_TO_SURFACE,
@@ -152,6 +153,11 @@ export function buildWeeklySnapshot(input: BuilderInput): WeeklySnapshot {
     // COUNT-ONLY posture §2 — factual numbers, never a market view.
     verification: input.verification,
     ...(patternSignals ? { patternSignals } : {}),
+    // S5 §32-C/D — synthèse de coaching psychologique. Le loader fournit le
+    // contexte STRUCTURÉ (DB) ; ici (pur) on le rend en bloc Markdown via le
+    // moteur (SSOT du format). Absent → slice omis (exactOptionalPropertyTypes).
+    // §2-safe : la copie est curée par le moteur (jamais un terme de marché).
+    ...(input.coaching ? { coaching: renderCoachingContextSection(input.coaching) } : {}),
   };
 }
 

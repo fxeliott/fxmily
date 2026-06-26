@@ -10,6 +10,7 @@ import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { auth } from '@/auth';
+import { CoachingInsightCard } from '@/components/coaching/coaching-insight-card';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { MethodMirrorCard } from '@/components/progression/method-mirror-card';
 import { PostLossReactionCard } from '@/components/progression/post-loss-reaction-card';
@@ -26,6 +27,7 @@ import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
 import { Sparkline } from '@/components/ui/sparkline';
 import { getDisciplineYearHeatmap } from '@/lib/checkin/service';
+import { getCoachingInsight } from '@/lib/coaching/service';
 import { getMethodMirror } from '@/lib/method-mirror/service';
 import { listTrackRecordTimeline } from '@/lib/trades/track-record-timeline';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
@@ -98,6 +100,21 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
           </h2>
           <Suspense fallback={<WeeklyRecapSkeleton />}>
             <WeeklyRecapSection userId={userId} />
+          </Suspense>
+        </section>
+
+        {/* S5 §32-C/D — « Ton coaching du moment » : la SYNTHÈSE du moteur
+            d'analyses autonomes (cause → effet Mark Douglas → prochain pas +
+            progression MESURÉE + traçabilité). Cadre tout l'analytique qui suit
+            par son SENS mental. Stream via Suspense (gather en 1 passe). Posture
+            §2 (process/mental only) + §31.2 (calme, jamais rouge). Déterministe
+            ⇒ pas d'AIGeneratedBanner. */}
+        <section className="wow-reveal mb-6" aria-labelledby="coaching-insight-section-heading">
+          <h2 id="coaching-insight-section-heading" className="sr-only">
+            Ton coaching du moment
+          </h2>
+          <Suspense fallback={<CoachingInsightSkeleton />}>
+            <CoachingInsightSection userId={userId} />
           </Suspense>
         </section>
 
@@ -329,6 +346,24 @@ function ProgressionHero({
         </div>
       </Card>
     </section>
+  );
+}
+
+async function CoachingInsightSection({ userId }: { userId: string }) {
+  const insight = await getCoachingInsight(userId);
+  // Carte mentale vide (rien à synthétiser) → on ne rend rien (jamais un insight
+  // fabriqué). Le reste de la page reste utile.
+  return <CoachingInsightCard insight={insight} />;
+}
+
+function CoachingInsightSkeleton() {
+  return (
+    <div
+      className="skel rounded-card-lg h-[300px] border border-[var(--b-acc)] bg-[var(--acc-dim)]"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement de ton coaching du moment"
+    />
   );
 }
 

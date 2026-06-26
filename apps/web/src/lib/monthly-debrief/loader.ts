@@ -3,6 +3,11 @@ import 'server-only';
 import { db } from '@/lib/db';
 import type { SerializedCheckin } from '@/lib/checkin/service';
 import { localDateOf, parseLocalDate } from '@/lib/checkin/timezone';
+// S5 §32-C/D — coaching psychologique. `getCoachingReportContext` agrège des
+// signaux de PROCESS (carte mentale, constance, micro-objectifs, momentum) —
+// aucun training, aucun P&L, aucun edge réel : hors firewall §21.5, comme
+// scoring/meeting/verification.
+import { getCoachingReportContext } from '@/lib/coaching/service';
 // SPEC §28/§30 — count-only meeting attendance primitive ({ scheduledCount,
 // completedCount }; no meeting body, no P&L). Feeds the explicit
 // `meetingAttendance` REAL counter. Meeting assiduité touches no real edge
@@ -202,6 +207,7 @@ export async function loadMonthlySliceForUser(
     alertCount,
     constancyScoresPrev,
     memberProfileRow,
+    coaching,
   ] = await Promise.all([
     loadTrades(userId, window),
     loadCheckins(userId, window),
@@ -269,6 +275,10 @@ export async function loadMonthlySliceForUser(
     // TASK G-monthly (member surfaced via Sentry/audit, never a silent drop) —
     // consistent with the 13 other parallel reads in this `Promise.all`.
     getProfileForUser(userId),
+    // S5 §32-C/D — synthèse de coaching psychologique (process/mental only),
+    // boucles de micro-objectifs period-scopées au mois rapporté. `null` quand
+    // le membre n'a aucun insight à synthétiser (carte mentale vide).
+    getCoachingReportContext(userId, { start: window.monthStartUtc, end: window.monthEndUtc }),
   ]);
 
   // SPEC §25.3 — training slice = count/recency ONLY. `daysSinceLastBacktest`
@@ -386,6 +396,9 @@ export async function loadMonthlySliceForUser(
     verification,
     // TASK B (SPEC §25.2) — onboarding profile REFERENCE (TEXT only, never edge).
     memberProfile,
+    // S5 §32-C/D — coaching psychologique structuré (le builder le rend en bloc
+    // Markdown dans le snapshot ; `null` → slice omis). §2-safe (copie curée).
+    coaching,
   };
 
   return {

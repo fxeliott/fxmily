@@ -6,6 +6,8 @@ import { Suspense } from 'react';
 import { auth } from '@/auth';
 import { CalendarStatusWidget } from '@/components/calendar/calendar-status-widget';
 import { MorningIntentionRecall } from '@/components/checkin/morning-intention-recall';
+import { MentalMapCard } from '@/components/coaching/mental-map-card';
+import { MicroObjectiveCard } from '@/components/coaching/micro-objective-card';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { FirstRunWelcome } from '@/components/dashboard/first-run-welcome';
 import { HubDriftSignal } from '@/components/dashboard/hub-drift-signal';
@@ -32,6 +34,8 @@ import { HoverLift } from '@/components/ui/hover-lift';
 import { Kbd } from '@/components/ui/kbd';
 import { getCheckin, getStreak, todayFor } from '@/lib/checkin/service';
 import { getTodayMilestone } from '@/lib/checkin/milestone';
+import { getOpenMicroObjective } from '@/lib/coaching/micro-objective';
+import { getMentalMap } from '@/lib/coaching/service';
 import { getDailyGuidance } from '@/lib/daily-guidance/service';
 import { getInterviewForUser } from '@/lib/onboarding-interview/service';
 import { getProcessObjectives } from '@/lib/objectives/service';
@@ -103,6 +107,8 @@ export default async function DashboardPage() {
     objectives,
     sessionRoutine,
     driftAlerts,
+    mentalMap,
+    openMicroObjective,
   ] = userId
     ? await Promise.all([
         countTradesByStatus(userId),
@@ -131,6 +137,12 @@ export default async function DashboardPage() {
         // surfacées au point d'entrée (hub) en plus de /verification. Même feed
         // lecture-seule (fenêtre 30j, cap 20), 0 nouvelle table. Lu en parallèle.
         listRecentAlertsForMember(userId),
+        // S5 §32-E1/E3 — l'accompagnement psychologique surfacé sur le hub : la
+        // carte mentale (compact = priorité #1) + le micro-objectif mental ouvert.
+        // Lectures indexées en parallèle (0 wall-clock ajouté). Rendent null/vide
+        // tant qu'il n'y a rien à dire (jamais une entrée fabriquée).
+        getMentalMap(userId),
+        getOpenMicroObjective(userId),
       ])
     : [
         { open: 0, closed: 0 },
@@ -144,6 +156,8 @@ export default async function DashboardPage() {
         null,
         null,
         [],
+        [],
+        null,
       ];
 
   // North-star hero — la seule action la plus « maintenant » (primary todo first),
@@ -286,6 +300,16 @@ export default async function DashboardPage() {
         {objectives ? (
           <MethodGoalCard goal={objectives.methodGoal} variant="compact" className="mb-6" />
         ) : null}
+
+        {/* S5 §32-E1 — « Ta carte mentale » (compact : la SEULE priorité du moment).
+            L'accompagnement psychologique au point d'entrée : le membre voit où il en
+            est sur sa discipline / son mental sans naviguer. Self-guard : rend null
+            sans signal (jamais un conseil fabriqué). §2/§31.2-safe. */}
+        <MentalMapCard entries={mentalMap} variant="compact" className="mb-6" />
+        {/* S5 §32-E3 — le micro-objectif mental OUVERT + son suivi (qui referme la
+            boucle au prochain passage). Surfacé compact sur le hub pour que le membre
+            avance dessus sans naviguer. Self-guard : rend null si rien d'ouvert. */}
+        <MicroObjectiveCard objective={openMicroObjective} variant="compact" className="mb-6" />
 
         {/* S4 §32/§33 — « alertes immédiates en cas de dérive, sans qu'il ait à les
             chercher » : surfacées au point d'entrée (avant, elles ne vivaient que

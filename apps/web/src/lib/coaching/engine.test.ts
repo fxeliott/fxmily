@@ -102,6 +102,22 @@ describe('buildCoachingInsight — moteur PUR (S5 §32-C)', () => {
     expect(result?.progression?.detail).toBe('3 tenus sur 4 refermés');
   });
 
+  it('progression #1 — un taux n’AFFICHE PAS la tendance d’axe (anti « 100% ↓ », 2e re-challenge)', () => {
+    // Un déclin d'axe soutenu (qui donne trend='down' sur la Constance) ne doit PAS
+    // s'accrocher au taux de complétion : « Micro-objectifs tenus · 100% · ↓ » se lirait
+    // comme un 100 % qui baisse — incohérence trompeuse. Le bloc taux reste trend=null.
+    const result = buildCoachingInsight(
+      input({
+        mentalMap: [entry({ axis: 'discipline' })],
+        microProgress: progress({ kept: 4, missed: 0, resolved: 4, keptRate: 100 }),
+        momentum: [momentum({ dimension: 'discipline' })],
+      }),
+    );
+    expect(result?.progression?.label).toBe('Micro-objectifs tenus');
+    expect(result?.progression?.value).toBe(100);
+    expect(result?.progression?.trend).toBeNull();
+  });
+
   it('progression #2 — retombe sur la constance quand aucune boucle refermée', () => {
     const result = buildCoachingInsight(input({ constancy: constancy({ value: 68 }) }));
     expect(result?.progression?.label).toBe('Constance');

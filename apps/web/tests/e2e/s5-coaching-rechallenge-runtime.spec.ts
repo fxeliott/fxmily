@@ -3,11 +3,14 @@
  * exercés de bout en bout contre le vrai Postgres à travers l'UI réelle :
  *
  *   A. §32-C — LE MOTEUR EXPLOITE LE PROFIL S2. Le membre a des `axesPrioritaires`
- *      d'onboarding (texte libre « Tenir mon plan »…) qui mappent vers l'axe
- *      `discipline`. Une alerte `forgot_no_reason_repeat` (axe discipline) domine sa
- *      carte mentale → l'insight de /progression porte la trace d'alignement CURÉE
- *      « En lien avec une priorité que tu t'es fixée » (jamais le texte libre brut :
- *      §50/§2 préservés). Avant le correctif, le profil n'était JAMAIS lu.
+ *      d'onboarding au VRAI format produit par le pipeline (phrases action-concrète
+ *      ≤200 chars, citations [N], concepts Douglas — PAS des mots-clés courts), dont
+ *      une mappe l'axe `discipline`. Une alerte `forgot_no_reason_repeat` (axe
+ *      discipline) domine sa carte mentale → l'insight de /progression porte la trace
+ *      d'alignement CURÉE « En lien avec une priorité que tu t'es fixée » (jamais le
+ *      texte libre brut : §50/§2 préservés). Avant le correctif, le profil n'était
+ *      JAMAIS lu — et un seed « Tenir mon plan » taillé pour les keywords aurait
+ *      masqué que le seam était inerte sur le vrai format (2e re-challenge S5).
  *
  *   B. a11y §31.2 / WCAG 1.4.3 — CONTRASTE DES CHIPS EN LIGHT. Le chip de tonalité
  *      de l'insight portait `text-[var(--warn)]` SANS `data-slot="pill"`, échappant
@@ -31,6 +34,19 @@ let member: SeededUser | null = null;
 
 /** Trace d'alignement attendue — apostrophe typographique U+2019 (identique engine.ts). */
 const ALIGNMENT_TRACE = 'En lien avec une priorité que tu t’es fixée';
+
+/**
+ * Axes prioritaires au VRAI format du pipeline d'onboarding (action-concrète, ≤200
+ * chars, citation [N], lexique Douglas) — pas des mots-clés courts. Le 1er mappe
+ * `discipline` (rigueur/exécution/plan/process/checklist), le 2e mappe `ego`
+ * (détachement/acceptation). C'est ce format que `classifyPriorityAxes` doit savoir
+ * lire en prod ; un seed mots-clés l'aurait faussement validé. Ces chaînes BRUTES ne
+ * doivent JAMAIS être rendues à l'écran (§50/§2) — la trace affichée est figée.
+ */
+const RAW_AXIS_DISCIPLINE =
+  "Renforcer la rigueur d'exécution du plan — suivre le process défini et la checklist avant d'agir plutôt que d'improviser sous l'impulsion [12].";
+const RAW_AXIS_EGO =
+  "Travailler le détachement du résultat — accepter qu'un trade exécuté à la lettre reste un bon process, même perdant (5 vérités #3, cf. [9]).";
 
 async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }> {
   const exec = chromium.executablePath();
@@ -57,9 +73,9 @@ test.describe('S5 re-challenge — profil S2 exploité + contraste chips light',
     await cleanupTestUsers();
     member = await seedMemberUser({ firstName: 'S5Rechallenge' });
 
-    // §32-C — profil S2 : axes prioritaires d'onboarding (texte libre). « Tenir mon
-    // plan » → discipline ; « Plus de régularité » → consistency. Le moteur DOIT les
-    // lire (chaîne FK : OnboardingInterview → MemberProfile).
+    // §32-C — profil S2 : axes prioritaires d'onboarding au VRAI format du pipeline.
+    // RAW_AXIS_DISCIPLINE → discipline ; RAW_AXIS_EGO → ego. Le moteur DOIT les lire
+    // (chaîne FK : OnboardingInterview → MemberProfile) et n'en surfacer aucun brut.
     const interview = await db.onboardingInterview.create({
       data: {
         userId: member.id,
@@ -75,7 +91,7 @@ test.describe('S5 re-challenge — profil S2 exploité + contraste chips light',
         interviewId: interview.id,
         summary: 'Profil de test runtime (re-challenge S5).',
         highlights: [],
-        axesPrioritaires: ['Tenir mon plan', 'Plus de régularité dans mon suivi'],
+        axesPrioritaires: [RAW_AXIS_DISCIPLINE, RAW_AXIS_EGO],
         claudeModelVersion: 'claude-opus-4-8',
         instrumentVersion: 'v1',
         analyzedAt: new Date(),
@@ -123,8 +139,11 @@ test.describe('S5 re-challenge — profil S2 exploité + contraste chips light',
     // (l'axe dominant `discipline` ∈ priorités du membre). Avant le fix : absente.
     await expect(page.getByText(ALIGNMENT_TRACE)).toBeVisible();
 
-    // §50/§2 — la trace est la copie FIGÉE, jamais le texte libre brut de l'axe.
-    await expect(page.getByText('Tenir mon plan')).toHaveCount(0);
+    // §50/§2 — la trace est la copie FIGÉE, jamais le texte libre brut AI-dérivé de
+    // l'axe. On prouve que NI le contenu discipline NI le contenu ego ne fuite à
+    // l'écran, malgré leur présence dans le profil exploité par le moteur.
+    await expect(page.getByText('Renforcer la rigueur')).toHaveCount(0);
+    await expect(page.getByText('détachement du résultat')).toHaveCount(0);
 
     expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([]);
   });

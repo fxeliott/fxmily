@@ -20,53 +20,127 @@ import type { MentalAxis } from './mental-map';
  * injection-free. Contraste avec `objectives/coaching-axis.ts`, qui rend le texte
  * BRUT de l'axe et porte donc, lui, l'`AIGeneratedBanner` (§50).
  *
- * Pur (pas de `server-only`, pas de DB) ⇒ unit-testable en isolation. CALIBRÉ pour
- * la PRÉCISION plutôt que le rappel : seuls des mots-clés à forte confiance mappent ;
- * un axe ambigu est ABANDONNÉ (→ pas de personnalisation plutôt qu'une MAUVAISE
- * personnalisation). Mieux vaut silencieux que faux (calibrated refusal).
+ * Pur (pas de `server-only`, pas de DB) ⇒ unit-testable en isolation.
+ *
+ * ⚖️ CALIBRATION = RAPPEL (re-calibré au 2e re-challenge S5). Les VRAIS
+ * `axes_prioritaires` ne sont PAS des mots-clés courts : le prompt d'onboarding
+ * (`onboarding-interview/prompt.ts`) impose des phrases ACTION-CONCRÈTE ≤200 chars
+ * référençant des citations [N] et des concepts Mark Douglas (ex. « Travailler le
+ * détachement du target — la peur de voir le marché repartir [8] »). Un vocabulaire
+ * trop maigre rendait la feature INERTE sur les vrais profils (5/9 axes few-shot →
+ * `[]`) — d'où un lexique riche, fidèle au vocabulaire psy-trading FR de Douglas.
+ * Le coût d'un FAUX NÉGATIF (axe non mappé) = violation du brief §32-C (« exploite
+ * réellement le profil ») ; le coût d'un FAUX POSITIF est BORNÉ par construction
+ * (`PRIORITY_BOOST < 1` ne franchit jamais une tonalité ni ne renverse une gravité
+ * curée distincte — il départage au pire deux entrées de MÊME poids). On privilégie
+ * donc le rappel. Le filet `[]` (0 fabrication) ne se déclenche plus que sur du
+ * NON-psy (méta-instructions, hors-sujet), pas sur du vrai contenu Douglas.
  */
 
 /**
- * Mots-clés FR à forte confiance → axe mental. Comparés sur un texte normalisé
- * (sans accents, minuscule). L'ordre fixe sert de tie-break quand un même axe-texte
- * touche plusieurs groupes (le plus grave d'abord : honnêteté > ego > régularité >
- * discipline). Les termes ambigus (ex. « réel » seul, « perte ») sont volontairement
+ * Mots-clés FR → axe mental, comparés sur un texte normalisé (sans accents,
+ * minuscule). L'ordre fixe sert de tie-break quand un libellé touche plusieurs
+ * groupes (le plus grave d'abord : honnêteté > ego > régularité > discipline). Les
+ * termes purement spéculatifs/marché (« réel » seul, « gagner », « setup ») restent
  * absents : un axe qu'ils seraient seuls à porter reste non mappé (0 fabrication).
  */
 const AXIS_KEYWORDS: ReadonlyArray<readonly [MentalAxis, readonly string[]]> = [
-  ['honesty', ['honnet', 'verite', 'sincer', 'mensonge', 'mentir', 'transparen']],
+  // Honnêteté avec soi-même : vérité, dissonance dire/faire, lucidité, data vs ressenti.
+  [
+    'honesty',
+    [
+      'honnet',
+      'sincer',
+      'mensonge',
+      'mentir',
+      'transparen',
+      'franchise',
+      'dissonance', // écart entre ce qu'on pense/dit et ce qu'on fait
+      'lucid',
+      'admettre',
+      'deni',
+      'illusion',
+      'awareness', // self-awareness / conscience de soi
+      'conscience de soi',
+      'backtest', // ancrer sur la data réelle plutôt que le ressenti
+      'reconnait',
+      // NB : « verite » volontairement ABSENT — polysémique, il attrapait « les 5
+      // vérités de Mark Douglas » (qui relèvent de l'acceptation/ego, classées ci-dessous).
+    ],
+  ],
+  // Ego & acceptation : détachement du résultat, incertitude/randomness, identité, émotions.
   [
     'ego',
     [
       'ego',
       'accept',
-      'lacher prise',
-      'lacher-prise',
+      'lacher', // lâcher prise / lâcher-prise
+      'detach', // détachement / détacher (du target, du résultat, de l'identité)
       'controle de soi',
       'orgueil',
       'revanche',
       'fomo',
       'frustration',
       'emotion',
+      'peur',
+      'anxi',
+      'stress',
+      'incertitude',
+      'random', // randomness / random distribution
+      'aleatoire',
+      'hasard',
+      'probabilis',
+      'anything can happen',
+      '5 verite', // « les 5 vérités de Mark Douglas » = acceptation probabiliste
+      'cinq verite',
+      'identite', // identité-trader / identité-publique
+      'humiliation',
+      'sang-froid',
+      'sang froid',
+      'somatique',
+      'respiration',
+      'sereni',
+      'calme',
     ],
   ],
+  // Régularité & constance : routine, rituel, habitude, fréquence, le geste répété.
   [
     'consistency',
-    ['regul', 'constan', 'routine', 'habitude', 'frequen', 'assidu', 'quotidien', 'chaque jour'],
+    [
+      'regul',
+      'constan',
+      'consistan', // consistance
+      'routine',
+      'rituel',
+      'habitude',
+      'frequen',
+      'assidu',
+      'quotidien',
+      'chaque jour',
+      'geste', // régularité du geste
+      'repet',
+      'cadence',
+    ],
   ],
+  // Discipline : rigueur, plan, process, règle, méthode, patience, exécution, cadre.
   [
     'discipline',
     [
       'disciplin',
       'rigueur',
-      'tenir mon plan',
-      'respecter mon plan',
-      'suivre mon plan',
-      'plan de trading',
-      'patience',
-      'process',
+      'plan', // tenir / respecter / suivre mon plan
+      'process', // process-focus
+      'focus',
       'regle',
       'methode',
+      'patience',
+      'execution',
+      'cadre',
+      'structure',
+      'protocole',
+      'checklist',
+      'prepar',
+      'organis',
     ],
   ],
 ];

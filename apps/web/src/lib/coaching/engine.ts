@@ -154,25 +154,30 @@ function pickProgression(
   input: CoachingInsightInput,
   axis: MentalAxis,
 ): CoachingProgression | null {
-  const trend = trendForAxis(input.momentum, input.dominantSignals, axis);
   const { resolved, kept, keptRate } = input.microProgress;
-  // Progression #1 — les boucles d'engagement refermées (la plus parlante).
+  // Progression #1 — les boucles d'engagement refermées (la plus parlante). C'est un
+  // TAUX de complétion point-in-time : on n'y accole PAS la tendance de l'axe mental.
+  // Sinon « Micro-objectifs tenus · 100% · ↓ à réancrer » se lirait comme une
+  // contradiction (le 100 % qui « baisse ») — la flèche d'un autre signal collée à un
+  // ratio induit le membre en erreur. On affiche le fait, sans flèche (trend = null).
   if (resolved > 0 && keptRate !== null) {
     return {
       label: 'Micro-objectifs tenus',
       value: keptRate,
       unit: '%',
-      trend,
+      trend: null,
       detail: `${kept} tenu${kept > 1 ? 's' : ''} sur ${resolved} refermé${resolved > 1 ? 's' : ''}`,
     };
   }
-  // Progression #2 — le score de constance (honnêteté/régularité/discipline).
+  // Progression #2 — le score de constance (honnêteté/régularité/discipline). C'est une
+  // mesure CONTINUE de l'axe : sa dynamique (déclin soutenu / présence en hausse)
+  // annote honnêtement le score, donc on porte ici la tendance de l'axe.
   if (input.constancy) {
     return {
       label: 'Constance',
       value: Math.round(input.constancy.value),
       unit: '/100',
-      trend,
+      trend: trendForAxis(input.momentum, input.dominantSignals, axis),
       detail: constancyDetail(input.constancy.breakdown),
     };
   }

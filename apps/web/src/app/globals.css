@@ -264,6 +264,20 @@
   /* ─── FOCUS RING (accessibilité non négociable) ─────────────── */
   --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--acc);
 
+  /* ─── Z-INDEX (échelle sémantique — S9) ─────────────────────────
+     Additif : nouvelles variables, aucune valeur d empilement existante
+     touchée. Une seule source pour coordonner backplate, contenu, nav,
+     overlays, modales et toasts. Se consomme au cas par cas (les valeurs
+     reprennent l empilement déjà en place : nav 30, overlay 40, modale 50). */
+  --z-below: -1;
+  --z-base: 0;
+  --z-content: 10;
+  --z-nav: 30;
+  --z-sticky: 35;
+  --z-overlay: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+
   /* ─── LEGACY ALIASES (load-bearing — NE PAS supprimer sans migration)
      Conserve la compat des classes Tailwind utilisées dans J0-J3 ET
      consommées aujourd'hui par la couche shadcn résiduelle (dialog /

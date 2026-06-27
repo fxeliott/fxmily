@@ -155,8 +155,12 @@ export default async function AdminCardsPage({ searchParams }: AdminCardsPagePro
               <li key={card.id} className="wow-reveal h-full">
                 <Card className="h-full p-4">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div className="flex flex-1 flex-col gap-2">
-                      <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                      {/* flex-wrap: 3–4 pills (category + trigger-kind + black hat
+                          + priority) overflow a 375px viewport on one line
+                          (scrollWidth 379 > 375). Wrapping keeps them on-screen;
+                          on wide screens they stay a single row. */}
+                      <div className="flex flex-wrap items-center gap-2">
                         <Icon className="text-acc h-4 w-4" aria-hidden />
                         <Pill tone={tone}>{CATEGORY_LABEL[card.category]}</Pill>
                         {card.triggerRules ? (

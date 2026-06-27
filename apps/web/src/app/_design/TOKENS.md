@@ -151,3 +151,37 @@ non référencé (`button.tsx` utilise `text-white` en dur) → YAGNI.
 4. **Light + dark obligatoires** : tout token sémantique doit avoir sa valeur
    `.light`. Vérifier au runtime dans les **deux** thèmes (canon des sessions
    frontend : auditer les pages AUTH, pas que le public).
+
+## 9. Session 9 — CP1 (consolidation du design system)
+
+Ajouts **100 % additifs** (aucun contrat existant cassé ; S4/S6/S7/S8 consomment sans friction).
+
+- **Boutons — source unique `Btn`** (`components/ui/btn.tsx`, 4 kinds × 3 sizes ×
+  6 états, touch ≥ 44px). `button.tsx` (shadcn legacy) est **déprécié** et retiré
+  du rendu (son unique usage, le « Close » de `DialogFooter`, est migré vers
+  `Btn kind="secondary"`). Toute nouvelle UI utilise `Btn` ; `button.tsx` reste
+  uniquement pour l'alias `--color-destructive` (§7), suppression à confirmer.
+- **Échelle z-index sémantique** (`globals.css`, `:root`) : `--z-below` (-1) ·
+  `--z-base` (0) · `--z-content` (10) · `--z-nav` (30) · `--z-sticky` (35) ·
+  `--z-overlay` (40) · `--z-modal` (50) · `--z-toast` (60). Reprend l'empilement
+  déjà en place ; se consomme via `z-[var(--z-nav)]`. Migration des z-index en dur
+  = incrémentale (non bloquante).
+- **Primitives d'état de données** :
+  - `<Skeleton>` / `<SkeletonText>` (`components/ui/skeleton.tsx`) — wrappe `.skel`,
+    `aria-hidden`, neutralisé sous `prefers-reduced-motion`.
+  - `<DataState status loading empty error>` (`components/ui/data-state.tsx`) —
+    aiguilleur `loading / empty / error / ready`, framework-neutre (server +
+    client). Compose `<EmptyState>` / `<ErrorState>` existants. Supprime les
+    écrans morts ; les skeletons bespoke (anti-CLS) restent valables.
+- **Vitrine vivante** : route **dev-only** `/design` (`app/design/page.tsx` →
+  `components/design-system/showcase.tsx`, `notFound()` en production). Ancre
+  anti-régression : tokens couleur, typographie, boutons, pills, cartes, états de
+  données et dialog réunis sur une page. À vérifier en light **et** dark.
+
+> **Couches composants / motion / layout / contrats** → ce fichier documente la
+> couche **tokens**. L'API des composants primitifs (`Btn`, `Card`, `Pill`,
+> `DataState`…), les patterns d'animation (60 fps compositor-only,
+> reduced-motion, `HoverLift`/`AnimatedNumber`…), l'échelle typographique nommée
+> `.t-*`, les conventions de layout/responsive (`--w-app`, breakpoints, grilles)
+> et les contrats de consommation aval sont documentés dans
+> [`DESIGN-SYSTEM.md`](./DESIGN-SYSTEM.md) (export S9, DoD §35 box 3-4).

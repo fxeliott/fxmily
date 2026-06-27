@@ -1,7 +1,7 @@
 'use client';
 
 import { Mail, Lock } from 'lucide-react';
-import { useActionState } from 'react';
+import { useActionState, useEffect, useRef } from 'react';
 
 import { Alert } from '@/components/alert';
 import { Btn } from '@/components/ui/btn';
@@ -14,6 +14,22 @@ const initialState: SignInActionState = { ok: false };
 
 export function LoginForm() {
   const [state, formAction, pending] = useActionState(signInAction, initialState);
+  const formRef = useRef<HTMLFormElement>(null);
+  const errorBannerRef = useRef<HTMLDivElement>(null);
+
+  // A11y: after a FAILED submit, move focus straight to what needs fixing — the
+  // first invalid field, or the error banner for credential/rate-limit errors.
+  // No-op on the initial render and on success (initialState carries neither
+  // `error` nor `fieldErrors`), so the form never steals focus unprompted.
+  useEffect(() => {
+    if (state.ok) return;
+    const hasFieldError = state.fieldErrors && Object.keys(state.fieldErrors).length > 0;
+    if (hasFieldError) {
+      formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    } else if (state.error) {
+      errorBannerRef.current?.focus();
+    }
+  }, [state]);
 
   const topError = (() => {
     if (state.ok) return null;
@@ -28,8 +44,12 @@ export function LoginForm() {
   })();
 
   return (
-    <form action={formAction} className="flex flex-col gap-5" noValidate>
-      {topError ? <Alert tone="danger">{topError}</Alert> : null}
+    <form ref={formRef} action={formAction} className="flex flex-col gap-5" noValidate>
+      {topError ? (
+        <div ref={errorBannerRef} tabIndex={-1} className="outline-none">
+          <Alert tone="danger">{topError}</Alert>
+        </div>
+      ) : null}
 
       <RevealGroup className="flex flex-col gap-5" stagger={90} y={10}>
         <Field
@@ -64,6 +84,16 @@ export function LoginForm() {
       >
         {pending ? 'Connexion…' : 'Se connecter'}
       </Btn>
+
+      {/* Self-service recourse for a private cohort: no public reset route exists
+          (admin-managed access) — point to the official contact email instead of
+          a dead link. Confidentiality-safe: only fxeliott@fxmily.fr is exposed. */}
+      <a
+        href="mailto:fxeliott@fxmily.fr?subject=Acc%C3%A8s%20Fxmily%20%E2%80%94%20mot%20de%20passe%20oubli%C3%A9"
+        className="self-center rounded-[3px] text-[11px] text-[var(--t-4)] underline-offset-2 transition-colors hover:text-[var(--acc)] hover:underline focus-visible:text-[var(--acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+      >
+        Mot de passe oublié&nbsp;?
+      </a>
     </form>
   );
 }

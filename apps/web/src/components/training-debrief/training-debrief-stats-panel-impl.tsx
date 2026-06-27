@@ -77,11 +77,17 @@ export function TrainingDebriefStatsPanel({
       )}
     >
       <div className="flex items-baseline justify-between gap-3">
-        <span className="t-eyebrow inline-flex items-center gap-1.5 text-[var(--cy)]">
+        {/* `.t-eyebrow`/`.t-mono-cap` are unlayered (globals.css) and bake `--t-3`,
+            which WINS over a Tailwind `text-[…]` utility — so the colour overrides
+            here were silently dead (eyebrow rendered grey, not cyan). Apply the
+            intended colours via inline token styles, which win the cascade. */}
+        <span className="t-eyebrow inline-flex items-center gap-1.5" style={{ color: 'var(--cy)' }}>
           Stats de pratique
         </span>
         {weekRangeLabel ? (
-          <span className="t-mono-cap text-[var(--t-4)]">{weekRangeLabel}</span>
+          <span className="t-mono-cap" style={{ color: 'var(--t-4)' }}>
+            {weekRangeLabel}
+          </span>
         ) : null}
       </div>
 
@@ -90,8 +96,16 @@ export function TrainingDebriefStatsPanel({
           data-slot="training-debrief-stats-empty"
           className="rounded-control border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] px-4 py-3"
         >
-          <p className="t-body text-[var(--t-1)]">0 backtest cette semaine.</p>
-          <p className="t-cap mt-1 text-[var(--t-2)]">
+          {/* `.t-body`/`.t-cap` are unlayered (globals.css) and bake their colour
+              (`--t-2`/`--t-3`), which WINS over a Tailwind `text-[…]` utility
+              (`@layer utilities`) — so a `text-[var(--…)]` colour override here is
+              silently dead. On the `--cy-dim` panel the baked `.t-cap` `--t-3` was
+              4.36:1 < WCAG AA. Apply the intended colours via inline token styles,
+              which win the cascade, fixing AA and restoring the t-1/t-2 tier. */}
+          <p className="t-body" style={{ color: 'var(--t-1)' }}>
+            0 backtest cette semaine.
+          </p>
+          <p className="t-cap mt-1" style={{ color: 'var(--t-2)' }}>
             Le débrief reste utile : prendre du recul même sans pratique, c&apos;est aussi une
             donnée. Aucun score — <em>anything can happen</em>, le geste prime.
           </p>
@@ -167,7 +181,10 @@ export function TrainingDebriefStatsPanel({
                 </BarChart>
               </ResponsiveContainer>
             </figure>
-            <p className="t-cap text-[var(--t-2)]">
+            {/* `.t-cap` baked `--t-3` beats the dead `text-[var(--t-2)]` utility →
+                restore the intended `--t-2` tier via an inline token style (the
+                nested `<strong>` has no `.t-*`, so its `--t-1` utility still wins). */}
+            <p className="t-cap" style={{ color: 'var(--t-2)' }}>
               <strong className="text-[var(--t-1)]">{volume.backtestCount}</strong> backtest
               {volume.backtestCount > 1 ? 's' : ''} ·{' '}
               <strong className="text-[var(--t-1)]">{volume.distinctDays}</strong>/7 jours pratiqués
@@ -256,7 +273,8 @@ export function TrainingDebriefStatsPanel({
               ).map(([label, n, color]) => (
                 <li
                   key={label}
-                  className="t-cap inline-flex items-center gap-1.5 text-[var(--t-2)]"
+                  className="t-cap inline-flex items-center gap-1.5"
+                  style={{ color: 'var(--t-2)' }}
                 >
                   <span
                     aria-hidden="true"
@@ -276,7 +294,7 @@ export function TrainingDebriefStatsPanel({
               <span className="f-mono text-[28px] leading-none font-semibold tracking-[-0.02em] text-[var(--t-1)] tabular-nums">
                 {diversity.distinctPairs}
               </span>
-              <span className="t-cap text-[var(--t-2)]">
+              <span className="t-cap" style={{ color: 'var(--t-2)' }}>
                 paire{diversity.distinctPairs > 1 ? 's' : ''} distincte
                 {diversity.distinctPairs > 1 ? 's' : ''} travaillée
                 {diversity.distinctPairs > 1 ? 's' : ''} cette semaine
@@ -322,7 +340,9 @@ function StatTile({ icon, value, label }: { icon: React.ReactNode; value: number
       <span className="f-mono text-[22px] leading-none font-semibold tracking-[-0.02em] text-[var(--t-1)] tabular-nums">
         {value}
       </span>
-      <span className="t-cap text-[var(--t-2)]">{label}</span>
+      <span className="t-cap" style={{ color: 'var(--t-2)' }}>
+        {label}
+      </span>
     </div>
   );
 }

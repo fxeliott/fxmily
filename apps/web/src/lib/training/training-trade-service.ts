@@ -5,6 +5,11 @@ import type { TrainingOutcome } from '@/generated/prisma/enums';
 import type { TrainingTradeModel } from '@/generated/prisma/models/TrainingTrade';
 
 import { db } from '@/lib/db';
+import {
+  computeFieldCompletionRate,
+  computeTrainingRegularity,
+  type TrainingRegularity,
+} from '@/lib/training/training-stats';
 
 /**
  * Member-scoped backtest service (V1.2 Mode Entraînement, SPEC §21).
@@ -143,6 +148,12 @@ export interface ListTrainingTradesOptions {
    * `| undefined` explicit for `exactOptionalPropertyTypes` (mirror
    * `ListTradesOptions`), so the page can pass a parsed `cursor` directly. */
   cursor?: string | undefined;
+  /** S8 RE-CHALLENGE — optional result filter (brief §255 "filtrable"). When
+   * set, restricts the list to that outcome; `undefined` (= "Tous") lists every
+   * backtest, newest-first. Mirrors the S4 `/journal` `status` filter. §21.5:
+   * still `db.trainingTrade` only — a pure additive `where` predicate, never a
+   * real-edge join. */
+  outcome?: TrainingOutcome | undefined;
 }
 
 export interface ListTrainingTradesResult {
@@ -169,7 +180,10 @@ export async function listTrainingTradesForUser(
 ): Promise<ListTrainingTradesResult> {
   const limit = Math.min(50, Math.max(1, options.limit ?? 20));
   const rows = await db.trainingTrade.findMany({
-    where: { userId },
+    // §21.5 — db.trainingTrade ONLY. `outcome` is an additive owner-scoped
+    // predicate (brief §255 "filtrable"); the `(userId, enteredAt DESC)` index
+    // still covers the scan.
+    where: { userId, ...(options.outcome ? { outcome: options.outcome } : {}) },
     orderBy: [{ enteredAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
     ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
@@ -215,6 +229,10 @@ export interface TrainingTradeStats {
   /** Backtests with a decided outcome (win|loss). */
   decidedCount: number;
   winCount: number;
+  /** Backtests recorded as a loss — surfaced for the §255 filter pill count. */
+  lossCount: number;
+  /** Backtests recorded break-even — surfaced for the §255 filter pill count. */
+  breakEvenCount: number;
   /** Backtests carrying a result in R. */
   withRCount: number;
   /** Mean result in R over `withRCount`, or null when none is set. */
@@ -234,66 +252,124 @@ export interface TrainingTradeStats {
    * never drag the rate down (anti-Black-Hat). Rate = `checklistCleanCount /
    * checklistAnsweredCount`. */
   checklistAnsweredCount: number;
+  /** S8 RE-CHALLENGE §269(c) — distinct Europe/Paris civil days practised in the
+   * last 30 days (regularity / effort, never a result). */
+  activeDays30: number;
+  /** §269(e) — current SOBER day-streak (consecutive civil days, ends today or,
+   * by grace, yesterday). No XP / badge / leaderboard (§188). */
+  currentDayStreak: number;
+  /** §269(e) — longest all-time day-streak. */
+  longestDayStreak: number;
+  /** §269(d) — mean fill-rate of the optional journal fields per backtest
+   * (PRESENCE, not the §270 "respected" rate). `null` when there are no
+   * backtests. DISTINCT from `checklistCleanCount/checklistAnsweredCount`. */
+  fieldCompletionRate: number | null;
 }
 
-export async function getTrainingTradeStatsForUser(userId: string): Promise<TrainingTradeStats> {
-  const [total, byOutcome, rAgg, bySystem, checklistCleanCount, checklistAnsweredCount] =
-    await Promise.all([
-      db.trainingTrade.count({ where: { userId } }),
-      db.trainingTrade.groupBy({ by: ['outcome'], where: { userId }, _count: { _all: true } }),
-      db.trainingTrade.aggregate({
-        where: { userId, resultR: { not: null } },
-        _avg: { resultR: true },
-        _count: { resultR: true },
-      }),
-      db.trainingTrade.groupBy({
-        by: ['systemRespected'],
-        where: { userId },
-        _count: { _all: true },
-      }),
-      // §33-2 discipline metric: all four checklist items explicitly "respected".
-      // §21.5 — still db.trainingTrade only; reads no real-edge surface.
-      db.trainingTrade.count({
-        where: {
-          userId,
-          planFollowed: true,
-          riskDefinedBefore: true,
-          emotionalStateNoted: true,
-          noImpulsiveDeviation: true,
-        },
-      }),
-      // §33-1 honest denominator: backtests where the checklist was ENGAGED at
-      // all (≥1 item non-null). Legacy / untouched backtests (all four NULL after
-      // the ADD-only migration) are excluded so they never drag the rate down
-      // (anti-Black-Hat). §21.5 — still db.trainingTrade only.
-      db.trainingTrade.count({
-        where: {
-          userId,
-          OR: [
-            { planFollowed: { not: null } },
-            { riskDefinedBefore: { not: null } },
-            { emotionalStateNoted: { not: null } },
-            { noImpulsiveDeviation: { not: null } },
-          ],
-        },
-      }),
-    ]);
+/**
+ * @param now Injected clock for the §269 regularity/streak window (defaults to
+ *   `new Date()`); the page passes the request instant, tests pass a fixed date.
+ */
+export async function getTrainingTradeStatsForUser(
+  userId: string,
+  now: Date = new Date(),
+): Promise<TrainingTradeStats> {
+  const [
+    total,
+    byOutcome,
+    rAgg,
+    bySystem,
+    checklistCleanCount,
+    checklistAnsweredCount,
+    enrichmentRows,
+  ] = await Promise.all([
+    db.trainingTrade.count({ where: { userId } }),
+    db.trainingTrade.groupBy({ by: ['outcome'], where: { userId }, _count: { _all: true } }),
+    db.trainingTrade.aggregate({
+      where: { userId, resultR: { not: null } },
+      _avg: { resultR: true },
+      _count: { resultR: true },
+    }),
+    db.trainingTrade.groupBy({
+      by: ['systemRespected'],
+      where: { userId },
+      _count: { _all: true },
+    }),
+    // §33-2 discipline metric: all four checklist items explicitly "respected".
+    // §21.5 — still db.trainingTrade only; reads no real-edge surface.
+    db.trainingTrade.count({
+      where: {
+        userId,
+        planFollowed: true,
+        riskDefinedBefore: true,
+        emotionalStateNoted: true,
+        noImpulsiveDeviation: true,
+      },
+    }),
+    // §33-1 honest denominator: backtests where the checklist was ENGAGED at
+    // all (≥1 item non-null). Legacy / untouched backtests (all four NULL after
+    // the ADD-only migration) are excluded so they never drag the rate down
+    // (anti-Black-Hat). §21.5 — still db.trainingTrade only.
+    db.trainingTrade.count({
+      where: {
+        userId,
+        OR: [
+          { planFollowed: { not: null } },
+          { riskDefinedBefore: { not: null } },
+          { emotionalStateNoted: { not: null } },
+          { noImpulsiveDeviation: { not: null } },
+        ],
+      },
+    }),
+    // S8 RE-CHALLENGE §269(c)/(d)/(e) — one owner-scoped projection feeding the
+    // PURE regularity/streak + field-completeness aggregators. §21.5: this is
+    // a TRAINING-ONLY surface (same contract as the avg/groupBy above, which
+    // already read `resultR`/`outcome`) and lives ABOVE the
+    // `countRecentTrainingActivity` primitive, so the anti-leak file-slice
+    // (Block B/I) is unaffected. The fields are read for PRESENCE only.
+    db.trainingTrade.findMany({
+      where: { userId },
+      select: {
+        enteredAt: true,
+        outcome: true,
+        resultR: true,
+        systemRespected: true,
+        planFollowed: true,
+        riskDefinedBefore: true,
+        emotionalStateNoted: true,
+        noImpulsiveDeviation: true,
+      },
+    }),
+  ]);
 
   const winCount = byOutcome.find((g) => g.outcome === 'win')?._count._all ?? 0;
   const lossCount = byOutcome.find((g) => g.outcome === 'loss')?._count._all ?? 0;
+  const breakEvenCount = byOutcome.find((g) => g.outcome === 'break_even')?._count._all ?? 0;
   const systemKeptCount = bySystem.find((g) => g.systemRespected === true)?._count._all ?? 0;
   const systemBrokenCount = bySystem.find((g) => g.systemRespected === false)?._count._all ?? 0;
+
+  const regularity: TrainingRegularity = computeTrainingRegularity(
+    enrichmentRows.map((r) => r.enteredAt),
+    now,
+  );
+  const fieldCompletionRate = computeFieldCompletionRate(enrichmentRows);
 
   return {
     total,
     decidedCount: winCount + lossCount,
     winCount,
+    lossCount,
+    breakEvenCount,
     withRCount: rAgg._count.resultR,
     avgR: rAgg._avg.resultR == null ? null : Number(rAgg._avg.resultR),
     systemDecidedCount: systemKeptCount + systemBrokenCount,
     systemKeptCount,
     checklistCleanCount,
     checklistAnsweredCount,
+    activeDays30: regularity.activeDays30,
+    currentDayStreak: regularity.currentDayStreak,
+    longestDayStreak: regularity.longestDayStreak,
+    fieldCompletionRate,
   };
 }
 

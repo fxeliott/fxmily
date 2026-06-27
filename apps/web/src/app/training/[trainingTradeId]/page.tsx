@@ -1,4 +1,4 @@
-import { ArrowLeft, GraduationCap } from 'lucide-react';
+import { ArrowLeft, GraduationCap, Layers } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
@@ -18,6 +18,7 @@ import {
   listTrainingAnnotationsForTrainingTradeAsMember,
   markTrainingAnnotationsSeenForTrainingTrade,
 } from '@/lib/training/training-annotation-member-service';
+import { getTrainingSessionMeta } from '@/lib/training/training-session-service';
 import { getTrainingTradeById } from '@/lib/training/training-trade-service';
 
 export const metadata = {
@@ -68,6 +69,17 @@ export default async function MemberTrainingTradeDetailPage({
     trainingTradeId,
   );
 
+  // §254 — echo the parent session's practice context (symbol/timeframe/label)
+  // when this backtest belongs to a session. Owner-scoped read; `null` (deleted
+  // session race, or not owned) degrades to no chip, never an error. §21.5-safe:
+  // these are practice context strings the member typed, never a P&L.
+  const sessionMeta = trade.sessionId
+    ? await getTrainingSessionMeta(trade.sessionId, session.user.id)
+    : null;
+  const sessionContext = sessionMeta
+    ? [sessionMeta.symbol, sessionMeta.timeframe].filter(Boolean).join(' · ')
+    : '';
+
   const screenshotUrl = safeReadUrl(trade.entryScreenshotKey);
 
   // S8 V2 §33-3 — review status derived at render (no migration). On this
@@ -103,6 +115,19 @@ export default async function MemberTrainingTradeDetailPage({
                 pending review is awaited, never a fault (Mark Douglas §2). */}
             <Pill tone={reviewMeta.tone}>{reviewMeta.label}</Pill>
           </div>
+
+          {/* §254 — parent session context (label + practised symbol/timeframe),
+              echoed so a backtest opened from a session keeps its frame. Sober,
+              never a 2nd identity (§21.5). Only when the session resolves. */}
+          {sessionMeta ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Pill tone="mute">
+                <Layers className="h-3 w-3" strokeWidth={2} aria-hidden="true" />
+                {sessionMeta.label?.trim() || 'Séance sans nom'}
+              </Pill>
+              {sessionContext ? <Pill tone="cy">{sessionContext}</Pill> : null}
+            </div>
+          ) : null}
         </header>
 
         <TrainingTradeCard trade={trade} />

@@ -1,4 +1,4 @@
-import { GraduationCap, ShieldCheck } from 'lucide-react';
+import { CalendarRange, GraduationCap, ShieldCheck } from 'lucide-react';
 
 import { TrainingEquityChart, type TrainingEquityPoint } from './training-equity-card';
 
@@ -13,13 +13,22 @@ import type { TrainingTradeStats } from '@/lib/training/training-trade-service';
  *
  * 🚨 These numbers are TRAINING-ONLY and never leave this surface
  * (statistical isolation §21.5). Posture (anti-Black-Hat / Mark Douglas):
- * no streak, no leaderboard, no red-on-pending. When a metric has too few
- * decided backtests we show "—" + a calm note rather than a misleading 0 %.
+ * no leaderboard, no red-on-pending; the day-streak (brief §269e / §182/§188) is
+ * SOBER — a calm "N jours d'affilée", zero XP/badge/fanfare, no red on a break.
+ * When a metric has too few decided backtests we show "—" + a calm note rather
+ * than a misleading 0 %.
+ *
+ * Two bars, by design (mirror of the débrief's "Volume & régularité" vs the
+ * quality families): `TrainingStatsBar` = practice RESULTS + discipline;
+ * `TrainingRegularityBar` = §269 Enrichissement 1 EFFORT metrics (séances,
+ * régularité, série, complétude des champs du journal). Both use a deterministic
+ * responsive grid (never `flex-wrap`) so no lone block ever stretches across a
+ * full row on intermediate tablet widths.
  */
 
 function StatBlock({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="flex min-w-[88px] flex-1 flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <span className="t-eyebrow text-[var(--t-4)]">{label}</span>
       <span className="f-mono text-[20px] font-bold tracking-[-0.02em] text-[var(--t-1)] tabular-nums">
         {value}
@@ -51,10 +60,13 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
       ? '—'
       : `${Math.round((systemKeptCount / systemDecidedCount) * 100)} %`;
 
-  // §33-1 "taux de complétude" — share of the backtests where the member
-  // ENGAGED the discipline checklist that were run with an irreproachable
-  // process (all four items answered "respected"). A pure discipline /
-  // completeness rate, never a P&L or market judgement (§21.5 + garde-fou §2).
+  // §33-2 / §270 process-discipline checklist — share of the backtests where the
+  // member ENGAGED the checklist that were run with an IRREPROACHABLE process
+  // (all four items answered "respected"). A pure DISCIPLINE rate (act of
+  // following the process), never a P&L or market judgement (§21.5 + garde-fou
+  // §2). DISTINCT from the §269(d) "Journal rempli" completeness rate (which
+  // counts field PRESENCE, not "respected") shown in the regularity bar — the
+  // two were previously conflated under a "§33-1 taux de complétude" label.
   // Denominator = `checklistAnsweredCount` (≥1 item filled), NOT raw `total`:
   // legacy / untouched backtests (all four NULL after the ADD-only migration)
   // are excluded so they never drag the rate down (anti-Black-Hat — they aren't
@@ -68,7 +80,7 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
   return (
     <section
       aria-label="Statistiques d'entraînement"
-      className="rounded-card flex flex-wrap gap-x-6 gap-y-4 border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
+      className="rounded-card grid grid-cols-2 gap-x-6 gap-y-4 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 sm:grid-cols-3 md:grid-cols-5"
     >
       <StatBlock
         label="Backtests"
@@ -95,7 +107,7 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
         hint={systemDecidedCount === 0 ? 'non renseigné' : `sur ${systemDecidedCount}`}
       />
       <StatBlock
-        label="Process complet"
+        label="Checklist tenue"
         value={processRate}
         hint={
           checklistAnsweredCount === 0
@@ -103,6 +115,59 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
             : `sur ${checklistAnsweredCount} renseigné${checklistAnsweredCount > 1 ? 's' : ''}`
         }
       />
+    </section>
+  );
+}
+
+/**
+ * §269 Enrichissement 1 — practice EFFORT metrics, separate from the results
+ * bar above. Séances (§269a), régularité dans le temps (§269c), série de jours
+ * (§269e), taux de complétude des champs du journal (§269d). All §21.5-safe
+ * (count/recency/presence only, never a P&L) and SOBER (§188): no XP, no badge,
+ * no red on a broken streak — a calm "—" empty state instead.
+ */
+export function TrainingRegularityBar({
+  stats,
+  sessionCount,
+}: {
+  stats: TrainingTradeStats;
+  /** Number of backtest sessions (passed by the page — already loaded there). */
+  sessionCount: number;
+}) {
+  const { activeDays30, currentDayStreak, longestDayStreak, fieldCompletionRate } = stats;
+
+  const streakValue = currentDayStreak === 0 ? '—' : String(currentDayStreak);
+  const streakHint =
+    currentDayStreak === 0
+      ? longestDayStreak > 0
+        ? `record ${longestDayStreak} j`
+        : 'jours consécutifs'
+      : `jour${currentDayStreak > 1 ? 's' : ''} d'affilée${
+          longestDayStreak > currentDayStreak ? ` · record ${longestDayStreak}` : ''
+        }`;
+
+  const fillValue =
+    fieldCompletionRate == null ? '—' : `${Math.round(fieldCompletionRate * 100)} %`;
+
+  return (
+    <section
+      aria-label="Régularité de la pratique"
+      className="rounded-card flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
+    >
+      <div className="flex items-center gap-2">
+        <CalendarRange className="h-4 w-4 text-[var(--cy)]" strokeWidth={1.75} aria-hidden="true" />
+        <span className="t-eyebrow text-[var(--t-3)]">Régularité de la pratique</span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+        <StatBlock label="Séances" value={String(sessionCount)} hint="de backtest" />
+        <StatBlock label="Régularité" value={`${activeDays30} j`} hint="actifs sur 30 j" />
+        <StatBlock label="Série" value={streakValue} hint={streakHint} />
+        <StatBlock
+          label="Journal rempli"
+          value={fillValue}
+          hint={fieldCompletionRate == null ? 'aucun backtest' : 'champs renseignés'}
+        />
+      </div>
     </section>
   );
 }

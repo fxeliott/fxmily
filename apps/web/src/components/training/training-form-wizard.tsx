@@ -28,6 +28,7 @@ import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { TRAINING_CHECKLIST_ITEMS, trainingTradeCreateSchema } from '@/lib/schemas/training-trade';
+import { TRAINING_UI_COPY } from '@/lib/training/training-ui-copy';
 import { cn } from '@/lib/utils';
 
 /**
@@ -549,6 +550,7 @@ function StepPairDate({ draft, update, fieldErrors, disabled }: StepProps) {
           onChange={(e) => update('enteredAt', e.target.value)}
           disabled={disabled}
           aria-invalid={fieldErrors.enteredAt ? 'true' : undefined}
+          aria-describedby={fieldErrors.enteredAt ? 'enteredAt-error' : 'enteredAt-hint'}
           className={cn(
             'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
             fieldErrors.enteredAt
@@ -559,11 +561,11 @@ function StepPairDate({ draft, update, fieldErrors, disabled }: StepProps) {
           )}
         />
         {fieldErrors.enteredAt ? (
-          <p className="text-[11px] text-[var(--bad)]" role="alert">
+          <p id="enteredAt-error" className="text-[11px] text-[var(--bad)]" role="alert">
             {fieldErrors.enteredAt}
           </p>
         ) : (
-          <p className="t-cap text-[var(--t-4)]">
+          <p id="enteredAt-hint" className="t-cap text-[var(--t-4)]">
             Quand tu as analysé ce backtest. Pré-rempli à maintenant.
           </p>
         )}
@@ -649,19 +651,28 @@ const OUTCOME_OPTIONS = [
   { v: 'win', label: 'Gagnant', tone: 'ok' },
   { v: 'break_even', label: 'Break-even', tone: 'cy' },
   { v: 'loss', label: 'Perdant', tone: 'bad' },
+  // §269/a11y — "Aucun" is a REAL radio (v: ''), not a re-click-to-clear hack.
+  // A WAI-ARIA radiogroup must always hold exactly one checked option; the
+  // empty default (analysis-only backtest) now maps to this explicit choice
+  // instead of leaving the group with nothing checked + a non-standard toggle.
+  { v: '', label: 'Aucun', tone: 'mute' },
 ] as const;
 
 function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
   // WAI-ARIA radiogroup keyboard pattern (APG): ONE tab stop (the selected
-  // option, or the first when none is chosen) + Arrow/Home/End move focus AND
-  // selection. Clicking still toggles to clear (analysis-only backtest).
+  // option) + Arrow/Home/End move focus AND selection. "Aucun" is a real radio
+  // (v: ''), so the group always holds exactly one checked option — no
+  // re-click-to-clear (non-standard for a radio, and it left the group with
+  // nothing checked).
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selectedIndex = OUTCOME_OPTIONS.findIndex((o) => o.v === draft.outcome);
 
   const moveTo = (next: number) => {
-    const v = OUTCOME_OPTIONS[next]?.v;
-    if (!v) return;
-    update('outcome', v);
+    // Guard on the OPTION, not on `v`: the "Aucun" value is '' (falsy), so a
+    // `!v` guard would silently block arrow-navigation onto it.
+    const opt = OUTCOME_OPTIONS[next];
+    if (!opt) return;
+    update('outcome', opt.v);
     optionRefs.current[next]?.focus();
   };
 
@@ -697,11 +708,16 @@ function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
       </p>
       <fieldset className="flex flex-col gap-2">
         <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">Résultat</legend>
-        <div role="radiogroup" aria-label="Résultat du backtest" className="grid grid-cols-3 gap-2">
+        <div
+          role="radiogroup"
+          aria-label="Résultat du backtest"
+          className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+        >
           {OUTCOME_OPTIONS.map((o, i) => {
             const active = draft.outcome === o.v;
-            // Roving tabindex: the selected option is the tab stop; with no
-            // selection the first option is reachable by Tab (APG radiogroup).
+            // Roving tabindex: the selected option is the tab stop. The group
+            // always has one checked option ("Aucun" = ''), so the `=== -1`
+            // fallback only guards a future out-of-range value (APG radiogroup).
             const tabbable = selectedIndex === -1 ? i === 0 : active;
             return (
               <button
@@ -713,7 +729,7 @@ function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
                 role="radio"
                 aria-checked={active}
                 tabIndex={tabbable ? 0 : -1}
-                onClick={() => update('outcome', active ? '' : o.v)}
+                onClick={() => update('outcome', o.v)}
                 onKeyDown={(e) => onRadioKeyDown(e, i)}
                 disabled={disabled}
                 className={cn(
@@ -724,7 +740,9 @@ function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
                       ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)]'
                       : o.tone === 'bad'
                         ? 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)]'
-                        : 'border-[var(--cy)] bg-[var(--cy-dim-strong)] text-[var(--cy)]'
+                        : o.tone === 'mute'
+                          ? 'border-[var(--b-strong)] bg-[var(--bg-2)] text-[var(--t-1)]'
+                          : 'border-[var(--cy)] bg-[var(--cy-dim-strong)] text-[var(--cy)]'
                     : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
                   disabled && 'cursor-not-allowed opacity-60',
                 )}
@@ -735,7 +753,7 @@ function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
           })}
         </div>
         <p className="t-cap text-[var(--t-4)]">
-          Flèches pour choisir, re-clique pour effacer (= analyse sans résultat).
+          Flèches ou clic pour choisir. « Aucun » = backtest d&apos;analyse, sans résultat noté.
         </p>
       </fieldset>
 
@@ -815,7 +833,7 @@ function StepLecon({ draft, update, fieldErrors, disabled }: StepProps) {
       <label htmlFor="lessonLearned" className="t-eyebrow-lg text-[var(--t-3)]">
         Leçon tirée
       </label>
-      <p className="t-cap text-[var(--t-4)]">
+      <p id="lessonLearned-hint" className="t-cap text-[var(--t-4)]">
         Ce que ce backtest t&apos;a appris sur ton process. C&apos;est la régularité de cette
         réflexion qui fait progresser — pas le résultat.
       </p>
@@ -826,8 +844,13 @@ function StepLecon({ draft, update, fieldErrors, disabled }: StepProps) {
         disabled={disabled}
         rows={5}
         maxLength={2000}
-        placeholder="Ex : j'ai attendu la confirmation au lieu d'anticiper, l'entrée était plus propre."
+        placeholder={TRAINING_UI_COPY.lessonLearnedPlaceholder}
         aria-invalid={fieldErrors.lessonLearned ? 'true' : undefined}
+        aria-describedby={
+          fieldErrors.lessonLearned
+            ? 'lessonLearned-hint lessonLearned-error'
+            : 'lessonLearned-hint'
+        }
         className={cn(
           'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
           'placeholder:text-[var(--t-4)]',
@@ -839,7 +862,7 @@ function StepLecon({ draft, update, fieldErrors, disabled }: StepProps) {
         )}
       />
       {fieldErrors.lessonLearned ? (
-        <p className="text-[11px] text-[var(--bad)]" role="alert">
+        <p id="lessonLearned-error" className="text-[11px] text-[var(--bad)]" role="alert">
           {fieldErrors.lessonLearned}
         </p>
       ) : null}

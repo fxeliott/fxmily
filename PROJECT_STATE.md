@@ -634,7 +634,7 @@ Toute session 2-9 **hérite** de ces contrats et ne doit **jamais** les violer :
 
 ## Hand-off — Session 8 (Mode Entraînement V2) — 2026-06-27
 
-> Reprise de contexte faite (§31①) : même dépôt `D:\Fxmily`, branche `feat/s8-training-mode-v2`. Entrées S1 (`auth()`), S4 (logique journal, **mirror sans dup**), S9 (DS-v9 : tokens `--cy`, `Pill`, `Card`) connectées **sans casse**. Au moment de l'écriture, le changeset est **non commité** dans le working tree (il sera commité à la suite). DoD §34 : 6/7 cases vérifiées en runtime réel, la 7e (hand-off) = ce bloc.
+> Reprise de contexte faite (§31①) : même dépôt `D:\Fxmily`, branche `feat/s8-training-mode-v2`. Entrées S1 (`auth()`), S4 (logique journal, **mirror sans dup**), S9 (DS-v9 : tokens `--cy`, `Pill`, `Card`) connectées **sans casse**. DoD §34 : 7/7 cases vérifiées en runtime réel. **Statut final : PR #421 mergée (squash `50f50c4`) puis déployée en prod le 2026-06-27** — migration `20260627104440_s8_v2_training_checklist_reply` → `All migrations have been successfully applied`, health-gate `https://app.fxmilyapp.com/api/health` OK dès la 1re tentative. Une passe d'auto-challenge a tué 2 défauts avant prod (commit fix `d6c6e80`, détails en ⑤).
 
 ### ① Ce que la session a produit
 
@@ -648,7 +648,7 @@ Toute session 2-9 **hérite** de ces contrats et ne doit **jamais** les violer :
 
 - Wizard backtest `training-form-wizard.tsx` : 7 étapes (paire → capture → R:R → résultat → système → **checklist process** → leçon). Checklist optionnelle, tri-state Oui/Non/N-A.
 - `training-trade-card.tsx` + page détail `/training/[trainingTradeId]` : bloc « Checklist process » + **pill statut de revue** (`deriveTrainingReviewStatus`) + **île réponse** `TrainingReplyForm` (§32-4).
-- `TrainingStatsBar` : +bloc « Process complet » = `checklistCleanCount / total` (taux de complétude §33-1).
+- `TrainingStatsBar` : +bloc « Process complet » = `checklistCleanCount / checklistAnsweredCount` (taux de complétude §33-1 — dénominateur honnête, cf. ⑤ fix MEDIUM).
 - Notif : `enqueueTrainingReplyNotification` + wiring complet `training_reply_received` (enum Prisma, `NOTIFICATION_TYPES`, TTL/urgence dispatcher, `buildPayload` deep-links, préférences admin-only, fallback email).
 
 **Endpoints / services :**
@@ -656,13 +656,13 @@ Toute session 2-9 **hérite** de ces contrats et ne doit **jamais** les violer :
 - Server Actions `app/training/actions.ts` : `createTrainingTradeAction` (lit la checklist tri-state) + `replyToTrainingAnnotationAction`.
 - `lib/training/training-annotation-member-service.ts` : `replyToTrainingAnnotationAsMember` (owner-scopé, claim **atomique** du premier reply).
 - `lib/training/review-status.ts` : `deriveTrainingReviewStatus` + `TRAINING_REVIEW_STATUS_META`.
-- `lib/training/training-trade-service.ts` : `getTrainingTradeStatsForUser` +`checklistCleanCount`.
+- `lib/training/training-trade-service.ts` : `getTrainingTradeStatsForUser` +`checklistCleanCount` (process irréprochable : 4 items `true`) +`checklistAnsweredCount` (checklist engagée : ≥1 item non-null = dénominateur du taux).
 
 ### ② Décisions prises & justification
 
 - **`isFirstReply` claimé ATOMIQUEMENT** (`updateMany({ memberRepliedAt: null })` → `count === 1`), pas dérivé d'un read préalable : sous double-submit / 2 onglets concurrents, exactement UN appel notifie l'admin ; le perdant retombe sur une édition texte-only (pas de double-ping, pas d'édition perdue). Tue le finding code-review 🟡 + le finding sécurité LOW (write resté owner-scopé sur les deux chemins). Réutilise le pattern `updateMany({ ...null })` déjà prouvé pour `markSeen` dans le même fichier.
 - **Statut de revue dérivé AU RENDER** (0 migration) : `pending` (0 correction) → `corrected` (≥1 non vue) → `seen` (toutes vues). Marquage « vu » fait AVANT la lecture sur la page détail.
-- **`checklistCleanCount` = taux de complétude (§33-1)** : pure discipline (4 items « respecté »), jamais un P&L. « — » si 0 backtest (posture anti-Black-Hat, pas de 0 % trompeur), dénominateur explicite dans le hint.
+- **Taux de complétude (§33-1) = `checklistCleanCount / checklistAnsweredCount`** : pure discipline (4 items « respecté »), jamais un P&L. Dénominateur = backtests où la checklist a été ENGAGÉE (≥1 item non-null), PAS le `total` brut — sinon les backtests legacy (4 colonnes NULL après migration ADD-only) plomberaient le taux (anti-Black-Hat). « — » si rien de renseigné ; dénominateur explicite dans le hint (« sur N renseignés »), miroir de `systemRate`.
 - **§21.5 isolation maintenue** : métadonnées audit + notification = ids/flags UNIQUEMENT (jamais `resultR`/`outcome`/`lessonLearned`/`memberReply`/`comment`). `revalidatePath` ne touche que les surfaces training. Pont unique vers le réel = `countRecentTrainingActivity` (count/recency only).
 - **Garde-fou §2** : le free-text membre (`reply`, `lessonLearned`) n'est PAS filtré par `detectAMFViolation` — cohérent projet : le garde-fou s'applique au contenu _produit par l'app_, pas à ce que le membre écrit pour lui-même. Labels/help statiques prouvés AMF-safe par tests guardrail.
 
@@ -696,14 +696,22 @@ type TrainingReviewStatus = 'pending' | 'corrected' | 'seen';
 ### ④ Ce qui reste à faire
 
 - **Gap #2 (§33-1)** : métriques « régularité dans le temps » et « streaks de jours » NON implémentées — décision anti-gamification assumée (cf. posture `training-stats-bar.tsx`). À arbitrer si une session future les veut strictement.
-- Pas de test unitaire dédié au reply concurrent (couvert par e2e séquentiel + correct par construction). Si l'audit prod montre un jour des doublons, ajouter un test ciblé.
+- Tests unitaires du reply ajoutés (4 chemins : première réponse, édition/perdant-de-race, absent/étranger, **delete-then-reply race** → `null`). Couverture concurrente désormais explicite (cf. ⑤ fix LOW).
 - Observation `avgR` (« R moyen » dans la stats bar) : tension de _lettre_ avec §33-1 (« on mesure l'effort, pas la qualité ») — PAS une violation garde-fou, isolation respectée, surface **pré-existante S13**, laissée intacte (hors scope S8).
 
-### ⑤ Pour la session suivante — état des gates (vérifié runtime)
+### ⑤ État des gates + auto-challenge (vérifié runtime, post-déploiement)
 
-- `vitest run` : **3596 passed**. Seul « failed » = `src/lib/cron/crontab-sync.test.ts` (collecte 0 test) : artefact **local Windows** (le `.mjs` cross-root garde son shebang `#!` non strippé sous CRLF) — `node --check` du `.mjs` passe, fichier inchangé depuis `bf8a8b1` (#377, mergé CI verte), **hors changeset**. Pas une régression.
+**Auto-challenge — 2 défauts tués avant prod (commit fix `d6c6e80`), tous deux dans le code de cette session :**
+
+- **MEDIUM (anti-Black-Hat)** : `TrainingStatsBar` divisait le taux « Process complet » par le `total` brut → les backtests legacy (checklist NULL après migration ADD-only) plombaient le taux durablement (un membre avec 2 legacy + 5 parfaits affichait « 20 % »). Fix : agrégat `checklistAnsweredCount` (≥1 item non-null) comme dénominateur, miroir de `systemDecidedCount` ; « — » si 0. **Prouvé au runtime** (seed 2 legacy + 1 propre + 1 partiel → l'écran rend « 50 % » / « sur 2 renseignés », l'ancien code rendait « 25 % »).
+- **LOW (write silencieux perdu)** : `replyToTrainingAnnotationAsMember` renvoyait un succès avec des ids périmés si la correction était hard-deleted entre le read d'ownership et le write (race delete-then-reply) → l'action signalait `ok` pour une réponse jamais persistée. Fix : capturer le `count` du fallback `updateMany` et renvoyer `null` (not-found) si 0.
+
+**Gates :**
+
+- `vitest run` : **3600 passed** (3596 + 4 tests reply ajoutés). Seul « failed » = `src/lib/cron/crontab-sync.test.ts` (collecte 0 test) : artefact **local Windows** (le `.mjs` cross-root garde son shebang `#!` non strippé sous CRLF) — passe en CI LF, fichier inchangé depuis `bf8a8b1` (#377), **hors changeset**. Pas une régression.
 - `tsc --noEmit` exit 0 · `eslint` exit 0 · `prettier --check` clean (LF).
 - e2e `s8-training-sessions.spec.ts` : **4/4** (chromium A+B, mobile-iphone-15 A+B) contre Postgres réel via l'UI réelle. Fix de stabilité mobile : checklist pilotée par `input.check({force})` (radios `sr-only` sous footer sticky) + nav détail en `waitUntil:'domcontentloaded'` (l'`<img>` capture stallait l'event `load`).
+- **CI PR #421 : tous checks verts** (Lint/type/build, CodeQL, 4 shards Playwright, Socket). Gotcha vu : le 1er run build a échoué sur un blip réseau `next/font/google` (Google Fonts injoignable au build-time) → re-run à code identique = vert (transitoire, pas le code). Même classe de flake sur E2E `main` post-merge (shard 3 : `WebServer timeout exceeded when trying to connect` Postgres → overlay Next → `main`/`today-guidance` en double/hidden, specs §26/S5 hors S8) → re-run.
 - Client Prisma généré = **gitignoré**, régénéré par CI (`prisma generate`) depuis le `schema.prisma` committé.
 
 ---

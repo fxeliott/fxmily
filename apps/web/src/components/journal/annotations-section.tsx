@@ -146,7 +146,7 @@ function AnnotationCard({ annotation, isAdmin, canDelete, mediaUrl }: Annotation
         ) : null}
         {annotation.mediaType === 'image' ? (
           <Pill tone="mute">
-            <ImageIcon className="h-2.5 w-2.5" strokeWidth={2} />
+            <ImageIcon className="h-2.5 w-2.5" strokeWidth={2} aria-hidden="true" />
             Capture jointe
           </Pill>
         ) : null}

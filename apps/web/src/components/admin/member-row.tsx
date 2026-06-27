@@ -133,17 +133,17 @@ export function MemberRow({ member, attention }: MemberRowProps) {
           </div>
           <div className="flex flex-col items-start sm:items-end">
             <dt className="t-eyebrow text-[var(--t-3)]">Ouverts</dt>
-            <dd
-              className={[
-                'f-mono tabular-nums',
-                // Open positions get a soft warn-dim chip (en cours, never an
-                // alarm — grammaire finance: warn = streak/en cours, SPEC §2).
-                hasOpenTrades
-                  ? 'rounded-pill bg-[var(--warn-dim)] px-1.5 text-[var(--warn)]'
-                  : 'text-[var(--t-3)]',
-              ].join(' ')}
-            >
-              {member.tradesOpenCount}
+            <dd className="f-mono tabular-nums">
+              {/* Open positions get a soft warn chip (en cours, never an alarm —
+                  grammaire finance: warn = streak/en cours, SPEC §2). Uses the
+                  Pill primitive so light mode inherits the S18.1 contrast override
+                  (data-tone=warn → --warn-hi, AA); a raw text-[var(--warn)] chip
+                  only cleared 4.06:1 in light. */}
+              {hasOpenTrades ? (
+                <Pill tone="warn">{member.tradesOpenCount}</Pill>
+              ) : (
+                <span className="text-[var(--t-3)]">{member.tradesOpenCount}</span>
+              )}
             </dd>
           </div>
           <div className="flex flex-col items-start sm:items-end">

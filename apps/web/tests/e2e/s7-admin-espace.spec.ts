@@ -218,6 +218,9 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
       throw new Error('seed missing — beforeAll did not run');
     }
     const ttId = trainingTradeId;
+    // Capture a non-null local — TS narrowing of the module-level `admin` does
+    // not survive into the nested `expect.poll` closure below (mirror test F).
+    const adminId = admin.id;
     const TRAINING_COMMENT = 'Backtest propre, mais entrée 2 bougies trop tôt (correction e2e S7).';
 
     await dismissCookieBanner(page);
@@ -237,19 +240,43 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
     await expect(page.getByText(TRAINING_COMMENT)).toBeVisible();
 
     // §21.5 isolation: the correction is a TrainingAnnotation, never a real one.
+    // Still unseen at creation — baseline for the read-receipt flip below.
     const annotation = await db.trainingAnnotation.findFirst({
       where: { trainingTradeId: ttId, adminId: admin.id },
-      select: { comment: true },
+      select: { comment: true, seenByMemberAt: true },
     });
     expect(annotation?.comment).toBe(TRAINING_COMMENT);
+    expect(annotation?.seenByMemberAt).toBeNull();
 
-    // --- MEMBER sees it at /training/[id] under « Corrections reçues ».
+    // --- #3 read-receipt PARITY (training): BEFORE the member opens it, the admin
+    // sees « Non lue » on the backtest correction. This route renders only the
+    // training annotations section, so the pill is unambiguous.
+    await expect(page.getByText('Non lue')).toBeVisible();
+
+    // --- MEMBER sees it at /training/[id] under « Corrections reçues ». Loading
+    // the page bulk-marks the training annotations seen.
     await page.context().clearCookies();
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
     await page.goto(`/training/${ttId}`);
     await expect(page.getByText('Corrections reçues')).toBeVisible();
     await expect(page.getByText(TRAINING_COMMENT)).toBeVisible();
+
+    // DB proof: seenByMemberAt flipped null → timestamp (mirror of the real flow).
+    await expect
+      .poll(async () => {
+        const row = await db.trainingAnnotation.findFirst({
+          where: { trainingTradeId: ttId, adminId },
+          select: { seenByMemberAt: true },
+        });
+        return row?.seenByMemberAt ? 'seen' : 'unseen';
+      })
+      .toBe('seen');
+
+    // The admin-side flip of « Non lue » → green « Lue » pill (re-challenge
+    // DEFECT-1, training read-receipt parity) is proven deterministically by
+    // `training-annotations-section.test.tsx` — no flaky 3rd auth-switch here.
+    // This e2e proves the end-to-end round-trip + the DB seen-flip above.
   });
 
   test('F — enrichissements S7 : palette (#1) + triage « à traiter » (#2) + accusé de lecture (#3)', async ({

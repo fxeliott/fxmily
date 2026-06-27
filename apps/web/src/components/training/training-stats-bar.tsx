@@ -38,6 +38,7 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
     avgR: avgRNum,
     systemDecidedCount,
     systemKeptCount,
+    checklistCleanCount,
   } = stats;
 
   const winRate = decidedCount === 0 ? '—' : `${Math.round((winCount / decidedCount) * 100)} %`;
@@ -48,6 +49,13 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
     systemDecidedCount === 0
       ? '—'
       : `${Math.round((systemKeptCount / systemDecidedCount) * 100)} %`;
+
+  // §33-1 "taux de complétude" — share of backtests run with an irreproachable
+  // process (all four discipline-checklist items answered "respected"). A pure
+  // discipline/completeness rate, never a P&L or market judgement (§21.5 +
+  // garde-fou §2). "—" when there is no backtest yet (anti-Black-Hat: no
+  // misleading 0 %); the denominator stays explicit in the hint.
+  const processRate = total === 0 ? '—' : `${Math.round((checklistCleanCount / total) * 100)} %`;
 
   return (
     <section
@@ -77,6 +85,15 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
         label="Système tenu"
         value={systemRate}
         hint={systemDecidedCount === 0 ? 'non renseigné' : `sur ${systemDecidedCount}`}
+      />
+      <StatBlock
+        label="Process complet"
+        value={processRate}
+        hint={
+          total === 0
+            ? 'checklist à remplir'
+            : `checklist tenue sur ${total} backtest${total > 1 ? 's' : ''}`
+        }
       />
     </section>
   );

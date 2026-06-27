@@ -89,6 +89,24 @@ const systemRespectedSchema = z
     return v;
   });
 
+/**
+ * S8 V2 — one process-checklist item (brief §33-2). Tri-state like
+ * `systemRespected` (`'true'` / `'false'` / `'na'` → boolean | null) but ALSO
+ * `.optional()`: a member may submit a backtest without touching the checklist
+ * (an absent item → `undefined`, normalised to `null` at the service layer).
+ * These are DISCIPLINE acts, never affect values nor market judgement (§21.2 +
+ * garde-fou §2): `emotionalStateNoted` records the ACT of observing one's state,
+ * not the mood itself.
+ */
+const checklistItemSchema = z
+  .union([z.boolean(), z.literal('na'), z.literal('true'), z.literal('false')])
+  .transform((v) => {
+    if (v === 'na') return null;
+    if (typeof v === 'string') return v === 'true';
+    return v;
+  })
+  .optional();
+
 /** Backtest entry timestamp — EXACT mirror of `trade.ts` `enteredAt`
  * (plain instant, NOT a calendar day: no civil-window applies). */
 const enteredAtSchema = z.coerce
@@ -105,8 +123,52 @@ export const trainingTradeCreateSchema = z.object({
   outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }).nullable().optional(),
   resultR: resultRSchema,
   systemRespected: systemRespectedSchema,
+  // S8 V2 — process-discipline checklist (brief §33-2). All optional/tri-state.
+  planFollowed: checklistItemSchema,
+  riskDefinedBefore: checklistItemSchema,
+  emotionalStateNoted: checklistItemSchema,
+  noImpulsiveDeviation: checklistItemSchema,
   lessonLearned: lessonLearnedSchema,
   enteredAt: enteredAtSchema,
 });
 
 export type TrainingTradeCreateInput = z.infer<typeof trainingTradeCreateSchema>;
+
+/**
+ * S8 V2 — the canonical process-checklist item descriptors. Single source of
+ * truth shared by the wizard UI, the detail view and the guardrail test
+ * (`training-checklist.guardrail.test.ts`), which feeds every `label` +
+ * `help` through `detectAMFViolation` to prove zero market-analysis leakage.
+ * Each `key` matches a `TrainingTrade` column + the create-schema field.
+ */
+export const TRAINING_CHECKLIST_ITEMS = [
+  {
+    key: 'planFollowed',
+    label: "Plan d'exécution suivi",
+    help: "As-tu suivi le plan que tu t'étais fixé avant ce backtest, sans improviser ?",
+  },
+  {
+    key: 'riskDefinedBefore',
+    label: 'Risque défini avant d’entrer',
+    help: 'Avais-tu défini ton risque (taille, R:R) AVANT d’ouvrir la position ?',
+  },
+  {
+    key: 'emotionalStateNoted',
+    label: 'État émotionnel observé',
+    help: 'As-tu pris un instant pour observer ton état (avant, pendant, après) — sans le laisser décider à ta place ?',
+  },
+  {
+    key: 'noImpulsiveDeviation',
+    label: 'Aucune déviation impulsive',
+    help: 'Es-tu resté sur ton process du début à la fin, sans réaction impulsive ?',
+  },
+] as const satisfies ReadonlyArray<{
+  key: keyof Pick<
+    TrainingTradeCreateInput,
+    'planFollowed' | 'riskDefinedBefore' | 'emotionalStateNoted' | 'noImpulsiveDeviation'
+  >;
+  label: string;
+  help: string;
+}>;
+
+export type TrainingChecklistKey = (typeof TRAINING_CHECKLIST_ITEMS)[number]['key'];

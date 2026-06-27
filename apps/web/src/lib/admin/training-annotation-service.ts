@@ -50,6 +50,12 @@ export interface SerializedTrainingAnnotation {
   updatedAt: string;
   /** True iff `seenByMemberAt` is null (handy for UI badges). */
   isUnseenByMember: boolean;
+  /** S8 V2 — the member's reply to this correction (brief §32-4), or null if
+   * the member has not answered yet. Hardened free text (Trojan-Source canon),
+   * psychology/process register only (garde-fou §2). */
+  memberReply: string | null;
+  /** ISO timestamp of the member reply, or null. */
+  memberRepliedAt: string | null;
 }
 
 export class TrainingAnnotationNotFoundError extends Error {
@@ -76,6 +82,8 @@ export function serializeTrainingAnnotation(
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     isUnseenByMember: row.seenByMemberAt === null,
+    memberReply: row.memberReply,
+    memberRepliedAt: row.memberRepliedAt ? row.memberRepliedAt.toISOString() : null,
   };
 }
 

@@ -98,7 +98,7 @@ export const subscribePushInputSchema = pushSubscriptionInputSchema.extend({
 });
 export type SubscribePushInput = z.infer<typeof subscribePushInputSchema>;
 
-/// The 9 notification categories a member can toggle. Mirrors the
+/// The 10 notification categories. Mirrors the
 /// `NotificationType` enum in `prisma/schema.prisma` 1:1 — the parity is
 /// enforced by a unit test (`push-subscription.test.ts`) so a value added to
 /// the Prisma enum but NOT registered here FAILS the suite. This kills the
@@ -114,7 +114,12 @@ export type SubscribePushInput = z.infer<typeof subscribePushInputSchema>;
 /// (no email, no fanfare — §27.4/§27.6). `verification_gentle_reminder` (S3 §33)
 /// is the single benevolent nudge on an isolated unexcused gap BEFORE any
 /// repetition alert — push-only, calm, strictly psychological (Mark Douglas),
-/// never a trading advice.
+/// never a trading advice. `training_reply_received` (S8 V2 §32-4) is the
+/// ADMIN-facing counterpart of `training_annotation_received`: it fires for the
+/// correction's author when the MEMBER replies to it, so the coaching loop
+/// closes without the admin polling each backtest. Admin-only (hidden from the
+/// member preferences grid, like `weekly_report_ready`). §21.5: ids only, never
+/// the reply text nor any backtest P&L.
 export const NOTIFICATION_TYPES = [
   'annotation_received',
   'training_annotation_received',
@@ -125,6 +130,7 @@ export const NOTIFICATION_TYPES = [
   'monthly_debrief_ready',
   'mindset_check_ready',
   'verification_gentle_reminder',
+  'training_reply_received',
 ] as const;
 export type NotificationTypeSlug = (typeof NOTIFICATION_TYPES)[number];
 

@@ -119,6 +119,10 @@ enum AnnotationMediaType {
 ///                                  (J-T3). DISTINCT from annotation_received — a
 ///                                  backtest correction must never conflate with a
 ///                                  real-trade correction (statistical isolation §21.5).
+///   training_reply_received      : a member REPLIED to an admin backtest correction
+///                                  (S8 V2, brief §32-4). Admin-facing push — the
+///                                  reverse direction of training_annotation_received.
+///                                  Stays inside the §21.5 training world (no P&L).
 ///   checkin_morning_reminder     : nudges the member to fill their morning check-in (J5).
 ///   checkin_evening_reminder     : nudges the member to fill their evening check-in (J5).
 ///   douglas_card_delivered       : a Mark Douglas card was triggered for the member (J9).
@@ -132,6 +136,7 @@ enum AnnotationMediaType {
 enum NotificationType {
   annotation_received
   training_annotation_received
+  training_reply_received
   checkin_morning_reminder
   checkin_evening_reminder
   douglas_card_delivered
@@ -862,6 +867,21 @@ model TrainingTrade {
   /// exact mirror of `Trade.hedgeRespected`.
   systemRespected Boolean? @map("system_respected")
 
+  /// S8 V2 — process-discipline checklist filled WHEN journaling a backtest
+  /// (brief §33-2). Each item is a discipline ACT (tri-state true/false/null =
+  /// not answered), NEVER a market-analysis judgement and NEVER an affect value.
+  /// `emotionalStateNoted` records that the member OBSERVED their state, never
+  /// the mood itself — this preserves the §21.2 lock "no emotions in backtest"
+  /// (backtest affect ≠ real-risk affect, Mark Douglas) while still capturing
+  /// the awareness discipline the brief asks for. Items are generic / method-
+  /// agnostic: the app never encodes the Lhedge system (garde-fou §2). Pure
+  /// process signals — never read by the real edge (§21.5); the completion rate
+  /// feeds only the training-internal stats (computed at render).
+  planFollowed         Boolean? @map("plan_followed")
+  riskDefinedBefore    Boolean? @map("risk_defined_before")
+  emotionalStateNoted  Boolean? @map("emotional_state_noted")
+  noImpulsiveDeviation Boolean? @map("no_impulsive_deviation")
+
   /// Lesson learned — the pedagogical core of a backtest (SPEC §21).
   /// Mandatory free text, hardened at the Zod edge (`safeFreeText` + reject
   /// bidi/zero-width = Trojan-Source canon Fxmily).
@@ -918,6 +938,16 @@ model TrainingAnnotation {
   /// First time the member opened the backtest detail after this correction
   /// existed. Null = unread. Mirror of `TradeAnnotation.seenByMemberAt`.
   seenByMemberAt DateTime? @map("seen_by_member_at")
+
+  /// S8 V2 — the member's single reply to this correction (brief §32-4 : « le
+  /// membre les voit et peut y répondre »). Closes the admin↔member loop while
+  /// staying 100% inside the §21.5 training world (NO FK to any real model).
+  /// Hardened free text at the Zod edge (Trojan-Source canon). One reply per
+  /// correction — the member edits it in place. `memberRepliedAt` null = no
+  /// reply yet; it powers the admin "member replied" surfacing & notification
+  /// (`training_reply_received`). Strictly psychology/process — never analysis.
+  memberReply     String?   @map("member_reply") @db.Text
+  memberRepliedAt DateTime? @map("member_replied_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -984,6 +1014,7 @@ model TrainingDebrief {
 /// (`type`) carries its own structured `payload`:
 ///   annotation_received          → { annotationId, tradeId, adminId, hasMedia }
 ///   training_annotation_received → { trainingAnnotationId, trainingTradeId, adminId, hasMedia }
+///   training_reply_received      → { trainingAnnotationId, trainingTradeId, memberId }
 ///
 /// `scheduledFor` lets us delay a notification (e.g. "remind if not seen
 /// after 48h" — SPEC §7.8). Null means "ASAP".

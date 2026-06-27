@@ -2,6 +2,7 @@ import { Check, Minus, X } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { TRAINING_CHECKLIST_ITEMS } from '@/lib/schemas/training-trade';
 import type { SerializedTrainingTrade } from '@/lib/training/training-trade-service';
 
 /**
@@ -94,11 +95,58 @@ export function TrainingTradeCard({ trade }: { trade: SerializedTrainingTrade })
         </div>
       </div>
 
+      {/* S8 V2 §33-2 — process-discipline checklist. Rendered only when at least
+          one item is answered (old backtests pre-checklist stay uncluttered).
+          DISCIPLINE acts, never market judgement (garde-fou §2). */}
+      {TRAINING_CHECKLIST_ITEMS.some((item) => trade[item.key] !== null) ? (
+        <div className="flex flex-col gap-2 border-t border-[var(--b-subtle)] pt-3">
+          <span className="t-eyebrow text-[var(--t-4)]">Checklist process</span>
+          <ul className="flex flex-col gap-1.5">
+            {TRAINING_CHECKLIST_ITEMS.map((item) => (
+              <li key={item.key} className="flex items-center gap-2 text-[13px]">
+                <ChecklistIcon value={trade[item.key]} />
+                <span className="text-[var(--t-2)]">{item.label}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-1 border-t border-[var(--b-subtle)] pt-3">
         <span className="t-eyebrow text-[var(--t-4)]">Leçon tirée</span>
         <p className="t-body line-clamp-3 text-[var(--t-2)]">{trade.lessonLearned}</p>
       </div>
     </Card>
+  );
+}
+
+/** Tri-state checklist marker — mirrors the "Système" row visual language:
+ * respected (green check), broken (red cross), N/A or unanswered (muted dash). */
+function ChecklistIcon({ value }: { value: boolean | null }) {
+  if (value === true) {
+    return (
+      <Check
+        className="h-3.5 w-3.5 shrink-0 text-[var(--ok)]"
+        strokeWidth={2.25}
+        aria-label="Respecté"
+      />
+    );
+  }
+  if (value === false) {
+    return (
+      <X
+        className="h-3.5 w-3.5 shrink-0 text-[var(--bad)]"
+        strokeWidth={2.25}
+        aria-label="Non respecté"
+      />
+    );
+  }
+  return (
+    <Minus
+      className="h-3.5 w-3.5 shrink-0 text-[var(--t-4)]"
+      strokeWidth={2.25}
+      aria-label="Non renseigné"
+    />
   );
 }
 

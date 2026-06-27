@@ -199,8 +199,11 @@ describe('listTrainingTradesForUser (cursor-paginated)', () => {
 // ---------------------------------------------------------------------------
 
 describe('getTrainingTradeStatsForUser (§21.5 training-only aggregate)', () => {
-  it('derives stats from count + groupBy(outcome) + groupBy(system) + avg(resultR), user-scoped', async () => {
-    vi.mocked(db.trainingTrade.count).mockResolvedValue(10 as never);
+  it('derives stats from count + groupBy(outcome) + groupBy(system) + avg(resultR) + checklist count, user-scoped', async () => {
+    // total = first count(), checklistCleanCount = second count() in the Promise.all.
+    vi.mocked(db.trainingTrade.count)
+      .mockResolvedValueOnce(10 as never)
+      .mockResolvedValueOnce(2 as never);
     vi.mocked(db.trainingTrade.groupBy)
       .mockResolvedValueOnce([
         { outcome: 'win', _count: { _all: 4 } },
@@ -227,12 +230,24 @@ describe('getTrainingTradeStatsForUser (§21.5 training-only aggregate)', () => 
       avgR: 0.5,
       systemDecidedCount: 7,
       systemKeptCount: 5,
+      checklistCleanCount: 2,
     });
 
     // §21.5 — every read is user-scoped on db.trainingTrade; the avg only ever
     // targets resultR for the member's own training surface.
     expect(vi.mocked(db.trainingTrade.count).mock.calls[0]![0]).toEqual({
       where: { userId: 'user-1' },
+    });
+    // §33-2 discipline count: all four checklist items must be `true`, user-scoped,
+    // never a P&L/outcome filter.
+    expect(vi.mocked(db.trainingTrade.count).mock.calls[1]![0]).toEqual({
+      where: {
+        userId: 'user-1',
+        planFollowed: true,
+        riskDefinedBefore: true,
+        emotionalStateNoted: true,
+        noImpulsiveDeviation: true,
+      },
     });
     const aggArg = vi.mocked(db.trainingTrade.aggregate).mock.calls[0]![0] as {
       where: { userId: string; resultR: unknown };
@@ -261,6 +276,7 @@ describe('getTrainingTradeStatsForUser (§21.5 training-only aggregate)', () => 
       avgR: null,
       systemDecidedCount: 0,
       systemKeptCount: 0,
+      checklistCleanCount: 0,
     });
   });
 });

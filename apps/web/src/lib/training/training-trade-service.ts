@@ -33,6 +33,17 @@ export interface CreateTrainingTradeInput {
   outcome: TrainingOutcome | null;
   resultR: number | null;
   systemRespected: boolean | null;
+  /** S8 V2 — process-discipline checklist (brief §33-2). Each item is tri-state
+   * (respected / broken / N-A → boolean | null) AND optional: a backtest may be
+   * submitted without touching the checklist. The Server Action passes the
+   * parsed schema value; `undefined` normalises to `null` on write. These are
+   * DISCIPLINE acts, never affect values nor market judgement (§21.2 + garde-fou
+   * §2) — `emotionalStateNoted` records the ACT of observing one's state, not
+   * the mood itself. */
+  planFollowed?: boolean | null | undefined;
+  riskDefinedBefore?: boolean | null | undefined;
+  emotionalStateNoted?: boolean | null | undefined;
+  noImpulsiveDeviation?: boolean | null | undefined;
   lessonLearned: string;
   enteredAt: Date;
   /** Optional parent backtest session (S8 — "crée une session de backtest").
@@ -54,6 +65,12 @@ export interface SerializedTrainingTrade {
   outcome: TrainingOutcome | null;
   resultR: string | null;
   systemRespected: boolean | null;
+  /** S8 V2 — process-discipline checklist (brief §33-2). `null` = unanswered/N-A,
+   * `true` = discipline respected, `false` = deviation acknowledged. */
+  planFollowed: boolean | null;
+  riskDefinedBefore: boolean | null;
+  emotionalStateNoted: boolean | null;
+  noImpulsiveDeviation: boolean | null;
   lessonLearned: string;
   enteredAt: string;
   createdAt: string;
@@ -77,6 +94,10 @@ export function serializeTrainingTrade(row: TrainingTradeModel): SerializedTrain
     outcome: row.outcome,
     resultR: row.resultR == null ? null : row.resultR.toString(),
     systemRespected: row.systemRespected,
+    planFollowed: row.planFollowed,
+    riskDefinedBefore: row.riskDefinedBefore,
+    emotionalStateNoted: row.emotionalStateNoted,
+    noImpulsiveDeviation: row.noImpulsiveDeviation,
     lessonLearned: row.lessonLearned,
     enteredAt: row.enteredAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
@@ -103,6 +124,10 @@ export async function createTrainingTrade(
       outcome: input.outcome,
       resultR: input.resultR == null ? null : new Prisma.Decimal(input.resultR),
       systemRespected: input.systemRespected,
+      planFollowed: input.planFollowed ?? null,
+      riskDefinedBefore: input.riskDefinedBefore ?? null,
+      emotionalStateNoted: input.emotionalStateNoted ?? null,
+      noImpulsiveDeviation: input.noImpulsiveDeviation ?? null,
       lessonLearned: input.lessonLearned,
       enteredAt: input.enteredAt,
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
@@ -197,10 +222,15 @@ export interface TrainingTradeStats {
   /** Backtests where the system was explicitly kept/broken (non-null). */
   systemDecidedCount: number;
   systemKeptCount: number;
+  /** S8 V2 — backtests run with an IRREPROACHABLE process: every one of the
+   * four discipline-checklist items (§33-2) explicitly answered "respected".
+   * A pure discipline metric (act of following the process), never a P&L or a
+   * market judgement (§21.2 + garde-fou §2). Rate = `checklistCleanCount / total`. */
+  checklistCleanCount: number;
 }
 
 export async function getTrainingTradeStatsForUser(userId: string): Promise<TrainingTradeStats> {
-  const [total, byOutcome, rAgg, bySystem] = await Promise.all([
+  const [total, byOutcome, rAgg, bySystem, checklistCleanCount] = await Promise.all([
     db.trainingTrade.count({ where: { userId } }),
     db.trainingTrade.groupBy({ by: ['outcome'], where: { userId }, _count: { _all: true } }),
     db.trainingTrade.aggregate({
@@ -212,6 +242,17 @@ export async function getTrainingTradeStatsForUser(userId: string): Promise<Trai
       by: ['systemRespected'],
       where: { userId },
       _count: { _all: true },
+    }),
+    // §33-2 discipline metric: all four checklist items explicitly "respected".
+    // §21.5 — still db.trainingTrade only; reads no real-edge surface.
+    db.trainingTrade.count({
+      where: {
+        userId,
+        planFollowed: true,
+        riskDefinedBefore: true,
+        emotionalStateNoted: true,
+        noImpulsiveDeviation: true,
+      },
     }),
   ]);
 
@@ -228,6 +269,7 @@ export async function getTrainingTradeStatsForUser(userId: string): Promise<Trai
     avgR: rAgg._avg.resultR == null ? null : Number(rAgg._avg.resultR),
     systemDecidedCount: systemKeptCount + systemBrokenCount,
     systemKeptCount,
+    checklistCleanCount,
   };
 }
 

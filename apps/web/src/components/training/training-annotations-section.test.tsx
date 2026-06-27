@@ -4,11 +4,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SerializedTrainingAnnotation } from '@/lib/admin/training-annotation-service';
 
-// The delete CTA statically imports the page Server Action → next-auth →
-// next/server, unresolvable in jsdom. It is a leaf client button, not the
-// subject here (the read-receipt pills), so stub it to a no-op.
+// The delete CTA + the member reply form statically import a page Server Action
+// → next-auth → next/server, unresolvable in jsdom. They are leaf client islands,
+// not the subject here (the read-receipt pills), so stub them to a no-op.
 vi.mock('./delete-training-annotation-button', () => ({
   DeleteTrainingAnnotationButton: () => null,
+}));
+vi.mock('./training-reply-form', () => ({
+  TrainingReplyForm: () => null,
 }));
 
 import { TrainingAnnotationsSection } from './training-annotations-section';
@@ -29,6 +32,8 @@ function annotation(
     createdAt: '2026-06-10T09:00:00.000Z',
     updatedAt: '2026-06-10T09:00:00.000Z',
     isUnseenByMember: true,
+    memberReply: null,
+    memberRepliedAt: null,
     ...over,
   };
 }

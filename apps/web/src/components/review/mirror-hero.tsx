@@ -155,7 +155,7 @@ export function MirrorHero({ className }: { className?: string }) {
         // S19 — token (was fixed light blue → faint on white in light); --acc-hi
         // flips to a darker blue in light, staying the bright focal in dark.
         fill="var(--acc-hi)"
-        initial={{ scale: 0 }}
+        initial={reduceMotion ? false : { scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ duration: 0.4, delay: 0.8, ease: 'backOut' }}
       />
@@ -194,7 +194,7 @@ export function MirrorHero({ className }: { className?: string }) {
           // S19 — token (was fixed light gray → invisible on white in light);
           // --t-3 flips dark on light canvas, light on dark.
           fill="var(--t-3)"
-          initial={{ opacity: 0, y: 0 }}
+          initial={reduceMotion ? false : { opacity: 0, y: 0 }}
           animate={{ opacity: 0.75 }}
           transition={{ duration: 0.6, delay: 1 + i * 0.12 }}
         />

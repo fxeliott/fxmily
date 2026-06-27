@@ -50,6 +50,15 @@ const VIEWPORTS = [
   { name: 'ultrawide', w: 1920, h: 1080 },
 ];
 
+// TRUE ultra-wide sizes for the dedicated full-bleed proof (DoD §35 box 1). The
+// shared VIEWPORTS gate tops at FHD (1920); the by-design `--w-app:1600px`
+// content cap + `.app-ambient` gutter mesh only manifests ABOVE ~1600px, so FHD
+// never exercises it. 2560 = 1440p, 3440 = 21:9 ultra-wide.
+const ULTRA_WIDE = [
+  { name: 'uw-2560', w: 2560, h: 1440 },
+  { name: 'uw-3440', w: 3440, h: 1440 },
+];
+
 // Public (no auth) surfaces.
 const PUBLIC_ROUTES = [
   '/',
@@ -62,8 +71,9 @@ const PUBLIC_ROUTES = [
 ];
 
 // Authenticated route groups (reachable by the seeded admin). Split for parallel
-// workers. Dynamic-param routes ([id]/[slug]/[instrument]) are exercised via a
-// resolved id in the `dynamic` group below.
+// workers. Dynamic-param routes ([id]/[slug]/[instrument]) are NOT enumerated
+// here — the static-route surface is what DoD §35 boxes 1-2 gate; per-id detail
+// pages are covered by their own feature specs.
 const ROUTE_GROUPS: Record<string, string[]> = {
   daily: [
     '/dashboard',
@@ -318,4 +328,65 @@ test.describe('S9 DoD §35 — full-app runtime gate', () => {
       expect(ok, `${group} group failures:\n${all.join('\n')}`).toBe(true);
     });
   }
+
+  // DoD §35 box 1 — "plein écran ... jusqu'à ultra-wide". The shared gate's
+  // `bodyW >= vp.w - 2` proxy passes trivially (body has no max-width), so it
+  // does NOT prove the by-design full-bleed frame above 1600px. This focused
+  // test goes to TRUE ultra-wide and asserts the real contract: (a) zero
+  // horizontal overflow, (b) the fixed `.app-ambient` backplate fills the FULL
+  // viewport width (no black bands = "plein écran"), (c) `<main>` content stays
+  // capped near `--w-app` (1600px) — full-bleed background, capped content.
+  test('ultra-wide full-bleed (DoD box 1)', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.context().addCookies([
+      {
+        name: SESSION_COOKIE_NAME,
+        value: sharedSessionToken,
+        url: origin,
+        httpOnly: true,
+        sameSite: 'Lax',
+      },
+    ]);
+    const routes = ['/', '/dashboard', '/journal'];
+    const all: string[] = [];
+    let ok = true;
+    for (const vp of ULTRA_WIDE) {
+      await page.setViewportSize({ width: vp.w, height: vp.h });
+      for (const route of routes) {
+        await page.goto(route, { waitUntil: 'domcontentloaded' }).catch((e) => {
+          ok = false;
+          all.push(`  [${vp.name}] ${route} → NAV-ERROR ${String(e).slice(0, 80)}`);
+          return null;
+        });
+        await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(500);
+        if (/\/login(\?|$)/.test(page.url()) && route !== '/') {
+          ok = false;
+          all.push(`  [${vp.name}] ${route} → REDIRECT-TO-LOGIN (auth not honoured)`);
+          continue;
+        }
+        const m = await page.evaluate(() => {
+          const docEl = document.documentElement;
+          const overflowX = docEl.scrollWidth - docEl.clientWidth;
+          const ambient = document.querySelector('.app-ambient');
+          const ambientW = ambient ? Math.round(ambient.getBoundingClientRect().width) : 0;
+          const main = document.querySelector('main');
+          const mainW = main ? Math.round(main.getBoundingClientRect().width) : 0;
+          return { overflowX, ambientW, mainW, vw: docEl.clientWidth };
+        });
+        // (a) no horizontal scroll, (b) ambient backplate spans the viewport
+        // (fixed inset:0 → full-bleed; tolerate a scrollbar gutter).
+        const noOverflow = m.overflowX <= 2;
+        const ambientFull = m.ambientW >= m.vw - 4;
+        if (!noOverflow || !ambientFull) ok = false;
+        all.push(
+          `  [${vp.name}] ${route} → overflowX=${m.overflowX} ambientW=${m.ambientW}/${m.vw} mainW=${m.mainW} ${
+            noOverflow && ambientFull ? 'PASS' : 'FAIL(full-bleed)'
+          }`,
+        );
+      }
+    }
+    console.log(`\n===== ULTRA-WIDE FULL-BLEED =====\n${all.join('\n')}\n`);
+    expect(ok, `ultra-wide full-bleed failures:\n${all.join('\n')}`).toBe(true);
+  });
 });

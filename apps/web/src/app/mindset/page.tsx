@@ -1,12 +1,4 @@
-import {
-  ArrowLeft,
-  ArrowRight,
-  Brain,
-  Check,
-  ClipboardCheck,
-  LineChart,
-  Sparkles,
-} from 'lucide-react';
+import { ArrowLeft, ArrowRight, Brain, ClipboardCheck, LineChart, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -16,6 +8,7 @@ import { DrawnRule } from '@/components/dashboard/drawn-rule';
 import { MindsetDashboard } from '@/components/mindset/mindset-dashboard';
 import { MindsetTimeline } from '@/components/mindset/mindset-timeline';
 import { btnVariants } from '@/components/ui/btn';
+import { SuccessState } from '@/components/ui/success-state';
 import { CURRENT_MINDSET_INSTRUMENT_VERSION } from '@/lib/mindset/instrument';
 import { loadMindsetDashboardData } from '@/lib/mindset/service';
 import { currentParisWeekStart, formatWeekRangeFr } from '@/lib/mindset/week';
@@ -103,24 +96,10 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
         </header>
 
         {justSubmitted ? (
-          <div
-            role="status"
-            data-slot="mindset-done"
-            className="rounded-card-lg border border-[var(--b-acc)] bg-[var(--acc-dim)] p-4"
-          >
-            <p className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--t-3)]">
-              <Check
-                className="h-3.5 w-3.5 text-[var(--acc)]"
-                strokeWidth={2.25}
-                aria-hidden="true"
-              />
-              Enregistré
-            </p>
-            <p className="t-h3 mt-1 text-[var(--t-1)]">
-              Ton auto-évaluation de la semaine est posée. Reviens lundi prochain prendre le même
-              recul, sans pression.
-            </p>
-          </div>
+          <SuccessState size="block" headline="Enregistré">
+            Ton auto-évaluation de la semaine est posée. Reviens lundi prochain prendre le même
+            recul, sans pression.
+          </SuccessState>
         ) : null}
 
         <div className="wow-reveal">

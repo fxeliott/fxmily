@@ -19,6 +19,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { Pill } from '@/components/ui/pill';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
+import { SuccessState } from '@/components/ui/success-state';
 
 /* Tokens couleur exposés (cf. @theme inline) — labels SOUS le swatch pour
    éviter tout souci de contraste sur une couleur arbitraire. */
@@ -216,7 +217,7 @@ export function DesignSystemShowcase() {
       {/* États de données */}
       <Section
         title="États de données"
-        hint="Skeleton · DataState (loading / empty / error / ready) — fini les écrans morts"
+        hint="Skeleton · DataState (loading / empty / error / ready) · SuccessState — fini les écrans morts"
       >
         <div className="flex flex-col gap-4">
           <Card className="flex flex-col gap-3 p-5">
@@ -275,6 +276,15 @@ export function DesignSystemShowcase() {
                 </div>
               </DataState>
             </div>
+          </Card>
+
+          <Card className="flex flex-col gap-3 p-5">
+            <span className="t-eyebrow text-[var(--t-3)]">
+              SuccessState — 4e état (succès / feedback)
+            </span>
+            <SuccessState headline="Trade enregistré.">
+              C&apos;est posé dans ton journal. Reviens demain pour le prochain.
+            </SuccessState>
           </Card>
         </div>
       </Section>

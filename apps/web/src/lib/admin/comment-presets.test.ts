@@ -127,20 +127,35 @@ describe('comment-presets — each preset is a submittable comment', () => {
   );
 });
 
+/**
+ * FIND-4 (re-challenge #2) — §2 must hold for EVERY admin-visible phrase in the
+ * palette, not only the text inserted into the comment. The old scan checked
+ * `p.text` alone, so a forbidden token smuggled into a chip label or a section
+ * heading would have shipped CI-green. Scan all three surfaces: the inserted
+ * text, each preset's chip label, and each group's section heading.
+ */
+const SCANNED_PHRASES: readonly (readonly [string, string])[] = [
+  ...ALL_COMMENT_PRESETS.flatMap(
+    (p) =>
+      [
+        [`${p.id} (text)`, p.text],
+        [`${p.id} (label)`, p.label],
+      ] as const,
+  ),
+  ...COMMENT_PRESET_GROUPS.map((g) => [`group:${g.id} (heading)`, g.label] as const),
+];
+
 describe('comment-presets — GARDE-FOU §2 (no trade-analysis advice)', () => {
-  it.each(ALL_COMMENT_PRESETS.map((p) => [p.id, p.text] as const))(
-    '%s carries no forbidden analysis token',
-    (_id, text) => {
-      const words = new Set(wordsOf(text));
-      const lower = text.toLowerCase();
+  it.each(SCANNED_PHRASES)('%s carries no forbidden analysis token', (_where, text) => {
+    const words = new Set(wordsOf(text));
+    const lower = text.toLowerCase();
 
-      const hitWord = FORBIDDEN_WORDS.find((w) => words.has(w));
-      expect(hitWord, `forbidden word "${hitWord}" found in: ${text}`).toBeUndefined();
+    const hitWord = FORBIDDEN_WORDS.find((w) => words.has(w));
+    expect(hitWord, `forbidden word "${hitWord}" found in: ${text}`).toBeUndefined();
 
-      const hitPhrase = FORBIDDEN_PHRASES.find((p) => lower.includes(p));
-      expect(hitPhrase, `forbidden phrase "${hitPhrase}" found in: ${text}`).toBeUndefined();
-    },
-  );
+    const hitPhrase = FORBIDDEN_PHRASES.find((p) => lower.includes(p));
+    expect(hitPhrase, `forbidden phrase "${hitPhrase}" found in: ${text}`).toBeUndefined();
+  });
 
   it('the forbidden-token scanner actually catches a planted violation', () => {
     // Guards the guard: a phrase smuggling a directional call must trip the scan.

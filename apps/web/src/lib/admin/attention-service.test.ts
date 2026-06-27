@@ -110,6 +110,21 @@ describe('getMembersAttention', () => {
     expect(map.get('m1')?.constancyDeclining).toBe(true);
   });
 
+  it('reads ONE snapshot without flagging a dip (nothing to compare against)', async () => {
+    vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
+    // A brand-new member with a single constancy snapshot: the loop records it as
+    // the latest but has no previous to compare → the dip stays false. Guards the
+    // `latest === undefined` first branch in isolation.
+    vi.mocked(db.constancyScore.findMany).mockResolvedValue([
+      { memberId: 'm1', value: 70 },
+    ] as never);
+
+    const map = await getMembersAttention(['m1']);
+    expect(map.get('m1')?.constancyDeclining).toBe(false);
+  });
+
   it('scopes every read to the requested ids and the right filters', async () => {
     vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
     vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
@@ -125,6 +140,18 @@ describe('getMembersAttention', () => {
 
     const discWhere = firstArg(db.discrepancy.groupBy).where as Record<string, unknown>;
     expect(discWhere).toMatchObject({ memberId: { in: ['m1', 'm2'] }, status: 'open' });
+
+    // FIND-3 (re-challenge #2) — the in-memory "first row per member = latest,
+    // second = previous" dip logic is ONLY correct if the query is ordered
+    // memberId ASC then periodStart DESC. The dip tests hand-feed pre-sorted
+    // arrays, so they'd stay green even if this orderBy were dropped — pin it
+    // here so the false-green can't hide a real prod regression.
+    const constancyArg = firstArg(db.constancyScore.findMany);
+    expect(constancyArg.where).toMatchObject({ memberId: { in: ['m1', 'm2'] } });
+    expect(
+      (constancyArg.where as { periodStart: { gte: unknown } }).periodStart.gte,
+    ).toBeInstanceOf(Date);
+    expect(constancyArg.orderBy).toEqual([{ memberId: 'asc' }, { periodStart: 'desc' }]);
   });
 });
 

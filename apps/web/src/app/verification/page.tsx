@@ -305,7 +305,11 @@ export default async function VerificationPage() {
                             porte un côté trade (mismatch / position non déclarée /
                             trade sans contrepartie) ; les oublis de rituel n'en ont
                             pas et le composant renvoie null. */}
-                        <RealityVsDeclared declared={d.declared} reality={d.reality} />
+                        <RealityVsDeclared
+                          declared={d.declared}
+                          reality={d.reality}
+                          type={d.type}
+                        />
                         {d.memberReason !== null ? (
                           <p className="t-cap text-[var(--t-4)]">Ton motif : {d.memberReason}</p>
                         ) : (

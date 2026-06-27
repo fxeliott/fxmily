@@ -57,8 +57,11 @@ describe('MemberVerificationPanel — face-à-face réalité vs déclaré (S7 §
         history={[]}
       />,
     );
-    expect(screen.getByText('Ce que tu as déclaré')).toBeInTheDocument();
-    expect(screen.getByText('Ce que ton historique montre')).toBeInTheDocument();
+    // Admin voice (CAND-A) — the panel reads a MEMBER's data, so the face-à-face
+    // is third-person ("le membre / son historique"), never "tu / ton".
+    expect(screen.getByText('Ce que le membre a déclaré')).toBeInTheDocument();
+    expect(screen.getByText('Ce que son historique montre')).toBeInTheDocument();
+    expect(screen.queryByText('Ce que tu as déclaré')).toBeNull();
     // The concrete matched metadata is surfaced (instrument on BOTH sides), not
     // just the narrative reasoning — that is the whole point of the face-à-face.
     expect(screen.getAllByText('EURUSD').length).toBeGreaterThanOrEqual(2);
@@ -85,7 +88,7 @@ describe('MemberVerificationPanel — face-à-face réalité vs déclaré (S7 §
     // The discrepancy card still renders (its type label), but the face-à-face
     // self-guards to null — no empty « Déclaré / Réel » columns for a ritual.
     expect(screen.getByText('Journée sans suivi')).toBeInTheDocument();
-    expect(screen.queryByText('Ce que tu as déclaré')).toBeNull();
-    expect(screen.queryByText('Ce que ton historique montre')).toBeNull();
+    expect(screen.queryByText('Ce que le membre a déclaré')).toBeNull();
+    expect(screen.queryByText('Ce que son historique montre')).toBeNull();
   });
 });

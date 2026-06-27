@@ -93,6 +93,12 @@ export interface TrainingReplyResult {
   trainingTradeId: string;
   /** Author of the correction = the admin to notify. */
   adminId: string;
+  /** Author's email — drives the immediate best-effort reply email (parity with
+   * the admin→member correction email; the push dispatcher returns on
+   * `no_subscriptions` before its fallback, so a push-less admin would be silent). */
+  adminEmail: string;
+  /** Author's first name for the email greeting (may be null). */
+  adminFirstName: string | null;
   /** Owner of the backtest = the replying member (drives the admin deep-link). */
   memberId: string;
   /** True iff this is the member's first reply (the row had no prior reply). */
@@ -106,7 +112,12 @@ export async function replyToTrainingAnnotationAsMember(
 ): Promise<TrainingReplyResult | null> {
   const annotation = await db.trainingAnnotation.findFirst({
     where: { id: trainingAnnotationId, trainingTrade: { is: { userId } } },
-    select: { id: true, trainingTradeId: true, adminId: true },
+    select: {
+      id: true,
+      trainingTradeId: true,
+      adminId: true,
+      admin: { select: { email: true, firstName: true } },
+    },
   });
   if (!annotation) return null;
 
@@ -141,6 +152,8 @@ export async function replyToTrainingAnnotationAsMember(
   return {
     trainingTradeId: annotation.trainingTradeId,
     adminId: annotation.adminId,
+    adminEmail: annotation.admin.email,
+    adminFirstName: annotation.admin.firstName,
     memberId: userId,
     isFirstReply,
   };

@@ -132,7 +132,14 @@ describe('countUnseenTrainingAnnotationsByTrainingTrade (BOLA on groupBy)', () =
 describe('replyToTrainingAnnotationAsMember (S8 §32-4 — atomic first-reply claim)', () => {
   const ANN = 'clx0annotation01';
   const ADMIN = 'clx0admin01';
-  const ownedRow = { id: ANN, trainingTradeId: TT, adminId: ADMIN };
+  const ADMIN_EMAIL = 'admin@fxmily.test';
+  const ADMIN_FIRST = 'Eliott';
+  const ownedRow = {
+    id: ANN,
+    trainingTradeId: TT,
+    adminId: ADMIN,
+    admin: { email: ADMIN_EMAIL, firstName: ADMIN_FIRST },
+  };
 
   it('first reply: claims atomically (memberRepliedAt:null), reports isFirstReply', async () => {
     vi.mocked(db.trainingAnnotation.findFirst).mockResolvedValue(ownedRow as never);
@@ -144,13 +151,18 @@ describe('replyToTrainingAnnotationAsMember (S8 §32-4 — atomic first-reply cl
     expect(res).toEqual({
       trainingTradeId: TT,
       adminId: ADMIN,
+      adminEmail: ADMIN_EMAIL,
+      adminFirstName: ADMIN_FIRST,
       memberId: USER,
       isFirstReply: true,
     });
-    // 🚨 BOLA — ownership read is scoped through the backtest owner relation.
+    // 🚨 BOLA — ownership read is scoped through the backtest owner relation,
+    // and pulls the author's email/firstName for the immediate reply email.
     const readArg = vi.mocked(db.trainingAnnotation.findFirst).mock.calls[0]![0] as {
       where: { id: string; trainingTrade: { is: { userId: string } } };
+      select: { admin: { select: Record<string, boolean> } };
     };
+    expect(Object.keys(readArg.select.admin.select).sort()).toEqual(['email', 'firstName']);
     expect(readArg.where.id).toBe(ANN);
     expect(readArg.where.trainingTrade).toEqual({ is: { userId: USER } });
     // The first claim filters on memberRepliedAt:null AND the owner relation,
@@ -178,6 +190,8 @@ describe('replyToTrainingAnnotationAsMember (S8 §32-4 — atomic first-reply cl
     expect(res).toEqual({
       trainingTradeId: TT,
       adminId: ADMIN,
+      adminEmail: ADMIN_EMAIL,
+      adminFirstName: ADMIN_FIRST,
       memberId: USER,
       isFirstReply: false,
     });

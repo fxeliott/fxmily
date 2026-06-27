@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
+import { sendTrainingReplyReceivedEmail } from '@/lib/email/send';
 import { enqueueTrainingReplyNotification } from '@/lib/notifications/enqueue';
 import { trainingReplyCreateSchema } from '@/lib/schemas/training-annotation';
 import { trainingSessionIdSchema } from '@/lib/schemas/training-session';
@@ -271,6 +272,19 @@ export async function replyToTrainingAnnotationAction(
       trainingAnnotationId: parsed.data.trainingAnnotationId,
       trainingTradeId: result.trainingTradeId,
       memberId: result.memberId,
+    });
+
+    // Parity with the admin→member correction flow: an IMMEDIATE best-effort
+    // email so a push-less admin is still notified (the J9 dispatcher returns on
+    // `no_subscriptions` before its fallback). §21.5/RGPD: admin training
+    // deep-link only, no member PII in the body. Never rolls back the reply.
+    void sendTrainingReplyReceivedEmail({
+      to: result.adminEmail,
+      recipientFirstName: result.adminFirstName,
+      memberId: result.memberId,
+      trainingTradeId: result.trainingTradeId,
+    }).catch((err) => {
+      console.error('[training.replyToTrainingAnnotation] email failed', err);
     });
   }
 

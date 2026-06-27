@@ -5,12 +5,17 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { TrainingSessionCard } from '@/components/training/training-session-card';
-import { TrainingEquityCard, TrainingStatsBar } from '@/components/training/training-stats-bar';
+import {
+  TrainingEquityCard,
+  TrainingRegularityBar,
+  TrainingStatsBar,
+} from '@/components/training/training-stats-bar';
 import { TrainingTradeCardLinkable } from '@/components/training/training-trade-card-linkable';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
+import type { TrainingOutcome } from '@/generated/prisma/enums';
 import { countUnseenTrainingAnnotationsByTrainingTrade } from '@/lib/training/training-annotation-member-service';
 import { listTrainingSessionsForUser } from '@/lib/training/training-session-service';
 import {
@@ -26,8 +31,21 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 interface TrainingPageProps {
-  searchParams: Promise<{ cursor?: string }>;
+  searchParams: Promise<{ outcome?: string; cursor?: string }>;
 }
+
+/** §255 result filter (brief "journal filtrable"). Labels stay strictly
+ * descriptive (result only), never a market judgement (garde-fou §2). */
+const OUTCOME_FILTERS = [
+  { v: 'all', label: 'Tous' },
+  { v: 'win', label: 'Gagnants' },
+  { v: 'loss', label: 'Perdants' },
+  { v: 'break_even', label: 'Break-even' },
+] as const;
+
+const OUTCOME_FILTER_LABEL: Record<string, string> = Object.fromEntries(
+  OUTCOME_FILTERS.map((f) => [f.v, f.label]),
+);
 
 /** Backtest ids are cuids — a forged `?cursor=` must degrade to page 1, never
  * to a 500 (mirror `/journal` `parseCursor`). */
@@ -35,8 +53,20 @@ function parseTrainingCursor(value: string | undefined): string | undefined {
   return value && /^[a-z0-9]{20,40}$/i.test(value) ? value : undefined;
 }
 
-function trainingHref(cursor?: string): string {
-  return cursor ? `/training?cursor=${cursor}` : '/training';
+/** Whitelist the result filter — anything else (forged / typo) degrades to
+ * "Tous" (undefined), never a 500 (mirror `/journal` `parseFilter`). */
+function parseTrainingOutcome(value: string | undefined): TrainingOutcome | undefined {
+  return value === 'win' || value === 'loss' || value === 'break_even' ? value : undefined;
+}
+
+/** Build a `/training` href preserving the active filter across pagination
+ * (mirror `/journal` `journalHref`). `outcome === undefined` = "Tous". */
+function trainingHref(outcome: TrainingOutcome | undefined, cursor?: string): string {
+  const params = new URLSearchParams();
+  if (outcome) params.set('outcome', outcome);
+  if (cursor) params.set('cursor', cursor);
+  const qs = params.toString();
+  return qs ? `/training?${qs}` : '/training';
 }
 
 export default async function TrainingPage({ searchParams }: TrainingPageProps) {
@@ -46,7 +76,8 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
   // weaker than its own Server Action (`createTrainingTradeAction`).
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
-  const { cursor: rawCursor } = await searchParams;
+  const { outcome: rawOutcome, cursor: rawCursor } = await searchParams;
+  const outcome = parseTrainingOutcome(rawOutcome);
   const cursor = parseTrainingCursor(rawCursor);
 
   // A well-formed cursor can still fail the query (e.g. the backtest was
@@ -56,12 +87,12 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
   // outside the catch.
   let page: Awaited<ReturnType<typeof listTrainingTradesForUser>> | null = null;
   try {
-    page = await listTrainingTradesForUser(session.user.id, { limit: 50, cursor });
+    page = await listTrainingTradesForUser(session.user.id, { limit: 50, cursor, outcome });
   } catch (err) {
     if (!cursor) throw err;
     page = null;
   }
-  if (page === null) redirect(trainingHref());
+  if (page === null) redirect(trainingHref(outcome));
 
   const { items, nextCursor } = page;
   const [stats, unseenMap, sessions] = await Promise.all([
@@ -78,6 +109,18 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
     systemRespected: t.systemRespected,
   }));
 
+  // Full-history denominator for the footer "X sur N" — the active filter's own
+  // total (stats are full-history, so the filtered count is exact), not the
+  // grand total, so the footer stays honest under a filter.
+  const filteredTotal =
+    outcome === 'win'
+      ? stats.winCount
+      : outcome === 'loss'
+        ? stats.lossCount
+        : outcome === 'break_even'
+          ? stats.breakEvenCount
+          : stats.total;
+
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       <DashboardAmbient tone="cyan" />
@@ -88,14 +131,14 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
             href="/dashboard"
             className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
           >
-            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
             Tableau de bord
           </Link>
 
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="flex flex-col gap-1.5">
               <span className="t-eyebrow inline-flex items-center gap-1.5 text-[var(--cy)]">
-                <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} />
+                <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
                 Mode entraînement
               </span>
               <h1
@@ -110,14 +153,14 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                 href="/training/sessions/new"
                 className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}
               >
-                <Layers className="h-3.5 w-3.5" strokeWidth={1.75} />
+                <Layers className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
                 Nouvelle session
               </Link>
               <Link
                 href="/training/new"
                 className={cn(btnVariants({ kind: 'primary', size: 'm' }))}
               >
-                <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+                <Plus className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
                 Nouveau backtest
               </Link>
             </div>
@@ -141,7 +184,11 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
             className="rounded-control group flex items-center justify-between gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] px-4 py-3 transition-colors hover:border-[var(--cy)] hover:bg-[var(--cy-dim)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
           >
             <span className="flex items-center gap-2.5">
-              <NotebookPen className="h-4 w-4 shrink-0 text-[var(--cy)]" strokeWidth={1.75} />
+              <NotebookPen
+                className="h-4 w-4 shrink-0 text-[var(--cy)]"
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
               <span className="flex flex-col">
                 <span className="text-[13px] font-semibold text-[var(--t-1)]">
                   Débrief hebdo d&apos;entraînement
@@ -154,6 +201,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
             <ArrowRight
               className="h-4 w-4 shrink-0 text-[var(--t-3)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--cy)]"
               strokeWidth={1.75}
+              aria-hidden="true"
             />
           </Link>
         </header>
@@ -167,7 +215,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
               id="training-sessions-heading"
               className="t-h3 flex items-center gap-2 text-[var(--t-1)]"
             >
-              <Layers className="h-4 w-4 text-[var(--cy)]" strokeWidth={1.75} />
+              <Layers className="h-4 w-4 text-[var(--cy)]" strokeWidth={1.75} aria-hidden="true" />
               Séances de backtest
               <span className="t-cap text-[var(--t-4)] tabular-nums">({sessions.length})</span>
             </h2>
@@ -208,63 +256,134 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
               tip="Le résultat d'un backtest ne dit rien de ta valeur de trader. Ce qu'on mesure ici, c'est la discipline du process — anything can happen, ton geste reste propre."
             />
           </Card>
-        ) : items.length === 0 ? (
-          // Stale cursor — a backtest was deleted since this paginated link was
-          // rendered. Calm dead-end (the member DOES have backtests, just none on
-          // this page), never the onboarding copy.
-          <Card primary className="py-2">
-            <EmptyState
-              icon={GraduationCap}
-              headline="Plus rien à afficher ici."
-              lead="Tu es arrivé au bout de ta liste de backtests."
-              ctaPrimary="Revenir au début"
-              ctaHref="/training"
-            />
-          </Card>
         ) : (
           <>
             {sessions.length > 0 ? (
               <h2 className="t-h3 flex items-center gap-2 text-[var(--t-1)]">
-                <GraduationCap className="h-4 w-4 text-[var(--cy)]" strokeWidth={1.75} />
+                <GraduationCap
+                  className="h-4 w-4 text-[var(--cy)]"
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                />
                 Tous les backtests
               </h2>
             ) : null}
             <TrainingStatsBar stats={stats} />
-            <TrainingEquityCard points={equityPoints} total={stats.total} />
-            <ul className="flex flex-col gap-3">
-              {items.map((trade) => (
-                <li key={trade.id}>
-                  <TrainingTradeCardLinkable
-                    trade={trade}
-                    href={`/training/${trade.id}`}
-                    unseenAnnotationsCount={unseenMap.get(trade.id) ?? 0}
+            <TrainingRegularityBar stats={stats} sessionCount={sessions.length} />
+
+            {/* §255 — journal FILTRABLE par résultat. Miroir des pills /journal ;
+              §21.5-safe (db.trainingTrade only) + libellés strictement descriptifs
+              (résultat), jamais d'analyse de marché (garde-fou §2). */}
+            <nav
+              aria-label="Filtres"
+              className="flex flex-wrap items-center gap-2 border-b border-[var(--b-default)] pb-3"
+            >
+              {OUTCOME_FILTERS.map((f) => {
+                const active = (outcome ?? 'all') === f.v;
+                const count =
+                  f.v === 'win'
+                    ? stats.winCount
+                    : f.v === 'loss'
+                      ? stats.lossCount
+                      : f.v === 'break_even'
+                        ? stats.breakEvenCount
+                        : stats.total;
+                return (
+                  <Link
+                    key={f.v}
+                    href={trainingHref(f.v === 'all' ? undefined : (f.v as TrainingOutcome))}
+                    prefetch={false}
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(
+                      'rounded-pill inline-flex h-9 items-center gap-1.5 border px-3 text-[12px] font-medium transition-[color,border-color,transform] hover:-translate-y-px active:translate-y-0 active:scale-[0.98]',
+                      active
+                        ? 'border-[var(--cy-edge)] bg-[var(--cy-dim)] text-[var(--cy)]'
+                        : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:text-[var(--t-1)]',
+                    )}
+                  >
+                    {f.label}
+                    <span
+                      className={cn(
+                        'rounded-pill px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+                        active
+                          ? 'bg-[var(--bg)] text-[var(--cy)]'
+                          : 'bg-[var(--bg-2)] text-[var(--t-4)]',
+                      )}
+                    >
+                      {count}
+                    </span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {items.length === 0 ? (
+              <Card primary className="py-2">
+                {outcome ? (
+                  // Filtre actif sans correspondance — dead-end calme, jamais
+                  // l'onboarding (le membre A des backtests, juste aucun de ce
+                  // résultat).
+                  <EmptyState
+                    icon={GraduationCap}
+                    headline={`Aucun backtest « ${OUTCOME_FILTER_LABEL[outcome]} ».`}
+                    lead="Aucun backtest ne correspond à ce filtre pour l'instant."
+                    ctaPrimary="Voir tous les backtests"
+                    ctaHref="/training"
                   />
-                </li>
-              ))}
-            </ul>
-            <footer className="flex flex-col items-center gap-3 border-t border-[var(--b-subtle)] pt-4">
-              {nextCursor ? (
-                <Link
-                  href={trainingHref(nextCursor)}
-                  prefetch={false}
-                  className={cn(btnVariants({ kind: 'ghost', size: 'm' }))}
-                >
-                  Voir les backtests plus anciens
-                </Link>
-              ) : null}
-              <p className="t-foot text-center text-[var(--t-4)]">
-                {items.length} backtest{items.length > 1 ? 's' : ''} affiché
-                {items.length > 1 ? 's' : ''} sur {stats.total}
-                {cursor ? (
-                  <>
-                    {' · '}
-                    <Link href="/training" className="underline hover:text-[var(--t-2)]">
-                      revenir au début
+                ) : (
+                  // Stale cursor — a backtest was deleted since this paginated
+                  // link was rendered. Calm dead-end, never the onboarding copy.
+                  <EmptyState
+                    icon={GraduationCap}
+                    headline="Plus rien à afficher ici."
+                    lead="Tu es arrivé au bout de ta liste de backtests."
+                    ctaPrimary="Revenir au début"
+                    ctaHref="/training"
+                  />
+                )}
+              </Card>
+            ) : (
+              <>
+                <TrainingEquityCard points={equityPoints} total={stats.total} />
+                <ul className="flex flex-col gap-3">
+                  {items.map((trade) => (
+                    <li key={trade.id}>
+                      <TrainingTradeCardLinkable
+                        trade={trade}
+                        href={`/training/${trade.id}`}
+                        unseenAnnotationsCount={unseenMap.get(trade.id) ?? 0}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                <footer className="flex flex-col items-center gap-3 border-t border-[var(--b-subtle)] pt-4">
+                  {nextCursor ? (
+                    <Link
+                      href={trainingHref(outcome, nextCursor)}
+                      prefetch={false}
+                      className={cn(btnVariants({ kind: 'ghost', size: 'm' }))}
+                    >
+                      Voir les backtests plus anciens
                     </Link>
-                  </>
-                ) : null}
-              </p>
-            </footer>
+                  ) : null}
+                  <p className="t-foot text-center text-[var(--t-4)]">
+                    {items.length} backtest{items.length > 1 ? 's' : ''} affiché
+                    {items.length > 1 ? 's' : ''} sur {filteredTotal}
+                    {cursor ? (
+                      <>
+                        {' · '}
+                        <Link
+                          href={trainingHref(outcome)}
+                          className="underline hover:text-[var(--t-2)]"
+                        >
+                          revenir au début
+                        </Link>
+                      </>
+                    ) : null}
+                  </p>
+                </footer>
+              </>
+            )}
           </>
         )}
       </div>

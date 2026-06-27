@@ -188,6 +188,25 @@ describe('listTrainingTradesForUser (cursor-paginated)', () => {
     vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
     expect(await listTrainingTradesForUser('user-1')).toEqual({ items: [], nextCursor: null });
   });
+
+  it('§255 — adds an outcome filter to the where clause when one is given (still user-scoped)', async () => {
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    await listTrainingTradesForUser('user-1', { limit: 50, outcome: 'loss' });
+    const arg = vi.mocked(db.trainingTrade.findMany).mock.calls[0]![0] as {
+      where: { userId: string; outcome?: string };
+    };
+    expect(arg.where).toEqual({ userId: 'user-1', outcome: 'loss' });
+  });
+
+  it('§255 — omits the outcome key entirely when no filter is given (returns "Tous")', async () => {
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    await listTrainingTradesForUser('user-1', { limit: 50 });
+    const arg = vi.mocked(db.trainingTrade.findMany).mock.calls[0]![0] as {
+      where: Record<string, unknown>;
+    };
+    expect(arg.where).toEqual({ userId: 'user-1' });
+    expect(arg.where).not.toHaveProperty('outcome');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -221,19 +240,56 @@ describe('getTrainingTradeStatsForUser (§21.5 training-only aggregate)', () => 
       _avg: { resultR: new Prisma.Decimal('0.5') },
       _count: { resultR: 6 },
     } as never);
+    // §269 enrichment projection (7th Promise.all query). Two fully-filled rows
+    // on consecutive Europe/Paris civil days (2026-06-14 & -15). Independent of
+    // `total` above — these are distinct mocked queries (the unit's contract).
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([
+      {
+        enteredAt: new Date('2026-06-15T08:00:00.000Z'), // Paris 2026-06-15
+        outcome: 'win',
+        resultR: new Prisma.Decimal('1.5'),
+        systemRespected: true,
+        planFollowed: true,
+        riskDefinedBefore: true,
+        emotionalStateNoted: true,
+        noImpulsiveDeviation: true,
+      },
+      {
+        enteredAt: new Date('2026-06-14T20:00:00.000Z'), // Paris 2026-06-14 (22:00)
+        outcome: 'loss',
+        resultR: new Prisma.Decimal('-1'),
+        systemRespected: false,
+        planFollowed: true,
+        riskDefinedBefore: true,
+        emotionalStateNoted: true,
+        noImpulsiveDeviation: true,
+      },
+    ] as never);
 
-    const stats = await getTrainingTradeStatsForUser('user-1');
+    // Fixed clock so the §269 regularity/streak window is deterministic.
+    const stats = await getTrainingTradeStatsForUser(
+      'user-1',
+      new Date('2026-06-15T12:00:00.000Z'),
+    );
 
     expect(stats).toEqual({
       total: 10,
       decidedCount: 7,
       winCount: 4,
+      lossCount: 3,
+      breakEvenCount: 0,
       withRCount: 6,
       avgR: 0.5,
       systemDecidedCount: 7,
       systemKeptCount: 5,
       checklistCleanCount: 2,
       checklistAnsweredCount: 5,
+      // §269: both rows are filled on consecutive days → 2 active days, a
+      // 2-day streak, and a 100% field-completion rate.
+      activeDays30: 2,
+      currentDayStreak: 2,
+      longestDayStreak: 2,
+      fieldCompletionRate: 1,
     });
 
     // §21.5 — every read is user-scoped on db.trainingTrade; the avg only ever
@@ -282,18 +338,26 @@ describe('getTrainingTradeStatsForUser (§21.5 training-only aggregate)', () => 
       _avg: { resultR: null },
       _count: { resultR: 0 },
     } as never);
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
 
     const stats = await getTrainingTradeStatsForUser('user-1');
     expect(stats).toEqual({
       total: 0,
       decidedCount: 0,
       winCount: 0,
+      lossCount: 0,
+      breakEvenCount: 0,
       withRCount: 0,
       avgR: null,
       systemDecidedCount: 0,
       systemKeptCount: 0,
       checklistCleanCount: 0,
       checklistAnsweredCount: 0,
+      // No backtest → no regularity, and "—" (null) completeness, never 0 %.
+      activeDays30: 0,
+      currentDayStreak: 0,
+      longestDayStreak: 0,
+      fieldCompletionRate: null,
     });
   });
 });

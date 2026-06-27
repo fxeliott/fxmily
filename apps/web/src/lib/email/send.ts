@@ -211,6 +211,16 @@ export function buildTrainingTradeDetailUrl(trainingTradeId: string): string {
   return `${base}/training/${encodeURIComponent(trainingTradeId)}`;
 }
 
+/** Build the absolute URL to the ADMIN backtest-correction detail (§21 mode
+ *  entraînement, S8 V2 §32-4). Admin-facing — points at the admin member
+ *  training surface; still 100% inside the §21.5 training world (no real edge). */
+export function buildAdminTrainingTradeUrl(memberId: string, trainingTradeId: string): string {
+  const base = env.AUTH_URL.replace(/\/+$/, '');
+  return `${base}/admin/members/${encodeURIComponent(memberId)}/training/${encodeURIComponent(
+    trainingTradeId,
+  )}`;
+}
+
 /** Build the absolute URL to /admin/reports/[id] — used by the J8 weekly digest. */
 export function buildAdminReportUrl(reportId: string): string {
   const base = env.AUTH_URL.replace(/\/+$/, '');
@@ -435,6 +445,60 @@ export async function sendTrainingAnnotationReceivedEmail({
       `${FALLBACK_CTA_BY_TYPE[type]} : ${trainingUrl}`,
       ``,
       `La correction est marquée comme lue dès que tu ouvres le backtest.`,
+    ].join('\n'),
+  });
+}
+
+// ----- S8 V2 §32-4 — member reply received (immediate, ADMIN-facing) --------
+
+export interface SendTrainingReplyReceivedParams {
+  to: string;
+  recipientFirstName: string | null | undefined;
+  memberId: string;
+  trainingTradeId: string;
+}
+
+/**
+ * Notify the AUTHORING ADMIN that a member replied to one of their backtest
+ * corrections (SPEC §21 — S8 V2 §32-4). Immediate + best-effort, the exact
+ * mirror of `sendTrainingAnnotationReceivedEmail`: closes the gap where an admin
+ * WITHOUT a push subscription got NO notification of the reply (the J9
+ * dispatcher returns on `no_subscriptions` before its fallback email). The
+ * caller fires it once, on the FIRST reply only (a later edit must not re-ping).
+ *
+ * §21.5 statistical isolation: reuses the admin-facing `training_reply_received`
+ * copy (no pair, no P&L) and deep-links to the ADMIN training surface only —
+ * never a real-edge route. RGPD: no member PII in the email body; the member's
+ * name lives behind the admin link, never in the message (mirror of the access-
+ * request email posture).
+ */
+export async function sendTrainingReplyReceivedEmail({
+  to,
+  recipientFirstName,
+  memberId,
+  trainingTradeId,
+}: SendTrainingReplyReceivedParams): Promise<{ id: string | null; delivered: boolean }> {
+  const adminUrl = buildAdminTrainingTradeUrl(memberId, trainingTradeId);
+  const recipient = recipientFirstName?.trim() || 'Eliott';
+  const type = 'training_reply_received' as const;
+
+  return sendEmail({
+    to,
+    subject: FALLBACK_SUBJECT_BY_TYPE[type],
+    react: NotificationFallbackEmail({
+      recipientFirstName,
+      type,
+      deepUrl: adminUrl,
+      channel: 'primary',
+    }),
+    text: [
+      `Salut ${recipient},`,
+      ``,
+      FALLBACK_BODY_BY_TYPE[type],
+      ``,
+      `${FALLBACK_CTA_BY_TYPE[type]} : ${adminUrl}`,
+      ``,
+      `Le détail (membre, réponse) reste dans l'espace admin, jamais dans cet email.`,
     ].join('\n'),
   });
 }

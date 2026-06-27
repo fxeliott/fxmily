@@ -147,20 +147,38 @@ export async function getTrainingSessionWithTradesById(
 }
 
 /**
- * Light owner-scoped read of a session's identity (id + label + ended flag),
- * WITHOUT pulling its backtests. Used by `/training/new?sessionId=…` to show
- * "Dans la session : …" and to drop a stale/forged param. Returns null if the
- * session is absent or not owned.
+ * Light owner-scoped read of a session's identity (id + label + ended flag +
+ * the practised symbol/timeframe), WITHOUT pulling its backtests. Used by
+ * `/training/new?sessionId=…` to show "Dans la session : …" and to drop a
+ * stale/forged param, and by the backtest detail page to echo the session
+ * context (§254). Returns null if the session is absent or not owned.
+ *
+ * 🚨 §21.5: `symbol`/`timeframe` are practice CONTEXT (free strings the member
+ * typed), never a P&L — surfacing them stays inside the training world.
  */
 export async function getTrainingSessionMeta(
   id: string,
   userId: string,
-): Promise<{ id: string; label: string | null; isEnded: boolean } | null> {
+): Promise<{
+  id: string;
+  label: string | null;
+  isEnded: boolean;
+  symbol: string | null;
+  timeframe: string | null;
+} | null> {
   const row = await db.trainingSession.findFirst({
     where: { id, memberId: userId },
-    select: { id: true, label: true, endedAt: true },
+    select: { id: true, label: true, endedAt: true, symbol: true, timeframe: true },
   });
-  return row ? { id: row.id, label: row.label, isEnded: row.endedAt != null } : null;
+  return row
+    ? {
+        id: row.id,
+        label: row.label,
+        isEnded: row.endedAt != null,
+        symbol: row.symbol,
+        timeframe: row.timeframe,
+      }
+    : null;
 }
 
 /**

@@ -9,6 +9,7 @@ import {
 } from '@/app/training/actions';
 import { Btn } from '@/components/ui/btn';
 import { TRAINING_REPLY_MAX } from '@/lib/schemas/training-annotation';
+import { TRAINING_UI_COPY } from '@/lib/training/training-ui-copy';
 
 /**
  * Member reply to a backtest correction (S8 V2 §32-4 — « le membre les voit et
@@ -94,7 +95,7 @@ export function TrainingReplyForm({ trainingAnnotationId, existingReply }: Train
         value={reply}
         onChange={(e) => setReply(e.target.value)}
         maxLength={TRAINING_REPLY_MAX + 256 /* server enforces the hard cap */}
-        placeholder="Ex. Compris — je vais travailler ma patience d'exécution sur les prochains backtests."
+        placeholder={TRAINING_UI_COPY.replyPlaceholder}
         className="rounded-card resize-y border border-[var(--b-default)] bg-[var(--bg)] px-3 py-2.5 font-sans text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
         aria-invalid={state?.fieldErrors?.reply ? 'true' : undefined}
         aria-describedby={

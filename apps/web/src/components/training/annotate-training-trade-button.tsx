@@ -19,6 +19,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { TRAINING_ANNOTATION_COMMENT_MAX } from '@/lib/schemas/training-annotation';
+import { TRAINING_UI_COPY } from '@/lib/training/training-ui-copy';
 import { ALLOWED_IMAGE_MIME_TYPES, MAX_SCREENSHOT_BYTES } from '@/lib/storage/types';
 
 /**
@@ -135,7 +136,7 @@ export function AnnotateTrainingTradeButton({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               maxLength={TRAINING_ANNOTATION_COMMENT_MAX + 256 /* server enforces hard cap */}
-              placeholder="Ex. R:R 1:2 prévu, mais entrée anticipée avant la confirmation — travaille la patience d'exécution (cf. fiche Douglas « attendre son setup »)."
+              placeholder={TRAINING_UI_COPY.annotationPlaceholder}
               className="rounded-card resize-y border border-[var(--b-default)] bg-[var(--bg)] px-3 py-2.5 font-sans text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
               aria-invalid={state?.fieldErrors?.comment ? 'true' : undefined}
               aria-describedby={

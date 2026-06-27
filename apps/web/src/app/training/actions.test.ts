@@ -33,6 +33,13 @@ const revalidatePathMock = vi.fn<(path: string) => void>();
 const createTrainingTradeMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const getTrainingSessionMetaMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 const logAuditMock = vi.fn<(arg: unknown) => Promise<void>>(async () => undefined);
+const replyToTrainingAnnotationAsMemberMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
+const enqueueTrainingReplyNotificationMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  async () => undefined,
+);
+const sendTrainingReplyReceivedEmailMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  async () => ({ id: 'em_1', delivered: true }),
+);
 
 vi.mock('@/auth', () => ({ auth: authMock }));
 vi.mock('next/navigation', () => ({ redirect: redirectMock }));
@@ -43,9 +50,18 @@ vi.mock('@/lib/training/training-trade-service', () => ({
 vi.mock('@/lib/training/training-session-service', () => ({
   getTrainingSessionMeta: getTrainingSessionMetaMock,
 }));
+vi.mock('@/lib/training/training-annotation-member-service', () => ({
+  replyToTrainingAnnotationAsMember: replyToTrainingAnnotationAsMemberMock,
+}));
+vi.mock('@/lib/notifications/enqueue', () => ({
+  enqueueTrainingReplyNotification: enqueueTrainingReplyNotificationMock,
+}));
+vi.mock('@/lib/email/send', () => ({
+  sendTrainingReplyReceivedEmail: sendTrainingReplyReceivedEmailMock,
+}));
 vi.mock('@/lib/auth/audit', () => ({ logAudit: logAuditMock }));
 
-const { createTrainingTradeAction } = await import('./actions');
+const { createTrainingTradeAction, replyToTrainingAnnotationAction } = await import('./actions');
 
 const MEMBER_ID = 'clx0member01';
 // A valid `training/{userId}/{nanoid32}.{ext}` key whose userId === MEMBER_ID
@@ -80,6 +96,9 @@ beforeEach(() => {
   createTrainingTradeMock.mockReset();
   getTrainingSessionMetaMock.mockReset();
   logAuditMock.mockClear();
+  replyToTrainingAnnotationAsMemberMock.mockReset();
+  enqueueTrainingReplyNotificationMock.mockClear();
+  sendTrainingReplyReceivedEmailMock.mockClear();
 
   authMock.mockResolvedValue({ user: { id: MEMBER_ID, status: 'active' } });
   createTrainingTradeMock.mockResolvedValue({ id: 'tt_1' });
@@ -293,5 +312,111 @@ describe('createTrainingTradeAction — persistence failure', () => {
     expect(logAuditMock).not.toHaveBeenCalled();
     expect(redirectMock).not.toHaveBeenCalled();
     expect(revalidatePathMock).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// S8 V2 §32-4 — member reply to a correction (notify-once + immediate email)
+// =============================================================================
+
+const ANN_ID = 'clx0annotation0001';
+const TT_ID = 'clx0trainingtrade1';
+const ADMIN_ID = 'clx0admin00000001';
+const ADMIN_EMAIL = 'eliott@fxmily.test';
+
+function replyForm(reply = 'Compris, je travaille la patience.'): FormData {
+  return form({ trainingAnnotationId: ANN_ID, reply });
+}
+
+describe('replyToTrainingAnnotationAction — auth + isolation', () => {
+  it('returns unauthorized when there is no active session', async () => {
+    authMock.mockResolvedValueOnce(null);
+    const result = await replyToTrainingAnnotationAction(null, replyForm());
+    expect(result).toEqual({ ok: false, error: 'unauthorized' });
+    expect(replyToTrainingAnnotationAsMemberMock).not.toHaveBeenCalled();
+    expect(sendTrainingReplyReceivedEmailMock).not.toHaveBeenCalled();
+  });
+
+  it('returns invalid_input on an empty reply (Zod), never touching the service', async () => {
+    const result = await replyToTrainingAnnotationAction(null, replyForm('   '));
+    expect(result.ok).toBe(false);
+    if (result.ok === false) expect(result.error).toBe('invalid_input');
+    expect(replyToTrainingAnnotationAsMemberMock).not.toHaveBeenCalled();
+    expect(sendTrainingReplyReceivedEmailMock).not.toHaveBeenCalled();
+  });
+
+  it('returns not_found when the service resolves null (foreign/deleted), no notify, no email', async () => {
+    replyToTrainingAnnotationAsMemberMock.mockResolvedValueOnce(null);
+    const result = await replyToTrainingAnnotationAction(null, replyForm());
+    expect(result).toEqual({ ok: false, error: 'not_found' });
+    expect(enqueueTrainingReplyNotificationMock).not.toHaveBeenCalled();
+    expect(sendTrainingReplyReceivedEmailMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('replyToTrainingAnnotationAction — first reply fires push + immediate email', () => {
+  it('enqueues the push AND sends the admin email exactly once on the first reply', async () => {
+    replyToTrainingAnnotationAsMemberMock.mockResolvedValueOnce({
+      trainingTradeId: TT_ID,
+      adminId: ADMIN_ID,
+      adminEmail: ADMIN_EMAIL,
+      adminFirstName: 'Eliott',
+      memberId: MEMBER_ID,
+      isFirstReply: true,
+    });
+
+    const result = await replyToTrainingAnnotationAction(null, replyForm());
+
+    expect(result.ok).toBe(true);
+    expect(enqueueTrainingReplyNotificationMock).toHaveBeenCalledTimes(1);
+    expect(enqueueTrainingReplyNotificationMock).toHaveBeenCalledWith(ADMIN_ID, {
+      trainingAnnotationId: ANN_ID,
+      trainingTradeId: TT_ID,
+      memberId: MEMBER_ID,
+    });
+    expect(sendTrainingReplyReceivedEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendTrainingReplyReceivedEmailMock).toHaveBeenCalledWith({
+      to: ADMIN_EMAIL,
+      recipientFirstName: 'Eliott',
+      memberId: MEMBER_ID,
+      trainingTradeId: TT_ID,
+    });
+  });
+
+  it('🚨 §21.5 — revalidates ONLY training surfaces, never /journal or /dashboard', async () => {
+    replyToTrainingAnnotationAsMemberMock.mockResolvedValueOnce({
+      trainingTradeId: TT_ID,
+      adminId: ADMIN_ID,
+      adminEmail: ADMIN_EMAIL,
+      adminFirstName: null,
+      memberId: MEMBER_ID,
+      isFirstReply: true,
+    });
+
+    await replyToTrainingAnnotationAction(null, replyForm());
+
+    const paths = revalidatePathMock.mock.calls.map((c) => c[0]);
+    expect(paths).toContain(`/training/${TT_ID}`);
+    expect(paths).toContain(`/admin/members/${MEMBER_ID}/training/${TT_ID}`);
+    expect(paths.some((p) => p.startsWith('/journal') || p.startsWith('/dashboard'))).toBe(false);
+  });
+});
+
+describe('replyToTrainingAnnotationAction — an edit must not re-ping the admin', () => {
+  it('skips BOTH the push enqueue and the email when isFirstReply is false', async () => {
+    replyToTrainingAnnotationAsMemberMock.mockResolvedValueOnce({
+      trainingTradeId: TT_ID,
+      adminId: ADMIN_ID,
+      adminEmail: ADMIN_EMAIL,
+      adminFirstName: 'Eliott',
+      memberId: MEMBER_ID,
+      isFirstReply: false,
+    });
+
+    const result = await replyToTrainingAnnotationAction(null, replyForm('Je corrige ma réponse.'));
+
+    expect(result.ok).toBe(true);
+    expect(enqueueTrainingReplyNotificationMock).not.toHaveBeenCalled();
+    expect(sendTrainingReplyReceivedEmailMock).not.toHaveBeenCalled();
   });
 });

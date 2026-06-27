@@ -16,6 +16,7 @@ import {
   TRAINING_SESSION_LABEL_MAX,
   TRAINING_SESSION_NOTES_MAX,
 } from '@/lib/schemas/training-session';
+import { TRAINING_UI_COPY } from '@/lib/training/training-ui-copy';
 import { cn } from '@/lib/utils';
 
 /**
@@ -106,7 +107,7 @@ export function TrainingSessionForm() {
               name="label"
               type="text"
               maxLength={TRAINING_SESSION_LABEL_MAX}
-              placeholder="Ex : Range GBPUSD — janvier 2024"
+              placeholder={TRAINING_UI_COPY.sessionLabelPlaceholder}
               disabled={pending}
               aria-invalid={fieldErrors.label ? 'true' : undefined}
               aria-describedby={fieldErrors.label ? 'label-error' : undefined}

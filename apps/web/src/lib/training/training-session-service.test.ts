@@ -197,11 +197,13 @@ describe('getTrainingSessionWithTradesById', () => {
 // ---------------------------------------------------------------------------
 
 describe('getTrainingSessionMeta', () => {
-  it('selects id/label/endedAt only and derives isEnded', async () => {
+  it('selects id/label/endedAt/symbol/timeframe and derives isEnded', async () => {
     vi.mocked(db.trainingSession.findFirst).mockResolvedValue({
       id: 'ts-1',
       label: 'X',
       endedAt: null,
+      symbol: 'EURUSD',
+      timeframe: 'H1',
     } as never);
 
     const meta = await getTrainingSessionMeta('ts-1', 'user-1');
@@ -211,8 +213,20 @@ describe('getTrainingSessionMeta', () => {
       select: Record<string, boolean>;
     };
     expect(arg.where).toEqual({ id: 'ts-1', memberId: 'user-1' });
-    expect(Object.keys(arg.select).sort()).toEqual(['endedAt', 'id', 'label']);
-    expect(meta).toEqual({ id: 'ts-1', label: 'X', isEnded: false });
+    expect(Object.keys(arg.select).sort()).toEqual([
+      'endedAt',
+      'id',
+      'label',
+      'symbol',
+      'timeframe',
+    ]);
+    expect(meta).toEqual({
+      id: 'ts-1',
+      label: 'X',
+      isEnded: false,
+      symbol: 'EURUSD',
+      timeframe: 'H1',
+    });
   });
 
   it('marks isEnded true when endedAt is set, null when not found', async () => {
@@ -220,6 +234,8 @@ describe('getTrainingSessionMeta', () => {
       id: 'ts-1',
       label: null,
       endedAt: new Date('2026-06-02T00:00:00.000Z'),
+      symbol: null,
+      timeframe: null,
     } as never);
     expect((await getTrainingSessionMeta('ts-1', 'user-1'))?.isEnded).toBe(true);
 

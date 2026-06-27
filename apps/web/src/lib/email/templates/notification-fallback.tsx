@@ -169,6 +169,14 @@ const META_BY_TYPE: Record<
     body: 'Un élément de ton suivi est resté de côté. Un coup d’œil quand tu peux — et indique s’il y a une raison. Rien de grave : juste rester honnête avec toi-même.',
     ctaLabel: 'Voir mon suivi →',
   },
+  // S8 V2 §32-4 — ADMIN-facing: a member replied to a backtest correction.
+  training_reply_received: {
+    title: 'Réponse à une correction',
+    preview: 'Un membre a répondu à l’une de tes corrections.',
+    eyebrow: 'ENTRAÎNEMENT · RÉPONSE',
+    body: 'Un membre a répondu à l’une de tes corrections de backtest. Le détail t’attend dans son espace entraînement, côté admin.',
+    ctaLabel: 'Voir la réponse →',
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

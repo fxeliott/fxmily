@@ -6,6 +6,7 @@ import type { SerializedTrainingAnnotation } from '@/lib/admin/training-annotati
 import { selectStorage, StorageError } from '@/lib/storage';
 
 import { DeleteTrainingAnnotationButton } from './delete-training-annotation-button';
+import { TrainingReplyForm } from './training-reply-form';
 
 /**
  * Backtest-corrections list (J-T3 — carbon mirror of
@@ -15,7 +16,8 @@ import { DeleteTrainingAnnotationButton } from './delete-training-annotation-but
  *   - `/admin/members/[id]/training/[trainingTradeId]` — admin, with the
  *     delete CTA + read-receipt badge ("Non lue" → green "Lue") on rows the
  *     current admin authored.
- *   - `/training/[trainingTradeId]` — member, read-only.
+ *   - `/training/[trainingTradeId]` — member, with the reply island
+ *     (`TrainingReplyForm`, §32-4) to answer / acknowledge each correction.
  *
  * 🚨 STATISTICAL ISOLATION (§21.5): consumes `SerializedTrainingAnnotation`
  * only; `selectStorage().getReadUrl` resolves a `training_annotations/` key
@@ -164,6 +166,37 @@ function TrainingAnnotationCard({
             className="rounded-card max-h-96 w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
           />
         </div>
+      ) : null}
+
+      {/* S8 V2 §32-4 — the member's reply, shown on BOTH surfaces (the member
+          re-reads their own reply; the admin sees the loop close). Read display
+          only — editing happens via the member form below. */}
+      {annotation.memberReply ? (
+        <div className="rounded-card mt-3 border border-[var(--b-subtle)] bg-[var(--bg)] p-3">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <Pill tone="mute">{isAdmin ? 'Réponse du membre' : 'Ta réponse'}</Pill>
+            {annotation.memberRepliedAt ? (
+              <time
+                dateTime={annotation.memberRepliedAt}
+                className="t-cap ml-auto text-[var(--t-4)]"
+              >
+                {DATETIME_FMT.format(new Date(annotation.memberRepliedAt))}
+              </time>
+            ) : null}
+          </div>
+          <p className="t-body leading-relaxed whitespace-pre-wrap text-[var(--t-2)]">
+            {annotation.memberReply}
+          </p>
+        </div>
+      ) : null}
+
+      {/* Member-only reply composer (inline island). The admin surface never
+          replies here — the admin answers by adding another correction. */}
+      {!isAdmin ? (
+        <TrainingReplyForm
+          trainingAnnotationId={annotation.id}
+          existingReply={annotation.memberReply}
+        />
       ) : null}
 
       {canDelete ? (

@@ -186,12 +186,34 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     await page.getByRole('radio', { name: 'Gagnant' }).click();
     await page.getByRole('button', { name: /Suivant/ }).click();
 
-    // Step 5/6 — Respect du système (gated — must answer).
+    // Step 5/7 — Respect du système (gated — must answer).
     await expect(wizardHeading).toHaveText('Respect du système');
     await page.getByRole('group', { name: 'Système respecté ?' }).getByText('Oui').click();
     await page.getByRole('button', { name: /Suivant/ }).click();
 
-    // Step 6/6 — Leçon tirée → submit.
+    // Step 6/7 — Checklist process (S8 V2 §33-2). Optional discipline mirror;
+    // answer a deliberate MIX so the tri-state round-trips to the DB
+    // (Oui→true / Oui→true / N/A→null / Oui→true).
+    //
+    // This is the only TALL wizard step. Each option is an `sr-only` <input>
+    // wrapped in a styled <label>: targeting the VISIBLE label forces a scroll
+    // under the `position: sticky` footer, and the per-step heading auto-focus
+    // (training-form-wizard.tsx) re-scrolls to the top — the two fight and
+    // Playwright's "stable" gate never settles on the emulated mobile viewport
+    // (the controls are provably interactable: chromium drives them fine). So we
+    // drive the real <input> directly with `check({force})`, which dispatches
+    // the change with NO actionability/scroll dance. The DB tri-state assertions
+    // below prove every check registered — a no-op would fail them.
+    await expect(wizardHeading).toHaveText('Checklist process');
+    const pickChecklist = (name: string, value: 'true' | 'false' | 'na') =>
+      page.locator(`input[name="${name}"][value="${value}"]`).check({ force: true });
+    await pickChecklist('planFollowed', 'true');
+    await pickChecklist('riskDefinedBefore', 'true');
+    await pickChecklist('emotionalStateNoted', 'na');
+    await pickChecklist('noImpulsiveDeviation', 'true');
+    await page.getByRole('button', { name: /Suivant/ }).click({ force: true });
+
+    // Step 7/7 — Leçon tirée → submit.
     await expect(wizardHeading).toHaveText('Leçon tirée');
     // `#lessonLearned` not getByLabel — the step heading is ALSO "Leçon tirée"
     // (it labels the <section> via aria-labelledby), so the accessible-name
@@ -215,12 +237,26 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     // --- 6. DB: the trade carries the sessionId + a training-prefixed capture.
     const tt = await db.trainingTrade.findFirst({
       where: { userId: member.id, sessionId },
-      select: { id: true, sessionId: true, entryScreenshotKey: true, pair: true },
+      select: {
+        id: true,
+        sessionId: true,
+        entryScreenshotKey: true,
+        pair: true,
+        planFollowed: true,
+        riskDefinedBefore: true,
+        emotionalStateNoted: true,
+        noImpulsiveDeviation: true,
+      },
     });
     expect(tt).not.toBeNull();
     expect(tt?.sessionId).toBe(sessionId);
     expect(tt?.pair).toBe('GBPUSD');
     expect(tt?.entryScreenshotKey).toMatch(new RegExp(`^training/${member.id}/`));
+    // S8 V2 §33-2 — the checklist tri-state round-tripped from the wizard.
+    expect(tt?.planFollowed).toBe(true);
+    expect(tt?.riskDefinedBefore).toBe(true);
+    expect(tt?.emotionalStateNoted).toBeNull();
+    expect(tt?.noImpulsiveDeviation).toBe(true);
 
     // --- 7. /training landing shows THIS session's card with its backtest
     // count (scoped by href — the member also has the seeded session from
@@ -231,7 +267,22 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     await expect(createdCard).toBeVisible();
     await expect(createdCard).toContainText('1 backtest dans cette séance');
 
-    // --- 8. DoD#3 isolation: the backtest NEVER leaks into the real journal.
+    // --- 8. The backtest DETAIL surfaces the checklist (§33-2) + a calm
+    // « En attente de correction » review pill (§33-3): no correction exists
+    // yet on this UI-created trade.
+    // `domcontentloaded`, NOT the default `load`: the detail page renders the
+    // backtest screenshot <img> whose src is the `/api/uploads/…` route. On a
+    // cold dev compile that route can stall the `load` event past the budget
+    // (proven flaky: server returns the HTML in ~165ms but `goto` waits for the
+    // image). The assertions below auto-wait, so readiness is still gated — this
+    // matches the file's "no networkidle, expect-gated" determinism canon.
+    await page.goto(`/training/${tt!.id}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { level: 1, name: 'GBPUSD' })).toBeVisible();
+    await expect(page.getByText('En attente de correction')).toBeVisible();
+    await expect(page.getByText('Checklist process')).toBeVisible();
+    await expect(page.getByText("Plan d'exécution suivi")).toBeVisible();
+
+    // --- 9. DoD#3 isolation: the backtest NEVER leaks into the real journal.
     await page.goto('/journal');
     await expect(page.getByRole('heading', { name: 'Ton journal est vide.' })).toBeVisible();
   });
@@ -286,12 +337,48 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     });
     expect(annotation?.comment).toBe(TRAINING_COMMENT);
 
-    // --- 4. Member opens the backtest → sees the correction.
+    // --- 4. Member opens the backtest → sees the correction; the review status
+    // flips to « Correction vue » (the page marks corrections seen on read).
     await page.context().clearCookies();
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
     await page.goto(`/training/${seededTradeId}`);
     await expect(page.getByText('Corrections reçues')).toBeVisible();
     await expect(page.getByText(TRAINING_COMMENT)).toBeVisible();
+    await expect(page.getByText('Correction vue')).toBeVisible();
+
+    // --- 5. §32-4 — the member REPLIES to the correction; it persists + shows.
+    const MEMBER_REPLY = 'Compris — je travaille ma patience d’exécution (réponse e2e S8).';
+    await page.getByRole('button', { name: 'Répondre à Eliott' }).click();
+    const replyBox = page.getByLabel('Ta réponse');
+    await expect(replyBox).toBeVisible();
+    await replyBox.fill(MEMBER_REPLY);
+    await page.getByRole('button', { name: 'Envoyer ma réponse' }).click();
+    // Deterministic POST-WRITE signal: on success the island collapses AND the
+    // server re-render (revalidatePath) flips the CTA to « Modifier ta réponse »
+    // (existingReply now set). Gating on this — NOT on the reply text, which is
+    // ALSO the still-open textarea's value pre-submit and would match instantly
+    // (a race that lets the DB read below run before the write commits).
+    await expect(page.getByRole('button', { name: 'Modifier ta réponse' })).toBeVisible({
+      timeout: 30_000,
+    });
+    // The persisted reply now renders in the read-block (textarea is gone).
+    await expect(page.getByText(MEMBER_REPLY)).toBeVisible();
+
+    // §21.5: the reply lands on the TrainingAnnotation, never a real one.
+    const replied = await db.trainingAnnotation.findFirst({
+      where: { trainingTradeId: seededTradeId, adminId: admin.id },
+      select: { memberReply: true },
+    });
+    expect(replied?.memberReply).toBe(MEMBER_REPLY);
+
+    // --- 6. The admin re-opens the backtest → sees the member's reply
+    // (loop closes, §32 admin↔membre).
+    await page.context().clearCookies();
+    await page.goto('/login');
+    await loginAs(page, request, admin.email, admin.password);
+    await page.goto(`/admin/members/${member.id}/training/${seededTradeId}`);
+    await expect(page.getByText('Réponse du membre')).toBeVisible();
+    await expect(page.getByText(MEMBER_REPLY)).toBeVisible();
   });
 });

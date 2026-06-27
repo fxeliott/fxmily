@@ -266,7 +266,7 @@ describe('nextAttemptDelay', () => {
 });
 
 describe('TTL_BY_TYPE / URGENCY_BY_TYPE config tables', () => {
-  it('TTL covers exactly the 9 NotificationType slugs', () => {
+  it('TTL covers exactly the 10 NotificationType slugs', () => {
     expect(Object.keys(TTL_BY_TYPE).sort()).toEqual([
       'annotation_received',
       'checkin_evening_reminder',
@@ -275,12 +275,13 @@ describe('TTL_BY_TYPE / URGENCY_BY_TYPE config tables', () => {
       'mindset_check_ready',
       'monthly_debrief_ready',
       'training_annotation_received',
+      'training_reply_received',
       'verification_gentle_reminder',
       'weekly_report_ready',
     ]);
   });
 
-  it('URGENCY covers exactly the same 9 slugs as TTL (no map drift)', () => {
+  it('URGENCY covers exactly the same 10 slugs as TTL (no map drift)', () => {
     expect(Object.keys(URGENCY_BY_TYPE).sort()).toEqual(Object.keys(TTL_BY_TYPE).sort());
   });
 

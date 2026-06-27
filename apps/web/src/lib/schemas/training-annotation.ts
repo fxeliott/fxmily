@@ -66,3 +66,31 @@ export const trainingAnnotationCreateSchema = z
   });
 
 export type TrainingAnnotationCreateInput = z.infer<typeof trainingAnnotationCreateSchema>;
+
+/** Hard upper bound on a member reply to a correction (S8 V2). A reply is a
+ * short acknowledgement / question, not an essay — mirrors the lesson cap. */
+export const TRAINING_REPLY_MAX = 2000;
+
+const replyTextSchema = z
+  .string()
+  .trim()
+  .min(1, 'Ta réponse ne peut pas être vide.')
+  .max(TRAINING_REPLY_MAX, `Maximum ${TRAINING_REPLY_MAX} caractères.`)
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText);
+
+/**
+ * S8 V2 — member reply to an admin backtest correction (brief §32-4 : « le
+ * membre les voit et peut y répondre »). Single source of truth for the member
+ * Server Action re-validation — the server is the only authority. The reply is
+ * hardened free text (Trojan-Source canon) and stays strictly within the
+ * psychology/process register (garde-fou §2) like every member free-text field.
+ * `trainingAnnotationId` is opaque; ownership is enforced server-side (the reply
+ * only lands if the annotation belongs to a backtest owned by the caller).
+ */
+export const trainingReplyCreateSchema = z.object({
+  trainingAnnotationId: z.string().trim().min(1, 'Correction introuvable.'),
+  reply: replyTextSchema,
+});
+
+export type TrainingReplyCreateInput = z.infer<typeof trainingReplyCreateSchema>;

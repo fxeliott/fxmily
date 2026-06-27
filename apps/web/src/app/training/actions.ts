@@ -5,11 +5,24 @@ import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
+import { enqueueTrainingReplyNotification } from '@/lib/notifications/enqueue';
+import { trainingReplyCreateSchema } from '@/lib/schemas/training-annotation';
 import { trainingSessionIdSchema } from '@/lib/schemas/training-session';
 import { trainingTradeCreateSchema } from '@/lib/schemas/training-trade';
 import { trainingKeyBelongsTo } from '@/lib/storage/local';
+import { replyToTrainingAnnotationAsMember } from '@/lib/training/training-annotation-member-service';
 import { getTrainingSessionMeta } from '@/lib/training/training-session-service';
 import { createTrainingTrade } from '@/lib/training/training-trade-service';
+
+/** Read a tri-state checklist field from FormData. The wizard sends
+ * `'true'` / `'false'` / `'na'`; an absent field (member skipped the item)
+ * must become `undefined` so the `.optional()` checklist schema short-circuits
+ * — `formData.get` returns `null` for an absent field, which the tri-state
+ * union would reject. */
+function readChecklistField(formData: FormData, key: string): string | undefined {
+  const v = formData.get(key);
+  return typeof v === 'string' ? v : undefined;
+}
 
 /**
  * Server Action for the Mode-Entraînement backtest journal (J-T2, SPEC §21).
@@ -77,6 +90,12 @@ export async function createTrainingTradeAction(
     outcome: rawOutcome === '' || rawOutcome == null ? null : rawOutcome,
     resultR: rawResultR === '' || rawResultR == null ? null : rawResultR,
     systemRespected: formData.get('systemRespected'),
+    // S8 V2 — process-discipline checklist (§33-2). Tri-state + optional: an
+    // untouched item is `undefined`, normalised to `null` at the service layer.
+    planFollowed: readChecklistField(formData, 'planFollowed'),
+    riskDefinedBefore: readChecklistField(formData, 'riskDefinedBefore'),
+    emotionalStateNoted: readChecklistField(formData, 'emotionalStateNoted'),
+    noImpulsiveDeviation: readChecklistField(formData, 'noImpulsiveDeviation'),
     lessonLearned: formData.get('lessonLearned'),
     enteredAt: formData.get('enteredAt'),
   };
@@ -139,6 +158,10 @@ export async function createTrainingTradeAction(
       outcome: data.outcome ?? null,
       resultR: data.resultR ?? null,
       systemRespected: data.systemRespected,
+      planFollowed: data.planFollowed,
+      riskDefinedBefore: data.riskDefinedBefore,
+      emotionalStateNoted: data.emotionalStateNoted,
+      noImpulsiveDeviation: data.noImpulsiveDeviation,
       lessonLearned: data.lessonLearned,
       enteredAt: data.enteredAt,
       sessionId,
@@ -169,4 +192,93 @@ export async function createTrainingTradeAction(
     console.error('[training.createTrainingTrade] redirect failed', err);
   }
   return { ok: true };
+}
+
+// =============================================================================
+// S8 V2 §32-4 — member reply to a backtest correction
+// =============================================================================
+
+export interface ReplyTrainingAnnotationActionState {
+  ok: boolean;
+  error?: 'unauthorized' | 'invalid_input' | 'not_found' | 'unknown';
+  fieldErrors?: Record<string, string>;
+  message?: string;
+}
+
+/**
+ * Record the member's reply to one of Eliott's backtest corrections (§32-4 :
+ * « le membre les voit et peut y répondre »). Carbon mirror of
+ * `createTrainingTradeAction`'s posture:
+ *   - Re-call `auth()` (defence in depth over `proxy.ts`).
+ *   - Re-parse `trainingReplyCreateSchema` (the client checks are UX only).
+ *   - Ownership is enforced in the service (`replyToTrainingAnnotationAsMember`
+ *     scopes through `TrainingTrade.userId`) — a foreign/typo id → `not_found`.
+ *   - Notify the authoring admin ONCE (first reply only; a later edit must not
+ *     re-ping). Best-effort — a queue hiccup never rolls back the reply.
+ *
+ * 🚨 STATISTICAL ISOLATION (SPEC §21.5, BLOCKING):
+ *   - Audit + notification metadata carry ids ONLY — NEVER the reply text nor
+ *     any backtest P&L.
+ *   - `revalidatePath` touches ONLY the member `/training/<id>` surface and the
+ *     admin training detail — NEVER `/journal`, `/dashboard` or any real edge.
+ */
+export async function replyToTrainingAnnotationAction(
+  _prev: ReplyTrainingAnnotationActionState | null,
+  formData: FormData,
+): Promise<ReplyTrainingAnnotationActionState> {
+  const session = await auth();
+  if (!session?.user?.id || session.user.status !== 'active') {
+    return { ok: false, error: 'unauthorized' };
+  }
+
+  const parsed = trainingReplyCreateSchema.safeParse({
+    trainingAnnotationId: formData.get('trainingAnnotationId'),
+    reply: formData.get('reply'),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: 'invalid_input', fieldErrors: flattenFieldErrors(parsed.error) };
+  }
+
+  let result: Awaited<ReturnType<typeof replyToTrainingAnnotationAsMember>>;
+  try {
+    result = await replyToTrainingAnnotationAsMember(
+      session.user.id,
+      parsed.data.trainingAnnotationId,
+      parsed.data.reply,
+    );
+  } catch (err) {
+    console.error('[training.replyToTrainingAnnotation] failed', err);
+    return { ok: false, error: 'unknown' };
+  }
+  if (!result) {
+    return { ok: false, error: 'not_found' };
+  }
+
+  // 🚨 §21.5 — PII-free: ids + a flag ONLY. Never the reply text or P&L.
+  await logAudit({
+    action: 'training_annotation.replied',
+    userId: session.user.id,
+    metadata: {
+      trainingAnnotationId: parsed.data.trainingAnnotationId,
+      trainingTradeId: result.trainingTradeId,
+      isFirstReply: result.isFirstReply,
+    },
+  });
+
+  // Notify the authoring admin ONCE (first reply). Best-effort, never thrown.
+  if (result.isFirstReply) {
+    await enqueueTrainingReplyNotification(result.adminId, {
+      trainingAnnotationId: parsed.data.trainingAnnotationId,
+      trainingTradeId: result.trainingTradeId,
+      memberId: result.memberId,
+    });
+  }
+
+  // 🚨 §21.5 — training surfaces ONLY. Member detail + admin detail; never the
+  // real edge. The member stays on the page (no redirect) so the reply renders
+  // inline beneath the correction.
+  revalidatePath(`/training/${result.trainingTradeId}`);
+  revalidatePath(`/admin/members/${result.memberId}/training/${result.trainingTradeId}`);
+
+  return { ok: true, message: 'Réponse envoyée.' };
 }

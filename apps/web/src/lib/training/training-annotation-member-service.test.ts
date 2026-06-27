@@ -19,6 +19,7 @@ vi.mock('@/lib/db', () => ({
     trainingAnnotation: {
       updateMany: vi.fn(),
       findMany: vi.fn(),
+      findFirst: vi.fn(),
       groupBy: vi.fn(),
     },
   },
@@ -33,6 +34,7 @@ import {
   countUnseenTrainingAnnotationsByTrainingTrade,
   listTrainingAnnotationsForTrainingTradeAsMember,
   markTrainingAnnotationsSeenForTrainingTrade,
+  replyToTrainingAnnotationAsMember,
 } from './training-annotation-member-service';
 
 const USER = 'clx0member01';
@@ -124,5 +126,90 @@ describe('countUnseenTrainingAnnotationsByTrainingTrade (BOLA on groupBy)', () =
     vi.mocked(db.trainingAnnotation.groupBy).mockResolvedValue([] as never);
     const res = await countUnseenTrainingAnnotationsByTrainingTrade(USER);
     expect(res.size).toBe(0);
+  });
+});
+
+describe('replyToTrainingAnnotationAsMember (S8 §32-4 — atomic first-reply claim)', () => {
+  const ANN = 'clx0annotation01';
+  const ADMIN = 'clx0admin01';
+  const ownedRow = { id: ANN, trainingTradeId: TT, adminId: ADMIN };
+
+  it('first reply: claims atomically (memberRepliedAt:null), reports isFirstReply', async () => {
+    vi.mocked(db.trainingAnnotation.findFirst).mockResolvedValue(ownedRow as never);
+    // firstClaim matches the still-unanswered row → count 1.
+    vi.mocked(db.trainingAnnotation.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+
+    const res = await replyToTrainingAnnotationAsMember(USER, ANN, 'merci, je note');
+
+    expect(res).toEqual({
+      trainingTradeId: TT,
+      adminId: ADMIN,
+      memberId: USER,
+      isFirstReply: true,
+    });
+    // 🚨 BOLA — ownership read is scoped through the backtest owner relation.
+    const readArg = vi.mocked(db.trainingAnnotation.findFirst).mock.calls[0]![0] as {
+      where: { id: string; trainingTrade: { is: { userId: string } } };
+    };
+    expect(readArg.where.id).toBe(ANN);
+    expect(readArg.where.trainingTrade).toEqual({ is: { userId: USER } });
+    // The first claim filters on memberRepliedAt:null AND the owner relation,
+    // and stamps both the reply text and a memberRepliedAt Date.
+    const claimArg = vi.mocked(db.trainingAnnotation.updateMany).mock.calls[0]![0] as {
+      where: { id: string; trainingTrade: { is: { userId: string } }; memberRepliedAt: null };
+      data: { memberReply: string; memberRepliedAt: unknown };
+    };
+    expect(claimArg.where.memberRepliedAt).toBeNull();
+    expect(claimArg.where.trainingTrade).toEqual({ is: { userId: USER } });
+    expect(claimArg.data.memberReply).toBe('merci, je note');
+    expect(claimArg.data.memberRepliedAt).toBeInstanceOf(Date);
+    // Exactly one write — no fallback edit on the happy path.
+    expect(db.trainingAnnotation.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('edit / race-loser: a reply already exists, persists text WITHOUT re-stamping, isFirstReply=false', async () => {
+    vi.mocked(db.trainingAnnotation.findFirst).mockResolvedValue(ownedRow as never);
+    vi.mocked(db.trainingAnnotation.updateMany)
+      .mockResolvedValueOnce({ count: 0 } as never) // firstClaim misses (already replied)
+      .mockResolvedValueOnce({ count: 1 } as never); // editClaim updates the text
+
+    const res = await replyToTrainingAnnotationAsMember(USER, ANN, 'correction de ma réponse');
+
+    expect(res).toEqual({
+      trainingTradeId: TT,
+      adminId: ADMIN,
+      memberId: USER,
+      isFirstReply: false,
+    });
+    // The fallback edit updates the text only — never re-stamps memberRepliedAt
+    // (so the admin is not re-notified) — and stays owner-scoped.
+    const editArg = vi.mocked(db.trainingAnnotation.updateMany).mock.calls[1]![0] as {
+      where: { id: string; trainingTrade: { is: { userId: string } } };
+      data: Record<string, unknown>;
+    };
+    expect(editArg.where.trainingTrade).toEqual({ is: { userId: USER } });
+    expect(editArg.data).toEqual({ memberReply: 'correction de ma réponse' });
+    expect(editArg.data).not.toHaveProperty('memberRepliedAt');
+  });
+
+  it('absent / foreign annotation: ownership read returns null → returns null, no write', async () => {
+    vi.mocked(db.trainingAnnotation.findFirst).mockResolvedValue(null as never);
+
+    const res = await replyToTrainingAnnotationAsMember(USER, 'forged', 'hello');
+
+    expect(res).toBeNull();
+    expect(db.trainingAnnotation.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('delete-then-reply race: deleted between read and write (both updates match 0) → returns null, no silent lost write', async () => {
+    vi.mocked(db.trainingAnnotation.findFirst).mockResolvedValue(ownedRow as never);
+    vi.mocked(db.trainingAnnotation.updateMany)
+      .mockResolvedValueOnce({ count: 0 } as never) // firstClaim misses (row gone)
+      .mockResolvedValueOnce({ count: 0 } as never); // editClaim also misses → not-found
+
+    const res = await replyToTrainingAnnotationAsMember(USER, ANN, 'trop tard');
+
+    expect(res).toBeNull();
+    expect(db.trainingAnnotation.updateMany).toHaveBeenCalledTimes(2);
   });
 });

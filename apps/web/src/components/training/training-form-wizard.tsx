@@ -9,6 +9,7 @@ import {
   Camera,
   GraduationCap,
   Layers,
+  ListChecks,
   ShieldCheck,
   Target,
   Trophy,
@@ -26,7 +27,7 @@ import { ScreenshotUploader } from '@/components/journal/screenshot-uploader';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
-import { trainingTradeCreateSchema } from '@/lib/schemas/training-trade';
+import { TRAINING_CHECKLIST_ITEMS, trainingTradeCreateSchema } from '@/lib/schemas/training-trade';
 import { cn } from '@/lib/utils';
 
 /**
@@ -51,10 +52,11 @@ const STEP_TITLES = [
   'Plan : R:R prévu',
   'Résultat du backtest',
   'Respect du système',
+  'Checklist process',
   'Leçon tirée',
 ] as const;
 
-const STEP_ICONS = [Calendar, Camera, Target, Trophy, ShieldCheck, BookOpen] as const;
+const STEP_ICONS = [Calendar, Camera, Target, Trophy, ShieldCheck, ListChecks, BookOpen] as const;
 
 const STEP_FIELDS = [
   ['pair', 'enteredAt'],
@@ -62,12 +64,13 @@ const STEP_FIELDS = [
   ['plannedRR'],
   ['outcome', 'resultR'],
   ['systemRespected'],
+  ['planFollowed', 'riskDefinedBefore', 'emotionalStateNoted', 'noImpulsiveDeviation'],
   ['lessonLearned'],
 ] as const;
 
 const TOTAL_STEPS = STEP_TITLES.length;
 
-type StepIndex = 0 | 1 | 2 | 3 | 4 | 5;
+type StepIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 interface TrainingDraftState {
   pair: string;
@@ -78,8 +81,21 @@ interface TrainingDraftState {
   outcome: '' | 'win' | 'loss' | 'break_even';
   resultR: string;
   systemRespected: 'true' | 'false' | 'na' | '';
+  // S8 V2 §33-2 — process-discipline checklist. '' = untouched (optional),
+  // mapped to undefined → null server-side. Tri-state like `systemRespected`.
+  planFollowed: 'true' | 'false' | 'na' | '';
+  riskDefinedBefore: 'true' | 'false' | 'na' | '';
+  emotionalStateNoted: 'true' | 'false' | 'na' | '';
+  noImpulsiveDeviation: 'true' | 'false' | 'na' | '';
   lessonLearned: string;
 }
+
+/** The 4 checklist keys that live on the draft (typed subset of the draft). */
+type ChecklistDraftKey =
+  | 'planFollowed'
+  | 'riskDefinedBefore'
+  | 'emotionalStateNoted'
+  | 'noImpulsiveDeviation';
 
 const DRAFT_STORAGE_KEY = 'fxmily:training:draft:v1';
 
@@ -102,6 +118,10 @@ function emptyDraft(): TrainingDraftState {
     outcome: '',
     resultR: '',
     systemRespected: '',
+    planFollowed: '',
+    riskDefinedBefore: '',
+    emotionalStateNoted: '',
+    noImpulsiveDeviation: '',
     lessonLearned: '',
   };
 }
@@ -219,6 +239,12 @@ export function TrainingFormWizard({
       outcome: draft.outcome === '' ? null : draft.outcome,
       resultR: draft.resultR === '' ? null : draft.resultR,
       systemRespected: draft.systemRespected || 'na',
+      // Optional tri-state: '' (untouched) → undefined so the optional schema
+      // short-circuits (an empty string is NOT a valid tri-state token).
+      planFollowed: draft.planFollowed || undefined,
+      riskDefinedBefore: draft.riskDefinedBefore || undefined,
+      emotionalStateNoted: draft.emotionalStateNoted || undefined,
+      noImpulsiveDeviation: draft.noImpulsiveDeviation || undefined,
       lessonLearned: draft.lessonLearned,
       enteredAt: draft.enteredAt ? new Date(draft.enteredAt) : new Date(NaN),
     };
@@ -262,7 +288,7 @@ export function TrainingFormWizard({
       goToStep(4, { keepErrors: true });
       return;
     }
-    if (!validateStep(5)) return;
+    if (!validateStep(6)) return;
 
     const fd = new FormData();
     fd.set('pair', draft.pair);
@@ -272,6 +298,11 @@ export function TrainingFormWizard({
     if (draft.outcome) fd.set('outcome', draft.outcome);
     if (draft.resultR !== '') fd.set('resultR', draft.resultR);
     fd.set('systemRespected', draft.systemRespected || 'na');
+    // S8 V2 §33-2 — only send touched checklist items (untouched stays null).
+    for (const item of TRAINING_CHECKLIST_ITEMS) {
+      const v = draft[item.key];
+      if (v !== '') fd.set(item.key, v);
+    }
     fd.set('lessonLearned', draft.lessonLearned);
     // S8 — attach to the parent backtest session when present (server re-checks
     // ownership). Absent → standalone backtest (unchanged behaviour).
@@ -425,6 +456,14 @@ export function TrainingFormWizard({
               />
             ) : null}
             {step === 5 ? (
+              <StepChecklist
+                draft={draft}
+                update={update}
+                fieldErrors={fieldErrors}
+                disabled={pending}
+              />
+            ) : null}
+            {step === 6 ? (
               <StepLecon
                 draft={draft}
                 update={update}
@@ -735,6 +774,37 @@ function StepSysteme({ draft, update, fieldErrors, disabled }: StepProps) {
         disabled={disabled}
         error={fieldErrors.systemRespected}
       />
+    </div>
+  );
+}
+
+function StepChecklist({ draft, update, fieldErrors, disabled }: StepProps) {
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="t-body text-[var(--t-2)]">
+        Une checklist de discipline, item par item. Tout est optionnel — c&apos;est un miroir de ton
+        process, pas une note. Le moteur ne juge jamais ton analyse, seulement si tu suis ton plan.
+      </p>
+      {TRAINING_CHECKLIST_ITEMS.map((item) => (
+        <div key={item.key} className="flex flex-col gap-1.5">
+          <RadioGroup
+            legend={item.label}
+            name={item.key}
+            value={draft[item.key as ChecklistDraftKey]}
+            options={[
+              { value: 'true', label: 'Oui' },
+              { value: 'false', label: 'Non' },
+              { value: 'na', label: 'N/A' },
+            ]}
+            onChange={(v) =>
+              update(item.key as ChecklistDraftKey, v as TrainingDraftState['planFollowed'])
+            }
+            disabled={disabled}
+            error={fieldErrors[item.key]}
+          />
+          <p className="t-cap text-[var(--t-4)]">{item.help}</p>
+        </div>
+      ))}
     </div>
   );
 }

@@ -630,4 +630,82 @@ Toute session 2-9 **hérite** de ces contrats et ne doit **jamais** les violer :
 
 ---
 
+---
+
+## Hand-off — Session 8 (Mode Entraînement V2) — 2026-06-27
+
+> Reprise de contexte faite (§31①) : même dépôt `D:\Fxmily`, branche `feat/s8-training-mode-v2`. Entrées S1 (`auth()`), S4 (logique journal, **mirror sans dup**), S9 (DS-v9 : tokens `--cy`, `Pill`, `Card`) connectées **sans casse**. Au moment de l'écriture, le changeset est **non commité** dans le working tree (il sera commité à la suite). DoD §34 : 6/7 cases vérifiées en runtime réel, la 7e (hand-off) = ce bloc.
+
+### ① Ce que la session a produit
+
+**Data model (migration ADD-only `20260627104440_s8_v2_training_checklist_reply`, 0 régression) :**
+
+- `TrainingTrade` → +4 colonnes checklist tri-state `BOOLEAN NULL` : `planFollowed`, `riskDefinedBefore`, `emotionalStateNoted`, `noImpulsiveDeviation` (§33-2).
+- `TrainingAnnotation` → +`memberReply TEXT NULL`, +`memberRepliedAt TIMESTAMP NULL` (§32-4 : réponse / accusé de réception du membre).
+- enum `NotificationType` → +`training_reply_received` (notif admin quand le membre répond).
+
+**Pages / flux / composants :**
+
+- Wizard backtest `training-form-wizard.tsx` : 7 étapes (paire → capture → R:R → résultat → système → **checklist process** → leçon). Checklist optionnelle, tri-state Oui/Non/N-A.
+- `training-trade-card.tsx` + page détail `/training/[trainingTradeId]` : bloc « Checklist process » + **pill statut de revue** (`deriveTrainingReviewStatus`) + **île réponse** `TrainingReplyForm` (§32-4).
+- `TrainingStatsBar` : +bloc « Process complet » = `checklistCleanCount / total` (taux de complétude §33-1).
+- Notif : `enqueueTrainingReplyNotification` + wiring complet `training_reply_received` (enum Prisma, `NOTIFICATION_TYPES`, TTL/urgence dispatcher, `buildPayload` deep-links, préférences admin-only, fallback email).
+
+**Endpoints / services :**
+
+- Server Actions `app/training/actions.ts` : `createTrainingTradeAction` (lit la checklist tri-state) + `replyToTrainingAnnotationAction`.
+- `lib/training/training-annotation-member-service.ts` : `replyToTrainingAnnotationAsMember` (owner-scopé, claim **atomique** du premier reply).
+- `lib/training/review-status.ts` : `deriveTrainingReviewStatus` + `TRAINING_REVIEW_STATUS_META`.
+- `lib/training/training-trade-service.ts` : `getTrainingTradeStatsForUser` +`checklistCleanCount`.
+
+### ② Décisions prises & justification
+
+- **`isFirstReply` claimé ATOMIQUEMENT** (`updateMany({ memberRepliedAt: null })` → `count === 1`), pas dérivé d'un read préalable : sous double-submit / 2 onglets concurrents, exactement UN appel notifie l'admin ; le perdant retombe sur une édition texte-only (pas de double-ping, pas d'édition perdue). Tue le finding code-review 🟡 + le finding sécurité LOW (write resté owner-scopé sur les deux chemins). Réutilise le pattern `updateMany({ ...null })` déjà prouvé pour `markSeen` dans le même fichier.
+- **Statut de revue dérivé AU RENDER** (0 migration) : `pending` (0 correction) → `corrected` (≥1 non vue) → `seen` (toutes vues). Marquage « vu » fait AVANT la lecture sur la page détail.
+- **`checklistCleanCount` = taux de complétude (§33-1)** : pure discipline (4 items « respecté »), jamais un P&L. « — » si 0 backtest (posture anti-Black-Hat, pas de 0 % trompeur), dénominateur explicite dans le hint.
+- **§21.5 isolation maintenue** : métadonnées audit + notification = ids/flags UNIQUEMENT (jamais `resultR`/`outcome`/`lessonLearned`/`memberReply`/`comment`). `revalidatePath` ne touche que les surfaces training. Pont unique vers le réel = `countRecentTrainingActivity` (count/recency only).
+- **Garde-fou §2** : le free-text membre (`reply`, `lessonLearned`) n'est PAS filtré par `detectAMFViolation` — cohérent projet : le garde-fou s'applique au contenu _produit par l'app_, pas à ce que le membre écrit pour lui-même. Labels/help statiques prouvés AMF-safe par tests guardrail.
+
+### ③ Contrat d'interface exposé — Sortie vers Session 7 (forme exacte des corrections d'entraînement)
+
+```ts
+// @/lib/admin/training-annotation-service — la forme JSON-safe consommée par le client
+interface SerializedTrainingAnnotation {
+  id: string;
+  trainingTradeId: string;
+  adminId: string; // auteur de la correction = admin à notifier
+  comment: string; // texte de correction (hardened, registre psycho/process)
+  mediaKey: string | null; // clé capture admin (route GET `training_annotations/…`)
+  mediaType: 'image' | null; // TrainingAnnotationMediaType
+  seenByMemberAt: string | null; // ISO ; null = pas encore vue
+  createdAt: string;
+  updatedAt: string; // ISO
+  isUnseenByMember: boolean; // = seenByMemberAt === null
+  memberReply: string | null; // S8 §32-4 : réponse du membre, null si pas répondu
+  memberRepliedAt: string | null; // ISO ; null si pas répondu
+}
+
+// @/lib/training/review-status — statut dérivé (pas de colonne)
+type TrainingReviewStatus = 'pending' | 'corrected' | 'seen';
+// TRAINING_REVIEW_STATUS_META[status] = { label, tone } (tons calmes : mute/cy/ok)
+
+// Notifications (slugs) : 'training_annotation_received' (→ membre, à l'arrivée d'une correction)
+//                         'training_reply_received' (→ admin auteur, au 1er reply du membre)
+```
+
+### ④ Ce qui reste à faire
+
+- **Gap #2 (§33-1)** : métriques « régularité dans le temps » et « streaks de jours » NON implémentées — décision anti-gamification assumée (cf. posture `training-stats-bar.tsx`). À arbitrer si une session future les veut strictement.
+- Pas de test unitaire dédié au reply concurrent (couvert par e2e séquentiel + correct par construction). Si l'audit prod montre un jour des doublons, ajouter un test ciblé.
+- Observation `avgR` (« R moyen » dans la stats bar) : tension de _lettre_ avec §33-1 (« on mesure l'effort, pas la qualité ») — PAS une violation garde-fou, isolation respectée, surface **pré-existante S13**, laissée intacte (hors scope S8).
+
+### ⑤ Pour la session suivante — état des gates (vérifié runtime)
+
+- `vitest run` : **3596 passed**. Seul « failed » = `src/lib/cron/crontab-sync.test.ts` (collecte 0 test) : artefact **local Windows** (le `.mjs` cross-root garde son shebang `#!` non strippé sous CRLF) — `node --check` du `.mjs` passe, fichier inchangé depuis `bf8a8b1` (#377, mergé CI verte), **hors changeset**. Pas une régression.
+- `tsc --noEmit` exit 0 · `eslint` exit 0 · `prettier --check` clean (LF).
+- e2e `s8-training-sessions.spec.ts` : **4/4** (chromium A+B, mobile-iphone-15 A+B) contre Postgres réel via l'UI réelle. Fix de stabilité mobile : checklist pilotée par `input.check({force})` (radios `sr-only` sous footer sticky) + nav détail en `waitUntil:'domcontentloaded'` (l'`<img>` capture stallait l'event `load`).
+- Client Prisma généré = **gitignoré**, régénéré par CI (`prisma generate`) depuis le `schema.prisma` committé.
+
+---
+
 _Fichier maintenu par la série de sessions structurées (plan « 9 » → réconcilié « 10 » le 2026-06-09, cf. §13). Toute affirmation y est datée et sourcée. En cas de conflit avec `SPEC.md`, SPEC.md gagne._

@@ -8,7 +8,12 @@ import { TrainingAnnotationsSection } from '@/components/training/training-annot
 import { TrainingTradeCard } from '@/components/training/training-trade-card';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
+import { Pill } from '@/components/ui/pill';
 import { selectStorage } from '@/lib/storage';
+import {
+  deriveTrainingReviewStatus,
+  TRAINING_REVIEW_STATUS_META,
+} from '@/lib/training/review-status';
 import {
   listTrainingAnnotationsForTrainingTradeAsMember,
   markTrainingAnnotationsSeenForTrainingTrade,
@@ -65,6 +70,13 @@ export default async function MemberTrainingTradeDetailPage({
 
   const screenshotUrl = safeReadUrl(trade.entryScreenshotKey);
 
+  // S8 V2 §33-3 — review status derived at render (no migration). On this
+  // surface the corrections were just marked seen, so the status is `seen`
+  // (≥1 correction) or `pending` (none yet) — the `corrected` (unread) state
+  // lives on the `/training` list as the "N non lues" pill.
+  const reviewStatus = deriveTrainingReviewStatus(annotations);
+  const reviewMeta = TRAINING_REVIEW_STATUS_META[reviewStatus];
+
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       <DashboardAmbient tone="cyan" />
@@ -87,6 +99,9 @@ export default async function MemberTrainingTradeDetailPage({
               <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} />
               Mode entraînement
             </span>
+            {/* S8 V2 §33-3 — review status. Calm tones only (mute/cy/ok) — a
+                pending review is awaited, never a fault (Mark Douglas §2). */}
+            <Pill tone={reviewMeta.tone}>{reviewMeta.label}</Pill>
           </div>
         </header>
 

@@ -61,6 +61,7 @@ export const TTL_BY_TYPE: Record<NotificationTypeSlug, number> = {
   monthly_debrief_ready: 86400, // 24h — monthly recul tool, not time-critical
   mindset_check_ready: 86400, // 24h — weekly mindset recul, not time-critical (§27.6)
   verification_gentle_reminder: 86400, // 24h — S3 §33 benevolent nudge, calm, never urgent
+  training_reply_received: 86400, // 24h — admin sees a member reply, can wait a day
 };
 
 /// RFC 8030 urgency. `low` = battery-friendly (reminders that aren't critical).
@@ -74,6 +75,7 @@ export const URGENCY_BY_TYPE: Record<NotificationTypeSlug, 'low' | 'normal'> = {
   monthly_debrief_ready: 'low', // calm, anti-FOMO — a monthly recul, never urgent
   mindset_check_ready: 'low', // calm weekly recul, anti-FOMO §27.6 (no fanfare)
   verification_gentle_reminder: 'low', // S3 §33 — a gentle nudge, never a pressure stick
+  training_reply_received: 'low', // admin-facing loop-close, never urgent
 };
 
 /**
@@ -231,6 +233,23 @@ export function buildPayload(
       body =
         'Un élément est resté de côté. Un coup d’œil quand tu peux — et dis-nous s’il y a une raison.';
       path = '/verification';
+      break;
+    }
+    case 'training_reply_received': {
+      // S8 V2 §32-4 — ADMIN-facing: a member replied to one of Eliott's backtest
+      // corrections. Deep-link straight to the admin correction view so the loop
+      // closes in one tap. §21.5: payload carries ids only (memberId +
+      // trainingTradeId) — never the reply text nor any backtest P&L; the copy
+      // stays generic rather than quoting the member.
+      const memberId = typeof payload.memberId === 'string' ? payload.memberId : '';
+      const trainingTradeId =
+        typeof payload.trainingTradeId === 'string' ? payload.trainingTradeId : '';
+      title = 'Réponse à une correction';
+      body = 'Un membre a répondu à l’une de tes corrections de backtest.';
+      path =
+        memberId && trainingTradeId
+          ? `/admin/members/${memberId}/training/${trainingTradeId}`
+          : '/admin/members';
       break;
     }
   }

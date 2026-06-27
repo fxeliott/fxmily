@@ -177,6 +177,10 @@ export type AuditAction =
   | 'admin.training_annotation.deleted'
   | 'admin.training_annotation.media.uploaded'
   | 'admin.training_trade.viewed'
+  // S8 V2 §32-4 — member reply to a backtest correction. STATISTICAL ISOLATION:
+  // metadata carries ids + an `isFirstReply` flag ONLY — NEVER the reply text
+  // nor any backtest P&L; the reply never touches the real edge (§21.5).
+  | 'training_annotation.replied'
   // S8 — backtest SESSION container ("crée une session de backtest", brief §31
   // DoD#1). STATISTICAL ISOLATION: metadata carries ids/flags ONLY
   // (`trainingSessionId`, `hasSymbol`, `hasTimeframe`) — NEVER the member's

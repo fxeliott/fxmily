@@ -145,6 +145,66 @@ export async function enqueueTrainingAnnotationNotification(
   }
 }
 
+export interface TrainingReplyReceivedPayload {
+  /** The annotation the member just replied to. */
+  trainingAnnotationId: string;
+  /** The backtest it's attached to — used in the admin deep-link. */
+  trainingTradeId: string;
+  /** The member who replied — drives the admin deep-link `/admin/members/<id>/…`.
+   * §21.5/§16: an id only, NEVER the reply text nor any backtest P&L. */
+  memberId: string;
+}
+
+/**
+ * Enqueue a "member replied to a backtest correction" push for the ADMIN who
+ * authored the correction (S8 V2 §32-4). The reverse direction of
+ * {@link enqueueTrainingAnnotationNotification}: there, the admin corrects and
+ * the MEMBER is notified; here, the member replies and the ADMIN is notified,
+ * closing the coaching loop without the admin polling each backtest.
+ *
+ * `recipientAdminId` is the correction author (the reply only ever lands on an
+ * annotation that admin wrote). Carbon mirror of the other enqueuers:
+ * best-effort (returns the row id, or null if the write failed — logged, never
+ * thrown, so a member's reply is never rolled back over a queue hiccup).
+ * PII-free payload: ids only, never the reply text (§21.5/§16).
+ */
+export async function enqueueTrainingReplyNotification(
+  recipientAdminId: string,
+  payload: TrainingReplyReceivedPayload,
+  tx?: Prisma.TransactionClient,
+): Promise<string | null> {
+  const client = tx ?? db;
+  try {
+    const row = await client.notificationQueue.create({
+      data: {
+        userId: recipientAdminId,
+        type: 'training_reply_received',
+        payload: payload as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+
+    if (!tx) {
+      await logAudit({
+        action: 'notification.enqueued',
+        userId: recipientAdminId,
+        metadata: {
+          notificationId: row.id,
+          type: 'training_reply_received',
+          trainingTradeId: payload.trainingTradeId,
+          trainingAnnotationId: payload.trainingAnnotationId,
+          memberId: payload.memberId,
+        },
+      });
+    }
+
+    return row.id;
+  } catch (err) {
+    console.error('[notifications.enqueue] training reply failed', err);
+    return null;
+  }
+}
+
 // =============================================================================
 // V1.4 §25 — Monthly AI debrief ready (member-facing, mirror J9)
 // =============================================================================

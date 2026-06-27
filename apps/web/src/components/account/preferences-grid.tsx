@@ -12,7 +12,8 @@ import { NOTIFICATION_TYPES, type NotificationTypeSlug } from '@/lib/schemas/pus
  * (consent default-on, opt-out by toggle). Members can disable any category;
  * the dispatcher checks `getEffectivePreferences(userId)` before sending.
  *
- * Admin-only category (`weekly_report_ready`) is hidden for members.
+ * Admin-only categories (`weekly_report_ready`, `training_reply_received`) are
+ * hidden for members.
  *
  * Mark Douglas posture (no-FOMO, no-pressure):
  * - Labels are factual ("Corrections d'Eliott") not anxious ("Tu rates ce setup !").
@@ -93,6 +94,13 @@ const CATEGORIES: CategoryMeta[] = [
     description:
       'Un unique rappel calme quand un élément de ton suivi reste de côté — l’occasion de t’expliquer s’il y a une raison, avant toute relance. Jamais insistant.',
   },
+  {
+    type: 'training_reply_received',
+    label: 'Réponses des membres à tes corrections (admin)',
+    description:
+      'Notification quand un membre répond à l’une de tes corrections de backtest, pour boucler l’échange sans surveiller chaque entraînement.',
+    adminOnly: true,
+  },
 ];
 
 export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.ReactNode {
@@ -107,6 +115,7 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
       monthly_debrief_ready: true,
       mindset_check_ready: true,
       verification_gentle_reminder: true,
+      training_reply_received: true,
     };
     for (const type of NOTIFICATION_TYPES) {
       if (initialPreferences[type] !== undefined) {

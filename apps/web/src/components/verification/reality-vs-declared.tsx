@@ -1,4 +1,8 @@
-import type { DiscrepancyDeclaredSide, DiscrepancyRealitySide } from '@/lib/verification/service';
+import type {
+  DiscrepancyDeclaredSide,
+  DiscrepancyRealitySide,
+  DiscrepancyView,
+} from '@/lib/verification/service';
 
 /**
  * S3 — « Réalité vs Déclaré » face-à-face (DoD §33, enrichissement écrit
@@ -53,19 +57,49 @@ function EmptySide({ note }: { note: string }) {
 export function RealityVsDeclared({
   declared,
   reality,
+  type,
+  voice = 'member',
 }: {
   declared: DiscrepancyDeclaredSide | null;
   reality: DiscrepancyRealitySide | null;
+  /** The gap's type — drives the TRUTHFUL empty-side note (see below). */
+  type: DiscrepancyView['type'];
+  /**
+   * Whose data this is. `member` (default) addresses the trader in the second
+   * person on /verification ; `admin` is read on /admin/members/[id], where
+   * "tu / ton" would mislabel the member's data as the admin's own — so the
+   * admin reads "le membre / son historique".
+   */
+  voice?: 'member' | 'admin';
 }) {
   // Nothing to compare (rituals: unfilled / meeting / tracking gaps carry no
   // trade side) — render nothing, the card's reasoning copy stands alone.
   if (!declared && !reality) return null;
 
+  const declaredHeader = voice === 'admin' ? 'Ce que le membre a déclaré' : 'Ce que tu as déclaré';
+  const realityHeader =
+    voice === 'admin' ? 'Ce que son historique montre' : 'Ce que ton historique montre';
+
+  // Truthful empty-side notes. Both FK sides are `onDelete: SetNull`
+  // (schema.prisma) → a `mismatch` (both sides existed at detection) can lose a
+  // side AFTER the fact when the member deletes the journal trade or the proof
+  // position is purged. Only `missing_declared` / `false_declared` are
+  // INTRINSICALLY one-sided ; for any other type a blank side means "existed,
+  // then removed", so "rien de déclaré" / "aucune trace" would LIE.
+  const declaredEmptyNote =
+    type === 'missing_declared'
+      ? 'Rien de déclaré pour cette position'
+      : 'Trade déclaré, retiré du journal depuis';
+  const realityEmptyNote =
+    type === 'false_declared'
+      ? "Aucune trace dans l'historique fourni"
+      : "Position retirée de l'historique depuis";
+
   return (
     <div className="rounded-card grid grid-cols-2 gap-px overflow-hidden border border-[var(--cy-edge)] bg-[var(--cy-edge)]">
       {/* Déclaré */}
       <div className="flex flex-col gap-1.5 bg-[var(--bg-1)] p-3">
-        <span className="t-cap font-semibold text-[var(--t-3)]">Ce que tu as déclaré</span>
+        <span className="t-cap font-semibold text-[var(--t-3)]">{declaredHeader}</span>
         {declared ? (
           <dl className="flex flex-col gap-1">
             <Row label="Instrument" value={declared.pair} />
@@ -77,13 +111,13 @@ export function RealityVsDeclared({
             <Row label="Saisi le" value={DT_FMT.format(declared.enteredAt)} />
           </dl>
         ) : (
-          <EmptySide note="Rien de déclaré pour cette position" />
+          <EmptySide note={declaredEmptyNote} />
         )}
       </div>
 
       {/* Réel (historique MT5) */}
       <div className="flex flex-col gap-1.5 bg-[var(--bg-1)] p-3">
-        <span className="t-cap font-semibold text-[var(--t-3)]">Ce que ton historique montre</span>
+        <span className="t-cap font-semibold text-[var(--t-3)]">{realityHeader}</span>
         {reality ? (
           <dl className="flex flex-col gap-1">
             <Row label="Instrument" value={reality.symbol} />
@@ -98,7 +132,7 @@ export function RealityVsDeclared({
             ) : null}
           </dl>
         ) : (
-          <EmptySide note="Aucune trace dans l'historique fourni" />
+          <EmptySide note={realityEmptyNote} />
         )}
       </div>
     </div>

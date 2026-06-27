@@ -114,7 +114,11 @@ export function CardActionsRow({ cardId, initialPublished, cardTitle }: CardActi
         className={cn(
           'rounded-pill inline-flex h-11 items-center gap-1.5 border px-3 text-xs font-medium transition-[background-color,border-color,color]',
           confirmingDelete
-            ? 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)]'
+            ? // a11y WCAG 1.4.3 — on its own --bad-dim-2 tint, raw --bad text is
+              // 4.33:1 in light (< AA for 12px medium); --bad-hi lifts it to 5.58:1
+              // light / 7.90:1 dark (both pass), matching the sibling publish
+              // button's --acc-hi idiom.
+              'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad-hi)]'
             : 'border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)] hover:border-[var(--b-danger)] hover:text-[var(--bad)]',
           'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--bad)]',
           'disabled:opacity-50',

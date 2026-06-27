@@ -150,7 +150,12 @@ export function MemberVerificationPanel({
                       admin sees WHERE the tracking diverges, not just that it did.
                       Self-guards to null on rituals (no trade side). Factual mirror,
                       zero market judgement (SPEC §2). */}
-                  <RealityVsDeclared declared={d.declared} reality={d.reality} />
+                  <RealityVsDeclared
+                    declared={d.declared}
+                    reality={d.reality}
+                    type={d.type}
+                    voice="admin"
+                  />
                   {d.reasoning ? (
                     <p className="t-cap leading-[1.5] text-[var(--t-3)]">{d.reasoning}</p>
                   ) : null}

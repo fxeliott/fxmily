@@ -1,8 +1,10 @@
 import { Shield, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 
+import { MemberAttentionBadges } from '@/components/admin/member-attention';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { Pill } from '@/components/ui/pill';
+import type { MemberAttention } from '@/lib/admin/attention-service';
 import type { MemberSummary } from '@/lib/admin/members-service';
 
 const DATETIME_FMT = new Intl.DateTimeFormat('fr-FR', {
@@ -15,6 +17,8 @@ const DAY_MS = 86_400_000;
 
 interface MemberRowProps {
   member: MemberSummary;
+  /** S7 §33-#2 — "à traiter" triage flags (uncommented trades, open gaps, dip). */
+  attention?: MemberAttention | undefined;
 }
 
 /**
@@ -65,7 +69,7 @@ export function presenceFrom(
  * admin list gets the same "mouvement au survol" premium as the member-facing
  * cards — instead of the prior raw shadcn aliases (`bg-card`/`text-muted`).
  */
-export function MemberRow({ member }: MemberRowProps) {
+export function MemberRow({ member, attention }: MemberRowProps) {
   const fullName = [member.firstName, member.lastName].filter(Boolean).join(' ').trim();
   const displayName = fullName.length > 0 ? fullName : member.email;
   const isAdmin = member.role === 'admin';
@@ -119,6 +123,7 @@ export function MemberRow({ member }: MemberRowProps) {
             ) : null}
           </div>
           <span className="t-cap truncate text-[var(--t-3)]">{member.email}</span>
+          <MemberAttentionBadges attention={attention} />
         </div>
 
         <dl className="grid grid-cols-3 gap-x-4 text-xs sm:gap-x-6">

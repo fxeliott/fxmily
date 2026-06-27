@@ -7,6 +7,7 @@ import {
   createTrainingAnnotationAction,
   type CreateTrainingAnnotationActionState,
 } from '@/app/admin/members/[id]/training/[trainingTradeId]/actions';
+import { CommentPalette } from '@/components/admin/comment-palette';
 import { MediaUploader } from '@/components/media-uploader';
 import { Btn } from '@/components/ui/btn';
 import {
@@ -45,6 +46,7 @@ export function AnnotateTrainingTradeButton({
 }: AnnotateTrainingTradeButtonProps) {
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [mediaKey, setMediaKey] = useState<string | null>(null);
@@ -65,6 +67,17 @@ export function AnnotateTrainingTradeButton({
     return result;
   };
   const [state, formAction, isPending] = useActionState(submitWithReset, initialState);
+
+  // Palette insert: append the reframe (never replace), clamp to the hard cap so
+  // a tap can't overflow, then focus the field. Mirror of the real-trade Sheet.
+  const insertPreset = (text: string) => {
+    setComment((current) => {
+      const base = current.trimEnd();
+      const merged = base.length > 0 ? `${base}\n${text}` : text;
+      return merged.slice(0, TRAINING_ANNOTATION_COMMENT_MAX);
+    });
+    textareaRef.current?.focus();
+  };
 
   const remaining = TRAINING_ANNOTATION_COMMENT_MAX - comment.length;
 
@@ -112,7 +125,9 @@ export function AnnotateTrainingTradeButton({
                 </span>
               </span>
             </div>
+            <CommentPalette onInsert={insertPreset} disabled={isPending} />
             <textarea
+              ref={textareaRef}
               id={`${formId}-comment`}
               name="comment"
               required

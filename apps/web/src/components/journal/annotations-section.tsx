@@ -1,4 +1,4 @@
-import { Image as ImageIcon, MessageSquare } from 'lucide-react';
+import { Check, Image as ImageIcon, MessageSquare } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
@@ -17,9 +17,10 @@ import { DeleteAnnotationButton } from './delete-annotation-button';
  *
  * Rendering policy:
  *   - Render newest annotation first.
- *   - "Non lue" pill for any annotation with `seenByMemberAt = null` (admin
- *     surface only — by the time the member sees the page their annotations
- *     are bulk-marked as seen).
+ *   - Read receipt (admin surface only — the member's annotations are bulk-
+ *     marked seen on page load, so they never see these): "Non lue" pill while
+ *     `seenByMemberAt = null`, flipping to a green "Lue" pill (with the seen
+ *     date for screen readers) once the member opens it (S7 §33-#3).
  *   - Plain-text rendering with `whitespace-pre-wrap` — markdown rendering
  *     ships when we wire `react-markdown` (J6+). Comments are sanitised at
  *     write time via Zod's trim + max length.
@@ -124,9 +125,23 @@ function AnnotationCard({ annotation, isAdmin, canDelete, mediaUrl }: Annotation
     <Card className="p-4">
       <header className="mb-3 flex flex-wrap items-center gap-2">
         <Pill tone="acc">CORRECTION</Pill>
+        {/* S7 §33-#3 — read receipt, admin surface only. The member never sees
+            these pills (their annotations are bulk-marked seen on page load).
+            "Non lue" (amber, live dot) → still waiting; "Lue" (green) → the
+            member opened it = proof the reframe landed. */}
         {isAdmin && annotation.isUnseenByMember ? (
           <Pill tone="warn" dot="live">
             Non lue
+          </Pill>
+        ) : null}
+        {isAdmin && !annotation.isUnseenByMember && annotation.seenByMemberAt ? (
+          <Pill tone="ok">
+            <Check className="h-2.5 w-2.5" strokeWidth={2.5} aria-hidden="true" />
+            Lue
+            <span className="sr-only">
+              {' '}
+              par le membre le {DATETIME_FMT.format(new Date(annotation.seenByMemberAt))}
+            </span>
           </Pill>
         ) : null}
         {annotation.mediaType === 'image' ? (

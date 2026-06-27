@@ -36,6 +36,13 @@ const buttonVariants = cva(
   },
 );
 
+/**
+ * @deprecated Primitive shadcn héritée (J0-J3). Source unique du design system
+ * S9 = `Btn` (`@/components/ui/btn`) : 4 kinds × 3 sizes × 6 états, touch ≥44px,
+ * focus-ring global. Plus aucun consommateur en rendu (migré depuis `dialog.tsx`).
+ * Conservé temporairement pour l'alias `--color-destructive` (cf. globals.css) ;
+ * suppression du fichier à confirmer.
+ */
 function Button({
   className,
   variant = 'default',

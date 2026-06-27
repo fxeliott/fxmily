@@ -290,31 +290,34 @@ export default async function DashboardPage() {
             <DashboardProgressBridge view={objectives} />
           </section>
         ) : null}
-        {/* S24 — l'axe de coaching PERSONNEL du membre (issu de son profil
-            d'onboarding), surfacé sur le hub pour qu'il retrouve « sa chose à
-            travailler » sans naviguer. Complète le levier MESURÉ du bridge
-            ci-dessus par l'intention STATED du membre. Badge IA, §2-safe. Rend
-            null sans profil (jamais d'axe inventé). */}
-        {objectives ? (
-          <CoachingAxisCard axis={objectives.coachingAxis} variant="compact" className="mb-6" />
-        ) : null}
-        {/* S25 — l'objectif de méthode DÉRIVÉ + ÉVOLUTIF (règle la plus faible sur
-            30j → palier doux). Surfacé compact sur le hub pour que le membre voie
-            « MON objectif issu de MA donnée, et j'avance dessus » sans naviguer.
-            Déterministe, §2-safe. Rend null sans assez de trades / déjà fidèle. */}
-        {objectives ? (
-          <MethodGoalCard goal={objectives.methodGoal} variant="compact" className="mb-6" />
+        {/* S9/CP3 — « ligne objectifs » : l'axe de coaching PERSONNEL (issu du
+            profil d'onboarding, badge IA §2-safe, rend null sans profil) + l'objectif
+            de méthode DÉRIVÉ & ÉVOLUTIF (règle la plus faible sur 30j → palier doux,
+            §2-safe, rend null sans assez de trades / déjà fidèle). Appariés côte à
+            côte ≥lg pour habiter la largeur et grouper la même intention « sur quoi
+            bosser » (avant : 2 cartes bleues empilées pleine largeur §13). La garde
+            externe `coachingAxis || methodGoal` interdit toute grille vide ; l'auto-flow
+            comble si une seule des deux est présente (jamais de cellule trouée). */}
+        {objectives && (objectives.coachingAxis || objectives.methodGoal) ? (
+          <div className="mb-6 grid items-start gap-4 lg:grid-cols-2">
+            <CoachingAxisCard axis={objectives.coachingAxis} variant="compact" />
+            <MethodGoalCard goal={objectives.methodGoal} variant="compact" />
+          </div>
         ) : null}
 
-        {/* S5 §32-E1 — « Ta carte mentale » (compact : la SEULE priorité du moment).
-            L'accompagnement psychologique au point d'entrée : le membre voit où il en
-            est sur sa discipline / son mental sans naviguer. Self-guard : rend null
-            sans signal (jamais un conseil fabriqué). §2/§31.2-safe. */}
-        <MentalMapCard entries={mentalMap} variant="compact" className="mb-6" />
-        {/* S5 §32-E3 — le micro-objectif mental OUVERT + son suivi (qui referme la
-            boucle au prochain passage). Surfacé compact sur le hub pour que le membre
-            avance dessus sans naviguer. Self-guard : rend null si rien d'ouvert. */}
-        <MicroObjectiveCard objective={openMicroObjective} variant="compact" className="mb-6" />
+        {/* S9/CP3 — « ligne mental » : « Ta carte mentale » (compact = la SEULE
+            priorité du moment ; rend null sans signal, jamais un conseil fabriqué)
+            + le micro-objectif mental OUVERT et son suivi qui referme la boucle
+            (rend null si rien d'ouvert). Appariés côte à côte ≥lg pour grouper
+            l'accompagnement psychologique du point d'entrée et casser la verticalité.
+            La garde externe interdit la grille vide ; l'auto-flow comble si une seule
+            est présente. §2/§31.2-safe (process/mental, jamais le marché). */}
+        {mentalMap.length > 0 || openMicroObjective ? (
+          <div className="mb-6 grid items-start gap-4 lg:grid-cols-2">
+            <MentalMapCard entries={mentalMap} variant="compact" />
+            <MicroObjectiveCard objective={openMicroObjective} variant="compact" />
+          </div>
+        ) : null}
 
         {/* S4 §32/§33 — « alertes immédiates en cas de dérive, sans qu'il ait à les
             chercher » : surfacées au point d'entrée (avant, elles ne vivaient que
@@ -552,21 +555,23 @@ export default async function DashboardPage() {
           <MarkDouglasCard />
         </section>
 
-        {/* J7.7 — Mark Douglas widget (entrée bibliothèque). S15 #20 — Suspense
-            like its neighbours (profile/calendar/monthly) so its 2 queries no
-            longer block the hub's first flush (the hero streams ahead). */}
-        <section className="mb-6" aria-label="Module Mark Douglas">
-          <Suspense fallback={<DouglasInboxSkeleton />}>
-            <DouglasInboxWidget userId={session.user.id} />
-          </Suspense>
-        </section>
-
-        {/* V1.8 — entrée module REFLECT (revue/réflexion). S15 #20 — Suspense. */}
-        <section className="mb-6" aria-label="Module REFLECT">
-          <Suspense fallback={<ReflectWidgetSkeleton />}>
-            <DashboardReflectWidget userId={session.user.id} />
-          </Suspense>
-        </section>
+        {/* S9/CP3 — les deux « portes » coaching/réflexion appariées ≥lg : l'inbox
+            Mark Douglas (entrée bibliothèque) + le module REFLECT (revue/réflexion).
+            Les deux rendent TOUJOURS du contenu (liste OU empty-state encourageant)
+            ⇒ aucune cellule trouée possible. Chacune garde son propre Suspense
+            (S15 #20 : les requêtes ne bloquent plus le premier flush du hub). */}
+        <div className="mb-6 grid items-start gap-4 lg:grid-cols-2">
+          <section aria-label="Module Mark Douglas">
+            <Suspense fallback={<DouglasInboxSkeleton />}>
+              <DouglasInboxWidget userId={session.user.id} />
+            </Suspense>
+          </section>
+          <section aria-label="Module REFLECT">
+            <Suspense fallback={<ReflectWidgetSkeleton />}>
+              <DashboardReflectWidget userId={session.user.id} />
+            </Suspense>
+          </section>
+        </div>
 
         {/* Footer kbd hint. S13 — `data-slot` + sm-stack: the Log-Express FAB
             (fixed bottom-right, z-40) was occluding the right-aligned "N nouveau

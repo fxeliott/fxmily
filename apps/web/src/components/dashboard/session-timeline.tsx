@@ -76,7 +76,10 @@ export function SessionTimeline({
   return (
     <section
       className={cn(
-        'rounded-card-lg border border-[var(--b-default)] bg-[var(--bg-1)] p-5',
+        // S9/CP3 — bg-1 est la surface « card » (globals.css : « lifted by --sh-card ») :
+        // on porte l'ombre pour élever la timeline au langage des cartes — 2e niveau
+        // de hiérarchie juste après le hero, plutôt qu'un encart mat sous lui.
+        'rounded-card-lg border border-[var(--b-default)] bg-[var(--bg-1)] p-5 shadow-[var(--sh-card)]',
         className,
       )}
       aria-labelledby="session-timeline-heading"

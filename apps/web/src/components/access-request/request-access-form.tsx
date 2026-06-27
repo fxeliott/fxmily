@@ -2,7 +2,7 @@
 
 import { m, useReducedMotion } from 'framer-motion';
 import { Mail, User } from 'lucide-react';
-import { useActionState } from 'react';
+import { useActionState, useEffect, useRef } from 'react';
 
 import { Alert } from '@/components/alert';
 import { Btn } from '@/components/ui/btn';
@@ -23,6 +23,21 @@ const initialState: RequestAccessActionState = { ok: false };
  */
 export function RequestAccessForm() {
   const [state, formAction, pending] = useActionState(requestAccessAction, initialState);
+  const formRef = useRef<HTMLFormElement>(null);
+  const errorBannerRef = useRef<HTMLDivElement>(null);
+
+  // A11y: after a FAILED submit, move focus to the first invalid field (or the
+  // error banner for rate-limit/unknown). Hooks must run before the success
+  // early return below; no-op on initial render and on success.
+  useEffect(() => {
+    if (state.ok) return;
+    const hasFieldError = state.fieldErrors && Object.keys(state.fieldErrors).length > 0;
+    if (hasFieldError) {
+      formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    } else if (state.error) {
+      errorBannerRef.current?.focus();
+    }
+  }, [state]);
 
   // Success state: a real calm moment. A check that draws itself inside a soft
   // accent halo, then settles — NO confetti, no fanfare (Mark Douglas posture).
@@ -44,8 +59,12 @@ export function RequestAccessForm() {
   })();
 
   return (
-    <form action={formAction} className="flex flex-col gap-5" noValidate>
-      {topError ? <Alert tone="danger">{topError}</Alert> : null}
+    <form ref={formRef} action={formAction} className="flex flex-col gap-5" noValidate>
+      {topError ? (
+        <div ref={errorBannerRef} tabIndex={-1} className="outline-none">
+          <Alert tone="danger">{topError}</Alert>
+        </div>
+      ) : null}
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Field

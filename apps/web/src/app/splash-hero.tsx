@@ -88,7 +88,10 @@ export function SplashHero() {
         <SplashGrain />
 
         {/* ── Marque (minimal, top-left) ── */}
-        <header className="relative z-10 flex items-center justify-between px-5 pt-7 sm:px-10">
+        {/* sm:pr-16 réserve la bande du ThemeToggle flottant (fixed right-3, 40px)
+            pour que l'eyebrow « Cohorte privée » (visible ≥sm) ne passe jamais
+            sous le bouton — zéro chevauchement §7. */}
+        <header className="relative z-10 flex items-center justify-between px-5 pt-7 sm:pr-16 sm:pl-10">
           <div className="flex items-center gap-2.5">
             <span className="rounded-control grid h-[26px] w-[26px] place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
               <BrandMark className="w-[16px]" />

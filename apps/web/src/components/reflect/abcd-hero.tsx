@@ -94,7 +94,7 @@ export function ABCDHero({ className }: { className?: string }) {
             strokeWidth="2"
             strokeLinecap="round"
             strokeDasharray={i === 2 ? '0 0' : '0 0'}
-            initial={{ pathLength: 0, opacity: 0 }}
+            initial={reduceMotion ? false : { pathLength: 0, opacity: 0 }}
             animate={{ pathLength: 1, opacity: 1 }}
             transition={{
               pathLength: { duration: dur * 1.3, ease: 'easeInOut', delay: 0.3 + i * 0.35 },
@@ -113,7 +113,7 @@ export function ABCDHero({ className }: { className?: string }) {
             cy={n.cy}
             r={n.r + 6}
             fill="url(#v18-abcd-node)"
-            initial={{ opacity: 0, scale: 0.5 }}
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.4, delay: 0.2 + i * 0.35, ease: 'backOut' }}
           />
@@ -129,7 +129,7 @@ export function ABCDHero({ className }: { className?: string }) {
             stroke={n.color}
             strokeWidth="2"
             filter={i === 3 ? 'url(#v18-abcd-glow)' : undefined}
-            initial={{ scale: 0 }}
+            initial={reduceMotion ? false : { scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ duration: 0.5, delay: 0.25 + i * 0.35, ease: 'backOut' }}
           />
@@ -144,7 +144,7 @@ export function ABCDHero({ className }: { className?: string }) {
             // S19 — token text (was fixed light grays → invisible on white node
             // in light mode); --t-1/--t-2 flip to dark on the light node.
             fill={i === 3 ? 'var(--t-1)' : 'var(--t-2)'}
-            initial={{ opacity: 0 }}
+            initial={reduceMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.5 + i * 0.35 }}
           >

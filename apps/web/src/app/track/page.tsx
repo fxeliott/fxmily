@@ -10,6 +10,7 @@ import { HabitKindPicker } from '@/components/track/habit-kind-picker';
 import { HabitKindTabPicker } from '@/components/track/habit-kind-tab-picker';
 import { TodayHabitCards } from '@/components/track/today-habit-cards';
 import { TrackHero } from '@/components/track/track-hero';
+import { SuccessState } from '@/components/ui/success-state';
 import { localDateOf } from '@/lib/checkin/timezone';
 import { listRecentHabitLogs } from '@/lib/habit/service';
 import { type HabitKind, habitKindSchema } from '@/lib/schemas/habit-log';
@@ -95,14 +96,9 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
         </header>
 
         {justLogged ? (
-          <div
-            role="status"
-            aria-live="polite"
-            className="rounded-input border border-[var(--b-acc)] bg-[var(--acc-dim)] px-4 py-3 text-[13px] text-[var(--t-1)]"
-          >
-            <strong className="font-semibold">{KIND_LABELS_FR[sp.kind as string]} loggué.</strong>{' '}
+          <SuccessState headline={`${KIND_LABELS_FR[sp.kind as string]} loggué.`}>
             C&apos;est dans le miroir. Reviens demain.
-          </div>
+          </SuccessState>
         ) : null}
 
         <div className="wow-reveal">

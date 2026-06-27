@@ -92,21 +92,26 @@ export async function getMembersAttention(ids: string[]): Promise<Map<string, Me
   }
 
   // constancyRows are memberId-grouped, periodStart DESC → the first two per
-  // member are its latest + previous snapshot. A drop ≥ MIN flags a dip.
+  // member are its latest + previous snapshot. The dip is defined vs the
+  // IMMEDIATELY-previous snapshot only; any older snapshots in the window are
+  // ignored. `comparedPrev` enforces that "compare once" contract — the bare
+  // `latestSeen` map alone could not, because a member with ≥ 3 snapshots would
+  // otherwise keep comparing its latest value against every older snapshot
+  // (false "constance en baisse" whenever the latest sits below an earlier peak).
   const latestSeen = new Map<string, number>();
+  const comparedPrev = new Set<string>();
   for (const row of constancyRows) {
     const acc = result.get(row.memberId);
     if (!acc) continue;
-    const prevLatest = latestSeen.get(row.memberId);
-    if (prevLatest === undefined) {
+    const latest = latestSeen.get(row.memberId);
+    if (latest === undefined) {
       latestSeen.set(row.memberId, row.value); // this is the LATEST (DESC order)
-    } else {
-      // this is the PREVIOUS snapshot; compare once, then stop caring.
-      // `prevLatest` = latest value, `row.value` = previous value → a dip is
+    } else if (!comparedPrev.has(row.memberId)) {
+      // exactly the PREVIOUS snapshot → compare once, then ignore older rows.
+      // `latest` = latest value, `row.value` = previous value → a dip is
       // "previous − latest ≥ MIN" (single source of truth in attention-logic).
-      if (!acc.constancyDeclining) {
-        acc.constancyDeclining = isConstancyDip(prevLatest, row.value);
-      }
+      comparedPrev.add(row.memberId);
+      acc.constancyDeclining = isConstancyDip(latest, row.value);
     }
   }
 

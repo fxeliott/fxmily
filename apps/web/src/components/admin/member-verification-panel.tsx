@@ -2,6 +2,7 @@ import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { ConstancyScoreCard } from '@/components/verification/constancy-score-card';
 import { ConstancyTrend } from '@/components/verification/constancy-trend';
+import { RealityVsDeclared } from '@/components/verification/reality-vs-declared';
 import { ALERT_LABELS } from '@/lib/verification/alert-labels';
 import type { ConstancyScoreView } from '@/lib/verification/constancy';
 import type { DiscrepancyView, VerificationOverview } from '@/lib/verification/service';
@@ -144,6 +145,12 @@ export function MemberVerificationPanel({
                       )}
                     </span>
                   </div>
+                  {/* S7 §29-#2 — « réalité prouvée vs déclaratif » : the concrete
+                      face-à-face (pair/size/time/pnl) the data layer matched, so the
+                      admin sees WHERE the tracking diverges, not just that it did.
+                      Self-guards to null on rituals (no trade side). Factual mirror,
+                      zero market judgement (SPEC §2). */}
+                  <RealityVsDeclared declared={d.declared} reality={d.reality} />
                   {d.reasoning ? (
                     <p className="t-cap leading-[1.5] text-[var(--t-3)]">{d.reasoning}</p>
                   ) : null}

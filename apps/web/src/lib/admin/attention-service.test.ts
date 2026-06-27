@@ -78,6 +78,38 @@ describe('getMembersAttention', () => {
     });
   });
 
+  it('compares only the latest vs the immediately-previous snapshot, ignoring older peaks', async () => {
+    vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
+    // DESC: latest 70, previous 70.5 (0.5 drop < MIN → no dip), older peak 85.
+    // The 15-point gap latest↔peak must NOT raise the signal — the dip is defined
+    // strictly vs the previous snapshot. Regression guard for the ≥3-snapshot case.
+    vi.mocked(db.constancyScore.findMany).mockResolvedValue([
+      { memberId: 'm1', value: 70 },
+      { memberId: 'm1', value: 70.5 },
+      { memberId: 'm1', value: 85 },
+    ] as never);
+
+    const map = await getMembersAttention(['m1']);
+    expect(map.get('m1')?.constancyDeclining).toBe(false);
+  });
+
+  it('flags a dip vs the previous snapshot even when an older snapshot was lower', async () => {
+    vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
+    // DESC: latest 60, previous 75 (15 drop ≥ MIN → dip), older 50 (irrelevant).
+    vi.mocked(db.constancyScore.findMany).mockResolvedValue([
+      { memberId: 'm1', value: 60 },
+      { memberId: 'm1', value: 75 },
+      { memberId: 'm1', value: 50 },
+    ] as never);
+
+    const map = await getMembersAttention(['m1']);
+    expect(map.get('m1')?.constancyDeclining).toBe(true);
+  });
+
   it('scopes every read to the requested ids and the right filters', async () => {
     vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
     vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);

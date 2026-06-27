@@ -34,7 +34,11 @@ export function CommentPalette({ onInsert, disabled = false }: CommentPalettePro
         className="t-eyebrow flex cursor-pointer list-none items-center gap-1.5 px-3 py-2.5 text-[var(--t-2)] transition-colors hover:text-[var(--t-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] [&::-webkit-details-marker]:hidden"
         aria-label="Afficher les recadrages rapides à insérer"
       >
-        <MessageSquareQuote className="h-3.5 w-3.5 text-[var(--acc-hi)]" strokeWidth={1.75} />
+        <MessageSquareQuote
+          className="h-3.5 w-3.5 text-[var(--acc-hi)]"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
         Recadrages rapides
         <span className="t-cap ml-auto font-normal tracking-normal text-[var(--t-4)] normal-case">
           appuie pour insérer

@@ -1,4 +1,4 @@
-import { Image as ImageIcon, MessageSquare } from 'lucide-react';
+import { Check, Image as ImageIcon, MessageSquare } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
@@ -13,7 +13,8 @@ import { DeleteTrainingAnnotationButton } from './delete-training-annotation-but
  *
  * Used by:
  *   - `/admin/members/[id]/training/[trainingTradeId]` — admin, with the
- *     delete CTA + "Non lue" badge on rows the current admin authored.
+ *     delete CTA + read-receipt badge ("Non lue" → green "Lue") on rows the
+ *     current admin authored.
  *   - `/training/[trainingTradeId]` — member, read-only.
  *
  * 🚨 STATISTICAL ISOLATION (§21.5): consumes `SerializedTrainingAnnotation`
@@ -31,7 +32,7 @@ const DATETIME_FMT = new Intl.DateTimeFormat('fr-FR', {
 
 interface TrainingAnnotationsSectionProps {
   annotations: SerializedTrainingAnnotation[];
-  /** Admin viewing surface — enables the delete CTA + "Non lue" badge. */
+  /** Admin viewing surface — enables the delete CTA + read-receipt badge. */
   isAdmin: boolean;
   /** Currently-authenticated user id — gates the delete button client-side
    * (the Server Action re-checks `(id, adminId)`). */
@@ -126,9 +127,22 @@ function TrainingAnnotationCard({
             Non lue
           </Pill>
         ) : null}
+        {/* S7 §33-#3 — read receipt, admin surface only (carbon mirror of
+            journal/annotations-section.tsx). "Non lue" (amber) → still waiting;
+            "Lue" (green) → the member opened the backtest correction. */}
+        {isAdmin && !annotation.isUnseenByMember && annotation.seenByMemberAt ? (
+          <Pill tone="ok">
+            <Check className="h-2.5 w-2.5" strokeWidth={2.5} aria-hidden="true" />
+            Lue
+            <span className="sr-only">
+              {' '}
+              par le membre le {DATETIME_FMT.format(new Date(annotation.seenByMemberAt))}
+            </span>
+          </Pill>
+        ) : null}
         {annotation.mediaType === 'image' ? (
           <Pill tone="mute">
-            <ImageIcon className="h-2.5 w-2.5" strokeWidth={2} />
+            <ImageIcon className="h-2.5 w-2.5" strokeWidth={2} aria-hidden="true" />
             Capture jointe
           </Pill>
         ) : null}

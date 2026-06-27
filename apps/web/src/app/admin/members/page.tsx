@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus, Search, Sparkles, Users, X } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Plus, Scale, Search, Sparkles, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -10,6 +10,7 @@ import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
+import { getCohortAttention, getMembersAttention } from '@/lib/admin/attention-service';
 import { getMemberDirectoryStats, listMembersForAdmin } from '@/lib/admin/members-service';
 import { logAudit } from '@/lib/auth/audit';
 import { cn } from '@/lib/utils';
@@ -61,17 +62,22 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
   // catches ONLY when a cursor is in play (mirror of the trades tab).
   let page: Awaited<ReturnType<typeof listMembersForAdmin>> | null = null;
   let stats: Awaited<ReturnType<typeof getMemberDirectoryStats>>;
+  let cohortAttention: Awaited<ReturnType<typeof getCohortAttention>>;
   try {
-    [stats, page] = await Promise.all([
+    [stats, cohortAttention, page] = await Promise.all([
       getMemberDirectoryStats(),
+      getCohortAttention(),
       listMembersForAdmin({ query, limit: 50, cursor }),
     ]);
   } catch (err) {
     if (!cursor) throw err;
-    stats = await getMemberDirectoryStats();
+    [stats, cohortAttention] = await Promise.all([getMemberDirectoryStats(), getCohortAttention()]);
     page = null;
   }
   if (page === null) redirect(membersHref(query));
+
+  // Per-member "à traiter" flags for THIS page only (O(page size), bounded reads).
+  const attentionByMember = await getMembersAttention(page.items.map((m) => m.id));
 
   await logAudit({
     action: 'admin.members.listed',
@@ -147,6 +153,32 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
             tone={stats.totalTrades > 0 ? 'acc' : 'mute'}
           />
         </div>
+
+        {/* S7 §33-#2 — cohort triage glance: what needs the admin across everyone,
+            so no member is forgotten. Calm tones (acc/warn), hidden when nothing waits. */}
+        {!isEmptyCohort &&
+        (cohortAttention.tradesToComment > 0 || cohortAttention.openDiscrepancies > 0) ? (
+          <div
+            role="status"
+            className="rounded-card flex flex-wrap items-center gap-x-3 gap-y-2 border border-[var(--b-default)] bg-[var(--bg-1)] px-4 py-3 shadow-[var(--sh-card)]"
+          >
+            <span className="t-eyebrow text-[var(--t-3)]">À traiter dans la cohorte</span>
+            {cohortAttention.tradesToComment > 0 ? (
+              <Pill tone="acc">
+                <MessageSquare aria-hidden="true" className="h-2.5 w-2.5" />
+                {cohortAttention.tradesToComment} trade
+                {cohortAttention.tradesToComment > 1 ? 's' : ''} à commenter
+              </Pill>
+            ) : null}
+            {cohortAttention.openDiscrepancies > 0 ? (
+              <Pill tone="warn">
+                <Scale aria-hidden="true" className="h-2.5 w-2.5" />
+                {cohortAttention.openDiscrepancies} écart
+                {cohortAttention.openDiscrepancies > 1 ? 's' : ''} de vérité
+              </Pill>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Search — server-rendered GET form (works without JS, accessible).
             Submitting drops any cursor → back to page 1 of the new query. */}
@@ -237,7 +269,7 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
               // structure stays intact for the admin e2e; MemberRow keeps its
               // own HoverLift spring. CSS reveal is no-JS + reduced-motion safe.
               <li key={member.id} className="wow-reveal h-full">
-                <MemberRow member={member} />
+                <MemberRow member={member} attention={attentionByMember.get(member.id)} />
               </li>
             ))}
           </ul>

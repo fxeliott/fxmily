@@ -251,4 +251,97 @@ test.describe('S7 — Espace Admin : pagination + comment round-trip + tabs', ()
     await expect(page.getByText('Corrections reçues')).toBeVisible();
     await expect(page.getByText(TRAINING_COMMENT)).toBeVisible();
   });
+
+  test('F — enrichissements S7 : palette (#1) + triage « à traiter » (#2) + accusé de lecture (#3)', async ({
+    page,
+    request,
+  }) => {
+    if (!admin || !member) throw new Error('seed missing — beforeAll did not run');
+    const adminUser = admin;
+    const memberUser = member;
+    // « Process > résultat » preset (comment-presets.ts) — a §2-safe Mark Douglas
+    // reframe, asserted by a fragment that drops typographic apostrophes.
+    const PRESET_FRAGMENT = 'Bon process, peu importe';
+
+    await dismissCookieBanner(page);
+    await page.goto('/login');
+    await loginAs(page, request, adminUser.email, adminUser.password);
+
+    // --- #2 — cohort triage strip surfaces uncommented RECENT trades. The seed
+    // spreads 55 trades across 55 days → ~14 fall inside the 14-day attention
+    // window, all uncommented at this point (A/B annotated a page-2 OLD trade,
+    // E a 26-day-old backtest — both outside the window), so the strip shows.
+    await page.goto('/admin/members');
+    const triageStrip = page.getByRole('status').filter({ hasText: 'À traiter dans la cohorte' });
+    await expect(triageStrip).toBeVisible();
+    await expect(triageStrip.getByText(/trades? à commenter/)).toBeVisible();
+
+    // Per-member badge: search to the seeded member (by email) so its row is
+    // guaranteed on-page regardless of the live cohort size, then assert the
+    // « N à commenter » pill renders on THAT row (scoped to its <li>).
+    await page.goto(`/admin/members?q=${encodeURIComponent(memberUser.email)}`);
+    const memberCard = page.locator('main li').filter({ hasText: 'S7Member' });
+    await expect(memberCard.getByText(/à commenter/)).toBeVisible();
+
+    // --- #1 — palette: open a fresh (page-1, recent, uncommented) trade and drop
+    // a preset reframe into the correction field via one tap.
+    await page.goto(`/admin/members/${memberUser.id}?tab=trades`);
+    const recentTradeHref = await page
+      .locator('main a[href*="/trades/"]')
+      .first()
+      .getAttribute('href');
+    expect(recentTradeHref).toMatch(/\/admin\/members\/[a-z0-9]+\/trades\/[a-z0-9]{20,40}$/);
+    const tradeId = recentTradeHref!.split('/trades/')[1]!;
+    await page.goto(recentTradeHref!);
+
+    await page.getByRole('button', { name: 'Annoter ce trade' }).click();
+    const commentBox = page.getByLabel('Correction');
+    await expect(commentBox).toBeVisible();
+    // Expand the native <details> palette, then tap the chip → the parent appends
+    // the phrase into the controlled textarea (no manual typing).
+    await page.getByText('Recadrages rapides').click();
+    await page.getByRole('button', { name: 'Insérer le recadrage : Process > résultat' }).click();
+    await expect(commentBox).toHaveValue(new RegExp(PRESET_FRAGMENT));
+    await page.getByRole('button', { name: /Envoyer correction/ }).click();
+    await expect(page.getByLabel('Correction')).toBeHidden({ timeout: 60_000 });
+    await expect(page.getByText(new RegExp(PRESET_FRAGMENT))).toBeVisible();
+
+    // Real DB row carries the preset text verbatim and is still unseen.
+    const created = await db.tradeAnnotation.findFirst({
+      where: { tradeId, adminId: adminUser.id },
+      select: { comment: true, seenByMemberAt: true },
+    });
+    expect(created?.comment).toContain(PRESET_FRAGMENT);
+    expect(created?.seenByMemberAt).toBeNull();
+
+    // --- #3 — read receipt: BEFORE the member opens it, the admin sees « Non lue ».
+    await expect(page.getByText('Non lue')).toBeVisible();
+
+    // Member opens the SAME trade → annotations are bulk-marked seen on load.
+    await page.context().clearCookies();
+    await page.goto('/login');
+    await loginAs(page, request, memberUser.email, memberUser.password);
+    await page.goto(`/journal/${tradeId}`);
+    await expect(page.getByText(new RegExp(PRESET_FRAGMENT))).toBeVisible();
+
+    // DB proof: seenByMemberAt flipped from null to a timestamp.
+    await expect
+      .poll(async () => {
+        const row = await db.tradeAnnotation.findFirst({
+          where: { tradeId, adminId: adminUser.id },
+          select: { seenByMemberAt: true },
+        });
+        return row?.seenByMemberAt ? 'seen' : 'unseen';
+      })
+      .toBe('seen');
+
+    // --- Admin reloads the trade detail → « Non lue » flips to the green « Lue »
+    // pill (its screen-reader text « par le membre le … » uniquely identifies it).
+    await page.context().clearCookies();
+    await page.goto('/login');
+    await loginAs(page, request, adminUser.email, adminUser.password);
+    await page.goto(recentTradeHref!);
+    await expect(page.getByText(/par le membre le/)).toBeVisible();
+    await expect(page.getByText('Non lue')).toBeHidden();
+  });
 });

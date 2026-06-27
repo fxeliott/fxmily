@@ -4,6 +4,7 @@ import { MessageSquarePlus, Send } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { useActionState } from 'react';
 
+import { CommentPalette } from '@/components/admin/comment-palette';
 import { MediaUploader } from '@/components/media-uploader';
 import { Btn } from '@/components/ui/btn';
 import {
@@ -49,6 +50,7 @@ const initialState: CreateAnnotationActionState | null = null;
 export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonProps) {
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [mediaKey, setMediaKey] = useState<string | null>(null);
@@ -78,6 +80,18 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
     return result;
   };
   const [state, formAction, isPending] = useActionState(submitWithReset, initialState);
+
+  // Palette insert: append the reframe to the existing comment (never replace),
+  // clamp to the hard cap so a tap can't overflow, then focus the field so the
+  // admin keeps typing inline. Newline separator keeps stacked reframes legible.
+  const insertPreset = (text: string) => {
+    setComment((current) => {
+      const base = current.trimEnd();
+      const merged = base.length > 0 ? `${base}\n${text}` : text;
+      return merged.slice(0, ANNOTATION_COMMENT_MAX);
+    });
+    textareaRef.current?.focus();
+  };
 
   const remaining = ANNOTATION_COMMENT_MAX - comment.length;
 
@@ -123,7 +137,9 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
                 <span className="sr-only"> caractères restants sur {ANNOTATION_COMMENT_MAX}</span>
               </span>
             </div>
+            <CommentPalette onInsert={insertPreset} disabled={isPending} />
             <textarea
+              ref={textareaRef}
               id={`${formId}-comment`}
               name="comment"
               required

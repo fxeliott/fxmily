@@ -18,6 +18,7 @@ import { AnimatedNumber } from '@/components/ui/animated-number';
 import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
 import { Pill } from '@/components/ui/pill';
 import { listPendingAccessRequests } from '@/lib/access-request/service';
+import { getCohortAttention } from '@/lib/admin/attention-service';
 import { getCatalogStats } from '@/lib/admin/cards-service';
 import { getMemberDirectoryStats } from '@/lib/admin/members-service';
 import { cn } from '@/lib/utils';
@@ -40,12 +41,16 @@ export default async function AdminHubPage() {
   const session = await auth();
   if (!session?.user || session.user.role !== 'admin') redirect('/login');
 
-  const [memberStats, pending, catalog] = await Promise.all([
+  const [memberStats, pending, catalog, cohortAttention] = await Promise.all([
     getMemberDirectoryStats(),
     listPendingAccessRequests(),
     getCatalogStats(),
+    getCohortAttention(),
   ]);
   const pendingCount = pending.length;
+  // S7 §33-#2 — one triage number for the Members card: trades to comment + open
+  // truth gaps. The hub already promises "attention first", so surface it here too.
+  const triageCount = cohortAttention.tradesToComment + cohortAttention.openDiscrepancies;
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-[var(--w-app)] flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
@@ -97,9 +102,17 @@ export default async function AdminHubPage() {
           label="Membres"
           description="Annuaire de la cohorte, profils et supervision."
           badge={
-            <Pill tone="acc">
-              <AnimatedNumber value={memberStats.total} /> membre{memberStats.total > 1 ? 's' : ''}
-            </Pill>
+            <div className="flex flex-col items-end gap-1">
+              <Pill tone="acc">
+                <AnimatedNumber value={memberStats.total} /> membre
+                {memberStats.total > 1 ? 's' : ''}
+              </Pill>
+              {triageCount > 0 ? (
+                <Pill tone="warn" dot>
+                  {triageCount} à traiter
+                </Pill>
+              ) : null}
+            </div>
           }
         />
         <HubCard

@@ -200,10 +200,12 @@ describe('listTrainingTradesForUser (cursor-paginated)', () => {
 
 describe('getTrainingTradeStatsForUser (§21.5 training-only aggregate)', () => {
   it('derives stats from count + groupBy(outcome) + groupBy(system) + avg(resultR) + checklist count, user-scoped', async () => {
-    // total = first count(), checklistCleanCount = second count() in the Promise.all.
+    // In Promise.all order, the three count() calls are: total (1st),
+    // checklistCleanCount (2nd), checklistAnsweredCount (3rd).
     vi.mocked(db.trainingTrade.count)
       .mockResolvedValueOnce(10 as never)
-      .mockResolvedValueOnce(2 as never);
+      .mockResolvedValueOnce(2 as never)
+      .mockResolvedValueOnce(5 as never);
     vi.mocked(db.trainingTrade.groupBy)
       .mockResolvedValueOnce([
         { outcome: 'win', _count: { _all: 4 } },
@@ -231,6 +233,7 @@ describe('getTrainingTradeStatsForUser (§21.5 training-only aggregate)', () => 
       systemDecidedCount: 7,
       systemKeptCount: 5,
       checklistCleanCount: 2,
+      checklistAnsweredCount: 5,
     });
 
     // §21.5 — every read is user-scoped on db.trainingTrade; the avg only ever
@@ -247,6 +250,19 @@ describe('getTrainingTradeStatsForUser (§21.5 training-only aggregate)', () => 
         riskDefinedBefore: true,
         emotionalStateNoted: true,
         noImpulsiveDeviation: true,
+      },
+    });
+    // §33-1 honest denominator: ≥1 checklist item filled (engaged), user-scoped,
+    // never a P&L/outcome filter. Legacy all-NULL backtests are excluded.
+    expect(vi.mocked(db.trainingTrade.count).mock.calls[2]![0]).toEqual({
+      where: {
+        userId: 'user-1',
+        OR: [
+          { planFollowed: { not: null } },
+          { riskDefinedBefore: { not: null } },
+          { emotionalStateNoted: { not: null } },
+          { noImpulsiveDeviation: { not: null } },
+        ],
       },
     });
     const aggArg = vi.mocked(db.trainingTrade.aggregate).mock.calls[0]![0] as {
@@ -277,6 +293,7 @@ describe('getTrainingTradeStatsForUser (§21.5 training-only aggregate)', () => 
       systemDecidedCount: 0,
       systemKeptCount: 0,
       checklistCleanCount: 0,
+      checklistAnsweredCount: 0,
     });
   });
 });

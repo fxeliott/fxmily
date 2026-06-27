@@ -225,36 +225,59 @@ export interface TrainingTradeStats {
   /** S8 V2 — backtests run with an IRREPROACHABLE process: every one of the
    * four discipline-checklist items (§33-2) explicitly answered "respected".
    * A pure discipline metric (act of following the process), never a P&L or a
-   * market judgement (§21.2 + garde-fou §2). Rate = `checklistCleanCount / total`. */
+   * market judgement (§21.2 + garde-fou §2). */
   checklistCleanCount: number;
+  /** Backtests where the member ENGAGED the discipline checklist at all — at
+   * least one of the four items is non-null. The honest denominator for the
+   * completeness rate (§33-1): mirrors `systemDecidedCount`, so legacy /
+   * untouched backtests (all four columns NULL after the ADD-only migration)
+   * never drag the rate down (anti-Black-Hat). Rate = `checklistCleanCount /
+   * checklistAnsweredCount`. */
+  checklistAnsweredCount: number;
 }
 
 export async function getTrainingTradeStatsForUser(userId: string): Promise<TrainingTradeStats> {
-  const [total, byOutcome, rAgg, bySystem, checklistCleanCount] = await Promise.all([
-    db.trainingTrade.count({ where: { userId } }),
-    db.trainingTrade.groupBy({ by: ['outcome'], where: { userId }, _count: { _all: true } }),
-    db.trainingTrade.aggregate({
-      where: { userId, resultR: { not: null } },
-      _avg: { resultR: true },
-      _count: { resultR: true },
-    }),
-    db.trainingTrade.groupBy({
-      by: ['systemRespected'],
-      where: { userId },
-      _count: { _all: true },
-    }),
-    // §33-2 discipline metric: all four checklist items explicitly "respected".
-    // §21.5 — still db.trainingTrade only; reads no real-edge surface.
-    db.trainingTrade.count({
-      where: {
-        userId,
-        planFollowed: true,
-        riskDefinedBefore: true,
-        emotionalStateNoted: true,
-        noImpulsiveDeviation: true,
-      },
-    }),
-  ]);
+  const [total, byOutcome, rAgg, bySystem, checklistCleanCount, checklistAnsweredCount] =
+    await Promise.all([
+      db.trainingTrade.count({ where: { userId } }),
+      db.trainingTrade.groupBy({ by: ['outcome'], where: { userId }, _count: { _all: true } }),
+      db.trainingTrade.aggregate({
+        where: { userId, resultR: { not: null } },
+        _avg: { resultR: true },
+        _count: { resultR: true },
+      }),
+      db.trainingTrade.groupBy({
+        by: ['systemRespected'],
+        where: { userId },
+        _count: { _all: true },
+      }),
+      // §33-2 discipline metric: all four checklist items explicitly "respected".
+      // §21.5 — still db.trainingTrade only; reads no real-edge surface.
+      db.trainingTrade.count({
+        where: {
+          userId,
+          planFollowed: true,
+          riskDefinedBefore: true,
+          emotionalStateNoted: true,
+          noImpulsiveDeviation: true,
+        },
+      }),
+      // §33-1 honest denominator: backtests where the checklist was ENGAGED at
+      // all (≥1 item non-null). Legacy / untouched backtests (all four NULL after
+      // the ADD-only migration) are excluded so they never drag the rate down
+      // (anti-Black-Hat). §21.5 — still db.trainingTrade only.
+      db.trainingTrade.count({
+        where: {
+          userId,
+          OR: [
+            { planFollowed: { not: null } },
+            { riskDefinedBefore: { not: null } },
+            { emotionalStateNoted: { not: null } },
+            { noImpulsiveDeviation: { not: null } },
+          ],
+        },
+      }),
+    ]);
 
   const winCount = byOutcome.find((g) => g.outcome === 'win')?._count._all ?? 0;
   const lossCount = byOutcome.find((g) => g.outcome === 'loss')?._count._all ?? 0;
@@ -270,6 +293,7 @@ export async function getTrainingTradeStatsForUser(userId: string): Promise<Trai
     systemDecidedCount: systemKeptCount + systemBrokenCount,
     systemKeptCount,
     checklistCleanCount,
+    checklistAnsweredCount,
   };
 }
 

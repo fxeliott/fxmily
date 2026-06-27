@@ -39,6 +39,7 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
     systemDecidedCount,
     systemKeptCount,
     checklistCleanCount,
+    checklistAnsweredCount,
   } = stats;
 
   const winRate = decidedCount === 0 ? '—' : `${Math.round((winCount / decidedCount) * 100)} %`;
@@ -50,12 +51,19 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
       ? '—'
       : `${Math.round((systemKeptCount / systemDecidedCount) * 100)} %`;
 
-  // §33-1 "taux de complétude" — share of backtests run with an irreproachable
-  // process (all four discipline-checklist items answered "respected"). A pure
-  // discipline/completeness rate, never a P&L or market judgement (§21.5 +
-  // garde-fou §2). "—" when there is no backtest yet (anti-Black-Hat: no
-  // misleading 0 %); the denominator stays explicit in the hint.
-  const processRate = total === 0 ? '—' : `${Math.round((checklistCleanCount / total) * 100)} %`;
+  // §33-1 "taux de complétude" — share of the backtests where the member
+  // ENGAGED the discipline checklist that were run with an irreproachable
+  // process (all four items answered "respected"). A pure discipline /
+  // completeness rate, never a P&L or market judgement (§21.5 + garde-fou §2).
+  // Denominator = `checklistAnsweredCount` (≥1 item filled), NOT raw `total`:
+  // legacy / untouched backtests (all four NULL after the ADD-only migration)
+  // are excluded so they never drag the rate down (anti-Black-Hat — they aren't
+  // a failure, just data we never asked for). "—" when nothing is filled yet;
+  // the denominator stays explicit in the hint (mirrors `systemRate`).
+  const processRate =
+    checklistAnsweredCount === 0
+      ? '—'
+      : `${Math.round((checklistCleanCount / checklistAnsweredCount) * 100)} %`;
 
   return (
     <section
@@ -90,9 +98,9 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
         label="Process complet"
         value={processRate}
         hint={
-          total === 0
+          checklistAnsweredCount === 0
             ? 'checklist à remplir'
-            : `checklist tenue sur ${total} backtest${total > 1 ? 's' : ''}`
+            : `sur ${checklistAnsweredCount} renseigné${checklistAnsweredCount > 1 ? 's' : ''}`
         }
       />
     </section>

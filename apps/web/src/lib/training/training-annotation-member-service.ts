@@ -77,7 +77,9 @@ export async function listTrainingAnnotationsForTrainingTradeAsMember(
  * re-parses `trainingReplyCreateSchema`). Returns the parent ids the action
  * needs to notify the authoring admin + revalidate both surfaces, plus
  * `isFirstReply` so the action notifies ONCE. Returns `null` when the annotation
- * is absent or not owned.
+ * is absent, not owned, or hard-deleted between the ownership read and the write
+ * (delete-then-reply race) — so the action never reports a success for a reply
+ * that did not persist.
  *
  * `isFirstReply` is claimed ATOMICALLY, not derived from a prior read: the first
  * write filters on `memberRepliedAt: null`, so under two concurrent replies
@@ -124,10 +126,15 @@ export async function replyToTrainingAnnotationAsMember(
     // An edit (a reply already exists) or the loser of a concurrent first-reply
     // race: persist the new text WITHOUT re-stamping `memberRepliedAt` (so the
     // admin is not re-notified) — still owner-scoped.
-    await db.trainingAnnotation.updateMany({
+    const editClaim = await db.trainingAnnotation.updateMany({
       where: { id: annotation.id, trainingTrade: { is: { userId } } },
       data: { memberReply: reply },
     });
+    // Delete-then-reply race: the correction was hard-deleted between the read
+    // and this write, so neither update matched a row. Surfacing the stale ids
+    // would let the action report a success for a reply that was never
+    // persisted (a silent lost write). Treat it as not-found instead.
+    if (editClaim.count === 0) return null;
     isFirstReply = false;
   }
 

@@ -147,6 +147,16 @@ describe('pushSubscriptionInputSchema', () => {
     expect(r.success).toBe(false);
   });
 
+  it('rejects a non-FCM *.googleapis.com host (allowlist pinned to fcm.googleapis.com)', () => {
+    // Before tightening, the broad `googleapis.com` pattern accepted any Google
+    // subdomain as a push endpoint. `fcm.` is the only host that serves Web Push.
+    const r = pushSubscriptionInputSchema.safeParse({
+      ...VALID_INPUT,
+      endpoint: 'https://storage.googleapis.com/bucket/object',
+    });
+    expect(r.success).toBe(false);
+  });
+
   it('rejects localhost endpoint (anti-SSRF)', () => {
     const r = pushSubscriptionInputSchema.safeParse({
       ...VALID_INPUT,

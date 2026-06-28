@@ -51,8 +51,15 @@ const authKeySchema = z
 /// subdomain prefixes — push services use sharded subdomains
 /// (e.g. `wns2-by3p.notify.windows.com`, `updates.push.services.mozilla.com`,
 /// `web.push.apple.com`, `fcm.googleapis.com`).
+///
+/// Google is pinned to `fcm.googleapis.com` (the ONLY Google host that serves
+/// Web Push) rather than the broad `googleapis.com`: the wide form let any
+/// `*.googleapis.com` (storage., compute., …) through as a push endpoint,
+/// needlessly widening the SSRF-amplifier surface. Chrome's modern endpoint is
+/// `https://fcm.googleapis.com/...`; legacy `android.googleapis.com` GCM was
+/// removed in 2019, so nothing real regresses.
 const ALLOWED_PUSH_HOSTS_REGEX =
-  /^([a-z0-9-]+\.)*(?:googleapis\.com|push\.apple\.com|push\.services\.mozilla\.com|notify\.windows\.com)$/i;
+  /^([a-z0-9-]+\.)*(?:fcm\.googleapis\.com|push\.apple\.com|push\.services\.mozilla\.com|notify\.windows\.com)$/i;
 
 /// Push service endpoint URL. Three layers of defense:
 /// 1. Valid URL (Zod `.url()`).

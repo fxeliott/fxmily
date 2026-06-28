@@ -41,6 +41,13 @@ describe('safeFreeText', () => {
     expect(safeFreeText('﻿hello')).toBe('hello');
   });
 
+  it('strips the Unicode TAG range (U+E0000–U+E007F) — hidden LLM-prompt smuggling', () => {
+    // TAG LATIN A + TAG LATIN B carry an invisible instruction payload that a
+    // human reviewer never sees but a Claude prompt builder would.
+    const hiddenTags = String.fromCodePoint(0xe0041, 0xe0042);
+    expect(safeFreeText(`Bonjour${hiddenTags}monde`)).toBe('Bonjourmonde');
+  });
+
   it('preserves regular ASCII whitespace and French punctuation', () => {
     expect(safeFreeText('Salut, ça va ? Très bien !')).toBe('Salut, ça va ? Très bien !');
   });
@@ -68,6 +75,10 @@ describe('containsBidiOrZeroWidth', () => {
 
   it('returns true on BOM', () => {
     expect(containsBidiOrZeroWidth('﻿hello')).toBe(true);
+  });
+
+  it('returns true on a Unicode TAG char (U+E0000–U+E007F)', () => {
+    expect(containsBidiOrZeroWidth(`x${String.fromCodePoint(0xe0041)}y`)).toBe(true);
   });
 
   it('is stateful-safe across multiple calls (regex lastIndex reset)', () => {

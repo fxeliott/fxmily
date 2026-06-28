@@ -29,6 +29,10 @@
  *   - U+202A–U+202E LRE / RLE / PDF / LRO / RLO (legacy bidi controls)
  *   - U+2066–U+2069 LRI / RLI / FSI / PDI (current bidi controls)
  *   - U+FEFF ZERO WIDTH NO-BREAK SPACE / BOM
+ *   - U+E0000–U+E007F UNICODE TAG range (invisible "tag" characters that can
+ *     smuggle a full hidden instruction stream into an LLM prompt — the modern
+ *     evolution of the Trojan-Source class; stripped at the source so the tag
+ *     payload never reaches the Claude prompt builders downstream).
  *
  * NOT stripped (legitimate use): ASCII whitespace, French diacritics,
  * emoji ZWJ sequences (the 200D inside `👨‍👩‍👧‍👦` IS stripped — V1 trade-off,
@@ -36,7 +40,10 @@
  * single-code-point variant of the emoji still renders fine).
  */
 
-const BIDI_AND_ZW_RE = /[​-‏‪-‮⁦-⁩﻿]/g;
+// `u` flag is REQUIRED: the U+E0000–U+E007F tag range is astral (surrogate
+// pairs), so a non-`u` regex can't express it as a range. Escapes (not literal
+// glyphs) keep the class readable and copy-paste-safe across editors.
+const BIDI_AND_ZW_RE = /[​-‏‪-‮⁦-⁩﻿\u{E0000}-\u{E007F}]/gu;
 
 /**
  * Sanitize a free-text string: trim, NFC normalize, strip bidi/zero-width

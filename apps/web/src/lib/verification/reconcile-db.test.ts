@@ -169,4 +169,37 @@ describe('reconcileAllMembers — DB orchestration (§32-e)', () => {
     // matchStatus already 'mismatch' → no churning update either.
     expect(m.tradeUpdate).not.toHaveBeenCalled();
   });
+
+  it('🚨 RACE — concurrent pass already created the gap (P2002) → no-op, never a double penalty', async () => {
+    // The in-memory `existingKeys` guard sees nothing (both passes read « none »
+    // before either commits), so the create IS attempted — but the partial
+    // unique index `discrepancies_reconcile_key_uniq` makes the loser's insert
+    // raise P2002. `createIfNew` must fold that into a clean no-op: no second
+    // accusation, and crucially NO second penalising ScoreEvent.
+    m.tradeFindMany.mockResolvedValue([trade({ lotSize: 0.5 })]);
+    m.positionFindMany.mockResolvedValue([position({ volume: 1.0 })]); // mismatch
+    m.discrepancyFindMany.mockResolvedValue([]); // guard empty → create attempted
+    m.discrepancyCreate.mockRejectedValue({ code: 'P2002' }); // lost the race
+
+    const r = await reconcileAllMembers({ now: NOW });
+
+    expect(r.errors).toBe(0); // P2002 is a clean dedup, not a member-level failure
+    expect(r.discrepanciesCreated).toBe(0); // the loser counts nothing
+    expect(m.scoreEventCreate).not.toHaveBeenCalled(); // ← the fix: no double penalty
+  });
+
+  it('🚨 a NON-P2002 create failure is surfaced, never silently swallowed', async () => {
+    // The P2002 fold must NOT hide a genuine DB failure: a real error has to
+    // propagate to the per-member error handler (errors += 1), not vanish.
+    m.tradeFindMany.mockResolvedValue([trade({ lotSize: 0.5 })]);
+    m.positionFindMany.mockResolvedValue([position({ volume: 1.0 })]); // mismatch
+    m.discrepancyFindMany.mockResolvedValue([]);
+    m.discrepancyCreate.mockRejectedValue({ code: 'P2010', message: 'real db failure' });
+
+    const r = await reconcileAllMembers({ now: NOW });
+
+    expect(r.errors).toBe(1); // surfaced
+    expect(r.discrepanciesCreated).toBe(0);
+    expect(m.scoreEventCreate).not.toHaveBeenCalled();
+  });
 });

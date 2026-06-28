@@ -4,6 +4,35 @@ import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { reportError } from '@/lib/observability';
 
+/** Prisma unique-constraint violation (P2002), detected without importing @prisma/client. */
+function isUniqueConstraintError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
+}
+
+/**
+ * Run a `discrepancy.create` + penalising `scoreEvent.create` pair idempotently.
+ *
+ * The in-memory `existingKeys` guard (read-then-create) skips the common re-run
+ * case, but it is NOT concurrency-safe: the daily `verification-scan` cron and
+ * an event-driven `batch.ts` pass can both read « none » for the same gap before
+ * either commits, then both INSERT — a duplicate accusation AND a duplicate
+ * NEGATIVE ScoreEvent (the member punished twice for one presumed gap). The
+ * partial unique index `discrepancies_reconcile_key_uniq` makes the loser's
+ * discrepancy create raise P2002, folded here into a no-op. Only the discrepancy
+ * create can raise P2002 (score_events has no unique constraint), so wrapping
+ * both writes means a lost race never emits the penalty either. Returns true iff
+ * a row was actually created (so the caller only counts real new écarts).
+ */
+async function createIfNew(write: () => Promise<void>): Promise<boolean> {
+  try {
+    await write();
+    return true;
+  } catch (err) {
+    if (isUniqueConstraintError(err)) return false;
+    throw err;
+  }
+}
+
 /**
  * S3 §33.5 — Réconciliation déclaré ↔ réalité (moteur DÉTERMINISTE).
  *
@@ -268,7 +297,11 @@ export async function reconcileAllMembers(
  * S4 §30 — exported so the verification batch can reconcile a member's freshly
  * persisted positions BEFORE the event-driven alert scan (mirrors the cron's
  * reconcile→alerts order). Idempotent: the cron already re-runs it daily, so an
- * extra event-driven pass creates no duplicate discrepancies.
+ * extra event-driven pass creates no duplicate discrepancies. The in-memory
+ * `existingKeys` guard covers the sequential re-run; the CONCURRENT case (this
+ * pass interleaving with the cron) is backstopped at the DB by the partial
+ * unique index `discrepancies_reconcile_key_uniq` → P2002 folded to a no-op in
+ * `createIfNew`, so neither a second accusation nor a second penalty can land.
  */
 export async function reconcileOneMember(
   memberId: string,
@@ -386,27 +419,29 @@ export async function reconcileOneMember(
       const key = `mismatch|${v.tradeId}|${v.positionId}`;
       if (!existingKeys.has(key)) {
         existingKeys.add(key);
-        const disc = await db.discrepancy.create({
-          data: {
-            memberId,
-            type: 'mismatch',
-            declaredTradeId: v.tradeId,
-            extractedPositionId: v.positionId,
-            severity: 1,
-            claudeReasoning:
-              'Le trade déclaré et la position MT5 correspondent (heure, sens, instrument) mais la taille diverge au-delà de la tolérance.',
-          },
-          select: { id: true },
+        const created = await createIfNew(async () => {
+          const disc = await db.discrepancy.create({
+            data: {
+              memberId,
+              type: 'mismatch',
+              declaredTradeId: v.tradeId,
+              extractedPositionId: v.positionId,
+              severity: 1,
+              claudeReasoning:
+                'Le trade déclaré et la position MT5 correspondent (heure, sens, instrument) mais la taille diverge au-delà de la tolérance.',
+            },
+            select: { id: true },
+          });
+          await db.scoreEvent.create({
+            data: {
+              memberId,
+              delta: SCORE_DELTA_REALITY_GAP,
+              reason: 'reality_gap',
+              relatedDiscrepancyId: disc.id,
+            },
+          });
         });
-        await db.scoreEvent.create({
-          data: {
-            memberId,
-            delta: SCORE_DELTA_REALITY_GAP,
-            reason: 'reality_gap',
-            relatedDiscrepancyId: disc.id,
-          },
-        });
-        discrepanciesCreated += 1;
+        if (created) discrepanciesCreated += 1;
       }
       continue;
     }
@@ -415,26 +450,28 @@ export async function reconcileOneMember(
       const key = `missing_declared||${v.positionId}`;
       if (!existingKeys.has(key)) {
         existingKeys.add(key);
-        const disc = await db.discrepancy.create({
-          data: {
-            memberId,
-            type: 'missing_declared',
-            extractedPositionId: v.positionId,
-            severity: 2,
-            claudeReasoning:
-              "Une position fermée apparaît dans l'historique MT5 fourni mais n'a pas été déclarée dans le journal.",
-          },
-          select: { id: true },
+        const created = await createIfNew(async () => {
+          const disc = await db.discrepancy.create({
+            data: {
+              memberId,
+              type: 'missing_declared',
+              extractedPositionId: v.positionId,
+              severity: 2,
+              claudeReasoning:
+                "Une position fermée apparaît dans l'historique MT5 fourni mais n'a pas été déclarée dans le journal.",
+            },
+            select: { id: true },
+          });
+          await db.scoreEvent.create({
+            data: {
+              memberId,
+              delta: SCORE_DELTA_REALITY_GAP,
+              reason: 'reality_gap',
+              relatedDiscrepancyId: disc.id,
+            },
+          });
         });
-        await db.scoreEvent.create({
-          data: {
-            memberId,
-            delta: SCORE_DELTA_REALITY_GAP,
-            reason: 'reality_gap',
-            relatedDiscrepancyId: disc.id,
-          },
-        });
-        discrepanciesCreated += 1;
+        if (created) discrepanciesCreated += 1;
       }
       continue;
     }
@@ -447,26 +484,28 @@ export async function reconcileOneMember(
     const key = `false_declared|${v.tradeId}|`;
     if (!existingKeys.has(key)) {
       existingKeys.add(key);
-      const disc = await db.discrepancy.create({
-        data: {
-          memberId,
-          type: 'false_declared',
-          declaredTradeId: v.tradeId,
-          severity: 3,
-          claudeReasoning:
-            "Un trade déclaré dans le journal n'a pas de contrepartie dans l'historique MT5 fourni, alors que la période est couverte par les preuves.",
-        },
-        select: { id: true },
+      const created = await createIfNew(async () => {
+        const disc = await db.discrepancy.create({
+          data: {
+            memberId,
+            type: 'false_declared',
+            declaredTradeId: v.tradeId,
+            severity: 3,
+            claudeReasoning:
+              "Un trade déclaré dans le journal n'a pas de contrepartie dans l'historique MT5 fourni, alors que la période est couverte par les preuves.",
+          },
+          select: { id: true },
+        });
+        await db.scoreEvent.create({
+          data: {
+            memberId,
+            delta: SCORE_DELTA_FALSE_DECLARATION,
+            reason: 'false_declaration',
+            relatedDiscrepancyId: disc.id,
+          },
+        });
       });
-      await db.scoreEvent.create({
-        data: {
-          memberId,
-          delta: SCORE_DELTA_FALSE_DECLARATION,
-          reason: 'false_declaration',
-          relatedDiscrepancyId: disc.id,
-        },
-      });
-      discrepanciesCreated += 1;
+      if (created) discrepanciesCreated += 1;
     }
   }
 

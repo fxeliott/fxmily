@@ -108,7 +108,9 @@ export async function getSystemHealthOverview(
   const alertFloor = scoreFloor;
 
   const [recentCheckins, gapsByStatus, scoreByReason, recentAlerts, meetings] = await Promise.all([
-    db.dailyCheckin.count({ where: { date: { gte: checkinFloor } } }),
+    db.dailyCheckin.count({
+      where: { date: { gte: checkinFloor }, user: { status: { not: 'deleted' } } },
+    }),
     db.discrepancy.groupBy({
       by: ['status'],
       where: { member: { status: { not: 'deleted' } } },
@@ -145,7 +147,14 @@ export async function getSystemHealthOverview(
     reality_gap: 0,
     false_declaration: 0,
   };
+  // Route known reasons into the typed shape, but fold EVERY row into `total` so a
+  // future `ScoreEventReason` can never be silently dropped from the movement count
+  // (§0 — `total` stays honest to its docstring « Total events folded »). `net`
+  // keeps its signed meaning over the KNOWN reasons (an unknown reason carries no
+  // known sign, so it must not tilt the direction either way).
+  let foldedTotal = 0;
   for (const row of scoreByReason) {
+    foldedTotal += row._count._all;
     if (row.reason in reasonCounts) reasonCounts[row.reason as ScoreReason] = row._count._all;
   }
   const negatives =
@@ -153,7 +162,7 @@ export async function getSystemHealthOverview(
   const scoreMovements: ScoreMovementHealth = {
     ...reasonCounts,
     net: reasonCounts.filled - negatives,
-    total: reasonCounts.filled + negatives,
+    total: foldedTotal,
   };
 
   // Meeting presence → fold the admin window into 4 totals (count-only, §2).

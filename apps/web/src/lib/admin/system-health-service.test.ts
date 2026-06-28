@@ -137,6 +137,9 @@ describe('getSystemHealthOverview', () => {
     const checkinWhere = firstArg(db.dailyCheckin.count).where as Record<string, unknown>;
     expect((checkinWhere.date as { gte: Date }).gte).toBeInstanceOf(Date);
     expect((checkinWhere.date as { gte: Date }).gte.getUTCHours()).toBe(0);
+    // Check-in fill EXCLUDES deleted members too — cohort consistency with the
+    // three reads below (relation is `user`, not `member`, on DailyCheckin).
+    expect(checkinWhere.user).toEqual({ status: { not: 'deleted' } });
 
     // Truth gaps: grouped by status, deleted members excluded, no date window.
     const gapArg = firstArg(db.discrepancy.groupBy);
@@ -159,7 +162,7 @@ describe('getSystemHealthOverview', () => {
     expect(vi.mocked(listMeetingsForAdmin)).toHaveBeenCalledWith(now);
   });
 
-  it('drops an unknown score reason without throwing', async () => {
+  it('folds an unknown score reason into total without throwing (durable to enum growth)', async () => {
     vi.mocked(db.dailyCheckin.count).mockResolvedValue(0 as never);
     vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
     vi.mocked(db.scoreEvent.groupBy).mockResolvedValue([
@@ -172,6 +175,8 @@ describe('getSystemHealthOverview', () => {
     const out = await getSystemHealthOverview(new Date('2026-06-22T09:00:00.000Z'));
 
     expect(out.scoreMovements.filled).toBe(3);
-    expect(out.scoreMovements.total).toBe(3);
+    // The unknown reason is NOT classified into a typed field, but it is NEVER
+    // silently dropped from `total` — a future ScoreEventReason still counts (3 + 9).
+    expect(out.scoreMovements.total).toBe(12);
   });
 });

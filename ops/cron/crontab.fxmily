@@ -168,3 +168,15 @@ MAILTO=""
 # lib/system/health.ts). 11:50 UTC offsets the 11:00/11:10/11:20/11:40 permanence
 # nudges and the 11:30 verification scan.
 50 11 * * *                  fxmily   /usr/local/bin/fxmily-cron verification-batch-overdue-alert
+
+# §9-C SELF-HEALING — container autoheal watchdog : every minute, as ROOT.
+# `restart: unless-stopped` (docker-compose.prod.yml) only restarts a container
+# that has EXITED — never one that is running-but-UNHEALTHY (DB pool deadlock,
+# event-loop stall, wedged dependency → Docker marks it `unhealthy`, Caddy 502s,
+# nothing heals it). This watchdog polls the Docker HEALTHCHECK and restarts the
+# `fxmily-web` container when unhealthy, with a 5-min cooldown so it can't thrash
+# and a loud ESCALATION log line when a restart didn't fix it (self-heal tried,
+# human needed). Runs as ROOT (not `fxmily`) because `docker restart` needs the
+# Docker daemon socket; the script itself only ever touches our own containers.
+# Idempotent + cheap (one `docker inspect` when healthy).
+* * * * *                    root     /usr/local/bin/fxmily-autoheal

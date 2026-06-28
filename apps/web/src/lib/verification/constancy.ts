@@ -162,6 +162,7 @@ export async function scanRitualsForAllMembers(
         delta: number;
         reason: 'filled' | 'forgot_no_reason';
         relatedDiscrepancyId: string | null;
+        createdAt: Date;
       }> = [];
       for (const slot of ['morning', 'evening'] as const) {
         if (filledSlots.has(slot)) {
@@ -171,6 +172,14 @@ export async function scanRitualsForAllMembers(
             delta: 1,
             reason: 'filled',
             relatedDiscrepancyId: null,
+            // Stamp the RITUAL day (Paris civil midnight), NOT the scan time.
+            // The scan runs the morning AFTER the ritual day, so without this
+            // a Sunday ritual (scanned Monday) defaults `createdAt` to Monday
+            // and the weekly fold — which buckets by `createdAt` over the ISO
+            // week [Mon, next Mon) (recomputeConstancyForAllMembers) — leaks it
+            // into the NEXT week. Anchoring `createdAt` to `yesterdayDate`
+            // keeps every ritual event in the week it belongs to.
+            createdAt: yesterdayDate,
           });
         } else {
           events.push({
@@ -179,6 +188,7 @@ export async function scanRitualsForAllMembers(
             delta: -1,
             reason: 'forgot_no_reason',
             relatedDiscrepancyId: blankDayDiscrepancyId,
+            createdAt: yesterdayDate,
           });
         }
       }

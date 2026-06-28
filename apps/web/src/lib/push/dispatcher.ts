@@ -541,7 +541,11 @@ export async function dispatchOne(notificationId: string): Promise<DispatchOneRe
     // Failed. Classify per-device.
     if (send.kind === 'gone') {
       goneCount += 1;
-      void deletePushSubscriptionByEndpoint(row.userId, sub.endpoint);
+      // Fire-and-forget cleanup of a dead endpoint — the delivery outcome is
+      // already recorded (`goneCount`). Swallow a transient delete failure here
+      // so it can't surface as an unhandled rejection (mirrors the `.catch` in
+      // bumpSubscriptionLastSeen); the next Gone hit re-attempts the purge.
+      void deletePushSubscriptionByEndpoint(row.userId, sub.endpoint).catch(() => {});
       continue;
     }
     retryableErrors += 1;

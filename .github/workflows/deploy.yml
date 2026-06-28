@@ -259,7 +259,14 @@ jobs:
             # `node_modules/prisma/config/` tree), then invoke the bin.
             # We `cp -r` the read-only mount into a writable workdir so
             # Prisma can write its temp lockfile without permission errors.
-            docker run --rm \
+            # Wrap the migration so a FAILURE routes into the rollback path
+            # instead of aborting the whole script under `set -e`. Without this
+            # `if`, a failed `migrate deploy` exits non-zero → errexit kills the
+            # SSH step right here — AFTER the new container is already up and
+            # routed by Caddy (step 3) and BEFORE the health gate / rollback
+            # decision — leaving new code live on an un-migrated schema with no
+            # rollback. Routing to HEALTH_OK=0 re-ups the previous good image.
+            if ! docker run --rm \
               --network fxmily-internal \
               --env-file /etc/fxmily/web.env \
               -v /opt/fxmily/prisma:/prisma:ro \
@@ -272,7 +279,11 @@ jobs:
                 npm init -y --silent >/dev/null
                 npm install --no-save --silent prisma@7
                 npx prisma migrate deploy --schema=./schema.prisma
-              "
+              "; then
+              echo "::error::prisma migrate deploy FAILED — new code would be live on an un-migrated schema. Routing to rollback."
+              docker compose -f docker-compose.prod.yml logs --tail 50 web || true
+              HEALTH_OK=0
+            fi
 
             # 4.5. POST-DEPLOY HEALTH GATE (FIX-2). `--wait` only proves the
             # container's own Dockerfile HEALTHCHECK passed ; this proves the

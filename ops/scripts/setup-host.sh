@@ -94,10 +94,13 @@ NEXT STEPS (manual, log in as 'fxmily' user):
 1. Copy the production stack files:
      scp ops/docker/docker-compose.prod.yml fxmily@<IP>:/opt/fxmily/
      scp ops/caddy/Caddyfile               fxmily@<IP>:/etc/fxmily/
-     scp ops/cron/fxmily-cron              fxmily@<IP>:/usr/local/bin/   # chmod 755 sudo
-     scp ops/cron/fxmily-backup            fxmily@<IP>:/usr/local/bin/   # chmod 755 sudo
-     scp ops/cron/crontab.fxmily           fxmily@<IP>:/etc/cron.d/fxmily-app  # chmod 644 sudo
      scp ops/cron/cron.env.example         fxmily@<IP>:/etc/fxmily/cron.env
+
+   Then push the crontab + ALL host-side scripts (fxmily-cron, fxmily-backup,
+   fxmily-caddy-backup, fxmily-autoheal) in one idempotent command — this is the
+   canonical way to (re)sync them and avoids per-script scp drift:
+     bash ops/sync-cron-host.sh <ssh-root-host>
+   Re-run it whenever any of those scripts or the crontab changes in the repo.
 
 2. Configure the AWS CLI for R2 backups (sudo -u fxmily -i):
      aws configure --profile fxmily-backup

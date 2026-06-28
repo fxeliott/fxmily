@@ -499,6 +499,7 @@ function QuestionStep({
               rows={6}
               maxLength={ONBOARDING_ANSWER_MAX_CHARS + 200}
               placeholder="Prends ton temps. Quelques phrases honnêtes valent mieux qu'un long discours idéalisé."
+              aria-labelledby={`oiw-heading-${item.id}`}
               aria-describedby={`${counterId}${fieldErrors?.answerText ? ' ' + errorId : ''}`}
               className="rounded-control min-h-[160px] w-full resize-y border border-[var(--b-strong)] bg-[var(--bg-2)] p-3 font-sans text-[15px] leading-[1.55] text-[var(--t-1)] transition-colors duration-150 placeholder:text-[var(--t-3)] hover:border-[var(--b-acc)] focus-visible:border-[var(--b-acc)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
             />

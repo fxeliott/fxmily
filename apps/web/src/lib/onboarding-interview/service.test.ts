@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { Prisma } from '@/generated/prisma/client';
+
 import { CURRENT_ONBOARDING_INSTRUMENT } from './instrument-v1';
 
 /**
@@ -125,6 +127,39 @@ describe('startInterview', () => {
 
     expect(interviewCreateMock).not.toHaveBeenCalled();
     expect(result.status).toBe('in_progress');
+  });
+
+  it('folds a concurrent P2002 race into the idempotent contract (double-click)', async () => {
+    // Lost the read race: both starts saw no row, our create lost to the winner.
+    interviewFindUniqueMock.mockResolvedValueOnce(null);
+    interviewCreateMock.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+    // The catch re-reads and finds the winner — returns it instead of throwing.
+    interviewFindUniqueMock.mockResolvedValueOnce(makeInterviewRow({ status: 'started' }));
+
+    const result = await startInterview('user_1', { instrumentVersion: 'v1' });
+
+    expect(result.status).toBe('started');
+    expect(result.id).toBe('oi_1');
+    expect(interviewFindUniqueMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('rethrows a non-P2002 create error (genuine fault, not a race)', async () => {
+    interviewFindUniqueMock.mockResolvedValueOnce(null);
+    interviewCreateMock.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Connection reset', {
+        code: 'P1001',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(startInterview('user_1', { instrumentVersion: 'v1' })).rejects.toThrow();
+    // No second read — we only re-read on a P2002 fold.
+    expect(interviewFindUniqueMock).toHaveBeenCalledTimes(1);
   });
 
   it('exports DEFAULT_INSTRUMENT_VERSION constant for callers', () => {

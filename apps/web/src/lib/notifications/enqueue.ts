@@ -19,6 +19,19 @@ import type { NotificationType } from '@/generated/prisma/enums';
  * decides whether to await us or fire-and-forget.
  */
 
+/**
+ * Prisma unique-constraint violation (P2002) detector. Kept as an inline
+ * `'code' in err` check (no runtime `Prisma` import — the namespace is
+ * type-only here) so a benign dedup race on a partial unique index can be
+ * folded into a no-op instead of surfacing as a false enqueue failure. Mirrors
+ * the inline check in `enqueueCheckinReminder`.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    !!err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002'
+  );
+}
+
 export interface AnnotationReceivedPayload {
   /** The annotation that was just created. */
   annotationId: string;
@@ -346,9 +359,10 @@ export interface MindsetCheckReadyPayload {
  * the row id, or null if the write failed — logged, never thrown, so a
  * reminder-scan hiccup never breaks the run). PII-free payload: only the
  * local Monday date, never anything from the real or backtest edge
- * (§21.5/§27.7/RGPD §16). Idempotency is the WEEKLY scan's job (it skips a
- * member who already submitted this week or already has a pending nudge for
- * this `weekStart`) — a single-instance weekly cron needs no dedup index.
+ * (§21.5/§27.7/RGPD §16). Idempotency is enforced at the DB by the partial
+ * unique index `notification_queue_pending_mindset_dedup` (user, weekStart) —
+ * the app-side scan skip is the fast path, and a concurrent / re-fired run that
+ * races it raises P2002 which we fold to a no-op here (RC#4).
  */
 export async function enqueueMindsetCheckNotification(
   recipientUserId: string,
@@ -380,6 +394,21 @@ export async function enqueueMindsetCheckNotification(
 
     return row.id;
   } catch (err) {
+    // P2002 on the partial unique index `notification_queue_pending_mindset_dedup`
+    // → a concurrent / re-fired weekly scan already enqueued this member's nudge
+    // for this `weekStart`. Benign dedup race, NOT a failure: fold to a no-op
+    // (return the existing pending row's id) so it never pollutes Sentry with a
+    // false `enqueue_failed`. Mirror `enqueueCheckinReminder`.
+    if (isUniqueViolation(err)) {
+      if (!tx) {
+        const existing = await db.notificationQueue.findFirst({
+          where: { userId: recipientUserId, type: 'mindset_check_ready', status: 'pending' },
+          select: { id: true },
+        });
+        if (existing) return existing.id;
+      }
+      return null;
+    }
     // A-Z observability — was console-only, so a genuine weekly-nudge enqueue
     // failure hid in the scan's `skipped` count and the WEEKLY cron showed
     // green even if every member's nudge failed. Surface to Sentry; the scan
@@ -412,9 +441,11 @@ export interface GentleVerificationReminderPayload {
  *
  * Carbon mirror of {@link enqueueMindsetCheckNotification}: best-effort
  * (returns the row id, or null if the write failed — logged, never thrown, so a
- * gentle-scan hiccup never breaks the verification run). Idempotency is the
- * SCAN's job (it stamps `Discrepancy.gentleReminderAt` so a gap is nudged at
- * most once) — no dedup index needed. PII-free payload : a discrepancy id only.
+ * gentle-scan hiccup never breaks the verification run). Idempotency is enforced
+ * at the DB by the partial unique index `notification_queue_pending_gentle_dedup`
+ * (user, discrepancyId): the scan stamping `Discrepancy.gentleReminderAt` is the
+ * fast path, and a concurrent / re-fired run that races it raises P2002 which we
+ * fold to a no-op here (RC#4). PII-free payload : a discrepancy id only.
  */
 export async function enqueueGentleVerificationReminder(
   recipientUserId: string,
@@ -446,6 +477,24 @@ export async function enqueueGentleVerificationReminder(
 
     return row.id;
   } catch (err) {
+    // P2002 on the partial unique index `notification_queue_pending_gentle_dedup`
+    // → a concurrent / re-fired verification scan already enqueued the gentle
+    // nudge for this `discrepancyId`. Benign dedup race: fold to a no-op
+    // (return the existing pending row's id), never log it as a failure.
+    if (isUniqueViolation(err)) {
+      if (!tx) {
+        const existing = await db.notificationQueue.findFirst({
+          where: {
+            userId: recipientUserId,
+            type: 'verification_gentle_reminder',
+            status: 'pending',
+          },
+          select: { id: true },
+        });
+        if (existing) return existing.id;
+      }
+      return null;
+    }
     console.error('[notifications.enqueue] gentle verification reminder failed', err);
     return null;
   }

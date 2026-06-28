@@ -1075,6 +1075,18 @@ model NotificationQueue {
   // NOT declared as `@@index` here to avoid Prisma generating a duplicate
   // full-index without the WHERE predicate (would create two B-tree indexes
   // on the same columns + cause schema drift on next `prisma migrate dev`).
+  //
+  // RC#4 — two further partial UNIQUE indexes give every nudge kind a DB-level
+  // idempotency guarantee (was app-side dedup only). Created in migration
+  // 20260629100000_rc4_notification_dedup_mindset_gentle, NOT as `@@unique`
+  // (same partial-predicate / drift reason as above) :
+  //   * `notification_queue_pending_mindset_dedup`
+  //       UNIQUE (user_id, type, payload->>'weekStart') WHERE status='pending'
+  //       AND type='mindset_check_ready'
+  //   * `notification_queue_pending_gentle_dedup`
+  //       UNIQUE (user_id, type, payload->>'discrepancyId') WHERE status='pending'
+  //       AND type='verification_gentle_reminder'
+  // Enforced by enqueue.ts P2002 no-op folds + their unit tests.
   @@map("notification_queue")
 }
 

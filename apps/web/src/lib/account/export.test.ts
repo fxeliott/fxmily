@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const userFindUnique = vi.fn();
 const tradeFindMany = vi.fn();
 const tradeAnnotationFindMany = vi.fn();
+const tradeMediaFindMany = vi.fn();
 const dailyCheckinFindMany = vi.fn();
 const behavioralScoreFindMany = vi.fn();
 const douglasDeliveryFindMany = vi.fn();
@@ -49,6 +50,7 @@ vi.mock('@/lib/db', () => ({
     user: { findUnique: userFindUnique },
     trade: { findMany: tradeFindMany },
     tradeAnnotation: { findMany: tradeAnnotationFindMany },
+    tradeMedia: { findMany: tradeMediaFindMany },
     dailyCheckin: { findMany: dailyCheckinFindMany },
     behavioralScore: { findMany: behavioralScoreFindMany },
     markDouglasDelivery: { findMany: douglasDeliveryFindMany },
@@ -98,6 +100,7 @@ const {
 const ALL_FIND_MANY = [
   tradeFindMany,
   tradeAnnotationFindMany,
+  tradeMediaFindMany,
   dailyCheckinFindMany,
   behavioralScoreFindMany,
   douglasDeliveryFindMany,
@@ -172,6 +175,7 @@ const EMPTY_SNAPSHOT = {
   user: null,
   trades: [],
   tradeAnnotations: [],
+  tradeMedia: [],
   dailyCheckins: [],
   behavioralScores: [],
   douglasDeliveries: [],
@@ -261,6 +265,8 @@ describe('buildUserDataExport', () => {
     // `userId`-keyed modules.
     expect(tradeFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
     expect(tradeAnnotationFindMany.mock.calls[0]?.[0]?.where).toEqual({ trade: { userId: 'u1' } });
+    // §31 — derived bucket via the parent trade's owner (mirror tradeAnnotation).
+    expect(tradeMediaFindMany.mock.calls[0]?.[0]?.where).toEqual({ trade: { userId: 'u1' } });
     expect(dailyCheckinFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
     expect(behavioralScoreFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
     expect(douglasDeliveryFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
@@ -402,12 +408,88 @@ describe('export coverage contract — every User relation is classified', () =>
   });
 });
 
+// =============================================================================
+// RC#4 — Trade-transitive PII coverage contract
+// =============================================================================
+
+describe('export coverage contract — Trade child relations (transitive PII)', () => {
+  // Why this guard matters : `TradeMedia` silently leaked OUT of the export for
+  // weeks. The `model User` guard above can't catch it — TradeMedia hangs off
+  // `Trade`, not `User`, so it never appears as a User relation. The deletion
+  // path (`account/deletion.ts`) DID purge `media.fileKey` as member PII, but
+  // the art.20 export never read it. This guard parses `model Trade` and fails
+  // if any 1-N child table (member PII queried via the parent trade's owner) is
+  // not classified — turning the next "table under Trade" into a hard failure.
+  const SCALAR_TYPES = new Set([
+    'String',
+    'Int',
+    'BigInt',
+    'Float',
+    'Decimal',
+    'Boolean',
+    'DateTime',
+    'Json',
+    'Bytes',
+  ]);
+
+  // How each 1-N child relation of `Trade` is covered by the export.
+  const TRADE_CHILD_COVERAGE: Readonly<Record<string, string>> = {
+    annotations: 'Exported as the derived `tradeAnnotations` bucket (corrections received).',
+    media: 'Exported as the derived `tradeMedia` bucket (§31 multi-capture screenshots).',
+    discrepancies: 'Exported via the member-scoped `discrepancies` reader (memberId-keyed).',
+  };
+
+  function parseTradeListRelations(): string[] {
+    const schemaPath = fileURLToPath(new URL('../../../prisma/schema.prisma', import.meta.url));
+    const schema = readFileSync(schemaPath, 'utf8');
+    const block = schema.match(/^model Trade \{([\s\S]*?)^\}/m)?.[1];
+    if (!block) throw new Error('Could not locate `model Trade` block in schema.prisma');
+
+    const fields: string[] = [];
+    for (const rawLine of block.split('\n')) {
+      // Only list relations (`Type[]`). Scalar arrays (e.g. `tags String[]`)
+      // are member content already inside the exported Trade row, not a
+      // separate table — excluded by the SCALAR_TYPES check.
+      const m = rawLine.match(/^\s+([a-zA-Z][a-zA-Z0-9_]*)\s+([A-Za-z][A-Za-z0-9_]*)\[\]/);
+      if (!m) continue;
+      const field = m[1]!;
+      const type = m[2]!;
+      if (SCALAR_TYPES.has(type)) continue;
+      fields.push(field);
+    }
+    return fields;
+  }
+
+  it('parses the expected Trade child relations from the schema', () => {
+    const children = parseTradeListRelations();
+    expect(children).toContain('media');
+    expect(children).toContain('annotations');
+  });
+
+  it('classifies every Trade child relation (no silent transitive PII gap)', () => {
+    const children = parseTradeListRelations();
+    const classified = new Set(Object.keys(TRADE_CHILD_COVERAGE));
+    const unclassified = children.filter((c) => !classified.has(c));
+    expect(
+      unclassified,
+      `Unclassified Trade child relations (member PII not covered by export): ${unclassified.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('has no stale Trade-child classifications (must exist in schema)', () => {
+    const children = new Set(parseTradeListRelations());
+    const stale = Object.keys(TRADE_CHILD_COVERAGE).filter((c) => !children.has(c));
+    expect(stale, `Listed Trade children absent from schema: ${stale.join(', ')}`).toEqual([]);
+  });
+});
+
 describe('summariseExport', () => {
   it('counts every section', () => {
     const summary = summariseExport({
       ...EMPTY_SNAPSHOT,
       trades: [{}, {}, {}] as never,
       tradeAnnotations: [{}] as never,
+      tradeMedia: [{}, {}] as never,
       dailyCheckins: [{}, {}] as never,
       douglasDeliveries: [{}] as never,
       weeklyReports: [{}] as never,
@@ -424,6 +506,7 @@ describe('summariseExport', () => {
       schemaVersion: EXPORT_SCHEMA_VERSION,
       tradeCount: 3,
       tradeAnnotationCount: 1,
+      tradeMediaCount: 2,
       dailyCheckinCount: 2,
       behavioralScoreCount: 0,
       douglasDeliveryCount: 1,
@@ -569,6 +652,7 @@ describe('summariseExport — defensive shape handling', () => {
       'schemaVersion',
       'tradeCount',
       'tradeAnnotationCount',
+      'tradeMediaCount',
       'dailyCheckinCount',
       'behavioralScoreCount',
       'douglasDeliveryCount',

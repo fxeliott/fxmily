@@ -18,7 +18,12 @@ vi.mock('@/lib/auth/audit', () => ({
   logAudit: vi.fn(async () => undefined),
 }));
 
-const { enqueueCheckinReminder, enqueueDouglasDeliveryNotification } = await import('./enqueue');
+const {
+  enqueueCheckinReminder,
+  enqueueDouglasDeliveryNotification,
+  enqueueMindsetCheckNotification,
+  enqueueGentleVerificationReminder,
+} = await import('./enqueue');
 
 afterEach(() => {
   findFirstMock.mockReset();
@@ -104,6 +109,90 @@ describe('enqueueCheckinReminder', () => {
     const id = await enqueueCheckinReminder('user_1', { slot: 'evening', date: '2026-05-07' });
 
     expect(id).toBeNull();
+  });
+});
+
+/**
+ * RC#4 — DB-level dedup folds. Both weekly-nudge kinds now sit behind a partial
+ * unique index (20260629100000_rc4_notification_dedup_mindset_gentle); a
+ * concurrent / re-fired scan that races the create must converge on the
+ * existing pending row, never surface a false failure.
+ */
+describe('enqueueMindsetCheckNotification — P2002 dedup fold', () => {
+  it('inserts a fresh nudge and returns its id', async () => {
+    createMock.mockResolvedValueOnce({ id: 'mindset_new' });
+
+    const id = await enqueueMindsetCheckNotification('user_1', { weekStart: '2026-06-29' });
+
+    expect(id).toBe('mindset_new');
+    expect(createMock.mock.calls[0]?.[0]?.data).toMatchObject({
+      userId: 'user_1',
+      type: 'mindset_check_ready',
+      payload: { weekStart: '2026-06-29' },
+    });
+  });
+
+  it('folds a P2002 race into the existing pending row id (no false failure)', async () => {
+    createMock.mockRejectedValueOnce(
+      Object.assign(new Error('unique violation'), { code: 'P2002' }),
+    );
+    findFirstMock.mockResolvedValueOnce({ id: 'mindset_winner' });
+
+    const id = await enqueueMindsetCheckNotification('user_1', { weekStart: '2026-06-29' });
+
+    expect(id).toBe('mindset_winner');
+    expect(findFirstMock).toHaveBeenCalledWith({
+      where: { userId: 'user_1', type: 'mindset_check_ready', status: 'pending' },
+      select: { id: true },
+    });
+  });
+
+  it('returns null on a genuine (non-P2002) failure, without a re-read', async () => {
+    createMock.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 'P9999' }));
+
+    const id = await enqueueMindsetCheckNotification('user_1', { weekStart: '2026-06-29' });
+
+    expect(id).toBeNull();
+    expect(findFirstMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('enqueueGentleVerificationReminder — P2002 dedup fold', () => {
+  it('inserts a fresh gentle reminder and returns its id', async () => {
+    createMock.mockResolvedValueOnce({ id: 'gentle_new' });
+
+    const id = await enqueueGentleVerificationReminder('member_1', { discrepancyId: 'd1' });
+
+    expect(id).toBe('gentle_new');
+    expect(createMock.mock.calls[0]?.[0]?.data).toMatchObject({
+      userId: 'member_1',
+      type: 'verification_gentle_reminder',
+      payload: { discrepancyId: 'd1' },
+    });
+  });
+
+  it('folds a P2002 race into the existing pending row id', async () => {
+    createMock.mockRejectedValueOnce(
+      Object.assign(new Error('unique violation'), { code: 'P2002' }),
+    );
+    findFirstMock.mockResolvedValueOnce({ id: 'gentle_winner' });
+
+    const id = await enqueueGentleVerificationReminder('member_1', { discrepancyId: 'd1' });
+
+    expect(id).toBe('gentle_winner');
+    expect(findFirstMock).toHaveBeenCalledWith({
+      where: { userId: 'member_1', type: 'verification_gentle_reminder', status: 'pending' },
+      select: { id: true },
+    });
+  });
+
+  it('returns null on a genuine (non-P2002) failure, without a re-read', async () => {
+    createMock.mockRejectedValueOnce(new Error('connection lost'));
+
+    const id = await enqueueGentleVerificationReminder('member_1', { discrepancyId: 'd1' });
+
+    expect(id).toBeNull();
+    expect(findFirstMock).not.toHaveBeenCalled();
   });
 });
 

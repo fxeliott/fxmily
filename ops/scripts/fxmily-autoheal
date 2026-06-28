@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# /usr/local/bin/fxmily-autoheal — host-side self-healing watchdog (§9-C).
+#
+# WHY THIS EXISTS
+# --------------
+# `restart: unless-stopped` (docker-compose.prod.yml) only restarts a container
+# that has EXITED. It does NOT restart a container that is running-but-UNHEALTHY
+# — e.g. the Next.js process is alive but `/api/health` returns 503 because the
+# Prisma pool deadlocked, the event loop stalled, or a dependency is wedged.
+# Docker marks it `unhealthy`, Caddy returns 502/503 to members, and nothing
+# ever heals it. This watchdog closes that gap: it polls the Docker HEALTHCHECK
+# status and bounces any container whose health is `unhealthy`.
+#
+# WHY A HOST SCRIPT (not the willfarrell/autoheal container)
+# --------------------------------------------------------
+# Consistent with the existing architecture (crons run on the host, not in
+# containers — see docker-compose.prod.yml header): no extra image to pin/patch,
+# no Docker socket mounted INTO a container (smaller attack surface), fully
+# reproducible from this repo.
+#
+# WIRING (host, one-time — see ops/scripts/provision-* / runbook):
+#   cp ops/scripts/fxmily-autoheal /usr/local/bin/ && chmod +x /usr/local/bin/fxmily-autoheal
+#   then a root entry in /etc/cron.d/fxmily-app (crontab.fxmily) runs it every minute.
+#
+# SELF-HEALING WITHOUT HIDING CHRONIC FAILURE
+# -------------------------------------------
+# A blind restart-every-minute loop would mask a container that is broken for a
+# real reason. So we apply a COOLDOWN: after a restart we wait COOLDOWN_SECS
+# before acting again. If a container is STILL unhealthy after the cooldown, we
+# emit a loud ESCALATION line (picked up by log monitoring / the dead-man-switch)
+# instead of thrashing — "self-heal tried, human needed".
+
+set -euo pipefail
+
+# Containers to watch. Kept explicit (not label-discovered) so a misconfigured
+# label can never silently drop a service from the watchdog.
+CONTAINERS=("fxmily-web")
+
+COOLDOWN_SECS="${AUTOHEAL_COOLDOWN_SECS:-300}"   # 5 min between restarts of the same container
+STATE_DIR="${AUTOHEAL_STATE_DIR:-/var/lib/fxmily/autoheal}"
+LOG_FILE="${AUTOHEAL_LOG:-/var/log/fxmily/autoheal.log}"
+# Optional dead-man-switch / alert ping fired on every restart (healthchecks.io
+# style URL). Left empty = no ping.
+ALERT_URL="${AUTOHEAL_ALERT_URL:-}"
+
+mkdir -p "$STATE_DIR" "$(dirname "$LOG_FILE")"
+
+ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
+log() { echo "[$(ts)] [fxmily-autoheal] $*" >> "$LOG_FILE"; }
+
+container_health() {
+  # Prints the health status, or "missing" if the container does not exist.
+  docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}nohealth{{end}}' \
+    "$1" 2>/dev/null || echo "missing"
+}
+
+for c in "${CONTAINERS[@]}"; do
+  status="$(container_health "$c")"
+
+  case "$status" in
+    healthy | starting | nohealth | missing)
+      # healthy / still starting / no healthcheck / not present → nothing to do.
+      # (`missing` during a deploy swap is transient; the deploy owns that path.)
+      continue
+      ;;
+    unhealthy)
+      marker="${STATE_DIR}/${c}.last-restart"
+      now_epoch="$(date -u +%s)"
+      last_epoch=0
+      [[ -f "$marker" ]] && last_epoch="$(cat "$marker" 2>/dev/null || echo 0)"
+      age=$(( now_epoch - last_epoch ))
+
+      if (( age < COOLDOWN_SECS )); then
+        # Already restarted recently and STILL unhealthy → escalate, don't thrash.
+        log "ESCALATION ${c} still unhealthy ${age}s after the last restart (cooldown ${COOLDOWN_SECS}s) — manual intervention likely needed"
+        continue
+      fi
+
+      log "RESTART ${c} is unhealthy — restarting (last restart ${age}s ago)"
+      if docker restart "$c" >/dev/null 2>&1; then
+        echo "$now_epoch" > "$marker"
+        log "RESTART ${c} restart issued OK"
+        if [[ -n "$ALERT_URL" ]]; then
+          curl -fsS -m 10 --retry 3 "$ALERT_URL" >/dev/null 2>&1 || \
+            log "WARN alert ping to AUTOHEAL_ALERT_URL failed"
+        fi
+      else
+        log "FAIL ${c} restart command failed — manual intervention required"
+      fi
+      ;;
+    *)
+      log "WARN ${c} unknown health status '${status}'"
+      ;;
+  esac
+done

@@ -28,6 +28,11 @@ import { localDateOf, parseLocalDate } from '@/lib/checkin/timezone';
 
 export const ALERT_WINDOW_DAYS = 14;
 
+/** Prisma unique-constraint violation (P2002), detected without importing @prisma/client. */
+function isUniqueConstraintError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
+}
+
 export interface AlertRule {
   readonly triggerType: string;
   readonly discrepancyTypes: readonly (
@@ -225,15 +230,31 @@ export async function scanAlertsForMember(
       continue;
     }
 
-    const alert = await db.alert.create({
-      data: {
-        memberId,
-        triggerType: rule.triggerType,
-        repeatCount: count,
-        threshold: rule.threshold,
-      },
-      select: { id: true },
-    });
+    // Concurrency guard — the daily `verification-scan` cron and an event-driven
+    // `batch.ts` pass can both read « no existing alert » for the same
+    // (member, triggerType) before either commits, then both INSERT, producing a
+    // DUPLICATE active alert (and a second coaching dispatch). The in-memory
+    // `existingAlerts` read above is not race-safe; the partial unique index
+    // `alerts_active_trigger_uniq` (member_id, trigger_type WHERE
+    // status<>'dismissed') makes the loser raise P2002 — folded here into a
+    // no-op. The winner's alert stands; its own scan (or the next daily retry
+    // pass on the still-`open` row, lines above) handles the dispatch. Same
+    // pattern as reconcile.ts `createIfNew`.
+    let alert: { id: string };
+    try {
+      alert = await db.alert.create({
+        data: {
+          memberId,
+          triggerType: rule.triggerType,
+          repeatCount: count,
+          threshold: rule.threshold,
+        },
+        select: { id: true },
+      });
+    } catch (err) {
+      if (isUniqueConstraintError(err)) continue;
+      throw err;
+    }
     created += 1;
     await logAudit({
       action: 'verification.alert.created',

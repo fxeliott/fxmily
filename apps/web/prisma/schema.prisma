@@ -2937,6 +2937,14 @@ model Alert {
   douglasDeliveries MarkDouglasDelivery[]
 
   @@index([memberId, status])
+  // S3 re-challenge — partial UNIQUE index `alerts_active_trigger_uniq`
+  // ON (member_id, trigger_type) WHERE status <> 'dismissed' enforces « ≤1 active
+  // alert per (member, trigger) » at the DB level (kills the scanAlertsForMember
+  // read-then-create race between the cron and the event-driven batch.ts pass).
+  // Created in the migration SQL only — Prisma 7 doesn't model partial-index
+  // predicates declaratively (same pattern as `discrepancies_reconcile_key_uniq`
+  // / `mental_micro_objectives_one_open_per_member`). NOT declared as `@@unique`
+  // here to avoid Prisma generating a duplicate full unique index + drift.
   @@map("alerts")
 }
 

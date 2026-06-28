@@ -7,6 +7,7 @@ import {
   FileBarChart,
   Gauge,
   GraduationCap,
+  HeartPulse,
   Inbox,
   LayoutDashboard,
   Library,
@@ -31,7 +32,7 @@ import {
  * objectifs / patterns), « Au quotidien » (les gestes du jour), « Mental &
  * vérité », « Suivi & orga ». Le dashboard redevient un hub d'action épuré ; les
  * surfaces analytiques rétrospectives vivent sous « Ma progression »
- * (/progression, /patterns). Cartographie : 67 routes (membre + admin).
+ * (/progression, /patterns). Cartographie : 75 routes (membre + admin).
  *
  * Surlignage actif via `isNavItemActive()` (exact, ou préfixe de segment).
  */
@@ -110,6 +111,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/admin/cards', label: 'Fiches Douglas', icon: Library, admin: true },
       { href: '/admin/reunions', label: 'Réunions', icon: CalendarRange, admin: true },
       { href: '/admin/reports', label: 'Rapports', icon: FileBarChart, admin: true },
+      { href: '/admin/health', label: 'Santé métier', icon: HeartPulse, admin: true },
       { href: '/admin/system', label: 'Système', icon: Settings, admin: true },
     ],
   },

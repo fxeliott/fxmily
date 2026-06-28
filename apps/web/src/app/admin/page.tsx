@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CalendarRange,
   FileBarChart,
+  HeartPulse,
   Inbox,
   Library,
   Settings,
@@ -137,6 +138,23 @@ export default async function AdminHubPage() {
           icon={FileBarChart}
           label="Rapports"
           description="Synthèses IA mensuelles et débriefs des membres."
+        />
+        <HubCard
+          href="/admin/health"
+          icon={HeartPulse}
+          label="Santé métier"
+          description="La chaîne tourne : remplissage, écarts, présence, score."
+          badge={
+            cohortAttention.openDiscrepancies > 0 ? (
+              <Pill tone="warn" dot>
+                {cohortAttention.openDiscrepancies} écart
+                {cohortAttention.openDiscrepancies > 1 ? 's' : ''} ouvert
+                {cohortAttention.openDiscrepancies > 1 ? 's' : ''}
+              </Pill>
+            ) : (
+              <Pill tone="mute">À jour</Pill>
+            )
+          }
         />
         <HubCard
           href="/admin/system"

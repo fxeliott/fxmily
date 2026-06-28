@@ -334,6 +334,13 @@ export type AuditAction =
   // V2.1 `admin.note.*` admin-scoped pattern.
   | 'meeting.generated'
   | 'admin.meeting.cancelled'
+  // S10 §30.8 — admin marks a member's presence (recoupement admin↔membre).
+  // PII-FREE metadata `{meetingId, present}` (`present` ∈ true|false|null) —
+  // never any Ichor content, mirror `admin.meeting.cancelled`.
+  | 'admin.meeting.presence.marked'
+  // S10(a) — admin business-chain health view (`/admin/health`). Parity with
+  // `admin.system.viewed`: a pure access trace, no PII, no member id.
+  | 'admin.health.viewed'
   // V2.5 — Self-service access requests (public "Rejoindre" front door).
   // PII-FREE metadata invariant (BLOCKING): these rows NEVER carry the
   // requester's name or email — only opaque ids. The `AccessRequest` row

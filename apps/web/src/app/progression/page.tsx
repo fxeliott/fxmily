@@ -12,6 +12,7 @@ import { Suspense } from 'react';
 import { auth } from '@/auth';
 import { CoachingInsightCard } from '@/components/coaching/coaching-insight-card';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { MemberRecapCard } from '@/components/progression/member-recap-card';
 import { MethodMirrorCard } from '@/components/progression/method-mirror-card';
 import { PostLossReactionCard } from '@/components/progression/post-loss-reaction-card';
 import { WeeklyRecapCard } from '@/components/progression/weekly-recap-card';
@@ -28,6 +29,7 @@ import { Card } from '@/components/ui/card';
 import { Sparkline } from '@/components/ui/sparkline';
 import { getDisciplineYearHeatmap } from '@/lib/checkin/service';
 import { getCoachingInsight } from '@/lib/coaching/service';
+import { getMember5AxisRecap } from '@/lib/member-recap/service';
 import { getMethodMirror } from '@/lib/method-mirror/service';
 import { listTrackRecordTimeline } from '@/lib/trades/track-record-timeline';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
@@ -88,6 +90,22 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
       <DashboardAmbient />
       <div className="relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
         <ProgressionHero score={latestScore} history={scoreHistory} />
+
+        {/* S10(b) — « Ton bilan » : le RÉCAP MEMBRE 5 AXES en tête de page. Pur
+            ASSEMBLAGE des loaders read-only existants (discipline, progression,
+            présence, méthode/coaching, constance/vérification) → une vue
+            d'ensemble « où j'en suis sur tous mes axes » que les surfaces
+            détaillées ci-dessous ne donnaient nulle part isolément. Stream via
+            Suspense (1 Promise.all de loaders déjà légers). Posture §2 (process
+            only, 0 P&L) + §31.2 (calme, jamais rouge, jamais un faux 0). */}
+        <section className="wow-reveal mb-6" aria-labelledby="member-recap-section-heading">
+          <h2 id="member-recap-section-heading" className="sr-only">
+            Ton bilan sur tous tes axes
+          </h2>
+          <Suspense fallback={<MemberRecapSkeleton />}>
+            <MemberRecapSection userId={userId} timezone={timezone} />
+          </Suspense>
+        </section>
 
         {/* Récap hebdo CHIFFRÉ — « Ta semaine en chiffres » (S14). Première
             surface membre avec un delta semaine-vs-semaine calme (réutilise
@@ -346,6 +364,22 @@ function ProgressionHero({
         </div>
       </Card>
     </section>
+  );
+}
+
+async function MemberRecapSection({ userId, timezone }: { userId: string; timezone: string }) {
+  const recap = await getMember5AxisRecap(userId, timezone);
+  return <MemberRecapCard recap={recap} />;
+}
+
+function MemberRecapSkeleton() {
+  return (
+    <div
+      className="skel rounded-card-lg h-[360px] border border-[var(--b-acc)] bg-[var(--acc-dim)]"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement de ton bilan"
+    />
   );
 }
 

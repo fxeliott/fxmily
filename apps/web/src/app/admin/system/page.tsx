@@ -194,7 +194,16 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
           <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
             /api/cron/health
           </code>{' '}
-          toutes les heures et ouvre une issue si statut rouge.
+          toutes les heures et ouvre une issue si statut rouge. Cette page suit l’
+          <strong>infrastructure</strong> ; pour la chaîne métier (cohorte, écarts, présence), voir
+          la{' '}
+          <Link
+            href="/admin/health"
+            className="font-medium text-[var(--acc-hi)] underline-offset-2 hover:underline"
+          >
+            vue de santé métier
+          </Link>
+          .
         </span>
       </p>
     </main>

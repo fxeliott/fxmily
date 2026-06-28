@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { coerceAxes } from '@/lib/objectives/coaching-axis';
 import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { detectMomentum } from '@/lib/scoring/momentum';
@@ -101,9 +103,9 @@ async function gatherCoachingInput(
  * consommé par l'espace membre (S4). `null` quand il n'y a rien à dire (carte
  * mentale vide) ⇒ la surface se cache, jamais un insight fabriqué.
  */
-export async function getCoachingInsight(userId: string): Promise<CoachingInsight | null> {
+export const getCoachingInsight = cache(async (userId: string): Promise<CoachingInsight | null> => {
   return buildCoachingInsight(await gatherCoachingInput(userId));
-}
+});
 
 /**
  * S5 §32-D — le contexte coaching STRUCTURÉ que les rapports Claude S6

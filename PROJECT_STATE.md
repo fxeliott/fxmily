@@ -722,4 +722,139 @@ type TrainingReviewStatus = 'pending' | 'corrected' | 'seen';
 
 ---
 
+## Hand-off — Session 10 (Interconnexion & Validation — la finale 10/10) — 2026-06-28
+
+> Reprise de contexte faite (§31①) : même dépôt `D:\Fxmily`. Session 10 = **interconnexion + validation**, PAS une reconstruction : on relie S1→S9 et on PROUVE au runtime que la chaîne tourne, avec 3 enrichissements ciblés. **Statut : committé (`434eee6` build + `de653fb` RC#1, branche `feat/s10-interconnexion-validation`) → PR #430 → merge + déploiement health-gaté AUTORISÉS (go total d'Eliott). Re-challenge adversarial RC#1 passé — détail ⑥.** Tous les gates verts (détail ⑤). Migration ADD-only `20260628121111_s10_meeting_admin_presence` appliquée en **dev** (prod = au déploiement). Travail mené avec sous-agents (audit/blueprint + 2 blocs délégués, tout re-vérifié first-hand).
+
+### ① Ce que la session a produit
+
+**Bloc 1 — Recoupement de présence admin↔membre (§30.8, la couture manquante du contexte global) :**
+
+- Migration ADD-only : `MeetingAttendance` +3 colonnes `NULL` — `admin_present BOOLEAN?`, `admin_marked_at TIMESTAMP?`, `admin_marked_by TEXT?` (lignes pré-S10 byte-identiques ; `null` = l'admin n'a rien dit).
+- `lib/meeting/attendance-gap.ts` (+test exhaustif) : dérivation PURE de l'écart au read-time (`computeAttendanceGap`) + **UNE seule voie de scoring** `attendanceCountsAsComplete = memberComplete && adminPresent !== false` (numérateur d'engagement honnête, §30.4). Pas de cycle de vie d'écart, pas de healing, pas d'enum `DiscrepancyType` touché.
+- `lib/meeting/service.ts` : numérateur d'assiduité honnête (`OR: [{adminPresent: null}, {adminPresent: true}]`), `gap` exposé sur les vues membre + admin, `gapCount` sur la vue réunion admin, `markMeetingPresence` (upsert des SEULES colonnes admin, clear via `updateMany`).
+- `lib/schemas/meeting.ts` : `meetingPresenceMarkSchema` + `presenceMarkToAdminPresent` (present|absent|clear → true|false|null).
+- `app/admin/reunions/actions.ts` : `markPresenceAction` (gate auth+role, Zod, audit PII-free `{meetingId, present}`, revalidate ciblé).
+- `components/admin/presence-mark-control.tsx` + `member-presence-panel.tsx` : contrôle 3-boutons sur `/admin/members/[id]?tab=presence`.
+- `components/reunions/meeting-item.tsx` : note de recoupement calme côté membre ; `app/reunions/page.tsx` : pont assiduité→engagement vers `/progression`.
+- `lib/auth/audit.ts` : +`admin.meeting.presence.marked`.
+
+**Bloc 2 — Tableau de bord « la chaîne tourne » (admin, S10a) → nouvelle route `/admin/health` :**
+
+- `lib/admin/system-health-service.ts` (+test) : `getSystemHealthOverview` — lecture cohorte UNIQUE, bornée, count-only, en un `Promise.all` : remplissage check-ins récents, écarts de vérité par statut (`Discrepancy.groupBy(status)`), présence réunions + recoupements (`listMeetingsForAdmin` → completed/declared/gaps), mouvements de score par raison (`ScoreEvent.groupBy(reason)` + net/total), alertes de répétition. §2/§21.5 par construction (aucun contenu de capture, aucun P&L, aucun nouveau FK). Read-only.
+- `app/admin/health/page.tsx` : server component, gate admin strict (carbone `/admin/system`), `logAudit('admin.health.viewed')`, 4 sections + libellé de fenêtre par carte (ne ment jamais sur la période) + lien croisé vers `/admin/system`.
+- `components/admin/system-health-section.tsx` : primitives présentationnelles calmes (acc/warn/mute, **jamais rouge punitif**).
+- `app/admin/page.tsx` : 7e HubCard « Santé métier » (badge live = écarts ouverts cohorte). `nav-items.ts` : entrée nav + compte de routes 67→**75** (recompté = nb réel de `page.tsx`). `app/admin/system/page.tsx` : lien croisé réciproque (séparation OPS/métier). `audit.ts` : +`admin.health.viewed`.
+
+**Bloc 3 — Récap membre 5 axes (S10b) → section « Ton bilan » sur `/progression` :**
+
+- `lib/member-recap/service.ts` (+test) : `getMember5AxisRecap` — PUR assemblage de 8 loaders read-only DÉJÀ §2-safe en un `Promise.all` → `Member5AxisRecap {discipline, progression, presence, selfWork, constance}`. `null` par axe = NON MESURÉ (jamais coercé en 0). Présence = union discriminée (jamais un faux « 0 % »). 0 migration, 0 écriture, posture portée à la source.
+- `components/progression/member-recap-card.tsx` : carte « Ton bilan », tons calmes (`bandFor` vert/lime/ambre, jamais rouge), axes `null` cachés proprement, empty-state pédagogique.
+- `app/progression/page.tsx` : section `<Suspense>` « Ton bilan » en tête (streaming indépendant, skeleton dédié).
+
+**Bloc test (livrable c — suite e2e réutilisable) :**
+
+- `tests/e2e/session10b-presence-recoupement.spec.ts` (4 tests) : over-claim → note + numérateur honnête `0/1` ; présent-non-déclaré → relance ; **`markPresenceAction` réelle** persiste `adminPresent=false` en DB + badge d'écart ; `/admin/health` rend la chaîne métier contre la vraie DB.
+- `tests/e2e/session10b-member-recap.spec.ts` : récap fonctionnel — seed 3 axes (progression/présence/constance) → assertions des valeurs DB réelles (présence « 1 sur 1 », constance « 72 / 100 », discipline non-seedée correctement ABSENTE).
+- `.gitattributes` : `*.mjs` + `scripts/* eol=lf` (fix durable du faux échec local `crontab-sync.test.ts`).
+
+### ② Décisions prises & justification
+
+- **Recoupement présence = dérivation au read-time + voie de scoring UNIQUE.** L'écart se calcule à la lecture (admin a dit / membre a dit) ; le scoring n'a qu'UN point d'entrée honnête (`attendanceCountsAsComplete`). Choix : numérateur d'engagement plutôt qu'un nouveau type d'écart/cycle de vie → 0 rebalance, pas de double-peine, pas de healing, `DiscrepancyType` intact, lignes legacy byte-identiques. `null` admin (« rien dit ») compte comme présent ; `false` explicite exclut du `completedCount`.
+- **`/admin/health` = page distincte (pas un onglet).** Il n'existe aucun layout/onglet admin partagé ; `/admin/system` est déjà une page sœur autonome ; canon repo « 1 surface = 1 route sous `/admin` ». **Distincte de `/admin/system`** (heartbeats crons OPS) — lien croisé bidirectionnel pour acter la frontière métier/infra.
+- **Récap membre = section de `/progression` (pas de page `/bilan`).** `/progression` porte déjà l'intention « où j'en suis » et la moitié des loaders ; une page neuve dupliquerait auth+hero et SCINDERAIT le récit 5 axes.
+- **Cohérence §30.4** : l'assiduité AFFICHÉE utilise le MÊME numérateur que l'assiduité SCORÉE.
+- **Posture §2/§21.5/§31.2** maintenue partout : comptes/faits seulement, tons calmes jamais rouge, `null` jamais transformé en 0, présence en union discriminée.
+
+### ③ Contrat d'interface exposé
+
+```ts
+// @/lib/meeting/attendance-gap
+type AttendanceGap =
+  | 'none'
+  | 'admin_absent_member_present'
+  | 'admin_present_member_absent'
+  | 'admin_present_member_partial';
+function attendanceCountsAsComplete(memberComplete: boolean, adminPresent: boolean | null): boolean;
+
+// @/lib/meeting/service — déclaration admin de présence (clear = null)
+function markMeetingPresence(
+  adminId,
+  meetingId,
+  memberId,
+  present: boolean | null,
+  now,
+): Promise<MarkedMeetingPresence>;
+
+// @/lib/admin/system-health-service — vue cohorte de la chaîne métier
+interface SystemHealthOverview {
+  checkins: { recentCheckins: number };
+  truthGaps: { open; acknowledged; resolved; total };
+  meetings: { meetings; completed; declared; gaps };
+  scoreMovements: { filled; forgot_no_reason; reality_gap; false_declaration; net; total };
+  recentAlerts: number;
+  windows: { checkinDays; scoreDays; alertDays; meetingDays };
+  computedAt: Date;
+}
+
+// @/lib/member-recap/service — récap 5 axes (null par axe = non mesuré)
+interface Member5AxisRecap {
+  discipline: { score: number } | null;
+  progression: { disciplineDelta: number | null; points; weeklyTrades; weeklyCheckinDays } | null;
+  presence:
+    | { kind: 'insufficient_data' }
+    | { kind: 'ok'; rate; scheduledCount; completedCount }
+    | null;
+  selfWork: { methodRate: number | null; coachingHeadline: string | null } | null;
+  constance: { score: number | null; proofsCount; accountsCount } | null;
+}
+
+// Audit slugs ajoutés : 'admin.meeting.presence.marked' | 'admin.health.viewed'
+```
+
+### ④ Ce qui reste à faire
+
+- **Commit → PR → déploiement health-gaté** : committé `434eee6` (build) + `de653fb` (RC#1), PR #430, merge + deploy AUTORISÉS (go Eliott) — voir ⑥. La migration ADD-only s'applique en prod au déploiement (0 régression).
+- **Dédup des loaders partagés du récap — FAIT (RC#1, #3)** : `getMethodMirror` + `getCoachingInsight` enrobés dans `cache()` React (pattern maison, cf. `calendar/service`). Ils étaient fetchés 2× sur `/progression` (récap 5 axes + section dédiée). `getMemberWeeklyRecap(userId, now)` reste hors-cache (arg horloge) — non concerné. Reconsidéré vs la MAJ initiale : ce n'était pas du gold-plating mais une vraie dédup read-time sûre.
+- **Marquage présence admin = 1 réunion à la fois** (pas de bulk) — suffisant à l'échelle actuelle.
+
+### ⑤ État des gates + auto-challenge (vérifié runtime first-hand)
+
+**Gates statiques :**
+
+- `tsc --noEmit` exit 0 · `eslint` (tous fichiers du changeset) exit 0 · `prettier --check` **CI-clean (LF)** : 21 warnings = faux positifs CRLF du working-tree Windows, prouvés inoffensifs (`core.autocrlf=true` + `git ls-files --eol` → **index `i/lf`** sur les fichiers édités ET les nouveaux fichiers stagés → octets committés en LF → CI vert).
+- `vitest run` : **3694 passed (256 fichiers), 0 échec** (dont 84 tests neufs/modifiés sur les 5 fichiers du changeset). `crontab-sync.test.ts` ne plante plus en local grâce au fix `.gitattributes`.
+
+**Validation runtime e2e (serveur dev frais + Postgres dev réel, via l'UI réelle) :**
+
+- `session10b-presence-recoupement.spec.ts` + `session10b-member-recap.spec.ts` : **9 passed + 1 flaky (passée au retry)**, chromium **ET** mobile-iphone-15. Preuves : `/admin/health` rend la chaîne métier contre la vraie DB ; `markPresenceAction` persiste réellement `adminPresent=false` (poll DB) → badge d'écart ; le récap rend les valeurs DB réelles (présence 1/1, constance 72/100, discipline absente car non-seedée).
+- `session10-admin-journey` + `session10-member-journey` (régression non-rupture) : **3 passed** (chromium) — toutes mes routes modifiées (`/progression`, `/reunions`, `/admin`, `/admin/members/[id]`, `/admin/system`) rendent propre, 0 overlay/pageerror.
+
+**Auto-challenge — défauts tués + transitoires classés :**
+
+- **Défaut de MON spec (attrapé au runtime)** : `getByText('72 / 100', {exact:true})` ne matchait pas (la carte rend la valeur en nœud-texte nu suivi du `<span>` mot-verdict) → corrigé en regex scopé à la région. L'app était correcte ; le test était faux.
+- **Vérifs first-hand qui auraient pu masquer un bug** : (1) `streakDays` = `Set(checkins.date).size` = **jours de check-in distincts** (libellé honnête, `builder.ts:333`) ; (2) enums COMPLETS — `DiscrepancyStatus` (3) + `ScoreEventReason` (4) gérés sans drop silencieux (`schema.prisma:2566/2577`) ; (3) compte de routes 75 = nb réel de `page.tsx` (recompté).
+- **Transitoire dev classé NON-défaut** : `Error: timeout exceeded when trying to connect` (Postgres) dans `getLastReviewWeekStart` ← `DashboardReflectWidget` (`reflect-widget.tsx`, widget **/dashboard pré-existant, non touché**, rendu pendant la redirection post-login). PAS un P2024 pool, PAS déterministe (non reproduit en run isolé) — **exactement la classe de flake que le hand-off S8 ⑤ documente déjà** (« WebServer timeout … connect → re-run »). Absorbé par `retries:2` (politique CI existante de l'équipe pour la flakiness cold-compile dev). Le récap (8 loaders concurrents) est occasionnellement flaky pour la même raison d'env, même traitement. Leçon S8 appliquée : « symptôme timeout ≠ défaut ».
+
+### ⑥ Re-challenge adversarial RC#1 (2026-06-28) — « es-tu sûr 100 % A-Z » ultra-deep
+
+Sur demande d'Eliott (autonomie totale + auto-remise-en-question hardcore), audit adversarial multi-dimensions de TOUS les livrables S10 (Workflow ultracode : 8 dimensions en parallèle, 2 vérificateurs par finding mandatés de RÉFUTER). 6 findings remontés → chacun re-confronté au code RÉEL first-hand avant tout fix (§4, zéro défaut fabriqué).
+
+**4 vrais défauts corrigés (commit `de653fb`, +32/-10, 4 fichiers) :**
+
+- **#3 double-fetch `/progression`** — `getCoachingInsight` et `getMethodMirror` tournaient 2× par requête (page `387`/`405` + via `getMember5AxisRecap` `134`/`135`). Fix : `cache()` React sur les 2 loaders (pattern maison `calendar/service`). Dédup read-time sûre, comportement identique.
+- **#5 cohérence cohorte `/admin/health`** — `db.dailyCheckin.count` ne filtrait PAS les membres supprimés alors que les 3 autres lectures (`Discrepancy` / `ScoreEvent` / `Alert`) le font. Fix : `user: { status: { not: 'deleted' } }` ajouté (la relation est `user`, pas `member`, sur `DailyCheckin`).
+- **#6 robustesse `scoreMovements.total`** — `total` valait `filled + negatives` (les 4 raisons connues) ; une future valeur de l'enum `ScoreEventReason` aurait été silencieusement absente de `total`. Fix : `total` somme désormais TOUTES les lignes (`foldedTotal`), honnête à sa doc « Total events folded ». `net` garde son sens signé sur les raisons connues.
+- **#1/#2 dossier hand-off** — statut + ④ mis à jour ; suites e2e anti-mensonge + cron-permanence citées ci-dessous.
+
+**1 finding REJETÉ avec preuve (faux positif) :**
+
+- **« over-claim compté dans `listMeetingsForAdmin.completedCount` (incohérence §30.4) »** — RÉFUTÉ. `/admin/health` ne dérive AUCUN taux de ce compteur : il additionne `completed` / `declared` / `gaps` en compteurs bruts affichés côte-à-côte, et le libellé page dit explicitement « présences complètes **déclarées** » (`admin/health/page.tsx:130`), l'over-claim étant exposé séparément en `gaps` (tone `warn`). Le canon §30.4 vise les TAUX membre (scoré vs affiché), pas un compteur d'observabilité admin. Le test `meeting/service.test.ts:642` documente ce compteur comme « informational, raw » à dessein. Le changer aurait cassé une décision délibérée + testée.
+
+**Gates RC#1 (re-vérifiés first-hand) :** `tsc --noEmit` exit 0 · `eslint` (4 fichiers) exit 0 · `prettier --check` clean (4 fichiers) · `vitest run` **3694 passed / 256 fichiers / 0 échec** (dont les tests `system-health-service` mis à jour : assertion exclusion-membres-supprimés sur le check-in + `total` = 3+9 = 12). Suites e2e du brief (parcours membre + admin + chaîne anti-mensonge S3 + cron-permanence) : vertes sur PR #430 (shards Playwright CI = gate autoritaire ; e2e local volontairement non relancé — flaky cold-compile dev documenté ⑤).
+
+**Leçon :** la valeur d'un re-challenge n'est pas un « conforme » mais des défauts tués AVANT prod — et savoir REJETER un finding d'audit en le confrontant au code réel (le #4 « incohérence » était un faux positif qu'une application aveugle aurait transformé en vraie régression d'une sémantique testée).
+
+---
+
 _Fichier maintenu par la série de sessions structurées (plan « 9 » → réconcilié « 10 » le 2026-06-09, cf. §13). Toute affirmation y est datée et sourcée. En cas de conflit avec `SPEC.md`, SPEC.md gagne._

@@ -9,6 +9,11 @@ import type {
 } from '@/lib/schemas/meeting';
 import { safeFreeText } from '@/lib/text/safe';
 
+import {
+  attendanceCountsAsComplete,
+  computeAttendanceGap,
+  type AttendanceGap,
+} from './attendance-gap';
 import { computeMeetingAttendanceRate, type MeetingAttendanceRateResult } from './attendance-rate';
 import { generateMeetingOccurrences, type MeetingSlotName } from './occurrence';
 import { meetingWindowStart } from './window';
@@ -90,10 +95,19 @@ export async function countMeetingAttendance(
         attendanceMode: { not: null },
         contentReviewed: true,
         meeting: inScheduledWindow,
+        // S10 §30.8 — honest numerator (the single recoupement scoring voie):
+        // a self-declared completion that Eliott marked ABSENT does NOT count
+        // (`attendanceCountsAsComplete`). `adminPresent` null OR true counts;
+        // explicit OR because Prisma's `not` excludes NULLs on nullable columns
+        // (verified — would silently drop unmarked completions otherwise).
+        OR: [{ adminPresent: null }, { adminPresent: true }],
       },
     }),
     db.meetingAttendance.findFirst({
-      where: { userId },
+      // "Last MEMBER activity" recency — must ignore admin-only rows created by
+      // `markMeetingPresence` (attendanceMode null + contentReviewed false), so
+      // an admin mark never fabricates a fake member-declaration timestamp.
+      where: { userId, OR: [{ attendanceMode: { not: null } }, { contentReviewed: true }] },
       orderBy: { declaredAt: 'desc' },
       select: { declaredAt: true },
     }),
@@ -151,6 +165,17 @@ export interface MemberMeetingView {
   contentReviewed: boolean;
   /** Whether the member can (re-)declare: only past, non-cancelled, in-window. */
   declarable: boolean;
+  /**
+   * S10 §30.8 — Eliott's presence declaration for THIS member on THIS meeting
+   * (null = Eliott said nothing). Drives the cross-check {@link gap} below.
+   */
+  adminPresent: boolean | null;
+  /**
+   * S10 §30.8 — cross-check verdict vs Eliott's declaration. `none` unless an
+   * écart exists. The member surface shows a calm recoupement note when
+   * `gap !== 'none'` (never a red accusation, posture §2).
+   */
+  gap: AttendanceGap;
 }
 
 export interface MemberMeetingsResult {
@@ -192,7 +217,7 @@ export async function listMeetingsForMember(
       status: true,
       attendances: {
         where: { userId },
-        select: { attendanceMode: true, contentReviewed: true },
+        select: { attendanceMode: true, contentReviewed: true, adminPresent: true },
         take: 1,
       },
     },
@@ -205,14 +230,17 @@ export async function listMeetingsForMember(
     const att = m.attendances[0] ?? null;
     const attendanceMode = (att?.attendanceMode ?? null) as MeetingAttendanceModeName | null;
     const contentReviewed = att?.contentReviewed ?? false;
+    const adminPresent = att?.adminPresent ?? null;
     const complete = attendanceMode !== null && contentReviewed === true;
+    const declaredSomething = attendanceMode !== null || contentReviewed;
+    const gap = computeAttendanceGap(adminPresent, complete, declaredSomething);
 
     let displayState: MeetingDisplayState;
     if (m.status === 'cancelled') {
       displayState = 'cancelled';
     } else if (complete) {
       displayState = 'complete';
-    } else if (attendanceMode !== null || contentReviewed) {
+    } else if (declaredSomething) {
       displayState = 'partielle';
     } else {
       displayState = 'en_attente';
@@ -220,7 +248,9 @@ export async function listMeetingsForMember(
 
     if (m.status === 'scheduled') {
       scheduledCount += 1;
-      if (complete) completedCount += 1;
+      // §30.4 coherence: the displayed rate uses the SAME honest numerator as
+      // the engagement score — an over-claim (admin absent) is not counted.
+      if (attendanceCountsAsComplete(complete, adminPresent)) completedCount += 1;
     }
 
     return {
@@ -232,6 +262,8 @@ export async function listMeetingsForMember(
       attendanceMode,
       contentReviewed,
       declarable: m.status === 'scheduled',
+      adminPresent,
+      gap,
     };
   });
 
@@ -461,6 +493,100 @@ export async function uncancelMeeting(meetingId: string): Promise<CancelledMeeti
   return { id: row.id, status: row.status as 'scheduled' | 'cancelled' };
 }
 
+/**
+ * Why an admin presence mark is refused (HARD service guard, S10 §30.8). The
+ * Server Action duck-types on `name` + `reason` (robust to module mocking).
+ */
+export type MeetingPresenceNotMarkableReason = 'not_found' | 'cancelled' | 'member_not_found';
+
+/** Thrown by {@link markMeetingPresence} on an illegitimate mark target. */
+export class MeetingPresenceNotMarkableError extends Error {
+  readonly reason: MeetingPresenceNotMarkableReason;
+  constructor(reason: MeetingPresenceNotMarkableReason) {
+    super(`Meeting presence not markable: ${reason}`);
+    this.name = 'MeetingPresenceNotMarkableError';
+    this.reason = reason;
+  }
+}
+
+/** Result of a presence mark (serialised, for the caller/audit). */
+export interface MarkedMeetingPresence {
+  meetingId: string;
+  memberId: string;
+  /** The resulting admin declaration (null = mark cleared). */
+  adminPresent: boolean | null;
+}
+
+/**
+ * S10 §30.8 — Eliott (admin) declares a MEMBER's presence for one meeting: the
+ * write side of the recoupement admin↔membre. The ÉCART vs the member self-
+ * report is DERIVED at read-time ({@link computeAttendanceGap}), never stored.
+ *
+ * This primitive writes ONLY the `adminPresent` family of columns — it NEVER
+ * touches `attendanceMode` / `contentReviewed` (the member's own declaration is
+ * sacred, §29 audit trail). A member who has not declared yet gets a row holding
+ * just the admin mark (member fields stay at their defaults); a member who
+ * already declared keeps their self-report untouched, the admin fields added
+ * alongside.
+ *
+ * HARD GUARD: refuses (throws {@link MeetingPresenceNotMarkableError}) when the
+ * meeting is unknown (`not_found`), cancelled (`cancelled` — no presence on a
+ * slot Eliott did not run, mirror §30.2), or the target is not an actual member
+ * (`member_not_found`). `present === null` CLEARS the mark — and only ever
+ * touches an existing row (`updateMany`), so retracting a mark on a member who
+ * never declared leaves no blank row behind.
+ *
+ * Posture §2 / PII-free: booleans + an opaque admin id only, no Ichor content.
+ */
+export async function markMeetingPresence(
+  adminId: string,
+  meetingId: string,
+  memberId: string,
+  present: boolean | null,
+  now: Date = new Date(),
+): Promise<MarkedMeetingPresence> {
+  const [meeting, member] = await Promise.all([
+    db.meeting.findUnique({ where: { id: meetingId }, select: { id: true, status: true } }),
+    db.user.findUnique({ where: { id: memberId }, select: { id: true, role: true } }),
+  ]);
+  if (!meeting) throw new MeetingPresenceNotMarkableError('not_found');
+  if (meeting.status === 'cancelled') throw new MeetingPresenceNotMarkableError('cancelled');
+  if (!member || member.role !== 'member') {
+    throw new MeetingPresenceNotMarkableError('member_not_found');
+  }
+
+  if (present === null) {
+    // Retract: only an existing row is cleared; never create a blank one.
+    await db.meetingAttendance.updateMany({
+      where: { meetingId, userId: memberId },
+      data: { adminPresent: null, adminMarkedAt: null, adminMarkedBy: null },
+    });
+    return { meetingId, memberId, adminPresent: null };
+  }
+
+  await db.meetingAttendance.upsert({
+    where: { meetingId_userId: { meetingId, userId: memberId } },
+    create: {
+      meetingId,
+      userId: memberId,
+      adminPresent: present,
+      adminMarkedAt: now,
+      adminMarkedBy: adminId,
+      // Member self-report stays at defaults — the admin mark never fabricates
+      // an attendanceMode / contentReviewed (the cross-check needs BOTH sides
+      // independent, §30.8). `declaredAt` default now() is harmless: the member
+      // recency cue (`lastDeclaredAt`) ignores admin-only rows.
+    },
+    update: {
+      adminPresent: present,
+      adminMarkedAt: now,
+      adminMarkedBy: adminId,
+    },
+    select: { meetingId: true },
+  });
+  return { meetingId, memberId, adminPresent: present };
+}
+
 /** Number of days of recent + upcoming meetings the `/admin/reunions` list shows. */
 export const ADMIN_MEETING_WINDOW_DAYS = 14;
 
@@ -477,6 +603,13 @@ export interface AdminMeetingView {
   completedCount: number;
   /** Total members who declared SOMETHING (complete or partial) on this slot. */
   declaredCount: number;
+  /**
+   * S10 §30.8 — number of unresolved admin↔membre ÉCARTS on this slot: members
+   * whose self-report contradicts Eliott's presence declaration
+   * (`computeAttendanceGap !== 'none'`). 0 unless Eliott has marked presence.
+   * A neutral coaching signal (count only, posture §2) — never a red flag.
+   */
+  gapCount: number;
 }
 
 /**
@@ -502,7 +635,7 @@ export async function listMeetingsForAdmin(now: Date = new Date()): Promise<Admi
       scheduledAt: true,
       status: true,
       attendances: {
-        select: { attendanceMode: true, contentReviewed: true },
+        select: { attendanceMode: true, contentReviewed: true, adminPresent: true },
       },
     },
   });
@@ -510,10 +643,15 @@ export async function listMeetingsForAdmin(now: Date = new Date()): Promise<Admi
   return rows.map((m) => {
     let completedCount = 0;
     let declaredCount = 0;
+    let gapCount = 0;
     for (const a of m.attendances) {
       const declaredSomething = a.attendanceMode !== null || a.contentReviewed;
+      const complete = a.attendanceMode !== null && a.contentReviewed === true;
       if (declaredSomething) declaredCount += 1;
-      if (a.attendanceMode !== null && a.contentReviewed === true) completedCount += 1;
+      if (complete) completedCount += 1;
+      if (computeAttendanceGap(a.adminPresent ?? null, complete, declaredSomething) !== 'none') {
+        gapCount += 1;
+      }
     }
     return {
       id: m.id,
@@ -523,6 +661,7 @@ export async function listMeetingsForAdmin(now: Date = new Date()): Promise<Admi
       isPast: m.scheduledAt.getTime() < now.getTime(),
       completedCount,
       declaredCount,
+      gapCount,
     };
   });
 }
@@ -543,6 +682,16 @@ export interface AdminMemberMeetingView {
    * cancelled (greyed, excluded from the rate).
    */
   state: AdminMeetingAttendanceState;
+  /**
+   * S10 §30.8 — Eliott's presence declaration for this member on this meeting
+   * (null = not marked yet). The admin panel renders the marking control from it.
+   */
+  adminPresent: boolean | null;
+  /**
+   * S10 §30.8 — cross-check verdict admin↔membre. `none` unless an écart exists;
+   * the panel badges the écart (over-claim / présent-non-déclaré) when set.
+   */
+  gap: AttendanceGap;
 }
 
 export interface AdminMemberAttendanceResult {
@@ -588,7 +737,7 @@ export async function listMeetingAttendanceForMember(
       status: true,
       attendances: {
         where: { userId: memberId },
-        select: { attendanceMode: true, contentReviewed: true },
+        select: { attendanceMode: true, contentReviewed: true, adminPresent: true },
         take: 1,
       },
     },
@@ -601,14 +750,17 @@ export async function listMeetingAttendanceForMember(
     const att = m.attendances[0] ?? null;
     const attendanceMode = att?.attendanceMode ?? null;
     const contentReviewed = att?.contentReviewed ?? false;
+    const adminPresent = att?.adminPresent ?? null;
     const complete = attendanceMode !== null && contentReviewed === true;
+    const declaredSomething = attendanceMode !== null || contentReviewed;
+    const gap = computeAttendanceGap(adminPresent, complete, declaredSomething);
 
     let state: AdminMeetingAttendanceState;
     if (m.status === 'cancelled') {
       state = 'cancelled';
     } else if (complete) {
       state = 'complete';
-    } else if (attendanceMode !== null || contentReviewed) {
+    } else if (declaredSomething) {
       state = 'partielle';
     } else {
       state = 'absent';
@@ -616,7 +768,8 @@ export async function listMeetingAttendanceForMember(
 
     if (m.status === 'scheduled') {
       scheduledCount += 1;
-      if (complete) completedCount += 1;
+      // §30.4 coherence with the member rate + engagement: honest numerator.
+      if (attendanceCountsAsComplete(complete, adminPresent)) completedCount += 1;
     }
 
     return {
@@ -625,6 +778,8 @@ export async function listMeetingAttendanceForMember(
       scheduledAt: m.scheduledAt.toISOString(),
       status: m.status as 'scheduled' | 'cancelled',
       state,
+      adminPresent,
+      gap,
     };
   });
 

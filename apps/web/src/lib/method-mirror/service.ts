@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { db } from '@/lib/db';
 
 import { computeMethodMirror, type MethodMirror } from './compute';
@@ -14,10 +16,7 @@ import { computeMethodMirror, type MethodMirror } from './compute';
 const LOOKBACK_DAYS = 30;
 const PARIS_TZ = 'Europe/Paris';
 
-export async function getMethodMirror(
-  userId: string,
-  now: Date = new Date(),
-): Promise<MethodMirror> {
+async function buildMethodMirror(userId: string, now: Date = new Date()): Promise<MethodMirror> {
   const since = new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
   const rows = await db.trade.findMany({
     where: { userId, enteredAt: { gte: since } },
@@ -45,3 +44,10 @@ export async function getMethodMirror(
     PARIS_TZ,
   );
 }
+
+/**
+ * Per-request memoised seam (React `cache`): `/progression` reads the mirror BOTH
+ * directly AND through `getMember5AxisRecap` — `cache` collapses those duplicate
+ * reads into a single trade query per request (house pattern, cf. calendar seam).
+ */
+export const getMethodMirror = cache(buildMethodMirror);

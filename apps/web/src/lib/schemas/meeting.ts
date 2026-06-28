@@ -88,3 +88,42 @@ export const meetingCancelSchema = z
   .strict();
 
 export type MeetingCancelInput = z.infer<typeof meetingCancelSchema>;
+
+/**
+ * S10 §30.8 — admin marks (or clears) a MEMBER's presence for one meeting, the
+ * data side of the recoupement admin↔membre. Distinct from the member self-
+ * report: it only ever writes the `adminPresent` family of columns.
+ *
+ * `present`:
+ *   - `present` → `adminPresent = true`  (Eliott confirms the member was there)
+ *   - `absent`  → `adminPresent = false` (Eliott states the member was absent)
+ *   - `clear`   → `adminPresent = null`  (retract the mark — no cross-check)
+ *
+ * `memberId` is UNTRUSTED admin input (the target member), capped like
+ * `meetingId` (cuid 25 + margin) to reject oversized payloads at the boundary.
+ * No free-text → no `safeFreeText` surface. `.strict()` rejects unknown keys.
+ * Posture §2: booleans/enums only, never any Ichor content.
+ */
+export const MEETING_PRESENCE_MARKS = ['present', 'absent', 'clear'] as const;
+export type MeetingPresenceMarkName = (typeof MEETING_PRESENCE_MARKS)[number];
+
+export const meetingPresenceMarkSchema = z
+  .object({
+    meetingId: meetingIdSchema,
+    memberId: z
+      .string()
+      .trim()
+      .min(1, { error: 'Membre requis.' })
+      .max(40, { error: 'Identifiant de membre invalide.' }),
+    present: z.enum(MEETING_PRESENCE_MARKS, { error: 'Marquage de présence invalide.' }),
+  })
+  .strict();
+
+export type MeetingPresenceMarkInput = z.infer<typeof meetingPresenceMarkSchema>;
+
+/** Map the wizard's enum to the persisted tri-state `adminPresent`. */
+export function presenceMarkToAdminPresent(mark: MeetingPresenceMarkName): boolean | null {
+  if (mark === 'present') return true;
+  if (mark === 'absent') return false;
+  return null;
+}

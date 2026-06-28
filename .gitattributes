@@ -5,6 +5,11 @@
 *.fish         text eol=lf
 ops/cron/*     text eol=lf
 ops/scripts/*  text eol=lf
+# S10 — .mjs scripts carry shebangs (e.g. scripts/check-cron-crontab-sync.mjs);
+# a Windows CRLF checkout breaks the `#!/usr/bin/env node\r` parse when Vitest
+# transforms them, so pin LF (the test was green in CI/LF, red only locally).
+*.mjs          text eol=lf
+scripts/*      text eol=lf
 **/Caddyfile   text eol=lf
 **/Dockerfile* text eol=lf
 *.yml          text eol=lf

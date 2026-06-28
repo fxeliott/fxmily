@@ -51,11 +51,18 @@ export const EXPORT_SCHEMA_VERSION = 2 as const;
 
 /**
  * `User` relation fields whose data is included in the portability export.
- * Note: `tradeAnnotations` / `trainingAnnotations` are exported as derived
- * buckets (the corrections a member RECEIVED, queried via the parent trade's
- * `userId`); the matching `User` relations `annotationsAuthored` /
- * `trainingAnnotationsAuthored` are the *admin-authored* side and live in
- * `EXCLUDED_USER_RELATIONS`.
+ * Note: `tradeAnnotations` / `trainingAnnotations` / `tradeMedia` are exported
+ * as derived buckets — they hang off `Trade`/`TrainingTrade`, not directly off
+ * `User`, so they are NOT listed here (this array enumerates direct `User`
+ * relations only). `tradeAnnotations` / `trainingAnnotations` are the
+ * corrections a member RECEIVED (queried via the parent trade's `userId`); the
+ * matching `User` relations `annotationsAuthored` / `trainingAnnotationsAuthored`
+ * are the *admin-authored* side and live in `EXCLUDED_USER_RELATIONS`.
+ * `tradeMedia` is the member's own multi-capture screenshots (`Trade.media`,
+ * §31), queried the same way — the deletion path already purges these keys
+ * (`account/deletion.ts`), so portability (art.20) must surface them too.
+ * The Trade-transitive buckets are covered by the dedicated guard in
+ * `export.test.ts` (parses `Trade` relations), not the `User`-relation guard.
  */
 export const EXPORTED_USER_RELATIONS = [
   'auditLogs',
@@ -131,6 +138,10 @@ export interface UserDataExport {
   user: SafeUser | null;
   trades: SafeTrade[];
   tradeAnnotations: SafeTradeAnnotation[];
+  // §31 — multi-capture screenshots attached to a member's own trades. Derived
+  // bucket via `Trade.media` (hangs off Trade, not User). The deletion path
+  // already treats these `fileKey`s as member PII; portability must match.
+  tradeMedia: SafeTradeMedia[];
   dailyCheckins: SafeDailyCheckin[];
   behavioralScores: SafeBehavioralScore[];
   douglasDeliveries: SafeDouglasDelivery[];
@@ -196,6 +207,7 @@ type SafeUser = {
 
 type SafeTrade = Awaited<ReturnType<typeof db.trade.findMany>>[number];
 type SafeTradeAnnotation = Awaited<ReturnType<typeof db.tradeAnnotation.findMany>>[number];
+type SafeTradeMedia = Awaited<ReturnType<typeof db.tradeMedia.findMany>>[number];
 type SafeDailyCheckin = Awaited<ReturnType<typeof db.dailyCheckin.findMany>>[number];
 type SafeBehavioralScore = Awaited<ReturnType<typeof db.behavioralScore.findMany>>[number];
 type SafeDouglasDelivery = Awaited<ReturnType<typeof db.markDouglasDelivery.findMany>>[number];
@@ -262,6 +274,7 @@ export interface ExportSummary {
   schemaVersion: typeof EXPORT_SCHEMA_VERSION;
   tradeCount: number;
   tradeAnnotationCount: number;
+  tradeMediaCount: number;
   dailyCheckinCount: number;
   behavioralScoreCount: number;
   douglasDeliveryCount: number;
@@ -307,6 +320,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     user,
     trades,
     annotations,
+    tradeMedia,
     checkins,
     scores,
     deliveries,
@@ -339,6 +353,12 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     }),
     db.trade.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
     db.tradeAnnotation.findMany({
+      where: { trade: { userId } },
+      orderBy: { createdAt: 'asc' },
+    }),
+    // §31 — member's own multi-capture screenshots. Derived via the parent
+    // trade's `userId` (mirror `tradeAnnotation` above).
+    db.tradeMedia.findMany({
       where: { trade: { userId } },
       orderBy: { createdAt: 'asc' },
     }),
@@ -451,6 +471,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     user: user as SafeUser | null,
     trades,
     tradeAnnotations: annotations,
+    tradeMedia,
     dailyCheckins: checkins,
     behavioralScores: scores,
     douglasDeliveries: deliveries,
@@ -493,6 +514,7 @@ export function summariseExport(snapshot: UserDataExport): ExportSummary {
     schemaVersion: snapshot.schemaVersion,
     tradeCount: snapshot.trades.length,
     tradeAnnotationCount: snapshot.tradeAnnotations.length,
+    tradeMediaCount: snapshot.tradeMedia.length,
     dailyCheckinCount: snapshot.dailyCheckins.length,
     behavioralScoreCount: snapshot.behavioralScores.length,
     douglasDeliveryCount: snapshot.douglasDeliveries.length,

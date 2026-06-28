@@ -45,6 +45,23 @@ fi
 DUMP_SIZE=$(du -h "$DUMP_FILE" | cut -f1)
 log "dump OK ($DUMP_SIZE)"
 
+# ---- 1b. Integrity + non-empty guard --------------------------------------
+# `pipefail` catches a pg_dump *error*, but not a silently truncated/corrupt
+# gzip stream or a 0-byte dump. A backup you cannot decompress is not a backup
+# (§9-B: proven restores, not backups). Verify before we throw away step 1's
+# work and call the day "backed up".
+if ! gzip -t "$DUMP_FILE" 2>/dev/null; then
+  log "FAIL dump failed gzip integrity check ; removing corrupt file"
+  rm -f "$DUMP_FILE"
+  exit 1
+fi
+DUMP_BYTES=$(stat -c%s "$DUMP_FILE" 2>/dev/null || echo 0)
+if (( DUMP_BYTES < 1000 )); then
+  log "FAIL dump suspiciously small (${DUMP_BYTES} bytes) ; removing"
+  rm -f "$DUMP_FILE"
+  exit 1
+fi
+
 # ---- 2. GPG symmetric encryption ------------------------------------------
 # AES-256 + iter+salted S2K (gpg defaults). Passphrase from a 0600 file —
 # never on the command line (would leak via /proc/<pid>/cmdline).
@@ -70,10 +87,26 @@ rm -f "$DUMP_FILE"
 # `--no-progress` keeps the cron stderr noise-free.
 R2_ENDPOINT="${R2_ENDPOINT:-}"
 R2_BUCKET="${R2_BUCKET:-}"
+# §9-B — off-host backup is THE durability guarantee. A copy that only lives
+# on the same VPS disk is gone the moment the disk/host dies. Set
+# `BACKUP_REQUIRE_OFFSITE=1` in cron.env on any host that must not lose data
+# (i.e. production): a missing/unconfigured off-site target then becomes a HARD
+# failure (exit 4) so the dead-man-switch / healthchecks fires, instead of a
+# green cron silently hiding a non-durable backup. Default 0 keeps pre-R2
+# environments working but emits a LOUD warning every run.
+REQUIRE_OFFSITE="${BACKUP_REQUIRE_OFFSITE:-0}"
+offsite_missing() {
+  local reason="$1"
+  if [[ "$REQUIRE_OFFSITE" == "1" ]]; then
+    log "FAIL off-site backup REQUIRED but $reason — encrypted dump kept locally for manual upload"
+    exit 4
+  fi
+  log "WARNING off-site backup skipped ($reason) — LOCAL-ONLY, NOT disaster-safe. Set BACKUP_REQUIRE_OFFSITE=1 once R2 is wired."
+}
 if [[ -z "$R2_ENDPOINT" || -z "$R2_BUCKET" ]]; then
-  log "R2 upload skipped (R2_ENDPOINT or R2_BUCKET unset — local-only V1 mode)"
+  offsite_missing "R2_ENDPOINT or R2_BUCKET unset"
 elif ! command -v aws >/dev/null 2>&1; then
-  log "R2 upload skipped (aws CLI not installed — V1.6 install todo)"
+  offsite_missing "aws CLI not installed"
 elif ! aws s3 cp "$ENCRYPTED_FILE" "s3://${R2_BUCKET}/$(basename "$ENCRYPTED_FILE")" \
     --endpoint-url "$R2_ENDPOINT" \
     --profile fxmily-backup \

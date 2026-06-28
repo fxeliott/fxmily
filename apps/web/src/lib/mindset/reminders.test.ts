@@ -119,7 +119,7 @@ describe('runMindsetCheckReminderScan', () => {
     expect(userFindManyMock.mock.calls[0]?.[0]?.where?.id).toEqual({ in: ['user_a'] });
   });
 
-  it('counts a failed enqueue (null) as skipped, not enqueued', async () => {
+  it('counts a failed enqueue (null) as an error, NOT a skip (observability A-Z)', async () => {
     userFindManyMock.mockResolvedValueOnce([{ id: 'user_a' }]);
     mindsetCheckFindManyMock.mockResolvedValueOnce([]);
     notificationQueueFindManyMock.mockResolvedValueOnce([]);
@@ -127,8 +127,12 @@ describe('runMindsetCheckReminderScan', () => {
 
     const out = await runMindsetCheckReminderScan(NOW);
 
+    // An eligible member (not submitted, not nudged) whose enqueue genuinely
+    // failed must surface as `errors`, not hide in `skipped` — so the WEEKLY
+    // cron heartbeat escalates green→amber in health.ts instead of staying green.
     expect(out.enqueued).toBe(0);
-    expect(out.skipped).toBe(1);
+    expect(out.errors).toBe(1);
+    expect(out.skipped).toBe(0);
   });
 
   it('logs the canonical heartbeat audit row at the end of every scan that ran', async () => {

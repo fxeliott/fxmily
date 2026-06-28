@@ -2,6 +2,7 @@ import 'server-only';
 
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
+import { reportWarning } from '@/lib/observability';
 import type { Prisma } from '@/generated/prisma/client';
 import type { NotificationType } from '@/generated/prisma/enums';
 
@@ -379,7 +380,14 @@ export async function enqueueMindsetCheckNotification(
 
     return row.id;
   } catch (err) {
-    console.error('[notifications.enqueue] mindset check failed', err);
+    // A-Z observability — was console-only, so a genuine weekly-nudge enqueue
+    // failure hid in the scan's `skipped` count and the WEEKLY cron showed
+    // green even if every member's nudge failed. Surface to Sentry; the scan
+    // also tallies it into the heartbeat `errors` field. Mirror service.ts:478.
+    reportWarning('mindset.reminders', 'enqueue_failed', {
+      userId: recipientUserId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }
@@ -518,7 +526,12 @@ export async function enqueueCheckinReminder(
       err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
         ? err.code
         : 'unknown';
-    console.error('[notifications.enqueue.checkin] failed', { code });
+    // A-Z observability — a genuine enqueue failure (NOT the P2002 no-op above)
+    // was console-only, so the scan bucketed it as "skipped" and the cron
+    // stayed green-by-age. Surface it to Sentry AND let the scan tally it into
+    // the heartbeat `errors` field (health.ts escalates green→amber on >0).
+    // Mirrors lib/scoring/service.ts:478 (the recompute observability fix).
+    reportWarning('checkin.reminders', 'enqueue_failed', { userId, type, code });
     return null;
   }
 }

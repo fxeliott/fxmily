@@ -30,6 +30,12 @@ export interface MindsetReminderScanResult {
   scannedUsers: number;
   enqueued: number;
   skipped: number;
+  /**
+   * Eligible members whose weekly-nudge enqueue genuinely FAILED (null id).
+   * Surfaced in the heartbeat so health.ts escalates the WEEKLY cron
+   * green→amber instead of hiding a failed nudge in `skipped`. A-Z fix.
+   */
+  errors: number;
   /** Monday `YYYY-MM-DD` (Europe/Paris) the nudge is for. */
   weekStart: string;
   /** Wall-clock at the moment the scan started, ISO 8601. */
@@ -57,6 +63,7 @@ export async function runMindsetCheckReminderScan(
     scannedUsers: 0,
     enqueued: 0,
     skipped: 0,
+    errors: 0,
     weekStart,
     ranAt: now.toISOString(),
   };
@@ -109,9 +116,12 @@ export async function runMindsetCheckReminderScan(
       result.skipped += 1;
       continue;
     }
+    // Eligible member (not submitted, not nudged) → a null id is a genuine
+    // enqueue failure, NOT a skip. Tally it as an error so the weekly cron
+    // can't show green when nudges silently failed to enqueue. A-Z fix.
     const id = await enqueueMindsetCheckNotification(userId, { weekStart });
     if (id) result.enqueued += 1;
-    else result.skipped += 1;
+    else result.errors += 1;
   }
 
   // Single audit heartbeat per scan (canon — no per-user spam).
@@ -121,6 +131,7 @@ export async function runMindsetCheckReminderScan(
       scannedUsers: result.scannedUsers,
       enqueued: result.enqueued,
       skipped: result.skipped,
+      errors: result.errors,
       weekStart: result.weekStart,
       ranAt: result.ranAt,
     },

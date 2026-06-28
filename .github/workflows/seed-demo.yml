@@ -1,0 +1,98 @@
+name: Seed demo account
+
+# Manual-only. Seeds (or re-seeds) the ISOLATED demo member into PRODUCTION so
+# `demo@fxmily.local` can be opened from anywhere (app.fxmilyapp.com), without
+# touching any real member.
+#
+# Safety :
+#   - Prod-safe meetings : DEMO_SEED_GLOBAL_MEETINGS=false → the practice module
+#     never CREATES global `Meeting` rows; it only declares the demo member's
+#     attendance on meetings that already exist. Every other row the seed writes
+#     is user-scoped and removed by the `demo@fxmily.local` cascade.
+#   - Idempotent : the orchestrator wipes & re-creates ONLY `demo@fxmily.local`.
+#     Re-running produces byte-identical data and never affects the 6 real users.
+#   - Mark Douglas cards are upserted first (idempotent, keeps favorites/
+#     deliveries) so the coaching surface has its referenced cards.
+#
+# Mechanism (mirrors the `prisma migrate deploy` one-shot in deploy.yml) :
+#   SSH → run a one-shot `node:22` container ON the `fxmily-internal` network
+#   (the only way to reach the un-published prod Postgres) with the prod
+#   `web.env` (DATABASE_URL) → shallow-clone main → install web deps → prisma
+#   generate → run the two seed scripts.
+#
+# Secrets reused from the deploy pipeline :
+#   - HETZNER_HOST    : public IPv4 of the Hetzner CX22.
+#   - HETZNER_SSH_KEY : private SSH key for the `fxmily` host user.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: seed-demo
+  cancel-in-progress: false # never interrupt a seed mid-write
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    name: Seed demo on Hetzner (prod-safe)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read # the GITHUB_TOKEN below only needs to clone repo contents
+    steps:
+      - name: SSH → one-shot demo seed against prod DB
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        env:
+          # Short-lived token used INSIDE the container to clone the private repo.
+          # Scoped to `contents: read` by the job permissions above.
+          GH_CLONE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: 22
+          command_timeout: 22m
+          envs: GH_CLONE_TOKEN
+          script: |
+            set -euo pipefail
+
+            echo "Seeding demo (prod-safe) inside a one-shot container on fxmily-internal..."
+
+            # The demo seed needs tsx + the generated Prisma client + argon2,
+            # none of which live in the standalone runtime image — so we run a
+            # clean node:22 container, clone main, install, generate, and seed.
+            # --env-file injects the prod DATABASE_URL; -e overrides force the
+            # prod-safe meeting flag and pass the clone token. The container is
+            # removed (`--rm`) afterwards so nothing persists on the host.
+            docker run --rm \
+              --network fxmily-internal \
+              --env-file /etc/fxmily/web.env \
+              -e DEMO_SEED_GLOBAL_MEETINGS=false \
+              -e GH_CLONE_TOKEN \
+              -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+              -w /work \
+              node:22-bookworm-slim \
+              bash -c '
+                set -euo pipefail
+                apt-get update -qq && apt-get install -y -qq git ca-certificates >/dev/null
+                corepack enable
+
+                git clone --depth 1 --branch main \
+                  "https://x-access-token:${GH_CLONE_TOKEN}@github.com/fxeliott/fxmily.git" /work/repo
+                cd /work/repo
+
+                # Install only the web package + its deps (frozen lockfile).
+                pnpm install --frozen-lockfile --filter @fxmily/web...
+
+                # Generate the Prisma client the seed imports.
+                pnpm --filter @fxmily/web exec prisma generate
+
+                # 1) Mark Douglas cards (idempotent upsert — coaching prereq).
+                pnpm --filter @fxmily/web exec tsx scripts/seed-mark-douglas-cards.ts
+                # 2) The demo member + its full, evolving, user-scoped dataset.
+                pnpm --filter @fxmily/web exec tsx scripts/seed-demo.ts
+              '
+
+            echo "Demo seed complete. Login: demo@fxmily.local @ https://app.fxmilyapp.com/login"

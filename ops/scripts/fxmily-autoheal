@@ -34,7 +34,18 @@ set -euo pipefail
 
 # Containers to watch. Kept explicit (not label-discovered) so a misconfigured
 # label can never silently drop a service from the watchdog.
-CONTAINERS=("fxmily-web")
+#
+# fxmily-postgres is the worst single point of failure (a wedged DB takes the
+# whole app down) and it DOES define a healthcheck (pg_isready), so it is
+# watched. If Postgres is bounced, `web`'s Prisma pool goes stale → `web`'s own
+# healthcheck flips unhealthy → the next tick heals `web` too (≤60s), so no
+# explicit cascade is needed here.
+#
+# fxmily-caddy is intentionally NOT listed: it declares no healthcheck in
+# docker-compose.prod.yml, so its status is always `nohealth` (a no-op here).
+# Adding a Caddy healthcheck blindly could trip a restart loop, so that is left
+# to a deliberate compose change first.
+CONTAINERS=("fxmily-web" "fxmily-postgres")
 
 COOLDOWN_SECS="${AUTOHEAL_COOLDOWN_SECS:-300}"   # 5 min between restarts of the same container
 STATE_DIR="${AUTOHEAL_STATE_DIR:-/var/lib/fxmily/autoheal}"

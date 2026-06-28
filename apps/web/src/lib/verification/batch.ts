@@ -626,8 +626,16 @@ async function materialiseProofExtraction(args: MaterialiseArgs): Promise<Materi
     );
   });
 
+  // The in-memory `toInsert` filter is the fast path; `skipDuplicates` is the
+  // race-safe backstop. Two concurrent vision parses for the SAME account can
+  // both pass the filter for one ticket, but the partial unique index
+  // `extracted_positions_account_ticket_uniq` (broker_account_id, ticket WHERE
+  // ticket IS NOT NULL) turns the loser's row into ON CONFLICT DO NOTHING, so we
+  // never double-count a real position. `count` is the rows ACTUALLY inserted
+  // (≤ toInsert.length), so reporting reflects the true write.
+  let insertedCount = 0;
   if (toInsert.length > 0) {
-    await db.extractedPosition.createMany({
+    const inserted = await db.extractedPosition.createMany({
       data: toInsert.map((p) => ({
         brokerAccountId: accountId as string,
         proofId,
@@ -643,7 +651,9 @@ async function materialiseProofExtraction(args: MaterialiseArgs): Promise<Materi
         source: 'mt5_screen_ocr' as const,
         confidence: args.output.confidence,
       })),
+      skipDuplicates: true,
     });
+    insertedCount = inserted.count;
   }
 
   // --- Proof → done + (re)attach to the resolved account. ---
@@ -666,8 +676,8 @@ async function materialiseProofExtraction(args: MaterialiseArgs): Promise<Materi
   return {
     accountId,
     accountCreated,
-    positionsInserted: toInsert.length,
-    positionsDeduplicated: parsedPositions.length - toInsert.length,
+    positionsInserted: insertedCount,
+    positionsDeduplicated: parsedPositions.length - insertedCount,
     detectedAccountCount,
   };
 }

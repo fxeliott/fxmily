@@ -71,22 +71,35 @@ export function computePostLossReaction(
 ): PostLossReaction {
   // Entries sorted ascending — we scan forward from each loss's close.
   const entries = [...trades].sort((a, b) => a.enteredAt.getTime() - b.enteredAt.getTime());
-  const losses = trades.filter((t) => t.closedAt !== null && t.outcome === 'loss');
+  // Losses are processed in CLOSE-time order so the earliest loss claims the
+  // earliest re-entry — the real behavioural sequence — and the attribution is
+  // deterministic regardless of the caller's input order.
+  const losses = trades
+    .filter((t) => t.closedAt !== null && t.outcome === 'loss')
+    .sort((a, b) => a.closedAt!.getTime() - b.closedAt!.getTime());
 
   let reentries = 0;
   let fastReentries = 0;
   const delays: number[] = [];
+  // A physical re-entry trade must be attributed to AT MOST ONE loss. Without
+  // this, two losses on the SAME day (e.g. closed 10:00 and 10:30) sharing a
+  // single subsequent entry (11:00) would BOTH count it — inflating `reentries`
+  // / `fastReentries` / `delays` past the real number of re-opens. Consuming
+  // each entry once also preserves the invariant `reentries <= losses`.
+  const consumed = new Set<ReactionTrade>();
 
   for (const loss of losses) {
     const closedAt = loss.closedAt!;
     const lossDay = localDateOf(closedAt, timezone);
-    // First entry strictly after this loss closed, same Paris day.
+    // First NOT-yet-consumed entry strictly after this loss closed, same Paris day.
     const next = entries.find(
       (t) =>
+        !consumed.has(t) &&
         t.enteredAt.getTime() > closedAt.getTime() &&
         localDateOf(t.enteredAt, timezone) === lossDay,
     );
     if (!next) continue;
+    consumed.add(next);
     reentries += 1;
     const delayMin = Math.round((next.enteredAt.getTime() - closedAt.getTime()) / 60_000);
     delays.push(delayMin);

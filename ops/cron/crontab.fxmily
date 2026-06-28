@@ -22,6 +22,7 @@
 #   - purge-push-subscriptions  Sunday 05:00 UTC                   (J10)
 #   - purge-audit-log           daily 04:00 UTC                    (J10)
 #   - fxmily-caddy-backup       Sunday 06:30 UTC                   (V1.12)
+#   - fxmily-uploads-backup     daily 06:45 UTC                    (A-Z DR)
 #   - mindset-check-reminders   Monday 09:00 UTC                   (V1.5 §27)
 #   - generate-meetings         weekdays 06:00 UTC                 (V1.7 §30)
 #   - purge-access-requests     Sunday 04:00 UTC                   (V2.5 RGPD)
@@ -84,6 +85,18 @@ MAILTO=""
 # Europe/Paris, no overlap with the daily 03:00/04:00 purge slots or
 # the 06:00 dispatch-douglas slot.
 30 6 * * 0                   fxmily   /usr/local/bin/fxmily-caddy-backup
+
+# A-Z DR — member uploads volume backup (irreplaceable proof evidence) :
+# DAILY 06:45 UTC. The `fxmily-uploads` volume is the ONLY copy of MT5
+# proofs / trade screenshots / training shots; the DB stores only the keys
+# (Mt5AccountProof.fileKey / Trade.screenshotEntryKey / TradeMedia.fileKey).
+# Without this, a disk/host loss leaves every restored key 404-ing forever
+# (the §33 anti-lie evidence gone). DAILY (vs the weekly cert backup)
+# because uploads are member-generated + irreplaceable. Off-hours
+# Europe/Paris; offsets the Sunday 06:30 caddy backup and the 06:00
+# dispatch-douglas / generate-meetings slots. Hard-fails (exit 4) when
+# BACKUP_REQUIRE_OFFSITE=1 and R2 is unconfigured (§9-B durability).
+45 6 * * *                   fxmily   /usr/local/bin/fxmily-uploads-backup
 
 # V1.5 §27 — QCM athlète weekly mindset reminder : Monday 09:00 UTC. The
 # mindset week opens Monday (`weekStart`); one gentle anti-FOMO nudge per

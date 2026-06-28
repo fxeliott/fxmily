@@ -85,6 +85,27 @@ describe('computePostLossReaction', () => {
     expect(r.reentries).toBe(0);
   });
 
+  it('de-dups a SINGLE re-entry shared by two same-day losses (no double count)', () => {
+    // Two losses the SAME Paris day (closed 12:00Z=14:00 and 12:30Z=14:30) and
+    // ONE subsequent entry at 13:00Z (15:00 Paris). The physical re-entry is
+    // ONE trade → it must be attributed to ONE loss only, not counted twice.
+    const r = computePostLossReaction(
+      [
+        trade('2026-06-10T11:00:00Z', '2026-06-10T12:00:00Z', 'loss'), // loss A, closes 14:00
+        trade('2026-06-10T11:15:00Z', '2026-06-10T12:30:00Z', 'loss'), // loss B, closes 14:30
+        trade('2026-06-10T13:00:00Z', '2026-06-10T14:00:00Z', 'win'), // single re-entry 15:00
+        trade('2026-06-11T11:00:00Z', '2026-06-11T12:00:00Z', 'loss'), // 3rd loss → hasEnough
+      ],
+      90,
+    );
+    expect(r.losses).toBe(3);
+    // The earliest loss (A, closed 14:00) claims the 15:00 re-entry (60 min);
+    // loss B (closed 14:30) has NO unconsumed entry left that day → not counted.
+    expect(r.reentries).toBe(1);
+    expect(r.fastReentries).toBe(0);
+    expect(r.medianDelayMin).toBe(60);
+  });
+
   it('treats only realized (closed) losses as losses', () => {
     const r = computePostLossReaction(
       [

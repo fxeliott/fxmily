@@ -10,6 +10,7 @@
 #   - ops/cron/fxmily-cron         → /usr/local/bin/fxmily-cron      (curl wrapper)
 #   - ops/cron/fxmily-backup       → /usr/local/bin/fxmily-backup    (pg_dump→GPG→R2)
 #   - ops/cron/fxmily-caddy-backup → /usr/local/bin/fxmily-caddy-backup (certs)
+#   - ops/cron/fxmily-uploads-backup → /usr/local/bin/fxmily-uploads-backup (member proofs)
 #   - ops/scripts/fxmily-autoheal  → /usr/local/bin/fxmily-autoheal  (§9-C watchdog)
 # `deploy.yml` does NOT touch them, so whenever a cron line / allowlist entry / a
 # host script is edited in the repo (e.g. the S6 weekly-report-overdue net, the
@@ -45,6 +46,7 @@ BIN_SRCS=(
   "$SCRIPT_DIR/cron/fxmily-cron"
   "$SCRIPT_DIR/cron/fxmily-backup"
   "$SCRIPT_DIR/cron/fxmily-caddy-backup"
+  "$SCRIPT_DIR/cron/fxmily-uploads-backup"
   "$SCRIPT_DIR/scripts/fxmily-autoheal"
 )
 
@@ -77,7 +79,7 @@ echo "===================================================================="
 # `install` sets mode+owner atomically. cron.d is auto-read, but reload is harmless.
 ssh "$HOST" 'set -e
   install -m 0644 -o root -g root /tmp/fxmily-app.cron /etc/cron.d/fxmily-app
-  for b in fxmily-cron fxmily-backup fxmily-caddy-backup fxmily-autoheal; do
+  for b in fxmily-cron fxmily-backup fxmily-caddy-backup fxmily-uploads-backup fxmily-autoheal; do
     install -m 0755 -o root -g root "/tmp/$b" "/usr/local/bin/$b"
     rm -f "/tmp/$b"
   done
@@ -90,7 +92,7 @@ ssh "$HOST" 'set -e
   echo "--- wrapper allowlist hits for weekly-report-overdue-alert (must be >= 1) ---"
   grep -c "weekly-report-overdue-alert" /usr/local/bin/fxmily-cron || true
   echo "--- host scripts are executable ---"
-  for b in fxmily-cron fxmily-backup fxmily-caddy-backup fxmily-autoheal; do
+  for b in fxmily-cron fxmily-backup fxmily-caddy-backup fxmily-uploads-backup fxmily-autoheal; do
     ( test -x "/usr/local/bin/$b" && echo "ok: $b executable" || echo "ERROR: $b not executable" )
   done'
 

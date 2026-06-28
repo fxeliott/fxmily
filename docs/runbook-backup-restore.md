@@ -1,4 +1,4 @@
-# Runbook — Postgres + Caddy backup & restore
+# Runbook — Postgres + Caddy + member-uploads backup & restore
 
 Couvre le cycle complet : sauvegarde quotidienne (Postgres) + hebdo
 (Caddy data), vérification, restore catastrophique, test annuel de DR
@@ -155,6 +155,75 @@ Pas de rotation dédiée — les Caddy backups partagent
 [Rotation de la GPG passphrase](#rotation-de-la-gpg-passphrase) ci-dessous
 (la boucle `for f in /etc/fxmily/backups/*.gpg` couvre déjà les deux
 familles via le glob).
+
+## Member uploads backup & restore (A-Z DR)
+
+Couvre le volume Docker `fxmily-uploads` (monté `/app/.uploads`) — la
+**seule copie** des uploads membres : preuves MT5 (l'évidence anti-mensonge
+§33), screenshots de trades, captures d'entraînement, médias d'annotation
+admin. La base ne stocke QUE la clé de stockage
+(`Mt5AccountProof.fileKey` / `Trade.screenshotEntryKey` / `TradeMedia.fileKey`),
+jamais les octets — donc un restore pg_dump après perte disque ramène des
+lignes dont les fichiers 404 pour toujours sans ce snapshot. Contrairement
+aux certs Caddy (régénérables), ces uploads sont **irremplaçables** → backup
+**quotidien** (pas hebdo) + R2 obligatoire en prod (`BACKUP_REQUIRE_OFFSITE=1`,
+hard-fail exit 4 sinon).
+
+Wrapper : [`/usr/local/bin/fxmily-uploads-backup`](../ops/cron/fxmily-uploads-backup) —
+déclenché par `/etc/cron.d/fxmily-app` quotidiennement à 06:45 UTC. tar du
+volume (alpine éphémère, mount `:ro`) → GPG AES256 → R2
+`s3://${R2_BUCKET}/uploads/` → rotation locale 7 jours + R2 30 jours.
+
+### Vérifier qu'un backup uploads a bien tourné
+
+```bash
+# Dernier run dans le log cron
+tail -10 /var/log/fxmily/cron.log | grep fxmily-uploads-backup
+# Attendu : `... [fxmily-uploads-backup] done`
+
+# Liste R2 (préfixe uploads/)
+aws s3 ls s3://fxmily-backups/uploads/ \
+  --endpoint-url $R2_ENDPOINT \
+  --profile fxmily-backup | tail -3
+# Attendu : 3 derniers fichiers `uploads-YYYYMMDD-HHMM.tar.gz.gpg`
+```
+
+### Restore manuel (perte du volume / rebuild VM)
+
+> ⚠️ Stoppe `web` avant restore — il écrit dans `/app/.uploads` et un write
+> concurrent corromprait l'extraction.
+
+```bash
+# 1. Récupère le dernier snapshot R2
+aws s3 cp s3://fxmily-backups/uploads/uploads-YYYYMMDD-HHMM.tar.gz.gpg . \
+  --endpoint-url $R2_ENDPOINT \
+  --profile fxmily-backup
+
+# 2. Décrypte
+gpg --decrypt --batch --passphrase-file /etc/fxmily/gpg.pass \
+  uploads-YYYYMMDD-HHMM.tar.gz.gpg > uploads-restore.tar.gz
+
+# 3. Stoppe web
+docker compose -f /opt/fxmily/docker-compose.prod.yml stop web
+
+# 4. Wipe + restore le volume (recréé par Docker au `up` suivant ; on
+#    extrait dedans via un alpine éphémère pour ne pas toucher au runtime)
+docker run --rm \
+  -v fxmily-uploads:/data \
+  -v "$PWD:/restore" \
+  alpine:latest \
+  sh -c "rm -rf /data/* && tar -xzf /restore/uploads-restore.tar.gz -C /data"
+
+# 5. Relance web
+docker compose -f /opt/fxmily/docker-compose.prod.yml start web
+
+# 6. Vérifie : un proof/screenshot connu se charge (plus de 404)
+curl -sI https://app.fxmilyapp.com/api/health | head -1
+# puis ouvre une preuve MT5 via l'UI admin/membre — l'image s'affiche.
+```
+
+La passphrase est partagée (`/etc/fxmily/gpg.pass`) — la rotation est
+couverte par le glob `for f in /etc/fxmily/backups/*.gpg` ci-dessus.
 
 ## Test de DR (annuel, ~30 min)
 

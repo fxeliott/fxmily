@@ -90,6 +90,36 @@ describe('scanAlertsForAllMembers — member-day cap + open-alert retry (S4)', (
     });
   });
 
+  it('🚨 race — a concurrent pass already created the alert (P2002) → no-op, never a duplicate dispatch', async () => {
+    // Both the cron and the event-driven batch.ts pass see « no alert » and both
+    // INSERT; the partial unique index makes the loser raise P2002. The loser
+    // must fold to a no-op: no count, no second Mark Douglas dispatch (the winner
+    // owns the dispatch / next-day retry).
+    arm({ deliveries: [{ cardId: 'card-x', triggeredOn: YESTERDAY_TRIGGERED_ON }] });
+    vi.mocked(db.alert.create).mockRejectedValueOnce({ code: 'P2002' } as never);
+    const r = await scanAlertsForAllMembers({ now: NOW });
+    expect(r.alertsCreated).toBe(0);
+    expect(r.deliveriesDispatched).toBe(0);
+    expect(db.markDouglasDelivery.create).not.toHaveBeenCalled();
+  });
+
+  it('🚨 a NON-P2002 alert create failure is surfaced (errors + Sentry), never silently swallowed', async () => {
+    // Only P2002 folds to a no-op; any other failure must re-throw out of
+    // scanAlertsForMember so the orchestrator counts it + reports to Sentry
+    // (never a green scan hiding a broken write).
+    arm({ deliveries: [{ cardId: 'card-x', triggeredOn: YESTERDAY_TRIGGERED_ON }] });
+    vi.mocked(db.alert.create).mockRejectedValueOnce(new Error('db down') as never);
+    const r = await scanAlertsForAllMembers({ now: NOW });
+    expect(r.errors).toBe(1);
+    expect(r.alertsCreated).toBe(0);
+    expect(r.deliveriesDispatched).toBe(0);
+    expect(reportError).toHaveBeenCalledWith(
+      'verification.alerts',
+      expect.any(Error),
+      expect.objectContaining({ memberId: 'member-1' }),
+    );
+  });
+
   it('🚨 priority (Jalon D-a) — a ROUTINE card delivered TODAY does NOT block the alert', async () => {
     // Routine engine card (sourceAlertId: null) went out this morning. The S3
     // truth alert (mensonge/ego/discipline) must STILL reach the member same-day.

@@ -153,6 +153,32 @@ describe('reconcileAllMembers — DB orchestration (§32-e)', () => {
     expect(m.scoreEventCreate).not.toHaveBeenCalled();
   });
 
+  it('🚨 UNCOVERED retraction — a trade that LEFT the proof window auto-resolves its EARLIER accusation (§33.6)', async () => {
+    // Prior run: proof covered this trade, no match → false_declared + penalty.
+    // This run: the proof moved out of window → `uncovered`. Out of window is
+    // NOT a proven lie, so the stale false_declared/mismatch accusation must be
+    // retracted (resolved) — same self-repair as the `matched` retraction —
+    // instead of leaving the member penalised for something we can't confront.
+    m.tradeFindMany.mockResolvedValue([trade({ matchStatus: 'unmatched' })]);
+    m.positionFindMany.mockResolvedValue([]); // out of window → uncovered
+    m.discrepancyUpdateMany.mockResolvedValue({ count: 1 }); // a stale gap existed
+
+    await reconcileAllMembers({ now: NOW });
+
+    expect(m.discrepancyUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          declaredTradeId: 't1',
+          status: { not: 'resolved' },
+          type: { in: ['false_declared', 'mismatch'] },
+        }),
+        data: { status: 'resolved' },
+      }),
+    );
+    // Still NEVER creates a fresh gap for an uncovered trade.
+    expect(m.discrepancyCreate).not.toHaveBeenCalled();
+  });
+
   it('🚨 DEDUP re-run — an already-materialised gap is never duplicated', async () => {
     m.tradeFindMany.mockResolvedValue([trade({ matchStatus: 'mismatch' })]);
     m.positionFindMany.mockResolvedValue([position({ volume: 1.0 })]); // mismatch again

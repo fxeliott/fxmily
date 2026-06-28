@@ -121,6 +121,23 @@ describe('runCheckinReminderScan', () => {
     expect(enqueueCheckinReminderMock).not.toHaveBeenCalled();
   });
 
+  it('counts a due+unfilled slot whose enqueue FAILS (null) as an error, NOT a skip (observability A-Z)', async () => {
+    userFindManyMock.mockResolvedValueOnce([{ id: 'user_a', timezone: 'Europe/Paris' }]);
+    dailyCheckinFindManyMock.mockResolvedValueOnce([]);
+    // Genuine enqueue failure (NOT the P2002 no-op): the helper returns null.
+    enqueueCheckinReminderMock.mockResolvedValueOnce(null);
+
+    // 18:30 UTC = 20:30 Paris → evening due, slot unfilled → it WILL attempt.
+    const out = await runCheckinReminderScan(new Date('2026-05-06T18:30:00Z'));
+
+    // A failed reminder must surface as `errors` so health.ts escalates the
+    // cron green→amber instead of the failure hiding in `skipped`.
+    expect(out.enqueuedEvening).toBe(0);
+    expect(out.errors).toBe(1);
+    expect(out.skipped).toBe(0);
+    expect(enqueueCheckinReminderMock).toHaveBeenCalledTimes(1);
+  });
+
   it('respects the userIds option (filters to a subset)', async () => {
     userFindManyMock.mockResolvedValueOnce([{ id: 'user_a', timezone: 'Europe/Paris' }]);
     dailyCheckinFindManyMock.mockResolvedValueOnce([]);

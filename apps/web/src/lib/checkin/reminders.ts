@@ -35,6 +35,12 @@ export interface ReminderScanResult {
   enqueuedMorning: number;
   enqueuedEvening: number;
   skipped: number;
+  /**
+   * Due-but-unfilled slots whose enqueue genuinely FAILED (a `null` id that is
+   * NOT the P2002 no-op). Surfaced in the heartbeat so health.ts escalates the
+   * cron green→amber instead of hiding a failed reminder in `skipped`. A-Z fix.
+   */
+  errors: number;
   /** Wall-clock at the moment the scan started, ISO 8601. */
   ranAt: string;
 }
@@ -57,6 +63,7 @@ export async function runCheckinReminderScan(
     enqueuedMorning: 0,
     enqueuedEvening: 0,
     skipped: 0,
+    errors: 0,
     ranAt: now.toISOString(),
   };
 
@@ -163,22 +170,24 @@ export async function runCheckinReminderScan(
       result.skipped += 1;
       continue;
     }
-    let didEnqueue = false;
+    // `attempted` = at least one due+unfilled slot tried to enqueue. A member
+    // with nothing to enqueue (both filled / not due) is a legitimate `skipped`;
+    // a member whose attempt returned a null id is an `errors` (NOT a skip) —
+    // that's the whole point of the A-Z fix, so a failed reminder can't hide.
+    let attempted = false;
     if (user.morningDue && !filled.has(filledKey(user.id, user.today, 'morning'))) {
+      attempted = true;
       const id = await enqueueCheckinReminder(user.id, { slot: 'morning', date: user.today });
-      if (id) {
-        result.enqueuedMorning += 1;
-        didEnqueue = true;
-      }
+      if (id) result.enqueuedMorning += 1;
+      else result.errors += 1;
     }
     if (user.eveningDue && !filled.has(filledKey(user.id, user.today, 'evening'))) {
+      attempted = true;
       const id = await enqueueCheckinReminder(user.id, { slot: 'evening', date: user.today });
-      if (id) {
-        result.enqueuedEvening += 1;
-        didEnqueue = true;
-      }
+      if (id) result.enqueuedEvening += 1;
+      else result.errors += 1;
     }
-    if (!didEnqueue) result.skipped += 1;
+    if (!attempted) result.skipped += 1;
   }
 
   // Single audit row per scan — heartbeat without spamming the audit log.
@@ -189,6 +198,7 @@ export async function runCheckinReminderScan(
       enqueuedMorning: result.enqueuedMorning,
       enqueuedEvening: result.enqueuedEvening,
       skipped: result.skipped,
+      errors: result.errors,
       ranAt: result.ranAt,
     },
   });

@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { reportError } from '@/lib/observability';
 
+import { mapMembersChunked } from './batch-util';
+
 /** Prisma unique-constraint violation (P2002), detected without importing @prisma/client. */
 function isUniqueConstraintError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
@@ -268,21 +270,23 @@ export async function reconcileAllMembers(
   let discrepanciesCreated = 0;
   let errors = 0;
 
-  for (const { memberId } of membersWithPositions) {
-    try {
-      const result = await reconcileOneMember(memberId, now);
-      tradesMatched += result.matched;
-      tradesMismatched += result.mismatched;
-      discrepanciesCreated += result.discrepanciesCreated;
-    } catch (err) {
+  const settled = await mapMembersChunked(membersWithPositions, ({ memberId }) =>
+    reconcileOneMember(memberId, now),
+  );
+  settled.forEach((s, idx) => {
+    if (s.status === 'fulfilled') {
+      tradesMatched += s.value.matched;
+      tradesMismatched += s.value.mismatched;
+      discrepanciesCreated += s.value.discrepanciesCreated;
+    } else {
       errors += 1;
       reportError(
         'verification.reconcile',
-        err instanceof Error ? err : new Error('reconcile_member_failed'),
-        { memberId },
+        s.reason instanceof Error ? s.reason : new Error('reconcile_member_failed'),
+        { memberId: membersWithPositions[idx]!.memberId },
       );
     }
-  }
+  });
 
   return {
     membersScanned: membersWithPositions.length,
@@ -405,6 +409,34 @@ export async function reconcileOneMember(
         where: { id: v.tradeId },
         data: { matchStatus: 'unmatched', verifiedAt: null, source: 'self_declared' },
       });
+      // §33.6 honesty — out of the proof window is NOT a proven lie. Retract any
+      // open accusation an EARLIER run raised against this SAME declared trade
+      // (its period WAS covered → false_declared, or a position was found but
+      // diverged → mismatch) but that we can no longer confront now the proof
+      // moved out of window. Mirrors the `matched` retraction (keyed on
+      // declaredTradeId only — an uncovered verdict carries no positionId): the
+      // fold excuses `resolved` discrepancies, so the member's score
+      // self-repairs instead of carrying a penalty we can't sustain.
+      const retractedUncovered = await db.discrepancy.updateMany({
+        where: {
+          memberId,
+          status: { not: 'resolved' },
+          declaredTradeId: v.tradeId,
+          type: { in: ['false_declared', 'mismatch'] },
+        },
+        data: { status: 'resolved' },
+      });
+      if (retractedUncovered.count > 0) {
+        await logAudit({
+          action: 'verification.batch.persisted',
+          userId: memberId,
+          metadata: {
+            scope: 'retraction_uncovered',
+            tradeId: v.tradeId,
+            retracted: retractedUncovered.count,
+          },
+        });
+      }
       continue;
     }
 

@@ -138,7 +138,18 @@ export function computeEmotionalStabilityScore(
     .map((c) => c.moodScore)
     .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
 
-  const moodDays = moodScores.length;
+  // Sample-size gate counts DISTINCT local days, not slots. A member who fills
+  // BOTH the morning AND evening slot every day would otherwise reach
+  // ES_MIN_MOOD_DAYS in HALF the calendar window (2 slots/day) and pass a guard
+  // the constant name ("MIN_MOOD_DAYS") and the §7.11 doc ("<14 days") define
+  // explicitly in DAYS — inflating the confidence of the dimension. The
+  // slot-level `moodScores` array is intentionally still what feeds stdDev:
+  // the morning↔evening swing IS the intra-day variance signal we measure.
+  const moodDays = new Set(
+    input.checkins
+      .filter((c) => typeof c.moodScore === 'number' && Number.isFinite(c.moodScore))
+      .map((c) => c.date),
+  ).size;
 
   if (moodDays === 0) {
     return {

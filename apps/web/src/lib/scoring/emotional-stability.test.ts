@@ -65,6 +65,18 @@ describe('computeEmotionalStabilityScore', () => {
     expect(r.score).not.toBeNull();
   });
 
+  it('counts DISTINCT local days, not slots — 7 days × (morning+evening) is NOT enough', () => {
+    // 7 calendar days, each filled BOTH morning AND evening = 14 mood SLOTS but
+    // only 7 distinct days. The gate must read 7 (window_short), never 14: the
+    // sample-size confidence is in days, not slots (§7.11).
+    const days7 = days14().slice(0, 7);
+    const checkins = days7.flatMap((d) => [C(d, 7, 5, [], 'morning'), C(d, 6, 5, [], 'evening')]);
+    const r = computeEmotionalStabilityScore({ checkins, closedTrades: [] });
+    expect(r.status).toBe('insufficient_data');
+    expect(r.reason).toBe('window_short');
+    expect(r.sample.days).toBe(7);
+  });
+
   it('rewards perfectly stable mood (stdDev=0) with full moodVariance points', () => {
     const checkins = days14().map((d) => C(d, 6, 1, [])); // stable mood, low stress, no tags
     const r = computeEmotionalStabilityScore({ checkins, closedTrades: [] });

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { Prisma } from '@/generated/prisma/client';
 import type { InterviewStatus } from '@/generated/prisma/enums';
 import { db } from '@/lib/db';
 import type {
@@ -203,13 +204,29 @@ export async function startInterview(
   if (existing) {
     return serializeInterview(existing);
   }
-  const row = await db.onboardingInterview.create({
-    data: {
-      userId,
-      instrumentVersion: input.instrumentVersion,
-    },
-  });
-  return serializeInterview(row);
+  try {
+    const row = await db.onboardingInterview.create({
+      data: {
+        userId,
+        instrumentVersion: input.instrumentVersion,
+      },
+    });
+    return serializeInterview(row);
+  } catch (err) {
+    // `userId` is @unique (schema.prisma) : a concurrent start (double-click on
+    // the wizard CTA, or the defensive re-entry from `appendAnswer` below)
+    // races us to the single row and the loser's `create` raises P2002. Fold it
+    // into the idempotent contract by re-reading the winner — never surface a
+    // false "server fault" to Sentry / the full-screen error page. Carbone of
+    // the access-request / micro-objective / cards P2002 dedup pattern.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      const winner = await db.onboardingInterview.findUnique({ where: { userId } });
+      if (winner) {
+        return serializeInterview(winner);
+      }
+    }
+    throw err;
+  }
 }
 
 /**

@@ -114,3 +114,46 @@ jobs:
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: pnpm build
+
+  dependency-audit:
+    name: Dependency vulnerability audit
+    # Independent of the lint/build job so a freshly-published advisory shows as
+    # its OWN red signal — it never masks (nor is masked by) a lint/type/build
+    # failure. CodeQL (codeql.yml) covers OUR source; this covers our DEPS.
+    if: ${{ !(github.event.pull_request && github.event.pull_request.draft) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: '.nvmrc'
+
+      # `pnpm audit` resolves the advisory tree from the committed lockfile and
+      # queries the registry — no `pnpm install` / node_modules needed, so this
+      # job is fast. `--prod` scopes the GATE to PRODUCTION dependencies only:
+      # high/critical vulns in code we actually ship BLOCK the merge, while
+      # dev-only toolchain advisories (vitest/vite/undici dev transitive CVEs
+      # with no runtime exposure) don't wedge the whole pipeline on something
+      # unfixable. `--ignore-registry-errors` keeps a transient npm-registry
+      # 5xx from turning into a spurious red build.
+      - name: Audit production dependencies (high+ blocks)
+        run: pnpm audit --audit-level=high --prod --ignore-registry-errors
+
+      # Full-tree audit (incl. devDependencies) as VISIBILITY only — never
+      # blocks. Surfaces dev-only advisories in the log so they're tracked and
+      # bumped on the next dependency sweep without gating day-to-day merges.
+      - name: Audit full tree (report-only, never blocks)
+        if: ${{ always() }}
+        run: pnpm audit --audit-level=low --ignore-registry-errors || true

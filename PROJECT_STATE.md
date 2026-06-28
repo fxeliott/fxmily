@@ -724,7 +724,7 @@ type TrainingReviewStatus = 'pending' | 'corrected' | 'seen';
 
 ## Hand-off — Session 10 (Interconnexion & Validation — la finale 10/10) — 2026-06-28
 
-> Reprise de contexte faite (§31①) : même dépôt `D:\Fxmily`. Session 10 = **interconnexion + validation**, PAS une reconstruction : on relie S1→S9 et on PROUVE au runtime que la chaîne tourne, avec 3 enrichissements ciblés. **Statut final : VALIDÉ en working-tree, NON committé / NON déployé — en attente du go d'Eliott** (commit → PR → deploy health-gaté, comme S8). Tous les gates verts (détail ⑤). Migration ADD-only `20260628121111_s10_meeting_admin_presence` appliquée en **dev** (prod = au déploiement). Travail mené avec sous-agents (audit/blueprint + 2 blocs délégués, tout re-vérifié first-hand).
+> Reprise de contexte faite (§31①) : même dépôt `D:\Fxmily`. Session 10 = **interconnexion + validation**, PAS une reconstruction : on relie S1→S9 et on PROUVE au runtime que la chaîne tourne, avec 3 enrichissements ciblés. **Statut : committé (`434eee6` build + `de653fb` RC#1, branche `feat/s10-interconnexion-validation`) → PR #430 → merge + déploiement health-gaté AUTORISÉS (go total d'Eliott). Re-challenge adversarial RC#1 passé — détail ⑥.** Tous les gates verts (détail ⑤). Migration ADD-only `20260628121111_s10_meeting_admin_presence` appliquée en **dev** (prod = au déploiement). Travail mené avec sous-agents (audit/blueprint + 2 blocs délégués, tout re-vérifié first-hand).
 
 ### ① Ce que la session a produit
 
@@ -814,8 +814,8 @@ interface Member5AxisRecap {
 
 ### ④ Ce qui reste à faire
 
-- **Commit → PR → déploiement health-gaté** (non fait — en attente du go explicite d'Eliott, conformément au protocole prod). Le working-tree est validé ; la migration s'appliquera en prod au déploiement (ADD-only, 0 régression).
-- **(Optionnel, déféré) Dédup des loaders partagés du récap** : `getMethodMirror`/`getCoachingInsight` sont fetchés 2× sur `/progression` (récap + section dédiée). `cache()` React les dédupliquerait MAIS `getMemberWeeklyRecap(userId, now=new Date())` ne se déduplique pas proprement (arg horloge) et la page est déjà conçue sans cache → gain marginal, non-bloquant, écarté (anti-overengineering).
+- **Commit → PR → déploiement health-gaté** : committé `434eee6` (build) + `de653fb` (RC#1), PR #430, merge + deploy AUTORISÉS (go Eliott) — voir ⑥. La migration ADD-only s'applique en prod au déploiement (0 régression).
+- **Dédup des loaders partagés du récap — FAIT (RC#1, #3)** : `getMethodMirror` + `getCoachingInsight` enrobés dans `cache()` React (pattern maison, cf. `calendar/service`). Ils étaient fetchés 2× sur `/progression` (récap 5 axes + section dédiée). `getMemberWeeklyRecap(userId, now)` reste hors-cache (arg horloge) — non concerné. Reconsidéré vs la MAJ initiale : ce n'était pas du gold-plating mais une vraie dédup read-time sûre.
 - **Marquage présence admin = 1 réunion à la fois** (pas de bulk) — suffisant à l'échelle actuelle.
 
 ### ⑤ État des gates + auto-challenge (vérifié runtime first-hand)
@@ -835,6 +835,25 @@ interface Member5AxisRecap {
 - **Défaut de MON spec (attrapé au runtime)** : `getByText('72 / 100', {exact:true})` ne matchait pas (la carte rend la valeur en nœud-texte nu suivi du `<span>` mot-verdict) → corrigé en regex scopé à la région. L'app était correcte ; le test était faux.
 - **Vérifs first-hand qui auraient pu masquer un bug** : (1) `streakDays` = `Set(checkins.date).size` = **jours de check-in distincts** (libellé honnête, `builder.ts:333`) ; (2) enums COMPLETS — `DiscrepancyStatus` (3) + `ScoreEventReason` (4) gérés sans drop silencieux (`schema.prisma:2566/2577`) ; (3) compte de routes 75 = nb réel de `page.tsx` (recompté).
 - **Transitoire dev classé NON-défaut** : `Error: timeout exceeded when trying to connect` (Postgres) dans `getLastReviewWeekStart` ← `DashboardReflectWidget` (`reflect-widget.tsx`, widget **/dashboard pré-existant, non touché**, rendu pendant la redirection post-login). PAS un P2024 pool, PAS déterministe (non reproduit en run isolé) — **exactement la classe de flake que le hand-off S8 ⑤ documente déjà** (« WebServer timeout … connect → re-run »). Absorbé par `retries:2` (politique CI existante de l'équipe pour la flakiness cold-compile dev). Le récap (8 loaders concurrents) est occasionnellement flaky pour la même raison d'env, même traitement. Leçon S8 appliquée : « symptôme timeout ≠ défaut ».
+
+### ⑥ Re-challenge adversarial RC#1 (2026-06-28) — « es-tu sûr 100 % A-Z » ultra-deep
+
+Sur demande d'Eliott (autonomie totale + auto-remise-en-question hardcore), audit adversarial multi-dimensions de TOUS les livrables S10 (Workflow ultracode : 8 dimensions en parallèle, 2 vérificateurs par finding mandatés de RÉFUTER). 6 findings remontés → chacun re-confronté au code RÉEL first-hand avant tout fix (§4, zéro défaut fabriqué).
+
+**4 vrais défauts corrigés (commit `de653fb`, +32/-10, 4 fichiers) :**
+
+- **#3 double-fetch `/progression`** — `getCoachingInsight` et `getMethodMirror` tournaient 2× par requête (page `387`/`405` + via `getMember5AxisRecap` `134`/`135`). Fix : `cache()` React sur les 2 loaders (pattern maison `calendar/service`). Dédup read-time sûre, comportement identique.
+- **#5 cohérence cohorte `/admin/health`** — `db.dailyCheckin.count` ne filtrait PAS les membres supprimés alors que les 3 autres lectures (`Discrepancy` / `ScoreEvent` / `Alert`) le font. Fix : `user: { status: { not: 'deleted' } }` ajouté (la relation est `user`, pas `member`, sur `DailyCheckin`).
+- **#6 robustesse `scoreMovements.total`** — `total` valait `filled + negatives` (les 4 raisons connues) ; une future valeur de l'enum `ScoreEventReason` aurait été silencieusement absente de `total`. Fix : `total` somme désormais TOUTES les lignes (`foldedTotal`), honnête à sa doc « Total events folded ». `net` garde son sens signé sur les raisons connues.
+- **#1/#2 dossier hand-off** — statut + ④ mis à jour ; suites e2e anti-mensonge + cron-permanence citées ci-dessous.
+
+**1 finding REJETÉ avec preuve (faux positif) :**
+
+- **« over-claim compté dans `listMeetingsForAdmin.completedCount` (incohérence §30.4) »** — RÉFUTÉ. `/admin/health` ne dérive AUCUN taux de ce compteur : il additionne `completed` / `declared` / `gaps` en compteurs bruts affichés côte-à-côte, et le libellé page dit explicitement « présences complètes **déclarées** » (`admin/health/page.tsx:130`), l'over-claim étant exposé séparément en `gaps` (tone `warn`). Le canon §30.4 vise les TAUX membre (scoré vs affiché), pas un compteur d'observabilité admin. Le test `meeting/service.test.ts:642` documente ce compteur comme « informational, raw » à dessein. Le changer aurait cassé une décision délibérée + testée.
+
+**Gates RC#1 (re-vérifiés first-hand) :** `tsc --noEmit` exit 0 · `eslint` (4 fichiers) exit 0 · `prettier --check` clean (4 fichiers) · `vitest run` **3694 passed / 256 fichiers / 0 échec** (dont les tests `system-health-service` mis à jour : assertion exclusion-membres-supprimés sur le check-in + `total` = 3+9 = 12). Suites e2e du brief (parcours membre + admin + chaîne anti-mensonge S3 + cron-permanence) : vertes sur PR #430 (shards Playwright CI = gate autoritaire ; e2e local volontairement non relancé — flaky cold-compile dev documenté ⑤).
+
+**Leçon :** la valeur d'un re-challenge n'est pas un « conforme » mais des défauts tués AVANT prod — et savoir REJETER un finding d'audit en le confrontant au code réel (le #4 « incohérence » était un faux positif qu'une application aveugle aurait transformé en vraie régression d'une sémantique testée).
 
 ---
 

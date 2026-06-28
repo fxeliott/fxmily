@@ -115,15 +115,25 @@ posé sur les orbes (`.ds-orb`, `.v18-orb`, `.login-orb`, `.splash-*`). Les bouc
 ambiantes infinies sont **CSS-class-driven** (pas Framer `repeat:Infinity`) pour
 que reduced-motion les neutralise (`globals.css:1425-1436`).
 
-**Exception bornée — transients one-shot** : quelques keyframes déclenchés par un
-geste utilisateur isolé peignent une propriété non-compositor sur une **durée
-finie, non bouclée** : `thresholdPulse` (`box-shadow` spread, 600ms,
-`globals.css:1276-1286`), `confirmFlash` (`background-color`, 700ms), `shimmer`
-(`background-position`, skeletons transitoires). Bornés, mutuellement exclusifs et
-sans `infinite`, ils ne menacent pas le budget 60 fps et le filet
-`prefers-reduced-motion` les neutralise. **Consigne S4/6/7/8** : pour une animation
-**récurrente**, rester strictement `transform`/`opacity` ; un paint borné n'est
-toléré que sur un transient one-shot lié à un geste.
+**Exception bornée — transients one-shot** : deux keyframes déclenchés par un geste
+utilisateur isolé peignent une propriété non-compositor sur une **durée finie, non
+bouclée**, sans `infinite` : `thresholdPulse` (`box-shadow` spread, 600ms,
+`globals.css:1284-1286`) et `confirmFlash` (`background-color`, 700ms,
+`globals.css:1383-1385`). Bornés, ils ne menacent pas le budget 60 fps et le filet
+`prefers-reduced-motion` les neutralise.
+
+**Exception assumée — shimmer skeleton (boucle infinie, non-compositor)** : `shimmer`
+(`globals.css:1322-1329`) anime `background-position` (-200%→200%, **non**
+compositor) en boucle `infinite` sur `.skel` (`globals.css:1340`) — ce n'est PAS un
+one-shot. Toléré quand même car (a) **éphémère** : un skeleton n'est monté que le
+temps d'un chargement puis démonté (jamais une surface persistante) ; (b)
+reduced-motion le neutralise réellement (`animation-iteration-count:1` du filet
+`globals.css:1483-1492` le fige sur une frame) ; (c) aire peinte faible, sans
+`box-shadow` ni second paint concurrent. **Ne jamais l'étendre** à une surface
+durable : un repaint `background-position` en boucle sur un large bloc menacerait le
+budget. **Consigne S4/6/7/8** : pour une animation **récurrente**, rester strictement
+`transform`/`opacity` ; un paint non-compositor n'est toléré que sur un transient
+one-shot lié à un geste, ou un loader éphémère reduced-motion-safe comme `shimmer`.
 
 ### Wrappers réutilisables (`components/ui/`, tous `'use client'`, no-op sous reduced-motion)
 

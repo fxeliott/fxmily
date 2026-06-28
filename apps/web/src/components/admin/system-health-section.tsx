@@ -1,0 +1,100 @@
+import type { LucideIcon } from 'lucide-react';
+
+import { AnimatedNumber } from '@/components/ui/animated-number';
+import { Pill } from '@/components/ui/pill';
+
+/**
+ * S10(a) — presentational primitives for `/admin/health` (business-chain view).
+ *
+ * Posture §2 (mirror `member-attention.tsx` / system `SnapshotCard`): calm
+ * coaching tones only — `acc` / `warn` / `mute`, NEVER a punitive red (`bad`).
+ * A gap or a forgot count is « à suivre », never a fault. Every card carries its
+ * own window sub-label so the surface can never mislead on the period it reads.
+ *
+ * Pure server components (zero client JS beyond the shared `AnimatedNumber`
+ * count-up). Read-only display of counts handed down by the loader.
+ */
+
+export function HealthSection({
+  icon: Icon,
+  title,
+  window,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  /** Human window label, e.g. « 7 derniers jours ». */
+  window: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <section className="rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--acc-dim)] text-[var(--acc-hi)]"
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-semibold text-[var(--t-1)]">{title}</h2>
+          <p className="mt-0.5 text-[11px] tracking-wide text-[var(--t-3)] uppercase">{window}</p>
+        </div>
+      </div>
+      <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{children}</dl>
+    </section>
+  );
+}
+
+/**
+ * One metric tile. Count-up value + label + sub-label. `tone` only colours the
+ * value (acc default / warn for a signal-that-needs-eyes / mute for context) —
+ * never red, never an alarm.
+ */
+export function HealthMetric({
+  label,
+  value,
+  sublabel,
+  tone = 'acc',
+}: {
+  label: string;
+  value: number;
+  sublabel: string;
+  tone?: 'acc' | 'warn' | 'mute';
+}): React.ReactElement {
+  const accentClass =
+    tone === 'warn'
+      ? 'text-[var(--warn)]'
+      : tone === 'mute'
+        ? 'text-[var(--t-2)]'
+        : 'text-[var(--acc-hi)]';
+  return (
+    <div className="rounded-xl border border-[var(--b-subtle)] bg-[var(--bg-2)] p-3">
+      <p className="text-[11px] font-medium tracking-wide text-[var(--t-3)] uppercase">{label}</p>
+      <p className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${accentClass}`}>
+        <AnimatedNumber value={value} />
+      </p>
+      <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--t-4)]">{sublabel}</p>
+    </div>
+  );
+}
+
+/** Net-direction chip for score movements — calm up/steady, never punitive. */
+export function NetDirectionPill({ net }: { net: number }): React.ReactElement {
+  if (net > 0) {
+    return (
+      <Pill tone="acc">
+        +<AnimatedNumber value={net} /> net
+      </Pill>
+    );
+  }
+  if (net < 0) {
+    // A negative net is a "à suivre" signal (warn), never a red verdict.
+    return (
+      <Pill tone="warn">
+        <AnimatedNumber value={net} /> net
+      </Pill>
+    );
+  }
+  return <Pill tone="mute">À l’équilibre</Pill>;
+}

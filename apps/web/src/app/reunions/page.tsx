@@ -100,6 +100,19 @@ export default async function ReunionsPage() {
               qu&apos;une réunion aura eu lieu, tu pourras déclarer ta présence ici.
             </p>
           )}
+          {/* S10 §30.8 — explicit bridge: assiduité → engagement. Links the rate
+              to its scoring lever so the member sees the causal chain (the écart
+              recoupement, when any, is shown calmly on each meeting card below). */}
+          <p className="t-cap mt-2.5 border-t border-[var(--b-default)] pt-2.5 text-[var(--t-3)]">
+            Ton assiduité nourrit ton score d&apos;engagement.{' '}
+            <Link
+              href="/progression"
+              className="text-[var(--acc)] underline-offset-2 hover:underline"
+            >
+              Voir où j&apos;en suis
+            </Link>
+            .
+          </p>
         </section>
 
         {/* Meeting list — newest first. Reflows into a responsive grid so the

@@ -1,8 +1,9 @@
-import { CalendarX, CheckCircle2, Circle, CircleDashed, type LucideIcon } from 'lucide-react';
+import { CalendarX, CheckCircle2, Circle, CircleDashed, Info, type LucideIcon } from 'lucide-react';
 
 import { MeetingDeclareForm } from '@/components/reunions/meeting-declare-form';
 import { Card } from '@/components/ui/card';
 import { Pill, type PillProps } from '@/components/ui/pill';
+import type { AttendanceGap } from '@/lib/meeting/attendance-gap';
 import type { MeetingDisplayState, MemberMeetingView } from '@/lib/meeting/service';
 import type { MeetingSlotName } from '@/lib/meeting/occurrence';
 import { cn } from '@/lib/utils';
@@ -13,6 +14,10 @@ import { cn } from '@/lib/utils';
  * Neutral DS-v3 accent-blue tone (anti Black-Hat, SPEC §30.7): the state badge uses
  * an icon + a text label (WCAG 1.4.1 — never colour alone) and NEVER the red
  * `bad` tone. A cancelled meeting is greyed and shows no declaration form.
+ *
+ * S10 §30.8 — when Eliott's presence declaration differs from the member's own
+ * (`meeting.gap !== 'none'`), a CALM recoupement note explains the écart, never
+ * an accusation (the engagement numerator already handles an over-claim quietly).
  */
 
 // Hoisted at module level (per-row instantiation would be wasteful — canon
@@ -45,6 +50,20 @@ const STATE_META: Record<
   cancelled: { label: 'Annulée', tone: 'mute', Icon: CalendarX },
 };
 
+/**
+ * S10 §30.8 — calm member-facing copy for each cross-check écart. Posture §2 /
+ * anti Black-Hat: factual + actionable, never a red accusation. `null` =
+ * `gap === 'none'` (no note).
+ */
+const GAP_NOTE: Record<Exclude<AttendanceGap, 'none'>, string> = {
+  admin_absent_member_present:
+    "Eliott t'a noté absent à cette réunion, ce qui diffère de ta déclaration. Elle n'est donc pas comptée dans ton assiduité. Si c'est une erreur, parles-en à Eliott.",
+  admin_present_member_absent:
+    "Eliott t'a noté présent à cette réunion. Confirme ta présence ci-dessus pour qu'elle compte dans ton assiduité.",
+  admin_present_member_partial:
+    "Eliott t'a noté présent. Complète ta déclaration (mode + lecture du contenu) pour valider la réunion.",
+};
+
 export function MeetingItem({ meeting }: { meeting: MemberMeetingView }) {
   const time = SLOT_TIME[meeting.slot];
   const dateLabel = DATE_FMT.format(new Date(meeting.scheduledAt));
@@ -52,6 +71,7 @@ export function MeetingItem({ meeting }: { meeting: MemberMeetingView }) {
   const meta = STATE_META[meeting.displayState];
   const { Icon } = meta;
   const isCancelled = meeting.status === 'cancelled';
+  const gapNote = meeting.gap === 'none' ? null : GAP_NOTE[meeting.gap];
 
   return (
     <Card
@@ -82,6 +102,22 @@ export function MeetingItem({ meeting }: { meeting: MemberMeetingView }) {
           {meta.label}
         </Pill>
       </div>
+
+      {/* S10 §30.8 — recoupement note (calm, never red). Shown above the form so
+          the member reads the cross-check before (re-)declaring. */}
+      {gapNote ? (
+        <p
+          className="t-cap rounded-control flex items-start gap-1.5 border border-[var(--b-default)] bg-[var(--bg-1)] px-2.5 py-2 text-[var(--t-2)]"
+          role="note"
+        >
+          <Info
+            className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--t-3)]"
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
+          <span>{gapNote}</span>
+        </p>
+      ) : null}
 
       {meeting.declarable ? (
         <MeetingDeclareForm

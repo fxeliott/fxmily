@@ -3,6 +3,7 @@ import { CalendarX, CheckCircle2, Circle, CircleDashed, type LucideIcon } from '
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill, type PillProps } from '@/components/ui/pill';
+import { PresenceMarkControl } from '@/components/admin/presence-mark-control';
 import type {
   AdminMeetingAttendanceState,
   AdminMemberAttendanceResult,
@@ -23,6 +24,12 @@ import { cn } from '@/lib/utils';
  * text label (WCAG 1.4.1 — never colour alone), never as a shame surface. A
  * cancelled slot is greyed + excluded from the rate (a member is never
  * penalised when Eliott was away). NO Ichor content — booleans only.
+ *
+ * S10 §30.8 — each scheduled row carries the {@link PresenceMarkControl}: Eliott
+ * declares the member's presence (présent / absent / effacer), and the cross-
+ * check ÉCART vs the member self-report is surfaced as a calm badge. The state
+ * above (`STATE_META`) reflects the MEMBER self-report; the control + écart badge
+ * reflect Eliott's declaration — the two sides stay visibly distinct (§30.8).
  */
 
 const SLOT_TIME: Record<MeetingSlotName, string> = { midday: '12h', evening: '20h' };
@@ -50,7 +57,13 @@ const STATE_META: Record<
   cancelled: { label: 'Annulée', tone: 'mute', Icon: CalendarX },
 };
 
-export function MemberPresencePanel({ data }: { data: AdminMemberAttendanceResult }) {
+export function MemberPresencePanel({
+  data,
+  memberId,
+}: {
+  data: AdminMemberAttendanceResult;
+  memberId: string;
+}) {
   const { meetings, rate } = data;
 
   return (
@@ -104,20 +117,35 @@ export function MemberPresencePanel({ data }: { data: AdminMemberAttendanceResul
                 <li
                   key={m.id}
                   className={cn(
-                    'flex items-center justify-between gap-3 border-b border-[var(--b-default)] px-5 py-3 last:border-b-0',
+                    'flex flex-col gap-2 border-b border-[var(--b-default)] px-5 py-3 last:border-b-0',
                     isCancelled && 'opacity-60',
                   )}
                 >
-                  <div className="flex flex-col gap-0.5">
-                    <span className="t-body text-[var(--t-1)]">
-                      Réunion {time} — {DATE_FMT.format(new Date(m.scheduledAt))}
-                    </span>
-                    <span className="t-cap text-[var(--t-3)]">{SLOT_SUBTITLE[m.slot]}</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="t-body text-[var(--t-1)]">
+                        Réunion {time} — {DATE_FMT.format(new Date(m.scheduledAt))}
+                      </span>
+                      <span className="t-cap text-[var(--t-3)]">
+                        {SLOT_SUBTITLE[m.slot]} · déclaration du membre
+                      </span>
+                    </div>
+                    <Pill tone={meta.tone} className="shrink-0">
+                      <Icon className="h-2.5 w-2.5" strokeWidth={2.25} aria-hidden="true" />
+                      {meta.label}
+                    </Pill>
                   </div>
-                  <Pill tone={meta.tone} className="shrink-0">
-                    <Icon className="h-2.5 w-2.5" strokeWidth={2.25} aria-hidden="true" />
-                    {meta.label}
-                  </Pill>
+                  {/* S10 §30.8 — Eliott's presence declaration + cross-check. A
+                      cancelled slot offers no marking (no presence on a slot that
+                      did not run, §30.2). */}
+                  {isCancelled ? null : (
+                    <PresenceMarkControl
+                      memberId={memberId}
+                      meetingId={m.id}
+                      adminPresent={m.adminPresent}
+                      gap={m.gap}
+                    />
+                  )}
                 </li>
               );
             })}

@@ -485,7 +485,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           interview={profileData[1]}
         />
       ) : null}
-      {tab === 'presence' && presence !== null ? <MemberPresencePanel data={presence} /> : null}
+      {tab === 'presence' && presence !== null ? (
+        <MemberPresencePanel data={presence} memberId={memberId} />
+      ) : null}
       {tab === 'verification' && verification !== null ? (
         <MemberVerificationPanel
           overview={verification[0]}

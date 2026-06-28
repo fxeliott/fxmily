@@ -14,25 +14,29 @@ const authMock = vi.fn();
 const logAuditMock = vi.fn();
 const cancelMeetingMock = vi.fn();
 const uncancelMeetingMock = vi.fn();
+const markMeetingPresenceMock = vi.fn();
 const revalidatePathMock = vi.fn();
 
 vi.mock('@/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/auth/audit', () => ({ logAudit: logAuditMock }));
-// Only VALUE exports are mocked. The action duck-types MeetingNotFoundError on
-// `name` (never imports the class value), so the mock stays minimal.
+// Only VALUE exports are mocked. The action duck-types MeetingNotFoundError /
+// MeetingPresenceNotMarkableError on `name` (never imports the class value), so
+// the mock stays minimal.
 vi.mock('@/lib/meeting/service', () => ({
   cancelMeeting: cancelMeetingMock,
   uncancelMeeting: uncancelMeetingMock,
+  markMeetingPresence: markMeetingPresenceMock,
 }));
 vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }));
 
-const { cancelMeetingAction } = await import('./actions');
+const { cancelMeetingAction, markPresenceAction } = await import('./actions');
 
 afterEach(() => {
   authMock.mockReset();
   logAuditMock.mockReset();
   cancelMeetingMock.mockReset();
   uncancelMeetingMock.mockReset();
+  markMeetingPresenceMock.mockReset();
   revalidatePathMock.mockReset();
 });
 
@@ -213,6 +217,177 @@ describe('cancelMeetingAction — unexpected service failure', () => {
     expect(logAuditMock).not.toHaveBeenCalled();
     expect(revalidatePathMock).not.toHaveBeenCalled();
 
+    consoleErrSpy.mockRestore();
+  });
+});
+
+// S10 §30.8 — markPresenceAction (recoupement admin↔membre) -------------------
+
+describe('markPresenceAction — auth + role gate', () => {
+  it('returns unauthorized without a session, never writes', async () => {
+    authMock.mockResolvedValueOnce(null);
+
+    const result = await markPresenceAction(
+      null,
+      makeFormData({ meetingId: 'm1', memberId: 'mem1', present: 'present' }),
+    );
+
+    expect(result).toEqual({ ok: false, error: 'unauthorized' });
+    expect(markMeetingPresenceMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('returns forbidden for a non-admin', async () => {
+    authMock.mockResolvedValueOnce({ user: { id: 'mem1', status: 'active', role: 'member' } });
+
+    const result = await markPresenceAction(
+      null,
+      makeFormData({ meetingId: 'm1', memberId: 'mem1', present: 'present' }),
+    );
+
+    expect(result).toEqual({ ok: false, error: 'forbidden' });
+    expect(markMeetingPresenceMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('markPresenceAction — Zod rejection', () => {
+  it('rejects an invalid present value', async () => {
+    authMock.mockResolvedValueOnce(ADMIN_SESSION);
+
+    const result = await markPresenceAction(
+      null,
+      makeFormData({ meetingId: 'm1', memberId: 'mem1', present: 'maybe' }),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('invalid_input');
+    expect(result.fieldErrors).toHaveProperty('present');
+    expect(markMeetingPresenceMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing memberId', async () => {
+    authMock.mockResolvedValueOnce(ADMIN_SESSION);
+
+    const result = await markPresenceAction(
+      null,
+      makeFormData({ meetingId: 'm1', present: 'present' }),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('invalid_input');
+    expect(result.fieldErrors).toHaveProperty('memberId');
+  });
+});
+
+describe('markPresenceAction — happy paths (PII-free audit)', () => {
+  it('present → marks true, audits {meetingId, present:true}, revalidates the surfaces', async () => {
+    authMock.mockResolvedValueOnce(ADMIN_SESSION);
+    markMeetingPresenceMock.mockResolvedValueOnce({
+      meetingId: 'm1',
+      memberId: 'mem1',
+      adminPresent: true,
+    });
+
+    const result = await markPresenceAction(
+      null,
+      makeFormData({ meetingId: 'm1', memberId: 'mem1', present: 'present' }),
+    );
+
+    expect(result).toEqual({ ok: true, adminPresent: true });
+    expect(markMeetingPresenceMock).toHaveBeenCalledWith('admin_1', 'm1', 'mem1', true);
+    expect(logAuditMock).toHaveBeenCalledWith({
+      action: 'admin.meeting.presence.marked',
+      userId: 'admin_1',
+      metadata: { meetingId: 'm1', present: true },
+    });
+    expect(revalidatePathMock).toHaveBeenCalledWith('/admin/members/mem1');
+    expect(revalidatePathMock).toHaveBeenCalledWith('/admin/reunions');
+    expect(revalidatePathMock).toHaveBeenCalledWith('/admin/health');
+  });
+
+  it('absent → marks false', async () => {
+    authMock.mockResolvedValueOnce(ADMIN_SESSION);
+    markMeetingPresenceMock.mockResolvedValueOnce({
+      meetingId: 'm1',
+      memberId: 'mem1',
+      adminPresent: false,
+    });
+
+    const result = await markPresenceAction(
+      null,
+      makeFormData({ meetingId: 'm1', memberId: 'mem1', present: 'absent' }),
+    );
+
+    expect(result).toEqual({ ok: true, adminPresent: false });
+    expect(markMeetingPresenceMock).toHaveBeenCalledWith('admin_1', 'm1', 'mem1', false);
+    expect(logAuditMock).toHaveBeenCalledWith({
+      action: 'admin.meeting.presence.marked',
+      userId: 'admin_1',
+      metadata: { meetingId: 'm1', present: false },
+    });
+  });
+
+  it('clear → marks null', async () => {
+    authMock.mockResolvedValueOnce(ADMIN_SESSION);
+    markMeetingPresenceMock.mockResolvedValueOnce({
+      meetingId: 'm1',
+      memberId: 'mem1',
+      adminPresent: null,
+    });
+
+    const result = await markPresenceAction(
+      null,
+      makeFormData({ meetingId: 'm1', memberId: 'mem1', present: 'clear' }),
+    );
+
+    expect(result).toEqual({ ok: true, adminPresent: null });
+    expect(markMeetingPresenceMock).toHaveBeenCalledWith('admin_1', 'm1', 'mem1', null);
+    expect(logAuditMock).toHaveBeenCalledWith({
+      action: 'admin.meeting.presence.marked',
+      userId: 'admin_1',
+      metadata: { meetingId: 'm1', present: null },
+    });
+  });
+});
+
+describe('markPresenceAction — error mapping (duck-typed)', () => {
+  it.each([['not_found'], ['cancelled'], ['member_not_found']] as const)(
+    'maps MeetingPresenceNotMarkableError reason=%s, no audit',
+    async (reason) => {
+      authMock.mockResolvedValueOnce(ADMIN_SESSION);
+      markMeetingPresenceMock.mockRejectedValueOnce(
+        Object.assign(new Error(`Meeting presence not markable: ${reason}`), {
+          name: 'MeetingPresenceNotMarkableError',
+          reason,
+        }),
+      );
+
+      const result = await markPresenceAction(
+        null,
+        makeFormData({ meetingId: 'm1', memberId: 'mem1', present: 'present' }),
+      );
+
+      expect(result).toEqual({ ok: false, error: reason });
+      expect(logAuditMock).not.toHaveBeenCalled();
+      expect(revalidatePathMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('maps an unexpected failure to unknown', async () => {
+    authMock.mockResolvedValueOnce(ADMIN_SESSION);
+    markMeetingPresenceMock.mockRejectedValueOnce(
+      Object.assign(new Error('connection lost'), { code: 'P1001' }),
+    );
+    const consoleErrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await markPresenceAction(
+      null,
+      makeFormData({ meetingId: 'm1', memberId: 'mem1', present: 'present' }),
+    );
+
+    expect(result).toEqual({ ok: false, error: 'unknown' });
+    expect(logAuditMock).not.toHaveBeenCalled();
     consoleErrSpy.mockRestore();
   });
 });

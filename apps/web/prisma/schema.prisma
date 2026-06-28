@@ -2389,6 +2389,26 @@ model MeetingAttendance {
   /// complete attendance = `attendanceMode != null` AND `contentReviewed = true`.
   contentReviewed Boolean @default(false) @map("content_reviewed")
 
+  /// S10 §30.8 — presence as DECLARED BY ELIOTT (admin), distinct from the
+  /// member self-report above. The cross-check the brief calls "recoupement
+  /// admin↔membre": null = admin said nothing (default — byte-identical to the
+  /// pre-S10 behaviour, no member is ever affected until Eliott marks a slot) ·
+  /// true = admin confirms the member was present · false = admin states the
+  /// member was absent. An ÉCART (gap) is derived purely from
+  /// (adminPresent, member-complete) at read-time — never stored — by
+  /// `computeAttendanceGap` (lib/meeting/attendance-gap.ts). The ONLY scoring
+  /// impact is honest accounting: a self-declared completion contradicted by
+  /// `adminPresent = false` does NOT count toward the engagement numerator
+  /// (`attendanceCountsAsComplete`) — no separate penalty, no discrepancy
+  /// lifecycle, auto-healing when Eliott corrects. Posture §2: booleans only,
+  /// never any Ichor content.
+  adminPresent  Boolean?  @map("admin_present")
+  /// When Eliott last set `adminPresent` (audit/recency of the admin mark).
+  adminMarkedAt DateTime? @map("admin_marked_at")
+  /// The admin `User.id` who set `adminPresent` (trace; no FK — kept opaque so a
+  /// purged admin never cascades a member's attendance row, mirror §30.4).
+  adminMarkedBy String?   @map("admin_marked_by")
+
   declaredAt DateTime @default(now()) @map("declared_at")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")

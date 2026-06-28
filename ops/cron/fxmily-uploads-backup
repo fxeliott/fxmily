@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# /usr/local/bin/fxmily-uploads-backup — daily member-uploads volume snapshot.
+#
+# Why : the `fxmily-uploads` Docker volume (mounted at /app/.uploads, see
+# docker-compose.prod.yml + apps/web/src/lib/storage/local.ts) is the ONLY
+# copy of every irreplaceable member upload — MT5 account-history proofs
+# (the §33 "honnêteté radicale" anti-lie evidence), trade entry/exit
+# screenshots, training shots, admin annotation media. The DB stores only
+# the storage KEY (Mt5AccountProof.fileKey / Trade.screenshotEntryKey /
+# TradeMedia.fileKey), never the bytes. So a pg_dump restore after a disk/
+# host loss brings back rows whose referenced files 404 forever — the whole
+# point of the verification feature, gone. We already back up the
+# regenerable Let's Encrypt certs (fxmily-caddy-backup) but NOT this
+# irreplaceable member data — this script closes that disaster-recovery gap.
+#
+# (Long-term: the R2 storage adapter in apps/web/src/lib/storage/r2.ts will
+# put each upload off-host at write time, making this volume snapshot
+# redundant. Until then — and as a belt-and-braces archive even after — this
+# is the durability guarantee for member proofs.)
+#
+# Wired by `/etc/cron.d/fxmily-app` daily 06:45 UTC (off-hours Europe/Paris;
+# offsets the Sunday 06:30 caddy backup and the 06:00 dispatch/generate
+# slots). DAILY (not weekly like certs) because uploads are member-generated
+# and irreplaceable — a week's loss window is unacceptable for proof
+# evidence.
+#
+# Failure semantics (mirror fxmily-backup):
+#   - tar failure     → exit 1, no upload, partial file removed
+#   - integrity fail  → exit 1, corrupt tarball removed
+#   - encrypt fail    → exit 2, leaves un-encrypted tarball for ops triage
+#   - upload fail     → exit 3, encrypted tarball preserved locally
+#   - offsite missing → exit 4 when BACKUP_REQUIRE_OFFSITE=1 (prod)
+#
+# Local retention : 7 days (`-mtime +7 -delete`).
+# Remote retention : 30 days (R2 bucket lifecycle policy, shared with the
+# Postgres + Caddy backups).
+
+set -euo pipefail
+
+# shellcheck disable=SC1091
+source /etc/fxmily/cron.env  # GPG_PASS_FILE, R2_ENDPOINT, R2_BUCKET, CRON_LOG
+
+CRON_LOG="${CRON_LOG:-/var/log/fxmily/cron.log}"
+BACKUP_DIR="/etc/fxmily/backups"
+TS=$(date -u +%Y%m%d-%H%M)
+TAR_FILE="${BACKUP_DIR}/uploads-${TS}.tar.gz"
+ENCRYPTED_FILE="${TAR_FILE}.gpg"
+VOLUME_NAME="fxmily-uploads"
+
+mkdir -p "$BACKUP_DIR"
+mkdir -p "$(dirname "$CRON_LOG")"
+
+ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
+log() { echo "[$(ts)] [fxmily-uploads-backup] $*" >> "$CRON_LOG"; }
+
+log "starting → $TAR_FILE"
+
+# ---- 1. Tar the uploads volume via an ephemeral alpine container ----------
+# Read-only mount of the named volume + write the tarball into BACKUP_DIR.
+# `docker run --rm` discards the container immediately; no host-path coupling
+# to `/var/lib/docker/volumes/...`. `-C /data` strips the mount point so a
+# restore is the symmetric `tar -xzf ... -C /data` (into a freshly-created
+# fxmily-uploads volume — see docs/runbook-backup-restore.md).
+if ! docker run --rm \
+    -v "${VOLUME_NAME}:/data:ro" \
+    -v "${BACKUP_DIR}:/backup" \
+    alpine:latest \
+    tar -czf "/backup/uploads-${TS}.tar.gz" -C /data .; then
+  log "FAIL tar ; partial file removed"
+  rm -f "$TAR_FILE"
+  exit 1
+fi
+TAR_SIZE=$(du -h "$TAR_FILE" | cut -f1)
+log "tar OK ($TAR_SIZE)"
+
+# ---- 1b. Integrity guard --------------------------------------------------
+# A tarball you cannot decompress is not a backup (§9-B: proven restores).
+# `pipefail` catches a tar *error*, but not a silently truncated gzip stream.
+# Note: an empty uploads volume tars to a valid ~tiny gzip (no member has
+# uploaded yet) — that's legitimately empty, so we only assert gzip validity,
+# not a min-size (unlike pg_dump which is never legitimately near-empty).
+if ! gzip -t "$TAR_FILE" 2>/dev/null; then
+  log "FAIL tarball failed gzip integrity check ; removing corrupt file"
+  rm -f "$TAR_FILE"
+  exit 1
+fi
+
+# ---- 2. GPG symmetric encryption ------------------------------------------
+# AES-256 + iter+salted S2K (gpg defaults). Member proof images are PII —
+# they must NEVER linger un-encrypted on disk nor leave the host in clear.
+# Passphrase via --passphrase-file (0600), never on the command line.
+if ! gpg --cipher-algo AES256 --symmetric --batch --yes \
+    --passphrase-file "$GPG_PASS_FILE" "$TAR_FILE"; then
+  log "FAIL gpg encrypt ; un-encrypted tar preserved at $TAR_FILE for ops"
+  exit 2
+fi
+log "encrypt OK → $ENCRYPTED_FILE"
+
+# Strict cleanup of the un-encrypted tarball as soon as the encrypted one
+# exists. Member PII must NEVER linger un-encrypted on disk.
+rm -f "$TAR_FILE"
+
+# ---- 3. R2 upload — REQUIRED in production --------------------------------
+# Uses the `uploads/` prefix inside the bucket to keep Postgres + Caddy +
+# uploads backups visually separated when listing R2 contents.
+#
+# §9-B — off-host is THE durability guarantee, and uploads are IRREPLACEABLE
+# (unlike the regenerable certs in fxmily-caddy-backup), so this script
+# mirrors fxmily-backup's hard-fail: with BACKUP_REQUIRE_OFFSITE=1 (set in
+# cron.env on production), a missing/unconfigured off-site target is a HARD
+# failure (exit 4) — a green cron must never hide a non-durable proof backup.
+# Default 0 keeps a pre-R2 host working but emits a LOUD warning every run.
+R2_ENDPOINT="${R2_ENDPOINT:-}"
+R2_BUCKET="${R2_BUCKET:-}"
+REQUIRE_OFFSITE="${BACKUP_REQUIRE_OFFSITE:-0}"
+offsite_missing() {
+  local reason="$1"
+  if [[ "$REQUIRE_OFFSITE" == "1" ]]; then
+    log "FAIL off-site backup REQUIRED but $reason — encrypted tarball kept locally for manual upload"
+    exit 4
+  fi
+  log "WARNING off-site backup skipped ($reason) — LOCAL-ONLY, NOT disaster-safe. Set BACKUP_REQUIRE_OFFSITE=1 once R2 is wired."
+}
+if [[ -z "$R2_ENDPOINT" || -z "$R2_BUCKET" ]]; then
+  offsite_missing "R2_ENDPOINT or R2_BUCKET unset"
+elif ! command -v aws >/dev/null 2>&1; then
+  offsite_missing "aws CLI not installed"
+elif ! aws s3 cp "$ENCRYPTED_FILE" "s3://${R2_BUCKET}/uploads/$(basename "$ENCRYPTED_FILE")" \
+    --endpoint-url "$R2_ENDPOINT" \
+    --profile fxmily-backup \
+    --no-progress; then
+  log "FAIL R2 upload ; encrypted tarball preserved locally for retry"
+  exit 3
+else
+  log "upload OK → s3://${R2_BUCKET}/uploads/$(basename "$ENCRYPTED_FILE")"
+fi
+
+# ---- 4. Local retention ----------------------------------------------------
+# 7 days local. Older snapshots already on R2 (30-day lifecycle there,
+# shared with Postgres + Caddy backups).
+find "$BACKUP_DIR" -name 'uploads-*.tar.gz.gpg' -mtime +7 -delete
+log "rotation OK (kept 7 days local)"
+
+log "done"

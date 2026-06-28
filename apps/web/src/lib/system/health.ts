@@ -228,6 +228,13 @@ export interface CronHealthEntry {
   /** Threshold beyond which we flag the cron as unhealthy. */
   toleranceMs: number;
   status: CronStatus;
+  /**
+   * Errors reported by the cron's most recent run (read from its heartbeat
+   * `metadata.errors`; 0 when the cron tracks no per-item errors). A FRESH row
+   * with errorCount > 0 means the cron RAN but failed for some/all members —
+   * invisible to the age-only check, which just sees "it ran".
+   */
+  errorCount: number;
 }
 
 export interface CronHealthReport {
@@ -257,6 +264,31 @@ export async function getCronHealthReport(now: Date = new Date()): Promise<CronH
     if (row._max.createdAt) lastRanByAction.set(row.action, row._max.createdAt);
   }
 
+  // Second pass: read the heartbeat metadata of each cron's LATEST row so we
+  // surface `errors` — a count the routes already write (e.g. verification-scan
+  // sums per-member failures) but nothing read. A cron that ran on time yet
+  // failed for every member writes a fresh row with errors > 0: green by age,
+  // actually broken. Bounded OR over the (action, createdAt) maxima, each
+  // served by the (action, created_at) index; skipped when no rows exist.
+  const errorsByAction = new Map<string, number>();
+  if (lastRanByAction.size > 0) {
+    const latestRows = await db.auditLog.findMany({
+      where: {
+        OR: Array.from(lastRanByAction.entries()).map(([action, createdAt]) => ({
+          action,
+          createdAt,
+        })),
+      },
+      select: { action: true, metadata: true },
+    });
+    for (const row of latestRows) {
+      const meta = row.metadata as { errors?: unknown } | null;
+      const errors = meta && typeof meta.errors === 'number' && meta.errors > 0 ? meta.errors : 0;
+      // If two rows share the exact max timestamp, keep the larger error count.
+      errorsByAction.set(row.action, Math.max(errorsByAction.get(row.action) ?? 0, errors));
+    }
+  }
+
   const entries: CronHealthEntry[] = EXPECTATIONS.map((expectation) => {
     const lastRanAt = lastRanByAction.get(expectation.action) ?? null;
     const ageMs = lastRanAt ? now.getTime() - lastRanAt.getTime() : null;
@@ -275,6 +307,15 @@ export async function getCronHealthReport(now: Date = new Date()): Promise<CronH
       status = 'red';
     }
 
+    // A cron that ran on schedule but reported errors is NOT healthy: a fresh
+    // heartbeat with errors > 0 escalates green → amber, so a cron failing for
+    // every member can't hide behind a green age. An already amber/red status
+    // (it is also late) is the more severe signal and is left as-is.
+    const errorCount = errorsByAction.get(expectation.action) ?? 0;
+    if (errorCount > 0 && status === 'green') {
+      status = 'amber';
+    }
+
     return {
       action: expectation.action,
       label: expectation.label,
@@ -283,6 +324,7 @@ export async function getCronHealthReport(now: Date = new Date()): Promise<CronH
       ageMs,
       toleranceMs,
       status,
+      errorCount,
     };
   });
 

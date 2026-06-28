@@ -251,6 +251,14 @@ function CronRow({ entry }: { entry: CronHealthEntry }): React.ReactElement {
           </code>{' '}
           · période {formatDuration(entry.periodMs)} · tolérance {formatDuration(entry.toleranceMs)}
         </p>
+        {/* Why amber: the cron ran on time but its heartbeat reported failures
+            for some members. Surfaces the count so the operator knows the run
+            was partial, not just late. */}
+        {entry.errorCount > 0 ? (
+          <p className="mt-1 text-[11px] font-medium text-[var(--bad)]">
+            {entry.errorCount} erreur{entry.errorCount > 1 ? 's' : ''} au dernier run
+          </p>
+        ) : null}
         {/* Age vs tolerance, visual. The Pill says *which* bucket; this bar
             says *how close to red* — a cron at 95% of tolerance reads amber
             but the near-full bar warns the operator before it flips. Only when

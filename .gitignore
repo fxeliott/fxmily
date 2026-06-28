@@ -34,6 +34,21 @@ next-env.d.ts
 .ssh/
 .gnupg/
 
+# Database dumps / backups (NEVER commit — a committed pg_dump leaks ALL member
+# PII into git history, irreversible without a history rewrite). Self-hosted devs
+# run local dumps for debug/migration, so a stray `pg_dump > db.dump` at the repo
+# root would show up untracked and could be `git add .`-ed by mistake. Prisma
+# migration SQL lives under prisma/migrations/ and is explicitly re-included.
+*.dump
+*.dump.gz
+*.sql
+*.sql.gz
+*.sql.gz.gpg
+dump-*
+backup-*
+pg_dump*
+!**/prisma/migrations/**/*.sql
+
 # Logs
 npm-debug.log*
 pnpm-debug.log*

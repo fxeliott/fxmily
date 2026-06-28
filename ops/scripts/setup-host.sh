@@ -59,6 +59,26 @@ echo "✓ UFW firewall enabled"
 # ---- 5. Docker non-root pour fxmily ----------------------------------------
 usermod -aG docker fxmily
 
+# ---- 5b. Docker daemon defaults: bounded logs + live-restore ----------------
+# Host-wide default so EVERY container (incl. any future one) gets log rotation
+# even if its compose service forgets a `logging:` block — defense in depth
+# against a full disk silently taking the host down. `live-restore` keeps
+# containers running across a docker daemon restart/upgrade. Idempotent: only
+# rewrites + restarts the daemon when the desired config differs.
+mkdir -p /etc/docker
+DOCKER_DAEMON_DESIRED='{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "5" },
+  "live-restore": true
+}'
+if [[ ! -f /etc/docker/daemon.json ]] || ! diff -q <(printf '%s\n' "$DOCKER_DAEMON_DESIRED") /etc/docker/daemon.json >/dev/null 2>&1; then
+  printf '%s\n' "$DOCKER_DAEMON_DESIRED" > /etc/docker/daemon.json
+  systemctl restart docker || true
+  echo "✓ /etc/docker/daemon.json written (bounded logs + live-restore), docker restarted"
+else
+  echo "✓ /etc/docker/daemon.json already up to date"
+fi
+
 # ---- 6. App + secrets directories ------------------------------------------
 mkdir -p /opt/fxmily
 # V1.5.2 round 5 : `/opt/fxmily/prisma` est mounté ro par `deploy.yml` migrate

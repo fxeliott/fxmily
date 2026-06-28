@@ -138,9 +138,6 @@ const ROUTE_GROUPS: Record<string, string[]> = {
 
 const SESSION_COOKIE_NAME = 'authjs.session-token';
 let sharedSessionToken = '';
-// Dedicated token for the ultra-wide CI gate (its describe has NO auditSource skip,
-// so it logs in independently of the local-only full-app gate).
-let ultraWideToken = '';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000';
 const origin = new URL(baseURL).origin;
 
@@ -345,32 +342,25 @@ test.describe('S9 DoD §35 — full-app runtime gate', () => {
 // DoD §35 box 1 — "plein écran ... jusqu'à ultra-wide", as a REAL CI gate. Lives in
 // its OWN describe (NOT gated by `!auditSource`) so it runs on every CI shard —
 // unlike the local-only full-app gate above. It needs no runtime-audit.js (it runs
-// its own inline `page.evaluate`), only a login. The shared VIEWPORTS gate tops at
-// FHD 1920 and its `bodyW >= vp.w - 2` proxy passes trivially (body has no
-// max-width), so the by-design `--w-app:1600px` content cap + `.app-ambient` gutter
-// mesh is only exercised HERE, at TRUE ultra-wide (2560/3440). Asserts the real
-// contract: (a) zero horizontal overflow, (b) the fixed `.app-ambient` backplate
-// fills the FULL viewport width (no black bands = "plein écran"), (c) `<main>`
-// content stays capped near `--w-app` (1600px) — full-bleed background, capped
-// content. A future change breaking full-bleed >1600px now turns a CI shard red.
+// its own inline `page.evaluate`) and NO auth. The full-bleed contract is carried by
+// the `.app-ambient` backplate — a `position:fixed; inset:0` primitive (globals.css
+// :998-1000) rendered in the ROOT layout (layout.tsx:120) on EVERY route, public
+// included. Its bounding width therefore equals the viewport width independent of
+// the page or auth state, so proving it on the PUBLIC surfaces (`/`, `/login`,
+// `/rejoindre`) at TRUE ultra-wide (2560/3440) exercises the exact same primitive
+// the authed shell uses — with ZERO CI-auth dependency (an earlier auth-gated
+// version was the sole shard-2 failure: `loginAs` does not establish a session in
+// CI; the contract under test is auth-independent, so the dependency was spurious).
+// The shared VIEWPORTS gate tops at FHD 1920 and never reaches >1600px, so the
+// `.app-ambient` full-bleed at ultra-wide is proven only HERE. Asserts: (a) zero
+// horizontal overflow, (b) the fixed `.app-ambient` backplate fills the FULL
+// viewport width (no black bands = "plein écran"). A change breaking full-bleed
+// >1600px now turns a CI shard red. The authed shell's `--w-app:1600px` content
+// cap is covered by the local-only full-app gate above.
 test.describe('S9 DoD §35 box 1 — ultra-wide full-bleed (CI non-regression gate)', () => {
-  test.beforeAll(async ({ browser }) => {
-    test.setTimeout(260_000);
-    ultraWideToken = await seedDemoSession(browser);
-  });
-
   test('ultra-wide full-bleed (DoD box 1)', async ({ page }) => {
     test.setTimeout(120_000);
-    await page.context().addCookies([
-      {
-        name: SESSION_COOKIE_NAME,
-        value: ultraWideToken,
-        url: origin,
-        httpOnly: true,
-        sameSite: 'Lax',
-      },
-    ]);
-    const routes = ['/', '/dashboard', '/journal'];
+    const routes = ['/', '/login', '/rejoindre'];
     const all: string[] = [];
     let ok = true;
     for (const vp of ULTRA_WIDE) {
@@ -383,11 +373,6 @@ test.describe('S9 DoD §35 box 1 — ultra-wide full-bleed (CI non-regression ga
         });
         await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
         await page.waitForTimeout(500);
-        if (/\/login(\?|$)/.test(page.url()) && route !== '/') {
-          ok = false;
-          all.push(`  [${vp.name}] ${route} → REDIRECT-TO-LOGIN (auth not honoured)`);
-          continue;
-        }
         const m = await page.evaluate(() => {
           const docEl = document.documentElement;
           const overflowX = docEl.scrollWidth - docEl.clientWidth;

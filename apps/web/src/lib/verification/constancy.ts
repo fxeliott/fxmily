@@ -13,6 +13,8 @@ import { MEETING_WINDOW_DAYS, meetingJoinFloor } from '@/lib/meeting/window';
 import { listClosedOccurrences, localDateToUtcMidnight } from '@/lib/tracking/cadence';
 import { getCurrentInstruments } from '@/lib/tracking/registry';
 
+import { mapMembersChunked } from './batch-util';
+
 /**
  * S3 §33.5 — Score de constance & d'investissement dans le travail.
  *
@@ -123,88 +125,94 @@ export async function scanRitualsForAllMembers(
   let blankDayDiscrepancies = 0;
   let errors = 0;
 
-  for (const member of members) {
-    try {
-      const filledSlots = checkinsByMember.get(member.id) ?? new Set<string>();
+  // Chunked-parallel per member (throughput at scale) — counters are mutated in
+  // the closure with their EXACT original placement (synchronous `+=` between
+  // awaits is atomic under JS's cooperative scheduling, so the sums are
+  // order-independent and byte-identical to the former sequential loop); only
+  // error handling moves to the settled-results zip.
+  const settled = await mapMembersChunked(members, async (member) => {
+    const filledSlots = checkinsByMember.get(member.id) ?? new Set<string>();
 
-      // A FULLY blank day materialises ONE excusable discrepancy FIRST, so
-      // the day's `forgot` events can reference it — giving a « motif
-      // valable » then excuses the whole day in the fold (« le score
-      // remonte », DoD §29/§31#3). Identity-deduped on (member, day).
-      let blankDayDiscrepancyId: string | null = null;
-      if (filledSlots.size === 0) {
-        const existing = await db.discrepancy.findFirst({
-          where: { memberId: member.id, type: 'unfilled_no_reason', detectedAt: yesterdayDate },
+    // A FULLY blank day materialises ONE excusable discrepancy FIRST, so
+    // the day's `forgot` events can reference it — giving a « motif
+    // valable » then excuses the whole day in the fold (« le score
+    // remonte », DoD §29/§31#3). Identity-deduped on (member, day).
+    let blankDayDiscrepancyId: string | null = null;
+    if (filledSlots.size === 0) {
+      const existing = await db.discrepancy.findFirst({
+        where: { memberId: member.id, type: 'unfilled_no_reason', detectedAt: yesterdayDate },
+        select: { id: true },
+      });
+      if (existing) {
+        blankDayDiscrepancyId = existing.id;
+      } else {
+        const created = await db.discrepancy.create({
+          data: {
+            memberId: member.id,
+            type: 'unfilled_no_reason',
+            severity: 1,
+            detectedAt: yesterdayDate,
+            claudeReasoning:
+              'Journée sans aucun check-in (matin et soir vides), sans motif déclaré pour le moment.',
+          },
           select: { id: true },
         });
-        if (existing) {
-          blankDayDiscrepancyId = existing.id;
-        } else {
-          const created = await db.discrepancy.create({
-            data: {
-              memberId: member.id,
-              type: 'unfilled_no_reason',
-              severity: 1,
-              detectedAt: yesterdayDate,
-              claudeReasoning:
-                'Journée sans aucun check-in (matin et soir vides), sans motif déclaré pour le moment.',
-            },
-            select: { id: true },
-          });
-          blankDayDiscrepancyId = created.id;
-          blankDayDiscrepancies += 1;
-        }
+        blankDayDiscrepancyId = created.id;
+        blankDayDiscrepancies += 1;
       }
+    }
 
-      const events: Array<{
-        id: string;
-        memberId: string;
-        delta: number;
-        reason: 'filled' | 'forgot_no_reason';
-        relatedDiscrepancyId: string | null;
-        createdAt: Date;
-      }> = [];
-      for (const slot of ['morning', 'evening'] as const) {
-        if (filledSlots.has(slot)) {
-          events.push({
-            id: ritualEventId('filled', member.id, yesterday, slot),
-            memberId: member.id,
-            delta: 1,
-            reason: 'filled',
-            relatedDiscrepancyId: null,
-            // Stamp the RITUAL day (Paris civil midnight), NOT the scan time.
-            // The scan runs the morning AFTER the ritual day, so without this
-            // a Sunday ritual (scanned Monday) defaults `createdAt` to Monday
-            // and the weekly fold — which buckets by `createdAt` over the ISO
-            // week [Mon, next Mon) (recomputeConstancyForAllMembers) — leaks it
-            // into the NEXT week. Anchoring `createdAt` to `yesterdayDate`
-            // keeps every ritual event in the week it belongs to.
-            createdAt: yesterdayDate,
-          });
-        } else {
-          events.push({
-            id: ritualEventId('forgot_no_reason', member.id, yesterday, slot),
-            memberId: member.id,
-            delta: -1,
-            reason: 'forgot_no_reason',
-            relatedDiscrepancyId: blankDayDiscrepancyId,
-            createdAt: yesterdayDate,
-          });
-        }
+    const events: Array<{
+      id: string;
+      memberId: string;
+      delta: number;
+      reason: 'filled' | 'forgot_no_reason';
+      relatedDiscrepancyId: string | null;
+      createdAt: Date;
+    }> = [];
+    for (const slot of ['morning', 'evening'] as const) {
+      if (filledSlots.has(slot)) {
+        events.push({
+          id: ritualEventId('filled', member.id, yesterday, slot),
+          memberId: member.id,
+          delta: 1,
+          reason: 'filled',
+          relatedDiscrepancyId: null,
+          // Stamp the RITUAL day (Paris civil midnight), NOT the scan time.
+          // The scan runs the morning AFTER the ritual day, so without this
+          // a Sunday ritual (scanned Monday) defaults `createdAt` to Monday
+          // and the weekly fold — which buckets by `createdAt` over the ISO
+          // week [Mon, next Mon) (recomputeConstancyForAllMembers) — leaks it
+          // into the NEXT week. Anchoring `createdAt` to `yesterdayDate`
+          // keeps every ritual event in the week it belongs to.
+          createdAt: yesterdayDate,
+        });
+      } else {
+        events.push({
+          id: ritualEventId('forgot_no_reason', member.id, yesterday, slot),
+          memberId: member.id,
+          delta: -1,
+          reason: 'forgot_no_reason',
+          relatedDiscrepancyId: blankDayDiscrepancyId,
+          createdAt: yesterdayDate,
+        });
       }
+    }
 
-      await db.scoreEvent.createMany({ data: events, skipDuplicates: true });
-      filledEvents += events.filter((e) => e.reason === 'filled').length;
-      forgotEvents += events.filter((e) => e.reason === 'forgot_no_reason').length;
-    } catch (err) {
+    await db.scoreEvent.createMany({ data: events, skipDuplicates: true });
+    filledEvents += events.filter((e) => e.reason === 'filled').length;
+    forgotEvents += events.filter((e) => e.reason === 'forgot_no_reason').length;
+  });
+  settled.forEach((s, idx) => {
+    if (s.status === 'rejected') {
       errors += 1;
       reportError(
         'verification.constancy.scan',
-        err instanceof Error ? err : new Error('ritual_scan_failed'),
-        { memberId: member.id },
+        s.reason instanceof Error ? s.reason : new Error('ritual_scan_failed'),
+        { memberId: members[idx]!.id },
       );
     }
-  }
+  });
 
   return {
     membersScanned: members.length,
@@ -730,90 +738,95 @@ export async function recomputeConstancyForAllMembers(
   let scoresUpserted = 0;
   let errors = 0;
 
-  for (const member of members) {
-    try {
-      const [events, confrontedCount, discrepancies] = await Promise.all([
-        db.scoreEvent.findMany({
-          where: { memberId: member.id, createdAt: { gte: windowStart, lt: windowEnd } },
-          select: {
-            reason: true,
-            relatedDiscrepancy: { select: { memberReason: true, status: true } },
-          },
-        }),
-        db.extractedPosition.count({ where: { brokerAccount: { memberId: member.id } } }),
-        db.discrepancy.findMany({
-          where: {
-            memberId: member.id,
-            detectedAt: { gte: new Date(now.getTime() - DISCIPLINE_WINDOW_DAYS * 86_400_000) },
-          },
-          select: { status: true, memberReason: true },
-        }),
-      ]);
-
-      const folded = foldConstancy(
-        events.map((e) => ({
-          reason: e.reason,
-          // Excused = member gave a valid reason OR the accusation was
-          // RETRACTED by reality itself (reconcile resolved it — the proof
-          // arrived later and confirmed the trade; the member must not have
-          // to self-excuse for our own premature verdict).
-          excused:
-            e.relatedDiscrepancy?.memberReason != null ||
-            e.relatedDiscrepancy?.status === 'resolved',
-        })),
-        {
-          everConfronted: confrontedCount > 0,
-          discrepancies28d: {
-            total: discrepancies.length,
-            addressed: discrepancies.filter((d) => d.status !== 'open' || d.memberReason !== null)
-              .length,
-          },
+  // Chunked-parallel per member (throughput at scale); `scoresUpserted` is
+  // mutated in the closure with its EXACT original placement (after the upsert,
+  // before logAudit), so a logAudit failure tallies identically to the former
+  // sequential loop. Synchronous `+=` between awaits is atomic under JS's
+  // cooperative scheduling. Only error handling moves to the settled zip.
+  const settled = await mapMembersChunked(members, async (member) => {
+    const [events, confrontedCount, discrepancies] = await Promise.all([
+      db.scoreEvent.findMany({
+        where: { memberId: member.id, createdAt: { gte: windowStart, lt: windowEnd } },
+        select: {
+          reason: true,
+          relatedDiscrepancy: { select: { memberReason: true, status: true } },
         },
-      );
-
-      // No signal at all → no row (a fake neutral score would be complaisance).
-      if (folded.value === null) continue;
-
-      // Plain-object cast for the Prisma Json column (mirror engine.ts canon).
-      const breakdownJson = folded.breakdown as unknown as object;
-      await db.constancyScore.upsert({
-        where: { memberId_periodStart: { memberId: member.id, periodStart } },
-        create: {
+      }),
+      db.extractedPosition.count({ where: { brokerAccount: { memberId: member.id } } }),
+      db.discrepancy.findMany({
+        where: {
           memberId: member.id,
-          value: folded.value,
-          breakdown: breakdownJson,
-          periodStart,
-          periodEnd,
+          detectedAt: { gte: new Date(now.getTime() - DISCIPLINE_WINDOW_DAYS * 86_400_000) },
         },
-        update: {
-          value: folded.value,
-          breakdown: breakdownJson,
-          periodEnd,
-          computedAt: now,
+        select: { status: true, memberReason: true },
+      }),
+    ]);
+
+    const folded = foldConstancy(
+      events.map((e) => ({
+        reason: e.reason,
+        // Excused = member gave a valid reason OR the accusation was
+        // RETRACTED by reality itself (reconcile resolved it — the proof
+        // arrived later and confirmed the trade; the member must not have
+        // to self-excuse for our own premature verdict).
+        excused:
+          e.relatedDiscrepancy?.memberReason != null || e.relatedDiscrepancy?.status === 'resolved',
+      })),
+      {
+        everConfronted: confrontedCount > 0,
+        discrepancies28d: {
+          total: discrepancies.length,
+          addressed: discrepancies.filter((d) => d.status !== 'open' || d.memberReason !== null)
+            .length,
         },
-      });
-      scoresUpserted += 1;
-      await logAudit({
-        action: 'verification.score.computed',
-        userId: member.id,
-        metadata: {
-          periodStart: periodStartLocal,
-          value: folded.value,
-          // Count-only breakdown — PII-free by construction.
-          honesty: folded.breakdown.honesty,
-          regularity: folded.breakdown.regularity,
-          discipline: folded.breakdown.discipline,
-        },
-      });
-    } catch (err) {
+      },
+    );
+
+    // No signal at all → no row (a fake neutral score would be complaisance).
+    if (folded.value === null) return;
+
+    // Plain-object cast for the Prisma Json column (mirror engine.ts canon).
+    const breakdownJson = folded.breakdown as unknown as object;
+    await db.constancyScore.upsert({
+      where: { memberId_periodStart: { memberId: member.id, periodStart } },
+      create: {
+        memberId: member.id,
+        value: folded.value,
+        breakdown: breakdownJson,
+        periodStart,
+        periodEnd,
+      },
+      update: {
+        value: folded.value,
+        breakdown: breakdownJson,
+        periodEnd,
+        computedAt: now,
+      },
+    });
+    scoresUpserted += 1;
+    await logAudit({
+      action: 'verification.score.computed',
+      userId: member.id,
+      metadata: {
+        periodStart: periodStartLocal,
+        value: folded.value,
+        // Count-only breakdown — PII-free by construction.
+        honesty: folded.breakdown.honesty,
+        regularity: folded.breakdown.regularity,
+        discipline: folded.breakdown.discipline,
+      },
+    });
+  });
+  settled.forEach((s, idx) => {
+    if (s.status === 'rejected') {
       errors += 1;
       reportError(
         'verification.constancy.recompute',
-        err instanceof Error ? err : new Error('constancy_recompute_failed'),
-        { memberId: member.id },
+        s.reason instanceof Error ? s.reason : new Error('constancy_recompute_failed'),
+        { memberId: members[idx]!.id },
       );
     }
-  }
+  });
 
   return { membersScanned: members.length, scoresUpserted, errors };
 }

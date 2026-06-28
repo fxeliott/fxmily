@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { reportError } from '@/lib/observability';
 
+import { mapMembersChunked } from './batch-util';
+
 /** Prisma unique-constraint violation (P2002), detected without importing @prisma/client. */
 function isUniqueConstraintError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
@@ -268,21 +270,23 @@ export async function reconcileAllMembers(
   let discrepanciesCreated = 0;
   let errors = 0;
 
-  for (const { memberId } of membersWithPositions) {
-    try {
-      const result = await reconcileOneMember(memberId, now);
-      tradesMatched += result.matched;
-      tradesMismatched += result.mismatched;
-      discrepanciesCreated += result.discrepanciesCreated;
-    } catch (err) {
+  const settled = await mapMembersChunked(membersWithPositions, ({ memberId }) =>
+    reconcileOneMember(memberId, now),
+  );
+  settled.forEach((s, idx) => {
+    if (s.status === 'fulfilled') {
+      tradesMatched += s.value.matched;
+      tradesMismatched += s.value.mismatched;
+      discrepanciesCreated += s.value.discrepanciesCreated;
+    } else {
       errors += 1;
       reportError(
         'verification.reconcile',
-        err instanceof Error ? err : new Error('reconcile_member_failed'),
-        { memberId },
+        s.reason instanceof Error ? s.reason : new Error('reconcile_member_failed'),
+        { memberId: membersWithPositions[idx]!.memberId },
       );
     }
-  }
+  });
 
   return {
     membersScanned: membersWithPositions.length,

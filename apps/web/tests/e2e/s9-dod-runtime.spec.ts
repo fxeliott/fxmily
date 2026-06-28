@@ -138,8 +138,38 @@ const ROUTE_GROUPS: Record<string, string[]> = {
 
 const SESSION_COOKIE_NAME = 'authjs.session-token';
 let sharedSessionToken = '';
+// Dedicated token for the ultra-wide CI gate (its describe has NO auditSource skip,
+// so it logs in independently of the local-only full-app gate).
+let ultraWideToken = '';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000';
 const origin = new URL(baseURL).origin;
+
+/**
+ * Seed a real Auth.js v5 session for the J6 demo admin, retrying through the
+ * dev-server cold-start window. Returns the session-token cookie value. Shared by
+ * both gates so the CI-running ultra-wide describe doesn't depend on the local
+ * full-app describe's beforeAll.
+ */
+async function seedDemoSession(browser: import('@playwright/test').Browser): Promise<string> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const request = await playwrightRequest.newContext({ baseURL });
+    try {
+      const { sessionToken } = await loginAs(page, request, DEMO_EMAIL, DEMO_PASSWORD);
+      await request.dispose();
+      await ctx.close();
+      return sessionToken;
+    } catch (e) {
+      lastErr = e;
+      await request.dispose();
+      await ctx.close();
+      if (attempt < 4) await new Promise((r) => setTimeout(r, 65_000));
+    }
+  }
+  throw new Error(`seedDemoSession login failed after retries: ${String(lastErr)}`);
+}
 
 /** Audit one route across the 3 viewports; returns the per-route log lines + pass. */
 async function auditRoute(
@@ -269,25 +299,7 @@ test.describe('S9 DoD §35 — full-app runtime gate', () => {
     } catch {
       /* noop */
     }
-    let lastErr: unknown;
-    for (let attempt = 1; attempt <= 4; attempt++) {
-      const ctx = await browser.newContext();
-      const page = await ctx.newPage();
-      const request = await playwrightRequest.newContext({ baseURL });
-      try {
-        const { sessionToken } = await loginAs(page, request, DEMO_EMAIL, DEMO_PASSWORD);
-        sharedSessionToken = sessionToken;
-        await request.dispose();
-        await ctx.close();
-        return;
-      } catch (e) {
-        lastErr = e;
-        await request.dispose();
-        await ctx.close();
-        if (attempt < 4) await new Promise((r) => setTimeout(r, 65_000));
-      }
-    }
-    throw new Error(`beforeAll login failed after retries: ${String(lastErr)}`);
+    sharedSessionToken = await seedDemoSession(browser);
   });
 
   // Public surfaces — no auth needed.
@@ -328,20 +340,31 @@ test.describe('S9 DoD §35 — full-app runtime gate', () => {
       expect(ok, `${group} group failures:\n${all.join('\n')}`).toBe(true);
     });
   }
+});
 
-  // DoD §35 box 1 — "plein écran ... jusqu'à ultra-wide". The shared gate's
-  // `bodyW >= vp.w - 2` proxy passes trivially (body has no max-width), so it
-  // does NOT prove the by-design full-bleed frame above 1600px. This focused
-  // test goes to TRUE ultra-wide and asserts the real contract: (a) zero
-  // horizontal overflow, (b) the fixed `.app-ambient` backplate fills the FULL
-  // viewport width (no black bands = "plein écran"), (c) `<main>` content stays
-  // capped near `--w-app` (1600px) — full-bleed background, capped content.
+// DoD §35 box 1 — "plein écran ... jusqu'à ultra-wide", as a REAL CI gate. Lives in
+// its OWN describe (NOT gated by `!auditSource`) so it runs on every CI shard —
+// unlike the local-only full-app gate above. It needs no runtime-audit.js (it runs
+// its own inline `page.evaluate`), only a login. The shared VIEWPORTS gate tops at
+// FHD 1920 and its `bodyW >= vp.w - 2` proxy passes trivially (body has no
+// max-width), so the by-design `--w-app:1600px` content cap + `.app-ambient` gutter
+// mesh is only exercised HERE, at TRUE ultra-wide (2560/3440). Asserts the real
+// contract: (a) zero horizontal overflow, (b) the fixed `.app-ambient` backplate
+// fills the FULL viewport width (no black bands = "plein écran"), (c) `<main>`
+// content stays capped near `--w-app` (1600px) — full-bleed background, capped
+// content. A future change breaking full-bleed >1600px now turns a CI shard red.
+test.describe('S9 DoD §35 box 1 — ultra-wide full-bleed (CI non-regression gate)', () => {
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(260_000);
+    ultraWideToken = await seedDemoSession(browser);
+  });
+
   test('ultra-wide full-bleed (DoD box 1)', async ({ page }) => {
     test.setTimeout(120_000);
     await page.context().addCookies([
       {
         name: SESSION_COOKIE_NAME,
-        value: sharedSessionToken,
+        value: ultraWideToken,
         url: origin,
         httpOnly: true,
         sameSite: 'Lax',

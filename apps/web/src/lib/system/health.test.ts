@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const auditGroupByMock = vi.fn<(...args: unknown[]) => unknown>();
+const auditFindManyMock = vi.fn<(...args: unknown[]) => unknown>();
 const userCountMock = vi.fn<(...args: unknown[]) => unknown>();
 const pushCountMock = vi.fn<(...args: unknown[]) => unknown>();
 const auditCountMock = vi.fn<(...args: unknown[]) => unknown>();
 
 vi.mock('@/lib/db', () => ({
   db: {
-    auditLog: { groupBy: auditGroupByMock, count: auditCountMock },
+    auditLog: { groupBy: auditGroupByMock, findMany: auditFindManyMock, count: auditCountMock },
     user: { count: userCountMock },
     pushSubscription: { count: pushCountMock },
   },
@@ -21,6 +22,10 @@ const DAY = 24 * HOUR;
 
 beforeEach(() => {
   auditGroupByMock.mockReset();
+  auditFindManyMock.mockReset();
+  // Default: no heartbeat carries errors, so the metadata pass is a no-op for
+  // the tests that only exercise the age-based classification.
+  auditFindManyMock.mockResolvedValue([]);
   userCountMock.mockReset();
   pushCountMock.mockReset();
   auditCountMock.mockReset();
@@ -214,6 +219,56 @@ describe('getCronHealthReport', () => {
 
     const report = await getCronHealthReport(now);
     expect(report.overall).toBe('red');
+  });
+
+  /**
+   * Why this matters : the age check only sees "did it run", never "did it
+   * SUCCEED". A cron that fires on schedule but fails for every member writes a
+   * fresh heartbeat with errors > 0 — green by age, actually broken. errorCount
+   * escalates such a run to amber so it can't hide.
+   */
+  it('escalates a green-by-age cron to amber when its latest run reported errors', async () => {
+    const now = new Date('2026-05-09T12:00:00.000Z');
+    // verification-scan ran 12h ago → green on age alone (period = 1 day).
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.verification_scan.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+    ]);
+    // ...but its heartbeat says it failed for 5 members.
+    auditFindManyMock.mockResolvedValueOnce([
+      { action: 'cron.verification_scan.scan', metadata: { errors: 5 } },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const scan = report.entries.find((e) => e.action === 'cron.verification_scan.scan');
+
+    expect(scan?.status).toBe('amber');
+    expect(scan?.errorCount).toBe(5);
+  });
+
+  /**
+   * Why this matters : a healthy heartbeat (errors: 0) must NOT be downgraded —
+   * errorCount escalation fires strictly on errors > 0.
+   */
+  it('leaves a green cron green when its latest run reported zero errors', async () => {
+    const now = new Date('2026-05-09T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.verification_scan.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      { action: 'cron.verification_scan.scan', metadata: { errors: 0 } },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const scan = report.entries.find((e) => e.action === 'cron.verification_scan.scan');
+
+    expect(scan?.status).toBe('green');
+    expect(scan?.errorCount).toBe(0);
   });
 
   /**

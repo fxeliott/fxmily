@@ -66,18 +66,23 @@ export function EmotionPicker({
     >
       <legend className="flex w-full items-center justify-between">
         <span className="t-eyebrow-lg text-[var(--t-3)]">{label}</span>
+        {/* Visual counter — silent for SR. Only the cap-reached transition
+            is announced once via the sr-only block below (audit B4). */}
         <span
           id={counterId}
           className={cn(
             'inline-flex items-center gap-1 font-mono text-[11px] tabular-nums',
             atCap ? 'text-[var(--warn)]' : 'text-[var(--t-4)]',
           )}
-          aria-live="polite"
+          aria-hidden
         >
           <span className={cn(atCap && 'font-semibold')}>{value.length}</span>
           <span className="text-[var(--t-4)]">/</span>
           <span>{EMOTION_MAX_PER_MOMENT}</span>
           {atCap ? <span className="ml-1 text-[10px]">· limite</span> : null}
+        </span>
+        <span className="sr-only" aria-live="polite">
+          {atCap ? `Limite ${EMOTION_MAX_PER_MOMENT} émotions atteinte.` : ''}
         </span>
       </legend>
 

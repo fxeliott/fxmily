@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
   const url = new URL(req.url);
   const atParam = url.searchParams.get('at');
   let now = new Date();
-  if (!isProdRuntime && atParam) {
+  if (!isProdRuntime && atParam && /[Tt ]/.test(atParam)) {
     const parsed = new Date(atParam);
     if (!Number.isNaN(parsed.getTime())) now = parsed;
   }

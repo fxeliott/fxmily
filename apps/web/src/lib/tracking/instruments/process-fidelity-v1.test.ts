@@ -4,6 +4,26 @@ import { detectAMFViolation } from '@/lib/safety/amf-detection';
 
 import { PROCESS_FIDELITY_V1 } from './process-fidelity-v1';
 
+/**
+ * §36 LONGITUDINAL-VALIDITY GUARD (mirror MindsetCheck §27.7 instrument.test.ts):
+ * the exact set of question ids is FROZEN here. A future rename/reorder/removal
+ * FAILS this test instead of silently breaking intra-version trend comparison —
+ * any wording/scale change must ship a NEW version file (process-fidelity-v2.ts),
+ * never an edit to v1.
+ */
+const EXPECTED_QUESTION_IDS = [
+  'cut_20h',
+  'one_risk_trade_per_day',
+  'one_stop_per_day',
+  'stop_set_before_entry',
+  'risk_size_respected',
+  'breakeven_secured',
+  'prep_done_before_session',
+  'patience_anti_fomo',
+  'no_revenge_after_loss',
+  'felt_emotion',
+] as const;
+
 describe('process-fidelity v1 instrument', () => {
   it('is keyed, versioned and on the risk_discipline axis', () => {
     expect(PROCESS_FIDELITY_V1.key).toBe('process-fidelity');
@@ -20,6 +40,12 @@ describe('process-fidelity v1 instrument', () => {
       expect(q.id.trim().length).toBeGreaterThan(0);
       expect(q.label.trim().length).toBeGreaterThan(0);
     }
+  });
+
+  it('freezes the exact set of question ids (§36 longitudinal validity)', () => {
+    const ids = PROCESS_FIDELITY_V1.questions.map((q) => q.id);
+    expect(ids).toEqual([...EXPECTED_QUESTION_IDS]);
+    expect(new Set(ids).size).toBe(EXPECTED_QUESTION_IDS.length);
   });
 
   it('Likert questions carry exactly 5 ascending anchors', () => {

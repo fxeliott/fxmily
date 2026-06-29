@@ -12,6 +12,11 @@ import { countRecentTrainingActivity } from '@/lib/training/training-trade-servi
 // T1 "cerveau actif" — score history feeds the pure `score_drift` evaluator
 // (via `detectMomentum`). User-scoped trend points (date + 4 dims), no P&L.
 import { getBehavioralScoreHistory } from '@/lib/scoring/service';
+// A-Z hardening (audit ERR-1/ERR-2) — this engine was the ONLY dispatch
+// pipeline that never reported to Sentry; a real DB failure on delivery
+// persistence was console-only and invisible to on-call. Mirrors the twin in
+// `lib/scoring/service.ts`.
+import { reportWarning } from '@/lib/observability';
 
 import {
   isOnCooldown,
@@ -410,7 +415,14 @@ export async function evaluateAndDispatchForUser(
     ) {
       return { delivered: null, matched: matches.length, evaluated, skippedCooldown };
     }
-    console.error('[douglas.engine] persist failed', err);
+    // A real DB failure here (pool exhausted, FK, timeout, deadlock) loses a
+    // member's coaching delivery. Surface it to Sentry — best-effort, never
+    // alters the return flow. (Audit ERR-1, twin of scoring/service.ts.)
+    reportWarning('douglas.engine', 'persist_failed', {
+      userId,
+      cardId: winner.cardId,
+      error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+    });
     return { delivered: null, matched: matches.length, evaluated, skippedCooldown };
   }
 }
@@ -459,15 +471,21 @@ export async function dispatchForAllActiveMembers(now?: Date): Promise<BulkDispa
         evaluateAndDispatchForUser(u.id, { ...(now ? { now } : {}), preparsedCards }),
       ),
     );
-    for (const r of results) {
+    results.forEach((r, idx) => {
       if (r.status === 'fulfilled') {
         if (r.value.delivered) delivered++;
         matched += r.value.matched;
       } else {
         errors++;
-        console.error('[douglas.engine] user dispatch failed:', r.reason);
+        // Audit ERR-2/CRON-4 — a per-member dispatch crash was console-only,
+        // so the cron's `errors` counter ticked but on-call never saw the
+        // cause (twin: weekly-report/service.ts). Surface to Sentry.
+        reportWarning('douglas.engine', 'bulk_dispatch_failed', {
+          userId: slice[idx]?.id,
+          error: r.reason instanceof Error ? r.reason.message.slice(0, 200) : 'unknown',
+        });
       }
-    }
+    });
   }
 
   return { scanned: users.length, delivered, matched, errors, ranAt };

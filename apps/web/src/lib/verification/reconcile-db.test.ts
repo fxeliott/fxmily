@@ -27,8 +27,8 @@ const m = vi.hoisted(() => ({
   scoreEventCreate: vi.fn(),
 }));
 
-vi.mock('@/lib/db', () => ({
-  db: {
+vi.mock('@/lib/db', () => {
+  const db = {
     brokerAccount: { findMany: m.brokerAccountFindMany },
     trade: { findMany: m.tradeFindMany, update: m.tradeUpdate },
     extractedPosition: { findMany: m.positionFindMany },
@@ -38,8 +38,13 @@ vi.mock('@/lib/db', () => ({
       updateMany: m.discrepancyUpdateMany,
     },
     scoreEvent: { create: m.scoreEventCreate },
-  },
-}));
+    // Audit DC-1 — the écart+penalty pair now runs in db.$transaction; the
+    // mock runs the callback with the same mocked client as `tx`, so a P2002
+    // from discrepancy.create still propagates out and folds to a no-op.
+    $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db)),
+  };
+  return { db };
+});
 
 vi.mock('@/lib/auth/audit', () => ({ logAudit: vi.fn() }));
 vi.mock('@/lib/observability', () => ({ reportError: vi.fn(), reportWarning: vi.fn() }));

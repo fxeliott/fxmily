@@ -28,6 +28,7 @@ vi.mock('@/lib/calendar/batch', () => ({
 
 vi.mock('@/lib/observability', () => ({
   reportError: reportErrorMock,
+  reportWarning: vi.fn(),
   flushSentry: vi.fn(async () => undefined),
 }));
 

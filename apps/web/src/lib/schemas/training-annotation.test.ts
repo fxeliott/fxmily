@@ -103,4 +103,33 @@ describe('trainingAnnotationCreateSchema', () => {
       }).success,
     ).toBe(false);
   });
+
+  // ----- §2 posture gate (mirror annotation.ts) — admin→member text -----
+
+  it('rejects a correction that gives a market-direction call (§2)', () => {
+    const result = trainingAnnotationCreateSchema.safeParse({
+      comment: 'Short le DAX maintenant, vise les 1.15.',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((i) => i.path.join('.'));
+      expect(paths).toContain('comment');
+    }
+  });
+
+  it('rejects a correction that gives a price target (§2)', () => {
+    expect(
+      trainingAnnotationCreateSchema.safeParse({
+        comment: 'Place ton take profit à 1.0850.',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('still accepts execution + psychology correction (§2 must-not-flag)', () => {
+    expect(
+      trainingAnnotationCreateSchema.safeParse({
+        comment: 'Bonne gestion du risque. Revois ta routine avant la session.',
+      }).success,
+    ).toBe(true);
+  });
 });

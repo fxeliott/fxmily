@@ -452,25 +452,32 @@ export async function reconcileOneMember(
       if (!existingKeys.has(key)) {
         existingKeys.add(key);
         const created = await createIfNew(async () => {
-          const disc = await db.discrepancy.create({
-            data: {
-              memberId,
-              type: 'mismatch',
-              declaredTradeId: v.tradeId,
-              extractedPositionId: v.positionId,
-              severity: 1,
-              claudeReasoning:
-                'Le trade déclaré et la position MT5 correspondent (heure, sens, instrument) mais la taille diverge au-delà de la tolérance.',
-            },
-            select: { id: true },
-          });
-          await db.scoreEvent.create({
-            data: {
-              memberId,
-              delta: SCORE_DELTA_REALITY_GAP,
-              reason: 'reality_gap',
-              relatedDiscrepancyId: disc.id,
-            },
+          // Audit DC-1 — the écart + its penalty ScoreEvent are a dependent
+          // pair; a crash between them would leave an accusatory discrepancy
+          // with NO penalty, never repaired (existingKeys gating). Atomic via
+          // $transaction. P2002 from `discrepancies_reconcile_key_uniq` rolls
+          // the tx back and surfaces to createIfNew → folded to a no-op.
+          await db.$transaction(async (tx) => {
+            const disc = await tx.discrepancy.create({
+              data: {
+                memberId,
+                type: 'mismatch',
+                declaredTradeId: v.tradeId,
+                extractedPositionId: v.positionId,
+                severity: 1,
+                claudeReasoning:
+                  'Le trade déclaré et la position MT5 correspondent (heure, sens, instrument) mais la taille diverge au-delà de la tolérance.',
+              },
+              select: { id: true },
+            });
+            await tx.scoreEvent.create({
+              data: {
+                memberId,
+                delta: SCORE_DELTA_REALITY_GAP,
+                reason: 'reality_gap',
+                relatedDiscrepancyId: disc.id,
+              },
+            });
           });
         });
         if (created) discrepanciesCreated += 1;
@@ -483,24 +490,27 @@ export async function reconcileOneMember(
       if (!existingKeys.has(key)) {
         existingKeys.add(key);
         const created = await createIfNew(async () => {
-          const disc = await db.discrepancy.create({
-            data: {
-              memberId,
-              type: 'missing_declared',
-              extractedPositionId: v.positionId,
-              severity: 2,
-              claudeReasoning:
-                "Une position fermée apparaît dans l'historique MT5 fourni mais n'a pas été déclarée dans le journal.",
-            },
-            select: { id: true },
-          });
-          await db.scoreEvent.create({
-            data: {
-              memberId,
-              delta: SCORE_DELTA_REALITY_GAP,
-              reason: 'reality_gap',
-              relatedDiscrepancyId: disc.id,
-            },
+          // Audit DC-1 — atomic écart + penalty (see mismatch branch above).
+          await db.$transaction(async (tx) => {
+            const disc = await tx.discrepancy.create({
+              data: {
+                memberId,
+                type: 'missing_declared',
+                extractedPositionId: v.positionId,
+                severity: 2,
+                claudeReasoning:
+                  "Une position fermée apparaît dans l'historique MT5 fourni mais n'a pas été déclarée dans le journal.",
+              },
+              select: { id: true },
+            });
+            await tx.scoreEvent.create({
+              data: {
+                memberId,
+                delta: SCORE_DELTA_REALITY_GAP,
+                reason: 'reality_gap',
+                relatedDiscrepancyId: disc.id,
+              },
+            });
           });
         });
         if (created) discrepanciesCreated += 1;
@@ -517,24 +527,27 @@ export async function reconcileOneMember(
     if (!existingKeys.has(key)) {
       existingKeys.add(key);
       const created = await createIfNew(async () => {
-        const disc = await db.discrepancy.create({
-          data: {
-            memberId,
-            type: 'false_declared',
-            declaredTradeId: v.tradeId,
-            severity: 3,
-            claudeReasoning:
-              "Un trade déclaré dans le journal n'a pas de contrepartie dans l'historique MT5 fourni, alors que la période est couverte par les preuves.",
-          },
-          select: { id: true },
-        });
-        await db.scoreEvent.create({
-          data: {
-            memberId,
-            delta: SCORE_DELTA_FALSE_DECLARATION,
-            reason: 'false_declaration',
-            relatedDiscrepancyId: disc.id,
-          },
+        // Audit DC-1 — atomic écart + penalty (see mismatch branch above).
+        await db.$transaction(async (tx) => {
+          const disc = await tx.discrepancy.create({
+            data: {
+              memberId,
+              type: 'false_declared',
+              declaredTradeId: v.tradeId,
+              severity: 3,
+              claudeReasoning:
+                "Un trade déclaré dans le journal n'a pas de contrepartie dans l'historique MT5 fourni, alors que la période est couverte par les preuves.",
+            },
+            select: { id: true },
+          });
+          await tx.scoreEvent.create({
+            data: {
+              memberId,
+              delta: SCORE_DELTA_FALSE_DECLARATION,
+              reason: 'false_declaration',
+              relatedDiscrepancyId: disc.id,
+            },
+          });
         });
       });
       if (created) discrepanciesCreated += 1;

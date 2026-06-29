@@ -96,4 +96,33 @@ describe('annotationCreateSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  // SPEC §2 posture invariant — the admin comment is member-facing and must be
+  // held to the same no-market-advice gate as Mark Douglas cards and the IA
+  // surfaces (`detectAMFViolation`). These lock the guardrail so removing it
+  // turns CI red.
+  it('rejects a comment that gives a market-direction call (§2)', () => {
+    const result = annotationCreateSchema.safeParse({
+      comment: 'Short le DAX maintenant, vise les 1.15.',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((i) => i.path.join('.'));
+      expect(paths).toContain('comment');
+    }
+  });
+
+  it('rejects a comment that gives a price target / take profit (§2)', () => {
+    const result = annotationCreateSchema.safeParse({
+      comment: 'Place ton take profit à 1.0850 et ton stop sous le support.',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('still accepts legitimate execution + psychology coaching (§2 must-not-flag)', () => {
+    const result = annotationCreateSchema.safeParse({
+      comment: 'Bon respect de ton plan. Reste discipliné sur tes horaires de session.',
+    });
+    expect(result.success).toBe(true);
+  });
 });

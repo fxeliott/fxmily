@@ -21,6 +21,12 @@ export default defineConfig({
   testDir: 'tests/e2e',
   globalSetup: './tests/e2e/global-setup.ts',
   fullyParallel: false, // shared DB state — run serially
+  // Fail the CI run if a committed `.only` is present: a stray `test.only`
+  // silently skips the entire rest of the suite, so a green build could be
+  // hiding 99 % of the e2e coverage. Locally `.only` stays allowed for fast
+  // iteration. (Cheap, zero-risk permanence gate — no committed `.only` exists
+  // today, so this never flips a currently-green run red.)
+  forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   // CI runs against `next dev` (compile-on-demand). A cold first hit on a

@@ -495,7 +495,14 @@ export async function enqueueGentleVerificationReminder(
       }
       return null;
     }
-    console.error('[notifications.enqueue] gentle verification reminder failed', err);
+    // Audit ERR-3 — a real DB failure here dropped a member's gentle nudge
+    // silently (console-only, invisible to Sentry AND uncounted by the scan).
+    // Surface it, best-effort — return null keeps the caller's flow unchanged.
+    reportWarning('verification.reminders', 'gentle_enqueue_failed', {
+      userId: recipientUserId,
+      discrepancyId: payload.discrepancyId,
+      error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+    });
     return null;
   }
 }

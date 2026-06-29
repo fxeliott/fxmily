@@ -32,6 +32,14 @@
 
 set -euo pipefail
 
+# Load operator config (AUTOHEAL_ALERT_URL, cooldown, paths) the same way
+# fxmily-backup does. The root crontab entry passes no env, so WITHOUT this the
+# alert URL is always empty in prod and every restart/escalation stays silent
+# (audit INFRA-03/RES-2). Runs as root → can read the 0600 owner-only file.
+CRON_ENV="${FXMILY_CRON_ENV:-/etc/fxmily/cron.env}"
+# shellcheck disable=SC1090
+[[ -r "$CRON_ENV" ]] && source "$CRON_ENV"
+
 # Containers to watch. Kept explicit (not label-discovered) so a misconfigured
 # label can never silently drop a service from the watchdog.
 #
@@ -59,6 +67,22 @@ mkdir -p "$STATE_DIR" "$(dirname "$LOG_FILE")"
 ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
 log() { echo "[$(ts)] [fxmily-autoheal] $*" >> "$LOG_FILE"; }
 
+# Single-flight: a slow `docker restart` can outlast the 1-min cron cadence, so
+# a second invocation could act on the same container concurrently. Hold a
+# non-blocking lock; a stacked run exits cleanly instead of thrashing (INFRA-04).
+exec 9>"${STATE_DIR}/autoheal.lock"
+flock -n 9 || exit 0
+
+# Fire the optional alert / dead-man-switch URL. Best-effort: a failed ping must
+# never abort the watchdog (that would defeat self-healing). No-op when
+# AUTOHEAL_ALERT_URL is unset. Fired on restart AND on escalation / hard failure
+# (audit RES-2) so a CHRONIC unhealthy container reaches a human, not just a log.
+alert_ping() {
+  [[ -n "$ALERT_URL" ]] || return 0
+  curl -fsS -m 10 --retry 3 "$ALERT_URL" >/dev/null 2>&1 ||
+    log "WARN alert ping to AUTOHEAL_ALERT_URL failed"
+}
+
 container_health() {
   # Prints the health status, or "missing" if the container does not exist.
   docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}nohealth{{end}}' \
@@ -84,6 +108,7 @@ for c in "${CONTAINERS[@]}"; do
       if (( age < COOLDOWN_SECS )); then
         # Already restarted recently and STILL unhealthy → escalate, don't thrash.
         log "ESCALATION ${c} still unhealthy ${age}s after the last restart (cooldown ${COOLDOWN_SECS}s) — manual intervention likely needed"
+        alert_ping
         continue
       fi
 
@@ -91,12 +116,10 @@ for c in "${CONTAINERS[@]}"; do
       if docker restart "$c" >/dev/null 2>&1; then
         echo "$now_epoch" > "$marker"
         log "RESTART ${c} restart issued OK"
-        if [[ -n "$ALERT_URL" ]]; then
-          curl -fsS -m 10 --retry 3 "$ALERT_URL" >/dev/null 2>&1 || \
-            log "WARN alert ping to AUTOHEAL_ALERT_URL failed"
-        fi
+        alert_ping
       else
         log "FAIL ${c} restart command failed — manual intervention required"
+        alert_ping
       fi
       ;;
     *)

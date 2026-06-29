@@ -24,6 +24,18 @@ const envSchema = z.object({
     .string()
     .regex(/^postgres(ql)?:\/\//, 'DATABASE_URL doit commencer par postgres:// ou postgresql://'),
 
+  /// Scalability hardening (2026-06-29 A-Z audit) — connection pool size +
+  /// per-statement safety timeouts, all OPTIONAL with defaults that preserve
+  /// the original hard-coded `db.ts` behaviour (max:10). Tunable per-deploy as
+  /// the cohort grows (SPEC §10 : CX22 jusqu'à ~500 membres actifs) without a
+  /// code change. `DATABASE_STATEMENT_TIMEOUT_MS` caps a runaway query so it
+  /// can't pin a pool connection forever under load (pool-exhaustion → every
+  /// other route hits `connectionTimeoutMillis`); `DATABASE_IDLE_IN_TX_TIMEOUT_MS`
+  /// kills a transaction left open (lock holder). Set either to 0 to disable.
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().max(100).default(10),
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(30_000),
+  DATABASE_IDLE_IN_TX_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(60_000),
+
   // Jalon 1 — Auth.js v5
   AUTH_SECRET: z
     .string()

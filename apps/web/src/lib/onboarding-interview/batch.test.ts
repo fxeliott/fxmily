@@ -279,6 +279,56 @@ describe('persistGeneratedProfiles — model attribution pin (mirror weekly BLOQ
   });
 });
 
+describe('persistGeneratedProfiles — TXN-2 (RC#8) idempotent token counters', () => {
+  beforeEach(() => {
+    setupSuccessMocks();
+  });
+
+  it('writes the per-run token totals ABSOLUTELY (not increment) so a re-delivery never inflates them', async () => {
+    const entry = makeRequestEntry('output');
+    const request: BatchPersistRequest = {
+      results: [
+        {
+          ...entry,
+          usage: { inputTokens: 1234, outputTokens: 567, cacheReadTokens: 0 },
+        } as BatchResultEntry,
+      ],
+    };
+
+    const result = await persistGeneratedProfiles(request);
+    expect(result.persisted).toBe(1);
+
+    // The interview row is stamped with the CURRENT generation's cost as an
+    // absolute set — a relative `{ increment }` would unbound the counters on
+    // every retried/double-submitted results.json (no post-analysis idempotency
+    // gate exists on the interview).
+    const data = interviewUpdateMock.mock.calls[0]?.[0]?.data as {
+      totalTokensInput: unknown;
+      totalTokensOutput: unknown;
+    };
+    expect(data.totalTokensInput).toBe(1234);
+    expect(data.totalTokensOutput).toBe(567);
+    // Explicitly NOT the relative-write shape.
+    expect(data.totalTokensInput).not.toMatchObject({ increment: expect.anything() });
+    expect(data.totalTokensOutput).not.toMatchObject({ increment: expect.anything() });
+  });
+
+  it('defaults absent usage to a zeroed absolute write (never undefined / never increment)', async () => {
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('output')], // no `usage` on the entry
+    };
+
+    await persistGeneratedProfiles(request);
+
+    const data = interviewUpdateMock.mock.calls[0]?.[0]?.data as {
+      totalTokensInput: unknown;
+      totalTokensOutput: unknown;
+    };
+    expect(data.totalTokensInput).toBe(0);
+    expect(data.totalTokensOutput).toBe(0);
+  });
+});
+
 describe('persistGeneratedProfiles — Gate 1: active user check', () => {
   it('skips entry when userId is not in active users set', async () => {
     setupSuccessMocks({ userIds: ['user_other'] }); // SUT requestUserIds will pre-fetch this

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { detectAMFViolation } from '@/lib/safety/amf-detection';
 import { ANNOTATION_KEY_PATTERN } from '@/lib/storage/keys';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
@@ -61,6 +62,24 @@ export const annotationCreateSchema = z
         code: 'custom',
         path: ['mediaKey'],
         message: 'Média incomplet : la clé et le type doivent être fournis ensemble.',
+      });
+    }
+    // SPEC §2 posture invariant — the admin free-text comment is member-facing
+    // (it lands on the member's trade/training annotation), so it MUST be held
+    // to the same no-market-advice gate as every other admin→member surface
+    // (Mark Douglas cards `lib/schemas/card.ts:185`, IA batches, onboarding…).
+    // Until now the comment passed only `safeFreeText` + bidi stripping, so a
+    // market-direction call ("short le DAX", "TP à 1.0850") from a compromised
+    // or off-guard admin account would reach the member un-screened — the one
+    // admin→member text path that bypassed `detectAMFViolation`. Mirror the
+    // card schema's `assertNoMarketAdvice` so the guardrail is enforced at the
+    // single source of truth instead of relying on admin discipline.
+    if (detectAMFViolation(data.comment).suspected) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['comment'],
+        message:
+          "Contenu interdit (§2) : un commentaire ne peut pas donner de conseil d'analyse de marché (direction, niveau ou objectif de prix).",
       });
     }
   });

@@ -18,13 +18,15 @@ const m = vi.hoisted(() => ({
   accountCount: vi.fn(),
   positionFindMany: vi.fn(),
   positionCreateMany: vi.fn(),
+  executeRaw: vi.fn(),
+  transaction: vi.fn(),
   logAudit: vi.fn(),
   scanAlertsForMember: vi.fn(),
   reconcileOneMember: vi.fn(),
 }));
 
-vi.mock('@/lib/db', () => ({
-  db: {
+vi.mock('@/lib/db', () => {
+  const db = {
     user: { findMany: m.userFindMany, update: m.userUpdate },
     mt5AccountProof: { findMany: m.proofFindMany, update: m.proofUpdate },
     brokerAccount: {
@@ -34,8 +36,18 @@ vi.mock('@/lib/db', () => ({
       count: m.accountCount,
     },
     extractedPosition: { findMany: m.positionFindMany, createMany: m.positionCreateMany },
-  },
-}));
+    // TXN-1 (RC#8) — materialiseProofExtraction now wraps read + insert +
+    // proof-flip in an interactive transaction guarded by a tx-scoped advisory
+    // lock (`pg_advisory_xact_lock`). The mock runs the callback synchronously
+    // with the same `db` as `tx` (the SUT uses identical model methods inside
+    // and outside the transaction), so existing assertions on the position /
+    // proof mocks keep holding unchanged.
+    $executeRaw: m.executeRaw,
+    $transaction: m.transaction,
+  };
+  m.transaction.mockImplementation((fn: (tx: typeof db) => unknown) => fn(db));
+  return { db };
+});
 
 vi.mock('@/lib/auth/audit', () => ({
   logAudit: m.logAudit,
@@ -434,5 +446,63 @@ describe('persistVisionResults — materialisation', () => {
       (c) => c[0]?.action === 'verification.proof.analyzed',
     );
     expect(analyzed?.[0]?.metadata?.claudeModelVersion).toBe('claude-code-local');
+  });
+});
+
+describe('persistVisionResults — TXN-1 (RC#8) double-invoke serialization', () => {
+  it('takes a tx-scoped advisory lock as the FIRST statement, inside one transaction', async () => {
+    seedHappyMocks();
+
+    await persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER, output: probeOutput() }],
+    });
+
+    // The read + insert + proof-flip ran inside a single interactive transaction.
+    expect(m.transaction).toHaveBeenCalledTimes(1);
+    // The advisory lock is acquired exactly once…
+    expect(m.executeRaw).toHaveBeenCalledTimes(1);
+    // …and BEFORE the existing-positions read, so a concurrent retry of the same
+    // proof WAITS for the winner to commit instead of both reading `existing`
+    // empty and double-inserting the ticket-less rows.
+    expect(m.executeRaw.mock.invocationCallOrder[0]!).toBeLessThan(
+      m.positionFindMany.mock.invocationCallOrder[0]!,
+    );
+    // …and before the insert (insert is atomic with the lock + the proof flip).
+    expect(m.executeRaw.mock.invocationCallOrder[0]!).toBeLessThan(
+      m.positionCreateMany.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('the LOSER re-reads the now-committed rows and inserts nothing (no double count)', async () => {
+    // Simulate the winner already committed: the post-lock re-read returns BOTH
+    // probe positions (one by ticket, one by the ticket-less heuristic), so the
+    // loser's filter excludes everything and createMany is never called.
+    seedHappyMocks();
+    m.positionFindMany.mockResolvedValue([
+      {
+        ticket: '74410221',
+        symbol: 'EURUSD',
+        side: 'long',
+        openTime: new Date('2026-06-02T07:15:12.000Z'),
+        volume: 0.5,
+      },
+      {
+        ticket: null,
+        symbol: 'GBPUSD',
+        side: 'short',
+        openTime: new Date('2026-06-03T06:02:44.000Z'),
+        volume: 0.3,
+      },
+    ]);
+
+    const r = await persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER, output: probeOutput() }],
+    });
+
+    expect(r.persisted).toBe(1);
+    expect(m.executeRaw).toHaveBeenCalledTimes(1); // lock still taken under the loser
+    expect(m.positionCreateMany).not.toHaveBeenCalled(); // nothing double-counted
+    // The proof still flips to done atomically (idempotent re-delivery).
+    expect(m.proofUpdate.mock.calls[0]?.[0]?.data.ocrStatus).toBe('done');
   });
 });

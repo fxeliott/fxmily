@@ -8,9 +8,10 @@ import { useEffect } from 'react';
  * Why a dedicated island (rather than register from `<PushToggle>`):
  * - The SW MUST be registered before the user clicks "Activate notifications",
  *   so `pushManager.subscribe()` finds an active registration.
- * - Mounting it once at the layout level keeps the registration global —
- *   the SW handles `notificationclick` even when the member is on
- *   `/dashboard` rather than `/account/notifications`.
+ * - Mounted once in the authenticated `<AppShell>` so it runs on every app open
+ *   regardless of landing route (incl. the manifest `start_url: /dashboard`),
+ *   keeping the registration global — the SW handles `notificationclick` even
+ *   when the member never visits `/account/notifications` (audit PWA-2).
  *
  * Idempotency: `register()` is a no-op if the SW is already registered, but
  * we set `updateViaCache: 'none'` so the browser revalidates `/sw.js` on every
@@ -21,8 +22,9 @@ import { useEffect } from 'react';
  * - Browser doesn't support SW (Safari ≤16.3, IE) → `'serviceWorker' in navigator`
  *   is false. We just skip; `<PushToggle>` renders the unsupported state.
  * - Registration throws (CSP issue, MIME type mismatch) → log to console; the
- *   member sees "Notifications désactivées" via `<PushToggle>` which polls
- *   `navigator.serviceWorker.ready` with a timeout.
+ *   member sees the idle/error state via `<PushToggle>`, which races
+ *   `navigator.serviceWorker.ready` against a 5s timeout and falls back to
+ *   `idle-no-sub` instead of hanging if no registration ever becomes active.
  *
  * No audit log here: registration is an implicit consequence of visiting the
  * app, not an explicit member action. The audit happens at subscribe time.

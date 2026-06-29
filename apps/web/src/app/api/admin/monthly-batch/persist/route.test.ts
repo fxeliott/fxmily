@@ -18,6 +18,7 @@ vi.mock('@/lib/monthly-debrief/batch', () => ({
 
 vi.mock('@/lib/observability', () => ({
   reportError: reportErrorMock,
+  reportWarning: vi.fn(),
   flushSentry: vi.fn(async () => undefined),
 }));
 

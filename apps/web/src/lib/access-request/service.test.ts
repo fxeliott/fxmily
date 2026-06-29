@@ -91,6 +91,7 @@ import {
   AccessRequestUserExistsError,
   approveAccessRequest,
   createAccessRequest,
+  listAccessRequests,
   listPendingAccessRequests,
   rejectAccessRequest,
   rollbackApproval,
@@ -229,10 +230,50 @@ describe('listPendingAccessRequests', () => {
     const arg = accessRequestFindMany.mock.calls[0]?.[0] as {
       where: { status: string };
       orderBy: { createdAt: string };
+      take: number;
     };
     expect(arg.where).toEqual({ status: 'pending' });
     expect(arg.orderBy).toEqual({ createdAt: 'asc' });
+    // DOS-1 (RC#8) — the public, unauthenticated submit can flood pending rows;
+    // the admin RSC payload is hard-capped so one findMany never materialises an
+    // unbounded backlog. The badge count stays accurate via a separate count().
+    expect(arg.take).toBe(500);
     expect(result[0]?.createdAt).toBe('2026-06-01T10:00:00.000Z');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listAccessRequests — DOS-1 render cap on the all-status audit view
+// ---------------------------------------------------------------------------
+
+describe('listAccessRequests', () => {
+  it('hard-caps the render set (DOS-1) and stays newest-first', async () => {
+    accessRequestFindMany.mockResolvedValue([]);
+
+    await listAccessRequests();
+
+    const arg = accessRequestFindMany.mock.calls[0]?.[0] as {
+      where?: { status: string };
+      orderBy: { createdAt: string };
+      take: number;
+    };
+    expect(arg.take).toBe(500);
+    expect(arg.orderBy).toEqual({ createdAt: 'desc' });
+    // No status filter when none is supplied (the spread omits `where`).
+    expect(arg.where).toBeUndefined();
+  });
+
+  it('passes a status filter through while keeping the cap', async () => {
+    accessRequestFindMany.mockResolvedValue([]);
+
+    await listAccessRequests('approved');
+
+    const arg = accessRequestFindMany.mock.calls[0]?.[0] as {
+      where: { status: string };
+      take: number;
+    };
+    expect(arg.where).toEqual({ status: 'approved' });
+    expect(arg.take).toBe(500);
   });
 });
 

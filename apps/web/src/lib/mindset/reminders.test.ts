@@ -92,6 +92,28 @@ describe('runMindsetCheckReminderScan', () => {
     expect(out.skipped).toBe(1);
   });
 
+  it('dedups against BOTH pending AND sent nudges (RC#7 CRON-2 — closes the post-dispatch re-fire window)', async () => {
+    userFindManyMock.mockResolvedValueOnce([{ id: 'user_a' }]);
+    mindsetCheckFindManyMock.mockResolvedValueOnce([]);
+    // The dispatcher already moved this week's nudge pending→sent; a same-Monday
+    // cron re-fire must still see it and skip, not enqueue a duplicate push.
+    notificationQueueFindManyMock.mockResolvedValueOnce([
+      { userId: 'user_a', payload: { weekStart: WEEK } },
+    ]);
+
+    const out = await runMindsetCheckReminderScan(NOW);
+
+    // The lookup must scan pending AND sent (the partial unique index only
+    // guards pending, so 'sent' would otherwise re-enqueue). 'failed' stays
+    // excluded so a never-delivered nudge is retried.
+    expect(notificationQueueFindManyMock.mock.calls[0]?.[0]?.where?.status).toEqual({
+      in: ['pending', 'sent'],
+    });
+    expect(enqueueMindsetCheckNotificationMock).not.toHaveBeenCalled();
+    expect(out.skipped).toBe(1);
+    expect(out.enqueued).toBe(0);
+  });
+
   it('a pending nudge for a DIFFERENT (older) week does NOT skip the new week', async () => {
     userFindManyMock.mockResolvedValueOnce([{ id: 'user_a' }]);
     mindsetCheckFindManyMock.mockResolvedValueOnce([]);

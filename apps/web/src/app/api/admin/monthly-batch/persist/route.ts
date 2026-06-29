@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { logAudit } from '@/lib/auth/audit';
 import { requireMonthlyAdminToken } from '@/lib/auth/admin-token';
-import { flushSentry, reportError } from '@/lib/observability';
+import { flushSentry, reportError, reportWarning } from '@/lib/observability';
 import {
   persistGeneratedReports,
   type MonthlyBatchPersistRequest,
@@ -116,10 +116,12 @@ export async function POST(req: NextRequest) {
   try {
     parsedJson = JSON.parse(raw);
   } catch (err) {
+    reportWarning('admin.monthly_batch.persist', 'invalid_json', {
+      error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+    });
     return NextResponse.json(
       {
         error: 'invalid_json',
-        detail: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
       },
       { status: 400 },
     );

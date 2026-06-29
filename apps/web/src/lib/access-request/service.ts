@@ -180,11 +180,23 @@ export async function createAccessRequest(
   // Note: `created` is internal only (tests/telemetry), never surfaced to the UI.
 }
 
+// DOS-1 (RC#8) — hard render cap. The AccessRequest table is fed by the
+// UNAUTHENTICATED public Server Action (rejoindre/actions.ts), throttled only
+// per-IP, so a distributed flood (one fresh email per row, bounded by the
+// `(email) WHERE status='pending'` partial unique index + the 30-day purge
+// cron) could accumulate enough pending rows that an unbounded findMany would
+// materialise + serialise + ship them all in one admin RSC payload. The admin
+// queue is FIFO (oldest first) so a cap degrades gracefully — the true backlog
+// is shown by `countPendingAccessRequests` (the badge), and operators work the
+// oldest rows down. Mirrors the `take` discipline of members-/trades-service.
+const ADMIN_LIST_RENDER_CAP = 500;
+
 /** List pending requests for the admin queue, oldest first (FIFO review). */
 export async function listPendingAccessRequests(): Promise<SerializedAccessRequest[]> {
   const rows = await db.accessRequest.findMany({
     where: { status: 'pending' },
     orderBy: { createdAt: 'asc' },
+    take: ADMIN_LIST_RENDER_CAP,
   });
   return rows.map(serializeAccessRequest);
 }
@@ -199,6 +211,7 @@ export async function listAccessRequests(
   const rows = await db.accessRequest.findMany({
     ...(status ? { where: { status } } : {}),
     orderBy: { createdAt: 'desc' },
+    take: ADMIN_LIST_RENDER_CAP,
   });
   return rows.map(serializeAccessRequest);
 }

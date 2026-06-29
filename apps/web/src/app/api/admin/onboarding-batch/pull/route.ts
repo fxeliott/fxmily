@@ -50,7 +50,6 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json(
       {
         error: 'batch_pull_failed',
-        message: err instanceof Error ? err.message.slice(0, 200) : 'unknown error',
       },
       { status: 500 },
     );

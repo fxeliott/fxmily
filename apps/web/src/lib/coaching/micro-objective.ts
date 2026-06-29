@@ -174,8 +174,14 @@ export async function closeMicroObjective(
   if (!row || row.memberId !== memberId) throw new MicroObjectiveNotFoundError();
   // Already closed → no-op (member double-tapped the follow-up). Le 1er suivi fait foi.
   if (row.status !== 'open') return;
-  await db.mentalMicroObjective.update({
-    where: { id: objectiveId },
+  // The findUnique above is a plain READ COMMITTED read and takes no row lock,
+  // so the JS `status` guard alone cannot stop two concurrent closes from both
+  // seeing 'open' and last-write-wins clobbering the first outcome. Move the
+  // guard into the WHERE: only the row still 'open' is updated; a loser matches
+  // 0 rows (count===0) and is a no-op, preserving « le 1er suivi fait foi »
+  // atomically without a transaction (RC#7 TX-2).
+  await db.mentalMicroObjective.updateMany({
+    where: { id: objectiveId, memberId, status: 'open' },
     data: { status: outcome, closedAt: new Date() },
   });
 }

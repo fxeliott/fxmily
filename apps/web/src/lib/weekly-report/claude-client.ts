@@ -234,7 +234,13 @@ export class LiveWeeklyReportClient implements WeeklyReportClaudeClient {
       return new MockWeeklyReportClient().generate(snapshot);
     }
 
-    const client = new Anthropic({ apiKey });
+    // Bound the request: the SDK default is a 10-minute timeout × up to 2
+    // retries (~30 min worst case on a hung connection), on a server cron path.
+    // A 60s timeout comfortably covers a 2048-max_tokens non-streaming
+    // completion and keeps a 5-member chunk bounded even if one member stalls;
+    // the resulting APIConnectionTimeoutError is already isolated per member by
+    // Promise.allSettled → reportWarning (audit RESIL-2).
+    const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 2 });
     const model = env.ANTHROPIC_MODEL;
     const userPrompt = buildWeeklyReportUserPrompt(snapshot);
 
@@ -251,8 +257,8 @@ export class LiveWeeklyReportClient implements WeeklyReportClaudeClient {
     // J8 audit fix — explicit `ttl: '1h'` on cache_control so the system
     // prompt is cached for the full hour (default is 5min, which would mean
     // every weekly cron invalidates the cache and bills full input rate).
-    // SDK 0.95.1 supports `ttl` on `cache_control` ; documented in Anthropic
-    // 2026 prompt-caching guide.
+    // The pinned @anthropic-ai/sdk (^0.98.0, see package.json) supports `ttl`
+    // on `cache_control` ; documented in Anthropic's 2026 prompt-caching guide.
     const response = await client.messages.create({
       model,
       max_tokens: 2048,

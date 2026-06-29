@@ -97,6 +97,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         purgeErrors: purge.errors,
         purgeThreshold: purge.threshold,
         purgedIds: purge.purgedIds,
+        // RC#7 CRON-1 — unified `errors` key so the cron health monitor
+        // (system/health.ts reads metadata.errors) escalates green→amber when
+        // a per-user materialise/purge failed. The split keys above stay for
+        // per-phase granularity; this is the one the monitor actually reads.
+        errors: materialise.errors + purge.errors,
         ranAt: refNow.toISOString(),
       },
     });

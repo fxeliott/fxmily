@@ -24,6 +24,18 @@ const envSchema = z.object({
     .string()
     .regex(/^postgres(ql)?:\/\//, 'DATABASE_URL doit commencer par postgres:// ou postgresql://'),
 
+  /// Scalability hardening (2026-06-29 A-Z audit) — connection pool size +
+  /// per-statement safety timeouts, all OPTIONAL with defaults that preserve
+  /// the original hard-coded `db.ts` behaviour (max:10). Tunable per-deploy as
+  /// the cohort grows (SPEC §10 : CX22 jusqu'à ~500 membres actifs) without a
+  /// code change. `DATABASE_STATEMENT_TIMEOUT_MS` caps a runaway query so it
+  /// can't pin a pool connection forever under load (pool-exhaustion → every
+  /// other route hits `connectionTimeoutMillis`); `DATABASE_IDLE_IN_TX_TIMEOUT_MS`
+  /// kills a transaction left open (lock holder). Set either to 0 to disable.
+  DATABASE_POOL_MAX: z.coerce.number().int().positive().max(100).default(10),
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(30_000),
+  DATABASE_IDLE_IN_TX_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(60_000),
+
   // Jalon 1 — Auth.js v5
   AUTH_SECRET: z
     .string()
@@ -294,7 +306,29 @@ export const envSchemaWithRefines = envSchema
         'CRON_SECRET est requis en production (sinon /api/cron/* répond 503 cron_disabled et les rappels/dispatch/recompute/purge RGPD sont morts en silence).',
       path: ['CRON_SECRET'],
     },
-  );
+  )
+  /**
+   * RC#7 (2026-06-29 A-Z audit) — plancher du pool vs concurrence batch fixe.
+   *
+   * Les scans de vérification tournent à une concurrence codée en dur de 5
+   * (`VERIFICATION_SCAN_CONCURRENCY`, lib/verification/batch-util.ts) et le
+   * dispatcher push à 8 (`CONCURRENCY` dans lib/push/dispatcher.ts), chacun
+   * justifié en commentaire par « bien en dessous du pool max (10) ». Cette
+   * justification casse en silence si un opérateur descend `DATABASE_POOL_MAX`
+   * sous la concurrence batch pour tenir un budget Postgres partagé (le scénario
+   * de scaling que le hardening de db.ts a justement ajouté) : un chunk de N
+   * membres réclame N connexions, les acquêtes en excès attendent
+   * `connectionTimeoutMillis` (5s) puis THROW → échecs cron sporadiques sans
+   * cause évidente. On bloque le boot plutôt que de laisser le foot-gun. Le
+   * plancher (8) DOIT rester >= max(ces deux constantes) ; relever une constante
+   * = relever ce plancher (gardé en littéral pour éviter un cycle d'import
+   * env → db → env ; verrouillé contre la dérive par env-pool-floor.test.ts).
+   */
+  .refine((e) => e.DATABASE_POOL_MAX >= 8, {
+    message:
+      'DATABASE_POOL_MAX doit être >= 8 (concurrence batch fixe : push dispatcher=8, verification scan=5). En dessous, les chunks saturent le pool et les crons throw sur connectionTimeoutMillis.',
+    path: ['DATABASE_POOL_MAX'],
+  });
 
 const parsed = envSchemaWithRefines.safeParse(process.env);
 

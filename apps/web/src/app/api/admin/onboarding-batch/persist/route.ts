@@ -104,10 +104,12 @@ export async function POST(req: Request): Promise<Response> {
   try {
     bodyJson = JSON.parse(bodyText);
   } catch (err) {
+    reportWarning('onboarding-interview.batch.persist', 'invalid_json', {
+      error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+    });
     return NextResponse.json(
       {
         error: 'invalid_json',
-        message: err instanceof Error ? err.message.slice(0, 200) : 'Could not parse JSON.',
       },
       { status: 400 },
     );
@@ -161,7 +163,6 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json(
       {
         error: 'batch_persist_failed',
-        message: err instanceof Error ? err.message.slice(0, 200) : 'unknown error',
       },
       { status: 500 },
     );

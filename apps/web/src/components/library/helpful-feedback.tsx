@@ -97,6 +97,7 @@ export function HelpfulFeedback({ deliveryId, initialHelpful }: HelpfulFeedbackP
           onClick={() => answer(false)}
           disabled={pending}
           aria-pressed={helpful === false}
+          {...(helpful === false ? { 'data-warn-text': '' } : {})}
           {...(tapAnim ? { whileTap: tapAnim } : {})}
           className={cn(
             'rounded-pill inline-flex h-11 flex-1 items-center justify-center gap-2 px-4',

@@ -78,6 +78,7 @@ export async function countMeetingAttendance(
   userId: string,
   fromUtc: Date,
   toUtc: Date,
+  scheduledCountMemo?: Map<string, Promise<number>>,
 ): Promise<MeetingAttendanceCounts> {
   // Shared filter: scheduled (non-cancelled) meetings in the half-open window.
   // Reused for BOTH the denominator (direct) and the numerator (relation
@@ -87,8 +88,28 @@ export async function countMeetingAttendance(
     scheduledAt: { gte: fromUtc, lt: toUtc },
   };
 
+  // PERF-1 — the denominator (scheduled meetings in the window) depends ONLY on
+  // the (fromUtc, toUtc) pair, NEVER on userId. In the nightly batch recompute
+  // every "established" member (joined before the period start) shares the SAME
+  // floored window, so without a memo we run N identical `meeting.count`
+  // queries. Memoize the denominator Promise per window → N members collapse to
+  // ONE query. Only the denominator is shared; the numerator + last-declaration
+  // stay strictly per-user, so §30.4 coherence is untouched (the same window
+  // object still drives both counts). Wrapped in an async IIFE so the memo holds
+  // a settled-once NATIVE Promise (safe to await from many members) rather than
+  // a lazy PrismaPromise whose multi-await semantics are unspecified. The memo
+  // is created per-run by `recomputeAllActiveMembers` and discarded with it —
+  // never crosses run boundaries, so a stale count can never leak across nights.
+  const windowKey = `${fromUtc.getTime()}-${toUtc.getTime()}`;
+  const cachedScheduledCount = scheduledCountMemo?.get(windowKey);
+  const scheduledCountPromise: Promise<number> =
+    cachedScheduledCount ?? (async () => db.meeting.count({ where: inScheduledWindow }))();
+  if (scheduledCountMemo && !cachedScheduledCount) {
+    scheduledCountMemo.set(windowKey, scheduledCountPromise);
+  }
+
   const [scheduledCount, completedCount, last] = await Promise.all([
-    db.meeting.count({ where: inScheduledWindow }),
+    scheduledCountPromise,
     db.meetingAttendance.count({
       where: {
         userId,

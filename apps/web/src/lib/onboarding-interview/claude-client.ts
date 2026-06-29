@@ -284,7 +284,12 @@ export class LiveOnboardingProfileClient implements OnboardingProfileClaudeClien
       return new MockOnboardingProfileClient().generate(snapshot);
     }
 
-    const client = new Anthropic({ apiKey });
+    // RESIL-1 (RC#8) — bound the SDK like the weekly-report twin. SDK default
+    // is a 10-min timeout × up to 2 retries (~30 min on a hung connection);
+    // set the bound now, before this dormant factory is wired into a server
+    // route (today: no prod caller, generation runs via the `claude --print`
+    // batch path).
+    const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 2 });
     const model = env.ANTHROPIC_MODEL;
     const userPrompt = buildOnboardingInterviewUserPrompt(snapshot);
 

@@ -28,8 +28,10 @@ vi.mock('@/lib/notifications/enqueue', () => ({
 vi.mock('@/lib/training/training-trade-service', () => ({
   countRecentTrainingActivity: vi.fn().mockResolvedValue({ count: 0, lastEnteredAt: null }),
 }));
+vi.mock('@/lib/observability', () => ({ reportWarning: vi.fn() }));
 
 import { db } from '@/lib/db';
+import { reportWarning } from '@/lib/observability';
 
 import { dispatchForAllActiveMembers, evaluateAndDispatchForUser } from './engine';
 
@@ -119,6 +121,35 @@ describe('evaluateAndDispatchForUser — member-day cap (S4 DOD2-T2-1)', () => {
     arm({ deliveredToday: null });
     const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
     expect(r.delivered?.cardId).toBe('card-A');
+  });
+});
+
+describe('loadPublishedTriggerCards — malformed rule observability (RC#7 SF-2)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('🚨 a published card whose triggerRules no longer parse is surfaced to Sentry AND dropped (not silently skipped)', async () => {
+    arm({ deliveredToday: null });
+    // Override the cards read with a single card carrying an unparseable rule
+    // (schema drift / out-of-band write). parseTriggerRule → null.
+    vi.mocked(db.markDouglasCard.findMany).mockResolvedValue([
+      { ...CARD, id: 'card-bad', triggerRules: { kind: 'totally_invalid_kind' } },
+    ] as never);
+
+    const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
+
+    // Surfaced to Sentry, not a bare console.warn that an operator never sees.
+    expect(vi.mocked(reportWarning)).toHaveBeenCalledWith(
+      'douglas.engine',
+      'invalid_trigger_rules',
+      {
+        cardId: 'card-bad',
+      },
+    );
+    // The unparseable card is dropped from dispatch → nothing delivered.
+    expect(r.delivered).toBeNull();
+    expect(db.markDouglasDelivery.create).not.toHaveBeenCalled();
   });
 });
 

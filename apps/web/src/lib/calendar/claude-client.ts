@@ -294,7 +294,12 @@ export class LiveCalendarClient implements CalendarClaudeClient {
       return new MockCalendarClient().generate(snapshot);
     }
 
-    const client = new Anthropic({ apiKey });
+    // RESIL-1 (RC#8) — bound the SDK like the weekly-report twin
+    // (claude-client.ts). The SDK default is a 10-minute timeout × up to 2
+    // retries (~30 min worst case on a hung connection); on any server path
+    // that is a per-member cliff. Set the bound here, before this factory is
+    // ever wired into a server route (today it is dormant — no prod caller).
+    const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 2 });
     const model = env.ANTHROPIC_MODEL;
     const userPrompt = buildCalendarUserPrompt(snapshot);
 

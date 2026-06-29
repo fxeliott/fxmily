@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { detectAMFViolation } from '@/lib/safety/amf-detection';
 import { TRAINING_ANNOTATION_KEY_PATTERN } from '@/lib/storage/keys';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
@@ -61,6 +62,21 @@ export const trainingAnnotationCreateSchema = z
         code: 'custom',
         path: ['mediaKey'],
         message: 'Média incomplet : la clé et le type doivent être fournis ensemble.',
+      });
+    }
+    // SPEC §2 posture invariant — the training correction comment is rendered
+    // back to the member, so it MUST pass the same no-market-advice gate as the
+    // real-trade annotation (`lib/schemas/annotation.ts`) and the Mark Douglas
+    // cards. Without this, the admin training-correction free-text was the
+    // second un-screened admin→member path. Note: the member's *reply*
+    // (`trainingReplyCreateSchema`) is member→admin, not member-facing, so it is
+    // intentionally NOT subject to this gate.
+    if (detectAMFViolation(data.comment).suspected) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['comment'],
+        message:
+          "Contenu interdit (§2) : une correction ne peut pas donner de conseil d'analyse de marché (direction, niveau ou objectif de prix).",
       });
     }
   });

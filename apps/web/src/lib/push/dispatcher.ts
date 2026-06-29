@@ -403,7 +403,10 @@ export type DispatchOneResult =
  * the row as `failed` with reason 'preference_off' and skip the actual send.
  */
 export async function dispatchOne(notificationId: string): Promise<DispatchOneResult> {
-  const baseUrl = env.AUTH_URL;
+  // Strip any trailing slash, mirroring the 8 email URL builders in send.ts.
+  // Without this, an operator AUTH_URL like `https://app.fxmilyapp.com/` would
+  // yield double-slash deep links in both pushes and fallback emails (NOTIF-1).
+  const baseUrl = env.AUTH_URL.replace(/\/+$/, '');
 
   // 1. Atomic claim: pending → dispatching, increment attempts.
   const claim = await db.notificationQueue.updateMany({

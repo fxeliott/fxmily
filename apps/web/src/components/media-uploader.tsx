@@ -348,6 +348,20 @@ export function MediaUploader({
         <input type="hidden" name={mediaTypeName} value={state.key ? mediaTypeValue : ''} />
       ) : null}
 
+      {/* RC#7 A11Y-1 — persistent polite live region OUTSIDE the branching
+          <label> above. The uploading branch (with its <Spinner role="status">)
+          UNMOUNTS on success, so a screen-reader user heard "Envoi en cours"
+          then silence with no confirmation the upload finished. This region
+          survives the branch swap and announces the resolved state. Errors stay
+          owned by the role="alert" below to avoid a double announcement. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {state.status === 'uploading'
+          ? 'Envoi en cours'
+          : state.status === 'success'
+            ? 'Image envoyée'
+            : ''}
+      </span>
+
       {showPreview && removable ? (
         <button
           type="button"

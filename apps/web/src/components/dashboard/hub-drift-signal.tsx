@@ -53,7 +53,9 @@ export function HubDriftSignal({
         <Compass className="h-4 w-4" strokeWidth={1.75} aria-hidden />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="t-eyebrow text-[var(--warn)]">Signal de dérive</span>
+        <span className="t-eyebrow text-[var(--warn)]" data-warn-text="">
+          Signal de dérive
+        </span>
         <p className="t-body leading-snug text-[var(--t-2)]">
           <span className="font-medium text-[var(--t-1)]">{headline}</span> — une fiche pour le
           travailler t&apos;attend, calmement.

@@ -592,6 +592,16 @@
   color: var(--bad-hi);
 }
 
+/* RC5 A11Y-3 — raw `text-[var(--warn)]` labels that sit on their own
+   `bg-[var(--warn-dim)]` tint (NOT pills, NOT zone-labels) still fell below
+   WCAG 1.4.3 AA in LIGHT (--warn ≈ 3.9–4.3:1 on the warm tint). Same remedy as
+   the zone-label warn fix: a dedicated darker amber (measured ≥4.9:1 on that
+   beige), scoped to a marker attribute so ONLY genuine text sites are recoloured
+   — the icon containers (1.4.11 non-text, already ≥3:1) stay at --warn. */
+.light [data-warn-text] {
+  color: oklch(0.4 0.1 78);
+}
+
 /* Selection en clair — teinte bleue douce, texte accent assombri lisible */
 .light ::selection {
   background: oklch(0.52 0.2 260 / 0.16);

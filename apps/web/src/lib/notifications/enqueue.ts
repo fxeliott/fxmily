@@ -89,7 +89,13 @@ export async function enqueueAnnotationNotification(
 
     return row.id;
   } catch (err) {
-    console.error('[notifications.enqueue] failed', err);
+    // A-Z observability — console-only hid a chronic enqueue failure from Sentry
+    // (server console.error is not captured). Best-effort: still return null so
+    // creating the annotation never rolls back over a queue hiccup.
+    reportWarning('annotation.enqueue', 'enqueue_failed', {
+      userId: recipientUserId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }
@@ -154,7 +160,11 @@ export async function enqueueTrainingAnnotationNotification(
 
     return row.id;
   } catch (err) {
-    console.error('[notifications.enqueue] training annotation failed', err);
+    // A-Z observability — see enqueueAnnotationNotification. Best-effort.
+    reportWarning('training-annotation.enqueue', 'enqueue_failed', {
+      userId: recipientUserId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }
@@ -214,7 +224,11 @@ export async function enqueueTrainingReplyNotification(
 
     return row.id;
   } catch (err) {
-    console.error('[notifications.enqueue] training reply failed', err);
+    // A-Z observability — see enqueueAnnotationNotification. Best-effort.
+    reportWarning('training-reply.enqueue', 'enqueue_failed', {
+      userId: recipientAdminId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }
@@ -271,7 +285,11 @@ export async function enqueueMonthlyDebriefNotification(
 
     return row.id;
   } catch (err) {
-    console.error('[notifications.enqueue] monthly debrief failed', err);
+    // A-Z observability — see enqueueAnnotationNotification. Best-effort.
+    reportWarning('monthly-debrief.enqueue', 'enqueue_failed', {
+      userId: recipientUserId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }
@@ -334,7 +352,18 @@ export async function enqueueDouglasDeliveryNotification(
 
     return row.id;
   } catch (err) {
-    console.error('[notifications.enqueue] douglas delivery failed', err);
+    // A-Z observability — was console-only, so a genuine Douglas-delivery enqueue
+    // failure hid from Sentry: the §28 drift card was persisted (the dispatch is
+    // audited) but its PUSH-channel emission silently never queued, and an
+    // operator had no signal. The queue insert has NO partial unique index for
+    // `douglas_card_delivered` (dedup is upstream on MarkDouglasDelivery), so any
+    // error here is a real failure, never a benign dedup race — surface it.
+    // Mirror enqueueMindsetCheckNotification. Still best-effort: return null so a
+    // real-time/cron dispatch never rolls back over a queue hiccup.
+    reportWarning('douglas.enqueue', 'enqueue_failed', {
+      userId: recipientUserId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }
@@ -495,7 +524,14 @@ export async function enqueueGentleVerificationReminder(
       }
       return null;
     }
-    console.error('[notifications.enqueue] gentle verification reminder failed', err);
+    // Audit ERR-3 — a real DB failure here dropped a member's gentle nudge
+    // silently (console-only, invisible to Sentry AND uncounted by the scan).
+    // Surface it, best-effort — return null keeps the caller's flow unchanged.
+    reportWarning('verification.reminders', 'gentle_enqueue_failed', {
+      userId: recipientUserId,
+      discrepancyId: payload.discrepancyId,
+      error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+    });
     return null;
   }
 }

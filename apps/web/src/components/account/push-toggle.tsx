@@ -68,6 +68,21 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return outputArray;
 }
 
+/// Race `navigator.serviceWorker.ready` against a timeout. Per the SW spec,
+/// `ready` resolves only once an active registration exists and NEVER rejects —
+/// so if registration silently fails (CSP/MIME/transient fetch), a bare
+/// `await navigator.serviceWorker.ready` would hang forever and strand the toggle
+/// on its loading card. Returning `null` on timeout lets each caller fall back to
+/// a real state instead (audit PWA-1).
+function swReadyOrNull(ms = 5000): Promise<ServiceWorkerRegistration | null> {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), ms);
+    }),
+  ]);
+}
+
 export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props): React.ReactNode {
   const [state, setState] = useState<ToggleState>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -111,8 +126,8 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
           // Check whether we already have a subscription. Tolerate a missing
           // SW registration (racing with `<ServiceWorkerRegister>`).
           try {
-            const reg = await navigator.serviceWorker.ready;
-            const sub = await reg.pushManager.getSubscription();
+            const reg = await swReadyOrNull();
+            const sub = reg ? await reg.pushManager.getSubscription() : null;
             next = sub !== null && initialSubscriptionCount > 0 ? 'subscribed' : 'idle-no-sub';
           } catch {
             next = 'idle-no-sub';
@@ -131,7 +146,11 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
   async function handleSubscribe(): Promise<void> {
     setError(null);
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await swReadyOrNull();
+      if (!reg) {
+        setError('Service de notifications indisponible. Réessaie dans un instant.');
+        return;
+      }
 
       // Permission prompt — must be triggered from the click handler (user gesture).
       let permission: NotificationPermission = Notification.permission;
@@ -171,7 +190,11 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
   async function handleUnsubscribe(): Promise<void> {
     setError(null);
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await swReadyOrNull();
+      if (!reg) {
+        setState('idle-no-sub');
+        return;
+      }
       const sub = await reg.pushManager.getSubscription();
       if (!sub) {
         setState('idle-no-sub');

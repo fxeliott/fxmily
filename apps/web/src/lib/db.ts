@@ -19,9 +19,21 @@ function createClient(): PrismaClient {
   // (cf. Prisma skills /prisma-upgrade-v7/references/driver-adapters.md).
   const adapter = new PrismaPg({
     connectionString: env.DATABASE_URL,
-    max: 10,
+    max: env.DATABASE_POOL_MAX,
     connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 30_000,
+    // Scale hardening (2026-06-29 A-Z audit) — a single runaway query (missing
+    // index hit, accidental cross join) must not pin a pool slot indefinitely
+    // and cascade into pool exhaustion for every other request. statement_timeout
+    // aborts it; idle_in_transaction_session_timeout reaps a transaction left
+    // open holding row locks. Generous defaults (30 s / 60 s) never touch the
+    // sub-second OLTP queries this app runs, and both are env-tunable / 0=off.
+    ...(env.DATABASE_STATEMENT_TIMEOUT_MS > 0
+      ? { statement_timeout: env.DATABASE_STATEMENT_TIMEOUT_MS }
+      : {}),
+    ...(env.DATABASE_IDLE_IN_TX_TIMEOUT_MS > 0
+      ? { idle_in_transaction_session_timeout: env.DATABASE_IDLE_IN_TX_TIMEOUT_MS }
+      : {}),
   });
   return new PrismaClient({
     adapter,

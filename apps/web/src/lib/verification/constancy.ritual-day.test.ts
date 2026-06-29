@@ -35,6 +35,7 @@ vi.mock('@/lib/observability', () => ({ reportError: vi.fn() }));
 
 import { scanRitualsForAllMembers } from './constancy';
 import { parseLocalDate } from '@/lib/checkin/timezone';
+import { reportError } from '@/lib/observability';
 
 beforeEach(() => {
   for (const fn of Object.values(m)) fn.mockReset();
@@ -85,5 +86,65 @@ describe('scanRitualsForAllMembers — ritual-day timestamping', () => {
     }
     // A fully filled day raises no blank-day discrepancy.
     expect(m.discrepancyCreate).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * CONC1-A — the blank-day discrepancy create is read-then-created with no
+ * transaction; two interleaved passes (daily cron + event-driven batch) could
+ * both read « none » and both INSERT. The partial unique index
+ * `discrepancies_blank_day_uniq` makes the loser raise P2002; the app folds it
+ * to a no-op by re-reading the winner so the day's `forgot` events still point
+ * at the single surviving excusable discrepancy. These tests lock that fold.
+ */
+describe('scanRitualsForAllMembers — blank-day race (CONC1-A)', () => {
+  it('🚨 RACE — a concurrent pass already created the blank day (P2002) → no-op, the forgot events still link the winner', async () => {
+    const now = new Date('2026-06-15T06:00:00.000Z');
+    m.userFindMany.mockResolvedValue([{ id: 'memberA' }]);
+    m.checkinFindMany.mockResolvedValue([]); // fully blank day
+    // First read (pre-create) sees nothing; the create loses the race (P2002);
+    // the catch re-reads and finds the winner row.
+    m.discrepancyFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'winner1' });
+    m.discrepancyCreate.mockRejectedValue({ code: 'P2002' });
+    m.scoreEventCreateMany.mockResolvedValue({ count: 2 });
+
+    const result = await scanRitualsForAllMembers({ now });
+
+    // P2002 is a clean dedup, NOT a member-level failure.
+    expect(result.errors).toBe(0);
+    // The winning pass already counted the row — the loser must not double-count.
+    expect(result.blankDayDiscrepancies).toBe(0);
+    // The two forgot events reference the SURVIVOR so a « motif valable » still
+    // excuses the whole day.
+    expect(m.scoreEventCreateMany).toHaveBeenCalledTimes(1);
+    const arg = m.scoreEventCreateMany.mock.calls[0]?.[0] as {
+      data: Array<{ reason: string; relatedDiscrepancyId: string | null }>;
+    };
+    const forgot = arg.data.filter((e) => e.reason === 'forgot_no_reason');
+    expect(forgot).toHaveLength(2);
+    for (const ev of forgot) {
+      expect(ev.relatedDiscrepancyId).toBe('winner1');
+    }
+  });
+
+  it('🚨 a NON-P2002 create failure is surfaced (errors + Sentry), never silently swallowed', async () => {
+    const now = new Date('2026-06-15T06:00:00.000Z');
+    m.userFindMany.mockResolvedValue([{ id: 'memberA' }]);
+    m.checkinFindMany.mockResolvedValue([]); // fully blank day
+    m.discrepancyFindFirst.mockResolvedValue(null);
+    m.discrepancyCreate.mockRejectedValue(new Error('db connection lost'));
+    m.scoreEventCreateMany.mockResolvedValue({ count: 2 });
+
+    // The scan must NOT throw — the member is settled as rejected and reported.
+    const result = await scanRitualsForAllMembers({ now });
+
+    expect(result.errors).toBe(1);
+    expect(vi.mocked(reportError)).toHaveBeenCalledWith(
+      'verification.constancy.scan',
+      expect.any(Error),
+      expect.objectContaining({ memberId: 'memberA' }),
+    );
+    // The throw happens before the events write — no score events for this member.
+    expect(m.scoreEventCreateMany).not.toHaveBeenCalled();
   });
 });

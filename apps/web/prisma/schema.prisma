@@ -2847,6 +2847,11 @@ model Discrepancy {
   // One tracking-skip gap per (member, instrument@occurrence). NULL trackingRef
   // rows (every other type) never collide (Postgres NULLs distinct).
   @@unique([memberId, trackingRef])
+  // RAW partial unique index `discrepancies_blank_day_uniq` ON (member_id,
+  // detected_at) WHERE type = 'unfilled_no_reason' — hand-written in migration
+  // 20260629110000 (Prisma 7 can't model a WHERE predicate). Enforces ONE
+  // blank-day excuse per (member, civil day); the loser's create folds P2002 to
+  // a no-op in constancy.ts. Same convention as discrepancies_reconcile_key_uniq.
   // Member + admin views: open discrepancies first.
   @@index([memberId, status])
   @@index([memberId, detectedAt(sort: Desc)])

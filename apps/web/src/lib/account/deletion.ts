@@ -2,6 +2,7 @@ import 'server-only';
 
 import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import { reportWarning } from '@/lib/observability';
 import { selectStorage } from '@/lib/storage';
 
 /**
@@ -247,8 +248,16 @@ export async function materialisePendingDeletions(
   let errors = 0;
   for (const u of pending) {
     try {
-      await db.user.update({
-        where: { id: u.id },
+      // RC#7 TX-4 — the snapshot above is a plain read; a member whose grace
+      // just elapsed can still legitimately `cancelAccountDeletion` (sets
+      // deletedAt=null, status stays 'active') in the window between this
+      // findMany and the write below. A bare id-only update would override
+      // that cancel and scrub the PII of a user who explicitly opted back in.
+      // Re-assert the predicate in the WHERE so a concurrent cancel makes this
+      // write a no-op (count===0) — mirrors the guarded updateMany already used
+      // by request/cancelAccountDeletion in this file.
+      const res = await db.user.updateMany({
+        where: { id: u.id, status: 'active', deletedAt: { lte: now } },
         data: {
           status: 'deleted',
           deletedAt: now,
@@ -268,10 +277,17 @@ export async function materialisePendingDeletions(
           pushSubscription: Prisma.DbNull,
         },
       });
-      materialisedIds.push(u.id);
+      // count===0 → a concurrent cancel won the race; honour it, don't count it.
+      if (res.count === 1) materialisedIds.push(u.id);
     } catch (err) {
       errors += 1;
-      console.error('[account.deletion.materialise] failed for', u.id, err);
+      // RC#7 CRON-1 — surface per-user erasure failures to Sentry (bare
+      // console.error is NOT captured server-side), so a member exercising
+      // their RGPD art.17 right to erasure can't stay un-scrubbed silently.
+      reportWarning('account.deletion.materialise', 'user_op_failed', {
+        userId: u.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -423,7 +439,12 @@ export async function purgeMaterialisedDeletions(
       purgedIds.push(u.id);
     } catch (err) {
       errors += 1;
-      console.error('[account.deletion.purge] failed for', u.id, err);
+      // RC#7 CRON-1 — surface per-user hard-purge failures to Sentry so a
+      // stuck erasure (FK deadlock, pool timeout) can't silently never complete.
+      reportWarning('account.deletion.purge', 'user_op_failed', {
+        userId: u.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

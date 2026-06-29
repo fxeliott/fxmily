@@ -14,7 +14,7 @@ import {
 } from '@/lib/analytics';
 import {
   localDateOf,
-  parseLocalDate,
+  localInstantToUtc,
   shiftLocalDate,
   type LocalDateString,
 } from '@/lib/checkin/timezone';
@@ -143,8 +143,12 @@ async function _getDashboardAnalyticsImpl(
   const today = localDateOf(new Date(), timezone);
   const anchor = asOf ?? today;
   const windowStart = shiftLocalDate(anchor, -(windowDays - 1));
-  const windowStartUtc = parseLocalDate(windowStart);
-  const windowEndExclusive = parseLocalDate(shiftLocalDate(anchor, 1));
+  // TIME-1 (RC#8) — Trade.closedAt is a true UTC instant, so bucket it by the
+  // real Paris civil-day boundary (DST-aware) instead of UTC-midnight pins, to
+  // match the behavioral-scoring window (scoring/service.ts) and the weekly
+  // report. UTC-midnight pins are 1-2h off and misfile late-evening trades.
+  const windowStartUtc = localInstantToUtc(windowStart, 0, 0, 0, 0, timezone);
+  const windowEndExclusive = localInstantToUtc(shiftLocalDate(anchor, 1), 0, 0, 0, 0, timezone);
 
   const trades = await db.trade.findMany({
     where: {

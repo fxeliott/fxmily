@@ -163,6 +163,7 @@ export function SessionTimeline({
               'rounded-pill inline-flex items-center border px-2.5 py-1 text-[11px] font-medium',
               tradeChipSurface,
             )}
+            {...(tradeTone === 'warn' ? { 'data-warn-text': '' } : {})}
             title={tradeChipHint}
           >
             {tradeChipLabel}

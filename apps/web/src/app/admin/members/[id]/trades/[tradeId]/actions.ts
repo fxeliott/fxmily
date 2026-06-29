@@ -13,6 +13,7 @@ import { logAudit } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
 import { sendAnnotationReceivedEmail } from '@/lib/email/send';
 import { enqueueAnnotationNotification } from '@/lib/notifications/enqueue';
+import { reportWarning } from '@/lib/observability';
 import { annotationCreateSchema } from '@/lib/schemas/annotation';
 import { parseAnnotationKey, selectStorage } from '@/lib/storage';
 
@@ -156,9 +157,12 @@ export async function createAnnotationAction(
     // (the janitor sweep is a backstop, not a guarantee).
     if (mediaKey !== null) {
       const storage = selectStorage();
-      void storage
-        .delete(mediaKey)
-        .catch((e) => console.error('[admin.annotation.create] orphan media cleanup failed', e));
+      void storage.delete(mediaKey).catch((e) =>
+        reportWarning('admin.annotation.create', 'orphan_media_cleanup_failed', {
+          mediaKey,
+          error: e instanceof Error ? e.message.slice(0, 200) : 'unknown',
+        }),
+      );
     }
     console.error('[admin.annotation.create] db insert failed', err);
     return { ok: false, error: 'unknown' };

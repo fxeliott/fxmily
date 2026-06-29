@@ -35,6 +35,24 @@ const envSchema = z.object({
   DATABASE_POOL_MAX: z.coerce.number().int().positive().max(100).default(10),
   DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(30_000),
   DATABASE_IDLE_IN_TX_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(60_000),
+  /// Dead-socket backstop + connection rotation (2026-06-29 A-Z deep audit).
+  /// `DATABASE_QUERY_TIMEOUT_MS` is CLIENT-side : unlike `statement_timeout`
+  /// (server-side — it needs a LIVE socket to deliver the cancel), it fires even
+  /// when the TCP connection has silently died (NAT/firewall idle-reap, server
+  /// OOM-kill, failover) and the backend will never answer. Without it a
+  /// black-holed query pins its pool slot until the OS gives up (minutes), and a
+  /// handful of those exhaust the pool → every other route hits
+  /// `connectionTimeoutMillis` and 500s. Defaulted slightly ABOVE
+  /// `statement_timeout` (35 s vs 30 s) so the server-side abort wins on a LIVE
+  /// socket (cleaner Postgres error) and this only reaps a DEAD one. 0 = off.
+  DATABASE_QUERY_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(35_000),
+  /// `DATABASE_MAX_LIFETIME_S` forces pool-connection rotation : evict any
+  /// connection older than this regardless of idleness. Survives a silent DB
+  /// failover / rolling restart (stale connections to a demoted primary get
+  /// recycled instead of erroring on next use) and bounds the blast radius of a
+  /// single leaked server-side session state. 1800 s (30 min) is conservative
+  /// for an always-on container ; 0 = disabled (never rotate).
+  DATABASE_MAX_LIFETIME_S: z.coerce.number().int().nonnegative().default(1_800),
 
   // Jalon 1 — Auth.js v5
   AUTH_SECRET: z
@@ -328,7 +346,30 @@ export const envSchemaWithRefines = envSchema
     message:
       'DATABASE_POOL_MAX doit être >= 8 (concurrence batch fixe : push dispatcher=8, verification scan=5). En dessous, les chunks saturent le pool et les crons throw sur connectionTimeoutMillis.',
     path: ['DATABASE_POOL_MAX'],
-  });
+  })
+  /**
+   * 2026-06-29 A-Z deep audit — lock the documented timeout invariant at boot.
+   *
+   * `db.ts` relies on the SERVER-side `statement_timeout` aborting a query on a
+   * LIVE socket BEFORE the CLIENT-side `query_timeout` fires (the latter is only
+   * the dead-socket backstop). That ordering holds iff
+   * `query_timeout >= statement_timeout` whenever both are enabled. An operator
+   * tuning these for a tighter Postgres budget could silently invert them and
+   * make the client timeout cut healthy long queries before Postgres aborts them
+   * cleanly. We block the boot instead. Either side at 0 = disabled = opt-out,
+   * which passes (the operator explicitly chose a single-sided cap).
+   */
+  .refine(
+    (e) =>
+      e.DATABASE_QUERY_TIMEOUT_MS === 0 ||
+      e.DATABASE_STATEMENT_TIMEOUT_MS === 0 ||
+      e.DATABASE_QUERY_TIMEOUT_MS >= e.DATABASE_STATEMENT_TIMEOUT_MS,
+    {
+      message:
+        'DATABASE_QUERY_TIMEOUT_MS (client-side, dead-socket backstop) doit être >= DATABASE_STATEMENT_TIMEOUT_MS (server-side) quand les deux sont actifs : sinon le timeout client coupe un query LIVE avant l’abort propre de Postgres.',
+      path: ['DATABASE_QUERY_TIMEOUT_MS'],
+    },
+  );
 
 const parsed = envSchemaWithRefines.safeParse(process.env);
 

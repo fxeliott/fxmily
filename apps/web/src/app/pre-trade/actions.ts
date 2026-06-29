@@ -6,6 +6,7 @@ import type { ZodError } from 'zod';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
+import { reportWarning } from '@/lib/observability';
 import { createPreTradeCheck } from '@/lib/pre-trade/service';
 import { preTradeCheckSchema } from '@/lib/schemas/pre-trade-check';
 
@@ -107,7 +108,7 @@ export async function submitPreTradeCheckAction(
       err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
         ? err.code
         : 'unknown';
-    console.error('[pre-trade.submit] persist failed', { code });
+    reportWarning('pre-trade.submit', 'persist_failed', { code });
     return { ok: false, error: 'unknown' };
   }
 

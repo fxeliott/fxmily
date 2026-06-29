@@ -250,12 +250,41 @@ export async function loadAllSnapshotsForCalendarGeneration(
         } satisfies CalendarBatchSnapshotEntry;
       }),
     );
-    for (const res of results) {
+    // `Promise.allSettled` preserves order, so `results[j]` ↔ `chunk[j]` — zip
+    // them to recover the failing member's id for the observability path below.
+    for (let j = 0; j < results.length; j += 1) {
+      const res = results[j];
+      if (res === undefined) continue;
       if (res.status === 'fulfilled' && res.value !== null) {
         entries.push(res.value);
+        continue;
       }
-      // Rejected promises are silently dropped — individual member load
-      // failures (corrupt row, etc.) must not fail the whole batch.
+      // A REJECTED per-member snapshot load (corrupt row, transient DB error)
+      // must NOT fail the whole batch — but it must NOT be a SILENT drop either:
+      // that member silently gets no adaptive calendar this week with nothing to
+      // explain why. Surface it (Sentry warning + PII-free audit) so an operator
+      // can spot a member repeatedly missing their calendar. Mirror the
+      // weekly/monthly debrief batchers. A `fulfilled`-with-`null` slice is an
+      // intentional drop (questionnaire vanished mid-run) and stays silent —
+      // only `rejected` is the unexpected failure we report. (`reason` =
+      // error.message truncated to 200 chars; not guaranteed PII-free, the
+      // truncation + read-only surface is the safeguard, never the AI text.)
+      if (res.status === 'rejected') {
+        const memberId = chunk[j]?.id ?? null;
+        const reason =
+          res.reason instanceof Error
+            ? res.reason.message.slice(0, 200)
+            : String(res.reason).slice(0, 200);
+        reportWarning('calendar.batch', 'member_snapshot_load_failed', {
+          userId: memberId,
+          reason,
+        });
+        await logAudit({
+          action: 'calendar.batch.skipped',
+          userId: memberId,
+          metadata: { ranAt, weekStart, reason },
+        });
+      }
     }
   }
 

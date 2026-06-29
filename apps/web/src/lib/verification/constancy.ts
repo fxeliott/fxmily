@@ -15,6 +15,11 @@ import { getCurrentInstruments } from '@/lib/tracking/registry';
 
 import { mapMembersChunked } from './batch-util';
 
+/** Prisma unique-constraint violation (P2002), detected without importing @prisma/client. */
+function isUniqueConstraintError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
+}
+
 /**
  * S3 §33.5 — Score de constance & d'investissement dans le travail.
  *
@@ -146,19 +151,38 @@ export async function scanRitualsForAllMembers(
       if (existing) {
         blankDayDiscrepancyId = existing.id;
       } else {
-        const created = await db.discrepancy.create({
-          data: {
-            memberId: member.id,
-            type: 'unfilled_no_reason',
-            severity: 1,
-            detectedAt: yesterdayDate,
-            claudeReasoning:
-              'Journée sans aucun check-in (matin et soir vides), sans motif déclaré pour le moment.',
-          },
-          select: { id: true },
-        });
-        blankDayDiscrepancyId = created.id;
-        blankDayDiscrepancies += 1;
+        try {
+          const created = await db.discrepancy.create({
+            data: {
+              memberId: member.id,
+              type: 'unfilled_no_reason',
+              severity: 1,
+              detectedAt: yesterdayDate,
+              claudeReasoning:
+                'Journée sans aucun check-in (matin et soir vides), sans motif déclaré pour le moment.',
+            },
+            select: { id: true },
+          });
+          blankDayDiscrepancyId = created.id;
+          blankDayDiscrepancies += 1;
+        } catch (err) {
+          // The read-then-create above is NOT concurrency-safe: the daily
+          // `verification-scan` cron and an event-driven `batch.ts` pass can both
+          // read « none » for the same blank day before either commits, then both
+          // INSERT — a duplicate excusable accusation for one day (and the day's
+          // `forgot` events would split their excuse link across two rows). The
+          // partial unique index `discrepancies_blank_day_uniq` (member, day)
+          // makes the loser's create raise P2002; fold it to a no-op by re-reading
+          // the winner so this pass's `forgot` events still reference the single
+          // surviving discrepancy. Mirror reconcile.ts `createIfNew`. NOT counted
+          // in `blankDayDiscrepancies` — the winning pass already counted it.
+          if (!isUniqueConstraintError(err)) throw err;
+          const winner = await db.discrepancy.findFirst({
+            where: { memberId: member.id, type: 'unfilled_no_reason', detectedAt: yesterdayDate },
+            select: { id: true },
+          });
+          blankDayDiscrepancyId = winner?.id ?? null;
+        }
       }
     }
 

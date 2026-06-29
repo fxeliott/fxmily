@@ -888,6 +888,11 @@ export async function dispatchAllReady(
         // refuse to abort the whole batch over one row. Count as failed so
         // the audit metadata stays accurate, the next cron run picks the row
         // back up via the stuck-recovery path or the row-level claim retry.
+        // Surface the throw to Sentry (twin of the unregistered-type path) so a
+        // systematic dispatchOne bug is observable, not buried inside `failed`.
+        reportWarning('push.dispatcher', 'dispatch_one_threw', {
+          error: settled.reason instanceof Error ? settled.reason.message.slice(0, 200) : 'unknown',
+        });
         failed += 1;
         continue;
       }

@@ -356,7 +356,15 @@ export async function purgeMaterialisedDeletions(
           try {
             await storage.delete(proof.fileKey);
           } catch (err) {
-            console.warn('[account.deletion.purge] proof sweep failed (non-fatal)', err);
+            // Non-fatal, but route to Sentry: a failed object delete strands
+            // broker-screenshot PII in the uploads volume after a right-to-
+            // erasure — console-only left that condition invisible (the user
+            // row is hard-deleted regardless, so it never re-surfaces).
+            reportWarning('account.deletion.purge', 'storage_sweep_failed', {
+              userId: u.id,
+              kind: 'proof',
+              error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+            });
           }
         }
       }
@@ -389,7 +397,13 @@ export async function purgeMaterialisedDeletions(
           try {
             await storage.delete(key);
           } catch (err) {
-            console.warn('[account.deletion.purge] training sweep failed (non-fatal)', err);
+            // Non-fatal — route to Sentry (see proof sweep above): a failed
+            // delete strands training media PII after a right-to-erasure.
+            reportWarning('account.deletion.purge', 'storage_sweep_failed', {
+              userId: u.id,
+              kind: 'training',
+              error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+            });
           }
         }
       }
@@ -430,7 +444,14 @@ export async function purgeMaterialisedDeletions(
           try {
             await storage.delete(key);
           } catch (err) {
-            console.warn('[account.deletion.purge] trade media sweep failed (non-fatal)', err);
+            // Non-fatal — route to Sentry (see proof sweep above): a failed
+            // delete strands real-trade broker-screenshot PII (name/account/
+            // balance/P&L) after a right-to-erasure.
+            reportWarning('account.deletion.purge', 'storage_sweep_failed', {
+              userId: u.id,
+              kind: 'trade',
+              error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+            });
           }
         }
       }

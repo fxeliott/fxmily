@@ -18,7 +18,7 @@ const { envMock, sendMock } = vi.hoisted(() => ({
 
 vi.mock('@/lib/db', () => ({
   db: {
-    mt5AccountProof: { findMany: vi.fn() },
+    mt5AccountProof: { count: vi.fn(), findFirst: vi.fn() },
   },
 }));
 
@@ -44,14 +44,26 @@ const WITHIN_GRACE = '2026-06-10T20:00:00.000Z';
 const EXACT_BOUNDARY = '2026-06-10T10:00:00.000Z';
 
 /**
- * The scan reads `{ uploadedAt }` rows only (pending proofs of active members —
- * that filtering is DB-side, see the where-clause pin below). The mock
- * therefore only models timestamps.
+ * The scan now delegates BOTH the candidate logic AND the per-proof grace split
+ * to the DB : two index-backed `count`s (overdue past grace + every pending row)
+ * + one `findFirst` for the oldest overdue, replacing the prior findMany+JS. The
+ * mock simulates Prisma from the same timestamp list : the overdue
+ * `count`/`findFirst` carry an `uploadedAt: { lte }` filter (rows past grace /
+ * the oldest of them), the bare `count` (pendingActive, no `uploadedAt`) counts
+ * every pending row. Same scenarios in, same asserted scan output.
  */
 function mockDb(uploadedAts: string[]) {
-  vi.mocked(db.mt5AccountProof.findMany).mockResolvedValue(
-    uploadedAts.map((iso) => ({ uploadedAt: new Date(iso) })) as never,
-  );
+  const rows = uploadedAts.map((iso) => ({ uploadedAt: new Date(iso) }));
+  const graceThreshold = NOW.getTime() - 24 * 60 * 60 * 1000;
+  const overdue = rows
+    .filter((r) => r.uploadedAt.getTime() <= graceThreshold)
+    .sort((a, b) => a.uploadedAt.getTime() - b.uploadedAt.getTime());
+
+  vi.mocked(db.mt5AccountProof.count).mockImplementation(((args: {
+    where: Record<string, unknown>;
+  }) => Promise.resolve('uploadedAt' in args.where ? overdue.length : rows.length)) as never);
+  vi.mocked(db.mt5AccountProof.findFirst).mockImplementation((() =>
+    Promise.resolve(overdue[0] ?? null)) as never);
 }
 
 beforeEach(() => {
@@ -118,7 +130,9 @@ describe('scanOverdueVerifications — candidate logic', () => {
     mockDb([]);
     await scanOverdueVerifications({ now: NOW });
 
-    const arg = vi.mocked(db.mt5AccountProof.findMany).mock.calls[0]?.[0] as {
+    // The oldest-overdue `findFirst` carries the FULL predicate (pending + active
+    // member + the grace `lte`) AND the PII-free select, so it pins both at once.
+    const arg = vi.mocked(db.mt5AccountProof.findFirst).mock.calls[0]?.[0] as {
       where: Record<string, unknown>;
       select: Record<string, unknown>;
     };

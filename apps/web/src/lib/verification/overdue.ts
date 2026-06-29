@@ -73,31 +73,36 @@ export async function scanOverdueVerifications(
   const now = options.now ?? new Date();
   const graceThreshold = new Date(now.getTime() - OVERDUE_GRACE_HOURS * 60 * 60 * 1000);
 
-  const rows = await db.mt5AccountProof.findMany({
-    where: {
-      // Only proofs still awaiting analysis — `done` (analysed) and `failed`
-      // (a `not_mt5_history` content verdict) never owe a batch run, exactly
-      // like the batch pull predicate (`lib/verification/batch.ts:139`).
-      ocrStatus: 'pending',
-      // A member who left (soft-delete / deletion pipeline) is no longer owed
-      // an analysis — mirror of the batch pull's `member: { status: 'active' }`
-      // filter and the sibling nets' active-user predicate.
-      member: { status: 'active' },
-    },
-    select: { uploadedAt: true },
-  });
-
-  const uploadedAts = rows.map((r) => r.uploadedAt);
-
+  // Only proofs still awaiting analysis — `done` (analysed) and `failed`
+  // (a `not_mt5_history` content verdict) never owe a batch run, exactly like
+  // the batch pull predicate (`lib/verification/batch.ts:139`). A member who
+  // left (deletion pipeline) is no longer owed one — mirror of the batch pull's
+  // `member: { status: 'active' }` filter.
+  const pendingActive = {
+    ocrStatus: 'pending',
+    member: { status: 'active' },
+  } as const;
   // Per-proof grace : overdue ⇔ the 24h courtesy window has fully elapsed. `≤`
   // on purpose — at exactly +24h the proof is overdue (mirror onboarding net).
-  const overdue = uploadedAts.filter((d) => d.getTime() <= graceThreshold.getTime());
-  const oldestOverdue = overdue.length > 0 ? overdue.reduce((min, d) => (d < min ? d : min)) : null;
+  const overduePredicate = { ...pendingActive, uploadedAt: { lte: graceThreshold } };
+
+  // Bounded reads (no materialising every cohort-wide pending row): two counts
+  // + the oldest overdue timestamp, all index-backed on `@@index([ocrStatus,
+  // uploadedAt])`, constant memory. Identical results to the prior findMany+JS.
+  const [overdueCount, oldestOverdue, pendingCount] = await Promise.all([
+    db.mt5AccountProof.count({ where: overduePredicate }),
+    db.mt5AccountProof.findFirst({
+      where: overduePredicate,
+      orderBy: { uploadedAt: 'asc' },
+      select: { uploadedAt: true },
+    }),
+    db.mt5AccountProof.count({ where: pendingActive }),
+  ]);
 
   return {
-    overdueCount: overdue.length,
-    oldestUploadedAt: oldestOverdue ? oldestOverdue.toISOString() : null,
-    withinGrace: overdue.length === 0 && uploadedAts.length > 0,
+    overdueCount,
+    oldestUploadedAt: oldestOverdue ? oldestOverdue.uploadedAt.toISOString() : null,
+    withinGrace: overdueCount === 0 && pendingCount > 0,
     scannedAt: now.toISOString(),
   };
 }

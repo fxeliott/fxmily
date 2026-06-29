@@ -64,7 +64,16 @@ export async function sendEmail({
     return { id: null, delivered: false };
   }
 
-  const { data, error } = await resendClient.emails.send({
+  // Bound the outbound Resend call with a Promise.race timeout. The SDK (v6.x)
+  // exposes no type-safe per-request `signal`/`timeout`, and Node's `fetch`
+  // applies no overall-request deadline — so a stalled-but-open connection would
+  // otherwise hang this await, and (via the push dispatcher's awaited fallback
+  // leg) stall a cron run toward its 600s ceiling. On timeout we reject with the
+  // same EmailDeliveryError every best-effort caller already catches, so a hung
+  // gateway degrades to the existing Sentry-warning path (audit RES-3).
+  const SEND_TIMEOUT_MS = 10_000;
+
+  const sendPromise = resendClient.emails.send({
     from: fromAddress,
     to: [to],
     subject,
@@ -72,6 +81,23 @@ export async function sendEmail({
     text,
   });
 
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(new EmailDeliveryError(`Resend send timed out after ${SEND_TIMEOUT_MS}ms`, null)),
+      SEND_TIMEOUT_MS,
+    );
+  });
+
+  let result: Awaited<typeof sendPromise>;
+  try {
+    result = await Promise.race([sendPromise, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+
+  const { data, error } = result;
   if (error) {
     throw new EmailDeliveryError(error.message ?? 'Resend rejected the email', error);
   }

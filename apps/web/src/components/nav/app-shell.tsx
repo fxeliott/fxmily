@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
+import { ServiceWorkerRegister } from '@/components/account/sw-register';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { ThemeToggle } from '@/components/theme-toggle';
 import {
@@ -69,6 +70,12 @@ export function AppShell({ session, signOutAction, children }: AppShellProps) {
 
   return (
     <>
+      {/* Register the Service Worker once on every authenticated app open
+          (incl. /dashboard launches), so push notificationclick routing + SW
+          refresh work even for members who never open /account/notifications
+          (audit PWA-2). Renders null; register() is idempotent. */}
+      <ServiceWorkerRegister />
+
       {/* ── Sidebar desktop (≥ lg) ─────────────────────────────────── */}
       <aside
         data-slot="app-sidebar"

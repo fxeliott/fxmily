@@ -92,6 +92,16 @@ export interface ComputeScoresOptions {
    * single-user path reads it from the same `db.user` query as `timezone`.
    */
   joinedAt?: Date;
+  /**
+   * PERF-1 — batch-scoped memo for the meeting denominator (scheduled-meeting
+   * count). That count depends only on the floored (window-start, window-end)
+   * pair, NOT on the member, so the nightly batch shares ONE count across every
+   * member on the same window instead of one query per member. Created once by
+   * `recomputeAllActiveMembers`; omitted on the single-user path (nothing to
+   * share). Keyed by window so mid-period joiners with a distinct floored window
+   * still get their own correct count. Never crosses batch/run boundaries.
+   */
+  scheduledCountMemo?: Map<string, Promise<number>>;
 }
 
 /**
@@ -213,7 +223,9 @@ export async function computeScoresForUser(
     // sub-score). Returns { scheduledCount, completedCount } integers — feeds the
     // ADDITION-PURE `meetingAttendanceRate` sub-score and nothing else (§30.7).
     // `meetingFrom` floors the window start at the member's join day (T3-1).
-    countMeetingAttendance(userId, meetingFrom, windowEndExclusive),
+    // PERF-1 — pass the batch memo (undefined on the single-user path) so the
+    // userId-independent denominator is computed once per window across a batch.
+    countMeetingAttendance(userId, meetingFrom, windowEndExclusive, options.scheduledCountMemo),
   ]);
 
   // Map to scoring inputs.
@@ -450,6 +462,12 @@ export async function recomputeAllActiveMembers(
   const skipped = 0;
   let errors = 0;
 
+  // PERF-1 — ONE denominator memo for the whole run (shared across every batch).
+  // Members who joined before the period start share the same floored meeting
+  // window, so their identical scheduled-meeting COUNT is computed once instead
+  // of once-per-member. Scoped to this call only — never reused across nights.
+  const scheduledCountMemo = new Map<string, Promise<number>>();
+
   // Compute the anchor in each user's TZ — different members may sit in
   // different timezones (V1 default Europe/Paris, but the column exists).
   for (let i = 0; i < users.length; i += batchSize) {
@@ -460,6 +478,7 @@ export async function recomputeAllActiveMembers(
           ...options,
           timezone: u.timezone,
           joinedAt: u.joinedAt,
+          scheduledCountMemo,
         }),
       ),
     );

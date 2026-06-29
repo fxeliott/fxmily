@@ -234,7 +234,13 @@ export class LiveWeeklyReportClient implements WeeklyReportClaudeClient {
       return new MockWeeklyReportClient().generate(snapshot);
     }
 
-    const client = new Anthropic({ apiKey });
+    // Bound the request: the SDK default is a 10-minute timeout × up to 2
+    // retries (~30 min worst case on a hung connection), on a server cron path.
+    // A 60s timeout comfortably covers a 2048-max_tokens non-streaming
+    // completion and keeps a 5-member chunk bounded even if one member stalls;
+    // the resulting APIConnectionTimeoutError is already isolated per member by
+    // Promise.allSettled → reportWarning (audit RESIL-2).
+    const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 2 });
     const model = env.ANTHROPIC_MODEL;
     const userPrompt = buildWeeklyReportUserPrompt(snapshot);
 

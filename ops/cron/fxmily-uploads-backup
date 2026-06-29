@@ -141,4 +141,19 @@ fi
 find "$BACKUP_DIR" -name 'uploads-*.tar.gz.gpg' -mtime +7 -delete
 log "rotation OK (kept 7 days local)"
 
+# ---- 5. Dead-man-switch success ping (opt-in, env-gated) ------------------
+# Same contract as fxmily-backup: ping ONLY after a fully-successful run so a
+# missing ping = silent cron death → Healthchecks alert after grace. Member
+# proof uploads are irreplaceable, so silent backup failure here is the worst
+# case this guards against. No-op until HEALTHCHECK_PING_URL_UPLOADS is set in
+# cron.env (Eliott pastes the hc-ping.com URL host-side, zero code change).
+PING_URL="${HEALTHCHECK_PING_URL_UPLOADS:-${HEALTHCHECK_PING_URL:-}}"
+if [[ -n "$PING_URL" ]]; then
+  if curl -fsS -m 10 --retry 3 "$PING_URL" >/dev/null 2>&1; then
+    log "healthcheck ping OK"
+  else
+    log "WARNING healthcheck ping failed (backup itself succeeded)"
+  fi
+fi
+
 log "done"

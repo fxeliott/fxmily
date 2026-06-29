@@ -104,4 +104,18 @@ fi
 find "$BACKUP_DIR" -name 'caddy-*.tar.gz.gpg' -mtime +7 -delete
 log "rotation OK (kept 7 days local)"
 
+# ---- 5. Dead-man-switch success ping (opt-in, env-gated) ------------------
+# Same contract as fxmily-backup: ping ONLY after a fully-successful run so a
+# missing ping = silent cron death → Healthchecks alert after grace. Certs are
+# regenerable (lower stakes than PG/uploads) but a dead backup cron is still
+# worth surfacing. No-op until HEALTHCHECK_PING_URL_CADDY is set in cron.env.
+PING_URL="${HEALTHCHECK_PING_URL_CADDY:-${HEALTHCHECK_PING_URL:-}}"
+if [[ -n "$PING_URL" ]]; then
+  if curl -fsS -m 10 --retry 3 "$PING_URL" >/dev/null 2>&1; then
+    log "healthcheck ping OK"
+  else
+    log "WARNING healthcheck ping failed (backup itself succeeded)"
+  fi
+fi
+
 log "done"

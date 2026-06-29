@@ -736,8 +736,16 @@ export async function persistGeneratedProfiles(
           where: { id: entry.interviewId },
           data: {
             claudeModelVersion: model,
-            totalTokensInput: { increment: usage.inputTokens },
-            totalTokensOutput: { increment: usage.outputTokens },
+            // TXN-2 (RC#8) — ABSOLUTE set, not `increment`. The persist has no
+            // idempotency gate (the interview never flips to a terminal
+            // post-analysis status), so a retried/double-submitted results.json
+            // would re-run this update; a relative `increment` would inflate the
+            // per-interview token totals without bound on every re-delivery.
+            // These counters describe the cost of the CURRENT profile
+            // generation (one analysis run), not an accumulation, so an absolute
+            // write is the correct idempotent semantic.
+            totalTokensInput: usage.inputTokens,
+            totalTokensOutput: usage.outputTokens,
           },
         });
       } catch (err) {

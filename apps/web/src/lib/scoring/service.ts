@@ -4,6 +4,7 @@ import { Prisma } from '@/generated/prisma/client';
 
 import {
   localDateOf,
+  localInstantToUtc,
   parseLocalDate,
   shiftLocalDate,
   type LocalDateString,
@@ -102,6 +103,14 @@ export interface ComputeScoresOptions {
    * still get their own correct count. Never crosses batch/run boundaries.
    */
   scheduledCountMemo?: Map<string, Promise<number>>;
+  /**
+   * TIME-2 (RC#8) — the run's "now" instant. When the cron injects a non-real
+   * `now` (the dev-only `?at=` back-test override on the recompute route), it
+   * must reach the window anchor so the scored day is deterministic and
+   * consistent with the audited `ranAt`. Omitted on the live path ⇒ falls back
+   * to ambient `new Date()`, byte-identical to the prior behaviour.
+   */
+  now?: Date;
 }
 
 /**
@@ -138,13 +147,32 @@ export async function computeScoresForUser(
   // pre-fix behaviour), so a caller that passes only `timezone` is unaffected.
   const joinedAt = options.joinedAt ?? user?.joinedAt ?? null;
 
-  // Anchor to yesterday-local by default — today is incomplete.
-  const today = localDateOf(new Date(), timezone);
+  // Anchor to yesterday-local by default — today is incomplete. TIME-2 (RC#8):
+  // honour the injected run `now` (back-test) so the anchor is deterministic;
+  // `options.now ?? new Date()` is byte-identical on the live path.
+  const today = localDateOf(options.now ?? new Date(), timezone);
   const anchor = asOf ?? shiftLocalDate(today, -1);
   const windowStart = shiftLocalDate(anchor, -(windowDays - 1));
 
   const windowStartUtc = parseLocalDate(windowStart);
   const windowEndExclusive = parseLocalDate(shiftLocalDate(anchor, 1));
+  // TIME-1 (RC#8) — Trade.closedAt/enteredAt are TRUE UTC instants, NOT @db.Date
+  // civil pins. Bucketing them by parseLocalDate (UTC midnight) is 1-2h off the
+  // real Paris civil-day boundary (DST-aware), so a late-evening trade lands in
+  // the wrong day's window and the scoring window DISAGREES with the weekly
+  // report (which buckets the same column via localInstantToUtc — week-window.ts).
+  // Use the real Paris civil boundary for the trade fetch. The checkin (@db.Date),
+  // training-count (effort, edge-tolerant by design) and meeting (fixed 12:00
+  // slot, never at midnight) windows correctly keep the parseLocalDate bounds.
+  const tradeWindowStart = localInstantToUtc(windowStart, 0, 0, 0, 0, timezone);
+  const tradeWindowEndExclusive = localInstantToUtc(
+    shiftLocalDate(anchor, 1),
+    0,
+    0,
+    0,
+    0,
+    timezone,
+  );
   // §30.7 T3-1 — meeting denominator floored at the member's join day so a
   // mid-window joiner's engagement sub-score is not deflated by meetings held
   // before they existed. `null` joinedAt ⇒ unchanged window (byte-identical).
@@ -158,10 +186,10 @@ export async function computeScoresForUser(
       where: {
         userId,
         OR: [
-          // Closed within the window.
-          { closedAt: { gte: windowStartUtc, lt: windowEndExclusive } },
+          // Closed within the window (TIME-1 — Paris civil-day instants).
+          { closedAt: { gte: tradeWindowStart, lt: tradeWindowEndExclusive } },
           // Open trades — included so DisciplineScore can see plan-respect on entry.
-          { closedAt: null, enteredAt: { gte: windowStartUtc, lt: windowEndExclusive } },
+          { closedAt: null, enteredAt: { gte: tradeWindowStart, lt: tradeWindowEndExclusive } },
         ],
       },
       select: {
@@ -476,6 +504,10 @@ export async function recomputeAllActiveMembers(
       slice.map((u) =>
         recomputeAndPersist(u.id, undefined, {
           ...options,
+          // TIME-2 (RC#8) — forward the run instant into the per-user anchor so
+          // a back-test (`?at=`) scores the injected day, not ambient now.
+          // Conditional spread (exactOptionalPropertyTypes) — never pass undefined.
+          ...(now ? { now } : {}),
           timezone: u.timezone,
           joinedAt: u.joinedAt,
           scheduledCountMemo,
@@ -504,7 +536,16 @@ export async function recomputeAllActiveMembers(
 
   // Track skipped count for parity with the cron audit shape — V1 has none
   // (every active user is computed), but the reporting shape supports it.
-  return { computed, skipped, errors, ranAt };
+  return {
+    computed,
+    skipped,
+    errors,
+    ranAt,
+    // TIME-2 (RC#8) — surface the deterministic local-day anchor when a run
+    // `now` was injected (back-test/test path), matching the documented field.
+    // Uses the V1 default tz; per-member anchors may differ if timezones do.
+    ...(now ? { anchor: shiftLocalDate(localDateOf(now, 'Europe/Paris'), -1) } : {}),
+  };
 }
 
 // ----- Helpers ---------------------------------------------------------------

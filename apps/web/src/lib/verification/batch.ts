@@ -197,6 +197,21 @@ function positionHeuristicKey(args: {
   return `${args.symbol}|${args.side}|${args.openTimeMs}|${args.volume.toFixed(4)}`;
 }
 
+// TXN-1 (RC#8) — advisory-lock key derivation. A fixed int4 namespace + a
+// deterministic in-process FNV-1a 32-bit hash of the proofId, fed to the
+// DOCUMENTED `pg_advisory_xact_lock(int4, int4)` overload. Hashing in JS (not
+// via Postgres' undocumented `hashtext()`) keeps the key stable and version-
+// proof. A hash collision only causes a harmless spurious serialization.
+const PROOF_PERSIST_LOCK_NS = 0x1f2e3d4c; // "verification.proof.persist" namespace
+function proofPersistLockKey(proofId: string): number {
+  let h = 0x811c9dc5; // FNV-1a offset basis
+  for (let i = 0; i < proofId.length; i++) {
+    h ^= proofId.charCodeAt(i);
+    h = Math.imul(h, 0x01000193); // FNV prime, 32-bit via imul
+  }
+  return h | 0; // coerce to signed int4 (Postgres `integer`)
+}
+
 export async function persistVisionResults(
   request: VerificationBatchPersistRequest,
 ): Promise<VerificationBatchPersistResult> {
@@ -592,74 +607,94 @@ async function materialiseProofExtraction(args: MaterialiseArgs): Promise<Materi
   const windowStart = new Date(Math.min(...openTimes, Date.now()));
   const windowEnd = new Date(Math.max(...openTimes, 0));
 
-  const existing = await db.extractedPosition.findMany({
-    where: {
-      brokerAccountId: accountId,
-      OR: [
-        ...(tickets.length > 0 ? [{ ticket: { in: tickets } }] : []),
-        ...(parsedPositions.length > 0 ? [{ openTime: { gte: windowStart, lte: windowEnd } }] : []),
-      ],
-    },
-    select: { ticket: true, symbol: true, side: true, openTime: true, volume: true },
-  });
-  const existingTickets = new Set(existing.map((e) => e.ticket).filter((t) => t !== null));
-  const existingHeuristic = new Set(
-    existing.map((e) =>
-      positionHeuristicKey({
-        symbol: e.symbol,
-        side: e.side,
-        openTimeMs: e.openTime.getTime(),
-        volume: Number(e.volume),
-      }),
-    ),
-  );
+  // TXN-1 (RC#8) — serialize concurrent persists of the SAME proof. The partial
+  // unique index `extracted_positions_account_ticket_uniq` only covers TICKETED
+  // rows (WHERE ticket IS NOT NULL); ticket-less mobile-MT5 positions have NO DB
+  // dedup. Two overlapping `persistVisionResults` POSTs for the same `pending`
+  // proof (a retry/double-invoke) could both read `existing` empty and both
+  // insert the same ticket-less rows → reality double-counted (inflated
+  // positionsCount + duplicate `missing_declared` discrepancies + duplicate
+  // negative ScoreEvents). A transaction-scoped advisory lock keyed on the proof
+  // makes the loser WAIT for the winner to commit, then re-read `existing` (now
+  // populated) so its heuristic filter excludes the inserted rows. Within-batch
+  // identical-heuristic rows are unchanged (the filter only compares against
+  // committed DB rows), so no legitimate duplicate trade is collapsed — strictly
+  // safer than a second partial unique index, which would. The insert + proof
+  // flip are now atomic, closing the old crash-between-them gap too.
+  const insertedCount = await db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${PROOF_PERSIST_LOCK_NS}::int4, ${proofPersistLockKey(proofId)}::int4)`;
 
-  const toInsert = parsedPositions.filter((p) => {
-    if (p.ticket !== null && existingTickets.has(p.ticket)) return false;
-    return !existingHeuristic.has(
-      positionHeuristicKey({
-        symbol: p.symbol,
-        side: p.side,
-        openTimeMs: p.openTime.getTime(),
-        volume: p.volume,
-      }),
-    );
-  });
-
-  // The in-memory `toInsert` filter is the fast path; `skipDuplicates` is the
-  // race-safe backstop. Two concurrent vision parses for the SAME account can
-  // both pass the filter for one ticket, but the partial unique index
-  // `extracted_positions_account_ticket_uniq` (broker_account_id, ticket WHERE
-  // ticket IS NOT NULL) turns the loser's row into ON CONFLICT DO NOTHING, so we
-  // never double-count a real position. `count` is the rows ACTUALLY inserted
-  // (≤ toInsert.length), so reporting reflects the true write.
-  let insertedCount = 0;
-  if (toInsert.length > 0) {
-    const inserted = await db.extractedPosition.createMany({
-      data: toInsert.map((p) => ({
-        brokerAccountId: accountId as string,
-        proofId,
-        ticket: p.ticket,
-        symbol: p.symbol,
-        side: p.side,
-        openTime: p.openTime,
-        closeTime: p.closeTime,
-        volume: p.volume,
-        entryPrice: p.entryPrice,
-        exitPrice: p.exitPrice,
-        pnl: p.pnl,
-        source: 'mt5_screen_ocr' as const,
-        confidence: args.output.confidence,
-      })),
-      skipDuplicates: true,
+    const existing = await tx.extractedPosition.findMany({
+      where: {
+        brokerAccountId: accountId,
+        OR: [
+          ...(tickets.length > 0 ? [{ ticket: { in: tickets } }] : []),
+          ...(parsedPositions.length > 0
+            ? [{ openTime: { gte: windowStart, lte: windowEnd } }]
+            : []),
+        ],
+      },
+      select: { ticket: true, symbol: true, side: true, openTime: true, volume: true },
     });
-    insertedCount = inserted.count;
-  }
+    const existingTickets = new Set(existing.map((e) => e.ticket).filter((t) => t !== null));
+    const existingHeuristic = new Set(
+      existing.map((e) =>
+        positionHeuristicKey({
+          symbol: e.symbol,
+          side: e.side,
+          openTimeMs: e.openTime.getTime(),
+          volume: Number(e.volume),
+        }),
+      ),
+    );
 
-  // --- Proof → done + (re)attach to the resolved account. ---
-  await db.mt5AccountProof.update({
-    where: { id: proofId },
-    data: { ocrStatus: 'done', brokerAccountId: accountId, claudeRunId: args.ranAt },
+    const toInsert = parsedPositions.filter((p) => {
+      if (p.ticket !== null && existingTickets.has(p.ticket)) return false;
+      return !existingHeuristic.has(
+        positionHeuristicKey({
+          symbol: p.symbol,
+          side: p.side,
+          openTimeMs: p.openTime.getTime(),
+          volume: p.volume,
+        }),
+      );
+    });
+
+    // `skipDuplicates` remains the race-safe backstop for TICKETED rows (the
+    // partial unique index turns a loser's row into ON CONFLICT DO NOTHING);
+    // the advisory lock above covers the ticket-less rows it cannot. `count`
+    // is the rows ACTUALLY inserted (≤ toInsert.length), so reporting is true.
+    let count = 0;
+    if (toInsert.length > 0) {
+      const inserted = await tx.extractedPosition.createMany({
+        data: toInsert.map((p) => ({
+          brokerAccountId: accountId as string,
+          proofId,
+          ticket: p.ticket,
+          symbol: p.symbol,
+          side: p.side,
+          openTime: p.openTime,
+          closeTime: p.closeTime,
+          volume: p.volume,
+          entryPrice: p.entryPrice,
+          exitPrice: p.exitPrice,
+          pnl: p.pnl,
+          source: 'mt5_screen_ocr' as const,
+          confidence: args.output.confidence,
+        })),
+        skipDuplicates: true,
+      });
+      count = inserted.count;
+    }
+
+    // --- Proof → done + (re)attach to the resolved account (atomic with the
+    // insert under the same lock). ---
+    await tx.mt5AccountProof.update({
+      where: { id: proofId },
+      data: { ocrStatus: 'done', brokerAccountId: accountId, claudeRunId: args.ranAt },
+    });
+
+    return count;
   });
 
   // --- Evidence-based account count (§30): DISTINCT MT5 logins proven so

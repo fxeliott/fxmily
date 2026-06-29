@@ -149,7 +149,16 @@ export default withSentryConfig(withBundleAnalyzer(nextConfig), {
     // to Sentry; only the public chunks are stripped client-side).
     deleteSourcemapsAfterUpload: true,
   },
-  disableLogger: true,
+  // @sentry/nextjs v10 deprecated the top-level `disableLogger` in favour of
+  // the granular `webpack.treeshake` options. `removeDebugLogging` strips the
+  // SDK's debug `logger.*` calls from the production bundle — same effect as
+  // the old flag, current (non-deprecated) API, so the build stops emitting
+  // the deprecation warning.
+  webpack: {
+    treeshake: {
+      removeDebugLogging: true,
+    },
+  },
   // Tunnel `/monitoring` → Sentry ingest. Same-origin requests are not
   // blocked by privacy extensions / corporate firewalls.
   tunnelRoute: '/monitoring',

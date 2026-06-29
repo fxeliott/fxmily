@@ -10,6 +10,11 @@ const trainingTradeFindManyMock = vi.fn();
 const trainingAnnotationFindManyMock = vi.fn();
 const tradeFindManyMock = vi.fn();
 const storageDeleteMock = vi.fn();
+const reportWarningMock = vi.fn();
+
+// RC#7 CRON-1 — deletion.ts now routes per-user materialise/purge failures to
+// Sentry via reportWarning (bare console.error was not captured server-side).
+vi.mock('@/lib/observability', () => ({ reportWarning: reportWarningMock }));
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -72,6 +77,7 @@ beforeEach(() => {
   trainingAnnotationFindManyMock.mockReset();
   tradeFindManyMock.mockReset();
   storageDeleteMock.mockReset();
+  reportWarningMock.mockReset();
   // Default: nothing to sweep — the pre-S3/S8 purge tests stay byte-identical.
   proofFindManyMock.mockResolvedValue([]);
   trainingTradeFindManyMock.mockResolvedValue([]);
@@ -271,7 +277,7 @@ describe('materialisePendingDeletions', () => {
       { id: 'u1', deletedAt: new Date('2026-05-07T10:00:00.000Z') },
       { id: 'u2', deletedAt: new Date('2026-05-07T11:00:00.000Z') },
     ]);
-    updateMock.mockResolvedValue({});
+    updateManyMock.mockResolvedValue({ count: 1 });
 
     const result = await materialisePendingDeletions({ now });
 
@@ -288,9 +294,11 @@ describe('materialisePendingDeletions', () => {
       materialisedIds: ['u1', 'u2'],
       ranAt: now.toISOString(),
     });
-    // Verify the scrub payload of the first call
-    const firstCall = updateMock.mock.calls[0]?.[0];
-    expect(firstCall?.where).toEqual({ id: 'u1' });
+    // RC#7 TX-4 — the scrub write re-asserts the predicate in the WHERE so a
+    // member who legitimately cancels in the snapshot→write window is honoured
+    // (count===0) instead of having their PII scrubbed by an id-only update.
+    const firstCall = updateManyMock.mock.calls[0]?.[0];
+    expect(firstCall?.where).toEqual({ id: 'u1', status: 'active', deletedAt: { lte: now } });
     expect(firstCall?.data).toMatchObject({
       status: 'deleted',
       deletedAt: now,
@@ -312,15 +320,13 @@ describe('materialisePendingDeletions', () => {
     expect('pushSubscription' in (firstCall?.data ?? {})).toBe(true);
   });
 
-  it('counts errors but keeps going if one row fails', async () => {
+  it('counts errors but keeps going if one row fails, and surfaces it to Sentry (RC#7 CRON-1)', async () => {
     const now = new Date('2026-05-08T10:00:00.000Z');
     findManyMock.mockResolvedValueOnce([
       { id: 'u1', deletedAt: new Date('2026-05-07T10:00:00.000Z') },
       { id: 'u2', deletedAt: new Date('2026-05-07T11:00:00.000Z') },
     ]);
-    updateMock.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce({});
-    // Silence the expected console.error from the inner catch.
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    updateManyMock.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce({ count: 1 });
 
     const result = await materialisePendingDeletions({ now });
 
@@ -329,7 +335,33 @@ describe('materialisePendingDeletions', () => {
     expect(result.scanned).toBe(2);
     // The successful row (u2) is captured; u1's failed update isn't.
     expect(result.materialisedIds).toEqual(['u2']);
-    errSpy.mockRestore();
+    // CRON-1 — the failure is routed to Sentry (not a bare console.error that
+    // would stay invisible while a RGPD erasure silently never completes).
+    expect(reportWarningMock).toHaveBeenCalledWith(
+      'account.deletion.materialise',
+      'user_op_failed',
+      expect.objectContaining({ userId: 'u1' }),
+    );
+  });
+
+  it('🚨 RACE (RC#7 TX-4) — a member cancels in the snapshot→write window → count===0 → PII NOT scrubbed, not counted', async () => {
+    const now = new Date('2026-05-08T10:00:00.000Z');
+    findManyMock.mockResolvedValueOnce([
+      { id: 'u_cancel', deletedAt: new Date('2026-05-07T10:00:00.000Z') },
+      { id: 'u2', deletedAt: new Date('2026-05-07T11:00:00.000Z') },
+    ]);
+    // u_cancel landed a cancelAccountDeletion (deletedAt=null) between the
+    // findMany snapshot and this write, so the guarded updateMany matches 0
+    // rows; u2 is still materialised normally.
+    updateManyMock.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+    const result = await materialisePendingDeletions({ now });
+
+    expect(result.scanned).toBe(2);
+    expect(result.materialised).toBe(1);
+    expect(result.errors).toBe(0);
+    // The cancelled member is honoured: not scrubbed, not in the audit list.
+    expect(result.materialisedIds).toEqual(['u2']);
   });
 
   it('returns empty result when no candidates match', async () => {
@@ -338,7 +370,7 @@ describe('materialisePendingDeletions', () => {
     expect(result.scanned).toBe(0);
     expect(result.materialised).toBe(0);
     expect(result.materialisedIds).toEqual([]);
-    expect(updateMock).not.toHaveBeenCalled();
+    expect(updateManyMock).not.toHaveBeenCalled();
   });
 });
 
@@ -671,11 +703,11 @@ describe('materialisePendingDeletions — batch and PII edge cases', () => {
       { id: 'u11', deletedAt: new Date(now.getTime() - 1) },
       { id: 'u111', deletedAt: new Date(now.getTime() - 1) },
     ]);
-    updateMock.mockResolvedValue({});
+    updateManyMock.mockResolvedValue({ count: 1 });
 
     await materialisePendingDeletions({ now });
 
-    const emails = updateMock.mock.calls.map((c) => c[0]?.data?.email);
+    const emails = updateManyMock.mock.calls.map((c) => c[0]?.data?.email);
     expect(emails).toEqual([
       'deleted-u1@fxmily.local',
       'deleted-u11@fxmily.local',
@@ -694,11 +726,11 @@ describe('materialisePendingDeletions — batch and PII edge cases', () => {
     const now = new Date('2026-05-08T10:00:00.000Z');
     const originalScheduled = new Date('2026-05-07T11:00:00.000Z');
     findManyMock.mockResolvedValueOnce([{ id: 'u1', deletedAt: originalScheduled }]);
-    updateMock.mockResolvedValueOnce({});
+    updateManyMock.mockResolvedValueOnce({ count: 1 });
 
     await materialisePendingDeletions({ now });
 
-    const data = updateMock.mock.calls[0]?.[0]?.data;
+    const data = updateManyMock.mock.calls[0]?.[0]?.data;
     expect(data?.deletedAt).toEqual(now);
     expect(data?.deletedAt).not.toEqual(originalScheduled);
   });

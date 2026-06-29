@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db', () => ({
   db: {
-    trade: { findMany: vi.fn(), count: vi.fn() },
-    trainingTrade: { findMany: vi.fn(), count: vi.fn() },
+    trade: { findMany: vi.fn(), groupBy: vi.fn(), count: vi.fn() },
+    trainingTrade: { findMany: vi.fn(), groupBy: vi.fn(), count: vi.fn() },
     discrepancy: { groupBy: vi.fn(), count: vi.fn() },
     constancyScore: { findMany: vi.fn() },
   },
@@ -29,13 +29,17 @@ describe('getMembersAttention', () => {
   it('returns an empty map and hits no DB when given no ids', async () => {
     const map = await getMembersAttention([]);
     expect(map.size).toBe(0);
-    expect(db.trade.findMany).not.toHaveBeenCalled();
+    expect(db.trade.groupBy).not.toHaveBeenCalled();
     expect(db.discrepancy.groupBy).not.toHaveBeenCalled();
   });
 
   it('aggregates uncommented trades, open gaps and a constancy dip per member', async () => {
-    vi.mocked(db.trade.findMany).mockResolvedValue([{ userId: 'm1' }, { userId: 'm1' }] as never);
-    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([{ userId: 'm2' }] as never);
+    // RC#7 PERF-2 — uncommented counts now come from groupBy/_count (one row
+    // per member) instead of findMany returning one row per trade.
+    vi.mocked(db.trade.groupBy).mockResolvedValue([{ userId: 'm1', _count: { _all: 2 } }] as never);
+    vi.mocked(db.trainingTrade.groupBy).mockResolvedValue([
+      { userId: 'm2', _count: { _all: 1 } },
+    ] as never);
     vi.mocked(db.discrepancy.groupBy).mockResolvedValue([
       { memberId: 'm1', _count: { _all: 3 } },
     ] as never);
@@ -62,8 +66,8 @@ describe('getMembersAttention', () => {
   });
 
   it('does not flag a dip when the latest snapshot rose or held', async () => {
-    vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
-    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.trade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.trainingTrade.groupBy).mockResolvedValue([] as never);
     vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
     vi.mocked(db.constancyScore.findMany).mockResolvedValue([
       { memberId: 'm1', value: 80 }, // latest
@@ -79,8 +83,8 @@ describe('getMembersAttention', () => {
   });
 
   it('compares only the latest vs the immediately-previous snapshot, ignoring older peaks', async () => {
-    vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
-    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.trade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.trainingTrade.groupBy).mockResolvedValue([] as never);
     vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
     // DESC: latest 70, previous 70.5 (0.5 drop < MIN → no dip), older peak 85.
     // The 15-point gap latest↔peak must NOT raise the signal — the dip is defined
@@ -96,8 +100,8 @@ describe('getMembersAttention', () => {
   });
 
   it('flags a dip vs the previous snapshot even when an older snapshot was lower', async () => {
-    vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
-    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.trade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.trainingTrade.groupBy).mockResolvedValue([] as never);
     vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
     // DESC: latest 60, previous 75 (15 drop ≥ MIN → dip), older 50 (irrelevant).
     vi.mocked(db.constancyScore.findMany).mockResolvedValue([
@@ -111,8 +115,8 @@ describe('getMembersAttention', () => {
   });
 
   it('reads ONE snapshot without flagging a dip (nothing to compare against)', async () => {
-    vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
-    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.trade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.trainingTrade.groupBy).mockResolvedValue([] as never);
     vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
     // A brand-new member with a single constancy snapshot: the loop records it as
     // the latest but has no previous to compare → the dip stays false. Guards the
@@ -126,14 +130,19 @@ describe('getMembersAttention', () => {
   });
 
   it('scopes every read to the requested ids and the right filters', async () => {
-    vi.mocked(db.trade.findMany).mockResolvedValue([] as never);
-    vi.mocked(db.trainingTrade.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.trade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.trainingTrade.groupBy).mockResolvedValue([] as never);
     vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
     vi.mocked(db.constancyScore.findMany).mockResolvedValue([] as never);
 
     await getMembersAttention(['m1', 'm2']);
 
-    const tradeWhere = firstArg(db.trade.findMany).where as Record<string, unknown>;
+    // RC#7 PERF-2 — the uncommented count is a groupBy(['userId'])/_count, not a
+    // findMany returning a row per trade. Pin the aggregate shape AND the filter.
+    const tradeArg = firstArg(db.trade.groupBy);
+    expect(tradeArg.by).toEqual(['userId']);
+    expect(tradeArg._count).toEqual({ _all: true });
+    const tradeWhere = tradeArg.where as Record<string, unknown>;
     expect(tradeWhere.userId).toEqual({ in: ['m1', 'm2'] });
     expect(tradeWhere.annotations).toEqual({ none: {} });
     expect((tradeWhere.enteredAt as { gte: unknown }).gte).toBeInstanceOf(Date);

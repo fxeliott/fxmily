@@ -307,20 +307,29 @@ export async function submitDiscrepancyReason(
   discrepancyId: string,
   reason: string,
 ): Promise<void> {
+  // findUnique only to distinguish not-found / not-owned for the BOLA error.
   const row = await db.discrepancy.findUnique({
     where: { id: discrepancyId },
-    select: { memberId: true, status: true },
+    select: { memberId: true },
   });
   if (!row || row.memberId !== memberId) {
     throw new DiscrepancyNotFoundError();
   }
-  await db.discrepancy.update({
-    where: { id: discrepancyId },
-    data: {
-      memberReason: safeFreeText(reason),
-      memberReasonAt: new Date(),
-      ...(row.status === 'open' ? { status: 'acknowledged' as const } : {}),
-    },
+  // RC#7 TX-3 — the status flip must NOT be decided from a stale plain read.
+  // The reconcile pipeline can flip this row open→resolved (reality retracted
+  // the écart, no fault) concurrently with this submit; deriving the flip from
+  // the JS-read status and writing it with an id-only UPDATE would clobber that
+  // 'resolved' back to 'acknowledged' (member self-excused), mislabelling the
+  // honesty surface. Split the write: always record the reason, and flip status
+  // ONLY while the row is still 'open' via the WHERE predicate — a row already
+  // re-statused is left untouched, so reality's retraction wins.
+  await db.discrepancy.updateMany({
+    where: { id: discrepancyId, memberId },
+    data: { memberReason: safeFreeText(reason), memberReasonAt: new Date() },
+  });
+  await db.discrepancy.updateMany({
+    where: { id: discrepancyId, memberId, status: 'open' },
+    data: { status: 'acknowledged' },
   });
 }
 

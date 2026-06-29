@@ -16,6 +16,8 @@ const m = vi.hoisted(() => ({
   proofFindUnique: vi.fn(),
   proofDelete: vi.fn(),
   positionGroupBy: vi.fn(),
+  discrepancyFindUnique: vi.fn(),
+  discrepancyUpdateMany: vi.fn(),
   storageDelete: vi.fn(),
   storageGetReadUrl: vi.fn((key: string) => `/api/uploads/${key}`),
 }));
@@ -35,6 +37,10 @@ vi.mock('@/lib/db', () => ({
     extractedPosition: {
       groupBy: m.positionGroupBy,
     },
+    discrepancy: {
+      findUnique: m.discrepancyFindUnique,
+      updateMany: m.discrepancyUpdateMany,
+    },
   },
 }));
 
@@ -49,15 +55,62 @@ vi.mock('@/lib/storage', () => ({
 
 import {
   BrokerAccountLimitError,
+  DiscrepancyNotFoundError,
   MAX_BROKER_ACCOUNTS_PER_MEMBER,
   ProofNotFoundError,
   createBrokerAccount,
   deleteProof,
   getVerificationOverview,
+  submitDiscrepancyReason,
 } from './service';
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe('submitDiscrepancyReason — atomic status flip (RC#7 TX-3)', () => {
+  it('records the reason ALWAYS and flips status open→acknowledged ONLY via a status-guarded updateMany', async () => {
+    m.discrepancyFindUnique.mockResolvedValue({ memberId: 'member1' });
+    m.discrepancyUpdateMany.mockResolvedValue({ count: 1 });
+
+    await submitDiscrepancyReason('member1', 'disc1', '  je me suis reposé​ '); // trailing space + zero-width
+
+    // Two writes: (1) reason fields, keyed by id+member, no status predicate;
+    const reasonCall = m.discrepancyUpdateMany.mock.calls[0]?.[0];
+    expect(reasonCall?.where).toEqual({ id: 'disc1', memberId: 'member1' });
+    expect(reasonCall?.data.memberReason).toBe('je me suis reposé'); // safeFreeText trimmed + stripped ZW
+    expect(reasonCall?.data.memberReasonAt).toBeInstanceOf(Date);
+    expect('status' in (reasonCall?.data ?? {})).toBe(false);
+    // (2) the status flip, gated by `status: 'open'` in the WHERE — a row a
+    // concurrent reconcile already re-statused (e.g. 'resolved') is left
+    // untouched, so reality's retraction wins instead of being clobbered.
+    const flipCall = m.discrepancyUpdateMany.mock.calls[1]?.[0];
+    expect(flipCall?.where).toEqual({ id: 'disc1', memberId: 'member1', status: 'open' });
+    expect(flipCall?.data).toEqual({ status: 'acknowledged' });
+  });
+
+  it('🚨 RACE — reconcile flipped the row to resolved first: the guarded flip is a no-op (count 0), the reason is still recorded', async () => {
+    m.discrepancyFindUnique.mockResolvedValue({ memberId: 'member1' });
+    // reason write succeeds; the status-guarded write matches 0 rows.
+    m.discrepancyUpdateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+
+    await expect(submitDiscrepancyReason('member1', 'disc1', 'motif')).resolves.toBeUndefined();
+    // Both writes were attempted; the function never derives status from a stale read.
+    expect(m.discrepancyUpdateMany).toHaveBeenCalledTimes(2);
+    expect(m.discrepancyUpdateMany.mock.calls[1]?.[0]?.where).toMatchObject({ status: 'open' });
+  });
+
+  it('BOLA — absent or another member collapses to DiscrepancyNotFoundError, no write', async () => {
+    m.discrepancyFindUnique.mockResolvedValue({ memberId: 'memberX' });
+    await expect(submitDiscrepancyReason('member1', 'disc1', 'x')).rejects.toBeInstanceOf(
+      DiscrepancyNotFoundError,
+    );
+    m.discrepancyFindUnique.mockResolvedValue(null);
+    await expect(submitDiscrepancyReason('member1', 'disc1', 'x')).rejects.toBeInstanceOf(
+      DiscrepancyNotFoundError,
+    );
+    expect(m.discrepancyUpdateMany).not.toHaveBeenCalled();
+  });
 });
 
 describe('createBrokerAccount', () => {

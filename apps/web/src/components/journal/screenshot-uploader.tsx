@@ -300,6 +300,19 @@ export function ScreenshotUploader({
       {/* Hidden input mirroring the storage key — the parent form posts this. */}
       <input type="hidden" name={name} value={state.key ?? ''} />
 
+      {/* RC#7 A11Y-1 — persistent polite live region OUTSIDE the branching
+          <label>. The uploading branch (its <Spinner role="status">) unmounts
+          on success, leaving a screen-reader user with no completion cue; this
+          region survives the swap and announces the resolved state. Errors stay
+          owned by the role="alert" below. (Mirror of the proof-uploader twin.) */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {state.status === 'uploading'
+          ? 'Envoi en cours'
+          : state.status === 'success'
+            ? 'Capture envoyée'
+            : ''}
+      </span>
+
       {showPreview ? (
         <button
           type="button"

@@ -91,21 +91,33 @@ export async function runMindsetCheckReminderScan(
 
   // Two bulk lookups (O(1) round-trips, never O(users)):
   //  1. who already submitted THIS week's mindset check;
-  //  2. who already has a pending `mindset_check_ready` push for THIS week.
-  const [alreadyChecked, pendingNudges] = await Promise.all([
+  //  2. who already has a `mindset_check_ready` push for THIS week.
+  // RC#7 CRON-2 — the dedup must cover BOTH 'pending' AND 'sent' rows. The
+  // partial unique index only guards the pending state, so once the dispatcher
+  // moves a nudge pending→sent, a same-Monday cron re-fire (operator re-run or
+  // rolling-deploy re-invocation) would no longer see it and would enqueue a
+  // SECOND identical push. Including 'sent' here closes that post-dispatch
+  // window (mirrors the persistent gentleReminderAt guard on the twin path).
+  // 'failed' is intentionally excluded so a nudge that never delivered is
+  // re-enqueued on the next run (recovery).
+  const [alreadyChecked, existingNudges] = await Promise.all([
     db.mindsetCheck.findMany({
       where: { userId: { in: userIds }, weekStart: weekStartDb },
       select: { userId: true },
     }),
     db.notificationQueue.findMany({
-      where: { userId: { in: userIds }, type: 'mindset_check_ready', status: 'pending' },
+      where: {
+        userId: { in: userIds },
+        type: 'mindset_check_ready',
+        status: { in: ['pending', 'sent'] },
+      },
       select: { userId: true, payload: true },
     }),
   ]);
 
   const submitted = new Set(alreadyChecked.map((r) => r.userId));
   const nudgedThisWeek = new Set(
-    pendingNudges
+    existingNudges
       .filter((n) => pendingPayloadWeekStart(n.payload) === weekStart)
       .map((n) => n.userId),
   );

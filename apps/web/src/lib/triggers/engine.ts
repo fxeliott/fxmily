@@ -107,7 +107,12 @@ async function loadPublishedTriggerCards(): Promise<PreparsedCard[]> {
   for (const row of rows) {
     const rule = parseTriggerRule(row.triggerRules);
     if (!rule) {
-      console.warn('[douglas.engine] invalid triggerRules', { cardId: row.id });
+      // RC#7 SF-2 — a published card whose triggerRules no longer parse (schema
+      // drift orphaning a legacy row, or an out-of-band DB write) is silently
+      // dropped from dispatch for EVERY member. Route it to Sentry (bare
+      // console.warn is not captured server-side) so an operator sees it,
+      // matching the persist_failed / bulk_dispatch_failed reporting below.
+      reportWarning('douglas.engine', 'invalid_trigger_rules', { cardId: row.id });
       continue;
     }
     cards.push({

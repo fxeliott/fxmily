@@ -36,6 +36,7 @@ import { db } from '@/lib/db';
 import {
   closeTrade,
   deleteTrade,
+  TradeAlreadyClosedError,
   TradeExitBeforeEntryError,
   type CloseTradeInput,
 } from './service';
@@ -161,6 +162,53 @@ describe('closeTrade — exit-after-entry invariant (S2 audit 2026-06-11)', () =
     };
     await closeTrade('user-1', 'trade-1', input);
     expect(updateMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('closeTrade — double-close optimistic guard (RC#7 TX-1)', () => {
+  it('scopes the UPDATE with `closedAt: null` so a concurrent close cannot clobber it', async () => {
+    const updateMock = wireTransaction(null);
+    await closeTrade('user-1', 'trade-1', closeInput(null));
+    const call = updateMock.mock.calls[0];
+    if (!call) throw new Error('expected tx.trade.update to be called');
+    const arg = call[0] as { where: Record<string, unknown> };
+    // The `closedAt: null` predicate is the optimistic lock: under READ
+    // COMMITTED the findUnique took no row lock, so only this WHERE stops a
+    // duplicate submit from overwriting the authoritative close.
+    expect(arg.where).toEqual({ id: 'trade-1', closedAt: null });
+  });
+
+  it('🚨 RACE — the UPDATE matches 0 rows (P2025) because a concurrent close won → TradeAlreadyClosedError, not a silent clobber', async () => {
+    // A duplicate submit: both transactions read closedAt=null, the first
+    // commits, the second's guarded UPDATE finds 0 rows → Prisma P2025. The
+    // service must fold it to the same already-closed error, never overwrite.
+    vi.mocked(db.$transaction).mockImplementation(async (cb: unknown) => {
+      const tx = {
+        trade: {
+          findUnique: vi.fn().mockResolvedValue(openExisting()),
+          update: vi.fn().mockRejectedValue({ code: 'P2025' }),
+        },
+      };
+      return (cb as (t: typeof tx) => Promise<unknown>)(tx);
+    });
+    await expect(closeTrade('user-1', 'trade-1', closeInput(null))).rejects.toBeInstanceOf(
+      TradeAlreadyClosedError,
+    );
+  });
+
+  it('a non-P2025 DB error during the close UPDATE still bubbles up (never swallowed)', async () => {
+    vi.mocked(db.$transaction).mockImplementation(async (cb: unknown) => {
+      const tx = {
+        trade: {
+          findUnique: vi.fn().mockResolvedValue(openExisting()),
+          update: vi.fn().mockRejectedValue(new Error('connection reset')),
+        },
+      };
+      return (cb as (t: typeof tx) => Promise<unknown>)(tx);
+    });
+    await expect(closeTrade('user-1', 'trade-1', closeInput(null))).rejects.toThrow(
+      'connection reset',
+    );
   });
 });
 

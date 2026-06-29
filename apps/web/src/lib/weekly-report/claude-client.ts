@@ -257,8 +257,8 @@ export class LiveWeeklyReportClient implements WeeklyReportClaudeClient {
     // J8 audit fix — explicit `ttl: '1h'` on cache_control so the system
     // prompt is cached for the full hour (default is 5min, which would mean
     // every weekly cron invalidates the cache and bills full input rate).
-    // SDK 0.95.1 supports `ttl` on `cache_control` ; documented in Anthropic
-    // 2026 prompt-caching guide.
+    // The pinned @anthropic-ai/sdk (^0.98.0, see package.json) supports `ttl`
+    // on `cache_control` ; documented in Anthropic's 2026 prompt-caching guide.
     const response = await client.messages.create({
       model,
       max_tokens: 2048,

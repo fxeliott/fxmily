@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   create: vi.fn(),
   findUnique: vi.fn(),
   update: vi.fn(),
+  updateMany: vi.fn(),
   findMany: vi.fn(),
   groupBy: vi.fn(),
   getMentalMap: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('@/lib/db', () => ({
       create: m.create,
       findUnique: m.findUnique,
       update: m.update,
+      updateMany: m.updateMany,
       findMany: m.findMany,
       groupBy: m.groupBy,
     },
@@ -168,17 +170,20 @@ describe('ensureMicroObjectiveForMember', () => {
 });
 
 describe('closeMicroObjective', () => {
-  it('closes an owned open objective with the given outcome', async () => {
+  it('closes an owned open objective with a status-guarded updateMany (RC#7 TX-2)', async () => {
     m.findUnique.mockResolvedValue({ memberId: 'member1', status: 'open' });
-    m.update.mockResolvedValue({});
+    m.updateMany.mockResolvedValue({ count: 1 });
     await closeMicroObjective('member1', 'obj1', 'kept');
-    expect(m.update).toHaveBeenCalledWith({
-      where: { id: 'obj1' },
+    // The `status: 'open'` predicate in the WHERE is the optimistic lock that
+    // makes a concurrent second close a no-op instead of a last-write clobber.
+    expect(m.updateMany).toHaveBeenCalledWith({
+      where: { id: 'obj1', memberId: 'member1', status: 'open' },
       data: { status: 'kept', closedAt: expect.any(Date) },
     });
+    expect(m.update).not.toHaveBeenCalled();
   });
 
-  it('BOLA — another member or absent collapses to the same error, no update', async () => {
+  it('BOLA — another member or absent collapses to the same error, no write', async () => {
     m.findUnique.mockResolvedValue({ memberId: 'memberX', status: 'open' });
     await expect(closeMicroObjective('member1', 'obj1', 'kept')).rejects.toBeInstanceOf(
       MicroObjectiveNotFoundError,
@@ -187,13 +192,27 @@ describe('closeMicroObjective', () => {
     await expect(closeMicroObjective('member1', 'obj1', 'kept')).rejects.toBeInstanceOf(
       MicroObjectiveNotFoundError,
     );
-    expect(m.update).not.toHaveBeenCalled();
+    expect(m.updateMany).not.toHaveBeenCalled();
   });
 
   it('is idempotent — an already-closed loop is not rewritten', async () => {
     m.findUnique.mockResolvedValue({ memberId: 'member1', status: 'kept' });
     await closeMicroObjective('member1', 'obj1', 'missed');
-    expect(m.update).not.toHaveBeenCalled();
+    expect(m.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('🚨 RACE (RC#7 TX-2) — a concurrent close already flipped the row → updateMany matches 0 rows → no-op, never throws', async () => {
+    // findUnique still reads 'open' (stale plain read), but by the time the
+    // write lands a concurrent close has flipped it: the WHERE predicate makes
+    // it match 0 rows. The function must settle as a clean no-op so « le 1er
+    // suivi fait foi » holds without a last-write-wins clobber.
+    m.findUnique.mockResolvedValue({ memberId: 'member1', status: 'open' });
+    m.updateMany.mockResolvedValue({ count: 0 });
+    await expect(closeMicroObjective('member1', 'obj1', 'missed')).resolves.toBeUndefined();
+    expect(m.updateMany).toHaveBeenCalledWith({
+      where: { id: 'obj1', memberId: 'member1', status: 'open' },
+      data: { status: 'missed', closedAt: expect.any(Date) },
+    });
   });
 });
 

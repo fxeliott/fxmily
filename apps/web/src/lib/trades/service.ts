@@ -317,40 +317,59 @@ export async function closeTrade(
     });
 
     // Notes are append-only at close: keep the pre-entry notes verbatim and
-    // suffix the new ones under a delimiter. Both reads happen within the
-    // same transaction; the row will be locked by the upcoming UPDATE.
+    // suffix the new ones under a delimiter. The findUnique above is a plain
+    // read and takes NO row lock under READ COMMITTED, so the JS `closedAt`
+    // guard alone cannot stop a concurrent double-close — the lock only
+    // materialises at the UPDATE below, after both transactions have already
+    // read closedAt=null. The optimistic `closedAt: null` predicate on the
+    // UPDATE closes that window: the loser matches 0 rows → P2025 → folded to
+    // TradeAlreadyClosedError, so a duplicate submit can never overwrite the
+    // authoritative close (exit price / outcome / realizedR) nor double-append
+    // the exit notes (RC#7 TX-1).
     const mergedNotes = mergeNotes(existing.notes, input.notes);
 
-    return tx.trade.update({
-      where: { id: tradeId },
-      data: {
-        exitedAt: input.exitedAt,
-        exitPrice: new Prisma.Decimal(input.exitPrice),
-        outcome: input.outcome,
-        realizedR: new Prisma.Decimal(realized.value),
-        realizedRSource: realized.source,
-        emotionDuring: input.emotionDuring,
-        emotionAfter: input.emotionAfter,
-        // SPEC §28/§21 — persist the "oublis" axis. Tri-state passed through
-        // verbatim (null = not answered → never coerced to false, which would
-        // fabricate a "forgot" signal the member never gave). Mirror of
-        // hedgeRespected / marketAnalysisDone null-handling.
-        processComplete: input.processComplete,
-        // S26 — persist the 3 management-fidelity acts. Same null-passthrough as
-        // processComplete: null (not answered) is NEVER coerced to false, which
-        // would fabricate a "rule broken" signal the member never gave.
-        slPerRule: input.slPerRule,
-        movedToBe: input.movedToBe,
-        partialAtTarget: input.partialAtTarget,
-        // V1.8 — persist post-outcome bias tags. Defaults to `[]` so V1 trades
-        // closed before V1.8 stay valid ; explicit `[]` overrides any prior
-        // value (admin edits go through a dedicated path).
-        tags: [...(input.tags ?? [])],
-        screenshotExitKey: input.screenshotExitKey,
-        closedAt: new Date(),
-        ...(mergedNotes !== existing.notes ? { notes: mergedNotes } : {}),
-      },
-    });
+    try {
+      return await tx.trade.update({
+        where: { id: tradeId, closedAt: null },
+        data: {
+          exitedAt: input.exitedAt,
+          exitPrice: new Prisma.Decimal(input.exitPrice),
+          outcome: input.outcome,
+          realizedR: new Prisma.Decimal(realized.value),
+          realizedRSource: realized.source,
+          emotionDuring: input.emotionDuring,
+          emotionAfter: input.emotionAfter,
+          // SPEC §28/§21 — persist the "oublis" axis. Tri-state passed through
+          // verbatim (null = not answered → never coerced to false, which would
+          // fabricate a "forgot" signal the member never gave). Mirror of
+          // hedgeRespected / marketAnalysisDone null-handling.
+          processComplete: input.processComplete,
+          // S26 — persist the 3 management-fidelity acts. Same null-passthrough as
+          // processComplete: null (not answered) is NEVER coerced to false, which
+          // would fabricate a "rule broken" signal the member never gave.
+          slPerRule: input.slPerRule,
+          movedToBe: input.movedToBe,
+          partialAtTarget: input.partialAtTarget,
+          // V1.8 — persist post-outcome bias tags. Defaults to `[]` so V1 trades
+          // closed before V1.8 stay valid ; explicit `[]` overrides any prior
+          // value (admin edits go through a dedicated path).
+          tags: [...(input.tags ?? [])],
+          screenshotExitKey: input.screenshotExitKey,
+          closedAt: new Date(),
+          ...(mergedNotes !== existing.notes ? { notes: mergedNotes } : {}),
+        },
+      });
+    } catch (err) {
+      // Optimistic-lock guard (RC#7 TX-1): the `closedAt: null` predicate
+      // matched 0 rows because a concurrent close already committed between
+      // our read and this write → Prisma P2025. Fold to the same already-closed
+      // error the JS guard raises so the second writer is a deterministic
+      // no-op, never a silent clobber of the authoritative close.
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2025') {
+        throw new TradeAlreadyClosedError();
+      }
+      throw err;
+    }
   });
 
   return toSerialized(updated);

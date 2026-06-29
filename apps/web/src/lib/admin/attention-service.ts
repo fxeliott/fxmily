@@ -58,13 +58,20 @@ export async function getMembersAttention(ids: string[]): Promise<Map<string, Me
   const constancyFloor = new Date(Date.now() - CONSTANCY_DECLINE_LOOKBACK_DAYS * DAY_MS);
 
   const [uncommentedReal, uncommentedTraining, openByMember, constancyRows] = await Promise.all([
-    db.trade.findMany({
+    // RC#7 PERF-2 — count uncommented trades with groupBy/_count (one row per
+    // member, count pushed to Postgres) instead of findMany returning one row
+    // PER trade just to length-count it in Node. Mirrors the openByMember
+    // groupBy below; the @@index([userId, enteredAt]) serves the anti-join
+    // identically, so this is strictly cheaper on row transfer.
+    db.trade.groupBy({
+      by: ['userId'],
       where: { userId: { in: ids }, enteredAt: { gte: recentFloor }, annotations: { none: {} } },
-      select: { userId: true },
+      _count: { _all: true },
     }),
-    db.trainingTrade.findMany({
+    db.trainingTrade.groupBy({
+      by: ['userId'],
       where: { userId: { in: ids }, enteredAt: { gte: recentFloor }, annotations: { none: {} } },
-      select: { userId: true },
+      _count: { _all: true },
     }),
     db.discrepancy.groupBy({
       by: ['memberId'],
@@ -80,11 +87,11 @@ export async function getMembersAttention(ids: string[]): Promise<Map<string, Me
 
   for (const row of uncommentedReal) {
     const acc = result.get(row.userId);
-    if (acc) acc.tradesToComment += 1;
+    if (acc) acc.tradesToComment += row._count._all;
   }
   for (const row of uncommentedTraining) {
     const acc = result.get(row.userId);
-    if (acc) acc.tradesToComment += 1;
+    if (acc) acc.tradesToComment += row._count._all;
   }
   for (const row of openByMember) {
     const acc = result.get(row.memberId);

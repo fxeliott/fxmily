@@ -249,6 +249,34 @@ describe('getCronHealthReport', () => {
   });
 
   /**
+   * RC#7 CRON-1 — purge-deleted now emits a unified `metadata.errors` key
+   * (= materialiseErrors + purgeErrors). Before, a per-user RGPD erasure
+   * failure landed only in the split `materialiseErrors`/`purgeErrors` keys
+   * that health.ts never reads, so a stuck erasure stayed green forever. Pin
+   * that the monitor now escalates the purge cron on a real error count.
+   */
+  it('escalates purge-deleted green→amber when a per-user erasure failed (RC#7 CRON-1)', async () => {
+    const now = new Date('2026-05-09T12:00:00.000Z');
+    // Ran 12h ago → green on age alone (period = 1 day).
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.purge_deleted.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+    ]);
+    // ...but a materialise/purge failed for 2 members (unified errors key).
+    auditFindManyMock.mockResolvedValueOnce([
+      { action: 'cron.purge_deleted.scan', metadata: { errors: 2 } },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const scan = report.entries.find((e) => e.action === 'cron.purge_deleted.scan');
+
+    expect(scan?.status).toBe('amber');
+    expect(scan?.errorCount).toBe(2);
+  });
+
+  /**
    * Why this matters : a healthy heartbeat (errors: 0) must NOT be downgraded —
    * errorCount escalation fires strictly on errors > 0.
    */

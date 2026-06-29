@@ -38,7 +38,11 @@
       "hono": ">=4.12.21",
       "esbuild": ">=0.28.1",
       "brace-expansion@^5.0.0": ">=5.0.6",
-      "@opentelemetry/core": ">=2.8.0 <3"
+      "@opentelemetry/core": ">=2.8.0 <3",
+      "undici": ">=7.28.0 <8",
+      "vite": ">=8.0.16 <9",
+      "@babel/core": ">=7.29.6 <8",
+      "js-yaml": ">=4.2.0 <5"
     }
   }
 }

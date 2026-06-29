@@ -217,7 +217,7 @@ function Field({
         />
       </div>
       {error ? (
-        <p id={errorId} className="text-[11px] text-[var(--bad)]">
+        <p id={errorId} role="alert" className="text-[11px] text-[var(--bad)]">
           {error}
         </p>
       ) : hint ? (

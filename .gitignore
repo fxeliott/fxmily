@@ -100,3 +100,11 @@ playwright/.cache/
 .vapid-keys-dev.txt
 
 .admin-password-rotation.txt
+
+# Local scratch / audit artefacts — keep out of an accidental `git add .`.
+# PNG shot dumps, throwaway prompt notes, and a stray byte-identical duplicate
+# of scripts/check-cron-crontab-sync.mjs. Deleting the files themselves is a
+# manual cleanup; this just stops them ever entering history.
+s9-shots/
+prompt fxmily/
+apps/web/.cisim-scripts/

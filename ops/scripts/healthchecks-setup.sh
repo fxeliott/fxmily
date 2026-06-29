@@ -33,6 +33,9 @@ CRONS=(
   "purge-push-subscriptions|0 4 * * 0|3600"
   "purge-audit-log|0 4 * * *|3600"
   "health|0 * * * *|7200"
+  "backup-pg|30 2 * * *|7200"
+  "backup-uploads|45 6 * * *|7200"
+  "backup-caddy|30 6 * * 0|14400"
 )
 
 cmd_provision() {
@@ -125,8 +128,15 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # Cron 9: health canary (hourly)
 0 * * * * fxmily /usr/local/bin/fxmily-cron health && curl -fsS -m 10 --retry 3 https://hc-ping.com/YOUR_UUID_HEALTH
 
-# Daily backup (existing, no Healthchecks ping yet — V2 candidate)
+# Daily/weekly backups — these self-ping via cron.env (HEALTHCHECK_PING_URL_PG
+# / _UPLOADS / _CADDY), NOT via a crontab `&& curl`. The script pings ONLY
+# after a fully-successful run (every failure path exits non-zero first), so a
+# missing ping = the backup silently failed → Healthchecks alert after grace.
+# Paste the backup-pg / backup-uploads / backup-caddy ping URLs (from the
+# `provision` step) into /etc/fxmily/cron.env, then no crontab change is needed.
 30 2 * * * fxmily /usr/local/bin/fxmily-backup
+45 6 * * * fxmily /usr/local/bin/fxmily-uploads-backup
+30 6 * * 0 fxmily /usr/local/bin/fxmily-caddy-backup
 EOF
 }
 

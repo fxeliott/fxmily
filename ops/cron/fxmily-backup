@@ -122,4 +122,23 @@ fi
 find "$BACKUP_DIR" -name 'fxmily-*.sql.gz.gpg' -mtime +7 -delete
 log "rotation OK (kept 7 days local)"
 
+# ---- 5. Dead-man-switch success ping (opt-in, env-gated) ------------------
+# Ping a Healthchecks.io URL (provision via ops/scripts/healthchecks-setup.sh)
+# ONLY here, after a fully-successful run — every failure path above already
+# exited non-zero, so a MISSING ping is exactly the signal: the cron silently
+# died, the host is down, or a step failed. Healthchecks fires the alert once
+# the ping doesn't arrive within its grace window. This closes the "backup
+# stopped running and nobody noticed" gap (healthchecks-setup.sh:128).
+# No-op until the URL is set in cron.env — Eliott pastes the hc-ping.com URL
+# host-side later, zero code change. Best-effort: a ping hiccup never fails an
+# otherwise-good backup.
+PING_URL="${HEALTHCHECK_PING_URL_PG:-${HEALTHCHECK_PING_URL:-}}"
+if [[ -n "$PING_URL" ]]; then
+  if curl -fsS -m 10 --retry 3 "$PING_URL" >/dev/null 2>&1; then
+    log "healthcheck ping OK"
+  else
+    log "WARNING healthcheck ping failed (backup itself succeeded)"
+  fi
+fi
+
 log "done"

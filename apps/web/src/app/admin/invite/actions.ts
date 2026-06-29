@@ -9,6 +9,7 @@ import {
 } from '@/lib/auth/invitations';
 import { logAudit } from '@/lib/auth/audit';
 import { sendInvitationEmail } from '@/lib/email/send';
+import { reportWarning } from '@/lib/observability';
 import { inviteSchema } from '@/lib/schemas/auth';
 
 export interface InviteActionState {
@@ -95,8 +96,16 @@ export async function createInvitationAction(
   } catch (err) {
     // The invitation row exists but no email left the building. Hard-delete
     // the row so the admin's next click generates a fresh token instead of
-    // a phantom that could be reused if leaked elsewhere.
-    await db.invitation.delete({ where: { id: invitationId } }).catch(() => undefined);
+    // a phantom that could be reused if leaked elsewhere. If the rollback
+    // delete itself fails, surface it to Sentry (mirror of the access-request
+    // sibling) — a persisting phantom token is a security-relevant leak, not
+    // a console-only footnote.
+    await db.invitation.delete({ where: { id: invitationId } }).catch((rollbackErr) =>
+      reportWarning('invite.create', 'rollback_failed', {
+        invitationId,
+        error: rollbackErr instanceof Error ? rollbackErr.message.slice(0, 200) : 'unknown',
+      }),
+    );
     console.error('[invite] email delivery failed', err);
     return {
       ok: false,

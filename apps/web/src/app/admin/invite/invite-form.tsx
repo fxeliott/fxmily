@@ -57,7 +57,7 @@ export function InviteForm() {
           />
         </div>
         {state.fieldErrors?.email ? (
-          <p id="invite-email-error" className="text-[11px] text-[var(--bad)]">
+          <p id="invite-email-error" role="alert" className="text-[11px] text-[var(--bad)]">
             {state.fieldErrors.email}
           </p>
         ) : null}

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 
 import { db } from '@/lib/db';
 import { env } from '@/lib/env';
+import { reportWarning } from '@/lib/observability';
 import {
   isAnnotationUploadKind,
   isProofUploadKind,
@@ -495,8 +496,13 @@ export async function logAudit({
         ...(metadata ? { metadata: metadata as object } : {}),
       },
     });
-  } catch (err) {
-    // Never let audit log failures break the auth flow.
-    console.error('[audit] failed to log', action, err);
+  } catch {
+    // Never let audit log failures break the auth flow. Surface to the
+    // observability channel (warning, not error — best-effort by design) so a
+    // sustained audit-write outage is visible to the operator instead of
+    // silently dropping the compliance trail. `action` only : the failed row's
+    // `metadata` may carry member data, so we never attach `err` (it can echo
+    // the rejected values).
+    reportWarning('audit', 'log_write_failed', { action });
   }
 }

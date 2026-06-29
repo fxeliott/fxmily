@@ -149,7 +149,7 @@ export async function submitMorningCheckinAction(
       err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
         ? err.code
         : 'unknown';
-    console.error('[checkin.morning] submit failed', { code });
+    reportWarning('checkin.morning', 'submit_failed', { code });
     return { ok: false, error: 'unknown' };
   }
 
@@ -273,7 +273,7 @@ export async function submitEveningCheckinAction(
       err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
         ? err.code
         : 'unknown';
-    console.error('[checkin.evening] submit failed', { code });
+    reportWarning('checkin.evening', 'submit_failed', { code });
     return { ok: false, error: 'unknown' };
   }
 

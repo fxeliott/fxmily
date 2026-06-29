@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
+import { reportError } from '@/lib/observability';
 import { linkRecentCheckToTrade } from '@/lib/pre-trade/service';
 import { tradeCloseSchema, tradeOpenSchema } from '@/lib/schemas/trade';
 import { scheduleDouglasDispatch } from '@/lib/cards/scheduler';
@@ -194,7 +195,7 @@ export async function createTradeAction(
     });
     tradeId = trade.id;
   } catch (err) {
-    console.error('[journal.createTrade] failed', err);
+    reportError('journal.createTrade', err);
     return { ok: false, error: 'unknown' };
   }
 
@@ -318,7 +319,7 @@ export async function closeTradeAction(
         fieldErrors: { exitedAt: 'La sortie ne peut pas précéder l’entrée du trade.' },
       };
     }
-    console.error('[journal.closeTrade] failed', err);
+    reportError('journal.closeTrade', err);
     return { ok: false, error: 'unknown' };
   }
 
@@ -378,7 +379,7 @@ export async function deleteTradeAction(tradeId: string): Promise<DeleteTradeAct
     await deleteTrade(session.user.id, tradeId);
   } catch (err) {
     if (err instanceof TradeNotFoundError) return { ok: false, error: 'not_found' };
-    console.error('[journal.deleteTrade] failed', err);
+    reportError('journal.deleteTrade', err);
     return { ok: false, error: 'unknown' };
   }
 

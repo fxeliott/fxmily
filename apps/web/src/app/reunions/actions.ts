@@ -8,6 +8,7 @@ import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
 import { declareMeetingAttendance } from '@/lib/meeting/service';
 import type { MeetingNotDeclarableReason } from '@/lib/meeting/service';
+import { reportWarning } from '@/lib/observability';
 import { meetingAttendanceDeclarationSchema } from '@/lib/schemas/meeting';
 
 /**
@@ -120,7 +121,7 @@ export async function declareMeetingAttendanceAction(
       err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
         ? err.code
         : 'unknown';
-    console.error('[reunions.declare] persist failed', { code });
+    reportWarning('reunions.declare', 'persist_failed', { code });
     return { ok: false, error: 'unknown' };
   }
 

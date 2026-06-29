@@ -66,6 +66,36 @@ const RANGE_DAYS: Record<RangeKey, number> = {
   all: 3650,
 };
 
+/**
+ * Defensive upper bound on the per-member closed-trade slice the dashboard
+ * aggregates in memory (2026-06-29 A-Z deep audit). The `'all'` range spans
+ * 3650 days, so a single power-user — or a scripted import — with tens of
+ * thousands of closed trades would otherwise pull the whole history into heap
+ * and run every O(n) aggregation over it on EVERY render, spiking memory + CPU
+ * + pool-hold time and degrading latency for everyone on the shared CX22.
+ * 5000 closed trades (~13/day for a year) is far beyond any realistic
+ * discretionary cohort yet bounds the worst case. Below the cap the result is
+ * identical to fetching everything.
+ */
+export const ANALYTICS_TRADE_CAP = 5000;
+
+/**
+ * Cap a closed-trade slice fetched MOST-RECENT-FIRST (`closedAt` desc, the
+ * non-null window column) to the most recent `cap` rows, returned in
+ * chronological (asc) order for the aggregations, with a `truncated` flag. Pure
+ * + side-effect free (never mutates the input) so it is unit-tested in isolation
+ * without a DB. Callers fetch `cap + 1` rows so `length > cap` detects
+ * truncation without a second COUNT.
+ */
+export function capRecentTrades<T>(
+  rowsDesc: T[],
+  cap: number = ANALYTICS_TRADE_CAP,
+): { trades: T[]; truncated: boolean } {
+  const truncated = rowsDesc.length > cap;
+  const kept = truncated ? rowsDesc.slice(0, cap) : rowsDesc;
+  return { trades: [...kept].reverse(), truncated };
+}
+
 export interface DashboardAnalytics {
   /** Local-day anchor used (today by default). */
   asOf: LocalDateString;
@@ -87,8 +117,14 @@ export interface DashboardAnalytics {
   /** S15 #5 — trades entered serene that turned contrarié during/after. */
   emotionArc: EmotionArcDegradation;
   streaks: { observedMaxLoss: number; observedMaxWin: number };
-  /** Total closed trades in the window. */
+  /** Total closed trades in the window (capped at `ANALYTICS_TRADE_CAP` when `truncated`). */
   closedCount: number;
+  /**
+   * True when the window held more than `ANALYTICS_TRADE_CAP` closed trades and
+   * only the most-recent cap were aggregated (so the very oldest trades in an
+   * `'all'` view are excluded). False in every realistic case.
+   */
+  truncated: boolean;
   estimatedCount: number;
   /** V1.5 — Steenbarger setup-quality distribution (A/B/C). NULL excluded. */
   setupQuality: SetupQualityDist;
@@ -150,7 +186,15 @@ async function _getDashboardAnalyticsImpl(
   const windowStartUtc = localInstantToUtc(windowStart, 0, 0, 0, 0, timezone);
   const windowEndExclusive = localInstantToUtc(shiftLocalDate(anchor, 1), 0, 0, 0, 0, timezone);
 
-  const trades = await db.trade.findMany({
+  // Fetch most-recent-first and cap the slice (ANALYTICS_TRADE_CAP) so one
+  // member's pathological history can't pull tens of thousands of rows into
+  // memory on every render; `capRecentTrades` hands them back in chronological
+  // order for the aggregations and flags truncation. One extra row (CAP + 1)
+  // detects truncation without a second COUNT. Ordered by `closedAt` (the
+  // window column — always non-null in this result, unlike nullable `exitedAt`,
+  // so the cap selects genuinely-recent rows with no NULLS-FIRST surprise) plus
+  // a unique `id` tiebreaker for a TOTAL, deterministic order.
+  const tradeRowsDesc = await db.trade.findMany({
     where: {
       userId,
       closedAt: { gte: windowStartUtc, lt: windowEndExclusive },
@@ -172,8 +216,10 @@ async function _getDashboardAnalyticsImpl(
       tradeQuality: true,
       riskPct: true,
     },
-    orderBy: { exitedAt: 'asc' },
+    orderBy: [{ closedAt: 'desc' }, { id: 'desc' }],
+    take: ANALYTICS_TRADE_CAP + 1,
   });
+  const { trades, truncated } = capRecentTrades(tradeRowsDesc);
 
   const tradesNorm = trades.map((t) => ({
     ...t,
@@ -224,6 +270,7 @@ async function _getDashboardAnalyticsImpl(
     emotionArc,
     streaks: { observedMaxLoss, observedMaxWin },
     closedCount,
+    truncated,
     estimatedCount,
     setupQuality,
     riskDiscipline,

@@ -47,7 +47,11 @@ export default defineConfig({
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
     actionTimeout: process.env.CI ? 15_000 : 0,
-    navigationTimeout: process.env.CI ? 45_000 : 30_000,
+    // `PW_NAV_TIMEOUT` lets a slow local disk (first-hit Turbopack compile can
+    // exceed 30s — e.g. a cold `/api/auth/*` route measured at ~47s here)
+    // absorb cold-compile navigations without tripping a false timeout.
+    // Unset → identical to the previous behaviour, so CI is unchanged.
+    navigationTimeout: Number(process.env.PW_NAV_TIMEOUT) || (process.env.CI ? 45_000 : 30_000),
     trace: process.env.PLAYWRIGHT_CAPTURE === 'all' ? 'on' : 'retain-on-failure',
     screenshot: process.env.PLAYWRIGHT_CAPTURE === 'all' ? 'on' : 'only-on-failure',
     video: process.env.PLAYWRIGHT_CAPTURE === 'all' ? 'on' : 'retain-on-failure',

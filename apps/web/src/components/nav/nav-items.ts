@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CalendarRange,
   ClipboardCheck,
+  Clapperboard,
   FileBarChart,
   Gauge,
   GraduationCap,
@@ -92,6 +93,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/training', label: 'Entraînement', icon: GraduationCap },
       { href: '/calendrier', label: 'Calendrier', icon: CalendarDays },
       { href: '/reunions', label: 'Réunions', icon: Users },
+      { href: '/seances', label: 'Séances', icon: Clapperboard },
     ],
   },
   {

@@ -27,10 +27,13 @@ import { TrainingReplyForm } from './training-reply-form';
  * a real-trade correction (non-confusability, Mark Douglas).
  */
 
-const DATETIME_FMT = new Intl.DateTimeFormat('fr-FR', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
+function formatDateTime(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: timezone,
+  }).format(date);
+}
 
 interface TrainingAnnotationsSectionProps {
   annotations: SerializedTrainingAnnotation[];
@@ -39,6 +42,9 @@ interface TrainingAnnotationsSectionProps {
   /** Currently-authenticated user id — gates the delete button client-side
    * (the Server Action re-checks `(id, adminId)`). */
   currentUserId?: string | null;
+  /** Member timezone for rendering absolute instants (F2). Defaults to
+   * 'Europe/Paris' so admin surfaces stay Paris with zero regression. */
+  timezone?: string;
 }
 
 /** Defensive: a corrupted `mediaKey` must not crash the page render. */
@@ -59,6 +65,7 @@ export function TrainingAnnotationsSection({
   annotations,
   isAdmin,
   currentUserId = null,
+  timezone = 'Europe/Paris',
 }: TrainingAnnotationsSectionProps) {
   if (annotations.length === 0) {
     if (!isAdmin) return null;
@@ -98,6 +105,7 @@ export function TrainingAnnotationsSection({
               isAdmin={isAdmin}
               canDelete={isAdmin && currentUserId === annotation.adminId}
               mediaUrl={safeReadUrl(storage, annotation.mediaKey)}
+              timezone={timezone}
             />
           </li>
         ))}
@@ -111,6 +119,7 @@ interface TrainingAnnotationCardProps {
   isAdmin: boolean;
   canDelete: boolean;
   mediaUrl: string | null;
+  timezone: string;
 }
 
 function TrainingAnnotationCard({
@@ -118,8 +127,9 @@ function TrainingAnnotationCard({
   isAdmin,
   canDelete,
   mediaUrl,
+  timezone,
 }: TrainingAnnotationCardProps) {
-  const formattedDate = DATETIME_FMT.format(new Date(annotation.createdAt));
+  const formattedDate = formatDateTime(new Date(annotation.createdAt), timezone);
   return (
     <Card className="p-4">
       <header className="mb-3 flex flex-wrap items-center gap-2">
@@ -138,7 +148,7 @@ function TrainingAnnotationCard({
             Lue
             <span className="sr-only">
               {' '}
-              par le membre le {DATETIME_FMT.format(new Date(annotation.seenByMemberAt))}
+              par le membre le {formatDateTime(new Date(annotation.seenByMemberAt), timezone)}
             </span>
           </Pill>
         ) : null}
@@ -180,7 +190,7 @@ function TrainingAnnotationCard({
                 dateTime={annotation.memberRepliedAt}
                 className="t-cap ml-auto text-[var(--t-4)]"
               >
-                {DATETIME_FMT.format(new Date(annotation.memberRepliedAt))}
+                {formatDateTime(new Date(annotation.memberRepliedAt), timezone)}
               </time>
             ) : null}
           </div>

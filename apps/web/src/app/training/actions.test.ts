@@ -275,6 +275,59 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
   });
 });
 
+describe('createTrainingTradeAction — F2 enteredAt interpreted in the member SET timezone', () => {
+  // The wizard posts the RAW `datetime-local` wall-clock (no offset). The action
+  // re-interprets it in `session.user.timezone` server-side (memberWallClock →
+  // localWallClockToUtc), so the stored instant is correct even when the member's
+  // DEVICE clock is in another zone. This is the symmetric mirror of the journal.
+  it('converts a bare wall-clock in a member NY timezone (EDT = UTC-4) to the right UTC instant', async () => {
+    authMock.mockResolvedValue({
+      user: { id: MEMBER_ID, status: 'active', timezone: 'America/New_York' },
+    });
+    // 14:30 wall-clock on 2026-05-06 in New York (DST, UTC-4) → 18:30Z.
+    await expect(
+      createTrainingTradeAction(null, validForm({ enteredAt: '2026-05-06T14:30' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    const arg = createTrainingTradeMock.mock.calls[0]?.[0] as { enteredAt: Date };
+    expect(arg.enteredAt.toISOString()).toBe('2026-05-06T18:30:00.000Z');
+  });
+
+  it('interprets the SAME wall-clock differently for a Paris member (CEST = UTC+2 → 12:30Z)', async () => {
+    authMock.mockResolvedValue({
+      user: { id: MEMBER_ID, status: 'active', timezone: 'Europe/Paris' },
+    });
+    await expect(
+      createTrainingTradeAction(null, validForm({ enteredAt: '2026-05-06T14:30' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    const arg = createTrainingTradeMock.mock.calls[0]?.[0] as { enteredAt: Date };
+    expect(arg.enteredAt.toISOString()).toBe('2026-05-06T12:30:00.000Z');
+  });
+
+  it('falls back to Europe/Paris when the session carries no timezone', async () => {
+    // beforeEach default session has no `timezone` field → Paris fallback.
+    await expect(
+      createTrainingTradeAction(null, validForm({ enteredAt: '2026-05-06T14:30' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    const arg = createTrainingTradeMock.mock.calls[0]?.[0] as { enteredAt: Date };
+    expect(arg.enteredAt.toISOString()).toBe('2026-05-06T12:30:00.000Z');
+  });
+
+  it('still accepts an already-absolute ISO instant (Z suffix) unchanged', async () => {
+    authMock.mockResolvedValue({
+      user: { id: MEMBER_ID, status: 'active', timezone: 'America/New_York' },
+    });
+    await expect(
+      createTrainingTradeAction(null, validForm({ enteredAt: '2026-05-06T18:30:00.000Z' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    const arg = createTrainingTradeMock.mock.calls[0]?.[0] as { enteredAt: Date };
+    expect(arg.enteredAt.toISOString()).toBe('2026-05-06T18:30:00.000Z');
+  });
+});
+
 describe('createTrainingTradeAction — S8 session attach (ownership + open-state)', () => {
   const SESSION_ID = 'clx0session0000000001';
 

@@ -147,7 +147,11 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
             <h2 className="t-h2 text-[var(--t-1)]">Tes débriefs</h2>
             <p className="t-cap text-[var(--t-3)]">{recent.length} / 12</p>
           </div>
-          <MonthlyDebriefTimeline debriefs={recent} selectedId={selected?.id} />
+          <MonthlyDebriefTimeline
+            debriefs={recent}
+            selectedId={selected?.id}
+            timezone={session.user.timezone || 'Europe/Paris'}
+          />
         </section>
       </div>
     </main>

@@ -24,10 +24,13 @@ import { cn } from '@/lib/utils';
  * long=ok / short=bad préservée. Sections cards default avec edge-top.
  */
 
-const DATETIME_FMT = new Intl.DateTimeFormat('fr-FR', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
+function formatDateTime(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: timezone,
+  }).format(date);
+}
 
 const NUMBER_FMT = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 5 });
 
@@ -43,6 +46,10 @@ interface TradeDetailViewProps {
   /** Identifier of the currently-authenticated user. Drives the admin
    * delete-CTA gate inside `<AnnotationsSection />`. */
   currentUserId?: string | null;
+  /** F2 — member timezone for rendering absolute instants (entry/exit dates,
+   * annotation timestamps). Optional; defaults to Europe/Paris so admin
+   * callers stay on Paris. */
+  timezone?: string;
 }
 
 export function TradeDetailView({
@@ -54,6 +61,7 @@ export function TradeDetailView({
   footerSlot,
   annotations = [],
   currentUserId = null,
+  timezone = 'Europe/Paris',
 }: TradeDetailViewProps) {
   const storage = selectStorage();
   const entryUrl = trade.screenshotEntryKey ? storage.getReadUrl(trade.screenshotEntryKey) : null;
@@ -113,7 +121,7 @@ export function TradeDetailView({
         <p className="t-body text-[var(--t-3)]">
           Entré le{' '}
           <span className="font-mono text-[var(--t-2)] tabular-nums">
-            {DATETIME_FMT.format(new Date(trade.enteredAt))}
+            {formatDateTime(new Date(trade.enteredAt), timezone)}
           </span>{' '}
           · {SESSION_LABEL[trade.session]}
         </p>
@@ -289,7 +297,7 @@ export function TradeDetailView({
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
             <Stat
               label="Date sortie"
-              value={trade.exitedAt ? DATETIME_FMT.format(new Date(trade.exitedAt)) : '—'}
+              value={trade.exitedAt ? formatDateTime(new Date(trade.exitedAt), timezone) : '—'}
             />
             <Stat
               label="Prix sortie"
@@ -318,6 +326,7 @@ export function TradeDetailView({
         annotations={annotations}
         isAdmin={isAdmin}
         currentUserId={currentUserId}
+        timezone={timezone}
       />
 
       {/* Footer admin/member-specific slot */}

@@ -54,11 +54,9 @@ export const metadata = {
 };
 export const dynamic = 'force-dynamic';
 
-const PARIS_TZ = 'Europe/Paris';
-
-function frenchToday(now = new Date()): string {
+function frenchToday(now: Date, timezone: string): string {
   const fmt = new Intl.DateTimeFormat('fr-FR', {
-    timeZone: PARIS_TZ,
+    timeZone: timezone,
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -68,9 +66,9 @@ function frenchToday(now = new Date()): string {
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
-function greeting(now = new Date()): string {
+function greeting(now: Date, timezone: string): string {
   const fmt = new Intl.DateTimeFormat('en-GB', {
-    timeZone: PARIS_TZ,
+    timeZone: timezone,
     hour: '2-digit',
     hour12: false,
   });
@@ -232,9 +230,9 @@ export default async function DashboardPage() {
         {/* V2 refonte J1 — north-star hero : point focal unique (état du jour +
             prochaine action). Remplace l'ancien title-row dense et absorbe le streak. */}
         <NorthStarHero
-          greeting={greeting()}
+          greeting={greeting(new Date(), timezone)}
           firstName={firstName}
-          dateLabel={frenchToday()}
+          dateLabel={frenchToday(new Date(), timezone)}
           score={latestScore}
           history={scoreHistory}
           streak={{
@@ -563,7 +561,7 @@ export default async function DashboardPage() {
         <div className="mb-6 grid items-start gap-4 lg:grid-cols-2">
           <section aria-label="Module Mark Douglas">
             <Suspense fallback={<DouglasInboxSkeleton />}>
-              <DouglasInboxWidget userId={session.user.id} />
+              <DouglasInboxWidget userId={session.user.id} timezone={timezone} />
             </Suspense>
           </section>
           <section aria-label="Module REFLECT">

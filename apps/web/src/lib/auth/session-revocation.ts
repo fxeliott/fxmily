@@ -32,6 +32,10 @@ export interface RevocationUserSnapshot {
   tokenVersion: number;
   status: UserStatus;
   role: UserRole;
+  // F2 — re-read so a self-service timezone change (`/account/timezone`)
+  // reaches the live session within one request, without a re-login and
+  // without reopening a client-controlled `session.update()` path.
+  timezone: string;
 }
 
 /**
@@ -45,10 +49,11 @@ export interface RevocationUserSnapshot {
  *  - `dbUser.tokenVersion !== token.tokenVersion` → an explicit revocation
  *    bump happened → invalidate every JWT issued before the bump.
  *
- * Otherwise the token survives, but `status` + `role` are refreshed from the
- * DB so a status flip that does NOT bump `tokenVersion` (e.g. a future admin
- * suspend) still reaches the `authorized()` gate within one request — defense
- * in depth.
+ * Otherwise the token survives, but `status` + `role` + `timezone` are
+ * refreshed from the DB so a status flip that does NOT bump `tokenVersion`
+ * (e.g. a future admin suspend) still reaches the `authorized()` gate within
+ * one request — defense in depth — and a member's self-service timezone change
+ * (F2) propagates to `session.user.timezone` on the next request.
  *
  * Backward-compat: a JWT minted before this column existed has no
  * `tokenVersion` claim. We coalesce it to 0 (the column default) so existing
@@ -69,6 +74,7 @@ export function applyRevocationCheck(
     tokenVersion: dbUser.tokenVersion,
     status: dbUser.status,
     role: dbUser.role,
+    timezone: dbUser.timezone,
   };
 }
 
@@ -100,7 +106,7 @@ export async function refreshAndCheckToken(token: JWT): Promise<JWT | null> {
   try {
     const dbUser = await db.user.findUnique({
       where: { id: token.sub },
-      select: { tokenVersion: true, status: true, role: true },
+      select: { tokenVersion: true, status: true, role: true, timezone: true },
     });
     return applyRevocationCheck(token, dbUser);
   } catch (err) {

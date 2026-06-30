@@ -12,6 +12,7 @@ import { MonthlyDebriefEmail } from '@/lib/email/templates/monthly-debrief';
 import { MonthlyDebriefOverdueAlertEmail } from '@/lib/email/templates/monthly-debrief-overdue-alert';
 import { NotificationFallbackEmail } from '@/lib/email/templates/notification-fallback';
 import { OnboardingProfileOverdueAlertEmail } from '@/lib/email/templates/onboarding-profile-overdue-alert';
+import { PasswordChangedEmail } from '@/lib/email/templates/password-changed';
 import { PasswordResetEmail } from '@/lib/email/templates/password-reset';
 import { VerificationOverdueAlertEmail } from '@/lib/email/templates/verification-overdue-alert';
 import { WeeklyDigestEmail } from '@/lib/email/templates/weekly-digest';
@@ -103,6 +104,43 @@ export async function sendPasswordResetEmail({
       resetUrl,
       ``,
       `Si tu n'es pas à l'origine de cette demande, ignore ce message — ton mot de passe actuel reste inchangé.`,
+    ].join('\n'),
+  });
+}
+
+/**
+ * Confirm out-of-band that a password reset just COMPLETED (OWASP Forgot
+ * Password Cheat Sheet — notify on every credential change so an account
+ * takeover is visible immediately). Carries NO token and NO reset link: it is a
+ * notification, never an action surface. The only CTA is the recovery path
+ * (`/forgot-password`) for the "ce n'était pas toi" case.
+ *
+ * BEST-EFFORT at the call site (`lib/auth/password-reset.ts:completePassword
+ * Reset`): the password is ALREADY rotated and every JWT already revoked by the
+ * time this fires, so a delivery failure must never undo a completed reset — the
+ * caller swallows any throw.
+ */
+export async function sendPasswordChangedEmail({
+  to,
+  firstName,
+}: {
+  to: string;
+  firstName: string | null | undefined;
+}): Promise<{ id: string | null; delivered: boolean }> {
+  const forgotUrl = buildForgotPasswordUrl();
+
+  return sendEmail({
+    to,
+    subject: 'Ton mot de passe Fxmily a été modifié',
+    react: PasswordChangedEmail({ firstName, forgotUrl }),
+    text: [
+      `Ton mot de passe Fxmily vient d'être modifié.`,
+      ``,
+      `Si c'est bien toi, tu n'as rien à faire — connecte-toi avec ton nouveau mot de passe.`,
+      `Par sécurité, toutes tes sessions ouvertes ont été déconnectées.`,
+      ``,
+      `Ce n'était pas toi ? Reprends le contrôle immédiatement : réinitialise ton mot de passe`,
+      `(${forgotUrl}) et écris-nous à fxeliott@fxmily.fr pour qu'on bloque l'accès.`,
     ].join('\n'),
   });
 }
@@ -241,6 +279,13 @@ export function buildResetUrl(plainToken: string): string {
   const base = env.AUTH_URL.replace(/\/+$/, '');
   const token = encodeURIComponent(plainToken);
   return `${base}/reset-password?token=${token}`;
+}
+
+/** Build the absolute "mot de passe oublié" REQUEST URL — the "ce n'était pas
+ * toi" recovery CTA in the password-changed confirmation email (SPEC §7.1). */
+export function buildForgotPasswordUrl(): string {
+  const base = env.AUTH_URL.replace(/\/+$/, '');
+  return `${base}/forgot-password`;
 }
 
 /** Build the absolute URL to the admin access-request queue (§26.2 email CTA). */

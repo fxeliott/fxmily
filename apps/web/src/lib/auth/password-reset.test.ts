@@ -28,6 +28,7 @@ interface ResetTokenRow {
 interface UserRow {
   id: string;
   email: string;
+  firstName: string | null;
   status: string;
   passwordHash: string;
   tokenVersion: number;
@@ -100,7 +101,7 @@ function buildDbApi(s: typeof store) {
       ),
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) => {
         const found = s.users.find((u) => u.id === where.id);
-        return found ? { email: found.email } : null;
+        return found ? { email: found.email, firstName: found.firstName } : null;
       }),
     },
     $transaction: vi.fn(async (cb: (tx: typeof api) => Promise<unknown>) => cb(api)),
@@ -113,6 +114,21 @@ vi.mock('@/lib/auth/audit', () => ({ logAudit: vi.fn(async () => undefined) }));
 vi.mock('@/lib/auth/password', () => ({
   hashPassword: vi.fn(async (pw: string) => `hashed:${pw}`),
 }));
+// The OWASP "password changed" confirmation is a best-effort side-effect of a
+// successful reset — mock the sender so we assert it fires (and ONLY on success)
+// without touching Resend, and the observability sink so a forced throw is
+// swallowed into a warning rather than the test.
+vi.mock('@/lib/email/send', () => ({
+  sendPasswordChangedEmail: vi.fn(async () => ({ id: 'em-1', delivered: true })),
+}));
+vi.mock('@/lib/observability', () => ({
+  reportWarning: vi.fn(() => undefined),
+  reportError: vi.fn(() => undefined),
+}));
+
+import { db } from '@/lib/db';
+import { sendPasswordChangedEmail } from '@/lib/email/send';
+import { reportWarning } from '@/lib/observability';
 
 import {
   PASSWORD_RESET_TTL_MS,
@@ -129,6 +145,7 @@ function seedUser(overrides: Partial<UserRow> = {}): UserRow {
   const row: UserRow = {
     id: 'user-1',
     email: 'alice@fxmily.local',
+    firstName: 'Alice',
     status: 'active',
     passwordHash: 'hashed:old-password',
     tokenVersion: 3,
@@ -308,5 +325,102 @@ describe('completePasswordReset', () => {
     expect(user.passwordHash).toBe('hashed:old-password'); // NOT rotated
     expect(user.tokenVersion).toBe(3); // NOT bumped
     expect(store.tokens[0]!.usedAt).not.toBeNull(); // token still consumed (burned)
+  });
+});
+
+describe('completePasswordReset — "password changed" confirmation (OWASP)', () => {
+  it('sends the confirmation email to the member on a SUCCESSFUL reset', async () => {
+    seedUser({ email: 'bob@fxmily.local', firstName: 'Bob' });
+    const { plainToken } = await createPasswordResetToken('user-1');
+
+    const result = await completePasswordReset({ plainToken, password: NEW_PASSWORD });
+
+    expect(result.ok).toBe(true);
+    expect(sendPasswordChangedEmail).toHaveBeenCalledTimes(1);
+    expect(sendPasswordChangedEmail).toHaveBeenCalledWith({
+      to: 'bob@fxmily.local',
+      firstName: 'Bob',
+    });
+  });
+
+  it('does NOT send on an unknown token (no reset happened)', async () => {
+    seedUser();
+    await completePasswordReset({
+      plainToken: 'never-issued-token-00000000000000',
+      password: NEW_PASSWORD,
+    });
+    expect(sendPasswordChangedEmail).not.toHaveBeenCalled();
+  });
+
+  it('does NOT send on an expired token', async () => {
+    seedUser();
+    const { plainToken } = await createPasswordResetToken('user-1', -1000);
+    await completePasswordReset({ plainToken, password: NEW_PASSWORD });
+    expect(sendPasswordChangedEmail).not.toHaveBeenCalled();
+  });
+
+  it('does NOT send when the member is suspended (token burned, password unchanged)', async () => {
+    seedUser({ status: 'suspended' });
+    const { plainToken } = await createPasswordResetToken('user-1');
+    await completePasswordReset({ plainToken, password: NEW_PASSWORD });
+    expect(sendPasswordChangedEmail).not.toHaveBeenCalled();
+  });
+
+  it('does NOT re-send on an idempotent second consume of the same token', async () => {
+    seedUser();
+    const { plainToken } = await createPasswordResetToken('user-1');
+
+    await completePasswordReset({ plainToken, password: NEW_PASSWORD });
+    await completePasswordReset({ plainToken, password: 'Another-Pwd!2026' });
+
+    expect(sendPasswordChangedEmail).toHaveBeenCalledTimes(1); // first success only
+  });
+
+  it('a notify failure NEVER undoes the reset — result stays ok, warning is reported', async () => {
+    const user = seedUser({ tokenVersion: 3 });
+    const { plainToken } = await createPasswordResetToken('user-1');
+    vi.mocked(sendPasswordChangedEmail).mockRejectedValueOnce(new Error('resend down'));
+
+    const result = await completePasswordReset({ plainToken, password: NEW_PASSWORD });
+
+    // The password is already rotated + JWTs revoked: a notify hiccup must not
+    // flip the outcome to a failure.
+    expect(result.ok).toBe(true);
+    expect(user.passwordHash).toBe(`hashed:${NEW_PASSWORD}`);
+    expect(user.tokenVersion).toBe(4);
+    expect(reportWarning).toHaveBeenCalledWith(
+      'password_reset.complete',
+      'notify_email_failed',
+      expect.objectContaining({ error: expect.stringContaining('resend down') }),
+    );
+  });
+
+  it('forwards a null firstName verbatim (template falls back to a generic heading)', async () => {
+    seedUser({ email: 'nameless@fxmily.local', firstName: null });
+    const { plainToken } = await createPasswordResetToken('user-1');
+
+    const result = await completePasswordReset({ plainToken, password: NEW_PASSWORD });
+
+    expect(result.ok).toBe(true);
+    expect(sendPasswordChangedEmail).toHaveBeenCalledWith({
+      to: 'nameless@fxmily.local',
+      firstName: null,
+    });
+  });
+
+  it('if the user vanished between reset and notify, swallows it: no email, reset still ok', async () => {
+    const user = seedUser({ tokenVersion: 3 });
+    const { plainToken } = await createPasswordResetToken('user-1');
+    // Defensive branch (`if (!user) return`): the post-reset read returns null
+    // (e.g. a concurrent hard-delete). The reset is already committed.
+    vi.mocked(db.user.findUnique).mockResolvedValueOnce(null);
+
+    const result = await completePasswordReset({ plainToken, password: NEW_PASSWORD });
+
+    expect(result.ok).toBe(true);
+    expect(user.passwordHash).toBe(`hashed:${NEW_PASSWORD}`);
+    expect(user.tokenVersion).toBe(4);
+    expect(sendPasswordChangedEmail).not.toHaveBeenCalled();
+    expect(reportWarning).not.toHaveBeenCalled(); // a missing row is NOT an error
   });
 });

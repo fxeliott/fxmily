@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { TRAINING_LESSON_MAX, trainingTradeCreateSchema } from './training-trade';
+import {
+  TRAINING_LESSON_MAX,
+  TRAINING_TRADINGVIEW_URL_MAX,
+  trainingTradeCreateSchema,
+} from './training-trade';
 
 /** A fully-valid backtest payload; override one field per test. */
 function valid(overrides: Record<string, unknown> = {}) {
@@ -49,6 +53,113 @@ describe('trainingTradeCreateSchema', () => {
         valid({ entryScreenshotKey: 'trades/abcdefgh12345678/abcdefghijkl1234.jpg' }),
       ).success,
     ).toBe(false);
+  });
+
+  // ----- tradingViewUrl (F1 — OPTIONAL, https + tradingview.com host allowlist) -----
+
+  it('accepts a backtest with NO tradingViewUrl (omitted — the field is optional)', () => {
+    const { tradingViewUrl: _t, ...rest } = valid() as Record<string, unknown>;
+    expect(trainingTradeCreateSchema.safeParse(rest).success).toBe(true);
+  });
+
+  it('accepts a null tradingViewUrl', () => {
+    expect(trainingTradeCreateSchema.safeParse(valid({ tradingViewUrl: null })).success).toBe(true);
+  });
+
+  it('accepts a valid TradingView snapshot link (/x/)', () => {
+    const url = 'https://www.tradingview.com/x/NQe0OrXz/';
+    expect(trainingTradeCreateSchema.parse(valid({ tradingViewUrl: url })).tradingViewUrl).toBe(
+      url,
+    );
+  });
+
+  it('accepts a valid TradingView layout link (/chart/)', () => {
+    expect(
+      trainingTradeCreateSchema.safeParse(
+        valid({ tradingViewUrl: 'https://www.tradingview.com/chart/J1cFbGBP/' }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it('accepts a regional sub-domain (fr.tradingview.com) and the apex host', () => {
+    expect(
+      trainingTradeCreateSchema.safeParse(
+        valid({ tradingViewUrl: 'https://fr.tradingview.com/x/abc123/' }),
+      ).success,
+    ).toBe(true);
+    expect(
+      trainingTradeCreateSchema.safeParse(
+        valid({ tradingViewUrl: 'https://tradingview.com/x/abc123/' }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it('trims surrounding whitespace on the tradingViewUrl', () => {
+    expect(
+      trainingTradeCreateSchema.parse(
+        valid({ tradingViewUrl: '  https://www.tradingview.com/x/abc/  ' }),
+      ).tradingViewUrl,
+    ).toBe('https://www.tradingview.com/x/abc/');
+  });
+
+  it('rejects an off-host link (not tradingview.com)', () => {
+    expect(
+      trainingTradeCreateSchema.safeParse(
+        valid({ tradingViewUrl: 'https://evil.example.com/x/abc/' }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it('rejects a look-alike host suffixing tradingview.com (open-redirect/phishing)', () => {
+    expect(
+      trainingTradeCreateSchema.safeParse(
+        valid({ tradingViewUrl: 'https://www.tradingview.com.evil.com/x/abc/' }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it('rejects a non-https (http) TradingView link', () => {
+    expect(
+      trainingTradeCreateSchema.safeParse(
+        valid({ tradingViewUrl: 'http://www.tradingview.com/x/abc/' }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it('rejects a javascript: scheme (stored-XSS guard)', () => {
+    expect(
+      trainingTradeCreateSchema.safeParse(
+        valid({ tradingViewUrl: 'javascript:alert(document.cookie)' }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it('rejects a data: URL', () => {
+    expect(
+      trainingTradeCreateSchema.safeParse(valid({ tradingViewUrl: 'data:text/html,<script>1' }))
+        .success,
+    ).toBe(false);
+  });
+
+  it('rejects a non-URL string', () => {
+    expect(
+      trainingTradeCreateSchema.safeParse(valid({ tradingViewUrl: 'pas-une-url' })).success,
+    ).toBe(false);
+  });
+
+  it('rejects a tradingViewUrl carrying a bidi/zero-width char (Trojan-Source/homograph)', () => {
+    expect(
+      trainingTradeCreateSchema.safeParse(
+        valid({ tradingViewUrl: 'https://www.tradingview.com/x/ab‮c/' }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it('rejects a tradingViewUrl over the length cap', () => {
+    const tooLong = `https://www.tradingview.com/x/${'a'.repeat(TRAINING_TRADINGVIEW_URL_MAX)}/`;
+    expect(trainingTradeCreateSchema.safeParse(valid({ tradingViewUrl: tooLong })).success).toBe(
+      false,
+    );
   });
 
   // ----- plannedRR (mirror Trade.plannedRR bounds) -----

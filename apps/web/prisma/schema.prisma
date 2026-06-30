@@ -933,6 +933,16 @@ model TrainingTrade {
   /// `training/{id}/{nanoid32}.{ext}` (lib/storage/keys.ts, wired J-T2).
   entryScreenshotKey String? @map("entry_screenshot_key")
 
+  /// F1 — OPTIONAL TradingView analysis link the member may paste BESIDE the
+  /// mandatory screenshot (copier-coller direct: a `/x/` snapshot or `/chart/`
+  /// layout URL). Optional at every layer (the screenshot stays mandatory via
+  /// Zod). Hardened at the Zod edge like `push-subscription` `endpointSchema`:
+  /// https-only + hostname allowlisted to tradingview.com + length cap + reject
+  /// Trojan-Source — so a member-pasted link rendered as a clickable `<a>` to
+  /// the admin can never become an open-redirect / XSS / SSRF vector. §21.5:
+  /// a chart link is process metadata, NEVER a P&L — never read by the real edge.
+  tradingViewUrl String? @map("trading_view_url")
+
   /// Planned reward-to-risk ratio. Mandatory (mirror `Trade.plannedRR`):
   /// defining R:R before is the backtest discipline.
   plannedRR Decimal @map("planned_rr") @db.Decimal(6, 2)

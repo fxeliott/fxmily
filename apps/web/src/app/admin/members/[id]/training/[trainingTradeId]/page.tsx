@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
@@ -88,6 +88,25 @@ export default async function AdminTrainingTradeDetailPage({
             alt="Capture de l'analyse TradingView du backtest"
             className="rounded-card max-h-[32rem] w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
           />
+        </Card>
+      ) : null}
+
+      {/* F1 — admin parity: the member's optional TradingView link, rendered
+          independently of the screenshot so the admin can review it even on a
+          link-only backtest. Clickable (page not wrapped in an outer Link);
+          rel="noopener noreferrer" on a member-supplied (Zod-validated) URL. */}
+      {trade.tradingViewUrl ? (
+        <Card className="flex flex-col gap-2 p-4">
+          <h2 className="t-eyebrow-lg text-[var(--t-3)]">Lien TradingView du membre</h2>
+          <a
+            href={trade.tradingViewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-control inline-flex w-fit items-center gap-1.5 text-[13px] font-medium text-[var(--cy)] underline-offset-2 transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
+          >
+            <ExternalLink className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+            Ouvrir l&apos;analyse sur TradingView
+          </a>
         </Card>
       ) : null}
 

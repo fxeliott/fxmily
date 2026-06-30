@@ -61,7 +61,7 @@ const STEP_ICONS = [Calendar, Camera, Target, Trophy, ShieldCheck, ListChecks, B
 
 const STEP_FIELDS = [
   ['pair', 'enteredAt'],
-  ['entryScreenshotKey'],
+  ['entryScreenshotKey', 'tradingViewUrl'],
   ['plannedRR'],
   ['outcome', 'resultR'],
   ['systemRespected'],
@@ -78,6 +78,8 @@ interface TrainingDraftState {
   enteredAt: string;
   entryScreenshotKey: string;
   entryScreenshotReadUrl: string;
+  /** F1 — optional TradingView analysis link, beside the mandatory screenshot. */
+  tradingViewUrl: string;
   plannedRR: number;
   outcome: '' | 'win' | 'loss' | 'break_even';
   resultR: string;
@@ -115,6 +117,7 @@ function emptyDraft(): TrainingDraftState {
     enteredAt: '',
     entryScreenshotKey: '',
     entryScreenshotReadUrl: '',
+    tradingViewUrl: '',
     plannedRR: 2,
     outcome: '',
     resultR: '',
@@ -236,6 +239,9 @@ export function TrainingFormWizard({
     const candidate = {
       pair: draft.pair,
       entryScreenshotKey: draft.entryScreenshotKey,
+      // F1 — optional URL: '' (untouched) → undefined so the optional schema
+      // short-circuits (an empty string is not a valid URL).
+      tradingViewUrl: draft.tradingViewUrl || undefined,
       plannedRR: draft.plannedRR,
       outcome: draft.outcome === '' ? null : draft.outcome,
       resultR: draft.resultR === '' ? null : draft.resultR,
@@ -295,6 +301,9 @@ export function TrainingFormWizard({
     fd.set('pair', draft.pair);
     fd.set('enteredAt', new Date(draft.enteredAt).toISOString());
     fd.set('entryScreenshotKey', draft.entryScreenshotKey);
+    // F1 — optional TradingView link: only send when non-empty (server reads
+    // null when omitted), mirroring the resultR guarded set above.
+    if (draft.tradingViewUrl !== '') fd.set('tradingViewUrl', draft.tradingViewUrl);
     fd.set('plannedRR', String(draft.plannedRR));
     if (draft.outcome) fd.set('outcome', draft.outcome);
     if (draft.resultR !== '') fd.set('resultR', draft.resultR);
@@ -604,6 +613,51 @@ function StepCapture({ draft, update, fieldErrors, disabled }: StepProps) {
           update('entryScreenshotReadUrl', '');
         }}
       />
+
+      {/* F1 — optional TradingView link, beside the mandatory capture. Pasting
+          the chart link (snapshot « /x/ » or layout « /chart/ ») in one move,
+          in ADDITION to the screenshot. Never gates submit (the screenshot is
+          the only requirement). */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="tradingViewUrl" className="t-eyebrow-lg text-[var(--t-3)]">
+          Lien TradingView <span className="font-normal text-[var(--t-4)]">(optionnel)</span>
+        </label>
+        <input
+          id="tradingViewUrl"
+          type="url"
+          inputMode="url"
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          value={draft.tradingViewUrl}
+          onChange={(e) => update('tradingViewUrl', e.target.value)}
+          disabled={disabled}
+          placeholder="https://www.tradingview.com/x/…"
+          aria-invalid={fieldErrors.tradingViewUrl ? 'true' : undefined}
+          aria-describedby={
+            fieldErrors.tradingViewUrl ? 'tradingViewUrl-error' : 'tradingViewUrl-hint'
+          }
+          className={cn(
+            'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
+            'placeholder:text-[var(--t-4)]',
+            fieldErrors.tradingViewUrl
+              ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+              : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--cy)]',
+            'focus-visible:ring-2 focus-visible:ring-[var(--cy-dim)]',
+            'disabled:cursor-not-allowed disabled:opacity-60',
+          )}
+        />
+        {fieldErrors.tradingViewUrl ? (
+          <p id="tradingViewUrl-error" className="text-[11px] text-[var(--bad)]" role="alert">
+            {fieldErrors.tradingViewUrl}
+          </p>
+        ) : (
+          <p id="tradingViewUrl-hint" className="t-cap text-[var(--t-4)]">
+            Colle le lien de ton analyse (snapshot « /x/ » ou chart « /chart/ »). En plus de la
+            capture, pas à sa place.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

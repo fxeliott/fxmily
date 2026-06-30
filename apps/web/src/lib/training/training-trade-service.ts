@@ -34,6 +34,10 @@ export interface CreateTrainingTradeInput {
   userId: string;
   pair: string;
   entryScreenshotKey: string;
+  /** F1 — optional TradingView analysis link (https tradingview.com only,
+   * validated at the Zod edge). `null`/absent = no link (the screenshot stays
+   * mandatory). §21.5: process metadata, never a P&L. */
+  tradingViewUrl?: string | null;
   plannedRR: number;
   outcome: TrainingOutcome | null;
   resultR: number | null;
@@ -66,6 +70,8 @@ export interface SerializedTrainingTrade {
   userId: string;
   pair: string;
   entryScreenshotKey: string | null;
+  /** F1 — optional TradingView analysis link, or null. */
+  tradingViewUrl: string | null;
   plannedRR: string;
   outcome: TrainingOutcome | null;
   resultR: string | null;
@@ -95,6 +101,7 @@ export function serializeTrainingTrade(row: TrainingTradeModel): SerializedTrain
     userId: row.userId,
     pair: row.pair,
     entryScreenshotKey: row.entryScreenshotKey,
+    tradingViewUrl: row.tradingViewUrl,
     plannedRR: row.plannedRR.toString(),
     outcome: row.outcome,
     resultR: row.resultR == null ? null : row.resultR.toString(),
@@ -125,6 +132,7 @@ export async function createTrainingTrade(
       userId: input.userId,
       pair: input.pair,
       entryScreenshotKey: input.entryScreenshotKey,
+      tradingViewUrl: input.tradingViewUrl ?? null,
       plannedRR: new Prisma.Decimal(input.plannedRR),
       outcome: input.outcome,
       resultR: input.resultR == null ? null : new Prisma.Decimal(input.resultR),

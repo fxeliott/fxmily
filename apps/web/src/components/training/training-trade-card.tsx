@@ -1,4 +1,4 @@
-import { Check, Minus, X } from 'lucide-react';
+import { Check, Link2, Minus, X } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
@@ -109,6 +109,17 @@ export function TrainingTradeCard({ trade }: { trade: SerializedTrainingTrade })
               </li>
             ))}
           </ul>
+        </div>
+      ) : null}
+
+      {/* F1 — non-clickable indicator that a TradingView link is attached. NOT
+          an anchor on purpose: on the list surfaces this card is rendered INSIDE
+          an outer Next.js Link, so a nested <a> would be invalid HTML. The link
+          is opened from the backtest DETAIL page (member + admin). */}
+      {trade.tradingViewUrl ? (
+        <div className="flex items-center gap-1.5 border-t border-[var(--b-subtle)] pt-3 text-[12px] text-[var(--t-3)]">
+          <Link2 className="h-3.5 w-3.5 shrink-0 text-[var(--cy)]" strokeWidth={1.75} aria-hidden />
+          <span>Analyse TradingView jointe</span>
         </div>
       ) : null}
 

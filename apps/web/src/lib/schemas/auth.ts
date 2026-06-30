@@ -126,8 +126,29 @@ export const onboardingSchema = z
   });
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
 
-/** Magic-link request form (forgot password). */
-export const magicLinkSchema = z.object({
+/** "Mot de passe oublié" request form (email only). SPEC §7.1. */
+export const forgotPasswordSchema = z.object({
   email: emailSchema,
 });
-export type MagicLinkInput = z.infer<typeof magicLinkSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
+/**
+ * /reset-password form. `token` is read from the URL `?token=…` and submitted
+ * with the new password; the server validates it against the DB (the client
+ * schema only checks shape, not freshness/single-use). Mirror of
+ * `onboardingSchema` for the password rules + confirmation refine.
+ */
+export const resetPasswordSchema = z
+  .object({
+    token: z
+      .string({ message: 'Lien invalide.' })
+      .min(20, 'Lien invalide.')
+      .max(128, 'Lien invalide.'),
+    password: passwordSchema,
+    passwordConfirm: z.string(),
+  })
+  .refine((d) => d.password === d.passwordConfirm, {
+    message: 'Les mots de passe ne correspondent pas.',
+    path: ['passwordConfirm'],
+  });
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

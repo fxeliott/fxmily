@@ -3,40 +3,27 @@ import { redirect } from 'next/navigation';
 import type { CSSProperties } from 'react';
 
 import { auth } from '@/auth';
-import { Alert } from '@/components/alert';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Card } from '@/components/ui/card';
 
-import { LoginAurora } from './login-aurora';
-import { LoginForm } from './login-form';
+import { LoginAurora } from '../login/login-aurora';
+import { ForgotForm } from './forgot-form';
 
 export const metadata = {
-  title: 'Connexion',
+  title: 'Mot de passe oublié',
   // Phase T security — V1 closed cohort, no SEO discovery.
   robots: { index: false, follow: false },
 };
 
-interface LoginPageProps {
-  searchParams: Promise<{ onboarding?: string | string[]; reset?: string | string[] }>;
-}
-
-export default async function LoginPage({ searchParams }: LoginPageProps) {
+export default async function ForgotPasswordPage() {
+  // Already signed in? A reset request is pointless — send them home.
   const session = await auth();
   if (session?.user) {
     redirect('/dashboard');
   }
 
-  const params = await searchParams;
-  const onboardingFlag = Array.isArray(params.onboarding)
-    ? params.onboarding[0]
-    : params.onboarding;
-  const showOnboardingNotice = onboardingFlag === 'success';
-  const resetFlag = Array.isArray(params.reset) ? params.reset[0] : params.reset;
-  const showResetNotice = resetFlag === 'success';
-
   return (
     <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[var(--bg)] px-4 py-10">
-      {/* S9.1 — premium drifting aurora backplate (decorative, zero JS). */}
       <LoginAurora />
 
       <section className="relative z-10 flex w-full max-w-sm flex-col gap-6">
@@ -60,26 +47,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
               style={{ fontFeatureSettings: '"ss01" 1' }}
             >
-              Connexion
+              Mot de passe oublié
             </h1>
-            <p className="t-body text-center text-[var(--t-3)]">Accède à ton espace de suivi.</p>
+            <p className="t-body text-center text-[var(--t-3)]">
+              Indique ton email, on t&apos;envoie un lien de réinitialisation.
+            </p>
           </header>
 
-          {showOnboardingNotice ? (
-            <div className="mb-5">
-              <Alert tone="success">Compte créé. Connecte-toi pour continuer.</Alert>
-            </div>
-          ) : null}
-
-          {showResetNotice ? (
-            <div className="mb-5">
-              <Alert tone="success">
-                Mot de passe mis à jour. Connecte-toi avec ton nouveau mot de passe.
-              </Alert>
-            </div>
-          ) : null}
-
-          <LoginForm />
+          <ForgotForm />
         </Card>
 
         <p
@@ -87,16 +62,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           style={{ '--rise-delay': '170ms' } as CSSProperties}
         >
           Cohorte privée · accès uniquement par invitation
-        </p>
-
-        <p
-          className="wow-rise text-center text-[11px] text-[var(--t-4)]"
-          style={{ '--rise-delay': '230ms' } as CSSProperties}
-        >
-          Pas encore membre ?{' '}
-          <Link href="/rejoindre" className="text-[var(--acc)] underline-offset-2 hover:underline">
-            Faire une demande
-          </Link>
         </p>
       </section>
     </main>

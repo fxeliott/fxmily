@@ -88,12 +88,16 @@ Application **Next.js 16** (App Router, Turbopack) qui sert l'app Fxmily — fro
 - `src/lib/auth/onboarding.ts` — transaction Prisma qui re-vérifie le state de l'invitation, crée le User en `status='active' role='member'`, marque l'invitation comme `usedAt = NOW()`, en best-effort log audit.
 - Auto-login après création (Server Action `completeOnboardingAction` appelle `signIn('credentials', { redirectTo: '/dashboard' })`).
 
-### Magic link "mot de passe oublié" — DIFFÉRÉ à J1.5
+### "Mot de passe oublié" — IMPLÉMENTÉ (2026-06-30)
 
-Le SPEC §15 J1 mentionne "Magic link 'mot de passe oublié'". Volontairement reporté pour ne pas mêler au flow Credentials :
+Implémentation custom (PAS le Magic-link Auth.js, qui fonctionne mal avec strategy=jwt + Credentials). Flow self-service complet, calqué sur le pattern token d'invitation :
 
-- L'Email provider d'Auth.js v5 fonctionne mal avec strategy=jwt + Credentials.
-- L'implémentation custom (`PasswordResetToken` + email Resend) est straightforward mais ajoute une migration et plusieurs routes : à faire en sous-jalon J1.5 si Eliot en a besoin avant J2.
+- **Schéma** : `model PasswordResetToken` (`token_hash` unique SHA-256, `expires_at`, `used_at`, FK `onDelete: Cascade`), migration `20260630090000_add_password_reset_tokens`.
+- **Service** `src/lib/auth/password-reset.ts` : `nanoid` 32 chars (~192 bits), stockage hash uniquement, TTL 30 min, consume atomique single-use (`updateMany where usedAt:null, expiresAt:{gt}`), bump `tokenVersion` (révoque tous les JWT), borné à ≤1 row/user (`deleteMany` avant `create` → pas de cron de purge). Seul un user `status='active'` est réinitialisé.
+- **Routes** : `/forgot-password` (form email → réponse NEUTRE identique que le compte existe ou non, anti-énumération ; rate-limit email 3/15min + IP 5/min consommé AVANT le lookup) et `/reset-password?token=` (valide le token au load, form nouveau mot de passe → redirect `/login?reset=success`).
+- **Email** : template Resend `src/lib/email/templates/password-reset.tsx` + `sendPasswordResetEmail` (rollback du token si l'envoi échoue, réponse toujours neutre).
+- **RGPD** : `passwordResetTokens` classé en `EXCLUDED_USER_RELATIONS` (secret auth, non-portable), comme `verificationToken`.
+- Le lien "Mot de passe oublié ?" de `/login` pointe désormais vers `/forgot-password` (remplace l'ancien `mailto:`).
 
 ## Server Actions (pattern J1)
 

@@ -82,9 +82,14 @@ export async function createTrainingTradeAction(
 
   const rawOutcome = formData.get('outcome');
   const rawResultR = formData.get('resultR');
+  const rawTradingViewUrl = formData.get('tradingViewUrl');
   const raw = {
     pair: formData.get('pair'),
     entryScreenshotKey: formData.get('entryScreenshotKey'),
+    // F1 — optional TradingView link. Empty/absent → null so the optional
+    // schema short-circuits (the wizard sends it GUARDED, like resultR).
+    tradingViewUrl:
+      rawTradingViewUrl === '' || rawTradingViewUrl == null ? null : rawTradingViewUrl,
     plannedRR: formData.get('plannedRR'),
     // Optional backtest result — empty/absent → null (mirrors the real
     // open/close split: a backtest may be logged before the result is set).
@@ -155,6 +160,7 @@ export async function createTrainingTradeAction(
       userId: session.user.id,
       pair: data.pair,
       entryScreenshotKey: data.entryScreenshotKey,
+      tradingViewUrl: data.tradingViewUrl ?? null,
       plannedRR: data.plannedRR,
       outcome: data.outcome ?? null,
       resultR: data.resultR ?? null,

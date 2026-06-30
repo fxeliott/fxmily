@@ -32,6 +32,7 @@ function makeRow(overrides: Record<string, unknown> = {}) {
     userId: 'user-1',
     pair: 'EURUSD',
     entryScreenshotKey: 'training/abcdefgh12345678/abcdefghijkl1234.jpg',
+    tradingViewUrl: null,
     plannedRR: new Prisma.Decimal('2.5'),
     outcome: 'win',
     resultR: new Prisma.Decimal('1.8'),
@@ -80,6 +81,7 @@ describe('createTrainingTrade', () => {
         userId: string;
         pair: string;
         entryScreenshotKey: string;
+        tradingViewUrl: string | null;
         plannedRR: { toString(): string };
         outcome: string | null;
         resultR: { toString(): string } | null;
@@ -91,6 +93,8 @@ describe('createTrainingTrade', () => {
     expect(arg.data.userId).toBe('user-1');
     expect(arg.data.pair).toBe('EURUSD');
     expect(arg.data.entryScreenshotKey).toBe('training/abcdefgh12345678/abcdefghijkl1234.jpg');
+    // F1 — absent input → null (the column stays nullable / optional).
+    expect(arg.data.tradingViewUrl).toBe(null);
     expect(arg.data.plannedRR.toString()).toBe('2.5');
     expect(arg.data.outcome).toBe('win');
     expect(arg.data.resultR?.toString()).toBe('1.8');
@@ -119,6 +123,19 @@ describe('createTrainingTrade', () => {
     expect(arg.data.resultR).toBe(null);
     expect(result.outcome).toBe(null);
     expect(result.resultR).toBe(null);
+  });
+
+  it('persists + serializes an optional tradingViewUrl (F1)', async () => {
+    const url = 'https://www.tradingview.com/x/NQe0OrXz/';
+    vi.mocked(db.trainingTrade.create).mockResolvedValue(makeRow({ tradingViewUrl: url }) as never);
+
+    const result = await createTrainingTrade(makeInput({ tradingViewUrl: url }));
+
+    const call = vi.mocked(db.trainingTrade.create).mock.calls[0];
+    if (!call) throw new Error('expected create to be called');
+    const arg = call[0] as { data: { tradingViewUrl: string | null } };
+    expect(arg.data.tradingViewUrl).toBe(url);
+    expect(result.tradingViewUrl).toBe(url);
   });
 });
 

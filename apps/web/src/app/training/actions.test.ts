@@ -162,6 +162,19 @@ describe('createTrainingTradeAction — input validation (real Zod)', () => {
     if (result.ok === false) expect(result.error).toBe('invalid_input');
     expect(createTrainingTradeMock).not.toHaveBeenCalled();
   });
+
+  it('rejects an off-host tradingViewUrl at the Zod layer (F1)', async () => {
+    const result = await createTrainingTradeAction(
+      null,
+      validForm({ tradingViewUrl: 'https://evil.example.com/x/abc/' }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok === false) {
+      expect(result.error).toBe('invalid_input');
+      expect(result.fieldErrors?.tradingViewUrl).toBeDefined();
+    }
+    expect(createTrainingTradeMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('createTrainingTradeAction — BOLA (real trainingKeyBelongsTo)', () => {
@@ -195,6 +208,8 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
       userId: MEMBER_ID,
       pair: 'EURUSD',
       entryScreenshotKey: OWN_KEY,
+      // F1 — no link in the form → null bridge (mirror outcome/resultR).
+      tradingViewUrl: null,
       plannedRR: 2,
       outcome: null,
       resultR: null,
@@ -243,6 +258,20 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
     expect(createTrainingTradeMock).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'win', resultR: 1.8 }),
     );
+  });
+
+  it('passes a valid TradingView link through to the service (F1)', async () => {
+    const url = 'https://www.tradingview.com/x/NQe0OrXz/';
+    await expect(
+      createTrainingTradeAction(null, validForm({ tradingViewUrl: url })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    expect(createTrainingTradeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ tradingViewUrl: url }),
+    );
+    // §21.5 — the link is process metadata; it must NEVER reach the audit trail.
+    const auditArg = logAuditMock.mock.calls[0]?.[0] as { metadata: Record<string, unknown> };
+    expect(auditArg.metadata).not.toHaveProperty('tradingViewUrl');
   });
 });
 

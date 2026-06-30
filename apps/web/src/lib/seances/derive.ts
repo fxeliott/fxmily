@@ -127,7 +127,14 @@ export function buildVimeoEmbedUrl(
       // malformed URL → ignore, fall through to id-based construction
     }
   }
-  if (!vimeoId) return null;
+  // Id-based construction interpolates `vimeoId` RAW into the URL path, so it is
+  // only trusted when it matches Vimeo's own shape — digits only. A malformed id
+  // (path/query/`#`/scheme chars from a future pipeline bug) degrades to the
+  // "replay indisponible" state instead of building a surprising player URL.
+  // The hash is set via `URLSearchParams` (already encoded) but is likewise
+  // dropped unless alphanumeric. Symmetric to the precomputed branch above +
+  // the CSP `frame-src https://player.vimeo.com` allowlist (defence-in-depth).
+  if (!vimeoId || !/^[0-9]+$/.test(vimeoId)) return null;
   const params = new URLSearchParams({
     dnt: '1',
     title: '0',
@@ -136,7 +143,7 @@ export function buildVimeoEmbedUrl(
     transparent: '0',
     playsinline: '1',
   });
-  if (vimeoHash) params.set('h', vimeoHash);
+  if (vimeoHash && /^[A-Za-z0-9]+$/.test(vimeoHash)) params.set('h', vimeoHash);
   return `https://player.vimeo.com/video/${vimeoId}?${params.toString()}`;
 }
 

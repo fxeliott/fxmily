@@ -196,8 +196,8 @@ export function buildLadder(
     };
   });
 
-  // Anti-overlap: sort by y, push labels down to keep MIN_GAP, then reframe the
-  // whole block if it overflows top/bottom (mirror levels-schema.mjs:111-123).
+  // Anti-overlap: sort by y, push labels down to keep MIN_GAP, then keep the
+  // block inside the canvas (mirror levels-schema.mjs:111-123).
   const ordered = [...lines].sort((a, b) => a.y - b.y);
   for (let i = 1; i < ordered.length; i += 1) {
     const prev = ordered[i - 1];
@@ -205,15 +205,34 @@ export function buildLadder(
     if (!prev || !cur) continue;
     if (cur.labelY - prev.labelY < MIN_GAP) cur.labelY = prev.labelY + MIN_GAP;
   }
-  const last = ordered[ordered.length - 1];
-  if (last && last.labelY > H - 14) {
-    const over = last.labelY - (H - 14);
-    for (const o of ordered) o.labelY -= over;
-  }
+  // Usable label band [TOP, BOTTOM]. Two cases:
+  //  - the stacked block FITS → reframe it within the band (the static behaviour);
+  //  - it OVERFLOWS (≈14+ levels: (n−1)·MIN_GAP > USABLE) → the original two
+  //    reframes fight (pin the bottom, then pinning the top re-pushes the bottom
+  //    past the viewBox), spilling labels outside H. Distribute UNIFORMLY across
+  //    the band instead: labels compress below MIN_GAP but never spill, and each
+  //    connector still points to its level's true price y.
+  const TOP = PAD_T - 6; // 20
+  const BOTTOM = H - 14; // 286
+  const USABLE = BOTTOM - TOP; // 266
+  const n = ordered.length;
   const first = ordered[0];
-  if (first && first.labelY < PAD_T - 6) {
-    const under = PAD_T - 6 - first.labelY;
-    for (const o of ordered) o.labelY += under;
+  const last = ordered[n - 1];
+  if (n >= 2 && first && last && last.labelY - first.labelY > USABLE) {
+    const gap = USABLE / (n - 1);
+    for (let i = 0; i < n; i += 1) {
+      const o = ordered[i];
+      if (o) o.labelY = TOP + i * gap;
+    }
+  } else {
+    if (last && last.labelY > BOTTOM) {
+      const over = last.labelY - BOTTOM;
+      for (const o of ordered) o.labelY -= over;
+    }
+    if (first && first.labelY < TOP) {
+      const under = TOP - first.labelY;
+      for (const o of ordered) o.labelY += under;
+    }
   }
 
   return {

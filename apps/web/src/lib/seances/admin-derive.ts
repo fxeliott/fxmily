@@ -86,9 +86,13 @@ export type GoNoGoDecision =
       /** create a new row vs update the existing one. */
       mode: 'create' | 'update';
       /**
-       * Reinstating a `cancelled` slot back to `done` MUST wipe stale editorial
-       * content + checkpoints so a reinstated session never republishes an
-       * outdated analysis marked "à jour" (Règle n°1, static state.mjs:413-441).
+       * Reinstating a `cancelled` slot back into the active lifecycle — to
+       * `done` (republish now) OR to `scheduled` (upcoming again) — MUST wipe
+       * stale editorial content + checkpoints so a reinstated session never
+       * republishes an outdated analysis marked "à jour" (Règle n°1, static
+       * state.mjs:413-441). Wiping on the `→ scheduled` edge too closes the
+       * `done → cancelled → scheduled → done` resurfacing path (a later
+       * `scheduled → done` does NOT wipe — by then the slot is already clean).
        */
       wipeContent: boolean;
     };
@@ -102,7 +106,8 @@ export type GoNoGoDecision =
  *   - **no-rewind**: a `done` session can never revert to `scheduled`. Only
  *     `cancelled → scheduled` (reinstate to undecided) and the `scheduled`
  *     no-op are permitted into `scheduled`.
- *   - **reinstate reset**: `cancelled → done` wipes content + checkpoints.
+ *   - **reinstate reset**: leaving `cancelled` (→ `done` OR → `scheduled`) wipes
+ *     content + checkpoints, so no stale analysis can resurface on a re-held slot.
  */
 export function planSeanceGoNoGo(input: GoNoGoInput): GoNoGoDecision {
   const { existingStatus, target, isPastDate } = input;
@@ -118,8 +123,11 @@ export function planSeanceGoNoGo(input: GoNoGoInput): GoNoGoDecision {
     return { ok: false, reason: 'no_rewind' };
   }
 
-  // reinstate: cancelled → done republishes from scratch (wipe stale content).
-  const wipeContent = target === 'done' && existingStatus === 'cancelled';
+  // reinstate: ANY transition OUT of `cancelled` (→ done = republish now, or
+  // → scheduled = upcoming again) republishes from scratch — wipe stale content
+  // so `done → cancelled → scheduled → done` can never resurface an old analysis.
+  const wipeContent =
+    existingStatus === 'cancelled' && (target === 'done' || target === 'scheduled');
   return { ok: true, mode: 'update', wipeContent };
 }
 

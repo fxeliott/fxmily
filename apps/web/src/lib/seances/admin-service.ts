@@ -371,9 +371,10 @@ export interface DeclaredSeance {
  * planner, then applies it:
  *   - **create** a new `scheduled`/`done`/`cancelled` row (no-backfill enforced
  *     by the planner: a past day with no row is refused),
- *   - **update** an existing row, with the `cancelled → done` reinstate wiping
- *     stale content + checkpoints + assets + messages in ONE transaction so a
- *     reinstated session never republishes an outdated analysis (Règle n°1),
+ *   - **update** an existing row, with any reinstate OUT of `cancelled` (→ done
+ *     or → scheduled) wiping stale content + checkpoints + assets + messages in
+ *     ONE transaction so a reinstated session never republishes an outdated
+ *     analysis (Règle n°1),
  *   - **refuse** a no-rewind (`done → scheduled`) with {@link SeanceGoNoGoError}.
  *
  * `title` is DERIVED (never admin-input). `time` is the admin-owned field
@@ -437,8 +438,9 @@ export async function declareSeanceGoNoGo(
   if (time !== null) baseData.time = time;
 
   if (decision.wipeContent) {
-    // Reinstate cancelled → done: wipe stale editorial content + checkpoints +
-    // assets + messages atomically so nothing outdated is republished as "à jour".
+    // Reinstate out of cancelled (→ done or → scheduled): wipe stale editorial
+    // content + checkpoints + assets + messages atomically so nothing outdated
+    // is ever republished as "à jour" (incl. via a later scheduled → done).
     await db.$transaction(async (tx) => {
       await tx.replayAsset.deleteMany({ where: { sessionId: id } });
       await tx.replayMessage.deleteMany({ where: { sessionId: id } });

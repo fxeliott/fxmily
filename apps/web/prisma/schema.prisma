@@ -3185,7 +3185,10 @@ model ReplaySession {
   /// A-Z key takeaways of the WHOLE session (IA, Règle n°1, zero invention):
   /// the through-line, macro context, global decisions — the primary debrief
   /// surface "understandable without having watched the meeting".
-  keyTakeaways String[] @map("key_takeaways")
+  /// `@default([])`: a non-optional scalar list must store `[]` (never SQL NULL)
+  /// so `isEmpty`/`NOT has` filters stay correct and the column matches its
+  /// non-nullable TS type (Prisma scalar-list NULL gotcha; cf. migration).
+  keyTakeaways String[] @default([]) @map("key_takeaways")
 
   /// Replay duration in seconds (optional).
   duration Int?
@@ -3269,7 +3272,9 @@ model ReplayAsset {
   levels  Json?
   /// Full A-Z reading of the asset (debrief): faithful paragraphs, zero ajout
   /// hors transcript (Règle n°1). Length follows the matter actually said.
-  reading String[]
+  /// `@default([])` so an asset with no reading stores `[]`, never SQL NULL
+  /// (non-nullable list invariant, mirror `ReplaySession.keyTakeaways`).
+  reading String[] @default([])
 
   /// Display order within the session (DXY/macro rendered apart regardless).
   position Int @default(0)

@@ -59,7 +59,7 @@ const BADGE_META: Record<
 const STEP_STATE_META: Record<PipelineStepState, { tone: string; label: string }> = {
   done: { tone: 'text-[var(--ok)]', label: 'fait' },
   active: { tone: 'text-[var(--acc-hi)]', label: 'en cours' },
-  pending: { tone: 'text-[var(--cy)]', label: 'en attente' },
+  pending: { tone: 'text-[var(--t-3)]', label: 'en attente' },
   failed: { tone: 'text-[var(--bad)]', label: 'échec' },
   idle: { tone: 'text-[var(--t-4)]', label: '—' },
 };
@@ -127,7 +127,9 @@ export function SeanceAdminCell({ cell }: { cell: AdminSeanceCell }) {
     <Card
       className={cn(
         'flex flex-col gap-3 p-4',
-        cell.status === 'cancelled' && 'opacity-70',
+        // De-emphasis of a cancelled cell is carried by the warn "Annulée" badge
+        // + the muted copy — NEVER by `opacity`, which would drag the tertiary
+        // text under 4.5:1 (WCAG 1.4.3, mirror seance-card.tsx canon).
         !cell.exists && 'border-dashed',
       )}
     >
@@ -215,7 +217,7 @@ export function SeanceAdminCell({ cell }: { cell: AdminSeanceCell }) {
             type="time"
             name="time"
             defaultValue={seanceTimeToInputValue(cell.exists ? cell.time : null)}
-            className="rounded-control border border-[var(--b-default)] bg-[var(--bg-1)] px-2 py-1 text-[12px] text-[var(--t-1)] focus:border-[var(--b-acc)] focus:outline-none"
+            className="rounded-control border border-[var(--b-default)] bg-[var(--bg-1)] px-2 py-1 text-[12px] text-[var(--t-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
           />
         </div>
 
@@ -232,7 +234,7 @@ export function SeanceAdminCell({ cell }: { cell: AdminSeanceCell }) {
               maxLength={280}
               defaultValue={cell.cancelReason ?? ''}
               placeholder="Pas de séance ce créneau — indisponibilité."
-              className="rounded-control border border-[var(--b-default)] bg-[var(--bg-1)] px-2 py-1.5 text-[12px] text-[var(--t-1)] focus:border-[var(--b-acc)] focus:outline-none"
+              className="rounded-control border border-[var(--b-default)] bg-[var(--bg-1)] px-2 py-1.5 text-[12px] text-[var(--t-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
             />
           </div>
         ) : null}

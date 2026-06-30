@@ -30,7 +30,6 @@ describe('buildVimeoEmbedUrl — iframe src injection defence (defence-in-depth 
   });
 
   it('rejects a javascript: precomputed URL', () => {
-     
     expect(buildVimeoEmbedUrl(null, null, 'javascript:alert(1)')).toBeNull();
   });
 
@@ -58,6 +57,21 @@ describe('buildVimeoEmbedUrl — iframe src injection defence (defence-in-depth 
 
   it('returns null (degraded "replay indisponible") when no id and no valid url', () => {
     expect(buildVimeoEmbedUrl(null, null, null)).toBeNull();
+  });
+
+  it('rejects a non-numeric id (path/query/fragment injection → degraded null)', () => {
+    // `vimeoId` is interpolated RAW into the URL path, so a value carrying
+    // `?`/`#`/`/`/spaces must never build a surprising player URL.
+    for (const bad of ['1?x=y', '1#frag', '1/../2', '1 2', 'abc', '<script>', '']) {
+      expect(buildVimeoEmbedUrl(bad, null, null)).toBeNull();
+    }
+  });
+
+  it('drops a non-alphanumeric hash but keeps the (valid) id-based URL', () => {
+    const out = buildVimeoEmbedUrl('123', 'bad&h=evil', null);
+    expect(out).toContain('https://player.vimeo.com/video/123?');
+    expect(out).not.toContain('evil');
+    expect(out).not.toContain('h=bad');
   });
 });
 

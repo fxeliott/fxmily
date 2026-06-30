@@ -155,4 +155,26 @@ describe('buildLadder — geometry + classification', () => {
       expect(cur - prev).toBeGreaterThanOrEqual(22 - 0.001);
     }
   });
+
+  it('compresses many labels (16) UNIFORMLY without spilling outside the viewBox', () => {
+    // (n−1)·MIN_GAP = 15·22 = 330 > usable band (266): the naive two-reframe
+    // logic used to push labels past H (300). Every label must stay inside the
+    // band [PAD_T−6, H−14] = [20, 286], compressed but never clipped, and the
+    // vertical order must be preserved (each connector points to its true y).
+    const many: RawLevel[] = Array.from({ length: 16 }, (_, i) => ({
+      label: `Niveau ${i + 1}`,
+      value: String(1000 + i * 10),
+    }));
+    const ladder = buildLadder(many, 'neutre');
+    if (!ladder) throw new Error('expected a ladder');
+    expect(ladder.lines).toHaveLength(16);
+    const sorted = [...ladder.lines].sort((a, b) => a.y - b.y);
+    let prevLabelY = -Infinity;
+    for (const line of sorted) {
+      expect(line.labelY).toBeGreaterThanOrEqual(20 - 0.001);
+      expect(line.labelY).toBeLessThanOrEqual(286 + 0.001);
+      expect(line.labelY).toBeGreaterThanOrEqual(prevLabelY - 0.001); // order preserved
+      prevLabelY = line.labelY;
+    }
+  });
 });

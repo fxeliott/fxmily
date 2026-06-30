@@ -49,13 +49,17 @@ describe('planSeanceGoNoGo — go/no-go FSM guards', () => {
     expect(d).toEqual({ ok: false, reason: 'no_rewind' });
   });
 
-  it('allows reinstating cancelled → scheduled (back to undecided)', () => {
+  it('reinstate cancelled → scheduled WIPES stale content (closes the resurface path)', () => {
+    // A cancelled slot that was previously `done` still holds its old content;
+    // leaving cancelled for `scheduled` must wipe it, else `done → cancelled →
+    // scheduled → done` resurfaces a stale analysis (a later scheduled → done
+    // does NOT wipe). Regression guard for the FSM defect.
     const d = planSeanceGoNoGo({
       existingStatus: 'cancelled',
       target: 'scheduled',
       isPastDate: false,
     });
-    expect(d).toEqual({ ok: true, mode: 'update', wipeContent: false });
+    expect(d).toEqual({ ok: true, mode: 'update', wipeContent: true });
   });
 
   it('allows the scheduled → scheduled no-op', () => {

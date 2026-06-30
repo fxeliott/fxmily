@@ -279,8 +279,12 @@ export async function approveAccessRequest(
       select: { id: true },
     });
 
-    await tx.accessRequest.update({
-      where: { id: request.id },
+    // Optimistic guard — re-assert `status: 'pending'` in the WHERE so two
+    // concurrent approvals can't both mint an invitation: the loser's
+    // updateMany matches 0 rows (the row is already 'approved') and we abort,
+    // rolling the whole transaction back (its just-created invitation included).
+    const flipped = await tx.accessRequest.updateMany({
+      where: { id: request.id, status: 'pending' },
       data: {
         status: 'approved',
         reviewedAt: new Date(),
@@ -288,6 +292,7 @@ export async function approveAccessRequest(
         invitationId: invitation.id,
       },
     });
+    if (flipped.count === 0) throw new AccessRequestNotPendingError();
 
     return {
       invitationId: invitation.id,

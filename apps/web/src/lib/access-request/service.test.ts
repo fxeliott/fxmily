@@ -292,7 +292,7 @@ describe('approveAccessRequest', () => {
     userFindUnique.mockResolvedValue(null);
     invitationUpdateMany.mockResolvedValue({ count: 0 });
     invitationCreate.mockResolvedValue({ id: 'inv-1' });
-    accessRequestUpdate.mockResolvedValue({});
+    accessRequestUpdateMany.mockResolvedValue({ count: 1 });
 
     const result = await approveAccessRequest('ar-1', 'admin-1');
 
@@ -310,10 +310,14 @@ describe('approveAccessRequest', () => {
     };
     expect(updArg.where.email).toBe('eliot@fxmilyapp.com');
 
-    // Request flipped to approved + linked to the invitation.
-    const reqUpdArg = accessRequestUpdate.mock.calls[0]?.[0] as {
+    // Request flipped to approved + linked — via a status-guarded updateMany
+    // (optimistic lock: the `where` re-asserts `status: 'pending'` so a
+    // concurrent double-approve can't both mint an invitation).
+    const reqUpdArg = accessRequestUpdateMany.mock.calls[0]?.[0] as {
+      where: { id: string; status: string };
       data: { status: string; reviewedById: string; invitationId: string };
     };
+    expect(reqUpdArg.where).toEqual({ id: 'ar-1', status: 'pending' });
     expect(reqUpdArg.data.status).toBe('approved');
     expect(reqUpdArg.data.reviewedById).toBe('admin-1');
     expect(reqUpdArg.data.invitationId).toBe('inv-1');
@@ -326,6 +330,26 @@ describe('approveAccessRequest', () => {
       email: 'eliot@fxmilyapp.com',
       firstName: 'Eliot',
     });
+  });
+
+  it('aborts with AccessRequestNotPendingError when the status-guarded updateMany matches 0 rows (concurrent double-approve)', async () => {
+    accessRequestFindUnique.mockResolvedValue({
+      id: 'ar-1',
+      status: 'pending',
+      email: 'eliot@fxmilyapp.com',
+      firstName: 'Eliot',
+    });
+    userFindUnique.mockResolvedValue(null);
+    invitationUpdateMany.mockResolvedValue({ count: 0 });
+    invitationCreate.mockResolvedValue({ id: 'inv-1' });
+    // A concurrent approval flipped the row to 'approved' between our read and
+    // our write → the optimistic `where: { status: 'pending' }` matches 0 rows,
+    // and the whole transaction (including the just-minted invitation) aborts.
+    accessRequestUpdateMany.mockResolvedValue({ count: 0 });
+
+    await expect(approveAccessRequest('ar-1', 'admin-1')).rejects.toBeInstanceOf(
+      AccessRequestNotPendingError,
+    );
   });
 
   it('throws AccessRequestNotFoundError for an unknown request', async () => {

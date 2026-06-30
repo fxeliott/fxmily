@@ -133,7 +133,7 @@ export interface DashboardAnalytics {
 }
 
 export interface RDistributionBucket {
-  /** Bucket label, e.g. "-3R", "0R", "+1R", "+4R+". */
+  /** Bucket label, e.g. "-3R", "0R", "+1R", "+3.5R+". */
   label: string;
   /** Lower bound (inclusive) of the bucket. */
   from: number;
@@ -279,7 +279,7 @@ async function _getDashboardAnalyticsImpl(
 
 // ----- Helpers ---------------------------------------------------------------
 
-function bucketRMultiples(
+export function bucketRMultiples(
   trades: ReadonlyArray<{
     realizedR: string | null;
     realizedRSource: 'computed' | 'estimated' | null;
@@ -302,7 +302,9 @@ function bucketRMultiples(
     '+2R',
     '+2.5R',
     '+3R',
-    '+3R+',
+    // Top rim covers [3.5R, +inf) — `edges[14] === 3.5`, NOT 3. Labelling it
+    // '+3R+' mislabelled the bucket (a +3.2R trade is in the '+3R' bucket below).
+    '+3.5R+',
   ];
 
   const buckets: RDistributionBucket[] = labels.map((label, i) => ({

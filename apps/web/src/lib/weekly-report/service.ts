@@ -414,12 +414,13 @@ export async function getReportStatsForAdmin(): Promise<AdminReportStats> {
   // emails + count membres semaine récente. À 1000 membres × 52 sem × 2 ans
   // = 104k rows × ~100 bytes = ~10MB heap par render `/admin/reports`. La
   // page est `force-dynamic` donc payé à chaque hit.
-  // Après : 4 queries parallèles bornées par index :
+  // Après : queries parallèles bornées par index :
   //   1. aggregate sum(costEur) + count(*) — index-only sur PK
-  //   2. groupBy sentToAdminAt is-null — index-only sur sentToAdminAt index
+  //   2. deux count() sentToAdminAt is-null / not-null — index-backed, O(1)
+  //      transfert (l'ancien groupBy émettait une row par instant d'envoi distinct)
   //   3. findFirst orderBy weekStart desc — index hit
   //   4. findMany distinct userId WHERE weekStart=last — sub-second
-  const [totals, lastReport, deliveryStats] = await Promise.all([
+  const [totals, lastReport, emailsPending, emailsDelivered] = await Promise.all([
     db.weeklyReport.aggregate({
       _count: { id: true },
       _sum: { costEur: true },
@@ -428,18 +429,14 @@ export async function getReportStatsForAdmin(): Promise<AdminReportStats> {
       orderBy: { weekStart: 'desc' },
       select: { weekStart: true },
     }),
-    db.weeklyReport.groupBy({
-      by: ['sentToAdminAt'],
-      _count: { id: true },
-    }),
+    // Two bounded counts (pending = sentToAdminAt is-null, delivered = not-null).
+    // `groupBy(['sentToAdminAt'])` emitted ONE row per distinct send-instant
+    // (sentToAdminAt is a near-unique DateTime), pulling O(rows) over the wire
+    // on the force-dynamic /admin/reports page; these counts are index-backed
+    // and O(1) transfer, with identical numbers.
+    db.weeklyReport.count({ where: { sentToAdminAt: null } }),
+    db.weeklyReport.count({ where: { sentToAdminAt: { not: null } } }),
   ]);
-
-  let emailsDelivered = 0;
-  let emailsPending = 0;
-  for (const row of deliveryStats) {
-    if (row.sentToAdminAt === null) emailsPending += row._count.id;
-    else emailsDelivered += row._count.id;
-  }
 
   const lastWeekStart = lastReport?.weekStart.toISOString().slice(0, 10) ?? null;
   let membersInLastWeek = 0;

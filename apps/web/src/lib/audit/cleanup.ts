@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
+import { reportError } from '@/lib/observability';
 
 /**
  * J10 — `/api/cron/purge-audit-log` service (V2-roadmap reclassed item).
@@ -94,9 +95,16 @@ export async function purgeStaleAuditLog(
       purged += result.count;
     } catch (err) {
       // Stop draining on a failing delete rather than spinning the cap —
-      // surface the count so the heartbeat shows errors > 0.
+      // surface the count so the heartbeat shows errors > 0, AND route the
+      // error to Sentry: the service swallows the throw (returns errors>0), so
+      // the route's own reportError is never reached — without this a chronic
+      // purge failure on the most write-heavy table stays non-paging.
       errors += candidates.length;
-      console.error('[audit.cleanup] deleteMany failed', err);
+      reportError(
+        'cron.purge-audit-log',
+        err instanceof Error ? err : new Error('audit_log_deleteMany_failed'),
+        { batch },
+      );
       break;
     }
 

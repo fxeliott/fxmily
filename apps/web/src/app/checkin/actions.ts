@@ -185,6 +185,12 @@ export async function submitEveningCheckinAction(
     date: getString(formData, 'date'),
     planRespectedToday: getString(formData, 'planRespectedToday'),
     hedgeRespectedToday: getString(formData, 'hedgeRespectedToday'),
+    // #13 — evening "intention kept?" self-report ('' → null in the schema).
+    // The wizard POSTs `intentionKept` (evening-checkin-wizard.tsx) and the
+    // schema/service/scoring (discipline sub-score, weight 10) all consume it,
+    // but it was never read here — so it always persisted null and the
+    // morning→evening intention loop stayed dead. Mirror of `formationFollowed`.
+    intentionKept: getString(formData, 'intentionKept'),
     // SPEC §28/§22 — optional course self-report ('' → null in the schema).
     formationFollowed: getString(formData, 'formationFollowed'),
     caffeineMl: getString(formData, 'caffeineMl'),

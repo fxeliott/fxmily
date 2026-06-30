@@ -3157,3 +3157,218 @@ model TrainingSession {
   @@index([memberId, startedAt(sort: Desc)])
   @@map("training_sessions")
 }
+
+// =============================================================================
+// Réunion Trading Hub — replay sessions (séances)            [SEANCES — J1]
+// =============================================================================
+// Native re-platform of the standalone `reunion-trading-hub` static generator
+// (D:/Projects/reunion-trading-hub) INTO Fxmily: members open the replays +
+// the faithful analysis of Eliott's live meetings with their Fxmily account,
+// and Eliott pilots everything from the admin.
+//
+// Posture §2: these rows hold the REPLAY + a FAITHFUL summary of what Eliott
+// SAID in his own formation session (Règle n°1 — verbatim fidelity, zero
+// invention). Archived educational content of the coach himself — NOT the app
+// emitting trade advice.
+//
+// 0 FK to the real-edge models (`Trade` / `BehavioralScore` / `User`): a replay
+// session is platform-wide admin content (mirror `Meeting` §30.3 isolation),
+// not a per-member datum — so no member PII ever lands here and a purge never
+// cascades. The local pipeline (Zoom→Vimeo→Fathom→IA `claude -p`) is the WRITER
+// (via the J4 cron API); the member/admin surfaces are READERS.
+
+/// Replay session slot. `analyse` = 12h00 Paris meeting, `debrief` = 20h00.
+/// Distinct from `MeetingSlot {midday,evening}` (attendance feature) on purpose:
+/// this is the CONTENT hub, not the presence tracker.
+enum ReplaySlot {
+  analyse
+  debrief
+}
+
+/// Replay session lifecycle (admin go/no-go authority). `scheduled` = declared
+/// upcoming (not published) · `done` = held (page published) · `cancelled` =
+/// cancelled (minimal page). Mirrors the static hub status so the pipeline maps 1:1.
+enum ReplayStatus {
+  scheduled
+  done
+  cancelled
+}
+
+/// Normalised directional bias of a followed asset, consumed by the bias panel.
+/// The pipeline maps the IA vocabulary (long/haussier/bull → haussier,
+/// short/baissier/bear → baissier, neutre → neutre) at the ingest boundary, so
+/// the DB only ever holds the 3 canonical values. Posture §2: this qualifies
+/// what Eliott SAID in the replay, never a live recommendation from the app.
+enum ReplayBias {
+  haussier
+  baissier
+  neutre
+}
+
+/// Source of the transcript the IA content was derived from (traceability,
+/// Règle n°1). `fathom` = nominal voice ; `whisper`/`manual` = faithful local
+/// fallback (degraded mode). Never displayed raw — only the derived summary.
+enum ReplayTranscriptSource {
+  fathom
+  whisper
+  manual
+}
+
+/// One recorded meeting session (séance) = the content unit of the réunion hub.
+/// Keyed by `(date, slot)` (one analyse + one debrief per civil day, mirror the
+/// static generator's clean URL `/{date}/{slot}/`). Holds the published, DERIVED
+/// content (Vimeo replay + summary + key takeaways + per-asset analysis) — the
+/// raw transcript segments stay in the local pipeline (source of truth) and are
+/// NOT mirrored here (data minimisation + posture §2).
+model ReplaySession {
+  id String @id @default(cuid())
+
+  /// Civil day (Europe/Paris) of the session. `@db.Date` pins UTC-midnight
+  /// (canon DailyCheckin/Meeting). DERIVED from the meeting's real start by the
+  /// pipeline, never recomputed downstream (anti DST-drift, mirror §30.7).
+  date   DateTime     @db.Date
+  slot   ReplaySlot
+  status ReplayStatus @default(scheduled)
+
+  /// Display title (e.g. "Analyse du 29 juin"). Pipeline-derived from slot+date.
+  title String
+
+  /// FR display time, bounded "00h00".."23h59" ("12h00" / "20h00"), exactly as
+  /// the admin declares it (zero-padded). Bornes the recovery window upstream.
+  time String?
+
+  /// Short 1-2 sentence summary shown under the title (IA-derived, Règle n°1).
+  summary String? @db.Text
+
+  /// A-Z key takeaways of the WHOLE session (IA, Règle n°1, zero invention):
+  /// the through-line, macro context, global decisions — the primary debrief
+  /// surface "understandable without having watched the meeting".
+  /// `@default([])`: a non-optional scalar list must store `[]` (never SQL NULL)
+  /// so `isEmpty`/`NOT has` filters stay correct and the column matches its
+  /// non-nullable TS type (Prisma scalar-list NULL gotcha; cf. migration).
+  keyTakeaways String[] @default([]) @map("key_takeaways")
+
+  /// Replay duration in seconds (optional).
+  duration Int?
+
+  /// Reason shown when `status = cancelled` (free-text, `safeFreeText`-sanitised
+  /// at the admin Server Action boundary).
+  cancelReason String? @map("cancel_reason") @db.Text
+
+  // ── Vimeo replay (unlisted + privacy hash) ────────────────────────────────
+  /// Numeric Vimeo video id.
+  vimeoId         String? @map("vimeo_id")
+  /// Privacy hash (unlisted). REQUIRED with `vimeoId` for the embed `h=` param.
+  vimeoHash       String? @map("vimeo_hash")
+  /// Pre-computed embed URL (optional; else derived from id+hash).
+  vimeoEmbedUrl   String? @map("vimeo_embed_url")
+  /// True while Vimeo transcodes: shows "en préparation" without loading the player.
+  vimeoProcessing Boolean @default(false) @map("vimeo_processing")
+
+  // ── Transcript metadata (content lives derived, never raw here) ───────────
+  transcriptSource  ReplayTranscriptSource? @map("transcript_source")
+  transcriptLang    String?                 @map("transcript_lang")
+  /// True = transcript expected but not yet arrived (Fathom async): the page
+  /// ships with the replay first, enriched later. Symmetric to vimeoProcessing.
+  transcriptPending Boolean                 @default(false) @map("transcript_pending")
+
+  // ── IA content traceability (text help, never the transcript) ─────────────
+  contentGenerated   Boolean @default(false) @map("content_generated")
+  contentModel       String? @map("content_model")
+  /// True if the IA failed / went off-schema → content to regenerate (fallback
+  /// renders replay-only, never a fabricated analysis).
+  contentNeedsReview Boolean @default(false) @map("content_needs_review")
+
+  // ── Pipeline idempotence checkpoints (admin status surface, J3) ───────────
+  cpMp4        Boolean @default(false) @map("cp_mp4")
+  cpVimeo      Boolean @default(false) @map("cp_vimeo")
+  cpTranscript Boolean @default(false) @map("cp_transcript")
+  cpAi         Boolean @default(false) @map("cp_ai")
+  cpDeployed   Boolean @default(false) @map("cp_deployed")
+
+  // ── Pipeline failure (admin "jamais d'échec silencieux", J3) ──────────────
+  /// Failing FSM step (mp4|vimeo|transcript|ai|deploy). Null unless failed.
+  pipelineFailedStep  String? @map("pipeline_failed_step")
+  /// Diagnostic (never a secret). Null unless failed.
+  pipelineFailedError String? @map("pipeline_failed_error") @db.Text
+
+  /// When the local pipeline last touched this row (heartbeat / freshness).
+  pipelineSyncedAt DateTime? @map("pipeline_synced_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  assets   ReplayAsset[]
+  messages ReplayMessage[]
+
+  /// One analyse + one debrief per civil day (idempotent pipeline upsert key,
+  /// mirror Meeting `@@unique(date, slot)`). Doubles as the hub listing filter.
+  @@unique([date, slot])
+  /// Hub listing: sessions by status, newest-first. No standalone `[status]` or
+  /// `[date]` index — redundant prefixes (repo convention).
+  @@index([status, date(sort: Desc)])
+  @@map("replay_sessions")
+}
+
+/// One followed asset within a replay session (comparable cards; DXY = macro).
+model ReplayAsset {
+  id        String        @id @default(cuid())
+  sessionId String        @map("session_id")
+  session   ReplaySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  /// Symbol ("EURUSD", "XAUUSD", "NQ", "SP500", "GBPUSD", "DXY").
+  symbol String
+  /// Human-readable name ("Euro / Dollar").
+  name   String?
+  /// Normalised directional bias (see `ReplayBias`). Null if not stated.
+  bias   ReplayBias?
+  /// True for a macro-context asset (e.g. DXY), rendered apart.
+  macro  Boolean     @default(false)
+
+  /// Key levels as `[{ label, value }]` (display-only, small) — Json mirrors the
+  /// static hub contract; the SVG ladder only ever plots stated numeric values.
+  levels  Json?
+  /// Full A-Z reading of the asset (debrief): faithful paragraphs, zero ajout
+  /// hors transcript (Règle n°1). Length follows the matter actually said.
+  /// `@default([])` so an asset with no reading stores `[]`, never SQL NULL
+  /// (non-nullable list invariant, mirror `ReplaySession.keyTakeaways`).
+  reading String[] @default([])
+
+  /// Display order within the session (DXY/macro rendered apart regardless).
+  position Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// One row per symbol per session (idempotent pipeline upsert + collision
+  /// guard the static hub enforced at build, lifted to a DB invariant).
+  @@unique([sessionId, symbol])
+  /// Ordered render within a session.
+  @@index([sessionId, position])
+  @@map("replay_assets")
+}
+
+/// One of the 6 Discord messages (5 assets + DXY) shown in the admin for copy
+/// before the session. Pipeline-produced (IA), admin-only surface.
+model ReplayMessage {
+  id        String        @id @default(cuid())
+  sessionId String        @map("session_id")
+  session   ReplaySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  /// Target asset label ("EURUSD", … "DXY").
+  asset String
+  /// Message body (verbatim-faithful, copy-paste ready).
+  text  String @db.Text
+
+  /// Display/copy order (DXY last = 6th, mirror the static hub).
+  position Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// One message per asset per session (idempotent pipeline upsert).
+  @@unique([sessionId, asset])
+  /// Ordered copy list in the admin.
+  @@index([sessionId, position])
+  @@map("replay_messages")
+}

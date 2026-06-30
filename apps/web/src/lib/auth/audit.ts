@@ -350,6 +350,16 @@ export type AuditAction =
   // PII-FREE metadata `{meetingId, present}` (`present` ∈ true|false|null) —
   // never any Ichor content, mirror `admin.meeting.cancelled`.
   | 'admin.meeting.presence.marked'
+  // Réunion hub (séances) J3 — admin go/no-go on a recorded session
+  // (`/admin/seances`). DISTINCT from the `/reunions` attendance tracker
+  // (`admin.meeting.*`): a séance is the replay/analysis content unit, not a
+  // presence slot. `admin.seance.declared` is emitted by the go/no-go Server
+  // Action: PII-FREE metadata `{date, slot, status}` — NEVER the cancel
+  // `reason` free-text (posture §2, mirror `admin.meeting.cancelled`).
+  // `admin.seance.regenerate` re-arms the AI step on a held session:
+  // PII-FREE `{date, slot}`. 0 FK to User → platform-wide content, no member id.
+  | 'admin.seance.declared'
+  | 'admin.seance.regenerate'
   // S10(a) — admin business-chain health view (`/admin/health`). Parity with
   // `admin.system.viewed`: a pure access trace, no PII, no member id.
   | 'admin.health.viewed'

@@ -25,6 +25,8 @@ import { listMonthlyDebriefsForMember } from '@/lib/monthly-debrief/service';
 import { listMeetingAttendanceForMember } from '@/lib/meeting/service';
 import { MemberPresencePanel } from '@/components/admin/member-presence-panel';
 import { MemberVerificationPanel } from '@/components/admin/member-verification-panel';
+import { MemberModerationPanel } from '@/components/admin/member-moderation-panel';
+import { listModerationHistory } from '@/lib/admin/member-moderation';
 import { getLatestConstancyScore, listRecentConstancyScores } from '@/lib/verification/constancy';
 import { getVerificationOverview, listDiscrepancies } from '@/lib/verification/service';
 import { db } from '@/lib/db';
@@ -100,6 +102,7 @@ function parseTab(
   | 'presence'
   | 'verification'
   | 'notes'
+  | 'moderation'
 > {
   if (value === 'trades') return 'trades';
   if (value === 'training') return 'training';
@@ -114,6 +117,7 @@ function parseTab(
   if (value === 'presence') return 'presence';
   if (value === 'verification') return 'verification';
   if (value === 'notes') return 'notes';
+  if (value === 'moderation') return 'moderation';
   return 'overview';
 }
 
@@ -288,6 +292,11 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           listRecentConstancyScores(memberId, 12),
         ])
       : null;
+
+  // F5 (overhaul 2026-06-30) — append-only moderation history for the
+  // admin-only Modération tab. Fetched only when the tab is active; bounded
+  // by the service (take=50). Admin-only surface, never shown to the member.
+  const moderationHistory = tab === 'moderation' ? await listModerationHistory(memberId) : null;
 
   // J6.5 — pull behavioral scores + analytics in parallel for the overview tab.
   // Skipped on the trades tab to keep its render path lean. J6.6 H1 fix —
@@ -499,6 +508,16 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       ) : null}
       {tab === 'notes' && adminNotes !== null ? (
         <MemberAdminNotesPanel memberId={memberId} notes={adminNotes} />
+      ) : null}
+      {tab === 'moderation' && moderationHistory !== null ? (
+        <MemberModerationPanel
+          memberId={memberId}
+          memberName={detail.displayName}
+          status={detail.status}
+          role={detail.role}
+          isSelf={session.user.id === memberId}
+          history={moderationHistory}
+        />
       ) : null}
     </main>
   );

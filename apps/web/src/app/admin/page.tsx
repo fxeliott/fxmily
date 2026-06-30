@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarRange,
+  Clapperboard,
   FileBarChart,
   HeartPulse,
   Inbox,
@@ -132,6 +133,12 @@ export default async function AdminHubPage() {
           icon={CalendarRange}
           label="Réunions"
           description="Créneaux et assiduité des membres aux réunions."
+        />
+        <HubCard
+          href="/admin/seances"
+          icon={Clapperboard}
+          label="Séances"
+          description="Go/No-Go des séances enregistrées et messages Discord."
         />
         <HubCard
           href="/admin/reports"

@@ -62,12 +62,16 @@ async function dismissCookieBanner(page: import('@playwright/test').Page): Promi
 }
 
 test.describe('F1 — Lien TradingView optionnel (Mode Entraînement)', () => {
-  // Emulate `prefers-reduced-motion: reduce`: the wizard honours framer-motion's
-  // useReducedMotion() and drops every step transition to `duration: 0`, so the
-  // « Suivant » button is stable the instant a step renders (no x-translate
-  // entrance animation to fight Playwright's actionability check). Deterministic
-  // AND a real user path (accessibility setting), not a flakiness band-aid.
-  test.use({ reducedMotion: 'reduce' });
+  // Emulate `prefers-reduced-motion: reduce` per test (typed Page API —
+  // `test.use({ reducedMotion })` is rejected by the base test's option type).
+  // The wizard honours framer-motion's useReducedMotion() → every step
+  // transition drops to `duration: 0`, so the « Suivant » button is stable the
+  // instant a step renders (no x-translate entrance animation fighting
+  // Playwright's actionability check). A real user path (accessibility setting),
+  // not a flakiness band-aid.
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+  });
 
   test.beforeAll(async () => {
     const probe = await isChromiumLaunchable();

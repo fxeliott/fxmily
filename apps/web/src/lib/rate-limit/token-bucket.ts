@@ -351,6 +351,30 @@ export const accessRequestIpLimiter = new TokenBucketLimiter({
   maxKeys: 5000,
 });
 
+/**
+ * "Mot de passe oublié" request (SPEC §7.1). Two buckets, both consumed
+ * PRE-AUTH so the IP MUST come from `callerIdTrusted` (last-entry XFF), never
+ * `callerId`.
+ *
+ * Per-EMAIL is the tight one: `bucketSize: 3` + `refillRate: 1/(15*60)` (1 per
+ * 15 min) bounds how often a single inbox can be e-mailed a reset link — an
+ * anti-abuse / anti-harassment cap (a stranger can't spam a victim's mailbox).
+ * Per-IP is looser (`bucketSize: 5`, 1/min sustained) to absorb a genuine user
+ * retrying, while throttling a bot enumerating addresses. Neither side reveals
+ * which bucket tripped (anti-enumeration parity with the login limiter).
+ */
+export const passwordResetEmailLimiter = new TokenBucketLimiter({
+  bucketSize: 3,
+  refillRate: 1 / (15 * 60),
+  maxKeys: 5000,
+});
+
+export const passwordResetIpLimiter = new TokenBucketLimiter({
+  bucketSize: 5,
+  refillRate: 1 / 60,
+  maxKeys: 5000,
+});
+
 // =============================================================================
 // Helpers — extract a stable per-caller identity from the request
 // =============================================================================

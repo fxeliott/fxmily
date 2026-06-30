@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { inviteSchema, onboardingSchema, signInSchema } from './auth';
+import {
+  forgotPasswordSchema,
+  inviteSchema,
+  onboardingSchema,
+  resetPasswordSchema,
+  signInSchema,
+} from './auth';
 
 describe('signInSchema', () => {
   it('accepts a valid email + password', () => {
@@ -114,5 +120,66 @@ describe('onboardingSchema', () => {
       passwordConfirm: 'PassWord1234',
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe('forgotPasswordSchema', () => {
+  it('accepts a valid email and normalises it', () => {
+    const parsed = forgotPasswordSchema.parse({ email: '  Eliot@Fxmily.COM ' });
+    expect(parsed.email).toBe('eliot@fxmily.com');
+  });
+
+  it('rejects an invalid email', () => {
+    expect(forgotPasswordSchema.safeParse({ email: 'nope' }).success).toBe(false);
+  });
+
+  it('rejects a missing email', () => {
+    expect(forgotPasswordSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('resetPasswordSchema', () => {
+  const valid = {
+    token: 'a'.repeat(32),
+    password: 'a-strong-pw-12chars',
+    passwordConfirm: 'a-strong-pw-12chars',
+  };
+
+  it('accepts a fully valid reset payload', () => {
+    expect(resetPasswordSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it('rejects when passwords do not match (error on passwordConfirm)', () => {
+    const result = resetPasswordSchema.safeParse({
+      ...valid,
+      passwordConfirm: 'different-12chars',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((i) => i.path.join('.'));
+      expect(paths).toContain('passwordConfirm');
+    }
+  });
+
+  it('rejects passwords shorter than 12 characters', () => {
+    const result = resetPasswordSchema.safeParse({
+      ...valid,
+      password: 'short',
+      passwordConfirm: 'short',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a token shorter than 20 characters', () => {
+    expect(resetPasswordSchema.safeParse({ ...valid, token: 'too-short' }).success).toBe(false);
+  });
+
+  it('rejects a denylisted common password', () => {
+    const result = resetPasswordSchema.safeParse({
+      ...valid,
+      password: 'fxmilyfxmily',
+      passwordConfirm: 'fxmilyfxmily',
+    });
+    expect(result.success).toBe(false);
   });
 });

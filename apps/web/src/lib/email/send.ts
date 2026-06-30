@@ -12,6 +12,7 @@ import { MonthlyDebriefEmail } from '@/lib/email/templates/monthly-debrief';
 import { MonthlyDebriefOverdueAlertEmail } from '@/lib/email/templates/monthly-debrief-overdue-alert';
 import { NotificationFallbackEmail } from '@/lib/email/templates/notification-fallback';
 import { OnboardingProfileOverdueAlertEmail } from '@/lib/email/templates/onboarding-profile-overdue-alert';
+import { PasswordResetEmail } from '@/lib/email/templates/password-reset';
 import { VerificationOverdueAlertEmail } from '@/lib/email/templates/verification-overdue-alert';
 import { WeeklyDigestEmail } from '@/lib/email/templates/weekly-digest';
 import { WeeklyReportOverdueAlertEmail } from '@/lib/email/templates/weekly-report-overdue-alert';
@@ -57,6 +58,51 @@ export async function sendInvitationEmail({
       inviteUrl,
       ``,
       `Si tu n'as pas demandé cette invitation, ignore ce message — aucun compte ne sera créé.`,
+    ].join('\n'),
+  });
+}
+
+// ----- "Mot de passe oublié" (SPEC §7.1) -----------------------------------
+
+export interface SendPasswordResetParams {
+  to: string;
+  plainToken: string;
+  firstName: string | null | undefined;
+  expiresAt: Date;
+}
+
+/**
+ * Send the password-reset link. Delivery is NOT best-effort here: the CALLER
+ * (`app/forgot-password/actions.ts`) treats a throw as an email failure and
+ * deletes the just-minted token (no phantom link), mirroring
+ * `invite/actions.ts:92-100` — but it ALWAYS returns the same neutral response
+ * to the browser so a delivery failure never reveals whether the email exists.
+ */
+export async function sendPasswordResetEmail({
+  to,
+  plainToken,
+  firstName,
+  expiresAt,
+}: SendPasswordResetParams): Promise<{ id: string | null; delivered: boolean }> {
+  const resetUrl = buildResetUrl(plainToken);
+  const expiresInMinutes = Math.max(
+    1,
+    Math.round((expiresAt.getTime() - Date.now()) / (60 * 1000)),
+  );
+
+  return sendEmail({
+    to,
+    subject: 'Réinitialise ton mot de passe Fxmily',
+    react: PasswordResetEmail({ resetUrl, firstName, expiresInMinutes }),
+    text: [
+      `Réinitialisation de ton mot de passe Fxmily.`,
+      ``,
+      `Tu as demandé à réinitialiser ton mot de passe. Choisis-en un nouveau avec ce lien`,
+      `(valable ${expiresInMinutes} minutes, utilisable une seule fois) :`,
+      ``,
+      resetUrl,
+      ``,
+      `Si tu n'es pas à l'origine de cette demande, ignore ce message — ton mot de passe actuel reste inchangé.`,
     ].join('\n'),
   });
 }
@@ -188,6 +234,13 @@ export function buildInviteUrl(plainToken: string): string {
   const base = env.AUTH_URL.replace(/\/+$/, '');
   const token = encodeURIComponent(plainToken);
   return `${base}/onboarding/welcome?token=${token}`;
+}
+
+/** Build the absolute "mot de passe oublié" reset URL (SPEC §7.1). */
+export function buildResetUrl(plainToken: string): string {
+  const base = env.AUTH_URL.replace(/\/+$/, '');
+  const token = encodeURIComponent(plainToken);
+  return `${base}/reset-password?token=${token}`;
 }
 
 /** Build the absolute URL to the admin access-request queue (§26.2 email CTA). */

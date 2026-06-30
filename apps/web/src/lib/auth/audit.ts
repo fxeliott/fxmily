@@ -29,6 +29,12 @@ export type AuditAction =
   | 'auth.login.failure'
   | 'auth.login.rate_limited'
   | 'auth.logout'
+  // "Mot de passe oublié" (SPEC §7.1) — `requested` is logged WITHOUT userId
+  // when the email is unknown (anti-enumeration), with userId when a token is
+  // actually minted; `completed` always carries the userId whose hash rotated.
+  | 'auth.password_reset.requested'
+  | 'auth.password_reset.rate_limited'
+  | 'auth.password_reset.completed'
   | 'invitation.created'
   | 'invitation.consumed'
   | 'onboarding.completed'

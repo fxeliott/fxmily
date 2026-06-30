@@ -323,6 +323,8 @@ model User {
   accounts                     Account[]
   sessions                     Session[]
   invitationsSent              Invitation[]                  @relation("InvitationsSent")
+  // S-overhaul §7.1 — pending "mot de passe oublié" reset tokens (bounded ~1/user).
+  passwordResetTokens          PasswordResetToken[]
   auditLogs                    AuditLog[]
   trades                       Trade[]
   // J4 — annotations the admin authored on members' trades.
@@ -500,6 +502,35 @@ model Invitation {
   @@index([email])
   @@index([expiresAt])
   @@map("invitations")
+}
+
+/// Password-reset flow (SPEC §7.1 — "mot de passe oublié", 2026-06-30).
+/// Exact mirror of `Invitation`: a high-entropy plain token (nanoid 32 ≈ 192
+/// bits) is e-mailed, and ONLY its SHA-256 hash is stored — the plain value
+/// never touches disk, so a DB compromise cannot forge a reset. Single-use
+/// (`usedAt`) + short TTL (PASSWORD_RESET_TTL_MS = 30 min, much tighter than the
+/// 7-day invitation). On consumption the user's `passwordHash` is rehashed AND
+/// `User.tokenVersion` is bumped (revokes every outstanding JWT — the
+/// tokenVersion doc on `User` anticipates exactly this "future password reset").
+/// Bounded by construction: each forgot request `deleteMany`s the member's prior
+/// tokens before creating a fresh one, so at most one row ever exists per user
+/// (no purge cron needed). FK → User onDelete:Cascade (RGPD §17 — a deleted
+/// member's reset tokens vanish with the account).
+model PasswordResetToken {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  /// "Invalidate all my prior tokens" lookup (deleteMany on a new request) +
+  /// the per-user uniqueness sweep. `tokenHash` (unique) serves the consume
+  /// lookup; no standalone `[expiresAt]` index since rows are bounded to ~1/user.
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 /// RGPD-friendly audit log (SPEC §6.8, §9.2).

@@ -115,6 +115,8 @@ export const EXCLUDED_USER_RELATIONS: Readonly<Record<string, string>> = {
   // Auth plumbing — OAuth tokens are secrets; not member-generated content.
   accounts: 'OAuth account rows hold access/refresh tokens (secrets).',
   sessions: 'Ephemeral auth sessions — not portable member content.',
+  passwordResetTokens:
+    'Single-use password-reset secrets (SHA-256 hashed, ≤1 row/user, ~30-min TTL). Auth secret like verificationToken — not portable member content.',
   // Admin-authored data — the member is the SUBJECT, not the author.
   invitationsSent: 'Invitations are authored by the admin, never by a member.',
   annotationsAuthored:

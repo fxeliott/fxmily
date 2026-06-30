@@ -1,4 +1,4 @@
-import { ArrowLeft, GraduationCap, Layers } from 'lucide-react';
+import { ArrowLeft, ExternalLink, GraduationCap, Layers } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
@@ -141,6 +141,30 @@ export default async function MemberTrainingTradeDetailPage({
               alt="Capture de ton analyse TradingView"
               className="rounded-card max-h-[32rem] w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
             />
+          </Card>
+        ) : null}
+
+        {/* F1 — the optional TradingView link, rendered INDEPENDENTLY of the
+            screenshot (a backtest may carry a link with no capture). Clickable
+            here (this page is not wrapped in an outer Link, so a real anchor is
+            valid). Validated https tradingview.com only at the Zod edge, opened
+            with rel="noopener noreferrer" (tab-nabbing / referrer-leak guard). */}
+        {trade.tradingViewUrl ? (
+          <Card className="flex flex-col gap-2 p-4">
+            <h2 className="t-eyebrow-lg text-[var(--t-3)]">Lien TradingView</h2>
+            <a
+              href={trade.tradingViewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-control inline-flex w-fit items-center gap-1.5 text-[13px] font-medium text-[var(--cy)] underline-offset-2 transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
+            >
+              <ExternalLink
+                className="h-3.5 w-3.5 shrink-0"
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
+              Ouvrir mon analyse sur TradingView
+            </a>
           </Card>
         ) : null}
 

@@ -6,6 +6,8 @@ import { customAlphabet } from 'nanoid';
 import { logAudit } from '@/lib/auth/audit';
 import { hashPassword } from '@/lib/auth/password';
 import { db } from '@/lib/db';
+import { sendPasswordChangedEmail } from '@/lib/email/send';
+import { reportWarning } from '@/lib/observability';
 
 /**
  * Password-reset tokens ("mot de passe oublié", SPEC §7.1 — 2026-06-30).
@@ -173,7 +175,35 @@ export async function completePasswordReset(
       ip: input.ip,
       userAgent: input.userAgent,
     }).catch(() => undefined);
+
+    // OWASP Forgot Password Cheat Sheet: notify the member out-of-band that
+    // their password changed, so an unexpected reset (account takeover) is
+    // visible immediately. STRICTLY best-effort — the password is already
+    // rotated and every JWT already revoked, so a notify failure must NEVER
+    // undo a completed reset. The whole block (read + send) degrades to a
+    // Sentry warning and `result` is returned unchanged.
+    await notifyPasswordChanged(result.userId).catch((err: unknown) =>
+      reportWarning('password_reset.complete', 'notify_email_failed', {
+        error: err instanceof Error ? err.message.slice(0, 200) : 'unknown',
+      }),
+    );
   }
 
   return result;
+}
+
+/**
+ * Send the "mot de passe modifié" confirmation for a just-completed reset.
+ * Separated so the caller's success branch reads cleanly; any throw here is
+ * caught by the caller and degraded to a warning (the reset itself is done).
+ */
+async function notifyPasswordChanged(userId: string): Promise<void> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { email: true, firstName: true },
+  });
+  // Defensive: the user was just updated in the same call, so this is
+  // effectively always present — but never throw on a missing row.
+  if (!user) return;
+  await sendPasswordChangedEmail({ to: user.email, firstName: user.firstName });
 }

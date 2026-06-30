@@ -427,6 +427,13 @@ model User {
   // D1/D2/D3 metadata only, feeds nothing into the real edge. Cascade on delete.
   trackingEntries              TrackingEntry[]
   trackingSchedules            TrackingSchedule[]
+  // F5 (overhaul) — admin moderation log. Two named relations: events ABOUT
+  // this member (target, cascade on delete so a purged member's log vanishes,
+  // RGPD §17) and events this (admin) user PERFORMED (actor, SetNull on delete
+  // so losing the admin row never erases a member's moderation history —
+  // mirrors the AccessRequest reviewer + AuditLog user relations).
+  moderationEvents             MemberModerationEvent[]       @relation("MemberModerationTarget")
+  moderationActionsTaken       MemberModerationEvent[]       @relation("MemberModerationActor")
 
   @@index([status])
   @@index([role])
@@ -548,6 +555,47 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([action, createdAt])
   @@map("audit_logs")
+}
+
+/// F5 (overhaul, 2026-06-30) — admin member-moderation log.
+///
+/// Each row records ONE status transition the admin performed on a member:
+///   - `suspended`  : expel / retirer l'accès. The service flips the member's
+///     `status` active→suspended AND bumps `User.tokenVersion` in one atomic
+///     `updateMany` — every outstanding JWT is torn down on its next `auth()`
+///     round-trip (immediate eject) and `authorize` refuses a non-active login
+///     (reconnection blocked).
+///   - `reinstated` : suspended→active (no tokenVersion bump needed — a
+///     suspended member already holds no valid session).
+///
+/// The optional free-text `reason` (motif) lives HERE, deliberately NOT in
+/// `AuditLog`: AuditLog is a PII-free trail (opaque ids only, schema doc
+/// :536-537), whereas a moderation motif is admin prose about a member — same
+/// privacy class as `AdminNote`. The member NEVER sees these rows (admin-only
+/// service + Server Action role gate, no member-facing read path). AuditLog
+/// still gets a PII-free row per action for the security trail.
+///
+/// Append-only history: the admin keeps a who/when/why record of every
+/// moderation decision. `member` FK cascades on delete so a hard-purged
+/// member's log vanishes with them (RGPD §17); `actor` FK is SetNull so losing
+/// the admin row never erases a member's moderation history.
+model MemberModerationEvent {
+  id        String                 @id @default(cuid())
+  memberId  String                 @map("member_id")
+  member    User                   @relation("MemberModerationTarget", fields: [memberId], references: [id], onDelete: Cascade)
+  actorId   String?                @map("actor_id")
+  actor     User?                  @relation("MemberModerationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action    MemberModerationAction
+  reason    String?                @db.Text
+  createdAt DateTime               @default(now()) @map("created_at")
+
+  @@index([memberId, createdAt])
+  @@map("member_moderation_events")
+}
+
+enum MemberModerationAction {
+  suspended
+  reinstated
 }
 
 // =============================================================================
@@ -884,6 +932,16 @@ model TrainingTrade {
   /// schema requires it — mirror of `Trade.screenshotEntryKey`. Format
   /// `training/{id}/{nanoid32}.{ext}` (lib/storage/keys.ts, wired J-T2).
   entryScreenshotKey String? @map("entry_screenshot_key")
+
+  /// F1 — OPTIONAL TradingView analysis link the member may paste BESIDE the
+  /// mandatory screenshot (copier-coller direct: a `/x/` snapshot or `/chart/`
+  /// layout URL). Optional at every layer (the screenshot stays mandatory via
+  /// Zod). Hardened at the Zod edge like `push-subscription` `endpointSchema`:
+  /// https-only + hostname allowlisted to tradingview.com + length cap + reject
+  /// Trojan-Source — so a member-pasted link rendered as a clickable `<a>` to
+  /// the admin can never become an open-redirect / XSS / SSRF vector. §21.5:
+  /// a chart link is process metadata, NEVER a P&L — never read by the real edge.
+  tradingViewUrl String? @map("trading_view_url")
 
   /// Planned reward-to-risk ratio. Mandatory (mirror `Trade.plannedRR`):
   /// defining R:R before is the backtest discipline.

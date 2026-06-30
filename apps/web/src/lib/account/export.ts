@@ -127,6 +127,15 @@ export const EXCLUDED_USER_RELATIONS: Readonly<Record<string, string>> = {
     'Admin private coaching notes (SPEC §7.7) — controller-internal, not member self-service portability.',
   adminNotesAuthored: 'Admin-authored private notes — only the admin user owns these.',
   reviewedAccessRequests: 'Admin review actions on public access requests — not member data.',
+  // F5 (overhaul) — moderation events are controller-internal admin decisions
+  // (suspend / reinstate) with a subjective free-text motif + the acting admin's
+  // identity, exactly like `adminNotesAbout`. Out of scope for the automated
+  // art.20 self-service export (a member may still request them via a manual
+  // art.15 access request to the controller).
+  moderationEvents:
+    'Admin moderation decisions about the member (suspend/reinstate + motif) — controller-internal, not member self-service portability.',
+  moderationActionsTaken:
+    'Moderation actions AUTHORED by an admin — only an admin is ever the actor, never a member.',
 } as const;
 
 export interface UserDataExport {

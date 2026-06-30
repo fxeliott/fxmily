@@ -14,7 +14,8 @@ export type MemberTabKey =
   | 'profile'
   | 'presence'
   | 'verification'
-  | 'notes';
+  | 'notes'
+  | 'moderation';
 
 interface MemberTabsProps {
   memberId: string;
@@ -52,6 +53,10 @@ const TABS: readonly TabDefinition[] = [
   // écarts, constancy score, alerts). Carbone pattern §7.7 admin read-only.
   { key: 'verification', label: 'Vérification' },
   { key: 'notes', label: 'Notes admin' },
+  // F5 (overhaul 2026-06-30) — admin-only moderation: suspend (expel) /
+  // reinstate a member with an optional motif + append-only history. The member
+  // never sees this tab. Carbone pattern §7.7 admin-only.
+  { key: 'moderation', label: 'Modération' },
 ];
 
 /**

@@ -44,6 +44,11 @@ export type AuditAction =
   | 'trade.screenshot.uploaded'
   | 'admin.members.listed'
   | 'admin.member.viewed'
+  // F5 (overhaul) — admin member moderation. PII-FREE: metadata carries only
+  // `{memberId, eventId}` — the free-text motif lives in the
+  // `MemberModerationEvent` row, never here (AuditLog is ids-only).
+  | 'admin.member.suspended'
+  | 'admin.member.reinstated'
   | 'admin.trade.viewed'
   // J4 — annotation workflow
   | 'admin.annotation.created'

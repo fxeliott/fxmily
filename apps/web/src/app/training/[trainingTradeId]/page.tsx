@@ -49,6 +49,8 @@ export default async function MemberTrainingTradeDetailPage({
   // with the J-T3 Server Actions' own status gate.
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
+  const timezone = session.user.timezone || 'Europe/Paris';
+
   const { trainingTradeId } = await params;
 
   const trade = await getTrainingTradeById(trainingTradeId, session.user.id);
@@ -130,7 +132,7 @@ export default async function MemberTrainingTradeDetailPage({
           ) : null}
         </header>
 
-        <TrainingTradeCard trade={trade} />
+        <TrainingTradeCard trade={trade} timezone={timezone} />
 
         {screenshotUrl ? (
           <Card className="flex flex-col gap-2 p-4">
@@ -172,6 +174,7 @@ export default async function MemberTrainingTradeDetailPage({
           annotations={annotations}
           isAdmin={false}
           currentUserId={session.user.id}
+          timezone={timezone}
         />
 
         {/* Wayfinding — un détail de backtest n'est pas un cul-de-sac : on relance

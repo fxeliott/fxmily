@@ -189,10 +189,13 @@ export function TrainingRegularityBar({
 export function TrainingEquityCard({
   points,
   total,
+  timezone,
 }: {
   points: ReadonlyArray<TrainingEquityPoint>;
   /** Full-history backtest count (for the honest "sur les N affichés" framing). */
   total: number;
+  /** F2 — member IANA timezone, threaded to the curve's day-axis labels. */
+  timezone: string;
 }) {
   const keptTotal = points.reduce((n, p) => n + (p.systemRespected === true ? 1 : 0), 0);
   const enough = points.length >= 3;
@@ -214,7 +217,7 @@ export function TrainingEquityCard({
 
       {enough ? (
         <>
-          <TrainingEquityChart points={points} />
+          <TrainingEquityChart points={points} timezone={timezone} />
           <p className="t-cap text-[var(--t-4)]">
             Nombre de fois où tu as tenu ton système, cumulé sur tes {points.length} derniers
             backtests

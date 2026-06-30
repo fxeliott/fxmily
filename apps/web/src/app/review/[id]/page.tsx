@@ -10,18 +10,14 @@ import { getWeeklyReviewById } from '@/lib/weekly-review/service';
 
 export const dynamic = 'force-dynamic';
 
-// V1.9 TIER F — module-level formatters (cheaper than per-render in detail page).
+// V1.9 TIER F — `FMT_LONG_DATE_UTC` is a civil-date pin (week range), always
+// rendered in the UTC frame. The submission INSTANT formatter is built per
+// request inside the component (F2 — it needs the member's session timezone).
 const FMT_LONG_DATE_UTC = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'long',
   year: 'numeric',
   timeZone: 'UTC',
-});
-const FMT_SUBMITTED_LONG_FR = new Intl.DateTimeFormat('fr-FR', {
-  day: 'numeric',
-  month: 'long',
-  hour: '2-digit',
-  minute: '2-digit',
 });
 
 interface ReviewDetailProps {
@@ -47,6 +43,16 @@ export default async function ReviewDetailPage({ params }: ReviewDetailProps) {
   const { id } = await params;
   const review = await getWeeklyReviewById(session.user.id, id);
   if (!review) notFound();
+
+  // F2 — the submission instant renders in the member's own timezone.
+  const timezone = session.user.timezone || 'Europe/Paris';
+  const fmtSubmittedLong = new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone,
+  });
 
   const formatLocalDate = (iso: string) => {
     const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
@@ -124,7 +130,7 @@ export default async function ReviewDetailPage({ params }: ReviewDetailProps) {
           <p className="t-cap text-[var(--t-3)]">
             Soumise{' '}
             <time dateTime={review.submittedAt}>
-              {FMT_SUBMITTED_LONG_FR.format(new Date(review.submittedAt))}
+              {fmtSubmittedLong.format(new Date(review.submittedAt))}
             </time>
           </p>
         </header>

@@ -26,8 +26,10 @@ import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Kbd } from '@/components/ui/kbd';
 import { Pill } from '@/components/ui/pill';
+import { localWallClockToUtc } from '@/lib/checkin/timezone';
 import { clamp } from '@/lib/hooks';
 import { tradeOpenSchema, WIZARD_STEPS } from '@/lib/schemas/trade';
+import { formatDateTimeLocalInput, timezoneCityLabel } from '@/lib/timezones';
 import { TRADING_PAIRS, type TradingPair } from '@/lib/trading/pairs';
 import { detectSession, SESSION_HINT, SESSION_LABEL, SESSIONS } from '@/lib/trading/sessions';
 import { cn } from '@/lib/utils';
@@ -105,12 +107,6 @@ function safeUploadUrl(url: string | undefined): string {
   return url && UPLOAD_URL_RX.test(url) ? url : '';
 }
 
-function nowIsoLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => `${n}`.padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function emptyDraft(): DraftState {
   return {
     pair: '',
@@ -167,7 +163,7 @@ function clearDraft() {
   }
 }
 
-export function TradeFormWizard() {
+export function TradeFormWizard({ timezone }: { timezone: string }) {
   const [draft, setDraft] = useState<DraftState>(() => emptyDraft());
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState<StepIndex>(0);
@@ -180,18 +176,26 @@ export function TradeFormWizard() {
 
   useEffect(() => {
     const restored = loadDraft();
-    // Browser-local default for the entry time, applied post-mount so the SSR
-    // render stays deterministic (no hydration mismatch on the datetime-local).
+    // F2 — default the entry time to "now" in the MEMBER's set timezone (not the
+    // device's), applied post-mount so the SSR render stays deterministic (no
+    // hydration mismatch on the datetime-local). The server re-interprets this
+    // wall-clock in the same set timezone, so the round-trip is offset-stable.
     if (!restored.enteredAt) {
-      restored.enteredAt = nowIsoLocal();
+      restored.enteredAt = formatDateTimeLocalInput(new Date(), timezone);
     }
     if (!restored.session) {
-      restored.session = detectSession(new Date(restored.enteredAt));
+      // F2 — a trading session is a global UTC-hour bucket, so derive it from
+      // the TRUE instant (member-tz wall-clock → UTC), not the device-tz parse,
+      // so the suggested session matches the one the server persists for this
+      // entry even when the member's device clock is in another timezone.
+      restored.session = detectSession(
+        localWallClockToUtc(restored.enteredAt, timezone) ?? new Date(NaN),
+      );
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(restored);
     setHydrated(true);
-  }, []);
+  }, [timezone]);
 
   useEffect(() => {
     if (hydrated) persistDraft(draft);
@@ -205,7 +209,9 @@ export function TradeFormWizard() {
     setDraft((d) => ({
       ...d,
       enteredAt: value,
-      session: d.session || detectSession(new Date(value)),
+      // F2 — see the hydration effect: detect the session from the true UTC
+      // instant (member-tz wall-clock → UTC), not the device-tz parse.
+      session: d.session || detectSession(localWallClockToUtc(value, timezone) ?? new Date(NaN)),
     }));
   };
 
@@ -296,7 +302,10 @@ export function TradeFormWizard() {
     fd.set('pair', draft.pair);
     fd.set('direction', draft.direction);
     fd.set('session', draft.session);
-    fd.set('enteredAt', new Date(draft.enteredAt).toISOString());
+    // F2 — post the RAW `datetime-local` wall-clock; the server converts it to a
+    // UTC instant in the member's set timezone (not the device's). Previously
+    // `new Date(...).toISOString()` baked in the BROWSER timezone here.
+    fd.set('enteredAt', draft.enteredAt);
     fd.set('entryPrice', draft.entryPrice);
     fd.set('lotSize', draft.lotSize);
     if (draft.stopLossPrice !== '') fd.set('stopLossPrice', draft.stopLossPrice);
@@ -415,6 +424,7 @@ export function TradeFormWizard() {
                 onEnteredAtChange={updateEnteredAt}
                 fieldErrors={fieldErrors}
                 disabled={pending}
+                timezone={timezone}
               />
             ) : null}
             {step === 1 ? (
@@ -518,7 +528,8 @@ function StepWhenAndWhat({
   onEnteredAtChange,
   fieldErrors,
   disabled,
-}: StepProps & { onEnteredAtChange: (next: string) => void }) {
+  timezone,
+}: StepProps & { onEnteredAtChange: (next: string) => void; timezone: string }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
@@ -547,8 +558,8 @@ function StepWhenAndWhat({
           </p>
         ) : (
           <p className="t-cap text-[var(--t-4)]">
-            Heure locale (Europe/Paris). Pré-rempli à maintenant, la session se devine à
-            l&apos;étape suivante.
+            Heure locale ({timezoneCityLabel(timezone)}). Pré-rempli à maintenant, la session se
+            devine à l&apos;étape suivante.
           </p>
         )}
       </div>

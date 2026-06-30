@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
+import { localWallClockToUtc } from '@/lib/checkin/timezone';
 import { reportError } from '@/lib/observability';
 import { linkRecentCheckToTrade } from '@/lib/pre-trade/service';
 import { tradeCloseSchema, tradeOpenSchema } from '@/lib/schemas/trade';
@@ -63,6 +64,19 @@ function flattenFieldErrors(error: import('zod').ZodError): Record<string, strin
   return out;
 }
 
+/**
+ * F2 — interpret a `datetime-local` wall-clock string submitted by the member
+ * as a moment in THEIR set timezone, converted to a UTC instant server-side
+ * (deterministic; the device timezone no longer leaks into stored trade times).
+ * Non-string or unparseable values fall through unchanged so the Zod
+ * `z.coerce.date()` still surfaces the "Date invalide." message on garbage and
+ * accepts already-absolute Dates from programmatic callers.
+ */
+function memberWallClock(value: FormDataEntryValue | null, timezone: string): unknown {
+  if (typeof value !== 'string') return value;
+  return localWallClockToUtc(value, timezone) ?? value;
+}
+
 function isNextRedirect(err: unknown): boolean {
   return (
     typeof err === 'object' &&
@@ -93,13 +107,15 @@ export async function createTradeAction(
     return { ok: false, error: 'unauthorized' };
   }
 
+  // F2 — the member's set timezone is authoritative for the entry wall-clock.
+  const timezone = session.user.timezone || 'Europe/Paris';
   const rawTradeQuality = formData.get('tradeQuality');
   const rawRiskPct = formData.get('riskPct');
   const raw = {
     pair: formData.get('pair'),
     direction: formData.get('direction'),
     session: formData.get('session'),
-    enteredAt: formData.get('enteredAt'),
+    enteredAt: memberWallClock(formData.get('enteredAt'), timezone),
     entryPrice: formData.get('entryPrice'),
     lotSize: formData.get('lotSize'),
     stopLossPrice:
@@ -251,8 +267,10 @@ export async function closeTradeAction(
     return { ok: false, error: 'unauthorized' };
   }
 
+  // F2 — the member's set timezone is authoritative for the exit wall-clock.
+  const timezone = session.user.timezone || 'Europe/Paris';
   const raw = {
-    exitedAt: formData.get('exitedAt'),
+    exitedAt: memberWallClock(formData.get('exitedAt'), timezone),
     exitPrice: formData.get('exitPrice'),
     outcome: formData.get('outcome'),
     emotionDuring: formData

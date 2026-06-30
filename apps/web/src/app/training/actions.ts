@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
+import { localWallClockToUtc } from '@/lib/checkin/timezone';
 import { sendTrainingReplyReceivedEmail } from '@/lib/email/send';
 import { enqueueTrainingReplyNotification } from '@/lib/notifications/enqueue';
 import { trainingReplyCreateSchema } from '@/lib/schemas/training-annotation';
@@ -23,6 +24,19 @@ import { createTrainingTrade } from '@/lib/training/training-trade-service';
 function readChecklistField(formData: FormData, key: string): string | undefined {
   const v = formData.get(key);
   return typeof v === 'string' ? v : undefined;
+}
+
+/**
+ * F2 — interpret a `datetime-local` wall-clock string submitted by the member
+ * as a moment in THEIR set timezone, converted to a UTC instant server-side
+ * (deterministic; the device timezone no longer leaks into stored backtest
+ * times). EXACT mirror of `journal/actions.ts` `memberWallClock`. Non-string or
+ * unparseable values fall through unchanged so the Zod `z.coerce.date()` still
+ * surfaces "Date invalide." on garbage and accepts already-absolute Dates.
+ */
+function memberWallClock(value: FormDataEntryValue | null, timezone: string): unknown {
+  if (typeof value !== 'string') return value;
+  return localWallClockToUtc(value, timezone) ?? value;
 }
 
 /**
@@ -80,6 +94,9 @@ export async function createTrainingTradeAction(
     return { ok: false, error: 'unauthorized' };
   }
 
+  // F2 — the member's set timezone is authoritative for the entry wall-clock
+  // (mirror of journal/actions.ts createTradeAction).
+  const timezone = session.user.timezone || 'Europe/Paris';
   const rawOutcome = formData.get('outcome');
   const rawResultR = formData.get('resultR');
   const rawTradingViewUrl = formData.get('tradingViewUrl');
@@ -103,7 +120,7 @@ export async function createTrainingTradeAction(
     emotionalStateNoted: readChecklistField(formData, 'emotionalStateNoted'),
     noImpulsiveDeviation: readChecklistField(formData, 'noImpulsiveDeviation'),
     lessonLearned: formData.get('lessonLearned'),
-    enteredAt: formData.get('enteredAt'),
+    enteredAt: memberWallClock(formData.get('enteredAt'), timezone),
   };
 
   const parsed = trainingTradeCreateSchema.safeParse(raw);

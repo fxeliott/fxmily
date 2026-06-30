@@ -5,6 +5,7 @@ import {
   isMorningReminderDue,
   isEveningReminderDue,
   localDateOf,
+  localWallClockToUtc,
   parseLocalDate,
   shiftLocalDate,
 } from './timezone';
@@ -135,5 +136,50 @@ describe('isEveningReminderDue', () => {
   it('returns false after 22:00 in user TZ', () => {
     // 22:01 Paris = 20:01 UTC
     expect(isEveningReminderDue(new Date('2026-05-06T20:01:00Z'), 'Europe/Paris')).toBe(false);
+  });
+});
+
+describe('localWallClockToUtc (F2 — trade entry/exit in the member SET timezone)', () => {
+  // A `datetime-local` value carries NO offset; the member's chosen IANA zone is
+  // authoritative. We assert exact UTC instants so the conversion is pinned
+  // DST-correct (the offset is read at the wall-clock date, not "now").
+  it.each([
+    // [wallClock, tz, expectedUtcIso]
+    // Europe/Paris summer (CEST = UTC+2)
+    ['2026-05-06T14:30', 'Europe/Paris', '2026-05-06T12:30:00.000Z'],
+    // Europe/Paris winter (CET = UTC+1) — proves the offset is DST-aware
+    ['2026-01-15T09:00', 'Europe/Paris', '2026-01-15T08:00:00.000Z'],
+    // America/New_York summer (EDT = UTC-4)
+    ['2026-05-06T08:00', 'America/New_York', '2026-05-06T12:00:00.000Z'],
+    // America/New_York winter (EST = UTC-5)
+    ['2026-01-15T09:00', 'America/New_York', '2026-01-15T14:00:00.000Z'],
+    // Asia/Tokyo (JST = UTC+9, no DST)
+    ['2026-05-06T09:00', 'Asia/Tokyo', '2026-05-06T00:00:00.000Z'],
+    // Optional :ss component is honoured
+    ['2026-05-06T14:30:45', 'Europe/Paris', '2026-05-06T12:30:45.000Z'],
+  ] as const)('parses %s in %s → %s', (value, tz, expectedIso) => {
+    const result = localWallClockToUtc(value, tz);
+    expect(result).not.toBeNull();
+    expect(result?.toISOString()).toBe(expectedIso);
+  });
+
+  it('returns null for an already-absolute ISO string (Z suffix) so a Zod coerce can handle it', () => {
+    expect(localWallClockToUtc('2026-05-06T12:30:00Z', 'Europe/Paris')).toBeNull();
+  });
+
+  it('returns null for a malformed shape', () => {
+    expect(localWallClockToUtc('not-a-date', 'Europe/Paris')).toBeNull();
+    expect(localWallClockToUtc('2026-05-06', 'Europe/Paris')).toBeNull(); // date only, no time
+  });
+
+  it('returns null for an impossible calendar date', () => {
+    expect(localWallClockToUtc('2026-02-30T10:00', 'Europe/Paris')).toBeNull();
+    expect(localWallClockToUtc('2026-13-01T10:00', 'Europe/Paris')).toBeNull();
+  });
+
+  it('trims surrounding whitespace before parsing', () => {
+    expect(localWallClockToUtc('  2026-05-06T14:30  ', 'Europe/Paris')?.toISOString()).toBe(
+      '2026-05-06T12:30:00.000Z',
+    );
   });
 });

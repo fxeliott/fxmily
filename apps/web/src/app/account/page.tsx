@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Database, Trash2, UserCircle } from 'lucide-react';
+import { ArrowLeft, Bell, Database, Globe2, Trash2, UserCircle } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -81,6 +81,12 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
             title="Notifications"
             description="Active ou coupe les notifications push, choisis par catégorie. Désactivable d'un clic à tout moment."
             icon={<Bell aria-hidden="true" className="h-5 w-5" />}
+          />
+          <AccountCard
+            href="/account/timezone"
+            title="Fuseau horaire"
+            description="Choisis ton fuseau : check-ins, rappels et dates s'affichent à l'heure de là où tu vis. Pris en compte immédiatement."
+            icon={<Globe2 aria-hidden="true" className="h-5 w-5" />}
           />
           <AccountCard
             href="/account/data"

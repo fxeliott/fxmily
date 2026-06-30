@@ -20,13 +20,15 @@ import type {
  * les lignes que le moteur déterministe a appariées.
  */
 
-const DT_FMT = new Intl.DateTimeFormat('fr-FR', {
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-  timeZone: 'Europe/Paris',
-});
+function formatInstant(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone,
+  }).format(date);
+}
 
 function sideLabel(side: 'long' | 'short'): string {
   return side === 'long' ? 'Long' : 'Short';
@@ -59,6 +61,7 @@ export function RealityVsDeclared({
   reality,
   type,
   voice = 'member',
+  timezone = 'Europe/Paris',
 }: {
   declared: DiscrepancyDeclaredSide | null;
   reality: DiscrepancyRealitySide | null;
@@ -71,6 +74,8 @@ export function RealityVsDeclared({
    * admin reads "le membre / son historique".
    */
   voice?: 'member' | 'admin';
+  /** Render absolute instants in the member's timezone (defaults to Paris). */
+  timezone?: string;
 }) {
   // Nothing to compare (rituals: unfilled / meeting / tracking gaps carry no
   // trade side) — render nothing, the card's reasoning copy stands alone.
@@ -108,7 +113,7 @@ export function RealityVsDeclared({
               label="Taille"
               value={`${declared.lotSize} lot${declared.lotSize > 1 ? 's' : ''}`}
             />
-            <Row label="Saisi le" value={DT_FMT.format(declared.enteredAt)} />
+            <Row label="Saisi le" value={formatInstant(declared.enteredAt, timezone)} />
           </dl>
         ) : (
           <EmptySide note={declaredEmptyNote} />
@@ -123,7 +128,7 @@ export function RealityVsDeclared({
             <Row label="Instrument" value={reality.symbol} />
             <Row label="Sens" value={sideLabel(reality.side)} />
             <Row label="Taille" value={`${reality.volume} lot${reality.volume > 1 ? 's' : ''}`} />
-            <Row label="Ouvert le" value={DT_FMT.format(reality.openTime)} />
+            <Row label="Ouvert le" value={formatInstant(reality.openTime, timezone)} />
             {reality.pnl !== null ? (
               <Row
                 label="P&L"

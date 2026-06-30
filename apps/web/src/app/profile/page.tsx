@@ -285,6 +285,8 @@ export default async function ProfilePage() {
                 day: 'numeric',
                 month: 'long',
                 year: 'numeric',
+                // F2 — show the member's local day for this instant.
+                timeZone: session.user.timezone || 'Europe/Paris',
               })}
             </p>
 

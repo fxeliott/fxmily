@@ -110,21 +110,21 @@ const WEEKLY_PATTERN_SETS: Array<{
 // -----------------------------------------------------------------------------
 
 const MONTHLY_PROGRESSION = [
-  'Ce mois marque une vraie consolidation de tes habitudes. Ta discipline mesurée passe de 64 % à 78 % de plans respectés, et tes bilans du soir sont devenus quasi quotidiens. Tu réagis plus calmement aux pertes : le réflexe de te refaire a presque disparu. Le chemin reste celui d’un process tenu jour après jour, pas d’un résultat — et c’est exactement ce que montrent tes données.',
+  'Ce mois marque une vraie consolidation de tes habitudes. Ta discipline mesurée passe de 64 % à 78 % de plans respectés, et tes bilans du soir sont devenus quasi quotidiens. Tu réagis plus calmement aux pertes : le réflexe de te refaire a presque disparu. Le chemin reste celui d’un process tenu jour après jour, pas d’un résultat, et c’est exactement ce que montrent tes données.',
   'Tu prends de la hauteur. Sur ce mois, ta stabilité émotionnelle progresse et tes entrées sont plus sélectives : moins de trades, mais mieux préparés. Tu verbalises tes intentions le matin et les confrontes le soir, ce qui réduit l’écart entre ton plan et ton exécution. La régularité que tu installes est la fondation la plus solide de ta progression.',
-  'Mois de maturité : ta gestion du risque est désormais constante autour de 1 % par position, et tu passes ton tour sur les configurations douteuses sans frustration. Les scores comportementaux confirment la tendance — discipline et constance montent ensemble. Continue d’ancrer ces routines : c’est leur répétition, pas leur intensité, qui construit ton edge.',
+  'Mois de maturité : ta gestion du risque est désormais constante autour de 1 % par position, et tu passes ton tour sur les configurations douteuses sans frustration. Les scores comportementaux confirment la tendance : discipline et constance montent ensemble. Continue d’ancrer ces routines : c’est leur répétition, pas leur intensité, qui construit ton edge.',
 ];
 
 const MONTHLY_REAL = [
   'Côté trading réel, le mois est solide sur le plan du comportement : tu as coupé tes pertes au stop sans hésiter et respecté ton sizing même après les séries perdantes. Ton R moyen reste positif sur les trades clôturés, mais l’essentiel est ailleurs : tu as exécuté ton plan, pas tes émotions. Quelques entrées un peu rapides en session de Londres restent le point à lisser.',
   'Sur le réel, ta sélectivité a payé : tu as privilégié les setups de qualité A et évité les prises de position impulsives. Le respect du plan grimpe et tes pertes sont restées petites et maîtrisées. Le travail du mois prochain porte sur la constance de ta préparation du matin, qui conditionne la qualité de tes entrées.',
-  'Ton trading réel reflète un trader plus posé : aucune position vengeresse ce mois, un risque tenu, et des sorties mécaniques au stop. Le P&L comportemental est sain — ce sont tes décisions qui s’améliorent, pas seulement les résultats. Garde ce cadre : il transforme la chance en process répétable.',
+  'Ton trading réel reflète un trader plus posé : aucune position vengeresse ce mois, un risque tenu, et des sorties mécaniques au stop. Le P&L comportemental est sain. Ce sont tes décisions qui s’améliorent, pas seulement les résultats. Garde ce cadre : il transforme la chance en process répétable.',
 ];
 
 const MONTHLY_TRAINING = [
-  'Côté entraînement, ta pratique est régulière : tu as enchaîné plusieurs sessions de backtest ce mois, en gardant un rythme constant sans forcer. C’est exactement l’usage attendu du mode entraînement — répéter le geste, ancrer la lecture, sans pression de résultat. Ta dernière session remonte à quelques jours seulement : la pratique reste vivante.',
+  'Côté entraînement, ta pratique est régulière : tu as enchaîné plusieurs sessions de backtest ce mois, en gardant un rythme constant sans forcer. C’est exactement l’usage attendu du mode entraînement : répéter le geste, ancrer la lecture, sans pression de résultat. Ta dernière session remonte à quelques jours seulement : la pratique reste vivante.',
   'Ton entraînement progresse en régularité. Tu reviens sur le backtest plusieurs fois par semaine, ce qui installe la mécanique de décision sans enjeu réel. Continue à espacer raisonnablement tes sessions : c’est la constance, pas le volume brut, qui transfère le mieux vers ton exécution réelle.',
-  'La pratique d’entraînement est bien installée ce mois : sessions régulières, rythme tenu, aucune coupure longue. Tu utilises l’environnement protégé pour répéter sans pression — c’est le rôle exact de cet espace, isolé de ton edge réel. Garde ce réflexe d’y revenir quand tu veux tester un geste à froid.',
+  'La pratique d’entraînement est bien installée ce mois : sessions régulières, rythme tenu, aucune coupure longue. Tu utilises l’environnement protégé pour répéter sans pression. C’est le rôle exact de cet espace, isolé de ton edge réel. Garde ce réflexe d’y revenir quand tu veux tester un geste à froid.',
 ];
 
 const MONTHLY_RISKS = [

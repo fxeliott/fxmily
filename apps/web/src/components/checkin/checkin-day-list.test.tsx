@@ -107,3 +107,32 @@ describe('CheckinDayList', () => {
     expect(screen.queryByText('Rattrapage')).toBeNull();
   });
 });
+
+describe('CheckinDayList — F7 §33.2 admin reuse signal', () => {
+  const backfilled = makeCheckin({
+    id: 'bf1',
+    slot: 'evening',
+    date: '2026-06-05',
+    backfilledAt: '2026-06-10T09:00:00.000Z',
+    lateJustification: 'Panne internet.',
+  });
+
+  it('shows the admin « Réutilisée » badge when repeatSignals flags the id', () => {
+    render(
+      <CheckinDayList
+        checkins={[backfilled]}
+        repeatSignals={new Map([['bf1', 2]])}
+        emptyState={<p>vide</p>}
+      />,
+    );
+    expect(screen.getByText(/Réutilisée/)).toBeInTheDocument();
+  });
+
+  it('hides the reuse badge on the member surface (no repeatSignals passed)', () => {
+    render(<CheckinDayList checkins={[backfilled]} emptyState={<p>vide</p>} />);
+    // The rattrapage badge still shows (member sees their own justification)...
+    expect(screen.getByText('Rattrapage')).toBeInTheDocument();
+    // ...but never the admin-only reuse verdict.
+    expect(screen.queryByText(/Réutilisée/)).toBeNull();
+  });
+});

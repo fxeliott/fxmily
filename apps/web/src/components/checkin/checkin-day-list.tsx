@@ -35,6 +35,13 @@ interface CheckinDayListProps {
   checkins: SerializedCheckin[];
   /** Rendered when the member/admin has no check-in yet (surface-specific copy). */
   emptyState: ReactNode;
+  /**
+   * F7 §33.2 — ADMIN-ONLY reuse signal, keyed by check-in id → how many
+   * backfills share this justification's wording (see
+   * `detectRepeatedJustifications`). Omitted on the member's own history page,
+   * so the member never sees a « réutilisée / suspecte » badge (anti-Black-Hat).
+   */
+  repeatSignals?: ReadonlyMap<string, number>;
 }
 
 interface DayGroup {
@@ -58,7 +65,7 @@ export function groupCheckinsByDay(checkins: SerializedCheckin[]): DayGroup[] {
   return Array.from(byDate.values());
 }
 
-export function CheckinDayList({ checkins, emptyState }: CheckinDayListProps) {
+export function CheckinDayList({ checkins, emptyState, repeatSignals }: CheckinDayListProps) {
   if (checkins.length === 0) {
     return <>{emptyState}</>;
   }
@@ -93,7 +100,10 @@ export function CheckinDayList({ checkins, emptyState }: CheckinDayListProps) {
             <SlotBlock title="Matin" icon={<Sun className="h-3.5 w-3.5" strokeWidth={1.75} />}>
               {day.morning ? (
                 <>
-                  <RattrapageNote c={day.morning} />
+                  <RattrapageNote
+                    c={day.morning}
+                    repeatCount={repeatSignals?.get(day.morning.id)}
+                  />
                   <MorningFields c={day.morning} />
                 </>
               ) : (
@@ -103,7 +113,10 @@ export function CheckinDayList({ checkins, emptyState }: CheckinDayListProps) {
             <SlotBlock title="Soir" icon={<Moon className="h-3.5 w-3.5" strokeWidth={1.75} />}>
               {day.evening ? (
                 <>
-                  <RattrapageNote c={day.evening} />
+                  <RattrapageNote
+                    c={day.evening}
+                    repeatCount={repeatSignals?.get(day.evening.id)}
+                  />
                   <EveningFields c={day.evening} />
                 </>
               ) : (
@@ -124,14 +137,28 @@ export function CheckinDayList({ checkins, emptyState }: CheckinDayListProps) {
  * failure. The justification is the free-text the member gave and the data the
  * J2 AI worker will later assess.
  */
-function RattrapageNote({ c }: { c: SerializedCheckin }) {
+function RattrapageNote({
+  c,
+  repeatCount,
+}: {
+  c: SerializedCheckin;
+  /** F7 §33.2 — admin-only reuse count; undefined (never rendered) on member surfaces. */
+  repeatCount?: number | undefined;
+}) {
   if (c.backfilledAt === null) return null;
+  const repeated = repeatCount != null && repeatCount >= 2;
   return (
     <div className="rounded-input flex flex-col gap-1 border border-[var(--b-default)] bg-[var(--bg-2)] p-2">
-      <Pill tone="cy">
-        <RotateCcw className="h-2.5 w-2.5" strokeWidth={2} />
-        Rattrapage
-      </Pill>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Pill tone="cy">
+          <RotateCcw className="h-2.5 w-2.5" strokeWidth={2} />
+          Rattrapage
+        </Pill>
+        {/* Admin-only redundancy signal (§33.2). Deterministic reuse count, never
+            a lie verdict. Amber = « à regarder », not punitive; the member never
+            sees it (member page passes no repeatSignals). */}
+        {repeated ? <Pill tone="warn">Réutilisée · {repeatCount}×</Pill> : null}
+      </div>
       {c.lateJustification ? (
         <div className="flex flex-col gap-0.5">
           <span className="t-cap text-[var(--t-4)]">Justification</span>

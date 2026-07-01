@@ -1,5 +1,6 @@
 import { CheckinDayList } from '@/components/checkin/checkin-day-list';
 import { Card } from '@/components/ui/card';
+import { detectRepeatedJustifications } from '@/lib/checkin/justification-repeat';
 import type { SerializedCheckin } from '@/lib/checkin/service';
 
 /**
@@ -21,9 +22,13 @@ interface MemberCheckinsPanelProps {
 }
 
 export function MemberCheckinsPanel({ checkins }: MemberCheckinsPanelProps) {
+  // F7 §33.2 — deterministic reuse signal, ADMIN-ONLY (this panel never renders
+  // on a member surface). Flags rattrapage justifications a member re-uses.
+  const repeatSignals = detectRepeatedJustifications(checkins);
   return (
     <CheckinDayList
       checkins={checkins}
+      repeatSignals={repeatSignals}
       emptyState={
         <Card className="p-6 text-center">
           <p className="t-body text-[var(--t-3)]">

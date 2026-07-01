@@ -22,6 +22,7 @@ import { StressZonesBar } from '@/components/checkin/stress-zones-bar';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
+import { formatLocalDate } from '@/lib/checkin/timezone';
 import { cn } from '@/lib/utils';
 
 /**
@@ -63,6 +64,8 @@ interface DraftState {
   emotionTags: string[];
   journalNote: string;
   gratitudeItems: [string, string, string];
+  /** F7 — rattrapage reason; '' on a normal same-day fill (collapses to null). */
+  lateJustification: string;
 }
 
 const DRAFT_STORAGE_KEY = 'fxmily:checkin:evening:draft:v1';
@@ -81,6 +84,7 @@ function emptyDraft(today: string): DraftState {
     emotionTags: [],
     journalNote: '',
     gratitudeItems: ['', '', ''],
+    lateJustification: '',
   };
 }
 
@@ -149,13 +153,23 @@ interface EveningCheckinWizardProps {
   /** #13 — true when the member set a morning intention today; gates the
    *  "intention kept?" evening question (meaningless without an intention). */
   hasMorningIntention?: boolean;
+  /**
+   * F7 — when set (a validated PAST local day), the wizard runs in RATTRAPAGE
+   * mode: it fills THIS day (not today), asks a required justification, and
+   * never touches the today localStorage draft (loading / writing the today key
+   * with date=past would corrupt the next normal fill — the #1 F7 pitfall).
+   */
+  backfillDate?: string;
 }
 
 export function EveningCheckinWizard({
   today,
   hasMorningIntention = false,
+  backfillDate,
 }: EveningCheckinWizardProps) {
-  const [draft, setDraft] = useState<DraftState>(() => emptyDraft(today));
+  const isBackfill = backfillDate != null;
+  const effectiveDate = backfillDate ?? today;
+  const [draft, setDraft] = useState<DraftState>(() => emptyDraft(effectiveDate));
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState<StepIndex>(0);
   const [direction, setDirection] = useState<1 | -1>(1);
@@ -166,14 +180,17 @@ export function EveningCheckinWizard({
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
+    // Rattrapage — start fresh anchored to the backfilled day and NEVER read the
+    // today draft (loading/writing the today key with date=past corrupts the
+    // next normal check-in — the #1 F7 pitfall).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDraft(loadDraft(today));
+    setDraft(isBackfill ? emptyDraft(effectiveDate) : loadDraft(today));
     setHydrated(true);
-  }, [today]);
+  }, [today, isBackfill, effectiveDate]);
 
   useEffect(() => {
-    if (hydrated) persistDraft(draft);
-  }, [draft, hydrated]);
+    if (hydrated && !isBackfill) persistDraft(draft);
+  }, [draft, hydrated, isBackfill]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -289,6 +306,17 @@ export function EveningCheckinWizard({
       return;
     }
 
+    // F7 — a rattrapage needs a justification. The submit CTA only exists on the
+    // final step (where the field lives), so we're already there: set the inline
+    // error, no navigation. The server re-enforces this (resolveBackfill).
+    if (isBackfill && draft.lateJustification.trim() === '') {
+      setFieldErrors({
+        lateJustification: 'Explique en une phrase pourquoi tu remplis ce jour en retard.',
+      });
+      hapticError();
+      return;
+    }
+
     const fd = new FormData();
     fd.set('date', draft.date);
     // Critical for plan/hedge: send empty string (not "false") if user
@@ -316,11 +344,13 @@ export function EveningCheckinWizard({
       const trimmed = item.trim();
       if (trimmed.length > 0) fd.append('gratitudeItems', trimmed);
     }
+    // F7 — empty on a normal (same-day) fill → schema collapses to null.
+    fd.set('lateJustification', isBackfill ? draft.lateJustification.trim() : '');
 
     startTransition(async () => {
       const result: CheckinActionState = await submitEveningCheckinAction(null, fd);
       if (result.ok) {
-        clearDraft();
+        if (!isBackfill) clearDraft();
         hapticSuccess();
         return;
       }
@@ -403,6 +433,14 @@ export function EveningCheckinWizard({
         </div>
       </header>
 
+      {isBackfill ? (
+        <Alert tone="info">
+          Tu remplis ton check-in du soir du{' '}
+          <span className="font-semibold">{formatLocalDate(effectiveDate)}</span> en retard. Ajoute
+          une courte justification à la dernière étape pour valider ce rattrapage.
+        </Alert>
+      ) : null}
+
       {serverError ? <Alert tone="danger">{serverError}</Alert> : null}
 
       <div className="relative min-h-[20rem]">
@@ -472,6 +510,7 @@ export function EveningCheckinWizard({
                 fieldErrors={fieldErrors}
                 disabled={pending}
                 hasMorningIntention={hasMorningIntention}
+                isBackfill={isBackfill}
               />
             ) : null}
           </m.div>
@@ -643,14 +682,60 @@ function StepReflection({
   fieldErrors,
   disabled,
   hasMorningIntention,
+  isBackfill,
 }: StepProps & {
   updateGratitude: (idx: 0 | 1 | 2, value: string) => void;
   hasMorningIntention: boolean;
+  isBackfill: boolean;
 }) {
   const journalChars = draft.journalNote.length;
   const isCharLimitNear = journalChars > 3500;
   return (
     <div className="flex flex-col gap-5">
+      {/* F7 — rattrapage justification, required client-side (server re-enforces
+          via resolveBackfill). Anti-Black-Hat §31.2 wording: no blame, just a
+          note so the accompaniment understands the member's rhythm. */}
+      {isBackfill ? (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="lateJustification" className="t-eyebrow-lg text-[var(--t-3)]">
+            Pourquoi ce rattrapage ? (obligatoire)
+          </label>
+          <textarea
+            id="lateJustification"
+            name="lateJustification"
+            value={draft.lateJustification}
+            onChange={(e) => update('lateJustification', e.target.value.slice(0, 500))}
+            disabled={disabled}
+            rows={3}
+            maxLength={500}
+            placeholder="Ex : panne internet hier soir, journée à l’hôpital…"
+            aria-invalid={fieldErrors.lateJustification ? 'true' : undefined}
+            aria-describedby={
+              fieldErrors.lateJustification ? 'lateJustification-error' : 'lateJustification-hint'
+            }
+            className={cn(
+              'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
+              'placeholder:text-[var(--t-3)]',
+              fieldErrors.lateJustification
+                ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+                : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+              'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+            )}
+          />
+          {fieldErrors.lateJustification ? (
+            <p id="lateJustification-error" className="text-[11px] text-[var(--bad)]" role="alert">
+              {fieldErrors.lateJustification}
+            </p>
+          ) : (
+            <p id="lateJustification-hint" className="t-cap text-[var(--t-4)]">
+              Une phrase honnête suffit. Elle aide ton accompagnement à comprendre ton rythme, sans
+              jugement.
+            </p>
+          )}
+        </div>
+      ) : null}
+
       {/* #13 — close the day loop: only when a morning intention was set.
           OPTIONAL (no validateStep gate, '' → null). §31.2: "Pas tout à fait"
           carries no judgement — it's a calm process signal, never a verdict. */}

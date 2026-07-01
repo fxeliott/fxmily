@@ -19,7 +19,13 @@ import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
  */
 
 const TODAY_HORIZON_DAYS = 1;
-const PAST_HORIZON_DAYS = 60; // members can backfill up to 2 months ago
+/**
+ * Members can backfill (rattrapage F7) up to 2 months ago. Exported so the
+ * service's `resolveBackfillDateParam` bounds the `?date=` UI to the SAME window
+ * the Zod `dateInWindow` lower bound enforces — one source of truth, no drift
+ * where the UI offers a day the submit would then reject.
+ */
+export const PAST_HORIZON_DAYS = 60;
 const MIN_DATE = '2020-01-01';
 
 /** YYYY-MM-DD with calendar validity check. */

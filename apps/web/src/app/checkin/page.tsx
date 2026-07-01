@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { CatchUpYesterdayCue } from '@/components/checkin/catch-up-yesterday-cue';
 import { FirstCheckinCelebration } from '@/components/checkin/first-checkin-celebration';
 import { V18CrisisBanner } from '@/components/review/crisis-banner';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
@@ -11,7 +12,13 @@ import { TrendCard } from '@/components/checkin/trend-card';
 import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { Pill } from '@/components/ui/pill';
-import { countCheckins, getCheckinStatus, getLast7Days, getStreak } from '@/lib/checkin/service';
+import {
+  countCheckins,
+  getCheckinStatus,
+  getLast7Days,
+  getStreak,
+  getYesterdayBackfill,
+} from '@/lib/checkin/service';
 import { crossedMilestone } from '@/lib/checkin/streak';
 import { formatLocalDate } from '@/lib/checkin/timezone';
 import { cn } from '@/lib/utils';
@@ -48,10 +55,11 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
   // J5.5 — read timezone from the JWT-backed session (default Europe/Paris).
   const timezone = session.user.timezone || 'Europe/Paris';
 
-  const [status, streak, last7] = await Promise.all([
+  const [status, streak, last7, yesterdayBackfill] = await Promise.all([
     getCheckinStatus(userId, timezone),
     getStreak(userId, timezone),
     getLast7Days(userId, timezone),
+    getYesterdayBackfill(userId, timezone),
   ]);
 
   // Slot qui correspond au moment présent (calme, jamais bloquant — les deux
@@ -132,6 +140,17 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
             {isFirstEver ? <FirstCheckinCelebration slot={justDoneSlot} /> : null}
             <DoneBanner slot={justDoneSlot} streak={streak.current} />
           </>
+        ) : null}
+
+        {/* F7 — cue calme « Rattraper hier » quand un slot d'hier manque. Opt-in,
+            jamais rouge ni compte-à-rebours (anti-Black-Hat §31.2). Ne s'affiche
+            pas quand hier est déjà complet (getYesterdayBackfill → null). */}
+        {yesterdayBackfill ? (
+          <CatchUpYesterdayCue
+            date={yesterdayBackfill.date}
+            morningMissing={yesterdayBackfill.morningMissing}
+            eveningMissing={yesterdayBackfill.eveningMissing}
+          />
         ) : null}
 
         {/* dash-stagger : la lecture du moment (streak puis tendance 7 j) arrive

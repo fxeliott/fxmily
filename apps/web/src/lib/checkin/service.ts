@@ -5,7 +5,11 @@ import type { CheckinSlot } from '@/generated/prisma/enums';
 import type { DailyCheckinModel } from '@/generated/prisma/models/DailyCheckin';
 
 import { db } from '@/lib/db';
-import type { EveningCheckinInput, MorningCheckinInput } from '@/lib/schemas/checkin';
+import {
+  PAST_HORIZON_DAYS,
+  type EveningCheckinInput,
+  type MorningCheckinInput,
+} from '@/lib/schemas/checkin';
 
 import { computeStreak, type CheckinDay } from './streak';
 import { localDateOf, parseLocalDate, shiftLocalDate, type LocalDateString } from './timezone';
@@ -194,6 +198,34 @@ export function isBackfillCheckin(
   now: Date = new Date(),
 ): boolean {
   return submitted < todayFor(timezone, now);
+}
+
+/**
+ * F7 — validate a `?date=YYYY-MM-DD` param (from the hub's « Rattraper hier »
+ * cue) into a usable backfill day, or `null`. Pure — no DB, never throws: a
+ * malformed, future, today, or out-of-window value silently degrades to the
+ * normal on-time flow. The submit path stays the authority (Zod window +
+ * {@link resolveBackfill}); this only decides whether the slot page opens in
+ * rattrapage mode, and refuses to offer a day the submit would then reject.
+ */
+export function resolveBackfillDateParam(
+  rawDate: string | undefined,
+  timezone: string,
+  now: Date = new Date(),
+): LocalDateString | null {
+  if (!rawDate) return null;
+  // Strict calendar-valid parse (rejects malformed strings + e.g. month 13).
+  try {
+    parseLocalDate(rawDate);
+  } catch {
+    return null;
+  }
+  // A same-day (or future) fill is the normal flow, never a rattrapage.
+  if (!isBackfillCheckin(rawDate, timezone, now)) return null;
+  // Bounded to the backfill horizon — mirrors the Zod `dateInWindow` lower bound.
+  const lower = shiftLocalDate(todayFor(timezone, now), -PAST_HORIZON_DAYS);
+  if (rawDate < lower) return null;
+  return rawDate;
 }
 
 /**
@@ -415,6 +447,37 @@ export async function getCheckinStatus(
     morningSubmitted: slots.has('morning'),
     eveningSubmitted: slots.has('evening'),
   };
+}
+
+/** F7 — yesterday's per-slot gap, for the hub's calm « Rattraper hier » cue. */
+export interface YesterdayBackfill {
+  /** Yesterday's local date (YYYY-MM-DD) — the value to pass as `?date=`. */
+  date: LocalDateString;
+  morningMissing: boolean;
+  eveningMissing: boolean;
+}
+
+/**
+ * F7 — yesterday's per-slot fill state, so the hub can gently offer to catch up
+ * a missed slot « le lendemain avec justification » (brief §F7). Returns `null`
+ * when yesterday is fully covered (no cue, no pressure — anti-Black-Hat §31.2).
+ * One indexed query on `(userId, date)`. TZ-aware (yesterday = local today − 1).
+ */
+export async function getYesterdayBackfill(
+  userId: string,
+  timezone: string,
+  now: Date = new Date(),
+): Promise<YesterdayBackfill | null> {
+  const yesterday = shiftLocalDate(todayFor(timezone, now), -1);
+  const rows = await db.dailyCheckin.findMany({
+    where: { userId, date: parseLocalDate(yesterday) },
+    select: { slot: true },
+  });
+  const slots = new Set(rows.map((r) => r.slot));
+  const morningMissing = !slots.has('morning');
+  const eveningMissing = !slots.has('evening');
+  if (!morningMissing && !eveningMissing) return null;
+  return { date: yesterday, morningMissing, eveningMissing };
 }
 
 /**

@@ -24,7 +24,9 @@ import { db } from '@/lib/db';
 
 import {
   CheckinBackfillJustificationRequiredError,
+  getYesterdayBackfill,
   listMemberCheckinsAsAdmin,
+  resolveBackfillDateParam,
   submitEveningCheckin,
   submitMorningCheckin,
 } from './service';
@@ -272,5 +274,74 @@ describe('submit*Checkin — F7 rattrapage (past-day) justification rule', () =>
     // rattrapage justification (keeps the §33.2 repetition signal clean).
     expect(arg.create.lateJustification).toBeNull();
     expect(arg.create.backfilledAt).toBeNull();
+  });
+});
+
+// F7 Layer 3 — the `?date=` param resolver that decides whether a slot page
+// opens in rattrapage mode. Pure (no DB); Paris-local today at NOW_JUN10 is
+// 2026-06-10 (UTC+2 in June, 11:00 local, same date).
+describe('resolveBackfillDateParam — F7 backfill `?date=` validation', () => {
+  const TZ = 'Europe/Paris';
+
+  it('returns null for an undefined / empty / malformed param', () => {
+    expect(resolveBackfillDateParam(undefined, TZ, NOW_JUN10)).toBeNull();
+    expect(resolveBackfillDateParam('', TZ, NOW_JUN10)).toBeNull();
+    expect(resolveBackfillDateParam('nope', TZ, NOW_JUN10)).toBeNull();
+    // Calendar-invalid (month 13) — parseLocalDate throws → null.
+    expect(resolveBackfillDateParam('2026-13-40', TZ, NOW_JUN10)).toBeNull();
+  });
+
+  it('returns null for today or a future day (not a rattrapage)', () => {
+    expect(resolveBackfillDateParam('2026-06-10', TZ, NOW_JUN10)).toBeNull();
+    expect(resolveBackfillDateParam('2026-06-11', TZ, NOW_JUN10)).toBeNull();
+  });
+
+  it('returns the day for a valid past day within the 60-day horizon', () => {
+    expect(resolveBackfillDateParam('2026-06-09', TZ, NOW_JUN10)).toBe('2026-06-09');
+    // Exactly 60 days back (today − 60 = 2026-04-11) is still in-window.
+    expect(resolveBackfillDateParam('2026-04-11', TZ, NOW_JUN10)).toBe('2026-04-11');
+  });
+
+  it('returns null just past the 60-day horizon', () => {
+    // 61 days back (2026-04-10) is out of window — the submit would reject it.
+    expect(resolveBackfillDateParam('2026-04-10', TZ, NOW_JUN10)).toBeNull();
+    expect(resolveBackfillDateParam('2026-01-01', TZ, NOW_JUN10)).toBeNull();
+  });
+});
+
+describe('getYesterdayBackfill — F7 hub cue (per-slot gap for yesterday)', () => {
+  const TZ = 'Europe/Paris';
+  // Paris-local yesterday at NOW_JUN10 = 2026-06-09.
+  const YESTERDAY = new Date('2026-06-09T00:00:00.000Z');
+
+  it('queries yesterday and flags both slots missing when the day is empty', async () => {
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([] as never);
+
+    const out = await getYesterdayBackfill('user-1', TZ, NOW_JUN10);
+
+    expect(out).toEqual({ date: '2026-06-09', morningMissing: true, eveningMissing: true });
+    const call = vi.mocked(db.dailyCheckin.findMany).mock.calls[0]?.[0] as {
+      where?: { userId?: string; date?: Date };
+    };
+    expect(call.where).toEqual({ userId: 'user-1', date: YESTERDAY });
+  });
+
+  it('flags only the missing slot when one is present', async () => {
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([{ slot: 'morning' }] as never);
+
+    const out = await getYesterdayBackfill('user-1', TZ, NOW_JUN10);
+
+    expect(out).toEqual({ date: '2026-06-09', morningMissing: false, eveningMissing: true });
+  });
+
+  it('returns null when yesterday is fully covered (no cue)', async () => {
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([
+      { slot: 'morning' },
+      { slot: 'evening' },
+    ] as never);
+
+    const out = await getYesterdayBackfill('user-1', TZ, NOW_JUN10);
+
+    expect(out).toBeNull();
   });
 });

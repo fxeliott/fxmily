@@ -297,5 +297,29 @@ export function seanceCellTime(time: string | null, slot: SeanceSlot): string {
   return time && time.length > 0 ? time : deriveSeanceTime(slot);
 }
 
+/**
+ * Format the J4 `pipelineSyncedAt` instant into a compact FR label ("30/06 à
+ * 22h46", Europe/Paris) for the admin pipeline panel — the J3 dead column made
+ * visible (the writer now stamps it on every sync). Pure + deterministic (a
+ * fixed instant + a fixed timezone → no `now`, no hydration drift). Null-safe:
+ * a null/unparseable input returns null (the panel then renders nothing).
+ */
+export function formatSyncedAtLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: SEANCE_TIMEZONE,
+  }).formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('day')}/${get('month')} à ${get('hour')}h${get('minute')}`;
+}
+
 /** Re-export the status type for ergonomic admin imports. */
 export type { SeanceSlot, SeanceStatus };

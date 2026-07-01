@@ -9,6 +9,7 @@ import {
   calendarBatchLimiter,
   callerIdTrusted,
   monthlyBatchLimiter,
+  seancesBatchLimiter,
   verificationBatchLimiter,
 } from '@/lib/rate-limit/token-bucket';
 
@@ -208,6 +209,52 @@ export function requireVerificationAdminToken(req: Request): NextResponse | null
   if (!provided || !verifyAdminToken(provided, env.VERIFICATION_ADMIN_BATCH_TOKEN)) {
     const id = callerIdTrusted(req);
     const decision = verificationBatchLimiter.consume(id);
+    if (!decision.allowed) {
+      return NextResponse.json(
+        { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(Math.ceil(decision.retryAfterMs / 1000)) },
+        },
+      );
+    }
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  return null;
+}
+
+/**
+ * Réunion hub (séances) J4 — per-request guard for the
+ * `/api/admin/seances-batch/*` routes (6th local Claude pipeline:
+ * Zoom→Vimeo→Fathom→IA bornée, Règle n°1).
+ *
+ * EXACT carbon of {@link requireVerificationAdminToken} with two deliberate
+ * swaps:
+ *   - reads `env.SEANCES_ADMIN_BATCH_TOKEN` (token separate from the
+ *     weekly/monthly/calendar/verification tokens — the séance content is
+ *     produced on Eliott's local pipeline machine, a distinct compromise blast
+ *     radius, so it rotates independently)
+ *   - consumes the dedicated `seancesBatchLimiter` on the 401 path (so a flood
+ *     on another batch surface can never lock Eliott out of the séance batch)
+ *
+ * Same anti-accumulation rationale: `verifyAdminToken` (the pure constant-time
+ * compare) IS reused — only the env key + limiter differ. Same check order
+ * (503 → 401-consume-bucket → 429 → null) and same status semantics. 0 PII:
+ * séances carry no member identity (platform-wide content, 0 FK to User).
+ */
+export function requireSeancesAdminToken(req: Request): NextResponse | null {
+  if (!env.SEANCES_ADMIN_BATCH_TOKEN) {
+    return NextResponse.json(
+      { error: 'seances_batch_disabled', detail: 'SEANCES_ADMIN_BATCH_TOKEN not configured.' },
+      { status: 503 },
+    );
+  }
+
+  const provided = req.headers.get('x-admin-token');
+  if (!provided || !verifyAdminToken(provided, env.SEANCES_ADMIN_BATCH_TOKEN)) {
+    const id = callerIdTrusted(req);
+    const decision = seancesBatchLimiter.consume(id);
     if (!decision.allowed) {
       return NextResponse.json(
         { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },

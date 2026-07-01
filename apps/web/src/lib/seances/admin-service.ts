@@ -65,6 +65,8 @@ export interface AdminPipelineView {
   deadLetter: boolean;
   failedStep: string | null;
   failedError: string | null;
+  /** ISO of the last J4 pipeline sync, or null (never synced). */
+  syncedAt: string | null;
 }
 
 /** One `(date, slot)` cell of the admin calendar (existing row OR placeholder). */
@@ -152,6 +154,7 @@ type SeanceRowForAdmin = {
   contentNeedsReview: boolean;
   pipelineFailedStep: string | null;
   pipelineFailedError: string | null;
+  pipelineSyncedAt: Date | null;
   _count: { assets: number; messages: number };
 };
 
@@ -191,6 +194,7 @@ function rowToCell(r: SeanceRowForAdmin, today: LocalDateString): AdminSeanceCel
       deadLetter: pipeline.deadLetter,
       failedStep: r.pipelineFailedStep,
       failedError: r.pipelineFailedError,
+      syncedAt: r.pipelineSyncedAt ? r.pipelineSyncedAt.toISOString() : null,
     },
   };
 }
@@ -232,6 +236,7 @@ function placeholderCell(
       deadLetter: pipeline.deadLetter,
       failedStep: null,
       failedError: null,
+      syncedAt: null,
     },
   };
 }
@@ -270,6 +275,7 @@ export async function listSeancesForAdmin(now: Date = new Date()): Promise<Admin
       contentNeedsReview: true,
       pipelineFailedStep: true,
       pipelineFailedError: true,
+      pipelineSyncedAt: true,
       _count: { select: { assets: true, messages: true } },
     },
   });
@@ -469,6 +475,10 @@ export async function declareSeanceGoNoGo(
           cpDeployed: false,
           pipelineFailedStep: null,
           pipelineFailedError: null,
+          // Clear the J4 sync stamp too: a wiped session is no longer "synced"
+          // — leaving the old value would surface a lying "Synchronisé …" label
+          // in the admin pipeline panel, the exact stale-"à jour" the wipe kills.
+          pipelineSyncedAt: null,
         },
       });
     });

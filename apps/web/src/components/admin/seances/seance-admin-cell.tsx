@@ -14,6 +14,7 @@ import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import type { AdminSeanceCell } from '@/lib/seances/admin-service';
 import {
+  formatSyncedAtLabel,
   seanceTimeToInputValue,
   type PipelineBadge,
   type PipelineStepState,
@@ -122,6 +123,8 @@ export function SeanceAdminCell({ cell }: { cell: AdminSeanceCell }) {
   const message = goNoGoMessage(state);
   const regenInfo = regenMessage(regenState);
   const noRewindLocked = !cell.canRevertToScheduled; // status === 'done'
+  // J4 sync freshness (pure, null-safe) — derived once, used as guard + label.
+  const syncedLabel = formatSyncedAtLabel(cell.pipeline.syncedAt);
 
   return (
     <Card
@@ -274,6 +277,9 @@ export function SeanceAdminCell({ cell }: { cell: AdminSeanceCell }) {
             <p role="alert" className="t-cap text-[var(--bad)]">
               Échec « {cell.pipeline.failedStep} » : {cell.pipeline.failedError}
             </p>
+          ) : null}
+          {syncedLabel ? (
+            <p className="t-cap text-[var(--t-3)]">Synchronisé {syncedLabel}</p>
           ) : null}
 
           {/* Régénérer — re-arm the AI step (J4 reruns the writing) */}

@@ -3287,7 +3287,9 @@ model ReplaySession {
   cpDeployed   Boolean @default(false) @map("cp_deployed")
 
   // ── Pipeline failure (admin "jamais d'échec silencieux", J3) ──────────────
-  /// Failing FSM step (mp4|vimeo|transcript|ai|deploy). Null unless failed.
+  /// Failing FSM step (mp4|vimeo|transcript|ai|deployed). Null unless failed.
+  /// The 5th key is `deployed` (the `cpDeployed` checkpoint / `STEP_DEFS` key in
+  /// `admin-derive.ts` + the J4 pipeline `failure.step` enum) — NOT `deploy`.
   pipelineFailedStep  String? @map("pipeline_failed_step")
   /// Diagnostic (never a secret). Null unless failed.
   pipelineFailedError String? @map("pipeline_failed_error") @db.Text

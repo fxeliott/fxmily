@@ -22,10 +22,12 @@ export function TrainingTradeCardLinkable({
   trade,
   href,
   unseenAnnotationsCount = 0,
+  timezone = 'Europe/Paris',
 }: {
   trade: SerializedTrainingTrade;
   href: string;
   unseenAnnotationsCount?: number;
+  timezone?: string;
 }) {
   return (
     // S18 — identité CYAN training (§21.7) : lift spring + halo cyan au survol,
@@ -36,7 +38,7 @@ export function TrainingTradeCardLinkable({
         href={href}
         className="rounded-card block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
       >
-        <TrainingTradeCard trade={trade} />
+        <TrainingTradeCard trade={trade} timezone={timezone} />
         {unseenAnnotationsCount > 0 ? (
           <div className="mt-1.5 flex justify-end">
             <Pill tone="cy" dot="live">

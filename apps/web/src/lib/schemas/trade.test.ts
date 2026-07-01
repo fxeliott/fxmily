@@ -13,6 +13,8 @@ import {
 } from './trade';
 
 const VALID_KEY = 'trades/clx0abc1234/abcdef0123456789abcdef0123456789.jpg';
+const VALID_TV_ENTRY = 'https://www.tradingview.com/x/Entry123/';
+const VALID_TV_EXIT = 'https://www.tradingview.com/x/Exit9876/';
 
 const baseOpen = {
   pair: 'EURUSD',
@@ -27,6 +29,7 @@ const baseOpen = {
   planRespected: true,
   hedgeRespected: 'na' as const,
   notes: 'Setup propre.',
+  tradingViewEntryUrl: VALID_TV_ENTRY,
   screenshotEntryKey: VALID_KEY,
 };
 
@@ -152,6 +155,28 @@ describe('tradeOpenSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  // J1 — the entry TradingView link is now the required primary field; the
+  // screenshot became legacy-optional.
+  it('requires a tradingViewEntryUrl', () => {
+    const { tradingViewEntryUrl, ...rest } = baseOpen;
+    void tradingViewEntryUrl;
+    expect(tradeOpenSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it('accepts an open with NO screenshot when the tradingView link is present (J1)', () => {
+    const { screenshotEntryKey, ...rest } = baseOpen;
+    void screenshotEntryKey;
+    expect(tradeOpenSchema.safeParse(rest).success).toBe(true);
+  });
+
+  it('rejects an off-host tradingViewEntryUrl', () => {
+    const result = tradeOpenSchema.safeParse({
+      ...baseOpen,
+      tradingViewEntryUrl: 'https://evil.example.com/x/abc/',
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('tradeCloseSchema', () => {
@@ -162,6 +187,7 @@ describe('tradeCloseSchema', () => {
     emotionDuring: ['calm'],
     emotionAfter: ['confident'],
     notes: 'TP atteint, discipline OK.',
+    tradingViewExitUrl: VALID_TV_EXIT,
     screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',
   };
 
@@ -169,10 +195,17 @@ describe('tradeCloseSchema', () => {
     expect(tradeCloseSchema.safeParse(baseClose).success).toBe(true);
   });
 
-  it('requires a screenshot', () => {
+  // J1 — the exit TradingView link is now the required primary field.
+  it('requires a tradingViewExitUrl', () => {
+    const { tradingViewExitUrl, ...rest } = baseClose;
+    void tradingViewExitUrl;
+    expect(tradeCloseSchema.safeParse(rest).success).toBe(false);
+  });
+
+  it('accepts a close with NO screenshot when the tradingView link is present (J1)', () => {
     const { screenshotExitKey, ...rest } = baseClose;
     void screenshotExitKey;
-    expect(tradeCloseSchema.safeParse(rest).success).toBe(false);
+    expect(tradeCloseSchema.safeParse(rest).success).toBe(true);
   });
 
   it('rejects exit at a far-future date', () => {
@@ -297,6 +330,7 @@ describe('tradeFullSchema cross-validation', () => {
         outcome: 'win',
         emotionDuring: ['calm'],
         emotionAfter: ['confident'],
+        tradingViewExitUrl: VALID_TV_EXIT,
         screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',
       },
     });
@@ -421,6 +455,7 @@ describe('tradeCloseSchema — V1.8 tags integration', () => {
     emotionDuring: ['calm'],
     emotionAfter: ['confident'],
     notes: 'TP atteint, discipline OK.',
+    tradingViewExitUrl: VALID_TV_EXIT,
     screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',
   };
 

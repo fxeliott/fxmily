@@ -5,12 +5,12 @@ import {
   ArrowLeft,
   ArrowRight,
   Calendar,
-  Camera,
+  Check,
   Heart,
   Info,
+  Link2,
   Sliders,
   Target,
-  Trash2,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
@@ -21,13 +21,15 @@ import { createTradeAction, type CreateTradeActionState } from '@/app/journal/ac
 import { Alert } from '@/components/alert';
 import { EmotionPicker } from '@/components/journal/emotion-picker';
 import { PairAutocomplete } from '@/components/journal/pair-autocomplete';
-import { ScreenshotUploader } from '@/components/journal/screenshot-uploader';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Kbd } from '@/components/ui/kbd';
 import { Pill } from '@/components/ui/pill';
+import { localWallClockToUtc } from '@/lib/checkin/timezone';
 import { clamp } from '@/lib/hooks';
 import { tradeOpenSchema, WIZARD_STEPS } from '@/lib/schemas/trade';
+import { isTradingViewUrl } from '@/lib/schemas/tradingview-url';
+import { formatDateTimeLocalInput, timezoneCityLabel } from '@/lib/timezones';
 import { TRADING_PAIRS, type TradingPair } from '@/lib/trading/pairs';
 import { detectSession, SESSION_HINT, SESSION_LABEL, SESSIONS } from '@/lib/trading/sessions';
 import { cn } from '@/lib/utils';
@@ -53,10 +55,10 @@ const STEP_TITLES = [
   'Prix & taille',
   'Plan : R:R prévu',
   'Discipline & émotion',
-  'Capture avant entrée',
+  "Lien TradingView d'entrée",
 ] as const;
 
-const STEP_ICONS = [Calendar, TrendingUp, Sliders, Target, Heart, Camera] as const;
+const STEP_ICONS = [Calendar, TrendingUp, Sliders, Target, Heart, Link2] as const;
 
 type StepIndex = 0 | 1 | 2 | 3 | 4 | 5;
 
@@ -77,39 +79,12 @@ interface DraftState {
   planRespected: boolean | null;
   hedgeRespected: 'true' | 'false' | 'na' | '';
   notes: string;
-  screenshotEntryKey: string;
-  screenshotEntryReadUrl: string;
-  /** §31 — additional entry analysis captures (TradeMedia kind=entry). */
-  extraEntryKeys: string[];
-  extraEntryReadUrls: string[];
+  /** J1 — mandatory TradingView entry link (replaces the former screenshot
+   *  upload). Host-allowlisted at the Zod / Server Action edge. */
+  tradingViewEntryUrl: string;
 }
 
 const DRAFT_STORAGE_KEY = 'fxmily:journal:draft:v1';
-
-/** §31 « photos » pluriel — additional entry analysis captures, on top of the
- *  mandatory primary `screenshotEntryKey`. Capped to keep the gallery sane. */
-const MAX_ENTRY_MEDIA = 4;
-
-/**
- * Whitelist a thumbnail URL to our own upload route before it reaches an
- * `href`/`src`. The readUrl comes from the `/api/uploads` fetch response, so
- * this guarantees a tampered/unexpected value can never become a `javascript:`
- * href (CodeQL js/xss-through-dom — defense in depth; the route is ours and the
- * key is server-generated `trades/{userId}/{nanoid}.{ext}`). An anchored regex
- * test (vs `startsWith`) is what CodeQL recognises as a sanitising barrier.
- */
-// Same-origin path under our upload route only — no `:` means no `javascript:`
-// / `data:` scheme, anchored start means no `//host` protocol-relative URL.
-const UPLOAD_URL_RX = /^\/api\/uploads\/[\w./-]+$/;
-function safeUploadUrl(url: string | undefined): string {
-  return url && UPLOAD_URL_RX.test(url) ? url : '';
-}
-
-function nowIsoLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => `${n}`.padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 function emptyDraft(): DraftState {
   return {
@@ -130,10 +105,7 @@ function emptyDraft(): DraftState {
     planRespected: null,
     hedgeRespected: '',
     notes: '',
-    screenshotEntryKey: '',
-    screenshotEntryReadUrl: '',
-    extraEntryKeys: [],
-    extraEntryReadUrls: [],
+    tradingViewEntryUrl: '',
   };
 }
 
@@ -167,7 +139,7 @@ function clearDraft() {
   }
 }
 
-export function TradeFormWizard() {
+export function TradeFormWizard({ timezone }: { timezone: string }) {
   const [draft, setDraft] = useState<DraftState>(() => emptyDraft());
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState<StepIndex>(0);
@@ -180,18 +152,26 @@ export function TradeFormWizard() {
 
   useEffect(() => {
     const restored = loadDraft();
-    // Browser-local default for the entry time, applied post-mount so the SSR
-    // render stays deterministic (no hydration mismatch on the datetime-local).
+    // F2 — default the entry time to "now" in the MEMBER's set timezone (not the
+    // device's), applied post-mount so the SSR render stays deterministic (no
+    // hydration mismatch on the datetime-local). The server re-interprets this
+    // wall-clock in the same set timezone, so the round-trip is offset-stable.
     if (!restored.enteredAt) {
-      restored.enteredAt = nowIsoLocal();
+      restored.enteredAt = formatDateTimeLocalInput(new Date(), timezone);
     }
     if (!restored.session) {
-      restored.session = detectSession(new Date(restored.enteredAt));
+      // F2 — a trading session is a global UTC-hour bucket, so derive it from
+      // the TRUE instant (member-tz wall-clock → UTC), not the device-tz parse,
+      // so the suggested session matches the one the server persists for this
+      // entry even when the member's device clock is in another timezone.
+      restored.session = detectSession(
+        localWallClockToUtc(restored.enteredAt, timezone) ?? new Date(NaN),
+      );
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(restored);
     setHydrated(true);
-  }, []);
+  }, [timezone]);
 
   useEffect(() => {
     if (hydrated) persistDraft(draft);
@@ -205,7 +185,9 @@ export function TradeFormWizard() {
     setDraft((d) => ({
       ...d,
       enteredAt: value,
-      session: d.session || detectSession(new Date(value)),
+      // F2 — see the hydration effect: detect the session from the true UTC
+      // instant (member-tz wall-clock → UTC), not the device-tz parse.
+      session: d.session || detectSession(localWallClockToUtc(value, timezone) ?? new Date(NaN)),
     }));
   };
 
@@ -229,7 +211,15 @@ export function TradeFormWizard() {
       pair: draft.pair,
       direction: draft.direction,
       session: draft.session,
-      enteredAt: draft.enteredAt ? new Date(draft.enteredAt) : new Date(NaN),
+      // F2 — validate the entry time against the SAME instant the server will
+      // store: interpret the wall-clock in the member's set timezone, mirroring
+      // the action's `memberWallClock` (localWallClockToUtc(value, tz) ?? value).
+      // A plain `new Date(draft.enteredAt)` parsed in the DEVICE timezone, so a
+      // member whose device clock ran ahead of their set zone could see a false
+      // "Date dans le futur." on a "now" entry the server accepts.
+      enteredAt: draft.enteredAt
+        ? (localWallClockToUtc(draft.enteredAt, timezone) ?? new Date(draft.enteredAt))
+        : new Date(NaN),
       entryPrice: draft.entryPrice,
       lotSize: draft.lotSize,
       stopLossPrice: draft.stopLossPrice === '' ? null : Number(draft.stopLossPrice),
@@ -242,7 +232,7 @@ export function TradeFormWizard() {
       planRespected: draft.planRespected ?? false,
       hedgeRespected: draft.hedgeRespected || 'na',
       notes: draft.notes,
-      screenshotEntryKey: draft.screenshotEntryKey,
+      tradingViewEntryUrl: draft.tradingViewEntryUrl,
     };
     const result = tradeOpenSchema.safeParse(candidate);
     if (result.success) return true;
@@ -296,7 +286,10 @@ export function TradeFormWizard() {
     fd.set('pair', draft.pair);
     fd.set('direction', draft.direction);
     fd.set('session', draft.session);
-    fd.set('enteredAt', new Date(draft.enteredAt).toISOString());
+    // F2 — post the RAW `datetime-local` wall-clock; the server converts it to a
+    // UTC instant in the member's set timezone (not the device's). Previously
+    // `new Date(...).toISOString()` baked in the BROWSER timezone here.
+    fd.set('enteredAt', draft.enteredAt);
     fd.set('entryPrice', draft.entryPrice);
     fd.set('lotSize', draft.lotSize);
     if (draft.stopLossPrice !== '') fd.set('stopLossPrice', draft.stopLossPrice);
@@ -307,8 +300,7 @@ export function TradeFormWizard() {
     fd.set('planRespected', String(draft.planRespected));
     fd.set('hedgeRespected', draft.hedgeRespected);
     if (draft.notes) fd.set('notes', draft.notes);
-    fd.set('screenshotEntryKey', draft.screenshotEntryKey);
-    for (const key of draft.extraEntryKeys) fd.append('extraEntryKey', key);
+    fd.set('tradingViewEntryUrl', draft.tradingViewEntryUrl.trim());
 
     startTransition(async () => {
       const result: CreateTradeActionState = await createTradeAction(null, fd);
@@ -415,6 +407,7 @@ export function TradeFormWizard() {
                 onEnteredAtChange={updateEnteredAt}
                 fieldErrors={fieldErrors}
                 disabled={pending}
+                timezone={timezone}
               />
             ) : null}
             {step === 1 ? (
@@ -443,7 +436,7 @@ export function TradeFormWizard() {
               />
             ) : null}
             {step === 5 ? (
-              <StepEntryScreenshot
+              <StepEntryLink
                 draft={draft}
                 update={update}
                 fieldErrors={fieldErrors}
@@ -481,19 +474,19 @@ export function TradeFormWizard() {
               kind="primary"
               size="m"
               onClick={submit}
-              disabled={pending || !draft.screenshotEntryKey}
+              disabled={pending || !draft.tradingViewEntryUrl.trim()}
               loading={pending}
-              kbd={pending || !draft.screenshotEntryKey ? undefined : '↵'}
-              aria-describedby={!draft.screenshotEntryKey ? 'submit-hint' : undefined}
+              kbd={pending || !draft.tradingViewEntryUrl.trim() ? undefined : '↵'}
+              aria-describedby={!draft.tradingViewEntryUrl.trim() ? 'submit-hint' : undefined}
               type="button"
             >
               {pending ? 'Enregistrement…' : 'Sauvegarder le trade'}
             </Btn>
           )}
         </div>
-        {step === 5 && !draft.screenshotEntryKey ? (
+        {step === 5 && !draft.tradingViewEntryUrl.trim() ? (
           <p id="submit-hint" className="text-right text-[11px] text-[var(--t-4)] tabular-nums">
-            Ajoute la capture pour activer la sauvegarde.
+            Colle ton lien TradingView pour activer la sauvegarde.
           </p>
         ) : null}
       </nav>
@@ -518,7 +511,8 @@ function StepWhenAndWhat({
   onEnteredAtChange,
   fieldErrors,
   disabled,
-}: StepProps & { onEnteredAtChange: (next: string) => void }) {
+  timezone,
+}: StepProps & { onEnteredAtChange: (next: string) => void; timezone: string }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
@@ -547,8 +541,8 @@ function StepWhenAndWhat({
           </p>
         ) : (
           <p className="t-cap text-[var(--t-4)]">
-            Heure locale (Europe/Paris). Pré-rempli à maintenant — la session se devine à
-            l&apos;étape suivante.
+            Heure locale ({timezoneCityLabel(timezone)}). Pré-rempli à maintenant — la session se
+            devine à l&apos;étape suivante.
           </p>
         )}
       </div>
@@ -1071,104 +1065,86 @@ function StepDisciplineEmotions({ draft, update, fieldErrors, disabled }: StepPr
   );
 }
 
-function StepEntryScreenshot({ draft, update, fieldErrors, disabled }: StepProps) {
-  const extraKeys = draft.extraEntryKeys;
-  const extraUrls = draft.extraEntryReadUrls;
-  const canAddMore = extraKeys.length < MAX_ENTRY_MEDIA;
+function StepEntryLink({ draft, update, fieldErrors, disabled }: StepProps) {
+  // J1 — the pre-entry proof is a TradingView analysis link (pivot capture →
+  // lien). Client-side validity is a best-effort affordance; the Server Action
+  // re-validates (HTTPS + tradingview.com host allowlist) as the only authority.
+  const value = draft.tradingViewEntryUrl;
+  const trimmed = value.trim();
+  const looksValid = trimmed.length > 0 && isTradingViewUrl(trimmed);
+  const error = fieldErrors.tradingViewEntryUrl;
+  const hintId = 'entry-link-hint';
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3">
-        <p className="t-body text-[var(--t-2)]">
-          Capture obligatoire avant entrée — preuve que tu as analysé le setup. C&apos;est la couche
-          d&apos;audit comportemental la plus solide.
-        </p>
-        <ScreenshotUploader
-          kind="trade-entry"
-          name="screenshotEntryKey"
-          initialKey={draft.screenshotEntryKey || null}
-          initialReadUrl={draft.screenshotEntryReadUrl || null}
-          disabled={disabled}
-          error={fieldErrors.screenshotEntryKey}
-          onUploaded={({ key, readUrl }) => {
-            update('screenshotEntryKey', key);
-            update('screenshotEntryReadUrl', readUrl);
-          }}
-          onCleared={() => {
-            update('screenshotEntryKey', '');
-            update('screenshotEntryReadUrl', '');
-          }}
-        />
-      </div>
+      <p className="t-body text-[var(--t-2)]">
+        Colle le lien TradingView de ton analyse avant entrée — la preuve que tu as étudié le setup.
+        C&apos;est la couche d&apos;audit comportemental la plus solide, et un lien reste vivant
+        (zoom, indicateurs) là où une capture fige tout.
+      </p>
 
-      {/* §31 « photos » pluriel — additional analysis captures (multi-TF, zone,
-          plan). Optional, on top of the mandatory primary capture above. */}
-      <div className="flex flex-col gap-2 border-t border-[var(--b-subtle)] pt-4">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="t-eyebrow text-[var(--t-3)]">Photos d&apos;analyse additionnelles</span>
-          <span className="t-cap font-mono text-[var(--t-4)] tabular-nums">
-            {extraKeys.length}/{MAX_ENTRY_MEDIA} · optionnel
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="tradingViewEntryUrl" className="t-eyebrow-lg text-[var(--t-3)]">
+          Lien TradingView d&apos;entrée
+        </label>
+        <div className="relative">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--t-4)]"
+          >
+            <Link2 className="h-4 w-4" strokeWidth={1.75} />
           </span>
-        </div>
-        <p className="t-cap text-[var(--t-4)]">
-          Plusieurs unités de temps, ta zone, ton plan — documente ton analyse autant que tu veux.
-        </p>
-
-        {extraKeys.length > 0 ? (
-          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {extraKeys.map((key, i) => (
-              <li key={key} className="relative">
-                <a
-                  href={safeUploadUrl(extraUrls[i]) || '#'}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-card block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={safeUploadUrl(extraUrls[i])}
-                    alt={`Photo d'analyse additionnelle ${i + 1}`}
-                    loading="lazy"
-                    className="rounded-card aspect-[16/9] w-full border border-[var(--b-default)] object-cover"
-                  />
-                </a>
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => {
-                    update(
-                      'extraEntryKeys',
-                      extraKeys.filter((_, j) => j !== i),
-                    );
-                    update(
-                      'extraEntryReadUrls',
-                      extraUrls.filter((_, j) => j !== i),
-                    );
-                  }}
-                  aria-label={`Retirer la photo additionnelle ${i + 1}`}
-                  className="absolute top-1 right-1 grid h-7 w-7 place-items-center rounded-full border border-[var(--b-default)] bg-[var(--bg)]/80 text-[var(--t-2)] backdrop-blur transition-colors hover:border-[var(--b-danger)] hover:text-[var(--bad)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-                >
-                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        {canAddMore ? (
-          <ScreenshotUploader
-            // Remount after each successful add so the dropzone resets cleanly.
-            key={extraKeys.length}
-            kind="trade-entry"
-            name=""
+          <input
+            id="tradingViewEntryUrl"
+            name="tradingViewEntryUrl"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="https://www.tradingview.com/x/…"
+            value={value}
+            onChange={(e) => update('tradingViewEntryUrl', e.target.value)}
             disabled={disabled}
-            onUploaded={({ key, readUrl }) => {
-              update('extraEntryKeys', [...extraKeys, key]);
-              update('extraEntryReadUrls', [...extraUrls, readUrl]);
-            }}
+            aria-invalid={error ? 'true' : undefined}
+            aria-describedby={error ? undefined : hintId}
+            className={cn(
+              'rounded-input h-11 w-full border bg-[var(--bg-1)] pr-10 pl-9 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
+              error
+                ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+                : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+              'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+            )}
           />
+          {looksValid ? (
+            <span
+              aria-hidden="true"
+              className="absolute top-1/2 right-3 -translate-y-1/2 text-[var(--good)]"
+            >
+              <Check className="h-4 w-4" strokeWidth={2} />
+            </span>
+          ) : null}
+        </div>
+
+        {error ? (
+          <p className="text-[11px] text-[var(--bad)]" role="alert">
+            {error}
+          </p>
+        ) : looksValid ? (
+          <p id={hintId} className="t-cap flex items-center gap-2 text-[var(--t-4)]">
+            <span className="text-[var(--good)]">Lien TradingView valide.</span>
+            <a
+              href={trimmed}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-sm underline decoration-[var(--b-strong)] underline-offset-2 hover:text-[var(--t-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              Ouvrir l&apos;aperçu
+            </a>
+          </p>
         ) : (
-          <p className="t-cap text-[var(--t-4)]">
-            Maximum {MAX_ENTRY_MEDIA} photos additionnelles atteint.
+          <p id={hintId} className="t-cap text-[var(--t-4)]">
+            Sur TradingView : bouton appareil-photo → « Copier le lien de l&apos;image », ou partage
+            de ta mise en page. Lien <code className="font-mono">tradingview.com</code> uniquement.
           </p>
         )}
       </div>

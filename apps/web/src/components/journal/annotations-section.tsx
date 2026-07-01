@@ -26,10 +26,13 @@ import { DeleteAnnotationButton } from './delete-annotation-button';
  *     write time via Zod's trim + max length.
  */
 
-const DATETIME_FMT = new Intl.DateTimeFormat('fr-FR', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
+function formatDateTime(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: timezone,
+  }).format(date);
+}
 
 interface AnnotationsSectionProps {
   annotations: SerializedAnnotation[];
@@ -38,6 +41,9 @@ interface AnnotationsSectionProps {
   /** Identifier of the currently-authenticated user — used by the delete
    * button to gate ownership client-side (server re-checks). */
   currentUserId?: string | null;
+  /** F2 — member timezone for rendering absolute annotation timestamps.
+   * Optional; defaults to Europe/Paris so admin callers stay on Paris. */
+  timezone?: string;
 }
 
 /** Defensive wrapper: a corrupted `mediaKey` row would otherwise crash the
@@ -60,6 +66,7 @@ export function AnnotationsSection({
   annotations,
   isAdmin,
   currentUserId = null,
+  timezone = 'Europe/Paris',
 }: AnnotationsSectionProps) {
   // Empty state: render an explicit "0 correction" card on the admin surface
   // so the admin gets a clear "this trade has no correction yet" anchor next
@@ -103,6 +110,7 @@ export function AnnotationsSection({
               isAdmin={isAdmin}
               canDelete={isAdmin && currentUserId === annotation.adminId}
               mediaUrl={safeReadUrl(storage, annotation.mediaKey)}
+              timezone={timezone}
             />
           </li>
         ))}
@@ -116,11 +124,18 @@ interface AnnotationCardProps {
   isAdmin: boolean;
   canDelete: boolean;
   mediaUrl: string | null;
+  timezone: string;
 }
 
-function AnnotationCard({ annotation, isAdmin, canDelete, mediaUrl }: AnnotationCardProps) {
+function AnnotationCard({
+  annotation,
+  isAdmin,
+  canDelete,
+  mediaUrl,
+  timezone,
+}: AnnotationCardProps) {
   const createdAtDate = new Date(annotation.createdAt);
-  const formattedDate = DATETIME_FMT.format(createdAtDate);
+  const formattedDate = formatDateTime(createdAtDate, timezone);
   return (
     <Card className="p-4">
       <header className="mb-3 flex flex-wrap items-center gap-2">
@@ -140,7 +155,7 @@ function AnnotationCard({ annotation, isAdmin, canDelete, mediaUrl }: Annotation
             Lue
             <span className="sr-only">
               {' '}
-              par le membre le {DATETIME_FMT.format(new Date(annotation.seenByMemberAt))}
+              par le membre le {formatDateTime(new Date(annotation.seenByMemberAt), timezone)}
             </span>
           </Pill>
         ) : null}

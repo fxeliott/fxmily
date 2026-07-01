@@ -61,13 +61,21 @@ const IMPACT_TONE_CLASS: Record<'pos' | 'soft' | 'neg' | 'strong', string> = {
   strong: 'text-[var(--t-2)]',
 };
 
-const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'Europe/Paris',
-});
+function formatEventDate(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: timezone,
+  }).format(date);
+}
 
-export function ScoreEventsHistory({ events }: { events: readonly ScoreEventView[] }) {
+export function ScoreEventsHistory({
+  events,
+  timezone = 'Europe/Paris',
+}: {
+  events: readonly ScoreEventView[];
+  timezone?: string;
+}) {
   if (events.length === 0) return null;
 
   // CONTEXTE GLOBAL « Scoring » — lead with the 2-3 signals that moved the score
@@ -130,7 +138,7 @@ export function ScoreEventsHistory({ events }: { events: readonly ScoreEventView
                 {REASON_LABEL[event.reason]}
               </span>
               <span className="t-foot text-[var(--t-4)]">
-                {DATE_FMT.format(event.createdAt)}
+                {formatEventDate(event.createdAt, timezone)}
                 {event.excused ? ' · excusé — motif donné ou levé par la réalité' : ''}
               </span>
             </span>

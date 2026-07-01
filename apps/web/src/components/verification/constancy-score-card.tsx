@@ -30,10 +30,15 @@ const AXES: ReadonlyArray<{
   },
 ];
 
+// `score.periodStart` is a UTC-midnight PIN of the cohort's shared civil week
+// (constancy.ts: `parseLocalDate` → `Date.UTC(...)`), NOT a per-member instant.
+// Format it in the UTC frame so the calendar-day label is stable for everyone —
+// formatting in Europe/Paris rolled the day back for negative-offset members.
+// Mirrors the sibling tracking formatter (constancy.ts:438-449, timeZone:'UTC').
 const PERIOD_FMT = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'short',
-  timeZone: 'Europe/Paris',
+  timeZone: 'UTC',
 });
 
 export function ConstancyScoreCard({ score }: { score: ConstancyScoreView | null }) {

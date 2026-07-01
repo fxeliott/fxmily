@@ -6,9 +6,11 @@ import {
   ArrowRight,
   BookOpen,
   Calendar,
-  Camera,
+  Check,
+  ExternalLink,
   GraduationCap,
   Layers,
+  Link2,
   ListChecks,
   ShieldCheck,
   Target,
@@ -23,11 +25,13 @@ import {
 } from '@/app/training/actions';
 import { Alert } from '@/components/alert';
 import { PairAutocomplete } from '@/components/journal/pair-autocomplete';
-import { ScreenshotUploader } from '@/components/journal/screenshot-uploader';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { localWallClockToUtc } from '@/lib/checkin/timezone';
+import { isTradingViewUrl } from '@/lib/schemas/tradingview-url';
 import { TRAINING_CHECKLIST_ITEMS, trainingTradeCreateSchema } from '@/lib/schemas/training-trade';
+import { formatDateTimeLocalInput, timezoneCityLabel } from '@/lib/timezones';
 import { TRAINING_UI_COPY } from '@/lib/training/training-ui-copy';
 import { cn } from '@/lib/utils';
 
@@ -49,7 +53,7 @@ import { cn } from '@/lib/utils';
 
 const STEP_TITLES = [
   'Quand & quelle paire',
-  'Capture de ton analyse',
+  'Lien de ton analyse',
   'Plan : R:R prévu',
   'Résultat du backtest',
   'Respect du système',
@@ -57,11 +61,11 @@ const STEP_TITLES = [
   'Leçon tirée',
 ] as const;
 
-const STEP_ICONS = [Calendar, Camera, Target, Trophy, ShieldCheck, ListChecks, BookOpen] as const;
+const STEP_ICONS = [Calendar, Link2, Target, Trophy, ShieldCheck, ListChecks, BookOpen] as const;
 
 const STEP_FIELDS = [
   ['pair', 'enteredAt'],
-  ['entryScreenshotKey', 'tradingViewUrl'],
+  ['tradingViewUrl'],
   ['plannedRR'],
   ['outcome', 'resultR'],
   ['systemRespected'],
@@ -76,9 +80,8 @@ type StepIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 interface TrainingDraftState {
   pair: string;
   enteredAt: string;
-  entryScreenshotKey: string;
-  entryScreenshotReadUrl: string;
-  /** F1 — optional TradingView analysis link, beside the mandatory screenshot. */
+  /** J1 — mandatory TradingView analysis link (replaces the former screenshot
+   *  upload as the backtest entry artefact). */
   tradingViewUrl: string;
   plannedRR: number;
   outcome: '' | 'win' | 'loss' | 'break_even';
@@ -102,12 +105,6 @@ type ChecklistDraftKey =
 
 const DRAFT_STORAGE_KEY = 'fxmily:training:draft:v1';
 
-function nowIsoLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => `${n}`.padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function emptyDraft(): TrainingDraftState {
   return {
     pair: '',
@@ -115,8 +112,6 @@ function emptyDraft(): TrainingDraftState {
     // deterministic across SSR + hydration. Filled with the browser-local
     // clock after mount in the restore effect (canon: close-trade-form.tsx).
     enteredAt: '',
-    entryScreenshotKey: '',
-    entryScreenshotReadUrl: '',
     tradingViewUrl: '',
     plannedRR: 2,
     outcome: '',
@@ -173,13 +168,18 @@ function serverErrorMessage(state: CreateTrainingTradeActionState): string {
 }
 
 export function TrainingFormWizard({
+  timezone,
   sessionId = null,
   sessionLabel = null,
 }: {
+  /** F2 — member IANA timezone: the entry wall-clock defaults to "now" in the
+   *  member's set timezone and round-trips through the server unchanged (never
+   *  the device's). */
+  timezone: string;
   /** S8 — when set, the backtest is logged inside this parent session. */
   sessionId?: string | null;
   sessionLabel?: string | null;
-} = {}) {
+}) {
   const [draft, setDraft] = useState<TrainingDraftState>(() => emptyDraft());
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState<StepIndex>(0);
@@ -198,15 +198,19 @@ export function TrainingFormWizard({
 
   useEffect(() => {
     const restored = loadDraft();
-    // Browser-local default for the entry time, applied post-mount so the SSR
-    // render stays deterministic (no hydration mismatch on the datetime-local).
+    // F2 — default the entry time to "now" in the MEMBER's set timezone (not the
+    // device's), applied post-mount so the SSR render stays deterministic (no
+    // hydration mismatch on the datetime-local). The member submits this raw
+    // wall-clock; the server re-interprets it in the same set timezone, so the
+    // round-trip is offset-stable even on a device clocked elsewhere (canon:
+    // trade-form-wizard.tsx).
     if (!restored.enteredAt) {
-      restored.enteredAt = nowIsoLocal();
+      restored.enteredAt = formatDateTimeLocalInput(new Date(), timezone);
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(restored);
     setHydrated(true);
-  }, []);
+  }, [timezone]);
 
   useEffect(() => {
     if (hydrated) persistDraft(draft);
@@ -238,10 +242,10 @@ export function TrainingFormWizard({
     const stepFields = STEP_FIELDS[s] ?? [];
     const candidate = {
       pair: draft.pair,
-      entryScreenshotKey: draft.entryScreenshotKey,
-      // F1 — optional URL: '' (untouched) → undefined so the optional schema
-      // short-circuits (an empty string is not a valid URL).
-      tradingViewUrl: draft.tradingViewUrl || undefined,
+      // J1 — mandatory TradingView link (replaces the former screenshot). Pass
+      // the raw trimmed value so the required schema's `.min(1)` surfaces the
+      // clean "obligatoire" message on an empty step.
+      tradingViewUrl: draft.tradingViewUrl.trim(),
       plannedRR: draft.plannedRR,
       outcome: draft.outcome === '' ? null : draft.outcome,
       resultR: draft.resultR === '' ? null : draft.resultR,
@@ -253,7 +257,13 @@ export function TrainingFormWizard({
       emotionalStateNoted: draft.emotionalStateNoted || undefined,
       noImpulsiveDeviation: draft.noImpulsiveDeviation || undefined,
       lessonLearned: draft.lessonLearned,
-      enteredAt: draft.enteredAt ? new Date(draft.enteredAt) : new Date(NaN),
+      // F2 — validate against the SAME instant the server stores: interpret the
+      // wall-clock in the member's set timezone (mirror of createTrainingTradeAction's
+      // memberWallClock), not the DEVICE timezone, so a device clock ahead of the
+      // set zone can't trip a false "Date dans le futur." on a "now" backtest.
+      enteredAt: draft.enteredAt
+        ? (localWallClockToUtc(draft.enteredAt, timezone) ?? new Date(draft.enteredAt))
+        : new Date(NaN),
     };
     const result = trainingTradeCreateSchema.safeParse(candidate);
     if (result.success) return true;
@@ -299,11 +309,14 @@ export function TrainingFormWizard({
 
     const fd = new FormData();
     fd.set('pair', draft.pair);
-    fd.set('enteredAt', new Date(draft.enteredAt).toISOString());
-    fd.set('entryScreenshotKey', draft.entryScreenshotKey);
-    // F1 — optional TradingView link: only send when non-empty (server reads
-    // null when omitted), mirroring the resultR guarded set above.
-    if (draft.tradingViewUrl !== '') fd.set('tradingViewUrl', draft.tradingViewUrl);
+    // F2 — post the RAW datetime-local wall-clock. The server re-interprets it
+    // as a moment in the member's set timezone (createTrainingTradeAction →
+    // memberWallClock), giving a correct UTC instant even when the device clock
+    // is in another timezone. Previously `new Date(...).toISOString()` baked in
+    // the BROWSER timezone here (canon: trade-form-wizard.tsx).
+    fd.set('enteredAt', draft.enteredAt);
+    // J1 — mandatory TradingView link (replaces the former screenshot upload).
+    fd.set('tradingViewUrl', draft.tradingViewUrl.trim());
     fd.set('plannedRR', String(draft.plannedRR));
     if (draft.outcome) fd.set('outcome', draft.outcome);
     if (draft.resultR !== '') fd.set('resultR', draft.resultR);
@@ -431,6 +444,7 @@ export function TrainingFormWizard({
                 update={update}
                 fieldErrors={fieldErrors}
                 disabled={pending}
+                timezone={timezone}
               />
             ) : null}
             {step === 1 ? (
@@ -511,22 +525,22 @@ export function TrainingFormWizard({
               kind="primary"
               size="m"
               onClick={submit}
-              disabled={pending || !draft.entryScreenshotKey}
+              disabled={pending || !draft.tradingViewUrl.trim()}
               loading={pending}
-              kbd={pending || !draft.entryScreenshotKey ? undefined : '↵'}
-              aria-describedby={!draft.entryScreenshotKey ? 'training-submit-hint' : undefined}
+              kbd={pending || !draft.tradingViewUrl.trim() ? undefined : '↵'}
+              aria-describedby={!draft.tradingViewUrl.trim() ? 'training-submit-hint' : undefined}
               type="button"
             >
               {pending ? 'Enregistrement…' : 'Enregistrer le backtest'}
             </Btn>
           )}
         </div>
-        {step === TOTAL_STEPS - 1 && !draft.entryScreenshotKey ? (
+        {step === TOTAL_STEPS - 1 && !draft.tradingViewUrl.trim() ? (
           <p
             id="training-submit-hint"
             className="text-right text-[11px] text-[var(--t-4)] tabular-nums"
           >
-            Ajoute la capture (étape 2) pour activer l&apos;enregistrement.
+            Colle ton lien TradingView (étape 2) pour activer l&apos;enregistrement.
           </p>
         ) : null}
       </nav>
@@ -545,7 +559,13 @@ interface StepProps {
   disabled?: boolean | undefined;
 }
 
-function StepPairDate({ draft, update, fieldErrors, disabled }: StepProps) {
+function StepPairDate({
+  draft,
+  update,
+  fieldErrors,
+  disabled,
+  timezone,
+}: StepProps & { timezone: string }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
@@ -575,7 +595,8 @@ function StepPairDate({ draft, update, fieldErrors, disabled }: StepProps) {
           </p>
         ) : (
           <p id="enteredAt-hint" className="t-cap text-[var(--t-4)]">
-            Quand tu as analysé ce backtest. Pré-rempli à maintenant.
+            Quand tu as analysé ce backtest. Heure locale ({timezoneCityLabel(timezone)}) —
+            pré-rempli à maintenant.
           </p>
         )}
       </div>
@@ -591,72 +612,77 @@ function StepPairDate({ draft, update, fieldErrors, disabled }: StepProps) {
 }
 
 function StepCapture({ draft, update, fieldErrors, disabled }: StepProps) {
+  const trimmed = draft.tradingViewUrl.trim();
+  const looksValid = trimmed.length > 0 && isTradingViewUrl(trimmed);
   return (
     <div className="flex flex-col gap-3">
       <p className="t-body text-[var(--t-2)]">
-        Capture ton analyse TradingView (le setup que tu testes). Obligatoire — c&apos;est la base
-        de la correction.
+        Colle le lien TradingView de ton analyse (le setup que tu testes). Obligatoire — c&apos;est
+        la base de la correction.
       </p>
-      <ScreenshotUploader
-        kind="training-entry"
-        name="entryScreenshotKey"
-        initialKey={draft.entryScreenshotKey || null}
-        initialReadUrl={draft.entryScreenshotReadUrl || null}
-        disabled={disabled}
-        error={fieldErrors.entryScreenshotKey}
-        onUploaded={({ key, readUrl }) => {
-          update('entryScreenshotKey', key);
-          update('entryScreenshotReadUrl', readUrl);
-        }}
-        onCleared={() => {
-          update('entryScreenshotKey', '');
-          update('entryScreenshotReadUrl', '');
-        }}
-      />
 
-      {/* F1 — optional TradingView link, beside the mandatory capture. Pasting
-          the chart link (snapshot « /x/ » or layout « /chart/ ») in one move,
-          in ADDITION to the screenshot. Never gates submit (the screenshot is
-          the only requirement). */}
       <div className="flex flex-col gap-1.5">
         <label htmlFor="tradingViewUrl" className="t-eyebrow-lg text-[var(--t-3)]">
-          Lien TradingView <span className="font-normal text-[var(--t-4)]">(optionnel)</span>
+          Lien TradingView
         </label>
-        <input
-          id="tradingViewUrl"
-          type="url"
-          inputMode="url"
-          autoComplete="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          value={draft.tradingViewUrl}
-          onChange={(e) => update('tradingViewUrl', e.target.value)}
-          disabled={disabled}
-          placeholder="https://www.tradingview.com/x/…"
-          aria-invalid={fieldErrors.tradingViewUrl ? 'true' : undefined}
-          aria-describedby={
-            fieldErrors.tradingViewUrl ? 'tradingViewUrl-error' : 'tradingViewUrl-hint'
-          }
-          className={cn(
-            'rounded-input h-11 w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
-            'placeholder:text-[var(--t-4)]',
-            fieldErrors.tradingViewUrl
-              ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
-              : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--cy)]',
-            'focus-visible:ring-2 focus-visible:ring-[var(--cy-dim)]',
-            'disabled:cursor-not-allowed disabled:opacity-60',
-          )}
-        />
+        <div className="relative">
+          <Link2
+            className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--t-4)]"
+            aria-hidden
+          />
+          <input
+            id="tradingViewUrl"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={draft.tradingViewUrl}
+            onChange={(e) => update('tradingViewUrl', e.target.value)}
+            disabled={disabled}
+            placeholder="https://www.tradingview.com/x/…"
+            aria-invalid={fieldErrors.tradingViewUrl ? 'true' : undefined}
+            aria-describedby={
+              fieldErrors.tradingViewUrl ? 'tradingViewUrl-error' : 'tradingViewUrl-hint'
+            }
+            className={cn(
+              'rounded-input h-11 w-full border bg-[var(--bg-1)] py-2 pr-10 pl-9 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
+              'placeholder:text-[var(--t-4)]',
+              fieldErrors.tradingViewUrl
+                ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+                : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--cy)]',
+              'focus-visible:ring-2 focus-visible:ring-[var(--cy-dim)]',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+            )}
+          />
+          {looksValid ? (
+            <Check
+              className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-[var(--good)]"
+              aria-hidden
+            />
+          ) : null}
+        </div>
         {fieldErrors.tradingViewUrl ? (
           <p id="tradingViewUrl-error" className="text-[11px] text-[var(--bad)]" role="alert">
             {fieldErrors.tradingViewUrl}
           </p>
         ) : (
           <p id="tradingViewUrl-hint" className="t-cap text-[var(--t-4)]">
-            Colle le lien de ton analyse (snapshot « /x/ » ou chart « /chart/ »). En plus de la
-            capture, pas à sa place.
+            Colle le lien de ton analyse (snapshot « /x/ » ou chart « /chart/ »). Plus fiable et
+            plus léger qu&apos;une capture.
           </p>
         )}
+        {looksValid ? (
+          <a
+            href={trimmed}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex w-fit items-center gap-1 text-[11px] font-medium text-[var(--cy)] underline-offset-2 hover:underline"
+          >
+            Ouvrir l&apos;aperçu
+            <ExternalLink className="h-3 w-3" aria-hidden />
+          </a>
+        ) : null}
       </div>
     </div>
   );

@@ -8,16 +8,11 @@ import type { SerializedTrainingDebrief } from '@/lib/training-debrief/service';
  * timeline is a recul mirror, not a scoreboard: no streak, no score, no
  * gamification (SPEC §23 calm invariant). Server Component.
  *
- * V1.9 TIER F perf — `Intl.DateTimeFormat` hoisted at module level so the
- * (≤12) rows don't each instantiate one.
+ * V1.9 TIER F perf — the week-range formatter (a civil-date pin, UTC frame)
+ * stays hoisted at module level. The submission-INSTANT formatter is built once
+ * per render from the member `timezone` prop (F2) and reused across the rows.
  */
 
-const FMT_SUBMITTED_AT_FR = new Intl.DateTimeFormat('fr-FR', {
-  day: '2-digit',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 const FMT_WEEK_RANGE_DAY = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'short',
@@ -48,9 +43,19 @@ function FormattedRange({ weekStart }: { weekStart: string }) {
 
 export function TrainingDebriefTimeline({
   debriefs,
+  timezone = 'Europe/Paris',
 }: {
   debriefs: readonly SerializedTrainingDebrief[];
+  /** F2 — member IANA timezone for the submission instant. Defaults to Paris. */
+  timezone?: string;
 }) {
+  const fmtSubmittedAt = new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone,
+  });
   if (debriefs.length === 0) {
     return (
       <div
@@ -83,7 +88,7 @@ export function TrainingDebriefTimeline({
               Semaine du <FormattedRange weekStart={d.weekStart} />
             </p>
             <p className="t-cap font-mono text-[var(--t-3)]">
-              {FMT_SUBMITTED_AT_FR.format(new Date(d.submittedAt))}
+              {fmtSubmittedAt.format(new Date(d.submittedAt))}
             </p>
           </header>
           <dl className="mt-2 flex flex-col gap-1.5">

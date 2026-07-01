@@ -11,16 +11,11 @@ import type { SerializedMindsetCheck } from '@/lib/mindset/service';
  * NEVER a fabricated 0 (§27.4). DS-v2 NEUTRAL (no cyan, no `.v18-theme`).
  * Server Component; the profile is computed PURELY per row (no DB).
  *
- * V1.9 TIER F perf — `Intl.DateTimeFormat` hoisted at module level so the
- * (≤12) rows don't each instantiate one.
+ * V1.9 TIER F perf — the week-range day formatter (a civil-date pin, UTC frame)
+ * stays hoisted. The submission-INSTANT (HH:mm) formatter is built once per
+ * render from the member `timezone` prop (F2) and reused across the rows.
  */
 
-const FMT_UPDATED_AT_FR = new Intl.DateTimeFormat('fr-FR', {
-  day: '2-digit',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 const FMT_DAY_FR = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'short',
@@ -51,7 +46,21 @@ function readingOf(check: SerializedMindsetCheck): RowReading {
   return { overall: profile.overall, strengthLabel: strength?.label ?? null };
 }
 
-export function MindsetTimeline({ checks }: { checks: readonly SerializedMindsetCheck[] }) {
+export function MindsetTimeline({
+  checks,
+  timezone = 'Europe/Paris',
+}: {
+  checks: readonly SerializedMindsetCheck[];
+  /** F2 — member IANA timezone for the submission instant. Defaults to Paris. */
+  timezone?: string;
+}) {
+  const fmtUpdatedAt = new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone,
+  });
   if (checks.length === 0) {
     return (
       <div
@@ -82,7 +91,7 @@ export function MindsetTimeline({ checks }: { checks: readonly SerializedMindset
                 <time dateTime={c.weekEnd}>{fmtDay(c.weekEnd)}</time>
               </p>
               <p className="t-cap font-mono text-[var(--t-3)]">
-                {FMT_UPDATED_AT_FR.format(new Date(c.updatedAt))}
+                {fmtUpdatedAt.format(new Date(c.updatedAt))}
               </p>
             </header>
             <dl className="mt-2 flex flex-col gap-1.5">

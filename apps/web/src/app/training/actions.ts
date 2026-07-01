@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
+import { localWallClockToUtc } from '@/lib/checkin/timezone';
 import { sendTrainingReplyReceivedEmail } from '@/lib/email/send';
 import { enqueueTrainingReplyNotification } from '@/lib/notifications/enqueue';
 import { trainingReplyCreateSchema } from '@/lib/schemas/training-annotation';
@@ -23,6 +24,19 @@ import { createTrainingTrade } from '@/lib/training/training-trade-service';
 function readChecklistField(formData: FormData, key: string): string | undefined {
   const v = formData.get(key);
   return typeof v === 'string' ? v : undefined;
+}
+
+/**
+ * F2 — interpret a `datetime-local` wall-clock string submitted by the member
+ * as a moment in THEIR set timezone, converted to a UTC instant server-side
+ * (deterministic; the device timezone no longer leaks into stored backtest
+ * times). EXACT mirror of `journal/actions.ts` `memberWallClock`. Non-string or
+ * unparseable values fall through unchanged so the Zod `z.coerce.date()` still
+ * surfaces "Date invalide." on garbage and accepts already-absolute Dates.
+ */
+function memberWallClock(value: FormDataEntryValue | null, timezone: string): unknown {
+  if (typeof value !== 'string') return value;
+  return localWallClockToUtc(value, timezone) ?? value;
 }
 
 /**
@@ -80,16 +94,21 @@ export async function createTrainingTradeAction(
     return { ok: false, error: 'unauthorized' };
   }
 
+  // F2 — the member's set timezone is authoritative for the entry wall-clock
+  // (mirror of journal/actions.ts createTradeAction).
+  const timezone = session.user.timezone || 'Europe/Paris';
   const rawOutcome = formData.get('outcome');
   const rawResultR = formData.get('resultR');
   const rawTradingViewUrl = formData.get('tradingViewUrl');
   const raw = {
     pair: formData.get('pair'),
-    entryScreenshotKey: formData.get('entryScreenshotKey'),
-    // F1 — optional TradingView link. Empty/absent → null so the optional
-    // schema short-circuits (the wizard sends it GUARDED, like resultR).
-    tradingViewUrl:
-      rawTradingViewUrl === '' || rawTradingViewUrl == null ? null : rawTradingViewUrl,
+    // J1 — legacy screenshot key now OPTIONAL, no longer sent by the wizard.
+    // Coerce absent/'' → undefined so the optional Zod string passes.
+    entryScreenshotKey: formData.get('entryScreenshotKey') || undefined,
+    // J1 — MANDATORY TradingView link (replaces the former screenshot upload).
+    // Coerce absent → '' so the required schema's `.min(1)` surfaces the clean
+    // "obligatoire" message rather than a generic "expected string".
+    tradingViewUrl: rawTradingViewUrl ?? '',
     plannedRR: formData.get('plannedRR'),
     // Optional backtest result — empty/absent → null (mirrors the real
     // open/close split: a backtest may be logged before the result is set).
@@ -103,7 +122,7 @@ export async function createTrainingTradeAction(
     emotionalStateNoted: readChecklistField(formData, 'emotionalStateNoted'),
     noImpulsiveDeviation: readChecklistField(formData, 'noImpulsiveDeviation'),
     lessonLearned: formData.get('lessonLearned'),
-    enteredAt: formData.get('enteredAt'),
+    enteredAt: memberWallClock(formData.get('enteredAt'), timezone),
   };
 
   const parsed = trainingTradeCreateSchema.safeParse(raw);
@@ -122,7 +141,9 @@ export async function createTrainingTradeAction(
   // session, otherwise a member could attach another member's upload to
   // their own backtest. `trainingKeyBelongsTo` never cross-accepts a
   // real-edge `trades/` key (statistical isolation §21.5).
-  if (!trainingKeyBelongsTo(data.entryScreenshotKey, session.user.id)) {
+  // J1 — the screenshot is now OPTIONAL, so only enforce ownership when a
+  // legacy key is present (the wizard no longer uploads one).
+  if (data.entryScreenshotKey && !trainingKeyBelongsTo(data.entryScreenshotKey, session.user.id)) {
     return {
       ok: false,
       error: 'invalid_input',
@@ -159,8 +180,8 @@ export async function createTrainingTradeAction(
     const trade = await createTrainingTrade({
       userId: session.user.id,
       pair: data.pair,
-      entryScreenshotKey: data.entryScreenshotKey,
-      tradingViewUrl: data.tradingViewUrl ?? null,
+      entryScreenshotKey: data.entryScreenshotKey ?? null,
+      tradingViewUrl: data.tradingViewUrl,
       plannedRR: data.plannedRR,
       outcome: data.outcome ?? null,
       resultR: data.resultR ?? null,

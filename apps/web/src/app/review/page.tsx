@@ -16,14 +16,10 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Revue hebdo' };
 
-// V1.9 TIER F — hoisted at module level so the 12 timeline rows don't each
-// instantiate a new `Intl.DateTimeFormat` (per-row cost ~0.5 ms × N rows).
-const FMT_SUBMITTED_AT_FR = new Intl.DateTimeFormat('fr-FR', {
-  day: '2-digit',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-});
+// V1.9 TIER F — `FMT_WEEK_RANGE_DAY` stays hoisted at module level: the week
+// range is a civil-date pin, always rendered in the UTC frame. The submission
+// INSTANT formatter is built per request inside the component instead — F2 needs
+// the MEMBER's timezone (session-derived), unavailable at module load.
 const FMT_WEEK_RANGE_DAY = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'short',
@@ -57,6 +53,18 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
   const justSubmitted = sp.done === '1';
 
   const recent = await listMyRecentReviews(session.user.id, 12);
+
+  // F2 — submission timestamps render in the MEMBER's timezone. Built once per
+  // request and reused across the ≤12 rows (keeps the single-instantiation
+  // intent of the original module-level formatter, now that the zone is dynamic).
+  const timezone = session.user.timezone || 'Europe/Paris';
+  const fmtSubmittedAt = new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone,
+  });
 
   return (
     <V18ThemeScope>
@@ -153,7 +161,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
                           Semaine du <FormattedRange weekStart={r.weekStart} weekEnd={r.weekEnd} />
                         </p>
                         <p className="t-cap font-mono text-[var(--t-3)]">
-                          {FMT_SUBMITTED_AT_FR.format(new Date(r.submittedAt))}
+                          {fmtSubmittedAt.format(new Date(r.submittedAt))}
                         </p>
                       </header>
                       <p className="t-body mt-2 line-clamp-2 text-[var(--t-2)]">

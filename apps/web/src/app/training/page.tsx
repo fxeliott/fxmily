@@ -76,6 +76,8 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
   // weaker than its own Server Action (`createTrainingTradeAction`).
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
+  const timezone = session.user.timezone || 'Europe/Paris';
+
   const { outcome: rawOutcome, cursor: rawCursor } = await searchParams;
   const outcome = parseTrainingOutcome(rawOutcome);
   const cursor = parseTrainingCursor(rawCursor);
@@ -232,7 +234,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                       aria-label={`Ouvrir la session ${s.label?.trim() || 'sans nom'} (${s.tradeCount} backtest${s.tradeCount > 1 ? 's' : ''})`}
                       className="rounded-card block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--cy)]"
                     >
-                      <TrainingSessionCard session={s} />
+                      <TrainingSessionCard session={s} timezone={timezone} />
                     </Link>
                   </HoverGlowLift>
                 </li>
@@ -344,7 +346,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
               </Card>
             ) : (
               <>
-                <TrainingEquityCard points={equityPoints} total={stats.total} />
+                <TrainingEquityCard points={equityPoints} total={stats.total} timezone={timezone} />
                 <ul className="flex flex-col gap-3">
                   {items.map((trade) => (
                     <li key={trade.id}>
@@ -352,6 +354,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                         trade={trade}
                         href={`/training/${trade.id}`}
                         unseenAnnotationsCount={unseenMap.get(trade.id) ?? 0}
+                        timezone={timezone}
                       />
                     </li>
                   ))}

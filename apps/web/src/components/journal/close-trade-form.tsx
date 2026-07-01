@@ -1,48 +1,54 @@
 'use client';
 
-import { Check, TrendingDown, TrendingUp } from 'lucide-react';
+import { Check, Link2, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useActionState, useEffect, useState } from 'react';
 
 import { closeTradeAction, type CloseTradeActionState } from '@/app/journal/actions';
 import { Alert } from '@/components/alert';
 import { EmotionPicker } from '@/components/journal/emotion-picker';
-import { ScreenshotUploader } from '@/components/journal/screenshot-uploader';
 import { TradeTagsPicker } from '@/components/journal/trade-tags-picker';
 import { Btn, btnVariants } from '@/components/ui/btn';
 import type { TradeTagSlug } from '@/lib/schemas/trade';
+import { isTradingViewUrl } from '@/lib/schemas/tradingview-url';
+import { formatDateTimeLocalInput } from '@/lib/timezones';
 import { cn } from '@/lib/utils';
 
 interface CloseTradeFormProps {
   tradeId: string;
-  /** Entry instant (ISO UTC) — the exit default is derived from it CLIENT-side. */
+  /** Entry instant (ISO UTC) — the exit default is derived from it. */
   enteredAtIso: string;
+  /** F2 — member's set timezone; drives the exit-time default + the server
+   * wall-clock → UTC conversion (symmetric with the entry wizard). */
+  timezone: string;
 }
 
 const initialState: CloseTradeActionState = { ok: false };
 
 /**
- * B1 fix (S2 audit review 2026-06-11) : the default exit value MUST be
- * computed in the BROWSER. The previous server-computed default used the
- * server's wall clock (UTC in prod) ; once `submitWithUtcExit` re-interprets
- * the datetime-local string in the member's timezone, a server-rendered
- * default would shift the stored instant by the member's UTC offset on the
- * most common path (close « now », default untouched). Browser getters =
- * member timezone, end to end.
+ * Default exit value = max(now, entry + 1h), rendered as a `datetime-local`
+ * wall-clock in the member's SET timezone.
+ *
+ * F2 — the member's set timezone (settings), not the device's, is authoritative
+ * end to end: this default is built in it, and the server re-interprets the
+ * submitted wall-clock in the same set timezone (see `memberWallClock` in
+ * journal/actions.ts). The two are offset-symmetric, so closing « now » with the
+ * default untouched stores exactly the displayed instant. (Supersedes the S2
+ * audit B1 fix, which relied on the BROWSER timezone matching the member's.)
  */
-function defaultExitLocalFrom(enteredAtIso: string): string {
+function defaultExitLocalFrom(enteredAtIso: string, timezone: string): string {
   const entered = new Date(enteredAtIso);
   const proposed = new Date(Math.max(Date.now(), entered.getTime() + 60 * 60 * 1000));
-  const pad = (n: number) => `${n}`.padStart(2, '0');
-  return `${proposed.getFullYear()}-${pad(proposed.getMonth() + 1)}-${pad(proposed.getDate())}T${pad(proposed.getHours())}:${pad(proposed.getMinutes())}`;
+  return formatDateTimeLocalInput(proposed, timezone);
 }
 
-export function CloseTradeForm({ tradeId, enteredAtIso }: CloseTradeFormProps) {
+export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFormProps) {
   const action = closeTradeAction.bind(null, tradeId);
   const [state, formAction, pending] = useActionState(action, initialState);
   const [emotionDuring, setEmotionDuring] = useState<string[]>([]);
   const [emotionAfter, setEmotionAfter] = useState<string[]>([]);
-  const [screenshotKey, setScreenshotKey] = useState<string>('');
+  // J1 — mandatory TradingView exit link (replaces the exit screenshot upload).
+  const [tradingViewExitUrl, setTradingViewExitUrl] = useState<string>('');
   const [tags, setTags] = useState<TradeTagSlug[]>([]);
   // SSR-safe : empty on the server render, filled with the BROWSER-local
   // default after mount (canon hydration pattern — setState in effect is the
@@ -50,8 +56,8 @@ export function CloseTradeForm({ tradeId, enteredAtIso }: CloseTradeFormProps) {
   const [exitedAtLocal, setExitedAtLocal] = useState<string>('');
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setExitedAtLocal(defaultExitLocalFrom(enteredAtIso));
-  }, [enteredAtIso]);
+    setExitedAtLocal(defaultExitLocalFrom(enteredAtIso, timezone));
+  }, [enteredAtIso, timezone]);
 
   const topError = state.ok
     ? null
@@ -69,28 +75,17 @@ export function CloseTradeForm({ tradeId, enteredAtIso }: CloseTradeFormProps) {
 
   const submitDisabled =
     pending ||
-    screenshotKey.length === 0 ||
+    tradingViewExitUrl.trim().length === 0 ||
     emotionDuring.length === 0 ||
     emotionAfter.length === 0;
 
-  // TIER2 fix (S2 audit 2026-06-11) : the raw `datetime-local` string was
-  // POSTed verbatim and parsed SERVER-side (`z.coerce.date()`), i.e. in the
-  // server timezone (UTC in prod) — a Paris member's declared 18:30 exit was
-  // stored as 18:30 UTC (= 20:30 Paris), asymmetric with `enteredAt` which the
-  // entry wizard already converts in the browser (`new Date(...).toISOString()`,
-  // trade-form-wizard fd.set). Convert here too : the browser's Date parser
-  // interprets datetime-local in the MEMBER's timezone, restoring symmetry.
-  const submitWithUtcExit = (fd: FormData) => {
-    const raw = fd.get('exitedAt');
-    if (typeof raw === 'string' && raw.length > 0) {
-      const d = new Date(raw);
-      if (!Number.isNaN(d.getTime())) fd.set('exitedAt', d.toISOString());
-    }
-    formAction(fd);
-  };
-
+  // F2 — the raw `datetime-local` wall-clock is POSTed verbatim and converted to
+  // a UTC instant SERVER-side in the member's SET timezone (see `memberWallClock`
+  // in journal/actions.ts), symmetric with the entry wizard. The previous
+  // client-side `new Date(raw).toISOString()` baked in the DEVICE timezone, which
+  // diverged from the member's set timezone for anyone not on Paris-time hardware.
   return (
-    <form action={submitWithUtcExit} className="flex flex-col gap-5" noValidate>
+    <form action={formAction} className="flex flex-col gap-5" noValidate>
       {topError ? <Alert tone="danger">{topError}</Alert> : null}
 
       {/* Date sortie */}
@@ -333,23 +328,64 @@ export function CloseTradeForm({ tradeId, enteredAtIso }: CloseTradeFormProps) {
         />
       </div>
 
-      {/* Screenshot exit */}
-      <div className="flex flex-col gap-2">
-        <span className="t-eyebrow-lg text-[var(--t-3)]">Capture après sortie</span>
-        <ScreenshotUploader
-          kind="trade-exit"
-          name="screenshotExitKey"
-          disabled={pending}
-          error={state.fieldErrors?.screenshotExitKey}
-          onUploaded={({ key }) => setScreenshotKey(key)}
-          onCleared={() => setScreenshotKey('')}
-        />
+      {/* J1 — TradingView exit link (replaces the exit screenshot upload) */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="tradingViewExitUrl" className="t-eyebrow-lg text-[var(--t-3)]">
+          Lien TradingView de sortie
+        </label>
+        <div className="relative">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--t-4)]"
+          >
+            <Link2 className="h-4 w-4" strokeWidth={1.75} />
+          </span>
+          <input
+            id="tradingViewExitUrl"
+            name="tradingViewExitUrl"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="https://www.tradingview.com/x/…"
+            value={tradingViewExitUrl}
+            onChange={(e) => setTradingViewExitUrl(e.target.value)}
+            disabled={pending}
+            aria-invalid={state.fieldErrors?.tradingViewExitUrl ? 'true' : undefined}
+            className={cn(
+              'rounded-input h-11 w-full border bg-[var(--bg-1)] pr-10 pl-9 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
+              state.fieldErrors?.tradingViewExitUrl
+                ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+                : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+              'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+            )}
+          />
+          {tradingViewExitUrl.trim().length > 0 && isTradingViewUrl(tradingViewExitUrl.trim()) ? (
+            <span
+              aria-hidden="true"
+              className="absolute top-1/2 right-3 -translate-y-1/2 text-[var(--good)]"
+            >
+              <Check className="h-4 w-4" strokeWidth={2} />
+            </span>
+          ) : null}
+        </div>
+        {state.fieldErrors?.tradingViewExitUrl ? (
+          <p className="text-[11px] text-[var(--bad)]" role="alert">
+            {state.fieldErrors.tradingViewExitUrl}
+          </p>
+        ) : (
+          <p className="t-cap text-[var(--t-4)]">
+            Lien <code className="font-mono">tradingview.com</code> de ta sortie — la preuve de ta
+            gestion jusqu&apos;au bout.
+          </p>
+        )}
       </div>
 
       {/* Submit gate hint */}
       {submitDisabled && !pending ? (
         <p id="close-submit-hint" className="text-right text-[11px] text-[var(--t-4)] tabular-nums">
-          Capture {screenshotKey.length === 0 ? '✗' : '✓'} · Pendant{' '}
+          Lien {tradingViewExitUrl.trim().length === 0 ? '✗' : '✓'} · Pendant{' '}
           {emotionDuring.length === 0 ? '✗' : '✓'} · Après {emotionAfter.length === 0 ? '✗' : '✓'}
         </p>
       ) : null}

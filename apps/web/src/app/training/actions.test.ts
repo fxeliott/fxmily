@@ -80,6 +80,10 @@ function form(fields: Record<string, string>): FormData {
 function validForm(overrides: Record<string, string> = {}): FormData {
   return form({
     pair: 'EURUSD',
+    // J1 — the TradingView link is now the required primary field; the
+    // screenshot key stays legacy-optional (still provided here to keep the
+    // BOLA-guard tests exercising a present key).
+    tradingViewUrl: 'https://www.tradingview.com/x/NQe0OrXz/',
     entryScreenshotKey: OWN_KEY,
     plannedRR: '2',
     systemRespected: 'true',
@@ -208,8 +212,8 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
       userId: MEMBER_ID,
       pair: 'EURUSD',
       entryScreenshotKey: OWN_KEY,
-      // F1 — no link in the form → null bridge (mirror outcome/resultR).
-      tradingViewUrl: null,
+      // J1 — the required TradingView link passes straight through to the service.
+      tradingViewUrl: 'https://www.tradingview.com/x/NQe0OrXz/',
       plannedRR: 2,
       outcome: null,
       resultR: null,
@@ -272,6 +276,59 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
     // §21.5 — the link is process metadata; it must NEVER reach the audit trail.
     const auditArg = logAuditMock.mock.calls[0]?.[0] as { metadata: Record<string, unknown> };
     expect(auditArg.metadata).not.toHaveProperty('tradingViewUrl');
+  });
+});
+
+describe('createTrainingTradeAction — F2 enteredAt interpreted in the member SET timezone', () => {
+  // The wizard posts the RAW `datetime-local` wall-clock (no offset). The action
+  // re-interprets it in `session.user.timezone` server-side (memberWallClock →
+  // localWallClockToUtc), so the stored instant is correct even when the member's
+  // DEVICE clock is in another zone. This is the symmetric mirror of the journal.
+  it('converts a bare wall-clock in a member NY timezone (EDT = UTC-4) to the right UTC instant', async () => {
+    authMock.mockResolvedValue({
+      user: { id: MEMBER_ID, status: 'active', timezone: 'America/New_York' },
+    });
+    // 14:30 wall-clock on 2026-05-06 in New York (DST, UTC-4) → 18:30Z.
+    await expect(
+      createTrainingTradeAction(null, validForm({ enteredAt: '2026-05-06T14:30' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    const arg = createTrainingTradeMock.mock.calls[0]?.[0] as { enteredAt: Date };
+    expect(arg.enteredAt.toISOString()).toBe('2026-05-06T18:30:00.000Z');
+  });
+
+  it('interprets the SAME wall-clock differently for a Paris member (CEST = UTC+2 → 12:30Z)', async () => {
+    authMock.mockResolvedValue({
+      user: { id: MEMBER_ID, status: 'active', timezone: 'Europe/Paris' },
+    });
+    await expect(
+      createTrainingTradeAction(null, validForm({ enteredAt: '2026-05-06T14:30' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    const arg = createTrainingTradeMock.mock.calls[0]?.[0] as { enteredAt: Date };
+    expect(arg.enteredAt.toISOString()).toBe('2026-05-06T12:30:00.000Z');
+  });
+
+  it('falls back to Europe/Paris when the session carries no timezone', async () => {
+    // beforeEach default session has no `timezone` field → Paris fallback.
+    await expect(
+      createTrainingTradeAction(null, validForm({ enteredAt: '2026-05-06T14:30' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    const arg = createTrainingTradeMock.mock.calls[0]?.[0] as { enteredAt: Date };
+    expect(arg.enteredAt.toISOString()).toBe('2026-05-06T12:30:00.000Z');
+  });
+
+  it('still accepts an already-absolute ISO instant (Z suffix) unchanged', async () => {
+    authMock.mockResolvedValue({
+      user: { id: MEMBER_ID, status: 'active', timezone: 'America/New_York' },
+    });
+    await expect(
+      createTrainingTradeAction(null, validForm({ enteredAt: '2026-05-06T18:30:00.000Z' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    const arg = createTrainingTradeMock.mock.calls[0]?.[0] as { enteredAt: Date };
+    expect(arg.enteredAt.toISOString()).toBe('2026-05-06T18:30:00.000Z');
   });
 });
 

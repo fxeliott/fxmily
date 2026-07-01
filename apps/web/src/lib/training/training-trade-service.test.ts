@@ -49,7 +49,7 @@ function makeInput(overrides: Partial<CreateTrainingTradeInput> = {}): CreateTra
   return {
     userId: 'user-1',
     pair: 'EURUSD',
-    entryScreenshotKey: 'training/abcdefgh12345678/abcdefghijkl1234.jpg',
+    tradingViewUrl: 'https://www.tradingview.com/x/AbCdEf12/',
     plannedRR: 2.5,
     outcome: 'win',
     resultR: 1.8,
@@ -80,7 +80,7 @@ describe('createTrainingTrade', () => {
       data: {
         userId: string;
         pair: string;
-        entryScreenshotKey: string;
+        entryScreenshotKey: string | null;
         tradingViewUrl: string | null;
         plannedRR: { toString(): string };
         outcome: string | null;
@@ -92,9 +92,10 @@ describe('createTrainingTrade', () => {
     };
     expect(arg.data.userId).toBe('user-1');
     expect(arg.data.pair).toBe('EURUSD');
-    expect(arg.data.entryScreenshotKey).toBe('training/abcdefgh12345678/abcdefghijkl1234.jpg');
-    // F1 — absent input → null (the column stays nullable / optional).
-    expect(arg.data.tradingViewUrl).toBe(null);
+    // J1 — screenshot is now legacy-optional; absent input → null.
+    expect(arg.data.entryScreenshotKey).toBe(null);
+    // J1 — the TradingView link is the required primary field.
+    expect(arg.data.tradingViewUrl).toBe('https://www.tradingview.com/x/AbCdEf12/');
     expect(arg.data.plannedRR.toString()).toBe('2.5');
     expect(arg.data.outcome).toBe('win');
     expect(arg.data.resultR?.toString()).toBe('1.8');
@@ -125,7 +126,7 @@ describe('createTrainingTrade', () => {
     expect(result.resultR).toBe(null);
   });
 
-  it('persists + serializes an optional tradingViewUrl (F1)', async () => {
+  it('persists + serializes the required tradingViewUrl (J1)', async () => {
     const url = 'https://www.tradingview.com/x/NQe0OrXz/';
     vi.mocked(db.trainingTrade.create).mockResolvedValue(makeRow({ tradingViewUrl: url }) as never);
 

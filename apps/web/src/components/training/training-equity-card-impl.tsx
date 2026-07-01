@@ -58,6 +58,10 @@ export interface CumulativeKeptPoint {
  */
 export function buildCumulativeKept(
   points: ReadonlyArray<TrainingEquityPoint>,
+  /** F2 — member IANA timezone for the axis label. Optional so the pure-logic
+   *  unit test (which only asserts `kept`/`idx`) can omit it; production always
+   *  threads the member's set timezone so the day label is offset-correct. */
+  timezone?: string,
 ): CumulativeKeptPoint[] {
   const ordered = [...points].sort(
     (a, b) => new Date(a.enteredAt).getTime() - new Date(b.enteredAt).getTime(),
@@ -67,7 +71,12 @@ export function buildCumulativeKept(
     if (p.systemRespected === true) running += 1;
     return {
       idx: i + 1,
-      date: new Date(p.enteredAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+      // F2 — the member's local calendar day for this instant (not the device's).
+      date: new Date(p.enteredAt).toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'short',
+        timeZone: timezone,
+      }),
       kept: running,
     };
   });
@@ -75,8 +84,11 @@ export function buildCumulativeKept(
 
 export function TrainingEquityCardChart({
   points,
+  timezone,
 }: {
   points: ReadonlyArray<TrainingEquityPoint>;
+  /** F2 — member IANA timezone so the axis day labels match the member's locale. */
+  timezone: string;
 }) {
   const prefersReducedMotion = useReducedMotion();
   // S19 — theme-aware chart colors (was the static dark `C`): the cumulative
@@ -84,7 +96,7 @@ export function TrainingEquityCardChart({
   // #0e7c99, surfaces white, axes AA). Same SSR-safe hook the 7 other charts use.
   const C = useChartColors();
 
-  const formatted = useMemo(() => buildCumulativeKept(points), [points]);
+  const formatted = useMemo(() => buildCumulativeKept(points, timezone), [points, timezone]);
 
   const last = formatted[formatted.length - 1];
 

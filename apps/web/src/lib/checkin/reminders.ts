@@ -67,27 +67,6 @@ export async function runCheckinReminderScan(
     ranAt: now.toISOString(),
   };
 
-  // Fast path — V1 ships single-TZ (Europe/Paris). If neither morning nor
-  // evening window is due, skip the entire scan. When V2 introduces per-user
-  // timezones, this short-circuit becomes a per-TZ-bucket aware probe.
-  const probeTz = 'Europe/Paris';
-  const morningDueProbe = isMorningReminderDue(now, probeTz);
-  const eveningDueProbe = isEveningReminderDue(now, probeTz);
-  if (!morningDueProbe && !eveningDueProbe) {
-    await logAudit({
-      action: 'cron.checkin_reminders.scan',
-      metadata: {
-        scannedUsers: 0,
-        enqueuedMorning: 0,
-        enqueuedEvening: 0,
-        skipped: 0,
-        ranAt: result.ranAt,
-        reason: 'out_of_window',
-      },
-    });
-    return result;
-  }
-
   // Active members only. Admins are excluded (cf. SPEC posture: members are
   // the audience, admins self-onboard if they want).
   const users: ScanCandidate[] = await db.user.findMany({
@@ -107,9 +86,34 @@ export async function runCheckinReminderScan(
     return result;
   }
 
-  // Single bulk fetch of today's checkins for all candidates. We compute
-  // `today` per user (in case timezones differ in V2), but in V1 they all
-  // share Europe/Paris — so we collapse to a single per-TZ today.
+  // Per-TZ-bucket fast path (F2 — members can live in different timezones).
+  // A single Europe/Paris probe would SKIP a member whose LOCAL 07:30/20:30
+  // window is due while Paris is out-of-window (and conversely fire a scan a
+  // member doesn't need). We probe each DISTINCT timezone present in the cohort
+  // and short-circuit only when NO bucket is due — preserving the early return
+  // before the heavier per-day checkin bulk fetch + enqueue loop.
+  const distinctTzs = new Set(users.map((u) => u.timezone || 'Europe/Paris'));
+  const anyWindowDue = [...distinctTzs].some(
+    (tz) => isMorningReminderDue(now, tz) || isEveningReminderDue(now, tz),
+  );
+  if (!anyWindowDue) {
+    await logAudit({
+      action: 'cron.checkin_reminders.scan',
+      metadata: {
+        scannedUsers: 0,
+        enqueuedMorning: 0,
+        enqueuedEvening: 0,
+        skipped: 0,
+        ranAt: result.ranAt,
+        reason: 'out_of_window',
+      },
+    });
+    return result;
+  }
+
+  // Single bulk fetch of today's checkins for all candidates. `today` is
+  // computed per user in their own timezone (F2: members can differ), memoised
+  // per distinct TZ so the work collapses to one `localDateOf` per bucket.
   const todayByTz = new Map<string, string>();
   const todayLookup = (tz: string): string => {
     const cached = todayByTz.get(tz);

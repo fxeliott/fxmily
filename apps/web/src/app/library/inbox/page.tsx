@@ -15,11 +15,15 @@ import { listMyDeliveries } from '@/lib/cards/service';
 
 export const dynamic = 'force-dynamic';
 
-const DT = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
-
 export default async function InboxPage() {
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
+
+  // F2 — delivery timestamps carry a time component (`timeStyle: 'short'`), so
+  // they render in the member's own timezone — consistent with the dashboard
+  // `douglas-inbox-widget` which already formats the SAME data per zone. The
+  // formatter is built inside `DeliveryItem` from this threaded `timezone`.
+  const timezone = session.user.timezone || 'Europe/Paris';
 
   const deliveries = await listMyDeliveries(session.user.id, { take: 50 });
   const unread = deliveries.filter((d) => !d.seenAt);
@@ -75,7 +79,7 @@ export default async function InboxPage() {
                 </h2>
                 <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {unread.map((d) => (
-                    <DeliveryItem key={d.id} delivery={d} unread />
+                    <DeliveryItem key={d.id} delivery={d} timezone={timezone} unread />
                   ))}
                 </ul>
               </section>
@@ -90,7 +94,7 @@ export default async function InboxPage() {
                 </h2>
                 <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {read.map((d) => (
-                    <DeliveryItem key={d.id} delivery={d} />
+                    <DeliveryItem key={d.id} delivery={d} timezone={timezone} />
                   ))}
                 </ul>
               </section>
@@ -104,13 +108,21 @@ export default async function InboxPage() {
 
 function DeliveryItem({
   delivery: d,
+  timezone,
   unread = false,
 }: {
   delivery: Awaited<ReturnType<typeof listMyDeliveries>>[number];
+  /** F2 — member IANA timezone so the delivery timestamp shows in their locale. */
+  timezone: string;
   unread?: boolean;
 }) {
   const Icon = CATEGORY_ICON[d.cardCategory];
   const tone = CATEGORY_TONE[d.cardCategory];
+  const DT = new Intl.DateTimeFormat('fr-FR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: timezone,
+  });
   return (
     <li className="h-full">
       <HoverLift className="block h-full">

@@ -25,11 +25,17 @@ import { countUnseenDeliveries, listMyDeliveries } from '@/lib/cards/service';
 
 interface DouglasInboxWidgetProps {
   userId: string;
+  timezone?: string;
 }
 
-const DT_REL = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' });
+function formatDeliveryDate(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeZone: timezone }).format(date);
+}
 
-export async function DouglasInboxWidget({ userId }: DouglasInboxWidgetProps) {
+export async function DouglasInboxWidget({
+  userId,
+  timezone = 'Europe/Paris',
+}: DouglasInboxWidgetProps) {
   const [unseenCount, recent] = await Promise.all([
     countUnseenDeliveries(userId),
     listMyDeliveries(userId, { take: 3 }),
@@ -102,7 +108,7 @@ export async function DouglasInboxWidget({ userId }: DouglasInboxWidgetProps) {
                       {d.cardTitle}
                     </p>
                     <p className="t-foot text-[var(--t-3)]">
-                      {DT_REL.format(new Date(d.createdAt))} · {d.triggeredBy}
+                      {formatDeliveryDate(new Date(d.createdAt), timezone)} · {d.triggeredBy}
                     </p>
                   </div>
                 </Link>

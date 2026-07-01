@@ -2507,6 +2507,16 @@ model MeetingAttendance {
   /// complete attendance = `attendanceMode != null` AND `contentReviewed = true`.
   contentReviewed Boolean @default(false) @map("content_reviewed")
 
+  /// F4 — the member's EXPLICIT "je n'ai pas pu y assister". Distinct from a
+  /// not-yet-declared slot (`en_attente`, rattrapable) : `false` = never declared
+  /// absent (default, byte-identical to prior behaviour) · `true` = the member
+  /// acknowledged they missed this meeting. Declaring a presence
+  /// (`attendanceMode`) flips it back to `false` (mutually exclusive — a member
+  /// can't be present AND absent). Anti-Black-Hat §31.2 : an acknowledged absence
+  /// is a calm, honest data point, NEVER a red failure ; it never counts as a
+  /// completion (rate/engagement untouched — it only clarifies the "why nothing").
+  memberDeclaredAbsent Boolean @default(false) @map("member_declared_absent")
+
   /// S10 §30.8 — presence as DECLARED BY ELIOTT (admin), distinct from the
   /// member self-report above. The cross-check the brief calls "recoupement
   /// admin↔membre": null = admin said nothing (default — byte-identical to the

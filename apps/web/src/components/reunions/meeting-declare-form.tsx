@@ -1,8 +1,10 @@
 'use client';
 
+import { CircleSlash } from 'lucide-react';
 import { useActionState, useId } from 'react';
 
 import {
+  declareMeetingAbsenceAction,
   declareMeetingAttendanceAction,
   type DeclareMeetingAttendanceActionState,
 } from '@/app/reunions/actions';
@@ -27,6 +29,8 @@ interface MeetingDeclareFormProps {
   contentLabel: string;
   initialMode: MeetingAttendanceModeName | null;
   initialContentReviewed: boolean;
+  /** F4 — the member already declared they couldn't attend (mutually exclusive). */
+  initialDeclaredAbsent: boolean;
 }
 
 function feedbackMessage(state: DeclareMeetingAttendanceActionState | null): string | null {
@@ -60,76 +64,121 @@ export function MeetingDeclareForm({
   contentLabel,
   initialMode,
   initialContentReviewed,
+  initialDeclaredAbsent,
 }: MeetingDeclareFormProps) {
   const [state, formAction, pending] = useActionState<
     DeclareMeetingAttendanceActionState | null,
     FormData
   >(declareMeetingAttendanceAction, null);
+  // F4 — the "je n'ai pas pu y assister" path lives in its own form/action so it
+  // stays a single low-friction tap, independent of the mode+content declaration.
+  const [absenceState, absenceAction, absencePending] = useActionState<
+    DeclareMeetingAttendanceActionState | null,
+    FormData
+  >(declareMeetingAbsenceAction, null);
 
   const baseId = useId();
   const contentId = `${baseId}-content`;
   const message = feedbackMessage(state);
+  const absenceMessage = feedbackMessage(absenceState);
   const alreadyDeclared = initialMode !== null || initialContentReviewed;
 
   return (
-    <form
-      action={formAction}
-      className="flex flex-col gap-3 border-t border-[var(--b-default)] pt-3"
-    >
-      <input type="hidden" name="meetingId" value={meetingId} />
+    <div className="flex flex-col gap-3">
+      <form
+        action={formAction}
+        className="flex flex-col gap-3 border-t border-[var(--b-default)] pt-3"
+      >
+        <input type="hidden" name="meetingId" value={meetingId} />
 
-      {/* Native <fieldset>+<legend> groups the radios accessibly; radios
+        {/* Native <fieldset>+<legend> groups the radios accessibly; radios
           sharing `name="attendanceMode"` give arrow-key navigation + a single
           tab stop for free. No redundant `role="radiogroup"` (a11y T2-1). */}
-      <fieldset className="flex flex-col gap-1.5">
-        <legend className="t-cap text-[var(--t-3)]">Comment as-tu assisté ?</legend>
-        <div className="flex gap-2">
-          {MODE_OPTIONS.map(({ value, label }) => {
-            const optionId = `${baseId}-${value}`;
-            return (
-              <label
-                key={value}
-                htmlFor={optionId}
-                className="rounded-control flex min-h-11 flex-1 cursor-pointer items-center justify-center border border-[var(--b-default)] px-3 text-center text-[13px] text-[var(--t-2)] transition-colors has-[:checked]:border-[var(--b-acc)] has-[:checked]:bg-[var(--acc-dim)] has-[:checked]:text-[var(--acc-hi)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--acc)] has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-[var(--bg-1)]"
-              >
-                <input
-                  type="radio"
-                  id={optionId}
-                  name="attendanceMode"
-                  value={value}
-                  defaultChecked={initialMode === value}
-                  className="sr-only"
-                />
-                {label}
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="t-cap text-[var(--t-3)]">Comment as-tu assisté ?</legend>
+          <div className="flex gap-2">
+            {MODE_OPTIONS.map(({ value, label }) => {
+              const optionId = `${baseId}-${value}`;
+              return (
+                <label
+                  key={value}
+                  htmlFor={optionId}
+                  className="rounded-control flex min-h-11 flex-1 cursor-pointer items-center justify-center border border-[var(--b-default)] px-3 text-center text-[13px] text-[var(--t-2)] transition-colors has-[:checked]:border-[var(--b-acc)] has-[:checked]:bg-[var(--acc-dim)] has-[:checked]:text-[var(--acc-hi)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--acc)] has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-[var(--bg-1)]"
+                >
+                  <input
+                    type="radio"
+                    id={optionId}
+                    name="attendanceMode"
+                    value={value}
+                    defaultChecked={initialMode === value}
+                    className="sr-only"
+                  />
+                  {label}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
 
-      <label
-        htmlFor={contentId}
-        className="rounded-control flex min-h-11 cursor-pointer items-center gap-2.5 px-1 transition-shadow has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--acc)] has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-[var(--bg-1)]"
-      >
-        <input
-          type="checkbox"
-          id={contentId}
-          name="contentReviewed"
-          defaultChecked={initialContentReviewed}
-          className="h-5 w-5 shrink-0 rounded-[6px] accent-[var(--acc)]"
-        />
-        <span className="t-cap text-[var(--t-2)]">{contentLabel}</span>
-      </label>
+        <label
+          htmlFor={contentId}
+          className="rounded-control flex min-h-11 cursor-pointer items-center gap-2.5 px-1 transition-shadow has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--acc)] has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-[var(--bg-1)]"
+        >
+          <input
+            type="checkbox"
+            id={contentId}
+            name="contentReviewed"
+            defaultChecked={initialContentReviewed}
+            className="h-5 w-5 shrink-0 rounded-[6px] accent-[var(--acc)]"
+          />
+          <span className="t-cap text-[var(--t-2)]">{contentLabel}</span>
+        </label>
 
-      {message ? (
-        <p role="status" className="t-cap text-[var(--t-2)]">
-          {message}
+        {message ? (
+          <p role="status" className="t-cap text-[var(--t-2)]">
+            {message}
+          </p>
+        ) : null}
+
+        <Btn type="submit" size="m" loading={pending} className="self-start">
+          {alreadyDeclared ? 'Mettre à jour ma présence' : 'Déclarer ma présence'}
+        </Btn>
+      </form>
+
+      {/* F4 — explicit "je n'ai pas pu y assister" path. Calm ghost action, NEVER
+          red (§31.2). Once declared absent, show a status note + how to correct. */}
+      {initialDeclaredAbsent ? (
+        <p role="status" className="t-cap inline-flex items-start gap-1.5 text-[var(--t-3)]">
+          <CircleSlash
+            className="mt-px h-3.5 w-3.5 shrink-0"
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
+          <span>
+            Tu as indiqué ne pas avoir pu y assister. Déclare ta présence ci-dessus si tu t’es
+            trompé.
+          </span>
         </p>
-      ) : null}
-
-      <Btn type="submit" size="m" loading={pending} className="self-start">
-        {alreadyDeclared ? 'Mettre à jour ma présence' : 'Déclarer ma présence'}
-      </Btn>
-    </form>
+      ) : (
+        <form action={absenceAction} className="flex flex-col gap-1.5">
+          <input type="hidden" name="meetingId" value={meetingId} />
+          {absenceMessage ? (
+            <p role="status" className="t-cap text-[var(--t-2)]">
+              {absenceMessage}
+            </p>
+          ) : null}
+          <Btn
+            type="submit"
+            kind="ghost"
+            size="s"
+            loading={absencePending}
+            className="self-start text-[var(--t-3)]"
+          >
+            <CircleSlash className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+            Je n’ai pas pu y assister
+          </Btn>
+        </form>
+      )}
+    </div>
   );
 }

@@ -7,7 +7,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { MEETING_ATTENDANCE_MODES, meetingAttendanceDeclarationSchema } from './meeting';
+import {
+  MEETING_ATTENDANCE_MODES,
+  meetingAbsenceDeclarationSchema,
+  meetingAttendanceDeclarationSchema,
+} from './meeting';
 
 describe('MEETING_ATTENDANCE_MODES', () => {
   it('is exactly [live, replay] (anti-regression)', () => {
@@ -63,6 +67,33 @@ describe('meetingAttendanceDeclarationSchema', () => {
   it('.strict() rejects unknown keys (defense-in-depth)', () => {
     expect(
       meetingAttendanceDeclarationSchema.safeParse({ ...valid, attendedLive: true }).success,
+    ).toBe(false);
+  });
+});
+
+describe('meetingAbsenceDeclarationSchema (F4)', () => {
+  it('accepts a bare valid meetingId (an absence carries no mode/content)', () => {
+    expect(
+      meetingAbsenceDeclarationSchema.safeParse({ meetingId: 'clmeeting000000000000abcd' }).success,
+    ).toBe(true);
+  });
+
+  it('rejects an empty meetingId', () => {
+    expect(meetingAbsenceDeclarationSchema.safeParse({ meetingId: '' }).success).toBe(false);
+  });
+
+  it('rejects an over-long meetingId (>40, anti heap-amplification)', () => {
+    expect(meetingAbsenceDeclarationSchema.safeParse({ meetingId: 'x'.repeat(41) }).success).toBe(
+      false,
+    );
+  });
+
+  it('.strict() rejects any extra field (no mode/content on an absence)', () => {
+    expect(
+      meetingAbsenceDeclarationSchema.safeParse({
+        meetingId: 'clmeeting000000000000abcd',
+        attendanceMode: 'live',
+      }).success,
     ).toBe(false);
   });
 });

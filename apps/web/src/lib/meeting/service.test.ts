@@ -28,6 +28,7 @@ import { db } from '@/lib/db';
 import {
   cancelMeeting,
   countMeetingAttendance,
+  declareMeetingAbsence,
   declareMeetingAttendance,
   generateMeetingsForWindow,
   listMeetingAttendanceForMember,
@@ -325,6 +326,157 @@ describe('declareMeetingAttendance — HARD guard (SPEC §30.7)', () => {
     expect(err).toBeInstanceOf(MeetingNotDeclarableError);
     expect(err.reason).toBe('not_found');
     expect(vi.mocked(db.meetingAttendance.upsert)).not.toHaveBeenCalled();
+  });
+});
+
+// F4 — explicit member absence ("je n'ai pas pu y assister") -----------------
+
+describe('declareMeetingAbsence — HARD guard + mutual exclusivity (F4)', () => {
+  const INPUT = { meetingId: 'm1' } as const;
+
+  function mockMeeting(scheduledAt: string, status: 'scheduled' | 'cancelled') {
+    vi.mocked(db.user.findUnique).mockResolvedValue({ joinedAt: JOINED_AT } as never);
+    vi.mocked(db.meeting.findUnique).mockResolvedValue({
+      id: 'm1',
+      status,
+      scheduledAt: new Date(scheduledAt),
+    } as never);
+  }
+
+  it('flags the absence AND wipes any prior self-report (mutually exclusive)', async () => {
+    mockMeeting('2026-05-29T10:00:00.000Z', 'scheduled');
+    vi.mocked(db.meetingAttendance.upsert).mockResolvedValue({
+      id: 'att1',
+      meetingId: 'm1',
+    } as never);
+
+    const result = await declareMeetingAbsence('user-1', INPUT, NOW);
+
+    const call = vi.mocked(db.meetingAttendance.upsert).mock.calls[0];
+    if (!call) throw new Error('expected upsert');
+    const arg = call[0] as {
+      where: { meetingId_userId: { meetingId: string; userId: string } };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    };
+    expect(arg.where.meetingId_userId).toEqual({ meetingId: 'm1', userId: 'user-1' });
+    // Create: flags absent + bumps declaredAt; NEVER fabricates a mode/content.
+    expect(arg.create).toMatchObject({
+      meetingId: 'm1',
+      userId: 'user-1',
+      memberDeclaredAbsent: true,
+      declaredAt: NOW,
+    });
+    expect('attendanceMode' in arg.create).toBe(false);
+    expect('contentReviewed' in arg.create).toBe(false);
+    // Update on a pre-existing row: flips to absent AND clears a prior present
+    // declaration (§31.2 — the two states are mutually exclusive).
+    expect(arg.update).toEqual({
+      memberDeclaredAbsent: true,
+      attendanceMode: null,
+      contentReviewed: false,
+      declaredAt: NOW,
+    });
+    // The admin cross-check family stays independent (§30.8) — never touched.
+    expect('adminPresent' in arg.update).toBe(false);
+    expect(result).toEqual({ id: 'att1', meetingId: 'm1', memberDeclaredAbsent: true });
+  });
+
+  it('REFUSES a cancelled meeting (reason=cancelled), never upserts', async () => {
+    mockMeeting('2026-05-29T10:00:00.000Z', 'cancelled');
+
+    await expect(declareMeetingAbsence('user-1', INPUT, NOW)).rejects.toMatchObject({
+      name: 'MeetingNotDeclarableError',
+      reason: 'cancelled',
+    });
+    expect(vi.mocked(db.meetingAttendance.upsert)).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES a future meeting (reason=future)', async () => {
+    mockMeeting('2026-05-31T10:00:00.000Z', 'scheduled'); // after NOW
+
+    const err = await declareMeetingAbsence('user-1', INPUT, NOW).catch((e) => e);
+    expect(err).toBeInstanceOf(MeetingNotDeclarableError);
+    expect(err.reason).toBe('future');
+    expect(vi.mocked(db.meetingAttendance.upsert)).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES an out-of-window meeting (reason=out_of_window)', async () => {
+    mockMeeting('2026-04-29T10:00:00.000Z', 'scheduled'); // before WINDOW_START
+
+    const err = await declareMeetingAbsence('user-1', INPUT, NOW).catch((e) => e);
+    expect(err).toBeInstanceOf(MeetingNotDeclarableError);
+    expect(err.reason).toBe('out_of_window');
+    expect(vi.mocked(db.meetingAttendance.upsert)).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES an unknown meeting id (reason=not_found)', async () => {
+    vi.mocked(db.user.findUnique).mockResolvedValue({ joinedAt: JOINED_AT } as never);
+    vi.mocked(db.meeting.findUnique).mockResolvedValue(null as never);
+
+    const err = await declareMeetingAbsence('user-1', INPUT, NOW).catch((e) => e);
+    expect(err).toBeInstanceOf(MeetingNotDeclarableError);
+    expect(err.reason).toBe('not_found');
+    expect(vi.mocked(db.meetingAttendance.upsert)).not.toHaveBeenCalled();
+  });
+});
+
+describe('listMeetingsForMember — explicit absence (F4)', () => {
+  it('maps an explicit absence to displayState "absent", never a completion', async () => {
+    vi.mocked(db.user.findUnique).mockResolvedValue({ joinedAt: JOINED_AT } as never);
+    vi.mocked(db.meeting.findMany).mockResolvedValue([
+      {
+        id: 'm1',
+        slot: 'midday',
+        scheduledAt: new Date('2026-05-29T10:00:00.000Z'),
+        status: 'scheduled',
+        attendances: [
+          {
+            attendanceMode: null,
+            contentReviewed: false,
+            adminPresent: null,
+            memberDeclaredAbsent: true,
+          },
+        ],
+      },
+    ] as never);
+
+    const result = await listMeetingsForMember('user-1', NOW);
+
+    expect(result.meetings[0]?.displayState).toBe('absent');
+    expect(result.meetings[0]?.memberDeclaredAbsent).toBe(true);
+    // Honest data, never inflated: denominator 1 (scheduled), numerator 0.
+    expect(result.rate.kind).toBe('ok');
+    if (result.rate.kind === 'ok') {
+      expect(result.rate.scheduledCount).toBe(1);
+      expect(result.rate.completedCount).toBe(0);
+    }
+  });
+
+  it('a present declaration takes precedence over a stale absent flag', async () => {
+    vi.mocked(db.user.findUnique).mockResolvedValue({ joinedAt: JOINED_AT } as never);
+    vi.mocked(db.meeting.findMany).mockResolvedValue([
+      {
+        id: 'm1',
+        slot: 'midday',
+        scheduledAt: new Date('2026-05-29T10:00:00.000Z'),
+        status: 'scheduled',
+        // Defensive: even if a row carried both, a real declaration wins the state
+        // (the service clears the flag on declare — this pins the read-side order).
+        attendances: [
+          {
+            attendanceMode: 'live',
+            contentReviewed: true,
+            adminPresent: null,
+            memberDeclaredAbsent: true,
+          },
+        ],
+      },
+    ] as never);
+
+    const result = await listMeetingsForMember('user-1', NOW);
+
+    expect(result.meetings[0]?.displayState).toBe('complete');
   });
 });
 

@@ -9,6 +9,7 @@ import type { MemberMeetingView } from '@/lib/meeting/service';
 // module (server-only auth/db). Mock it so the component tree renders in jsdom.
 vi.mock('@/app/reunions/actions', () => ({
   declareMeetingAttendanceAction: vi.fn(),
+  declareMeetingAbsenceAction: vi.fn(),
 }));
 
 afterEach(() => {
@@ -33,6 +34,7 @@ function makeMeeting(overrides: Partial<MemberMeetingView>): MemberMeetingView {
     displayState: 'en_attente',
     attendanceMode: null,
     contentReviewed: false,
+    memberDeclaredAbsent: false,
     declarable: true,
     adminPresent: null,
     gap: 'none',
@@ -84,5 +86,38 @@ describe('MeetingDayGroup', () => {
     expect(screen.getByRole('heading', { name: /30 juin/i })).toBeInTheDocument();
     // The card title collapses to the slot only (showDate=false) — no repeated date.
     expect(screen.getByText('Réunion 12h')).toBeInTheDocument();
+  });
+});
+
+describe('MeetingDayGroup — explicit absence affordance (F4)', () => {
+  it('offers the calm "je n\'ai pas pu y assister" action when not yet declared absent', () => {
+    render(
+      <MeetingDayGroup
+        day={{ date: '2026-06-30', meetings: [makeMeeting({ id: 'm', slot: 'midday' })] }}
+      />,
+    );
+    // A single low-friction tap, never red (§31.2).
+    expect(screen.getByRole('button', { name: /pas pu y assister/i })).toBeInTheDocument();
+  });
+
+  it('replaces the action with a calm status note once the absence is declared', () => {
+    render(
+      <MeetingDayGroup
+        day={{
+          date: '2026-06-30',
+          meetings: [
+            makeMeeting({
+              id: 'm',
+              slot: 'midday',
+              displayState: 'absent',
+              memberDeclaredAbsent: true,
+            }),
+          ],
+        }}
+      />,
+    );
+    // No more absence button (already declared) — a note explains how to correct.
+    expect(screen.queryByRole('button', { name: /pas pu y assister/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/indiqué ne pas avoir pu y assister/i)).toBeInTheDocument();
   });
 });

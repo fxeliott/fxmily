@@ -1,4 +1,12 @@
-import { CalendarX, CheckCircle2, Circle, CircleDashed, Info, type LucideIcon } from 'lucide-react';
+import {
+  CalendarX,
+  CheckCircle2,
+  Circle,
+  CircleDashed,
+  CircleSlash,
+  Info,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { MeetingDeclareForm } from '@/components/reunions/meeting-declare-form';
 import { Card } from '@/components/ui/card';
@@ -47,6 +55,9 @@ const STATE_META: Record<
   complete: { label: 'Complète', tone: 'acc', Icon: CheckCircle2 },
   partielle: { label: 'Partielle', tone: 'warn', Icon: CircleDashed },
   en_attente: { label: 'En attente', tone: 'mute', Icon: Circle },
+  // F4 — the member declared they couldn't attend. Calm mute tone, NEVER red
+  // (§31.2): an acknowledged absence is honest data, not a failure.
+  absent: { label: 'Absent', tone: 'mute', Icon: CircleSlash },
   cancelled: { label: 'Annulée', tone: 'mute', Icon: CalendarX },
 };
 
@@ -137,6 +148,7 @@ export function MeetingItem({
           contentLabel={SLOT_CONTENT_LABEL[meeting.slot]}
           initialMode={meeting.attendanceMode}
           initialContentReviewed={meeting.contentReviewed}
+          initialDeclaredAbsent={meeting.memberDeclaredAbsent}
         />
       ) : (
         <p className="t-cap text-[var(--t-3)]">

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const authMock = vi.fn();
 const logAuditMock = vi.fn();
 const declareMeetingAttendanceMock = vi.fn();
+const declareMeetingAbsenceMock = vi.fn();
 const revalidatePathMock = vi.fn();
 const redirectMock = vi.fn((path: string) => {
   const err = new Error('NEXT_REDIRECT') as Error & { digest: string };
@@ -14,21 +15,23 @@ const redirectMock = vi.fn((path: string) => {
 
 vi.mock('@/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/auth/audit', () => ({ logAudit: logAuditMock }));
-// Only the VALUE export `declareMeetingAttendance` is mocked. The action
-// duck-types the not-declarable error on `name` + `reason` (it never imports
-// the `MeetingNotDeclarableError` class value), so the mock stays minimal.
+// Only the VALUE exports are mocked. Both actions duck-type the not-declarable
+// error on `name` + `reason` (they never import the `MeetingNotDeclarableError`
+// class value), so the mock stays minimal.
 vi.mock('@/lib/meeting/service', () => ({
   declareMeetingAttendance: declareMeetingAttendanceMock,
+  declareMeetingAbsence: declareMeetingAbsenceMock,
 }));
 vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }));
 vi.mock('next/navigation', () => ({ redirect: redirectMock }));
 
-const { declareMeetingAttendanceAction } = await import('./actions');
+const { declareMeetingAbsenceAction, declareMeetingAttendanceAction } = await import('./actions');
 
 afterEach(() => {
   authMock.mockReset();
   logAuditMock.mockReset();
   declareMeetingAttendanceMock.mockReset();
+  declareMeetingAbsenceMock.mockReset();
   revalidatePathMock.mockReset();
   redirectMock.mockClear();
 });
@@ -211,6 +214,118 @@ describe('declareMeetingAttendanceAction — unexpected service failure', () => 
       null,
       makeFormData({ meetingId: 'm1', attendanceMode: 'live', contentReviewed: 'on' }),
     );
+
+    expect(result).toEqual({ ok: false, error: 'unknown' });
+    expect(logAuditMock).not.toHaveBeenCalled();
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+
+    consoleErrSpy.mockRestore();
+  });
+});
+
+// F4 — declareMeetingAbsenceAction ("je n'ai pas pu y assister") --------------
+
+describe('declareMeetingAbsenceAction — auth gate (defence in depth)', () => {
+  it('returns unauthorized when there is no session, never writes', async () => {
+    authMock.mockResolvedValueOnce(null);
+
+    const result = await declareMeetingAbsenceAction(null, makeFormData({ meetingId: 'm1' }));
+
+    expect(result).toEqual({ ok: false, error: 'unauthorized' });
+    expect(declareMeetingAbsenceMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
+  it('returns unauthorized when status is not "active"', async () => {
+    authMock.mockResolvedValueOnce({
+      user: { id: 'user_1', status: 'pending', timezone: 'Europe/Paris' },
+    });
+
+    const result = await declareMeetingAbsenceAction(null, makeFormData({ meetingId: 'm1' }));
+
+    expect(result).toEqual({ ok: false, error: 'unauthorized' });
+    expect(declareMeetingAbsenceMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('declareMeetingAbsenceAction — Zod safeParse rejection', () => {
+  it('returns invalid_input when meetingId is missing', async () => {
+    authMock.mockResolvedValueOnce(ACTIVE_SESSION);
+
+    const result = await declareMeetingAbsenceAction(null, makeFormData({}));
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('invalid_input');
+    expect(result.fieldErrors).toHaveProperty('meetingId');
+    expect(declareMeetingAbsenceMock).not.toHaveBeenCalled();
+    expect(logAuditMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('declareMeetingAbsenceAction — happy path', () => {
+  it('declares absence, audits PII-free {meetingId} only, revalidates + redirects /reunions', async () => {
+    authMock.mockResolvedValueOnce(ACTIVE_SESSION);
+    declareMeetingAbsenceMock.mockResolvedValueOnce({
+      id: 'att_1',
+      meetingId: 'm1',
+      memberDeclaredAbsent: true,
+    });
+
+    await expect(
+      declareMeetingAbsenceAction(null, makeFormData({ meetingId: 'm1' })),
+    ).rejects.toThrow('NEXT_REDIRECT');
+
+    expect(declareMeetingAbsenceMock).toHaveBeenCalledTimes(1);
+    expect(declareMeetingAbsenceMock).toHaveBeenCalledWith('user_1', { meetingId: 'm1' });
+
+    // Audit carries the meeting id ONLY — no mode/content (there is none) and no
+    // PII (posture §2).
+    expect(logAuditMock).toHaveBeenCalledTimes(1);
+    expect(logAuditMock).toHaveBeenCalledWith({
+      action: 'meeting.attendance.absent',
+      userId: 'user_1',
+      metadata: { meetingId: 'm1' },
+    });
+
+    expect(revalidatePathMock).toHaveBeenCalledWith('/reunions');
+    expect(redirectMock).toHaveBeenCalledWith('/reunions');
+  });
+});
+
+describe('declareMeetingAbsenceAction — HARD guard refusal', () => {
+  it('maps MeetingNotDeclarableError to not_declarable + reason (duck-typed)', async () => {
+    authMock.mockResolvedValueOnce(ACTIVE_SESSION);
+    declareMeetingAbsenceMock.mockRejectedValueOnce(
+      Object.assign(new Error('Meeting not declarable: out_of_window'), {
+        name: 'MeetingNotDeclarableError',
+        reason: 'out_of_window',
+      }),
+    );
+
+    const result = await declareMeetingAbsenceAction(null, makeFormData({ meetingId: 'm1' }));
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'not_declarable',
+      notDeclarableReason: 'out_of_window',
+    });
+    expect(logAuditMock).not.toHaveBeenCalled();
+    expect(revalidatePathMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('declareMeetingAbsenceAction — unexpected service failure', () => {
+  it('returns unknown and does NOT audit / revalidate / redirect', async () => {
+    authMock.mockResolvedValueOnce(ACTIVE_SESSION);
+    declareMeetingAbsenceMock.mockRejectedValueOnce(
+      Object.assign(new Error('connection lost'), { code: 'P1001' }),
+    );
+    const consoleErrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await declareMeetingAbsenceAction(null, makeFormData({ meetingId: 'm1' }));
 
     expect(result).toEqual({ ok: false, error: 'unknown' });
     expect(logAuditMock).not.toHaveBeenCalled();

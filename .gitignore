@@ -24,6 +24,13 @@ next-env.d.ts
 *.local.env*
 !*.local.env.example
 
+# Local AI worker (J2) — never commit the token or the runtime logs/status. The
+# scripts + README + worker.env.example stay tracked; worker.env (secret) and
+# logs/ (runtime output, may reference member work) do NOT. The filename has no
+# leading dot, so the `.env*` rules above would miss it.
+ops/worker/worker.env
+ops/worker/logs/
+
 # Secrets / keys (defense in depth)
 *.pem
 *.key

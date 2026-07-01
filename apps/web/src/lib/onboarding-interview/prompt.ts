@@ -250,8 +250,20 @@ export function buildOnboardingInterviewUserPrompt(snapshot: OnboardingInterview
 
 /**
  * 2 few-shot examples canoniques. Format = user prompt fictif compacté +
- * assistant JSON output attendu. Injectés au début du `messages` array dans
- * `claude-client.ts` (carbone Anthropic best practice 2026).
+ * assistant JSON output attendu, incluant les 4 dimensions approfondies J-A
+ * (coaching_tone, learning_stage, axes_structured, weak_signals) — chaque
+ * evidence est un substring verbatim des réponses de l'exemple lui-même, donc
+ * les exemplaires enseignent l'ancrage 100 % grounded que la garde
+ * evidence-substring (safety.ts) exige.
+ *
+ * DEUX chemins les consomment :
+ *   - **Chemin local `claude --print` (prod)** — `renderFewShotExamplesBlock()`
+ *     les rend en texte et `buildOnboardingInterviewSystemPrompt()` les colle
+ *     au system prompt qui voyage dans l'enveloppe pull (batch.ts). SANS ça les
+ *     4 dimensions seraient générées zéro-shot en prod.
+ *   - **Chemin SDK `@anthropic-ai/sdk` (dormant)** — `claude-client.ts` les
+ *     pousse au début du `messages` array (actif seulement si
+ *     ANTHROPIC_API_KEY est défini, jamais en prod V1).
  *
  * NOTE : pseudonyms `member-aaaaaaaa` + `member-bbbbbbbb` = exemples
  * synthétiques, jamais associés à un membre réel.
@@ -324,6 +336,42 @@ Génère le MemberProfile...`,
         "Capitaliser sur l'awareness somatique existante [17] — proposer un rituel respiration 2 min avant chaque entrée.",
         "Consolider le process-focus déjà présent [26] en visualisant explicitement la 'régularité du geste' comme objectif premier.",
       ],
+      coaching_tone: {
+        register: 'pedagogique',
+        rationale:
+          "Le membre reconnaît lui-même l'écart entre son plan et son exécution et vise un objectif orienté process ; un registre pédagogique qui structure des étapes concrètes l'aidera à incarner ses règles.",
+        evidence: [
+          'Honnêtement 4 sur 10. Je dévie souvent sur le target — je sors trop tôt par peur que le marché reparte.',
+        ],
+      },
+      learning_stage: {
+        stage: 'mechanical',
+        rationale:
+          "Le membre travaille encore à appliquer son plan écrit de façon rigide (4 trades sur 10 conformes) : la règle existe mais l'exécution n'est pas encore automatique, ce qui correspond au stade mechanical de Douglas.",
+        evidence: ['Honnêtement 4 sur 10.'],
+      },
+      axes_structured: [
+        {
+          axis: 'Travailler le détachement du target pour réduire les sorties prématurées dictées par la peur.',
+          dimensionId: 'discipline_plan_adherence',
+          priority: 1,
+          evidence: ['je sors trop tôt par peur que le marché reparte.'],
+        },
+        {
+          axis: "Ancrer un rituel de respiration avant chaque entrée en s'appuyant sur l'awareness corporelle déjà présente.",
+          dimensionId: 'emotional_regulation',
+          priority: 2,
+          evidence: ['Tension dans les épaules et la mâchoire. Respiration courte.'],
+        },
+      ],
+      weak_signals: [
+        {
+          signal:
+            "Sortie anticipée récurrente sur le target, à recouper avec la rigueur d'exécution du plan.",
+          dimensionId: 'discipline_plan_adherence',
+          evidence: ['Je dévie souvent sur le target'],
+        },
+      ],
     }),
   },
   {
@@ -379,9 +427,109 @@ Génère le MemberProfile...`,
         'Proposer un backtest chiffré du setup A+ pour ancrer la confidence sur de la data réelle plutôt que ressenti [14].',
         "Détacher l'identité-trader de l'identité-publique — exploration explicite du trigger [23] en session coaching.",
       ],
+      coaching_tone: {
+        register: 'socratique',
+        rationale:
+          "Le membre intellectualise la théorie probabiliste mais ne l'accepte pas en pratique ; un registre socratique qui l'amène à confronter lui-même l'écart entre son discours et son ressenti sera plus efficace qu'un cours magistral.",
+        evidence: [
+          "Intellectuellement je suis d'accord. Mais en pratique quand je vois mon setup A+ partir contre moi, je doute de mon analyse.",
+        ],
+      },
+      learning_stage: {
+        stage: 'subjective',
+        rationale:
+          'Le membre applique une lecture flexible teintée de biais émotionnels : il doute de son analyse dès que le marché va contre lui et calibre sa confiance au ressenti, ce qui situe son travail au stade subjective de Douglas.',
+        evidence: ["Je n'accepte pas vraiment la randomness, je crois."],
+      },
+      axes_structured: [
+        {
+          axis: "Travailler les vérités Mark Douglas sur l'incertitude pour réduire la dissonance entre théorie et pratique.",
+          dimensionId: 'uncertainty_acceptance',
+          priority: 1,
+          evidence: ["Je n'accepte pas vraiment la randomness, je crois."],
+        },
+        {
+          axis: "Remplacer l'estimation du win-rate au ressenti par un backtest chiffré pour ancrer la confiance sur des données.",
+          dimensionId: 'confidence_calibration',
+          priority: 2,
+          evidence: ["C'est basé sur mon ressenti des 6 derniers mois, pas un backtest chiffré."],
+        },
+      ],
+      weak_signals: [
+        {
+          signal:
+            'Confiance calibrée au ressenti plutôt que sur des données, à observer pour un possible excès de confiance.',
+          dimensionId: 'confidence_calibration',
+          evidence: [
+            "J'estime 70-75%. C'est basé sur mon ressenti des 6 derniers mois, pas un backtest chiffré.",
+          ],
+        },
+        {
+          signal:
+            "Douleur dominante liée à l'image publique plus qu'à la perte financière, à observer sans dramatiser.",
+          dimensionId: 'triggers_emotional',
+          evidence: ["La perte financière compte moins que l'humiliation publique."],
+        },
+      ],
     }),
   },
 ] as const;
+
+// =============================================================================
+// Few-shot rendering — travels in the batch envelope's system prompt
+// =============================================================================
+
+/**
+ * Render `ONBOARDING_FEW_SHOT_EXAMPLES` as a plain-text teaching block appended
+ * to the system prompt that rides in the batch envelope. This is what makes the
+ * few-shot exemplars actually reach the local `claude --print` path : the SDK
+ * `messages`-array path in `claude-client.ts` is dormant in prod (it activates
+ * only when ANTHROPIC_API_KEY is set), so without this block the 4 deep
+ * dimensions would be generated zero-shot in production.
+ *
+ * Anti-imitation guard : the header states these are SYNTHETIC and that the
+ * model must never copy a fragment — every evidence in a real profile has to be
+ * a verbatim substring of the CURRENT member's own answers, or the batch
+ * rejects the whole profile (safety.ts evidence-substring gate). The example
+ * JSON is pretty-printed so the model learns the exact shape.
+ */
+export function renderFewShotExamplesBlock(): string {
+  const lines: string[] = [];
+  lines.push(
+    `EXEMPLES DE RÉFÉRENCE (few-shot, §J Anthropic profilage — 2-3 exemples réduisent nettement l'hallucination) :`,
+  );
+  lines.push(``);
+  lines.push(
+    `Voici ${ONBOARDING_FEW_SHOT_EXAMPLES.length} profils modèles construits sur des entretiens SYNTHÉTIQUES (pseudonymes fictifs, jamais un membre réel). Ils montrent le niveau de finesse attendu, l'ancrage evidence verbatim, et le bon usage des 4 dimensions approfondies (coaching_tone, learning_stage, axes_structured, weak_signals).`,
+  );
+  lines.push(
+    `RÈGLE ABSOLUE : ne recopie AUCUN fragment de ces exemples dans un profil réel. Chaque evidence d'un profil réel doit provenir mot pour mot des réponses du membre courant, sinon le batch REJETTE tout le profil.`,
+  );
+  lines.push(``);
+  ONBOARDING_FEW_SHOT_EXAMPLES.forEach((example, idx) => {
+    lines.push(`### Exemple ${idx + 1} (synthétique)`);
+    lines.push(``);
+    lines.push(`ENTRÉE (extrait d'entretien) :`);
+    lines.push(example.userPrompt.trim());
+    lines.push(``);
+    lines.push(`SORTIE ATTENDUE (JSON strict, evidence 100 % verbatim de l'entrée ci-dessus) :`);
+    lines.push(JSON.stringify(JSON.parse(example.assistantOutput), null, 2));
+    lines.push(``);
+  });
+  return lines.join('\n');
+}
+
+/**
+ * The full system prompt handed to the local `claude --print` path : the base
+ * posture (`ONBOARDING_INTERVIEW_SYSTEM_PROMPT`) plus the rendered few-shot
+ * block. `batch.ts` uses THIS for the envelope's `systemPrompt` so the
+ * exemplars reach real generation. The bare constant stays untouched for the
+ * dormant SDK path (which injects the examples as separate `messages`),
+ * avoiding any double-injection.
+ */
+export function buildOnboardingInterviewSystemPrompt(): string {
+  return `${ONBOARDING_INTERVIEW_SYSTEM_PROMPT}\n\n${renderFewShotExamplesBlock()}`;
+}
 
 // =============================================================================
 // Output JSON Schema (used by Anthropic structured-output config + post-parse)

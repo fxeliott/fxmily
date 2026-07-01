@@ -19,8 +19,8 @@ import { pseudonymizeMember } from '@/lib/weekly-report/builder';
 import { CURRENT_ONBOARDING_INSTRUMENT, type OnboardingInstrument } from './instrument-v1';
 import { composeOutputCorpus, runSafetyGate } from './safety';
 import {
-  ONBOARDING_INTERVIEW_SYSTEM_PROMPT,
   MEMBER_PROFILE_OUTPUT_JSON_SCHEMA,
+  buildOnboardingInterviewSystemPrompt,
   buildOnboardingInterviewUserPrompt,
 } from './prompt';
 
@@ -45,8 +45,8 @@ import {
  *      │  Loop N completed interviews :
  *      │  ┌─────────────────────────────────────┐
  *      │  │ claude --print --max-turns 1        │ × N, 60-120s jittered
- *      │  │ --append-system-prompt (Mark Douglas)│
- *      │  │ + 2 few-shot examples (prompt.ts)   │
+ *      │  │ --system-prompt = base posture      │
+ *      │  │   + 2 few-shot examples (envelope)  │
  *      │  └─────────────────────────────────────┘
  *      │
  *      │  jq -s NDJSON → results.json (atomic single write)
@@ -222,7 +222,7 @@ export async function loadAllSnapshotsForCompletedInterviews(
     return {
       ranAt,
       instrumentVersion,
-      systemPrompt: ONBOARDING_INTERVIEW_SYSTEM_PROMPT,
+      systemPrompt: buildOnboardingInterviewSystemPrompt(),
       outputJsonSchema: MEMBER_PROFILE_OUTPUT_JSON_SCHEMA,
       entries: [],
     };
@@ -251,7 +251,7 @@ export async function loadAllSnapshotsForCompletedInterviews(
     return {
       ranAt,
       instrumentVersion,
-      systemPrompt: ONBOARDING_INTERVIEW_SYSTEM_PROMPT,
+      systemPrompt: buildOnboardingInterviewSystemPrompt(),
       outputJsonSchema: MEMBER_PROFILE_OUTPUT_JSON_SCHEMA,
       entries: [],
     };
@@ -309,7 +309,7 @@ export async function loadAllSnapshotsForCompletedInterviews(
   return {
     ranAt,
     instrumentVersion,
-    systemPrompt: ONBOARDING_INTERVIEW_SYSTEM_PROMPT,
+    systemPrompt: buildOnboardingInterviewSystemPrompt(),
     outputJsonSchema: MEMBER_PROFILE_OUTPUT_JSON_SCHEMA,
     entries,
   };

@@ -156,6 +156,7 @@ echo ""
 echo "[verification-batch] [2/4] Analysing $ENTRIES_COUNT proof(s) ($SLEEP_MIN-${SLEEP_MAX}s jittered)"
 
 : > "$RESULTS_NDJSON"
+core_reset_failure_state # Volet B — reset the rate-limit / consecutive-failure breaker
 
 for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
   PROOF_ID=$(jq -r --argjson idx "$i" '.entries[$idx].proofId' "$ENVELOPE_FILE")
@@ -221,6 +222,8 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
     tail -5 "$ERRORS_LOG" >&2 || true
     jq -nc --arg pid "$PROOF_ID" --arg uid "$USER_ID" --argjson exit "$CLAUDE_EXIT" \
       '{proofId: $pid, userId: $uid, error: ("claude_exit_" + ($exit | tostring))}' >> "$RESULTS_NDJSON"
+    core_note_failure
+    if core_should_halt; then break; fi
     continue
   fi
 
@@ -228,14 +231,19 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
     echo "[verification-batch] Invalid JSON response from claude"
     jq -nc --arg pid "$PROOF_ID" --arg uid "$USER_ID" \
       '{proofId: $pid, userId: $uid, error: "invalid_json_response"}' >> "$RESULTS_NDJSON"
+    core_note_failure
+    if core_should_halt; then break; fi
     continue
   fi
 
   # Model-declared "not an MT5 history" → wire error (persist flips to failed).
+  # The claude call itself SUCCEEDED (valid JSON, legit verdict) → it is healthy
+  # evidence the account is NOT limited, so it resets the breaker, not trips it.
   if jq -e '.error == "not_mt5_history"' "$PARSED_FILE" >/dev/null 2>&1; then
     echo "[verification-batch] Model verdict: not an MT5 history"
     jq -nc --arg pid "$PROOF_ID" --arg uid "$USER_ID" \
       '{proofId: $pid, userId: $uid, error: "not_mt5_history"}' >> "$RESULTS_NDJSON"
+    core_note_success
     continue
   fi
 
@@ -246,6 +254,8 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
     echo "[verification-batch] Response misses required keys"
     jq -nc --arg pid "$PROOF_ID" --arg uid "$USER_ID" \
       '{proofId: $pid, userId: $uid, error: "invalid_json_response"}' >> "$RESULTS_NDJSON"
+    core_note_failure
+    if core_should_halt; then break; fi
     continue
   fi
 
@@ -258,6 +268,7 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
     >> "$RESULTS_NDJSON"
 
   echo "[verification-batch] Captured extraction for $PSEUDONYM"
+  core_note_success
 done
 
 # ============================================================================

@@ -190,6 +190,7 @@ echo ""
 echo "[onboarding-batch] [2/4] Running claude --print × $ENTRIES_COUNT ($SLEEP_MIN-${SLEEP_MAX}s jittered)"
 
 : > "$RESULTS_NDJSON" # truncate
+core_reset_failure_state # Volet B — reset the rate-limit / consecutive-failure breaker
 
 for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
   # --argjson idx (MSYS Git Bash Windows defense — see core_build_prompt_file).
@@ -225,6 +226,8 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
     jq -n --arg uid "$USER_ID" --arg iid "$INTERVIEW_ID" --argjson exit "$CLAUDE_EXIT" \
       '{userId: $uid, interviewId: $iid, error: ("claude_exit_" + ($exit | tostring))}' \
       >> "$RESULTS_NDJSON"
+    core_note_failure
+    if core_should_halt; then break; fi
     continue
   fi
 
@@ -235,6 +238,8 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
     jq -n --arg uid "$USER_ID" --arg iid "$INTERVIEW_ID" \
       '{userId: $uid, interviewId: $iid, error: "invalid_json_response"}' \
       >> "$RESULTS_NDJSON"
+    core_note_failure
+    if core_should_halt; then break; fi
     continue
   fi
 
@@ -263,6 +268,7 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
     >> "$RESULTS_NDJSON"
 
   echo "[onboarding-batch] Captured response for $PSEUDONYM"
+  core_note_success
 done
 
 # ============================================================================

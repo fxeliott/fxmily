@@ -87,6 +87,11 @@ export const EXPORTED_USER_RELATIONS = [
   'onboardingInterview',
   'onboardingAnswers',
   'memberProfile',
+  // J-E — ADMIN-ONLY monthly deep re-profiling snapshots. Same 4-dim data class
+  // as `memberProfile` (AI-derived FROM the member's own data → art.15 access
+  // right); not a member coaching surface, but the member's own profiling, so
+  // exported exactly like `memberProfile` / `monthlyDebriefs`.
+  'memberProfileMonthlySnapshots',
   'weeklyScheduleQuestionnaires',
   'adaptiveCalendars',
   'meetingAttendances',
@@ -177,6 +182,7 @@ export interface UserDataExport {
   onboardingInterview: SafeOnboardingInterview | null;
   onboardingAnswers: SafeOnboardingAnswer[];
   memberProfile: SafeMemberProfile | null;
+  memberProfileMonthlySnapshots: SafeMemberProfileMonthlySnapshot[];
   weeklyScheduleQuestionnaires: SafeWeeklyScheduleQuestionnaire[];
   adaptiveCalendars: SafeAdaptiveCalendar[];
   meetingAttendances: SafeMeetingAttendance[];
@@ -247,6 +253,9 @@ type SafeOnboardingAnswer = Awaited<
   ReturnType<typeof db.onboardingInterviewAnswer.findMany>
 >[number];
 type SafeMemberProfile = NonNullable<Awaited<ReturnType<typeof db.memberProfile.findFirst>>>;
+type SafeMemberProfileMonthlySnapshot = Awaited<
+  ReturnType<typeof db.memberProfileMonthlySnapshot.findMany>
+>[number];
 type SafeWeeklyScheduleQuestionnaire = Awaited<
   ReturnType<typeof db.weeklyScheduleQuestionnaire.findMany>
 >[number];
@@ -308,6 +317,7 @@ export interface ExportSummary {
   onboardingInterviewCount: number;
   onboardingAnswerCount: number;
   memberProfileCount: number;
+  memberProfileMonthlySnapshotCount: number;
   weeklyScheduleQuestionnaireCount: number;
   adaptiveCalendarCount: number;
   meetingAttendanceCount: number;
@@ -423,6 +433,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     onboardingInterview,
     onboardingAnswers,
     memberProfile,
+    memberProfileMonthlySnapshots,
     weeklyScheduleQuestionnaires,
     adaptiveCalendars,
     meetingAttendances,
@@ -452,6 +463,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     db.onboardingInterview.findFirst({ where: { userId } }),
     db.onboardingInterviewAnswer.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
     db.memberProfile.findFirst({ where: { userId } }),
+    db.memberProfileMonthlySnapshot.findMany({ where: { userId }, orderBy: { monthStart: 'asc' } }),
     db.weeklyScheduleQuestionnaire.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
     db.adaptiveCalendar.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
     db.meetingAttendance.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
@@ -505,6 +517,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     onboardingInterview: onboardingInterview as SafeOnboardingInterview | null,
     onboardingAnswers,
     memberProfile: memberProfile as SafeMemberProfile | null,
+    memberProfileMonthlySnapshots,
     weeklyScheduleQuestionnaires,
     adaptiveCalendars,
     meetingAttendances,
@@ -548,6 +561,7 @@ export function summariseExport(snapshot: UserDataExport): ExportSummary {
     onboardingInterviewCount: snapshot.onboardingInterview ? 1 : 0,
     onboardingAnswerCount: snapshot.onboardingAnswers.length,
     memberProfileCount: snapshot.memberProfile ? 1 : 0,
+    memberProfileMonthlySnapshotCount: snapshot.memberProfileMonthlySnapshots.length,
     weeklyScheduleQuestionnaireCount: snapshot.weeklyScheduleQuestionnaires.length,
     adaptiveCalendarCount: snapshot.adaptiveCalendars.length,
     meetingAttendanceCount: snapshot.meetingAttendances.length,

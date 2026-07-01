@@ -30,6 +30,7 @@ const preTradeCheckFindMany = vi.fn();
 const onboardingInterviewFindFirst = vi.fn();
 const onboardingInterviewAnswerFindMany = vi.fn();
 const memberProfileFindFirst = vi.fn();
+const memberProfileMonthlySnapshotFindMany = vi.fn();
 const weeklyScheduleQuestionnaireFindMany = vi.fn();
 const adaptiveCalendarFindMany = vi.fn();
 const meetingAttendanceFindMany = vi.fn();
@@ -73,6 +74,7 @@ vi.mock('@/lib/db', () => ({
     onboardingInterview: { findFirst: onboardingInterviewFindFirst },
     onboardingInterviewAnswer: { findMany: onboardingInterviewAnswerFindMany },
     memberProfile: { findFirst: memberProfileFindFirst },
+    memberProfileMonthlySnapshot: { findMany: memberProfileMonthlySnapshotFindMany },
     weeklyScheduleQuestionnaire: { findMany: weeklyScheduleQuestionnaireFindMany },
     adaptiveCalendar: { findMany: adaptiveCalendarFindMany },
     meetingAttendance: { findMany: meetingAttendanceFindMany },
@@ -121,6 +123,7 @@ const ALL_FIND_MANY = [
   mindsetCheckFindMany,
   preTradeCheckFindMany,
   onboardingInterviewAnswerFindMany,
+  memberProfileMonthlySnapshotFindMany,
   weeklyScheduleQuestionnaireFindMany,
   adaptiveCalendarFindMany,
   meetingAttendanceFindMany,
@@ -198,6 +201,7 @@ const EMPTY_SNAPSHOT = {
   onboardingInterview: null,
   onboardingAnswers: [],
   memberProfile: null,
+  memberProfileMonthlySnapshots: [],
   weeklyScheduleQuestionnaires: [],
   adaptiveCalendars: [],
   meetingAttendances: [],
@@ -329,6 +333,23 @@ describe('buildUserDataExport', () => {
     expect(summary.onboardingInterviewCount).toBe(1);
     expect(summary.memberProfileCount).toBe(1);
     expect(summary.alertCount).toBe(3);
+  });
+
+  it('exports the J-E monthly deep re-profiling snapshots (RGPD art.15, member-scoped)', async () => {
+    userFindUnique.mockResolvedValueOnce(SAFE_USER);
+    memberProfileMonthlySnapshotFindMany.mockResolvedValueOnce([
+      { id: 's1', monthStart: new Date('2026-06-01') },
+      { id: 's2', monthStart: new Date('2026-07-01') },
+    ]);
+
+    const snap = await buildUserDataExport('u1');
+
+    expect(snap.memberProfileMonthlySnapshots).toHaveLength(2);
+    expect(summariseExport(snap).memberProfileMonthlySnapshotCount).toBe(2);
+    // Member-scoped read (never a cross-member leak) + chronological order.
+    const call = memberProfileMonthlySnapshotFindMany.mock.calls[0]?.[0];
+    expect(call?.where).toEqual({ userId: 'u1' });
+    expect(call?.orderBy).toEqual({ monthStart: 'asc' });
   });
 });
 
@@ -675,6 +696,7 @@ describe('summariseExport — defensive shape handling', () => {
       'onboardingInterviewCount',
       'onboardingAnswerCount',
       'memberProfileCount',
+      'memberProfileMonthlySnapshotCount',
       'weeklyScheduleQuestionnaireCount',
       'adaptiveCalendarCount',
       'meetingAttendanceCount',

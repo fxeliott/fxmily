@@ -19,7 +19,7 @@ vi.mock('@/lib/db', () => ({
       update: vi.fn(),
     },
     meetingAttendance: { count: vi.fn(), findFirst: vi.fn(), upsert: vi.fn(), updateMany: vi.fn() },
-    user: { findUnique: vi.fn() },
+    user: { findUnique: vi.fn(), findMany: vi.fn() },
   },
 }));
 
@@ -32,6 +32,7 @@ import {
   declareMeetingAttendance,
   generateMeetingsForWindow,
   listMeetingAttendanceForMember,
+  listMeetingRosterForAdmin,
   listMeetingsForAdmin,
   listMeetingsForMember,
   markMeetingPresence,
@@ -875,5 +876,139 @@ describe('markMeetingPresence (S10 §30.8)', () => {
     expect(err).toBeInstanceOf(MeetingPresenceNotMarkableError);
     expect(err.reason).toBe('member_not_found');
     expect(vi.mocked(db.meetingAttendance.upsert)).not.toHaveBeenCalled();
+  });
+});
+
+// F4 — per-meeting roster (listMeetingRosterForAdmin) ------------------------
+
+describe('listMeetingRosterForAdmin (F4)', () => {
+  function rosterMember(
+    id: string,
+    firstName: string | null,
+    lastName: string | null,
+    email: string,
+    att: {
+      attendanceMode?: 'live' | 'replay' | null;
+      contentReviewed?: boolean;
+      adminPresent?: boolean | null;
+      memberDeclaredAbsent?: boolean;
+    } | null,
+  ) {
+    return {
+      id,
+      firstName,
+      lastName,
+      email,
+      meetingAttendances: att
+        ? [
+            {
+              attendanceMode: att.attendanceMode ?? null,
+              contentReviewed: att.contentReviewed ?? false,
+              adminPresent: att.adminPresent ?? null,
+              memberDeclaredAbsent: att.memberDeclaredAbsent ?? false,
+            },
+          ]
+        : [],
+    };
+  }
+
+  it('returns null for an unknown meeting id (page renders 404), never queries members', async () => {
+    vi.mocked(db.meeting.findUnique).mockResolvedValue(null as never);
+
+    const result = await listMeetingRosterForAdmin('ghost', NOW);
+
+    expect(result).toBeNull();
+    expect(vi.mocked(db.user.findMany)).not.toHaveBeenCalled();
+  });
+
+  it('maps every active member with their state, absence flag, admin mark + gap', async () => {
+    vi.mocked(db.meeting.findUnique).mockResolvedValue({
+      id: 'm1',
+      slot: 'midday',
+      scheduledAt: new Date('2026-05-29T10:00:00.000Z'),
+      status: 'scheduled',
+    } as never);
+    vi.mocked(db.user.findMany).mockResolvedValue([
+      // complete + admin agrees → no gap
+      rosterMember('u1', 'Alice', 'Martin', 'alice@x.fr', {
+        attendanceMode: 'live',
+        contentReviewed: true,
+        adminPresent: true,
+      }),
+      // complete BUT admin marked absent → over-claim gap (the honesty écart)
+      rosterMember('u2', 'Bob', null, 'bob@x.fr', {
+        attendanceMode: 'live',
+        contentReviewed: true,
+        adminPresent: false,
+      }),
+      // explicit absence, no admin mark → state absent + declared-absent flag
+      rosterMember('u3', null, null, 'carol@x.fr', { memberDeclaredAbsent: true }),
+      // silent (no attendance row at all) → state absent, not declared-absent
+      rosterMember('u4', 'Dan', 'Roy', 'dan@x.fr', null),
+    ] as never);
+
+    const result = await listMeetingRosterForAdmin('m1', NOW);
+    if (!result) throw new Error('expected a roster');
+
+    // Only active members are queried, name-sorted, left-joined for THIS meeting.
+    const call = vi.mocked(db.user.findMany).mock.calls[0];
+    if (!call) throw new Error('expected user.findMany');
+    const arg = call[0] as {
+      where: { role: string; status: string };
+      select: { meetingAttendances: { where: { meetingId: string } } };
+    };
+    expect(arg.where).toEqual({ role: 'member', status: 'active' });
+    expect(arg.select.meetingAttendances.where).toEqual({ meetingId: 'm1' });
+
+    expect(result.meeting).toEqual({
+      id: 'm1',
+      slot: 'midday',
+      scheduledAt: '2026-05-29T10:00:00.000Z',
+      status: 'scheduled',
+      isPast: true,
+    });
+
+    expect(result.members.map((m) => [m.memberId, m.state, m.memberDeclaredAbsent, m.gap])).toEqual(
+      [
+        ['u1', 'complete', false, 'none'],
+        ['u2', 'complete', false, 'admin_absent_member_present'],
+        ['u3', 'absent', true, 'none'],
+        ['u4', 'absent', false, 'none'],
+      ],
+    );
+    // displayName: "Prénom Nom", "Prénom" alone, or the email fallback.
+    expect(result.members.map((m) => m.displayName)).toEqual([
+      'Alice Martin',
+      'Bob',
+      'carol@x.fr',
+      'Dan Roy',
+    ]);
+    // Only the over-claim counts as an unresolved écart.
+    expect(result.gapCount).toBe(1);
+  });
+
+  it('a cancelled slot greys every row and suppresses all cross-checks (gap none)', async () => {
+    vi.mocked(db.meeting.findUnique).mockResolvedValue({
+      id: 'm1',
+      slot: 'evening',
+      scheduledAt: new Date('2026-05-29T18:00:00.000Z'),
+      status: 'cancelled',
+    } as never);
+    vi.mocked(db.user.findMany).mockResolvedValue([
+      // Even a would-be over-claim yields NO gap on a cancelled slot.
+      rosterMember('u1', 'Alice', 'Martin', 'alice@x.fr', {
+        attendanceMode: 'live',
+        contentReviewed: true,
+        adminPresent: false,
+      }),
+    ] as never);
+
+    const result = await listMeetingRosterForAdmin('m1', NOW);
+    if (!result) throw new Error('expected a roster');
+
+    expect(result.meeting.status).toBe('cancelled');
+    expect(result.members[0]?.state).toBe('cancelled');
+    expect(result.members[0]?.gap).toBe('none');
+    expect(result.gapCount).toBe(0);
   });
 });

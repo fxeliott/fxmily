@@ -1,6 +1,7 @@
 'use client';
 
-import { CalendarCheck, CalendarX, Users } from 'lucide-react';
+import { CalendarCheck, CalendarX, ClipboardList, Users } from 'lucide-react';
+import Link from 'next/link';
 import { useActionState } from 'react';
 
 import { cancelMeetingAction, type CancelMeetingActionState } from '@/app/admin/reunions/actions';
@@ -98,7 +99,25 @@ export function AdminMeetingRow({ meeting }: { meeting: AdminMeetingView }) {
             {meeting.declaredCount} déclaration{meeting.declaredCount > 1 ? 's' : ''}
           </Pill>
         ) : null}
+        {meeting.gapCount > 0 ? (
+          <Pill tone="warn">
+            {meeting.gapCount} écart{meeting.gapCount > 1 ? 's' : ''}
+          </Pill>
+        ) : null}
       </p>
+
+      {/* F4 — drill into the per-meeting roster to tick the cohort present/absent.
+          Hidden on a cancelled slot (nothing to mark). A plain <Link> (outside the
+          cancel <form>) so it never submits the form. */}
+      {!isCancelled ? (
+        <Link
+          href={`/admin/reunions/${meeting.id}`}
+          className="rounded-control inline-flex w-fit items-center gap-1.5 text-[12px] font-medium text-[var(--acc-hi)] transition-colors hover:text-[var(--t-1)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-1)] focus-visible:outline-none"
+        >
+          <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+          Feuille de présence
+        </Link>
+      ) : null}
 
       <form
         action={formAction}

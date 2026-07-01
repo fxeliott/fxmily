@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ADMIN_SEANCE_HORIZON_DAYS,
   derivePipelineStatus,
+  formatSyncedAtLabel,
   futureSeanceCells,
   isWeekendDate,
   normalizeSeanceTime,
@@ -238,5 +239,18 @@ describe('seanceToday — Europe/Paris civil day', () => {
   it('rolls to the next Paris day after 22:00 UTC in summer', () => {
     // 2026-06-30T22:30:00Z = 00:30 Paris next day (CEST +2).
     expect(seanceToday(new Date('2026-06-30T22:30:00.000Z'))).toBe('2026-07-01');
+  });
+});
+
+describe('formatSyncedAtLabel — J4 sync freshness (defect #2 made visible)', () => {
+  it('formats an instant as "JJ/MM à HHhMM" in Europe/Paris', () => {
+    // 2026-06-30T20:46:00Z = 22:46 Paris (CEST +2).
+    expect(formatSyncedAtLabel('2026-06-30T20:46:00.000Z')).toBe('30/06 à 22h46');
+  });
+
+  it('returns null for a null/empty/unparseable input', () => {
+    expect(formatSyncedAtLabel(null)).toBeNull();
+    expect(formatSyncedAtLabel(undefined)).toBeNull();
+    expect(formatSyncedAtLabel('not-a-date')).toBeNull();
   });
 });

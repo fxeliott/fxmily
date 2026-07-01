@@ -360,6 +360,23 @@ export type AuditAction =
   // PII-FREE `{date, slot}`. 0 FK to User → platform-wide content, no member id.
   | 'admin.seance.declared'
   | 'admin.seance.regenerate'
+  // Réunion hub (séances) J4 — local content pipeline batch
+  // (`/api/admin/seances-batch/{pull,persist}`, 6th local Claude pipeline). The
+  // local orchestrator (Zoom→Vimeo→Fathom→IA bornée) pushes the FAITHFUL
+  // editorial snapshot of a HELD session; Fxmily re-validates (Règle n°1) and
+  // materialises the Replay* rows the members read. Mirror the calendar/
+  // verification batch canonical lifecycle. PII-FREE by construction (0 FK to
+  // User → no member id ever): counts + slot coordinates only.
+  //   - batch.pulled         : `{ranAt, sessionsCount}` (declared go-sessions the local side fills)
+  //   - batch.persisted      : `{ranAt, persisted, skipped, errors, total}`
+  //   - batch.skipped        : `{ranAt, date, slot, reason}` (invalid-date / not-declared / not-done)
+  //   - batch.invalid_output : `{ranAt, date, slot, errorsCount}` (Règle n°1 re-validation fail)
+  //   - batch.persist_failed : `{ranAt, date, slot, error (truncated 200)}`
+  | 'seance.batch.pulled'
+  | 'seance.batch.persisted'
+  | 'seance.batch.skipped'
+  | 'seance.batch.invalid_output'
+  | 'seance.batch.persist_failed'
   // S10(a) — admin business-chain health view (`/admin/health`). Parity with
   // `admin.system.viewed`: a pure access trace, no PII, no member id.
   | 'admin.health.viewed'

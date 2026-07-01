@@ -235,7 +235,13 @@ export function TradeFormWizard({ timezone }: { timezone: string }) {
       pair: draft.pair,
       direction: draft.direction,
       session: draft.session,
-      enteredAt: draft.enteredAt ? new Date(draft.enteredAt) : new Date(NaN),
+      // F2 — interpret the wizard's raw wall-clock in the MEMBER's set timezone
+      // (matches the server's `memberWallClock`), not the device-tz `new Date()`.
+      // Falls back to the device parse for an already-absolute ISO/garbage value
+      // so the schema still surfaces "Date invalide." on bad input.
+      enteredAt: draft.enteredAt
+        ? (localWallClockToUtc(draft.enteredAt, timezone) ?? new Date(draft.enteredAt))
+        : new Date(NaN),
       entryPrice: draft.entryPrice,
       lotSize: draft.lotSize,
       stopLossPrice: draft.stopLossPrice === '' ? null : Number(draft.stopLossPrice),

@@ -27,6 +27,7 @@ import { ScreenshotUploader } from '@/components/journal/screenshot-uploader';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { localWallClockToUtc } from '@/lib/checkin/timezone';
 import { TRAINING_CHECKLIST_ITEMS, trainingTradeCreateSchema } from '@/lib/schemas/training-trade';
 import { formatDateTimeLocalInput, timezoneCityLabel } from '@/lib/timezones';
 import { TRAINING_UI_COPY } from '@/lib/training/training-ui-copy';
@@ -257,7 +258,11 @@ export function TrainingFormWizard({
       emotionalStateNoted: draft.emotionalStateNoted || undefined,
       noImpulsiveDeviation: draft.noImpulsiveDeviation || undefined,
       lessonLearned: draft.lessonLearned,
-      enteredAt: draft.enteredAt ? new Date(draft.enteredAt) : new Date(NaN),
+      // F2 — interpret the wizard's raw wall-clock in the MEMBER's set timezone
+      // (matches the server's `memberWallClock`), not the device-tz `new Date()`.
+      enteredAt: draft.enteredAt
+        ? (localWallClockToUtc(draft.enteredAt, timezone) ?? new Date(draft.enteredAt))
+        : new Date(NaN),
     };
     const result = trainingTradeCreateSchema.safeParse(candidate);
     if (result.success) return true;

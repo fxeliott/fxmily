@@ -59,6 +59,23 @@ export interface CalendarSnapshotInput {
   readonly profileSummary: string | null;
   readonly responses: WeeklyScheduleResponses;
   readonly activity: CalendarActivityCounts;
+  /**
+   * §21.5-safe adaptive dimension (D3). The member's Mark Douglas learning
+   * stage (`Disciplined Trader`, ch.8), read-only from the onboarding profile.
+   * It tunes the KIND of practice blocks Claude proposes (structuring vs
+   * relating feeling-to-process vs more autonomy) — never the market, never a
+   * result, and NEVER a scoring input. `null`/omitted when the onboarding
+   * signal was insufficient (the model omits the dimension). weakSignals is
+   * NEVER passed here (admin-only, must not cross the member boundary).
+   */
+  readonly learningStage?: 'mechanical' | 'subjective' | 'intuitive' | null;
+  /**
+   * §21.5-safe adaptive dimension (D3). The member's coaching register from
+   * the onboarding profile — read-only. Modulates the TONE of the copy only;
+   * never the market, never a result, never a scoring input. `null`/omitted
+   * when the onboarding signal was insufficient.
+   */
+  readonly coachingRegister?: 'direct' | 'pedagogique' | 'socratique' | null;
 }
 
 /** What travels to Claude. No userId, no P&L — pseudonymised + count-only. */
@@ -71,6 +88,16 @@ export interface CalendarSnapshot {
   readonly activity: CalendarActivityCounts;
   /** Derived: total available slots across the week (helps Claude size it). */
   readonly availableSlotsCount: number;
+  /**
+   * §21.5-safe adaptive dimension (D3), passed through verbatim. `null` when
+   * absent. Tunes the KIND of practice blocks, never the market/result/score.
+   */
+  readonly learningStage: 'mechanical' | 'subjective' | 'intuitive' | null;
+  /**
+   * §21.5-safe adaptive dimension (D3), passed through verbatim. `null` when
+   * absent. Tunes the TONE of the copy only, never the market/result/score.
+   */
+  readonly coachingRegister: 'direct' | 'pedagogique' | 'socratique' | null;
 }
 
 function countTrueSlots(
@@ -105,5 +132,10 @@ export function buildCalendarSnapshot(input: CalendarSnapshotInput): CalendarSna
     responses: input.responses,
     activity: input.activity,
     availableSlotsCount,
+    // Adaptive dimensions (D3): pass through, normalising `undefined` → `null`
+    // so the shape stays stable and deterministic. These are read-only tuning
+    // hints, never a P&L, never a scoring input (firewall §21.5).
+    learningStage: input.learningStage ?? null,
+    coachingRegister: input.coachingRegister ?? null,
   };
 }

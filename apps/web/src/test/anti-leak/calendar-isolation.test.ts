@@ -168,6 +168,82 @@ describe('§26 isolation — runtime payload + schema', () => {
         'trainingSessionsLast14d',
       ].sort(),
     );
+
+    // D3 — the snapshot's TOP-LEVEL key set is pinned too. The two adaptive
+    // dimensions (`learningStage` / `coachingRegister`) are the ONLY additions;
+    // weakSignals (admin-only) must NEVER appear on the member-facing snapshot,
+    // and no P&L / result key may sneak in at the top level either.
+    expect(Object.keys(snap).sort()).toEqual(
+      [
+        'activity',
+        'availableSlotsCount',
+        'coachingRegister',
+        'instrumentVersion',
+        'learningStage',
+        'profileSummary',
+        'pseudonymLabel',
+        'responses',
+        'weekStart',
+      ].sort(),
+    );
+    for (const banned of [
+      'weakSignals',
+      'axesStructured',
+      'realizedR',
+      'resultR',
+      'plannedRR',
+      'outcome',
+      'pnl',
+    ]) {
+      expect(banned in snap, `snapshot must not expose "${banned}"`).toBe(false);
+    }
+  });
+
+  it('the two adaptive dimensions carry only the closed enum literal (no rationale/evidence)', () => {
+    const base = {
+      pseudonymLabel: 'member-BBBB2222',
+      weekStart: '2026-06-08',
+      instrumentVersion: 1,
+      profileSummary: null,
+      responses: {
+        profile: 'salarie' as const,
+        sessionGoal: 3,
+        weekdayAvailability: {
+          monday: { morning: true, afternoon: false, evening: false },
+          tuesday: { morning: false, afternoon: false, evening: false },
+          wednesday: { morning: false, afternoon: false, evening: false },
+          thursday: { morning: false, afternoon: false, evening: false },
+          friday: { morning: false, afternoon: false, evening: false },
+        },
+        weekendAvailability: {
+          saturday: { morning: false, afternoon: false, evening: false },
+          sunday: { morning: false, afternoon: false, evening: false },
+        },
+        sleep: 'standard' as const,
+        energyPeak: 'morning' as const,
+        meetingCommitment: 'none' as const,
+        practiceFocus: 'balanced' as const,
+        constraint: 'none' as const,
+      },
+      activity: {
+        tradesLast30d: 5,
+        checkinsLast14d: 3,
+        trainingSessionsLast14d: 2,
+        lastMindsetCheckDate: null,
+      },
+    };
+    // Present → passed through as the enum literal only.
+    const withDims = buildCalendarSnapshot({
+      ...base,
+      learningStage: 'mechanical',
+      coachingRegister: 'direct',
+    });
+    expect(withDims.learningStage).toBe('mechanical');
+    expect(withDims.coachingRegister).toBe('direct');
+    // Absent → normalised to null (never undefined), keeping the shape stable.
+    const withoutDims = buildCalendarSnapshot(base);
+    expect(withoutDims.learningStage).toBeNull();
+    expect(withoutDims.coachingRegister).toBeNull();
   });
 
   it('adaptiveCalendarOutputSchema.strict() rejects an injected realizedR key', () => {

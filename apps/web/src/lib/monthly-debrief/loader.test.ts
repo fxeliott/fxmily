@@ -74,6 +74,7 @@ vi.mock('@/lib/coaching/service', () => ({
 }));
 
 import { parseLocalDate } from '@/lib/checkin/timezone';
+import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { listConstancyScoresInRange, currentPeriodStart } from '@/lib/verification/constancy';
 
 import { db } from '@/lib/db';
@@ -148,5 +149,110 @@ describe('loadMonthlySliceForUser — Session-3 constancy window (DoD §32-2)', 
     // Disjoint AND complete: reported upper + 1ms === next month's lower bound,
     // so every folded ISO week is attributed to exactly one civil month.
     expect((upper as Date).getTime() + 1).toBe(nextMonthLower.getTime());
+  });
+});
+
+// =============================================================================
+// D1 — the loader derives coachingRegister + learningStage from the onboarding
+// profile, validates them with Zod (safeParse), and NEVER relays weakSignals.
+// =============================================================================
+
+/** A `SerializedMemberProfile`-shaped row the mocked `getProfileForUser` returns.
+ *  `coachingTone` / `learningStage` / `weakSignals` are `unknown` (Prisma JSON). */
+function profileRow(over: Record<string, unknown> = {}): unknown {
+  return {
+    id: 'mp-1',
+    userId: 'user-1',
+    interviewId: 'iv-1',
+    summary: 'Trader rigoureux, sujet au FOMO en fin de session.',
+    highlights: [{ key: 'discipline', label: 'Discipline matinale', evidence: ['je me lève tôt'] }],
+    axesPrioritaires: ['Tenir mon plan', 'Réduire le FOMO'],
+    claudeModelVersion: 'claude-x',
+    instrumentVersion: 'v1',
+    analyzedAt: '2026-06-01T00:00:00.000Z',
+    coachingTone: {
+      register: 'socratique',
+      rationale: 'Le membre progresse mieux en se posant ses propres questions.',
+      evidence: ['je me demande souvent pourquoi'],
+    },
+    learningStage: {
+      stage: 'intuitive',
+      rationale: 'Le membre lit le marché sans dérouler mécaniquement ses règles.',
+      evidence: ['je sens le moment'],
+    },
+    // ADMIN-ONLY — must NEVER cross the member boundary (§21.5 + admin surface).
+    weakSignals: [
+      {
+        signal: 'tendance à sur-risquer après une perte',
+        dimensionId: 'risk_management',
+        evidence: ['je double après une perte'],
+      },
+    ],
+    ...over,
+  };
+}
+
+describe('loadMonthlySliceForUser — D1 coaching register/stage relay (never weakSignals)', () => {
+  it('derives coachingRegister + learningStage enums from the onboarding profile', async () => {
+    vi.mocked(getProfileForUser).mockResolvedValueOnce(profileRow() as never);
+
+    const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
+
+    const profile = slice!.builderInput.memberProfile;
+    expect(profile).not.toBeNull();
+    expect(profile!.coachingRegister).toBe('socratique');
+    expect(profile!.learningStage).toBe('intuitive');
+    // The verbatim rationale/evidence are DROPPED — only the enums travel.
+    expect(JSON.stringify(profile)).not.toContain('rationale');
+    expect(JSON.stringify(profile)).not.toContain('je me demande souvent');
+  });
+
+  it('NEVER relays weakSignals into the builder input (admin-only, §21.5)', async () => {
+    vi.mocked(getProfileForUser).mockResolvedValueOnce(profileRow() as never);
+
+    const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
+
+    const serialized = JSON.stringify(slice!.builderInput.memberProfile);
+    expect(serialized).not.toMatch(/weak[_-]?signals?/i);
+    expect(serialized).not.toContain('sur-risquer');
+  });
+
+  it('degrades cleanly (null enum) on malformed coachingTone / learningStage JSON', async () => {
+    vi.mocked(getProfileForUser).mockResolvedValueOnce(
+      profileRow({
+        coachingTone: { register: 'not-an-enum' }, // fails safeParse
+        learningStage: 'garbage', // wrong shape
+      }) as never,
+    );
+
+    const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
+
+    const profile = slice!.builderInput.memberProfile;
+    // The member's words still surface; only the tone enums fall back to null.
+    expect(profile).not.toBeNull();
+    expect(profile!.coachingRegister).toBeNull();
+    expect(profile!.learningStage).toBeNull();
+    expect(profile!.summary).toContain('Trader rigoureux');
+  });
+
+  it('surfaces a reference carrying ONLY a valid register when the member has no words', async () => {
+    vi.mocked(getProfileForUser).mockResolvedValueOnce(
+      profileRow({
+        summary: '',
+        highlights: [],
+        axesPrioritaires: [],
+        learningStage: null,
+      }) as never,
+    );
+
+    const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
+
+    const profile = slice!.builderInput.memberProfile;
+    // A valid register alone is "usable" so the tone consigne can travel.
+    expect(profile).not.toBeNull();
+    expect(profile!.coachingRegister).toBe('socratique');
+    expect(profile!.learningStage).toBeNull();
+    expect(profile!.summary).toBe('');
+    expect(profile!.axesPrioritaires).toEqual([]);
   });
 });

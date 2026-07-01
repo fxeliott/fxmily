@@ -803,7 +803,27 @@ describe('buildMonthlySnapshot — memberProfile (TASK B reference, never scorin
       summary: 'Trader rigoureux, sujet au FOMO en fin de session.',
       axesPrioritaires: ['Tenir mon plan', 'Réduire le FOMO'],
       highlightLabels: ['Discipline matinale', 'Tendance au revenge-trade'],
+      // D1 — the tone enums default to null when the profile carries none.
+      coachingRegister: null,
+      learningStage: null,
     });
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('D1 — relays the coaching register + learning stage enums verbatim (never scoring)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        memberProfile: {
+          summary: 'Trader introspectif.',
+          axesPrioritaires: ['Tenir mon plan'],
+          highlightLabels: [],
+          coachingRegister: 'socratique',
+          learningStage: 'intuitive',
+        },
+      }),
+    );
+    expect(snap.memberProfile!.coachingRegister).toBe('socratique');
+    expect(snap.memberProfile!.learningStage).toBe('intuitive');
     expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 

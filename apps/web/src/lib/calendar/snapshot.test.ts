@@ -55,6 +55,26 @@ describe('buildCalendarSnapshot — pure assembler', () => {
     expect(snap.instrumentVersion).toBe(1);
   });
 
+  it('D3: passes the adaptive dimensions through verbatim when present', () => {
+    const snap = buildCalendarSnapshot(
+      input({ learningStage: 'subjective', coachingRegister: 'socratique' }),
+    );
+    expect(snap.learningStage).toBe('subjective');
+    expect(snap.coachingRegister).toBe('socratique');
+  });
+
+  it('D3: normalises omitted adaptive dimensions to null (stable shape)', () => {
+    const snap = buildCalendarSnapshot(input());
+    expect(snap.learningStage).toBeNull();
+    expect(snap.coachingRegister).toBeNull();
+  });
+
+  it('D3: normalises an explicit null adaptive dimension to null', () => {
+    const snap = buildCalendarSnapshot(input({ learningStage: null, coachingRegister: null }));
+    expect(snap.learningStage).toBeNull();
+    expect(snap.coachingRegister).toBeNull();
+  });
+
   it('carries the responses object verbatim', () => {
     const r = responses({ sessionGoal: 5, practiceFocus: 'backtest' });
     const snap = buildCalendarSnapshot(input({ responses: r }));

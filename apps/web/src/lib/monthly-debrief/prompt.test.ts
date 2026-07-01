@@ -14,7 +14,11 @@ import { describe, expect, it } from 'vitest';
 import type { CoachingReportContext } from '@/lib/coaching/engine';
 
 import { buildMonthlySnapshot } from './builder';
-import { buildMonthlyDebriefUserPrompt, MONTHLY_DEBRIEF_SYSTEM_PROMPT } from './prompt';
+import {
+  buildMonthlyDebriefUserPrompt,
+  MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA,
+  MONTHLY_DEBRIEF_SYSTEM_PROMPT,
+} from './prompt';
 import type { MonthlyBuilderInput } from './types';
 
 const LABEL = 'member-A1B2C3D4';
@@ -676,5 +680,224 @@ describe('buildMonthlyDebriefUserPrompt — coaching psychologique reaches the p
     expect(block).not.toMatch(
       /\b(setup|achat|vente|buy|sell|long|short|pip|lots?|support|résistance|bougie|take[- ]?profit|stop[- ]?loss)\b/i,
     );
+  });
+});
+
+// =============================================================================
+// D1 + D2 — coaching register/stage relayed to the snapshot AND injected into
+// the member prompt as a TONE consigne (never the behavioural score, §21.5).
+// =============================================================================
+
+describe('buildMonthlyDebriefUserPrompt — coaching register/stage tone consigne (D1 + D2)', () => {
+  it('(a) register=socratique → the tone consigne appears in the user prompt', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          memberProfile: {
+            summary: 'Trader introspectif.',
+            axesPrioritaires: ['Tenir mon plan'],
+            highlightLabels: [],
+            coachingRegister: 'socratique',
+            learningStage: null,
+          },
+        }),
+      ),
+    );
+    expect(prompt).toContain('Registre de coaching adapté à ce membre :');
+    expect(prompt).toContain('des questions ouvertes pour faire réfléchir le membre');
+    // The consigne is explicit that the register only changes the WORDING.
+    expect(prompt).toContain('Ce registre ne change QUE la manière de dire');
+  });
+
+  it('(a bis) register=direct and =pedagogique map to their own concise consignes', () => {
+    const promptDirect = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          memberProfile: {
+            summary: 'Trader pressé.',
+            axesPrioritaires: [],
+            highlightLabels: [],
+            coachingRegister: 'direct',
+            learningStage: null,
+          },
+        }),
+      ),
+    );
+    expect(promptDirect).toContain('adopte un ton direct, concret, qui va droit au but');
+
+    const promptPedago = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          memberProfile: {
+            summary: 'Trader curieux.',
+            axesPrioritaires: [],
+            highlightLabels: [],
+            coachingRegister: 'pedagogique',
+            learningStage: null,
+          },
+        }),
+      ),
+    );
+    expect(promptPedago).toContain('adopte un ton pédagogique, explique le pourquoi pas à pas');
+  });
+
+  it('learning stage nuances the register consigne (mechanical → process/règles)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          memberProfile: {
+            summary: 'Trader débutant.',
+            axesPrioritaires: [],
+            highlightLabels: [],
+            coachingRegister: 'pedagogique',
+            learningStage: 'mechanical',
+          },
+        }),
+      ),
+    );
+    expect(prompt).toContain('adopte un ton pédagogique');
+    expect(prompt).toContain("rappelle calmement l'importance du process et des règles");
+  });
+
+  it('(b) register/stage absent (profile present, tone null) → NO tone line added (clean degradation)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          memberProfile: {
+            summary: 'Trader rigoureux.',
+            axesPrioritaires: ['Tenir mon plan'],
+            highlightLabels: [],
+            coachingRegister: null,
+            learningStage: null,
+          },
+        }),
+      ),
+    );
+    // The profile section still renders (member has words), but no tone consigne.
+    expect(prompt).toContain("Profil d'entrée (onboarding)");
+    expect(prompt).not.toContain('Registre de coaching adapté à ce membre');
+  });
+
+  it('(b bis) no memberProfile at all → NO tone consigne (and no profile section)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).not.toContain('Registre de coaching adapté à ce membre');
+    expect(prompt).not.toContain("Profil d'entrée (onboarding)");
+  });
+
+  it('stage without a register never surfaces a bare stage nuance (register gates the line)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          memberProfile: {
+            summary: 'Trader autonome.',
+            axesPrioritaires: [],
+            highlightLabels: [],
+            coachingRegister: null,
+            learningStage: 'intuitive',
+          },
+        }),
+      ),
+    );
+    expect(prompt).not.toContain('Registre de coaching adapté à ce membre');
+    expect(prompt).not.toContain('valorise son autonomie');
+  });
+
+  it('the system prompt carries the conditional REGISTRE directive (D2)', () => {
+    expect(MONTHLY_DEBRIEF_SYSTEM_PROMPT).toContain('REGISTRE :');
+    expect(MONTHLY_DEBRIEF_SYSTEM_PROMPT).toContain('registre de coaching adapté au membre');
+    // The default tone still applies when no register consigne is present.
+    expect(MONTHLY_DEBRIEF_SYSTEM_PROMPT).toContain('garde le ton par défaut');
+  });
+});
+
+// =============================================================================
+// (c) weak_signals is ADMIN-ONLY — it NEVER crosses the member boundary
+// (never in the snapshot, never in the prompt). §21.5 firewall + admin-only.
+// =============================================================================
+
+describe('member-facing firewall — weak_signals never reaches the snapshot or prompt', () => {
+  it('the built snapshot memberProfile carries no weakSignals key', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        memberProfile: {
+          summary: 'Trader rigoureux.',
+          axesPrioritaires: ['Tenir mon plan'],
+          highlightLabels: ['Discipline matinale'],
+          coachingRegister: 'direct',
+          learningStage: 'subjective',
+        },
+      }),
+    );
+    expect(snap.memberProfile).not.toBeNull();
+    // The relayed reference exposes ONLY the sanctioned tone enums + words.
+    expect(Object.keys(snap.memberProfile!)).toEqual([
+      'summary',
+      'axesPrioritaires',
+      'highlightLabels',
+      'coachingRegister',
+      'learningStage',
+    ]);
+    expect(JSON.stringify(snap)).not.toMatch(/weak[_-]?signals?/i);
+  });
+
+  it('the rendered prompt never contains any weak-signal token', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          memberProfile: {
+            summary: 'Trader rigoureux.',
+            axesPrioritaires: ['Tenir mon plan'],
+            highlightLabels: [],
+            coachingRegister: 'socratique',
+            learningStage: 'intuitive',
+          },
+        }),
+      ),
+    );
+    expect(prompt).not.toMatch(/weak[_-]?signals?/i);
+    expect(prompt).not.toContain('signaux faibles');
+    expect(prompt).not.toContain('signal faible');
+  });
+});
+
+// =============================================================================
+// (d) PARITY — the OUTPUT JSON schema is UNCHANGED by D1/D2 (relay + tone only).
+// D1/D2 add INPUT context (snapshot + user prompt) only; the shape Claude must
+// return is frozen. Pin the exact required keys + properties as a regression net.
+// =============================================================================
+
+describe('MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA — output parity is unchanged by D1/D2', () => {
+  it('required keys are exactly the frozen set (no register/stage/weakSignals added)', () => {
+    expect(MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA.required).toEqual([
+      'progressionNarrative',
+      'summaryReal',
+      'summaryTraining',
+      'risks',
+      'recommendations',
+      'patterns',
+    ]);
+  });
+
+  it('top-level properties are exactly the frozen set', () => {
+    expect(Object.keys(MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA.properties)).toEqual([
+      'progressionNarrative',
+      'summaryReal',
+      'summaryTraining',
+      'risks',
+      'recommendations',
+      'patterns',
+    ]);
+  });
+
+  it('no coaching-register / learning-stage / weak-signal key leaked into the output schema', () => {
+    const serialized = JSON.stringify(MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA);
+    expect(serialized).not.toMatch(
+      /coachingRegister|learningStage|weak[_-]?signals?|register|stage/i,
+    );
+  });
+
+  it('stays strict (additionalProperties:false) so a smuggled key is structurally rejected', () => {
+    expect(MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA.additionalProperties).toBe(false);
+    expect(MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA.properties.patterns.additionalProperties).toBe(false);
   });
 });

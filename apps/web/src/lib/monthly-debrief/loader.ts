@@ -24,6 +24,13 @@ import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
 // there is 0 cross-member leak. NOT a §21.5-isolated symbol (onboarding answers
 // are real self-declaration, not training-backtest P&L) — unrestricted import.
 import { getProfileForUser } from '@/lib/onboarding-interview/service';
+// D1 (SPEC §25.2) — the sub-schemas that validate the member's onboarding
+// coaching REGISTER + learning STAGE before they cross the member boundary. We
+// `safeParse` the raw Prisma JSON (`unknown`) and derive ONLY the enum
+// (`.register` / `.stage`); the verbatim rationale/evidence are dropped (data
+// minimisation). weakSignals is NEVER read here (admin-only, §21.5) — importing
+// its schema would be a code smell, so we deliberately import only these two.
+import { coachingToneSchema, learningStageSchema } from '@/lib/schemas/onboarding-interview';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the monthly-debrief loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
@@ -625,11 +632,35 @@ const PROFILE_HIGHLIGHT_LABEL_MAX_CHARS = 100;
  * (data minimisation: no raw answer text crosses into the monthly snapshot).
  * Returns `null` when the row is absent OR when nothing usable survives (the
  * prompt then omits the whole profile section — no fabricated axes, §33.6).
+ *
+ * D1 (SPEC §25.2) — additionally derives the member's COACHING REGISTER and
+ * LEARNING STAGE from the Prisma JSON `coachingTone` / `learningStage` columns
+ * (typed `unknown`). Each is `safeParse`d with its dedicated sub-schema and only
+ * the enum (`.register` / `.stage`) is kept — the verbatim rationale/evidence
+ * are dropped (data minimisation). Invalid/absent JSON → `null` (never throws).
+ * These tune the debrief TONE only; they are NEVER an input of the behavioural
+ * score (firewall §21.5). `weakSignals` is deliberately NOT read (admin-only).
+ * A profile carrying ONLY a register/stage (no summary/axes/labels) still
+ * surfaces (returns a reference) so the tone consigne can travel even when the
+ * member's own words are absent.
  */
 function toMemberProfileReference(
-  row: { summary: string; highlights: unknown; axesPrioritaires: unknown } | null,
+  row: {
+    summary: string;
+    highlights: unknown;
+    axesPrioritaires: unknown;
+    coachingTone: unknown;
+    learningStage: unknown;
+  } | null,
 ): MemberProfileReference | null {
   if (row === null) return null;
+
+  // D1 — derive the tone enums defensively (safeParse, never throw). Only the
+  // enum crosses the member boundary; rationale/evidence are dropped.
+  const coachingToneParsed = coachingToneSchema.safeParse(row.coachingTone);
+  const coachingRegister = coachingToneParsed.success ? coachingToneParsed.data.register : null;
+  const learningStageParsed = learningStageSchema.safeParse(row.learningStage);
+  const learningStage = learningStageParsed.success ? learningStageParsed.data.stage : null;
 
   const summary =
     typeof row.summary === 'string' ? row.summary.trim().slice(0, PROFILE_SUMMARY_MAX_CHARS) : '';
@@ -666,9 +697,17 @@ function toMemberProfileReference(
     : [];
 
   // Nothing usable → null (the prompt omits the section; no fabricated axes).
-  if (summary.length === 0 && axesPrioritaires.length === 0 && highlightLabels.length === 0) {
+  // D1 — a valid register/stage alone is "usable": the tone consigne can travel
+  // even when the member's own words are empty, so keep the reference in that case.
+  if (
+    summary.length === 0 &&
+    axesPrioritaires.length === 0 &&
+    highlightLabels.length === 0 &&
+    coachingRegister === null &&
+    learningStage === null
+  ) {
     return null;
   }
 
-  return { summary, axesPrioritaires, highlightLabels };
+  return { summary, axesPrioritaires, highlightLabels, coachingRegister, learningStage };
 }

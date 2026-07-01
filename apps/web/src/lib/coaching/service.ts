@@ -4,6 +4,7 @@ import { cache } from 'react';
 
 import { coerceAxes } from '@/lib/objectives/coaching-axis';
 import { getProfileForUser } from '@/lib/onboarding-interview/service';
+import { coachingToneSchema, learningStageSchema } from '@/lib/schemas/onboarding-interview';
 import { detectMomentum } from '@/lib/scoring/momentum';
 import { getBehavioralScoreHistory } from '@/lib/scoring/service';
 import { listRecentAlertsForMember } from '@/lib/verification/alerts';
@@ -19,7 +20,35 @@ import {
 } from './engine';
 import { buildMentalMap, type MentalMapEntry } from './mental-map';
 import { getMicroObjectiveProgress, getOpenMicroObjective } from './micro-objective';
-import { classifyPriorityAxes } from './priority-axis';
+import { classifyPriorityAxes, type PriorityAxisHints } from './priority-axis';
+
+/**
+ * D5 §J-D — dérive les indices de tie-break DÉTERMINISTES depuis le profil S2 profond.
+ * `safeParse` des MÊMES schemas Zod utilisés au write-time (jamais throw sur null /
+ * legacy / garbage) puis ne garde QUE les enums `register`/`stage` — jamais le texte
+ * brut IA (`rationale`/`evidence`), donc §50-safe (aucun contenu AI surfacé) et
+ * firewall §21.5 (jamais un input du score). On ne lit JAMAIS `weakSignals`
+ * (admin-only : il ne traverse pas la frontière membre). Champs absents / malformés
+ * (lignes legacy ou partielles) ⇒ omis ⇒ le tie-break retombe sur l'ordre historique.
+ */
+function derivePriorityAxisHints(
+  profile: {
+    coachingTone: unknown;
+    learningStage: unknown;
+  } | null,
+): PriorityAxisHints {
+  // Mutable draft assemblé conditionnellement ; on n'écrit une clé QUE si le safeParse
+  // réussit (jamais `= undefined`, incompatible avec exactOptionalPropertyTypes).
+  const hints: {
+    register?: 'direct' | 'pedagogique' | 'socratique';
+    stage?: 'mechanical' | 'subjective' | 'intuitive';
+  } = {};
+  const tone = coachingToneSchema.safeParse(profile?.coachingTone);
+  if (tone.success) hints.register = tone.data.register;
+  const stage = learningStageSchema.safeParse(profile?.learningStage);
+  if (stage.success) hints.stage = stage.data.stage;
+  return hints;
+}
 
 /**
  * S5 §32-E1 — seam serveur de la « carte mentale » du membre.
@@ -52,7 +81,11 @@ export async function getMentalMap(userId: string): Promise<MentalMapEntry[]> {
     dominantSignals: pickDominantSignals(scoreEvents),
     constancy: constancy?.breakdown ?? null,
     // §32-C — priorités d'onboarding (profil S2) → tie-break de priorisation.
-    priorityAxes: classifyPriorityAxes(coerceAxes(profile?.axesPrioritaires)),
+    // D5 §J-D — départage déterministe (register/stage) entre axes touchés à égalité.
+    priorityAxes: classifyPriorityAxes(
+      coerceAxes(profile?.axesPrioritaires),
+      derivePriorityAxisHints(profile),
+    ),
   });
 }
 
@@ -82,7 +115,11 @@ async function gatherCoachingInput(
   const dominantSignals = pickDominantSignals(scoreEvents);
   // §32-C — exploite le profil S2 RÉELLEMENT : ses axes prioritaires (texte libre
   // d'onboarding) mappés vers l'enum mental, jamais surfacés bruts (§50/§2-safe).
-  const priorityAxes = classifyPriorityAxes(coerceAxes(profile?.axesPrioritaires));
+  // D5 §J-D — départage déterministe (register/stage) entre axes touchés à égalité.
+  const priorityAxes = classifyPriorityAxes(
+    coerceAxes(profile?.axesPrioritaires),
+    derivePriorityAxisHints(profile),
+  );
   return {
     mentalMap: buildMentalMap({
       alerts,

@@ -19,6 +19,13 @@ import type {
   SubmitWeeklyScheduleInput,
   WeeklyScheduleResponses,
 } from '@/lib/schemas/weekly-schedule-questionnaire';
+// D3 — read-only adaptive dimensions from the onboarding profile. Parsed with
+// the SAME strict Zod schemas used at write time so a null/legacy/garbage Json?
+// value safely degrades to "no modulation" instead of throwing. weakSignals is
+// DELIBERATELY not imported: it is admin-only and must never cross the member
+// boundary (firewall §21.5 — these two dimensions only TUNE copy/blocks, they
+// are never fed to the behavioural score).
+import { coachingToneSchema, learningStageSchema } from '@/lib/schemas/onboarding-interview';
 import type { CalendarSlotValue } from '@/lib/calendar/instrument-v1';
 // §21.5 — the ONLY sanctioned training read: a count-only primitive. The
 // calendar never imports a training value, only "how many backtests recently".
@@ -381,9 +388,22 @@ export async function loadCalendarSnapshotForUser(
     }),
     db.memberProfile.findUnique({
       where: { userId },
-      select: { summary: true },
+      // D3 — pull the two §21.5-safe adaptive dimensions alongside the summary.
+      // weakSignals / axesStructured are NOT selected: they are admin-only and
+      // must never reach the member-facing calendar prompt.
+      select: { summary: true, coachingTone: true, learningStage: true },
     }),
   ]);
+
+  // Defensive parse of the two adaptive dimensions (Prisma Json?, null on
+  // legacy/partial rows). safeParse never throws on null/garbage → we degrade
+  // to "no modulation". Only the closed enum literal (`stage` / `register`)
+  // crosses into the snapshot — the rationale/evidence stay behind (not needed,
+  // and evidence is member free-text already surfaced only via profileSummary).
+  const learningStageParsed = learningStageSchema.safeParse(profile?.learningStage);
+  const learningStage = learningStageParsed.success ? learningStageParsed.data.stage : null;
+  const coachingToneParsed = coachingToneSchema.safeParse(profile?.coachingTone);
+  const coachingRegister = coachingToneParsed.success ? coachingToneParsed.data.register : null;
 
   return buildCalendarSnapshot({
     pseudonymLabel: pseudonymizeMember(userId),
@@ -397,6 +417,8 @@ export async function loadCalendarSnapshotForUser(
       trainingSessionsLast14d: training.count,
       lastMindsetCheckDate: lastMindset ? lastMindset.weekStart.toISOString().slice(0, 10) : null,
     },
+    learningStage,
+    coachingRegister,
   });
 }
 

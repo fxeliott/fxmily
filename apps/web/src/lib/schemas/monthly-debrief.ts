@@ -393,6 +393,19 @@ const memberProfileSnapshotSchema = z
           .transform(safeFreeText),
       )
       .max(5),
+    /// D1 (SPEC §25.2) — the member's onboarding COACHING REGISTER, derived by
+    /// the loader from `MemberProfile.coachingTone.register` (Zod-validated
+    /// there; only the closed enum travels — no free-text, no rationale/evidence).
+    /// REFERENCE for the debrief TONE only (`direct` / `pedagogique` /
+    /// `socratique`) — NEVER an input of the behavioural score (firewall §21.5).
+    /// `null` when absent/malformed → the prompt omits the tone consigne.
+    coachingRegister: z.enum(['direct', 'pedagogique', 'socratique']).nullable().optional(),
+    /// D1 (SPEC §25.2) — the member's onboarding LEARNING STAGE, derived by the
+    /// loader from `MemberProfile.learningStage.stage` (Zod-validated there; only
+    /// the closed enum travels). Lets the debrief nuance the register
+    /// (`mechanical` / `subjective` / `intuitive`) — NEVER an input of the
+    /// behavioural score (firewall §21.5). `null` when absent/malformed.
+    learningStage: z.enum(['mechanical', 'subjective', 'intuitive']).nullable().optional(),
   })
   .strict();
 

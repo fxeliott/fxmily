@@ -9,6 +9,7 @@ import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scori
 
 import { coerceAxes, pickWeeklyAxis } from './coaching-axis';
 import { deriveMethodGoal, type DerivedMethodGoal } from './derived-goals';
+import { deriveLearningStage, type DerivedLearningStage } from './learning-stage';
 import { orderGuidanceActions } from './next-actions';
 import {
   DIMENSION_META,
@@ -83,6 +84,17 @@ export interface ProcessObjectivesView {
    * sa pratique. Posture §2 : une cible de process, jamais de P&L.
    */
   methodGoal: DerivedMethodGoal | null;
+  /**
+   * D4 — le STADE d'apprentissage du membre (Mécanique / Subjectif / Intuitif),
+   * dérivé de son profil d'onboarding (`MemberProfile.learningStage`, analyse IA
+   * profonde). DÉTERMINISTE : on ne surface que le libellé issu de l'enum + une
+   * phrase FIXE par stade pour orienter son plan, jamais le texte brut IA
+   * (`rationale`) ⇒ aucune bannière IA requise (AI Act §50). `null` tant qu'aucun
+   * profil n'existe ou que le champ est absent/malformé. Firewall §21.5 :
+   * lecture seule, jamais un input du score. Posture §2 : descriptif, jamais un
+   * signal de marché. On ne lit PAS `weakSignals` (admin-only).
+   */
+  learningStage: DerivedLearningStage | null;
 }
 
 export async function getProcessObjectives(
@@ -176,6 +188,11 @@ export async function getProcessObjectives(
   // doux). `null` tant qu'il n'a pas assez de trades ou qu'il est fidèle partout.
   const methodGoal = deriveMethodGoal(methodMirror);
 
+  // D4 — le stade d'apprentissage dérivé du profil (déterministe : enum → libellé
+  // FR + phrase fixe). Lecture seule de `profile?.learningStage` (jamais
+  // `weakSignals`). `null` sans profil ou champ absent/malformé ⇒ rien n'est rendu.
+  const learningStage = deriveLearningStage(profile?.learningStage);
+
   return {
     hasScores: latestScore !== null,
     cap,
@@ -188,5 +205,6 @@ export async function getProcessObjectives(
     nextActions,
     coachingAxis,
     methodGoal,
+    learningStage,
   };
 }

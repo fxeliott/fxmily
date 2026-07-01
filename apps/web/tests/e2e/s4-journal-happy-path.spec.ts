@@ -2,18 +2,19 @@
  * S4 DoD #1 — « le membre ajoute un trade + photo — testé en réel », exercised
  * END TO END against real Postgres through the real UI:
  *
- *   A. EMPTY-STATE CTA + WIZARD + PHOTO (régression S4 DOD1-01 — the CTA used
- *      to be a dead `<Btn onPrimary>` across the RSC boundary):
+ *   A. EMPTY-STATE CTA + WIZARD + TRADINGVIEW LINK (régression S4 DOD1-01 — the
+ *      CTA used to be a dead `<Btn onPrimary>` across the RSC boundary ; J1 —
+ *      the mandatory photo proof is now a TradingView link, NO upload):
  *        1. /journal empty → « Ton journal est vide. » + the CTA « Logger mon
  *           premier trade » is a real LINK (`a[href="/journal/new"]`);
  *        2. the 6-step wizard is driven with valid values (pair, direction,
  *           session, prices, R:R, discipline, émotion) ;
- *        3. step 6 gate: submit is DISABLED until the entry capture is
- *           uploaded (`trade-form-wizard.tsx` — `disabled={!screenshotEntryKey}`);
- *        4. a real PNG goes through POST /api/uploads (kind=trade-entry,
- *           magic-byte sniffed server-side) → submit → redirect /journal/[id]
- *           → the detail page renders the entry image → the DB row carries a
- *           non-null `screenshotEntryKey` under `trades/{userId}/` ;
+ *        3. step 6 gate: submit is DISABLED until a valid TradingView link is
+ *           filled (`trade-form-wizard.tsx` — `disabled={!tradingViewEntryUrl}`);
+ *        4. the required link is validated server-side (HTTPS + tradingview.com)
+ *           → submit → redirect /journal/[id] → the detail page renders the
+ *           « Voir l'analyse d'entrée » anchor → the DB row carries the
+ *           `tradingViewEntryUrl` and a NULL `screenshotEntryKey` ;
  *        5. /journal lists the new trade card.
  *
  *   B. PAGINATION 50+ (S4 DOD1-02 — the list used to hard-truncate at 50):
@@ -21,10 +22,6 @@
  *      cards + « Voir les trades plus anciens » ; page 2 shows the rest +
  *      « revenir au début » ; a forged `?cursor=` degrades to page 1
  *      (parseCursor guard — `journal/page.tsx:39-41`), never a 500.
- *
- * The capture fixture reuses the S3 proof PNG (real PNG bytes, same path
- * anchoring as `s3-verification-proofs.spec.ts:31` — `__dirname` is unreliable
- * once transpiled, anchor on cwd).
  *
  * Determinism (canon J-C3): NO `networkidle` in the wizard flow — `goto`
  * awaits `load`, every step interaction is gated on an auto-waiting
@@ -34,7 +31,6 @@
  */
 
 import { existsSync } from 'node:fs';
-import path from 'node:path';
 
 import { chromium, expect, test } from '@playwright/test';
 
@@ -56,16 +52,6 @@ async function dismissCookieBanner(page: import('@playwright/test').Page): Promi
   });
 }
 
-// Real PNG bytes — passes the server-side magic-byte sniff like a genuine
-// member capture would (same fixture as the S3 proof spec).
-const FIXTURE_PNG = path.join(
-  process.cwd(),
-  'tests',
-  'e2e',
-  'fixtures',
-  'mt5-history-account-a.png',
-);
-
 /** TradeCard renders as `li > a[href="/journal/<id>"]` inside the list `<ul>`. */
 const TRADE_CARD_SELECTOR = 'main ul > li > a[href^="/journal/"]';
 
@@ -82,7 +68,7 @@ async function isChromiumLaunchable(): Promise<{ ok: boolean; reason?: string }>
   return { ok: true };
 }
 
-test.describe('S4 — /journal happy-path : empty-state CTA + wizard + photo + pagination', () => {
+test.describe('S4 — /journal happy-path : empty-state CTA + wizard + lien TradingView + pagination', () => {
   test.beforeAll(async () => {
     const probe = await isChromiumLaunchable();
     test.skip(!probe.ok, probe.reason ?? 'Chromium not launchable');
@@ -100,7 +86,7 @@ test.describe('S4 — /journal happy-path : empty-state CTA + wizard + photo + p
     member = null;
   });
 
-  test('A — empty-state CTA réel + wizard 6 étapes + photo (S4 DOD1-01)', async ({
+  test('A — empty-state CTA réel + wizard 6 étapes + lien TradingView (S4 DOD1-01)', async ({
     page,
     request,
   }) => {
@@ -163,42 +149,64 @@ test.describe('S4 — /journal happy-path : empty-state CTA + wizard + photo + p
     await page.getByRole('button', { name: 'Calme', exact: true }).click();
     await page.getByRole('button', { name: /Suivant/ }).click();
 
-    // Step 6/6 — Capture avant entrée. SUBMIT GATE: the save button stays
-    // disabled (native `disabled`) until a capture is uploaded, with the
-    // explicit member-facing hint.
-    await expect(wizardHeading).toHaveText('Capture avant entrée');
+    // Step 6/6 — Lien TradingView d'entrée (J1 pivot capture → lien). SUBMIT
+    // GATE: the save button stays disabled (native `disabled`) until a valid
+    // TradingView link is filled, with the explicit member-facing hint. NO
+    // photo is uploaded anywhere in this flow — the whole point of J1.
+    await expect(wizardHeading).toHaveText("Lien TradingView d'entrée");
     const submitBtn = page.getByRole('button', { name: 'Sauvegarder le trade' });
     await expect(submitBtn).toBeDisabled();
-    await expect(page.getByText('Ajoute la capture pour activer la sauvegarde.')).toBeVisible();
+    await expect(
+      page.getByText('Colle ton lien TradingView pour activer la sauvegarde.'),
+    ).toBeVisible();
 
-    // --- 3. Upload a real PNG through the real POST /api/uploads pipeline.
-    // `.first()` — step 6 now has TWO file inputs (primary capture + the §31
-    // additional-photos gallery uploader). The primary is first in the DOM.
-    await page.locator('input[type="file"]').first().setInputFiles(FIXTURE_PNG);
-    // The uploader preview confirms the 201 + readUrl round-trip.
-    await expect(page.getByAltText('Capture avant entrée')).toBeVisible({ timeout: 15_000 });
+    // --- 3. Fill the required TradingView entry link (https + tradingview.com,
+    // re-validated server-side). No POST /api/uploads, no file input.
+    const ENTRY_LINK = 'https://www.tradingview.com/x/S4Journal1/';
+    // Target the input by its id, NOT getByLabel: the step's <section
+    // aria-labelledby="wizard-heading"> carries the SAME accessible name as this
+    // field's <label> ("Lien TradingView d'entrée"), so getByLabel is ambiguous
+    // and resolves the section first. The id is the unambiguous anchor.
+    // Controlled React input → type char-by-char (WebKit-safe, canon F5): a
+    // one-shot `fill` sets the DOM value without reliably committing onChange.
+    const entryBox = page.locator('#tradingViewEntryUrl');
+    await entryBox.click();
+    await entryBox.pressSequentially(ENTRY_LINK);
+    await expect(entryBox).toHaveValue(ENTRY_LINK);
+    await expect(page.getByText('Lien TradingView valide.')).toBeVisible();
     await expect(submitBtn).toBeEnabled();
 
     // --- 4. Submit → Server Action createTradeAction → redirect /journal/[id].
+    // 60s: the FIRST submit on a cold `next dev` compiles the createTradeAction
+    // route on demand (the heaviest cold-compile hop of the flow) — 30s was
+    // tighter than the CI navigationTimeout (45s) and produced a cold-start
+    // flake absorbed only by a retry. This aligns it with the cold-compile
+    // tolerance the config already grants navigations.
     await submitBtn.click();
-    await expect(page).toHaveURL(/\/journal\/[a-z0-9]{20,40}$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/journal\/[a-z0-9]{20,40}$/, { timeout: 60_000 });
 
-    // Detail page renders the entry image (alt carries the pair — J2 contract).
-    await expect(page.getByAltText('Capture avant entrée du trade EURUSD')).toBeVisible({
-      timeout: 15_000,
-    });
+    // Detail page renders the TradingView analysis link (the psychology triad's
+    // « Avant » moment carries an accessible « analyse d'entrée » anchor).
+    await expect(
+      page.getByRole('link', { name: "Voir l'analyse d'entrée sur TradingView" }),
+    ).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
 
-    // Real DB row: the trade belongs to the member and carries a non-null
-    // screenshotEntryKey under the member's own storage prefix (BOLA guard).
+    // Real DB row: the trade belongs to the member and carries the TradingView
+    // entry link — with NO screenshot key (J1: the photo pipeline is retired).
     const trade = await db.trade.findFirst({
       where: { userId: member.id, pair: 'EURUSD' },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, screenshotEntryKey: true, closedAt: true },
+      select: {
+        id: true,
+        screenshotEntryKey: true,
+        tradingViewEntryUrl: true,
+        closedAt: true,
+      },
     });
     expect(trade).not.toBeNull();
-    expect(trade?.screenshotEntryKey).not.toBeNull();
-    expect(trade?.screenshotEntryKey).toMatch(new RegExp(`^trades/${member.id}/`));
+    expect(trade?.tradingViewEntryUrl).toBe(ENTRY_LINK);
+    expect(trade?.screenshotEntryKey).toBeNull();
     expect(trade?.closedAt).toBeNull(); // open trade — close flow is separate
     expect(page.url()).toContain(`/journal/${trade!.id}`);
 

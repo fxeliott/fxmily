@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { tradingViewUrlRequiredSchema } from '@/lib/schemas/tradingview-url';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 import { EMOTION_MAX_PER_MOMENT, isEmotionSlug } from '@/lib/trading/emotions';
 import { TRADING_PAIRS } from '@/lib/trading/pairs';
@@ -170,9 +171,11 @@ const managementAdherence = z
 /**
  * Pre-entry block (steps 1–6 of the wizard).
  *
- * The screenshot is mandatory by SPEC §7.3 ("Screen avant entrée — upload
- * obligatoire") but submitted as an already-uploaded storage key, NOT a
- * file blob — the wizard uploads through `lib/storage` first.
+ * J1 pivot (capture → lien, actée par Eliott) : the pre-entry PROOF is now a
+ * mandatory TradingView link (`tradingViewEntryUrl`), NOT an uploaded
+ * screenshot. The legacy `screenshotEntryKey` stays accepted but OPTIONAL —
+ * pre-J1 trades keep their stored capture, the wizard no longer uploads one.
+ * The link is hardened in the shared `lib/schemas/tradingview-url` module.
  */
 export const tradeOpenSchema = z
   .object({
@@ -224,7 +227,10 @@ export const tradeOpenSchema = z
         return v;
       }),
     notes: notesSchema,
-    screenshotEntryKey: storageKey,
+    // J1 — mandatory TradingView entry link (replaces the former screenshot
+    // upload). The legacy storage key is kept OPTIONAL for pre-J1 trades.
+    tradingViewEntryUrl: tradingViewUrlRequiredSchema,
+    screenshotEntryKey: storageKey.optional(),
   })
   .superRefine((data, ctx) => {
     // Sanity check stopLossPrice direction relative to entry. We don't reject
@@ -295,9 +301,13 @@ export const tradeCloseSchema = z
     /// Member self-assigned at close (Q3=A) — see `TRADE_TAG_SLUGS` allowlist.
     tags: tradeTagsSchema.optional().default([]),
     notes: notesSchema,
-    screenshotExitKey: storageKey,
+    // J1 — mandatory TradingView exit link (replaces the former screenshot
+    // upload at close). The legacy storage key is kept OPTIONAL for pre-J1
+    // trades / administrative repairs.
+    tradingViewExitUrl: tradingViewUrlRequiredSchema,
+    screenshotExitKey: storageKey.optional(),
   })
-  .strict(); // invariant #6 — reject unknown keys (raw is hand-built, 8 fields)
+  .strict(); // invariant #6 — reject unknown keys (raw is hand-built, 9 fields)
 
 export type TradeCloseInput = z.infer<typeof tradeCloseSchema>;
 
@@ -340,8 +350,8 @@ export const WIZARD_STEPS = [
   // 4 — discipline & emotion before (V1.5: + tradeQuality at the top of the step,
   //                                  Steenbarger setup classification before discipline tags)
   ['tradeQuality', 'planRespected', 'hedgeRespected', 'emotionBefore'],
-  // 5 — entry screenshot
-  ['screenshotEntryKey'],
+  // 5 — entry proof: TradingView link (J1 pivot, replaces the screenshot upload)
+  ['tradingViewEntryUrl'],
   // 6 — outcome fields. NOT rendered by the open wizard (it caps at step 5 /
   // « Étape X sur 6 ») — this entry documents the CLOSE flow's field group
   // (`/journal/[id]/close`) so both flows share one field map (S4 DOD4-F1 :
@@ -352,7 +362,7 @@ export const WIZARD_STEPS = [
     'outcome',
     'emotionDuring',
     'emotionAfter',
-    'screenshotExitKey',
+    'tradingViewExitUrl',
     'notes',
   ],
 ] as const;

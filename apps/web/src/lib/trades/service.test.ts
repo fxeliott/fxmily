@@ -59,7 +59,8 @@ function closeInput(
     partialAtTarget: management.partialAtTarget ?? null,
     tags: [],
     notes: undefined,
-    screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',
+    // J1 — mandatory TradingView exit link (replaces the exit screenshot).
+    tradingViewExitUrl: 'https://www.tradingview.com/x/exit9876/',
   };
 }
 

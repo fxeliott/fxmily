@@ -10,11 +10,12 @@
  *        2. the open session shows « En cours » + an empty backtests list +
  *           « Ajouter un backtest » → /training/new?sessionId=… with the
  *           « Dans la session : … » banner;
- *        3. the 6-step backtest wizard is driven (pair → real PNG upload →
+ *        3. the 6-step backtest wizard is driven (pair → lien TradingView →
  *           R:R → résultat → système → leçon) → submit → redirect BACK to the
  *           session → the backtest is now grouped under it (« 1 backtest »);
- *        4. DB: the TrainingTrade carries `sessionId` = the session + an
- *           `entryScreenshotKey` under `training/{userId}/`;
+ *        4. DB: the TrainingTrade carries `sessionId` = the session + the pasted
+ *           `tradingViewUrl` (J1 pivot capture → lien) and a NULL
+ *           `entryScreenshotKey`;
  *        5. /training landing shows the session card « 1 backtest dans cette
  *           séance »;
  *        6. DoD#3 — the backtest NEVER leaks into the real journal (/journal
@@ -33,7 +34,6 @@
  */
 
 import { existsSync } from 'node:fs';
-import path from 'node:path';
 
 import { chromium, expect, test } from '@playwright/test';
 
@@ -45,14 +45,6 @@ import {
   type SeededUser,
 } from '@/test/db-helpers';
 import { loginAs } from '@/test/e2e-auth';
-
-const FIXTURE_PNG = path.join(
-  process.cwd(),
-  'tests',
-  'e2e',
-  'fixtures',
-  'mt5-history-account-a.png',
-);
 
 let admin: SeededUser | null = null;
 let member: SeededUser | null = null;
@@ -125,6 +117,13 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     request,
   }) => {
     if (!member) throw new Error('seed missing — beforeAll did not run');
+    // Long flow (~10 route compiles: /training, /sessions/new, the session
+    // form submit, /training/new, the 6-step wizard submit, the session detail,
+    // the backtest detail, /journal). On a cold `next dev` the CUMULATIVE
+    // compile time brushes the CI 60s per-test budget → `test.slow()` (×3)
+    // gives deterministic headroom on the dev server. Passing assertions still
+    // resolve instantly; only a genuine hang would consume the larger budget.
+    test.slow();
 
     await dismissCookieBanner(page);
     await page.goto('/login');
@@ -135,7 +134,11 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     const newSessionCta = page.getByRole('link', { name: 'Nouvelle session' });
     await expect(newSessionCta).toBeVisible();
     await newSessionCta.click();
-    await expect(page).toHaveURL(/\/training\/sessions\/new$/);
+    // 30s (like every sibling navigation below): the FIRST hit on
+    // /training/sessions/new compiles the route on a cold `next dev`; the 10s
+    // default expect-timeout was tighter than that cold-compile budget and
+    // produced a false failure on a slow dev server.
+    await expect(page).toHaveURL(/\/training\/sessions\/new$/, { timeout: 30_000 });
 
     // --- 2. Fill + submit the session form.
     const label = 'Range GBPUSD — janvier (e2e)';
@@ -169,12 +172,15 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     await page.getByLabel('Paire', { exact: true }).fill('GBPUSD');
     await page.getByRole('button', { name: /Suivant/ }).click();
 
-    // Step 2/6 — Capture: real PNG through POST /api/uploads (training-entry).
-    await expect(wizardHeading).toHaveText('Capture de ton analyse');
-    await page.locator('input[type="file"]').setInputFiles(FIXTURE_PNG);
-    await expect(page.getByAltText("Capture de l'analyse du backtest")).toBeVisible({
-      timeout: 15_000,
-    });
+    // Step 2/6 — Lien TradingView requis (J1 pivot capture → lien).
+    // Controlled input → type char-by-char (WebKit-safe, canon F5): a one-shot
+    // `fill` sets the DOM value without reliably committing React's onChange on
+    // WebKit (mobile-iphone-15 project), which would drop the link before submit.
+    await expect(wizardHeading).toHaveText('Lien de ton analyse');
+    const s8Link = page.getByLabel('Lien TradingView');
+    await s8Link.click();
+    await s8Link.pressSequentially('https://www.tradingview.com/x/S8Sess01/');
+    await expect(s8Link).toHaveValue('https://www.tradingview.com/x/S8Sess01/');
     await page.getByRole('button', { name: /Suivant/ }).click();
 
     // Step 3/6 — R:R prévu (default 1:2.00 valid).
@@ -241,6 +247,7 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
         id: true,
         sessionId: true,
         entryScreenshotKey: true,
+        tradingViewUrl: true,
         pair: true,
         planFollowed: true,
         riskDefinedBefore: true,
@@ -251,7 +258,10 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     expect(tt).not.toBeNull();
     expect(tt?.sessionId).toBe(sessionId);
     expect(tt?.pair).toBe('GBPUSD');
-    expect(tt?.entryScreenshotKey).toMatch(new RegExp(`^training/${member.id}/`));
+    // J1 pivot capture → lien : the backtest carries the pasted TradingView link
+    // and NO screenshot key (the upload pipeline is retired for training too).
+    expect(tt?.tradingViewUrl).toBe('https://www.tradingview.com/x/S8Sess01/');
+    expect(tt?.entryScreenshotKey).toBeNull();
     // S8 V2 §33-2 — the checklist tri-state round-tripped from the wizard.
     expect(tt?.planFollowed).toBe(true);
     expect(tt?.riskDefinedBefore).toBe(true);
@@ -270,12 +280,11 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     // --- 8. The backtest DETAIL surfaces the checklist (§33-2) + a calm
     // « En attente de correction » review pill (§33-3): no correction exists
     // yet on this UI-created trade.
-    // `domcontentloaded`, NOT the default `load`: the detail page renders the
-    // backtest screenshot <img> whose src is the `/api/uploads/…` route. On a
-    // cold dev compile that route can stall the `load` event past the budget
-    // (proven flaky: server returns the HTML in ~165ms but `goto` waits for the
-    // image). The assertions below auto-wait, so readiness is still gated — this
-    // matches the file's "no networkidle, expect-gated" determinism canon.
+    // `domcontentloaded`, NOT the default `load`: this `force-dynamic` detail
+    // route compiles + server-renders on first cold hit, and the `load` event
+    // can stall past the budget on the slow dev filesystem. The assertions below
+    // auto-wait, so readiness is still gated — this matches the file's "no
+    // networkidle, expect-gated" determinism canon.
     await page.goto(`/training/${tt!.id}`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { level: 1, name: 'GBPUSD' })).toBeVisible();
     await expect(page.getByText('En attente de correction')).toBeVisible();
@@ -294,6 +303,12 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     if (!admin || !member || !seededSessionId || !seededTradeId) {
       throw new Error('seed missing — beforeAll did not run');
     }
+    // Long admin↔member loop (login×3 + ~6 route/Server-Action cold compiles:
+    // admin training tab, session detail, correct-backtest action, member
+    // detail, member reply action, admin re-view). The CUMULATIVE cold-compile
+    // time brushes the CI 60s per-test budget → `test.slow()` (×3) for
+    // deterministic headroom; a genuine hang would still fail at the larger cap.
+    test.slow();
     const TRAINING_COMMENT = 'Backtest propre, mais entrée 2 bougies trop tôt (correction e2e S8).';
 
     await dismissCookieBanner(page);
@@ -342,16 +357,28 @@ test.describe('S8 — Mode Entraînement : session de backtest (create + group +
     await page.context().clearCookies();
     await page.goto('/login');
     await loginAs(page, request, member.email, member.password);
-    await page.goto(`/training/${seededTradeId}`);
+    // `domcontentloaded` (canon, mirrors test A): the `force-dynamic` member
+    // detail route compiles cold on first hit; the default `load` wait timed out
+    // (net::ERR_ABORTED). The auto-waiting expects below still gate readiness.
+    await page.goto(`/training/${seededTradeId}`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('Corrections reçues')).toBeVisible();
     await expect(page.getByText(TRAINING_COMMENT)).toBeVisible();
     await expect(page.getByText('Correction vue')).toBeVisible();
 
     // --- 5. §32-4 — the member REPLIES to the correction; it persists + shows.
     const MEMBER_REPLY = 'Compris — je travaille ma patience d’exécution (réponse e2e S8).';
-    await page.getByRole('button', { name: 'Répondre à Eliott' }).click();
+    // The reply island is collapsed by default; « Répondre à Eliott » reveals
+    // the textarea through a client onClick (setOpen). On a cold first paint the
+    // click can land BEFORE the island hydrates → it no-ops and the textarea
+    // never appears — a genuine hydration race (retries + test.slow don't help,
+    // the click is simply lost). Retry the reveal until the textarea shows; once
+    // open the toggle unmounts, so guard the re-click on its visibility.
+    const revealReply = page.getByRole('button', { name: 'Répondre à Eliott' });
     const replyBox = page.getByLabel('Ta réponse');
-    await expect(replyBox).toBeVisible();
+    await expect(async () => {
+      if (await revealReply.isVisible()) await revealReply.click();
+      await expect(replyBox).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 30_000 });
     await replyBox.fill(MEMBER_REPLY);
     await page.getByRole('button', { name: 'Envoyer ma réponse' }).click();
     // Deterministic POST-WRITE signal: on success the island collapses AND the

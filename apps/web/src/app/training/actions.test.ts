@@ -80,6 +80,10 @@ function form(fields: Record<string, string>): FormData {
 function validForm(overrides: Record<string, string> = {}): FormData {
   return form({
     pair: 'EURUSD',
+    // J1 — the TradingView link is now the required primary field; the
+    // screenshot key stays legacy-optional (still provided here to keep the
+    // BOLA-guard tests exercising a present key).
+    tradingViewUrl: 'https://www.tradingview.com/x/NQe0OrXz/',
     entryScreenshotKey: OWN_KEY,
     plannedRR: '2',
     systemRespected: 'true',
@@ -208,8 +212,8 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
       userId: MEMBER_ID,
       pair: 'EURUSD',
       entryScreenshotKey: OWN_KEY,
-      // F1 — no link in the form → null bridge (mirror outcome/resultR).
-      tradingViewUrl: null,
+      // J1 — the required TradingView link passes straight through to the service.
+      tradingViewUrl: 'https://www.tradingview.com/x/NQe0OrXz/',
       plannedRR: 2,
       outcome: null,
       resultR: null,

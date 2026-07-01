@@ -133,7 +133,12 @@ export async function createTradeAction(
     planRespected: formData.get('planRespected'),
     hedgeRespected: formData.get('hedgeRespected'),
     notes: formData.get('notes') ?? undefined,
-    screenshotEntryKey: formData.get('screenshotEntryKey'),
+    // J1 — mandatory TradingView entry link (replaces the screenshot upload).
+    tradingViewEntryUrl: formData.get('tradingViewEntryUrl'),
+    // J1 — legacy screenshot key is now OPTIONAL and no longer sent by the
+    // wizard. Coerce absent/'' → undefined so the optional Zod string passes
+    // (FormData.get returns null when absent, which `.optional()` rejects).
+    screenshotEntryKey: formData.get('screenshotEntryKey') || undefined,
   };
 
   const parsed = tradeOpenSchema.safeParse(raw);
@@ -150,8 +155,9 @@ export async function createTradeAction(
   // BOLA defence: the key shape was already validated by Zod, but we must
   // also enforce that the userId segment belongs to the *current session* —
   // otherwise an authenticated attacker could attach another member's
-  // (or admin-uploaded) screenshot to their own trade.
-  if (!keyBelongsTo(data.screenshotEntryKey, session.user.id)) {
+  // (or admin-uploaded) screenshot to their own trade. J1 — the screenshot is
+  // now OPTIONAL, so only enforce ownership when a legacy key is present.
+  if (data.screenshotEntryKey && !keyBelongsTo(data.screenshotEntryKey, session.user.id)) {
     return {
       ok: false,
       error: 'invalid_input',
@@ -206,7 +212,8 @@ export async function createTradeAction(
       planRespected: data.planRespected,
       hedgeRespected: data.hedgeRespected,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
-      screenshotEntryKey: data.screenshotEntryKey,
+      tradingViewEntryUrl: data.tradingViewEntryUrl,
+      screenshotEntryKey: data.screenshotEntryKey ?? null,
       extraEntryKeys,
     });
     tradeId = trade.id;
@@ -289,7 +296,10 @@ export async function closeTradeAction(
     // the Zod schema defaults to `[]` if missing.
     tags: formData.getAll('tags').filter((v): v is string => typeof v === 'string'),
     notes: formData.get('notes') ?? undefined,
-    screenshotExitKey: formData.get('screenshotExitKey'),
+    // J1 — mandatory TradingView exit link (replaces the exit screenshot).
+    tradingViewExitUrl: formData.get('tradingViewExitUrl'),
+    // J1 — legacy exit screenshot key now OPTIONAL, no longer sent by the form.
+    screenshotExitKey: formData.get('screenshotExitKey') || undefined,
   };
 
   const parsed = tradeCloseSchema.safeParse(raw);
@@ -303,8 +313,9 @@ export async function closeTradeAction(
 
   const data = parsed.data;
 
-  // BOLA defence — same rationale as createTradeAction.
-  if (!keyBelongsTo(data.screenshotExitKey, session.user.id)) {
+  // BOLA defence — same rationale as createTradeAction. J1 — the exit
+  // screenshot is now OPTIONAL, so only enforce ownership when present.
+  if (data.screenshotExitKey && !keyBelongsTo(data.screenshotExitKey, session.user.id)) {
     return {
       ok: false,
       error: 'invalid_input',
@@ -325,7 +336,8 @@ export async function closeTradeAction(
       partialAtTarget: data.partialAtTarget,
       tags: data.tags,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
-      screenshotExitKey: data.screenshotExitKey,
+      tradingViewExitUrl: data.tradingViewExitUrl,
+      screenshotExitKey: data.screenshotExitKey ?? null,
     });
   } catch (err) {
     if (err instanceof TradeNotFoundError) return { ok: false, error: 'not_found' };

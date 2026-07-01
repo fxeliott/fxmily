@@ -24,21 +24,12 @@
  */
 
 import { existsSync } from 'node:fs';
-import path from 'node:path';
 
 import { chromium, expect, test } from '@playwright/test';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
 import { loginAs } from '@/test/e2e-auth';
-
-const FIXTURE_PNG = path.join(
-  process.cwd(),
-  'tests',
-  'e2e',
-  'fixtures',
-  'mt5-history-account-a.png',
-);
 
 // 14:30 wall-clock on 2026-05-06 in New York (EDT, UTC-4) = 18:30Z. A past date
 // (well before "now") so the wizard's "no future date" guard always passes.
@@ -113,12 +104,15 @@ test.describe('F2 — Fuseau horaire par membre', () => {
     await page.getByLabel('Paire', { exact: true }).fill('GBPUSD');
     await page.getByRole('button', { name: /Suivant/ }).click();
 
-    // Step 2/7 — Capture (mandatory). No TradingView link (covered by F1).
-    await expect(wizardHeading).toHaveText('Capture de ton analyse');
-    await page.locator('input[type="file"]').setInputFiles(FIXTURE_PNG);
-    await expect(page.getByAltText("Capture de l'analyse du backtest")).toBeVisible({
-      timeout: 45_000,
-    });
+    // Step 2/7 — Lien TradingView de l'analyse (mandatory, J1 pivot capture → lien).
+    // Controlled input → type char-by-char (WebKit-safe, canon F5): a one-shot
+    // `fill` sets the DOM value without reliably committing React's onChange on
+    // WebKit (mobile-iphone-15 project), which would drop the link before submit.
+    await expect(wizardHeading).toHaveText('Lien de ton analyse');
+    const f2Link = page.getByLabel('Lien TradingView');
+    await f2Link.click();
+    await f2Link.pressSequentially('https://www.tradingview.com/x/F2Back01/');
+    await expect(f2Link).toHaveValue('https://www.tradingview.com/x/F2Back01/');
     await page.getByRole('button', { name: /Suivant/ }).click();
 
     // Step 3/7 — R:R prévu (default valid).
@@ -145,7 +139,10 @@ test.describe('F2 — Fuseau horaire par membre', () => {
     await expect(submitBtn).toBeEnabled();
     await submitBtn.click();
 
-    await expect(page).toHaveURL(/\/training$/, { timeout: 30_000 });
+    // 60s: a cold `next dev` compiles createTrainingTradeAction on the first
+    // submit (heaviest cold-compile hop) — 30s under-budgets that on a slow
+    // dev server and cold-flakes the redirect.
+    await expect(page).toHaveURL(/\/training$/, { timeout: 60_000 });
 
     // DECISIVE proof — the wall-clock was interpreted in the member's SET zone
     // (NY), independent of whatever timezone the test browser runs in.

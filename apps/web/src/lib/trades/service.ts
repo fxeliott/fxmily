@@ -51,9 +51,14 @@ export interface CreateTradeInput {
   planRespected: boolean;
   hedgeRespected: boolean | null;
   notes: string | undefined;
-  screenshotEntryKey: string;
+  /// J1 — mandatory TradingView entry link (replaces the former screenshot
+  /// upload). Host-allowlisted at the Zod / Server Action edge.
+  tradingViewEntryUrl: string;
+  /// J1 — legacy pre-entry screenshot key, now OPTIONAL (pre-J1 trades keep
+  /// their capture; the wizard no longer uploads one). Null when absent.
+  screenshotEntryKey?: string | null;
   /// §31 — additional entry analysis captures (TradeMedia kind=entry). The
-  /// primary `screenshotEntryKey` stays the mandatory anchor; these are extra.
+  /// primary proof is now the TradingView link; these stay extra attachments.
   /// Already cap-checked + BOLA-validated by the Server Action.
   extraEntryKeys?: string[];
 }
@@ -82,7 +87,11 @@ export interface CloseTradeInput {
   /** V1.8 — post-outcome LESSOR + Steenbarger bias tags (max 3, allowlisted Zod-side). */
   tags?: readonly string[];
   notes: string | undefined;
-  screenshotExitKey: string;
+  /// J1 — mandatory TradingView exit link (replaces the former exit screenshot
+  /// upload at close). Host-allowlisted at the Zod / Server Action edge.
+  tradingViewExitUrl: string;
+  /// J1 — legacy exit screenshot key, now OPTIONAL. Null when absent.
+  screenshotExitKey?: string | null;
 }
 
 /**
@@ -125,6 +134,8 @@ export interface SerializedTrade {
   partialAtTarget: boolean | null;
   notes: string | null;
   screenshotEntryKey: string | null;
+  /// J1 — TradingView entry link (mandatory for J1+ trades, null for pre-J1).
+  tradingViewEntryUrl: string | null;
   // Post-exit (nullable until closed)
   exitedAt: string | null;
   exitPrice: string | null;
@@ -134,6 +145,9 @@ export interface SerializedTrade {
   emotionDuring: string[];
   emotionAfter: string[];
   screenshotExitKey: string | null;
+  /// J1 — TradingView exit link (mandatory at close for J1+ trades, null for
+  /// pre-J1 / still-open trades).
+  tradingViewExitUrl: string | null;
   closedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -188,6 +202,7 @@ function toSerialized(
     partialAtTarget: trade.partialAtTarget,
     notes: trade.notes,
     screenshotEntryKey: trade.screenshotEntryKey,
+    tradingViewEntryUrl: trade.tradingViewEntryUrl,
     exitedAt: trade.exitedAt ? trade.exitedAt.toISOString() : null,
     exitPrice: trade.exitPrice == null ? null : trade.exitPrice.toString(),
     outcome: trade.outcome,
@@ -196,6 +211,7 @@ function toSerialized(
     emotionDuring: [...trade.emotionDuring],
     emotionAfter: [...trade.emotionAfter],
     screenshotExitKey: trade.screenshotExitKey,
+    tradingViewExitUrl: trade.tradingViewExitUrl,
     closedAt: trade.closedAt ? trade.closedAt.toISOString() : null,
     createdAt: trade.createdAt.toISOString(),
     updatedAt: trade.updatedAt.toISOString(),
@@ -261,7 +277,8 @@ export async function createTrade(
       planRespected: input.planRespected,
       hedgeRespected: input.hedgeRespected,
       notes: input.notes ?? null,
-      screenshotEntryKey: input.screenshotEntryKey,
+      tradingViewEntryUrl: input.tradingViewEntryUrl,
+      screenshotEntryKey: input.screenshotEntryKey ?? null,
       // §31 — additional entry photos written atomically with the trade via the
       // nested create (kind defaults to `entry`). Empty/absent → no media rows.
       ...(input.extraEntryKeys && input.extraEntryKeys.length > 0
@@ -354,7 +371,8 @@ export async function closeTrade(
           // closed before V1.8 stay valid ; explicit `[]` overrides any prior
           // value (admin edits go through a dedicated path).
           tags: [...(input.tags ?? [])],
-          screenshotExitKey: input.screenshotExitKey,
+          tradingViewExitUrl: input.tradingViewExitUrl,
+          screenshotExitKey: input.screenshotExitKey ?? null,
           closedAt: new Date(),
           ...(mergedNotes !== existing.notes ? { notes: mergedNotes } : {}),
         },

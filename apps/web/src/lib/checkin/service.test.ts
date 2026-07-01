@@ -22,8 +22,13 @@ vi.mock('@/lib/db', () => ({
 
 import { db } from '@/lib/db';
 
-import { listMemberCheckinsAsAdmin, submitEveningCheckin } from './service';
-import type { EveningCheckinInput } from '@/lib/schemas/checkin';
+import {
+  CheckinBackfillJustificationRequiredError,
+  listMemberCheckinsAsAdmin,
+  submitEveningCheckin,
+  submitMorningCheckin,
+} from './service';
+import type { EveningCheckinInput, MorningCheckinInput } from '@/lib/schemas/checkin';
 
 /** A realistic post-Zod evening input (the schema already collapsed the form). */
 function eveningInput(formationFollowed: boolean | null): EveningCheckinInput {
@@ -40,6 +45,7 @@ function eveningInput(formationFollowed: boolean | null): EveningCheckinInput {
     emotionTags: [],
     journalNote: null,
     gratitudeItems: [],
+    lateJustification: null,
   } as EveningCheckinInput;
 }
 
@@ -69,6 +75,8 @@ function eveningRow(formationFollowed: boolean | null) {
     moodScore: 6,
     emotionTags: [] as string[],
     journalNote: null,
+    lateJustification: null,
+    backfilledAt: null as Date | null,
     submittedAt: now,
     createdAt: now,
     updatedAt: now,
@@ -125,11 +133,18 @@ describe('listMemberCheckinsAsAdmin — cap par JOURS (anti-split de slot)', () 
   });
 });
 
+// F7 — pin "now" to the fixtures' local day (2026-06-05 Paris) so these
+// same-day submits never trip the new past-day rattrapage justification rule.
+const FIXTURE_NOW = new Date('2026-06-05T20:00:00.000Z');
+
 describe('submitEveningCheckin — formationFollowed (SPEC §28/§22)', () => {
   it('PERSISTS formationFollowed=true in both the create and update payloads', async () => {
     vi.mocked(db.dailyCheckin.upsert).mockResolvedValue(eveningRow(true) as never);
 
-    await submitEveningCheckin('user-1', eveningInput(true), { timezone: 'Europe/Paris' });
+    await submitEveningCheckin('user-1', eveningInput(true), {
+      timezone: 'Europe/Paris',
+      now: FIXTURE_NOW,
+    });
 
     const call = vi.mocked(db.dailyCheckin.upsert).mock.calls[0];
     if (!call) throw new Error('expected dailyCheckin.upsert to be called');
@@ -146,6 +161,7 @@ describe('submitEveningCheckin — formationFollowed (SPEC §28/§22)', () => {
       vi.mocked(db.dailyCheckin.upsert).mockResolvedValue(eveningRow(value) as never);
       const serialized = await submitEveningCheckin('user-1', eveningInput(value), {
         timezone: 'Europe/Paris',
+        now: FIXTURE_NOW,
       });
       expect(serialized.formationFollowed).toBe(value);
     }
@@ -154,7 +170,10 @@ describe('submitEveningCheckin — formationFollowed (SPEC §28/§22)', () => {
   it('passes null through unchanged (unanswered evening — no penalty, no default)', async () => {
     vi.mocked(db.dailyCheckin.upsert).mockResolvedValue(eveningRow(null) as never);
 
-    await submitEveningCheckin('user-1', eveningInput(null), { timezone: 'Europe/Paris' });
+    await submitEveningCheckin('user-1', eveningInput(null), {
+      timezone: 'Europe/Paris',
+      now: FIXTURE_NOW,
+    });
 
     const call = vi.mocked(db.dailyCheckin.upsert).mock.calls[0];
     if (!call) throw new Error('expected dailyCheckin.upsert to be called');
@@ -162,5 +181,96 @@ describe('submitEveningCheckin — formationFollowed (SPEC §28/§22)', () => {
     // Explicit null — never coerced to false (which would fabricate a "skipped"
     // signal the member never gave). Mirrors hedgeRespectedToday's N/A handling.
     expect(arg.update.formationFollowed).toBeNull();
+  });
+});
+
+// F7 — rattrapage (backfill) justification rule (past-day fills). Paris-local
+// today = 2026-06-10; the fixtures' date 2026-06-05 is 5 days earlier.
+const NOW_JUN10 = new Date('2026-06-10T09:00:00.000Z');
+
+/** Minimal post-Zod morning input for the backfill-rule symmetry test. */
+function morningInput(overrides: Partial<MorningCheckinInput> = {}): MorningCheckinInput {
+  return {
+    date: '2026-06-05',
+    sleepHours: 7,
+    sleepQuality: 6,
+    morningRoutineCompleted: true,
+    marketAnalysisDone: true,
+    meditationMin: 0,
+    sportType: null,
+    sportDurationMin: null,
+    intention: null,
+    moodScore: 6,
+    emotionTags: [],
+    lateJustification: null,
+    ...overrides,
+  } as MorningCheckinInput;
+}
+
+describe('submit*Checkin — F7 rattrapage (past-day) justification rule', () => {
+  const TZ = 'Europe/Paris';
+
+  it('THROWS when a past-day evening fill has no justification (no upsert)', async () => {
+    await expect(
+      submitEveningCheckin('user-1', eveningInput(null), { timezone: TZ, now: NOW_JUN10 }),
+    ).rejects.toBeInstanceOf(CheckinBackfillJustificationRequiredError);
+    expect(db.dailyCheckin.upsert).not.toHaveBeenCalled();
+  });
+
+  it('THROWS symmetrically for a past-day morning fill with no justification', async () => {
+    await expect(
+      submitMorningCheckin('user-1', morningInput(), { timezone: TZ, now: NOW_JUN10 }),
+    ).rejects.toBeInstanceOf(CheckinBackfillJustificationRequiredError);
+    expect(db.dailyCheckin.upsert).not.toHaveBeenCalled();
+  });
+
+  it('persists the reason + stamps backfilledAt on a JUSTIFIED past-day fill', async () => {
+    vi.mocked(db.dailyCheckin.upsert).mockResolvedValueOnce(eveningRow(null) as never);
+    const input = { ...eveningInput(null), lateJustification: 'Panne internet la veille.' };
+
+    await submitEveningCheckin('user-1', input, { timezone: TZ, now: NOW_JUN10 });
+
+    const call = vi.mocked(db.dailyCheckin.upsert).mock.calls[0];
+    if (!call) throw new Error('expected dailyCheckin.upsert to be called');
+    const arg = call[0] as {
+      create: { lateJustification: string | null; backfilledAt: Date | null };
+      update: { lateJustification: string | null; backfilledAt: Date | null };
+    };
+    expect(arg.create.lateJustification).toBe('Panne internet la veille.');
+    expect(arg.update.lateJustification).toBe('Panne internet la veille.');
+    expect(arg.create.backfilledAt).toBeInstanceOf(Date);
+    expect(arg.update.backfilledAt).toBeInstanceOf(Date);
+  });
+
+  it('a SAME-DAY fill needs no justification and clears both backfill fields', async () => {
+    vi.mocked(db.dailyCheckin.upsert).mockResolvedValueOnce(eveningRow(null) as never);
+    const input = { ...eveningInput(null), date: '2026-06-10', lateJustification: null };
+
+    await submitEveningCheckin('user-1', input, { timezone: TZ, now: NOW_JUN10 });
+
+    const call = vi.mocked(db.dailyCheckin.upsert).mock.calls[0];
+    if (!call) throw new Error('expected dailyCheckin.upsert to be called');
+    const arg = call[0] as {
+      create: { lateJustification: string | null; backfilledAt: Date | null };
+    };
+    expect(arg.create.lateJustification).toBeNull();
+    expect(arg.create.backfilledAt).toBeNull();
+  });
+
+  it('a same-day fill IGNORES a stray justification (kept null, no stamp)', async () => {
+    vi.mocked(db.dailyCheckin.upsert).mockResolvedValueOnce(eveningRow(null) as never);
+    const input = { ...eveningInput(null), date: '2026-06-10', lateJustification: 'inutile' };
+
+    await submitEveningCheckin('user-1', input, { timezone: TZ, now: NOW_JUN10 });
+
+    const call = vi.mocked(db.dailyCheckin.upsert).mock.calls[0];
+    if (!call) throw new Error('expected dailyCheckin.upsert to be called');
+    const arg = call[0] as {
+      create: { lateJustification: string | null; backfilledAt: Date | null };
+    };
+    // Not a backfill → clear the reason so an on-time row never carries a
+    // rattrapage justification (keeps the §33.2 repetition signal clean).
+    expect(arg.create.lateJustification).toBeNull();
+    expect(arg.create.backfilledAt).toBeNull();
   });
 });

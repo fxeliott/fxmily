@@ -1359,6 +1359,23 @@ model DailyCheckin {
   /// Free-form journal entry (max 4000 chars by Zod).
   journalNote String?  @map("journal_note") @db.Text
 
+  // ----- Rattrapage / backfill (F7) ----------------------------------------
+
+  /// F7 — member's free-text reason when this row was filled for a PAST local
+  /// day (a "rattrapage"). Mirror of `Discrepancy.memberReason` exactly: pure
+  /// additive nullable `@db.Text`, safeFreeText + crisis routing at the Zod
+  /// boundary. NULL for same-day check-ins (no justification asked — filling
+  /// today is the norm, only late fills are "exceptionnel", brief §F7). The
+  /// deterministic repetition signal (§33.2) and the J2 local AI worker read
+  /// THIS field; we store the ACT of justifying, never a market claim (§2).
+  lateJustification String?   @map("late_justification") @db.Text
+  /// F7 — the instant a late (past-day) fill happened; NULL when the row was
+  /// filled on its own local day. Mirror of `Discrepancy.memberReasonAt`. Lets
+  /// the tracking page + admin panel distinguish an on-time entry from a
+  /// rattrapage without re-deriving it from `date` vs `submittedAt` (which
+  /// drift across edits). Completion metadata only (§21.5), never P&L.
+  backfilledAt      DateTime? @map("backfilled_at")
+
   submittedAt DateTime @default(now()) @map("submitted_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

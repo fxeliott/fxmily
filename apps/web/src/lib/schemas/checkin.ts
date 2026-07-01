@@ -124,6 +124,30 @@ const checkinEmotionTags = z
   .refine((tags) => tags.every(isCheckinEmotionSlug), { message: 'Émotion inconnue.' })
   .refine((tags) => new Set(tags).size === tags.length, { message: 'Doublons interdits.' });
 
+/**
+ * F7 — optional free-text justification when the member fills a check-in for a
+ * PAST local day (a "rattrapage"). OPTIONAL at the Zod layer (empty / omitted →
+ * `null`): whether it is REQUIRED is a TZ-aware decision made in the service
+ * (`date < today_local` ⇒ required), mirroring `assertCheckinDateInLocalWindow`
+ * (Zod = UTC first pass, service = TZ-aware second pass). Same hardening as
+ * `intention` / `journalNote` (bidi/zero-width REJECT + `safeFreeText`) because
+ * it is fed to `buildCheckinCrisisCorpus` (crisis routing) AND, downstream, to
+ * the J2 local AI worker's prompt. Length cap mirrors
+ * `discrepancyReasonSchema.reason` (max 500).
+ */
+const lateJustificationField = z
+  .string()
+  .max(500, 'Justification trop longue (500 max).')
+  .optional()
+  .refine((v) => v == null || !containsBidiOrZeroWidth(v), {
+    message: 'Caractères de contrôle interdits.',
+  })
+  .transform((v): string | null => {
+    if (v == null) return null;
+    const cleaned = safeFreeText(v);
+    return cleaned === '' ? null : cleaned;
+  });
+
 // =============================================================================
 // Morning slot
 // =============================================================================
@@ -181,6 +205,9 @@ export const morningCheckinSchema = z
       }),
 
     emotionTags: checkinEmotionTags,
+
+    // F7 — optional rattrapage reason (required-when-backfill enforced service-side).
+    lateJustification: lateJustificationField,
   })
   .superRefine((data, ctx) => {
     // Sport: both fields together or neither. We check this BEFORE the
@@ -276,6 +303,9 @@ export const eveningCheckinSchema = z.object({
     .pipe(
       z.array(z.string().max(200, 'Gratitude trop longue (200 max).')).max(3, 'Max 3 gratitudes.'),
     ),
+
+  // F7 — optional rattrapage reason (required-when-backfill enforced service-side).
+  lateJustification: lateJustificationField,
 });
 
 export type EveningCheckinInput = z.infer<typeof eveningCheckinSchema>;
@@ -298,8 +328,15 @@ export function buildCheckinCrisisCorpus(fields: {
   intention?: string | null;
   journalNote?: string | null;
   gratitudeItems?: readonly string[];
+  /** F7 — the rattrapage justification is member free-text too: scan it. */
+  lateJustification?: string | null;
 }): string {
-  return [fields.intention, fields.journalNote, ...(fields.gratitudeItems ?? [])]
+  return [
+    fields.intention,
+    fields.journalNote,
+    fields.lateJustification,
+    ...(fields.gratitudeItems ?? []),
+  ]
     .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
     .join('\n');
 }

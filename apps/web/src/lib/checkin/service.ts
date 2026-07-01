@@ -27,6 +27,23 @@ export class CheckinDateOutOfWindowError extends Error {
 }
 
 /**
+ * Domain error (F7): a check-in filled for a PAST local day (a "rattrapage")
+ * without the required free-text justification (brief §F7 "avec justification
+ * si exceptionnel"). TZ-aware second pass, same as
+ * {@link assertCheckinDateInLocalWindow} — the Server Action maps this to an
+ * inline field error on `lateJustification`.
+ */
+export class CheckinBackfillJustificationRequiredError extends Error {
+  constructor(
+    public readonly submitted: LocalDateString,
+    public readonly today: LocalDateString,
+  ) {
+    super(`Late check-in for ${submitted} (today ${today}) requires a justification.`);
+    this.name = 'CheckinBackfillJustificationRequiredError';
+  }
+}
+
+/**
  * Daily check-in service layer (J5, SPEC §6.4 + §7.4).
  *
  * All exported functions are user-scoped: they take a `userId` and never
@@ -73,6 +90,11 @@ export interface SerializedCheckin {
   moodScore: number | null;
   emotionTags: string[];
   journalNote: string | null;
+
+  /** F7 — rattrapage reason when filled for a past local day; null on-time. */
+  lateJustification: string | null;
+  /** F7 — ISO instant of a late (past-day) fill; null when filled on its day. */
+  backfilledAt: string | null;
 
   submittedAt: string;
   createdAt: string;
@@ -121,6 +143,8 @@ function toSerialized(row: DailyCheckinModel): SerializedCheckin {
     moodScore: row.moodScore,
     emotionTags: [...row.emotionTags],
     journalNote: row.journalNote,
+    lateJustification: row.lateJustification,
+    backfilledAt: row.backfilledAt == null ? null : row.backfilledAt.toISOString(),
     submittedAt: row.submittedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -158,6 +182,39 @@ export function assertCheckinDateInLocalWindow(
   }
 }
 
+/**
+ * F7 — a check-in is a "rattrapage" (backfill) when its date is strictly before
+ * the member's local today. Uses the same TZ source as
+ * {@link assertCheckinDateInLocalWindow}. Pure — a same-day (or the tolerated
+ * today+1 drift) fill is never a backfill, so no justification is asked.
+ */
+export function isBackfillCheckin(
+  submitted: LocalDateString,
+  timezone: string,
+  now: Date = new Date(),
+): boolean {
+  return submitted < todayFor(timezone, now);
+}
+
+/**
+ * F7 — enforce the rattrapage rule: a PAST-day fill MUST carry a non-empty
+ * justification. Returns the resolved backfill flag so the submit path can
+ * stamp `backfilledAt` / persist the reason without recomputing it. Throws
+ * {@link CheckinBackfillJustificationRequiredError} when the reason is missing.
+ */
+function resolveBackfill(
+  date: LocalDateString,
+  justification: string | null,
+  timezone: string,
+  now: Date | undefined,
+): boolean {
+  const backfill = isBackfillCheckin(date, timezone, now);
+  if (backfill && (justification == null || justification.trim() === '')) {
+    throw new CheckinBackfillJustificationRequiredError(date, todayFor(timezone, now));
+  }
+  return backfill;
+}
+
 // ----- Submit (upsert) --------------------------------------------------------
 
 /**
@@ -174,7 +231,10 @@ export async function submitMorningCheckin(
 ): Promise<SerializedCheckin> {
   // Audit J5 M2 — TZ-aware second pass. Defaults to Europe/Paris (V1 reality);
   // when J5.5 propagates per-user TZ, the Server Action will pass it explicitly.
-  assertCheckinDateInLocalWindow(input.date, options.timezone ?? 'Europe/Paris', options.now);
+  const timezone = options.timezone ?? 'Europe/Paris';
+  assertCheckinDateInLocalWindow(input.date, timezone, options.now);
+  // F7 — a past-day fill is a rattrapage: require + persist the justification.
+  const backfill = resolveBackfill(input.date, input.lateJustification, timezone, options.now);
   const date = parseLocalDate(input.date);
   const updateData = {
     sleepHours: new Prisma.Decimal(input.sleepHours),
@@ -187,6 +247,10 @@ export async function submitMorningCheckin(
     intention: input.intention,
     moodScore: input.moodScore,
     emotionTags: input.emotionTags,
+    // F7 — persist the reason + stamp only on a real backfill; a same-day (or
+    // tolerated today+1) fill clears both so an edit can't leave a stale stamp.
+    lateJustification: backfill ? input.lateJustification : null,
+    backfilledAt: backfill ? new Date() : null,
     submittedAt: new Date(),
   };
 
@@ -209,7 +273,10 @@ export async function submitEveningCheckin(
   input: EveningCheckinInput,
   options: { timezone?: string; now?: Date } = {},
 ): Promise<SerializedCheckin> {
-  assertCheckinDateInLocalWindow(input.date, options.timezone ?? 'Europe/Paris', options.now);
+  const timezone = options.timezone ?? 'Europe/Paris';
+  assertCheckinDateInLocalWindow(input.date, timezone, options.now);
+  // F7 — a past-day fill is a rattrapage: require + persist the justification.
+  const backfill = resolveBackfill(input.date, input.lateJustification, timezone, options.now);
   const date = parseLocalDate(input.date);
   const updateData = {
     planRespectedToday: input.planRespectedToday,
@@ -223,6 +290,9 @@ export async function submitEveningCheckin(
     emotionTags: input.emotionTags,
     journalNote: input.journalNote,
     gratitudeItems: input.gratitudeItems,
+    // F7 — persist the reason + stamp only on a real backfill (see morning).
+    lateJustification: backfill ? input.lateJustification : null,
+    backfilledAt: backfill ? new Date() : null,
     submittedAt: new Date(),
   };
 

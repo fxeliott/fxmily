@@ -12,6 +12,7 @@ import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import {
   computeMonthWindow,
   computeReportingMonth,
+  monthWindowFromMonthStart,
   type MonthWindow,
 } from '@/lib/monthly-debrief/month-window';
 // Enum-only derivation of the baseline coaching register / learning stage from
@@ -21,7 +22,7 @@ import { coachingToneSchema, learningStageSchema } from '@/lib/schemas/onboardin
 // no raw userId reaches the model (sanctioned reuse, mirror monthly-debrief loader).
 import { pseudonymizeMember } from '@/lib/weekly-report/builder';
 
-import { buildReprofileSnapshot } from './snapshot';
+import { buildReprofileSnapshot, concatReflectionCorpus } from './snapshot';
 import type {
   CoachingRegister,
   LearningStageValue,
@@ -74,6 +75,72 @@ export interface LoadReprofileOptions {
 /// portrait cannot dominate the prompt (the builder does not re-truncate it).
 const ONBOARDING_SUMMARY_MAX_CHARS = 600;
 
+// SHARED projections + pure mappers — the ONLY definitions of "which reflection
+// columns we read and how we shape them". Used by BOTH the pull slice loader and
+// the persist-time corpus re-derivation ({@link loadReflectionCorpusForMonth}),
+// so the reflection corpus is byte-for-byte identical on both sides: a
+// re-profiled `evidence[]` that was a verbatim substring at generation is still
+// a verbatim substring at the persist gate (no drift → no false evidence_invalid
+// reject). Change the projection or the mapping in ONE place only.
+const REFLECTION_CHECKIN_SELECT = {
+  date: true,
+  intention: true,
+  journalNote: true,
+  gratitudeItems: true,
+  emotionTags: true,
+} as const;
+
+const REFLECTION_TRADE_SELECT = {
+  enteredAt: true,
+  notes: true,
+  emotionBefore: true,
+  emotionDuring: true,
+  emotionAfter: true,
+  tags: true,
+} as const;
+
+/** Shape check-in rows into the raw slice (pure — corpus-identity critical). */
+function mapCheckinRows(
+  rows: readonly {
+    date: Date;
+    intention: string | null;
+    journalNote: string | null;
+    gratitudeItems: string[];
+    emotionTags: string[];
+  }[],
+): RawReprofileCheckin[] {
+  return rows.map((row) => ({
+    localDate: row.date.toISOString().slice(0, 10),
+    intention: row.intention,
+    journalNote: row.journalNote,
+    gratitudeItems: [...row.gratitudeItems],
+    emotionTags: [...row.emotionTags],
+  }));
+}
+
+/** Shape trade rows into the raw slice (pure — corpus-identity critical). */
+function mapTradeRows(
+  rows: readonly {
+    enteredAt: Date;
+    notes: string | null;
+    emotionBefore: string[];
+    emotionDuring: string[];
+    emotionAfter: string[];
+    tags: string[];
+  }[],
+  timezone: string,
+): RawReprofileTrade[] {
+  return rows.map((row) => ({
+    // `enteredAt` is a real instant → resolve to the member-local calendar day.
+    localDate: localDateOf(row.enteredAt, timezone),
+    notes: row.notes,
+    emotionBefore: [...row.emotionBefore],
+    emotionDuring: [...row.emotionDuring],
+    emotionAfter: [...row.emotionAfter],
+    tags: [...row.tags],
+  }));
+}
+
 export async function loadReprofileSliceForUser(
   userId: string,
   options: LoadReprofileOptions = {},
@@ -110,26 +177,13 @@ export async function loadReprofileSliceForUser(
         },
       },
       orderBy: [{ date: 'asc' }, { slot: 'asc' }],
-      select: {
-        date: true,
-        intention: true,
-        journalNote: true,
-        gratitudeItems: true,
-        emotionTags: true,
-      },
+      select: REFLECTION_CHECKIN_SELECT,
     }),
     // Trades whose `enteredAt` instant falls inside the local-month window.
     db.trade.findMany({
       where: { userId, enteredAt: { gte: window.monthStartUtc, lte: window.monthEndUtc } },
       orderBy: { enteredAt: 'asc' },
-      select: {
-        enteredAt: true,
-        notes: true,
-        emotionBefore: true,
-        emotionDuring: true,
-        emotionAfter: true,
-        tags: true,
-      },
+      select: REFLECTION_TRADE_SELECT,
     }),
     // The member's onboarding profile (their words + prior reading) — `null`
     // until the onboarding batch has run (honest absence, no fabrication).
@@ -164,23 +218,8 @@ export async function loadReprofileSliceForUser(
             86_400_000,
         ) + 1;
 
-  const checkins: RawReprofileCheckin[] = checkinRows.map((row) => ({
-    localDate: row.date.toISOString().slice(0, 10),
-    intention: row.intention,
-    journalNote: row.journalNote,
-    gratitudeItems: [...row.gratitudeItems],
-    emotionTags: [...row.emotionTags],
-  }));
-
-  const trades: RawReprofileTrade[] = tradeRows.map((row) => ({
-    // `enteredAt` is a real instant → resolve to the member-local calendar day.
-    localDate: localDateOf(row.enteredAt, user.timezone),
-    notes: row.notes,
-    emotionBefore: [...row.emotionBefore],
-    emotionDuring: [...row.emotionDuring],
-    emotionAfter: [...row.emotionAfter],
-    tags: [...row.tags],
-  }));
+  const checkins = mapCheckinRows(checkinRows);
+  const trades = mapTradeRows(tradeRows, user.timezone);
 
   const baselineProfile: RawReprofileSlice['baselineProfile'] =
     profileRow === null
@@ -221,6 +260,71 @@ export async function loadReprofileSliceForUser(
     window,
     userMeta: { email: user.email, firstName: user.firstName, lastName: user.lastName },
   };
+}
+
+/**
+ * Persist-time re-derivation of a member's month reflection corpus — the ONLY
+ * citable evidence source, rebuilt server-side so it can NEVER be tampered with
+ * on the wire (mirror onboarding `rederiveSnapshotForValidation`). Keyed by the
+ * persisted `monthStart` (`YYYY-MM-01`), NOT by `now`, so it is deterministic
+ * and matches the pull window for the member's timezone. Returns `null` if the
+ * user is unknown/inactive.
+ *
+ * Only the reflection corpus is needed for the evidence gate, so the rebuilt
+ * snapshot is corpus-only: the baseline / previous-month reference (which is
+ * NEVER a citable source) is passed as `null`. It does not contribute to
+ * {@link concatReflectionCorpus}, so the corpus is byte-identical to the pull's
+ * (same window + same shared projection + same shared mappers).
+ */
+export async function loadReflectionCorpusForMonth(
+  userId: string,
+  monthStartLocal: string,
+): Promise<string | null> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, timezone: true, status: true },
+  });
+  if (!user || user.status !== 'active') return null;
+
+  // Deterministic window from the persisted monthStart (anti-tamper; mirror the
+  // monthly-debrief persist recomputing monthEnd). The member's real timezone
+  // yields identical local + UTC bounds to the pull for any east-of-UTC member
+  // (V1 cohort = Europe/Paris). `monthWindowFromMonthStart` shares the
+  // parseLocalDate round-trip caveat for west-of-UTC zones (out of V1 scope).
+  const window = monthWindowFromMonthStart(monthStartLocal, user.timezone);
+
+  const [checkinRows, tradeRows] = await Promise.all([
+    db.dailyCheckin.findMany({
+      where: {
+        userId,
+        date: {
+          gte: parseLocalDate(window.monthStartLocal),
+          lte: parseLocalDate(window.monthEndLocal),
+        },
+      },
+      orderBy: [{ date: 'asc' }, { slot: 'asc' }],
+      select: REFLECTION_CHECKIN_SELECT,
+    }),
+    db.trade.findMany({
+      where: { userId, enteredAt: { gte: window.monthStartUtc, lte: window.monthEndUtc } },
+      orderBy: { enteredAt: 'asc' },
+      select: REFLECTION_TRADE_SELECT,
+    }),
+  ]);
+
+  const snapshot = buildReprofileSnapshot({
+    pseudonymLabel: pseudonymizeMember(user.id),
+    timezone: user.timezone,
+    monthStartLocal: window.monthStartLocal,
+    monthEndLocal: window.monthEndLocal,
+    accountAgeDaysInWindow: 0, // irrelevant for the corpus (reflections only)
+    checkins: mapCheckinRows(checkinRows),
+    trades: mapTradeRows(tradeRows, user.timezone),
+    baselineProfile: null,
+    previousMonthSnapshot: null,
+  });
+
+  return concatReflectionCorpus(snapshot);
 }
 
 /** Derive the coaching register enum from a Prisma JSON column (safeParse). */

@@ -1,16 +1,16 @@
 'use client';
 
-import { Check, TrendingDown, TrendingUp } from 'lucide-react';
+import { Check, Link2, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useActionState, useEffect, useState } from 'react';
 
 import { closeTradeAction, type CloseTradeActionState } from '@/app/journal/actions';
 import { Alert } from '@/components/alert';
 import { EmotionPicker } from '@/components/journal/emotion-picker';
-import { ScreenshotUploader } from '@/components/journal/screenshot-uploader';
 import { TradeTagsPicker } from '@/components/journal/trade-tags-picker';
 import { Btn, btnVariants } from '@/components/ui/btn';
 import type { TradeTagSlug } from '@/lib/schemas/trade';
+import { isTradingViewUrl } from '@/lib/schemas/tradingview-url';
 import { formatDateTimeLocalInput } from '@/lib/timezones';
 import { cn } from '@/lib/utils';
 
@@ -47,7 +47,8 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
   const [state, formAction, pending] = useActionState(action, initialState);
   const [emotionDuring, setEmotionDuring] = useState<string[]>([]);
   const [emotionAfter, setEmotionAfter] = useState<string[]>([]);
-  const [screenshotKey, setScreenshotKey] = useState<string>('');
+  // J1 — mandatory TradingView exit link (replaces the exit screenshot upload).
+  const [tradingViewExitUrl, setTradingViewExitUrl] = useState<string>('');
   const [tags, setTags] = useState<TradeTagSlug[]>([]);
   // SSR-safe : empty on the server render, filled with the BROWSER-local
   // default after mount (canon hydration pattern — setState in effect is the
@@ -74,7 +75,7 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
 
   const submitDisabled =
     pending ||
-    screenshotKey.length === 0 ||
+    tradingViewExitUrl.trim().length === 0 ||
     emotionDuring.length === 0 ||
     emotionAfter.length === 0;
 
@@ -327,23 +328,64 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
         />
       </div>
 
-      {/* Screenshot exit */}
-      <div className="flex flex-col gap-2">
-        <span className="t-eyebrow-lg text-[var(--t-3)]">Capture après sortie</span>
-        <ScreenshotUploader
-          kind="trade-exit"
-          name="screenshotExitKey"
-          disabled={pending}
-          error={state.fieldErrors?.screenshotExitKey}
-          onUploaded={({ key }) => setScreenshotKey(key)}
-          onCleared={() => setScreenshotKey('')}
-        />
+      {/* J1 — TradingView exit link (replaces the exit screenshot upload) */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="tradingViewExitUrl" className="t-eyebrow-lg text-[var(--t-3)]">
+          Lien TradingView de sortie
+        </label>
+        <div className="relative">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--t-4)]"
+          >
+            <Link2 className="h-4 w-4" strokeWidth={1.75} />
+          </span>
+          <input
+            id="tradingViewExitUrl"
+            name="tradingViewExitUrl"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="https://www.tradingview.com/x/…"
+            value={tradingViewExitUrl}
+            onChange={(e) => setTradingViewExitUrl(e.target.value)}
+            disabled={pending}
+            aria-invalid={state.fieldErrors?.tradingViewExitUrl ? 'true' : undefined}
+            className={cn(
+              'rounded-input h-11 w-full border bg-[var(--bg-1)] pr-10 pl-9 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
+              state.fieldErrors?.tradingViewExitUrl
+                ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+                : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+              'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+            )}
+          />
+          {tradingViewExitUrl.trim().length > 0 && isTradingViewUrl(tradingViewExitUrl.trim()) ? (
+            <span
+              aria-hidden="true"
+              className="absolute top-1/2 right-3 -translate-y-1/2 text-[var(--good)]"
+            >
+              <Check className="h-4 w-4" strokeWidth={2} />
+            </span>
+          ) : null}
+        </div>
+        {state.fieldErrors?.tradingViewExitUrl ? (
+          <p className="text-[11px] text-[var(--bad)]" role="alert">
+            {state.fieldErrors.tradingViewExitUrl}
+          </p>
+        ) : (
+          <p className="t-cap text-[var(--t-4)]">
+            Lien <code className="font-mono">tradingview.com</code> de ta sortie — la preuve de ta
+            gestion jusqu&apos;au bout.
+          </p>
+        )}
       </div>
 
       {/* Submit gate hint */}
       {submitDisabled && !pending ? (
         <p id="close-submit-hint" className="text-right text-[11px] text-[var(--t-4)] tabular-nums">
-          Capture {screenshotKey.length === 0 ? '✗' : '✓'} · Pendant{' '}
+          Lien {tradingViewExitUrl.trim().length === 0 ? '✗' : '✓'} · Pendant{' '}
           {emotionDuring.length === 0 ? '✗' : '✓'} · Après {emotionAfter.length === 0 ? '✗' : '✓'}
         </p>
       ) : null}

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { TRAINING_KEY_PATTERN } from '@/lib/storage/keys';
+import { TRADINGVIEW_URL_MAX, tradingViewUrlRequiredSchema } from '@/lib/schemas/tradingview-url';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 import { TRADING_PAIRS } from '@/lib/trading/pairs';
 
@@ -68,48 +69,14 @@ const resultRSchema = z.coerce
  * same approach as `annotation.ts`. */
 const trainingScreenshotKeySchema = z.string().regex(TRAINING_KEY_PATTERN, 'Clé fichier invalide.');
 
-/** Hard upper bound on the optional TradingView link (F1). Mirrors the
- * `push-subscription` endpoint cap: protects the btree index + guards a RAM
- * DoS. ~2 048 chars is far above any real `/x/` snapshot or `/chart/` URL. */
-export const TRAINING_TRADINGVIEW_URL_MAX = 2048;
-
-/** TradingView hosts allowlist — anchored, case-insensitive, accepting any
- * sub-domain prefix (`www.`, `fr.`, `in.`, …) of `tradingview.com`. EXACT
- * mechanism mirror of `push-subscription` `ALLOWED_PUSH_HOSTS_REGEX`: the host
- * is the security-relevant part (an off-host link would be an open-redirect /
- * phishing / SSRF-amplifier surface once rendered as a clickable `<a>` to the
- * admin). Hosts confirmed against tradingview.com (snapshot `/x/`, layout
- * `/chart/`, regional sub-domains). */
-const TRADINGVIEW_HOST_REGEX = /^([a-z0-9-]+\.)*tradingview\.com$/i;
-
-/** F1 — OPTIONAL TradingView analysis link the member may paste BESIDE the
- * mandatory screenshot (copier-coller direct). OPTIONAL/nullable at every
- * layer — it NEVER loosens the mandatory `entryScreenshotKey`. This is the
- * app's first user-supplied URL rendered as a clickable link to an admin, so
- * it is hardened at the Zod edge exactly like `push-subscription`
- * `endpointSchema`: length cap, reject Trojan-Source bidi/zero-width (a hidden
- * homograph char could spoof the host to a human), then HTTPS-only +
- * hostname-allowlisted to tradingview.com via `new URL()` in a try/catch
- * (a thrown parse error becomes a clean field error, never a 500). This blocks
- * `javascript:` / `data:` schemes (stored-XSS via href) and any off-host link.
- * The `.nullable().optional()` short-circuits an absent/empty value (the wizard
- * sends the field GUARDED, like `resultR`) before the string checks run. */
-const tradingViewUrlSchema = z
-  .string()
-  .trim()
-  .max(TRAINING_TRADINGVIEW_URL_MAX, `Maximum ${TRAINING_TRADINGVIEW_URL_MAX} caractères.`)
-  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
-  .refine((url) => {
-    try {
-      const u = new URL(url);
-      if (u.protocol !== 'https:') return false;
-      return TRADINGVIEW_HOST_REGEX.test(u.hostname);
-    } catch {
-      return false;
-    }
-  }, 'Lien TradingView uniquement (https://www.tradingview.com/…).')
-  .nullable()
-  .optional();
+/** J1 — the training backtest now REQUIRES a TradingView link in place of the
+ * former mandatory screenshot (pivot capture → lien, actée par Eliott). The
+ * link validation + hardening (length cap, Trojan-Source reject, HTTPS-only +
+ * tradingview.com host allowlist) lives in the shared `lib/schemas/
+ * tradingview-url` module so the journal (entry + exit) and training surfaces
+ * never drift. `TRAINING_TRADINGVIEW_URL_MAX` is re-exported as an alias of the
+ * shared cap so existing importers/tests keep resolving. */
+export const TRAINING_TRADINGVIEW_URL_MAX = TRADINGVIEW_URL_MAX;
 
 /** Lesson learned — mandatory free text, Fxmily Trojan-Source canon (exact
  * chain as `adminNoteCreateSchema` / annotation `comment`): reject
@@ -161,9 +128,12 @@ const enteredAtSchema = z.coerce
 
 export const trainingTradeCreateSchema = z.object({
   pair: pairSchema,
-  entryScreenshotKey: trainingScreenshotKeySchema,
-  // F1 — optional TradingView link, beside the mandatory screenshot above.
-  tradingViewUrl: tradingViewUrlSchema,
+  // J1 — the TradingView link is now the mandatory entry artefact; the legacy
+  // screenshot key is OPTIONAL (kept nullable in DB for pre-J1 backtests and
+  // administrative repairs, never captured by the wizard anymore).
+  entryScreenshotKey: trainingScreenshotKeySchema.optional(),
+  // J1 — mandatory TradingView link (replaces the former screenshot upload).
+  tradingViewUrl: tradingViewUrlRequiredSchema,
   plannedRR: plannedRRSchema,
   outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }).nullable().optional(),
   resultR: resultRSchema,

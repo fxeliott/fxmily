@@ -680,10 +680,19 @@ model Trade {
 
   notes String? @db.Text
 
-  /// Storage key for the pre-entry screenshot (mandatory at creation, but the
-  /// column is nullable to allow administrative repairs). Format follows
+  /// Storage key for the pre-entry screenshot. J1 pivot (capture → lien) :
+  /// pre-J1 trades keep their stored capture, new trades leave this NULL. The
+  /// column is nullable (legacy rows + administrative repairs). Format follows
   /// `lib/storage` conventions: `trades/{userId}/{nanoid}.{ext}`.
   screenshotEntryKey String? @map("screenshot_entry_key")
+
+  /// J1 — mandatory TradingView entry link (replaces the pre-entry screenshot
+  /// upload). Nullable in DB for pre-J1 rows + administrative repairs, but the
+  /// Zod create schema REQUIRES it (mirror of the former screenshot rule). The
+  /// link is HTTPS-only + tradingview.com host-allowlisted at the Zod edge
+  /// (`lib/schemas/tradingview-url`) so it can never become an open-redirect /
+  /// XSS / SSRF vector once rendered as a clickable `<a>` to the admin.
+  tradingViewEntryUrl String? @map("trading_view_entry_url")
 
   // ----- V1.5 trading-expert calibration (Steenbarger / Tharp) -----------
 
@@ -727,7 +736,15 @@ model Trade {
   // Capped at 3 tags per trade (Zod max, not DB).
   tags String[] @default([]) @map("tags")
 
+  /// Storage key for the exit screenshot. J1 pivot (capture → lien) : pre-J1
+  /// trades keep their stored capture, new trades leave this NULL. Nullable
+  /// (legacy rows + administrative repairs).
   screenshotExitKey String? @map("screenshot_exit_key")
+
+  /// J1 — mandatory TradingView exit link (replaces the exit screenshot upload
+  /// at close). Nullable in DB for pre-J1 / still-open rows, but the Zod close
+  /// schema REQUIRES it. Same host-allowlist hardening as `tradingViewEntryUrl`.
+  tradingViewExitUrl String? @map("trading_view_exit_url")
 
   /// Set when the post-exit block is filled. A trade is "open" iff this is
   /// null — used by /journal queries to split the list visually.

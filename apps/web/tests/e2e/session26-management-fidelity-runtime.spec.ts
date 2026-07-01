@@ -204,9 +204,10 @@ test.describe('S26 — Fidélité à ta gestion (capture au close + miroir /prog
     await expect(page.getByText(/Un miroir, pas un jugement/i)).toBeVisible();
     await expect(page.getByText('Fidélité à ta gestion').first()).toBeVisible();
 
-    // It is OPTIONAL — the submit gate is screenshot + emotions only, never the
-    // management acts (CANON: a new required field at close breaks the wizard e2e).
-    // None of the management radios are checked by default, yet the page is valid.
+    // It is OPTIONAL — the submit gate is the TradingView exit link + emotions
+    // only (J1), never the management acts (CANON: a new required field at close
+    // breaks the wizard e2e). None of the management radios are checked by
+    // default, yet the page is valid.
     await expect(sl.getByRole('radio', { checked: true })).toHaveCount(0);
 
     // POSTURE §2 (BLOQUANT) — the section is about the member's OWN rule, never a

@@ -17,7 +17,7 @@ import {
 import { pseudonymizeMember } from '@/lib/weekly-report/builder';
 
 import { CURRENT_ONBOARDING_INSTRUMENT, type OnboardingInstrument } from './instrument-v1';
-import { runSafetyGate } from './safety';
+import { composeOutputCorpus, runSafetyGate } from './safety';
 import {
   ONBOARDING_INTERVIEW_SYSTEM_PROMPT,
   MEMBER_PROFILE_OUTPUT_JSON_SCHEMA,
@@ -576,12 +576,11 @@ export async function persistGeneratedProfiles(
     }
     const output = parsed.data;
 
-    // Gate 4 — Crisis routing on Claude output mirror V1.7.1
-    const crisisCorpus = [
-      output.summary,
-      ...output.highlights.flatMap((h) => [h.label, ...h.evidence]),
-      ...output.axes_prioritaires,
-    ].join('\n');
+    // Gate 4 — Crisis routing on Claude output mirror V1.7.1.
+    // Uses the SAME single corpus as the AMF/clinical scan (composeOutputCorpus)
+    // so the J-A dimensions are covered by crisis detection too, with no risk of
+    // the two scans drifting apart.
+    const crisisCorpus = composeOutputCorpus(output);
     const crisis = detectCrisis(crisisCorpus);
     if (crisis.level === 'high' || crisis.level === 'medium') {
       skipped += 1;
@@ -674,15 +673,18 @@ export async function persistGeneratedProfiles(
             ranAt,
             interviewId: entry.interviewId,
             invalidHighlightIndexes: safety.invalidHighlightIndexes,
+            invalidDimensionPaths: safety.invalidDimensionPaths ?? [],
           },
         });
         // Surface for human review — a completed interview produced no profile
-        // because Claude fabricated a citation. Symmetric with amf_violation /
-        // clinical_language siblings above (which already escalate to Sentry).
+        // because Claude fabricated a citation (highlight OR J-A dimension).
+        // Symmetric with amf_violation / clinical_language siblings above
+        // (which already escalate to Sentry).
         reportWarning('onboarding-interview.batch', 'evidence_invalid_in_ai_output', {
           userId: entry.userId,
           interviewId: entry.interviewId,
           invalidHighlightIndexes: safety.invalidHighlightIndexes,
+          invalidDimensionPaths: safety.invalidDimensionPaths ?? [],
         });
       }
       continue;
@@ -706,6 +708,18 @@ export async function persistGeneratedProfiles(
         : CLAUDE_LOCAL_SENTINEL
       : claudeModelVersion;
 
+    // J-A dimensions — include ONLY fields the model actually produced. An
+    // absent field is omitted from the write : NULL on create (nullable column),
+    // left unchanged on the rare re-analysis update path. No Prisma.JsonNull
+    // sentinel needed, and recoveryProtocol (member-written, set elsewhere) is
+    // never touched here.
+    const aiDimensions = {
+      ...(output.coaching_tone !== undefined ? { coachingTone: output.coaching_tone } : {}),
+      ...(output.learning_stage !== undefined ? { learningStage: output.learning_stage } : {}),
+      ...(output.axes_structured !== undefined ? { axesStructured: output.axes_structured } : {}),
+      ...(output.weak_signals !== undefined ? { weakSignals: output.weak_signals } : {}),
+    };
+
     try {
       await db.memberProfile.upsert({
         where: { userId: entry.userId },
@@ -717,6 +731,7 @@ export async function persistGeneratedProfiles(
           axesPrioritaires: output.axes_prioritaires,
           claudeModelVersion: model,
           instrumentVersion,
+          ...aiDimensions,
         },
         update: {
           interviewId: entry.interviewId,
@@ -725,6 +740,7 @@ export async function persistGeneratedProfiles(
           axesPrioritaires: output.axes_prioritaires,
           claudeModelVersion: model,
           instrumentVersion,
+          ...aiDimensions,
         },
       });
 

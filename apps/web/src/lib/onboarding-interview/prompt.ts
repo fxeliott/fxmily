@@ -49,7 +49,7 @@ export const ONBOARDING_INTERVIEW_SYSTEM_PROMPT = `Tu es l'assistant interne de 
 POSTURE NON-NÉGOCIABLE (SPEC §2 + framework Mark Douglas, *Trading in the Zone* 2000 + *The Disciplined Trader* 1990) :
 
 - **INTERDIT** : analyser le marché, donner un avis sur un setup, prédire une tendance, recommander une paire ou une direction, parler de "niveau de support à X", "objectif à Y", "anticipation".
-- **INTERDIT — anti-clinical strict** : aucun mot \`dépression\`, \`anxiété généralisée\`, \`trouble\`, \`pathologie\`, \`diagnostic\` ne doit apparaître dans summary/highlights/axes. Le profile est **descriptif-comportemental**, pas clinique. Paraphraser en langage athlète-coach (ex : "périodes de doute" plutôt que "anxiété", "phases de fatigue" plutôt que "épuisement").
+- **INTERDIT — anti-clinical strict** : aucun mot \`dépression\`, \`anxiété généralisée\`, \`trouble\`, \`pathologie\`, \`diagnostic\` ne doit apparaître dans AUCUN champ généré : ni summary, highlights, axes_prioritaires, ni les 4 dimensions optionnelles coaching_tone, learning_stage, axes_structured, weak_signals (rationale, axis et signal inclus). Le profile est **descriptif-comportemental**, pas clinique. Paraphraser en langage athlète-coach (ex : "périodes de doute" plutôt que "anxiété", "phases de fatigue" plutôt que "épuisement").
 - **AUTORISÉ** : commenter le **profil mental** (posture face à l'incertitude, ego/résultats, discipline-process, régulation émotionnelle process-language, peurs Douglas, calibration confiance, patience), les **routines** (sommeil, sport, rituels), le **parcours** (méthodes testées, étapes), les **objectifs** (process > outcome), le **style coaching préféré**.
 
 CADRE THÉORIQUE Mark Douglas (à utiliser comme grille d'analyse INTERNE — ne JAMAIS demander au membre "à quel stade es-tu") :
@@ -101,6 +101,14 @@ FORMAT DE SORTIE (strict JSON validé Zod post-parse) :
   - \`label\` : court FR ≤100 chars (ex "Process-focus solide", "Tendance à tenir un loser").
   - \`evidence\` : 1-5 fragments **verbatim substring** ≤250 chars de la réponse membre, jamais paraphrase, jamais invention. Chaque evidence DOIT exister textuellement (NFC) dans la concaténation des answerTexts.
 - **axes_prioritaires** : 3-5 axes pour Eliott. Chacun ≤200 chars FR. Phrasé action-concrète ("Travailler X via Y") référencant les highlights ou les question indexes [N].
+
+DIMENSIONS APPROFONDIES (OPTIONNELLES, evidence-grounded) :
+Tu peux enrichir le profil avec 4 clés supplémentaires. Chacune est OPTIONNELLE : ne l'émets QUE si une citation verbatim la soutient, sinon OMETS-la entièrement (jamais de clé vide ni inventée). Chaque dimension porte son propre evidence[] (mêmes règles verbatim substring que highlights). Ces dimensions rendent le suivi plus précis et unique par membre.
+- **coaching_tone** \`{register, rationale, evidence[]}\` : le registre de coaching le plus adapté à ce membre. register vaut \`direct\`, \`pedagogique\` ou \`socratique\`. rationale = 10-400 chars expliquant le choix (préférence exprimée, réaction aux pertes, style d'apprentissage).
+- **learning_stage** \`{stage, rationale, evidence[]}\` : le stade Mark Douglas du membre (Disciplined Trader ch.8). stage vaut \`mechanical\`, \`subjective\` ou \`intuitive\`. rationale = 10-400 chars.
+- **axes_structured** \`[{axis, dimensionId, priority, evidence[]}]\` : 1-5 axes prioritaires structurés (version priorisée de axes_prioritaires). axis = action concrète (≤200). dimensionId = slug de la dimension d'instrument concernée (ex \`discipline_plan_adherence\`). priority = 1 (le plus urgent) à 5.
+- **weak_signals** \`[{signal, dimensionId, evidence[]}]\` : 1-7 patterns latents à OBSERVER, pour Eliott admin uniquement. signal = pattern factuel (≤200), ton Mark Douglas "pattern à observer", jamais une alerte ni du drama, jamais anxiogène.
+Si tu n'as aucune donnée grounded pour une dimension, OMETS-la. Un profil plus court mais 100% grounded vaut toujours mieux.
 
 EVIDENCE-GROUNDED MANDATORY :
 - Chaque \`highlight.evidence[i]\` est un substring verbatim NFC-normalisé d'une answerText. Si tu paraphrases ou inventes, le batch layer REJETTE le profile au persist — toute la génération est perdue.
@@ -211,6 +219,9 @@ export function buildOnboardingInterviewUserPrompt(snapshot: OnboardingInterview
   lines.push(`- summary 100-800 chars FR descriptif-comportemental`);
   lines.push(`- highlights 3-7 items \`{key, label, evidence[]}\` — evidence = verbatim substring`);
   lines.push(`- axes_prioritaires 3-5 axes action-concrète pour Eliott`);
+  lines.push(
+    `- optionnel, seulement si grounded : coaching_tone, learning_stage, axes_structured, weak_signals (cf. schéma)`,
+  );
   lines.push(``);
   lines.push(`Toute analyse de marché ou diagnostic clinique = violation de posture.`);
   lines.push(``);
@@ -221,8 +232,13 @@ export function buildOnboardingInterviewUserPrompt(snapshot: OnboardingInterview
   // Zod `.strict()` Gate 3). Mirror of `core_build_prompt_file`'s wording.
   lines.push(`FORMAT DE RÉPONSE (STRICT, non négociable) :`);
   lines.push(`- Réponds avec UNIQUEMENT l'objet JSON : commence par { et termine par }.`);
-  lines.push(`- EXACTEMENT trois clés top-level : summary, highlights, axes_prioritaires.`);
-  lines.push(`- N'ajoute PAS pseudonymLabel ni aucune autre clé.`);
+  lines.push(
+    `- Clés OBLIGATOIRES (exactement ces trois) : summary, highlights, axes_prioritaires.`,
+  );
+  lines.push(
+    `- Clés OPTIONNELLES autorisées, uniquement si grounded : coaching_tone, learning_stage, axes_structured, weak_signals.`,
+  );
+  lines.push(`- N'ajoute AUCUNE autre clé (pas de pseudonymLabel ni quoi que ce soit d'autre).`);
   lines.push(`- Pas de markdown, pas de fence \`\`\`, pas de prose avant ou après le JSON.`);
 
   return lines.join('\n');
@@ -433,6 +449,80 @@ export const MEMBER_PROFILE_OUTPUT_JSON_SCHEMA = {
         type: 'string',
         minLength: 5,
         maxLength: 200,
+      },
+    },
+    // J-A — 4 dimensions IA profondes, OPTIONNELLES (absentes de `required`) :
+    // le modele les emet SEULEMENT s'il a un signal grounded, sinon il les omet.
+    // Chacune porte son evidence[] (verbatim substring, validee au persist).
+    coaching_tone: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['register', 'rationale', 'evidence'],
+      properties: {
+        register: { type: 'string', enum: ['direct', 'pedagogique', 'socratique'] },
+        rationale: { type: 'string', minLength: 10, maxLength: 400 },
+        evidence: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 5,
+          items: { type: 'string', minLength: 1, maxLength: 250 },
+        },
+      },
+    },
+    learning_stage: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['stage', 'rationale', 'evidence'],
+      properties: {
+        stage: { type: 'string', enum: ['mechanical', 'subjective', 'intuitive'] },
+        rationale: { type: 'string', minLength: 10, maxLength: 400 },
+        evidence: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 5,
+          items: { type: 'string', minLength: 1, maxLength: 250 },
+        },
+      },
+    },
+    axes_structured: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 5,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['axis', 'dimensionId', 'priority', 'evidence'],
+        properties: {
+          axis: { type: 'string', minLength: 5, maxLength: 200 },
+          dimensionId: { type: 'string', pattern: '^[a-z][a-z0-9_-]{2,63}$', maxLength: 64 },
+          priority: { type: 'integer', minimum: 1, maximum: 5 },
+          evidence: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 5,
+            items: { type: 'string', minLength: 1, maxLength: 250 },
+          },
+        },
+      },
+    },
+    weak_signals: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 7,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['signal', 'dimensionId', 'evidence'],
+        properties: {
+          signal: { type: 'string', minLength: 5, maxLength: 200 },
+          dimensionId: { type: 'string', pattern: '^[a-z][a-z0-9_-]{2,63}$', maxLength: 64 },
+          evidence: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 5,
+            items: { type: 'string', minLength: 1, maxLength: 250 },
+          },
+        },
       },
     },
   },

@@ -162,6 +162,89 @@ const memberProfileHighlightSchema = z
   })
   .strict();
 
+// =============================================================================
+// J-A (expansion IA profonde) — 4 dimensions structurees, evidence-grounded.
+// Toutes OPTIONNELLES en sortie (le modele omet si signal insuffisant) mais
+// STRICTES si presentes. Chaque dimension porte son propre evidence[] (verbatim
+// substring NFC), valide au persist par runSafetyGate (safety.ts). Read-only,
+// jamais un input du score (firewall §21.5). Meme contrat que highlights.
+// =============================================================================
+
+/** Rationale libre par dimension (coachingTone/learningStage). Descriptif, court. */
+export const MEMBER_PROFILE_RATIONALE_MIN_CHARS = 10;
+export const MEMBER_PROFILE_RATIONALE_MAX_CHARS = 400;
+/** weakSignals[].signal libelle court. */
+export const MEMBER_PROFILE_WEAK_SIGNAL_MAX_CHARS = 200;
+/** Bornes cardinalite axesStructured / weakSignals. */
+export const MEMBER_PROFILE_AXES_STRUCTURED_MIN = 1;
+export const MEMBER_PROFILE_AXES_STRUCTURED_MAX = 5;
+export const MEMBER_PROFILE_WEAK_SIGNALS_MIN = 1;
+export const MEMBER_PROFILE_WEAK_SIGNALS_MAX = 7;
+/** dimensionId = slug d'une dimension d'instrument (ex `discipline_plan_adherence`). */
+const DIMENSION_ID_REGEX = /^[a-z][a-z0-9_-]{2,63}$/;
+
+/** Evidence array partagee (memes bornes que highlights). */
+const dimensionEvidenceSchema = z
+  .array(z.string().min(1).max(MEMBER_PROFILE_EVIDENCE_MAX_CHARS, 'Evidence trop long (max 250).'))
+  .min(MEMBER_PROFILE_EVIDENCE_MIN_ITEMS, 'Au moins 1 evidence requise.')
+  .max(MEMBER_PROFILE_EVIDENCE_MAX_ITEMS, 'Maximum 5 evidence.');
+
+const dimensionIdSchema = z
+  .string()
+  .regex(DIMENSION_ID_REGEX, 'dimensionId invalide.')
+  .max(64, 'dimensionId trop long.');
+
+const rationaleSchema = z
+  .string()
+  .min(MEMBER_PROFILE_RATIONALE_MIN_CHARS, 'Rationale trop court (min 10).')
+  .max(MEMBER_PROFILE_RATIONALE_MAX_CHARS, 'Rationale trop long (max 400).');
+
+export const coachingToneSchema = z
+  .object({
+    register: z.enum(['direct', 'pedagogique', 'socratique']),
+    rationale: rationaleSchema,
+    evidence: dimensionEvidenceSchema,
+  })
+  .strict();
+
+export const learningStageSchema = z
+  .object({
+    stage: z.enum(['mechanical', 'subjective', 'intuitive']),
+    rationale: rationaleSchema,
+    evidence: dimensionEvidenceSchema,
+  })
+  .strict();
+
+export const axisStructuredSchema = z
+  .object({
+    axis: z.string().min(5).max(MEMBER_PROFILE_AXIS_MAX_CHARS, 'Axe trop long (max 200).'),
+    dimensionId: dimensionIdSchema,
+    priority: z.number().int().min(1, 'Priorite 1-5.').max(5, 'Priorite 1-5.'),
+    evidence: dimensionEvidenceSchema,
+  })
+  .strict();
+
+export const axesStructuredSchema = z
+  .array(axisStructuredSchema)
+  .min(MEMBER_PROFILE_AXES_STRUCTURED_MIN, 'Au moins 1 axe structure.')
+  .max(MEMBER_PROFILE_AXES_STRUCTURED_MAX, 'Maximum 5 axes structures.');
+
+export const weakSignalSchema = z
+  .object({
+    signal: z
+      .string()
+      .min(5)
+      .max(MEMBER_PROFILE_WEAK_SIGNAL_MAX_CHARS, 'Signal trop long (max 200).'),
+    dimensionId: dimensionIdSchema,
+    evidence: dimensionEvidenceSchema,
+  })
+  .strict();
+
+export const weakSignalsSchema = z
+  .array(weakSignalSchema)
+  .min(MEMBER_PROFILE_WEAK_SIGNALS_MIN, 'Au moins 1 signal faible.')
+  .max(MEMBER_PROFILE_WEAK_SIGNALS_MAX, 'Maximum 7 signaux faibles.');
+
 /**
  * Output schema Claude returns (Phase A.2 batch local).
  *
@@ -198,11 +281,22 @@ export const memberProfileOutputSchema = z
       )
       .min(MEMBER_PROFILE_AXES_MIN, 'Au moins 3 axes prioritaires requis.')
       .max(MEMBER_PROFILE_AXES_MAX, 'Maximum 5 axes prioritaires.'),
+    // J-A — 4 dimensions IA profondes, OPTIONNELLES (omises si signal
+    // insuffisant), STRICTES si presentes. Chacune evidence-grounded (validee
+    // au persist par validateDimensionEvidence dans runSafetyGate).
+    coaching_tone: coachingToneSchema.optional(),
+    learning_stage: learningStageSchema.optional(),
+    axes_structured: axesStructuredSchema.optional(),
+    weak_signals: weakSignalsSchema.optional(),
   })
   .strict();
 
 export type MemberProfileOutput = z.infer<typeof memberProfileOutputSchema>;
 export type MemberProfileHighlight = z.infer<typeof memberProfileHighlightSchema>;
+export type MemberProfileCoachingTone = z.infer<typeof coachingToneSchema>;
+export type MemberProfileLearningStage = z.infer<typeof learningStageSchema>;
+export type MemberProfileAxisStructured = z.infer<typeof axisStructuredSchema>;
+export type MemberProfileWeakSignal = z.infer<typeof weakSignalSchema>;
 
 /**
  * Snapshot input — handed to Claude via the user prompt.

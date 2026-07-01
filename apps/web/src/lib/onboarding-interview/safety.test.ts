@@ -6,10 +6,12 @@ import type {
 } from '@/lib/schemas/onboarding-interview';
 
 import {
+  composeOutputCorpus,
   detectAMFViolation,
   detectClinicalLanguage,
   isEvidenceVerbatimSubstring,
   runSafetyGate,
+  validateDimensionEvidence,
   validateEvidenceSubstrings,
 } from './safety';
 
@@ -308,5 +310,236 @@ describe('runSafetyGate', () => {
     if (result.status === 'reject') {
       expect(result.reason).toBe('clinical_language');
     }
+  });
+});
+
+// =============================================================================
+// J-A — Deep AI dimensions : evidence grounding + corpus scanning
+// =============================================================================
+
+/**
+ * Fully-grounded output helper : every J-A dimension's evidence is a verbatim
+ * substring of the provided corpus text (so the tests can flip a single field
+ * to a fabricated citation and assert the gate rejects it).
+ */
+function makeOutputWithDimensions(
+  corpusText: string,
+  overrides: Partial<MemberProfileOutput> = {},
+): MemberProfileOutput {
+  return makeOutput({
+    coaching_tone: {
+      register: 'socratique',
+      rationale: 'Le membre progresse mieux en questionnant ses propres décisions.',
+      evidence: [corpusText],
+    },
+    learning_stage: {
+      stage: 'subjective',
+      rationale: 'Il verbalise ses ressentis mais ne les relie pas encore à un process stable.',
+      evidence: [corpusText],
+    },
+    axes_structured: [
+      {
+        axis: 'Consistance du plan personnel',
+        dimensionId: 'discipline_plan_adherence',
+        priority: 1,
+        evidence: [corpusText],
+      },
+    ],
+    weak_signals: [
+      {
+        signal: 'Tendance à sur-ajuster après une perte.',
+        dimensionId: 'discipline_plan_adherence',
+        evidence: [corpusText],
+      },
+    ],
+    ...overrides,
+  });
+}
+
+describe('validateDimensionEvidence', () => {
+  it('allValid=true when every dimension evidence is a verbatim substring', () => {
+    const corpus = 'Je remets tout en question après une perte, souvent trop vite.';
+    const snapshot = makeSnapshot([corpus]);
+    const output = makeOutputWithDimensions(corpus);
+    const result = validateDimensionEvidence(output, snapshot);
+    expect(result.allValid).toBe(true);
+    expect(result.invalidPaths).toHaveLength(0);
+  });
+
+  it('allValid=true when no J-A dimensions are present (optional, back-compat)', () => {
+    const snapshot = makeSnapshot(['Réponse banale.']);
+    const output = makeOutput(); // no coaching_tone/learning_stage/axes_structured/weak_signals
+    const result = validateDimensionEvidence(output, snapshot);
+    expect(result.allValid).toBe(true);
+    expect(result.invalidPaths).toHaveLength(0);
+  });
+
+  it('flags a fabricated citation inside coaching_tone', () => {
+    const corpus = 'Réponse réelle du membre présente dans le corpus.';
+    const snapshot = makeSnapshot([corpus]);
+    const output = makeOutputWithDimensions(corpus, {
+      coaching_tone: {
+        register: 'direct',
+        rationale: 'Rationale plausible.',
+        evidence: ["Phrase que le membre n'a jamais écrite."],
+      },
+    });
+    const result = validateDimensionEvidence(output, snapshot);
+    expect(result.allValid).toBe(false);
+    expect(result.invalidPaths).toContain('coaching_tone');
+  });
+
+  it('flags the exact index of a fabricated axes_structured entry', () => {
+    const corpus = 'Contenu authentique du membre pour ancrage.';
+    const snapshot = makeSnapshot([corpus]);
+    const output = makeOutputWithDimensions(corpus, {
+      axes_structured: [
+        {
+          axis: 'Axe ancré',
+          dimensionId: 'discipline_plan_adherence',
+          priority: 1,
+          evidence: [corpus],
+        },
+        {
+          axis: 'Axe halluciné',
+          dimensionId: 'risk_management',
+          priority: 2,
+          evidence: ['Citation inventée absente du corpus.'],
+        },
+      ],
+    });
+    const result = validateDimensionEvidence(output, snapshot);
+    expect(result.allValid).toBe(false);
+    expect(result.invalidPaths).toContain('axes_structured[1]');
+    expect(result.invalidPaths).not.toContain('axes_structured[0]');
+  });
+});
+
+describe('composeOutputCorpus (J-A dimension coverage)', () => {
+  it('includes coaching_tone / learning_stage rationale + evidence in the scan corpus', () => {
+    const output = makeOutput({
+      coaching_tone: {
+        register: 'direct',
+        rationale: 'RATIONALE_TONE_MARKER',
+        evidence: ['EVIDENCE_TONE_MARKER'],
+      },
+      learning_stage: {
+        stage: 'mechanical',
+        rationale: 'RATIONALE_STAGE_MARKER',
+        evidence: ['EVIDENCE_STAGE_MARKER'],
+      },
+    });
+    const corpus = composeOutputCorpus(output);
+    expect(corpus).toContain('RATIONALE_TONE_MARKER');
+    expect(corpus).toContain('EVIDENCE_TONE_MARKER');
+    expect(corpus).toContain('RATIONALE_STAGE_MARKER');
+    expect(corpus).toContain('EVIDENCE_STAGE_MARKER');
+  });
+
+  it('includes axes_structured.axis + weak_signals.signal in the scan corpus', () => {
+    const output = makeOutput({
+      axes_structured: [
+        {
+          axis: 'AXIS_TEXT_MARKER',
+          dimensionId: 'discipline_plan_adherence',
+          priority: 1,
+          evidence: ['AXIS_EVIDENCE_MARKER'],
+        },
+      ],
+      weak_signals: [
+        {
+          signal: 'SIGNAL_TEXT_MARKER',
+          dimensionId: 'discipline_plan_adherence',
+          evidence: ['SIGNAL_EVIDENCE_MARKER'],
+        },
+      ],
+    });
+    const corpus = composeOutputCorpus(output);
+    expect(corpus).toContain('AXIS_TEXT_MARKER');
+    expect(corpus).toContain('AXIS_EVIDENCE_MARKER');
+    expect(corpus).toContain('SIGNAL_TEXT_MARKER');
+    expect(corpus).toContain('SIGNAL_EVIDENCE_MARKER');
+  });
+});
+
+describe('runSafetyGate (J-A dimensions)', () => {
+  it('rejects a fabricated citation living ONLY in a J-A dimension', () => {
+    const corpus = 'Réponse authentique et exploitable du membre.';
+    const snapshot = makeSnapshot([corpus]);
+    // highlights all grounded; only weak_signals carries a fabricated citation.
+    const output = makeOutputWithDimensions(corpus, {
+      highlights: [
+        { key: 'h1', label: 'H1', evidence: [corpus] },
+        { key: 'h2', label: 'H2', evidence: ['Réponse authentique'] },
+        { key: 'h3', label: 'H3', evidence: ['exploitable du membre.'] },
+      ],
+      weak_signals: [
+        {
+          signal: 'Signal halluciné.',
+          dimensionId: 'discipline_plan_adherence',
+          evidence: ['Citation totalement inventée hors corpus.'],
+        },
+      ],
+    });
+    const result = runSafetyGate({ output, snapshot });
+    expect(result.status).toBe('reject');
+    if (result.status === 'reject') {
+      expect(result.reason).toBe('evidence_invalid');
+      if (result.reason === 'evidence_invalid') {
+        expect(result.invalidHighlightIndexes).toHaveLength(0);
+        expect(result.invalidDimensionPaths).toContain('weak_signals[0]');
+      }
+    }
+  });
+
+  it('does not set invalidDimensionPaths when only a highlight is fabricated', () => {
+    const corpus = 'Contenu réel du membre.';
+    const snapshot = makeSnapshot([corpus]);
+    const output = makeOutputWithDimensions(corpus, {
+      highlights: [
+        { key: 'h1', label: 'H1', evidence: ['Halluciné hors corpus.'] },
+        { key: 'h2', label: 'H2', evidence: [corpus] },
+        { key: 'h3', label: 'H3', evidence: ['Contenu réel'] },
+      ],
+    });
+    const result = runSafetyGate({ output, snapshot });
+    expect(result.status).toBe('reject');
+    if (result.status === 'reject' && result.reason === 'evidence_invalid') {
+      expect(result.invalidHighlightIndexes).toEqual([0]);
+      expect(result.invalidDimensionPaths).toBeUndefined();
+    }
+  });
+
+  it('rejects an AMF violation planted in a J-A dimension rationale', () => {
+    const corpus = "L'analyse correspondait à mon plan de trading.";
+    const snapshot = makeSnapshot([corpus]);
+    const output = makeOutputWithDimensions(corpus, {
+      coaching_tone: {
+        register: 'direct',
+        rationale: 'Achetez LONG sur EURUSD, TP à 1.0850.',
+        evidence: [corpus],
+      },
+    });
+    const result = runSafetyGate({ output, snapshot });
+    expect(result.status).toBe('reject');
+    if (result.status === 'reject') {
+      expect(result.reason).toBe('amf_violation');
+    }
+  });
+
+  it('passes when all highlights AND all J-A dimensions are grounded and clean', () => {
+    const corpus = 'Réponse claire, exploitable, orientée process du membre.';
+    const snapshot = makeSnapshot([corpus]);
+    const output = makeOutputWithDimensions(corpus, {
+      summary:
+        'Profil sain, process-focus présent, work in progress sur la consistance. Routines stables, awareness solide, marge de progression sur la gestion post-perte.',
+      highlights: [
+        { key: 'h1', label: 'H1', evidence: [corpus] },
+        { key: 'h2', label: 'H2', evidence: ['Réponse claire'] },
+        { key: 'h3', label: 'H3', evidence: ['orientée process du membre.'] },
+      ],
+    });
+    const result = runSafetyGate({ output, snapshot });
+    expect(result.status).toBe('pass');
   });
 });

@@ -2143,6 +2143,26 @@ model MemberProfile {
   /// no broker lock. NULL = not set; NEVER a scoring input (firewall-clean).
   recoveryProtocol Json? @map("recovery_protocol")
 
+  /// J-A (expansion IA profonde) — 4 dimensions structurees, evidence-grounded,
+  /// produites par le pipeline onboarding enrichi. Toutes ADD-only, nullable,
+  /// read-only, JAMAIS un input du score comportemental (firewall §21.5, meme
+  /// contrat que recoveryProtocol ci-dessus). Shapes valides par les sous-schemas
+  /// Zod stricts dans schemas/onboarding-interview.ts. Chaque champ porte son
+  /// propre evidence[] (verbatim substring NFC), valide au persist par
+  /// runSafetyGate. NULL = signal insuffisant a l'onboarding (le modele omet).
+  ///
+  /// coachingTone   = {register: direct|pedagogique|socratique, rationale, evidence[]}
+  ///                  registre de coaching adapte, propage aux prompts membre-facing.
+  /// learningStage  = {stage: mechanical|subjective|intuitive, rationale, evidence[]}
+  ///                  stade Mark Douglas (Disciplined Trader ch.8).
+  /// axesStructured = [{axis, dimensionId, priority 1-5, evidence[]}] axes priorises.
+  /// weakSignals    = [{signal, dimensionId, evidence[]}] patterns latents a
+  ///                  observer, surface ADMIN uniquement (non anxiogene cote membre).
+  coachingTone   Json? @map("coaching_tone")
+  learningStage  Json? @map("learning_stage")
+  axesStructured Json? @map("axes_structured")
+  weakSignals    Json? @map("weak_signals")
+
   @@map("member_profiles")
 }
 

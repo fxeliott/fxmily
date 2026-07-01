@@ -244,12 +244,22 @@ for i in $(seq 0 $((ENTRIES_COUNT - 1))); do
   # keys (e.g. `pseudonymLabel`) that the server-side Zod `.strict()` Gate 3
   # would reject — projecting here is model-proof regardless of prompt
   # compliance. Presence of the three keys was asserted just above.
+  # J-A — project onto the 3 required keys PLUS the 4 optional deep-AI
+  # dimensions, but ONLY when the model actually emitted them (non-null). This
+  # keeps the model-proof defense (any OTHER volunteered key is still dropped, so
+  # server-side Zod `.strict()` never sees it) while letting coaching_tone /
+  # learning_stage / axes_structured / weak_signals flow through end-to-end. A
+  # null-guard avoids emitting `{key: null}` (which Zod `.optional()` rejects).
   jq -n \
     --arg uid "$USER_ID" \
     --arg iid "$INTERVIEW_ID" \
     --slurpfile output "$PARSED_FILE" \
     --arg model "$CLAUDE_MODEL" \
-    '{userId: $uid, interviewId: $iid, output: ($output[0] | {summary, highlights, axes_prioritaires}), model: $model}' \
+    '{userId: $uid, interviewId: $iid, output: ($output[0] | {summary, highlights, axes_prioritaires}
+        + (if (.coaching_tone   != null) then {coaching_tone}   else {} end)
+        + (if (.learning_stage  != null) then {learning_stage}  else {} end)
+        + (if (.axes_structured != null) then {axes_structured} else {} end)
+        + (if (.weak_signals    != null) then {weak_signals}    else {} end)), model: $model}' \
     >> "$RESULTS_NDJSON"
 
   echo "[onboarding-batch] Captured response for $PSEUDONYM"

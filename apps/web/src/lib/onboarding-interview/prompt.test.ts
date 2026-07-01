@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { UNTRUSTED_INPUT_SYSTEM_INSTRUCTION } from '@/lib/ai/prompt-builder';
 import type { OnboardingInterviewSnapshot } from '@/lib/schemas/onboarding-interview';
 
-import { buildOnboardingInterviewUserPrompt, ONBOARDING_INTERVIEW_SYSTEM_PROMPT } from './prompt';
+import {
+  buildOnboardingInterviewUserPrompt,
+  MEMBER_PROFILE_OUTPUT_JSON_SCHEMA,
+  ONBOARDING_INTERVIEW_SYSTEM_PROMPT,
+} from './prompt';
 
 /**
  * V2.4 safety hardening (2026-05-29) — anti-regression on the distress /
@@ -109,5 +113,109 @@ describe('FIX-5 — onboarding untrusted-input wrap (prompt-injection defense)',
 
   it('the system prompt references the <member_reflection_untrusted> envelope', () => {
     expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('<member_reflection_untrusted>');
+  });
+});
+
+/**
+ * J-A (2026-07-01) — the 4 deep-AI dimensions (coaching_tone, learning_stage,
+ * axes_structured, weak_signals) are wired into the wire-format JSON schema AND
+ * the system/user prompts as STRICTLY OPTIONAL, evidence-grounded extras. These
+ * assertions fail loudly if a future edit either (a) makes a dimension required
+ * — which would break every profile with insufficient signal — or (b) drops the
+ * `additionalProperties: false` anti-hallucination hardening on a dimension.
+ */
+describe('J-A — deep-AI dimensions in the output JSON schema', () => {
+  const DIMENSIONS = [
+    'coaching_tone',
+    'learning_stage',
+    'axes_structured',
+    'weak_signals',
+  ] as const;
+
+  it('keeps only the 3 original keys required (dimensions never required)', () => {
+    expect(MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.required).toEqual([
+      'summary',
+      'highlights',
+      'axes_prioritaires',
+    ]);
+    for (const dim of DIMENSIONS) {
+      expect(MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.required).not.toContain(dim);
+    }
+  });
+
+  it('declares each dimension in properties', () => {
+    for (const dim of DIMENSIONS) {
+      expect(MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.properties).toHaveProperty(dim);
+    }
+  });
+
+  it('top-level object forbids additional properties (anti-hallucination)', () => {
+    expect(MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.additionalProperties).toBe(false);
+  });
+
+  it('coaching_tone / learning_stage are strict objects with an evidence array', () => {
+    for (const dim of ['coaching_tone', 'learning_stage'] as const) {
+      const node = MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.properties[dim];
+      expect(node.type).toBe('object');
+      expect(node.additionalProperties).toBe(false);
+      expect(node.required).toContain('evidence');
+      expect(node.required).toContain('rationale');
+      expect(node.properties.evidence.type).toBe('array');
+    }
+  });
+
+  it('axes_structured / weak_signals are arrays of strict objects carrying evidence', () => {
+    for (const dim of ['axes_structured', 'weak_signals'] as const) {
+      const node = MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.properties[dim];
+      expect(node.type).toBe('array');
+      expect(node.items.type).toBe('object');
+      expect(node.items.additionalProperties).toBe(false);
+      expect(node.items.required).toContain('evidence');
+      expect(node.items.required).toContain('dimensionId');
+    }
+  });
+
+  it('constrains register / stage enums to the Douglas-aligned values', () => {
+    expect(
+      MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.properties.coaching_tone.properties.register.enum,
+    ).toEqual(['direct', 'pedagogique', 'socratique']);
+    expect(
+      MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.properties.learning_stage.properties.stage.enum,
+    ).toEqual(['mechanical', 'subjective', 'intuitive']);
+  });
+});
+
+describe('J-A — prompts advertise the optional dimensions', () => {
+  const makeSnapshot = (): OnboardingInterviewSnapshot => ({
+    pseudonymLabel: 'member-cafebabe',
+    instrumentVersion: 'v1',
+    startedAt: '2026-06-01T08:00:00.000Z',
+    completedAt: '2026-06-01T08:30:00.000Z',
+    answers: [
+      {
+        questionIndex: 0,
+        questionKey: 'parcours_origin',
+        questionText: 'Raconte comment tu es arrivé au trading.',
+        answerText: 'Réponse suffisamment longue pour passer le seuil minimal.',
+        dimensionId: 'parcours_trading',
+        phase: 'warmup',
+      },
+    ],
+  });
+
+  it('the system prompt documents the 4 optional dimensions', () => {
+    expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('coaching_tone');
+    expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('learning_stage');
+    expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('axes_structured');
+    expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('weak_signals');
+    expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('DIMENSIONS APPROFONDIES');
+  });
+
+  it('the user prompt lists the optional dimensions and relaxes the key lockdown', () => {
+    const prompt = buildOnboardingInterviewUserPrompt(makeSnapshot());
+    expect(prompt).toContain('Clés OPTIONNELLES autorisées');
+    expect(prompt).toContain('coaching_tone, learning_stage, axes_structured, weak_signals');
+    // The old hard "exactement trois clés — rien d'autre" lock must be gone.
+    expect(prompt).toContain("N'ajoute AUCUNE autre clé");
   });
 });

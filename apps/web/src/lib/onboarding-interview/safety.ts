@@ -198,6 +198,43 @@ export function isEvidenceVerbatimSubstring(
   return corpus.includes(evidence.normalize('NFC'));
 }
 
+export interface DimensionEvidenceValidationResult {
+  readonly allValid: boolean;
+  /** Chemins des dimensions J-A dont au moins une evidence est fabriquee. */
+  readonly invalidPaths: readonly string[];
+}
+
+/**
+ * J-A — valide l'evidence[] de CHAQUE dimension IA profonde (coaching_tone,
+ * learning_stage, axes_structured[i], weak_signals[i]) contre le corpus des
+ * answerTexts (NFC). Meme garantie anti-hallucination que les highlights : une
+ * citation fabriquee dans une dimension fait REJETER le profil au persist.
+ * C'est le pendant obligatoire de l'ajout des dimensions au schema, sinon une
+ * hallucination y passerait sans controle.
+ */
+export function validateDimensionEvidence(
+  output: MemberProfileOutput,
+  snapshot: OnboardingInterviewSnapshot,
+): DimensionEvidenceValidationResult {
+  const corpus = concatAnswerTextsForValidation(snapshot);
+  const invalidPaths: string[] = [];
+  const check = (evidence: readonly string[], path: string): void => {
+    const hasInvalid = evidence.some((e) => !corpus.includes(e.normalize('NFC')));
+    if (hasInvalid) invalidPaths.push(path);
+  };
+
+  if (output.coaching_tone) check(output.coaching_tone.evidence, 'coaching_tone');
+  if (output.learning_stage) check(output.learning_stage.evidence, 'learning_stage');
+  if (output.axes_structured) {
+    output.axes_structured.forEach((a, i) => check(a.evidence, `axes_structured[${i}]`));
+  }
+  if (output.weak_signals) {
+    output.weak_signals.forEach((s, i) => check(s.evidence, `weak_signals[${i}]`));
+  }
+
+  return { allValid: invalidPaths.length === 0, invalidPaths };
+}
+
 // =============================================================================
 // Composite gate — combines all 3 couches for batch persist decision
 // =============================================================================
@@ -223,6 +260,10 @@ export type SafetyGateResult =
       readonly status: 'reject';
       readonly reason: 'evidence_invalid';
       readonly invalidHighlightIndexes: readonly number[];
+      /** J-A — chemins des dimensions dont l'evidence est fabriquee
+       *  (ex `coaching_tone`, `axes_structured[2]`). Absent si seuls les
+       *  highlights ont echoue (retro-compat avec le contrat pre-J-A). */
+      readonly invalidDimensionPaths?: readonly string[];
     };
 
 /**
@@ -265,13 +306,19 @@ export function runSafetyGate(input: SafetyGateInput): SafetyGateResult {
     };
   }
 
-  // Layer 3 — Evidence substring NFC validation
+  // Layer 3 — Evidence substring NFC validation (highlights + dimensions J-A).
+  // Both must pass : a fabricated citation in ANY highlight OR any J-A dimension
+  // rejects the whole profile (same anti-hallucination guarantee everywhere).
   const evidence = validateEvidenceSubstrings(input.output, input.snapshot);
-  if (!evidence.allValid) {
+  const dimEvidence = validateDimensionEvidence(input.output, input.snapshot);
+  if (!evidence.allValid || !dimEvidence.allValid) {
     return {
       status: 'reject',
       reason: 'evidence_invalid',
       invalidHighlightIndexes: evidence.invalidHighlightIndexes,
+      ...(dimEvidence.invalidPaths.length > 0
+        ? { invalidDimensionPaths: dimEvidence.invalidPaths }
+        : {}),
     };
   }
 
@@ -281,9 +328,15 @@ export function runSafetyGate(input: SafetyGateInput): SafetyGateResult {
 /**
  * Compose the full text corpus from a MemberProfileOutput for AMF +
  * anti-clinical scanning. Concatenates summary + ALL highlights (labels +
- * evidence) + ALL axes. Joined by newline.
+ * evidence) + ALL axes + ALL J-A dimensions (rationale/axis/signal + evidence).
+ * Joined by newline.
+ *
+ * EXPORTED and used as the SINGLE source of truth for "every text the model
+ * produced" : runSafetyGate scans it for AMF/clinical, and batch.ts reuses it
+ * for crisis detection. Any new output field MUST be added here, otherwise a
+ * violation in that field would never be scanned (J-A rupture point #1).
  */
-function composeOutputCorpus(output: MemberProfileOutput): string {
+export function composeOutputCorpus(output: MemberProfileOutput): string {
   const parts: string[] = [output.summary];
   for (const highlight of output.highlights) {
     parts.push(highlight.label);
@@ -293,6 +346,23 @@ function composeOutputCorpus(output: MemberProfileOutput): string {
   }
   for (const axis of output.axes_prioritaires) {
     parts.push(axis);
+  }
+  // J-A dimensions — every model-generated text field.
+  if (output.coaching_tone) {
+    parts.push(output.coaching_tone.rationale, ...output.coaching_tone.evidence);
+  }
+  if (output.learning_stage) {
+    parts.push(output.learning_stage.rationale, ...output.learning_stage.evidence);
+  }
+  if (output.axes_structured) {
+    for (const a of output.axes_structured) {
+      parts.push(a.axis, ...a.evidence);
+    }
+  }
+  if (output.weak_signals) {
+    for (const s of output.weak_signals) {
+      parts.push(s.signal, ...s.evidence);
+    }
   }
   return parts.join('\n');
 }

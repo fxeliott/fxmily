@@ -73,8 +73,17 @@ export interface MemberProfileMonthlyBatchEntry {
   monthEnd: string;
   /** Pure builder output (compile-time typed; free text already sanitized via
    *  safeFreeText at the builder). Pseudonymised — carries no email/name/raw
-   *  userId. The snapshot type is NOT `.parse()`d at runtime here. */
+   *  userId. The snapshot type is NOT `.parse()`d at runtime here. Retained for
+   *  audit/debug; the wire prompt is the pre-rendered {@link userPrompt}. */
   snapshot: MonthlyReprofileSnapshot;
+  /** The FULLY-RENDERED per-member user prompt (`buildMonthlyReprofileUserPrompt`)
+   *  — the reference-vs-citable-source framing, the per-reflection untrusted
+   *  wrapping and the indexed [i] labels TRAVEL to `claude --print` verbatim
+   *  (J-B lesson: the enriched prompt is useless if it does not reach the
+   *  engine). The local script sends THIS as the user content, NOT the raw
+   *  snapshot JSON — so the system prompt's references to the "Réflexions du
+   *  mois" block + `<member_reflection_untrusted>` tags stay accurate. */
+  userPrompt: string;
 }
 
 /**
@@ -198,6 +207,8 @@ export async function loadAllReprofileSnapshots(
             monthStart: slice.window.monthStartLocal,
             monthEnd: slice.window.monthEndLocal,
             snapshot: slice.snapshot,
+            // Render server-side so the rich, tested user prompt travels verbatim.
+            userPrompt: buildMonthlyReprofileUserPrompt(slice.snapshot),
           },
         };
       }),

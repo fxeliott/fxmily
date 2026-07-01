@@ -322,6 +322,10 @@ describe('loadAllReprofileSnapshots (J-E monthly re-profiling)', () => {
     // The system prompt carries the few-shot block (J-B: examples must travel).
     expect(envelope.systemPrompt).toContain('member-9F3A2C71');
     expect(envelope.outputJsonSchema).toBeDefined();
+    // The RENDERED user prompt travels verbatim (J-B): reference-vs-citable
+    // framing + the member's reflection text both reach the wire.
+    expect(envelope.entries[0]?.userPrompt).toContain('SOURCE CITABLE');
+    expect(envelope.entries[0]?.userPrompt).toContain('Coupe un gagnant tot.');
     const pulled = vi
       .mocked(logAudit)
       .mock.calls.find(([arg]) => arg.action === 'member_profile_monthly.batch.pulled');

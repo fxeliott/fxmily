@@ -1,10 +1,28 @@
-import { Compass, Sparkles, Target } from 'lucide-react';
+import {
+  Compass,
+  GraduationCap,
+  ListChecks,
+  MessageSquare,
+  Radar,
+  Sparkles,
+  Target,
+} from 'lucide-react';
 
 import { AIGeneratedBanner } from '@/components/ai-generated-banner';
 import type {
   SerializedMemberProfile,
   SerializedOnboardingInterview,
 } from '@/lib/onboarding-interview/service';
+import {
+  axesStructuredSchema,
+  coachingToneSchema,
+  learningStageSchema,
+  weakSignalsSchema,
+  type MemberProfileAxisStructured,
+  type MemberProfileCoachingTone,
+  type MemberProfileLearningStage,
+  type MemberProfileWeakSignal,
+} from '@/lib/schemas/onboarding-interview';
 import { pseudonymizeMember } from '@/lib/weekly-report/builder';
 
 /**
@@ -56,6 +74,74 @@ function asHighlights(raw: unknown): ProfileHighlight[] {
 function asStringArray(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((s): s is string => typeof s === 'string');
+}
+
+// J-C — the 4 deep-AI dimensions arrive as `unknown` (Prisma Json?, null on
+// legacy/partial rows). Parse defensively with the same Zod schemas used at
+// write time : safeParse never throws on null/garbage and returns a clean
+// empty result, so each section degrades to nothing when the field is absent.
+function asCoachingTone(raw: unknown): MemberProfileCoachingTone | null {
+  const parsed = coachingToneSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
+function asLearningStage(raw: unknown): MemberProfileLearningStage | null {
+  const parsed = learningStageSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
+function asAxesStructured(raw: unknown): MemberProfileAxisStructured[] {
+  const parsed = axesStructuredSchema.safeParse(raw);
+  return parsed.success ? parsed.data : [];
+}
+
+function asWeakSignals(raw: unknown): MemberProfileWeakSignal[] {
+  const parsed = weakSignalsSchema.safeParse(raw);
+  return parsed.success ? parsed.data : [];
+}
+
+// Enum -> French label maps (no em-dash per Eliott's copy rule). Descriptive
+// only, never clinical, never anthropomorphized ("l'IA pense" banned).
+const REGISTER_LABEL: Record<MemberProfileCoachingTone['register'], string> = {
+  direct: 'Direct',
+  pedagogique: 'Pédagogique',
+  socratique: 'Socratique',
+};
+
+const STAGE_LABEL: Record<MemberProfileLearningStage['stage'], string> = {
+  mechanical: 'Mécanique',
+  subjective: 'Subjectif',
+  intuitive: 'Intuitif',
+};
+
+/** Verbatim member citations rendered as a quoted list (shared idiom). */
+function EvidenceList({ items }: { items: readonly string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-1.5 border-l-2 border-[var(--b-acc)] pl-3">
+      {items.map((e, ei) => (
+        <li
+          key={ei}
+          className="t-cap text-[var(--t-2)] italic before:mr-2 before:content-['«'] after:ml-2 after:content-['»']"
+        >
+          {e}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Small accent icon chip reused across the dimension section headers. */
+function DimensionIcon({ icon: Icon }: { icon: typeof MessageSquare }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="rounded-pill mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center border"
+      style={{ background: 'var(--acc-dim)', borderColor: 'var(--b-acc)', color: 'var(--acc)' }}
+    >
+      <Icon className="h-4 w-4" strokeWidth={2.2} />
+    </div>
+  );
 }
 
 interface MemberProfileViewerAdminProps {
@@ -249,6 +335,64 @@ export function MemberProfileViewerAdmin({
             );
           })()}
 
+          {/* J-C — Registre de coaching suggéré (coachingTone). */}
+          {(() => {
+            const tone = asCoachingTone(profile.coachingTone);
+            if (!tone) return null;
+            return (
+              <section
+                className="rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6"
+                aria-labelledby="profile-admin-tone-heading"
+              >
+                <div className="flex items-start gap-3">
+                  <DimensionIcon icon={MessageSquare} />
+                  <div className="min-w-0 flex-1">
+                    <h2 id="profile-admin-tone-heading" className="t-h2 text-[var(--t-1)]">
+                      Registre de coaching suggéré
+                    </h2>
+                    <p className="t-cap mt-1 text-[var(--t-3)]">
+                      Le style d&apos;accompagnement le mieux adapté à ce membre.
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-pill inline-flex w-fit items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] px-2.5 py-1 text-[11px] font-semibold text-[var(--acc)]">
+                  {REGISTER_LABEL[tone.register]}
+                </span>
+                <p className="t-body leading-relaxed text-[var(--t-2)]">{tone.rationale}</p>
+                <EvidenceList items={tone.evidence} />
+              </section>
+            );
+          })()}
+
+          {/* J-C — Stade d'apprentissage Mark Douglas (learningStage). */}
+          {(() => {
+            const stage = asLearningStage(profile.learningStage);
+            if (!stage) return null;
+            return (
+              <section
+                className="rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6"
+                aria-labelledby="profile-admin-stage-heading"
+              >
+                <div className="flex items-start gap-3">
+                  <DimensionIcon icon={GraduationCap} />
+                  <div className="min-w-0 flex-1">
+                    <h2 id="profile-admin-stage-heading" className="t-h2 text-[var(--t-1)]">
+                      Stade d&apos;apprentissage
+                    </h2>
+                    <p className="t-cap mt-1 text-[var(--t-3)]">
+                      Grille Mark Douglas (The Disciplined Trader) : mécanique, subjectif, intuitif.
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-pill inline-flex w-fit items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] px-2.5 py-1 text-[11px] font-semibold text-[var(--acc)]">
+                  {STAGE_LABEL[stage.stage]}
+                </span>
+                <p className="t-body leading-relaxed text-[var(--t-2)]">{stage.rationale}</p>
+                <EvidenceList items={stage.evidence} />
+              </section>
+            );
+          })()}
+
           {/* Axes prioritaires for the coaching path — admin focuses here. */}
           {(() => {
             const axes = asStringArray(profile.axesPrioritaires);
@@ -292,6 +436,86 @@ export function MemberProfileViewerAdmin({
                     </li>
                   ))}
                 </ol>
+              </section>
+            );
+          })()}
+
+          {/* J-C — Axes prioritaires structurés (axesStructured) : version
+              priorisée + traçable de axes_prioritaires, classée par urgence. */}
+          {(() => {
+            const axes = asAxesStructured(profile.axesStructured);
+            if (axes.length === 0) return null;
+            const sorted = [...axes].sort((a, b) => a.priority - b.priority);
+            return (
+              <section
+                className="rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6"
+                aria-labelledby="profile-admin-axes-structured-heading"
+              >
+                <div className="flex items-start gap-3">
+                  <DimensionIcon icon={ListChecks} />
+                  <div className="min-w-0 flex-1">
+                    <h2
+                      id="profile-admin-axes-structured-heading"
+                      className="t-h2 text-[var(--t-1)]"
+                    >
+                      Axes prioritaires structurés
+                    </h2>
+                    <p className="t-cap mt-1 text-[var(--t-3)]">
+                      Classés par urgence (1 = le plus prioritaire), avec la citation qui les fonde.
+                    </p>
+                  </div>
+                </div>
+                <ol className="flex flex-col gap-4">
+                  {sorted.map((axis, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="rounded-pill mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center border border-[var(--b-acc)] bg-[var(--acc-dim)] font-mono text-[11px] font-semibold text-[var(--acc)]"
+                      >
+                        {axis.priority}
+                      </span>
+                      <div className="flex min-w-0 flex-1 flex-col gap-2">
+                        <p className="t-body text-[var(--t-1)]">{axis.axis}</p>
+                        <EvidenceList items={axis.evidence} />
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            );
+          })()}
+
+          {/* J-C — Signaux faibles à observer (weakSignals). ADMIN-ONLY par
+              design (schema : non anxiogène côté membre). Ton calme uniquement,
+              jamais d'alerte : ce sont des patterns latents à surveiller. */}
+          {(() => {
+            const signals = asWeakSignals(profile.weakSignals);
+            if (signals.length === 0) return null;
+            return (
+              <section
+                className="rounded-card-lg flex flex-col gap-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-6"
+                aria-labelledby="profile-admin-weak-signals-heading"
+              >
+                <div className="flex items-start gap-3">
+                  <DimensionIcon icon={Radar} />
+                  <div className="min-w-0 flex-1">
+                    <h2 id="profile-admin-weak-signals-heading" className="t-h2 text-[var(--t-1)]">
+                      Signaux faibles à observer
+                    </h2>
+                    <p className="t-cap mt-1 text-[var(--t-3)]">
+                      Patterns latents à surveiller côté coaching. Pour ton usage admin, sans
+                      dramatiser.
+                    </p>
+                  </div>
+                </div>
+                <ul className="flex flex-col gap-4">
+                  {signals.map((s, i) => (
+                    <li key={i} className="flex flex-col gap-2">
+                      <p className="t-body text-[var(--t-1)]">{s.signal}</p>
+                      <EvidenceList items={s.evidence} />
+                    </li>
+                  ))}
+                </ul>
               </section>
             );
           })()}

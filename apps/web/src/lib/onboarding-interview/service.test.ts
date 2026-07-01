@@ -431,6 +431,64 @@ describe('getProfileForUser', () => {
     expect(result?.summary).toMatch(/discipline/);
     expect(result?.analyzedAt).toBe('2026-05-27T17:00:00.000Z');
   });
+
+  it('passes the 4 deep-AI dimensions through unchanged when present (J-C DTO)', async () => {
+    const coachingTone = { register: 'socratique', rationale: 'r', evidence: ['e'] };
+    const learningStage = { stage: 'subjective', rationale: 'r', evidence: ['e'] };
+    const axesStructured = [
+      { axis: 'a', dimensionId: 'discipline_plan_adherence', priority: 1, evidence: ['e'] },
+    ];
+    const weakSignals = [
+      { signal: 's', dimensionId: 'discipline_plan_adherence', evidence: ['e'] },
+    ];
+    profileFindUniqueMock.mockResolvedValueOnce({
+      id: 'mp_2',
+      userId: 'user_1',
+      interviewId: 'oi_1',
+      summary: 'Profil enrichi avec les 4 dimensions profondes.',
+      highlights: [],
+      axesPrioritaires: [],
+      claudeModelVersion: 'claude-opus-4-8',
+      instrumentVersion: 'v1',
+      analyzedAt: NOW,
+      coachingTone,
+      learningStage,
+      axesStructured,
+      weakSignals,
+    });
+
+    const result = await getProfileForUser('user_1');
+
+    expect(result?.coachingTone).toEqual(coachingTone);
+    expect(result?.learningStage).toEqual(learningStage);
+    expect(result?.axesStructured).toEqual(axesStructured);
+    expect(result?.weakSignals).toEqual(weakSignals);
+  });
+
+  it('passes null dimensions through as null (legacy/partial rows)', async () => {
+    profileFindUniqueMock.mockResolvedValueOnce({
+      id: 'mp_3',
+      userId: 'user_1',
+      interviewId: 'oi_1',
+      summary: 'Profil legacy sans dimensions profondes.',
+      highlights: [],
+      axesPrioritaires: [],
+      claudeModelVersion: 'claude-sonnet-4-6',
+      instrumentVersion: 'v1',
+      analyzedAt: NOW,
+      coachingTone: null,
+      learningStage: null,
+      axesStructured: null,
+      weakSignals: null,
+    });
+
+    const result = await getProfileForUser('user_1');
+
+    expect(result?.coachingTone).toBeNull();
+    expect(result?.learningStage).toBeNull();
+    expect(result?.axesStructured).toBeNull();
+    expect(result?.weakSignals).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -18,13 +18,15 @@ import { cn } from '@/lib/utils';
  * « plan non tenu » est ambre (process), jamais rouge punitif (§31.2).
  */
 
-const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'Europe/Paris',
-});
+function formatDate(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: timezone,
+  }).format(date);
+}
 
-function nodeLabel(item: TrackRecordTimelineItem): string {
+function nodeLabel(item: TrackRecordTimelineItem, timezone: string): string {
   const r =
     item.realizedR === null
       ? 'R non chiffré'
@@ -32,7 +34,7 @@ function nodeLabel(item: TrackRecordTimelineItem): string {
           item.realizedR,
         ).toFixed(1)} R réalisé`.trim();
   return [
-    `Trade ${item.pair} ${item.direction === 'long' ? 'long' : 'short'} clôturé le ${DATE_FMT.format(item.date)}`,
+    `Trade ${item.pair} ${item.direction === 'long' ? 'long' : 'short'} clôturé le ${formatDate(item.date, timezone)}`,
     r,
     item.planRespected === null ? null : item.planRespected ? 'plan tenu' : 'plan non tenu',
     item.hasDiscrepancy ? 'écart de vérité associé' : null,
@@ -42,7 +44,13 @@ function nodeLabel(item: TrackRecordTimelineItem): string {
     .join(', ');
 }
 
-export function TrackRecordTimeline({ items }: { items: readonly TrackRecordTimelineItem[] }) {
+export function TrackRecordTimeline({
+  items,
+  timezone = 'Europe/Paris',
+}: {
+  items: readonly TrackRecordTimelineItem[];
+  timezone?: string;
+}) {
   if (items.length === 0) {
     return (
       <p className="t-body max-w-prose text-[var(--t-3)]">
@@ -83,11 +91,11 @@ export function TrackRecordTimeline({ items }: { items: readonly TrackRecordTime
             <li key={item.id} className="shrink-0 snap-start">
               <Link
                 href={`/journal/${item.id}`}
-                aria-label={nodeLabel(item)}
+                aria-label={nodeLabel(item, timezone)}
                 className="wow-hover-glow rounded-card flex min-w-[116px] flex-col gap-1.5 border border-[var(--b-default)] bg-[var(--bg-1)] p-2.5 transition-colors hover:border-[var(--b-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
               >
                 <span aria-hidden className="t-cap text-[var(--t-4)]">
-                  {DATE_FMT.format(item.date)}
+                  {formatDate(item.date, timezone)}
                 </span>
                 <span
                   aria-hidden

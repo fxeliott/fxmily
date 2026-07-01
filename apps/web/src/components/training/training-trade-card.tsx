@@ -14,14 +14,16 @@ import type { SerializedTrainingTrade } from '@/lib/training/training-trade-serv
  * (statistical isolation §21.5 — enforced upstream by the data layer).
  */
 
-const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
-  timeZone: 'Europe/Paris',
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
+function formatDate(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: timezone,
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
 
 const OUTCOME_LABEL: Record<string, string> = {
   win: 'Gagnant',
@@ -29,7 +31,13 @@ const OUTCOME_LABEL: Record<string, string> = {
   break_even: 'Break-even',
 };
 
-export function TrainingTradeCard({ trade }: { trade: SerializedTrainingTrade }) {
+export function TrainingTradeCard({
+  trade,
+  timezone = 'Europe/Paris',
+}: {
+  trade: SerializedTrainingTrade;
+  timezone?: string;
+}) {
   const outcomeTone = trade.outcome === 'win' ? 'ok' : trade.outcome === 'loss' ? 'bad' : 'cy';
 
   return (
@@ -51,7 +59,7 @@ export function TrainingTradeCard({ trade }: { trade: SerializedTrainingTrade })
             {trade.pair}
           </span>
           <span className="t-cap text-[var(--t-4)] tabular-nums">
-            {DATE_FMT.format(new Date(trade.enteredAt))}
+            {formatDate(new Date(trade.enteredAt), timezone)}
           </span>
         </div>
         {trade.outcome ? (

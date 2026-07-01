@@ -12,15 +12,22 @@ interface TradeCardProps {
   /** J4 — number of admin annotations the member hasn't opened yet. Drives
    * the "Nouvelle correction" pill in the top row. Pass 0 (default) to hide. */
   unseenAnnotationsCount?: number;
+  /** F2 — member timezone for rendering the absolute trade-entry instant.
+   * Optional; defaults to Europe/Paris so admin callers stay on Paris. */
+  timezone?: string;
 }
 
 const NUMBER_FMT = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 5 });
-const DATETIME_FMT = new Intl.DateTimeFormat('fr-FR', {
-  day: '2-digit',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-});
+
+function formatDateTime(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone,
+  }).format(date);
+}
 
 const OUTCOME_LABEL: Record<NonNullable<SerializedTrade['outcome']>, string> = {
   win: 'GAIN',
@@ -44,7 +51,11 @@ const OUTCOME_TONE: Record<NonNullable<SerializedTrade['outcome']>, 'ok' | 'bad'
  * reste signal système (CTAs, accents), pas signal financier. R-réalisé en JetBrains Mono
  * tabular-nums avec drop-shadow accent/red selon outcome.
  */
-export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps) {
+export function TradeCard({
+  trade,
+  unseenAnnotationsCount = 0,
+  timezone = 'Europe/Paris',
+}: TradeCardProps) {
   const isClosed = trade.isClosed;
   const realizedRNumber = trade.realizedR ? Number(trade.realizedR) : null;
   const isWin = realizedRNumber !== null && realizedRNumber > 0;
@@ -73,7 +84,7 @@ export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps)
   const unseenLabel = hasUnseen
     ? `, ${unseenAnnotationsCount} correction${unseenAnnotationsCount > 1 ? 's' : ''} non lue${unseenAnnotationsCount > 1 ? 's' : ''}`
     : '';
-  const ariaLabel = `Trade ${trade.pair} ${trade.direction} du ${DATETIME_FMT.format(new Date(trade.enteredAt))}, ${statusLabel}${unseenLabel}`;
+  const ariaLabel = `Trade ${trade.pair} ${trade.direction} du ${formatDateTime(new Date(trade.enteredAt), timezone)}, ${statusLabel}${unseenLabel}`;
 
   return (
     <Link href={`/journal/${trade.id}`} aria-label={ariaLabel} className="group block">
@@ -125,7 +136,7 @@ export function TradeCard({ trade, unseenAnnotationsCount = 0 }: TradeCardProps)
 
             {/* Meta row : timestamp + session */}
             <span className="font-mono text-[11px] text-[var(--t-3)] tabular-nums">
-              {DATETIME_FMT.format(new Date(trade.enteredAt))}
+              {formatDateTime(new Date(trade.enteredAt), timezone)}
               <span className="mx-1.5 text-[var(--t-4)]">·</span>
               {SESSION_LABEL[trade.session]}
             </span>

@@ -17,12 +17,14 @@ import type { AlertView } from '@/lib/verification/alerts';
  *   - une alerte est un signal psychologique à travailler, pas un crime.
  */
 
-const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'Europe/Paris',
-});
+function formatAlertDate(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: timezone,
+  }).format(date);
+}
 
 /** Status → libellé calme + ton (jamais rouge, §33.2). */
 const STATUS_META: Record<AlertView['status'], { label: string; tone: 'cy' | 'mute' }> = {
@@ -31,7 +33,13 @@ const STATUS_META: Record<AlertView['status'], { label: string; tone: 'cy' | 'mu
   dismissed: { label: 'Classé', tone: 'mute' },
 };
 
-export function DriftAlertsCard({ alerts }: { alerts: readonly AlertView[] }) {
+export function DriftAlertsCard({
+  alerts,
+  timezone = 'Europe/Paris',
+}: {
+  alerts: readonly AlertView[];
+  timezone?: string;
+}) {
   if (alerts.length === 0) {
     return (
       <p className="t-body max-w-prose text-[var(--t-3)]">
@@ -65,7 +73,7 @@ export function DriftAlertsCard({ alerts }: { alerts: readonly AlertView[] }) {
                   <Pill tone={status.tone}>{status.label}</Pill>
                 </div>
                 <span className="t-cap text-[var(--t-4)]">
-                  {DATE_FMT.format(alert.createdAt)} · répété {alert.repeatCount} fois
+                  {formatAlertDate(alert.createdAt, timezone)} · répété {alert.repeatCount} fois
                 </span>
               </Card>
             </li>

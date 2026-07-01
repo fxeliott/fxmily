@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Framer Motion pass-through — same pattern as the other wizard/component tests
@@ -55,6 +55,9 @@ vi.mock('@/lib/haptics', () => ({
 }));
 
 import { MorningCheckinWizard } from './morning-checkin-wizard';
+// Resolves to the vi.fn() mock declared above — imported so the full-drive tests
+// can assert whether the server action was (not) called.
+import { submitMorningCheckinAction } from '@/app/checkin/actions';
 
 // Module-private key (stable contract) — mirror it here to assert the pitfall.
 const TODAY_DRAFT_KEY = 'fxmily:checkin:morning:draft:v1';
@@ -99,5 +102,61 @@ describe('MorningCheckinWizard — F7 rattrapage mode', () => {
     const raw = window.localStorage.getItem(TODAY_DRAFT_KEY);
     expect(raw).not.toBeNull();
     expect(JSON.parse(raw as string).date).toBe('2026-06-10');
+  });
+});
+
+/**
+ * F7 — closes the runtime-proof gap the headless browser pass could not reach:
+ * the multi-step wizard's Suivant only advances once each step's REQUIRED field
+ * is filled (so headless "Suivant does nothing" was expected validation, not a
+ * bug). This drives the full 5 steps in jsdom to prove, deterministically, that
+ * the justification textarea renders on the last step in rattrapage mode AND
+ * that submitting it empty is BLOCKED (the server re-enforces via resolveBackfill,
+ * but the client gate must hold too).
+ */
+describe('MorningCheckinWizard — F7 rattrapage justification gate (full drive)', () => {
+  function advanceToLastStep() {
+    // Step 1 (Sommeil) — sleepHours is required to advance.
+    fireEvent.change(screen.getByLabelText('Heures de sommeil'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+    // Step 2 (Routine) — both yes/no toggles required (non-null). Pick each via
+    // its UNIQUE label (both groups also carry an ambiguous « Oui »).
+    fireEvent.click(screen.getByRole('radio', { name: /Pas aujourd/ })); // routine → false
+    fireEvent.click(screen.getByRole('radio', { name: /Pas encore/ })); // market → false
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+    // Step 3 (Corps) — meditation defaults to "0" (valid), sport optional.
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+    // Step 4 (Mental) — no required field.
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+  }
+
+  it('renders the justification textarea on the last step and BLOCKS an empty submit', () => {
+    render(<MorningCheckinWizard today="2026-06-10" backfillDate="2026-06-05" />);
+    advanceToLastStep();
+
+    // Step 5 (Intention) — the rattrapage justification field is present.
+    const justification = screen.getByLabelText(/Pourquoi ce rattrapage/);
+    expect(justification).toBeInTheDocument();
+
+    // Submitting with an empty justification is refused inline, action NOT called.
+    fireEvent.click(screen.getByRole('button', { name: /Enregistrer mon matin/ }));
+    expect(screen.getByText(/Explique en une phrase/)).toBeInTheDocument();
+    expect(vi.mocked(submitMorningCheckinAction)).not.toHaveBeenCalled();
+  });
+
+  it('submits once a justification is filled, forwarding it in the FormData', async () => {
+    vi.mocked(submitMorningCheckinAction).mockResolvedValue({ ok: true });
+    render(<MorningCheckinWizard today="2026-06-10" backfillDate="2026-06-05" />);
+    advanceToLastStep();
+
+    fireEvent.change(screen.getByLabelText(/Pourquoi ce rattrapage/), {
+      target: { value: 'Panne internet hier soir.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Enregistrer mon matin/ }));
+
+    await waitFor(() => expect(vi.mocked(submitMorningCheckinAction)).toHaveBeenCalledTimes(1));
+    const fd = vi.mocked(submitMorningCheckinAction).mock.calls[0]?.[1] as FormData;
+    expect(fd.get('lateJustification')).toBe('Panne internet hier soir.');
+    expect(fd.get('date')).toBe('2026-06-05');
   });
 });

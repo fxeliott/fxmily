@@ -23,14 +23,14 @@ const ERROR_LABELS = {
   unauthorized: 'Session expirée, reconnecte-toi.',
   invalid_form: 'Formulaire invalide.',
   invalid_kind: 'Type de capture invalide.',
-  invalid_account_id: 'Compte invalide — recharge la page.',
+  invalid_account_id: 'Compte invalide, recharge la page.',
   invalid_account_type: 'Type de compte invalide.',
   missing_file: 'Aucun fichier sélectionné.',
   empty_file: 'Le fichier est vide.',
   too_large: 'Image trop lourde (8 Mo max).',
   invalid_mime: 'Format non supporté. Utilise JPG, PNG ou WebP.',
   invalid_bytes: 'Le fichier ne ressemble pas à une vraie image.',
-  duplicate_proof: 'Cette capture a déjà été envoyée — pas besoin de la renvoyer.',
+  duplicate_proof: 'Cette capture a déjà été envoyée, pas besoin de la renvoyer.',
   rate_limited: 'Trop d’envois d’un coup, attends quelques secondes.',
   storage_failed: "Échec de l'enregistrement, réessaie.",
 } as const satisfies Record<string, string>;
@@ -144,7 +144,7 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
             disabled={status === 'uploading'}
             className="rounded-control h-11 border border-[var(--b-default)] bg-[var(--bg-1)] px-3 text-[13px] text-[var(--t-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
           >
-            <option value="">— À rattacher plus tard —</option>
+            <option value="">À rattacher plus tard</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.label}
@@ -160,7 +160,7 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
             disabled={status === 'uploading'}
             className="rounded-control h-11 border border-[var(--b-default)] bg-[var(--bg-1)] px-3 text-[13px] text-[var(--t-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
           >
-            <option value="">— Non précisé —</option>
+            <option value="">Non précisé</option>
             {PROOF_ACCOUNT_TYPES.map((t) => (
               <option key={t} value={t}>
                 {ACCOUNT_TYPE_LABELS[t]}
@@ -222,7 +222,7 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
                 {isDragOver ? 'Lâche pour envoyer' : 'Ajoute une capture de ton historique MT5'}
               </span>
               <span id={hintId} className="t-cap text-[var(--t-4)]">
-                Onglet « Historique » de MT5 — JPG · PNG · WebP, 8 Mo max
+                Onglet « Historique » de MT5 · JPG · PNG · WebP, 8 Mo max
               </span>
             </div>
           </>
@@ -232,7 +232,7 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
       {status === 'success' ? (
         <p className="inline-flex items-center gap-1.5 text-[11px] text-[var(--ok)]" role="status">
           <ImageIcon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-          Capture reçue — elle sera lue lors de la prochaine analyse.
+          Capture reçue, elle sera lue lors de la prochaine analyse.
         </p>
       ) : null}
 

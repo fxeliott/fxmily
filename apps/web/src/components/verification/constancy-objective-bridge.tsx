@@ -63,7 +63,7 @@ export function ConstancyObjectiveBridge({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="t-eyebrow text-[var(--t-3)]">Ce que ta constance change</span>
         <p className="t-body leading-[1.5] text-[var(--t-2)]">
-          Ta constance ({Math.round(score.value)}/100) mesure ta régularité et ton honnêteté —{' '}
+          Ta constance ({Math.round(score.value)}/100) mesure ta régularité et ton honnêteté,{' '}
           {effet}. Prochain pas : voir comment progresser dessus.
         </p>
         {showsAiAxis ? <AIGeneratedBanner variant="badge" className="mt-0.5 self-start" /> : null}

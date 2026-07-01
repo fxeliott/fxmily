@@ -72,7 +72,7 @@ export function MemberAdminNotesPanel({ memberId, notes }: MemberAdminNotesPanel
       {/* Privacy affordance — reinforces SPEC §7.7 for the admin. */}
       <div className="rounded-control flex items-center gap-2 border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2">
         <Lock className="h-3.5 w-3.5 text-[var(--t-4)]" strokeWidth={1.75} aria-hidden />
-        <p className="t-cap text-[var(--t-2)]">Privé — le membre ne voit jamais ces notes.</p>
+        <p className="t-cap text-[var(--t-2)]">Privé, le membre ne voit jamais ces notes.</p>
       </div>
 
       {/* Add note */}
@@ -103,7 +103,7 @@ export function MemberAdminNotesPanel({ memberId, notes }: MemberAdminNotesPanel
               value={body}
               onChange={(e) => setBody(e.target.value)}
               maxLength={ADMIN_NOTE_BODY_MAX + 256 /* let the server enforce the hard cap */}
-              placeholder="Ex. Tendance à doubler le sizing après 2 wins — surveiller l'over-confidence. À recadrer au prochain échange."
+              placeholder="Ex. Tendance à doubler le sizing après 2 wins, surveiller l'over-confidence. À recadrer au prochain échange."
               className="rounded-card resize-y border border-[var(--b-default)] bg-[var(--bg)] px-3 py-2.5 font-sans text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
               aria-invalid={state?.fieldErrors?.body ? 'true' : undefined}
               aria-describedby={state?.fieldErrors?.body ? 'admin-note-body-error' : undefined}
@@ -252,7 +252,7 @@ function errorMessage(code: string): string {
     case 'forbidden':
       return 'Action réservée à l’admin.';
     case 'member_not_found':
-      return 'Membre introuvable — la page a peut-être expiré.';
+      return 'Membre introuvable, la page a peut-être expiré.';
     default:
       return 'Échec de l’enregistrement. Réessaie dans un instant.';
   }

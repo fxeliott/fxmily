@@ -40,7 +40,7 @@ export function MonthlyDebriefTimeline({
       >
         <p className="t-body text-[var(--t-2)]">
           Ton premier débrief mensuel arrivera au début du mois prochain. Il fait le point sur ta
-          progression — pas un score, un recul.
+          progression, pas un score, un recul.
         </p>
       </div>
     );

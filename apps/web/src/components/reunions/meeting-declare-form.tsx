@@ -41,7 +41,7 @@ function feedbackMessage(state: DeclareMeetingAttendanceActionState | null): str
     case 'not_declarable':
       switch (state.notDeclarableReason) {
         case 'cancelled':
-          return 'Cette réunion a été annulée — rien à déclarer.';
+          return 'Cette réunion a été annulée, rien à déclarer.';
         case 'future':
           return "Cette réunion n'a pas encore eu lieu.";
         case 'out_of_window':

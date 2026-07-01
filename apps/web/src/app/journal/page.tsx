@@ -233,9 +233,9 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
                 guides={[
                   "Logge ton plan AVANT d'entrer (R:R visé, lot, scénario, capture).",
                   'Note ton R:R réel ET ta discipline post-clôture.',
-                  'Mental check J+1 — discipline + sérénité, pas le résultat.',
+                  'Mental check J+1 · discipline + sérénité, pas le résultat.',
                 ]}
-                tip="Le marché peut faire ce qu'il veut. Toi, tu restes propre. C'est ça qu'on mesure ici — anything can happen, mais ton process reste."
+                tip="Le marché peut faire ce qu'il veut. Toi, tu restes propre. C'est ça qu'on mesure ici, anything can happen, mais ton process reste."
                 ctaPrimary={
                   <>
                     <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />

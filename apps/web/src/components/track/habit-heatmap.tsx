@@ -75,7 +75,7 @@ export function HabitHeatmap({ days }: HabitHeatmapProps) {
   return (
     <figure className="flex flex-col gap-2">
       <figcaption className="t-mono-cap text-[var(--t-4)]">
-        Régularité — {cols.length} derniers jours
+        Régularité · {cols.length} derniers jours
       </figcaption>
       <div className="overflow-x-auto">
         <table className="border-separate border-spacing-1 text-left">

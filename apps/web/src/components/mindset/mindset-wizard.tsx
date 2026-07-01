@@ -393,7 +393,7 @@ function LikertItem({ item, value, onChange, error }: LikertItemProps) {
               type="button"
               role="radio"
               aria-checked={checked}
-              aria-label={`${anchor.value} sur 5 — ${anchor.label}`}
+              aria-label={`${anchor.value} sur 5 · ${anchor.label}`}
               tabIndex={i === tabbableIndex ? 0 : -1}
               onClick={() => onChange(anchor.value)}
               className={cn(

@@ -49,7 +49,7 @@ export function V18CbtDisclaimerBanner() {
           <p className="t-body mt-1 text-[var(--t-2)]">
             Inspiré du modèle <strong className="text-[var(--t-1)]">Ellis ABC + Disputation</strong>{' '}
             (REBT, 1955), adapté ici au contexte trader. Ce wizard est une{' '}
-            <em>structure de journaling</em> — il n&apos;est{' '}
+            <em>structure de journaling</em>. Il n&apos;est{' '}
             <strong className="text-[var(--t-1)]">pas validé cliniquement</strong> pour la
             population trader et n&apos;est pas un substitut à un accompagnement
             psychothérapeutique. Pour la posture process &gt; outcome, voir Mark Douglas{' '}

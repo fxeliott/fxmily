@@ -53,7 +53,7 @@ const AXIS_META = {
   market_analysis: {
     id: 'market_analysis',
     label: 'Préparation / analyse',
-    description: 'Faire sa préparation avant la session — le fait que la préparation a eu lieu.',
+    description: 'Faire sa préparation avant la session : le fait que la préparation a eu lieu.',
   },
   training: {
     id: 'training',
@@ -63,7 +63,7 @@ const AXIS_META = {
   formation: {
     id: 'formation',
     label: 'Formation',
-    description: 'Suivre et avancer dans la formation — le fait de continuer à se former.',
+    description: 'Suivre et avancer dans la formation : le fait de continuer à se former.',
   },
   meeting_presence: {
     id: 'meeting_presence',
@@ -83,7 +83,7 @@ const AXIS_META = {
   evening_review: {
     id: 'evening_review',
     label: 'Bilan du soir',
-    description: 'Le retour calme sur la journée — ce qui a été tenu, ce qui peut progresser.',
+    description: 'Le retour calme sur la journée : ce qui a été tenu, ce qui peut progresser.',
   },
   self_work: {
     id: 'self_work',

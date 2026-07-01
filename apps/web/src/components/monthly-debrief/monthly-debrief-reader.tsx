@@ -24,7 +24,7 @@ import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 /** Anti-drift AI model label (mirror `weekly-digest.tsx`). */
 function modelDisplay(claudeModel: string): string {
   return claudeModel === 'claude-code-local'
-    ? 'Claude — subscription locale'
+    ? 'Claude · subscription locale'
     : `Claude ${claudeModel}`;
 }
 
@@ -80,7 +80,7 @@ export function MonthlyDebriefReader({
           {debrief.summaryTraining}
         </p>
         <p className="t-cap mt-3 text-[var(--t-3)]">
-          Régularité et pratique uniquement — pas de P&amp;L, pas d&apos;analyse de marché. Ton
+          Régularité et pratique uniquement, pas de P&amp;L, pas d&apos;analyse de marché. Ton
           entraînement reste isolé de ton edge réel, comme le reste du mode entraînement.
         </p>
       </section>

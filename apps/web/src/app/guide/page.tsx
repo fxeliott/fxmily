@@ -69,7 +69,7 @@ const PILLARS: readonly Pillar[] = [
     icon: Brain,
     eyebrow: 'Mental & vérité',
     title: 'Ton mental, sans complaisance',
-    body: "Des QCM et tests récurrents font le point sur ta psychologie de trader, à la manière de Mark Douglas. L'app confronte ensuite ce que tu déclares à ce que tu fais réellement — pas pour te juger, mais pour te montrer où l'écart se creuse.",
+    body: "Des QCM et tests récurrents font le point sur ta psychologie de trader, à la manière de Mark Douglas. L'app confronte ensuite ce que tu déclares à ce que tu fais réellement, pas pour te juger, mais pour te montrer où l'écart se creuse.",
     points: [
       'QCM mindset réguliers : où tu en es, sur quoi travailler.',
       'Vérité : tes déclarations confrontées à ta réalité d’exécution.',
@@ -105,7 +105,7 @@ const PILLARS: readonly Pillar[] = [
     icon: UserCircle,
     eyebrow: 'Ton profil',
     title: 'Le portrait qui te ressemble',
-    body: "Au tout début, un entretien d'onboarding (une trentaine de questions) permet à l'IA locale de dresser ton profil psychologique et tes axes prioritaires. C'est ton point de départ — il s'affine à mesure que tu nourris l'app.",
+    body: "Au tout début, un entretien d'onboarding (une trentaine de questions) permet à l'IA locale de dresser ton profil psychologique et tes axes prioritaires. C'est ton point de départ. Il s'affine à mesure que tu nourris l'app.",
     points: [
       'Un entretien guidé, à ton rythme, confidentiel.',
       'Un profil descriptif : tes traits, tes axes de travail.',
@@ -155,7 +155,7 @@ export default async function GuidePage() {
               Comment utiliser Fxmily.
             </h1>
             <p className="t-lead max-w-[60ch]">
-              Ton mode d’emploi, pilier par pilier — pour ne jamais être perdu, du premier jour à la
+              Ton mode d’emploi, pilier par pilier, pour ne jamais être perdu, du premier jour à la
               routine installée. Tu sais toujours quoi faire, quand, et pourquoi.
             </p>
           </div>
@@ -179,10 +179,10 @@ export default async function GuidePage() {
             <p className="t-body text-[var(--t-2)]">
               Fxmily mesure <strong className="font-semibold text-[var(--t-1)]">ton plan</strong>,
               ta <strong className="font-semibold text-[var(--t-1)]">discipline</strong> et ton{' '}
-              <strong className="font-semibold text-[var(--t-1)]">mental</strong> — pas les bougies
+              <strong className="font-semibold text-[var(--t-1)]">mental</strong>, pas les bougies
               du marché. L’app ne te dira jamais quoi trader : elle t’aide à mieux exécuter, à tenir
               ton plan et à travailler ta psychologie. Tu nourris l’app un peu chaque jour, et elle
-              t’accompagne dans le temps — rien à entasser d’un coup, juste une pratique régulière
+              t’accompagne dans le temps, rien à entasser d’un coup, juste une pratique régulière
               que tu construis.
             </p>
           </div>

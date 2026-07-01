@@ -59,7 +59,7 @@ export default async function ReunionsPage() {
               Tes réunions
             </h1>
             <p className="t-cap max-w-prose text-[var(--t-3)]">
-              Déclare ta présence — en live ou en rediffusion — et que tu as lu l&apos;analyse (12h)
+              Déclare ta présence, en live ou en rediffusion, et que tu as lu l&apos;analyse (12h)
               ou le bilan (20h). Tu peux rattraper une réunion dans les {MEETING_WINDOW_DAYS} jours.
             </p>
           </div>

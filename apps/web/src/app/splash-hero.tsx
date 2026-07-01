@@ -147,7 +147,7 @@ export function SplashHero() {
               className="wow-rise t-lead max-w-[42ch] text-balance"
               style={{ '--rise-delay': '560ms' } as CSSProperties}
             >
-              Le journal qui ignore le marché. On mesure ton plan, ta discipline et ton mental — pas
+              Le journal qui ignore le marché. On mesure ton plan, ta discipline et ton mental, pas
               les bougies.
             </p>
           </div>
@@ -203,7 +203,7 @@ export function SplashHero() {
             retire sur `/` pour ne pas créer un 2e écran résiduel). ── */}
         <footer className="relative z-10 flex flex-col items-center justify-center gap-2 px-5 pb-7 text-[10px] tabular-nums sm:flex-row sm:gap-3">
           <span className="t-foot" style={{ color: 'var(--t-2)' }}>
-            © 2026 Fxmily — Discipline avant le marché.
+            © 2026 Fxmily · Discipline avant le marché.
           </span>
           <span aria-hidden className="hidden text-[var(--t-4)] sm:inline">
             ·

@@ -44,7 +44,7 @@ export function ReplayPlayer({
     <div className="rounded-card relative aspect-video w-full overflow-hidden border border-[var(--b-default)] bg-black">
       <iframe
         src={embedUrl}
-        title={`Replay — ${title}`}
+        title={`Replay · ${title}`}
         className="absolute inset-0 h-full w-full"
         allow="autoplay; fullscreen; picture-in-picture; clipboard-write"
         allowFullScreen

@@ -109,7 +109,7 @@ export function ScoreBreakdown({ score }: { score: SerializedBehavioralScore }) 
     <details className="group rounded-card border border-[var(--b-default)] bg-[var(--bg-1)]">
       <summary className="rounded-card flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--bg-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] [&::-webkit-details-marker]:hidden">
         <span className="t-eyebrow text-[var(--t-2)]">
-          Sur quoi travailler — détail de tes scores
+          Sur quoi travailler · détail de tes scores
         </span>
         <svg
           className="h-3.5 w-3.5 shrink-0 text-[var(--t-3)] transition-transform group-open:rotate-180"
@@ -169,7 +169,7 @@ export function ScoreBreakdown({ score }: { score: SerializedBehavioralScore }) 
       </ul>
 
       <p className="t-foot border-t border-[var(--b-subtle)] px-4 py-2.5 text-[var(--t-4)]">
-        Du plus faible au plus fort : commence par le haut. Aucun conseil de marché — uniquement ton
+        Du plus faible au plus fort : commence par le haut. Aucun conseil de marché, uniquement ton
         exécution et tes habitudes.
       </p>
     </details>

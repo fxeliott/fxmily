@@ -107,7 +107,7 @@ export function TrainingDebriefStatsPanel({
           </p>
           <p className="t-cap mt-1" style={{ color: 'var(--t-2)' }}>
             Le débrief reste utile : prendre du recul même sans pratique, c&apos;est aussi une
-            donnée. Aucun score — <em>anything can happen</em>, le geste prime.
+            donnée. Aucun score, <em>anything can happen</em>, le geste prime.
           </p>
         </div>
       ) : (

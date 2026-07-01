@@ -27,7 +27,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: {
     default: 'Fxmily',
-    template: '%s — Fxmily',
+    template: '%s · Fxmily',
   },
   description:
     'Suivi comportemental des membres de la formation de trading Fxmily : journal, check-ins, scoring, coaching.',

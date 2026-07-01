@@ -41,7 +41,7 @@ function feedbackMessage(state: CancelMeetingActionState | null): string | null 
   if (!state || state.ok) return null;
   switch (state.error) {
     case 'not_found':
-      return 'Ce créneau est introuvable — la liste a peut-être changé.';
+      return 'Ce créneau est introuvable, la liste a peut-être changé.';
     case 'forbidden':
       return 'Action réservée à l’admin.';
     case 'unauthorized':
@@ -61,7 +61,7 @@ export function AdminMeetingRow({ meeting }: { meeting: AdminMeetingView }) {
 
   const time = SLOT_TIME[meeting.slot];
   const dateLabel = DATE_FMT.format(new Date(meeting.scheduledAt));
-  const title = `Réunion ${time} — ${dateLabel}`;
+  const title = `Réunion ${time} · ${dateLabel}`;
   const isCancelled = meeting.status === 'cancelled';
   const message = feedbackMessage(state);
   const nextAction = isCancelled ? 'uncancel' : 'cancel';

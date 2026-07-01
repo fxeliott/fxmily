@@ -56,7 +56,7 @@ export default async function NewTradePage() {
                 Pause 30 secondes avant ton trade ?
               </span>
               <span className="text-[12px] leading-relaxed text-[var(--t-2)]">
-                4 questions courtes — raison, émotion, plan, stop-loss. Optionnel.
+                4 questions courtes : raison, émotion, plan, stop-loss. Optionnel.
               </span>
             </div>
             <ArrowRight className="h-4 w-4 shrink-0 text-[var(--acc)]" aria-hidden="true" />

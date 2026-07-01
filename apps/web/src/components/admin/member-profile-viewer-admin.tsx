@@ -90,7 +90,7 @@ export function MemberProfileViewerAdmin({
             <Compass className="h-4 w-4" strokeWidth={2.2} />
           </div>
           <div className="flex flex-col gap-0.5">
-            <p className="t-eyebrow-lg text-[var(--t-3)]">Profil membre — boundary Claude</p>
+            <p className="t-eyebrow-lg text-[var(--t-3)]">Profil membre · boundary Claude</p>
             <p className="font-mono text-[13px] font-semibold text-[var(--t-1)]">
               {pseudonymLabel}
             </p>

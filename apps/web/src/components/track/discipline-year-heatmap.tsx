@@ -44,7 +44,7 @@ function cellClass(level: HeatLevel): string {
 function titleFor(date: string, level: HeatLevel): string {
   const day = FULL_DAY_FMT.format(parseLocalDate(date));
   const what = level === 0 ? 'aucun check-in' : level === 1 ? '1 check-in' : '2 check-ins';
-  return `${day} — ${what}`;
+  return `${day} · ${what}`;
 }
 
 export function DisciplineYearHeatmap({ heatmap }: { heatmap: YearHeatmap }) {
@@ -53,7 +53,7 @@ export function DisciplineYearHeatmap({ heatmap }: { heatmap: YearHeatmap }) {
   return (
     <figure className="flex flex-col gap-2">
       <figcaption className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className="t-mono-cap text-[var(--t-4)]">Régularité — 12 derniers mois</span>
+        <span className="t-mono-cap text-[var(--t-4)]">Régularité · 12 derniers mois</span>
         <span className="t-cap text-[var(--t-3)]">
           <span className="f-mono text-[var(--t-2)] tabular-nums">{activeDays}</span> jours actifs
         </span>

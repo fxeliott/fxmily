@@ -44,7 +44,7 @@ export async function CalendarStatusWidget({ userId }: { userId: string }) {
               </span>
               <h3 className="text-[15px] font-semibold text-[var(--t-1)]">Organise ta semaine</h3>
               <p className="text-[12px] leading-relaxed text-[var(--t-2)]">
-                Un court questionnaire pour adapter ton temps de pratique — sessions, entraînement,
+                Un court questionnaire pour adapter ton temps de pratique : sessions, entraînement,
                 repos. Pas d&apos;avis sur le marché.
               </p>
             </div>

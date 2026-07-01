@@ -86,7 +86,7 @@ export default async function AdminMeetingRosterPage({ params }: RosterPageProps
             className="f-display h-rise text-[28px] leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
-            Réunion {time} — {dateLabel}
+            Réunion {time} · {dateLabel}
           </h1>
           <p className="t-cap text-[var(--t-3)]">{SLOT_SUBTITLE[meeting.slot]}</p>
         </div>
@@ -115,7 +115,7 @@ export default async function AdminMeetingRosterPage({ params }: RosterPageProps
           </p>
         ) : (
           <p className="t-cap text-[var(--t-3)]">
-            Ce créneau est annulé — aucune présence à marquer. Personne n&apos;est pénalisé.
+            Ce créneau est annulé : aucune présence à marquer. Personne n&apos;est pénalisé.
           </p>
         )}
       </header>

@@ -70,7 +70,7 @@ export default async function ObjectifsPage() {
             Mes objectifs
           </h1>
           <p className="t-lead max-w-[62ch]">
-            Ta destination, ta trajectoire et tes gestes du jour — réunis. On vise le{' '}
+            Ta destination, ta trajectoire et tes gestes du jour, réunis. On vise le{' '}
             <strong className="text-[var(--t-1)]">process</strong>, jamais le profit : seulement ce
             que tu contrôles.
           </p>
@@ -173,7 +173,7 @@ export default async function ObjectifsPage() {
             strokeWidth={1.75}
             aria-hidden="true"
           />
-          Le détail de tes scores et ta trajectoire passée — Où j’en suis
+          Le détail de tes scores et ta trajectoire passée · Où j’en suis
         </Link>
       </div>
     </main>

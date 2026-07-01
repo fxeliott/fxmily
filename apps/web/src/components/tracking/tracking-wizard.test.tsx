@@ -136,10 +136,10 @@ describe('TrackingWizard — universal engine renders all six question kinds (Do
     expect(screen.getByRole('radio', { name: 'Oui' })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Non' })).toBeInTheDocument();
     // likert → anchored radios ("1 — Jamais" … "5 — Toujours").
-    expect(screen.getByRole('radio', { name: /^1 — Jamais/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /^1 · Jamais/ })).toBeInTheDocument();
     // scale → extremes labelled.
-    expect(screen.getByRole('radio', { name: /^1 — Faible/ })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /^5 — Élevé/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /^1 · Faible/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /^5 · Élevé/ })).toBeInTheDocument();
     // single_choice → option labels.
     expect(screen.getByRole('radio', { name: 'Ouverture' })).toBeInTheDocument();
     // multi_tag → a labelled group of toggle buttons (aria-pressed).
@@ -168,7 +168,7 @@ describe('TrackingWizard — universal engine renders all six question kinds (Do
 
     fireEvent.click(stress);
     // Cap reached (2/2) — the live counter reflects it and the third is blocked.
-    expect(screen.getByText(/2\/2 sélectionnés — maximum atteint/)).toBeInTheDocument();
+    expect(screen.getByText(/2\/2 sélectionnés · maximum atteint/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Fatigue' })).toHaveAttribute(
       'aria-disabled',
       'true',
@@ -180,7 +180,7 @@ describe('TrackingWizard — universal engine renders all six question kinds (Do
       'aria-pressed',
       'false',
     );
-    expect(screen.getByText(/2\/2 sélectionnés — maximum atteint/)).toBeInTheDocument();
+    expect(screen.getByText(/2\/2 sélectionnés · maximum atteint/)).toBeInTheDocument();
 
     // The hidden payload is the JSON array the server action JSON.parses back.
     expect(hidden(container, 'mt1').value).toBe(JSON.stringify(['calme', 'stress']));

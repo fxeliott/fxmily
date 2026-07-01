@@ -243,7 +243,7 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
           <div className="flex flex-col gap-0.5">
             <span className="t-eyebrow text-[var(--acc-hi)]">Et maintenant</span>
             <span className="text-[15px] font-semibold text-[var(--t-1)]">
-              Où tout ça te mène — Mes objectifs
+              Où tout ça te mène · Mes objectifs
             </span>
             <span className="t-cap text-[var(--t-3)]">
               Ton cap, ta trajectoire vers la Maîtrise et tes prochains gestes.
@@ -310,7 +310,7 @@ function ProgressionHero({
               Où j’en suis
             </h1>
             <p className="t-lead max-w-[58ch]">
-              Tes scores comportementaux, leur trajectoire et ton track record — la photo de ta
+              Tes scores comportementaux, leur trajectoire et ton track record, la photo de ta
               discipline dans le temps. Tu observes, tu ne te fais pas punir.
             </p>
           </div>

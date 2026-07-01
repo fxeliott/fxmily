@@ -20,7 +20,7 @@ export const TRAINING_UI_COPY = {
   /** Admin annotation textarea (the correction the admin writes). Process /
    * psychology framing only — never a market call on the screenshot. */
   annotationPlaceholder:
-    "Ex. R:R 1:2 prévu, mais entrée anticipée avant la confirmation — travaille la patience d'exécution (cf. fiche Douglas « attendre son setup »).",
+    "Ex. R:R 1:2 prévu, mais entrée anticipée avant la confirmation. Travaille la patience d'exécution (cf. fiche Douglas « attendre son setup »).",
 
   /** Wizard "Leçon tirée" textarea — what the backtest taught about the
    * member's PROCESS, not about the market. */
@@ -29,11 +29,11 @@ export const TRAINING_UI_COPY = {
 
   /** Member reply to an admin correction — acknowledges the process work. */
   replyPlaceholder:
-    "Ex. Compris — je vais travailler ma patience d'exécution sur les prochains backtests.",
+    "Ex. Compris, je vais travailler ma patience d'exécution sur les prochains backtests.",
 
   /** Backtest-session label example — names instrument/period as a neutral
    * tag, never a direction (« Range GBPUSD », not « GBPUSD haussier »). */
-  sessionLabelPlaceholder: 'Ex : Range GBPUSD — janvier 2024',
+  sessionLabelPlaceholder: 'Ex : Range GBPUSD · janvier 2024',
 } as const;
 
 export type TrainingUiCopyKey = keyof typeof TRAINING_UI_COPY;

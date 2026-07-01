@@ -211,7 +211,7 @@ export function detectCalendarConflicts(
   if (overloadedDays.length > 0) {
     messages.push(
       clamp(
-        `Journée chargée (${joinDays(overloadedDays)}) — beaucoup de pratique prévue d'affilée. Garde un peu de marge pour souffler et rester régulier.`,
+        `Journée chargée (${joinDays(overloadedDays)}), beaucoup de pratique prévue d'affilée. Garde un peu de marge pour souffler et rester régulier.`,
       ),
     );
   }

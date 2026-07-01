@@ -48,7 +48,7 @@ export function TrendCard({ days }: TrendCardProps) {
 
       {filledDays === 0 ? (
         <p className="t-body text-[var(--t-3)]">
-          Aucun check-in cette semaine — ta tendance s’écrira ici à partir de ton premier
+          Aucun check-in cette semaine, ta tendance s’écrira ici à partir de ton premier
           enregistrement.
         </p>
       ) : (
@@ -124,7 +124,7 @@ function TrendCell({
         />
       ) : (
         <div className="t-cap text-[var(--t-3)]">
-          {data.length === 1 ? '1 point — courbe à venir' : '—'}
+          {data.length === 1 ? '1 point, courbe à venir' : '—'}
         </div>
       )}
     </div>

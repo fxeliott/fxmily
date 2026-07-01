@@ -90,7 +90,7 @@ export function MeetingItem({
 }) {
   const time = SLOT_TIME[meeting.slot];
   const dateLabel = DATE_FMT.format(new Date(meeting.scheduledAt));
-  const title = showDate ? `Réunion ${time} — ${dateLabel}` : `Réunion ${time}`;
+  const title = showDate ? `Réunion ${time} · ${dateLabel}` : `Réunion ${time}`;
   const meta = STATE_META[meeting.displayState];
   const { Icon } = meta;
   const isCancelled = meeting.status === 'cancelled';
@@ -152,7 +152,7 @@ export function MeetingItem({
         />
       ) : (
         <p className="t-cap text-[var(--t-3)]">
-          Réunion annulée — pas de présence à déclarer. Tu n&apos;es pas pénalisé.
+          Réunion annulée : pas de présence à déclarer. Tu n&apos;es pas pénalisé.
         </p>
       )}
     </Card>

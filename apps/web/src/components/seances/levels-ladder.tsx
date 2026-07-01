@@ -91,7 +91,7 @@ export function LevelsLadder({
       {/* Template string (NOT `Schéma… — {displayName}`): mixed literal+expression
           children make React see a 2-element Array, which an SVG <title> can't
           hold as a single text node → console warning + SSR/CSR hydration mismatch. */}
-      <title id={titleId}>{`Schéma de prix — ${displayName}`}</title>
+      <title id={titleId}>{`Schéma de prix · ${displayName}`}</title>
       <desc id={descId}>{desc}</desc>
 
       {arrow}

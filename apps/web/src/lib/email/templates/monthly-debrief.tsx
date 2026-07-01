@@ -74,18 +74,18 @@ export function MonthlyDebriefEmail({
       <Head>
         <title>Ton débrief mensuel · {monthLabel}</title>
       </Head>
-      <Preview>Ta synthèse du mois — {monthLabel}</Preview>
+      <Preview>Ta synthèse du mois · {monthLabel}</Preview>
       <Body style={body}>
         <Container style={container}>
           <Section style={brand}>
             <span style={logoBadge}>F</span>
-            <span style={brandName}>Fxmily — Débrief mensuel</span>
+            <span style={brandName}>Fxmily · Débrief mensuel</span>
           </Section>
 
           <Text style={eyebrow}>DÉBRIEF MENSUEL · {monthLabel.toUpperCase()}</Text>
           <Heading style={heading}>Salut {recipient},</Heading>
           <Text style={periodText}>
-            Voici ta synthèse du mois écoulé — un moment pour prendre du recul, à ton rythme.
+            Voici ta synthèse du mois écoulé, un moment pour prendre du recul, à ton rythme.
           </Text>
 
           {/* EU AI Act 50(1) chatbot transparency disclaimer (mandatoire avant
@@ -95,7 +95,7 @@ export function MonthlyDebriefEmail({
             <Text style={aiBannerText}>
               Cette synthèse est générée par une intelligence artificielle (
               {claudeModel === 'claude-code-local'
-                ? 'Claude — subscription locale'
+                ? 'Claude · subscription locale'
                 : `Claude ${claudeModel}`}
               , Anthropic). Elle ne remplace ni un coaching humain, ni un avis médical, ni un
               conseil en investissement personnalisé.
@@ -119,7 +119,7 @@ export function MonthlyDebriefEmail({
             <Text style={sectionLabelCyan}>Entraînement</Text>
             <Text style={summaryText}>{summaryTraining}</Text>
             <Text style={trainingNote}>
-              Régularité et pratique uniquement — pas de P&amp;L, pas d’analyse de marché. Ton
+              Régularité et pratique uniquement, pas de P&amp;L, pas d’analyse de marché. Ton
               entraînement reste isolé de ton edge réel.
             </Text>
           </Section>
@@ -165,7 +165,7 @@ export function MonthlyDebriefEmail({
           <Hr style={hr} />
 
           <Text style={footer}>
-            Aucun conseil de trade — uniquement progression, comportement, exécution, psychologie
+            Aucun conseil de trade, uniquement progression, comportement, exécution, psychologie
             (SPEC §2).
           </Text>
         </Container>
@@ -186,18 +186,18 @@ MonthlyDebriefEmail.PreviewProps = {
   summaryReal:
     'Mois à 22 trades réels (winrate 50%), plan respecté à 80%. Le R moyen reste positif malgré 3 pertes consécutives mi-mois absorbées sans tilt visible.',
   summaryTraining:
-    'Pratique d’entraînement régulière : 14 backtests sur 9 jours distincts, dernier il y a 2 jours. La régularité s’installe — c’est l’effort qui compte ici, pas le résultat.',
+    'Pratique d’entraînement régulière : 14 backtests sur 9 jours distincts, dernier il y a 2 jours. La régularité s’installe, c’est l’effort qui compte ici, pas le résultat.',
   risks: [
-    'Plan respecté à 60% sur la dernière semaine du mois — léger relâchement à surveiller en début de mois prochain.',
+    'Plan respecté à 60% sur la dernière semaine du mois, léger relâchement à surveiller en début de mois prochain.',
   ],
   recommendations: [
-    'Garder le rythme de journalisation post-trade les jours de perte — la régularité du mois a payé.',
-    'Continuer l’entraînement à cadence constante plutôt qu’en rafale — la pratique espacée ancre mieux.',
+    'Garder le rythme de journalisation post-trade les jours de perte, la régularité du mois a payé.',
+    'Continuer l’entraînement à cadence constante plutôt qu’en rafale, la pratique espacée ancre mieux.',
   ],
   patterns: {
     monthOverMonth: 'Discipline 71% → 84% sur 2 mois.',
     realTrend: 'FOMO -0.4R moyen sur 4 trades réels (vs 9 calmes à +0.6R).',
-    trainingRhythm: '14 backtests / 9 jours distincts — cadence régulière.',
+    trainingRhythm: '14 backtests / 9 jours distincts, cadence régulière.',
     disciplineTrend: 'Plan respect 80% (vs 68% mois -1).',
   },
   debriefUrl: 'https://app.fxmilyapp.com/debrief-mensuel?id=clx0debrief1',

@@ -131,7 +131,7 @@ const TRUTHS = [
     // notion — the previous "Random distribution between wins and losses."
     // dropped that and turned it into "the market is random" (false).
     short: 'Random distribution of wins and losses for any given edge.',
-    full: 'Pour un edge donné, l’ordre exact des wins et losses est aléatoire. Une série de pertes ne casse pas l’edge — elle teste ta discipline.',
+    full: 'Pour un edge donné, l’ordre exact des wins et losses est aléatoire. Une série de pertes ne casse pas l’edge, elle teste ta discipline.',
   },
   {
     n: 4,
@@ -144,7 +144,7 @@ const TRUTHS = [
   {
     n: 5,
     short: 'Every moment in the market is unique.',
-    full: 'Aucun setup ne se répète exactement. Ce qui a marché hier n’est qu’un guide probabiliste — pas une recette.',
+    full: 'Aucun setup ne se répète exactement. Ce qui a marché hier n’est qu’un guide probabiliste, pas une recette.',
   },
 ] as const;
 
@@ -190,7 +190,7 @@ export function MarkDouglasCard() {
 
       <footer className="mt-4 flex items-center justify-between border-t border-[var(--b-subtle)] pt-3">
         <cite className="t-foot text-[var(--t-3)] not-italic">
-          Trading in the Zone — Mark Douglas (2000), citations + paraphrases
+          Trading in the Zone · Mark Douglas (2000), citations + paraphrases
         </cite>
         <Link
           href="/library"

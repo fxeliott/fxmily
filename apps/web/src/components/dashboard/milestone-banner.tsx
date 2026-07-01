@@ -63,7 +63,7 @@ export function MilestoneBanner({ milestone, streak }: { milestone: number; stre
               pas la chaîne", no streak-loss anxiety — the regularity is the point. */}
           <p className="t-body text-[var(--t-2)]">
             Ce n’est pas un trophée à défendre : c’est la preuve que la régularité t’appartient. La
-            discipline se construit un jour à la fois — continue à ton rythme.
+            discipline se construit un jour à la fois, continue à ton rythme.
           </p>
           <span className="sr-only" role="status">
             Palier de {milestone} jours de check-in franchi. La régularité construit le process.

@@ -200,7 +200,7 @@ export const TRAINING_CHECKLIST_ITEMS = [
   {
     key: 'emotionalStateNoted',
     label: 'État émotionnel observé',
-    help: 'As-tu pris un instant pour observer ton état (avant, pendant, après) — sans le laisser décider à ta place ?',
+    help: 'As-tu pris un instant pour observer ton état (avant, pendant, après), sans le laisser décider à ta place ?',
   },
   {
     key: 'noImpulsiveDeviation',

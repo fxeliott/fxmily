@@ -300,7 +300,7 @@ export function EveningCheckinWizard({
     // Find the first invalid step and jump to it (a11y H2 audit fix).
     const invalidStep = ([0, 1] as const).find((stepIndex) => !validateStep(stepIndex));
     if (invalidStep !== undefined) {
-      setServerError('Certains champs sont incomplets — utilise « Précédent » pour les compléter.');
+      setServerError('Certains champs sont incomplets, utilise « Précédent » pour les compléter.');
       goToStep(invalidStep as StepIndex);
       hapticError();
       return;
@@ -490,7 +490,7 @@ export function EveningCheckinWizard({
                 <StressZonesBar
                   value={draft.stressScore}
                   direction="stress"
-                  caption="Un niveau élevé n’est pas un échec — c’est une donnée. La voir aujourd’hui éclaire la session de demain."
+                  caption="Un niveau élevé n’est pas un échec, c’est une donnée. La voir aujourd’hui éclaire la session de demain."
                 />
               </div>
             ) : null}
@@ -605,8 +605,8 @@ function StepDiscipline({ draft, update, fieldErrors, disabled }: StepProps) {
       <Card className="flex items-start gap-2.5 p-4">
         <Shield className="mt-0.5 h-4 w-4 shrink-0 text-[var(--cy)]" strokeWidth={1.75} />
         <p className="t-cap text-[var(--t-3)]">
-          Ce sont les seuls jugements binaires de la journée. Pas d’explication à fournir — on
-          mesure le respect, pas l’intention.
+          Ce sont les seuls jugements binaires de la journée. Pas d’explication à fournir, on mesure
+          le respect, pas l’intention.
         </p>
       </Card>
     </div>
@@ -654,14 +654,14 @@ function StepMind({ draft, update, disabled }: StepProps) {
         describeAt={MOOD_LABEL}
         tone="acc"
         disabled={disabled}
-        hint="Moyenne sur la journée — pas un score à gonfler ni à minimiser, juste un signal."
+        hint="Moyenne sur la journée, pas un score à gonfler ni à minimiser, juste un signal."
       />
 
       <StressZonesBar
         value={draft.moodScore}
         direction="clarity"
         title="Zones d’état mental"
-        caption="Un miroir de ton humeur, pas une note. Les jours « brouillard » se traversent — les voir suffit."
+        caption="Un miroir de ton humeur, pas une note. Les jours « brouillard » se traversent, les voir suffit."
       />
 
       <EmotionCheckinPicker
@@ -1014,11 +1014,11 @@ function RadioGroup({
 function serverErrorMessage(state: CheckinActionState): string {
   switch (state.error) {
     case 'unauthorized':
-      return 'Session expirée — reconnecte-toi puis réessaie.';
+      return 'Session expirée, reconnecte-toi puis réessaie.';
     case 'invalid_input':
-      return 'Certains champs sont invalides — contrôle les étapes.';
+      return 'Certains champs sont invalides, contrôle les étapes.';
     case 'unknown':
     default:
-      return 'Erreur inattendue — réessaie dans un instant.';
+      return 'Erreur inattendue, réessaie dans un instant.';
   }
 }

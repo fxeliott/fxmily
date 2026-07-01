@@ -196,7 +196,7 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
               ces deux signaux révèlent les patterns qui dégradent ton edge.
             </p>
             <p className="t-cap text-[var(--t-4)]">
-              Tu peux passer un slot — mais le streak ne tient que si tu en fais au moins un par
+              Tu peux passer un slot, mais le streak ne tient que si tu en fais au moins un par
               jour.
             </p>
           </Card>

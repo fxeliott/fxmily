@@ -46,7 +46,7 @@ export function WeeklyReportOverdueAlertEmail({
         <title>Rapports hebdo en attente · Fxmily</title>
       </Head>
       <Preview>
-        {`${overdueCount} rapport${plural ? 's' : ''} hebdo en attente · Semaine du ${weekRange} — lance le batch`}
+        {`${overdueCount} rapport${plural ? 's' : ''} hebdo en attente · Semaine du ${weekRange}, lance le batch`}
       </Preview>
       <Body style={body}>
         <Container style={container}>
@@ -70,7 +70,7 @@ export function WeeklyReportOverdueAlertEmail({
           </Text>
 
           <Section style={actionCard}>
-            <Text style={actionEyebrow}>À FAIRE — DEPUIS TON PC</Text>
+            <Text style={actionEyebrow}>À FAIRE · DEPUIS TON PC</Text>
             <Text style={actionStep}>
               <span style={dot}>·</span> Lance le batch{' '}
               <span style={code}>ops/scripts/weekly-batch-local.sh</span>.
@@ -93,11 +93,11 @@ export function WeeklyReportOverdueAlertEmail({
           <Hr style={hr} />
 
           <Text style={footer}>
-            Rappel automatique de permanence — envoyé uniquement quand des rapports hebdo sont en
+            Rappel automatique de permanence, envoyé uniquement quand des rapports hebdo sont en
             attente passé le délai de courtoisie. Aucun rapport généré sur un serveur (le batch
             reste manuel, par sécurité du compte).
           </Text>
-          <Text style={footerSign}>— Fxmily ops</Text>
+          <Text style={footerSign}>Fxmily ops</Text>
         </Container>
 
         <Text style={legal}>Aucun conseil de marché. Cohorte privée. © 2026 Fxmily.</Text>

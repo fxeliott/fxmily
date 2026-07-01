@@ -80,7 +80,7 @@ export function AIGeneratedBanner({
         className={`inline-flex items-center gap-1 rounded-full border border-[var(--b-default)] bg-[var(--bg-2)] px-2 py-0.5 text-xs text-[var(--t-3)] ${className}`.trim()}
       >
         <span aria-hidden="true">·</span>
-        Généré par IA — pas substitut coaching humain
+        Généré par IA · pas substitut coaching humain
       </span>
     );
   }

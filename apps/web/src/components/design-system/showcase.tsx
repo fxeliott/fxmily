@@ -38,7 +38,7 @@ const TYPO: { cls: string; label: string; sample: string }[] = [
   {
     cls: 't-body',
     label: '.t-body',
-    sample: 'Texte courant — la base de lecture du suivi quotidien.',
+    sample: 'Texte courant, la base de lecture du suivi quotidien.',
   },
   { cls: 't-eyebrow', label: '.t-eyebrow', sample: 'Sur-titre' },
   { cls: 't-cap', label: '.t-cap', sample: 'Légende / métadonnée discrète' },
@@ -78,10 +78,10 @@ export function DesignSystemShowcase() {
       <header className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-[var(--acc)]" strokeWidth={1.75} aria-hidden />
-          <h1 className="t-h1 text-[var(--t-1)]">Design System — Fxmily</h1>
+          <h1 className="t-h1 text-[var(--t-1)]">Design System · Fxmily</h1>
         </div>
         <p className="t-lead max-w-[60ch] text-[var(--t-2)]">
-          Vitrine vivante des tokens et primitives (S9). Référence anti-régression — change de thème
+          Vitrine vivante des tokens et primitives (S9). Référence anti-régression. Change de thème
           via le bouton de la sidebar pour vérifier light / dark. Route dev uniquement.
         </p>
       </header>
@@ -217,7 +217,7 @@ export function DesignSystemShowcase() {
       {/* États de données */}
       <Section
         title="États de données"
-        hint="Skeleton · DataState (loading / empty / error / ready) · SuccessState — fini les écrans morts"
+        hint="Skeleton · DataState (loading / empty / error / ready) · SuccessState, fini les écrans morts"
       >
         <div className="flex flex-col gap-4">
           <Card className="flex flex-col gap-3 p-5">
@@ -254,7 +254,7 @@ export function DesignSystemShowcase() {
                     icon={Target}
                     headingLevel="h3"
                     headline="Pas encore de données"
-                    lead="C’est normal au démarrage — chaque jour ajoute une brique."
+                    lead="C’est normal au démarrage, chaque jour ajoute une brique."
                     guides={['Fais ton check-in du matin', 'Journalise ton premier trade']}
                     ctaPrimary="Commencer"
                     onPrimary={() => setStatus('ready')}
@@ -272,7 +272,7 @@ export function DesignSystemShowcase() {
               >
                 <div className="flex items-center gap-2 p-4">
                   <Bell className="h-4 w-4 text-[var(--acc)]" strokeWidth={1.75} aria-hidden />
-                  <p className="t-body text-[var(--t-1)]">Contenu prêt — données chargées.</p>
+                  <p className="t-body text-[var(--t-1)]">Contenu prêt, données chargées.</p>
                 </div>
               </DataState>
             </div>
@@ -280,7 +280,7 @@ export function DesignSystemShowcase() {
 
           <Card className="flex flex-col gap-3 p-5">
             <span className="t-eyebrow text-[var(--t-3)]">
-              SuccessState — 4e état (succès / feedback)
+              SuccessState · 4e état (succès / feedback)
             </span>
             <SuccessState headline="Trade enregistré.">
               C&apos;est posé dans ton journal. Reviens demain pour le prochain.

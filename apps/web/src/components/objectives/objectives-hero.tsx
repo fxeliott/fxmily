@@ -60,7 +60,7 @@ export function ObjectivesHero({ view }: { view: ProcessObjectivesView }) {
               {trajectory.trend === 'up'
                 ? 'En progression'
                 : trajectory.trend === 'down'
-                  ? 'Léger repli — rien d’alarmant'
+                  ? 'Léger repli, rien d’alarmant'
                   : 'Stable'}
             </span>
           </div>
@@ -72,7 +72,7 @@ export function ObjectivesHero({ view }: { view: ProcessObjectivesView }) {
 
         <p className="t-body max-w-[52ch] text-[var(--t-2)]">
           Ta destination, c’est la <strong className="text-[var(--t-1)]">Maîtrise</strong> : un
-          process qui tient tout seul. On vise ce que tu contrôles — le résultat suit.
+          process qui tient tout seul. On vise ce que tu contrôles, le résultat suit.
         </p>
       </div>
 

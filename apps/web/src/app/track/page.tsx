@@ -91,7 +91,7 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
           </h1>
           <p className="text-[14px] leading-relaxed text-[var(--t-2)]">
             Loguer ces piliers révèle les conditions biologiques qui alimentent ton exécution. Aucun
-            jugement, aucun comparatif — juste le miroir de ta pratique quotidienne.
+            jugement, aucun comparatif, juste le miroir de ta pratique quotidienne.
           </p>
         </header>
 

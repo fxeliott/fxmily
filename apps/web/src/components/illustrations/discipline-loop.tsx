@@ -47,7 +47,7 @@ interface Step {
 }
 
 const STEPS: readonly Step[] = [
-  { n: 1, label: 'Check-in matin', hint: 'État, sommeil, routine — avant le marché.', angle: 0 },
+  { n: 1, label: 'Check-in matin', hint: 'État, sommeil, routine · avant le marché.', angle: 0 },
   { n: 2, label: 'Plan & pré-trade', hint: 'Ton intention, ton edge, tes limites.', angle: 90 },
   {
     n: 3,

@@ -290,7 +290,7 @@ export function ScreenshotUploader({
                 {isDragOver ? 'Lâche pour envoyer' : 'Glisse ou clique pour choisir'}
               </span>
               <span id={hintId} className="t-cap text-[var(--t-4)]">
-                JPG · PNG · WebP — 8 Mo max
+                JPG · PNG · WebP · 8 Mo max
               </span>
             </div>
           </>

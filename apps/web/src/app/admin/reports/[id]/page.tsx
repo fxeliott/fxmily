@@ -266,7 +266,7 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
           />
         </dl>
         <p className="t-mono-cap mt-3 text-[var(--t-3)]">
-          Aucun conseil de trade — uniquement comportement, exécution, psychologie (SPEC §2).
+          Aucun conseil de trade : uniquement comportement, exécution, psychologie (SPEC §2).
         </p>
       </section>
     </main>

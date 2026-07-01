@@ -74,7 +74,7 @@ export function MethodGoalCard({
           aria-valuenow={current}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuetext={`${current}% — objectif ${target}%`}
+          aria-valuetext={`${current}% · objectif ${target}%`}
           aria-label={`Fidélité à la règle « ${label} » : ${current}%, objectif ${target}%`}
           className="relative h-2.5 w-full overflow-hidden rounded-full bg-[var(--bg-2)]"
         >

@@ -70,7 +70,7 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
             Mon compte
           </h1>
           <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
-            Tout ce que tu peux régler tout seul depuis l&apos;app — notifications, export de tes
+            Tout ce que tu peux régler tout seul depuis l&apos;app : notifications, export de tes
             données, suppression du compte. Aucune action ici n&apos;exige Eliott.
           </p>
         </header>
@@ -93,7 +93,7 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
             title="Supprimer mon compte"
             description={
               isDeletionScheduled
-                ? 'Suppression programmée — annule depuis cette page tant que le compte à rebours 24h n’est pas écoulé.'
+                ? 'Suppression programmée, annule depuis cette page tant que le compte à rebours 24h n’est pas écoulé.'
                 : 'Soft-delete immédiat puis suppression définitive sous 30 jours (RGPD article 17). Compte à rebours 24h pour annuler.'
             }
             icon={<Trash2 aria-hidden="true" className="h-5 w-5" />}

@@ -35,7 +35,7 @@ export default function CalendrierLoading() {
           </h1>
         </div>
         <p className="t-body leading-[1.6] text-[var(--t-2)]">
-          Un plan calme de ton temps de pratique — sessions, entraînement, psychologie, réunions,
+          Un plan calme de ton temps de pratique : sessions, entraînement, psychologie, réunions,
           repos.
         </p>
       </header>

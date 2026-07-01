@@ -89,11 +89,11 @@ export function AnnotationReceivedEmail({
           <Hr style={hr} />
 
           <Text style={footer}>
-            Aucune analyse de marché — uniquement de l&apos;exécution et de la psychologie. La
+            Aucune analyse de marché, uniquement de l&apos;exécution et de la psychologie. La
             correction est marquée comme lue dès que tu ouvres le trade.
           </Text>
 
-          <Text style={footerSign}>— L&apos;équipe Fxmily</Text>
+          <Text style={footerSign}>L&apos;équipe Fxmily</Text>
         </Container>
 
         <Text style={legal}>

@@ -46,7 +46,7 @@ export function DailyCompletionRing({ done, total }: { done: number; total: numb
   return (
     <div
       role="img"
-      aria-label={`Complétude du jour : ${done} sur ${total} geste${total > 1 ? 's' : ''} fait${done > 1 ? 's' : ''}${complete ? ' — tout est fait pour ce moment' : ''}.`}
+      aria-label={`Complétude du jour : ${done} sur ${total} geste${total > 1 ? 's' : ''} fait${done > 1 ? 's' : ''}${complete ? ', tout est fait pour ce moment' : ''}.`}
       className="flex flex-col items-center gap-1.5"
     >
       <div className="relative grid place-items-center" style={{ width: SIZE, height: SIZE }}>

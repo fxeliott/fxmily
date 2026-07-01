@@ -257,9 +257,9 @@ export function NutritionHabitWizard() {
       {serverState?.ok === false ? (
         <Alert tone="danger" role="alert">
           {serverState.error === 'unauthorized' && "Tu n'es plus connecté(e). Recharge la page."}
-          {serverState.error === 'invalid_input' && 'Vérifie les champs — un détail ne passe pas.'}
+          {serverState.error === 'invalid_input' && 'Vérifie les champs, un détail ne passe pas.'}
           {serverState.error === 'persist_failed' &&
-            'Le serveur a hoqueté — réessaie dans un instant.'}
+            'Le serveur a hoqueté, réessaie dans un instant.'}
         </Alert>
       ) : null}
 
@@ -379,8 +379,8 @@ function NutritionStep({ draft, setDraft, stepError, headingRef, confirmFlash }:
           Combien de repas aujourd&apos;hui ?
         </h2>
         <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
-          Des repas réguliers stabilisent ta glycémie — un cerveau sans à-coups décide plus
-          posément. Note ta qualité ressentie en complément.
+          Des repas réguliers stabilisent ta glycémie, un cerveau sans à-coups décide plus posément.
+          Note ta qualité ressentie en complément.
         </p>
       </header>
 

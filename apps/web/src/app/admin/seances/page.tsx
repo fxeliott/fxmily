@@ -64,7 +64,7 @@ export default async function AdminSeancesPage() {
           </h1>
           <p className="t-cap text-[var(--t-3)]">
             Déclare, pour chaque créneau, si la séance a été tenue (publiée), annulée, ou simplement
-            prévue. Une séance tenue ne peut pas revenir à « prévue » — tu peux l&apos;annuler. La
+            prévue. Une séance tenue ne peut pas revenir à « prévue », tu peux l&apos;annuler. La
             rédaction (résumé, analyses, messages Discord) est produite automatiquement à partir de
             tes séances.
           </p>

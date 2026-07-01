@@ -334,9 +334,9 @@ export function MeditationHabitWizard() {
       {serverState?.ok === false ? (
         <Alert tone="danger" role="alert">
           {serverState.error === 'unauthorized' && "Tu n'es plus connecté(e). Recharge la page."}
-          {serverState.error === 'invalid_input' && 'Vérifie les champs — un détail ne passe pas.'}
+          {serverState.error === 'invalid_input' && 'Vérifie les champs, un détail ne passe pas.'}
           {serverState.error === 'persist_failed' &&
-            'Le serveur a hoqueté — réessaie dans un instant.'}
+            'Le serveur a hoqueté, réessaie dans un instant.'}
         </Alert>
       ) : null}
 
@@ -465,7 +465,7 @@ function MeditationStep({
           Combien de temps as-tu médité ?
         </h2>
         <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
-          Méditation, cohérence cardiaque, respiration consciente — tout compte. Note la qualité de
+          Méditation, cohérence cardiaque, respiration consciente. Tout compte. Note la qualité de
           présence ressentie en complément.
         </p>
       </header>
@@ -563,7 +563,7 @@ function MeditationNotesStep({ draft, setDraft, headingRef }: StepProps) {
           <dd className="font-mono text-[var(--t-1)] tabular-nums">{draft.durationMin} min</dd>
           <dt className="text-[var(--t-3)]">Présence</dt>
           <dd className="font-mono text-[var(--t-1)] tabular-nums">
-            {draft.quality}/10 — {QUALITY_LABEL(draft.quality)}
+            {draft.quality}/10 · {QUALITY_LABEL(draft.quality)}
           </dd>
         </dl>
       </div>

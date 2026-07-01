@@ -59,7 +59,7 @@ export default async function InboxPage() {
             <EmptyState
               icon={Sparkles}
               headline="Aucune fiche poussée pour l'instant"
-              lead="Le système n'a pas encore détecté de pattern qui justifie une fiche. Continue ton process — le coaching arrive quand il est utile."
+              lead="Le système n'a pas encore détecté de pattern qui justifie une fiche. Continue ton process, le coaching arrive quand il est utile."
               tip="Tu peux toujours parcourir tout le catalogue dans /library."
             />
           </Card>

@@ -59,7 +59,7 @@ export function MindsetDashboard({
         <p className="t-eyebrow-lg text-[var(--t-3)]">Ton profil mental</p>
         <p className="t-body mt-2 text-[var(--t-2)]">
           Ton profil apparaîtra ici dès ta première auto-évaluation complète. Il n&apos;y a pas de
-          bonne ni de mauvaise réponse — juste un instantané honnête, semaine après semaine.
+          bonne ni de mauvaise réponse, juste un instantané honnête, semaine après semaine.
         </p>
       </div>
     );
@@ -94,7 +94,7 @@ export function MindsetDashboard({
         </p>
         <p className="t-body text-[var(--t-2)]">
           <strong className="text-[var(--t-1)]">Axe d&apos;attention :</strong> {attention.label}{' '}
-          <span className="font-mono text-[var(--t-3)]">({attention.score}/100)</span> — non pas une
+          <span className="font-mono text-[var(--t-3)]">({attention.score}/100)</span>, non pas une
           faille, un endroit où un peu d&apos;attention rapporte le plus. Pas de jugement :
           c&apos;est un instantané, pas une note.
         </p>
@@ -135,7 +135,7 @@ function ProfileRadar({
   return (
     <section className="rounded-card-lg flex flex-col gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4">
       <span className="t-eyebrow-lg text-[var(--t-3)]" id="mindset-radar-title">
-        Profil mental — 6 dimensions
+        Profil mental · 6 dimensions
       </span>
       <figure
         className="h-[300px] w-full"
@@ -266,7 +266,7 @@ function DimensionTrends({
       {!anyMultiPoint ? (
         <p className="t-cap text-[var(--t-3)]">
           La tendance se dessinera après quelques semaines. Une semaine sans auto-évaluation reste
-          un trou honnête — jamais comblé artificiellement.
+          un trou honnête, jamais comblé artificiellement.
         </p>
       ) : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -299,7 +299,7 @@ function DimensionTrends({
               >
                 <figcaption id={descId} className="sr-only">
                   {valid.length < 2
-                    ? `${t.label} : une seule mesure (${last?.score ?? '—'} sur 100) — pas encore de tendance.`
+                    ? `${t.label} : une seule mesure (${last?.score ?? '—'} sur 100), pas encore de tendance.`
                     : `${t.label} : de ${first?.score ?? '—'} à ${last?.score ?? '—'} sur 100, sur ${valid.length} auto-évaluations. Les semaines manquantes ne sont pas extrapolées.`}
                 </figcaption>
                 <ResponsiveContainer width="100%" height="100%">

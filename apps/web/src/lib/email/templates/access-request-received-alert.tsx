@@ -42,7 +42,7 @@ export function AccessRequestReceivedAlertEmail({
         <title>Nouvelle demande d&apos;accès · Fxmily</title>
       </Head>
       <Preview>
-        {`Nouvelle demande d'accès — ${pendingCount} en attente. Ouvre la file pour valider ou refuser.`}
+        {`Nouvelle demande d'accès : ${pendingCount} en attente. Ouvre la file pour valider ou refuser.`}
       </Preview>
       <Body style={body}>
         <Container style={container}>
@@ -70,11 +70,11 @@ export function AccessRequestReceivedAlertEmail({
           <Hr style={hr} />
 
           <Text style={footer}>
-            Notification automatique — envoyée à chaque nouvelle demande. Le détail (prénom, nom,
+            Notification automatique, envoyée à chaque nouvelle demande. Le détail (prénom, nom,
             email du demandeur) reste dans l&apos;espace admin, jamais dans cet email.
           </Text>
 
-          <Text style={footerSign}>— Fxmily</Text>
+          <Text style={footerSign}>Fxmily</Text>
         </Container>
 
         <Text style={legal}>Cohorte privée invitation-only. © 2026 Fxmily.</Text>

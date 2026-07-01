@@ -32,7 +32,7 @@ export function MemberCalendarPanel({ calendar }: { calendar: SerializedAdaptive
         <EmptyState
           icon={CalendarRange}
           headline="Aucun calendrier généré pour ce membre."
-          lead="Le calendrier de la semaine apparaîtra ici une fois que le membre aura rempli son questionnaire d'organisation et que Claude l'aura généré — un plan de temps, pas un score."
+          lead="Le calendrier de la semaine apparaîtra ici une fois que le membre aura rempli son questionnaire d'organisation et que Claude l'aura généré, un plan de temps, pas un score."
           headingLevel="h3"
         />
       </Card>

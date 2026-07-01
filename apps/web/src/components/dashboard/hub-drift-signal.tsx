@@ -57,7 +57,7 @@ export function HubDriftSignal({
           Signal de dérive
         </span>
         <p className="t-body leading-snug text-[var(--t-2)]">
-          <span className="font-medium text-[var(--t-1)]">{headline}</span> — une fiche pour le
+          <span className="font-medium text-[var(--t-1)]">{headline}</span>, une fiche pour le
           travailler t&apos;attend, calmement.
         </p>
       </div>

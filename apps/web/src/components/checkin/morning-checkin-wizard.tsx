@@ -286,7 +286,7 @@ export function MorningCheckinWizard({ today, backfillDate }: MorningCheckinWiza
     // Find the first invalid step and jump to it (a11y H2 audit fix).
     const invalidStep = ([0, 1, 2] as const).find((stepIndex) => !validateStep(stepIndex));
     if (invalidStep !== undefined) {
-      setServerError('Certains champs sont incomplets — utilise « Précédent » pour les compléter.');
+      setServerError('Certains champs sont incomplets, utilise « Précédent » pour les compléter.');
       goToStep(invalidStep as StepIndex);
       hapticError();
       return;
@@ -723,14 +723,14 @@ function StepMind({ draft, update, disabled }: StepProps) {
         describeAt={MOOD_LABEL}
         tone="acc"
         disabled={disabled}
-        hint="Sensation présente — ni anticipation, ni rétrospective."
+        hint="Sensation présente, ni anticipation, ni rétrospective."
       />
 
       <StressZonesBar
         value={draft.moodScore}
         direction="clarity"
         title="Zones d’état mental"
-        caption="Un miroir de ton humeur, pas une note. Les jours « brouillard » se traversent — les voir suffit."
+        caption="Un miroir de ton humeur, pas une note. Les jours « brouillard » se traversent, les voir suffit."
       />
 
       <EmotionCheckinPicker
@@ -1049,12 +1049,12 @@ function RadioGroup({
 function serverErrorMessage(state: CheckinActionState): string {
   switch (state.error) {
     case 'unauthorized':
-      return 'Session expirée — reconnecte-toi puis réessaie.';
+      return 'Session expirée, reconnecte-toi puis réessaie.';
     case 'invalid_input':
-      return 'Certains champs sont invalides — contrôle les étapes.';
+      return 'Certains champs sont invalides, contrôle les étapes.';
     case 'unknown':
     default:
-      return 'Erreur inattendue — réessaie dans un instant.';
+      return 'Erreur inattendue, réessaie dans un instant.';
   }
 }
 

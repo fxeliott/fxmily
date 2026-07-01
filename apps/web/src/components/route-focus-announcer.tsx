@@ -43,9 +43,9 @@ export function RouteFocusAnnouncer() {
 
     const raf = requestAnimationFrame(() => {
       document.getElementById('main-content')?.focus({ preventScroll: true });
-      // "Tableau de bord — Fxmily" → "Tableau de bord". The template suffix is
+      // "Tableau de bord · Fxmily" → "Tableau de bord". The template suffix is
       // stripped so the announcement is just the page name.
-      const title = document.title.replace(/\s*—\s*Fxmily\s*$/, '').trim();
+      const title = document.title.replace(/\s*[·—]\s*Fxmily\s*$/, '').trim();
       setMessage(title || 'Page chargée');
     });
 

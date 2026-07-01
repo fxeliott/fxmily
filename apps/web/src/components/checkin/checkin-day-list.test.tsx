@@ -1,0 +1,109 @@
+// @vitest-environment jsdom
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { CheckinDayList, groupCheckinsByDay } from './checkin-day-list';
+import type { SerializedCheckin } from '@/lib/checkin/service';
+
+afterEach(() => {
+  cleanup();
+});
+
+// jsdom env startup can spike past 5s on cold Windows filesystem — bump timeout.
+vi.setConfig({ testTimeout: 15000 });
+
+/**
+ * F7 Layer 2 — the shared day-by-day renderer used by both the member
+ * `/checkin/history` page and the admin panel. These tests pin: day grouping
+ * (morning+evening of one date collapse to a single card), the « rattrapage »
+ * badge + justification (the F7 value-add), and the empty-state passthrough.
+ */
+
+function makeCheckin(overrides: Partial<SerializedCheckin>): SerializedCheckin {
+  return {
+    id: 'c1',
+    userId: 'u1',
+    date: '2026-06-05',
+    slot: 'morning',
+    sleepHours: null,
+    sleepQuality: null,
+    morningRoutineCompleted: null,
+    marketAnalysisDone: null,
+    meditationMin: null,
+    sportType: null,
+    sportDurationMin: null,
+    intention: null,
+    planRespectedToday: null,
+    hedgeRespectedToday: null,
+    intentionKept: null,
+    formationFollowed: null,
+    caffeineMl: null,
+    waterLiters: null,
+    stressScore: null,
+    gratitudeItems: [],
+    moodScore: null,
+    emotionTags: [],
+    journalNote: null,
+    lateJustification: null,
+    backfilledAt: null,
+    submittedAt: '2026-06-05T20:00:00.000Z',
+    createdAt: '2026-06-05T20:00:00.000Z',
+    updatedAt: '2026-06-05T20:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('groupCheckinsByDay', () => {
+  it('collapses morning + evening of the same date into one group', () => {
+    const groups = groupCheckinsByDay([
+      makeCheckin({ id: 'm', slot: 'morning', date: '2026-06-05' }),
+      makeCheckin({ id: 'e', slot: 'evening', date: '2026-06-05' }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.morning?.id).toBe('m');
+    expect(groups[0]?.evening?.id).toBe('e');
+  });
+
+  it('preserves the loader ordering across distinct dates', () => {
+    const groups = groupCheckinsByDay([
+      makeCheckin({ slot: 'morning', date: '2026-06-06' }),
+      makeCheckin({ slot: 'morning', date: '2026-06-05' }),
+    ]);
+    expect(groups.map((g) => g.date)).toEqual(['2026-06-06', '2026-06-05']);
+  });
+});
+
+describe('CheckinDayList', () => {
+  it('renders the passed empty-state when there are no check-ins', () => {
+    render(<CheckinDayList checkins={[]} emptyState={<p>Aucun check-in ici.</p>} />);
+    expect(screen.getByText('Aucun check-in ici.')).toBeInTheDocument();
+  });
+
+  it('shows the « Rattrapage » badge + justification on a backfilled slot', () => {
+    render(
+      <CheckinDayList
+        checkins={[
+          makeCheckin({
+            slot: 'evening',
+            date: '2026-06-05',
+            backfilledAt: '2026-06-10T09:00:00.000Z',
+            lateJustification: 'Panne internet la veille.',
+          }),
+        ]}
+        emptyState={<p>vide</p>}
+      />,
+    );
+    expect(screen.getByText('Rattrapage')).toBeInTheDocument();
+    expect(screen.getByText('Panne internet la veille.')).toBeInTheDocument();
+  });
+
+  it('does NOT show the « Rattrapage » badge on an on-time slot', () => {
+    render(
+      <CheckinDayList
+        checkins={[makeCheckin({ slot: 'morning', date: '2026-06-05', backfilledAt: null })]}
+        emptyState={<p>vide</p>}
+      />,
+    );
+    expect(screen.queryByText('Rattrapage')).toBeNull();
+  });
+});

@@ -172,6 +172,7 @@ export async function submitMorningCheckinAction(
   }
 
   revalidatePath('/checkin');
+  revalidatePath('/checkin/history');
   revalidatePath('/dashboard');
   scheduleScoreRecompute(
     session.user.id,
@@ -315,6 +316,7 @@ export async function submitEveningCheckinAction(
   }
 
   revalidatePath('/checkin');
+  revalidatePath('/checkin/history');
   revalidatePath('/dashboard');
   scheduleScoreRecompute(
     session.user.id,

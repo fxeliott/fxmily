@@ -385,6 +385,20 @@ export async function listMemberCheckinsAsAdmin(
   return rows.map(toSerialized);
 }
 
+/**
+ * F7 — a member's OWN check-in history for the `/checkin/history` tracking page
+ * (« page regroupant TOUS les check-in/out »). Same userId-scoped read as the
+ * admin panel — the page gates the member via `auth()` — but a distinct name so
+ * a member surface never imports an `AsAdmin` function (semantic honesty).
+ *
+ * Windowed to a year of distinct days: paired with the year heatmap above the
+ * list, this surfaces effectively all of a member's tracking (30-member scale,
+ * ≤2 rows/day) while staying bounded — never an unbounded query.
+ */
+export async function listMemberCheckins(userId: string, days = 365): Promise<SerializedCheckin[]> {
+  return listMemberCheckinsAsAdmin(userId, days);
+}
+
 export async function getCheckinStatus(
   userId: string,
   timezone: string,

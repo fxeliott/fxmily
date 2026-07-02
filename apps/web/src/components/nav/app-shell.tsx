@@ -1,6 +1,7 @@
 'use client';
 
 import { LogOut, Menu as MenuIcon, Search } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -17,8 +18,15 @@ import {
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
-import { CommandPalette } from './command-palette';
 import { BOTTOM_NAV, isNavItemActive, NAV_GROUPS, type NavItem } from './nav-items';
+
+// AppShell wraps EVERY authenticated page: keeping the palette out of the
+// shared entry chunk trims first-load JS everywhere. It renders a closed
+// dialog (nothing visible), so the async mount causes no layout shift; the
+// ⌘K listener lives inside and attaches as soon as the chunk lands.
+const CommandPalette = dynamic(() => import('./command-palette').then((m) => m.CommandPalette), {
+  ssr: false,
+});
 
 interface SessionLite {
   name: string;

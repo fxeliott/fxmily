@@ -31,6 +31,7 @@ vi.mock('./service', () => ({ getMentalMap: m.getMentalMap }));
 import {
   closeMicroObjective,
   ensureMicroObjectiveForMember,
+  ensureMicroObjectiveFromAnnotation,
   getMicroObjectiveProgress,
   getOpenMicroObjective,
   listRecentMicroObjectives,
@@ -166,6 +167,65 @@ describe('ensureMicroObjectiveForMember', () => {
     m.getMentalMap.mockResolvedValue([alertEntry()]);
     m.create.mockRejectedValue(new Error('connection reset'));
     await expect(ensureMicroObjectiveForMember('member1')).rejects.toThrow('connection reset');
+  });
+});
+
+describe('ensureMicroObjectiveFromAnnotation (J-AI corrections echo)', () => {
+  it('seeds a micro-objective from a tagged correction, mapping the axis to a MentalAxis', async () => {
+    m.findFirst.mockResolvedValue(null);
+    m.create.mockResolvedValue({ id: 'obj-anno' });
+    // `risk_discipline` (TrackingAxis) → `discipline` (MentalAxis).
+    const res = await ensureMicroObjectiveFromAnnotation('member1', 'risk_discipline', 'anno-1');
+    expect(res).toEqual({ created: true, objectiveId: 'obj-anno' });
+    const data = m.create.mock.calls[0]?.[0]?.data;
+    expect(data).toMatchObject({
+      memberId: 'member1',
+      axis: 'discipline',
+      sourceKind: 'annotation',
+      sourceRef: 'anno-1',
+    });
+    // Curated, deterministic copy (never free LLM text, anti-market).
+    expect(typeof data.title).toBe('string');
+    expect(typeof data.intention).toBe('string');
+  });
+
+  it('maps emotions_confidence / self_work to the ego axis', async () => {
+    m.findFirst.mockResolvedValue(null);
+    m.create.mockResolvedValue({ id: 'obj-ego' });
+    await ensureMicroObjectiveFromAnnotation('member1', 'emotions_confidence', 'anno-2');
+    expect(m.create.mock.calls[0]?.[0]?.data.axis).toBe('ego');
+  });
+
+  it('maps training / formation / meeting_presence to the consistency axis', async () => {
+    m.findFirst.mockResolvedValue(null);
+    m.create.mockResolvedValue({ id: 'obj-c' });
+    await ensureMicroObjectiveFromAnnotation('member1', 'formation', 'anno-3');
+    expect(m.create.mock.calls[0]?.[0]?.data.axis).toBe('consistency');
+  });
+
+  it('is a no-op when the member already has an open objective (≤1 open invariant)', async () => {
+    m.findFirst.mockResolvedValue({ id: 'already-open' });
+    const res = await ensureMicroObjectiveFromAnnotation('member1', 'execution', 'anno-4');
+    expect(res).toEqual({ created: false, objectiveId: 'already-open' });
+    expect(m.create).not.toHaveBeenCalled();
+  });
+
+  it('folds a P2002 (concurrent seed) into a no-op on the winner', async () => {
+    m.findFirst
+      .mockResolvedValueOnce(null) // our perf short-circuit: nothing open
+      .mockResolvedValueOnce({ id: 'winner-anno' }); // post-P2002 re-read
+    m.create.mockRejectedValue({ code: 'P2002' });
+    const res = await ensureMicroObjectiveFromAnnotation('member1', 'execution', 'anno-5');
+    expect(res).toEqual({ created: false, objectiveId: 'winner-anno' });
+    expect(m.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates a non-P2002 DB error (never swallowed)', async () => {
+    m.findFirst.mockResolvedValue(null);
+    m.create.mockRejectedValue(new Error('connection reset'));
+    await expect(
+      ensureMicroObjectiveFromAnnotation('member1', 'execution', 'anno-6'),
+    ).rejects.toThrow('connection reset');
   });
 });
 

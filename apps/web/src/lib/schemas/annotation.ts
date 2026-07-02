@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { detectAMFViolation } from '@/lib/safety/amf-detection';
 import { ANNOTATION_KEY_PATTERN } from '@/lib/storage/keys';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
+import { trackingAxisSchema } from '@/lib/tracking/axes';
 
 /**
  * Trade annotation schemas (J4, SPEC §6.3, §7.8).
@@ -53,6 +54,10 @@ export const annotationCreateSchema = z
     comment: commentSchema,
     mediaKey: annotationImageKeySchema.nullable().optional(),
     mediaType: mediaTypeSchema.nullable().optional(),
+    // J-AI corrections echo — optional coaching axis the admin tags the
+    // correction with (one of the 11 `TrackingAxis` ids). Absent/empty = null
+    // (untagged); the theming aggregate ignores untagged corrections.
+    axis: trackingAxisSchema.nullable().optional(),
   })
   .superRefine((data, ctx) => {
     const hasKey = data.mediaKey != null && data.mediaKey.length > 0;

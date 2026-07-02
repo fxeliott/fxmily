@@ -180,6 +180,8 @@ function AnnotationCard({
           <img
             src={mediaUrl}
             alt={`Capture annotée jointe à la correction du ${formattedDate}`}
+            loading="lazy"
+            decoding="async"
             className="rounded-card max-h-96 w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
           />
         </div>

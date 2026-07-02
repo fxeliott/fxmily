@@ -26,6 +26,11 @@ import type { MonthlyReflectionEntry, MonthlyReprofileSnapshot, RawReprofileSlic
 export const MAX_REFLECTIONS = 160;
 export const REFLECTION_MAX_CHARS = 600;
 export const MAX_TAG_FREQUENCIES = 16;
+/// J-AI corrections echo — the coach-corrections REFERENCE block is bounded so a
+/// verbose coaching month cannot dominate the prompt (they are reference, not the
+/// re-profiling source). Each item is already `« Axe » : commentaire` (loader).
+export const MAX_COACH_CORRECTIONS = 20;
+export const COACH_CORRECTION_MAX_CHARS = 400;
 
 /**
  * Append `raw` as a reflection IFF it survives `safeFreeText` (drops a
@@ -111,6 +116,13 @@ export function buildReprofileSnapshot(raw: RawReprofileSlice): MonthlyReprofile
             learningStage: raw.previousMonthSnapshot.learningStage,
           }
         : null,
+      // J-AI corrections echo — REFERENCE context (never citable). Sanitised +
+      // capped here so prompt/snapshot agree; `concatReflectionCorpus` never
+      // reads `baseline`, so these can never back an evidence[] (the invariant).
+      coachCorrections: (raw.coachCorrections ?? [])
+        .map((c) => safeFreeText(c).slice(0, COACH_CORRECTION_MAX_CHARS))
+        .filter((c) => c.length > 0)
+        .slice(0, MAX_COACH_CORRECTIONS),
     },
     processSignals: {
       reflectionCount: boundedReflections.length,

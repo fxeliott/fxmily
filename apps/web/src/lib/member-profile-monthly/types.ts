@@ -65,6 +65,16 @@ export interface MonthlyReprofileBaseline {
     readonly coachingRegister: CoachingRegister | null;
     readonly learningStage: LearningStageValue | null;
   } | null;
+  /**
+   * J-AI corrections echo — the coach's TAGGED corrections on the member's REAL
+   * trades this month, pre-formatted `« Axe » : commentaire`. REFERENCE context
+   * for the narrative ONLY (never a citable evidence source, exactly like the
+   * onboarding baseline / previous-month narrative): an admin correction is NOT a
+   * member reflection, so it stays out of {@link concatReflectionCorpus} and can
+   * never back an `evidence[i]`. REAL side only — training corrections are §21.5-
+   * isolated and never enter this pipeline. Empty array when no tagged correction.
+   */
+  readonly coachCorrections: readonly string[];
 }
 
 /**
@@ -126,6 +136,15 @@ export interface RawReprofileSlice {
     readonly coachingRegister: CoachingRegister | null;
     readonly learningStage: LearningStageValue | null;
   } | null;
+  /**
+   * J-AI corrections echo — the coach's TAGGED corrections on the member's REAL
+   * trades this month, pre-formatted `« Axe » : commentaire` by the loader.
+   * REFERENCE context only (never citable). Optional: the persist-time corpus
+   * re-derivation ({@link loadReflectionCorpusForMonth}) omits it because the
+   * corpus depends only on the member's reflections, never on the baseline /
+   * corrections reference. Absent/empty → the prompt omits the corrections block.
+   */
+  readonly coachCorrections?: readonly string[];
 }
 
 /**

@@ -256,3 +256,55 @@ describe('loadMonthlySliceForUser — D1 coaching register/stage relay (never we
     expect(profile!.axesPrioritaires).toEqual([]);
   });
 });
+
+// =============================================================================
+// J-AI corrections echo — the loader loads the coach's TAGGED corrections on the
+// member's REAL trades, pre-formatted `« Axe » : commentaire` (REAL side only).
+// =============================================================================
+
+describe('loadMonthlySliceForUser — coach corrections corpus (J-AI corrections echo)', () => {
+  it('reads only TAGGED real-trade corrections and pre-formats them « Axe » : commentaire', async () => {
+    // The loader calls db.tradeAnnotation.findMany twice: the count-only
+    // `loadAnnotationStats` (no axis filter) and `loadCoachCorrections`
+    // (`axis: { not: null }`). Route by the axis filter so only the corrections
+    // read returns rows.
+    vi.mocked(db.tradeAnnotation.findMany).mockImplementation((async (args: {
+      where?: { axis?: unknown };
+      select?: Record<string, unknown>;
+    }) => {
+      if (args.where?.axis !== undefined) {
+        return [
+          { axis: 'execution', comment: '  entrée avant confirmation  ' },
+          { axis: 'risk_discipline', comment: 'stop non défini' },
+        ];
+      }
+      return [];
+    }) as never);
+
+    const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
+
+    expect(slice!.builderInput.coachCorrections).toEqual([
+      '« Exécution » : entrée avant confirmation',
+      '« Gestion du risque » : stop non défini',
+    ]);
+  });
+
+  it('scopes the corrections read to the member + non-null axis + the month window', async () => {
+    await loadMonthlySliceForUser('user-1', { now: NOW });
+
+    const call = vi
+      .mocked(db.tradeAnnotation.findMany)
+      .mock.calls.find((c) => (c[0] as { where?: { axis?: unknown } }).where?.axis !== undefined);
+    expect(call, 'a corrections read (axis filter) must have happened').toBeDefined();
+    const where = (call![0] as { where: { axis: unknown; trade: unknown } }).where;
+    expect(where.axis).toEqual({ not: null });
+    expect(where.trade).toEqual({ userId: 'user-1' });
+  });
+
+  it('defaults to an empty corpus when the coach tagged nothing', async () => {
+    // No tagged corrections this month → both reads return nothing.
+    vi.mocked(db.tradeAnnotation.findMany).mockResolvedValue([] as never);
+    const slice = await loadMonthlySliceForUser('user-1', { now: NOW });
+    expect(slice!.builderInput.coachCorrections).toEqual([]);
+  });
+});

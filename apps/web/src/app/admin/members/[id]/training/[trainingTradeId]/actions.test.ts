@@ -169,6 +169,7 @@ describe('createTrainingAnnotationAction — happy path + statistical isolation'
       comment: 'Entrée anticipée — attends la confirmation.',
       mediaKey: OWN_MEDIA,
       mediaType: 'image',
+      axis: null,
     });
     expect(enqueueMock).toHaveBeenCalledWith(MEMBER_ID, {
       trainingAnnotationId: 'ta_1',
@@ -192,7 +193,14 @@ describe('createTrainingAnnotationAction — happy path + statistical isolation'
     };
     expect(auditArg.action).toBe('admin.training_annotation.created');
     expect(Object.keys(auditArg.metadata).sort()).toEqual(
-      ['hasMedia', 'mediaType', 'memberId', 'trainingAnnotationId', 'trainingTradeId'].sort(),
+      [
+        'axis',
+        'hasMedia',
+        'mediaType',
+        'memberId',
+        'trainingAnnotationId',
+        'trainingTradeId',
+      ].sort(),
     );
     expect(auditArg.metadata).not.toHaveProperty('comment');
 

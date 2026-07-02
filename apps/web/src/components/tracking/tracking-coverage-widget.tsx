@@ -55,8 +55,8 @@ export async function TrackingCoverageWidget({ userId }: { userId: string }) {
           className="rounded-pill h-2 w-full overflow-hidden bg-[var(--bg-3)]"
         >
           <div
-            className="rounded-pill h-full bg-[var(--acc)] transition-[width] duration-500"
-            style={{ width: `${coverage.pct}%` }}
+            className="rounded-pill h-full w-full origin-left bg-[var(--acc)] transition-transform duration-500"
+            style={{ transform: `scaleX(${coverage.pct / 100})` }}
           />
         </div>
         <div className="flex flex-wrap gap-1.5 pt-1">

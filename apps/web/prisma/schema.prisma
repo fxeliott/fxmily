@@ -833,6 +833,13 @@ model TradeAnnotation {
 
   comment String @db.Text
 
+  /// Optional coaching axis the admin tags this correction with (J-AI corrections
+  /// echo). Nullable + additive — an untagged correction stays null and is simply
+  /// ignored by the theming aggregate (`lib/annotations/correction-themes.ts`).
+  /// Reuses the existing `TrackingAxis` taxonomy (FR labels in `lib/tracking/axes.ts`)
+  /// so admin, member echo and monthly IA pipelines share ONE vocabulary.
+  axis TrackingAxis?
+
   /// Storage key for the optional media attachment.
   /// Format: `annotations/{tradeId}/{nanoid32}.{jpg|png|webp}` (J4) or
   ///         `annotations/{tradeId}/{nanoid32}.{mp4|webm}` (J4.5).
@@ -1043,6 +1050,11 @@ model TrainingAnnotation {
   admin   User   @relation("TrainingAnnotationsAuthored", fields: [adminId], references: [id], onDelete: Cascade)
 
   comment String @db.Text
+
+  /// Optional coaching axis the admin tags this backtest correction with (J-AI
+  /// corrections echo). Nullable + additive — mirror of `TradeAnnotation.axis`,
+  /// same `TrackingAxis` taxonomy so trade + training corrections theme together.
+  axis TrackingAxis?
 
   /// Storage key for the optional correction media. Format
   /// `training_annotations/{trainingTradeId}/{nanoid32}.{jpg|png|webp}`.
@@ -3213,9 +3225,11 @@ model MentalMicroObjective {
   /// Bounded by the coaching layer (single write-site), not a Zod allowlist.
   axis String
 
-  /// Origin motif (E2/B traceability). `sourceKind` ∈ {alert, signal};
-  /// `sourceRef` = the alert id (alert) or the score reason (signal). Kept for
-  /// the evolution trace, never a FK (firewall §21.5 — no link to the edge).
+  /// Origin motif (E2/B traceability). `sourceKind` ∈ {alert, signal, annotation};
+  /// `sourceRef` = the alert id (alert), the score reason (signal), or the tagged
+  /// TradeAnnotation/TrainingAnnotation id (annotation — J-AI corrections echo).
+  /// Free String bounded by the coaching layer (single write-site), NOT a Prisma
+  /// enum, so adding `annotation` needs no migration. Never a FK (firewall §21.5).
   sourceKind String @map("source_kind")
   sourceRef  String @map("source_ref")
 

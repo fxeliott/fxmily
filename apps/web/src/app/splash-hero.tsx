@@ -1,12 +1,12 @@
-'use client';
-
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { type CSSProperties, useEffect, useRef } from 'react';
+import { type CSSProperties } from 'react';
 
 import { BrandMark, FX_PATH } from '@/components/brand/brand-mark';
 import { btnVariants } from '@/components/ui/btn';
 import { cn } from '@/lib/utils';
+
+import { SplashParallax } from './splash-parallax';
 
 /**
  * Splash / accueil public — `/` (V4 refonte « welcome-only »).
@@ -16,43 +16,15 @@ import { cn } from '@/lib/utils';
  * / demander un accès) + ligne de confiance discrète. Aucun récit marketing
  * sous le pli — directive : l'accueil ne doit PAS ressembler à une app interne.
  *
+ * Server Component : tout le markup arrive en HTML statique (animations en
+ * CSS pur) ; le seul JS client est l'îlot SplashParallax (progressif).
+ *
  * Invariants frontend-elite : compositor-only (transform/opacity), aurora
  * deep-space scopée, entrée `.wow-rise` + emblème `.splash-float`.
  * prefers-reduced-motion et forced-colors gérés dans globals.css
  * (`.splash-*`, `.wow-*`, `.fx-*`). Route publique.
  */
 export function SplashHero() {
-  const parallaxRef = useRef<HTMLDivElement>(null);
-
-  // Pointer-parallax discret sur l'emblème : rAF-throttlé, et désactivé sous
-  // prefers-reduced-motion OU pointeur grossier (tactile) — l'emblème garde
-  // alors son flottement CSS seul. Compositor-only (translate3d via --px/--py).
-  useEffect(() => {
-    const el = parallaxRef.current;
-    if (!el) return;
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const fine = window.matchMedia('(hover: hover) and (pointer: fine)');
-    if (reduce.matches || !fine.matches) return;
-
-    let raf = 0;
-    const onMove = (e: MouseEvent) => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        const dx = (e.clientX / window.innerWidth - 0.5) * 2;
-        const dy = (e.clientY / window.innerHeight - 0.5) * 2;
-        const max = 10;
-        el.style.setProperty('--px', `${(dx * max).toFixed(2)}px`);
-        el.style.setProperty('--py', `${(dy * max).toFixed(2)}px`);
-      });
-    };
-    window.addEventListener('mousemove', onMove, { passive: true });
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
-
   return (
     <main className="relative flex min-h-dvh flex-col overflow-x-hidden bg-[var(--bg)]">
       {/* ═══════════════ HERO (premier écran, ambiance deep-space scopée) ═══════════════ */}
@@ -108,11 +80,11 @@ export function SplashHero() {
         {/* ── Bienvenue centrée ── */}
         <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-8 px-5 py-10 text-center">
           {/* Élément signature : emblème de marque orbital animé */}
-          <div ref={parallaxRef} className="splash-parallax">
+          <SplashParallax>
             <div className="splash-float">
               <BrandEmblem />
             </div>
-          </div>
+          </SplashParallax>
 
           <div className="flex flex-col items-center gap-4">
             <h1

@@ -86,6 +86,7 @@ export default async function AdminTrainingTradeDetailPage({
           <img
             src={screenshotUrl}
             alt="Capture de l'analyse TradingView du backtest"
+            decoding="async"
             className="rounded-card max-h-[32rem] w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
           />
         </Card>

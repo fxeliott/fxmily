@@ -561,6 +561,26 @@ export const monthlySnapshotSchema = z
     /// posture §2). Lets the debrief calmly name the Douglas theme that resonates
     /// (discipline / ego / fear…) without any judgement. Empty when none seen.
     helpfulByCategory: helpfulByCategorySchema,
+    /// J-AI corrections echo — the coach's own corrections on the member's REAL
+    /// trades this month, each pre-formatted by the loader as `« Axe » : commentaire`
+    /// (the axis label prefixes the correction so the debrief can theme them). REAL
+    /// side only: training corrections are §21.5-isolated and NEVER reach this
+    /// pipeline (the monthly loader may read only `countRecentTrainingActivity`).
+    /// The comment is an ADMIN free-text (not member self-declaration), so it is
+    /// still wrapped untrusted at the prompt boundary + `safeFreeText`-hardened
+    /// here defense-in-depth. ≤20 entries, recency-sorted, each ≤350 chars
+    /// (loader-truncated). Empty array when the coach tagged no correction.
+    coachCorrections: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(WEEKLY_CONTEXT_ITEM_MAX_CHARS)
+          .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+          .transform(safeFreeText),
+      )
+      .max(20),
   })
   .strict();
 

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { TrainingAnnotationMediaType } from '@/generated/prisma/enums';
+import type { TrackingAxis, TrainingAnnotationMediaType } from '@/generated/prisma/enums';
 import type { TrainingAnnotationModel } from '@/generated/prisma/models/TrainingAnnotation';
 
 import { db } from '@/lib/db';
@@ -32,6 +32,8 @@ export interface CreateTrainingAnnotationInput {
   comment: string;
   mediaKey: string | null;
   mediaType: TrainingAnnotationMediaType | null;
+  /** Optional coaching axis (J-AI corrections echo). Omitted/null = untagged. */
+  axis?: TrackingAxis | null;
 }
 
 /**
@@ -45,6 +47,8 @@ export interface SerializedTrainingAnnotation {
   comment: string;
   mediaKey: string | null;
   mediaType: TrainingAnnotationMediaType | null;
+  /** Optional coaching axis (J-AI corrections echo). Null = untagged. */
+  axis: TrackingAxis | null;
   seenByMemberAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -78,6 +82,7 @@ export function serializeTrainingAnnotation(
     comment: row.comment,
     mediaKey: row.mediaKey,
     mediaType: row.mediaType,
+    axis: row.axis,
     seenByMemberAt: row.seenByMemberAt ? row.seenByMemberAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -106,6 +111,7 @@ export async function createTrainingAnnotation(
       comment: input.comment,
       mediaKey: input.mediaKey,
       mediaType: input.mediaType,
+      axis: input.axis ?? null,
     },
   });
   return serializeTrainingAnnotation(row);

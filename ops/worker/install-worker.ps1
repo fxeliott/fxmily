@@ -73,7 +73,7 @@ function ConvertTo-BashPath([string]$WinPath) {
 }
 $RunBatchBash = ConvertTo-BashPath $RunBatch
 
-# --- The 5 pipelines + their triggers -----------------------------------------
+# --- The 6 pipelines + their triggers -----------------------------------------
 # Trigger objects are built per-task below (New-ScheduledTaskTrigger).
 $Pipelines = @(
   @{ Name = 'onboarding'; Kind = 'interval' },
@@ -172,7 +172,8 @@ Write-Host ""
 Write-Host "Done. Verify with:  ops\worker\status-worker.ps1" -ForegroundColor Cyan
 Write-Host "Remove with:        ops\worker\uninstall-worker.ps1" -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "PREREQUISITE: ops\worker\worker.env must hold the FOUR pipeline tokens" -ForegroundColor Yellow
+Write-Host "PREREQUISITE: ops\worker\worker.env must hold the FIVE pipeline tokens" -ForegroundColor Yellow
 Write-Host "(FXMILY_ADMIN_TOKEN, FXMILY_MONTHLY_ADMIN_TOKEN, FXMILY_CALENDAR_TOKEN," -ForegroundColor Yellow
-Write-Host "FXMILY_VERIFICATION_ADMIN_BATCH_TOKEN) + optional FXMILY_BASE_URL." -ForegroundColor Yellow
+Write-Host "FXMILY_VERIFICATION_ADMIN_BATCH_TOKEN, FXMILY_PROFILE_ADMIN_TOKEN)" -ForegroundColor Yellow
+Write-Host "+ optional FXMILY_BASE_URL." -ForegroundColor Yellow
 Write-Host "Copy worker.env.example and fill it in before the first tick." -ForegroundColor Yellow

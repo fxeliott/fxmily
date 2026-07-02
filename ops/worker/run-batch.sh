@@ -2,10 +2,11 @@
 #
 # ops/worker/run-batch.sh — Fxmily local AI worker (J2).
 #
-# WHY THIS EXISTS. The 5 Claude batch orchestrators
-# (onboarding / weekly / monthly / calendar / verification) generate every AI
-# artifact the app shows a member (onboarding MemberProfile, weekly/monthly
-# digests, adaptive calendar, MT5 vision verification). Until J2 they were
+# WHY THIS EXISTS. The 6 Claude batch orchestrators
+# (onboarding / weekly / monthly / calendar / verification / profile) generate
+# every AI artifact the app shows a member (onboarding MemberProfile,
+# weekly/monthly digests, adaptive calendar, MT5 vision verification, J-E
+# monthly deep re-profiling). Until J2 they were
 # "human-in-the-loop : run manually by Eliot" (see
 # ops/scripts/lib/claude-batch-core.sh:25). That manual step was the ROOT CAUSE
 # of the "IA silence 24H après profil rempli" bug : finalizeInterview only flips
@@ -24,7 +25,7 @@
 #
 # BAN-RISK — no parallelisation. A GLOBAL lock (not per-batch) guarantees at
 # most ONE batch — hence at most one `claude --print` — runs at any instant
-# across all 5 pipelines, exactly as when Eliot ran them one at a time by hand.
+# across all 6 pipelines, exactly as when Eliot ran them one at a time by hand.
 # The install schedules are staggered so collisions are effectively impossible;
 # if one still happens, the later tick SKIPS cleanly (benign) and the next tick
 # (or the server-side overdue-alert net) picks the work up. Pull is idempotent

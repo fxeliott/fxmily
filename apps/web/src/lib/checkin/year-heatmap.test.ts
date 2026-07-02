@@ -48,6 +48,27 @@ describe('buildYearHeatmap', () => {
     expect(hm.monthLabels.every((m) => typeof m.label === 'string' && m.col >= 0)).toBe(true);
   });
 
+  it('drops the leading partial-month label when it would overlap the next one', () => {
+    // today Thu 2026-07-02 → first column is Monday 2025-06-30: a 1-column June
+    // stub whose label sat 1 column (14px) before « juil. » — the two rendered
+    // superposed on /progression (prod audit 2026-07-02). The partial leading
+    // label is dropped; the first visible label is July at column 1.
+    const hm = buildYearHeatmap(new Map(), '2026-07-02');
+    expect(hm.monthLabels[0]).toEqual({ col: 1, label: 'juil.' });
+    // Anti-overlap invariant: no adjacent labels closer than 3 columns.
+    for (let i = 1; i < hm.monthLabels.length; i++) {
+      expect(hm.monthLabels[i]!.col - hm.monthLabels[i - 1]!.col).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('keeps the leading label when the first month segment is wide enough', () => {
+    // today Sat 2026-06-20 → first column is Monday 2025-06-16: June owns 3
+    // columns before « juil. » (42px pitch ≥ label width) — nothing dropped.
+    const hm = buildYearHeatmap(new Map(), today);
+    expect(hm.monthLabels[0]).toEqual({ col: 0, label: 'juin' });
+    expect(hm.monthLabels[1]).toEqual({ col: 3, label: 'juil.' });
+  });
+
   it('covers ~one year back (first column is a Monday in 2025)', () => {
     const hm = buildYearHeatmap(new Map(), today);
     const first = hm.weeks[0]![0];

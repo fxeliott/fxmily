@@ -30,6 +30,15 @@ export interface YearHeatmap {
 
 const WEEKS = 53;
 
+/**
+ * Minimum column gap between two month labels before they overlap. A label
+ * renders ~20-25px wide at 10px font while a column pitch is 14px (11px cell
+ * + 3px gap), so two labels 1-2 columns apart draw on top of each other.
+ * Real month starts are always ≥ 4 columns apart — only the leading partial
+ * month segment can sit closer than this to its successor.
+ */
+const MONTH_LABEL_MIN_COL_GAP = 3;
+
 export const MONTHS_FR = [
   'janv.',
   'févr.',
@@ -84,6 +93,18 @@ export function buildYearHeatmap(
       }
     }
     weeks.push(col);
+  }
+
+  // Anti-overlap guard (prod audit 2026-07-02, « juiljuil. » on /progression):
+  // the leading month segment can be as narrow as one column, which puts its
+  // label right under the next month's — the two render superposed. Only the
+  // first pair can ever collide (see MONTH_LABEL_MIN_COL_GAP), so dropping the
+  // partial leading label is the complete fix and never hides a real month.
+  if (
+    monthLabels.length >= 2 &&
+    monthLabels[1]!.col - monthLabels[0]!.col < MONTH_LABEL_MIN_COL_GAP
+  ) {
+    monthLabels.shift();
   }
 
   return { weeks, activeDays, monthLabels };

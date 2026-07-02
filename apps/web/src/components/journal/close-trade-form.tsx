@@ -14,6 +14,23 @@ import { isTradingViewUrl } from '@/lib/schemas/tradingview-url';
 import { formatDateTimeLocalInput } from '@/lib/timezones';
 import { cn } from '@/lib/utils';
 
+/**
+ * P2 — keep `defaultChecked` in sync with the CONTROLLED `checked` state.
+ *
+ * React 19 resets the <form> after a server action settles (literally
+ * `form.reset()`). Controlled TEXT inputs survive because React mirrors their
+ * value into the `value` attribute (what `reset()` restores to) — but React
+ * does NOT mirror `checked` into `defaultChecked` for controlled radios, so a
+ * failed validation still visually unchecked them. This ref applies the same
+ * attribute-mirroring manually: after the post-action reset, the radio
+ * restores to the member's last selection instead of the mount default.
+ */
+function syncDefaultChecked(checked: boolean) {
+  return (el: HTMLInputElement | null) => {
+    if (el) el.defaultChecked = checked;
+  };
+}
+
 interface CloseTradeFormProps {
   tradeId: string;
   /** Entry instant (ISO UTC) — the exit default is derived from it. */
@@ -49,6 +66,18 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
   const [emotionAfter, setEmotionAfter] = useState<string[]>([]);
   // J1 — mandatory TradingView exit link (replaces the exit screenshot upload).
   const [tradingViewExitUrl, setTradingViewExitUrl] = useState<string>('');
+  // P2 — every remaining free-entry field is CONTROLLED so a failed server
+  // validation cannot wipe the member's input: React 19 resets the <form>
+  // after the action settles, clearing UNCONTROLLED fields only. Same pattern
+  // as `tradingViewExitUrl` above (runtime-proven loss: exitPrice, outcome,
+  // notes and the four self-evaluation radio groups).
+  const [exitPrice, setExitPrice] = useState<string>('');
+  const [outcome, setOutcome] = useState<'' | 'win' | 'loss' | 'break_even'>('');
+  const [notes, setNotes] = useState<string>('');
+  const [processComplete, setProcessComplete] = useState<'' | 'true' | 'false'>('');
+  const [slPerRule, setSlPerRule] = useState<'' | 'true' | 'false'>('');
+  const [movedToBe, setMovedToBe] = useState<'' | 'true' | 'false'>('');
+  const [partialAtTarget, setPartialAtTarget] = useState<'' | 'true' | 'false'>('');
   const [tags, setTags] = useState<TradeTagSlug[]>([]);
   // SSR-safe : empty on the server render, filled with the BROWSER-local
   // default after mount (canon hydration pattern — setState in effect is the
@@ -129,6 +158,8 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
           type="number"
           step="any"
           inputMode="decimal"
+          value={exitPrice}
+          onChange={(e) => setExitPrice(e.currentTarget.value)}
           required
           disabled={pending}
           placeholder="0.00000"
@@ -154,9 +185,33 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
       <fieldset className="flex flex-col gap-2">
         <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">Résultat</legend>
         <div role="radiogroup" aria-label="Résultat du trade" className="grid grid-cols-3 gap-2">
-          <OutcomeCard value="win" label="Gain" icon="up" tone="ok" disabled={pending} />
-          <OutcomeCard value="loss" label="Perte" icon="down" tone="bad" disabled={pending} />
-          <OutcomeCard value="break_even" label="BE" icon="flat" tone="mute" disabled={pending} />
+          <OutcomeCard
+            value="win"
+            label="Gain"
+            icon="up"
+            tone="ok"
+            disabled={pending}
+            checked={outcome === 'win'}
+            onChange={() => setOutcome('win')}
+          />
+          <OutcomeCard
+            value="loss"
+            label="Perte"
+            icon="down"
+            tone="bad"
+            disabled={pending}
+            checked={outcome === 'loss'}
+            onChange={() => setOutcome('loss')}
+          />
+          <OutcomeCard
+            value="break_even"
+            label="BE"
+            icon="flat"
+            tone="mute"
+            disabled={pending}
+            checked={outcome === 'break_even'}
+            onChange={() => setOutcome('break_even')}
+          />
         </div>
         {state.fieldErrors?.outcome ? (
           <p className="text-[11px] text-[var(--bad)]" role="alert">
@@ -208,8 +263,20 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
           aria-label="Process suivi sans oubli"
           className="grid grid-cols-2 gap-2"
         >
-          <ProcessCompleteCard value="true" label="Oui, rien oublié" disabled={pending} />
-          <ProcessCompleteCard value="false" label="J'ai oublié des choses" disabled={pending} />
+          <ProcessCompleteCard
+            value="true"
+            label="Oui, rien oublié"
+            disabled={pending}
+            checked={processComplete === 'true'}
+            onChange={() => setProcessComplete('true')}
+          />
+          <ProcessCompleteCard
+            value="false"
+            label="J'ai oublié des choses"
+            disabled={pending}
+            checked={processComplete === 'false'}
+            onChange={() => setProcessComplete('false')}
+          />
         </div>
       </fieldset>
 
@@ -243,12 +310,16 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
               value="true"
               label="Oui, selon ma règle"
               disabled={pending}
+              checked={slPerRule === 'true'}
+              onChange={() => setSlPerRule('true')}
             />
             <ManagementAdherenceCard
               name="slPerRule"
               value="false"
               label="Non, au hasard"
               disabled={pending}
+              checked={slPerRule === 'false'}
+              onChange={() => setSlPerRule('false')}
             />
           </div>
         </fieldset>
@@ -263,12 +334,16 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
               value="true"
               label="Oui, BE à RR 1"
               disabled={pending}
+              checked={movedToBe === 'true'}
+              onChange={() => setMovedToBe('true')}
             />
             <ManagementAdherenceCard
               name="movedToBe"
               value="false"
               label="Non"
               disabled={pending}
+              checked={movedToBe === 'false'}
+              onChange={() => setMovedToBe('false')}
             />
           </div>
         </fieldset>
@@ -287,12 +362,16 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
               value="true"
               label="Oui, 90/10"
               disabled={pending}
+              checked={partialAtTarget === 'true'}
+              onChange={() => setPartialAtTarget('true')}
             />
             <ManagementAdherenceCard
               name="partialAtTarget"
               value="false"
               label="Non"
               disabled={pending}
+              checked={partialAtTarget === 'false'}
+              onChange={() => setPartialAtTarget('false')}
             />
           </div>
         </fieldset>
@@ -316,6 +395,8 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
           name="notes"
           rows={3}
           maxLength={2000}
+          value={notes}
+          onChange={(e) => setNotes(e.currentTarget.value)}
           disabled={pending}
           placeholder="Comment tu t'es senti ? Ce qui a marché / pas marché ?"
           className={cn(
@@ -420,12 +501,17 @@ function OutcomeCard({
   icon,
   tone,
   disabled,
+  checked,
+  onChange,
 }: {
   value: 'win' | 'loss' | 'break_even';
   label: string;
   icon: 'up' | 'down' | 'flat';
   tone: 'ok' | 'bad' | 'mute';
   disabled?: boolean;
+  /** P2 — controlled radio: survives the React 19 post-action form reset. */
+  checked: boolean;
+  onChange: () => void;
 }) {
   const Icon = icon === 'up' ? TrendingUp : icon === 'down' ? TrendingDown : Minus;
 
@@ -449,11 +535,14 @@ function OutcomeCard({
       )}
     >
       <input
+        ref={syncDefaultChecked(checked)}
         type="radio"
         name="outcome"
         value={value}
         required
         disabled={disabled}
+        checked={checked}
+        onChange={onChange}
         className="peer sr-only"
       />
       <span aria-hidden className="absolute top-2 right-2 hidden peer-checked:inline">
@@ -475,10 +564,15 @@ function ProcessCompleteCard({
   value,
   label,
   disabled,
+  checked,
+  onChange,
 }: {
   value: 'true' | 'false';
   label: string;
   disabled?: boolean;
+  /** P2 — controlled radio: survives the React 19 post-action form reset. */
+  checked: boolean;
+  onChange: () => void;
 }) {
   const toneChecked =
     value === 'true'
@@ -496,10 +590,13 @@ function ProcessCompleteCard({
       )}
     >
       <input
+        ref={syncDefaultChecked(checked)}
         type="radio"
         name="processComplete"
         value={value}
         disabled={disabled}
+        checked={checked}
+        onChange={onChange}
         className="peer sr-only"
       />
       <span aria-hidden className="absolute top-2 right-2 hidden peer-checked:inline">
@@ -520,11 +617,16 @@ function ManagementAdherenceCard({
   value,
   label,
   disabled,
+  checked,
+  onChange,
 }: {
   name: string;
   value: 'true' | 'false';
   label: string;
   disabled?: boolean;
+  /** P2 — controlled radio: survives the React 19 post-action form reset. */
+  checked: boolean;
+  onChange: () => void;
 }) {
   const toneChecked =
     value === 'true'
@@ -541,7 +643,16 @@ function ManagementAdherenceCard({
         disabled && 'cursor-not-allowed opacity-60',
       )}
     >
-      <input type="radio" name={name} value={value} disabled={disabled} className="peer sr-only" />
+      <input
+        ref={syncDefaultChecked(checked)}
+        type="radio"
+        name={name}
+        value={value}
+        disabled={disabled}
+        checked={checked}
+        onChange={onChange}
+        className="peer sr-only"
+      />
       <span aria-hidden className="absolute top-2 right-2 hidden peer-checked:inline">
         <Check className="h-3 w-3" strokeWidth={2.5} />
       </span>

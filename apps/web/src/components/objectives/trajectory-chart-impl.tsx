@@ -165,7 +165,7 @@ export function TrajectoryChart({ trajectory }: { trajectory: TrajectoryProjecti
             : ' Pas encore de projection, continue d’observer ta régularité.'}
         </figcaption>
         <ResponsiveContainer width="100%" height={240} debounce={1}>
-          <ComposedChart data={rows} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
+          <ComposedChart data={rows} margin={{ top: 8, right: 10, left: -8, bottom: 0 }}>
             <defs>
               {/* S18 — theme-aware premium fan fill for the prediction band.
                   Hex (not var()) for iOS WebView; per-instance id via useId so
@@ -187,6 +187,9 @@ export function TrajectoryChart({ trajectory }: { trajectory: TrajectoryProjecti
               interval="preserveStartEnd"
               minTickGap={28}
             />
+            {/* Tick text ends at margin.left + width − 8px (recharts tickSize 6 +
+                tickMargin 2): keep that sum ≥ ~28 so the explicit "100" tick
+                never clips (same defect as the 2026-07-02 prod audit pair). */}
             <YAxis
               domain={[0, 100]}
               ticks={[0, 25, 50, 75, 100]}
@@ -194,7 +197,7 @@ export function TrajectoryChart({ trajectory }: { trajectory: TrajectoryProjecti
               tick={{ fontSize: 11, fill: C.t4 }}
               tickLine={false}
               axisLine={false}
-              width={32}
+              width={40}
             />
             <Tooltip
               content={<TrajectoryTooltip />}

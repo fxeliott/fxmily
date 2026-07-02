@@ -264,6 +264,41 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
     );
   });
 
+  it('P3 — forces resultR to null when outcome is ABSENT (analysis-only backtest)', async () => {
+    // The wizard clears resultR when « Aucun » is selected, but a stale
+    // localStorage draft or a crafted request can still post a result without
+    // an outcome. The server silently drops it (no rejection) so a backtest
+    // card can never show « EN ATTENTE » and a « RÉSULTAT x R » at once.
+    await expect(
+      createTrainingTradeAction(null, validForm({ resultR: '2' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    expect(createTrainingTradeMock).toHaveBeenCalledTimes(1);
+    expect(createTrainingTradeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: null, resultR: null }),
+    );
+  });
+
+  it('P3 — forces resultR to null when outcome is EMPTY (« Aucun » radio)', async () => {
+    await expect(
+      createTrainingTradeAction(null, validForm({ outcome: '', resultR: '-1.5' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    expect(createTrainingTradeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: null, resultR: null }),
+    );
+  });
+
+  it('P3 — keeps resultR when a real outcome is noted (guard must not over-clean)', async () => {
+    await expect(
+      createTrainingTradeAction(null, validForm({ outcome: 'loss', resultR: '-1' })),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    expect(createTrainingTradeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'loss', resultR: -1 }),
+    );
+  });
+
   it('passes a valid TradingView link through to the service (F1)', async () => {
     const url = 'https://www.tradingview.com/x/NQe0OrXz/';
     await expect(

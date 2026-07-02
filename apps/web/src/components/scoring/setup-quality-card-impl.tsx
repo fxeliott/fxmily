@@ -88,7 +88,7 @@ export function SetupQualityCard({ setupQuality, riskDiscipline }: SetupQualityC
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={qualityData}
-                  margin={{ top: 4, right: 0, left: -24, bottom: 0 }}
+                  margin={{ top: 4, right: 0, left: -8, bottom: 0 }}
                   barSize={48}
                 >
                   <XAxis
@@ -98,12 +98,15 @@ export function SetupQualityCard({ setupQuality, riskDiscipline }: SetupQualityC
                     tickLine={false}
                     axisLine={false}
                   />
+                  {/* Tick text ends at margin.left + width − 8px (recharts tickSize 6
+                      + tickMargin 2): the old −24/28 pair left −4px → the count
+                      ticks were fully invisible. Keep the sum ≥ ~28 (2026-07-02 audit). */}
                   <YAxis
                     stroke={C.t4}
                     tick={{ fontSize: 11, fill: C.t4 }}
                     tickLine={false}
                     axisLine={false}
-                    width={28}
+                    width={40}
                     allowDecimals={false}
                   />
                   <Tooltip

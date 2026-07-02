@@ -133,7 +133,7 @@ export function TrainingDebriefStatsPanel({
                 {barData.map((b) => ` ${b.day}: ${b.count}.`).join('')}
               </figcaption>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData} margin={{ top: 4, right: 0, left: -28, bottom: 0 }}>
+                <BarChart data={barData} margin={{ top: 4, right: 0, left: -8, bottom: 0 }}>
                   <CartesianGrid stroke={C.bSubtle} strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="day"
@@ -142,12 +142,15 @@ export function TrainingDebriefStatsPanel({
                     tickLine={false}
                     axisLine={false}
                   />
+                  {/* Tick text ends at margin.left + width − 8px (recharts tickSize 6
+                      + tickMargin 2): the old −28/32 pair left −4px → the count
+                      ticks were fully invisible. Keep the sum ≥ ~28 (2026-07-02 audit). */}
                   <YAxis
                     stroke={C.t4}
                     tick={{ fontSize: 11, fill: C.t4 }}
                     tickLine={false}
                     axisLine={false}
-                    width={32}
+                    width={40}
                     allowDecimals={false}
                   />
                   <Tooltip

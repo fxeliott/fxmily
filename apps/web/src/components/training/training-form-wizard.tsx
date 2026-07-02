@@ -319,7 +319,11 @@ export function TrainingFormWizard({
     fd.set('tradingViewUrl', draft.tradingViewUrl.trim());
     fd.set('plannedRR', String(draft.plannedRR));
     if (draft.outcome) fd.set('outcome', draft.outcome);
-    if (draft.resultR !== '') fd.set('resultR', draft.resultR);
+    // P3 — a result in R only makes sense WITH a noted outcome. The wizard
+    // clears resultR when « Aucun » is selected, but a stale localStorage
+    // draft can still carry both: never post resultR without an outcome (the
+    // server enforces the same guard defensively).
+    if (draft.outcome && draft.resultR !== '') fd.set('resultR', draft.resultR);
     fd.set('systemRespected', draft.systemRespected || 'na');
     // S8 V2 §33-2 — only send touched checklist items (untouched stays null).
     for (const item of TRAINING_CHECKLIST_ITEMS) {
@@ -747,12 +751,21 @@ function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selectedIndex = OUTCOME_OPTIONS.findIndex((o) => o.v === draft.outcome);
 
+  // P3 — « Aucun » = analysis-only backtest, no noted result: selecting it
+  // also CLEARS resultR so the detail card can never show « EN ATTENTE » and
+  // a « RÉSULTAT x R » at the same time (semantic contradiction, proven at
+  // runtime in prod). Soft coherence, never punitive: nothing is rejected.
+  const selectOutcome = (v: TrainingDraftState['outcome']) => {
+    update('outcome', v);
+    if (v === '') update('resultR', '');
+  };
+
   const moveTo = (next: number) => {
     // Guard on the OPTION, not on `v`: the "Aucun" value is '' (falsy), so a
     // `!v` guard would silently block arrow-navigation onto it.
     const opt = OUTCOME_OPTIONS[next];
     if (!opt) return;
-    update('outcome', opt.v);
+    selectOutcome(opt.v);
     optionRefs.current[next]?.focus();
   };
 
@@ -809,7 +822,7 @@ function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
                 role="radio"
                 aria-checked={active}
                 tabIndex={tabbable ? 0 : -1}
-                onClick={() => update('outcome', o.v)}
+                onClick={() => selectOutcome(o.v)}
                 onKeyDown={(e) => onRadioKeyDown(e, i)}
                 disabled={disabled}
                 className={cn(
@@ -837,17 +850,27 @@ function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
         </p>
       </fieldset>
 
-      <NumericField
-        id="resultR"
-        label="Résultat en R (optionnel)"
-        value={draft.resultR}
-        onChange={(v) => update('resultR', v)}
-        error={fieldErrors.resultR}
-        disabled={disabled}
-        step="0.01"
-        inputMode="decimal"
-        placeholder="ex : 1.8 ou -1"
-      />
+      {/* P3 — the R field only exists when a result IS noted. With « Aucun »
+          selected (analysis-only), it is masked and already cleared by
+          `selectOutcome`, with a short explanation instead. */}
+      {draft.outcome === '' ? (
+        <p className="t-cap text-[var(--t-4)]">
+          Un résultat en R se note avec un résultat Gagnant, Break-even ou Perdant. Choisis
+          d&apos;abord un résultat pour le renseigner.
+        </p>
+      ) : (
+        <NumericField
+          id="resultR"
+          label="Résultat en R (optionnel)"
+          value={draft.resultR}
+          onChange={(v) => update('resultR', v)}
+          error={fieldErrors.resultR}
+          disabled={disabled}
+          step="0.01"
+          inputMode="decimal"
+          placeholder="ex : 1.8 ou -1"
+        />
+      )}
     </div>
   );
 }

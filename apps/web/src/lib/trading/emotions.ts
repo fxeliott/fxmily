@@ -18,6 +18,8 @@
  *     the UX (peurs en premier comme ancre Mark Douglas, biais en dernier).
  */
 
+import { checkinEmotionLabel } from '@/lib/checkin/emotions';
+
 export const EMOTION_CLUSTERS = ['douglas-fears', 'states', 'biases'] as const;
 export type EmotionCluster = (typeof EMOTION_CLUSTERS)[number];
 
@@ -131,7 +133,10 @@ const EMOTION_BY_SLUG: Record<string, EmotionTagDefinition> = Object.fromEntries
 );
 
 export function emotionLabel(slug: string): string {
-  return EMOTION_BY_SLUG[slug]?.label ?? slug;
+  // Trade rows can carry check-in vocabulary (seed/legacy data was observed in
+  // prod rendering raw slugs like `focused`) — fall back to the check-in
+  // referential before surfacing the bare slug.
+  return EMOTION_BY_SLUG[slug]?.label ?? checkinEmotionLabel(slug);
 }
 
 /** Maximum tags selectable for a single emotional moment (before / after). */

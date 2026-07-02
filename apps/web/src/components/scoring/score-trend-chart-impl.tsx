@@ -121,7 +121,7 @@ export function ScoreTrendChart({ data }: { data: ReadonlyArray<BehavioralScoreT
           Engagement {last.engagement ?? 'non calculé'} sur 100.
         </figcaption>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={formatted} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+          <LineChart data={formatted} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
             <CartesianGrid stroke={C.bSubtle} strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="label"
@@ -132,13 +132,16 @@ export function ScoreTrendChart({ data }: { data: ReadonlyArray<BehavioralScoreT
               interval="preserveStartEnd"
               minTickGap={24}
             />
+            {/* Tick text ends at margin.left + width − 8px (recharts tickSize 6 +
+                tickMargin 2): keep that sum ≥ ~28 so the 3-digit "100" never
+                clips against the svg edge (prod audit 2026-07-02: "100"→"0"). */}
             <YAxis
               domain={[0, 100]}
               stroke={C.t4}
               tick={{ fontSize: 11, fill: C.t4 }}
               tickLine={false}
               axisLine={false}
-              width={32}
+              width={40}
             />
             <Tooltip
               cursor={{ stroke: C.bStrong, strokeDasharray: '3 3' }}

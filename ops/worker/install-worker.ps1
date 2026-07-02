@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Fxmily local AI worker (J2) — register the automated, permanent Windows
   Scheduled Tasks that drive the 5 Claude batch orchestrators.
@@ -133,24 +133,34 @@ foreach ($p in $Pipelines) {
   $desc = "Fxmily local AI worker — $name batch (J2 auto-generation; ban-risk global lock in run-batch.sh)."
 
   if ($PSCmdlet.ShouldProcess($taskName, "Register scheduled task ($($p.Kind))")) {
-    if ($p.Kind -eq 'monthly') {
-      # Monthly-on-day-1 is not expressible via New-ScheduledTaskTrigger, so we
-      # register the task first (daily placeholder) then swap in an MSFT_Task
-      # monthly trigger via schtasks XML would be heavy; instead use a daily
-      # trigger that the wrapper no-ops on non-first days is avoided — we set a
-      # true monthly trigger through the CIM MSFT_TaskMonthlyTrigger class.
-      $monthly = Get-CimClass -Namespace Root/Microsoft/Windows/TaskScheduler -ClassName MSFT_TaskMonthlyTrigger
-      $mt = New-CimInstance -CimClass $monthly -ClientOnly
-      $mt.DaysOfMonth = 1
-      $mt.MonthsOfYear = 4095  # all 12 months (bitmask 2^12-1)
-      $mt.StartBoundary = ([DateTime]::Today.AddDays(1).ToString('yyyy-MM-dd') + 'T' + $p.At + ':00')
-      $mt.Enabled = $true
-      $Trigger = $mt
-    }
-
     Register-ScheduledTask -TaskName $taskName -TaskPath $TaskFolder `
       -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal `
       -Description $desc -Force | Out-Null
+
+    if ($p.Kind -eq 'monthly') {
+      # Monthly-on-day-1 is not expressible via New-ScheduledTaskTrigger, the
+      # MSFT_TaskMonthlyTrigger CIM class rejects property assignment on a
+      # -ClientOnly instance ("MonthsOfYear" not settable), and schtasks /TR
+      # quoting is not reliably reachable from PS 5.1 (inner quotes are not
+      # re-escaped on native calls) — all three proven 2026-07-02 on Win11.
+      # Robust path: register with the daily placeholder above, then rewrite
+      # the trigger XML to ScheduleByMonth and re-register from XML (cmdlets
+      # own all the quoting; works non-elevated for an Interactive task).
+      $xml = Export-ScheduledTask -TaskName $taskName -TaskPath $TaskFolder
+      $months = '<Months>' + (('January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December' |
+            ForEach-Object { "<$_ />" }) -join '') + '</Months>'
+      $byMonth = "<ScheduleByMonth><DaysOfMonth><Day>1</Day></DaysOfMonth>$months</ScheduleByMonth>"
+      # (?s) — the exported XML is pretty-printed across lines; without
+      # singleline mode the lazy .*? never crosses them and nothing replaces.
+      $xml = $xml -replace '(?s)<ScheduleByDay>.*?</ScheduleByDay>', $byMonth
+      if ($xml -notmatch 'ScheduleByMonth') {
+        throw "monthly trigger rewrite failed for $taskName (ScheduleByDay not found in exported XML)."
+      }
+      Unregister-ScheduledTask -TaskName $taskName -TaskPath $TaskFolder -Confirm:$false
+      Register-ScheduledTask -TaskName $taskName -TaskPath $TaskFolder -Xml $xml | Out-Null
+    }
+
     Write-Host ("  [OK] {0,-14} {1}" -f $name, $taskName) -ForegroundColor Green
   }
 }
@@ -159,5 +169,7 @@ Write-Host ""
 Write-Host "Done. Verify with:  ops\worker\status-worker.ps1" -ForegroundColor Cyan
 Write-Host "Remove with:        ops\worker\uninstall-worker.ps1" -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "PREREQUISITE: ops\worker\worker.env must hold FXMILY_ADMIN_TOKEN (+ optional" -ForegroundColor Yellow
-Write-Host "FXMILY_BASE_URL). Copy worker.env.example and fill it in before the first tick." -ForegroundColor Yellow
+Write-Host "PREREQUISITE: ops\worker\worker.env must hold the FOUR pipeline tokens" -ForegroundColor Yellow
+Write-Host "(FXMILY_ADMIN_TOKEN, FXMILY_MONTHLY_ADMIN_TOKEN, FXMILY_CALENDAR_TOKEN," -ForegroundColor Yellow
+Write-Host "FXMILY_VERIFICATION_ADMIN_BATCH_TOKEN) + optional FXMILY_BASE_URL." -ForegroundColor Yellow
+Write-Host "Copy worker.env.example and fill it in before the first tick." -ForegroundColor Yellow

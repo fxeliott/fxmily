@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Show the state + last run of every Fxmily local AI worker task (observability).
 .DESCRIPTION

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Remove every Fxmily local AI worker scheduled task (revert install-worker.ps1).
 .DESCRIPTION

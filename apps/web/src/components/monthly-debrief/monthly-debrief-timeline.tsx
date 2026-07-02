@@ -15,23 +15,26 @@ import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
  * which had no detail route (§23.6). Here the member reads the full AI
  * synthesis, so the row IS the entry point.
  *
- * V1.9 TIER F perf — `Intl.DateTimeFormat` hoisted at module level so the
- * (≤24) rows don't each instantiate one.
+ * V1.9 TIER F perf — the generated-at formatter is built once per render from
+ * the member `timezone` prop (F2) and reused across the (≤24) rows.
  */
-
-const FMT_GENERATED_AT_FR = new Intl.DateTimeFormat('fr-FR', {
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-});
 
 export function MonthlyDebriefTimeline({
   debriefs,
   selectedId,
+  timezone = 'Europe/Paris',
 }: {
   debriefs: readonly SerializedMonthlyDebrief[];
   selectedId?: string | undefined;
+  /** F2 — member IANA timezone so "generated on" shows the member's local day. */
+  timezone?: string;
 }) {
+  const fmtGeneratedAt = new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: timezone,
+  });
   if (debriefs.length === 0) {
     return (
       <div
@@ -64,7 +67,7 @@ export function MonthlyDebriefTimeline({
               <header className="flex items-baseline justify-between gap-3">
                 <p className="t-eyebrow-lg text-[var(--t-2)]">{formatMonthLabelFr(d.monthStart)}</p>
                 <p className="t-cap font-mono text-[var(--t-3)]">
-                  {FMT_GENERATED_AT_FR.format(new Date(d.generatedAt))}
+                  {fmtGeneratedAt.format(new Date(d.generatedAt))}
                 </p>
               </header>
               <p className="t-body mt-2 line-clamp-2 text-[var(--t-2)]">{d.progressionNarrative}</p>

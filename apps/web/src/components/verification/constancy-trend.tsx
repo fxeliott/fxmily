@@ -14,10 +14,13 @@ import type { ConstancyScoreView } from '@/lib/verification/constancy';
  * `viewBox` + `w-full` — no fixed-width sparkline, scales from iPhone SE up.
  */
 
+// `h.periodStart` is a UTC-midnight PIN of the cohort's shared civil week, not a
+// per-member instant — format in the UTC frame so the week label is stable for
+// every member (Europe/Paris rolled the day back for negative-offset members).
 const PERIOD_FMT = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'short',
-  timeZone: 'Europe/Paris',
+  timeZone: 'UTC',
 });
 
 const VB_W = 300;

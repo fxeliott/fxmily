@@ -30,6 +30,10 @@ export default async function ReunionsPage() {
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
+  // F2 — the member's set timezone drives every date/time render on this page
+  // (same fallback as the rest of the app: legacy rows without a zone = Paris).
+  const timezone = session.user.timezone || 'Europe/Paris';
+
   const { meetings, rate } = await listMeetingsForMember(session.user.id);
 
   return (
@@ -59,8 +63,9 @@ export default async function ReunionsPage() {
               Tes réunions
             </h1>
             <p className="t-cap max-w-prose text-[var(--t-3)]">
-              Déclare ta présence, en live ou en rediffusion, et que tu as lu l&apos;analyse (12h)
-              ou le bilan (20h). Tu peux rattraper une réunion dans les {MEETING_WINDOW_DAYS} jours.
+              Déclare ta présence, en live ou en rediffusion, et confirme que tu as lu
+              l&apos;analyse ou le bilan de chaque séance. Tu peux rattraper une réunion dans les{' '}
+              {MEETING_WINDOW_DAYS} jours.
             </p>
           </div>
         </header>
@@ -126,12 +131,14 @@ export default async function ReunionsPage() {
             <div className="rounded-card border border-dashed border-[var(--b-default)] bg-[var(--bg-1)] p-6 text-center">
               <p className="t-body text-[var(--t-2)]">Pas encore de réunion à déclarer.</p>
               <p className="t-cap mt-1 text-[var(--t-3)]">
-                Les réunions Fxmily ont lieu du lundi au vendredi, à 12h et 20h. Elles apparaîtront
-                ici une fois passées.
+                Les réunions Fxmily ont lieu du lundi au vendredi, à 12h et 20h (heure de Paris).
+                Elles apparaîtront ici une fois passées.
               </p>
             </div>
           ) : (
-            groupMeetingsByDay(meetings).map((day) => <MeetingDayGroup key={day.date} day={day} />)
+            groupMeetingsByDay(meetings, timezone).map((day) => (
+              <MeetingDayGroup key={day.date} day={day} timezone={timezone} />
+            ))
           )}
         </section>
       </div>

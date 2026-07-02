@@ -36,6 +36,10 @@ interface EquityChartProps {
   estimatedExcluded: number;
   /** Currently-selected range. */
   range: RangeKey;
+  /** F2 — member IANA timezone so each instant's axis label shows the member's
+   *  local calendar day (this is a client-only chart: without it the label would
+   *  use the device tz, which F2 decouples from the member's set timezone). */
+  timezone: string;
 }
 
 const RANGE_LABELS: Record<RangeKey, string> = {
@@ -48,7 +52,7 @@ const RANGE_LABELS: Record<RangeKey, string> = {
 
 const RANGE_ORDER: RangeKey[] = ['7d', '30d', '3m', '6m', 'all'];
 
-export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChartProps) {
+export function TrackRecordChart({ data, estimatedExcluded, range, timezone }: EquityChartProps) {
   const C = useChartColors();
   const prefersReducedMotion = useReducedMotion();
   const gradientId = useId();
@@ -69,12 +73,18 @@ export function TrackRecordChart({ data, estimatedExcluded, range }: EquityChart
     () =>
       data.map((p, i) => ({
         idx: i,
-        date: new Date(p.ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        // F2 — render the axis label in the member's set timezone (not the
+        // device's), so a trade near local midnight lands on the right day.
+        date: new Date(p.ts).toLocaleDateString('fr-FR', {
+          day: 'numeric',
+          month: 'short',
+          timeZone: timezone,
+        }),
         cumR: Number(p.cumR.toFixed(2)),
         // S4 DOD4-F1 — the unplotted `dd` field was removed (no series nor
         // tooltip ever read it; the drawdown story lives in DrawdownStreaksCard).
       })),
-    [data],
+    [data, timezone],
   );
 
   return (

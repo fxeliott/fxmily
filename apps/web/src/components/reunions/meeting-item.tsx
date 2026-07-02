@@ -14,6 +14,7 @@ import { Pill, type PillProps } from '@/components/ui/pill';
 import type { AttendanceGap } from '@/lib/meeting/attendance-gap';
 import type { MeetingDisplayState, MemberMeetingView } from '@/lib/meeting/service';
 import type { MeetingSlotName } from '@/lib/meeting/occurrence';
+import { formatMeetingSlotTime } from '@/lib/meeting/slot-time';
 import { cn } from '@/lib/utils';
 
 /**
@@ -28,16 +29,24 @@ import { cn } from '@/lib/utils';
  * an accusation (the engagement numerator already handles an over-claim quietly).
  */
 
-// Hoisted at module level (per-row instantiation would be wasteful — canon
-// J8 review/reflect pages). Europe/Paris fixed (V1 cohort = France, SPEC §16).
-const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  timeZone: 'Europe/Paris',
-});
+// F2 — formatters cached per member timezone (Intl construction is expensive,
+// the list renders one row per meeting — same canon as the hoisted formatter
+// this replaces, extended to arbitrary timezones).
+const DATE_FMT_CACHE = new Map<string, Intl.DateTimeFormat>();
+function dateFormatter(timeZone: string): Intl.DateTimeFormat {
+  let fmt = DATE_FMT_CACHE.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('fr-FR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      timeZone,
+    });
+    DATE_FMT_CACHE.set(timeZone, fmt);
+  }
+  return fmt;
+}
 
-const SLOT_TIME: Record<MeetingSlotName, string> = { midday: '12h', evening: '20h' };
 const SLOT_SUBTITLE: Record<MeetingSlotName, string> = {
   midday: 'Analyse Ichor',
   evening: 'Bilan / débrief Ichor',
@@ -77,9 +86,12 @@ const GAP_NOTE: Record<Exclude<AttendanceGap, 'none'>, string> = {
 
 export function MeetingItem({
   meeting,
+  timezone,
   showDate = true,
 }: {
   meeting: MemberMeetingView;
+  /** F2 — the MEMBER's IANA timezone: date and slot time render in their wall-clock. */
+  timezone: string;
   /**
    * F4 — when the card is rendered UNDER a per-day header ({@link MeetingDayGroup}),
    * the full date is already shown by the header, so the card title collapses to
@@ -88,8 +100,8 @@ export function MeetingItem({
    */
   showDate?: boolean;
 }) {
-  const time = SLOT_TIME[meeting.slot];
-  const dateLabel = DATE_FMT.format(new Date(meeting.scheduledAt));
+  const time = formatMeetingSlotTime(meeting.scheduledAt, timezone);
+  const dateLabel = dateFormatter(timezone).format(new Date(meeting.scheduledAt));
   const title = showDate ? `Réunion ${time} · ${dateLabel}` : `Réunion ${time}`;
   const meta = STATE_META[meeting.displayState];
   const { Icon } = meta;

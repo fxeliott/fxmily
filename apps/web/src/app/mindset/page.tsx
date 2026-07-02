@@ -117,7 +117,7 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
               {recent.length} / 12 · semaine {weekRange}
             </p>
           </div>
-          <MindsetTimeline checks={recent} />
+          <MindsetTimeline checks={recent} timezone={session.user.timezone || 'Europe/Paris'} />
         </section>
 
         {/* S19.2 — §11 : ferme le cul-de-sac mindset. L'auto-évaluation est un

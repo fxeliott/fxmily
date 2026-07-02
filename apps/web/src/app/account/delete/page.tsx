@@ -79,7 +79,11 @@ export default async function AccountDeletePage(): Promise<React.ReactElement> {
           <h1 className="t-h1 mt-2 text-[var(--t-1)]">Supprimer mon compte</h1>
         </header>
 
-        {state.kind === 'scheduled' ? <ScheduledPanel state={state} /> : <ActiveAccountPanel />}
+        {state.kind === 'scheduled' ? (
+          <ScheduledPanel state={state} timezone={session.user.timezone || 'Europe/Paris'} />
+        ) : (
+          <ActiveAccountPanel />
+        )}
 
         <footer className="mt-10 border-t border-[var(--b-subtle)] pt-5 text-xs text-[var(--t-3)]">
           <p>
@@ -184,13 +188,17 @@ function ActiveAccountPanel(): React.ReactElement {
 
 function ScheduledPanel({
   state,
+  timezone,
 }: {
   state: Extract<ReturnType<typeof deriveDeletionState>, { kind: 'scheduled' }>;
+  /** F2 — member IANA timezone: the purge instant is shown in their local time. */
+  timezone: string;
 }): React.ReactElement {
   const hoursLeft = Math.ceil(state.msUntilMaterialisation / (60 * 60 * 1000));
   const formatted = state.scheduledAt.toLocaleString('fr-FR', {
     dateStyle: 'long',
     timeStyle: 'short',
+    timeZone: timezone,
   });
   return (
     <section

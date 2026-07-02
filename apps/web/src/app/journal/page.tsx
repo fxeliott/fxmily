@@ -53,6 +53,9 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
+  // F2 — render absolute trade instants in the member's own timezone.
+  const timezone = session.user.timezone || 'Europe/Paris';
+
   const { status: rawStatus, cursor: rawCursor } = await searchParams;
   const status = parseFilter(rawStatus);
   const cursor = parseCursor(rawCursor);
@@ -258,6 +261,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
                 <TradeCard
                   trade={trade}
                   unseenAnnotationsCount={unseenByTrade.get(trade.id) ?? 0}
+                  timezone={timezone}
                 />
               </li>
             ))}

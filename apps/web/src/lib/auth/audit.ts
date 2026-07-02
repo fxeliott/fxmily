@@ -134,6 +134,10 @@ export type AuditAction =
   | 'cron.dispatch_notifications.scan'
   // J10 — RGPD account self-service + ops crons
   | 'account.data.exported'
+  // F2 (overhaul) — member self-service timezone change. PII-free: metadata
+  // carries only the new IANA timezone string (no location precision beyond
+  // the zone the member chose themselves).
+  | 'account.timezone.updated'
   | 'account.deletion.requested'
   | 'account.deletion.cancelled'
   | 'account.deletion.materialised'

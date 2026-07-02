@@ -11,7 +11,13 @@ export const btnVariants = cva(
     variants: {
       kind: {
         primary:
-          'bg-[var(--acc-btn)] text-[var(--acc-fg)] font-semibold shadow-[var(--sh-btn-pri)] hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] hover:-translate-y-px active:translate-y-0 active:shadow-[var(--sh-btn-pri)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hatch-disabled disabled:hover:translate-y-0',
+          // `motion-safe:` on the hover lift — under `prefers-reduced-motion` the
+          // global 0.01ms transition filet (globals.css) would turn the 1px lift
+          // into an instant per-frame flip-flop when the pointer rests on the
+          // button's edge (hover → lift → un-hover → drop → …), which both
+          // violates WCAG 2.3.3 and makes the button permanently "not stable"
+          // for Playwright's actionability check (CI-proven on the F2 wizard).
+          'bg-[var(--acc-btn)] text-[var(--acc-fg)] font-semibold shadow-[var(--sh-btn-pri)] hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] motion-safe:hover:-translate-y-px active:translate-y-0 active:shadow-[var(--sh-btn-pri)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hatch-disabled disabled:hover:translate-y-0',
         secondary:
           'bg-transparent text-[var(--t-1)] border border-[var(--b-strong)] hover:border-[var(--b-acc)] hover:bg-[var(--acc-dim-2)] hover:text-[var(--acc-hi)] active:bg-[var(--acc-dim)] disabled:opacity-40 disabled:cursor-not-allowed disabled:hatch-disabled',
         ghost:

@@ -16,6 +16,10 @@ export default async function NewTradePage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
+  // F2 — the member's set timezone drives the entry-time picker (pre-fill +
+  // label) and the server-side wall-clock → UTC conversion on submit.
+  const timezone = session.user.timezone || 'Europe/Paris';
+
   return (
     <main className="relative bg-[var(--bg)]">
       {/* S19 — ambient depth backplate (parité avec journal close, les formulaires
@@ -63,7 +67,7 @@ export default async function NewTradePage() {
           </Link>
         </aside>
 
-        <TradeFormWizard />
+        <TradeFormWizard timezone={timezone} />
       </div>
     </main>
   );

@@ -3,7 +3,11 @@ import { redirect } from 'next/navigation';
 import { ArrowLeft, Moon } from 'lucide-react';
 
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { AlreadyLoggedNotice } from '@/components/track/already-logged-notice';
 import { SleepHabitWizard } from '@/components/track/sleep-habit-wizard';
+import { localDateOf } from '@/lib/checkin/timezone';
+import { listRecentHabitLogs } from '@/lib/habit/service';
+import { findTodayHabitLog, sleepPrefillFromLog } from '@/lib/habit/today-log';
 import { auth } from '@/auth';
 
 /**
@@ -11,6 +15,12 @@ import { auth } from '@/auth';
  *
  * Auth gate (status === 'active'). Renders the `<SleepHabitWizard>` Client
  * Component which handles the 2-step flow + Server Action submit.
+ *
+ * P3 fix — if the sleep pillar is already logged for the member-timezone today,
+ * the wizard starts PREFILLED with the existing values and an "already logged"
+ * notice makes the re-submit-updates behavior explicit (was a silent overwrite;
+ * pattern carbone `/review/new` #463). Same 1-day read + `localDateOf` the
+ * `/track` landing already uses.
  */
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +30,11 @@ export default async function TrackSleepNewPage() {
   if (!session?.user?.id || session.user.status !== 'active') {
     redirect('/login');
   }
+
+  const timezone = session.user.timezone || 'Europe/Paris';
+  const today = localDateOf(new Date(), timezone);
+  const existing = findTodayHabitLog(await listRecentHabitLogs(session.user.id, 1), today, 'sleep');
+  const prefill = existing ? sleepPrefillFromLog(existing) : null;
 
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
@@ -51,12 +66,14 @@ export default async function TrackSleepNewPage() {
           </div>
           <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
             Walker, <em>Why We Sleep</em>, ch. 5 ; Steenbarger, <em>Trading Psychology 2.0</em>. La
-            bande 6,5–9 h est l&apos;optimal de prise de décision et de régulation émotionnelle. En
-            dessous de 5 h, tu trades avec un désavantage mesurable.
+            bande 6,5 à 9 h est l&apos;optimal de prise de décision et de régulation émotionnelle.
+            En dessous de 5 h, tu trades avec un désavantage mesurable.
           </p>
         </header>
 
-        <SleepHabitWizard />
+        {prefill ? <AlreadyLoggedNotice pillarLabel="Sommeil" /> : null}
+
+        <SleepHabitWizard {...(prefill ? { prefill } : {})} />
       </div>
     </main>
   );

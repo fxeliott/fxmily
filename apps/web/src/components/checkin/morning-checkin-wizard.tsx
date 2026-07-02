@@ -24,6 +24,7 @@ import { StressZonesBar } from '@/components/checkin/stress-zones-bar';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
+import type { MorningCheckinPrefill } from '@/lib/checkin/prefill';
 import { MORNING_ROUTINE_SUGGESTIONS } from '@/lib/checkin/routine';
 import { formatLocalDate } from '@/lib/checkin/timezone';
 import { cn } from '@/lib/utils';
@@ -88,20 +89,45 @@ function emptyDraft(today: string): DraftState {
   };
 }
 
-function loadDraft(today: string): DraftState {
-  if (typeof window === 'undefined') return emptyDraft(today);
+/**
+ * P3 — starting draft when the member is EDITING a submitted check-in
+ * (`prefill` from the host page). Reuses `emptyDraft` for the fields the prefill
+ * never carries (`date`, `lateJustification`). Without a prefill this reduces to
+ * `emptyDraft`. Mirror of the weekly-review wizard `baseDraft` (#463).
+ */
+function baseDraft(today: string, prefill?: MorningCheckinPrefill): DraftState {
+  const base = emptyDraft(today);
+  if (!prefill) return base;
+  return {
+    ...base,
+    sleepHours: prefill.sleepHours,
+    sleepQuality: prefill.sleepQuality,
+    morningRoutineCompleted: prefill.morningRoutineCompleted,
+    marketAnalysisDone: prefill.marketAnalysisDone,
+    meditationMin: prefill.meditationMin,
+    sportType: prefill.sportType,
+    sportDurationMin: prefill.sportDurationMin,
+    moodScore: prefill.moodScore,
+    emotionTags: [...prefill.emotionTags],
+    intention: prefill.intention,
+  };
+}
+
+function loadDraft(today: string, prefill?: MorningCheckinPrefill): DraftState {
+  const base = baseDraft(today, prefill);
+  if (typeof window === 'undefined') return base;
   try {
     const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!raw) return emptyDraft(today);
+    if (!raw) return base;
     const parsed = JSON.parse(raw) as Partial<DraftState>;
     return {
-      ...emptyDraft(today),
+      ...base,
       ...parsed,
       // Always anchor to today on hydrate — no point editing yesterday's draft.
       date: today,
     };
   } catch {
-    return emptyDraft(today);
+    return base;
   }
 }
 
@@ -149,12 +175,21 @@ interface MorningCheckinWizardProps {
    * with date=past would corrupt the next normal fill — the #1 F7 pitfall).
    */
   backfillDate?: string;
+  /**
+   * P3 — when the effective day ALREADY has a submitted morning check-in, the
+   * host page passes its answers here so the wizard opens SEEDED (edit mode)
+   * instead of empty. A re-submission is then an explicit update (the service
+   * upsert stays), never a silent overwrite of answers the member can't see.
+   * #463 pattern parity (`/review/new`).
+   */
+  prefill?: MorningCheckinPrefill;
 }
 
-export function MorningCheckinWizard({ today, backfillDate }: MorningCheckinWizardProps) {
+export function MorningCheckinWizard({ today, backfillDate, prefill }: MorningCheckinWizardProps) {
   const isBackfill = backfillDate != null;
   const effectiveDate = backfillDate ?? today;
-  const [draft, setDraft] = useState<DraftState>(() => emptyDraft(effectiveDate));
+  const isEditing = prefill != null;
+  const [draft, setDraft] = useState<DraftState>(() => baseDraft(effectiveDate, prefill));
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState<StepIndex>(0);
   const [direction, setDirection] = useState<1 | -1>(1);
@@ -167,10 +202,16 @@ export function MorningCheckinWizard({ today, backfillDate }: MorningCheckinWiza
   useEffect(() => {
     // Rattrapage — start fresh anchored to the backfilled day and NEVER read the
     // today draft (loading/writing the today key with date=past corrupts the
-    // next normal check-in — the #1 F7 pitfall).
+    // next normal check-in — the #1 F7 pitfall). Rattrapage never carries a
+    // prefill (distinct `?date=` entry path), so it stays an empty draft.
+    // Normal flow — seed from the prefill (edit mode) then let a local draft win.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDraft(isBackfill ? emptyDraft(effectiveDate) : loadDraft(today));
+    setDraft(isBackfill ? emptyDraft(effectiveDate) : loadDraft(today, prefill));
     setHydrated(true);
+    // `prefill` is a stable server prop for the page's lifetime; intentionally
+    // not in deps (it would re-run + clobber an in-progress edit on re-render).
+    // Weekly-review-wizard parity (#463).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today, isBackfill, effectiveDate]);
 
   useEffect(() => {
@@ -472,6 +513,7 @@ export function MorningCheckinWizard({ today, backfillDate }: MorningCheckinWiza
                 fieldErrors={fieldErrors}
                 disabled={pending}
                 isBackfill={isBackfill}
+                isEditing={isEditing}
               />
             ) : null}
           </m.div>
@@ -515,7 +557,11 @@ export function MorningCheckinWizard({ today, backfillDate }: MorningCheckinWiza
               loading={pending}
               type="button"
             >
-              {pending ? 'Enregistrement…' : 'Enregistrer mon matin'}
+              {pending
+                ? 'Enregistrement…'
+                : isEditing
+                  ? 'Mettre à jour mon matin'
+                  : 'Enregistrer mon matin'}
             </Btn>
           )}
         </div>
@@ -750,7 +796,8 @@ function StepIntention({
   fieldErrors,
   disabled,
   isBackfill,
-}: StepProps & { isBackfill: boolean }) {
+  isEditing,
+}: StepProps & { isBackfill: boolean; isEditing: boolean }) {
   const charCount = draft.intention.length;
   const isCharLimitNear = charCount > 180;
   const hint = 'Une phrase courte. Ex: "Trader uniquement à Londres", "Pas de revenge trade".';
@@ -865,11 +912,15 @@ function StepIntention({
           <span className="t-eyebrow">Récap</span>
           <p className="t-body text-[var(--t-2)]">
             Clique sur{' '}
-            <span className="font-semibold text-[var(--t-1)]">Enregistrer mon matin</span> pour
-            valider.
-            {isBackfill
-              ? ' Ce jour sera ajouté à ton historique.'
-              : ' Le check-in soir s’ouvrira ce soir.'}
+            <span className="font-semibold text-[var(--t-1)]">
+              {isEditing ? 'Mettre à jour mon matin' : 'Enregistrer mon matin'}
+            </span>{' '}
+            pour valider.
+            {isEditing
+              ? ' Tes réponses existantes seront remplacées par cette version.'
+              : isBackfill
+                ? ' Ce jour sera ajouté à ton historique.'
+                : ' Le check-in soir s’ouvrira ce soir.'}
           </p>
         </div>
       </Card>

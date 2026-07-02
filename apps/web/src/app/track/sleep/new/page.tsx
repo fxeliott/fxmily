@@ -50,7 +50,7 @@ export default async function TrackSleepNewPage() {
             </h1>
           </div>
           <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
-            Walker, <em>Why We Sleep</em>, ch. 5. Steenbarger, <em>Trading Psychology 2.0</em>. La
+            Walker, <em>Why We Sleep</em>, ch. 5 ; Steenbarger, <em>Trading Psychology 2.0</em>. La
             bande 6,5–9 h est l&apos;optimal de prise de décision et de régulation émotionnelle. En
             dessous de 5 h, tu trades avec un désavantage mesurable.
           </p>

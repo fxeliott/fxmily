@@ -596,8 +596,8 @@ function StepPairDate({
           </p>
         ) : (
           <p id="enteredAt-hint" className="t-cap text-[var(--t-4)]">
-            Quand tu as analysé ce backtest. Heure locale ({timezoneCityLabel(timezone)}) —
-            pré-rempli à maintenant.
+            Quand tu as analysé ce backtest. Heure locale ({timezoneCityLabel(timezone)}),
+            pré-remplie à maintenant.
           </p>
         )}
       </div>

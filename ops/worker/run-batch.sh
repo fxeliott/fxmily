@@ -2,10 +2,11 @@
 #
 # ops/worker/run-batch.sh — Fxmily local AI worker (J2).
 #
-# WHY THIS EXISTS. The 5 Claude batch orchestrators
-# (onboarding / weekly / monthly / calendar / verification) generate every AI
-# artifact the app shows a member (onboarding MemberProfile, weekly/monthly
-# digests, adaptive calendar, MT5 vision verification). Until J2 they were
+# WHY THIS EXISTS. The 6 Claude batch orchestrators
+# (onboarding / weekly / monthly / calendar / verification / profile) generate
+# every AI artifact the app shows a member (onboarding MemberProfile,
+# weekly/monthly digests, adaptive calendar, MT5 vision verification, J-E
+# monthly deep re-profiling). Until J2 they were
 # "human-in-the-loop : run manually by Eliot" (see
 # ops/scripts/lib/claude-batch-core.sh:25). That manual step was the ROOT CAUSE
 # of the "IA silence 24H après profil rempli" bug : finalizeInterview only flips
@@ -24,7 +25,7 @@
 #
 # BAN-RISK — no parallelisation. A GLOBAL lock (not per-batch) guarantees at
 # most ONE batch — hence at most one `claude --print` — runs at any instant
-# across all 5 pipelines, exactly as when Eliot ran them one at a time by hand.
+# across all 6 pipelines, exactly as when Eliot ran them one at a time by hand.
 # The install schedules are staggered so collisions are effectively impossible;
 # if one still happens, the later tick SKIPS cleanly (benign) and the next tick
 # (or the server-side overdue-alert net) picks the work up. Pull is idempotent
@@ -32,7 +33,7 @@
 # always safe.
 #
 # Usage :
-#   run-batch.sh <onboarding|weekly|monthly|calendar|verification> [-- <extra script args>]
+#   run-batch.sh <onboarding|weekly|monthly|calendar|verification|profile> [-- <extra script args>]
 #
 # Env (loaded from ops/worker/worker.env if present; already-set vars win) :
 #   FXMILY_ADMIN_TOKEN   — 32+ char admin batch token (matches prod ADMIN_BATCH_TOKEN)
@@ -65,19 +66,25 @@ if [[ "${1:-}" == "--" ]]; then
 fi
 
 case "$BATCH" in
-  onboarding|weekly|monthly|calendar|verification) ;;
+  onboarding|weekly|monthly|calendar|verification|profile) ;;
   ""|-h|--help)
-    echo "Usage: $0 <onboarding|weekly|monthly|calendar|verification> [-- <extra args>]" >&2
+    echo "Usage: $0 <onboarding|weekly|monthly|calendar|verification|profile> [-- <extra args>]" >&2
     [[ "$BATCH" == "-h" || "$BATCH" == "--help" ]] && exit 0
     exit 2
     ;;
   *)
-    echo "[worker] ERROR: unknown batch '$BATCH' (expected onboarding|weekly|monthly|calendar|verification)." >&2
+    echo "[worker] ERROR: unknown batch '$BATCH' (expected onboarding|weekly|monthly|calendar|verification|profile)." >&2
     exit 2
     ;;
 esac
 
-BATCH_SCRIPT="$SCRIPTS_DIR/${BATCH}-batch-local.sh"
+# `profile` (J-E monthly deep re-profiling) is the one pipeline whose script
+# does not follow the `<batch>-batch-local.sh` naming convention.
+if [[ "$BATCH" == "profile" ]]; then
+  BATCH_SCRIPT="$SCRIPTS_DIR/member-profile-monthly-local.sh"
+else
+  BATCH_SCRIPT="$SCRIPTS_DIR/${BATCH}-batch-local.sh"
+fi
 if [[ ! -f "$BATCH_SCRIPT" ]]; then
   echo "[worker] ERROR: batch script not found: $BATCH_SCRIPT" >&2
   exit 2

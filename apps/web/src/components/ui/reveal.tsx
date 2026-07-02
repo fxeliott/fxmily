@@ -14,9 +14,16 @@
  *   layout/paint (pas de width/height/top/margin) → 60fps garanti.
  * - LazyMotion strict : import depuis `'framer-motion'` et usage via l'alias
  *   `m.*` (jamais `motion.*`, jamais `'motion/react'`).
- * - Reduced-motion : si l'utilisateur préfère réduire les animations, on rend
- *   un `<div>` statique déjà dans son état final (visible, non décalé) — aucune
- *   animation, aucune transition.
+ * - Reduced-motion : si l'utilisateur préfère réduire les animations, la
+ *   révélation est instantanée (duration 0 ; le translateY est neutralisé par
+ *   `MotionConfig reducedMotion="user"`). SURTOUT PAS de branche structurelle
+ *   `if (reduced) return <div>` : le serveur ne connaît pas
+ *   prefers-reduced-motion et sérialise toujours le style initial du m.div
+ *   (`opacity:0; transform:translateY(…)`) ; un arbre client divergent =
+ *   hydration mismatch que React 19 ne répare pas → éléments gelés invisibles
+ *   (prouvé par la trace e2e F2, CI run 28584461967). L'arbre doit être LE
+ *   MÊME dans les deux préférences ; seule `transition` (non sérialisée)
+ *   change.
  * - `RevealGroup` ne fait que déléguer : chaque enfant est enveloppé dans un
  *   `<Reveal>` avec un `delay` croissant. Le no-op reduced-motion est donc géré
  *   enfant par enfant par `Reveal` lui-même.
@@ -48,21 +55,17 @@ export function Reveal({
 }: RevealProps): JSX.Element {
   const reduced = useReducedMotion();
 
-  if (reduced) {
-    return <div className={className}>{children}</div>;
-  }
-
   return (
     <m.div
       className={className}
       initial={{ opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once, amount: 0.2 }}
-      transition={{
-        duration: 0.55,
-        ease: [0.22, 1, 0.36, 1],
-        delay: delay / 1000,
-      }}
+      transition={
+        reduced
+          ? { duration: 0, delay: 0 }
+          : { duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: delay / 1000 }
+      }
     >
       {children}
     </m.div>

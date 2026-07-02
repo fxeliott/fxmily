@@ -23,8 +23,14 @@ import { cn } from '@/lib/utils';
  * Invariants :
  *  - Mouse only. `pointerType !== 'mouse'` is ignored so touch/pen taps
  *    never displace the target out from under a finger.
- *  - `useReducedMotion()` true → a plain `<div>` passthrough, zero magnetism
- *    (WCAG 2.3.3). No spring, no listeners.
+ *  - `useReducedMotion()` true → zero magnetism (WCAG 2.3.3): the pointer
+ *    handlers short-circuit so the motion values never leave 0. The TREE stays
+ *    identical to the animated branch — a structural `if (reduced) return
+ *    <div>` diverges from the SSR HTML (the server never knows the
+ *    preference), and React 19 hydration mismatches are never patched up,
+ *    shifting every downstream `useId` (caught by the F2 e2e trace, CI run
+ *    28584461967). Handlers/springs are not serialized, so guarding them is
+ *    hydration-safe.
  *  - Box-transparent : we don't impose a `display`; the caller's `className`
  *    owns layout so the wrapper can envelop a button without breaking its box.
  */
@@ -43,13 +49,9 @@ export function Magnetic({ children, className, strength = 0.3 }: MagneticProps)
   const x = useSpring(useMotionValue(0), SPRING);
   const y = useSpring(useMotionValue(0), SPRING);
 
-  // AT users (and reduced-motion preference) get a static, listener-free
-  // surface — never call hooks conditionally above this point.
-  if (prefersReducedMotion) {
-    return <div className={className}>{children}</div>;
-  }
-
   const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    // Reduced-motion → inert surface (WCAG 2.3.3): the values stay at rest.
+    if (prefersReducedMotion) return;
     if (e.pointerType !== 'mouse') return;
     const rect = e.currentTarget.getBoundingClientRect();
     const offsetX = e.clientX - (rect.left + rect.width / 2);

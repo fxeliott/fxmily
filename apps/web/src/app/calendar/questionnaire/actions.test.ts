@@ -27,8 +27,12 @@ vi.mock('next/navigation', () => ({ redirect: redirectMock }));
 
 const { submitCalendarQuestionnaireAction } = await import('./actions');
 const { currentParisWeekStart } = await import('@/lib/calendar/week');
-const { CALENDAR_SLOTS, CALENDAR_WEEKDAYS, CALENDAR_WEEKEND_DAYS } =
-  await import('@/lib/calendar/instrument-v1');
+const {
+  CALENDAR_SLOTS,
+  CALENDAR_WEEKDAYS,
+  CALENDAR_WEEKEND_DAYS,
+  CURRENT_CALENDAR_INSTRUMENT_VERSION,
+} = await import('@/lib/calendar/instrument-v1');
 
 afterEach(() => {
   authMock.mockReset();
@@ -81,7 +85,7 @@ function frozenResult(weekStart: string) {
       id: 'wsq_1',
       userId: 'user_1',
       weekStart,
-      instrumentVersion: 1,
+      instrumentVersion: CURRENT_CALENDAR_INSTRUMENT_VERSION,
       energyPeakSlot: 'morning' as const,
       responses: {},
       createdAt: '2026-06-01T00:00:00.000Z',
@@ -233,7 +237,11 @@ describe('submitCalendarQuestionnaireAction — happy path', () => {
     expect(logAuditMock).toHaveBeenCalledWith({
       action: 'calendar.questionnaire.submitted',
       userId: 'user_1',
-      metadata: { weekStart: serverWeek, instrumentVersion: 1, wasNew: true },
+      metadata: {
+        weekStart: serverWeek,
+        instrumentVersion: CURRENT_CALENDAR_INSTRUMENT_VERSION,
+        wasNew: true,
+      },
     });
 
     expect(revalidatePathMock).toHaveBeenCalledWith('/calendrier');

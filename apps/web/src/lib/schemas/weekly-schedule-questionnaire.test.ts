@@ -56,6 +56,19 @@ describe('weeklyScheduleResponsesSchema', () => {
     expect(parsed.constraint).toBe('none');
   });
 
+  it('accepts the v2 « work » constraint (F8)', () => {
+    const parsed = weeklyScheduleResponsesSchema.parse({ ...validResponses(), constraint: 'work' });
+    expect(parsed.constraint).toBe('work');
+  });
+
+  it('rejects an unknown constraint value (closed enum)', () => {
+    const res = weeklyScheduleResponsesSchema.safeParse({
+      ...validResponses(),
+      constraint: 'holiday',
+    });
+    expect(res.success).toBe(false);
+  });
+
   it('rejects an unknown profile value', () => {
     const input = { ...validResponses(), profile: 'pro_trader' };
     expect(weeklyScheduleResponsesSchema.safeParse(input).success).toBe(false);

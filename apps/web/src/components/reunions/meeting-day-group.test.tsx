@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { groupMeetingsByDay, MeetingDayGroup } from './meeting-day-group';
+import { civilDayKey, groupMeetingsByDay, MeetingDayGroup } from './meeting-day-group';
 import type { MemberMeetingView } from '@/lib/meeting/service';
 
 // The card renders MeetingDeclareForm, which imports the 'use server' action
@@ -108,6 +108,38 @@ describe('MeetingDayGroup', () => {
     // date. 10:00Z = 12h Paris (CEST): the slot time now derives from the
     // instant + member tz (F2), no longer from a hardcoded slot→"12h" map.
     expect(screen.getByText('Réunion 12h')).toBeInTheDocument();
+  });
+});
+
+describe('civilDayKey', () => {
+  it('resolves the civil day in the member timezone (same instant, different days)', () => {
+    // 2026-06-30T22:30Z = 1 July 00:30 Paris (CEST) but 30 June 18:30 New York (EDT).
+    expect(civilDayKey('2026-06-30T22:30:00.000Z', 'Europe/Paris')).toBe('2026-07-01');
+    expect(civilDayKey('2026-06-30T22:30:00.000Z', 'America/New_York')).toBe('2026-06-30');
+  });
+});
+
+describe('MeetingDayGroup — today highlight (F4)', () => {
+  it('renders the « Aujourd’hui » pill and enriches the section label when isToday', () => {
+    render(
+      <MeetingDayGroup
+        day={{ date: '2026-06-30', meetings: [makeMeeting({ id: 'm', slot: 'midday' })] }}
+        timezone="Europe/Paris"
+        isToday
+      />,
+    );
+    expect(screen.getByText('Aujourd’hui')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /aujourd’hui/i })).toBeInTheDocument();
+  });
+
+  it('stays plain (no pill) for any other day — the default', () => {
+    render(
+      <MeetingDayGroup
+        day={{ date: '2026-06-30', meetings: [makeMeeting({ id: 'm', slot: 'midday' })] }}
+        timezone="Europe/Paris"
+      />,
+    );
+    expect(screen.queryByText('Aujourd’hui')).not.toBeInTheDocument();
   });
 });
 

@@ -95,7 +95,7 @@ export function MonthlyDebriefEmail({
             <Text style={aiBannerText}>
               Cette synthèse est générée par une intelligence artificielle (
               {claudeModel === 'claude-code-local'
-                ? 'Claude · subscription locale'
+                ? 'Claude · abonnement local'
                 : `Claude ${claudeModel}`}
               , Anthropic). Elle ne remplace ni un coaching humain, ni un avis médical, ni un
               conseil en investissement personnalisé.

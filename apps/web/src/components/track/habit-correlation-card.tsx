@@ -180,9 +180,9 @@ export function HabitCorrelationCard({ result, discipline }: HabitCorrelationCar
           <p className="t-eyebrow text-[var(--cy)]">{kindLabel} × respect du plan</p>
           {discipline.status === 'insufficient_data' ? (
             <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
-              Pas encore assez de trades notés « plan respecté » sur des jours {kindNoun} loggués (
-              {discipline.n}/{discipline.minRequired}) pour un lien fiable. Chaque trade clôturé
-              avec son auto-évaluation rapproche la carte.
+              Pas encore assez de trades notés « plan respecté » sur des jours {kindNoun}{' '}
+              enregistrés ({discipline.n}/{discipline.minRequired}) pour un lien fiable. Chaque
+              trade clôturé avec son auto-évaluation rapproche la carte.
             </p>
           ) : (
             <>

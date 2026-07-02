@@ -74,7 +74,7 @@ export function NextSteps({
                   href={action.href}
                   className={cn(
                     'rounded-card group flex items-center gap-3 border border-[var(--b-default)] bg-[var(--bg-2)] p-3 transition-all duration-200',
-                    'hover:-translate-y-px hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)]',
+                    'hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] motion-safe:hover:-translate-y-px',
                   )}
                 >
                   <span

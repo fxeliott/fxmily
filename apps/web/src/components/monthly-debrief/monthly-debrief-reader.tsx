@@ -24,7 +24,7 @@ import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 /** Anti-drift AI model label (mirror `weekly-digest.tsx`). */
 function modelDisplay(claudeModel: string): string {
   return claudeModel === 'claude-code-local'
-    ? 'Claude · subscription locale'
+    ? 'Claude · abonnement local'
     : `Claude ${claudeModel}`;
 }
 

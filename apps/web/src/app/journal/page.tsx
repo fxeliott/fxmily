@@ -142,7 +142,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
                 prefetch={false}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'rounded-pill inline-flex h-9 items-center gap-1.5 border px-3 text-[12px] font-medium transition-[color,border-color,transform] hover:-translate-y-px active:translate-y-0 active:scale-[0.98]',
+                  'rounded-pill inline-flex h-9 items-center gap-1.5 border px-3 text-[12px] font-medium transition-[color,border-color,transform] active:translate-y-0 active:scale-[0.98] motion-safe:hover:-translate-y-px',
                   active
                     ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]'
                     : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:text-[var(--t-1)]',
@@ -195,9 +195,9 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
               <EmptyState
                 icon={Target}
                 headline="Aucun trade ouvert."
-                lead="Les trades ouverts attendent leur clôture (prix sortie, outcome, capture)."
+                lead="Les trades ouverts attendent leur clôture (prix de sortie, résultat, lien TradingView)."
                 guides={[
-                  "Les ordres en cours doivent être loggués au moment de l'entrée.",
+                  "Les ordres en cours doivent être enregistrés au moment de l'entrée.",
                   'À la sortie, ouvre /journal/[id]/close pour finaliser le R réalisé.',
                   'Tu peux cumuler plusieurs trades ouverts simultanément.',
                 ]}
@@ -214,11 +214,11 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
               <EmptyState
                 icon={BookOpen}
                 headline="Aucun trade clôturé."
-                lead="Tes trades clôturés apparaîtront ici avec leur R réalisé et leur plan score."
+                lead="Tes trades clôturés apparaîtront ici avec leur R réalisé et leur respect du plan."
                 guides={[
-                  'Logge un trade ouvert en passant par /journal/new.',
+                  'Enregistre un trade ouvert en passant par /journal/new.',
                   'Au moment de la sortie, clôture-le avec le résultat.',
-                  'Le R réalisé est calculé automatiquement (computed) ou estimé (fallback).',
+                  'Le R réalisé est calculé automatiquement ou, à défaut, estimé.',
                 ]}
                 ctaPrimary={
                   <>

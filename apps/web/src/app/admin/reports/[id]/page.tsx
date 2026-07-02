@@ -174,7 +174,7 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
         variant="inline"
         modelName={
           report.claudeModel === 'claude-code-local'
-            ? 'Claude (subscription locale)'
+            ? 'Claude (abonnement local)'
             : `Claude ${report.claudeModel}`
         }
       />

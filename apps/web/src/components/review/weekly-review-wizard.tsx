@@ -349,7 +349,7 @@ export function WeeklyReviewWizard() {
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-4 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid
-                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px'
                 : // a11y B1 fix (WCAG 1.4.3) — `--t-2` instead of `--t-3`
                   // lifts contrast above 4.5:1 on the `--bg-2` disabled CTA.
                   // The label remains operationally informative ("Enregistrer
@@ -368,7 +368,7 @@ export function WeeklyReviewWizard() {
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-5 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid && !isPending
-                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px'
                 : // a11y B1 fix (WCAG 1.4.3) — `--t-2` instead of `--t-3`
                   // lifts contrast above 4.5:1 on the `--bg-2` disabled CTA.
                   // The label remains operationally informative ("Enregistrer

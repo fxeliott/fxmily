@@ -21,7 +21,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  *   - 400 empty body
  *   - 400 invalid JSON
  *   - 400 validation_failed (empty results array — schema min(1))
- *   - 400 validation_failed (malformed entry — output too short)
+ *   - 400 validation_failed (corrupt SKELETON — entry without userId)
+ *   - 200 pass-through on malformed entry CONTENT (per-entry Gate 0 in the
+ *     service counts it as `errors`, the lot is NOT 400-rejected — 2026-07-02
+ *     incident fix : one 801-char summary must not starve the other 9 members)
  *   - 413 Content-Length declared too large (cheap header reject)
  *   - 413 UTF-8 byte length > 16 MiB (emoji amplification, spoofed Content-Length)
  *   - 400 body_read_failed + reportWarning when req.text() rejects
@@ -182,24 +185,58 @@ describe('POST /api/admin/onboarding-batch/persist — body validation', () => {
     expect(persistMock).not.toHaveBeenCalled();
   });
 
-  it('returns 400 validation_failed on malformed entry (output too short, no highlights/axes)', async () => {
-    const malformed = JSON.stringify({
+  it('returns 400 validation_failed when an entry skeleton is corrupt (missing userId)', async () => {
+    // The envelope schema only checks per-entry ADDRESSING (userId +
+    // interviewId). A wire bug that drops the addressing must still 400 —
+    // the service could not even attribute the failure to a member.
+    const corruptSkeleton = JSON.stringify({
       results: [
         {
-          userId: 'cuid_test_member_a',
           interviewId: 'cuid_test_interview_a',
-          output: { summary: 'trop court' },
+          output: VALID_OUTPUT,
         },
       ],
     });
     const res = await POST(
-      makeRequest({ token: TEST_TOKEN, ip: '10.82.0.6', body: malformed }) as never,
+      makeRequest({ token: TEST_TOKEN, ip: '10.82.0.6', body: corruptSkeleton }) as never,
     );
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe('validation_failed');
     expect(typeof body.issuesCount).toBe('number');
     expect(persistMock).not.toHaveBeenCalled();
+  });
+
+  it('passes malformed entry CONTENT through to the service (200, no lot-wide 400)', async () => {
+    // 2026-07-02 prod incident fix : entry content (output/error shape) is
+    // validated PER-ENTRY by Gate 0 inside persistGeneratedProfiles, never
+    // at the route — one bad AI output must not 400-reject the 9 good ones.
+    persistMock.mockResolvedValueOnce({ persisted: 1, skipped: 0, errors: 1 });
+    const mixedLot = JSON.stringify({
+      results: [
+        {
+          userId: 'cuid_test_member_a',
+          interviewId: 'cuid_test_interview_a',
+          output: { summary: 'trop court' }, // invalid content, valid skeleton
+        },
+        {
+          userId: 'cuid_test_member_b',
+          interviewId: 'cuid_test_interview_b',
+          output: VALID_OUTPUT,
+        },
+      ],
+    });
+    const res = await POST(
+      makeRequest({ token: TEST_TOKEN, ip: '10.82.0.12', body: mixedLot }) as never,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ ok: true, persisted: 1, skipped: 0, errors: 1, total: 2 });
+    expect(persistMock).toHaveBeenCalledTimes(1);
+    // The service receives BOTH entries — the invalid one included, so its
+    // Gate 0 can count + audit it per-member.
+    const passed = persistMock.mock.calls[0]?.[0] as { results: readonly unknown[] };
+    expect(passed.results).toHaveLength(2);
   });
 
   it('returns 413 when declared Content-Length exceeds MAX_BODY_BYTES', async () => {

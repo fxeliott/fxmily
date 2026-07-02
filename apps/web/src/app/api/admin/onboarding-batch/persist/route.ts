@@ -4,7 +4,6 @@ import { requireAdminToken } from '@/lib/auth/admin-token';
 import {
   persistGeneratedProfiles,
   type BatchPersistRequest,
-  type BatchResultEntry,
 } from '@/lib/onboarding-interview/batch';
 import { reportError, reportWarning } from '@/lib/observability';
 import { batchPersistRequestSchema } from '@/lib/schemas/onboarding-interview';
@@ -20,9 +19,13 @@ import { batchPersistRequestSchema } from '@/lib/schemas/onboarding-interview';
  * Rate limit : `adminBatchLimiter` (shared with pull — burst 10, refill 1/5min).
  *
  * Body : `BatchPersistRequest` JSON validated via `batchPersistRequestSchema`
- * (Zod strict) — discriminated union per result (output|error). Hard cap
- * `MAX_BODY_BYTES = 16 MiB` (per Content-Length + Buffer.byteLength UTF-8
- * double check, V1.7.2 H4 fix).
+ * — ENVELOPE ONLY (array bounds + per-entry addressing skeleton). Entry
+ * CONTENT is validated per-entry inside `persistGeneratedProfiles` (Gate 0,
+ * strict `batchResultEntrySchema` union) so one invalid AI output skips that
+ * entry instead of 400-rejecting the whole lot (2026-07-02 prod incident :
+ * a single 801-char summary starved 10 members and looped the scheduled
+ * worker). Hard cap `MAX_BODY_BYTES = 16 MiB` (per Content-Length +
+ * Buffer.byteLength UTF-8 double check, V1.7.2 H4 fix).
  *
  * Validation : 4 layers fail-fast before passing to `persistGeneratedProfiles` :
  *   1. Admin token (rate-limit + auth)
@@ -31,9 +34,9 @@ import { batchPersistRequestSchema } from '@/lib/schemas/onboarding-interview';
  *   4. Zod `batchPersistRequestSchema.safeParse` (10 issues max truncated 100 chars
  *      — anti reflect attacker-controlled bodies in error response)
  *
- * After validation, `persistGeneratedProfiles` runs the 6 fail-fast gates
- * (active user / interview owner / Zod re-parse / crisis / safety / upsert)
- * and returns `{persisted, skipped, errors}` for the client.
+ * After validation, `persistGeneratedProfiles` runs the 7 fail-fast gates
+ * (entry union / active user / interview owner / Zod re-parse / crisis /
+ * safety / upsert) and returns `{persisted, skipped, errors}` for the client.
  */
 
 export const runtime = 'nodejs';
@@ -134,12 +137,10 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  // Layer 5 — Persist via the service (6 internal fail-fast gates).
-  // Convert Zod-validated input to BatchResultEntry shape (TypeScript union
-  // narrowed via `'error' in entry` in the loop). The shapes are byte-
-  // identical (no `kind` discriminator on wire, see schema rationale).
+  // Layer 5 — Persist via the service (7 internal fail-fast gates, starting
+  // with the strict per-entry union re-parse — see Gate 0 in batch.ts).
   const request: BatchPersistRequest = {
-    results: parsed.data.results as readonly BatchResultEntry[],
+    results: parsed.data.results,
   };
 
   try {

@@ -6,6 +6,7 @@ import { reportError, reportWarning } from '@/lib/observability';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
 import { CLAUDE_LOCAL_SENTINEL, KNOWN_CLAUDE_MODEL_SLUGS } from '@/lib/ai/claude-response';
 import {
+  batchResultEntrySchema,
   memberProfileOutputSchema,
   type MemberProfileOutput,
   type OnboardingInterviewSnapshot,
@@ -142,12 +143,16 @@ export type BatchResultEntry =
       readonly userId: string;
       readonly interviewId: string;
       readonly output: MemberProfileOutput;
-      readonly usage?: {
-        readonly inputTokens: number;
-        readonly outputTokens: number;
-        readonly cacheReadTokens?: number;
-      };
-      readonly model?: string;
+      // `| undefined` matches what Zod `.optional()` actually infers under
+      // exactOptionalPropertyTypes — Gate 0 assigns `entryParsed.data` here.
+      readonly usage?:
+        | {
+            readonly inputTokens: number;
+            readonly outputTokens: number;
+            readonly cacheReadTokens?: number | undefined;
+          }
+        | undefined;
+      readonly model?: string | undefined;
     }
   | {
       readonly userId: string;
@@ -155,8 +160,22 @@ export type BatchResultEntry =
       readonly error: string;
     };
 
+/**
+ * Wire-level entry as accepted by the persist ROUTE : the addressing IDs are
+ * schema-guaranteed, everything else (output/error/usage/model) is untrusted
+ * until Gate 0 re-parses the entry against the strict
+ * `batchResultEntrySchema` union. Rationale (2026-07-02 prod incident) :
+ * validating entry CONTENT at the envelope made the route all-or-nothing —
+ * one 801-char summary 400-rejected a lot of 10 profiles and the scheduled
+ * worker re-paid every `claude --print` each tick.
+ */
+export type BatchPersistWireEntry = {
+  readonly userId: string;
+  readonly interviewId: string;
+} & Record<string, unknown>;
+
 export interface BatchPersistRequest {
-  readonly results: readonly BatchResultEntry[];
+  readonly results: readonly BatchPersistWireEntry[];
 }
 
 export interface BatchPersistResult {
@@ -482,7 +501,28 @@ export async function persistGeneratedProfiles(
   let skipped = 0;
   let errors = 0;
 
-  for (const entry of request.results) {
+  for (const rawEntry of request.results) {
+    // Gate 0 — strict per-entry union re-parse. This validation used to live
+    // at the route envelope; moved here (2026-07-02) so ONE invalid AI output
+    // only skips THAT entry instead of 400-rejecting the whole lot. Same
+    // audit slug as Gate 3 — both mean "this entry's content failed Zod".
+    const entryParsed = batchResultEntrySchema.safeParse(rawEntry);
+    if (!entryParsed.success) {
+      errors += 1;
+      await logAudit({
+        action: 'onboarding.batch.invalid_output',
+        userId: rawEntry.userId,
+        metadata: {
+          ranAt,
+          interviewId: rawEntry.interviewId,
+          issuesCount: entryParsed.error.issues.length,
+          gate: 'entry_union',
+        },
+      });
+      continue;
+    }
+    const entry: BatchResultEntry = entryParsed.data;
+
     if ('error' in entry) {
       skipped += 1;
       await logAudit({

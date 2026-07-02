@@ -337,6 +337,68 @@ describe('persistVisionResults — gates', () => {
   });
 });
 
+describe('persistVisionResults — Gate 0 entry union (per-entry persist, 2026-07-02)', () => {
+  // Mirror of the onboarding per-entry fix: entry CONTENT is no longer
+  // validated at the route envelope, so ONE malformed AI output must only
+  // error ITS entry — never sink the valid siblings of the same batch.
+  const PROOF2 = 'clxproof00002';
+
+  it('one malformed entry only errors ITS entry — the valid sibling persists', async () => {
+    seedHappyMocks();
+    m.proofFindMany.mockResolvedValue([
+      {
+        id: PROOF,
+        memberId: MEMBER,
+        ocrStatus: 'pending',
+        brokerAccountId: null,
+        accountType: null,
+      },
+      {
+        id: PROOF2,
+        memberId: MEMBER,
+        ocrStatus: 'pending',
+        brokerAccountId: null,
+        accountType: null,
+      },
+    ]);
+
+    const malformed = { ...probeOutput(), confidence: 42 } as unknown as VerificationVisionOutput;
+    const r = await persistVisionResults({
+      results: [
+        { proofId: PROOF, userId: MEMBER, output: probeOutput() },
+        { proofId: PROOF2, userId: MEMBER, output: malformed },
+      ],
+    });
+
+    expect(r).toEqual({ persisted: 1, skipped: 0, errors: 1 });
+    const invalidCall = m.logAudit.mock.calls.find(
+      (c) => c[0]?.action === 'verification.batch.invalid_output',
+    );
+    expect(invalidCall?.[0]?.metadata).toMatchObject({ proofId: PROOF2, gate: 'entry_union' });
+  });
+
+  it('an entry with neither output nor error fails the union — nothing written for it', async () => {
+    m.userFindMany.mockResolvedValue([{ id: MEMBER }]);
+    m.proofFindMany.mockResolvedValue([
+      {
+        id: PROOF,
+        memberId: MEMBER,
+        ocrStatus: 'pending',
+        brokerAccountId: null,
+        accountType: null,
+      },
+    ]);
+
+    const r = await persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER }],
+    });
+
+    expect(r).toEqual({ persisted: 0, skipped: 0, errors: 1 });
+    expect(m.positionCreateMany).not.toHaveBeenCalled();
+    expect(m.proofUpdate).not.toHaveBeenCalled();
+  });
+});
+
 describe('persistVisionResults — materialisation', () => {
   it('creates a detectedByAI account, maps buy/sell→long/short, refreshes detectedAccountCount', async () => {
     seedHappyMocks();

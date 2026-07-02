@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { getCalendarForUser, getQuestionnaireForUser } from '@/lib/calendar/service';
 import { currentParisWeekStart } from '@/lib/calendar/week';
 import { getCheckinStatus } from '@/lib/checkin/service';
@@ -114,8 +116,17 @@ function capitalizeFirst(s: string): string {
  * Build one member's daily guidance. `timezone` defaults to the V1 cohort TZ;
  * `now` is injectable for deterministic tests (carbone the calendar/checkin
  * services). All reads run in parallel; every one is count/status/time-only.
+ *
+ * Exported through React `cache()` (carbone getMethodMirror): the dashboard
+ * page and its sections may each ask for the guidance during ONE server render
+ * — per-request memoisation collapses the duplicate `(userId)` calls into a
+ * single fan-out of queries. Defaults resolve INSIDE the memoised function, so
+ * argument-less production calls share one cache key; tests injecting `now`
+ * bypass the dedup (distinct Date identity), which is the correct behaviour.
  */
-export async function getDailyGuidance(
+export const getDailyGuidance = cache(buildDailyGuidance);
+
+async function buildDailyGuidance(
   userId: string,
   timezone: string = 'Europe/Paris',
   now: Date = new Date(),

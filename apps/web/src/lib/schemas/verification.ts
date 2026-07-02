@@ -148,33 +148,53 @@ export const verificationVisionOutputSchema = z
 
 export type VerificationVisionOutput = z.infer<typeof verificationVisionOutputSchema>;
 
+const proofIdWireSchema = z.string().regex(/^[a-z0-9]{8,40}$/);
+const wireUserIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+
 /**
- * Wire schema for `POST /api/admin/verification-batch/persist` (mirror of
- * the onboarding `batchPersistRequestSchema` union rationale: success and
- * error entries share the routing keys, no `kind` discriminator on wire).
+ * Strict per-entry union — re-parsed PER-ENTRY by `persistVisionResults`
+ * (Gate 0), NOT by the route envelope. Mirror of the onboarding
+ * `batchResultEntrySchema` fix (2026-07-02 prod incident): validating entry
+ * CONTENT at the envelope made persist all-or-nothing — ONE hallucinated key
+ * in ONE vision output 400-rejected the whole lot and the scheduled worker
+ * re-paid every `claude --print` at the next tick.
+ */
+export const verificationBatchResultEntrySchema = z.union([
+  z
+    .object({
+      proofId: proofIdWireSchema,
+      userId: wireUserIdSchema,
+      output: verificationVisionOutputSchema,
+      model: z.string().max(64).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      proofId: proofIdWireSchema,
+      userId: wireUserIdSchema,
+      error: z.string().min(1).max(200),
+    })
+    .strict(),
+]);
+
+/** Addressing skeleton (envelope-validated) — entry content passes through
+ *  untrusted until Gate 0. Carbone onboarding `batchEntrySkeletonSchema`. */
+const verificationBatchEntrySkeletonSchema = z
+  .object({
+    proofId: proofIdWireSchema,
+    userId: wireUserIdSchema,
+  })
+  .passthrough();
+
+/**
+ * Wire schema for `POST /api/admin/verification-batch/persist`. The route
+ * validates the ENVELOPE only (array bounds + per-entry addressing skeleton);
+ * entry content is validated per-entry by `persistVisionResults` against
+ * `verificationBatchResultEntrySchema` (defense-in-depth — never trust the
+ * laptop, but never reject the whole lot for one bad AI output either).
  */
 export const verificationBatchPersistRequestSchema = z
   .object({
-    results: z
-      .array(
-        z.union([
-          z
-            .object({
-              proofId: z.string().regex(/^[a-z0-9]{8,40}$/),
-              userId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
-              output: verificationVisionOutputSchema,
-              model: z.string().max(64).optional(),
-            })
-            .strict(),
-          z
-            .object({
-              proofId: z.string().regex(/^[a-z0-9]{8,40}$/),
-              userId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
-              error: z.string().min(1).max(200),
-            })
-            .strict(),
-        ]),
-      )
-      .max(1000),
+    results: z.array(verificationBatchEntrySkeletonSchema).max(1000),
   })
   .strict();

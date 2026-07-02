@@ -313,6 +313,10 @@ export type AuditAction =
   //   - crisis_detected : `{userId, level, matchedLabels}` (mirror V1.7.1)
   //   - amf_violation   : `{userId, matchedLabels}` (post-gen regex filter)
   //   - evidence_invalid: `{userId, invalidIndexes}` (substring NFC failure)
+  //   - gate_locked_backoff : `{ranAt, lockedCount}` (2026-07-02 quota-burn
+  //     fix — members with ≥GATE_LOCK_MAX_FAILURES gate rejections in the
+  //     rolling window are excluded from the pull instead of re-burning one
+  //     `claude --print` per tick on content the gates keep rejecting)
   // NEVER log `answerText`, Claude raw output (summary/highlights/axes),
   // pseudonymLabel.
   | 'member_profile.analyzed'
@@ -325,6 +329,7 @@ export type AuditAction =
   | 'onboarding.batch.crisis_detected'
   | 'onboarding.batch.amf_violation'
   | 'onboarding.batch.evidence_invalid'
+  | 'onboarding.batch.gate_locked_backoff'
   // §26 — Calendrier adaptatif (J-C1 pre-declared, wired J-C2/J-C3/J-C4).
   // Mirror the V1.7 weekly-report batch canonical lifecycle. PII-FREE metadata
   // expected (posture §2 — NEVER log responses, schedule, pseudonymLabel) :

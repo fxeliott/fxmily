@@ -559,6 +559,9 @@ model AuditLog {
 
   @@index([userId, createdAt])
   @@index([action, createdAt])
+  // Retention purge (ops cron) deletes on `createdAt` ALONE — without this
+  // index every purge is a full-table seq-scan on the busiest table.
+  @@index([createdAt])
   @@map("audit_logs")
 }
 

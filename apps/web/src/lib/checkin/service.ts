@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { Prisma } from '@/generated/prisma/client';
 import type { CheckinSlot } from '@/generated/prisma/enums';
 import type { DailyCheckinModel } from '@/generated/prisma/models/DailyCheckin';
@@ -492,17 +494,27 @@ export async function countCheckins(userId: string): Promise<number> {
   return db.dailyCheckin.count({ where: { userId } });
 }
 
-export async function getStreak(
-  userId: string,
-  timezone: string,
-  now: Date = new Date(),
-): Promise<CheckinStreakSummary> {
-  const today = todayFor(timezone, now);
-  const days = await listRecentCheckinDays(userId, today, 60);
-  const current = computeStreak(days, today);
-  const todayFilled = days.some((d) => d.date === today && d.slots.length > 0);
-  return { current, todayFilled, today };
-}
+/**
+ * React `cache()` (carbone getMethodMirror): the dashboard render asks for the
+ * streak from more than one section — per-request memoisation collapses the
+ * duplicate `(userId, timezone)` calls into one query chain. Callers that
+ * inject an explicit `now` (tests) key on that Date's identity and simply
+ * bypass the dedup; the default is resolved INSIDE the memoised function, so
+ * argument-less production calls share one cache key.
+ */
+export const getStreak = cache(
+  async (
+    userId: string,
+    timezone: string,
+    now: Date = new Date(),
+  ): Promise<CheckinStreakSummary> => {
+    const today = todayFor(timezone, now);
+    const days = await listRecentCheckinDays(userId, today, 60);
+    const current = computeStreak(days, today);
+    const todayFilled = days.some((d) => d.date === today && d.slots.length > 0);
+    return { current, todayFilled, today };
+  },
+);
 
 /**
  * Year "régularité" heatmap (S11) — daily check-in activity over the last 53

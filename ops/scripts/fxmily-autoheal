@@ -27,8 +27,9 @@
 # A blind restart-every-minute loop would mask a container that is broken for a
 # real reason. So we apply a COOLDOWN: after a restart we wait COOLDOWN_SECS
 # before acting again. If a container is STILL unhealthy after the cooldown, we
-# emit a loud ESCALATION line (picked up by log monitoring / the dead-man-switch)
-# instead of thrashing — "self-heal tried, human needed".
+# fire the FAIL signal of the alert URL ("self-heal tried, human needed") —
+# healthchecks.io then notifies the operator on the transition. A successful
+# restart pings the base (OK) URL so the check also works as a dead-man switch.
 
 set -euo pipefail
 
@@ -75,12 +76,27 @@ flock -n 9 || exit 0
 
 # Fire the optional alert / dead-man-switch URL. Best-effort: a failed ping must
 # never abort the watchdog (that would defeat self-healing). No-op when
-# AUTOHEAL_ALERT_URL is unset. Fired on restart AND on escalation / hard failure
-# (audit RES-2) so a CHRONIC unhealthy container reaches a human, not just a log.
+# AUTOHEAL_ALERT_URL is unset.
+#
+# SIGNAL-AWARE (2026-07-02 fix, semantic-inversion bug): before this fix every
+# outcome — successful restart, escalation, restart failure — sent the SAME
+# bare GET to the base URL. On healthchecks.io a bare GET is a SUCCESS signal,
+# so the "human needed" escalation actively RESET the dead-man timer and
+# suppressed the very alarm it was supposed to raise. Now:
+#   alert_ping        → base URL        (healthchecks.io OK signal)
+#   alert_ping fail   → <base>/fail     (healthchecks.io FAILURE signal →
+#                        immediate operator notification on the transition)
+# A non-healthchecks receiver can point AUTOHEAL_ALERT_FAIL_URL somewhere else;
+# it defaults to <AUTOHEAL_ALERT_URL>/fail.
 alert_ping() {
+  local kind="${1:-ok}"
   [[ -n "$ALERT_URL" ]] || return 0
-  curl -fsS -m 10 --retry 3 "$ALERT_URL" >/dev/null 2>&1 ||
-    log "WARN alert ping to AUTOHEAL_ALERT_URL failed"
+  local url="$ALERT_URL"
+  if [[ "$kind" == "fail" ]]; then
+    url="${AUTOHEAL_ALERT_FAIL_URL:-${ALERT_URL%/}/fail}"
+  fi
+  curl -fsS -m 10 --retry 3 "$url" >/dev/null 2>&1 ||
+    log "WARN alert ping (${kind}) failed"
 }
 
 container_health() {
@@ -108,7 +124,7 @@ for c in "${CONTAINERS[@]}"; do
       if (( age < COOLDOWN_SECS )); then
         # Already restarted recently and STILL unhealthy → escalate, don't thrash.
         log "ESCALATION ${c} still unhealthy ${age}s after the last restart (cooldown ${COOLDOWN_SECS}s) — manual intervention likely needed"
-        alert_ping
+        alert_ping fail
         continue
       fi
 
@@ -119,7 +135,7 @@ for c in "${CONTAINERS[@]}"; do
         alert_ping
       else
         log "FAIL ${c} restart command failed — manual intervention required"
-        alert_ping
+        alert_ping fail
       fi
       ;;
     *)

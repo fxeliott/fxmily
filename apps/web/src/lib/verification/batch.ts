@@ -8,6 +8,7 @@ import { detectAMFViolation } from '@/lib/safety/amf-detection';
 import { CLAUDE_LOCAL_SENTINEL, KNOWN_CLAUDE_MODEL_SLUGS } from '@/lib/ai/claude-response';
 import { safeFreeText } from '@/lib/text/safe';
 import {
+  verificationBatchResultEntrySchema,
   verificationVisionOutputSchema,
   type VerificationVisionOutput,
 } from '@/lib/schemas/verification';
@@ -96,7 +97,9 @@ export type VerificationBatchResultEntry =
       readonly proofId: string;
       readonly userId: string;
       readonly output: VerificationVisionOutput;
-      readonly model?: string;
+      // `| undefined` matches what Zod `.optional()` actually infers under
+      // exactOptionalPropertyTypes — Gate 0 assigns `entryParsed.data` here.
+      readonly model?: string | undefined;
     }
   | {
       readonly proofId: string;
@@ -104,8 +107,21 @@ export type VerificationBatchResultEntry =
       readonly error: string;
     };
 
+/**
+ * Wire-level entry as accepted by the persist ROUTE : the addressing IDs are
+ * schema-guaranteed, everything else (output/error/model) is untrusted until
+ * Gate 0 re-parses the entry against the strict
+ * `verificationBatchResultEntrySchema` union. Mirror of the onboarding
+ * per-entry fix (2026-07-02): validating entry CONTENT at the envelope made
+ * persist all-or-nothing.
+ */
+export type VerificationBatchPersistWireEntry = {
+  readonly proofId: string;
+  readonly userId: string;
+} & Record<string, unknown>;
+
 export interface VerificationBatchPersistRequest {
-  readonly results: readonly VerificationBatchResultEntry[];
+  readonly results: readonly VerificationBatchPersistWireEntry[];
 }
 
 export interface VerificationBatchPersistResult {
@@ -248,7 +264,28 @@ export async function persistVisionResults(
   // scans when a member uploads several proofs in the same batch.
   const touchedMemberIds = new Set<string>();
 
-  for (const entry of request.results) {
+  for (const rawEntry of request.results) {
+    // Gate 0 — strict per-entry union re-parse. This validation used to live
+    // at the route envelope; moved here (2026-07-02, mirror onboarding) so
+    // ONE invalid AI output only skips THAT entry instead of 400-rejecting
+    // the whole lot. Same audit slug as Gate 4 — both mean "this entry's
+    // content failed Zod".
+    const entryParsed = verificationBatchResultEntrySchema.safeParse(rawEntry);
+    if (!entryParsed.success) {
+      errors += 1;
+      await logAudit({
+        action: 'verification.batch.invalid_output',
+        userId: rawEntry.userId,
+        metadata: {
+          ranAt,
+          proofId: rawEntry.proofId,
+          issuesCount: entryParsed.error.issues.length,
+          gate: 'entry_union',
+        },
+      });
+      continue;
+    }
+    const entry: VerificationBatchResultEntry = entryParsed.data;
     const proof = proofById.get(entry.proofId);
 
     // Gate 1 — active user (forged userId defense).

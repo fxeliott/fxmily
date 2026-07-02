@@ -4,7 +4,6 @@ import { requireVerificationAdminToken } from '@/lib/auth/admin-token';
 import {
   persistVisionResults,
   type VerificationBatchPersistRequest,
-  type VerificationBatchResultEntry,
 } from '@/lib/verification/batch';
 import { reportError, reportWarning } from '@/lib/observability';
 import { verificationBatchPersistRequestSchema } from '@/lib/schemas/verification';
@@ -13,10 +12,13 @@ import { verificationBatchPersistRequestSchema } from '@/lib/schemas/verificatio
  * S3 §33.4 — Verification vision batch PERSIST endpoint.
  *
  * EXACT carbon of `app/api/admin/onboarding-batch/persist/route.ts`
- * (4 fail-fast layers: token → body size cap → JSON parse → Zod strict),
- * then `persistVisionResults` runs the internal gates (active user → proof
- * ownership → idempotency → Zod re-parse → crisis → AMF → model pin →
- * account resolve + positions insert).
+ * (4 fail-fast layers: token → body size cap → JSON parse → Zod ENVELOPE
+ * only — array bounds + per-entry addressing skeleton), then
+ * `persistVisionResults` runs the internal gates (entry union re-parse →
+ * active user → proof ownership → idempotency → Zod re-parse → crisis →
+ * AMF → model pin → account resolve + positions insert). Entry CONTENT is
+ * deliberately NOT validated here (2026-07-02, mirror onboarding): one
+ * invalid AI output must only skip ITS entry, never 400-reject the lot.
  */
 
 export const runtime = 'nodejs';
@@ -104,7 +106,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const request: VerificationBatchPersistRequest = {
-    results: parsed.data.results as readonly VerificationBatchResultEntry[],
+    results: parsed.data.results,
   };
 
   try {

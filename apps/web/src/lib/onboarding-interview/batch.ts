@@ -191,6 +191,31 @@ export interface BatchPersistResult {
 const SNAPSHOT_BATCH_CONCURRENCY = 5;
 
 /**
+ * Gate-locked backoff (2026-07-02). Runtime-proven loop: 3 members whose
+ * regenerated profile keeps being rejected by the persist gates (AMF ×2 in a
+ * row for one member, evidence_invalid for the others) were re-pulled and
+ * re-generated EVERY 20-min tick — ~72 wasted `claude --print` calls per
+ * member per day with a near-certain re-reject (the AMF trigger is
+ * deterministic on the member's answers). A member with
+ * `GATE_LOCK_MAX_FAILURES` gate rejections inside the sliding
+ * `GATE_LOCK_WINDOW_HOURS` window is excluded from the pull; the window
+ * slides, so they automatically get `GATE_LOCK_MAX_FAILURES` fresh attempts
+ * per day (regeneration variance CAN converge — proven: one evidence_invalid
+ * member persisted on retry). Human review is NOT reduced: every gate skip
+ * already audits + Sentry-warns, and the admin can fix the root cause
+ * (answers content) then simply wait for the window to slide.
+ * The lookup hits the existing `@@index([action, createdAt])`.
+ */
+export const GATE_LOCK_ACTIONS = [
+  'onboarding.batch.invalid_output',
+  'onboarding.batch.crisis_detected',
+  'onboarding.batch.amf_violation',
+  'onboarding.batch.evidence_invalid',
+] as const;
+export const GATE_LOCK_WINDOW_HOURS = 24;
+export const GATE_LOCK_MAX_FAILURES = 3;
+
+/**
  * Load every completed onboarding interview that has NOT yet been analyzed
  * (no MemberProfile row exists). Used by
  * `app/api/admin/onboarding-batch/pull/route.ts` (CHECKPOINT 6 future).
@@ -201,6 +226,7 @@ const SNAPSHOT_BATCH_CONCURRENCY = 5;
  *   - User `status === 'active'` (skip suspended/deleted)
  *   - No existing `MemberProfile` row for this interview (idempotency —
  *     if Eliott re-runs the batch, only un-analyzed interviews are picked)
+ *   - Not gate-locked (see `GATE_LOCK_ACTIONS` backoff above)
  *
  * Performance : `SNAPSHOT_BATCH_CONCURRENCY`-by-5 Promise.allSettled
  * carbone V1.7. At 30 completed interviews ~1.8s expected. At 1000 ~60s.
@@ -276,10 +302,62 @@ export async function loadAllSnapshotsForCompletedInterviews(
     };
   }
 
+  // Step 2-bis — Gate-locked backoff: drop members whose recent generations
+  // keep being gate-rejected (see GATE_LOCK_ACTIONS rationale above).
+  const gateFailures = await db.auditLog.groupBy({
+    by: ['userId'],
+    where: {
+      action: { in: [...GATE_LOCK_ACTIONS] },
+      createdAt: { gte: new Date(now.getTime() - GATE_LOCK_WINDOW_HOURS * 60 * 60 * 1000) },
+      userId: { in: toProcess.map((i) => i.userId) },
+    },
+    _count: { _all: true },
+  });
+  const lockedUserIds = new Set(
+    gateFailures
+      .filter((g) => g.userId !== null && g._count._all >= GATE_LOCK_MAX_FAILURES)
+      .map((g) => g.userId as string),
+  );
+  const eligible = toProcess.filter((i) => !lockedUserIds.has(i.userId));
+
+  if (lockedUserIds.size > 0) {
+    // PII-free observability: count only, per-member detail already lives in
+    // the per-gate audit rows that triggered the lock.
+    await logAudit({
+      action: 'onboarding.batch.gate_locked_backoff',
+      metadata: {
+        ranAt,
+        lockedCount: lockedUserIds.size,
+        windowHours: GATE_LOCK_WINDOW_HOURS,
+        maxFailures: GATE_LOCK_MAX_FAILURES,
+      },
+    });
+  }
+
+  if (eligible.length === 0) {
+    await logAudit({
+      action: 'onboarding.batch.pulled',
+      metadata: {
+        ranAt,
+        entriesCount: 0,
+        instrumentVersion,
+        reason: 'all_pending_gate_locked',
+        lockedCount: lockedUserIds.size,
+      },
+    });
+    return {
+      ranAt,
+      instrumentVersion,
+      systemPrompt: buildOnboardingInterviewSystemPrompt(),
+      outputJsonSchema: MEMBER_PROFILE_OUTPUT_JSON_SCHEMA,
+      entries: [],
+    };
+  }
+
   // Step 3 — Build snapshots in concurrent batches of 5 (pool-friendly).
   const entries: BatchSnapshotEntry[] = [];
-  for (let i = 0; i < toProcess.length; i += SNAPSHOT_BATCH_CONCURRENCY) {
-    const chunk = toProcess.slice(i, i + SNAPSHOT_BATCH_CONCURRENCY);
+  for (let i = 0; i < eligible.length; i += SNAPSHOT_BATCH_CONCURRENCY) {
+    const chunk = eligible.slice(i, i + SNAPSHOT_BATCH_CONCURRENCY);
     const results = await Promise.allSettled(
       chunk.map((interview) => buildSnapshotForInterview(interview, CURRENT_ONBOARDING_INSTRUMENT)),
     );
@@ -322,6 +400,7 @@ export async function loadAllSnapshotsForCompletedInterviews(
       instrumentVersion,
       totalCompleted: interviews.length,
       alreadyAnalyzed: analyzedSet.size,
+      gateLocked: lockedUserIds.size,
     },
   });
 

@@ -30,6 +30,11 @@ const answerFindManyMock = vi.fn();
 const profileFindManyMock = vi.fn();
 const profileUpsertMock = vi.fn();
 const auditLogCreateMock = vi.fn();
+const auditLogGroupByMock = vi.fn();
+// Default: no recent gate failures → nobody is backoff-locked. Set ONCE at
+// module level: vi.clearAllMocks() (afterEach) clears calls but KEEPS this
+// implementation, so every pull test starts unlocked unless it overrides.
+auditLogGroupByMock.mockResolvedValue([]);
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -44,7 +49,7 @@ vi.mock('@/lib/db', () => ({
       findMany: profileFindManyMock,
       upsert: profileUpsertMock,
     },
-    auditLog: { create: auditLogCreateMock },
+    auditLog: { create: auditLogCreateMock, groupBy: auditLogGroupByMock },
   },
 }));
 
@@ -74,6 +79,8 @@ const {
   persistGeneratedProfiles,
   canonicalizeBatchErrorCategory,
   loadAllSnapshotsForCompletedInterviews,
+  GATE_LOCK_ACTIONS,
+  GATE_LOCK_MAX_FAILURES,
 } = await import('./batch');
 
 import type { BatchPersistRequest, BatchResultEntry } from './batch';
@@ -770,6 +777,99 @@ describe('loadAllSnapshotsForCompletedInterviews — TASK G rejected-promise obs
       (c) => c[1] === 'snapshot_build_rejected_review_needed',
     );
     expect(warnCall).toBeUndefined();
+  });
+});
+
+describe('loadAllSnapshotsForCompletedInterviews — gate-locked backoff', () => {
+  const version = CURRENT_ONBOARDING_INSTRUMENT.version;
+
+  function interviewRow(id: string, userId: string) {
+    return {
+      id,
+      userId,
+      instrumentVersion: version,
+      startedAt: new Date('2026-05-28T10:00:00Z'),
+      completedAt: new Date('2026-05-28T10:30:00Z'),
+    };
+  }
+
+  it('excludes a member with >= GATE_LOCK_MAX_FAILURES recent gate rejections (quota-loop killer)', async () => {
+    interviewFindManyMock.mockResolvedValueOnce([
+      interviewRow('iv_locked', 'user_locked'),
+      interviewRow('iv_free', 'user_free'),
+    ]);
+    profileFindManyMock.mockResolvedValueOnce([]);
+    auditLogGroupByMock.mockResolvedValueOnce([
+      { userId: 'user_locked', _count: { _all: GATE_LOCK_MAX_FAILURES } },
+    ]);
+    // Snapshot build for the ONE eligible interview.
+    answerFindManyMock.mockResolvedValueOnce([
+      {
+        questionIndex: 0,
+        questionKey: 'parcours_origin',
+        questionText: 'Question',
+        answerText: "J'ai démarré le trading en 2022 avec un compte démo.",
+      },
+    ]);
+
+    const envelope = await loadAllSnapshotsForCompletedInterviews();
+
+    expect(envelope.entries).toHaveLength(1);
+    expect(envelope.entries[0]?.userId).toBe('user_free');
+
+    // The lock event is audited (count only, PII-free).
+    const lockAudit = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.gate_locked_backoff',
+    );
+    expect(lockAudit).toBeDefined();
+    expect(lockAudit?.[0].metadata).toMatchObject({ lockedCount: 1 });
+
+    // The groupBy only scans the gate slugs inside the sliding window.
+    const groupByArg = auditLogGroupByMock.mock.calls[0]?.[0];
+    expect(groupByArg.where.action.in).toEqual([...GATE_LOCK_ACTIONS]);
+  });
+
+  it('keeps a member BELOW the failure threshold (variance can still converge)', async () => {
+    interviewFindManyMock.mockResolvedValueOnce([interviewRow('iv_retry', 'user_retry')]);
+    profileFindManyMock.mockResolvedValueOnce([]);
+    auditLogGroupByMock.mockResolvedValueOnce([
+      { userId: 'user_retry', _count: { _all: GATE_LOCK_MAX_FAILURES - 1 } },
+    ]);
+    answerFindManyMock.mockResolvedValueOnce([
+      {
+        questionIndex: 0,
+        questionKey: 'parcours_origin',
+        questionText: 'Question',
+        answerText: "J'ai démarré le trading en 2022 avec un compte démo.",
+      },
+    ]);
+
+    const envelope = await loadAllSnapshotsForCompletedInterviews();
+
+    expect(envelope.entries).toHaveLength(1);
+    expect(envelope.entries[0]?.userId).toBe('user_retry');
+    const lockAudit = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.gate_locked_backoff',
+    );
+    expect(lockAudit).toBeUndefined();
+  });
+
+  it('returns an empty envelope + dedicated audit when EVERY pending member is locked', async () => {
+    interviewFindManyMock.mockResolvedValueOnce([interviewRow('iv_only', 'user_only')]);
+    profileFindManyMock.mockResolvedValueOnce([]);
+    auditLogGroupByMock.mockResolvedValueOnce([
+      { userId: 'user_only', _count: { _all: GATE_LOCK_MAX_FAILURES + 2 } },
+    ]);
+
+    const envelope = await loadAllSnapshotsForCompletedInterviews();
+
+    expect(envelope.entries).toHaveLength(0);
+    const pulledAudit = logAuditMock.mock.calls.find(
+      (c) =>
+        c[0].action === 'onboarding.batch.pulled' &&
+        c[0].metadata.reason === 'all_pending_gate_locked',
+    );
+    expect(pulledAudit).toBeDefined();
   });
 });
 

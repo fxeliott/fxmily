@@ -20,6 +20,8 @@
  * soi (mindset Mark Douglas), routine.
  */
 
+import { z } from 'zod';
+
 import type { TrackingAxis } from '@/generated/prisma/enums';
 
 export type TrackingAxisId = TrackingAxis;
@@ -112,3 +114,14 @@ export function getAxisMeta(id: TrackingAxisId): TrackingAxisMeta | undefined {
 export function getAxisLabel(id: TrackingAxisId): string {
   return AXIS_META[id]?.label ?? id;
 }
+
+/**
+ * Zod enum over the 11 canonical axis ids — the SINGLE validation source shared
+ * by the trade + training correction schemas (J-AI corrections echo). Derived
+ * from `TRACKING_AXIS_IDS` so it stays in lock-step with the Prisma enum: adding
+ * an axis to the Prisma `TrackingAxis` enum makes `axes.ts` gain its label (the
+ * `satisfies` assertion above) AND this validator automatically, with zero drift.
+ */
+export const trackingAxisSchema = z.enum(
+  TRACKING_AXIS_IDS as [TrackingAxisId, ...TrackingAxisId[]],
+);

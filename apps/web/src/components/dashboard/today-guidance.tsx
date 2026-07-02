@@ -5,6 +5,7 @@ import {
   CalendarRange,
   Check,
   ClipboardList,
+  MessageSquare,
   Moon,
   RotateCcw,
   Sun,
@@ -63,6 +64,7 @@ const KIND_ICON: Record<GuidanceKind, LucideIcon> = {
   questionnaire: CalendarRange,
   douglas: BookOpen,
   tracking: ClipboardList,
+  'correction-echo': MessageSquare,
 };
 
 function ActionRow({ action }: { action: GuidanceAction }) {

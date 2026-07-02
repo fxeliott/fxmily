@@ -59,6 +59,9 @@ import { countAlertsInRange } from '@/lib/verification/alerts';
 import { countOpenDiscrepancies } from '@/lib/verification/service';
 
 import { WEEKLY_CONTEXT_MAX } from '@/lib/schemas/monthly-debrief';
+// J-AI corrections echo — the axis FR label prefixes each coach correction so the
+// debrief can theme them. Pure data module (no DB/edge), §2-safe (process axes).
+import { getAxisLabel } from '@/lib/tracking/axes';
 // TASK C — filter the profile axes/labels on the REAL sanitization the builder
 // applies (`safeFreeText`), not a bare `.trim()`: a 100% zero-width/bidi
 // (U+200B/U+200E/U+200F) axis survives `.trim()` but `safeFreeText` strips it to
@@ -204,6 +207,7 @@ export async function loadMonthlySliceForUser(
     checkins,
     deliveries,
     annotations,
+    coachCorrections,
     latestScore,
     scoreHistory,
     trainingActivity,
@@ -220,6 +224,11 @@ export async function loadMonthlySliceForUser(
     loadCheckins(userId, window),
     loadDeliveries(userId, window),
     loadAnnotationStats(userId, window),
+    // J-AI corrections echo — the coach's TAGGED corrections on this member's REAL
+    // trades, pre-formatted `« Axe » : commentaire` for the debrief corpus. REAL
+    // side only (training corrections are §21.5-isolated — the monthly loader may
+    // read only `countRecentTrainingActivity`, never a `TrainingAnnotation`).
+    loadCoachCorrections(userId, window),
     getLatestBehavioralScore(userId),
     // DoD#3 / §29 "progression MESURABLE" — la série ASCENDANTE des scores
     // comportementaux sur ~75 jours (≈2 mois + marge) pour ancrer le récit de
@@ -380,6 +389,9 @@ export async function loadMonthlySliceForUser(
     deliveries,
     annotationsReceived: annotations.received,
     annotationsViewed: annotations.viewed,
+    // J-AI corrections echo — the coach's TAGGED corrections on REAL trades,
+    // pre-formatted `« Axe » : commentaire` (REAL side only, §21.5-clean).
+    coachCorrections,
     latestScore: latestScore === null ? null : toScoreSnapshot(latestScore),
     // DoD#3 / §29 — série brute + ancre d'entrée de mois ; le builder pur en
     // calcule la baseline N-1 et le delta (clock-free, fixture-replayable).
@@ -572,6 +584,48 @@ async function loadAnnotationStats(
   });
   const viewed = rows.filter((r) => r.seenByMemberAt !== null).length;
   return { received: rows.length, viewed };
+}
+
+/// J-AI corrections echo — cap + per-item truncation for the coach-corrections
+/// corpus. ≤20 corrections (newest-first) keeps the prompt bounded; each comment
+/// is clamped so a long paste can't balloon the payload (the axis-label prefix is
+/// short and always kept). Mirrors the WEEKLY_CONTEXT_MAX belt-and-suspenders cap.
+const COACH_CORRECTIONS_MAX = 20;
+const COACH_CORRECTION_COMMENT_MAX_CHARS = 350;
+
+/**
+ * J-AI corrections echo — load the coach's TAGGED corrections on THIS member's
+ * REAL trades over the civil month, pre-formatted `« Axe » : commentaire` for the
+ * debrief corpus. Only corrections the admin tagged with a `TrackingAxis` are
+ * loaded (`axis: { not: null }`) — an untagged correction carries no machine
+ * theme. Newest-first, capped ≤20, each comment truncated so the payload stays
+ * bounded; the builder relays verbatim + re-hardens.
+ *
+ * 🚨 §21.5 — REAL side ONLY. This reads `db.tradeAnnotation` (real-edge coaching,
+ * legitimate — the §25 firewall is training-isolation, real annotations are the
+ * product, mirror `loadAnnotationStats`). Training corrections (`TrainingAnnotation`)
+ * are §21.5-isolated and are DELIBERATELY not read here: the monthly loader may
+ * touch training exclusively through `countRecentTrainingActivity` (anti-leak
+ * Block A). So a backtest correction never leaks into the real-trading debrief.
+ */
+async function loadCoachCorrections(userId: string, window: MonthWindow): Promise<string[]> {
+  const rows = await db.tradeAnnotation.findMany({
+    where: {
+      createdAt: { gte: window.monthStartUtc, lte: window.monthEndUtc },
+      axis: { not: null },
+      trade: { userId },
+    },
+    select: { axis: true, comment: true },
+    orderBy: { createdAt: 'desc' },
+    take: COACH_CORRECTIONS_MAX,
+  });
+  return rows.map((r) => {
+    // `axis: { not: null }` guarantees a value at runtime; the select type stays
+    // `TrackingAxis | null`, so getAxisLabel receives the narrowed value.
+    const label = getAxisLabel(r.axis!);
+    const comment = r.comment.trim().slice(0, COACH_CORRECTION_COMMENT_MAX_CHARS);
+    return `« ${label} » : ${comment}`;
+  });
 }
 
 async function loadWeeklySummaries(userId: string, window: MonthWindow): Promise<string[]> {

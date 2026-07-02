@@ -8,6 +8,7 @@ import {
   CalendarRange,
   Check,
   ClipboardList,
+  MessageSquareText,
   Minus,
   Moon,
   RotateCcw,
@@ -65,6 +66,7 @@ const KIND_ICON: Record<GuidanceKind, LucideIcon> = {
   questionnaire: CalendarRange,
   douglas: BookOpen,
   tracking: ClipboardList,
+  'correction-echo': MessageSquareText,
 };
 
 type Trend = 'up' | 'flat' | 'down';

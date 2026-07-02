@@ -96,6 +96,7 @@ describe('J-E — buildMonthlyReprofileUserPrompt', () => {
           coachingRegister: 'pedagogique',
           learningStage: 'mechanical',
         },
+        coachCorrections: [],
       },
       processSignals: {
         reflectionCount: 2,
@@ -123,6 +124,29 @@ describe('J-E — buildMonthlyReprofileUserPrompt', () => {
     expect(prompt).toContain('SENTINEL_PREV_NARRATIVE');
     // The reference block precedes the citable reflections block.
     expect(prompt.indexOf('NE PAS citer')).toBeLessThan(prompt.indexOf('SOURCE CITABLE'));
+  });
+
+  it('renders coach corrections INSIDE the NON-citable reference block (J-AI corrections echo)', () => {
+    const prompt = buildMonthlyReprofileUserPrompt(
+      snap({
+        baseline: {
+          coachingRegister: null,
+          learningStage: null,
+          onboardingSummary: null,
+          previousMonth: null,
+          coachCorrections: ['« Exécution » : SENTINEL_CORRECTION_TEXT'],
+        },
+      }),
+    );
+    expect(prompt).toContain('Corrections du coach ce mois');
+    expect(prompt).toContain('SENTINEL_CORRECTION_TEXT');
+    // The correction sits in the "NE PAS citer" reference block, BEFORE the citable corpus.
+    expect(prompt.indexOf('SENTINEL_CORRECTION_TEXT')).toBeLessThan(
+      prompt.indexOf('SOURCE CITABLE'),
+    );
+    expect(prompt.indexOf('NE PAS citer')).toBeLessThan(prompt.indexOf('SENTINEL_CORRECTION_TEXT'));
+    // Admin free-text is wrapped untrusted (defense-in-depth).
+    expect(prompt).toContain('member_reflection_untrusted');
   });
 
   it('handles a silent month (no reflections) without fabricating', () => {

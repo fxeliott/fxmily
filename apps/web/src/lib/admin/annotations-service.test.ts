@@ -79,6 +79,7 @@ describe('createAnnotation', () => {
       comment: 'Bon process, peu importe l’issue.',
       mediaKey: null,
       mediaType: null,
+      axis: null,
     });
     expect(result.id).toBe('an-1');
     expect(result.isUnseenByMember).toBe(true);

@@ -21,6 +21,7 @@ import {
 import { TRAINING_ANNOTATION_COMMENT_MAX } from '@/lib/schemas/training-annotation';
 import { TRAINING_UI_COPY } from '@/lib/training/training-ui-copy';
 import { ALLOWED_IMAGE_MIME_TYPES, MAX_SCREENSHOT_BYTES } from '@/lib/storage/types';
+import { TRACKING_AXES } from '@/lib/tracking/axes';
 
 /**
  * Admin "corriger ce backtest" CTA + Sheet (J-T3 — carbon mirror of
@@ -157,6 +158,31 @@ export function AnnotateTrainingTradeButton({
                 {state.fieldErrors.comment}
               </p>
             ) : null}
+          </div>
+
+          {/* Coaching axis (optional) — J-AI corrections echo. Native select
+              styled to match the comment field (no shadcn Select in this DS);
+              submits through FormData. Empty option = untagged (null server-side). */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={`${formId}-axis`} className="t-eyebrow">
+              Axe de coaching (optionnel)
+            </label>
+            <select
+              id={`${formId}-axis`}
+              name="axis"
+              defaultValue=""
+              className="rounded-card border border-[var(--b-default)] bg-[var(--bg)] px-3 py-2.5 font-sans text-[14px] leading-relaxed text-[var(--t-1)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+            >
+              <option value="">Aucun axe</option>
+              {TRACKING_AXES.map((axis) => (
+                <option key={axis.id} value={axis.id}>
+                  {axis.label}
+                </option>
+              ))}
+            </select>
+            <span className="t-cap text-[var(--t-4)]">
+              Relie cette correction à un axe de suivi pour l&apos;écho au membre.
+            </span>
           </div>
 
           <div className="flex flex-col gap-1.5">

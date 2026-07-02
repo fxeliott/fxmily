@@ -28,6 +28,7 @@ function annotation(
     comment: 'Entrée 2 bougies trop tôt — attends la confirmation.',
     mediaKey: null,
     mediaType: null,
+    axis: null,
     seenByMemberAt: null,
     createdAt: '2026-06-10T09:00:00.000Z',
     updatedAt: '2026-06-10T09:00:00.000Z',

@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { memberProfileMonthlySnapshotOutputSchema } from '@/lib/schemas/member-profile-monthly-snapshot';
-import { buildReprofileSnapshot } from '@/lib/member-profile-monthly/snapshot';
+import {
+  buildReprofileSnapshot,
+  concatReflectionCorpus,
+} from '@/lib/member-profile-monthly/snapshot';
 
 /**
  * J-E (§2 / §21.5 / §27.7) — BLOCKING isolation suite for the ADMIN-ONLY monthly
@@ -211,6 +214,97 @@ describe('J-E isolation — weakSignals admin-only + closed output', () => {
         memberProfileMonthlySnapshotOutputSchema.safeParse({ ...valid, ...injected }).success,
         `output schema must reject ${JSON.stringify(injected)}`,
       ).toBe(false);
+    }
+  });
+});
+
+describe('J-AI corrections echo — coach corrections are REFERENCE, never citable', () => {
+  // A tagged coach correction is REFERENCE context (like the onboarding baseline
+  // / previous-month narrative) — an ADMIN free-text, NOT a member reflection. The
+  // evidence gate validates every re-profiled evidence[] against the reflection
+  // corpus ONLY, so a correction MUST stay out of `concatReflectionCorpus`, else
+  // an admin note could be laundered into a "citable" evidence. This pins the
+  // invariant at runtime for the whole pipeline.
+  const SENTINEL_CORRECTION = 'SENTINEL_COACH_CORRECTION_zzq';
+  const SENTINEL_REFLECTION = 'SENTINEL_MEMBER_REFLECTION_zzq';
+
+  const snap = buildReprofileSnapshot({
+    pseudonymLabel: 'member-BBBB2222',
+    timezone: 'Europe/Paris',
+    monthStartLocal: '2026-06-01',
+    monthEndLocal: '2026-06-30',
+    accountAgeDaysInWindow: 30,
+    checkins: [
+      {
+        localDate: '2026-06-02',
+        intention: SENTINEL_REFLECTION,
+        journalNote: null,
+        gratitudeItems: [],
+        emotionTags: [],
+      },
+    ],
+    trades: [],
+    baselineProfile: null,
+    previousMonthSnapshot: null,
+    coachCorrections: [`« Exécution » : ${SENTINEL_CORRECTION}`],
+  });
+
+  it('a coach correction lands in the baseline (reference), never in the reflections corpus', () => {
+    // It is carried as reference context…
+    expect(JSON.stringify(snap.baseline.coachCorrections)).toContain(SENTINEL_CORRECTION);
+    // …but the citable corpus is member reflections ONLY.
+    const corpus = concatReflectionCorpus(snap);
+    expect(corpus).toContain(SENTINEL_REFLECTION);
+    expect(corpus).not.toContain(SENTINEL_CORRECTION);
+    // Not a single reflection entry carries the correction text either.
+    for (const r of snap.reflections) {
+      expect(r.text).not.toContain(SENTINEL_CORRECTION);
+    }
+  });
+
+  it('the corpus is byte-identical whether or not coach corrections are present', () => {
+    // The persist-time corpus re-derivation omits `coachCorrections` entirely, so
+    // the evidence gate MUST see the same corpus as the pull. Prove adding
+    // corrections never perturbs `concatReflectionCorpus` (no drift → no false
+    // evidence_invalid reject).
+    const withoutCorrections = buildReprofileSnapshot({
+      pseudonymLabel: 'member-BBBB2222',
+      timezone: 'Europe/Paris',
+      monthStartLocal: '2026-06-01',
+      monthEndLocal: '2026-06-30',
+      accountAgeDaysInWindow: 30,
+      checkins: [
+        {
+          localDate: '2026-06-02',
+          intention: SENTINEL_REFLECTION,
+          journalNote: null,
+          gratitudeItems: [],
+          emotionTags: [],
+        },
+      ],
+      trades: [],
+      baselineProfile: null,
+      previousMonthSnapshot: null,
+    });
+    expect(concatReflectionCorpus(snap)).toBe(concatReflectionCorpus(withoutCorrections));
+  });
+});
+
+describe('J-AI corrections echo — the loader never reads a private AdminNote', () => {
+  // AdminNote is a member-invisible admin-only model (same privacy class the
+  // schema flags). The re-profiling loader reads the member's OWN reflections +
+  // (as reference) the coach's tagged corrections on REAL trades — it must NEVER
+  // touch `db.adminNote` / `AdminNote`, which would launder a private admin note
+  // into the member re-profiling payload. Static firewall over the loader source.
+  it('lib/member-profile-monthly/loader.ts references no AdminNote surface', () => {
+    const abs = fileURLToPath(
+      new URL('../../lib/member-profile-monthly/loader.ts', import.meta.url),
+    );
+    const code = readFileSync(abs, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    for (const forbidden of ['AdminNote', 'adminNote', 'db.adminNote']) {
+      expect(code, `loader must not reference "${forbidden}"`).not.toContain(forbidden);
     }
   });
 });

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
+import type { TrackingAxis } from '@/generated/prisma/enums';
 import { getMentalMap } from './service';
 import type { MentalAxis, MentalMapEntry } from './mental-map';
 
@@ -40,10 +41,15 @@ export interface MicroObjectiveView {
   readonly closedAt: Date | null;
 }
 
-/** Graine d'un micro-objectif — dérivée d'une entrée de carte mentale (pur). */
+/**
+ * Graine d'un micro-objectif — dérivée d'une entrée de carte mentale OU d'une
+ * correction admin taggée d'un axe (J-AI corrections echo). `sourceKind` trace
+ * l'origine : `alert`/`signal` = moteur de coaching (carte mentale), `annotation`
+ * = une correction admin porteuse d'un `TrackingAxis`. Jamais une FK (firewall §21.5).
+ */
 export interface MicroObjectiveSeed {
   readonly axis: MentalAxis;
-  readonly sourceKind: 'alert' | 'signal';
+  readonly sourceKind: 'alert' | 'signal' | 'annotation';
   readonly sourceRef: string;
   readonly title: string;
   readonly intention: string;
@@ -55,6 +61,46 @@ const MICRO_OBJECTIVE_TITLES: Record<MentalAxis, string> = {
   honesty: 'Rester honnête avec toi-même',
   ego: 'Regarder les faits en face, sans te juger',
   consistency: 'Faire de la régularité ton edge silencieux',
+};
+
+/**
+ * J-AI corrections echo — projette un `TrackingAxis` (11 axes méthodo,
+ * `lib/tracking/axes.ts`) sur le `MentalAxis` (4 axes Mark Douglas) qui porte le
+ * micro-objectif. Les axes de PROCESS/discipline (exécution, risque, prépa,
+ * sommeil, routine) tirent vers `discipline` ; le bilan honnête tire vers
+ * `honesty` ; le travail sur soi et les émotions/confiance vers `ego`
+ * (acceptation de l'incertitude, détachement) ; l'assiduité et la régularité
+ * (entraînement, formation, réunions) vers `consistency`. Table exhaustive
+ * (`satisfies Record<TrackingAxis, …>`) → un nouvel axe Prisma casse la compilation
+ * tant qu'il n'a pas sa projection ici (zéro axe orphelin).
+ */
+const AXIS_TO_MENTAL: Record<TrackingAxis, MentalAxis> = {
+  execution: 'discipline',
+  risk_discipline: 'discipline',
+  market_analysis: 'discipline',
+  routine: 'discipline',
+  sleep_lifestyle: 'discipline',
+  evening_review: 'honesty',
+  self_work: 'ego',
+  emotions_confidence: 'ego',
+  training: 'consistency',
+  formation: 'consistency',
+  meeting_presence: 'consistency',
+} satisfies Record<TrackingAxis, MentalAxis>;
+
+/**
+ * Intention curée (déterministe, anti-marché déjà testé) par axe mental — jouée
+ * quand la graine vient d'une correction admin (pas d'entrée de carte mentale
+ * dont réutiliser l'`action`). Un seul pas doux, ancré discipline/mental.
+ */
+const ANNOTATION_INTENTIONS: Record<MentalAxis, string> = {
+  discipline:
+    'Ton coach a relevé ce point dans une correction. Aujourd’hui, tiens ton process sur cet aspect, un pas à la fois.',
+  honesty:
+    'Ton coach a relevé ce point dans une correction. Aujourd’hui, regarde tes faits en face, sans te juger.',
+  ego: 'Ton coach a relevé ce point dans une correction. Aujourd’hui, accueille l’inconfort sans le fuir, avec détachement.',
+  consistency:
+    'Ton coach a relevé ce point dans une correction. Aujourd’hui, mise sur la régularité plutôt que sur le résultat.',
 };
 
 export class MicroObjectiveNotFoundError extends Error {
@@ -146,6 +192,59 @@ export async function ensureMicroObjectiveForMember(
     // Course perdue : un autre passage a semé la boucle entre notre `findFirst` et
     // notre `create` (l'index partiel l'a rejetée). On relit l'ouvert gagnant — la
     // boucle existe bien, on n'en a juste pas été l'auteur.
+    if (isUniqueConstraintError(err)) {
+      const winner = await db.mentalMicroObjective.findFirst({
+        where: { memberId, status: 'open' },
+        select: { id: true },
+      });
+      return { created: false, objectiveId: winner?.id ?? null };
+    }
+    throw err;
+  }
+}
+
+/**
+ * J-AI corrections echo — sème un micro-objectif à partir d'une correction admin
+ * porteuse d'un `TrackingAxis`. L'admin qui tague une correction d'un axe engage
+ * le membre sur ce point Mark Douglas au prochain passage.
+ *
+ * 🛡️ MÊME INVARIANT « ≤1 ouvert » que `ensureMicroObjectiveForMember` : idempotent,
+ * si une boucle est déjà ouverte on ne touche à rien (le membre la referme d'abord).
+ * L'index partiel `mental_micro_objectives_one_open_per_member` est le vrai garant
+ * (P2002 → no-op ici) : deux corrections rapprochées ne peuvent pas semer deux boucles.
+ * `sourceKind='annotation'`, `sourceRef` = l'id de l'annotation (trace, jamais une FK
+ * — firewall §21.5). La copie (`title`/`intention`) est CURÉE + déterministe → jamais
+ * d'analyse de marché, jamais d'`AIGeneratedBanner`.
+ */
+export async function ensureMicroObjectiveFromAnnotation(
+  memberId: string,
+  axis: TrackingAxis,
+  annotationId: string,
+): Promise<EnsureMicroObjectiveResult> {
+  const existing = await db.mentalMicroObjective.findFirst({
+    where: { memberId, status: 'open' },
+    select: { id: true },
+  });
+  if (existing) return { created: false, objectiveId: existing.id };
+
+  const mentalAxis = AXIS_TO_MENTAL[axis];
+  try {
+    const row = await db.mentalMicroObjective.create({
+      data: {
+        memberId,
+        axis: mentalAxis,
+        sourceKind: 'annotation',
+        sourceRef: annotationId,
+        title: MICRO_OBJECTIVE_TITLES[mentalAxis],
+        intention: ANNOTATION_INTENTIONS[mentalAxis],
+      },
+      select: { id: true },
+    });
+    return { created: true, objectiveId: row.id };
+  } catch (err) {
+    // Course perdue : une autre correction/passage a semé la boucle entre notre
+    // `findFirst` et notre `create` (l'index partiel l'a rejetée). No-op : on
+    // relit l'ouvert gagnant — la boucle existe, on n'en est juste pas l'auteur.
     if (isUniqueConstraintError(err)) {
       const winner = await db.mentalMicroObjective.findFirst({
         where: { memberId, status: 'open' },

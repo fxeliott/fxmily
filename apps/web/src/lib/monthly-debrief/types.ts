@@ -150,6 +150,17 @@ export interface MonthlyBuilderInput {
    * section (no fabricated axes, §33.6).
    */
   memberProfile: MemberProfileReference | null;
+  /**
+   * J-AI corrections echo — the coach's corrections on the member's REAL trades
+   * over the civil month, pre-formatted by the loader as `« Axe » : commentaire`
+   * (only corrections the admin TAGGED with a `TrackingAxis` — the label prefixes
+   * the comment so the debrief can theme them). REAL side only: training
+   * corrections are §21.5-isolated and never enter this pipeline. Newest-first,
+   * loader-capped ≤20 + truncated; the builder relays verbatim (belt-and-suspenders
+   * re-harden at the snapshot boundary). Empty array when no tagged correction.
+   * The comment is ADMIN free-text → wrapped untrusted at the prompt boundary.
+   */
+  coachCorrections: string[];
   // ----- (B) TRAINING section — §21.5 firewall: effort/recency only -----
   training: TrainingEffortInput;
   // ----- (C) VERIFICATION & CONSTANCY — Session 3 (DOD3-01 / DoD#2 S6) -----

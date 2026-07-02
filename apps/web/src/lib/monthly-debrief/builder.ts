@@ -95,6 +95,11 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
     morningIntentions: collectMorningIntentions(input),
     // TASK E — per-category "fiche utile" breakdown (count-only, posture §2).
     helpfulByCategory: collectHelpfulByCategory(input),
+    // J-AI corrections echo — the coach's TAGGED corrections on REAL trades
+    // (`« Axe » : commentaire`, pre-formatted + capped by the loader). ADMIN
+    // free-text → wrapped untrusted at the prompt boundary; re-hardened here
+    // belt-and-suspenders (mirror buildWeeklySummaries). REAL side only (§21.5).
+    coachCorrections: buildCoachCorrections(input),
     // S5 §32-C/D — synthèse de coaching psychologique. Le loader fournit le
     // contexte STRUCTURÉ (DB) ; ici (pur) on le rend en bloc Markdown via le
     // moteur (SSOT du format). Absent → slice omis (exactOptionalPropertyTypes).
@@ -292,6 +297,22 @@ function buildWeeklySummaries(input: MonthlyBuilderInput): string[] {
   // defense-in-depth even though weekly persist already sanitised them
   // (mirror builder journalExcerpts belt-and-suspenders).
   return input.weeklySummaries.slice(0, WEEKLY_CONTEXT_MAX).map((s) => {
+    const trimmed = s.trim();
+    const truncated =
+      trimmed.length > WEEKLY_CONTEXT_ITEM_MAX_CHARS
+        ? trimmed.slice(0, WEEKLY_CONTEXT_ITEM_MAX_CHARS)
+        : trimmed;
+    return safeFreeText(truncated);
+  });
+}
+
+/// J-AI corrections echo — relay the loader's pre-formatted coach corrections
+/// (`« Axe » : commentaire`) verbatim, capped ≤20 + re-hardened defense-in-depth
+/// (the loader already truncated each comment; safeFreeText strips bidi/zero-width
+/// even though the schema also refines). Belt-and-suspenders twin of
+/// `buildWeeklySummaries`. REAL side only — training corrections never reach here.
+function buildCoachCorrections(input: MonthlyBuilderInput): string[] {
+  return input.coachCorrections.slice(0, 20).map((s) => {
     const trimmed = s.trim();
     const truncated =
       trimmed.length > WEEKLY_CONTEXT_ITEM_MAX_CHARS

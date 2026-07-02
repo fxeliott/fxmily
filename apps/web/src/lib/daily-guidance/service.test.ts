@@ -5,6 +5,7 @@ import { getCheckinStatus } from '@/lib/checkin/service';
 import { listScheduledMeetingsOn } from '@/lib/meeting/service';
 import { getMindsetCheck } from '@/lib/mindset/service';
 import { getDueTrackingInstruments } from '@/lib/tracking/service';
+import { getCorrectionThemes } from '@/lib/annotations/correction-themes';
 
 import { getDailyGuidance } from './service';
 
@@ -27,6 +28,7 @@ vi.mock('@/lib/checkin/service', () => ({ getCheckinStatus: vi.fn() }));
 vi.mock('@/lib/mindset/service', () => ({ getMindsetCheck: vi.fn() }));
 vi.mock('@/lib/meeting/service', () => ({ listScheduledMeetingsOn: vi.fn() }));
 vi.mock('@/lib/tracking/service', () => ({ getDueTrackingInstruments: vi.fn() }));
+vi.mock('@/lib/annotations/correction-themes', () => ({ getCorrectionThemes: vi.fn() }));
 
 const USER = 'user_1';
 const TZ = 'Europe/Paris';
@@ -62,7 +64,19 @@ beforeEach(() => {
   vi.mocked(getMindsetCheck).mockResolvedValue(null);
   vi.mocked(listScheduledMeetingsOn).mockResolvedValue([]);
   vi.mocked(getDueTrackingInstruments).mockResolvedValue([]);
+  vi.mocked(getCorrectionThemes).mockResolvedValue([]);
 });
+
+/** Minimal CorrectionTheme list — the service reads axis + count + lastSource. */
+function themes(...items: Array<{ axis: string; count: number; source?: 'trade' | 'training' }>) {
+  return items.map((it) => ({
+    axis: it.axis,
+    count: it.count,
+    lastComment: 'comment',
+    lastAt: new Date('2026-06-08T00:00:00Z'),
+    lastSource: it.source ?? 'trade',
+  })) as unknown as Awaited<ReturnType<typeof getCorrectionThemes>>;
+}
 
 /** Minimal DueTrackingInstrument list — the service reads only key + title. */
 function dueTracking(...pairs: Array<[key: string, title: string]>) {
@@ -329,5 +343,47 @@ describe('getDailyGuidance — S6 §32-2 (plan du jour consolidé : missed / tim
   it('no tracking action when nothing is due', async () => {
     const g = await getDailyGuidance(USER, TZ, MON_MORNING);
     expect(g.actions.some((a) => a.kind === 'tracking')).toBe(false);
+  });
+});
+
+describe('getDailyGuidance — J-AI corrections echo', () => {
+  it('emits a correction-echo action when a theme recurs at least twice', async () => {
+    vi.mocked(getCorrectionThemes).mockResolvedValue(themes({ axis: 'execution', count: 3 }));
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    const echo = g.actions.find((a) => a.kind === 'correction-echo');
+    expect(echo).toMatchObject({
+      key: 'correction-echo-execution',
+      state: 'info',
+      emphasis: 'secondary',
+      href: '/journal',
+    });
+    // The FR copy names the count and the axis label.
+    expect(echo?.detail).toContain('3 fois');
+    expect(echo?.detail).toContain('Exécution');
+  });
+
+  it('does NOT emit an echo when the top theme has a single correction', async () => {
+    vi.mocked(getCorrectionThemes).mockResolvedValue(themes({ axis: 'execution', count: 1 }));
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    expect(g.actions.some((a) => a.kind === 'correction-echo')).toBe(false);
+  });
+
+  it('does NOT emit an echo when there is no theme', async () => {
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    expect(g.actions.some((a) => a.kind === 'correction-echo')).toBe(false);
+  });
+
+  it('points the deep-link at /training when the latest correction is a backtest', async () => {
+    vi.mocked(getCorrectionThemes).mockResolvedValue(
+      themes({ axis: 'training', count: 2, source: 'training' }),
+    );
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    expect(g.actions.find((a) => a.kind === 'correction-echo')?.href).toBe('/training');
+  });
+
+  it('an info echo never carries a timing marker', async () => {
+    vi.mocked(getCorrectionThemes).mockResolvedValue(themes({ axis: 'execution', count: 2 }));
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    expect(g.actions.find((a) => a.kind === 'correction-echo')?.timing).toBeUndefined();
   });
 });

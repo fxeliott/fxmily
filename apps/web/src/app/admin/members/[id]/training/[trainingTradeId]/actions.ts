@@ -10,6 +10,7 @@ import {
   getTrainingAnnotationById,
 } from '@/lib/admin/training-annotation-service';
 import { logAudit } from '@/lib/auth/audit';
+import { ensureMicroObjectiveFromAnnotation } from '@/lib/coaching/micro-objective';
 import { db } from '@/lib/db';
 import { sendTrainingAnnotationReceivedEmail } from '@/lib/email/send';
 import { enqueueTrainingAnnotationNotification } from '@/lib/notifications/enqueue';
@@ -95,6 +96,7 @@ export async function createTrainingAnnotationAction(
     comment: formData.get('comment') ?? '',
     mediaKey: readNullableString(formData, 'mediaKey'),
     mediaType: readNullableString(formData, 'mediaType'),
+    axis: readNullableString(formData, 'axis'),
   };
 
   const parsed = trainingAnnotationCreateSchema.safeParse(raw);
@@ -109,6 +111,7 @@ export async function createTrainingAnnotationAction(
   const data = parsed.data;
   const mediaKey = data.mediaKey ?? null;
   const mediaType = data.mediaType ?? null;
+  const axis = data.axis ?? null;
 
   // BOLA defence: the media key must point at THIS backtest. Without it an
   // admin (or token leak) could attach an image uploaded under another
@@ -152,6 +155,7 @@ export async function createTrainingAnnotationAction(
       comment: data.comment,
       mediaKey,
       mediaType,
+      axis,
     });
     trainingAnnotationId = created.id;
   } catch (err) {
@@ -179,6 +183,16 @@ export async function createTrainingAnnotationAction(
     hasMedia: mediaKey !== null,
   });
 
+  // J-AI corrections echo — a backtest correction tagged with a coaching axis
+  // seeds a Mark Douglas micro-objective (idempotent, ≤1 open per member).
+  // §21.5-safe: the seeder relates ONLY to User (no FK to the training trade or
+  // any edge), exactly like the mental alerts. Best-effort, never rolls back.
+  if (axis !== null) {
+    await ensureMicroObjectiveFromAnnotation(memberId, axis, trainingAnnotationId).catch((err) => {
+      console.error('[admin.trainingAnnotation.create] micro-objective seed failed', err);
+    });
+  }
+
   // S7 DoD#3 parity with the real-trade flow: immediate best-effort email so a
   // member without a push subscription is still notified (the dispatcher
   // returns on `no_subscriptions` before its fallback). §21.5: training copy,
@@ -201,6 +215,7 @@ export async function createTrainingAnnotationAction(
       memberId,
       hasMedia: mediaKey !== null,
       mediaType,
+      axis,
     },
   });
 

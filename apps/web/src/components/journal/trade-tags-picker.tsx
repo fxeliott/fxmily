@@ -133,7 +133,7 @@ export function TradeTagsPicker({ value, onChange, disabled }: TradeTagsPickerPr
         </span>
       </legend>
       <p className="t-cap text-[var(--t-3)]">
-        Classifie le biais dominant (max 3). Cadre CFA LESSOR + Steenbarger — voir le descriptif au
+        Classifie le biais dominant (max 3). Cadre CFA LESSOR + Steenbarger, voir le descriptif au
         tap d&apos;une étiquette.
       </p>
 

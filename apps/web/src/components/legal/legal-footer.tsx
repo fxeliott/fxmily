@@ -37,7 +37,7 @@ export function LegalFooter(): React.ReactElement | null {
           <span aria-hidden="true">·</span>
           <span>© {year}</span>
           <span aria-hidden="true">·</span>
-          <span>Suivi comportemental — pas de conseil de trade.</span>
+          <span>Suivi comportemental, pas de conseil de trade.</span>
         </p>
         {/*
           Touch target ≥ 24×24 (WCAG 2.5.8 AA — J10 Phase G a11y B3).

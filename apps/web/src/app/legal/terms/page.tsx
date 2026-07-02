@@ -43,7 +43,7 @@ export default function TermsPage(): React.ReactElement {
         trading inspirées du framework Mark Douglas.
       </p>
 
-      <h2>2. Posture éducative — ce que Fxmily n&apos;est pas</h2>
+      <h2>2. Posture éducative · ce que Fxmily n&apos;est pas</h2>
       <p>
         <strong>Fxmily ne donne aucun conseil de trade.</strong> Aucun setup, aucune prévision de
         marché, aucun appel d&apos;achat ou de vente, aucune recommandation de paire. Les contenus
@@ -51,10 +51,10 @@ export default function TermsPage(): React.ReactElement {
       </p>
       <ul>
         <li>
-          l&apos;<strong>exécution</strong> — sessions, hedge, plan, sizing, discipline ;
+          l&apos;<strong>exécution</strong> : sessions, hedge, plan, sizing, discipline ;
         </li>
         <li>
-          la <strong>psychologie</strong> — acceptation du risque, probabilités, gestion de la peur,
+          la <strong>psychologie</strong> : acceptation du risque, probabilités, gestion de la peur,
           du tilt, de l&apos;ego (citations courtes attribuées + paraphrases originales).
         </li>
       </ul>
@@ -97,16 +97,16 @@ export default function TermsPage(): React.ReactElement {
       <p>
         Le code, le design DS v2, les paraphrases Mark Douglas et les marques Fxmily sont la
         propriété d&apos;Eliott Pena. Tes données personnelles (trades, check-ins, journal) restent
-        ta propriété — tu peux les exporter ou les effacer à tout moment depuis{' '}
+        ta propriété, tu peux les exporter ou les effacer à tout moment depuis{' '}
         <a href="/account/data">/account/data</a> et <a href="/account/delete">/account/delete</a>.
       </p>
 
       <h2>6. Disponibilité</h2>
       <p>
         Fxmily V1 tourne sur un serveur unique Hetzner CX22 (Falkenstein, UE). Aucune garantie de
-        disponibilité n&apos;est promise — un incident peut entraîner une indisponibilité
-        temporaire. Une maintenance planifiée est annoncée par email avec ≥ 24h de préavis quand
-        c&apos;est possible. Sauvegardes quotidiennes chiffrées (cf.{' '}
+        disponibilité n&apos;est promise. Un incident peut entraîner une indisponibilité temporaire.
+        Une maintenance planifiée est annoncée par email avec ≥ 24h de préavis quand c&apos;est
+        possible. Sauvegardes quotidiennes chiffrées (cf.{' '}
         <a href="/legal/privacy">politique de confidentialité §4</a>).
       </p>
 

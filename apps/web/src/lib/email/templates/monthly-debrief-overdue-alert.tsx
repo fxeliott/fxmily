@@ -45,7 +45,7 @@ export function MonthlyDebriefOverdueAlertEmail({
         <title>Débriefs mensuels en attente · Fxmily</title>
       </Head>
       <Preview>
-        {`${overdueCount} débrief${plural ? 's' : ''} mensuel${plural ? 's' : ''} en attente (${monthLabel}) — lance le batch`}
+        {`${overdueCount} débrief${plural ? 's' : ''} mensuel${plural ? 's' : ''} en attente (${monthLabel}), lance le batch`}
       </Preview>
       <Body style={body}>
         <Container style={container}>
@@ -71,7 +71,7 @@ export function MonthlyDebriefOverdueAlertEmail({
           </Text>
 
           <Section style={actionCard}>
-            <Text style={actionEyebrow}>À FAIRE — DEPUIS TON PC</Text>
+            <Text style={actionEyebrow}>À FAIRE · DEPUIS TON PC</Text>
             <Text style={actionStep}>
               <span style={dot}>·</span> Lance <span style={code}>/monthly-batch</span> (ou{' '}
               <span style={code}>ops/scripts/monthly-batch-local.sh</span>).
@@ -95,11 +95,11 @@ export function MonthlyDebriefOverdueAlertEmail({
           <Hr style={hr} />
 
           <Text style={footer}>
-            Rappel automatique de permanence — envoyé uniquement quand des débriefs mensuels sont en
+            Rappel automatique de permanence, envoyé uniquement quand des débriefs mensuels sont en
             attente passé le délai de courtoisie. Aucun débrief généré sur un serveur (le batch
             reste manuel, par sécurité du compte).
           </Text>
-          <Text style={footerSign}>— Fxmily ops</Text>
+          <Text style={footerSign}>Fxmily ops</Text>
         </Container>
 
         <Text style={legal}>Aucun conseil de marché. Cohorte privée. © 2026 Fxmily.</Text>

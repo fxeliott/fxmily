@@ -62,7 +62,7 @@ export function MemberWeeklyReportsPanel({ reports }: MemberWeeklyReportsPanelPr
       <Card primary className="p-4">
         <div className="flex flex-wrap items-center gap-2">
           <Pill tone="acc">RAPPORTS IA</Pill>
-          <span className="t-eyebrow">SPEC §7.10 — Claude en local (Max)</span>
+          <span className="t-eyebrow">SPEC §7.10 · Claude en local (Max)</span>
         </div>
         <p className="t-body mt-2 text-[var(--t-2)]">
           Synthèse comportementale hebdomadaire (Mark Douglas + exécution + scores). Aucun avis sur

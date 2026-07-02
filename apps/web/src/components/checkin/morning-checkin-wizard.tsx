@@ -25,6 +25,7 @@ import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
 import { MORNING_ROUTINE_SUGGESTIONS } from '@/lib/checkin/routine';
+import { formatLocalDate } from '@/lib/checkin/timezone';
 import { cn } from '@/lib/utils';
 
 /**
@@ -64,6 +65,8 @@ interface DraftState {
   moodScore: number;
   emotionTags: string[];
   intention: string;
+  /** F7 — rattrapage reason; '' on a normal same-day fill (collapses to null). */
+  lateJustification: string;
 }
 
 const DRAFT_STORAGE_KEY = 'fxmily:checkin:morning:draft:v1';
@@ -81,6 +84,7 @@ function emptyDraft(today: string): DraftState {
     moodScore: 6,
     emotionTags: [],
     intention: '',
+    lateJustification: '',
   };
 }
 
@@ -138,10 +142,19 @@ const MOOD_LABEL = (v: number): string => {
 interface MorningCheckinWizardProps {
   /** Server-provided "today" in the user's local timezone. */
   today: string;
+  /**
+   * F7 — when set (a validated PAST local day), the wizard runs in RATTRAPAGE
+   * mode: it fills THIS day (not today), asks a required justification, and
+   * never touches the today localStorage draft (loading / writing the today key
+   * with date=past would corrupt the next normal fill — the #1 F7 pitfall).
+   */
+  backfillDate?: string;
 }
 
-export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
-  const [draft, setDraft] = useState<DraftState>(() => emptyDraft(today));
+export function MorningCheckinWizard({ today, backfillDate }: MorningCheckinWizardProps) {
+  const isBackfill = backfillDate != null;
+  const effectiveDate = backfillDate ?? today;
+  const [draft, setDraft] = useState<DraftState>(() => emptyDraft(effectiveDate));
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState<StepIndex>(0);
   const [direction, setDirection] = useState<1 | -1>(1);
@@ -152,14 +165,17 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
+    // Rattrapage — start fresh anchored to the backfilled day and NEVER read the
+    // today draft (loading/writing the today key with date=past corrupts the
+    // next normal check-in — the #1 F7 pitfall).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDraft(loadDraft(today));
+    setDraft(isBackfill ? emptyDraft(effectiveDate) : loadDraft(today));
     setHydrated(true);
-  }, [today]);
+  }, [today, isBackfill, effectiveDate]);
 
   useEffect(() => {
-    if (hydrated) persistDraft(draft);
-  }, [draft, hydrated]);
+    if (hydrated && !isBackfill) persistDraft(draft);
+  }, [draft, hydrated, isBackfill]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -270,8 +286,19 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
     // Find the first invalid step and jump to it (a11y H2 audit fix).
     const invalidStep = ([0, 1, 2] as const).find((stepIndex) => !validateStep(stepIndex));
     if (invalidStep !== undefined) {
-      setServerError('Certains champs sont incomplets — utilise « Précédent » pour les compléter.');
+      setServerError('Certains champs sont incomplets, utilise « Précédent » pour les compléter.');
       goToStep(invalidStep as StepIndex);
+      hapticError();
+      return;
+    }
+
+    // F7 — a rattrapage needs a justification. The submit CTA only exists on the
+    // final step (where the field lives), so we're already there: set the inline
+    // error, no navigation. The server re-enforces this (resolveBackfill).
+    if (isBackfill && draft.lateJustification.trim() === '') {
+      setFieldErrors({
+        lateJustification: 'Explique en une phrase pourquoi tu remplis ce jour en retard.',
+      });
       hapticError();
       return;
     }
@@ -288,12 +315,15 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
     fd.set('sportDurationMin', draft.sportDurationMin.replace(',', '.'));
     fd.set('moodScore', String(draft.moodScore));
     fd.set('intention', draft.intention.trim());
+    // F7 — empty on a normal (same-day) fill → schema collapses to null.
+    fd.set('lateJustification', isBackfill ? draft.lateJustification.trim() : '');
     for (const slug of draft.emotionTags) fd.append('emotionTags', slug);
 
     startTransition(async () => {
       const result: CheckinActionState = await submitMorningCheckinAction(null, fd);
       if (result.ok) {
-        clearDraft();
+        // Never clear the today draft from a rattrapage (we never loaded it).
+        if (!isBackfill) clearDraft();
         hapticSuccess();
         return;
       }
@@ -377,6 +407,14 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
         </div>
       </header>
 
+      {isBackfill ? (
+        <Alert tone="info">
+          Tu remplis ton check-in du matin du{' '}
+          <span className="font-semibold">{formatLocalDate(effectiveDate)}</span> en retard. Ajoute
+          une courte justification à la dernière étape pour valider ce rattrapage.
+        </Alert>
+      ) : null}
+
       {serverError ? <Alert tone="danger">{serverError}</Alert> : null}
 
       <div className="relative min-h-[20rem]">
@@ -433,6 +471,7 @@ export function MorningCheckinWizard({ today }: MorningCheckinWizardProps) {
                 update={update}
                 fieldErrors={fieldErrors}
                 disabled={pending}
+                isBackfill={isBackfill}
               />
             ) : null}
           </m.div>
@@ -684,14 +723,14 @@ function StepMind({ draft, update, disabled }: StepProps) {
         describeAt={MOOD_LABEL}
         tone="acc"
         disabled={disabled}
-        hint="Sensation présente — ni anticipation, ni rétrospective."
+        hint="Sensation présente, ni anticipation, ni rétrospective."
       />
 
       <StressZonesBar
         value={draft.moodScore}
         direction="clarity"
         title="Zones d’état mental"
-        caption="Un miroir de ton humeur, pas une note. Les jours « brouillard » se traversent — les voir suffit."
+        caption="Un miroir de ton humeur, pas une note. Les jours « brouillard » se traversent, les voir suffit."
       />
 
       <EmotionCheckinPicker
@@ -705,12 +744,62 @@ function StepMind({ draft, update, disabled }: StepProps) {
   );
 }
 
-function StepIntention({ draft, update, fieldErrors, disabled }: StepProps) {
+function StepIntention({
+  draft,
+  update,
+  fieldErrors,
+  disabled,
+  isBackfill,
+}: StepProps & { isBackfill: boolean }) {
   const charCount = draft.intention.length;
   const isCharLimitNear = charCount > 180;
   const hint = 'Une phrase courte. Ex: "Trader uniquement à Londres", "Pas de revenge trade".';
   return (
     <div className="flex flex-col gap-3">
+      {/* F7 — rattrapage justification, required client-side (server re-enforces
+          via resolveBackfill). Anti-Black-Hat §31.2 wording: no blame, just a
+          note so the accompaniment understands the member's rhythm. */}
+      {isBackfill ? (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="lateJustification" className="t-eyebrow-lg text-[var(--t-3)]">
+            Pourquoi ce rattrapage ? (obligatoire)
+          </label>
+          <textarea
+            id="lateJustification"
+            name="lateJustification"
+            value={draft.lateJustification}
+            onChange={(e) => update('lateJustification', e.target.value.slice(0, 500))}
+            disabled={disabled}
+            rows={3}
+            maxLength={500}
+            placeholder="Ex : panne internet hier soir, journée à l’hôpital…"
+            aria-invalid={fieldErrors.lateJustification ? 'true' : undefined}
+            aria-describedby={
+              fieldErrors.lateJustification ? 'lateJustification-error' : 'lateJustification-hint'
+            }
+            className={cn(
+              'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
+              'placeholder:text-[var(--t-3)]',
+              fieldErrors.lateJustification
+                ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+                : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+              'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+            )}
+          />
+          {fieldErrors.lateJustification ? (
+            <p id="lateJustification-error" className="text-[11px] text-[var(--bad)]" role="alert">
+              {fieldErrors.lateJustification}
+            </p>
+          ) : (
+            <p id="lateJustification-hint" className="t-cap text-[var(--t-4)]">
+              Une phrase honnête suffit. Elle aide ton accompagnement à comprendre ton rythme, sans
+              jugement.
+            </p>
+          )}
+        </div>
+      ) : null}
+
       <Card className="flex items-start gap-2.5 p-4">
         <Coffee className="mt-0.5 h-4 w-4 shrink-0 text-[var(--cy)]" strokeWidth={1.75} />
         {/* Paraphrase Mark Douglas — pas de citation directe (pas de
@@ -777,7 +866,10 @@ function StepIntention({ draft, update, fieldErrors, disabled }: StepProps) {
           <p className="t-body text-[var(--t-2)]">
             Clique sur{' '}
             <span className="font-semibold text-[var(--t-1)]">Enregistrer mon matin</span> pour
-            valider. Le check-in soir s’ouvrira ce soir.
+            valider.
+            {isBackfill
+              ? ' Ce jour sera ajouté à ton historique.'
+              : ' Le check-in soir s’ouvrira ce soir.'}
           </p>
         </div>
       </Card>
@@ -957,12 +1049,12 @@ function RadioGroup({
 function serverErrorMessage(state: CheckinActionState): string {
   switch (state.error) {
     case 'unauthorized':
-      return 'Session expirée — reconnecte-toi puis réessaie.';
+      return 'Session expirée, reconnecte-toi puis réessaie.';
     case 'invalid_input':
-      return 'Certains champs sont invalides — contrôle les étapes.';
+      return 'Certains champs sont invalides, contrôle les étapes.';
     case 'unknown':
     default:
-      return 'Erreur inattendue — réessaie dans un instant.';
+      return 'Erreur inattendue, réessaie dans un instant.';
   }
 }
 

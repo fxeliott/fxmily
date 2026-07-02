@@ -76,13 +76,13 @@ export function WeeklyDigestEmail({
         </title>
       </Head>
       <Preview>
-        Rapport hebdo IA — {memberLabel} — {period}
+        Rapport hebdo IA · {memberLabel} · {period}
       </Preview>
       <Body style={body}>
         <Container style={container}>
           <Section style={brand}>
             <span style={logoBadge}>F</span>
-            <span style={brandName}>Fxmily — Rapport admin</span>
+            <span style={brandName}>Fxmily · Rapport admin</span>
           </Section>
 
           <Text style={eyebrow}>RAPPORT HEBDO IA · COMPORTEMENT</Text>
@@ -97,7 +97,7 @@ export function WeeklyDigestEmail({
             <Text style={aiBannerText}>
               Ce rapport est généré par une intelligence artificielle (
               {claudeModel === 'claude-code-local'
-                ? 'Claude — subscription locale'
+                ? 'Claude · subscription locale'
                 : `Claude ${claudeModel}`}
               , Anthropic). Il ne remplace ni un coaching humain, ni un avis médical, ni un conseil
               en investissement personnalisé.
@@ -159,7 +159,7 @@ export function WeeklyDigestEmail({
           <Hr style={hr} />
 
           <Text style={footer}>
-            Aucun conseil de trade — uniquement comportement, exécution, psychologie (SPEC §2).
+            Aucun conseil de trade, uniquement comportement, exécution, psychologie (SPEC §2).
           </Text>
           <Text style={footerMeta}>
             Modèle : <span style={footerMono}>{claudeModel}</span> · coût :{' '}
@@ -182,17 +182,17 @@ WeeklyDigestEmail.PreviewProps = {
   summary:
     'Le membre a pris 8 trades cette semaine (winrate 50%) avec 75% de plan respecté. Streak de 6 jours, journal nourri. Tendance émotionnelle stable.',
   risks: [
-    'Plan respecté à 60% sur les 3 derniers trades — drift à surveiller, à recouper avec les annotations admin.',
+    'Plan respecté à 60% sur les 3 derniers trades, drift à surveiller, à recouper avec les annotations admin.',
   ],
   recommendations: [
-    'Encourager la journalisation post-trade les jours pertes — la tendance montre une fiabilité plus haute quand le journal est rempli.',
-    "Envoyer la fiche Mark Douglas sur l'acceptation des pertes — alignement parfait avec la posture observée.",
+    'Encourager la journalisation post-trade les jours pertes, la tendance montre une fiabilité plus haute quand le journal est rempli.',
+    "Envoyer la fiche Mark Douglas sur l'acceptation des pertes, alignement parfait avec la posture observée.",
   ],
   patterns: {
-    emotionPerf: 'FOMO sur 2 trades / Calme sur 6 trades — winrate 0/2 vs 4/6. Signal cohérent.',
+    emotionPerf: 'FOMO sur 2 trades / Calme sur 6 trades, winrate 0/2 vs 4/6. Signal cohérent.',
     sleepPerf: 'Sommeil < 6h sur 1 trade (perte). Échantillon trop petit pour conclure.',
-    sessionFocus: '6 trades en session London, 2 en NY — bon focus sur la fenêtre habituelle.',
-    disciplineTrend: 'Plan respect rate 75% (vs 65% semaine -1) — progression claire.',
+    sessionFocus: '6 trades en session London, 2 en NY, bon focus sur la fenêtre habituelle.',
+    disciplineTrend: 'Plan respect rate 75% (vs 65% semaine -1), progression claire.',
   },
   reportUrl: 'https://app.fxmilyapp.com/admin/reports/clx0report1',
   claudeModel: 'claude-sonnet-4-6',

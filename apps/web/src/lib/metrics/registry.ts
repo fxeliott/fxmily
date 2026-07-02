@@ -128,7 +128,7 @@ export const METRICS = [
   {
     key: 'emotional_stability',
     label: 'Stabilité émotionnelle',
-    hint: 'Régulation de ton état — humeur, stress, émotions — indépendante du P&L.',
+    hint: 'Régulation de ton état (humeur, stress, émotions), indépendante du P&L.',
     type: 'score',
     axis: 'emotional_stability',
     unit: 'pts',
@@ -139,7 +139,7 @@ export const METRICS = [
   {
     key: 'consistency',
     label: 'Consistance',
-    hint: "Proxys d'edge (espérance, profit factor, drawdown) — la régularité, pas la chance.",
+    hint: "Proxys d'edge (espérance, profit factor, drawdown), la régularité, pas la chance.",
     type: 'score',
     axis: 'consistency',
     unit: 'pts',
@@ -247,7 +247,7 @@ export const METRICS = [
   // prettier-ignore
   { key: 'constancy.value', label: 'Score de constance', hint: 'Moyenne pondérée honnêteté/régularité/discipline, confrontée à la réalité MT5.', type: 'score', axis: 'honesty', unit: 'pts', aggregation: 'weighted', status: 'live', source: 'lib/verification/constancy.ts' },
   // prettier-ignore
-  { key: 'constancy.honesty', label: 'Honnêteté', hint: 'Écart déclaré vs réalité prouvée (preuves MT5) — fausses déclarations pénalisées.', type: 'rate', axis: 'honesty', unit: '%', aggregation: 'rate', status: 'live', source: 'lib/verification/constancy.ts', parent: 'constancy.value', weight: 0.4 },
+  { key: 'constancy.honesty', label: 'Honnêteté', hint: 'Écart déclaré vs réalité prouvée (preuves MT5), fausses déclarations pénalisées.', type: 'rate', axis: 'honesty', unit: '%', aggregation: 'rate', status: 'live', source: 'lib/verification/constancy.ts', parent: 'constancy.value', weight: 0.4 },
   // prettier-ignore
   { key: 'constancy.regularity', label: 'Régularité de déclaration', hint: 'Déclarations faites / (faites + oubliées sans motif).', type: 'rate', axis: 'honesty', unit: '%', aggregation: 'rate', status: 'live', source: 'lib/verification/constancy.ts', parent: 'constancy.value', weight: 0.35 },
   // prettier-ignore

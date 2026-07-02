@@ -159,7 +159,7 @@ export function MediaUploader({
   }, []);
 
   const accept = acceptMime.join(',');
-  const resolvedHint = hint ?? `${acceptMime.map(mimeShort).join(' · ')} — ${bytesToMo(maxBytes)}`;
+  const resolvedHint = hint ?? `${acceptMime.map(mimeShort).join(' · ')} · ${bytesToMo(maxBytes)}`;
 
   const upload = useCallback(
     async (file: File) => {

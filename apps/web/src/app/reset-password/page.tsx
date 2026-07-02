@@ -102,7 +102,7 @@ function InvalidTokenView({
   const action = (() => {
     switch (reason) {
       case 'missing':
-        return "Ce lien est incomplet. Vérifie l'URL reçue par email — elle doit contenir un token complet.";
+        return "Ce lien est incomplet. Vérifie l'URL reçue par email. Elle doit contenir un token complet.";
       case 'unknown':
         return "Ce lien de réinitialisation n'existe pas ou n'est plus valide. Refais une demande.";
       case 'expired':

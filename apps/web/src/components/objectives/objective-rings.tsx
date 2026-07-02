@@ -103,7 +103,7 @@ export function ObjectiveRing({ objective }: { objective: ProcessObjective }) {
   // l'info utile (dimension + leviers + palier + ecart) dans l'aria-label.
   const ariaLabel =
     current === null
-      ? `${label}, ${hint} — données insuffisantes`
+      ? `${label}, ${hint} : données insuffisantes`
       : reached
         ? `${label}, ${hint} : ${current} sur 100, palier Maîtrise atteint`
         : `${label}, ${hint} : ${current} sur 100, ${tone.band}, ${gap} point${(gap ?? 0) > 1 ? 's' : ''} avant la Maîtrise`;

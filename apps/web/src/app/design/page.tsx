@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { DesignSystemShowcase } from '@/components/design-system/showcase';
 
 export const metadata = {
-  title: 'Design System — Fxmily (dev)',
+  title: 'Design System · Fxmily (dev)',
   robots: { index: false, follow: false },
 };
 

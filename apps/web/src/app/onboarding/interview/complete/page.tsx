@@ -90,7 +90,7 @@ export default async function OnboardingInterviewCompletePage() {
           <span className="text-[var(--t-1)]">
             Ton profil sera disponible dans les prochaines 24h
           </span>{' '}
-          sur ta page profil. Tu peux y retourner quand tu veux — pas besoin de rester là.
+          sur ta page profil. Tu peux y retourner quand tu veux, pas besoin de rester là.
         </p>
 
         <div
@@ -113,7 +113,7 @@ export default async function OnboardingInterviewCompletePage() {
       </section>
 
       <p className="t-cap text-center text-[var(--t-3)]">
-        Tu peux refermer cette page sans perdre tes réponses — tout est enregistré.
+        Tu peux refermer cette page sans perdre tes réponses, tout est enregistré.
       </p>
     </main>
   );

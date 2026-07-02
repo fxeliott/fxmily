@@ -70,7 +70,7 @@ export function ScoreTrendChart({ data }: { data: ReadonlyArray<BehavioralScoreT
         <div className="grid h-[200px] place-items-center text-center text-[var(--t-4)]">
           <span className="t-cap max-w-[34ch]">
             Ta courbe de progression apparaîtra dès le 2ᵉ jour de scores. Un instantané est
-            enregistré chaque nuit — reviens demain pour voir ta trajectoire.
+            enregistré chaque nuit. Reviens demain pour voir ta trajectoire.
           </span>
         </div>
       </div>
@@ -115,7 +115,7 @@ export function ScoreTrendChart({ data }: { data: ReadonlyArray<BehavioralScoreT
         aria-describedby="score-trend-summary"
       >
         <figcaption id="score-trend-summary" className="sr-only">
-          Évolution des 4 scores comportementaux sur {formatted.length} jours. Derniers scores —
+          Évolution des 4 scores comportementaux sur {formatted.length} jours. Derniers scores :
           Discipline {last.discipline ?? 'non calculé'}, Stabilité{' '}
           {last.emotionalStability ?? 'non calculé'}, Cohérence {last.consistency ?? 'non calculé'},
           Engagement {last.engagement ?? 'non calculé'} sur 100.
@@ -175,7 +175,7 @@ export function ScoreTrendChart({ data }: { data: ReadonlyArray<BehavioralScoreT
 
       <p className="t-cap text-[var(--t-4)]">
         Un instantané par nuit. Les jours sans données suffisantes sont reliés (jamais comptés comme
-        0). Aucun conseil de marché — uniquement ton comportement.
+        0). Aucun conseil de marché, uniquement ton comportement.
       </p>
     </m.div>
   );

@@ -1359,6 +1359,23 @@ model DailyCheckin {
   /// Free-form journal entry (max 4000 chars by Zod).
   journalNote String?  @map("journal_note") @db.Text
 
+  // ----- Rattrapage / backfill (F7) ----------------------------------------
+
+  /// F7 — member's free-text reason when this row was filled for a PAST local
+  /// day (a "rattrapage"). Mirror of `Discrepancy.memberReason` exactly: pure
+  /// additive nullable `@db.Text`, safeFreeText + crisis routing at the Zod
+  /// boundary. NULL for same-day check-ins (no justification asked — filling
+  /// today is the norm, only late fills are "exceptionnel", brief §F7). The
+  /// deterministic repetition signal (§33.2) and the J2 local AI worker read
+  /// THIS field; we store the ACT of justifying, never a market claim (§2).
+  lateJustification String?   @map("late_justification") @db.Text
+  /// F7 — the instant a late (past-day) fill happened; NULL when the row was
+  /// filled on its own local day. Mirror of `Discrepancy.memberReasonAt`. Lets
+  /// the tracking page + admin panel distinguish an on-time entry from a
+  /// rattrapage without re-deriving it from `date` vs `submittedAt` (which
+  /// drift across edits). Completion metadata only (§21.5), never P&L.
+  backfilledAt      DateTime? @map("backfilled_at")
+
   submittedAt DateTime @default(now()) @map("submitted_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -2489,6 +2506,16 @@ model MeetingAttendance {
   /// Boolean ONLY — the app NEVER stores the content itself (posture §2). A
   /// complete attendance = `attendanceMode != null` AND `contentReviewed = true`.
   contentReviewed Boolean @default(false) @map("content_reviewed")
+
+  /// F4 — the member's EXPLICIT "je n'ai pas pu y assister". Distinct from a
+  /// not-yet-declared slot (`en_attente`, rattrapable) : `false` = never declared
+  /// absent (default, byte-identical to prior behaviour) · `true` = the member
+  /// acknowledged they missed this meeting. Declaring a presence
+  /// (`attendanceMode`) flips it back to `false` (mutually exclusive — a member
+  /// can't be present AND absent). Anti-Black-Hat §31.2 : an acknowledged absence
+  /// is a calm, honest data point, NEVER a red failure ; it never counts as a
+  /// completion (rate/engagement untouched — it only clarifies the "why nothing").
+  memberDeclaredAbsent Boolean @default(false) @map("member_declared_absent")
 
   /// S10 §30.8 — presence as DECLARED BY ELIOTT (admin), distinct from the
   /// member self-report above. The cross-check the brief calls "recoupement

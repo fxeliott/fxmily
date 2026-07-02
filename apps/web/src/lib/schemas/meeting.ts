@@ -59,6 +59,21 @@ export const meetingAttendanceDeclarationSchema = z
 export type MeetingAttendanceDeclarationInput = z.infer<typeof meetingAttendanceDeclarationSchema>;
 
 /**
+ * F4 — the member's EXPLICIT "je n'ai pas pu y assister". A single-field payload
+ * (only the target `meetingId`): unlike a presence declaration it carries no
+ * mode / content — an absence IS the absence of those. `.strict()` rejects
+ * unknown keys (defense-in-depth, same as the presence schema). The service
+ * re-checks the meeting is past / not-cancelled / in-window before persisting.
+ */
+export const meetingAbsenceDeclarationSchema = z
+  .object({
+    meetingId: meetingIdSchema,
+  })
+  .strict();
+
+export type MeetingAbsenceDeclarationInput = z.infer<typeof meetingAbsenceDeclarationSchema>;
+
+/**
  * V1.7 §30 J-M3 — admin cancel/uncancel of a meeting slot.
  *
  * The ONLY free-text in §30 (SPEC §30.6): `reason` is an optional admin note

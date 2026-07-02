@@ -14,7 +14,7 @@ import { selectStorage } from '@/lib/storage';
 import { getTrainingTradeAsAdmin } from '@/lib/training/training-trade-admin-service';
 
 export const metadata = {
-  title: 'Backtest — vue admin',
+  title: 'Backtest · vue admin',
 };
 
 export const dynamic = 'force-dynamic';
@@ -73,7 +73,7 @@ export default async function AdminTrainingTradeDetailPage({
           <h1 className="f-mono text-[28px] leading-none font-semibold tracking-[0.01em] text-[var(--t-1)] sm:text-[32px]">
             {trade.pair}
           </h1>
-          <Pill tone="cy">Vue admin — entraînement</Pill>
+          <Pill tone="cy">Vue admin · entraînement</Pill>
         </div>
       </header>
 

@@ -115,7 +115,7 @@ export function MomentumCard({
   const body =
     `Sur environ 6 semaines, ${possLower} ${dimLower} suit une pente descendante légère ` +
     `(~${perWeek} pt/semaine). C'est le genre de dérive lente qu'on ne sent pas au jour le ` +
-    `jour — seules tes données la voient. Rien d'alarmant : juste un repère. Dans l'esprit ` +
+    `jour, seules tes données la voient. Rien d'alarmant : juste un repère. Dans l'esprit ` +
     `de Mark Douglas, on ne juge pas un résultat, on revient simplement à la régularité du process.`;
 
   return (

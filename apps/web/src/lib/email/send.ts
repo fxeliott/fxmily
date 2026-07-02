@@ -58,7 +58,7 @@ export async function sendInvitationEmail({
       ``,
       inviteUrl,
       ``,
-      `Si tu n'as pas demandé cette invitation, ignore ce message — aucun compte ne sera créé.`,
+      `Si tu n'as pas demandé cette invitation, ignore ce message, aucun compte ne sera créé.`,
     ].join('\n'),
   });
 }
@@ -103,7 +103,7 @@ export async function sendPasswordResetEmail({
       ``,
       resetUrl,
       ``,
-      `Si tu n'es pas à l'origine de cette demande, ignore ce message — ton mot de passe actuel reste inchangé.`,
+      `Si tu n'es pas à l'origine de cette demande, ignore ce message, ton mot de passe actuel reste inchangé.`,
     ].join('\n'),
   });
 }
@@ -136,7 +136,7 @@ export async function sendPasswordChangedEmail({
     text: [
       `Ton mot de passe Fxmily vient d'être modifié.`,
       ``,
-      `Si c'est bien toi, tu n'as rien à faire — connecte-toi avec ton nouveau mot de passe.`,
+      `Si c'est bien toi, tu n'as rien à faire, connecte-toi avec ton nouveau mot de passe.`,
       `Par sécurité, toutes tes sessions ouvertes ont été déconnectées.`,
       ``,
       `Ce n'était pas toi ? Reprends le contrôle immédiatement : réinitialise ton mot de passe`,
@@ -181,17 +181,17 @@ export async function sendAccessApprovedEmail({
 
   return sendEmail({
     to,
-    subject: 'Ta demande est acceptée — bienvenue dans Fxmily',
+    subject: 'Ta demande est acceptée, bienvenue dans Fxmily',
     react: AccessApprovedEmail({ inviteUrl, firstName, expiresInDays }),
     text: [
       name ? `Salut ${name},` : `Bonjour,`,
       ``,
-      `Ta demande pour rejoindre Fxmily est acceptée — bienvenue dans la cohorte.`,
+      `Ta demande pour rejoindre Fxmily est acceptée, bienvenue dans la cohorte.`,
       `Il ne te reste qu'une étape : créer ton compte avec ce lien (expire dans ${expiresInDays} jour${expiresInDays > 1 ? 's' : ''}) :`,
       ``,
       inviteUrl,
       ``,
-      `Le lien est unique et ne peut servir qu'une seule fois. Si tu n'es plus intéressé·e, ignore ce message — aucun compte ne sera créé.`,
+      `Le lien est unique et ne peut servir qu'une seule fois. Si tu n'es plus intéressé·e, ignore ce message, aucun compte ne sera créé.`,
     ].join('\n'),
   });
 }
@@ -228,7 +228,7 @@ export async function sendAccessRejectedEmail({
       ``,
       `Une question ? Écris à fxeliott@fxmily.fr.`,
       ``,
-      `— L'équipe Fxmily`,
+      `L'équipe Fxmily`,
     ].join('\n'),
   });
 }
@@ -256,7 +256,7 @@ export async function sendAccessRequestReceivedAlertEmail({
     subject: `Nouvelle demande d'accès Fxmily · ${pendingCount} en attente`,
     react: AccessRequestReceivedAlertEmail({ pendingCount, adminUrl }),
     text: [
-      `Fxmily — nouvelle demande d'accès.`,
+      `Fxmily · nouvelle demande d'accès.`,
       ``,
       `${pendingCount} demande${plural ? 's' : ''} ${plural ? 'sont' : 'est'} en attente de validation dans ta file d'accès.`,
       `Tu peux les accepter ou les refuser depuis ton espace admin.`,
@@ -418,22 +418,22 @@ const FALLBACK_SUBJECT_BY_TYPE: Record<NotificationTypeSlug, string> = {
 
 const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
   annotation_received:
-    "Eliott a laissé une correction sur l'un de tes trades. Elle t'attend dans ton journal — la correction sera marquée comme lue dès que tu ouvres le trade.",
+    "Eliott a laissé une correction sur l'un de tes trades. Elle t'attend dans ton journal, la correction sera marquée comme lue dès que tu ouvres le trade.",
   training_annotation_received:
-    "Eliott a laissé une correction sur l'un de tes backtests. Elle t'attend dans ton espace entraînement — marquée comme lue dès que tu ouvres le backtest.",
+    "Eliott a laissé une correction sur l'un de tes backtests. Elle t'attend dans ton espace entraînement, marquée comme lue dès que tu ouvres le backtest.",
   checkin_morning_reminder:
-    'Trois minutes pour poser ton intention du jour. Pas de rattrapage — si la fenêtre est passée, on se retrouve ce soir.',
+    'Trois minutes pour poser ton intention du jour. Pas de rattrapage, si la fenêtre est passée, on se retrouve ce soir.',
   checkin_evening_reminder:
     'Bilan rapide du jour : plan, ressenti, gratitude. Trois minutes pour fermer la journée proprement.',
   douglas_card_delivered:
     'Une fiche est arrivée dans ta bibliothèque, choisie selon ton activité récente. Lis-la quand le moment te paraît juste.',
   weekly_report_ready: 'Ton digest hebdomadaire des membres a été généré.',
   monthly_debrief_ready:
-    'Une synthèse du mois écoulé t’attend — progression, trading réel, entraînement. Un moment pour prendre du recul.',
+    'Une synthèse du mois écoulé t’attend : progression, trading réel, entraînement. Un moment pour prendre du recul.',
   mindset_check_ready:
-    'Ton QCM hebdo de 2 minutes pour mesurer où tu en es — mindset, discipline, patience. Calme et sans pression.',
+    'Ton QCM hebdo de 2 minutes pour mesurer où tu en es : mindset, discipline, patience. Calme et sans pression.',
   verification_gentle_reminder:
-    'Un élément de ton suivi est resté de côté. Un coup d’œil quand tu peux — et indique s’il y a une raison. Rien de grave : juste rester honnête avec toi-même.',
+    'Un élément de ton suivi est resté de côté. Un coup d’œil quand tu peux, et indique s’il y a une raison. Rien de grave : juste rester honnête avec toi-même.',
   training_reply_received:
     'Un membre a répondu à l’une de tes corrections de backtest. Le détail t’attend dans son espace entraînement, côté admin.',
 };
@@ -626,7 +626,7 @@ export async function sendWeeklyDigestEmail({
   const reportUrl = buildAdminReportUrl(report.id);
   const subject = `Rapport hebdo · ${memberLabel} · ${report.weekStart} → ${report.weekEnd}`;
   const lines: string[] = [];
-  lines.push(`Rapport hebdo Fxmily — ${memberLabel}`);
+  lines.push(`Rapport hebdo Fxmily · ${memberLabel}`);
   lines.push(`Période : ${report.weekStart} → ${report.weekEnd}`);
   lines.push('');
   lines.push('Synthèse :');
@@ -714,7 +714,7 @@ export async function sendMonthlyDebriefReadyEmail({
   const lines: string[] = [];
   lines.push(`Salut ${recipient},`);
   lines.push('');
-  lines.push(`Voici ta synthèse Fxmily du mois écoulé — ${monthLabel}.`);
+  lines.push(`Voici ta synthèse Fxmily du mois écoulé, ${monthLabel}.`);
   lines.push('');
   lines.push('Progression :');
   lines.push(debrief.progressionNarrative);
@@ -722,7 +722,7 @@ export async function sendMonthlyDebriefReadyEmail({
   lines.push('Trading réel :');
   lines.push(debrief.summaryReal);
   lines.push('');
-  lines.push('Entraînement (régularité/pratique uniquement — pas de P&L) :');
+  lines.push('Entraînement (régularité/pratique uniquement, pas de P&L) :');
   lines.push(debrief.summaryTraining);
   lines.push('');
   if (debrief.risks.length > 0) {
@@ -750,7 +750,7 @@ export async function sendMonthlyDebriefReadyEmail({
   lines.push(`Ouvre ton débrief : ${debriefUrl}`);
   lines.push('');
   lines.push(
-    'Synthèse générée par IA (Claude, Anthropic) — ne remplace ni coaching humain, ni avis médical, ni conseil en investissement. Aucun conseil de trade (SPEC §2).',
+    'Synthèse générée par IA (Claude, Anthropic), ne remplace ni coaching humain, ni avis médical, ni conseil en investissement. Aucun conseil de trade (SPEC §2).',
   );
 
   return sendEmail({
@@ -806,20 +806,20 @@ export async function sendCalendarOverdueAlertEmail({
     subject,
     react: CalendarOverdueAlertEmail({ overdueCount, questionnaireCount, weekRange, adminUrl }),
     text: [
-      `Fxmily — rappel de permanence (calendrier adaptatif).`,
+      `Fxmily · rappel de permanence (calendrier adaptatif).`,
       ``,
       `${overdueCount} membre${plural ? 's' : ''} ${plural ? 'ont' : 'a'} rempli le questionnaire`,
       `d'organisation de la semaine du ${weekRange}, mais ${plural ? 'leurs calendriers ne sont' : 'son calendrier n’est'} pas`,
       `encore généré${plural ? 's' : ''} (${overdueCount} en attente sur ${questionnaireCount} organisés).`,
       ``,
-      `À faire — depuis ton PC :`,
+      `À faire, depuis ton PC :`,
       `  1. Lance /calendar-batch (ou ops/scripts/calendar-batch-local.sh).`,
       `  2. Claude Opus 4.8 génère les calendriers en local ($0), persistés après les garde-fous §2.`,
       `  3. Les membres voient leur calendrier dès la fin du batch.`,
       ``,
       `Ouvre l'admin : ${adminUrl}`,
       ``,
-      `Rappel automatique — envoyé uniquement quand des calendriers sont en attente passé le délai`,
+      `Rappel automatique, envoyé uniquement quand des calendriers sont en attente passé le délai`,
       `de courtoisie. Aucun calendrier n'est généré sur un serveur (le batch reste manuel, par`,
       `sécurité du compte).`,
     ].join('\n'),
@@ -860,20 +860,20 @@ export async function sendMonthlyDebriefOverdueAlertEmail({
     subject,
     react: MonthlyDebriefOverdueAlertEmail({ overdueCount, expectedCount, monthLabel, adminUrl }),
     text: [
-      `Fxmily — rappel de permanence (débrief mensuel).`,
+      `Fxmily · rappel de permanence (débrief mensuel).`,
       ``,
       `Le mois de ${monthLabel.toLowerCase()} est terminé, mais ${overdueCount} membre${plural ? 's' : ''} actif${plural ? 's' : ''}`,
       `${expectedCount > overdueCount ? `(sur ${expectedCount}) ` : ''}${plural ? "n'ont" : "n'a"} pas encore reçu leur débrief mensuel.`,
       `Chaque membre actif doit en recevoir un (SPEC §25.4).`,
       ``,
-      `À faire — depuis ton PC :`,
+      `À faire, depuis ton PC :`,
       `  1. Lance /monthly-batch (ou ops/scripts/monthly-batch-local.sh).`,
       `  2. Claude Opus 4.8 rédige les débriefs en local ($0), persistés après les garde-fous §2.`,
       `  3. Les membres reçoivent leur débrief (push + email) dès la fin du batch.`,
       ``,
       `Ouvre l'admin : ${adminUrl}`,
       ``,
-      `Rappel automatique — envoyé uniquement quand des débriefs sont en attente passé le délai`,
+      `Rappel automatique, envoyé uniquement quand des débriefs sont en attente passé le délai`,
       `de courtoisie. Aucun débrief n'est généré sur un serveur (le batch reste manuel, par`,
       `sécurité du compte).`,
     ].join('\n'),
@@ -915,20 +915,20 @@ export async function sendWeeklyReportOverdueAlertEmail({
     subject,
     react: WeeklyReportOverdueAlertEmail({ overdueCount, expectedCount, weekRange, adminUrl }),
     text: [
-      `Fxmily — rappel de permanence (rapport hebdomadaire).`,
+      `Fxmily · rappel de permanence (rapport hebdomadaire).`,
       ``,
       `La semaine du ${weekRange} est terminée, mais ${overdueCount} membre${plural ? 's' : ''} actif${plural ? 's' : ''}`,
       `${expectedCount > overdueCount ? `(sur ${expectedCount}) ` : ''}${plural ? "n'ont" : "n'a"} pas encore leur rapport hebdomadaire.`,
       `Le digest n'a pas été généré pour cette semaine.`,
       ``,
-      `À faire — depuis ton PC :`,
+      `À faire, depuis ton PC :`,
       `  1. Lance le batch ops/scripts/weekly-batch-local.sh.`,
       `  2. Claude Opus 4.8 rédige les rapports en local ($0), persistés après les garde-fous §2.`,
       `  3. Le digest admin est prêt dès la fin du batch.`,
       ``,
       `Ouvre l'admin : ${adminUrl}`,
       ``,
-      `Rappel automatique — envoyé uniquement quand des rapports hebdo sont en attente passé le délai`,
+      `Rappel automatique, envoyé uniquement quand des rapports hebdo sont en attente passé le délai`,
       `de courtoisie. Aucun rapport n'est généré sur un serveur (le batch reste manuel, par`,
       `sécurité du compte).`,
     ].join('\n'),
@@ -981,20 +981,20 @@ export async function sendOnboardingProfileOverdueAlertEmail({
     subject,
     react: OnboardingProfileOverdueAlertEmail({ overdueCount, oldestLabel, adminUrl }),
     text: [
-      `Fxmily — rappel de permanence (profil d'onboarding).`,
+      `Fxmily · rappel de permanence (profil d'onboarding).`,
       ``,
       `${overdueCount} membre${plural ? 's' : ''} actif${plural ? 's' : ''} ${plural ? 'ont' : 'a'} complété leur entretien d'onboarding`,
       `il y a plus de 24h sans recevoir leur profil${oldestLabel ? ` (le plus ancien attend depuis le ${oldestLabel})` : ''}.`,
       `L'app leur promet leur profil « dans les prochaines 24h ».`,
       ``,
-      `À faire — depuis ton PC :`,
+      `À faire, depuis ton PC :`,
       `  1. Lance bash ops/scripts/onboarding-batch-local.sh.`,
       `  2. Le moteur Claude local ($0) synthétise les profils, persistés après les garde-fous §2.`,
       `  3. Les membres voient leur profil dans « Mon profil » dès la fin du batch.`,
       ``,
       `Ouvre l'admin : ${adminUrl}`,
       ``,
-      `Rappel automatique — envoyé uniquement quand des profils sont en attente passé le délai`,
+      `Rappel automatique, envoyé uniquement quand des profils sont en attente passé le délai`,
       `de courtoisie. Aucun profil n'est généré sur un serveur (le batch reste manuel, par`,
       `sécurité du compte).`,
     ].join('\n'),
@@ -1035,20 +1035,20 @@ export async function sendVerificationOverdueAlertEmail({
     subject,
     react: VerificationOverdueAlertEmail({ overdueCount, oldestLabel, adminUrl }),
     text: [
-      `Fxmily — rappel de permanence (vérification MT5 / vision).`,
+      `Fxmily · rappel de permanence (vérification MT5 / vision).`,
       ``,
       `${overdueCount} membre${plural ? 's' : ''} actif${plural ? 's' : ''} ${plural ? 'ont' : 'a'} envoyé une preuve de compte MT5`,
       `il y a plus de 24h sans qu'elle soit analysée${oldestLabel ? ` (la plus ancienne attend depuis le ${oldestLabel})` : ''}.`,
       `Tant que le batch vision n'est pas lancé, le compte et les positions ne sont jamais extraits.`,
       ``,
-      `À faire — depuis ton PC :`,
+      `À faire, depuis ton PC :`,
       `  1. Lance /verification-batch (ou bash ops/scripts/verification-batch-local.sh).`,
       `  2. Le moteur Claude local ($0) lit les preuves et extrait comptes + positions, persistés après les garde-fous §2.`,
       `  3. Les membres voient leur vérification à jour dès la fin du batch.`,
       ``,
       `Ouvre l'admin : ${adminUrl}`,
       ``,
-      `Rappel automatique — envoyé uniquement quand des preuves MT5 sont en attente d'analyse passé le`,
+      `Rappel automatique, envoyé uniquement quand des preuves MT5 sont en attente d'analyse passé le`,
       `délai de courtoisie. Aucune preuve n'est analysée sur un serveur (le batch reste manuel, par`,
       `sécurité du compte).`,
     ].join('\n'),

@@ -74,7 +74,7 @@ describe('AIGeneratedBanner', () => {
   describe('badge variant', () => {
     it('renders compact pill copy', () => {
       render(<AIGeneratedBanner variant="badge" />);
-      expect(screen.getByText(/Généré par IA — pas substitut coaching humain/)).toBeInTheDocument();
+      expect(screen.getByText(/Généré par IA · pas substitut coaching humain/)).toBeInTheDocument();
     });
 
     it('uses span (not aside) for inline placement', () => {

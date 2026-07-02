@@ -51,7 +51,7 @@ interface ScoreGaugeProps {
 
 const REASON_TEXT: Record<NonNullable<ScoreGaugeProps['reason']>, string> = {
   no_trades: 'Pas encore de trades clôturés',
-  no_computed_trades: 'Stop-loss manquants — clôture des trades pour activer',
+  no_computed_trades: 'Stop-loss manquants, clôture des trades pour activer',
   no_checkins: 'Pas encore de check-in renseigné',
   window_short: 'Encore quelques jours pour activer',
 };
@@ -153,7 +153,7 @@ export function ScoreGauge({
 
   const ariaLabel =
     score === null
-      ? `${label} — données insuffisantes`
+      ? `${label} · données insuffisantes`
       : `${label} : ${score} sur 100, ${tone.band}`;
 
   const Wrapper: 'button' | 'div' = onClick ? 'button' : 'div';
@@ -161,7 +161,7 @@ export function ScoreGauge({
     ? {
         type: 'button' as const,
         onClick,
-        'aria-label': `${ariaLabel} — voir le détail`,
+        'aria-label': `${ariaLabel} · voir le détail`,
       }
     : { 'aria-label': ariaLabel, role: 'img' as const };
 

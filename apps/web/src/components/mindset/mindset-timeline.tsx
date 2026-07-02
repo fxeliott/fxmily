@@ -60,7 +60,7 @@ export function MindsetTimeline({ checks }: { checks: readonly SerializedMindset
       >
         <p className="t-body text-[var(--t-2)]">
           Aucune auto-évaluation pour l&apos;instant. Le lundi est un bon moment pour faire le point
-          sur ton état d&apos;esprit de la semaine — sans bonne ni mauvaise réponse.
+          sur ton état d&apos;esprit de la semaine, sans bonne ni mauvaise réponse.
         </p>
       </div>
     );

@@ -51,19 +51,19 @@ export const CHECKIN_EMOTION_TAGS: readonly CheckinEmotionTag[] = [
   {
     slug: 'fearful',
     label: 'Craintif',
-    hint: 'Peur active de perdre — Douglas, peur n°2.',
+    hint: 'Peur active de perdre · Douglas, peur n°2.',
     cluster: 'pressure',
   },
   {
     slug: 'fomo',
     label: 'FOMO',
-    hint: 'Peur de manquer une opportunité — Douglas, peur n°3.',
+    hint: 'Peur de manquer une opportunité · Douglas, peur n°3.',
     cluster: 'pressure',
   },
   {
     slug: 'greedy',
     label: 'Avide',
-    hint: 'Tentation de pousser ou sur-sizer — Douglas, peur n°4 (laisser sur la table).',
+    hint: 'Tentation de pousser ou sur-sizer · Douglas, peur n°4 (laisser sur la table).',
     cluster: 'pressure',
   },
   {
@@ -83,7 +83,7 @@ export const CHECKIN_EMOTION_TAGS: readonly CheckinEmotionTag[] = [
     slug: 'doubt',
     label: 'Doute',
     cluster: 'pressure',
-    hint: 'Peur d’être dans l’erreur — Douglas, peur n°1.',
+    hint: 'Peur d’être dans l’erreur · Douglas, peur n°1.',
   },
 ] as const;
 

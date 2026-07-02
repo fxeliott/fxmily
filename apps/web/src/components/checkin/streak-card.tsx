@@ -193,7 +193,7 @@ export function StreakCard({ streak, todayFilled, compact, justCrossed }: Streak
 
       <p className="t-body text-[var(--t-2)]">
         {noStreak
-          ? 'Démarre ton premier check-in aujourd’hui — le matin ou le soir suffit pour lancer la chaîne.'
+          ? 'Démarre ton premier check-in aujourd’hui, le matin ou le soir suffit pour lancer la chaîne.'
           : todayFilled
             ? `Tu enchaînes ${streak} jour${streak > 1 ? 's' : ''} d’affilée. La régularité construit le score discipline.`
             : `${streak} jour${streak > 1 ? 's' : ''} d’affilée derrière toi. Confirme aujourd’hui pour continuer.`}

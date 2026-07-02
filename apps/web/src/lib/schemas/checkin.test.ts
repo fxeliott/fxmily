@@ -366,6 +366,24 @@ describe('buildCheckinCrisisCorpus (T1 safety)', () => {
     expect(buildCheckinCrisisCorpus({ journalNote: '   ', gratitudeItems: ['', '  '] })).toBe('');
   });
 
+  it('includes the F7 rattrapage justification in the corpus', () => {
+    expect(
+      buildCheckinCrisisCorpus({
+        intention: 'Rester calme.',
+        lateJustification: "J'étais à l'hôpital hier.",
+      }),
+    ).toBe("Rester calme.\nJ'étais à l'hôpital hier.");
+  });
+
+  it('feeds detectCrisis: a HIGH signal in the F7 justification surfaces', () => {
+    // Same proven high-signal phrase as the journalNote case above — the point
+    // is that the justification is now part of the scanned corpus.
+    const corpus = buildCheckinCrisisCorpus({
+      lateJustification: 'Je pense au suicide, je n’en peux plus.',
+    });
+    expect(detectCrisis(corpus).level).toBe('high');
+  });
+
   it('feeds detectCrisis end-to-end: a HIGH signal in the journal surfaces', () => {
     const corpus = buildCheckinCrisisCorpus({
       journalNote: "Je pense au suicide, je n'en peux plus.",
@@ -378,5 +396,44 @@ describe('buildCheckinCrisisCorpus (T1 safety)', () => {
       intention: 'Je vais tout perdre sur ce trade si je respecte pas le stop.',
     });
     expect(detectCrisis(corpus).level).toBe('none');
+  });
+});
+
+describe('lateJustification field (F7 rattrapage)', () => {
+  it('accepts a trimmed reason and passes it through (morning + evening)', () => {
+    const m = morningCheckinSchema.parse({
+      ...validMorning,
+      lateJustification: '  Panne internet la veille.  ',
+    });
+    expect(m.lateJustification).toBe('Panne internet la veille.');
+    const e = eveningCheckinSchema.parse({ ...validEvening, lateJustification: 'Malade hier.' });
+    expect(e.lateJustification).toBe('Malade hier.');
+  });
+
+  it('collapses empty / whitespace / omitted to null', () => {
+    expect(
+      morningCheckinSchema.parse({ ...validMorning, lateJustification: '' }).lateJustification,
+    ).toBeNull();
+    expect(
+      morningCheckinSchema.parse({ ...validMorning, lateJustification: '   ' }).lateJustification,
+    ).toBeNull();
+    // Omitted entirely (the normal on-time path) → null, never a rejection.
+    expect(morningCheckinSchema.parse(validMorning).lateJustification).toBeNull();
+  });
+
+  it('rejects a reason over 500 chars', () => {
+    const res = eveningCheckinSchema.safeParse({
+      ...validEvening,
+      lateJustification: 'x'.repeat(501),
+    });
+    expect(res.success).toBe(false);
+  });
+
+  it('rejects bidi / zero-width control characters (Trojan-source hardening)', () => {
+    const res = eveningCheckinSchema.safeParse({
+      ...validEvening,
+      lateJustification: 'Panne‮internet',
+    });
+    expect(res.success).toBe(false);
   });
 });

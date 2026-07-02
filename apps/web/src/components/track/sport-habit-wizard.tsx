@@ -268,9 +268,9 @@ export function SportHabitWizard() {
       {serverState?.ok === false ? (
         <Alert tone="danger" role="alert">
           {serverState.error === 'unauthorized' && "Tu n'es plus connecté(e). Recharge la page."}
-          {serverState.error === 'invalid_input' && 'Vérifie les champs — un détail ne passe pas.'}
+          {serverState.error === 'invalid_input' && 'Vérifie les champs, un détail ne passe pas.'}
           {serverState.error === 'persist_failed' &&
-            'Le serveur a hoqueté — réessaie dans un instant.'}
+            'Le serveur a hoqueté, réessaie dans un instant.'}
         </Alert>
       ) : null}
 
@@ -401,7 +401,7 @@ function SportStep({
         </h2>
         <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
           Bouger régulièrement régule ton humeur sur la semaine de trading. Le type et la durée
-          suffisent — l&apos;intensité ressentie en complément.
+          suffisent, l&apos;intensité ressentie en complément.
         </p>
       </header>
 
@@ -532,7 +532,7 @@ function SportNotesStep({ draft, setDraft, headingRef }: StepProps) {
           <dd className="font-mono text-[var(--t-1)] tabular-nums">{draft.durationMin} min</dd>
           <dt className="text-[var(--t-3)]">Intensité</dt>
           <dd className="font-mono text-[var(--t-1)] tabular-nums">
-            {draft.intensity}/10 — {INTENSITY_LABEL(draft.intensity)}
+            {draft.intensity}/10 · {INTENSITY_LABEL(draft.intensity)}
           </dd>
         </dl>
       </div>

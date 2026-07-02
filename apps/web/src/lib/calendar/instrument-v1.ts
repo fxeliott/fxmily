@@ -242,7 +242,7 @@ const ITEMS_V1: readonly CalendarInstrumentItem[] = [
 export const CALENDAR_INSTRUMENT_V1: CalendarInstrument = {
   version: 1,
   preamble:
-    "Ce questionnaire sert à organiser ton TEMPS de pratique cette semaine — sessions, entraînement, réunions, psychologie, repos. Il ne donne aucun avis sur le marché. Il n'y a pas de bonne ni de mauvaise réponse : décris simplement ta disponibilité réelle.",
+    "Ce questionnaire sert à organiser ton TEMPS de pratique cette semaine : sessions, entraînement, réunions, psychologie, repos. Il ne donne aucun avis sur le marché. Il n'y a pas de bonne ni de mauvaise réponse : décris simplement ta disponibilité réelle.",
   items: ITEMS_V1,
 } as const;
 

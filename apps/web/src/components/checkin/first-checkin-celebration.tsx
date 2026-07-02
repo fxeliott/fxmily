@@ -75,7 +75,7 @@ export function FirstCheckinCelebration({ slot }: { slot: 'morning' | 'evening' 
           {/* Mark Douglas posture: name the action, not a reward. No streak
               pressure, no "ne casse pas la chaîne". Just: tu as commencé. */}
           <p className="t-body text-[var(--t-2)]">
-            {`Ce ${word} est enregistré — le premier d'une pratique qui t'appartient. La régularité se construit un jour à la fois, sans te juger.`}
+            {`Ce ${word} est enregistré, le premier d'une pratique qui t'appartient. La régularité se construit un jour à la fois, sans te juger.`}
           </p>
         </div>
 

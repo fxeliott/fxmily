@@ -146,7 +146,7 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
     {
       label: "Logs d'audit",
       count: auditCount,
-      description: 'Actions sensibles (login, export, suppression) — IP non incluse (hash sel).',
+      description: 'Actions sensibles (login, export, suppression), IP non incluse (hash sel).',
     },
     {
       label: 'Réflexions & revues',

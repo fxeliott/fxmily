@@ -174,7 +174,7 @@ export function MemberVerificationPanel({
         <h3 className="t-h3 text-[var(--t-1)]">Alertes (répétition)</h3>
         {alerts.length === 0 ? (
           <p className="t-body text-[var(--t-3)]">
-            Aucune alerte — un manquement isolé ne déclenche jamais rien.
+            Aucune alerte, un manquement isolé ne déclenche jamais rien.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">

@@ -5,7 +5,11 @@ import type { CheckinSlot } from '@/generated/prisma/enums';
 import type { DailyCheckinModel } from '@/generated/prisma/models/DailyCheckin';
 
 import { db } from '@/lib/db';
-import type { EveningCheckinInput, MorningCheckinInput } from '@/lib/schemas/checkin';
+import {
+  PAST_HORIZON_DAYS,
+  type EveningCheckinInput,
+  type MorningCheckinInput,
+} from '@/lib/schemas/checkin';
 
 import { computeStreak, type CheckinDay } from './streak';
 import { localDateOf, parseLocalDate, shiftLocalDate, type LocalDateString } from './timezone';
@@ -23,6 +27,23 @@ export class CheckinDateOutOfWindowError extends Error {
   ) {
     super(`Check-in date ${submitted} outside the window around ${today}.`);
     this.name = 'CheckinDateOutOfWindowError';
+  }
+}
+
+/**
+ * Domain error (F7): a check-in filled for a PAST local day (a "rattrapage")
+ * without the required free-text justification (brief §F7 "avec justification
+ * si exceptionnel"). TZ-aware second pass, same as
+ * {@link assertCheckinDateInLocalWindow} — the Server Action maps this to an
+ * inline field error on `lateJustification`.
+ */
+export class CheckinBackfillJustificationRequiredError extends Error {
+  constructor(
+    public readonly submitted: LocalDateString,
+    public readonly today: LocalDateString,
+  ) {
+    super(`Late check-in for ${submitted} (today ${today}) requires a justification.`);
+    this.name = 'CheckinBackfillJustificationRequiredError';
   }
 }
 
@@ -74,6 +95,11 @@ export interface SerializedCheckin {
   emotionTags: string[];
   journalNote: string | null;
 
+  /** F7 — rattrapage reason when filled for a past local day; null on-time. */
+  lateJustification: string | null;
+  /** F7 — ISO instant of a late (past-day) fill; null when filled on its day. */
+  backfilledAt: string | null;
+
   submittedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -121,6 +147,8 @@ function toSerialized(row: DailyCheckinModel): SerializedCheckin {
     moodScore: row.moodScore,
     emotionTags: [...row.emotionTags],
     journalNote: row.journalNote,
+    lateJustification: row.lateJustification,
+    backfilledAt: row.backfilledAt == null ? null : row.backfilledAt.toISOString(),
     submittedAt: row.submittedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -158,6 +186,67 @@ export function assertCheckinDateInLocalWindow(
   }
 }
 
+/**
+ * F7 — a check-in is a "rattrapage" (backfill) when its date is strictly before
+ * the member's local today. Uses the same TZ source as
+ * {@link assertCheckinDateInLocalWindow}. Pure — a same-day (or the tolerated
+ * today+1 drift) fill is never a backfill, so no justification is asked.
+ */
+export function isBackfillCheckin(
+  submitted: LocalDateString,
+  timezone: string,
+  now: Date = new Date(),
+): boolean {
+  return submitted < todayFor(timezone, now);
+}
+
+/**
+ * F7 — validate a `?date=YYYY-MM-DD` param (from the hub's « Rattraper hier »
+ * cue) into a usable backfill day, or `null`. Pure — no DB, never throws: a
+ * malformed, future, today, or out-of-window value silently degrades to the
+ * normal on-time flow. The submit path stays the authority (Zod window +
+ * {@link resolveBackfill}); this only decides whether the slot page opens in
+ * rattrapage mode, and refuses to offer a day the submit would then reject.
+ */
+export function resolveBackfillDateParam(
+  rawDate: string | undefined,
+  timezone: string,
+  now: Date = new Date(),
+): LocalDateString | null {
+  if (!rawDate) return null;
+  // Strict calendar-valid parse (rejects malformed strings + e.g. month 13).
+  try {
+    parseLocalDate(rawDate);
+  } catch {
+    return null;
+  }
+  // A same-day (or future) fill is the normal flow, never a rattrapage.
+  if (!isBackfillCheckin(rawDate, timezone, now)) return null;
+  // Bounded to the backfill horizon — mirrors the Zod `dateInWindow` lower bound.
+  const lower = shiftLocalDate(todayFor(timezone, now), -PAST_HORIZON_DAYS);
+  if (rawDate < lower) return null;
+  return rawDate;
+}
+
+/**
+ * F7 — enforce the rattrapage rule: a PAST-day fill MUST carry a non-empty
+ * justification. Returns the resolved backfill flag so the submit path can
+ * stamp `backfilledAt` / persist the reason without recomputing it. Throws
+ * {@link CheckinBackfillJustificationRequiredError} when the reason is missing.
+ */
+function resolveBackfill(
+  date: LocalDateString,
+  justification: string | null,
+  timezone: string,
+  now: Date | undefined,
+): boolean {
+  const backfill = isBackfillCheckin(date, timezone, now);
+  if (backfill && (justification == null || justification.trim() === '')) {
+    throw new CheckinBackfillJustificationRequiredError(date, todayFor(timezone, now));
+  }
+  return backfill;
+}
+
 // ----- Submit (upsert) --------------------------------------------------------
 
 /**
@@ -174,7 +263,10 @@ export async function submitMorningCheckin(
 ): Promise<SerializedCheckin> {
   // Audit J5 M2 — TZ-aware second pass. Defaults to Europe/Paris (V1 reality);
   // when J5.5 propagates per-user TZ, the Server Action will pass it explicitly.
-  assertCheckinDateInLocalWindow(input.date, options.timezone ?? 'Europe/Paris', options.now);
+  const timezone = options.timezone ?? 'Europe/Paris';
+  assertCheckinDateInLocalWindow(input.date, timezone, options.now);
+  // F7 — a past-day fill is a rattrapage: require + persist the justification.
+  const backfill = resolveBackfill(input.date, input.lateJustification, timezone, options.now);
   const date = parseLocalDate(input.date);
   const updateData = {
     sleepHours: new Prisma.Decimal(input.sleepHours),
@@ -187,6 +279,10 @@ export async function submitMorningCheckin(
     intention: input.intention,
     moodScore: input.moodScore,
     emotionTags: input.emotionTags,
+    // F7 — persist the reason + stamp only on a real backfill; a same-day (or
+    // tolerated today+1) fill clears both so an edit can't leave a stale stamp.
+    lateJustification: backfill ? input.lateJustification : null,
+    backfilledAt: backfill ? new Date() : null,
     submittedAt: new Date(),
   };
 
@@ -209,7 +305,10 @@ export async function submitEveningCheckin(
   input: EveningCheckinInput,
   options: { timezone?: string; now?: Date } = {},
 ): Promise<SerializedCheckin> {
-  assertCheckinDateInLocalWindow(input.date, options.timezone ?? 'Europe/Paris', options.now);
+  const timezone = options.timezone ?? 'Europe/Paris';
+  assertCheckinDateInLocalWindow(input.date, timezone, options.now);
+  // F7 — a past-day fill is a rattrapage: require + persist the justification.
+  const backfill = resolveBackfill(input.date, input.lateJustification, timezone, options.now);
   const date = parseLocalDate(input.date);
   const updateData = {
     planRespectedToday: input.planRespectedToday,
@@ -223,6 +322,9 @@ export async function submitEveningCheckin(
     emotionTags: input.emotionTags,
     journalNote: input.journalNote,
     gratitudeItems: input.gratitudeItems,
+    // F7 — persist the reason + stamp only on a real backfill (see morning).
+    lateJustification: backfill ? input.lateJustification : null,
+    backfilledAt: backfill ? new Date() : null,
     submittedAt: new Date(),
   };
 
@@ -315,6 +417,20 @@ export async function listMemberCheckinsAsAdmin(
   return rows.map(toSerialized);
 }
 
+/**
+ * F7 — a member's OWN check-in history for the `/checkin/history` tracking page
+ * (« page regroupant TOUS les check-in/out »). Same userId-scoped read as the
+ * admin panel — the page gates the member via `auth()` — but a distinct name so
+ * a member surface never imports an `AsAdmin` function (semantic honesty).
+ *
+ * Windowed to a year of distinct days: paired with the year heatmap above the
+ * list, this surfaces effectively all of a member's tracking (30-member scale,
+ * ≤2 rows/day) while staying bounded — never an unbounded query.
+ */
+export async function listMemberCheckins(userId: string, days = 365): Promise<SerializedCheckin[]> {
+  return listMemberCheckinsAsAdmin(userId, days);
+}
+
 export async function getCheckinStatus(
   userId: string,
   timezone: string,
@@ -331,6 +447,37 @@ export async function getCheckinStatus(
     morningSubmitted: slots.has('morning'),
     eveningSubmitted: slots.has('evening'),
   };
+}
+
+/** F7 — yesterday's per-slot gap, for the hub's calm « Rattraper hier » cue. */
+export interface YesterdayBackfill {
+  /** Yesterday's local date (YYYY-MM-DD) — the value to pass as `?date=`. */
+  date: LocalDateString;
+  morningMissing: boolean;
+  eveningMissing: boolean;
+}
+
+/**
+ * F7 — yesterday's per-slot fill state, so the hub can gently offer to catch up
+ * a missed slot « le lendemain avec justification » (brief §F7). Returns `null`
+ * when yesterday is fully covered (no cue, no pressure — anti-Black-Hat §31.2).
+ * One indexed query on `(userId, date)`. TZ-aware (yesterday = local today − 1).
+ */
+export async function getYesterdayBackfill(
+  userId: string,
+  timezone: string,
+  now: Date = new Date(),
+): Promise<YesterdayBackfill | null> {
+  const yesterday = shiftLocalDate(todayFor(timezone, now), -1);
+  const rows = await db.dailyCheckin.findMany({
+    where: { userId, date: parseLocalDate(yesterday) },
+    select: { slot: true },
+  });
+  const slots = new Set(rows.map((r) => r.slot));
+  const morningMissing = !slots.has('morning');
+  const eveningMissing = !slots.has('evening');
+  if (!morningMissing && !eveningMissing) return null;
+  return { date: yesterday, morningMissing, eveningMissing };
 }
 
 /**

@@ -6,10 +6,13 @@ import type { ZodError } from 'zod';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
-import { declareMeetingAttendance } from '@/lib/meeting/service';
+import { declareMeetingAbsence, declareMeetingAttendance } from '@/lib/meeting/service';
 import type { MeetingNotDeclarableReason } from '@/lib/meeting/service';
 import { reportWarning } from '@/lib/observability';
-import { meetingAttendanceDeclarationSchema } from '@/lib/schemas/meeting';
+import {
+  meetingAbsenceDeclarationSchema,
+  meetingAttendanceDeclarationSchema,
+} from '@/lib/schemas/meeting';
 
 /**
  * V1.7 §30 J-M2 — Server Action for the `/reunions` member surface.
@@ -138,5 +141,52 @@ export async function declareMeetingAttendanceAction(
   revalidatePath('/reunions');
 
   // J5 H2 fix: `redirect()` always throws (NEXT_REDIRECT). No try/catch.
+  redirect('/reunions');
+}
+
+/**
+ * F4 — Server Action for the member's EXPLICIT "je n'ai pas pu y assister".
+ * Same shape/guards as {@link declareMeetingAttendanceAction} but a single-field
+ * payload (only `meetingId`). Reuses {@link DeclareMeetingAttendanceActionState}
+ * (identical error surface). PII-free audit (`meetingId` only, posture §2).
+ */
+export async function declareMeetingAbsenceAction(
+  _prev: DeclareMeetingAttendanceActionState | null,
+  formData: FormData,
+): Promise<DeclareMeetingAttendanceActionState> {
+  const session = await auth();
+  if (!session?.user?.id || session.user.status !== 'active') {
+    return { ok: false, error: 'unauthorized' };
+  }
+
+  const parsed = meetingAbsenceDeclarationSchema.safeParse({
+    meetingId: getString(formData, 'meetingId'),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: 'invalid_input', fieldErrors: flattenFieldErrors(parsed.error) };
+  }
+
+  try {
+    await declareMeetingAbsence(session.user.id, parsed.data);
+  } catch (err) {
+    const reason = asNotDeclarableReason(err);
+    if (reason) {
+      return { ok: false, error: 'not_declarable', notDeclarableReason: reason };
+    }
+    const code =
+      err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
+        ? err.code
+        : 'unknown';
+    reportWarning('reunions.absence', 'persist_failed', { code });
+    return { ok: false, error: 'unknown' };
+  }
+
+  await logAudit({
+    action: 'meeting.attendance.absent',
+    userId: session.user.id,
+    metadata: { meetingId: parsed.data.meetingId },
+  });
+
+  revalidatePath('/reunions');
   redirect('/reunions');
 }

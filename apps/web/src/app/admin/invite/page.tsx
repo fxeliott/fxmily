@@ -58,7 +58,7 @@ export default async function AdminInvitePage() {
         <Send className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--cy)]" strokeWidth={1.75} />
         <p className="t-cap text-[var(--t-2)]">
           Si Resend n&apos;est pas configuré en dev, le lien d&apos;invitation est loggué dans la
-          console serveur — utile pour tester localement sans envoyer d&apos;email.
+          console serveur, utile pour tester localement sans envoyer d&apos;email.
         </p>
       </div>
     </main>

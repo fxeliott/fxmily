@@ -174,7 +174,7 @@ const ITEMS_V1: readonly MindsetItem[] = [
 export const MINDSET_INSTRUMENT_V1: MindsetInstrument = {
   version: 1,
   preamble:
-    "Cette semaine en trading, à quelle fréquence cela t'a correspondu ? Il n'y a pas de bonne ni de mauvaise réponse — c'est un instantané honnête de ton état d'esprit, pour toi et pour ton suivi.",
+    "Cette semaine en trading, à quelle fréquence cela t'a correspondu ? Il n'y a pas de bonne ni de mauvaise réponse. C'est un instantané honnête de ton état d'esprit, pour toi et pour ton suivi.",
   likertScale: LIKERT_SCALE_V1,
   dimensions: DIMENSIONS_V1,
   items: ITEMS_V1,

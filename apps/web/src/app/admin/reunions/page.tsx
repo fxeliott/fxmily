@@ -73,7 +73,7 @@ export default async function AdminReunionsPage() {
           </h1>
           <p className="t-cap text-[var(--t-3)]">
             Les créneaux Lun–Ven 12h/20h sont générés automatiquement. Annule un créneau quand tu
-            n&apos;es pas dispo — il est alors exclu du taux d&apos;assiduité des membres (personne
+            n&apos;es pas dispo, il est alors exclu du taux d&apos;assiduité des membres (personne
             n&apos;est pénalisé).
           </p>
         </div>

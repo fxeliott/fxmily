@@ -45,7 +45,7 @@ export const COMMENT_PRESET_GROUPS: readonly CommentPresetGroup[] = [
       {
         id: 'plan-respected',
         label: 'Plan respecté',
-        text: 'Tu as suivi ton plan de bout en bout — c’est exactement la régularité qu’on construit. Continue ainsi.',
+        text: 'Tu as suivi ton plan de bout en bout. C’est exactement la régularité qu’on construit. Continue ainsi.',
       },
       {
         id: 'plan-deviation',
@@ -55,7 +55,7 @@ export const COMMENT_PRESET_GROUPS: readonly CommentPresetGroup[] = [
       {
         id: 'system-not-respected',
         label: 'Système non respecté',
-        text: 'Le système n’a pas été respecté sur ce trade. Reviens à la règle plutôt qu’à l’intuition — c’est elle qui te protège dans la durée.',
+        text: 'Le système n’a pas été respecté sur ce trade. Reviens à la règle plutôt qu’à l’intuition. C’est elle qui te protège dans la durée.',
       },
     ],
   },
@@ -92,7 +92,7 @@ export const COMMENT_PRESET_GROUPS: readonly CommentPresetGroup[] = [
       {
         id: 'fomo',
         label: 'FOMO',
-        text: 'Tu sembles être entré par peur de manquer (FOMO). Il y aura toujours une autre opportunité — attendre n’est pas perdre.',
+        text: 'Tu sembles être entré par peur de manquer (FOMO). Il y aura toujours une autre opportunité. Attendre n’est pas perdre.',
       },
     ],
   },
@@ -119,7 +119,7 @@ export const COMMENT_PRESET_GROUPS: readonly CommentPresetGroup[] = [
       {
         id: 'evening-review',
         label: 'Bilan du soir',
-        text: 'Ton bilan du soir manque ici. C’est lui qui transforme l’expérience en compétence — prends cinq minutes pour le poser à chaud.',
+        text: 'Ton bilan du soir manque ici. C’est lui qui transforme l’expérience en compétence. Prends cinq minutes pour le poser à chaud.',
       },
       {
         id: 'sleep-routine',
@@ -135,12 +135,12 @@ export const COMMENT_PRESET_GROUPS: readonly CommentPresetGroup[] = [
       {
         id: 'execution-patience',
         label: 'Patience d’exécution',
-        text: 'Entrée anticipée avant ta confirmation — travaille la patience d’attendre TON moment. Souvent, la meilleure action est de ne rien faire.',
+        text: 'Entrée anticipée avant ta confirmation. Travaille la patience d’attendre TON moment. Souvent, la meilleure action est de ne rien faire.',
       },
       {
         id: 'let-it-run',
         label: 'Laisser courir le plan',
-        text: 'Tu as laissé le trade se dérouler selon ton plan, sans intervenir sous l’émotion. Excellente maîtrise d’exécution — reproduis-la.',
+        text: 'Tu as laissé le trade se dérouler selon ton plan, sans intervenir sous l’émotion. Excellente maîtrise d’exécution. Reproduis-la.',
       },
     ],
   },

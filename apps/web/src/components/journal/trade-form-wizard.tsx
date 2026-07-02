@@ -547,7 +547,7 @@ function StepWhenAndWhat({
           </p>
         ) : (
           <p className="t-cap text-[var(--t-4)]">
-            Heure locale (Europe/Paris). Pré-rempli à maintenant — la session se devine à
+            Heure locale (Europe/Paris). Pré-rempli à maintenant, la session se devine à
             l&apos;étape suivante.
           </p>
         )}
@@ -697,7 +697,7 @@ function StepPricesSizing({ draft, update, fieldErrors, disabled }: StepProps) {
           when the value exceeds 2 % (Tharp gold standard). */}
       <NumericField
         id="riskPct"
-        label="Risque % du compte (optionnel — règle Tharp 1-2 %)"
+        label="Risque % du compte (optionnel, règle Tharp 1-2 %)"
         value={draft.riskPct}
         onChange={(v) => update('riskPct', v)}
         error={fieldErrors.riskPct}
@@ -916,7 +916,7 @@ function StepPlannedRR({
               <span className="font-mono font-semibold text-[var(--bad-hi)] tabular-nums">
                 {breakeven.toFixed(0)}%
               </span>{' '}
-              pour ne pas perdre. Vérifie que ton plan est cohérent — ne déplace pas le stop pour
+              pour ne pas perdre. Vérifie que ton plan est cohérent, ne déplace pas le stop pour
               forcer un meilleur ratio.
             </p>
           </div>
@@ -1079,7 +1079,7 @@ function StepEntryScreenshot({ draft, update, fieldErrors, disabled }: StepProps
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-3">
         <p className="t-body text-[var(--t-2)]">
-          Capture obligatoire avant entrée — preuve que tu as analysé le setup. C&apos;est la couche
+          Capture obligatoire avant entrée, preuve que tu as analysé le setup. C&apos;est la couche
           d&apos;audit comportemental la plus solide.
         </p>
         <ScreenshotUploader
@@ -1110,7 +1110,7 @@ function StepEntryScreenshot({ draft, update, fieldErrors, disabled }: StepProps
           </span>
         </div>
         <p className="t-cap text-[var(--t-4)]">
-          Plusieurs unités de temps, ta zone, ton plan — documente ton analyse autant que tu veux.
+          Plusieurs unités de temps, ta zone, ton plan. Documente ton analyse autant que tu veux.
         </p>
 
         {extraKeys.length > 0 ? (
@@ -1205,19 +1205,19 @@ function TradeQualitySelector({
   const options = [
     {
       value: 'A' as const,
-      label: 'A — Setup parfait',
+      label: 'A · Setup parfait',
       hint: 'Conviction haute, contexte favorable, le marché te dit oui sur tous les fronts.',
       tone: 'ok' as const,
     },
     {
       value: 'B' as const,
-      label: 'B — Setup correct',
+      label: 'B · Setup correct',
       hint: 'Conviction moyenne ou contexte mitigé. Acceptable mais à surveiller.',
       tone: 'cy' as const,
     },
     {
       value: 'C' as const,
-      label: 'C — Setup limite',
+      label: 'C · Setup limite',
       hint: 'Conviction basse ou doute sur le contexte. À éviter idéalement.',
       tone: 'bad' as const,
     },
@@ -1229,7 +1229,7 @@ function TradeQualitySelector({
       <legend className="t-eyebrow-lg mb-1 flex items-center gap-2 text-[var(--t-3)]">
         Qualité du setup
         <span className="text-[10px] tracking-normal text-[var(--t-4)] normal-case">
-          (optionnel — Steenbarger A/B/C)
+          (optionnel, Steenbarger A/B/C)
         </span>
       </legend>
       <div
@@ -1275,7 +1275,7 @@ function TradeQualitySelector({
         </p>
       ) : (
         <p className="t-cap text-[var(--t-4)]">
-          Capture la qualité du setup AVANT de connaître l&apos;issue — bloque le biais de résultat.
+          Capture la qualité du setup AVANT de connaître l&apos;issue. Bloque le biais de résultat.
           Un C qui gagne reste un C.
         </p>
       )}
@@ -1432,11 +1432,11 @@ function pairExamplePrice(pair: TradingPair | ''): string {
 function serverErrorMessage(state: CreateTradeActionState): string {
   switch (state.error) {
     case 'unauthorized':
-      return 'Session expirée — reconnecte-toi puis réessaie.';
+      return 'Session expirée, reconnecte-toi puis réessaie.';
     case 'invalid_input':
-      return 'Certains champs sont invalides — contrôle les étapes.';
+      return 'Certains champs sont invalides, contrôle les étapes.';
     case 'unknown':
     default:
-      return 'Erreur inattendue — réessaie dans un instant.';
+      return 'Erreur inattendue, réessaie dans un instant.';
   }
 }

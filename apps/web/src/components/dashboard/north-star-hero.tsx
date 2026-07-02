@@ -310,7 +310,7 @@ export function NorthStarHero({
                   <InfoDot
                     label="le score de discipline"
                     side="top"
-                    tip="La discipline mesure ta régularité de process — check-ins tenus, plan respecté, exécution complète — sur une échelle de 0 à 100. Elle monte avec la constance, jamais avec ton profit."
+                    tip="La discipline mesure ta régularité de process (check-ins tenus, plan respecté, exécution complète) sur une échelle de 0 à 100. Elle monte avec la constance, jamais avec ton profit."
                   />
                 </span>
                 <div className="flex items-end gap-2.5">
@@ -390,7 +390,7 @@ export function NorthStarHero({
                     Tu es à jour
                   </span>
                   <span className="t-cap leading-snug text-[var(--t-3)]">
-                    Rien d’urgent pour ce moment — avance à ton rythme.
+                    Rien d’urgent pour ce moment, avance à ton rythme.
                   </span>
                 </span>
               </div>

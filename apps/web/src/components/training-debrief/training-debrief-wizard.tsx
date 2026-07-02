@@ -222,7 +222,7 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
               <FreeTextStep
                 id="processStrengthOne"
                 label="Quelle a été ta première force de process cette semaine ?"
-                hint={`Steenbarger reverse-journaling : ce qui a marché ET comment tu l'as fait. Pas un résultat — un comportement.`}
+                hint={`Steenbarger reverse-journaling : ce qui a marché ET comment tu l'as fait. Pas un résultat, un comportement.`}
                 value={draft.processStrengthOne}
                 onChange={(v) => update('processStrengthOne', v)}
                 error={errors?.processStrengthOne}
@@ -232,7 +232,7 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
               <FreeTextStep
                 id="processStrengthTwo"
                 label="Une deuxième force de process à ancrer."
-                hint="Une autre chose que tu veux répéter — décris le geste, pas l'issue."
+                hint="Une autre chose que tu veux répéter, décris le geste, pas l'issue."
                 value={draft.processStrengthTwo}
                 onChange={(v) => update('processStrengthTwo', v)}
                 error={errors?.processStrengthTwo}
@@ -242,7 +242,7 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
               <FreeTextStep
                 id="microAdjustment"
                 label="Un micro-ajustement concret pour la semaine prochaine."
-                hint="Petit, testable, sous ton contrôle. Pas un grand plan — un seul levier."
+                hint="Petit, testable, sous ton contrôle. Pas un grand plan, un seul levier."
                 value={draft.microAdjustment}
                 onChange={(v) => update('microAdjustment', v)}
                 error={errors?.microAdjustment}
@@ -252,7 +252,7 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
               <FreeTextStep
                 id="transversalLesson"
                 label="La leçon transversale de la semaine."
-                hint="Ce que tu retiens au-delà d'un backtest précis — une phrase qui te servira longtemps."
+                hint="Ce que tu retiens au-delà d'un backtest précis, une phrase qui te servira longtemps."
                 value={draft.transversalLesson}
                 onChange={(v) => update('transversalLesson', v)}
                 error={errors?.transversalLesson}

@@ -327,6 +327,8 @@ async function loadCheckins(userId: string, window: WeekWindow): Promise<Seriali
     moodScore: row.moodScore,
     emotionTags: [...row.emotionTags],
     journalNote: row.journalNote,
+    lateJustification: row.lateJustification,
+    backfilledAt: row.backfilledAt == null ? null : row.backfilledAt.toISOString(),
     submittedAt: row.submittedAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

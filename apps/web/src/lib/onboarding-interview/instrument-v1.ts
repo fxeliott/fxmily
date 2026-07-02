@@ -124,7 +124,7 @@ const DIMENSIONS_V1: readonly OnboardingDimension[] = [
   {
     id: 'parcours_trading',
     label: 'Parcours trading',
-    description: 'Histoire personnelle avec le trading — début, évolution, méthodes testées.',
+    description: 'Histoire personnelle avec le trading : début, évolution, méthodes testées.',
     primarySource: 'Steenbarger TP2.0 self-assessment (biographical anchoring)',
   },
   {
@@ -186,7 +186,7 @@ const DIMENSIONS_V1: readonly OnboardingDimension[] = [
   {
     id: 'objectifs_psyche',
     label: 'Objectifs psychologiques',
-    description: 'Projection 12 mois — comportement + état + posture (pas chiffre P&L).',
+    description: 'Projection 12 mois : comportement + état + posture (pas chiffre P&L).',
     primarySource: 'Steenbarger TP2.0 self-assessment questions (verbatim adapted)',
   },
   {
@@ -213,7 +213,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'parcours_trading',
     phase: 'warmup',
     questionIndex: 0,
-    text: 'Raconte comment tu es arrivé au trading — premier contact, premier compte réel, première fois où tu as su que ça allait devenir sérieux pour toi. 3-5 phrases.',
+    text: 'Raconte comment tu es arrivé au trading : premier contact, premier compte réel, première fois où tu as su que ça allait devenir sérieux pour toi. 3-5 phrases.',
   },
   {
     id: 'parcours_history',
@@ -227,7 +227,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'routines_hygiene',
     phase: 'warmup',
     questionIndex: 2,
-    text: 'Décris ta journée-type un jour où tu trades. De ton réveil à ton coucher. Sommeil, repas, sport, écran — pas idéal, réel.',
+    text: 'Décris ta journée-type un jour où tu trades. De ton réveil à ton coucher. Sommeil, repas, sport, écran. Pas idéal, réel.',
   },
   {
     id: 'routines_presession',
@@ -277,7 +277,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'discipline_plan_adherence',
     phase: 'core',
     questionIndex: 8,
-    text: 'Sur tes 10 derniers trades, combien ont été exécutés à 100% selon ton plan écrit (entrée, stop, target — pas de déplacement) ?',
+    text: 'Sur tes 10 derniers trades, combien ont été exécutés à 100% selon ton plan écrit (entrée, stop, target, pas de déplacement) ?',
   },
   {
     id: 'discipline_last_deviation',
@@ -293,7 +293,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'formation_adherence',
     phase: 'core',
     questionIndex: 10,
-    text: "Sur tes 10 derniers trades, combien ont suivi à 100% les règles du système que tu apprends dans la formation Fxmily — pas ton plan personnel, mais l'enseignement reçu ?",
+    text: "Sur tes 10 derniers trades, combien ont suivi à 100% les règles du système que tu apprends dans la formation Fxmily, pas ton plan personnel, mais l'enseignement reçu ?",
   },
 
   // patience_anti_fomo (3) — sensible moyenne
@@ -325,7 +325,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'confidence_calibration',
     phase: 'core',
     questionIndex: 14,
-    text: "Imagine ton meilleur setup. Sur 100 fois ce setup, combien tu penses qu'il gagne ? Et tu te bases sur quoi pour ce chiffre — backtest chiffré, ressenti, ou estimation ?",
+    text: "Imagine ton meilleur setup. Sur 100 fois ce setup, combien tu penses qu'il gagne ? Et tu te bases sur quoi pour ce chiffre : backtest chiffré, ressenti, ou estimation ?",
   },
   {
     id: 'confidence_aplus_feeling',
@@ -348,7 +348,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'emotional_regulation',
     phase: 'core',
     questionIndex: 17,
-    text: 'Quand une trade te met en stress (drawdown intra-trade, signal contradictoire), où sens-tu ça dans ton corps ? Quelle est ta première réaction physique — respiration, tension épaules, posture ?',
+    text: 'Quand une trade te met en stress (drawdown intra-trade, signal contradictoire), où sens-tu ça dans ton corps ? Quelle est ta première réaction physique : respiration, tension épaules, posture ?',
   },
   {
     id: 'emotion_3_losses_thought',
@@ -371,7 +371,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'ego_result_detachment',
     phase: 'core',
     questionIndex: 20,
-    text: 'Après une journée verte, comment tu te sens vs après une journée rouge ? À quel point ton humeur du soir dépend du P&L du jour — sois honnête, pas idéaliste.',
+    text: 'Après une journée verte, comment tu te sens vs après une journée rouge ? À quel point ton humeur du soir dépend du P&L du jour. Sois honnête, pas idéaliste.',
   },
   {
     id: 'ego_win_feeling',
@@ -385,7 +385,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'ego_result_detachment',
     phase: 'core',
     questionIndex: 22,
-    text: "Beaucoup de traders gardent un loser ouvert plus longtemps que prévu \"parce que ça devait revenir\". Te souviens-tu d'une fois où ça t'est arrivé ? Qu'est-ce qui parlait à ce moment-là — la méthode ou ton besoin d'avoir raison ?",
+    text: "Beaucoup de traders gardent un loser ouvert plus longtemps que prévu \"parce que ça devait revenir\". Te souviens-tu d'une fois où ça t'est arrivé ? Qu'est-ce qui parlait à ce moment-là : la méthode ou ton besoin d'avoir raison ?",
   },
 
   // triggers_emotional (3) — révèle douleur dominante, plus sensible
@@ -401,14 +401,14 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'triggers_emotional',
     phase: 'core',
     questionIndex: 24,
-    text: "Quelle situation de marché te met systématiquement le plus en stress — gap à l'ouverture, news, range serré, breakout violent ? Décris pourquoi.",
+    text: "Quelle situation de marché te met systématiquement le plus en stress : gap à l'ouverture, news, range serré, breakout violent ? Décris pourquoi.",
   },
   {
     id: 'triggers_avoided_setup',
     dimensionId: 'triggers_emotional',
     phase: 'core',
     questionIndex: 25,
-    text: "Y a-t-il un type de trade ou d'instrument que tu évites, alors qu'il colle techniquement à ta méthode ? Si oui, lequel et pourquoi — sois honnête sur le ressenti.",
+    text: "Y a-t-il un type de trade ou d'instrument que tu évites, alors qu'il colle techniquement à ta méthode ? Si oui, lequel et pourquoi. Sois honnête sur le ressenti.",
   },
 
   // ----------------------------------------------------------------------
@@ -419,7 +419,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'objectifs_psyche',
     phase: 'reflective_close',
     questionIndex: 26,
-    text: "Si dans 12 mois tu te regardes trader et que tu es fier de toi, qu'est-ce que tu vois ? Pas un chiffre P&L — un comportement, un état, une posture.",
+    text: "Si dans 12 mois tu te regardes trader et que tu es fier de toi, qu'est-ce que tu vois ? Pas un chiffre P&L : un comportement, un état, une posture.",
   },
   {
     id: 'objectifs_consistency_vs_pnl',
@@ -440,7 +440,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
     dimensionId: 'coaching_preference',
     phase: 'reflective_close',
     questionIndex: 29,
-    text: "Y a-t-il quelque chose qu'on n'a pas abordé dans ces questions et que tu veux qu'Eliott sache à ton sujet — sur ton trading, ta vie autour, ce qui te freine ou t'élève ? Pas obligatoire. Si rien : \"rien\" suffit.",
+    text: "Y a-t-il quelque chose qu'on n'a pas abordé dans ces questions et que tu veux qu'Eliott sache à ton sujet : sur ton trading, ta vie autour, ce qui te freine ou t'élève ? Pas obligatoire. Si rien : \"rien\" suffit.",
   },
 ] as const;
 
@@ -451,7 +451,7 @@ const ITEMS_V1: readonly OnboardingItem[] = [
 const METADATA_V1: OnboardingInstrumentMetadata = {
   version: 'v1',
   createdAt: '2026-05-28',
-  author: 'Fxmily — instrument design + posture validation',
+  author: 'Fxmily · instrument design + posture validation',
   primarySources: [
     {
       title: 'Trading in the Zone',
@@ -495,7 +495,7 @@ const METADATA_V1: OnboardingInstrumentMetadata = {
 export const ONBOARDING_INSTRUMENT_V1: OnboardingInstrument = {
   version: 'v1',
   preamble:
-    "Bienvenue. Cet entretien d'onboarding sert à mieux te connaître — ton trading, ton profil mental, tes routines. Il n'y a pas de bonne ni de mauvaise réponse. Eliott lit chaque réponse personnellement et l'IA en tire un profil descriptif pour personnaliser ton coaching. Tu peux quitter et reprendre à tout moment — tes réponses sont sauvegardées au fur et à mesure. Compte ~30 min répartis sur une ou deux sessions selon ton rythme. Sois honnête, pas idéaliste — la valeur de l'exercice dépend uniquement de ça.",
+    "Bienvenue. Cet entretien d'onboarding sert à mieux te connaître : ton trading, ton profil mental, tes routines. Il n'y a pas de bonne ni de mauvaise réponse. Eliott lit chaque réponse personnellement et l'IA en tire un profil descriptif pour personnaliser ton coaching. Tu peux quitter et reprendre à tout moment. Tes réponses sont sauvegardées au fur et à mesure. Compte ~30 min répartis sur une ou deux sessions selon ton rythme. Sois honnête, pas idéaliste. La valeur de l'exercice dépend uniquement de ça.",
   dimensions: DIMENSIONS_V1,
   items: ITEMS_V1,
   metadata: METADATA_V1,

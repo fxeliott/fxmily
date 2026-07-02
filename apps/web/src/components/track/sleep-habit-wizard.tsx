@@ -294,9 +294,9 @@ export function SleepHabitWizard() {
       {serverState?.ok === false ? (
         <Alert tone="danger" role="alert">
           {serverState.error === 'unauthorized' && "Tu n'es plus connecté(e). Recharge la page."}
-          {serverState.error === 'invalid_input' && 'Vérifie les champs — un détail ne passe pas.'}
+          {serverState.error === 'invalid_input' && 'Vérifie les champs, un détail ne passe pas.'}
           {serverState.error === 'persist_failed' &&
-            'Le serveur a hoqueté — réessaie dans un instant.'}
+            'Le serveur a hoqueté, réessaie dans un instant.'}
         </Alert>
       ) : null}
 
@@ -524,7 +524,7 @@ function SleepNotesStep({ draft, setDraft, headingRef }: StepProps) {
           <dd className="font-mono text-[var(--t-1)] tabular-nums">{draft.sleepHours} h</dd>
           <dt className="text-[var(--t-3)]">Qualité</dt>
           <dd className="font-mono text-[var(--t-1)] tabular-nums">
-            {draft.sleepQuality}/10 — {SLEEP_QUALITY_LABEL(draft.sleepQuality)}
+            {draft.sleepQuality}/10 · {SLEEP_QUALITY_LABEL(draft.sleepQuality)}
           </dd>
         </dl>
       </div>

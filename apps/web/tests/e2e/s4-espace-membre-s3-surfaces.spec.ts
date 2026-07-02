@@ -219,7 +219,7 @@ test.describe('S4 — surfaces S3 espace membre : teaser dashboard + /verificati
     // memberReason) — visibly neutralized, never silently dropped (« l'histoire
     // ne se réécrit pas, seul le score pardonne »).
     await expect(
-      constancySection.getByText(/excusé — motif donné ou levé par la réalité/),
+      constancySection.getByText(/excusé, motif donné ou levé par la réalité/),
     ).toHaveCount(1);
 
     // --- Écarts: both cards render, factual labels (§33.2 — calm, no shaming).

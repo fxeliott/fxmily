@@ -40,11 +40,11 @@ const inputClass =
 function serverErrorMessage(state: CreateTrainingSessionActionState): string | null {
   switch (state.error) {
     case 'unauthorized':
-      return 'Session expirée — reconnecte-toi puis réessaie.';
+      return 'Session expirée, reconnecte-toi puis réessaie.';
     case 'invalid_input':
-      return 'Certains champs sont invalides — contrôle-les ci-dessous.';
+      return 'Certains champs sont invalides, contrôle-les ci-dessous.';
     case 'unknown':
-      return 'Erreur inattendue — réessaie dans un instant.';
+      return 'Erreur inattendue, réessaie dans un instant.';
     default:
       return null;
   }
@@ -74,7 +74,7 @@ export function TrainingSessionForm() {
         </Link>
         <span className="t-eyebrow inline-flex w-fit items-center gap-1.5 text-[var(--cy)]">
           <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} />
-          Mode entraînement — nouvelle séance
+          Mode entraînement · nouvelle séance
         </span>
         <div className="flex items-center gap-2.5">
           <div className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] text-[var(--cy)]">

@@ -81,7 +81,7 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
           <h1 className="t-h1 mt-1 text-[var(--t-1)]">Notifications</h1>
           <p className="mt-2 text-sm text-[var(--t-2)]">
             Reste informé sur ce qui compte, sans être noyé. Tu choisis ce qui mérite une
-            notification — et tu peux tout couper en un clic.
+            notification, et tu peux tout couper en un clic.
           </p>
           <div className="mt-3 flex items-center gap-2">
             <Pill tone="acc">
@@ -112,7 +112,7 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
               </div>
               <p className="mt-1 text-sm text-[var(--t-2)]">
                 Les notifications push sont en cours de mise en service. Reviens dans quelques
-                minutes — ou demande à Eliott si l&apos;attente persiste.
+                minutes, ou demande à Eliott si l&apos;attente persiste.
               </p>
             </div>
           )}
@@ -141,7 +141,7 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
             </p>
             <p>
               <strong className="text-[var(--t-1)]">Ton choix prime.</strong> Si tu désactives une
-              catégorie, le serveur vérifie systématiquement avant d&apos;envoyer — aucun message ne
+              catégorie, le serveur vérifie systématiquement avant d&apos;envoyer, aucun message ne
               te parvient en contradiction avec tes réglages.
             </p>
             <p>

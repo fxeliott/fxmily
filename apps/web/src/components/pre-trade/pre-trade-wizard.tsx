@@ -318,7 +318,7 @@ export function PreTradeCheckWizard({
       {/* Preamble — calm, non-coercive. Frame the wizard as a mirror. */}
       <p className="rounded-control border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 text-[12px] leading-[1.5] text-[var(--t-2)]">
         Pause 30 secondes. 4 questions pour observer ce qui se passe AVANT d&apos;entrer. Pas de
-        bonne ni de mauvaise réponse — c&apos;est un miroir.
+        bonne ni de mauvaise réponse, c&apos;est un miroir.
       </p>
 
       <StepProgress current={safeStep + 1} total={TOTAL_STEPS} labels={STEP_LABELS} />
@@ -328,7 +328,7 @@ export function PreTradeCheckWizard({
       ) : null}
       {formError === 'invalid_input' ? (
         <Alert tone="danger">
-          {`Une réponse manque — utilise « Précédent » pour la compléter.`}
+          {`Une réponse manque, utilise « Précédent » pour la compléter.`}
         </Alert>
       ) : null}
       {formError === 'unknown' ? (
@@ -394,7 +394,7 @@ export function PreTradeCheckWizard({
                 headingRef={headingRef}
                 eyebrow="Étape 3 sur 4"
                 title="Ce trade respecte ton plan ?"
-                description="Setup, session, RR, taille — tout est dans ta routine documentée ?"
+                description="Setup, session, RR, taille. Tout est dans ta routine documentée ?"
                 name="planAlignment__radio"
                 value={draft.planAlignment}
                 onChange={(v) => setField('planAlignment', v)}
@@ -482,13 +482,13 @@ export function PreTradeCheckWizard({
             )}
             aria-busy={isPending || undefined}
           >
-            {isPending ? 'Enregistrement…' : 'Prends ton temps — enregistrer'}
+            {isPending ? 'Enregistrement…' : 'Prends ton temps · enregistrer'}
             <Check size={14} aria-hidden="true" />
           </button>
         )}
       </div>
 
-      <p className="t-cap text-center text-[var(--t-4)]">Le trade peut attendre — toi non.</p>
+      <p className="t-cap text-center text-[var(--t-4)]">Le trade peut attendre. Toi non.</p>
     </form>
   );
 }
@@ -524,7 +524,7 @@ export function buildReasonMirror(
     if (stats.reason === 'no_linked_trades') {
       return {
         tone: 'pending',
-        text: `Aucun trade « ${reasonText} » relié pour l'instant — ton miroir apparaîtra dès que tu en auras quelques-uns.`,
+        text: `Aucun trade « ${reasonText} » relié pour l'instant, ton miroir apparaîtra dès que tu en auras quelques-uns.`,
       };
     }
     const remaining = MIN_SAMPLE_PER_REASON_CORRELATION - stats.sampleSize;
@@ -744,7 +744,7 @@ function StepCardGroup({
               type="button"
               role="radio"
               aria-checked={checked}
-              aria-label={`${opt.label} — ${opt.caption}`}
+              aria-label={`${opt.label} · ${opt.caption}`}
               tabIndex={i === tabbableIndex ? 0 : -1}
               onClick={() => onChange(opt.value)}
               data-name={name}

@@ -51,7 +51,7 @@ export default async function TrackNutritionNewPage() {
           </div>
           <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
             Des repas réguliers stabilisent ta glycémie : moins d&apos;à-coups d&apos;énergie, moins
-            de décisions impulsives en session. On note le nombre de repas et la qualité ressentie —
+            de décisions impulsives en session. On note le nombre de repas et la qualité ressentie,
             aucun comptage de calories.
           </p>
         </header>

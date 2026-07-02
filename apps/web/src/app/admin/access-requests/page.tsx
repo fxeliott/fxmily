@@ -94,7 +94,7 @@ export default async function AdminAccessRequestsPage() {
             lead="Les demandes envoyées depuis la page publique /rejoindre apparaîtront ici, à valider une par une."
             guides={[
               'Accepter crée une invitation (lien 7 jours) et envoie l’email premium.',
-              'Refuser envoie un email de refus soigné — aucun compte n’est créé.',
+              'Refuser envoie un email de refus soigné. Aucun compte n’est créé.',
               'Les demandes traitées sont purgées automatiquement (RGPD).',
             ]}
             tip="Cohorte privée = qualité > quantité. Mieux vaut 30 traders sérieux que 300 curieux."

@@ -209,11 +209,12 @@ export async function markPresenceAction(
   });
 
   // The mark moves: the admin per-member presence panel, the admin reunions
-  // list gapCount, the cohort health view, AND the member's own /reunions
-  // cross-check + honest rate. Revalidate the admin surfaces (the member page is
-  // force-dynamic and re-reads on its next request).
+  // list gapCount, the per-meeting roster (F4), the cohort health view, AND the
+  // member's own /reunions cross-check + honest rate. Revalidate the admin
+  // surfaces (the member page is force-dynamic and re-reads on its next request).
   revalidatePath(`/admin/members/${parsed.data.memberId}`);
   revalidatePath('/admin/reunions');
+  revalidatePath(`/admin/reunions/${parsed.data.meetingId}`);
   revalidatePath('/admin/health');
 
   return { ok: true, adminPresent };

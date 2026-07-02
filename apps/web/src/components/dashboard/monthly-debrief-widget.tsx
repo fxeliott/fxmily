@@ -47,7 +47,7 @@ export async function MonthlyDebriefWidget({ userId }: { userId: string }) {
                 Ton débrief de {formatMonthInlineFr(debrief.monthStart)} est prêt
               </h3>
               <p className="text-[12px] leading-relaxed text-[var(--t-2)]">
-                Une synthèse calme de ton mois — progression et exécution, pour prendre du recul.
+                Une synthèse calme de ton mois : progression et exécution, pour prendre du recul.
                 Pas d&apos;analyse de marché.
               </p>
             </div>

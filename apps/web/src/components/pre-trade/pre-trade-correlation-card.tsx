@@ -114,7 +114,7 @@ function AllNoLinkedTradesState() {
         Pas encore de pré-trade check lié à un trade fermé
       </p>
       <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
-        Fais ton pré-trade check juste avant un trade, puis clôture le trade — l&apos;auto-link
+        Fais ton pré-trade check juste avant un trade, puis clôture le trade, l&apos;auto-link
         15&nbsp;min connectera les deux. Avec 8 trades par raison, tu verras tes patterns réels.
       </p>
     </div>

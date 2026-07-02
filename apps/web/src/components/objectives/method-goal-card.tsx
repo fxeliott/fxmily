@@ -79,8 +79,8 @@ export function MethodGoalCard({
           className="relative h-2.5 w-full overflow-hidden rounded-full bg-[var(--bg-2)]"
         >
           <div
-            className="h-full rounded-full bg-[var(--acc)] transition-[width] duration-500"
-            style={{ width: `${fillPct}%` }}
+            className="h-full w-full origin-left rounded-full bg-[var(--acc)] transition-transform duration-500"
+            style={{ transform: `scaleX(${fillPct / 100})` }}
           />
           {/* Repère cible (encoche claire), jamais rouge. */}
           <span

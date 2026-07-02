@@ -371,8 +371,8 @@ function CronAgeBar({
         title={`${Math.round(pct)} % de la tolérance`}
       >
         <div
-          className="h-full rounded-full transition-[width]"
-          style={{ width: `${pct}%`, backgroundColor: fill }}
+          className="h-full w-full origin-left rounded-full transition-transform"
+          style={{ transform: `scaleX(${Math.min(pct, 100) / 100})`, backgroundColor: fill }}
         />
         {/* Tick marking the green→amber boundary. */}
         <span

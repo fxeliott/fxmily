@@ -141,6 +141,7 @@ export default async function MemberTrainingTradeDetailPage({
             <img
               src={screenshotUrl}
               alt="Capture de ton analyse TradingView"
+              decoding="async"
               className="rounded-card max-h-[32rem] w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
             />
           </Card>

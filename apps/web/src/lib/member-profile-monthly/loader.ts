@@ -21,6 +21,9 @@ import { coachingToneSchema, learningStageSchema } from '@/lib/schemas/onboardin
 // The V1.5.2 pure SHA-256 pseudonymiser — pre-computed at the Claude boundary so
 // no raw userId reaches the model (sanctioned reuse, mirror monthly-debrief loader).
 import { pseudonymizeMember } from '@/lib/weekly-report/builder';
+// J-AI corrections echo — the axis FR label prefixes each coach correction (REFERENCE
+// context only). Pure data module (no DB/edge/scoring), §21.5-clean (process axes).
+import { getAxisLabel } from '@/lib/tracking/axes';
 
 import { buildReprofileSnapshot, concatReflectionCorpus } from './snapshot';
 import type {
@@ -165,43 +168,58 @@ export async function loadReprofileSliceForUser(
     ? computeMonthWindow(now, user.timezone)
     : computeReportingMonth(now, user.timezone);
 
-  const [checkinRows, tradeRows, profileRow, previousSnapshotRow] = await Promise.all([
-    // Check-ins anchor to a `@db.Date` column → DATE-filter on the window
-    // boundary strings (UTC-midnight, canon), never a TZ-drifted instant.
-    db.dailyCheckin.findMany({
-      where: {
-        userId,
-        date: {
-          gte: parseLocalDate(window.monthStartLocal),
-          lte: parseLocalDate(window.monthEndLocal),
+  const [checkinRows, tradeRows, correctionRows, profileRow, previousSnapshotRow] =
+    await Promise.all([
+      // Check-ins anchor to a `@db.Date` column → DATE-filter on the window
+      // boundary strings (UTC-midnight, canon), never a TZ-drifted instant.
+      db.dailyCheckin.findMany({
+        where: {
+          userId,
+          date: {
+            gte: parseLocalDate(window.monthStartLocal),
+            lte: parseLocalDate(window.monthEndLocal),
+          },
         },
-      },
-      orderBy: [{ date: 'asc' }, { slot: 'asc' }],
-      select: REFLECTION_CHECKIN_SELECT,
-    }),
-    // Trades whose `enteredAt` instant falls inside the local-month window.
-    db.trade.findMany({
-      where: { userId, enteredAt: { gte: window.monthStartUtc, lte: window.monthEndUtc } },
-      orderBy: { enteredAt: 'asc' },
-      select: REFLECTION_TRADE_SELECT,
-    }),
-    // The member's onboarding profile (their words + prior reading) — `null`
-    // until the onboarding batch has run (honest absence, no fabrication).
-    getProfileForUser(userId),
-    // The immediately-previous monthly snapshot (month-over-month trajectory).
-    // `monthStart` is a `@db.Date` → compare against the UTC-midnight of THIS
-    // month's local 1st (parseLocalDate), strictly-before to exclude re-runs.
-    db.memberProfileMonthlySnapshot.findFirst({
-      where: { userId, monthStart: { lt: parseLocalDate(window.monthStartLocal) } },
-      orderBy: { monthStart: 'desc' },
-      select: {
-        monthStart: true,
-        evolutionNarrative: true,
-        coachingTone: true,
-        learningStage: true,
-      },
-    }),
-  ]);
+        orderBy: [{ date: 'asc' }, { slot: 'asc' }],
+        select: REFLECTION_CHECKIN_SELECT,
+      }),
+      // Trades whose `enteredAt` instant falls inside the local-month window.
+      db.trade.findMany({
+        where: { userId, enteredAt: { gte: window.monthStartUtc, lte: window.monthEndUtc } },
+        orderBy: { enteredAt: 'asc' },
+        select: REFLECTION_TRADE_SELECT,
+      }),
+      // J-AI corrections echo — the coach's TAGGED corrections on this member's REAL
+      // trades this month, REFERENCE context for the narrative (never citable — an
+      // admin correction is not a member reflection, so it stays out of the corpus).
+      // REAL side only: training corrections are §21.5-isolated and never read here.
+      db.tradeAnnotation.findMany({
+        where: {
+          createdAt: { gte: window.monthStartUtc, lte: window.monthEndUtc },
+          axis: { not: null },
+          trade: { userId },
+        },
+        select: { axis: true, comment: true },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+      // The member's onboarding profile (their words + prior reading) — `null`
+      // until the onboarding batch has run (honest absence, no fabrication).
+      getProfileForUser(userId),
+      // The immediately-previous monthly snapshot (month-over-month trajectory).
+      // `monthStart` is a `@db.Date` → compare against the UTC-midnight of THIS
+      // month's local 1st (parseLocalDate), strictly-before to exclude re-runs.
+      db.memberProfileMonthlySnapshot.findFirst({
+        where: { userId, monthStart: { lt: parseLocalDate(window.monthStartLocal) } },
+        orderBy: { monthStart: 'desc' },
+        select: {
+          monthStart: true,
+          evolutionNarrative: true,
+          coachingTone: true,
+          learningStage: true,
+        },
+      }),
+    ]);
 
   // SPEC §25.4 — whole days the account existed within the window (mirror the
   // monthly-debrief loader): joined after month end ⇒ 0; before month start ⇒
@@ -243,6 +261,14 @@ export async function loadReprofileSliceForUser(
           learningStage: deriveStage(previousSnapshotRow.learningStage),
         };
 
+  // J-AI corrections echo — pre-format the coach's TAGGED corrections as
+  // `« Axe » : commentaire` (REFERENCE context; the builder sanitises + caps).
+  // `axis: { not: null }` guarantees a value at runtime; the select type stays
+  // `TrackingAxis | null`, so assert the narrowed shape for the label lookup.
+  const coachCorrections = correctionRows.map(
+    (r) => `« ${getAxisLabel(r.axis!)} » : ${r.comment.trim()}`,
+  );
+
   const snapshot = buildReprofileSnapshot({
     pseudonymLabel: pseudonymizeMember(user.id),
     timezone: user.timezone,
@@ -253,6 +279,7 @@ export async function loadReprofileSliceForUser(
     trades,
     baselineProfile,
     previousMonthSnapshot,
+    coachCorrections,
   });
 
   return {

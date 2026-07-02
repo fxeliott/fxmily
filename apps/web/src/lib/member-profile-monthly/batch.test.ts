@@ -99,6 +99,7 @@ function mockSlice(reflections: MonthlyReflectionEntry[]) {
       learningStage: null,
       onboardingSummary: null,
       previousMonth: null,
+      coachCorrections: [],
     },
     processSignals: {
       reflectionCount: reflections.length,

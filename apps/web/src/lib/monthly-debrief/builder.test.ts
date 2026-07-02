@@ -26,6 +26,9 @@ function baseInput(over: Partial<MonthlyBuilderInput> = {}): MonthlyBuilderInput
     deliveries: [],
     annotationsReceived: 0,
     annotationsViewed: 0,
+    // J-AI corrections echo — no tagged coach correction by default; tests that
+    // exercise the corpus override with pre-formatted `« Axe » : commentaire` strings.
+    coachCorrections: [],
     latestScore: null,
     // DoD#3 / §29 — empty history + the local month-start anchor (Paris 2026-05-01).
     scoreHistory: [],
@@ -629,6 +632,34 @@ describe('buildMonthlySnapshot — weekly summaries context + scores', () => {
       consistency: null,
       engagement: 65,
     });
+  });
+});
+
+describe('buildMonthlySnapshot — coach corrections corpus (J-AI corrections echo)', () => {
+  it('relays the pre-formatted corrections and validates against the schema', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        coachCorrections: ['« Exécution » : entrée trop tôt', '« Gestion du risque » : sizing x2'],
+      }),
+    );
+    expect(snap.coachCorrections).toEqual([
+      '« Exécution » : entrée trop tôt',
+      '« Gestion du risque » : sizing x2',
+    ]);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('defaults to an empty corpus when the coach tagged nothing', () => {
+    expect(buildMonthlySnapshot(baseInput()).coachCorrections).toEqual([]);
+  });
+
+  it('caps at 20 corrections and strips bidi/zero-width (Trojan Source)', () => {
+    const many = Array.from({ length: 25 }, (_, i) => `« Routine » : correction ${i}`);
+    many[0] = '« Routine » : stable‮injected'; // RLO bidi override
+    const snap = buildMonthlySnapshot(baseInput({ coachCorrections: many }));
+    expect(snap.coachCorrections).toHaveLength(20);
+    expect(snap.coachCorrections.join('')).not.toContain('‮');
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });
 

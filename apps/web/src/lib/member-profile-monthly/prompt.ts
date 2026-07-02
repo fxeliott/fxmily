@@ -217,7 +217,8 @@ export function buildMonthlyReprofileUserPrompt(snapshot: MonthlyReprofileSnapsh
     b.coachingRegister !== null ||
     b.learningStage !== null ||
     b.onboardingSummary !== null ||
-    b.previousMonth !== null;
+    b.previousMonth !== null ||
+    b.coachCorrections.length > 0;
   if (hasBaseline) {
     lines.push(`## Référence — contexte de comparaison (NE PAS citer)`);
     lines.push(``);
@@ -234,6 +235,16 @@ export function buildMonthlyReprofileUserPrompt(snapshot: MonthlyReprofileSnapsh
         `- Mois précédent (${b.previousMonth.monthStartLocal}) : registre ${b.previousMonth.coachingRegister ?? 'n/c'} · stade ${b.previousMonth.learningStage ?? 'n/c'}.`,
       );
       lines.push(`  Synthèse du mois précédent : ${b.previousMonth.evolutionNarrative}`);
+    }
+    // J-AI corrections echo — the coach's corrections on the member's REAL trades
+    // this month. REFERENCE ONLY (never citable): an admin correction is not a
+    // member reflection, so an evidence[] that quotes one is rejected at persist.
+    // Surfaced so the re-profiling can factor in what the coach kept flagging
+    // (posture §2 — process/psychologie, jamais un avis marché). Admin free-text
+    // → wrapped untrusted (defense-in-depth). It lives INSIDE the NE-PAS-citer block.
+    if (b.coachCorrections.length > 0) {
+      lines.push(`- Corrections du coach ce mois (contexte, jamais une citation) :`);
+      lines.push(wrapUntrustedMemberInput(b.coachCorrections.map((c) => `  - ${c}`).join('\n')));
     }
     lines.push(``);
   }

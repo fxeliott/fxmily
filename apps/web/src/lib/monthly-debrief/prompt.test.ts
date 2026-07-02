@@ -35,6 +35,9 @@ function baseInput(over: Partial<MonthlyBuilderInput> = {}): MonthlyBuilderInput
     deliveries: [],
     annotationsReceived: 0,
     annotationsViewed: 0,
+    // J-AI corrections echo — no tagged coach correction by default; tests that
+    // exercise the corpus override it.
+    coachCorrections: [],
     latestScore: null,
     // DoD#3 / §29 — empty history + the local month-start anchor (Paris 2026-05-01).
     scoreHistory: [],
@@ -899,5 +902,30 @@ describe('MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA — output parity is unchanged by D
   it('stays strict (additionalProperties:false) so a smuggled key is structurally rejected', () => {
     expect(MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA.additionalProperties).toBe(false);
     expect(MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA.properties.patterns.additionalProperties).toBe(false);
+  });
+});
+
+describe('buildMonthlyDebriefUserPrompt — coach corrections section (J-AI corrections echo)', () => {
+  it('renders the corrections section (wrapped untrusted) when the coach tagged some', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          coachCorrections: [
+            '« Exécution » : entrée avant confirmation',
+            '« Gestion du risque » : stop non défini',
+          ],
+        }),
+      ),
+    );
+    expect(prompt).toContain('## Corrections du coach (ce mois');
+    expect(prompt).toContain('« Exécution » : entrée avant confirmation');
+    expect(prompt).toContain('« Gestion du risque » : stop non défini');
+    // Admin free-text is wrapped untrusted (defense-in-depth).
+    expect(prompt).toContain('member_reflection_untrusted');
+  });
+
+  it('omits the corrections section entirely when the coach tagged nothing', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).not.toContain('## Corrections du coach');
   });
 });

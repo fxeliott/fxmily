@@ -37,6 +37,12 @@ import { cn } from '@/lib/utils';
  * Submit via `useActionState(submitWeeklyReviewAction)` ; on success the
  * action redirects (NEXT_REDIRECT re-thrown — wizard unmounts cleanly).
  *
+ * Resume mode (P2 fix, mindset-wizard parity) : when the member already has
+ * a review for the current week, the host page passes it as `prefill` so the
+ * wizard starts seeded with the existing answers instead of empty — a second
+ * submission is then an EXPLICIT edit (the upsert stays the server story),
+ * never a silent overwrite of text the member cannot see.
+ *
  * Posture : zero gamification (no streak, no XP, no celebration). Process
  * language ("plus grande victoire" = quel comportement, pas quel P&L).
  */
@@ -63,6 +69,19 @@ interface DraftState {
   biggestWin: string;
   biggestMistake: string;
   bestPractice: string;
+  lessonLearned: string;
+  nextWeekFocus: string;
+}
+
+/**
+ * Existing review of the current week → editing (upsert). Field names mirror
+ * `SerializedWeeklyReview` (weekly-review/service.ts) minus the metadata the
+ * wizard never touches. Mindset parity: `MindsetCheckPrefill`.
+ */
+export interface WeeklyReviewPrefill {
+  biggestWin: string;
+  biggestMistake: string;
+  bestPractice: string | null;
   lessonLearned: string;
   nextWeekFocus: string;
 }
@@ -113,21 +132,44 @@ function emptyDraft(weekStart: string): DraftState {
   };
 }
 
-function loadDraft(weekStart: string): DraftState {
-  if (typeof window === 'undefined') return emptyDraft(weekStart);
+function baseDraft(weekStart: string, prefill?: WeeklyReviewPrefill): DraftState {
+  if (!prefill) return emptyDraft(weekStart);
+  return {
+    weekStart,
+    biggestWin: prefill.biggestWin,
+    biggestMistake: prefill.biggestMistake,
+    bestPractice: prefill.bestPractice ?? '',
+    lessonLearned: prefill.lessonLearned,
+    nextWeekFocus: prefill.nextWeekFocus,
+  };
+}
+
+function loadDraft(weekStart: string, prefill?: WeeklyReviewPrefill): DraftState {
+  const base = baseDraft(weekStart, prefill);
+  if (typeof window === 'undefined') return base;
   try {
     const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!raw) return emptyDraft(weekStart);
+    if (!raw) return base;
     const parsed = JSON.parse(raw) as Partial<DraftState>;
+    // Field-by-field: a non-empty local draft edit wins over the server
+    // prefill, but an empty stored field never blanks an existing answer
+    // (mindset-wizard parity — its response merge keeps prefilled answers
+    // unless the draft overrides them individually). Without prefill this
+    // reduces to the historical `{ ...empty, ...parsed }` behavior.
+    const pick = (stored: unknown, fallback: string): string =>
+      typeof stored === 'string' && stored.trim().length > 0 ? stored : fallback;
     return {
-      ...emptyDraft(weekStart),
-      ...parsed,
       // Always anchor weekStart to current Monday on rehydrate — stale drafts
       // from previous weeks are out of the window anyway (Zod refine -35d).
       weekStart,
+      biggestWin: pick(parsed.biggestWin, base.biggestWin),
+      biggestMistake: pick(parsed.biggestMistake, base.biggestMistake),
+      bestPractice: pick(parsed.bestPractice, base.bestPractice),
+      lessonLearned: pick(parsed.lessonLearned, base.lessonLearned),
+      nextWeekFocus: pick(parsed.nextWeekFocus, base.nextWeekFocus),
     };
   } catch {
-    return emptyDraft(weekStart);
+    return base;
   }
 }
 
@@ -155,10 +197,15 @@ function isStepValid(step: StepIndex, draft: DraftState): boolean {
   }
 }
 
-export function WeeklyReviewWizard() {
+interface WeeklyReviewWizardProps {
+  /** Existing review for this week → editing (upsert), P2 fix. */
+  prefill?: WeeklyReviewPrefill;
+}
+
+export function WeeklyReviewWizard({ prefill }: WeeklyReviewWizardProps = {}) {
   const reduceMotion = useReducedMotion();
   const initialWeekStart = useMemo(() => lastMondayUTC(), []);
-  const [draft, setDraft] = useState<DraftState>(() => emptyDraft(initialWeekStart));
+  const [draft, setDraft] = useState<DraftState>(() => baseDraft(initialWeekStart, prefill));
   const [step, setStep] = useState<StepIndex>(0);
   const [hydrated, setHydrated] = useState(false);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
@@ -177,8 +224,12 @@ export function WeeklyReviewWizard() {
   // canonical React 19 SSR-safe approach.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDraft(loadDraft(initialWeekStart));
+    setDraft(loadDraft(initialWeekStart, prefill));
     setHydrated(true);
+    // `prefill` is a stable server prop for the page's lifetime; intentionally
+    // not in deps (it would re-run + clobber an in-progress edit on re-render).
+    // Mindset-wizard parity (mindset-wizard.tsx:117-124).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialWeekStart]);
 
   // Persist draft on every change after hydration.

@@ -52,6 +52,9 @@ const KIND_LABELS_FR: Record<string, string> = {
   meditation: 'Méditation',
 };
 
+/** Feminine labels — the success banner participle must agree ("Nutrition logguée."). */
+const FEMININE_KINDS: ReadonlySet<string> = new Set(['nutrition', 'meditation']);
+
 export default async function TrackPage({ searchParams }: TrackPageProps) {
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') {
@@ -96,7 +99,9 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
         </header>
 
         {justLogged ? (
-          <SuccessState headline={`${KIND_LABELS_FR[sp.kind as string]} loggué.`}>
+          <SuccessState
+            headline={`${KIND_LABELS_FR[sp.kind as string]} loggué${FEMININE_KINDS.has(sp.kind as string) ? 'e' : ''}.`}
+          >
             C&apos;est dans le miroir. Reviens demain.
           </SuccessState>
         ) : null}

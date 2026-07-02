@@ -11,6 +11,7 @@ import { HoverLift } from '@/components/ui/hover-lift';
 import { V18Aurora } from '@/components/v18/aurora';
 import { V18ThemeScope } from '@/components/v18/theme-scope';
 import { listMyRecentReviews } from '@/lib/weekly-review/service';
+import { currentWeekStartUTC, findCurrentWeekReview } from '@/lib/weekly-review/week';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,12 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
 
   const recent = await listMyRecentReviews(session.user.id, 12);
 
+  // P2 fix (mindset-landing parity `mindset/page.tsx:51`) — once this week's
+  // review exists, the primary CTA says "resume" instead of pretending the
+  // review is still to do (the wizard opens prefilled + upsert updates it).
+  const hasCurrentWeekReview = findCurrentWeekReview(recent, currentWeekStartUTC()) !== null;
+  const ctaLabel = hasCurrentWeekReview ? 'Reprendre ma revue hebdo' : 'Faire ma revue hebdo';
+
   // F2 — submission timestamps render in the MEMBER's timezone. Built once per
   // request and reused across the ≤12 rows (keeps the single-instantiation
   // intent of the original module-level formatter, now that the zone is dynamic).
@@ -95,7 +102,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
               className="rounded-control inline-flex h-12 items-center gap-2 bg-[var(--acc-btn)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px"
             >
               <NotebookPen size={16} strokeWidth={2.2} aria-hidden="true" />
-              Faire ma revue hebdo
+              {ctaLabel}
               <ArrowRight size={14} strokeWidth={2.2} aria-hidden="true" />
             </Link>
             <Link

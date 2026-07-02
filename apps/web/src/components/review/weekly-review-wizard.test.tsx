@@ -178,6 +178,61 @@ describe('WeeklyReviewWizard — localStorage draft hydration', () => {
   });
 });
 
+describe('WeeklyReviewWizard — prefill (resume an existing review, P2 fix)', () => {
+  const prefill = {
+    biggestWin: 'Prefilled win pulled from the existing review row.',
+    biggestMistake: 'Prefilled mistake pulled from the existing review row.',
+    bestPractice: null,
+    lessonLearned: 'Prefilled lesson pulled from the existing review row.',
+    nextWeekFocus: 'Prefilled focus pulled from the existing review row.',
+  };
+
+  it('seeds the textareas with the existing review answers', () => {
+    render(<WeeklyReviewWizard prefill={prefill} />);
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // → step 2
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    expect(textarea.value).toBe('Prefilled win pulled from the existing review row.');
+    // Prefilled content satisfies the min-chars gate → Suivant enabled.
+    expect(screen.getByRole('button', { name: /Suivant/ })).not.toBeDisabled();
+  });
+
+  it('lets a non-empty localStorage draft win over the prefill, field by field', () => {
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({ biggestWin: 'Draft edit typed after the first submission.' }),
+    );
+    render(<WeeklyReviewWizard prefill={prefill} />);
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // → step 2 (biggestWin)
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
+      'Draft edit typed after the first submission.',
+    );
+    // The untouched field still comes from the prefill.
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // → step 3 (biggestMistake)
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
+      'Prefilled mistake pulled from the existing review row.',
+    );
+  });
+
+  it('falls back to the prefill when the stored draft field is empty', () => {
+    window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ biggestWin: '' }));
+    render(<WeeklyReviewWizard prefill={prefill} />);
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // → step 2
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(
+      'Prefilled win pulled from the existing review row.',
+    );
+  });
+
+  it('renders a null bestPractice prefill as an empty optional step', () => {
+    render(<WeeklyReviewWizard prefill={prefill} />);
+    const next = () => fireEvent.click(screen.getByRole('button', { name: /Suivant/ }));
+    next(); // → step 2 (prefilled, valid)
+    next(); // → step 3 (prefilled, valid)
+    next(); // → step 4 (bestPractice, optional)
+    expect(screen.getByText('Étape 4 sur 5')).toBeInTheDocument();
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('');
+  });
+});
+
 describe('WeeklyReviewWizard — terminal step (5)', () => {
   it('shows the "Enregistrer ma revue" submit button on step 5', () => {
     render(<WeeklyReviewWizard />);

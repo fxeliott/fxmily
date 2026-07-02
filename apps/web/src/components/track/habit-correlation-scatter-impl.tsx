@@ -52,6 +52,15 @@ interface HabitCorrelationScatterProps {
   summary: string;
 }
 
+/**
+ * The padded X domain callbacks below produce non-round bounds (e.g. 5.6333…),
+ * and Recharts derives raw tick values from them — cap ticks at 1 decimal,
+ * dropping a trailing ".0" so integer scales (cafés, séances) stay clean.
+ */
+function tickLabel(value: number): string {
+  return String(Number(value.toFixed(1)));
+}
+
 export function HabitCorrelationScatter({ points, xLabel, summary }: HabitCorrelationScatterProps) {
   const C = useChartColors();
   const prefersReducedMotion = useReducedMotion();
@@ -87,6 +96,7 @@ export function HabitCorrelationScatter({ points, xLabel, summary }: HabitCorrel
               tick={{ fontSize: 11, fill: C.t4 }}
               tickLine={false}
               axisLine={false}
+              tickFormatter={tickLabel}
               domain={[
                 (min: number) => min - Math.max(0.5, Math.abs(min) * 0.05),
                 (max: number) => max + Math.max(0.5, Math.abs(max) * 0.05),

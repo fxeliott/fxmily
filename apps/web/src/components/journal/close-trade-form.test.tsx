@@ -79,32 +79,45 @@ afterEach(() => {
   cleanup();
 });
 
+// Both tests type long strings through userEvent — zero inter-keystroke delay
+// plus an explicit budget keeps them deterministic under full-suite worker
+// load (they timed out at the 5s default with 306 sibling files running).
+const LOAD_SAFE_TIMEOUT = 20_000;
+
 describe('CloseTradeForm — P2 controlled fields (no input loss)', () => {
-  it('binds every self-report field to state (typed/selected value stays applied)', async () => {
-    const user = userEvent.setup();
-    renderForm();
+  it(
+    'binds every self-report field to state (typed/selected value stays applied)',
+    async () => {
+      const user = userEvent.setup({ delay: null });
+      renderForm();
 
-    await fillEntry(user);
-    expectEntryRetained();
-  });
+      await fillEntry(user);
+      expectEntryRetained();
+    },
+    LOAD_SAFE_TIMEOUT,
+  );
 
-  it('keeps the whole entry after a FAILED server validation round-trip', async () => {
-    const user = userEvent.setup();
-    const { container } = renderForm();
+  it(
+    'keeps the whole entry after a FAILED server validation round-trip',
+    async () => {
+      const user = userEvent.setup({ delay: null });
+      const { container } = renderForm();
 
-    await fillEntry(user);
+      await fillEntry(user);
 
-    // Programmatic submit — bypasses the submit gate (emotions are not the
-    // subject here; they are controlled via EmotionPicker state already).
-    const form = container.querySelector('form');
-    expect(form).not.toBeNull();
-    fireEvent.submit(form!);
+      // Programmatic submit — bypasses the submit gate (emotions are not the
+      // subject here; they are controlled via EmotionPicker state already).
+      const form = container.querySelector('form');
+      expect(form).not.toBeNull();
+      fireEvent.submit(form!);
 
-    // The action ran and the server-style rejection surfaced.
-    await waitFor(() => expect(closeTradeActionMock).toHaveBeenCalledTimes(1));
-    await screen.findByText('Vérifie les champs en rouge.');
+      // The action ran and the server-style rejection surfaced.
+      await waitFor(() => expect(closeTradeActionMock).toHaveBeenCalledTimes(1));
+      await screen.findByText('Vérifie les champs en rouge.');
 
-    // React 19 has reset the <form> by now — controlled fields must survive.
-    expectEntryRetained();
-  });
+      // React 19 has reset the <form> by now — controlled fields must survive.
+      expectEntryRetained();
+    },
+    LOAD_SAFE_TIMEOUT,
+  );
 });

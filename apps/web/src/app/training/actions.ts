@@ -102,11 +102,13 @@ export async function createTrainingTradeAction(
   const rawTradingViewUrl = formData.get('tradingViewUrl');
   const raw = {
     pair: formData.get('pair'),
-    entryScreenshotKey: formData.get('entryScreenshotKey'),
-    // F1 — optional TradingView link. Empty/absent → null so the optional
-    // schema short-circuits (the wizard sends it GUARDED, like resultR).
-    tradingViewUrl:
-      rawTradingViewUrl === '' || rawTradingViewUrl == null ? null : rawTradingViewUrl,
+    // J1 — legacy screenshot key now OPTIONAL, no longer sent by the wizard.
+    // Coerce absent/'' → undefined so the optional Zod string passes.
+    entryScreenshotKey: formData.get('entryScreenshotKey') || undefined,
+    // J1 — MANDATORY TradingView link (replaces the former screenshot upload).
+    // Coerce absent → '' so the required schema's `.min(1)` surfaces the clean
+    // "obligatoire" message rather than a generic "expected string".
+    tradingViewUrl: rawTradingViewUrl ?? '',
     plannedRR: formData.get('plannedRR'),
     // Optional backtest result — empty/absent → null (mirrors the real
     // open/close split: a backtest may be logged before the result is set).
@@ -139,7 +141,9 @@ export async function createTrainingTradeAction(
   // session, otherwise a member could attach another member's upload to
   // their own backtest. `trainingKeyBelongsTo` never cross-accepts a
   // real-edge `trades/` key (statistical isolation §21.5).
-  if (!trainingKeyBelongsTo(data.entryScreenshotKey, session.user.id)) {
+  // J1 — the screenshot is now OPTIONAL, so only enforce ownership when a
+  // legacy key is present (the wizard no longer uploads one).
+  if (data.entryScreenshotKey && !trainingKeyBelongsTo(data.entryScreenshotKey, session.user.id)) {
     return {
       ok: false,
       error: 'invalid_input',
@@ -176,8 +180,8 @@ export async function createTrainingTradeAction(
     const trade = await createTrainingTrade({
       userId: session.user.id,
       pair: data.pair,
-      entryScreenshotKey: data.entryScreenshotKey,
-      tradingViewUrl: data.tradingViewUrl ?? null,
+      entryScreenshotKey: data.entryScreenshotKey ?? null,
+      tradingViewUrl: data.tradingViewUrl,
       plannedRR: data.plannedRR,
       outcome: data.outcome ?? null,
       resultR: data.resultR ?? null,

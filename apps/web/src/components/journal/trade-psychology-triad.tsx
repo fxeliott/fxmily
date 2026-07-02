@@ -1,3 +1,5 @@
+import { ExternalLink, LineChart } from 'lucide-react';
+
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { emotionLabel } from '@/lib/trading/emotions';
@@ -28,10 +30,15 @@ interface TradePsychologyTriadProps {
   after: readonly string[];
   /** Open trades only capture « avant » ; during/after come at close. */
   isClosed: boolean;
-  /** Capture avant entrée (clé résolue en URL signée par l'appelant). */
+  /** Capture avant entrée (clé résolue en URL signée par l'appelant). Legacy —
+   * les nouveaux trades portent un lien TradingView (`entryChartUrl`). */
   entryPhotoUrl?: string | null;
-  /** Capture après sortie (présente seulement à la clôture). */
+  /** Capture après sortie (présente seulement à la clôture). Legacy. */
   exitPhotoUrl?: string | null;
+  /** J1 — lien TradingView d'entrée (le champ primaire des nouveaux trades). */
+  entryChartUrl?: string | null;
+  /** J1 — lien TradingView de sortie (renseigné à la clôture). */
+  exitChartUrl?: string | null;
   /** Note d'intention pré-entrée (côté « avant » du débrief scindé). */
   entryNote?: string | null;
   /** Débrief de sortie (côté « après » du débrief scindé). */
@@ -47,15 +54,25 @@ export function TradePsychologyTriad({
   isClosed,
   entryPhotoUrl = null,
   exitPhotoUrl = null,
+  entryChartUrl = null,
+  exitChartUrl = null,
   entryNote = null,
   debrief = null,
   pair,
 }: TradePsychologyTriadProps) {
   const hasEmotions = before.length > 0 || during.length > 0 || after.length > 0;
   const hasWritten = entryNote !== null || debrief !== null;
-  // Render the arc as soon as ANY dimension exists (émotion, capture ou écrit) —
-  // parité avec les sections d'origine, chacune masquée si vide.
-  if (!hasEmotions && !entryPhotoUrl && !exitPhotoUrl && !hasWritten) {
+  // Render the arc as soon as ANY dimension exists (émotion, lien TradingView,
+  // capture legacy ou écrit) — parité avec les sections d'origine, chacune
+  // masquée si vide.
+  if (
+    !hasEmotions &&
+    !entryPhotoUrl &&
+    !exitPhotoUrl &&
+    !entryChartUrl &&
+    !exitChartUrl &&
+    !hasWritten
+  ) {
     return null;
   }
 
@@ -67,6 +84,8 @@ export function TradePsychologyTriad({
       pending: 'Rien noté',
       photoUrl: entryPhotoUrl,
       photoAlt: `Capture avant entrée du trade ${pair}`,
+      chartUrl: entryChartUrl,
+      chartLabel: "Voir l'analyse d'entrée sur TradingView",
     },
     {
       key: 'during',
@@ -75,6 +94,8 @@ export function TradePsychologyTriad({
       pending: isClosed ? 'Rien noté' : 'Se renseigne à la clôture',
       photoUrl: null,
       photoAlt: '',
+      chartUrl: null,
+      chartLabel: '',
     },
     {
       key: 'after',
@@ -83,6 +104,8 @@ export function TradePsychologyTriad({
       pending: isClosed ? 'Rien noté' : 'Se renseigne à la clôture',
       photoUrl: exitPhotoUrl,
       photoAlt: `Capture après sortie du trade ${pair}`,
+      chartUrl: exitChartUrl,
+      chartLabel: "Voir l'analyse de sortie sur TradingView",
     },
   ] as const;
 
@@ -107,6 +130,19 @@ export function TradePsychologyTriad({
             ) : (
               <span className="t-cap text-[var(--t-4)]">{phase.pending}</span>
             )}
+            {phase.chartUrl ? (
+              <a
+                href={phase.chartUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={phase.chartLabel}
+                className="rounded-card mt-0.5 inline-flex items-center gap-2 border border-[var(--b-default)] bg-[var(--bg-1)] px-3 py-2 text-[12px] font-medium text-[var(--acc)] transition-colors hover:border-[var(--b-strong)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              >
+                <LineChart className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                <span className="min-w-0 flex-1 truncate">Analyse TradingView</span>
+                <ExternalLink className="h-3 w-3 shrink-0 text-[var(--t-4)]" aria-hidden />
+              </a>
+            ) : null}
             {phase.photoUrl ? (
               <a
                 href={phase.photoUrl}

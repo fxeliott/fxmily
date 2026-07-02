@@ -21,7 +21,8 @@ import { TRAINING_CHECKLIST_ITEMS, trainingTradeCreateSchema } from './training-
 
 const BASE_VALID_BACKTEST = {
   pair: 'EURUSD',
-  entryScreenshotKey: 'training/abcdefgh12345678/abcdefghijkl1234.jpg',
+  // J1 — the TradingView link is the required primary field.
+  tradingViewUrl: 'https://www.tradingview.com/x/NQe0OrXz/',
   plannedRR: 2,
   systemRespected: 'na' as const,
   lessonLearned: 'Entrée patiente sur retest, process tenu de bout en bout.',

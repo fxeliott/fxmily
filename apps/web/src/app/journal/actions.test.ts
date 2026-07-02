@@ -88,6 +88,7 @@ function openForm(overrides: Record<string, string> = {}, emotions: string[] = [
     planRespected: 'true',
     hedgeRespected: 'na',
     notes: 'Setup propre.',
+    tradingViewEntryUrl: 'https://www.tradingview.com/x/Entry123/',
     screenshotEntryKey: OWN_ENTRY_KEY,
     ...overrides,
   };
@@ -107,6 +108,7 @@ function closeForm(
     exitPrice: '1.105',
     outcome: 'win',
     notes: 'TP atteint, discipline OK.',
+    tradingViewExitUrl: 'https://www.tradingview.com/x/Exit9876/',
     screenshotExitKey: OWN_EXIT_KEY,
     ...overrides,
   };

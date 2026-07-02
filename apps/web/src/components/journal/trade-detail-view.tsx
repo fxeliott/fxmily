@@ -133,7 +133,7 @@ export function TradeDetailView({
           <div className="flex flex-col gap-1">
             <span className="t-eyebrow text-[var(--warn)]">Trade ouvert</span>
             <p className="t-body text-[var(--t-2)]">
-              Ajoute le résultat et la capture à la sortie pour calculer ton R réalisé.
+              Ajoute le résultat et le lien TradingView de sortie pour calculer ton R réalisé.
             </p>
           </div>
           <Link
@@ -254,6 +254,8 @@ export function TradeDetailView({
         isClosed={trade.isClosed}
         entryPhotoUrl={entryUrl}
         exitPhotoUrl={exitUrl}
+        entryChartUrl={trade.tradingViewEntryUrl}
+        exitChartUrl={trade.tradingViewExitUrl}
         entryNote={entryNote}
         debrief={debrief}
         pair={trade.pair}

@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { Prisma } from '@/generated/prisma/client';
 
 import {
@@ -587,16 +589,20 @@ function localDateOfDate(d: Date, timezone: string): LocalDateString {
 /**
  * Read the latest snapshot for a user (dashboard use). Returns null if none
  * exists yet — typical for a brand-new member before the first cron run.
+ *
+ * Wrapped in React `cache()` (carbone getDashboardAnalytics/getMethodMirror):
+ * several dashboard sections each need the latest score during ONE server
+ * render — per-request memoisation collapses them into a single query.
  */
-export async function getLatestBehavioralScore(
-  userId: string,
-): Promise<SerializedBehavioralScore | null> {
-  const row = await db.behavioralScore.findFirst({
-    where: { userId },
-    orderBy: { date: 'desc' },
-  });
-  return row === null ? null : serializeBehavioralScore(row);
-}
+export const getLatestBehavioralScore = cache(
+  async (userId: string): Promise<SerializedBehavioralScore | null> => {
+    const row = await db.behavioralScore.findFirst({
+      where: { userId },
+      orderBy: { date: 'desc' },
+    });
+    return row === null ? null : serializeBehavioralScore(row);
+  },
+);
 
 /** One point of the behavioral-score trend (4 dimensions over time). Scores are
  *  `null` on days the dimension was `insufficient_data` — never a fabricated 0. */
@@ -617,28 +623,37 @@ export interface BehavioralScoreTrendPoint {
  * ONLY by the RGPD export — the member could see today's gauges but never their
  * trajectory. Lightweight projection (4 ints + date), user-scoped, no P&L.
  */
+// React `cache()` keys on argument IDENTITY — an `options` object literal is a
+// fresh reference on every call and would NEVER hit. So the memoised layer
+// takes primitives only; the public wrapper below keeps the ergonomic
+// options-object signature and resolves the default before delegating.
+const getBehavioralScoreHistoryCached = cache(
+  async (userId: string, sinceDays: number): Promise<BehavioralScoreTrendPoint[]> => {
+    const cutoff = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+    const rows = await db.behavioralScore.findMany({
+      where: { userId, date: { gte: cutoff } },
+      orderBy: { date: 'asc' },
+      select: {
+        date: true,
+        disciplineScore: true,
+        emotionalStabilityScore: true,
+        consistencyScore: true,
+        engagementScore: true,
+      },
+    });
+    return rows.map((r) => ({
+      date: r.date.toISOString().slice(0, 10),
+      discipline: r.disciplineScore,
+      emotionalStability: r.emotionalStabilityScore,
+      consistency: r.consistencyScore,
+      engagement: r.engagementScore,
+    }));
+  },
+);
+
 export async function getBehavioralScoreHistory(
   userId: string,
   options: { sinceDays?: number } = {},
 ): Promise<BehavioralScoreTrendPoint[]> {
-  const sinceDays = options.sinceDays ?? 90;
-  const cutoff = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
-  const rows = await db.behavioralScore.findMany({
-    where: { userId, date: { gte: cutoff } },
-    orderBy: { date: 'asc' },
-    select: {
-      date: true,
-      disciplineScore: true,
-      emotionalStabilityScore: true,
-      consistencyScore: true,
-      engagementScore: true,
-    },
-  });
-  return rows.map((r) => ({
-    date: r.date.toISOString().slice(0, 10),
-    discipline: r.disciplineScore,
-    emotionalStability: r.emotionalStabilityScore,
-    consistency: r.consistencyScore,
-    engagement: r.engagementScore,
-  }));
+  return getBehavioralScoreHistoryCached(userId, options.sinceDays ?? 90);
 }

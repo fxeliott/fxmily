@@ -265,7 +265,7 @@ export function DesignSystemShowcase() {
                     headingLevel="h3"
                     headline="Synchronisation impossible"
                     action="Vérifie ta connexion puis réessaie."
-                    cause="DEMO: simulated 503 — request-id 8f2c"
+                    cause="DEMO: simulated 503 (request-id 8f2c)"
                     onRetry={() => setStatus('ready')}
                   />
                 }

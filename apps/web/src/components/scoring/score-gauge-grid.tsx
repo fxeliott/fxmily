@@ -90,7 +90,7 @@ export function ScoreGaugeGrid({ score, history }: ScoreGaugeGridProps) {
               label="les 4 scores comportementaux"
               side="bottom"
               width={272}
-              tip="4 scores de process (0–100), jamais basés sur ton P&L : Discipline (plan, hedge, routine), Stabilité (variance, stress, tilt), Cohérence (expectancy, drawdown, sessions) et Engagement (check-ins, streak, journal). Recalculés chaque nuit et en live après chaque action."
+              tip="4 scores de process (0 à 100), jamais basés sur ton P&L : Discipline (plan, hedge, routine), Stabilité (variance, stress, tilt), Cohérence (expectancy, drawdown, sessions) et Engagement (check-ins, streak, journal). Recalculés chaque nuit et en live après chaque action."
             />
           </div>
           {checkinDays != null ? (

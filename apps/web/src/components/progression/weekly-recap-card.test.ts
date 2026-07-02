@@ -129,7 +129,7 @@ describe('computeWeeklyRecap — statistical integrity (no fabricated delta)', (
       counters({ planRespectRate: 0.65, streakDays: 4 }),
     );
     const plan = metric(res, 'planRespect');
-    expect(plan.display).toBe('—');
+    expect(plan.display).toBe('-');
     expect(plan.delta).toBeNull();
     expect(plan.deltaDisplay).toBeNull();
     expect(plan.direction).toBe('none');

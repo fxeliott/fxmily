@@ -155,7 +155,7 @@ export function TrackRecordChart({ data, estimatedExcluded, range, timezone }: E
             {estimatedExcluded > 0 ? ` ${estimatedExcluded} trade(s) sans stop-loss exclu(s).` : ''}
           </figcaption>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={formatted} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+            <AreaChart data={formatted} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
               <defs>
                 {/* J6.6 BLOCKER B1 fix — hex literals instead of var(--token) so
                     Safari/iOS WebView resolves the gradient correctly. S18: hex
@@ -198,7 +198,7 @@ export function TrackRecordChart({ data, estimatedExcluded, range, timezone }: E
                 itemStyle={{ color: C.t1 }}
                 formatter={(value, name) => {
                   const v = typeof value === 'number' ? value : Number(value);
-                  if (!Number.isFinite(v)) return ['—', String(name)];
+                  if (!Number.isFinite(v)) return ['-', String(name)];
                   return name === 'cumR'
                     ? [`${v >= 0 ? '+' : ''}${v.toFixed(2)} R`, 'R cumulé']
                     : [v.toFixed(2), 'DD'];

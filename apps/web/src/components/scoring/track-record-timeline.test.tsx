@@ -47,13 +47,13 @@ describe('TrackRecordTimeline — frise track record (S4 §33 #1)', () => {
     expect(label).toContain('photo');
   });
 
-  it('R estimé marqué « est. » ; R non chiffré rendu « — »', () => {
+  it('R estimé marqué « est. » ; R non chiffré rendu « - »', () => {
     render(<TrackRecordTimeline items={[ITEM({ realizedR: -1, realizedREstimated: true })]} />);
     expect(screen.getByText('est.')).toBeInTheDocument();
     expect(screen.getByText(/-1\.0R/)).toBeInTheDocument();
     cleanup();
     render(<TrackRecordTimeline items={[ITEM({ realizedR: null })]} />);
-    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.getByText('-')).toBeInTheDocument();
   });
 
   // §33.2 : l'écart est un repère CALME (cyan), jamais rouge punitif.

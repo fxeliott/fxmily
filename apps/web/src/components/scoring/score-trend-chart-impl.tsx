@@ -155,7 +155,7 @@ export function ScoreTrendChart({ data }: { data: ReadonlyArray<BehavioralScoreT
               itemStyle={{ color: C.t1 }}
               formatter={(value, name) => {
                 const v = typeof value === 'number' ? value : Number(value);
-                return [Number.isFinite(v) ? `${v}/100` : '—', String(name)];
+                return [Number.isFinite(v) ? `${v}/100` : '-', String(name)];
               }}
             />
             {DIMENSIONS.map((dim) => (

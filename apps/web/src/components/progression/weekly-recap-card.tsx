@@ -128,7 +128,7 @@ function countMetric(
  * an honest "—") with no fabricated delta.
  */
 function rateMetric(current: number | null, previous: number | null): WeeklyRecapMetric {
-  const display = current === null ? '—' : `${round(current * 100)} %`;
+  const display = current === null ? '-' : `${round(current * 100)} %`;
   if (current === null || previous === null) {
     return {
       key: 'planRespect',

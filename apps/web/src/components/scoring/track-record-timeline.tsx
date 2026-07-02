@@ -115,7 +115,7 @@ export function TrackRecordTimeline({
                     win ? 'text-[var(--ok)]' : loss ? 'text-[var(--bad)]' : 'text-[var(--t-3)]',
                   )}
                 >
-                  {r === null ? '—' : `${r > 0 ? '+' : ''}${r.toFixed(1)}R`}
+                  {r === null ? '-' : `${r > 0 ? '+' : ''}${r.toFixed(1)}R`}
                   {item.realizedREstimated && r !== null ? (
                     <span className="text-[10px] font-normal text-[var(--t-4)]"> est.</span>
                   ) : null}

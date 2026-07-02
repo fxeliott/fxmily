@@ -16,7 +16,16 @@
  * payload. The local side only ever provides `bias`/`levels`/`reading`/`text` —
  * so even a fully-compromised pipeline machine can neither invent an asset, drop
  * one, reorder them, nor relabel DXY as a non-macro pivot.
+ *
+ * Typography belt (F-J1): every editorial TEXT field the pipeline produced is
+ * AI output persisted then shown to members, so it passes through
+ * `normalizeAiTypography` here (the ingest boundary = the persist boundary for
+ * séance content) — em/en dashes never reach `/seances`. Deterministic and
+ * idempotent; the symbol/name/macro IDENTITIES are canonical (never text), so
+ * they are untouched.
  */
+
+import { normalizeAiTypography } from '@/lib/text/normalize-typography';
 
 /** One canonical followed asset (display order; identity is authoritative). */
 export interface CanonicalAsset {
@@ -177,7 +186,7 @@ export function assembleSeanceContent(
     } else {
       const reading = (Array.isArray(a.reading) ? a.reading : [])
         .filter((p): p is string => typeof p === 'string' && p.trim() !== '')
-        .map((p) => p.trim());
+        .map((p) => normalizeAiTypography(p.trim()));
       if (!reading.length) errors.push(`lecture (reading) vide: ${canon.symbol}`);
       if (!OUTPUT_BIAS.includes(a.bias as OutputBias)) {
         errors.push(`biais invalide (${a.bias}): ${canon.symbol}`);
@@ -191,7 +200,10 @@ export function assembleSeanceContent(
             typeof l.value === 'string' &&
             l.value.trim() !== '',
         )
-        .map((l) => ({ label: l.label.trim(), value: l.value.trim() }));
+        .map((l) => ({
+          label: normalizeAiTypography(l.label.trim()),
+          value: normalizeAiTypography(l.value.trim()),
+        }));
       assets.push({
         symbol: canon.symbol,
         name: canon.name,
@@ -206,11 +218,12 @@ export function assembleSeanceContent(
     if (!m || typeof m.text !== 'string' || m.text.trim() === '') {
       errors.push(`message manquant ou vide: ${canon.symbol}`);
     } else {
-      messages.push({ asset: canon.symbol, text: m.text.trim() });
+      messages.push({ asset: canon.symbol, text: normalizeAiTypography(m.text.trim()) });
     }
   }
 
-  const summary = typeof input?.summary === 'string' ? input.summary.trim() : '';
+  const summary =
+    typeof input?.summary === 'string' ? normalizeAiTypography(input.summary.trim()) : '';
   if (!summary) errors.push('summary manquant');
 
   // Key takeaways OPTIONAL (a thin session may have none → never invent, never
@@ -218,7 +231,7 @@ export function assembleSeanceContent(
   // point would mutilate faithful content → Règle n°1 violation).
   const keyTakeaways = (Array.isArray(input?.keyTakeaways) ? input!.keyTakeaways : [])
     .filter((p): p is string => typeof p === 'string' && p.trim() !== '')
-    .map((p) => p.trim());
+    .map((p) => normalizeAiTypography(p.trim()));
 
   // Editorial hard constraints, over ALL published text (incl. the A-Z points).
   const allText = [

@@ -27,6 +27,7 @@
 
 import { z } from 'zod';
 
+import { normalizeAiTypography } from '@/lib/text/normalize-typography';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
 // =============================================================================
@@ -57,7 +58,9 @@ const safeItemSchema = z
   .min(ITEM_MIN_CHARS)
   .max(ITEM_MAX_CHARS)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
-  .transform(safeFreeText);
+  .transform(safeFreeText)
+  // Deterministic typography belt (F-J1) — em/en dashes out of Claude output.
+  .transform(normalizeAiTypography);
 
 const safeNarrativeSchema = z
   .string()
@@ -65,7 +68,9 @@ const safeNarrativeSchema = z
   .min(NARRATIVE_MIN_CHARS)
   .max(NARRATIVE_MAX_CHARS)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
-  .transform(safeFreeText);
+  .transform(safeFreeText)
+  // Deterministic typography belt (F-J1) — em/en dashes out of Claude output.
+  .transform(normalizeAiTypography);
 
 const safeSectionSchema = z
   .string()
@@ -73,14 +78,18 @@ const safeSectionSchema = z
   .min(SECTION_MIN_CHARS)
   .max(SECTION_MAX_CHARS)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
-  .transform(safeFreeText);
+  .transform(safeFreeText)
+  // Deterministic typography belt (F-J1) — em/en dashes out of Claude output.
+  .transform(normalizeAiTypography);
 
 const safePatternValueSchema = z
   .string()
   .trim()
   .max(PATTERN_VALUE_MAX_CHARS)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
-  .transform(safeFreeText);
+  .transform(safeFreeText)
+  // Deterministic typography belt (F-J1) — em/en dashes out of Claude output.
+  .transform(normalizeAiTypography);
 
 // =============================================================================
 // Patterns object — month-over-month observations

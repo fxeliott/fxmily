@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { normalizeAiTypography } from '@/lib/text/normalize-typography';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
 /**
@@ -152,7 +153,12 @@ export const MEMBER_PROFILE_AXIS_MAX_CHARS = 200;
 const memberProfileHighlightSchema = z
   .object({
     key: z.string().regex(MEMBER_PROFILE_HIGHLIGHT_KEY_REGEX, 'Highlight key invalide.').max(80),
-    label: z.string().min(3).max(MEMBER_PROFILE_HIGHLIGHT_LABEL_MAX_CHARS, 'Label trop long.'),
+    label: z
+      .string()
+      .min(3)
+      .max(MEMBER_PROFILE_HIGHLIGHT_LABEL_MAX_CHARS, 'Label trop long.')
+      // Deterministic typography belt (F-J1) — em/en dashes out of Claude prose.
+      .transform(normalizeAiTypography),
     evidence: z
       .array(
         z.string().min(1).max(MEMBER_PROFILE_EVIDENCE_MAX_CHARS, 'Evidence trop long (max 250).'),
@@ -197,7 +203,11 @@ const dimensionIdSchema = z
 const rationaleSchema = z
   .string()
   .min(MEMBER_PROFILE_RATIONALE_MIN_CHARS, 'Rationale trop court (min 10).')
-  .max(MEMBER_PROFILE_RATIONALE_MAX_CHARS, 'Rationale trop long (max 400).');
+  .max(MEMBER_PROFILE_RATIONALE_MAX_CHARS, 'Rationale trop long (max 400).')
+  // Deterministic typography belt (F-J1) — em/en dashes out of Claude prose.
+  // NOT applied to the sibling `evidence[]` (verbatim member substrings that a
+  // post-gen substring check validates — rewriting them would break it).
+  .transform(normalizeAiTypography);
 
 export const coachingToneSchema = z
   .object({
@@ -217,7 +227,12 @@ export const learningStageSchema = z
 
 export const axisStructuredSchema = z
   .object({
-    axis: z.string().min(5).max(MEMBER_PROFILE_AXIS_MAX_CHARS, 'Axe trop long (max 200).'),
+    axis: z
+      .string()
+      .min(5)
+      .max(MEMBER_PROFILE_AXIS_MAX_CHARS, 'Axe trop long (max 200).')
+      // Deterministic typography belt (F-J1) — em/en dashes out of Claude prose.
+      .transform(normalizeAiTypography),
     dimensionId: dimensionIdSchema,
     priority: z.number().int().min(1, 'Priorite 1-5.').max(5, 'Priorite 1-5.'),
     evidence: dimensionEvidenceSchema,
@@ -234,7 +249,9 @@ export const weakSignalSchema = z
     signal: z
       .string()
       .min(5)
-      .max(MEMBER_PROFILE_WEAK_SIGNAL_MAX_CHARS, 'Signal trop long (max 200).'),
+      .max(MEMBER_PROFILE_WEAK_SIGNAL_MAX_CHARS, 'Signal trop long (max 200).')
+      // Deterministic typography belt (F-J1) — em/en dashes out of Claude prose.
+      .transform(normalizeAiTypography),
     dimensionId: dimensionIdSchema,
     evidence: dimensionEvidenceSchema,
   })
@@ -267,7 +284,9 @@ export const memberProfileOutputSchema = z
     summary: z
       .string()
       .min(MEMBER_PROFILE_SUMMARY_MIN_CHARS, 'Summary trop court (min 100 chars).')
-      .max(MEMBER_PROFILE_SUMMARY_MAX_CHARS, 'Summary trop long (max 800 chars).'),
+      .max(MEMBER_PROFILE_SUMMARY_MAX_CHARS, 'Summary trop long (max 800 chars).')
+      // Deterministic typography belt (F-J1) — em/en dashes out of Claude prose.
+      .transform(normalizeAiTypography),
     highlights: z
       .array(memberProfileHighlightSchema)
       .min(MEMBER_PROFILE_HIGHLIGHTS_MIN, 'Au moins 3 highlights requis.')
@@ -277,7 +296,9 @@ export const memberProfileOutputSchema = z
         z
           .string()
           .min(5)
-          .max(MEMBER_PROFILE_AXIS_MAX_CHARS, 'Axe prioritaire trop long (max 200).'),
+          .max(MEMBER_PROFILE_AXIS_MAX_CHARS, 'Axe prioritaire trop long (max 200).')
+          // Deterministic typography belt (F-J1) — em/en dashes out of Claude prose.
+          .transform(normalizeAiTypography),
       )
       .min(MEMBER_PROFILE_AXES_MIN, 'Au moins 3 axes prioritaires requis.')
       .max(MEMBER_PROFILE_AXES_MAX, 'Maximum 5 axes prioritaires.'),

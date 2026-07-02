@@ -90,7 +90,7 @@ export async function approveAccessRequestAction(
         error: rollbackErr instanceof Error ? rollbackErr.message.slice(0, 200) : 'unknown',
       });
     });
-    console.error('[access-request] approval email failed — rolled back', err);
+    console.error('[access-request] approval email failed, rolled back', err);
     return {
       ok: false,
       error: 'email_failed',

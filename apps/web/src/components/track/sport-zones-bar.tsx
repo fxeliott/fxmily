@@ -93,7 +93,7 @@ export function SportZonesBar({ durationMin }: SportZonesBarProps) {
             {currentZone.label}
           </span>
         ) : (
-          <span className="font-mono text-[11px] text-[var(--t-3)] tabular-nums">—</span>
+          <span className="font-mono text-[11px] text-[var(--t-3)] tabular-nums">-</span>
         )}
       </div>
 

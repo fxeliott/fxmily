@@ -140,7 +140,7 @@ export function distributionPercents(
  * UI-side (slate sur fomo/revenge, jamais rouge punition).
  */
 export function formatRMagnitude(r: number | null): string {
-  if (r === null) return '—';
+  if (r === null) return '-';
   if (r === 0) return '0R';
   const sign = r > 0 ? '+' : '';
   return `${sign}${r.toFixed(1)}R`;

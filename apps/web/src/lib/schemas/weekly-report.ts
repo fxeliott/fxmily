@@ -29,6 +29,7 @@
 
 import { z } from 'zod';
 
+import { normalizeAiTypography } from '@/lib/text/normalize-typography';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
 // =============================================================================
@@ -52,7 +53,10 @@ const safeItemSchema = z
   .min(ITEM_MIN_CHARS)
   .max(ITEM_MAX_CHARS)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
-  .transform(safeFreeText);
+  .transform(safeFreeText)
+  // Deterministic typography belt (F-J1) — strip em/en dashes from Claude output
+  // before it is persisted / shown to a member. AI output only (not member input).
+  .transform(normalizeAiTypography);
 
 const safeSummarySchema = z
   .string()
@@ -60,14 +64,20 @@ const safeSummarySchema = z
   .min(SUMMARY_MIN_CHARS)
   .max(SUMMARY_MAX_CHARS)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
-  .transform(safeFreeText);
+  .transform(safeFreeText)
+  // Deterministic typography belt (F-J1) — strip em/en dashes from Claude output
+  // before it is persisted / shown to a member. AI output only (not member input).
+  .transform(normalizeAiTypography);
 
 const safePatternValueSchema = z
   .string()
   .trim()
   .max(PATTERN_VALUE_MAX_CHARS)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
-  .transform(safeFreeText);
+  .transform(safeFreeText)
+  // Deterministic typography belt (F-J1) — strip em/en dashes from Claude output
+  // before it is persisted / shown to a member. AI output only (not member input).
+  .transform(normalizeAiTypography);
 
 // =============================================================================
 // Patterns object — what the builder summarizes from analytics

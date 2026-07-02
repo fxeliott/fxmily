@@ -259,7 +259,7 @@ export default async function AdminReportDetailPage({ params }: ReportDetailPage
             label="Email"
             value={
               report.sentToAdminAt
-                ? `${report.sentToAdminEmail ?? '—'} · ${GENERATED_FMT.format(new Date(report.sentToAdminAt))}`
+                ? `${report.sentToAdminEmail ?? '-'} · ${GENERATED_FMT.format(new Date(report.sentToAdminAt))}`
                 : 'En attente'
             }
             tone={report.sentToAdminAt ? 'ok' : 'mute'}

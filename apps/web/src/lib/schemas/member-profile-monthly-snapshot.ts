@@ -34,6 +34,7 @@
 
 import { z } from 'zod';
 
+import { normalizeAiTypography } from '@/lib/text/normalize-typography';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 import {
   axesStructuredSchema,
@@ -59,7 +60,9 @@ const evolutionNarrativeSchema = z
   .min(EVOLUTION_NARRATIVE_MIN_CHARS)
   .max(EVOLUTION_NARRATIVE_MAX_CHARS)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
-  .transform(safeFreeText);
+  .transform(safeFreeText)
+  // Deterministic typography belt (F-J1) — em/en dashes out of Claude output.
+  .transform(normalizeAiTypography);
 
 // =============================================================================
 // Output schema — what Claude must return (JSON strict, double-net)

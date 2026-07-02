@@ -101,8 +101,9 @@ export function MemberVerificationPanel({
               <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--t-1)]">
                 {a.label}
                 <span className="t-cap block text-[var(--t-4)]">
-                  {a.brokerName ?? '—'} · {a.proofsCount} preuve{a.proofsCount > 1 ? 's' : ''} ·{' '}
-                  {a.positionsCount} position{a.positionsCount > 1 ? 's' : ''}
+                  {a.brokerName ?? 'Broker non précisé'} · {a.proofsCount} preuve
+                  {a.proofsCount > 1 ? 's' : ''} · {a.positionsCount} position
+                  {a.positionsCount > 1 ? 's' : ''}
                 </span>
               </span>
               {a.detectedByAI ? (

@@ -94,9 +94,7 @@ export function SleepZonesBar({ hours }: SleepZonesBarProps) {
           >
             {currentZone.label}
           </span>
-        ) : (
-          <span className="font-mono text-[11px] text-[var(--t-3)] tabular-nums">—</span>
-        )}
+        ) : null}
       </div>
 
       {/* Stacked zone bar */}
@@ -163,8 +161,8 @@ export function SleepZonesBar({ hours }: SleepZonesBarProps) {
 
       {/* Caption */}
       <p className="t-cap text-[var(--t-3)]">
-        Cible <span className="font-mono text-[var(--t-2)] tabular-nums">6,5–9h</span> : la bande où
-        ta clarté de décision et ta régulation émotionnelle culminent. Sous{' '}
+        Cible <span className="font-mono text-[var(--t-2)] tabular-nums">6,5 à 9h</span> : la bande
+        où ta clarté de décision et ta régulation émotionnelle culminent. Sous{' '}
         <span className="font-mono text-[var(--t-2)] tabular-nums">5h</span> tu trades avec un
         désavantage mesurable.
       </p>

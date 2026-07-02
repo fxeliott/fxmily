@@ -29,7 +29,7 @@ export function PairTopFive({ pairs }: PairTopFiveProps) {
               <tr>
                 <th>Paire</th>
                 <th>Trades</th>
-                <th>Win rate</th>
+                <th>Taux de réussite</th>
                 <th>R moyen</th>
               </tr>
             </thead>

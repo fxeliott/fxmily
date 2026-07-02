@@ -65,7 +65,10 @@ function AxisRow({ icon: Icon, label, value, word, fg, hint }: AxisRowProps) {
           <span className={cn('f-mono text-[13px] font-semibold tabular-nums', fg)}>
             {value}
             {word ? (
-              <span className="ml-1.5 text-[11px] font-medium text-[var(--t-4)]">{word}</span>
+              <>
+                {' '}
+                <span className="text-[11px] font-medium text-[var(--t-4)]">{word}</span>
+              </>
             ) : null}
           </span>
         </div>
@@ -167,7 +170,7 @@ export function MemberRecapCard({
     rows.push({
       icon: Compass,
       label: 'Travail sur toi & méthode',
-      value: methodRate === null ? '—' : `${methodRate} %`,
+      value: methodRate === null ? 'à venir' : `${methodRate} %`,
       word: band.word,
       fg: band.fg,
       hint:
@@ -187,7 +190,7 @@ export function MemberRecapCard({
     rows.push({
       icon: Sparkles,
       label: 'Constance & honnêteté',
-      value: score === null ? '—' : `${score} / 100`,
+      value: score === null ? 'à venir' : `${score} / 100`,
       word: band.word,
       fg: band.fg,
       hint:

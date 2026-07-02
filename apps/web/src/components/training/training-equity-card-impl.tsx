@@ -149,7 +149,7 @@ export function TrainingEquityCardChart({
             itemStyle={{ color: C.t1 }}
             formatter={(value) => {
               const v = typeof value === 'number' ? value : Number(value);
-              if (!Number.isFinite(v)) return ['—', 'Système tenu'];
+              if (!Number.isFinite(v)) return ['N/A', 'Système tenu'];
               return [`${v} fois`, 'Système tenu (cumulé)'];
             }}
           />

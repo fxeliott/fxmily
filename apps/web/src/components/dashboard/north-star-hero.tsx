@@ -315,7 +315,7 @@ export function NorthStarHero({
                 </span>
                 <div className="flex items-end gap-2.5">
                   <span className="f-mono text-[28px] leading-none font-bold tracking-[-0.03em] text-[var(--t-1)] tabular-nums">
-                    {disciplineValue === null ? '—' : disciplineValue}
+                    {disciplineValue === null ? 'à venir' : disciplineValue}
                     {disciplineValue !== null ? (
                       <span className="text-[15px] font-medium text-[var(--t-3)]">/100</span>
                     ) : null}

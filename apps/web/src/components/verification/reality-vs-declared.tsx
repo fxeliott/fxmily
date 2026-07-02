@@ -49,7 +49,7 @@ function EmptySide({ note }: { note: string }) {
   return (
     <div className="flex min-h-[68px] flex-col items-center justify-center gap-1 text-center">
       <span aria-hidden className="f-mono text-[16px] leading-none text-[var(--t-4)]">
-        —
+        ·
       </span>
       <span className="t-cap max-w-[22ch] text-[var(--t-4)]">{note}</span>
     </div>

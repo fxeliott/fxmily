@@ -180,7 +180,7 @@ function ProfileRadar({
               itemStyle={{ color: C.t1 }}
               formatter={(value) => {
                 const v = typeof value === 'number' ? value : Number(value);
-                return [Number.isFinite(v) ? `${v}/100` : '—', 'Score'];
+                return [Number.isFinite(v) ? `${v}/100` : 'non disponible', 'Score'];
               }}
             />
           </RadarChart>
@@ -288,7 +288,7 @@ function DimensionTrends({
                   {t.label}
                 </span>
                 <span className="t-mono-cap text-[var(--t-3)]">
-                  {last ? `${last.score}/100` : '—'}
+                  {last ? `${last.score}/100` : ''}
                 </span>
               </div>
               <figure
@@ -299,8 +299,8 @@ function DimensionTrends({
               >
                 <figcaption id={descId} className="sr-only">
                   {valid.length < 2
-                    ? `${t.label} : une seule mesure (${last?.score ?? '—'} sur 100), pas encore de tendance.`
-                    : `${t.label} : de ${first?.score ?? '—'} à ${last?.score ?? '—'} sur 100, sur ${valid.length} auto-évaluations. Les semaines manquantes ne sont pas extrapolées.`}
+                    ? `${t.label} : une seule mesure${last ? ` (${last.score} sur 100)` : ''}, pas encore de tendance.`
+                    : `${t.label} : de ${first?.score ?? 'non renseigné'} à ${last?.score ?? 'non renseigné'} sur 100, sur ${valid.length} auto-évaluations. Les semaines manquantes ne sont pas extrapolées.`}
                 </figcaption>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={series} margin={{ top: 6, right: 6, left: -28, bottom: 0 }}>
@@ -337,7 +337,7 @@ function DimensionTrends({
                       }}
                       formatter={(value) => {
                         const v = typeof value === 'number' ? value : Number(value);
-                        return [Number.isFinite(v) ? `${v}/100` : '—', t.label];
+                        return [Number.isFinite(v) ? `${v}/100` : 'non disponible', t.label];
                       }}
                     />
                   </LineChart>

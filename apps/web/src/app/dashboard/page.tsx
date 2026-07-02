@@ -407,7 +407,7 @@ export default async function DashboardPage() {
                         <AnimatedNumber value={Math.round(constancy.value)} />
                         <span className="text-[12px] font-medium text-[var(--t-4)]">/100</span>
                       </span>
-                      <span className="t-foot mt-1 text-[var(--t-4)]">constance</span>
+                      <span className="t-foot mt-1 text-[var(--t-4)]">score de constance</span>
                     </div>
                   ) : null}
                   <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden="true" />

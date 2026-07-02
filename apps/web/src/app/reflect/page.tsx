@@ -78,12 +78,12 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
               <span style={{ color: 'var(--acc-hi)' }}>vient en éclair</span>
             </h1>
             <p className="t-lead max-w-prose text-[var(--t-2)]">
-              Une réflexion CBT structurée en quatre étapes :{' '}
-              <strong className="text-[var(--t-1)]">A</strong>déclencheur ·{' '}
-              <strong className="text-[var(--t-1)]">B</strong>elief ·{' '}
-              <strong className="text-[var(--t-1)]">C</strong>onséquence ·{' '}
-              <strong className="text-[var(--t-1)]">D</strong>isputation. Cadre Ellis adapté au
-              trading, pas un substitut à un suivi clinique.
+              Une réflexion structurée en quatre étapes :{' '}
+              <strong className="text-[var(--t-1)]">A</strong> (déclencheur) ·{' '}
+              <strong className="text-[var(--t-1)]">B</strong> (croyance) ·{' '}
+              <strong className="text-[var(--t-1)]">C</strong> (conséquence) ·{' '}
+              <strong className="text-[var(--t-1)]">D</strong> (mise en question). Le cadre ABCD
+              d&apos;Ellis adapté au trading, pas un substitut à un suivi clinique.
             </p>
           </div>
 

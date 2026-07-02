@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Link2, TrendingDown, TrendingUp } from 'lucide-react';
+import { Check, Link2, Minus, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { useActionState, useEffect, useState } from 'react';
 
@@ -376,7 +376,7 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
           </p>
         ) : (
           <p className="t-cap text-[var(--t-4)]">
-            Lien <code className="font-mono">tradingview.com</code> de ta sortie — la preuve de ta
+            Lien <code className="font-mono">tradingview.com</code> de ta sortie : la preuve de ta
             gestion jusqu&apos;au bout.
           </p>
         )}
@@ -427,7 +427,7 @@ function OutcomeCard({
   tone: 'ok' | 'bad' | 'mute';
   disabled?: boolean;
 }) {
-  const Icon = icon === 'up' ? TrendingUp : icon === 'down' ? TrendingDown : null;
+  const Icon = icon === 'up' ? TrendingUp : icon === 'down' ? TrendingDown : Minus;
 
   // Tailwind 4 has-[:checked] : when the radio inside is checked, apply
   // the tone-specific colors. Fallback states for disabled/hover.
@@ -459,7 +459,7 @@ function OutcomeCard({
       <span aria-hidden className="absolute top-2 right-2 hidden peer-checked:inline">
         <Check className="h-3 w-3" strokeWidth={2.5} />
       </span>
-      {Icon ? <Icon className="h-4 w-4" strokeWidth={1.75} /> : <span>—</span>}
+      <Icon className="h-4 w-4" strokeWidth={1.75} />
       <span>{label}</span>
     </label>
   );

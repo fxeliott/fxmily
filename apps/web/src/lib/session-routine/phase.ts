@@ -52,9 +52,9 @@ export function currentSessionPhase(
 
 /** The four ACTIVE steps of the trading day, in order, for the timeline UI. */
 export const SESSION_STEPS = [
-  { phase: 'analysis', label: 'Analyse', window: '12h–13h' },
-  { phase: 'execution', label: 'Exécution', window: '13h–16h' },
-  { phase: 'management', label: 'Gestion', window: '16h–20h' },
+  { phase: 'analysis', label: 'Analyse', window: '12h-13h' },
+  { phase: 'execution', label: 'Exécution', window: '13h-16h' },
+  { phase: 'management', label: 'Gestion', window: '16h-20h' },
   { phase: 'closed', label: 'Coupure', window: '20h' },
 ] as const satisfies ReadonlyArray<{ phase: SessionPhase; label: string; window: string }>;
 

@@ -100,15 +100,15 @@ describe('classifyPriorityAxes — anti-collision « regle » / « déréglé »
 describe('classifyPriorityAxes — VRAIS axes onboarding (anti-inertie §32-C/§33#3)', () => {
   // prompt.ts few-shot #1 — profil détachement/process (axes_prioritaires:306-310).
   const FEWSHOT_DETACHMENT = [
-    "Travailler le détachement du target — la peur de 'voir le marché repartir' (cf. [8]) défait l'edge à chaque trade.",
-    "Capitaliser sur l'awareness somatique existante [17] — proposer un rituel respiration 2 min avant chaque entrée.",
+    "Travailler le détachement du target : la peur de 'voir le marché repartir' (cf. [8]) défait l'edge à chaque trade.",
+    "Capitaliser sur l'awareness somatique existante [17] : proposer un rituel respiration 2 min avant chaque entrée.",
     "Consolider le process-focus déjà présent [26] en visualisant explicitement la 'régularité du geste' comme objectif premier.",
   ];
   // prompt.ts few-shot #2 — profil ego-public/randomness (axes_prioritaires:361-365).
   const FEWSHOT_EGO_PUBLIC = [
-    'Travailler les 5 vérités Mark Douglas (#1 anything can happen + #3 random distribution) — la dissonance intellectuel/pratique [4] est le point de levier #1.',
+    'Travailler les 5 vérités Mark Douglas (#1 anything can happen + #3 random distribution) : la dissonance intellectuel/pratique [4] est le point de levier #1.',
     'Proposer un backtest chiffré du setup A+ pour ancrer la confidence sur de la data réelle plutôt que ressenti [14].',
-    "Détacher l'identité-trader de l'identité-publique — exploration explicite du trigger [23] en session coaching.",
+    "Détacher l'identité-trader de l'identité-publique : exploration explicite du trigger [23] en session coaching.",
   ];
   // batch.test.ts / safety.test.ts — profil consistance/routines (axes_prioritaires:105-109).
   const FEWSHOT_CONSISTENCY = [

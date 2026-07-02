@@ -33,9 +33,9 @@ export default function MentionsPage(): React.ReactElement {
       <p>
         <strong>Eliott Pena</strong>, éditeur du service Fxmily.
         <br />
-        Adresse postale communiquée sur demande à
-        <a href="mailto:fxeliott@fxmily.fr">&nbsp;fxeliott@fxmily.fr</a>, conformément à
-        l&apos;article 6 III 2° de la LCEN, particulier non-professionnel).
+        Adresse postale communiquée sur demande à{' '}
+        <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>, conformément à l&apos;article 6
+        III 2° de la LCEN (particulier non-professionnel).
         <br />
         Contact : <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>
       </p>

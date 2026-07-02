@@ -660,7 +660,7 @@ describe('buildMonthlyDebriefUserPrompt — coaching psychologique reaches the p
     expect(prompt).toContain('## Signal de coaching psychologique');
     expect(prompt).toContain('- Axe dominant : régularité');
     expect(prompt).toContain('- Observé : Quelques suivis sautés');
-    expect(prompt).toContain('- Progression mesurée : Constance — 68/100');
+    expect(prompt).toContain('- Progression mesurée : Constance · 68/100');
     expect(prompt).toContain('- Micro-objectif mental en cours : Faire de la régularité');
     expect(prompt).toMatch(/2 tenue\(s\), 1 manquée\(s\), 1 écartée\(s\)/);
     expect(prompt).toContain('Rappel posture');

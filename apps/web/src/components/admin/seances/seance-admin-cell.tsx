@@ -62,7 +62,7 @@ const STEP_STATE_META: Record<PipelineStepState, { tone: string; label: string }
   active: { tone: 'text-[var(--acc-hi)]', label: 'en cours' },
   pending: { tone: 'text-[var(--t-3)]', label: 'en attente' },
   failed: { tone: 'text-[var(--bad)]', label: 'échec' },
-  idle: { tone: 'text-[var(--t-4)]', label: '—' },
+  idle: { tone: 'text-[var(--t-4)]', label: 'à faire' },
 };
 
 function goNoGoMessage(state: SeanceGoNoGoActionState | null): string | null {

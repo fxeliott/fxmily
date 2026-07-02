@@ -296,7 +296,7 @@ export function buildCoachingReportContext(
 export function renderCoachingContextSection(ctx: CoachingReportContext): string {
   const { insight, openObjective, closedOutcomes } = ctx;
   const lines: string[] = [
-    '## Signal de coaching psychologique (S5 — process / mental UNIQUEMENT)',
+    '## Signal de coaching psychologique (S5 : process / mental UNIQUEMENT)',
     '',
     `- Axe dominant : ${AXIS_FR[insight.axis]}`,
     `- Observé : ${insight.observation}`,
@@ -305,13 +305,13 @@ export function renderCoachingContextSection(ctx: CoachingReportContext): string
   ];
   if (insight.progression) {
     const p = insight.progression;
-    lines.push(`- Progression mesurée : ${p.label} — ${p.value}${p.unit} (${p.detail})`);
+    lines.push(`- Progression mesurée : ${p.label} · ${p.value}${p.unit} (${p.detail})`);
   }
   if (openObjective) lines.push(`- Micro-objectif mental en cours : ${openObjective.title}`);
   lines.push(
     `- Boucles refermées (période) : ${closedOutcomes.kept} tenue(s), ${closedOutcomes.missed} manquée(s), ${closedOutcomes.dismissed} écartée(s)`,
     '',
-    'Rappel posture : intègre ce signal CALMEMENT dans ton accompagnement psychologique. Jamais un conseil de marché, jamais un reproche — une donnée de régularité.',
+    'Rappel posture : intègre ce signal CALMEMENT dans ton accompagnement psychologique. Jamais un conseil de marché, jamais un reproche : une donnée de régularité.',
   );
   return lines.join('\n');
 }

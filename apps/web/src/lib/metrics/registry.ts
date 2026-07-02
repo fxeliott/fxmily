@@ -221,7 +221,7 @@ export const METRICS = [
 
   // ─── Fidélité à la méthode — 7 règles dures (MethodMirror, dérivé-au-render)─
   // prettier-ignore
-  { key: 'method.window', label: 'Fenêtre 13h–16h', hint: "Entrées dans la fenêtre d'exécution 13h–16h Paris.", type: 'rate', axis: 'method', unit: '%', aggregation: 'rate', status: 'live', source: 'lib/method-mirror/compute.ts' },
+  { key: 'method.window', label: 'Fenêtre 13h-16h', hint: "Entrées dans la fenêtre d'exécution 13h-16h Paris.", type: 'rate', axis: 'method', unit: '%', aggregation: 'rate', status: 'live', source: 'lib/method-mirror/compute.ts' },
   // prettier-ignore
   { key: 'method.oneADay', label: 'Un trade par jour', hint: 'Jours à au plus une entrée (approximation de « un risque ouvert/jour »).', type: 'rate', axis: 'method', unit: '%', aggregation: 'rate', status: 'live', source: 'lib/method-mirror/compute.ts' },
   // prettier-ignore
@@ -241,7 +241,7 @@ export const METRICS = [
   { key: 'method.disciplinedNoTrade', label: 'Jour de patience', hint: 'Analyse faite mais aucun trade pris faute de confirmations (discipline +).', type: 'rate', axis: 'method', unit: '%', aggregation: 'rate', status: 'derivable', source: 'dérivable de DailyCheckin.marketAnalysisDone ∧ 0 Trade' },
   // Candidat V2 — nécessite un champ accountType/isPropFirm (NON ajouté en S1).
   // prettier-ignore
-  { key: 'method.propFirmSizing', label: 'Sizing 0,5% prop-firm', hint: 'Conformité au risque fixe 0,5% par position en compte prop-firm.', type: 'rate', axis: 'method', unit: '%', aggregation: 'rate', status: 'candidate_v2', source: 'candidat V2 — champ accountType requis' },
+  { key: 'method.propFirmSizing', label: 'Sizing 0,5% prop-firm', hint: 'Conformité au risque fixe 0,5% par position en compte prop-firm.', type: 'rate', axis: 'method', unit: '%', aggregation: 'rate', status: 'candidate_v2', source: 'candidat V2 : champ accountType requis' },
 
   // ─── Constance / honnêteté radicale (§33, reality-confronted) ──────────────
   // prettier-ignore

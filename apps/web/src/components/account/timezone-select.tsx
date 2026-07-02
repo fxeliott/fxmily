@@ -85,7 +85,7 @@ export function TimezoneSelect({ initialTimezone, groups }: Props): React.ReactN
           setSaved(true);
         } else {
           setSelected(previous);
-          setError('Échec de l’enregistrement — réessaie.');
+          setError('Échec de l’enregistrement, réessaie.');
         }
       });
     });

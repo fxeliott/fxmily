@@ -320,7 +320,7 @@ function ProgressionHero({
             <span className="t-eyebrow text-[var(--acc-hi)]">Discipline du moment</span>
             <div className="flex items-end gap-3">
               <span className="f-mono text-[40px] leading-none font-bold tracking-[-0.03em] text-[var(--t-1)] tabular-nums">
-                {value === null ? '—' : <AnimatedNumber value={value} />}
+                {value === null ? 'à venir' : <AnimatedNumber value={value} />}
                 {value !== null ? (
                   <span className="text-[18px] font-medium text-[var(--t-3)]">/100</span>
                 ) : null}

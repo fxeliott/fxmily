@@ -274,7 +274,7 @@ function CronRow({ entry }: { entry: CronHealthEntry }): React.ReactElement {
         {entry.lastRanAt ? (
           <>
             <p className="font-mono tabular-nums">
-              {entry.ageMs !== null ? formatDuration(entry.ageMs) : '—'}
+              {entry.ageMs !== null ? formatDuration(entry.ageMs) : 'âge inconnu'}
             </p>
             <p className="text-[10px] text-[var(--t-4)]">{formatTimestamp(entry.lastRanAt)}</p>
           </>

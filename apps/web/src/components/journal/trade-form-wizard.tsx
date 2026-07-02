@@ -640,7 +640,7 @@ function StepDirectionSession({ draft, update, fieldErrors, disabled }: StepProp
         <p className="t-cap text-[var(--t-4)]">
           Pré-sélection :{' '}
           <span className="font-mono text-[var(--t-2)]">
-            {draft.session ? SESSION_LABEL[draft.session as keyof typeof SESSION_LABEL] : '—'}
+            {draft.session ? SESSION_LABEL[draft.session as keyof typeof SESSION_LABEL] : 'aucune'}
           </span>
           . Tu peux corriger.
         </p>
@@ -684,8 +684,7 @@ function StepPricesSizing({ draft, update, fieldErrors, disabled }: StepProps) {
         disabled={disabled}
         step="any"
         inputMode="decimal"
-        placeholder="—"
-        hint="Sans stop-loss, le R réalisé sera estimé (computed → estimated fallback)."
+        hint="Sans stop-loss, le R réalisé sera estimé au lieu d'être calculé précisément."
       />
       {/* V1.5 — Tharp risk % rule. Optional capture; surfaces a soft warning
           when the value exceeds 2 % (Tharp gold standard). */}
@@ -776,7 +775,7 @@ function StepPlannedRR({
         <div className="mb-3 flex items-center justify-between">
           <span className="t-eyebrow">R:R prévu</span>
           <Pill tone={isLowRR ? 'bad' : 'acc'}>
-            EV {isLowRR ? 'NÉGATIF' : 'POSITIF'} si WR&gt;{breakeven.toFixed(0)}%
+            EV {isLowRR ? 'NÉGATIF' : 'POSITIF'} si réussite &gt;{breakeven.toFixed(0)}%
           </Pill>
         </div>
 
@@ -853,7 +852,7 @@ function StepPlannedRR({
             value={rr}
             onChange={(e) => update('plannedRR', Number(e.target.value))}
             disabled={disabled}
-            aria-label="Risk Reward ratio"
+            aria-label="Ratio R:R prévu"
             aria-valuetext={`R:R 1 pour ${rr.toFixed(2)}`}
             className="absolute inset-0 w-full cursor-grab opacity-0 active:cursor-grabbing disabled:cursor-not-allowed"
           />
@@ -906,7 +905,7 @@ function StepPlannedRR({
           <div className="flex-1">
             <div className="text-[12px] font-medium text-[var(--bad-hi)]">EV négatif sous 1:1</div>
             <p className="t-cap mt-0.5 text-[var(--t-2)]">
-              Avec R:R 1:{rr.toFixed(2)}, ton win rate doit dépasser{' '}
+              Avec R:R 1:{rr.toFixed(2)}, ton taux de réussite doit dépasser{' '}
               <span className="font-mono font-semibold text-[var(--bad-hi)] tabular-nums">
                 {breakeven.toFixed(0)}%
               </span>{' '}
@@ -921,8 +920,10 @@ function StepPlannedRR({
       <Card className="p-4">
         <div className="mb-3 flex items-start justify-between">
           <div className="flex flex-col gap-1">
-            <span className="t-eyebrow">Breakeven probability</span>
-            <p className="t-cap text-[var(--t-3)]">Win rate minimum pour ne pas perdre, par R:R.</p>
+            <span className="t-eyebrow">Seuil de rentabilité</span>
+            <p className="t-cap text-[var(--t-3)]">
+              Taux de réussite minimum pour ne pas perdre, par R:R.
+            </p>
           </div>
           <Pill tone="cy" dot="live">
             CALCULÉ LIVE
@@ -939,13 +940,13 @@ function StepPlannedRR({
           >
             {breakeven.toFixed(0)}%
           </span>
-          <span className="t-eyebrow">win rate requis</span>
+          <span className="t-eyebrow">de réussite requise</span>
         </div>
 
         <p className="t-body mt-2 text-[var(--t-3)]">
           Avec 1:{rr.toFixed(2)} il te faut{' '}
           <span className="font-mono text-[var(--t-1)] tabular-nums">{breakeven.toFixed(0)}%</span>{' '}
-          de wins pour être à zéro. Au-dessus = EV positif sur le long terme.
+          de trades gagnants pour être à zéro. Au-dessus = EV positif sur le long terme.
         </p>
 
         {/* Ladder 9-cells */}
@@ -986,7 +987,7 @@ function StepPlannedRR({
           })}
         </div>
         <p className="t-foot mt-3 text-[var(--t-4)]">
-          EV = (WR × R) − (1 − WR). Hors frais &amp; swap.
+          EV = (réussite × R) − (1 − réussite). Hors frais et swap.
         </p>
       </Card>
     </div>
@@ -1402,7 +1403,7 @@ function pairExamplePrice(pair: TradingPair | ''): string {
   if (pair === 'NAS100') return '15800.00';
   if (pair === 'SPX500') return '4520.00';
   if (pair && (TRADING_PAIRS as readonly string[]).includes(pair)) return '1.10000';
-  return '—';
+  return '';
 }
 
 function serverErrorMessage(state: CreateTradeActionState): string {

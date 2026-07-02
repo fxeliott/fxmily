@@ -75,19 +75,19 @@ export default async function AdminSeancesPage() {
           <StatCell
             label="Tenues"
             value={stats.done}
-            hint={stats.done > 0 ? 'publiées' : '—'}
+            hint={stats.done > 0 ? 'publiées' : 'aucune'}
             tone={stats.done > 0 ? 'ok' : 'mute'}
           />
           <StatCell
             label="À venir"
             value={stats.upcoming}
-            hint={stats.upcoming > 0 ? 'prévues' : '—'}
+            hint={stats.upcoming > 0 ? 'prévues' : 'aucune'}
             tone={stats.upcoming > 0 ? 'acc' : 'mute'}
           />
           <StatCell
             label="Annulées"
             value={stats.cancelled}
-            hint={stats.cancelled > 0 ? 'indispo' : '—'}
+            hint={stats.cancelled > 0 ? 'indispo' : 'aucune'}
             tone={stats.cancelled > 0 ? 'warn' : 'mute'}
           />
         </div>

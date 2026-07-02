@@ -144,7 +144,7 @@ export function computeMethodMirror(
   const rules: MethodRule[] = [
     {
       key: 'window',
-      label: 'Fenêtre 13h–16h',
+      label: 'Fenêtre 13h-16h',
       hint: 'Tes entrées sur la fenêtre d’exécution de la méthode.',
       good: inWindow,
       total: entered,

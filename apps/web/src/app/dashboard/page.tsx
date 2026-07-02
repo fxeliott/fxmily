@@ -129,8 +129,9 @@ export default async function DashboardPage() {
         getProcessObjectives(userId, timezone),
         // S24 — journée-type trader : the method's canonical session routine
         // (analyse/exécution/gestion/coupure, Paris-fixed) + today's discipline
-        // facts derived from existing Trade rows (0 migration). Two indexed reads.
-        getSessionRoutine(userId),
+        // facts derived from existing Trade rows (0 migration) + the member's
+        // own-day pre-trade prep (F2 timezone, read-only helper reuse).
+        getSessionRoutine(userId, new Date(), timezone),
         // S4 §32/§33 — les alertes de dérive « sans qu'il ait à les chercher » :
         // surfacées au point d'entrée (hub) en plus de /verification. Même feed
         // lecture-seule (fenêtre 30j, cap 20), 0 nouvelle table. Lu en parallèle.
@@ -270,7 +271,9 @@ export default async function DashboardPage() {
             guide le membre heure par heure. Posture §2 : process/discipline, jamais
             un signal de marché. Toujours présente (même pour un nouveau membre :
             elle enseigne le rythme de la méthode). */}
-        {sessionRoutine ? <SessionTimeline routine={sessionRoutine} className="mb-6" /> : null}
+        {sessionRoutine ? (
+          <SessionTimeline routine={sessionRoutine} timezone={timezone} className="mb-6" />
+        ) : null}
 
         {/* S19 — « Maintenant » : la liste du jour (remontée de la 7e position, où
             elle était noyée) + le pont parcours (palier / ETA / levier du moment)

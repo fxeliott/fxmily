@@ -1,5 +1,7 @@
 import { Check, Moon } from 'lucide-react';
+import Link from 'next/link';
 
+import { formatCheckTime } from '@/components/pre-trade/pre-trade-today-status';
 import { SESSION_STEPS, sessionStepIndex } from '@/lib/session-routine/phase';
 import type { SessionRoutine } from '@/lib/session-routine/service';
 import { cn } from '@/lib/utils';
@@ -34,9 +36,12 @@ const PHASE_TONE: Record<string, { dot: string; ring: string }> = {
 
 export function SessionTimeline({
   routine,
+  timezone = 'Europe/Paris',
   className = '',
 }: {
   routine: SessionRoutine;
+  /** Member's IANA timezone (F2) — formats the pre-trade "posé à HHhMM" label. */
+  timezone?: string;
   className?: string;
 }) {
   const { phase, guidance, day } = routine;
@@ -72,6 +77,25 @@ export function SessionTimeline({
     phase === 'closed' && day.hasOpenPosition
       ? 'Une position est encore ouverte. La méthode coupe tout à 20h : la nuit n’est pas ta session.'
       : null;
+
+  // --- Pré-trade du jour : posture Mark Douglas stricte (§2) ------------------
+  // Trois états, jamais d'urgence ni de rouge :
+  //   fait                        → un simple constat calme "posé à HHhMM".
+  //   non fait, fenêtre pré-trade → rappel NEUTRE + lien vers /pre-trade/new
+  //                                 (analyse & exécution : le moment où préparer
+  //                                 a encore du sens — une invitation, pas une porte).
+  //   sinon (avant / gestion /    → rien (le moins intrusif : préparer n'a plus
+  //   coupure, non fait)            de sens ou la journée n'a pas ouvert).
+  // Le pré-trade est OPTIONNEL (ADR-003) : "pas fait" est un fait neutre, jamais
+  // un échec — même surface accent que les autres notes, aucun ton d'alerte.
+  const preTradeDone = day.preTradeToday.done;
+  const preTradeAt = day.preTradeToday.at;
+  const inPreTradeWindow = phase === 'analysis' || phase === 'execution';
+  const preTradeDoneNote =
+    preTradeDone && preTradeAt
+      ? `Pré-trade du jour posé à ${formatCheckTime(preTradeAt, timezone)}.`
+      : null;
+  const showPreTradeNudge = !preTradeDone && inPreTradeWindow;
 
   return (
     <section
@@ -179,6 +203,27 @@ export function SessionTimeline({
           <p className="t-body rounded-control border border-[var(--warn-edge)] bg-[var(--warn-dim)] px-3 py-2 leading-[1.5] text-[var(--t-2)]">
             {cutNote}
           </p>
+        ) : null}
+        {/* Pré-trade du jour — constat calme (fait) ou invitation neutre (fenêtre,
+            non fait). Jamais de rouge, jamais d'urgence : posture Mark Douglas. */}
+        {preTradeDoneNote ? (
+          <p
+            className="t-body rounded-control border border-[var(--b-default)] bg-[var(--bg-2)] px-3 py-2 leading-[1.5] text-[var(--t-2)]"
+            data-slot="pre-trade-day-note"
+            data-state="done"
+          >
+            {preTradeDoneNote}
+          </p>
+        ) : showPreTradeNudge ? (
+          <Link
+            href="/pre-trade/new"
+            data-slot="pre-trade-day-note"
+            data-state="todo"
+            className="t-body rounded-control block border border-[var(--b-acc)] bg-[var(--acc-dim)] px-3 py-2 leading-[1.5] text-[var(--t-2)] transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+          >
+            Tu n’as pas encore posé ton pré-trade du jour. Une pause de 30 secondes avant d’entrer,
+            si tu le souhaites.
+          </Link>
         ) : null}
       </div>
     </section>

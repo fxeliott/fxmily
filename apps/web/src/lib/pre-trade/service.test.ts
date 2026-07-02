@@ -23,6 +23,7 @@ const {
   createPreTradeCheck,
   listRecentPreTradeChecks,
   linkRecentCheckToTrade,
+  getTodayPreTradeStatus,
   LINK_DEFAULT_WINDOW_MIN,
   MAX_LIST_LIMIT,
 } = await import('./service');
@@ -162,6 +163,81 @@ describe('listRecentPreTradeChecks', () => {
     expect(result[0]?.createdAt).toBe('2026-05-26T10:00:00.000Z');
     expect(result[0]?.linkedTradeId).toBe('trade_X');
     expect(result[1]?.linkedTradeId).toBeNull();
+  });
+});
+
+describe('getTodayPreTradeStatus', () => {
+  it('reads only the newest check for the user (indexed, select-minimal)', async () => {
+    findFirstMock.mockResolvedValueOnce(null);
+
+    await getTodayPreTradeStatus('user_1', 'Europe/Paris', NOW_FIXED);
+
+    expect(findFirstMock).toHaveBeenCalledWith({
+      where: { userId: 'user_1' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+  });
+
+  it('returns done:false / at:null when the member has no check at all', async () => {
+    findFirstMock.mockResolvedValueOnce(null);
+
+    const result = await getTodayPreTradeStatus('user_1', 'Europe/Paris', NOW_FIXED);
+
+    expect(result).toEqual({ done: false, at: null });
+  });
+
+  it('returns done:true + ISO instant when the newest check is on the member local day', async () => {
+    // NOW = 2026-05-26T15:30Z ; check 2h earlier same Paris day.
+    const at = new Date('2026-05-26T13:30:00.000Z');
+    findFirstMock.mockResolvedValueOnce({ createdAt: at });
+
+    const result = await getTodayPreTradeStatus('user_1', 'Europe/Paris', NOW_FIXED);
+
+    expect(result).toEqual({ done: true, at: '2026-05-26T13:30:00.000Z' });
+  });
+
+  it('returns done:false when the newest check is from a PREVIOUS local day', async () => {
+    // Check yesterday afternoon (Paris) — not today.
+    findFirstMock.mockResolvedValueOnce({
+      createdAt: new Date('2026-05-25T13:30:00.000Z'),
+    });
+
+    const result = await getTodayPreTradeStatus('user_1', 'Europe/Paris', NOW_FIXED);
+
+    expect(result).toEqual({ done: false, at: null });
+  });
+
+  it('honours the member timezone at the day boundary (Pacific/Kiritimati +14)', async () => {
+    // NOW = 2026-05-26T15:30Z. In Kiritimati (UTC+14) that is 2026-05-27 05:30
+    // local → today = the 27th. A check at 2026-05-26T13:30Z = 2026-05-27 03:30
+    // local → same local day → done:true, even though it is the 26th in UTC.
+    const at = new Date('2026-05-26T13:30:00.000Z');
+    findFirstMock.mockResolvedValueOnce({ createdAt: at });
+
+    const result = await getTodayPreTradeStatus('user_1', 'Pacific/Kiritimati', NOW_FIXED);
+
+    expect(result).toEqual({ done: true, at: '2026-05-26T13:30:00.000Z' });
+  });
+
+  it('treats a check just before local midnight as a DIFFERENT day (tz-aware)', async () => {
+    // Paris on 2026-05-26T15:30Z is the 26th. A check at 2026-05-25T21:30Z is
+    // 2026-05-25 23:30 Paris → the 25th → NOT today.
+    findFirstMock.mockResolvedValueOnce({
+      createdAt: new Date('2026-05-25T21:30:00.000Z'),
+    });
+
+    const result = await getTodayPreTradeStatus('user_1', 'Europe/Paris', NOW_FIXED);
+
+    expect(result).toEqual({ done: false, at: null });
+  });
+
+  it('NEVER queries other users (userId is the scoping predicate)', async () => {
+    findFirstMock.mockResolvedValueOnce(null);
+
+    await getTodayPreTradeStatus('user_OWNER', 'Europe/Paris', NOW_FIXED);
+
+    expect(findFirstMock.mock.calls[0]?.[0]?.where?.userId).toBe('user_OWNER');
   });
 });
 

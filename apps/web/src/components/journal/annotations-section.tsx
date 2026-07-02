@@ -83,7 +83,7 @@ export function AnnotationsSection({
         </h2>
         <Card className="p-4">
           <p className="t-body text-[var(--t-3)]">
-            Aucune correction encore — le bouton ci-dessous en crée une.
+            Aucune correction encore, le bouton ci-dessous en crée une.
           </p>
         </Card>
       </section>

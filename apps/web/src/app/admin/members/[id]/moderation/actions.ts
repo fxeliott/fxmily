@@ -144,7 +144,7 @@ export async function suspendMemberAction(
     return {
       ok: false,
       error: 'already_suspended',
-      message: "Ce membre n'est plus actif — recharge la page.",
+      message: "Ce membre n'est plus actif. Recharge la page.",
     };
   }
 
@@ -156,7 +156,7 @@ export async function suspendMemberAction(
 
   revalidatePath(`/admin/members/${memberId}`);
   revalidatePath('/admin/members');
-  return { ok: true, message: 'Membre suspendu — accès révoqué immédiatement.' };
+  return { ok: true, message: 'Membre suspendu, accès révoqué immédiatement.' };
 }
 
 /**
@@ -204,7 +204,7 @@ export async function reinstateMemberAction(
     return {
       ok: false,
       error: 'not_suspended',
-      message: "Ce membre n'est plus suspendu — recharge la page.",
+      message: "Ce membre n'est plus suspendu. Recharge la page.",
     };
   }
 
@@ -216,5 +216,5 @@ export async function reinstateMemberAction(
 
   revalidatePath(`/admin/members/${memberId}`);
   revalidatePath('/admin/members');
-  return { ok: true, message: 'Membre réintégré — il peut de nouveau se connecter.' };
+  return { ok: true, message: 'Membre réintégré, il peut de nouveau se connecter.' };
 }

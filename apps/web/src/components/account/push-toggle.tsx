@@ -292,7 +292,7 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
           <p className="mt-1 text-sm text-[var(--t-2)]">
             {isSubscribed
               ? 'Tu reçois les notifications cochées plus bas. Tu peux les désactiver à tout moment.'
-              : "Reçois les corrections d'Eliott, les rappels de check-in, et les fiches Mark Douglas pertinentes — sans bruit superflu."}
+              : "Reçois les corrections d'Eliott, les rappels de check-in, et les fiches Mark Douglas pertinentes, sans bruit superflu."}
           </p>
         </div>
         <button

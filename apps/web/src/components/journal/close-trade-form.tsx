@@ -65,7 +65,7 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
       : state.error === 'already_closed'
         ? 'Ce trade est déjà clôturé.'
         : state.error === 'unauthorized'
-          ? 'Session expirée — reconnecte-toi.'
+          ? 'Session expirée, reconnecte-toi.'
           : state.error === 'invalid_input'
             ? 'Vérifie les champs en rouge.'
             : state.error === 'unknown'

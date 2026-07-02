@@ -50,7 +50,7 @@ export default async function TrackMeditationNewPage() {
             </h1>
           </div>
           <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
-            Hofmann et al., <em>J. Consult. Clin. Psychol.</em>, 2010 (méta-analyse) — ~10 min/jour
+            Hofmann et al., <em>J. Consult. Clin. Psychol.</em>, 2010 (méta-analyse) : ~10 min/jour
             de pleine conscience suffisent à réduire l&apos;anxiété et stabiliser ta régulation
             émotionnelle, les deux leviers de ton exécution sous incertitude.
           </p>

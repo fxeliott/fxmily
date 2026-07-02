@@ -20,14 +20,18 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 const TEST_TOKEN = 'test_admin_batch_token_64_hex_dummy_value_aaaaaaaaaaaaaaaaaaaaaaaa';
 const WRONG_TOKEN = 'test_admin_batch_token_WRONG_dummy_value_bbbbbbbbbbbbbbbbbbbbbbb';
 
-// Mock env module — must come before importing the SUT.
+// Mock env module — must come before importing the SUT. Both batch tokens are
+// configured so the generic `requireAdminToken` AND the séances variant
+// (`requireSeancesAdminToken`, J4) can be exercised in the same file.
 vi.mock('@/lib/env', () => ({
   env: {
     ADMIN_BATCH_TOKEN: TEST_TOKEN,
+    SEANCES_ADMIN_BATCH_TOKEN: TEST_TOKEN,
   },
 }));
 
-const { verifyAdminToken, requireAdminToken } = await import('./admin-token');
+const { verifyAdminToken, requireAdminToken, requireSeancesAdminToken } =
+  await import('./admin-token');
 
 beforeEach(() => {
   // No state to reset on the SUT itself ; each test uses a unique IP for
@@ -219,6 +223,92 @@ describe('requireAdminToken — env disabled', () => {
     expect(res!.status).toBe(503);
     const body = await res!.json();
     expect(body.error).toBe('admin_batch_disabled');
+
+    vi.doUnmock('@/lib/env');
+    vi.resetModules();
+  });
+});
+
+/**
+ * Réunion hub (séances) J4 — `requireSeancesAdminToken` guard.
+ *
+ * The variant is an EXACT carbon of `requireVerificationAdminToken` with two
+ * deliberate swaps: it reads `env.SEANCES_ADMIN_BATCH_TOKEN` and consumes the
+ * DEDICATED `seancesBatchLimiter`. Those swaps ARE the security invariant — a
+ * future copy-paste that forgot to replace the limiter would silently lock
+ * Eliott out of another batch surface. We pin both the auth gate AND the
+ * bucket isolation so that regression can never ship green.
+ */
+describe('requireSeancesAdminToken — séances batch guard (J4)', () => {
+  it('returns 401 when the X-Admin-Token header is missing', async () => {
+    const res = requireSeancesAdminToken(makeRequest({ ip: '10.60.0.1' }));
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(401);
+    expect(await res!.json()).toEqual({ error: 'unauthorized' });
+  });
+
+  it('returns 401 when the X-Admin-Token header is wrong', () => {
+    const res = requireSeancesAdminToken(makeRequest({ token: WRONG_TOKEN, ip: '10.60.0.2' }));
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(401);
+  });
+
+  it('returns null (passthrough) when the X-Admin-Token header is valid', () => {
+    const res = requireSeancesAdminToken(makeRequest({ token: TEST_TOKEN, ip: '10.60.0.3' }));
+    expect(res).toBeNull();
+  });
+
+  it('returns 429 once the dedicated séances bucket is drained via 401 attempts', async () => {
+    const ip = '10.60.0.4';
+    // seancesBatchLimiter burst budget is 10 (token-bucket.ts).
+    for (let i = 0; i < 10; i++) {
+      const res = requireSeancesAdminToken(makeRequest({ token: 'WRONG' + 'a'.repeat(60), ip }));
+      expect(res!.status).toBe(401);
+    }
+    const res = requireSeancesAdminToken(makeRequest({ token: 'WRONG' + 'a'.repeat(60), ip }));
+    expect(res!.status).toBe(429);
+    expect(res!.headers.get('Retry-After')).toBeTruthy();
+    expect((await res!.json()).error).toBe('rate_limited');
+  });
+
+  it('does NOT consume the bucket on a valid-token request', () => {
+    const ip = '10.60.0.5';
+    for (let i = 0; i < 30; i++) {
+      expect(requireSeancesAdminToken(makeRequest({ token: TEST_TOKEN, ip }))).toBeNull();
+    }
+  });
+
+  it('uses a SEPARATE bucket from the generic admin batch (no cross-surface lockout)', () => {
+    // The load-bearing invariant: drain the séances bucket to 429 for an IP,
+    // then prove the SAME IP can still fail-auth on the generic admin batch
+    // with a 401 (not a 429) — i.e. the séances flood never touched the
+    // adminBatchLimiter. A shared limiter would surface 429 here.
+    const ip = '10.60.0.6';
+    for (let i = 0; i < 11; i++) {
+      requireSeancesAdminToken(makeRequest({ token: 'WRONG' + 'z'.repeat(60), ip }));
+    }
+    // séances bucket is now drained (≥1 of those returned 429).
+    const drained = requireSeancesAdminToken(makeRequest({ token: 'WRONG' + 'z'.repeat(60), ip }));
+    expect(drained!.status).toBe(429);
+
+    // Same IP, generic admin batch → first hit, admin bucket untouched → 401.
+    const cross = requireAdminToken(makeRequest({ token: 'WRONG' + 'z'.repeat(60), ip }));
+    expect(cross!.status).toBe(401);
+  });
+});
+
+describe('requireSeancesAdminToken — env disabled (refuse-by-default)', () => {
+  it('returns 503 when SEANCES_ADMIN_BATCH_TOKEN is not configured', async () => {
+    vi.resetModules();
+    vi.doMock('@/lib/env', () => ({
+      env: { SEANCES_ADMIN_BATCH_TOKEN: undefined },
+    }));
+
+    const { requireSeancesAdminToken: gated } = await import('./admin-token');
+    const res = gated(makeRequest({ token: TEST_TOKEN, ip: '10.60.0.7' }));
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(503);
+    expect((await res!.json()).error).toBe('seances_batch_disabled');
 
     vi.doUnmock('@/lib/env');
     vi.resetModules();

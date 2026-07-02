@@ -136,7 +136,7 @@ function renderMockOutput(snapshot: WeeklySnapshot): WeeklyReportOutput {
   if (c.tradesTotal === 0 && c.morningCheckinsCount === 0 && c.eveningCheckinsCount === 0) {
     return {
       summary:
-        "Le membre n'a aucune activité enregistrée cette semaine — pas de trades, pas de check-ins. C'est typique d'un onboarding récent ou d'une semaine de pause volontaire ; pas un signal d'inquiétude en soi.",
+        "Le membre n'a aucune activité enregistrée cette semaine : pas de trades, pas de check-ins. C'est typique d'un onboarding récent ou d'une semaine de pause volontaire ; pas un signal d'inquiétude en soi.",
       risks: [],
       recommendations: [
         "Relancer doucement avec un message d'encouragement pour le check-in matin (rituel le plus facile à reprendre).",
@@ -149,22 +149,22 @@ function renderMockOutput(snapshot: WeeklySnapshot): WeeklyReportOutput {
     `Le membre a pris ${c.tradesTotal} trade(s) cette semaine (winrate ${winRate}%) avec ${planRate} de plan respecté. ` +
     `Routine : ${c.morningCheckinsCount} check-ins matin et ${c.eveningCheckinsCount} soir, streak ${c.streakDays}j. ` +
     `${c.douglasCardsDelivered} fiche(s) Mark Douglas délivrée(s) (${c.douglasCardsSeen} lue(s)). ` +
-    `Mock smoke-test — l'analyse qualitative arrivera quand ANTHROPIC_API_KEY sera configurée.`;
+    `Mock smoke-test. L'analyse qualitative arrivera quand ANTHROPIC_API_KEY sera configurée.`;
 
   const risks: string[] = [];
   if (c.planRespectRate !== null && c.planRespectRate < 0.7) {
     risks.push(
-      `Plan respecté seulement à ${Math.round(c.planRespectRate * 100)}% — drift de discipline à surveiller, à recouper avec la trajectoire émotionnelle.`,
+      `Plan respecté seulement à ${Math.round(c.planRespectRate * 100)}%, drift de discipline à surveiller, à recouper avec la trajectoire émotionnelle.`,
     );
   }
   if (c.tradesLoss >= 3 && c.tradesWin === 0) {
     risks.push(
-      `Série de ${c.tradesLoss} pertes sans gain — risque de tilt si le membre force la prochaine entrée pour "se refaire".`,
+      `Série de ${c.tradesLoss} pertes sans gain, risque de tilt si le membre force la prochaine entrée pour "se refaire".`,
     );
   }
   if (c.streakDays === 0 && c.morningCheckinsCount === 0) {
     risks.push(
-      `Aucun check-in matin cette semaine — risque de désengagement progressif, à recouper avec les annotations admin.`,
+      `Aucun check-in matin cette semaine, risque de désengagement progressif, à recouper avec les annotations admin.`,
     );
   }
 
@@ -174,7 +174,7 @@ function renderMockOutput(snapshot: WeeklySnapshot): WeeklyReportOutput {
   );
   if (c.eveningCheckinsCount < c.morningCheckinsCount) {
     recommendations.push(
-      `Encourager le check-in du soir — il manque ${c.morningCheckinsCount - c.eveningCheckinsCount} jour(s) cette semaine, c'est là que la stabilité émotionnelle se mesure.`,
+      `Encourager le check-in du soir, il manque ${c.morningCheckinsCount - c.eveningCheckinsCount} jour(s) cette semaine, c'est là que la stabilité émotionnelle se mesure.`,
     );
   }
 
@@ -185,7 +185,7 @@ function renderMockOutput(snapshot: WeeklySnapshot): WeeklyReportOutput {
       .join(', ')}.`;
   }
   if (c.sleepHoursMedian !== null && c.tradesTotal > 0) {
-    patterns.sleepPerf = `Sommeil médian ${c.sleepHoursMedian.toFixed(1)}h sur ${c.tradesTotal} trade(s) — corrélation à observer sur 4–6 semaines.`;
+    patterns.sleepPerf = `Sommeil médian ${c.sleepHoursMedian.toFixed(1)}h sur ${c.tradesTotal} trade(s), corrélation à observer sur 4–6 semaines.`;
   }
   if (snapshot.freeText.emotionTags.length > 0) {
     patterns.emotionPerf = `Émotions dominantes : ${snapshot.freeText.emotionTags.slice(0, 5).join(', ')}.`;

@@ -55,7 +55,7 @@ const KIND_X_LABEL: Record<HabitKind, string> = {
 const INTERPRETATION_FR: Record<CorrelationInterpretation, string> = {
   strong_positive: 'Lien positif fort',
   moderate_positive: 'Lien positif modéré',
-  weak: 'Lien faible — pas de tendance nette',
+  weak: 'Lien faible, pas de tendance nette',
   moderate_negative: 'Lien négatif modéré',
   strong_negative: 'Lien négatif fort',
 };
@@ -118,12 +118,12 @@ export function HabitCorrelationCard({ result, discipline }: HabitCorrelationCar
             <span className="t-mono-cap text-[var(--t-4)]">jours appariés</span>
           </div>
           <p className="text-[14px] leading-relaxed text-[var(--t-2)]">
-            Pas encore assez de données pour un lien fiable — un coefficient sur si peu de points ne
+            Pas encore assez de données pour un lien fiable, un coefficient sur si peu de points ne
             voudrait rien dire.
           </p>
           <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
             Il faut un trade clôturé (R précis) ET un log {KIND_NOUN_FR[habitKind]} le même jour. La
-            carte s&apos;active à {correlation.minRequired} jours appariés — chaque trade loggué
+            carte s&apos;active à {correlation.minRequired} jours appariés, chaque trade loggué
             t&apos;en rapproche.
           </p>
         </div>
@@ -136,7 +136,7 @@ export function HabitCorrelationCard({ result, discipline }: HabitCorrelationCar
             <p className="t-mono-cap text-[var(--t-4)]">
               r {fmt(correlation.r)} · ρ {fmt(correlation.rSpearman)} · n {correlation.n}
               {Math.abs(correlation.r - correlation.rSpearman) > SPEARMAN_PEARSON_DIVERGENCE
-                ? ' · écart Pearson/Spearman — sensible aux valeurs extrêmes'
+                ? ' · écart Pearson/Spearman, sensible aux valeurs extrêmes'
                 : ''}
             </p>
           </div>
@@ -151,7 +151,7 @@ export function HabitCorrelationCard({ result, discipline }: HabitCorrelationCar
             />
             {correlation.confidence === 'low' ? (
               <span className="t-mono-cap text-[var(--t-3)]">
-                Échantillon limité — à confirmer avec plus de jours.
+                Échantillon limité, à confirmer avec plus de jours.
               </span>
             ) : null}
           </div>
@@ -168,7 +168,7 @@ export function HabitCorrelationCard({ result, discipline }: HabitCorrelationCar
           />
 
           <p className="t-cap leading-relaxed text-[var(--t-4)]">
-            Corrélation, pas causalité : tes habitudes et ton R bougent peut-être ensemble — ça ne
+            Corrélation, pas causalité : tes habitudes et ton R bougent peut-être ensemble, ça ne
             prouve pas que l&apos;un cause l&apos;autre. Trades à stop-loss estimé exclus (R non
             précis).
           </p>
@@ -195,7 +195,7 @@ export function HabitCorrelationCard({ result, discipline }: HabitCorrelationCar
               </p>
               <p className="t-cap leading-relaxed text-[var(--t-4)]">
                 Descriptif, pas causal : tes habitudes et ton respect du plan bougent peut-être
-                ensemble — ça ne prouve pas que l&apos;un provoque l&apos;autre.
+                ensemble, ça ne prouve pas que l&apos;un provoque l&apos;autre.
               </p>
             </>
           )}

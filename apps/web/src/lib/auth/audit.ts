@@ -339,6 +339,11 @@ export type AuditAction =
   // The admin slugs (`meeting.generated`, `admin.meeting.cancelled`) follow
   // in J-M3.
   | 'meeting.attendance.declared'
+  // F4 — the member EXPLICITLY declared "je n'ai pas pu y assister" for one past
+  // slot (`declareMeetingAbsenceAction`). PII-FREE metadata `{meetingId}` ONLY:
+  // an absence carries no mode/content, and is NEVER a completion (posture §2 +
+  // §31.2 — honest, calm data that can't inflate the rate/engagement).
+  | 'meeting.attendance.absent'
   // V1.7 §30 J-M3 — meeting admin surface (cron generation + slot cancel).
   // `meeting.generated` is the `generate-meetings` cron heartbeat: ONE row per
   // scan carrying `{generated, skipped, ranAt}` (counts + timestamp only —
@@ -354,6 +359,33 @@ export type AuditAction =
   // PII-FREE metadata `{meetingId, present}` (`present` ∈ true|false|null) —
   // never any Ichor content, mirror `admin.meeting.cancelled`.
   | 'admin.meeting.presence.marked'
+  // Réunion hub (séances) J3 — admin go/no-go on a recorded session
+  // (`/admin/seances`). DISTINCT from the `/reunions` attendance tracker
+  // (`admin.meeting.*`): a séance is the replay/analysis content unit, not a
+  // presence slot. `admin.seance.declared` is emitted by the go/no-go Server
+  // Action: PII-FREE metadata `{date, slot, status}` — NEVER the cancel
+  // `reason` free-text (posture §2, mirror `admin.meeting.cancelled`).
+  // `admin.seance.regenerate` re-arms the AI step on a held session:
+  // PII-FREE `{date, slot}`. 0 FK to User → platform-wide content, no member id.
+  | 'admin.seance.declared'
+  | 'admin.seance.regenerate'
+  // Réunion hub (séances) J4 — local content pipeline batch
+  // (`/api/admin/seances-batch/{pull,persist}`, 6th local Claude pipeline). The
+  // local orchestrator (Zoom→Vimeo→Fathom→IA bornée) pushes the FAITHFUL
+  // editorial snapshot of a HELD session; Fxmily re-validates (Règle n°1) and
+  // materialises the Replay* rows the members read. Mirror the calendar/
+  // verification batch canonical lifecycle. PII-FREE by construction (0 FK to
+  // User → no member id ever): counts + slot coordinates only.
+  //   - batch.pulled         : `{ranAt, sessionsCount}` (declared go-sessions the local side fills)
+  //   - batch.persisted      : `{ranAt, persisted, skipped, errors, total}`
+  //   - batch.skipped        : `{ranAt, date, slot, reason}` (invalid-date / not-declared / not-done)
+  //   - batch.invalid_output : `{ranAt, date, slot, errorsCount}` (Règle n°1 re-validation fail)
+  //   - batch.persist_failed : `{ranAt, date, slot, error (truncated 200)}`
+  | 'seance.batch.pulled'
+  | 'seance.batch.persisted'
+  | 'seance.batch.skipped'
+  | 'seance.batch.invalid_output'
+  | 'seance.batch.persist_failed'
   // S10(a) — admin business-chain health view (`/admin/health`). Parity with
   // `admin.system.viewed`: a pure access trace, no PII, no member id.
   | 'admin.health.viewed'

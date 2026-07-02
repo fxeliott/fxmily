@@ -48,7 +48,7 @@ export function VerificationOverdueAlertEmail({
         <title>Preuves MT5 en attente d&apos;analyse · Fxmily</title>
       </Head>
       <Preview>
-        {`${overdueCount} preuve${plural ? 's' : ''} MT5 en attente d'analyse (vision) — lance le batch`}
+        {`${overdueCount} preuve${plural ? 's' : ''} MT5 en attente d'analyse (vision), lance le batch`}
       </Preview>
       <Body style={body}>
         <Container style={container}>
@@ -78,7 +78,7 @@ export function VerificationOverdueAlertEmail({
           </Text>
 
           <Section style={actionCard}>
-            <Text style={actionEyebrow}>À FAIRE — DEPUIS TON PC</Text>
+            <Text style={actionEyebrow}>À FAIRE · DEPUIS TON PC</Text>
             <Text style={actionStep}>
               <span style={dot}>·</span> Lance <span style={code}>/verification-batch</span> (ou{' '}
               <span style={code}>bash ops/scripts/verification-batch-local.sh</span>).
@@ -102,11 +102,11 @@ export function VerificationOverdueAlertEmail({
           <Hr style={hr} />
 
           <Text style={footer}>
-            Rappel automatique de permanence — envoyé uniquement quand des preuves MT5 sont en
+            Rappel automatique de permanence, envoyé uniquement quand des preuves MT5 sont en
             attente d&apos;analyse passé le délai de courtoisie. Aucune preuve analysée sur un
             serveur (le batch vision reste manuel, par sécurité du compte).
           </Text>
-          <Text style={footerSign}>— Fxmily ops</Text>
+          <Text style={footerSign}>Fxmily ops</Text>
         </Container>
 
         <Text style={legal}>Aucun conseil de marché. Cohorte privée. © 2026 Fxmily.</Text>

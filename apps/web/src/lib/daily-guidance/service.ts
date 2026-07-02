@@ -96,12 +96,12 @@ const CHECKIN_META: Record<'morning' | 'evening', { title: string; detail: strin
   {
     morning: {
       title: 'Check-in du matin',
-      detail: 'Sommeil, routine, préparation — pose ton intention du jour.',
+      detail: 'Sommeil, routine, préparation. Pose ton intention du jour.',
       href: '/checkin/morning',
     },
     evening: {
       title: 'Check-in du soir',
-      detail: 'Discipline, stress, bilan — referme ta journée en conscience.',
+      detail: 'Discipline, stress, bilan. Referme ta journée en conscience.',
       href: '/checkin/evening',
     },
   };
@@ -197,7 +197,7 @@ export async function getDailyGuidance(
       key: 'meeting-today',
       kind: 'meeting',
       title: 'Réunion Fxmily aujourd’hui',
-      detail: `Aujourd’hui (Paris) — ${labels.join(' · ')}.`,
+      detail: `Aujourd’hui (Paris) : ${labels.join(' · ')}.`,
       href: '/reunions',
       state: 'info',
       emphasis: 'primary',
@@ -230,7 +230,7 @@ export async function getDailyGuidance(
       kind: 'checkin',
       title: CHECKIN_META[otherSlot].title,
       detail: isMissedMorning
-        ? 'Pas encore fait ce matin — tu peux le rattraper tranquillement.'
+        ? 'Pas encore fait ce matin. Tu peux le rattraper tranquillement.'
         : CHECKIN_META[otherSlot].detail,
       href: CHECKIN_META[otherSlot].href,
       state: isMissedMorning ? 'missed' : 'todo',

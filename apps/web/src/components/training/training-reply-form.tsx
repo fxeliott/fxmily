@@ -144,7 +144,7 @@ function errorMessage(code: string): string {
     case 'unauthorized':
       return 'Session expirée, reconnecte-toi.';
     case 'not_found':
-      return 'Correction introuvable — la page a peut-être expiré.';
+      return 'Correction introuvable, la page a peut-être expiré.';
     default:
       return 'Échec de l’envoi. Réessaie dans un instant.';
   }

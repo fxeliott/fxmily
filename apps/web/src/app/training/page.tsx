@@ -173,7 +173,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
           <p className="rounded-control border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] px-3 py-2 text-[12px] leading-[1.5] text-[var(--t-2)]">
             Ton entraînement est <strong className="text-[var(--t-1)]">totalement isolé</strong> de
             ton trading réel : aucun résultat de backtest ne touche ton track-record, ton score ou
-            tes statistiques. Ici, c&apos;est la régularité de la pratique qui compte — pas le
+            tes statistiques. Ici, c&apos;est la régularité de la pratique qui compte, pas le
             P&amp;L.
           </p>
 
@@ -253,9 +253,9 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
               guides={[
                 'Ouvre une session pour regrouper les backtests d’une même séance de replay.',
                 'Capture ton analyse TradingView avant de noter le backtest.',
-                'Note la leçon tirée — c’est elle qui fait progresser, pas le résultat.',
+                'Note la leçon tirée, c’est elle qui fait progresser, pas le résultat.',
               ]}
-              tip="Le résultat d'un backtest ne dit rien de ta valeur de trader. Ce qu'on mesure ici, c'est la discipline du process — anything can happen, ton geste reste propre."
+              tip="Le résultat d'un backtest ne dit rien de ta valeur de trader. Ce qu'on mesure ici, c'est la discipline du process. Anything can happen, ton geste reste propre."
             />
           </Card>
         ) : (

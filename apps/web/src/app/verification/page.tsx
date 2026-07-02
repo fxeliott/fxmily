@@ -179,8 +179,8 @@ export default async function VerificationPage() {
                 </h1>
                 <p className="t-lead max-w-[58ch]">
                   Ici, ton trading déclaré est mis en face de ton historique MT5 réel. Pas pour te
-                  juger — pour t&apos;aider à te voir tel que tu es, et progresser à partir de là.
-                  Ce qui est confronté, c&apos;est l&apos;historique que tu fournis : jamais tes
+                  juger, pour t&apos;aider à te voir tel que tu es, et progresser à partir de là. Ce
+                  qui est confronté, c&apos;est l&apos;historique que tu fournis : jamais tes
                   analyses, jamais de conseil de marché.
                 </p>
               </div>
@@ -255,14 +255,14 @@ export default async function VerificationPage() {
           {discrepancies.length === 0 ? (
             <p className="t-body max-w-prose text-[var(--t-3)]">
               Aucun écart détecté pour l&apos;instant entre ton déclaré et ta réalité. Continue
-              comme ça — c&apos;est la régularité qui compte.
+              comme ça, c&apos;est la régularité qui compte.
             </p>
           ) : (
             <>
               <p className="t-body max-w-prose leading-[1.6] text-[var(--t-2)]">
                 Un écart n&apos;est pas une faute : c&apos;est une information. S&apos;il y a un
-                motif (maladie, coupure, semaine off), donne-le — un oubli expliqué n&apos;est pas
-                de l&apos;indiscipline.
+                motif (maladie, coupure, semaine off), donne-le, un oubli expliqué n&apos;est pas de
+                l&apos;indiscipline.
               </p>
               <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2 xl:grid-cols-3">
                 {[...openDiscrepancies, ...handledDiscrepancies].map((d) => {
@@ -356,7 +356,7 @@ export default async function VerificationPage() {
           </h2>
           {overview.accounts.length === 0 ? (
             <p className="t-body max-w-prose text-[var(--t-3)]">
-              Déclare chacun de tes comptes — prop firm et perso. C&apos;est la base du suivi : un
+              Déclare chacun de tes comptes, prop firm et perso. C&apos;est la base du suivi : un
               compte non déclaré finit toujours par se voir dans les écarts.
             </p>
           ) : null}
@@ -410,7 +410,7 @@ export default async function VerificationPage() {
             Téléverse une capture de l&apos;onglet « Historique » de MT5 pour{' '}
             <strong className="font-semibold text-[var(--t-1)]">chacun</strong> de tes comptes.
             L&apos;analyse lit les positions affichées et les confronte à ton journal. Une capture
-            reste une capture — c&apos;est la régularité de tes preuves qui construit la confiance.
+            reste une capture, c&apos;est la régularité de tes preuves qui construit la confiance.
           </p>
           <Card className="flex w-full max-w-xl flex-col gap-3 p-4">
             <ProofUploader
@@ -474,7 +474,7 @@ export default async function VerificationPage() {
             <div className="rounded-card border border-dashed border-[var(--b-default)] bg-[var(--bg-1)] px-4 py-6 text-center">
               <span className="inline-flex items-center gap-2 text-[13px] text-[var(--t-3)]">
                 <ScanSearch className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-                Aucune preuve pour l&apos;instant — ta première capture pose la base de ton suivi.
+                Aucune preuve pour l&apos;instant, ta première capture pose la base de ton suivi.
               </span>
             </div>
           )}
@@ -482,7 +482,7 @@ export default async function VerificationPage() {
 
         <p className="wow-reveal t-foot max-w-prose text-[var(--t-4)]">
           Les positions extraites sont confrontées à ton journal déclaré. Ce suivi se base sur
-          l&apos;historique que tu fournis — il vaut ce que vaut ta régularité, et c&apos;est
+          l&apos;historique que tu fournis, il vaut ce que vaut ta régularité, et c&apos;est
           exactement ce qu&apos;il mesure.
         </p>
       </div>

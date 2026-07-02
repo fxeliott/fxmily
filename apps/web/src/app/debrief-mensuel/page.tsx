@@ -119,8 +119,8 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
           </div>
 
           <p className="t-body leading-[1.6] text-[var(--t-2)]">
-            Une synthèse de ton mois écoulé — progression, trading réel et pratique
-            d&apos;entraînement — pour prendre du recul. Aucune analyse de marché, aucun conseil de
+            Une synthèse de ton mois écoulé : progression, trading réel et pratique
+            d&apos;entraînement, pour prendre du recul. Aucune analyse de marché, aucun conseil de
             trade : seulement ton comportement et ton exécution.
           </p>
         </header>
@@ -137,7 +137,7 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
           >
             <p className="t-body text-[var(--t-2)]">
               Ton premier débrief mensuel arrivera au début du mois prochain. Il fait le point sur
-              ta progression — ce n&apos;est pas un score, c&apos;est un recul.
+              ta progression, ce n&apos;est pas un score, c&apos;est un recul.
             </p>
           </div>
         )}

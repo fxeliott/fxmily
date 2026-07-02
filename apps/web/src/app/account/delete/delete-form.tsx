@@ -98,7 +98,7 @@ export function DeleteAccountForm(): React.ReactElement {
           : errorCode === 'already_requested'
             ? 'Une demande de suppression est déjà en cours.'
             : errorCode === 'unauthorized'
-              ? 'Session expirée — recharge la page.'
+              ? 'Session expirée. Recharge la page.'
               : null}
       </div>
       {/*

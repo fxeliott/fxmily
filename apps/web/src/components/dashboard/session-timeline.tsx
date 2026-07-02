@@ -58,14 +58,14 @@ export function SessionTimeline({
       : `${day.tradesEnteredToday} trade${day.tradesEnteredToday > 1 ? 's' : ''} aujourd’hui`;
   const tradeChipHint =
     day.tradesEnteredToday >= 2
-      ? 'La méthode vise un seul trade par jour — un seul risque ouvert.'
+      ? 'La méthode vise un seul trade par jour, un seul risque ouvert.'
       : day.tradesEnteredToday === 1
         ? 'Un trade, comme la méthode le demande.'
         : 'La méthode : un seul trade par jour, sur la session.';
 
   // Calm Mark Douglas note when the day's SL is taken (the method ends the day).
   const slNote = day.lossToday
-    ? 'Tu as pris ton SL du jour. La méthode est claire : un SL, et la journée de trading s’arrête. Reviens demain, l’esprit neuf — chaque jour repart à zéro.'
+    ? 'Tu as pris ton SL du jour. La méthode est claire : un SL, et la journée de trading s’arrête. Reviens demain, l’esprit neuf, chaque jour repart à zéro.'
     : null;
   // Calm reminder if a position is still open after the 20h cut.
   const cutNote =

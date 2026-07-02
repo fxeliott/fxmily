@@ -107,21 +107,21 @@ const META_BY_TYPE: Record<
     title: 'Nouvelle correction reçue',
     preview: 'Eliott a laissé une correction sur l’un de tes trades.',
     eyebrow: 'CORRECTION · COACHING',
-    body: "Eliott a laissé une correction sur l'un de tes trades. Le détail t'attend dans ton journal — la correction sera marquée comme lue dès que tu ouvres le trade.",
+    body: "Eliott a laissé une correction sur l'un de tes trades. Le détail t'attend dans ton journal, la correction sera marquée comme lue dès que tu ouvres le trade.",
     ctaLabel: 'Voir la correction →',
   },
   training_annotation_received: {
     title: 'Correction reçue (entraînement)',
     preview: 'Eliott a laissé une correction sur l’un de tes backtests.',
     eyebrow: 'CORRECTION · ENTRAÎNEMENT',
-    body: "Eliott a laissé une correction sur l'un de tes backtests. Le détail t'attend dans ton espace entraînement — la correction sera marquée comme lue dès que tu ouvres le backtest.",
+    body: "Eliott a laissé une correction sur l'un de tes backtests. Le détail t'attend dans ton espace entraînement, la correction sera marquée comme lue dès que tu ouvres le backtest.",
     ctaLabel: 'Voir la correction →',
   },
   checkin_morning_reminder: {
     title: 'Check-in matin',
     preview: 'Trois minutes pour poser ton intention du jour.',
     eyebrow: 'CHECK-IN · MATIN',
-    body: 'Trois minutes pour poser ton intention du jour. Pas de rattrapage — si la fenêtre est passée, on se retrouve ce soir.',
+    body: 'Trois minutes pour poser ton intention du jour. Pas de rattrapage, si la fenêtre est passée, on se retrouve ce soir.',
     ctaLabel: 'Faire le check-in matin →',
   },
   checkin_evening_reminder: {
@@ -149,7 +149,7 @@ const META_BY_TYPE: Record<
     title: 'Ton débrief mensuel est prêt',
     preview: 'Une synthèse du mois écoulé t’attend.',
     eyebrow: 'DÉBRIEF MENSUEL · IA',
-    body: 'Une synthèse du mois écoulé t’attend — progression, trading réel, entraînement. Un moment pour prendre du recul, à ton rythme.',
+    body: 'Une synthèse du mois écoulé t’attend : progression, trading réel, entraînement. Un moment pour prendre du recul, à ton rythme.',
     ctaLabel: 'Ouvrir mon débrief →',
   },
   // V1.5 §27.6 dispose "push-only, no email" — defense-in-depth copy if the
@@ -158,7 +158,7 @@ const META_BY_TYPE: Record<
     title: 'Auto-évaluation mindset prête',
     preview: 'Ton QCM hebdo de 2 minutes est disponible.',
     eyebrow: 'MINDSET · QCM HEBDO',
-    body: 'Ton QCM hebdo de 2 minutes pour mesurer où tu en es — mindset, discipline, patience. Calme et sans pression.',
+    body: 'Ton QCM hebdo de 2 minutes pour mesurer où tu en es : mindset, discipline, patience. Calme et sans pression.',
     ctaLabel: 'Faire mon QCM hebdo →',
   },
   // S3 §33 — push-only (EMAIL_FALLBACK_SKIP_TYPES). Defense-in-depth copy only.
@@ -166,7 +166,7 @@ const META_BY_TYPE: Record<
     title: 'Un point rapide sur ton suivi',
     preview: 'Un élément de ton suivi est resté de côté.',
     eyebrow: 'SUIVI · RAPPEL',
-    body: 'Un élément de ton suivi est resté de côté. Un coup d’œil quand tu peux — et indique s’il y a une raison. Rien de grave : juste rester honnête avec toi-même.',
+    body: 'Un élément de ton suivi est resté de côté. Un coup d’œil quand tu peux, et indique s’il y a une raison. Rien de grave : juste rester honnête avec toi-même.',
     ctaLabel: 'Voir mon suivi →',
   },
   // S8 V2 §32-4 — ADMIN-facing: a member replied to a backtest correction.

@@ -105,7 +105,7 @@ export function MemberRecapCard({
       value: `${recap.discipline.score} / 100`,
       word: band.word,
       fg: band.fg,
-      hint: 'Ton score comportemental du moment — un process, jamais un résultat.',
+      hint: 'Ton score comportemental du moment, un process, jamais un résultat.',
     });
   }
 
@@ -145,7 +145,7 @@ export function MemberRecapCard({
         fg: band.fg,
         hint: `${recap.presence.completedCount} sur ${recap.presence.scheduledCount} réunion${
           recap.presence.scheduledCount > 1 ? 's' : ''
-        } suivie${recap.presence.completedCount > 1 ? 's' : ''} — direct ou replay.`,
+        } suivie${recap.presence.completedCount > 1 ? 's' : ''}, direct ou replay.`,
       });
     } else {
       // insufficient_data → calm "en attente", NEVER a fake 0 %.
@@ -155,7 +155,7 @@ export function MemberRecapCard({
         value: 'en attente',
         word: null,
         fg: 'text-[var(--t-3)]',
-        hint: 'Aucune réunion sur ta fenêtre pour l’instant — rien à rattraper.',
+        hint: 'Aucune réunion sur ta fenêtre pour l’instant, rien à rattraper.',
       });
     }
   }
@@ -172,7 +172,7 @@ export function MemberRecapCard({
       fg: band.fg,
       hint:
         coachingHeadline ??
-        'Ta fidélité aux règles dures de la méthode — un miroir, pas un verdict.',
+        'Ta fidélité aux règles dures de la méthode, un miroir, pas un verdict.',
     });
   }
 
@@ -227,7 +227,7 @@ export function MemberRecapCard({
 
       {isEmpty ? (
         <p className="t-body leading-[1.5] text-[var(--t-2)]">
-          Dès tes premiers check-ins, trades et réunions, ton bilan d’ensemble apparaîtra ici —
+          Dès tes premiers check-ins, trades et réunions, ton bilan d’ensemble apparaîtra ici,
           calmement, axe par axe : ta discipline, ta progression, ta présence, ton travail sur la
           méthode et ta constance. Une photo pour te situer, jamais une sanction.
         </p>
@@ -239,7 +239,7 @@ export function MemberRecapCard({
             ))}
           </ul>
           <p className="t-foot border-t border-[var(--b-acc)] pt-3 text-[var(--t-3)]">
-            Une vue d’ensemble, pas une note. Chaque axe est un repère de process — la régularité
+            Une vue d’ensemble, pas une note. Chaque axe est un repère de process, la régularité
             compte plus qu’un chiffre isolé.
           </p>
         </>

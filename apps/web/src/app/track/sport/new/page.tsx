@@ -50,7 +50,7 @@ export default async function TrackSportNewPage() {
             </h1>
           </div>
           <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
-            ACSM — ≥ 150 min/semaine d&apos;activité modérée à soutenue (cadre FITT-VP). La
+            ACSM : ≥ 150 min/semaine d&apos;activité modérée à soutenue (cadre FITT-VP). La
             régularité, pas le volume d&apos;une séance, stabilise ton humeur et ta régulation
             émotionnelle sur la semaine de trading.
           </p>

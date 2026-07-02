@@ -83,7 +83,7 @@ export function TrainingDebriefStepProgress({
         <ol className="sr-only">
           {labels.map((label, i) => (
             <li key={label + i} aria-current={i === safeCurrent - 1 ? 'step' : undefined}>
-              Étape {i + 1} sur {total} — {label}
+              Étape {i + 1} sur {total} · {label}
               {i < safeCurrent - 1 ? ' (complétée)' : ''}
             </li>
           ))}

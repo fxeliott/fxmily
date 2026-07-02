@@ -121,8 +121,8 @@ export default async function ProfilePage() {
             title="Reprends où tu en étais."
             body={
               <>
-                Tu as commencé ton entretien — tes réponses sont sauvegardées. Termine-le quand tu
-                te sens prêt·e pour activer ton profil personnalisé.
+                Tu as commencé ton entretien, tes réponses sont sauvegardées. Termine-le quand tu te
+                sens prêt·e pour activer ton profil personnalisé.
               </>
             }
             ctaHref="/onboarding/interview/new"
@@ -148,7 +148,7 @@ export default async function ProfilePage() {
                 </h2>
                 <p className="t-body mt-2 text-[var(--t-2)]">
                   Tu as terminé ton entretien. Eliott et l&apos;IA prennent le temps de relire tes
-                  30 réponses — ton profil descriptif sera disponible dans les prochaines 24h.
+                  30 réponses, ton profil descriptif sera disponible dans les prochaines 24h.
                   Reviens demain.
                 </p>
               </div>

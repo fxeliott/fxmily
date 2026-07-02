@@ -46,7 +46,7 @@ export function AccessApprovedEmail({
       <Head>
         <title>Ta demande Fxmily est acceptée</title>
       </Head>
-      <Preview>Ta demande est acceptée — bienvenue dans Fxmily. Crée ton compte.</Preview>
+      <Preview>Ta demande est acceptée, bienvenue dans Fxmily. Crée ton compte.</Preview>
       <Body style={body}>
         <Container style={container}>
           {/* Brand mark */}
@@ -57,7 +57,7 @@ export function AccessApprovedEmail({
 
           <Text style={eyebrow}>COHORTE PRIVÉE · DEMANDE ACCEPTÉE</Text>
 
-          <Heading style={heading}>Ta demande est acceptée — bienvenue dans Fxmily.</Heading>
+          <Heading style={heading}>Ta demande est acceptée, bienvenue dans Fxmily.</Heading>
 
           <Text style={paragraph}>
             {name ? (
@@ -71,7 +71,7 @@ export function AccessApprovedEmail({
           </Text>
 
           <Text style={paragraph}>
-            Fxmily mesure ton plan, ta discipline, ton mental — pas les bougies. Le seul journal qui
+            Fxmily mesure ton plan, ta discipline, ton mental, pas les bougies. Le seul journal qui
             ignore le marché.
           </Text>
 
@@ -125,11 +125,11 @@ export function AccessApprovedEmail({
 
           <Text style={footer}>
             Ce lien expire dans {expiresInDays} jour{expiresInDays > 1 ? 's' : ''} et ne peut servir
-            qu&apos;une seule fois. Si tu n&apos;es plus intéressé·e, tu peux ignorer cet email —
+            qu&apos;une seule fois. Si tu n&apos;es plus intéressé·e, tu peux ignorer cet email,
             aucun compte ne sera créé.
           </Text>
 
-          <Text style={footerSign}>— L&apos;équipe Fxmily</Text>
+          <Text style={footerSign}>L&apos;équipe Fxmily</Text>
         </Container>
 
         <Text style={legal}>

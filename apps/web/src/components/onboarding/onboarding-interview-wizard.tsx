@@ -293,7 +293,7 @@ function InjectionWarningBanner() {
         <div className="min-w-0 flex-1">
           <p className="t-body text-[var(--t-2)]">
             Ta réponse a bien été enregistrée. Si tu testais l&apos;IA, sache que les consignes
-            système ne peuvent pas être contournées — ton entretien suit son cours normalement.
+            système ne peuvent pas être contournées, ton entretien suit son cours normalement.
           </p>
         </div>
       </div>
@@ -627,7 +627,7 @@ function FinalizeStep() {
       {state?.error === 'incomplete' ? (
         <Alert tone="danger">
           Il reste des questions sans réponse. Reprends l&apos;entretien pour toutes les compléter
-          avant de le valider — ton profil a besoin de tes réponses.
+          avant de le valider, ton profil a besoin de tes réponses.
         </Alert>
       ) : null}
       {state?.error === 'unknown' ? (
@@ -841,7 +841,7 @@ function PhaseProgress({
     >
       <div className="flex items-baseline justify-between gap-3 pb-2">
         <p className="t-mono-cap">
-          {phaseLabel.toUpperCase()} — <span className="text-[var(--t-1)]">{positionInPhase}</span>{' '}
+          {phaseLabel.toUpperCase()} · <span className="text-[var(--t-1)]">{positionInPhase}</span>{' '}
           / {phaseTotal}
         </p>
         <p className="t-cap text-[var(--t-3)]">

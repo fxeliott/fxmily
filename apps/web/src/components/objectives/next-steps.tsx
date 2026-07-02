@@ -57,7 +57,7 @@ export function NextSteps({
               Ton levier du moment : {focus.label}
             </span>
             <span className="t-cap leading-snug text-[var(--t-2)]">
-              {focus.hint} — {focus.gap} point{(focus.gap ?? 0) > 1 ? 's' : ''} avant la Maîtrise.
+              {focus.hint}, {focus.gap} point{(focus.gap ?? 0) > 1 ? 's' : ''} avant la Maîtrise.
               Les gestes ci-dessous le renforcent.
             </span>
           </div>
@@ -107,7 +107,7 @@ export function NextSteps({
         </ul>
       ) : (
         <p className="t-body text-[var(--t-2)]">
-          Rien d’urgent dans l’immédiat — continue ta routine. Chaque check-in et chaque trade
+          Rien d’urgent dans l’immédiat, continue ta routine. Chaque check-in et chaque trade
           journalisé fait avancer tes objectifs.
         </p>
       )}

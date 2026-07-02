@@ -47,7 +47,7 @@ export function ConstancyScoreCard({ score }: { score: ConstancyScoreView | null
       <div className="rounded-card border border-dashed border-[var(--b-default)] bg-[var(--bg-1)] px-4 py-5">
         <span className="t-body text-[var(--t-3)]">
           Ton score de constance se construira avec tes premiers check-ins et tes premières preuves.
-          Rien à rattraper — il commence quand tu commences.
+          Rien à rattraper, il commence quand tu commences.
         </span>
       </div>
     );

@@ -112,7 +112,7 @@ export function CardGridItem({ card, favorited, hasUnread = false }: CardGridIte
           )}
           <footer className="text-muted mt-1 text-[10px] tracking-wide uppercase not-italic">
             {isParaphraseQuote(card.quoteSourceChapter)
-              ? `D'après Mark Douglas — ${cleanQuoteSource(card.quoteSourceChapter)}`
+              ? `D'après Mark Douglas · ${cleanQuoteSource(card.quoteSourceChapter)}`
               : card.quoteSourceChapter}
           </footer>
         </blockquote>

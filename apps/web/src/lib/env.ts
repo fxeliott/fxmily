@@ -235,6 +235,21 @@ const envSchema = z.object({
     .min(32, 'VERIFICATION_ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
     .optional(),
 
+  /// Réunion hub (séances) J4 — Token partagé entre la machine d'Eliott et
+  /// `/api/admin/seances-batch/*` (6ᵉ pipeline local : Zoom→Vimeo→Fathom→IA
+  /// bornée, Règle n°1). Sans ça, les endpoints seances batch répondent 503
+  /// (refuse-by-default, mirror des quatre autres tokens batch). Génération :
+  /// `openssl rand -hex 32` (64 chars). Provisionner sur Hetzner via append à
+  /// `/etc/fxmily/web.env` (0600 owner fxmily) puis `docker compose -f
+  /// docker-compose.prod.yml restart web`. SÉPARÉ des autres : la production du
+  /// contenu séance vit sur le PC pipeline d'Eliott (compromis distinct), donc
+  /// rotation indépendante. 0 PII (les séances sont du contenu plateforme, sans
+  /// FK User) — la surface ne sert AUCUNE donnée membre.
+  SEANCES_ADMIN_BATCH_TOKEN: z
+    .string()
+    .min(32, 'SEANCES_ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
+    .optional(),
+
   /// V1.5 — Salt server-side pour la pseudonymisation `userId → memberLabel`
   /// dans `lib/weekly-report/builder.ts`. Sans salt, un attaquant qui connaît
   /// un cuid peut vérifier sa présence dans un export rapport hebdo en

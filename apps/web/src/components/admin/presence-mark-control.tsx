@@ -46,7 +46,7 @@ function feedbackMessage(state: MarkPresenceActionState | null): string | null {
   if (!state || state.ok) return null;
   switch (state.error) {
     case 'not_found':
-      return 'Ce créneau est introuvable — la liste a peut-être changé.';
+      return 'Ce créneau est introuvable, la liste a peut-être changé.';
     case 'cancelled':
       return 'Créneau annulé : pas de présence à marquer.';
     case 'member_not_found':

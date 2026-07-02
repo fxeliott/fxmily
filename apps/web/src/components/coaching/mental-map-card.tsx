@@ -84,7 +84,7 @@ export function MentalMapCard({
           </h2>
           {!compact ? (
             <p className="t-cap leading-relaxed text-[var(--t-2)]">
-              Ta discipline et ton honnêteté avec toi-même, lues dans tes faits — et un seul geste
+              Ta discipline et ton honnêteté avec toi-même, lues dans tes faits, et un seul geste
               pour chaque. Aucun conseil de marché : seulement ton process.
             </p>
           ) : null}

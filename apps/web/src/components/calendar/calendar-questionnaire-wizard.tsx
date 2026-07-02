@@ -25,7 +25,10 @@ import {
   type CalendarWeekday,
   type CalendarWeekendDay,
 } from '@/lib/calendar/instrument-v1';
-import type { WeeklyScheduleResponses } from '@/lib/schemas/weekly-schedule-questionnaire';
+import {
+  weeklyScheduleResponsesSchema,
+  type WeeklyScheduleResponses,
+} from '@/lib/schemas/weekly-schedule-questionnaire';
 import { cn } from '@/lib/utils';
 
 /**
@@ -159,9 +162,14 @@ function emptyWeekend(): Record<CalendarWeekendDay, DaySlots> {
 }
 
 function emptyDraft(weekStart: string, prefill?: CalendarQuestionnairePrefill): CalendarDraftState {
-  // Prefill only counts if it was captured against the CURRENT instrument
-  // version (longitudinal integrity — item ids/options differ across versions).
-  const usePrefill = prefill && prefill.instrumentVersion === INSTRUMENT.version;
+  // Prefill is reused whenever the stored answers still satisfy the CURRENT
+  // instrument (forward-compatibility) — not only on an exact version match. A
+  // bump that merely ADDS an option (e.g. F8 v1→v2) keeps every prior answer
+  // valid, so re-editing must not wipe the member's saved answers. Zod is the
+  // authority: a genuinely incompatible version (a renamed/removed value — which
+  // the longitudinal invariant otherwise forbids) fails safeParse and is
+  // discarded, so stale ids are never resurrected.
+  const usePrefill = prefill && weeklyScheduleResponsesSchema.safeParse(prefill.responses).success;
   const base: CalendarDraftState = {
     weekStart,
     instrumentVersion: INSTRUMENT.version,

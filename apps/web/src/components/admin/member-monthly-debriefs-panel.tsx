@@ -39,7 +39,7 @@ export function MemberMonthlyDebriefsPanel({
         <EmptyState
           icon={CalendarRange}
           headline="Aucun débrief mensuel pour ce membre."
-          lead="La synthèse mensuelle apparaîtra ici au début du mois suivant — un recul sur le mois, pas un score."
+          lead="La synthèse mensuelle apparaîtra ici au début du mois suivant, un recul sur le mois, pas un score."
           headingLevel="h3"
         />
       </Card>

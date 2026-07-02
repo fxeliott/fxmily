@@ -45,7 +45,7 @@ export default async function FavoritesPage() {
           </div>
           <p className="text-muted max-w-2xl text-sm leading-relaxed">
             Les fiches que tu as marquées comme essentielles. Tu peux y revenir aussi souvent que
-            besoin — la répétition est la voie de l&apos;intégration.
+            besoin. La répétition est la voie de l&apos;intégration.
           </p>
           <DrawnRule className="mt-1 max-w-[220px]" />
         </header>

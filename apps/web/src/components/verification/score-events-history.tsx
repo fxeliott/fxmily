@@ -87,7 +87,7 @@ export function ScoreEventsHistory({
       <div className="flex flex-col gap-0.5">
         <span className="t-eyebrow text-[var(--t-3)]">Pourquoi ton score bouge</span>
         <span className="t-cap text-[var(--t-4)]">
-          Les derniers événements pris en compte — un motif donné neutralise l&apos;événement.
+          Les derniers événements pris en compte, un motif donné neutralise l&apos;événement.
         </span>
       </div>
 
@@ -139,7 +139,7 @@ export function ScoreEventsHistory({
               </span>
               <span className="t-foot text-[var(--t-4)]">
                 {formatEventDate(event.createdAt, timezone)}
-                {event.excused ? ' · excusé — motif donné ou levé par la réalité' : ''}
+                {event.excused ? ' · excusé, motif donné ou levé par la réalité' : ''}
               </span>
             </span>
             <span

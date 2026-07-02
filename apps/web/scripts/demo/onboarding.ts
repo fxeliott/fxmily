@@ -70,7 +70,7 @@ const ANSWERS: readonly SeedAnswer[] = [
     questionIndex: 0,
     questionKey: 'parcours_origin',
     questionText:
-      'Raconte comment tu es arrivé au trading — premier contact, premier compte réel, première fois où tu as su que ça allait devenir sérieux pour toi. 3-5 phrases.',
+      'Raconte comment tu es arrivé au trading : premier contact, premier compte réel, première fois où tu as su que ça allait devenir sérieux pour toi. 3-5 phrases.',
     answerText:
       "J'ai découvert le trading en 2021 via un ami qui en parlait tout le temps. Premier compte réel à 500€, blow-up en trois semaines parce que je tradais sans plan et sans stop. J'ai repris en 2024 avec une approche beaucoup plus structurée, et c'est là que j'ai su que je voulais en faire quelque chose de sérieux.",
   },
@@ -78,7 +78,7 @@ const ANSWERS: readonly SeedAnswer[] = [
     questionIndex: 2,
     questionKey: 'routines_day',
     questionText:
-      'Décris ta journée-type un jour où tu trades. De ton réveil à ton coucher. Sommeil, repas, sport, écran — pas idéal, réel.',
+      'Décris ta journée-type un jour où tu trades. De ton réveil à ton coucher. Sommeil, repas, sport, écran, pas idéal, réel.',
     answerText:
       "Je me lève vers 7h, café, je regarde les news macro pendant trente minutes. Souvent je manque de sommeil les jours de news importantes parce que je me couche tard à refaire mes analyses. Je trade la session de Londres, puis je coupe, sport en fin d'après-midi quand j'y arrive. Le soir je débriefe mes trades, parfois trop longtemps.",
   },
@@ -110,7 +110,7 @@ const ANSWERS: readonly SeedAnswer[] = [
     questionIndex: 8,
     questionKey: 'discipline_last10_count',
     questionText:
-      'Sur tes 10 derniers trades, combien ont été exécutés à 100% selon ton plan écrit (entrée, stop, target — pas de déplacement) ?',
+      'Sur tes 10 derniers trades, combien ont été exécutés à 100% selon ton plan écrit (entrée, stop, target, pas de déplacement) ?',
     answerText:
       "Honnêtement quatre sur dix. Je dévie souvent sur le target, je sors trop tôt par peur que le marché reparte contre moi. C'est exactement là que je perds mon edge.",
   },
@@ -118,7 +118,7 @@ const ANSWERS: readonly SeedAnswer[] = [
     questionIndex: 17,
     questionKey: 'emotion_body_stress',
     questionText:
-      'Quand une trade te met en stress (drawdown intra-trade, signal contradictoire), où sens-tu ça dans ton corps ? Quelle est ta première réaction physique — respiration, tension épaules, posture ?',
+      'Quand une trade te met en stress (drawdown intra-trade, signal contradictoire), où sens-tu ça dans ton corps ? Quelle est ta première réaction physique : respiration, tension épaules, posture ?',
     answerText:
       "Je sens une tension dans les épaules et la mâchoire, et ma respiration devient courte. J'ai souvent envie de me lever et de marcher. Au moins je le remarque maintenant, ce qui n'était pas le cas avant.",
   },
@@ -142,9 +142,9 @@ const ANSWERS: readonly SeedAnswer[] = [
     questionIndex: 26,
     questionKey: 'objectifs_proud_12m',
     questionText:
-      "Si dans 12 mois tu te regardes trader et que tu es fier de toi, qu'est-ce que tu vois ? Pas un chiffre P&L — un comportement, un état, une posture.",
+      "Si dans 12 mois tu te regardes trader et que tu es fier de toi, qu'est-ce que tu vois ? Pas un chiffre P&L : un comportement, un état, une posture.",
     answerText:
-      "Un trader calme qui exécute son plan sans hésiter, trade après trade. Pas un chiffre — la régularité du geste et le respect de mes règles, même les jours où c'est dur. Une vraie sérénité face à l'incertitude.",
+      "Un trader calme qui exécute son plan sans hésiter, trade après trade. Pas un chiffre, la régularité du geste et le respect de mes règles, même les jours où c'est dur. Une vraie sérénité face à l'incertitude.",
   },
 ] as const;
 
@@ -185,7 +185,7 @@ const HIGHLIGHTS: ReadonlyArray<{
     key: 'process-focus-objectif',
     label: 'Process-focus aligné Mark Douglas',
     evidence: [
-      'Un trader calme qui exécute son plan sans hésiter, trade après trade. Pas un chiffre — la régularité du geste',
+      'Un trader calme qui exécute son plan sans hésiter, trade après trade. Pas un chiffre, la régularité du geste',
     ],
   },
 ];
@@ -198,9 +198,9 @@ const HIGHLIGHTS: ReadonlyArray<{
  * 'geste' → consistency. Keeps the coaching seam live, not inert.
  */
 const AXES_PRIORITAIRES: readonly string[] = [
-  "Travailler le détachement du résultat et l'acceptation de l'incertitude — la peur de voir le marché repartir défait l'edge à chaque sortie anticipée.",
+  "Travailler le détachement du résultat et l'acceptation de l'incertitude. La peur de voir le marché repartir défait l'edge à chaque sortie anticipée.",
   'Installer un rituel pré-session de respiration de 2 min pour réguler la tension somatique repérée avant chaque entrée.',
-  "Consolider l'exécution du plan et le respect de la méthode — tenir entrée, stop ET target sans déplacement, surtout quand l'émotion monte.",
+  "Consolider l'exécution du plan et le respect de la méthode, tenir entrée, stop ET target sans déplacement, surtout quand l'émotion monte.",
   'Ancrer la régularité du geste comme objectif premier : viser la constance du process répété plutôt que le P&L du jour.',
 ];
 
@@ -229,7 +229,7 @@ const RECOVERY_PROTOCOL = {
 } as const;
 
 const SUMMARY =
-  "Membre revenu au trading en 2024 après un blow-up en 2021, avec un retour nettement plus structuré. Profil orienté process plutôt que résultat — objectif 12 mois centré sur « la régularité du geste » — mais tension nette entre l'intention et l'exécution : 4 trades sur 10 conformes au plan, déviation systématique sur le target par peur de voir le marché repartir. Bonne awareness somatique sous stress (épaules, mâchoire, respiration courte), ce qui est un point d'appui. Posture Mark Douglas en construction : la lucidité est là, l'incarnation des règles et l'acceptation de l'incertitude restent à consolider (stade Mechanical).";
+  "Membre revenu au trading en 2024 après un blow-up en 2021, avec un retour nettement plus structuré. Profil orienté process plutôt que résultat, objectif 12 mois centré sur « la régularité du geste », mais tension nette entre l'intention et l'exécution : 4 trades sur 10 conformes au plan, déviation systématique sur le target par peur de voir le marché repartir. Bonne awareness somatique sous stress (épaules, mâchoire, respiration courte), ce qui est un point d'appui. Posture Mark Douglas en construction : la lucidité est là, l'incarnation des règles et l'acceptation de l'incertitude restent à consolider (stade Mechanical).";
 
 export async function seedOnboarding(ctx: SeedCtx): Promise<Record<string, number>> {
   const { db, userId, now, log } = ctx;

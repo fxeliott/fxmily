@@ -50,7 +50,7 @@ const PILLARS: PillarMeta[] = [
     kind: 'caffeine',
     label: 'Café',
     Icon: Coffee,
-    hint: 'Demi-vie ~6 h — coupe avant le coucher.',
+    hint: 'Demi-vie ~6 h, coupe avant le coucher.',
     href: '/track/caffeine/new',
   },
   {

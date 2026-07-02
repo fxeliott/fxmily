@@ -78,7 +78,7 @@ export function AccessRejectedEmail({ firstName }: AccessRejectedEmailProps) {
             .
           </Text>
 
-          <Text style={footerSign}>— L&apos;équipe Fxmily</Text>
+          <Text style={footerSign}>L&apos;équipe Fxmily</Text>
         </Container>
 
         <Text style={legal}>

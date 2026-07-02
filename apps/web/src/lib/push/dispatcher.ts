@@ -208,7 +208,7 @@ export function buildPayload(
       // fanfare/XP/streak (anti Black-Hat, SPEC §25.2).
       const debriefId = typeof payload.debriefId === 'string' ? payload.debriefId : '';
       title = 'Ton débrief mensuel est prêt';
-      body = 'Une synthèse du mois écoulé t’attend — un moment pour prendre du recul.';
+      body = 'Une synthèse du mois écoulé t’attend. Un moment pour prendre du recul.';
       path = debriefId ? `/debrief-mensuel?id=${debriefId}` : '/debrief-mensuel';
       break;
     }
@@ -231,7 +231,7 @@ export function buildPayload(
       // so the copy stays generic rather than naming the gap.
       title = 'Un point rapide sur ton suivi';
       body =
-        'Un élément est resté de côté. Un coup d’œil quand tu peux — et dis-nous s’il y a une raison.';
+        'Un élément est resté de côté. Un coup d’œil quand tu peux, et dis-nous s’il y a une raison.';
       path = '/verification';
       break;
     }

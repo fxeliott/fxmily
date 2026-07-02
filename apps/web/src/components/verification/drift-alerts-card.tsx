@@ -43,8 +43,8 @@ export function DriftAlertsCard({
   if (alerts.length === 0) {
     return (
       <p className="t-body max-w-prose text-[var(--t-3)]">
-        Aucune alerte de dérive sur les 30 derniers jours. Tes écarts ne se répètent pas —
-        c&apos;est exactement ce qu&apos;on veut voir. Continue comme ça.
+        Aucune alerte de dérive sur les 30 derniers jours. Tes écarts ne se répètent pas, c&apos;est
+        exactement ce qu&apos;on veut voir. Continue comme ça.
       </p>
     );
   }
@@ -53,7 +53,7 @@ export function DriftAlertsCard({
     <>
       <p className="t-body max-w-prose leading-[1.6] text-[var(--t-2)]">
         Quand un même type d&apos;écart se répète, une fiche Mark Douglas t&apos;est préparée pour
-        travailler ce point — calmement, jamais pour te juger. Voici ce qui a été relevé récemment.
+        travailler ce point, calmement, jamais pour te juger. Voici ce qui a été relevé récemment.
       </p>
       <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2 xl:grid-cols-3">
         {alerts.map((alert) => {

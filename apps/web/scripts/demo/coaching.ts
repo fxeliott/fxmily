@@ -189,38 +189,38 @@ const DELIVERY_PLANS: readonly DeliveryPlan[] = [
   {
     daysAgo: 40,
     status: 'seen-helpful',
-    triggeredBy: 'Fiche du jour — accepter l’incertitude',
+    triggeredBy: 'Fiche du jour · accepter l’incertitude',
     category: 'acceptance',
   },
   {
     daysAgo: 33,
     status: 'seen-unhelpful',
-    triggeredBy: 'Fiche du jour — la perte fait partie du jeu',
+    triggeredBy: 'Fiche du jour · la perte fait partie du jeu',
     category: 'loss',
   },
   {
     daysAgo: 20,
     status: 'dismissed',
-    triggeredBy: 'Fiche du jour — revenir au process',
+    triggeredBy: 'Fiche du jour · revenir au process',
     category: 'process',
   },
   {
     daysAgo: 11,
     status: 'seen-helpful',
-    triggeredBy: 'Fiche du jour — la discipline est une architecture',
+    triggeredBy: 'Fiche du jour · la discipline est une architecture',
     category: 'discipline',
   },
   // ---- Recent UNSEEN deliveries (light the inbox + "Nouvelle" badges) ------
   {
     daysAgo: 4,
     status: 'unseen',
-    triggeredBy: 'Fiche du jour — détacher ton identité du résultat',
+    triggeredBy: 'Fiche du jour · détacher ton identité du résultat',
     category: 'ego',
   },
   {
     daysAgo: 1,
     status: 'unseen',
-    triggeredBy: 'Fiche du jour — chaque instant est unique',
+    triggeredBy: 'Fiche du jour · chaque instant est unique',
     category: 'acceptance',
   },
 ];
@@ -423,7 +423,7 @@ const MICRO_PLANS: readonly MicroPlan[] = [
     axis: 'discipline',
     sourceKind: 'signal',
     sourceRef: 'forgot_no_reason',
-    intention: 'Ce soir, remplis ton bilan — même en une seule ligne.',
+    intention: 'Ce soir, remplis ton bilan, même en une seule ligne.',
     status: 'kept',
     createdDaysAgo: 8,
     closedDaysAgo: 4,

@@ -186,7 +186,7 @@ function SuspendForm({
       formRef.current?.reset();
       // Lift the success message to the panel before `revalidatePath` unmounts
       // this form (the branch flips to ReinstateForm).
-      onSuccess(result.message ?? 'Membre suspendu — accès révoqué immédiatement.');
+      onSuccess(result.message ?? 'Membre suspendu, accès révoqué immédiatement.');
     }
     return result;
   };
@@ -210,7 +210,7 @@ function SuspendForm({
       <form ref={formRef} action={formAction} className="flex flex-col gap-3 p-5">
         <p className="t-body text-[var(--t-2)]">
           Le membre sera <strong className="text-[var(--t-1)]">déconnecté immédiatement</strong> et
-          ne pourra plus se connecter. Ses données sont conservées — tu pourras le réintégrer à tout
+          ne pourra plus se connecter. Ses données sont conservées, tu pourras le réintégrer à tout
           moment.
         </p>
 
@@ -313,7 +313,7 @@ function ReinstateForm({
     if (result.ok) {
       setReason('');
       formRef.current?.reset();
-      onSuccess(result.message ?? 'Membre réintégré — il peut de nouveau se connecter.');
+      onSuccess(result.message ?? 'Membre réintégré, il peut de nouveau se connecter.');
     }
     return result;
   };

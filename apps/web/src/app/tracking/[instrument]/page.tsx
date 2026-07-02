@@ -109,7 +109,7 @@ export default async function TrackingInstrumentPage({
               aria-hidden="true"
             />
             <p className="text-[13px] leading-relaxed text-[var(--t-2)]">
-              C&apos;est noté — ton suivi est enregistré. Tu peux ajuster tes réponses tant que la
+              C&apos;est noté, ton suivi est enregistré. Tu peux ajuster tes réponses tant que la
               période est en cours ; rien n&apos;est figé, c&apos;est juste un repère pour toi.
             </p>
           </div>

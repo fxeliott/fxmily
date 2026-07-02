@@ -80,19 +80,19 @@ const CATEGORIES: CategoryMeta[] = [
     type: 'monthly_debrief_ready',
     label: 'Débrief mensuel prêt',
     description:
-      'Notification début de mois quand ta synthèse du mois écoulé est disponible — progression, trading réel, entraînement.',
+      'Notification début de mois quand ta synthèse du mois écoulé est disponible : progression, trading réel, entraînement.',
   },
   {
     type: 'mindset_check_ready',
     label: 'Auto-évaluation mindset hebdo',
     description:
-      'Rappel hebdo (lundi matin) pour ton QCM de 2 minutes — mindset, discipline, patience. Calme et sans pression.',
+      'Rappel hebdo (lundi matin) pour ton QCM de 2 minutes : mindset, discipline, patience. Calme et sans pression.',
   },
   {
     type: 'verification_gentle_reminder',
     label: 'Rappel bienveillant de suivi',
     description:
-      'Un unique rappel calme quand un élément de ton suivi reste de côté — l’occasion de t’expliquer s’il y a une raison, avant toute relance. Jamais insistant.',
+      'Un unique rappel calme quand un élément de ton suivi reste de côté, l’occasion de t’expliquer s’il y a une raison, avant toute relance. Jamais insistant.',
   },
   {
     type: 'training_reply_received',
@@ -142,7 +142,7 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
         if (!result.ok) {
           // Revert and surface a soft error.
           setPreferences((p) => ({ ...p, [type]: previous }));
-          setErrorByType((e) => ({ ...e, [type]: 'Échec — réessaie.' }));
+          setErrorByType((e) => ({ ...e, [type]: 'Échec, réessaie.' }));
         }
       });
     });

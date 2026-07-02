@@ -122,9 +122,9 @@ const ALERT_COPY: Record<string, AlertCopy> = {
   forgot_no_reason_repeat: {
     observation: (n) => `Plusieurs journées sans suivi, sans motif (×${n}).`,
     meaning:
-      'Ne pas regarder son propre travail, c’est souvent éviter une vérité inconfortable. La discipline ne dépend pas du résultat du jour — elle se prouve surtout les jours où l’on n’en a pas envie.',
+      'Ne pas regarder son propre travail, c’est souvent éviter une vérité inconfortable. La discipline ne dépend pas du résultat du jour. Elle se prouve surtout les jours où l’on n’en a pas envie.',
     action:
-      'Ce soir, remplis ton bilan — même en une seule ligne. Te montrer, même un mauvais jour, c’est déjà gagner.',
+      'Ce soir, remplis ton bilan, même en une seule ligne. Te montrer, même un mauvais jour, c’est déjà gagner.',
     axis: 'discipline',
     weight: 3,
   },
@@ -161,7 +161,7 @@ const WATCH_COPY: Partial<Record<SignalReason, SignalCopy>> = {
   false_declaration: {
     observation: () => 'Une déclaration sans contrepartie réelle, repérée récemment.',
     meaning:
-      'Rien de grave isolément — mais c’est l’instant idéal pour réancrer l’honnêteté avec toi-même, tant que c’est facile.',
+      'Rien de grave isolément, mais c’est l’instant idéal pour réancrer l’honnêteté avec toi-même, tant que c’est facile.',
     action: 'Vérifie ta dernière déclaration face à ton historique, calmement.',
     axis: 'honesty',
     weight: 2,
@@ -177,7 +177,7 @@ const WATCH_COPY: Partial<Record<SignalReason, SignalCopy>> = {
   forgot_no_reason: {
     observation: () => 'Quelques check-ins oubliés ces derniers jours.',
     meaning:
-      'Un oubli isolé n’est rien — c’est le moment parfait pour reposer la routine avant qu’elle ne s’effrite.',
+      'Un oubli isolé n’est rien. C’est le moment parfait pour reposer la routine avant qu’elle ne s’effrite.',
     action:
       'Refais ton prochain check-in à l’heure. Une routine se répare par le geste suivant, jamais par la culpabilité.',
     axis: 'discipline',
@@ -189,7 +189,7 @@ const POSITIVE_COPY: SignalCopy = {
   observation: () => 'Tu te montres régulièrement dans ton suivi.',
   meaning:
     'C’est exactement ainsi que la constance se construit : un geste tenu, répété, indépendamment du résultat. Garde ce cap.',
-  action: 'Continue sur ta lancée — la régularité est ton edge silencieux.',
+  action: 'Continue sur ta lancée. La régularité est ton edge silencieux.',
   axis: 'consistency',
   weight: 0,
 };

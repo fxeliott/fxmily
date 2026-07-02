@@ -41,7 +41,12 @@ function buildContentSecurityPolicy(isProd: boolean): string {
     // DSN host. We accept any sentry.io subdomain (cluster + region tags
     // appear in the public DSN).
     "connect-src 'self' https://*.sentry.io",
-    "frame-src 'none'",
+    // Réunion hub (séances) — the only third-party frame is the official Vimeo
+    // privacy player embedding the séance replays. Restricted to that exact host
+    // (paired with the `buildVimeoEmbedUrl` https://player.vimeo.com allowlist).
+    // `frame-ancestors 'none'` + `X-Frame-Options: DENY` stay — Fxmily itself is
+    // still un-frameable (anti-clickjacking unchanged).
+    'frame-src https://player.vimeo.com',
     "frame-ancestors 'none'",
     "object-src 'none'",
     "base-uri 'self'",

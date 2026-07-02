@@ -38,7 +38,7 @@ export function PasswordResetEmail({
       <Head>
         <title>Réinitialiser ton mot de passe Fxmily</title>
       </Head>
-      <Preview>{`Réinitialise ton mot de passe Fxmily — lien valable ${expiresInMinutes} minutes`}</Preview>
+      <Preview>{`Réinitialise ton mot de passe Fxmily, lien valable ${expiresInMinutes} minutes`}</Preview>
       <Body style={body}>
         <Container style={container}>
           <Section style={brand}>
@@ -73,11 +73,11 @@ export function PasswordResetEmail({
 
           <Text style={footer}>
             Ce lien expire dans {expiresInMinutes} minutes et ne peut servir qu&apos;une seule fois.
-            Si tu n&apos;es pas à l&apos;origine de cette demande, ignore cet email — ton mot de
+            Si tu n&apos;es pas à l&apos;origine de cette demande, ignore cet email, ton mot de
             passe actuel reste inchangé et ton compte est en sécurité.
           </Text>
 
-          <Text style={footerSign}>— L&apos;équipe Fxmily</Text>
+          <Text style={footerSign}>L&apos;équipe Fxmily</Text>
         </Container>
 
         <Text style={legal}>

@@ -275,6 +275,25 @@ export const verificationBatchLimiter = new TokenBucketLimiter({
 });
 
 /**
+ * Réunion hub (séances) J4 — `/api/admin/seances-batch/{pull,persist}` per-IP
+ * bucket (6th local Claude pipeline: Zoom→Vimeo→Fathom→IA bornée).
+ *
+ * Carbon of `calendarBatchLimiter`. Eliott triggers the séance batch from his
+ * local pipeline machine; legitimate flow = 1 pull + 1 persist per held session
+ * (≤2/day: analyse@12h + debrief@20h). Same burst 10 / refill 1-per-5-min
+ * envelope — well below any human cadence, tight enough to throttle a bot
+ * brute-forcing the 32-char `SEANCES_ADMIN_BATCH_TOKEN`. Separate singleton (not
+ * shared with the weekly/monthly/calendar/verification buckets) so a flood on
+ * one batch surface never locks Eliott out of another — independent surfaces,
+ * independent buckets.
+ */
+export const seancesBatchLimiter = new TokenBucketLimiter({
+  bucketSize: 10,
+  refillRate: 1 / (5 * 60),
+  maxKeys: 256,
+});
+
+/**
  * V1.6 extras — `/api/health` endpoint rate-limit.
  *
  * Pre-existing security HIGH identified by Round 5 security-auditor audit :

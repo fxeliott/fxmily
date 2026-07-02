@@ -110,7 +110,7 @@ export function MethodMirrorCard({
             ))}
           </ul>
           <p className="t-foot border-t border-[var(--b-default)] pt-3 text-[var(--t-3)]">
-            Un miroir, pas un verdict. La méthode se respecte un jour à la fois — chaque journée
+            Un miroir, pas un verdict. La méthode se respecte un jour à la fois, chaque journée
             repart à zéro.
           </p>
         </>

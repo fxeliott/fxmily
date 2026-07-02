@@ -42,7 +42,7 @@ export function SampleSizeDisclaimer({
 
   const label = sufficient
     ? `${current} ${unit}${context ? ` · ${context}` : ''}`
-    : `Échantillon faible — ${current}/${minimum} ${unit}${context ? ` · ${context}` : ''}`;
+    : `Échantillon faible · ${current}/${minimum} ${unit}${context ? ` · ${context}` : ''}`;
 
   const role = sufficient ? undefined : ('note' as const);
 

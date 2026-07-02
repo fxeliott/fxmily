@@ -224,7 +224,7 @@ function PatternsHero() {
             </h1>
             <p className="t-lead max-w-[58ch]">
               Ce que tes données révèlent sur ton exécution : émotions, sessions, paires, et le lien
-              entre tes habitudes et ton trading. Une lecture honnête — jamais un verdict.
+              entre tes habitudes et ton trading. Une lecture honnête, jamais un verdict.
             </p>
           </div>
 

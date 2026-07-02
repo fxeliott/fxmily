@@ -106,7 +106,7 @@ export async function approveAccessRequestAction(
   });
 
   revalidatePath('/admin/access-requests');
-  return { ok: true, message: 'Demande acceptée — email envoyé.' };
+  return { ok: true, message: 'Demande acceptée, email envoyé.' };
 }
 
 export async function rejectAccessRequestAction(
@@ -152,6 +152,6 @@ export async function rejectAccessRequestAction(
   revalidatePath('/admin/access-requests');
   return {
     ok: true,
-    message: emailDelivered ? 'Demande refusée — email envoyé.' : 'Demande refusée.',
+    message: emailDelivered ? 'Demande refusée, email envoyé.' : 'Demande refusée.',
   };
 }

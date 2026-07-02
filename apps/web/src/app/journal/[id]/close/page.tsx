@@ -80,7 +80,7 @@ export default async function CloseTradePage({ params }: CloseTradePageProps) {
         </Card>
 
         <p className="t-foot text-center text-[var(--t-4)]">
-          Une fois clôturé, ce trade ne peut plus être modifié — uniquement supprimé.
+          Une fois clôturé, ce trade ne peut plus être modifié, uniquement supprimé.
         </p>
       </div>
     </main>

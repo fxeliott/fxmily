@@ -161,7 +161,7 @@ export function CaffeineZonesBar({ cups }: CaffeineZonesBarProps) {
       <p className="t-cap text-[var(--t-3)]">
         Demi-vie <span className="font-mono text-[var(--t-2)] tabular-nums">~6 h</span> : un café à
         16 h pèse encore sur ton sommeil à 22 h. Coupe{' '}
-        <span className="font-mono text-[var(--t-2)] tabular-nums">6 h</span> avant le coucher — la
+        <span className="font-mono text-[var(--t-2)] tabular-nums">6 h</span> avant le coucher, la
         clarté de demain se joue ici.
       </p>
     </div>

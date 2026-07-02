@@ -58,8 +58,16 @@ export type CalendarMeetingCommitment = (typeof CALENDAR_MEETING_COMMITMENTS)[nu
 export const CALENDAR_PRACTICE_FOCI = ['live', 'backtest', 'mark_douglas', 'balanced'] as const;
 export type CalendarPracticeFocus = (typeof CALENDAR_PRACTICE_FOCI)[number];
 
-/** Item 9 — optional life constraint that should compress the week. */
-export const CALENDAR_WEEK_CONSTRAINTS = ['none', 'travel', 'exams', 'reduced'] as const;
+/**
+ * Item 9 — optional life constraint that should compress the week.
+ *
+ * Append-only vocabulary (a value is NEVER renamed/reused — longitudinal-validity
+ * §27.7). `work` ('Semaine chargée au travail', member-requested F8) was added
+ * with instrument v2 and is DISTINCT from `travel` (voyage). Historical v1 answer
+ * sets (values ⊂ {none,travel,exams,reduced}) still read back unchanged; the
+ * frozen `CALENDAR_INSTRUMENT_V1` below keeps its original 4-option item.
+ */
+export const CALENDAR_WEEK_CONSTRAINTS = ['none', 'travel', 'work', 'exams', 'reduced'] as const;
 export type CalendarWeekConstraint = (typeof CALENDAR_WEEK_CONSTRAINTS)[number];
 
 /** Item 3 — weekday availability grid keys (Mon→Fri). */
@@ -234,16 +242,50 @@ const ITEMS_V1: readonly CalendarInstrumentItem[] = [
 export const CALENDAR_INSTRUMENT_V1: CalendarInstrument = {
   version: 1,
   preamble:
-    "Ce questionnaire sert à organiser ton TEMPS de pratique cette semaine — sessions, entraînement, réunions, psychologie, repos. Il ne donne aucun avis sur le marché. Il n'y a pas de bonne ni de mauvaise réponse : décris simplement ta disponibilité réelle.",
+    "Ce questionnaire sert à organiser ton TEMPS de pratique cette semaine : sessions, entraînement, réunions, psychologie, repos. Il ne donne aucun avis sur le marché. Il n'y a pas de bonne ni de mauvaise réponse : décris simplement ta disponibilité réelle.",
   items: ITEMS_V1,
 } as const;
 
-/** Every shipped instrument version. Append v2+ here, never mutate v1. */
+// =============================================================================
+// Instrument v2 — F8: item 9 (`constraint`) gains the member-requested `work`
+// option ("Semaine chargée au travail"). Items 1-8 are IDENTICAL to v1 and are
+// reused BY REFERENCE (the map swaps ONLY the constraint item). v1 stays frozen
+// above — its constraint item still lists exactly the 4 original options, so
+// historical v1 answer sets read back against v1 unchanged (§27.7). Bump trigger:
+// "Ajout/retrait d'une option de l'instrument" (ADR-005).
+// =============================================================================
+
+const CONSTRAINT_ITEM_V2: CalendarSingleChoiceItem = {
+  id: 'constraint',
+  kind: 'single_choice',
+  optional: true,
+  text: 'As-tu une contrainte particulière cette semaine ? (optionnel)',
+  options: choices([
+    ['none', 'Aucune'],
+    ['travel', 'Déplacement / voyage'],
+    ['work', 'Semaine chargée au travail'],
+    ['exams', 'Examens / révisions'],
+    ['reduced', 'Semaine allégée'],
+  ]),
+};
+
+const ITEMS_V2: readonly CalendarInstrumentItem[] = ITEMS_V1.map((item) =>
+  item.id === 'constraint' ? CONSTRAINT_ITEM_V2 : item,
+);
+
+export const CALENDAR_INSTRUMENT_V2: CalendarInstrument = {
+  version: 2,
+  preamble: CALENDAR_INSTRUMENT_V1.preamble,
+  items: ITEMS_V2,
+} as const;
+
+/** Every shipped instrument version. Append v3+ here, never mutate v1/v2. */
 export const CALENDAR_INSTRUMENTS: readonly CalendarInstrument[] = [
   CALENDAR_INSTRUMENT_V1,
+  CALENDAR_INSTRUMENT_V2,
 ] as const;
 
-export const CURRENT_CALENDAR_INSTRUMENT: CalendarInstrument = CALENDAR_INSTRUMENT_V1;
+export const CURRENT_CALENDAR_INSTRUMENT: CalendarInstrument = CALENDAR_INSTRUMENT_V2;
 
 export const CURRENT_CALENDAR_INSTRUMENT_VERSION = CURRENT_CALENDAR_INSTRUMENT.version;
 

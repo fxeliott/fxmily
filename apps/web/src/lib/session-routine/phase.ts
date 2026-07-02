@@ -88,22 +88,22 @@ export function sessionPhaseGuidance(phase: SessionPhase): SessionPhaseGuidance 
     case 'analysis':
       return {
         headline: 'Moment d’analyse',
-        line: 'Pose ton analyse multi-timeframe, du large au précis (Daily → H1 → M15). On observe et on définit — aucune exécution maintenant.',
+        line: 'Pose ton analyse multi-timeframe, du large au précis (Daily → H1 → M15). On observe et on définit. Aucune exécution maintenant.',
       };
     case 'execution':
       return {
         headline: 'Fenêtre d’exécution',
-        line: 'Si — et seulement si — ton process est complet, c’est ici que tu exécutes ton plan. Sinon, pas de trade : l’attente est une position.',
+        line: 'Si, et seulement si, ton process est complet, c’est ici que tu exécutes ton plan. Sinon, pas de trade : l’attente est une position.',
       };
     case 'management':
       return {
         headline: 'Gestion',
-        line: 'Tu laisses courir, tu sécurises (BE), tu ne forces rien. Un trade par jour suffit — la patience fait partie du plan.',
+        line: 'Tu laisses courir, tu sécurises (BE), tu ne forces rien. Un trade par jour suffit. La patience fait partie du plan.',
       };
     case 'closed':
       return {
         headline: 'Coupure',
-        line: 'Après 20h, on coupe tout — quel que soit le résultat. La nuit n’est pas ta session. Demain repart à zéro.',
+        line: 'Après 20h, on coupe tout, quel que soit le résultat. La nuit n’est pas ta session. Demain repart à zéro.',
       };
   }
 }

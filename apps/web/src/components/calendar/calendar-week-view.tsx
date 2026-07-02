@@ -78,7 +78,7 @@ function DayCard({ day }: { day: CalendarDay }) {
       </div>
 
       {blocks.length === 0 ? (
-        <p className="t-cap text-[var(--t-3)]">Journée libre — aucun bloc planifié.</p>
+        <p className="t-cap text-[var(--t-3)]">Journée libre, aucun bloc planifié.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {blocks.map((block, idx) => {

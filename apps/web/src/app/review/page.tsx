@@ -80,8 +80,8 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
               <span style={{ color: 'var(--acc-hi)' }}>ton exécution</span>
             </h1>
             <p className="t-lead max-w-prose text-[var(--t-2)]">
-              Une revue hebdomadaire de ton process — pas de tes P&amp;L. Cinq questions ciblées
-              pour mettre des mots sur ce qui a marché et ce qui doit changer.
+              Une revue hebdomadaire de ton process, pas de tes P&amp;L. Cinq questions ciblées pour
+              mettre des mots sur ce qui a marché et ce qui doit changer.
             </p>
           </div>
 
@@ -140,7 +140,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
               <EmptyState
                 icon={CalendarCheck}
                 headline="Aucune revue pour l'instant."
-                lead="Dimanche soir est un bon moment — le bouton ci-dessus ouvre ta première revue."
+                lead="Dimanche soir est un bon moment. Le bouton ci-dessus ouvre ta première revue."
               />
             </Card>
           ) : (

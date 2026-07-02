@@ -285,7 +285,7 @@ export function TrackingWizard({ instrument, occurrenceKey, prefill }: TrackingW
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
       >
         <p className="t-cap flex-1 text-[var(--t-3)]">
-          Un « non » n&apos;est pas un échec — juste un repère pour toi.
+          Un « non » n&apos;est pas un échec, juste un repère pour toi.
         </p>
         <button
           type="submit"
@@ -468,7 +468,7 @@ function ChoiceField({ label, help, choices, value, onChange, error, columns }: 
               type="button"
               role="radio"
               aria-checked={checked}
-              aria-label={choice.sub ? `${choice.label} — ${choice.sub}` : choice.label}
+              aria-label={choice.sub ? `${choice.label} · ${choice.sub}` : choice.label}
               tabIndex={i === tabbableIndex ? 0 : -1}
               onClick={() => onChange(choice.value)}
               className={cn(
@@ -619,7 +619,7 @@ function MultiTagField({ label, help, question, value, onChange, error }: MultiT
       {typeof cap === 'number' ? (
         <p className="t-cap text-[var(--t-3)]" role="status" aria-live="polite">
           {selected.length}/{cap} sélectionné{selected.length > 1 ? 's' : ''}
-          {atCap ? ' — maximum atteint' : ''}
+          {atCap ? ' · maximum atteint' : ''}
         </p>
       ) : null}
       {error ? (

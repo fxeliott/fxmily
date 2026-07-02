@@ -50,7 +50,7 @@ export default async function TrackCaffeineNewPage() {
             </h1>
           </div>
           <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
-            Bjorness &amp; Greene, <em>Sleep Medicine Reviews</em>, 2009 — la caféine a une demi-vie
+            Bjorness &amp; Greene, <em>Sleep Medicine Reviews</em>, 2009 : la caféine a une demi-vie
             de ~6 h. Un café à 16 h pèse encore sur ton sommeil à 22 h, et le sommeil finance la
             clarté de tes décisions. Le timing compte autant que la quantité.
           </p>

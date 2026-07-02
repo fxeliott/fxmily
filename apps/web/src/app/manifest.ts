@@ -40,7 +40,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Fxmily',
     short_name: 'Fxmily',
     description:
-      'Suivi comportemental — formation de trading Fxmily. Discipline, exécution, psychologie.',
+      'Suivi comportemental. Formation de trading Fxmily. Discipline, exécution, psychologie.',
     start_url: '/dashboard',
     scope: '/',
     display: 'standalone',

@@ -89,7 +89,7 @@ export default async function TrainingDebriefLandingPage({ searchParams }: Debri
 
           <p className="rounded-control border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] px-3 py-2 text-[12px] leading-[1.5] text-[var(--t-2)]">
             Un recul hebdomadaire sur ta <strong className="text-[var(--t-1)]">pratique</strong>{' '}
-            d&apos;entraînement — régularité, discipline, leçons. Pas de P&amp;L, pas d&apos;analyse
+            d&apos;entraînement : régularité, discipline, leçons. Pas de P&amp;L, pas d&apos;analyse
             de marché : ton débrief est isolé de ton edge réel, comme le reste du mode entraînement.
           </p>
         </header>

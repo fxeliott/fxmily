@@ -26,6 +26,9 @@ export default async function TradeDetailPage({ params }: DetailPageProps) {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
+  // F2 — render absolute trade instants in the member's own timezone.
+  const timezone = session.user.timezone || 'Europe/Paris';
+
   const { id } = await params;
   const trade = await getTradeById(session.user.id, id);
   if (!trade) notFound();
@@ -61,6 +64,7 @@ export default async function TradeDetailPage({ params }: DetailPageProps) {
         closeHref={`/journal/${trade.id}/close`}
         annotations={annotations}
         currentUserId={session.user.id}
+        timezone={timezone}
         footerSlot={<DeleteTradeButton tradeId={trade.id} />}
       />
     </div>

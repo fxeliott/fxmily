@@ -44,10 +44,13 @@ function makeMeeting(overrides: Partial<MemberMeetingView>): MemberMeetingView {
 
 describe('groupMeetingsByDay', () => {
   it('groups the two slots of one civil day together', () => {
-    const days = groupMeetingsByDay([
-      makeMeeting({ id: 'e', slot: 'evening', scheduledAt: '2026-06-30T18:00:00.000Z' }),
-      makeMeeting({ id: 'm', slot: 'midday', scheduledAt: '2026-06-30T10:00:00.000Z' }),
-    ]);
+    const days = groupMeetingsByDay(
+      [
+        makeMeeting({ id: 'e', slot: 'evening', scheduledAt: '2026-06-30T18:00:00.000Z' }),
+        makeMeeting({ id: 'm', slot: 'midday', scheduledAt: '2026-06-30T10:00:00.000Z' }),
+      ],
+      'Europe/Paris',
+    );
     expect(days).toHaveLength(1);
     expect(days[0]?.date).toBe('2026-06-30');
     // Re-sorted chronologically within the day: 12h (midday) before 20h (evening).
@@ -55,20 +58,36 @@ describe('groupMeetingsByDay', () => {
   });
 
   it('preserves newest-day-first ordering from the loader (desc)', () => {
-    const days = groupMeetingsByDay([
-      makeMeeting({ id: 'a', scheduledAt: '2026-06-30T10:00:00.000Z' }),
-      makeMeeting({ id: 'b', scheduledAt: '2026-06-29T10:00:00.000Z' }),
-    ]);
+    const days = groupMeetingsByDay(
+      [
+        makeMeeting({ id: 'a', scheduledAt: '2026-06-30T10:00:00.000Z' }),
+        makeMeeting({ id: 'b', scheduledAt: '2026-06-29T10:00:00.000Z' }),
+      ],
+      'Europe/Paris',
+    );
     expect(days.map((d) => d.date)).toEqual(['2026-06-30', '2026-06-29']);
   });
 
   it('splits meetings across the Europe/Paris midnight boundary (not UTC)', () => {
     // Summer (CEST = UTC+2): 21:30Z = 23:30 Paris (30 June) · 22:30Z = 00:30 Paris (1 July).
-    const days = groupMeetingsByDay([
-      makeMeeting({ id: 'late', slot: 'evening', scheduledAt: '2026-06-30T22:30:00.000Z' }),
-      makeMeeting({ id: 'early', slot: 'evening', scheduledAt: '2026-06-30T21:30:00.000Z' }),
-    ]);
+    const days = groupMeetingsByDay(
+      [
+        makeMeeting({ id: 'late', slot: 'evening', scheduledAt: '2026-06-30T22:30:00.000Z' }),
+        makeMeeting({ id: 'early', slot: 'evening', scheduledAt: '2026-06-30T21:30:00.000Z' }),
+      ],
+      'Europe/Paris',
+    );
     expect(days.map((d) => d.date)).toEqual(['2026-07-01', '2026-06-30']);
+  });
+
+  it('buckets by the MEMBER timezone (F2) — the same instant lands on different civil days', () => {
+    // 2026-06-30T22:30Z = 1 July 00:30 in Paris (CEST) but 30 June 18:30 in
+    // New York (EDT) — the member-tz grouping is what F2 promises.
+    const meetings = [
+      makeMeeting({ id: 'x', slot: 'evening', scheduledAt: '2026-06-30T22:30:00.000Z' }),
+    ];
+    expect(groupMeetingsByDay(meetings, 'Europe/Paris')[0]?.date).toBe('2026-07-01');
+    expect(groupMeetingsByDay(meetings, 'America/New_York')[0]?.date).toBe('2026-06-30');
   });
 });
 
@@ -80,11 +99,14 @@ describe('MeetingDayGroup', () => {
           date: '2026-06-30',
           meetings: [makeMeeting({ id: 'm', slot: 'midday' })],
         }}
+        timezone="Europe/Paris"
       />,
     );
     // Day header carries the full date (midi-UTC guard → 30 June, never 29).
     expect(screen.getByRole('heading', { name: /30 juin/i })).toBeInTheDocument();
-    // The card title collapses to the slot only (showDate=false) — no repeated date.
+    // The card title collapses to the slot only (showDate=false) — no repeated
+    // date. 10:00Z = 12h Paris (CEST): the slot time now derives from the
+    // instant + member tz (F2), no longer from a hardcoded slot→"12h" map.
     expect(screen.getByText('Réunion 12h')).toBeInTheDocument();
   });
 });
@@ -94,6 +116,7 @@ describe('MeetingDayGroup — explicit absence affordance (F4)', () => {
     render(
       <MeetingDayGroup
         day={{ date: '2026-06-30', meetings: [makeMeeting({ id: 'm', slot: 'midday' })] }}
+        timezone="Europe/Paris"
       />,
     );
     // A single low-friction tap, never red (§31.2).
@@ -114,6 +137,7 @@ describe('MeetingDayGroup — explicit absence affordance (F4)', () => {
             }),
           ],
         }}
+        timezone="Europe/Paris"
       />,
     );
     // No more absence button (already declared) — a note explains how to correct.

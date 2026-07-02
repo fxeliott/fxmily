@@ -20,14 +20,16 @@ export const metadata = {
 
 export const dynamic = 'force-dynamic';
 
-const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
-  timeZone: 'Europe/Paris',
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
+function formatDate(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: timezone,
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
 
 interface MemberTrainingSessionDetailPageProps {
   params: Promise<{ sessionId: string }>;
@@ -38,6 +40,8 @@ export default async function MemberTrainingSessionDetailPage({
 }: MemberTrainingSessionDetailPageProps) {
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
+
+  const timezone = session.user.timezone || 'Europe/Paris';
 
   const { sessionId } = await params;
 
@@ -95,9 +99,9 @@ export default async function MemberTrainingSessionDetailPage({
           </div>
 
           <p className="t-cap text-[var(--t-4)] tabular-nums">
-            Ouverte le {DATE_FMT.format(new Date(tSession.startedAt))}
+            Ouverte le {formatDate(new Date(tSession.startedAt), timezone)}
             {tSession.endedAt
-              ? ` · terminée le ${DATE_FMT.format(new Date(tSession.endedAt))}`
+              ? ` · terminée le ${formatDate(new Date(tSession.endedAt), timezone)}`
               : ''}
           </p>
         </header>
@@ -139,6 +143,7 @@ export default async function MemberTrainingSessionDetailPage({
                     trade={trade}
                     href={`/training/${trade.id}`}
                     unseenAnnotationsCount={unseenMap.get(trade.id) ?? 0}
+                    timezone={timezone}
                   />
                 </li>
               ))}

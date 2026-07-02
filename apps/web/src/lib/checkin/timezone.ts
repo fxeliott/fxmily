@@ -125,6 +125,46 @@ function getTimezoneOffsetMinutes(instant: Date, timezone: string): number {
   return Math.round((localAsUtc - instant.getTime()) / 60_000);
 }
 
+/** A browser `datetime-local` value: `YYYY-MM-DDTHH:mm` with optional `:ss`. */
+const WALL_CLOCK_REGEX = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
+
+/**
+ * Interpret a `datetime-local` wall-clock string (`YYYY-MM-DDTHH:mm` optionally
+ * with `:ss`) as a moment in the member's IANA timezone and return the matching
+ * UTC instant.
+ *
+ * F2 — the member's *set* timezone (settings) is authoritative for trade
+ * entry/exit, NOT the device/browser one. The conversion therefore runs
+ * SERVER-side (deterministic, unit-testable) instead of relying on the browser
+ * `new Date(...)` parser, which interpreted the wall-clock in whatever timezone
+ * the device happened to be in.
+ *
+ * Returns `null` when `value` is not a bare wall-clock (malformed shape or an
+ * impossible calendar date), so a Zod `preprocess` can fall it through to
+ * `z.coerce.date()` — which still handles already-absolute ISO strings carrying
+ * a `Z`/offset, and surfaces the standard "Date invalide." message on garbage.
+ */
+export function localWallClockToUtc(value: string, timezone: string): Date | null {
+  const m = WALL_CLOCK_REGEX.exec(value.trim());
+  if (!m) return null;
+  const [, year, month, day, hour, minute, second] = m;
+  const localDate = `${year}-${month}-${day}`;
+  try {
+    // Rejects impossible calendar dates (e.g. 2026-02-30) before conversion.
+    parseLocalDate(localDate);
+  } catch {
+    return null;
+  }
+  return localInstantToUtc(
+    localDate,
+    Number(hour),
+    Number(minute),
+    second ? Number(second) : 0,
+    0,
+    timezone,
+  );
+}
+
 /**
  * `YYYY-MM-DD` → `Date` at UTC midnight. Used to feed Prisma's `@db.Date`
  * column without timezone drift. Throws on malformed inputs (Zod-friendly).

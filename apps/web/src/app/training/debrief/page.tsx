@@ -119,7 +119,10 @@ export default async function TrainingDebriefLandingPage({ searchParams }: Debri
               {recent.length} / 12 · semaine {weekRange}
             </p>
           </div>
-          <TrainingDebriefTimeline debriefs={recent} />
+          <TrainingDebriefTimeline
+            debriefs={recent}
+            timezone={session.user.timezone || 'Europe/Paris'}
+          />
         </section>
       </div>
     </main>

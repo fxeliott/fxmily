@@ -228,7 +228,7 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
           <div className="flex flex-col gap-2">
             <h3 className="t-mono-cap text-[var(--t-4)]">Tes dernières séries</h3>
             <Suspense fallback={<TrackRecordTimelineSkeleton />}>
-              <TrackRecordTimelineSection userId={userId} />
+              <TrackRecordTimelineSection userId={userId} timezone={timezone} />
             </Suspense>
           </div>
         </section>
@@ -468,6 +468,7 @@ async function TrackRecordSection({
         data={analytics.equity.points}
         estimatedExcluded={analytics.equity.estimatedExcluded}
         range={range}
+        timezone={timezone}
       />
       <div className="flex flex-col gap-3">
         <ExpectancyCard expectancy={analytics.expectancy} />
@@ -484,9 +485,15 @@ async function TrackRecordSection({
   );
 }
 
-async function TrackRecordTimelineSection({ userId }: { userId: string }) {
+async function TrackRecordTimelineSection({
+  userId,
+  timezone,
+}: {
+  userId: string;
+  timezone: string;
+}) {
   const items = await listTrackRecordTimeline(userId);
-  return <TrackRecordTimeline items={items} />;
+  return <TrackRecordTimeline items={items} timezone={timezone} />;
 }
 
 function TrackRecordTimelineSkeleton() {

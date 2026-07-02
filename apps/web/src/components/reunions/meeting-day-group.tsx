@@ -17,20 +17,34 @@ import type { MeetingSlotName } from '@/lib/meeting/occurrence';
  * DOM. Posture is inherited from {@link MeetingItem} — neutral, never red §30.7.
  */
 
-/** YYYY-MM-DD civil day key in Europe/Paris (en-CA gives the ISO ordering). */
-const DAY_KEY_FMT = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Europe/Paris',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
+// F2 — formatters cached per member timezone (Intl construction is expensive;
+// same canon as the module-hoisted formatters this replaces, extended to
+// arbitrary member zones).
+const DAY_KEY_FMT_CACHE = new Map<string, Intl.DateTimeFormat>();
 
-/** Human day header, e.g. « lundi 30 juin ». */
+/** YYYY-MM-DD civil day key in the member's timezone (en-CA = ISO ordering). */
+function dayKeyFormatter(timeZone: string): Intl.DateTimeFormat {
+  let fmt = DAY_KEY_FMT_CACHE.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    DAY_KEY_FMT_CACHE.set(timeZone, fmt);
+  }
+  return fmt;
+}
+
+/** Human day header, e.g. « lundi 30 juin ». The civil day is ALREADY resolved
+ *  by the member-tz day key, so the label formats the midi-UTC instant in UTC
+ *  (canonical anti-drift guard — same as checkin-day-list). */
 const DAY_LABEL_FMT = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
-  timeZone: 'Europe/Paris',
+  timeZone: 'UTC',
 });
 
 /** Chronological slot order WITHIN a day (12h before 20h). */
@@ -44,16 +58,19 @@ export interface MeetingDay {
 }
 
 /**
- * Group meetings by civil day (Europe/Paris), preserving the caller's day
- * ordering (the loader returns `scheduledAt desc`, so the first day seen is the
- * most recent → the output stays newest-day-first). Slots within a day are
- * re-sorted 12h → 20h so a day always reads chronologically regardless of the
- * input order.
+ * Group meetings by civil day in the MEMBER's timezone (F2 — the whole app
+ * reads in the member's wall-clock; a Paris 20h meeting belongs to the same
+ * civil day at 14h for a New York member, but a Paris 00:30 one shifts a day),
+ * preserving the caller's day ordering (the loader returns `scheduledAt desc`,
+ * so the first day seen is the most recent → the output stays
+ * newest-day-first). Slots within a day are re-sorted 12h → 20h so a day
+ * always reads chronologically regardless of the input order.
  */
-export function groupMeetingsByDay(meetings: MemberMeetingView[]): MeetingDay[] {
+export function groupMeetingsByDay(meetings: MemberMeetingView[], timezone: string): MeetingDay[] {
+  const dayKeyFmt = dayKeyFormatter(timezone);
   const byDay = new Map<string, MemberMeetingView[]>();
   for (const m of meetings) {
-    const key = DAY_KEY_FMT.format(new Date(m.scheduledAt));
+    const key = dayKeyFmt.format(new Date(m.scheduledAt));
     let bucket = byDay.get(key);
     if (!bucket) {
       bucket = [];
@@ -67,16 +84,17 @@ export function groupMeetingsByDay(meetings: MemberMeetingView[]): MeetingDay[] 
   }));
 }
 
-export function MeetingDayGroup({ day }: { day: MeetingDay }) {
-  // Midi UTC pour le libellé — évite le drift de jour à minuit (piège TZ canonique,
-  // même garde que checkin-day-list).
+export function MeetingDayGroup({ day, timezone }: { day: MeetingDay; timezone: string }) {
+  // Midi UTC pour le libellé — le jour civil est déjà résolu par la clé
+  // membre-tz, formater l'instant midi-UTC en UTC évite tout drift de jour
+  // (piège TZ canonique, même garde que checkin-day-list).
   const label = DAY_LABEL_FMT.format(new Date(`${day.date}T12:00:00Z`));
   return (
     <section className="flex flex-col gap-2.5" aria-label={label}>
       <h3 className="t-eyebrow-lg text-[var(--t-3)] capitalize">{label}</h3>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {day.meetings.map((meeting) => (
-          <MeetingItem key={meeting.id} meeting={meeting} showDate={false} />
+          <MeetingItem key={meeting.id} meeting={meeting} timezone={timezone} showDate={false} />
         ))}
       </div>
     </section>

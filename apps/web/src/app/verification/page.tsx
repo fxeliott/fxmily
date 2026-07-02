@@ -42,12 +42,14 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Vérification' };
 
-const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'Europe/Paris',
-});
+function formatDate(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: timezone,
+  }).format(date);
+}
 
 const OCR_STATUS_META = {
   pending: { label: 'En attente d’analyse', tone: 'warn' as const },
@@ -233,7 +235,7 @@ export default async function VerificationPage() {
           </div>
           {/* S4 — « le score reste explicable au membre » (promesse du schéma
               ScoreEvent) : les derniers événements, excusés neutralisés. */}
-          <ScoreEventsHistory events={scoreEvents} />
+          <ScoreEventsHistory events={scoreEvents} timezone={timezone} />
           {/* S4 (CONTEXTE « Scoring ») — relie le score à l'objectif personnel :
               cause (ta constance) → effet (le levier qu'elle nourrit) → prochain
               pas (/objectifs). Rend null sans score ou sans objectif. */}
@@ -284,7 +286,7 @@ export default async function VerificationPage() {
                           </span>
                           <span className="flex items-center gap-2">
                             <span className="t-cap text-[var(--t-4)]">
-                              {DATE_FMT.format(d.detectedAt)}
+                              {formatDate(d.detectedAt, timezone)}
                             </span>
                             {d.memberReason !== null ? (
                               <Pill tone="cy">Motif donné</Pill>
@@ -309,6 +311,7 @@ export default async function VerificationPage() {
                           declared={d.declared}
                           reality={d.reality}
                           type={d.type}
+                          timezone={timezone}
                         />
                         {d.memberReason !== null ? (
                           <p className="t-cap text-[var(--t-4)]">Ton motif : {d.memberReason}</p>
@@ -343,7 +346,7 @@ export default async function VerificationPage() {
           <h2 id="alerts-heading" className="t-h2 text-[var(--t-1)]">
             Tes alertes de dérive
           </h2>
-          <DriftAlertsCard alerts={alerts} />
+          <DriftAlertsCard alerts={alerts} timezone={timezone} />
         </section>
 
         {/* Comptes broker — wow-reveal */}
@@ -441,7 +444,7 @@ export default async function VerificationPage() {
                       </a>
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
                         <span className="t-cap text-[var(--t-3)]">
-                          {DATE_FMT.format(proof.uploadedAt)}
+                          {formatDate(proof.uploadedAt, timezone)}
                           {account ? ` · ${account.label}` : ' · Sans compte rattaché'}
                           {proof.extractedPositionsCount > 0
                             ? ` · ${proof.extractedPositionsCount} position${proof.extractedPositionsCount > 1 ? 's' : ''} lue${proof.extractedPositionsCount > 1 ? 's' : ''}`

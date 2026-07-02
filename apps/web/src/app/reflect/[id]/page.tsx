@@ -10,17 +10,15 @@ import { getReflectionById } from '@/lib/reflection/service';
 
 export const dynamic = 'force-dynamic';
 
-// V1.9 TIER F — module-level formatters.
+// V1.9 TIER F — the entry DAY label is a civil-date pin (UTC frame). The
+// submission-time (HH:mm) formatter is an INSTANT, built per request inside the
+// component (F2 — it follows the member's session timezone).
 const FMT_WEEKDAY_LONG_UTC = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
   year: 'numeric',
   timeZone: 'UTC',
-});
-const FMT_HM_FR = new Intl.DateTimeFormat('fr-FR', {
-  hour: '2-digit',
-  minute: '2-digit',
 });
 
 interface ReflectionDetailProps {
@@ -46,6 +44,14 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
   const { id } = await params;
   const entry = await getReflectionById(session.user.id, id);
   if (!entry) notFound();
+
+  // F2 — the submission instant (HH:mm) renders in the member's own timezone.
+  const timezone = session.user.timezone || 'Europe/Paris';
+  const fmtHm = new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone,
+  });
 
   const formatLocalDate = (iso: string) => {
     const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
@@ -111,7 +117,7 @@ export default async function ReflectionDetailPage({ params }: ReflectionDetailP
           </h1>
           <p className="t-cap text-[var(--t-3)]">
             Soumise{' '}
-            <time dateTime={entry.createdAt}>{FMT_HM_FR.format(new Date(entry.createdAt))}</time>
+            <time dateTime={entry.createdAt}>{fmtHm.format(new Date(entry.createdAt))}</time>
           </p>
         </header>
 

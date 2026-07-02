@@ -28,6 +28,10 @@ export default async function CloseTradePage({ params }: CloseTradePageProps) {
   if (!trade) notFound();
   if (trade.isClosed) redirect(`/journal/${trade.id}`);
 
+  // F2 — the member's set timezone drives the exit-time default + the server
+  // wall-clock → UTC conversion on submit.
+  const timezone = session.user.timezone || 'Europe/Paris';
+
   return (
     <main className="relative bg-[var(--bg)]">
       {/* S13 — ambient depth backplate (same zero-JS server component the hub /
@@ -69,11 +73,10 @@ export default async function CloseTradePage({ params }: CloseTradePageProps) {
         </header>
 
         <Card primary className="p-5 sm:p-6">
-          {/* B1 fix (S2 audit review 2026-06-11) : the exit default is computed
-            CLIENT-side from the entry instant — a server-rendered wall-clock
-            default (UTC in prod) re-interpreted in the member's browser TZ
-            would shift the stored instant by the member's UTC offset. */}
-          <CloseTradeForm tradeId={trade.id} enteredAtIso={trade.enteredAt} />
+          {/* F2 — the exit default is rendered in the member's SET timezone and
+            the submitted wall-clock is converted to UTC server-side in that same
+            timezone (symmetric, offset-stable). */}
+          <CloseTradeForm tradeId={trade.id} enteredAtIso={trade.enteredAt} timezone={timezone} />
         </Card>
 
         <p className="t-foot text-center text-[var(--t-4)]">

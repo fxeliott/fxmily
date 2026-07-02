@@ -16,16 +16,13 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Réflexion' };
 
-// V1.9 TIER F — hoisted at module level (timeline can render up to 30 rows,
-// each previously instantiated 2 formatters).
+// V1.9 TIER F — the reflection DAY label is a civil-date pin, hoisted in the UTC
+// frame. The submission-time (HH:mm) formatter is an INSTANT and is built per
+// request inside the component (F2 — it must follow the member's session zone).
 const FMT_REFLECT_DATE_LONG_UTC = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'long',
   timeZone: 'UTC',
-});
-const FMT_HM_FR = new Intl.DateTimeFormat('fr-FR', {
-  hour: '2-digit',
-  minute: '2-digit',
 });
 
 interface ReflectLandingProps {
@@ -58,6 +55,15 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
   const justSubmitted = sp.done === '1';
 
   const recent = await listRecentReflections(session.user.id, 30);
+
+  // F2 — submission times (HH:mm) render in the member's own timezone. Built
+  // once per request, reused across the ≤30 rows.
+  const timezone = session.user.timezone || 'Europe/Paris';
+  const fmtHm = new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone,
+  });
 
   return (
     <V18ThemeScope>
@@ -167,7 +173,7 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
                           </time>
                         </p>
                         <p className="t-cap font-mono text-[var(--t-3)]">
-                          {FMT_HM_FR.format(new Date(r.createdAt))}
+                          {fmtHm.format(new Date(r.createdAt))}
                         </p>
                       </header>
                       <dl className="mt-2 space-y-1.5">

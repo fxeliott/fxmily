@@ -31,21 +31,29 @@ afterEach(() => {
 });
 
 /**
- * Cron scan helper (J5 audit BLOCKERS B2 + B3).
+ * Cron scan helper (J5 audit BLOCKERS B2 + B3, F2 per-TZ buckets).
  *
- * V1 ships single-TZ (Europe/Paris). The fast path early-returns when the
- * window probe says "neither morning nor evening is due", which keeps the
- * cron run cheap (1 audit row, zero DB churn) outside the 07:30-09:00 /
- * 20:30-22:00 windows.
+ * The fast path early-returns when NO timezone present in the cohort has a
+ * morning/evening window due, which keeps the cron run cheap (1 audit row, no
+ * checkin bulk fetch + enqueue) outside the 07:30-09:00 / 20:30-22:00 LOCAL
+ * windows. F2 — the probe runs on the ACTUAL cohort's distinct timezones, so it
+ * needs the (cheap, ≪30-row) user fetch first; a single Europe/Paris probe
+ * would mis-fire for members living elsewhere.
  */
 describe('runCheckinReminderScan', () => {
-  it('early-returns with zero scan when out of all reminder windows', async () => {
-    // 14:00 UTC = 16:00 Paris = neither window.
+  it('early-returns without the checkin bulk fetch when the whole cohort is out of all windows', async () => {
+    // 14:00 UTC = 16:00 Paris = neither window for a Paris-only cohort. The
+    // cohort IS fetched (to learn its timezones) but the heavier per-day checkin
+    // bulk fetch + enqueue loop are short-circuited.
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'user_a', timezone: 'Europe/Paris' },
+      { id: 'user_b', timezone: 'Europe/Paris' },
+    ]);
     const out = await runCheckinReminderScan(new Date('2026-05-06T14:00:00Z'));
     expect(out.scannedUsers).toBe(0);
     expect(out.enqueuedMorning).toBe(0);
     expect(out.enqueuedEvening).toBe(0);
-    expect(userFindManyMock).not.toHaveBeenCalled();
+    expect(dailyCheckinFindManyMock).not.toHaveBeenCalled();
     expect(enqueueCheckinReminderMock).not.toHaveBeenCalled();
     // The audit row still fires — that's our heartbeat.
     expect(logAuditMock).toHaveBeenCalledWith(
@@ -54,6 +62,32 @@ describe('runCheckinReminderScan', () => {
         metadata: expect.objectContaining({ reason: 'out_of_window' }),
       }),
     );
+  });
+
+  it('F2: enqueues for a member whose LOCAL window is due even though Europe/Paris is out of window', async () => {
+    // 12:00 UTC. Paris = 14:00 CEST (out of both windows). A member in
+    // America/New_York is at 08:00 EDT → inside the 07:30-09:00 morning window.
+    // A single Europe/Paris probe would WRONGLY skip the whole scan; the per-TZ
+    // bucket probe must keep it alive and enqueue the NY member only.
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'paris_u', timezone: 'Europe/Paris' },
+      { id: 'ny_u', timezone: 'America/New_York' },
+    ]);
+    dailyCheckinFindManyMock.mockResolvedValueOnce([]);
+    enqueueCheckinReminderMock.mockResolvedValueOnce('notif_ny');
+
+    const out = await runCheckinReminderScan(new Date('2026-05-06T12:00:00Z'));
+
+    // Only the NY member is in-window; the Paris member is scanned-but-skipped.
+    expect(enqueueCheckinReminderMock).toHaveBeenCalledTimes(1);
+    expect(enqueueCheckinReminderMock).toHaveBeenCalledWith('ny_u', {
+      slot: 'morning',
+      date: '2026-05-06',
+    });
+    expect(out.scannedUsers).toBe(2);
+    expect(out.enqueuedMorning).toBe(1);
+    expect(out.enqueuedEvening).toBe(0);
+    expect(out.skipped).toBe(1);
   });
 
   it('reports zero work + audit reason when window is open but no eligible members', async () => {

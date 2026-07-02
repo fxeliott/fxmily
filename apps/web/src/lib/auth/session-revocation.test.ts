@@ -58,7 +58,12 @@ describe('applyRevocationCheck (pure)', () => {
   it('revokes when the DB tokenVersion is ahead of the claim (explicit bump)', () => {
     const token = makeToken({ tokenVersion: 0 });
     expect(
-      applyRevocationCheck(token, { tokenVersion: 1, status: 'active', role: 'member' }),
+      applyRevocationCheck(token, {
+        tokenVersion: 1,
+        status: 'active',
+        role: 'member',
+        timezone: 'Europe/Paris',
+      }),
     ).toBeNull();
   });
 
@@ -68,6 +73,7 @@ describe('applyRevocationCheck (pure)', () => {
       tokenVersion: 2,
       status: 'active',
       role: 'member',
+      timezone: 'Europe/Paris',
     });
     expect(result).not.toBeNull();
     expect(result?.tokenVersion).toBe(2);
@@ -79,20 +85,27 @@ describe('applyRevocationCheck (pure)', () => {
       tokenVersion: 0,
       status: 'suspended',
       role: 'admin',
+      timezone: 'Europe/Paris',
     });
     expect(result?.status).toBe('suspended');
     expect(result?.role).toBe('admin');
   });
 
-  it('preserves unrelated claims (sub, timezone) when refreshing', () => {
+  it('preserves the sub claim but refreshes timezone from the DB (F2 self-service propagation)', () => {
+    // The member changed their zone via /account/timezone AFTER this JWT was
+    // minted (the token still carries the stale 'America/New_York'); the DB
+    // snapshot is now 'Asia/Tokyo'. F2 requires the live session to pick up the
+    // new zone on the next request — so timezone is REFRESHED from the DB, not
+    // preserved from the token. `sub` stays an unrelated claim and is preserved.
     const token = makeToken({ sub: 'usr_42', timezone: 'America/New_York', tokenVersion: 3 });
     const result = applyRevocationCheck(token, {
       tokenVersion: 3,
       status: 'active',
       role: 'member',
+      timezone: 'Asia/Tokyo',
     });
     expect(result?.sub).toBe('usr_42');
-    expect(result?.timezone).toBe('America/New_York');
+    expect(result?.timezone).toBe('Asia/Tokyo');
   });
 
   it('backward-compat: a legacy token with no tokenVersion claim coalesces to 0 and survives when DB is still 0', () => {
@@ -102,6 +115,7 @@ describe('applyRevocationCheck (pure)', () => {
       tokenVersion: 0,
       status: 'active',
       role: 'member',
+      timezone: 'Europe/Paris',
     });
     expect(result).not.toBeNull();
     expect(result?.tokenVersion).toBe(0);
@@ -111,7 +125,12 @@ describe('applyRevocationCheck (pure)', () => {
     const legacy = makeToken();
     delete (legacy as { tokenVersion?: number }).tokenVersion;
     expect(
-      applyRevocationCheck(legacy, { tokenVersion: 1, status: 'active', role: 'member' }),
+      applyRevocationCheck(legacy, {
+        tokenVersion: 1,
+        status: 'active',
+        role: 'member',
+        timezone: 'Europe/Paris',
+      }),
     ).toBeNull();
   });
 });
@@ -130,11 +149,12 @@ describe('refreshAndCheckToken (DB orchestrator)', () => {
       tokenVersion: 0,
       status: 'active',
       role: 'member',
+      timezone: 'Europe/Paris',
     });
     await refreshAndCheckToken(makeToken({ sub: 'usr_77' }));
     expect(dbUserFindUniqueMock).toHaveBeenCalledWith({
       where: { id: 'usr_77' },
-      select: { tokenVersion: true, status: true, role: true },
+      select: { tokenVersion: true, status: true, role: true, timezone: true },
     });
   });
 
@@ -148,6 +168,7 @@ describe('refreshAndCheckToken (DB orchestrator)', () => {
       tokenVersion: 5,
       status: 'active',
       role: 'member',
+      timezone: 'Europe/Paris',
     });
     expect(await refreshAndCheckToken(makeToken({ tokenVersion: 4 }))).toBeNull();
   });

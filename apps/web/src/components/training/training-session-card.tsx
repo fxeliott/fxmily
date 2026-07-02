@@ -14,14 +14,22 @@ import type { SerializedTrainingSession } from '@/lib/training/training-session-
  * it never feeds the real edge.
  */
 
-const DATE_FMT = new Intl.DateTimeFormat('fr-FR', {
-  timeZone: 'Europe/Paris',
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-});
+function formatDate(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: timezone,
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+}
 
-export function TrainingSessionCard({ session }: { session: SerializedTrainingSession }) {
+export function TrainingSessionCard({
+  session,
+  timezone = 'Europe/Paris',
+}: {
+  session: SerializedTrainingSession;
+  timezone?: string;
+}) {
   const title = session.label?.trim() || 'Session sans nom';
   const isEnded = session.endedAt != null;
 
@@ -58,7 +66,7 @@ export function TrainingSessionCard({ session }: { session: SerializedTrainingSe
         {session.timeframe ? <Pill tone="mute">{session.timeframe}</Pill> : null}
         <span className="t-cap inline-flex items-center gap-1 text-[var(--t-4)] tabular-nums">
           <Clock className="h-3 w-3" strokeWidth={1.75} />
-          {DATE_FMT.format(new Date(session.startedAt))}
+          {formatDate(new Date(session.startedAt), timezone)}
         </span>
       </div>
 

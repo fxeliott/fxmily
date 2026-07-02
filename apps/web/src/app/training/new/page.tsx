@@ -45,6 +45,7 @@ export default async function NewTrainingTradePage({ searchParams }: NewTraining
       <DashboardAmbient tone="cyan" />
       <div className="relative">
         <TrainingFormWizard
+          timezone={session.user.timezone || 'Europe/Paris'}
           sessionId={activeSession?.id ?? null}
           sessionLabel={activeSession?.label ?? null}
         />

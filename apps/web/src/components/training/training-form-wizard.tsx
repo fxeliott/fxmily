@@ -27,7 +27,9 @@ import { ScreenshotUploader } from '@/components/journal/screenshot-uploader';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { localWallClockToUtc } from '@/lib/checkin/timezone';
 import { TRAINING_CHECKLIST_ITEMS, trainingTradeCreateSchema } from '@/lib/schemas/training-trade';
+import { formatDateTimeLocalInput, timezoneCityLabel } from '@/lib/timezones';
 import { TRAINING_UI_COPY } from '@/lib/training/training-ui-copy';
 import { cn } from '@/lib/utils';
 
@@ -102,12 +104,6 @@ type ChecklistDraftKey =
 
 const DRAFT_STORAGE_KEY = 'fxmily:training:draft:v1';
 
-function nowIsoLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => `${n}`.padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function emptyDraft(): TrainingDraftState {
   return {
     pair: '',
@@ -173,13 +169,18 @@ function serverErrorMessage(state: CreateTrainingTradeActionState): string {
 }
 
 export function TrainingFormWizard({
+  timezone,
   sessionId = null,
   sessionLabel = null,
 }: {
+  /** F2 — member IANA timezone: the entry wall-clock defaults to "now" in the
+   *  member's set timezone and round-trips through the server unchanged (never
+   *  the device's). */
+  timezone: string;
   /** S8 — when set, the backtest is logged inside this parent session. */
   sessionId?: string | null;
   sessionLabel?: string | null;
-} = {}) {
+}) {
   const [draft, setDraft] = useState<TrainingDraftState>(() => emptyDraft());
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState<StepIndex>(0);
@@ -198,15 +199,19 @@ export function TrainingFormWizard({
 
   useEffect(() => {
     const restored = loadDraft();
-    // Browser-local default for the entry time, applied post-mount so the SSR
-    // render stays deterministic (no hydration mismatch on the datetime-local).
+    // F2 — default the entry time to "now" in the MEMBER's set timezone (not the
+    // device's), applied post-mount so the SSR render stays deterministic (no
+    // hydration mismatch on the datetime-local). The member submits this raw
+    // wall-clock; the server re-interprets it in the same set timezone, so the
+    // round-trip is offset-stable even on a device clocked elsewhere (canon:
+    // trade-form-wizard.tsx).
     if (!restored.enteredAt) {
-      restored.enteredAt = nowIsoLocal();
+      restored.enteredAt = formatDateTimeLocalInput(new Date(), timezone);
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDraft(restored);
     setHydrated(true);
-  }, []);
+  }, [timezone]);
 
   useEffect(() => {
     if (hydrated) persistDraft(draft);
@@ -253,7 +258,11 @@ export function TrainingFormWizard({
       emotionalStateNoted: draft.emotionalStateNoted || undefined,
       noImpulsiveDeviation: draft.noImpulsiveDeviation || undefined,
       lessonLearned: draft.lessonLearned,
-      enteredAt: draft.enteredAt ? new Date(draft.enteredAt) : new Date(NaN),
+      // F2 — interpret the wizard's raw wall-clock in the MEMBER's set timezone
+      // (matches the server's `memberWallClock`), not the device-tz `new Date()`.
+      enteredAt: draft.enteredAt
+        ? (localWallClockToUtc(draft.enteredAt, timezone) ?? new Date(draft.enteredAt))
+        : new Date(NaN),
     };
     const result = trainingTradeCreateSchema.safeParse(candidate);
     if (result.success) return true;
@@ -299,7 +308,12 @@ export function TrainingFormWizard({
 
     const fd = new FormData();
     fd.set('pair', draft.pair);
-    fd.set('enteredAt', new Date(draft.enteredAt).toISOString());
+    // F2 — post the RAW datetime-local wall-clock. The server re-interprets it
+    // as a moment in the member's set timezone (createTrainingTradeAction →
+    // memberWallClock), giving a correct UTC instant even when the device clock
+    // is in another timezone. Previously `new Date(...).toISOString()` baked in
+    // the BROWSER timezone here (canon: trade-form-wizard.tsx).
+    fd.set('enteredAt', draft.enteredAt);
     fd.set('entryScreenshotKey', draft.entryScreenshotKey);
     // F1 — optional TradingView link: only send when non-empty (server reads
     // null when omitted), mirroring the resultR guarded set above.
@@ -431,6 +445,7 @@ export function TrainingFormWizard({
                 update={update}
                 fieldErrors={fieldErrors}
                 disabled={pending}
+                timezone={timezone}
               />
             ) : null}
             {step === 1 ? (
@@ -545,7 +560,13 @@ interface StepProps {
   disabled?: boolean | undefined;
 }
 
-function StepPairDate({ draft, update, fieldErrors, disabled }: StepProps) {
+function StepPairDate({
+  draft,
+  update,
+  fieldErrors,
+  disabled,
+  timezone,
+}: StepProps & { timezone: string }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
@@ -575,7 +596,8 @@ function StepPairDate({ draft, update, fieldErrors, disabled }: StepProps) {
           </p>
         ) : (
           <p id="enteredAt-hint" className="t-cap text-[var(--t-4)]">
-            Quand tu as analysé ce backtest. Pré-rempli à maintenant.
+            Quand tu as analysé ce backtest. Heure locale ({timezoneCityLabel(timezone)}),
+            pré-remplie à maintenant.
           </p>
         )}
       </div>

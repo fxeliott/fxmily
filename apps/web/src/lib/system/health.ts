@@ -22,36 +22,45 @@ import { db } from '@/lib/db';
  *    rolling deploys + network blips without false positives.
  */
 
-interface CronExpectation {
-  /** Audit action emitted by the route. */
-  action:
-    | 'cron.checkin_reminders.scan'
-    | 'cron.recompute_scores.scan'
-    | 'cron.dispatch_douglas.scan'
-    | 'cron.weekly_reports.scan'
-    | 'cron.dispatch_notifications.scan'
-    | 'cron.purge_deleted.scan'
-    | 'cron.purge_push_subscriptions.scan'
-    | 'cron.purge_audit_log.scan'
-    | 'cron.calendar_overdue.scan'
-    | 'cron.monthly_debrief_overdue.scan'
-    | 'cron.onboarding_profile_overdue.scan'
-    | 'cron.weekly_report_overdue.scan'
-    | 'cron.verification_scan.scan'
-    | 'cron.verification_overdue.scan'
-    // S10 — three wired prod crons that were emitting a heartbeat but were NOT
-    // monitored here, so a silent failure of any of them never surfaced red.
-    | 'meeting.generated' // generate-meetings (admin slug, see lib/auth/audit.ts:312)
-    | 'cron.mindset_check_reminders.scan'
-    | 'cron.purge_access_requests.scan'
-    | 'cron.health.scan';
+/**
+ * Shared shape for anything that emits a periodic heartbeat audit row —
+ * server crons (`cron.*.scan`) and the local AI-worker pipelines
+ * (`*.batch.pulled`). One generic report builder serves both dashboards.
+ */
+interface HeartbeatExpectation<A extends string = string> {
+  /** Audit action emitted on each run. */
+  action: A;
   /** Human-readable label for the dashboard. */
   label: string;
-  /** Expected period in ms (matches the crontab schedule). */
+  /** Expected period in ms (matches the schedule). */
   periodMs: number;
   /** Multiplier applied to `periodMs` to flag a gap as unhealthy. Default 3. */
   toleranceMultiplier?: number;
 }
+
+type CronAction =
+  | 'cron.checkin_reminders.scan'
+  | 'cron.recompute_scores.scan'
+  | 'cron.dispatch_douglas.scan'
+  | 'cron.weekly_reports.scan'
+  | 'cron.dispatch_notifications.scan'
+  | 'cron.purge_deleted.scan'
+  | 'cron.purge_push_subscriptions.scan'
+  | 'cron.purge_audit_log.scan'
+  | 'cron.calendar_overdue.scan'
+  | 'cron.monthly_debrief_overdue.scan'
+  | 'cron.onboarding_profile_overdue.scan'
+  | 'cron.weekly_report_overdue.scan'
+  | 'cron.verification_scan.scan'
+  | 'cron.verification_overdue.scan'
+  // S10 — three wired prod crons that were emitting a heartbeat but were NOT
+  // monitored here, so a silent failure of any of them never surfaced red.
+  | 'meeting.generated' // generate-meetings (admin slug, see lib/auth/audit.ts:312)
+  | 'cron.mindset_check_reminders.scan'
+  | 'cron.purge_access_requests.scan'
+  | 'cron.health.scan';
+
+type CronExpectation = HeartbeatExpectation<CronAction>;
 
 const MIN = 60 * 1000;
 const HOUR = 60 * MIN;
@@ -217,45 +226,51 @@ const EXPECTATIONS: readonly CronExpectation[] = [
 
 export type CronStatus = 'green' | 'amber' | 'red' | 'never_ran';
 
-export interface CronHealthEntry {
-  action: CronExpectation['action'];
+export interface HeartbeatHealthEntry<A extends string = string> {
+  action: A;
   label: string;
   periodMs: number;
   /** ISO-8601 of the last successful scan, or null if no audit row at all. */
   lastRanAt: string | null;
   /** ms since the last scan, or null if never ran. */
   ageMs: number | null;
-  /** Threshold beyond which we flag the cron as unhealthy. */
+  /** Threshold beyond which we flag the heartbeat as unhealthy. */
   toleranceMs: number;
   status: CronStatus;
   /**
-   * Errors reported by the cron's most recent run (read from its heartbeat
-   * `metadata.errors`; 0 when the cron tracks no per-item errors). A FRESH row
-   * with errorCount > 0 means the cron RAN but failed for some/all members —
+   * Errors reported by the most recent run (read from its heartbeat
+   * `metadata.errors`; 0 when the run tracks no per-item errors). A FRESH row
+   * with errorCount > 0 means the run FIRED but failed for some/all members —
    * invisible to the age-only check, which just sees "it ran".
    */
   errorCount: number;
 }
 
+export type CronHealthEntry = HeartbeatHealthEntry<CronAction>;
+
 export interface CronHealthReport {
   ranAt: string;
-  /** Worst status across all crons (`red` > `amber` > `never_ran` > `green`). */
+  /** Worst status across all crons (`red` > `never_ran` > `amber` > `green`). */
   overall: CronStatus;
   entries: CronHealthEntry[];
 }
 
 /**
- * Look up the most-recent `cron.*.scan` row for each known action and
- * compute its status.
+ * Look up the most-recent heartbeat row for each expected action and compute
+ * its status. Generic core shared by the server-cron report and the local
+ * AI-worker report — same audit-gap semantics, different expectation tables.
  *
  * Single SQL pass (`groupBy` + `_max`) so the cost is constant regardless
  * of audit log volume — Postgres uses the `(action, created_at desc)`
  * index naturally.
  */
-export async function getCronHealthReport(now: Date = new Date()): Promise<CronHealthReport> {
+async function buildHeartbeatReport<A extends string>(
+  expectations: readonly HeartbeatExpectation<A>[],
+  now: Date,
+): Promise<{ ranAt: string; overall: CronStatus; entries: HeartbeatHealthEntry<A>[] }> {
   const grouped = await db.auditLog.groupBy({
     by: ['action'],
-    where: { action: { in: EXPECTATIONS.map((e) => e.action) } },
+    where: { action: { in: expectations.map((e) => e.action) } },
     _max: { createdAt: true },
   });
 
@@ -289,7 +304,7 @@ export async function getCronHealthReport(now: Date = new Date()): Promise<CronH
     }
   }
 
-  const entries: CronHealthEntry[] = EXPECTATIONS.map((expectation) => {
+  const entries: HeartbeatHealthEntry<A>[] = expectations.map((expectation) => {
     const lastRanAt = lastRanByAction.get(expectation.action) ?? null;
     const ageMs = lastRanAt ? now.getTime() - lastRanAt.getTime() : null;
     const toleranceMs = expectation.periodMs * (expectation.toleranceMultiplier ?? 3);
@@ -337,6 +352,108 @@ export async function getCronHealthReport(now: Date = new Date()): Promise<CronH
         : 'green';
 
   return { ranAt: now.toISOString(), overall, entries };
+}
+
+export async function getCronHealthReport(now: Date = new Date()): Promise<CronHealthReport> {
+  return buildHeartbeatReport(EXPECTATIONS, now);
+}
+
+/**
+ * J6 — Local AI-worker heartbeat health check.
+ *
+ * The 6 Claude batch pipelines run on Eliott's PC via Windows Task Scheduler
+ * (source of truth: `ops/worker/install-worker.ps1`). Each pull endpoint
+ * writes a `<pipeline>.batch.pulled` audit row on EVERY call — even when it
+ * returns 0 entries — so the audit gap is a true "did the worker tick" signal,
+ * exactly like the server crons above.
+ *
+ * Deliberately NOT merged into `/api/cron/health` / cron-watch.yml: the worker
+ * host is a personal machine that is legitimately off at night, and the GitHub
+ * watcher would open a false-positive issue every evening. The member-facing
+ * guarantee stays with the 5 server-side overdue-nudge crons (monitored in
+ * EXPECTATIONS); this report tells the operator whether generation is CURRENT
+ * or merely guaranteed-eventually. `seance.batch.pulled` is excluded on
+ * purpose — the séances pipeline is pulled on demand, it has no expected
+ * period, so an age-based status would lie.
+ *
+ * Tolerances are wider than the server crons: amber = "the PC is probably
+ * off, expected overnight"; red = "the worker missed enough consecutive
+ * occurrences that StartWhenAvailable can no longer explain the gap".
+ */
+type WorkerPipelineAction =
+  | 'onboarding.batch.pulled'
+  | 'verification.batch.pulled'
+  | 'calendar.batch.pulled'
+  | 'weekly_report.batch.pulled'
+  | 'monthly_debrief.batch.pulled'
+  | 'member_profile_monthly.batch.pulled';
+
+const MONTH = 30 * DAY;
+
+// Source of truth: `ops/worker/install-worker.ps1` ($Pipelines + triggers).
+const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[] = [
+  {
+    // Task Scheduler interval trigger, every 20 min while the PC is on.
+    // Green ≤ 30 min (worker alive), amber up to 24h (PC off overnight is
+    // normal and calm), red past 24h: the PC was necessarily on at some point
+    // that day, so zero ticks in 24h means the task itself is broken
+    // (unregistered, lock stuck, bash path gone) — not just a sleeping host.
+    action: 'onboarding.batch.pulled',
+    label: 'Worker · profils onboarding',
+    periodMs: 20 * MIN,
+    toleranceMultiplier: 72, // 24h
+  },
+  {
+    // Daily 04:10 local. StartWhenAvailable replays a missed run at boot, so
+    // default ×3 (72h) only reddens after 3 consecutive fully-missed days.
+    action: 'verification.batch.pulled',
+    label: 'Worker · vision preuves MT5',
+    periodMs: DAY,
+  },
+  {
+    // Weekly, Monday 05:10 local. ×2 → red only after TWO missed Mondays —
+    // one missed occurrence is amber (vacation, PC off), two is a dead task.
+    action: 'calendar.batch.pulled',
+    label: 'Worker · calendriers semaine',
+    periodMs: WEEK,
+    toleranceMultiplier: 2,
+  },
+  {
+    // Weekly, Sunday 05:40 local. Same ×2 rationale as the calendar pipeline.
+    action: 'weekly_report.batch.pulled',
+    label: 'Worker · digests hebdo',
+    periodMs: WEEK,
+    toleranceMultiplier: 2,
+  },
+  {
+    // Monthly, day 1 06:10 local. ×2 (60d) → red after two missed months.
+    action: 'monthly_debrief.batch.pulled',
+    label: 'Worker · débriefs mensuels',
+    periodMs: MONTH,
+    toleranceMultiplier: 2,
+  },
+  {
+    // Monthly, day 2 06:40 local (J-E deep re-profiling, staggered one day
+    // after the debrief batch). `never_ran` is the HONEST status until its
+    // first scheduled run — the UI renders it neutral, not red.
+    action: 'member_profile_monthly.batch.pulled',
+    label: 'Worker · re-profilage mensuel',
+    periodMs: MONTH,
+    toleranceMultiplier: 2,
+  },
+] as const;
+
+export type WorkerHealthEntry = HeartbeatHealthEntry<WorkerPipelineAction>;
+
+export interface WorkerHealthReport {
+  ranAt: string;
+  /** Worst status across all pipelines (`red` > `never_ran` > `amber` > `green`). */
+  overall: CronStatus;
+  entries: WorkerHealthEntry[];
+}
+
+export async function getWorkerHealthReport(now: Date = new Date()): Promise<WorkerHealthReport> {
+  return buildHeartbeatReport(WORKER_EXPECTATIONS, now);
 }
 
 /**

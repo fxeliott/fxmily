@@ -14,7 +14,7 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-const { getCronHealthReport, getSystemSnapshot } = await import('./health');
+const { getCronHealthReport, getSystemSnapshot, getWorkerHealthReport } = await import('./health');
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -335,6 +335,144 @@ describe('getCronHealthReport', () => {
     expect(report.entries.map((e) => e.action)).toContain('meeting.generated');
     expect(report.entries.map((e) => e.action)).toContain('cron.mindset_check_reminders.scan');
     expect(report.entries.map((e) => e.action)).toContain('cron.purge_access_requests.scan');
+  });
+});
+
+describe('getWorkerHealthReport', () => {
+  /**
+   * Why this matters : the worker board is fixed to the 6 pipelines that
+   * install-worker.ps1 actually registers. Adding a 7th pipeline (or renaming
+   * a slug) must force an explicit WORKER_EXPECTATIONS update — and
+   * `seance.batch.pulled` must NOT appear (pulled on demand, no period, an
+   * age-based status would lie).
+   */
+  it('returns exactly the 6 installed pipelines, never the on-demand séances slug', async () => {
+    auditGroupByMock.mockResolvedValueOnce([]);
+    const report = await getWorkerHealthReport();
+    expect(report.entries.map((e) => e.action)).toEqual([
+      'onboarding.batch.pulled',
+      'verification.batch.pulled',
+      'calendar.batch.pulled',
+      'weekly_report.batch.pulled',
+      'monthly_debrief.batch.pulled',
+      'member_profile_monthly.batch.pulled',
+    ]);
+    expect(report.entries.map((e) => e.action)).not.toContain('seance.batch.pulled');
+  });
+
+  /**
+   * Why this matters : a PC that is on and a worker that ticks must read
+   * all-green — the operator's "everything is generating" glance.
+   */
+  it("returns 'green' when every pipeline pulled within 1.5× its period", async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
+      },
+      {
+        action: 'verification.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
+      {
+        action: 'weekly_report.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
+      },
+      {
+        action: 'monthly_debrief.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * DAY) },
+      },
+      {
+        action: 'member_profile_monthly.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * DAY) },
+      },
+    ]);
+
+    const report = await getWorkerHealthReport(now);
+
+    expect(report.overall).toBe('green');
+    expect(report.entries.every((e) => e.status === 'green')).toBe(true);
+  });
+
+  /**
+   * Why this matters : the onboarding pipeline ticks every 20 min but its host
+   * is a personal PC that sleeps at night. The status semantics are the whole
+   * point of the wide tolerance — a 3h gap (evening off) must read amber/calm,
+   * while a 30h gap means the task itself is broken (the PC was necessarily on
+   * at some point in 24h) and must read red.
+   */
+  it('classifies an overnight-off PC as amber and a dead worker as red (onboarding)', async () => {
+    const now = new Date('2026-07-10T08:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 3 * HOUR) },
+      },
+    ]);
+    const overnight = await getWorkerHealthReport(now);
+    expect(overnight.entries.find((e) => e.action === 'onboarding.batch.pulled')?.status).toBe(
+      'amber',
+    );
+
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 30 * HOUR) },
+      },
+    ]);
+    const dead = await getWorkerHealthReport(now);
+    expect(dead.entries.find((e) => e.action === 'onboarding.batch.pulled')?.status).toBe('red');
+    expect(dead.overall).toBe('red');
+  });
+
+  /**
+   * Why this matters : member_profile_monthly (J-E, day-2 batch) has never run
+   * before its first scheduled occurrence. `never_ran` — not red — is the
+   * honest status, and it must surface in `overall` so the operator knows the
+   * board has a pipeline with zero history rather than a silent green.
+   */
+  it("keeps a pipeline with no audit row 'never_ran' (honest pre-first-batch status)", async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'onboarding.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
+      },
+    ]);
+
+    const report = await getWorkerHealthReport(now);
+    const profile = report.entries.find((e) => e.action === 'member_profile_monthly.batch.pulled');
+
+    expect(profile?.status).toBe('never_ran');
+    expect(profile?.lastRanAt).toBeNull();
+    expect(report.overall).toBe('never_ran');
+  });
+
+  /**
+   * Why this matters : the pull endpoints write `metadata.errors` like the
+   * server crons do. A worker that ticks on time but fails per member must
+   * escalate green → amber through the shared builder — pin that the worker
+   * board inherits the escalation, not just the age check.
+   */
+  it('escalates a fresh pull that reported errors to amber', async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'verification.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+    ]);
+    auditFindManyMock.mockResolvedValueOnce([
+      { action: 'verification.batch.pulled', metadata: { errors: 3 } },
+    ]);
+
+    const report = await getWorkerHealthReport(now);
+    const verification = report.entries.find((e) => e.action === 'verification.batch.pulled');
+
+    expect(verification?.status).toBe('amber');
+    expect(verification?.errorCount).toBe(3);
   });
 });
 

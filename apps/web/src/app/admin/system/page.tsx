@@ -1,4 +1,4 @@
-import { Activity, ArrowLeft, Database, ShieldCheck } from 'lucide-react';
+import { Activity, ArrowLeft, Bot, Database, ShieldCheck } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -11,8 +11,9 @@ import { logAudit } from '@/lib/auth/audit';
 import {
   getCronHealthReport,
   getSystemSnapshot,
-  type CronHealthEntry,
+  getWorkerHealthReport,
   type CronStatus,
+  type HeartbeatHealthEntry,
 } from '@/lib/system/health';
 
 /**
@@ -45,12 +46,20 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
     redirect('/login?redirect=/admin/system');
   }
 
-  const [report, snapshot] = await Promise.all([getCronHealthReport(), getSystemSnapshot()]);
+  const [report, workerReport, snapshot] = await Promise.all([
+    getCronHealthReport(),
+    getWorkerHealthReport(),
+    getSystemSnapshot(),
+  ]);
+
+  // The masthead pill must reflect the WHOLE page: a green server-cron board
+  // with a red local worker is still an incident for the operator.
+  const overall = worstStatus(report.overall, workerReport.overall);
 
   await logAudit({
     action: 'admin.system.viewed',
     userId: session.user.id,
-    metadata: { overall: report.overall },
+    metadata: { overall: report.overall, workerOverall: workerReport.overall },
   });
 
   return (
@@ -75,12 +84,12 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
           style={{ fontFeatureSettings: '"ss01" 1' }}
         >
           État système
-          <OverallStatusPill status={report.overall} />
+          <OverallStatusPill status={overall} />
         </h1>
         <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
-          Dernier scan {formatRelative(report.ranAt)}. Couverture : {report.entries.length} crons,
-          soft-delete pipeline, audit log volume 24h. Source de vérité = audit_logs (gap depuis le
-          dernier{' '}
+          Dernier scan {formatRelative(report.ranAt)}. Couverture : {report.entries.length} crons +{' '}
+          {workerReport.entries.length} pipelines worker IA, soft-delete pipeline, audit log volume
+          24h. Source de vérité = audit_logs (gap depuis le dernier{' '}
           <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
             cron.X.scan
           </code>
@@ -176,6 +185,45 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
         </ul>
       </section>
 
+      <section
+        aria-labelledby="worker-heading"
+        className="mt-8 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
+      >
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--acc-dim)] text-[var(--acc-hi)]"
+          >
+            <Bot className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2
+              id="worker-heading"
+              className="flex flex-wrap items-center gap-2 text-base font-semibold text-[var(--t-1)]"
+            >
+              Worker IA · machine locale
+              <CronStatusPill status={workerReport.overall} />
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
+              Les 6 batchs Claude tournent sur la machine locale (Task Scheduler). Chaque pull émet
+              un audit row{' '}
+              <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
+                &lt;pipeline&gt;.batch.pulled
+              </code>{' '}
+              même à zéro membre. Tolérances larges : ambre = PC probablement éteint (normal la
+              nuit) · rouge = occurrences manquées en série, la tâche elle-même est en panne. La
+              garantie membre reste portée par les filets overdue côté serveur, listés au-dessus.
+            </p>
+          </div>
+        </div>
+
+        <ul className="mt-5 grid gap-x-8 xl:grid-cols-2">
+          {workerReport.entries.map((entry) => (
+            <CronRow key={entry.action} entry={entry} />
+          ))}
+        </ul>
+      </section>
+
       {/* items-start + shrink-0 icon + wrapping <span> : a `flex items-center`
           on the whole sentence forced icon + text + both <code> onto ONE
           non-wrapping line → ~481px horizontal overflow at 390px (§243).
@@ -236,7 +284,7 @@ function SnapshotCard({
   );
 }
 
-function CronRow({ entry }: { entry: CronHealthEntry }): React.ReactElement {
+function CronRow({ entry }: { entry: HeartbeatHealthEntry }): React.ReactElement {
   return (
     <li className="flex flex-col gap-2 border-b border-[var(--b-subtle)] py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 flex-1">
@@ -371,8 +419,8 @@ function CronAgeBar({
         title={`${Math.round(pct)} % de la tolérance`}
       >
         <div
-          className="h-full rounded-full transition-[width]"
-          style={{ width: `${pct}%`, backgroundColor: fill }}
+          className="h-full w-full origin-left rounded-full transition-transform"
+          style={{ transform: `scaleX(${Math.min(pct, 100) / 100})`, backgroundColor: fill }}
         />
         {/* Tick marking the green→amber boundary. */}
         <span
@@ -404,6 +452,15 @@ function CronStatusPill({ status }: { status: CronStatus }): React.ReactElement 
   const label =
     status === 'green' ? 'OK' : status === 'amber' ? 'Lent' : status === 'red' ? 'Stale' : 'Jamais';
   return <Pill tone={tone}>{label}</Pill>;
+}
+
+/**
+ * Same severity order the reports use for their own `overall`
+ * (`red` > `never_ran` > `amber` > `green`) — applied across the two boards.
+ */
+function worstStatus(a: CronStatus, b: CronStatus): CronStatus {
+  const severity: Record<CronStatus, number> = { green: 0, amber: 1, never_ran: 2, red: 3 };
+  return severity[a] >= severity[b] ? a : b;
 }
 
 function formatRelative(iso: string): string {

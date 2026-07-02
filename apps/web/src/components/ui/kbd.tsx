@@ -22,6 +22,9 @@ export function Kbd({ children, inline, className }: KbdProps) {
       data-slot="kbd"
       className={cn(
         'inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[4px] px-1 font-mono text-[10px] leading-none font-medium tabular-nums',
+        // inline sits on an ACCENT-filled parent (CTA button), not an app
+        // surface: white/black relative overlays stay correct on the blue
+        // fill in BOTH themes — surface tokens (--bg-*) would not.
         inline
           ? 'border border-white/15 bg-black/25 text-current'
           : 'border border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-3)]',

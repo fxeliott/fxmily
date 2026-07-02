@@ -58,8 +58,11 @@ function MirrorRow({ rule }: { rule: MethodRule }) {
       >
         {hasData ? (
           <div
-            className={cn('h-full rounded-full transition-[width] duration-500', band.bar)}
-            style={{ width: `${rule.rate}%` }}
+            className={cn(
+              'h-full w-full origin-left rounded-full transition-transform duration-500',
+              band.bar,
+            )}
+            style={{ transform: `scaleX(${(rule.rate ?? 0) / 100})` }}
           />
         ) : null}
       </div>

@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS
   Fxmily local AI worker (J2) — register the automated, permanent Windows
-  Scheduled Tasks that drive the 5 Claude batch orchestrators.
+  Scheduled Tasks that drive the 6 Claude batch orchestrators.
 
 .DESCRIPTION
   Turns the former "human-in-the-loop, run manually by Eliot" batches into a
@@ -10,13 +10,15 @@
   most one `claude --print` ever runs at a time (ban-risk: no parallelisation),
   exactly as when the scripts were run by hand one after another.
 
-  Schedules are STAGGERED so the five never collide:
+  Schedules are STAGGERED so the six never collide:
     onboarding    every 20 min   (time-sensitive — this is what kills the
                                    "IA silence 24H après profil rempli" bug)
     verification  daily   04:10
     calendar      Mon     05:10
     weekly        Sun     05:40
     monthly       day 1   06:10
+    profile       day 2   06:40   (J-E monthly deep re-profiling; day 2 so the
+                                   digest of the just-ended month lands first)
 
   Tasks run as the CURRENT user with LogonType S4U ("run whether the user is
   logged on or not", no stored password) so the worker keeps ticking on an
@@ -78,7 +80,8 @@ $Pipelines = @(
   @{ Name = 'verification'; Kind = 'daily'; At = '04:10' },
   @{ Name = 'calendar'; Kind = 'weekly'; At = '05:10'; Day = 'Monday' },
   @{ Name = 'weekly'; Kind = 'weekly'; At = '05:40'; Day = 'Sunday' },
-  @{ Name = 'monthly'; Kind = 'monthly'; At = '06:10'; DayOfMonth = 1 }
+  @{ Name = 'monthly'; Kind = 'monthly'; At = '06:10'; DayOfMonth = 1 },
+  @{ Name = 'profile'; Kind = 'monthly'; At = '06:40'; DayOfMonth = 2 }
 )
 
 # --- Shared settings (permanence + self-healing seed for J4) -------------------
@@ -150,7 +153,7 @@ foreach ($p in $Pipelines) {
       $months = '<Months>' + (('January', 'February', 'March', 'April', 'May', 'June',
           'July', 'August', 'September', 'October', 'November', 'December' |
             ForEach-Object { "<$_ />" }) -join '') + '</Months>'
-      $byMonth = "<ScheduleByMonth><DaysOfMonth><Day>1</Day></DaysOfMonth>$months</ScheduleByMonth>"
+      $byMonth = "<ScheduleByMonth><DaysOfMonth><Day>$($p.DayOfMonth)</Day></DaysOfMonth>$months</ScheduleByMonth>"
       # (?s) — the exported XML is pretty-printed across lines; without
       # singleline mode the lazy .*? never crosses them and nothing replaces.
       $xml = $xml -replace '(?s)<ScheduleByDay>.*?</ScheduleByDay>', $byMonth

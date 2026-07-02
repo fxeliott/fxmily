@@ -36,6 +36,19 @@ export default defineConfig({
       reporter: ['text', 'lcov'],
       include: ['src/lib/**/*.ts'],
       exclude: ['src/generated/**', '**/*.test.ts', '**/*.spec.ts'],
+      /**
+       * RATCHET thresholds — set ~1.5 pts under the measured baseline
+       * (2026-07-02 : stmts 78.58 / branches 66.14 / funcs 76.39 / lines
+       * 78.88 on 4125+ tests) so CI fails on a coverage REGRESSION without
+       * demanding aspirational coverage. Raise them as coverage grows;
+       * never lower them to make a PR pass.
+       */
+      thresholds: {
+        statements: 77,
+        branches: 64.5,
+        functions: 74.5,
+        lines: 77,
+      },
     },
   },
 });

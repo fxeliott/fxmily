@@ -1,6 +1,12 @@
 import { Compass, Sparkles, Target } from 'lucide-react';
 
 import { AIGeneratedBanner } from '@/components/ai-generated-banner';
+import {
+  AxesStructuredSection,
+  CoachingToneSection,
+  LearningStageSection,
+  WeakSignalsSection,
+} from '@/components/admin/deep-dimension-sections';
 import type {
   SerializedMemberProfile,
   SerializedOnboardingInterview,
@@ -249,6 +255,14 @@ export function MemberProfileViewerAdmin({
             );
           })()}
 
+          {/* J-C dims — extracted to a shared renderer (J-E inc.3) so the SAME
+              section markup serves the onboarding baseline here AND each month
+              on the trajectory tab. `idPrefix` keeps the historical element ids
+              (`profile-admin-*-heading`) byte-identical on this surface. */}
+          <CoachingToneSection raw={profile.coachingTone} idPrefix="profile-admin" />
+
+          <LearningStageSection raw={profile.learningStage} idPrefix="profile-admin" />
+
           {/* Axes prioritaires for the coaching path — admin focuses here. */}
           {(() => {
             const axes = asStringArray(profile.axesPrioritaires);
@@ -295,6 +309,10 @@ export function MemberProfileViewerAdmin({
               </section>
             );
           })()}
+
+          <AxesStructuredSection raw={profile.axesStructured} idPrefix="profile-admin" />
+
+          <WeakSignalsSection raw={profile.weakSignals} idPrefix="profile-admin" />
 
           <p className="t-cap text-center text-[var(--t-3)]">
             Profil analysé le{' '}

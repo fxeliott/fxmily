@@ -108,6 +108,7 @@ echo "[2/3] Generating reports locally via 'claude --print' ($SLEEP_MIN-${SLEEP_
 
 core_extract_prompt_and_schema
 : >"$RESULTS_NDJSON"
+core_reset_failure_state # Volet B — reset the rate-limit / consecutive-failure breaker
 
 i=0
 generated=0
@@ -160,16 +161,26 @@ for idx in $ENTRY_INDICES; do
     errored=$((errored + 1))
     echo "    ✗ claude exited $CLAUDE_EXIT, response file empty or missing — see $ERRORS_LOG"
     core_append_error "$USER_ID" "claude_exit_$CLAUDE_EXIT"
+    core_note_failure
   else
     if core_parse_response "$RESPONSE_FILE" "$PARSED_FILE"; then
       generated=$((generated + 1))
       echo "    ✓ generated, JSON valid"
       core_append_success "$USER_ID" "$PARSED_FILE"
+      core_note_success
     else
       errored=$((errored + 1))
       echo "    ✗ output is not valid JSON — saved to $RESPONSE_FILE"
       core_append_error "$USER_ID" "invalid_json_response"
+      core_note_failure
     fi
+  fi
+
+  # Volet B — stop early on a rate limit / consecutive-failure breaker rather
+  # than hammering a limited account (idempotent: unprocessed members re-pull).
+  if core_should_halt; then
+    echo "  Stopping the weekly loop early (see reason above)."
+    break
   fi
 
   # Sleep with jitter between requests (don't sleep after the last one)

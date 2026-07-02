@@ -129,6 +129,14 @@ export interface SerializedMemberProfile {
   claudeModelVersion: string;
   instrumentVersion: string;
   analyzedAt: string;
+  // J-A/J-C — 4 optional deep-AI dimensions, passed through as `unknown` (same
+  // posture as highlights/axesPrioritaires : nullable Prisma Json?, parsed
+  // defensively at render). NULL on legacy/partial rows. DISPLAY-ONLY, never a
+  // scoring input (firewall §21.5). weakSignals is admin-surface only.
+  coachingTone: unknown;
+  learningStage: unknown;
+  axesStructured: unknown;
+  weakSignals: unknown;
 }
 
 // =============================================================================
@@ -450,5 +458,9 @@ export async function getProfileForUser(userId: string): Promise<SerializedMembe
     claudeModelVersion: row.claudeModelVersion,
     instrumentVersion: row.instrumentVersion,
     analyzedAt: row.analyzedAt.toISOString(),
+    coachingTone: row.coachingTone,
+    learningStage: row.learningStage,
+    axesStructured: row.axesStructured,
+    weakSignals: row.weakSignals,
   };
 }

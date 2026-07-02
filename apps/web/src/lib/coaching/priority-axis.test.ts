@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classifyPriorityAxes } from './priority-axis';
+import { classifyPriorityAxes, type PriorityAxisHints } from './priority-axis';
 
 /**
  * S5 §32-C — le moteur doit exploiter le profil S2 (axes prioritaires d'onboarding,
@@ -167,5 +167,111 @@ describe('classifyPriorityAxes — VRAIS axes onboarding (anti-inertie §32-C/§
         "Vérifier que les 30 questions de l'entretien sont toutes exploitables avant le batch production.",
       ]),
     ).toEqual([]);
+  });
+});
+
+/**
+ * D5 §J-D — TIE-BREAK DÉTERMINISTE par les indices de profil profond (dimensions J-A
+ * `coachingTone.register` / `learningStage.stage`). CONSERVATEUR : le paramètre
+ * `hints` ne départage QU'UNE ÉGALITÉ (un même libellé touche ≥2 groupes d'axes, sans
+ * autre signal que l'ordre figé de `AXIS_KEYWORDS`). Sans `hints` — ou quand aucun axe
+ * préféré n'est parmi les axes réellement touchés — le comportement est STRICTEMENT
+ * identique à l'historique (aucun re-classement, aucune fabrication). Enum→enum : §50
+ * préservé (aucun texte brut IA), firewall §21.5 (jamais un input du score).
+ */
+describe('classifyPriorityAxes — tie-break profil profond §J-D (register/stage)', () => {
+  // « honnête » (honesty) + « discipliné » (discipline) touchent DEUX groupes : c'est
+  // l'égalité canonique que le tie-break départage. Sans hints → honesty (1er groupe).
+  const AMBIGUOUS_HONESTY_DISCIPLINE = 'Être honnête et discipliné';
+  // « détachement » (ego) + « process/plan » (discipline) → égalité ego vs discipline.
+  const AMBIGUOUS_EGO_DISCIPLINE =
+    'Travailler le détachement du résultat tout en tenant mon process et mon plan';
+
+  it('(a) sans hints → ordre STRICTEMENT identique à l’historique (non-régression)', () => {
+    // Même sortie qu'avant l'ajout du paramètre, sur un libellé ambigu et une liste.
+    expect(classifyPriorityAxes([AMBIGUOUS_HONESTY_DISCIPLINE])).toEqual(['honesty']);
+    expect(
+      classifyPriorityAxes(['Tenir mon plan', 'Plus de sincérité', 'Garder mon sang-froid (ego)']),
+    ).toEqual(['discipline', 'honesty', 'ego']);
+  });
+
+  it('(a bis) hints={} (aucun enum) → identique à l’absence de hints', () => {
+    expect(classifyPriorityAxes([AMBIGUOUS_HONESTY_DISCIPLINE], {})).toEqual(['honesty']);
+    expect(classifyPriorityAxes([AMBIGUOUS_EGO_DISCIPLINE], {})).toEqual(['ego']);
+  });
+
+  it('(b) register=direct départage l’égalité honesty/discipline vers discipline', () => {
+    // Sans hints → 'honesty'. register 'direct' → discipline (cadre/process direct).
+    expect(classifyPriorityAxes([AMBIGUOUS_HONESTY_DISCIPLINE])).toEqual(['honesty']);
+    expect(classifyPriorityAxes([AMBIGUOUS_HONESTY_DISCIPLINE], { register: 'direct' })).toEqual([
+      'discipline',
+    ]);
+  });
+
+  it('(b) register=pedagogique laisse honesty (déjà le 1er) — pas de faux changement', () => {
+    expect(
+      classifyPriorityAxes([AMBIGUOUS_HONESTY_DISCIPLINE], { register: 'pedagogique' }),
+    ).toEqual(['honesty']);
+  });
+
+  it('(b) stage=mechanical départage ego/discipline vers discipline', () => {
+    expect(classifyPriorityAxes([AMBIGUOUS_EGO_DISCIPLINE])).toEqual(['ego']); // historique
+    expect(classifyPriorityAxes([AMBIGUOUS_EGO_DISCIPLINE], { stage: 'mechanical' })).toEqual([
+      'discipline',
+    ]);
+  });
+
+  it('(b) stage=subjective conserve ego sur l’égalité ego/discipline', () => {
+    expect(classifyPriorityAxes([AMBIGUOUS_EGO_DISCIPLINE], { stage: 'subjective' })).toEqual([
+      'ego',
+    ]);
+  });
+
+  it('le stade PRIME sur le registre quand les deux visent des axes différents parmi les touchés', () => {
+    // stage=mechanical → discipline ; register=socratique → ego. Les deux sont parmi
+    // les axes touchés (ego + discipline) → le stade gagne (canon D4).
+    expect(
+      classifyPriorityAxes([AMBIGUOUS_EGO_DISCIPLINE], {
+        stage: 'mechanical',
+        register: 'socratique',
+      }),
+    ).toEqual(['discipline']);
+  });
+
+  it('n’agit JAMAIS sur un libellé mono-axe (pas d’égalité → hints ignorés)', () => {
+    // « Tenir mon plan » ne touche QUE discipline : aucun hint ne peut le déplacer.
+    expect(classifyPriorityAxes(['Tenir mon plan'], { stage: 'subjective' })).toEqual([
+      'discipline',
+    ]);
+    expect(
+      classifyPriorityAxes(['Être honnête avec mes résultats'], { register: 'direct' }),
+    ).toEqual(['honesty']);
+  });
+
+  it('un axe préféré ABSENT des axes touchés ne fabrique rien → ordre historique', () => {
+    // honesty/discipline touchés ; stage=intuitive → consistency (NON touché) → aucun
+    // effet, on retombe sur l'ordre de gravité curé (honesty).
+    expect(classifyPriorityAxes([AMBIGUOUS_HONESTY_DISCIPLINE], { stage: 'intuitive' })).toEqual([
+      'honesty',
+    ]);
+  });
+
+  it('ne fabrique JAMAIS un axe quand rien ne mappe, hints présents ou pas', () => {
+    const hints: PriorityAxisHints = { register: 'direct', stage: 'mechanical' };
+    expect(classifyPriorityAxes(['Gagner plus', 'Trader le réel'], hints)).toEqual([]);
+    expect(classifyPriorityAxes([], hints)).toEqual([]);
+  });
+
+  it('exhaustif : chaque (sans hints) == avec hints tant qu’aucune égalité n’existe', () => {
+    // Sur des libellés mono-axe, TOUTES les combinaisons d'enums laissent l'ordre intact.
+    const monoAxis = ['Tenir mon plan', 'Plus de régularité', 'Réduire le FOMO', 'Sincérité'];
+    const baseline = classifyPriorityAxes(monoAxis);
+    const registers = ['direct', 'pedagogique', 'socratique'] as const;
+    const stages = ['mechanical', 'subjective', 'intuitive'] as const;
+    for (const register of registers) {
+      for (const stage of stages) {
+        expect(classifyPriorityAxes(monoAxis, { register, stage })).toEqual(baseline);
+      }
+    }
   });
 });

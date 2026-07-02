@@ -55,6 +55,12 @@ POSTURE COPY (CRITIQUE — anti-Black-Hat Yu-kai Chou) :
 - **Aucun score d'adhérence, aucun streak, aucune menace.** Le seul signal de hiérarchie est la \`priority\` d'un bloc (high/medium/low) — un poids visuel, jamais une punition.
 - **Respecte la disponibilité déclarée.** Ne place un bloc QUE sur un créneau (matin/aprem/soir) marqué disponible dans le snapshot. Si une journée n'a aucun créneau dispo, laisse-la vide (\`blocks: []\`) ou propose uniquement du repos.
 - **Adapte à la situation de vie** (étudiant/salarié/etc.), au chronotype (\`sleep\`), au pic d'énergie (\`energyPeak\` : place les blocs exigeants à ce moment), au focus de pratique (\`practiceFocus\`), et à la contrainte éventuelle (\`constraint\` : voyage/travail chargé/examens/semaine allégée → réduis la charge).
+- **Module selon le stade d'apprentissage** (\`learningStage\`, quand il est fourni) — c'est le rythme de pratique du membre, jamais un jugement :
+  - \`mechanical\` : privilégie des blocs structurants et cadrants (révision des règles du plan, checklists avant session, révision Mark Douglas régulière). Le membre consolide sa méthode, donne-lui un cadre clair.
+  - \`subjective\` : ajoute des blocs qui aident à relier le ressenti au process (revue de journal, check-ins un peu plus présents, temps de révision psychologique). Le membre apprend à lire ses réactions sans se juger.
+  - \`intuitive\` : laisse plus d'autonomie et allège les rappels mécaniques (moins de blocs de checklist imposés, plus d'espace libre pour la pratique). Le membre a intégré la méthode, fais-lui confiance.
+  - Si \`learningStage\` n'est pas fourni, garde un équilibre neutre sans forcer de stade.
+- **Ajuste le ton** selon le registre de coaching (\`coachingRegister\`, quand il est fourni), sans jamais changer le fond ni la posture : \`direct\` = phrasé bref et concret ; \`pedagogique\` = un mot d'explication en plus sur le pourquoi d'un bloc ; \`socratique\` = formule qui invite à réfléchir. Le calendrier reste calme et organisationnel dans tous les cas.
 
 FORMAT DE SORTIE (strict, JSON validé) :
 - **weekStart** : recopie exactement le \`weekStart\` (YYYY-MM-DD) du snapshot.
@@ -100,6 +106,19 @@ export function buildCalendarUserPrompt(snapshot: CalendarSnapshot): string {
   );
   lines.push(`- Focus de pratique : ${FOCUS_LABELS[r.practiceFocus] ?? r.practiceFocus}`);
   lines.push(`- Contrainte de la semaine : ${CONSTRAINT_LABELS[r.constraint] ?? r.constraint}`);
+  // D3 — read-only adaptive dimensions. Emitted ONLY when present so an empty
+  // profile keeps a neutral prompt. These tune the KIND of blocks / the TONE,
+  // never a result. weakSignals is never here (admin-only, member firewall).
+  if (snapshot.learningStage !== null) {
+    lines.push(
+      `- Stade d'apprentissage (module la nature des blocs) : ${LEARNING_STAGE_LABELS[snapshot.learningStage]}`,
+    );
+  }
+  if (snapshot.coachingRegister !== null) {
+    lines.push(
+      `- Registre de coaching (module le ton, jamais le fond) : ${COACHING_REGISTER_LABELS[snapshot.coachingRegister]}`,
+    );
+  }
   lines.push(``);
 
   lines.push(`## Disponibilité (place un bloc UNIQUEMENT sur un créneau disponible)`);
@@ -260,6 +279,22 @@ const CONSTRAINT_LABELS: Record<(typeof CALENDAR_WEEK_CONSTRAINTS)[number], stri
   work: 'semaine chargée au travail',
   exams: 'examens / révisions',
   reduced: 'semaine allégée',
+};
+
+// D3 — member-facing FR labels for the two §21.5-safe adaptive dimensions.
+// Descriptive-behavioural only, calm, no clinical/diagnostic vocabulary, no
+// anthropomorphisation, no em-dash (Eliott copy rule). The literal keys mirror
+// the closed Zod enums (learningStageSchema.stage / coachingToneSchema.register).
+const LEARNING_STAGE_LABELS: Record<'mechanical' | 'subjective' | 'intuitive', string> = {
+  mechanical: 'mécanique (consolidation de la méthode, cadre structurant utile)',
+  subjective: 'subjectif (relier le ressenti au process)',
+  intuitive: 'intuitif (plus d’autonomie, moins de rappels mécaniques)',
+};
+
+const COACHING_REGISTER_LABELS: Record<'direct' | 'pedagogique' | 'socratique', string> = {
+  direct: 'direct (phrasé bref et concret)',
+  pedagogique: 'pédagogique (un mot d’explication en plus)',
+  socratique: 'socratique (formule qui invite à réfléchir)',
 };
 
 // =============================================================================

@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, GraduationCap } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -101,6 +101,38 @@ export default async function ObjectifsPage() {
         {view.methodGoal ? (
           <section className="wow-reveal" aria-label="Ton objectif de méthode du moment">
             <MethodGoalCard goal={view.methodGoal} variant="full" />
+          </section>
+        ) : null}
+
+        {/* 1.75 — D4 : le STADE d'apprentissage (Mécanique / Subjectif / Intuitif)
+            dérivé du profil d'onboarding, DÉTERMINISTE (enum → libellé FR + phrase
+            fixe orientant le plan). On ne rend que l'enum-dérivé, jamais le texte
+            brut IA (`rationale`) ⇒ aucune bannière IA requise (AI Act §50). Rend
+            null tant qu'aucun profil / champ absent. §2/§21.5-safe. */}
+        {view.learningStage ? (
+          <section className="wow-reveal" aria-labelledby="learning-stage-heading">
+            <div className="rounded-card border border-[var(--b-default)] bg-[var(--bg-1)] p-5">
+              <div className="flex items-start gap-3.5">
+                <span
+                  aria-hidden="true"
+                  className="rounded-control mt-0.5 grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-2)]"
+                >
+                  <GraduationCap className="h-4 w-4" strokeWidth={1.75} />
+                </span>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="t-eyebrow text-[var(--t-3)]">Ton stade d’apprentissage</span>
+                  <h2
+                    id="learning-stage-heading"
+                    className="t-body leading-[1.4] font-semibold text-[var(--t-1)]"
+                  >
+                    {view.learningStage.label}
+                  </h2>
+                  <p className="t-cap leading-relaxed text-[var(--t-2)]">
+                    {view.learningStage.hint}
+                  </p>
+                </div>
+              </div>
+            </div>
           </section>
         ) : null}
 

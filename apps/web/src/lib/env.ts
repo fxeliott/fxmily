@@ -250,6 +250,20 @@ const envSchema = z.object({
     .min(32, 'SEANCES_ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
     .optional(),
 
+  /// J-E (expansion IA §21.5) — Token partagé entre la machine d'Eliott et
+  /// `/api/admin/member-profile-batch/*` (7ᵉ pipeline local : re-profilage IA
+  /// profond mensuel ADMIN-ONLY). Sans ça, les endpoints répondent 503
+  /// (refuse-by-default, mirror des autres tokens batch). Génération :
+  /// `openssl rand -hex 32` (64 chars). Provisionner sur Hetzner via append à
+  /// `/etc/fxmily/web.env` (0600 owner fxmily) puis `docker compose -f
+  /// docker-compose.prod.yml restart web`. SÉPARÉ des autres : les snapshots
+  /// re-profilés quittent le host vers le PC d'Eliott puis Anthropic (compromis
+  /// distinct), donc rotation indépendante.
+  PROFILE_ADMIN_BATCH_TOKEN: z
+    .string()
+    .min(32, 'PROFILE_ADMIN_BATCH_TOKEN ≥ 32 chars (openssl rand -hex 32)')
+    .optional(),
+
   /// V1.5 — Salt server-side pour la pseudonymisation `userId → memberLabel`
   /// dans `lib/weekly-report/builder.ts`. Sans salt, un attaquant qui connaît
   /// un cuid peut vérifier sa présence dans un export rapport hebdo en

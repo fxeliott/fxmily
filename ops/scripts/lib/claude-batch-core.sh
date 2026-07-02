@@ -67,6 +67,43 @@ SLEEP_MAX="${FXMILY_SLEEP_MAX_S:-120}"
 # read-only tools (pure-generator isolation: no Bash, no Write, no network).
 CLAUDE_ALLOWED_TOOLS="${FXMILY_CLAUDE_ALLOWED_TOOLS:-}"
 
+# --- Volet B : rate-limit / permanence hardening -----------------------------
+# The 9 ban-risk rules above stop PARALLELISM and pace calls, but nothing stops
+# TOTAL VOLUME against an already usage-limited OAuth Max account. Sustained
+# rapid-fire against an exhausted quota is the exact pattern that escalates from
+# a soft throttle to an account action, and a broken auth mid-cohort silently
+# burns the rest of the run. These knobs turn both into a clean, idempotent
+# HALT (safe re-run next quota window — unprocessed members are re-picked by the
+# server-side pull filter). Halting is deliberately preferred over a
+# back-off-and-continue : continuing keeps hammering a possibly-limited account,
+# the opposite of the "zéro ban" goal ; stopping never does.
+
+# Consecutive-failure circuit breaker. After this many BACK-TO-BACK failed
+# members (claude non-zero exit / unparseable output / timeout), the per-member
+# loop HALTS instead of burning the rest of the cohort against a broken
+# auth/quota/network. A successful member resets the counter to 0. 0 disables
+# the breaker (NOT recommended). Default 4 tolerates a couple of transient blips
+# while stopping a systemic failure early.
+FXMILY_MAX_CONSECUTIVE_FAILURES="${FXMILY_MAX_CONSECUTIVE_FAILURES:-4}"
+
+# Hard wall-clock timeout (seconds) around ONE `claude --print`. xhigh extended
+# thinking is slow, so this is generous — it only catches a truly hung process
+# (keychain prompt, network stall) that would otherwise block the whole serial
+# batch forever. Requires coreutils `timeout` on PATH ; degrades to an unbounded
+# call (with a one-time warning) when absent. 0 disables the wrapper entirely.
+FXMILY_CLAUDE_TIMEOUT_S="${FXMILY_CLAUDE_TIMEOUT_S:-900}"
+
+# --- Runtime state (module globals, reset per run by core_reset_failure_state) -
+CORE_CONSECUTIVE_FAILURES=0
+CORE_RATE_LIMITED=0
+CORE_TIMEOUT_WARNED=0
+# Byte offset in $ERRORS_LOG captured just before each `claude --print` call, so
+# core_classify_failure inspects ONLY the current member's stderr (the log is
+# append-only across the whole run — without this, a keyword from an earlier,
+# even successful, member would be misattributed to a later failure and trip a
+# spurious rate-limit halt). 0 = classify the whole file (first call / tests).
+CORE_ERRLOG_MARK=0
+
 # --- Validations --------------------------------------------------------------
 
 # Allowlist of acceptable Claude model slugs for `claude --model` — THE single
@@ -134,6 +171,16 @@ core_validate_numeric_knobs() {
   fi
   if ! [[ "$MAX_BUDGET_USD" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
     echo "ERROR: FXMILY_MAX_BUDGET_USD=$MAX_BUDGET_USD must be a dot-decimal number (e.g. 15.00)." >&2
+    exit 1
+  fi
+  # Volet B knobs : non-negative integers (0 = disabled). A French-locale or
+  # typo'd value would otherwise silently break the arithmetic guards mid-batch.
+  if ! [[ "$FXMILY_MAX_CONSECUTIVE_FAILURES" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: FXMILY_MAX_CONSECUTIVE_FAILURES=$FXMILY_MAX_CONSECUTIVE_FAILURES must be a non-negative integer (0 disables the breaker)." >&2
+    exit 1
+  fi
+  if ! [[ "$FXMILY_CLAUDE_TIMEOUT_S" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: FXMILY_CLAUDE_TIMEOUT_S=$FXMILY_CLAUDE_TIMEOUT_S must be a non-negative integer seconds (0 disables the timeout)." >&2
     exit 1
   fi
 }
@@ -328,6 +375,14 @@ core_invoke_claude_print() {
   local prompt_file="$1" response_file="$2"
   local system_prompt_content
   system_prompt_content=$(<"$SYSTEM_PROMPT_FILE")
+  # Volet B — mark the current size of the shared stderr log BEFORE the call so
+  # core_classify_failure classifies only THIS call's stderr (round-2 P2 fix:
+  # avoid a keyword bleeding from an earlier member's stderr into this one).
+  CORE_ERRLOG_MARK=0
+  if [ -n "${ERRORS_LOG:-}" ] && [ -f "${ERRORS_LOG:-}" ]; then
+    CORE_ERRLOG_MARK=$(wc -c <"$ERRORS_LOG" 2>/dev/null | tr -dc '0-9')
+    [ -n "$CORE_ERRLOG_MARK" ] || CORE_ERRLOG_MARK=0
+  fi
   # S3 — vision opt-in: `--allowedTools` is appended ONLY when the caller set
   # CLAUDE_ALLOWED_TOOLS (e.g. "Read" for the verification pipeline). The
   # empty default keeps the 4 text pipelines byte-identical (no flag at all).
@@ -335,7 +390,26 @@ core_invoke_claude_print() {
   if [ -n "$CLAUDE_ALLOWED_TOOLS" ]; then
     extra_args+=(--allowedTools "$CLAUDE_ALLOWED_TOOLS")
   fi
-  claude --print \
+  # Volet B — optional hard timeout: coreutils `timeout` wraps the call so a
+  # hung `claude --print` (keychain prompt, network stall) cannot block the
+  # whole serial batch forever. `--kill-after=30s` escalates to SIGKILL if the
+  # process ignores SIGTERM. A timeout surfaces as a NORMAL non-zero exit
+  # (124 term / 137 kill) → the caller records it and it counts toward the
+  # consecutive-failure breaker, exactly like any other claude failure. When
+  # `timeout` is unavailable the call runs unbounded (one-time warning) — no
+  # regression versus the historical invocation. The empty-array expansion
+  # `"${timeout_cmd[@]}"` is the same set-u-safe idiom already used for
+  # extra_args below.
+  local timeout_cmd=()
+  if [ "$FXMILY_CLAUDE_TIMEOUT_S" -gt 0 ]; then
+    if command -v timeout >/dev/null 2>&1; then
+      timeout_cmd=(timeout --kill-after=30s "${FXMILY_CLAUDE_TIMEOUT_S}s")
+    elif [ "$CORE_TIMEOUT_WARNED" -eq 0 ]; then
+      echo "WARN: coreutils 'timeout' not on PATH — claude --print runs unbounded (set FXMILY_CLAUDE_TIMEOUT_S=0 to silence)." >&2
+      CORE_TIMEOUT_WARNED=1
+    fi
+  fi
+  "${timeout_cmd[@]}" claude --print \
     --model "$CLAUDE_MODEL" \
     --effort "$CLAUDE_EFFORT" \
     --max-turns "$MAX_TURNS" \
@@ -395,4 +469,85 @@ core_jittered_sleep() {
   local dur=$((SLEEP_MIN + RANDOM % (SLEEP_MAX - SLEEP_MIN + 1)))
   echo "    ⏱  sleeping ${dur}s (jittered for ban-risk mitigation)"
   sleep "$dur"
+}
+
+# --- Volet B : failure classification + circuit breaker ------------------------
+#
+# All five per-member loops share the same failure taxonomy :
+#   - claude non-zero exit / empty output / timeout  → core_note_failure
+#   - unparseable or wrong-shape JSON                → core_note_failure
+#   - a successful, valid generation (incl. a legit  → core_note_success
+#     model verdict like verification's not_mt5_history)
+#   - PRE-CALL skips (bad pseudonym/userId, inactive → neither: no claude call
+#     member, image download failure)                  was made
+# After recording, the loop asks core_should_halt and `break`s when true, so a
+# systemic auth/quota/network failure stops the run early (idempotent re-run)
+# instead of hammering a limited account for the rest of the cohort.
+
+# Reset the per-run failure state. Call ONCE right before the per-member loop.
+core_reset_failure_state() {
+  CORE_CONSECUTIVE_FAILURES=0
+  CORE_RATE_LIMITED=0
+  CORE_ERRLOG_MARK=0
+}
+
+# Classify the LAST claude failure by scanning the tail of $ERRORS_LOG for a
+# usage/rate-limit signature. Echoes "rate_limited" or "generic", returns 0.
+# DEFENSIVE by design : the exact `claude --print` stderr wording is NOT a
+# stable contract, so we match a BROAD set of well-known limit signatures
+# (case-insensitive). A false positive only costs a safe early halt + an
+# idempotent re-run ; a false negative still trips the consecutive-failure
+# breaker. Both failure modes are safe — the classifier never keeps the loop
+# running when in doubt.
+core_classify_failure() {
+  local tail_txt=""
+  if [ -n "${ERRORS_LOG:-}" ] && [ -f "${ERRORS_LOG:-}" ]; then
+    # Only the bytes appended since the current call's pre-invocation mark
+    # (CORE_ERRLOG_MARK), then capped at 4000 — so an earlier member's stderr
+    # keyword can never poison this classification. Mark 0 = whole file (first
+    # call / direct-call tests).
+    tail_txt=$(tail -c +"$(( ${CORE_ERRLOG_MARK:-0} + 1 ))" "$ERRORS_LOG" 2>/dev/null | tail -c 4000 || true)
+  fi
+  if printf '%s' "$tail_txt" | grep -qiE \
+       'rate[ _-]?limit|usage[ _-]?limit|too many requests|(^|[^0-9])429([^0-9]|$)|quota|resource[ _-]?exhausted|overloaded|limit reached|usage cap|try again later'; then
+    echo "rate_limited"
+  else
+    echo "generic"
+  fi
+}
+
+# Record a failed member : increment the consecutive-failure counter and, when
+# the failure classifies as a rate/usage limit, LATCH CORE_RATE_LIMITED (once
+# set it stays set for the run). Always returns 0 (safe under `set -e`).
+core_note_failure() {
+  CORE_CONSECUTIVE_FAILURES=$((CORE_CONSECUTIVE_FAILURES + 1))
+  local kind
+  kind=$(core_classify_failure)
+  if [ "$kind" = "rate_limited" ]; then
+    CORE_RATE_LIMITED=1
+  fi
+  return 0
+}
+
+# Record a successful member — resets the consecutive-failure counter so an
+# isolated blip between two successes never accumulates toward the breaker.
+core_note_success() {
+  CORE_CONSECUTIVE_FAILURES=0
+  return 0
+}
+
+# Should the batch HALT now? True (0) when a rate/usage limit was detected
+# (stop immediately — never hammer a limited account) OR the consecutive-failure
+# breaker tripped. False (1) otherwise. Prints the reason to stderr on halt.
+core_should_halt() {
+  if [ "$CORE_RATE_LIMITED" -eq 1 ]; then
+    echo "  ⛔ HALT: a usage/rate limit was detected in claude stderr — stopping the run to avoid hammering a limited account. Re-run in the next quota window (idempotent: unprocessed members are re-picked)." >&2
+    return 0
+  fi
+  if [ "$FXMILY_MAX_CONSECUTIVE_FAILURES" -gt 0 ] \
+     && [ "$CORE_CONSECUTIVE_FAILURES" -ge "$FXMILY_MAX_CONSECUTIVE_FAILURES" ]; then
+    echo "  ⛔ HALT: $CORE_CONSECUTIVE_FAILURES consecutive failures (breaker=$FXMILY_MAX_CONSECUTIVE_FAILURES) — stopping to avoid a silent mass-failure cohort. Fix the cause (auth/quota/network) and re-run (idempotent)." >&2
+    return 0
+  fi
+  return 1
 }

@@ -165,20 +165,95 @@ function fold(value: string): string {
 }
 
 /**
+ * D5 §J-D — indices de coaching DÉTERMINISTES issus du profil S2 profond (dimensions
+ * J-A `coachingTone.register` / `learningStage.stage`). Enum-only : jamais le texte
+ * brut IA (`rationale`/`evidence`) — l'appelant `service.ts` fait un `safeParse` des
+ * schemas Zod puis ne transmet QUE les deux enums ici. §50-safe (aucun contenu
+ * AI-dérivé surfacé, mapping enum→enum) ; firewall §21.5 (jamais un input du score).
+ * On ne lit JAMAIS `weakSignals` (admin-only, ne traverse pas la frontière membre).
+ */
+export interface PriorityAxisHints {
+  /** Registre de coaching préféré (dimension J-A `coachingTone.register`). */
+  readonly register?: 'direct' | 'pedagogique' | 'socratique';
+  /** Stade d'apprentissage (dimension J-A `learningStage.stage`). */
+  readonly stage?: 'mechanical' | 'subjective' | 'intuitive';
+}
+
+/**
+ * Stade d'apprentissage → axe mental de départage. ALIGNÉ sur le mapping D4
+ * `learning-stage.ts` STAGE_HINT (une seule source de vérité de l'orientation par
+ * stade) : `mechanical` = « respect strict des règles » ⇒ discipline ; `subjective`
+ * = quitter les règles mécaniques pour la lecture subjective ⇒ acceptation de
+ * l'incertitude (ego) ; `intuitive` = « consolide ta constance » ⇒ consistency.
+ */
+const STAGE_PREFERRED_AXIS: Record<NonNullable<PriorityAxisHints['stage']>, MentalAxis> = {
+  mechanical: 'discipline',
+  subjective: 'ego',
+  intuitive: 'consistency',
+};
+
+/**
+ * Registre de coaching → axe mental de départage. `direct` = cadre/process direct
+ * ⇒ discipline ; `pedagogique` = construire la conscience de soi ⇒ honnêteté ;
+ * `socratique` = questionner pour accepter l'incertitude/lâcher le besoin d'avoir
+ * raison ⇒ ego.
+ */
+const REGISTER_PREFERRED_AXIS: Record<NonNullable<PriorityAxisHints['register']>, MentalAxis> = {
+  direct: 'discipline',
+  pedagogique: 'honesty',
+  socratique: 'ego',
+};
+
+/**
+ * Départage DÉTERMINISTE des axes qu'UN libellé touche à égalité. Ne renvoie un axe
+ * préféré QUE s'il figure parmi les `matched` (jamais un axe non détecté dans le
+ * texte ⇒ 0 fabrication). Le stade prime sur le registre (marqueur développemental
+ * plus structurant, canon D4). `undefined` ⇒ aucune préférence applicable → l'ordre
+ * de gravité curé de `AXIS_KEYWORDS` reste seul juge (comportement historique).
+ */
+function preferredAxis(
+  matched: readonly MentalAxis[],
+  hints: PriorityAxisHints,
+): MentalAxis | undefined {
+  const candidates: MentalAxis[] = [];
+  if (hints.stage) candidates.push(STAGE_PREFERRED_AXIS[hints.stage]);
+  if (hints.register) candidates.push(REGISTER_PREFERRED_AXIS[hints.register]);
+  return candidates.find((axis) => matched.includes(axis));
+}
+
+/**
  * Classe les priorités d'onboarding (déjà nettoyées par `coerceAxes`) en axes
  * mentaux. Déduplique en conservant l'ordre de première apparition. Retourne `[]`
  * si rien ne mappe (jamais un axe inventé). Les 4 axes possibles bornent la sortie.
+ *
+ * D5 §J-D — `hints` OPTIONNEL. Il sert UNIQUEMENT de tie-break déterministe quand un
+ * MÊME libellé touche plusieurs groupes d'axes À ÉGALITÉ (aucun signal ordinal ne les
+ * sépare hormis l'ordre figé de `AXIS_KEYWORDS`). Il ne re-classe RIEN d'autre : un
+ * libellé qui ne touche qu'un seul axe est intouché, et sans `hints` le comportement
+ * est STRICTEMENT identique à aujourd'hui (aucune régression). L'exemption AI Act §50
+ * de ce module est préservée : `hints` est enum→enum, jamais du texte brut IA.
  */
-export function classifyPriorityAxes(axes: readonly string[]): MentalAxis[] {
+export function classifyPriorityAxes(
+  axes: readonly string[],
+  hints?: PriorityAxisHints,
+): MentalAxis[] {
   const result: MentalAxis[] = [];
   for (const raw of axes) {
     const haystack = fold(raw);
+    // Tous les axes que CE libellé touche, dans l'ordre de gravité curé (historique).
+    const matched: MentalAxis[] = [];
     for (const [axis, keywords] of AXIS_KEYWORDS) {
-      if (keywords.some((keyword) => haystack.includes(keyword))) {
-        if (!result.includes(axis)) result.push(axis);
-        break; // premier groupe qui matche → cet axe-texte est classé
-      }
+      if (keywords.some((keyword) => haystack.includes(keyword))) matched.push(axis);
     }
+    // Ordre de gravité curé (historique) : le 1er groupe touché. `matched` est non
+    // vide ici (garde ci-dessous) ⇒ `fallback` est défini.
+    const fallback = matched[0];
+    if (fallback === undefined) continue;
+    // Tie-break §J-D : n'agit QUE sur une égalité (≥2 axes touchés) et QUE si un axe
+    // préféré est réellement parmi eux. Sinon → 1er de l'ordre de gravité (historique).
+    const chosen =
+      (hints && matched.length > 1 ? preferredAxis(matched, hints) : undefined) ?? fallback;
+    if (!result.includes(chosen)) result.push(chosen);
   }
   return result;
 }

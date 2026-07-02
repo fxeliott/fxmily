@@ -234,6 +234,22 @@ export type AuditAction =
   // `weekly_report.batch.amf_violation` for the monthly pipeline. PII-FREE:
   // carries `matchedLabels` + `monthStart` + `ranAt` — never the AI text.
   | 'monthly_debrief.batch.amf_violation'
+  // J-E — ADMIN-ONLY monthly deep re-profiling batch (expansion IA §21.5). Same
+  // PII-free rule as the monthly-debrief batch above (counts + monthStart + ranAt
+  // + canonical labels only, NEVER the AI text nor a P&L). `evidence_invalid`
+  // mirrors `onboarding.batch.evidence_invalid`: a fabricated dimension citation
+  // (not verbatim in the month's reflection corpus) halts the persist.
+  | 'member_profile_monthly.batch.pulled'
+  | 'member_profile_monthly.batch.persisted'
+  // Per-member re-profiling event (mirror `member_profile.analyzed`) — carries
+  // model + token counts for cost traceability, PII-free (no AI text, no P&L).
+  | 'member_profile_monthly.analyzed'
+  | 'member_profile_monthly.batch.skipped'
+  | 'member_profile_monthly.batch.invalid_output'
+  | 'member_profile_monthly.batch.persist_failed'
+  | 'member_profile_monthly.batch.crisis_detected'
+  | 'member_profile_monthly.batch.amf_violation'
+  | 'member_profile_monthly.batch.evidence_invalid'
   // V1.5 — QCM athlète / auto-évaluation mindset (SPEC §27, jalon #3 séquence
   // §21.6). ONE slug only: the instrument is 100 % closed (Likert) — ZERO
   // free-text ⇒ NO crisis/injection surface (§27.6/§27.7), so there is NO

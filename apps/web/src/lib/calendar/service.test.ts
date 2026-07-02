@@ -258,11 +258,64 @@ describe('loadCalendarSnapshotForUser', () => {
       lastMindsetCheckDate: '2026-06-01',
     });
     expect(snap?.profileSummary).toBe('Profil discipline.');
+    // D3: a profile without the adaptive dimensions degrades to null (no
+    // modulation), never undefined and never a throw.
+    expect(snap?.learningStage).toBeNull();
+    expect(snap?.coachingRegister).toBeNull();
     // The §21.5 sanctioned training read got the right 14-day window boundary.
     const tcall = vi.mocked(countRecentTrainingActivity).mock.calls[0];
     if (!tcall) throw new Error('expected count call');
     expect(tcall[0]).toBe('user-1');
     expect((tcall[1] as Date).toISOString()).toBe('2026-05-25T09:00:00.000Z');
+  });
+
+  it('D3: propagates learningStage.stage + coachingTone.register when the profile has them', async () => {
+    vi.mocked(db.weeklyScheduleQuestionnaire.findUnique).mockResolvedValue(
+      questionnaireRow() as never,
+    );
+    vi.mocked(db.trade.count).mockResolvedValue(1 as never);
+    vi.mocked(db.dailyCheckin.count).mockResolvedValue(1 as never);
+    vi.mocked(countRecentTrainingActivity).mockResolvedValue({ count: 1, lastEnteredAt: null });
+    vi.mocked(db.mindsetCheck.findFirst).mockResolvedValue(null as never);
+    // Full valid dimension shapes (register/stage + rationale + evidence) as
+    // they are persisted; only the closed enum literal must reach the snapshot.
+    vi.mocked(db.memberProfile.findUnique).mockResolvedValue({
+      summary: 'Profil discipline.',
+      learningStage: {
+        stage: 'mechanical',
+        rationale: 'Consolide encore sa methode de trading pas a pas.',
+        evidence: ['je relis mes regles avant chaque session'],
+      },
+      coachingTone: {
+        register: 'pedagogique',
+        rationale: 'Reagit bien quand on explique le pourquoi des choses.',
+        evidence: ['jaime comprendre le raisonnement derriere une consigne'],
+      },
+    } as never);
+
+    const snap = await loadCalendarSnapshotForUser('user-1', '2026-06-08');
+    expect(snap?.learningStage).toBe('mechanical');
+    expect(snap?.coachingRegister).toBe('pedagogique');
+  });
+
+  it('D3: a malformed adaptive dimension safely degrades to null', async () => {
+    vi.mocked(db.weeklyScheduleQuestionnaire.findUnique).mockResolvedValue(
+      questionnaireRow() as never,
+    );
+    vi.mocked(db.trade.count).mockResolvedValue(0 as never);
+    vi.mocked(db.dailyCheckin.count).mockResolvedValue(0 as never);
+    vi.mocked(countRecentTrainingActivity).mockResolvedValue({ count: 0, lastEnteredAt: null });
+    vi.mocked(db.mindsetCheck.findFirst).mockResolvedValue(null as never);
+    // Garbage / partial JSON on a legacy row must not throw and must not leak.
+    vi.mocked(db.memberProfile.findUnique).mockResolvedValue({
+      summary: 'Profil discipline.',
+      learningStage: { stage: 'not_a_stage' },
+      coachingTone: 'oops-a-string',
+    } as never);
+
+    const snap = await loadCalendarSnapshotForUser('user-1', '2026-06-08');
+    expect(snap?.learningStage).toBeNull();
+    expect(snap?.coachingRegister).toBeNull();
   });
 
   it('tolerates a member with no mindset check and no profile (nulls)', async () => {

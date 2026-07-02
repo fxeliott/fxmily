@@ -508,6 +508,109 @@ describe('persistGeneratedProfiles — Gate 5: Safety gate (AMF + clinical + evi
   });
 });
 
+describe('persistGeneratedProfiles — J-A deep AI dimensions', () => {
+  beforeEach(() => {
+    setupSuccessMocks();
+  });
+
+  // Evidence must be verbatim substrings of setupSuccessMocks' answerText:
+  // "J'ai démarré le trading en 2022. Honnêtement 4 sur 10 trades selon plan.
+  //  Tension dans les épaules."
+  const groundedDimensions = {
+    coaching_tone: {
+      register: 'direct' as const,
+      rationale: 'Le membre réagit mieux à un cadrage direct et concret.',
+      evidence: ["J'ai démarré le trading"],
+    },
+    learning_stage: {
+      stage: 'mechanical' as const,
+      rationale: 'Exécution encore très centrée sur des règles rigides.',
+      evidence: ['Honnêtement 4 sur 10'],
+    },
+    axes_structured: [
+      {
+        axis: 'Consolider la conformité au plan personnel',
+        dimensionId: 'discipline_plan_adherence',
+        priority: 1,
+        evidence: ['Honnêtement 4 sur 10'],
+      },
+    ],
+    weak_signals: [
+      {
+        signal: 'Signaux somatiques marqués sous stress à observer.',
+        dimensionId: 'emotional_regulation',
+        evidence: ['Tension dans les épaules'],
+      },
+    ],
+  };
+
+  it('writes the 4 AI dimensions to the upsert create AND update when present + grounded', async () => {
+    const output = makeValidOutput(groundedDimensions);
+    const request: BatchPersistRequest = {
+      results: [{ userId: 'user_123', interviewId: 'iv_abc', output }],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.persisted).toBe(1);
+
+    const call = profileUpsertMock.mock.calls[0]?.[0] as {
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    };
+    for (const key of ['coachingTone', 'learningStage', 'axesStructured', 'weakSignals']) {
+      expect(call.create).toHaveProperty(key);
+      expect(call.update).toHaveProperty(key);
+    }
+    // Camel-cased Prisma columns carry the snake_cased model output verbatim.
+    expect(call.create.coachingTone).toEqual(output.coaching_tone);
+    expect(call.create.weakSignals).toEqual(output.weak_signals);
+  });
+
+  it('omits absent dimensions from the upsert (NULL on create, no Prisma.JsonNull sentinel)', async () => {
+    // makeValidOutput() carries NONE of the 4 optional dimensions.
+    const request: BatchPersistRequest = {
+      results: [makeRequestEntry('output')],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.persisted).toBe(1);
+    const call = profileUpsertMock.mock.calls[0]?.[0] as { create: Record<string, unknown> };
+    for (const key of ['coachingTone', 'learningStage', 'axesStructured', 'weakSignals']) {
+      expect(call.create).not.toHaveProperty(key);
+    }
+  });
+
+  it('skips + audits evidence_invalid with invalidDimensionPaths when a dimension citation is fabricated', async () => {
+    // Highlights stay grounded; only weak_signals[0] carries a fabricated cite.
+    const output = makeValidOutput({
+      weak_signals: [
+        {
+          signal: 'Signal dont la citation est inventée.',
+          dimensionId: 'discipline_plan_adherence',
+          evidence: ['Citation totalement absente du corpus des réponses.'],
+        },
+      ],
+    });
+    const request: BatchPersistRequest = {
+      results: [{ userId: 'user_123', interviewId: 'iv_abc', output }],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.skipped).toBe(1);
+    expect(profileUpsertMock).not.toHaveBeenCalled();
+
+    const evidenceCall = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.evidence_invalid',
+    );
+    expect(evidenceCall).toBeDefined();
+    expect(evidenceCall?.[0].metadata.invalidDimensionPaths).toContain('weak_signals[0]');
+    expect(evidenceCall?.[0].metadata.invalidHighlightIndexes).toEqual([]);
+
+    // Sentry escalation carries the same dimension paths for human review.
+    const warnCall = reportWarningMock.mock.calls.find(
+      (c) => c[1] === 'evidence_invalid_in_ai_output',
+    );
+    expect(warnCall?.[2]).toMatchObject({ invalidDimensionPaths: ['weak_signals[0]'] });
+  });
+});
+
 describe('persistGeneratedProfiles — Gate 6: Prisma upsert', () => {
   it('counts errors+1 + audit onboarding.batch.persist_failed on Prisma exception', async () => {
     setupSuccessMocks();

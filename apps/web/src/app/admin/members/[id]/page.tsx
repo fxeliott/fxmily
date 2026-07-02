@@ -48,6 +48,8 @@ import { listTrainingSessionsAsAdmin } from '@/lib/training/training-session-adm
 import { countTrainingAnnotationsByMember } from '@/lib/admin/training-annotation-service';
 import { getProfileForUser, getInterviewForUser } from '@/lib/onboarding-interview/service';
 import { MemberProfileViewerAdmin } from '@/components/admin/member-profile-viewer-admin';
+import { listMonthlyReprofileSnapshotsForMember } from '@/lib/member-profile-monthly/admin-service';
+import { MemberMonthlyProfileTrajectoryPanel } from '@/components/admin/member-monthly-profile-trajectory-panel';
 import { getLatestCalendarForUser } from '@/lib/calendar/service';
 import { MemberCalendarPanel } from '@/components/admin/member-calendar-panel';
 import {
@@ -99,6 +101,7 @@ function parseTab(
   | 'mindset'
   | 'calendar'
   | 'profile'
+  | 'trajectoire'
   | 'presence'
   | 'verification'
   | 'notes'
@@ -114,6 +117,7 @@ function parseTab(
   if (value === 'mindset') return 'mindset';
   if (value === 'calendar') return 'calendar';
   if (value === 'profile') return 'profile';
+  if (value === 'trajectoire') return 'trajectoire';
   if (value === 'presence') return 'presence';
   if (value === 'verification') return 'verification';
   if (value === 'notes') return 'notes';
@@ -251,6 +255,13 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
     tab === 'profile'
       ? await Promise.all([getProfileForUser(memberId), getInterviewForUser(memberId)])
       : null;
+
+  // J-E inc.3 — read-only monthly deep re-profiling trajectory for the
+  // trajectoire tab (ADMIN-ONLY). §21.5: read straight from
+  // `member_profile_monthly_snapshots`, never recomputed against trades. Capped
+  // at 12 (admin-only, not a hot path, 30-member scale).
+  const monthlyTrajectory =
+    tab === 'trajectoire' ? await listMonthlyReprofileSnapshotsForMember(memberId) : null;
 
   // §26 J-C4 — read-only latest AdaptiveCalendar for the calendar tab. §2:
   // read straight from `adaptive_calendars` (no real-edge recompute). The
@@ -493,6 +504,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           profile={profileData[0]}
           interview={profileData[1]}
         />
+      ) : null}
+      {tab === 'trajectoire' && monthlyTrajectory !== null ? (
+        <MemberMonthlyProfileTrajectoryPanel snapshots={monthlyTrajectory} />
       ) : null}
       {tab === 'presence' && presence !== null ? (
         <MemberPresencePanel data={presence} memberId={memberId} />

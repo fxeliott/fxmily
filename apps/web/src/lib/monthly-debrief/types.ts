@@ -42,6 +42,24 @@ export interface MemberProfileReference {
   summary: string;
   axesPrioritaires: string[];
   highlightLabels: string[];
+  /**
+   * D1 (SPEC §25.2) — the member's onboarding COACHING REGISTER, relayed from
+   * `MemberProfile.coachingTone.register` (Zod-validated at the loader boundary,
+   * `null` when absent/malformed). REFERENCE for the prompt TEXT only — it tunes
+   * the tone the debrief adopts (`direct` / `pedagogique` / `socratique`), NEVER
+   * an input of the behavioural score (firewall §21.5). The verbatim rationale /
+   * evidence are deliberately DROPPED — only the enum travels (data minimisation).
+   */
+  coachingRegister?: 'direct' | 'pedagogique' | 'socratique' | null;
+  /**
+   * D1 (SPEC §25.2) — the member's onboarding LEARNING STAGE, relayed from
+   * `MemberProfile.learningStage.stage` (Zod-validated at the loader boundary,
+   * `null` when absent/malformed). REFERENCE for the prompt TEXT only — it lets
+   * the debrief nuance the register (`mechanical` / `subjective` / `intuitive`),
+   * NEVER an input of the behavioural score (firewall §21.5). The verbatim
+   * rationale / evidence are dropped — only the enum travels.
+   */
+  learningStage?: 'mechanical' | 'subjective' | 'intuitive' | null;
 }
 
 /**

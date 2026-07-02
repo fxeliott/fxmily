@@ -68,6 +68,7 @@ LANGUE & TON (CRITIQUE — Mark Douglas, anti Black-Hat) :
 - JAMAIS anxiogène, JAMAIS de fanfare/gamification/urgence : "Ce mois, 12 trades dont 8 alignés au plan." OUI. "ALERTE tilt !" / "Bravo champion 🎉" NON.
 - Le risque = un comportement à observer, jamais un drame. La recommandation = une action concrète et calme que le membre peut tenir le mois prochain.
 - Mois sans activité : cadrage HONNÊTE et apaisé ("Un mois calme — l'important est de reprendre le rythme à ton rythme"), JAMAIS un faux "score 0" culpabilisant. Si le compte est récent (âge fourni), tiens-en compte sans le reprocher.
+- REGISTRE : si le payload indique un registre de coaching adapté au membre, adopte ce registre dans tout le texte (formulation, longueur des phrases, façon d'amener une recommandation). En l'absence de cette consigne, garde le ton par défaut ci-dessus. Le registre ne change QUE la manière de dire ; il ne change jamais le fond, la posture, ni les limites.
 
 FORMAT DE SORTIE (strict, JSON validé) :
 - **progressionNarrative** : 120–1400 caractères. Le récit de PROGRESSION mois-sur-mois (la valeur ajoutée vs l'hebdo) : tendance de discipline/régularité, ce qui a bougé, en t'appuyant sur les synthèses hebdo du mois si fournies. Ancré Mark Douglas (process > outcome).
@@ -348,6 +349,15 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
     lines.push(
       `Le membre a décrit ces axes À SON ENTRÉE. Sers-t'en pour évaluer s'il PROGRESSE SUR SES PROPRES AXES (psychologie, discipline, process) — jamais pour juger un résultat de marché.`,
     );
+    // D2 (SPEC §25.2) — coaching REGISTER consigne. Derived enum (loader-validated,
+    // no free-text) → a concise, non-clinical FR tone instruction. The optional
+    // learning STAGE nuances the register (sobre). Absent → no line added (clean
+    // degradation, the default tone from the system prompt applies). This tunes
+    // HOW the debrief speaks, NEVER the behavioural score (firewall §21.5).
+    const toneConsigne = buildToneConsigne(profile.coachingRegister, profile.learningStage);
+    if (toneConsigne !== null) {
+      lines.push(toneConsigne);
+    }
     const profileLines: string[] = [];
     if (profile.summary.trim().length > 0) {
       profileLines.push(`Résumé du profil : ${profile.summary.replace(/\n/g, ' ')}`);
@@ -483,6 +493,42 @@ export const MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA = {
 
 function formatDate(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * D2 (SPEC §25.2) — map the member's onboarding coaching REGISTER (+ optional
+ * learning STAGE nuance) to a single concise, non-clinical FR tone consigne for
+ * the debrief. Returns `null` when no register is set (clean degradation — the
+ * default tone from the system prompt applies, no line is added).
+ *
+ * Anti-anthropomorphisation / anti-clinique (posture §2) : the consigne is a
+ * descriptive tone instruction ("adopte un ton …"), never a diagnostic label on
+ * the member. The register tunes HOW the debrief speaks; it is NEVER an input of
+ * the behavioural score (firewall §21.5). The stage nuance stays sober (one short
+ * clause) and is appended only when a register is present.
+ */
+function buildToneConsigne(
+  register: 'direct' | 'pedagogique' | 'socratique' | null | undefined,
+  stage: 'mechanical' | 'subjective' | 'intuitive' | null | undefined,
+): string | null {
+  if (register === null || register === undefined) return null;
+
+  const registerText: Record<'direct' | 'pedagogique' | 'socratique', string> = {
+    direct: 'adopte un ton direct, concret, qui va droit au but',
+    pedagogique: 'adopte un ton pédagogique, explique le pourquoi pas à pas',
+    socratique:
+      'adopte un ton qui pose des questions ouvertes pour faire réfléchir le membre par lui-même',
+  };
+
+  const stageText: Record<'mechanical' | 'subjective' | 'intuitive', string> = {
+    mechanical: "rappelle calmement l'importance du process et des règles",
+    subjective: 'aide le membre à relier son ressenti à son process',
+    intuitive: 'valorise son autonomie',
+  };
+
+  const base = `Registre de coaching adapté à ce membre : ${registerText[register]}`;
+  const nuance = stage === null || stage === undefined ? '' : ` ; ${stageText[stage]}`;
+  return `${base}${nuance}. Ce registre ne change QUE la manière de dire, jamais le fond ni la posture (jamais un avis de marché).`;
 }
 
 function formatRate(rate: number | null): string {

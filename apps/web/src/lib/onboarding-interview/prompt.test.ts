@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
 import { UNTRUSTED_INPUT_SYSTEM_INSTRUCTION } from '@/lib/ai/prompt-builder';
-import type { OnboardingInterviewSnapshot } from '@/lib/schemas/onboarding-interview';
+import {
+  memberProfileOutputSchema,
+  type OnboardingInterviewSnapshot,
+} from '@/lib/schemas/onboarding-interview';
 
-import { buildOnboardingInterviewUserPrompt, ONBOARDING_INTERVIEW_SYSTEM_PROMPT } from './prompt';
+import { runSafetyGate } from './safety';
+import {
+  buildOnboardingInterviewSystemPrompt,
+  buildOnboardingInterviewUserPrompt,
+  MEMBER_PROFILE_OUTPUT_JSON_SCHEMA,
+  ONBOARDING_FEW_SHOT_EXAMPLES,
+  ONBOARDING_INTERVIEW_SYSTEM_PROMPT,
+  renderFewShotExamplesBlock,
+} from './prompt';
 
 /**
  * V2.4 safety hardening (2026-05-29) — anti-regression on the distress /
@@ -109,5 +120,219 @@ describe('FIX-5 — onboarding untrusted-input wrap (prompt-injection defense)',
 
   it('the system prompt references the <member_reflection_untrusted> envelope', () => {
     expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('<member_reflection_untrusted>');
+  });
+});
+
+/**
+ * J-A (2026-07-01) — the 4 deep-AI dimensions (coaching_tone, learning_stage,
+ * axes_structured, weak_signals) are wired into the wire-format JSON schema AND
+ * the system/user prompts as STRICTLY OPTIONAL, evidence-grounded extras. These
+ * assertions fail loudly if a future edit either (a) makes a dimension required
+ * — which would break every profile with insufficient signal — or (b) drops the
+ * `additionalProperties: false` anti-hallucination hardening on a dimension.
+ */
+describe('J-A — deep-AI dimensions in the output JSON schema', () => {
+  const DIMENSIONS = [
+    'coaching_tone',
+    'learning_stage',
+    'axes_structured',
+    'weak_signals',
+  ] as const;
+
+  it('keeps only the 3 original keys required (dimensions never required)', () => {
+    expect(MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.required).toEqual([
+      'summary',
+      'highlights',
+      'axes_prioritaires',
+    ]);
+    for (const dim of DIMENSIONS) {
+      expect(MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.required).not.toContain(dim);
+    }
+  });
+
+  it('declares each dimension in properties', () => {
+    for (const dim of DIMENSIONS) {
+      expect(MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.properties).toHaveProperty(dim);
+    }
+  });
+
+  it('top-level object forbids additional properties (anti-hallucination)', () => {
+    expect(MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.additionalProperties).toBe(false);
+  });
+
+  it('coaching_tone / learning_stage are strict objects with an evidence array', () => {
+    for (const dim of ['coaching_tone', 'learning_stage'] as const) {
+      const node = MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.properties[dim];
+      expect(node.type).toBe('object');
+      expect(node.additionalProperties).toBe(false);
+      expect(node.required).toContain('evidence');
+      expect(node.required).toContain('rationale');
+      expect(node.properties.evidence.type).toBe('array');
+    }
+  });
+
+  it('axes_structured / weak_signals are arrays of strict objects carrying evidence', () => {
+    for (const dim of ['axes_structured', 'weak_signals'] as const) {
+      const node = MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.properties[dim];
+      expect(node.type).toBe('array');
+      expect(node.items.type).toBe('object');
+      expect(node.items.additionalProperties).toBe(false);
+      expect(node.items.required).toContain('evidence');
+      expect(node.items.required).toContain('dimensionId');
+    }
+  });
+
+  it('constrains register / stage enums to the Douglas-aligned values', () => {
+    expect(
+      MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.properties.coaching_tone.properties.register.enum,
+    ).toEqual(['direct', 'pedagogique', 'socratique']);
+    expect(
+      MEMBER_PROFILE_OUTPUT_JSON_SCHEMA.properties.learning_stage.properties.stage.enum,
+    ).toEqual(['mechanical', 'subjective', 'intuitive']);
+  });
+});
+
+describe('J-A — prompts advertise the optional dimensions', () => {
+  const makeSnapshot = (): OnboardingInterviewSnapshot => ({
+    pseudonymLabel: 'member-cafebabe',
+    instrumentVersion: 'v1',
+    startedAt: '2026-06-01T08:00:00.000Z',
+    completedAt: '2026-06-01T08:30:00.000Z',
+    answers: [
+      {
+        questionIndex: 0,
+        questionKey: 'parcours_origin',
+        questionText: 'Raconte comment tu es arrivé au trading.',
+        answerText: 'Réponse suffisamment longue pour passer le seuil minimal.',
+        dimensionId: 'parcours_trading',
+        phase: 'warmup',
+      },
+    ],
+  });
+
+  it('the system prompt documents the 4 optional dimensions', () => {
+    expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('coaching_tone');
+    expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('learning_stage');
+    expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('axes_structured');
+    expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('weak_signals');
+    expect(ONBOARDING_INTERVIEW_SYSTEM_PROMPT).toContain('DIMENSIONS APPROFONDIES');
+  });
+
+  it('the user prompt lists the optional dimensions and relaxes the key lockdown', () => {
+    const prompt = buildOnboardingInterviewUserPrompt(makeSnapshot());
+    expect(prompt).toContain('Clés OPTIONNELLES autorisées');
+    expect(prompt).toContain('coaching_tone, learning_stage, axes_structured, weak_signals');
+    // The old hard "exactement trois clés — rien d'autre" lock must be gone.
+    expect(prompt).toContain("N'ajoute AUCUNE autre clé");
+  });
+});
+
+/**
+ * J-B (2026-07-01) — few-shot reroute. The exemplars in
+ * `ONBOARDING_FEW_SHOT_EXAMPLES` now (a) teach the 4 deep dimensions and (b)
+ * ride in the batch envelope's system prompt via
+ * `buildOnboardingInterviewSystemPrompt()`, so they actually reach the local
+ * `claude --print` path (the SDK `messages` path is dormant in prod). Before
+ * this reroute, enriching the exemplars alone was inert for real generation.
+ *
+ * The load-bearing guarantee : every exemplar must ITSELF pass the exact prod
+ * safety gate (`runSafetyGate`) — evidence 100% verbatim-grounded, no AMF, no
+ * clinical wording. An exemplar that failed the gate would teach the model to
+ * fabricate citations, defeating the whole anti-hallucination design.
+ */
+describe('J-B — few-shot exemplars teach schema-valid, gate-passing profiles', () => {
+  /**
+   * Build a minimal snapshot from an exemplar's `R : …` answer lines. Mirrors
+   * what `concatAnswerTextsForValidation` consumes (only `answerText` matters
+   * for the evidence-substring gate), so running the real gate here proves the
+   * exemplar's evidence is grounded in its own answers.
+   */
+  const snapshotFromExample = (userPrompt: string): OnboardingInterviewSnapshot => {
+    const answers = userPrompt
+      .split('\n')
+      .filter((line) => line.startsWith('R : '))
+      .map((line, i) => ({
+        questionIndex: i,
+        questionKey: `k_ex_${i}`,
+        questionText: 'Q',
+        answerText: line.slice('R : '.length),
+        dimensionId: 'parcours_trading',
+        phase: 'core' as const,
+      }));
+    return {
+      pseudonymLabel: 'member-aaaaaaaa',
+      instrumentVersion: 'v1',
+      startedAt: '2026-01-15T00:00:00.000Z',
+      completedAt: '2026-01-17T00:00:00.000Z',
+      answers,
+    };
+  };
+
+  it('every exemplar output parses under the strict Zod schema', () => {
+    for (const example of ONBOARDING_FEW_SHOT_EXAMPLES) {
+      const parsed = memberProfileOutputSchema.safeParse(JSON.parse(example.assistantOutput));
+      expect(parsed.success).toBe(true);
+    }
+  });
+
+  it('every exemplar carries the 4 deep dimensions', () => {
+    for (const example of ONBOARDING_FEW_SHOT_EXAMPLES) {
+      const output = JSON.parse(example.assistantOutput);
+      expect(output.coaching_tone).toBeDefined();
+      expect(output.learning_stage).toBeDefined();
+      expect(Array.isArray(output.axes_structured)).toBe(true);
+      expect(Array.isArray(output.weak_signals)).toBe(true);
+    }
+  });
+
+  it('every exemplar PASSES the real prod safety gate (grounded, no AMF, no clinical)', () => {
+    for (const example of ONBOARDING_FEW_SHOT_EXAMPLES) {
+      const parsed = memberProfileOutputSchema.parse(JSON.parse(example.assistantOutput));
+      const snapshot = snapshotFromExample(example.userPrompt);
+      const result = runSafetyGate({ output: parsed, snapshot });
+      // If this fails, the exemplar itself fabricates a citation / trips AMF /
+      // uses clinical wording — it would teach the model the wrong behavior.
+      expect(result.status).toBe('pass');
+    }
+  });
+});
+
+describe('J-B — few-shot exemplars travel in the envelope system prompt', () => {
+  it('the rendered block advertises the synthetic exemplars and the no-copy rule', () => {
+    const block = renderFewShotExamplesBlock();
+    expect(block).toContain('EXEMPLES DE RÉFÉRENCE');
+    expect(block).toContain('SYNTHÉTIQUES');
+    expect(block).toContain('ne recopie AUCUN fragment');
+    // Both synthetic pseudonyms appear (proof both exemplars are rendered).
+    expect(block).toContain('member-aaaaaaaa');
+    expect(block).toContain('member-bbbbbbbb');
+    // The 4 deep dimensions are demonstrated in the rendered JSON.
+    for (const dim of ['coaching_tone', 'learning_stage', 'axes_structured', 'weak_signals']) {
+      expect(block).toContain(dim);
+    }
+  });
+
+  it('the envelope system prompt = base posture + few-shot block (strictly longer)', () => {
+    const full = buildOnboardingInterviewSystemPrompt();
+    // Base posture is preserved intact (safety block still present).
+    expect(full).toContain(ONBOARDING_INTERVIEW_SYSTEM_PROMPT);
+    expect(full).toContain('SÉCURITÉ — DÉTRESSE');
+    expect(full).toContain('DIMENSIONS APPROFONDIES');
+    // And the few-shot block is appended.
+    expect(full).toContain(renderFewShotExamplesBlock());
+    expect(full.length).toBeGreaterThan(ONBOARDING_INTERVIEW_SYSTEM_PROMPT.length);
+  });
+
+  it('survives JSON wire serialization intact (pull envelope → jq .systemPrompt)', () => {
+    // The pull route returns NextResponse.json({ systemPrompt: full, ... }); the
+    // local script extracts it via `jq -r .systemPrompt` and feeds it to
+    // `claude --print --system-prompt`. Prove the block survives the wire
+    // round-trip losslessly (newlines, accents, quotes in the rendered JSON) so
+    // the exemplars actually reach real generation.
+    const full = buildOnboardingInterviewSystemPrompt();
+    const onWire = JSON.parse(JSON.stringify({ systemPrompt: full })).systemPrompt;
+    expect(onWire).toBe(full);
+    expect(onWire).toContain('EXEMPLES DE RÉFÉRENCE');
+    expect(onWire).toContain('coaching_tone');
   });
 });

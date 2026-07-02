@@ -9,6 +9,7 @@ import {
   calendarBatchLimiter,
   callerIdTrusted,
   monthlyBatchLimiter,
+  profileBatchLimiter,
   seancesBatchLimiter,
   verificationBatchLimiter,
 } from '@/lib/rate-limit/token-bucket';
@@ -255,6 +256,50 @@ export function requireSeancesAdminToken(req: Request): NextResponse | null {
   if (!provided || !verifyAdminToken(provided, env.SEANCES_ADMIN_BATCH_TOKEN)) {
     const id = callerIdTrusted(req);
     const decision = seancesBatchLimiter.consume(id);
+    if (!decision.allowed) {
+      return NextResponse.json(
+        { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(Math.ceil(decision.retryAfterMs / 1000)) },
+        },
+      );
+    }
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  return null;
+}
+
+/**
+ * J-E (expansion IA §21.5) — per-request guard for the
+ * `/api/admin/member-profile-batch/*` routes (7th local Claude pipeline: monthly
+ * deep re-profiling, ADMIN-ONLY).
+ *
+ * EXACT carbon of {@link requireSeancesAdminToken} with two deliberate swaps:
+ *   - reads `env.PROFILE_ADMIN_BATCH_TOKEN` (token separate from every other
+ *     batch token — the re-profiled snapshots leave the host toward Eliott's
+ *     machine then Anthropic, a distinct compromise blast radius, so it rotates
+ *     independently)
+ *   - consumes the dedicated `profileBatchLimiter` on the 401 path (so a flood
+ *     on another batch surface can never lock Eliott out of the re-profiling batch)
+ *
+ * Same anti-accumulation rationale: `verifyAdminToken` (the pure constant-time
+ * compare) IS reused — only the env key + limiter differ. Same check order
+ * (503 → 401-consume-bucket → 429 → null) and same status semantics.
+ */
+export function requireProfileAdminToken(req: Request): NextResponse | null {
+  if (!env.PROFILE_ADMIN_BATCH_TOKEN) {
+    return NextResponse.json(
+      { error: 'profile_batch_disabled', detail: 'PROFILE_ADMIN_BATCH_TOKEN not configured.' },
+      { status: 503 },
+    );
+  }
+
+  const provided = req.headers.get('x-admin-token');
+  if (!provided || !verifyAdminToken(provided, env.PROFILE_ADMIN_BATCH_TOKEN)) {
+    const id = callerIdTrusted(req);
+    const decision = profileBatchLimiter.consume(id);
     if (!decision.allowed) {
       return NextResponse.json(
         { error: 'rate_limited', retryAfterMs: decision.retryAfterMs },

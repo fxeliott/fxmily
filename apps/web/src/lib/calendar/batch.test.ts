@@ -118,6 +118,10 @@ function fakeSnapshot(userId: string): CalendarSnapshot {
       lastMindsetCheckDate: '2026-06-01',
     },
     availableSlotsCount: 8,
+    // D3 — adaptive dimensions (null here: this fixture exercises the batch
+    // pipeline, not the modulation). Null keeps the prompt neutral.
+    learningStage: null,
+    coachingRegister: null,
   };
 }
 

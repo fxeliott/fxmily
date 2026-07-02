@@ -582,6 +582,13 @@ function buildMemberProfile(input: MonthlyBuilderInput): MonthlySnapshot['member
     summary: safeFreeText(p.summary),
     axesPrioritaires: p.axesPrioritaires.map((a) => safeFreeText(a)),
     highlightLabels: p.highlightLabels.map((l) => safeFreeText(l)),
+    // D1 (SPEC §25.2) — relay the loader-derived tone enums verbatim (already
+    // Zod-validated at the loader boundary — a closed enum, no free-text to
+    // sanitise). `null` when the member has no coaching register / learning
+    // stage (the prompt then omits the tone consigne). REFERENCE for the TEXT
+    // tone only — NEVER an input of the behavioural score (firewall §21.5).
+    coachingRegister: p.coachingRegister ?? null,
+    learningStage: p.learningStage ?? null,
   };
 }
 

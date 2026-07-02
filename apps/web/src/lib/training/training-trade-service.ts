@@ -33,11 +33,13 @@ import {
 export interface CreateTrainingTradeInput {
   userId: string;
   pair: string;
-  entryScreenshotKey: string;
-  /** F1 — optional TradingView analysis link (https tradingview.com only,
-   * validated at the Zod edge). `null`/absent = no link (the screenshot stays
-   * mandatory). §21.5: process metadata, never a P&L. */
-  tradingViewUrl?: string | null;
+  /** J1 — legacy entry screenshot key, now OPTIONAL (pre-J1 backtests keep
+   * their capture; the wizard no longer uploads one). Null when absent. */
+  entryScreenshotKey?: string | null;
+  /** J1 — MANDATORY TradingView analysis link (https tradingview.com only,
+   * validated at the Zod edge). Replaces the former mandatory screenshot as the
+   * backtest entry artefact. §21.5: process metadata, never a P&L. */
+  tradingViewUrl: string;
   plannedRR: number;
   outcome: TrainingOutcome | null;
   resultR: number | null;
@@ -131,8 +133,8 @@ export async function createTrainingTrade(
     data: {
       userId: input.userId,
       pair: input.pair,
-      entryScreenshotKey: input.entryScreenshotKey,
-      tradingViewUrl: input.tradingViewUrl ?? null,
+      entryScreenshotKey: input.entryScreenshotKey ?? null,
+      tradingViewUrl: input.tradingViewUrl,
       plannedRR: new Prisma.Decimal(input.plannedRR),
       outcome: input.outcome,
       resultR: input.resultR == null ? null : new Prisma.Decimal(input.resultR),

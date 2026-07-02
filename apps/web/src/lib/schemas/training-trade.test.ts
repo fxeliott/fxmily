@@ -10,7 +10,7 @@ import {
 function valid(overrides: Record<string, unknown> = {}) {
   return {
     pair: 'EURUSD',
-    entryScreenshotKey: 'training/abcdefgh12345678/abcdefghijkl1234.jpg',
+    tradingViewUrl: 'https://www.tradingview.com/x/NQe0OrXz/',
     plannedRR: 2.5,
     outcome: 'win',
     resultR: 1.8,
@@ -55,15 +55,22 @@ describe('trainingTradeCreateSchema', () => {
     ).toBe(false);
   });
 
-  // ----- tradingViewUrl (F1 — OPTIONAL, https + tradingview.com host allowlist) -----
+  // ----- tradingViewUrl (J1 — REQUIRED, https + tradingview.com host allowlist) -----
 
-  it('accepts a backtest with NO tradingViewUrl (omitted — the field is optional)', () => {
+  it('rejects a backtest with NO tradingViewUrl (omitted — the field is now required)', () => {
     const { tradingViewUrl: _t, ...rest } = valid() as Record<string, unknown>;
-    expect(trainingTradeCreateSchema.safeParse(rest).success).toBe(true);
+    expect(trainingTradeCreateSchema.safeParse(rest).success).toBe(false);
   });
 
-  it('accepts a null tradingViewUrl', () => {
-    expect(trainingTradeCreateSchema.safeParse(valid({ tradingViewUrl: null })).success).toBe(true);
+  it('rejects a null tradingViewUrl (required, non-nullable)', () => {
+    expect(trainingTradeCreateSchema.safeParse(valid({ tradingViewUrl: null })).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects an empty-string tradingViewUrl with the "obligatoire" message', () => {
+    const res = trainingTradeCreateSchema.safeParse(valid({ tradingViewUrl: '   ' }));
+    expect(res.success).toBe(false);
   });
 
   it('accepts a valid TradingView snapshot link (/x/)', () => {

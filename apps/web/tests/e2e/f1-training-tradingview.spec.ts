@@ -1,17 +1,17 @@
 /**
- * F1 — Mode Entraînement : OPTIONAL TradingView link beside the mandatory
- * analysis screenshot, exercised END TO END against real Postgres through the
- * real wizard + detail UI.
+ * F1/J1 — Mode Entraînement : the TradingView analysis link is now the REQUIRED
+ * primary proof (J1 pivot capture → lien — no photo anywhere), exercised END TO
+ * END against real Postgres through the real wizard + detail UI.
  *
- *   A. HAPPY PATH — a member drives the backtest wizard, uploads the mandatory
- *      screenshot AND pastes a TradingView snapshot link, submits, and:
+ *   A. HAPPY PATH — a member drives the backtest wizard, pastes the mandatory
+ *      TradingView link (NO screenshot upload), submits, and:
  *        - the DB row carries the pasted `tradingViewUrl`,
  *        - the member detail page renders it as a real clickable anchor
  *          (target=_blank + rel="noopener noreferrer"),
  *        - the list card surfaces the "Analyse TradingView jointe" indicator.
  *
  *   B. CLIENT GATE — an off-host URL (not tradingview.com) is refused at the
- *      wizard's per-step validation: the member cannot advance past the capture
+ *      wizard's per-step validation: the member cannot advance past the link
  *      step and a field error is shown. (The server-side Zod guard — the real
  *      authority — is covered exhaustively in the unit suites.)
  *
@@ -24,21 +24,12 @@
  */
 
 import { existsSync } from 'node:fs';
-import path from 'node:path';
 
 import { chromium, expect, test } from '@playwright/test';
 
 import { db } from '@/lib/db';
 import { cleanupTestUsers, seedMemberUser, type SeededUser } from '@/test/db-helpers';
 import { loginAs } from '@/test/e2e-auth';
-
-const FIXTURE_PNG = path.join(
-  process.cwd(),
-  'tests',
-  'e2e',
-  'fixtures',
-  'mt5-history-account-a.png',
-);
 
 const TV_URL = 'https://www.tradingview.com/x/NQe0OrXz/';
 
@@ -61,7 +52,7 @@ async function dismissCookieBanner(page: import('@playwright/test').Page): Promi
   });
 }
 
-test.describe('F1 — Lien TradingView optionnel (Mode Entraînement)', () => {
+test.describe('F1/J1 — Lien TradingView requis (Mode Entraînement)', () => {
   // Emulate `prefers-reduced-motion: reduce` per test (typed Page API —
   // `test.use({ reducedMotion })` is rejected by the base test's option type).
   // The wizard honours framer-motion's useReducedMotion() → every step
@@ -86,7 +77,7 @@ test.describe('F1 — Lien TradingView optionnel (Mode Entraînement)', () => {
     member = null;
   });
 
-  test('A — un membre colle un lien TradingView en plus de la capture ; il persiste + s’affiche cliquable', async ({
+  test('A — un membre colle le lien TradingView requis (sans capture) ; il persiste + s’affiche cliquable', async ({
     page,
     request,
   }) => {
@@ -113,14 +104,10 @@ test.describe('F1 — Lien TradingView optionnel (Mode Entraînement)', () => {
     await page.getByLabel('Paire', { exact: true }).fill('GBPUSD');
     await page.getByRole('button', { name: /Suivant/ }).click();
 
-    // Step 2/7 — Capture (mandatory) + the OPTIONAL TradingView link beside it.
-    await expect(wizardHeading).toHaveText('Capture de ton analyse');
-    await page.locator('input[type="file"]').setInputFiles(FIXTURE_PNG);
-    await expect(page.getByAltText("Capture de l'analyse du backtest")).toBeVisible({
-      timeout: 45_000,
-    });
+    // Step 2/7 — Lien TradingView (mandatory, J1). NO capture upload.
+    await expect(wizardHeading).toHaveText('Lien de ton analyse');
     // Controlled input → type the URL char-by-char (WebKit-safe, canon F5).
-    const urlBox = page.getByLabel('Lien TradingView (optionnel)');
+    const urlBox = page.getByLabel('Lien TradingView');
     await urlBox.click();
     await urlBox.pressSequentially(TV_URL);
     await expect(urlBox).toHaveValue(TV_URL);
@@ -150,8 +137,11 @@ test.describe('F1 — Lien TradingView optionnel (Mode Entraînement)', () => {
     await expect(submitBtn).toBeEnabled();
     await submitBtn.click();
 
-    // Redirect to the standalone training landing.
-    await expect(page).toHaveURL(/\/training$/, { timeout: 30_000 });
+    // Redirect to the standalone training landing. 60s: the FIRST submit on a
+    // cold `next dev` compiles the createTrainingTradeAction route on demand
+    // (the heaviest cold-compile hop) — 30s was tighter than that budget and
+    // produced a cold-start flake absorbed only by a retry.
+    await expect(page).toHaveURL(/\/training$/, { timeout: 60_000 });
 
     // DB-authoritative proof: the pasted link round-tripped onto the row.
     const tt = await db.trainingTrade.findFirst({
@@ -197,19 +187,15 @@ test.describe('F1 — Lien TradingView optionnel (Mode Entraînement)', () => {
     await page.getByLabel('Paire', { exact: true }).fill('EURUSD');
     await page.getByRole('button', { name: /Suivant/ }).click();
 
-    // Capture provided (so the screenshot requirement is satisfied) + a BAD URL.
-    await expect(wizardHeading).toHaveText('Capture de ton analyse');
-    await page.locator('input[type="file"]').setInputFiles(FIXTURE_PNG);
-    await expect(page.getByAltText("Capture de l'analyse du backtest")).toBeVisible({
-      timeout: 45_000,
-    });
-    const urlBox = page.getByLabel('Lien TradingView (optionnel)');
+    // A BAD (off-host) URL in the required link field.
+    await expect(wizardHeading).toHaveText('Lien de ton analyse');
+    const urlBox = page.getByLabel('Lien TradingView');
     await urlBox.click();
     await urlBox.pressSequentially('https://evil.example.com/x/abc/');
     await page.getByRole('button', { name: /Suivant/ }).click();
 
-    // The off-host URL blocks the step: still on the capture step + a field error.
-    await expect(wizardHeading).toHaveText('Capture de ton analyse');
+    // The off-host URL blocks the step: still on the link step + a field error.
+    await expect(wizardHeading).toHaveText('Lien de ton analyse');
     await expect(page.locator('#tradingViewUrl-error')).toBeVisible();
   });
 });

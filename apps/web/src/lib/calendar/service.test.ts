@@ -34,6 +34,7 @@ import { db } from '@/lib/db';
 import { countRecentTrainingActivity } from '@/lib/training/training-trade-service';
 import type { AdaptiveCalendarOutput } from '@/lib/schemas/adaptive-calendar';
 import type { SubmitWeeklyScheduleInput } from '@/lib/schemas/weekly-schedule-questionnaire';
+import { CURRENT_CALENDAR_INSTRUMENT_VERSION } from '@/lib/calendar/instrument-v1';
 
 import {
   getCalendarForUser,
@@ -132,7 +133,8 @@ describe('submitWeeklyScheduleQuestionnaire', () => {
     // parseLocalDate('2026-06-08') → UTC midnight (anti-flake PR#96).
     expect(arg.where.userId_weekStart.weekStart.toISOString()).toBe('2026-06-08T00:00:00.000Z');
     expect(arg.create.energyPeakSlot).toBe('afternoon');
-    expect(arg.create.instrumentVersion).toBe(1);
+    // Version-agnostic: the submit stamps whatever instrument is CURRENT (F8 → v2).
+    expect(arg.create.instrumentVersion).toBe(CURRENT_CALENDAR_INSTRUMENT_VERSION);
     expect(res.questionnaire.weekStart).toBe('2026-06-08');
   });
 

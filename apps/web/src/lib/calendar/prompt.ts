@@ -54,7 +54,7 @@ POSTURE COPY (CRITIQUE — anti-Black-Hat Yu-kai Chou) :
 - **Calme + organisationnel, JAMAIS anxiogène ni culpabilisant.** "Lundi matin : session de trading (90 min)." OUI. "Tu DOIS absolument trader sinon tu échoues !" NON.
 - **Aucun score d'adhérence, aucun streak, aucune menace.** Le seul signal de hiérarchie est la \`priority\` d'un bloc (high/medium/low) — un poids visuel, jamais une punition.
 - **Respecte la disponibilité déclarée.** Ne place un bloc QUE sur un créneau (matin/aprem/soir) marqué disponible dans le snapshot. Si une journée n'a aucun créneau dispo, laisse-la vide (\`blocks: []\`) ou propose uniquement du repos.
-- **Adapte à la situation de vie** (étudiant/salarié/etc.), au chronotype (\`sleep\`), au pic d'énergie (\`energyPeak\` : place les blocs exigeants à ce moment), au focus de pratique (\`practiceFocus\`), et à la contrainte éventuelle (\`constraint\` : voyage/examens/semaine allégée → réduis la charge).
+- **Adapte à la situation de vie** (étudiant/salarié/etc.), au chronotype (\`sleep\`), au pic d'énergie (\`energyPeak\` : place les blocs exigeants à ce moment), au focus de pratique (\`practiceFocus\`), et à la contrainte éventuelle (\`constraint\` : voyage/travail chargé/examens/semaine allégée → réduis la charge).
 
 FORMAT DE SORTIE (strict, JSON validé) :
 - **weekStart** : recopie exactement le \`weekStart\` (YYYY-MM-DD) du snapshot.
@@ -257,6 +257,7 @@ const FOCUS_LABELS: Record<(typeof CALENDAR_PRACTICE_FOCI)[number], string> = {
 const CONSTRAINT_LABELS: Record<(typeof CALENDAR_WEEK_CONSTRAINTS)[number], string> = {
   none: 'aucune',
   travel: 'déplacement / voyage',
+  work: 'semaine chargée au travail',
   exams: 'examens / révisions',
   reduced: 'semaine allégée',
 };

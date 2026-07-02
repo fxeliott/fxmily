@@ -341,7 +341,9 @@ const idSchema = z.string().min(1).max(40, 'ID trop long.');
 // field required. TypeScript narrows via `'error' in entry` structural check
 // in `batch.ts:persistGeneratedProfiles`. Zod parses by trying each variant
 // in order — output variant first (most common path), error variant fallback.
-const batchResultEntrySchema = z.union([
+// Exported : `persistGeneratedProfiles` re-parses EVERY entry against this
+// strict union so one invalid AI output only skips THAT entry — never the lot.
+export const batchResultEntrySchema = z.union([
   z
     .object({
       userId: idSchema,
@@ -368,10 +370,33 @@ const batchResultEntrySchema = z.union([
 ]);
 
 /**
+ * Wire skeleton for ONE batch entry at the HTTP layer : addressing IDs only,
+ * unknown keys (output/error/usage/model) pass through untouched.
+ *
+ * WHY the route no longer validates entry CONTENT (2026-07-02 prod incident) :
+ * validating the full union at envelope level made the route all-or-nothing —
+ * a single AI summary of 801 chars 400-rejected a lot of 10 profiles, and the
+ * scheduled worker re-paid 10 `claude --print` calls every tick forever. The
+ * strict union still gates every entry, but PER-ENTRY inside
+ * `persistGeneratedProfiles` (Gate 0) : an invalid entry is counted + audited
+ * (`onboarding.batch.invalid_output`) and the 9 valid ones persist.
+ * `.passthrough()` is REQUIRED here — a stripping object would silently drop
+ * `output`/`error` before the service could re-parse them.
+ */
+const batchEntrySkeletonSchema = z
+  .object({
+    userId: idSchema,
+    interviewId: idSchema,
+  })
+  .passthrough();
+
+/**
  * Top-level batch persist request schema. The local script POSTs this body
- * after running `claude --print` N times for the N entries pulled. Server
- * re-validates every entry via this schema before passing to
- * `persistGeneratedProfiles` (defense-in-depth — never trust the laptop).
+ * after running `claude --print` N times for the N entries pulled. The route
+ * validates the ENVELOPE (array bounds + per-entry addressing skeleton) ;
+ * entry content is validated per-entry by `persistGeneratedProfiles` against
+ * `batchResultEntrySchema` (defense-in-depth — never trust the laptop, but
+ * never reject the whole lot for one bad AI output either).
  *
  * Wire format aligns with `BatchResultEntry` TypeScript union in `batch.ts` —
  * each result is either `{userId, interviewId, output, usage?, model?}` (success)
@@ -381,7 +406,7 @@ const batchResultEntrySchema = z.union([
 export const batchPersistRequestSchema = z
   .object({
     results: z
-      .array(batchResultEntrySchema)
+      .array(batchEntrySkeletonSchema)
       .min(1, 'Au moins 1 résultat requis.')
       .max(
         ONBOARDING_BATCH_MAX_ENTRIES,

@@ -130,15 +130,92 @@ if [[ -z "${FXMILY_ADMIN_TOKEN:-}" && "$ENV_FILE_EXISTED" == "false" ]]; then
 fi
 
 # --- Global serialisation lock (ban-risk: one claude --print at a time) --------
-LOCK_DIR="${TMPDIR:-/tmp}/fxmily-worker.lock"
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  holder="unknown"
-  [[ -f "$LOCK_DIR/batch" ]] && holder="$(cat "$LOCK_DIR/batch" 2>/dev/null || echo unknown)"
-  echo "[worker] $BATCH — another batch ($holder) holds the global lock; skipping this tick (benign)."
-  exit 0
+# MACHINE-GLOBAL and TMPDIR-independent : $HOME is the same for every context
+# that can start this worker (Task Scheduler, interactive Git Bash, tests),
+# whereas ${TMPDIR:-/tmp} can differ per context and would silently produce
+# TWO "global" locks. Also checkout-independent (a worktree copy of this
+# script still serialises against the main repo's worker).
+LOCK_DIR="${FXMILY_WORKER_LOCK_DIR:-${HOME:-/tmp}/.fxmily-worker.lock}"
+
+# Stale-lock recovery — a hard kill (reboot, Task Scheduler stop, kill -9)
+# leaves the lock dir behind and would starve EVERY future tick forever.
+# Liveness check: the holder wrote its PID; if that PID is gone, the lock is
+# stale and we reclaim it. Fallback for a lock with no readable PID (partial
+# write): reclaim after 6h (longest legitimate batch ≈ 2h at 30 members).
+lock_is_stale() {
+  local pid
+  pid="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+  if [[ "$pid" =~ ^[0-9]+$ ]]; then
+    kill -0 "$pid" 2>/dev/null && return 1  # holder alive → not stale
+    return 0                                 # holder dead → stale
+  fi
+  # No PID file — stale only if the dir is old enough (find -mmin on the dir).
+  [[ -n "$(find "$LOCK_DIR" -maxdepth 0 -mmin +360 2>/dev/null)" ]]
+}
+
+acquire_lock() {
+  mkdir "$LOCK_DIR" 2>/dev/null || return 1
+  echo "$$" > "$LOCK_DIR/pid" 2>/dev/null || true
+  echo "$BATCH" > "$LOCK_DIR/batch" 2>/dev/null || true
+  return 0
+}
+
+if ! acquire_lock; then
+  if lock_is_stale; then
+    echo "[worker] $BATCH — stale lock detected (holder dead); reclaiming."
+    rm -rf "$LOCK_DIR" 2>/dev/null || true
+    if ! acquire_lock; then
+      echo "[worker] $BATCH — lock re-acquired by another tick during recovery; skipping (benign)."
+      exit 0
+    fi
+  else
+    holder="unknown"
+    [[ -f "$LOCK_DIR/batch" ]] && holder="$(cat "$LOCK_DIR/batch" 2>/dev/null || echo unknown)"
+    echo "[worker] $BATCH — another batch ($holder) holds the global lock; skipping this tick (benign)."
+    exit 0
+  fi
 fi
-echo "$BATCH" > "$LOCK_DIR/batch" 2>/dev/null || true
-trap 'rm -rf "$LOCK_DIR" 2>/dev/null || true' EXIT
+
+# --- Guaranteed epilogue (status.json + footer + lock release) ----------------
+# One idempotent finish() wired on EXIT *and* TERM/INT. Before the 2026-07-02
+# hardening a failed run could leave NO status.json and NO footer —
+# indistinguishable from "still running" for status-worker.ps1 / J4 health.
+# HONEST LIMIT (proved empirically 2026-07-02): under MSYS/Git Bash a TERM
+# delivered to a background bash is a Windows hard-kill (TerminateProcess) —
+# no trap runs, nothing flushes. Same for Task Scheduler "Stop the task".
+# For THOSE deaths the recovery net is the stale-lock reclaim above (dead
+# holder PID → next tick reclaims and reruns; pull is idempotent).
+EXIT_CODE=125  # provisional — overwritten after the batch runs; 125 = killed mid-run
+FINISHED=false
+finish() {
+  [[ "$FINISHED" == "true" ]] && return 0
+  FINISHED=true
+  local code="${1:-$EXIT_CODE}"
+  # Only write status/footer if the logging section below already ran.
+  if [[ -n "${STATUS_FILE:-}" ]]; then
+    local finished_at ok
+    finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    ok=false
+    [[ "$code" -eq 0 ]] && ok=true
+    cat > "$STATUS_FILE" <<EOF
+{
+  "batch": "$BATCH",
+  "startedAt": "${STARTED_AT:-}",
+  "finishedAt": "$finished_at",
+  "exitCode": $code,
+  "ok": $ok
+}
+EOF
+    {
+      echo "[worker] batch=$BATCH finished=$finished_at exit=$code ok=$ok"
+      echo "==================================================================="
+    } | tee -a "$LOG_FILE"
+  fi
+  rm -rf "$LOCK_DIR" 2>/dev/null || true
+}
+trap 'finish' EXIT
+trap 'finish 143; exit 143' TERM
+trap 'finish 130; exit 130' INT
 
 # --- Logging + status ---------------------------------------------------------
 LOG_DIR="${FXMILY_WORKER_LOG_DIR:-$WORKER_DIR/logs}"
@@ -164,24 +241,6 @@ bash "$BATCH_SCRIPT" "${EXTRA_ARGS[@]}" 2>&1 | tee -a "$LOG_FILE"
 EXIT_CODE="${PIPESTATUS[0]}"
 set -e 2>/dev/null || true
 
-FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-OK=false
-[[ "$EXIT_CODE" -eq 0 ]] && OK=true
-
-# Machine-readable last-run status (consumed by status-worker.ps1 + J4 health).
-cat > "$STATUS_FILE" <<EOF
-{
-  "batch": "$BATCH",
-  "startedAt": "$STARTED_AT",
-  "finishedAt": "$FINISHED_AT",
-  "exitCode": $EXIT_CODE,
-  "ok": $OK
-}
-EOF
-
-{
-  echo "[worker] batch=$BATCH finished=$FINISHED_AT exit=$EXIT_CODE ok=$OK"
-  echo "==================================================================="
-} | tee -a "$LOG_FILE"
-
+# Machine-readable status.json + human footer + lock release all live in
+# finish() (trap EXIT) so they are ALSO written when the run is killed.
 exit "$EXIT_CODE"

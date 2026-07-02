@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * V2.4 Phase A.2 — `persistGeneratedProfiles` 6-gate fail-fast tests.
+ * V2.4 Phase A.2 — `persistGeneratedProfiles` 7-gate fail-fast tests.
  *
  * Pattern carbone V1.7 `weekly-report/batch.test.ts` — mock Prisma client +
  * audit + observability + crisis detection BEFORE importing the SUT.
  *
- * The 6 gates tested here (in order, fail-fast) :
+ * The 7 gates tested here (in order, fail-fast PER ENTRY) :
+ *   Gate 0 — strict entry union re-parse (2026-07-02 incident fix : one
+ *            invalid AI output counts `errors` for THAT entry only, the
+ *            other entries of the lot still persist)
  *   Gate 1 — active user check (reject forged userId)
  *   Gate 2 — interview owner match (BOLA-resistant)
  *   Gate 3 — Zod strict re-parse (defense-in-depth)
@@ -217,6 +220,55 @@ describe('persistGeneratedProfiles — happy path + error variant', () => {
   });
 });
 
+describe('persistGeneratedProfiles — Gate 0: strict entry union re-parse (per-result)', () => {
+  beforeEach(() => {
+    setupSuccessMocks();
+  });
+
+  it('counts errors for an 801-char summary entry but STILL persists the valid entry of the same lot', async () => {
+    // Exact 2026-07-02 prod incident shape : claude --print does not enforce
+    // the JSON schema server-side, one summary came back at 801 chars (Zod
+    // max 800) and the route-level all-or-nothing 400 starved all 10 members.
+    const oversized = makeRequestEntry('output');
+    const request: BatchPersistRequest = {
+      results: [
+        { ...oversized, output: makeValidOutput({ summary: 'M' + 'e'.repeat(800) }) },
+        makeRequestEntry('output'),
+      ],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.errors).toBe(1);
+    expect(result.persisted).toBe(1);
+    expect(result.skipped).toBe(0);
+    expect(profileUpsertMock).toHaveBeenCalledTimes(1);
+
+    const invalidCall = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.invalid_output',
+    );
+    expect(invalidCall).toBeDefined();
+    expect(invalidCall?.[0].metadata).toMatchObject({ gate: 'entry_union' });
+  });
+
+  it('counts errors for a bare skeleton entry (neither output nor error key)', async () => {
+    // A corrupted envelope (orchestrator bug) can ship an entry that passes
+    // the route skeleton (userId + interviewId) but matches NEITHER union
+    // variant — Gate 0 must count it, audit it, and touch no DB row.
+    const request: BatchPersistRequest = {
+      results: [{ userId: 'user_123', interviewId: 'iv_abc' }],
+    };
+    const result = await persistGeneratedProfiles(request);
+    expect(result.errors).toBe(1);
+    expect(result.persisted).toBe(0);
+    expect(profileUpsertMock).not.toHaveBeenCalled();
+
+    const invalidCall = logAuditMock.mock.calls.find(
+      (c) => c[0].action === 'onboarding.batch.invalid_output',
+    );
+    expect(invalidCall).toBeDefined();
+    expect(invalidCall?.[0].metadata).toMatchObject({ gate: 'entry_union' });
+  });
+});
+
 describe('persistGeneratedProfiles — model attribution pin (mirror weekly BLOQUANT 5)', () => {
   beforeEach(() => {
     setupSuccessMocks();
@@ -377,7 +429,8 @@ describe('persistGeneratedProfiles — Gate 3: Zod strict re-parse', () => {
         {
           userId: 'user_123',
           interviewId: 'iv_abc',
-          // @ts-expect-error — intentionally invalid output (missing fields)
+          // Intentionally invalid output — the wire type accepts any content
+          // since the 2026-07-02 per-entry fix; Gate 0 rejects it at runtime.
           output: { summary: 'too short' }, // < 100 chars + no highlights
         },
       ],

@@ -95,7 +95,7 @@ SÉCURITÉ — DÉTRESSE / SIGNAUX DE CRISE (non-négociable) :
 
 FORMAT DE SORTIE (strict JSON validé Zod post-parse) :
 
-- **summary** : 100-800 chars FR, 3-5 phrases. Vue d'ensemble descriptif-comportemental du profil (parcours + posture mentale + axes saillants). Référence aux 5 vérités Douglas si pertinent.
+- **summary** : 3-5 phrases FR, **vise 400-650 caractères et ne dépasse JAMAIS 750** (au-delà le persist rejette le profil et toute la génération est perdue — compte les caractères, coupe une phrase si nécessaire). Vue d'ensemble descriptif-comportemental du profil (parcours + posture mentale + axes saillants). Référence aux 5 vérités Douglas si pertinent.
 - **highlights** : 3-7 traits ou patterns durables. Chaque highlight = \`{key, label, evidence[]}\` :
   - \`key\` : slug kebab-case ≤80 chars (ex \`process_focus_strong\`, \`tendance_hold_loser\`, \`routine_pre_session_solide\`).
   - \`label\` : court FR ≤100 chars (ex "Process-focus solide", "Tendance à tenir un loser").
@@ -553,8 +553,14 @@ export const MEMBER_PROFILE_OUTPUT_JSON_SCHEMA = {
     summary: {
       type: 'string',
       minLength: 100,
-      maxLength: 800,
-      description: "Vue d'ensemble descriptif-comportemental du membre, 3-5 phrases FR.",
+      // 750 wire-side vs 800 Zod persist-side : deliberate 50-char safety
+      // margin. `claude --print` does NOT enforce this schema server-side
+      // (it is prompt text), so the model can overshoot slightly — the
+      // margin absorbs that instead of losing the whole generation
+      // (2026-07-02 incident : one 801-char summary 400-rejected a lot of 10).
+      maxLength: 750,
+      description:
+        "Vue d'ensemble descriptif-comportemental du membre, 3-5 phrases FR. Vise 400-650 caractères, jamais plus de 750.",
     },
     highlights: {
       type: 'array',

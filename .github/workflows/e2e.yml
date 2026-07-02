@@ -206,14 +206,20 @@ jobs:
       - name: Run Playwright tests (chromium project, sharded)
         run: pnpm --filter @fxmily/web exec playwright test --project=chromium --shard=${{ matrix.shard }}/4
 
-      - name: Upload Playwright report (on failure)
+      - name: Upload Playwright traces + screenshots (on failure)
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           # Per-shard name — four shards uploading the same artifact name would
           # collide and fail the upload.
           name: playwright-report-shard-${{ matrix.shard }}
-          path: apps/web/playwright-report/
+          # `test-results/` is where `trace: retain-on-failure`, failure
+          # screenshots and error-context.md actually land. The previous path
+          # (`playwright-report/`) is only written by the `html` reporter,
+          # which CI does not use (github+list) — so every failure artifact
+          # uploaded until now was EMPTY, leaving CI-only failures (like a
+          # locator that is never "stable" on a loaded runner) undebuggable.
+          path: apps/web/test-results/
           retention-days: 7
 
   # Aggregator gate. This job's name MUST stay EXACTLY "Playwright (chromium)"

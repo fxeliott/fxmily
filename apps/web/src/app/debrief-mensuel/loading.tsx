@@ -33,8 +33,8 @@ export default function MonthlyDebriefLoading() {
           </h1>
         </div>
         <p className="t-body leading-[1.6] text-[var(--t-2)]">
-          Une synthèse de ton mois écoulé — progression, trading réel et pratique
-          d&apos;entraînement — pour prendre du recul.
+          Une synthèse de ton mois écoulé : progression, trading réel et pratique
+          d&apos;entraînement, pour prendre du recul.
         </p>
       </header>
 

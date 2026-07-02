@@ -103,7 +103,7 @@ export function MemberTrainingPanel({
             <li key={trade.id}>
               <Link
                 href={`/admin/members/${memberId}/training/${trade.id}`}
-                aria-label={`Corriger le backtest ${trade.pair} du ${DATE_FMT.format(new Date(trade.enteredAt))} — ${
+                aria-label={`Corriger le backtest ${trade.pair} du ${DATE_FMT.format(new Date(trade.enteredAt))} · ${
                   corrections === 0
                     ? 'aucune correction'
                     : `${corrections} correction${corrections > 1 ? 's' : ''}`

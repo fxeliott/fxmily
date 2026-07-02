@@ -63,7 +63,7 @@ function buildMetrics(summary: CompletionSummary, periodNoun: string): OverviewM
       key: 'journal',
       label: 'Journaux du soir',
       display: `${summary.eveningCheckinsCount}`,
-      tip: `Nombre de bilans du soir remplis sur ${periodNoun} — le moment où tu poses des mots sur ton exécution.`,
+      tip: `Nombre de bilans du soir remplis sur ${periodNoun}, le moment où tu poses des mots sur ton exécution.`,
     },
   ];
 }
@@ -94,7 +94,7 @@ export function CompletionOverview({
             <span className="t-eyebrow text-[var(--t-3)]">Complétion &amp; continuité</span>
             <p className="t-body leading-[1.5] text-[var(--t-2)]">
               Aucun check-in enregistré sur {periodNoun}. Dès tes premiers check-ins, ta couverture
-              et ta plus longue série apparaîtront ici — un repère honnête de régularité, jamais un
+              et ta plus longue série apparaîtront ici, un repère honnête de régularité, jamais un
               quota à atteindre.
             </p>
           </div>
@@ -149,8 +149,8 @@ export function CompletionOverview({
       </dl>
 
       <p className="t-cap mt-4 leading-[1.5] text-[var(--t-3)]">
-        Un état des lieux de ta régularité sur {periodNoun} — un repère, pas un verdict. La
-        constance du process prime sur n&apos;importe quel chiffre isolé.
+        Un état des lieux de ta régularité sur {periodNoun}, un repère, pas un verdict. La constance
+        du process prime sur n&apos;importe quel chiffre isolé.
       </p>
     </Card>
   );

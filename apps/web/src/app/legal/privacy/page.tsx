@@ -50,31 +50,31 @@ export default function PrivacyPolicyPage(): React.ReactElement {
       </p>
       <ul>
         <li>
-          <strong>Identité &amp; compte</strong> — email, prénom, nom, mot de passe (haché en
+          <strong>Identité &amp; compte</strong> : email, prénom, nom, mot de passe (haché en
           argon2id, jamais stocké en clair), fuseau horaire, date d&apos;inscription, dernière
           connexion. Base légale : exécution du contrat (membre / éditeur).
         </li>
         <li>
-          <strong>Journal de trades</strong> — paire, direction, session, sizing, R planifié, R
+          <strong>Journal de trades</strong> : paire, direction, session, sizing, R planifié, R
           réalisé, screenshots avant/après que tu uploades volontairement. Base légale : exécution
           du contrat.
         </li>
         <li>
-          <strong>Check-ins quotidiens</strong> — humeur, sommeil, discipline, gratitude, intention
+          <strong>Check-ins quotidiens</strong> : humeur, sommeil, discipline, gratitude, intention
           du jour. Base légale : exécution du contrat (suivi comportemental volontaire).
         </li>
         <li>
-          <strong>Score comportemental</strong> — snapshots calculés chaque nuit à partir de tes
+          <strong>Score comportemental</strong> : snapshots calculés chaque nuit à partir de tes
           trades + check-ins, sur fenêtre glissante 30 jours. Base légale : intérêt légitime
           (mesurer ta progression).
         </li>
         <li>
-          <strong>Notifications push</strong> — abonnements WebPush (endpoint, clés publiques P-256,
+          <strong>Notifications push</strong> : abonnements WebPush (endpoint, clés publiques P-256,
           user-agent, dernière vue). On ne logge jamais le contenu envoyé. Base légale :
           consentement (toggle activable et désactivable à tout moment).
         </li>
         <li>
-          <strong>Logs d&apos;audit</strong> — actions sensibles (login, création de trade, export
+          <strong>Logs d&apos;audit</strong> : actions sensibles (login, création de trade, export
           de données…) avec un hash SHA-256 salé de ton IP (jamais l&apos;IP en clair) et un
           user-agent tronqué à 512 caractères. Base légale : intérêt légitime (sécurité).
         </li>
@@ -98,23 +98,23 @@ export default function PrivacyPolicyPage(): React.ReactElement {
       <h2>4. Combien de temps on les garde</h2>
       <ul>
         <li>
-          <strong>Compte actif</strong> — toutes les données ci-dessus, tant que tu es membre.
+          <strong>Compte actif</strong> : toutes les données ci-dessus, tant que tu es membre.
         </li>
         <li>
-          <strong>Compte supprimé</strong> — soft-delete immédiat (PII scrubbée, login bloqué), puis
+          <strong>Compte supprimé</strong> : soft-delete immédiat (PII scrubbée, login bloqué), puis
           purge définitive sous <strong>30 jours</strong>. Tu peux annuler ta suppression dans les
           24h via un lien email.
         </li>
         <li>
-          <strong>Logs d&apos;audit</strong> — 12 mois maximum (rétention sécurité, hashs IP non
+          <strong>Logs d&apos;audit</strong> : 12 mois maximum (rétention sécurité, hashs IP non
           réversibles).
         </li>
         <li>
-          <strong>Sauvegardes Postgres chiffrées</strong> — 30 jours en R2 cross-région. Une demande
+          <strong>Sauvegardes Postgres chiffrées</strong> : 30 jours en R2 cross-région. Une demande
           d&apos;effacement RGPD purge les sauvegardes au prochain cycle (≤ 30 jours).
         </li>
         <li>
-          <strong>Abonnements push inactifs</strong> — purgés automatiquement après 90 jours sans
+          <strong>Abonnements push inactifs</strong> : purgés automatiquement après 90 jours sans
           dispatch réussi.
         </li>
       </ul>
@@ -122,29 +122,29 @@ export default function PrivacyPolicyPage(): React.ReactElement {
       <h2>5. Sous-traitants (article 28 RGPD)</h2>
       <ul>
         <li>
-          <strong>Hetzner Online GmbH</strong> (Allemagne, UE) — hébergement applicatif et base de
+          <strong>Hetzner Online GmbH</strong> (Allemagne, UE) : hébergement applicatif et base de
           données. Données stockées chiffrées au repos.
         </li>
         <li>
-          <strong>Cloudflare, Inc.</strong> — DNS et stockage médias R2 (chiffré au repos). Pas de
+          <strong>Cloudflare, Inc.</strong> : DNS et stockage médias R2 (chiffré au repos). Pas de
           Cloudflare Analytics activé.
         </li>
         <li>
-          <strong>Resend, Inc.</strong> (États-Unis, clauses contractuelles types) — envoi
+          <strong>Resend, Inc.</strong> (États-Unis, clauses contractuelles types) : envoi
           d&apos;emails transactionnels (invitation, digest hebdo). Aucun email marketing.
         </li>
         <li>
-          <strong>Sentry, Inc.</strong> (États-Unis, clauses contractuelles types) — collecte
+          <strong>Sentry, Inc.</strong> (États-Unis, clauses contractuelles types) : collecte
           d&apos;erreurs serveur (stack trace + user-agent + URL anonymisée). Pas de session replay,
           pas de PII utilisateur dans les payloads (configuration côté code).
         </li>
         <li>
-          <strong>Anthropic PBC</strong> (États-Unis, clauses contractuelles types) — modèle Claude
+          <strong>Anthropic PBC</strong> (États-Unis, clauses contractuelles types) : modèle Claude
           Opus 4.8 (<code>claude-opus-4-8</code>) utilisé pour générer le rapport hebdo (Eliott
           uniquement), le débrief mensuel, le calendrier d&apos;organisation et l&apos;analyse
           unique de ton questionnaire d&apos;entrée (profil membre, données pseudonymisées) (voir{' '}
           <a href="/legal/ai-disclosure">Transparence IA</a>). Anthropic indique ne pas utiliser ces
-          contenus pour ré-entraîner ses modèles — détail et mises à jour sur la page{' '}
+          contenus pour ré-entraîner ses modèles, détail et mises à jour sur la page{' '}
           <a href="/legal/ai-disclosure">Transparence IA</a>.
         </li>
       </ul>
@@ -157,22 +157,22 @@ export default function PrivacyPolicyPage(): React.ReactElement {
       </p>
       <ul>
         <li>
-          <strong>Accès &amp; portabilité</strong> — exporte 100 % de tes données au format JSON
+          <strong>Accès &amp; portabilité</strong> : exporte 100 % de tes données au format JSON
           depuis <a href="/account/data">/account/data</a>. Le fichier inclut compte, trades,
           check-ins, scores, fiches Mark Douglas reçues, abonnements push, logs.
         </li>
         <li>
-          <strong>Effacement</strong> — tu peux supprimer ton compte depuis{' '}
+          <strong>Effacement</strong> : tu peux supprimer ton compte depuis{' '}
           <a href="/account/delete">/account/delete</a>. Soft-delete immédiat, hard-delete sous 30
           jours, fenêtre d&apos;annulation 24h par email.
         </li>
         <li>
-          <strong>Rectification &amp; opposition</strong> — par email à{' '}
+          <strong>Rectification &amp; opposition</strong> : par email à{' '}
           <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>, réponse sous 30 jours (article
           12 RGPD).
         </li>
         <li>
-          <strong>Réclamation</strong> — si tu estimes que tes droits ne sont pas respectés, tu peux
+          <strong>Réclamation</strong> : si tu estimes que tes droits ne sont pas respectés, tu peux
           saisir la <a href="https://www.cnil.fr/fr/plaintes">CNIL</a> (autorité française de
           contrôle).
         </li>

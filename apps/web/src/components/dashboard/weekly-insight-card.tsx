@@ -215,7 +215,7 @@ export function WeeklyInsightCard({
           <span className="t-eyebrow text-[var(--t-3)]">Insight de la semaine</span>
           <p className="t-body leading-[1.5] text-[var(--t-2)]">
             Encore quelques jours de check-ins et ton premier constat hebdo apparaîtra ici. Rien à
-            forcer — chaque journée notée nourrit une lecture honnête de ta semaine.
+            forcer, chaque journée notée nourrit une lecture honnête de ta semaine.
           </p>
         </div>
       </aside>
@@ -232,7 +232,7 @@ export function WeeklyInsightCard({
 
   const body =
     insight.kind === 'rising'
-      ? `Sur tes 7 derniers jours, ta ${insight.label.toLowerCase()} gagne ${insight.delta} point${insight.delta > 1 ? 's' : ''} (moyenne ${insight.average}/100). Un trader gagnant, c'est d'abord une exécution répétée — continue à dérouler ton process.`
+      ? `Sur tes 7 derniers jours, ta ${insight.label.toLowerCase()} gagne ${insight.delta} point${insight.delta > 1 ? 's' : ''} (moyenne ${insight.average}/100). Un trader gagnant, c'est d'abord une exécution répétée, continue à dérouler ton process.`
       : `Sur tes 7 derniers jours, ta ${insight.label.toLowerCase()} tient le mieux (moyenne ${insight.average}/100). C'est ton ancre du moment : la régularité du process compte plus que le résultat d'un trade isolé.`;
 
   // Micro-tendance de la dimension mise en avant (7 derniers jours). Nulls

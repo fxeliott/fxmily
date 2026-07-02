@@ -50,7 +50,7 @@ export function EmotionArcNote({ arc }: { arc: EmotionArcDegradation }) {
           </ul>
         ) : null}
         <p className="t-cap text-[var(--t-3)]">
-          Le contrôle intra-trade se travaille. Le nommer, c’est déjà le voir — pas un verdict.
+          Le contrôle intra-trade se travaille. Le nommer, c’est déjà le voir, pas un verdict.
         </p>
       </div>
     </aside>

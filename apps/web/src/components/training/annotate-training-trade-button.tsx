@@ -233,7 +233,7 @@ function errorMessage(code: string): string {
     case 'forbidden':
       return 'Action réservée à l’admin.';
     case 'training_trade_not_found':
-      return 'Backtest introuvable — la page a peut-être expiré.';
+      return 'Backtest introuvable, la page a peut-être expiré.';
     default:
       return 'Échec de l’envoi. Réessaie dans un instant.';
   }

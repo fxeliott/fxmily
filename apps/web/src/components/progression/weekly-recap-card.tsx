@@ -232,7 +232,7 @@ const METRIC_TIP: Record<WeeklyRecapMetricKey, string> = {
     'Part de tes trades clôturés où tu as respecté ton plan. Le delta est en points de pourcentage vs la semaine précédente.',
   streak: 'Nombre de jours distincts où tu as fait au moins un check-in cette semaine.',
   journal:
-    'Nombre de journaux du soir remplis cette semaine — le moment où tu poses des mots sur ton exécution.',
+    'Nombre de journaux du soir remplis cette semaine, le moment où tu poses des mots sur ton exécution.',
 };
 
 /**
@@ -290,7 +290,7 @@ export function WeeklyRecapCard({
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="t-eyebrow text-[var(--t-3)]">Ta semaine en chiffres</span>
             <p className="t-body leading-[1.5] text-[var(--t-2)]">
-              Dès tes premiers trades ou check-ins de la semaine, ton récap chiffré apparaîtra ici —
+              Dès tes premiers trades ou check-ins de la semaine, ton récap chiffré apparaîtra ici,
               avec l’écart calme par rapport à la semaine d’avant. Rien à forcer&nbsp;: chaque
               journée notée nourrit une lecture honnête.
             </p>
@@ -346,7 +346,7 @@ export function WeeklyRecapCard({
 
       <p className="t-cap mt-4 leading-[1.5] text-[var(--t-3)]">
         {recap.hasPreviousWeek
-          ? 'Écart calculé vs la semaine précédente. Un repère, pas un verdict — la régularité du process compte plus qu’un chiffre isolé.'
+          ? 'Écart calculé vs la semaine précédente. Un repère, pas un verdict, la régularité du process compte plus qu’un chiffre isolé.'
           : 'Première semaine mesurée : l’écart vs la semaine d’avant apparaîtra dès la semaine prochaine.'}
       </p>
     </Card>

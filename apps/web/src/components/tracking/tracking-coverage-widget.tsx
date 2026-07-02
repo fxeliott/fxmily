@@ -38,7 +38,7 @@ export async function TrackingCoverageWidget({ userId }: { userId: string }) {
           <h3 className="text-[15px] font-semibold text-[var(--t-1)]">Vue d&apos;ensemble</h3>
           <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
             {coverage.coveredCount === 0
-              ? 'Commence à nourrir ton suivi — chaque dimension que tu remplis t’aide à te connaître.'
+              ? 'Commence à nourrir ton suivi, chaque dimension que tu remplis t’aide à te connaître.'
               : `${coverage.coveredCount} dimension${coverage.coveredCount > 1 ? 's' : ''} sur ${coverage.totalCount} nourrie${coverage.coveredCount > 1 ? 's' : ''} ces 30 derniers jours.`}
           </p>
         </div>

@@ -86,7 +86,7 @@ export function MemberPresencePanel({
           </div>
         ) : (
           <p className="t-cap mt-1.5 text-[var(--t-3)]">
-            Aucune réunion sur les {MEETING_WINDOW_DAYS} derniers jours — pas de taux à afficher
+            Aucune réunion sur les {MEETING_WINDOW_DAYS} derniers jours, pas de taux à afficher
             (jamais un « 0 % » trompeur).
           </p>
         )}
@@ -124,7 +124,7 @@ export function MemberPresencePanel({
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex flex-col gap-0.5">
                       <span className="t-body text-[var(--t-1)]">
-                        Réunion {time} — {DATE_FMT.format(new Date(m.scheduledAt))}
+                        Réunion {time} · {DATE_FMT.format(new Date(m.scheduledAt))}
                       </span>
                       <span className="t-cap text-[var(--t-3)]">
                         {SLOT_SUBTITLE[m.slot]} · déclaration du membre

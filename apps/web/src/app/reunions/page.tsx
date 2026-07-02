@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
-import { MeetingItem } from '@/components/reunions/meeting-item';
+import { groupMeetingsByDay, MeetingDayGroup } from '@/components/reunions/meeting-day-group';
 import { listMeetingsForMember } from '@/lib/meeting/service';
 import { MEETING_WINDOW_DAYS } from '@/lib/meeting/window';
 
@@ -59,7 +59,7 @@ export default async function ReunionsPage() {
               Tes réunions
             </h1>
             <p className="t-cap max-w-prose text-[var(--t-3)]">
-              Déclare ta présence — en live ou en rediffusion — et que tu as lu l&apos;analyse (12h)
+              Déclare ta présence, en live ou en rediffusion, et que tu as lu l&apos;analyse (12h)
               ou le bilan (20h). Tu peux rattraper une réunion dans les {MEETING_WINDOW_DAYS} jours.
             </p>
           </div>
@@ -115,11 +115,12 @@ export default async function ReunionsPage() {
           </p>
         </section>
 
-        {/* Meeting list — newest first. Reflows into a responsive grid so the
-            cards fill the desktop instead of stacking in a narrow column. */}
-        <section aria-labelledby="reunions-list-heading" className="wow-reveal flex flex-col gap-3">
+        {/* F4 — « vue à la journée » : meetings grouped by civil day (its 12h +
+            20h slots together, chronological), newest day first. Replaces the
+            flat grid where a day's two slots could drift apart. */}
+        <section aria-labelledby="reunions-list-heading" className="wow-reveal flex flex-col gap-5">
           <h2 id="reunions-list-heading" className="sr-only">
-            Liste des réunions
+            Liste des réunions par jour
           </h2>
           {meetings.length === 0 ? (
             <div className="rounded-card border border-dashed border-[var(--b-default)] bg-[var(--bg-1)] p-6 text-center">
@@ -130,11 +131,7 @@ export default async function ReunionsPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {meetings.map((meeting) => (
-                <MeetingItem key={meeting.id} meeting={meeting} />
-              ))}
-            </div>
+            groupMeetingsByDay(meetings).map((day) => <MeetingDayGroup key={day.date} day={day} />)
           )}
         </section>
       </div>

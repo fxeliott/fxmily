@@ -143,7 +143,7 @@ export function BehaviorRadar({
       <figure className="rounded-card-lg flex h-[300px] flex-col items-center justify-center gap-2 border border-[var(--b-default)] bg-[var(--bg-1)] p-5 text-center">
         <span className="t-eyebrow">Ton profil comportemental</span>
         <figcaption className="t-cap max-w-[40ch] text-[var(--t-4)]">
-          Ton radar s’affiche quand tes 4 dimensions sont calculées — quelques check-ins et trades
+          Ton radar s’affiche quand tes 4 dimensions sont calculées, quelques check-ins et trades
           clôturés suffisent. Une dimension sans donnée n’est jamais comptée comme 0.
         </figcaption>
       </figure>
@@ -228,7 +228,7 @@ export function BehaviorRadar({
 
       <p className="t-cap text-[var(--t-4)]">
         Plus la forme est large et régulière, plus ton process est équilibré. C’est une lecture de
-        ta discipline — jamais un conseil de marché.
+        ta discipline, jamais un conseil de marché.
       </p>
     </m.figure>
   );

@@ -41,7 +41,7 @@ const REASONING = {
 const MEMBER_REASONS = [
   'J’étais en déplacement, journée off prévue.',
   'Coupure internet ce jour-là, rattrapé le lendemain.',
-  'Petite saisie en double, position fermée aussitôt — corrigé.',
+  'Petite saisie en double, position fermée aussitôt, corrigé.',
   'Semaine de repos décidée, pas de trading.',
 ] as const;
 

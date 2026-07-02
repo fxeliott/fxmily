@@ -1,4 +1,12 @@
-import { CalendarX, CheckCircle2, Circle, CircleDashed, Info, type LucideIcon } from 'lucide-react';
+import {
+  CalendarX,
+  CheckCircle2,
+  Circle,
+  CircleDashed,
+  CircleSlash,
+  Info,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { MeetingDeclareForm } from '@/components/reunions/meeting-declare-form';
 import { Card } from '@/components/ui/card';
@@ -47,6 +55,9 @@ const STATE_META: Record<
   complete: { label: 'Complète', tone: 'acc', Icon: CheckCircle2 },
   partielle: { label: 'Partielle', tone: 'warn', Icon: CircleDashed },
   en_attente: { label: 'En attente', tone: 'mute', Icon: Circle },
+  // F4 — the member declared they couldn't attend. Calm mute tone, NEVER red
+  // (§31.2): an acknowledged absence is honest data, not a failure.
+  absent: { label: 'Absent', tone: 'mute', Icon: CircleSlash },
   cancelled: { label: 'Annulée', tone: 'mute', Icon: CalendarX },
 };
 
@@ -64,10 +75,22 @@ const GAP_NOTE: Record<Exclude<AttendanceGap, 'none'>, string> = {
     "Eliott t'a noté présent. Complète ta déclaration (mode + lecture du contenu) pour valider la réunion.",
 };
 
-export function MeetingItem({ meeting }: { meeting: MemberMeetingView }) {
+export function MeetingItem({
+  meeting,
+  showDate = true,
+}: {
+  meeting: MemberMeetingView;
+  /**
+   * F4 — when the card is rendered UNDER a per-day header ({@link MeetingDayGroup}),
+   * the full date is already shown by the header, so the card title collapses to
+   * just the slot time ("Réunion 12h") to avoid repeating it. Defaults to `true`
+   * (the standalone card keeps the full "Réunion 12h — lundi 30 juin" title).
+   */
+  showDate?: boolean;
+}) {
   const time = SLOT_TIME[meeting.slot];
   const dateLabel = DATE_FMT.format(new Date(meeting.scheduledAt));
-  const title = `Réunion ${time} — ${dateLabel}`;
+  const title = showDate ? `Réunion ${time} · ${dateLabel}` : `Réunion ${time}`;
   const meta = STATE_META[meeting.displayState];
   const { Icon } = meta;
   const isCancelled = meeting.status === 'cancelled';
@@ -125,10 +148,11 @@ export function MeetingItem({ meeting }: { meeting: MemberMeetingView }) {
           contentLabel={SLOT_CONTENT_LABEL[meeting.slot]}
           initialMode={meeting.attendanceMode}
           initialContentReviewed={meeting.contentReviewed}
+          initialDeclaredAbsent={meeting.memberDeclaredAbsent}
         />
       ) : (
         <p className="t-cap text-[var(--t-3)]">
-          Réunion annulée — pas de présence à déclarer. Tu n&apos;es pas pénalisé.
+          Réunion annulée : pas de présence à déclarer. Tu n&apos;es pas pénalisé.
         </p>
       )}
     </Card>

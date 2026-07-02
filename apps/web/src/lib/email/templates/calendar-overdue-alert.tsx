@@ -48,7 +48,7 @@ export function CalendarOverdueAlertEmail({
         <title>Calendriers en attente · Fxmily</title>
       </Head>
       <Preview>
-        {`${overdueCount} membre${plural ? 's' : ''} ${plural ? 'attendent' : 'attend'} leur calendrier — lance le batch`}
+        {`${overdueCount} membre${plural ? 's' : ''} ${plural ? 'attendent' : 'attend'} leur calendrier, lance le batch`}
       </Preview>
       <Body style={body}>
         <Container style={container}>
@@ -73,7 +73,7 @@ export function CalendarOverdueAlertEmail({
           </Text>
 
           <Section style={actionCard}>
-            <Text style={actionEyebrow}>À FAIRE — DEPUIS TON PC</Text>
+            <Text style={actionEyebrow}>À FAIRE · DEPUIS TON PC</Text>
             <Text style={actionStep}>
               <span style={dot}>·</span> Lance la commande <span style={code}>/calendar-batch</span>{' '}
               (ou <span style={code}>ops/scripts/calendar-batch-local.sh</span>).
@@ -96,11 +96,11 @@ export function CalendarOverdueAlertEmail({
           <Hr style={hr} />
 
           <Text style={footer}>
-            Rappel automatique de permanence — envoyé uniquement quand des calendriers sont en
+            Rappel automatique de permanence, envoyé uniquement quand des calendriers sont en
             attente passé le délai de courtoisie. Aucun calendrier généré sur un serveur (le batch
             reste manuel, par sécurité du compte).
           </Text>
-          <Text style={footerSign}>— Fxmily ops</Text>
+          <Text style={footerSign}>Fxmily ops</Text>
         </Container>
 
         <Text style={legal}>Aucun conseil de marché. Cohorte privée. © 2026 Fxmily.</Text>

@@ -59,7 +59,7 @@ const REVIEW_EARLY = {
   ],
   biggestMistake: [
     "J'ai sauté ma checklist pré-trade jeudi à l'ouverture de Londres, et je suis entré sur un setup B.",
-    "Après une perte mercredi, j'ai doublé la taille pour me refaire — exactement ce que je m'étais interdit.",
+    "Après une perte mercredi, j'ai doublé la taille pour me refaire, exactement ce que je m'étais interdit.",
     "J'ai regardé mon P&L flottant toutes les cinq minutes au lieu de regarder le marché.",
   ],
   bestPractice: [
@@ -68,7 +68,7 @@ const REVIEW_EARLY = {
     null,
   ],
   lessonLearned: [
-    'Le revenge-trading ne répare rien — il ajoute une deuxième erreur à la première.',
+    'Le revenge-trading ne répare rien. Il ajoute une deuxième erreur à la première.',
     "Un setup B pris par impatience coûte plus cher qu'un setup A manqué.",
     "Mon problème n'est pas l'analyse, c'est l'exécution sous émotion.",
   ],
@@ -87,12 +87,12 @@ const REVIEW_MID = {
   ],
   biggestMistake: [
     "J'ai déplacé mon stop au seuil de rentabilité trop tôt par peur, et je me suis fait sortir avant le mouvement.",
-    "J'ai pris un trade de corrélation en pensant doubler mon edge — c'était juste doubler mon risque.",
+    "J'ai pris un trade de corrélation en pensant doubler mon edge. C'était juste doubler mon risque.",
     "J'ai laissé la frustration d'un lundi raté déborder sur mes décisions de mardi.",
   ],
   bestPractice: [
     "Penser en séries de trades plutôt qu'au résultat isolé a vraiment désamorcé ma peur de perdre.",
-    "Ma revue du soir est devenue automatique — c'est elle qui m'a fait repérer le pattern.",
+    "Ma revue du soir est devenue automatique. C'est elle qui m'a fait repérer le pattern.",
     "J'ai relu mes règles avant chaque séance ; ça ancre la discipline.",
   ],
   lessonLearned: [
@@ -109,13 +109,13 @@ const REVIEW_MID = {
 
 const REVIEW_LATE = {
   biggestWin: [
-    "J'ai exécuté toute la semaine exactement comme mon plan le prévoyait — zéro déviation.",
+    "J'ai exécuté toute la semaine exactement comme mon plan le prévoyait, zéro déviation.",
     "Une perte sèche lundi n'a rien changé à ma manière de trader le reste de la semaine.",
     "J'ai dit non à trois setups B sans la moindre frustration : juste pas mes conditions.",
   ],
   biggestMistake: [
     'Une seule entorse : un trade pris dix minutes avant une news, par habitude plus que par décision.',
-    "J'ai légèrement augmenté ma taille après trois gains d'affilée — un reste de surconfiance à surveiller.",
+    "J'ai légèrement augmenté ma taille après trois gains d'affilée, un reste de surconfiance à surveiller.",
     "J'ai écourté ma revue du soir jeudi parce que la journée avait été calme.",
   ],
   bestPractice: [
@@ -124,13 +124,13 @@ const REVIEW_LATE = {
     'Revenir au calme avant de reprendre, systématiquement, a supprimé le tilt de ma semaine.',
   ],
   lessonLearned: [
-    "La discipline n'est plus un effort, c'est devenu l'état par défaut — et ça change tout.",
+    "La discipline n'est plus un effort, c'est devenu l'état par défaut, et ça change tout.",
     'La surconfiance après une série de gains est aussi dangereuse que la peur après une perte.',
     "Le marché ne me doit rien ; mon travail est de bien exécuter, pas d'avoir raison.",
   ],
   nextWeekFocus: [
     'Garder le cap : process identique, pas de nouveauté, juste de la régularité.',
-    'Surveiller la taille après une série de gains — la confiance ne doit pas gonfler le risque.',
+    'Surveiller la taille après une série de gains. La confiance ne doit pas gonfler le risque.',
     'Tenir la revue du soir même les jours calmes, sans exception.',
   ],
 } as const;

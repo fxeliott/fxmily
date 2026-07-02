@@ -64,8 +64,8 @@ export function FirstRunWelcome({ needsProfile = false }: { needsProfile?: boole
           className="wow-rise t-lead max-w-prose"
           style={{ '--rise-delay': '180ms' } as CSSProperties}
         >
-          Ici, on construit la régularité avant la performance. Pas de chiffres à battre aujourd’hui
-          — juste un premier geste à poser. Commence par où tu veux, à ton rythme.
+          Ici, on construit la régularité avant la performance. Pas de chiffres à battre
+          aujourd’hui, juste un premier geste à poser. Commence par où tu veux, à ton rythme.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-3">

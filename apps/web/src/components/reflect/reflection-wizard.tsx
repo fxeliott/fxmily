@@ -54,7 +54,7 @@ const STEP_DEFS: readonly StepDef[] = [
     icon: Zap,
     field: 'triggerEvent',
     label: `Que s'est-il passé ? (Faits seulement)`,
-    hint: 'Décris le moment factuel — heure, marché, contexte. Pas encore tes pensées.',
+    hint: 'Décris le moment factuel, heure, marché, contexte. Pas encore tes pensées.',
     placeholder: `Ex : "13h30 GMT, NFP miss -50k. Ai vu le prix sauter pendant ma pause."`,
   },
   {
@@ -63,7 +63,7 @@ const STEP_DEFS: readonly StepDef[] = [
     icon: MessageCircleQuestion,
     field: 'beliefAuto',
     label: `Quelle pensée a fusé dans ta tête ?`,
-    hint: 'La voix intérieure brute — pas filtrée. "Je dois entrer maintenant", "je vais tout perdre"…',
+    hint: 'La voix intérieure brute, pas filtrée. "Je dois entrer maintenant", "je vais tout perdre"…',
     placeholder: `Ex : "Si je rate ce move, je vais m'en vouloir toute la semaine."`,
   },
   {
@@ -71,7 +71,7 @@ const STEP_DEFS: readonly StepDef[] = [
     title: 'Émotion + comportement',
     icon: HeartPulse,
     field: 'consequence',
-    label: `Qu'as-tu ressenti — et qu'as-tu fait ?`,
+    label: `Qu'as-tu ressenti, et qu'as-tu fait ?`,
     hint: `L'émotion + le passage à l'acte (ou la non-action). Sois précis, sans jugement.`,
     placeholder: `Ex : "FOMO 8/10. Ai violé ma règle 'pas de NFP 5 premières min', entré au marché."`,
   },
@@ -80,13 +80,13 @@ const STEP_DEFS: readonly StepDef[] = [
     title: 'Le reframe (Disputation)',
     icon: Sparkles,
     field: 'disputation',
-    label: `Quelle pensée alternative — plus juste, plus utile — pourrait remplacer la première ?`,
+    label: `Quelle pensée alternative, plus juste, plus utile, pourrait remplacer la première ?`,
     hint: 'Process > outcome. Mark Douglas : chaque trade est unique, mon edge est probabiliste.',
     placeholder: `Ex : "Le plan existe précisément pour les moments volatils. Skipper un trade coûte rien ; chasser peut coûter ma semaine."`,
   },
 ];
 
-const STEP_LABELS = STEP_DEFS.map((s) => `${s.letter} — ${s.title}`);
+const STEP_LABELS = STEP_DEFS.map((s) => `${s.letter} · ${s.title}`);
 
 type StepIndex = 0 | 1 | 2 | 3;
 

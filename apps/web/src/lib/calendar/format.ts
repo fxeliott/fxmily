@@ -13,6 +13,6 @@
  */
 export function modelDisplay(claudeModel: string): string {
   return claudeModel === 'claude-code-local'
-    ? 'Claude — subscription locale'
+    ? 'Claude · subscription locale'
     : `Claude ${claudeModel}`;
 }

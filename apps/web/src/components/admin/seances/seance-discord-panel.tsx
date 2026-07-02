@@ -77,7 +77,7 @@ export function SeanceDiscordPanel({ latest }: { latest: AdminLatestMessages }) 
         <div className="flex flex-col gap-0.5">
           <p className="t-eyebrow-lg text-[var(--t-3)]">Messages Discord</p>
           <p className="t-cap text-[var(--t-3)]">
-            Dernière séance tenue — {latest.title}. Copie chaque message avant la séance.
+            Dernière séance tenue · {latest.title}. Copie chaque message avant la séance.
           </p>
         </div>
         <Pill tone="acc">{latest.messages.length} messages</Pill>

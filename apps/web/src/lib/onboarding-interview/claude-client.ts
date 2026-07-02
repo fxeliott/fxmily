@@ -175,22 +175,22 @@ function renderMockOutput(snapshot: OnboardingInterviewSnapshot): MemberProfileO
     // that explicitly flags the absence of data.
     return {
       summary:
-        "Profil insuffisamment renseigné — le membre n'a complété aucune réponse de longueur exploitable (< 30 chars chacune). Aucune analyse comportementale fiable n'est possible à ce stade. Recommandation : reprendre l'entretien onboarding avec accompagnement pour aider le membre à développer ses réponses. Mock smoke-test — l'analyse qualitative arrivera quand ANTHROPIC_API_KEY sera configurée.",
+        "Profil insuffisamment renseigné, le membre n'a complété aucune réponse de longueur exploitable (< 30 chars chacune). Aucune analyse comportementale fiable n'est possible à ce stade. Recommandation : reprendre l'entretien onboarding avec accompagnement pour aider le membre à développer ses réponses. Mock smoke-test. L'analyse qualitative arrivera quand ANTHROPIC_API_KEY sera configurée.",
       highlights: [
         {
           key: 'entretien-vide',
           label: 'Entretien onboarding non-complété',
-          evidence: ['(Réponses du membre toutes inférieures à 30 chars — voir log batch)'],
+          evidence: ['(Réponses du membre toutes inférieures à 30 chars, voir log batch)'],
         },
         {
           key: 'reprise-recommandee',
           label: 'Reprise recommandée',
-          evidence: ['(Mock smoke-test — pas de signal exploitable)'],
+          evidence: ['(Mock smoke-test, pas de signal exploitable)'],
         },
         {
           key: 'pas-de-pattern',
           label: 'Pas de pattern détectable',
-          evidence: ['(Mock smoke-test — pas de signal exploitable)'],
+          evidence: ['(Mock smoke-test, pas de signal exploitable)'],
         },
       ],
       axes_prioritaires: [
@@ -210,7 +210,7 @@ function renderMockOutput(snapshot: OnboardingInterviewSnapshot): MemberProfileO
   const summary =
     `Le membre ${snapshot.pseudonymLabel} a complété ${validAnswers.length}/${snapshot.answers.length} questions de l'entretien onboarding v${snapshot.instrumentVersion}. ` +
     `Les réponses montrent un parcours engagé et une self-awareness présente. ` +
-    `Mock smoke-test — l'analyse qualitative arrivera quand ANTHROPIC_API_KEY sera configurée et le batch local Claude Max activé. ` +
+    `Mock smoke-test. L'analyse qualitative arrivera quand ANTHROPIC_API_KEY sera configurée et le batch local Claude Max activé. ` +
     `Le profil descriptif ci-dessous est dérivé déterministiquement du snapshot pour validation du contrat schema + evidence substring.`;
 
   const highlights = picks.slice(0, Math.min(3, picks.length)).map((pick, idx) => {
@@ -228,7 +228,7 @@ function renderMockOutput(snapshot: OnboardingInterviewSnapshot): MemberProfileO
       key: `mock-placeholder-${highlights.length + 1}`,
       label: `Mock placeholder ${highlights.length + 1}`,
       evidence: [
-        '(Mock smoke-test — placeholder filler to meet min=3 highlights schema constraint)',
+        '(Mock smoke-test, placeholder filler to meet min=3 highlights schema constraint)',
       ],
     });
   }

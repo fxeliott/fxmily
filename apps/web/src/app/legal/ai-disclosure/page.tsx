@@ -29,7 +29,7 @@ import { LegalLayout } from '@/components/legal/legal-layout';
 export const metadata: Metadata = {
   title: 'Transparence IA',
   description:
-    "Comment Fxmily utilise l'intelligence artificielle (Claude, Anthropic) — limites, garanties, et ce qu'elle ne fait jamais.",
+    "Comment Fxmily utilise l'intelligence artificielle (Claude, Anthropic), limites, garanties, et ce qu'elle ne fait jamais.",
 };
 
 export default function AIDisclosurePage(): React.ReactElement {
@@ -62,28 +62,28 @@ export default function AIDisclosurePage(): React.ReactElement {
       <h2>2. Quel modèle on utilise, pour quoi</h2>
       <ul>
         <li>
-          <strong>Modèle</strong> — Claude Opus 4.8 (identifiant exact <code>claude-opus-4-8</code>
+          <strong>Modèle</strong> : Claude Opus 4.8 (identifiant exact <code>claude-opus-4-8</code>
           ), édité par Anthropic PBC. Les contenus sont générés via l&apos;abonnement personnel Max
-          d&apos;Eliott (pas d&apos;API Anthropic facturée par requête côté Fxmily — voir{' '}
+          d&apos;Eliott (pas d&apos;API Anthropic facturée par requête côté Fxmily, voir{' '}
           <a href="/legal/privacy">Politique de confidentialité §3</a> pour les sous-traitants).
         </li>
         <li>
-          <strong>Quatre usages</strong> — (a) un <em>rapport hebdomadaire</em> que{' '}
+          <strong>Quatre usages</strong> : (a) un <em>rapport hebdomadaire</em> que{' '}
           <strong>seul Eliott (admin)</strong> reçoit chaque dimanche par email, pour assurer ton
-          suivi — tu ne le reçois pas directement ; il s&apos;affiche dans l&apos;onglet Admin ; (b)
+          suivi, tu ne le reçois pas directement ; il s&apos;affiche dans l&apos;onglet Admin ; (b)
           ton <em>débrief mensuel</em> (V1.4, SPEC §25.4) consultable sur ta page{' '}
           <a href="/debrief-mensuel">/debrief-mensuel</a> et dans l&apos;onglet Admin (
-          <code>?tab=monthly-debrief</code>) — il synthétise <strong>tes propres données</strong>{' '}
+          <code>?tab=monthly-debrief</code>), il synthétise <strong>tes propres données</strong>{' '}
           (trades, check-ins, notes, progression mois sur mois) ; (c) ton{' '}
           <em>calendrier d&apos;organisation hebdomadaire</em> (§26) consultable sur{' '}
           <a href="/calendrier">/calendrier</a>, généré à partir de ton questionnaire de
-          disponibilité et d&apos;un instantané chiffré de ton activité — il organise ton{' '}
+          disponibilité et d&apos;un instantané chiffré de ton activité, il organise ton{' '}
           <strong>temps</strong> de pratique (sessions, entraînement, repos), jamais le marché ; (d)
           l&apos;<em>analyse unique de ton questionnaire d&apos;entrée</em> (entretien
-          d&apos;onboarding) qui construit ton profil membre — réponses pseudonymisées avant envoi.
+          d&apos;onboarding) qui construit ton profil membre, réponses pseudonymisées avant envoi.
         </li>
         <li>
-          <strong>Volume</strong> — au plus 1 appel par utilisateur par semaine (rapport hebdo) + 1
+          <strong>Volume</strong> : au plus 1 appel par utilisateur par semaine (rapport hebdo) + 1
           par mois (débrief mensuel) + 1 par semaine pour le calendrier (uniquement si tu remplis le
           questionnaire d&apos;organisation) + 1 appel unique à l&apos;arrivée (analyse du
           questionnaire d&apos;entrée), plafonnés à $15 de tokens par run (garde-fou technique côté
@@ -122,14 +122,14 @@ export default function AIDisclosurePage(): React.ReactElement {
       <h2>4. Garde-fous techniques</h2>
       <ul>
         <li>
-          <strong>Détection d&apos;injection de prompt</strong> — toute donnée que tu saisis (notes
+          <strong>Détection d&apos;injection de prompt</strong> : toute donnée que tu saisis (notes
           d&apos;humeur, journal, descriptions de trades) est filtrée par un détecteur multi-vecteur
           côté serveur avant d&apos;être incluse dans le contexte envoyé à l&apos;IA. Si un pattern
           suspect est détecté (ex. tentative d&apos;injecter des instructions adverses), la donnée
           est neutralisée et un audit log est créé.
         </li>
         <li>
-          <strong>Filtre de routage de crise</strong> — si une donnée que tu saisis contient des
+          <strong>Filtre de routage de crise</strong> : si une donnée que tu saisis contient des
           marqueurs de détresse psychologique (mots-clés FR, regex unicode-aware exclusive des
           expressions argot trading), un message t&apos;orientant vers les ressources de soutien
           national (3114, SOS Amitié, Suicide Écoute) s&apos;affiche, et la donnée est conservée
@@ -137,13 +137,13 @@ export default function AIDisclosurePage(): React.ReactElement {
           contenu.
         </li>
         <li>
-          <strong>Budget plafonné</strong> — chaque appel IA est limité à $15 de tokens. Au-delà, la
+          <strong>Budget plafonné</strong> : chaque appel IA est limité à $15 de tokens. Au-delà, la
           requête est refusée et journalisée. Garantie de non-explosion de coûts.
         </li>
         <li>
-          <strong>Banner de transparence</strong> — chaque contenu généré par IA (rapport hebdo
+          <strong>Banner de transparence</strong> : chaque contenu généré par IA (rapport hebdo
           admin, débrief mensuel, calendrier d&apos;organisation, emails) affiche un bandeau «
-          Généré par IA — pas substitut coaching humain ».
+          Généré par IA · pas substitut coaching humain ».
         </li>
       </ul>
 
@@ -155,20 +155,20 @@ export default function AIDisclosurePage(): React.ReactElement {
       </p>
       <ul>
         <li>
-          <strong>Droit de savoir</strong> — tout contenu qui t&apos;est destiné et qui a été généré
+          <strong>Droit de savoir</strong> : tout contenu qui t&apos;est destiné et qui a été généré
           par IA porte le bandeau de transparence ci-dessus. Pas de prose IA déguisée en écriture
           humaine.
         </li>
         <li>
-          <strong>Droit de refuser le contenu IA</strong> — tu peux désactiver la livraison de ton{' '}
+          <strong>Droit de refuser le contenu IA</strong> : tu peux désactiver la livraison de ton{' '}
           <em>débrief mensuel</em> dans{' '}
           <a href="/account/notifications">tes préférences de notifications</a> (toggle{' '}
           <code>monthly_debrief_ready</code>). Le contenu désactivé ne sera plus envoyé ni affiché
-          pour toi. Le <em>rapport hebdomadaire</em>, lui, ne t&apos;est pas adressé — il est
-          réservé à Eliott pour assurer ton suivi.
+          pour toi. Le <em>rapport hebdomadaire</em>, lui, ne t&apos;est pas adressé, il est réservé
+          à Eliott pour assurer ton suivi.
         </li>
         <li>
-          <strong>Droit de signaler une erreur</strong> — si un rapport contient une affirmation
+          <strong>Droit de signaler une erreur</strong> : si un rapport contient une affirmation
           fausse ou inappropriée, signale-le à{' '}
           <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>. Eliott revoit manuellement et
           ajuste le prompt si nécessaire.
@@ -191,12 +191,12 @@ export default function AIDisclosurePage(): React.ReactElement {
       <h2>7. Sécurité et chaîne de traitement</h2>
       <ul>
         <li>
-          <strong>Données envoyées à l&apos;IA</strong> — uniquement ton journal de trades agrégé
+          <strong>Données envoyées à l&apos;IA</strong> : uniquement ton journal de trades agrégé
           (statistiques numériques), tes check-ins de la semaine (humeur 1-5, mots-clés), tes notes
           libres. Aucune information directement identifiante (nom, email, IP).
         </li>
         <li>
-          <strong>Conservation côté Anthropic</strong> — Anthropic indique ne pas utiliser les
+          <strong>Conservation côté Anthropic</strong> : Anthropic indique ne pas utiliser les
           contenus de l&apos;abonnement Max pour ré-entraîner ses modèles (voir{' '}
           <a
             href="https://www.anthropic.com/legal/aup"
@@ -208,7 +208,7 @@ export default function AIDisclosurePage(): React.ReactElement {
           ). Si cette politique change, cette page sera mise à jour avant tout impact.
         </li>
         <li>
-          <strong>Conservation côté Fxmily</strong> — le rapport est stocké dans la base Fxmily
+          <strong>Conservation côté Fxmily</strong> : le rapport est stocké dans la base Fxmily
           (Hetzner Allemagne) chiffré au repos, et purgé selon la durée de conservation indiquée
           dans la <a href="/legal/privacy">Politique de confidentialité §4</a>.
         </li>
@@ -231,7 +231,7 @@ export default function AIDisclosurePage(): React.ReactElement {
             rel="noopener noreferrer external"
             target="_blank"
           >
-            Règlement (UE) 2024/1689 — texte intégral EUR-Lex
+            Règlement (UE) 2024/1689 · texte intégral EUR-Lex
           </a>
         </li>
         <li>
@@ -240,7 +240,7 @@ export default function AIDisclosurePage(): React.ReactElement {
             rel="noopener noreferrer external"
             target="_blank"
           >
-            Article 50 — Obligations de transparence
+            Article 50 · Obligations de transparence
           </a>
         </li>
         <li>
@@ -249,7 +249,7 @@ export default function AIDisclosurePage(): React.ReactElement {
             rel="noopener noreferrer external"
             target="_blank"
           >
-            Article 99 — Pénalités administratives
+            Article 99 · Pénalités administratives
           </a>
         </li>
       </ul>

@@ -67,7 +67,7 @@ export const TRAINING_REVIEW_STATUS_META: Record<TrainingReviewStatus, TrainingR
   },
   corrected: {
     label: 'Correction à lire',
-    description: 'Une correction t’attend — ouvre le backtest pour la découvrir.',
+    description: 'Une correction t’attend, ouvre le backtest pour la découvrir.',
     tone: 'cy',
   },
   seen: {

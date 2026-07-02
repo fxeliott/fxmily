@@ -118,7 +118,7 @@ export function TrajectoryChart({ trajectory }: { trajectory: TrajectoryProjecti
       <figure className="rounded-card-lg flex h-[200px] flex-col items-center justify-center gap-2 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 text-center">
         <span className="t-eyebrow">Ta trajectoire vers la Maîtrise</span>
         <figcaption className="t-cap max-w-[36ch] text-[var(--t-4)]">
-          Ta courbe apparaît dès le 2ᵉ jour de scores. Un instantané est enregistré chaque nuit —
+          Ta courbe apparaît dès le 2ᵉ jour de scores. Un instantané est enregistré chaque nuit,
           reviens demain pour voir où tu vas.
         </figcaption>
       </figure>
@@ -162,7 +162,7 @@ export function TrajectoryChart({ trajectory }: { trajectory: TrajectoryProjecti
           Évolution du score de discipline sur {history.length} jours, tendance {trendLabel}.
           {projected.length > 0
             ? ` Projection vers la cible Maîtrise de ${target} sur 100${etaLabel ? `, ${etaLabel}` : ''}.`
-            : ' Pas encore de projection — continue d’observer ta régularité.'}
+            : ' Pas encore de projection, continue d’observer ta régularité.'}
         </figcaption>
         <ResponsiveContainer width="100%" height={240} debounce={1}>
           <ComposedChart data={rows} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
@@ -255,7 +255,7 @@ export function TrajectoryChart({ trajectory }: { trajectory: TrajectoryProjecti
       <p className="t-cap text-[var(--t-4)]">
         {insufficient
           ? 'Projection disponible dès quelques jours de scores. Les jours non calculés ne sont jamais comptés comme 0.'
-          : 'Estimation à partir de ton rythme récent — une tendance, pas une promesse. Aucun conseil de marché.'}
+          : 'Estimation à partir de ton rythme récent, une tendance, pas une promesse. Aucun conseil de marché.'}
       </p>
     </m.div>
   );

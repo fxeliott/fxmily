@@ -9,6 +9,7 @@ import {
   Gauge,
   GraduationCap,
   HeartPulse,
+  History,
   Inbox,
   LayoutDashboard,
   Library,
@@ -71,6 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Au quotidien',
     items: [
       { href: '/checkin', label: 'Check-in', icon: ClipboardCheck },
+      { href: '/checkin/history', label: 'Historique', icon: History },
       { href: '/pre-trade/new', label: 'Pré-trade', icon: ShieldCheck },
       { href: '/track', label: 'Habitudes', icon: Waves },
       { href: '/journal', label: 'Journal', icon: BookOpen },
@@ -132,13 +134,34 @@ export const BOTTOM_NAV: NavItem[] = [
 ];
 
 /**
+ * Toutes les destinations de nav (groupes sidebar + bottom-nav), aplaties une
+ * fois. Sert à départager deux items dont l'un préfixe l'autre (`/checkin` vs
+ * `/checkin/history`) : sur un sous-chemin, seul le plus spécifique s'allume.
+ */
+const ALL_NAV_HREFS: string[] = [
+  ...NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href)),
+  ...BOTTOM_NAV.map((i) => i.href),
+];
+
+/**
  * Un item est actif si le chemin courant l'égale, OU en est un sous-chemin de
  * segment (`/journal` actif sur `/journal/123`), MAIS `/dashboard` reste exact
  * pour ne pas s'allumer partout. Évite le piège substring (`/track` vs
  * `/tracking`) en exigeant une frontière `/`.
+ *
+ * Le plus spécifique gagne : un match par préfixe (`/checkin` sur
+ * `/checkin/history`) est neutralisé si une autre entrée de nav, plus profonde,
+ * matche aussi le chemin (ici `/checkin/history` exact) — un seul item allumé.
  */
 export function isNavItemActive(pathname: string, href: string): boolean {
   if (pathname === href) return true;
   if (href === '/dashboard') return false;
-  return pathname.startsWith(`${href}/`);
+  if (!pathname.startsWith(`${href}/`)) return false;
+  const supersededByDeeper = ALL_NAV_HREFS.some(
+    (other) =>
+      other.length > href.length &&
+      other.startsWith(`${href}/`) &&
+      (pathname === other || pathname.startsWith(`${other}/`)),
+  );
+  return !supersededByDeeper;
 }

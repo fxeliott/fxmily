@@ -172,7 +172,7 @@ export function TradeDetailView({
           ) : null}
           {trade.realizedRSource === 'estimated' ? (
             <p className="t-cap mt-2 text-[var(--t-4)]">
-              Valeur estimée — fournir le stop-loss au moment de l&apos;entrée permet un R exact.
+              Valeur estimée, fournir le stop-loss au moment de l&apos;entrée permet un R exact.
             </p>
           ) : null}
         </Card>

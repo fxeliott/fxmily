@@ -7,6 +7,7 @@ import type { ZodError } from 'zod';
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
 import {
+  CheckinBackfillJustificationRequiredError,
   CheckinDateOutOfWindowError,
   submitEveningCheckin,
   submitMorningCheckin,
@@ -76,6 +77,8 @@ export async function submitMorningCheckinAction(
     moodScore: getString(formData, 'moodScore'),
     intention: getString(formData, 'intention'),
     emotionTags: getStringArray(formData, 'emotionTags'),
+    // F7 — optional rattrapage reason (required-when-backfill enforced service-side).
+    lateJustification: getString(formData, 'lateJustification'),
   };
 
   const parsed = morningCheckinSchema.safeParse(raw);
@@ -91,7 +94,12 @@ export async function submitMorningCheckinAction(
   // signals BEFORE persisting. Pure + non-blocking: we ALWAYS persist, then
   // surface a calm resource banner on the redirect (never silent-skip member
   // input). Numeric/structured fields are never scanned.
-  const crisis = detectCrisis(buildCheckinCrisisCorpus({ intention: parsed.data.intention }));
+  const crisis = detectCrisis(
+    buildCheckinCrisisCorpus({
+      intention: parsed.data.intention,
+      lateJustification: parsed.data.lateJustification,
+    }),
+  );
   const crisisMatchedLabels = crisis.matches.map((m) => m.label);
 
   try {
@@ -145,6 +153,16 @@ export async function submitMorningCheckinAction(
         fieldErrors: { date: 'Date hors fenêtre autorisée pour ton fuseau.' },
       };
     }
+    // F7 — a past-day (rattrapage) fill needs a justification. Surface it inline.
+    if (err instanceof CheckinBackfillJustificationRequiredError) {
+      return {
+        ok: false,
+        error: 'invalid_input',
+        fieldErrors: {
+          lateJustification: 'Explique en une phrase pourquoi tu remplis ce jour en retard.',
+        },
+      };
+    }
     const code =
       err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
         ? err.code
@@ -154,6 +172,7 @@ export async function submitMorningCheckinAction(
   }
 
   revalidatePath('/checkin');
+  revalidatePath('/checkin/history');
   revalidatePath('/dashboard');
   scheduleScoreRecompute(
     session.user.id,
@@ -200,6 +219,8 @@ export async function submitEveningCheckinAction(
     emotionTags: getStringArray(formData, 'emotionTags'),
     journalNote: getString(formData, 'journalNote'),
     gratitudeItems: getStringArray(formData, 'gratitudeItems'),
+    // F7 — optional rattrapage reason (required-when-backfill enforced service-side).
+    lateJustification: getString(formData, 'lateJustification'),
   };
 
   const parsed = eveningCheckinSchema.safeParse(raw);
@@ -219,6 +240,7 @@ export async function submitEveningCheckinAction(
     buildCheckinCrisisCorpus({
       journalNote: parsed.data.journalNote,
       gratitudeItems: parsed.data.gratitudeItems,
+      lateJustification: parsed.data.lateJustification,
     }),
   );
   const crisisMatchedLabels = crisis.matches.map((m) => m.label);
@@ -275,6 +297,16 @@ export async function submitEveningCheckinAction(
         fieldErrors: { date: 'Date hors fenêtre autorisée pour ton fuseau.' },
       };
     }
+    // F7 — a past-day (rattrapage) fill needs a justification. Surface it inline.
+    if (err instanceof CheckinBackfillJustificationRequiredError) {
+      return {
+        ok: false,
+        error: 'invalid_input',
+        fieldErrors: {
+          lateJustification: 'Explique en une phrase pourquoi tu remplis ce jour en retard.',
+        },
+      };
+    }
     const code =
       err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
         ? err.code
@@ -284,6 +316,7 @@ export async function submitEveningCheckinAction(
   }
 
   revalidatePath('/checkin');
+  revalidatePath('/checkin/history');
   revalidatePath('/dashboard');
   scheduleScoreRecompute(
     session.user.id,

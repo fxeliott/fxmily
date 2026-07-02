@@ -73,7 +73,7 @@ function goNoGoMessage(state: SeanceGoNoGoActionState | null): string | null {
     case 'no_rewind':
       return 'Une séance déjà tenue ne peut pas revenir à « prévue ». Tu peux l’annuler.';
     case 'invalid_input':
-      return 'Saisie invalide — vérifie la date, le créneau et l’heure.';
+      return 'Saisie invalide, vérifie la date, le créneau et l’heure.';
     case 'forbidden':
       return 'Action réservée à l’admin.';
     case 'unauthorized':
@@ -85,7 +85,7 @@ function goNoGoMessage(state: SeanceGoNoGoActionState | null): string | null {
 
 function regenMessage(state: SeanceRegenerateActionState | null): string | null {
   if (!state) return null;
-  if (state.ok) return 'Régénération demandée — le pipeline reprendra la rédaction.';
+  if (state.ok) return 'Régénération demandée, le pipeline reprendra la rédaction.';
   switch (state.error) {
     case 'not_done':
       return 'Seule une séance tenue peut être régénérée.';
@@ -236,7 +236,7 @@ export function SeanceAdminCell({ cell }: { cell: AdminSeanceCell }) {
               rows={2}
               maxLength={280}
               defaultValue={cell.cancelReason ?? ''}
-              placeholder="Pas de séance ce créneau — indisponibilité."
+              placeholder="Pas de séance ce créneau, indisponibilité."
               className="rounded-control border border-[var(--b-default)] bg-[var(--bg-1)] px-2 py-1.5 text-[12px] text-[var(--t-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
             />
           </div>

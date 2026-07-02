@@ -85,7 +85,7 @@ export function EvolutionTraceCard({
             Tes micro-objectifs dans le temps
           </h2>
           <p className="t-body leading-[1.5] text-[var(--t-2)]">
-            Chaque boucle ouverte puis refermée — une trace honnête de ta progression mentale.
+            Chaque boucle ouverte puis refermée, une trace honnête de ta progression mentale.
           </p>
         </div>
         <span

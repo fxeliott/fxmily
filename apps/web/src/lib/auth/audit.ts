@@ -335,6 +335,11 @@ export type AuditAction =
   // The admin slugs (`meeting.generated`, `admin.meeting.cancelled`) follow
   // in J-M3.
   | 'meeting.attendance.declared'
+  // F4 — the member EXPLICITLY declared "je n'ai pas pu y assister" for one past
+  // slot (`declareMeetingAbsenceAction`). PII-FREE metadata `{meetingId}` ONLY:
+  // an absence carries no mode/content, and is NEVER a completion (posture §2 +
+  // §31.2 — honest, calm data that can't inflate the rate/engagement).
+  | 'meeting.attendance.absent'
   // V1.7 §30 J-M3 — meeting admin surface (cron generation + slot cancel).
   // `meeting.generated` is the `generate-meetings` cron heartbeat: ONE row per
   // scan carrying `{generated, skipped, ranAt}` (counts + timestamp only —

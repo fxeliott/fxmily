@@ -32,7 +32,7 @@ import { logAudit } from '@/lib/auth/audit';
 export const metadata: Metadata = {
   title: 'Santé métier · Admin',
   description:
-    'Vue cohorte de la chaîne métier — remplissage check-ins, écarts de vérité, présence réunions, mouvements de score.',
+    'Vue cohorte de la chaîne métier : remplissage check-ins, écarts de vérité, présence réunions, mouvements de score.',
 };
 export const dynamic = 'force-dynamic';
 
@@ -76,8 +76,8 @@ export default async function AdminHealthPage(): Promise<React.ReactElement> {
         </h1>
         <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
           Une lecture unique de la cohorte : remplissage des rituels, honnêteté &amp; écarts,
-          recoupements de présence et mouvements de score. Des faits, des comptes — jamais un
-          verdict ni un conseil de marché (posture §2). Calculé à {formatTime(overview.computedAt)}.
+          recoupements de présence et mouvements de score. Des faits, des comptes, jamais un verdict
+          ni un conseil de marché (posture §2). Calculé à {formatTime(overview.computedAt)}.
         </p>
       </header>
 

@@ -108,7 +108,7 @@ export function EmotionPicker({
                     disabled={isFormDisabled}
                     aria-pressed={isSelected}
                     aria-disabled={inert ? 'true' : undefined}
-                    aria-label={tag.hint ? `${tag.label} — ${tag.hint}` : tag.label}
+                    aria-label={tag.hint ? `${tag.label} · ${tag.hint}` : tag.label}
                     title={tag.hint}
                     className={cn(
                       // min-h-11 (44px) clears WCAG 2.5.5 + matches the audited

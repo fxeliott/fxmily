@@ -267,7 +267,7 @@ export function WeeklyReviewWizard() {
               <FreeTextStep
                 id="biggestWin"
                 label="Quelle a été ta plus grande victoire de process cette semaine ?"
-                hint={`Pas un P&L — un comportement. "J'ai respecté ma checklist sur EURUSD malgré la tentation."`}
+                hint={`Pas un P&L, un comportement. "J'ai respecté ma checklist sur EURUSD malgré la tentation."`}
                 value={draft.biggestWin}
                 onChange={(v) => update('biggestWin', v)}
                 error={errors?.biggestWin}
@@ -276,23 +276,23 @@ export function WeeklyReviewWizard() {
             ) : step === 2 ? (
               <FreeTextStep
                 id="biggestMistake"
-                label={`Ton plus grand piège — quel a été l'écart au plan ?`}
+                label={`Ton plus grand piège : quel a été l'écart au plan ?`}
                 hint="Pas une perte. Un dérapage de process. Sois précis, sans jugement."
                 value={draft.biggestMistake}
                 onChange={(v) => update('biggestMistake', v)}
                 error={errors?.biggestMistake}
-                placeholder="Le moment où tu as dévié — quand, pourquoi, comment tu l'as vu après…"
+                placeholder="Le moment où tu as dévié, quand, pourquoi, comment tu l'as vu après…"
               />
             ) : step === 3 ? (
               <FreeTextStep
                 id="bestPractice"
-                label={`Ce qui a marché — et comment tu l'as fait. (Optionnel)`}
+                label={`Ce qui a marché, et comment tu l'as fait. (Optionnel)`}
                 hint="Steenbarger 2025 reverse-journaling. Identifie ta force avant tes failles."
                 value={draft.bestPractice}
                 onChange={(v) => update('bestPractice', v)}
                 error={errors?.bestPractice}
                 optional
-                placeholder="Ce passage où tu as été aligné·e — qu'est-ce qui a fait la différence ?"
+                placeholder="Ce passage où tu as été aligné·e, qu'est-ce qui a fait la différence ?"
               />
             ) : (
               <DoubleTextStep
@@ -308,7 +308,7 @@ export function WeeklyReviewWizard() {
                 b={{
                   id: 'nextWeekFocus',
                   label: 'Ton focus pour la semaine qui vient',
-                  hint: 'Un seul objectif de process — concret, mesurable, sans P&L.',
+                  hint: 'Un seul objectif de process, concret, mesurable, sans P&L.',
                   value: draft.nextWeekFocus,
                   onChange: (v) => update('nextWeekFocus', v),
                   error: errors?.nextWeekFocus,
@@ -440,7 +440,7 @@ function StepWeekIntro({ weekStart }: { weekStart: string }) {
     <div className="flex flex-col gap-4">
       <p className="t-lead text-[var(--t-2)]">
         Pose le miroir sur les sept derniers jours.{' '}
-        <span className="text-[var(--t-1)]">Pas de P&amp;L</span>, pas d&apos;analyse de marché —
+        <span className="text-[var(--t-1)]">Pas de P&amp;L</span>, pas d&apos;analyse de marché,
         juste ton exécution.
       </p>
       <div className="glow-edge rounded-card-lg border bg-[var(--acc-dim)] p-4">

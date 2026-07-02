@@ -34,7 +34,7 @@ export function EndTrainingSessionButton({ sessionId }: { sessionId: string }) {
             ? 'Session introuvable.'
             : res.error === 'unauthorized'
               ? 'Session expirée.'
-              : 'Erreur inattendue — réessaie.',
+              : 'Erreur inattendue, réessaie.',
         );
       }
       // On success the page revalidates via the action.

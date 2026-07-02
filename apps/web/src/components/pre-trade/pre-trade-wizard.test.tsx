@@ -132,7 +132,7 @@ describe('PreTradeCheckWizard — recurring QCM multi-step UI (DoD#4)', () => {
 
     // Step 4 — Stop-loss: no more "Suivant", a disabled submit until answered.
     expect(screen.getByRole('heading', { name: /Ton stop-loss est défini/ })).toBeInTheDocument();
-    const submit = screen.getByRole('button', { name: /Prends ton temps — enregistrer/ });
+    const submit = screen.getByRole('button', { name: /Prends ton temps · enregistrer/ });
     expect(submit).toBeDisabled();
     fireEvent.click(screen.getByRole('radio', { name: 'Oui' }));
     expect(submit).toBeEnabled();

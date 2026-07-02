@@ -8,7 +8,7 @@ import { getMemberTradeAsAdmin } from '@/lib/admin/trades-service';
 import { logAudit } from '@/lib/auth/audit';
 
 export const metadata = {
-  title: 'Trade — vue admin',
+  title: 'Trade · vue admin',
 };
 
 export const dynamic = 'force-dynamic';

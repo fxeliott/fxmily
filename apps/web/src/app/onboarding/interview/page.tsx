@@ -86,7 +86,7 @@ export default async function OnboardingInterviewLandingPage() {
           Présentation de l&apos;entretien
         </h2>
         <p className="t-body text-[var(--t-2)]">
-          Cet entretien d&apos;onboarding sert à mieux te connaître — ton trading, ton profil
+          Cet entretien d&apos;onboarding sert à mieux te connaître : ton trading, ton profil
           mental, tes routines.{' '}
           <span className="text-[var(--t-1)]">
             Il n&apos;y a pas de bonne ni de mauvaise réponse.
@@ -96,8 +96,8 @@ export default async function OnboardingInterviewLandingPage() {
         </p>
         <p className="t-body text-[var(--t-2)]">
           Compte <span className="text-[var(--t-1)]">environ 30 minutes</span>, répartis sur une ou
-          deux sessions selon ton rythme. Tes réponses sont sauvegardées au fur et à mesure — tu
-          peux quitter et reprendre à tout moment. Sois honnête, pas idéaliste : la valeur de
+          deux sessions selon ton rythme. Tes réponses sont sauvegardées au fur et à mesure. Tu peux
+          quitter et reprendre à tout moment. Sois honnête, pas idéaliste : la valeur de
           l&apos;exercice dépend uniquement de ça.
         </p>
 
@@ -116,7 +116,7 @@ export default async function OnboardingInterviewLandingPage() {
               ·
             </span>
             <span>
-              <span className="font-semibold text-[var(--acc)]">3 phases</span> — échauffement, cœur
+              <span className="font-semibold text-[var(--acc)]">3 phases</span> : échauffement, cœur
               de l&apos;entretien, clôture réflexive.
             </span>
           </li>
@@ -125,7 +125,7 @@ export default async function OnboardingInterviewLandingPage() {
               ·
             </span>
             <span>
-              <span className="font-semibold text-[var(--acc)]">Confidentiel</span> — analyse IA
+              <span className="font-semibold text-[var(--acc)]">Confidentiel</span> : analyse IA
               locale (pas d&apos;API tierce), profil descriptif pour Eliott uniquement.
             </span>
           </li>

@@ -77,7 +77,7 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
               <strong className="text-[var(--t-1)]">B</strong>elief ·{' '}
               <strong className="text-[var(--t-1)]">C</strong>onséquence ·{' '}
               <strong className="text-[var(--t-1)]">D</strong>isputation. Cadre Ellis adapté au
-              trading — pas un substitut à un suivi clinique.
+              trading, pas un substitut à un suivi clinique.
             </p>
           </div>
 
@@ -135,7 +135,7 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
               <EmptyState
                 icon={Sparkles}
                 headline="Aucune réflexion enregistrée."
-                lead="La prochaine pensée éclair sera la bonne — le formulaire ci-dessus t'attend."
+                lead="La prochaine pensée éclair sera la bonne. Le formulaire ci-dessus t'attend."
               />
               <div className="flex justify-center pb-8">
                 <Link

@@ -163,12 +163,12 @@ function clearDraft() {
 function serverErrorMessage(state: CreateTrainingTradeActionState): string {
   switch (state.error) {
     case 'unauthorized':
-      return 'Session expirée — reconnecte-toi puis réessaie.';
+      return 'Session expirée, reconnecte-toi puis réessaie.';
     case 'invalid_input':
-      return 'Certains champs sont invalides — contrôle les étapes.';
+      return 'Certains champs sont invalides, contrôle les étapes.';
     case 'unknown':
     default:
-      return 'Erreur inattendue — réessaie dans un instant.';
+      return 'Erreur inattendue, réessaie dans un instant.';
   }
 }
 
@@ -356,7 +356,7 @@ export function TrainingFormWizard({
 
         <span className="t-eyebrow inline-flex w-fit items-center gap-1.5 text-[var(--cy)]">
           <GraduationCap className="h-3.5 w-3.5" strokeWidth={2} />
-          Mode entraînement — backtest isolé du réel
+          Mode entraînement · backtest isolé du réel
         </span>
 
         {sessionId ? (
@@ -594,8 +594,8 @@ function StepCapture({ draft, update, fieldErrors, disabled }: StepProps) {
   return (
     <div className="flex flex-col gap-3">
       <p className="t-body text-[var(--t-2)]">
-        Capture ton analyse TradingView (le setup que tu testes). Obligatoire — c&apos;est la base
-        de la correction.
+        Capture ton analyse TradingView (le setup que tu testes). Obligatoire, c&apos;est la base de
+        la correction.
       </p>
       <ScreenshotUploader
         kind="training-entry"
@@ -757,7 +757,7 @@ function StepResultat({ draft, update, fieldErrors, disabled }: StepProps) {
   return (
     <div className="flex flex-col gap-5">
       <p className="t-cap text-[var(--t-4)]">
-        Optionnel — tu peux enregistrer un backtest sans résultat (analyse seule) et le compléter
+        Optionnel, tu peux enregistrer un backtest sans résultat (analyse seule) et le compléter
         plus tard côté admin.
       </p>
       <fieldset className="flex flex-col gap-2">
@@ -831,7 +831,7 @@ function StepSysteme({ draft, update, fieldErrors, disabled }: StepProps) {
     <div className="flex flex-col gap-5">
       <p className="t-body text-[var(--t-2)]">
         As-tu respecté ton système / ton plan sur ce backtest ? (Le moteur ne juge jamais la qualité
-        de ton analyse — seulement si tu suis ton process.)
+        de ton analyse, seulement si tu suis ton process.)
       </p>
       <RadioGroup
         legend="Système respecté ?"
@@ -854,7 +854,7 @@ function StepChecklist({ draft, update, fieldErrors, disabled }: StepProps) {
   return (
     <div className="flex flex-col gap-5">
       <p className="t-body text-[var(--t-2)]">
-        Une checklist de discipline, item par item. Tout est optionnel — c&apos;est un miroir de ton
+        Une checklist de discipline, item par item. Tout est optionnel, c&apos;est un miroir de ton
         process, pas une note. Le moteur ne juge jamais ton analyse, seulement si tu suis ton plan.
       </p>
       {TRAINING_CHECKLIST_ITEMS.map((item) => (
@@ -889,7 +889,7 @@ function StepLecon({ draft, update, fieldErrors, disabled }: StepProps) {
       </label>
       <p id="lessonLearned-hint" className="t-cap text-[var(--t-4)]">
         Ce que ce backtest t&apos;a appris sur ton process. C&apos;est la régularité de cette
-        réflexion qui fait progresser — pas le résultat.
+        réflexion qui fait progresser, pas le résultat.
       </p>
       <textarea
         id="lessonLearned"

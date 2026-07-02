@@ -46,7 +46,7 @@ export function OnboardingProfileOverdueAlertEmail({
         <title>Profils d&apos;onboarding en attente · Fxmily</title>
       </Head>
       <Preview>
-        {`${overdueCount} profil${plural ? 's' : ''} d'onboarding en attente (promesse 24h dépassée) — lance le batch`}
+        {`${overdueCount} profil${plural ? 's' : ''} d'onboarding en attente (promesse 24h dépassée), lance le batch`}
       </Preview>
       <Body style={body}>
         <Container style={container}>
@@ -75,7 +75,7 @@ export function OnboardingProfileOverdueAlertEmail({
           </Text>
 
           <Section style={actionCard}>
-            <Text style={actionEyebrow}>À FAIRE — DEPUIS TON PC</Text>
+            <Text style={actionEyebrow}>À FAIRE · DEPUIS TON PC</Text>
             <Text style={actionStep}>
               <span style={dot}>·</span> Lance{' '}
               <span style={code}>bash ops/scripts/onboarding-batch-local.sh</span>.
@@ -99,11 +99,11 @@ export function OnboardingProfileOverdueAlertEmail({
           <Hr style={hr} />
 
           <Text style={footer}>
-            Rappel automatique de permanence — envoyé uniquement quand des profils d&apos;onboarding
+            Rappel automatique de permanence, envoyé uniquement quand des profils d&apos;onboarding
             sont en attente passé le délai de courtoisie. Aucun profil généré sur un serveur (le
             batch reste manuel, par sécurité du compte).
           </Text>
-          <Text style={footerSign}>— Fxmily ops</Text>
+          <Text style={footerSign}>Fxmily ops</Text>
         </Container>
 
         <Text style={legal}>Aucun conseil de marché. Cohorte privée. © 2026 Fxmily.</Text>

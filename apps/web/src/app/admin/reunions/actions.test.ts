@@ -303,6 +303,8 @@ describe('markPresenceAction — happy paths (PII-free audit)', () => {
     });
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/members/mem1');
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/reunions');
+    // F4 — the per-meeting roster must refresh after a mark.
+    expect(revalidatePathMock).toHaveBeenCalledWith('/admin/reunions/m1');
     expect(revalidatePathMock).toHaveBeenCalledWith('/admin/health');
   });
 

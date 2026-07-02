@@ -90,7 +90,7 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
             Un point hebdomadaire sur ton{' '}
             <strong className="text-[var(--t-1)]">état d&apos;esprit</strong> d&apos;athlète-trader
             (cadre Mark Douglas). Pas de bonne ni de mauvaise réponse, pas de P&amp;L, pas
-            d&apos;analyse de marché — c&apos;est un instrument de recul, totalement séparé de ton
+            d&apos;analyse de marché, c&apos;est un instrument de recul, totalement séparé de ton
             score et de ton edge.
           </p>
         </header>

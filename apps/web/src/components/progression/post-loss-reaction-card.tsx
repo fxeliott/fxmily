@@ -32,8 +32,8 @@ export function PostLossReactionCard({ reaction }: { reaction: PostLossReaction 
             <span className="t-eyebrow text-[var(--t-3)]">Réaction après une perte</span>
             <h3 className="text-[15px] font-semibold text-[var(--t-1)]">Reprendre après un SL</h3>
             <p className="t-cap leading-relaxed text-[var(--t-3)]">
-              Ce miroir s’affiche après quelques pertes clôturées. Il regarde ta réaction à chaud —
-              repars-tu le même jour, et en combien de temps — pas ton résultat.
+              Ce miroir s’affiche après quelques pertes clôturées. Il regarde ta réaction à chaud :
+              repars-tu le même jour, et en combien de temps, pas ton résultat.
             </p>
           </div>
         </div>
@@ -78,7 +78,7 @@ export function PostLossReactionCard({ reaction }: { reaction: PostLossReaction 
               Sur tes <strong className="text-[var(--t-1)]">{losses}</strong> pertes clôturées des{' '}
               {windowDays} derniers jours, tu n’as{' '}
               <strong className="text-[var(--t-1)]">jamais</strong> repris position le même jour. La
-              méthode est claire : un SL, et la journée s’arrête — tu la tiens.
+              méthode est claire : un SL, et la journée s’arrête, tu la tiens.
             </p>
           ) : (
             <p className="t-cap leading-relaxed text-[var(--t-2)]">

@@ -86,7 +86,7 @@ export function DashboardProgressBridge({ view }: { view: ProcessObjectivesView 
             <p className="t-cap text-[var(--t-2)]">
               Sur quoi bosser :{' '}
               <strong className="font-semibold text-[var(--t-1)]">{focus.label}</strong>
-              <span className="text-[var(--t-3)]"> — {focus.hint}</span>
+              <span className="text-[var(--t-3)]"> · {focus.hint}</span>
             </p>
           ) : (
             <p className="t-cap text-[var(--t-2)]">Toutes tes dimensions tiennent le cap.</p>

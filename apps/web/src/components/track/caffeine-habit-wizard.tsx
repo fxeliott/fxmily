@@ -248,9 +248,9 @@ export function CaffeineHabitWizard() {
       {serverState?.ok === false ? (
         <Alert tone="danger" role="alert">
           {serverState.error === 'unauthorized' && "Tu n'es plus connecté(e). Recharge la page."}
-          {serverState.error === 'invalid_input' && 'Vérifie les champs — un détail ne passe pas.'}
+          {serverState.error === 'invalid_input' && 'Vérifie les champs, un détail ne passe pas.'}
           {serverState.error === 'persist_failed' &&
-            'Le serveur a hoqueté — réessaie dans un instant.'}
+            'Le serveur a hoqueté, réessaie dans un instant.'}
         </Alert>
       ) : null}
 

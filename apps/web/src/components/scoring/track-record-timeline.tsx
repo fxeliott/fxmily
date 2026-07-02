@@ -46,7 +46,7 @@ export function TrackRecordTimeline({ items }: { items: readonly TrackRecordTime
   if (items.length === 0) {
     return (
       <p className="t-body max-w-prose text-[var(--t-3)]">
-        Ta frise apparaît dès ton premier trade clôturé — chaque trade y reliera sa photo
+        Ta frise apparaît dès ton premier trade clôturé, chaque trade y reliera sa photo
         d&apos;analyse, ton respect du plan et l&apos;écart de vérité associé.
       </p>
     );

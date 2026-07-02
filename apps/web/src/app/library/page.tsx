@@ -118,7 +118,7 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
           <p className="t-lead max-w-2xl text-[var(--t-2)]">
             Fiches inspirées de <em>Trading in the Zone</em> et <em>The Disciplined Trader</em> de
             Mark Douglas. Tu reçois automatiquement les fiches qui correspondent à ton état
-            comportemental — et tu peux parcourir tout le catalogue à ta guise.
+            comportemental, et tu peux parcourir tout le catalogue à ta guise.
           </p>
           <DrawnRule className="mt-1 max-w-[220px]" />
         </header>

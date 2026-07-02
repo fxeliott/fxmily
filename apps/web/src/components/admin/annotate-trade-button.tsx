@@ -147,7 +147,7 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               maxLength={ANNOTATION_COMMENT_MAX + 256 /* let server enforce hard cap */}
-              placeholder="Ex. R:R 1:2 prévu, mais sizing doublé après 2 wins — attention au pattern over-confidence (cf. fiche Douglas « arrogance précède la chute »)."
+              placeholder="Ex. R:R 1:2 prévu, mais sizing doublé après 2 wins, attention au pattern over-confidence (cf. fiche Douglas « arrogance précède la chute »)."
               className="rounded-card resize-y border border-[var(--b-default)] bg-[var(--bg)] px-3 py-2.5 font-sans text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
               aria-invalid={state?.fieldErrors?.comment ? 'true' : undefined}
               aria-describedby={
@@ -189,7 +189,7 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
               onStatusChange={(status) => setIsUploading(status === 'uploading')}
             />
             <span className="t-cap text-[var(--t-4)]">
-              Vidéo Zoom (jusqu&apos;à 500 Mo) — prochain jalon, dès que R2 sera configuré.
+              Vidéo Zoom (jusqu&apos;à 500 Mo) · prochain jalon, dès que R2 sera configuré.
             </span>
           </div>
 
@@ -250,7 +250,7 @@ function errorMessage(code: string): string {
     case 'forbidden':
       return 'Action réservée à l’admin.';
     case 'trade_not_found':
-      return 'Trade introuvable — la page a peut-être expiré.';
+      return 'Trade introuvable, la page a peut-être expiré.';
     default:
       return 'Échec de l’envoi. Réessaie dans un instant.';
   }

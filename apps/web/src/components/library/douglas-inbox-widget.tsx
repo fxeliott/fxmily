@@ -59,8 +59,8 @@ export async function DouglasInboxWidget({ userId }: DouglasInboxWidgetProps) {
       {recent.length === 0 ? (
         <div className="flex flex-col gap-3">
           <p className="t-body text-[var(--t-3)]">
-            Aucune fiche poussée pour l&apos;instant. Continue ton process — le coaching arrive
-            quand le système détecte un pattern (3 pertes, FOMO, etc.).
+            Aucune fiche poussée pour l&apos;instant. Continue ton process, le coaching arrive quand
+            le système détecte un pattern (3 pertes, FOMO, etc.).
           </p>
           <Link
             href="/library"

@@ -117,7 +117,7 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
             </span>
             <Pill tone={tone}>{CATEGORY_LABEL[card.category]}</Pill>
             {card.hatClass === 'black' && (
-              <Pill tone="warn" dot aria-label="Cadre d'urgence — fiche tilt management">
+              <Pill tone="warn" dot aria-label="Cadre d'urgence · fiche tilt management">
                 Cadre d&apos;urgence
               </Pill>
             )}
@@ -150,8 +150,8 @@ export default async function CardReaderPage({ params }: CardReaderPageProps) {
                 <BookOpen className="h-3 w-3" aria-hidden />
                 <span>
                   {isParaphraseQuote(card.quoteSourceChapter)
-                    ? `D'après Mark Douglas — ${cleanQuoteSource(card.quoteSourceChapter)}`
-                    : `Mark Douglas — ${card.quoteSourceChapter}`}
+                    ? `D'après Mark Douglas · ${cleanQuoteSource(card.quoteSourceChapter)}`
+                    : `Mark Douglas · ${card.quoteSourceChapter}`}
                 </span>
               </figcaption>
             </figure>

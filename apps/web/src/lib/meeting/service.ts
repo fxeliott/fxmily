@@ -4,6 +4,7 @@ import { parseLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import { Prisma } from '@/generated/prisma/client';
 import type {
+  MeetingAbsenceDeclarationInput,
   MeetingAttendanceDeclarationInput,
   MeetingAttendanceModeName,
 } from '@/lib/schemas/meeting';
@@ -166,7 +167,7 @@ export class MeetingNotDeclarableError extends Error {
 }
 
 /** Display state of one meeting for the member (neutral, anti Black-Hat). */
-export type MeetingDisplayState = 'complete' | 'partielle' | 'en_attente' | 'cancelled';
+export type MeetingDisplayState = 'complete' | 'partielle' | 'en_attente' | 'absent' | 'cancelled';
 
 /** One meeting row as the `/reunions` page consumes it (serialised). */
 export interface MemberMeetingView {
@@ -178,12 +179,19 @@ export interface MemberMeetingView {
   /**
    * `complete` = mode set AND content read · `partielle` = one of the two ·
    * `en_attente` = not declared yet (rattrapable, NEVER "absent honteux") ·
+   * `absent` = the member EXPLICITLY declared they couldn't attend (F4, calm) ·
    * `cancelled` = admin cancelled (greyed, non-declarable).
    */
   displayState: MeetingDisplayState;
   /** Current declaration (for form prefill). Null until declared. */
   attendanceMode: MeetingAttendanceModeName | null;
   contentReviewed: boolean;
+  /**
+   * F4 — the member EXPLICITLY declared they couldn't attend. Mutually exclusive
+   * with a presence declaration (declaring present clears it). Surfaced so the
+   * form reflects the current choice; never punitive (§31.2).
+   */
+  memberDeclaredAbsent: boolean;
   /** Whether the member can (re-)declare: only past, non-cancelled, in-window. */
   declarable: boolean;
   /**
@@ -238,7 +246,12 @@ export async function listMeetingsForMember(
       status: true,
       attendances: {
         where: { userId },
-        select: { attendanceMode: true, contentReviewed: true, adminPresent: true },
+        select: {
+          attendanceMode: true,
+          contentReviewed: true,
+          adminPresent: true,
+          memberDeclaredAbsent: true,
+        },
         take: 1,
       },
     },
@@ -252,6 +265,7 @@ export async function listMeetingsForMember(
     const attendanceMode = (att?.attendanceMode ?? null) as MeetingAttendanceModeName | null;
     const contentReviewed = att?.contentReviewed ?? false;
     const adminPresent = att?.adminPresent ?? null;
+    const memberDeclaredAbsent = att?.memberDeclaredAbsent ?? false;
     const complete = attendanceMode !== null && contentReviewed === true;
     const declaredSomething = attendanceMode !== null || contentReviewed;
     const gap = computeAttendanceGap(adminPresent, complete, declaredSomething);
@@ -263,6 +277,9 @@ export async function listMeetingsForMember(
       displayState = 'complete';
     } else if (declaredSomething) {
       displayState = 'partielle';
+    } else if (memberDeclaredAbsent) {
+      // F4 — an EXPLICIT "je n'ai pas pu y assister" (never a red failure §31.2).
+      displayState = 'absent';
     } else {
       displayState = 'en_attente';
     }
@@ -282,6 +299,7 @@ export async function listMeetingsForMember(
       displayState,
       attendanceMode,
       contentReviewed,
+      memberDeclaredAbsent,
       declarable: m.status === 'scheduled',
       adminPresent,
       gap,
@@ -346,11 +364,15 @@ export async function declareMeetingAttendance(
       userId,
       attendanceMode: input.attendanceMode,
       contentReviewed: input.contentReviewed,
+      // F4 — declaring a presence clears any prior explicit "absent" (mutually
+      // exclusive). Create default is already false; set on update below.
+      memberDeclaredAbsent: false,
       declaredAt: now,
     },
     update: {
       attendanceMode: input.attendanceMode,
       contentReviewed: input.contentReviewed,
+      memberDeclaredAbsent: false,
       declaredAt: now,
     },
     select: { id: true, meetingId: true, attendanceMode: true, contentReviewed: true },
@@ -362,6 +384,69 @@ export async function declareMeetingAttendance(
     attendanceMode: row.attendanceMode as MeetingAttendanceModeName,
     contentReviewed: row.contentReviewed,
   };
+}
+
+/** Result of a successful absence declaration (serialised, for the audit log). */
+export interface DeclaredMeetingAbsence {
+  id: string;
+  meetingId: string;
+  memberDeclaredAbsent: true;
+}
+
+/**
+ * F4 — the member EXPLICITLY declares they couldn't attend one past meeting
+ * ("je n'ai pas pu y assister"). Same HARD GUARD as
+ * {@link declareMeetingAttendance} (unknown / cancelled / future / out-of-window
+ * → {@link MeetingNotDeclarableError}).
+ *
+ * Upserts on `(meetingId, userId)`: sets `memberDeclaredAbsent = true` and CLEARS
+ * any prior self-report (`attendanceMode = null`, `contentReviewed = false`) so
+ * the two are mutually exclusive — a member who first said "present" then "absent"
+ * ends up cleanly absent. Never touches the `adminPresent` family (the admin
+ * cross-check stays independent, §30.8). An absence is NEVER a completion — it
+ * cannot inflate the rate/engagement (posture §31.2 — calm, honest data only).
+ */
+export async function declareMeetingAbsence(
+  userId: string,
+  input: MeetingAbsenceDeclarationInput,
+  now: Date = new Date(),
+): Promise<DeclaredMeetingAbsence> {
+  const [meeting, user] = await Promise.all([
+    db.meeting.findUnique({
+      where: { id: input.meetingId },
+      select: { id: true, status: true, scheduledAt: true },
+    }),
+    db.user.findUnique({ where: { id: userId }, select: { joinedAt: true } }),
+  ]);
+
+  if (!meeting || !user) throw new MeetingNotDeclarableError('not_found');
+  if (meeting.status === 'cancelled') throw new MeetingNotDeclarableError('cancelled');
+  if (meeting.scheduledAt.getTime() > now.getTime()) {
+    throw new MeetingNotDeclarableError('future');
+  }
+  const fromUtc = meetingWindowStart(now, user.joinedAt);
+  if (meeting.scheduledAt.getTime() < fromUtc.getTime()) {
+    throw new MeetingNotDeclarableError('out_of_window');
+  }
+
+  const row = await db.meetingAttendance.upsert({
+    where: { meetingId_userId: { meetingId: input.meetingId, userId } },
+    create: {
+      meetingId: input.meetingId,
+      userId,
+      memberDeclaredAbsent: true,
+      declaredAt: now,
+    },
+    update: {
+      memberDeclaredAbsent: true,
+      attendanceMode: null,
+      contentReviewed: false,
+      declaredAt: now,
+    },
+    select: { id: true, meetingId: true },
+  });
+
+  return { id: row.id, meetingId: row.meetingId, memberDeclaredAbsent: true };
 }
 
 // Session 5 (guidage quotidien) — "réunion aujourd'hui" ----------------------
@@ -805,4 +890,151 @@ export async function listMeetingAttendanceForMember(
   });
 
   return { meetings, rate: computeMeetingAttendanceRate(scheduledCount, completedCount) };
+}
+
+// F4 — per-meeting roster (all members for ONE meeting, admin markable) --------
+
+/** One member's row in the per-meeting roster (admin, read-only + markable). */
+export interface MeetingRosterMemberView {
+  memberId: string;
+  /** "Prénom Nom" (falls back to the email when the profile has no name). */
+  displayName: string;
+  /**
+   * Admin-viewed attendance state of THIS member on THIS meeting (same machine
+   * as {@link AdminMemberMeetingView}): `complete` · `partielle` · `absent`
+   * (nothing complete) · `cancelled` (slot greyed).
+   */
+  state: AdminMeetingAttendanceState;
+  /**
+   * F4 — the member EXPLICITLY declared "je n'ai pas pu y assister". Surfaced as
+   * a distinct badge from a SILENT absence so the admin (and the J2 AI) can tell
+   * an owned absence apart from a non-declaration — the extra data the F4 vision
+   * asks to accumulate, and the honest counterpart to the admin↔membre {@link gap}.
+   */
+  memberDeclaredAbsent: boolean;
+  /** Eliott's presence mark for this member (null = not marked yet). */
+  adminPresent: boolean | null;
+  /** S10 §30.8 — cross-check verdict admin↔membre (`none` unless an écart). */
+  gap: AttendanceGap;
+}
+
+/** The whole per-meeting roster the `/admin/reunions/[id]` page consumes. */
+export interface MeetingRosterView {
+  meeting: {
+    id: string;
+    slot: MeetingSlotName;
+    scheduledAt: string;
+    status: 'scheduled' | 'cancelled';
+    isPast: boolean;
+  };
+  /** Every ACTIVE member, name-sorted, with their per-meeting attendance state. */
+  members: MeetingRosterMemberView[];
+  /**
+   * Count-only aggregate (posture §2, neutral): members with an unresolved
+   * admin↔membre écart on this slot. 0 unless Eliott has marked presence.
+   */
+  gapCount: number;
+}
+
+/**
+ * F4 — the INVERSE of {@link listMeetingAttendanceForMember}: for ONE meeting,
+ * every active member with their attendance state, so the admin can tick a whole
+ * cohort present/absent on a single sheet ("qui était présent", détecter les
+ * écarts, accumuler la data déclaré-vs-constaté).
+ *
+ * Starts from the active-member set (NOT from attendance rows) so a member who
+ * declared NOTHING still appears (state `absent`, markable) — the roster is
+ * exhaustive, never only the self-reporters. Left-joins each member's single
+ * attendance row for this meeting. Returns `null` for an unknown meeting id (the
+ * page renders a 404). Admin-scoped: member identities are shown (like
+ * `/admin/members`), but the write path's audit stays PII-free (`markPresenceAction`).
+ *
+ * Reuses {@link computeAttendanceGap} verbatim (same cross-check as every other
+ * view) — a cancelled slot yields `gap: 'none'` for all (no cross-check on a slot
+ * Eliott didn't run; `markMeetingPresence` refuses it anyway). Posture §2 / anti
+ * Black-Hat §30.7: counts + booleans, never any Ichor content, tone is the UI's.
+ */
+export async function listMeetingRosterForAdmin(
+  meetingId: string,
+  now: Date = new Date(),
+): Promise<MeetingRosterView | null> {
+  const meeting = await db.meeting.findUnique({
+    where: { id: meetingId },
+    select: { id: true, slot: true, scheduledAt: true, status: true },
+  });
+  if (!meeting) return null;
+
+  const cancelled = meeting.status === 'cancelled';
+
+  const members = await db.user.findMany({
+    where: { role: 'member', status: 'active' },
+    orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }, { email: 'asc' }],
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      meetingAttendances: {
+        where: { meetingId },
+        select: {
+          attendanceMode: true,
+          contentReviewed: true,
+          adminPresent: true,
+          memberDeclaredAbsent: true,
+        },
+        take: 1,
+      },
+    },
+  });
+
+  let gapCount = 0;
+
+  const roster: MeetingRosterMemberView[] = members.map((u) => {
+    const att = u.meetingAttendances[0] ?? null;
+    const attendanceMode = att?.attendanceMode ?? null;
+    const contentReviewed = att?.contentReviewed ?? false;
+    const adminPresent = att?.adminPresent ?? null;
+    const memberDeclaredAbsent = att?.memberDeclaredAbsent ?? false;
+    const complete = attendanceMode !== null && contentReviewed === true;
+    const declaredSomething = attendanceMode !== null || contentReviewed;
+    // No cross-check on a cancelled slot (mirrors markMeetingPresence's refusal).
+    const gap = cancelled
+      ? 'none'
+      : computeAttendanceGap(adminPresent, complete, declaredSomething);
+    if (gap !== 'none') gapCount += 1;
+
+    let state: AdminMeetingAttendanceState;
+    if (cancelled) {
+      state = 'cancelled';
+    } else if (complete) {
+      state = 'complete';
+    } else if (declaredSomething) {
+      state = 'partielle';
+    } else {
+      state = 'absent';
+    }
+
+    const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+
+    return {
+      memberId: u.id,
+      displayName: fullName.length > 0 ? fullName : u.email,
+      state,
+      memberDeclaredAbsent,
+      adminPresent,
+      gap,
+    };
+  });
+
+  return {
+    meeting: {
+      id: meeting.id,
+      slot: meeting.slot as MeetingSlotName,
+      scheduledAt: meeting.scheduledAt.toISOString(),
+      status: meeting.status as 'scheduled' | 'cancelled',
+      isPast: meeting.scheduledAt.getTime() < now.getTime(),
+    },
+    members: roster,
+    gapCount,
+  };
 }

@@ -198,7 +198,7 @@ describe('rejectAccessRequestAction', () => {
     const result = await rejectAccessRequestAction('ar-1');
 
     expect(result.ok).toBe(true);
-    expect(result.message).toBe('Demande refusée — email envoyé.');
+    expect(result.message).toBe('Demande refusée, email envoyé.');
     expect(rejectMock).toHaveBeenCalledWith('ar-1', 'admin-1');
     // §26.4 — refusal email goes to the requester with their first name.
     expect(sendRejectedEmailMock).toHaveBeenCalledWith({

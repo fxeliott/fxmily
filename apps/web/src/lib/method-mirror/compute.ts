@@ -153,7 +153,7 @@ export function computeMethodMirror(
     {
       key: 'oneADay',
       label: 'Un trade par jour',
-      hint: 'Les jours où tu t’es tenu à un seul trade — un seul risque ouvert.',
+      hint: 'Les jours où tu t’es tenu à un seul trade, un seul risque ouvert.',
       good: compliantDays,
       total: tradingDays,
       rate: rate(compliantDays, tradingDays),
@@ -161,7 +161,7 @@ export function computeMethodMirror(
     {
       key: 'cut',
       label: 'Coupure 20h',
-      hint: 'Tes clôtures avant 20h, même journée — la nuit n’est pas ta session.',
+      hint: 'Tes clôtures avant 20h, même journée : la nuit n’est pas ta session.',
       good: cutRespected,
       total: closed.length,
       rate: rate(cutRespected, closed.length),

@@ -43,11 +43,11 @@ const TRAINING_PAIRS = ['EURUSD', 'GBPUSD', 'XAUUSD', 'NAS100', 'US30'] as const
 const TIMEFRAMES = ['M5', 'M15', 'H1', 'H4'] as const;
 
 const SESSION_LABELS = [
-  'Backtest EURUSD — range asiatique',
-  'Replay GBPUSD — cassures de Londres',
-  'Backtest XAUUSD — pullbacks NY',
-  'Replay NAS100 — ouverture US',
-  'Backtest US30 — continuation H1',
+  'Backtest EURUSD · range asiatique',
+  'Replay GBPUSD · cassures de Londres',
+  'Backtest XAUUSD · pullbacks NY',
+  'Replay NAS100 · ouverture US',
+  'Backtest US30 · continuation H1',
 ] as const;
 
 const SESSION_NOTES = [
@@ -60,11 +60,11 @@ const SESSION_NOTES = [
 const LESSONS = [
   'Attendre la confirmation au lieu d’anticiper m’aurait évité une entrée prématurée.',
   'Mon stop était au bon endroit ; j’ai tenu le plan sans le déplacer.',
-  'J’ai forcé un trade hors zone — anything can happen, le geste doit rester propre.',
+  'J’ai forcé un trade hors zone. Anything can happen, le geste doit rester propre.',
   'Sortie au TP comme prévu : la patience sur ce setup a payé le process.',
   'Risque défini avant l’entrée, aucune déviation impulsive : bon réflexe à ancrer.',
   'J’ai coupé trop tôt par peur ; le plan disait de laisser courir.',
-  'Setup B traité comme un A — rester sélectif sur la qualité.',
+  'Setup B traité comme un A, rester sélectif sur la qualité.',
   'Bon repérage de la structure, mais j’ai sur-tradé la séance. Réduire le volume.',
 ] as const;
 

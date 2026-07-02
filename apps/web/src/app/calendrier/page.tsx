@@ -73,7 +73,7 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
           <span className="t-eyebrow-lg text-[var(--acc)]">Première étape</span>
           <h2 className="t-h2 text-[var(--t-1)]">Organise ta semaine</h2>
           <p className="t-body max-w-prose text-[var(--t-2)]">
-            Réponds à un court questionnaire — ta disponibilité, ton énergie, tes objectifs de
+            Réponds à un court questionnaire : ta disponibilité, ton énergie, tes objectifs de
             pratique. Claude prépare ensuite ton calendrier de la semaine. Aucun avis sur le marché
             : on organise ton temps.
           </p>
@@ -99,7 +99,7 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
             <h2 className="t-h2 text-[var(--t-1)]">Ton calendrier se prépare</h2>
             <p className="t-body max-w-prose text-[var(--t-2)]">
               Ton organisation est enregistrée. Ton calendrier de la semaine sera prêt en début de
-              semaine — reviens à ce moment-là, sans précipitation.
+              semaine. Reviens à ce moment-là, sans précipitation.
             </p>
           </div>
         </div>
@@ -184,7 +184,7 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
           </div>
 
           <p className="t-body leading-[1.6] text-[var(--t-2)]">
-            Un plan calme de ton temps de pratique — sessions, entraînement, psychologie, réunions,
+            Un plan calme de ton temps de pratique : sessions, entraînement, psychologie, réunions,
             repos. Aucune analyse de marché, aucun conseil de trade : seulement comment organiser ta
             semaine.
           </p>

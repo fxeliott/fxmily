@@ -50,9 +50,9 @@ export function CancelDeletionForm(): React.ReactElement {
         className="mt-2 min-h-[1.25rem] text-xs text-[var(--bad)]"
       >
         {errorCode === 'not_pending'
-          ? 'Aucune suppression en attente — la fenêtre de 24h est peut-être expirée.'
+          ? 'Aucune suppression en attente, la fenêtre de 24h est peut-être expirée.'
           : errorCode === 'unauthorized'
-            ? 'Session expirée — recharge la page.'
+            ? 'Session expirée. Recharge la page.'
             : null}
       </div>
     </form>

@@ -57,7 +57,7 @@ export function PasswordChangedEmail({ firstName, forgotUrl }: PasswordChangedEm
 
           <Text style={paragraph}>
             Ton mot de passe Fxmily vient d&apos;être modifié. Si c&apos;est bien toi, tu n&apos;as
-            rien à faire — tu peux te connecter avec ton nouveau mot de passe.
+            rien à faire, tu peux te connecter avec ton nouveau mot de passe.
           </Text>
 
           <Text style={paragraph}>
@@ -88,7 +88,7 @@ export function PasswordChangedEmail({ firstName, forgotUrl }: PasswordChangedEm
             pour qu&apos;on bloque l&apos;accès le temps de tout remettre en ordre.
           </Text>
 
-          <Text style={footerSign}>— L&apos;équipe Fxmily</Text>
+          <Text style={footerSign}>L&apos;équipe Fxmily</Text>
         </Container>
 
         <Text style={legal}>

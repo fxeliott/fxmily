@@ -37,7 +37,7 @@ export function InvitationEmail({ inviteUrl, invitedByName, expiresInDays }: Inv
       <Head>
         <title>Activer ton compte Fxmily</title>
       </Head>
-      <Preview>Tu es invité·e à rejoindre Fxmily — la discipline avant le marché</Preview>
+      <Preview>Tu es invité·e à rejoindre Fxmily, la discipline avant le marché</Preview>
       <Body style={body}>
         <Container style={container}>
           {/* Brand mark */}
@@ -56,7 +56,7 @@ export function InvitationEmail({ inviteUrl, invitedByName, expiresInDays }: Inv
           </Text>
 
           <Text style={paragraph}>
-            Fxmily mesure ton plan, ta discipline, ton mental — pas les bougies. Le seul journal qui
+            Fxmily mesure ton plan, ta discipline, ton mental, pas les bougies. Le seul journal qui
             ignore le marché.
           </Text>
 
@@ -111,10 +111,10 @@ export function InvitationEmail({ inviteUrl, invitedByName, expiresInDays }: Inv
           <Text style={footer}>
             Ce lien expire dans {expiresInDays} jour{expiresInDays > 1 ? 's' : ''} et ne peut servir
             qu&apos;une seule fois. Si tu n&apos;as pas demandé cette invitation, tu peux ignorer
-            cet email — aucun compte ne sera créé.
+            cet email, aucun compte ne sera créé.
           </Text>
 
-          <Text style={footerSign}>— L&apos;équipe Fxmily</Text>
+          <Text style={footerSign}>L&apos;équipe Fxmily</Text>
         </Container>
 
         <Text style={legal}>

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
-import type { AnnotationMediaType } from '@/generated/prisma/enums';
+import type { AnnotationMediaType, TrackingAxis } from '@/generated/prisma/enums';
 import type { TradeAnnotationModel } from '@/generated/prisma/models/TradeAnnotation';
 
 /**
@@ -25,6 +25,8 @@ export interface CreateAnnotationInput {
   comment: string;
   mediaKey: string | null;
   mediaType: AnnotationMediaType | null;
+  /** Optional coaching axis (J-AI corrections echo). Omitted/null = untagged. */
+  axis?: TrackingAxis | null;
 }
 
 /**
@@ -38,6 +40,8 @@ export interface SerializedAnnotation {
   comment: string;
   mediaKey: string | null;
   mediaType: AnnotationMediaType | null;
+  /** Optional coaching axis (J-AI corrections echo). Null = untagged. */
+  axis: TrackingAxis | null;
   seenByMemberAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -66,6 +70,7 @@ export function serializeAnnotation(row: TradeAnnotationModel): SerializedAnnota
     comment: row.comment,
     mediaKey: row.mediaKey,
     mediaType: row.mediaType,
+    axis: row.axis,
     seenByMemberAt: row.seenByMemberAt ? row.seenByMemberAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -93,6 +98,7 @@ export async function createAnnotation(
       comment: input.comment,
       mediaKey: input.mediaKey,
       mediaType: input.mediaType,
+      axis: input.axis ?? null,
     },
   });
   return serializeAnnotation(row);

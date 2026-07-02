@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { detectAMFViolation } from '@/lib/safety/amf-detection';
 import { TRAINING_ANNOTATION_KEY_PATTERN } from '@/lib/storage/keys';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
+import { trackingAxisSchema } from '@/lib/tracking/axes';
 
 /**
  * Admin training-correction schema (V1.2 Mode Entraînement, SPEC §21).
@@ -53,6 +54,9 @@ export const trainingAnnotationCreateSchema = z
     comment: commentSchema,
     mediaKey: trainingAnnotationImageKeySchema.nullable().optional(),
     mediaType: mediaTypeSchema.nullable().optional(),
+    // J-AI corrections echo — optional coaching axis (mirror of
+    // `annotationCreateSchema`), one of the 11 `TrackingAxis` ids or null.
+    axis: trackingAxisSchema.nullable().optional(),
   })
   .superRefine((data, ctx) => {
     const hasKey = data.mediaKey != null && data.mediaKey.length > 0;

@@ -65,6 +65,7 @@ describe('createTrainingAnnotation', () => {
         comment: string;
         mediaKey: string | null;
         mediaType: string | null;
+        axis: string | null;
       };
     };
     expect(arg.data).toEqual({
@@ -73,6 +74,7 @@ describe('createTrainingAnnotation', () => {
       comment: 'Bonne lecture, mais SL trop serré.',
       mediaKey: null,
       mediaType: null,
+      axis: null,
     });
     expect(result.id).toBe('ta-1');
     expect(result.createdAt).toBe('2026-05-17T10:00:00.000Z');

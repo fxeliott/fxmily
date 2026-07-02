@@ -8,7 +8,9 @@ import { getCheckinStatus } from '@/lib/checkin/service';
 import { formatLocalDate, localDateOf, parseLocalDate } from '@/lib/checkin/timezone';
 import { listScheduledMeetingsOn } from '@/lib/meeting/service';
 import { getMindsetCheck } from '@/lib/mindset/service';
+import { getCorrectionThemes } from '@/lib/annotations/correction-themes';
 import { getDueTrackingInstruments } from '@/lib/tracking/service';
+import { getAxisLabel } from '@/lib/tracking/axes';
 import type { CalendarBlock } from '@/lib/schemas/adaptive-calendar';
 
 import { currentDaySlot, primaryCheckinSlot, type DaySlot } from './slot';
@@ -54,7 +56,10 @@ export type GuidanceKind =
   | 'mindset'
   | 'questionnaire'
   | 'douglas'
-  | 'tracking';
+  | 'tracking'
+  // J-AI corrections echo — a calm reminder of a recurring point the coach has
+  // raised in corrections this month (`info`, never a to-do, never punitive).
+  | 'correction-echo';
 
 export interface GuidanceAction {
   /** Stable key for the React list + e2e selectors. */
@@ -145,14 +150,17 @@ async function buildDailyGuidance(
   const weekStart = currentParisWeekStart(now);
   const isMonday = parseLocalDate(today).getUTCDay() === 1;
 
-  const [checkin, calendar, questionnaire, mindset, meetings, dueTracking] = await Promise.all([
-    getCheckinStatus(userId, timezone, now),
-    getCalendarForUser(userId, weekStart),
-    getQuestionnaireForUser(userId, weekStart),
-    getMindsetCheck(userId, weekStart),
-    listScheduledMeetingsOn(today),
-    getDueTrackingInstruments(userId, now),
-  ]);
+  const [checkin, calendar, questionnaire, mindset, meetings, dueTracking, correctionThemes] =
+    await Promise.all([
+      getCheckinStatus(userId, timezone, now),
+      getCalendarForUser(userId, weekStart),
+      getQuestionnaireForUser(userId, weekStart),
+      getMindsetCheck(userId, weekStart),
+      listScheduledMeetingsOn(today),
+      getDueTrackingInstruments(userId, now),
+      // J-AI corrections echo — the recurring coaching points of the last 30 days.
+      getCorrectionThemes(userId, 30, now),
+    ]);
 
   // --- TODAY's calendar blocks + calendar state -----------------------------
   let calendarState: CalendarTodayState;
@@ -267,6 +275,26 @@ async function buildDailyGuidance(
       detail: 'Un court relevé de ton process à compléter quand tu veux.',
       href: `/tracking/${topDue.instrument.key}`,
       state: 'todo',
+      emphasis: 'secondary',
+    });
+  }
+
+  // (6) Correction echo (J-AI corrections echo) — when the coach has raised the
+  // SAME axis at least twice in the last 30 days, echo it back as a calm,
+  // benevolent reminder (never a to-do, never punitive — anti-Black-Hat §31.2).
+  // Only the STRONGEST theme is surfaced (themes are sorted count desc), so the
+  // panel never turns into a wall of coaching reminders. `info` state = neither
+  // to-do nor done; the deep-link points at the surface the latest correction
+  // lives on (/journal for a trade, /training for a backtest).
+  const topTheme = correctionThemes.find((t) => t.count >= 2);
+  if (topTheme) {
+    actions.push({
+      key: `correction-echo-${topTheme.axis}`,
+      kind: 'correction-echo',
+      title: 'Un point suivi par ton coach',
+      detail: `Ton coach a relevé ${topTheme.count} fois « ${getAxisLabel(topTheme.axis)} » ce mois. Garde ce point en tête aujourd'hui.`,
+      href: topTheme.lastSource === 'training' ? '/training' : '/journal',
+      state: 'info',
       emphasis: 'secondary',
     });
   }

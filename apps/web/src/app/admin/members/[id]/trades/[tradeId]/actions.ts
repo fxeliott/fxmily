@@ -10,6 +10,7 @@ import {
   getAnnotationById,
 } from '@/lib/admin/annotations-service';
 import { logAudit } from '@/lib/auth/audit';
+import { ensureMicroObjectiveFromAnnotation } from '@/lib/coaching/micro-objective';
 import { db } from '@/lib/db';
 import { sendAnnotationReceivedEmail } from '@/lib/email/send';
 import { enqueueAnnotationNotification } from '@/lib/notifications/enqueue';
@@ -89,6 +90,7 @@ export async function createAnnotationAction(
     comment: formData.get('comment') ?? '',
     mediaKey: readNullableString(formData, 'mediaKey'),
     mediaType: readNullableString(formData, 'mediaType'),
+    axis: readNullableString(formData, 'axis'),
   };
 
   const parsed = annotationCreateSchema.safeParse(raw);
@@ -103,6 +105,7 @@ export async function createAnnotationAction(
   const data = parsed.data;
   const mediaKey = data.mediaKey ?? null;
   const mediaType = data.mediaType ?? null;
+  const axis = data.axis ?? null;
 
   // BOLA defence: the media key must point at this trade. Without this, an
   // admin (or token leak) could attach an image uploaded under another
@@ -149,6 +152,7 @@ export async function createAnnotationAction(
       comment: data.comment,
       mediaKey,
       mediaType,
+      axis,
     });
     annotationId = created.id;
   } catch (err) {
@@ -177,6 +181,16 @@ export async function createAnnotationAction(
     hasMedia: mediaKey !== null,
   });
 
+  // J-AI corrections echo — a correction tagged with a coaching axis seeds a
+  // Mark Douglas micro-objective for the member (idempotent, ≤1 open per member).
+  // Best-effort: a failure here must never roll back the correction. The seeder
+  // only relates to User (firewall §21.5 — no FK to the trade / real edge).
+  if (axis !== null) {
+    await ensureMicroObjectiveFromAnnotation(memberId, axis, annotationId).catch((err) => {
+      console.error('[admin.annotation.create] micro-objective seed failed', err);
+    });
+  }
+
   void sendAnnotationReceivedEmail({
     to: tradeRow.user.email,
     recipientFirstName: tradeRow.user.firstName,
@@ -197,6 +211,7 @@ export async function createAnnotationAction(
       memberId,
       hasMedia: mediaKey !== null,
       mediaType,
+      axis,
     },
   });
 

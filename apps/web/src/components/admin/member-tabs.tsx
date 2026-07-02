@@ -12,6 +12,7 @@ export type MemberTabKey =
   | 'mindset'
   | 'calendar'
   | 'profile'
+  | 'trajectoire'
   | 'presence'
   | 'verification'
   | 'notes'
@@ -46,6 +47,10 @@ const TABS: readonly TabDefinition[] = [
   // V2.4 Phase C — admin pseudonymized view of MemberProfile (post-V2.4 Phase B
   // onboarding interview LIVE). Carbone pattern §7.7 admin-only read-only.
   { key: 'profile', label: 'Profil' },
+  // J-E inc.3 — admin read-only monthly trajectory of the 4 deep AI dimensions
+  // (re-profiled each civil month). Sits right after the onboarding baseline
+  // (`profile`): baseline portrait then month-over-month evolution.
+  { key: 'trajectoire', label: 'Trajectoire' },
   // V1.7 §30 J-M3 — admin read-only view of the member's meeting attendance
   // (rate + per-meeting detail). Carbone pattern §7.7 admin-only read-only.
   { key: 'presence', label: 'Présence' },

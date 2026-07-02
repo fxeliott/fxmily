@@ -128,6 +128,40 @@ export interface RawReprofileSlice {
   } | null;
 }
 
+/**
+ * J-E inc.3 — JSON-safe view of a `MemberProfileMonthlySnapshot` row for the
+ * ADMIN trajectory tab (`/admin/members/[id]?tab=trajectoire`). Dates → strings,
+ * the 4 deep dims stay raw `unknown` (Prisma `Json?`) and are Zod-`safeParse`d
+ * at RENDER by the shared `deep-dimension-sections` renderer (mirror the
+ * onboarding `SerializedMemberProfile` contract — parse defensively at the UI
+ * boundary, never trust the JSON column shape).
+ *
+ * Defined HERE (not in the `server-only` admin service) so the presentational
+ * panel can `import type` it without pulling a server-only runtime edge — same
+ * split as `monthly-debrief/types.ts SerializedMonthlyDebrief`.
+ *
+ * 🚨 ADMIN-ONLY: `weakSignals` rides along because this is an admin reading
+ * surface (never a member coaching surface); it is NEVER a scoring input.
+ */
+export interface SerializedMonthlyProfileSnapshot {
+  readonly id: string;
+  readonly userId: string;
+  /** `YYYY-MM-DD` (member-local 1st of the reported civil month). */
+  readonly monthStart: string;
+  /** `YYYY-MM-DD` (member-local last calendar day of the month). */
+  readonly monthEnd: string;
+  /** ISO instant the snapshot was generated. */
+  readonly generatedAt: string;
+  /** ADMIN-ONLY month-over-month evolution synthesis (the J-E value-add). */
+  readonly evolutionNarrative: string;
+  readonly coachingTone: unknown;
+  readonly learningStage: unknown;
+  readonly axesStructured: unknown;
+  readonly weakSignals: unknown;
+  /** Claude model pin (drives the AI Act art.50 banner label). */
+  readonly claudeModel: string;
+}
+
 export interface RawReprofileCheckin {
   readonly localDate: string;
   readonly intention: string | null;

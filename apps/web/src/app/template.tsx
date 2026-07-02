@@ -20,7 +20,15 @@ import { V18_EASE_DRAW } from '@/components/v18/motion-presets';
  *     containing block), and resolves to a clean `opacity: 1` at rest. Zero
  *     layout cost, compositor-only.
  *   - `useReducedMotion`: members who ask for reduced motion get the content
- *     instantly (no fade), honoring prefers-reduced-motion strictly.
+ *     instantly (duration 0), honoring prefers-reduced-motion strictly.
+ *   - SINGLE TREE both branches (hydration invariant): the server never knows
+ *     `prefers-reduced-motion` and always renders the animated branch, so a
+ *     `if (reduced) return <div>` here diverges from the SSR HTML on every
+ *     reduced-motion client. React 19 does NOT patch attribute mismatches —
+ *     the serialized `style="opacity:0"` then sticks forever and the whole
+ *     route stays invisible (caught by the F2 e2e trace, CI run 28584461967).
+ *     Reduction therefore lives in `transition` (not serialized to HTML),
+ *     never in the tree shape — this also keeps `useId` stable downstream.
  *   - CALM (180ms, ease-out): process-oriented posture §2 — no bouncy/gamified
  *     swoosh, just enough perceived liveliness to feel "vivante" on every move.
  *   - Layout-neutral wrapper: mirrors `#main-content`'s flex chain so the page
@@ -31,16 +39,12 @@ import { V18_EASE_DRAW } from '@/components/v18/motion-presets';
 export default function RouteTransition({ children }: { children: React.ReactNode }) {
   const prefersReducedMotion = useReducedMotion();
 
-  if (prefersReducedMotion) {
-    return <div className="flex min-h-full flex-1 flex-col">{children}</div>;
-  }
-
   return (
     <m.div
       className="flex min-h-full flex-1 flex-col"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.18, ease: V18_EASE_DRAW }}
+      transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.18, ease: V18_EASE_DRAW }}
     >
       {children}
     </m.div>

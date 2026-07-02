@@ -26,8 +26,14 @@ import { cn } from '@/lib/utils';
  *    Never touch layout/paint properties.
  *  - Coarse pointers (touch/pen) are ignored — `pointerType !== 'mouse'`
  *    short-circuits onPointerMove so a finger never tilts the card.
- *  - `useReducedMotion()` returns a plain static `<div>` (no perspective,
- *    no handlers, no spring) so AT users get a flat surface (WCAG 2.3.3).
+ *  - `useReducedMotion()` true → flat surface (WCAG 2.3.3): the pointer
+ *    handlers short-circuit so rotateX/rotateY never leave 0deg and the
+ *    hover scale is dropped. The TREE stays identical to the animated
+ *    branch — a structural `if (reduced) return <div>` diverges from the
+ *    SSR HTML (the server never knows the preference) and React 19 never
+ *    patches hydration mismatches, shifting every downstream `useId`
+ *    (caught by the F2 e2e trace, CI run 28584461967). Handlers and
+ *    springs are not serialized, so guarding them is hydration-safe.
  *  - Premium-but-professional : max ~8deg, calm spring — depth, not a toy.
  */
 const SPRING = { stiffness: 220, damping: 20, mass: 0.6 } as const;
@@ -56,12 +62,9 @@ export function Tilt3D({ children, className, maxDeg = 8, hoverScale = 1.0 }: Ti
     SPRING,
   );
 
-  if (prefersReducedMotion) {
-    // Static surface — no perspective, no tilt, no handlers (WCAG 2.3.3).
-    return <div className={className}>{children}</div>;
-  }
-
   const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    // Reduced-motion → static surface (WCAG 2.3.3): the values stay at rest.
+    if (prefersReducedMotion) return;
     // Ignore coarse pointers (touch/pen) — only a real mouse tilts the card.
     if (e.pointerType !== 'mouse') return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -84,7 +87,7 @@ export function Tilt3D({ children, className, maxDeg = 8, hoverScale = 1.0 }: Ti
     >
       <m.div
         style={{ rotateX, rotateY, transformStyle: 'preserve-3d' }}
-        {...(hoverScale > 1 ? { whileHover: { scale: hoverScale } } : {})}
+        {...(hoverScale > 1 && !prefersReducedMotion ? { whileHover: { scale: hoverScale } } : {})}
       >
         {children}
       </m.div>

@@ -427,7 +427,7 @@ describe('buildWeeklyReportUserPrompt — coaching psychologique reaches the pro
     expect(prompt).toContain('## Signal de coaching psychologique');
     expect(prompt).toContain('- Axe dominant : discipline');
     expect(prompt).toContain('- Observé : Plusieurs journées sans suivi');
-    expect(prompt).toContain('- Progression mesurée : Micro-objectifs tenus — 75%');
+    expect(prompt).toContain('- Progression mesurée : Micro-objectifs tenus · 75%');
     expect(prompt).toContain('- Micro-objectif mental en cours : Tenir ta routine');
     expect(prompt).toMatch(/3 tenue\(s\), 1 manquée\(s\), 0 écartée\(s\)/);
     // The block carries its OWN posture lock for Claude.

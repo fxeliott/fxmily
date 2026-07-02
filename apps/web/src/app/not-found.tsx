@@ -43,7 +43,7 @@ export default function NotFound(): React.ReactElement {
       <nav aria-label="Retour" className="flex flex-wrap items-center justify-center gap-3">
         <Link href="/dashboard" className={btnVariants({ kind: 'primary', size: 'm' })}>
           <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-          Dashboard
+          Tableau de bord
         </Link>
         <Link href="/account" className={btnVariants({ kind: 'secondary', size: 'm' })}>
           Mon compte

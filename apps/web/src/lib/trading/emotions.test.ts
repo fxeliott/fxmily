@@ -54,6 +54,11 @@ describe('emotionLabel', () => {
   it('echoes back the raw slug for an unknown one (safe fallback)', () => {
     expect(emotionLabel('something-removed-later')).toBe('something-removed-later');
   });
+
+  it('falls back to the check-in referential for check-in-only slugs (seed/legacy trade data)', () => {
+    expect(emotionLabel('focused')).toBe('Concentré');
+    expect(emotionLabel('rested')).toBe('Reposé');
+  });
 });
 
 describe('EMOTION_MAX_PER_MOMENT', () => {

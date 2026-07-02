@@ -979,7 +979,7 @@ function RadioGroup({
             <label
               key={opt.value}
               className={cn(
-                'wow-hover-glow rounded-pill inline-flex min-h-11 cursor-pointer items-center gap-2 border px-4 py-2 text-[13px] font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-150 hover:-translate-y-px',
+                'wow-hover-glow rounded-pill inline-flex min-h-11 cursor-pointer items-center gap-2 border px-4 py-2 text-[13px] font-medium transition-[color,background-color,border-color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-px',
                 'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--acc)]',
                 active
                   ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)] shadow-[0_0_0_3px_oklch(0.62_0.19_254_/_0.10)]'

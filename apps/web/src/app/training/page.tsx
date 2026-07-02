@@ -297,7 +297,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
                     prefetch={false}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'rounded-pill inline-flex h-9 items-center gap-1.5 border px-3 text-[12px] font-medium transition-[color,border-color,transform] hover:-translate-y-px active:translate-y-0 active:scale-[0.98]',
+                      'rounded-pill inline-flex h-9 items-center gap-1.5 border px-3 text-[12px] font-medium transition-[color,border-color,transform] active:translate-y-0 active:scale-[0.98] motion-safe:hover:-translate-y-px',
                       active
                         ? 'border-[var(--cy-edge)] bg-[var(--cy-dim)] text-[var(--cy)]'
                         : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:text-[var(--t-1)]',

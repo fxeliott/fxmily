@@ -74,9 +74,11 @@ CADRE THÉORIQUE Mark Douglas (à utiliser comme grille d'analyse INTERNE — ne
 
 LANGUE : français, registre professionnel-bienveillant. Phrases courtes. Tu t'adresses à Eliott (3e personne pour le membre : "le membre", "il/elle").
 
+PONCTUATION (règle stricte) : ponctuation simple uniquement (virgule, deux-points, point, parenthèses). N'utilise JAMAIS de tiret cadratin ni de demi-cadratin dans le texte que tu rédiges (summary, label, rationale, axis, signal, axes_prioritaires). Exception : les citations evidence recopient le texte du membre à l'identique, même si sa ponctuation diffère.
+
 POSTURE COPY (CRITIQUE — Mark Douglas style) :
 - **Factuel + processus, JAMAIS anxiogène** : "Le membre montre des signaux de fragilité émotionnelle après pertes consécutives (3 occurrences citées)." OUI. "ALERTE : tilt imminent !" NON.
-- **Pattern à observer**, jamais drama : "Tendance à tenir un loser au-delà du stop initial — à recouper avec discipline_plan_adherence." OUI. "Catastrophe sur la discipline !" NON.
+- **Pattern à observer**, jamais drama : "Tendance à tenir un loser au-delà du stop initial, à recouper avec discipline_plan_adherence." OUI. "Catastrophe sur la discipline !" NON.
 - **Axe prioritaire = action concrète Eliott peut adresser**, pas vœu pieux : "Travailler le détachement du P&L journalier (cf. citations [20]+[21] ego_pnl_mood + ego_win_feeling)." OUI. "Améliorer la psychologie." NON.
 
 INSTRUCTIONS DE SÉCURITÉ :
@@ -285,7 +287,7 @@ R : J'ai commencé en 2022 par curiosité après avoir lu un livre de Mark Miner
 
 **[8] discipline_plan_adherence · discipline_last10_count**
 Q : Sur tes 10 derniers trades, combien ont été exécutés à 100% selon ton plan écrit ?
-R : Honnêtement 4 sur 10. Je dévie souvent sur le target — je sors trop tôt par peur que le marché reparte.
+R : Honnêtement 4 sur 10. Je dévie souvent sur le target, je sors trop tôt par peur que le marché reparte.
 
 **[17] emotional_regulation · emotion_body_stress**
 Q : Quand une trade te met en stress, où sens-tu ça dans ton corps ?
@@ -293,26 +295,26 @@ R : Tension dans les épaules et la mâchoire. Respiration courte. J'ai souvent 
 
 **[26] objectifs_psyche · objectifs_proud_12m**
 Q : Si dans 12 mois tu es fier de toi, qu'est-ce que tu vois ?
-R : Un trader qui exécute son plan sans hésiter. Pas un chiffre — la régularité du geste.
+R : Un trader qui exécute son plan sans hésiter. Pas un chiffre : la régularité du geste.
 
 ---
 Génère le MemberProfile...`,
     assistantOutput: JSON.stringify({
       summary:
-        "Membre avec 2 ans d'expérience post-blow-up 2022, retour structuré 2024. Profil orienté process > outcome (verbatim objectif 12m : 'régularité du geste'), mais tension entre intention et exécution : 4/10 trades selon plan, déviation systématique sur le target par peur. Signaux somatiques clairs sous stress (mâchoire, respiration courte, besoin de marche). Posture Mark Douglas en construction — la self-awareness est là, l'incarnation des règles reste à consolider (stade Mechanical Douglas).",
+        "Membre avec 2 ans d'expérience post-blow-up 2022, retour structuré 2024. Profil orienté process > outcome (verbatim objectif 12m : 'régularité du geste'), mais tension entre intention et exécution : 4/10 trades selon plan, déviation systématique sur le target par peur. Signaux somatiques clairs sous stress (mâchoire, respiration courte, besoin de marche). Posture Mark Douglas en construction : la self-awareness est là, l'incarnation des règles reste à consolider (stade Mechanical Douglas).",
       highlights: [
         {
           key: 'process_focus_objectif',
           label: 'Process-focus aligné Mark Douglas',
           evidence: [
-            'Un trader qui exécute son plan sans hésiter. Pas un chiffre — la régularité du geste.',
+            'Un trader qui exécute son plan sans hésiter. Pas un chiffre : la régularité du geste.',
           ],
         },
         {
           key: 'gap_plan_vs_execution',
           label: 'Gap exécution plan (4/10 conformes)',
           evidence: [
-            'Honnêtement 4 sur 10. Je dévie souvent sur le target — je sors trop tôt par peur que le marché reparte.',
+            'Honnêtement 4 sur 10. Je dévie souvent sur le target, je sors trop tôt par peur que le marché reparte.',
           ],
         },
         {
@@ -332,8 +334,8 @@ Génère le MemberProfile...`,
         },
       ],
       axes_prioritaires: [
-        "Travailler le détachement du target — la peur de 'voir le marché repartir' (cf. [8]) défait l'edge à chaque trade.",
-        "Capitaliser sur l'awareness somatique existante [17] — proposer un rituel respiration 2 min avant chaque entrée.",
+        "Travailler le détachement du target : la peur de 'voir le marché repartir' (cf. [8]) défait l'edge à chaque trade.",
+        "Capitaliser sur l'awareness somatique existante [17] : proposer un rituel respiration 2 min avant chaque entrée.",
         "Consolider le process-focus déjà présent [26] en visualisant explicitement la 'régularité du geste' comme objectif premier.",
       ],
       coaching_tone: {
@@ -341,7 +343,7 @@ Génère le MemberProfile...`,
         rationale:
           "Le membre reconnaît lui-même l'écart entre son plan et son exécution et vise un objectif orienté process ; un registre pédagogique qui structure des étapes concrètes l'aidera à incarner ses règles.",
         evidence: [
-          'Honnêtement 4 sur 10. Je dévie souvent sur le target — je sors trop tôt par peur que le marché reparte.',
+          'Honnêtement 4 sur 10. Je dévie souvent sur le target, je sors trop tôt par peur que le marché reparte.',
         ],
       },
       learning_stage: {
@@ -397,7 +399,7 @@ R : Avoir tort sur une analyse que j'ai présentée à des amis. La perte financ
 Génère le MemberProfile...`,
     assistantOutput: JSON.stringify({
       summary:
-        "Membre avec dissonance acceptée entre théorie probabiliste (intellectualisée) et pratique émotionnelle. Confidence calibration au ressenti (estimation 70-75% sans backtest), ce qui suggère un risque d'over-confidence à recouper avec données réelles. Trigger émotionnel dominant ego-public > financier — verbatim 'l'humiliation publique compte plus que la perte financière'. Profil candidat à un travail Mark Douglas sur les 5 vérités fondamentales (#1+#3+#4) + détachement de l'identité-trader vs résultat-public.",
+        "Membre avec dissonance acceptée entre théorie probabiliste (intellectualisée) et pratique émotionnelle. Confidence calibration au ressenti (estimation 70-75% sans backtest), ce qui suggère un risque d'over-confidence à recouper avec données réelles. Trigger émotionnel dominant ego-public > financier : verbatim 'l'humiliation publique compte plus que la perte financière'. Profil candidat à un travail Mark Douglas sur les 5 vérités fondamentales (#1+#3+#4) + détachement de l'identité-trader vs résultat-public.",
       highlights: [
         {
           key: 'dissonance_intellectuelle_pratique',
@@ -423,9 +425,9 @@ Génère le MemberProfile...`,
         },
       ],
       axes_prioritaires: [
-        'Travailler les 5 vérités Mark Douglas (#1 anything can happen + #3 random distribution) — la dissonance intellectuel/pratique [4] est le point de levier #1.',
+        'Travailler les 5 vérités Mark Douglas (#1 anything can happen + #3 random distribution) : la dissonance intellectuel/pratique [4] est le point de levier #1.',
         'Proposer un backtest chiffré du setup A+ pour ancrer la confidence sur de la data réelle plutôt que ressenti [14].',
-        "Détacher l'identité-trader de l'identité-publique — exploration explicite du trigger [23] en session coaching.",
+        "Détacher l'identité-trader de l'identité-publique : exploration explicite du trigger [23] en session coaching.",
       ],
       coaching_tone: {
         register: 'socratique',

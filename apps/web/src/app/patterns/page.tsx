@@ -240,7 +240,7 @@ function PatternsHero() {
               <li key={label}>
                 <a
                   href={href}
-                  className={`rounded-card flex items-center gap-2.5 border p-3 transition-[colors,transform] duration-200 ease-out hover:-translate-y-px hover:border-[var(--b-acc)] hover:bg-[var(--acc-dim-2)] focus-visible:-translate-y-px focus-visible:border-[var(--b-acc)] focus-visible:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] ${surf}`}
+                  className={`rounded-card flex items-center gap-2.5 border p-3 transition-[colors,transform] duration-200 ease-out hover:border-[var(--b-acc)] hover:bg-[var(--acc-dim-2)] focus-visible:-translate-y-px focus-visible:border-[var(--b-acc)] focus-visible:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] motion-safe:hover:-translate-y-px ${surf}`}
                 >
                   <span
                     aria-hidden="true"

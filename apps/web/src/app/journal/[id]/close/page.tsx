@@ -66,8 +66,8 @@ export default async function CloseTradePage({ params }: CloseTradePageProps) {
               Clôturer <span className="f-mono text-[var(--acc)]">{trade.pair}</span>
             </h1>
             <p className="t-lead">
-              Renseigne le prix de sortie, le résultat et la capture après sortie. Le R réalisé sera
-              calculé automatiquement.
+              Renseigne le prix de sortie, le résultat et le lien TradingView de la sortie. Le R
+              réalisé sera calculé automatiquement.
             </p>
           </div>
         </header>

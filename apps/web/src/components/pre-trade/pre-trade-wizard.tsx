@@ -462,7 +462,7 @@ export function PreTradeCheckWizard({
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-4 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid
-                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
               confirmPulse && stepValid && 'threshold-pulse',
             )}
@@ -477,7 +477,7 @@ export function PreTradeCheckWizard({
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-5 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               allValid && !isPending
-                ? 'bg-[var(--acc-btn)] hover:-translate-y-px hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)]'
+                ? 'bg-[var(--acc-btn)] hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
             )}
             aria-busy={isPending || undefined}
@@ -749,7 +749,7 @@ function StepCardGroup({
               onClick={() => onChange(opt.value)}
               data-name={name}
               className={cn(
-                'wow-hover-glow rounded-card flex min-h-[88px] items-start gap-3 border p-4 text-left transition-[color,background-color,border-color,transform] duration-150 hover:-translate-y-px',
+                'wow-hover-glow rounded-card flex min-h-[88px] items-start gap-3 border p-4 text-left transition-[color,background-color,border-color,transform] duration-150 motion-safe:hover:-translate-y-px',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] focus-visible:outline-solid',
                 checked
                   ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)]'
@@ -908,7 +908,7 @@ function StepBoolean({
               onClick={() => onChange(opt.bool)}
               data-name={name}
               className={cn(
-                'wow-hover-glow rounded-card flex min-h-[60px] items-center justify-center gap-2 border px-4 py-3 text-[14px] font-semibold transition-[color,background-color,border-color,transform] duration-150 hover:-translate-y-px',
+                'wow-hover-glow rounded-card flex min-h-[60px] items-center justify-center gap-2 border px-4 py-3 text-[14px] font-semibold transition-[color,background-color,border-color,transform] duration-150 motion-safe:hover:-translate-y-px',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] focus-visible:outline-solid',
                 checked
                   ? 'border-[var(--b-acc-strong)] bg-[var(--acc-dim)] text-[var(--acc)]'

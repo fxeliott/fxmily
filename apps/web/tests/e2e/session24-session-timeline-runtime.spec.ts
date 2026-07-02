@@ -290,7 +290,7 @@ test.describe('S24 — SessionTimeline (journée-type trader, runtime, posture �
     await expect(card).toBeVisible();
     await expect(card).toContainText(/Ta fidélité à la méthode/i);
     // The four hard rules of the method are each mirrored.
-    await expect(card).toContainText(/Fenêtre 13h–16h/);
+    await expect(card).toContainText(/Fenêtre 13h-16h/);
     await expect(card).toContainText(/Un trade par jour/);
     await expect(card).toContainText(/Coupure 20h/);
     await expect(card).toContainText(/Visée RR 3/);

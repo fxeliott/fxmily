@@ -103,7 +103,7 @@ export function EmotionCheckinPicker({
                     disabled={Boolean(disabled)}
                     aria-pressed={isSelected}
                     aria-disabled={inert ? 'true' : undefined}
-                    aria-label={tag.hint ? `${tag.label} — ${tag.hint}` : tag.label}
+                    aria-label={tag.hint ? `${tag.label} : ${tag.hint}` : tag.label}
                     title={tag.hint}
                     // Inert chips (cap reached, not selected) are removed
                     // from the tab order — audit J5 H7. The button is still

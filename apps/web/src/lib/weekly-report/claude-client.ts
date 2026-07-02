@@ -185,7 +185,7 @@ function renderMockOutput(snapshot: WeeklySnapshot): WeeklyReportOutput {
       .join(', ')}.`;
   }
   if (c.sleepHoursMedian !== null && c.tradesTotal > 0) {
-    patterns.sleepPerf = `Sommeil médian ${c.sleepHoursMedian.toFixed(1)}h sur ${c.tradesTotal} trade(s), corrélation à observer sur 4–6 semaines.`;
+    patterns.sleepPerf = `Sommeil médian ${c.sleepHoursMedian.toFixed(1)}h sur ${c.tradesTotal} trade(s), corrélation à observer sur 4 à 6 semaines.`;
   }
   if (snapshot.freeText.emotionTags.length > 0) {
     patterns.emotionPerf = `Émotions dominantes : ${snapshot.freeText.emotionTags.slice(0, 5).join(', ')}.`;

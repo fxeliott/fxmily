@@ -75,7 +75,7 @@ export function TrainingTradeCard({
           label="Résultat"
           value={
             trade.resultR == null
-              ? '—'
+              ? 'à venir'
               : `${Number(trade.resultR) >= 0 ? '+' : ''}${Number(trade.resultR).toFixed(2)} R`
           }
           tone={trade.resultR == null ? undefined : Number(trade.resultR) >= 0 ? 'ok' : 'bad'}

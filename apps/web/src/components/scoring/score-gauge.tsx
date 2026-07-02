@@ -71,7 +71,7 @@ function toneFor(score: number | null): Tone {
       stroke: 'var(--b-default)',
       glow: 'transparent',
       text: 'text-[var(--t-3)]',
-      band: '—',
+      band: 'En attente',
     };
   if (score < 50)
     return {

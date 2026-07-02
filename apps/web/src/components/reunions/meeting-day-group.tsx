@@ -1,4 +1,5 @@
 import { MeetingItem } from '@/components/reunions/meeting-item';
+import { Pill } from '@/components/ui/pill';
 import type { MemberMeetingView } from '@/lib/meeting/service';
 import type { MeetingSlotName } from '@/lib/meeting/occurrence';
 
@@ -35,6 +36,15 @@ function dayKeyFormatter(timeZone: string): Intl.DateTimeFormat {
     DAY_KEY_FMT_CACHE.set(timeZone, fmt);
   }
   return fmt;
+}
+
+/**
+ * Civil day key (YYYY-MM-DD) of an instant in the member's timezone — the same
+ * key {@link groupMeetingsByDay} buckets by. The page derives "today" with it
+ * at render time so {@link MeetingDayGroup} stays clock-free (testable).
+ */
+export function civilDayKey(instant: Date | string, timezone: string): string {
+  return dayKeyFormatter(timezone).format(new Date(instant));
 }
 
 /** Human day header, e.g. « lundi 30 juin ». The civil day is ALREADY resolved
@@ -84,14 +94,29 @@ export function groupMeetingsByDay(meetings: MemberMeetingView[], timezone: stri
   }));
 }
 
-export function MeetingDayGroup({ day, timezone }: { day: MeetingDay; timezone: string }) {
+export function MeetingDayGroup({
+  day,
+  timezone,
+  isToday = false,
+}: {
+  day: MeetingDay;
+  timezone: string;
+  /** F4 — highlight the member's current civil day (derived by the page via {@link civilDayKey}). */
+  isToday?: boolean;
+}) {
   // Midi UTC pour le libellé — le jour civil est déjà résolu par la clé
   // membre-tz, formater l'instant midi-UTC en UTC évite tout drift de jour
   // (piège TZ canonique, même garde que checkin-day-list).
   const label = DAY_LABEL_FMT.format(new Date(`${day.date}T12:00:00Z`));
   return (
-    <section className="flex flex-col gap-2.5" aria-label={label}>
-      <h3 className="t-eyebrow-lg text-[var(--t-3)] capitalize">{label}</h3>
+    <section
+      className="flex flex-col gap-2.5"
+      aria-label={isToday ? `${label} (aujourd’hui)` : label}
+    >
+      <div className="flex items-center gap-2">
+        <h3 className="t-eyebrow-lg text-[var(--t-3)] capitalize">{label}</h3>
+        {isToday && <Pill tone="acc">Aujourd’hui</Pill>}
+      </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {day.meetings.map((meeting) => (
           <MeetingItem key={meeting.id} meeting={meeting} timezone={timezone} showDate={false} />

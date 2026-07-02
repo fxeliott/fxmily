@@ -15,7 +15,7 @@ interface ExpectancyCardProps {
 }
 
 function fmtR(value: number | null): string {
-  if (value === null) return '—';
+  if (value === null) return 'N/A';
   const sign = value > 0 ? '+' : '';
   return `${sign}${value.toFixed(2)}R`;
 }
@@ -25,7 +25,7 @@ function fmtPct(value: number): string {
 }
 
 function fmtPF(value: number | null): string {
-  if (value === null) return '—';
+  if (value === null) return 'N/A';
   if (value >= 999) return '∞';
   return value.toFixed(2);
 }
@@ -89,14 +89,14 @@ export function ExpectancyCard({ expectancy }: ExpectancyCardProps) {
             hint="gross win / gross loss"
           />
           <Metric
-            label="Win rate"
+            label="Taux de réussite"
             value={fmtPct(e.winRate)}
             hint={`${e.sampleSize.closedTrades} trades`}
             tone="text-[var(--t-1)]"
           />
           <Metric
             label="Payoff R:R"
-            value={e.payoffRatio === null ? '—' : `1:${e.payoffRatio.toFixed(2)}`}
+            value={e.payoffRatio === null ? 'N/A' : `1:${e.payoffRatio.toFixed(2)}`}
             hint="avg win / avg loss"
             tone="text-[var(--t-1)]"
           />

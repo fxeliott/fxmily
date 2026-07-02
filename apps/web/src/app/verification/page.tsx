@@ -189,10 +189,12 @@ export default async function VerificationPage() {
                   preuves. tone cyan/neutre, 0 rouge (anti Black-Hat §33.2). */}
               <dl className="grid grid-cols-3 gap-2.5 lg:grid-cols-1">
                 <div className="rounded-card flex flex-col gap-0.5 border border-[var(--cy-edge)] bg-[var(--bg-1)] p-3">
-                  <dt className="t-cap text-[var(--t-4)]">Constance</dt>
+                  <dt className="t-cap text-[var(--t-4)]">Score de constance</dt>
                   <dd className="f-mono text-[20px] leading-none font-bold text-[var(--cy)] tabular-nums">
-                    {constancy ? Math.round(constancy.value) : '—'}
-                    <span className="text-[12px] font-normal text-[var(--t-4)]">/100</span>
+                    {constancy ? Math.round(constancy.value) : 'à venir'}
+                    {constancy ? (
+                      <span className="text-[12px] font-normal text-[var(--t-4)]">/100</span>
+                    ) : null}
                   </dd>
                 </div>
                 <div className="rounded-card flex flex-col gap-0.5 border border-[var(--b-default)] bg-[var(--bg-1)] p-3">

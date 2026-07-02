@@ -4,7 +4,11 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
-import { groupMeetingsByDay, MeetingDayGroup } from '@/components/reunions/meeting-day-group';
+import {
+  civilDayKey,
+  groupMeetingsByDay,
+  MeetingDayGroup,
+} from '@/components/reunions/meeting-day-group';
 import { listMeetingsForMember } from '@/lib/meeting/service';
 import { MEETING_WINDOW_DAYS } from '@/lib/meeting/window';
 
@@ -137,7 +141,12 @@ export default async function ReunionsPage() {
             </div>
           ) : (
             groupMeetingsByDay(meetings, timezone).map((day) => (
-              <MeetingDayGroup key={day.date} day={day} timezone={timezone} />
+              <MeetingDayGroup
+                key={day.date}
+                day={day}
+                timezone={timezone}
+                isToday={day.date === civilDayKey(new Date(), timezone)}
+              />
             ))
           )}
         </section>

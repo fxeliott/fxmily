@@ -100,6 +100,9 @@ export async function createTrainingTradeAction(
   const rawOutcome = formData.get('outcome');
   const rawResultR = formData.get('resultR');
   const rawTradingViewUrl = formData.get('tradingViewUrl');
+  // Optional backtest result — empty/absent → null (mirrors the real
+  // open/close split: a backtest may be logged before the result is set).
+  const outcome = rawOutcome === '' || rawOutcome == null ? null : rawOutcome;
   const raw = {
     pair: formData.get('pair'),
     // J1 — legacy screenshot key now OPTIONAL, no longer sent by the wizard.
@@ -110,10 +113,13 @@ export async function createTrainingTradeAction(
     // "obligatoire" message rather than a generic "expected string".
     tradingViewUrl: rawTradingViewUrl ?? '',
     plannedRR: formData.get('plannedRR'),
-    // Optional backtest result — empty/absent → null (mirrors the real
-    // open/close split: a backtest may be logged before the result is set).
-    outcome: rawOutcome === '' || rawOutcome == null ? null : rawOutcome,
-    resultR: rawResultR === '' || rawResultR == null ? null : rawResultR,
+    outcome,
+    // P3 — defensive coherence guard: an analysis-only backtest (no outcome)
+    // can never carry a result in R. Silent cleanup, never a rejection: a
+    // stale wizard draft or a crafted request must not produce a card showing
+    // both « EN ATTENTE » and a « RÉSULTAT x R » (mirror of the wizard's
+    // clearing when « Aucun » is selected).
+    resultR: outcome === null || rawResultR === '' || rawResultR == null ? null : rawResultR,
     systemRespected: formData.get('systemRespected'),
     // S8 V2 — process-discipline checklist (§33-2). Tri-state + optional: an
     // untouched item is `undefined`, normalised to `null` at the service layer.

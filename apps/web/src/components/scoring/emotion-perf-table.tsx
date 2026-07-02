@@ -67,7 +67,7 @@ export function EmotionPerfTable({ rows, totalTrades }: EmotionPerfTableProps) {
               <tr className="t-mono-cap text-[var(--t-4)]">
                 <th className="py-1.5">Émotion</th>
                 <th className="py-1.5 text-right">n</th>
-                <th className="py-1.5 text-right">Win rate</th>
+                <th className="py-1.5 text-right">Taux de réussite</th>
                 <th className="py-1.5 text-right">Wilson 95%</th>
                 <th className="py-1.5 text-right">Avg R</th>
               </tr>
@@ -96,7 +96,7 @@ export function EmotionPerfTable({ rows, totalTrades }: EmotionPerfTableProps) {
                           (ci.sufficientSample ? 'text-[var(--t-3)]' : 'text-[var(--warn)]')
                         }
                       >
-                        [{(ci.lower * 100).toFixed(0)}–{(ci.upper * 100).toFixed(0)}%]
+                        [{(ci.lower * 100).toFixed(0)}-{(ci.upper * 100).toFixed(0)}%]
                       </span>
                     </td>
                     <td className="py-2 text-right">
@@ -112,7 +112,7 @@ export function EmotionPerfTable({ rows, totalTrades }: EmotionPerfTableProps) {
                                 : 'text-[var(--t-3)]')
                         }
                       >
-                        {avgR === null ? '—' : `${avgR > 0 ? '+' : ''}${avgR.toFixed(2)}R`}
+                        {avgR === null ? 'N/A' : `${avgR > 0 ? '+' : ''}${avgR.toFixed(2)}R`}
                       </span>
                     </td>
                   </tr>

@@ -171,9 +171,10 @@ test.describe('S4 — surfaces S3 espace membre : teaser dashboard + /verificati
     await expect(verifCard).toBeVisible();
 
     // S4 — constancy teaser: rounded value + « /100 » in one mono span
-    // (dashboard/page.tsx:618-622) + its « constance » caption.
+    // (dashboard/page.tsx:618-622) + its « score de constance » caption
+    // (disambiguated from the « Constance » journey stage on /objectifs).
     await expect(verifCard.getByText('72/100', { exact: true })).toBeVisible();
-    await expect(verifCard.getByText('constance', { exact: true })).toBeVisible();
+    await expect(verifCard.getByText('score de constance', { exact: true })).toBeVisible();
 
     // S4 — open écarts count (singular: exactly 1 open, the acknowledged one
     // is NOT counted — countOpenDiscrepancies filters status=open).

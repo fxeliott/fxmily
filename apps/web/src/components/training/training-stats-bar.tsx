@@ -15,8 +15,8 @@ import type { TrainingTradeStats } from '@/lib/training/training-trade-service';
  * (statistical isolation §21.5). Posture (anti-Black-Hat / Mark Douglas):
  * no leaderboard, no red-on-pending; the day-streak (brief §269e / §182/§188) is
  * SOBER — a calm "N jours d'affilée", zero XP/badge/fanfare, no red on a break.
- * When a metric has too few decided backtests we show "—" + a calm note rather
- * than a misleading 0 %.
+ * When a metric has too few decided backtests we show "à venir" + a calm note
+ * rather than a misleading 0 %.
  *
  * Two bars, by design (mirror of the débrief's "Volume & régularité" vs the
  * quality families): `TrainingStatsBar` = practice RESULTS + discipline;
@@ -51,13 +51,14 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
     checklistAnsweredCount,
   } = stats;
 
-  const winRate = decidedCount === 0 ? '—' : `${Math.round((winCount / decidedCount) * 100)} %`;
+  const winRate =
+    decidedCount === 0 ? 'à venir' : `${Math.round((winCount / decidedCount) * 100)} %`;
 
-  const avgR = avgRNum == null ? '—' : `${avgRNum >= 0 ? '+' : ''}${avgRNum.toFixed(2)} R`;
+  const avgR = avgRNum == null ? 'à venir' : `${avgRNum >= 0 ? '+' : ''}${avgRNum.toFixed(2)} R`;
 
   const systemRate =
     systemDecidedCount === 0
-      ? '—'
+      ? 'à venir'
       : `${Math.round((systemKeptCount / systemDecidedCount) * 100)} %`;
 
   // §33-2 / §270 process-discipline checklist — share of the backtests where the
@@ -70,11 +71,11 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
   // Denominator = `checklistAnsweredCount` (≥1 item filled), NOT raw `total`:
   // legacy / untouched backtests (all four NULL after the ADD-only migration)
   // are excluded so they never drag the rate down (anti-Black-Hat — they aren't
-  // a failure, just data we never asked for). "—" when nothing is filled yet;
+  // a failure, just data we never asked for). "à venir" when nothing is filled;
   // the denominator stays explicit in the hint (mirrors `systemRate`).
   const processRate =
     checklistAnsweredCount === 0
-      ? '—'
+      ? 'à venir'
       : `${Math.round((checklistCleanCount / checklistAnsweredCount) * 100)} %`;
 
   return (
@@ -88,7 +89,7 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
         hint={total > 1 ? 'enregistrés' : 'enregistré'}
       />
       <StatBlock
-        label="Win rate"
+        label="Taux de réussite"
         value={winRate}
         hint={
           decidedCount === 0
@@ -124,7 +125,7 @@ export function TrainingStatsBar({ stats }: { stats: TrainingTradeStats }) {
  * bar above. Séances (§269a), régularité dans le temps (§269c), série de jours
  * (§269e), taux de complétude des champs du journal (§269d). All §21.5-safe
  * (count/recency/presence only, never a P&L) and SOBER (§188): no XP, no badge,
- * no red on a broken streak — a calm "—" empty state instead.
+ * no red on a broken streak — a calm "0 j" / "à venir" empty state instead.
  */
 export function TrainingRegularityBar({
   stats,
@@ -136,18 +137,18 @@ export function TrainingRegularityBar({
 }) {
   const { activeDays30, currentDayStreak, longestDayStreak, fieldCompletionRate } = stats;
 
-  const streakValue = currentDayStreak === 0 ? '—' : String(currentDayStreak);
+  const streakValue = currentDayStreak === 0 ? '0 j' : String(currentDayStreak);
   const streakHint =
     currentDayStreak === 0
       ? longestDayStreak > 0
         ? `record ${longestDayStreak} j`
-        : 'jours consécutifs'
+        : 'aucune série en cours'
       : `jour${currentDayStreak > 1 ? 's' : ''} d'affilée${
           longestDayStreak > currentDayStreak ? ` · record ${longestDayStreak}` : ''
         }`;
 
   const fillValue =
-    fieldCompletionRate == null ? '—' : `${Math.round(fieldCompletionRate * 100)} %`;
+    fieldCompletionRate == null ? 'à venir' : `${Math.round(fieldCompletionRate * 100)} %`;
 
   return (
     <section

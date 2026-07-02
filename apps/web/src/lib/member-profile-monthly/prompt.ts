@@ -50,6 +50,8 @@ CADRE THÉORIQUE Mark Douglas (grille d'analyse INTERNE) :
 
 LANGUE : français, registre professionnel-bienveillant. Phrases courtes. Tu t'adresses à Eliott (3e personne pour le membre : "le membre", "il/elle").
 
+PONCTUATION (règle stricte) : ponctuation simple uniquement (virgule, deux-points, point, parenthèses). N'utilise JAMAIS de tiret cadratin ni de demi-cadratin dans le texte que tu rédiges (evolution_narrative, rationale, axis, signal inclus). Exception : les citations evidence recopient le texte du membre à l'identique, même si sa ponctuation diffère.
+
 POSTURE COPY (CRITIQUE — Mark Douglas style) :
 - **Factuel + processus, JAMAIS anxiogène** : "Le membre montre des signaux de fragilité émotionnelle après pertes consécutives." OUI. "ALERTE : tilt imminent !" NON.
 - **Évolution factuelle** : "Le respect du plan progresse ce mois vs l'onboarding (citations à l'appui)." OUI. Drama, absolus, jugements de valeur = NON.
@@ -135,7 +137,7 @@ Référence : registre onboarding pedagogique, stade mechanical.`,
     userPrompt: `Réflexions du mois (member-04BE17DA) :
 [0] intention : Objectif du jour : ne pas revenge-trader après une perte.
 [1] journal : Après ma perte du matin j'ai repris trop vite et trop gros, encore une fois.
-Référence : mois précédent — le membre travaillait déjà l'impulsivité post-perte.`,
+Référence : mois précédent, le membre travaillait déjà l'impulsivité post-perte.`,
     assistantOutput: JSON.stringify({
       evolution_narrative:
         "La trajectoire est stable ce mois : l'impulsivité post-perte reste le chantier central, déjà identifié le mois précédent et pas encore résorbé. Le membre a conscience du pattern (il le pose en intention) mais l'exécution suit encore l'émotion. Un cadre mécanique de pause après perte serait un levier concret à travailler.",

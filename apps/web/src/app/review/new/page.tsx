@@ -3,24 +3,16 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { WeeklyFocusRecall } from '@/components/review/weekly-focus-recall';
-import { WeeklyReviewWizard } from '@/components/review/weekly-review-wizard';
+import {
+  WeeklyReviewWizard,
+  type WeeklyReviewPrefill,
+} from '@/components/review/weekly-review-wizard';
 import { V18Aurora } from '@/components/v18/aurora';
 import { V18ThemeScope } from '@/components/v18/theme-scope';
 import { listMyRecentReviews } from '@/lib/weekly-review/service';
+import { currentWeekStartUTC, findCurrentWeekReview } from '@/lib/weekly-review/week';
 
 export const dynamic = 'force-dynamic';
-
-/**
- * Current ISO week Monday (UTC) — mirrors `lastMondayUTC()` in the wizard so the
- * recall filter and the draft's `weekStart` agree on "this week" (BUG-1 fix
- * carbone weekly-review-wizard.tsx:72-82: compute in UTC, never local getDay()).
- */
-function currentWeekStartUTC(): string {
-  const d = new Date();
-  const offset = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
-  d.setUTCDate(d.getUTCDate() - offset);
-  return d.toISOString().slice(0, 10);
-}
 
 /**
  * V1.8 REFLECT — `/review/new` host page.
@@ -28,6 +20,11 @@ function currentWeekStartUTC(): string {
  * Server Component shell that auth-gates the wizard. The actual UX lives
  * in `<WeeklyReviewWizard>` (Client component, Framer Motion + localStorage
  * draft + Server Action submit).
+ *
+ * P2 fix (mindset/new parity) : if the current week already has a review,
+ * the wizard starts PREFILLED with the existing answers and a notice says
+ * re-submitting updates it — the one-per-week upsert stops being a silent
+ * overwrite path.
  *
  * Posture (Mark Douglas) : the page chrome is intentionally bare — no
  * KPI strip, no streak, no progress widgets. The wizard is the focal.
@@ -46,6 +43,19 @@ export default async function NewWeeklyReviewPage() {
   const recent = await listMyRecentReviews(session.user.id, 2);
   const previousFocus = recent.find((r) => r.weekStart < thisWeek)?.nextWeekFocus ?? null;
 
+  // P2 fix — same 2-row fetch also answers "does this week already have a
+  // review?" (newest-first, so the current week is always in the window).
+  const existing = findCurrentWeekReview(recent, thisWeek);
+  const prefill: WeeklyReviewPrefill | undefined = existing
+    ? {
+        biggestWin: existing.biggestWin,
+        biggestMistake: existing.biggestMistake,
+        bestPractice: existing.bestPractice,
+        lessonLearned: existing.lessonLearned,
+        nextWeekFocus: existing.nextWeekFocus,
+      }
+    : undefined;
+
   return (
     <V18ThemeScope>
       <V18Aurora />
@@ -59,9 +69,25 @@ export default async function NewWeeklyReviewPage() {
           </Link>
         </nav>
 
+        {existing ? (
+          <section
+            aria-label="Revue de la semaine déjà enregistrée"
+            data-slot="review-edit-notice"
+            className="rounded-card-lg border border-[var(--b-acc)] p-4"
+            style={{
+              background: 'linear-gradient(135deg, var(--acc-dim) 0%, var(--bg-2) 80%)',
+            }}
+          >
+            <p className="t-eyebrow text-[var(--t-3)]">Reprendre ma revue</p>
+            <p className="t-body mt-1 text-[var(--t-1)]">
+              Tu as déjà une revue pour cette semaine : la soumettre à nouveau la met à jour.
+            </p>
+          </section>
+        ) : null}
+
         <WeeklyFocusRecall focus={previousFocus} />
 
-        <WeeklyReviewWizard />
+        <WeeklyReviewWizard {...(prefill ? { prefill } : {})} />
       </main>
     </V18ThemeScope>
   );

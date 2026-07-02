@@ -112,7 +112,7 @@ export function TrainingEquityCardChart({
         {last?.kept ?? 0} fois ton système respecté, cumulé dans le temps.
       </figcaption>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={formatted} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+        <AreaChart data={formatted} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
           <defs>
             <linearGradient id="training-kept-fill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={C.cy} stopOpacity={0.45} />
@@ -129,12 +129,15 @@ export function TrainingEquityCardChart({
             interval="preserveStartEnd"
             minTickGap={28}
           />
+          {/* Tick text ends at margin.left + width − 8px (recharts tickSize 6 +
+              tickMargin 2): keep that sum ≥ ~28 — the cumulative count is
+              unbounded (prod audit 2026-07-02: "16" clipped to "6"). */}
           <YAxis
             stroke={C.t4}
             tick={{ fontSize: 11, fill: C.t4 }}
             tickLine={false}
             axisLine={false}
-            width={36}
+            width={40}
             allowDecimals={false}
           />
           <Tooltip
@@ -149,7 +152,7 @@ export function TrainingEquityCardChart({
             itemStyle={{ color: C.t1 }}
             formatter={(value) => {
               const v = typeof value === 'number' ? value : Number(value);
-              if (!Number.isFinite(v)) return ['—', 'Système tenu'];
+              if (!Number.isFinite(v)) return ['N/A', 'Système tenu'];
               return [`${v} fois`, 'Système tenu (cumulé)'];
             }}
           />

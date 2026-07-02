@@ -97,7 +97,7 @@ export function WeeklyDigestEmail({
             <Text style={aiBannerText}>
               Ce rapport est généré par une intelligence artificielle (
               {claudeModel === 'claude-code-local'
-                ? 'Claude · subscription locale'
+                ? 'Claude · abonnement local'
                 : `Claude ${claudeModel}`}
               , Anthropic). Il ne remplace ni un coaching humain, ni un avis médical, ni un conseil
               en investissement personnalisé.

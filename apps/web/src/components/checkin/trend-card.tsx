@@ -105,7 +105,7 @@ function TrendCell({
           className="f-mono text-[20px] leading-none font-bold tracking-[-0.02em] tabular-nums"
           style={{ color: avg == null ? 'var(--t-3)' : color }}
         >
-          {avg == null ? '—' : avgFmt(avg)}
+          {avg == null ? 'Aucune donnée' : avgFmt(avg)}
         </span>
         {avg != null ? (
           <span className="font-mono text-[10px] text-[var(--t-3)] tabular-nums">{unit}</span>
@@ -124,7 +124,7 @@ function TrendCell({
         />
       ) : (
         <div className="t-cap text-[var(--t-3)]">
-          {data.length === 1 ? '1 point, courbe à venir' : '—'}
+          {data.length === 1 ? '1 point, courbe à venir' : 'Courbe à venir'}
         </div>
       )}
     </div>

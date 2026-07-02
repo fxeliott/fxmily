@@ -194,7 +194,9 @@ export function TradeDetailView({
           <Stat label="Lot / contrats" value={NUMBER_FMT.format(Number(trade.lotSize))} mono />
           <Stat
             label="Stop-loss"
-            value={trade.stopLossPrice ? NUMBER_FMT.format(Number(trade.stopLossPrice)) : '—'}
+            value={
+              trade.stopLossPrice ? NUMBER_FMT.format(Number(trade.stopLossPrice)) : 'Non défini'
+            }
             mono
           />
           <Stat label="R:R prévu" value={Number(trade.plannedRR).toFixed(2)} mono />
@@ -215,7 +217,13 @@ export function TradeDetailView({
               answered) renders « — », never a fabricated "Non". */}
           <Stat
             label="Process complet"
-            value={trade.processComplete === null ? '—' : trade.processComplete ? 'Oui' : 'Non'}
+            value={
+              trade.processComplete === null
+                ? 'Non renseigné'
+                : trade.processComplete
+                  ? 'Oui'
+                  : 'Non'
+            }
             tone={
               trade.processComplete === null ? 'neutral' : trade.processComplete ? 'good' : 'bad'
             }
@@ -299,11 +307,15 @@ export function TradeDetailView({
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
             <Stat
               label="Date sortie"
-              value={trade.exitedAt ? formatDateTime(new Date(trade.exitedAt), timezone) : '—'}
+              value={
+                trade.exitedAt
+                  ? formatDateTime(new Date(trade.exitedAt), timezone)
+                  : 'Non renseignée'
+              }
             />
             <Stat
               label="Prix sortie"
-              value={trade.exitPrice ? NUMBER_FMT.format(Number(trade.exitPrice)) : '—'}
+              value={trade.exitPrice ? NUMBER_FMT.format(Number(trade.exitPrice)) : 'Non renseigné'}
               mono
             />
           </dl>

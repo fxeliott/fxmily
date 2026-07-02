@@ -143,7 +143,7 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
           <StatCell
             label="Suspendus"
             value={stats.suspended}
-            hint={stats.suspended > 0 ? 'à revoir' : '—'}
+            hint={stats.suspended > 0 ? 'à revoir' : 'aucun'}
             tone={stats.suspended > 0 ? 'bad' : 'mute'}
           />
           <StatCell

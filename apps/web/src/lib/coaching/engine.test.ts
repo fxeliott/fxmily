@@ -299,7 +299,7 @@ describe('renderCoachingContextSection — bloc Markdown injecté dans S6', () =
   it('inclut la progression mesurée, l’objectif en cours et les boucles refermées', () => {
     const md = renderCoachingContextSection(ctx());
     expect(md).toContain(
-      '- Progression mesurée : Micro-objectifs tenus — 75% (3 tenus sur 4 refermés)',
+      '- Progression mesurée : Micro-objectifs tenus · 75% (3 tenus sur 4 refermés)',
     );
     expect(md).toContain('- Micro-objectif mental en cours : Tenir ta routine');
     expect(md).toMatch(/3 tenue\(s\), 1 manquée\(s\), 0 écartée\(s\)/);

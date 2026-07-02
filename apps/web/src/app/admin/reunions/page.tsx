@@ -72,9 +72,9 @@ export default async function AdminReunionsPage() {
             Créneaux
           </h1>
           <p className="t-cap text-[var(--t-3)]">
-            Les créneaux Lun–Ven 12h/20h sont générés automatiquement. Annule un créneau quand tu
-            n&apos;es pas dispo, il est alors exclu du taux d&apos;assiduité des membres (personne
-            n&apos;est pénalisé).
+            Les créneaux du lundi au vendredi, à 12h et 20h, sont générés automatiquement. Annule un
+            créneau quand tu n&apos;es pas dispo, il est alors exclu du taux d&apos;assiduité des
+            membres (personne n&apos;est pénalisé).
           </p>
         </div>
 
@@ -84,13 +84,13 @@ export default async function AdminReunionsPage() {
           <StatCell
             label="À venir"
             value={totalUpcoming}
-            hint={totalUpcoming > 0 ? 'prochains' : '—'}
+            hint={totalUpcoming > 0 ? 'prochains' : 'aucun'}
             tone={totalUpcoming > 0 ? 'ok' : 'mute'}
           />
           <StatCell
             label="Annulés"
             value={totalCancelled}
-            hint={totalCancelled > 0 ? 'indispo' : '—'}
+            hint={totalCancelled > 0 ? 'indispo' : 'aucun'}
             tone={totalCancelled > 0 ? 'warn' : 'mute'}
           />
         </div>
@@ -102,7 +102,7 @@ export default async function AdminReunionsPage() {
             <EmptyState
               icon={CalendarClock}
               headline="Aucun créneau sur la période."
-              lead="Les réunions Lun–Ven 12h/20h sont matérialisées par le cron quotidien (jours ouvrés). Dès la prochaine génération, les créneaux apparaîtront ici."
+              lead="Les réunions du lundi au vendredi, à 12h et 20h, sont matérialisées par le cron quotidien (jours ouvrés). Dès la prochaine génération, les créneaux apparaîtront ici."
               tip="Tu n'as rien à créer à la main : le cron s'en charge. Ton seul geste ici, c'est d'annuler un créneau quand tu n'es pas dispo."
             />
           </Card>

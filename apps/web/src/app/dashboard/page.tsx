@@ -222,8 +222,12 @@ export default async function DashboardPage() {
 
   return (
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
-      {/* DS-v3 J3 — ambient mesh + drifting orbs behind the glass panels */}
-      <DashboardAmbient />
+      {/* DS-v3 J3 — ambient mesh + drifting orbs behind the glass panels.
+          Tour 9 — réactif à la complétude du jour : le cocon s'allume à mesure
+          que les gestes du jour sont faits (0.82 → 1, calme, jamais un signal). */}
+      <DashboardAmbient
+        intensity={dayProgress && dayProgress.total > 0 ? dayProgress.done / dayProgress.total : 0}
+      />
       {/* S4 DOD1-04 — makes the advertised `N` shortcut real (renders nothing) */}
       <JournalShortcut />
 
@@ -279,30 +283,42 @@ export default async function DashboardPage() {
             elle était noyée) + le pont parcours (palier / ETA / levier du moment)
             placés directement sous le hero → « quoi faire » et « où j'en suis /
             où je vais / sur quoi bosser » répondus dès l'arrivée sur le hub. */}
-        {guidance ? (
-          <div className="mb-6">
-            {/* S19.2 — the hero already elevates `primaryAction` as the focal CTA;
-                exclude it here so the same next-action isn't rendered twice. */}
-            <TodayGuidance guidance={guidance} excludeKey={primaryAction?.key} />
-          </div>
-        ) : null}
-        {objectives ? (
-          <section className="mb-6" aria-label="Ta progression">
-            <DashboardProgressBridge view={objectives} />
-          </section>
-        ) : null}
-        {/* S9/CP3 — « ligne objectifs » : l'axe de coaching PERSONNEL (issu du
-            profil d'onboarding, badge IA §2-safe, rend null sans profil) + l'objectif
-            de méthode DÉRIVÉ & ÉVOLUTIF (règle la plus faible sur 30j → palier doux,
-            §2-safe, rend null sans assez de trades / déjà fidèle). Appariés côte à
-            côte ≥lg pour habiter la largeur et grouper la même intention « sur quoi
-            bosser » (avant : 2 cartes bleues empilées pleine largeur §13). La garde
-            externe `coachingAxis || methodGoal` interdit toute grille vide ; l'auto-flow
-            comble si une seule des deux est présente (jamais de cellule trouée). */}
-        {objectives && (objectives.coachingAxis || objectives.methodGoal) ? (
-          <div className="mb-6 grid items-start gap-4 lg:grid-cols-2">
-            <CoachingAxisCard axis={objectives.coachingAxis} variant="compact" />
-            <MethodGoalCard goal={objectives.methodGoal} variant="compact" />
+        {/* Tour 9 bento — « quoi faire » (guidage) et « où j'en suis » (pont
+            progression) répondent à la même question d'arrivée : appariés ≥lg
+            (guidage dominant 1.55fr) au lieu de deux bandes pleine largeur
+            empilées. Ordre DOM inchangé (lecture AT = ordre visuel) ; si une
+            seule des deux surfaces rend, la grille retombe en pleine largeur. */}
+        {guidance || objectives ? (
+          <div
+            className={cn(
+              'mb-6 grid items-start gap-4',
+              guidance && objectives && 'lg:grid-cols-[1.55fr_1fr]',
+            )}
+          >
+            {guidance ? (
+              <div>
+                {/* S19.2 — the hero already elevates `primaryAction` as the focal
+                    CTA; exclude it here so the same next-action isn't rendered
+                    twice. */}
+                <TodayGuidance guidance={guidance} excludeKey={primaryAction?.key} />
+              </div>
+            ) : null}
+            {objectives ? (
+              /* Colonne droite : pont progression + « sur quoi bosser » (S9/CP3 —
+                 axe de coaching PERSONNEL, badge IA §2-safe, rend null sans
+                 profil ; objectif de méthode DÉRIVÉ & ÉVOLUTIF, rend null sans
+                 assez de trades). Empilés sous le pont pour équilibrer la
+                 hauteur du guidage (audit visuel tour 9 : la carte progression
+                 seule laissait ~60 % de vide dans sa colonne). Ordre de lecture
+                 inchangé : progression → axe → objectif. */
+              <div className="grid gap-4">
+                <section aria-label="Ta progression">
+                  <DashboardProgressBridge view={objectives} />
+                </section>
+                <CoachingAxisCard axis={objectives.coachingAxis} variant="compact" />
+                <MethodGoalCard goal={objectives.methodGoal} variant="compact" />
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -351,74 +367,100 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        {/* S12 — echo the member's OWN morning intention back during the day
-            (day-loop close). Read-only, renders nothing if no intention set. */}
-        <MorningIntentionRecall intention={morningCheckin?.intention} className="mb-6" />
+        {/* Tour 9 bento — la « ligne réflexive » : écho d'intention (S12),
+            insight hebdo (D §7.5) et momentum (S22) appariés 2 colonnes ≥lg au
+            lieu de trois bandes pleine largeur. WeeklyInsightCard rend TOUJOURS
+            (état vide pédagogique inclus) ⇒ la grille n'est jamais vide ; les
+            deux autres rendent null proprement (auto-flow, pas de cellule
+            trouée en tête de rangée). Chaque carte garde sa sémantique/copy. */}
+        <div className="mb-6 grid items-start gap-4 lg:grid-cols-2">
+          {/* S12 — echo the member's OWN morning intention back during the day
+              (day-loop close). Read-only, renders nothing if no intention set. */}
+          <MorningIntentionRecall intention={morningCheckin?.intention} />
 
-        {/* D — Insight hebdo déterministe (aha-moment, SPEC §7.5). Lecture PURE
-            des 7 derniers scores comportementaux du membre (pas d'IA). Intégrité
-            statistique : sous le seuil de jours notés → état vide pédagogique,
-            jamais un constat fabriqué. Anti-Black-Hat : constat factuel + un
-            micro-encouragement Mark Douglas, jamais de verdict punitif. */}
-        <WeeklyInsightCard history={scoreHistory} className="mb-6" />
+          {/* D — Insight hebdo déterministe (aha-moment, SPEC §7.5). Lecture PURE
+              des 7 derniers scores comportementaux du membre (pas d'IA). Intégrité
+              statistique : sous le seuil de jours notés → état vide pédagogique,
+              jamais un constat fabriqué. Anti-Black-Hat : constat factuel + un
+              micro-encouragement Mark Douglas, jamais de verdict punitif. */}
+          <WeeklyInsightCard history={scoreHistory} />
 
-        {/* S22 — Momentum : la dérive lente que SEULES les données voient, surfacée
-            au membre (avant, `detectMomentum` était enfermé dans le rapport IA
-            admin). N'apparaît QUE si une dimension décline de façon soutenue sur
-            ~6 semaines ; sinon rien (pas de bruit). Ton calme/process Mark Douglas,
-            jamais alarmiste (§2/§31.2). 0 requête ajoutée (réutilise scoreHistory). */}
-        <MomentumCard history={scoreHistory} className="mb-6" />
+          {/* S22 — Momentum : la dérive lente que SEULES les données voient, surfacée
+              au membre (avant, `detectMomentum` était enfermé dans le rapport IA
+              admin). N'apparaît QUE si une dimension décline de façon soutenue sur
+              ~6 semaines ; sinon rien (pas de bruit). Ton calme/process Mark Douglas,
+              jamais alarmiste (§2/§31.2). 0 requête ajoutée (réutilise scoreHistory). */}
+          <MomentumCard history={scoreHistory} />
+        </div>
 
         {/* S3/S4 — Découvrabilité de la surface Vérification (SPEC §33) + teaser
             constance. Carte calme anti-Black-Hat (§33.2) : la confrontation
             déclaré ↔ réalité MT5 est un outil de lucidité, pas une sanction.
             Restaurée sur le hub dé-densifié = le pont dashboard → /verification
             (copy honnête §33.6, score absent tant que non confronté). */}
-        <section className="mb-6" aria-label="Vérification">
-          <HoverLift className="block">
-            <Link
-              href="/verification"
-              className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)]">
-                    <ScanSearch className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                  </div>
-                  <div className="space-y-1">
-                    <span className="t-eyebrow text-[var(--t-3)]">Vérification</span>
-                    <p className="text-[15px] font-semibold text-[var(--t-1)]">
-                      Ta réalité de trading
-                    </p>
-                    <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
-                      Tes comptes, tes preuves MT5 et ton déclaré mis en face de ton historique
-                      réel. Se voir tel qu&apos;on est, pour progresser.
-                    </p>
-                    {openDiscrepancies > 0 ? (
-                      <p className="text-[12px] font-medium text-[var(--t-2)]">
-                        {openDiscrepancies} écart{openDiscrepancies > 1 ? 's' : ''} à regarder
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  {/* S4 — constancy teaser. Honesty rule §33.5 : no score until
-                      the member has been confronted at least once (no fake 100). */}
-                  {constancy ? (
-                    <div className="flex flex-col items-end">
-                      <span className="font-mono text-[22px] leading-none font-bold text-[var(--t-1)] tabular-nums">
-                        <AnimatedNumber value={Math.round(constancy.value)} />
-                        <span className="text-[12px] font-medium text-[var(--t-4)]">/100</span>
-                      </span>
-                      <span className="t-foot mt-1 text-[var(--t-4)]">score de constance</span>
+        {/* Tour 9 bento — la « ligne lucidité » : la porte Vérification (§33) et
+            la jauge de suivi (V2 S2) appariées ≥lg — même intention « où j'en
+            suis réellement », scroll raccourci. La jauge remonte d'une rangée
+            (avant : sous profil/calendrier) ; ordre de lecture AT = visuel. */}
+        <div className="mb-6 grid items-start gap-4 lg:grid-cols-2">
+          <section aria-label="Vérification">
+            <HoverLift className="block">
+              <Link
+                href="/verification"
+                className="rounded-card card-premium block border border-[var(--b-default)] bg-[var(--bg-2)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-default)] bg-[var(--bg-1)] text-[var(--t-3)]">
+                      <ScanSearch className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                     </div>
-                  ) : null}
-                  <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden="true" />
+                    <div className="space-y-1">
+                      <span className="t-eyebrow text-[var(--t-3)]">Vérification</span>
+                      <p className="text-[15px] font-semibold text-[var(--t-1)]">
+                        Ta réalité de trading
+                      </p>
+                      <p className="text-[12px] leading-relaxed text-[var(--t-3)]">
+                        Tes comptes, tes preuves MT5 et ton déclaré mis en face de ton historique
+                        réel. Se voir tel qu&apos;on est, pour progresser.
+                      </p>
+                      {openDiscrepancies > 0 ? (
+                        <p className="text-[12px] font-medium text-[var(--t-2)]">
+                          {openDiscrepancies} écart{openDiscrepancies > 1 ? 's' : ''} à regarder
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    {/* S4 — constancy teaser. Honesty rule §33.5 : no score until
+                      the member has been confronted at least once (no fake 100). */}
+                    {constancy ? (
+                      <div className="flex flex-col items-end">
+                        <span className="font-mono text-[22px] leading-none font-bold text-[var(--t-1)] tabular-nums">
+                          <AnimatedNumber value={Math.round(constancy.value)} />
+                          <span className="text-[12px] font-medium text-[var(--t-4)]">/100</span>
+                        </span>
+                        <span className="t-foot mt-1 text-[var(--t-4)]">score de constance</span>
+                      </div>
+                    ) : null}
+                    <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden="true" />
+                  </div>
                 </div>
-              </div>
-            </Link>
-          </HoverLift>
-        </section>
+              </Link>
+            </HoverLift>
+          </section>
+
+          {/* V2 S2 — Universal tracking engine : jauge de complétude (11 axes
+              méthodo, count/recency only, §21.5) + sollicitation calme de
+              l'instrument dû. */}
+          <section aria-labelledby="tracking-widget-heading">
+            <h2 id="tracking-widget-heading" className="sr-only">
+              Vue d&apos;ensemble de mon suivi
+            </h2>
+            <Suspense fallback={<TrackingCoverageSkeleton />}>
+              <TrackingCoverageWidget userId={userId!} />
+            </Suspense>
+          </section>
+        </div>
 
         {/* S19.2 — de-density (§11 "pas un mur") : the two compact status
             widgets (profile bridge + weekly calendar) pair side-by-side on lg
@@ -444,17 +486,6 @@ export default async function DashboardPage() {
             </Suspense>
           </section>
         </div>
-
-        {/* V2 S2 — Universal tracking engine : jauge de complétude (11 axes méthodo,
-            count/recency only, §21.5) + sollicitation calme de l'instrument dû. */}
-        <section aria-labelledby="tracking-widget-heading" className="mb-6">
-          <h2 id="tracking-widget-heading" className="sr-only">
-            Vue d&apos;ensemble de mon suivi
-          </h2>
-          <Suspense fallback={<TrackingCoverageSkeleton />}>
-            <TrackingCoverageWidget userId={userId!} />
-          </Suspense>
-        </section>
 
         {/* §30 — guidage calme vers le débrief mensuel frais (S6 audit). Le widget
             rend sa propre section (avec heading) ou rien si tout est déjà lu :

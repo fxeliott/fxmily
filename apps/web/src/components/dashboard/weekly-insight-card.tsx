@@ -202,7 +202,7 @@ export function WeeklyInsightCard({
   if (insight.kind === 'insufficient') {
     return (
       <aside
-        className={`rounded-card flex items-start gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 ${className}`.trim()}
+        className={`rounded-card card-premium flex items-start gap-3 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 ${className}`.trim()}
         aria-label="Insight de la semaine"
       >
         <span

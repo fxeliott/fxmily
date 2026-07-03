@@ -443,59 +443,69 @@
   --b-default: oklch(0.4 0.02 258 / 0.14);
   --b-strong: oklch(0.4 0.02 258 / 0.22);
   --b-stronger: oklch(0.4 0.02 258 / 0.34);
-  --b-acc: oklch(0.52 0.2 260 / 0.42);
-  --b-acc-strong: oklch(0.52 0.2 260 / 0.62);
-  --b-danger: oklch(0.53 0.2 25 / 0.42);
+  --b-acc: oklch(0.49 0.2 260 / 0.42);
+  --b-acc-strong: oklch(0.49 0.2 260 / 0.62);
+  --b-danger: oklch(0.5 0.2 25 / 0.42);
 
   /* ─── ACCENT (bleu assombri — seul CTA, AA texte+bouton) ────── */
-  --acc: oklch(0.52 0.2 260); /* #2563eb — accent text/icon, ~4.6:1 sur blanc */
-  --acc-hi: oklch(0.46 0.2 262); /* #1d4ed8 — hover/active accent, ~6.4:1 */
+  /* Tour 8 (light runtime audit) — tone text painted ON its own `-dim` tint is a
+     RECURRING geometry (pills S18.1, zone-bars S20, session chips / recap pills /
+     score gauges this round). The base tones were AA on solid white only; on the
+     tint they measured 3.56-4.43:1. Root fix: darken every state tone so that
+     tone-on-own-dim holds >=4.5:1 on white, canvas AND bg-2 (computed exactly,
+     oklch->sRGB blend — see contrast table in PR). -hi hovers shift down in step. */
+  --acc: oklch(
+    0.49 0.2 260
+  ); /* #0056cf — accent text/icon, ~5.6:1 sur blanc, >=4.5 sur acc-dim/toutes surfaces */
+  --acc-hi: oklch(0.43 0.2 262); /* hover/active accent, plus sombre que --acc */
   --acc-fg: oklch(0.99 0.01 247); /* near-white label sur --acc-btn */
-  --acc-dim: oklch(0.52 0.2 260 / 0.1);
-  --acc-dim-2: oklch(0.52 0.2 260 / 0.05);
+  --acc-dim: oklch(0.49 0.2 260 / 0.1);
+  --acc-dim-2: oklch(0.49 0.2 260 / 0.05);
   --acc-edge: var(--b-acc);
-  --acc-glow: 0 0 20px -6px oklch(0.52 0.2 260 / 0.3);
-  --acc-glow-strong: 0 0 28px -4px oklch(0.52 0.2 260 / 0.42);
+  --acc-glow: 0 0 20px -6px oklch(0.49 0.2 260 / 0.3);
+  --acc-glow-strong: 0 0 28px -4px oklch(0.49 0.2 260 / 0.42);
   --acc-btn: oklch(0.5 0.2 262); /* #2456cf — white label ~5.3:1 AA */
   --acc-btn-hover: oklch(0.45 0.2 263); /* #1c47c0 — hover deepens (~6.6:1) */
 
   /* ─── ACCENT-2 INDIGO (assombri pour fond clair) ────────────── */
-  --acc-2: oklch(0.5 0.21 264); /* #4f46e5 — 2e série data */
-  --acc-2-hi: oklch(0.44 0.2 266); /* #4338ca — hover */
-  --acc-2-dim: oklch(0.5 0.21 264 / 0.12);
-  --acc-2-dim-2: oklch(0.5 0.21 264 / 0.05);
-  --acc-2-edge: oklch(0.5 0.21 264 / 0.42);
-  --acc-2-glow: 0 0 20px -6px oklch(0.5 0.21 264 / 0.3);
+  --acc-2: oklch(0.48 0.21 264); /* indigo 2e série data, >=4.8 sur acc-2-dim/toutes surfaces */
+  --acc-2-hi: oklch(0.42 0.2 266); /* hover, plus sombre que --acc-2 */
+  --acc-2-dim: oklch(0.48 0.21 264 / 0.12);
+  --acc-2-dim-2: oklch(0.48 0.21 264 / 0.05);
+  --acc-2-edge: oklch(0.48 0.21 264 / 0.42);
+  --acc-2-glow: 0 0 20px -6px oklch(0.48 0.21 264 / 0.3);
 
   /* ─── CYAN → TEAL (le cyan clair est illisible sur blanc) ───── */
-  --cy: oklch(0.52 0.12 220); /* #0e7c99 teal — texte/info ~4.7:1 */
-  --cy-dim: oklch(0.52 0.12 220 / 0.1);
-  --cy-dim-strong: oklch(0.52 0.12 220 / 0.14);
-  --cy-edge-soft: oklch(0.52 0.12 220 / 0.3);
-  --cy-edge: oklch(0.52 0.12 220 / 0.42);
-  --cy-glow: 0 0 20px -6px oklch(0.52 0.12 220 / 0.3);
-  --cy-glow-strong: 0 0 28px -4px oklch(0.52 0.12 220 / 0.42);
+  --cy: oklch(0.47 0.12 220); /* #006889 teal — texte/info ~5.8:1 sur blanc, >=4.5 sur cy-dim */
+  --cy-dim: oklch(0.47 0.12 220 / 0.1);
+  --cy-dim-strong: oklch(0.47 0.12 220 / 0.14);
+  --cy-edge-soft: oklch(0.47 0.12 220 / 0.3);
+  --cy-edge: oklch(0.47 0.12 220 / 0.42);
+  --cy-glow: 0 0 20px -6px oklch(0.47 0.12 220 / 0.3);
+  --cy-glow-strong: 0 0 28px -4px oklch(0.47 0.12 220 / 0.42);
 
   /* ─── STATE (finance grammar — re-saturée, JAMAIS inversée) ──── */
-  --ok: oklch(0.52 0.17 150); /* #18914e — vert, ~4.7:1 sur blanc */
-  --ok-hi: oklch(0.46 0.16 152); /* #157a43 */
-  --ok-dim: oklch(0.52 0.17 150 / 0.12);
-  --ok-dim-2: oklch(0.52 0.17 150 / 0.18);
-  --ok-edge: oklch(0.52 0.17 150 / 0.4);
-  --warn: oklch(0.56 0.13 78); /* #936713 — ambre lisible, ~4.6:1 */
-  --warn-hi: oklch(0.5 0.12 78); /* #7d5810 */
-  --warn-dim: oklch(0.56 0.13 78 / 0.12);
-  --warn-dim-2: oklch(0.56 0.13 78 / 0.2);
-  --warn-edge: oklch(0.56 0.13 78 / 0.42);
-  --bad: oklch(0.53 0.2 25); /* #c92a26 — rouge, ~4.7:1 sur blanc */
-  --bad-hi: oklch(0.47 0.19 25); /* #b01f1d */
-  --bad-dim: oklch(0.53 0.2 25 / 0.1);
-  --bad-dim-2: oklch(0.53 0.2 25 / 0.18);
-  --bad-edge: oklch(0.53 0.2 25 / 0.4);
+  /* Tour 8 — darkened so tone-on-own-dim >=4.5:1 on white/canvas/bg-2 (measured
+     3.56-4.21:1 before: session chips, recap pills, training filter, gauges). */
+  --ok: oklch(0.46 0.17 150); /* #007017 — vert, ~6.3:1 sur blanc, >=4.6 sur ok-dim */
+  --ok-hi: oklch(0.41 0.16 152); /* hover, plus sombre que --ok */
+  --ok-dim: oklch(0.46 0.17 150 / 0.1);
+  --ok-dim-2: oklch(0.46 0.17 150 / 0.18);
+  --ok-edge: oklch(0.46 0.17 150 / 0.4);
+  --warn: oklch(0.49 0.13 78); /* #885400 — ambre lisible, ~5.9:1 sur blanc, >=4.5 sur warn-dim */
+  --warn-hi: oklch(0.44 0.12 78); /* hover, plus sombre que --warn */
+  --warn-dim: oklch(0.49 0.13 78 / 0.1);
+  --warn-dim-2: oklch(0.49 0.13 78 / 0.2);
+  --warn-edge: oklch(0.49 0.13 78 / 0.42);
+  --bad: oklch(0.5 0.2 25); /* #bb061e — rouge, ~6.7:1 sur blanc, >=4.5 sur bad-dim */
+  --bad-hi: oklch(0.43 0.19 25); /* hover, plus sombre que --bad */
+  --bad-dim: oklch(0.5 0.2 25 / 0.1);
+  --bad-dim-2: oklch(0.5 0.2 25 / 0.18);
+  --bad-edge: oklch(0.5 0.2 25 / 0.4);
   /* S20 — light mirror of the ok/bad glow colors (darkened, re-saturated for the
      white canvas, never inverted — finance grammar held). */
-  --ok-glow: oklch(0.52 0.17 150 / 0.32);
-  --bad-glow: oklch(0.53 0.2 25 / 0.3);
+  --ok-glow: oklch(0.46 0.17 150 / 0.32);
+  --bad-glow: oklch(0.5 0.2 25 / 0.3);
   --mute-dim: oklch(0.4 0.02 258 / 0.05);
 
   /* ─── SHADOWS (douces, 1 direction, sans highlight blanc) ──────
@@ -507,10 +517,10 @@
     0 0 0 1px oklch(0.4 0.02 258 / 0.04), 0 2px 5px -1px oklch(0.28 0.04 260 / 0.09),
     0 1px 2px oklch(0.28 0.04 260 / 0.06);
   --sh-card-hover:
-    0 0 0 1px oklch(0.52 0.2 260 / 0.12), 0 8px 20px -4px oklch(0.28 0.04 260 / 0.14),
+    0 0 0 1px oklch(0.49 0.2 260 / 0.12), 0 8px 20px -4px oklch(0.28 0.04 260 / 0.14),
     0 2px 6px -1px oklch(0.28 0.04 260 / 0.08);
   --sh-card-primary:
-    0 0 0 1px oklch(0.52 0.2 260 / 0.12), 0 8px 22px -6px oklch(0.5 0.2 262 / 0.24),
+    0 0 0 1px oklch(0.49 0.2 260 / 0.12), 0 8px 22px -6px oklch(0.5 0.2 262 / 0.24),
     0 2px 5px -1px oklch(0.28 0.04 260 / 0.08);
   --sh-card-selected:
     0 0 0 1px var(--acc-edge), 0 0 0 4px var(--acc-dim-2), 0 6px 18px -6px oklch(0.5 0.2 262 / 0.22);
@@ -522,7 +532,7 @@
     0 0 0 1px oklch(0.4 0.02 258 / 0.08);
   --sh-toast:
     0 16px 40px -12px oklch(0.2 0.03 260 / 0.22), 0 6px 12px -6px oklch(0.2 0.03 260 / 0.12),
-    0 0 0 1px oklch(0.52 0.2 260 / 0.1);
+    0 0 0 1px oklch(0.49 0.2 260 / 0.1);
   --sh-btn-pri: 0 1px 2px oklch(0.2 0.03 260 / 0.12), 0 2px 6px -1px oklch(0.5 0.2 262 / 0.32);
   --sh-btn-pri-hover:
     0 2px 4px oklch(0.2 0.03 260 / 0.14), 0 6px 16px -2px oklch(0.5 0.2 262 / 0.42);
@@ -604,11 +614,11 @@
 
 /* Selection en clair — teinte bleue douce, texte accent assombri lisible */
 .light ::selection {
-  background: oklch(0.52 0.2 260 / 0.16);
+  background: oklch(0.49 0.2 260 / 0.16);
   color: var(--acc-hi);
 }
 .light ::-moz-selection {
-  background: oklch(0.52 0.2 260 / 0.16);
+  background: oklch(0.49 0.2 260 / 0.16);
   color: var(--acc-hi);
 }
 
@@ -629,7 +639,7 @@
   border-color: var(--b-acc);
   box-shadow:
     inset 0 1px 0 0 oklch(1 0 0 / 0.6),
-    inset 0 0 0 1px oklch(0.52 0.2 260 / 0.1),
+    inset 0 0 0 1px oklch(0.49 0.2 260 / 0.1),
     var(--acc-glow);
 }
 
@@ -687,22 +697,22 @@
   --b-default: oklch(0.4 0.02 258 / 0.14);
   --b-strong: oklch(0.4 0.02 258 / 0.22);
   --b-stronger: oklch(0.4 0.02 258 / 0.34);
-  --b-acc: oklch(0.52 0.2 260 / 0.42);
-  --b-acc-strong: oklch(0.52 0.2 260 / 0.62);
-  --acc: oklch(0.52 0.2 260);
-  --acc-hi: oklch(0.46 0.2 262);
+  --b-acc: oklch(0.49 0.2 260 / 0.42);
+  --b-acc-strong: oklch(0.49 0.2 260 / 0.62);
+  --acc: oklch(0.49 0.2 260);
+  --acc-hi: oklch(0.43 0.2 262);
   --acc-fg: oklch(0.99 0.01 247);
-  --acc-dim: oklch(0.52 0.2 260 / 0.1);
-  --acc-dim-2: oklch(0.52 0.2 260 / 0.05);
+  --acc-dim: oklch(0.49 0.2 260 / 0.1);
+  --acc-dim-2: oklch(0.49 0.2 260 / 0.05);
   --acc-edge: var(--b-acc);
-  --acc-glow: 0 0 22px -6px oklch(0.52 0.2 260 / 0.32);
-  --acc-glow-strong: 0 0 30px -4px oklch(0.52 0.2 260 / 0.44);
+  --acc-glow: 0 0 22px -6px oklch(0.49 0.2 260 / 0.32);
+  --acc-glow-strong: 0 0 30px -4px oklch(0.49 0.2 260 / 0.44);
   --sh-card: 0 1px 2px oklch(0.28 0.04 260 / 0.06), 0 1px 1px oklch(0.28 0.04 260 / 0.04);
   --sh-card-hover:
-    0 0 0 1px oklch(0.52 0.2 260 / 0.08), 0 4px 12px -2px oklch(0.28 0.04 260 / 0.1),
+    0 0 0 1px oklch(0.49 0.2 260 / 0.08), 0 4px 12px -2px oklch(0.28 0.04 260 / 0.1),
     0 2px 4px oklch(0.28 0.04 260 / 0.06);
   --sh-card-primary:
-    0 0 0 1px oklch(0.52 0.2 260 / 0.1), 0 6px 18px -6px oklch(0.5 0.2 262 / 0.2),
+    0 0 0 1px oklch(0.49 0.2 260 / 0.1), 0 6px 18px -6px oklch(0.5 0.2 262 / 0.2),
     0 1px 2px oklch(0.28 0.04 260 / 0.06);
   --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--acc);
 }
@@ -2536,7 +2546,7 @@
 .light .spotlight-surface::before {
   background: radial-gradient(
     240px circle at var(--spot-x, 50%) var(--spot-y, 50%),
-    oklch(0.52 0.2 260 / 0.1),
+    oklch(0.49 0.2 260 / 0.1),
     transparent 68%
   );
 }

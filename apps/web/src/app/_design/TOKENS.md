@@ -42,18 +42,18 @@ et chroma (`--c-*`) ne flippent pas.
 | `text-text-2`           | `--color-text-2`    | `--t-2`                      | `oklch(0.762 0.013 256)`             | `oklch(0.42 0.02 260)`          |
 | `text-text-3`           | `--color-text-3`    | `--t-3`                      | `oklch(0.604 0.02 257)`              | `oklch(0.5 0.022 258)`          |
 | `text-text-4`           | `--color-text-4`    | `--t-4`                      | `oklch(0.62 0.022 257)`              | `oklch(0.48 0.022 258)`         |
-| `bg-acc`                | `--color-acc`       | `--acc`                      | `oklch(0.62 0.19 254)` (#3b82f6)     | `oklch(0.52 0.2 260)` (#2563eb) |
-| `*-acc-hi`              | `--color-acc-hi`    | `--acc-hi`                   | `oklch(0.74 0.16 250)`               | `oklch(0.46 0.2 262)`           |
+| `bg-acc`                | `--color-acc`       | `--acc`                      | `oklch(0.62 0.19 254)` (#3b82f6)     | `oklch(0.49 0.2 260)` (#0056cf) |
+| `*-acc-hi`              | `--color-acc-hi`    | `--acc-hi`                   | `oklch(0.74 0.16 250)`               | `oklch(0.43 0.2 262)`           |
 | `text-acc-fg`           | `--color-acc-fg`    | `--acc-fg`                   | `oklch(0.98 0.01 247)`               | `oklch(0.99 0.01 247)`          |
 | `bg-acc-dim`            | `--color-acc-dim`   | `--acc-dim`                  | `…254 / 0.16`                        | `…260 / 0.1`                    |
-| `*-acc-2`               | `--color-acc-2`     | `--acc-2`                    | `oklch(0.55 0.21 262)` (#5b5bd6)     | `oklch(0.5 0.21 264)`           |
-| `*-acc-2-hi`            | `--color-acc-2-hi`  | `--acc-2-hi`                 | `oklch(0.66 0.19 260)`               | `oklch(0.44 0.2 266)`           |
+| `*-acc-2`               | `--color-acc-2`     | `--acc-2`                    | `oklch(0.55 0.21 262)` (#5b5bd6)     | `oklch(0.48 0.21 264)`          |
+| `*-acc-2-hi`            | `--color-acc-2-hi`  | `--acc-2-hi`                 | `oklch(0.66 0.19 260)`               | `oklch(0.42 0.2 266)`           |
 | `bg-acc-2-dim`          | `--color-acc-2-dim` | `--acc-2-dim`                | `…262 / 0.16`                        | `…264 / 0.12`                   |
-| `*-cy`                  | `--color-cy`        | `--cy`                       | `oklch(0.789 0.139 217)` (#22d3ee)   | `oklch(0.52 0.12 220)`          |
+| `*-cy`                  | `--color-cy`        | `--cy`                       | `oklch(0.789 0.139 217)` (#22d3ee)   | `oklch(0.47 0.12 220)`          |
 | `*-dv-1/2/3`            | `--color-dv-1/2/3`  | `--acc` / `--acc-2` / `--cy` | (datavis : accent / accent-2 / cyan) | idem                            |
-| `text-ok` / `bg-ok`     | `--color-ok`        | `--ok`                       | `oklch(0.804 0.181 145)` (#4ade80)   | `oklch(0.52 0.17 150)`          |
-| `text-bad` / `bg-bad`   | `--color-bad`       | `--bad`                      | `oklch(0.7 0.165 22)` (#f87171)      | `oklch(0.53 0.2 25)` (#c92a26)  |
-| `text-warn` / `bg-warn` | `--color-warn`      | `--warn`                     | `oklch(0.834 0.158 80)` (#fbbf24)    | `oklch(0.56 0.13 78)`           |
+| `text-ok` / `bg-ok`     | `--color-ok`        | `--ok`                       | `oklch(0.804 0.181 145)` (#4ade80)   | `oklch(0.46 0.17 150)`          |
+| `text-bad` / `bg-bad`   | `--color-bad`       | `--bad`                      | `oklch(0.7 0.165 22)` (#f87171)      | `oklch(0.5 0.2 25)` (#bb061e)   |
+| `text-warn` / `bg-warn` | `--color-warn`      | `--warn`                     | `oklch(0.834 0.158 80)` (#fbbf24)    | `oklch(0.49 0.13 78)`           |
 
 ### Sémantique d'usage (à respecter)
 

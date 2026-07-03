@@ -93,7 +93,7 @@ export function TrainingEquityCardChart({
   const prefersReducedMotion = useReducedMotion();
   // S19 — theme-aware chart colors (was the static dark `C`): the cumulative
   // discipline curve now flips to the light hex set on white canvas (cyan→teal
-  // #0e7c99, surfaces white, axes AA). Same SSR-safe hook the 7 other charts use.
+  // #006889, surfaces white, axes AA). Same SSR-safe hook the 7 other charts use.
   const C = useChartColors();
 
   const formatted = useMemo(() => buildCumulativeKept(points, timezone), [points, timezone]);

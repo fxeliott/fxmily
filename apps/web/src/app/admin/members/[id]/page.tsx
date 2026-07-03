@@ -341,8 +341,9 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // purple/violet (mono-accent invariant §3) — the raw 0-359 hash regularly
   // landed in 270-300 (violet). The 56°-wide band keeps members visually
   // distinguishable while staying on-brand. Saturation is kept modest (22%) so
-  // the chip reads premium, not candy, and the white initials stay AA in both
-  // themes.
+  // the chip reads premium, not candy. The gradient stops are theme-INVARIANT
+  // (dark, 28%/18% HSL lightness) so the initials need a fixed light color:
+  // var(--t-1) flips dark in light theme (measured 1.16:1, unreadable).
   let hash = 0;
   for (let i = 0; i < detail.email.length; i++) {
     hash = (hash * 31 + detail.email.charCodeAt(i)) % 360;
@@ -398,7 +399,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           {/* Avatar with initials + deterministic hash gradient */}
           <div
-            className="rounded-card grid h-16 w-16 shrink-0 place-items-center border border-[var(--b-strong)] text-[20px] font-semibold text-[var(--t-1)]"
+            className="rounded-card grid h-16 w-16 shrink-0 place-items-center border border-[var(--b-strong)] text-[20px] font-semibold text-white"
             style={{
               // Both stops stay in the cool band (217 teal → 265 indigo): the
               // 2nd stop shifts toward blue (hue-12), never up into violet.

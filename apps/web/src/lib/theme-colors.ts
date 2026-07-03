@@ -81,15 +81,16 @@ export const CHART_COLORS_LIGHT = {
   bDefault: 'rgba(74, 82, 99, 0.16)',
   bStrong: 'rgba(74, 82, 99, 0.26)',
 
-  // Semantic (darkened for white canvas)
-  acc: '#2563eb', // blue — process / discipline (light --acc)
-  acc2: '#4f46e5', // indigo — 2nd data series (light --acc-2)
-  cy: '#0e7c99', // teal — cyan illegible on white → teal (light --cy)
-  ok: '#18914e', // green — gain (light --ok)
-  warn: '#936713', // amber — caution (light --warn)
-  warnHi: '#7d5810', // darker amber for the now-white tooltip bg (light --warn-hi)
-  bad: '#c92a26', // red — loss (light --bad)
-  badHi: '#b01f1d', // darker red for the now-white tooltip bg (light --bad-hi)
+  // Semantic (darkened for white canvas — tour 8 recalibration: tone-on-own-dim
+  // now holds >=4.5:1 on white/canvas/bg-2, hexes mirror globals.css `.light`)
+  acc: '#0056cf', // blue — process / discipline (light --acc)
+  acc2: '#1b4dd1', // indigo — 2nd data series (light --acc-2)
+  cy: '#006889', // teal — cyan illegible on white → teal (light --cy)
+  ok: '#007017', // green — gain (light --ok)
+  warn: '#885400', // amber — caution (light --warn)
+  warnHi: '#764700', // darker amber for the now-white tooltip bg (light --warn-hi)
+  bad: '#bb061e', // red — loss (light --bad)
+  badHi: '#9e000b', // darker red for the now-white tooltip bg (light --bad-hi)
 } as const satisfies Record<ChartColorKey, string>;
 
 /** Sugar — same shape, named for ergonomics in JSX. DARK set (SSR-safe default).

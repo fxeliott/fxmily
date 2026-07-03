@@ -9,6 +9,7 @@ import { formatLocalDate, localDateOf, parseLocalDate } from '@/lib/checkin/time
 import { listScheduledMeetingsOn } from '@/lib/meeting/service';
 import { getMindsetCheck } from '@/lib/mindset/service';
 import { getCorrectionThemes } from '@/lib/annotations/correction-themes';
+import { getRecentCrisisSignal } from '@/lib/safety/crisis-followup';
 import { getDueTrackingInstruments } from '@/lib/tracking/service';
 import { getAxisLabel } from '@/lib/tracking/axes';
 import type { CalendarBlock } from '@/lib/schemas/adaptive-calendar';
@@ -59,7 +60,11 @@ export type GuidanceKind =
   | 'tracking'
   // J-AI corrections echo — a calm reminder of a recurring point the coach has
   // raised in corrections this month (`info`, never a to-do, never punitive).
-  | 'correction-echo';
+  | 'correction-echo'
+  // Crisis follow-up — for 48h after a HIGH/MEDIUM crisis detection, a gentle
+  // "how are you today" presence (`info`, never a to-do — the member owes the
+  // app nothing after a hard moment). See `lib/safety/crisis-followup.ts`.
+  | 'crisis-followup';
 
 export interface GuidanceAction {
   /** Stable key for the React list + e2e selectors. */
@@ -150,17 +155,27 @@ async function buildDailyGuidance(
   const weekStart = currentParisWeekStart(now);
   const isMonday = parseLocalDate(today).getUTCDay() === 1;
 
-  const [checkin, calendar, questionnaire, mindset, meetings, dueTracking, correctionThemes] =
-    await Promise.all([
-      getCheckinStatus(userId, timezone, now),
-      getCalendarForUser(userId, weekStart),
-      getQuestionnaireForUser(userId, weekStart),
-      getMindsetCheck(userId, weekStart),
-      listScheduledMeetingsOn(today),
-      getDueTrackingInstruments(userId, now),
-      // J-AI corrections echo — the recurring coaching points of the last 30 days.
-      getCorrectionThemes(userId, 30, now),
-    ]);
+  const [
+    checkin,
+    calendar,
+    questionnaire,
+    mindset,
+    meetings,
+    dueTracking,
+    correctionThemes,
+    crisisSignal,
+  ] = await Promise.all([
+    getCheckinStatus(userId, timezone, now),
+    getCalendarForUser(userId, weekStart),
+    getQuestionnaireForUser(userId, weekStart),
+    getMindsetCheck(userId, weekStart),
+    listScheduledMeetingsOn(today),
+    getDueTrackingInstruments(userId, now),
+    // J-AI corrections echo — the recurring coaching points of the last 30 days.
+    getCorrectionThemes(userId, 30, now),
+    // Crisis follow-up — most recent HIGH/MEDIUM detection inside 48h, or null.
+    getRecentCrisisSignal(userId, now),
+  ]);
 
   // --- TODAY's calendar blocks + calendar state -----------------------------
   let calendarState: CalendarTodayState;
@@ -182,6 +197,27 @@ async function buildDailyGuidance(
 
   // --- Ordered actions ------------------------------------------------------
   const actions: GuidanceAction[] = [];
+
+  // (0) Crisis follow-up — FIRST, above everything, for 48h after a HIGH/MEDIUM
+  // detection (audit-derived, see `lib/safety/crisis-followup.ts`). `info` on
+  // purpose: it must NEVER become a to-do the member "owes" the app, and the
+  // timing highlight below keeps pointing at the check-in as the concrete next
+  // step. PRIVACY (RGPD §16): the copy never quotes or paraphrases what the
+  // member wrote — only a calm presence, with the 3114 restated on `high`.
+  if (crisisSignal) {
+    actions.push({
+      key: 'crisis-followup',
+      kind: 'crisis-followup',
+      title: 'Comment tu vas aujourd’hui ?',
+      detail:
+        crisisSignal.level === 'high'
+          ? 'Ces derniers jours ont peut-être été lourds. Prends un instant pour te poser. Le 3114 reste disponible 24h/24, gratuit, si tu en as besoin.'
+          : 'Ces derniers jours ont peut-être été chargés. Prends un instant pour te poser, sans pression. On avance à ton rythme.',
+      href: '/checkin',
+      state: 'info',
+      emphasis: 'primary',
+    });
+  }
 
   // (1) Check-in — the slot-appropriate one is primary. The "done" one is a
   // calm ack; the secondary one is only surfaced when still to do (anti-clutter).

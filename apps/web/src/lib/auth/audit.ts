@@ -162,6 +162,17 @@ export type AuditAction =
   // `admin.annotation.*` admin-scoped pattern.
   | 'admin.note.created'
   | 'admin.note.deleted'
+  // Tour 11 (chantier G) — admin closes the coaching loop. `*.resolved` marks a
+  // verification discrepancy handled by hand (open|acknowledged → resolved);
+  // `*.reinforced` records the coach dropping a private relance note about an
+  // open/missed correction objective. Both carry ids-only metadata (PII-free),
+  // same admin-scoped pattern as `admin.note.*` / `admin.annotation.*`.
+  | 'admin.discrepancy.resolved'
+  | 'admin.objective.reinforced'
+  // Tour 11 (chantier C) — admin converts a WEAK SIGNAL into a member
+  // micro-objective. Metadata is ids-only (`memberId`, opaque `dimensionId`,
+  // derived `mentalAxis`, `created`) — FIREWALL §21.5: never the signal text.
+  | 'admin.objective.seeded_from_signal'
   // V1.8 — REFLECT module (member-facing reflection + CBT Ellis ABCD).
   // `*.submitted` rows carry `crisisLevel` + `injectionSuspected` in metadata
   // so a single row captures the full audit picture for a submission.

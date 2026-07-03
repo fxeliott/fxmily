@@ -7,6 +7,7 @@ vi.mock('@/lib/db', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       deleteMany: vi.fn(),
+      count: vi.fn(),
     },
   },
 }));
@@ -15,6 +16,7 @@ import { db } from '@/lib/db';
 
 import {
   AnnotationNotFoundError,
+  countUnseenAnnotationsByMember,
   createAnnotation,
   deleteAnnotation,
   getAnnotationById,
@@ -138,5 +140,27 @@ describe('getAnnotationById', () => {
   it('returns null when absent', async () => {
     vi.mocked(db.tradeAnnotation.findUnique).mockResolvedValue(null as never);
     expect(await getAnnotationById('nope')).toBeNull();
+  });
+});
+
+describe('countUnseenAnnotationsByMember', () => {
+  it('counts unseen annotations scoped to the member’s own trades', async () => {
+    vi.mocked(db.tradeAnnotation.count).mockResolvedValue(3 as never);
+
+    const result = await countUnseenAnnotationsByMember('member-1');
+
+    expect(result).toBe(3);
+    const call = vi.mocked(db.tradeAnnotation.count).mock.calls[0];
+    if (!call) throw new Error('expected count to be called');
+    const arg = call[0] as { where: Record<string, unknown> };
+    expect(arg.where).toEqual({
+      seenByMemberAt: null,
+      trade: { is: { userId: 'member-1' } },
+    });
+  });
+
+  it('returns 0 when the member has no unread corrections', async () => {
+    vi.mocked(db.tradeAnnotation.count).mockResolvedValue(0 as never);
+    await expect(countUnseenAnnotationsByMember('member-2')).resolves.toBe(0);
   });
 });

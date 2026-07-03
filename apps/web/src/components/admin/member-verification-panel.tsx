@@ -7,6 +7,8 @@ import { ALERT_LABELS } from '@/lib/verification/alert-labels';
 import type { ConstancyScoreView } from '@/lib/verification/constancy';
 import type { DiscrepancyView, VerificationOverview } from '@/lib/verification/service';
 
+import { ResolveDiscrepancyButton } from './resolve-discrepancy-button';
+
 /**
  * S3 §33 — admin read-only « réalité vs déclaré » panel (S7 output:
  * « admin : visibilité totale de la réalité & des écarts »). Carbone pattern
@@ -48,6 +50,8 @@ interface AlertView {
 }
 
 interface MemberVerificationPanelProps {
+  /** The supervised member — needed to revalidate their page after a resolve. */
+  memberId: string;
   overview: VerificationOverview;
   constancy: ConstancyScoreView | null;
   discrepancies: readonly DiscrepancyView[];
@@ -63,6 +67,7 @@ interface MemberVerificationPanelProps {
 }
 
 export function MemberVerificationPanel({
+  memberId,
   overview,
   constancy,
   discrepancies,
@@ -162,6 +167,16 @@ export function MemberVerificationPanel({
                   ) : null}
                   {d.memberReason !== null ? (
                     <p className="t-cap text-[var(--t-4)]">Motif membre : {d.memberReason}</p>
+                  ) : null}
+                  {/* Tour 11 (chantier G, FINDING 3) — the admin closes an
+                      open/acknowledged gap by hand (the machine only ever reached
+                      « résolu » via reconciliation, so an acknowledged gap with a
+                      valid member reason sat here forever). Discreet, sober, only
+                      on non-resolved rows. Posture §31.2 : neutral wording. */}
+                  {d.status !== 'resolved' ? (
+                    <div className="flex justify-end pt-0.5">
+                      <ResolveDiscrepancyButton memberId={memberId} discrepancyId={d.id} />
+                    </div>
                   ) : null}
                 </Card>
               </li>

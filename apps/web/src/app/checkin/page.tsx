@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { CatchUpYesterdayCue } from '@/components/checkin/catch-up-yesterday-cue';
+import { CheckinEchoCard } from '@/components/checkin/checkin-echo-card';
 import { FirstCheckinCelebration } from '@/components/checkin/first-checkin-celebration';
 import { V18CrisisBanner } from '@/components/review/crisis-banner';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
@@ -13,14 +14,24 @@ import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { Pill } from '@/components/ui/pill';
 import {
+  buildDayWrap,
+  buildEveningCheckinEcho,
+  buildMorningCheckinEcho,
+  type CheckinEcho,
+} from '@/lib/coaching/checkin-echo';
+import { echoProfileDims } from '@/lib/coaching/trade-echo';
+import {
   countCheckins,
+  getCheckin,
   getCheckinStatus,
   getLast7Days,
   getStreak,
   getYesterdayBackfill,
 } from '@/lib/checkin/service';
 import { crossedMilestone } from '@/lib/checkin/streak';
-import { formatLocalDate } from '@/lib/checkin/timezone';
+import { formatLocalDate, localInstantToUtc, shiftLocalDate } from '@/lib/checkin/timezone';
+import { db } from '@/lib/db';
+import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { cn } from '@/lib/utils';
 
 export const metadata = {
@@ -89,6 +100,16 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
   // otherwise it's wasted work on every landing visit.
   const isFirstEver = justDone && justDoneSlot ? (await countCheckins(userId)) === 1 : false;
 
+  // Tour 11 — the LIVING check-in echo: an immediate, member-specific reading of
+  // what the member just declared (deterministic, enum/boolean-derived — see
+  // lib/coaching/checkin-echo.ts). Built ONLY when we just completed a check-in,
+  // so the profile + the just-written row are read exclusively on that path
+  // (mirror of the `isFirstEver` gate — zero extra work on plain landing visits).
+  const checkinEcho =
+    justDone && justDoneSlot
+      ? await buildCheckinEcho(userId, timezone, justDoneSlot, status.today)
+      : null;
+
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* DS-v3 — ambient mesh + drifting orbs behind the hub (tone blue défaut,
@@ -135,9 +156,14 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
           <>
             {/* DoneBanner is ALWAYS the confirmation status (role="status",
                 "Check-in matin enregistré · streak N") — the J5 e2e asserts on it
-                and assistive tech reads it. The first-ever celebration is an
-                additive visual bonus ABOVE it, never a replacement. */}
+                and assistive tech reads it. The first-ever celebration and the
+                Tour 11 living echo are additive context ABOVE it, never a
+                replacement. */}
             {isFirstEver ? <FirstCheckinCelebration slot={justDoneSlot} /> : null}
+            {/* Tour 11 — living, member-specific reading of what was just
+                declared. Renders above the confirmation so the member reads the
+                mirror first, then the plain streak confirmation. */}
+            {checkinEcho ? <CheckinEchoCard echo={checkinEcho} /> : null}
             <DoneBanner slot={justDoneSlot} streak={streak.current} />
           </>
         ) : null}
@@ -204,6 +230,96 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
       </div>
     </main>
   );
+}
+
+/**
+ * Tour 11 — assemble the living check-in echo for the slot we just submitted.
+ * Reads the profile (register + stage, via `echoProfileDims`) and the freshly
+ * written check-in row (the true self-reports), then selects deterministic
+ * copy. Best-effort: any read failure degrades to `null` (the DoneBanner still
+ * confirms the save), never breaks the confirmation page.
+ *
+ * For the EVENING slot we FUSE the reflective echo with the factual "journée
+ * bouclée" recap (finding 2) into a SINGLE coherent card: the mirror line(s)
+ * first, then the true facts of the day, then the calm closer — capped so the
+ * card stays short.
+ */
+async function buildCheckinEcho(
+  userId: string,
+  timezone: string,
+  slot: 'morning' | 'evening',
+  today: string,
+): Promise<CheckinEcho | null> {
+  try {
+    const [profile, row] = await Promise.all([
+      getProfileForUser(userId),
+      getCheckin(userId, today, slot),
+    ]);
+    if (!row) return null;
+    const dims = echoProfileDims(profile);
+
+    if (slot === 'morning') {
+      return buildMorningCheckinEcho({
+        moodScore: row.moodScore,
+        sleepQuality: row.sleepQuality,
+        emotionTags: row.emotionTags,
+        learningStage: dims.learningStage,
+        coachingRegister: dims.coachingRegister,
+      });
+    }
+
+    // Evening — reflective mirror FUSED with the factual day-wrap.
+    const echo = buildEveningCheckinEcho({
+      planRespectedToday: row.planRespectedToday,
+      stressScore: row.stressScore,
+      intentionKept: row.intentionKept,
+      emotionTags: row.emotionTags,
+      learningStage: dims.learningStage,
+      coachingRegister: dims.coachingRegister,
+    });
+
+    // Count trades JOURNALISÉS on the member's local day (finding 2). Scoped to
+    // userId + [dayStart, nextDayStart) in the member's timezone via
+    // localInstantToUtc — a light dedicated count, never touching the dashboard.
+    const tradesToday = await countTradesEnteredOnLocalDay(userId, today, timezone);
+    const wrap = buildDayWrap({
+      tradesToday,
+      planRespectedToday: row.planRespectedToday,
+      intentionKept: row.intentionKept,
+      formationFollowed: row.formationFollowed,
+    });
+
+    // One coherent card, kept short: the reflective mirror (line 0, drops the
+    // stage anchor to leave room for the facts) + the day-wrap facts + closer.
+    return {
+      title: 'Ta journée, bouclée',
+      tone: echo.tone,
+      lines: [echo.lines[0]!, ...wrap],
+    };
+  } catch {
+    // Never let the echo break the confirmation page — the save already landed.
+    return null;
+  }
+}
+
+/**
+ * Tour 11 — count trades whose entry instant falls on the member's local
+ * calendar `today` (finding 2 "journée bouclée"). We scope on `enteredAt`
+ * (the member's own trade-entry timestamp) between the local-day boundaries
+ * converted to UTC, so DST + timezone are respected (F2 pattern). Dedicated
+ * light count — deliberately NOT the app-wide `countTradesByStatus` (which is
+ * not day-scoped) and never touches the dashboard.
+ */
+async function countTradesEnteredOnLocalDay(
+  userId: string,
+  today: string,
+  timezone: string,
+): Promise<number> {
+  const dayStart = localInstantToUtc(today, 0, 0, 0, 0, timezone);
+  const nextDayStart = localInstantToUtc(shiftLocalDate(today, 1), 0, 0, 0, 0, timezone);
+  return db.trade.count({
+    where: { userId, enteredAt: { gte: dayStart, lt: nextDayStart } },
+  });
 }
 
 function SlotCard({

@@ -61,6 +61,7 @@ import {
   createBrokerAccount,
   deleteProof,
   getVerificationOverview,
+  resolveDiscrepancyAsAdmin,
   submitDiscrepancyReason,
 } from './service';
 
@@ -110,6 +111,28 @@ describe('submitDiscrepancyReason — atomic status flip (RC#7 TX-3)', () => {
       DiscrepancyNotFoundError,
     );
     expect(m.discrepancyUpdateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveDiscrepancyAsAdmin — admin hand-close (Tour 11 chantier G)', () => {
+  it('flips open|acknowledged → resolved via a status-guarded updateMany and returns the count', async () => {
+    m.discrepancyUpdateMany.mockResolvedValue({ count: 1 });
+
+    const flipped = await resolveDiscrepancyAsAdmin('disc1');
+
+    expect(flipped).toBe(1);
+    const call = m.discrepancyUpdateMany.mock.calls[0]?.[0];
+    // Gate-locked WHERE: a row already 'resolved' (reconcile won the race) is
+    // excluded, so the admin close can never clobber a machine resolution.
+    expect(call?.where).toEqual({ id: 'disc1', status: { in: ['open', 'acknowledged'] } });
+    expect(call?.data).toEqual({ status: 'resolved' });
+    // No memberId in the WHERE — this is an admin-scoped write (auth already checked).
+    expect('memberId' in (call?.where ?? {})).toBe(false);
+  });
+
+  it('RACE — already resolved / stale id matches 0 rows and returns 0 (no throw)', async () => {
+    m.discrepancyUpdateMany.mockResolvedValue({ count: 0 });
+    await expect(resolveDiscrepancyAsAdmin('disc1')).resolves.toBe(0);
   });
 });
 

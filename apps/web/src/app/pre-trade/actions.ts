@@ -135,10 +135,10 @@ export async function submitPreTradeCheckAction(
   // if Next ever doesn't throw, letting the bug surface beats silently
   // returning `{ ok: true }` and leaving the wizard hanging.
   //
-  // Target: `/dashboard?done=pre-trade` (NOT brief's `/?done=pre-trade` —
-  // `/` is the public SplashHero, landing an authenticated post-submit user
-  // there breaks the confirmation UX. The Card trigger lives on /dashboard
-  // — returning the user there with a confirmation flag is the consistent
-  // J5 pattern. Documented deviation from auto_session_resume §4 brief).
-  redirect('/dashboard?done=pre-trade');
+  // Tour 11 (finding 3): redirect to the dedicated confirmation surface
+  // `/pre-trade/done/<id>` that renders a deterministic, register-personalised
+  // echo of the pause. The former target `/dashboard?done=pre-trade` carried a
+  // DEAD param (the dashboard never read `searchParams`), so the 30s pause fell
+  // into the void with zero acknowledgement.
+  redirect(`/pre-trade/done/${check.id}`);
 }

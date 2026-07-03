@@ -372,6 +372,32 @@ export async function submitDiscrepancyReason(
 }
 
 /**
+ * Tour 11 (chantier G, FINDING 3) — the ADMIN closes a discrepancy by hand.
+ *
+ * `DiscrepancyStatus` has three states (open / acknowledged / resolved) but only
+ * the reconciliation machine ever reached `resolved` : an `acknowledged` gap (the
+ * member gave a valid reason) sat there forever with no admin lever. This lets the
+ * coach mark such a gap « traité » once they have handled it off-app.
+ *
+ * Gate-locked `updateMany` (carbone `submitDiscrepancyReason` TX-3, l.364-371) :
+ * the WHERE predicate restricts the flip to rows still `open` OR `acknowledged`,
+ * so a row the reconcile pipeline concurrently flipped to `resolved` (or that was
+ * never in a resolvable state) is left untouched — no lost update, no clobber.
+ * ADMIN scope : the caller (Server Action) has already re-checked `role === 'admin'`,
+ * so no `memberId` ownership filter is needed here (unlike the member-facing writes).
+ *
+ * Returns the number of rows flipped (`0` = already resolved / not found), so the
+ * action can surface an accurate result without a second read.
+ */
+export async function resolveDiscrepancyAsAdmin(discrepancyId: string): Promise<number> {
+  const result = await db.discrepancy.updateMany({
+    where: { id: discrepancyId, status: { in: ['open', 'acknowledged'] } },
+    data: { status: 'resolved' },
+  });
+  return result.count;
+}
+
+/**
  * Delete one of the member's proofs. The DB row is the source of truth — the
  * storage object is deleted best-effort (never blocks the user-facing flow;
  * orphans are swept by the purge path). Extracted positions SURVIVE the proof

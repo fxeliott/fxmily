@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DiscrepancyView, VerificationOverview } from '@/lib/verification/service';
+
+// The panel renders the `ResolveDiscrepancyButton` client island (Tour 11) which
+// references the server action. Mock it so this presentational test never pulls
+// NextAuth/next-cache (same pattern as `micro-objective-card.test.tsx`).
+vi.mock('@/app/admin/members/[id]/resolve-discrepancy-actions', () => ({
+  resolveDiscrepancyAction: vi.fn().mockResolvedValue({ ok: true }),
+}));
 
 import { MemberVerificationPanel } from './member-verification-panel';
 
@@ -50,6 +57,7 @@ describe('MemberVerificationPanel — face-à-face réalité vs déclaré (S7 §
   it('rend le face-à-face declared/reality quand l’écart porte les deux côtés', () => {
     render(
       <MemberVerificationPanel
+        memberId="member-1"
         overview={EMPTY_OVERVIEW}
         constancy={null}
         discrepancies={[discrepancy()]}
@@ -70,6 +78,7 @@ describe('MemberVerificationPanel — face-à-face réalité vs déclaré (S7 §
   it('ne rend AUCUN face-à-face pour un rituel sans côté trade (les deux nuls)', () => {
     render(
       <MemberVerificationPanel
+        memberId="member-1"
         overview={EMPTY_OVERVIEW}
         constancy={null}
         discrepancies={[

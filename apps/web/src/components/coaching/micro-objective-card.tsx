@@ -1,6 +1,6 @@
 import { Compass } from 'lucide-react';
 
-import type { MicroObjectiveView } from '@/lib/coaching/micro-objective';
+import type { MicroObjectiveCloseEcho, MicroObjectiveView } from '@/lib/coaching/micro-objective';
 import { cn } from '@/lib/utils';
 
 import { CloseMicroObjective } from './close-micro-objective';
@@ -32,13 +32,29 @@ import { CloseMicroObjective } from './close-micro-objective';
 export function MicroObjectiveCard({
   objective,
   annotationExcerpt = null,
+  isStale = false,
   variant = 'full',
   className,
+  onEcho,
 }: {
   objective: MicroObjectiveView | null;
   annotationExcerpt?: string | null;
+  /**
+   * Tour 11 (FINDING 2) — l'objectif ouvert dépasse le seuil de sommeil (14j,
+   * calculé server-side via `isMicroObjectiveStale`). Ajoute UNE relance douce
+   * au-dessus du bloc de clôture. Factuel, jamais un compte à rebours, jamais
+   * rouge (§31.2). `false` par défaut = comportement historique inchangé.
+   */
+  isStale?: boolean;
   variant?: 'full' | 'compact';
   className?: string;
+  /**
+   * Tour 11 (FINDING 1, fix runtime) — remonte l'écho de clôture vers l'île
+   * toujours montée (`MicroObjectiveLoop`) : la revalidation RSC démonte cette
+   * carte (la boucle quitte le slot « ouvert »), l'écho doit vivre au-dessus.
+   * Prop fonction ⇒ uniquement depuis un contexte client.
+   */
+  onEcho?: (echo: MicroObjectiveCloseEcho | null) => void;
 }) {
   if (!objective) return null;
   const compact = variant === 'compact';
@@ -86,12 +102,21 @@ export function MicroObjectiveCard({
       </div>
 
       <div className="flex flex-col gap-2 border-t border-[var(--b-acc)] pt-3">
+        {/* Tour 11 (FINDING 2) — relance douce quand la boucle est en sommeil
+            (> 14j). Factuel, jamais un compte à rebours ni un reproche : on
+            rappelle simplement que le membre peut la refermer pour repartir.
+            Rendu au-dessus du bloc de clôture, ton calme (accent, jamais rouge). */}
+        {isStale ? (
+          <p className="t-foot leading-relaxed text-[var(--acc-hi)]">
+            Toujours d’actualité ? Tu peux le marquer tenu, pas encore, ou le laisser partir.
+          </p>
+        ) : null}
         {!compact ? (
           <p className="t-foot text-[var(--t-3)]">
             Une seule chose à la fois. Tu la refermeras à ton prochain passage.
           </p>
         ) : null}
-        <CloseMicroObjective microObjectiveId={objective.id} />
+        <CloseMicroObjective microObjectiveId={objective.id} onEcho={onEcho} />
       </div>
     </section>
   );

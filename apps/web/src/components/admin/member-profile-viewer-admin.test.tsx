@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   SerializedMemberProfile,
   SerializedOnboardingInterview,
 } from '@/lib/onboarding-interview/service';
+
+// Tour 11 — `WeakSignalsSection` renders the `SeedObjectiveFromSignalButton`
+// client island which references the server action. Mock it so this
+// presentational test never pulls NextAuth/next-cache (same pattern as
+// `member-verification-panel.test.tsx` / `micro-objective-card.test.tsx`).
+vi.mock('@/app/admin/members/[id]/objective-from-signal-actions', () => ({
+  seedObjectiveFromSignalAction: vi.fn().mockResolvedValue({ ok: true, status: 'created' }),
+}));
 
 import { MemberProfileViewerAdmin } from './member-profile-viewer-admin';
 

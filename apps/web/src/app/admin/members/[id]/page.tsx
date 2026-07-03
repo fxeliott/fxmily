@@ -1,4 +1,4 @@
-import { ChevronRight, Mail, Shield, ShieldAlert } from 'lucide-react';
+import { ChevronRight, Mail, MailWarning, Shield, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
@@ -39,6 +39,7 @@ import { ScoreGaugeGrid } from '@/components/scoring/score-gauge-grid';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { listAdminNotesForMember } from '@/lib/admin/admin-notes-service';
+import { countUnseenAnnotationsByMember } from '@/lib/admin/annotations-service';
 import { aggregateMemberDeliveryStats, listMemberDeliveries } from '@/lib/admin/cards-service';
 import { MemberNotFoundError, getMemberDetail } from '@/lib/admin/members-service';
 import { listMemberTradesAsAdmin } from '@/lib/admin/trades-service';
@@ -145,6 +146,12 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
     if (err instanceof MemberNotFoundError) notFound();
     throw err;
   }
+
+  // Tour 11 (chantier G, FINDING 1) — hero rollup : how many of this member's
+  // admin corrections are still unread. The unseen pill existed only per-trade,
+  // forcing the coach to open every trade to know if a reframe landed. Fetched
+  // unconditionally (the hero shows on every tab); a single indexed count.
+  const unseenCorrections = await countUnseenAnnotationsByMember(memberId);
 
   // Cursor-paginated (S7). A stale cursor (trade deleted since the link was
   // rendered) returns an empty list (Prisma 7 — no throw), handled by the
@@ -437,6 +444,17 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
                   SUSPENDU
                 </Pill>
               ) : null}
+              {/* Tour 11 (chantier G, FINDING 1) — corrections still unread by
+                  the member. Factual pointer, never a guilt counter (§31.2) :
+                  hidden entirely at 0 (no « 0 corrections non lues »). Amber
+                  (warn), never red (red is reserved for trade outcomes). */}
+              {unseenCorrections > 0 ? (
+                <Pill tone="warn">
+                  <MailWarning className="h-2.5 w-2.5" strokeWidth={2} aria-hidden />
+                  {unseenCorrections} correction{unseenCorrections > 1 ? 's' : ''} non lue
+                  {unseenCorrections > 1 ? 's' : ''}
+                </Pill>
+              ) : null}
             </div>
             <p className="t-body flex min-w-0 items-center gap-1.5 font-mono text-[var(--t-2)] tabular-nums">
               <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--t-4)]" strokeWidth={1.75} />
@@ -499,7 +517,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
               landing? Sits above the delivery timeline (both are Mark Douglas
               engagement surfaces). */}
           <section className="flex flex-col gap-3">
-            <MemberCorrectionsFollowupPanel objectives={douglasData[2]} />
+            <MemberCorrectionsFollowupPanel memberId={memberId} objectives={douglasData[2]} />
           </section>
           <section className="flex flex-col gap-3">
             <h2 className="t-h3 text-foreground">Fiches Mark Douglas</h2>
@@ -532,6 +550,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
       ) : null}
       {tab === 'verification' && verification !== null ? (
         <MemberVerificationPanel
+          memberId={memberId}
           overview={verification[0]}
           constancy={verification[1]}
           discrepancies={verification[2]}

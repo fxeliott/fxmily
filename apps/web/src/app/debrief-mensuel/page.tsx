@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { EmptyState } from '@/components/ui/empty-state';
 import { MonthlyDebriefReader } from '@/components/monthly-debrief/monthly-debrief-reader';
 import { MonthlyDebriefTimeline } from '@/components/monthly-debrief/monthly-debrief-timeline';
 import { formatMonthLabelFr } from '@/lib/monthly-debrief/format';
@@ -135,13 +136,20 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
           </article>
         ) : (
           <div
-            className="rounded-card-lg border border-dashed border-[var(--b-strong)] p-6 text-center"
+            className="rounded-card-lg border border-[var(--b-default)] bg-[var(--bg-1)]"
             data-empty="true"
           >
-            <p className="t-body text-[var(--t-2)]">
-              Ton premier débrief mensuel arrivera au début du mois prochain. Il fait le point sur
-              ta progression, ce n&apos;est pas un score, c&apos;est un recul.
-            </p>
+            <EmptyState
+              icon={CalendarRange}
+              headline="Ton premier débrief arrive bientôt"
+              lead="Une synthèse de ton mois, ni un score ni un verdict, juste du recul sur ta progression."
+              guides={[
+                'Continue tes check-ins du matin et du soir.',
+                'Logue tes trades, plan et process compris.',
+                'Le 1er du mois prochain, ta synthèse apparaît ici.',
+              ]}
+              tip="Rien à préparer : le débrief se construit tout seul à partir de ce que tu nourris chaque jour."
+            />
           </div>
         )}
 

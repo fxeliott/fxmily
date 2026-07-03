@@ -7,15 +7,18 @@ import { auth } from '@/auth';
 import { CalendarStatusWidget } from '@/components/calendar/calendar-status-widget';
 import { MorningIntentionRecall } from '@/components/checkin/morning-intention-recall';
 import { MentalMapCard } from '@/components/coaching/mental-map-card';
-import { MicroObjectiveCard } from '@/components/coaching/micro-objective-card';
+import { MicroObjectiveLoop } from '@/components/coaching/micro-objective-loop';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { FirstRunWelcome } from '@/components/dashboard/first-run-welcome';
 import { HubDriftSignal } from '@/components/dashboard/hub-drift-signal';
 import { JournalShortcut } from '@/components/dashboard/journal-shortcut';
+import { JourneyMilestoneBanner } from '@/components/dashboard/journey-milestone-banner';
 import { MilestoneBanner } from '@/components/dashboard/milestone-banner';
 import { MomentumCard } from '@/components/dashboard/momentum-card';
 import { MonthlyDebriefWidget } from '@/components/dashboard/monthly-debrief-widget';
+import { MorningBridgeCard } from '@/components/dashboard/morning-bridge-card';
 import { NorthStarHero } from '@/components/dashboard/north-star-hero';
+import { StageAwareLine } from '@/components/dashboard/stage-aware-line';
 import { DashboardProgressBridge } from '@/components/dashboard/progress-bridge';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
 import { SessionTimeline } from '@/components/dashboard/session-timeline';
@@ -34,10 +37,13 @@ import { HoverLift } from '@/components/ui/hover-lift';
 import { Kbd } from '@/components/ui/kbd';
 import { getCheckin, getStreak, todayFor } from '@/lib/checkin/service';
 import { getTodayMilestone } from '@/lib/checkin/milestone';
-import { getOpenMicroObjective } from '@/lib/coaching/micro-objective';
+import { getTodayJourneyMilestone } from '@/lib/coaching/journey-milestone';
+import { getOpenMicroObjective, isMicroObjectiveStale } from '@/lib/coaching/micro-objective';
+import { getDashboardMorningContext } from '@/lib/coaching/morning-bridge-data';
 import { getMentalMap } from '@/lib/coaching/service';
+import { echoProfileDims } from '@/lib/coaching/trade-echo';
 import { getDailyGuidance } from '@/lib/daily-guidance/service';
-import { getInterviewForUser } from '@/lib/onboarding-interview/service';
+import { getInterviewForUser, getProfileForUser } from '@/lib/onboarding-interview/service';
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 import { getSessionRoutine } from '@/lib/session-routine/service';
@@ -107,6 +113,7 @@ export default async function DashboardPage() {
     driftAlerts,
     mentalMap,
     openMicroObjective,
+    profile,
   ] = userId
     ? await Promise.all([
         countTradesByStatus(userId),
@@ -142,6 +149,11 @@ export default async function DashboardPage() {
         // tant qu'il n'y a rien à dire (jamais une entrée fabriquée).
         getMentalMap(userId),
         getOpenMicroObjective(userId),
+        // Tour 11 — profil S2 (dimensions IA) pour personnaliser le pont du matin
+        // (register) + la ligne stage-aware (stage). FIREWALL §21.5 : seuls
+        // `coachingTone`/`learningStage` sont dérivés via `echoProfileDims`,
+        // jamais `weakSignals`. Rend null sans profil ⇒ surfaces se cachent.
+        getProfileForUser(userId),
       ])
     : [
         { open: 0, closed: 0 },
@@ -156,6 +168,7 @@ export default async function DashboardPage() {
         null,
         [],
         [],
+        null,
         null,
       ];
 
@@ -209,6 +222,30 @@ export default async function DashboardPage() {
     current: streak.current,
     todayFilled: streak.todayFilled,
   });
+
+  // Tour 11 — dimensions IA du profil (register/stage) dérivées via echoProfileDims
+  // (safeParse, garbage -> null, fallback register 'pedagogique' en aval).
+  // FIREWALL §21.5 : jamais `weakSignals`. Null sans profil ⇒ surfaces se cachent.
+  const profileDims = echoProfileDims(profile);
+  // Tour 11 (FINDING 1/2) — le pont du matin : écho de la veille (check-in soir)
+  // OU accueil après absence. Le seam charge aussi `createdAt` (jalon 1er mois).
+  // Le pont ne rend RIEN hors du matin (garde côté builder) — le seam évite alors
+  // les lectures check-in inutiles. Déterministe (0 IA), personnalisé par register.
+  const { bridge: morningBridge, createdAt: memberCreatedAt } = userId
+    ? await getDashboardMorningContext(userId, timezone, profileDims.coachingRegister)
+    : { bridge: null, createdAt: null };
+  // Tour 11 (FINDING 4) — jalon de PROCESS (trades journalisés 10/25/50/100, 1er
+  // mois de présence). Pur + synchrone (dérivé de faits déjà chargés, 0 requête).
+  // ONE-DAY-ONLY + gate serveur (compte pile / jour anniversaire). Le streak garde
+  // la priorité : le journey ne s'affiche QUE si `todayMilestone` est null.
+  const journeyMilestone = todayMilestone
+    ? null
+    : getTodayJourneyMilestone({
+        totalTrades,
+        createdAt: memberCreatedAt,
+        timezone,
+        now: new Date(),
+      });
   // S9.1 "wave wow" — brand-new member (no trade, no streak) gets a warm,
   // animated first-run welcome instead of a wall of empty analytics.
   const isFirstRun = totalTrades === 0 && streak.current === 0;
@@ -251,11 +288,34 @@ export default async function DashboardPage() {
           sessionFocus={sessionFocus}
         />
 
+        {/* Tour 11 (FINDING 1/2/3) — la « ligne de connaissance » discrète sous le
+            hero : le pont du matin (écho de la veille OU accueil après absence,
+            matin uniquement) + la ligne stage-aware (le membre VOIT que l'app le
+            connaît). Sobriété absolue : une carte calme + une ligne fine, jamais
+            rendues vides (chaque builder rend null proprement). §31.2 : jamais
+            rouge, jamais culpabilisant. */}
+        {morningBridge || profileDims.learningStage ? (
+          <section className="mb-6 flex flex-col gap-3" aria-label="Ta situation du moment">
+            {morningBridge ? <MorningBridgeCard bridge={morningBridge} /> : null}
+            <StageAwareLine stage={profileDims.learningStage} />
+          </section>
+        ) : null}
+
         {/* S11 — calm streak-milestone celebration, only on the crossing day.
             Mutually exclusive with first-run (milestone ⇒ streak ≥ 7). */}
         {todayMilestone ? (
           <section className="mb-6" data-self-animate aria-label="Palier de régularité franchi">
             <MilestoneBanner milestone={todayMilestone} streak={streak.current} />
+          </section>
+        ) : null}
+
+        {/* Tour 11 (FINDING 4) — jalon de PROCESS (trades journalisés / 1er mois),
+            calme et dismissible. Exclusif du streak-milestone : ne s'affiche que si
+            `todayMilestone` est null (gate déjà appliqué en amont). Process over
+            outcome (§2/§31.2) : la trace, jamais un trophée. */}
+        {journeyMilestone ? (
+          <section className="mb-6" data-self-animate aria-label="Jalon de parcours atteint">
+            <JourneyMilestoneBanner milestone={journeyMilestone} />
           </section>
         ) : null}
 
@@ -329,12 +389,20 @@ export default async function DashboardPage() {
             l'accompagnement psychologique du point d'entrée et casser la verticalité.
             La garde externe interdit la grille vide ; l'auto-flow comble si une seule
             est présente. §2/§31.2-safe (process/mental, jamais le marché). */}
-        {mentalMap.length > 0 || openMicroObjective ? (
-          <div className="mb-6 grid items-start gap-4 lg:grid-cols-2">
-            <MentalMapCard entries={mentalMap} variant="compact" />
-            <MicroObjectiveCard objective={openMicroObjective} variant="compact" />
-          </div>
-        ) : null}
+        {/* Tour 11 (FINDING 1, fix runtime) : la grille reste montée (garde CSS
+            `empty:hidden`, plus de garde serveur) pour que l'île MicroObjectiveLoop
+            survive au re-render RSC et garde l'écho de clôture visible. Les deux
+            enfants rendent null à vide → :empty masque la grille (et son mb-6). */}
+        <div className="mb-6 grid items-start gap-4 empty:hidden lg:grid-cols-2">
+          <MentalMapCard entries={mentalMap} variant="compact" />
+          <MicroObjectiveLoop
+            objective={openMicroObjective}
+            isStale={
+              openMicroObjective ? isMicroObjectiveStale(openMicroObjective.createdAt) : false
+            }
+            variant="compact"
+          />
+        </div>
 
         {/* S4 §32/§33 — « alertes immédiates en cas de dérive, sans qu'il ait à les
             chercher » : surfacées au point d'entrée (avant, elles ne vivaient que

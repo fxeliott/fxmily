@@ -4,6 +4,7 @@ import { cache } from 'react';
 
 import { db } from '@/lib/db';
 import type { TrackingAxis } from '@/generated/prisma/enums';
+import { echoProfileDims, type CoachingRegister } from '@/lib/coaching/trade-echo';
 import { getMentalMap } from './service';
 import type { MentalAxis, MentalMapEntry } from './mental-map';
 
@@ -110,6 +111,156 @@ export class MicroObjectiveNotFoundError extends Error {
   constructor() {
     super('Micro-objective not found or access denied.');
   }
+}
+
+/**
+ * Tour 11 (FINDING 1) — L'ÉCHO DE FERMETURE. Refermer la boucle était muet
+ * (`{ok:true}` nu, aucun retour) : c'était pourtant LE moment Mark Douglas
+ * (nommer l'acte). On répond désormais par une copie FR FIXE, personnalisée par
+ * `register`, jouée en `role="status"` à la place du silence.
+ *
+ * DÉTERMINISTE, ZÉRO IA : chaque phrase est figée et sélectionnée par
+ * (`outcome`, `register`). Sœur pure de `trade-echo.ts` (même patron : table de
+ * copie par register, fenêtre de fraîcheur côté trade, max 3 lignes).
+ *
+ * POSTURE §31.2 / Mark Douglas : miroir de l'ACTE, jamais punitif.
+ *   - `kept`     → renforcement (la répétition construit la constance) ;
+ *   - `missed`   → cadre-donnée non punitif (une donnée sur la difficulté du
+ *                  geste, PAS un échec) — jamais rouge, jamais culpabilisant ;
+ *   - `dismissed`→ neutre (l'objectif ne collait pas, on repart libre).
+ * Tone `ok`/`neutral` uniquement (le rouge reste réservé aux outcomes de trade).
+ */
+export type MicroObjectiveCloseEcho = {
+  /** Pilote l'accent calme de la confirmation — jamais 'bad'/rouge (§31.2). */
+  readonly tone: 'ok' | 'neutral';
+  /** 1 à 2 phrases courtes : le miroir de l'acte, puis un cap doux optionnel. */
+  readonly lines: readonly string[];
+};
+
+type CloseEchoCopy = Record<CoachingRegister, MicroObjectiveCloseEcho>;
+
+/** `kept` — renforcement : c'est la répétition du geste qui construit la constance. */
+const CLOSE_ECHO_KEPT: CloseEchoCopy = {
+  direct: {
+    tone: 'ok',
+    lines: [
+      "Tu l'as tenu. C'est la répétition de ce geste qui construit ta constance.",
+      'Un pas de plus dans la bonne direction, garde ce cap.',
+    ],
+  },
+  pedagogique: {
+    tone: 'ok',
+    lines: [
+      "Tu l'as tenu. C'est la répétition de ce geste, jour après jour, qui construit ta constance.",
+      "Ce n'est pas un exploit isolé qui compte, c'est le fait de le refaire : tu viens de le prouver.",
+    ],
+  },
+  socratique: {
+    tone: 'ok',
+    lines: [
+      "Tu l'as tenu. C'est la répétition de ce geste qui construit ta constance.",
+      "Qu'est-ce qui t'a aidé à le tenir cette fois, et comment le reproduire ?",
+    ],
+  },
+};
+
+/** `missed` — cadre-donnée non punitif : une donnée sur la difficulté, jamais un échec. */
+const CLOSE_ECHO_MISSED: CloseEchoCopy = {
+  direct: {
+    tone: 'neutral',
+    lines: [
+      "Pas encore tenu. C'est une donnée sur la difficulté du geste, pas un échec.",
+      'Tu sais maintenant où porter ton attention au prochain passage.',
+    ],
+  },
+  pedagogique: {
+    tone: 'neutral',
+    lines: [
+      "Pas encore tenu, et c'est une information utile : ce geste te demande plus d'attention qu'il n'y paraît.",
+      "Une boucle manquée n'est pas une faute, c'est une donnée sur ta difficulté du moment. On repart de là.",
+    ],
+  },
+  socratique: {
+    tone: 'neutral',
+    lines: [
+      "Pas encore tenu. C'est une donnée sur la difficulté du geste, pas un échec.",
+      "Qu'est-ce qui a rendu ce geste difficile à tenir cette fois ?",
+    ],
+  },
+};
+
+/** `dismissed` — neutre : l'objectif ne collait pas, on repart libre pour le suivant. */
+const CLOSE_ECHO_DISMISSED: CloseEchoCopy = {
+  direct: {
+    tone: 'neutral',
+    lines: ["C'est noté, cet objectif ne collait pas. La place est libre pour le prochain."],
+  },
+  pedagogique: {
+    tone: 'neutral',
+    lines: [
+      "C'est noté, cet objectif ne te parlait pas. Écarter ce qui ne colle pas fait aussi partie du travail : la place est libre pour le prochain.",
+    ],
+  },
+  socratique: {
+    tone: 'neutral',
+    lines: ["C'est noté, cet objectif ne collait pas. La place est libre pour le prochain."],
+  },
+};
+
+const CLOSE_ECHO_BY_OUTCOME: Record<MicroObjectiveOutcome, CloseEchoCopy> = {
+  kept: CLOSE_ECHO_KEPT,
+  missed: CLOSE_ECHO_MISSED,
+  dismissed: CLOSE_ECHO_DISMISSED,
+};
+
+/**
+ * PURE — l'écho de fermeture pour un `(outcome, register)`. Fallback register
+ * `'pedagogique'` (comme `trade-echo.ts`) quand le profil est absent/illisible.
+ * Exporté pour être testé en isolation.
+ */
+export function buildMicroObjectiveCloseEcho(
+  outcome: MicroObjectiveOutcome,
+  register: CoachingRegister | null,
+): MicroObjectiveCloseEcho {
+  return CLOSE_ECHO_BY_OUTCOME[outcome][register ?? 'pedagogique'];
+}
+
+/**
+ * Charge le `register` de coaching du membre (dimension IA `coachingTone`),
+ * dérivé via `echoProfileDims` (safeParse, garbage → null, fallback en aval
+ * sur `'pedagogique'`). FIREWALL §21.5 : on ne lit QUE `coachingTone`, jamais
+ * `weakSignals` ni les blobs bruts (rationale/evidence). `null` si aucun profil.
+ */
+export async function getMemberCoachingRegister(
+  memberId: string,
+): Promise<CoachingRegister | null> {
+  const profile = await db.memberProfile.findFirst({
+    where: { userId: memberId },
+    select: { coachingTone: true, learningStage: true },
+  });
+  return echoProfileDims(profile).coachingRegister;
+}
+
+/**
+ * Tour 11 (FINDING 2) — au-delà de ce seuil, une boucle ouverte reçoit UNE
+ * relance douce (jamais un compte à rebours, jamais rouge). Le calcul est
+ * server-side (`isMicroObjectiveStale` ci-dessous) : le membre ne voit qu'un
+ * booléen, pas un décompte anxiogène.
+ */
+export const MICRO_OBJECTIVE_STALE_DAYS = 14;
+
+/**
+ * PURE — une boucle ouverte est « en sommeil » quand elle date de plus de
+ * {@link MICRO_OBJECTIVE_STALE_DAYS} jours. Sert la relance douce membre : un
+ * objectif oublié GÈLE toute nouvelle boucle (invariant ≤1 ouvert), donc on
+ * invite calmement le membre à le refermer (tenu / pas encore / le laisser
+ * partir) plutôt que de le laisser bloqué en silence. FACTUEL, jamais punitif
+ * (§31.2). Pas d'auto-close dans ce tour — c'est le membre qui décide.
+ * `now` injectable pour la testabilité.
+ */
+export function isMicroObjectiveStale(createdAt: Date, now: Date = new Date()): boolean {
+  const ageMs = now.getTime() - createdAt.getTime();
+  return ageMs >= MICRO_OBJECTIVE_STALE_DAYS * 24 * 60 * 60 * 1000;
 }
 
 /**
@@ -247,6 +398,100 @@ export async function ensureMicroObjectiveFromAnnotation(
     // Course perdue : une autre correction/passage a semé la boucle entre notre
     // `findFirst` et notre `create` (l'index partiel l'a rejetée). No-op : on
     // relit l'ouvert gagnant — la boucle existe, on n'en est juste pas l'auteur.
+    if (isUniqueConstraintError(err)) {
+      const winner = await db.mentalMicroObjective.findFirst({
+        where: { memberId, status: 'open' },
+        select: { id: true },
+      });
+      return { created: false, objectiveId: winner?.id ?? null };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Tour 11 (FINDING 3) — projette le `dimensionId` d'un signal faible (slug libre
+ * de dimension d'instrument, ex `discipline_plan_adherence`) sur le `MentalAxis`
+ * (4 axes Mark Douglas) qui portera le micro-objectif semé depuis ce signal.
+ *
+ * On ne lit QUE le préfixe technique du slug (jamais le TEXTE du signal — firewall
+ * §21.5 : le contenu du weakSignal ne traverse JAMAIS vers le membre). Table de
+ * préfixes curée + fallback `discipline` (l'axe process le plus neutre) pour tout
+ * slug inconnu → jamais de crash, jamais d'axe fabriqué à partir de texte libre.
+ */
+const DIMENSION_PREFIX_TO_MENTAL: Record<string, MentalAxis> = {
+  discipline: 'discipline',
+  risk: 'discipline',
+  execution: 'discipline',
+  plan: 'discipline',
+  routine: 'discipline',
+  process: 'discipline',
+  honesty: 'honesty',
+  review: 'honesty',
+  bilan: 'honesty',
+  ego: 'ego',
+  emotion: 'ego',
+  emotions: 'ego',
+  confidence: 'ego',
+  fear: 'ego',
+  consistency: 'consistency',
+  regularity: 'consistency',
+  training: 'consistency',
+  formation: 'consistency',
+};
+
+export function mentalAxisFromDimensionId(dimensionId: string): MentalAxis {
+  const prefix = dimensionId.toLowerCase().split(/[_-]/)[0] ?? '';
+  return DIMENSION_PREFIX_TO_MENTAL[prefix] ?? 'discipline';
+}
+
+/**
+ * Tour 11 (FINDING 3) — sème un micro-objectif depuis un SIGNAL FAIBLE admin
+ * (onglet profil). Jusqu'ici la seule voie de semis était l'annotation sur un
+ * trade précis : le coach lisait les signaux faibles mais ne pouvait pas les
+ * convertir en engagement membre. Cette action referme le vide.
+ *
+ * 🛡️ FIREWALL §21.5 ABSOLU : le TEXTE du signal ne traverse JAMAIS vers le membre.
+ * La copie membre (`title`/`intention`) est une intention CURÉE déterministe par
+ * axe mental (réutilise `MICRO_OBJECTIVE_TITLES` + `ANNOTATION_INTENTIONS`, déjà
+ * figées et anti-marché) ; `sourceRef` est un string OPAQUE (le `dimensionId` du
+ * signal, une trace technique), jamais une FK, jamais le contenu du signal.
+ *
+ * 🛡️ MÊME INVARIANT « ≤1 ouvert » que les deux seeders sœurs : idempotent, si une
+ * boucle est déjà ouverte on ne touche à rien et on relit l'ouvert ; l'index
+ * partiel `mental_micro_objectives_one_open_per_member` est le vrai garant
+ * (P2002 → no-op). `sourceKind='signal'` (String libre côté DB, aucune migration).
+ * Le `mentalAxis` est dérivé par l'appelant (admin action) via
+ * `mentalAxisFromDimensionId` — jamais depuis le texte du signal.
+ */
+export async function ensureMicroObjectiveFromSignal(
+  memberId: string,
+  mentalAxis: MentalAxis,
+  signalRef: string,
+): Promise<EnsureMicroObjectiveResult> {
+  const existing = await db.mentalMicroObjective.findFirst({
+    where: { memberId, status: 'open' },
+    select: { id: true },
+  });
+  if (existing) return { created: false, objectiveId: existing.id };
+
+  try {
+    const row = await db.mentalMicroObjective.create({
+      data: {
+        memberId,
+        axis: mentalAxis,
+        sourceKind: 'signal',
+        sourceRef: signalRef,
+        title: MICRO_OBJECTIVE_TITLES[mentalAxis],
+        intention: ANNOTATION_INTENTIONS[mentalAxis],
+      },
+      select: { id: true },
+    });
+    return { created: true, objectiveId: row.id };
+  } catch (err) {
+    // Course perdue : un autre semis/passage a créé la boucle entre notre
+    // `findFirst` et notre `create` (index partiel → P2002). No-op : on relit
+    // l'ouvert gagnant — la boucle existe, on n'en est juste pas l'auteur.
     if (isUniqueConstraintError(err)) {
       const winner = await db.mentalMicroObjective.findFirst({
         where: { memberId, status: 'open' },

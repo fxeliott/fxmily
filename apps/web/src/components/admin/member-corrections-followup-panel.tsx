@@ -3,10 +3,13 @@ import { ClipboardCheck } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { getAxisLabel } from '@/lib/tracking/axes';
+import { ageDays, isCorrectionStale } from '@/lib/admin/correction-followup-age';
 import type { AnnotationObjectiveRow } from '@/lib/coaching/micro-objective';
 import type { MicroObjectiveStatusView } from '@/lib/coaching/micro-objective';
 import type { TrackingAxisId } from '@/lib/tracking/axes';
 import { cn } from '@/lib/utils';
+
+import { ReinforceObjectiveButton } from './reinforce-objective-button';
 
 /**
  * C3 (tour 10) — « Suivi des corrections » : la boucle « correction admin →
@@ -16,13 +19,22 @@ import { cn } from '@/lib/utils';
  * intention, leur date et leur STATUT, pour que l'admin voie si ses corrections
  * sont tenues.
  *
- * Read-only (aucune action). Server Component présentationnel (DB-free) : la
- * liste arrive en props (`listAnnotationObjectivesForMember`). Vit dans l'onglet
- * « Mark Douglas » car un micro-objectif EST un engagement Mark Douglas.
+ * Tour 11 (chantier G) — le panel n'est plus 100% read-only :
+ *  - FINDING 2 : une boucle OUVERTE de plus de 14 jours affiche un sous-libellé
+ *    ambre neutre « ouvert depuis N j » (un objectif zombie bloque l'invariant
+ *    « ≤ 1 ouvert » du membre, il ne doit plus être invisible). Factuel, jamais
+ *    rouge, jamais un compte à rebours.
+ *  - FINDING 4 : sur une boucle open-et-ancienne OU « Pas tenu » (missed), un
+ *    bouton discret « Renforcer » pose une note privée pré-remplie (jamais vue
+ *    du membre). Aucune autre commande, le panel reste lisible.
+ *
+ * Server Component présentationnel (DB-free) : la liste + `memberId` arrivent en
+ * props. Vit dans l'onglet « Mark Douglas » car un micro-objectif EST un
+ * engagement Mark Douglas.
  *
  * POSTURE §31.2 (anti-Black-Hat) : « Pas tenu » (missed) est un état FACTUEL, jamais
  * un rouge punitif — ton ambre calme (warn), libellé neutre. On donne à l'admin une
- * lecture, pas un verdict à charge contre le membre.
+ * lecture et un levier de relance, jamais un verdict à charge contre le membre.
  */
 
 /** `axis` est l'axe MENTAL (discipline/honesty/ego/consistency), pas un TrackingAxis :
@@ -68,8 +80,10 @@ const STATUS: Record<MicroObjectiveStatusView, { label: string; chip: string; do
 const DT = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' });
 
 export function MemberCorrectionsFollowupPanel({
+  memberId,
   objectives,
 }: {
+  memberId: string;
   objectives: readonly AnnotationObjectiveRow[];
 }) {
   if (objectives.length === 0) {
@@ -84,6 +98,10 @@ export function MemberCorrectionsFollowupPanel({
       </Card>
     );
   }
+
+  // Server-side clock (une seule lecture pour tout le rendu) — l'âge est un fait
+  // dérivé à l'instant du rendu, pas un compte à rebours vivant côté client.
+  const now = new Date();
 
   return (
     <Card className="p-0">
@@ -105,6 +123,10 @@ export function MemberCorrectionsFollowupPanel({
       <ul className="flex flex-col">
         {objectives.map((obj) => {
           const status = STATUS[obj.status];
+          const stale = obj.status === 'open' && isCorrectionStale(obj.createdAt, now);
+          // « Renforcer » : sur une boucle ouverte ANCIENNE (zombie) ou « Pas tenu »
+          // (missed) — les deux cas où une relance a du sens (FINDING 4).
+          const canReinforce = stale || obj.status === 'missed';
           return (
             <li
               key={obj.id}
@@ -143,6 +165,20 @@ export function MemberCorrectionsFollowupPanel({
                   {mentalAxisLabel(obj.axis)} · ouvert le {DT.format(obj.createdAt)}
                   {obj.closedAt ? ` · refermé le ${DT.format(obj.closedAt)}` : ''}
                 </p>
+                {/* FINDING 2 — âge d'une boucle zombie. Ambre calme, factuel, jamais
+                    rouge, jamais un décompte (§31.2). Statut aussi en texte (pas
+                    color-only) : le libellé « ouvert depuis N j » porte l'info. */}
+                {stale ? (
+                  <p className="t-foot font-medium text-[var(--warn)] tabular-nums">
+                    Ouvert depuis {ageDays(obj.createdAt, now)} j
+                  </p>
+                ) : null}
+                {/* FINDING 4 — relance. Un seul contrôle discret, aucun autre. */}
+                {canReinforce ? (
+                  <div className="mt-1.5">
+                    <ReinforceObjectiveButton memberId={memberId} objectiveId={obj.id} />
+                  </div>
+                ) : null}
               </div>
             </li>
           );

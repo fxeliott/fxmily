@@ -5,11 +5,14 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { ABCDHero } from '@/components/reflect/abcd-hero';
 import { V18CrisisBanner } from '@/components/review/crisis-banner';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { SubmitEchoCard } from '@/components/ui/submit-echo-card';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
-import { HoverLift } from '@/components/ui/hover-lift';
-import { V18Aurora } from '@/components/v18/aurora';
-import { V18ThemeScope } from '@/components/v18/theme-scope';
+import { RecentRowCard } from '@/components/ui/recent-row-card';
+import { echoProfileDims } from '@/lib/coaching/trade-echo';
+import { buildReflectSubmitEcho } from '@/lib/coaching/submit-echo';
+import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { listRecentReflections } from '@/lib/reflection/service';
 import { NextStepRail } from '@/components/nav/next-step-rail';
 
@@ -34,13 +37,13 @@ interface ReflectLandingProps {
  * V1.8 REFLECT — `/reflect` landing.
  *
  * Server Component. Three sections :
- *   1. Hero — ABCD SVG illustration + intro copy + primary CTA.
- *   2. Recent reflections timeline (last 30 days, clamped service-side).
- *
- * Note : crisis banner is NOT mounted here (the redirect URL state is
- * checked on /reflect after a submit — landing for first-visit case
- * stays clean ; the action redirect carries the crisis banner via
- * `?crisis=` query param consumed below if present).
+ *   1. Hero — glass `dash-hero` card (Tour 11 finding 1: migrated off the legacy
+ *      V18 theme scope onto the app-wide DashboardAmbient so the module reads
+ *      byte-identical to the rest of the app) with the ABCD SVG illustration.
+ *   2. Optional crisis banner + a LIVING submit echo (finding 3): after a submit,
+ *      a member-specific, register-declined reading of the act of naming a
+ *      thought, replacing the old frozen paragraph.
+ *   3. Recent reflections timeline (last 30 days) — Spotlight-lit RecentRowCards.
  *
  * Auth gate : redirect to /login if not active.
  */
@@ -66,49 +69,85 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
     timeZone: timezone,
   });
 
+  // Tour 11 finding 3 — the living submit echo. Built ONLY on the post-submit
+  // path (the freshest entry is the one we just wrote, newest-first order), and
+  // declined by the member's coaching profile. Presence-only read of the
+  // disputation (firewall §21.5 — never the free text). The profile query is
+  // paid only when a submit actually just happened.
+  let submitEcho = null;
+  if (justSubmitted && !crisisLevel) {
+    const profile = await getProfileForUser(session.user.id);
+    const dims = echoProfileDims(profile);
+    const latest = recent[0];
+    submitEcho = buildReflectSubmitEcho({
+      hasDisputation: latest ? latest.disputation.trim().length > 0 : false,
+      learningStage: dims.learningStage,
+      coachingRegister: dims.coachingRegister,
+    });
+  }
+
   return (
-    <V18ThemeScope>
-      <V18Aurora />
-      <main className="relative mx-auto flex w-full max-w-[var(--w-app)] flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8 2xl:px-12">
-        <header className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3">
-            <p className="t-eyebrow text-[var(--t-3)]">Module REFLECT</p>
-            <h1 className="t-display-fluid text-[var(--t-1)]">
-              Quand la pensée
-              <br />
-              <span style={{ color: 'var(--acc-hi)' }}>vient en éclair</span>
-            </h1>
-            <p className="t-lead max-w-prose text-[var(--t-2)]">
-              Une réflexion structurée en quatre étapes :{' '}
-              <strong className="text-[var(--t-1)]">A</strong> (déclencheur) ·{' '}
-              <strong className="text-[var(--t-1)]">B</strong> (croyance) ·{' '}
-              <strong className="text-[var(--t-1)]">C</strong> (conséquence) ·{' '}
-              <strong className="text-[var(--t-1)]">D</strong> (mise en question). Le cadre ABCD
-              d&apos;Ellis adapté au trading, pas un substitut à un suivi clinique.
-            </p>
-          </div>
+    <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
+      <DashboardAmbient />
+      <div className="relative mx-auto flex w-full max-w-[var(--w-app)] flex-1 flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8 2xl:px-12">
+        {/* HERO — Tour 11 finding 1 : glass dash-hero, illustration à droite. */}
+        <section aria-labelledby="reflect-hero-heading" className="wow-reveal">
+          <Card
+            primary
+            glass
+            edge={false}
+            className="dash-hero relative overflow-hidden p-6 backdrop-blur-[16px] backdrop-saturate-150 lg:p-7"
+          >
+            <div className="relative grid gap-6 lg:grid-cols-[1.35fr_1fr] lg:items-center lg:gap-8">
+              {/* ---- Gauche : intro ---- */}
+              <div className="flex flex-col gap-3">
+                <p className="t-eyebrow-lg text-[var(--t-3)]">Module REFLECT</p>
+                <h1
+                  id="reflect-hero-heading"
+                  className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+                  style={{
+                    fontFeatureSettings: '"ss01" 1',
+                    fontSize: 'clamp(1.9rem, 1.5rem + 1.6vw, 2.6rem)',
+                  }}
+                >
+                  Quand la pensée
+                  <br />
+                  <span style={{ color: 'var(--acc-hi)' }}>vient en éclair</span>
+                </h1>
+                <p className="t-lead max-w-prose text-[var(--t-2)]">
+                  Une réflexion structurée en quatre étapes :{' '}
+                  <strong className="text-[var(--t-1)]">A</strong> (déclencheur) ·{' '}
+                  <strong className="text-[var(--t-1)]">B</strong> (croyance) ·{' '}
+                  <strong className="text-[var(--t-1)]">C</strong> (conséquence) ·{' '}
+                  <strong className="text-[var(--t-1)]">D</strong> (mise en question). Le cadre ABCD
+                  d&apos;Ellis adapté au trading, pas un substitut à un suivi clinique.
+                </p>
 
-          <div className="relative flex items-center justify-center">
-            <ABCDHero className="w-full max-w-lg" />
-          </div>
+                <div className="mt-1 flex flex-wrap items-center gap-3">
+                  <Link
+                    href="/reflect/new"
+                    className="rounded-control inline-flex h-12 items-center gap-2 bg-[var(--acc-btn)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px"
+                  >
+                    <BrainCircuit size={16} strokeWidth={2.2} aria-hidden="true" />
+                    Démarrer une réflexion
+                    <ArrowRight size={14} strokeWidth={2.2} aria-hidden="true" />
+                  </Link>
+                  <Link
+                    href="/dashboard"
+                    className="rounded-control inline-flex h-11 items-center gap-1.5 border border-[var(--b-strong)] bg-transparent px-4 text-[13px] font-medium text-[var(--t-2)] transition-colors hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]"
+                  >
+                    Retour au dashboard
+                  </Link>
+                </div>
+              </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/reflect/new"
-              className="rounded-control inline-flex h-12 items-center gap-2 bg-[var(--acc-btn)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px"
-            >
-              <BrainCircuit size={16} strokeWidth={2.2} aria-hidden="true" />
-              Démarrer une réflexion
-              <ArrowRight size={14} strokeWidth={2.2} aria-hidden="true" />
-            </Link>
-            <Link
-              href="/dashboard"
-              className="rounded-control inline-flex h-11 items-center gap-1.5 border border-[var(--b-strong)] bg-transparent px-4 text-[13px] font-medium text-[var(--t-2)] transition-colors hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]"
-            >
-              Retour au dashboard
-            </Link>
-          </div>
-        </header>
+              {/* ---- Droite : illustration ABCD ---- */}
+              <div className="relative flex items-center justify-center">
+                <ABCDHero className="w-full max-w-md" />
+              </div>
+            </div>
+          </Card>
+        </section>
 
         <NextStepRail currentPath="/reflect" />
 
@@ -118,20 +157,8 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
             carries `?crisis=` and the landing mounts the banner here. */}
         {crisisLevel ? <V18CrisisBanner key={crisisLevel} level={crisisLevel} /> : null}
 
-        {justSubmitted && !crisisLevel ? (
-          <div
-            role="status"
-            className="wow-rise rounded-card-lg border border-[var(--b-acc)] p-4"
-            style={{
-              background: 'linear-gradient(135deg, var(--acc-dim) 0%, var(--bg-2) 80%)',
-            }}
-          >
-            <p className="t-eyebrow text-[var(--t-3)]">Enregistrée</p>
-            <p className="t-h3 mt-1 text-[var(--t-1)]">
-              La pensée a été nommée. C&apos;est le premier pas du reframe.
-            </p>
-          </div>
-        ) : null}
+        {/* Tour 11 finding 3 — living submit echo (replaces the frozen paragraph). */}
+        {submitEcho ? <SubmitEchoCard echo={submitEcho} /> : null}
 
         <section className="flex flex-col gap-4">
           <div className="flex items-baseline justify-between gap-3">
@@ -161,16 +188,19 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
               className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3"
               data-slot="recent-reflections"
             >
-              {recent.map((r) => (
-                <li key={r.id} className="h-full">
-                  <HoverLift className="block h-full">
-                    <Link
+              {recent.map((r) => {
+                return (
+                  <li key={r.id} className="h-full">
+                    <RecentRowCard
                       href={`/reflect/${r.id}`}
-                      aria-labelledby={`ref-${r.id}-date`}
-                      className="rounded-card block h-full border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
+                      ariaLabel={`Réflexion du ${FMT_REFLECT_DATE_LONG_UTC.format(
+                        new Date(`${r.date}T00:00:00Z`),
+                      )}`}
+                      accentBar
+                      className="h-full"
                     >
                       <header className="flex items-baseline justify-between gap-3">
-                        <p className="t-eyebrow text-[var(--t-3)]" id={`ref-${r.id}-date`}>
+                        <p className="t-eyebrow text-[var(--t-3)]">
                           <time dateTime={r.date}>
                             {FMT_REFLECT_DATE_LONG_UTC.format(new Date(`${r.date}T00:00:00Z`))}
                           </time>
@@ -179,6 +209,10 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
                           {fmtHm.format(new Date(r.createdAt))}
                         </p>
                       </header>
+                      {/* Tour 11 (runtime audit) — the "Reframe" pill was dropped :
+                          the D step is REQUIRED by the form, so the pill showed on
+                          100% of rows — uniform noise, zero signal. The D line
+                          below already carries the reframe itself. */}
                       <dl className="mt-2 space-y-1.5">
                         <div className="flex items-baseline gap-2">
                           <dt className="t-eyebrow w-7 shrink-0 text-[var(--acc-2)]">A</dt>
@@ -191,14 +225,14 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
                           <dd className="t-body line-clamp-1 text-[var(--t-1)]">{r.disputation}</dd>
                         </div>
                       </dl>
-                    </Link>
-                  </HoverLift>
-                </li>
-              ))}
+                    </RecentRowCard>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
-      </main>
-    </V18ThemeScope>
+      </div>
+    </main>
   );
 }

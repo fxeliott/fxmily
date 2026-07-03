@@ -130,8 +130,8 @@ describe('emptyCopyForReason', () => {
 });
 
 describe('formatRMagnitude', () => {
-  it('null → "—" em-dash (transparence honesty : 0 trade computed)', () => {
-    expect(formatRMagnitude(null)).toBe('—');
+  it('null → "-" hyphen (transparence honesty : 0 trade computed)', () => {
+    expect(formatRMagnitude(null)).toBe('-');
   });
 
   it('0 → "0R" (no sign, pas de fake "+0R")', () => {

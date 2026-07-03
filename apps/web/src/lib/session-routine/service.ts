@@ -3,6 +3,7 @@ import 'server-only';
 import { localDateOf } from '@/lib/checkin/timezone';
 import { localHour } from '@/lib/daily-guidance/slot';
 import { db } from '@/lib/db';
+import { getTodayPreTradeStatus } from '@/lib/pre-trade/service';
 
 import {
   currentSessionPhase,
@@ -14,13 +15,15 @@ import {
 /**
  * Session 24 — Journée-type trader : the READ-ONLY day-status derivation for the
  * dashboard SessionTimeline. Combines the pure time-phase (`phase.ts`) with the
- * member's OWN discipline facts of the day, derived entirely from existing
- * `Trade` rows (0 migration — "dérive > stockée", §3/§24).
+ * member's OWN discipline facts of the day, derived from existing `Trade` rows
+ * (0 migration — "dérive > stockée", §3/§24) plus the member's read-only
+ * pre-trade prep of the day (reused from `lib/pre-trade/service`, no new table).
  *
  * ARCHITECTURE. Like `lib/daily-guidance`, this is a UI orchestration read that
  * lives OUTSIDE the real-edge scoring tree : it touches NO P&L content, feeds NO
- * score, and is consumed solely by the dashboard. It reads only the entry TIME
- * and the discrete `outcome`/`closedAt` flags — never prices, never market data.
+ * score, and is consumed solely by the dashboard. It reads only the entry TIME,
+ * the discrete `outcome`/`closedAt` flags and the boolean/instant fact of the
+ * pre-trade prep — never prices, never market data.
  *
  * POSTURE §2 + anti-Black-Hat (§31.2). The facts it surfaces are the method's
  * DISCIPLINE rules (1 trade/jour, fenêtre d'exécution, 1 SL = journée finie,
@@ -48,6 +51,14 @@ export interface SessionDayStatus {
   lossToday: boolean;
   /** Any position still open (no `closedAt`) — relevant to the 20h cut. */
   hasOpenPosition: boolean;
+  /**
+   * The member's pre-trade preparation of THEIR OWN calendar day (F2 — the
+   * member's set timezone, NOT the Paris session clock). `done` mirrors
+   * {@link getTodayPreTradeStatus}; `at` is the ISO instant of the most recent
+   * check of the day (for a calm "posé à HHhMM" recall), or `null` if none yet.
+   * Read-only reuse of the pre-trade helper (0 new query owned here).
+   */
+  preTradeToday: { done: boolean; at: string | null };
 }
 
 export interface SessionRoutine {
@@ -57,23 +68,36 @@ export interface SessionRoutine {
 }
 
 /**
- * Build one member's session routine for the given Europe/Paris instant. `now`
- * is injectable for deterministic tests. Two indexed, user-scoped reads only.
+ * Build one member's session routine for the given instant. `now` is injectable
+ * for deterministic tests.
+ *
+ * The session PHASE/clock is Paris-fixed (the method's NY-session hours read in
+ * heure française — identical for the whole cohort). `timezone` is the member's
+ * OWN IANA zone (F2) and is used ONLY to derive whether the pre-trade of THEIR
+ * calendar day is done — never for the phase math. Defaults to Europe/Paris so
+ * existing callers stay correct.
+ *
+ * Three indexed, user-scoped reads (2 trade reads + the pre-trade helper's one),
+ * run concurrently — the pre-trade status is a read-only reuse of
+ * {@link getTodayPreTradeStatus} (no new query owned here).
  */
 export async function getSessionRoutine(
   userId: string,
   now: Date = new Date(),
+  timezone: string = PARIS_TZ,
 ): Promise<SessionRoutine> {
   const phase = currentSessionPhase(now, PARIS_TZ);
   const today = localDateOf(now, PARIS_TZ);
   const since = new Date(now.getTime() - LOOKBACK_MS);
 
-  const [recent, openCount] = await Promise.all([
+  const [recent, openCount, preTradeToday] = await Promise.all([
     db.trade.findMany({
       where: { userId, enteredAt: { gte: since } },
       select: { enteredAt: true, outcome: true, closedAt: true },
     }),
     db.trade.count({ where: { userId, closedAt: null } }),
+    // Member's own-day pre-trade prep (F2 timezone). Read-only helper reuse.
+    getTodayPreTradeStatus(userId, timezone, now),
   ]);
 
   let tradesEnteredToday = 0;
@@ -97,6 +121,7 @@ export async function getSessionRoutine(
       enteredOutsideWindow,
       lossToday,
       hasOpenPosition: openCount > 0,
+      preTradeToday: { done: preTradeToday.done, at: preTradeToday.at },
     },
   };
 }

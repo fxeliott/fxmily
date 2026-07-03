@@ -131,7 +131,7 @@ export function MemberTradesList({
                         {realized.toFixed(2)}R
                       </span>
                     ) : (
-                      <span className="text-[var(--t-3)]">—</span>
+                      <span className="text-[var(--t-3)]">-</span>
                     )}
                   </div>
                 </Link>

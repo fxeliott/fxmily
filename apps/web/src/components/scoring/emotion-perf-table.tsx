@@ -112,7 +112,9 @@ export function EmotionPerfTable({ rows, totalTrades }: EmotionPerfTableProps) {
                                 : 'text-[var(--t-3)]')
                         }
                       >
-                        {avgR === null ? 'N/A' : `${avgR > 0 ? '+' : ''}${avgR.toFixed(2)}R`}
+                        {avgR === null
+                          ? 'non calculé'
+                          : `${avgR > 0 ? '+' : ''}${avgR.toFixed(2)}R`}
                       </span>
                     </td>
                   </tr>

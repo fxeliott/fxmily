@@ -61,8 +61,8 @@ export default async function AccountTimezonePage(): Promise<React.ReactElement>
           </h1>
           <p className="mt-2 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
             Fxmily s’adapte à l’heure de là où tu vis. Choisis ton fuseau : tes check-ins du matin
-            et du soir, tes rappels et toutes les dates de ton espace suivront ton heure locale —
-            pas celle de Paris.
+            et du soir, tes rappels et toutes les dates de ton espace suivront ton heure locale, pas
+            celle de Paris.
           </p>
         </header>
 

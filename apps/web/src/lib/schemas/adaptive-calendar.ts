@@ -18,6 +18,7 @@
 import { z } from 'zod';
 
 import { CALENDAR_SLOTS, type CalendarSlotValue } from '@/lib/calendar/instrument-v1';
+import { normalizeAiTypography } from '@/lib/text/normalize-typography';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 
 // =============================================================================
@@ -53,13 +54,17 @@ const MAX_BLOCKS_PER_DAY = 8;
 const MAX_WARNINGS = 3;
 
 function safeText(min: number, max: number) {
-  return z
-    .string()
-    .trim()
-    .min(min)
-    .max(max)
-    .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
-    .transform(safeFreeText);
+  return (
+    z
+      .string()
+      .trim()
+      .min(min)
+      .max(max)
+      .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+      .transform(safeFreeText)
+      // Deterministic typography belt (F-J1) — em/en dashes out of Claude output.
+      .transform(normalizeAiTypography)
+  );
 }
 
 const localDateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD');

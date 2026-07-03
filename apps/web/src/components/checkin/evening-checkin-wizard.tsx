@@ -22,6 +22,7 @@ import { StressZonesBar } from '@/components/checkin/stress-zones-bar';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
+import type { EveningCheckinPrefill } from '@/lib/checkin/prefill';
 import { formatLocalDate } from '@/lib/checkin/timezone';
 import { cn } from '@/lib/utils';
 
@@ -88,15 +89,40 @@ function emptyDraft(today: string): DraftState {
   };
 }
 
-function loadDraft(today: string): DraftState {
-  if (typeof window === 'undefined') return emptyDraft(today);
+/**
+ * P3 — starting draft when the member is EDITING a submitted check-in
+ * (`prefill` from the host page). Reuses `emptyDraft` for the fields the prefill
+ * never carries (`date`, `lateJustification`). Without a prefill this reduces to
+ * `emptyDraft`. Mirror of the weekly-review wizard `baseDraft` (#463).
+ */
+function baseDraft(today: string, prefill?: EveningCheckinPrefill): DraftState {
+  const base = emptyDraft(today);
+  if (!prefill) return base;
+  return {
+    ...base,
+    planRespectedToday: prefill.planRespectedToday,
+    hedgeRespectedToday: prefill.hedgeRespectedToday,
+    intentionKept: prefill.intentionKept,
+    formationFollowed: prefill.formationFollowed,
+    caffeineMl: prefill.caffeineMl,
+    waterLiters: prefill.waterLiters,
+    stressScore: prefill.stressScore,
+    moodScore: prefill.moodScore,
+    emotionTags: [...prefill.emotionTags],
+    journalNote: prefill.journalNote,
+    gratitudeItems: [...prefill.gratitudeItems],
+  };
+}
+
+function loadDraft(today: string, prefill?: EveningCheckinPrefill): DraftState {
+  const base = baseDraft(today, prefill);
+  if (typeof window === 'undefined') return base;
   try {
     const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!raw) return emptyDraft(today);
+    if (!raw) return base;
     const parsed = JSON.parse(raw) as Partial<DraftState> & {
       gratitudeItems?: unknown;
     };
-    const base = emptyDraft(today);
     return {
       ...base,
       ...parsed,
@@ -110,7 +136,7 @@ function loadDraft(today: string): DraftState {
         : base.gratitudeItems,
     };
   } catch {
-    return emptyDraft(today);
+    return base;
   }
 }
 
@@ -160,16 +186,26 @@ interface EveningCheckinWizardProps {
    * with date=past would corrupt the next normal fill — the #1 F7 pitfall).
    */
   backfillDate?: string;
+  /**
+   * P3 — when the effective day ALREADY has a submitted evening check-in, the
+   * host page passes its answers here so the wizard opens SEEDED (edit mode)
+   * instead of empty. A re-submission is then an explicit update (the service
+   * upsert stays), never a silent overwrite of answers the member can't see.
+   * #463 pattern parity (`/review/new`).
+   */
+  prefill?: EveningCheckinPrefill;
 }
 
 export function EveningCheckinWizard({
   today,
   hasMorningIntention = false,
   backfillDate,
+  prefill,
 }: EveningCheckinWizardProps) {
   const isBackfill = backfillDate != null;
   const effectiveDate = backfillDate ?? today;
-  const [draft, setDraft] = useState<DraftState>(() => emptyDraft(effectiveDate));
+  const isEditing = prefill != null;
+  const [draft, setDraft] = useState<DraftState>(() => baseDraft(effectiveDate, prefill));
   const [hydrated, setHydrated] = useState(false);
   const [step, setStep] = useState<StepIndex>(0);
   const [direction, setDirection] = useState<1 | -1>(1);
@@ -182,10 +218,16 @@ export function EveningCheckinWizard({
   useEffect(() => {
     // Rattrapage — start fresh anchored to the backfilled day and NEVER read the
     // today draft (loading/writing the today key with date=past corrupts the
-    // next normal check-in — the #1 F7 pitfall).
+    // next normal check-in — the #1 F7 pitfall). Rattrapage never carries a
+    // prefill (distinct `?date=` entry path), so it stays an empty draft.
+    // Normal flow — seed from the prefill (edit mode) then let a local draft win.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDraft(isBackfill ? emptyDraft(effectiveDate) : loadDraft(today));
+    setDraft(isBackfill ? emptyDraft(effectiveDate) : loadDraft(today, prefill));
     setHydrated(true);
+    // `prefill` is a stable server prop for the page's lifetime; intentionally
+    // not in deps (it would re-run + clobber an in-progress edit on re-render).
+    // Weekly-review-wizard parity (#463).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today, isBackfill, effectiveDate]);
 
   useEffect(() => {
@@ -553,7 +595,11 @@ export function EveningCheckinWizard({
               loading={pending}
               type="button"
             >
-              {pending ? 'Enregistrement…' : 'Enregistrer ma soirée'}
+              {pending
+                ? 'Enregistrement…'
+                : isEditing
+                  ? 'Mettre à jour ma soirée'
+                  : 'Enregistrer ma soirée'}
             </Btn>
           )}
         </div>

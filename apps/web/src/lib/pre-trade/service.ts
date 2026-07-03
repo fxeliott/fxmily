@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { localDateOf } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import type { PreTradeCheckInput } from '@/lib/schemas/pre-trade-check';
 import {
@@ -347,6 +348,50 @@ export async function loadPreTradeCorrelationData(
     asOf: now.toISOString(),
     perReason: computeCorrelationByReason(outcomes),
   };
+}
+
+/**
+ * Whether the member has submitted a pre-trade check on their OWN calendar
+ * day, and if so the instant of the most recent one.
+ *
+ * `done: false` → no check today (the member has not prepared yet).
+ * `done: true`  → at least one check today ; `at` is the ISO instant of the
+ *                 most recent one (for a calm "fait à 14h05" recall label).
+ *
+ * The member's calendar day is derived via {@link localDateOf} against their
+ * IANA `timezone` (F2 — the whole app follows the member's set timezone, not
+ * UTC nor the device). We fetch only the single newest check (indexed
+ * `userId + createdAt desc`) and compare its local day to today's local day:
+ * one row is enough because checks are ordered newest-first, so if the newest
+ * is not today, none is. `select`-minimal (only `createdAt`, data-minimality
+ * canon §16).
+ */
+export interface TodayPreTradeStatus {
+  /** A pre-trade check exists for the member's current calendar day. */
+  done: boolean;
+  /** ISO instant of the most recent check of the day, or `null` if none. */
+  at: string | null;
+}
+
+export async function getTodayPreTradeStatus(
+  userId: string,
+  timezone: string,
+  now: Date = new Date(),
+): Promise<TodayPreTradeStatus> {
+  const latest = await db.preTradeCheck.findFirst({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
+  });
+
+  if (!latest) return { done: false, at: null };
+
+  const today = localDateOf(now, timezone);
+  if (localDateOf(latest.createdAt, timezone) !== today) {
+    return { done: false, at: null };
+  }
+
+  return { done: true, at: latest.createdAt.toISOString() };
 }
 
 export async function linkRecentCheckToTrade(

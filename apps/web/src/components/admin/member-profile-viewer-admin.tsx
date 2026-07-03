@@ -179,7 +179,7 @@ export function MemberProfileViewerAdmin({
                       month: 'long',
                       year: 'numeric',
                     })
-                  : '—'}
+                  : '-'}
                 . Le batch local Claude Max tournera dans les 24h pour générer le profil descriptif.
               </p>
             </div>

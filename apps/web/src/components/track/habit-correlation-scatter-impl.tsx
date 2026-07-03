@@ -137,7 +137,7 @@ export function HabitCorrelationScatter({ points, xLabel, summary }: HabitCorrel
               itemStyle={{ color: C.t1 }}
               formatter={(value, name) => {
                 const v = typeof value === 'number' ? value : Number(value);
-                if (!Number.isFinite(v)) return ['—', String(name)];
+                if (!Number.isFinite(v)) return ['-', String(name)];
                 return name === 'y' ? [`${v >= 0 ? '+' : ''}${v} R`, 'R réalisé'] : [v, xLabel];
               }}
               labelFormatter={(_label, payload) => {

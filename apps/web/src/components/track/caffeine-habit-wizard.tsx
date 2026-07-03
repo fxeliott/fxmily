@@ -18,6 +18,7 @@ import { CaffeineZonesBar } from '@/components/track/caffeine-zones-bar';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
+import type { CaffeineHabitPrefill } from '@/lib/habit/today-log';
 import { HABIT_NOTES_MAX_CHARS } from '@/lib/schemas/habit-log';
 import { cn } from '@/lib/utils';
 
@@ -62,16 +63,47 @@ function emptyDraft(today: string): DraftState {
   return { date: today, cups: '', lastDrinkAt: '', notes: '' };
 }
 
-function loadDraft(today: string): DraftState {
-  if (typeof window === 'undefined') return emptyDraft(today);
+/**
+ * Seed the draft from the server `prefill` (today's existing log) when present,
+ * else empty. P3 "already logged today" edit-mode entry point (pattern carbone
+ * weekly-review-wizard `baseDraft`).
+ */
+function baseDraft(today: string, prefill?: CaffeineHabitPrefill): DraftState {
+  if (!prefill) return emptyDraft(today);
+  return {
+    date: today,
+    cups: prefill.cups,
+    lastDrinkAt: prefill.lastDrinkAt,
+    notes: prefill.notes,
+  };
+}
+
+function loadDraft(today: string, prefill?: CaffeineHabitPrefill): DraftState {
+  const base = baseDraft(today, prefill);
+  if (typeof window === 'undefined') return base;
   try {
     const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!raw) return emptyDraft(today);
+    if (!raw) return base;
     const parsed = JSON.parse(raw) as Partial<DraftState>;
-    return { ...emptyDraft(today), ...parsed, date: today };
+    // Field-by-field: an in-progress local draft wins over the server prefill;
+    // an empty stored field falls back to the prefill instead of blanking an
+    // existing value (weekly-review-wizard parity).
+    return {
+      ...base,
+      ...parsed,
+      cups: pickNonEmpty(parsed.cups, base.cups),
+      lastDrinkAt: pickNonEmpty(parsed.lastDrinkAt, base.lastDrinkAt),
+      notes: pickNonEmpty(parsed.notes, base.notes),
+      date: today,
+    };
   } catch {
-    return emptyDraft(today);
+    return base;
   }
+}
+
+/** A non-empty stored string wins; otherwise fall back to the prefill value. */
+function pickNonEmpty(stored: unknown, fallback: string): string {
+  return typeof stored === 'string' && stored.trim().length > 0 ? stored : fallback;
 }
 
 function persistDraft(draft: DraftState) {
@@ -108,11 +140,16 @@ function validateStep(step: StepIndex, draft: DraftState): string | null {
   return null;
 }
 
-export function CaffeineHabitWizard() {
+interface CaffeineHabitWizardProps {
+  /** Today's existing log (member timezone) -> edit mode (upsert), P3 fix. */
+  prefill?: CaffeineHabitPrefill;
+}
+
+export function CaffeineHabitWizard({ prefill }: CaffeineHabitWizardProps = {}) {
   const prefersReducedMotion = useReducedMotion();
   const [hasMounted, setHasMounted] = useState(false);
   const [today] = useState(() => localToday());
-  const [draft, setDraft] = useState<DraftState>(() => emptyDraft(today));
+  const [draft, setDraft] = useState<DraftState>(() => baseDraft(today, prefill));
   const [step, setStep] = useState<StepIndex>(0);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [stepError, setStepError] = useState<string | null>(null);
@@ -126,7 +163,10 @@ export function CaffeineHabitWizard() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasMounted(true);
-    setDraft(loadDraft(today));
+    setDraft(loadDraft(today, prefill));
+    // `prefill` is a stable server prop; intentionally out of deps (would clobber
+    // an in-progress edit on re-render). Weekly-review-wizard parity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
 
   useEffect(() => {
@@ -482,7 +522,7 @@ function CaffeineNotesStep({ draft, setDraft, headingRef }: StepProps) {
           <dt className="text-[var(--t-3)]">Tasses</dt>
           <dd className="font-mono text-[var(--t-1)] tabular-nums">{draft.cups}</dd>
           <dt className="text-[var(--t-3)]">Dernière prise</dt>
-          <dd className="font-mono text-[var(--t-1)] tabular-nums">{draft.lastDrinkAt || '—'}</dd>
+          <dd className="font-mono text-[var(--t-1)] tabular-nums">{draft.lastDrinkAt || '-'}</dd>
         </dl>
       </div>
     </Card>

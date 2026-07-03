@@ -236,7 +236,7 @@ export function ScoreGauge({
         {/* Center text overlay (un-rotated) */}
         <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
           {score === null ? (
-            <span className="t-mono-cap text-[var(--t-4)]">N/A</span>
+            <span className="t-mono-cap text-[var(--t-4)]">non calculé</span>
           ) : (
             <>
               <m.span

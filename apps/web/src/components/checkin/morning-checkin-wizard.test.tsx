@@ -58,9 +58,26 @@ import { MorningCheckinWizard } from './morning-checkin-wizard';
 // Resolves to the vi.fn() mock declared above — imported so the full-drive tests
 // can assert whether the server action was (not) called.
 import { submitMorningCheckinAction } from '@/app/checkin/actions';
+import type { MorningCheckinPrefill } from '@/lib/checkin/prefill';
 
 // Module-private key (stable contract) — mirror it here to assert the pitfall.
 const TODAY_DRAFT_KEY = 'fxmily:checkin:morning:draft:v1';
+
+function makeMorningPrefill(overrides: Partial<MorningCheckinPrefill> = {}): MorningCheckinPrefill {
+  return {
+    sleepHours: '7.5',
+    sleepQuality: 8,
+    morningRoutineCompleted: true,
+    marketAnalysisDone: false,
+    meditationMin: '12',
+    sportType: 'Course',
+    sportDurationMin: '45',
+    moodScore: 7,
+    emotionTags: ['calm', 'focused'],
+    intention: 'Trader uniquement Londres',
+    ...overrides,
+  };
+}
 
 afterEach(() => {
   cleanup();
@@ -158,5 +175,53 @@ describe('MorningCheckinWizard — F7 rattrapage justification gate (full drive)
     const fd = vi.mocked(submitMorningCheckinAction).mock.calls[0]?.[1] as FormData;
     expect(fd.get('lateJustification')).toBe('Panne internet hier soir.');
     expect(fd.get('date')).toBe('2026-06-05');
+  });
+});
+
+/**
+ * P3 (#463 parity) — a submitted morning check-in must re-open SEEDED with its
+ * answers (edit mode), not empty, and re-submitting must forward those exact
+ * answers (an explicit update) instead of blanking the row. This is the whole
+ * point of the fix: the member can SEE his check-in and never destroys it blind.
+ */
+describe('MorningCheckinWizard — P3 edit (prefill) mode', () => {
+  afterEach(() => window.localStorage.clear());
+
+  it('seeds the visible fields from the prefill (not empty)', () => {
+    render(<MorningCheckinWizard today="2026-07-02" prefill={makeMorningPrefill()} />);
+    // Step 1 (Sommeil) — sleepHours seeded from the prefill.
+    expect(screen.getByLabelText('Heures de sommeil')).toHaveValue(7.5);
+  });
+
+  it('swaps the submit CTA to an explicit "Mettre à jour" in edit mode', () => {
+    render(<MorningCheckinWizard today="2026-07-02" prefill={makeMorningPrefill()} />);
+    // Drive to the last step (all required fields are already prefilled valid).
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // 1 → 2
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // 2 → 3
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // 3 → 4
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // 4 → 5
+    expect(screen.getByRole('button', { name: /Mettre à jour mon matin/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Enregistrer mon matin/ })).toBeNull();
+  });
+
+  it('re-submits the prefilled answers (explicit update, not a blank overwrite)', async () => {
+    // Reset call history: the file-level mock accumulates across tests (no
+    // clearMocks in vitest.config), so assert against THIS render's call only.
+    vi.mocked(submitMorningCheckinAction).mockClear();
+    vi.mocked(submitMorningCheckinAction).mockResolvedValue({ ok: true });
+    render(<MorningCheckinWizard today="2026-07-02" prefill={makeMorningPrefill()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // 1 → 2
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // 2 → 3
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // 3 → 4
+    fireEvent.click(screen.getByRole('button', { name: /Suivant/ })); // 4 → 5
+    fireEvent.click(screen.getByRole('button', { name: /Mettre à jour mon matin/ }));
+
+    await waitFor(() => expect(vi.mocked(submitMorningCheckinAction)).toHaveBeenCalledTimes(1));
+    const fd = vi.mocked(submitMorningCheckinAction).mock.calls[0]?.[1] as FormData;
+    expect(fd.get('date')).toBe('2026-07-02');
+    expect(fd.get('sleepHours')).toBe('7.5');
+    expect(fd.get('intention')).toBe('Trader uniquement Londres');
+    expect(fd.get('moodScore')).toBe('7');
+    expect(fd.getAll('emotionTags')).toEqual(['calm', 'focused']);
   });
 });

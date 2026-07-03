@@ -18,6 +18,7 @@ import { ScoreSlider } from '@/components/checkin/score-slider';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
+import type { MeditationHabitPrefill } from '@/lib/habit/today-log';
 import { HABIT_NOTES_MAX_CHARS } from '@/lib/schemas/habit-log';
 import { cn } from '@/lib/utils';
 
@@ -76,16 +77,47 @@ function emptyDraft(today: string): DraftState {
   return { date: today, durationMin: '', quality: 6, notes: '' };
 }
 
-function loadDraft(today: string): DraftState {
-  if (typeof window === 'undefined') return emptyDraft(today);
+/**
+ * Seed the draft from the server `prefill` (today's existing log) when present,
+ * else empty. P3 "already logged today" edit-mode entry point (pattern carbone
+ * weekly-review-wizard `baseDraft`).
+ */
+function baseDraft(today: string, prefill?: MeditationHabitPrefill): DraftState {
+  if (!prefill) return emptyDraft(today);
+  return {
+    date: today,
+    durationMin: prefill.durationMin,
+    quality: prefill.quality,
+    notes: prefill.notes,
+  };
+}
+
+function loadDraft(today: string, prefill?: MeditationHabitPrefill): DraftState {
+  const base = baseDraft(today, prefill);
+  if (typeof window === 'undefined') return base;
   try {
     const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!raw) return emptyDraft(today);
+    if (!raw) return base;
     const parsed = JSON.parse(raw) as Partial<DraftState>;
-    return { ...emptyDraft(today), ...parsed, date: today };
+    // Field-by-field: an in-progress local draft wins over the server prefill;
+    // an empty stored string field falls back to the prefill instead of
+    // blanking an existing value (weekly-review-wizard parity).
+    return {
+      ...base,
+      ...parsed,
+      durationMin: pickNonEmpty(parsed.durationMin, base.durationMin),
+      quality: typeof parsed.quality === 'number' ? parsed.quality : base.quality,
+      notes: pickNonEmpty(parsed.notes, base.notes),
+      date: today,
+    };
   } catch {
-    return emptyDraft(today);
+    return base;
   }
+}
+
+/** A non-empty stored string wins; otherwise fall back to the prefill value. */
+function pickNonEmpty(stored: unknown, fallback: string): string {
+  return typeof stored === 'string' && stored.trim().length > 0 ? stored : fallback;
 }
 
 function persistDraft(draft: DraftState) {
@@ -191,11 +223,16 @@ function HofmannAnchor({ durationMin }: { durationMin: number | null }) {
   );
 }
 
-export function MeditationHabitWizard() {
+interface MeditationHabitWizardProps {
+  /** Today's existing log (member timezone) -> edit mode (upsert), P3 fix. */
+  prefill?: MeditationHabitPrefill;
+}
+
+export function MeditationHabitWizard({ prefill }: MeditationHabitWizardProps = {}) {
   const prefersReducedMotion = useReducedMotion();
   const [hasMounted, setHasMounted] = useState(false);
   const [today] = useState(() => localToday());
-  const [draft, setDraft] = useState<DraftState>(() => emptyDraft(today));
+  const [draft, setDraft] = useState<DraftState>(() => baseDraft(today, prefill));
   const [step, setStep] = useState<StepIndex>(0);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [stepError, setStepError] = useState<string | null>(null);
@@ -209,7 +246,10 @@ export function MeditationHabitWizard() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasMounted(true);
-    setDraft(loadDraft(today));
+    setDraft(loadDraft(today, prefill));
+    // `prefill` is a stable server prop; intentionally out of deps (would clobber
+    // an in-progress edit on re-render). Weekly-review-wizard parity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
 
   useEffect(() => {

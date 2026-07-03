@@ -17,8 +17,8 @@
  *      predicate (cf. `lib/pre-trade/service.ts:144-172`).
  *   4. RENDER triggers UI — `/pre-trade/new` shows the wizard for an authed
  *      member ; `/dashboard` surfaces Trigger A Card with
- *      `aria-labelledby="pre-trade-heading"` ; `/journal/new` surfaces
- *      Trigger B Banner with `aria-labelledby="pre-trade-banner-heading"`.
+ *      `aria-labelledby="pre-trade-heading"` ; `/journal/new` surfaces the
+ *      live day status `data-slot="pre-trade-today-status"` (todo|done).
  *
  * NOT covered (canon `v1-5-mindset-check.spec.ts:18-22`) : driving the 4-step
  * wizard UI itself (hidden inputs + localStorage draft → fragile selectors).
@@ -290,7 +290,7 @@ test.describe('V2.3 PreTradeCheck — auth-gate + happy-path persist + auto-link
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
   });
 
-  test('RENDER: /journal/new surfaces Trigger B Banner (pre-trade-banner-heading)', async ({
+  test('RENDER: /journal/new surfaces the live pre-trade day status (todo|done)', async ({
     page,
     request,
   }) => {
@@ -304,15 +304,25 @@ test.describe('V2.3 PreTradeCheck — auth-gate + happy-path persist + auto-link
 
     await expect(page).toHaveURL(/\/journal\/new/);
 
-    // ADR-003 Trigger B : visible `<span id="pre-trade-banner-heading">`
-    // inside an `<aside aria-labelledby>` wrapper. Span (not h2) is the
-    // labelledby target — Banner is decorative, not a structural heading.
-    const bannerHeading = page.locator('#pre-trade-banner-heading');
-    await expect(bannerHeading).toBeVisible();
-    await expect(bannerHeading).toContainText(/Pause 30 secondes/i);
-
-    // Anchor link to /pre-trade/new + aria-label confirming the destination.
-    await expect(page.locator('a[href="/pre-trade/new"][aria-label*="pré-trade"]')).toBeVisible();
+    // ADR-003 Trigger B, live variant : the static banner became
+    // `PreTradeTodayStatus` (two calm states). Whether THIS member already has
+    // a check today depends on sibling tests in this file (the persist test
+    // creates one via Prisma), so both states are legitimate here — assert the
+    // rendered copy matches whichever state the component reports.
+    const status = page.locator('[data-slot="pre-trade-today-status"]');
+    await expect(status).toBeVisible();
+    const state = await status.getAttribute('data-state');
+    if (state === 'done') {
+      await expect(status).toContainText(/Pré-trade du jour fait à \d{1,2}h\d{2}/);
+      // Done state links to the recap, not to a new check.
+      await expect(status.locator('a[href="/patterns"]')).toBeVisible();
+    } else {
+      expect(state).toBe('todo');
+      await expect(status).toContainText(/Pense à ton pré-trade/);
+      await expect(status).toContainText(/pause de 30 secondes/i);
+      // Anchor link to /pre-trade/new + aria-label confirming the destination.
+      await expect(page.locator('a[href="/pre-trade/new"][aria-label*="pré-trade"]')).toBeVisible();
+    }
 
     await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
   });

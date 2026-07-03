@@ -26,7 +26,7 @@ interface Band {
 }
 
 function bandFor(rate: number | null): Band {
-  if (rate === null) return { fg: 'text-[var(--t-4)]', bar: 'bg-[var(--b-strong)]', word: '—' };
+  if (rate === null) return { fg: 'text-[var(--t-4)]', bar: 'bg-[var(--b-strong)]', word: '-' };
   if (rate >= 80) return { fg: 'text-[var(--ok)]', bar: 'bg-[var(--ok)]', word: 'solide' };
   if (rate >= 50)
     return { fg: 'text-[var(--acc-hi)]', bar: 'bg-[var(--acc)]', word: 'en bonne voie' };
@@ -42,7 +42,7 @@ function MirrorRow({ rule }: { rule: MethodRule }) {
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-[13px] font-semibold text-[var(--t-1)]">{rule.label}</span>
         <span className={cn('f-mono text-[13px] font-semibold tabular-nums', band.fg)}>
-          {hasData ? `${rule.rate}%` : '—'}
+          {hasData ? `${rule.rate}%` : '-'}
           {hasData ? (
             <span className="ml-1.5 text-[11px] font-medium text-[var(--t-4)]">{band.word}</span>
           ) : null}

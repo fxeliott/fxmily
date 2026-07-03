@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
 
 function formatFullName(firstName: string, lastName: string): string {
   const name = [firstName, lastName].filter(Boolean).join(' ').trim();
-  return name.length > 0 ? name : '—';
+  return name.length > 0 ? name : '-';
 }
 
 function formatDateLabel(iso: string): string {

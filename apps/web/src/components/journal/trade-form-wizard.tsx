@@ -926,7 +926,7 @@ function StepPlannedRR({
             </p>
           </div>
           <Pill tone="cy" dot="live">
-            CALCULÉ LIVE
+            Calculé en direct
           </Pill>
         </div>
 

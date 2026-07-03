@@ -41,7 +41,7 @@ export function BiasSynthesis({ assets }: { assets: SeanceAssetView[] }) {
                 <BiasPill bias={a.bias} />
               </td>
               <td className="px-3 py-2.5 align-middle font-mono text-[12px] text-[var(--t-2)] tabular-nums">
-                {a.levels[0]?.value ?? '—'}
+                {a.levels[0]?.value ?? '-'}
               </td>
             </tr>
           ))}

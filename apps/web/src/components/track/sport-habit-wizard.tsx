@@ -19,6 +19,7 @@ import { SportZonesBar } from '@/components/track/sport-zones-bar';
 import { Btn } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { hapticError, hapticSuccess, hapticTap } from '@/lib/haptics';
+import type { SportHabitPrefill } from '@/lib/habit/today-log';
 import { HABIT_NOTES_MAX_CHARS } from '@/lib/schemas/habit-log';
 import { cn } from '@/lib/utils';
 
@@ -79,16 +80,51 @@ function emptyDraft(today: string): DraftState {
   return { date: today, sportType: 'cardio', durationMin: '', intensity: 5, notes: '' };
 }
 
-function loadDraft(today: string): DraftState {
-  if (typeof window === 'undefined') return emptyDraft(today);
+/**
+ * Seed the draft from the server `prefill` (today's existing log) when present,
+ * else empty. P3 "already logged today" edit-mode entry point (pattern carbone
+ * weekly-review-wizard `baseDraft`).
+ */
+function baseDraft(today: string, prefill?: SportHabitPrefill): DraftState {
+  if (!prefill) return emptyDraft(today);
+  return {
+    date: today,
+    sportType: prefill.sportType,
+    durationMin: prefill.durationMin,
+    intensity: prefill.intensity,
+    notes: prefill.notes,
+  };
+}
+
+function loadDraft(today: string, prefill?: SportHabitPrefill): DraftState {
+  const base = baseDraft(today, prefill);
+  if (typeof window === 'undefined') return base;
   try {
     const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!raw) return emptyDraft(today);
+    if (!raw) return base;
     const parsed = JSON.parse(raw) as Partial<DraftState>;
-    return { ...emptyDraft(today), ...parsed, date: today };
+    // Field-by-field: an in-progress local draft wins over the server prefill;
+    // an empty stored string field falls back to the prefill instead of
+    // blanking an existing value (weekly-review-wizard parity). `sportType` and
+    // `intensity` are always-present typed draft values, so a stored value of
+    // the right type wins.
+    return {
+      ...base,
+      ...parsed,
+      sportType: typeof parsed.sportType === 'string' ? parsed.sportType : base.sportType,
+      durationMin: pickNonEmpty(parsed.durationMin, base.durationMin),
+      intensity: typeof parsed.intensity === 'number' ? parsed.intensity : base.intensity,
+      notes: pickNonEmpty(parsed.notes, base.notes),
+      date: today,
+    };
   } catch {
-    return emptyDraft(today);
+    return base;
   }
+}
+
+/** A non-empty stored string wins; otherwise fall back to the prefill value. */
+function pickNonEmpty(stored: unknown, fallback: string): string {
+  return typeof stored === 'string' && stored.trim().length > 0 ? stored : fallback;
 }
 
 function persistDraft(draft: DraftState) {
@@ -125,11 +161,16 @@ function validateStep(step: StepIndex, draft: DraftState): string | null {
   return null;
 }
 
-export function SportHabitWizard() {
+interface SportHabitWizardProps {
+  /** Today's existing log (member timezone) -> edit mode (upsert), P3 fix. */
+  prefill?: SportHabitPrefill;
+}
+
+export function SportHabitWizard({ prefill }: SportHabitWizardProps = {}) {
   const prefersReducedMotion = useReducedMotion();
   const [hasMounted, setHasMounted] = useState(false);
   const [today] = useState(() => localToday());
-  const [draft, setDraft] = useState<DraftState>(() => emptyDraft(today));
+  const [draft, setDraft] = useState<DraftState>(() => baseDraft(today, prefill));
   const [step, setStep] = useState<StepIndex>(0);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [stepError, setStepError] = useState<string | null>(null);
@@ -143,7 +184,10 @@ export function SportHabitWizard() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasMounted(true);
-    setDraft(loadDraft(today));
+    setDraft(loadDraft(today, prefill));
+    // `prefill` is a stable server prop; intentionally out of deps (would clobber
+    // an in-progress edit on re-render). Weekly-review-wizard parity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
 
   useEffect(() => {
@@ -481,7 +525,7 @@ function SportStep({
 
 function SportNotesStep({ draft, setDraft, headingRef }: StepProps) {
   const remaining = HABIT_NOTES_MAX_CHARS - draft.notes.length;
-  const typeLabel = SPORT_OPTIONS.find((o) => o.value === draft.sportType)?.label ?? '—';
+  const typeLabel = SPORT_OPTIONS.find((o) => o.value === draft.sportType)?.label ?? '-';
   return (
     <Card className="space-y-4 p-4">
       <header className="space-y-1">

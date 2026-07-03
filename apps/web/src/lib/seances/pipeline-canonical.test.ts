@@ -75,6 +75,44 @@ describe('assembleSeanceContent — happy path', () => {
   });
 });
 
+describe('assembleSeanceContent — typography belt (F-J1, em/en dash strip)', () => {
+  it('strips em/en dashes from summary / keyTakeaways / reading / levels / messages', () => {
+    const res = assembleSeanceContent(
+      validContent({
+        summary: 'Analyse de séance — un dollar qui souffle.',
+        keyTakeaways: ['Range 3–5R visé', 'Discipline — priorité'],
+        assets: CANONICAL_ASSETS.map((a) => ({
+          symbol: a.symbol,
+          bias: 'neutre',
+          levels: [{ label: 'Zone—clé', value: '1.0800–1.0850' }],
+          reading: [`Lecture ${a.symbol} — biais neutre.`],
+        })),
+        messages: CANONICAL_ASSETS.map((a) => ({
+          asset: a.symbol,
+          text: `${a.symbol} — rien à signaler.`,
+        })),
+      }),
+    );
+    expect(res.ok).toBe(true);
+    const blob = JSON.stringify(res.content);
+    expect(blob).not.toMatch(/[–—]/);
+    expect(res.content.summary).toBe('Analyse de séance : un dollar qui souffle.');
+    expect(res.content.keyTakeaways).toEqual(['Range 3 à 5R visé', 'Discipline : priorité']);
+    expect(res.content.assets[0]?.levels).toEqual([
+      { label: 'Zone, clé', value: '1.0800 à 1.0850' },
+    ]);
+    expect(res.content.assets[0]?.reading[0]).toBe('Lecture EURUSD : biais neutre.');
+    expect(res.content.messages[0]?.text).toBe('EURUSD : rien à signaler.');
+  });
+
+  it('leaves dash-free content byte-for-byte unchanged', () => {
+    const res = assembleSeanceContent(validContent());
+    expect(res.ok).toBe(true);
+    expect(res.content.summary).toBe("Séance d'analyse du matin, fil conducteur macro.");
+    expect(res.content.messages[0]?.text).toBe('EURUSD : RAS.');
+  });
+});
+
 describe('assembleSeanceContent — Règle n°1 rejections', () => {
   it('rejects a missing canonical asset', () => {
     const c = validContent();

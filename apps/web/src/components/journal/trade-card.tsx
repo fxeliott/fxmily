@@ -215,7 +215,7 @@ export function TradeCard({
               </>
             ) : (
               <span className="f-mono text-[16px] leading-none font-medium text-[var(--t-4)]">
-                —
+                -
               </span>
             )}
             <ChevronRight

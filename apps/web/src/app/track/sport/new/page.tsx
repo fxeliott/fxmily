@@ -3,7 +3,11 @@ import { redirect } from 'next/navigation';
 import { ArrowLeft, Dumbbell } from 'lucide-react';
 
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { AlreadyLoggedNotice } from '@/components/track/already-logged-notice';
 import { SportHabitWizard } from '@/components/track/sport-habit-wizard';
+import { localDateOf } from '@/lib/checkin/timezone';
+import { listRecentHabitLogs } from '@/lib/habit/service';
+import { findTodayHabitLog, sportPrefillFromLog } from '@/lib/habit/today-log';
 import { auth } from '@/auth';
 
 /**
@@ -11,6 +15,10 @@ import { auth } from '@/auth';
  *
  * Auth gate (status === 'active'). Renders the `<SportHabitWizard>`
  * Client Component which handles the 2-step flow + Server Action submit.
+ *
+ * P3 fix — if sport is already logged for the member-timezone today, the wizard
+ * starts PREFILLED and an "already logged" notice makes re-submit-updates
+ * explicit (pattern carbone `/review/new` #463).
  */
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +28,11 @@ export default async function TrackSportNewPage() {
   if (!session?.user?.id || session.user.status !== 'active') {
     redirect('/login');
   }
+
+  const timezone = session.user.timezone || 'Europe/Paris';
+  const today = localDateOf(new Date(), timezone);
+  const existing = findTodayHabitLog(await listRecentHabitLogs(session.user.id, 1), today, 'sport');
+  const prefill = existing ? sportPrefillFromLog(existing) : null;
 
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
@@ -56,7 +69,9 @@ export default async function TrackSportNewPage() {
           </p>
         </header>
 
-        <SportHabitWizard />
+        {prefill ? <AlreadyLoggedNotice pillarLabel="Sport" /> : null}
+
+        <SportHabitWizard {...(prefill ? { prefill } : {})} />
       </div>
     </main>
   );

@@ -191,7 +191,7 @@ export function SetupQualityCard({ setupQuality, riskDiscipline }: SetupQualityC
                   riskPct !== null && riskPct >= 80 ? 'text-[var(--ok)]' : 'text-[var(--t-1)]'
                 }`}
               >
-                {riskPct !== null ? `${riskPct}%` : '—'}
+                {riskPct !== null ? `${riskPct}%` : '-'}
               </span>
               <span className="t-cap text-[var(--t-4)]">des trades saisis</span>
             </div>
@@ -211,7 +211,7 @@ export function SetupQualityCard({ setupQuality, riskDiscipline }: SetupQualityC
             <div className="flex flex-col gap-1">
               <span className="t-mono-cap text-[var(--t-4)]">Médiane</span>
               <span className="f-mono text-[20px] leading-none font-semibold text-[var(--t-1)] tabular-nums">
-                {median !== null ? `${median.toFixed(2)} %` : '—'}
+                {median !== null ? `${median.toFixed(2)} %` : '-'}
               </span>
               <span className="t-cap text-[var(--t-4)]">risque par trade</span>
             </div>

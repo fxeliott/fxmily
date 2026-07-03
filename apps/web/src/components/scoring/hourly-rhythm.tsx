@@ -55,9 +55,9 @@ export function HourlyRhythm({ hours }: HourlyRhythmProps) {
                     // Insufficient sample — show « — » instead of a noise metric
                     // (mirror of SessionPerfBars / EmotionPerfTable honesty rule).
                     <>
-                      <span className="t-mono-cap text-[var(--t-4)]">—</span>
+                      <span className="t-mono-cap text-[var(--t-4)]">-</span>
                       <span className="f-mono w-14 text-right text-[12px] text-[var(--t-4)] tabular-nums">
-                        —
+                        -
                       </span>
                     </>
                   ) : (

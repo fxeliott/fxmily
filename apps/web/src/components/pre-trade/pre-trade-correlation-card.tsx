@@ -150,13 +150,25 @@ function ReasonCell({
       >
         <div className="flex items-baseline justify-between gap-2">
           <span
-            className={cn('t-eyebrow', tone === 'acc' ? 'text-[var(--acc)]' : 'text-[var(--t-3)]')}
+            className="t-eyebrow"
+            // `.t-eyebrow` bakes `color: var(--t-3)` OUTSIDE Tailwind's layers,
+            // so it beats any `text-[...]` utility — inline style is the only
+            // override that wins. On the acc-dim cell, t-3 sits at 4.45:1
+            // (< 4.5 WCAG AA); --acc-hi is the DS "text-accent" token.
+            style={tone === 'acc' ? { color: 'var(--acc-hi)' } : undefined}
           >
             {label}
           </span>
-          <Pill tone="mute">{formatSampleSize(stats.sampleSize)}</Pill>
+          <Pill tone={tone === 'acc' ? 'acc' : 'mute'}>{formatSampleSize(stats.sampleSize)}</Pill>
         </div>
-        <p className="text-[11px] leading-relaxed text-[var(--t-3)]">{copy.title}</p>
+        <p
+          className={cn(
+            'text-[11px] leading-relaxed',
+            tone === 'acc' ? 'text-[var(--t-2)]' : 'text-[var(--t-3)]',
+          )}
+        >
+          {copy.title}
+        </p>
       </div>
     );
   }
@@ -178,11 +190,13 @@ function ReasonCell({
     >
       <div className="flex items-baseline justify-between gap-2">
         <span
-          className={cn('t-eyebrow', tone === 'acc' ? 'text-[var(--acc)]' : 'text-[var(--t-1)]')}
+          className="t-eyebrow"
+          // Same `.t-eyebrow` baked-color override as the insufficient state.
+          style={tone === 'acc' ? { color: 'var(--acc-hi)' } : undefined}
         >
           {label}
         </span>
-        <Pill tone="mute">{formatSampleSize(stats.sampleSize)}</Pill>
+        <Pill tone={tone === 'acc' ? 'acc' : 'mute'}>{formatSampleSize(stats.sampleSize)}</Pill>
       </div>
       <div className="flex items-baseline gap-2">
         <span
@@ -193,26 +207,39 @@ function ReasonCell({
         >
           {winRateLabel}
         </span>
-        <span className="text-[11px] text-[var(--t-4)]">win</span>
+        <span
+          className={cn('text-[11px]', tone === 'acc' ? 'text-[var(--t-2)]' : 'text-[var(--t-4)]')}
+        >
+          win
+        </span>
       </div>
-      <dl className="flex flex-col gap-0.5 text-[11px] leading-relaxed">
+      <dl
+        className={cn(
+          'flex flex-col gap-0.5 text-[11px] leading-relaxed',
+          // On the accent-tinted cell the tinted bg lifts the surface: t-3/t-4
+          // drop under 4.5:1 (WCAG AA) — use t-2 for every small neutral text.
+          tone === 'acc' ? 'text-[var(--t-2)]' : 'text-[var(--t-3)]',
+        )}
+      >
         <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-[var(--t-3)]">Perdants</dt>
-          <dd className="t-mono-cap text-[var(--t-3)]">{lossRateLabel}</dd>
+          <dt>Perdants</dt>
+          <dd className="t-mono-cap">{lossRateLabel}</dd>
         </div>
         <div className="flex items-baseline justify-between gap-2">
-          <dt className="text-[var(--t-3)]">BE</dt>
-          <dd className="t-mono-cap text-[var(--t-3)]">{breakEvenRateLabel}</dd>
+          <dt>BE</dt>
+          <dd className="t-mono-cap">{breakEvenRateLabel}</dd>
         </div>
         <div className="flex items-baseline justify-between gap-2 border-t border-[var(--b-default)] pt-1">
-          <dt className="text-[var(--t-3)]">R moyen</dt>
+          <dt>R moyen</dt>
           <dd
             className={cn(
               'f-mono tabular-nums',
               stats.avgRealizedR === null
-                ? 'text-[var(--t-4)]'
+                ? tone === 'acc'
+                  ? 'text-[var(--t-2)]'
+                  : 'text-[var(--t-4)]'
                 : tone === 'acc'
-                  ? 'text-[var(--acc)]'
+                  ? 'text-[var(--acc-hi)]'
                   : 'text-[var(--t-1)]',
             )}
           >
@@ -220,7 +247,12 @@ function ReasonCell({
           </dd>
         </div>
         {stats.avgRSampleSize !== stats.sampleSize && (
-          <div className="text-[10px] text-[var(--t-4)]">
+          <div
+            className={cn(
+              'text-[10px]',
+              tone === 'acc' ? 'text-[var(--t-2)]' : 'text-[var(--t-4)]',
+            )}
+          >
             R calculé sur {stats.avgRSampleSize}/{stats.sampleSize}
           </div>
         )}

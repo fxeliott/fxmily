@@ -24,6 +24,7 @@ import {
   listRecentScoreEvents,
 } from '@/lib/verification/constancy';
 import { getVerificationOverview, listDiscrepancies } from '@/lib/verification/service';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 /**
  * S3 — `/verification` member surface (SPEC §33, Vérification & Honnêteté
@@ -219,6 +220,8 @@ export default async function VerificationPage() {
             </div>
           </Card>
         </header>
+
+        <NextStepRail currentPath="/verification" />
 
         {/* Score de constance — au-dessus du fold, visible immédiatement (pas de
             wow-reveal : le score est l'info pivot, jamais retardé). */}

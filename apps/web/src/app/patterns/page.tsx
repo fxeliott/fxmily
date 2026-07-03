@@ -21,6 +21,7 @@ import {
 import { Card } from '@/components/ui/card';
 import { HabitKindTabPicker } from '@/components/track/habit-kind-tab-picker';
 import { habitKindSchema } from '@/lib/schemas/habit-log';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
 
 /**
@@ -76,6 +77,8 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
       <DashboardAmbient />
       <div className="relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
         <PatternsHero />
+
+        <NextStepRail currentPath="/patterns" className="mb-6 block" />
 
         {/* Patterns — émotion×résultat (3 moments) + rythmes + sessions + paires */}
         <section className="wow-reveal mb-6 flex flex-col gap-3" aria-labelledby="patterns-heading">

@@ -8,6 +8,7 @@ import { SeanceCard } from '@/components/seances/seance-card';
 import { SeancesDisclaimer } from '@/components/seances/seances-disclaimer';
 import { SeancesStatGrid } from '@/components/seances/seances-stat-grid';
 import { getSeancesHub } from '@/lib/seances/service';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 export const metadata = {
   title: 'Séances',
@@ -61,6 +62,8 @@ export default async function SeancesPage() {
             </p>
           </div>
         </header>
+
+        <NextStepRail currentPath="/seances" />
 
         <SeancesStatGrid stats={stats} />
 

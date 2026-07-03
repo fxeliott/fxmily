@@ -12,6 +12,7 @@ import { V18Aurora } from '@/components/v18/aurora';
 import { V18ThemeScope } from '@/components/v18/theme-scope';
 import { listMyRecentReviews } from '@/lib/weekly-review/service';
 import { currentWeekStartUTC, findCurrentWeekReview } from '@/lib/weekly-review/week';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 export const dynamic = 'force-dynamic';
 
@@ -113,6 +114,8 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
             </Link>
           </div>
         </header>
+
+        <NextStepRail currentPath="/review" />
 
         {/* CRISIS BANNER (conditional). `key={crisisLevel}` forces a clean
             remount when the level changes (HIGH-4 fix — `aria-live="polite"`

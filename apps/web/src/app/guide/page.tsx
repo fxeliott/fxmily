@@ -18,6 +18,7 @@ import type { CSSProperties } from 'react';
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DisciplineLoop } from '@/components/illustrations/discipline-loop';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { btnVariants } from '@/components/ui/btn';
@@ -131,6 +132,8 @@ export default async function GuidePage() {
           <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
           Tableau de bord
         </Link>
+
+        <NextStepRail currentPath="/guide" />
 
         {/* S19 — hero glass (était un <header> texte nu = zone la plus fade du
             cluster guidage). Cohérent avec ProgressionHero / NorthStarHero. */}

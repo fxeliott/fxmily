@@ -13,6 +13,7 @@ import { CURRENT_MINDSET_INSTRUMENT_VERSION } from '@/lib/mindset/instrument';
 import { loadMindsetDashboardData } from '@/lib/mindset/service';
 import { currentParisWeekStart, formatWeekRangeFr } from '@/lib/mindset/week';
 import { cn } from '@/lib/utils';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 export const metadata = {
   title: 'Mon mindset',
@@ -94,6 +95,8 @@ export default async function MindsetLandingPage({ searchParams }: MindsetLandin
             score et de ton edge.
           </p>
         </header>
+
+        <NextStepRail currentPath="/mindset" />
 
         {justSubmitted ? (
           <SuccessState size="block" headline="Enregistré">

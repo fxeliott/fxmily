@@ -20,6 +20,7 @@ import {
 } from '@/lib/calendar/service';
 import { currentParisWeekStart } from '@/lib/calendar/week';
 import { reportWarning } from '@/lib/observability';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 export const metadata = {
   title: 'Mon calendrier',
@@ -189,6 +190,8 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
             semaine.
           </p>
         </header>
+
+        <NextStepRail currentPath="/calendrier" />
 
         {justSubmitted ? (
           <div

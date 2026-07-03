@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { countUnseenAnnotationsByTrade } from '@/lib/annotations/member-service';
 import { countTradesByStatus, listTradesForUser } from '@/lib/trades/service';
+import { countOpenDiscrepanciesByTrade } from '@/lib/verification/service';
 import type { TradeStatusFilter } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
 import { NextStepRail } from '@/components/nav/next-step-rail';
@@ -76,12 +77,15 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
   if (page === null) redirect(journalHref(status));
 
   const { items, nextCursor } = page;
-  const [totals, unseenByTrade] = await Promise.all([
+  const [totals, unseenByTrade, discrepanciesByTrade] = await Promise.all([
     countTradesByStatus(session.user.id),
     // J4 — Map<tradeId, unseenAnnotationsCount> for the "Nouvelle correction"
     // pill. Trades with no unread annotations simply aren't keyed, so the
     // default 0 from `<TradeCard />` keeps the badge hidden.
     countUnseenAnnotationsByTrade(session.user.id),
+    // Tour 10 — Map<tradeId, open écart count> : the lucidity signal lands on
+    // the exact trade it concerns (before, écarts lived only on /verification).
+    countOpenDiscrepanciesByTrade(session.user.id),
   ]);
 
   return (
@@ -264,6 +268,7 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
                 <TradeCard
                   trade={trade}
                   unseenAnnotationsCount={unseenByTrade.get(trade.id) ?? 0}
+                  openDiscrepancyCount={discrepanciesByTrade.get(trade.id) ?? 0}
                   timezone={timezone}
                 />
               </li>

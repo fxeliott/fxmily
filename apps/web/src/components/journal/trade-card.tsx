@@ -1,4 +1,12 @@
-import { Check, ChevronRight, MessageSquare, TrendingDown, TrendingUp, X } from 'lucide-react';
+import {
+  Check,
+  ChevronRight,
+  MessageSquare,
+  ScanSearch,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 
 import { AnimatedNumber } from '@/components/ui/animated-number';
@@ -14,6 +22,9 @@ interface TradeCardProps {
   /** J4 — number of admin annotations the member hasn't opened yet. Drives
    * the "Nouvelle correction" pill in the top row. Pass 0 (default) to hide. */
   unseenAnnotationsCount?: number;
+  /** Tour 10 — open verification écarts anchored to THIS trade (declaredTradeId).
+   * Drives the calm "écart à regarder" pill. Pass 0 (default) to hide. */
+  openDiscrepancyCount?: number;
   /** F2 — member timezone for rendering the absolute trade-entry instant.
    * Optional; defaults to Europe/Paris so admin callers stay on Paris. */
   timezone?: string;
@@ -56,6 +67,7 @@ const OUTCOME_TONE: Record<NonNullable<SerializedTrade['outcome']>, 'ok' | 'bad'
 export function TradeCard({
   trade,
   unseenAnnotationsCount = 0,
+  openDiscrepancyCount = 0,
   timezone = 'Europe/Paris',
 }: TradeCardProps) {
   const isClosed = trade.isClosed;
@@ -63,6 +75,7 @@ export function TradeCard({
   const isWin = realizedRNumber !== null && realizedRNumber > 0;
   const isLoss = realizedRNumber !== null && realizedRNumber < 0;
   const hasUnseen = unseenAnnotationsCount > 0;
+  const hasOpenDiscrepancy = openDiscrepancyCount > 0;
 
   const statusBarColor = isClosed
     ? isWin
@@ -86,7 +99,10 @@ export function TradeCard({
   const unseenLabel = hasUnseen
     ? `, ${unseenAnnotationsCount} correction${unseenAnnotationsCount > 1 ? 's' : ''} non lue${unseenAnnotationsCount > 1 ? 's' : ''}`
     : '';
-  const ariaLabel = `Trade ${trade.pair} ${trade.direction} du ${formatDateTime(new Date(trade.enteredAt), timezone)}, ${statusLabel}${unseenLabel}`;
+  const discrepancyLabel = hasOpenDiscrepancy
+    ? `, ${openDiscrepancyCount} écart${openDiscrepancyCount > 1 ? 's' : ''} de vérification à regarder`
+    : '';
+  const ariaLabel = `Trade ${trade.pair} ${trade.direction} du ${formatDateTime(new Date(trade.enteredAt), timezone)}, ${statusLabel}${unseenLabel}${discrepancyLabel}`;
 
   return (
     <Link href={`/journal/${trade.id}`} aria-label={ariaLabel} className="group block">
@@ -136,6 +152,18 @@ export function TradeCard({
                     {unseenAnnotationsCount === 1
                       ? '1 nouvelle correction'
                       : `+${unseenAnnotationsCount} corrections`}
+                  </Pill>
+                ) : null}
+                {hasOpenDiscrepancy ? (
+                  // Tour 10 — the verification écart lands on the exact trade it
+                  // concerns. Posture §33.2 : lucidity pointer, calm warn amber
+                  // (never the red reserved for the loss OUTCOME), no live dot
+                  // (an écart is a fact to face, not an urgency signal).
+                  <Pill tone="warn">
+                    <ScanSearch className="h-2.5 w-2.5" strokeWidth={2} />
+                    {openDiscrepancyCount === 1
+                      ? 'Écart à regarder'
+                      : `${openDiscrepancyCount} écarts à regarder`}
                   </Pill>
                 ) : null}
               </div>

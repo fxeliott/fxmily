@@ -242,6 +242,44 @@ export async function countOpenDiscrepancies(memberId: string): Promise<number> 
   return db.discrepancy.count({ where: { memberId, status: 'open' } });
 }
 
+/**
+ * Tour 10 — Map<tradeId, open discrepancy count> for the journal list badge.
+ * Mirror of `countUnseenAnnotationsByTrade` (annotations/member-service.ts):
+ * ONE groupBy for the whole page, trades without an open écart simply aren't
+ * keyed (TradeCard's default 0 keeps the badge hidden). Only écarts anchored
+ * to a declared trade (`declaredTradeId`) can badge a card — the account-level
+ * types (missing_declared, unfilled_no_reason…) stay on /verification.
+ * Posture §33.2 : a factual pointer to lucidity, never a guilt counter.
+ */
+export async function countOpenDiscrepanciesByTrade(
+  memberId: string,
+): Promise<Map<string, number>> {
+  const grouped = await db.discrepancy.groupBy({
+    by: ['declaredTradeId'],
+    where: { memberId, status: 'open', declaredTradeId: { not: null } },
+    _count: { _all: true },
+  });
+  return new Map(
+    grouped
+      .filter((g): g is typeof g & { declaredTradeId: string } => g.declaredTradeId !== null)
+      .map((g) => [g.declaredTradeId, g._count._all]),
+  );
+}
+
+/**
+ * Tour 10 — single-trade variant for the detail page (close echo input).
+ * A plain indexed count ([memberId, status]) beats reusing the groupBy Map
+ * when only ONE trade is on screen.
+ */
+export async function countOpenDiscrepanciesForTrade(
+  memberId: string,
+  tradeId: string,
+): Promise<number> {
+  return db.discrepancy.count({
+    where: { memberId, status: 'open', declaredTradeId: tradeId },
+  });
+}
+
 /** Member-facing list — newest first, the excused ones stay visible (the
  *  history doesn't rewrite itself; only the score forgives, §33.5). */
 export async function listDiscrepancies(memberId: string): Promise<readonly DiscrepancyView[]> {

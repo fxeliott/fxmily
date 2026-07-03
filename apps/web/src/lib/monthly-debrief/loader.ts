@@ -477,6 +477,7 @@ async function loadTrades(
     exitedAt: trade.exitedAt ? trade.exitedAt.toISOString() : null,
     exitPrice: trade.exitPrice == null ? null : trade.exitPrice.toString(),
     outcome: trade.outcome,
+    exitReason: trade.exitReason,
     realizedR: trade.realizedR == null ? null : trade.realizedR.toString(),
     realizedRSource: trade.realizedRSource,
     // D3-01 — post-outcome behavioural bias tags (LESSOR/Steenbarger). The

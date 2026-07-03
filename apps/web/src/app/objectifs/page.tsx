@@ -14,7 +14,11 @@ import { NextSteps } from '@/components/objectives/next-steps';
 import { ObjectiveRings } from '@/components/objectives/objective-rings';
 import { ObjectivesHero } from '@/components/objectives/objectives-hero';
 import { TrajectoryChart } from '@/components/objectives/trajectory-chart';
-import { getOpenMicroObjective, listRecentMicroObjectives } from '@/lib/coaching/micro-objective';
+import {
+  getAnnotationExcerptForObjective,
+  getOpenMicroObjective,
+  listRecentMicroObjectives,
+} from '@/lib/coaching/micro-objective';
 import { getMentalMap } from '@/lib/coaching/service';
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { NextStepRail } from '@/components/nav/next-step-rail';
@@ -54,6 +58,17 @@ export default async function ObjectifsPage() {
     getOpenMicroObjective(userId),
     listRecentMicroObjectives(userId),
   ]);
+
+  // C3 (tour 10) — quand le micro-objectif ouvert vient d'une correction admin
+  // (`sourceKind='annotation'`), on résout le commentaire RÉEL de cette correction
+  // pour le montrer sous l'intention générique. La lecture est scopée par
+  // `trade.userId` (BOLA) et retourne `null` si l'objectif ne vient pas d'une
+  // annotation OU si elle n'existe plus → aucun surcoût quand il n'y a rien à
+  // montrer, comportement inchangé. Séquentiel (dépend de `openMicroObjective`),
+  // mais c'est un read indexé unique.
+  const annotationExcerpt = openMicroObjective
+    ? await getAnnotationExcerptForObjective(userId, openMicroObjective)
+    : null;
 
   return (
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
@@ -153,7 +168,11 @@ export default async function ObjectifsPage() {
             boucle ouverte. Déterministe, §2-safe. */}
         {openMicroObjective ? (
           <section className="wow-reveal" aria-label="Ton micro-objectif du moment">
-            <MicroObjectiveCard objective={openMicroObjective} variant="full" />
+            <MicroObjectiveCard
+              objective={openMicroObjective}
+              annotationExcerpt={annotationExcerpt}
+              variant="full"
+            />
           </section>
         ) : null}
 

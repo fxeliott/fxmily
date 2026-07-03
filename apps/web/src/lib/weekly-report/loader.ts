@@ -17,6 +17,13 @@ import { countMeetingAttendance } from '@/lib/meeting/service';
 // who joined mid-week is never charged for meetings scheduled before they
 // existed (byte-identical for everyone past their first week).
 import { floorMeetingWindowAtJoin } from '@/lib/meeting/window';
+// C4 (tour 10) — the two sub-schemas that validate the member's onboarding
+// coaching REGISTER + learning STAGE before they cross into the prompt. We
+// `safeParse` the raw Prisma JSON (`unknown`) and derive ONLY the enum
+// (`.register` / `.stage`); the verbatim rationale/evidence are dropped (data
+// minimisation). `weakSignals` is NEVER read here (admin-only, §21.5) — importing
+// only these two mirrors the calendar + monthly-debrief loaders exactly.
+import { coachingToneSchema, learningStageSchema } from '@/lib/schemas/onboarding-interview';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 // 🚨 §21.5 — the ONLY symbol the weekly-report loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
@@ -30,6 +37,7 @@ import { listConstancyScoresInRange } from '@/lib/verification/constancy';
 import { countAlertsInRange } from '@/lib/verification/alerts';
 import { countOpenDiscrepancies } from '@/lib/verification/service';
 
+import type { MemberToneRef } from './prompt';
 import type { BehavioralScoreSnapshot, BuilderInput } from './types';
 import {
   computePreviousFullWeekWindow,
@@ -68,6 +76,14 @@ export interface LoadedWeeklySlice {
     firstName: string | null;
     lastName: string | null;
   };
+  /// C4 (tour 10) — the member's onboarding coaching REGISTER + learning STAGE
+  /// (validated enums only), carried ALONGSIDE the pseudonymised snapshot so the
+  /// LIVE Claude client can inject a tone consigne into the prompt (mirror of the
+  /// monthly-debrief + calendar loaders). Both `null` when the member has no
+  /// profile yet (or the row's JSON is malformed) → the prompt stays neutral,
+  /// zero regression. Read-only reference, NEVER an input of the behavioural
+  /// score (firewall §21.5).
+  memberTone: MemberToneRef;
 }
 
 export interface LoadOptions {
@@ -126,6 +142,7 @@ export async function loadWeeklySliceForUser(
     openDiscrepancyCount,
     alertCount,
     coaching,
+    memberProfileRow,
   ] = await Promise.all([
     loadTrades(userId, window),
     loadCheckins(userId, window),
@@ -174,6 +191,15 @@ export async function loadWeeklySliceForUser(
     // boucles de micro-objectifs period-scopées à la semaine rapportée. `null`
     // quand le membre n'a aucun insight à synthétiser (carte mentale vide).
     getCoachingReportContext(userId, { start: window.weekStartUtc, end: window.weekEndUtc }),
+    // C4 (tour 10) — THIS member's onboarding profile, for the two §21.5-safe
+    // adaptive dimensions ONLY (coachingTone / learningStage). `weakSignals`
+    // and `axesStructured` are NOT selected: admin-only, they must never reach
+    // the prompt. `null` until the onboarding batch has run (honest absence).
+    // Mirror of calendar/service.ts:389 + monthly-debrief getProfileForUser.
+    db.memberProfile.findUnique({
+      where: { userId },
+      select: { coachingTone: true, learningStage: true },
+    }),
   ]);
 
   // DOD3-01 / DoD#2 S6 — a single report week has ≤1 ConstancyScore; take it (or
@@ -190,6 +216,19 @@ export async function loadWeeklySliceForUser(
       : null,
     openDiscrepancyCount,
     alertCount,
+  };
+
+  // C4 (tour 10) — defensive parse of the two adaptive dimensions (Prisma Json?,
+  // null on legacy/partial rows). `safeParse` never throws on null/garbage → we
+  // degrade to "no modulation". Only the closed enum literal (`register` /
+  // `stage`) crosses into the prompt reference — the rationale/evidence stay
+  // behind (not needed for tone, and evidence is member free-text). Carbon of
+  // calendar/service.ts:403-406.
+  const coachingToneParsed = coachingToneSchema.safeParse(memberProfileRow?.coachingTone);
+  const learningStageParsed = learningStageSchema.safeParse(memberProfileRow?.learningStage);
+  const memberTone: MemberToneRef = {
+    coachingRegister: coachingToneParsed.success ? coachingToneParsed.data.register : null,
+    learningStage: learningStageParsed.success ? learningStageParsed.data.stage : null,
   };
 
   const builderInput: BuilderInput = {
@@ -227,6 +266,9 @@ export async function loadWeeklySliceForUser(
       firstName: user.firstName,
       lastName: user.lastName,
     },
+    // C4 (tour 10) — the validated tone reference, carried alongside the slice
+    // so the service can hand it to the LIVE Claude client for prompt injection.
+    memberTone,
   };
 }
 
@@ -277,6 +319,7 @@ async function loadTrades(userId: string, window: WeekWindow): Promise<BuilderIn
     exitedAt: trade.exitedAt ? trade.exitedAt.toISOString() : null,
     exitPrice: trade.exitPrice == null ? null : trade.exitPrice.toString(),
     outcome: trade.outcome,
+    exitReason: trade.exitReason,
     realizedR: trade.realizedR == null ? null : trade.realizedR.toString(),
     realizedRSource: trade.realizedRSource,
     // D3-01 — post-outcome behavioural bias tags (LESSOR/Steenbarger). The

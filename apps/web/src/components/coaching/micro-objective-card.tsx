@@ -20,14 +20,23 @@ import { CloseMicroObjective } from './close-micro-objective';
  *
  * `full` — /objectifs (avec le rappel « tu le refermeras à ton prochain passage »).
  * `compact` — le hub (resserré ; le suivi reste actionnable sur place).
+ *
+ * C3 (tour 10) — quand la boucle vient d'une correction admin, `annotationExcerpt`
+ * porte un court extrait du commentaire RÉEL de la correction (résolu server-side
+ * via `getAnnotationExcerptForObjective`, déjà tronqué). On l'affiche SOUS
+ * l'intention générique, en `full` seulement (le hub compact reste resserré) : le
+ * membre lit ce que son coach lui a vraiment dit, pas juste la phrase curée. `null`
+ * quand la boucle ne vient pas d'une annotation, ou que la correction n'existe plus.
  */
 
 export function MicroObjectiveCard({
   objective,
+  annotationExcerpt = null,
   variant = 'full',
   className,
 }: {
   objective: MicroObjectiveView | null;
+  annotationExcerpt?: string | null;
   variant?: 'full' | 'compact';
   className?: string;
 }) {
@@ -58,6 +67,21 @@ export function MicroObjectiveCard({
             {objective.title}
           </h2>
           <p className="t-cap leading-relaxed text-[var(--t-2)]">{objective.intention}</p>
+
+          {/* C3 (tour 10) — l'extrait de la correction admin dont la boucle est
+              issue, cité SOUS l'intention générique (full uniquement). Liseré
+              accent gauche + eyebrow pour signaler « parole du coach » sans
+              rivaliser avec le titre. §31.2 : c'est un rappel, jamais un reproche. */}
+          {!compact && annotationExcerpt ? (
+            <figure className="mt-1 border-l-2 border-[var(--b-acc)] pl-3">
+              <figcaption className="t-eyebrow text-[var(--t-3)]">
+                Ce que ton coach a relevé
+              </figcaption>
+              <blockquote className="t-foot mt-0.5 leading-relaxed text-[var(--t-2)] italic">
+                {annotationExcerpt}
+              </blockquote>
+            </figure>
+          ) : null}
         </div>
       </div>
 

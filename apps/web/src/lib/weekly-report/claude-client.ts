@@ -7,6 +7,7 @@ import type { WeeklySnapshot } from '@/lib/schemas/weekly-report';
 
 import {
   buildWeeklyReportUserPrompt,
+  type MemberToneRef,
   WEEKLY_REPORT_OUTPUT_JSON_SCHEMA,
   WEEKLY_REPORT_SYSTEM_PROMPT,
 } from './prompt';
@@ -55,7 +56,16 @@ export interface WeeklyReportGeneration {
 }
 
 export interface WeeklyReportClaudeClient {
-  generate(snapshot: WeeklySnapshot): Promise<WeeklyReportGeneration>;
+  /// C4 (tour 10) — `memberTone` is the member's onboarding coaching register /
+  /// learning stage (validated enums), carried ALONGSIDE the pseudonymised
+  /// snapshot (which has no `userId` to look it up with). The LIVE client injects
+  /// a tone consigne into the prompt from it; the MOCK ignores it (deterministic,
+  /// no Claude call). Optional → callers that don't resolve a profile pass nothing
+  /// and the prompt stays neutral (zero regression).
+  generate(
+    snapshot: WeeklySnapshot,
+    memberTone?: MemberToneRef | null,
+  ): Promise<WeeklyReportGeneration>;
 }
 
 // =============================================================================
@@ -101,7 +111,14 @@ export function resetClaudeClient(): void {
  * pipeline produces real Claude output".
  */
 export class MockWeeklyReportClient implements WeeklyReportClaudeClient {
-  async generate(snapshot: WeeklySnapshot): Promise<WeeklyReportGeneration> {
+  // C4 (tour 10) — `memberTone` is accepted for interface parity but
+  // deliberately unused: the mock output is a deterministic contract fixture
+  // derived from the counters, it never builds the Claude prompt, so the tone
+  // register has nothing to modulate here.
+  async generate(
+    snapshot: WeeklySnapshot,
+    _memberTone?: MemberToneRef | null,
+  ): Promise<WeeklyReportGeneration> {
     const output = renderMockOutput(snapshot);
     // Validate via Zod — guarantees the mock stays aligned with the live schema.
     const validated = weeklyReportOutputSchema.parse(output);
@@ -214,12 +231,15 @@ function renderMockOutput(snapshot: WeeklySnapshot): WeeklyReportOutput {
  * back to the mock path with a `console.warn` so the cron stays unblocked.
  */
 export class LiveWeeklyReportClient implements WeeklyReportClaudeClient {
-  async generate(snapshot: WeeklySnapshot): Promise<WeeklyReportGeneration> {
+  async generate(
+    snapshot: WeeklySnapshot,
+    memberTone?: MemberToneRef | null,
+  ): Promise<WeeklyReportGeneration> {
     const apiKey = env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       // Defensive — should not happen, factory only instantiates us when key
       // is set. Fall back to mock rather than throw.
-      return new MockWeeklyReportClient().generate(snapshot);
+      return new MockWeeklyReportClient().generate(snapshot, memberTone);
     }
 
     let Anthropic: typeof import('@anthropic-ai/sdk').default;
@@ -231,7 +251,7 @@ export class LiveWeeklyReportClient implements WeeklyReportClaudeClient {
         '[weekly-report.claude-client] @anthropic-ai/sdk not installed — falling back to mock',
         err instanceof Error ? err.message : err,
       );
-      return new MockWeeklyReportClient().generate(snapshot);
+      return new MockWeeklyReportClient().generate(snapshot, memberTone);
     }
 
     // Bound the request: the SDK default is a 10-minute timeout × up to 2
@@ -242,7 +262,10 @@ export class LiveWeeklyReportClient implements WeeklyReportClaudeClient {
     // Promise.allSettled → reportWarning (audit RESIL-2).
     const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 2 });
     const model = env.ANTHROPIC_MODEL;
-    const userPrompt = buildWeeklyReportUserPrompt(snapshot);
+    // C4 (tour 10) — inject the member's coaching register / learning stage
+    // consigne (when resolved by the loader) so the report is phrased to match
+    // this member's onboarding register. `null`/absent → neutral prompt.
+    const userPrompt = buildWeeklyReportUserPrompt(snapshot, memberTone);
 
     // We treat the SDK shape defensively — JSON output via `messages.create`
     // with an explicit instruction. If the running SDK version exposes

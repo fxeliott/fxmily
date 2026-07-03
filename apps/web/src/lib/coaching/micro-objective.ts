@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { db } from '@/lib/db';
 import type { TrackingAxis } from '@/generated/prisma/enums';
 import { getMentalMap } from './service';
@@ -309,25 +311,32 @@ function toView(row: {
   };
 }
 
-/** Le micro-objectif OUVERT du membre (E3 « créé »), ou `null`. */
-export async function getOpenMicroObjective(memberId: string): Promise<MicroObjectiveView | null> {
-  const row = await db.mentalMicroObjective.findFirst({
-    where: { memberId, status: 'open' },
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      axis: true,
-      title: true,
-      intention: true,
-      status: true,
-      sourceKind: true,
-      sourceRef: true,
-      createdAt: true,
-      closedAt: true,
-    },
-  });
-  return row ? toView(row) : null;
-}
+/**
+ * Le micro-objectif OUVERT du membre (E3 « créé »), ou `null`.
+ * `React.cache()` (tour 10) : la pill du shell (root layout) et les pages qui
+ * l'affichent déjà (/dashboard, /objectifs) partagent le MÊME render tree →
+ * une seule requête par requête serveur, pas une par surface.
+ */
+export const getOpenMicroObjective = cache(
+  async (memberId: string): Promise<MicroObjectiveView | null> => {
+    const row = await db.mentalMicroObjective.findFirst({
+      where: { memberId, status: 'open' },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        axis: true,
+        title: true,
+        intention: true,
+        status: true,
+        sourceKind: true,
+        sourceRef: true,
+        createdAt: true,
+        closedAt: true,
+      },
+    });
+    return row ? toView(row) : null;
+  },
+);
 
 /**
  * Historique des micro-objectifs du membre (E2 — trace d'évolution), du plus
@@ -399,4 +408,108 @@ export async function getMicroObjectiveProgress(
     resolved,
     keptRate: resolved > 0 ? Math.round((kept / resolved) * 1000) / 10 : null,
   };
+}
+
+/** Longueur max de l'extrait de correction affiché au membre (troncature douce). */
+const ANNOTATION_EXCERPT_MAX = 180;
+
+/**
+ * PURE — extrait court et propre du commentaire brut d'une correction admin.
+ * Aplati (espaces normalisés, retours à la ligne écrasés) puis tronqué à
+ * `ANNOTATION_EXCERPT_MAX` sur une frontière de mot quand c'est possible, avec
+ * une ellipse « … ». Retourne `null` pour un commentaire vide (jamais un extrait
+ * fantôme). Exporté pour être testé en isolation.
+ */
+export function buildAnnotationExcerpt(comment: string): string | null {
+  const flat = comment.replace(/\s+/g, ' ').trim();
+  if (flat.length === 0) return null;
+  if (flat.length <= ANNOTATION_EXCERPT_MAX) return flat;
+  // Coupe sur le dernier espace avant la limite pour ne pas trancher un mot ;
+  // si aucun espace (mot très long), coupe dur à la limite.
+  const sliced = flat.slice(0, ANNOTATION_EXCERPT_MAX);
+  const lastSpace = sliced.lastIndexOf(' ');
+  const head = (
+    lastSpace > ANNOTATION_EXCERPT_MAX * 0.6 ? sliced.slice(0, lastSpace) : sliced
+  ).trimEnd();
+  return `${head}…`;
+}
+
+/**
+ * C3 (tour 10) — referme visuellement la boucle « correction admin → micro-objectif ».
+ * Résout le commentaire RÉEL de la correction dont un micro-objectif `annotation`
+ * est issu, pour l'afficher au membre SOUS l'intention générique (il voit ce que
+ * son coach lui a vraiment dit, pas juste une phrase curée).
+ *
+ * 🛡️ BOLA : la lecture est scopée par `trade.userId = memberId` (relation
+ * `TradeAnnotation → Trade → User`), donc un membre ne peut JAMAIS résoudre
+ * l'annotation d'un autre membre, même en forgeant le `sourceRef`. Pas de fuite
+ * nouvelle : ces annotations lui sont déjà visibles via
+ * `lib/annotations/member-service.ts`. Fallback SILENCIEUX (`null`) si le
+ * micro-objectif ne vient pas d'une annotation, ou si l'annotation n'existe plus
+ * / n'est pas la sienne → comportement historique inchangé (§C3 « si l'annotation
+ * n'existe plus, comportement actuel inchangé »). `sourceRef` reste une trace,
+ * jamais une FK (firewall §21.5) : on le résout à la lecture, à la demande.
+ */
+export async function getAnnotationExcerptForObjective(
+  memberId: string,
+  objective: Pick<MicroObjectiveView, 'sourceKind' | 'sourceRef'>,
+): Promise<string | null> {
+  if (objective.sourceKind !== 'annotation') return null;
+  const row = await db.tradeAnnotation.findFirst({
+    where: { id: objective.sourceRef, trade: { is: { userId: memberId } } },
+    select: { comment: true },
+  });
+  if (!row) return null;
+  return buildAnnotationExcerpt(row.comment);
+}
+
+/** Une ligne de « Suivi des corrections » (admin) : un micro-objectif issu d'une correction. */
+export interface AnnotationObjectiveRow {
+  readonly id: string;
+  readonly axis: string;
+  readonly title: string;
+  readonly intention: string;
+  readonly status: MicroObjectiveStatusView;
+  readonly createdAt: Date;
+  readonly closedAt: Date | null;
+}
+
+/**
+ * C3 (tour 10) — surface admin « Suivi des corrections » : les micro-objectifs
+ * du membre SEMÉS PAR une correction taggée (`sourceKind='annotation'`), du plus
+ * récent au plus ancien, pour que l'admin voie si ses corrections sont tenues
+ * (open / kept / missed). Read-only, aucune action.
+ *
+ * Anti-N+1 : UNE seule requête `findMany` avec `select` ciblé (jamais de fetch
+ * par ligne). Borné (`take`) — liste finie, pas de scroll infini. Admin-scoped :
+ * l'appelant a déjà vérifié le rôle (mirror `lib/admin/*-service.ts`), donc pas
+ * de re-check ici ; la seule contrainte est `memberId`.
+ */
+export async function listAnnotationObjectivesForMember(
+  memberId: string,
+  take = 20,
+): Promise<readonly AnnotationObjectiveRow[]> {
+  const rows = await db.mentalMicroObjective.findMany({
+    where: { memberId, sourceKind: 'annotation' },
+    orderBy: { createdAt: 'desc' },
+    take,
+    select: {
+      id: true,
+      axis: true,
+      title: true,
+      intention: true,
+      status: true,
+      createdAt: true,
+      closedAt: true,
+    },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    axis: row.axis,
+    title: row.title,
+    intention: row.intention,
+    status: row.status as MicroObjectiveStatusView,
+    createdAt: row.createdAt,
+    closedAt: row.closedAt,
+  }));
 }

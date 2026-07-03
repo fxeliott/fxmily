@@ -4,6 +4,7 @@ import { Prisma } from '@/generated/prisma/client';
 import type {
   RealizedRSource,
   TradeDirection,
+  TradeExitReason,
   TradeOutcome,
   TradeQuality,
   TradeSession,
@@ -67,6 +68,12 @@ export interface CloseTradeInput {
   exitedAt: Date;
   exitPrice: number;
   outcome: TradeOutcome;
+  /**
+   * Tour 10 — factual nature of the exit (TP hit, SL hit, BE, manual before
+   * target, 20h time-exit). `null` = not answered (OPTIONAL, no gate — CANON).
+   * SPEC §2: the ACT of how the position ended, never a judgement.
+   */
+  exitReason: TradeExitReason | null;
   /** Emotions felt DURING the open position (recalled at close). Master prompt §22. */
   emotionDuring: string[];
   emotionAfter: string[];
@@ -140,6 +147,8 @@ export interface SerializedTrade {
   exitedAt: string | null;
   exitPrice: string | null;
   outcome: TradeOutcome | null;
+  /** Tour 10 — factual exit nature (tri-state enum, null = not answered / legacy). */
+  exitReason: TradeExitReason | null;
   realizedR: string | null;
   realizedRSource: RealizedRSource | null;
   emotionDuring: string[];
@@ -206,6 +215,7 @@ function toSerialized(
     exitedAt: trade.exitedAt ? trade.exitedAt.toISOString() : null,
     exitPrice: trade.exitPrice == null ? null : trade.exitPrice.toString(),
     outcome: trade.outcome,
+    exitReason: trade.exitReason,
     realizedR: trade.realizedR == null ? null : trade.realizedR.toString(),
     realizedRSource: trade.realizedRSource,
     emotionDuring: [...trade.emotionDuring],
@@ -352,6 +362,9 @@ export async function closeTrade(
           exitedAt: input.exitedAt,
           exitPrice: new Prisma.Decimal(input.exitPrice),
           outcome: input.outcome,
+          // Tour 10 — factual exit nature. Null passthrough (not answered is
+          // NEVER coerced to a value the member did not give).
+          exitReason: input.exitReason,
           realizedR: new Prisma.Decimal(realized.value),
           realizedRSource: realized.source,
           emotionDuring: input.emotionDuring,

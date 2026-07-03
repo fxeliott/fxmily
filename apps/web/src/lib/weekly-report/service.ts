@@ -103,7 +103,12 @@ export async function generateWeeklyReportForUser(
   const c = validatedSnapshot.counters;
   const hasActivity = c.tradesTotal > 0 || c.morningCheckinsCount > 0 || c.eveningCheckinsCount > 0;
   const client = hasActivity ? getWeeklyReportClient() : new MockWeeklyReportClient();
-  const generation = await client.generate(validatedSnapshot);
+  // C4 (tour 10) — hand the member's coaching register / learning stage (resolved
+  // by the loader from their onboarding profile) to the client so the LIVE prompt
+  // is phrased to match this member's register. Zero-activity members go through
+  // the mock, which ignores it; no profile → `null` on both dimensions → neutral
+  // prompt (identical output to before this change).
+  const generation = await client.generate(validatedSnapshot, slice.memberTone);
 
   // ── SPEC §2 + crisis output gate (S5 10e challenge — D4-01) ────────────────
   // This LIVE cron path persisted Claude output with NO §2/crisis screen — the

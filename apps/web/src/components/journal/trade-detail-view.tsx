@@ -11,6 +11,7 @@ import type { SerializedAnnotation } from '@/lib/admin/annotations-service';
 import { selectStorage } from '@/lib/storage';
 import { splitNotes } from '@/lib/trades/notes';
 import type { SerializedTrade } from '@/lib/trades/service';
+import { EXIT_REASON_LABELS } from '@/lib/trading/exit-reasons';
 import { SESSION_LABEL } from '@/lib/trading/sessions';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +42,9 @@ interface TradeDetailViewProps {
   closeHref: string | null;
   contextBadge?: string;
   footerSlot?: React.ReactNode;
+  /** Tour 10 — living close echo, MEMBER page only (admin never builds one).
+   * Rendered right under the result hero so the reaction reads with the R. */
+  echoSlot?: React.ReactNode;
   /** J4 — annotations attached to this trade. Empty array hides the section. */
   annotations?: SerializedAnnotation[];
   /** Identifier of the currently-authenticated user. Drives the admin
@@ -59,6 +63,7 @@ export function TradeDetailView({
   closeHref,
   contextBadge,
   footerSlot,
+  echoSlot,
   annotations = [],
   currentUserId = null,
   timezone = 'Europe/Paris',
@@ -185,6 +190,9 @@ export function TradeDetailView({
           ) : null}
         </Card>
       ) : null}
+
+      {/* Tour 10 — living close echo (member only, fresh closes only). */}
+      {echoSlot}
 
       {/* Plan d'entrée */}
       <Card className="p-4">
@@ -318,6 +326,14 @@ export function TradeDetailView({
               value={trade.exitPrice ? NUMBER_FMT.format(Number(trade.exitPrice)) : 'Non renseigné'}
               mono
             />
+            {/* Tour 10 — factual exit nature (tri-state: null renders « Non
+                renseignée », never a fabricated answer). Always NEUTRAL tone:
+                no exit nature is good or bad at capture time (SPEC §2). */}
+            <Stat
+              label="Nature de la sortie"
+              value={trade.exitReason ? EXIT_REASON_LABELS[trade.exitReason] : 'Non renseignée'}
+              tone={trade.exitReason ? undefined : 'neutral'}
+            />
           </dl>
         </Card>
       ) : null}
@@ -360,7 +376,8 @@ function Stat({
   label: string;
   value: string;
   mono?: boolean;
-  tone?: 'good' | 'bad' | 'neutral';
+  /** `| undefined` — callers pass conditional tones (exactOptionalPropertyTypes). */
+  tone?: 'good' | 'bad' | 'neutral' | undefined;
 }) {
   const toneClass =
     tone === 'good'

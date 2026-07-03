@@ -20,6 +20,17 @@ import { TRADING_PAIRS } from '@/lib/trading/pairs';
 const SESSIONS = ['asia', 'london', 'newyork', 'overlap'] as const;
 const DIRECTIONS = ['long', 'short'] as const;
 const OUTCOMES = ['win', 'loss', 'break_even'] as const;
+/// Tour 10 — factual nature of the exit (mirrors Prisma `TradeExitReason`).
+/// The ACT of how the position ended, never a judgement (SPEC §2). Exported
+/// for the close form's option list (single source of truth with the enum).
+export const TRADE_EXIT_REASONS = [
+  'tp_hit',
+  'sl_hit',
+  'be_exit',
+  'manual_before_target',
+  'time_exit',
+] as const;
+export type TradeExitReasonSlug = (typeof TRADE_EXIT_REASONS)[number];
 /// V1.5 — Steenbarger setup quality buckets.
 const TRADE_QUALITIES = ['A', 'B', 'C'] as const;
 
@@ -269,6 +280,13 @@ export const tradeCloseSchema = z
       }),
     exitPrice: positivePrice,
     outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }),
+    /// Tour 10 — factual nature of the exit, next to `outcome`. OPTIONAL with
+    /// the same null-mapping discipline as `processComplete`: absent/'' → null
+    /// (not answered — NO required-field gate, CANON). Unknown values reject.
+    exitReason: z
+      .union([z.enum(TRADE_EXIT_REASONS), z.literal('')])
+      .optional()
+      .transform((v) => (v === undefined || v === '' ? null : v)),
     /// Emotions felt DURING the open position (recalled at close). Required,
     /// mirroring `emotionAfter` — closes the "avant / pendant / après" axis
     /// (master prompt §22). Same `emotionTagsRequired` rule (1–3 allowlisted).
@@ -307,7 +325,7 @@ export const tradeCloseSchema = z
     tradingViewExitUrl: tradingViewUrlRequiredSchema,
     screenshotExitKey: storageKey.optional(),
   })
-  .strict(); // invariant #6 — reject unknown keys (raw is hand-built, 9 fields)
+  .strict(); // invariant #6 — reject unknown keys (raw is hand-built in journal/actions.ts)
 
 export type TradeCloseInput = z.infer<typeof tradeCloseSchema>;
 

@@ -37,6 +37,10 @@ interface SessionLite {
 interface AppShellProps {
   session: SessionLite | null;
   signOutAction: () => Promise<void>;
+  /** Tour 10 — slot RSC optionnel (pill micro-objectif) épinglé au-dessus du
+   * footer utilisateur, sidebar desktop + drawer mobile. Rendu côté serveur
+   * (le client ne fait que le placer), null quand rien à épingler. */
+  pill?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -52,7 +56,7 @@ interface AppShellProps {
  * `isPublic()` de auth.config.ts. Les décalages mobile (FAB, footer, cookie)
  * sont gérés en CSS via `[data-slot="app-bottom-nav"]` (globals.css).
  */
-export function AppShell({ session, signOutAction, children }: AppShellProps) {
+export function AppShell({ session, signOutAction, pill, children }: AppShellProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -110,6 +114,7 @@ export function AppShell({ session, signOutAction, children }: AppShellProps) {
             </div>
           ))}
         </nav>
+        {pill}
         <UserFooter session={session} signOutAction={signOutAction} />
       </aside>
 
@@ -196,6 +201,7 @@ export function AppShell({ session, signOutAction, children }: AppShellProps) {
               </div>
             ))}
           </nav>
+          {pill}
           <UserFooter session={session} signOutAction={signOutAction} />
         </SheetContent>
       </Sheet>

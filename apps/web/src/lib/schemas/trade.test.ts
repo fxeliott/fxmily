@@ -213,6 +213,31 @@ describe('tradeCloseSchema', () => {
     expect(tradeCloseSchema.safeParse({ ...baseClose, exitedAt: farFuture }).success).toBe(false);
   });
 
+  // Tour 10 — factual exit nature: OPTIONAL tri-state (absent/'' → null),
+  // allowlisted values pass through, unknown values reject (same discipline
+  // as processComplete).
+  it('maps an absent or empty exitReason to null', () => {
+    const absent = tradeCloseSchema.safeParse(baseClose);
+    expect(absent.success).toBe(true);
+    if (absent.success) expect(absent.data.exitReason).toBeNull();
+
+    const empty = tradeCloseSchema.safeParse({ ...baseClose, exitReason: '' });
+    expect(empty.success).toBe(true);
+    if (empty.success) expect(empty.data.exitReason).toBeNull();
+  });
+
+  it('passes an allowlisted exitReason through verbatim', () => {
+    const result = tradeCloseSchema.safeParse({ ...baseClose, exitReason: 'manual_before_target' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.exitReason).toBe('manual_before_target');
+  });
+
+  it('rejects an unknown exitReason', () => {
+    expect(tradeCloseSchema.safeParse({ ...baseClose, exitReason: 'moon_phase' }).success).toBe(
+      false,
+    );
+  });
+
   // §22 — "émotion pendant" mirrors emotionAfter (required, 1–3 allowlisted).
   it('requires at least one emotionDuring tag', () => {
     const { emotionDuring, ...rest } = baseClose;

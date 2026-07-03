@@ -66,10 +66,10 @@ export const SESSION_LABEL: Record<TradeSession, string> = {
  * London session but counted the position as a NY trade).
  */
 export const SESSION_HINT: Record<TradeSession, string> = {
-  asia: '00:00 – 07:00 UTC',
-  london: '07:00 – 12:00 UTC',
-  overlap: '12:00 – 16:00 UTC',
-  newyork: '16:00 – 21:00 UTC',
+  asia: '00:00 à 07:00 UTC',
+  london: '07:00 à 12:00 UTC',
+  overlap: '12:00 à 16:00 UTC',
+  newyork: '16:00 à 21:00 UTC',
 };
 
 export const SESSIONS: readonly TradeSession[] = ['asia', 'london', 'overlap', 'newyork'] as const;

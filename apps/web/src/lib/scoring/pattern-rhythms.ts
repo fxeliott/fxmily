@@ -63,10 +63,10 @@ const HOUR_BANDS: ReadonlyArray<{
   startHour: number;
   endHour: number;
 }> = [
-  { slot: 'night', label: 'Nuit (0 h – 6 h)', startHour: 0, endHour: 6 },
-  { slot: 'morning', label: 'Matin (6 h – 12 h)', startHour: 6, endHour: 12 },
-  { slot: 'afternoon', label: 'Après-midi (12 h – 18 h)', startHour: 12, endHour: 18 },
-  { slot: 'evening', label: 'Soir (18 h – 24 h)', startHour: 18, endHour: 24 },
+  { slot: 'night', label: 'Nuit (0 h à 6 h)', startHour: 0, endHour: 6 },
+  { slot: 'morning', label: 'Matin (6 h à 12 h)', startHour: 6, endHour: 12 },
+  { slot: 'afternoon', label: 'Après-midi (12 h à 18 h)', startHour: 12, endHour: 18 },
+  { slot: 'evening', label: 'Soir (18 h à 24 h)', startHour: 18, endHour: 24 },
 ];
 
 type EmotionTradeLike = {

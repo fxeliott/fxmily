@@ -27,6 +27,14 @@ export default function DashboardLoading() {
           </div>
         </div>
 
+        {/* Tour 9 — session timeline strip + bento pair (guidance / progression)
+            mirror the re-composed hub so the stream-in doesn't shift layout. */}
+        <div className="rounded-card mb-6 h-[72px] border border-[var(--b-default)] bg-[var(--bg-2)] motion-safe:animate-pulse" />
+        <div className="mb-6 grid items-start gap-4 motion-safe:animate-pulse lg:grid-cols-[1.55fr_1fr]">
+          <div className="rounded-card h-[150px] border border-[var(--b-default)] bg-[var(--bg-2)]" />
+          <div className="rounded-card h-[150px] border border-[var(--b-default)] bg-[var(--bg-2)]" />
+        </div>
+
         {/* Activity strip 3-up */}
         <div className="mb-6 grid grid-cols-3 gap-3 motion-safe:animate-pulse">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -40,8 +48,8 @@ export default function DashboardLoading() {
           ))}
         </div>
 
-        {/* Two stacked action cards */}
-        <div className="flex flex-col gap-4 motion-safe:animate-pulse">
+        {/* Paired action cards (bento rows réflexive / lucidité) */}
+        <div className="grid items-start gap-4 motion-safe:animate-pulse lg:grid-cols-2">
           {Array.from({ length: 2 }).map((_, i) => (
             <div
               key={i}

@@ -1151,6 +1151,39 @@
     var(--acc-glow);
 }
 
+/* =============================================================
+ * TOUR 9 — DS-v3.5 premium card paint (default Card surface)
+ * -------------------------------------------------------------
+ * Le Card par défaut peignait un aplat --bg-1 (flat) : à l'échelle d'une
+ * page entière, ça lit « fade » malgré les tokens (audit visuel prod tour 9).
+ * Cette classe ajoute UNIQUEMENT un background-image en 2 couches :
+ *   1. un souffle accent (--acc-dim-2, alpha 0.05-0.06) biaisé coin haut-droit
+ *      — même géométrie que .dash-hero::before, en plus discret ;
+ *   2. une lumière haute neutre (top-light 3%) qui donne le volume Linear.
+ * background-color ABSENT exprès : les utilities bg-* des call-sites (couleur)
+ * restent maîtres. Dans @layer components (pas unlayered) pour qu'une utility
+ * background-image (bg-gradient-*) posée par un call-site GAGNE — leçon du
+ * bloc TYPOGRAPHY (l.793). Contraste : alpha ≤0.06 coin haut = géométrie déjà
+ * prouvée AA par les surfaces acc-dim-2 pleines (TradeStatCard mute).
+ * ============================================================= */
+@layer components {
+  .card-premium {
+    background-image:
+      radial-gradient(130% 76% at 86% -24%, var(--acc-dim-2) 0%, transparent 56%),
+      linear-gradient(180deg, oklch(1 0 0 / 0.032) 0%, transparent 72px);
+  }
+  /* En clair le top-light blanc est invisible sur carte blanche — on ne garde
+     que le souffle cool (l'élévation reste portée par --sh-card, grammaire S20.1). */
+  .light .card-premium {
+    background-image: radial-gradient(130% 76% at 86% -24%, var(--acc-dim-2) 0%, transparent 56%);
+  }
+}
+@media (forced-colors: active) {
+  .card-premium {
+    background-image: none;
+  }
+}
+
 /* V2 refonte J1 — north-star hero scoped accent bloom. The Card already brings
    the glass + accent edge (.glass-panel + .glow-edge) ; this adds ONE soft
    radial bloom in the upper-right, behind the content, for a premium "lit

@@ -18,11 +18,28 @@
  * etc. render byte-identically). `tone="cyan"` retints the mesh + orbs for the
  * §21.7 training-debrief "Mode entraînement" surface, keeping the live/backtest
  * line visually distinct (Mark Douglas discipline) without a separate component.
+ *
+ * Tour 9 — `intensity` (0..1, optionnel) : complétude du jour (gestes faits /
+ * gestes actionnables). Le cocon « s'allume » doucement à mesure que le membre
+ * complète sa journée : opacité globale 0.82 → 1. Calme par construction
+ * (jamais une couleur d'alerte, jamais un countdown — §31.2) ; statique côté
+ * client (une seule valeur SSR, zéro JS, zéro coût reduced-motion).
  */
-export function DashboardAmbient({ tone = 'blue' }: { tone?: 'blue' | 'cyan' }) {
+export function DashboardAmbient({
+  tone = 'blue',
+  intensity,
+}: {
+  tone?: 'blue' | 'cyan';
+  intensity?: number;
+}) {
   const isCyan = tone === 'cyan';
+  const lift = intensity === undefined ? 1 : 0.82 + 0.18 * Math.max(0, Math.min(1, intensity));
   return (
-    <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+    <div
+      className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+      aria-hidden="true"
+      style={intensity === undefined ? undefined : { opacity: lift }}
+    >
       <div className={`${isCyan ? 'ds-aurora-cy' : 'ds-aurora'} absolute inset-0`} />
       <div
         className="ds-orb"

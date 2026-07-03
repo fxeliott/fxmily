@@ -11,6 +11,7 @@ import { HoverLift } from '@/components/ui/hover-lift';
 import { V18Aurora } from '@/components/v18/aurora';
 import { V18ThemeScope } from '@/components/v18/theme-scope';
 import { listRecentReflections } from '@/lib/reflection/service';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 export const dynamic = 'force-dynamic';
 
@@ -108,6 +109,8 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
             </Link>
           </div>
         </header>
+
+        <NextStepRail currentPath="/reflect" />
 
         {/* CRISIS BANNER (conditional). `key={crisisLevel}` forces a clean
             remount when the level changes so `aria-live="polite"` re-announces

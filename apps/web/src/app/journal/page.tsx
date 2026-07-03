@@ -12,6 +12,7 @@ import { countUnseenAnnotationsByTrade } from '@/lib/annotations/member-service'
 import { countTradesByStatus, listTradesForUser } from '@/lib/trades/service';
 import type { TradeStatusFilter } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 export const metadata = {
   title: 'Journal de trading',
@@ -121,6 +122,8 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
             </Link>
           </div>
         </header>
+
+        <NextStepRail currentPath="/journal" />
 
         {/* Filter pills + counter */}
         <nav

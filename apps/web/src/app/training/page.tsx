@@ -23,6 +23,7 @@ import {
   listTrainingTradesForUser,
 } from '@/lib/training/training-trade-service';
 import { cn } from '@/lib/utils';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 export const metadata = {
   title: 'Entraînement',
@@ -207,6 +208,8 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
             />
           </Link>
         </header>
+
+        <NextStepRail currentPath="/training" />
 
         {/* Sessions de backtest — regroupent les backtests d'une même séance de
           replay (S8). Affichées seulement s'il en existe ; sinon le bouton

@@ -16,6 +16,7 @@ import { reportWarning } from '@/lib/observability';
 import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 import { loadCompletionSummary } from '@/lib/reports/completion-loader';
 import type { CompletionSummary } from '@/lib/reports/completion';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 export const metadata = {
   title: 'Débrief mensuel',
@@ -124,6 +125,8 @@ export default async function MonthlyDebriefPage({ searchParams }: MonthlyDebrie
             trade : seulement ton comportement et ton exécution.
           </p>
         </header>
+
+        <NextStepRail currentPath="/debrief-mensuel" />
 
         {selected ? (
           <article className="wow-reveal flex flex-col gap-5">

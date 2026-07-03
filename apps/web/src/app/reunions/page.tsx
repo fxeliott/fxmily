@@ -11,6 +11,7 @@ import {
 } from '@/components/reunions/meeting-day-group';
 import { listMeetingsForMember } from '@/lib/meeting/service';
 import { MEETING_WINDOW_DAYS } from '@/lib/meeting/window';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 export const metadata = {
   title: 'Réunions',
@@ -73,6 +74,8 @@ export default async function ReunionsPage() {
             </p>
           </div>
         </header>
+
+        <NextStepRail currentPath="/reunions" />
 
         {/* Attendance rate — neutral, honest. Never a fake "0 %".
             S18 — hover glow cool (acc) + liseré supérieur cool décoratif. Posture

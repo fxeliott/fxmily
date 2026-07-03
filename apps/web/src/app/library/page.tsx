@@ -20,6 +20,7 @@ import {
   listUnseenDeliveryCardIds,
 } from '@/lib/cards/service';
 import type { DouglasCategory } from '@/generated/prisma/enums';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 export const dynamic = 'force-dynamic';
 
@@ -122,6 +123,8 @@ export default async function LibraryPage({ searchParams }: LibraryPageProps) {
           </p>
           <DrawnRule className="mt-1 max-w-[220px]" />
         </header>
+
+        <NextStepRail currentPath="/library" />
 
         {/* Filters */}
         <div className="mb-6">

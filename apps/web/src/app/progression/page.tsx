@@ -24,6 +24,7 @@ import { ScoreTrendChart } from '@/components/scoring/score-trend-chart';
 import { TrackRecordChart } from '@/components/scoring/track-record-chart';
 import { TrackRecordTimeline } from '@/components/scoring/track-record-timeline';
 import { DisciplineYearHeatmap } from '@/components/track/discipline-year-heatmap';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
 import { Sparkline } from '@/components/ui/sparkline';
@@ -90,6 +91,8 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
       <DashboardAmbient />
       <div className="relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
         <ProgressionHero score={latestScore} history={scoreHistory} />
+
+        <NextStepRail currentPath="/progression" className="mb-6 block" />
 
         {/* S10(b) — « Ton bilan » : le RÉCAP MEMBRE 5 AXES en tête de page. Pur
             ASSEMBLAGE des loaders read-only existants (discipline, progression,

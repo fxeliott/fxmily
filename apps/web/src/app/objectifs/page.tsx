@@ -17,6 +17,7 @@ import { TrajectoryChart } from '@/components/objectives/trajectory-chart';
 import { getOpenMicroObjective, listRecentMicroObjectives } from '@/lib/coaching/micro-objective';
 import { getMentalMap } from '@/lib/coaching/service';
 import { getProcessObjectives } from '@/lib/objectives/service';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 
 /**
  * « Mes objectifs · Où je vais » — jalon J4 (intention de guidage #2).
@@ -75,6 +76,8 @@ export default async function ObjectifsPage() {
             que tu contrôles.
           </p>
         </header>
+
+        <NextStepRail currentPath="/objectifs" />
 
         {/* 1. Où j'en suis + ma prochaine étape */}
         <section className="wow-reveal" aria-labelledby="hero-heading">

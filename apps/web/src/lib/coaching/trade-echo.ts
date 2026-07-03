@@ -2,6 +2,9 @@ import type { TradeExitReason, TradeOutcome } from '@/generated/prisma/enums';
 import { coachingToneSchema, learningStageSchema } from '@/lib/schemas/onboarding-interview';
 import { NEGATIVE_TRADING_EMOTIONS } from '@/lib/trading/emotions';
 
+/** Tour 11 — a loss streak this long is the tilt/revenge danger zone. */
+export const LOSS_STREAK_ECHO_THRESHOLD = 3;
+
 /**
  * Tour 10 — the LIVING close echo. When a member closes a trade, the system
  * answers immediately on `/journal/[id]` with a short, member-specific reading
@@ -47,6 +50,13 @@ export interface TradeCloseEchoInput {
   emotionDuring: readonly string[];
   /** Open verification discrepancies attached to THIS trade. */
   openDiscrepancyCount: number;
+  /**
+   * Tour 11 — length of the run of consecutive losses ENDING on this trade
+   * (this trade included). Only meaningful when `outcome === 'loss'`; the
+   * caller passes the count it computed on the member's recent closed trades.
+   * `0`/absent → no streak line. Undefined-safe (legacy callers omit it).
+   */
+  recentConsecutiveLosses?: number;
   /** Profile dimensions (already schema-validated). Null → neutral fallback. */
   learningStage: EchoLearningStage | null;
   coachingRegister: CoachingRegister | null;
@@ -143,6 +153,38 @@ const CLEAN_BE: RegisterCopy = {
 const WIN_BUT_BROKEN =
   "Le gain n'efface pas le geste : c'est le process qui rend les résultats répétables.";
 
+/**
+ * Tour 11 anti-tilt follow-up — added when this loss ENDS a run of at least
+ * {@link LOSS_STREAK_ECHO_THRESHOLD} consecutive losses (the tilt/revenge
+ * danger zone). Anchored on the variance doctrine of `analytics/streaks.ts`
+ * (Douglas / Van Tharp): a streak inside a sample is normal variance, the edge
+ * is not judged on a run. It is a FOLLOW-UP line only — it never sets the card
+ * tone (the main clean-loss reading stays 'ok'), never a countdown, never
+ * punitive. Register-aware; `count` is interpolated in French words to stay warm.
+ */
+function lossStreakFollowUp(count: number, register: CoachingRegister): string {
+  const nth = ordinalLossFr(count);
+  const copy: RegisterCopy = {
+    direct: `${nth} perte d'affilée. Sur un échantillon, une série comme celle-ci reste dans la variance normale : ton edge ne se juge pas sur une série. Garde ta taille de position, ne cherche pas à te refaire.`,
+    pedagogique: `${nth} perte d'affilée. Statistiquement, une série de pertes arrive même avec un bon process, c'est la variance normale d'un échantillon. Ce moment est celui où l'on augmente la taille pour se refaire : c'est exactement ce qu'il faut éviter.`,
+    socratique: `${nth} perte d'affilée. Une série de pertes reste dans la variance normale d'un échantillon. Qu'est-ce qui protégerait le mieux ton capital là maintenant, respecter ta taille habituelle ou tenter de te refaire ?`,
+  };
+  return copy[register];
+}
+
+/** French ordinal for the streak length ("Troisième", "Quatrième", ...). */
+function ordinalLossFr(count: number): string {
+  const words: Record<number, string> = {
+    3: 'Troisième',
+    4: 'Quatrième',
+    5: 'Cinquième',
+    6: 'Sixième',
+    7: 'Septième',
+    8: 'Huitième',
+  };
+  return words[count] ?? `${count}e`;
+}
+
 /** Verification follow-up — same factual wording family as the journal badge. */
 const DISCREPANCY_OPEN =
   'Un écart de vérification est encore ouvert sur ce trade, va le regarder dans Vérification.';
@@ -227,9 +269,15 @@ export function buildTradeCloseEcho(input: TradeCloseEchoInput): TradeCloseEcho 
 
   const lines: string[] = [main];
 
-  // One optional follow-up, in priority order — never both (3 lines max).
+  // One optional follow-up, in priority order — never more than one (3 lines
+  // max). A loss streak and a win are mutually exclusive by construction, so
+  // the streak line slots between WIN_BUT_BROKEN and DISCREPANCY_OPEN without
+  // ever colliding with the winning-bad-trade line.
+  const lossStreak = input.recentConsecutiveLosses ?? 0;
   if (input.outcome === 'win' && processMiss) {
     lines.push(WIN_BUT_BROKEN);
+  } else if (input.outcome === 'loss' && lossStreak >= LOSS_STREAK_ECHO_THRESHOLD) {
+    lines.push(lossStreakFollowUp(lossStreak, register));
   } else if (input.openDiscrepancyCount > 0) {
     lines.push(DISCREPANCY_OPEN);
   }
@@ -240,6 +288,137 @@ export function buildTradeCloseEcho(input: TradeCloseEchoInput): TradeCloseEcho 
 
   return {
     title: 'Ce que cette clôture dit de ton process',
+    tone,
+    lines,
+  };
+}
+
+// ===========================================================================
+// Tour 11 — the OPEN echo. Finding 1: when a member OPENS a trade,
+// `createTradeAction` redirects to `/journal/{id}` with the position still
+// open (`closedAt === null`), so the close echo returns null and the member
+// sees no reaction. Yet plan-respect, the entry emotions and the stop-loss are
+// ALREADY declared at entry. We accueille the ENGAGEMENT (never accuse: the
+// trade just opened, no outcome exists), mirroring only the ACT of entering.
+//
+// POSTURE §31.2 / Mark Douglas: never red, never punitive, never a countdown.
+// An off-plan entry or a negative entry emotion is a calm 'watch' (accent),
+// a clean in-plan entry with a stop is an 'ok' acknowledgement. FIREWALL
+// §21.5: reads only enum/boolean self-reports + `coachingTone`/`learningStage`,
+// never `weakSignals` or raw AI blobs.
+// ===========================================================================
+
+export interface TradeOpenEchoInput {
+  /** ISO instant the trade was OPENED in the app (Trade.createdAt). Null → no echo. */
+  openedAt: string | null;
+  planRespected: boolean;
+  /** Emotions declared at entry (Trade.emotionBefore). */
+  emotionBefore: readonly string[];
+  /** Whether a stop-loss price was set at entry. */
+  hasStopLoss: boolean;
+  /** Profile dimensions (already schema-validated). Null → neutral fallback. */
+  learningStage: EchoLearningStage | null;
+  coachingRegister: CoachingRegister | null;
+  /** Injected clock for testability. */
+  now: Date;
+}
+
+export interface TradeOpenEcho {
+  title: string;
+  /** Accent only — 'watch' stays calm (accent, never red), 'ok' acknowledges. */
+  tone: 'ok' | 'watch' | 'neutral';
+  /** 1 to 2 short sentences: entry reading, optional stage anchor. */
+  lines: string[];
+}
+
+/** Off-plan entry — declared out of plan at the moment of engagement. */
+const OPEN_OFF_PLAN: RegisterCopy = {
+  direct:
+    "Entrée déclarée hors plan. Tu l'as notée, c'est déjà de la lucidité : observe ce qui t'a fait entrer, pas le résultat à venir.",
+  pedagogique:
+    "Tu es entré en te déclarant hors plan. Reconnaître l'écart au moment de l'entrée, c'est déjà travailler ta discipline : la gestion de la position reste entièrement entre tes mains.",
+  socratique:
+    "Entrée déclarée hors plan. Qu'est-ce qui a rendu cette entrée difficile à laisser passer ?",
+};
+
+/** Entry under a negative emotion (in-plan) — accueil, jamais reproche. */
+const OPEN_TENSE: RegisterCopy = {
+  direct:
+    "Tu entres avec une émotion de tension notée. C'est une bonne donnée : garde ta gestion telle que prévue, laisse le plan travailler.",
+  pedagogique:
+    "Tu es entré en notant une émotion de tension. En avoir conscience à l'entrée est déjà un atout : ta gestion prévue est ce qui te protège maintenant.",
+  socratique:
+    "Tu entres avec une émotion de tension notée. Qu'est-ce qui t'aiderait à laisser ton plan travailler sans y toucher ?",
+};
+
+/** Clean, in-plan entry WITH a stop — acknowledge the engagement. */
+const OPEN_CLEAN: RegisterCopy = {
+  direct: 'Entrée dans le plan, stop en place. Le cadre est posé, laisse-le travailler.',
+  pedagogique:
+    "Entrée dans le plan avec un stop défini : ton cadre de risque est posé avant que le marché décide, c'est exactement ce qui rend une position tenable.",
+  socratique:
+    'Entrée dans le plan, stop en place. Que retiens-tu de la préparation qui a rendu cette entrée simple à poser ?',
+};
+
+/** In-plan entry WITHOUT a stop — a calm nudge, never a reproach. */
+const OPEN_NO_STOP: RegisterCopy = {
+  direct:
+    "Entrée dans le plan. Aucun stop n'est défini sur ce trade : un stop rend ton risque exact et ton R lisible à la clôture.",
+  pedagogique:
+    "Entrée dans le plan. Il n'y a pas de stop défini ici : le poser, c'est ce qui borne ton risque et rend ton R exact quand tu clôtureras.",
+  socratique:
+    'Entrée dans le plan, sans stop défini. Où placerais-tu ton stop pour que ton risque reste borné sur ce trade ?',
+};
+
+/** Stage anchor for the OPEN moment — forward-looking (management to come). */
+const OPEN_STAGE_ANCHOR: Record<EchoLearningStage, string> = {
+  mechanical: 'À ton stade, la priorité reste de tenir tes règles jusqu’à la sortie.',
+  subjective: 'À ton stade, garde ton cadre comme garde-fou pendant que tu gères la position.',
+  intuitive: 'À ton stade, la constance de ta gestion est ce qui transforme ta lecture en edge.',
+};
+
+/**
+ * Build the OPEN echo. Returns `null` when the trade is not fresh: no
+ * `openedAt`, malformed, or older than {@link ECHO_WINDOW_HOURS} (the echo is
+ * a reaction to the engagement, not a verdict pinned on the trade — §31.2).
+ */
+export function buildTradeOpenEcho(input: TradeOpenEchoInput): TradeOpenEcho | null {
+  if (!input.openedAt) return null;
+  const openedMs = Date.parse(input.openedAt);
+  if (Number.isNaN(openedMs)) return null;
+  const ageMs = input.now.getTime() - openedMs;
+  if (ageMs < 0 || ageMs > ECHO_WINDOW_HOURS * 60 * 60 * 1000) return null;
+
+  const register: CoachingRegister = input.coachingRegister ?? 'pedagogique';
+
+  const offPlan = input.planRespected === false;
+  const tenseEntry = hasNegativeDuring(input.emotionBefore);
+
+  let tone: TradeOpenEcho['tone'];
+  let main: string;
+
+  if (offPlan) {
+    // Off-plan entry is the one act worth mirroring first (calm, never red).
+    tone = 'watch';
+    main = OPEN_OFF_PLAN[register];
+  } else if (tenseEntry) {
+    tone = 'watch';
+    main = OPEN_TENSE[register];
+  } else if (input.hasStopLoss) {
+    tone = 'ok';
+    main = OPEN_CLEAN[register];
+  } else {
+    tone = 'watch';
+    main = OPEN_NO_STOP[register];
+  }
+
+  const lines: string[] = [main];
+  if (input.learningStage) {
+    lines.push(OPEN_STAGE_ANCHOR[input.learningStage]);
+  }
+
+  return {
+    title: 'Ce que cette ouverture dit de ton engagement',
     tone,
     lines,
   };

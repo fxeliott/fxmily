@@ -140,3 +140,31 @@ export async function getAnnotationById(id: string): Promise<SerializedAnnotatio
   const row = await db.tradeAnnotation.findUnique({ where: { id } });
   return row ? serializeAnnotation(row) : null;
 }
+
+/**
+ * Tour 11 (chantier G, FINDING 1) — admin rollup : how many of THIS member's
+ * annotations are still unread by them (`seenByMemberAt IS NULL`). The unseen
+ * pill already exists per-trade (member journal + trade detail), but the admin
+ * had no aggregate : to know if a reframe landed, they had to open every trade.
+ * This single indexed count feeds a discreet « N corrections non lues » pill in
+ * the member-detail hero.
+ *
+ * Admin-side mirror of `countUnseenAnnotationsByTrade` (member-service.ts): here
+ * we roll up ACROSS trades for one member instead of grouping per trade.
+ *
+ * Every `TradeAnnotation` is admin-authored by construction (the `adminId` FK +
+ * the `AnnotationsAuthored` relation — a member never writes one), so filtering
+ * on the member's OWN trades already isolates the admin corrections the member
+ * hasn't opened. No author disambiguation is needed.
+ *
+ * Posture §31.2 : a factual pointer, never a guilt counter. The caller hides the
+ * pill entirely at 0 (no « 0 corrections non lues »).
+ */
+export async function countUnseenAnnotationsByMember(memberId: string): Promise<number> {
+  return db.tradeAnnotation.count({
+    where: {
+      seenByMemberAt: null,
+      trade: { is: { userId: memberId } },
+    },
+  });
+}

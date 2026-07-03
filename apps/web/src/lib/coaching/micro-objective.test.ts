@@ -11,6 +11,7 @@ const m = vi.hoisted(() => ({
   findMany: vi.fn(),
   groupBy: vi.fn(),
   annotationFindFirst: vi.fn(),
+  memberProfileFindFirst: vi.fn(),
   getMentalMap: vi.fn(),
 }));
 
@@ -28,20 +29,29 @@ vi.mock('@/lib/db', () => ({
     tradeAnnotation: {
       findFirst: m.annotationFindFirst,
     },
+    memberProfile: {
+      findFirst: m.memberProfileFindFirst,
+    },
   },
 }));
 vi.mock('./service', () => ({ getMentalMap: m.getMentalMap }));
 
 import {
   buildAnnotationExcerpt,
+  buildMicroObjectiveCloseEcho,
   closeMicroObjective,
   ensureMicroObjectiveForMember,
   ensureMicroObjectiveFromAnnotation,
+  ensureMicroObjectiveFromSignal,
   getAnnotationExcerptForObjective,
+  getMemberCoachingRegister,
   getMicroObjectiveProgress,
   getOpenMicroObjective,
+  isMicroObjectiveStale,
   listAnnotationObjectivesForMember,
   listRecentMicroObjectives,
+  mentalAxisFromDimensionId,
+  MICRO_OBJECTIVE_STALE_DAYS,
   MicroObjectiveNotFoundError,
   selectMicroObjectiveSeed,
 } from './micro-objective';
@@ -444,5 +454,172 @@ describe('listAnnotationObjectivesForMember — C3 (admin follow-up)', () => {
     expect(arg?.take).toBe(20);
     // Single ciblé select — no sourceRef/sourceKind pulled (anti over-fetch, N+1-safe).
     expect(arg?.select).toMatchObject({ id: true, title: true, status: true });
+  });
+});
+
+describe('buildMicroObjectiveCloseEcho (pure) — Tour 11 FINDING 1', () => {
+  it('kept → renforcement, tone ok, phrase de constance en tête', () => {
+    const echo = buildMicroObjectiveCloseEcho('kept', 'direct');
+    expect(echo.tone).toBe('ok');
+    expect(echo.lines[0]).toContain("Tu l'as tenu");
+    expect(echo.lines[0]).toContain('constance');
+  });
+
+  it('missed direct → cadre-donnée non punitif, tone neutral (le mot échec est NIÉ)', () => {
+    const echo = buildMicroObjectiveCloseEcho('missed', 'direct');
+    expect(echo.tone).toBe('neutral');
+    expect(echo.lines[0]?.toLowerCase()).toContain('donnée');
+    // Posture §31.2 : « échec » n'est jamais un verdict — la copie le NIE explicitement.
+    expect(echo.lines[0]).toContain('pas un échec');
+  });
+
+  it('missed pédagogique → recadrage non punitif (ni faute ni échec), tone neutral', () => {
+    const echo = buildMicroObjectiveCloseEcho('missed', 'pedagogique');
+    expect(echo.tone).toBe('neutral');
+    expect(echo.lines.join(' ').toLowerCase()).toContain('donnée');
+    expect(echo.lines.join(' ')).toContain('pas une faute');
+  });
+
+  it('dismissed → neutre, une seule ligne, tone neutral', () => {
+    const echo = buildMicroObjectiveCloseEcho('dismissed', 'socratique');
+    expect(echo.tone).toBe('neutral');
+    expect(echo.lines).toHaveLength(1);
+  });
+
+  it('register null → fallback pédagogique (jamais un crash)', () => {
+    const echo = buildMicroObjectiveCloseEcho('kept', null);
+    expect(echo).toEqual(buildMicroObjectiveCloseEcho('kept', 'pedagogique'));
+  });
+
+  it('aucune copie ne contient de tiret cadratin (règle typo Eliott)', () => {
+    for (const outcome of ['kept', 'missed', 'dismissed'] as const) {
+      for (const register of ['direct', 'pedagogique', 'socratique'] as const) {
+        const echo = buildMicroObjectiveCloseEcho(outcome, register);
+        for (const line of echo.lines) {
+          expect(line).not.toContain('—'); // em-dash interdit
+        }
+      }
+    }
+  });
+
+  it('chaque (outcome × register) rend 1 à 2 lignes non vides, tone jamais bad', () => {
+    for (const outcome of ['kept', 'missed', 'dismissed'] as const) {
+      for (const register of ['direct', 'pedagogique', 'socratique'] as const) {
+        const echo = buildMicroObjectiveCloseEcho(outcome, register);
+        expect(echo.lines.length).toBeGreaterThanOrEqual(1);
+        expect(echo.lines.length).toBeLessThanOrEqual(2);
+        expect(echo.lines.every((l) => l.trim().length > 0)).toBe(true);
+        expect(['ok', 'neutral']).toContain(echo.tone);
+      }
+    }
+  });
+});
+
+describe('getMemberCoachingRegister — Tour 11 FINDING 1 (firewall §21.5)', () => {
+  it('dérive le register depuis coachingTone (safeParse), ne lit que tone/stage', async () => {
+    m.memberProfileFindFirst.mockResolvedValue({
+      coachingTone: {
+        register: 'direct',
+        rationale: 'assez de matière pour trancher net',
+        evidence: ['je préfère qu’on me dise les choses'],
+      },
+      learningStage: null,
+    });
+    const register = await getMemberCoachingRegister('member1');
+    expect(register).toBe('direct');
+    // Firewall : le select ne demande QUE coachingTone/learningStage, jamais weakSignals.
+    const arg = m.memberProfileFindFirst.mock.calls[0]?.[0];
+    expect(arg?.where).toEqual({ userId: 'member1' });
+    expect(arg?.select).toEqual({ coachingTone: true, learningStage: true });
+  });
+
+  it('profil absent → null (fallback pédagogique en aval)', async () => {
+    m.memberProfileFindFirst.mockResolvedValue(null);
+    expect(await getMemberCoachingRegister('member1')).toBeNull();
+  });
+
+  it('coachingTone illisible → null (garbage ne fabrique jamais un register)', async () => {
+    m.memberProfileFindFirst.mockResolvedValue({ coachingTone: 42, learningStage: 'nope' });
+    expect(await getMemberCoachingRegister('member1')).toBeNull();
+  });
+});
+
+describe('isMicroObjectiveStale (pure) — Tour 11 FINDING 2', () => {
+  const now = new Date('2026-07-03T12:00:00Z');
+
+  it('false sous le seuil de 14 jours', () => {
+    const createdAt = new Date(now.getTime() - 13 * 24 * 60 * 60 * 1000);
+    expect(isMicroObjectiveStale(createdAt, now)).toBe(false);
+  });
+
+  it('true à exactement 14 jours (seuil inclusif)', () => {
+    const createdAt = new Date(now.getTime() - MICRO_OBJECTIVE_STALE_DAYS * 24 * 60 * 60 * 1000);
+    expect(isMicroObjectiveStale(createdAt, now)).toBe(true);
+  });
+
+  it('true bien au-delà (boucle oubliée depuis des semaines)', () => {
+    const createdAt = new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000);
+    expect(isMicroObjectiveStale(createdAt, now)).toBe(true);
+  });
+});
+
+describe('mentalAxisFromDimensionId (pure) — Tour 11 FINDING 3 (firewall)', () => {
+  it('mappe le préfixe de slug vers l’axe mental (jamais le texte du signal)', () => {
+    expect(mentalAxisFromDimensionId('discipline_plan_adherence')).toBe('discipline');
+    expect(mentalAxisFromDimensionId('risk_sizing_consistency')).toBe('discipline');
+    expect(mentalAxisFromDimensionId('review_honesty_bias')).toBe('honesty');
+    expect(mentalAxisFromDimensionId('emotion_regulation')).toBe('ego');
+    expect(mentalAxisFromDimensionId('consistency_routine')).toBe('consistency');
+  });
+
+  it('slug inconnu → fallback discipline (jamais un crash, jamais un axe fabriqué)', () => {
+    expect(mentalAxisFromDimensionId('xyz_unknown_dimension')).toBe('discipline');
+    expect(mentalAxisFromDimensionId('')).toBe('discipline');
+  });
+
+  it('insensible à la casse et au séparateur', () => {
+    expect(mentalAxisFromDimensionId('Emotion-Confidence')).toBe('ego');
+  });
+});
+
+describe('ensureMicroObjectiveFromSignal — Tour 11 FINDING 3', () => {
+  it('sème un objectif signal avec copie curée par axe (jamais le texte du signal)', async () => {
+    m.findFirst.mockResolvedValue(null);
+    m.create.mockResolvedValue({ id: 'obj-sig' });
+    const res = await ensureMicroObjectiveFromSignal('member1', 'ego', 'emotion_regulation');
+    expect(res).toEqual({ created: true, objectiveId: 'obj-sig' });
+    const data = m.create.mock.calls[0]?.[0]?.data;
+    expect(data).toMatchObject({
+      memberId: 'member1',
+      axis: 'ego',
+      sourceKind: 'signal',
+      sourceRef: 'emotion_regulation', // ref OPAQUE (slug), jamais le contenu
+    });
+    // Copie curée déterministe (jamais de texte libre du signal).
+    expect(typeof data.title).toBe('string');
+    expect(typeof data.intention).toBe('string');
+  });
+
+  it('no-op quand une boucle est déjà ouverte (invariant ≤1 ouvert)', async () => {
+    m.findFirst.mockResolvedValue({ id: 'already-open' });
+    const res = await ensureMicroObjectiveFromSignal('member1', 'discipline', 'discipline_plan');
+    expect(res).toEqual({ created: false, objectiveId: 'already-open' });
+    expect(m.create).not.toHaveBeenCalled();
+  });
+
+  it('replie un P2002 (semis concurrent) en no-op sur le gagnant', async () => {
+    m.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'winner-sig' });
+    m.create.mockRejectedValue({ code: 'P2002' });
+    const res = await ensureMicroObjectiveFromSignal('member1', 'honesty', 'review_bias');
+    expect(res).toEqual({ created: false, objectiveId: 'winner-sig' });
+    expect(m.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('propage une erreur DB non-P2002 (jamais avalée)', async () => {
+    m.findFirst.mockResolvedValue(null);
+    m.create.mockRejectedValue(new Error('connection reset'));
+    await expect(
+      ensureMicroObjectiveFromSignal('member1', 'discipline', 'discipline_plan'),
+    ).rejects.toThrow('connection reset');
   });
 });

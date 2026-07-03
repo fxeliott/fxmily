@@ -1,3 +1,4 @@
+import { RecentRowCard } from '@/components/ui/recent-row-card';
 import type { SerializedTrainingDebrief } from '@/lib/training-debrief/service';
 
 /**
@@ -73,46 +74,43 @@ export function TrainingDebriefTimeline({
   return (
     <ul className="dash-stagger flex flex-col gap-2.5" data-slot="training-debrief-timeline">
       {debriefs.map((d) => (
-        <li
-          key={d.id}
-          className="rounded-card relative block overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
-        >
-          {/* Liseré cyan décoratif (identité §21.7 training) — read-only, pas de
-              hover-lift (la timeline est un miroir de recul, pas un scoreboard). */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--cy-edge)] to-transparent"
-          />
-          <header className="flex items-baseline justify-between gap-3">
-            <p className="t-eyebrow text-[var(--cy)]">
-              Semaine du <FormattedRange weekStart={d.weekStart} />
-            </p>
-            <p className="t-cap font-mono text-[var(--t-3)]">
-              {fmtSubmittedAt.format(new Date(d.submittedAt))}
-            </p>
-          </header>
-          <dl className="mt-2 flex flex-col gap-1.5">
-            <div>
-              <dt className="sr-only">Forces de process</dt>
-              <dd className="t-body line-clamp-2 text-[var(--t-2)]">
-                <strong className="text-[var(--t-1)]">Forces :</strong> {d.processStrengthOne}
-                {' · '}
-                {d.processStrengthTwo}
-              </dd>
-            </div>
-            <div>
-              <dt className="sr-only">Micro-ajustement</dt>
-              <dd className="t-cap line-clamp-1 text-[var(--t-3)]">
-                <span className="font-semibold">Ajustement :</span> {d.microAdjustment}
-              </dd>
-            </div>
-            <div>
-              <dt className="sr-only">Leçon transversale</dt>
-              <dd className="t-cap line-clamp-1 text-[var(--t-3)]">
-                <span className="font-semibold">Leçon :</span> {d.transversalLesson}
-              </dd>
-            </div>
-          </dl>
+        <li key={d.id}>
+          {/* Tour 11 (finding 2) — read-only row lit by the Spotlight glow. The
+              cyan accent bar carries the §21.7 training identity (replaces the
+              old top liseré). No navigation (this jalon ships no detail route),
+              a calm recul mirror, never a scoreboard. */}
+          <RecentRowCard accentBar accentColor="var(--cy)">
+            <header className="flex items-baseline justify-between gap-3">
+              <p className="t-eyebrow text-[var(--cy)]">
+                Semaine du <FormattedRange weekStart={d.weekStart} />
+              </p>
+              <p className="t-cap font-mono text-[var(--t-3)]">
+                {fmtSubmittedAt.format(new Date(d.submittedAt))}
+              </p>
+            </header>
+            <dl className="mt-2 flex flex-col gap-1.5">
+              <div>
+                <dt className="sr-only">Forces de process</dt>
+                <dd className="t-body line-clamp-2 text-[var(--t-2)]">
+                  <strong className="text-[var(--t-1)]">Forces :</strong> {d.processStrengthOne}
+                  {' · '}
+                  {d.processStrengthTwo}
+                </dd>
+              </div>
+              <div>
+                <dt className="sr-only">Micro-ajustement</dt>
+                <dd className="t-cap line-clamp-1 text-[var(--t-3)]">
+                  <span className="font-semibold">Ajustement :</span> {d.microAdjustment}
+                </dd>
+              </div>
+              <div>
+                <dt className="sr-only">Leçon transversale</dt>
+                <dd className="t-cap line-clamp-1 text-[var(--t-3)]">
+                  <span className="font-semibold">Leçon :</span> {d.transversalLesson}
+                </dd>
+              </div>
+            </dl>
+          </RecentRowCard>
         </li>
       ))}
     </ul>

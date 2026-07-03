@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ANTICIPATED_EXIT_MIN_TO_SURFACE,
+  anticipatedExitUnderPressure,
   emotionArcDegradation,
   EMOTION_ARC_MIN_TO_SURFACE,
   type EmotionField,
@@ -8,7 +10,9 @@ import {
   type HourSlot,
   localHourOf,
   perEmotionField,
+  perExitReason,
   perHour,
+  perTag,
 } from './pattern-rhythms';
 
 // -----------------------------------------------------------------------------
@@ -270,5 +274,221 @@ describe('emotionArcDegradation', () => {
 
   it('exposes a calm surfacing threshold', () => {
     expect(EMOTION_ARC_MIN_TO_SURFACE).toBe(3);
+  });
+});
+
+// =============================================================================
+// perExitReason (Tour 11 #1) — exitReason × outcome, calqued on perEmotionField
+// =============================================================================
+
+type ExitTrade = {
+  exitReason: string | null;
+  outcome: 'win' | 'loss' | 'break_even' | null;
+  realizedR: string | null;
+  realizedRSource: 'computed' | 'estimated' | null;
+};
+
+function exitTrade(
+  exitReason: string | null,
+  outcome: ExitTrade['outcome'],
+  realizedR: string | null,
+  source: ExitTrade['realizedRSource'] = 'computed',
+): ExitTrade {
+  return { exitReason, outcome, realizedR, realizedRSource: source };
+}
+
+describe('perExitReason', () => {
+  it('returns [] on an empty slice', () => {
+    expect(perExitReason([])).toEqual([]);
+  });
+
+  it('null-passthrough: a null exitReason is skipped, never fabricates a slug', () => {
+    const trades = [exitTrade(null, 'win', '1.0'), exitTrade(null, 'loss', '-1.0')];
+    expect(perExitReason(trades)).toEqual([]);
+  });
+
+  it('aggregates trade/win counts + summed R per slug (golden values)', () => {
+    const trades = [
+      exitTrade('tp_hit', 'win', '2.0'),
+      exitTrade('tp_hit', 'win', '1.0'),
+      exitTrade('sl_hit', 'loss', '-1.0'),
+    ];
+    const rows = perExitReason(trades);
+    const bySlug = Object.fromEntries(rows.map((r) => [r.slug, r]));
+    expect(bySlug.tp_hit).toEqual({ slug: 'tp_hit', trades: 2, wins: 2, sumR: 3, rTrades: 2 });
+    expect(bySlug.sl_hit).toEqual({ slug: 'sl_hit', trades: 1, wins: 0, sumR: -1, rTrades: 1 });
+  });
+
+  it('EXCLUDES estimated-source R from sumR/rTrades but still counts the trade + win', () => {
+    const trades = [
+      exitTrade('manual_before_target', 'win', '3.0', 'estimated'), // R must NOT count
+      exitTrade('manual_before_target', 'win', '1.0', 'computed'),
+    ];
+    const [row] = perExitReason(trades);
+    expect(row).toEqual({
+      slug: 'manual_before_target',
+      trades: 2,
+      wins: 2,
+      sumR: 1,
+      rTrades: 1,
+    });
+  });
+
+  it('skips a non-finite realizedR string without dropping the trade/win count', () => {
+    const trades = [exitTrade('be_exit', 'break_even', 'NaN', 'computed')];
+    expect(perExitReason(trades)).toEqual([
+      { slug: 'be_exit', trades: 1, wins: 0, sumR: 0, rTrades: 0 },
+    ]);
+  });
+
+  it('handles the 5 canonical slugs together (small sample per slug)', () => {
+    const trades = [
+      exitTrade('tp_hit', 'win', '1.5'),
+      exitTrade('sl_hit', 'loss', '-1.0'),
+      exitTrade('be_exit', 'break_even', '0'),
+      exitTrade('manual_before_target', 'win', '0.5'),
+      exitTrade('time_exit', 'loss', '-0.5'),
+    ];
+    const slugs = perExitReason(trades)
+      .map((r) => r.slug)
+      .sort();
+    expect(slugs).toEqual(['be_exit', 'manual_before_target', 'sl_hit', 'time_exit', 'tp_hit']);
+  });
+});
+
+// =============================================================================
+// anticipatedExitUnderPressure (Tour 11 #1) — manual-before-target × negative
+// emotionDuring. Denominator = all manual_before_target closes (honest).
+// =============================================================================
+
+describe('anticipatedExitUnderPressure', () => {
+  it('counts a manual-before-target close carrying a negative emotionDuring', () => {
+    const res = anticipatedExitUnderPressure([
+      { exitReason: 'manual_before_target', emotionDuring: ['fomo'] },
+    ]);
+    expect(res).toEqual({ count: 1, considered: 1 });
+  });
+
+  it('considers a manual exit but does NOT count it when emotionDuring is serene', () => {
+    const res = anticipatedExitUnderPressure([
+      { exitReason: 'manual_before_target', emotionDuring: ['calm'] },
+    ]);
+    expect(res).toEqual({ count: 0, considered: 1 });
+  });
+
+  it('null-passthrough: a null emotionDuring never counts as pressure', () => {
+    const res = anticipatedExitUnderPressure([
+      { exitReason: 'manual_before_target', emotionDuring: null },
+    ]);
+    expect(res).toEqual({ count: 0, considered: 1 });
+  });
+
+  it('ignores non-manual exit reasons entirely (not in the denominator)', () => {
+    const res = anticipatedExitUnderPressure([
+      { exitReason: 'tp_hit', emotionDuring: ['anxious'] },
+      { exitReason: 'sl_hit', emotionDuring: ['frustrated'] },
+      { exitReason: null, emotionDuring: ['fear-loss'] },
+    ]);
+    expect(res).toEqual({ count: 0, considered: 0 });
+  });
+
+  it('computes the honest ratio over a mixed sample', () => {
+    const res = anticipatedExitUnderPressure([
+      { exitReason: 'manual_before_target', emotionDuring: ['revenge-trade'] }, // pressure
+      { exitReason: 'manual_before_target', emotionDuring: ['anxious'] }, // pressure
+      { exitReason: 'manual_before_target', emotionDuring: ['confident'] }, // calm
+      { exitReason: 'manual_before_target', emotionDuring: [] }, // no emotion → not pressure
+      { exitReason: 'tp_hit', emotionDuring: ['fomo'] }, // not manual → excluded
+    ]);
+    expect(res).toEqual({ count: 2, considered: 4 });
+  });
+
+  it('exposes a calm minimum-to-surface threshold', () => {
+    expect(ANTICIPATED_EXIT_MIN_TO_SURFACE).toBe(3);
+  });
+});
+
+// =============================================================================
+// perTag (Tour 11 #2) — REFLECT bias tag × outcome, multi-tag aware
+// =============================================================================
+
+type TagTrade = {
+  tags: readonly string[] | null;
+  outcome: 'win' | 'loss' | 'break_even' | null;
+  realizedR: string | null;
+  realizedRSource: 'computed' | 'estimated' | null;
+};
+
+function tagTrade(
+  tags: readonly string[] | null,
+  outcome: TagTrade['outcome'],
+  realizedR: string | null,
+  source: TagTrade['realizedRSource'] = 'computed',
+): TagTrade {
+  return { tags, outcome, realizedR, realizedRSource: source };
+}
+
+describe('perTag', () => {
+  it('returns [] on an empty slice', () => {
+    expect(perTag([])).toEqual([]);
+  });
+
+  it('null-passthrough + empty array: a trade with no tag is skipped', () => {
+    const trades = [tagTrade(null, 'win', '1.0'), tagTrade([], 'loss', '-1.0')];
+    expect(perTag(trades)).toEqual([]);
+  });
+
+  it('a multi-tag trade counts toward EACH of its tags', () => {
+    const trades = [tagTrade(['revenge-trade', 'self-control-fail'], 'loss', '-2.0')];
+    const rows = perTag(trades);
+    expect(rows).toEqual([
+      { slug: 'revenge-trade', trades: 1, wins: 0, sumR: -2, rTrades: 1 },
+      { slug: 'self-control-fail', trades: 1, wins: 0, sumR: -2, rTrades: 1 },
+    ]);
+  });
+
+  it('aggregates trade/win counts + summed R per tag (golden values)', () => {
+    const trades = [
+      tagTrade(['discipline-high'], 'win', '2.0'),
+      tagTrade(['discipline-high'], 'win', '1.0'),
+      tagTrade(['revenge-trade'], 'loss', '-1.0'),
+    ];
+    const bySlug = Object.fromEntries(perTag(trades).map((r) => [r.slug, r]));
+    expect(bySlug['discipline-high']).toEqual({
+      slug: 'discipline-high',
+      trades: 2,
+      wins: 2,
+      sumR: 3,
+      rTrades: 2,
+    });
+    expect(bySlug['revenge-trade']).toEqual({
+      slug: 'revenge-trade',
+      trades: 1,
+      wins: 0,
+      sumR: -1,
+      rTrades: 1,
+    });
+  });
+
+  it('EXCLUDES estimated-source R from sumR/rTrades but still counts the trade + win', () => {
+    const trades = [
+      tagTrade(['overconfidence'], 'win', '5.0', 'estimated'), // R excluded
+      tagTrade(['overconfidence'], 'win', '1.0', 'computed'),
+    ];
+    const [row] = perTag(trades);
+    expect(row).toEqual({
+      slug: 'overconfidence',
+      trades: 2,
+      wins: 2,
+      sumR: 1,
+      rTrades: 1,
+    });
+  });
+
+  it('skips a non-finite realizedR string without dropping the trade/win count', () => {
+    const trades = [tagTrade(['loss-aversion'], 'loss', 'Infinity', 'computed')];
+    expect(perTag(trades)).toEqual([
+      { slug: 'loss-aversion', trades: 1, wins: 0, sumR: 0, rTrades: 0 },
+    ]);
   });
 });

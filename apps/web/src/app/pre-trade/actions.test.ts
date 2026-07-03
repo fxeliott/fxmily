@@ -214,7 +214,9 @@ describe('submitPreTradeCheckAction — happy path (persist + audit + revalidate
     // `force-dynamic`, revalidate était un dead call).
     expect(revalidatePathMock).not.toHaveBeenCalledWith('/pre-trade/new');
 
-    expect(redirectMock).toHaveBeenCalledWith('/dashboard?done=pre-trade');
+    // Tour 11 (finding 3): redirect to the dedicated confirmation surface
+    // `/pre-trade/done/<id>` (echo), NOT the former dead `/dashboard?done=pre-trade`.
+    expect(redirectMock).toHaveBeenCalledWith('/pre-trade/done/ptc_HAPPY');
   });
 });
 

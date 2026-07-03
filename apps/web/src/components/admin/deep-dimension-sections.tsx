@@ -1,5 +1,6 @@
 import { GraduationCap, ListChecks, MessageSquare, Radar } from 'lucide-react';
 
+import { SeedObjectiveFromSignalButton } from '@/components/admin/seed-objective-from-signal-button';
 import {
   axesStructuredSchema,
   coachingToneSchema,
@@ -253,8 +254,20 @@ export function AxesStructuredSection({
  * Signaux faibles à observer (weakSignals). ADMIN-ONLY par design (schema :
  * non anxiogène côté membre). Ton calme uniquement, jamais d'alerte : ce sont
  * des patterns latents à surveiller.
+ *
+ * Tour 11 (FINDING 3) — quand `memberId` est fourni (onglet profil admin, surface
+ * ACTIONNABLE), chaque signal porte un bouton discret « En faire un objectif » qui
+ * sème un micro-objectif Mark Douglas curé pour le membre. Absent (panneau de
+ * trajectoire read-only), la section reste 100 % passive (comportement historique).
+ * FIREWALL §21.5 : seul le `dimensionId` (slug opaque du signal) est passé à
+ * l'action, JAMAIS le texte du signal.
  */
-export function WeakSignalsSection({ raw, idPrefix, headingLevel = 'h2' }: DimensionSectionProps) {
+export function WeakSignalsSection({
+  raw,
+  idPrefix,
+  headingLevel = 'h2',
+  memberId,
+}: DimensionSectionProps & { memberId?: string }) {
   const signals = asWeakSignals(raw);
   if (signals.length === 0) return null;
   return (
@@ -274,6 +287,11 @@ export function WeakSignalsSection({ raw, idPrefix, headingLevel = 'h2' }: Dimen
           <li key={i} className="flex flex-col gap-2">
             <p className="t-body text-[var(--t-1)]">{s.signal}</p>
             <EvidenceList items={s.evidence} />
+            {memberId ? (
+              <div className="mt-0.5">
+                <SeedObjectiveFromSignalButton memberId={memberId} dimensionId={s.dimensionId} />
+              </div>
+            ) : null}
           </li>
         ))}
       </ul>

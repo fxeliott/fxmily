@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
+import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { deriveDeletionState } from '@/lib/account/deletion';
 import { db } from '@/lib/db';
@@ -53,7 +54,7 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
       {/* S19.1 ambient anti-fade backplate (decorative, -z-10, reduced-motion-safe). */}
       <DashboardAmbient />
       <div className="dash-stagger relative mx-auto w-full max-w-5xl px-4 py-6 sm:py-10 lg:px-8">
-        <header className="mb-6">
+        <header className="mb-6 flex flex-col gap-4">
           <Link
             href="/dashboard"
             className={btnVariants({ kind: 'ghost', size: 'm' })}
@@ -62,17 +63,36 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
             <ArrowLeft aria-hidden="true" className="h-4 w-4" />
             Dashboard
           </Link>
-          <p className="mt-4 text-[11px] font-medium tracking-[0.18em] text-[var(--acc)] uppercase">
-            Mon espace
-          </p>
-          <h1 className="t-h1 mt-2 flex items-center gap-3 text-[var(--t-1)]">
-            <UserCircle aria-hidden="true" className="h-7 w-7 text-[var(--acc-hi)]" />
-            Mon compte
-          </h1>
-          <p className="mt-3 max-w-prose text-sm leading-relaxed text-[var(--t-2)]">
-            Tout ce que tu peux régler tout seul depuis l&apos;app : notifications, export de tes
-            données, suppression du compte. Aucune action ici n&apos;exige Eliott.
-          </p>
+          {/* Tour 11 — hero glass (était un header texte plat = incohérent avec
+              les pages sœurs GuideHero / VerificationHero). Même pattern : Card
+              primary glass edge={false} dash-hero, eyebrow t-eyebrow-lg + icône,
+              h1 f-display h-rise, t-lead. Accent bleu de marque uniquement. */}
+          <Card
+            primary
+            glass
+            edge={false}
+            className="dash-hero relative overflow-hidden p-6 sm:p-7 lg:p-8"
+          >
+            <div className="relative flex flex-col gap-3">
+              <span className="t-eyebrow-lg inline-flex items-center gap-1.5 text-[var(--acc-hi)]">
+                <UserCircle className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                Mon espace
+              </span>
+              <h1
+                className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+                style={{
+                  fontFeatureSettings: '"ss01" 1',
+                  fontSize: 'clamp(1.875rem, 1.5rem + 1.6vw, 2.5rem)',
+                }}
+              >
+                Mon compte
+              </h1>
+              <p className="t-lead max-w-[58ch]">
+                Tout ce que tu peux régler tout seul depuis l&apos;app : notifications, export de
+                tes données, suppression du compte. Aucune action ici n&apos;exige Eliott.
+              </p>
+            </div>
+          </Card>
         </header>
 
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

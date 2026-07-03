@@ -1,3 +1,4 @@
+import { RecentRowCard } from '@/components/ui/recent-row-card';
 import { computeMindsetProfile } from '@/lib/mindset/profile';
 import type { SerializedMindsetCheck } from '@/lib/mindset/service';
 
@@ -80,41 +81,43 @@ export function MindsetTimeline({
       {checks.map((c) => {
         const { overall, strengthLabel } = readingOf(c);
         return (
-          <li
-            key={c.id}
-            className="rounded-card block border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-colors hover:border-[var(--b-acc)] hover:bg-[var(--bg-2)]"
-          >
-            <header className="flex items-baseline justify-between gap-3">
-              <p className="t-eyebrow-lg text-[var(--t-3)]">
-                Semaine du <time dateTime={c.weekStart}>{fmtDay(c.weekStart)}</time>
-                <span aria-hidden="true"> → </span>
-                <time dateTime={c.weekEnd}>{fmtDay(c.weekEnd)}</time>
-              </p>
-              <p className="t-cap font-mono text-[var(--t-3)]">
-                {fmtUpdatedAt.format(new Date(c.updatedAt))}
-              </p>
-            </header>
-            <dl className="mt-2 flex flex-col gap-1.5">
-              <div>
-                <dt className="sr-only">Profil global</dt>
-                <dd className="t-body text-[var(--t-2)]">
-                  <strong className="text-[var(--t-1)]">Profil :</strong>{' '}
-                  {overall === null ? (
-                    <span className="text-[var(--t-3)]">en cours de constitution</span>
-                  ) : (
-                    <span className="font-mono text-[var(--acc)]">{overall}/100</span>
-                  )}
-                </dd>
-              </div>
-              {strengthLabel ? (
+          <li key={c.id}>
+            {/* Tour 11 (finding 2) — read-only row lit by the Spotlight glow +
+                left accent bar, no navigation (this jalon ships no check detail
+                route). Calm neutral accent, never red (§27.7). */}
+            <RecentRowCard accentBar>
+              <header className="flex items-baseline justify-between gap-3">
+                <p className="t-eyebrow-lg text-[var(--t-3)]">
+                  Semaine du <time dateTime={c.weekStart}>{fmtDay(c.weekStart)}</time>
+                  <span aria-hidden="true"> → </span>
+                  <time dateTime={c.weekEnd}>{fmtDay(c.weekEnd)}</time>
+                </p>
+                <p className="t-cap font-mono text-[var(--t-3)]">
+                  {fmtUpdatedAt.format(new Date(c.updatedAt))}
+                </p>
+              </header>
+              <dl className="mt-2 flex flex-col gap-1.5">
                 <div>
-                  <dt className="sr-only">Point d&apos;appui</dt>
-                  <dd className="t-cap text-[var(--t-3)]">
-                    <span className="font-semibold">Point d&apos;appui :</span> {strengthLabel}
+                  <dt className="sr-only">Profil global</dt>
+                  <dd className="t-body text-[var(--t-2)]">
+                    <strong className="text-[var(--t-1)]">Profil :</strong>{' '}
+                    {overall === null ? (
+                      <span className="text-[var(--t-3)]">en cours de constitution</span>
+                    ) : (
+                      <span className="font-mono text-[var(--acc)]">{overall}/100</span>
+                    )}
                   </dd>
                 </div>
-              ) : null}
-            </dl>
+                {strengthLabel ? (
+                  <div>
+                    <dt className="sr-only">Point d&apos;appui</dt>
+                    <dd className="t-cap text-[var(--t-3)]">
+                      <span className="font-semibold">Point d&apos;appui :</span> {strengthLabel}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            </RecentRowCard>
           </li>
         );
       })}

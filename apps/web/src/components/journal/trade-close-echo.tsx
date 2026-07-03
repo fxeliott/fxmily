@@ -1,22 +1,38 @@
-import { Activity } from 'lucide-react';
+import { Activity, Flag } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
-import type { TradeCloseEcho } from '@/lib/coaching/trade-echo';
+import type { TradeCloseEcho, TradeOpenEcho } from '@/lib/coaching/trade-echo';
 import { cn } from '@/lib/utils';
 
 /**
- * Tour 10 — the living close echo card, rendered on the MEMBER trade detail
- * only (the page passes it through TradeDetailView's `echoSlot`; the admin
- * variant never builds one). Shows for {@link ECHO_WINDOW_HOURS} after the
- * close: an immediate, member-specific reading of what THIS close says about
- * their process.
+ * Tour 10 / Tour 11 — the living echo cards, rendered on the MEMBER trade
+ * detail only (the page passes them through TradeDetailView's `echoSlot`; the
+ * admin variant never builds one). Shows for {@link ECHO_WINDOW_HOURS} after
+ * the moment it reads:
+ *   - {@link TradeCloseEchoCard} — after a CLOSE, a reading of what THIS close
+ *     says about the member's process.
+ *   - {@link TradeOpenEchoCard} — after an OPEN (Tour 11 finding 1), we accueille
+ *     the engagement (plan-respect / entry emotion / stop-loss already declared)
+ *     while the position is still live.
  *
  * DETERMINISTIC copy (enum-derived, see lib/coaching/trade-echo.ts) → no
  * AIGeneratedBanner (AI Act §50 precedent: learning-stage.ts). POSTURE §31.2:
  * calm accents only — 'watch' renders in the ACCENT tone, never red (red is
  * reserved for trade OUTCOME, DS-v3 finance grammar).
  */
-export function TradeCloseEchoCard({ echo }: { echo: TradeCloseEcho }) {
+
+/** Both echo shapes are structurally identical — one renderer, two data-slots. */
+type EchoLike = Pick<TradeCloseEcho, 'title' | 'tone' | 'lines'>;
+
+function EchoCard({
+  echo,
+  slot,
+  icon: Icon,
+}: {
+  echo: EchoLike;
+  slot: string;
+  icon: typeof Activity;
+}) {
   const edge =
     echo.tone === 'ok'
       ? 'border-[var(--ok-edge)] bg-[var(--ok-dim-2)]'
@@ -31,8 +47,10 @@ export function TradeCloseEchoCard({ echo }: { echo: TradeCloseEcho }) {
         : 'text-[var(--t-3)]';
 
   return (
-    <Card data-slot="trade-close-echo" className={cn('border p-4', edge)}>
-      <div className="flex items-start gap-3">
+    <Card data-slot={slot} className={cn('border p-4', edge)}>
+      {/* role="status" — the echo is a live, non-urgent reaction to the member's
+          own act; announced politely by AT without stealing focus. */}
+      <div className="flex items-start gap-3" role="status">
         <span
           aria-hidden
           className={cn(
@@ -40,7 +58,7 @@ export function TradeCloseEchoCard({ echo }: { echo: TradeCloseEcho }) {
             iconTone,
           )}
         >
-          <Activity className="h-4 w-4" strokeWidth={1.75} />
+          <Icon className="h-4 w-4" strokeWidth={1.75} />
         </span>
         <div className="flex min-w-0 flex-col gap-1.5">
           <h2 className="t-eyebrow text-[var(--t-3)]">{echo.title}</h2>
@@ -59,4 +77,12 @@ export function TradeCloseEchoCard({ echo }: { echo: TradeCloseEcho }) {
       </div>
     </Card>
   );
+}
+
+export function TradeCloseEchoCard({ echo }: { echo: TradeCloseEcho }) {
+  return <EchoCard echo={echo} slot="trade-close-echo" icon={Activity} />;
+}
+
+export function TradeOpenEchoCard({ echo }: { echo: TradeOpenEcho }) {
+  return <EchoCard echo={echo} slot="trade-open-echo" icon={Flag} />;
 }

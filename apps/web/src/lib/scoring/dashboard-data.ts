@@ -20,12 +20,18 @@ import {
 } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import {
+  anticipatedExitUnderPressure,
+  type AnticipatedExitUnderPressure,
   emotionArcDegradation,
   type EmotionArcDegradation,
   type EmotionPerfRow,
+  type ExitReasonPerfRow,
   type HourlyPerf,
   perEmotionField,
+  perExitReason,
   perHour,
+  perTag,
+  type TagPerfRow,
 } from '@/lib/scoring/pattern-rhythms';
 import {
   aggregateRiskDiscipline,
@@ -36,7 +42,12 @@ import {
 import { SESSION_LABEL } from '@/lib/trading/sessions';
 
 export type { RiskDiscipline, SetupQualityDist } from '@/lib/scoring/setup-quality';
-export type { EmotionPerfRow, HourlyPerf } from '@/lib/scoring/pattern-rhythms';
+export type {
+  EmotionPerfRow,
+  ExitReasonPerfRow,
+  HourlyPerf,
+  TagPerfRow,
+} from '@/lib/scoring/pattern-rhythms';
 
 /**
  * Dashboard analytics aggregator (J6, SPEC §7.5).
@@ -116,6 +127,12 @@ export interface DashboardAnalytics {
   emotionPerfAfter: EmotionPerfRow[];
   /** S15 #5 — trades entered serene that turned contrarié during/after. */
   emotionArc: EmotionArcDegradation;
+  /** Tour 11 — exitReason×outcome (nature de sortie × résultat). */
+  exitReasonPerf: ExitReasonPerfRow[];
+  /** Tour 11 — manual-before-target closes that carried a negative emotionDuring. */
+  anticipatedExit: AnticipatedExitUnderPressure;
+  /** Tour 11 — REFLECT bias tag × outcome (biais × résultat). */
+  tagPerf: TagPerfRow[];
   streaks: { observedMaxLoss: number; observedMaxWin: number };
   /** Total closed trades in the window (capped at `ANALYTICS_TRADE_CAP` when `truncated`). */
   closedCount: number;
@@ -212,6 +229,9 @@ async function _getDashboardAnalyticsImpl(
       // V2 §7.5 — the during/after moments, captured at close (master prompt §22).
       emotionDuring: true,
       emotionAfter: true,
+      // Tour 11 — captured at close (tour 10): nature of the exit + REFLECT biases.
+      exitReason: true,
+      tags: true,
       // V1.5 process metrics (Steenbarger / Tharp) — set at entry time.
       tradeQuality: true,
       riskPct: true,
@@ -231,6 +251,7 @@ async function _getDashboardAnalyticsImpl(
     emotionBefore: [...(t.emotionBefore ?? [])],
     emotionDuring: [...(t.emotionDuring ?? [])],
     emotionAfter: [...(t.emotionAfter ?? [])],
+    tags: [...(t.tags ?? [])],
   }));
 
   const expectancy = computeExpectancy(tradesNorm);
@@ -248,6 +269,9 @@ async function _getDashboardAnalyticsImpl(
   const emotionPerfDuring = perEmotionField(tradesNorm, 'emotionDuring');
   const emotionPerfAfter = perEmotionField(tradesNorm, 'emotionAfter');
   const emotionArc = emotionArcDegradation(tradesNorm);
+  const exitReasonPerf = perExitReason(tradesNorm);
+  const anticipatedExit = anticipatedExitUnderPressure(tradesNorm);
+  const tagPerf = perTag(tradesNorm);
 
   const closedCount = tradesNorm.length;
   const estimatedCount = tradesNorm.filter((t) => t.realizedRSource === 'estimated').length;
@@ -268,6 +292,9 @@ async function _getDashboardAnalyticsImpl(
     emotionPerfDuring,
     emotionPerfAfter,
     emotionArc,
+    exitReasonPerf,
+    anticipatedExit,
+    tagPerf,
     streaks: { observedMaxLoss, observedMaxWin },
     closedCount,
     truncated,

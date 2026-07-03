@@ -4,7 +4,13 @@ import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
-import { MicroObjectiveNotFoundError, closeMicroObjective } from '@/lib/coaching/micro-objective';
+import {
+  MicroObjectiveNotFoundError,
+  buildMicroObjectiveCloseEcho,
+  closeMicroObjective,
+  getMemberCoachingRegister,
+  type MicroObjectiveCloseEcho,
+} from '@/lib/coaching/micro-objective';
 import { closeMicroObjectiveSchema, type MicroObjectiveOutcomeInput } from '@/lib/schemas/coaching';
 
 /**
@@ -23,6 +29,12 @@ import { closeMicroObjectiveSchema, type MicroObjectiveOutcomeInput } from '@/li
 export interface CloseMicroObjectiveActionState {
   ok: boolean;
   error?: 'unauthorized' | 'invalid_input' | 'not_found' | 'unknown';
+  /**
+   * Tour 11 (FINDING 1) — l'écho de fermeture, nommé Mark Douglas : une copie FR
+   * FIXE personnalisée par le `register` de coaching du membre, jouée en
+   * `role="status"` à la place de l'ancien silence. Présent seulement sur succès.
+   */
+  echo?: MicroObjectiveCloseEcho;
 }
 
 export async function closeMicroObjectiveAction(
@@ -56,6 +68,20 @@ export async function closeMicroObjectiveAction(
     metadata: { microObjectiveId: parsed.data.microObjectiveId, outcome: parsed.data.outcome },
   });
 
+  // Tour 11 (FINDING 1) — build the Mark Douglas close echo, personalised by the
+  // member's coaching register (FIREWALL §21.5 : only `coachingTone` is read, never
+  // `weakSignals` nor raw AI blobs). Best-effort: a profile-read hiccup must not
+  // fail the (already committed) close — we fall back to the neutral 'pedagogique'
+  // register (buildMicroObjectiveCloseEcho coerces null → 'pedagogique').
+  let echo: MicroObjectiveCloseEcho;
+  try {
+    const register = await getMemberCoachingRegister(session.user.id);
+    echo = buildMicroObjectiveCloseEcho(parsed.data.outcome, register);
+  } catch (err) {
+    console.error('[objectives.closeMicroObjective] register load failed', err);
+    echo = buildMicroObjectiveCloseEcho(parsed.data.outcome, null);
+  }
+
   // The loop is surfaced on BOTH the hub (compact) and /objectifs (full) → both
   // must re-render so the closed objective leaves the "open" slot immediately.
   revalidatePath('/objectifs');
@@ -63,5 +89,5 @@ export async function closeMicroObjectiveAction(
   // Tour 10 — the pinned pill lives in the ROOT layout (every page): closing the
   // loop must clear it everywhere, not only on the two pages above.
   revalidatePath('/', 'layout');
-  return { ok: true };
+  return { ok: true, echo };
 }

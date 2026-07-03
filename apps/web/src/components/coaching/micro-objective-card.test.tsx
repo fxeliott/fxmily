@@ -84,4 +84,18 @@ describe('MicroObjectiveCard — E3 boucle ouverte + suivi (S5 §32)', () => {
     render(<MicroObjectiveCard objective={view()} annotationExcerpt={null} />);
     expect(screen.queryByText(/Ce que ton coach a relevé/)).not.toBeInTheDocument();
   });
+
+  it('Tour 11 FINDING 2 — no gentle nudge by default (fresh open loop)', () => {
+    render(<MicroObjectiveCard objective={view()} />);
+    expect(screen.queryByText(/Toujours d’actualité/)).not.toBeInTheDocument();
+  });
+
+  it('Tour 11 FINDING 2 — stale loop shows a calm nudge above the close block', () => {
+    render(<MicroObjectiveCard objective={view()} isStale />);
+    const nudge = screen.getByText(/Toujours d’actualité \? Tu peux le marquer tenu/);
+    expect(nudge).toBeInTheDocument();
+    // §31.2 — factual, never red / never a countdown.
+    expect(nudge.className).not.toMatch(/--bad|danger/i);
+    expect(nudge.textContent).not.toMatch(/jours? restants?|compte à rebours/i);
+  });
 });

@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SerializedMonthlyProfileSnapshot } from '@/lib/member-profile-monthly/types';
+
+// Tour 11 — the shared `deep-dimension-sections` module now exports the
+// signal-seeding client island which references a server action. Mock it so
+// this presentational test never pulls NextAuth/next-cache (same pattern as
+// `member-verification-panel.test.tsx`). This panel itself stays read-only
+// (it never passes `memberId`).
+vi.mock('@/app/admin/members/[id]/objective-from-signal-actions', () => ({
+  seedObjectiveFromSignalAction: vi.fn().mockResolvedValue({ ok: true, status: 'created' }),
+}));
 
 import { MemberMonthlyProfileTrajectoryPanel } from './member-monthly-profile-trajectory-panel';
 

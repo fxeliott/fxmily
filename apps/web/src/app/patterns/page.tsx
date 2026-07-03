@@ -10,7 +10,9 @@ import { type EmotionPhase, isEmotionPhase } from '@/lib/patterns/emotion-phase'
 import { PreTradeAnalyticsCard } from '@/components/pre-trade/pre-trade-analytics-card';
 import { PreTradeCorrelationCard } from '@/components/pre-trade/pre-trade-correlation-card';
 import { EmotionPerfTable } from '@/components/scoring/emotion-perf-table';
+import { ExitReasonPerfTable } from '@/components/scoring/exit-reason-perf-table';
 import { HourlyRhythm } from '@/components/scoring/hourly-rhythm';
+import { TagPerfTable } from '@/components/scoring/tag-perf-table';
 import { PairTopFive } from '@/components/scoring/pair-top-five';
 import { SessionPerfBars } from '@/components/scoring/session-perf-bars';
 import { SetupQualityCard } from '@/components/scoring/setup-quality-card';
@@ -95,6 +97,27 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
           </div>
           <Suspense key={phase} fallback={<PatternsSkeleton />}>
             <PatternsSection userId={userId} timezone={timezone} range={range} phase={phase} />
+          </Suspense>
+        </section>
+
+        {/* Tour 11 : data dormante restituée, nature de sortie × résultat
+            (exitReason, capté au close depuis le tour 10) + biais REFLECT ×
+            résultat (tags). Deux agrégats membre jamais montrés jusqu'ici, dans
+            leur propre section pour une hiérarchie claire (pas de rangée
+            orpheline). Même (userId, timezone, range) donne cache() React 19,
+            zéro query supplémentaire. Posture §2 : la ligne « sous pression »
+            est un 'watch' ambre calme, jamais rouge ; un biais nommé est une donnée. */}
+        <section
+          className="wow-reveal mb-6 flex flex-col gap-3"
+          aria-labelledby="exec-depth-heading"
+        >
+          <div className="flex items-center gap-2">
+            <h2 id="exec-depth-heading" className="t-eyebrow">
+              Sorties &amp; biais
+            </h2>
+          </div>
+          <Suspense fallback={<ExecDepthSkeleton />}>
+            <ExecDepthSection userId={userId} timezone={timezone} range={range} />
           </Suspense>
         </section>
 
@@ -309,6 +332,47 @@ function PatternsSkeleton() {
         <div className="skel rounded-card-lg h-[280px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
         <div className="skel rounded-card-lg h-[240px] border border-[var(--b-default)] bg-[var(--bg-1)] lg:col-span-2" />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Tour 11 — nature-of-exit × outcome + REFLECT bias × outcome. Same
+ * (userId, timezone, range) as PatternsSection → React 19 cache() dedup, zero
+ * extra DB query. Two paired cards, side by side on lg, stacked on mobile.
+ */
+async function ExecDepthSection({
+  userId,
+  timezone,
+  range,
+}: {
+  userId: string;
+  timezone: string;
+  range: RangeKey;
+}) {
+  const analytics = await getDashboardAnalytics(userId, timezone, range);
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      <ExitReasonPerfTable
+        rows={analytics.exitReasonPerf}
+        anticipatedExit={analytics.anticipatedExit}
+        totalTrades={analytics.closedCount}
+      />
+      <TagPerfTable rows={analytics.tagPerf} totalTrades={analytics.closedCount} />
+    </div>
+  );
+}
+
+function ExecDepthSkeleton() {
+  return (
+    <div
+      className="grid gap-3 lg:grid-cols-2"
+      aria-busy="true"
+      aria-live="polite"
+      aria-label="Chargement des sorties et biais"
+    >
+      <div className="skel rounded-card-lg h-[280px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
+      <div className="skel rounded-card-lg h-[280px] border border-[var(--b-default)] bg-[var(--bg-1)]" />
     </div>
   );
 }

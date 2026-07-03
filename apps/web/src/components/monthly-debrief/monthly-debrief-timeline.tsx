@@ -1,5 +1,4 @@
-import Link from 'next/link';
-
+import { RecentRowCard } from '@/components/ui/recent-row-card';
 import { formatMonthLabelFr } from '@/lib/monthly-debrief/format';
 import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 
@@ -55,14 +54,15 @@ export function MonthlyDebriefTimeline({
         const isSelected = d.id === selectedId;
         return (
           <li key={d.id}>
-            <Link
+            {/* Tour 11 (finding 2) — Spotlight-lit navigable row (each debrief is
+                read on the same page via `?id=`). The selected month keeps its
+                accent ring; the left accent bar stays a calm neutral accent. */}
+            <RecentRowCard
               href={`/debrief-mensuel?id=${d.id}`}
-              aria-current={isSelected ? 'true' : undefined}
-              className={`wow-hover-glow rounded-card block border bg-[var(--bg-1)] p-4 transition-colors focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none ${
-                isSelected
-                  ? 'border-[var(--b-acc)]'
-                  : 'border-[var(--b-default)] hover:border-[var(--b-strong)]'
-              }`}
+              ariaLabel={`Débrief mensuel ${formatMonthLabelFr(d.monthStart)}`}
+              current={isSelected}
+              accentBar
+              className={isSelected ? 'ring-2 ring-[var(--b-acc)]' : ''}
             >
               <header className="flex items-baseline justify-between gap-3">
                 <p className="t-eyebrow-lg text-[var(--t-2)]">{formatMonthLabelFr(d.monthStart)}</p>
@@ -71,7 +71,7 @@ export function MonthlyDebriefTimeline({
                 </p>
               </header>
               <p className="t-body mt-2 line-clamp-2 text-[var(--t-2)]">{d.progressionNarrative}</p>
-            </Link>
+            </RecentRowCard>
           </li>
         );
       })}

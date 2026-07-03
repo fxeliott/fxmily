@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarCheck } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -7,6 +7,7 @@ import { CheckinDayList } from '@/components/checkin/checkin-day-list';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DisciplineYearHeatmap } from '@/components/track/discipline-year-heatmap';
 import { Card } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { getDisciplineYearHeatmap, listMemberCheckins } from '@/lib/checkin/service';
 
 /**
@@ -85,20 +86,25 @@ export default async function CheckinHistoryPage() {
           <CheckinDayList
             checkins={checkins}
             emptyState={
-              <Card className="flex flex-col items-center gap-3 p-6 text-center">
-                <p className="t-body text-[var(--t-3)]">
-                  Tu n&apos;as encore rempli aucun check-in.
-                </p>
-                <p className="t-cap text-[var(--t-4)]">
-                  Ton historique matin / soir apparaîtra ici dès ton premier check-in.
-                </p>
-                <Link
-                  href="/checkin"
-                  className="rounded-control mt-1 inline-flex items-center gap-1.5 border border-[var(--b-acc)] bg-[var(--acc-dim)] px-3 py-1.5 text-[13px] font-medium text-[var(--acc-hi)] transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-                >
-                  Faire mon check-in
-                  <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
-                </Link>
+              <Card className="py-2">
+                <EmptyState
+                  icon={CalendarCheck}
+                  headingLevel="h3"
+                  headline="Ton suivi commence à ton premier check-in"
+                  lead="Rien encore rempli, c'est normal : ton historique matin et soir se posera ici dès aujourd'hui."
+                  guides={[
+                    'Ouvre le check-in du matin avant le marché.',
+                    'Referme ta journée par le bilan du soir.',
+                    'Chaque jour rempli apparaît ici, matin et soir réunis.',
+                  ]}
+                  ctaPrimary={
+                    <>
+                      Faire mon check-in
+                      <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+                    </>
+                  }
+                  ctaHref="/checkin"
+                />
               </Card>
             }
           />

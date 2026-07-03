@@ -2,6 +2,7 @@ import { ArrowLeft, ShieldCheck, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 
 import { AnnotationsSection } from '@/components/journal/annotations-section';
+import { TradeBiasTags } from '@/components/journal/trade-bias-tags';
 import { TradePsychologyTriad } from '@/components/journal/trade-psychology-triad';
 import { TradeRiskSchema } from '@/components/journal/trade-risk-schema';
 import { btnVariants } from '@/components/ui/btn';
@@ -42,9 +43,13 @@ interface TradeDetailViewProps {
   closeHref: string | null;
   contextBadge?: string;
   footerSlot?: React.ReactNode;
-  /** Tour 10 — living close echo, MEMBER page only (admin never builds one).
-   * Rendered right under the result hero so the reaction reads with the R. */
+  /** Tour 10 / Tour 11 — living echo, MEMBER page only (admin never builds one).
+   * Close echo on a fresh close (reads with the R), open echo on a fresh open. */
   echoSlot?: React.ReactNode;
+  /** Tour 11 — REFLECT bias tags classified at close (Trade.tags). Restituted
+   * as Pills in the Sortie card. Empty/absent → nothing rendered (no fabricated
+   * empty state). Not on `SerializedTrade`, so passed explicitly by the caller. */
+  tags?: readonly string[];
   /** J4 — annotations attached to this trade. Empty array hides the section. */
   annotations?: SerializedAnnotation[];
   /** Identifier of the currently-authenticated user. Drives the admin
@@ -64,6 +69,7 @@ export function TradeDetailView({
   contextBadge,
   footerSlot,
   echoSlot,
+  tags = [],
   annotations = [],
   currentUserId = null,
   timezone = 'Europe/Paris',
@@ -191,7 +197,10 @@ export function TradeDetailView({
         </Card>
       ) : null}
 
-      {/* Tour 10 — living close echo (member only, fresh closes only). */}
+      {/* Tour 10 / Tour 11 — living echo (member only): the close echo on a
+          fresh close, the open echo on a fresh open. Rendered here so the
+          reaction reads with the result hero (closed) or right under the open
+          CTA banner (open). */}
       {echoSlot}
 
       {/* Plan d'entrée */}
@@ -335,6 +344,11 @@ export function TradeDetailView({
               tone={trade.exitReason ? undefined : 'neutral'}
             />
           </dl>
+
+          {/* Tour 11 — REFLECT bias tags classified at close, restituted to the
+              member as neutral Pills (discipline-high is the only `ok` tone).
+              Renders nothing when there are no tags (no fabricated empty state). */}
+          <TradeBiasTags tags={tags} />
         </Card>
       ) : null}
 

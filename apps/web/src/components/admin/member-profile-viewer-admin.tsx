@@ -312,7 +312,14 @@ export function MemberProfileViewerAdmin({
 
           <AxesStructuredSection raw={profile.axesStructured} idPrefix="profile-admin" />
 
-          <WeakSignalsSection raw={profile.weakSignals} idPrefix="profile-admin" />
+          {/* Tour 11 — `memberId` rend la section ACTIONNABLE (bouton « En faire un
+              objectif » par signal). Le panneau trajectoire mensuel reste read-only
+              (il ne passe volontairement pas de memberId). */}
+          <WeakSignalsSection
+            raw={profile.weakSignals}
+            idPrefix="profile-admin"
+            memberId={memberId}
+          />
 
           <p className="t-cap text-center text-[var(--t-3)]">
             Profil analysé le{' '}

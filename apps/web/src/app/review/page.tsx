@@ -5,11 +5,14 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { V18CrisisBanner } from '@/components/review/crisis-banner';
 import { MirrorHero } from '@/components/review/mirror-hero';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { SubmitEchoCard } from '@/components/ui/submit-echo-card';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
-import { HoverLift } from '@/components/ui/hover-lift';
-import { V18Aurora } from '@/components/v18/aurora';
-import { V18ThemeScope } from '@/components/v18/theme-scope';
+import { RecentRowCard } from '@/components/ui/recent-row-card';
+import { echoProfileDims } from '@/lib/coaching/trade-echo';
+import { buildReviewSubmitEcho } from '@/lib/coaching/submit-echo';
+import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { listMyRecentReviews } from '@/lib/weekly-review/service';
 import { currentWeekStartUTC, findCurrentWeekReview } from '@/lib/weekly-review/week';
 import { NextStepRail } from '@/components/nav/next-step-rail';
@@ -36,10 +39,12 @@ interface ReviewLandingProps {
  * V1.8 REFLECT — `/review` landing.
  *
  * Server Component. Three sections:
- *   1. Hero — Mirror SVG illustration + intro copy + primary CTA.
- *   2. Optional crisis banner (URL state `?crisis=high|medium` from
- *      `submitWeeklyReviewAction` redirect when corpus tripped detect).
- *   3. Recent reviews timeline — last 12 (clamped service-side).
+ *   1. Hero — glass `dash-hero` card (Tour 11 finding 1: migrated off the legacy
+ *      V18 theme scope onto the app-wide DashboardAmbient) with the Mirror SVG.
+ *   2. Optional crisis banner + a LIVING submit echo (finding 3): after a submit,
+ *      a member-specific, register-declined reading of the recul, replacing the
+ *      old frozen paragraph.
+ *   3. Recent reviews timeline (last 12) — Spotlight-lit RecentRowCards.
  *
  * Auth gate : redirect to /login if not active. Pattern carbone J5.
  */
@@ -74,46 +79,79 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
     timeZone: timezone,
   });
 
+  // Tour 11 finding 3 — living submit echo. Built only post-submit, on the
+  // freshest review (newest-first), declined by the member's coaching profile.
+  // Presence-only read of `nextWeekFocus` (firewall §21.5 — never the free text).
+  let submitEcho = null;
+  if (justSubmitted && !crisisLevel) {
+    const profile = await getProfileForUser(session.user.id);
+    const dims = echoProfileDims(profile);
+    const latest = recent[0];
+    submitEcho = buildReviewSubmitEcho({
+      hasNextWeekFocus: latest ? latest.nextWeekFocus.trim().length > 0 : false,
+      learningStage: dims.learningStage,
+      coachingRegister: dims.coachingRegister,
+    });
+  }
+
   return (
-    <V18ThemeScope>
-      <V18Aurora />
-      <main className="relative mx-auto flex w-full max-w-[var(--w-app)] flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8 2xl:px-12">
-        {/* HERO */}
-        <header className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3">
-            <p className="t-eyebrow text-[var(--t-3)]">Module REFLECT</p>
-            <h1 className="t-display-fluid text-[var(--t-1)]">
-              Le miroir de
-              <br />
-              <span style={{ color: 'var(--acc-hi)' }}>ton exécution</span>
-            </h1>
-            <p className="t-lead max-w-prose text-[var(--t-2)]">
-              Une revue hebdomadaire de ton process, pas de tes P&amp;L. Cinq questions ciblées pour
-              mettre des mots sur ce qui a marché et ce qui doit changer.
-            </p>
-          </div>
+    <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
+      <DashboardAmbient />
+      <div className="relative mx-auto flex w-full max-w-[var(--w-app)] flex-1 flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8 2xl:px-12">
+        {/* HERO — Tour 11 finding 1 : glass dash-hero, illustration à droite. */}
+        <section aria-labelledby="review-hero-heading" className="wow-reveal">
+          <Card
+            primary
+            glass
+            edge={false}
+            className="dash-hero relative overflow-hidden p-6 backdrop-blur-[16px] backdrop-saturate-150 lg:p-7"
+          >
+            <div className="relative grid gap-6 lg:grid-cols-[1.35fr_1fr] lg:items-center lg:gap-8">
+              {/* ---- Gauche : intro ---- */}
+              <div className="flex flex-col gap-3">
+                <p className="t-eyebrow-lg text-[var(--t-3)]">Module REFLECT</p>
+                <h1
+                  id="review-hero-heading"
+                  className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+                  style={{
+                    fontFeatureSettings: '"ss01" 1',
+                    fontSize: 'clamp(1.9rem, 1.5rem + 1.6vw, 2.6rem)',
+                  }}
+                >
+                  Le miroir de
+                  <br />
+                  <span style={{ color: 'var(--acc-hi)' }}>ton exécution</span>
+                </h1>
+                <p className="t-lead max-w-prose text-[var(--t-2)]">
+                  Une revue hebdomadaire de ton process, pas de tes P&amp;L. Cinq questions ciblées
+                  pour mettre des mots sur ce qui a marché et ce qui doit changer.
+                </p>
 
-          <div className="relative flex items-center justify-center">
-            <MirrorHero className="w-full max-w-md" />
-          </div>
+                <div className="mt-1 flex flex-wrap items-center gap-3">
+                  <Link
+                    href="/review/new"
+                    className="rounded-control inline-flex h-12 items-center gap-2 bg-[var(--acc-btn)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px"
+                  >
+                    <NotebookPen size={16} strokeWidth={2.2} aria-hidden="true" />
+                    {ctaLabel}
+                    <ArrowRight size={14} strokeWidth={2.2} aria-hidden="true" />
+                  </Link>
+                  <Link
+                    href="/dashboard"
+                    className="rounded-control inline-flex h-11 items-center gap-1.5 border border-[var(--b-strong)] bg-transparent px-4 text-[13px] font-medium text-[var(--t-2)] transition-colors hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]"
+                  >
+                    Retour au dashboard
+                  </Link>
+                </div>
+              </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/review/new"
-              className="rounded-control inline-flex h-12 items-center gap-2 bg-[var(--acc-btn)] px-5 text-[14px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150 hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px"
-            >
-              <NotebookPen size={16} strokeWidth={2.2} aria-hidden="true" />
-              {ctaLabel}
-              <ArrowRight size={14} strokeWidth={2.2} aria-hidden="true" />
-            </Link>
-            <Link
-              href="/dashboard"
-              className="rounded-control inline-flex h-11 items-center gap-1.5 border border-[var(--b-strong)] bg-transparent px-4 text-[13px] font-medium text-[var(--t-2)] transition-colors hover:bg-[var(--bg-2)] hover:text-[var(--t-1)]"
-            >
-              Retour au dashboard
-            </Link>
-          </div>
-        </header>
+              {/* ---- Droite : illustration miroir ---- */}
+              <div className="relative flex items-center justify-center">
+                <MirrorHero className="w-full max-w-sm" />
+              </div>
+            </div>
+          </Card>
+        </section>
 
         <NextStepRail currentPath="/review" />
 
@@ -122,21 +160,8 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
             re-announces only on region-change, not on same-region prop update). */}
         {crisisLevel ? <V18CrisisBanner key={crisisLevel} level={crisisLevel} /> : null}
 
-        {/* CONFIRM FLASH after submit */}
-        {justSubmitted && !crisisLevel ? (
-          <div
-            role="status"
-            className="wow-rise rounded-card-lg border border-[var(--b-acc)] p-4"
-            style={{
-              background: 'linear-gradient(135deg, var(--acc-dim) 0%, var(--bg-2) 80%)',
-            }}
-          >
-            <p className="t-eyebrow text-[var(--t-3)]">Enregistrée</p>
-            <p className="t-h3 mt-1 text-[var(--t-1)]">
-              Ta revue est dans le miroir. Reviens dimanche prochain.
-            </p>
-          </div>
-        ) : null}
+        {/* Tour 11 finding 3 — living submit echo (replaces the frozen paragraph). */}
+        {submitEcho ? <SubmitEchoCard echo={submitEcho} /> : null}
 
         {/* RECENT REVIEWS TIMELINE */}
         <section className="flex flex-col gap-4">
@@ -160,49 +185,50 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
             >
               {recent.map((r) => (
                 <li key={r.id} className="h-full">
-                  <HoverLift className="block h-full">
-                    <Link
-                      href={`/review/${r.id}`}
-                      aria-labelledby={`rev-${r.id}-title`}
-                      className="rounded-card block h-full border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
-                    >
-                      <header className="flex items-baseline justify-between gap-3">
-                        <p className="t-eyebrow text-[var(--t-3)]" id={`rev-${r.id}-title`}>
-                          Semaine du <FormattedRange weekStart={r.weekStart} weekEnd={r.weekEnd} />
-                        </p>
-                        <p className="t-cap font-mono text-[var(--t-3)]">
-                          {fmtSubmittedAt.format(new Date(r.submittedAt))}
-                        </p>
-                      </header>
-                      <p className="t-body mt-2 line-clamp-2 text-[var(--t-2)]">
-                        <strong className="text-[var(--t-1)]">Leçon :</strong> {r.lessonLearned}
+                  <RecentRowCard
+                    href={`/review/${r.id}`}
+                    ariaLabel={`Revue de la semaine du ${FMT_WEEK_RANGE_DAY.format(
+                      isoToUtcDate(r.weekStart),
+                    )} au ${FMT_WEEK_RANGE_DAY.format(isoToUtcDate(r.weekEnd))}`}
+                    accentBar
+                    className="h-full"
+                  >
+                    <header className="flex items-baseline justify-between gap-3">
+                      <p className="t-eyebrow text-[var(--t-3)]">
+                        Semaine du <FormattedRange weekStart={r.weekStart} weekEnd={r.weekEnd} />
                       </p>
-                      <p className="t-cap mt-1.5 line-clamp-1 text-[var(--t-3)]">
-                        <span className="font-semibold">Focus suivant :</span> {r.nextWeekFocus}
+                      <p className="t-cap font-mono text-[var(--t-3)]">
+                        {fmtSubmittedAt.format(new Date(r.submittedAt))}
                       </p>
-                    </Link>
-                  </HoverLift>
+                    </header>
+                    <p className="t-body mt-2 line-clamp-2 text-[var(--t-2)]">
+                      <strong className="text-[var(--t-1)]">Leçon :</strong> {r.lessonLearned}
+                    </p>
+                    <p className="t-cap mt-1.5 line-clamp-1 text-[var(--t-3)]">
+                      <span className="font-semibold">Focus suivant :</span> {r.nextWeekFocus}
+                    </p>
+                  </RecentRowCard>
                 </li>
               ))}
             </ul>
           )}
         </section>
-      </main>
-    </V18ThemeScope>
+      </div>
+    </main>
   );
 }
 
+function isoToUtcDate(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
 function FormattedRange({ weekStart, weekEnd }: { weekStart: string; weekEnd: string }) {
-  const fmt = (iso: string) => {
-    const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
-    const dt = new Date(Date.UTC(y, m - 1, d));
-    return FMT_WEEK_RANGE_DAY.format(dt);
-  };
   return (
     <>
-      <time dateTime={weekStart}>{fmt(weekStart)}</time>
+      <time dateTime={weekStart}>{FMT_WEEK_RANGE_DAY.format(isoToUtcDate(weekStart))}</time>
       <span aria-hidden="true"> → </span>
-      <time dateTime={weekEnd}>{fmt(weekEnd)}</time>
+      <time dateTime={weekEnd}>{FMT_WEEK_RANGE_DAY.format(isoToUtcDate(weekEnd))}</time>
     </>
   );
 }

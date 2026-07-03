@@ -76,6 +76,7 @@ function makeTrade(partial: Partial<TradeFixture> = {}): TradeFixture {
     exitedAt: null,
     exitPrice: null,
     outcome: null,
+    exitReason: null,
     realizedR: null,
     realizedRSource: null,
     emotionDuring: [],

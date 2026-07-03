@@ -6,6 +6,8 @@ import { auth } from '@/auth';
 import { MemberTabs, MEMBER_TAB_LABEL, type MemberTabKey } from '@/components/admin/member-tabs';
 import { MemberAdminNotesPanel } from '@/components/admin/member-admin-notes-panel';
 import { MemberDouglasPanel } from '@/components/admin/member-douglas-panel';
+import { MemberCorrectionsFollowupPanel } from '@/components/admin/member-corrections-followup-panel';
+import { listAnnotationObjectivesForMember } from '@/lib/coaching/micro-objective';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
 import { MemberCheckinsPanel } from '@/components/admin/member-checkins-panel';
 import { listMemberCheckinsAsAdmin } from '@/lib/checkin/service';
@@ -216,11 +218,16 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // check-ins carry no market content (mindset + declarative booleans only).
   const checkins = tab === 'checkins' ? await listMemberCheckinsAsAdmin(memberId) : null;
 
+  // C3 (tour 10) — the Mark Douglas tab also hosts « Suivi des corrections » : the
+  // micro-objectives seeded by axis-tagged corrections (`sourceKind='annotation'`),
+  // so the admin sees whether their corrections are kept. Batched into the same
+  // parallel read (one extra indexed findMany, no added wall-clock).
   const douglasData =
     tab === 'mark-douglas'
       ? await Promise.all([
           listMemberDeliveries(memberId, { take: 30 }),
           aggregateMemberDeliveryStats(memberId),
+          listAnnotationObjectivesForMember(memberId),
         ])
       : null;
 
@@ -487,7 +494,18 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
         </div>
       ) : null}
       {tab === 'mark-douglas' && douglasData ? (
-        <MemberDouglasPanel deliveries={douglasData[0]} stats={douglasData[1]} />
+        <div className="flex flex-col gap-8">
+          {/* C3 (tour 10) — « Suivi des corrections » : is the admin's coaching
+              landing? Sits above the delivery timeline (both are Mark Douglas
+              engagement surfaces). */}
+          <section className="flex flex-col gap-3">
+            <MemberCorrectionsFollowupPanel objectives={douglasData[2]} />
+          </section>
+          <section className="flex flex-col gap-3">
+            <h2 className="t-h3 text-foreground">Fiches Mark Douglas</h2>
+            <MemberDouglasPanel deliveries={douglasData[0]} stats={douglasData[1]} />
+          </section>
+        </div>
       ) : null}
       {tab === 'weekly-reports' && weeklyReports !== null ? (
         <MemberWeeklyReportsPanel reports={weeklyReports} />

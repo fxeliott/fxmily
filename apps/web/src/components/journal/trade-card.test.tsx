@@ -47,6 +47,7 @@ function openTrade(): SerializedTrade {
     exitedAt: null,
     exitPrice: null,
     outcome: null,
+    exitReason: null,
     realizedR: null,
     realizedRSource: null,
     emotionDuring: [],
@@ -82,5 +83,29 @@ describe('TradeCard — entry instant in the member timezone (F2)', () => {
     const { container } = render(<TradeCard trade={openTrade()} timezone="America/New_York" />);
     const link = container.querySelector('a[aria-label]');
     expect(link?.getAttribute('aria-label')).toContain('08:30');
+  });
+});
+
+/**
+ * Tour 10 — open verification discrepancy badge. Same contract as the unseen
+ * annotations pill: hidden at 0 (default), singular/plural label, and the
+ * count surfaces in the accessible name so screen readers hear it too.
+ */
+describe('TradeCard — open discrepancy badge (tour 10)', () => {
+  it('renders nothing when the count is 0 or the prop is omitted', () => {
+    const { container } = render(<TradeCard trade={openTrade()} />);
+    expect(container.textContent).not.toContain('à regarder');
+  });
+
+  it('renders the singular badge and enriches the aria-label', () => {
+    const { container } = render(<TradeCard trade={openTrade()} openDiscrepancyCount={1} />);
+    expect(container.textContent).toContain('Écart à regarder');
+    const link = container.querySelector('a[aria-label]');
+    expect(link?.getAttribute('aria-label')).toContain('1 écart de vérification à regarder');
+  });
+
+  it('renders the plural badge with the count', () => {
+    const { container } = render(<TradeCard trade={openTrade()} openDiscrepancyCount={3} />);
+    expect(container.textContent).toContain('3 écarts à regarder');
   });
 });

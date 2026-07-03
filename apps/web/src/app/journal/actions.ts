@@ -280,6 +280,9 @@ export async function closeTradeAction(
     exitedAt: memberWallClock(formData.get('exitedAt'), timezone),
     exitPrice: formData.get('exitPrice'),
     outcome: formData.get('outcome'),
+    // Tour 10 — factual exit nature. OPTIONAL: absent/'' → schema maps to null
+    // (not answered — no required-field gate, CANON). Mirror of processComplete.
+    exitReason: formData.get('exitReason') ?? undefined,
     emotionDuring: formData
       .getAll('emotionDuring')
       .filter((v): v is string => typeof v === 'string'),
@@ -328,6 +331,7 @@ export async function closeTradeAction(
       exitedAt: data.exitedAt,
       exitPrice: data.exitPrice,
       outcome: data.outcome,
+      exitReason: data.exitReason,
       emotionDuring: data.emotionDuring,
       emotionAfter: data.emotionAfter,
       processComplete: data.processComplete,

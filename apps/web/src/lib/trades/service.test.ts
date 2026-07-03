@@ -50,6 +50,8 @@ function closeInput(
     exitedAt: new Date('2026-06-05T11:00:00.000Z'),
     exitPrice: 1.105,
     outcome: 'win',
+    // Tour 10 — factual exit nature (default: not answered).
+    exitReason: null,
     emotionDuring: ['calm'],
     emotionAfter: ['confident'],
     processComplete,

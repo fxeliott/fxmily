@@ -60,5 +60,8 @@ export async function closeMicroObjectiveAction(
   // must re-render so the closed objective leaves the "open" slot immediately.
   revalidatePath('/objectifs');
   revalidatePath('/dashboard');
+  // Tour 10 — the pinned pill lives in the ROOT layout (every page): closing the
+  // loop must clear it everywhere, not only on the two pages above.
+  revalidatePath('/', 'layout');
   return { ok: true };
 }

@@ -79,6 +79,24 @@ enum TradeOutcome {
   break_even
 }
 
+/// Tour 10 — factual nature of the exit, answered at CLOSE. Captures HOW the
+/// position ended (the ACT, never a judgement — SPEC §2): crossed with
+/// `emotionDuring` it surfaces fear-driven early exits, the single biggest
+/// expectancy killer the method's rules (S26) guard against. OPTIONAL —
+/// tri-state pattern of `processComplete` (null = not answered, no gate).
+enum TradeExitReason {
+  /// Take-profit reached as planned.
+  tp_hit
+  /// Initial stop-loss was hit.
+  sl_hit
+  /// Exited at break-even (SL moved to BE per the RR-1 rule, then hit).
+  be_exit
+  /// Manual exit BEFORE the target, outside the plan's exit rules.
+  manual_before_target
+  /// Runner closed at the 20h candle (method's time-exit rule).
+  time_exit
+}
+
 /// Provenance of `realizedR` (J2).
 ///   computed  : derived from entry/exit/stopLoss with the canonical
 ///               (exit-entry)/(entry-stopLoss) formula. Reliable for analytics.
@@ -733,6 +751,12 @@ model Trade {
   /// Plain `text[]` (no DB allowlist) for migration-free slug evolution; trades
   /// closed before this field shipped carry `{}` (migration DEFAULT).
   emotionDuring   String[]         @map("emotion_during")
+
+  /// Tour 10 — factual nature of the exit (see `TradeExitReason`). OPTIONAL,
+  /// answered at close next to `outcome`. Pure additive nullable enum: legacy
+  /// and unanswered rows stay NULL (null-skip everywhere, CANON — a new
+  /// required close field would break the shared-wizard e2e).
+  exitReason      TradeExitReason? @map("exit_reason")
 
   // V1.8 REFLECT — post-outcome bias tags (CFA LESSOR + Steenbarger).
   // Distinct from `emotionAfter` (raw affect): `tags` is a structured

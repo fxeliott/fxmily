@@ -2,13 +2,22 @@ import { notFound, redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { TradeCloseEchoCard } from '@/components/journal/trade-close-echo';
 import { TradeDetailView } from '@/components/journal/trade-detail-view';
 import {
   listAnnotationsForTradeAsMember,
   markAnnotationsSeenForTrade,
 } from '@/lib/annotations/member-service';
 import { logAudit } from '@/lib/auth/audit';
-import { getTradeById } from '@/lib/trades/service';
+import {
+  buildTradeCloseEcho,
+  echoProfileDims,
+  ECHO_WINDOW_HOURS,
+  type TradeCloseEcho,
+} from '@/lib/coaching/trade-echo';
+import { getProfileForUser } from '@/lib/onboarding-interview/service';
+import { getTradeById, type SerializedTrade } from '@/lib/trades/service';
+import { countOpenDiscrepanciesForTrade } from '@/lib/verification/service';
 
 import { DeleteTradeButton } from './delete-button';
 
@@ -48,6 +57,13 @@ export default async function TradeDetailPage({ params }: DetailPageProps) {
 
   const annotations = await listAnnotationsForTradeAsMember(session.user.id, id);
 
+  // Tour 10 — living close echo: an immediate, member-specific reading of what
+  // THIS close says about their process (deterministic, enum-derived — see
+  // lib/coaching/trade-echo.ts). Built ONLY here (member page): the admin trade
+  // view never passes an echoSlot. The freshness gate runs BEFORE any DB read
+  // so archived trades pay zero extra queries.
+  const echo = await buildEchoForTrade(session.user.id, trade);
+
   // S13 — ambient depth backplate for the MEMBER trade detail only. Mounted at
   // the page level (never inside the shared <TradeDetailView>, which the admin
   // route also renders) so the admin variant stays flat. The opaque host masks
@@ -65,8 +81,45 @@ export default async function TradeDetailPage({ params }: DetailPageProps) {
         annotations={annotations}
         currentUserId={session.user.id}
         timezone={timezone}
+        echoSlot={echo ? <TradeCloseEchoCard echo={echo} /> : null}
         footerSlot={<DeleteTradeButton tradeId={trade.id} />}
       />
     </div>
   );
+}
+
+/**
+ * Tour 10 — assemble the close-echo input. Freshness short-circuit FIRST
+ * (open trade / close older than the window → null, no profile/discrepancy
+ * read), then ONE parallel batch for the two inputs the echo personalises on.
+ */
+async function buildEchoForTrade(
+  userId: string,
+  trade: SerializedTrade,
+): Promise<TradeCloseEcho | null> {
+  if (!trade.closedAt) return null;
+  const ageMs = Date.now() - Date.parse(trade.closedAt);
+  if (Number.isNaN(ageMs) || ageMs < 0 || ageMs > ECHO_WINDOW_HOURS * 60 * 60 * 1000) return null;
+
+  const [profile, openDiscrepancyCount] = await Promise.all([
+    getProfileForUser(userId),
+    countOpenDiscrepanciesForTrade(userId, trade.id),
+  ]);
+  const dims = echoProfileDims(profile);
+
+  return buildTradeCloseEcho({
+    closedAt: trade.closedAt,
+    outcome: trade.outcome,
+    exitReason: trade.exitReason,
+    planRespected: trade.planRespected,
+    processComplete: trade.processComplete,
+    slPerRule: trade.slPerRule,
+    movedToBe: trade.movedToBe,
+    partialAtTarget: trade.partialAtTarget,
+    emotionDuring: trade.emotionDuring,
+    openDiscrepancyCount,
+    learningStage: dims.learningStage,
+    coachingRegister: dims.coachingRegister,
+    now: new Date(),
+  });
 }

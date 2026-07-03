@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { GeistSans } from 'geist/font/sans';
+import { Suspense } from 'react';
 import { auth, signOut } from '@/auth';
+import { MicroObjectivePillSlot } from '@/components/coaching/micro-objective-pill';
 import { CookieBanner } from '@/components/legal/cookie-banner';
 import { LegalFooter } from '@/components/legal/legal-footer';
 import { MotionProvider } from '@/components/motion-provider';
@@ -120,7 +122,21 @@ export default async function RootLayout({
           <div className="app-ambient" aria-hidden="true" />
           <TooltipProvider>
             <MotionProvider>
-              <AppShell session={sessionLite} signOutAction={handleSignOut}>
+              <AppShell
+                session={sessionLite}
+                signOutAction={handleSignOut}
+                // Tour 10 — micro-objectif ouvert épinglé dans le chrome (membres
+                // uniquement : l'admin n'a pas de boucle de coaching). Suspense
+                // fallback null : le shell flush sans attendre la requête ; la
+                // requête est React.cache()-ée avec /dashboard et /objectifs.
+                pill={
+                  session?.user?.id && session.user.role !== 'admin' ? (
+                    <Suspense fallback={null}>
+                      <MicroObjectivePillSlot userId={session.user.id} />
+                    </Suspense>
+                  ) : null
+                }
+              >
                 <div id="main-content" tabIndex={-1} className="flex min-h-full flex-1 flex-col">
                   {/* S15 #23 — SPA focus reset + sr-only route announcement. Mounted
                     here (persists across navigations) so usePathname changes are

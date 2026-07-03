@@ -9,8 +9,9 @@ import { Alert } from '@/components/alert';
 import { EmotionPicker } from '@/components/journal/emotion-picker';
 import { TradeTagsPicker } from '@/components/journal/trade-tags-picker';
 import { Btn, btnVariants } from '@/components/ui/btn';
-import type { TradeTagSlug } from '@/lib/schemas/trade';
+import type { TradeExitReasonSlug, TradeTagSlug } from '@/lib/schemas/trade';
 import { isTradingViewUrl } from '@/lib/schemas/tradingview-url';
+import { EXIT_REASON_LABELS, EXIT_REASON_OPTIONS } from '@/lib/trading/exit-reasons';
 import { formatDateTimeLocalInput } from '@/lib/timezones';
 import { cn } from '@/lib/utils';
 
@@ -73,6 +74,9 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
   // notes and the four self-evaluation radio groups).
   const [exitPrice, setExitPrice] = useState<string>('');
   const [outcome, setOutcome] = useState<'' | 'win' | 'loss' | 'break_even'>('');
+  // Tour 10 — factual exit nature. OPTIONAL (maps to null server-side when
+  // left unanswered), controlled like every radio group here (P2).
+  const [exitReason, setExitReason] = useState<'' | TradeExitReasonSlug>('');
   const [notes, setNotes] = useState<string>('');
   const [processComplete, setProcessComplete] = useState<'' | 'true' | 'false'>('');
   const [slPerRule, setSlPerRule] = useState<'' | 'true' | 'false'>('');
@@ -218,6 +222,33 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
             {state.fieldErrors.outcome}
           </p>
         ) : null}
+      </fieldset>
+
+      {/* Tour 10 — factual exit nature. OPTIONAL (no submit gate, CANON) :
+          crossed with `emotionDuring` it surfaces fear-driven early exits.
+          Every option keeps the SAME neutral tone (SPEC §2 / §31.2) : we
+          capture HOW the position ended, none of the answers is a fault. */}
+      <fieldset className="flex flex-col gap-2">
+        <legend className="t-eyebrow-lg mb-1 text-[var(--t-3)]">
+          Comment s&apos;est terminée la position ?{' '}
+          <span className="font-normal text-[var(--t-4)] normal-case">(optionnel)</span>
+        </legend>
+        <div
+          role="radiogroup"
+          aria-label="Nature de la sortie"
+          className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+        >
+          {EXIT_REASON_OPTIONS.map((reason) => (
+            <ExitReasonCard
+              key={reason}
+              value={reason}
+              label={EXIT_REASON_LABELS[reason]}
+              disabled={pending}
+              checked={exitReason === reason}
+              onChange={() => setExitReason(reason)}
+            />
+          ))}
+        </div>
       </fieldset>
 
       {/* Émotion pendant le trade (master prompt §22 — recalled at close,
@@ -593,6 +624,55 @@ function ProcessCompleteCard({
         ref={syncDefaultChecked(checked)}
         type="radio"
         name="processComplete"
+        value={value}
+        disabled={disabled}
+        checked={checked}
+        onChange={onChange}
+        className="peer sr-only"
+      />
+      <span aria-hidden className="absolute top-2 right-2 hidden peer-checked:inline">
+        <Check className="h-3 w-3" strokeWidth={2.5} />
+      </span>
+      <span>{label}</span>
+    </label>
+  );
+}
+
+/**
+ * Tour 10 — radio card for the factual exit nature. Five values, ONE shared
+ * neutral tone (accent) on purpose : unlike outcome (win/loss), no exit nature
+ * is "good" or "bad" here — the member reports an act, the system never grades
+ * it at capture time (SPEC §2 / §31.2). Not `required` : submit without
+ * answering maps to `null` server-side.
+ */
+function ExitReasonCard({
+  value,
+  label,
+  disabled,
+  checked,
+  onChange,
+}: {
+  value: TradeExitReasonSlug;
+  label: string;
+  disabled?: boolean;
+  /** P2 — controlled radio: survives the React 19 post-action form reset. */
+  checked: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      className={cn(
+        'rounded-card relative flex min-h-12 cursor-pointer items-center justify-center gap-1.5 border bg-[var(--bg-1)] px-3 py-3 text-center text-[12px] font-semibold tracking-[0.06em] text-[var(--t-3)] uppercase transition-all',
+        'border-[var(--b-default)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
+        'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--acc)]',
+        'has-[:checked]:border-[var(--b-acc)] has-[:checked]:bg-[var(--acc-dim)] has-[:checked]:text-[var(--t-1)]',
+        disabled && 'cursor-not-allowed opacity-60',
+      )}
+    >
+      <input
+        ref={syncDefaultChecked(checked)}
+        type="radio"
+        name="exitReason"
         value={value}
         disabled={disabled}
         checked={checked}

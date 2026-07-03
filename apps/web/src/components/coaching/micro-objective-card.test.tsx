@@ -57,4 +57,31 @@ describe('MicroObjectiveCard — E3 boucle ouverte + suivi (S5 §32)', () => {
     const missed = screen.getByRole('button', { name: /pas encore/i });
     expect(missed.className).not.toMatch(/danger|bad|--bad/i);
   });
+
+  it('C3 — full variant quotes the resolved admin correction excerpt', () => {
+    render(
+      <MicroObjectiveCard
+        objective={view({ sourceKind: 'annotation', sourceRef: 'ann1' })}
+        annotationExcerpt="Tu as encore bougé ton stop en cours de trade."
+      />,
+    );
+    expect(screen.getByText(/Ce que ton coach a relevé/)).toBeInTheDocument();
+    expect(screen.getByText(/bougé ton stop/)).toBeInTheDocument();
+  });
+
+  it('C3 — compact variant stays terse (no correction excerpt on the hub)', () => {
+    render(
+      <MicroObjectiveCard
+        objective={view({ sourceKind: 'annotation', sourceRef: 'ann1' })}
+        annotationExcerpt="Tu as encore bougé ton stop en cours de trade."
+        variant="compact"
+      />,
+    );
+    expect(screen.queryByText(/Ce que ton coach a relevé/)).not.toBeInTheDocument();
+  });
+
+  it('C3 — no excerpt block when the loop is not annotation-sourced', () => {
+    render(<MicroObjectiveCard objective={view()} annotationExcerpt={null} />);
+    expect(screen.queryByText(/Ce que ton coach a relevé/)).not.toBeInTheDocument();
+  });
 });

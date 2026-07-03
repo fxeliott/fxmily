@@ -33,6 +33,11 @@ vi.mock('@/lib/db', () => ({
     dailyCheckin: { findMany: vi.fn(async () => []) },
     markDouglasDelivery: { findMany: vi.fn(async () => []) },
     tradeAnnotation: { findMany: vi.fn(async () => []) },
+    // C4 (tour 10) — the loader now reads the member's onboarding profile for the
+    // coaching register / learning stage. Default `null` (no profile) → the tone
+    // reference degrades to `{ coachingRegister: null, learningStage: null }`,
+    // keeping the S3-injection tests below byte-identical.
+    memberProfile: { findUnique: vi.fn(async () => null) },
   },
 }));
 

@@ -19,7 +19,11 @@ import type { CoachingReportContext } from '@/lib/coaching/engine';
 import type { SerializedTrade } from '@/lib/trades/service';
 
 import { buildWeeklySnapshot } from './builder';
-import { buildWeeklyReportUserPrompt, WEEKLY_REPORT_SYSTEM_PROMPT } from './prompt';
+import {
+  buildWeeklyReportUserPrompt,
+  type MemberToneRef,
+  WEEKLY_REPORT_SYSTEM_PROMPT,
+} from './prompt';
 import type { BuilderInput } from './types';
 
 const WEEK_START = new Date('2026-05-04T00:00:00Z'); // Monday
@@ -75,6 +79,7 @@ function makeTrade(partial: Partial<TradeFixture> = {}): TradeFixture {
     exitedAt: null,
     exitPrice: null,
     outcome: null,
+    exitReason: null,
     realizedR: null,
     realizedRSource: null,
     emotionDuring: [],
@@ -448,5 +453,74 @@ describe('buildWeeklyReportUserPrompt — coaching psychologique reaches the pro
     expect(block).not.toMatch(
       /\b(setup|achat|vente|buy|sell|long|short|pip|lots?|support|résistance|bougie|take[- ]?profit|stop[- ]?loss)\b/i,
     );
+  });
+});
+
+describe('C4 (tour 10) — coaching register / learning stage tone consigne reaches the prompt', () => {
+  const CONSIGNE_PREFIX = "Registre de coaching adapté à ce membre (issu de son profil d'entrée) :";
+
+  it('injects the DIRECT register consigne when the member profile carries one', () => {
+    const tone: MemberToneRef = { coachingRegister: 'direct', learningStage: null };
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(emptyInput()), tone);
+    expect(prompt).toContain(CONSIGNE_PREFIX);
+    expect(prompt).toContain('rédige le rapport sur un ton direct et concret');
+    // The register modulates the manner only, never the posture / market rule.
+    expect(prompt).toContain(
+      'Ce registre ne change QUE la manière de dire, jamais le fond, la posture ni les limites',
+    );
+  });
+
+  it('injects the PEDAGOGIQUE and SOCRATIQUE register variants', () => {
+    const pedago = buildWeeklyReportUserPrompt(buildWeeklySnapshot(emptyInput()), {
+      coachingRegister: 'pedagogique',
+      learningStage: null,
+    });
+    expect(pedago).toContain('rédige le rapport sur un ton pédagogique');
+
+    const socratique = buildWeeklyReportUserPrompt(buildWeeklySnapshot(emptyInput()), {
+      coachingRegister: 'socratique',
+      learningStage: null,
+    });
+    expect(socratique).toContain('formulant les recommandations comme des questions ouvertes');
+  });
+
+  it('appends the learning-stage nuance only when a register is also present', () => {
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(emptyInput()), {
+      coachingRegister: 'direct',
+      learningStage: 'mechanical',
+    });
+    expect(prompt).toContain("rappelle calmement l'importance du process et des règles");
+  });
+
+  it('the tone consigne uses ponctuation simple only (no em/en dash)', () => {
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(emptyInput()), {
+      coachingRegister: 'socratique',
+      learningStage: 'intuitive',
+    });
+    const consigneLine = prompt.split('\n').find((l) => l.startsWith(CONSIGNE_PREFIX));
+    expect(consigneLine).toBeDefined();
+    expect(consigneLine).not.toMatch(/[—–]/);
+  });
+
+  it('adds NO consigne (neutral fallback) when the register is null, even if stage is set', () => {
+    // A stage without a register must not surface a consigne — the register is
+    // the gate (mirror monthly-debrief buildToneConsigne).
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(emptyInput()), {
+      coachingRegister: null,
+      learningStage: 'subjective',
+    });
+    expect(prompt).not.toContain(CONSIGNE_PREFIX);
+  });
+
+  it('is byte-for-byte unchanged when memberTone is absent vs { null, null } (zero regression)', () => {
+    const snapshot = buildWeeklySnapshot(emptyInput());
+    const withoutArg = buildWeeklyReportUserPrompt(snapshot);
+    const withNulls = buildWeeklyReportUserPrompt(snapshot, {
+      coachingRegister: null,
+      learningStage: null,
+    });
+    expect(withoutArg).toBe(withNulls);
+    // And neither carries the consigne prefix.
+    expect(withoutArg).not.toContain(CONSIGNE_PREFIX);
   });
 });

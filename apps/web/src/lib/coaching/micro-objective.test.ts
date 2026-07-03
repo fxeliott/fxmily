@@ -10,6 +10,7 @@ const m = vi.hoisted(() => ({
   updateMany: vi.fn(),
   findMany: vi.fn(),
   groupBy: vi.fn(),
+  annotationFindFirst: vi.fn(),
   getMentalMap: vi.fn(),
 }));
 
@@ -24,16 +25,22 @@ vi.mock('@/lib/db', () => ({
       findMany: m.findMany,
       groupBy: m.groupBy,
     },
+    tradeAnnotation: {
+      findFirst: m.annotationFindFirst,
+    },
   },
 }));
 vi.mock('./service', () => ({ getMentalMap: m.getMentalMap }));
 
 import {
+  buildAnnotationExcerpt,
   closeMicroObjective,
   ensureMicroObjectiveForMember,
   ensureMicroObjectiveFromAnnotation,
+  getAnnotationExcerptForObjective,
   getMicroObjectiveProgress,
   getOpenMicroObjective,
+  listAnnotationObjectivesForMember,
   listRecentMicroObjectives,
   MicroObjectiveNotFoundError,
   selectMicroObjectiveSeed,
@@ -353,5 +360,89 @@ describe('getMicroObjectiveProgress', () => {
     await getMicroObjectiveProgress('member1', { start, end });
     const arg = m.groupBy.mock.calls[0]?.[0];
     expect(arg?.where).toMatchObject({ memberId: 'member1', createdAt: { gte: start, lte: end } });
+  });
+});
+
+describe('buildAnnotationExcerpt (pure) — C3', () => {
+  it('returns null on an empty / whitespace-only comment (no ghost excerpt)', () => {
+    expect(buildAnnotationExcerpt('')).toBeNull();
+    expect(buildAnnotationExcerpt('   \n  \t ')).toBeNull();
+  });
+
+  it('flattens whitespace/newlines and passes a short comment through unchanged', () => {
+    expect(buildAnnotationExcerpt('Bien joué  sur\nla  gestion du risque.')).toBe(
+      'Bien joué sur la gestion du risque.',
+    );
+  });
+
+  it('truncates a long comment on a word boundary with an ellipsis', () => {
+    const long = 'mot '.repeat(80).trim(); // 320 chars, spaces every 4
+    const out = buildAnnotationExcerpt(long)!;
+    expect(out.length).toBeLessThanOrEqual(181); // 180 + ellipsis
+    expect(out.endsWith('…')).toBe(true);
+    expect(out).not.toMatch(/ …$/); // trailing space trimmed before the ellipsis
+  });
+
+  it('hard-cuts a single very long word (no space before the limit)', () => {
+    const out = buildAnnotationExcerpt('a'.repeat(300))!;
+    expect(out).toBe(`${'a'.repeat(180)}…`);
+  });
+});
+
+describe('getAnnotationExcerptForObjective — C3 (BOLA + fallback)', () => {
+  it('returns null without a query when the loop is not annotation-sourced', async () => {
+    const out = await getAnnotationExcerptForObjective('member1', {
+      sourceKind: 'alert',
+      sourceRef: 'a1',
+    });
+    expect(out).toBeNull();
+    expect(m.annotationFindFirst).not.toHaveBeenCalled();
+  });
+
+  it('scopes the read by trade.userId (BOLA) and returns the trimmed excerpt', async () => {
+    m.annotationFindFirst.mockResolvedValue({ comment: 'Tu as bougé ton stop en cours de trade.' });
+    const out = await getAnnotationExcerptForObjective('member1', {
+      sourceKind: 'annotation',
+      sourceRef: 'anno-1',
+    });
+    expect(out).toBe('Tu as bougé ton stop en cours de trade.');
+    expect(m.annotationFindFirst).toHaveBeenCalledWith({
+      where: { id: 'anno-1', trade: { is: { userId: 'member1' } } },
+      select: { comment: true },
+    });
+  });
+
+  it('falls back to null when the annotation no longer exists / is another member’s', async () => {
+    m.annotationFindFirst.mockResolvedValue(null);
+    const out = await getAnnotationExcerptForObjective('member1', {
+      sourceKind: 'annotation',
+      sourceRef: 'anno-x',
+    });
+    expect(out).toBeNull();
+  });
+});
+
+describe('listAnnotationObjectivesForMember — C3 (admin follow-up)', () => {
+  it('queries annotation-sourced objectives only, newest-first, bounded, ciblé select', async () => {
+    m.findMany.mockResolvedValue([
+      {
+        id: 'o-anno',
+        axis: 'discipline',
+        title: 'T',
+        intention: 'I',
+        status: 'missed',
+        createdAt: new Date('2026-06-02T00:00:00Z'),
+        closedAt: new Date('2026-06-05T00:00:00Z'),
+      },
+    ]);
+    const rows = await listAnnotationObjectivesForMember('member1');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: 'o-anno', status: 'missed' });
+    const arg = m.findMany.mock.calls[0]?.[0];
+    expect(arg?.where).toEqual({ memberId: 'member1', sourceKind: 'annotation' });
+    expect(arg?.orderBy).toEqual({ createdAt: 'desc' });
+    expect(arg?.take).toBe(20);
+    // Single ciblé select — no sourceRef/sourceKind pulled (anti over-fetch, N+1-safe).
+    expect(arg?.select).toMatchObject({ id: true, title: true, status: true });
   });
 });

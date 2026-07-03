@@ -8,6 +8,7 @@ import {
   CalendarRange,
   Check,
   ClipboardList,
+  HeartHandshake,
   MessageSquareText,
   Minus,
   Moon,
@@ -67,6 +68,7 @@ const KIND_ICON: Record<GuidanceKind, LucideIcon> = {
   douglas: BookOpen,
   tracking: ClipboardList,
   'correction-echo': MessageSquareText,
+  'crisis-followup': HeartHandshake,
 };
 
 type Trend = 'up' | 'flat' | 'down';

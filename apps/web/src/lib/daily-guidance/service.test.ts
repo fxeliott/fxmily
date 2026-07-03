@@ -6,6 +6,7 @@ import { listScheduledMeetingsOn } from '@/lib/meeting/service';
 import { getMindsetCheck } from '@/lib/mindset/service';
 import { getDueTrackingInstruments } from '@/lib/tracking/service';
 import { getCorrectionThemes } from '@/lib/annotations/correction-themes';
+import { getRecentCrisisSignal } from '@/lib/safety/crisis-followup';
 
 import { getDailyGuidance } from './service';
 
@@ -29,6 +30,7 @@ vi.mock('@/lib/mindset/service', () => ({ getMindsetCheck: vi.fn() }));
 vi.mock('@/lib/meeting/service', () => ({ listScheduledMeetingsOn: vi.fn() }));
 vi.mock('@/lib/tracking/service', () => ({ getDueTrackingInstruments: vi.fn() }));
 vi.mock('@/lib/annotations/correction-themes', () => ({ getCorrectionThemes: vi.fn() }));
+vi.mock('@/lib/safety/crisis-followup', () => ({ getRecentCrisisSignal: vi.fn() }));
 
 const USER = 'user_1';
 const TZ = 'Europe/Paris';
@@ -65,6 +67,7 @@ beforeEach(() => {
   vi.mocked(listScheduledMeetingsOn).mockResolvedValue([]);
   vi.mocked(getDueTrackingInstruments).mockResolvedValue([]);
   vi.mocked(getCorrectionThemes).mockResolvedValue([]);
+  vi.mocked(getRecentCrisisSignal).mockResolvedValue(null);
 });
 
 /** Minimal CorrectionTheme list — the service reads axis + count + lastSource. */
@@ -385,5 +388,50 @@ describe('getDailyGuidance — J-AI corrections echo', () => {
     vi.mocked(getCorrectionThemes).mockResolvedValue(themes({ axis: 'execution', count: 2 }));
     const g = await getDailyGuidance(USER, TZ, MON_MORNING);
     expect(g.actions.find((a) => a.kind === 'correction-echo')?.timing).toBeUndefined();
+  });
+});
+
+describe('getDailyGuidance — crisis follow-up (item 20)', () => {
+  it('no recent signal → no crisis-followup action (the default day)', async () => {
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    expect(g.actions.some((a) => a.kind === 'crisis-followup')).toBe(false);
+  });
+
+  it('a HIGH signal surfaces FIRST as a calm info card restating the 3114', async () => {
+    vi.mocked(getRecentCrisisSignal).mockResolvedValue({
+      level: 'high',
+      detectedAt: new Date('2026-06-07T18:00:00Z'),
+    });
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    expect(g.actions[0]).toMatchObject({
+      key: 'crisis-followup',
+      kind: 'crisis-followup',
+      state: 'info',
+      emphasis: 'primary',
+      href: '/checkin',
+    });
+    expect(g.actions[0]?.detail).toContain('3114');
+  });
+
+  it('a MEDIUM signal uses the softer copy (no emergency number)', async () => {
+    vi.mocked(getRecentCrisisSignal).mockResolvedValue({
+      level: 'medium',
+      detectedAt: new Date('2026-06-07T18:00:00Z'),
+    });
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    const followup = g.actions.find((a) => a.kind === 'crisis-followup');
+    expect(followup?.state).toBe('info');
+    expect(followup?.detail).not.toContain('3114');
+  });
+
+  it('the follow-up never steals the timing highlight (the check-in stays "current")', async () => {
+    vi.mocked(getRecentCrisisSignal).mockResolvedValue({
+      level: 'high',
+      detectedAt: new Date('2026-06-07T18:00:00Z'),
+    });
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    // `info` is never pending: the rail/highlight keeps guiding to the check-in.
+    expect(g.actions.find((a) => a.kind === 'crisis-followup')?.timing).toBeUndefined();
+    expect(g.actions.find((a) => a.key === 'checkin-morning')?.timing).toBe('current');
   });
 });

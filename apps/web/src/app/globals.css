@@ -768,31 +768,43 @@
 
 /* =============================================================
  * TYPOGRAPHY — 10 niveaux nommés
+ * -------------------------------------------------------------
+ * WHY @layer components (load-bearing): these classes bake defaults
+ * (colour, size, tracking). Unlayered CSS beats EVERY Tailwind layer
+ * regardless of specificity, so as long as this block lived outside
+ * the layers, any `text-[...]`/`tracking-*`/`font-*` utility a
+ * call-site stacked on top was silently DEAD — including semantic
+ * state colours (`t-cap text-[var(--bad)]` error lines rendered slate,
+ * proven at runtime 2026-07-03, ~100+ call-sites affected). Inside
+ * `components` (Tailwind v4 order: theme < base < components <
+ * utilities) the defaults still apply everywhere, but explicit
+ * utilities now win — which is what every call-site already wrote.
  * ============================================================= */
-.f-display {
-  font-family: var(--font-display);
-  letter-spacing: -0.02em;
-  font-feature-settings: 'ss01' 1;
-}
-.f-body {
-  font-family: var(--font-sans);
-}
-.f-mono,
-.tnum {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
-}
+@layer components {
+  .f-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    font-feature-settings: 'ss01' 1;
+  }
+  .f-body {
+    font-family: var(--font-sans);
+  }
+  .f-mono,
+  .tnum {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
 
-.t-display {
-  font-family: var(--font-display);
-  font-size: 68px;
-  line-height: 0.96;
-  letter-spacing: -0.04em;
-  font-weight: 800;
-  font-feature-settings: 'ss01' 1;
-}
-/* V1.9 TIER C B5 — fluid display variant for hero headlines that need to
+  .t-display {
+    font-family: var(--font-display);
+    font-size: 68px;
+    line-height: 0.96;
+    letter-spacing: -0.04em;
+    font-weight: 800;
+    font-feature-settings: 'ss01' 1;
+  }
+  /* V1.9 TIER C B5 — fluid display variant for hero headlines that need to
    scale on mobile (REFLECT module wizards landing). 36px on iPhone SE,
    ~7vw between, capped at 56px to stay below the static `t-display` 68px
    on desktop — typography rhythm preserved. Use this instead of inlining
@@ -801,113 +813,116 @@
    protect WCAG 1.4.10 Reflow at zoom 400% iPhone SE (`exécution`/`éclair`
    wrap inside long French words on 320 CSS px viewport instead of
    horizontal-scrolling). */
-.t-display-fluid {
-  font-family: var(--font-display);
-  font-size: clamp(36px, 7vw, 56px);
-  line-height: 0.96;
-  letter-spacing: -0.04em;
-  font-weight: 800;
-  font-feature-settings: 'ss01' 1;
-  overflow-wrap: anywhere;
-  hyphens: auto;
-}
-.t-h1 {
-  font-family: var(--font-display);
-  font-size: 32px;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
-  font-weight: 700;
-}
-.t-h2 {
-  font-family: var(--font-display);
-  font-size: 20px;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
-  font-weight: 600;
-}
-.t-h3 {
-  font-family: var(--font-display);
-  font-size: 15px;
-  line-height: 1.3;
-  letter-spacing: -0.005em;
-  font-weight: 600;
-}
-/* S19.2 — long-prose question heading (wizard prompts run 150-220 chars). t-h1
+  .t-display-fluid {
+    font-family: var(--font-display);
+    font-size: clamp(36px, 7vw, 56px);
+    line-height: 0.96;
+    letter-spacing: -0.04em;
+    font-weight: 800;
+    font-feature-settings: 'ss01' 1;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+  }
+  .t-h1 {
+    font-family: var(--font-display);
+    font-size: 32px;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-weight: 700;
+  }
+  .t-h2 {
+    font-family: var(--font-display);
+    font-size: 20px;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+  }
+  .t-h3 {
+    font-family: var(--font-display);
+    font-size: 15px;
+    line-height: 1.3;
+    letter-spacing: -0.005em;
+    font-weight: 600;
+  }
+  /* S19.2 — long-prose question heading (wizard prompts run 150-220 chars). t-h1
    (32px / lh 1.05) is calibrated for SHORT titles and turns a real question into
    a cramped wall of text on 375px. This variant is fluid 21→26px with an airy
    1.3 line-height for multi-line legibility, and wraps hostile long tokens.
    Reused by the onboarding interview + any data-driven question prompt. */
-.t-question {
-  font-family: var(--font-display);
-  font-size: clamp(1.3125rem, 1.05rem + 1.1vw, 1.625rem);
-  line-height: 1.3;
-  letter-spacing: -0.015em;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-  hyphens: auto;
-}
-.t-lead {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 1.55;
-  font-weight: 400;
-  color: var(--t-2);
-}
-.t-body {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--t-2);
-}
-.t-cap {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--t-3);
-}
-.t-mono-cap {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--t-3);
-  font-variant-numeric: tabular-nums;
-}
-.t-eyebrow,
-.eyebrow {
-  font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--t-3);
-}
-/* The 12px eyebrow used app-wide (auth / journal / checkin / track forms,
+  .t-question {
+    font-family: var(--font-display);
+    font-size: clamp(1.3125rem, 1.05rem + 1.1vw, 1.625rem);
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+  }
+  .t-lead {
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+    font-weight: 400;
+    color: var(--t-2);
+  }
+  .t-body {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--t-2);
+  }
+  .t-cap {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--t-3);
+  }
+  .t-mono-cap {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--t-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .t-eyebrow,
+  .eyebrow {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--t-3);
+  }
+  /* The 12px eyebrow used app-wide (auth / journal / checkin / track forms,
    wizards, section labels) — historically inlined as the raw cluster
    `text-[12px] font-medium tracking-[0.10em] uppercase` ~60×. `.t-eyebrow`
    above is the *compact* 10px variant (dashboard KPI strips). Colour is
    intentionally NOT set here: every call-site supplies it via an explicit
-   `text-[var(--t-3)]` / `text-[var(--acc)]` utility, so this token stays
-   colour-agnostic and the migration is byte-equivalent to the raw cluster
-   (no line-height either — both inherit, matching `.t-eyebrow`).
+   `text-[var(--t-3)]` / `text-[var(--acc)]` utility (no line-height either —
+   both inherit, matching `.t-eyebrow`). Since the block moved into
+   @layer components, `.t-eyebrow`'s baked `--t-3` is only a DEFAULT: a
+   call-site utility overrides it, so the two tokens now share the same
+   override contract.
    NB: `.t-eyebrow` and `.t-eyebrow-lg` are NOT a pure size pair — they
-   diverge on 3 axes (10/12px, tracking 0.14em/0.10em, baked colour vs
-   colour-agnostic). Do not "harmonize" them into one scale: the
-   divergence is intentional (compact KPI vs standard form label). A
-   future cleanup may rename to `.t-eyebrow-sm`/`.t-eyebrow` (29-file
-   mechanical PR, own verifier pass) — tracked, not in this PR. */
-.t-eyebrow-lg {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.t-foot {
-  font-family: var(--font-sans);
-  font-size: 10px;
-  line-height: 1.4;
-  color: var(--t-4);
-  font-style: italic;
+   diverge on size (10/12px), tracking (0.14em/0.10em) and default colour
+   (t-3 vs none). Do not "harmonize" them into one scale: the divergence
+   is intentional (compact KPI vs standard form label). A future cleanup
+   may rename to `.t-eyebrow-sm`/`.t-eyebrow` (29-file mechanical PR,
+   own verifier pass) — tracked, not in this PR. */
+  .t-eyebrow-lg {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .t-foot {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--t-4);
+    font-style: italic;
+  }
 }
 
 /* =============================================================

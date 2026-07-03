@@ -137,12 +137,13 @@ export function CoachingInsightCard({
         >
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="t-foot font-semibold text-[var(--acc-hi)]">{progression.label}</span>
-            <span className="t-cap text-[var(--t-3)]">{progression.detail}</span>
+            {/* acc-dim-2 lifts the surface: t-3 sits at 4.35:1 (< 4.5 WCAG AA) — use t-2. */}
+            <span className="t-cap text-[var(--t-2)]">{progression.detail}</span>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-0.5">
             <span className="f-mono text-[26px] leading-none font-bold tracking-[-0.02em] text-[var(--t-1)] tabular-nums">
               {progression.value}
-              <span className="text-[14px] font-medium text-[var(--t-3)]">{progression.unit}</span>
+              <span className="text-[14px] font-medium text-[var(--t-2)]">{progression.unit}</span>
             </span>
             <TrendBadge trend={progression.trend} />
           </div>

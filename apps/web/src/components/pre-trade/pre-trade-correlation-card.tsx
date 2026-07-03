@@ -149,16 +149,9 @@ function ReasonCell({
         aria-label={`${label} : pas assez de trades pour calculer les stats`}
       >
         <div className="flex items-baseline justify-between gap-2">
-          <span
-            className="t-eyebrow"
-            // `.t-eyebrow` bakes `color: var(--t-3)` OUTSIDE Tailwind's layers,
-            // so it beats any `text-[...]` utility — inline style is the only
-            // override that wins. On the acc-dim cell, t-3 sits at 4.45:1
-            // (< 4.5 WCAG AA); --acc-hi is the DS "text-accent" token.
-            style={tone === 'acc' ? { color: 'var(--acc-hi)' } : undefined}
-          >
-            {label}
-          </span>
+          {/* On the acc-dim cell the baked t-3 sits at 4.45:1 (< 4.5 WCAG AA)
+              — lift to the DS "text-accent" token. */}
+          <span className={cn('t-eyebrow', tone === 'acc' && 'text-[var(--acc-hi)]')}>{label}</span>
           <Pill tone={tone === 'acc' ? 'acc' : 'mute'}>{formatSampleSize(stats.sampleSize)}</Pill>
         </div>
         <p
@@ -189,13 +182,8 @@ function ReasonCell({
       aria-label={`${label} : ${winRateLabel} win sur ${stats.sampleSize} trades`}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <span
-          className="t-eyebrow"
-          // Same `.t-eyebrow` baked-color override as the insufficient state.
-          style={tone === 'acc' ? { color: 'var(--acc-hi)' } : undefined}
-        >
-          {label}
-        </span>
+        {/* Same acc-dim contrast lift as the insufficient state. */}
+        <span className={cn('t-eyebrow', tone === 'acc' && 'text-[var(--acc-hi)]')}>{label}</span>
         <Pill tone={tone === 'acc' ? 'acc' : 'mute'}>{formatSampleSize(stats.sampleSize)}</Pill>
       </div>
       <div className="flex items-baseline gap-2">

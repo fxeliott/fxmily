@@ -437,6 +437,7 @@ export default async function VerificationPage() {
                         href={proof.readUrl}
                         target="_blank"
                         rel="noreferrer"
+                        aria-label={`Ouvrir la capture du ${formatDate(proof.uploadedAt, timezone)} en grand (nouvel onglet)`}
                         className="rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}

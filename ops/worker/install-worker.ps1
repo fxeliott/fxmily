@@ -52,7 +52,11 @@ param(
   [ValidateSet('S4U', 'Interactive')]
   [string]$LogonType = 'S4U',
 
-  [string]$BashPath = 'C:\Program Files\Git\bin\bash.exe'
+  [string]$BashPath = 'C:\Program Files\Git\bin\bash.exe',
+
+  # Tour 12 — set by watchdog.ps1 when it repairs the 6 pipelines: the watchdog
+  # must never re-register ITSELF while it is the running process.
+  [switch]$SkipWatchdog
 )
 
 $ErrorActionPreference = 'Stop'
@@ -165,6 +169,40 @@ foreach ($p in $Pipelines) {
     }
 
     Write-Host ("  [OK] {0,-14} {1}" -f $name, $taskName) -ForegroundColor Green
+  }
+}
+
+# --- Tour 12 — the watchdog task (self-healing layer) --------------------------
+# Every 30 min, offset :07/:37 so it never collides with the :00/:20/:40
+# onboarding ticks. 10-min time limit: the watchdog only inspects + repairs
+# task registrations, it never runs a batch. It repairs via THIS script with
+# -SkipWatchdog, so the watchdog task itself is only (re)registered here.
+if (-not $SkipWatchdog) {
+  $watchdogScript = Join-Path $WorkerDir 'watchdog.ps1'
+  if (Test-Path $watchdogScript) {
+    $wdName = "${TaskPrefix}watchdog"
+    $wdAction = New-ScheduledTaskAction -Execute 'powershell.exe' `
+      -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$watchdogScript`"" `
+      -WorkingDirectory $WorkerDir
+    $wdTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddMinutes(7) `
+      -RepetitionInterval (New-TimeSpan -Minutes 30)
+    $wdSettings = New-ScheduledTaskSettingsSet `
+      -StartWhenAvailable `
+      -DontStopOnIdleEnd `
+      -AllowStartIfOnBatteries `
+      -DontStopIfGoingOnBatteries `
+      -MultipleInstances IgnoreNew `
+      -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+    if ($PSCmdlet.ShouldProcess($wdName, 'Register scheduled task (watchdog, every 30 min)')) {
+      Register-ScheduledTask -TaskName $wdName -TaskPath $TaskFolder `
+        -Action $wdAction -Trigger $wdTrigger -Settings $wdSettings -Principal $Principal `
+        -Description 'Fxmily worker watchdog (tour 12) - detects and repairs dead worker tasks, reports heartbeat to /admin/system.' `
+        -Force | Out-Null
+      Write-Host ("  [OK] {0,-14} {1}" -f 'watchdog', $wdName) -ForegroundColor Green
+    }
+  }
+  else {
+    Write-Host "  [WARN] watchdog.ps1 not found - watchdog task not registered." -ForegroundColor Yellow
   }
 }
 

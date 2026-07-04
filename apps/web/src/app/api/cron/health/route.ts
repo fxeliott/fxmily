@@ -62,6 +62,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         red: report.entries.filter((e) => e.status === 'red').length,
         amber: report.entries.filter((e) => e.status === 'amber').length,
         neverRan: report.entries.filter((e) => e.status === 'never_ran').length,
+        pending: report.entries.filter((e) => e.status === 'pending').length,
         ranAt: report.ranAt,
       },
     });

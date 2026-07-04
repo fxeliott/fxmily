@@ -182,6 +182,83 @@ describe('getCronHealthReport', () => {
   });
 
   /**
+   * Tour 12 — window-bounded classification. check-in reminders fire every
+   * 15 min ONLY inside 05-07h + 18-20h UTC. Raw-age classification flagged
+   * the cron amber every single day between windows (age 4h at noon >> 1.5 ×
+   * 15 min) — a structural false positive the operator learns to ignore.
+   * With `windowedScheduleUtc`, status = missed expected ticks:
+   *  - last tick of the morning window + now=noon → 0 missed → green
+   *  - 2 ticks missed inside a window → amber (jitter/deploy, watch it)
+   *  - a whole window missed → red (the cron is genuinely broken)
+   */
+  it('keeps a window-bounded cron green between windows (0 missed ticks)', async () => {
+    // Last morning tick (07:45Z) ran; it is now noon — between windows.
+    const now = new Date('2026-07-04T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.checkin_reminders.scan',
+        _max: { createdAt: new Date('2026-07-04T07:45:00.000Z') },
+      },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const checkin = report.entries.find((e) => e.action === 'cron.checkin_reminders.scan');
+
+    expect(checkin?.status).toBe('green');
+    expect(checkin?.windowed).toBe(true);
+  });
+
+  it('classifies a window-bounded cron amber at 2 missed ticks and red past a whole window', async () => {
+    // 07:15Z ran, now 07:50Z → 07:30 + 07:45 missed (2) → amber.
+    const midWindow = new Date('2026-07-04T07:50:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.checkin_reminders.scan',
+        _max: { createdAt: new Date('2026-07-04T07:15:00.000Z') },
+      },
+    ]);
+    const amberReport = await getCronHealthReport(midWindow);
+    expect(
+      amberReport.entries.find((e) => e.action === 'cron.checkin_reminders.scan')?.status,
+    ).toBe('amber');
+
+    // Last ran yesterday evening; the whole morning window (12 ticks) has
+    // passed with nothing → red.
+    const morningAfter = new Date('2026-07-04T09:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.checkin_reminders.scan',
+        _max: { createdAt: new Date('2026-07-03T20:45:00.000Z') },
+      },
+    ]);
+    const redReport = await getCronHealthReport(morningAfter);
+    expect(redReport.entries.find((e) => e.action === 'cron.checkin_reminders.scan')?.status).toBe(
+      'red',
+    );
+  });
+
+  /**
+   * Tour 12 — `greenMultiplier` absorbs GH Actions schedule jitter. The
+   * health watcher is hourly but GH routinely skips whole hours under load
+   * (observed 2026-07-04: 04:01 → 07:14 → 09:32). A 2h30 gap is normal
+   * operation → green; past 3h → amber; past the 6h tolerance → red stays.
+   */
+  it('applies greenMultiplier: a 2h30-old hourly watcher heartbeat stays green, 4h reads amber', async () => {
+    const now = new Date('2026-07-04T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      { action: 'cron.health.scan', _max: { createdAt: new Date(now.getTime() - 150 * MIN) } },
+    ]);
+    const greenReport = await getCronHealthReport(now);
+    expect(greenReport.entries.find((e) => e.action === 'cron.health.scan')?.status).toBe('green');
+
+    auditGroupByMock.mockResolvedValueOnce([
+      { action: 'cron.health.scan', _max: { createdAt: new Date(now.getTime() - 4 * HOUR) } },
+    ]);
+    const amberReport = await getCronHealthReport(now);
+    expect(amberReport.entries.find((e) => e.action === 'cron.health.scan')?.status).toBe('amber');
+  });
+
+  /**
    * Why this matters : a fresh deploy (no audit history yet) MUST surface
    * as `never_ran` so the operator knows the cron daemon hasn't connected
    * yet. We pin that distinct from `red` so the UI can render a different
@@ -341,12 +418,12 @@ describe('getCronHealthReport', () => {
 describe('getWorkerHealthReport', () => {
   /**
    * Why this matters : the worker board is fixed to the 6 pipelines that
-   * install-worker.ps1 actually registers. Adding a 7th pipeline (or renaming
-   * a slug) must force an explicit WORKER_EXPECTATIONS update — and
-   * `seance.batch.pulled` must NOT appear (pulled on demand, no period, an
-   * age-based status would lie).
+   * install-worker.ps1 actually registers + the tour-12 watchdog heartbeat.
+   * Adding a pipeline (or renaming a slug) must force an explicit
+   * WORKER_EXPECTATIONS update — and `seance.batch.pulled` must NOT appear
+   * (pulled on demand, no period, an age-based status would lie).
    */
-  it('returns exactly the 6 installed pipelines, never the on-demand séances slug', async () => {
+  it('returns exactly the 6 installed pipelines + watchdog, never the on-demand séances slug', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);
     const report = await getWorkerHealthReport();
     expect(report.entries.map((e) => e.action)).toEqual([
@@ -356,6 +433,7 @@ describe('getWorkerHealthReport', () => {
       'weekly_report.batch.pulled',
       'monthly_debrief.batch.pulled',
       'member_profile_monthly.batch.pulled',
+      'worker.watchdog.heartbeat',
     ]);
     expect(report.entries.map((e) => e.action)).not.toContain('seance.batch.pulled');
   });
@@ -387,6 +465,10 @@ describe('getWorkerHealthReport', () => {
       {
         action: 'member_profile_monthly.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 10 * DAY) },
+      },
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
       },
     ]);
 
@@ -428,25 +510,63 @@ describe('getWorkerHealthReport', () => {
   });
 
   /**
-   * Why this matters : member_profile_monthly (J-E, day-2 batch) has never run
-   * before its first scheduled occurrence. `never_ran` — not red — is the
-   * honest status, and it must surface in `overall` so the operator knows the
-   * board has a pipeline with zero history rather than a silent green.
+   * Tour 12 — member_profile_monthly (J-E, day-2 batch) has never run before
+   * its first scheduled occurrence (Aug 2). With `expectedSince` (install date
+   * 2026-07-02) + tolerance (60d), a missing row on Jul 10 is `pending` —
+   * calm "premier run à venir" — and MUST NOT drag `overall` down: the old
+   * `never_ran` classification put "Pas démarré" on the masthead for a month
+   * about a pipeline behaving exactly as designed.
    */
-  it("keeps a pipeline with no audit row 'never_ran' (honest pre-first-batch status)", async () => {
+  it("classifies a pipeline whose first run is not due yet as 'pending' (not never_ran)", async () => {
     const now = new Date('2026-07-10T12:00:00.000Z');
     auditGroupByMock.mockResolvedValueOnce([
       {
         action: 'onboarding.batch.pulled',
         _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
       },
+      {
+        action: 'verification.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
+      { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
+      {
+        action: 'weekly_report.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 2 * DAY) },
+      },
+      {
+        action: 'monthly_debrief.batch.pulled',
+        _max: { createdAt: new Date(now.getTime() - 10 * DAY) },
+      },
+      {
+        action: 'worker.watchdog.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
     ]);
 
     const report = await getWorkerHealthReport(now);
     const profile = report.entries.find((e) => e.action === 'member_profile_monthly.batch.pulled');
 
-    expect(profile?.status).toBe('never_ran');
+    expect(profile?.status).toBe('pending');
     expect(profile?.lastRanAt).toBeNull();
+    expect(profile?.firstRunDeadline).not.toBeNull();
+    // pending is healthy: with every other pipeline green, the board is green.
+    expect(report.overall).toBe('green');
+  });
+
+  /**
+   * Tour 12 — the flip side of `pending`: once `expectedSince + tolerance`
+   * has passed with still no row, the honest status IS `never_ran` (the task
+   * was installed, its first occurrence is overdue, something is broken).
+   */
+  it("flips pending to 'never_ran' once the first-run deadline has passed", async () => {
+    // onboarding: expectedSince 2026-07-02, tolerance 24h → deadline Jul 3.
+    const now = new Date('2026-07-10T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([]);
+
+    const report = await getWorkerHealthReport(now);
+    const onboarding = report.entries.find((e) => e.action === 'onboarding.batch.pulled');
+
+    expect(onboarding?.status).toBe('never_ran');
     expect(report.overall).toBe('never_ran');
   });
 

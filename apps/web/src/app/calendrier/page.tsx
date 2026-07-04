@@ -161,7 +161,15 @@ export default async function CalendrierPage({ searchParams }: CalendrierPagePro
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* DS-v3 J3 — ambient mesh + drifting orbs behind the masthead */}
       <DashboardAmbient />
-      <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
+      {/* Tour 12 — `page-stagger` cascades the direct children (header, rail,
+          the "enregistré" status banner, then `{body}`) in on navigation. The
+          `wow-reveal` blocks live nested INSIDE `{body}` (week-view, warnings),
+          not as direct children here, so there is no animation/opacity conflict
+          to opt out of. Compositor-only (opacity + translateY), reduced-motion
+          neutralised by the class, CLS 0. No fixed descendant lives here
+          (DashboardAmbient is an absolute sibling, the app-shell fixed nav is an
+          ancestor), so the transform creates no containing block. */}
+      <div className="page-stagger relative mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
         <header className="flex flex-col gap-4">
           <Link
             href="/dashboard"

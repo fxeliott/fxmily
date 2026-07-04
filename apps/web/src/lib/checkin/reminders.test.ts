@@ -83,6 +83,7 @@ describe('runCheckinReminderScan', () => {
     expect(enqueueCheckinReminderMock).toHaveBeenCalledWith('ny_u', {
       slot: 'morning',
       date: '2026-05-06',
+      streak: 0,
     });
     expect(out.scannedUsers).toBe(2);
     expect(out.enqueuedMorning).toBe(1);
@@ -122,6 +123,7 @@ describe('runCheckinReminderScan', () => {
     expect(enqueueCheckinReminderMock).toHaveBeenCalledWith('user_b', {
       slot: 'morning',
       date: '2026-05-06',
+      streak: 0,
     });
     expect(out.scannedUsers).toBe(2);
     expect(out.enqueuedMorning).toBe(1);
@@ -141,6 +143,7 @@ describe('runCheckinReminderScan', () => {
     expect(enqueueCheckinReminderMock).toHaveBeenCalledWith('user_a', {
       slot: 'evening',
       date: '2026-05-06',
+      streak: 0,
     });
   });
 
@@ -192,6 +195,45 @@ describe('runCheckinReminderScan', () => {
     const out = await runCheckinReminderScan(new Date('2026-05-06T06:30:00Z'));
     expect(out.enqueuedMorning).toBe(1);
     expect(out.enqueuedEvening).toBe(0);
+  });
+
+  // Tour 12 (action 2) — the scan computes the member's streak in memory from the
+  // widened bulk fetch and passes it to the enqueue (no per-member query).
+  it('passes the current streak (from the pre-fetched window) to the enqueue', async () => {
+    userFindManyMock.mockResolvedValueOnce([{ id: 'user_a', timezone: 'Europe/Paris' }]);
+    // Evening window is due on 2026-05-06. Streak walk anchors on TODAY: since
+    // today's slot isn't filled yet, the streak is the consecutive run ending
+    // YESTERDAY. Seed 3 consecutive prior days (05-03..05-05) → streak = 3.
+    dailyCheckinFindManyMock.mockResolvedValueOnce([
+      { userId: 'user_a', date: new Date('2026-05-05T00:00:00Z'), slot: 'evening' },
+      { userId: 'user_a', date: new Date('2026-05-04T00:00:00Z'), slot: 'morning' },
+      { userId: 'user_a', date: new Date('2026-05-03T00:00:00Z'), slot: 'evening' },
+    ]);
+    enqueueCheckinReminderMock.mockResolvedValueOnce('notif_streak');
+
+    // 18:30 UTC = 20:30 Paris = evening window.
+    await runCheckinReminderScan(new Date('2026-05-06T18:30:00Z'));
+
+    expect(enqueueCheckinReminderMock).toHaveBeenCalledWith('user_a', {
+      slot: 'evening',
+      date: '2026-05-06',
+      streak: 3,
+    });
+  });
+
+  // The widened fetch must be ONE query (no N+1 for the streak) — the whole point.
+  it('keeps the streak-aware fetch to a single bulk round-trip (no N+1)', async () => {
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'user_a', timezone: 'Europe/Paris' },
+      { id: 'user_b', timezone: 'Europe/Paris' },
+    ]);
+    dailyCheckinFindManyMock.mockResolvedValueOnce([]);
+    enqueueCheckinReminderMock.mockResolvedValue('id');
+
+    await runCheckinReminderScan(new Date('2026-05-06T18:30:00Z'));
+
+    // One findMany feeds BOTH the `filled` gate and every member's streak.
+    expect(dailyCheckinFindManyMock).toHaveBeenCalledTimes(1);
   });
 
   it('logs the canonical audit row at the end of every scan that ran', async () => {

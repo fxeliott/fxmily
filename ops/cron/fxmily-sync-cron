@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+#
+# ops/cron/fxmily-sync-cron — Tour 12: converge the host cron onto the repo.
+#
+# WHY THIS EXISTS. deploy.yml ships the Docker image but NEVER touched
+# /etc/cron.d/fxmily-app or /usr/local/bin/fxmily-cron — so every cron added
+# in the repo silently missed prod until a human installed it by hand. That
+# exact drift caused the 2026-07-04 incident: crontab.fxmily:183 added the
+# verification-batch-overdue-alert line (AUTONOMY-1), the host still ran the
+# June 19 files, the new cron never fired, /admin/system went "Pas démarré"
+# and cron-watch failed hourly for days. This script makes the installed cron
+# a pure function of the merged repo, on every deploy.
+#
+# SECURITY MODEL (why sudo on this is safe):
+#   - Installed root:root 0755 by the operator (NEVER by itself — a script
+#     that can replace itself under sudo is a root escalation; updating THIS
+#     file requires a manual root action, see ops/cron/README note).
+#   - Sudoers grants `fxmily` this command with NO arguments
+#     (/etc/sudoers.d/fxmily-cron-sync). The staging dir is hard-coded.
+#   - The crontab is VALIDATED line by line before install: only variable
+#     assignments, comments, and `<schedule> fxmily /usr/local/bin/fxmily-cron
+#     <subcommand>` lines are accepted. A crontab line running as root — or
+#     any other user, or any other binary — aborts the sync untouched.
+#   - /usr/local/bin/fxmily-cron itself runs as user `fxmily` (per the forced
+#     cron user field), so its content grants nothing `fxmily` cannot already
+#     do over SSH. We still sanity-check shebang + size.
+#
+# Usage (from deploy.yml, after scp of the two repo files):
+#   sudo /usr/local/bin/fxmily-sync-cron
+#
+# Exit codes: 0 = in sync (installed or already identical) ; 1 = validation
+# or install failure (deploy step surfaces it, nothing was modified).
+
+set -euo pipefail
+
+STAGE_DIR="/home/fxmily/cron-sync"
+SRC_CRONTAB="$STAGE_DIR/crontab.fxmily"
+SRC_RUNNER="$STAGE_DIR/fxmily-cron"
+DST_CRONTAB="/etc/cron.d/fxmily-app"
+DST_RUNNER="/usr/local/bin/fxmily-cron"
+STAMP="$(date -u +%Y%m%d-%H%M%S)"
+
+log() { echo "[fxmily-sync-cron] $*"; }
+fail() { echo "[fxmily-sync-cron] ERROR: $*" >&2; exit 1; }
+
+[[ "$(id -u)" -eq 0 ]] || fail "must run as root (via sudo)."
+[[ -f "$SRC_CRONTAB" ]] || fail "staged crontab not found: $SRC_CRONTAB"
+[[ -f "$SRC_RUNNER" ]] || fail "staged runner not found: $SRC_RUNNER"
+
+# --- Validate the staged crontab, line by line ---------------------------------
+# Accepted:
+#   - blank lines and comments
+#   - SHELL= / PATH= / MAILTO= variable assignments
+#   - cron lines whose user field is `fxmily` and whose command is one of the
+#     ALLOWLISTED /usr/local/bin binaries below (fxmily-cron takes exactly one
+#     [a-z-]+ subcommand; the backups take none)
+#   - ONE literal-exact root line: `root /usr/local/bin/fxmily-autoheal`
+#     (§9-C docker-socket watchdog). Safe to accept: the path is literal and
+#     the binary is root:root, out of fxmily's write reach — the sync can
+#     only change WHEN that existing root binary runs, never WHAT runs.
+# Regexes live in variables: inside a POSIX bracket expression a backslash is
+# a LITERAL character (not an escape), so inline `[\*\,\-]` classes silently
+# match the wrong set — proved on the checkin-reminders line 2026-07-04.
+# `-` is literal in last position; `*`, `,`, `/` need no escaping there.
+var_re='^(SHELL|PATH|MAILTO)=[^;&|]*$'
+sched='^[0-9*,/[:space:]-]+'
+cron_re="${sched}fxmily[[:space:]]+/usr/local/bin/fxmily-cron[[:space:]]+[a-z-]+[[:space:]]*$"
+backup_re="${sched}fxmily[[:space:]]+/usr/local/bin/fxmily-(backup|caddy-backup|uploads-backup)[[:space:]]*$"
+autoheal_re="${sched}root[[:space:]]+/usr/local/bin/fxmily-autoheal[[:space:]]*$"
+lineno=0
+while IFS= read -r line || [[ -n "$line" ]]; do
+  lineno=$((lineno + 1))
+  [[ -z "${line//[[:space:]]/}" ]] && continue
+  [[ "$line" =~ ^[[:space:]]*# ]] && continue
+  if [[ "$line" =~ $var_re ]]; then continue; fi
+  if [[ "$line" =~ $cron_re ]]; then continue; fi
+  if [[ "$line" =~ $backup_re ]]; then continue; fi
+  if [[ "$line" =~ $autoheal_re ]]; then continue; fi
+  fail "crontab line $lineno rejected (not in the fxmily-cron/backup/autoheal allowlist): $line"
+done < "$SRC_CRONTAB"
+
+# --- Sanity-check the staged runner ---------------------------------------------
+head -c 3 "$SRC_RUNNER" | grep -q '^#!' || fail "staged fxmily-cron has no shebang."
+runner_size="$(stat -c %s "$SRC_RUNNER")"
+[[ "$runner_size" -lt 65536 ]] || fail "staged fxmily-cron unexpectedly large ($runner_size bytes)."
+
+# --- Converge (idempotent, atomic, backed up) -----------------------------------
+changed=0
+
+if ! cmp -s "$SRC_RUNNER" "$DST_RUNNER" 2>/dev/null; then
+  [[ -f "$DST_RUNNER" ]] && cp -p "$DST_RUNNER" "${DST_RUNNER}.bak-${STAMP}"
+  install -o root -g root -m 0755 "$SRC_RUNNER" "$DST_RUNNER"
+  log "installed $DST_RUNNER (backup: ${DST_RUNNER}.bak-${STAMP})"
+  changed=1
+fi
+
+if ! cmp -s "$SRC_CRONTAB" "$DST_CRONTAB" 2>/dev/null; then
+  [[ -f "$DST_CRONTAB" ]] && cp -p "$DST_CRONTAB" "/root/fxmily-app.cron.bak-${STAMP}"
+  install -o root -g root -m 0644 "$SRC_CRONTAB" "$DST_CRONTAB"
+  log "installed $DST_CRONTAB (backup: /root/fxmily-app.cron.bak-${STAMP})"
+  changed=1
+fi
+
+# Keep only the 5 most recent backups of each (disk hygiene on a 40 GB host).
+ls -1t "${DST_RUNNER}".bak-* 2>/dev/null | tail -n +6 | xargs -r rm -f
+ls -1t /root/fxmily-app.cron.bak-* 2>/dev/null | tail -n +6 | xargs -r rm -f
+
+if [[ "$changed" -eq 0 ]]; then
+  log "already in sync — nothing to do."
+else
+  log "cron converged onto repo state (cron daemon re-reads /etc/cron.d automatically)."
+fi

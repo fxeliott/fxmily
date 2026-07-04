@@ -545,6 +545,35 @@ export interface CheckinReminderPayload {
   slot: 'morning' | 'evening';
   /** YYYY-MM-DD the reminder is for, in the user's local TZ. */
   date: string;
+  /**
+   * Tour 12 (action 2) — the member's current check-in streak (consecutive days
+   * with ≥1 check-in), computed by the scan. Optional so every existing caller
+   * compiles unchanged. Used ONLY to build the calm streak-aware copy line; the
+   * scalar itself is PII-free (§21.5). 0/1 ⇒ no streak line (default copy).
+   */
+  streak?: number;
+}
+
+/**
+ * Tour 12 (action 2) — the calm, continuity-framed streak line stored in the
+ * reminder payload and read by the J9 dispatcher `buildPayload` as the push body.
+ *
+ * POSTURE §31.2 (BLOQUANT, tested by anti-dark-pattern suites): continuity ONLY,
+ * NEVER a countdown, NEVER a loss threat ("ne casse pas ta série" is forbidden).
+ * We acknowledge what's already behind the member — a fact, not a stake. Below 2
+ * days there is no streak worth naming, so we return `null` and the dispatcher
+ * keeps the existing neutral copy (no regression, and no "1 jour" awkwardness).
+ *
+ * Pure + FR, ponctuation simple, jamais de tiret cadratin (contrainte Eliott).
+ */
+export function buildStreakReminderLine(
+  streak: number | undefined,
+  slot: 'morning' | 'evening',
+): string | null {
+  if (typeof streak !== 'number' || streak < 2) return null;
+  const tail =
+    slot === 'morning' ? 'Ton check-in du matin t’attend.' : 'Ton check-in du soir t’attend.';
+  return `${streak} jours d’affilée derrière toi. ${tail}`;
 }
 
 /**
@@ -565,12 +594,23 @@ export async function enqueueCheckinReminder(
 ): Promise<string | null> {
   const type = payload.slot === 'morning' ? 'checkin_morning_reminder' : 'checkin_evening_reminder';
 
+  // Tour 12 (action 2) — persist the ready-made calm streak line (or omit it) so
+  // the copy stays under code review here and the J9 dispatcher only READS it.
+  // The raw `streak` scalar is dropped from the stored payload; only the derived
+  // line (or nothing) is kept, along with slot/date needed for dedup + deep-link.
+  const streakLine = buildStreakReminderLine(payload.streak, payload.slot);
+  const storedPayload: { slot: 'morning' | 'evening'; date: string; streakLine?: string } = {
+    slot: payload.slot,
+    date: payload.date,
+    ...(streakLine ? { streakLine } : {}),
+  };
+
   try {
     const row = await db.notificationQueue.create({
       data: {
         userId,
         type,
-        payload: payload as unknown as Prisma.InputJsonValue,
+        payload: storedPayload as unknown as Prisma.InputJsonValue,
       },
       select: { id: true },
     });

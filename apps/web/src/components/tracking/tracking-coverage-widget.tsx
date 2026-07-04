@@ -1,5 +1,6 @@
 import { ClipboardList } from 'lucide-react';
 
+import { GrowBar } from '@/components/tracking/grow-bar';
 import { getTrackingCoverage } from '@/lib/tracking/service';
 
 /**
@@ -54,10 +55,10 @@ export async function TrackingCoverageWidget({ userId }: { userId: string }) {
           aria-valuetext={`${coverage.coveredCount} dimensions sur ${coverage.totalCount} suivies récemment`}
           className="rounded-pill h-2 w-full overflow-hidden bg-[var(--bg-3)]"
         >
-          <div
-            className="rounded-pill h-full w-full origin-left bg-[var(--acc)] transition-transform duration-500"
-            style={{ transform: `scaleX(${coverage.pct / 100})` }}
-          />
+          {/* Tour 12 (C) — la jauge se REMPLIT à l'entrée du viewport (GrowBar,
+              scaleX 0 → pct) au lieu d'un remplissage figé. SSR-safe, décoratif :
+              la valeur reste portée par le role="progressbar" + aria-* du parent. */}
+          <GrowBar pct={coverage.pct} className="rounded-pill h-full w-full bg-[var(--acc)]" />
         </div>
         <div className="flex flex-wrap gap-1.5 pt-1">
           {coverage.axes.map((a) => (

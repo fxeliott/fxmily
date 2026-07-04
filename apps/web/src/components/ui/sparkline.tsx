@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { useReducedMotion } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
@@ -33,11 +33,18 @@ export interface SparklineProps {
  * Sparkline — micro-chart SVG inline. Custom impl, zéro dépendance
  * (Tremor sera ajouté à J6 pour les vrais graphes analytics).
  *
- * Le `draw` est animé via stroke-dasharray locked sync count-up
- * (cf. globals.css `.spark-draw-1400`). Honore prefers-reduced-motion.
+ * Tour 12 (C) — « data-viz vivante » : le tracé se DESSINE quand il entre dans
+ * le viewport (IntersectionObserver, une fois), pas au simple mount ; le point
+ * terminal PULSE doucement en continu (livePulse) au lieu d'un fade unique ;
+ * le fill dégradé reste optionnel.
  *
- * Usage typical : KPI cell strip (140×20), hero splash bento (300×36),
- * R cumulé chart (720×88).
+ * SSR-safe (leçon reduced-motion-hydration, PR #457) : un SEUL arbre JSX, la
+ * réduction et l'état de dessin vivent dans les STYLES, jamais dans la structure.
+ * Le trait est rendu à son ÉTAT FINAL (offset 0) côté serveur ET au 1er render
+ * client (aucun flash, visible sans JS) ; un `useEffect` « arme » ensuite le
+ * dessin (reset à 2000 puis draw vers 0 à l'entrée du viewport). `suppressHydration
+ * Warning` absorbe la brève divergence de style au démarrage du draw. Sous
+ * `prefers-reduced-motion`, on ne réarme jamais : le trait reste dessiné, immobile.
  */
 export function Sparkline({
   data,
@@ -55,6 +62,11 @@ export function Sparkline({
   const gradId = useId();
   const reduced = useReducedMotion();
   const shouldDraw = animate && !reduced;
+
+  const svgRef = useRef<SVGSVGElement>(null);
+  // Draw phase: 'final' = trait complet (SSR + no-JS + reduced), 'pending' =
+  // armé mais pas encore visible (offset plein), 'drawing' = transition en cours.
+  const [phase, setPhase] = useState<'final' | 'pending' | 'drawing'>('final');
 
   const { d, dFill, lastPoint } = useMemo(() => {
     if (data.length < 2) {
@@ -75,10 +87,42 @@ export function Sparkline({
     return { d: path, dFill: fillPath, lastPoint: points[points.length - 1] ?? null };
   }, [data, width, height]);
 
+  // Arme le dessin à l'entrée du viewport (une seule fois). On part de l'état
+  // final (rendu SSR), on masque le trait (phase 'pending' = offset plein), puis
+  // on lance la transition vers 0 quand l'élément est visible.
+  useEffect(() => {
+    if (!shouldDraw) return;
+    const node = svgRef.current;
+    if (!node) return;
+
+    // Reset immédiat à l'état masqué (un seul frame invisible max, jamais servi
+    // au SSR ni sans JS).
+    setPhase('pending');
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          // rAF pour garantir que 'pending' (offset plein, sans transition) est
+          // peint avant de basculer sur 'drawing' (transition vers 0).
+          requestAnimationFrame(() => setPhase('drawing'));
+          io.disconnect();
+        }
+      },
+      { threshold: 0.4 },
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, [shouldDraw]);
+
   if (data.length < 2) return null;
+
+  // offset : 0 = dessiné, 2000 = masqué. La transition n'est active qu'en phase
+  // 'drawing'. Reduced / no-JS restent en 'final' → trait visible immobile.
+  const drawOffset = phase === 'pending' ? 2000 : 0;
 
   return (
     <svg
+      ref={svgRef}
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
@@ -101,12 +145,14 @@ export function Sparkline({
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
+        suppressHydrationWarning
         style={{
           strokeDasharray: 2000,
-          strokeDashoffset: shouldDraw ? 0 : reduced ? 0 : 2000,
-          transition: shouldDraw
-            ? `stroke-dashoffset ${duration}ms cubic-bezier(0.4,0,0.2,1)`
-            : undefined,
+          strokeDashoffset: drawOffset,
+          transition:
+            phase === 'drawing'
+              ? `stroke-dashoffset ${duration}ms cubic-bezier(0.4,0,0.2,1)`
+              : undefined,
         }}
       />
       {showLastDot && lastPoint && (
@@ -115,13 +161,21 @@ export function Sparkline({
           cy={lastPoint[1]}
           r="2.5"
           fill={color}
+          suppressHydrationWarning
           style={{
-            opacity: reduced ? 1 : 0,
-            animation: reduced ? undefined : `sparkDot 200ms ${duration - 100}ms forwards`,
+            // Terminal pulse (livePulse) — un point vivant, pas un simple fade.
+            // Immobile et visible sous reduced-motion / no-JS.
+            transformOrigin: `${lastPoint[0]}px ${lastPoint[1]}px`,
+            animation: reduced
+              ? undefined
+              : `sparkDotPulse 2.4s cubic-bezier(0.4,0,0.2,1) infinite`,
           }}
         />
       )}
-      <style>{`@keyframes sparkDot { to { opacity: 1 } }`}</style>
+      {/* Terminal-dot pulse keyframe. Les boucles reduced-motion sont neutralisées
+          par le filet global (globals.css ~1705 : iteration-count 1) + la garde
+          `reduced ? undefined` au call-site : point figé visible, jamais clignotant. */}
+      <style>{`@keyframes sparkDotPulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }`}</style>
     </svg>
   );
 }

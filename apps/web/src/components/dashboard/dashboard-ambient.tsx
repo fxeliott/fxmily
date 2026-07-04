@@ -21,9 +21,19 @@
  *
  * Tour 9 — `intensity` (0..1, optionnel) : complétude du jour (gestes faits /
  * gestes actionnables). Le cocon « s'allume » doucement à mesure que le membre
- * complète sa journée : opacité globale 0.82 → 1. Calme par construction
+ * complète sa journée : opacité globale 0.92 → 1. Calme par construction
  * (jamais une couleur d'alerte, jamais un countdown — §31.2) ; statique côté
  * client (une seule valeur SSR, zéro JS, zéro coût reduced-motion).
+ *
+ * Tour 12 — the backplate must READ as alive from the first second (brief §31
+ * "jamais statique"). Two extra drifting orbs (`.ds-orb-extra`, mobile-gated) on
+ * longer, phase-offset cycles widen the parallax field. The very slow conic
+ * `.ds-sweep` light lives INSIDE the hero card (north-star-hero.tsx), clipped to
+ * the masthead where the eye lands — not here, to avoid a double sweep. The
+ * intensity FLOOR was raised 0.82 → 0.92 so the morning first-impression is
+ * barely dimmed (the whole mesh sits above the sub-perceptual threshold now).
+ * All motion stays in CSS keyframes (killed by the global reduced-motion filet);
+ * orbs are `aria-hidden` + `pointer-events:none` and paint below opaque content.
  */
 export function DashboardAmbient({
   tone = 'blue',
@@ -33,7 +43,7 @@ export function DashboardAmbient({
   intensity?: number;
 }) {
   const isCyan = tone === 'cyan';
-  const lift = intensity === undefined ? 1 : 0.82 + 0.18 * Math.max(0, Math.min(1, intensity));
+  const lift = intensity === undefined ? 1 : 0.92 + 0.08 * Math.max(0, Math.min(1, intensity));
   return (
     <div
       className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
@@ -69,6 +79,23 @@ export function DashboardAmbient({
             ? 'radial-gradient(circle, oklch(0.703 0.145 218 / 0.34) 0%, transparent 70%)'
             : 'radial-gradient(circle, oklch(0.5 0.21 262 / 0.42) 0%, transparent 70%)',
           animationDelay: '-9s',
+        }}
+      />
+      {/* Tour 12 — 2nd extra orb, wider drift (`dsOrbDriftWide`, 16s) phase-offset
+          from the two above, indigo/cyan to widen the moving colour field. */}
+      <div
+        className="ds-orb ds-orb-extra ds-orb-wide"
+        style={{
+          top: '10rem',
+          left: '18vw',
+          width: '30vw',
+          height: '30vw',
+          maxWidth: '320px',
+          maxHeight: '320px',
+          background: isCyan
+            ? 'radial-gradient(circle, oklch(0.62 0.19 254 / 0.3) 0%, transparent 70%)'
+            : 'radial-gradient(circle, oklch(0.7 0.13 217 / 0.34) 0%, transparent 70%)',
+          animationDelay: '-5s',
         }}
       />
     </div>

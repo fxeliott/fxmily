@@ -120,11 +120,17 @@ test.describe('S4 — qualité de setup & plafond de risque sur /patterns (real 
       page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );
-    expect(await measureOverflow(), `overflow on ${testInfo.project.name}`).toBeLessThanOrEqual(1);
+    await expect
+      .poll(measureOverflow, { message: `overflow on ${testInfo.project.name}` })
+      .toBeLessThanOrEqual(1);
     // 375 = the project's documented minimum target (iPhone SE, CLAUDE.md). The
     // KPI legend now flex-wraps so it reflows rather than overflowing here.
+    // Poll (don't race): after setViewportSize, Recharts re-measures through a
+    // ResizeObserver, so the svg keeps its desktop width for a few frames — an
+    // instant read loses that race on slow CI runners. Real phones never resize
+    // 1280 → 375; the §32-d contract is the steady state, which poll asserts.
     await page.setViewportSize({ width: 375, height: 812 });
-    expect(await measureOverflow(), 'overflow at 375px').toBeLessThanOrEqual(1);
+    await expect.poll(measureOverflow, { message: 'overflow at 375px' }).toBeLessThanOrEqual(1);
     expect(consoleErrors, consoleErrors.join('\n')).toEqual([]);
   });
 });

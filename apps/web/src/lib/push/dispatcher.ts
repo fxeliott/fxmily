@@ -178,13 +178,19 @@ export function buildPayload(
     }
     case 'checkin_morning_reminder': {
       title = 'Check-in matin';
-      body = 'Trois minutes pour poser ton intention du jour.';
+      // Tour 12 (action 2) — streak-aware calm copy when the scan stored one
+      // (built + reviewed in `enqueue.ts`, continuity only, never a countdown).
+      // Null-safe: absent (streak < 2 or legacy row) → the neutral default copy.
+      const streakLine = typeof payload.streakLine === 'string' ? payload.streakLine : '';
+      body = streakLine || 'Trois minutes pour poser ton intention du jour.';
       path = '/checkin/morning';
       break;
     }
     case 'checkin_evening_reminder': {
       title = 'Check-in soir';
-      body = 'Bilan rapide du jour : plan, ressenti, gratitude.';
+      // Tour 12 (action 2) — see morning reminder. Null-safe streak-aware copy.
+      const streakLine = typeof payload.streakLine === 'string' ? payload.streakLine : '';
+      body = streakLine || 'Bilan rapide du jour : plan, ressenti, gratitude.';
       path = '/checkin/evening';
       break;
     }

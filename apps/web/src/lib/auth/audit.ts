@@ -148,6 +148,12 @@ export type AuditAction =
   // J10 Phase J — observability dashboard surface
   | 'admin.system.viewed'
   | 'cron.health.scan'
+  // Tour 12 — self-healing worker watchdog (ops/worker/watchdog.ps1, every
+  // 30 min on the host machine). Counts-only metadata (tasksChecked/repaired/
+  // errors), NEVER a token value nor a local username/path. Monitored in
+  // WORKER_EXPECTATIONS exactly like cron.health.scan monitors cron-watch:
+  // a guardian nobody watches is a broken promise.
+  | 'worker.watchdog.heartbeat'
   // V2.0 — TRACK module (master plan A2-A5 must-have habit logging).
   // `habit_log.upserted` carries `kind` + `wasNew` in metadata so the
   // analytics pipeline (V2.1 D-features) can distinguish create vs update.

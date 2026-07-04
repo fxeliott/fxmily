@@ -13,6 +13,15 @@ name: Cron Watch
 # curl step so GH Actions surfaces the alert through its native
 # notification channel — simpler, no permissions needed, no API calls.
 #
+# Tour 12 — SELF-HEALING pass. On a 503, before alerting, the watcher
+# re-fires the stale crons itself — but ONLY those that are detection-only
+# and idempotent (the 5 overdue-alert nudges + verification-scan: pure
+# reads that at worst re-send an admin nudge). Member-facing dispatchers
+# (checkin-reminders, dispatch-douglas, weekly-reports,
+# dispatch-notifications) are NEVER re-fired out of schedule — a duplicate
+# member notification is worse than an hour of red. If the re-check still
+# fails, the run fails loudly exactly as before.
+#
 # Required secrets : `CRON_SECRET` (mirrors `/etc/fxmily/web.env`) and
 # `APP_URL` repository variable (e.g. `https://app.fxmilyapp.com`).
 
@@ -32,18 +41,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Curl health endpoint and fail loud if red
+      - name: Curl health endpoint, self-heal safe crons, fail loud if still red
         run: |
           set +e
-          BODY=$(curl -sS \
-            --max-time 30 \
-            -X POST \
-            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
-            -H "Accept: application/json" \
-            -w "\n__HTTP_STATUS__%{http_code}" \
-            "${{ vars.APP_URL || 'https://app.fxmilyapp.com' }}/api/cron/health")
-          HTTP_CODE=$(echo "$BODY" | sed -n 's/.*__HTTP_STATUS__\([0-9]*\)$/\1/p')
-          BODY_ONLY=$(echo "$BODY" | sed '$d')
+          BASE_URL="${{ vars.APP_URL || 'https://app.fxmilyapp.com' }}"
+
+          check_health() {
+            BODY=$(curl -sS \
+              --max-time 30 \
+              -X POST \
+              -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+              -H "Accept: application/json" \
+              -w "\n__HTTP_STATUS__%{http_code}" \
+              "$BASE_URL/api/cron/health")
+            HTTP_CODE=$(echo "$BODY" | sed -n 's/.*__HTTP_STATUS__\([0-9]*\)$/\1/p')
+            BODY_ONLY=$(echo "$BODY" | sed '$d')
+          }
+
+          check_health
           echo "::group::Health response (HTTP $HTTP_CODE)"
           echo "$BODY_ONLY"
           echo "::endgroup::"
@@ -51,5 +66,50 @@ jobs:
             echo "✅ Heartbeat green"
             exit 0
           fi
-          echo "::error title=Cron heartbeat alert::HTTP $HTTP_CODE — at least one cron is stale or never ran. See body above."
+
+          # ---- Self-heal pass (tour 12) --------------------------------------
+          # action slug (health report) -> cron route. ONLY detection-only,
+          # idempotent routes: pure reads whose worst duplicate effect is a
+          # repeated ADMIN nudge. Never member-facing dispatchers.
+          declare -A HEALABLE=(
+            ["cron.calendar_overdue.scan"]="calendar-overdue-alert"
+            ["cron.monthly_debrief_overdue.scan"]="monthly-debrief-overdue-alert"
+            ["cron.onboarding_profile_overdue.scan"]="onboarding-profile-overdue-alert"
+            ["cron.weekly_report_overdue.scan"]="weekly-report-overdue-alert"
+            ["cron.verification_overdue.scan"]="verification-batch-overdue-alert"
+            ["cron.verification_scan.scan"]="verification-scan"
+          )
+
+          STALE_ACTIONS=$(echo "$BODY_ONLY" | jq -r \
+            '.entries[]? | select(.status == "red" or .status == "never_ran") | .action' 2>/dev/null)
+          HEALED_ANY=0
+          for action in $STALE_ACTIONS; do
+            route="${HEALABLE[$action]:-}"
+            if [ -z "$route" ]; then
+              echo "⏭  $action is stale but NOT self-healable (member-facing or infra) — left for the operator."
+              continue
+            fi
+            echo "🔧 Re-firing $route (stale: $action)..."
+            HEAL_CODE=$(curl -sS -o /dev/null -w '%{http_code}' \
+              --max-time 120 \
+              -X POST \
+              -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+              "$BASE_URL/api/cron/$route")
+            echo "   → HTTP $HEAL_CODE"
+            [ "$HEAL_CODE" = "200" ] && HEALED_ANY=1
+          done
+
+          if [ "$HEALED_ANY" = "1" ]; then
+            sleep 10
+            check_health
+            echo "::group::Health after self-heal (HTTP $HTTP_CODE)"
+            echo "$BODY_ONLY"
+            echo "::endgroup::"
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "::warning title=Cron self-healed::Stale crons were re-fired and the board is green again. If this repeats hourly, the host schedule is broken — check /etc/cron.d/fxmily-app."
+              exit 0
+            fi
+          fi
+
+          echo "::error title=Cron heartbeat alert::HTTP $HTTP_CODE — at least one cron is stale or never ran, and self-heal could not fix it. See body above."
           exit 1

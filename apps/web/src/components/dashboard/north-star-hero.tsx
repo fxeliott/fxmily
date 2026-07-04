@@ -22,6 +22,7 @@ import {
 import Link from 'next/link';
 
 import { StreakCard } from '@/components/checkin/streak-card';
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { Card } from '@/components/ui/card';
 import { InfoDot } from '@/components/ui/info-dot';
 import { Sparkline } from '@/components/ui/sparkline';
@@ -269,6 +270,8 @@ export function NorthStarHero({
   const disciplineValue = score?.disciplineScore ?? null;
   const trend = trendOf(disciplinePoints);
   const hasSpark = disciplinePoints.length >= 2;
+  // Tour 12 (A) — salutation découpée mot à mot pour le word-rise en cascade.
+  const greetingWords = `${greeting} ${firstName}`.split(' ');
 
   // Standing reflects the ACTION state (the hero's purpose), decoupled from the
   // score readiness : a member can have 100 trades yet no score snapshot yet, so
@@ -286,23 +289,41 @@ export function NorthStarHero({
         primary
         glass
         edge={false}
-        className="dash-hero relative overflow-hidden p-6 backdrop-blur-[16px] backdrop-saturate-150 lg:p-8"
+        className="dash-hero grain-card relative overflow-hidden p-6 backdrop-blur-[16px] backdrop-saturate-150 lg:p-8"
       >
+        {/* Tour 12 (A) — liseret respirant : un souffle décoratif continu qui
+            fait vivre le hero sans jamais un throb anxieux (§31.2). Frère du
+            contenu, opacity-only, aria-hidden. La couche balayage conique
+            .ds-sweep vient dessous, sous le contenu opaque. */}
+        <span className="ds-sweep" aria-hidden="true" />
+        <span className="hero-breathe" aria-hidden="true" />
         <div className="relative grid gap-6 lg:grid-cols-[1.5fr_1fr] lg:items-center lg:gap-8">
           {/* ---- LEFT — état du jour ---- */}
           <div className="flex flex-col gap-4">
             <div className="t-eyebrow flex items-center gap-2">
               <span>{dateLabel}</span>
             </div>
+            {/* Tour 12 (A) — salutation en word-rise mot à mot : la 1re seconde
+                met en scène l'arrivée. CSS-only (`.word-rise` = animation forwards),
+                donc SSR-safe (un seul arbre) ; le filet reduced-motion global fige
+                chaque mot à son état final. Le point garde le dernier mot. */}
             <h1
               id="hero-greeting"
-              className="f-display h-rise leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+              className="f-display leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
               style={{
                 fontFeatureSettings: '"ss01" 1',
                 fontSize: 'clamp(1.875rem, 1.5rem + 1.6vw, 2.5rem)',
               }}
             >
-              {greeting} {firstName}.
+              {greetingWords.map((word, i) => (
+                <span key={`${word}-${i}`}>
+                  <span className="word-rise" style={{ animationDelay: `${80 + i * 90}ms` }}>
+                    {word}
+                    {i === greetingWords.length - 1 ? '.' : ''}
+                  </span>
+                  {i < greetingWords.length - 1 ? ' ' : ''}
+                </span>
+              ))}
             </h1>
             <p className="t-lead max-w-[46ch]">{standing}</p>
 
@@ -317,13 +338,29 @@ export function NorthStarHero({
                     tip="La discipline mesure ta régularité de process (check-ins tenus, plan respecté, exécution complète) sur une échelle de 0 à 100. Elle monte avec la constance, jamais avec ton profit."
                   />
                 </span>
+                {/* Tour 12 (A) — le score focal du hero : 56-64px en dégradé de
+                    marque (text-grad-brand, grand texte AA ≥3:1) avec count-up
+                    (AnimatedNumber, once-on-view). C'est LE contraste d'échelle
+                    typographique de la page. Le `/100` reste en petit texte pleine
+                    couleur (AA ≥4.5:1). Pas de valeur → « à venir » muté, même
+                    échelle pour garder le rythme. */}
                 <div className="flex items-end gap-2.5">
-                  <span className="f-mono text-[28px] leading-none font-bold tracking-[-0.03em] text-[var(--t-1)] tabular-nums">
-                    {disciplineValue === null ? 'à venir' : disciplineValue}
-                    {disciplineValue !== null ? (
-                      <span className="text-[15px] font-medium text-[var(--t-3)]">/100</span>
-                    ) : null}
-                  </span>
+                  {disciplineValue === null ? (
+                    <span className="f-mono text-[clamp(2.75rem,2rem+2.4vw,3.5rem)] leading-none font-bold tracking-[-0.03em] text-[var(--t-3)] tabular-nums">
+                      à venir
+                    </span>
+                  ) : (
+                    <span className="f-mono flex items-end leading-none font-bold tracking-[-0.03em] tabular-nums">
+                      <AnimatedNumber
+                        value={disciplineValue}
+                        durationMs={1200}
+                        className="text-grad-brand text-[clamp(2.75rem,2rem+2.4vw,3.5rem)] leading-[0.9]"
+                      />
+                      <span className="mb-1 ml-0.5 text-[17px] font-medium text-[var(--t-3)]">
+                        /100
+                      </span>
+                    </span>
+                  )}
                   {trend ? <TrendBadge trend={trend} /> : null}
                 </div>
                 {hasSpark ? (

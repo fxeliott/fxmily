@@ -116,7 +116,18 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
           comme dashboard/profile). Le hub 2×/jour mérite la même profondeur que
           ses propres enfants StreakCard/TrendCard. */}
       <DashboardAmbient />
-      <div className="relative mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8 lg:py-10">
+      {/* Tour 12 — `page-stagger` cascades the direct sections in on navigation
+          (header + confirmation/crisis/catch-up banners) so the hub arrives in
+          scene instead of a flat fade. The three children that carry their OWN
+          entrance — the two inner `dash-stagger` blocks and the scroll-driven
+          `wow-reveal` explainer — opt OUT via `data-self-animate` so they land
+          visible and keep their own animation instead of fighting the parent
+          wowRise for `animation`/`opacity`. Compositor-only (opacity +
+          translateY), reduced-motion neutralised by the class, CLS 0. No fixed
+          descendant lives here (DashboardAmbient is an absolute sibling, the
+          app-shell fixed nav is an ancestor), so the transform creates no
+          containing block for a fixed element. */}
+      <div className="page-stagger relative mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8 lg:py-10">
         <header className="flex flex-col gap-3">
           <Link
             href="/dashboard"
@@ -182,7 +193,7 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
         {/* dash-stagger : la lecture du moment (streak puis tendance 7 j) arrive
             en cascade douce — DIRECT children animés (compositor-only, reduced-
             motion neutralisé globalement par la classe utilitaire). */}
-        <section className="dash-stagger flex flex-col gap-6">
+        <section className="dash-stagger flex flex-col gap-6" data-self-animate>
           <StreakCard
             streak={streak.current}
             todayFilled={streak.todayFilled}
@@ -194,7 +205,7 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
 
         {/* dash-stagger : les 2 slots (matin/soir) arrivent en cascade — DIRECT
             children animés (compositor-only, reduced-motion neutralisé globalement). */}
-        <section className="dash-stagger grid gap-4 sm:grid-cols-2">
+        <section className="dash-stagger grid gap-4 sm:grid-cols-2" data-self-animate>
           <SlotCard
             slot="morning"
             submitted={status.morningSubmitted}
@@ -212,8 +223,12 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
         </section>
 
         {/* wow-reveal : la carte explicative est sous le fold — fade+rise au
-            scroll (progressive, compositor-only, reduced-motion géré par la classe). */}
-        <section className="wow-reveal">
+            scroll (progressive, compositor-only, reduced-motion géré par la classe).
+            `data-self-animate` : elle porte SA propre animation (scroll-driven), donc
+            elle opte hors du wowRise du page-stagger parent — sinon les deux se
+            disputeraient `animation`/`opacity` (double-fade au mieux, coincée à
+            opacity:0 au pire). Elle reste visible + garde son reveal au scroll. */}
+        <section className="wow-reveal" data-self-animate>
           <Card className="flex flex-col gap-2 p-5">
             <span className="t-eyebrow">Pourquoi deux fois par jour ?</span>
             <p className="t-body text-[var(--t-2)]">

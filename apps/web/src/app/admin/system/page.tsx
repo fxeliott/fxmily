@@ -170,6 +170,8 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
                 cron.&lt;route&gt;.scan
               </code>{' '}
               à chaque exécution. Vert = âge ≤ 1.5× période · Ambre = ≤ tolérance · Rouge = au-delà.
+              Les crons à fenêtres horaires sont jugés sur leurs créneaux planifiés (ticks manqués),
+              pas sur l’âge brut.
             </p>
           </div>
         </div>
@@ -205,8 +207,8 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
               <CronStatusPill status={workerReport.overall} />
             </h2>
             <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
-              Les 6 batchs Claude tournent sur la machine locale (Task Scheduler). Chaque pull émet
-              un audit row{' '}
+              Les 6 batchs Claude tournent sur la machine locale (Task Scheduler), surveillés par un
+              watchdog qui répare seul les tâches mortes. Chaque pull émet un audit row{' '}
               <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
                 &lt;pipeline&gt;.batch.pulled
               </code>{' '}
@@ -309,14 +311,22 @@ function CronRow({ entry }: { entry: HeartbeatHealthEntry }): React.ReactElement
         ) : null}
         {/* Age vs tolerance, visual. The Pill says *which* bucket; this bar
             says *how close to red* — a cron at 95% of tolerance reads amber
-            but the near-full bar warns the operator before it flips. Only when
-            the cron has actually run and a finite tolerance exists. */}
-        <CronAgeBar
-          status={entry.status}
-          ageMs={entry.ageMs}
-          periodMs={entry.periodMs}
-          toleranceMs={entry.toleranceMs}
-        />
+            but the near-full bar warns the operator before it flips. Hidden
+            for window-bounded crons: between windows the raw age grows for
+            hours by design, so the gauge would read "almost red" all day
+            about a healthy cron. Their status is the missed-ticks count. */}
+        {entry.windowed ? (
+          <p className="mt-2 text-[11px] text-[var(--t-4)]">
+            Cron à fenêtres horaires · statut = créneaux planifiés manqués, pas l’âge brut
+          </p>
+        ) : (
+          <CronAgeBar
+            status={entry.status}
+            ageMs={entry.ageMs}
+            periodMs={entry.periodMs}
+            toleranceMs={entry.toleranceMs}
+          />
+        )}
       </div>
       <div className="text-right text-xs text-[var(--t-2)]">
         {entry.lastRanAt ? (
@@ -325,6 +335,18 @@ function CronRow({ entry }: { entry: HeartbeatHealthEntry }): React.ReactElement
               {entry.ageMs !== null ? formatDuration(entry.ageMs) : 'âge inconnu'}
             </p>
             <p className="text-[10px] text-[var(--t-4)]">{formatTimestamp(entry.lastRanAt)}</p>
+          </>
+        ) : entry.status === 'pending' ? (
+          <>
+            {/* First run not due yet: calm, factual — NOT the red "Jamais
+                exécuté" which reads as an incident about a task installed
+                two days ago whose first tick is next month. */}
+            <p className="text-[var(--t-2)]">Premier run à venir</p>
+            {entry.firstRunDeadline ? (
+              <p className="text-[10px] text-[var(--t-4)]">
+                attendu avant le {formatTimestamp(entry.firstRunDeadline)}
+              </p>
+            ) : null}
           </>
         ) : (
           <p className="text-[var(--bad)]">Jamais exécuté</p>
@@ -351,7 +373,7 @@ function CronHeartbeatDot({ status }: { status: CronStatus }): React.ReactElemen
         ? 'var(--warn)'
         : status === 'red'
           ? 'var(--bad)'
-          : 'var(--t-3)'; // never_ran — neutral, not red (it hasn't failed, it has no data)
+          : 'var(--t-3)'; // never_ran / pending — neutral, not red (no failure, just no data yet)
   const labelText =
     status === 'green'
       ? 'Sain'
@@ -359,7 +381,9 @@ function CronHeartbeatDot({ status }: { status: CronStatus }): React.ReactElemen
         ? 'Lent'
         : status === 'red'
           ? 'Bloqué'
-          : 'Jamais exécuté';
+          : status === 'pending'
+            ? 'Premier run à venir'
+            : 'Jamais exécuté';
   return (
     <span
       role="img"
@@ -434,9 +458,12 @@ function CronAgeBar({
 }
 
 function OverallStatusPill({ status }: { status: CronStatus }): React.ReactElement {
-  const tone = status === 'green' ? 'ok' : status === 'amber' ? 'warn' : 'bad';
+  // `pending` is healthy by definition (first run not due yet) — the reports
+  // never propagate it to `overall`, but the type allows it so map it green.
+  const tone =
+    status === 'green' || status === 'pending' ? 'ok' : status === 'amber' ? 'warn' : 'bad';
   const label =
-    status === 'green'
+    status === 'green' || status === 'pending'
       ? 'Tout vert'
       : status === 'amber'
         ? 'Surveillance'
@@ -450,16 +477,32 @@ function CronStatusPill({ status }: { status: CronStatus }): React.ReactElement 
   const tone =
     status === 'green' ? 'ok' : status === 'amber' ? 'warn' : status === 'red' ? 'bad' : 'mute';
   const label =
-    status === 'green' ? 'OK' : status === 'amber' ? 'Lent' : status === 'red' ? 'Stale' : 'Jamais';
+    status === 'green'
+      ? 'OK'
+      : status === 'amber'
+        ? 'Lent'
+        : status === 'red'
+          ? 'Stale'
+          : status === 'pending'
+            ? 'À venir'
+            : 'Jamais';
   return <Pill tone={tone}>{label}</Pill>;
 }
 
 /**
  * Same severity order the reports use for their own `overall`
- * (`red` > `never_ran` > `amber` > `green`) — applied across the two boards.
+ * (`red` > `never_ran` > `amber` > `green` = `pending`) — applied across
+ * the two boards. `pending` never escalates the masthead: a first run that
+ * is not due yet is expected state.
  */
 function worstStatus(a: CronStatus, b: CronStatus): CronStatus {
-  const severity: Record<CronStatus, number> = { green: 0, amber: 1, never_ran: 2, red: 3 };
+  const severity: Record<CronStatus, number> = {
+    green: 0,
+    pending: 0,
+    amber: 1,
+    never_ran: 2,
+    red: 3,
+  };
   return severity[a] >= severity[b] ? a : b;
 }
 

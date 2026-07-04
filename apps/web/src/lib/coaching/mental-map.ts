@@ -76,6 +76,63 @@ export interface MentalMapInput {
 export const MAX_MENTAL_MAP_ENTRIES = 4;
 
 /**
+ * Tour 12 (action 3) — l'axe mental DOMINANT du membre, dérivé de ses priorités
+ * d'onboarding (profil S2) déjà classées par `classifyPriorityAxes`. Ce dernier
+ * retourne les axes dans l'ordre de première apparition ; la tête est donc l'axe
+ * que le membre a mis en avant en premier ⇒ son axe de travail principal.
+ *
+ * Rôle : SEUL tie-break de personnalisation pour le picker Mark Douglas
+ * (`pickBestMatch`) et pour les lignes de coaching des routes muettes (/patterns,
+ * /seances, /library). `null` quand aucune priorité ne mappe (0 fabrication) ⇒ le
+ * comportement historique (priorité + cooldown seuls) reste STRICTEMENT inchangé.
+ *
+ * §50/§2-safe : enum-only, jamais le texte libre AI-dérivé de l'axe. §21.5 : jamais
+ * un input du score comportemental — une préférence d'affichage/priorisation.
+ */
+export function dominantMentalAxis(
+  priorityAxes: readonly MentalAxis[] | undefined,
+): MentalAxis | null {
+  return priorityAxes?.[0] ?? null;
+}
+
+/**
+ * Tour 12 (action 4) — libellé FR public d'un axe mental. Miroir de l'`AXIS_FR`
+ * privé d'`engine.ts` (même vocabulaire), exposé pour la ligne de coaching des
+ * routes muettes. Enum→texte figé (jamais de l'AI brut) ⇒ §50-safe.
+ */
+export const MENTAL_AXIS_FR: Record<MentalAxis, string> = {
+  discipline: 'la discipline',
+  honesty: 'l’honnêteté avec toi-même',
+  ego: 'l’acceptation des faits',
+  consistency: 'la régularité',
+};
+
+/** Les routes (jusqu'ici muettes) qui portent une ligne de coaching contextuelle. */
+export type CoachingLinePage = 'patterns' | 'seances' | 'library';
+
+/**
+ * Tour 12 (action 4) — copie DÉTERMINISTE de la ligne de coaching en tête d'une
+ * route jusqu'ici muette (/patterns, /seances, /library). Ancrée sur l'axe de
+ * travail du membre (profil S2) + le rôle de la page, elle relie l'axe à ce que la
+ * page offre, sans jamais un verdict ni un conseil de marché (§2/§33.2). FR,
+ * tutoiement, ponctuation simple, jamais de tiret cadratin (contrainte Eliott).
+ *
+ * PUR + figé ⇒ §50-safe (aucun texte AI surfacé) et testable en isolation. La copie
+ * n'affiche jamais un chiffre fabriqué : elle oriente, elle ne mesure pas.
+ */
+export function coachingAxisLine(axis: MentalAxis, page: CoachingLinePage): string {
+  const focus = MENTAL_AXIS_FR[axis];
+  switch (page) {
+    case 'patterns':
+      return `Ton axe de travail : ${focus}. La table émotion x résultat ci-dessous est ton meilleur miroir.`;
+    case 'seances':
+      return `Ton axe de travail : ${focus}. Garde-le en tête en revoyant les séances.`;
+    case 'library':
+      return `Ton axe de travail : ${focus}. Laisse-toi guider vers les fiches qui le nourrissent.`;
+  }
+}
+
+/**
  * S5 §32-C — boost de priorisation quand une entrée porte sur un axe que le membre
  * s'est fixé (profil S2). BORNÉ < 1 par INVARIANT (testé) : (a) il ne franchit
  * JAMAIS une frontière de tonalité (alerte ≥ 103, vigilance ≥ 11, positif = 0 :

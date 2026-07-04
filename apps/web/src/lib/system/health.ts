@@ -36,6 +36,30 @@ interface HeartbeatExpectation<A extends string = string> {
   periodMs: number;
   /** Multiplier applied to `periodMs` to flag a gap as unhealthy. Default 3. */
   toleranceMultiplier?: number;
+  /**
+   * Multiplier applied to `periodMs` for the green→amber boundary. Default 1.5.
+   * Raise it for heartbeats whose SCHEDULER jitters by design (GitHub Actions
+   * `schedule` routinely drifts 30-60 min and skips hours under load) so the
+   * board doesn't read "Lent" for a watcher that is merely riding GH's queue.
+   */
+  greenMultiplier?: number;
+  /**
+   * Tour 12 — window-bounded schedule (UTC). When set, the status is computed
+   * from MISSED EXPECTED TICKS instead of raw age: a cron that fires every
+   * 15 min inside 05-07h + 18-20h windows is HEALTHY at 12h even though its
+   * last row is hours old. Raw-age classification flagged it "amber" all day,
+   * every day, between windows — a structural false positive the operator
+   * learns to ignore (which is how real incidents slip through).
+   */
+  windowedScheduleUtc?: { minutes: readonly number[]; hours: readonly number[] };
+  /**
+   * Tour 12 — ISO date from which this heartbeat is EXPECTED to exist (task
+   * installed / cron wired). A missing row before `expectedSince + tolerance`
+   * is `pending` (first run not due yet — neutral, calm), not `never_ran`
+   * (incident). Without it, a monthly pipeline installed on the 2nd reads
+   * "Jamais exécuté" for a month and drags the masthead to "Pas démarré".
+   */
+  expectedSince?: string;
 }
 
 type CronAction =
@@ -72,8 +96,10 @@ const EXPECTATIONS: readonly CronExpectation[] = [
   {
     action: 'cron.checkin_reminders.scan',
     label: 'Check-in reminders',
-    periodMs: 15 * MIN, // every 15 min in the 7-9 AM + 8-10 PM UTC windows
-    toleranceMultiplier: 80, // window-bounded, so allow up to ~20h between runs (off-window)
+    periodMs: 15 * MIN, // every 15 min inside the windows below (crontab.fxmily:56)
+    toleranceMultiplier: 80, // still bounds the age bar; status comes from missed ticks
+    // `0,15,30,45 5-7,18-20 * * *` — Paris morning + evening check-in windows.
+    windowedScheduleUtc: { minutes: [0, 15, 30, 45], hours: [5, 6, 7, 18, 19, 20] },
   },
   {
     action: 'cron.recompute_scores.scan',
@@ -221,10 +247,15 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     // outages of 6 consecutive misses, but absorbs the GH cron jitter that
     // routinely drifts 30-60 min during peak hours.
     toleranceMultiplier: 6,
+    // Tour 12 — GH Actions also SKIPS scheduled hours entirely under load
+    // (observed 2026-07-04: 04:01 → 07:14 → 09:32, no 05/06/08 runs). A 2h18
+    // gap is normal operation for this scheduler, not a slow watcher: green
+    // up to 3h, amber 3-6h, red past 6h.
+    greenMultiplier: 3,
   },
 ] as const;
 
-export type CronStatus = 'green' | 'amber' | 'red' | 'never_ran';
+export type CronStatus = 'green' | 'amber' | 'red' | 'never_ran' | 'pending';
 
 export interface HeartbeatHealthEntry<A extends string = string> {
   action: A;
@@ -244,6 +275,16 @@ export interface HeartbeatHealthEntry<A extends string = string> {
    * invisible to the age-only check, which just sees "it ran".
    */
   errorCount: number;
+  /**
+   * True for window-bounded schedules — the UI hides the age/tolerance bar
+   * (meaningless between windows) and shows the window note instead.
+   */
+  windowed: boolean;
+  /**
+   * `pending` only — ISO instant past which a still-missing first row flips
+   * to `never_ran`. Lets the UI say "premier run attendu avant le …".
+   */
+  firstRunDeadline: string | null;
 }
 
 export type CronHealthEntry = HeartbeatHealthEntry<CronAction>;
@@ -308,13 +349,25 @@ async function buildHeartbeatReport<A extends string>(
     const lastRanAt = lastRanByAction.get(expectation.action) ?? null;
     const ageMs = lastRanAt ? now.getTime() - lastRanAt.getTime() : null;
     const toleranceMs = expectation.periodMs * (expectation.toleranceMultiplier ?? 3);
+    const firstRunDeadline = expectation.expectedSince
+      ? new Date(new Date(expectation.expectedSince).getTime() + toleranceMs).toISOString()
+      : null;
 
     let status: CronStatus;
-    if (lastRanAt === null) {
-      status = 'never_ran';
-    } else if (ageMs === null) {
-      status = 'never_ran';
-    } else if (ageMs <= expectation.periodMs * 1.5) {
+    if (lastRanAt === null || ageMs === null) {
+      // No row at all. If the heartbeat was wired recently and its first
+      // occurrence is not overdue yet, that absence is EXPECTED — `pending`
+      // keeps the board calm and honest instead of shouting "Jamais exécuté"
+      // about a monthly task installed two days ago.
+      status =
+        firstRunDeadline !== null && now.getTime() <= new Date(firstRunDeadline).getTime()
+          ? 'pending'
+          : 'never_ran';
+    } else if (expectation.windowedScheduleUtc) {
+      // Window-bounded cron: classify on missed expected ticks, not raw age.
+      const missed = countMissedTicks(expectation.windowedScheduleUtc, lastRanAt, now);
+      status = missed === 0 ? 'green' : missed <= 2 ? 'amber' : 'red';
+    } else if (ageMs <= expectation.periodMs * (expectation.greenMultiplier ?? 1.5)) {
       status = 'green';
     } else if (ageMs <= toleranceMs) {
       status = 'amber';
@@ -340,9 +393,14 @@ async function buildHeartbeatReport<A extends string>(
       toleranceMs,
       status,
       errorCount,
+      windowed: Boolean(expectation.windowedScheduleUtc),
+      firstRunDeadline: status === 'pending' ? firstRunDeadline : null,
     };
   });
 
+  // `pending` counts as healthy for the overall pill: a first run that is not
+  // due yet is expected state, not an incident — it must not page the watcher
+  // nor drag the masthead to "Incident".
   const overall: CronStatus = entries.some((e) => e.status === 'red')
     ? 'red'
     : entries.some((e) => e.status === 'never_ran')
@@ -352,6 +410,49 @@ async function buildHeartbeatReport<A extends string>(
         : 'green';
 
   return { ranAt: now.toISOString(), overall, entries };
+}
+
+/**
+ * Tour 12 — count the schedule ticks that SHOULD have fired strictly after
+ * `lastRanAt` and up to `now - jitter`, for a window-bounded cron
+ * (`minutes × hours`, UTC, every day). 0 missed → green ; ≤ 2 → amber ;
+ * more → red. A 5-min jitter grace keeps the tick currently firing out of
+ * the count. Iteration is bounded: past ~7 days of misses the exact count
+ * stops mattering (red either way), so we bail out early.
+ */
+function countMissedTicks(
+  schedule: { minutes: readonly number[]; hours: readonly number[] },
+  lastRanAt: Date,
+  now: Date,
+): number {
+  const JITTER_MS = 5 * MIN;
+  const horizon = now.getTime() - JITTER_MS;
+  if (horizon <= lastRanAt.getTime()) return 0;
+
+  let missed = 0;
+  const cursor = new Date(lastRanAt.getTime());
+  cursor.setUTCSeconds(0, 0);
+  const maxDays = 8;
+  for (let day = 0; day <= maxDays; day += 1) {
+    const base = new Date(cursor.getTime() + day * DAY);
+    for (const hour of schedule.hours) {
+      for (const minute of schedule.minutes) {
+        const tick = Date.UTC(
+          base.getUTCFullYear(),
+          base.getUTCMonth(),
+          base.getUTCDate(),
+          hour,
+          minute,
+        );
+        if (tick > lastRanAt.getTime() && tick <= horizon) {
+          missed += 1;
+          if (missed > 3) return missed; // already red — stop counting
+        }
+      }
+    }
+    if (base.getTime() > horizon) break;
+  }
+  return missed;
 }
 
 export async function getCronHealthReport(now: Date = new Date()): Promise<CronHealthReport> {
@@ -386,9 +487,15 @@ type WorkerPipelineAction =
   | 'calendar.batch.pulled'
   | 'weekly_report.batch.pulled'
   | 'monthly_debrief.batch.pulled'
-  | 'member_profile_monthly.batch.pulled';
+  | 'member_profile_monthly.batch.pulled'
+  | 'worker.watchdog.heartbeat';
 
 const MONTH = 30 * DAY;
+
+// Tour 12 — the 6 pipeline tasks were (re)installed on the host on this date
+// (install-worker.ps1, 6/6 registered). Before that instant + tolerance, a
+// missing first row is `pending`, not `never_ran`.
+const WORKER_INSTALLED_AT = '2026-07-02T00:00:00Z';
 
 // Source of truth: `ops/worker/install-worker.ps1` ($Pipelines + triggers).
 const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[] = [
@@ -402,6 +509,7 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
     label: 'Worker · profils onboarding',
     periodMs: 20 * MIN,
     toleranceMultiplier: 72, // 24h
+    expectedSince: WORKER_INSTALLED_AT,
   },
   {
     // Daily 04:10 local. StartWhenAvailable replays a missed run at boot, so
@@ -409,6 +517,7 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
     action: 'verification.batch.pulled',
     label: 'Worker · vision preuves MT5',
     periodMs: DAY,
+    expectedSince: WORKER_INSTALLED_AT,
   },
   {
     // Weekly, Monday 05:10 local. ×2 → red only after TWO missed Mondays —
@@ -417,6 +526,7 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
     label: 'Worker · calendriers semaine',
     periodMs: WEEK,
     toleranceMultiplier: 2,
+    expectedSince: WORKER_INSTALLED_AT,
   },
   {
     // Weekly, Sunday 05:40 local. Same ×2 rationale as the calendar pipeline.
@@ -424,6 +534,7 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
     label: 'Worker · digests hebdo',
     periodMs: WEEK,
     toleranceMultiplier: 2,
+    expectedSince: WORKER_INSTALLED_AT,
   },
   {
     // Monthly, day 1 06:10 local. ×2 (60d) → red after two missed months.
@@ -431,15 +542,32 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
     label: 'Worker · débriefs mensuels',
     periodMs: MONTH,
     toleranceMultiplier: 2,
+    expectedSince: WORKER_INSTALLED_AT,
   },
   {
     // Monthly, day 2 06:40 local (J-E deep re-profiling, staggered one day
-    // after the debrief batch). `never_ran` is the HONEST status until its
-    // first scheduled run — the UI renders it neutral, not red.
+    // after the debrief batch). With `expectedSince`, the month before its
+    // first scheduled run reads `pending` (calm "premier run à venir"), not
+    // `never_ran` — which was dragging the masthead to "Pas démarré".
     action: 'member_profile_monthly.batch.pulled',
     label: 'Worker · re-profilage mensuel',
     periodMs: MONTH,
     toleranceMultiplier: 2,
+    expectedSince: WORKER_INSTALLED_AT,
+  },
+  {
+    // Tour 12 — the worker WATCHDOG's own heartbeat (self-healing layer).
+    // ops/worker/watchdog.ps1 runs every 30 min on the host, repairs dead
+    // tasks, then POSTs /api/admin/worker-watchdog/heartbeat. Monitored here
+    // for the same reason as cron.health.scan: a guardian nobody watches is
+    // a broken promise. ×48 → red only after 24h of silence (PC off at night
+    // is normal), and `expectedSince` keeps it `pending` until the task is
+    // actually installed.
+    action: 'worker.watchdog.heartbeat',
+    label: 'Worker · watchdog (auto-réparation)',
+    periodMs: 30 * MIN,
+    toleranceMultiplier: 48, // 24h
+    expectedSince: '2026-07-04T12:00:00Z',
   },
 ] as const;
 

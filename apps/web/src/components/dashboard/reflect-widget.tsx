@@ -47,7 +47,7 @@ export async function DashboardReflectWidget({ userId }: DashboardReflectWidgetP
       <div className="grid gap-3 sm:grid-cols-2">
         <Link
           href="/review"
-          className="rounded-card-lg group relative flex flex-col gap-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none motion-safe:hover:-translate-y-px"
+          className="wow-hover-glow rounded-card-lg group relative flex flex-col gap-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none motion-safe:hover:-translate-y-px"
           aria-label={`Revue hebdomadaire : ${reviewCount > 0 ? `dernière soumise le ${lastReviewDate}` : 'aucune pour l’instant'}`}
         >
           <div className="flex items-start justify-between gap-2">
@@ -85,7 +85,7 @@ export async function DashboardReflectWidget({ userId }: DashboardReflectWidgetP
 
         <Link
           href="/reflect"
-          className="rounded-card-lg group relative flex flex-col gap-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none motion-safe:hover:-translate-y-px"
+          className="wow-hover-glow rounded-card-lg group relative flex flex-col gap-2 overflow-hidden border border-[var(--b-default)] bg-[var(--bg-1)] p-4 transition-[border-color,box-shadow,transform] duration-150 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card-hover)] focus-visible:ring-2 focus-visible:ring-[var(--acc)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none motion-safe:hover:-translate-y-px"
           aria-label={`Réflexion ABCD : ${reflectionCount} réflexion${reflectionCount > 1 ? 's' : ''} ces 30 derniers jours`}
         >
           <div className="flex items-start justify-between gap-2">

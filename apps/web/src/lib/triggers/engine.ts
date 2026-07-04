@@ -17,6 +17,11 @@ import { getBehavioralScoreHistory } from '@/lib/scoring/service';
 // persistence was console-only and invisible to on-call. Mirrors the twin in
 // `lib/scoring/service.ts`.
 import { reportWarning } from '@/lib/observability';
+// Tour 12 (action 3) — the member's dominant mental axis (from their onboarding
+// profile) weights the same-priority tie-break in `pickBestMatch`. Read-only,
+// deterministic; `null` for un-profiled members → historical pick order.
+import { getDominantMentalAxis } from '@/lib/coaching/service';
+import type { DouglasCategory } from '@/generated/prisma/enums';
 
 import {
   isOnCooldown,
@@ -80,6 +85,8 @@ export type PreparsedCard = {
   readonly slug: string;
   readonly priority: number;
   readonly hatClass: string;
+  /** Tour 12 (action 3) — fed to the picker's profile-aware tie-break. */
+  readonly category: DouglasCategory;
   readonly rule: TriggerRule;
 };
 
@@ -88,6 +95,7 @@ const PUBLISHED_TRIGGER_CARD_SELECT = {
   slug: true,
   priority: true,
   hatClass: true,
+  category: true,
   triggerRules: true,
 } as const;
 
@@ -120,6 +128,7 @@ async function loadPublishedTriggerCards(): Promise<PreparsedCard[]> {
       slug: row.slug,
       priority: row.priority,
       hatClass: row.hatClass,
+      category: row.category,
       rule,
     });
   }
@@ -193,7 +202,7 @@ export async function evaluateAndDispatchForUser(
     ? Promise.resolve(options.preparsedCards)
     : loadPublishedTriggerCards();
 
-  const [trades, checkins, activeCards, deliveries, trainingActivity, scoreHistory] =
+  const [trades, checkins, activeCards, deliveries, trainingActivity, scoreHistory, dominantAxis] =
     await Promise.all([
       db.trade.findMany({
         where: {
@@ -245,6 +254,10 @@ export async function evaluateAndDispatchForUser(
       // T1 — behavioral-score trend (ascending, 90d default) for `score_drift`.
       // detectMomentum needs ≥6 points over a 42d window; 90d covers it with slack.
       getBehavioralScoreHistory(userId),
+      // Tour 12 (action 3) — member's dominant mental axis (profile S2), read in
+      // parallel so it adds no wall-clock. `null` for un-profiled members → the
+      // picker keeps its historical `priority DESC, id ASC` order (no regression).
+      getDominantMentalAxis(userId),
     ]);
 
   // --- 3. Build TriggerContext -----------------------------------------------
@@ -305,6 +318,8 @@ export async function evaluateAndDispatchForUser(
     cardSlug: string;
     priority: number;
     hatClass: HatClass;
+    /** Tour 12 (action 3) — carried through to the picker's profile tie-break. */
+    category: DouglasCategory;
     result: Extract<TriggerEvalResult, { matched: true }>;
   };
   const matches: Match[] = [];
@@ -319,6 +334,7 @@ export async function evaluateAndDispatchForUser(
         cardSlug: card.slug,
         priority: card.priority,
         hatClass: hat,
+        category: card.category,
         result,
       });
     }
@@ -357,9 +373,16 @@ export async function evaluateAndDispatchForUser(
   const skippedCooldown = matches.length - eligible.length;
 
   const picked = pickBestMatch({
-    matched: eligible.map((m) => ({ id: m.cardId, priority: m.priority, hatClass: m.hatClass })),
+    matched: eligible.map((m) => ({
+      id: m.cardId,
+      priority: m.priority,
+      hatClass: m.hatClass,
+      category: m.category,
+    })),
     history,
     now,
+    // Tour 12 (action 3) — profile-aware tie-break AFTER priority + cooldown.
+    dominantAxis,
   });
   if (!picked) {
     return { delivered: null, matched: matches.length, evaluated, skippedCooldown };

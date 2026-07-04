@@ -55,6 +55,27 @@ describe('buildPayload', () => {
     expect(out.notification.navigate).toMatch(/\/checkin\/evening$/);
   });
 
+  // Tour 12 (action 2) — the calm streak line stored at enqueue time becomes the
+  // push body; absent → the neutral default copy (null-safe, no regression).
+  it('uses the stored streak line as the reminder body when present', () => {
+    const line = '12 jours d’affilée derrière toi. Ton check-in du soir t’attend.';
+    const out = buildPayload('checkin_evening_reminder', 'r3', {
+      slot: 'evening',
+      date: '2026-05-07',
+      streakLine: line,
+    });
+    expect(out.notification.body).toBe(line);
+    expect(out.notification.navigate).toMatch(/\/checkin\/evening$/);
+  });
+
+  it('falls back to the neutral reminder body when no streak line is stored', () => {
+    const out = buildPayload('checkin_morning_reminder', 'r4', {
+      slot: 'morning',
+      date: '2026-05-07',
+    });
+    expect(out.notification.body).toBe('Trois minutes pour poser ton intention du jour.');
+  });
+
   it('builds Mark Douglas card delivery with slug', () => {
     const out = buildPayload('douglas_card_delivered', 'd1', { cardSlug: 'sortir-du-tilt' });
     expect(out.notification.navigate).toMatch(/\/library\/sortir-du-tilt$/);

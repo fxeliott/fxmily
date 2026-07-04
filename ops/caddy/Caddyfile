@@ -75,6 +75,18 @@ app.fxmilyapp.com {
 # Marketing / public landing : redirects to the app for V1 (no public
 # marketing site yet). Kill this block when fxmilyapp.com gets a real
 # landing page in V2.
+#
+# `tls internal` — these two names are Cloudflare-PROXIED (orange cloud), so
+# public ACME can never validate them from here: tls-alpn-01 terminates at
+# Cloudflare's edge ("Cannot negotiate ALPN protocol acme-tls/1") and http-01
+# gets bounced to an https:// URL that has no cert yet (chicken-and-egg).
+# That failing loop left the apex with NO cert at all → TLS alert on every
+# Cloudflare origin fetch → visitors saw a CF 522 while app.fxmilyapp.com
+# (DNS-only, direct ACME) stayed green. Cloudflare already serves the public
+# certificate at its edge; the origin only needs A cert for the CF→origin
+# hop, and CF "Full" accepts Caddy's internal CA. Long-term nicety: replace
+# this origin round-trip with a Cloudflare edge Redirect Rule.
 www.fxmilyapp.com, fxmilyapp.com {
+	tls internal
 	redir https://app.fxmilyapp.com{uri} permanent
 }

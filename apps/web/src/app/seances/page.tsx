@@ -9,6 +9,8 @@ import { SeancesDisclaimer } from '@/components/seances/seances-disclaimer';
 import { SeancesStatGrid } from '@/components/seances/seances-stat-grid';
 import { getSeancesHub } from '@/lib/seances/service';
 import { NextStepRail } from '@/components/nav/next-step-rail';
+import { CoachingAxisLine } from '@/components/coaching/coaching-axis-line';
+import { getDominantMentalAxis } from '@/lib/coaching/service';
 
 export const metadata = {
   title: 'Séances',
@@ -29,12 +31,25 @@ export default async function SeancesPage() {
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
-  const { stats, featuredDay, days, latestDoneId, hasPublished } = await getSeancesHub();
+  const [{ stats, featuredDay, days, latestDoneId, hasPublished }, dominantAxis] =
+    await Promise.all([
+      getSeancesHub(),
+      // Tour 12 (action 4) — dominant mental axis for the coaching line. `null`
+      // for un-profiled members → the line renders nothing (null-safe).
+      getDominantMentalAxis(session.user.id),
+    ]);
 
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       <DashboardAmbient />
-      <div className="relative mx-auto flex w-full max-w-[var(--w-app)] flex-1 flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
+      {/* Tour 12 — `page-stagger` cascades the direct sections in on navigation.
+          The two `wow-reveal` sections below carry their OWN scroll-driven
+          entrance, so they opt OUT via `data-self-animate` (else the two would
+          fight over animation/opacity — double-fade at best, stuck at opacity:0
+          at worst). No fixed descendant here (DashboardAmbient is an absolute
+          sibling, the app-shell nav is an ancestor), so the transform creates no
+          containing block for a fixed element. */}
+      <div className="page-stagger relative mx-auto flex w-full max-w-[var(--w-app)] flex-1 flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
         <header className="flex flex-col gap-4">
           <Link
             href="/dashboard"
@@ -65,6 +80,10 @@ export default async function SeancesPage() {
 
         <NextStepRail currentPath="/seances" />
 
+        {/* Tour 12 (action 4) — coaching line: this route was profile-blind.
+            Null-safe (no profile → renders nothing). */}
+        <CoachingAxisLine axis={dominantAxis} page="seances" />
+
         <SeancesStatGrid stats={stats} />
 
         {/* À la une — most recent day with a done session. */}
@@ -72,6 +91,7 @@ export default async function SeancesPage() {
           <section
             aria-labelledby="seances-featured-heading"
             className="wow-reveal flex flex-col gap-3"
+            data-self-animate
           >
             <div className="flex items-baseline justify-between gap-3">
               <h2 id="seances-featured-heading" className="t-eyebrow-lg text-[var(--t-3)]">
@@ -91,6 +111,7 @@ export default async function SeancesPage() {
         <section
           aria-labelledby="seances-archive-heading"
           className="wow-reveal flex flex-col gap-4"
+          data-self-animate
         >
           <h2 id="seances-archive-heading" className="t-eyebrow-lg text-[var(--t-3)]">
             Toutes les séances

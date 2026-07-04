@@ -126,11 +126,38 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # SSH deploy only needs read access to repository contents (none in
-    # practice — the appleboy/ssh-action only consumes secrets).
+    # Tour 12 — contents:read is now used for real: the cron-convergence
+    # steps below check out ops/cron and scp it to the host.
     permissions:
       contents: read
     steps:
+      # Tour 12 — CRON CONVERGENCE. The image deploy never touched
+      # /etc/cron.d/fxmily-app nor /usr/local/bin/fxmily-cron, so every cron
+      # added in the repo silently missed prod until a human installed it
+      # (2026-07-04 incident: verification-overdue cron "Pas démarré" for
+      # days). Stage the two repo files on the host, then let the root-owned
+      # validator (/usr/local/bin/fxmily-sync-cron, sudoers NOPASSWD, no
+      # args, strict line-by-line crontab validation) converge the host.
+      - name: Checkout (cron sources only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            ops/cron
+          sparse-checkout-cone-mode: true
+
+      - name: Stage cron files on host
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
+        with:
+          host: ${{ secrets.HETZNER_HOST }}
+          username: fxmily
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          port: 22
+          source: 'ops/cron/crontab.fxmily,ops/cron/fxmily-cron'
+          target: /home/fxmily/cron-sync
+          strip_components: 2
+          overwrite: true
+
       - name: SSH → docker compose pull + up + migrate
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
         with:
@@ -316,6 +343,19 @@ jobs:
             # 5. DECISION — either reap old images (healthy deploy) or roll back
             # to the previously-running image and FAIL the job (FIX-2).
             if [ "$HEALTH_OK" = "1" ]; then
+              # Tour 12 — converge the host cron onto the staged repo files
+              # (validated + installed by the root-owned fxmily-sync-cron;
+              # sudoers grants exactly this one command, no args). Runs ONLY
+              # on a healthy deploy so a rolled-back image never installs the
+              # new image's crontab. Failure here fails the job loudly (the
+              # app deploy itself is fine, but the operator must know the
+              # cron drift persists).
+              if [ -x /usr/local/bin/fxmily-sync-cron ]; then
+                sudo /usr/local/bin/fxmily-sync-cron
+              else
+                echo "::warning::fxmily-sync-cron not installed on host — cron convergence skipped (bootstrap: install ops/cron/fxmily-sync-cron as root)."
+              fi
+
               # Reap dangling images so the 40 GB CX22 disk doesn't fill over
               # time. Keeps the last 3 versions for quick rollback (so the
               # PREV_IMAGE captured above is still present on the next deploy).

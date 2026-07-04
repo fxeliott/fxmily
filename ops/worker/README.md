@@ -69,6 +69,26 @@ the server-side overdue-alert net — picks the work up.
    OAuth under `~/.claude`. If S4U can't reach that auth in your setup, re-run with
    `-LogonType Interactive` (ticks only while you're logged on).
 
+## Self-healing watchdog (tour 12)
+
+`install-worker.ps1` also registers a 7th task, `Fxmily-worker-watchdog`
+(every 30 min, offset :07/:37). It runs `watchdog.ps1`, which:
+
+- re-enables a disabled pipeline task and re-registers missing ones via
+  `install-worker.ps1 -SkipWatchdog -LogonType Interactive` (Interactive is
+  non-negotiable on repair: S4U cannot read the Claude OAuth). Repair is
+  skipped while a batch is running and capped at 3 consecutive attempts;
+- verifies `worker.env` holds the 5 tokens (32+ chars) — closes the hole
+  where a missing env file made every tick a silent benign skip forever;
+- signals (never deletes) a stale global lock and a hard-killed run whose
+  `status.json` never got written;
+- POSTs a counts-only heartbeat to `/api/admin/worker-watchdog/heartbeat`
+  (X-Admin-Token = `FXMILY_ADMIN_TOKEN`). That row is monitored on
+  `/admin/system` — a dead watchdog surfaces there like any dead cron.
+
+Logs: `ops/worker/logs/watchdog.log`; repair state:
+`ops/worker/logs/watchdog.state.json`.
+
 ## Operate
 
 ```powershell

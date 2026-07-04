@@ -29,6 +29,13 @@ vi.mock('@/lib/training/training-trade-service', () => ({
   countRecentTrainingActivity: vi.fn().mockResolvedValue({ count: 0, lastEnteredAt: null }),
 }));
 vi.mock('@/lib/observability', () => ({ reportWarning: vi.fn() }));
+// Tour 12 (action 3) — the engine now reads the member's dominant mental axis for
+// the picker tie-break. Default `null` (un-profiled) → historical pick order, so
+// every assertion below (single-priority card-A / card-drift) is unchanged. The
+// dedicated tie-break behaviour is unit-tested in `cooldown.test.ts` (pure).
+vi.mock('@/lib/coaching/service', () => ({
+  getDominantMentalAxis: vi.fn().mockResolvedValue(null),
+}));
 
 import { db } from '@/lib/db';
 import { reportWarning } from '@/lib/observability';
@@ -56,6 +63,7 @@ const CARD = {
   slug: 'process-over-outcome',
   priority: 5,
   hatClass: 'white',
+  category: 'process',
   triggerRules: { kind: 'no_checkin_streak', days: 3 },
 };
 
@@ -278,6 +286,7 @@ describe('evaluateAndDispatchForUser — score_drift end-to-end (T1)', () => {
     slug: 'process-vs-outcome',
     priority: 6,
     hatClass: 'white',
+    category: 'process',
     triggerRules: { kind: 'score_drift', minDecliningDimensions: 1 },
   };
 

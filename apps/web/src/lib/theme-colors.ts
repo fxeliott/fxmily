@@ -39,7 +39,7 @@ export const CHART_COLORS = {
 
   // Borders (rgba on the underlying neutral)
   bSubtle: 'rgba(140, 146, 163, 0.08)',
-  bDefault: 'rgba(140, 146, 163, 0.14)',
+  bDefault: 'rgba(140, 146, 163, 0.18)', // tour 12: mirror of --b-default 0.14 -> 0.18
   bStrong: 'rgba(140, 146, 163, 0.22)',
 
   // Semantic
@@ -78,7 +78,7 @@ export const CHART_COLORS_LIGHT = {
 
   // Borders (rgba on the light neutral oklch(0.4 0.02 258) ≈ #4a5263)
   bSubtle: 'rgba(74, 82, 99, 0.1)',
-  bDefault: 'rgba(74, 82, 99, 0.16)',
+  bDefault: 'rgba(74, 82, 99, 0.18)', // tour 12: mirror of light --b-default 0.14 -> 0.18
   bStrong: 'rgba(74, 82, 99, 0.26)',
 
   // Semantic (darkened for white canvas — tour 8 recalibration: tone-on-own-dim

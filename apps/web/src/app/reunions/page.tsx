@@ -45,7 +45,15 @@ export default async function ReunionsPage() {
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* DS-v3 J3 — ambient mesh + drifting orbs behind the masthead */}
       <DashboardAmbient />
-      <div className="relative mx-auto flex w-full max-w-[var(--w-app)] flex-1 flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
+      {/* Tour 12 — `page-stagger` cascades the direct children (header, rail) in
+          on navigation. The two `wow-reveal` sections below (attendance rate +
+          meetings list) carry their OWN scroll-driven entrance, so they opt OUT
+          via `data-self-animate` — landing visible and keeping their reveal
+          instead of fighting the parent wowRise for `animation`/`opacity`.
+          Compositor-only (opacity + translateY), reduced-motion neutralised by
+          the class, CLS 0. No fixed descendant lives here (DashboardAmbient is
+          an absolute sibling, the app-shell fixed nav is an ancestor). */}
+      <div className="page-stagger relative mx-auto flex w-full max-w-[var(--w-app)] flex-1 flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
         <header className="flex flex-col gap-4">
           <Link
             href="/dashboard"
@@ -82,6 +90,7 @@ export default async function ReunionsPage() {
             neutre §30.7 : jamais de rouge, le halo reste un bleu calme. */}
         <section
           aria-labelledby="reunions-rate-heading"
+          data-self-animate
           className="wow-reveal wow-hover-glow rounded-card group relative w-full max-w-sm border border-[var(--b-default)] bg-[var(--bg-1)] p-4"
         >
           <span
@@ -130,7 +139,11 @@ export default async function ReunionsPage() {
         {/* F4 — « vue à la journée » : meetings grouped by civil day (its 12h +
             20h slots together, chronological), newest day first. Replaces the
             flat grid where a day's two slots could drift apart. */}
-        <section aria-labelledby="reunions-list-heading" className="wow-reveal flex flex-col gap-5">
+        <section
+          aria-labelledby="reunions-list-heading"
+          data-self-animate
+          className="wow-reveal flex flex-col gap-5"
+        >
           <h2 id="reunions-list-heading" className="sr-only">
             Liste des réunions par jour
           </h2>

@@ -9,6 +9,7 @@ import { MorningIntentionRecall } from '@/components/checkin/morning-intention-r
 import { MentalMapCard } from '@/components/coaching/mental-map-card';
 import { MicroObjectiveLoop } from '@/components/coaching/micro-objective-loop';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
+import { MetricRing } from '@/components/dashboard/daily-completion-ring';
 import { FirstRunWelcome } from '@/components/dashboard/first-run-welcome';
 import { HubDriftSignal } from '@/components/dashboard/hub-drift-signal';
 import { JournalShortcut } from '@/components/dashboard/journal-shortcut';
@@ -32,9 +33,12 @@ import { TrackingCoverageWidget } from '@/components/tracking/tracking-coverage-
 import { AnimatedNumber } from '@/components/ui/animated-number';
 import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
+import { GradientBorder } from '@/components/ui/gradient-border';
 import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { Kbd } from '@/components/ui/kbd';
+import { Magnetic } from '@/components/ui/magnetic';
+import { Tilt3D } from '@/components/ui/tilt-3d';
 import { getCheckin, getStreak, todayFor } from '@/lib/checkin/service';
 import { getTodayMilestone } from '@/lib/checkin/milestone';
 import { getTodayJourneyMilestone } from '@/lib/coaching/journey-milestone';
@@ -500,14 +504,19 @@ export default async function DashboardPage() {
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     {/* S4 — constancy teaser. Honesty rule §33.5 : no score until
-                      the member has been confronted at least once (no fake 100). */}
+                      the member has been confronted at least once (no fake 100).
+                      Tour 12 (C) — rendu en anneau SVG qui SE DESSINE à l'entrée du
+                      viewport (MetricRing), le nombre count-up au centre : la donnée
+                      devient vivante au lieu d'un chiffre plat. */}
                     {constancy ? (
-                      <div className="flex flex-col items-end">
-                        <span className="font-mono text-[22px] leading-none font-bold text-[var(--t-1)] tabular-nums">
-                          <AnimatedNumber value={Math.round(constancy.value)} />
-                          <span className="text-[12px] font-medium text-[var(--t-4)]">/100</span>
-                        </span>
-                        <span className="t-foot mt-1 text-[var(--t-4)]">score de constance</span>
+                      <div className="flex flex-col items-center gap-1">
+                        <MetricRing
+                          value={Math.round(constancy.value)}
+                          max={100}
+                          suffix="/100"
+                          ariaLabel={`Score de constance : ${Math.round(constancy.value)} sur 100.`}
+                        />
+                        <span className="t-foot text-[var(--t-4)]">score de constance</span>
                       </div>
                     ) : null}
                     <ArrowRight className="h-5 w-5 shrink-0 text-[var(--t-3)]" aria-hidden="true" />
@@ -565,59 +574,66 @@ export default async function DashboardPage() {
         {/* V2.3 — Pré-trade circuit breaker (ADR-003 Trigger A). Nudge calme « pause
             30s » au-dessus du journal. Non-bloquant — un miroir, pas une barrière.
             (Les ANALYTICS pré-trade ont migré vers /patterns ; ceci est le CTA.) */}
+        {/* Tour 12 (B) — accent électrique MONO-FOCAL de la page : l'anneau
+            conique bleu→indigo→cyan (gradient-border, data-trigger='always')
+            borde LE CTA prioritaire du jour, le pré-trade. Un seul par page
+            (discipline mono-focale) ; décoratif, l'interactivité reste dans le
+            Link. Radius aligné sur `rounded-card` (12px). */}
         <section className="mb-6" aria-labelledby="pre-trade-heading">
-          <HoverLift className="block">
-            <Link
-              href="/pre-trade/new"
-              className="wow-hover-glow rounded-card block border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
-            >
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]">
-                    <ShieldCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {/* S15 #25 — --acc-hi (not --acc) clears WCAG 1.4.3 AA on the
+          <GradientBorder trigger="always" radius="var(--r-card)" innerClassName="!bg-transparent">
+            <HoverLift className="block">
+              <Link
+                href="/pre-trade/new"
+                className="wow-hover-glow rounded-card block border border-[var(--b-acc)] bg-[var(--acc-dim)] p-5 transition-colors hover:bg-[var(--acc-dim-2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-control grid h-9 w-9 shrink-0 place-items-center border border-[var(--b-acc-strong)] bg-[var(--acc)] text-[var(--acc-fg)]">
+                      <ShieldCheck className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {/* S15 #25 — --acc-hi (not --acc) clears WCAG 1.4.3 AA on the
                         --acc-dim fill (--acc is ~3.15:1 on tinted surfaces). */}
-                    <span className="t-eyebrow text-[var(--acc-hi)]">Pré-trade</span>
-                    <h2
-                      id="pre-trade-heading"
-                      className="text-[15px] font-semibold text-[var(--t-1)]"
-                    >
-                      Pause 30 secondes avant ton prochain trade
-                    </h2>
-                    <p className="text-[12px] leading-relaxed text-[var(--t-2)]">
-                      Un miroir de ton exécution, pas une barrière.
-                    </p>
+                      <span className="t-eyebrow text-[var(--acc-hi)]">Pré-trade</span>
+                      <h2
+                        id="pre-trade-heading"
+                        className="text-[15px] font-semibold text-[var(--t-1)]"
+                      >
+                        Pause 30 secondes avant ton prochain trade
+                      </h2>
+                      <p className="text-[12px] leading-relaxed text-[var(--t-2)]">
+                        Un miroir de ton exécution, pas une barrière.
+                      </p>
+                    </div>
                   </div>
+
+                  <ul
+                    className="flex flex-wrap items-center gap-2"
+                    aria-label="Les 4 questions du pré-trade : raison, émotion, plan, stop-loss"
+                  >
+                    {['Raison', 'Émotion', 'Plan', 'Stop-loss'].map((q) => (
+                      <li
+                        key={q}
+                        className="rounded-pill inline-flex items-center border border-[var(--b-acc)] bg-[var(--acc-dim-2)] px-2.5 py-1 text-[11px] font-medium text-[var(--acc-hi)]"
+                      >
+                        {q}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <span
+                    className={cn(
+                      btnVariants({ kind: 'primary', size: 'm' }),
+                      'pointer-events-none shrink-0 self-start lg:self-auto',
+                    )}
+                  >
+                    Commencer
+                    <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                  </span>
                 </div>
-
-                <ul
-                  className="flex flex-wrap items-center gap-2"
-                  aria-label="Les 4 questions du pré-trade : raison, émotion, plan, stop-loss"
-                >
-                  {['Raison', 'Émotion', 'Plan', 'Stop-loss'].map((q) => (
-                    <li
-                      key={q}
-                      className="rounded-pill inline-flex items-center border border-[var(--b-acc)] bg-[var(--acc-dim-2)] px-2.5 py-1 text-[11px] font-medium text-[var(--acc-hi)]"
-                    >
-                      {q}
-                    </li>
-                  ))}
-                </ul>
-
-                <span
-                  className={cn(
-                    btnVariants({ kind: 'primary', size: 'm' }),
-                    'pointer-events-none shrink-0 self-start lg:self-auto',
-                  )}
-                >
-                  Commencer
-                  <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
-                </span>
-              </div>
-            </Link>
-          </HoverLift>
+              </Link>
+            </HoverLift>
+          </GradientBorder>
         </section>
 
         {/* Journal de trading (action cœur) + carte Mark Douglas (mental). */}
@@ -638,13 +654,21 @@ export default async function DashboardPage() {
               renseigne le résultat et l&apos;émotion.
             </p>
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Link href="/journal/new" className={cn(btnVariants({ kind: 'primary', size: 'm' }))}>
-                <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Nouveau trade
-                <Kbd inline className="ml-1">
-                  N
-                </Kbd>
-              </Link>
+              {/* Tour 12 (E) — le CTA primaire du hub « suit » légèrement le
+                  pointeur (Magnetic, souris uniquement, garde reduced-motion
+                  interne). Wrapper inline-flex pour ne pas casser la boîte du bouton. */}
+              <Magnetic className="inline-flex">
+                <Link
+                  href="/journal/new"
+                  className={cn(btnVariants({ kind: 'primary', size: 'm' }))}
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Nouveau trade
+                  <Kbd inline className="ml-1">
+                    N
+                  </Kbd>
+                </Link>
+              </Magnetic>
               <Link href="/journal" className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}>
                 Voir mes trades
                 <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -795,21 +819,27 @@ function TradeStatCard({
             : 'text-[var(--t-1)]';
   const glowTone = tone === 'ok' ? 'cy' : tone === 'mute' || tone === 'acc2' ? 'indigo' : 'acc';
   return (
-    <HoverGlowLift
-      tone={glowTone}
-      className={cn(
-        'rounded-card flex flex-col items-start gap-1 border p-3.5 transition-colors',
-        surface,
-      )}
-    >
-      <AnimatedNumber
-        value={value}
+    // Tour 12 (E) — micro-physique premium : la carte s'incline légèrement vers
+    // le curseur (Tilt3D, 3deg, souris uniquement, garde reduced-motion interne).
+    // Le HoverGlowLift garde le lift + halo ; Tilt3D (rotateX/Y) et HoverGlowLift
+    // (scale/y) animent des couches distinctes, compositor-only, sans conflit.
+    <Tilt3D maxDeg={3} className="h-full">
+      <HoverGlowLift
+        tone={glowTone}
         className={cn(
-          'f-mono text-[26px] leading-none font-bold tracking-[-0.03em] tabular-nums',
-          valColor,
+          'rounded-card flex h-full flex-col items-start gap-1 border p-3.5 transition-colors',
+          surface,
         )}
-      />
-      <span className="t-cap text-[var(--t-3)]">{label}</span>
-    </HoverGlowLift>
+      >
+        <AnimatedNumber
+          value={value}
+          className={cn(
+            'f-mono text-[26px] leading-none font-bold tracking-[-0.03em] tabular-nums',
+            valColor,
+          )}
+        />
+        <span className="t-cap text-[var(--t-3)]">{label}</span>
+      </HoverGlowLift>
+    </Tilt3D>
   );
 }

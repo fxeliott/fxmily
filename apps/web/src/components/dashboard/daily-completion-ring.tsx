@@ -1,8 +1,10 @@
 'use client';
 
-import { m, useReducedMotion } from 'framer-motion';
+import { m, useInView, useReducedMotion } from 'framer-motion';
 import { Check } from 'lucide-react';
+import { useRef } from 'react';
 
+import { AnimatedNumber } from '@/components/ui/animated-number';
 import { useChartColors } from '@/lib/use-chart-colors';
 
 /**
@@ -73,7 +75,7 @@ export function DailyCompletionRing({ done, total }: { done: number; total: numb
             strokeDasharray={CIRC}
             initial={prefersReduced ? { strokeDashoffset: offset } : { strokeDashoffset: CIRC }}
             animate={{ strokeDashoffset: offset }}
-            transition={{ duration: prefersReduced ? 0 : 1, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: prefersReduced ? 0 : 1.2, ease: [0.22, 1, 0.36, 1] }}
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
@@ -88,6 +90,92 @@ export function DailyCompletionRing({ done, total }: { done: number; total: numb
         </div>
       </div>
       <span className="t-eyebrow text-[var(--t-3)]">Aujourd’hui</span>
+    </div>
+  );
+}
+
+/**
+ * Tour 12 (C) — anneau de métrique générique (0..max) qui SE DESSINE à l'entrée
+ * du viewport, avec un count-up de la valeur au centre. Réutilise l'anatomie de
+ * `DailyCompletionRing` (SVG natif, hex WebView-safe, rotate -90) mais sans la
+ * sémantique « gestes du jour » : sert le score de constance et toute jauge 0-100.
+ *
+ * SSR-safe : un seul arbre. Le tracé démarre plein (offset = CIRC) et se dessine
+ * quand l'élément entre dans le viewport (`useInView`, once) ; sous reduced-motion
+ * il est rendu directement à sa valeur finale (offset cible), immobile. La valeur
+ * numérique est portée par `AnimatedNumber` (déjà SSR-correct + once-on-view).
+ */
+export function MetricRing({
+  value,
+  max = 100,
+  size = 64,
+  stroke: strokeWidth = 6,
+  suffix,
+  ariaLabel,
+}: {
+  value: number;
+  max?: number;
+  size?: number;
+  stroke?: number;
+  /** Petit suffixe sous/après la valeur (ex. « /100 »). */
+  suffix?: string;
+  ariaLabel: string;
+}) {
+  const prefersReduced = useReducedMotion();
+  const C = useChartColors();
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, amount: 0.5 });
+
+  const radius = (size - strokeWidth) / 2;
+  const circ = 2 * Math.PI * radius;
+  const center = size / 2;
+  const fraction = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
+  const offset = circ - fraction * circ;
+  // Se dessine seulement une fois visible ; reduced-motion → directement plein.
+  const animateOffset = prefersReduced || inView ? offset : circ;
+
+  return (
+    <div
+      ref={ref}
+      role="img"
+      aria-label={ariaLabel}
+      className="relative grid shrink-0 place-items-center"
+      style={{ width: size, height: size }}
+    >
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke={C.bStrong}
+          strokeWidth={strokeWidth}
+        />
+        <m.circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke={C.acc}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${center} ${center})`}
+          strokeDasharray={circ}
+          initial={{ strokeDashoffset: prefersReduced ? offset : circ }}
+          animate={{ strokeDashoffset: animateOffset }}
+          transition={{ duration: prefersReduced ? 0 : 1.2, ease: [0.22, 1, 0.36, 1] }}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center">
+        <AnimatedNumber
+          value={Math.round(value)}
+          durationMs={1200}
+          className="f-mono text-[17px] leading-none font-bold tracking-[-0.02em] text-[var(--t-1)] tabular-nums"
+        />
+        {suffix ? (
+          <span className="f-mono ml-px text-[10px] font-medium text-[var(--t-4)]">{suffix}</span>
+        ) : null}
+      </span>
     </div>
   );
 }

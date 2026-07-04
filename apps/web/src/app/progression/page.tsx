@@ -89,6 +89,14 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
   return (
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
       <DashboardAmbient />
+      {/* Tour 12 — `page-stagger` volontairement PAS posé ici : quasiment chaque
+          enfant direct du conteneur (le hero + les 8 sections analytiques + le
+          lien de bas de page) porte déjà `wow-reveal`, qui EST son orchestration
+          d'entrée (scroll-driven, opacity:0 → 1). Empiler page-stagger imposerait
+          data-self-animate sur presque tous ces enfants pour éviter le conflit
+          `animation`/`opacity`, ce qui neutraliserait l'effet page-stagger lui-
+          même. L'orchestration existante suffit — pas d'empilement (déviation
+          documentée). */}
       <div className="relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
         <ProgressionHero score={latestScore} history={scoreHistory} />
 

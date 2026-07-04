@@ -88,7 +88,11 @@
 
   /* ─── SEMANTIC: borders (3 niveaux + accent + danger) ───────── */
   --b-subtle: oklch(0.604 0.02 257 / 0.08);
-  --b-default: oklch(0.604 0.02 257 / 0.14);
+  /* Tour 12 — 0.14 → 0.18 : cards read as too flush with the deep-space base at
+     0.14 (audit "je vois pas de changement"). 0.18 lets the hairline separate
+     the surface from the canvas without a franc white cast (decorative border,
+     no text-contrast impact). Mirrored in .light and in theme-colors.ts. */
+  --b-default: oklch(0.604 0.02 257 / 0.18);
   --b-strong: oklch(0.604 0.02 257 / 0.22);
   --b-stronger: oklch(0.604 0.02 257 / 0.34);
   --b-acc: oklch(0.62 0.19 254 / 0.42);
@@ -101,6 +105,14 @@
   --acc-fg: oklch(0.98 0.01 247); /* #f3f9ff — near-white label on --acc-btn (4.97:1 AA) */
   --acc-dim: oklch(0.62 0.19 254 / 0.16);
   --acc-dim-2: oklch(0.62 0.19 254 / 0.06);
+  /* Tour 12 — corner-bloom alpha for .card-premium ONLY. A dedicated token (not
+     a bump of --acc-dim-2, which many flat tint surfaces consume) so the card
+     corner reads with a perceptible blue breath while every other --acc-dim-2
+     fill stays put. 0.10 is AA-cleared for the corner geometry: on the card the
+     bloom peaks top-right where any --t-3/--t-4 10-11px hint composited over it
+     still holds >=4.5:1 (dark 4.52:1 worst case with the top-light, light 5.08:1
+     — recomputed oklch->sRGB, tour 12). */
+  --acc-dim-15: oklch(0.62 0.19 254 / 0.1);
   --acc-edge: var(--b-acc);
   --acc-glow: 0 0 24px -4px oklch(0.62 0.19 254 / 0.45);
   --acc-glow-strong: 0 0 32px -2px oklch(0.62 0.19 254 / 0.65);
@@ -236,12 +248,15 @@
   /* ─── SHADOWS — multi-layer Mercury-grade ───────────────────── */
   --sh-card:
     0 1px 0 oklch(1 0 0 / 0.04) inset, 0 0 0 1px oklch(1 0 0 / 0.01), 0 1px 2px oklch(0 0 0 / 0.18);
+  /* Tour 12 — deepen the tinted blue drop so a hovered/primary card visibly
+     LIFTS off the deep-space base (the halo was sub-perceptual at 0.18). Only
+     the coloured outer glow alpha rises; the black occlusion + inset stay. */
   --sh-card-hover:
     0 1px 0 oklch(1 0 0 / 0.06) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.08),
-    0 4px 8px -2px oklch(0 0 0 / 0.24), 0 14px 32px -8px oklch(0.62 0.19 254 / 0.18);
+    0 4px 8px -2px oklch(0 0 0 / 0.24), 0 14px 32px -8px oklch(0.62 0.19 254 / 0.3);
   --sh-card-primary:
     0 1px 0 oklch(1 0 0 / 0.06) inset, 0 0 0 1px oklch(0.62 0.19 254 / 0.06),
-    0 8px 24px -8px oklch(0.62 0.19 254 / 0.18), 0 2px 6px -1px oklch(0 0 0 / 0.3);
+    0 8px 24px -8px oklch(0.62 0.19 254 / 0.28), 0 2px 6px -1px oklch(0 0 0 / 0.3);
   --sh-card-selected:
     0 0 0 1px var(--acc-edge), 0 0 0 4px var(--acc-dim-2),
     0 8px 24px -8px oklch(0.62 0.19 254 / 0.28);
@@ -440,7 +455,9 @@
 
   /* ─── BORDERS (neutres assombris — visibles sur blanc) ──────── */
   --b-subtle: oklch(0.4 0.02 258 / 0.08);
-  --b-default: oklch(0.4 0.02 258 / 0.14);
+  /* Tour 12 — mirror of the :root 0.14 → 0.18 bump so light cards separate from
+     the near-white canvas by the same measure (decorative border, no text impact). */
+  --b-default: oklch(0.4 0.02 258 / 0.18);
   --b-strong: oklch(0.4 0.02 258 / 0.22);
   --b-stronger: oklch(0.4 0.02 258 / 0.34);
   --b-acc: oklch(0.49 0.2 260 / 0.42);
@@ -461,6 +478,10 @@
   --acc-fg: oklch(0.99 0.01 247); /* near-white label sur --acc-btn */
   --acc-dim: oklch(0.49 0.2 260 / 0.1);
   --acc-dim-2: oklch(0.49 0.2 260 / 0.05);
+  /* Tour 12 — light mirror of the .card-premium corner-bloom token. Darkened
+     light --acc at 0.10 alpha on white: --t-3/--t-4 10-11px hints composited on
+     it hold 5.08/5.58:1 (recomputed tour 12), well above AA. */
+  --acc-dim-15: oklch(0.49 0.2 260 / 0.1);
   --acc-edge: var(--b-acc);
   --acc-glow: 0 0 20px -6px oklch(0.49 0.2 260 / 0.3);
   --acc-glow-strong: 0 0 28px -4px oklch(0.49 0.2 260 / 0.42);
@@ -674,6 +695,13 @@
 .light .splash-orb {
   opacity: 0.4;
   mix-blend-mode: multiply; /* sur clair, multiply garde la teinte lisible sans laver */
+}
+/* Tour 12 — the conic .ds-sweep needs the same light treatment as the orbs:
+   multiply keeps the cool hue readable on the near-white canvas without washing
+   it out, and a reduced opacity keeps the moving light subtle in light mode. */
+.light .ds-sweep {
+  opacity: 0.4;
+  mix-blend-mode: multiply;
 }
 
 /* =============================================================
@@ -991,11 +1019,14 @@
    glass panels. Static gradient, zero JS, paints under content. */
 .ds-aurora {
   /* S18 — backplate hero densifié (bleu→indigo→cyan plus présents). Sous des
-     panneaux glass/opaques → contraste texte intact. */
+     panneaux glass/opaques → contraste texte intact.
+     Tour 12 — hero peak 0.20 → 0.30 (+ side stops) so the mesh clears the
+     sub-perceptual threshold at reading distance. Still edge/hero-biased and
+     under opaque content → text contrast untouched by construction. */
   background:
-    radial-gradient(58% 34% at 50% -8%, oklch(0.62 0.19 254 / 0.2) 0%, transparent 62%),
-    radial-gradient(42% 30% at 4% 16%, oklch(0.5 0.21 262 / 0.15) 0%, transparent 68%),
-    radial-gradient(40% 32% at 98% 6%, oklch(0.7 0.13 217 / 0.11) 0%, transparent 70%);
+    radial-gradient(58% 34% at 50% -8%, oklch(0.62 0.19 254 / 0.3) 0%, transparent 62%),
+    radial-gradient(42% 30% at 4% 16%, oklch(0.5 0.21 262 / 0.19) 0%, transparent 68%),
+    radial-gradient(40% 32% at 98% 6%, oklch(0.7 0.13 217 / 0.15) 0%, transparent 70%);
 }
 
 /* Cyan-forward variant — §21.7 training-debrief "Mode entraînement". Same
@@ -1038,13 +1069,16 @@
   /* S18 — densifié (la couleur ressort plus franchement, demande "moins fade").
      Reste EDGE-BIASED (coins) : le centre — toujours sous le contenu — reste
      quasi-nul, donc contraste texte intact par construction. +1 stop cyan
-     bas-gauche pour équilibrer le spectre cool bleu→indigo→cyan dans les 4 coins. */
+     bas-gauche pour équilibrer le spectre cool bleu→indigo→cyan dans les 4 coins.
+     Tour 12 — +0.06 par stop : les gutters ultra-wide portent enfin une couleur
+     franche (demande "je vois pas de changement"). Reste edge-biased : le centre
+     sous contenu opaque ne bouge pas → contraste texte intact. */
   background:
-    radial-gradient(48% 36% at 50% -8%, oklch(0.62 0.19 254 / 0.12) 0%, transparent 62%),
-    radial-gradient(36% 48% at -2% 10%, oklch(0.5 0.21 262 / 0.11) 0%, transparent 68%),
-    radial-gradient(36% 48% at 102% 4%, oklch(0.7 0.13 217 / 0.09) 0%, transparent 70%),
-    radial-gradient(40% 44% at 4% 102%, oklch(0.7 0.13 217 / 0.07) 0%, transparent 66%),
-    radial-gradient(46% 50% at 88% 104%, oklch(0.5 0.21 262 / 0.1) 0%, transparent 68%);
+    radial-gradient(48% 36% at 50% -8%, oklch(0.62 0.19 254 / 0.18) 0%, transparent 62%),
+    radial-gradient(36% 48% at -2% 10%, oklch(0.5 0.21 262 / 0.17) 0%, transparent 68%),
+    radial-gradient(36% 48% at 102% 4%, oklch(0.7 0.13 217 / 0.15) 0%, transparent 70%),
+    radial-gradient(40% 44% at 4% 102%, oklch(0.7 0.13 217 / 0.13) 0%, transparent 66%),
+    radial-gradient(46% 50% at 88% 104%, oklch(0.5 0.21 262 / 0.16) 0%, transparent 68%);
 }
 /* S18 — grain anti-banding (technique Stripe/Apple, opacité ≤3% — confirmée
    best-practice 2026 par la veille). Tue le banding sRGB des grands dégradés
@@ -1061,6 +1095,42 @@
 @media (forced-colors: active) {
   .app-ambient,
   .app-ambient::after {
+    display: none;
+  }
+}
+
+/* =============================================================
+ * Tour 12 — .grain-card : per-surface fractalNoise texture.
+ * -------------------------------------------------------------
+ * Same anti-banding grain the app-ambient backplate uses (fractalNoise SVG
+ * data-URI, zero request, theme-agnostic), scoped to a single card so the hero
+ * and primary surfaces get a subtle "print" tactility instead of a flat digital
+ * aplat (brief action 9). Opacity 0.03 (a hair above the ambient 0.022 since it
+ * sits on a lit card, not the deep-space base). Decorative `::after`, always
+ * pointer-events:none, requires the host to be a positioned + overflow-clipped
+ * box (every card-premium / glass surface already is). Dropped in forced-colors
+ * (grain adds nothing in High Contrast). No animation → no reduced-motion cost. */
+.grain-card {
+  position: relative;
+  /* Establish a stacking context so the grain pseudo (z-index:-1) paints ABOVE
+     the card background but BELOW every content child, WITHOUT the call-site
+     needing to wrap content in a `relative z-10`. Isolation is inert visually
+     (no blend leakage) and is the robust generic fix for a `::after` grain,
+     which would otherwise paint on top of text (::after is last in tree order). */
+  isolation: isolate;
+}
+.grain-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.03;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+@media (forced-colors: active) {
+  .grain-card::after {
     display: none;
   }
 }
@@ -1117,11 +1187,96 @@
   animation: dsOrbDrift 26s var(--e-smooth) infinite;
   will-change: transform, opacity;
 }
+/* Tour 12 — wider, faster, phase-offset drift + higher opacity peak (0.5→0.7)
+   for the extra orbs, so the backplate reads as ALIVE from the first second
+   (brief §31 "jamais statique"). Longer travel (≈70px) than the base 22px and a
+   shorter 16s cycle widen the moving-colour field. transform/opacity only. */
+@keyframes dsOrbDriftWide {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate3d(-64px, 40px, 0) scale(1.1);
+    opacity: 0.7;
+  }
+}
+.ds-orb-wide {
+  animation: dsOrbDriftWide 16s var(--e-smooth) infinite;
+}
 /* Mobile keeps a single orb (perf — the `.ds-orb-extra` ones drop). The
    first `.ds-orb` is the 2nd child of the wrapper (after `.ds-aurora`), so
-   an `:nth-child` gate would wrongly hide it — use an explicit class. */
+   an `:nth-child` gate would wrongly hide it — use an explicit class. The
+   `.ds-sweep` also carries `.ds-orb-extra` at the call-site so it drops here too. */
 @media (max-width: 640px) {
   .ds-orb-extra {
+    display: none;
+  }
+}
+
+/* =============================================================
+ * Tour 12 — .ds-sweep : slow conic light sweep behind the dashboard hero.
+ * -------------------------------------------------------------
+ * Port of the proven `.splash-sweep` pattern (conic-gradient + radial mask,
+ * compositor-only rotation) into the authenticated dashboard. Anchored in the
+ * hero zone (top) so the moving light lands where the eye first reads. Cycle is
+ * deliberately SLOW (≥40s — here 56s) : a calm sweep, never a throb (Mark Douglas
+ * §31.2). Decorative : the call-site wrapper is aria-hidden + pointer-events:none
+ * and paints below opaque content, so text contrast is untouched by construction.
+ * Killed by the global reduced-motion filet (animation-iteration-count:1) and
+ * dropped in forced-colors. Mobile-gated via `.ds-orb-extra` at the call-site.
+ * ============================================================= */
+@keyframes dsSweepSpin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.ds-sweep {
+  position: absolute;
+  left: 50%;
+  top: 2%;
+  width: min(160vw, 1200px);
+  aspect-ratio: 1 / 1;
+  translate: -50% -50%;
+  pointer-events: none;
+  opacity: 0.5;
+  border-radius: 999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    oklch(0.62 0.19 254 / 0.14) 40deg,
+    transparent 108deg,
+    oklch(0.7 0.13 217 / 0.1) 196deg,
+    transparent 248deg,
+    oklch(0.5 0.21 262 / 0.12) 316deg,
+    transparent 360deg
+  );
+  -webkit-mask-image: radial-gradient(
+    closest-side,
+    #000 4%,
+    oklch(0 0 0 / 0.5) 42%,
+    transparent 74%
+  );
+  mask-image: radial-gradient(closest-side, #000 4%, oklch(0 0 0 / 0.5) 42%, transparent 74%);
+  animation: dsSweepSpin 56s linear infinite;
+  will-change: transform;
+}
+/* Cyan-led variant — mirrors DashboardAmbient tone="cyan" (§21.7 training). */
+.ds-sweep-cy {
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    oklch(0.789 0.139 217 / 0.14) 40deg,
+    transparent 108deg,
+    oklch(0.703 0.145 218 / 0.1) 196deg,
+    transparent 248deg,
+    oklch(0.62 0.19 254 / 0.1) 316deg,
+    transparent 360deg
+  );
+}
+@media (forced-colors: active) {
+  .ds-sweep {
     display: none;
   }
 }
@@ -1168,14 +1323,19 @@
  * ============================================================= */
 @layer components {
   .card-premium {
+    /* Tour 12 — corner bloom lifted to --acc-dim-15 (0.10) and the top-light
+       0.032 → 0.06 so the default card reads with a perceptible blue breath +
+       Linear volume (was sub-perceptual). AA re-cleared: the corner bloom peaks
+       top-right where --t-3/--t-4 10-11px hints hold >=4.5:1 even composited with
+       the stronger top-light (dark 4.52:1 worst case, tour 12 recompute). */
     background-image:
-      radial-gradient(130% 76% at 86% -24%, var(--acc-dim-2) 0%, transparent 56%),
-      linear-gradient(180deg, oklch(1 0 0 / 0.032) 0%, transparent 72px);
+      radial-gradient(130% 76% at 86% -24%, var(--acc-dim-15) 0%, transparent 56%),
+      linear-gradient(180deg, oklch(1 0 0 / 0.06) 0%, transparent 72px);
   }
   /* En clair le top-light blanc est invisible sur carte blanche — on ne garde
      que le souffle cool (l'élévation reste portée par --sh-card, grammaire S20.1). */
   .light .card-premium {
-    background-image: radial-gradient(130% 76% at 86% -24%, var(--acc-dim-2) 0%, transparent 56%);
+    background-image: radial-gradient(130% 76% at 86% -24%, var(--acc-dim-15) 0%, transparent 56%);
   }
 }
 @media (forced-colors: active) {
@@ -1384,6 +1544,54 @@
   opacity: 0;
   pointer-events: none;
   animation: livePulse 2s var(--e-data) infinite;
+}
+
+/* =============================================================
+ * Tour 12 — .hero-breathe : a calm glow liseret that breathes on the hero.
+ * -------------------------------------------------------------
+ * Generalises the livePulse "paint the glow once, breathe only its opacity"
+ * technique into a full-surface decorative layer for the dashboard hero. The
+ * accent edge + inner halo are painted ONCE on a `::after` pseudo; only that
+ * pseudo's OPACITY animates (0 -> 1 -> 0) over a SLOW 7s cycle — a breath, never
+ * a throb (Mark Douglas §31.2). Compositor-only (opacity), so zero INP/CLS cost
+ * and no per-frame box-shadow repaint (frontend-elite gate). The host must be a
+ * positioned + overflow-clipped surface (the hero Card is); the pseudo inherits
+ * its border-radius. Decorative: aria-hidden at the call-site, pointer-events
+ * none, killed by the global reduced-motion filet (settles at opacity 0 → the
+ * static hero stays fully visible), dropped in forced-colors (box-shadow = none).
+ * Consumed by north-star-hero.tsx as a `<span class="hero-breathe" aria-hidden>`. */
+@keyframes heroBreathe {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.hero-breathe {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.hero-breathe::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  border: 1px solid var(--b-acc-strong);
+  box-shadow:
+    inset 0 0 24px -8px oklch(0.62 0.19 254 / 0.4),
+    var(--acc-glow);
+  animation: heroBreathe 7s var(--e-smooth) infinite;
+}
+@media (forced-colors: active) {
+  .hero-breathe::after {
+    display: none;
+  }
 }
 
 /* Skeleton shimmer matched dimensions */
@@ -2006,6 +2214,48 @@
 .dash-stagger > [data-self-animate] {
   opacity: 1;
   animation: none;
+}
+
+/* Tour 12 — .page-stagger : the exact `.dash-stagger` entrance orchestration,
+   generalised to any page's content-root children so EVERY route assembles
+   top-to-bottom on load instead of a flat 180ms fade (brief §31 "chaque
+   navigation met en scène la page"). Additive: `.dash-stagger` is UNTOUCHED (the
+   dashboard keeps using it). Same wowRise keyframe, same 6-step delay cap, same
+   `both` fill (each child hidden before its delay, then locks its final state),
+   same reduced-motion belt (animation:none, opacity:1 — no flash of empty page
+   for AT users) and the same [data-self-animate] opt-out for children that run
+   their own framer entrance. MUST live on a page-content wrapper, NEVER on the
+   template.tsx root (a transform there would create a containing block for the
+   fixed sidebar/FAB — documented invariant). translateY + opacity only → the box
+   occupies its final layout slot from frame 0 → CLS 0. */
+.page-stagger > * {
+  opacity: 0;
+  animation: wowRise 620ms var(--e-smooth) both;
+}
+.page-stagger > *:nth-child(2) {
+  animation-delay: 60ms;
+}
+.page-stagger > *:nth-child(3) {
+  animation-delay: 120ms;
+}
+.page-stagger > *:nth-child(4) {
+  animation-delay: 180ms;
+}
+.page-stagger > *:nth-child(5) {
+  animation-delay: 240ms;
+}
+.page-stagger > *:nth-child(n + 6) {
+  animation-delay: 300ms;
+}
+.page-stagger > [data-self-animate] {
+  opacity: 1;
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-stagger > * {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 /* ---- Reveal — h-rise stagger (translateY + opacity, CSS-only) ----
@@ -2731,4 +2981,58 @@
 }
 [data-slot='card'][data-selected]:not([data-glass]) {
   border-color: var(--b-acc);
+}
+
+/* =============================================================
+ * Tour 12 — central interactive-card affordance : `[data-slot='card'][data-interactive]`.
+ * -------------------------------------------------------------
+ * ONE rule so every card the primitive marks interactive responds identically —
+ * a 2px lift, an accent border, and a brand halo — without each call-site
+ * re-declaring hover utilities (brief "spec chaque élément"). The Card primitive
+ * emits `data-interactive` when its `interactive` prop is set (wired by the
+ * consuming agents). Factors the proven `.wow-hover-glow` glow: the halo is
+ * painted ONCE on a `::after` pseudo and only its OPACITY animates — no
+ * box-shadow repaint in a loop, no layout thrash (frontend-elite gate). Keyboard
+ * parity: `:focus-visible` gets the exact same treatment as `:hover` (glow +
+ * lift), so a keyboard user sees the same affordance as the mouse. The lift is
+ * transform-only (compositor, CLS 0) and reduced-motion neutralises it via the
+ * global filet (transition-duration 0.01ms) while the border/glow stay reachable.
+ * `:not([data-glass])` — glass cards keep their own edge and never transform
+ * (backdrop-filter + transform conflict, documented on the `glass` prop). ======= */
+[data-slot='card'][data-interactive]:not([data-glass]) {
+  position: relative;
+  transition:
+    transform 180ms var(--e-smooth),
+    border-color 180ms var(--e-smooth);
+}
+[data-slot='card'][data-interactive]:not([data-glass])::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  border: 1px solid var(--b-acc-strong);
+  box-shadow: var(--acc-glow);
+  transition: opacity 180ms var(--e-smooth);
+}
+[data-slot='card'][data-interactive]:not([data-glass]):hover,
+[data-slot='card'][data-interactive]:not([data-glass]):focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--b-acc);
+}
+[data-slot='card'][data-interactive]:not([data-glass]):hover::after,
+[data-slot='card'][data-interactive]:not([data-glass]):focus-visible::after {
+  opacity: 1;
+}
+/* Active press settles the lift + gentle scale (tactile "put it back down").
+ * The scale used to live as a Tailwind utility on the Card primitive; it moved
+ * here so transform stays single-source (no translate/transform composition). */
+[data-slot='card'][data-interactive]:not([data-glass]):active {
+  transform: translateY(0) scale(0.995);
+}
+@media (forced-colors: active) {
+  [data-slot='card'][data-interactive]:not([data-glass])::after {
+    display: none;
+  }
 }

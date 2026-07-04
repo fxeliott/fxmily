@@ -19,6 +19,7 @@ vi.mock('@/lib/auth/audit', () => ({
 }));
 
 const {
+  buildStreakReminderLine,
   enqueueCheckinReminder,
   enqueueDouglasDeliveryNotification,
   enqueueMindsetCheckNotification,
@@ -109,6 +110,56 @@ describe('enqueueCheckinReminder', () => {
     const id = await enqueueCheckinReminder('user_1', { slot: 'evening', date: '2026-05-07' });
 
     expect(id).toBeNull();
+  });
+
+  // Tour 12 (action 2) — the streak line is derived + stored at enqueue time.
+  it('stores the calm streak line in the payload when the streak is worth naming', async () => {
+    createMock.mockResolvedValueOnce({ id: 'notif_streak' });
+
+    await enqueueCheckinReminder('user_1', { slot: 'evening', date: '2026-05-07', streak: 12 });
+
+    expect(createMock.mock.calls[0]?.[0]?.data?.payload).toEqual({
+      slot: 'evening',
+      date: '2026-05-07',
+      streakLine: '12 jours d’affilée derrière toi. Ton check-in du soir t’attend.',
+    });
+  });
+
+  it('omits the streak line entirely for a streak below 2 (default copy, no darkpattern)', async () => {
+    createMock.mockResolvedValueOnce({ id: 'notif_no_streak' });
+
+    await enqueueCheckinReminder('user_1', { slot: 'morning', date: '2026-05-07', streak: 1 });
+
+    // No `streakLine` key at all → the dispatcher falls back to the neutral copy.
+    expect(createMock.mock.calls[0]?.[0]?.data?.payload).toEqual({
+      slot: 'morning',
+      date: '2026-05-07',
+    });
+  });
+});
+
+describe('buildStreakReminderLine (Tour 12, action 2 — calm continuity copy)', () => {
+  it('names the streak with a continuity frame from 2 days onward', () => {
+    expect(buildStreakReminderLine(2, 'morning')).toBe(
+      '2 jours d’affilée derrière toi. Ton check-in du matin t’attend.',
+    );
+    expect(buildStreakReminderLine(12, 'evening')).toBe(
+      '12 jours d’affilée derrière toi. Ton check-in du soir t’attend.',
+    );
+  });
+
+  it('returns null for streak 0/1/undefined (no streak worth naming)', () => {
+    expect(buildStreakReminderLine(0, 'morning')).toBeNull();
+    expect(buildStreakReminderLine(1, 'evening')).toBeNull();
+    expect(buildStreakReminderLine(undefined, 'morning')).toBeNull();
+  });
+
+  it('NEVER frames a loss or a countdown (anti-dark-pattern §31.2)', () => {
+    const line = buildStreakReminderLine(30, 'evening')!;
+    // No loss/urgency framing — continuity only.
+    expect(line).not.toMatch(/casse|perds?|perdre|attention|plus que|ne pas|dernier|urgent/i);
+    // No em-dash (Eliott's constraint).
+    expect(line).not.toContain('—');
   });
 });
 

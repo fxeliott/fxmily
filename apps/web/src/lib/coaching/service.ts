@@ -18,7 +18,12 @@ import {
   type CoachingInsightInput,
   type CoachingReportContext,
 } from './engine';
-import { buildMentalMap, type MentalMapEntry } from './mental-map';
+import {
+  buildMentalMap,
+  dominantMentalAxis,
+  type MentalAxis,
+  type MentalMapEntry,
+} from './mental-map';
 import { getMicroObjectiveProgress, getOpenMicroObjective } from './micro-objective';
 import { classifyPriorityAxes, type PriorityAxisHints } from './priority-axis';
 
@@ -142,6 +147,29 @@ async function gatherCoachingInput(
  */
 export const getCoachingInsight = cache(async (userId: string): Promise<CoachingInsight | null> => {
   return buildCoachingInsight(await gatherCoachingInput(userId));
+});
+
+/**
+ * Tour 12 (action 3/4) — l'axe mental DOMINANT du membre, dérivé de ses priorités
+ * d'onboarding (profil S2) exactement comme `getMentalMap` (même `classifyPriorityAxes`
+ * + mêmes hints register/stage), puis réduit à sa tête via {@link dominantMentalAxis}.
+ *
+ * SEULE source de vérité de « l'axe de travail du membre » pour :
+ *   - le tie-break profil du picker Mark Douglas (`lib/triggers/engine.ts`, action 3),
+ *   - la ligne de coaching des routes muettes /patterns, /seances, /library (action 4).
+ *
+ * `cache()` ⇒ un seul fetch profil par requête même si plusieurs surfaces l'appellent.
+ * `null` quand aucune priorité ne mappe (0 fabrication) ⇒ les surfaces se cachent et le
+ * picker retombe sur son ordre historique. §21.5/§2/§50 : enum-only, jamais un input du
+ * score ni du texte AI brut.
+ */
+export const getDominantMentalAxis = cache(async (userId: string): Promise<MentalAxis | null> => {
+  const profile = await getProfileForUser(userId);
+  const priorityAxes = classifyPriorityAxes(
+    coerceAxes(profile?.axesPrioritaires),
+    derivePriorityAxisHints(profile),
+  );
+  return dominantMentalAxis(priorityAxes);
 });
 
 /**

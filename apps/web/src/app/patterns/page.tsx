@@ -24,6 +24,8 @@ import { Card } from '@/components/ui/card';
 import { HabitKindTabPicker } from '@/components/track/habit-kind-tab-picker';
 import { habitKindSchema } from '@/lib/schemas/habit-log';
 import { NextStepRail } from '@/components/nav/next-step-rail';
+import { CoachingAxisLine } from '@/components/coaching/coaching-axis-line';
+import { getDominantMentalAxis } from '@/lib/coaching/service';
 import { getDashboardAnalytics, type RangeKey } from '@/lib/scoring/dashboard-data';
 
 /**
@@ -74,16 +76,37 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
   const corrPreserved = buildPreserved('corr');
   const phasePreserved = buildPreserved('phase');
 
+  // Tour 12 (action 4) — dominant mental axis for the coaching line at the top of
+  // this route. `null` for un-profiled members → the line renders nothing.
+  const dominantAxis = await getDominantMentalAxis(userId);
+
   return (
     <main className="relative flex min-h-dvh flex-col bg-[var(--bg)]">
       <DashboardAmbient />
-      <div className="relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
+      {/* Tour 12 — `page-stagger` cascades the direct sections in on navigation.
+          Nearly every direct child (the hero + the analytics sections) already
+          carries `wow-reveal` (its own scroll-driven entrance), so those opt OUT
+          via `data-self-animate` to avoid an animation/opacity conflict; the
+          NextStepRail + the coaching line, which have no entrance of their own,
+          ride the stagger. No fixed descendant lives here (DashboardAmbient is an
+          absolute sibling, the app-shell nav is an ancestor), so the transform
+          creates no containing block for a fixed element. */}
+      <div className="page-stagger relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
         <PatternsHero />
 
         <NextStepRail currentPath="/patterns" className="mb-6 block" />
 
+        {/* Tour 12 (action 4) — coaching line: this route was profile-blind.
+            Null-safe (no profile → renders nothing, and the mb-6 collapses with
+            it since the class rides on the component's own root). */}
+        <CoachingAxisLine axis={dominantAxis} page="patterns" className="mb-6" />
+
         {/* Patterns — émotion×résultat (3 moments) + rythmes + sessions + paires */}
-        <section className="wow-reveal mb-6 flex flex-col gap-3" aria-labelledby="patterns-heading">
+        <section
+          className="wow-reveal mb-6 flex flex-col gap-3"
+          aria-labelledby="patterns-heading"
+          data-self-animate
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 id="patterns-heading" className="t-eyebrow">
               Patterns d’exécution
@@ -108,6 +131,7 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
             zéro query supplémentaire. Posture §2 : la ligne « sous pression »
             est un 'watch' ambre calme, jamais rouge ; un biais nommé est une donnée. */}
         <section
+          data-self-animate
           className="wow-reveal mb-6 flex flex-col gap-3"
           aria-labelledby="exec-depth-heading"
         >
@@ -124,6 +148,7 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
         {/* Qualité de setup (Steenbarger) + plafond de risque (Tharp) — mesure
             l'ACTE de grader/sizer, jamais le P&L (posture §2). */}
         <section
+          data-self-animate
           className="wow-reveal mb-6 flex flex-col gap-3"
           aria-labelledby="setup-quality-heading"
         >
@@ -139,6 +164,7 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
 
         {/* Pré-trade — exécution honnête + corrélation raison×performance */}
         <section
+          data-self-animate
           className="wow-reveal mb-6 flex flex-col gap-3"
           aria-labelledby="patterns-pretrade-heading"
         >
@@ -155,6 +181,7 @@ export default async function PatternsPage({ searchParams }: PatternsPageProps) 
 
         {/* Corrélations habitudes × trading (différenciateur Fxmily) */}
         <section
+          data-self-animate
           className="wow-reveal mb-6 flex flex-col gap-3"
           aria-labelledby="habit-corr-heading"
         >
@@ -224,7 +251,7 @@ function PatternsHero() {
   ] as const;
 
   return (
-    <section aria-labelledby="patterns-hero-heading" className="wow-reveal mb-6">
+    <section aria-labelledby="patterns-hero-heading" className="wow-reveal mb-6" data-self-animate>
       <Card
         primary
         glass

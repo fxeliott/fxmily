@@ -17,7 +17,44 @@
  * lives in `engine.ts` (single trip per user).
  */
 
+import type { DouglasCategory } from '@/generated/prisma/enums';
+import type { MentalAxis } from '@/lib/coaching/mental-map';
+
 import { COOLDOWN_DAYS_BY_HAT, type HatClass } from './types';
+
+// =============================================================================
+// Tour 12 (action 3) — Douglas card selection weighted by the member's profile
+// =============================================================================
+
+/**
+ * Static `DouglasCategory` → `MentalAxis` map. DETERMINISTIC, curated once here so
+ * the profile-aware tie-break never depends on runtime data or an AI call. Only the
+ * four coaching axes exist (discipline / honesty / ego / consistency); the 11 Douglas
+ * categories fold onto them by their psychological pillar (Mark Douglas, *Trading in
+ * the Zone*). Categories with no clean single-axis mapping (e.g. `probabilities`,
+ * `fear`, `loss`) are DELIBERATELY absent → they never bias the pick (0 fabrication),
+ * exactly like a member with no profile.
+ *
+ * §21.5 / §2 : a display-ordering preference, NEVER an input to the behavioral score
+ * and never a market read. §50 : enum→enum, no AI-derived text surfaced.
+ */
+const CATEGORY_TO_AXIS: Partial<Record<DouglasCategory, MentalAxis>> = {
+  discipline: 'discipline',
+  process: 'discipline',
+  patience: 'discipline',
+  ego: 'ego',
+  acceptance: 'ego',
+  tilt: 'ego',
+  consistency: 'consistency',
+  confidence: 'honesty',
+  // probabilities / fear / loss : no clean single-axis pillar → left unmapped so
+  // they never tilt the tie-break (same effect as an absent profile).
+};
+
+/** Pure: the coaching axis a Douglas category belongs to, or `null` if unmapped. */
+export function axisForCategory(category: DouglasCategory | null | undefined): MentalAxis | null {
+  return category ? (CATEGORY_TO_AXIS[category] ?? null) : null;
+}
 
 /**
  * Past delivery slim shape — what `isOnCooldown` needs.
@@ -125,12 +162,26 @@ export interface PickerCard {
   id: string;
   priority: number;
   hatClass: HatClass;
+  /**
+   * Tour 12 (action 3) — the card's Douglas category, used ONLY for the
+   * profile-aware tie-break. Optional so every existing caller/test compiles
+   * unchanged; absent ⇒ the card is treated as un-aligned (historical behaviour).
+   */
+  category?: DouglasCategory;
 }
 
 export interface PickerInput {
   matched: PickerCard[];
   history: DeliveryHistoryEntry[];
   now: Date;
+  /**
+   * Tour 12 (action 3) — the member's dominant mental axis (from their onboarding
+   * profile, via `dominantMentalAxis`). Used as a FINAL tie-break AFTER priority
+   * and cooldown: among cards of equal priority, one whose category maps to this
+   * axis is surfaced first. `null`/absent ⇒ no personalisation → byte-identical
+   * to the historical `priority DESC, id ASC` order.
+   */
+  dominantAxis?: MentalAxis | null;
 }
 
 export interface PickedCard {
@@ -140,19 +191,33 @@ export interface PickedCard {
 /**
  * Pick the best-matching card eligible for delivery:
  *   1. Drop cards on cooldown.
- *   2. Sort remaining by `priority DESC` (ties broken by `id` ASC for
- *      determinism).
- *   3. Return the head, or `null` if nothing eligible.
+ *   2. Sort remaining by `priority DESC`.
+ *   3. Tour 12 (action 3) — among cards of EQUAL priority, prefer one aligned with
+ *      the member's dominant mental axis (profile-aware). This runs AFTER priority
+ *      and the cooldown filter, so it never overrides a higher-priority card and
+ *      never resurrects a card on cooldown — it only reorders same-priority ties.
+ *   4. Final tie-break by `id` ASC (determinism).
+ *   5. Return the head, or `null` if nothing eligible.
  *
- * Pure — no DB, no clock. Engine layer handles persistence.
+ * Pure — no DB, no clock. Engine layer handles persistence. Without `dominantAxis`
+ * the ordering is byte-identical to before (no regression for un-profiled members).
  */
 export function pickBestMatch(input: PickerInput): PickedCard | null {
   const eligible = input.matched.filter(
     (c) => !isOnCooldown(c.id, c.hatClass, input.history, input.now),
   );
   if (eligible.length === 0) return null;
+  const dominantAxis = input.dominantAxis ?? null;
+  const isAligned = (c: PickerCard): boolean =>
+    dominantAxis !== null && axisForCategory(c.category) === dominantAxis;
   eligible.sort((a, b) => {
+    // 1) Priority DESC — the curated gravity, never overridden by the profile.
     if (a.priority !== b.priority) return b.priority - a.priority;
+    // 2) Profile-aware tie-break — an aligned card wins a same-priority tie.
+    const alignedA = isAligned(a);
+    const alignedB = isAligned(b);
+    if (alignedA !== alignedB) return alignedA ? -1 : 1;
+    // 3) Deterministic final tie-break.
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
   return { cardId: eligible[0]!.id };

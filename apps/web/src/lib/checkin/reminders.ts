@@ -4,11 +4,13 @@ import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { enqueueCheckinReminder } from '@/lib/notifications/enqueue';
 
+import { computeStreak, type CheckinDay, type CheckinSlotName } from './streak';
 import {
   isEveningReminderDue,
   isMorningReminderDue,
   localDateOf,
   parseLocalDate,
+  shiftLocalDate,
 } from './timezone';
 
 /**
@@ -29,6 +31,14 @@ import {
  *     (notification_queue_pending_checkin_dedup), so the JS-side
  *     "did anything actually insert?" answer comes back deterministically.
  */
+
+/**
+ * Trailing window (days) of check-ins fetched per scan. Sized so the same single
+ * bulk query that gates today's `filled` also yields enough history for a correct
+ * streak (action 2). 40 covers the longest celebrated milestone (30) with slack
+ * while staying a cheap, index-served range scan on the ≤30-member V1 cohort.
+ */
+const STREAK_WINDOW_DAYS = 40;
 
 export interface ReminderScanResult {
   scannedUsers: number;
@@ -147,24 +157,57 @@ export async function runCheckinReminderScan(
     return result;
   }
 
-  // Bulk lookup of today's checkins for ALL due users in 1 round-trip.
-  // We pass a list of `Date` (parsed via `parseLocalDate`) so Prisma writes
-  // the canonical UTC-midnight values that match `@db.Date`.
-  const dates = Array.from(new Set(userMeta.map((u) => u.today))).map((d) => parseLocalDate(d));
+  // Bulk lookup of due users' checkins in 1 round-trip. The window is widened
+  // from "today" to the trailing STREAK_WINDOW_DAYS so the SAME single query
+  // feeds BOTH the today `filled` gate AND the per-member streak used for the
+  // calm streak-aware reminder copy (action 2). Still O(1) round-trips — the
+  // streak is computed in memory from these rows, never one query per member.
+  const lowerBoundDate = Array.from(new Set(userMeta.map((u) => u.today)))
+    .map((d) => shiftLocalDate(d, -(STREAK_WINDOW_DAYS - 1)))
+    .reduce((min, d) => (d < min ? d : min));
   const existingRows = await db.dailyCheckin.findMany({
     where: {
       userId: { in: dueUserIds },
-      date: { in: dates },
+      date: { gte: parseLocalDate(lowerBoundDate) },
     },
     select: { userId: true, date: true, slot: true },
   });
 
   // Index by (userId, dateString, slot) for O(1) lookup in the per-user loop.
+  // The `filled` gate only cares about TODAY, so we key the today rows; the
+  // per-member streak days are accumulated separately over the whole window.
   const filledKey = (uid: string, date: string, slot: 'morning' | 'evening') =>
     `${uid}|${date}|${slot}`;
-  const filled = new Set(
-    existingRows.map((r) => filledKey(r.userId, r.date.toISOString().slice(0, 10), r.slot)),
-  );
+  const filled = new Set<string>();
+  // Per-member map of local-date → slots filed, fed to `computeStreak`.
+  const daysByUser = new Map<string, Map<string, Set<CheckinSlotName>>>();
+  for (const r of existingRows) {
+    const dateStr = r.date.toISOString().slice(0, 10);
+    const slot = r.slot as CheckinSlotName;
+    filled.add(filledKey(r.userId, dateStr, slot));
+    let byDate = daysByUser.get(r.userId);
+    if (!byDate) {
+      byDate = new Map();
+      daysByUser.set(r.userId, byDate);
+    }
+    const slots = byDate.get(dateStr);
+    if (slots) slots.add(slot);
+    else byDate.set(dateStr, new Set([slot]));
+  }
+
+  /**
+   * Current streak for a member, computed in memory from the pre-fetched window.
+   * `computeStreak` is pure (already used elsewhere) — reused here so the copy
+   * and the app agree on what "streak" means. Anchored on the member's OWN local
+   * `today` (F2 — members can live in different timezones).
+   */
+  const streakFor = (userId: string, today: string): number => {
+    const byDate = daysByUser.get(userId);
+    if (!byDate) return 0;
+    const days: CheckinDay[] = [];
+    for (const [date, slots] of byDate) days.push({ date, slots: [...slots] });
+    return computeStreak(days, today);
+  };
 
   // Per-user enqueue. The actual enqueue function is race-safe (P2002 catch),
   // so concurrent scans converge on the same row count.
@@ -179,15 +222,25 @@ export async function runCheckinReminderScan(
     // a member whose attempt returned a null id is an `errors` (NOT a skip) —
     // that's the whole point of the A-Z fix, so a failed reminder can't hide.
     let attempted = false;
+    // Streak computed once per member (not per slot) from the pre-fetched window.
+    const streak = streakFor(user.id, user.today);
     if (user.morningDue && !filled.has(filledKey(user.id, user.today, 'morning'))) {
       attempted = true;
-      const id = await enqueueCheckinReminder(user.id, { slot: 'morning', date: user.today });
+      const id = await enqueueCheckinReminder(user.id, {
+        slot: 'morning',
+        date: user.today,
+        streak,
+      });
       if (id) result.enqueuedMorning += 1;
       else result.errors += 1;
     }
     if (user.eveningDue && !filled.has(filledKey(user.id, user.today, 'evening'))) {
       attempted = true;
-      const id = await enqueueCheckinReminder(user.id, { slot: 'evening', date: user.today });
+      const id = await enqueueCheckinReminder(user.id, {
+        slot: 'evening',
+        date: user.today,
+        streak,
+      });
       if (id) result.enqueuedEvening += 1;
       else result.errors += 1;
     }

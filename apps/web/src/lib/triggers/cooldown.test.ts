@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  axisForCategory,
   isOnCooldown,
   isRoutineSaturated,
   pickBestMatch,
@@ -112,6 +113,122 @@ describe('pickBestMatch', () => {
       now: NOW,
     });
     expect(r?.cardId).toBe('alpha');
+  });
+});
+
+describe('axisForCategory (Tour 12 — Douglas category → mental axis)', () => {
+  it('maps discipline-family categories to the discipline axis', () => {
+    expect(axisForCategory('discipline')).toBe('discipline');
+    expect(axisForCategory('process')).toBe('discipline');
+    expect(axisForCategory('patience')).toBe('discipline');
+  });
+
+  it('maps ego-family categories to the ego axis', () => {
+    expect(axisForCategory('ego')).toBe('ego');
+    expect(axisForCategory('acceptance')).toBe('ego');
+    expect(axisForCategory('tilt')).toBe('ego');
+  });
+
+  it('maps consistency → consistency and confidence → honesty', () => {
+    expect(axisForCategory('consistency')).toBe('consistency');
+    expect(axisForCategory('confidence')).toBe('honesty');
+  });
+
+  it('leaves ambiguous categories unmapped (never fabricates an axis)', () => {
+    expect(axisForCategory('probabilities')).toBeNull();
+    expect(axisForCategory('fear')).toBeNull();
+    expect(axisForCategory('loss')).toBeNull();
+    expect(axisForCategory(null)).toBeNull();
+    expect(axisForCategory(undefined)).toBeNull();
+  });
+});
+
+describe('pickBestMatch — profile-aware tie-break (Tour 12, action 3)', () => {
+  it('same priority + both eligible → the card aligned on the dominant axis wins', () => {
+    // Two white cards of EQUAL priority. `id` ASC would pick 'a-discipline';
+    // the dominant axis is `ego`, so the ego-aligned card 'z-ego' wins instead.
+    const r = pickBestMatch({
+      matched: [
+        { id: 'a-discipline', priority: 5, hatClass: 'white', category: 'discipline' },
+        { id: 'z-ego', priority: 5, hatClass: 'white', category: 'tilt' },
+      ],
+      history: [],
+      now: NOW,
+      dominantAxis: 'ego',
+    });
+    expect(r?.cardId).toBe('z-ego');
+  });
+
+  it('without a dominant axis → identical to historical order (id ASC on ties)', () => {
+    const matched = [
+      {
+        id: 'a-discipline',
+        priority: 5,
+        hatClass: 'white' as const,
+        category: 'discipline' as const,
+      },
+      { id: 'z-ego', priority: 5, hatClass: 'white' as const, category: 'tilt' as const },
+    ];
+    expect(pickBestMatch({ matched, history: [], now: NOW })?.cardId).toBe('a-discipline');
+    expect(pickBestMatch({ matched, history: [], now: NOW, dominantAxis: null })?.cardId).toBe(
+      'a-discipline',
+    );
+  });
+
+  it('never overrides a higher-priority card (tie-break is AFTER priority)', () => {
+    // The higher-priority card is NOT aligned; the aligned card is lower priority.
+    // Priority must still win — the axis only reorders EQUAL-priority ties.
+    const r = pickBestMatch({
+      matched: [
+        { id: 'high', priority: 9, hatClass: 'white', category: 'discipline' },
+        { id: 'low-aligned', priority: 3, hatClass: 'white', category: 'tilt' },
+      ],
+      history: [],
+      now: NOW,
+      dominantAxis: 'ego',
+    });
+    expect(r?.cardId).toBe('high');
+  });
+
+  it('never resurrects a card on cooldown (tie-break is AFTER the cooldown filter)', () => {
+    // The aligned card is on cooldown → dropped before the tie-break even runs.
+    const r = pickBestMatch({
+      matched: [
+        { id: 'a-clean', priority: 5, hatClass: 'white', category: 'discipline' },
+        { id: 'z-aligned', priority: 5, hatClass: 'white', category: 'tilt' },
+      ],
+      history: [entry('z-aligned', 2)], // z-aligned on cooldown
+      now: NOW,
+      dominantAxis: 'ego',
+    });
+    expect(r?.cardId).toBe('a-clean');
+  });
+
+  it('dominant axis with no aligned card among matches → falls back to id ASC', () => {
+    const r = pickBestMatch({
+      matched: [
+        { id: 'b-consistency', priority: 5, hatClass: 'white', category: 'consistency' },
+        { id: 'a-discipline', priority: 5, hatClass: 'white', category: 'discipline' },
+      ],
+      history: [],
+      now: NOW,
+      dominantAxis: 'honesty', // neither card maps to honesty
+    });
+    expect(r?.cardId).toBe('a-discipline');
+  });
+
+  it('unmapped category is treated as un-aligned even with a dominant axis', () => {
+    // 'fear' is intentionally unmapped → the aligned discipline card wins.
+    const r = pickBestMatch({
+      matched: [
+        { id: 'a-fear', priority: 5, hatClass: 'white', category: 'fear' },
+        { id: 'z-discipline', priority: 5, hatClass: 'white', category: 'process' },
+      ],
+      history: [],
+      now: NOW,
+      dominantAxis: 'discipline',
+    });
+    expect(r?.cardId).toBe('z-discipline');
   });
 });
 

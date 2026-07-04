@@ -478,7 +478,7 @@ function NutritionStep({ draft, setDraft, stepError, headingRef, confirmFlash }:
                 className={cn(
                   'rounded-input flex min-h-11 items-center justify-center border px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
                   selected
-                    ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]'
+                    ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc-hi)]'
                     : 'border-[var(--b-default)] bg-[var(--bg-2)] text-[var(--t-2)] hover:border-[var(--b-acc)] hover:text-[var(--t-1)]',
                 )}
               >

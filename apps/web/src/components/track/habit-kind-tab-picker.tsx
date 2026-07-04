@@ -198,7 +198,7 @@ export function HabitKindTabPicker({
             className={cn(
               'rounded-pill inline-flex min-h-11 items-center gap-2 border px-3.5 py-2 text-[12px] font-medium transition-[color,background-color,border-color,transform] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] active:scale-[0.97]',
               active
-                ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]'
+                ? 'border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc-hi)]'
                 : 'border-[var(--b-subtle)] bg-[var(--bg-2)] text-[var(--t-2)] hover:border-[var(--b-acc)] hover:bg-[var(--bg-3)] hover:text-[var(--t-1)]',
             )}
           >

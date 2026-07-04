@@ -1318,19 +1318,23 @@
  * background-color ABSENT exprès : les utilities bg-* des call-sites (couleur)
  * restent maîtres. Dans @layer components (pas unlayered) pour qu'une utility
  * background-image (bg-gradient-*) posée par un call-site GAGNE — leçon du
- * bloc TYPOGRAPHY (l.793). Contraste : alpha ≤0.06 coin haut = géométrie déjà
- * prouvée AA par les surfaces acc-dim-2 pleines (TradeStatCard mute).
+ * bloc TYPOGRAPHY (l.793). Contraste (contrat tour 12) : sous le bloom 0.10,
+ * une puce sélectionnée (--acc-dim) doit porter son texte en --acc-hi (pas
+ * --acc, mesuré 4.41:1) ; --t-3/--t-4 tiennent >=4.5:1 au top-light 0.032.
  * ============================================================= */
 @layer components {
   .card-premium {
-    /* Tour 12 — corner bloom lifted to --acc-dim-15 (0.10) and the top-light
-       0.032 → 0.06 so the default card reads with a perceptible blue breath +
-       Linear volume (was sub-perceptual). AA re-cleared: the corner bloom peaks
-       top-right where --t-3/--t-4 10-11px hints hold >=4.5:1 even composited with
-       the stronger top-light (dark 4.52:1 worst case, tour 12 recompute). */
+    /* Tour 12 — corner bloom lifted to --acc-dim-15 (0.10) for a perceptible
+       blue breath; top-light kept at its proven 0.032 (0.06 eats --t-3/--t-4
+       margin for no perceptible gain). CONTRAST CONTRACT: --acc text is NOT
+       AA over [--acc-dim fill + this bloom] (4.41:1 measured, runtime audit
+       /track/sport/new) — selected chips/pills inside a premium card must use
+       --acc-hi for their text (6.8:1 dark / 5.8:1 light, its documented
+       text-accent role). Raising either alpha requires re-proving --acc-hi
+       AND --t-3/--t-4 composites. */
     background-image:
       radial-gradient(130% 76% at 86% -24%, var(--acc-dim-15) 0%, transparent 56%),
-      linear-gradient(180deg, oklch(1 0 0 / 0.06) 0%, transparent 72px);
+      linear-gradient(180deg, oklch(1 0 0 / 0.032) 0%, transparent 72px);
   }
   /* En clair le top-light blanc est invisible sur carte blanche — on ne garde
      que le souffle cool (l'élévation reste portée par --sh-card, grammaire S20.1). */

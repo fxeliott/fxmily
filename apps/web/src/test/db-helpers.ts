@@ -94,6 +94,11 @@ async function seedUser(role: 'member' | 'admin', options: SeedUserOptions): Pro
       status,
       timezone,
       consentRgpdAt: new Date(),
+      // Determinism (canon J-C3): the Tour 14 default (`weekendsOff=true`)
+      // makes Saturday/Sunday an off day — a spec asserting a check-in ACTION
+      // would then pass Mon-Fri and fail on weekends (CI broke on a Sunday).
+      // E2E users trade every day; off-day specs opt in explicitly.
+      weekendsOff: false,
     },
     select: { id: true },
   });

@@ -9,6 +9,8 @@ const auditCountMock = vi.fn<(...args: unknown[]) => unknown>();
 // the thresholds/error path are deterministic and platform-independent (the CI
 // runner and Windows dev both give real-but-irrelevant free space otherwise).
 const statfsSyncMock = vi.fn<(...args: unknown[]) => unknown>();
+// Tour 14 — uploads-persistence probe reads /proc/mounts via readFileSync.
+const readFileSyncMock = vi.fn<(...args: unknown[]) => unknown>();
 // Tour 13 — verification backlog probe reads mt5AccountProof.count + findFirst.
 const proofCountMock = vi.fn<(...args: unknown[]) => unknown>();
 const proofFindFirstMock = vi.fn<(...args: unknown[]) => unknown>();
@@ -24,6 +26,7 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('node:fs', () => ({
   statfsSync: (...args: unknown[]) => statfsSyncMock(...args),
+  readFileSync: (...args: unknown[]) => readFileSyncMock(...args),
 }));
 
 const {
@@ -32,6 +35,9 @@ const {
   getSystemSnapshot,
   getWorkerHealthReport,
   getVerificationBacklogHealth,
+  getUploadsPersistenceHealth,
+  parseProcMounts,
+  mountForPath,
 } = await import('./health');
 
 const GIB = 1024 * 1024 * 1024;
@@ -64,6 +70,7 @@ beforeEach(() => {
   pushCountMock.mockReset();
   auditCountMock.mockReset();
   statfsSyncMock.mockReset();
+  readFileSyncMock.mockReset();
   proofCountMock.mockReset();
   proofFindFirstMock.mockReset();
 });
@@ -161,12 +168,18 @@ describe('getCronHealthReport', () => {
         action: 'cron.health.scan',
         _max: { createdAt: new Date(now.getTime() - 30 * MIN) },
       },
+      {
+        // Tour 14 — host autoheal watchdog heartbeat (period=1h, tolerance=2h,
+        // green ≤ 1.5h). A 30-min-old row lands green.
+        action: 'cron.autoheal.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 30 * MIN) },
+      },
     ]);
 
     const report = await getCronHealthReport(now);
 
     expect(report.overall).toBe('green');
-    expect(report.entries).toHaveLength(18);
+    expect(report.entries).toHaveLength(19);
     expect(report.entries.every((e) => e.status === 'green')).toBe(true);
     expect(report.ranAt).toBe(now.toISOString());
   });
@@ -354,9 +367,19 @@ describe('getCronHealthReport', () => {
 
     const report = await getCronHealthReport(now);
 
-    expect(report.entries.every((e) => e.status === 'never_ran')).toBe(true);
+    // Every cron WITHOUT an `expectedSince` reads `never_ran` on a fresh deploy.
+    // Tour 14 — the autoheal watchdog DOES carry `expectedSince` (2026-07-05),
+    // which is in the FUTURE relative to this May-dated `now`, so its absence is
+    // `pending` ("premier run à venir"), not `never_ran` — by design (same
+    // pattern as the worker member_profile_monthly pipeline). Assert the split.
+    const dated = report.entries.filter((e) => e.action !== 'cron.autoheal.heartbeat');
+    expect(dated.every((e) => e.status === 'never_ran')).toBe(true);
     expect(report.entries.every((e) => e.lastRanAt === null)).toBe(true);
     expect(report.entries.every((e) => e.ageMs === null)).toBe(true);
+    const autoheal = report.entries.find((e) => e.action === 'cron.autoheal.heartbeat');
+    expect(autoheal?.status).toBe('pending');
+    // `pending` is healthy and never escalates the masthead, but a genuine
+    // `never_ran` on every other cron still surfaces the overall as never_ran.
     expect(report.overall).toBe('never_ran');
   });
 
@@ -471,11 +494,13 @@ describe('getCronHealthReport', () => {
    * overdue net alongside calendar/monthly/onboarding).
    * S21 raised it 17 → 18 (the verification-proof overdue safety-net, closing
    * the last AI pipeline that had no anti-forget net — §33).
+   * Tour 14 raised it 18 → 19 (the host autoheal watchdog heartbeat, P1-4 —
+   * a self-healer nobody watches is the blind spot the worker layer had).
    */
-  it('always returns exactly 18 entries (S21 — added the verification overdue net)', async () => {
+  it('always returns exactly 19 entries (Tour 14 — added the autoheal watchdog heartbeat)', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);
     const report = await getCronHealthReport();
-    expect(report.entries).toHaveLength(18);
+    expect(report.entries).toHaveLength(19);
     // self-monitoring of the watcher (cron-watch.yml).
     expect(report.entries.map((e) => e.action)).toContain('cron.health.scan');
     // audit_log retention purge (V2-roadmap reclassed).
@@ -496,6 +521,87 @@ describe('getCronHealthReport', () => {
     expect(report.entries.map((e) => e.action)).toContain('meeting.generated');
     expect(report.entries.map((e) => e.action)).toContain('cron.mindset_check_reminders.scan');
     expect(report.entries.map((e) => e.action)).toContain('cron.purge_access_requests.scan');
+    // Tour 14 — host autoheal watchdog heartbeat (P1-4).
+    expect(report.entries.map((e) => e.action)).toContain('cron.autoheal.heartbeat');
+  });
+
+  /**
+   * Tour 14 (P1-4) — the host autoheal watchdog reports hourly on an always-on
+   * host, so the tolerances are TIGHT (unlike the worker watchdog on a sleeping
+   * PC): green ≤ 1.5h, amber ≤ 2h, red past 2h. A dead watchdog must go red so
+   * cron-watch.yml opens the alert — the whole point of making self-healing
+   * observable. A fresh row whose payload reported an escalation escalates the
+   * entry green → amber via the shared metadata.errors read.
+   */
+  it('classifies the autoheal watchdog: fresh green, 100-min amber, 3h red', async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z');
+
+    // period=1h, greenMultiplier default 1.5 → green ≤ 90min; tolerance ×2 → red past 2h.
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.autoheal.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 30 * MIN) },
+      },
+    ]);
+    const fresh = await getCronHealthReport(now);
+    expect(fresh.entries.find((e) => e.action === 'cron.autoheal.heartbeat')?.status).toBe('green');
+
+    // 100 min: past the 90-min green boundary, under the 2h tolerance → amber.
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.autoheal.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 100 * MIN) },
+      },
+    ]);
+    const late = await getCronHealthReport(now);
+    expect(late.entries.find((e) => e.action === 'cron.autoheal.heartbeat')?.status).toBe('amber');
+
+    // 3h: past the 2h tolerance → red (dead watchdog on an always-on host).
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.autoheal.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 3 * HOUR) },
+      },
+    ]);
+    const dead = await getCronHealthReport(now);
+    expect(dead.entries.find((e) => e.action === 'cron.autoheal.heartbeat')?.status).toBe('red');
+    expect(dead.overall).toBe('red');
+  });
+
+  it('escalates a fresh autoheal heartbeat that reported an escalation to amber', async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.autoheal.heartbeat',
+        _max: { createdAt: new Date(now.getTime() - 20 * MIN) },
+      },
+    ]);
+    // The route mirrors `escalations` into metadata.errors; a fresh row that
+    // still had an escalation is not fully healthy.
+    auditFindManyMock.mockResolvedValueOnce([
+      { action: 'cron.autoheal.heartbeat', metadata: { errors: 2 } },
+    ]);
+    const report = await getCronHealthReport(now);
+    const autoheal = report.entries.find((e) => e.action === 'cron.autoheal.heartbeat');
+    expect(autoheal?.status).toBe('amber');
+    expect(autoheal?.errorCount).toBe(2);
+  });
+
+  /**
+   * Tour 14 — before the deploy that ships the heartbeat converges the host, no
+   * row exists yet. With `expectedSince`, that absence reads `pending` (calm
+   * "premier run à venir"), NOT `never_ran` — so a freshly-merged expectation
+   * never drags the masthead to "Pas démarré" for the window between merge and
+   * the first hourly POST.
+   */
+  it("classifies the autoheal watchdog as 'pending' before its first-run deadline", async () => {
+    // expectedSince 2026-07-05, tolerance 2h → deadline ~2026-07-05T02:00Z.
+    const now = new Date('2026-07-05T00:30:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([]);
+    const report = await getCronHealthReport(now);
+    const autoheal = report.entries.find((e) => e.action === 'cron.autoheal.heartbeat');
+    expect(autoheal?.status).toBe('pending');
+    expect(autoheal?.lastRanAt).toBeNull();
   });
 });
 
@@ -885,5 +991,126 @@ describe('getVerificationBacklogHealth', () => {
       orderBy: { uploadedAt: 'asc' },
       select: { uploadedAt: true },
     });
+  });
+});
+
+describe('parseProcMounts', () => {
+  it('parses device / mountpoint / fstype triples, ignoring the trailing dump/pass fields', () => {
+    const body = [
+      'overlay / overlay rw,relatime,lowerdir=/x 0 0',
+      '/dev/sda1 /opt/fxmily/.uploads ext4 rw,relatime 0 0',
+      '',
+    ].join('\n');
+
+    expect(parseProcMounts(body)).toEqual([
+      { mountPoint: '/', fsType: 'overlay' },
+      { mountPoint: '/opt/fxmily/.uploads', fsType: 'ext4' },
+    ]);
+  });
+
+  it('decodes octal-escaped spaces (\\040) in mount points', () => {
+    // A bind mount whose path contains a space is octal-escaped by the kernel.
+    const body = 'tmpfs /mnt/with\\040space tmpfs rw 0 0';
+    expect(parseProcMounts(body)).toEqual([{ mountPoint: '/mnt/with space', fsType: 'tmpfs' }]);
+  });
+
+  it('skips malformed lines with fewer than three fields', () => {
+    const body = ['garbage', 'a b', '/dev/sdb /data xfs rw 0 0'].join('\n');
+    expect(parseProcMounts(body)).toEqual([{ mountPoint: '/data', fsType: 'xfs' }]);
+  });
+});
+
+describe('mountForPath', () => {
+  const mounts = [
+    { mountPoint: '/', fsType: 'overlay' },
+    { mountPoint: '/opt', fsType: 'ext4' },
+    { mountPoint: '/opt/fxmily/.uploads', fsType: 'xfs' },
+  ];
+
+  it('picks the LONGEST matching prefix (most specific mount wins)', () => {
+    // The upload root lives under the deepest mount, not the '/' fallback.
+    expect(mountForPath('/opt/fxmily/.uploads/proofs/x.png', mounts)).toEqual({
+      mountPoint: '/opt/fxmily/.uploads',
+      fsType: 'xfs',
+    });
+  });
+
+  it('matches the mount point exactly (target === mountPoint)', () => {
+    expect(mountForPath('/opt', mounts)).toEqual({ mountPoint: '/opt', fsType: 'ext4' });
+  });
+
+  it("falls back to '/' when no deeper mount covers the path", () => {
+    expect(mountForPath('/app/.uploads', mounts)).toEqual({ mountPoint: '/', fsType: 'overlay' });
+  });
+
+  it('does NOT match a sibling whose name is a string-prefix but not a path-prefix', () => {
+    // '/opt-backup' must not match the '/opt' mount (guards the naive
+    // startsWith without a separator).
+    expect(mountForPath('/opt-backup/x', mounts)).toEqual({ mountPoint: '/', fsType: 'overlay' });
+  });
+
+  it('returns null when no mount (not even /) is present', () => {
+    expect(mountForPath('/x', [{ mountPoint: '/data', fsType: 'ext4' }])).toBeNull();
+  });
+});
+
+describe('getUploadsPersistenceHealth', () => {
+  const PROOF_PATH = '/proc/mounts';
+
+  it("returns 'red' when the upload root is on the ephemeral overlay layer", () => {
+    // No volume mounted on /app/.uploads → it falls to the overlay rootfs.
+    readFileSyncMock.mockReturnValueOnce('overlay / overlay rw 0 0\n');
+
+    const health = getUploadsPersistenceHealth(PROOF_PATH, '/app/.uploads');
+
+    expect(health.status).toBe('red');
+    expect(health.ephemeral).toBe(true);
+    expect(health.fsType).toBe('overlay');
+    expect(health.mountPoint).toBe('/');
+    expect(health.uploadsRoot).toBe('/app/.uploads');
+  });
+
+  it("returns 'green' when the upload root is on a persistent volume", () => {
+    readFileSyncMock.mockReturnValueOnce(
+      ['overlay / overlay rw 0 0', '/dev/sda1 /app/.uploads ext4 rw 0 0'].join('\n'),
+    );
+
+    const health = getUploadsPersistenceHealth(PROOF_PATH, '/app/.uploads');
+
+    expect(health.status).toBe('green');
+    expect(health.ephemeral).toBe(false);
+    expect(health.fsType).toBe('ext4');
+    expect(health.mountPoint).toBe('/app/.uploads');
+  });
+
+  it('treats tmpfs as ephemeral (red)', () => {
+    readFileSyncMock.mockReturnValueOnce(
+      ['overlay / overlay rw 0 0', 'tmpfs /app/.uploads tmpfs rw 0 0'].join('\n'),
+    );
+    expect(getUploadsPersistenceHealth(PROOF_PATH, '/app/.uploads').status).toBe('red');
+  });
+
+  it("returns 'unknown' (neutral) when /proc/mounts cannot be read", () => {
+    readFileSyncMock.mockImplementationOnce(() => {
+      throw new Error('ENOENT');
+    });
+
+    const health = getUploadsPersistenceHealth(PROOF_PATH, '/app/.uploads');
+
+    expect(health.status).toBe('unknown');
+    expect(health.ephemeral).toBe(false);
+    expect(health.fsType).toBeNull();
+    expect(health.mountPoint).toBeNull();
+    // Even with no reading, the inspected root is reported for the operator.
+    expect(health.uploadsRoot).toBe('/app/.uploads');
+  });
+
+  it("returns 'unknown' when the root cannot be attributed to any mount", () => {
+    // A /proc/mounts with no '/' fallback and no covering mount.
+    readFileSyncMock.mockReturnValueOnce('/dev/sda1 /data ext4 rw 0 0\n');
+
+    const health = getUploadsPersistenceHealth(PROOF_PATH, '/app/.uploads');
+    expect(health.status).toBe('unknown');
+    expect(health.fsType).toBeNull();
   });
 });

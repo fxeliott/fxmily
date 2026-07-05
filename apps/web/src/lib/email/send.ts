@@ -412,6 +412,8 @@ const FALLBACK_SUBJECT_BY_TYPE: Record<NotificationTypeSlug, string> = {
   mindset_check_ready: 'Auto-évaluation mindset prête · Fxmily',
   // S3 §33 — push-only (EMAIL_FALLBACK_SKIP_TYPES). Defense-in-depth copy only.
   verification_gentle_reminder: 'Un point rapide sur ton suivi · Fxmily',
+  // Tour 14 — member-facing verdict (mirror monthly_debrief_ready, email fallback allowed).
+  verification_proof_analyzed: 'Ton analyse de suivi est prête · Fxmily',
   // S8 V2 §32-4 — ADMIN-facing fallback (member replied to a backtest correction).
   training_reply_received: 'Réponse à une correction · Fxmily',
 };
@@ -434,6 +436,8 @@ const FALLBACK_BODY_BY_TYPE: Record<NotificationTypeSlug, string> = {
     'Ton QCM hebdo de 2 minutes pour mesurer où tu en es : mindset, discipline, patience. Calme et sans pression.',
   verification_gentle_reminder:
     'Un élément de ton suivi est resté de côté. Un coup d’œil quand tu peux, et indique s’il y a une raison. Rien de grave : juste rester honnête avec toi-même.',
+  verification_proof_analyzed:
+    'Ton analyse de suivi est prête. Les positions lues et les éventuels écarts t’attendent sur ta page de vérification. Un moment pour te voir tel que tu es, sans jugement.',
   training_reply_received:
     'Un membre a répondu à l’une de tes corrections de backtest. Le détail t’attend dans son espace entraînement, côté admin.',
 };
@@ -448,6 +452,7 @@ const FALLBACK_CTA_BY_TYPE: Record<NotificationTypeSlug, string> = {
   monthly_debrief_ready: 'Ouvrir mon débrief',
   mindset_check_ready: 'Faire mon QCM hebdo',
   verification_gentle_reminder: 'Voir mon suivi',
+  verification_proof_analyzed: 'Voir mon analyse',
   training_reply_received: 'Voir la réponse',
 };
 

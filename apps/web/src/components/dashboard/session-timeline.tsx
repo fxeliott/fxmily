@@ -38,11 +38,18 @@ export function SessionTimeline({
   routine,
   timezone = 'Europe/Paris',
   className = '',
+  todayIsOff = false,
 }: {
   routine: SessionRoutine;
   /** Member's IANA timezone (F2) — formats the pre-trade "posé à HHhMM" label. */
   timezone?: string;
   className?: string;
+  /**
+   * Tour 14 — when the member's TODAY is an off day, a calm "repos" banner leads
+   * the timeline: the 4-phase track stays (it teaches the method's rhythm), but
+   * the member reads first that today is a rest day, nothing owed (§31.2).
+   */
+  todayIsOff?: boolean;
 }) {
   const { phase, guidance, day } = routine;
   const activeIdx = sessionStepIndex(phase); // -1 before the session opens
@@ -124,6 +131,16 @@ export function SessionTimeline({
           <Moon className="h-4 w-4" strokeWidth={1.75} />
         </span>
       </div>
+
+      {/* Tour 14 — off day : bandeau repos calme AVANT la piste. On garde la
+          piste (elle enseigne le rythme de la méthode) mais le membre lit
+          d'abord que la journée est un repos choisi, rien à tenir (§31.2). */}
+      {todayIsOff ? (
+        <p className="rounded-control mb-4 border border-[var(--b-default)] bg-[var(--bg-2)] p-3 text-[13px] leading-[1.5] text-[var(--t-2)]">
+          Aujourd’hui est un jour off. Pas de session à tenir, pas de trade à poser. La routine
+          ci-dessous reste ta boussole pour les jours de trading.
+        </p>
+      ) : null}
 
       {/* The 4-step routine track. before → all pending ; otherwise past=done,
           current=active, future=pending. Pure presentational, token-driven. */}

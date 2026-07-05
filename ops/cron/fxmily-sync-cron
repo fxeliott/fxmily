@@ -40,6 +40,27 @@ DST_CRONTAB="/etc/cron.d/fxmily-app"
 DST_RUNNER="/usr/local/bin/fxmily-cron"
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
 
+# Tour 14 (P0-1) — the crontab schedules fxmily-uploads-backup, fxmily-caddy-
+# backup, fxmily-restore-drill and (root) fxmily-autoheal, but the deploy only
+# ever installed fxmily-cron. So those crons ran a NON-EXISTENT binary and failed
+# SILENTLY every tick (the MT5-proof uploads volume had NO backup at all). The
+# sync now converges EVERY ops script the crontab references, from the same
+# staging dir, with the same install/backup/perms discipline. Each is optional:
+# a script that was not staged is skipped (the deploy scp may ship a subset), but
+# the final `command -v` check FAILS LOUDLY if the crontab references one that is
+# neither staged nor already installed.
+#
+# Format: "<staged-name> <dst-path> <mode>". All install root:root (out of
+# fxmily's write reach) — the cron `user` field, not file ownership, is what
+# drops privilege for the fxmily-run ones.
+MANAGED_SCRIPTS=(
+  "fxmily-backup /usr/local/bin/fxmily-backup 0755"
+  "fxmily-caddy-backup /usr/local/bin/fxmily-caddy-backup 0755"
+  "fxmily-uploads-backup /usr/local/bin/fxmily-uploads-backup 0755"
+  "fxmily-restore-drill /usr/local/bin/fxmily-restore-drill 0755"
+  "fxmily-autoheal /usr/local/bin/fxmily-autoheal 0755"
+)
+
 log() { echo "[fxmily-sync-cron] $*"; }
 fail() { echo "[fxmily-sync-cron] ERROR: $*" >&2; exit 1; }
 
@@ -65,7 +86,7 @@ fail() { echo "[fxmily-sync-cron] ERROR: $*" >&2; exit 1; }
 var_re='^(SHELL|PATH|MAILTO)=[^;&|]*$'
 sched='^[0-9*,/[:space:]-]+'
 cron_re="${sched}fxmily[[:space:]]+/usr/local/bin/fxmily-cron[[:space:]]+[a-z-]+[[:space:]]*$"
-backup_re="${sched}fxmily[[:space:]]+/usr/local/bin/fxmily-(backup|caddy-backup|uploads-backup)[[:space:]]*$"
+backup_re="${sched}fxmily[[:space:]]+/usr/local/bin/fxmily-(backup|caddy-backup|uploads-backup|restore-drill)[[:space:]]*$"
 autoheal_re="${sched}root[[:space:]]+/usr/local/bin/fxmily-autoheal[[:space:]]*$"
 lineno=0
 while IFS= read -r line || [[ -n "$line" ]]; do
@@ -101,9 +122,57 @@ if ! cmp -s "$SRC_CRONTAB" "$DST_CRONTAB" 2>/dev/null; then
   changed=1
 fi
 
+# --- Converge the other ops scripts the crontab references (P0-1) --------------
+# Each is sanity-checked (shebang + size bound) before install, exactly like the
+# runner above — a staged file with no shebang or an absurd size is refused
+# rather than installed. A script not present in the staging dir is skipped
+# (staged subset), NOT an error here — the `command -v` gate below is what makes
+# a genuinely-missing referenced binary fail the deploy loudly.
+for spec in "${MANAGED_SCRIPTS[@]}"; do
+  read -r name dst mode <<<"$spec"
+  src="$STAGE_DIR/$name"
+  [[ -f "$src" ]] || { log "skip $name (not staged)"; continue; }
+  head -c 3 "$src" | grep -q '^#!' || fail "staged $name has no shebang."
+  sz="$(stat -c %s "$src")"
+  [[ "$sz" -lt 65536 ]] || fail "staged $name unexpectedly large ($sz bytes)."
+  if ! cmp -s "$src" "$dst" 2>/dev/null; then
+    [[ -f "$dst" ]] && cp -p "$dst" "${dst}.bak-${STAMP}"
+    install -o root -g root -m "$mode" "$src" "$dst"
+    log "installed $dst (backup: ${dst}.bak-${STAMP})"
+    changed=1
+  fi
+  # Prune old backups of this script (keep 5, disk hygiene on the 40 GB host).
+  ls -1t "${dst}".bak-* 2>/dev/null | tail -n +6 | xargs -r rm -f || true
+done
+
 # Keep only the 5 most recent backups of each (disk hygiene on a 40 GB host).
-ls -1t "${DST_RUNNER}".bak-* 2>/dev/null | tail -n +6 | xargs -r rm -f
-ls -1t /root/fxmily-app.cron.bak-* 2>/dev/null | tail -n +6 | xargs -r rm -f
+ls -1t "${DST_RUNNER}".bak-* 2>/dev/null | tail -n +6 | xargs -r rm -f || true
+ls -1t /root/fxmily-app.cron.bak-* 2>/dev/null | tail -n +6 | xargs -r rm -f || true
+
+# --- Post-convergence integrity gate (P0-2) ------------------------------------
+# Validate that EVERY command the crontab actually runs now exists + is
+# executable. This turns the class of failure that hid for weeks (a scheduled
+# binary that was never installed → silent per-tick failure, no backup) into a
+# LOUD deploy failure. We read the installed crontab (post-convergence), pull the
+# 7th field (the command path) from every non-comment cron row, and assert each
+# resolves via `command -v`. Anything missing aborts non-zero so deploy.yml goes
+# red and the operator fixes it before trusting the schedule.
+missing_cmds=""
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ -z "${line//[[:space:]]/}" ]] && continue
+  [[ "$line" =~ ^[[:space:]]*# ]] && continue
+  [[ "$line" =~ ^(SHELL|PATH|MAILTO)= ]] && continue
+  # cron.d row: `m h dom mon dow user command [args]` — field 7 is the binary.
+  cmd="$(awk '{print $7}' <<<"$line")"
+  [[ -n "$cmd" ]] || continue
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    missing_cmds="${missing_cmds}\n  - ${cmd}"
+  fi
+done < "$DST_CRONTAB"
+if [[ -n "$missing_cmds" ]]; then
+  fail "crontab references command(s) that are NOT installed/executable on the host:$(printf '%b' "$missing_cmds")"
+fi
+log "integrity gate OK — every scheduled command resolves via command -v."
 
 if [[ "$changed" -eq 0 ]]; then
   log "already in sync — nothing to do."

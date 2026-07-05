@@ -56,15 +56,45 @@ export interface CompletionInput {
   periodEnd: string;
   /** Raw check-in rows in the period (any slot), as loaded from the DB. */
   checkins: readonly CompletionDay[];
+  /**
+   * Tour 14 — the OFF days (weekend kept off + explicit declarations) that fall
+   * inside the period, as local `YYYY-MM-DD` strings. The loader resolves them
+   * once via `getOffDaySet` + `isOffDay`. Two effects, mirroring the SPEC pont:
+   *   - coverage DENOMINATOR excludes off days (a member who takes weekends off
+   *     is measured against the days they actually owed a check-in, never the
+   *     full calendar span);
+   *   - the continuity run STEPS OVER an unfilled off day (a weekend off must
+   *     not break a Friday→Monday streak — same bridge as `checkin/streak.ts`).
+   * Absent/empty → byte-identical to pre-Tour-14 (denominator = periodDays, no
+   * bridge). A check-in actually filed on an off day still counts 100 % (the
+   * rempli wins): off status only ever REMOVES pressure, never a filled entry.
+   */
+  offDays?: ReadonlySet<string>;
 }
 
 /** Deterministic completion + continuity snapshot for one report period. */
 export interface CompletionSummary {
   /** Number of calendar days in the (inclusive) period. */
   periodDays: number;
+  /**
+   * Tour 14 — off days inside the period (weekend off + explicit declarations).
+   * Excluded from the coverage denominator; surfaced so the reader can frame the
+   * rate ("hors jours off"). 0 when no off days / no set supplied.
+   */
+  offDaysCount: number;
+  /**
+   * Tour 14 — days the member actually OWED a check-in: `periodDays − offDays`,
+   * floored at 0. This is the coverage denominator (never the raw calendar span
+   * once off days exist), so a member who keeps weekends off is not scored
+   * against the days they never owed.
+   */
+  owedDays: number;
   /** Distinct days with at least one check-in. */
   checkinDaysFilled: number;
-  /** `checkinDaysFilled / periodDays`, clamped to [0,1]. */
+  /**
+   * `checkinDaysFilled / owedDays`, clamped to [0,1]. Denominator excludes off
+   * days (Tour 14). Falls back to `periodDays` when no off days are supplied.
+   */
   checkinCoverageRate: number;
   /** Morning check-ins filed (count). */
   morningCheckinsCount: number;
@@ -112,7 +142,21 @@ export function buildCompletionSummary(input: CompletionInput): CompletionSummar
 
   const distinctDates = new Set(input.checkins.map((c) => c.date));
   const checkinDaysFilled = distinctDates.size;
-  const checkinCoverageRate = periodDays > 0 ? Math.min(1, checkinDaysFilled / periodDays) : 0;
+
+  // Tour 14 — only off days that fall INSIDE the period count against the
+  // denominator, and only when they are NOT themselves filled (a check-in filed
+  // on an off day still counts 100 % — the rempli wins, so it stays in the owed
+  // set). `owedDays` = the days the member actually owed a check-in.
+  const offInPeriod = new Set<string>();
+  if (input.offDays) {
+    for (const date of input.offDays) {
+      const ord = dayOrdinal(date);
+      if (ord >= startOrd && ord <= endOrd && !distinctDates.has(date)) offInPeriod.add(date);
+    }
+  }
+  const offDaysCount = offInPeriod.size;
+  const owedDays = Math.max(0, periodDays - offDaysCount);
+  const checkinCoverageRate = owedDays > 0 ? Math.min(1, checkinDaysFilled / owedDays) : 0;
 
   const morningCheckinsCount = input.checkins.filter((c) => c.slot === 'morning').length;
   const eveningCheckinsCount = input.checkins.filter((c) => c.slot === 'evening').length;
@@ -121,10 +165,14 @@ export function buildCompletionSummary(input: CompletionInput): CompletionSummar
     input.checkins.filter((c) => c.morningRoutineCompleted === true).map((c) => c.date),
   ).size;
 
-  const longestStreakDays = computeLongestRun([...distinctDates].map(dayOrdinal));
+  // Tour 14 — the continuity run STEPS OVER unfilled off days (a weekend off
+  // does not break a Friday→Monday streak), mirroring `checkin/streak.ts`.
+  const longestStreakDays = computeLongestRun(startOrd, endOrd, distinctDates, offInPeriod);
 
   return {
     periodDays,
+    offDaysCount,
+    owedDays,
     checkinDaysFilled,
     checkinCoverageRate: roundTo(checkinCoverageRate, 4),
     morningCheckinsCount,
@@ -135,20 +183,43 @@ export function buildCompletionSummary(input: CompletionInput): CompletionSummar
   };
 }
 
-/** Longest run of consecutive integers in a (possibly unsorted) ordinal list. */
-function computeLongestRun(ordinals: number[]): number {
-  if (ordinals.length === 0) return 0;
-  const sorted = [...ordinals].sort((a, b) => a - b);
-  let longest = 1;
-  let run = 1;
-  for (let i = 1; i < sorted.length; i += 1) {
-    const cur = sorted[i];
-    const prev = sorted[i - 1];
-    if (cur === undefined || prev === undefined) continue;
-    run = cur === prev + 1 ? run + 1 : 1;
-    if (run > longest) longest = run;
+/**
+ * Longest run of CONSECUTIVE filled days within `[startOrd, endOrd]`, where an
+ * unfilled OFF day is TRANSPARENT (steps over, never a break — the SPEC pont)
+ * and an unfilled working day breaks the run. A filled day always adds 1 (even
+ * a filled off day: the rempli wins). Returns 0 on a period with no filled day.
+ *
+ * Walks the period day-by-day (cheap: periods are ≤31 days) rather than sorting
+ * check-in ordinals, because the bridge needs to know, for every gap, whether
+ * the gap days were off (skip) or working (break).
+ */
+function computeLongestRun(
+  startOrd: number,
+  endOrd: number,
+  filledDates: ReadonlySet<string>,
+  offDates: ReadonlySet<string>,
+): number {
+  if (filledDates.size === 0) return 0;
+
+  let longest = 0;
+  let run = 0;
+  for (let ord = startOrd; ord <= endOrd; ord += 1) {
+    const date = localFromOrdinal(ord);
+    if (filledDates.has(date)) {
+      run += 1;
+      if (run > longest) longest = run;
+    } else if (!offDates.has(date)) {
+      // Unfilled working day → the run breaks. (An unfilled off day is skipped:
+      // `run` carries over, so a filled Friday + off weekend + filled Monday = 2.)
+      run = 0;
+    }
   }
   return longest;
+}
+
+/** Inverse of {@link dayOrdinal}: a UTC-epoch day ordinal → `YYYY-MM-DD`. */
+function localFromOrdinal(ordinal: number): string {
+  return new Date(ordinal * 86_400_000).toISOString().slice(0, 10);
 }
 
 function roundTo(value: number, decimals: number): number {

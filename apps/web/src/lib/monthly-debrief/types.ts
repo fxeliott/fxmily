@@ -140,6 +140,15 @@ export interface MonthlyBuilderInput {
    */
   meetingScheduledCount?: number;
   meetingCompletedCount?: number;
+  /**
+   * Tour 14 — number of OFF days (weekend kept off + explicit declarations) in
+   * the civil-month window, PRE-COMPUTED by the loader (same pattern as
+   * `meetingScheduledCount`). Count-only, posture §2. Optional: absent → the
+   * aggregator defaults it to 0 (existing fixtures stay valid; 0 ⇒ the prompt
+   * line simply omits the mention). Feeds the `offDaysCount` counter so the AI
+   * reads a jour off as a choice of process, never a missing check-in (§31.2).
+   */
+  offDaysInWindow?: number;
   /// ≤4 weekly AI summaries of the civil month — INPUT context only (SPEC
   /// §25.3, never an FK). Newest-first; the builder caps + re-hardens.
   weeklySummaries: string[];

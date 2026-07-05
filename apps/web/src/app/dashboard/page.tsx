@@ -218,7 +218,12 @@ export default async function DashboardPage() {
   // Complétude du jour (anneau hero) : fraction des gestes ACTIONNABLES faits.
   // Les actions 'info' (ni à faire ni faites — ex. réunion) sont exclues du
   // dénominateur, sinon le ratio mentirait. Jamais rendu si 0 actionnable.
-  const dayActions = guidance ? guidance.actions.filter((a) => a.state !== 'info') : [];
+  // Tour 14 — un jour off, le membre ne doit AUCUN geste (le bloc check-in est
+  // une info calme, pas une action) : on masque l'anneau plutôt que d'afficher
+  // un 0/0 trompeur (§31.2). Réunions/tracking restent des infos/secondaires.
+  const todayIsOff = guidance?.todayIsOff ?? false;
+  const dayActions =
+    guidance && !todayIsOff ? guidance.actions.filter((a) => a.state !== 'info') : [];
   const dayProgress =
     dayActions.length > 0
       ? { done: dayActions.filter((a) => a.state === 'done').length, total: dayActions.length }
@@ -337,7 +342,7 @@ export default async function DashboardPage() {
             <h2 id="first-run-heading" className="sr-only">
               Bienvenue sur Fxmily
             </h2>
-            <FirstRunWelcome needsProfile={needsProfile} />
+            <FirstRunWelcome needsProfile={needsProfile} todayIsOff={todayIsOff} />
           </section>
         ) : null}
 
@@ -348,7 +353,12 @@ export default async function DashboardPage() {
             un signal de marché. Toujours présente (même pour un nouveau membre :
             elle enseigne le rythme de la méthode). */}
         {sessionRoutine ? (
-          <SessionTimeline routine={sessionRoutine} timezone={timezone} className="mb-6" />
+          <SessionTimeline
+            routine={sessionRoutine}
+            timezone={timezone}
+            className="mb-6"
+            todayIsOff={todayIsOff}
+          />
         ) : null}
 
         {/* S19 — « Maintenant » : la liste du jour (remontée de la 7e position, où
@@ -659,7 +669,10 @@ export default async function DashboardPage() {
           <Card primary glass className="flex flex-col gap-4 p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <h2 id="journal-md-heading" className="t-eyebrow">
+                {/* Tour 14 — dégraissage eyebrows : titre de carte réel en h3
+                    sentence-case (au lieu du kicker 10px uppercase générique) pour
+                    recréer une hiérarchie de section lisible sur la display face. */}
+                <h2 id="journal-md-heading" className="t-h3 text-[var(--t-1)]">
                   Journal de trading
                 </h2>
               </div>

@@ -177,8 +177,17 @@ export function buildMonthlyDebriefUserPrompt(snapshot: MonthlySnapshot): string
     );
   }
   lines.push(
-    `- Check-ins : ${r.morningCheckinsCount} matin · ${r.eveningCheckinsCount} soir · ${r.distinctCheckinDays} jours distincts`,
+    // Tour 14 — les jours off n'apparaissent que s'il y en a (0 ⇒ ligne
+    // inchangée). Un jour off est un choix de process, jamais un manque (§31.2).
+    `- Check-ins : ${r.morningCheckinsCount} matin · ${r.eveningCheckinsCount} soir · ${r.distinctCheckinDays} jours distincts${
+      r.offDaysCount > 0 ? ` · ${r.offDaysCount} jour${r.offDaysCount === 1 ? '' : 's'} off` : ''
+    }`,
   );
+  if (r.offDaysCount > 0) {
+    lines.push(
+      `  Un jour off (week-end sans trading ou jour posé par le membre) est un CHOIX de process, jamais un manque de check-in : ne le compte jamais comme une absence, ne le reproche jamais, et n'attends aucun check-in ces jours-là.`,
+    );
+  }
   lines.push(
     `- Médianes : sommeil ${r.sleepHoursMedian === null ? 'n/a' : r.sleepHoursMedian.toFixed(1) + 'h'} · humeur ${r.moodMedian === null ? 'n/a' : r.moodMedian.toFixed(1) + '/10'} · stress ${r.stressMedian === null ? 'n/a' : r.stressMedian.toFixed(1) + '/10'}`,
   );

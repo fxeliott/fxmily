@@ -169,6 +169,14 @@ const META_BY_TYPE: Record<
     body: 'Un élément de ton suivi est resté de côté. Un coup d’œil quand tu peux, et indique s’il y a une raison. Rien de grave : juste rester honnête avec toi-même.',
     ctaLabel: 'Voir mon suivi →',
   },
+  // Tour 14 — member-facing verdict (mirror monthly_debrief_ready, email fallback allowed).
+  verification_proof_analyzed: {
+    title: 'Ton analyse de suivi est prête',
+    preview: 'Le résultat de ton suivi t’attend sur ta page de vérification.',
+    eyebrow: 'VÉRIFICATION · ANALYSE',
+    body: 'Ton analyse de suivi est prête. Les positions lues et les éventuels écarts t’attendent sur ta page de vérification. Un moment pour te voir tel que tu es, sans jugement.',
+    ctaLabel: 'Voir mon analyse →',
+  },
   // S8 V2 §32-4 — ADMIN-facing: a member replied to a backtest correction.
   training_reply_received: {
     title: 'Réponse à une correction',

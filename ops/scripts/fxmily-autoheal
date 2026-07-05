@@ -62,16 +62,35 @@ LOG_FILE="${AUTOHEAL_LOG:-/var/log/fxmily/autoheal.log}"
 # Optional dead-man-switch / alert ping fired on every restart (healthchecks.io
 # style URL). Left empty = no ping.
 ALERT_URL="${AUTOHEAL_ALERT_URL:-}"
+# App URL + admin token for the hourly heartbeat POST (below). Both left empty
+# = heartbeat disabled (no-op), same opt-in contract as ALERT_URL.
+APP_URL="${APP_URL:-}"
+ADMIN_TOKEN="${AUTOHEAL_ADMIN_TOKEN:-${FXMILY_ADMIN_TOKEN:-}}"
+# Cadence at which the heartbeat is POSTed (once/hour by default). The watchdog
+# runs every minute but only reports hourly — health.ts tolerates 2h+, so a
+# missed hour is amber, a dead watchdog is red.
+HEARTBEAT_SECS="${AUTOHEAL_HEARTBEAT_SECS:-3600}"
+WATCHDOG_VERSION="1.1.0"
 
 mkdir -p "$STATE_DIR" "$(dirname "$LOG_FILE")"
 
 ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
 log() { echo "[$(ts)] [fxmily-autoheal] $*" >> "$LOG_FILE"; }
 
-# Single-flight: a slow `docker restart` can outlast the 1-min cron cadence, so
-# a second invocation could act on the same container concurrently. Hold a
-# non-blocking lock; a stacked run exits cleanly instead of thrashing (INFRA-04).
-exec 9>"${STATE_DIR}/autoheal.lock"
+# GLOBAL single-flight (P0-3). A root binary (this script, once installed to
+# /usr/local/bin by the deploy convergence) and any legacy user-space copy must
+# NEVER run two autoheal loops without a shared lock: two restarters racing on
+# the same container (different cooldown markers under different STATE_DIRs)
+# would thrash it. Hold ONE machine-wide lock at a fixed path independent of
+# STATE_DIR/user, so a second instance — whatever its origin — exits cleanly.
+# `/var/lock` is the FHS tmpfs for lock files; fall back to STATE_DIR if it is
+# not writable (unprivileged / hardened host). The lock FD stays open for the
+# whole process, released automatically on exit.
+LOCK_FILE="${AUTOHEAL_LOCK_FILE:-/var/lock/fxmily-autoheal.lock}"
+if ! { exec 9>"$LOCK_FILE"; } 2>/dev/null; then
+  LOCK_FILE="${STATE_DIR}/autoheal.lock"
+  exec 9>"$LOCK_FILE"
+fi
 flock -n 9 || exit 0
 
 # Fire the optional alert / dead-man-switch URL. Best-effort: a failed ping must
@@ -105,6 +124,21 @@ container_health() {
     "$1" 2>/dev/null || echo "missing"
 }
 
+# Cumulative counters the hourly heartbeat reports (P1-4). A muted autoheal — a
+# watchdog that restarts every minute with nobody watching — is exactly what
+# broke the worker layer before its own watchdog. These monotonic counters make
+# the self-healing itself observable on /admin/system: a rising `errors`
+# (escalations + failed restarts) surfaces the board amber even when the age is
+# fresh. Best-effort integer files; a read/write hiccup never aborts the loop.
+COUNTER_RESTARTS="${STATE_DIR}/counter.restarts"
+COUNTER_ESCALATIONS="${STATE_DIR}/counter.escalations"
+bump_counter() {
+  local file="$1" cur=0
+  [[ -f "$file" ]] && cur="$(cat "$file" 2>/dev/null || echo 0)"
+  [[ "$cur" =~ ^[0-9]+$ ]] || cur=0
+  echo "$(( cur + 1 ))" > "$file" 2>/dev/null || true
+}
+
 for c in "${CONTAINERS[@]}"; do
   status="$(container_health "$c")"
 
@@ -124,6 +158,7 @@ for c in "${CONTAINERS[@]}"; do
       if (( age < COOLDOWN_SECS )); then
         # Already restarted recently and STILL unhealthy → escalate, don't thrash.
         log "ESCALATION ${c} still unhealthy ${age}s after the last restart (cooldown ${COOLDOWN_SECS}s) — manual intervention likely needed"
+        bump_counter "$COUNTER_ESCALATIONS"
         alert_ping fail
         continue
       fi
@@ -131,10 +166,12 @@ for c in "${CONTAINERS[@]}"; do
       log "RESTART ${c} is unhealthy — restarting (last restart ${age}s ago)"
       if docker restart "$c" >/dev/null 2>&1; then
         echo "$now_epoch" > "$marker"
+        bump_counter "$COUNTER_RESTARTS"
         log "RESTART ${c} restart issued OK"
         alert_ping
       else
         log "FAIL ${c} restart command failed — manual intervention required"
+        bump_counter "$COUNTER_ESCALATIONS"
         alert_ping fail
       fi
       ;;
@@ -143,3 +180,62 @@ for c in "${CONTAINERS[@]}"; do
       ;;
   esac
 done
+
+# --- Hourly heartbeat (P1-4) ----------------------------------------------------
+# POST a COUNTS-ONLY heartbeat to the app so a dead watchdog surfaces red on
+# /admin/system and /api/cron/health (health.ts `cron.autoheal.heartbeat`
+# expectation, 2h+ tolerance). Built on the EXACT model of the worker watchdog:
+# same X-Admin-Token auth, same PII-free counts payload, same 2-attempt retry.
+#
+# The watchdog runs every minute but only reports hourly (a per-minute row would
+# bloat the audit log for no signal). A stamp file gates the cadence: we POST
+# only when the last successful heartbeat is older than HEARTBEAT_SECS. Failure
+# to send is logged, never fatal — the self-healing loop above already ran, and
+# the MISSING heartbeat is itself the "watchdog is dead" signal the board reads.
+heartbeat_metadata() {
+  # Reset the cumulative counters AFTER a successful POST so each heartbeat
+  # reports the restarts/escalations SINCE the previous one (a rate the operator
+  # reads at a glance), not an ever-growing lifetime total. Emitted as a compact
+  # JSON object matching the route's zod schema (counts only, bounded).
+  local restarts=0 escalations=0
+  [[ -f "$COUNTER_RESTARTS" ]] && restarts="$(cat "$COUNTER_RESTARTS" 2>/dev/null || echo 0)"
+  [[ -f "$COUNTER_ESCALATIONS" ]] && escalations="$(cat "$COUNTER_ESCALATIONS" 2>/dev/null || echo 0)"
+  [[ "$restarts" =~ ^[0-9]+$ ]] || restarts=0
+  [[ "$escalations" =~ ^[0-9]+$ ]] || escalations=0
+  printf '{"containersChecked":%d,"restarts":%d,"escalations":%d,"watchdogVersion":"%s"}' \
+    "${#CONTAINERS[@]}" "$restarts" "$escalations" "$WATCHDOG_VERSION"
+}
+
+send_heartbeat() {
+  [[ -n "$APP_URL" && -n "$ADMIN_TOKEN" ]] || return 0
+  local stamp="${STATE_DIR}/heartbeat.last"
+  local now_epoch last_epoch=0
+  now_epoch="$(date -u +%s)"
+  [[ -f "$stamp" ]] && last_epoch="$(cat "$stamp" 2>/dev/null || echo 0)"
+  [[ "$last_epoch" =~ ^[0-9]+$ ]] || last_epoch=0
+  (( now_epoch - last_epoch < HEARTBEAT_SECS )) && return 0
+
+  local url body
+  url="${APP_URL%/}/api/admin/autoheal/heartbeat"
+  body="$(heartbeat_metadata)"
+  local attempt
+  for attempt in 1 2; do
+    if curl -fsS -m 15 \
+        -X POST \
+        -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "$body" \
+        "$url" >/dev/null 2>&1; then
+      echo "$now_epoch" > "$stamp" 2>/dev/null || true
+      # Success → zero the counters so the next hour reports a fresh delta.
+      : > "$COUNTER_RESTARTS" 2>/dev/null || true
+      : > "$COUNTER_ESCALATIONS" 2>/dev/null || true
+      log "heartbeat delivered (attempt ${attempt})"
+      return 0
+    fi
+    [[ "$attempt" -eq 1 ]] && sleep 5
+  done
+  log "WARN heartbeat POST failed (both attempts) — a missing row is the dead-watchdog signal"
+}
+
+send_heartbeat

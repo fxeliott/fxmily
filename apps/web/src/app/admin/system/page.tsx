@@ -1,4 +1,13 @@
-import { Activity, ArrowLeft, Bot, Database, HardDrive, ScanEye, ShieldCheck } from 'lucide-react';
+import {
+  Activity,
+  ArrowLeft,
+  Bot,
+  Database,
+  HardDrive,
+  Image as ImageIcon,
+  ScanEye,
+  ShieldCheck,
+} from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -12,12 +21,15 @@ import {
   getCronHealthReport,
   getDiskHealth,
   getSystemSnapshot,
+  getUploadsPersistenceHealth,
   getVerificationBacklogHealth,
   getWorkerHealthReport,
   type CronStatus,
   type DiskHealth,
   type DiskStatus,
   type HeartbeatHealthEntry,
+  type UploadsPersistenceHealth,
+  type UploadsPersistenceStatus,
   type VerificationBacklogHealth,
   type VerificationBacklogStatus,
 } from '@/lib/system/health';
@@ -65,12 +77,20 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
   // monitor until now.
   const disk = getDiskHealth();
 
+  // Tour 14 — live uploads-persistence probe (sync, cheap). Reads /proc/mounts
+  // to tell whether member uploads (MT5 proofs) sit on a persistent volume or
+  // the container's ephemeral overlay (wiped every deploy). Detection only.
+  const uploads = getUploadsPersistenceHealth();
+
   // The masthead pill must reflect the WHOLE page: a green server-cron board
-  // with a red local worker — or a proof queue stuck for hours — is still an
-  // incident for the operator.
+  // with a red local worker — a proof queue stuck for hours, or member uploads
+  // living on the ephemeral layer — is still an incident for the operator.
   const overall = worstStatus(
-    worstStatus(report.overall, workerReport.overall),
-    backlogToCronStatus(verificationBacklog.status),
+    worstStatus(
+      worstStatus(report.overall, workerReport.overall),
+      backlogToCronStatus(verificationBacklog.status),
+    ),
+    uploadsToCronStatus(uploads.status),
   );
 
   await logAudit({
@@ -143,6 +163,41 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
         </div>
 
         <DiskGauge disk={disk} />
+      </section>
+
+      <section
+        aria-labelledby="uploads-heading"
+        className="mb-8 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
+      >
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--acc-dim)] text-[var(--acc-hi)]"
+          >
+            <ImageIcon className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2
+              id="uploads-heading"
+              className="flex flex-wrap items-center gap-2 text-base font-semibold text-[var(--t-1)]"
+            >
+              Persistance des preuves
+              <UploadsPersistencePill status={uploads.status} />
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
+              Les preuves MT5 et captures envoyées par les membres sont écrites sur disque. Si leur
+              dossier vit dans la couche éphémère du conteneur (pas de volume Docker), chaque
+              déploiement les efface alors que leurs lignes en base survivent, d’où des 404
+              silencieux à la lecture. Sonde en direct via{' '}
+              <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[11px]">
+                /proc/mounts
+              </code>
+              . Vert = volume persistant · Rouge = couche éphémère (perte à chaque déploiement).
+            </p>
+          </div>
+        </div>
+
+        <UploadsPersistenceDetail uploads={uploads} />
       </section>
 
       <section
@@ -738,6 +793,97 @@ function VerificationBacklogDetail({
  */
 function backlogToCronStatus(status: VerificationBacklogStatus): CronStatus {
   return status === 'red' ? 'red' : status === 'amber' ? 'amber' : 'green'; // green + idle both fold to healthy
+}
+
+/**
+ * Tour 14 — uploads persistence pill. `unknown` (probe unavailable — non-Linux
+ * dev host, sandbox) reads neutral, never red; `red` = the upload root is on
+ * the ephemeral overlay layer (proofs being lost on every deploy right now).
+ */
+function UploadsPersistencePill({
+  status,
+}: {
+  status: UploadsPersistenceStatus;
+}): React.ReactElement {
+  const tone =
+    status === 'green' ? 'ok' : status === 'amber' ? 'warn' : status === 'red' ? 'bad' : 'mute';
+  const label =
+    status === 'green'
+      ? 'Persistant'
+      : status === 'amber'
+        ? 'À surveiller'
+        : status === 'red'
+          ? 'Éphémère'
+          : 'Inconnu';
+  return <Pill tone={tone}>{label}</Pill>;
+}
+
+/**
+ * Detail line under the uploads pill. Shows the inspected upload root + the
+ * backing filesystem so the operator can act (mount the volume / drop
+ * UPLOADS_DIR). `unknown` renders a neutral "lecture indisponible" note rather
+ * than a lying verdict; `red` spells out the data-loss consequence.
+ */
+function UploadsPersistenceDetail({
+  uploads,
+}: {
+  uploads: UploadsPersistenceHealth;
+}): React.ReactElement {
+  if (uploads.status === 'unknown' || uploads.fsType === null) {
+    return (
+      <p className="mt-5 text-[11px] text-[var(--t-4)]">
+        Lecture de la persistance indisponible sur cette plateforme (pas de{' '}
+        <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[10px]">
+          /proc/mounts
+        </code>
+        ). Dossier inspecté :{' '}
+        <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[10px]">
+          {uploads.uploadsRoot}
+        </code>
+        .
+      </p>
+    );
+  }
+
+  const fsTone = uploads.ephemeral ? 'text-[var(--bad)]' : 'text-[var(--t-1)]';
+
+  return (
+    <div className="mt-5 flex flex-col gap-2">
+      <p className="text-sm text-[var(--t-2)]">
+        Système de fichiers :{' '}
+        <span className={`font-mono text-base font-semibold ${fsTone}`}>{uploads.fsType}</span>
+        {uploads.mountPoint ? (
+          <span className="ml-2 text-[11px] text-[var(--t-4)]">
+            monté sur{' '}
+            <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[10px]">
+              {uploads.mountPoint}
+            </code>
+          </span>
+        ) : null}
+      </p>
+      <p className="text-[11px] text-[var(--t-3)]">
+        Dossier des preuves :{' '}
+        <code className="rounded bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-[10px]">
+          {uploads.uploadsRoot}
+        </code>
+      </p>
+      {uploads.ephemeral ? (
+        <p className="mt-1 text-[11px] font-medium text-[var(--bad)]">
+          Ce dossier vit dans la couche éphémère du conteneur : les preuves sont effacées à chaque
+          déploiement. Monter le volume Docker sur ce chemin (ou retirer UPLOADS_DIR de web.env).
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Map the uploads-persistence probe onto the shared `CronStatus` ladder so the
+ * masthead `worstStatus` can fold it in. `unknown` folds to green (no reading =
+ * not an incident, exactly like the disk probe's `unknown`).
+ */
+function uploadsToCronStatus(status: UploadsPersistenceStatus): CronStatus {
+  return status === 'red' ? 'red' : status === 'amber' ? 'amber' : 'green'; // green + unknown both fold to healthy
 }
 
 /** Coarse ms → "42 min" / "3 h" / "2 j" for the backlog age (own formatter so

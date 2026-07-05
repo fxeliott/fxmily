@@ -3,6 +3,7 @@ import 'server-only';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { selectStorage } from '@/lib/storage';
+import { enqueueProofAnalyzedNotification } from '@/lib/notifications/enqueue';
 import { reportError, reportWarning } from '@/lib/observability';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
 import { detectAMFViolation } from '@/lib/safety/amf-detection';
@@ -315,6 +316,16 @@ export async function persistVisionResults(
   // ONCE after the loop (event-driven), never per-proof, to avoid redundant
   // scans when a member uploads several proofs in the same batch.
   const touchedMemberIds = new Set<string>();
+  // Tour 14 — per-member terminal-proof counters for THIS run, aggregated so the
+  // member gets ONE calm « analyse prête » push (never one-per-proof). `analyzed`
+  // counts proofs flipped to `done`, `failed` counts proofs terminally refused
+  // (`not_mt5_history`). Enqueued once after the loop; PII-free (counts only).
+  const verdictByMember = new Map<string, { analyzed: number; failed: number }>();
+  const bumpVerdict = (userId: string, key: 'analyzed' | 'failed') => {
+    const current = verdictByMember.get(userId) ?? { analyzed: 0, failed: 0 };
+    current[key] += 1;
+    verdictByMember.set(userId, current);
+  };
 
   for (const rawEntry of request.results) {
     // Gate 0 — strict per-entry union re-parse. This validation used to live
@@ -382,6 +393,9 @@ export async function persistVisionResults(
           where: { id: entry.proofId },
           data: { ocrStatus: 'failed', claudeRunId: ranAt },
         });
+        // Terminal `failed` → the member should learn the capture could not be
+        // read (so they can re-shoot); count it toward this run's verdict push.
+        bumpVerdict(entry.userId, 'failed');
         // Terminal `failed` → the screen has served its (unsuccessful) purpose;
         // purge it now. The member re-shoots via a fresh upload, never a stored
         // retry of THIS one.
@@ -491,6 +505,7 @@ export async function persistVisionResults(
 
       persisted += 1;
       touchedMemberIds.add(entry.userId);
+      bumpVerdict(entry.userId, 'analyzed');
       // Terminal `done` (flipped inside materialiseProofExtraction's txn) → the
       // screen has been read; purge the stored image immediately (the extracted
       // positions ARE the retained record now, not the screenshot).
@@ -570,6 +585,20 @@ export async function persistVisionResults(
         );
       }
     }
+  }
+
+  // Tour 14 — « vérification informée » : one calm verdict push per member whose
+  // proof reached a terminal state this run (done or failed). Best-effort (the
+  // enqueuer never throws) and isolated so a queue hiccup never undoes a committed
+  // persist. Covers `failed`-only members too (verdictByMember is the superset of
+  // touchedMemberIds, which holds only `done`). The `/verification` poller shows
+  // the result in-page; this push reaches members who left the page.
+  for (const [userId, verdict] of verdictByMember) {
+    if (verdict.analyzed === 0 && verdict.failed === 0) continue;
+    await enqueueProofAnalyzedNotification(userId, {
+      analyzedCount: verdict.analyzed,
+      failedCount: verdict.failed,
+    });
   }
 
   await logAudit({

@@ -1,7 +1,13 @@
 import 'server-only';
 
+import { getOffDaySet, isOffDay } from '@/lib/checkin/off-days';
 import { getCheckin, listRecentCheckinDays } from '@/lib/checkin/service';
-import { localDateOf, safeTimeZone, shiftLocalDate } from '@/lib/checkin/timezone';
+import {
+  localDateOf,
+  safeTimeZone,
+  shiftLocalDate,
+  type LocalDateString,
+} from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 
 import { buildMorningBridge, type MorningBridge } from './morning-bridge';
@@ -67,19 +73,28 @@ export async function getDashboardMorningContext(
 
   const today = localDateOf(now, timezone);
   const yesterday = shiftLocalDate(today, -1);
+  const windowStart = shiftLocalDate(today, -(60 - 1));
 
-  const [yesterdayEveningRow, recentDays] = await Promise.all([
+  const [yesterdayEveningRow, recentDays, offCtx] = await Promise.all([
     getCheckin(userId, yesterday, 'evening'),
     // 60-day window (same as the streak walker) → most-recent check-in date for
     // the return-after-absence branch. Not deduped with getStreak (different fn),
     // but a single cheap indexed read on a small cohort.
     listRecentCheckinDays(userId, today, 60),
+    // Tour 14 — off-day context over the same window, so the absence count steps
+    // OVER off days: a Monday morning after a weekend the member keeps off reads
+    // "1 day" (Friday → Monday, weekend stepped over), not "3 days d'absence".
+    getOffDaySet(userId, windowStart, today),
   ]);
 
   // Whole days since the member's most recent check-in (any slot), or null when
   // they have never checked in. `recentDays` is sorted newest-first by the service.
+  // Tour 14 — count only the ACTIVE (non-off) days between the last check-in and
+  // today, so an off weekend never inflates the absence (§31.2 — a chosen rest
+  // is not an absence).
   const lastDate = recentDays[0]?.date ?? null;
-  const daysSinceLastCheckin = lastDate === null ? null : daysBetweenLocalDates(lastDate, today);
+  const daysSinceLastCheckin =
+    lastDate === null ? null : activeDaysSince(lastDate, today, (d) => isOffDay(d, offCtx));
 
   const bridge = buildMorningBridge({
     localHour,
@@ -98,13 +113,28 @@ export async function getDashboardMorningContext(
 }
 
 /**
- * Whole days between two `YYYY-MM-DD` local dates (b - a). Both are UTC-midnight
- * semantics, so a plain UTC-ms diff is exact (DST-safe on the calendar level).
+ * Tour 14 — number of ACTIVE (non-off) days strictly after `lastDate` up to and
+ * including `today`, so an off day the member never owed a check-in on does not
+ * count as an absence (a Monday morning after an off weekend reads "1", not "3").
+ *
+ * Semantics preserved vs the old raw diff:
+ *   - `lastDate === today` → 0 (checked in today — the bridge is null anyway);
+ *   - each civil day in `(lastDate, today]` counts 1 unless it is off.
+ * Bounded by the 60-day service window, so the walk is short. `isOff` is the
+ * pure predicate (string-keyed), no DB inside.
  */
-function daysBetweenLocalDates(a: string, b: string): number {
-  const [ay, am, ad] = a.split('-').map(Number);
-  const [by, bm, bd] = b.split('-').map(Number);
-  const aMs = Date.UTC(ay ?? 0, (am ?? 1) - 1, ad ?? 1);
-  const bMs = Date.UTC(by ?? 0, (bm ?? 1) - 1, bd ?? 1);
-  return Math.round((bMs - aMs) / (24 * 60 * 60 * 1000));
+function activeDaysSince(
+  lastDate: LocalDateString,
+  today: LocalDateString,
+  isOff: (date: LocalDateString) => boolean,
+): number {
+  let count = 0;
+  let cursor = shiftLocalDate(lastDate, 1);
+  // Walk forward day by day; ISO strings compare lexicographically as calendar
+  // dates, so the loop terminates at `today` inclusive.
+  while (cursor <= today) {
+    if (!isOff(cursor)) count += 1;
+    cursor = shiftLocalDate(cursor, 1);
+  }
+  return count;
 }

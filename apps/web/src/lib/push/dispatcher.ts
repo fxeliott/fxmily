@@ -61,6 +61,7 @@ export const TTL_BY_TYPE: Record<NotificationTypeSlug, number> = {
   monthly_debrief_ready: 86400, // 24h — monthly recul tool, not time-critical
   mindset_check_ready: 86400, // 24h — weekly mindset recul, not time-critical (§27.6)
   verification_gentle_reminder: 86400, // 24h — S3 §33 benevolent nudge, calm, never urgent
+  verification_proof_analyzed: 86400, // 24h — Tour 14 verdict, informative not urgent
   training_reply_received: 86400, // 24h — admin sees a member reply, can wait a day
 };
 
@@ -75,6 +76,7 @@ export const URGENCY_BY_TYPE: Record<NotificationTypeSlug, 'low' | 'normal'> = {
   monthly_debrief_ready: 'low', // calm, anti-FOMO — a monthly recul, never urgent
   mindset_check_ready: 'low', // calm weekly recul, anti-FOMO §27.6 (no fanfare)
   verification_gentle_reminder: 'low', // S3 §33 — a gentle nudge, never a pressure stick
+  verification_proof_analyzed: 'low', // Tour 14 — a calm verdict signal, never a stick
   training_reply_received: 'low', // admin-facing loop-close, never urgent
 };
 
@@ -238,6 +240,32 @@ export function buildPayload(
       title = 'Un point rapide sur ton suivi';
       body =
         'Un élément est resté de côté. Un coup d’œil quand tu peux, et dis-nous s’il y a une raison.';
+      path = '/verification';
+      break;
+    }
+    case 'verification_proof_analyzed': {
+      // Tour 14 — member-facing verdict push: an uploaded MT5 proof reached a
+      // terminal state in the vision batch. Deep-link to `/verification` (where
+      // the read positions + any écart now appear). Payload carries only counts
+      // (PII-free §21.5/§16): `analyzedCount` = proofs read (`done`), `failedCount`
+      // = proofs the model could not read (`failed`). Copy branches on whether at
+      // least one capture was actually read, staying calm/factual either way
+      // (anti Black-Hat §33.2 — inform, never accuse). Null-safe: absent/0 counts
+      // fall back to the generic "verdict prêt" line.
+      const analyzedCount = typeof payload.analyzedCount === 'number' ? payload.analyzedCount : 0;
+      const failedCount = typeof payload.failedCount === 'number' ? payload.failedCount : 0;
+      title = 'Ton analyse de suivi est prête';
+      if (analyzedCount > 0) {
+        body =
+          analyzedCount > 1
+            ? `${analyzedCount} de tes captures ont été lues. Le détail t’attend sur ta page de vérification.`
+            : 'Ta capture a été lue. Le détail t’attend sur ta page de vérification.';
+      } else if (failedCount > 0) {
+        body =
+          'Une capture n’a pas pu être lue. Jette un œil sur ta page de vérification pour la renvoyer.';
+      } else {
+        body = 'Le résultat de ton suivi t’attend sur ta page de vérification.';
+      }
       path = '/verification';
       break;
     }

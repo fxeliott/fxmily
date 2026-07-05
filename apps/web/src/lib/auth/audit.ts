@@ -66,6 +66,12 @@ export type AuditAction =
   // alerting (mirror of the V1.8 REFLECT / training_debrief pair). The wiring
   // target was reserved in `lib/safety/crisis-detection.ts:28`.
   | 'checkin.crisis_detected'
+  // Tour 14 — off-day ("jour off") declaration lifecycle. PII-free (opaque civil
+  // date + a `hasReason` boolean only — the free-text reason is never logged).
+  | 'checkin.off_day.declared'
+  | 'checkin.off_day.cancelled'
+  | 'checkin.off_day.range_declared'
+  | 'checkin.off_day.weekends_updated'
   | 'cron.checkin_reminders.scan'
   // J6 — behavioral score snapshot
   | 'score.computed'
@@ -154,6 +160,14 @@ export type AuditAction =
   // WORKER_EXPECTATIONS exactly like cron.health.scan monitors cron-watch:
   // a guardian nobody watches is a broken promise.
   | 'worker.watchdog.heartbeat'
+  // Tour 14 — host autoheal watchdog heartbeat (/usr/local/bin/fxmily-autoheal,
+  // every minute on the Hetzner host, reports hourly). Counts-only metadata
+  // (containersChecked/restarts/escalations), NEVER a container name beyond the
+  // fixed watched set, NEVER a path or token. Monitored in EXPECTATIONS (server
+  // cron report, always-on host) so a dead autoheal surfaces red on
+  // /admin/system AND /api/cron/health — a self-healer nobody watches is the
+  // exact blind spot the worker layer had before its own watchdog.
+  | 'cron.autoheal.heartbeat'
   // V2.0 — TRACK module (master plan A2-A5 must-have habit logging).
   // `habit_log.upserted` carries `kind` + `wasNew` in metadata so the
   // analytics pipeline (V2.1 D-features) can distinguish create vs update.

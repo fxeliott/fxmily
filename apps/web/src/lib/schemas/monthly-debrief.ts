@@ -224,6 +224,11 @@ const realCounterSliceSchema = z
     morningCheckinsCount: z.number().int().min(0),
     eveningCheckinsCount: z.number().int().min(0),
     distinctCheckinDays: z.number().int().min(0),
+    // Tour 14 — off days in the month window (weekend off + explicit
+    // declarations), count-only. `.default(0)` keeps pre-Tour-14 persisted
+    // snapshots valid. A jour off is a choice of process, never a missing
+    // check-in (§31.2) — the prompt reads it, never scores it as an absence.
+    offDaysCount: z.number().int().min(0).default(0),
     sleepHoursMedian: z.number().min(0).max(24).nullable(),
     moodMedian: z.number().min(1).max(10).nullable(),
     stressMedian: z.number().min(1).max(10).nullable(),

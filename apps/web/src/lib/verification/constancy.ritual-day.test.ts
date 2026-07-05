@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const m = vi.hoisted(() => ({
   userFindMany: vi.fn(),
   checkinFindMany: vi.fn(),
+  offDayFindMany: vi.fn(),
   discrepancyFindFirst: vi.fn(),
   discrepancyCreate: vi.fn(),
   scoreEventCreateMany: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock('@/lib/db', () => ({
   db: {
     user: { findMany: m.userFindMany },
     dailyCheckin: { findMany: m.checkinFindMany },
+    memberOffDay: { findMany: m.offDayFindMany },
     discrepancy: { findFirst: m.discrepancyFindFirst, create: m.discrepancyCreate },
     scoreEvent: { createMany: m.scoreEventCreateMany },
   },
@@ -39,6 +41,8 @@ import { reportError } from '@/lib/observability';
 
 beforeEach(() => {
   for (const fn of Object.values(m)) fn.mockReset();
+  // Tour 14 — default: no explicit off day declared. Off-day cases override it.
+  m.offDayFindMany.mockResolvedValue([]);
 });
 
 describe('scanRitualsForAllMembers — ritual-day timestamping', () => {
@@ -46,7 +50,7 @@ describe('scanRitualsForAllMembers — ritual-day timestamping', () => {
     // Scan running Monday 2026-06-15 08:00 Paris (06:00Z, CEST +2) → the ritual
     // day is the previous civil day, Sunday 2026-06-14.
     const now = new Date('2026-06-15T06:00:00.000Z');
-    m.userFindMany.mockResolvedValue([{ id: 'memberA' }]);
+    m.userFindMany.mockResolvedValue([{ id: 'memberA', weekendsOff: false }]);
     m.checkinFindMany.mockResolvedValue([]); // fully blank day → two forgot events
     m.discrepancyFindFirst.mockResolvedValue(null);
     m.discrepancyCreate.mockResolvedValue({ id: 'disc1' });
@@ -67,7 +71,7 @@ describe('scanRitualsForAllMembers — ritual-day timestamping', () => {
 
   it('stamps filled events with the ritual day too', async () => {
     const now = new Date('2026-06-15T06:00:00.000Z');
-    m.userFindMany.mockResolvedValue([{ id: 'memberA' }]);
+    m.userFindMany.mockResolvedValue([{ id: 'memberA', weekendsOff: false }]);
     m.checkinFindMany.mockResolvedValue([
       { userId: 'memberA', slot: 'morning' },
       { userId: 'memberA', slot: 'evening' },
@@ -100,7 +104,7 @@ describe('scanRitualsForAllMembers — ritual-day timestamping', () => {
 describe('scanRitualsForAllMembers — blank-day race (CONC1-A)', () => {
   it('🚨 RACE — a concurrent pass already created the blank day (P2002) → no-op, the forgot events still link the winner', async () => {
     const now = new Date('2026-06-15T06:00:00.000Z');
-    m.userFindMany.mockResolvedValue([{ id: 'memberA' }]);
+    m.userFindMany.mockResolvedValue([{ id: 'memberA', weekendsOff: false }]);
     m.checkinFindMany.mockResolvedValue([]); // fully blank day
     // First read (pre-create) sees nothing; the create loses the race (P2002);
     // the catch re-reads and finds the winner row.
@@ -129,7 +133,7 @@ describe('scanRitualsForAllMembers — blank-day race (CONC1-A)', () => {
 
   it('🚨 a NON-P2002 create failure is surfaced (errors + Sentry), never silently swallowed', async () => {
     const now = new Date('2026-06-15T06:00:00.000Z');
-    m.userFindMany.mockResolvedValue([{ id: 'memberA' }]);
+    m.userFindMany.mockResolvedValue([{ id: 'memberA', weekendsOff: false }]);
     m.checkinFindMany.mockResolvedValue([]); // fully blank day
     m.discrepancyFindFirst.mockResolvedValue(null);
     m.discrepancyCreate.mockRejectedValue(new Error('db connection lost'));
@@ -146,5 +150,66 @@ describe('scanRitualsForAllMembers — blank-day race (CONC1-A)', () => {
     );
     // The throw happens before the events write — no score events for this member.
     expect(m.scoreEventCreateMany).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Tour 14 — the off-day "pont" on the constancy ritual scan. Yesterday
+ * (2026-06-14) is a Sunday. For a member who keeps weekends off, an unfilled
+ * off day emits NO event and raises NO blank-day discrepancy (neutral, not
+ * "excused"); a check-in actually filed on that off day still emits its
+ * `filled` event (the rempli wins). An explicit weekday declaration is off too.
+ */
+describe('scanRitualsForAllMembers — off-day pont (Tour 14)', () => {
+  it('a blank OFF day (weekend, weekendsOff=true) emits NOTHING: no forgot, no discrepancy', async () => {
+    const now = new Date('2026-06-15T06:00:00.000Z'); // ritual day = Sun 2026-06-14
+    m.userFindMany.mockResolvedValue([{ id: 'memberA', weekendsOff: true }]);
+    m.checkinFindMany.mockResolvedValue([]); // nothing filed on the off day
+
+    const result = await scanRitualsForAllMembers({ now });
+
+    // No blank-day discrepancy (the day is neutral, not accused).
+    expect(m.discrepancyCreate).not.toHaveBeenCalled();
+    expect(result.blankDayDiscrepancies).toBe(0);
+    // No score events at all (the empty write is skipped).
+    expect(m.scoreEventCreateMany).not.toHaveBeenCalled();
+    expect(result.forgotEvents).toBe(0);
+    expect(result.filledEvents).toBe(0);
+    expect(result.errors).toBe(0);
+  });
+
+  it('a check-in FILLED on an off day still emits `filled` (no forgot for the empty slot)', async () => {
+    const now = new Date('2026-06-15T06:00:00.000Z');
+    m.userFindMany.mockResolvedValue([{ id: 'memberA', weekendsOff: true }]);
+    // Morning filed on the off Sunday, evening left empty.
+    m.checkinFindMany.mockResolvedValue([{ userId: 'memberA', slot: 'morning' }]);
+    m.scoreEventCreateMany.mockResolvedValue({ count: 1 });
+
+    const result = await scanRitualsForAllMembers({ now });
+
+    expect(m.discrepancyCreate).not.toHaveBeenCalled();
+    expect(m.scoreEventCreateMany).toHaveBeenCalledTimes(1);
+    const arg = m.scoreEventCreateMany.mock.calls[0]?.[0] as {
+      data: Array<{ reason: string }>;
+    };
+    // Exactly one event, the filled morning — the empty evening emits NO forgot.
+    expect(arg.data).toHaveLength(1);
+    expect(arg.data[0]?.reason).toBe('filled');
+    expect(result.filledEvents).toBe(1);
+    expect(result.forgotEvents).toBe(0);
+  });
+
+  it('an EXPLICITLY declared off day is off even when weekendsOff=false', async () => {
+    const now = new Date('2026-06-15T06:00:00.000Z');
+    m.userFindMany.mockResolvedValue([{ id: 'memberA', weekendsOff: false }]);
+    m.checkinFindMany.mockResolvedValue([]);
+    // The member declared the ritual day (2026-06-14) off explicitly.
+    m.offDayFindMany.mockResolvedValue([{ userId: 'memberA' }]);
+
+    const result = await scanRitualsForAllMembers({ now });
+
+    expect(m.discrepancyCreate).not.toHaveBeenCalled();
+    expect(m.scoreEventCreateMany).not.toHaveBeenCalled();
+    expect(result.forgotEvents).toBe(0);
   });
 });

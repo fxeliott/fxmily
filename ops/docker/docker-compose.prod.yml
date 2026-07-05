@@ -91,8 +91,19 @@ services:
     # binaries vanish while their DB rows survive → 404 on read. A Docker-managed
     # named volume keeps the proofs across container recreation. (Long-term: the
     # R2 adapter in apps/web/src/lib/storage/r2.ts replaces this once implemented.)
+    #
+    # Tour 14 (data-loss follow-up) — the SAME named volume is ALSO mounted at
+    # `/opt/fxmily/.uploads`. The app resolves its upload root from
+    # `process.env.UPLOADS_DIR` FIRST (apps/web/src/lib/storage/local.ts:44), and
+    # web.env historically set `UPLOADS_DIR=/opt/fxmily/.uploads` — a path that,
+    # WITHOUT this second mount, lived in the container's ephemeral overlay layer
+    # (wiped on every deploy). Mounting the same volume on both paths makes the
+    # proofs persistent whether UPLOADS_DIR is set, unset, or points at either
+    # location. Removing UPLOADS_DIR from web.env is the clean fix (operator
+    # action); this additive mount is the belt to that suspenders.
     volumes:
       - fxmily-uploads:/app/.uploads
+      - fxmily-uploads:/opt/fxmily/.uploads
     networks:
       - internal
     deploy:

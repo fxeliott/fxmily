@@ -167,6 +167,13 @@ enum NotificationType {
   /// repetition alert escalates. Strictly psychological (honnêteté/discipline,
   /// Mark Douglas), never a trading advice. ≤1 per gap (Discrepancy.gentleReminderAt).
   verification_gentle_reminder
+  /// Tour 14 — an uploaded MT5 proof reached a TERMINAL state (analysed `done`
+  /// or terminally refused `failed`) in the vision batch. Member-facing push
+  /// (mirror `monthly_debrief_ready`): the verdict is ready on `/verification`,
+  /// so the member never has to poll/reload to learn whether the capture was
+  /// read. ONE push per member per batch run (aggregated, never one-per-proof),
+  /// PII-free (counts only, never any P&L). Calm, factual — never a stick.
+  verification_proof_analyzed
 }
 
 /// Daily check-in slot (J5, SPEC §6.4 + §7.4).
@@ -316,6 +323,12 @@ model User {
 
   // SPEC §6.1 — behavioral profile fields
   timezone         String    @default("Europe/Paris")
+  /// Tour 14 — weekends are OFF by default: a member trades a normal work week,
+  /// so Saturday/Sunday never break the streak, never enter the fill-rate
+  /// denominator, and raise no forgot/discrepancy accusation. Members who DO
+  /// trade weekends opt out (`false`) and every civil day counts as before.
+  /// Local-day semantics anchor to `timezone` exactly like DailyCheckin.date.
+  weekendsOff      Boolean   @default(true) @map("weekends_off")
   pushSubscription Json?     @map("push_subscription") // J9
   consentRgpdAt    DateTime? @map("consent_rgpd_at")
 
@@ -351,6 +364,10 @@ model User {
   notificationsQueued           NotificationQueue[]
   // J5 — morning + evening check-ins.
   dailyCheckins                 DailyCheckin[]
+  // Tour 14 — member-declared off days (jours off). A "pont" over the streak /
+  // scoring surfaces: neutral, never a check-in row. Cascade on User delete
+  // (RGPD §17, schema-wide invariant).
+  offDays                       MemberOffDay[]
   // J6 — daily behavioral score snapshots (cached, recomputed nightly).
   behavioralScores              BehavioralScore[]
   // J7 - Mark Douglas contextual card deliveries + manual favorites.
@@ -763,7 +780,7 @@ model Trade {
   /// answered at close next to `outcome`. Pure additive nullable enum: legacy
   /// and unanswered rows stay NULL (null-skip everywhere, CANON — a new
   /// required close field would break the shared-wizard e2e).
-  exitReason      TradeExitReason? @map("exit_reason")
+  exitReason TradeExitReason? @map("exit_reason")
 
   // V1.8 REFLECT — post-outcome bias tags (CFA LESSOR + Steenbarger).
   // Distinct from `emotionAfter` (raw affect): `tags` is a structured
@@ -1482,6 +1499,46 @@ model DailyCheckin {
   // Weekly report aggregation (J8) — fetch a 7-day window in date order.
   @@index([userId, slot, date(sort: Desc)])
   @@map("daily_checkins")
+}
+
+/// Tour 14 — a member-declared OFF day ("jour off"). A "pont" over the streak
+/// and constancy surfaces: a declared off day does NOT count toward the streak
+/// and does NOT break it, drops out of the fill-rate denominator, silences the
+/// reminder + the forgot/discrepancy accusation. It is NEVER a fake check-in —
+/// a real check-in filed on an off day still counts 100 % (the filled entry
+/// always wins). Weekends are off by DEFAULT (`User.weekendsOff`); this table
+/// only carries the EXPLICIT overrides a member makes on top of that default
+/// (a chosen weekday off, or — implicitly, by declaring — a specific date).
+///
+/// `date` is a Postgres `DATE` (no time), the member's local CIVIL day exactly
+/// like `DailyCheckin.date` (anchored to `User.timezone`; conversions live in
+/// `lib/checkin/timezone.ts`). `reason` is optional member free-text, validated
+/// with `safeFreeText` at the Zod boundary (mirror of `DailyCheckin.lateJustification`).
+/// The unique index on (userId, date) makes declaring the same day twice a no-op.
+model MemberOffDay {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Local-date the member declared off (Europe/Paris by default, see
+  /// User.timezone). `@db.Date` keeps a calendar-day stable across DST — same
+  /// invariant as DailyCheckin.date.
+  date DateTime @db.Date
+
+  /// Optional member free-text reason. Mirror of `DailyCheckin.lateJustification`:
+  /// safeFreeText + bidi/zero-width REJECT at the Zod boundary (lib/schemas/off-day.ts).
+  /// NULL when the member declared the day off without a note.
+  reason String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Idempotency: at most one declaration per (user, day). The Server Action
+  // upserts / deletes on this composite key.
+  @@unique([userId, date])
+  // Off-day lookups: scan the user's declared days over a date range.
+  @@index([userId, date])
+  @@map("member_off_days")
 }
 
 // =============================================================================

@@ -1,8 +1,11 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
+// Tour 14 — off-day context over the month window, to pre-compute the count of
+// off days the AI reads as a choice of process (never a missing check-in, §31.2).
+import { getOffDaySet, isOffDay } from '@/lib/checkin/off-days';
 import type { SerializedCheckin } from '@/lib/checkin/service';
-import { localDateOf, parseLocalDate } from '@/lib/checkin/timezone';
+import { localDateOf, parseLocalDate, shiftLocalDate } from '@/lib/checkin/timezone';
 // S5 §32-C/D — coaching psychologique. `getCoachingReportContext` agrège des
 // signaux de PROCESS (carte mentale, constance, micro-objectifs, momentum) —
 // aucun training, aucun P&L, aucun edge réel : hors firewall §21.5, comme
@@ -225,6 +228,7 @@ export async function loadMonthlySliceForUser(
     constancyScoresPrev,
     memberProfileRow,
     coaching,
+    offCtx,
   ] = await Promise.all([
     loadTrades(userId, window),
     loadCheckins(userId, window),
@@ -306,7 +310,20 @@ export async function loadMonthlySliceForUser(
     // boucles de micro-objectifs period-scopées au mois rapporté. `null` quand
     // le membre n'a aucun insight à synthétiser (carte mentale vide).
     getCoachingReportContext(userId, { start: window.monthStartUtc, end: window.monthEndUtc }),
+    // Tour 14 — off-day context over the SAME civil-month window as the check-in
+    // slice (monthStartLocal → monthEndLocal). A single indexed query + the
+    // member's `weekendsOff` flag (React-cached). Feeds `offDaysInWindow` so the
+    // debrief reads a jour off as a choice of process, never a missing check-in.
+    getOffDaySet(userId, window.monthStartLocal, window.monthEndLocal),
   ]);
+
+  // Tour 14 — count the off days inside the civil-month window [monthStartLocal,
+  // monthEndLocal] (both inclusive, civil-local). Weekends off-by-default are
+  // folded in via `offCtx.weekendsOff`, exactly like the scoring/weekly count.
+  let offDaysInWindow = 0;
+  for (let d = window.monthStartLocal; d <= window.monthEndLocal; d = shiftLocalDate(d, 1)) {
+    if (isOffDay(d, offCtx)) offDaysInWindow += 1;
+  }
 
   // SPEC §25.3 — training slice = count/recency ONLY. `daysSinceLastBacktest`
   // is derived here (the loader owns the clock; the pure aggregator stays
@@ -418,6 +435,9 @@ export async function loadMonthlySliceForUser(
     // `null` rate.
     meetingScheduledCount: meeting.scheduledCount,
     meetingCompletedCount: meeting.completedCount,
+    // Tour 14 — off days in the month (count-only). The aggregator folds it into
+    // the `offDaysCount` counter; the prompt reads it as a choice of process.
+    offDaysInWindow,
     // 🚨 §21.5 — effort COUNT + recency only. The pure aggregator relays
     // this verbatim; the snapshot schema `.strict()` structurally rejects a
     // smuggled backtest P&L key.

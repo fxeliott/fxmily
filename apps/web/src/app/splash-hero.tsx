@@ -88,11 +88,13 @@ export function SplashHero() {
 
           <div className="flex flex-col items-center gap-4">
             <h1
-              className="f-display font-bold tracking-[-0.04em] text-[var(--t-1)]"
+              className="f-display font-bold tracking-[-0.045em] text-[var(--t-1)]"
               style={{
                 fontFeatureSettings: '"ss01" 1',
-                fontSize: 'clamp(2.1rem, 1.5rem + 3vw, 3.75rem)',
-                lineHeight: 1.02,
+                // Signature d'accueil : la face display (Clash) porte le wow, on
+                // pousse le plafond desktop (60 → 72px) et on resserre le tracking.
+                fontSize: 'clamp(2.4rem, 1.5rem + 4vw, 4.5rem)',
+                lineHeight: 0.98,
               }}
             >
               <span className="word-rise inline-block" style={{ animationDelay: '90ms' }}>

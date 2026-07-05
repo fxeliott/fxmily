@@ -1,13 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the DB + the enqueue helper before importing the SUT.
 const userFindManyMock = vi.fn();
 const dailyCheckinFindManyMock = vi.fn();
+const memberOffDayFindManyMock = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   db: {
     user: { findMany: userFindManyMock },
     dailyCheckin: { findMany: dailyCheckinFindManyMock },
+    memberOffDay: { findMany: memberOffDayFindManyMock },
   },
 }));
 
@@ -23,9 +25,16 @@ vi.mock('@/lib/auth/audit', () => ({
 
 const { runCheckinReminderScan } = await import('./reminders');
 
+beforeEach(() => {
+  // Tour 14 — default: no explicit off days declared. Individual tests override
+  // this to exercise the off-day pont (streak skip + reminder suppression).
+  memberOffDayFindManyMock.mockResolvedValue([]);
+});
+
 afterEach(() => {
   userFindManyMock.mockReset();
   dailyCheckinFindManyMock.mockReset();
+  memberOffDayFindManyMock.mockReset();
   enqueueCheckinReminderMock.mockReset();
   logAuditMock.mockClear();
 });
@@ -46,8 +55,8 @@ describe('runCheckinReminderScan', () => {
     // cohort IS fetched (to learn its timezones) but the heavier per-day checkin
     // bulk fetch + enqueue loop are short-circuited.
     userFindManyMock.mockResolvedValueOnce([
-      { id: 'user_a', timezone: 'Europe/Paris' },
-      { id: 'user_b', timezone: 'Europe/Paris' },
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+      { id: 'user_b', timezone: 'Europe/Paris', weekendsOff: true },
     ]);
     const out = await runCheckinReminderScan(new Date('2026-05-06T14:00:00Z'));
     expect(out.scannedUsers).toBe(0);
@@ -70,8 +79,8 @@ describe('runCheckinReminderScan', () => {
     // A single Europe/Paris probe would WRONGLY skip the whole scan; the per-TZ
     // bucket probe must keep it alive and enqueue the NY member only.
     userFindManyMock.mockResolvedValueOnce([
-      { id: 'paris_u', timezone: 'Europe/Paris' },
-      { id: 'ny_u', timezone: 'America/New_York' },
+      { id: 'paris_u', timezone: 'Europe/Paris', weekendsOff: true },
+      { id: 'ny_u', timezone: 'America/New_York', weekendsOff: false },
     ]);
     dailyCheckinFindManyMock.mockResolvedValueOnce([]);
     enqueueCheckinReminderMock.mockResolvedValueOnce('notif_ny');
@@ -106,8 +115,8 @@ describe('runCheckinReminderScan', () => {
 
   it('enqueues morning reminders for all due users in a single bulk lookup', async () => {
     userFindManyMock.mockResolvedValueOnce([
-      { id: 'user_a', timezone: 'Europe/Paris' },
-      { id: 'user_b', timezone: 'Europe/Paris' },
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+      { id: 'user_b', timezone: 'Europe/Paris', weekendsOff: true },
     ]);
     // user_a already filed morning, user_b hasn't.
     dailyCheckinFindManyMock.mockResolvedValueOnce([
@@ -131,7 +140,9 @@ describe('runCheckinReminderScan', () => {
   });
 
   it('enqueues evening reminders correctly during the evening window', async () => {
-    userFindManyMock.mockResolvedValueOnce([{ id: 'user_a', timezone: 'Europe/Paris' }]);
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+    ]);
     dailyCheckinFindManyMock.mockResolvedValueOnce([]);
     enqueueCheckinReminderMock.mockResolvedValueOnce('notif_x');
 
@@ -148,7 +159,9 @@ describe('runCheckinReminderScan', () => {
   });
 
   it('skips users whose slot is already filled (no enqueue, counted as skipped)', async () => {
-    userFindManyMock.mockResolvedValueOnce([{ id: 'user_a', timezone: 'Europe/Paris' }]);
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+    ]);
     dailyCheckinFindManyMock.mockResolvedValueOnce([
       { userId: 'user_a', date: new Date('2026-05-06T00:00:00Z'), slot: 'evening' },
     ]);
@@ -159,7 +172,9 @@ describe('runCheckinReminderScan', () => {
   });
 
   it('counts a due+unfilled slot whose enqueue FAILS (null) as an error, NOT a skip (observability A-Z)', async () => {
-    userFindManyMock.mockResolvedValueOnce([{ id: 'user_a', timezone: 'Europe/Paris' }]);
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+    ]);
     dailyCheckinFindManyMock.mockResolvedValueOnce([]);
     // Genuine enqueue failure (NOT the P2002 no-op): the helper returns null.
     enqueueCheckinReminderMock.mockResolvedValueOnce(null);
@@ -176,7 +191,9 @@ describe('runCheckinReminderScan', () => {
   });
 
   it('respects the userIds option (filters to a subset)', async () => {
-    userFindManyMock.mockResolvedValueOnce([{ id: 'user_a', timezone: 'Europe/Paris' }]);
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+    ]);
     dailyCheckinFindManyMock.mockResolvedValueOnce([]);
     enqueueCheckinReminderMock.mockResolvedValueOnce('id');
 
@@ -186,7 +203,9 @@ describe('runCheckinReminderScan', () => {
   });
 
   it('does not double-count when a user has both windows due simultaneously (e.g. test scenarios)', async () => {
-    userFindManyMock.mockResolvedValueOnce([{ id: 'user_a', timezone: 'Europe/Paris' }]);
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+    ]);
     dailyCheckinFindManyMock.mockResolvedValueOnce([]);
     enqueueCheckinReminderMock.mockResolvedValueOnce('m').mockResolvedValueOnce('e');
 
@@ -200,7 +219,9 @@ describe('runCheckinReminderScan', () => {
   // Tour 12 (action 2) — the scan computes the member's streak in memory from the
   // widened bulk fetch and passes it to the enqueue (no per-member query).
   it('passes the current streak (from the pre-fetched window) to the enqueue', async () => {
-    userFindManyMock.mockResolvedValueOnce([{ id: 'user_a', timezone: 'Europe/Paris' }]);
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+    ]);
     // Evening window is due on 2026-05-06. Streak walk anchors on TODAY: since
     // today's slot isn't filled yet, the streak is the consecutive run ending
     // YESTERDAY. Seed 3 consecutive prior days (05-03..05-05) → streak = 3.
@@ -224,8 +245,8 @@ describe('runCheckinReminderScan', () => {
   // The widened fetch must be ONE query (no N+1 for the streak) — the whole point.
   it('keeps the streak-aware fetch to a single bulk round-trip (no N+1)', async () => {
     userFindManyMock.mockResolvedValueOnce([
-      { id: 'user_a', timezone: 'Europe/Paris' },
-      { id: 'user_b', timezone: 'Europe/Paris' },
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+      { id: 'user_b', timezone: 'Europe/Paris', weekendsOff: true },
     ]);
     dailyCheckinFindManyMock.mockResolvedValueOnce([]);
     enqueueCheckinReminderMock.mockResolvedValue('id');
@@ -237,7 +258,9 @@ describe('runCheckinReminderScan', () => {
   });
 
   it('logs the canonical audit row at the end of every scan that ran', async () => {
-    userFindManyMock.mockResolvedValueOnce([{ id: 'user_a', timezone: 'Europe/Paris' }]);
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+    ]);
     dailyCheckinFindManyMock.mockResolvedValueOnce([]);
     enqueueCheckinReminderMock.mockResolvedValueOnce('id');
 
@@ -254,5 +277,61 @@ describe('runCheckinReminderScan', () => {
         }),
       }),
     );
+  });
+
+  // Tour 14 — the off-day pont: a member whose LOCAL today is off gets NO
+  // reminder, counted as `skipped` (subset `offDaySkipped`), never `errors`.
+  it('suppresses the reminder on a WEEKEND for a weekends-off member (skipped as off_day)', async () => {
+    // 2026-05-09 = Saturday. 18:30 UTC = 20:30 Paris = evening window would fire,
+    // but the member keeps weekends off → the reminder is suppressed.
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+    ]);
+    dailyCheckinFindManyMock.mockResolvedValueOnce([]);
+
+    const out = await runCheckinReminderScan(new Date('2026-05-09T18:30:00Z'));
+
+    expect(enqueueCheckinReminderMock).not.toHaveBeenCalled();
+    expect(out.skipped).toBe(1);
+    expect(out.offDaySkipped).toBe(1);
+    expect(out.errors).toBe(0);
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ offDaySkipped: 1 }),
+      }),
+    );
+  });
+
+  it('still reminds on a weekend when the member trades weekends (weekendsOff=false)', async () => {
+    // Same Saturday, but this member opted out of weekend-off → normal reminder.
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'trader', timezone: 'Europe/Paris', weekendsOff: false },
+    ]);
+    dailyCheckinFindManyMock.mockResolvedValueOnce([]);
+    enqueueCheckinReminderMock.mockResolvedValueOnce('notif_sat');
+
+    const out = await runCheckinReminderScan(new Date('2026-05-09T18:30:00Z'));
+
+    expect(enqueueCheckinReminderMock).toHaveBeenCalledTimes(1);
+    expect(out.enqueuedEvening).toBe(1);
+    expect(out.offDaySkipped).toBe(0);
+  });
+
+  it('suppresses the reminder on an EXPLICITLY declared off day (a weekday)', async () => {
+    // 2026-05-06 = Wednesday (a working day), but the member declared it off.
+    userFindManyMock.mockResolvedValueOnce([
+      { id: 'user_a', timezone: 'Europe/Paris', weekendsOff: true },
+    ]);
+    dailyCheckinFindManyMock.mockResolvedValueOnce([]);
+    memberOffDayFindManyMock.mockResolvedValueOnce([
+      { userId: 'user_a', date: new Date('2026-05-06T00:00:00Z') },
+    ]);
+
+    const out = await runCheckinReminderScan(new Date('2026-05-06T18:30:00Z'));
+
+    expect(enqueueCheckinReminderMock).not.toHaveBeenCalled();
+    expect(out.skipped).toBe(1);
+    expect(out.offDaySkipped).toBe(1);
+    expect(out.errors).toBe(0);
   });
 });

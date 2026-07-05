@@ -23,6 +23,10 @@ const m = vi.hoisted(() => ({
   logAudit: vi.fn(),
   scanAlertsForMember: vi.fn(),
   reconcileOneMember: vi.fn(),
+  // Tour 14 — the member-facing « analyse prête » verdict push enqueued after
+  // the loop. Mocked so these unit tests stay on the persist branching logic
+  // (the enqueuer's own behavior is covered by enqueue.test.ts).
+  enqueueProofAnalyzed: vi.fn(),
   // Tour 13 — the at-analysis file purge deletes the stored screen via the
   // storage adapter, then stamps filePurgedAt. Mocked so the unit tests stay on
   // the branching logic (real delete would touch the FS).
@@ -82,6 +86,13 @@ vi.mock('./alerts', () => ({
 // own behavior is covered by reconcile.test.ts / reconcile-db.test.ts).
 vi.mock('./reconcile', () => ({
   reconcileOneMember: m.reconcileOneMember,
+}));
+
+// Tour 14 — the verdict push enqueuer (mocked: its own best-effort behavior is
+// covered by enqueue.test.ts; here we assert it is CALLED once per member with
+// the right terminal-proof counts).
+vi.mock('@/lib/notifications/enqueue', () => ({
+  enqueueProofAnalyzedNotification: m.enqueueProofAnalyzed,
 }));
 
 import { persistVisionResults } from './batch';
@@ -637,5 +648,115 @@ describe('persistVisionResults — TXN-1 (RC#8) double-invoke serialization', ()
     expect(m.positionCreateMany).not.toHaveBeenCalled(); // nothing double-counted
     // The proof still flips to done atomically (idempotent re-delivery).
     expect(m.proofUpdate.mock.calls[0]?.[0]?.data.ocrStatus).toBe('done');
+  });
+});
+
+describe('persistVisionResults — Tour 14 verdict push (analyse prête)', () => {
+  it('enqueues ONE verdict push with analyzedCount=1 after a successful (done) persist', async () => {
+    seedHappyMocks();
+
+    await persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER, output: probeOutput() }],
+    });
+
+    expect(m.enqueueProofAnalyzed).toHaveBeenCalledTimes(1);
+    expect(m.enqueueProofAnalyzed).toHaveBeenCalledWith(MEMBER, {
+      analyzedCount: 1,
+      failedCount: 0,
+    });
+  });
+
+  it('enqueues a verdict push with failedCount=1 when a proof is terminally refused (not_mt5_history)', async () => {
+    m.userFindMany.mockResolvedValue([{ id: MEMBER }]);
+    m.proofFindMany.mockResolvedValue([
+      {
+        id: PROOF,
+        memberId: MEMBER,
+        ocrStatus: 'pending',
+        brokerAccountId: null,
+        accountType: null,
+        fileKey: `proofs/${MEMBER}/abcdefghijklmnop.jpg`,
+        filePurgedAt: null,
+      },
+    ]);
+    m.proofUpdate.mockResolvedValue({});
+    m.storageDelete.mockResolvedValue(undefined);
+
+    await persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER, error: 'not_mt5_history' }],
+    });
+
+    expect(m.enqueueProofAnalyzed).toHaveBeenCalledTimes(1);
+    expect(m.enqueueProofAnalyzed).toHaveBeenCalledWith(MEMBER, {
+      analyzedCount: 0,
+      failedCount: 1,
+    });
+  });
+
+  it('aggregates a member’s terminal proofs into a SINGLE push (never one-per-proof)', async () => {
+    m.userFindMany.mockResolvedValue([{ id: MEMBER }]);
+    m.proofFindMany.mockResolvedValue([
+      {
+        id: PROOF,
+        memberId: MEMBER,
+        ocrStatus: 'pending',
+        brokerAccountId: null,
+        accountType: null,
+        fileKey: `proofs/${MEMBER}/abcdefghijklmnop.jpg`,
+        filePurgedAt: null,
+      },
+      {
+        id: 'clxproof00002',
+        memberId: MEMBER,
+        ocrStatus: 'pending',
+        brokerAccountId: null,
+        accountType: null,
+        fileKey: `proofs/${MEMBER}/qrstuvwxyz012345.jpg`,
+        filePurgedAt: null,
+      },
+    ]);
+    m.accountFindUnique.mockResolvedValue(null);
+    m.accountCreate.mockResolvedValue({ id: 'accNew1' });
+    m.accountCount.mockResolvedValue(1);
+    m.positionFindMany.mockResolvedValue([]);
+    m.positionCreateMany.mockResolvedValue({ count: 2 });
+    m.proofUpdate.mockResolvedValue({});
+    m.userUpdate.mockResolvedValue({});
+    m.storageDelete.mockResolvedValue(undefined);
+
+    // One proof read (done), one terminally refused (failed) — same member.
+    await persistVisionResults({
+      results: [
+        { proofId: PROOF, userId: MEMBER, output: probeOutput() },
+        { proofId: 'clxproof00002', userId: MEMBER, error: 'not_mt5_history' },
+      ],
+    });
+
+    expect(m.enqueueProofAnalyzed).toHaveBeenCalledTimes(1);
+    expect(m.enqueueProofAnalyzed).toHaveBeenCalledWith(MEMBER, {
+      analyzedCount: 1,
+      failedCount: 1,
+    });
+  });
+
+  it('does NOT enqueue a verdict push when nothing reached a terminal state (transient error)', async () => {
+    m.userFindMany.mockResolvedValue([{ id: MEMBER }]);
+    m.proofFindMany.mockResolvedValue([
+      {
+        id: PROOF,
+        memberId: MEMBER,
+        ocrStatus: 'pending',
+        brokerAccountId: null,
+        accountType: null,
+        fileKey: `proofs/${MEMBER}/abcdefghijklmnop.jpg`,
+        filePurgedAt: null,
+      },
+    ]);
+
+    await persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER, error: 'claude_exit_1' }],
+    });
+
+    expect(m.enqueueProofAnalyzed).not.toHaveBeenCalled();
   });
 });

@@ -537,6 +537,76 @@ export async function enqueueGentleVerificationReminder(
 }
 
 // =============================================================================
+// Tour 14 — MT5 proof analysed (member-facing verdict, mirror monthly debrief)
+// =============================================================================
+
+export interface ProofAnalyzedPayload {
+  /** Proofs of this member that reached `done` (read) in this batch run. */
+  analyzedCount: number;
+  /** Proofs of this member terminally refused (`failed`) in this batch run. */
+  failedCount: number;
+}
+
+/**
+ * Enqueue ONE « ta capture a été analysée » push for the member after the vision
+ * batch flips at least one of their proofs to a TERMINAL state (`done`/`failed`)
+ * (Tour 14 — vérification non bloquante et informée). This closes the loop the
+ * `/verification` poller opens: the member is told the verdict is ready even if
+ * they left the page, so they never have to reload to find out.
+ *
+ * Carbon mirror of {@link enqueueMonthlyDebriefNotification}: member-facing,
+ * best-effort (returns the row id, or null if the write failed — logged, never
+ * thrown, so the batch persist never rolls back an analysed proof over a queue
+ * hiccup), optionally joins a parent `db.$transaction`. PII-free payload: only
+ * two counts, never a symbol, a broker, or any P&L (§21.5/RGPD §16).
+ *
+ * One push per member per run by construction — the caller aggregates all of a
+ * member's terminal proofs into a single call (never one push per proof), so
+ * there is no per-proof dedup index to race on (unlike the mindset/gentle nudges);
+ * a benign double-run would at worst enqueue a second calm verdict, not spam.
+ */
+export async function enqueueProofAnalyzedNotification(
+  recipientUserId: string,
+  payload: ProofAnalyzedPayload,
+  tx?: Prisma.TransactionClient,
+): Promise<string | null> {
+  const client = tx ?? db;
+  try {
+    const row = await client.notificationQueue.create({
+      data: {
+        userId: recipientUserId,
+        type: 'verification_proof_analyzed',
+        payload: payload as unknown as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+
+    if (!tx) {
+      await logAudit({
+        action: 'notification.enqueued',
+        userId: recipientUserId,
+        metadata: {
+          notificationId: row.id,
+          type: 'verification_proof_analyzed',
+          analyzedCount: payload.analyzedCount,
+          failedCount: payload.failedCount,
+        },
+      });
+    }
+
+    return row.id;
+  } catch (err) {
+    // A-Z observability — see enqueueAnnotationNotification. Best-effort: return
+    // null so a queue hiccup never rolls back a committed proof analysis.
+    reportWarning('verification.proof-analyzed.enqueue', 'enqueue_failed', {
+      userId: recipientUserId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+// =============================================================================
 // J5 — Check-in reminders
 // =============================================================================
 

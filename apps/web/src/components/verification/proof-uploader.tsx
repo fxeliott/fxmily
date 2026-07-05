@@ -6,6 +6,7 @@ import { useCallback, useId, useRef, useState } from 'react';
 
 import { Spinner } from '@/components/spinner';
 import { PROOF_ACCOUNT_TYPES, type ProofAccountType } from '@/lib/schemas/verification';
+import { compressProofImage } from '@/lib/uploads/compress-proof-client';
 import { cn } from '@/lib/utils';
 
 interface ProofUploaderAccountOption {
@@ -63,6 +64,12 @@ const ACCOUNT_TYPE_LABELS: Record<ProofAccountType, string> = {
   personal: 'Compte perso',
 };
 
+/** Taille lisible d'un fichier (Ko en dessous de 1 Mo, sinon Mo à 1 décimale). */
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
 /**
  * S3 — MT5 history proof uploader (`/verification`, SPEC §33).
  *
@@ -84,6 +91,9 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
   const [status, setStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  // Taille du fichier en cours d'envoi, affichée pendant l'upload (rassure sur
+  // « c'est bien parti », null hors upload).
+  const [uploadingSize, setUploadingSize] = useState<number | null>(null);
 
   const upload = useCallback(
     async (file: File) => {
@@ -115,9 +125,18 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
 
       setStatus('uploading');
       setMessage(null);
+      setUploadingSize(file.size);
+
+      // Tour 14 — shrink a heavy capture in the browser before the transfer so
+      // the slow part (mobile uplink) sends a few hundred KB instead of several
+      // MB. Best-effort: returns the raw file untouched on any failure or for a
+      // small capture. The server re-normalises regardless, so this only speeds
+      // the wire. Reflect the actually-sent size in the copy.
+      const toSend = await compressProofImage(file);
+      if (toSend.size !== file.size) setUploadingSize(toSend.size);
 
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append('file', toSend);
       fd.append('kind', 'mt5-proof');
       if (accountId) fd.append('accountId', accountId);
       if (accountType) fd.append('accountType', accountType);
@@ -228,7 +247,16 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
             <div className="grid h-12 w-12 place-items-center rounded-full border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
               <Spinner size={20} label="Envoi en cours" />
             </div>
-            <span className="t-body text-[var(--t-2)]">Envoi en cours…</span>
+            <div className="flex flex-col items-center gap-1">
+              <span className="t-body text-[var(--t-2)]">
+                Envoi en cours, ne ferme pas encore cette page.
+              </span>
+              {uploadingSize !== null ? (
+                <span className="t-cap text-[var(--t-4)]">
+                  {formatFileSize(uploadingSize)} en cours de transfert
+                </span>
+              ) : null}
+            </div>
           </>
         ) : (
           <>
@@ -259,9 +287,15 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
       </p>
 
       {status === 'success' ? (
-        <p className="inline-flex items-center gap-1.5 text-[11px] text-[var(--ok)]" role="status">
-          <ImageIcon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-          Capture reçue, elle sera lue lors de la prochaine analyse.
+        <p
+          className="inline-flex items-start gap-1.5 text-[11px] leading-[1.5] text-[var(--ok)]"
+          role="status"
+        >
+          <ImageIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+          <span>
+            Capture reçue. L’analyse tourne en arrière-plan, en général sous 20 minutes. Tu peux
+            quitter cette page, le résultat s’affichera ici dès qu’il est prêt.
+          </span>
         </p>
       ) : null}
 

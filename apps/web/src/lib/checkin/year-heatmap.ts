@@ -17,6 +17,14 @@ export type HeatLevel = 0 | 1 | 2;
 export interface HeatCell {
   date: LocalDateString;
   level: HeatLevel;
+  /**
+   * Tour 14 — the day is an OFF day (weekend the member keeps off, or an
+   * explicit declaration). A muted, distinct tint from the empty level-0 slate:
+   * a chosen rest, not a missed day (§31.2). A check-in filed on an off day
+   * still carries its `level` (the rempli wins) AND this flag, so the cell reads
+   * as "active AND off" — never a demotion. `false`/absent = a normal day.
+   */
+  off?: boolean;
 }
 
 export interface YearHeatmap {
@@ -62,6 +70,12 @@ function weekdayMonFirst(date: LocalDateString): number {
 export function buildYearHeatmap(
   levelByDate: ReadonlyMap<LocalDateString, HeatLevel>,
   today: LocalDateString,
+  /**
+   * Tour 14 — optional off-day predicate (pure, string-keyed). When provided, a
+   * cell whose civil date is off gets `off: true`. Omitted → no cell is off
+   * (byte-identical to the pre-Tour-14 output — the field is simply absent).
+   */
+  isOff?: (date: LocalDateString) => boolean,
 ): YearHeatmap {
   const lastMonday = shiftLocalDate(today, -weekdayMonFirst(today));
   const firstMonday = shiftLocalDate(lastMonday, -(WEEKS - 1) * 7);
@@ -82,7 +96,11 @@ export function buildYearHeatmap(
       }
       const level = levelByDate.get(d) ?? 0;
       if (level > 0) activeDays += 1;
-      col.push({ date: d, level });
+      // `off` is additive to `level`: a filled off day keeps its level (the
+      // rempli wins) and is flagged off; only append the field when true so a
+      // normal day serialises exactly as before (no `off: false` noise).
+      const off = isOff?.(d) ?? false;
+      col.push(off ? { date: d, level, off: true } : { date: d, level });
     }
     const firstCell = col.find((x): x is HeatCell => x != null);
     if (firstCell) {

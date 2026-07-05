@@ -430,3 +430,47 @@ export async function seedHabitLogs(ctx: SeedCtx): Promise<Record<string, number
   ctx.log(`  habit logs: ${n} entries over ${HABIT_WINDOW} days`);
   return { habitLogs: n };
 }
+
+// =============================================================================
+// Off days (Tour 14 — "jour off")
+// =============================================================================
+
+/**
+ * Seed a couple of EXPLICIT past off days with a reason, so the demo shows the
+ * "pont" behaviour on the heatmap / history / reports (a chosen day that never
+ * counts as a missed check-in and does not break the streak). We deliberately
+ * pick WEEKDAYS (the weekend is already off via `weekendsOff`), so these read as
+ * a distinct member choice, not the automatic weekend rule.
+ */
+export async function seedOffDays(ctx: SeedCtx): Promise<Record<string, number>> {
+  const { db, userId, now } = ctx;
+
+  // Two recent, in-window weekday off days with a plausible reason each.
+  const specs: Array<{ daysAgo: number; reason: string }> = [
+    { daysAgo: 12, reason: 'Journée off posée : repos choisi, pas de trading.' },
+    { daysAgo: 26, reason: 'Formation en présentiel toute la journée.' },
+  ];
+
+  let count = 0;
+  for (const spec of specs) {
+    // Nudge onto the nearest weekday so the off day is a visible member choice
+    // rather than merged into the weekend-off rule (0 = Sun … 6 = Sat).
+    let date = dbDate(now, spec.daysAgo);
+    let dow = date.getUTCDay();
+    let extra = 0;
+    while (dow === 0 || dow === 6) {
+      extra += 1;
+      date = dbDate(now, spec.daysAgo + extra);
+      dow = date.getUTCDay();
+    }
+    await db.memberOffDay.upsert({
+      where: { userId_date: { userId, date } },
+      create: { userId, date, reason: spec.reason },
+      update: { reason: spec.reason },
+    });
+    count++;
+  }
+
+  ctx.log(`  off days: ${count} explicit weekday off days (with reason)`);
+  return { offDays: count };
+}

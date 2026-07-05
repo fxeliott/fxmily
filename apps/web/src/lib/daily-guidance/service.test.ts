@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getCalendarForUser, getQuestionnaireForUser } from '@/lib/calendar/service';
+import { getOffDaySet } from '@/lib/checkin/off-days';
 import { getCheckinStatus } from '@/lib/checkin/service';
 import { listScheduledMeetingsOn } from '@/lib/meeting/service';
 import { getMindsetCheck } from '@/lib/mindset/service';
@@ -26,6 +27,13 @@ vi.mock('@/lib/calendar/service', () => ({
   getQuestionnaireForUser: vi.fn(),
 }));
 vi.mock('@/lib/checkin/service', () => ({ getCheckinStatus: vi.fn() }));
+// Tour 14 — mock ONLY the DB-backed `getOffDaySet`; the pure predicates
+// (`isOffDay` / `isWeekendLocalDate`) run REAL so the off-day derivation is
+// exercised genuinely (weekend detection, explicit set membership).
+vi.mock('@/lib/checkin/off-days', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/checkin/off-days')>();
+  return { ...actual, getOffDaySet: vi.fn() };
+});
 vi.mock('@/lib/mindset/service', () => ({ getMindsetCheck: vi.fn() }));
 vi.mock('@/lib/meeting/service', () => ({ listScheduledMeetingsOn: vi.fn() }));
 vi.mock('@/lib/tracking/service', () => ({ getDueTrackingInstruments: vi.fn() }));
@@ -60,6 +68,13 @@ beforeEach(() => {
     today: '2026-06-08',
     morningSubmitted: false,
     eveningSubmitted: false,
+  });
+  // Default: weekends off (the product default) with no explicit declaration.
+  // 2026-06-08 is a Monday, so the default day is NOT off (byte-identical to
+  // the pre-Tour-14 behaviour for the weekday fixtures).
+  vi.mocked(getOffDaySet).mockResolvedValue({
+    weekendsOff: true,
+    explicitDates: new Set<string>(),
   });
   vi.mocked(getCalendarForUser).mockResolvedValue(null);
   vi.mocked(getQuestionnaireForUser).mockResolvedValue(null);
@@ -142,6 +157,65 @@ describe('getDailyGuidance — slot + check-in', () => {
     expect(morning?.state).toBe('done');
     // the other (done) check-in is NOT repeated as a secondary todo
     expect(g.actions.some((a) => a.key === 'checkin-evening')).toBe(false);
+  });
+});
+
+describe('getDailyGuidance — jour off (Tour 14, pont §31.2)', () => {
+  // 2026-06-06 = Saturday, 08:00 Paris (weekend). 2026-06-08 = Monday.
+  const SAT_MORNING = new Date('2026-06-06T06:00:00Z'); // 08:00 Paris, Saturday
+
+  it('un week-end off remplace les check-ins par UNE action info « Jour off » (pas de todo/missed)', async () => {
+    vi.mocked(getCheckinStatus).mockResolvedValue({
+      today: '2026-06-06',
+      morningSubmitted: false,
+      eveningSubmitted: false,
+    });
+    const g = await getDailyGuidance(USER, TZ, SAT_MORNING);
+    expect(g.todayIsOff).toBe(true);
+    const off = g.actions.find((a) => a.kind === 'off');
+    expect(off).toMatchObject({ key: 'off-day', state: 'info', emphasis: 'primary' });
+    expect(off?.detail).toMatch(/week-end/i);
+    // Aucun check-in todo/missed : le membre ne doit rien ce jour-là.
+    expect(g.actions.some((a) => a.kind === 'checkin')).toBe(false);
+    expect(g.actions.some((a) => a.state === 'missed')).toBe(false);
+  });
+
+  it('un jour déclaré off en semaine remplace les check-ins par l’action info (copy « posé »)', async () => {
+    vi.mocked(getOffDaySet).mockResolvedValue({
+      weekendsOff: true,
+      explicitDates: new Set<string>(['2026-06-08']),
+    });
+    const g = await getDailyGuidance(USER, TZ, MON_EVENING);
+    expect(g.todayIsOff).toBe(true);
+    const off = g.actions.find((a) => a.kind === 'off');
+    expect(off?.state).toBe('info');
+    // Déclaration explicite → copy « tu as posé », pas « week-end ».
+    expect(off?.detail).toMatch(/posé/i);
+    expect(g.actions.some((a) => a.state === 'missed')).toBe(false);
+  });
+
+  it('un check-in RÉELLEMENT posé un jour off reste crédité (le rempli gagne)', async () => {
+    vi.mocked(getCheckinStatus).mockResolvedValue({
+      today: '2026-06-06',
+      morningSubmitted: true,
+      eveningSubmitted: false,
+    });
+    const g = await getDailyGuidance(USER, TZ, SAT_MORNING);
+    expect(g.todayIsOff).toBe(true);
+    // Pas d'action off substituée : le membre a filé un slot, on garde le done.
+    expect(g.actions.some((a) => a.kind === 'off')).toBe(false);
+    const morning = g.actions.find((a) => a.key === 'checkin-morning');
+    expect(morning?.state).toBe('done');
+    // Le slot du soir reste offert en `todo` bonus, jamais `missed` un jour off.
+    const evening = g.actions.find((a) => a.key === 'checkin-evening');
+    expect(evening?.state).toBe('todo');
+  });
+
+  it('un jour de semaine NON off garde le comportement check-in inchangé', async () => {
+    const g = await getDailyGuidance(USER, TZ, MON_MORNING);
+    expect(g.todayIsOff).toBe(false);
+    expect(g.actions.some((a) => a.kind === 'off')).toBe(false);
+    expect(g.actions[0]).toMatchObject({ key: 'checkin-morning', state: 'todo' });
   });
 });
 

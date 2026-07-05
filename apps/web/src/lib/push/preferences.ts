@@ -40,6 +40,7 @@ export async function getEffectivePreferences(userId: string): Promise<Effective
     monthly_debrief_ready: true,
     mindset_check_ready: true,
     verification_gentle_reminder: true,
+    verification_proof_analyzed: true,
     training_reply_received: true,
   };
 

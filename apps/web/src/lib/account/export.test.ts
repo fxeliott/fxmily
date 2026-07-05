@@ -45,6 +45,8 @@ const trackingEntryFindMany = vi.fn();
 const trackingScheduleFindMany = vi.fn();
 // S5 §32-E3 — mental micro-objective loops.
 const mentalMicroObjectiveFindMany = vi.fn();
+// Tour 14 — member-declared off days.
+const memberOffDayFindMany = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -87,6 +89,7 @@ vi.mock('@/lib/db', () => ({
     trackingEntry: { findMany: trackingEntryFindMany },
     trackingSchedule: { findMany: trackingScheduleFindMany },
     mentalMicroObjective: { findMany: mentalMicroObjectiveFindMany },
+    memberOffDay: { findMany: memberOffDayFindMany },
   },
 }));
 
@@ -136,6 +139,7 @@ const ALL_FIND_MANY = [
   trackingEntryFindMany,
   trackingScheduleFindMany,
   mentalMicroObjectiveFindMany,
+  memberOffDayFindMany,
 ];
 
 beforeEach(() => {
@@ -214,6 +218,7 @@ const EMPTY_SNAPSHOT = {
   trackingEntries: [],
   trackingSchedules: [],
   mentalMicroObjectives: [],
+  offDays: [],
 } satisfies Parameters<typeof summariseExport>[0];
 
 describe('buildUserDataExport', () => {
@@ -310,6 +315,8 @@ describe('buildUserDataExport', () => {
     expect(trackingScheduleFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
     // S5 §32-E3 — mental micro-objectives (member-owned, `memberId`-keyed).
     expect(mentalMicroObjectiveFindMany.mock.calls[0]?.[0]?.where).toEqual({ memberId: 'u1' });
+    // Tour 14 — member-declared off days (member-owned, `userId`-keyed).
+    expect(memberOffDayFindMany.mock.calls[0]?.[0]?.where).toEqual({ userId: 'u1' });
   });
 
   it('exports the behavioural / psychological surface added in Session 21', async () => {
@@ -709,6 +716,7 @@ describe('summariseExport — defensive shape handling', () => {
       'trackingEntryCount',
       'trackingScheduleCount',
       'mentalMicroObjectiveCount',
+      'offDayCount',
     ]);
   });
 });

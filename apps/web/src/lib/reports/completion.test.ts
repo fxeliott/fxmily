@@ -30,6 +30,8 @@ describe('buildCompletionSummary', () => {
     });
     expect(s).toEqual({
       periodDays: 7,
+      offDaysCount: 0,
+      owedDays: 7,
       checkinDaysFilled: 0,
       checkinCoverageRate: 0,
       morningCheckinsCount: 0,
@@ -161,5 +163,83 @@ describe('buildCompletionSummary', () => {
     });
     expect(s.periodDays).toBe(31);
     expect(s.longestStreakDays).toBe(3);
+  });
+
+  describe('Tour 14 — off-day pont', () => {
+    it('excludes off days from the coverage denominator (owedDays)', () => {
+      // Mon-Fri filled, Sat+Sun off → 5 owed days, 5 filled = 100 % (not 5/7).
+      // 2026-06-01 is a Monday.
+      const s = buildCompletionSummary({
+        periodStart: '2026-06-01',
+        periodEnd: '2026-06-07',
+        checkins: [
+          morning('2026-06-01'),
+          morning('2026-06-02'),
+          morning('2026-06-03'),
+          morning('2026-06-04'),
+          morning('2026-06-05'),
+        ],
+        offDays: new Set(['2026-06-06', '2026-06-07']),
+      });
+      expect(s.periodDays).toBe(7);
+      expect(s.offDaysCount).toBe(2);
+      expect(s.owedDays).toBe(5);
+      expect(s.checkinDaysFilled).toBe(5);
+      expect(s.checkinCoverageRate).toBe(1);
+    });
+
+    it('bridges the streak over an unfilled off weekend (Fri + off Sat/Sun + Mon = 4)', () => {
+      // Filled Fri 05, off Sat 06 + Sun 07 (both unfilled), filled Mon 08 +
+      // Tue 09. The unfilled off weekend is stepped over → run of 4, not 2.
+      const s = buildCompletionSummary({
+        periodStart: '2026-06-05',
+        periodEnd: '2026-06-09',
+        checkins: [morning('2026-06-05'), morning('2026-06-08'), morning('2026-06-09')],
+        offDays: new Set(['2026-06-06', '2026-06-07']),
+      });
+      expect(s.longestStreakDays).toBe(3); // 3 filled days, bridged across the off weekend
+      expect(s.owedDays).toBe(3); // 5 days − 2 off
+    });
+
+    it('an unfilled WORKING day still breaks the run (only off days bridge)', () => {
+      // Fri 05 filled, Sat 06 off (unfilled, bridged), Sun 07 off (unfilled,
+      // bridged), Mon 08 UNFILLED working day (break), Tue 09 filled.
+      const s = buildCompletionSummary({
+        periodStart: '2026-06-05',
+        periodEnd: '2026-06-09',
+        checkins: [morning('2026-06-05'), morning('2026-06-09')],
+        offDays: new Set(['2026-06-06', '2026-06-07']),
+      });
+      // 05 (run 1) → off 06/07 (skipped) → 08 unfilled working (break) → 09 (run 1).
+      expect(s.longestStreakDays).toBe(1);
+    });
+
+    it('a check-in filed ON an off day still counts (the rempli wins, stays owed)', () => {
+      // Sat 06 is off BUT the member filed it → it is NOT removed from owedDays
+      // and it counts as a filled day.
+      const s = buildCompletionSummary({
+        periodStart: '2026-06-06',
+        periodEnd: '2026-06-07',
+        checkins: [morning('2026-06-06')],
+        offDays: new Set(['2026-06-06', '2026-06-07']),
+      });
+      expect(s.offDaysCount).toBe(1); // only the UNFILLED Sun 07 drops out
+      expect(s.owedDays).toBe(1); // 2 days − 1 unfilled off
+      expect(s.checkinDaysFilled).toBe(1);
+      expect(s.checkinCoverageRate).toBe(1);
+    });
+
+    it('is byte-identical to pre-Tour-14 when no off days are supplied', () => {
+      const base = {
+        periodStart: '2026-06-01',
+        periodEnd: '2026-06-07',
+        checkins: [morning('2026-06-01'), morning('2026-06-03'), morning('2026-06-05')],
+      };
+      const withEmpty = buildCompletionSummary({ ...base, offDays: new Set() });
+      const without = buildCompletionSummary(base);
+      expect(withEmpty).toEqual(without);
+      expect(without.owedDays).toBe(without.periodDays); // denominator unchanged
+      expect(without.checkinCoverageRate).toBeCloseTo(0.4286, 4);
+    });
   });
 });

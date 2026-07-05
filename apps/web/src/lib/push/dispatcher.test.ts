@@ -121,6 +121,51 @@ describe('buildPayload', () => {
     expect(text).not.toMatch(/urgent|vite|attention|tu rates|obligatoire|dépêche/);
   });
 
+  // Tour 14 — MT5 proof verdict push. Deep-links /verification; the body branches
+  // on whether at least one capture was actually read (`analyzedCount`).
+  it('builds verification_proof_analyzed with deep-link /verification (Tour 14)', () => {
+    const out = buildPayload('verification_proof_analyzed', 'p1', {
+      analyzedCount: 1,
+      failedCount: 0,
+    });
+    expect(out.notification.title).toBe('Ton analyse de suivi est prête');
+    expect(out.notification.body).toBeTruthy();
+    expect(out.notification.navigate).toBe('http://localhost:3000/verification');
+    expect(out.notification.tag).toBe('verification_proof_analyzed');
+    expect(out.type).toBe('verification_proof_analyzed');
+  });
+
+  it('pluralises the proof verdict body when several captures were read', () => {
+    const out = buildPayload('verification_proof_analyzed', 'p2', {
+      analyzedCount: 3,
+      failedCount: 0,
+    });
+    expect(out.notification.body).toContain('3 de tes captures');
+  });
+
+  it('uses the failed-only verdict body when no capture could be read', () => {
+    const out = buildPayload('verification_proof_analyzed', 'p3', {
+      analyzedCount: 0,
+      failedCount: 1,
+    });
+    expect(out.notification.body).toMatch(/n’a pas pu être lue/);
+  });
+
+  it('falls back to the generic verdict body when counts are absent', () => {
+    const out = buildPayload('verification_proof_analyzed', 'p4', {});
+    expect(out.notification.body).toBeTruthy();
+    expect(out.notification.navigate).toBe('http://localhost:3000/verification');
+  });
+
+  it('keeps the proof verdict copy calm (anti Black-Hat §33.2)', () => {
+    const out = buildPayload('verification_proof_analyzed', 'p5', {
+      analyzedCount: 1,
+      failedCount: 0,
+    });
+    const text = `${out.notification.title} ${out.notification.body}`.toLowerCase();
+    expect(text).not.toMatch(/urgent|vite|attention|tu rates|obligatoire|dépêche|sanction/);
+  });
+
   it('uses custom appBaseUrl when provided', () => {
     const out = buildPayload(
       'annotation_received',
@@ -287,7 +332,7 @@ describe('nextAttemptDelay', () => {
 });
 
 describe('TTL_BY_TYPE / URGENCY_BY_TYPE config tables', () => {
-  it('TTL covers exactly the 10 NotificationType slugs', () => {
+  it('TTL covers exactly the 11 NotificationType slugs', () => {
     expect(Object.keys(TTL_BY_TYPE).sort()).toEqual([
       'annotation_received',
       'checkin_evening_reminder',
@@ -298,11 +343,12 @@ describe('TTL_BY_TYPE / URGENCY_BY_TYPE config tables', () => {
       'training_annotation_received',
       'training_reply_received',
       'verification_gentle_reminder',
+      'verification_proof_analyzed',
       'weekly_report_ready',
     ]);
   });
 
-  it('URGENCY covers exactly the same 10 slugs as TTL (no map drift)', () => {
+  it('URGENCY covers exactly the same 11 slugs as TTL (no map drift)', () => {
     expect(Object.keys(URGENCY_BY_TYPE).sort()).toEqual(Object.keys(TTL_BY_TYPE).sort());
   });
 

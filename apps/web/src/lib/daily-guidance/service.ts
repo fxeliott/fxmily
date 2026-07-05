@@ -4,6 +4,7 @@ import { cache } from 'react';
 
 import { getCalendarForUser, getQuestionnaireForUser } from '@/lib/calendar/service';
 import { currentParisWeekStart } from '@/lib/calendar/week';
+import { getOffDaySet, isOffDay, isWeekendLocalDate } from '@/lib/checkin/off-days';
 import { getCheckinStatus } from '@/lib/checkin/service';
 import { formatLocalDate, localDateOf, parseLocalDate } from '@/lib/checkin/timezone';
 import { listScheduledMeetingsOn } from '@/lib/meeting/service';
@@ -64,7 +65,12 @@ export type GuidanceKind =
   // Crisis follow-up — for 48h after a HIGH/MEDIUM crisis detection, a gentle
   // "how are you today" presence (`info`, never a to-do — the member owes the
   // app nothing after a hard moment). See `lib/safety/crisis-followup.ts`.
-  | 'crisis-followup';
+  | 'crisis-followup'
+  // Tour 14 — off day ("jour off"). When TODAY is off (weekend the member keeps
+  // off, or an explicit declaration), the two check-in actions are REPLACED by a
+  // single calm `info` acknowledgement: no todo, no missed the evening, no
+  // pressure — a "pont" (§31.2). Réunions/tracking stay untouched.
+  | 'off';
 
 export interface GuidanceAction {
   /** Stable key for the React list + e2e selectors. */
@@ -102,6 +108,14 @@ export interface DailyGuidance {
   todayBlocks: CalendarBlock[];
   /** Ordered nudges (most "now"-relevant first). */
   actions: GuidanceAction[];
+  /**
+   * Tour 14 — is the member's local TODAY an off day (weekend kept off, or an
+   * explicit declaration)? Drives the dashboard: the day-progress ring is hidden
+   * (no misleading 0/0), the first-run welcome never pushes "fais ton premier
+   * check-in", and the session timeline can render a calm rest state. The
+   * check-in block above is already a calm `off` info row when this is true.
+   */
+  todayIsOff: boolean;
 }
 
 const CHECKIN_META: Record<'morning' | 'evening', { title: string; detail: string; href: string }> =
@@ -155,8 +169,16 @@ async function buildDailyGuidance(
   const weekStart = currentParisWeekStart(now);
   const isMonday = parseLocalDate(today).getUTCDay() === 1;
 
+  // The check-in row lives on the MEMBER's local day, so the off-day lookup is
+  // keyed on the member-local civil date (same frame as `getCheckinStatus`
+  // below), not the Paris-pinned `today` used for the calendar/meeting reads. In
+  // the V1 100%-Paris cohort the two coincide, but keeping the off-day check on
+  // the member timezone stays correct for a future non-Paris member.
+  const memberToday = localDateOf(now, timezone);
+
   const [
     checkin,
+    offDayCtx,
     calendar,
     questionnaire,
     mindset,
@@ -166,6 +188,9 @@ async function buildDailyGuidance(
     crisisSignal,
   ] = await Promise.all([
     getCheckinStatus(userId, timezone, now),
+    // Tour 14 — resolve TODAY's off-day status (the single member-local day is
+    // both bounds). Drives the "jour off" pont below.
+    getOffDaySet(userId, memberToday, memberToday),
     getCalendarForUser(userId, weekStart),
     getQuestionnaireForUser(userId, weekStart),
     getMindsetCheck(userId, weekStart),
@@ -176,6 +201,12 @@ async function buildDailyGuidance(
     // Crisis follow-up — most recent HIGH/MEDIUM detection inside 48h, or null.
     getRecentCrisisSignal(userId, now),
   ]);
+
+  // Tour 14 — is the member's local today an off day? A weekend they keep off,
+  // or an explicit declaration. When true, the check-in block becomes a single
+  // calm `info` acknowledgement (no todo, no missed) — the pont (§31.2).
+  const todayIsOff = isOffDay(memberToday, offDayCtx);
+  const offIsWeekend = isWeekendLocalDate(memberToday) && !offDayCtx.explicitDates.has(memberToday);
 
   // --- TODAY's calendar blocks + calendar state -----------------------------
   let calendarState: CalendarTodayState;
@@ -228,17 +259,38 @@ async function buildDailyGuidance(
     evening: checkin.eveningSubmitted,
   } as const;
 
-  actions.push({
-    key: `checkin-${primarySlot}`,
-    kind: 'checkin',
-    title: CHECKIN_META[primarySlot].title,
-    detail: submitted[primarySlot]
-      ? 'Fait pour ce moment de la journée.'
-      : CHECKIN_META[primarySlot].detail,
-    href: CHECKIN_META[primarySlot].href,
-    state: submitted[primarySlot] ? 'done' : 'todo',
-    emphasis: 'primary',
-  });
+  // Tour 14 — a member who filed a check-in on their off day is still credited
+  // (the rempli always wins): if a slot was submitted, keep the calm "done" ack.
+  const filedOnOffDay = todayIsOff && (submitted.morning || submitted.evening);
+
+  if (todayIsOff && !filedOnOffDay) {
+    // OFF DAY — the two check-in actions are REPLACED by a single calm `info`
+    // row. No todo, no missed the evening: a jour off is a choice of process, a
+    // "pont", never a gap (§31.2). Réunions/tracking below stay untouched.
+    actions.push({
+      key: 'off-day',
+      kind: 'off',
+      title: 'Jour off',
+      detail: offIsWeekend
+        ? 'Week-end sans trading. Rien à remplir aujourd’hui, ta constance reste intacte.'
+        : 'Tu as posé ce jour comme off. Rien à remplir aujourd’hui, ta constance reste intacte.',
+      href: '/checkin',
+      state: 'info',
+      emphasis: 'primary',
+    });
+  } else {
+    actions.push({
+      key: `checkin-${primarySlot}`,
+      kind: 'checkin',
+      title: CHECKIN_META[primarySlot].title,
+      detail: submitted[primarySlot]
+        ? 'Fait pour ce moment de la journée.'
+        : CHECKIN_META[primarySlot].detail,
+      href: CHECKIN_META[primarySlot].href,
+      state: submitted[primarySlot] ? 'done' : 'todo',
+      emphasis: 'primary',
+    });
+  }
 
   // (2) Meeting today (platform-wide, §30) — informational nudge, never shame.
   // The copy names ONLY the slots actually scheduled today: a cancelled/absent
@@ -278,8 +330,18 @@ async function buildDailyGuidance(
   // has passed — see slot.ts), surfaced amber-benevolent, NEVER red/punitive
   // (anti-Black-Hat §31.2). The evening check-in is never "missed" while the
   // member is still inside the evening slot (the day isn't over for them).
-  if (!submitted[otherSlot]) {
-    const isMissedMorning = otherSlot === 'morning' && slot === 'evening';
+  //
+  // Tour 14 — on an off day WITHOUT any filed slot, the check-in block was
+  // replaced by the calm `off` row above, so the secondary slot is skipped too:
+  // no `missed` the evening on a day the member owed nothing. When the member
+  // DID file a slot on their off day (`filedOnOffDay`), we fall through to the
+  // normal path so the other slot is still offered as a plain `todo` (never
+  // `missed`, since the day is a bonus, not an obligation).
+  const skipSecondaryForOff = todayIsOff && !filedOnOffDay;
+  if (!skipSecondaryForOff && !submitted[otherSlot]) {
+    // On an off day where a slot WAS filed, the other slot is a plain `todo`
+    // bonus, never a `missed` accusation.
+    const isMissedMorning = !todayIsOff && otherSlot === 'morning' && slot === 'evening';
     actions.push({
       key: `checkin-${otherSlot}`,
       kind: 'checkin',
@@ -360,5 +422,6 @@ async function buildDailyGuidance(
     calendarState,
     todayBlocks,
     actions,
+    todayIsOff,
   };
 }

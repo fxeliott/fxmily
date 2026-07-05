@@ -1,0 +1,11 @@
+-- Tour 14 — vérification MT5 non bloquante et informée.
+--   NotificationType enum : +verification_proof_analyzed
+--     member-facing verdict push fired when an uploaded MT5 proof reaches a
+--     terminal state (done/failed) in the vision batch, so the member learns
+--     the outcome without polling/reloading /verification (mirror
+--     monthly_debrief_ready). One push per member per run, PII-free (counts only).
+--
+-- ALTER TYPE ADD VALUE IF NOT EXISTS is idempotent on Postgres 12+ and survives a
+-- re-run; additive-only, so it composes cleanly with the sibling off-day migration
+-- (20260705101615_tour14_member_off_days) which touches unrelated tables.
+ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'verification_proof_analyzed';

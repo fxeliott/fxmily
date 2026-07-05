@@ -48,7 +48,22 @@ const STEPS = [
   },
 ] as const;
 
-export function FirstRunWelcome({ needsProfile = false }: { needsProfile?: boolean }) {
+export function FirstRunWelcome({
+  needsProfile = false,
+  todayIsOff = false,
+}: {
+  needsProfile?: boolean;
+  /**
+   * Tour 14 — when the member's TODAY is an off day, the welcome never leads
+   * with "commence ton check-in" (a jour off owes nothing, §31.2): the check-in
+   * CTA steps back to secondary and a calm line names the off day. The profil /
+   * journal / guide steps stay available (they are not day-bound).
+   */
+  todayIsOff?: boolean;
+}) {
+  // On an off day the check-in never leads as the primary CTA (the day is a
+  // pont, not a first-gesture push). The profile still leads when it's missing.
+  const checkinKind = needsProfile || todayIsOff ? 'secondary' : 'primary';
   return (
     <Card
       primary
@@ -80,6 +95,19 @@ export function FirstRunWelcome({ needsProfile = false }: { needsProfile?: boole
           Ici, on construit la régularité avant la performance. Pas de chiffres à battre
           aujourd’hui, juste un premier geste à poser. Commence par où tu veux, à ton rythme.
         </p>
+
+        {/* Tour 14 — off day : on ne pousse jamais le check-in du jour, on
+            nomme calmement le repos. Le membre garde profil / trade / guide sous
+            la main pour découvrir l'app sans pression (§31.2). */}
+        {todayIsOff ? (
+          <p
+            className="wow-rise t-cap rounded-control w-fit border border-[var(--b-default)] bg-[var(--bg-1)] px-3 py-2 text-[var(--t-3)]"
+            style={{ '--rise-delay': '210ms' } as CSSProperties}
+          >
+            Aujourd’hui est un jour off : rien à remplir. Tu peux découvrir l’app tranquillement,
+            ton premier check-in attendra un jour de trading.
+          </p>
+        ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {STEPS.map((step, i) => {
@@ -124,13 +152,13 @@ export function FirstRunWelcome({ needsProfile = false }: { needsProfile?: boole
           ) : null}
           <Link
             href="/checkin/morning"
-            className={cn(btnVariants({ kind: needsProfile ? 'secondary' : 'primary', size: 'm' }))}
+            className={cn(btnVariants({ kind: checkinKind, size: 'm' }))}
           >
             <Sunrise className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
             Commencer mon check-in
-            {needsProfile ? null : (
+            {checkinKind === 'primary' ? (
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-            )}
+            ) : null}
           </Link>
           <Link href="/journal/new" className={cn(btnVariants({ kind: 'secondary', size: 'm' }))}>
             <NotebookPen className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />

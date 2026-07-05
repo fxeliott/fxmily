@@ -76,4 +76,33 @@ describe('buildYearHeatmap', () => {
     expect(wd(first!.date)).toBe(0); // Monday
     expect(first!.date.startsWith('2025-')).toBe(true);
   });
+
+  describe('Tour 14 — off-day flag', () => {
+    it('marks off cells and leaves normal cells untouched (no `off` field)', () => {
+      // Mark today (2026-06-20, Saturday) as off; 2026-06-19 stays normal.
+      const isOff = (d: string) => d === '2026-06-20';
+      const hm = buildYearHeatmap(new Map(), today, isOff);
+      const todayCell = hm.weeks[52]![wd('2026-06-20')];
+      const prevCell = hm.weeks[52]![wd('2026-06-19')];
+      expect(todayCell?.off).toBe(true);
+      // A normal cell serialises WITHOUT the field (byte-identical to pre-Tour-14).
+      expect(prevCell?.off).toBeUndefined();
+    });
+
+    it('a filled off day keeps its level AND is flagged off (the rempli wins)', () => {
+      const levels = new Map<string, HeatLevel>([['2026-06-20', 2]]);
+      const hm = buildYearHeatmap(levels, today, (d) => d === '2026-06-20');
+      const cell = hm.weeks[52]![wd('2026-06-20')];
+      expect(cell?.level).toBe(2);
+      expect(cell?.off).toBe(true);
+      // An off day is never counted OUT of activeDays when it was filled.
+      expect(hm.activeDays).toBe(1);
+    });
+
+    it('omitting the predicate yields no off cells (default behaviour)', () => {
+      const hm = buildYearHeatmap(new Map(), today);
+      const anyOff = hm.weeks.some((col) => col.some((c) => c?.off === true));
+      expect(anyOff).toBe(false);
+    });
+  });
 });

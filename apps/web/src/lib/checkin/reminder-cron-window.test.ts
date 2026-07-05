@@ -5,20 +5,25 @@ import { describe, expect, it } from 'vitest';
 import { isEveningReminderDue, isMorningReminderDue } from './timezone';
 
 /**
- * S10 regression guard (TIER1) — the deployed cron UTC schedule MUST overlap the
- * Paris-LOCAL reminder windows (lib/checkin/timezone.ts) in BOTH DST seasons.
+ * S10 regression guard (TIER1), rewritten tour 13 — the deployed cron schedule
+ * MUST cover the Paris-LOCAL reminder windows (lib/checkin/timezone.ts) in BOTH
+ * DST seasons.
  *
- * The bug this guards: `checkin-reminders` fired at UTC hours `7-8,20-21`, which
- * only intersects the Paris windows [07:30,09:00) + [20:30,22:00) in WINTER (CET).
- * All summer (CEST, UTC+2) the first tick 07:00 UTC = 09:00 Paris was already past
- * the exclusive 09:00 end → ZERO reminders fired ~7 months/yr, silently (the scan
- * still wrote its heartbeat so health stayed green). We assert the REAL crontab
- * file so a future schedule edit that re-introduces the divergence fails CI.
+ * TIMEZONE REALITY (tour 13): the prod host runs `Europe/Paris` and Debian
+ * crond interprets /etc/cron.d hour fields in the HOST-LOCAL timezone, not
+ * UTC (proven at runtime: an `18-20` hour field logged ticks 17:00→18:45 UTC
+ * = 19:00→20:45 Paris, cron.log 2026-07-04). The previous version of this
+ * test modelled the ticks as UTC instants, so it green-lit a `5-7,18-20`
+ * field that actually fired 05:00-07:45 + 18:00-20:45 Paris — covering only
+ * the first 15-30 min of each member window. This version models the ticks
+ * as Paris WALL-CLOCK times, exactly like crond executes them, and asserts
+ * FULL-WINDOW coverage (not just "at least one tick") so an edge-only
+ * overlap can never pass again.
  */
 
 const CRONTAB_URL = new URL('../../../../../ops/cron/crontab.fxmily', import.meta.url);
 
-/** Expand a single crontab field ("0,15,30,45", "5-7,18-20", "*") into values. */
+/** Expand a single crontab field ("0,15,30,45", "7-9,20-22", "*") into values. */
 function expandField(field: string, max: number): number[] {
   const out = new Set<number>();
   for (const part of field.split(',')) {
@@ -36,8 +41,8 @@ function expandField(field: string, max: number): number[] {
   return [...out].sort((a, b) => a - b);
 }
 
-/** Parse the UTC (hour, minute) ticks of the checkin-reminders row. */
-function checkinTicksUtc(): ReadonlyArray<{ hour: number; minute: number }> {
+/** Parse the HOST-LOCAL (Europe/Paris) (hour, minute) ticks of the checkin-reminders row. */
+function checkinTicksParisLocal(): ReadonlyArray<{ hour: number; minute: number }> {
   const text = readFileSync(CRONTAB_URL, 'utf8');
   const row = text
     .split('\n')
@@ -55,32 +60,49 @@ function checkinTicksUtc(): ReadonlyArray<{ hour: number; minute: number }> {
   return ticks;
 }
 
-function utcInstant(isoDate: string, hour: number, minute: number): Date {
+/**
+ * Build the UTC instant for a Paris wall-clock time on a given date. The two
+ * test dates sit deep inside each DST season, so the offset is a constant
+ * (+02:00 CEST / +01:00 CET) — no transition edge cases on these days.
+ */
+function parisInstant(isoDate: string, hour: number, minute: number, offset: string): Date {
   return new Date(
-    `${isoDate}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00Z`,
+    `${isoDate}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00${offset}`,
   );
 }
 
-describe('check-in reminder cron ↔ Paris window coverage (DST-safe)', () => {
-  const ticks = checkinTicksUtc();
-  const seasons: ReadonlyArray<readonly [label: string, isoDate: string]> = [
-    ['summer (CEST, UTC+2)', '2026-07-15'],
-    ['winter (CET, UTC+1)', '2026-01-15'],
+describe('check-in reminder cron ↔ Paris window coverage (host-local crond, DST-safe)', () => {
+  const ticks = checkinTicksParisLocal();
+  const seasons: ReadonlyArray<readonly [label: string, isoDate: string, offset: string]> = [
+    ['summer (CEST, UTC+2)', '2026-07-15', '+02:00'],
+    ['winter (CET, UTC+1)', '2026-01-15', '+01:00'],
   ];
 
-  for (const [label, isoDate] of seasons) {
-    it(`fires ≥1 MORNING reminder tick inside the Paris window — ${label}`, () => {
+  // Windows are 90 min each with a 15-min cadence → full coverage means at
+  // least 6 due ticks (07:30..08:45 / 20:30..21:45). Requiring ≥4 tolerates a
+  // legitimate future cadence change (every 20-30 min) while still failing
+  // the edge-only overlap this test exists to prevent.
+  const FULL_COVERAGE_MIN_TICKS = 4;
+
+  for (const [label, isoDate, offset] of seasons) {
+    it(`covers the MORNING Paris window end-to-end — ${label}`, () => {
       const due = ticks.filter((t) =>
-        isMorningReminderDue(utcInstant(isoDate, t.hour, t.minute), 'Europe/Paris'),
+        isMorningReminderDue(parisInstant(isoDate, t.hour, t.minute, offset), 'Europe/Paris'),
       );
-      expect(due.length, `morning ticks in window (${label})`).toBeGreaterThan(0);
+      expect(
+        due.length,
+        `morning ticks in window (${label}): ${JSON.stringify(due)}`,
+      ).toBeGreaterThanOrEqual(FULL_COVERAGE_MIN_TICKS);
     });
 
-    it(`fires ≥1 EVENING reminder tick inside the Paris window — ${label}`, () => {
+    it(`covers the EVENING Paris window end-to-end — ${label}`, () => {
       const due = ticks.filter((t) =>
-        isEveningReminderDue(utcInstant(isoDate, t.hour, t.minute), 'Europe/Paris'),
+        isEveningReminderDue(parisInstant(isoDate, t.hour, t.minute, offset), 'Europe/Paris'),
       );
-      expect(due.length, `evening ticks in window (${label})`).toBeGreaterThan(0);
+      expect(
+        due.length,
+        `evening ticks in window (${label}): ${JSON.stringify(due)}`,
+      ).toBeGreaterThanOrEqual(FULL_COVERAGE_MIN_TICKS);
     });
   }
 });

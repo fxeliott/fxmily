@@ -6,14 +6,23 @@
 #           which is mode 0600 owner fxmily, so the secret never appears
 #           in `ps -ef` / `journalctl` / this file.
 #
-# Schedule philosophy : every cron is anchored to a UTC slot that's deep
-# in the off-hours window for `Europe/Paris` (V1 single-TZ cohort) and
-# spaced so two long-running jobs never overlap on the CX22 (2 vCPU,
-# 4 GB RAM).
+# Schedule philosophy : every cron is anchored to an off-hours slot for
+# `Europe/Paris` (V1 single-TZ cohort) and spaced so two long-running
+# jobs never overlap on the CX22 (2 vCPU, 4 GB RAM).
+#
+# ⚠ TIMEZONE REALITY (tour 13) : the host runs `Europe/Paris`
+# (/etc/localtime, set at provisioning 2026-05-02) and Debian crond
+# interprets /etc/cron.d hour fields in the HOST-LOCAL timezone, NOT
+# UTC (no CRON_TZ support in Debian vixie-cron). Proven at runtime:
+# checkin-reminders logged ticks 17:00→18:45 UTC = 19:00→20:45 Paris
+# for an `18-20` hour field (cron.log 2026-07-04). Historical comments
+# below that say "UTC" describe the local wall-clock hour — for the
+# off-hours jobs the 1-2 h offset is harmless, and local-time
+# scheduling is actually what the Paris member windows want (DST-proof).
 #
 # Wired routes (POST + X-Cron-Secret SHA-256 verify timingSafeEqual) :
 #
-#   - checkin-reminders         every 15 min, 05-07 + 18-20 UTC (Paris windows, J5)
+#   - checkin-reminders         every 15 min, 07-09 + 20-22 Paris (member windows, J5)
 #   - recompute-scores          daily 02:00 UTC                    (J6)
 #   - dispatch-douglas          every 6 h                          (J7)
 #   - weekly-reports            Sunday 21:00 UTC                   (J8)
@@ -44,16 +53,18 @@ MAILTO=""
 # m h dom mon dow user command
 
 # J5 — check-in reminders : every 15 min, anchored to the Paris-LOCAL due windows
-# 07:30→09:00 + 20:30→22:00 (lib/checkin/timezone.ts) across BOTH DST offsets. The
-# reminder scan early-returns when outside the Paris window, so the UTC hours below
-# are a SUPERSET: morning [05:30,08:00) (CEST 05:30→07:00 ∪ CET 06:30→08:00),
-# evening [18:30,21:00) (CEST 18:30→20:00 ∪ CET 19:30→21:00). The in-window guard +
-# DB dedup make the extra ticks harmless no-ops.
-# S10 FIX (TIER1): the previous `7-8,20-21` UTC window only overlapped the Paris
-# window in WINTER (CET); all SUMMER (CEST) the first tick 07:00 UTC = 09:00 Paris
-# was already past the 09:00 exclusive end → 0 reminders fired ~7 months/yr,
-# silently (heartbeat stayed green). Guarded by reminder-cron-window.test.ts.
-0,15,30,45 5-7,18-20 * * *   fxmily   /usr/local/bin/fxmily-cron checkin-reminders
+# 07:30→09:00 + 20:30→22:00 (lib/checkin/timezone.ts). Since crond reads these
+# hours in HOST-LOCAL Europe/Paris time (see header), local hours 7-9 + 20-22 are
+# an exact DST-proof SUPERSET of the member windows: the in-window guard +
+# DB dedup make the out-of-window ticks (07:00-07:15, 09:15-09:45, 20:00-20:15,
+# 22:15-22:45) harmless no-ops.
+# TOUR 13 FIX: the previous `5-7,18-20` field was designed as UTC (S10 dual-DST
+# superset) but crond read it as Paris-local → ticks fired 05:00-07:45 + 18:00-20:45
+# Paris, covering only the FIRST 15-30 min of each member window (07:30/07:45 +
+# 20:30/20:45). Members due later in the window were silently never nudged, since
+# provisioning (May). Exposed by the tour-12 windowed health model (first honest
+# red 2026-07-04 19:37Z). Guarded by reminder-cron-window.test.ts.
+0,15,30,45 7-9,20-22 * * *   fxmily   /usr/local/bin/fxmily-cron checkin-reminders
 
 # J6 — behavioral score recompute : nightly 02:00 UTC.
 0 2 * * *                    fxmily   /usr/local/bin/fxmily-cron recompute-scores

@@ -372,8 +372,13 @@
   --color-input: var(--input);
   --color-ring: var(--acc);
 
-  /* Fonts (Geist display + Inter body + JetBrains Mono) */
-  --font-display: var(--font-geist-sans), Inter, system-ui, sans-serif;
+  /* Fonts (Clash Display signature display face + Inter body + JetBrains Mono).
+     --font-display bascule TOUT le bloc @layer components `.t-*`/`.f-display`
+     d'un coup ; le fallback stack reprend Geist puis Inter le temps du swap
+     (métrique alignée via `adjustFontFallback` côté next/font, cf. layout.tsx). */
+  --font-display:
+    var(--font-display-face, var(--font-geist-sans)), var(--font-geist-sans), Inter, system-ui,
+    sans-serif;
   --font-sans: var(--font-inter), Inter, system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', ui-monospace, monospace;
 
@@ -599,7 +604,11 @@
   color: var(--cy);
 }
 [data-zone-label='acc'] {
-  color: var(--acc);
+  /* Tour 14 — the acc segment label sits on --acc-dim (alpha 0.16) composited
+     over the premium card GRADIENT (tour 9): the worst gradient stop measured
+     4.37:1 with --acc (runtime sweep T14; 10px text < WCAG 1.4.3 AA). The
+     luminous --acc-hi clears it in DARK; LIGHT keeps its own override below. */
+  color: var(--acc-hi);
 }
 [data-zone-label='warn'] {
   color: var(--warn);
@@ -822,6 +831,11 @@
   .f-display {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
+    /* Clash Display a des espaces étroits et les call-sites resserrent le
+       tracking jusqu'à -0.04em (le tracking négatif s'applique AUSSI aux
+       espaces) : sans compensation les mots fusionnent — « Monrythme »
+       (screenshots T14). Couvre tous les headings inline `f-display`. */
+    word-spacing: 0.08em;
     font-feature-settings: 'ss01' 1;
   }
   .f-body {
@@ -836,10 +850,16 @@
 
   .t-display {
     font-family: var(--font-display);
-    font-size: 68px;
-    line-height: 0.96;
-    letter-spacing: -0.04em;
-    font-weight: 800;
+    font-size: 72px;
+    line-height: 0.94;
+    /* Clash Display porte déjà beaucoup de présence : tracking resserré à
+       grande taille + graisse 700 (sa graisse maxi ; 800 n'existe pas et
+       serait un faux-bold synthétisé). Le tracking négatif s'applique AUSSI
+       aux espaces et la face a des espaces étroits : sans word-spacing
+       compensatoire, « Mon rythme » se lit « Monrythme » (screenshots T14). */
+    letter-spacing: -0.045em;
+    word-spacing: 0.1em;
+    font-weight: 700;
     font-feature-settings: 'ss01' 1;
   }
   /* V1.9 TIER C B5 — fluid display variant for hero headlines that need to
@@ -853,33 +873,37 @@
    horizontal-scrolling). */
   .t-display-fluid {
     font-family: var(--font-display);
-    font-size: clamp(36px, 7vw, 56px);
-    line-height: 0.96;
-    letter-spacing: -0.04em;
-    font-weight: 800;
+    font-size: clamp(40px, 7vw, 60px);
+    line-height: 0.94;
+    letter-spacing: -0.045em;
+    word-spacing: 0.1em; /* voir .t-display — anti « Monrythme » */
+    font-weight: 700;
     font-feature-settings: 'ss01' 1;
     overflow-wrap: anywhere;
     hyphens: auto;
   }
   .t-h1 {
     font-family: var(--font-display);
-    font-size: 32px;
-    line-height: 1.05;
-    letter-spacing: -0.03em;
+    /* Saut d'échelle Tour 14 : 32px figé → fluide 36→44px. La face display
+       encaisse la montée sans écraser la hiérarchie mobile (clamp borné). */
+    font-size: clamp(36px, 3vw, 44px);
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    word-spacing: 0.08em; /* voir .t-display — anti « Monrythme » */
     font-weight: 700;
   }
   .t-h2 {
     font-family: var(--font-display);
     font-size: 20px;
-    line-height: 1.2;
-    letter-spacing: -0.015em;
+    line-height: 1.18;
+    letter-spacing: -0.02em;
     font-weight: 600;
   }
   .t-h3 {
     font-family: var(--font-display);
     font-size: 15px;
     line-height: 1.3;
-    letter-spacing: -0.005em;
+    letter-spacing: -0.01em;
     font-weight: 600;
   }
   /* S19.2 — long-prose question heading (wizard prompts run 150-220 chars). t-h1
@@ -891,7 +915,7 @@
     font-family: var(--font-display);
     font-size: clamp(1.3125rem, 1.05rem + 1.1vw, 1.625rem);
     line-height: 1.3;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.02em;
     font-weight: 600;
     overflow-wrap: anywhere;
     hyphens: auto;

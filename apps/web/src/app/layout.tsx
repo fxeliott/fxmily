@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import { GeistSans } from 'geist/font/sans';
 import { Suspense } from 'react';
 import { auth, signOut } from '@/auth';
@@ -24,6 +25,33 @@ const jetbrainsMono = JetBrains_Mono({
   variable: '--font-jetbrains-mono',
   subsets: ['latin'],
   display: 'swap',
+});
+
+// Signature typographique : Clash Display (Indian Type Foundry, licence ITF FFL
+// — cf. src/fonts/ClashDisplay-LICENSE-FFL.txt). Fichiers woff2 officiels
+// Fontshare utilisés tels quels (la licence interdit la conversion de format).
+// Deux graisses seulement (Semibold 600 + Bold 700) : la face display ne sert
+// qu'aux titres/hero/KPI, le corps de texte reste sur Inter/Geist.
+// `adjustFontFallback` calibre la métrique du fallback système pour tuer le CLS
+// pendant le swap ; `--font-display-face` est la variable consommée par
+// `--font-display` dans globals.css.
+const clashDisplay = localFont({
+  variable: '--font-display-face',
+  display: 'swap',
+  adjustFontFallback: 'Arial',
+  fallback: ['Geist', 'Inter', 'system-ui', 'sans-serif'],
+  src: [
+    {
+      path: '../fonts/ClashDisplay-Semibold.woff2',
+      weight: '600',
+      style: 'normal',
+    },
+    {
+      path: '../fonts/ClashDisplay-Bold.woff2',
+      weight: '700',
+      style: 'normal',
+    },
+  ],
 });
 
 export const metadata: Metadata = {
@@ -92,7 +120,7 @@ export default async function RootLayout({
       // next-themes écrit la classe .dark/.light côté client avant le paint →
       // le SSR (sans classe) diffère : suppressHydrationWarning est obligatoire.
       suppressHydrationWarning
-      className={`${GeistSans.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${GeistSans.variable} ${inter.variable} ${jetbrainsMono.variable} ${clashDisplay.variable} h-full antialiased`}
     >
       <body className="bg-background text-foreground flex min-h-full flex-col font-sans">
         <ThemeProvider>

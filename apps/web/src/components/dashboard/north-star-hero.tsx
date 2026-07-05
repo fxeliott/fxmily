@@ -8,6 +8,7 @@ import {
   CalendarRange,
   Check,
   ClipboardList,
+  Coffee,
   HeartHandshake,
   MessageSquareText,
   Minus,
@@ -70,6 +71,10 @@ const KIND_ICON: Record<GuidanceKind, LucideIcon> = {
   tracking: ClipboardList,
   'correction-echo': MessageSquareText,
   'crisis-followup': HeartHandshake,
+  // Tour 14 — off day: a calm "pause" glyph. The off action is `info`, so it
+  // never becomes the hero's focal primaryAction; this keeps the Record
+  // exhaustive for the shared GuidanceKind type.
+  off: Coffee,
 };
 
 type Trend = 'up' | 'flat' | 'down';
@@ -309,10 +314,9 @@ export function NorthStarHero({
                 chaque mot à son état final. Le point garde le dernier mot. */}
             <h1
               id="hero-greeting"
-              className="f-display leading-[1.05] font-bold tracking-[-0.03em] text-[var(--t-1)]"
+              className="t-display-fluid text-[var(--t-1)]"
               style={{
                 fontFeatureSettings: '"ss01" 1',
-                fontSize: 'clamp(1.875rem, 1.5rem + 1.6vw, 2.5rem)',
               }}
             >
               {greetingWords.map((word, i) => (
@@ -346,17 +350,21 @@ export function NorthStarHero({
                     échelle pour garder le rythme. */}
                 <div className="flex items-end gap-2.5">
                   {disciplineValue === null ? (
-                    <span className="f-mono text-[clamp(2.75rem,2rem+2.4vw,3.5rem)] leading-none font-bold tracking-[-0.03em] text-[var(--t-3)] tabular-nums">
+                    <span className="f-mono text-[clamp(3.25rem,7vw,4.5rem)] leading-none font-bold tracking-[-0.04em] text-[var(--t-3)] tabular-nums">
                       à venir
                     </span>
                   ) : (
-                    <span className="f-mono flex items-end leading-none font-bold tracking-[-0.03em] tabular-nums">
+                    /* Tour 14 — saut d'échelle : le score focal passe de 44-56px à
+                       64-112px. C'est LE point focal typographique de la page ;
+                       tabular-nums garde l'alignement des chiffres pendant le
+                       count-up (AnimatedNumber, once-on-view, préservé). */
+                    <span className="f-mono flex items-end leading-none font-bold tracking-[-0.04em] tabular-nums">
                       <AnimatedNumber
                         value={disciplineValue}
                         durationMs={1200}
-                        className="text-grad-brand text-[clamp(2.75rem,2rem+2.4vw,3.5rem)] leading-[0.9]"
+                        className="text-grad-brand text-[clamp(4rem,10vw,7rem)] leading-[0.85]"
                       />
-                      <span className="mb-1 ml-0.5 text-[17px] font-medium text-[var(--t-3)]">
+                      <span className="mb-1.5 ml-1 text-[19px] font-medium text-[var(--t-3)]">
                         /100
                       </span>
                     </span>

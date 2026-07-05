@@ -211,8 +211,10 @@ export function WeeklyInsightCard({
         >
           <Sparkles className="h-4 w-4" strokeWidth={1.75} />
         </span>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="t-eyebrow text-[var(--t-3)]">Insight de la semaine</span>
+        <div className="flex min-w-0 flex-col gap-1">
+          {/* Tour 14 — dégraissage : titre de la carte (empty-state) en h3
+              sentence-case au lieu du kicker uppercase, pour hiérarchiser. */}
+          <span className="t-h3 text-[var(--t-1)]">Insight de la semaine</span>
           <p className="t-body leading-[1.5] text-[var(--t-2)]">
             Encore quelques jours de check-ins et ton premier constat hebdo apparaîtra ici. Rien à
             forcer, chaque journée notée nourrit une lecture honnête de ta semaine.

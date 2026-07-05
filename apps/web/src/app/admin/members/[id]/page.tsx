@@ -10,6 +10,7 @@ import { MemberCorrectionsFollowupPanel } from '@/components/admin/member-correc
 import { listAnnotationObjectivesForMember } from '@/lib/coaching/micro-objective';
 import { MemberTradesList } from '@/components/admin/member-trades-list';
 import { MemberCheckinsPanel } from '@/components/admin/member-checkins-panel';
+import { getOffDaySet, isOffDay } from '@/lib/checkin/off-days';
 import { listMemberCheckinsAsAdmin } from '@/lib/checkin/service';
 import { PreTradeAnalyticsCard } from '@/components/pre-trade/pre-trade-analytics-card';
 import { PreTradeCorrelationCard } from '@/components/pre-trade/pre-trade-correlation-card';
@@ -224,6 +225,21 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
   // tab). Capped at the 30 most recent days (admin-only, not a hot path). §2:
   // check-ins carry no market content (mindset + declarative booleans only).
   const checkins = tab === 'checkins' ? await listMemberCheckinsAsAdmin(memberId) : null;
+
+  // Tour 14 — mark the OFF days among the listed check-in days so an unfilled
+  // slot on an off day reads « Jour off » (a chosen day) instead of « Non
+  // rempli. » in the admin panel (§31.2). Same resolution as the member's
+  // /checkin/history: one range query over [oldest, newest] listed date, then
+  // the pure predicate flags each distinct listed date (weekend-off folded in).
+  let checkinOffDates: Set<string> | undefined;
+  if (checkins && checkins.length > 0) {
+    const listedDates = [...new Set(checkins.map((c) => c.date))].sort();
+    const offCtx = await getOffDaySet(memberId, listedDates[0]!, listedDates.at(-1)!);
+    checkinOffDates = new Set<string>();
+    for (const d of listedDates) {
+      if (isOffDay(d, offCtx)) checkinOffDates.add(d);
+    }
+  }
 
   // C3 (tour 10) — the Mark Douglas tab also hosts « Suivi des corrections » : the
   // micro-objectives seeded by axis-tagged corrections (`sourceKind='annotation'`),
@@ -505,7 +521,12 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           ) : null}
         </div>
       ) : null}
-      {tab === 'checkins' && checkins !== null ? <MemberCheckinsPanel checkins={checkins} /> : null}
+      {tab === 'checkins' && checkins !== null ? (
+        <MemberCheckinsPanel
+          checkins={checkins}
+          {...(checkinOffDates ? { offDates: checkinOffDates } : {})}
+        />
+      ) : null}
       {tab === 'pretrade' ? (
         <div className="flex flex-col gap-4">
           <PreTradeAnalyticsCard userId={memberId} />

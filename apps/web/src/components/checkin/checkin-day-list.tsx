@@ -1,4 +1,4 @@
-import { Check, Moon, RotateCcw, Sun, X } from 'lucide-react';
+import { Check, Coffee, Moon, RotateCcw, Sun, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { Card } from '@/components/ui/card';
@@ -42,6 +42,16 @@ interface CheckinDayListProps {
    * so the member never sees a « réutilisée / suspecte » badge (anti-Black-Hat).
    */
   repeatSignals?: ReadonlyMap<string, number>;
+  /**
+   * Tour 14 — the set of OFF-day local-date strings (YYYY-MM-DD) covering the
+   * listed days (resolved server-side from the member's `OffDayContext`). An
+   * unfilled slot on an off day reads « Jour off » (a chosen rest) instead of
+   * « Non rempli. » (§31.2 — never a gap). A slot ACTUALLY filed on an off day
+   * still renders its fields normally (the rempli wins). Omitted → every
+   * unfilled slot stays « Non rempli. » (byte-identical to the pre-Tour-14
+   * behaviour, so callers that don't thread it are unaffected).
+   */
+  offDates?: ReadonlySet<string>;
 }
 
 interface DayGroup {
@@ -65,7 +75,12 @@ export function groupCheckinsByDay(checkins: SerializedCheckin[]): DayGroup[] {
   return Array.from(byDate.values());
 }
 
-export function CheckinDayList({ checkins, emptyState, repeatSignals }: CheckinDayListProps) {
+export function CheckinDayList({
+  checkins,
+  emptyState,
+  repeatSignals,
+  offDates,
+}: CheckinDayListProps) {
   if (checkins.length === 0) {
     return <>{emptyState}</>;
   }
@@ -79,55 +94,83 @@ export function CheckinDayList({ checkins, emptyState, repeatSignals }: CheckinD
         {checkins.length > 1 ? 's' : ''}
       </p>
 
-      {days.map((day) => (
-        <Card key={day.date} className="flex flex-col gap-4 p-4">
-          <h2 className="t-h3 flex items-center gap-2 text-[var(--t-1)] capitalize">
-            {/* Midi UTC — évite le drift de jour à minuit (piège TZ canonique). */}
-            {DAY_FMT.format(new Date(`${day.date}T12:00:00Z`))}
-            <span className="ml-auto flex items-center gap-1.5">
-              <Pill tone={day.morning ? 'ok' : 'mute'}>
-                <Sun className="h-2.5 w-2.5" strokeWidth={2} />
-                Matin
-              </Pill>
-              <Pill tone={day.evening ? 'ok' : 'mute'}>
-                <Moon className="h-2.5 w-2.5" strokeWidth={2} />
-                Soir
-              </Pill>
-            </span>
-          </h2>
+      {days.map((day) => {
+        const isOff = offDates?.has(day.date) ?? false;
+        return (
+          <Card key={day.date} className="flex flex-col gap-4 p-4">
+            <h2 className="t-h3 flex flex-wrap items-center gap-2 text-[var(--t-1)] capitalize">
+              {/* Midi UTC — évite le drift de jour à minuit (piège TZ canonique). */}
+              {DAY_FMT.format(new Date(`${day.date}T12:00:00Z`))}
+              <span className="ml-auto flex items-center gap-1.5">
+                {/* Tour 14 — pill « Off » calme quand le jour est un repos choisi
+                    (ton cyan « pont », jamais un ton d'alerte, §31.2). */}
+                {isOff ? (
+                  <Pill tone="cy">
+                    <Coffee className="h-2.5 w-2.5" strokeWidth={2} />
+                    Off
+                  </Pill>
+                ) : null}
+                <Pill tone={day.morning ? 'ok' : 'mute'}>
+                  <Sun className="h-2.5 w-2.5" strokeWidth={2} />
+                  Matin
+                </Pill>
+                <Pill tone={day.evening ? 'ok' : 'mute'}>
+                  <Moon className="h-2.5 w-2.5" strokeWidth={2} />
+                  Soir
+                </Pill>
+              </span>
+            </h2>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SlotBlock title="Matin" icon={<Sun className="h-3.5 w-3.5" strokeWidth={1.75} />}>
-              {day.morning ? (
-                <>
-                  <RattrapageNote
-                    c={day.morning}
-                    repeatCount={repeatSignals?.get(day.morning.id)}
-                  />
-                  <MorningFields c={day.morning} />
-                </>
-              ) : (
-                <p className="t-cap text-[var(--t-4)]">Non rempli.</p>
-              )}
-            </SlotBlock>
-            <SlotBlock title="Soir" icon={<Moon className="h-3.5 w-3.5" strokeWidth={1.75} />}>
-              {day.evening ? (
-                <>
-                  <RattrapageNote
-                    c={day.evening}
-                    repeatCount={repeatSignals?.get(day.evening.id)}
-                  />
-                  <EveningFields c={day.evening} />
-                </>
-              ) : (
-                <p className="t-cap text-[var(--t-4)]">Non rempli.</p>
-              )}
-            </SlotBlock>
-          </div>
-        </Card>
-      ))}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SlotBlock title="Matin" icon={<Sun className="h-3.5 w-3.5" strokeWidth={1.75} />}>
+                {day.morning ? (
+                  <>
+                    <RattrapageNote
+                      c={day.morning}
+                      repeatCount={repeatSignals?.get(day.morning.id)}
+                    />
+                    <MorningFields c={day.morning} />
+                  </>
+                ) : (
+                  <EmptySlot isOff={isOff} />
+                )}
+              </SlotBlock>
+              <SlotBlock title="Soir" icon={<Moon className="h-3.5 w-3.5" strokeWidth={1.75} />}>
+                {day.evening ? (
+                  <>
+                    <RattrapageNote
+                      c={day.evening}
+                      repeatCount={repeatSignals?.get(day.evening.id)}
+                    />
+                    <EveningFields c={day.evening} />
+                  </>
+                ) : (
+                  <EmptySlot isOff={isOff} />
+                )}
+              </SlotBlock>
+            </div>
+          </Card>
+        );
+      })}
     </div>
   );
+}
+
+/**
+ * Tour 14 — the empty-slot line. On an off day it reads « Jour off » (a chosen
+ * rest, cyan-calm) instead of « Non rempli. » (a muted absence). Never a red /
+ * punitive tone in either case (§31.2).
+ */
+function EmptySlot({ isOff }: { isOff: boolean }) {
+  if (isOff) {
+    return (
+      <p className="t-cap flex items-center gap-1.5 text-[var(--cy)]">
+        <Coffee className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
+        Jour off
+      </p>
+    );
+  }
+  return <p className="t-cap text-[var(--t-4)]">Non rempli.</p>;
 }
 
 /**

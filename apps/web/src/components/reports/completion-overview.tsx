@@ -38,20 +38,30 @@ const METRIC_ICON: Record<MetricKey, typeof CalendarCheck> = {
 };
 
 function buildMetrics(summary: CompletionSummary, periodNoun: string): OverviewMetric[] {
+  // Tour 14 — with off days, the denominator is the days actually owed
+  // (`owedDays`), not the raw calendar span, and the copy says so. Without off
+  // days, `owedDays === periodDays` so this reads byte-identical to before.
+  const hasOffDays = summary.offDaysCount > 0;
   return [
     {
       key: 'coverage',
       label: 'Jours actifs',
-      display: `${summary.checkinDaysFilled}/${summary.periodDays} j`,
+      display: `${summary.checkinDaysFilled}/${summary.owedDays} j`,
       tip: `Nombre de jours distincts où tu as fait au moins un check-in sur ${periodNoun} (${Math.round(
         summary.checkinCoverageRate * 100,
-      )} % de couverture). Un repère de présence, jamais un quota.`,
+      )} % de couverture${
+        hasOffDays
+          ? `, hors ${summary.offDaysCount} jour${summary.offDaysCount === 1 ? '' : 's'} off`
+          : ''
+      }). Un repère de présence, jamais un quota.`,
     },
     {
       key: 'streak',
       label: 'Série la plus longue',
       display: `${summary.longestStreakDays} j`,
-      tip: `La plus longue suite de jours consécutifs avec un check-in sur ${periodNoun}. La continuité du process compte plus qu'un jour isolé.`,
+      tip: `La plus longue suite de jours consécutifs avec un check-in sur ${periodNoun}${
+        hasOffDays ? ' (un jour off ne casse jamais la série, il est simplement enjambé)' : ''
+      }. La continuité du process compte plus qu'un jour isolé.`,
     },
     {
       key: 'routine',

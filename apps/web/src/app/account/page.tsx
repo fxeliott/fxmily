@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, Database, Globe2, Trash2, UserCircle } from 'lucide-react';
+import { ArrowLeft, Bell, CalendarOff, Database, Globe2, Trash2, UserCircle } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -107,6 +107,12 @@ export default async function AccountHubPage(): Promise<React.ReactElement> {
             title="Fuseau horaire"
             description="Choisis ton fuseau : check-ins, rappels et dates s'affichent à l'heure de là où tu vis. Pris en compte immédiatement."
             icon={<Globe2 aria-hidden="true" className="h-5 w-5" />}
+          />
+          <AccountCard
+            href="/account/rythme"
+            title="Mon rythme"
+            description="Règle tes jours off : week-ends off par défaut et absences posées. Ces jours ne comptent jamais comme un check-in manqué."
+            icon={<CalendarOff aria-hidden="true" className="h-5 w-5" />}
           />
           <AccountCard
             href="/account/data"

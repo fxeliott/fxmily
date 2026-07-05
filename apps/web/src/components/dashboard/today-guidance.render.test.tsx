@@ -26,6 +26,7 @@ const base: Omit<DailyGuidance, 'actions'> = {
   weekStart: '2026-06-08',
   calendarState: 'none',
   todayBlocks: [],
+  todayIsOff: false,
 };
 
 function guidance(actions: GuidanceAction[]): DailyGuidance {
@@ -113,6 +114,29 @@ describe('TodayGuidance — plan du jour consolidé (S6 §32-2, posture §2/§31
     const ensuite = screen.getByText('Ensuite');
     expect(ensuite.getAttribute('data-slot')).toBe('pill');
     expect(ensuite.getAttribute('data-tone')).toBe('warn');
+  });
+
+  it('Tour 14 — une action jour off rend une ligne info calme (jamais missed ni rouge)', () => {
+    const off: GuidanceAction = {
+      key: 'off-day',
+      kind: 'off',
+      title: 'Jour off',
+      detail: 'Week-end sans trading. Rien à remplir aujourd’hui, ta constance reste intacte.',
+      href: '/checkin',
+      state: 'info',
+      emphasis: 'primary',
+    };
+    render(<TodayGuidance guidance={{ ...guidance([off]), todayIsOff: true }} />);
+    const row = document.querySelector('[data-slot="guidance-action"][data-kind="off"]');
+    expect(row).not.toBeNull();
+    expect(row?.getAttribute('data-state')).toBe('info');
+    expect(row?.textContent ?? '').toMatch(/Jour off/);
+    // Jamais un ton d'alerte : pas de `missed`/`warn`, pas de rouge `--bad`.
+    expect(document.querySelector('[data-state="missed"]')).toBeNull();
+    expect(row?.className ?? '').not.toMatch(/warn/);
+    expect(row?.className ?? '').not.toMatch(/--bad/);
+    // `info` n'est pas "pending" → l'ack "tu es à jour" reste visible.
+    expect(screen.getByText(/Tu es à jour/i)).toBeInTheDocument();
   });
 
   it('marque le bloc du créneau courant avec « Maintenant » (§32-1 « au bon moment »)', () => {

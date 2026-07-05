@@ -8,6 +8,7 @@ import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { DisciplineYearHeatmap } from '@/components/track/discipline-year-heatmap';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { getOffDaySet, isOffDay } from '@/lib/checkin/off-days';
 import { getDisciplineYearHeatmap, listMemberCheckins } from '@/lib/checkin/service';
 
 /**
@@ -37,6 +38,21 @@ export default async function CheckinHistoryPage() {
     listMemberCheckins(userId),
     getDisciplineYearHeatmap(userId, timezone),
   ]);
+
+  // Tour 14 — mark the OFF days among the listed days so an unfilled slot on an
+  // off day reads « Jour off » (a chosen rest), never « Non rempli. » (§31.2).
+  // The check-ins are date-desc, so the window spans from the OLDEST listed day
+  // to the newest; one indexed range query resolves the member's off context,
+  // then the pure predicate flags each distinct listed date. Empty when the
+  // member has no check-in yet (the list renders its empty state anyway).
+  const listedDates = [...new Set(checkins.map((c) => c.date))].sort();
+  const offDates = new Set<string>();
+  if (listedDates.length > 0) {
+    const offCtx = await getOffDaySet(userId, listedDates[0]!, listedDates.at(-1)!);
+    for (const d of listedDates) {
+      if (isOffDay(d, offCtx)) offDates.add(d);
+    }
+  }
 
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
@@ -85,6 +101,7 @@ export default async function CheckinHistoryPage() {
           </h2>
           <CheckinDayList
             checkins={checkins}
+            offDates={offDates}
             emptyState={
               <Card className="py-2">
                 <EmptyState

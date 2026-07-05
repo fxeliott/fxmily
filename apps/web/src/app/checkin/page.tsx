@@ -9,6 +9,7 @@ import { FirstCheckinCelebration } from '@/components/checkin/first-checkin-cele
 import { V18CrisisBanner } from '@/components/review/crisis-banner';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { StreakCard } from '@/components/checkin/streak-card';
+import { TodayOffToggle } from '@/components/checkin/today-off-toggle';
 import { TrendCard } from '@/components/checkin/trend-card';
 import { Card } from '@/components/ui/card';
 import { HoverLift } from '@/components/ui/hover-lift';
@@ -28,9 +29,11 @@ import {
   getStreak,
   getYesterdayBackfill,
 } from '@/lib/checkin/service';
+import { getOffDaySet, isOffDay, isWeekendLocalDate } from '@/lib/checkin/off-days';
 import { crossedMilestone } from '@/lib/checkin/streak';
 import {
   formatLocalDate,
+  localDateOf,
   localInstantToUtc,
   safeTimeZone,
   shiftLocalDate,
@@ -72,12 +75,26 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
   // safeTimeZone also fences a non-IANA legacy value (would throw in Intl).
   const timezone = safeTimeZone(session.user.timezone);
 
-  const [status, streak, last7, yesterdayBackfill] = await Promise.all([
+  // Member-local today, computed before the parallel loads so the off-day
+  // context can be queried on the same civil day the status uses.
+  const todayLocal = localDateOf(new Date(), timezone);
+
+  const [status, streak, last7, yesterdayBackfill, offCtx] = await Promise.all([
     getCheckinStatus(userId, timezone),
     getStreak(userId, timezone),
     getLast7Days(userId, timezone),
     getYesterdayBackfill(userId, timezone),
+    // Tour 14 — off-day context for TODAY, to power the "Je ne trade pas
+    // aujourd'hui" control (declare/cancel) and read its current state.
+    getOffDaySet(userId, todayLocal, todayLocal),
   ]);
+
+  // Whether today is off + whether it is off ONLY because of the weekend rule
+  // (an explicit declaration owns a row; a weekend-off day is managed in
+  // /account/rythme, so the hub control offers no cancel for it).
+  const todayIsOff = isOffDay(todayLocal, offCtx);
+  const todayIsWeekendOff =
+    todayIsOff && !offCtx.explicitDates.has(todayLocal) && isWeekendLocalDate(todayLocal);
 
   // Slot qui correspond au moment présent (calme, jamais bloquant — les deux
   // restent cliquables ; le slot "maintenant" reçoit juste un liseré accent).
@@ -227,6 +244,19 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
             complementaryPending={oneSlotDone && !status.eveningSubmitted}
           />
         </section>
+
+        {/* Tour 14 — « Je ne trade pas aujourd'hui » : contrôle jour off calme.
+            Ne s'affiche que si AUCUN check-in n'a été posé aujourd'hui (un jour
+            déjà rempli est actif — proposer un jour off n'aurait pas de sens ; un
+            check-in posé un jour off compte toujours 100 %). Ton pont (cyan),
+            jamais une accusation de manque (§31.2). */}
+        {!status.morningSubmitted && !status.eveningSubmitted ? (
+          <TodayOffToggle
+            initialIsOff={todayIsOff}
+            isWeekendOff={todayIsWeekendOff}
+            todayLocal={todayLocal}
+          />
+        ) : null}
 
         {/* wow-reveal : la carte explicative est sous le fold — fade+rise au
             scroll (progressive, compositor-only, reduced-motion géré par la classe).

@@ -108,6 +108,34 @@ describe('CheckinDayList', () => {
   });
 });
 
+describe('CheckinDayList — Tour 14 jour off', () => {
+  it('un slot vide sur un jour off lit « Jour off » (pas « Non rempli. »)', () => {
+    render(
+      <CheckinDayList
+        // Un seul slot rempli (matin) le jour off → le soir vide doit lire « Jour off ».
+        checkins={[makeCheckin({ slot: 'morning', date: '2026-06-06' })]}
+        offDates={new Set(['2026-06-06'])}
+        emptyState={<p>vide</p>}
+      />,
+    );
+    // Pill « Off » dans l'en-tête + « Jour off » sur le slot du soir vide.
+    expect(screen.getByText('Off')).toBeInTheDocument();
+    expect(screen.getByText('Jour off')).toBeInTheDocument();
+    expect(screen.queryByText('Non rempli.')).toBeNull();
+  });
+
+  it('sans offDates, un slot vide garde « Non rempli. » (comportement inchangé)', () => {
+    render(
+      <CheckinDayList
+        checkins={[makeCheckin({ slot: 'morning', date: '2026-06-05' })]}
+        emptyState={<p>vide</p>}
+      />,
+    );
+    expect(screen.getByText('Non rempli.')).toBeInTheDocument();
+    expect(screen.queryByText('Off')).toBeNull();
+  });
+});
+
 describe('CheckinDayList — F7 §33.2 admin reuse signal', () => {
   const backfilled = makeCheckin({
     id: 'bf1',

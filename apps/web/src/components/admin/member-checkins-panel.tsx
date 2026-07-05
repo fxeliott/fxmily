@@ -19,15 +19,25 @@ import type { SerializedCheckin } from '@/lib/checkin/service';
 
 interface MemberCheckinsPanelProps {
   checkins: SerializedCheckin[];
+  /**
+   * Tour 14 — the OFF days among the listed days (resolved in the page via
+   * `getOffDaySet` + `isOffDay`, member timezone). The shared list marks an
+   * unfilled slot on an off day as « Jour off » instead of « Non rempli. », so
+   * the admin reads a chosen off day, never a missing check-in (§31.2 posture).
+   */
+  offDates?: ReadonlySet<string>;
 }
 
-export function MemberCheckinsPanel({ checkins }: MemberCheckinsPanelProps) {
+export function MemberCheckinsPanel({ checkins, offDates }: MemberCheckinsPanelProps) {
   // F7 §33.2 — deterministic reuse signal, ADMIN-ONLY (this panel never renders
   // on a member surface). Flags rattrapage justifications a member re-uses.
   const repeatSignals = detectRepeatedJustifications(checkins);
   return (
     <CheckinDayList
       checkins={checkins}
+      // Only forward when present — `exactOptionalPropertyTypes` rejects an
+      // explicit `undefined` on an optional prop.
+      {...(offDates ? { offDates } : {})}
       repeatSignals={repeatSignals}
       emptyState={
         <Card className="p-6 text-center">

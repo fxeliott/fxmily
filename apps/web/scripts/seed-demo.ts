@@ -19,7 +19,13 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { hashPassword } from '../src/lib/auth/password.js';
 import { DEMO, WINDOW_DAYS, SEED, makePrng, type SeedCtx, type DB } from './demo/_shared.js';
-import { seedTrades, seedCheckins, seedBehavioralScores, seedHabitLogs } from './demo/core.js';
+import {
+  seedTrades,
+  seedCheckins,
+  seedBehavioralScores,
+  seedHabitLogs,
+  seedOffDays,
+} from './demo/core.js';
 import { seedOnboarding } from './demo/onboarding.js';
 import { seedCoaching } from './demo/coaching.js';
 import { seedVerification } from './demo/verification.js';
@@ -60,6 +66,9 @@ async function createDemoUser(): Promise<string> {
       role: 'member',
       status: 'active',
       timezone: DEMO.timezone,
+      // Tour 14 — the demo member keeps weekends off (the product default), so
+      // the dashboard/heatmap/reports show the "pont" behaviour out of the box.
+      weekendsOff: true,
       emailVerified: joinedAt,
       consentRgpdAt: joinedAt,
       joinedAt,
@@ -90,6 +99,7 @@ async function main() {
   const steps: Array<[string, (c: SeedCtx) => Promise<Record<string, number>>]> = [
     ['core: trades', seedTrades],
     ['core: check-ins', seedCheckins],
+    ['core: off days', seedOffDays],
     ['core: behavioral scores', seedBehavioralScores],
     ['core: habit logs', seedHabitLogs],
     ['onboarding profile', seedOnboarding],

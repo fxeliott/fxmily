@@ -5,6 +5,7 @@ import {
   CalendarRange,
   Check,
   ClipboardList,
+  Coffee,
   HeartHandshake,
   MessageSquare,
   Moon,
@@ -67,6 +68,8 @@ const KIND_ICON: Record<GuidanceKind, LucideIcon> = {
   tracking: ClipboardList,
   'correction-echo': MessageSquare,
   'crisis-followup': HeartHandshake,
+  // Tour 14 — off day: a calm "pause" glyph (a mug), never a check-in sun/moon.
+  off: Coffee,
 };
 
 function ActionRow({ action }: { action: GuidanceAction }) {
@@ -184,7 +187,9 @@ function TodayBlocksList({
           covered. Same `variant="inline"` + `/legal/ai-disclosure` link as the
           other 5 surfaces (DS + posture §2: calm cyan note, never alarm). */}
       <AIGeneratedBanner variant="inline" />
-      <span className="t-eyebrow text-[var(--t-3)]">Ton plan du jour</span>
+      {/* Tour 14 — dégraissage : sous-titre de la liste du plan en h3 sentence-case
+          (hiérarchie) au lieu du kicker uppercase générique. */}
+      <span className="t-h3 text-[var(--t-2)]">Ton plan du jour</span>
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {sorted.map((block, idx) => {
           const meta = categoryMetaFor(block.category);

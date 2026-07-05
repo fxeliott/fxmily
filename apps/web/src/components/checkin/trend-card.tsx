@@ -30,6 +30,12 @@ export function TrendCard({ days }: TrendCardProps) {
   const moodValues = days.map((d) => d.moodScore).filter((v): v is number => v != null);
 
   const filledDays = days.filter((d) => d.filled).length;
+  // Tour 14 — an off day is a chosen rest, never a trou: it drops out of the
+  // "X/N jours remplis" denominator (a member who takes weekends off is not read
+  // at "5/7" for two days they never owed a check-in, §31.2). A check-in filed
+  // on an off day still counts toward the numerator (the rempli wins → the day
+  // is `filled`, so it stays in the owed set).
+  const owedDays = days.filter((d) => !d.off || d.filled).length;
   const sleepAvg = sleepValues.length
     ? sleepValues.reduce((a, b) => a + b, 0) / sleepValues.length
     : null;
@@ -42,7 +48,7 @@ export function TrendCard({ days }: TrendCardProps) {
       <div className="flex items-center justify-between">
         <span className="t-eyebrow">Tendance 7 jours</span>
         <span className="font-mono text-[10px] text-[var(--t-3)] tabular-nums">
-          {filledDays}/7 jours remplis
+          {filledDays}/{owedDays} jours remplis
         </span>
       </div>
 

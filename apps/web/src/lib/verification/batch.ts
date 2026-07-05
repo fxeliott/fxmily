@@ -2,6 +2,7 @@ import 'server-only';
 
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
+import { selectStorage } from '@/lib/storage';
 import { reportError, reportWarning } from '@/lib/observability';
 import { detectCrisis } from '@/lib/safety/crisis-detection';
 import { detectAMFViolation } from '@/lib/safety/amf-detection';
@@ -204,6 +205,51 @@ export async function loadPendingProofsEnvelope(
  *  leaves it `pending`, retryable at the next run). */
 export const NOT_MT5_HISTORY_ERROR = 'not_mt5_history';
 
+/**
+ * Tour 13 — purge a proof's stored screen once it reaches a TERMINAL state.
+ * The verification screens exist « QU'À la vérification, traités à la volée et
+ * jamais conservés » : the second a proof is analysed (`done`) or terminally
+ * refused (`failed` via NOT_MT5_HISTORY), the image file is deleted and
+ * `filePurgedAt` is stamped. The proof ROW survives (audit trail, per-member
+ * dedup hash, extracted positions) — only the bytes go.
+ *
+ * Idempotent: a proof already purged (`filePurgedAt` set) is a no-op, so a
+ * re-run / double-persist never double-deletes nor re-stamps. TRANSIENT
+ * failures (proof stays `pending`) deliberately keep their file for the retry.
+ *
+ * Best-effort by design (mirror `storage.delete` contract): a delete error is
+ * logged, not thrown — it must never undo a committed persist. A file left
+ * behind by a delete blip is swept the next time the proof is (re)touched, or
+ * by `ops/scripts/purge-legacy-media.sh`.
+ */
+async function purgeProofFile(args: {
+  proofId: string;
+  fileKey: string;
+  alreadyPurged: boolean;
+  ranAt: string;
+  userId: string;
+}): Promise<void> {
+  if (args.alreadyPurged) return;
+  try {
+    await selectStorage().delete(args.fileKey);
+    await db.mt5AccountProof.update({
+      where: { id: args.proofId },
+      data: { filePurgedAt: new Date() },
+    });
+    await logAudit({
+      action: 'verification.proof.file_purged',
+      userId: args.userId,
+      metadata: { ranAt: args.ranAt, proofId: args.proofId },
+    });
+  } catch (err) {
+    reportError(
+      'verification.batch.purge',
+      err instanceof Error ? err : new Error('proof_file_purge_failed'),
+      { userId: args.userId, proofId: args.proofId },
+    );
+  }
+}
+
 function positionHeuristicKey(args: {
   symbol: string;
   side: string;
@@ -250,6 +296,12 @@ export async function persistVisionResults(
         ocrStatus: true,
         brokerAccountId: true,
         accountType: true,
+        // Tour 13 — the stored screen is purged the moment a proof reaches a
+        // TERMINAL state (done / failed): `fileKey` locates the bytes to
+        // delete, `filePurgedAt` makes the purge idempotent (a re-run finds it
+        // already null-file and skips).
+        fileKey: true,
+        filePurgedAt: true,
       },
     }),
   ]);
@@ -329,6 +381,16 @@ export async function persistVisionResults(
         await db.mt5AccountProof.update({
           where: { id: entry.proofId },
           data: { ocrStatus: 'failed', claudeRunId: ranAt },
+        });
+        // Terminal `failed` → the screen has served its (unsuccessful) purpose;
+        // purge it now. The member re-shoots via a fresh upload, never a stored
+        // retry of THIS one.
+        await purgeProofFile({
+          proofId: entry.proofId,
+          fileKey: proof.fileKey,
+          alreadyPurged: proof.filePurgedAt !== null,
+          ranAt,
+          userId: entry.userId,
         });
       }
       await logAudit({
@@ -429,6 +491,16 @@ export async function persistVisionResults(
 
       persisted += 1;
       touchedMemberIds.add(entry.userId);
+      // Terminal `done` (flipped inside materialiseProofExtraction's txn) → the
+      // screen has been read; purge the stored image immediately (the extracted
+      // positions ARE the retained record now, not the screenshot).
+      await purgeProofFile({
+        proofId: entry.proofId,
+        fileKey: proof.fileKey,
+        alreadyPurged: proof.filePurgedAt !== null,
+        ranAt,
+        userId: entry.userId,
+      });
       await logAudit({
         action: 'verification.proof.analyzed',
         userId: entry.userId,

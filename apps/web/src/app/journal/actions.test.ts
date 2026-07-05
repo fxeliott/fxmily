@@ -16,9 +16,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * `next/navigation`, `next/cache`, the trade service, audit, observability,
  * pre-trade link + schedulers are mocked so we exercise the action's branching.
  * `@/lib/schemas/trade` (Zod) and `@/lib/checkin/timezone` (the conversion
- * under test) are kept REAL. `@/lib/storage/local` is mocked only to dodge its
- * `import 'server-only'` (the BOLA gate it provides is covered by its own
- * suite — not the F2 concern here).
+ * under test) are kept REAL. Tour 13 — the journal writers no longer read any
+ * screenshot key from the FormData (only the verification flow uploads), so the
+ * former `@/lib/storage/local` (`keyBelongsTo`) mock and the legacy key form
+ * fields are gone; there is no image-key API path left to dodge.
  */
 
 const authMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -60,14 +61,10 @@ vi.mock('@/lib/pre-trade/service', () => ({
 }));
 vi.mock('@/lib/scoring/scheduler', () => ({ scheduleScoreRecompute: scheduleScoreRecomputeMock }));
 vi.mock('@/lib/cards/scheduler', () => ({ scheduleDouglasDispatch: scheduleDouglasDispatchMock }));
-// Dodge `import 'server-only'` in storage/local; BOLA is tested in its own suite.
-vi.mock('@/lib/storage/local', () => ({ keyBelongsTo: () => true }));
 
 const { createTradeAction, closeTradeAction } = await import('./actions');
 
 const MEMBER_ID = 'clx0member01';
-const OWN_ENTRY_KEY = `trades/${MEMBER_ID}/abcdef0123456789abcdef0123456789.png`;
-const OWN_EXIT_KEY = `trades/${MEMBER_ID}/fedcba9876543210fedcba9876543210.png`;
 const TRADE_ID = 'clx0trade00000001';
 
 // Fixed past instants so the schema's "no future date" refine always passes for
@@ -89,7 +86,6 @@ function openForm(overrides: Record<string, string> = {}, emotions: string[] = [
     hedgeRespected: 'na',
     notes: 'Setup propre.',
     tradingViewEntryUrl: 'https://www.tradingview.com/x/Entry123/',
-    screenshotEntryKey: OWN_ENTRY_KEY,
     ...overrides,
   };
   for (const [k, v] of Object.entries(base)) fd.set(k, v);
@@ -109,7 +105,6 @@ function closeForm(
     outcome: 'win',
     notes: 'TP atteint, discipline OK.',
     tradingViewExitUrl: 'https://www.tradingview.com/x/Exit9876/',
-    screenshotExitKey: OWN_EXIT_KEY,
     ...overrides,
   };
   for (const [k, v] of Object.entries(base)) fd.set(k, v);
@@ -249,5 +244,31 @@ describe('closeTradeAction — F2 exitedAt interpreted in the member SET timezon
     // The converted instant still reached the service before it rejected.
     const arg = closeTradeMock.mock.calls[0]?.[2] as { exitedAt: Date };
     expect(arg.exitedAt.toISOString()).toBe('2026-05-06T18:30:00.000Z');
+  });
+});
+
+describe('closeTradeAction — tour 13 TradingView exit note forwarding', () => {
+  // Regression pin: the runtime audit caught the action READING the note from
+  // the form but never forwarding it to closeTrade() → silent NULL in DB.
+  it('forwards the exit note to the service', async () => {
+    await expect(
+      closeTradeAction(
+        TRADE_ID,
+        null,
+        closeForm({ tradingViewExitNote: 'Sortie manuelle avant TP, pression vendeuse.' }),
+      ),
+    ).rejects.toMatchObject({ digest: expect.stringContaining('NEXT_REDIRECT') });
+
+    const arg = closeTradeMock.mock.calls[0]?.[2] as { tradingViewExitNote: string | null };
+    expect(arg.tradingViewExitNote).toBe('Sortie manuelle avant TP, pression vendeuse.');
+  });
+
+  it('defaults the note to null when the member leaves it empty', async () => {
+    await expect(closeTradeAction(TRADE_ID, null, closeForm())).rejects.toMatchObject({
+      digest: expect.stringContaining('NEXT_REDIRECT'),
+    });
+
+    const arg = closeTradeMock.mock.calls[0]?.[2] as { tradingViewExitNote: string | null };
+    expect(arg.tradingViewExitNote).toBeNull();
   });
 });

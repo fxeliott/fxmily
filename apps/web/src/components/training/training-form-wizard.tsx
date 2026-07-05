@@ -65,7 +65,7 @@ const STEP_ICONS = [Calendar, Link2, Target, Trophy, ShieldCheck, ListChecks, Bo
 
 const STEP_FIELDS = [
   ['pair', 'enteredAt'],
-  ['tradingViewUrl'],
+  ['tradingViewUrl', 'tradingViewNote'],
   ['plannedRR'],
   ['outcome', 'resultR'],
   ['systemRespected'],
@@ -83,6 +83,8 @@ interface TrainingDraftState {
   /** J1 — mandatory TradingView analysis link (replaces the former screenshot
    *  upload as the backtest entry artefact). */
   tradingViewUrl: string;
+  /** Tour 13 — optional member explanation of the analysis screen (500 max). */
+  tradingViewNote: string;
   plannedRR: number;
   outcome: '' | 'win' | 'loss' | 'break_even';
   resultR: string;
@@ -113,6 +115,7 @@ function emptyDraft(): TrainingDraftState {
     // clock after mount in the restore effect (canon: close-trade-form.tsx).
     enteredAt: '',
     tradingViewUrl: '',
+    tradingViewNote: '',
     plannedRR: 2,
     outcome: '',
     resultR: '',
@@ -246,6 +249,7 @@ export function TrainingFormWizard({
       // the raw trimmed value so the required schema's `.min(1)` surfaces the
       // clean "obligatoire" message on an empty step.
       tradingViewUrl: draft.tradingViewUrl.trim(),
+      ...(draft.tradingViewNote !== '' ? { tradingViewNote: draft.tradingViewNote } : {}),
       plannedRR: draft.plannedRR,
       outcome: draft.outcome === '' ? null : draft.outcome,
       resultR: draft.resultR === '' ? null : draft.resultR,
@@ -317,6 +321,8 @@ export function TrainingFormWizard({
     fd.set('enteredAt', draft.enteredAt);
     // J1 — mandatory TradingView link (replaces the former screenshot upload).
     fd.set('tradingViewUrl', draft.tradingViewUrl.trim());
+    // Tour 13 — optional member explanation of the analysis screen (guarded).
+    if (draft.tradingViewNote.trim()) fd.set('tradingViewNote', draft.tradingViewNote.trim());
     fd.set('plannedRR', String(draft.plannedRR));
     if (draft.outcome) fd.set('outcome', draft.outcome);
     // P3 — a result in R only makes sense WITH a noted outcome. The wizard
@@ -386,7 +392,7 @@ export function TrainingFormWizard({
           </p>
         ) : null}
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-start gap-2.5">
           <div className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] text-[var(--cy)]">
             <StepIcon className="h-4 w-4" strokeWidth={1.75} />
           </div>
@@ -394,7 +400,7 @@ export function TrainingFormWizard({
             id="training-wizard-heading"
             ref={headingRef}
             tabIndex={-1}
-            className="f-display text-[22px] leading-[1.1] font-bold tracking-[-0.02em] text-[var(--t-1)] sm:text-[26px]"
+            className="masthead-accent masthead-accent-cy f-display text-[22px] leading-[1.1] font-bold tracking-[-0.02em] text-[var(--t-1)] sm:text-[26px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             {STEP_TITLES[step]}
@@ -520,7 +526,15 @@ export function TrainingFormWizard({
           </Btn>
 
           {step < TOTAL_STEPS - 1 ? (
-            <Btn kind="primary" size="m" onClick={next} disabled={pending} kbd="↵" type="button">
+            <Btn
+              kind="primary"
+              size="m"
+              onClick={next}
+              disabled={pending}
+              kbd="↵"
+              type="button"
+              className="wow-hover-glow wow-hover-glow-cy"
+            >
               Suivant
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
             </Btn>
@@ -534,6 +548,7 @@ export function TrainingFormWizard({
               kbd={pending || !draft.tradingViewUrl.trim() ? undefined : '↵'}
               aria-describedby={!draft.tradingViewUrl.trim() ? 'training-submit-hint' : undefined}
               type="button"
+              className="wow-hover-glow wow-hover-glow-cy"
             >
               {pending ? 'Enregistrement…' : 'Enregistrer le backtest'}
             </Btn>
@@ -687,6 +702,50 @@ function StepCapture({ draft, update, fieldErrors, disabled }: StepProps) {
             <ExternalLink className="h-3 w-3" aria-hidden />
           </a>
         ) : null}
+      </div>
+
+      {/* Tour 13 — optional member explanation of the analysis screen. Cyan
+          training identity (§21.5 non-confusable); 500-char cap mirrors Zod. */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="tradingViewNote" className="t-eyebrow-lg text-[var(--t-3)]">
+          Ton analyse du screen (optionnel)
+        </label>
+        <textarea
+          id="tradingViewNote"
+          value={draft.tradingViewNote}
+          onChange={(e) => update('tradingViewNote', e.target.value)}
+          disabled={disabled}
+          rows={3}
+          maxLength={500}
+          placeholder="Explique ce que tu voyais : contexte, signal, plan que tu testais."
+          aria-invalid={fieldErrors.tradingViewNote ? 'true' : undefined}
+          aria-describedby={
+            fieldErrors.tradingViewNote ? 'tradingViewNote-error' : 'tradingViewNote-note-hint'
+          }
+          className={cn(
+            'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
+            'placeholder:text-[var(--t-4)]',
+            fieldErrors.tradingViewNote
+              ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+              : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--cy)]',
+            'focus-visible:ring-2 focus-visible:ring-[var(--cy-dim)]',
+            'disabled:cursor-not-allowed disabled:opacity-60',
+          )}
+        />
+        {fieldErrors.tradingViewNote ? (
+          <p id="tradingViewNote-error" className="text-[11px] text-[var(--bad)]" role="alert">
+            {fieldErrors.tradingViewNote}
+          </p>
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            <p id="tradingViewNote-note-hint" className="t-cap text-[var(--t-4)]">
+              Le contexte que tu vois sur le screen. Ça aide ton suivi et ta correction.
+            </p>
+            <span className="t-cap shrink-0 text-[var(--t-4)] tabular-nums" aria-hidden>
+              {draft.tradingViewNote.trim().length}/500
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

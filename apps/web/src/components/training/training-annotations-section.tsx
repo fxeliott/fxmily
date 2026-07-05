@@ -1,8 +1,10 @@
-import { Check, Image as ImageIcon, MessageSquare } from 'lucide-react';
+import { Check, ExternalLink, Image as ImageIcon, LineChart, MessageSquare } from 'lucide-react';
 
+import { LegacyCaptureImage } from '@/components/legacy-capture-image';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import type { SerializedTrainingAnnotation } from '@/lib/admin/training-annotation-service';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { selectStorage, StorageError } from '@/lib/storage';
 
 import { DeleteTrainingAnnotationButton } from './delete-training-annotation-button';
@@ -31,7 +33,7 @@ function formatDateTime(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat('fr-FR', {
     dateStyle: 'medium',
     timeStyle: 'short',
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
   }).format(date);
 }
 
@@ -167,17 +169,30 @@ function TrainingAnnotationCard({
         {annotation.comment}
       </p>
 
+      {/* Tour 13 — TradingView screen link supporting the correction. §21.5:
+          process metadata, never a P&L. Rendered independently of the legacy
+          capture below (a row may hold either). */}
+      {annotation.tradingViewUrl ? (
+        <a
+          href={annotation.tradingViewUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Voir la correction sur TradingView"
+          className="rounded-card mt-3 inline-flex items-center gap-2 border border-[var(--b-default)] bg-[var(--bg-1)] px-3 py-2 text-[12px] font-medium text-[var(--acc)] transition-colors hover:border-[var(--b-strong)] hover:bg-[var(--bg-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+        >
+          <LineChart className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+          <span className="min-w-0 flex-1 truncate">Voir la correction sur TradingView</span>
+          <ExternalLink className="h-3 w-3 shrink-0 text-[var(--t-4)]" aria-hidden />
+        </a>
+      ) : null}
+
+      {/* LEGACY (read-only) — a pre-Tour-13 uploaded capture. Degrades to a
+          discreet note if the file was purged in prod (onError island). */}
       {mediaUrl ? (
-        <div className="mt-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={mediaUrl}
-            alt={`Capture annotée jointe à la correction du ${formattedDate}`}
-            loading="lazy"
-            decoding="async"
-            className="rounded-card max-h-96 w-full border border-[var(--b-default)] object-contain shadow-[var(--sh-card)]"
-          />
-        </div>
+        <LegacyCaptureImage
+          src={mediaUrl}
+          alt={`Capture annotée jointe à la correction du ${formattedDate}`}
+        />
       ) : null}
 
       {/* S8 V2 §32-4 — the member's reply, shown on BOTH surfaces (the member

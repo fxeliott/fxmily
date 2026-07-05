@@ -306,6 +306,35 @@ describe('closeTrade — S26 management-fidelity acts (SPEC §2: the ACT only)',
   });
 });
 
+describe('closeTrade — tradingViewExitNote (Tour 13, OPTIONAL free-text)', () => {
+  it('PERSISTS the exit note verbatim in the update payload', async () => {
+    const updateMock = wireTransaction(null);
+
+    await closeTrade('user-1', 'trade-1', {
+      ...closeInput(null),
+      tradingViewExitNote: 'Sortie au TP, gestion propre.',
+    });
+
+    const call = updateMock.mock.calls[0];
+    if (!call) throw new Error('expected tx.trade.update to be called');
+    const arg = call[0] as { data: { tradingViewExitNote: string | null } };
+    expect(arg.data.tradingViewExitNote).toBe('Sortie au TP, gestion propre.');
+  });
+
+  it('writes null when the member left the exit note empty (input undefined → `?? null`)', async () => {
+    const updateMock = wireTransaction(null);
+
+    // closeInput() carries no tradingViewExitNote → the service must coalesce
+    // the missing optional to an explicit null, never write `undefined`.
+    await closeTrade('user-1', 'trade-1', closeInput(null));
+
+    const call = updateMock.mock.calls[0];
+    if (!call) throw new Error('expected tx.trade.update to be called');
+    const arg = call[0] as { data: { tradingViewExitNote: string | null } };
+    expect(arg.data.tradingViewExitNote).toBeNull();
+  });
+});
+
 describe('deleteTrade — storage sweep (AX1-F1, RGPD §17)', () => {
   it('best-effort deletes the trade row + every attached media key (entry, exit, annotations, §31 photos), skipping nulls', async () => {
     storageDelete.mockResolvedValue(undefined);

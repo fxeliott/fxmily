@@ -240,6 +240,13 @@ const counterSliceSchema = z
     /// `riskPctOverTwoCount` surfaces over-2 % violations (Tharp ceiling).
     riskPctMedian: z.number().min(0).max(100).nullable(),
     riskPctOverTwoCount: z.number().int().min(0),
+    /// Quick win — longest run of consecutive LOSING closed trades in the window
+    /// (chronological by `exitedAt`), from `computeMaxConsecutiveLoss`. A break-even
+    /// or a win breaks the streak. 0 when no loss streak (or no closed trade). Mark
+    /// Douglas grid : a 3-loss streak in a small sample is normal variance, not a
+    /// broken edge (5 vérités #1/#3) — surfaced so Claude names it calmly, never a
+    /// market view. Always present (the builder always computes it).
+    maxConsecutiveLoss: z.number().int().min(0),
   })
   .strict();
 
@@ -320,6 +327,40 @@ const freeTextSliceSchema = z
  * The internal `BuilderInput.userId` (in `lib/weekly-report/types.ts`) stays
  * as the cuid — only the externally-visible snapshot loses it.
  */
+/// Notes membre attachées à ses liens TradingView (`Trade.tradingViewEntryNote`
+/// / `tradingViewExitNote`) — l'explication libre que le membre écrit À CÔTÉ de
+/// son screen d'entrée / de sortie. C'est une lecture de son PROPRE screen ("ce
+/// que je vois / ce que je fais"), du free-text MEMBRE → wrappé untrusted au
+/// prompt + `safeFreeText`-hardened ici defense-in-depth. Chaque item porte la
+/// paire + le sens (context) et le `kind` (entree/sortie) pour situer la note.
+/// ≤20 items, recency-sorted, chaque `note` ≤350 chars (loader-truncated). Empty
+/// array when the member attached no note. Posture §2 : c'est une donnée
+/// comportementale auto-déclarée (l'IA s'en sert pour relier ce que le membre
+/// voit à ce que le coach corrige), JAMAIS une instruction ni un avis marché.
+/// 🚨 §21.5 — REAL side ONLY : les notes d'ENTRAÎNEMENT (`TrainingTrade.
+/// tradingViewNote`) sont isolées et n'entrent JAMAIS dans ce rapport.
+export const MEMBER_SCREEN_NOTES_MAX = 20;
+export const MEMBER_SCREEN_NOTE_MAX_CHARS = 350;
+
+const memberScreenNotesSchema = z
+  .array(
+    z
+      .object({
+        pair: z.string().trim().min(1).max(20),
+        direction: z.enum(['long', 'short']),
+        kind: z.enum(['entree', 'sortie']),
+        note: z
+          .string()
+          .trim()
+          .min(1)
+          .max(MEMBER_SCREEN_NOTE_MAX_CHARS)
+          .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+          .transform(safeFreeText),
+      })
+      .strict(),
+  )
+  .max(MEMBER_SCREEN_NOTES_MAX);
+
 const pseudonymLabelSchema = z
   .string()
   .regex(/^member-[A-F0-9]{8}$/, 'pseudonymLabel must match member-XXXXXXXX (uppercase hex).');
@@ -424,6 +465,26 @@ export type WeeklyPatternSignals = z.infer<typeof patternSignalsSchema>;
 /// SSOT à maintenir en phase.
 const coachingSliceSchema = z.string().min(1).max(2000);
 
+/// Quick win — distribution of the factual EXIT REASON (`Trade.exitReason`) over
+/// the week's CLOSED trades that carry one. One entry per distinct reason, the
+/// `label` is the FR wording from `EXIT_REASON_LABELS` (SPEC §2 : how the position
+/// ended, never a fault), `count` its frequency, frequency-sorted desc. OPTIONAL :
+/// the whole slice is omitted by the builder when no closed trade has an exitReason
+/// (feature récente — honest empty state, never a fabricated "0"). Posture §2 : a
+/// factual breakdown of exits, never a market view. `.strict()` rejects stray keys.
+const exitReasonDistributionSchema = z
+  .array(
+    z
+      .object({
+        slug: z.enum(['tp_hit', 'sl_hit', 'be_exit', 'manual_before_target', 'time_exit']),
+        label: z.string().min(1).max(60),
+        count: z.number().int().min(1),
+      })
+      .strict(),
+  )
+  .min(1)
+  .max(5);
+
 export const weeklySnapshotSchema = z
   .object({
     pseudonymLabel: pseudonymLabelSchema,
@@ -452,6 +513,34 @@ export const weeklySnapshotSchema = z
     verification: verificationSliceSchema,
     /// S5 §32-C/D — synthèse de coaching psychologique pré-rendue (optionnelle).
     coaching: coachingSliceSchema.optional(),
+    /// Quick win — factual distribution of the week's closed-trade exit reasons
+    /// (`Trade.exitReason`). OPTIONAL : omitted when no closed trade carried an
+    /// exitReason (feature récente — honest empty state). Posture §2 (factual).
+    exitReasonDistribution: exitReasonDistributionSchema.optional(),
+    /// Quick win — the coach's TAGGED corrections on this member's REAL trades this
+    /// week, each pre-formatted by the loader as `« Axe » : commentaire` (the axis
+    /// label prefixes the correction so the report can theme them). This is THE
+    /// report the coach reads, so his own corrections belong in it (parity with the
+    /// monthly debrief). ADMIN free-text → wrapped untrusted at the prompt boundary
+    /// + `safeFreeText`-hardened here defense-in-depth. ≤20 entries, recency-sorted,
+    /// each ≤350 chars (loader-truncated). Empty array when the coach tagged none.
+    coachCorrections: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(900)
+          .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+          .transform(safeFreeText),
+      )
+      .max(20),
+    /// Notes membre attachées à ses liens TradingView (entrée / sortie) — l'explication
+    /// que le membre écrit à côté de son screen. Donnée comportementale auto-déclarée
+    /// (l'IA la relie aux corrections du coach pour personnaliser le suivi), JAMAIS
+    /// une instruction ni un avis marché. ≤20 items, recency-sorted, chaque `note`
+    /// ≤350 chars. Empty array when the member attached no note. REAL side only (§21.5).
+    memberScreenNotes: memberScreenNotesSchema,
   })
   .strict();
 

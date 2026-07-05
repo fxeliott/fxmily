@@ -30,8 +30,10 @@ export interface CreateTrainingAnnotationInput {
   trainingTradeId: string;
   adminId: string;
   comment: string;
-  mediaKey: string | null;
-  mediaType: TrainingAnnotationMediaType | null;
+  /** Tour 13 — optional TradingView screen link supporting the correction, or
+   * null. Replaces the former `mediaKey`/`mediaType` upload pair on create.
+   * §21.5: a chart link is process metadata, never a P&L. */
+  tradingViewUrl: string | null;
   /** Optional coaching axis (J-AI corrections echo). Omitted/null = untagged. */
   axis?: TrackingAxis | null;
 }
@@ -45,7 +47,14 @@ export interface SerializedTrainingAnnotation {
   trainingTradeId: string;
   adminId: string;
   comment: string;
+  /** Tour 13 — optional TradingView screen link supporting the correction, or
+   * null. New corrections use this instead of an uploaded capture. §21.5:
+   * process metadata, never a P&L. */
+  tradingViewUrl: string | null;
+  /** LEGACY (read-only) — storage key of a pre-Tour-13 uploaded capture, or
+   * null. New corrections never set this; the file may be purged in prod. */
   mediaKey: string | null;
+  /** LEGACY (read-only) — media type of the legacy uploaded capture, or null. */
   mediaType: TrainingAnnotationMediaType | null;
   /** Optional coaching axis (J-AI corrections echo). Null = untagged. */
   axis: TrackingAxis | null;
@@ -80,6 +89,7 @@ export function serializeTrainingAnnotation(
     trainingTradeId: row.trainingTradeId,
     adminId: row.adminId,
     comment: row.comment,
+    tradingViewUrl: row.tradingViewUrl,
     mediaKey: row.mediaKey,
     mediaType: row.mediaType,
     axis: row.axis,
@@ -109,8 +119,9 @@ export async function createTrainingAnnotation(
       trainingTradeId: input.trainingTradeId,
       adminId: input.adminId,
       comment: input.comment,
-      mediaKey: input.mediaKey,
-      mediaType: input.mediaType,
+      // Tour 13 — new corrections carry an optional TradingView link; the legacy
+      // mediaKey/mediaType stay null (never captured on create anymore).
+      tradingViewUrl: input.tradingViewUrl,
       axis: input.axis ?? null,
     },
   });

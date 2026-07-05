@@ -30,6 +30,7 @@ function makeRow(overrides: Record<string, unknown> = {}) {
     tradeId: 't-1',
     adminId: 'admin-1',
     comment: 'Bon process, peu importe l’issue.',
+    tradingViewUrl: null,
     mediaKey: null,
     mediaType: null,
     seenByMemberAt: null,
@@ -61,29 +62,33 @@ describe('serializeAnnotation', () => {
 });
 
 describe('createAnnotation', () => {
-  it('inserts trade + admin + comment and serializes the row', async () => {
-    vi.mocked(db.tradeAnnotation.create).mockResolvedValue(makeRow() as never);
+  it('inserts trade + admin + comment + tradingViewUrl and serializes the row', async () => {
+    const tvUrl = `https://fr.tradingview.com/x/${'a'.repeat(12)}/`;
+    vi.mocked(db.tradeAnnotation.create).mockResolvedValue(
+      makeRow({ tradingViewUrl: tvUrl }) as never,
+    );
 
     const result = await createAnnotation({
       tradeId: 't-1',
       adminId: 'admin-1',
       comment: 'Bon process, peu importe l’issue.',
-      mediaKey: null,
-      mediaType: null,
+      tradingViewUrl: tvUrl,
     });
 
     const call = vi.mocked(db.tradeAnnotation.create).mock.calls[0];
     if (!call) throw new Error('expected create to be called');
     const arg = call[0] as { data: Record<string, unknown> };
+    // Tour 13 — new corrections persist the optional TradingView link; the
+    // legacy mediaKey/mediaType are never written on create anymore.
     expect(arg.data).toEqual({
       tradeId: 't-1',
       adminId: 'admin-1',
       comment: 'Bon process, peu importe l’issue.',
-      mediaKey: null,
-      mediaType: null,
+      tradingViewUrl: tvUrl,
       axis: null,
     });
     expect(result.id).toBe('an-1');
+    expect(result.tradingViewUrl).toBe(tvUrl);
     expect(result.isUnseenByMember).toBe(true);
   });
 });

@@ -10,6 +10,19 @@ import {
 import type { TradeModel } from '@/generated/prisma/models/Trade';
 
 /**
+ * Tour 13 — admin trades list result, augmented with a per-trade admin-annotation
+ * count so the list can badge each closed row « Commenté » / « À commenter »
+ * without reopening every trade. The count is folded from a single
+ * `_count: { annotations }` join on the same `findMany` (no N+1, no second read);
+ * `SerializedTrade` stays untouched (it is shared with the member-facing surface,
+ * which must not carry an admin-only field). Keyed by trade id.
+ */
+export interface ListMemberTradesAsAdminResult extends ListTradesResult {
+  /** Map<tradeId, admin-annotation count>. A trade absent from the map has 0. */
+  annotationCountByTrade: Map<string, number>;
+}
+
+/**
  * Admin-scoped trades service (J3).
  *
  * Bypass-ownership variant of `lib/trades/service.ts`. Same `SerializedTrade`
@@ -56,6 +69,7 @@ function toSerialized(
     notes: trade.notes,
     screenshotEntryKey: trade.screenshotEntryKey,
     tradingViewEntryUrl: trade.tradingViewEntryUrl,
+    tradingViewEntryNote: trade.tradingViewEntryNote,
     exitedAt: trade.exitedAt ? trade.exitedAt.toISOString() : null,
     exitPrice: trade.exitPrice == null ? null : trade.exitPrice.toString(),
     outcome: trade.outcome,
@@ -66,6 +80,7 @@ function toSerialized(
     emotionAfter: [...trade.emotionAfter],
     screenshotExitKey: trade.screenshotExitKey,
     tradingViewExitUrl: trade.tradingViewExitUrl,
+    tradingViewExitNote: trade.tradingViewExitNote,
     closedAt: trade.closedAt ? trade.closedAt.toISOString() : null,
     createdAt: trade.createdAt.toISOString(),
     updatedAt: trade.updatedAt.toISOString(),
@@ -99,7 +114,7 @@ function toSerialized(
 export async function listMemberTradesAsAdmin(
   memberId: string,
   options: ListTradesOptions = {},
-): Promise<ListTradesResult> {
+): Promise<ListMemberTradesAsAdminResult> {
   const limit = Math.min(50, Math.max(1, options.limit ?? 50));
   const status = options.status ?? 'all';
   const trades = await db.trade.findMany({
@@ -111,13 +126,22 @@ export async function listMemberTradesAsAdmin(
     orderBy: [{ enteredAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
     ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
+    // Tour 13 — fold the admin-annotation count into the SAME query (one join,
+    // no N+1) so the list can badge each closed row « Commenté » / « À commenter »
+    // without a per-trade read. `_count` returns a plain number per row.
+    include: { _count: { select: { annotations: true } } },
   });
   const hasMore = trades.length > limit;
   const items = hasMore ? trades.slice(0, limit) : trades;
+  const annotationCountByTrade = new Map<string, number>();
+  for (const t of items) {
+    annotationCountByTrade.set(t.id, t._count.annotations);
+  }
   return {
     // not `.map(toSerialized)` — `.map` passes the index as the media arg.
     items: items.map((t) => toSerialized(t)),
     nextCursor: hasMore ? (items[items.length - 1]?.id ?? null) : null,
+    annotationCountByTrade,
   };
 }
 

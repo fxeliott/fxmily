@@ -14,9 +14,9 @@ import { ensureMicroObjectiveFromAnnotation } from '@/lib/coaching/micro-objecti
 import { db } from '@/lib/db';
 import { sendAnnotationReceivedEmail } from '@/lib/email/send';
 import { enqueueAnnotationNotification } from '@/lib/notifications/enqueue';
-import { reportWarning } from '@/lib/observability';
 import { annotationCreateSchema } from '@/lib/schemas/annotation';
-import { parseAnnotationKey, selectStorage } from '@/lib/storage';
+// selectStorage stays: deleteAnnotationAction still purges a legacy media file.
+import { selectStorage } from '@/lib/storage';
 
 /**
  * Server Actions for the admin annotation workflow (J4, SPEC §7.8).
@@ -88,8 +88,13 @@ export async function createAnnotationAction(
 
   const raw = {
     comment: formData.get('comment') ?? '',
-    mediaKey: readNullableString(formData, 'mediaKey'),
-    mediaType: readNullableString(formData, 'mediaType'),
+    // Tour 13 — optional TradingView link replaces the former mediaKey/mediaType
+    // upload pair. Omit the field entirely when empty so the optional schema
+    // short-circuits before the host checks run.
+    ...(() => {
+      const url = readNullableString(formData, 'tradingViewUrl');
+      return url !== null ? { tradingViewUrl: url } : {};
+    })(),
     axis: readNullableString(formData, 'axis'),
   };
 
@@ -103,31 +108,8 @@ export async function createAnnotationAction(
   }
 
   const data = parsed.data;
-  const mediaKey = data.mediaKey ?? null;
-  const mediaType = data.mediaType ?? null;
+  const tradingViewUrl = data.tradingViewUrl ?? null;
   const axis = data.axis ?? null;
-
-  // BOLA defence: the media key must point at this trade. Without this, an
-  // admin (or token leak) could attach an image uploaded under another
-  // trade's prefix.
-  if (mediaKey !== null) {
-    try {
-      const parsedKey = parseAnnotationKey(mediaKey);
-      if (parsedKey.tradeId !== tradeId) {
-        return {
-          ok: false,
-          error: 'invalid_input',
-          fieldErrors: { mediaKey: 'Le média ne correspond pas à ce trade.' },
-        };
-      }
-    } catch {
-      return {
-        ok: false,
-        error: 'invalid_input',
-        fieldErrors: { mediaKey: 'Clé média invalide.' },
-      };
-    }
-  }
 
   // Single round-trip: confirm the trade exists, belongs to the declared
   // member, and pre-fetch the data the email helper needs. Failing fast on
@@ -150,24 +132,11 @@ export async function createAnnotationAction(
       tradeId,
       adminId: session.user.id,
       comment: data.comment,
-      mediaKey,
-      mediaType,
+      tradingViewUrl,
       axis,
     });
     annotationId = created.id;
   } catch (err) {
-    // Orphan media: the upload landed but the row insert failed. Best-effort
-    // delete; log a failed cleanup so a recurring R2 leak is observable
-    // (the janitor sweep is a backstop, not a guarantee).
-    if (mediaKey !== null) {
-      const storage = selectStorage();
-      void storage.delete(mediaKey).catch((e) =>
-        reportWarning('admin.annotation.create', 'orphan_media_cleanup_failed', {
-          mediaKey,
-          error: e instanceof Error ? e.message.slice(0, 200) : 'unknown',
-        }),
-      );
-    }
     console.error('[admin.annotation.create] db insert failed', err);
     return { ok: false, error: 'unknown' };
   }
@@ -178,7 +147,7 @@ export async function createAnnotationAction(
     annotationId,
     tradeId,
     adminId: session.user.id,
-    hasMedia: mediaKey !== null,
+    hasMedia: tradingViewUrl !== null,
   });
 
   // J-AI corrections echo — a correction tagged with a coaching axis seeds a
@@ -197,7 +166,7 @@ export async function createAnnotationAction(
     adminName: session.user.name,
     tradeId,
     tradePair: tradeRow.pair,
-    hasMedia: mediaKey !== null,
+    hasMedia: tradingViewUrl !== null,
   }).catch((err) => {
     console.error('[admin.annotation.create] email failed', err);
   });
@@ -209,8 +178,7 @@ export async function createAnnotationAction(
       annotationId,
       tradeId,
       memberId,
-      hasMedia: mediaKey !== null,
-      mediaType,
+      hasTradingViewUrl: tradingViewUrl !== null,
       axis,
     },
   });

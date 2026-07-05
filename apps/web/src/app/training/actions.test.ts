@@ -5,17 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * `createTrainingTradeAction`.
  *
  * Critical logic surface (CLAUDE.md "tests pour la logique critique") :
- * auth gate + FormData → Zod re-parse + nullable bridge + BOLA + service
- * create + PII-free audit + revalidate isolation + NEXT_REDIRECT contract.
- * The wizard UI is pure presentation (no test per CLAUDE.md "UI pure : pas
- * de tests").
+ * auth gate + FormData → Zod re-parse + nullable bridge + service create +
+ * PII-free audit + revalidate isolation + NEXT_REDIRECT contract. The wizard
+ * UI is pure presentation (no test per CLAUDE.md "UI pure : pas de tests").
  *
  * Mocking strategy carbone `app/track/actions.test.ts` : `@/auth`,
  * `next/navigation`, `next/cache`, `@/lib/training/training-trade-service`,
  * `@/lib/auth/audit` mocked so we exercise the action's branching, not the
  * real Auth.js / Prisma. `trainingTradeCreateSchema` is kept REAL (pure, no
- * IO) so the fieldErrors contract is end-to-end exercised, and
- * `trainingKeyBelongsTo` is kept REAL so the BOLA gate is genuinely tested.
+ * IO) so the fieldErrors contract is end-to-end exercised. Tour 13 — the
+ * backtest writer no longer accepts any image key from the FormData (only the
+ * verification flow uploads), so the former `entryScreenshotKey` field + its
+ * Zod/BOLA (`trainingKeyBelongsTo`) coverage are gone with the API path.
  *
  * 🚨 STATISTICAL ISOLATION (§21.5) is asserted explicitly: the audit
  * metadata carries ONLY `{ trainingTradeId }` (never resultR/outcome/lesson)
@@ -64,11 +65,6 @@ vi.mock('@/lib/auth/audit', () => ({ logAudit: logAuditMock }));
 const { createTrainingTradeAction, replyToTrainingAnnotationAction } = await import('./actions');
 
 const MEMBER_ID = 'clx0member01';
-// A valid `training/{userId}/{nanoid32}.{ext}` key whose userId === MEMBER_ID
-// (passes the Zod TRAINING_KEY_PATTERN AND the trainingKeyBelongsTo BOLA).
-const OWN_KEY = `training/${MEMBER_ID}/cccccccccccccccccccccccccccccccc.png`;
-// Same shape, different owner — passes Zod, fails the BOLA gate.
-const FOREIGN_KEY = 'training/clx0other099/dddddddddddddddddddddddddddddddd.png';
 const ENTERED_AT = new Date(Date.now() - 60_000).toISOString();
 
 function form(fields: Record<string, string>): FormData {
@@ -80,11 +76,9 @@ function form(fields: Record<string, string>): FormData {
 function validForm(overrides: Record<string, string> = {}): FormData {
   return form({
     pair: 'EURUSD',
-    // J1 — the TradingView link is now the required primary field; the
-    // screenshot key stays legacy-optional (still provided here to keep the
-    // BOLA-guard tests exercising a present key).
+    // J1 — the TradingView link is now the required primary field. Tour 13 —
+    // no image key is posted anymore (only the verification flow uploads).
     tradingViewUrl: 'https://www.tradingview.com/x/NQe0OrXz/',
-    entryScreenshotKey: OWN_KEY,
     plannedRR: '2',
     systemRespected: 'true',
     lessonLearned: 'Entrée patiente, respect du plan.',
@@ -157,16 +151,6 @@ describe('createTrainingTradeAction — input validation (real Zod)', () => {
     expect(createTrainingTradeMock).not.toHaveBeenCalled();
   });
 
-  it('rejects a non-training-prefixed screenshot key at the Zod layer', async () => {
-    const result = await createTrainingTradeAction(
-      null,
-      validForm({ entryScreenshotKey: 'trades/clx0member01/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png' }),
-    );
-    expect(result.ok).toBe(false);
-    if (result.ok === false) expect(result.error).toBe('invalid_input');
-    expect(createTrainingTradeMock).not.toHaveBeenCalled();
-  });
-
   it('rejects an off-host tradingViewUrl at the Zod layer (F1)', async () => {
     const result = await createTrainingTradeAction(
       null,
@@ -176,24 +160,6 @@ describe('createTrainingTradeAction — input validation (real Zod)', () => {
     if (result.ok === false) {
       expect(result.error).toBe('invalid_input');
       expect(result.fieldErrors?.tradingViewUrl).toBeDefined();
-    }
-    expect(createTrainingTradeMock).not.toHaveBeenCalled();
-  });
-});
-
-describe('createTrainingTradeAction — BOLA (real trainingKeyBelongsTo)', () => {
-  it('rejects a Zod-valid training key whose userId is NOT the session user', async () => {
-    // FOREIGN_KEY is a perfectly-shaped training key (passes Zod) but its
-    // path-owner segment is a different member → the BOLA gate must reject
-    // it so a member cannot attach another member's upload to their backtest.
-    const result = await createTrainingTradeAction(
-      null,
-      validForm({ entryScreenshotKey: FOREIGN_KEY }),
-    );
-    expect(result.ok).toBe(false);
-    if (result.ok === false) {
-      expect(result.error).toBe('invalid_input');
-      expect(result.fieldErrors?.entryScreenshotKey).toBeDefined();
     }
     expect(createTrainingTradeMock).not.toHaveBeenCalled();
   });
@@ -211,13 +177,19 @@ describe('createTrainingTradeAction — happy path + statistical isolation', () 
     expect(createTrainingTradeMock).toHaveBeenCalledWith({
       userId: MEMBER_ID,
       pair: 'EURUSD',
-      entryScreenshotKey: OWN_KEY,
       // J1 — the required TradingView link passes straight through to the service.
       tradingViewUrl: 'https://www.tradingview.com/x/NQe0OrXz/',
+      // Tour 13 — optional analysis note, absent in the form → bridged to null.
+      tradingViewNote: null,
       plannedRR: 2,
       outcome: null,
       resultR: null,
       systemRespected: true,
+      // S8 V2 — process checklist untouched in the form → all undefined.
+      planFollowed: undefined,
+      riskDefinedBefore: undefined,
+      emotionalStateNoted: undefined,
+      noImpulsiveDeviation: undefined,
       lessonLearned: 'Entrée patiente, respect du plan.',
       enteredAt: expect.any(Date),
       // S8 — standalone backtest (no session field in the form) → null.

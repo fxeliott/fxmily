@@ -6,12 +6,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * `deleteTrainingAnnotationAction`).
  *
  * Critical logic surface (CLAUDE.md "tests pour la logique critique"):
- * admin auth+role gate + Zod re-parse + media-key BOLA + parent ownership
- * + PII-free audit + revalidate ISOLATION. Mirror of the J-T2
- * `app/training/actions.test.ts` mocking strategy: collaborators mocked
- * (`@/auth`, `next/cache`, services, audit, enqueue, db, storage), but
- * `trainingAnnotationCreateSchema` + `parseTrainingAnnotationKey` kept REAL
- * (pure, no IO) so the fieldErrors + BOLA gates are genuinely exercised.
+ * admin auth+role gate + Zod re-parse + parent ownership + PII-free audit +
+ * revalidate ISOLATION. Mirror of the J-T2 `app/training/actions.test.ts`
+ * mocking strategy: collaborators mocked (`@/auth`, `next/cache`, services,
+ * audit, enqueue, db, storage), but `trainingAnnotationCreateSchema` kept REAL
+ * (pure, no IO) so the fieldErrors + TradingView-link gate are genuinely
+ * exercised.
+ *
+ * Tour 13 — the optional artefact is a TradingView link (validated + hardened
+ * at the Zod edge), NOT an upload: the former media-key BOLA gate is gone.
  *
  * 🚨 STATISTICAL ISOLATION (§21.5) asserted explicitly: audit metadata
  * carries ONLY ids/flags (never the correction `comment` nor any backtest
@@ -63,8 +66,10 @@ const ADMIN_ID = 'clx0admin001';
 const MEMBER_ID = 'clx0member01';
 const MEMBER_EMAIL = 'member@e2e.test';
 const TT_ID = 'clx0tt000001';
-const OWN_MEDIA = `training_annotations/${TT_ID}/dddddddddddddddddddddddddddddddd.png`;
-const FOREIGN_MEDIA = 'training_annotations/clx0ttother9/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.png';
+const TV_URL = `https://fr.tradingview.com/x/${'a'.repeat(12)}/`;
+// Legacy media key — still used by deleteTrainingAnnotationAction (purges a
+// pre-Tour-13 uploaded file), never accepted on create anymore.
+const LEGACY_MEDIA = `training_annotations/${TT_ID}/dddddddddddddddddddddddddddddddd.png`;
 
 function form(fields: Record<string, string>): FormData {
   const fd = new FormData();
@@ -110,7 +115,7 @@ describe('createTrainingAnnotationAction — auth/role gate', () => {
   });
 });
 
-describe('createTrainingAnnotationAction — validation + BOLA (real Zod + parseTrainingAnnotationKey)', () => {
+describe('createTrainingAnnotationAction — validation + TradingView link gate (real Zod)', () => {
   it('invalid_input + fieldErrors when comment is empty', async () => {
     const r = await createTrainingAnnotationAction(MEMBER_ID, TT_ID, null, form({ comment: '' }));
     expect(r.ok).toBe(false);
@@ -121,17 +126,17 @@ describe('createTrainingAnnotationAction — validation + BOLA (real Zod + parse
     expect(createTrainingAnnotationMock).not.toHaveBeenCalled();
   });
 
-  it('rejects a media key whose trainingTradeId does not match the route param (BOLA)', async () => {
+  it('rejects an off-host TradingView link (fieldErrors.tradingViewUrl)', async () => {
     const r = await createTrainingAnnotationAction(
       MEMBER_ID,
       TT_ID,
       null,
-      form({ comment: 'Bonne analyse.', mediaKey: FOREIGN_MEDIA, mediaType: 'image' }),
+      form({ comment: 'Bonne analyse.', tradingViewUrl: 'https://evil.example.com/x/abc/' }),
     );
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.error).toBe('invalid_input');
-      expect(r.fieldErrors?.mediaKey).toBeDefined();
+      expect(r.fieldErrors?.tradingViewUrl).toBeDefined();
     }
     expect(createTrainingAnnotationMock).not.toHaveBeenCalled();
   });
@@ -150,15 +155,14 @@ describe('createTrainingAnnotationAction — validation + BOLA (real Zod + parse
 });
 
 describe('createTrainingAnnotationAction — happy path + statistical isolation', () => {
-  it('creates, enqueues, audits PII-free, revalidates ONLY training surfaces', async () => {
+  it('creates with the TradingView link, enqueues, audits PII-free, revalidates ONLY training surfaces', async () => {
     const r = await createTrainingAnnotationAction(
       MEMBER_ID,
       TT_ID,
       null,
       form({
         comment: 'Entrée anticipée — attends la confirmation.',
-        mediaKey: OWN_MEDIA,
-        mediaType: 'image',
+        tradingViewUrl: TV_URL,
       }),
     );
     expect(r.ok).toBe(true);
@@ -167,8 +171,7 @@ describe('createTrainingAnnotationAction — happy path + statistical isolation'
       trainingTradeId: TT_ID,
       adminId: ADMIN_ID,
       comment: 'Entrée anticipée — attends la confirmation.',
-      mediaKey: OWN_MEDIA,
-      mediaType: 'image',
+      tradingViewUrl: TV_URL,
       axis: null,
     });
     expect(enqueueMock).toHaveBeenCalledWith(MEMBER_ID, {
@@ -186,23 +189,19 @@ describe('createTrainingAnnotationAction — happy path + statistical isolation'
       trainingTradeId: TT_ID,
     });
 
-    // 🚨 §21.5 — audit metadata is ids/flags ONLY, never the comment text.
+    // 🚨 §21.5 — audit metadata is ids/flags ONLY, never the comment text or
+    // the TradingView URL itself (Tour 13: a boolean flag, not the link).
     const auditArg = logAuditMock.mock.calls[0]?.[0] as {
       action: string;
       metadata: Record<string, unknown>;
     };
     expect(auditArg.action).toBe('admin.training_annotation.created');
     expect(Object.keys(auditArg.metadata).sort()).toEqual(
-      [
-        'axis',
-        'hasMedia',
-        'mediaType',
-        'memberId',
-        'trainingAnnotationId',
-        'trainingTradeId',
-      ].sort(),
+      ['axis', 'hasTradingViewUrl', 'memberId', 'trainingAnnotationId', 'trainingTradeId'].sort(),
     );
+    expect(auditArg.metadata.hasTradingViewUrl).toBe(true);
     expect(auditArg.metadata).not.toHaveProperty('comment');
+    expect(auditArg.metadata).not.toHaveProperty('tradingViewUrl');
 
     // 🚨 §21.5 — never revalidate a real-edge surface.
     const paths = revalidatePathMock.mock.calls.map((c) => c[0]);
@@ -213,7 +212,7 @@ describe('createTrainingAnnotationAction — happy path + statistical isolation'
     expect(paths).not.toContain('/dashboard');
   });
 
-  it('no-media path: hasMedia false, no mediaType', async () => {
+  it('no-link path: hasMedia false, tradingViewUrl null', async () => {
     const r = await createTrainingAnnotationAction(
       MEMBER_ID,
       TT_ID,
@@ -222,12 +221,14 @@ describe('createTrainingAnnotationAction — happy path + statistical isolation'
     );
     expect(r.ok).toBe(true);
     expect(createTrainingAnnotationMock).toHaveBeenCalledWith(
-      expect.objectContaining({ mediaKey: null, mediaType: null }),
+      expect.objectContaining({ tradingViewUrl: null }),
     );
     expect(enqueueMock).toHaveBeenCalledWith(
       MEMBER_ID,
       expect.objectContaining({ hasMedia: false }),
     );
+    const auditArg = logAuditMock.mock.calls[0]?.[0] as { metadata: Record<string, unknown> };
+    expect(auditArg.metadata.hasTradingViewUrl).toBe(false);
   });
 });
 
@@ -250,7 +251,7 @@ describe('deleteTrainingAnnotationAction', () => {
     getTrainingAnnotationByIdMock.mockResolvedValueOnce({
       id: 'ta_1',
       trainingTradeId: TT_ID,
-      mediaKey: OWN_MEDIA,
+      mediaKey: LEGACY_MEDIA,
     });
     findUniqueMock.mockResolvedValueOnce({ userId: MEMBER_ID });
     deleteTrainingAnnotationMock.mockResolvedValueOnce(undefined);
@@ -258,7 +259,7 @@ describe('deleteTrainingAnnotationAction', () => {
     const r = await deleteTrainingAnnotationAction('ta_1');
     expect(r).toEqual({ ok: true });
     expect(deleteTrainingAnnotationMock).toHaveBeenCalledWith('ta_1', ADMIN_ID);
-    expect(storageDeleteMock).toHaveBeenCalledWith(OWN_MEDIA);
+    expect(storageDeleteMock).toHaveBeenCalledWith(LEGACY_MEDIA);
 
     const auditArg = logAuditMock.mock.calls[0]?.[0] as { action: string };
     expect(auditArg.action).toBe('admin.training_annotation.deleted');

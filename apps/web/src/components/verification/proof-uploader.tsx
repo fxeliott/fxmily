@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useId, useRef, useState } from 'react';
 
 import { Spinner } from '@/components/spinner';
-import { ALLOWED_IMAGE_MIME_TYPES, MAX_SCREENSHOT_BYTES } from '@/lib/storage/types';
 import { PROOF_ACCOUNT_TYPES, type ProofAccountType } from '@/lib/schemas/verification';
 import { cn } from '@/lib/utils';
 
@@ -19,17 +18,34 @@ interface ProofUploaderProps {
   accounts: readonly ProofUploaderAccountOption[];
 }
 
+/**
+ * Tour 13 — a proof accepts any common phone/desktop capture format: it is
+ * normalised to JPEG server-side. 20 MiB raw ceiling (a HEIC-exported PNG can
+ * be heavy before normalisation). HEIC itself is undecodable → a dedicated,
+ * actionable message.
+ */
+const ACCEPTED_INPUT_MIME = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+] as const;
+const MAX_PROOF_INPUT_BYTES = 20 * 1024 * 1024;
+
 const ERROR_LABELS = {
   unauthorized: 'Session expirée, reconnecte-toi.',
   invalid_form: 'Formulaire invalide.',
-  invalid_kind: 'Type de capture invalide.',
+  uploads_closed: 'Les captures sont réservées à la vérification.',
   invalid_account_id: 'Compte invalide, recharge la page.',
   invalid_account_type: 'Type de compte invalide.',
   missing_file: 'Aucun fichier sélectionné.',
   empty_file: 'Le fichier est vide.',
-  too_large: 'Image trop lourde (8 Mo max).',
-  invalid_mime: 'Format non supporté. Utilise JPG, PNG ou WebP.',
+  too_large: 'Image trop lourde (20 Mo max).',
+  invalid_mime: 'Format non supporté. Utilise JPG, PNG, WebP, GIF ou AVIF.',
   invalid_bytes: 'Le fichier ne ressemble pas à une vraie image.',
+  heic_unsupported:
+    'Format HEIC non pris en charge. Sur iPhone : Réglages > Appareil photo > Formats > Le plus compatible, ou exporte en JPEG.',
   duplicate_proof: 'Cette capture a déjà été envoyée, pas besoin de la renvoyer.',
   rate_limited: 'Trop d’envois d’un coup, attends quelques secondes.',
   storage_failed: "Échec de l'enregistrement, réessaie.",
@@ -40,7 +56,7 @@ function errorLabel(code: string | undefined): string {
   return 'Échec de l’envoi.';
 }
 
-const ACCEPT = ALLOWED_IMAGE_MIME_TYPES.join(',');
+const ACCEPT = ACCEPTED_INPUT_MIME.join(',');
 
 const ACCOUNT_TYPE_LABELS: Record<ProofAccountType, string> = {
   prop_firm: 'Prop firm',
@@ -77,12 +93,21 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
         setMessage(errorLabel('empty_file'));
         return;
       }
-      if (file.size > MAX_SCREENSHOT_BYTES) {
+      if (file.size > MAX_PROOF_INPUT_BYTES) {
         setStatus('error');
         setMessage(errorLabel('too_large'));
         return;
       }
-      if (!(ALLOWED_IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) {
+      // HEIC often surfaces as `image/heic`/`image/heif` (or an empty type from
+      // the OS picker) — give the actionable message up front instead of a
+      // generic "format non supporté".
+      if (file.type === 'image/heic' || file.type === 'image/heif') {
+        setStatus('error');
+        setMessage(errorLabel('heic_unsupported'));
+        return;
+      }
+      // Empty type (some pickers) is tolerated — the server sniffs magic bytes.
+      if (file.type !== '' && !(ACCEPTED_INPUT_MIME as readonly string[]).includes(file.type)) {
         setStatus('error');
         setMessage(errorLabel('invalid_mime'));
         return;
@@ -222,12 +247,16 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
                 {isDragOver ? 'Lâche pour envoyer' : 'Ajoute une capture de ton historique MT5'}
               </span>
               <span id={hintId} className="t-cap text-[var(--t-4)]">
-                Onglet « Historique » de MT5 · JPG · PNG · WebP, 8 Mo max
+                Onglet « Historique » de MT5 · JPG, PNG, WebP, GIF ou AVIF, 20 Mo max
               </span>
             </div>
           </>
         )}
       </label>
+
+      <p className="t-cap text-[var(--t-3)]">
+        Ta capture est analysée puis supprimée : elle n’est jamais conservée.
+      </p>
 
       {status === 'success' ? (
         <p className="inline-flex items-center gap-1.5 text-[11px] text-[var(--ok)]" role="status">

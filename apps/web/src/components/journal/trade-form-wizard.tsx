@@ -82,6 +82,8 @@ interface DraftState {
   /** J1 — mandatory TradingView entry link (replaces the former screenshot
    *  upload). Host-allowlisted at the Zod / Server Action edge. */
   tradingViewEntryUrl: string;
+  /** Tour 13 — optional member explanation of the entry screen (500 max). */
+  tradingViewEntryNote: string;
 }
 
 const DRAFT_STORAGE_KEY = 'fxmily:journal:draft:v1';
@@ -106,6 +108,7 @@ function emptyDraft(): DraftState {
     hedgeRespected: '',
     notes: '',
     tradingViewEntryUrl: '',
+    tradingViewEntryNote: '',
   };
 }
 
@@ -233,6 +236,9 @@ export function TradeFormWizard({ timezone }: { timezone: string }) {
       hedgeRespected: draft.hedgeRespected || 'na',
       notes: draft.notes,
       tradingViewEntryUrl: draft.tradingViewEntryUrl,
+      ...(draft.tradingViewEntryNote !== ''
+        ? { tradingViewEntryNote: draft.tradingViewEntryNote }
+        : {}),
     };
     const result = tradeOpenSchema.safeParse(candidate);
     if (result.success) return true;
@@ -301,6 +307,8 @@ export function TradeFormWizard({ timezone }: { timezone: string }) {
     fd.set('hedgeRespected', draft.hedgeRespected);
     if (draft.notes) fd.set('notes', draft.notes);
     fd.set('tradingViewEntryUrl', draft.tradingViewEntryUrl.trim());
+    if (draft.tradingViewEntryNote.trim())
+      fd.set('tradingViewEntryNote', draft.tradingViewEntryNote.trim());
 
     startTransition(async () => {
       const result: CreateTradeActionState = await createTradeAction(null, fd);
@@ -339,7 +347,7 @@ export function TradeFormWizard({ timezone }: { timezone: string }) {
           </span>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-start gap-2.5">
           <div className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
             <StepIcon className="h-4 w-4" strokeWidth={1.75} />
           </div>
@@ -347,14 +355,14 @@ export function TradeFormWizard({ timezone }: { timezone: string }) {
             id="wizard-heading"
             ref={headingRef}
             tabIndex={-1}
-            className="f-display text-[22px] leading-[1.1] font-bold tracking-[-0.02em] text-[var(--t-1)] sm:text-[26px]"
+            className="masthead-accent f-display text-[22px] leading-[1.1] font-bold tracking-[-0.02em] text-[var(--t-1)] sm:text-[26px]"
             style={{ fontFeatureSettings: '"ss01" 1' }}
           >
             {STEP_TITLES[step]}
           </h1>
         </div>
 
-        {/* Progress bar 6 segments lime accent */}
+        {/* Progress bar 6 segments — ruban de marque bleu→cyan (tour 13) */}
         <div
           role="progressbar"
           aria-valuenow={step + 1}
@@ -371,9 +379,9 @@ export function TradeFormWizard({ timezone }: { timezone: string }) {
               className={cn(
                 'rounded-pill h-1 flex-1 transition-all duration-300',
                 i < step
-                  ? 'bg-[var(--acc)]'
+                  ? 'wizard-progress-fill'
                   : i === step
-                    ? 'bg-[var(--acc)] shadow-[var(--acc-glow)]'
+                    ? 'wizard-progress-fill shadow-[var(--acc-glow)]'
                     : 'bg-[var(--b-default)]',
               )}
             />
@@ -465,7 +473,15 @@ export function TradeFormWizard({ timezone }: { timezone: string }) {
           </Btn>
 
           {step < 5 ? (
-            <Btn kind="primary" size="m" onClick={next} disabled={pending} kbd="↵" type="button">
+            <Btn
+              kind="primary"
+              size="m"
+              onClick={next}
+              disabled={pending}
+              kbd="↵"
+              type="button"
+              className="wow-hover-glow"
+            >
               Suivant
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
             </Btn>
@@ -479,6 +495,7 @@ export function TradeFormWizard({ timezone }: { timezone: string }) {
               kbd={pending || !draft.tradingViewEntryUrl.trim() ? undefined : '↵'}
               aria-describedby={!draft.tradingViewEntryUrl.trim() ? 'submit-hint' : undefined}
               type="button"
+              className="wow-hover-glow"
             >
               {pending ? 'Enregistrement…' : 'Sauvegarder le trade'}
             </Btn>
@@ -1149,6 +1166,16 @@ function StepEntryLink({ draft, update, fieldErrors, disabled }: StepProps) {
           </p>
         )}
       </div>
+
+      <TradingViewNoteField
+        id="tradingViewEntryNote"
+        label="Ton analyse du screen (optionnel)"
+        hint="Explique ce que tu voyais : contexte, signal, plan. L'IA en tient compte pour ton suivi."
+        value={draft.tradingViewEntryNote}
+        onChange={(v) => update('tradingViewEntryNote', v)}
+        error={fieldErrors.tradingViewEntryNote}
+        disabled={disabled}
+      />
     </div>
   );
 }
@@ -1156,6 +1183,75 @@ function StepEntryLink({ draft, update, fieldErrors, disabled }: StepProps) {
 // ============================================================
 // BUILDING BLOCKS
 // ============================================================
+
+/**
+ * Tour 13 — optional free-text explanation attached to a TradingView link.
+ * The member captions their own screen ("ce que je voyais") so the coach and
+ * the weekly/monthly IA read the entry with the member's own framing. Same
+ * textarea primitive + a11y wiring as the wizard's `notes` field, with a live
+ * character counter (cap mirrors the Zod 500-char bound).
+ */
+function TradingViewNoteField({
+  id,
+  label,
+  hint,
+  value,
+  onChange,
+  error,
+  disabled,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (next: string) => void;
+  error?: string | undefined;
+  disabled?: boolean | undefined;
+}) {
+  const errorId = error ? `${id}-error` : undefined;
+  const hintId = `${id}-hint`;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="t-eyebrow-lg text-[var(--t-3)]">
+        {label}
+      </label>
+      <textarea
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        rows={3}
+        maxLength={500}
+        placeholder="Ex : cassure du range asiatique, retour sur la zone, confirmation en M5…"
+        aria-invalid={error ? 'true' : undefined}
+        aria-describedby={[hintId, errorId].filter(Boolean).join(' ') || undefined}
+        className={cn(
+          'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
+          'placeholder:text-[var(--t-4)]',
+          error
+            ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+            : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+          'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+          'disabled:cursor-not-allowed disabled:opacity-60',
+        )}
+      />
+      {error ? (
+        <p id={errorId} className="text-[11px] text-[var(--bad)]" role="alert">
+          {error}
+        </p>
+      ) : (
+        <div className="flex items-center justify-between gap-2">
+          <p id={hintId} className="t-cap text-[var(--t-4)]">
+            {hint}
+          </p>
+          <span className="t-cap shrink-0 text-[var(--t-4)] tabular-nums" aria-hidden>
+            {value.trim().length}/500
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * V1.5 — Steenbarger setup quality classification (Daily Trading Coach).
@@ -1226,14 +1322,24 @@ function TradeQualitySelector({
               onClick={() => onChange(active ? '' : opt.value)}
               disabled={disabled}
               className={cn(
-                'rounded-card flex min-h-20 flex-col items-start gap-1 border bg-[var(--bg-1)] px-3 py-2.5 text-left transition-all',
+                'rounded-card flex min-h-20 flex-col items-start gap-1 border bg-[var(--bg-1)] px-3 py-2.5 text-left transition-all duration-200',
                 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]',
+                // Le geste signature du produit : le grade choisi se détache par
+                // un halo (`.grade-halo`) qui emprunte la teinte du grade via
+                // currentColor — mise en scène du moment sans repeindre le code
+                // couleur A/B/C. Léger lift pour asseoir le choix. Exception
+                // délibérée : le grade C garde son anneau discret d'origine
+                // (pas de halo) — le rouge reste réservé aux outcomes, on ne
+                // le renforce pas sur un signal de process.
                 active
-                  ? opt.tone === 'ok'
-                    ? 'border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)] shadow-[0_0_0_3px_var(--ok-dim)]'
-                    : opt.tone === 'cy'
-                      ? 'border-[var(--cy)] bg-[var(--cy-dim-strong)] text-[var(--cy)] shadow-[0_0_0_3px_var(--cy-dim)]'
-                      : 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)] shadow-[0_0_0_3px_var(--bad-dim)]'
+                  ? cn(
+                      '-translate-y-px',
+                      opt.tone === 'ok'
+                        ? 'grade-halo border-[var(--ok)] bg-[var(--ok-dim-2)] text-[var(--ok)]'
+                        : opt.tone === 'cy'
+                          ? 'grade-halo border-[var(--cy)] bg-[var(--cy-dim-strong)] text-[var(--cy)]'
+                          : 'border-[var(--bad)] bg-[var(--bad-dim-2)] text-[var(--bad)] shadow-[0_0_0_3px_var(--bad-dim)]',
+                    )
                   : 'border-[var(--b-default)] text-[var(--t-3)] hover:border-[var(--b-strong)] hover:bg-[var(--bg-2)]',
                 disabled && 'cursor-not-allowed opacity-60',
               )}

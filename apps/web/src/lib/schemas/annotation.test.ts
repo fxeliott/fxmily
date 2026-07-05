@@ -2,20 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { ANNOTATION_COMMENT_MAX, annotationCreateSchema } from './annotation';
 
-const VALID_KEY = `annotations/clx0abc123/${'a'.repeat(32)}.jpg`;
+const VALID_TV_URL = `https://fr.tradingview.com/x/${'a'.repeat(12)}/`;
 
 describe('annotationCreateSchema', () => {
   it('accepts a comment-only annotation', () => {
     const result = annotationCreateSchema.safeParse({ comment: 'Bon plan respecté.' });
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts a comment + image media pair', () => {
-    const result = annotationCreateSchema.safeParse({
-      comment: 'Cf. capture annotée.',
-      mediaKey: VALID_KEY,
-      mediaType: 'image',
-    });
     expect(result.success).toBe(true);
   });
 
@@ -41,60 +32,59 @@ describe('annotationCreateSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects mediaKey without mediaType', () => {
+  // ----- Tour 13 — optional TradingView link (replaces the upload pair) -----
+
+  it('accepts a comment + valid TradingView link', () => {
+    const result = annotationCreateSchema.safeParse({
+      comment: 'Cf. analyse jointe.',
+      tradingViewUrl: VALID_TV_URL,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.tradingViewUrl).toBe(VALID_TV_URL);
+  });
+
+  it('rejects a malformed TradingView link (not a URL)', () => {
     const result = annotationCreateSchema.safeParse({
       comment: 'ok',
-      mediaKey: VALID_KEY,
+      tradingViewUrl: 'not a url',
     });
     expect(result.success).toBe(false);
     if (!result.success) {
       const paths = result.error.issues.map((i) => i.path.join('.'));
-      expect(paths).toContain('mediaKey');
+      expect(paths).toContain('tradingViewUrl');
     }
   });
 
-  it('rejects mediaType without mediaKey', () => {
+  it('rejects an off-host link (host not on the tradingview.com allowlist)', () => {
     const result = annotationCreateSchema.safeParse({
       comment: 'ok',
-      mediaType: 'image',
+      tradingViewUrl: 'https://evil.example.com/x/abc/',
     });
     expect(result.success).toBe(false);
   });
 
-  it('rejects a malformed media key (path traversal)', () => {
+  it('rejects a non-HTTPS TradingView link', () => {
     const result = annotationCreateSchema.safeParse({
       comment: 'ok',
-      mediaKey: 'annotations/../../etc/passwd',
-      mediaType: 'image',
+      tradingViewUrl: 'http://fr.tradingview.com/x/abc/',
     });
     expect(result.success).toBe(false);
   });
 
-  it('rejects a trade-prefixed key for an annotation', () => {
-    const result = annotationCreateSchema.safeParse({
-      comment: 'ok',
-      mediaKey: `trades/clx0abc123/${'a'.repeat(32)}.jpg`,
-      mediaType: 'image',
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects gif extension (not in the allowlist)', () => {
-    const result = annotationCreateSchema.safeParse({
-      comment: 'ok',
-      mediaKey: `annotations/clx0abc123/${'a'.repeat(32)}.gif`,
-      mediaType: 'image',
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects video mediaType (deferred to J4.5)', () => {
+  it('no longer accepts a mediaKey/mediaType pair on create (legacy read-only)', () => {
+    // mediaKey/mediaType are stripped from the create schema; unknown keys are
+    // simply ignored, so the parse still succeeds on the comment alone and the
+    // resolved data carries NO media fields.
     const result = annotationCreateSchema.safeParse({
       comment: 'ok',
       mediaKey: `annotations/clx0abc123/${'a'.repeat(32)}.jpg`,
-      mediaType: 'video',
+      mediaType: 'image',
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty('mediaKey');
+      expect(result.data).not.toHaveProperty('mediaType');
+    }
   });
 
   // SPEC §2 posture invariant — the admin comment is member-facing and must be

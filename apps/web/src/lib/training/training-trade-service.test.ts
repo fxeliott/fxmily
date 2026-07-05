@@ -33,6 +33,7 @@ function makeRow(overrides: Record<string, unknown> = {}) {
     pair: 'EURUSD',
     entryScreenshotKey: 'training/abcdefgh12345678/abcdefghijkl1234.jpg',
     tradingViewUrl: null,
+    tradingViewNote: null,
     plannedRR: new Prisma.Decimal('2.5'),
     outcome: 'win',
     resultR: new Prisma.Decimal('1.8'),
@@ -137,6 +138,36 @@ describe('createTrainingTrade', () => {
     const arg = call[0] as { data: { tradingViewUrl: string | null } };
     expect(arg.data.tradingViewUrl).toBe(url);
     expect(result.tradingViewUrl).toBe(url);
+  });
+
+  // Tour 13 — OPTIONAL free-text the member attaches to the analysis screen.
+  it('persists + serializes a tradingViewNote when the member wrote one', async () => {
+    const note = 'Je testais un retest de la zone de demande H4.';
+    vi.mocked(db.trainingTrade.create).mockResolvedValue(
+      makeRow({ tradingViewNote: note }) as never,
+    );
+
+    const result = await createTrainingTrade(makeInput({ tradingViewNote: note }));
+
+    const call = vi.mocked(db.trainingTrade.create).mock.calls[0];
+    if (!call) throw new Error('expected create to be called');
+    const arg = call[0] as { data: { tradingViewNote: string | null } };
+    expect(arg.data.tradingViewNote).toBe(note);
+    expect(result.tradingViewNote).toBe(note);
+  });
+
+  it('coalesces an absent tradingViewNote to null (never writes undefined)', async () => {
+    vi.mocked(db.trainingTrade.create).mockResolvedValue(makeRow() as never);
+
+    // makeInput() carries no tradingViewNote → the service maps the missing
+    // optional to an explicit null.
+    const result = await createTrainingTrade(makeInput());
+
+    const call = vi.mocked(db.trainingTrade.create).mock.calls[0];
+    if (!call) throw new Error('expected create to be called');
+    const arg = call[0] as { data: { tradingViewNote: string | null } };
+    expect(arg.data.tradingViewNote).toBeNull();
+    expect(result.tradingViewNote).toBeNull();
   });
 });
 

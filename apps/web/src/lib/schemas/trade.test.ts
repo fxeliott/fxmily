@@ -12,7 +12,6 @@ import {
   WIZARD_STEPS,
 } from './trade';
 
-const VALID_KEY = 'trades/clx0abc1234/abcdef0123456789abcdef0123456789.jpg';
 const VALID_TV_ENTRY = 'https://www.tradingview.com/x/Entry123/';
 const VALID_TV_EXIT = 'https://www.tradingview.com/x/Exit9876/';
 
@@ -30,7 +29,6 @@ const baseOpen = {
   hedgeRespected: 'na' as const,
   notes: 'Setup propre.',
   tradingViewEntryUrl: VALID_TV_ENTRY,
-  screenshotEntryKey: VALID_KEY,
 };
 
 describe('tradeOpenSchema', () => {
@@ -148,26 +146,13 @@ describe('tradeOpenSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects a malformed screenshot key', () => {
-    const result = tradeOpenSchema.safeParse({
-      ...baseOpen,
-      screenshotEntryKey: '/etc/passwd',
-    });
-    expect(result.success).toBe(false);
-  });
-
-  // J1 — the entry TradingView link is now the required primary field; the
-  // screenshot became legacy-optional.
+  // J1 — the entry TradingView link is now the required primary field. Tour 13
+  // — no image key is accepted by the schema anymore (only the verification flow
+  // uploads); the pre-J1 `screenshotEntryKey` column + display are untouched.
   it('requires a tradingViewEntryUrl', () => {
     const { tradingViewEntryUrl, ...rest } = baseOpen;
     void tradingViewEntryUrl;
     expect(tradeOpenSchema.safeParse(rest).success).toBe(false);
-  });
-
-  it('accepts an open with NO screenshot when the tradingView link is present (J1)', () => {
-    const { screenshotEntryKey, ...rest } = baseOpen;
-    void screenshotEntryKey;
-    expect(tradeOpenSchema.safeParse(rest).success).toBe(true);
   });
 
   it('rejects an off-host tradingViewEntryUrl', () => {
@@ -176,6 +161,49 @@ describe('tradeOpenSchema', () => {
       tradingViewEntryUrl: 'https://evil.example.com/x/abc/',
     });
     expect(result.success).toBe(false);
+  });
+
+  // Tour 13 — the member may attach a free-text explanation to the entry
+  // screen: OPTIONAL, safeFreeText-normalized, capped, Trojan-Source-hardened.
+  it('accepts an open with no tradingViewEntryNote (the field is optional)', () => {
+    const result = tradeOpenSchema.safeParse(baseOpen);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.tradingViewEntryNote).toBeUndefined();
+  });
+
+  it('trims and NFC-normalizes a tradingViewEntryNote', () => {
+    const result = tradeOpenSchema.safeParse({
+      ...baseOpen,
+      tradingViewEntryNote: '  Cassure de range, je jouais le retest.  ',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tradingViewEntryNote).toBe('Cassure de range, je jouais le retest.');
+    }
+  });
+
+  it('rejects a tradingViewEntryNote over 500 chars', () => {
+    expect(
+      tradeOpenSchema.safeParse({ ...baseOpen, tradingViewEntryNote: 'a'.repeat(501) }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a tradingViewEntryNote exactly at the 500 cap', () => {
+    expect(
+      tradeOpenSchema.safeParse({ ...baseOpen, tradingViewEntryNote: 'a'.repeat(500) }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a tradingViewEntryNote carrying a bidi override (U+202E, Trojan-Source)', () => {
+    expect(
+      tradeOpenSchema.safeParse({ ...baseOpen, tradingViewEntryNote: 'note‮evil' }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a tradingViewEntryNote carrying a zero-width space (U+200B)', () => {
+    expect(
+      tradeOpenSchema.safeParse({ ...baseOpen, tradingViewEntryNote: 'hid​den' }).success,
+    ).toBe(false);
   });
 });
 
@@ -188,29 +216,69 @@ describe('tradeCloseSchema', () => {
     emotionAfter: ['confident'],
     notes: 'TP atteint, discipline OK.',
     tradingViewExitUrl: VALID_TV_EXIT,
-    screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',
   };
 
   it('accepts a valid close', () => {
     expect(tradeCloseSchema.safeParse(baseClose).success).toBe(true);
   });
 
-  // J1 — the exit TradingView link is now the required primary field.
+  // J1 — the exit TradingView link is now the required primary field. Tour 13 —
+  // the `.strict()` close schema no longer accepts any image key (only the
+  // verification flow uploads); the pre-J1 column + display are untouched.
   it('requires a tradingViewExitUrl', () => {
     const { tradingViewExitUrl, ...rest } = baseClose;
     void tradingViewExitUrl;
     expect(tradeCloseSchema.safeParse(rest).success).toBe(false);
   });
 
-  it('accepts a close with NO screenshot when the tradingView link is present (J1)', () => {
-    const { screenshotExitKey, ...rest } = baseClose;
-    void screenshotExitKey;
-    expect(tradeCloseSchema.safeParse(rest).success).toBe(true);
+  it('rejects an unknown screenshot key on the strict close schema (no image API path)', () => {
+    const result = tradeCloseSchema.safeParse({
+      ...baseClose,
+      screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',
+    });
+    expect(result.success).toBe(false);
   });
 
   it('rejects exit at a far-future date', () => {
     const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
     expect(tradeCloseSchema.safeParse({ ...baseClose, exitedAt: farFuture }).success).toBe(false);
+  });
+
+  // Tour 13 — free-text explanation attached to the exit screen. Same OPTIONAL,
+  // capped, Trojan-Source-hardened contract as the entry note.
+  it('accepts a close with no tradingViewExitNote (the field is optional)', () => {
+    const result = tradeCloseSchema.safeParse(baseClose);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.tradingViewExitNote).toBeUndefined();
+  });
+
+  it('trims and NFC-normalizes a tradingViewExitNote', () => {
+    const result = tradeCloseSchema.safeParse({
+      ...baseClose,
+      tradingViewExitNote: '  Sortie au TP, pas de gestion en trop.  ',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tradingViewExitNote).toBe('Sortie au TP, pas de gestion en trop.');
+    }
+  });
+
+  it('rejects a tradingViewExitNote over 500 chars', () => {
+    expect(
+      tradeCloseSchema.safeParse({ ...baseClose, tradingViewExitNote: 'a'.repeat(501) }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a tradingViewExitNote carrying a bidi override (U+202E, Trojan-Source)', () => {
+    expect(
+      tradeCloseSchema.safeParse({ ...baseClose, tradingViewExitNote: 'note‮evil' }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a tradingViewExitNote carrying a zero-width space (U+200B)', () => {
+    expect(
+      tradeCloseSchema.safeParse({ ...baseClose, tradingViewExitNote: 'hid​den' }).success,
+    ).toBe(false);
   });
 
   // Tour 10 — factual exit nature: OPTIONAL tri-state (absent/'' → null),
@@ -356,7 +424,6 @@ describe('tradeFullSchema cross-validation', () => {
         emotionDuring: ['calm'],
         emotionAfter: ['confident'],
         tradingViewExitUrl: VALID_TV_EXIT,
-        screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',
       },
     });
     expect(result.success).toBe(false);
@@ -481,7 +548,6 @@ describe('tradeCloseSchema — V1.8 tags integration', () => {
     emotionAfter: ['confident'],
     notes: 'TP atteint, discipline OK.',
     tradingViewExitUrl: VALID_TV_EXIT,
-    screenshotExitKey: 'trades/clx0abc1234/fedcba9876543210fedcba9876543210.png',
   };
 
   it('defaults `tags` to an empty array when omitted', () => {

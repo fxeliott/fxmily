@@ -11,7 +11,6 @@ import { enqueueTrainingReplyNotification } from '@/lib/notifications/enqueue';
 import { trainingReplyCreateSchema } from '@/lib/schemas/training-annotation';
 import { trainingSessionIdSchema } from '@/lib/schemas/training-session';
 import { trainingTradeCreateSchema } from '@/lib/schemas/training-trade';
-import { trainingKeyBelongsTo } from '@/lib/storage/local';
 import { replyToTrainingAnnotationAsMember } from '@/lib/training/training-annotation-member-service';
 import { getTrainingSessionMeta } from '@/lib/training/training-session-service';
 import { createTrainingTrade } from '@/lib/training/training-trade-service';
@@ -105,13 +104,17 @@ export async function createTrainingTradeAction(
   const outcome = rawOutcome === '' || rawOutcome == null ? null : rawOutcome;
   const raw = {
     pair: formData.get('pair'),
-    // J1 — legacy screenshot key now OPTIONAL, no longer sent by the wizard.
-    // Coerce absent/'' → undefined so the optional Zod string passes.
-    entryScreenshotKey: formData.get('entryScreenshotKey') || undefined,
+    // Tour 13 — the legacy `entryScreenshotKey` input is gone: no wizard sends
+    // an image key since J1, and image capture now lives only in the
+    // verification flow. The create schema no longer reads it; the DB column +
+    // display of pre-J1 training captures are untouched (§21.5 preserved).
     // J1 — MANDATORY TradingView link (replaces the former screenshot upload).
     // Coerce absent → '' so the required schema's `.min(1)` surfaces the clean
     // "obligatoire" message rather than a generic "expected string".
     tradingViewUrl: rawTradingViewUrl ?? '',
+    // Tour 13 — optional member explanation of the analysis screen. Absent → the
+    // optional Zod string short-circuits (FormData.get returns null when absent).
+    tradingViewNote: formData.get('tradingViewNote') ?? undefined,
     plannedRR: formData.get('plannedRR'),
     outcome,
     // P3 — defensive coherence guard: an analysis-only backtest (no outcome)
@@ -142,20 +145,10 @@ export async function createTrainingTradeAction(
 
   const data = parsed.data;
 
-  // BOLA defence — the key shape was validated by Zod, but we must also
-  // enforce that the `training/{userId}/…` segment belongs to the current
-  // session, otherwise a member could attach another member's upload to
-  // their own backtest. `trainingKeyBelongsTo` never cross-accepts a
-  // real-edge `trades/` key (statistical isolation §21.5).
-  // J1 — the screenshot is now OPTIONAL, so only enforce ownership when a
-  // legacy key is present (the wizard no longer uploads one).
-  if (data.entryScreenshotKey && !trainingKeyBelongsTo(data.entryScreenshotKey, session.user.id)) {
-    return {
-      ok: false,
-      error: 'invalid_input',
-      fieldErrors: { entryScreenshotKey: 'Capture invalide.' },
-    };
-  }
+  // Tour 13 — no training image key is accepted anymore, so the former
+  // `entryScreenshotKey` BOLA `trainingKeyBelongsTo` check is gone. Only the
+  // verification flow uploads images. Existing captures still display (§21.5
+  // isolation unchanged).
 
   // S8 — optional parent backtest session. Validate the id shape, then enforce
   // OWNERSHIP **and** open-state: a member must never attach a backtest to
@@ -186,8 +179,8 @@ export async function createTrainingTradeAction(
     const trade = await createTrainingTrade({
       userId: session.user.id,
       pair: data.pair,
-      entryScreenshotKey: data.entryScreenshotKey ?? null,
       tradingViewUrl: data.tradingViewUrl,
+      tradingViewNote: data.tradingViewNote ?? null,
       plannedRR: data.plannedRR,
       outcome: data.outcome ?? null,
       resultR: data.resultR ?? null,

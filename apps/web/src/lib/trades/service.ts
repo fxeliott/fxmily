@@ -16,6 +16,7 @@ import { selectStorage } from '@/lib/storage';
 import { computeRealizedR } from '@/lib/trading/calculations';
 
 import { mergeNotes } from './notes';
+import { STALE_OPEN_TRADE_MS } from './stale-open-threshold';
 
 /**
  * Trade journal service layer (J2).
@@ -55,6 +56,9 @@ export interface CreateTradeInput {
   /// J1 — mandatory TradingView entry link (replaces the former screenshot
   /// upload). Host-allowlisted at the Zod / Server Action edge.
   tradingViewEntryUrl: string;
+  /// Tour 13 — optional member explanation of the entry screen. Hardened +
+  /// length-capped at the Zod edge. `undefined` → NULL in DB.
+  tradingViewEntryNote?: string | null;
   /// J1 — legacy pre-entry screenshot key, now OPTIONAL (pre-J1 trades keep
   /// their capture; the wizard no longer uploads one). Null when absent.
   screenshotEntryKey?: string | null;
@@ -97,6 +101,9 @@ export interface CloseTradeInput {
   /// J1 — mandatory TradingView exit link (replaces the former exit screenshot
   /// upload at close). Host-allowlisted at the Zod / Server Action edge.
   tradingViewExitUrl: string;
+  /// Tour 13 — optional member explanation of the exit screen. Hardened +
+  /// length-capped at the Zod edge. `undefined` → NULL in DB.
+  tradingViewExitNote?: string | null;
   /// J1 — legacy exit screenshot key, now OPTIONAL. Null when absent.
   screenshotExitKey?: string | null;
 }
@@ -143,6 +150,8 @@ export interface SerializedTrade {
   screenshotEntryKey: string | null;
   /// J1 — TradingView entry link (mandatory for J1+ trades, null for pre-J1).
   tradingViewEntryUrl: string | null;
+  /// Tour 13 — member's optional explanation of the entry screen (null when absent).
+  tradingViewEntryNote: string | null;
   // Post-exit (nullable until closed)
   exitedAt: string | null;
   exitPrice: string | null;
@@ -157,6 +166,8 @@ export interface SerializedTrade {
   /// J1 — TradingView exit link (mandatory at close for J1+ trades, null for
   /// pre-J1 / still-open trades).
   tradingViewExitUrl: string | null;
+  /// Tour 13 — member's optional explanation of the exit screen (null when absent).
+  tradingViewExitNote: string | null;
   closedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -212,6 +223,7 @@ function toSerialized(
     notes: trade.notes,
     screenshotEntryKey: trade.screenshotEntryKey,
     tradingViewEntryUrl: trade.tradingViewEntryUrl,
+    tradingViewEntryNote: trade.tradingViewEntryNote,
     exitedAt: trade.exitedAt ? trade.exitedAt.toISOString() : null,
     exitPrice: trade.exitPrice == null ? null : trade.exitPrice.toString(),
     outcome: trade.outcome,
@@ -222,6 +234,7 @@ function toSerialized(
     emotionAfter: [...trade.emotionAfter],
     screenshotExitKey: trade.screenshotExitKey,
     tradingViewExitUrl: trade.tradingViewExitUrl,
+    tradingViewExitNote: trade.tradingViewExitNote,
     closedAt: trade.closedAt ? trade.closedAt.toISOString() : null,
     createdAt: trade.createdAt.toISOString(),
     updatedAt: trade.updatedAt.toISOString(),
@@ -288,6 +301,7 @@ export async function createTrade(
       hedgeRespected: input.hedgeRespected,
       notes: input.notes ?? null,
       tradingViewEntryUrl: input.tradingViewEntryUrl,
+      tradingViewEntryNote: input.tradingViewEntryNote ?? null,
       screenshotEntryKey: input.screenshotEntryKey ?? null,
       // §31 — additional entry photos written atomically with the trade via the
       // nested create (kind defaults to `entry`). Empty/absent → no media rows.
@@ -385,6 +399,7 @@ export async function closeTrade(
           // value (admin edits go through a dedicated path).
           tags: [...(input.tags ?? [])],
           tradingViewExitUrl: input.tradingViewExitUrl,
+          tradingViewExitNote: input.tradingViewExitNote ?? null,
           screenshotExitKey: input.screenshotExitKey ?? null,
           closedAt: new Date(),
           ...(mergedNotes !== existing.notes ? { notes: mergedNotes } : {}),
@@ -511,4 +526,53 @@ export async function countTradesByStatus(
     db.trade.count({ where: { userId, closedAt: { not: null } } }),
   ]);
   return { open, closed };
+}
+
+// Threshold shared with the admin triage queue — single source of truth in
+// `lib/trades/stale-open-threshold.ts` (same number, same strict comparator).
+// Re-exported because the member-side tests read it from this module.
+export { STALE_OPEN_TRADE_MS };
+
+/**
+ * Tour 13 — a trade the member logged but never closed silently drops out of
+ * the behavioural score (exitReason / planRespected stay null) and stops
+ * reflecting their real activity. This read spots the case for the member-side
+ * gentle reminder on the hub: how many of THEIR trades have been open longer
+ * than `STALE_OPEN_TRADE_MS`, and the id of the oldest one to deep-link to.
+ *
+ * "Open longer than 72 h" is measured from `enteredAt` (member-provided entry
+ * timestamp) — the position's real age, which is what "a trade waiting to be
+ * closed" means to the member — with the same strict `<` comparator as the
+ * admin cohort queue (`lib/admin/attention-service.ts`), so both sides always
+ * agree on what is stale. Read-only, ownership-scoped, bounded (one `count` +
+ * one indexed `findFirst`, no list materialised). Returns `count: 0` /
+ * `oldestTradeId: null` when nothing is stale, so the card renders nothing.
+ */
+export interface StaleOpenTradesSummary {
+  count: number;
+  /** Id of the oldest stale open trade, for a direct journal deep-link. */
+  oldestTradeId: string | null;
+}
+
+export async function getStaleOpenTradesSummary(
+  userId: string,
+  now: Date = new Date(),
+): Promise<StaleOpenTradesSummary> {
+  const threshold = new Date(now.getTime() - STALE_OPEN_TRADE_MS);
+  const where: Prisma.TradeWhereInput = {
+    userId,
+    closedAt: null,
+    enteredAt: { lt: threshold },
+  };
+
+  const [count, oldest] = await Promise.all([
+    db.trade.count({ where }),
+    db.trade.findFirst({
+      where,
+      orderBy: { enteredAt: 'asc' },
+      select: { id: true },
+    }),
+  ]);
+
+  return { count, oldestTradeId: oldest?.id ?? null };
 }

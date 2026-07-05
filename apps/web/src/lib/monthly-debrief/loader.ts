@@ -69,7 +69,12 @@ import { getAxisLabel } from '@/lib/tracking/axes';
 import { safeFreeText } from '@/lib/text/safe';
 
 import { computeMonthWindow, computeReportingMonth, type MonthWindow } from './month-window';
-import type { BehavioralScoreSnapshot, MemberProfileReference, MonthlyBuilderInput } from './types';
+import type {
+  BehavioralScoreSnapshot,
+  MemberProfileReference,
+  MemberScreenNote,
+  MonthlyBuilderInput,
+} from './types';
 
 /**
  * J-M2 — DB loader for the V1.4 monthly AI debrief (SPEC §25).
@@ -208,6 +213,7 @@ export async function loadMonthlySliceForUser(
     deliveries,
     annotations,
     coachCorrections,
+    memberScreenNotes,
     latestScore,
     scoreHistory,
     trainingActivity,
@@ -229,6 +235,11 @@ export async function loadMonthlySliceForUser(
     // side only (training corrections are §21.5-isolated — the monthly loader may
     // read only `countRecentTrainingActivity`, never a `TrainingAnnotation`).
     loadCoachCorrections(userId, window),
+    // Notes membre attachées à ses liens TradingView (entrée / sortie) sur ses
+    // trades RÉELS du mois — l'explication que le membre écrit à côté de son screen.
+    // REAL side only : les notes d'entraînement (`TrainingTrade.tradingViewNote`)
+    // sont §21.5-isolées et jamais lues ici.
+    loadMemberScreenNotes(userId, window),
     getLatestBehavioralScore(userId),
     // DoD#3 / §29 "progression MESURABLE" — la série ASCENDANTE des scores
     // comportementaux sur ~75 jours (≈2 mois + marge) pour ancrer le récit de
@@ -392,6 +403,10 @@ export async function loadMonthlySliceForUser(
     // J-AI corrections echo — the coach's TAGGED corrections on REAL trades,
     // pre-formatted `« Axe » : commentaire` (REAL side only, §21.5-clean).
     coachCorrections,
+    // Notes membre TradingView (entrée / sortie) sur ses trades RÉELS du mois,
+    // pré-shapées `{ pair, direction, kind, note }` (REAL side only, §21.5-clean).
+    // L'IA les relie aux corrections du coach pour personnaliser le suivi.
+    memberScreenNotes,
     latestScore: latestScore === null ? null : toScoreSnapshot(latestScore),
     // DoD#3 / §29 — série brute + ancre d'entrée de mois ; le builder pur en
     // calcule la baseline N-1 et le delta (clock-free, fixture-replayable).
@@ -474,6 +489,9 @@ async function loadTrades(
     notes: trade.notes,
     screenshotEntryKey: trade.screenshotEntryKey,
     tradingViewEntryUrl: trade.tradingViewEntryUrl,
+    // Tour 13 — carried on the shape so it stays SerializedTrade-compatible. The
+    // actual injection into the monthly IA prompt is a separate wiring task.
+    tradingViewEntryNote: trade.tradingViewEntryNote,
     exitedAt: trade.exitedAt ? trade.exitedAt.toISOString() : null,
     exitPrice: trade.exitPrice == null ? null : trade.exitPrice.toString(),
     outcome: trade.outcome,
@@ -488,6 +506,9 @@ async function loadTrades(
     emotionAfter: [...trade.emotionAfter],
     screenshotExitKey: trade.screenshotExitKey,
     tradingViewExitUrl: trade.tradingViewExitUrl,
+    // Tour 13 — shape-only (SerializedTrade parity); prompt injection is a
+    // separate wiring task.
+    tradingViewExitNote: trade.tradingViewExitNote,
     closedAt: trade.closedAt ? trade.closedAt.toISOString() : null,
     createdAt: trade.createdAt.toISOString(),
     updatedAt: trade.updatedAt.toISOString(),
@@ -627,6 +648,75 @@ async function loadCoachCorrections(userId: string, window: MonthWindow): Promis
     const comment = r.comment.trim().slice(0, COACH_CORRECTION_COMMENT_MAX_CHARS);
     return `« ${label} » : ${comment}`;
   });
+}
+
+/// Cap + per-note truncation for the member-screen-notes corpus. ≤20 notes
+/// (newest-first) keeps the prompt bounded; each note is clamped so a long paste
+/// can't balloon the payload. Mirror of the coach-corrections caps + the weekly
+/// loader's `loadMemberScreenNotes`, scoped to the MONTH window.
+const MEMBER_SCREEN_NOTES_MAX = 20;
+const MEMBER_SCREEN_NOTE_MAX_CHARS = 350;
+
+/**
+ * Load the member's own explanatory notes attached to their TradingView links
+ * (`Trade.tradingViewEntryNote` / `tradingViewExitNote`) on their REAL trades of
+ * the civil month, shaped `{ pair, direction, kind, note }` so the debrief can
+ * situate each note (which trade, entry or exit). One entry per non-empty note
+ * (an entry note and an exit note on the same trade yield TWO entries). The trade
+ * is ordered newest-first (`enteredAt desc`); within a trade the entry note comes
+ * before the exit note. Capped ≤20 total, each note truncated so the payload stays
+ * bounded; the builder relays verbatim + re-hardens. Carbon of the weekly loader's
+ * `loadMemberScreenNotes`, scoped to the MONTH window.
+ *
+ * 🚨 §21.5 — REAL side ONLY. This reads `db.trade` (real trades — the product,
+ * mirror `loadTrades`). Training notes (`TrainingTrade.tradingViewNote`) are
+ * §21.5-isolated and DELIBERATELY not read here: the monthly loader may touch
+ * training exclusively through `countRecentTrainingActivity` (anti-leak Block A).
+ * So a backtest note never leaks into the real-trading debrief.
+ */
+async function loadMemberScreenNotes(
+  userId: string,
+  window: MonthWindow,
+): Promise<MemberScreenNote[]> {
+  const rows = await db.trade.findMany({
+    where: {
+      userId,
+      enteredAt: { gte: window.monthStartUtc, lte: window.monthEndUtc },
+      OR: [{ tradingViewEntryNote: { not: null } }, { tradingViewExitNote: { not: null } }],
+    },
+    select: {
+      pair: true,
+      direction: true,
+      tradingViewEntryNote: true,
+      tradingViewExitNote: true,
+    },
+    orderBy: { enteredAt: 'desc' },
+  });
+
+  const notes: MemberScreenNote[] = [];
+  for (const row of rows) {
+    if (notes.length >= MEMBER_SCREEN_NOTES_MAX) break;
+    const entry = row.tradingViewEntryNote?.trim() ?? '';
+    if (entry.length > 0) {
+      notes.push({
+        pair: row.pair,
+        direction: row.direction,
+        kind: 'entree',
+        note: entry.slice(0, MEMBER_SCREEN_NOTE_MAX_CHARS),
+      });
+    }
+    if (notes.length >= MEMBER_SCREEN_NOTES_MAX) break;
+    const exit = row.tradingViewExitNote?.trim() ?? '';
+    if (exit.length > 0) {
+      notes.push({
+        pair: row.pair,
+        direction: row.direction,
+        kind: 'sortie',
+        note: exit.slice(0, MEMBER_SCREEN_NOTE_MAX_CHARS),
+      });
+    }
+  }
+  return notes;
 }
 
 async function loadWeeklySummaries(userId: string, window: MonthWindow): Promise<string[]> {

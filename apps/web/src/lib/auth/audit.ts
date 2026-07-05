@@ -486,6 +486,10 @@ export type AuditAction =
   | 'verification.batch.crisis_detected'
   | 'verification.batch.amf_violation'
   | 'verification.proof.analyzed'
+  // Tour 13 — screen retention policy: the stored image is deleted the moment a
+  // proof reaches a TERMINAL state (done / terminally failed). PII-free (ranAt +
+  // opaque proofId only) — a screen is « traité à la volée, jamais conservé ».
+  | 'verification.proof.file_purged'
   // AUTONOMY-1 — verification overdue safety-net (5th twin of the §26 calendar /
   // §25 monthly / S2 onboarding / J8 weekly nets — the VISION batch is the only
   // local Claude pipeline that lacked an anti-oubli nudge). Heartbeat on EVERY

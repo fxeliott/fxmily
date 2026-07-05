@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SerializedTrainingAnnotation } from '@/lib/admin/training-annotation-service';
@@ -14,9 +14,22 @@ vi.mock('./training-reply-form', () => ({
   TrainingReplyForm: () => null,
 }));
 
+// Storage: resolve a legacy mediaKey to a deterministic URL so the LEGACY image
+// branch renders (the real dev storage would throw on the fake key). Any other
+// call path (mediaKey null) never reaches getReadUrl.
+vi.mock('@/lib/storage', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/storage')>('@/lib/storage');
+  return {
+    ...actual,
+    selectStorage: () => ({ getReadUrl: (key: string) => `https://cdn.test/${key}` }),
+  };
+});
+
 import { TrainingAnnotationsSection } from './training-annotations-section';
 
 afterEach(cleanup);
+
+const TV_URL = 'https://fr.tradingview.com/x/abcdefghijkl/';
 
 function annotation(
   over: Partial<SerializedTrainingAnnotation> = {},
@@ -26,6 +39,7 @@ function annotation(
     trainingTradeId: 'tt1',
     adminId: 'admin1',
     comment: 'Entrée 2 bougies trop tôt — attends la confirmation.',
+    tradingViewUrl: null,
     mediaKey: null,
     mediaType: null,
     axis: null,
@@ -84,5 +98,48 @@ describe('TrainingAnnotationsSection — accusé de lecture (S7 §33-#3 parité)
     );
     expect(screen.queryByText('Non lue')).toBeNull();
     expect(screen.queryByText(/par le membre le/)).toBeNull();
+  });
+});
+
+/**
+ * Tour 13 — corrections now carry an optional TradingView link in place of the
+ * former upload; legacy uploaded captures stay readable but degrade gracefully
+ * when the file is purged in prod (onError island → "Capture retirée.").
+ */
+describe('TrainingAnnotationsSection — Tour 13 lien TradingView + capture legacy', () => {
+  it('affiche un lien cliquable « Voir la correction sur TradingView » quand tradingViewUrl est présent', () => {
+    render(
+      <TrainingAnnotationsSection
+        annotations={[annotation({ tradingViewUrl: TV_URL })]}
+        isAdmin={false}
+      />,
+    );
+    const link = screen.getByRole('link', { name: 'Voir la correction sur TradingView' });
+    expect(link).toHaveAttribute('href', TV_URL);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('aucun lien TradingView quand tradingViewUrl est null', () => {
+    render(<TrainingAnnotationsSection annotations={[annotation()]} isAdmin={false} />);
+    expect(screen.queryByRole('link', { name: /TradingView/ })).toBeNull();
+  });
+
+  it('rend l’image legacy (mediaKey non null) puis la dégrade en « Capture retirée. » sur erreur de chargement', () => {
+    render(
+      <TrainingAnnotationsSection
+        annotations={[
+          annotation({ mediaKey: 'training_annotations/tt1/x.png', mediaType: 'image' }),
+        ]}
+        isAdmin={false}
+      />,
+    );
+    const img = screen.getByAltText(/Capture annotée jointe/);
+    expect(img).toBeInTheDocument();
+    expect(screen.queryByText('Capture retirée.')).toBeNull();
+    // Simulate the purged-file case: the browser fires <img onError>.
+    fireEvent.error(img);
+    expect(screen.getByText('Capture retirée.')).toBeInTheDocument();
+    expect(screen.queryByAltText(/Capture annotée jointe/)).toBeNull();
   });
 });

@@ -22,6 +22,12 @@ import type { SerializedCheckin } from '@/lib/checkin/service';
 import type { CoachingReportContext } from '@/lib/coaching/engine';
 import type { BehavioralScoreTrendPoint } from '@/lib/scoring/service';
 import type { SerializedTrade } from '@/lib/trades/service';
+// Notes membre TradingView (entrée / sortie) — même shape que le weekly. On
+// réutilise le type plutôt que de le dupliquer : ce sont les mêmes colonnes
+// (`Trade.tradingViewEntryNote` / `tradingViewExitNote`) lues à la fenêtre du mois.
+import type { MemberScreenNote } from '@/lib/weekly-report/types';
+
+export type { MemberScreenNote };
 
 export interface BehavioralScoreSnapshot {
   discipline: number | null;
@@ -161,6 +167,19 @@ export interface MonthlyBuilderInput {
    * The comment is ADMIN free-text → wrapped untrusted at the prompt boundary.
    */
   coachCorrections: string[];
+  /**
+   * Notes membre attachées à ses liens TradingView (`Trade.tradingViewEntryNote`
+   * / `tradingViewExitNote`) sur ses trades RÉELS du mois — l'explication libre
+   * que le membre écrit à côté de son screen. Pré-shapé par le loader en
+   * `{ pair, direction, kind, note }` (note tronquée ~350 chars, cap ≤20,
+   * newest-first). REAL side only : les notes d'entraînement (`TrainingTrade.
+   * tradingViewNote`) sont §21.5-isolées et n'entrent jamais ici. Le `note` est du
+   * free-text MEMBRE → wrapped untrusted au prompt boundary (le builder re-harden
+   * safeFreeText au snapshot boundary). L'IA s'en sert pour relier ce que le membre
+   * VOIT à ce que le coach CORRIGE (twin des `coachCorrections`), jamais un avis
+   * marché. Requis (défaut `[]` fourni par le loader), comme `coachCorrections`.
+   */
+  memberScreenNotes: MemberScreenNote[];
   // ----- (B) TRAINING section — §21.5 firewall: effort/recency only -----
   training: TrainingEffortInput;
   // ----- (C) VERIFICATION & CONSTANCY — Session 3 (DOD3-01 / DoD#2 S6) -----

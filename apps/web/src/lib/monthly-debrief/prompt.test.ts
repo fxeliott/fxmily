@@ -38,6 +38,9 @@ function baseInput(over: Partial<MonthlyBuilderInput> = {}): MonthlyBuilderInput
     // J-AI corrections echo — no tagged coach correction by default; tests that
     // exercise the corpus override it.
     coachCorrections: [],
+    // Notes membre TradingView — no attached note by default; tests that exercise
+    // the corpus override it.
+    memberScreenNotes: [],
     latestScore: null,
     // DoD#3 / §29 — empty history + the local month-start anchor (Paris 2026-05-01).
     scoreHistory: [],
@@ -905,6 +908,65 @@ describe('MONTHLY_DEBRIEF_OUTPUT_JSON_SCHEMA — output parity is unchanged by D
   });
 });
 
+// =============================================================================
+// Quick win 1 — maxConsecutiveLoss reaches the prompt (SECTION 1, always)
+// =============================================================================
+
+describe('buildMonthlyDebriefUserPrompt — maxConsecutiveLoss (quick win)', () => {
+  it('renders the worst loss-streak line with the Mark Douglas framing', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          trades: [
+            trade({ outcome: 'loss', closedAt: '2026-05-01T10:00:00.000Z' }),
+            trade({ outcome: 'loss', closedAt: '2026-05-02T10:00:00.000Z' }),
+            trade({ outcome: 'win', closedAt: '2026-05-03T10:00:00.000Z' }),
+          ],
+        }),
+      ),
+    );
+    expect(prompt).toContain('Pire série de pertes consécutives : **2**');
+    expect(prompt).toContain('variance normale au sens Mark Douglas');
+    expect(prompt).toContain('jamais un edge cassé ni un avis marché');
+  });
+
+  it('renders **0** honestly on an empty month (no loss to streak, still a line)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).toContain('Pire série de pertes consécutives : **0**');
+  });
+});
+
+// =============================================================================
+// Quick win 2 — exit-reason distribution reaches the prompt (SECTION 1, opt.)
+// =============================================================================
+
+describe('buildMonthlyDebriefUserPrompt — exitReasonDistribution (quick win)', () => {
+  it('renders the exit-reason line (FR labels + counts, sorted) when data exists', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          trades: [
+            trade({ exitReason: 'sl_hit' }),
+            trade({ exitReason: 'sl_hit' }),
+            trade({ exitReason: 'tp_hit' }),
+          ],
+        }),
+      ),
+    );
+    expect(prompt).toContain('Motifs de sortie (trades clôturés) : SL touché 2, TP atteint 1');
+    expect(prompt).toContain(
+      "comment la position s'est terminée, jamais une faute ni un avis marché",
+    );
+  });
+
+  it('omits the exit-reason line when no closed trade carries a reason (feature récente)', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(baseInput({ trades: [trade({ exitReason: null })] })),
+    );
+    expect(prompt).not.toContain('Motifs de sortie (trades clôturés)');
+  });
+});
+
 describe('buildMonthlyDebriefUserPrompt — coach corrections section (J-AI corrections echo)', () => {
   it('renders the corrections section (wrapped untrusted) when the coach tagged some', () => {
     const prompt = buildMonthlyDebriefUserPrompt(
@@ -927,5 +989,37 @@ describe('buildMonthlyDebriefUserPrompt — coach corrections section (J-AI corr
   it('omits the corrections section entirely when the coach tagged nothing', () => {
     const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
     expect(prompt).not.toContain('## Corrections du coach');
+  });
+});
+
+describe('buildMonthlyDebriefUserPrompt — member screen notes section', () => {
+  it('renders the screen-notes section (wrapped untrusted) with pair/direction/kind context', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(
+        baseInput({
+          memberScreenNotes: [
+            { pair: 'EURUSD', direction: 'long', kind: 'entree', note: 'Cassure propre du range.' },
+            {
+              pair: 'XAUUSD',
+              direction: 'short',
+              kind: 'sortie',
+              note: 'Sorti au TP comme prévu.',
+            },
+          ],
+        }),
+      ),
+    );
+    expect(prompt).toContain('## Ce que tu dis de tes screens');
+    expect(prompt).toContain('[EURUSD long, entree] Cassure propre du range.');
+    expect(prompt).toContain('[XAUUSD short, sortie] Sorti au TP comme prévu.');
+    // Positive consigne: relier ce que le membre voit aux corrections du coach.
+    expect(prompt).toContain('corrections du coach');
+    // Member free-text is wrapped untrusted (defense-in-depth).
+    expect(prompt).toContain('member_reflection_untrusted');
+  });
+
+  it('omits the screen-notes section entirely when the member attached no note', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).not.toContain('## Ce que tu dis de tes screens');
   });
 });

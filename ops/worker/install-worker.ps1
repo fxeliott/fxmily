@@ -13,7 +13,11 @@
   Schedules are STAGGERED so the six never collide:
     onboarding    every 20 min   (time-sensitive — this is what kills the
                                    "IA silence 24H après profil rempli" bug)
-    verification  daily   04:10
+    verification  every 20 min   (Tour 13 — verification screens are analysed
+                                   "sur le moment"; a pull with nothing pending
+                                   short-circuits in verification-batch-local.sh
+                                   and never calls claude, so a 20-min tick
+                                   costs zero when the queue is empty)
     calendar      Mon     05:10
     weekly        Sun     05:40
     monthly       day 1   06:10
@@ -79,9 +83,13 @@ $RunBatchBash = ConvertTo-BashPath $RunBatch
 
 # --- The 6 pipelines + their triggers -----------------------------------------
 # Trigger objects are built per-task below (New-ScheduledTaskTrigger).
+# Tour 13 — `verification` moved from `daily 04:10` to a 20-min interval so
+# uploaded MT5 proofs are analysed "sur le moment", not once a night. The empty
+# pull short-circuits (verification-batch-local.sh exits before any claude call
+# when nothing is pending), so an idle tick costs zero.
 $Pipelines = @(
   @{ Name = 'onboarding'; Kind = 'interval' },
-  @{ Name = 'verification'; Kind = 'daily'; At = '04:10' },
+  @{ Name = 'verification'; Kind = 'interval'; IntervalMinutes = 20 },
   @{ Name = 'calendar'; Kind = 'weekly'; At = '05:10'; Day = 'Monday' },
   @{ Name = 'weekly'; Kind = 'weekly'; At = '05:40'; Day = 'Sunday' },
   @{ Name = 'monthly'; Kind = 'monthly'; At = '06:10'; DayOfMonth = 1 },
@@ -112,7 +120,8 @@ Write-Host "Fxmily local AI worker — installing $($Pipelines.Count) tasks unde
 Write-Host "  bash      : $BashPath"
 Write-Host "  script    : $RunBatchBash"
 Write-Host "  principal : $UserId (LogonType=$LogonType)"
-Write-Host "  onboarding: every $OnboardingIntervalMinutes min"
+Write-Host "  onboarding  : every $OnboardingIntervalMinutes min"
+Write-Host "  verification: every 20 min (Tour 13 — analyse sur le moment)"
 Write-Host ""
 
 foreach ($p in $Pipelines) {
@@ -126,8 +135,14 @@ foreach ($p in $Pipelines) {
 
   switch ($p.Kind) {
     'interval' {
-      $Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddMinutes(1) `
-        -RepetitionInterval (New-TimeSpan -Minutes $OnboardingIntervalMinutes)
+      # Per-pipeline cadence (verification carries its own IntervalMinutes),
+      # falling back to the onboarding cadence. Onboarding starts at :01,
+      # verification at :11 — a ~10-min offset so the two interval tasks rarely
+      # contend for the run-batch.sh global lock at the exact same instant.
+      $intervalMin = if ($p.ContainsKey('IntervalMinutes')) { [int]$p.IntervalMinutes } else { $OnboardingIntervalMinutes }
+      $startOffset = if ($p.Name -eq 'onboarding') { 1 } else { 11 }
+      $Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date.AddMinutes($startOffset) `
+        -RepetitionInterval (New-TimeSpan -Minutes $intervalMin)
     }
     'daily' { $Trigger = New-ScheduledTaskTrigger -Daily -At $p.At }
     'weekly' { $Trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $p.Day -At $p.At }

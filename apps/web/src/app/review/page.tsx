@@ -10,6 +10,7 @@ import { SubmitEchoCard } from '@/components/ui/submit-echo-card';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { RecentRowCard } from '@/components/ui/recent-row-card';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { echoProfileDims } from '@/lib/coaching/trade-echo';
 import { buildReviewSubmitEcho } from '@/lib/coaching/submit-echo';
 import { getProfileForUser } from '@/lib/onboarding-interview/service';
@@ -70,7 +71,7 @@ export default async function ReviewLandingPage({ searchParams }: ReviewLandingP
   // F2 — submission timestamps render in the MEMBER's timezone. Built once per
   // request and reused across the ≤12 rows (keeps the single-instantiation
   // intent of the original module-level formatter, now that the zone is dynamic).
-  const timezone = session.user.timezone || 'Europe/Paris';
+  const timezone = safeTimeZone(session.user.timezone);
   const fmtSubmittedAt = new Intl.DateTimeFormat('fr-FR', {
     day: '2-digit',
     month: 'short',

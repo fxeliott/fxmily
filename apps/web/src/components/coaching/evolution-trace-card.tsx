@@ -1,5 +1,6 @@
 import { History } from 'lucide-react';
 
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import type { MicroObjectiveStatusView, MicroObjectiveView } from '@/lib/coaching/micro-objective';
 import { cn } from '@/lib/utils';
 
@@ -54,7 +55,7 @@ function formatDay(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat('fr-FR', {
     day: 'numeric',
     month: 'short',
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
   }).format(date);
 }
 

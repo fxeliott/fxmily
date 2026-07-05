@@ -43,7 +43,7 @@ export default async function NewTrainingTradePage({ searchParams }: NewTraining
       {/* S19.2 — cyan ambient (§21.7 training identity) so the backtest wizard
           matches the depth of /training instead of sitting on a flat bg. */}
       <DashboardAmbient tone="cyan" />
-      <div className="relative">
+      <div className="page-stagger relative">
         <TrainingFormWizard
           timezone={session.user.timezone || 'Europe/Paris'}
           sessionId={activeSession?.id ?? null}

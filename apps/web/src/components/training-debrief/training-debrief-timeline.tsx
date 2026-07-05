@@ -1,4 +1,5 @@
 import { RecentRowCard } from '@/components/ui/recent-row-card';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import type { SerializedTrainingDebrief } from '@/lib/training-debrief/service';
 
 /**
@@ -55,7 +56,7 @@ export function TrainingDebriefTimeline({
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
   });
   if (debriefs.length === 0) {
     return (
@@ -72,7 +73,7 @@ export function TrainingDebriefTimeline({
   }
 
   return (
-    <ul className="dash-stagger flex flex-col gap-2.5" data-slot="training-debrief-timeline">
+    <ul className="page-stagger flex flex-col gap-2.5" data-slot="training-debrief-timeline">
       {debriefs.map((d) => (
         <li key={d.id}>
           {/* Tour 11 (finding 2) — read-only row lit by the Spotlight glow. The

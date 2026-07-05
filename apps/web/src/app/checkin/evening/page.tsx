@@ -4,6 +4,7 @@ import { auth } from '@/auth';
 import { CheckinResumeNotice } from '@/components/checkin/checkin-resume-notice';
 import { EveningCheckinWizard } from '@/components/checkin/evening-checkin-wizard';
 import { MorningIntentionRecall } from '@/components/checkin/morning-intention-recall';
+import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { getCheckin, resolveBackfillDateParam, todayFor } from '@/lib/checkin/service';
 import { toEveningPrefill } from '@/lib/checkin/prefill';
 
@@ -42,15 +43,19 @@ export default async function EveningCheckinPage({ searchParams }: EveningChecki
   const prefill = existingEvening ? toEveningPrefill(existingEvening) : undefined;
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:py-10">
-      {prefill ? <CheckinResumeNotice slot="evening" /> : null}
-      <MorningIntentionRecall intention={morning?.intention} context="evening" />
-      <EveningCheckinWizard
-        today={today}
-        {...(backfillDate ? { backfillDate } : {})}
-        {...(prefill ? { prefill } : {})}
-        hasMorningIntention={Boolean(morning?.intention?.trim())}
-      />
+    <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
+      {/* Tour 13 — ambiance de marque calme derrière le wizard du soir. */}
+      <DashboardAmbient />
+      <div className="page-stagger relative mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:py-10">
+        {prefill ? <CheckinResumeNotice slot="evening" /> : null}
+        <MorningIntentionRecall intention={morning?.intention} context="evening" />
+        <EveningCheckinWizard
+          today={today}
+          {...(backfillDate ? { backfillDate } : {})}
+          {...(prefill ? { prefill } : {})}
+          hasMorningIntention={Boolean(morning?.intention?.trim())}
+        />
+      </div>
     </main>
   );
 }

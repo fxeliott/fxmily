@@ -305,7 +305,7 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-4 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid
-                ? 'bg-[var(--acc-btn)] hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px'
+                ? 'wow-hover-glow wow-hover-glow-cy bg-[var(--acc-btn)] hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
             )}
           >
@@ -319,7 +319,7 @@ export function TrainingDebriefWizard({ weekStart, prefill }: TrainingDebriefWiz
             className={cn(
               'rounded-control inline-flex h-11 items-center gap-1.5 px-5 text-[13px] font-semibold text-[var(--acc-fg)] shadow-[var(--sh-btn-pri)] transition-[background-color,box-shadow,transform] duration-150',
               stepValid && !isPending
-                ? 'bg-[var(--acc-btn)] hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px'
+                ? 'wow-hover-glow wow-hover-glow-cy bg-[var(--acc-btn)] hover:bg-[var(--acc-btn-hover)] hover:shadow-[var(--sh-btn-pri-hover)] active:translate-y-0 active:shadow-[var(--sh-btn-pri)] motion-safe:hover:-translate-y-px'
                 : 'cursor-not-allowed bg-[var(--bg-2)] text-[var(--t-2)] shadow-none',
             )}
             aria-busy={isPending || undefined}
@@ -364,7 +364,7 @@ function StepHeader({ step, eyebrow, headingRef }: StepHeaderProps) {
       >
         <Icon size={18} strokeWidth={2.2} />
       </div>
-      <div className="min-w-0 flex-1">
+      <div className="masthead-accent masthead-accent-cy min-w-0 flex-1">
         <p className="t-eyebrow text-[var(--t-3)]">{eyebrow}</p>
         <h2 id="tdw-heading" ref={headingRef} tabIndex={-1} className="t-h1 mt-1 text-[var(--t-1)]">
           {def.title}

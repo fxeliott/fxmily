@@ -2,6 +2,7 @@ import { Compass } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import type { AlertView } from '@/lib/verification/alerts';
 
 /**
@@ -22,7 +23,7 @@ function formatAlertDate(date: Date, timezone: string): string {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
   }).format(date);
 }
 

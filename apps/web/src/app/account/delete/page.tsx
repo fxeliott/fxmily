@@ -12,6 +12,7 @@ import {
   ACCOUNT_HARD_PURGE_DAYS,
   deriveDeletionState,
 } from '@/lib/account/deletion';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 
 import { CancelDeletionForm } from './cancel-form';
@@ -63,7 +64,7 @@ export default async function AccountDeletePage(): Promise<React.ReactElement> {
     <main className="relative bg-[var(--bg)]">
       {/* S19.1 ambient anti-fade backplate (decorative, -z-10, reduced-motion-safe). */}
       <DashboardAmbient />
-      <div className="dash-stagger relative mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
+      <div className="page-stagger relative mx-auto w-full max-w-3xl px-4 py-6 sm:py-10">
         <header className="mb-6">
           <Link
             href="/dashboard"
@@ -80,7 +81,7 @@ export default async function AccountDeletePage(): Promise<React.ReactElement> {
         </header>
 
         {state.kind === 'scheduled' ? (
-          <ScheduledPanel state={state} timezone={session.user.timezone || 'Europe/Paris'} />
+          <ScheduledPanel state={state} timezone={safeTimeZone(session.user.timezone)} />
         ) : (
           <ActiveAccountPanel />
         )}

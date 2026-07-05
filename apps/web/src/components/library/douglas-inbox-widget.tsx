@@ -5,6 +5,7 @@ import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_TONE } from '@/components/libra
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { countUnseenDeliveries, listMyDeliveries } from '@/lib/cards/service';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 
 /**
  * Dashboard widget — surfaces the Mark Douglas library and any recent
@@ -29,7 +30,10 @@ interface DouglasInboxWidgetProps {
 }
 
 function formatDeliveryDate(date: Date, timezone: string): string {
-  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeZone: timezone }).format(date);
+  return new Intl.DateTimeFormat('fr-FR', {
+    dateStyle: 'medium',
+    timeZone: safeTimeZone(timezone),
+  }).format(date);
 }
 
 export async function DouglasInboxWidget({

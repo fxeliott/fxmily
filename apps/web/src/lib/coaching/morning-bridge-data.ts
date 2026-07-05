@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { getCheckin, listRecentCheckinDays } from '@/lib/checkin/service';
-import { localDateOf, shiftLocalDate } from '@/lib/checkin/timezone';
+import { localDateOf, safeTimeZone, shiftLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 
 import { buildMorningBridge, type MorningBridge } from './morning-bridge';
@@ -41,10 +41,15 @@ export async function getDashboardMorningContext(
   register: CoachingRegister | null,
   now: Date = new Date(),
 ): Promise<DashboardMorningContext> {
+  // Fence a non-IANA legacy tz before it reaches Intl (would throw a RangeError
+  // and take the dashboard down). The date CALCULATIONS below keep their own
+  // internal UTC fallback (localDateOf/shiftLocalDate) — untouched on purpose.
   const localHour = Number(
-    new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', hour12: false }).format(
-      now,
-    ),
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: safeTimeZone(timezone),
+      hour: '2-digit',
+      hour12: false,
+    }).format(now),
   );
 
   // Account age fact — always needed by the journey milestone. One indexed read.

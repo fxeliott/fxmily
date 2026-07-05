@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { HoverLift } from '@/components/ui/hover-lift';
 import { Pill } from '@/components/ui/pill';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { listMyDeliveries } from '@/lib/cards/service';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export default async function InboxPage() {
   // they render in the member's own timezone — consistent with the dashboard
   // `douglas-inbox-widget` which already formats the SAME data per zone. The
   // formatter is built inside `DeliveryItem` from this threaded `timezone`.
-  const timezone = session.user.timezone || 'Europe/Paris';
+  const timezone = safeTimeZone(session.user.timezone);
 
   const deliveries = await listMyDeliveries(session.user.id, { take: 50 });
   const unread = deliveries.filter((d) => !d.seenAt);

@@ -52,7 +52,7 @@ export default async function TrainingDebriefLandingPage({ searchParams }: Debri
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       <DashboardAmbient tone="cyan" />
-      <div className="dash-stagger relative mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
+      <div className="page-stagger relative mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
         <header className="flex flex-col gap-4">
           <Link
             href="/training"

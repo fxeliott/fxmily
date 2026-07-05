@@ -108,6 +108,13 @@ export default async function AdminTrainingTradeDetailPage({
             <ExternalLink className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
             Ouvrir l&apos;analyse sur TradingView
           </a>
+          {/* Tour 13 — l'explication du membre attachée au lien, en texte brut
+              (jamais de HTML). Le coach la lit pour corriger avec le contexte. */}
+          {trade.tradingViewNote ? (
+            <p className="t-body mt-1 leading-relaxed whitespace-pre-wrap text-[var(--t-2)]">
+              {trade.tradingViewNote}
+            </p>
+          ) : null}
         </Card>
       ) : null}
 

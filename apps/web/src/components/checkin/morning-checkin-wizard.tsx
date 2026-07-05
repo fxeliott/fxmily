@@ -403,7 +403,7 @@ export function MorningCheckinWizard({ today, backfillDate, prefill }: MorningCh
           <div className="rounded-control grid h-8 w-8 shrink-0 place-items-center border border-[var(--b-acc)] bg-[var(--acc-dim)] text-[var(--acc)]">
             <StepIcon className="h-4 w-4" strokeWidth={1.75} />
           </div>
-          <div className="flex flex-col gap-0.5">
+          <div className="masthead-accent flex flex-col gap-0.5">
             <span className="t-eyebrow">Check-in matin</span>
             <h1
               id="checkin-heading"
@@ -438,9 +438,9 @@ export function MorningCheckinWizard({ today, backfillDate, prefill }: MorningCh
               className={cn(
                 'rounded-pill h-1 flex-1 transition-all duration-300',
                 i < step
-                  ? 'bg-[var(--acc)]'
+                  ? 'wizard-progress-fill'
                   : i === step
-                    ? 'bg-[var(--acc)] shadow-[0_0_8px_oklch(0.62_0.19_254_/_0.55)]'
+                    ? 'wizard-progress-fill shadow-[0_0_8px_oklch(0.62_0.19_254_/_0.55)]'
                     : 'bg-[var(--b-default)]',
               )}
             />
@@ -543,7 +543,7 @@ export function MorningCheckinWizard({ today, backfillDate, prefill }: MorningCh
               onClick={next}
               disabled={pending}
               type="button"
-              className={cn(confirmPulse && stepValid && 'threshold-pulse')}
+              className={cn('wow-hover-glow', confirmPulse && stepValid && 'threshold-pulse')}
             >
               Suivant
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -556,6 +556,7 @@ export function MorningCheckinWizard({ today, backfillDate, prefill }: MorningCh
               disabled={pending}
               loading={pending}
               type="button"
+              className="wow-hover-glow"
             >
               {pending
                 ? 'Enregistrement…'

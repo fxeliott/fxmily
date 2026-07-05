@@ -147,7 +147,7 @@ one-shot lié à un geste, ou un loader éphémère reduced-motion-safe comme `s
 
 ### Classes d'orchestration
 
-- `.dash-stagger > *` : entrée échelonnée (`wowRise`, délais 60→300ms, `both`) ;
+- `.page-stagger > *` : entrée échelonnée (`wowRise`, délais 60→300ms, `both`) ;
   opt-out `[data-self-animate]` ; garde reduced-motion (`globals.css:1909-1941`).
 - `.wow-rise`, `.wow-reveal` (scroll-driven `animation-timeline: view()`, fallback
   visible), `.wow-hover-glow` (+`-cy`/`-2`), `.celebrate-pop`/`-halo`,
@@ -164,7 +164,7 @@ one-shot lié à un geste, ou un loader éphémère reduced-motion-safe comme `s
    `animation-duration:0.01ms`, `iteration-count:1`, `transition-duration:0.01ms`,
    `scroll-behavior:auto` (tous `!important`).
 2. **Gardes explicites** sur login orbs/WOW (`:2101-2119`), splash (`:2242-2267`),
-   dash-stagger (`:1928-1933`) — épinglent l'état final visible.
+   page-stagger — épinglent l'état final visible.
 3. **Framer** : `MotionConfig reducedMotion="user"` + `useReducedMotion()` dans
    chaque wrapper.
 4. `forced-colors: active` retire orbes/glows décoratifs (`:1506-1533`, etc.).

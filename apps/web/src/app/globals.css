@@ -1348,6 +1348,154 @@
   }
 }
 
+/* =============================================================
+ * Tour 13 — SIGNATURE STATIQUE : un signal de marque PERCEPTIBLE SANS
+ * interaction (ni hover, ni scroll, ni arrivée). Constat d'audit : tout le WOW
+ * des tours 9-12 dépendait d'un geste (glow au survol, stagger 620ms à
+ * l'arrivée, reveal au scroll) → invisible sur un regard fixe ou un
+ * screenshot. Ces classes posent une empreinte PERMANENTE sur les surfaces où
+ * le membre AGIT chaque jour (les 5 wizards, les échos, /track).
+ *
+ * Spectre STRICT bleu(254) → indigo(262) → cyan(217), via --grad-brand (déjà
+ * flippé en light, l.2957). Alphas assumés (0.15-0.9 sur les TRAITS fins,
+ * décoratifs) — au-dessus du seuil « chuchotement ». Aucune de ces classes ne
+ * porte de texte : contraste AA intact (le trait/halo est purement décoratif,
+ * sous ou à côté du contenu). forced-colors : trait remplacé par une bordure
+ * system-color (jamais un aplat invisible). Statique par construction → zéro
+ * coût reduced-motion (rien ne bouge à animer).
+ * ============================================================= */
+@layer components {
+  /* .masthead-accent — en-tête de PAGE distinctif : un court trait dégradé de
+     marque (28px) posé SOUS l'eyebrow/titre, permanent. Pose-le sur le
+     conteneur du header ; le trait rend le masthead identifiable sans dépendre
+     d'un titre en gradient (que le contraste « grand texte » 3:1 limiterait).
+     `--mast-w` surchargeable au call-site. */
+  .masthead-accent {
+    position: relative;
+  }
+  .masthead-accent::after {
+    content: '';
+    display: block;
+    margin-top: 0.625rem;
+    width: var(--mast-w, 2.5rem);
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(
+      90deg,
+      oklch(0.62 0.19 254) 0%,
+      oklch(0.55 0.21 262) 55%,
+      oklch(0.7 0.13 217) 100%
+    );
+  }
+  /* Variante CYAN du trait de masthead pour la famille « entraînement » (§21.7,
+     surface cyan isolée du réel). Reste dans le spectre cool autorisé
+     (indigo→cyan), pas de bleu CTA — le masthead training se lit dans SA teinte
+     de famille. Spécificité (0,2,0) > (0,1,0) → override propre. */
+  .masthead-accent.masthead-accent-cy::after {
+    background: linear-gradient(90deg, oklch(0.55 0.21 262) 0%, oklch(0.7 0.13 217) 100%);
+  }
+
+  /* .wizard-progress-fill — remplissage de barre de progression EN dégradé de
+     marque (bleu→cyan), pour que la progression d'un wizard se lise comme un
+     ruban de marque qui avance et non un simple aplat --acc. Statique (la
+     largeur est pilotée en inline par le call-site). Un léger glow bleu porté
+     une seule fois (pas animé) souligne la tête de progression. */
+  .wizard-progress-fill {
+    background: linear-gradient(
+      90deg,
+      oklch(0.62 0.19 254) 0%,
+      oklch(0.55 0.21 262) 55%,
+      oklch(0.7 0.13 217) 100%
+    );
+    box-shadow: 0 0 12px -2px oklch(0.62 0.19 254 / 0.55);
+  }
+
+  /* .grade-halo — mise en scène du geste SIGNATURE du produit (choix du grade
+     A/B/C du setup dans le formulaire de trade). L'option SÉLECTIONNÉE reçoit
+     un halo permanent (anneau + lueur portée) qui la détache franchement des
+     autres. Le halo emprunte `currentColor` : sur un bouton actif dont le texte
+     est déjà `--ok`/`--cy`/`--bad` (code couleur pédagogique A/B/C préexistant),
+     le halo prend AUTOMATIQUEMENT la teinte du grade — on met en scène le geste
+     sans repeindre les grades ni introduire de rouge nouveau (le rouge du C est
+     l'auto-évaluation existante, pas un outcome). `color-mix` translucide pour
+     la lueur portée. Statique tant que l'option est active ; la transition douce
+     à la sélection est portée par le call-site (transition-all déjà présent). */
+  .grade-halo {
+    box-shadow:
+      0 0 0 3px color-mix(in oklch, currentColor 22%, transparent),
+      0 6px 22px -6px color-mix(in oklch, currentColor 55%, transparent);
+  }
+
+  /* .echo-signature — l'écho d'un trade clôturé/ouvert est le feedback le plus
+     fort émotionnellement : il doit se distinguer de TOUTE autre carte. Liseré
+     signature renforcé (3px) + double souffle (bleu haut-droite, cyan
+     bas-gauche) permanent. À composer avec .card-premium. Décoratif, statique. */
+  .echo-signature {
+    position: relative;
+  }
+  .echo-signature::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 3px;
+    z-index: 1;
+    pointer-events: none;
+    border-top-left-radius: inherit;
+    border-top-right-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      oklch(0.62 0.19 254 / 0.95) 0%,
+      oklch(0.55 0.21 262 / 0.95) 50%,
+      oklch(0.7 0.13 217 / 0.95) 100%
+    );
+  }
+  .echo-signature::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background:
+      radial-gradient(120% 78% at 96% -18%, oklch(0.62 0.19 254 / 0.14) 0%, transparent 54%),
+      radial-gradient(120% 80% at 2% 118%, oklch(0.7 0.13 217 / 0.12) 0%, transparent 52%);
+  }
+  .echo-signature > * {
+    position: relative;
+    z-index: 2;
+  }
+}
+/* Light — le liseré/masthead gardent les MÊMES hues cool (invariant-safe) ;
+   seul le double souffle radial de l'écho est réaccordé pour ressortir sur le
+   canvas clair (mêmes hues cool, alpha décoratif ≤0.12). */
+.light .echo-signature::after {
+  background:
+    radial-gradient(120% 78% at 96% -18%, oklch(0.5 0.2 262 / 0.12) 0%, transparent 54%),
+    radial-gradient(120% 80% at 2% 118%, oklch(0.5 0.12 220 / 0.12) 0%, transparent 52%);
+}
+/* forced-colors : les traits/souffles décoratifs disparaissent (aplats
+   invisibles en High Contrast). On garde une bordure haute system-color sur
+   .echo-signature pour que son « signal de marque » reste perceptible sans
+   couleur, et l'anneau du grade passe en Highlight. */
+@media (forced-colors: active) {
+  .echo-signature::before {
+    background: none;
+    height: 0;
+    border-top: 2px solid CanvasText;
+  }
+  .masthead-accent::after,
+  .wizard-progress-fill {
+    background: CanvasText;
+  }
+  .echo-signature::after {
+    background: none;
+  }
+  .grade-halo {
+    box-shadow: 0 0 0 2px Highlight;
+  }
+}
+
 /* V2 refonte J1 — north-star hero scoped accent bloom. The Card already brings
    the glass + accent edge (.glass-panel + .glow-edge) ; this adds ONE soft
    radial bloom in the upper-right, behind the content, for a premium "lit
@@ -2186,52 +2334,20 @@
    fill hides each child before its delay then locks the final state. AT users:
    the explicit reduced-motion block + the global filet land every child visible
    instantly (no flash of empty hub). */
-.dash-stagger > * {
-  opacity: 0;
-  animation: wowRise 620ms var(--e-smooth) both;
-}
-.dash-stagger > *:nth-child(2) {
-  animation-delay: 60ms;
-}
-.dash-stagger > *:nth-child(3) {
-  animation-delay: 120ms;
-}
-.dash-stagger > *:nth-child(4) {
-  animation-delay: 180ms;
-}
-.dash-stagger > *:nth-child(5) {
-  animation-delay: 240ms;
-}
-.dash-stagger > *:nth-child(n + 6) {
-  animation-delay: 300ms;
-}
-@media (prefers-reduced-motion: reduce) {
-  .dash-stagger > * {
-    animation: none;
-    opacity: 1;
-  }
-}
-/* S20 — a dash-stagger child that runs its OWN framer entrance (the celebration
-   banners: MilestoneBanner / FirstRunWelcome) must opt OUT of the parent wowRise,
-   else the two compose into a double fade-in. Marked `data-self-animate`: it lands
-   at opacity 1 immediately, then its inner animation plays alone. */
-.dash-stagger > [data-self-animate] {
-  opacity: 1;
-  animation: none;
-}
-
-/* Tour 12 — .page-stagger : the exact `.dash-stagger` entrance orchestration,
-   generalised to any page's content-root children so EVERY route assembles
-   top-to-bottom on load instead of a flat 180ms fade (brief §31 "chaque
-   navigation met en scène la page"). Additive: `.dash-stagger` is UNTOUCHED (the
-   dashboard keeps using it). Same wowRise keyframe, same 6-step delay cap, same
-   `both` fill (each child hidden before its delay, then locks its final state),
-   same reduced-motion belt (animation:none, opacity:1 — no flash of empty page
-   for AT users) and the same [data-self-animate] opt-out for children that run
-   their own framer entrance. MUST live on a page-content wrapper, NEVER on the
+/* Tour 12 — .page-stagger : entrance orchestration generalised to any page's
+   content-root children so EVERY route assembles top-to-bottom on load instead
+   of a flat 180ms fade (brief §31 "chaque navigation met en scène la page").
+   Uses the wowRise keyframe, a 6-step delay cap, `both` fill (each child hidden
+   before its delay, then locks its final state), a reduced-motion belt
+   (animation:none, opacity:1 — no flash of empty page for AT users) and a
+   [data-self-animate] opt-out for children that run their own framer entrance
+   (celebration banners: MilestoneBanner / FirstRunWelcome — else the two compose
+   into a double fade-in). MUST live on a page-content wrapper, NEVER on the
    template.tsx root (a transform there would create a containing block for the
    fixed sidebar/FAB — documented invariant). translateY + opacity only → the box
-   occupies its final layout slot from frame 0 → CLS 0. */
+   occupies its final layout slot from frame 0 → CLS 0. (Tour 13: the legacy
+   .dash-stagger duplicate block was folded in here — every call-site now uses
+   .page-stagger, single source of truth.) */
 .page-stagger > * {
   opacity: 0;
   animation: wowRise 620ms var(--e-smooth) both;

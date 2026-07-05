@@ -10,6 +10,7 @@ import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Pill } from '@/components/ui/pill';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { countUnseenTrainingAnnotationsByTrainingTrade } from '@/lib/training/training-annotation-member-service';
 import { getTrainingSessionWithTradesById } from '@/lib/training/training-session-service';
 import { cn } from '@/lib/utils';
@@ -41,7 +42,7 @@ export default async function MemberTrainingSessionDetailPage({
   const session = await auth();
   if (!session?.user?.id || session.user.status !== 'active') redirect('/login');
 
-  const timezone = session.user.timezone || 'Europe/Paris';
+  const timezone = safeTimeZone(session.user.timezone);
 
   const { sessionId } = await params;
 
@@ -56,7 +57,7 @@ export default async function MemberTrainingSessionDetailPage({
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       <DashboardAmbient tone="cyan" />
-      <div className="dash-stagger relative mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-6 sm:py-10">
+      <div className="page-stagger relative mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-6 sm:py-10">
         <header className="flex flex-col gap-3">
           <Link
             href="/training"

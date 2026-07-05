@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react';
 import { auth } from '@/auth';
 import { V18Aurora } from '@/components/v18/aurora';
 import { V18ThemeScope } from '@/components/v18/theme-scope';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { getWeeklyReviewById } from '@/lib/weekly-review/service';
 
 export const dynamic = 'force-dynamic';
@@ -45,7 +46,7 @@ export default async function ReviewDetailPage({ params }: ReviewDetailProps) {
   if (!review) notFound();
 
   // F2 — the submission instant renders in the member's own timezone.
-  const timezone = session.user.timezone || 'Europe/Paris';
+  const timezone = safeTimeZone(session.user.timezone);
   const fmtSubmittedLong = new Intl.DateTimeFormat('fr-FR', {
     day: 'numeric',
     month: 'long',

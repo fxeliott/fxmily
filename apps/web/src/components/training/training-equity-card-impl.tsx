@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts';
 
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { useChartColors } from '@/lib/use-chart-colors';
 
 /**
@@ -75,7 +76,7 @@ export function buildCumulativeKept(
       date: new Date(p.enteredAt).toLocaleDateString('fr-FR', {
         day: 'numeric',
         month: 'short',
-        timeZone: timezone,
+        timeZone: safeTimeZone(timezone),
       }),
       kept: running,
     };

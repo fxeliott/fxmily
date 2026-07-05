@@ -47,7 +47,19 @@ function EchoCard({
         : 'text-[var(--t-3)]';
 
   return (
-    <Card data-slot={slot} className={cn('border p-4', edge)}>
+    // Tour 13 — l'écho est le feedback le plus fort émotionnellement : il doit
+    // se distinguer de TOUTE autre carte. `echo-signature` pose un liseré de
+    // marque (bleu→cyan) + un double souffle permanents (perceptibles sans
+    // interaction) ; `card-premium` ajoute le bloom d'angle ; `wow-reveal` fait
+    // monter la carte à l'apparition. Le `border-edge-top` par défaut est retiré
+    // (`edge={false}`) car `echo-signature::before` occupe le même pseudo et
+    // porte un liseré bien plus affirmé. Le tone (ok/watch/neutre) reste porté
+    // par la bordure/fond ci-dessous — jamais de rouge (réservé aux outcomes).
+    <Card
+      data-slot={slot}
+      edge={false}
+      className={cn('echo-signature card-premium wow-reveal overflow-hidden border p-4', edge)}
+    >
       {/* role="status" — the echo is a live, non-urgent reaction to the member's
           own act; announced politely by AT without stealing focus. */}
       <div className="flex items-start gap-3" role="status">

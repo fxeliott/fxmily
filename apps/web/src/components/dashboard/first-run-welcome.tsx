@@ -1,4 +1,12 @@
-import { ArrowRight, BookOpen, Compass, NotebookPen, Sparkles, Sunrise } from 'lucide-react';
+import {
+  Activity,
+  ArrowRight,
+  BookOpen,
+  Compass,
+  NotebookPen,
+  Sparkles,
+  Sunrise,
+} from 'lucide-react';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
@@ -32,6 +40,11 @@ const STEPS = [
     icon: Sparkles,
     title: 'Apprends à te connaître',
     body: 'Un entretien guidé : l’app cerne ton profil pour t’accompagner au plus juste. À ton rythme.',
+  },
+  {
+    icon: Activity,
+    title: 'Suis tes habitudes',
+    body: 'Sommeil, sport, méditation : tes cinq piliers alimentent ton exécution. Le module habitudes en garde le miroir.',
   },
 ] as const;
 
@@ -68,7 +81,7 @@ export function FirstRunWelcome({ needsProfile = false }: { needsProfile?: boole
           aujourd’hui, juste un premier geste à poser. Commence par où tu veux, à ton rythme.
         </p>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {STEPS.map((step, i) => {
             const Icon = step.icon;
             return (

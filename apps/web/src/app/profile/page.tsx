@@ -7,6 +7,7 @@ import { AIGeneratedBanner } from '@/components/ai-generated-banner';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { ProfileAnalysisPulse } from '@/components/profile/profile-analysis-pulse';
 import { btnVariants } from '@/components/ui/btn';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { getInterviewForUser, getProfileForUser } from '@/lib/onboarding-interview/service';
 import { cn } from '@/lib/utils';
 
@@ -286,7 +287,7 @@ export default async function ProfilePage() {
                 month: 'long',
                 year: 'numeric',
                 // F2 — show the member's local day for this instant.
-                timeZone: session.user.timezone || 'Europe/Paris',
+                timeZone: safeTimeZone(session.user.timezone),
               })}
             </p>
 

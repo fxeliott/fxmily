@@ -1,4 +1,5 @@
 import { RecentRowCard } from '@/components/ui/recent-row-card';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { computeMindsetProfile } from '@/lib/mindset/profile';
 import type { SerializedMindsetCheck } from '@/lib/mindset/service';
 
@@ -60,7 +61,7 @@ export function MindsetTimeline({
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
   });
   if (checks.length === 0) {
     return (

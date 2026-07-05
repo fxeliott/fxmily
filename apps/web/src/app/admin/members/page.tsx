@@ -1,4 +1,14 @@
-import { ArrowLeft, MessageSquare, Plus, Scale, Search, Sparkles, Users, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  ListChecks,
+  MessageSquare,
+  Plus,
+  Scale,
+  Search,
+  Sparkles,
+  Users,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -22,7 +32,7 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 interface MembersPageProps {
-  searchParams: Promise<{ q?: string; cursor?: string }>;
+  searchParams: Promise<{ q?: string; cursor?: string; attention?: string }>;
 }
 
 /** Member ids are cuids — reject anything else BEFORE it reaches the Prisma
@@ -39,10 +49,17 @@ function parseQuery(value: string | undefined): string | undefined {
   return q.length > 0 ? q : undefined;
 }
 
-/** Build the members href, carrying the active search + an optional cursor. */
-function membersHref(query: string | undefined, cursor?: string | null): string {
+/** Build the members href, carrying the active search + attention filter + an
+ *  optional cursor. The filter is a plain searchParam so the view is shareable
+ *  and back-button-friendly (no client state). */
+function membersHref(
+  query: string | undefined,
+  attention: boolean,
+  cursor?: string | null,
+): string {
   const params = new URLSearchParams();
   if (query) params.set('q', query);
+  if (attention) params.set('attention', '1');
   if (cursor) params.set('cursor', cursor);
   const qs = params.toString();
   return qs ? `/admin/members?${qs}` : '/admin/members';
@@ -52,9 +69,12 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
   const session = await auth();
   if (!session?.user || session.user.role !== 'admin') redirect('/login');
 
-  const { q: rawQuery, cursor: rawCursor } = await searchParams;
+  const { q: rawQuery, cursor: rawCursor, attention: rawAttention } = await searchParams;
   const query = parseQuery(rawQuery);
   const cursor = parseCursor(rawCursor);
+  // Tour 13 — `?attention=1` triage filter (shareable, no client state). Any
+  // other value is treated as off so a stray `?attention=foo` degrades cleanly.
+  const attentionOnly = rawAttention === '1';
 
   // Cohort-wide stats (independent of search/page) + the current page in one
   // round of parallel reads. A stale cursor returns an empty page (handled by
@@ -67,14 +87,14 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
     [stats, cohortAttention, page] = await Promise.all([
       getMemberDirectoryStats(),
       getCohortAttention(),
-      listMembersForAdmin({ query, limit: 50, cursor }),
+      listMembersForAdmin({ query, limit: 50, cursor, attentionOnly }),
     ]);
   } catch (err) {
     if (!cursor) throw err;
     [stats, cohortAttention] = await Promise.all([getMemberDirectoryStats(), getCohortAttention()]);
     page = null;
   }
-  if (page === null) redirect(membersHref(query));
+  if (page === null) redirect(membersHref(query, attentionOnly));
 
   // Per-member "à traiter" flags for THIS page only (O(page size), bounded reads).
   const attentionByMember = await getMembersAttention(page.items.map((m) => m.id));
@@ -87,6 +107,9 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
 
   const isEmptyCohort = stats.total === 0;
   const isSearchMiss = !isEmptyCohort && page.items.length === 0;
+  // Tour 13 — an empty attention filter (no query) is a POSITIVE state (« tout
+  // est à jour »), not a failed search — worded apart from the "no match" miss.
+  const isAttentionClear = isSearchMiss && attentionOnly && !query && !cursor;
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-[var(--w-app)] flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
@@ -155,9 +178,13 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
         </div>
 
         {/* S7 §33-#2 — cohort triage glance: what needs the admin across everyone,
-            so no member is forgotten. Calm tones (acc/warn), hidden when nothing waits. */}
+            so no member is forgotten. Calm tones (acc/warn), hidden when nothing waits.
+            Tour 13 — the strip is now actionable: it carries a filter toggle so the
+            counts turn into a members subset (`?attention=1`, shareable URL). */}
         {!isEmptyCohort &&
-        (cohortAttention.tradesToComment > 0 || cohortAttention.openDiscrepancies > 0) ? (
+        (attentionOnly ||
+          cohortAttention.tradesToComment > 0 ||
+          cohortAttention.openDiscrepancies > 0) ? (
           <div
             role="status"
             className="rounded-card flex flex-wrap items-center gap-x-3 gap-y-2 border border-[var(--b-default)] bg-[var(--bg-1)] px-4 py-3 shadow-[var(--sh-card)]"
@@ -177,6 +204,25 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
                 {cohortAttention.openDiscrepancies > 1 ? 's' : ''} de vérité
               </Pill>
             ) : null}
+            <span className="ml-auto">
+              {attentionOnly ? (
+                <Link
+                  href={membersHref(query, false)}
+                  className={cn(btnVariants({ kind: 'ghost', size: 's' }))}
+                >
+                  <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Voir tous les membres
+                </Link>
+              ) : (
+                <Link
+                  href={membersHref(query, true)}
+                  className={cn(btnVariants({ kind: 'secondary', size: 's' }))}
+                >
+                  <ListChecks className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Afficher seulement ceux à traiter
+                </Link>
+              )}
+            </span>
           </div>
         ) : null}
 
@@ -187,6 +233,9 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
             <label htmlFor="member-search" className="sr-only">
               Rechercher un membre par nom ou email
             </label>
+            {/* Preserve the attention filter across a GET search submit (the form
+                only carries `q`; without this the triage view would be lost). */}
+            {attentionOnly ? <input type="hidden" name="attention" value="1" /> : null}
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search
@@ -249,16 +298,42 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
             ctaHref="/admin/invite"
           />
         </Card>
+      ) : isAttentionClear ? (
+        // Tour 13 — the attention filter matched nobody: a calm, positive « rien
+        // en attente » state (not a failed search). Green dot, never an alarm.
+        <div className="rounded-card flex flex-col items-center gap-2 border border-[var(--b-default)] bg-[var(--bg-1)] px-6 py-10 text-center">
+          <p className="flex items-center gap-2 text-sm text-[var(--t-1)]">
+            <span className="inline-block h-2 w-2 rounded-full bg-[var(--ok)]" aria-hidden="true" />
+            Rien en attente : chaque membre est à jour.
+          </p>
+          <p className="t-cap text-[var(--t-3)]">
+            Aucun trade récent à commenter, aucun écart de vérité ouvert.
+          </p>
+          <Link
+            href={membersHref(undefined, false)}
+            className="text-xs text-[var(--acc-hi)] underline hover:text-[var(--acc)]"
+          >
+            Voir tous les membres
+          </Link>
+        </div>
       ) : isSearchMiss ? (
         <div className="rounded-card flex flex-col items-center gap-2 border border-[var(--b-default)] bg-[var(--bg-1)] px-6 py-10 text-center">
           <p className="text-sm text-[var(--t-1)]">
-            {cursor ? 'Fin de la liste.' : `Aucun membre ne correspond à « ${query} ».`}
+            {cursor
+              ? 'Fin de la liste.'
+              : query
+                ? `Aucun membre ne correspond à « ${query} ».`
+                : 'Aucun membre à traiter sur cette page.'}
           </p>
           <Link
-            href={membersHref(cursor ? query : undefined)}
+            href={membersHref(cursor ? query : undefined, attentionOnly)}
             className="text-xs text-[var(--acc-hi)] underline hover:text-[var(--acc)]"
           >
-            {cursor ? 'Revenir au début' : 'Réinitialiser la recherche'}
+            {cursor
+              ? 'Revenir au début'
+              : query
+                ? 'Réinitialiser la recherche'
+                : 'Revenir au début'}
           </Link>
         </div>
       ) : (
@@ -278,7 +353,7 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
           <footer className="flex flex-col items-center gap-3 border-t border-[var(--b-subtle)] pt-2">
             {page.nextCursor ? (
               <Link
-                href={membersHref(query, page.nextCursor)}
+                href={membersHref(query, attentionOnly, page.nextCursor)}
                 prefetch={false}
                 className={cn(btnVariants({ kind: 'ghost', size: 'm' }))}
               >
@@ -287,16 +362,20 @@ export default async function AdminMembersPage({ searchParams }: MembersPageProp
             ) : null}
             <p className="t-foot text-center text-[var(--t-4)]">
               Affichage de {page.items.length} membre{page.items.length > 1 ? 's' : ''}
-              {!query ? (
+              {!query && !attentionOnly ? (
                 <>
                   {' '}
                   · <span className="font-mono tabular-nums">{stats.total} au total</span>
                 </>
               ) : null}
+              {attentionOnly ? <> · en attente de traitement</> : null}
               {cursor ? (
                 <>
                   {' · '}
-                  <Link href={membersHref(query)} className="underline hover:text-[var(--t-2)]">
+                  <Link
+                    href={membersHref(query, attentionOnly)}
+                    className="underline hover:text-[var(--t-2)]"
+                  >
                     revenir au début
                   </Link>
                 </>

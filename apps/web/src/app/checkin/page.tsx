@@ -29,7 +29,12 @@ import {
   getYesterdayBackfill,
 } from '@/lib/checkin/service';
 import { crossedMilestone } from '@/lib/checkin/streak';
-import { formatLocalDate, localInstantToUtc, shiftLocalDate } from '@/lib/checkin/timezone';
+import {
+  formatLocalDate,
+  localInstantToUtc,
+  safeTimeZone,
+  shiftLocalDate,
+} from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import { getProfileForUser } from '@/lib/onboarding-interview/service';
 import { cn } from '@/lib/utils';
@@ -64,7 +69,8 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
 
   const userId = session.user.id;
   // J5.5 — read timezone from the JWT-backed session (default Europe/Paris).
-  const timezone = session.user.timezone || 'Europe/Paris';
+  // safeTimeZone also fences a non-IANA legacy value (would throw in Intl).
+  const timezone = safeTimeZone(session.user.timezone);
 
   const [status, streak, last7, yesterdayBackfill] = await Promise.all([
     getCheckinStatus(userId, timezone),
@@ -119,7 +125,7 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
       {/* Tour 12 — `page-stagger` cascades the direct sections in on navigation
           (header + confirmation/crisis/catch-up banners) so the hub arrives in
           scene instead of a flat fade. The three children that carry their OWN
-          entrance — the two inner `dash-stagger` blocks and the scroll-driven
+          entrance — the two inner `page-stagger` blocks and the scroll-driven
           `wow-reveal` explainer — opt OUT via `data-self-animate` so they land
           visible and keep their own animation instead of fighting the parent
           wowRise for `animation`/`opacity`. Compositor-only (opacity +
@@ -190,10 +196,10 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
           />
         ) : null}
 
-        {/* dash-stagger : la lecture du moment (streak puis tendance 7 j) arrive
+        {/* page-stagger : la lecture du moment (streak puis tendance 7 j) arrive
             en cascade douce — DIRECT children animés (compositor-only, reduced-
             motion neutralisé globalement par la classe utilitaire). */}
-        <section className="dash-stagger flex flex-col gap-6" data-self-animate>
+        <section className="page-stagger flex flex-col gap-6" data-self-animate>
           <StreakCard
             streak={streak.current}
             todayFilled={streak.todayFilled}
@@ -203,9 +209,9 @@ export default async function CheckinLandingPage({ searchParams }: CheckinLandin
           <TrendCard days={last7} />
         </section>
 
-        {/* dash-stagger : les 2 slots (matin/soir) arrivent en cascade — DIRECT
+        {/* page-stagger : les 2 slots (matin/soir) arrivent en cascade — DIRECT
             children animés (compositor-only, reduced-motion neutralisé globalement). */}
-        <section className="dash-stagger grid gap-4 sm:grid-cols-2" data-self-animate>
+        <section className="page-stagger grid gap-4 sm:grid-cols-2" data-self-animate>
           <SlotCard
             slot="morning"
             submitted={status.morningSubmitted}

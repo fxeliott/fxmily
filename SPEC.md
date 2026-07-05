@@ -463,7 +463,7 @@ Mode sombre uniquement (pas de light mode V1, c'est aligné avec ton brief).
 - `<CheckinForm />` (wizard mobile)
 - `<ScoreGauge />` (jauge animée 0-100)
 - `<EmotionPicker />` (grille de tags émotions)
-- `<MediaUploader />` (drag & drop + upload R2)
+- `<ProofUploader />` (upload preuve MT5 — Tour 13 : seul upload restant, les partages de trades passent par des liens TradingView)
 - `<MarkDouglasCard />` (fiche pédagogique)
 - `<AdminMemberRow />` (ligne membre avec badges)
 - `<TrackRecordChart />` (Tremor wrapper)

@@ -1,4 +1,12 @@
-import { Activity, ArrowLeft, CalendarCheck, HeartPulse, Scale, TrendingUp } from 'lucide-react';
+import {
+  Activity,
+  ArrowLeft,
+  CalendarCheck,
+  HeartPulse,
+  Scale,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -79,6 +87,23 @@ export default async function AdminHealthPage(): Promise<React.ReactElement> {
           recoupements de présence et mouvements de score. Des faits, des comptes, jamais un verdict
           ni un conseil de marché (posture §2). Calculé à {formatTime(overview.computedAt)}.
         </p>
+        {/* Tour 13 — turn the read into action: from a global count, one click to
+            the members that need work. Shown only when something waits. */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {truthGaps.open > 0 ? (
+            <Link
+              href="/admin/members?attention=1"
+              className={btnVariants({ kind: 'secondary', size: 'm' })}
+            >
+              <Scale aria-hidden="true" className="h-4 w-4" />
+              Voir les membres à traiter
+            </Link>
+          ) : null}
+          <Link href="/admin/members" className={btnVariants({ kind: 'ghost', size: 'm' })}>
+            <Users aria-hidden="true" className="h-4 w-4" />
+            Tous les membres
+          </Link>
+        </div>
       </header>
 
       <div className="relative flex flex-col gap-6">
@@ -103,6 +128,12 @@ export default async function AdminHealthPage(): Promise<React.ReactElement> {
             value={truthGaps.open}
             sublabel="en attente d’un motif ou d’un suivi"
             tone={truthGaps.open > 0 ? 'warn' : 'mute'}
+            {...(truthGaps.open > 0
+              ? {
+                  href: '/admin/members?attention=1',
+                  linkLabel: `Voir les ${truthGaps.open} membre${truthGaps.open > 1 ? 's' : ''} avec un écart ouvert`,
+                }
+              : {})}
           />
           <HealthMetric
             label="Pris en compte"

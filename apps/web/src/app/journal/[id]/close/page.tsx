@@ -40,9 +40,9 @@ export default async function CloseTradePage({ params }: CloseTradePageProps) {
           mesh. Decorative: aria-hidden + pointer-events:none + reduced-motion. */}
       <DashboardAmbient />
 
-      {/* `dash-stagger` cascades the back-link / hero / form / footnote in on
+      {/* `page-stagger` cascades the back-link / hero / form / footnote in on
           load (wowRise, compositor-only, reduced-motion-safe). */}
-      <div className="dash-stagger relative mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-8">
+      <div className="page-stagger relative mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-8">
         <header className="flex flex-col gap-3">
           <Link
             href={`/journal/${trade.id}`}

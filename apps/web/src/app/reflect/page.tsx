@@ -10,6 +10,7 @@ import { SubmitEchoCard } from '@/components/ui/submit-echo-card';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { RecentRowCard } from '@/components/ui/recent-row-card';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { echoProfileDims } from '@/lib/coaching/trade-echo';
 import { buildReflectSubmitEcho } from '@/lib/coaching/submit-echo';
 import { getProfileForUser } from '@/lib/onboarding-interview/service';
@@ -62,7 +63,7 @@ export default async function ReflectLandingPage({ searchParams }: ReflectLandin
 
   // F2 — submission times (HH:mm) render in the member's own timezone. Built
   // once per request, reused across the ≤30 rows.
-  const timezone = session.user.timezone || 'Europe/Paris';
+  const timezone = safeTimeZone(session.user.timezone);
   const fmtHm = new Intl.DateTimeFormat('fr-FR', {
     hour: '2-digit',
     minute: '2-digit',

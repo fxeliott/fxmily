@@ -207,7 +207,7 @@ export default async function AccountDataPage(): Promise<React.ReactElement> {
     <main className="relative bg-[var(--bg)]">
       {/* S19.1 ambient anti-fade backplate (decorative, -z-10, reduced-motion-safe). */}
       <DashboardAmbient />
-      <div className="dash-stagger relative mx-auto w-full max-w-5xl px-4 py-6 sm:py-10 lg:px-8">
+      <div className="page-stagger relative mx-auto w-full max-w-5xl px-4 py-6 sm:py-10 lg:px-8">
         <header className="mb-6">
           <Link
             href="/dashboard"

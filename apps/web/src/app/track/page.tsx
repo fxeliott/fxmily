@@ -6,6 +6,7 @@ import {
   HabitCorrelationSection,
   HabitCorrelationSkeleton,
 } from '@/components/track/habit-correlation-section';
+import { NextStepRail } from '@/components/nav/next-step-rail';
 import { HabitKindPicker } from '@/components/track/habit-kind-picker';
 import { HabitKindTabPicker } from '@/components/track/habit-kind-tab-picker';
 import { TodayHabitCards } from '@/components/track/today-habit-cards';
@@ -83,8 +84,14 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* DS-v3 J3 — ambient mesh + drifting orbs behind the masthead */}
       <DashboardAmbient />
-      <div className="relative mx-auto w-full max-w-3xl space-y-8 px-4 py-6">
-        <header className="space-y-2">
+      {/* Tour 13 — `page-stagger` fait monter chaque section en cascade à
+          l'arrivée (parité avec /patterns et les pages de consultation du tour
+          12) ; NextStepRail place /track dans le fil de guidage comme ses pairs.
+          Les sections ne portent plus `wow-reveal` : le stagger d'arrivée
+          remplace le reveal au scroll (les deux animeraient le même élément). */}
+      <div className="page-stagger relative mx-auto w-full max-w-3xl space-y-8 px-4 py-6">
+        <NextStepRail currentPath="/track" className="block" />
+        <header className="masthead-accent space-y-2">
           <p className="t-eyebrow-lg text-[var(--acc)]">Suivi des habitudes</p>
           <h1
             className="f-display h-rise text-[28px] font-semibold tracking-[-0.03em] text-[var(--t-1)] sm:text-[32px]"
@@ -106,15 +113,15 @@ export default async function TrackPage({ searchParams }: TrackPageProps) {
           </SuccessState>
         ) : null}
 
-        <div className="wow-reveal">
+        <div>
           <TrackHero loggedToday={loggedToday} />
         </div>
 
-        <div className="wow-reveal">
+        <div>
           <TodayHabitCards userId={session.user.id} timezone={timezone} loggedKinds={loggedToday} />
         </div>
 
-        <section aria-labelledby="track-corr-heading" className="wow-reveal flex flex-col gap-3">
+        <section aria-labelledby="track-corr-heading" className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <span id="track-corr-heading" className="t-eyebrow">
               Corrélations habitudes × trading

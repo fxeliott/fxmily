@@ -138,22 +138,32 @@ jobs:
       # days). Stage the two repo files on the host, then let the root-owned
       # validator (/usr/local/bin/fxmily-sync-cron, sudoers NOPASSWD, no
       # args, strict line-by-line crontab validation) converge the host.
-      - name: Checkout (cron sources only)
+      - name: Checkout (cron + ops scripts only)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
           sparse-checkout: |
             ops/cron
+            ops/scripts
           sparse-checkout-cone-mode: true
 
-      - name: Stage cron files on host
+      # Tour 14 (P0-1) — stage EVERY ops script the crontab references, not just
+      # crontab.fxmily + fxmily-cron. The backups (uploads/caddy/restore-drill)
+      # and the root autoheal were scheduled but NEVER installed, so those crons
+      # ran a non-existent binary and failed silently every tick (the MT5-proof
+      # volume had no backup at all). `strip_components: 2` flattens both
+      # ops/cron/* and ops/scripts/* into /home/fxmily/cron-sync/ (the flat
+      # staging dir fxmily-sync-cron reads). fxmily-sync-cron installs the
+      # subset it recognises and its post-convergence `command -v` gate fails
+      # the deploy loudly if any scheduled binary is still missing.
+      - name: Stage cron + ops scripts on host
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
         with:
           host: ${{ secrets.HETZNER_HOST }}
           username: fxmily
           key: ${{ secrets.HETZNER_SSH_KEY }}
           port: 22
-          source: 'ops/cron/crontab.fxmily,ops/cron/fxmily-cron'
+          source: 'ops/cron/crontab.fxmily,ops/cron/fxmily-cron,ops/cron/fxmily-backup,ops/cron/fxmily-caddy-backup,ops/cron/fxmily-uploads-backup,ops/cron/fxmily-restore-drill,ops/scripts/fxmily-autoheal'
           target: /home/fxmily/cron-sync
           strip_components: 2
           overwrite: true
@@ -388,9 +398,42 @@ jobs:
               exit 1
             fi
 
+  smoke:
+    name: Post-deploy smoke
+    # Tour 14 (P1-5) — automated prod smoke after a healthy deploy. Exercises the
+    # public path end-to-end (health, legal pages, login, cron auth boundary,
+    # real recompute/purge crons, security headers) from OUTSIDE the host, so a
+    # deploy that passed the in-cluster health gate but broke a public surface
+    # (bad CSP, a cron route 500-ing, a legal page 404) still goes RED. It runs
+    # AFTER a successful ssh-deploy and NEVER rolls back (the deploy's own health
+    # gate owns rollback) — a failed smoke fails THIS job loudly so the operator
+    # investigates, prod stays on the just-deployed image.
+    needs: ssh-deploy
+    if: ${{ needs.ssh-deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (smoke script only)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            ops/scripts/post-deploy-smoke.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Run automated smoke
+        env:
+          # Same sources cron-watch.yml already uses: APP_URL from repo vars,
+          # CRON_SECRET from secrets (mirrors /etc/fxmily/web.env).
+          APP_URL: ${{ vars.APP_URL || 'https://app.fxmilyapp.com' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: bash ops/scripts/post-deploy-smoke.sh
+
   notify:
     name: Notify deploy outcome
-    needs: [build-and-push, ssh-deploy]
+    needs: [build-and-push, ssh-deploy, smoke]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -398,9 +441,12 @@ jobs:
     steps:
       - name: Echo summary
         run: |
-          if [ "${{ needs.ssh-deploy.result }}" = "success" ]; then
-            echo "✅ Deploy of ${{ needs.build-and-push.outputs.image-tag }} succeeded"
-          else
+          if [ "${{ needs.ssh-deploy.result }}" != "success" ]; then
             echo "❌ Deploy failed at SSH step"
             exit 1
           fi
+          if [ "${{ needs.smoke.result }}" != "success" ]; then
+            echo "⚠️ Deploy succeeded but the post-deploy smoke FAILED — investigate ${{ needs.build-and-push.outputs.image-tag }} (prod stays on the new image, no rollback)."
+            exit 1
+          fi
+          echo "✅ Deploy of ${{ needs.build-and-push.outputs.image-tag }} succeeded (smoke green)"

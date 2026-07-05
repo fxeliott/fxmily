@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# /usr/local/bin/fxmily-restore-drill — monthly PROVEN-RESTORE drill (§9-B).
+#
+# Wired by `/etc/cron.d/fxmily-app` on the 1st Sunday of the month at 05:00
+# Paris (a quiet slot, well clear of the 02:30 pg backup and the 06:30/06:45
+# volume backups). A backup you have never restored is a hope, not a backup
+# (§9-B: proven restores, not backups). fxmily-backup verifies gzip integrity,
+# but "the gzip is intact" is NOT "the dump restores into a working schema with
+# real rows". This drill closes that gap: it takes the freshest encrypted dump,
+# decrypts + restores it into a DISPOSABLE, ISOLATED Postgres container, and
+# asserts the restored DB actually has tables and rows in 3 key tables.
+#
+# ISOLATION (why this can never touch prod):
+#   - the scratch container joins NO network (`--network none`) and is NOT on
+#     `fxmily-internal`, so it can never reach the live DB.
+#   - NO port is published, so nothing external can reach the scratch DB.
+#   - a throwaway POSTGRES_PASSWORD is generated per run; the container +
+#     its anonymous volume are removed (`--rm`) at the end, always.
+#
+# Failure semantics (each exits non-zero so the cron log + optional healthcheck
+# ping surface the failure loudly):
+#   - no encrypted dump found        → exit 1
+#   - decrypt failure                → exit 2
+#   - scratch postgres never ready   → exit 3
+#   - restore (psql) failure         → exit 4
+#   - verification (0 tables / 0 rows in every key table) → exit 5
+#
+# It NEVER writes to prod, NEVER uploads anything, NEVER deletes a backup.
+
+set -euo pipefail
+
+# shellcheck disable=SC1091
+source /etc/fxmily/cron.env  # GPG_PASS_FILE, CRON_LOG, HEALTHCHECK_PING_URL_RESTORE
+
+CRON_LOG="${CRON_LOG:-/var/log/fxmily/cron.log}"
+BACKUP_DIR="/etc/fxmily/backups"
+# Same official image the prod compose uses, so the restore is representative.
+PG_IMAGE="${RESTORE_DRILL_PG_IMAGE:-postgres:17-bookworm}"
+SCRATCH_NAME="fxmily-restore-drill-$$"
+# Key tables whose non-empty restore proves the dump carries real member data
+# (not just an empty schema). users/daily_checkins/trades span the core domain.
+KEY_TABLES=("users" "daily_checkins" "trades")
+
+mkdir -p "$(dirname "$CRON_LOG")"
+
+ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
+log() { echo "[$(ts)] [fxmily-restore-drill] $*" >> "$CRON_LOG"; }
+
+# Always tear the scratch container down, whatever happens (success, restore
+# failure, or a mid-script error under `set -e`). `--rm` also drops its
+# anonymous data volume, so no disk leak on the 40 GB host.
+cleanup() {
+  docker rm -f "$SCRATCH_NAME" >/dev/null 2>&1 || true
+  [[ -n "${WORK_DIR:-}" && -d "$WORK_DIR" ]] && rm -rf "$WORK_DIR"
+}
+trap cleanup EXIT
+
+# ---- 0. Monthly gate : 1st Sunday only ------------------------------------
+# Debian vixie-cron has no clean "1st Sunday" field (when BOTH dom and dow are
+# restricted, crond ORs them → `1-7 * 0` would fire every day 1-7 AND every
+# Sunday). So the crontab runs this every Sunday 05:00 and the guard lives HERE:
+# exit early (silent, exit 0) unless today is the 1st Sunday of the month, i.e.
+# a Sunday whose day-of-month is ≤ 7. `RESTORE_DRILL_FORCE=1` bypasses the gate
+# for an on-demand manual drill. Uses local wall-clock (crond fires in the host
+# Europe/Paris tz), matching the "05:00 Paris" intent.
+if [[ "${RESTORE_DRILL_FORCE:-0}" != "1" ]]; then
+  dom="$(date +%d)"      # 01..31, zero-padded → force base-10 below
+  if (( 10#$dom > 7 )); then
+    exit 0               # not the first week of the month → not the 1st Sunday
+  fi
+fi
+
+log "starting restore drill"
+
+# ---- 1. Locate the freshest encrypted dump --------------------------------
+# Newest by mtime (matches how fxmily-backup names them, TS-sorted anyway).
+LATEST="$(ls -1t "${BACKUP_DIR}"/fxmily-*.sql.gz.gpg 2>/dev/null | head -n1 || true)"
+if [[ -z "$LATEST" ]]; then
+  log "FAIL no encrypted dump found in $BACKUP_DIR — nothing to restore-drill"
+  exit 1
+fi
+log "using dump: $(basename "$LATEST")"
+
+WORK_DIR="$(mktemp -d)"
+PLAIN_GZ="${WORK_DIR}/restore.sql.gz"
+
+# ---- 2. Decrypt (never gunzip yet — psql reads the gunzip stream) ----------
+if ! gpg --quiet --batch --yes --decrypt \
+    --passphrase-file "$GPG_PASS_FILE" \
+    --output "$PLAIN_GZ" "$LATEST"; then
+  log "FAIL gpg decrypt of $(basename "$LATEST")"
+  exit 2
+fi
+
+# ---- 3. Boot a disposable, isolated Postgres -------------------------------
+# `--network none` + no published port = zero reachability to/from anything.
+SCRATCH_PW="drill_$(date -u +%s)_$$"
+if ! docker run -d --rm \
+    --name "$SCRATCH_NAME" \
+    --network none \
+    -e POSTGRES_USER=fxmily \
+    -e POSTGRES_PASSWORD="$SCRATCH_PW" \
+    -e POSTGRES_DB=fxmily \
+    "$PG_IMAGE" >/dev/null 2>&1; then
+  log "FAIL could not start scratch postgres container"
+  exit 3
+fi
+
+# Wait for the scratch DB to accept connections (bounded, ~60s). `exec -T` with
+# stdin redirected from /dev/null so the loop can't block on a stray read.
+READY=0
+for _ in $(seq 1 30); do
+  if docker exec "$SCRATCH_NAME" pg_isready -U fxmily -d fxmily >/dev/null 2>&1 </dev/null; then
+    READY=1
+    break
+  fi
+  sleep 2
+done
+if [[ "$READY" != "1" ]]; then
+  log "FAIL scratch postgres never became ready within ~60s"
+  # `|| true`: best-effort diagnostics. If the `--rm` scratch container already
+  # vanished, `docker logs` (or a SIGPIPE-141 on `tail`) exits non-zero; under
+  # `set -euo pipefail` that would abort with a MISLEADING code (1/141) instead
+  # of the contractual `exit 3` below. The log dump is nice-to-have, not the
+  # verdict — never let it override the real exit code.
+  docker logs "$SCRATCH_NAME" 2>&1 | tail -n 20 | while IFS= read -r l; do log "  pg: $l"; done || true
+  exit 3
+fi
+
+# ---- 4. Restore : gunzip the plaintext dump straight into psql -------------
+# Stream the decrypted gzip through gunzip into the scratch DB's psql. `exec -i`
+# pipes our stdin (the SQL) into the container; ON_ERROR_STOP=1 makes a bad
+# statement fail the restore loudly instead of a partial silent load.
+if ! gunzip -c "$PLAIN_GZ" | docker exec -i "$SCRATCH_NAME" \
+    psql -v ON_ERROR_STOP=1 -q -U fxmily -d fxmily >/dev/null 2>&1; then
+  log "FAIL psql restore into scratch DB reported an error"
+  exit 4
+fi
+log "restore into scratch DB OK"
+
+# ---- 5. Verify : count tables + rows in the key tables ---------------------
+# A dump can restore "successfully" yet be an empty schema (backup ran before
+# any data, or dumped the wrong DB). Assert real content.
+TABLE_COUNT="$(docker exec "$SCRATCH_NAME" \
+  psql -tAX -U fxmily -d fxmily </dev/null \
+  -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';" \
+  2>/dev/null | tr -d '[:space:]')"
+[[ "$TABLE_COUNT" =~ ^[0-9]+$ ]] || TABLE_COUNT=0
+log "restored schema has ${TABLE_COUNT} public tables"
+
+if (( TABLE_COUNT == 0 )); then
+  log "FAIL restored DB has ZERO public tables — the dump restored an empty schema"
+  exit 5
+fi
+
+nonempty=0
+for tbl in "${KEY_TABLES[@]}"; do
+  # `to_regclass` guards a table that legitimately does not exist yet (early
+  # cohort) so a missing table is reported, not a psql error.
+  rows="$(docker exec "$SCRATCH_NAME" \
+    psql -tAX -U fxmily -d fxmily </dev/null \
+    -c "SELECT CASE WHEN to_regclass('public.${tbl}') IS NULL THEN -1 ELSE (SELECT count(*) FROM public.${tbl}) END;" \
+    2>/dev/null | tr -d '[:space:]')"
+  [[ "$rows" =~ ^-?[0-9]+$ ]] || rows="-1"
+  if (( rows < 0 )); then
+    log "  table ${tbl}: ABSENT from restored schema"
+  else
+    log "  table ${tbl}: ${rows} rows"
+    (( rows > 0 )) && nonempty=1
+  fi
+done
+
+# The drill PASSES if the schema restored (tables > 0) and at least one key
+# table carries rows — proof the dump holds real member data, not just DDL.
+if (( nonempty == 0 )); then
+  log "FAIL restored schema has tables but ZERO rows across all key tables (${KEY_TABLES[*]}) — dump may be structure-only"
+  exit 5
+fi
+log "PASS restore drill verified — schema + real rows present"
+
+# ---- 6. Dead-man-switch success ping (opt-in, env-gated) ------------------
+# Ping ONLY after a fully-successful drill. A MISSING ping (drill crashed, host
+# down, restore failed) is the alert signal, same contract as the backup pings.
+# No-op until HEALTHCHECK_PING_URL_RESTORE is set in cron.env.
+PING_URL="${HEALTHCHECK_PING_URL_RESTORE:-}"
+if [[ -n "$PING_URL" ]]; then
+  if curl -fsS -m 10 --retry 3 "$PING_URL" >/dev/null 2>&1; then
+    log "healthcheck ping OK"
+  else
+    log "WARNING healthcheck ping failed (drill itself passed)"
+  fi
+fi
+
+log "done"

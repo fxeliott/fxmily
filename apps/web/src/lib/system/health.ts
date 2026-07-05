@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { statfsSync } from 'node:fs';
+import { readFileSync, statfsSync } from 'node:fs';
+import path from 'node:path';
 
 import { localDateOf, localInstantToUtc } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
@@ -97,7 +98,12 @@ type CronAction =
   | 'meeting.generated' // generate-meetings (admin slug, see lib/auth/audit.ts:312)
   | 'cron.mindset_check_reminders.scan'
   | 'cron.purge_access_requests.scan'
-  | 'cron.health.scan';
+  | 'cron.health.scan'
+  // Tour 14 — host autoheal watchdog heartbeat (fxmily-autoheal, every minute
+  // on the always-on Hetzner host, POSTs hourly). Lives in the SERVER cron
+  // report (not the worker report) because the host never sleeps: a missing
+  // heartbeat means the watchdog itself is dead, an incident on prod infra.
+  | 'cron.autoheal.heartbeat';
 
 type CronExpectation = HeartbeatExpectation<CronAction>;
 
@@ -271,6 +277,24 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     // gap is normal operation for this scheduler, not a slow watcher: green
     // up to 3h, amber 3-6h, red past 6h.
     greenMultiplier: 3,
+  },
+  {
+    // Tour 14 — host autoheal watchdog heartbeat (P1-4). `fxmily-autoheal` runs
+    // every minute on the always-on Hetzner host but POSTs a counts-only
+    // heartbeat once an hour. Unlike the WORKER watchdog (personal PC that
+    // legitimately sleeps at night → 24h tolerance), the host NEVER sleeps, so
+    // a missing hourly heartbeat is a real signal: green ≤ 1.5h, amber ≤ 2h,
+    // red past 2h — the watchdog binary is gone, its cron line was stripped, or
+    // the app token drifted. `expectedSince` keeps it `pending` (calm "premier
+    // run à venir") until the deploy that ships the heartbeat has converged the
+    // host, instead of shouting "Jamais exécuté" the moment this expectation
+    // lands. A fresh row with escalations > 0 (mapped to metadata.errors by the
+    // route) escalates green → amber via buildHeartbeatReport.
+    action: 'cron.autoheal.heartbeat',
+    label: 'Autoheal watchdog (hôte)',
+    periodMs: HOUR,
+    toleranceMultiplier: 2, // red past 2h of silence on an always-on host
+    expectedSince: '2026-07-05T00:00:00Z',
   },
 ] as const;
 
@@ -770,6 +794,159 @@ export function getDiskHealth(path = '/'): DiskHealth {
       criticalBytes: DISK_CRITICAL_BYTES,
     };
   }
+}
+
+/**
+ * Tour 14 — uploads persistence health (data-loss self-detection).
+ *
+ * Member uploads (MT5 proofs = the S3 anti-lie evidence, trade + training
+ * shots, annotations) are written by `LocalStorageAdapter` under its upload
+ * root. That root is `process.env.UPLOADS_DIR` when set, else `<cwd>/.uploads`
+ * (kept in sync with apps/web/src/lib/storage/local.ts:44 — the single source
+ * of truth for the resolution). If that path resolves onto the container's
+ * EPHEMERAL overlay layer (no Docker volume mounted there), every deploy wipes
+ * the files while their DB rows survive → 404 on read, silently, with no other
+ * signal. This probe reads `/proc/mounts` and reports whether the upload root
+ * sits on a persistent volume (a real mount) or the ephemeral overlay/tmpfs.
+ *
+ * Detection ONLY — it never moves or writes files. The fix is infrastructural
+ * (mount the `fxmily-uploads` volume on the upload root + drop the stray
+ * `UPLOADS_DIR` from web.env); this card tells the operator whether that
+ * convergence has actually landed on the running container.
+ *
+ * Like `getDiskHealth`, it is an INSTANT sync probe (no audit gap), and any
+ * failure to read `/proc/mounts` (non-Linux dev host, sandbox, permission)
+ * degrades to `unknown` — neutral, never red, never a crash of the admin page.
+ */
+
+/** Filesystem types that live in a container's writable layer and are WIPED on
+ *  every `docker compose up -d` (i.e. every deploy). A member upload root on any
+ *  of these loses the bytes while the DB rows survive. */
+const EPHEMERAL_FS_TYPES = new Set(['overlay', 'overlayfs', 'tmpfs', 'ramfs']);
+
+export type UploadsPersistenceStatus = 'green' | 'amber' | 'red' | 'unknown';
+
+export interface UploadsPersistenceHealth {
+  status: UploadsPersistenceStatus;
+  /** Resolved upload root inspected (mirrors LocalStorageAdapter). */
+  uploadsRoot: string;
+  /** Longest-prefix mount point covering the upload root, or null if unresolved. */
+  mountPoint: string | null;
+  /** Filesystem type backing that mount point, or null when unread. */
+  fsType: string | null;
+  /** True when `fsType` is a known ephemeral (overlay/tmpfs) writable layer. */
+  ephemeral: boolean;
+}
+
+/**
+ * Resolve the upload root exactly as `LocalStorageAdapter` does. Kept local to
+ * avoid importing the storage adapter (heavy `server-only` module) into the
+ * health surface; MUST stay in lockstep with apps/web/src/lib/storage/local.ts.
+ */
+function resolveUploadsRoot(): string {
+  const fromEnv = process.env.UPLOADS_DIR;
+  if (fromEnv && fromEnv.trim().length > 0) {
+    return path.resolve(fromEnv);
+  }
+  return path.resolve(process.cwd(), '.uploads');
+}
+
+/**
+ * Parse a `/proc/mounts` body into `{ mountPoint, fsType }` records. Fields are
+ * space-separated: `device mountPoint fsType options dump pass`; path fields
+ * octal-escape spaces/tabs/newlines/backslash (`\040 \011 \012 \134`), which we
+ * decode so a mount point with a space still matches. Exported for unit tests.
+ */
+export function parseProcMounts(body: string): { mountPoint: string; fsType: string }[] {
+  const unescape = (field: string): string =>
+    field.replace(/\\(040|011|012|134)/g, (_, code) => {
+      switch (code) {
+        case '040':
+          return ' ';
+        case '011':
+          return '\t';
+        case '012':
+          return '\n';
+        default:
+          return '\\';
+      }
+    });
+  const records: { mountPoint: string; fsType: string }[] = [];
+  for (const line of body.split('\n')) {
+    if (line.trim().length === 0) continue;
+    const [, mountPoint, fsType] = line.split(' ');
+    if (mountPoint === undefined || fsType === undefined) continue;
+    records.push({ mountPoint: unescape(mountPoint), fsType });
+  }
+  return records;
+}
+
+/**
+ * Pick the mount whose mount point is the LONGEST prefix of `target` — the same
+ * longest-prefix rule `df`/`findmnt` use to attribute a path to its filesystem.
+ * A mount point matches when `target` equals it or lives under it (`/` matches
+ * everything as the shortest fallback). Exported for unit tests.
+ */
+export function mountForPath(
+  target: string,
+  mounts: { mountPoint: string; fsType: string }[],
+): { mountPoint: string; fsType: string } | null {
+  let best: { mountPoint: string; fsType: string } | null = null;
+  for (const mount of mounts) {
+    const mp = mount.mountPoint;
+    const isPrefix =
+      target === mp || mp === '/' || target.startsWith(mp.endsWith('/') ? mp : `${mp}/`);
+    if (!isPrefix) continue;
+    if (best === null || mp.length > best.mountPoint.length) best = mount;
+  }
+  return best;
+}
+
+/**
+ * Inspect where the member upload root lives. `procMounts` + `uploadsRoot` are
+ * injectable for tests; prod reads `/proc/mounts` and resolves the root the
+ * running container actually uses.
+ *
+ *   red     → upload root is on the ephemeral overlay/tmpfs layer: proofs are
+ *             being lost on every deploy RIGHT NOW.
+ *   green   → upload root is on a persistent mount (Docker volume / bind).
+ *   unknown → `/proc/mounts` unreadable or the root can't be attributed to a
+ *             mount (non-Linux dev host, sandbox) — neutral, no reading.
+ */
+export function getUploadsPersistenceHealth(
+  procMounts = '/proc/mounts',
+  uploadsRoot = resolveUploadsRoot(),
+): UploadsPersistenceHealth {
+  const neutral: UploadsPersistenceHealth = {
+    status: 'unknown',
+    uploadsRoot,
+    mountPoint: null,
+    fsType: null,
+    ephemeral: false,
+  };
+  let body: string;
+  try {
+    body = readFileSync(procMounts, 'utf8');
+  } catch {
+    // Non-Linux dev host / sandbox: no /proc, no reading — stay neutral.
+    return neutral;
+  }
+
+  const mount = mountForPath(uploadsRoot, parseProcMounts(body));
+  if (mount === null) {
+    // Could not attribute the root to any mount — report unknown rather than
+    // guessing persistence from a partial read.
+    return neutral;
+  }
+
+  const ephemeral = EPHEMERAL_FS_TYPES.has(mount.fsType.toLowerCase());
+  return {
+    status: ephemeral ? 'red' : 'green',
+    uploadsRoot,
+    mountPoint: mount.mountPoint,
+    fsType: mount.fsType,
+    ephemeral,
+  };
 }
 
 /**

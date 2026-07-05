@@ -109,6 +109,19 @@ MAILTO=""
 # BACKUP_REQUIRE_OFFSITE=1 and R2 is unconfigured (§9-B durability).
 45 6 * * *                   fxmily   /usr/local/bin/fxmily-uploads-backup
 
+# Tour 14 §9-B — monthly PROVEN-RESTORE drill : 1st Sunday 05:00 Paris. A
+# backup you have never restored is a hope, not a backup. This runs EVERY
+# Sunday 05:00 but the script self-gates to the 1st Sunday only (Debian crond
+# ORs a restricted dom+dow, so the "1st Sunday" logic lives in the binary, not
+# this field). It takes the freshest encrypted pg dump, restores it into a
+# DISPOSABLE, network-isolated (`--network none`, no published port) scratch
+# Postgres, and asserts real tables + rows exist (users/daily_checkins/trades).
+# NEVER touches prod. 05:10 is clear of the 02:30 pg backup, the 06:30/06:45
+# volume backups AND the 05:00 purge-push-subscriptions (CX22 = 2 vCPU — the
+# scratch-postgres restore should not race another job). Logs the verdict to
+# cron.log; pings HEALTHCHECK_PING_URL_RESTORE on success if set.
+10 5 * * 0                   fxmily   /usr/local/bin/fxmily-restore-drill
+
 # V1.5 §27 — QCM athlète weekly mindset reminder : Monday 09:00 UTC. The
 # mindset week opens Monday (`weekStart`); one gentle anti-FOMO nudge per
 # week (no email). 09:00 UTC is a free Monday slot — no overlap with the

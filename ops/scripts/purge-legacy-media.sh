@@ -67,13 +67,16 @@ if ! docker inspect "$WEB_CT" >/dev/null 2>&1; then
 fi
 
 # psql helper — `-T` (no TTY), tuples-only + unaligned for scriptable scalars.
+# `</dev/null` is load-bearing: without it, `docker compose exec` keeps stdin
+# attached and psql SWALLOWS the rest of the script when it is streamed
+# (`ssh host 'bash -s' < script`), silently truncating the run at this line.
 psql_scalar() {
   docker compose -f "$COMPOSE" exec -T postgres \
-    psql -U fxmily -d fxmily -tA -c "$1"
+    psql -U fxmily -d fxmily -tA -c "$1" </dev/null
 }
 psql_run() {
   docker compose -f "$COMPOSE" exec -T postgres \
-    psql -U fxmily -d fxmily -c "$1"
+    psql -U fxmily -d fxmily -c "$1" </dev/null
 }
 
 # Resolve the uploads root the app writes to (UPLOADS_DIR override or default).
@@ -104,9 +107,11 @@ for prefix in "${LEGACY_PREFIXES[@]}"; do
     if [ -d "$d" ]; then
       c=$(find "$d" -type f 2>/dev/null | wc -l)
       b=$(find "$d" -type f -printf "%s\n" 2>/dev/null | awk "{s+=\$1} END {print s+0}")
-      printf "%s %s" "${c:-0}" "${b:-0}"
+      # Trailing \n is load-bearing: `read` exits 1 on EOF without a final
+      # newline, which kills the script under `set -e` before any output.
+      printf "%s %s\n" "${c:-0}" "${b:-0}"
     else
-      printf "0 0"
+      printf "0 0\n"
     fi
   ' _ "$dir")
   printf "  %-22s %8s files   %14s bytes\n" "$prefix/" "$count" "$bytes"

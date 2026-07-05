@@ -235,6 +235,31 @@ describe('buildWeeklyReportUserPrompt — §28 process/habit axes reach the prom
   });
 });
 
+describe('buildWeeklyReportUserPrompt — off days reach the prompt as a choice of process (Tour 14)', () => {
+  it('appends the off-day count to the check-in line + the process instruction when there are off days', () => {
+    const input = emptyInput();
+    input.offDaysInWindow = 2;
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(input));
+    expect(prompt).toContain('2 jours off');
+    // The instruction the AI must read: a jour off is a CHOICE, never a lack.
+    expect(prompt).toContain('est un CHOIX de process, jamais un manque de check-in');
+  });
+
+  it('singularises a single off day', () => {
+    const input = emptyInput();
+    input.offDaysInWindow = 1;
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(input));
+    expect(prompt).toContain('1 jour off');
+    expect(prompt).not.toContain('1 jours off');
+  });
+
+  it('omits the off-day mention entirely when there are none (no fake "0 jour off")', () => {
+    const prompt = buildWeeklyReportUserPrompt(buildWeeklySnapshot(emptyInput()));
+    expect(prompt).not.toContain('jour off');
+    expect(prompt).not.toContain('CHOIX de process');
+  });
+});
+
 describe('buildWeeklyReportUserPrompt — routine & lifestyle line reaches the prompt (§7.10/§30)', () => {
   it('renders the routine & lifestyle line (count-only, posture §2)', () => {
     const input = emptyInput();

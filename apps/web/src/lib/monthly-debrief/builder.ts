@@ -325,6 +325,9 @@ function buildRealCounters(input: MonthlyBuilderInput): MonthlySnapshot['real'] 
     morningCheckinsCount: morningCheckins.length,
     eveningCheckinsCount: eveningCheckins.length,
     distinctCheckinDays,
+    // Tour 14 — off days in the month (loader-precomputed, count-only). A jour
+    // off is a choice of process, never a missing check-in (§31.2).
+    offDaysCount: Math.max(0, input.offDaysInWindow ?? 0),
     sleepHoursMedian: median(sleepHours),
     moodMedian: median(moodScores),
     stressMedian: median(stressScores),

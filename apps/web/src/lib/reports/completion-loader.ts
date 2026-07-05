@@ -1,6 +1,9 @@
 import 'server-only';
 
-import { parseLocalDate } from '@/lib/checkin/timezone';
+// Tour 14 — off-day context over the report period, to shrink the coverage
+// denominator + bridge the continuity run (a weekend off never breaks it).
+import { getOffDaySet, isOffDay } from '@/lib/checkin/off-days';
+import { parseLocalDate, shiftLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 
 import { buildCompletionSummary, type CompletionSummary } from './completion';
@@ -31,14 +34,27 @@ export async function loadCompletionSummary(
   periodStartLocal: string,
   periodEndLocal: string,
 ): Promise<CompletionSummary> {
-  const rows = await db.dailyCheckin.findMany({
-    where: {
-      userId,
-      date: { gte: parseLocalDate(periodStartLocal), lte: parseLocalDate(periodEndLocal) },
-    },
-    select: { date: true, slot: true, morningRoutineCompleted: true },
-    orderBy: { date: 'asc' },
-  });
+  const [rows, offCtx] = await Promise.all([
+    db.dailyCheckin.findMany({
+      where: {
+        userId,
+        date: { gte: parseLocalDate(periodStartLocal), lte: parseLocalDate(periodEndLocal) },
+      },
+      select: { date: true, slot: true, morningRoutineCompleted: true },
+      orderBy: { date: 'asc' },
+    }),
+    // Tour 14 — off-day context over the SAME civil period (indexed query +
+    // React-cached weekend flag). Resolved to the concrete set of off dates
+    // below so the pure aggregator stays DB-free.
+    getOffDaySet(userId, periodStartLocal, periodEndLocal),
+  ]);
+
+  // Materialise the off dates inside the period (weekend-off folded in via
+  // `offCtx.weekendsOff`) so the pure aggregator receives a plain string set.
+  const offDays = new Set<string>();
+  for (let d = periodStartLocal; d <= periodEndLocal; d = shiftLocalDate(d, 1)) {
+    if (isOffDay(d, offCtx)) offDays.add(d);
+  }
 
   return buildCompletionSummary({
     periodStart: periodStartLocal,
@@ -48,5 +64,6 @@ export async function loadCompletionSummary(
       slot: row.slot,
       morningRoutineCompleted: row.morningRoutineCompleted,
     })),
+    offDays,
   });
 }

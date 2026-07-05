@@ -1,6 +1,10 @@
 import 'server-only';
 
 import { db } from '@/lib/db';
+// Tour 14 — off-day context over the report window, to pre-compute the count of
+// off days the AI reads as a choice of process (never a missing check-in, §31.2).
+import { getOffDaySet, isOffDay } from '@/lib/checkin/off-days';
+import { shiftLocalDate } from '@/lib/checkin/timezone';
 import type { SerializedCheckin } from '@/lib/checkin/service';
 // S5 §32-C/D — coaching psychologique. `getCoachingReportContext` agrège des
 // signaux de PROCESS (carte mentale, constance, micro-objectifs, momentum) —
@@ -149,6 +153,7 @@ export async function loadWeeklySliceForUser(
     alertCount,
     coaching,
     memberProfileRow,
+    offCtx,
   ] = await Promise.all([
     loadTrades(userId, window),
     loadCheckins(userId, window),
@@ -215,6 +220,11 @@ export async function loadWeeklySliceForUser(
       where: { userId },
       select: { coachingTone: true, learningStage: true },
     }),
+    // Tour 14 — off-day context over the SAME civil window as the check-in slice
+    // (weekStartLocal → weekEndLocal). A single indexed query + the member's
+    // `weekendsOff` flag (React-cached). Feeds `offDaysInWindow` so the report
+    // reads a jour off as a choice of process, never a missing check-in (§31.2).
+    getOffDaySet(userId, window.weekStartLocal, window.weekEndLocal),
   ]);
 
   // DOD3-01 / DoD#2 S6 — a single report week has ≤1 ConstancyScore; take it (or
@@ -246,6 +256,14 @@ export async function loadWeeklySliceForUser(
     learningStage: learningStageParsed.success ? learningStageParsed.data.stage : null,
   };
 
+  // Tour 14 — count the off days inside the report window [weekStartLocal,
+  // weekEndLocal] (both inclusive, civil-local). Weekends off-by-default are
+  // folded in via `offCtx.weekendsOff`, exactly like the scoring window count.
+  let offDaysInWindow = 0;
+  for (let d = window.weekStartLocal; d <= window.weekEndLocal; d = shiftLocalDate(d, 1)) {
+    if (isOffDay(d, offCtx)) offDaysInWindow += 1;
+  }
+
   const builderInput: BuilderInput = {
     userId: user.id,
     timezone: user.timezone,
@@ -270,6 +288,9 @@ export async function loadWeeklySliceForUser(
     // them into the explicit `meetingAttendance` counter ; 0/0 → `null` rate.
     meetingScheduledCount: meeting.scheduledCount,
     meetingCompletedCount: meeting.completedCount,
+    // Tour 14 — off days in the window (count-only). The builder folds it into
+    // the `offDaysCount` counter; the prompt reads it as a choice of process.
+    offDaysInWindow,
     latestScore: latestScore === null ? null : toScoreSnapshot(latestScore),
     // S15 #6/#7 — score history feeds the snapshot momentum signal (count-only).
     scoreHistory,

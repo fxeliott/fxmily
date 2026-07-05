@@ -199,6 +199,30 @@ describe('buildMonthlyDebriefUserPrompt — §28 process/habit axes reach the pr
   });
 });
 
+describe('buildMonthlyDebriefUserPrompt — off days reach the prompt as a choice of process (Tour 14)', () => {
+  it('appends the off-day count to the check-in line + the process instruction', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(baseInput({ offDaysInWindow: 8 })),
+    );
+    expect(prompt).toContain('8 jours off');
+    expect(prompt).toContain('est un CHOIX de process, jamais un manque de check-in');
+  });
+
+  it('singularises a single off day', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(
+      buildMonthlySnapshot(baseInput({ offDaysInWindow: 1 })),
+    );
+    expect(prompt).toContain('1 jour off');
+    expect(prompt).not.toContain('1 jours off');
+  });
+
+  it('omits the off-day mention entirely when there are none (no fake "0 jour off")', () => {
+    const prompt = buildMonthlyDebriefUserPrompt(buildMonthlySnapshot(baseInput()));
+    expect(prompt).not.toContain('jour off');
+    expect(prompt).not.toContain('CHOIX de process');
+  });
+});
+
 // =============================================================================
 // FIX C S5 — emotion tags reach the snapshot AND the prompt text
 // =============================================================================

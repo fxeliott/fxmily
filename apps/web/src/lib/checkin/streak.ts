@@ -27,12 +27,22 @@ export interface CheckinDay {
 /**
  * Count consecutive days with ≥1 check-in ending at `today`.
  *
- * @param days   Pre-fetched check-in rows. Order doesn't matter; duplicates
- *               are tolerated (we collapse to a Set of dates internally).
- * @param today  The "today" anchor in the user's local TZ (YYYY-MM-DD). Use
- *               `localDateOf(new Date(), user.timezone)` upstream.
+ * @param days     Pre-fetched check-in rows. Order doesn't matter; duplicates
+ *                 are tolerated (we collapse to a Set of dates internally).
+ * @param today    The "today" anchor in the user's local TZ (YYYY-MM-DD). Use
+ *                 `localDateOf(new Date(), user.timezone)` upstream.
+ * @param isOffDay Optional off-day predicate (Tour 14). An off day the member
+ *                 did NOT fill is a "pont": the backward walk STEPS OVER it —
+ *                 it neither counts toward the streak nor breaks it. A day the
+ *                 member DID fill always counts, even if it is off (the rempli
+ *                 wins). Omit it (or pass `undefined`) for the pre-Tour-14
+ *                 behaviour, byte-identical (no day is ever off).
  */
-export function computeStreak(days: readonly CheckinDay[], today: LocalDateString): number {
+export function computeStreak(
+  days: readonly CheckinDay[],
+  today: LocalDateString,
+  isOffDay?: (localDate: LocalDateString) => boolean,
+): number {
   if (days.length === 0) return 0;
 
   // Collapse to a Set of dates with ≥1 check-in. Future-dated rows (clock skew)
@@ -44,22 +54,40 @@ export function computeStreak(days: readonly CheckinDay[], today: LocalDateStrin
 
   if (filledDates.size === 0) return 0;
 
-  let cursor: LocalDateString;
-  let streak = 0;
+  // A day contributes to the run when it is filled; an UNFILLED off day is
+  // transparent (skipped, never a break); an unfilled non-off day breaks it.
+  const filled = (d: LocalDateString): boolean => filledDates.has(d);
+  const off = (d: LocalDateString): boolean => (isOffDay ? isOffDay(d) : false);
 
-  if (filledDates.has(today)) {
-    // Today is filled — start counting from today.
-    cursor = today;
-  } else {
-    // Today is empty — the streak is the run of consecutive days ending
-    // *yesterday*. If yesterday is also empty, streak is 0.
-    const yesterday = shiftLocalDate(today, -1);
-    if (!filledDates.has(yesterday)) return 0;
-    cursor = yesterday;
+  // Find the anchor: the most recent day at/just before `today` that is filled,
+  // stepping over unfilled off days (a weekend the member took off must not
+  // break a Friday→Monday streak). Today itself is optional — a member who
+  // hasn't checked in yet today still holds yesterday's streak — so we allow at
+  // most ONE unfilled, non-off day (today) before requiring a filled anchor.
+  let cursor = today;
+  if (!filled(cursor)) {
+    // Skip leading unfilled off days (e.g. an off weekend before today).
+    while (off(cursor) && !filled(cursor)) cursor = shiftLocalDate(cursor, -1);
+    if (!filled(cursor)) {
+      // `cursor` is now the first non-off unfilled day at/below today (today
+      // when today is a working day). Grace one such day (today may be empty)
+      // and look at the previous day as the anchor.
+      cursor = shiftLocalDate(cursor, -1);
+      // Skip unfilled off days again before the anchor.
+      while (off(cursor) && !filled(cursor)) cursor = shiftLocalDate(cursor, -1);
+      if (!filled(cursor)) return 0;
+    }
   }
 
-  while (filledDates.has(cursor)) {
-    streak += 1;
+  // Walk backwards from the anchor: count filled days, step over unfilled off
+  // days, stop at the first unfilled working day.
+  let streak = 0;
+  while (true) {
+    if (filled(cursor)) {
+      streak += 1;
+    } else if (!off(cursor)) {
+      break;
+    }
     cursor = shiftLocalDate(cursor, -1);
   }
 

@@ -17,6 +17,9 @@ vi.mock('@/lib/db', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
     },
+    // Tour 14 — `getStreak` loads the member's off-day context via `off-days.ts`.
+    user: { findUnique: vi.fn() },
+    memberOffDay: { findMany: vi.fn() },
   },
 }));
 
@@ -24,6 +27,7 @@ import { db } from '@/lib/db';
 
 import {
   CheckinBackfillJustificationRequiredError,
+  getStreak,
   getYesterdayBackfill,
   listMemberCheckinsAsAdmin,
   resolveBackfillDateParam,
@@ -311,25 +315,32 @@ describe('resolveBackfillDateParam — F7 backfill `?date=` validation', () => {
 
 describe('getYesterdayBackfill — F7 hub cue (per-slot gap for yesterday)', () => {
   const TZ = 'Europe/Paris';
-  // Paris-local yesterday at NOW_JUN10 = 2026-06-09.
+  // Paris-local yesterday at NOW_JUN10 = 2026-06-09 (a Tuesday — not a weekend).
   const YESTERDAY = new Date('2026-06-09T00:00:00.000Z');
+
+  beforeEach(() => {
+    // Tour 14 — `getYesterdayBackfill` first resolves the off-day context. By
+    // default the member is not off (weekday, weekends off, no explicit date).
+    vi.mocked(db.user.findUnique).mockResolvedValue({ weekendsOff: true } as never);
+    vi.mocked(db.memberOffDay.findMany).mockResolvedValue([] as never);
+  });
 
   it('queries yesterday and flags both slots missing when the day is empty', async () => {
     vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([] as never);
 
-    const out = await getYesterdayBackfill('user-1', TZ, NOW_JUN10);
+    const out = await getYesterdayBackfill('yb-both', TZ, NOW_JUN10);
 
     expect(out).toEqual({ date: '2026-06-09', morningMissing: true, eveningMissing: true });
     const call = vi.mocked(db.dailyCheckin.findMany).mock.calls[0]?.[0] as {
       where?: { userId?: string; date?: Date };
     };
-    expect(call.where).toEqual({ userId: 'user-1', date: YESTERDAY });
+    expect(call.where).toEqual({ userId: 'yb-both', date: YESTERDAY });
   });
 
   it('flags only the missing slot when one is present', async () => {
     vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([{ slot: 'morning' }] as never);
 
-    const out = await getYesterdayBackfill('user-1', TZ, NOW_JUN10);
+    const out = await getYesterdayBackfill('yb-one', TZ, NOW_JUN10);
 
     expect(out).toEqual({ date: '2026-06-09', morningMissing: false, eveningMissing: true });
   });
@@ -340,8 +351,61 @@ describe('getYesterdayBackfill — F7 hub cue (per-slot gap for yesterday)', () 
       { slot: 'evening' },
     ] as never);
 
-    const out = await getYesterdayBackfill('user-1', TZ, NOW_JUN10);
+    const out = await getYesterdayBackfill('yb-covered', TZ, NOW_JUN10);
 
     expect(out).toBeNull();
+  });
+
+  // Tour 14 — when yesterday was an OFF day there is nothing to catch up.
+  it('returns null (no cue) when yesterday was an explicit off day', async () => {
+    vi.mocked(db.memberOffDay.findMany).mockResolvedValue([{ date: YESTERDAY }] as never);
+
+    const out = await getYesterdayBackfill('yb-off', TZ, NOW_JUN10);
+
+    expect(out).toBeNull();
+    // The check-in query is never reached — the off day short-circuits first.
+    expect(vi.mocked(db.dailyCheckin.findMany)).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Tour 14 — `getStreak` threads the member's off-day context into the streak
+ * walk so an off weekend does not break a Friday→Monday streak. Distinct userIds
+ * per case avoid the React `cache()` memoisation collapsing them.
+ */
+describe('getStreak — off-day pont', () => {
+  const TZ = 'Europe/Paris';
+  // Monday 2026-06-08, 09:00 Paris.
+  const NOW_MON = new Date('2026-06-08T07:00:00.000Z');
+  const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
+
+  it('keeps a Friday→Monday streak alive across an off weekend (weekendsOff=true)', async () => {
+    // Filled Fri 06-05 + today Mon 06-08; the weekend is empty but off.
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([
+      { date: d('2026-06-08'), slot: 'morning' },
+      { date: d('2026-06-05'), slot: 'morning' },
+    ] as never);
+    vi.mocked(db.user.findUnique).mockResolvedValue({ weekendsOff: true } as never);
+    vi.mocked(db.memberOffDay.findMany).mockResolvedValue([] as never);
+
+    const out = await getStreak('streak-weekend', TZ, NOW_MON);
+
+    expect(out.current).toBe(2);
+    expect(out.today).toBe('2026-06-08');
+    expect(out.todayFilled).toBe(true);
+  });
+
+  it('breaks across the empty weekend when the member trades weekends (weekendsOff=false)', async () => {
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([
+      { date: d('2026-06-08'), slot: 'morning' },
+      { date: d('2026-06-05'), slot: 'morning' },
+    ] as never);
+    vi.mocked(db.user.findUnique).mockResolvedValue({ weekendsOff: false } as never);
+    vi.mocked(db.memberOffDay.findMany).mockResolvedValue([] as never);
+
+    const out = await getStreak('streak-trader', TZ, NOW_MON);
+
+    // The empty Sat/Sun are working days for this member → today only.
+    expect(out.current).toBe(1);
   });
 });

@@ -177,6 +177,12 @@ describe('buildMonthlySnapshot — Session-2 axis counters (§28 — count-only,
     );
     expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
+
+  it('offDaysCount reflects the loader-precomputed off days (Tour 14), defaults to 0', () => {
+    expect(buildMonthlySnapshot(baseInput({ offDaysInWindow: 6 })).real.offDaysCount).toBe(6);
+    // Absent → byte-identical to pre-Tour-14 (0, never a fabricated count).
+    expect(buildMonthlySnapshot(baseInput()).real.offDaysCount).toBe(0);
+  });
 });
 
 describe('buildMonthlySnapshot — REAL counter maths (carbon weekly)', () => {

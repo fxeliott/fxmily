@@ -776,6 +776,16 @@ describe('buildWeeklySnapshot — Session-2 axis counters (§28 — count-only, 
     });
   });
 
+  it('offDaysCount reflects the loader-precomputed off days in the window (Tour 14)', () => {
+    const input = emptyInput();
+    input.offDaysInWindow = 2;
+    expect(buildWeeklySnapshot(input).counters.offDaysCount).toBe(2);
+  });
+
+  it('offDaysCount defaults to 0 when the loader did not wire off days (byte-identical)', () => {
+    expect(buildWeeklySnapshot(emptyInput()).counters.offDaysCount).toBe(0);
+  });
+
   it('all five axes default gracefully when the loader did not wire meeting counts', () => {
     const snap = buildWeeklySnapshot(emptyInput());
     expect(snap.counters.meetingAttendance).toEqual({ scheduled: 0, completed: 0, rate: null });

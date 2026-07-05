@@ -533,6 +533,9 @@ function buildCounters(input: BuilderInput): WeeklySnapshot['counters'] {
     },
     morningCheckinsCount: morningCheckins.length,
     eveningCheckinsCount: eveningCheckins.length,
+    // Tour 14 — off days in the window (loader-precomputed, count-only). A jour
+    // off is a choice of process, never a missing check-in (§31.2).
+    offDaysCount: Math.max(0, input.offDaysInWindow ?? 0),
     streakDays,
     sleepHoursMedian: median(sleepHours),
     moodMedian: median(moodScores),

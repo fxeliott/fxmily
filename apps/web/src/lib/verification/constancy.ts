@@ -3,6 +3,7 @@ import 'server-only';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { reportError } from '@/lib/observability';
+import { isWeekendLocalDate } from '@/lib/checkin/off-days';
 import {
   localDateOf,
   localInstantToUtc,
@@ -101,7 +102,11 @@ export async function scanRitualsForAllMembers(
       // their own signup day).
       createdAt: { lt: localInstantToUtc(yesterday, 0, 0, 0, 0, 'Europe/Paris') },
     },
-    select: { id: true },
+    // Tour 14 — `weekendsOff` drives the off-day pont: yesterday being off for a
+    // member means a TOTAL skip (no forgot event, no blank-day discrepancy — the
+    // day is neutral, NOT "excused"). A check-in actually filed on an off day
+    // still emits its `filled` event (the rempli always wins).
+    select: { id: true, weekendsOff: true },
   });
 
   // S10 perf — batch yesterday's check-ins for ALL scanned members in ONE
@@ -125,6 +130,19 @@ export async function scanRitualsForAllMembers(
     set.add(c.slot);
   }
 
+  // Tour 14 — resolve which members had YESTERDAY as an off day. Two sources:
+  // (a) it is a weekend and the member keeps weekends off (`weekendsOff`), or
+  // (b) they explicitly declared yesterday off. The explicit set is fetched in
+  // ONE bulk query (constant round-trips, mirror the check-in batch above).
+  const yesterdayIsWeekend = isWeekendLocalDate(yesterday);
+  const explicitOffRows = await db.memberOffDay.findMany({
+    where: { userId: { in: memberIds }, date: yesterdayDate },
+    select: { userId: true },
+  });
+  const explicitOffMembers = new Set(explicitOffRows.map((r) => r.userId));
+  const isMemberOffYesterday = (member: { id: string; weekendsOff: boolean }): boolean =>
+    explicitOffMembers.has(member.id) || (yesterdayIsWeekend && member.weekendsOff);
+
   let filledEvents = 0;
   let forgotEvents = 0;
   let blankDayDiscrepancies = 0;
@@ -137,13 +155,19 @@ export async function scanRitualsForAllMembers(
   // error handling moves to the settled-results zip.
   const settled = await mapMembersChunked(members, async (member) => {
     const filledSlots = checkinsByMember.get(member.id) ?? new Set<string>();
+    // Tour 14 — is yesterday an off day for THIS member? An off day is a "pont":
+    // no forgot event and no blank-day discrepancy (the day is neutral, not
+    // "excused"). Only the `filled` events for slots the member actually filed
+    // are emitted below (the rempli always wins).
+    const memberOff = isMemberOffYesterday(member);
 
     // A FULLY blank day materialises ONE excusable discrepancy FIRST, so
     // the day's `forgot` events can reference it — giving a « motif
     // valable » then excuses the whole day in the fold (« le score
-    // remonte », DoD §29/§31#3). Identity-deduped on (member, day).
+    // remonte », DoD §29/§31#3). Identity-deduped on (member, day). An off day
+    // raises NO discrepancy — a member who took the day off owes nothing.
     let blankDayDiscrepancyId: string | null = null;
-    if (filledSlots.size === 0) {
+    if (filledSlots.size === 0 && !memberOff) {
       const existing = await db.discrepancy.findFirst({
         where: { memberId: member.id, type: 'unfilled_no_reason', detectedAt: yesterdayDate },
         select: { id: true },
@@ -211,7 +235,10 @@ export async function scanRitualsForAllMembers(
           // keeps every ritual event in the week it belongs to.
           createdAt: yesterdayDate,
         });
-      } else {
+      } else if (!memberOff) {
+        // Tour 14 — a missing slot on an OFF day emits nothing: the day is a
+        // "pont", not a forgotten ritual. On a normal day it stays a forgot
+        // event (linked to the blank-day discrepancy when the whole day is empty).
         events.push({
           id: ritualEventId('forgot_no_reason', member.id, yesterday, slot),
           memberId: member.id,
@@ -223,7 +250,10 @@ export async function scanRitualsForAllMembers(
       }
     }
 
-    await db.scoreEvent.createMany({ data: events, skipDuplicates: true });
+    // A fully blank OFF day yields no events at all — skip the empty write.
+    if (events.length > 0) {
+      await db.scoreEvent.createMany({ data: events, skipDuplicates: true });
+    }
     filledEvents += events.filter((e) => e.reason === 'filled').length;
     forgotEvents += events.filter((e) => e.reason === 'forgot_no_reason').length;
   });

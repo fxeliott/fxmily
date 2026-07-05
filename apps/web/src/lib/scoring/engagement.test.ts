@@ -678,3 +678,95 @@ describe('computeEngagementScore — course adherence (SPEC §28/§22)', () => {
     expect(r.parts.formationFollowedRate).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tour 14 — off-day "pont" on the fill-rate denominator.
+//
+// Product semantics: an off day (weekend off-by-default OR an explicit
+// declaration) drops OUT of the fill-rate denominator. A member who takes
+// weekends off is scored against the days they actually owed a check-in
+// (`daysWithAny / max(1, windowDays − offDaysInWindow)`), NOT the full
+// calendar window — so the empty off days never deflate their engagement.
+//
+// ADDITION PURE: `offDaysInWindow` omitted / `0` leaves the denominator at
+// `windowDays`, byte-identical to pre-Tour-14. The value is clamped to
+// `[0, windowDays]` by the pure fn and the `max(1, …)` guard keeps the
+// denominator ≥ 1 even for a fully-off window.
+//
+// The wiring in `scoring/service.ts` computes `offDaysInWindow` by walking
+// the civil window `[windowStart, anchor]` through `isOffDay(day, offCtx)`;
+// this suite pins the pure-fn contract the wiring depends on.
+// ---------------------------------------------------------------------------
+
+describe('computeEngagementScore — off-day denominator (Tour 14)', () => {
+  it('ZERO REGRESSION — omitted ≡ offDaysInWindow 0 (byte-identical fill rate)', () => {
+    // 14/30 morning check-ins → fill 0.4667 either way when no day is off.
+    const checkins = Array.from({ length: 14 }, (_, i) => M(day(i)));
+    const omitted = computeEngagementScore({ checkins, streak: 14 });
+    const zero = computeEngagementScore({ checkins, streak: 14, offDaysInWindow: 0 });
+    expect(zero.score).toBe(omitted.score);
+    expect(zero.parts.checkinFillRate.rate).toBe(omitted.parts.checkinFillRate.rate);
+    expect(omitted.parts.checkinFillRate.denominator).toBe(30);
+  });
+
+  it('shrinks the fill denominator by the off-day count', () => {
+    // 14 filled days, 8 off days (e.g. the weekends) → denominator 30 − 8 = 22.
+    // fill = 14/22 = 0.6363̄ (vs 0.4667 without the pont).
+    const checkins = Array.from({ length: 14 }, (_, i) => M(day(i)));
+    const r = computeEngagementScore({ checkins, streak: 14, offDaysInWindow: 8 });
+    expect(r.parts.checkinFillRate.denominator).toBe(22);
+    expect(r.parts.checkinFillRate.rate).toBeCloseTo(14 / 22, 10);
+  });
+
+  it('lifts the score vs the same run with no off days (empty off days do not deflate)', () => {
+    const checkins = Array.from({ length: 14 }, (_, i) => M(day(i)));
+    const base = computeEngagementScore({ checkins, streak: 14 });
+    const withOff = computeEngagementScore({ checkins, streak: 14, offDaysInWindow: 8 });
+    expect(withOff.score!).toBeGreaterThan(base.score!);
+  });
+
+  it('a member who fills every WORKING day reaches fill rate 1 (off days excluded)', () => {
+    // 22 filled days, 8 off days → denominator 22, numerator 22 → fill 1.
+    const checkins = Array.from({ length: 22 }, (_, i) => M(day(i)));
+    const r = computeEngagementScore({ checkins, streak: 22, offDaysInWindow: 8 });
+    expect(r.parts.checkinFillRate.rate).toBe(1);
+    expect(r.parts.checkinFillRate.denominator).toBe(22);
+  });
+
+  it('clamps offDaysInWindow to the window and never divides by zero', () => {
+    // A pathological off-day count ≥ windowDays is clamped so the denominator
+    // floors at 1 (never a division by zero, never a negative denominator).
+    const checkins = Array.from({ length: 7 }, (_, i) => M(day(i)));
+    const r = computeEngagementScore({
+      checkins,
+      streak: 7,
+      windowDays: 7,
+      offDaysInWindow: 999,
+    });
+    expect(r.parts.checkinFillRate.denominator).toBe(1);
+    expect(Number.isFinite(r.parts.checkinFillRate.rate)).toBe(true);
+    // 7 filled / max(1, 7 − 7) = 7/1 → clamped to rate 1 (never > 1).
+    expect(r.parts.checkinFillRate.rate).toBe(1);
+  });
+
+  it('negative offDaysInWindow is floored at 0 (defensive — denominator unchanged)', () => {
+    const checkins = Array.from({ length: 14 }, (_, i) => M(day(i)));
+    const r = computeEngagementScore({ checkins, streak: 14, offDaysInWindow: -5 });
+    expect(r.parts.checkinFillRate.denominator).toBe(30);
+  });
+
+  it('a perfect run with off days stays exactly 100 (all active parts at rate 1)', () => {
+    // Fill every one of the 22 working days both slots + journal; 8 weekends off.
+    // Streak passed as 30 (the pont-aware streak steps over the off weekends, so a
+    // member who fills every working day can reach the 30-day streak cap) → the
+    // streak sub-score is also at rate 1, so the whole dimension lands on 100.
+    const checkins: EngagementCheckinInput[] = [];
+    for (let i = 0; i < 22; i++) {
+      checkins.push(M(day(i)));
+      checkins.push(E(day(i), 'journal'));
+    }
+    const r = computeEngagementScore({ checkins, streak: 30, offDaysInWindow: 8 });
+    expect(r.parts.checkinFillRate.rate).toBe(1);
+    expect(r.score).toBe(100);
+  });
+});

@@ -109,6 +109,10 @@ export const EXPORTED_USER_RELATIONS = [
   // engagement loops (axis + curated intention + outcome). Member-owned
   // content, no auth secret, no link to the trading edge (§21.5) → exported.
   'mentalMicroObjectives',
+  // Tour 14 — member-declared off days (date + optional free-text reason).
+  // The member's own planning content: no admin authorship, no secret →
+  // exported (art. 20), mirroring `dailyCheckins`.
+  'offDays',
 ] as const;
 
 /**
@@ -197,6 +201,7 @@ export interface UserDataExport {
   trackingSchedules: SafeTrackingSchedule[];
   // S5 §32-E3 — member's mental micro-objective engagement loops.
   mentalMicroObjectives: SafeMentalMicroObjective[];
+  offDays: SafeMemberOffDay[];
 }
 
 // Whitelist DTOs : explicit `Pick<>` (or shaped literal) per row so a future
@@ -273,6 +278,8 @@ type SafeTrackingSchedule = Awaited<ReturnType<typeof db.trackingSchedule.findMa
 type SafeMentalMicroObjective = Awaited<
   ReturnType<typeof db.mentalMicroObjective.findMany>
 >[number];
+// Tour 14 — member-declared off days (date + optional reason, member-owned).
+type SafeMemberOffDay = Awaited<ReturnType<typeof db.memberOffDay.findMany>>[number];
 
 type SafePushSubscription = {
   id: string;
@@ -330,6 +337,7 @@ export interface ExportSummary {
   trackingEntryCount: number;
   trackingScheduleCount: number;
   mentalMicroObjectiveCount: number;
+  offDayCount: number;
 }
 
 export async function buildUserDataExport(userId: string): Promise<UserDataExport> {
@@ -446,6 +454,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     trackingEntries,
     trackingSchedules,
     mentalMicroObjectives,
+    offDays,
   ] = await Promise.all([
     db.weeklyReview.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
     db.reflectionEntry.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
@@ -480,6 +489,8 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
       where: { memberId: userId },
       orderBy: { createdAt: 'asc' },
     }),
+    // Tour 14 — member-declared off days, calendar order.
+    db.memberOffDay.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
   ]);
 
   return {
@@ -530,6 +541,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
     trackingEntries,
     trackingSchedules,
     mentalMicroObjectives,
+    offDays,
   };
 }
 
@@ -574,6 +586,7 @@ export function summariseExport(snapshot: UserDataExport): ExportSummary {
     trackingEntryCount: snapshot.trackingEntries.length,
     trackingScheduleCount: snapshot.trackingSchedules.length,
     mentalMicroObjectiveCount: snapshot.mentalMicroObjectives.length,
+    offDayCount: snapshot.offDays.length,
   };
 }
 

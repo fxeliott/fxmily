@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { enqueueCheckinReminder } from '@/lib/notifications/enqueue';
 
+import { isOffDay, type OffDayContext } from './off-days';
 import { computeStreak, type CheckinDay, type CheckinSlotName } from './streak';
 import {
   isEveningReminderDue,
@@ -11,6 +12,7 @@ import {
   localDateOf,
   parseLocalDate,
   shiftLocalDate,
+  type LocalDateString,
 } from './timezone';
 
 /**
@@ -46,6 +48,14 @@ export interface ReminderScanResult {
   enqueuedEvening: number;
   skipped: number;
   /**
+   * Tour 14 — subset of `skipped` whose reason is an off day (weekend off or an
+   * explicit declaration): a "pont" suppression, never a failure. Surfaced in
+   * the heartbeat so an operator can tell a calm all-off weekend (many
+   * off-day skips, 0 errors) apart from a silent breakage. The health check keys
+   * red/amber on `errors`, so an all-off scan stays green.
+   */
+  offDaySkipped: number;
+  /**
    * Due-but-unfilled slots whose enqueue genuinely FAILED (a `null` id that is
    * NOT the P2002 no-op). Surfaced in the heartbeat so health.ts escalates the
    * cron green→amber instead of hiding a failed reminder in `skipped`. A-Z fix.
@@ -58,6 +68,8 @@ export interface ReminderScanResult {
 interface ScanCandidate {
   id: string;
   timezone: string;
+  /** Tour 14 — weekend off preference (drives the off-day pont). */
+  weekendsOff: boolean;
 }
 
 /**
@@ -73,6 +85,7 @@ export async function runCheckinReminderScan(
     enqueuedMorning: 0,
     enqueuedEvening: 0,
     skipped: 0,
+    offDaySkipped: 0,
     errors: 0,
     ranAt: now.toISOString(),
   };
@@ -85,7 +98,7 @@ export async function runCheckinReminderScan(
       role: 'member',
       ...(options.userIds?.length ? { id: { in: options.userIds } } : {}),
     },
-    select: { id: true, timezone: true },
+    select: { id: true, timezone: true, weekendsOff: true },
   });
 
   if (users.length === 0) {
@@ -140,6 +153,7 @@ export async function runCheckinReminderScan(
     return {
       id: u.id,
       tz,
+      weekendsOff: u.weekendsOff,
       today: todayLookup(tz),
       morningDue: isMorningReminderDue(now, tz),
       eveningDue: isEveningReminderDue(now, tz),
@@ -173,6 +187,30 @@ export async function runCheckinReminderScan(
     select: { userId: true, date: true, slot: true },
   });
 
+  // Tour 14 — bulk-fetch the EXPLICIT off days for the due members over the SAME
+  // trailing window as the check-ins, in ONE query. Combined with each member's
+  // `weekendsOff` flag (already on `userMeta`), this drives both the streak pont
+  // (unfilled off days are stepped over) and the enqueue filter (a member whose
+  // LOCAL today is off gets no reminder). Still O(1) round-trips on the cron.
+  const offRows = await db.memberOffDay.findMany({
+    where: {
+      userId: { in: dueUserIds },
+      date: { gte: parseLocalDate(lowerBoundDate) },
+    },
+    select: { userId: true, date: true },
+  });
+  const explicitOffByUser = new Map<string, Set<LocalDateString>>();
+  for (const r of offRows) {
+    const dateStr = r.date.toISOString().slice(0, 10);
+    const set = explicitOffByUser.get(r.userId);
+    if (set) set.add(dateStr);
+    else explicitOffByUser.set(r.userId, new Set([dateStr]));
+  }
+  const offCtxFor = (userId: string, weekendsOff: boolean): OffDayContext => ({
+    weekendsOff,
+    explicitDates: explicitOffByUser.get(userId) ?? new Set<LocalDateString>(),
+  });
+
   // Index by (userId, dateString, slot) for O(1) lookup in the per-user loop.
   // The `filled` gate only cares about TODAY, so we key the today rows; the
   // per-member streak days are accumulated separately over the whole window.
@@ -199,14 +237,16 @@ export async function runCheckinReminderScan(
    * Current streak for a member, computed in memory from the pre-fetched window.
    * `computeStreak` is pure (already used elsewhere) — reused here so the copy
    * and the app agree on what "streak" means. Anchored on the member's OWN local
-   * `today` (F2 — members can live in different timezones).
+   * `today` (F2 — members can live in different timezones). Tour 14 — the
+   * off-day pont is threaded through so an off weekend never breaks the streak
+   * line in the reminder copy (same semantics as the app's `getStreak`).
    */
-  const streakFor = (userId: string, today: string): number => {
+  const streakFor = (userId: string, today: string, offCtx: OffDayContext): number => {
     const byDate = daysByUser.get(userId);
     if (!byDate) return 0;
     const days: CheckinDay[] = [];
     for (const [date, slots] of byDate) days.push({ date, slots: [...slots] });
-    return computeStreak(days, today);
+    return computeStreak(days, today, (d) => isOffDay(d, offCtx));
   };
 
   // Per-user enqueue. The actual enqueue function is race-safe (P2002 catch),
@@ -217,13 +257,26 @@ export async function runCheckinReminderScan(
       result.skipped += 1;
       continue;
     }
+    // Tour 14 — a member whose LOCAL today is an off day gets NO reminder: the
+    // off day is a "pont" (no pressure, no nag). Counted as `skipped` with the
+    // reason surfaced in the heartbeat, NOT `errors`, so the cron stays green
+    // when everyone is off (e.g. a weekend). A member who nonetheless files a
+    // check-in on an off day is unaffected — this only suppresses the reminder.
+    const offCtx = offCtxFor(user.id, user.weekendsOff);
+    if (isOffDay(user.today, offCtx)) {
+      result.skipped += 1;
+      result.offDaySkipped += 1;
+      continue;
+    }
     // `attempted` = at least one due+unfilled slot tried to enqueue. A member
     // with nothing to enqueue (both filled / not due) is a legitimate `skipped`;
     // a member whose attempt returned a null id is an `errors` (NOT a skip) —
     // that's the whole point of the A-Z fix, so a failed reminder can't hide.
     let attempted = false;
     // Streak computed once per member (not per slot) from the pre-fetched window.
-    const streak = streakFor(user.id, user.today);
+    // The off-day context (already resolved for the filter above) is reused so
+    // the streak line steps over the member's off days.
+    const streak = streakFor(user.id, user.today, offCtx);
     if (user.morningDue && !filled.has(filledKey(user.id, user.today, 'morning'))) {
       attempted = true;
       const id = await enqueueCheckinReminder(user.id, {
@@ -255,6 +308,7 @@ export async function runCheckinReminderScan(
       enqueuedMorning: result.enqueuedMorning,
       enqueuedEvening: result.enqueuedEvening,
       skipped: result.skipped,
+      offDaySkipped: result.offDaySkipped,
       errors: result.errors,
       ranAt: result.ranAt,
     },

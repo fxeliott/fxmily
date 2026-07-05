@@ -38,6 +38,10 @@ vi.mock('@/lib/db', () => ({
     // reference degrades to `{ coachingRegister: null, learningStage: null }`,
     // keeping the S3-injection tests below byte-identical.
     memberProfile: { findUnique: vi.fn(async () => null) },
+    // Tour 14 — the loader now resolves the member's off-day context
+    // (getOffDaySet). No explicit off days by default, keeping counters
+    // byte-identical (weekendsOff: false is pinned on the user mock below).
+    memberOffDay: { findMany: vi.fn(async () => []) },
   },
 }));
 
@@ -94,6 +98,10 @@ beforeEach(() => {
     email: 'm@example.com',
     firstName: 'Mem',
     lastName: 'Ber',
+    // Tour 14 — getOffDaySet reads weekendsOff through the same findUnique
+    // mock; false = no weekend off days, so offDaysCount stays 0 and every
+    // pre-tour-14 counter assertion below remains byte-identical.
+    weekendsOff: false,
   } as never);
 });
 

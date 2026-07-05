@@ -4,6 +4,7 @@ import { cache } from 'react';
 
 import { Prisma } from '@/generated/prisma/client';
 
+import { getOffDaySet, isOffDay } from '@/lib/checkin/off-days';
 import {
   localDateOf,
   localInstantToUtc,
@@ -183,7 +184,7 @@ export async function computeScoresForUser(
     : windowStartUtc;
 
   // Parallel fetch — anti-waterfall.
-  const [trades, checkins, trainingActivity, meetingActivity] = await Promise.all([
+  const [trades, checkins, trainingActivity, meetingActivity, offCtx] = await Promise.all([
     db.trade.findMany({
       where: {
         userId,
@@ -256,7 +257,22 @@ export async function computeScoresForUser(
     // PERF-1 — pass the batch memo (undefined on the single-user path) so the
     // userId-independent denominator is computed once per window across a batch.
     countMeetingAttendance(userId, meetingFrom, windowEndExclusive, options.scheduledCountMemo),
+    // Tour 14 — off-day context over the SAME civil window as the check-in slice.
+    // A single indexed query + the member's `weekendsOff` flag (React-cached);
+    // used only to shrink the engagement fill-rate denominator so a member who
+    // legitimately skips a day is not penalised for the empty slot (SPEC pont —
+    // an off day neither counts nor breaks; it drops out of the denominator).
+    getOffDaySet(userId, windowStart, anchor),
   ]);
+
+  // Tour 14 — count the off days that fall inside the scoring window
+  // [windowStart, anchor] (both inclusive, civil-local). Weekends off-by-default
+  // are folded in via `offCtx.weekendsOff` so the denominator matches exactly the
+  // days the member was never expected to check in.
+  let offDaysInWindow = 0;
+  for (let d = windowStart; d <= anchor; d = shiftLocalDate(d, 1)) {
+    if (isOffDay(d, offCtx)) offDaysInWindow += 1;
+  }
 
   // Map to scoring inputs.
   const disciplineTrades: DisciplineTradeInput[] = trades.map((t) => ({
@@ -359,6 +375,10 @@ export async function computeScoresForUser(
     // engagement renormalizes to its exact pre-J-M4 value (ADDITION PURE §30.7).
     meetingScheduledCount: meetingActivity.scheduledCount,
     meetingCompletedCount: meetingActivity.completedCount,
+    // Tour 14 — off days shrink the fill-rate denominator (ADDITION PURE: when 0,
+    // the sub-score is byte-identical to pre-Tour-14). A member is judged on the
+    // days they were expected to show up, not on the days they legitimately took off.
+    offDaysInWindow,
   });
 
   const components: ComponentsJson = { discipline, emotionalStability, consistency, engagement };

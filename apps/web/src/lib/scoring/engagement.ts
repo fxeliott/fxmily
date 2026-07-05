@@ -57,6 +57,16 @@ export interface EngagementInput {
   /** Window length used for the fill-rate denominator. Default 30. */
   windowDays?: number;
   /**
+   * Tour 14 — number of OFF days (weekend off + explicit declarations) inside
+   * the scoring window. Removed from the fill-rate DENOMINATOR so a member who
+   * takes weekends off is not scored against days they never owed a check-in
+   * (`daysWithAny / max(1, windowDays − offDaysInWindow)`). Pure ADDITION:
+   * `undefined`/`0` leaves the denominator at `windowDays`, byte-identical to
+   * pre-Tour-14. Bounded to `[0, windowDays)` by the caller; the `max(1, …)`
+   * guard keeps the denominator ≥ 1 even for a fully-off window.
+   */
+  offDaysInWindow?: number;
+  /**
    * SPEC §21 J-T4 — number of the member's backtests within the scoring
    * window (effort/volume ONLY). `undefined` (the state of all 30 V1
    * members at deploy — TrainingTrade is empty) → the training sub-score is
@@ -157,6 +167,12 @@ const WEIGHT_FORMATION = 10;
 
 export function computeEngagementScore(input: EngagementInput): ScoreResult<EngagementParts> {
   const windowDays = input.windowDays ?? DEFAULT_WINDOW_DAYS;
+  // Tour 14 — the fill-rate denominator excludes off days: a member who takes
+  // weekends off is measured against the days they actually owed a check-in, not
+  // the full calendar window. `max(1, …)` keeps it ≥ 1 even for a fully-off
+  // window; `undefined`/`0` off days leave it at `windowDays` (byte-identical).
+  const offDaysInWindow = Math.min(Math.max(input.offDaysInWindow ?? 0, 0), windowDays);
+  const fillDenominator = Math.max(1, windowDays - offDaysInWindow);
 
   // Group check-ins by date.
   const byDate = new Map<string, { morning: boolean; evening: boolean; journal: boolean }>();
@@ -219,7 +235,7 @@ export function computeEngagementScore(input: EngagementInput): ScoreResult<Enga
       eveningsFilled,
       eveningsWithJournal,
       input.streak,
-      windowDays,
+      fillDenominator,
       input.trainingActivityCount,
       input.meetingScheduledCount,
       input.meetingCompletedCount,
@@ -243,7 +259,7 @@ export function computeEngagementScore(input: EngagementInput): ScoreResult<Enga
     eveningsFilled,
     eveningsWithJournal,
     input.streak,
-    windowDays,
+    fillDenominator,
     input.trainingActivityCount,
     input.meetingScheduledCount,
     input.meetingCompletedCount,
@@ -268,7 +284,9 @@ function computeParts(
   eveningsFilled: number,
   eveningsWithJournal: number,
   streak: number,
-  windowDays: number,
+  // Tour 14 — the off-day-adjusted fill-rate denominator (windowDays − offDays,
+  // floored at 1). Was `windowDays` pre-Tour-14; only the fill-rate uses it.
+  fillDenominator: number,
   trainingActivityCount: number | undefined,
   meetingScheduledCount: number | undefined,
   meetingCompletedCount: number | undefined,
@@ -280,7 +298,7 @@ function computeParts(
   parts: EngagementParts;
   partsForAggregate: Array<{ pointsAwarded: number; pointsMax: number } | null>;
 } {
-  const checkinFillRate = rateSubScore(daysWithAny, windowDays, WEIGHT_FILL);
+  const checkinFillRate = rateSubScore(daysWithAny, fillDenominator, WEIGHT_FILL);
 
   const dualSlotRate = rateSubScore(daysWithBoth, daysWithAny, WEIGHT_DUAL_SLOT);
 

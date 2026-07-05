@@ -122,6 +122,16 @@ export interface BuilderInput {
    * pre-S15 callers). COUNT-ONLY posture: scores 0–100, never P&L.
    */
   scoreHistory?: MomentumHistoryPoint[];
+  /**
+   * Tour 14 — number of OFF days (weekend kept off + explicit declarations) in
+   * the report window, PRE-COMPUTED by the loader (same pattern as
+   * `meetingScheduledCount` / `trainingActivityCount`). Count-only, posture §2.
+   * Optional: absent → the builder defaults it to 0 (existing fixtures +
+   * pre-Tour-14 callers stay valid; a 0 yields "0 jours off" ⇒ the prompt line
+   * simply omits it). Feeds the `offDaysCount` counter so the AI reads a jour off
+   * as a choice of process, never a missing check-in (§31.2).
+   */
+  offDaysInWindow?: number;
   /// DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters PRE-COMPOSED by
   /// the loader. `constancy` + `alertCount` are PERIOD-SCOPED to the reported week
   /// (the ConstancyScore OF that week + alerts triggered in it — NEVER

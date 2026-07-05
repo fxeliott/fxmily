@@ -13,6 +13,7 @@ import {
   type MorningCheckinInput,
 } from '@/lib/schemas/checkin';
 
+import { getOffDaySet, isOffDay } from './off-days';
 import { computeStreak, type CheckinDay } from './streak';
 import { localDateOf, parseLocalDate, shiftLocalDate, type LocalDateString } from './timezone';
 import { buildYearHeatmap, type HeatLevel, type YearHeatmap } from './year-heatmap';
@@ -471,6 +472,11 @@ export async function getYesterdayBackfill(
   now: Date = new Date(),
 ): Promise<YesterdayBackfill | null> {
   const yesterday = shiftLocalDate(todayFor(timezone, now), -1);
+  // Tour 14 — never offer to "rattraper hier" when yesterday was an off day:
+  // the member took the day off, there is nothing to catch up (no pressure,
+  // §31.2). Checked first so no cue is built for a neutral day.
+  const offCtx = await getOffDaySet(userId, yesterday, yesterday);
+  if (isOffDay(yesterday, offCtx)) return null;
   const rows = await db.dailyCheckin.findMany({
     where: { userId, date: parseLocalDate(yesterday) },
     select: { slot: true },
@@ -509,8 +515,15 @@ export const getStreak = cache(
     now: Date = new Date(),
   ): Promise<CheckinStreakSummary> => {
     const today = todayFor(timezone, now);
-    const days = await listRecentCheckinDays(userId, today, 60);
-    const current = computeStreak(days, today);
+    const windowStart = shiftLocalDate(today, -(60 - 1));
+    // Tour 14 — load the member's off-day context over the SAME 60-day window as
+    // the check-in rows so `computeStreak` can step over unfilled off days (an
+    // off weekend never breaks a Friday→Monday streak). One cached range query.
+    const [days, offCtx] = await Promise.all([
+      listRecentCheckinDays(userId, today, 60),
+      getOffDaySet(userId, windowStart, today),
+    ]);
+    const current = computeStreak(days, today, (d) => isOffDay(d, offCtx));
     const todayFilled = days.some((d) => d.date === today && d.slots.length > 0);
     return { current, todayFilled, today };
   },
@@ -528,13 +541,21 @@ export async function getDisciplineYearHeatmap(
   now: Date = new Date(),
 ): Promise<YearHeatmap> {
   const today = todayFor(timezone, now);
-  const days = await listRecentCheckinDays(userId, today, 380);
+  const windowStart = shiftLocalDate(today, -(380 - 1));
+  // Tour 14 — resolve the member's off-day context over the SAME window the
+  // heatmap covers, so an off day (weekend kept off, or an explicit
+  // declaration) is a distinct muted tint, never read as a blank level-0 gap
+  // (§31.2). One indexed range query + the `weekendsOff` flag, memoised.
+  const [days, offCtx] = await Promise.all([
+    listRecentCheckinDays(userId, today, 380),
+    getOffDaySet(userId, windowStart, today),
+  ]);
   const levelByDate = new Map<LocalDateString, HeatLevel>();
   for (const d of days) {
     const level = Math.min(d.slots.length, 2) as HeatLevel;
     if (level > 0) levelByDate.set(d.date, level);
   }
-  return buildYearHeatmap(levelByDate, today);
+  return buildYearHeatmap(levelByDate, today, (d) => isOffDay(d, offCtx));
 }
 
 export async function getCheckin(
@@ -571,6 +592,14 @@ export interface DayPoint {
   stressScore: number | null;
   /** True if at least one slot was filled (morning OR evening). */
   filled: boolean;
+  /**
+   * Tour 14 — the day is an OFF day (weekend kept off, or an explicit
+   * declaration). The sparkline/trend consumer reads this so an off day is NOT
+   * counted as a blank "trou" (a missing check-in): a rest is a chosen day, not
+   * a gap (§31.2). A day can be both `off` and `filled` (a check-in filed on an
+   * off day still counts — the rempli wins).
+   */
+  off: boolean;
 }
 
 export async function getLast7Days(
@@ -579,20 +608,25 @@ export async function getLast7Days(
   now: Date = new Date(),
 ): Promise<DayPoint[]> {
   const today = todayFor(timezone, now);
-  const startDate = parseLocalDate(today);
-  startDate.setUTCDate(startDate.getUTCDate() - 6);
+  const startLocal = shiftLocalDate(today, -6);
+  const startDate = parseLocalDate(startLocal);
 
-  const rows = await db.dailyCheckin.findMany({
-    where: { userId, date: { gte: startDate } },
-    select: {
-      date: true,
-      slot: true,
-      sleepHours: true,
-      moodScore: true,
-      stressScore: true,
-    },
-    orderBy: { date: 'desc' },
-  });
+  // Tour 14 — off-day context over the same 7-day window (weekend flag + explicit
+  // declarations), so the trend reads an off day as a chosen rest, never a trou.
+  const [rows, offCtx] = await Promise.all([
+    db.dailyCheckin.findMany({
+      where: { userId, date: { gte: startDate } },
+      select: {
+        date: true,
+        slot: true,
+        sleepHours: true,
+        moodScore: true,
+        stressScore: true,
+      },
+      orderBy: { date: 'desc' },
+    }),
+    getOffDaySet(userId, startLocal, today),
+  ]);
 
   // Bucket by date.
   const byDate = new Map<LocalDateString, typeof rows>();
@@ -626,6 +660,7 @@ export async function getLast7Days(
       moodScore: moodAvg,
       stressScore: evening?.stressScore ?? null,
       filled: dayRows.length > 0,
+      off: isOffDay(dateKey, offCtx),
     });
   }
   return out;

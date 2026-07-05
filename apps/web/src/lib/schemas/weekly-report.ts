@@ -205,6 +205,13 @@ const counterSliceSchema = z
       .strict(),
     morningCheckinsCount: z.number().int().min(0),
     eveningCheckinsCount: z.number().int().min(0),
+    /// Tour 14 — number of OFF days (weekend kept off + explicit declarations)
+    /// inside the report window. Count-only (posture §2). Surfaced in the prompt
+    /// so the AI reads a jour off as a CHOICE of process, never a missing
+    /// check-in (§31.2). `.default(0)` so historical persisted snapshots (written
+    /// before Tour 14, without the field) re-parse — the report text persists,
+    /// only the fresh snapshot carries the count.
+    offDaysCount: z.number().int().min(0).default(0),
     streakDays: z.number().int().min(0),
     sleepHoursMedian: z.number().min(0).max(24).nullable(),
     moodMedian: z.number().min(1).max(10).nullable(),

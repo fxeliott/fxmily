@@ -26,6 +26,8 @@ const m = vi.hoisted(() => ({
   checkinFindMany: vi.fn(),
   countTraining: vi.fn(),
   countMeeting: vi.fn(),
+  // Tour 14 — the scoring path now resolves the off-day context (getOffDaySet).
+  offDayFindMany: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -33,6 +35,7 @@ vi.mock('@/lib/db', () => ({
     user: { findUnique: m.userFindUnique },
     trade: { findMany: m.tradeFindMany },
     dailyCheckin: { findMany: m.checkinFindMany },
+    memberOffDay: { findMany: m.offDayFindMany },
   },
 }));
 
@@ -54,6 +57,10 @@ beforeEach(() => {
   m.checkinFindMany.mockResolvedValue([]);
   m.countTraining.mockResolvedValue({ count: 0 });
   m.countMeeting.mockResolvedValue({ scheduledCount: 0, completedCount: 0 });
+  // Tour 14 — no off days: weekendsOff false + empty explicit rows keep every
+  // TIME-1/TIME-2 window assertion below byte-identical to pre-tour-14.
+  m.userFindUnique.mockResolvedValue({ weekendsOff: false });
+  m.offDayFindMany.mockResolvedValue([]);
 });
 
 type TradeWhere = {

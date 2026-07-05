@@ -209,8 +209,17 @@ export function buildWeeklyReportUserPrompt(
 
   lines.push(`## Routine quotidienne`);
   lines.push(
-    `- Check-ins : ${c.morningCheckinsCount} matin · ${c.eveningCheckinsCount} soir · streak ${c.streakDays}j`,
+    // Tour 14 — les jours off n'apparaissent que s'il y en a (0 ⇒ ligne
+    // inchangée). Un jour off est un choix de process, jamais un manque (§31.2).
+    `- Check-ins : ${c.morningCheckinsCount} matin · ${c.eveningCheckinsCount} soir${
+      c.offDaysCount > 0 ? ` · ${c.offDaysCount} jour${c.offDaysCount === 1 ? '' : 's'} off` : ''
+    } · streak ${c.streakDays}j`,
   );
+  if (c.offDaysCount > 0) {
+    lines.push(
+      `  Un jour off (week-end sans trading ou jour posé par le membre) est un CHOIX de process, jamais un manque de check-in : ne le compte jamais comme une absence, ne le reproche jamais, et n'attends aucun check-in ces jours-là.`,
+    );
+  }
   // SPEC §21 J-T4 — volume de pratique (mode entraînement / backtest).
   // EFFORT only: a session count, never a backtest result. The training edge
   // is statistically isolated (§21.5) — Claude must treat this strictly as an

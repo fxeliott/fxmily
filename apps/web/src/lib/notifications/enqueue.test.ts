@@ -24,6 +24,7 @@ const {
   enqueueDouglasDeliveryNotification,
   enqueueMindsetCheckNotification,
   enqueueGentleVerificationReminder,
+  enqueueProofAnalyzedNotification,
 } = await import('./enqueue');
 
 afterEach(() => {
@@ -274,6 +275,40 @@ describe('enqueueDouglasDeliveryNotification', () => {
     const id = await enqueueDouglasDeliveryNotification('user_1', {
       deliveryId: 'del_2',
       cardSlug: 'anything',
+    });
+
+    expect(id).toBeNull();
+  });
+});
+
+/**
+ * Tour 14 — MT5 proof verdict push (member-facing, mirror monthly debrief).
+ * One push per member per batch run; PII-free payload (counts only).
+ */
+describe('enqueueProofAnalyzedNotification', () => {
+  it('enqueues a verification_proof_analyzed row with the counts and returns its id', async () => {
+    createMock.mockResolvedValueOnce({ id: 'notif_proof_1' });
+
+    const id = await enqueueProofAnalyzedNotification('member_1', {
+      analyzedCount: 2,
+      failedCount: 1,
+    });
+
+    expect(id).toBe('notif_proof_1');
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(createMock.mock.calls[0]?.[0]?.data).toMatchObject({
+      userId: 'member_1',
+      type: 'verification_proof_analyzed',
+      payload: { analyzedCount: 2, failedCount: 1 },
+    });
+  });
+
+  it('returns null on a DB error (best-effort — never throws, never rolls back the persist)', async () => {
+    createMock.mockRejectedValueOnce(new Error('queue down'));
+
+    const id = await enqueueProofAnalyzedNotification('member_1', {
+      analyzedCount: 1,
+      failedCount: 0,
     });
 
     expect(id).toBeNull();

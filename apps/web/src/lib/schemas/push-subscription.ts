@@ -137,6 +137,10 @@ export const NOTIFICATION_TYPES = [
   'monthly_debrief_ready',
   'mindset_check_ready',
   'verification_gentle_reminder',
+  // Tour 14 — member-facing verdict push when an uploaded MT5 proof reaches a
+  // terminal state (done/failed) in the vision batch. Mirror monthly_debrief_ready,
+  // one push per member per run, PII-free (counts only).
+  'verification_proof_analyzed',
   'training_reply_received',
 ] as const;
 export type NotificationTypeSlug = (typeof NOTIFICATION_TYPES)[number];

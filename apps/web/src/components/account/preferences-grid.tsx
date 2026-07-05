@@ -95,6 +95,12 @@ const CATEGORIES: CategoryMeta[] = [
       'Un unique rappel calme quand un élément de ton suivi reste de côté, l’occasion de t’expliquer s’il y a une raison, avant toute relance. Jamais insistant.',
   },
   {
+    type: 'verification_proof_analyzed',
+    label: 'Analyse de tes captures MT5',
+    description:
+      'Notification quand l’analyse d’une capture d’historique MT5 est terminée : tu vois le résultat sans avoir à recharger ta page de vérification.',
+  },
+  {
     type: 'training_reply_received',
     label: 'Réponses des membres à tes corrections (admin)',
     description:
@@ -115,6 +121,7 @@ export function PreferencesGrid({ initialPreferences, isAdmin }: Props): React.R
       monthly_debrief_ready: true,
       mindset_check_ready: true,
       verification_gentle_reminder: true,
+      verification_proof_analyzed: true,
       training_reply_received: true,
     };
     for (const type of NOTIFICATION_TYPES) {

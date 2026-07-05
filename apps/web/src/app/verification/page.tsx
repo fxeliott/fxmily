@@ -11,6 +11,7 @@ import { ConstancyTrend } from '@/components/verification/constancy-trend';
 import { DeleteProofButton } from '@/components/verification/delete-proof-button';
 import { DiscrepancyReasonForm } from '@/components/verification/discrepancy-reason-form';
 import { DriftAlertsCard } from '@/components/verification/drift-alerts-card';
+import { ProofAnalysisPoller } from '@/components/verification/proof-analysis-poller';
 import { ProofUploader } from '@/components/verification/proof-uploader';
 import { RealityVsDeclared } from '@/components/verification/reality-vs-declared';
 import { ScoreEventsHistory } from '@/components/verification/score-events-history';
@@ -423,6 +424,20 @@ export default async function VerificationPage() {
               accounts={overview.accounts.map((a) => ({ id: a.id, label: a.label }))}
             />
           </Card>
+
+          {/* Tour 14 — attente informée : tant qu'une preuve reste en analyse, la
+              page se rafraîchit doucement pour faire apparaître le verdict sans
+              rechargement manuel (invisible, suspendu onglet caché, cap 30 min). */}
+          <ProofAnalysisPoller pendingCount={overview.pendingProofsCount} />
+
+          {overview.pendingProofsCount > 0 ? (
+            <p className="t-cap inline-flex items-center gap-1.5 text-[var(--t-3)]" role="status">
+              <ScanSearch className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+              {overview.pendingProofsCount > 1
+                ? `${overview.pendingProofsCount} captures sont en cours d’analyse en arrière-plan. Le résultat s’affichera ici tout seul, tu peux quitter la page.`
+                : 'Une capture est en cours d’analyse en arrière-plan. Le résultat s’affichera ici tout seul, tu peux quitter la page.'}
+            </p>
+          ) : null}
 
           {overview.proofs.length > 0 ? (
             <ul className="grid grid-cols-1 gap-2 lg:grid-cols-2 xl:grid-cols-3">

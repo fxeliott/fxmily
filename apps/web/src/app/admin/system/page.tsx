@@ -1,4 +1,4 @@
-import { Activity, ArrowLeft, Bot, Database, ShieldCheck } from 'lucide-react';
+import { Activity, ArrowLeft, Bot, Database, HardDrive, ScanEye, ShieldCheck } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -10,10 +10,16 @@ import { Pill } from '@/components/ui/pill';
 import { logAudit } from '@/lib/auth/audit';
 import {
   getCronHealthReport,
+  getDiskHealth,
   getSystemSnapshot,
+  getVerificationBacklogHealth,
   getWorkerHealthReport,
   type CronStatus,
+  type DiskHealth,
+  type DiskStatus,
   type HeartbeatHealthEntry,
+  type VerificationBacklogHealth,
+  type VerificationBacklogStatus,
 } from '@/lib/system/health';
 
 /**
@@ -46,15 +52,26 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
     redirect('/login?redirect=/admin/system');
   }
 
-  const [report, workerReport, snapshot] = await Promise.all([
+  const [report, workerReport, snapshot, verificationBacklog] = await Promise.all([
     getCronHealthReport(),
     getWorkerHealthReport(),
     getSystemSnapshot(),
+    getVerificationBacklogHealth(),
   ]);
 
+  // Tour 13 — live disk probe (sync, cheap). Read AFTER the awaits so the
+  // reading is as fresh as the render. A full shared 40 GB volume stops
+  // Postgres AND the backups at once — the one signal that had no continuous
+  // monitor until now.
+  const disk = getDiskHealth();
+
   // The masthead pill must reflect the WHOLE page: a green server-cron board
-  // with a red local worker is still an incident for the operator.
-  const overall = worstStatus(report.overall, workerReport.overall);
+  // with a red local worker — or a proof queue stuck for hours — is still an
+  // incident for the operator.
+  const overall = worstStatus(
+    worstStatus(report.overall, workerReport.overall),
+    backlogToCronStatus(verificationBacklog.status),
+  );
 
   await logAudit({
     action: 'admin.system.viewed',
@@ -96,6 +113,69 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
           ).
         </p>
       </header>
+
+      <section
+        aria-labelledby="disk-heading"
+        className="mb-8 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
+      >
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--acc-dim)] text-[var(--acc-hi)]"
+          >
+            <HardDrive className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2
+              id="disk-heading"
+              className="flex flex-wrap items-center gap-2 text-base font-semibold text-[var(--t-1)]"
+            >
+              Espace disque
+              <DiskStatusPill status={disk.status} />
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
+              Le volume unique de la VM (40 Go) est partagé par l&apos;app, Postgres et les
+              sauvegardes. Un disque plein arrête Postgres et fait échouer la sauvegarde en même
+              temps. Sonde en direct à chaque render. Vert au-dessus de {formatGiB(disk.warnBytes)}{' '}
+              libres · Ambre en dessous · Rouge sous {formatGiB(disk.criticalBytes)}.
+            </p>
+          </div>
+        </div>
+
+        <DiskGauge disk={disk} />
+      </section>
+
+      <section
+        aria-labelledby="verification-backlog-heading"
+        className="mb-8 rounded-2xl border border-[var(--b-default)] bg-[var(--bg-1)] p-5 sm:p-6"
+      >
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--acc-dim)] text-[var(--acc-hi)]"
+          >
+            <ScanEye className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2
+              id="verification-backlog-heading"
+              className="flex flex-wrap items-center gap-2 text-base font-semibold text-[var(--t-1)]"
+            >
+              File de vérification
+              <VerificationBacklogPill status={verificationBacklog.status} />
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--t-3)]">
+              Les captures d&apos;historique MT5 sont analysées « sur le moment » : le worker passe
+              toutes les 20 minutes. On surveille la preuve la plus ancienne encore en attente. Vert
+              en dessous d&apos;{formatBacklogDuration(verificationBacklog.amberMs)} · Ambre au-delà
+              · Rouge au-delà de {formatBacklogDuration(verificationBacklog.redMs)} (le worker
+              aurait dû la traiter).
+            </p>
+          </div>
+        </div>
+
+        <VerificationBacklogDetail backlog={verificationBacklog} />
+      </section>
 
       <section
         aria-labelledby="cohort-heading"
@@ -258,6 +338,80 @@ export default async function AdminSystemPage(): Promise<React.ReactElement> {
       </p>
     </main>
   );
+}
+
+/**
+ * Tour 13 — disk free/used gauge. Presentational view of the instant probe.
+ * The bar fills with USED space so a nearly-full disk reads as a nearly-full
+ * bar (the intuitive direction), colour mirrors the status bucket. `unknown`
+ * (probe failed / exotic FS) renders a neutral "lecture indisponible" note
+ * instead of a lying gauge — never red, never a crash.
+ */
+function DiskGauge({ disk }: { disk: DiskHealth }): React.ReactElement {
+  if (disk.freeBytes === null || disk.totalBytes === null || disk.totalBytes <= 0) {
+    return (
+      <p className="mt-5 text-[11px] text-[var(--t-4)]">
+        Lecture de l&apos;espace disque indisponible sur cette plateforme. Aucune donnée à afficher.
+      </p>
+    );
+  }
+
+  const usedBytes = Math.max(0, disk.totalBytes - disk.freeBytes);
+  const usedPct = Math.min(100, Math.max(0, (usedBytes / disk.totalBytes) * 100));
+  const fill =
+    disk.status === 'green' ? 'var(--ok)' : disk.status === 'amber' ? 'var(--warn)' : 'var(--bad)';
+  // Where the green→amber boundary sits on the USED-space bar (warn threshold
+  // expressed as a used-percentage), so the operator reads the margin at a glance.
+  const warnThresholdPct = Math.min(
+    100,
+    ((disk.totalBytes - disk.warnBytes) / disk.totalBytes) * 100,
+  );
+
+  return (
+    <div className="mt-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <p className="text-sm text-[var(--t-2)]">
+          <span className="font-mono text-lg font-semibold text-[var(--t-1)] tabular-nums">
+            {formatGiB(disk.freeBytes)}
+          </span>{' '}
+          libres sur {formatGiB(disk.totalBytes)}
+        </p>
+        <p className="font-mono text-[11px] text-[var(--t-3)] tabular-nums">
+          {Math.round(usedPct)} % utilisé
+        </p>
+      </div>
+      <div
+        className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--bg-2)]"
+        role="img"
+        aria-label={`Disque : ${formatGiB(disk.freeBytes)} libres sur ${formatGiB(disk.totalBytes)} (${Math.round(usedPct)} % utilisé).`}
+      >
+        <div
+          className="h-full w-full origin-left rounded-full transition-transform"
+          style={{ transform: `scaleX(${usedPct / 100})`, backgroundColor: fill }}
+        />
+        {/* Tick marking the green→amber boundary (warn threshold). */}
+        <span
+          aria-hidden="true"
+          className="absolute top-0 bottom-0 w-px bg-[var(--b-default)]"
+          style={{ left: `${warnThresholdPct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DiskStatusPill({ status }: { status: DiskStatus }): React.ReactElement {
+  const tone =
+    status === 'green' ? 'ok' : status === 'amber' ? 'warn' : status === 'red' ? 'bad' : 'mute';
+  const label =
+    status === 'green'
+      ? 'OK'
+      : status === 'amber'
+        ? 'Faible'
+        : status === 'red'
+          ? 'Critique'
+          : 'Inconnu';
+  return <Pill tone={tone}>{label}</Pill>;
 }
 
 function SnapshotCard({
@@ -506,6 +660,95 @@ function worstStatus(a: CronStatus, b: CronStatus): CronStatus {
   return severity[a] >= severity[b] ? a : b;
 }
 
+/**
+ * Tour 13 — verification backlog pill. `idle` (nothing pending) reads as a calm
+ * "À jour", never an alarm; `green` means a fresh in-flight queue; amber/red
+ * escalate honestly. Tones stay on the shared ok/warn/bad/mute scale.
+ */
+function VerificationBacklogPill({
+  status,
+}: {
+  status: VerificationBacklogStatus;
+}): React.ReactElement {
+  const tone =
+    status === 'green' ? 'ok' : status === 'amber' ? 'warn' : status === 'red' ? 'bad' : 'mute';
+  const label =
+    status === 'green'
+      ? 'À jour'
+      : status === 'amber'
+        ? 'En retard'
+        : status === 'red'
+          ? 'Bloquée'
+          : 'À jour';
+  return <Pill tone={tone}>{label}</Pill>;
+}
+
+/**
+ * Detail line under the backlog pill. When idle, a single reassuring sentence;
+ * otherwise the pending count + the oldest wait, coloured by bucket (never red
+ * for a merely-fresh queue).
+ */
+function VerificationBacklogDetail({
+  backlog,
+}: {
+  backlog: VerificationBacklogHealth;
+}): React.ReactElement {
+  if (backlog.status === 'idle' || backlog.oldestPendingAgeMs === null) {
+    return (
+      <p className="mt-5 text-[11px] text-[var(--t-4)]">
+        Aucune preuve en attente. Toutes les captures reçues ont été analysées puis supprimées.
+      </p>
+    );
+  }
+
+  const ageTone =
+    backlog.status === 'red'
+      ? 'text-[var(--bad)]'
+      : backlog.status === 'amber'
+        ? 'text-[var(--warn)]'
+        : 'text-[var(--t-1)]';
+
+  return (
+    <div className="mt-5 flex flex-wrap items-baseline gap-x-6 gap-y-2">
+      <p className="text-sm text-[var(--t-2)]">
+        <span className="font-mono text-lg font-semibold text-[var(--t-1)] tabular-nums">
+          {backlog.pendingCount}
+        </span>{' '}
+        preuve{backlog.pendingCount > 1 ? 's' : ''} en attente
+      </p>
+      <p className="text-sm text-[var(--t-2)]">
+        Plus ancienne :{' '}
+        <span className={`font-mono text-lg font-semibold tabular-nums ${ageTone}`}>
+          {formatBacklogDuration(backlog.oldestPendingAgeMs)}
+        </span>
+        {backlog.oldestPendingAt ? (
+          <span className="ml-2 text-[11px] text-[var(--t-4)]">
+            depuis {formatTimestamp(backlog.oldestPendingAt)}
+          </span>
+        ) : null}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Map the backlog probe onto the shared `CronStatus` severity ladder so the
+ * masthead `worstStatus` can fold it in. `idle` = healthy (green); the queue
+ * being empty is the desired steady state, not an incident.
+ */
+function backlogToCronStatus(status: VerificationBacklogStatus): CronStatus {
+  return status === 'red' ? 'red' : status === 'amber' ? 'amber' : 'green'; // green + idle both fold to healthy
+}
+
+/** Coarse ms → "42 min" / "3 h" / "2 j" for the backlog age (own formatter so
+ *  the sub-minute floor reads "< 1 min" instead of "0s"). */
+function formatBacklogDuration(ms: number): string {
+  if (ms < 60_000) return '< 1 min';
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)} min`;
+  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)} h`;
+  return `${Math.round(ms / 86_400_000)} j`;
+}
+
 function formatRelative(iso: string): string {
   return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 }
@@ -519,4 +762,11 @@ function formatDuration(ms: number): string {
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
   if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h`;
   return `${Math.round(ms / 86_400_000)}j`;
+}
+
+/** Bytes → GiB with one decimal below 10 Go, integer above (e.g. "2,4 Go", "38 Go"). */
+function formatGiB(bytes: number): string {
+  const gib = bytes / (1024 * 1024 * 1024);
+  const value = gib < 10 ? gib.toFixed(1) : String(Math.round(gib));
+  return `${value.replace('.', ',')} Go`;
 }

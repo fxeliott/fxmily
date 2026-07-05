@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CalendarRange,
   Clapperboard,
+  ClipboardCheck,
   FileBarChart,
   HeartPulse,
   Inbox,
@@ -20,7 +21,7 @@ import { AnimatedNumber } from '@/components/ui/animated-number';
 import { HoverGlowLift } from '@/components/ui/hover-glow-lift';
 import { Pill } from '@/components/ui/pill';
 import { listPendingAccessRequests } from '@/lib/access-request/service';
-import { getCohortAttention } from '@/lib/admin/attention-service';
+import { getCohortAttention, getTriageQueueCounts } from '@/lib/admin/attention-service';
 import { getCatalogStats } from '@/lib/admin/cards-service';
 import { getMemberDirectoryStats } from '@/lib/admin/members-service';
 import { cn } from '@/lib/utils';
@@ -43,11 +44,12 @@ export default async function AdminHubPage() {
   const session = await auth();
   if (!session?.user || session.user.role !== 'admin') redirect('/login');
 
-  const [memberStats, pending, catalog, cohortAttention] = await Promise.all([
+  const [memberStats, pending, catalog, cohortAttention, triage] = await Promise.all([
     getMemberDirectoryStats(),
     listPendingAccessRequests(),
     getCatalogStats(),
     getCohortAttention(),
+    getTriageQueueCounts(),
   ]);
   const pendingCount = pending.length;
   // S7 §33-#2 — one triage number for the Members card: trades to comment + open
@@ -92,6 +94,21 @@ export default async function AdminHubPage() {
             pendingCount > 0 ? (
               <Pill tone="warn" dot>
                 {pendingCount} en attente
+              </Pill>
+            ) : (
+              <Pill tone="mute">À jour</Pill>
+            )
+          }
+        />
+        <HubCard
+          href="/admin/a-traiter"
+          icon={ClipboardCheck}
+          label="À traiter"
+          description="File de travail unifiée : trades à commenter, restés ouverts, écarts en attente."
+          badge={
+            triage.total > 0 ? (
+              <Pill tone="warn" dot>
+                {triage.total} à traiter
               </Pill>
             ) : (
               <Pill tone="mute">À jour</Pill>

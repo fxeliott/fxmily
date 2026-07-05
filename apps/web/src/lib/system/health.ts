@@ -1,5 +1,8 @@
 import 'server-only';
 
+import { statfsSync } from 'node:fs';
+
+import { localDateOf, localInstantToUtc } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 
 /**
@@ -44,14 +47,26 @@ interface HeartbeatExpectation<A extends string = string> {
    */
   greenMultiplier?: number;
   /**
-   * Tour 12 — window-bounded schedule (UTC). When set, the status is computed
-   * from MISSED EXPECTED TICKS instead of raw age: a cron that fires every
-   * 15 min inside 05-07h + 18-20h windows is HEALTHY at 12h even though its
+   * Tour 12 — window-bounded schedule. When set, the status is computed from
+   * MISSED EXPECTED TICKS instead of raw age: a cron that fires every 15 min
+   * inside its morning + evening windows is HEALTHY at noon even though its
    * last row is hours old. Raw-age classification flagged it "amber" all day,
    * every day, between windows — a structural false positive the operator
    * learns to ignore (which is how real incidents slip through).
+   *
+   * Tour 13 (prod bug fix) — the `hours` are wall-clock **Europe/Paris**, NOT
+   * UTC. The prod host runs in Europe/Paris (`/etc/localtime`, provisioned
+   * 2026-05-02) and Debian `crond` interprets `/etc/cron.d` hour fields in the
+   * host's LOCAL time, not UTC. So `crontab.fxmily` expresses Paris hours
+   * (`7-9,20-22`) and this model must expect the SAME Paris wall-clock ticks.
+   * The previous `windowedScheduleUtc: { hours: [...18,19,20] }` generated
+   * expected ticks in UTC, so every evening past ~19:15 UTC the model waited
+   * for ticks that crond never fires in UTC → a nightly FALSE red (the 19:37Z
+   * cron-watch 503 on 2026-07-04). `countMissedTicks` converts each
+   * `minutes × hours` wall-clock Paris tick to a UTC instant (DST-correct via
+   * `localInstantToUtc`), so the two agree across CET/CEST.
    */
-  windowedScheduleUtc?: { minutes: readonly number[]; hours: readonly number[] };
+  windowedScheduleParis?: { minutes: readonly number[]; hours: readonly number[] };
   /**
    * Tour 12 — ISO date from which this heartbeat is EXPECTED to exist (task
    * installed / cron wired). A missing row before `expectedSince + tolerance`
@@ -98,8 +113,12 @@ const EXPECTATIONS: readonly CronExpectation[] = [
     label: 'Check-in reminders',
     periodMs: 15 * MIN, // every 15 min inside the windows below (crontab.fxmily:56)
     toleranceMultiplier: 80, // still bounds the age bar; status comes from missed ticks
-    // `0,15,30,45 5-7,18-20 * * *` — Paris morning + evening check-in windows.
-    windowedScheduleUtc: { minutes: [0, 15, 30, 45], hours: [5, 6, 7, 18, 19, 20] },
+    // `0,15,30,45 7-9,20-22 * * *` in `crontab.fxmily` — crond reads these as
+    // Europe/Paris LOCAL hours (host tz), covering the member reminder windows
+    // (Paris 07:30-09:00 + 20:30-22:00, lib/checkin/timezone.ts) plus grace.
+    // Hours below are the SAME Paris wall-clock; countMissedTicks converts them
+    // to UTC instants (DST-correct) before comparing with the audit rows.
+    windowedScheduleParis: { minutes: [0, 15, 30, 45], hours: [7, 8, 9, 20, 21, 22] },
   },
   {
     action: 'cron.recompute_scores.scan',
@@ -363,9 +382,9 @@ async function buildHeartbeatReport<A extends string>(
         firstRunDeadline !== null && now.getTime() <= new Date(firstRunDeadline).getTime()
           ? 'pending'
           : 'never_ran';
-    } else if (expectation.windowedScheduleUtc) {
+    } else if (expectation.windowedScheduleParis) {
       // Window-bounded cron: classify on missed expected ticks, not raw age.
-      const missed = countMissedTicks(expectation.windowedScheduleUtc, lastRanAt, now);
+      const missed = countMissedTicks(expectation.windowedScheduleParis, lastRanAt, now);
       status = missed === 0 ? 'green' : missed <= 2 ? 'amber' : 'red';
     } else if (ageMs <= expectation.periodMs * (expectation.greenMultiplier ?? 1.5)) {
       status = 'green';
@@ -393,7 +412,7 @@ async function buildHeartbeatReport<A extends string>(
       toleranceMs,
       status,
       errorCount,
-      windowed: Boolean(expectation.windowedScheduleUtc),
+      windowed: Boolean(expectation.windowedScheduleParis),
       firstRunDeadline: status === 'pending' ? firstRunDeadline : null,
     };
   });
@@ -412,13 +431,44 @@ async function buildHeartbeatReport<A extends string>(
   return { ranAt: now.toISOString(), overall, entries };
 }
 
+/** IANA timezone the prod host + crond run in (see `windowedScheduleParis`). */
+const HOST_TIMEZONE = 'Europe/Paris';
+
+/** Wall-clock hour (0-23) of a UTC instant in `HOST_TIMEZONE`. Used only to
+ *  detect a non-existent spring-forward tick (round-trip guard). */
+function parisHourOf(instant: Date): number {
+  const hour = new Intl.DateTimeFormat('en-GB', {
+    timeZone: HOST_TIMEZONE,
+    hour: '2-digit',
+    hour12: false,
+  })
+    .formatToParts(instant)
+    .find((p) => p.type === 'hour')?.value;
+  const n = Number(hour);
+  // en-GB may render midnight as `24` in some ICU versions — normalise to 0.
+  return n === 24 ? 0 : n;
+}
+
 /**
- * Tour 12 — count the schedule ticks that SHOULD have fired strictly after
- * `lastRanAt` and up to `now - jitter`, for a window-bounded cron
- * (`minutes × hours`, UTC, every day). 0 missed → green ; ≤ 2 → amber ;
- * more → red. A 5-min jitter grace keeps the tick currently firing out of
- * the count. Iteration is bounded: past ~7 days of misses the exact count
- * stops mattering (red either way), so we bail out early.
+ * Tour 12 / Tour 13 — count the schedule ticks that SHOULD have fired strictly
+ * after `lastRanAt` and up to `now - jitter`, for a window-bounded cron
+ * (`minutes × hours`). 0 missed → green ; ≤ 2 → amber ; more → red. A 5-min
+ * jitter grace keeps the tick currently firing out of the count.
+ *
+ * Tour 13 — the `hours` are wall-clock **Europe/Paris** (crond on the prod host
+ * reads `/etc/cron.d` in host-local time), so each `minutes × hours` tick is
+ * converted to a UTC instant via `localInstantToUtc`, DST-correct across
+ * CET/CEST. We iterate over Paris CALENDAR days (via `localDateOf`) so the
+ * day boundary matches the crontab's, not UTC midnight.
+ *
+ * DST edge: on the spring-forward day a wall-clock hour can be non-existent
+ * (Paris skips 02:00→03:00). Our windows (07-09h, 20-22h) never touch that
+ * hour, but for correctness we skip any tick whose wall-clock does not round
+ * trip — `localInstantToUtc` would otherwise fabricate an instant for a tick
+ * crond never fires, producing a false `missed`.
+ *
+ * Iteration is bounded: past a few days of misses the exact count stops
+ * mattering (red either way), so we bail out at maxDays / missed > 3.
  */
 function countMissedTicks(
   schedule: { minutes: readonly number[]; hours: readonly number[] },
@@ -430,27 +480,40 @@ function countMissedTicks(
   if (horizon <= lastRanAt.getTime()) return 0;
 
   let missed = 0;
-  const cursor = new Date(lastRanAt.getTime());
-  cursor.setUTCSeconds(0, 0);
   const maxDays = 8;
+  // Anchor on the Paris calendar day of `lastRanAt`; each iteration walks one
+  // Paris day forward. Using the Paris day (not UTC) keeps ticks near midnight
+  // attributed to the correct crontab day.
+  const anchorParisDate = localDateOf(lastRanAt, HOST_TIMEZONE);
   for (let day = 0; day <= maxDays; day += 1) {
-    const base = new Date(cursor.getTime() + day * DAY);
+    // A UTC noon on the anchor day + `day` days lands unambiguously inside the
+    // right Paris day (noon is >12h from either DST edge), so re-reading its
+    // Paris date gives the calendar day we want to enumerate ticks for.
+    const parisDate = localDateOf(
+      new Date(new Date(`${anchorParisDate}T12:00:00Z`).getTime() + day * DAY),
+      HOST_TIMEZONE,
+    );
+    let dayStartMs = Infinity;
     for (const hour of schedule.hours) {
       for (const minute of schedule.minutes) {
-        const tick = Date.UTC(
-          base.getUTCFullYear(),
-          base.getUTCMonth(),
-          base.getUTCDate(),
-          hour,
-          minute,
-        );
+        const tickInstant = localInstantToUtc(parisDate, hour, minute, 0, 0, HOST_TIMEZONE);
+        // Skip a non-existent wall-clock tick (spring-forward): if converting
+        // back does not land on the same Paris hour, crond never fires it.
+        const back = localDateOf(tickInstant, HOST_TIMEZONE);
+        const backHour = parisHourOf(tickInstant);
+        if (back !== parisDate || backHour !== hour) continue;
+
+        const tick = tickInstant.getTime();
+        dayStartMs = Math.min(dayStartMs, tick);
         if (tick > lastRanAt.getTime() && tick <= horizon) {
           missed += 1;
           if (missed > 3) return missed; // already red — stop counting
         }
       }
     }
-    if (base.getTime() > horizon) break;
+    // Stop once this whole Paris day starts past the horizon (nothing later
+    // can be a missed tick within the window).
+    if (dayStartMs !== Infinity && dayStartMs > horizon) break;
   }
   return missed;
 }
@@ -512,11 +575,15 @@ const WORKER_EXPECTATIONS: readonly HeartbeatExpectation<WorkerPipelineAction>[]
     expectedSince: WORKER_INSTALLED_AT,
   },
   {
-    // Daily 04:10 local. StartWhenAvailable replays a missed run at boot, so
-    // default ×3 (72h) only reddens after 3 consecutive fully-missed days.
+    // Tour 13 — moved from daily 04:10 to a 20-min interval (verification
+    // screens are analysed "sur le moment"). Same cadence + tolerance rationale
+    // as the onboarding pipeline: green ≤ 30 min (worker alive), amber up to 24h
+    // (PC off overnight is normal and calm), red past 24h (the task itself is
+    // broken — the PC was necessarily on at some point that day).
     action: 'verification.batch.pulled',
     label: 'Worker · vision preuves MT5',
-    periodMs: DAY,
+    periodMs: 20 * MIN,
+    toleranceMultiplier: 72, // 24h
     expectedSince: WORKER_INSTALLED_AT,
   },
   {
@@ -620,5 +687,168 @@ export async function getSystemSnapshot(now: Date = new Date()): Promise<SystemS
     members: { active, deletionScheduled, softDeleted },
     push: { activeSubscriptions },
     audit: { last24h: audit24h },
+  };
+}
+
+/**
+ * Tour 13 — disk space health check.
+ *
+ * The prod container shares a single 40 GB Hetzner CX22 volume with Postgres
+ * AND the nightly backups. A full disk is a TOTAL, SILENT failure class: PG
+ * refuses writes (the app 500s on every mutation), the backup job aborts
+ * mid-dump (so the one artefact that could recover the incident is also
+ * destroyed), and NOTHING here surfaces it — the only free-space check lived
+ * in `ops/scripts/preflight-check.sh`, run by hand before a deploy, never
+ * again after. This makes the check continuous: every `/admin/system` render
+ * and every `cron-watch.yml` hit reads the live free bytes.
+ *
+ * Thresholds reuse preflight-check.sh's `THRESHOLD_DISK_GB=5` as the
+ * green→amber boundary (below 5 GB the operator should act before the backup
+ * dump — bounded by the DB size — can no longer fit), and add a hard critical
+ * floor at 2 GB where PG write failures and a failed dump become imminent.
+ *
+ * Unlike the heartbeat entries above, disk is an INSTANT probe, not an audit
+ * gap: there is no `action` / `periodMs` / `lastRanAt`, so it carries its own
+ * shape. `statfsSync('/')` reads the VM filesystem the container sees through
+ * overlayfs, so `bavail × bsize` is the real free space on the host volume.
+ */
+
+/** Green→amber boundary — mirrors preflight-check.sh THRESHOLD_DISK_GB=5. */
+const DISK_WARN_BYTES = 5 * 1024 * 1024 * 1024;
+/** Amber→red boundary — PG write failures + a failed backup dump loom below this. */
+const DISK_CRITICAL_BYTES = 2 * 1024 * 1024 * 1024;
+
+/**
+ * `unknown` mirrors the heartbeat `pending`/`never_ran` neutrality: a platform
+ * where `statfsSync` is unavailable or throws (exotic FS, sandbox) is NOT an
+ * incident — we simply have no reading, so the card renders neutral, never red,
+ * and never crashes the system page.
+ */
+export type DiskStatus = 'green' | 'amber' | 'red' | 'unknown';
+
+export interface DiskHealth {
+  status: DiskStatus;
+  /** Free bytes on `/`, or null when the probe failed (status `unknown`). */
+  freeBytes: number | null;
+  /** Total bytes on `/`, or null when the probe failed. */
+  totalBytes: number | null;
+  /** The two thresholds, echoed so the UI can explain the buckets. */
+  warnBytes: number;
+  criticalBytes: number;
+}
+
+/**
+ * Read live free/total bytes on `/`. Pure sync probe, wrapped so a throwing
+ * `statfsSync` (unsupported platform, permission) degrades to `unknown`
+ * instead of bubbling up and 500-ing the admin page. `path` is injectable for
+ * tests; prod always reads the root the container mounts.
+ */
+export function getDiskHealth(path = '/'): DiskHealth {
+  try {
+    const stats = statfsSync(path);
+    // `bsize` = fragment size in bytes; `bavail` = blocks free to a non-root
+    // user (the honest headroom, not the root-reserved `bfree`).
+    const freeBytes = stats.bavail * stats.bsize;
+    const totalBytes = stats.blocks * stats.bsize;
+    const status: DiskStatus =
+      freeBytes < DISK_CRITICAL_BYTES ? 'red' : freeBytes < DISK_WARN_BYTES ? 'amber' : 'green';
+    return {
+      status,
+      freeBytes,
+      totalBytes,
+      warnBytes: DISK_WARN_BYTES,
+      criticalBytes: DISK_CRITICAL_BYTES,
+    };
+  } catch {
+    // Exotic platform / permission error: no reading, stay neutral (never red,
+    // never a crash of the observability page).
+    return {
+      status: 'unknown',
+      freeBytes: null,
+      totalBytes: null,
+      warnBytes: DISK_WARN_BYTES,
+      criticalBytes: DISK_CRITICAL_BYTES,
+    };
+  }
+}
+
+/**
+ * Tour 13 — verification backlog health.
+ *
+ * The verification pipeline now ticks every 20 min (install-worker.ps1), so an
+ * uploaded MT5 proof should turn from `pending` to `done`/`failed` within
+ * minutes, not overnight. This is an INSTANT probe (a single indexed count +
+ * min-timestamp on `mt5_account_proofs`), NOT an audit-gap heartbeat: it reads
+ * the OLDEST still-`pending` proof and flags how long the member has been
+ * waiting for their reality to be read.
+ *
+ *   red   → oldest pending > 6h  (the 20-min worker would have caught it; the
+ *           pipeline or the local PC is stuck — honest, not alarmist).
+ *   amber → oldest pending > 1h  (running late; worth an eye).
+ *   green → a backlog exists but it is fresh (< 1h — normal in-flight state).
+ *   idle  → nothing pending at all (neutral, calm — the healthy steady state).
+ *
+ * Scoped to ACTIVE members to mirror the pull's own eligibility predicate
+ * (`loadPendingProofsEnvelope` only pulls `member.status = 'active'`): a proof
+ * from a soft-deleted member is never analysed, so it must not redden the board.
+ */
+const VERIFICATION_BACKLOG_AMBER_MS = HOUR;
+const VERIFICATION_BACKLOG_RED_MS = 6 * HOUR;
+
+export type VerificationBacklogStatus = 'green' | 'amber' | 'red' | 'idle';
+
+export interface VerificationBacklogHealth {
+  status: VerificationBacklogStatus;
+  /** Number of proofs still `pending` for active members. */
+  pendingCount: number;
+  /** Age in ms of the OLDEST pending proof, or null when the queue is empty. */
+  oldestPendingAgeMs: number | null;
+  /** ISO upload instant of the oldest pending proof, or null when idle. */
+  oldestPendingAt: string | null;
+  /** Thresholds echoed so the UI can explain the buckets. */
+  amberMs: number;
+  redMs: number;
+}
+
+export async function getVerificationBacklogHealth(
+  now: Date = new Date(),
+): Promise<VerificationBacklogHealth> {
+  const [pendingCount, oldest] = await Promise.all([
+    db.mt5AccountProof.count({
+      where: { ocrStatus: 'pending', member: { status: 'active' } },
+    }),
+    db.mt5AccountProof.findFirst({
+      where: { ocrStatus: 'pending', member: { status: 'active' } },
+      orderBy: { uploadedAt: 'asc' },
+      select: { uploadedAt: true },
+    }),
+  ]);
+
+  if (pendingCount === 0 || !oldest) {
+    return {
+      status: 'idle',
+      pendingCount: 0,
+      oldestPendingAgeMs: null,
+      oldestPendingAt: null,
+      amberMs: VERIFICATION_BACKLOG_AMBER_MS,
+      redMs: VERIFICATION_BACKLOG_RED_MS,
+    };
+  }
+
+  const oldestPendingAgeMs = Math.max(0, now.getTime() - oldest.uploadedAt.getTime());
+  const status: VerificationBacklogStatus =
+    oldestPendingAgeMs > VERIFICATION_BACKLOG_RED_MS
+      ? 'red'
+      : oldestPendingAgeMs > VERIFICATION_BACKLOG_AMBER_MS
+        ? 'amber'
+        : 'green';
+
+  return {
+    status,
+    pendingCount,
+    oldestPendingAgeMs,
+    oldestPendingAt: oldest.uploadedAt.toISOString(),
+    amberMs: VERIFICATION_BACKLOG_AMBER_MS,
+    redMs: VERIFICATION_BACKLOG_RED_MS,
   };
 }

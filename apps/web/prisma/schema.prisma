@@ -720,6 +720,13 @@ model Trade {
   /// XSS / SSRF vector once rendered as a clickable `<a>` to the admin.
   tradingViewEntryUrl String? @map("trading_view_entry_url")
 
+  /// Tour 13 — optional member explanation attached to the entry link (what
+  /// they saw, why they entered). Hardened free text at the Zod edge
+  /// (`safeFreeText` + bidi/zero-width reject + length cap). Read by the
+  /// weekly/monthly IA loaders as UNTRUSTED member input so the follow-up
+  /// can adapt to the member's own reading of their screen.
+  tradingViewEntryNote String? @map("trading_view_entry_note") @db.Text
+
   // ----- V1.5 trading-expert calibration (Steenbarger / Tharp) -----------
 
   /// Setup quality A/B/C (Steenbarger, *Daily Trading Coach*). Captured at
@@ -777,6 +784,11 @@ model Trade {
   /// at close). Nullable in DB for pre-J1 / still-open rows, but the Zod close
   /// schema REQUIRES it. Same host-allowlist hardening as `tradingViewEntryUrl`.
   tradingViewExitUrl String? @map("trading_view_exit_url")
+
+  /// Tour 13 — optional member explanation attached to the exit link (how the
+  /// exit unfolded, what they learned from the screen). Mirror of
+  /// `tradingViewEntryNote` — same hardening, same untrusted IA consumption.
+  tradingViewExitNote String? @map("trading_view_exit_note") @db.Text
 
   /// Set when the post-exit block is filled. A trade is "open" iff this is
   /// null — used by /journal queries to split the list visually.
@@ -867,8 +879,17 @@ model TradeAnnotation {
   /// Storage key for the optional media attachment.
   /// Format: `annotations/{tradeId}/{nanoid32}.{jpg|png|webp}` (J4) or
   ///         `annotations/{tradeId}/{nanoid32}.{mp4|webm}` (J4.5).
+  /// Tour 13 — LEGACY, read-only: new corrections carry a TradingView link
+  /// instead (images are reserved for the verification pipeline).
   mediaKey  String?              @map("media_key")
   mediaType AnnotationMediaType? @map("media_type")
+
+  /// Tour 13 — optional TradingView correction link: the coach "corrects by
+  /// screen" by sharing a snapshot/layout URL instead of uploading an image.
+  /// Same Zod hardening as `Trade.tradingViewEntryUrl` (https-only + host
+  /// allowlist + length cap + Trojan-Source reject) so the rendered `<a>` can
+  /// never become an open-redirect/XSS vector for the member.
+  tradingViewUrl String? @map("trading_view_url")
 
   /// Timestamp of the first time the member opened the trade detail page after
   /// this annotation existed. Null = unread.
@@ -999,6 +1020,11 @@ model TrainingTrade {
   /// a chart link is process metadata, NEVER a P&L — never read by the real edge.
   tradingViewUrl String? @map("trading_view_url")
 
+  /// Tour 13 — optional member explanation attached to the analysis link.
+  /// Mirror of `Trade.tradingViewEntryNote` (same hardening) but §21.5: it
+  /// lives in the training world only, never read by the real edge.
+  tradingViewNote String? @map("trading_view_note") @db.Text
+
   /// Planned reward-to-risk ratio. Mandatory (mirror `Trade.plannedRR`):
   /// defining R:R before is the backtest discipline.
   plannedRR Decimal @map("planned_rr") @db.Decimal(6, 2)
@@ -1082,8 +1108,15 @@ model TrainingAnnotation {
 
   /// Storage key for the optional correction media. Format
   /// `training_annotations/{trainingTradeId}/{nanoid32}.{jpg|png|webp}`.
+  /// Tour 13 — LEGACY, read-only: new corrections carry a TradingView link
+  /// instead (mirror of `TradeAnnotation.mediaKey`).
   mediaKey  String?                      @map("media_key")
   mediaType TrainingAnnotationMediaType? @map("media_type")
+
+  /// Tour 13 — optional TradingView correction link, mirror of
+  /// `TradeAnnotation.tradingViewUrl` (same hardening). §21.5: a chart link is
+  /// process metadata, never a P&L — never read by the real edge.
+  tradingViewUrl String? @map("trading_view_url")
 
   /// First time the member opened the backtest detail after this correction
   /// existed. Null = unread. Mirror of `TradeAnnotation.seenByMemberAt`.
@@ -2960,6 +2993,13 @@ model Mt5AccountProof {
   ocrStatus   ProofOcrStatus @default(pending) @map("ocr_status")
   /// Vision batch run identifier (mirror of the other pipelines' audit trail).
   claudeRunId String?        @map("claude_run_id")
+
+  /// Tour 13 — when the stored screenshot bytes were deleted after a COMPLETE
+  /// analysis (done, or terminal failure). The proof ROW stays (audit trail +
+  /// per-member dedup hash + extracted positions); only the image file is
+  /// purged. Storage posture: verification screens are processed on the spot,
+  /// never retained.
+  filePurgedAt DateTime? @map("file_purged_at")
 
   uploadedAt DateTime @default(now()) @map("uploaded_at")
   createdAt  DateTime @default(now()) @map("created_at")

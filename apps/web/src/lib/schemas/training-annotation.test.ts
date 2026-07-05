@@ -5,7 +5,7 @@ import {
   trainingAnnotationCreateSchema,
 } from './training-annotation';
 
-const KEY = 'training_annotations/abcdefgh12345678/abcdefghijkl1234.png';
+const VALID_TV_URL = `https://fr.tradingview.com/x/${'a'.repeat(12)}/`;
 
 describe('trainingAnnotationCreateSchema', () => {
   it('accepts a comment-only correction', () => {
@@ -60,48 +60,58 @@ describe('trainingAnnotationCreateSchema', () => {
     expect(trainingAnnotationCreateSchema.safeParse({}).success).toBe(false);
   });
 
-  // ----- media key + type pairing (mirror annotation.ts superRefine) -----
+  // ----- Tour 13 — optional TradingView link (replaces the upload pair) -----
 
-  it('accepts comment + valid mediaKey + mediaType together', () => {
-    expect(
-      trainingAnnotationCreateSchema.safeParse({
-        comment: 'Voir capture annotée.',
-        mediaKey: KEY,
-        mediaType: 'image',
-      }).success,
-    ).toBe(true);
+  it('accepts comment + valid TradingView link', () => {
+    const result = trainingAnnotationCreateSchema.safeParse({
+      comment: 'Voir analyse jointe.',
+      tradingViewUrl: VALID_TV_URL,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.tradingViewUrl).toBe(VALID_TV_URL);
   });
 
-  it('rejects a mediaKey without a mediaType', () => {
-    expect(trainingAnnotationCreateSchema.safeParse({ comment: 'x', mediaKey: KEY }).success).toBe(
-      false,
-    );
+  it('rejects a malformed TradingView link (not a URL)', () => {
+    const result = trainingAnnotationCreateSchema.safeParse({
+      comment: 'x',
+      tradingViewUrl: 'not a url',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const paths = result.error.issues.map((i) => i.path.join('.'));
+      expect(paths).toContain('tradingViewUrl');
+    }
   });
 
-  it('rejects a mediaType without a mediaKey', () => {
-    expect(
-      trainingAnnotationCreateSchema.safeParse({ comment: 'x', mediaType: 'image' }).success,
-    ).toBe(false);
-  });
-
-  it('rejects a malformed / foreign-prefix mediaKey', () => {
-    expect(
-      trainingAnnotationCreateSchema.safeParse({
-        comment: 'x',
-        mediaKey: 'annotations/abcdefgh12345678/abcdefghijkl1234.png',
-        mediaType: 'image',
-      }).success,
-    ).toBe(false);
-  });
-
-  it('rejects an unknown mediaType', () => {
+  it('rejects an off-host link (host not on the tradingview.com allowlist)', () => {
     expect(
       trainingAnnotationCreateSchema.safeParse({
         comment: 'x',
-        mediaKey: KEY,
-        mediaType: 'video',
+        tradingViewUrl: 'https://evil.example.com/x/abc/',
       }).success,
     ).toBe(false);
+  });
+
+  it('rejects a non-HTTPS TradingView link', () => {
+    expect(
+      trainingAnnotationCreateSchema.safeParse({
+        comment: 'x',
+        tradingViewUrl: 'http://fr.tradingview.com/x/abc/',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('no longer accepts a mediaKey/mediaType pair on create (legacy read-only)', () => {
+    const result = trainingAnnotationCreateSchema.safeParse({
+      comment: 'x',
+      mediaKey: 'training_annotations/abcdefgh12345678/abcdefghijkl1234.png',
+      mediaType: 'image',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty('mediaKey');
+      expect(result.data).not.toHaveProperty('mediaType');
+    }
   });
 
   // ----- §2 posture gate (mirror annotation.ts) — admin→member text -----

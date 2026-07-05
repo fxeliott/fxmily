@@ -25,6 +25,14 @@ interface MemberTradesListProps {
   cursor?: string | undefined;
   /** Member's total trade count (open + closed) — kills the truncation illusion. */
   total?: number;
+  /**
+   * Tour 13 — Map<tradeId, admin-annotation count> for THIS page (folded from the
+   * list's `_count` join, no N+1). A closed trade with 0 annotations shows
+   * « À commenter »; one already annotated shows « Commenté ». Neutral work-state
+   * of the coach, never an outcome — so a calm cyan / mute pill, never red.
+   * Absent → the badges are skipped (open trades and pre-Tour-13 callers).
+   */
+  annotationCountByTrade?: Map<string, number> | undefined;
 }
 
 /** Build the admin trades-tab href, optionally carrying a pagination cursor.
@@ -55,6 +63,7 @@ export function MemberTradesList({
   nextCursor = null,
   cursor,
   total,
+  annotationCountByTrade,
 }: MemberTradesListProps) {
   if (trades.length === 0) {
     // Stale cursor (a trade was deleted since the link was rendered) — calm
@@ -95,6 +104,14 @@ export function MemberTradesList({
                 : realized < 0
                   ? 'text-[var(--bad)]'
                   : 'text-[var(--t-3)]';
+          // Tour 13 — comment work-state, closed trades only (an open trade
+          // isn't ready to review yet). Neutral: cyan « Commenté » once the coach
+          // has left a correction, blue « À commenter » while it waits. Never a
+          // red outcome tone. Skipped entirely when the caller omits the map.
+          const isCommented =
+            trade.isClosed && annotationCountByTrade
+              ? (annotationCountByTrade.get(trade.id) ?? 0) > 0
+              : null;
           return (
             <li key={trade.id}>
               <HoverLift className="block">
@@ -121,7 +138,12 @@ export function MemberTradesList({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-4 text-xs">
+                  <div className="flex items-center gap-3 text-xs sm:gap-4">
+                    {isCommented !== null ? (
+                      <Pill tone={isCommented ? 'cy' : 'acc'}>
+                        {isCommented ? 'Commenté' : 'À commenter'}
+                      </Pill>
+                    ) : null}
                     <span className="f-mono text-[var(--t-3)] tabular-nums">
                       {NUMBER_FMT.format(Number(trade.entryPrice))}
                     </span>

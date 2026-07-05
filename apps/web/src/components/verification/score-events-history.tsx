@@ -1,5 +1,6 @@
 import { TrendingDown, TrendingUp } from 'lucide-react';
 
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import type { ScoreEventView } from '@/lib/verification/constancy';
 import { pickDominantSignals, type SignalReason } from '@/lib/verification/dominant-signals';
 import { cn } from '@/lib/utils';
@@ -65,7 +66,7 @@ function formatEventDate(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat('fr-FR', {
     day: 'numeric',
     month: 'short',
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
   }).format(date);
 }
 

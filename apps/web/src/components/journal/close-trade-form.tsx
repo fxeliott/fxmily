@@ -67,6 +67,9 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
   const [emotionAfter, setEmotionAfter] = useState<string[]>([]);
   // J1 — mandatory TradingView exit link (replaces the exit screenshot upload).
   const [tradingViewExitUrl, setTradingViewExitUrl] = useState<string>('');
+  // Tour 13 — optional member explanation of the exit screen. Controlled (P2)
+  // so a failed server validation cannot wipe it on the React 19 form reset.
+  const [tradingViewExitNote, setTradingViewExitNote] = useState<string>('');
   // P2 — every remaining free-entry field is CONTROLLED so a failed server
   // validation cannot wipe the member's input: React 19 resets the <form>
   // after the action settles, clearing UNCONTROLLED fields only. Same pattern
@@ -491,6 +494,55 @@ export function CloseTradeForm({ tradeId, enteredAtIso, timezone }: CloseTradeFo
             Lien <code className="font-mono">tradingview.com</code> de ta sortie : la preuve de ta
             gestion jusqu&apos;au bout.
           </p>
+        )}
+      </div>
+
+      {/* Tour 13 — optional member explanation of the exit screen, right under
+          the exit link. Controlled (P2) so a failed server validation keeps the
+          text; 500-char cap mirrors the Zod bound. */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="tradingViewExitNote" className="t-eyebrow-lg text-[var(--t-3)]">
+          Ton analyse du screen (optionnel)
+        </label>
+        <textarea
+          id="tradingViewExitNote"
+          name="tradingViewExitNote"
+          rows={3}
+          maxLength={500}
+          value={tradingViewExitNote}
+          onChange={(e) => setTradingViewExitNote(e.currentTarget.value)}
+          disabled={pending}
+          placeholder="Comment la sortie s'est passée, ce que tu retiens."
+          aria-invalid={state.fieldErrors?.tradingViewExitNote ? 'true' : undefined}
+          aria-describedby={
+            state.fieldErrors?.tradingViewExitNote
+              ? 'tradingViewExitNote-error'
+              : 'tradingViewExitNote-hint'
+          }
+          className={cn(
+            'rounded-input w-full border bg-[var(--bg-1)] px-3 py-2 text-[14px] text-[var(--t-1)] transition-[border-color,box-shadow] duration-150 outline-none',
+            'placeholder:text-[var(--t-4)]',
+            state.fieldErrors?.tradingViewExitNote
+              ? 'border-[var(--b-danger)] focus-visible:border-[var(--bad)]'
+              : 'border-[var(--b-default)] hover:border-[var(--b-strong)] focus-visible:border-[var(--acc)]',
+            'focus-visible:ring-2 focus-visible:ring-[var(--acc-dim)]',
+            'disabled:cursor-not-allowed disabled:opacity-60',
+          )}
+        />
+        {state.fieldErrors?.tradingViewExitNote ? (
+          <p id="tradingViewExitNote-error" className="text-[11px] text-[var(--bad)]" role="alert">
+            {state.fieldErrors.tradingViewExitNote}
+          </p>
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            <p id="tradingViewExitNote-hint" className="t-cap text-[var(--t-4)]">
+              Explique la sortie côté écran : ce que tu retiens, ce que tu ferais pareil ou
+              autrement.
+            </p>
+            <span className="t-cap shrink-0 text-[var(--t-4)] tabular-nums" aria-hidden>
+              {tradingViewExitNote.trim().length}/500
+            </span>
+          </div>
         )}
       </div>
 

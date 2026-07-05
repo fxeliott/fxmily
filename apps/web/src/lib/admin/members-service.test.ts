@@ -10,12 +10,22 @@ vi.mock('@/lib/db', () => ({
       groupBy: vi.fn(),
       count: vi.fn(),
     },
+    trainingTrade: {
+      groupBy: vi.fn(),
+    },
+    discrepancy: {
+      groupBy: vi.fn(),
+    },
   },
 }));
 
 import { db } from '@/lib/db';
 
-import { getMemberDirectoryStats, listMembersForAdmin } from './members-service';
+import {
+  getAttentionMemberIds,
+  getMemberDirectoryStats,
+  listMembersForAdmin,
+} from './members-service';
 
 function makeUser(id: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -182,5 +192,106 @@ describe('getMemberDirectoryStats', () => {
 
     const stats = await getMemberDirectoryStats();
     expect(stats).toEqual({ total: 4, active: 3, suspended: 0, totalTrades: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getAttentionMemberIds — cohort-wide "à traiter" id set (Tour 13).
+// ---------------------------------------------------------------------------
+
+describe('getAttentionMemberIds', () => {
+  it('unions uncommented real + training trades and open gaps into ONE id set', async () => {
+    vi.mocked(db.trade.groupBy).mockResolvedValue([
+      { userId: 'a', _count: { _all: 2 } },
+      { userId: 'b', _count: { _all: 1 } },
+    ] as never);
+    vi.mocked(db.trainingTrade.groupBy).mockResolvedValue([
+      { userId: 'b', _count: { _all: 3 } }, // b appears in two sources → deduped
+      { userId: 'c', _count: { _all: 1 } },
+    ] as never);
+    vi.mocked(db.discrepancy.groupBy).mockResolvedValue([
+      { memberId: 'd', _count: { _all: 1 } },
+    ] as never);
+
+    const ids = await getAttentionMemberIds();
+
+    expect([...ids].sort()).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('filters real/training anti-joins on uncommented + recent + non-deleted', async () => {
+    vi.mocked(db.trade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.trainingTrade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
+
+    await getAttentionMemberIds();
+
+    const tradeArg = vi.mocked(db.trade.groupBy).mock.calls[0]?.[0] as {
+      where: { annotations: unknown; enteredAt: { gte: Date }; user: unknown };
+    };
+    expect(tradeArg.where.annotations).toEqual({ none: {} });
+    expect(tradeArg.where.user).toEqual({ status: { not: 'deleted' } });
+    expect(tradeArg.where.enteredAt.gte).toBeInstanceOf(Date);
+
+    const gapArg = vi.mocked(db.discrepancy.groupBy).mock.calls[0]?.[0] as {
+      where: { status: string; member: unknown };
+    };
+    expect(gapArg.where.status).toBe('open');
+    expect(gapArg.where.member).toEqual({ status: { not: 'deleted' } });
+  });
+
+  it('returns an empty set when nothing is pending', async () => {
+    vi.mocked(db.trade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.trainingTrade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
+
+    expect((await getAttentionMemberIds()).size).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listMembersForAdmin — attentionOnly triage filter (Tour 13).
+// ---------------------------------------------------------------------------
+
+describe('listMembersForAdmin (attentionOnly filter)', () => {
+  it('feeds the flagged ids into the page WHERE as id: { in } and keeps the sort/cursor', async () => {
+    vi.mocked(db.trade.groupBy)
+      .mockResolvedValueOnce([{ userId: 'm1', _count: { _all: 1 } }] as never) // attention: real
+      .mockResolvedValue([] as never); // later per-page open/closed counts
+    vi.mocked(db.trainingTrade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.user.findMany).mockResolvedValue([makeUser('m1')] as never);
+
+    const result = await listMembersForAdmin({ attentionOnly: true });
+
+    const arg = vi.mocked(db.user.findMany).mock.calls[0]?.[0] as FindManyArg & {
+      where: { id?: { in: string[] } };
+    };
+    expect(arg.where.id).toEqual({ in: ['m1'] });
+    expect(arg.orderBy).toEqual([{ joinedAt: 'desc' }, { id: 'desc' }]);
+    expect(result.items).toHaveLength(1);
+  });
+
+  it('short-circuits to an empty page (no users query) when nobody needs attention', async () => {
+    vi.mocked(db.trade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.trainingTrade.groupBy).mockResolvedValue([] as never);
+    vi.mocked(db.discrepancy.groupBy).mockResolvedValue([] as never);
+
+    const result = await listMembersForAdmin({ attentionOnly: true });
+
+    expect(result).toEqual({ items: [], nextCursor: null });
+    expect(db.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it('does NOT add an id filter when attentionOnly is off', async () => {
+    vi.mocked(db.user.findMany).mockResolvedValue([makeUser('u1')] as never);
+    vi.mocked(db.trade.groupBy).mockResolvedValue([] as never);
+
+    await listMembersForAdmin({});
+
+    const arg = vi.mocked(db.user.findMany).mock.calls[0]?.[0] as FindManyArg & {
+      where: { id?: unknown };
+    };
+    expect(arg.where.id).toBeUndefined();
+    expect(db.trainingTrade.groupBy).not.toHaveBeenCalled();
   });
 });

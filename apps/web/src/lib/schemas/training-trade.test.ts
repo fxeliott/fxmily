@@ -37,24 +37,6 @@ describe('trainingTradeCreateSchema', () => {
     expect(trainingTradeCreateSchema.safeParse(valid({ pair: 'BTCUSD' })).success).toBe(false);
   });
 
-  // ----- entryScreenshotKey (mirror annotation key regex from keys.ts) -----
-
-  it('accepts a well-formed training storage key', () => {
-    expect(
-      trainingTradeCreateSchema.safeParse(
-        valid({ entryScreenshotKey: 'training/zzzz9999/Ab_cd-ef12ghij.webp' }),
-      ).success,
-    ).toBe(true);
-  });
-
-  it('rejects a malformed / foreign-prefix storage key', () => {
-    expect(
-      trainingTradeCreateSchema.safeParse(
-        valid({ entryScreenshotKey: 'trades/abcdefgh12345678/abcdefghijkl1234.jpg' }),
-      ).success,
-    ).toBe(false);
-  });
-
   // ----- tradingViewUrl (J1 — REQUIRED, https + tradingview.com host allowlist) -----
 
   it('rejects a backtest with NO tradingViewUrl (omitted — the field is now required)', () => {
@@ -165,6 +147,42 @@ describe('trainingTradeCreateSchema', () => {
   it('rejects a tradingViewUrl over the length cap', () => {
     const tooLong = `https://www.tradingview.com/x/${'a'.repeat(TRAINING_TRADINGVIEW_URL_MAX)}/`;
     expect(trainingTradeCreateSchema.safeParse(valid({ tradingViewUrl: tooLong })).success).toBe(
+      false,
+    );
+  });
+
+  // ----- tradingViewNote (Tour 13 — OPTIONAL free-text on the analysis screen,
+  // §21.5-isolated like every training field; same Trojan-Source canon) -----
+
+  it('accepts a backtest with no tradingViewNote (the field is optional)', () => {
+    // `valid()` carries no tradingViewNote — that absence IS the "no note" case.
+    const result = trainingTradeCreateSchema.safeParse(valid());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.tradingViewNote).toBeUndefined();
+  });
+
+  it('trims and NFC-normalizes a tradingViewNote', () => {
+    const result = trainingTradeCreateSchema.safeParse(
+      valid({ tradingViewNote: '  Je testais un retest de zone.  ' }),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.tradingViewNote).toBe('Je testais un retest de zone.');
+  });
+
+  it('rejects a tradingViewNote over 500 chars', () => {
+    expect(
+      trainingTradeCreateSchema.safeParse(valid({ tradingViewNote: 'a'.repeat(501) })).success,
+    ).toBe(false);
+  });
+
+  it('rejects a tradingViewNote with a bidi override (U+202E, Trojan-Source)', () => {
+    expect(
+      trainingTradeCreateSchema.safeParse(valid({ tradingViewNote: 'note‮evil' })).success,
+    ).toBe(false);
+  });
+
+  it('rejects a tradingViewNote with a zero-width space (U+200B)', () => {
+    expect(trainingTradeCreateSchema.safeParse(valid({ tradingViewNote: 'hid​den' })).success).toBe(
       false,
     );
   });

@@ -67,6 +67,8 @@ const ACTIVE_SNAPSHOT = {
     tradesQualityCaptured: 0,
     riskPctMedian: null,
     riskPctOverTwoCount: 0,
+    // Quick win — worst consecutive-loss streak of the week (count-only).
+    maxConsecutiveLoss: 1,
   },
   freeText: {
     emotionTags: ['calm', 'focused', 'fomo'],
@@ -93,6 +95,10 @@ const ACTIVE_SNAPSHOT = {
     openDiscrepancyCount: 1,
     alertCount: 0,
   },
+  // Quick win (weekly parity) — coach corrections echo; none tagged in this fixture.
+  coachCorrections: [],
+  // Notes membre TradingView (entrée / sortie) — none attached in this fixture.
+  memberScreenNotes: [],
 };
 
 const INACTIVE_SNAPSHOT = {
@@ -144,6 +150,8 @@ const INACTIVE_SNAPSHOT = {
     tradesQualityCaptured: 0,
     riskPctMedian: null,
     riskPctOverTwoCount: 0,
+    // Quick win — inactive member: no closed trade → no loss streak.
+    maxConsecutiveLoss: 0,
   },
   freeText: {
     emotionTags: [],
@@ -163,6 +171,10 @@ const INACTIVE_SNAPSHOT = {
   },
   // DOD3-01 / DoD#2 S6 — inactive member: no constancy signal yet.
   verification: { constancy: null, openDiscrepancyCount: 0, alertCount: 0 },
+  // Quick win (weekly parity) — coach corrections echo; none for an inactive member.
+  coachCorrections: [],
+  // Notes membre TradingView — an inactive member attached none.
+  memberScreenNotes: [],
 };
 
 describe('MockWeeklyReportClient', () => {

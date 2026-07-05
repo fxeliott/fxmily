@@ -5,7 +5,7 @@ import { constantTimeEqual } from '@/lib/auth/constant-time';
 import { env } from '@/lib/env';
 import { flushSentry, reportError } from '@/lib/observability';
 import { callerIdTrusted, cronLimiter } from '@/lib/rate-limit/token-bucket';
-import { getCronHealthReport } from '@/lib/system/health';
+import { getCronHealthReport, getDiskHealth } from '@/lib/system/health';
 
 /**
  * J10 Phase J — Read-only cron health check endpoint.
@@ -51,7 +51,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   try {
     const report = await getCronHealthReport();
-    const healthy = report.overall === 'green' || report.overall === 'amber';
+    // Tour 13 — the shared prod volume filling up is a total silent failure
+    // (Postgres stops, backups fail). Fold the instant disk probe into the
+    // watcher response so `cron-watch.yml` opens an issue on a `red` disk just
+    // like a stale cron. `unknown` (probe unavailable) is neutral — it must NOT
+    // flip the endpoint to 503 (no reading is not an incident).
+    const disk = getDiskHealth();
+    const cronHealthy = report.overall === 'green' || report.overall === 'amber';
+    const healthy = cronHealthy && disk.status !== 'red';
     // Heartbeat audit row : the watcher itself emits a `cron.health.scan`
     // so a missing health-check (e.g. cron-watch.yml broken) is also
     // detectable. Counts only — no PII.
@@ -63,10 +70,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         amber: report.entries.filter((e) => e.status === 'amber').length,
         neverRan: report.entries.filter((e) => e.status === 'never_ran').length,
         pending: report.entries.filter((e) => e.status === 'pending').length,
+        diskStatus: disk.status,
+        diskFreeBytes: disk.freeBytes,
         ranAt: report.ranAt,
       },
     });
-    return NextResponse.json(report, { status: healthy ? 200 : 503 });
+    return NextResponse.json({ ...report, disk }, { status: healthy ? 200 : 503 });
   } catch (err) {
     reportError('cron.health', err, { route: '/api/cron/health' });
     await flushSentry();

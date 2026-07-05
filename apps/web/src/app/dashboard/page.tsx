@@ -19,6 +19,7 @@ import { MomentumCard } from '@/components/dashboard/momentum-card';
 import { MonthlyDebriefWidget } from '@/components/dashboard/monthly-debrief-widget';
 import { MorningBridgeCard } from '@/components/dashboard/morning-bridge-card';
 import { NorthStarHero } from '@/components/dashboard/north-star-hero';
+import { OpenTradesReminder } from '@/components/dashboard/open-trades-reminder';
 import { StageAwareLine } from '@/components/dashboard/stage-aware-line';
 import { DashboardProgressBridge } from '@/components/dashboard/progress-bridge';
 import { DashboardReflectWidget } from '@/components/dashboard/reflect-widget';
@@ -41,6 +42,7 @@ import { Magnetic } from '@/components/ui/magnetic';
 import { Tilt3D } from '@/components/ui/tilt-3d';
 import { getCheckin, getStreak, todayFor } from '@/lib/checkin/service';
 import { getTodayMilestone } from '@/lib/checkin/milestone';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { getTodayJourneyMilestone } from '@/lib/coaching/journey-milestone';
 import { getOpenMicroObjective, isMicroObjectiveStale } from '@/lib/coaching/micro-objective';
 import { getDashboardMorningContext } from '@/lib/coaching/morning-bridge-data';
@@ -51,7 +53,7 @@ import { getInterviewForUser, getProfileForUser } from '@/lib/onboarding-intervi
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scoring/service';
 import { getSessionRoutine } from '@/lib/session-routine/service';
-import { countTradesByStatus } from '@/lib/trades/service';
+import { countTradesByStatus, getStaleOpenTradesSummary } from '@/lib/trades/service';
 import { cn } from '@/lib/utils';
 import { listRecentAlertsForMember } from '@/lib/verification/alerts';
 import { getLatestConstancyScore } from '@/lib/verification/constancy';
@@ -94,7 +96,7 @@ export default async function DashboardPage() {
   if (!session?.user) redirect('/login');
 
   const userId = session.user.id;
-  const timezone = session.user.timezone || 'Europe/Paris';
+  const timezone = safeTimeZone(session.user.timezone);
 
   // V2 refonte J2 — le dashboard est un HUB D'ACTION (où j'en suis / quoi faire),
   // PAS un mur d'analytics. Les surfaces rétrospectives (scores, trajectoire,
@@ -118,6 +120,7 @@ export default async function DashboardPage() {
     mentalMap,
     openMicroObjective,
     profile,
+    staleOpenTrades,
   ] = userId
     ? await Promise.all([
         countTradesByStatus(userId),
@@ -158,6 +161,10 @@ export default async function DashboardPage() {
         // `coachingTone`/`learningStage` sont dérivés via `echoProfileDims`,
         // jamais `weakSignals`. Rend null sans profil ⇒ surfaces se cachent.
         getProfileForUser(userId),
+        // Tour 13 — trades ouverts depuis > 72h : un trade jamais clôturé sort du
+        // score comportemental en silence. Lecture pure bornée (1 count + 1 findFirst
+        // indexé), rend {count:0} sans rien → la carte de rappel se cache d'elle-même.
+        getStaleOpenTradesSummary(userId),
       ])
     : [
         { open: 0, closed: 0 },
@@ -174,6 +181,7 @@ export default async function DashboardPage() {
         [],
         null,
         null,
+        { count: 0, oldestTradeId: null },
       ];
 
   // North-star hero — la seule action la plus « maintenant » (primary todo first),
@@ -272,7 +280,7 @@ export default async function DashboardPage() {
       {/* S4 DOD1-04 — makes the advertised `N` shortcut real (renders nothing) */}
       <JournalShortcut />
 
-      <div className="dash-stagger relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
+      <div className="page-stagger relative mx-auto w-full max-w-[var(--w-app)] flex-1 px-4 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 2xl:px-12">
         {/* V2 refonte J1 — north-star hero : point focal unique (état du jour +
             prochaine action). Remplace l'ancien title-row dense et absorbe le streak. */}
         <NorthStarHero
@@ -413,6 +421,13 @@ export default async function DashboardPage() {
             sur /verification). Strip calme (ambre = attention, JAMAIS rouge §31.2/
             §33.2) qui pointe vers le feed complet. Rend null sans alerte active. */}
         <HubDriftSignal alerts={driftAlerts} className="mb-6" />
+
+        {/* Tour 13 — rappel doux « un trade attend sa clôture » (> 72h ouvert).
+            Un trade jamais clôturé sort du score comportemental EN SILENCE : ce
+            rappel garde le journal fidèle à la réalité du membre. Posture §2 :
+            process, jamais punitif, JAMAIS rouge (bleu de process, pas l'ambre
+            de dérive). Rend null sans trade concerné (garde interne). */}
+        <OpenTradesReminder summary={staleOpenTrades} className="mb-6" />
 
         {/* V2 refonte J1 — slim activity strip (streak dans le hero). S18 — passée
             de spans nus à 3 mini-cartes acc-dim vivantes (AnimatedNumber + micro

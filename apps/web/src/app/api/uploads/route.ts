@@ -7,56 +7,53 @@ import { logAudit, resolveUploadAuditAction } from '@/lib/auth/audit';
 import { db } from '@/lib/db';
 import { uploadLimiter } from '@/lib/rate-limit/token-bucket';
 import { selectStorage } from '@/lib/storage';
-import { isAllowedMime, sniffImageMime } from '@/lib/storage/keys';
-import {
-  ALL_UPLOAD_KINDS,
-  MAX_SCREENSHOT_BYTES,
-  isAnnotationUploadKind,
-  isProofUploadKind,
-  isTradeUploadKind,
-  isTrainingAnnotationUploadKind,
-  isTrainingUploadKind,
-  type UploadKind,
-} from '@/lib/storage/types';
+import { isProofUploadKind, type UploadKind } from '@/lib/storage/types';
+import { isHeic, normalizeProofImage, sniffProofInputFormat } from '@/lib/uploads/normalize-image';
 import { PROOF_ACCOUNT_TYPES, type ProofAccountType } from '@/lib/schemas/verification';
 
 /**
  * POST /api/uploads
  *
- * Upload an image attached to a trade (J2) or to an admin annotation (J4).
+ * Tour 13 — the ONLY accepted upload is `mt5-proof`. The verification screen
+ * policy is « les images ne servent QU'À la vérification » : every other kind
+ * (trade-entry/exit, training-entry, annotation-image, training-annotation-image)
+ * is CLOSED and answers 410 with an FR message steering the member to a
+ * TradingView link. The read side (`/api/uploads/[...key]`) still serves the
+ * legacy trade/annotation/training files already on disk — closing the write
+ * boundary here does not orphan what already exists.
  *
  * Request body: `multipart/form-data` with fields:
- *   - `file`    (File, required) — image bytes (jpg/png/webp), ≤ 8 MiB.
- *   - `kind`    (string, required) — one of `ALL_UPLOAD_KINDS`.
- *   - `tradeId` (string, required when `kind` is annotation-*) — CUID of the
- *     trade the annotation will attach to. Used to scope the storage path
- *     and to enforce admin ownership.
+ *   - `file`        (File, required) — image bytes, ≤ 20 MiB raw input.
+ *   - `kind`        (string, required) — must be `mt5-proof`.
+ *   - `accountId`   (string, optional) — one of the member's broker accounts.
+ *   - `accountType` (string, optional) — declared type (prop_firm | personal).
  *
- * Response (201): `{ key: string, readUrl: string }`.
+ * Response (201): `{ key, readUrl, proofId }`.
  *
- * Auth gates:
- *   - any authenticated active session for trade-* kinds
- *   - role=admin for annotation-* kinds (defense in depth on top of the
- *     `/admin/*` proxy gate which doesn't cover `/api/uploads`)
- *
- * Validation pipeline (defense layered):
+ * Validation pipeline for `mt5-proof` (defense layered):
  *   1. Auth + status active.
- *   2. multipart parsed via `req.formData()`.
- *   3. `kind` allowlist check.
- *   4. Per-kind owner check (admin gate + tradeId existence).
- *   5. File presence + size cap.
- *   6. `Content-Type` allowlist (via `isAllowedMime`).
- *   7. Magic-byte sniff against the allowlist — must match the declared MIME.
- *      Defeats `Content-Type` spoof + extension-rename attacks.
- *   8. Storage adapter `put()` — generates the canonical server-side key.
+ *   2. Per-member rate-limit BEFORE buffering the body.
+ *   3. multipart parsed via `req.formData()`.
+ *   4. `kind` allowlist — only `mt5-proof` survives.
+ *   5. Optional account link resolution (ownership enforced — BOLA).
+ *   6. File presence + 20 MiB raw cap.
+ *   7. Magic-byte sniff (JPEG/PNG/WebP/GIF/AVIF) + dedicated HEIC rejection.
+ *   8. Normalisation to a canonical EXIF-oriented JPEG (`normalizeProofImage`).
+ *   9. SHA-256 dedup computed on the NORMALISED bytes (see note below).
+ *  10. Storage adapter `put()` with `image/jpeg` — the stored extension is .jpg.
  */
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function isUploadKind(value: unknown): value is UploadKind {
-  return typeof value === 'string' && (ALL_UPLOAD_KINDS as readonly string[]).includes(value);
-}
+/**
+ * Raw input cap for a proof upload: 20 MiB. A modern phone HEIC/large PNG can
+ * exceed the 8 MiB storage cap (`MAX_SCREENSHOT_BYTES`) before normalisation;
+ * we accept up to 20 MiB in, and `normalizeProofImage` re-encodes to a JPEG
+ * that lands comfortably below the storage cap. Rejecting only past 20 MiB
+ * keeps a legitimate high-DPI capture from being bounced for size.
+ */
+const MAX_PROOF_INPUT_BYTES = 20 * 1024 * 1024;
 
 export async function POST(req: Request): Promise<Response> {
   const session = await auth();
@@ -69,7 +66,7 @@ export async function POST(req: Request): Promise<Response> {
   const userId = session.user.id;
 
   // Session 3 hardening — per-member rate-limit BEFORE buffering the (up to
-  // 8 MiB) multipart body, so a throttled caller never costs memory/disk.
+  // 20 MiB) multipart body, so a throttled caller never costs memory/disk.
   const decision = uploadLimiter.consume(userId);
   if (!decision.allowed) {
     return NextResponse.json(
@@ -89,97 +86,49 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const kindRaw = formData.get('kind');
-  if (!isUploadKind(kindRaw)) {
-    return NextResponse.json({ error: 'invalid_kind' }, { status: 400 });
+  // Tour 13 — screen policy: only the MT5 proof kind is open. Everything else
+  // is intentionally closed (410 Gone), not merely rejected (400), so the
+  // client learns the capability is retired, with an actionable FR message.
+  if (typeof kindRaw !== 'string' || !isProofUploadKind(kindRaw as UploadKind)) {
+    return NextResponse.json(
+      {
+        error: 'uploads_closed',
+        message:
+          'Les captures sont réservées à la vérification. Pour partager un trade, utilise un lien TradingView.',
+      },
+      { status: 410 },
+    );
   }
-  const kind: UploadKind = kindRaw;
+  const kind: UploadKind = kindRaw as UploadKind;
 
-  // Resolve the path-owner segment per kind, applying the kind-specific
-  // authorisation rule. Failing fast keeps malformed requests from reaching
-  // the buffer/sniff pipeline.
-  let pathOwner: string;
-  // S3 — MT5 proof: the `Mt5AccountProof` row is created in THIS request so
-  // the SHA-256 anti-double-upload hash is server-computed from the validated
-  // bytes (a client-supplied hash would be forgeable). Optional links parsed
-  // here, fail-fast before the buffer pipeline.
+  // Member-owned, exactly like a trade screenshot. Optional `accountId`
+  // attaches the proof to one of the member's broker accounts (ownership
+  // enforced — BOLA); optional `accountType` records the declared type.
+  const pathOwner = userId;
   let proofAccountId: string | null = null;
   let proofAccountType: ProofAccountType | null = null;
-  if (isTradeUploadKind(kind)) {
-    pathOwner = userId;
-  } else if (isProofUploadKind(kind)) {
-    // Member-owned, exactly like a trade screenshot. Optional `accountId`
-    // attaches the proof to one of the member's broker accounts (ownership
-    // enforced — BOLA); optional `accountType` records the declared type.
-    pathOwner = userId;
-    const accountIdRaw = formData.get('accountId');
-    if (typeof accountIdRaw === 'string' && accountIdRaw.length > 0) {
-      if (!/^[a-z0-9]{8,40}$/.test(accountIdRaw)) {
-        return NextResponse.json({ error: 'invalid_account_id' }, { status: 400 });
-      }
-      const account = await db.brokerAccount.findUnique({
-        where: { id: accountIdRaw },
-        select: { memberId: true },
-      });
-      // Absent + not-owner collapse into one error (no existence oracle).
-      if (!account || account.memberId !== userId) {
-        return NextResponse.json({ error: 'invalid_account_id' }, { status: 400 });
-      }
-      proofAccountId = accountIdRaw;
+
+  const accountIdRaw = formData.get('accountId');
+  if (typeof accountIdRaw === 'string' && accountIdRaw.length > 0) {
+    if (!/^[a-z0-9]{8,40}$/.test(accountIdRaw)) {
+      return NextResponse.json({ error: 'invalid_account_id' }, { status: 400 });
     }
-    const accountTypeRaw = formData.get('accountType');
-    if (typeof accountTypeRaw === 'string' && accountTypeRaw.length > 0) {
-      if (!(PROOF_ACCOUNT_TYPES as readonly string[]).includes(accountTypeRaw)) {
-        return NextResponse.json({ error: 'invalid_account_type' }, { status: 400 });
-      }
-      proofAccountType = accountTypeRaw as ProofAccountType;
-    }
-  } else if (isTrainingUploadKind(kind)) {
-    // Mode Entraînement (SPEC §21) — member-owned, exactly like a trade
-    // screenshot: the backtest row doesn't exist yet at upload time, so the
-    // path-owner is the authenticated member. No admin gate, no DB lookup.
-    pathOwner = userId;
-  } else if (isTrainingAnnotationUploadKind(kind)) {
-    // J-T3 admin correction media — admin-only, parent-owned. Carbon mirror
-    // of the annotation branch but through `TrainingTrade` (NEVER `Trade` —
-    // statistical isolation §21.5). pathOwner = the parent trainingTradeId.
-    if (session.user.role !== 'admin') {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-    }
-    const trainingTradeIdRaw = formData.get('trainingTradeId');
-    if (typeof trainingTradeIdRaw !== 'string' || !/^[a-z0-9]{8,40}$/.test(trainingTradeIdRaw)) {
-      return NextResponse.json({ error: 'invalid_training_trade_id' }, { status: 400 });
-    }
-    // Confirm the backtest exists — avoid orphan correction media on a typo'd
-    // id. Existence-only here; the tighter member-ownership check lives in
-    // the Server Action (defense in depth, mirrors the J4 annotation split).
-    const trainingTrade = await db.trainingTrade.findUnique({
-      where: { id: trainingTradeIdRaw },
-      select: { id: true },
+    const account = await db.brokerAccount.findUnique({
+      where: { id: accountIdRaw },
+      select: { memberId: true },
     });
-    if (!trainingTrade) {
-      return NextResponse.json({ error: 'training_trade_not_found' }, { status: 404 });
+    // Absent + not-owner collapse into one error (no existence oracle).
+    if (!account || account.memberId !== userId) {
+      return NextResponse.json({ error: 'invalid_account_id' }, { status: 400 });
     }
-    pathOwner = trainingTradeIdRaw;
-  } else if (isAnnotationUploadKind(kind)) {
-    if (session.user.role !== 'admin') {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    proofAccountId = accountIdRaw;
+  }
+  const accountTypeRaw = formData.get('accountType');
+  if (typeof accountTypeRaw === 'string' && accountTypeRaw.length > 0) {
+    if (!(PROOF_ACCOUNT_TYPES as readonly string[]).includes(accountTypeRaw)) {
+      return NextResponse.json({ error: 'invalid_account_type' }, { status: 400 });
     }
-    const tradeIdRaw = formData.get('tradeId');
-    if (typeof tradeIdRaw !== 'string' || !/^[a-z0-9]{8,40}$/.test(tradeIdRaw)) {
-      return NextResponse.json({ error: 'invalid_trade_id' }, { status: 400 });
-    }
-    // Confirm the trade actually exists — we don't want orphan annotation
-    // media when the admin typo'd the URL.
-    const trade = await db.trade.findUnique({
-      where: { id: tradeIdRaw },
-      select: { id: true },
-    });
-    if (!trade) {
-      return NextResponse.json({ error: 'trade_not_found' }, { status: 404 });
-    }
-    pathOwner = tradeIdRaw;
-  } else {
-    return NextResponse.json({ error: 'invalid_kind' }, { status: 400 });
+    proofAccountType = accountTypeRaw as ProofAccountType;
   }
 
   const file = formData.get('file');
@@ -190,35 +139,79 @@ export async function POST(req: Request): Promise<Response> {
   if (file.size === 0) {
     return NextResponse.json({ error: 'empty_file' }, { status: 400 });
   }
-  if (file.size > MAX_SCREENSHOT_BYTES) {
-    return NextResponse.json({ error: 'too_large', limit: MAX_SCREENSHOT_BYTES }, { status: 413 });
+  if (file.size > MAX_PROOF_INPUT_BYTES) {
+    return NextResponse.json({ error: 'too_large', limit: MAX_PROOF_INPUT_BYTES }, { status: 413 });
   }
 
-  const declared = file.type;
-  if (!isAllowedMime(declared)) {
-    return NextResponse.json({ error: 'invalid_mime' }, { status: 415 });
+  const rawBytes = new Uint8Array(await file.arrayBuffer());
+
+  // HEIC/HEIF is caught FIRST with a dedicated, actionable message: sharp's
+  // prebuilt libvips cannot decode the patented HEVC payload, so without this
+  // the member would get a generic "storage_failed" with no way to self-serve.
+  if (isHeic(rawBytes)) {
+    return NextResponse.json(
+      {
+        error: 'heic_unsupported',
+        message:
+          'Format HEIC non pris en charge. Sur iPhone : Réglages > Appareil photo > Formats > Le plus compatible, ou exporte en JPEG.',
+      },
+      { status: 415 },
+    );
   }
 
-  const buffer = new Uint8Array(await file.arrayBuffer());
-  const detected = sniffImageMime(buffer);
-  if (detected === null || detected !== declared) {
-    return NextResponse.json({ error: 'invalid_bytes' }, { status: 415 });
+  // Accept only the formats we can decode. The label is coarse (the canonical
+  // output is always JPEG) — used for the accept decision + the audit trail.
+  const inputFormat = sniffProofInputFormat(rawBytes);
+  if (inputFormat === null) {
+    return NextResponse.json(
+      {
+        error: 'invalid_bytes',
+        message:
+          'Le fichier ne ressemble pas à une image lisible. Utilise une capture JPG, PNG, WebP, GIF ou AVIF.',
+      },
+      { status: 415 },
+    );
   }
 
-  // S3 — anti-double-upload: the SHA-256 of the validated bytes is the
-  // per-member dedup key (`@@unique([memberId, fileHash])`). Checked BEFORE
-  // storing so a duplicate never costs disk; re-checked via P2002 after the
-  // create (two concurrent uploads of the same bytes — race-safe).
-  let proofFileHash: string | null = null;
-  if (isProofUploadKind(kind)) {
-    proofFileHash = createHash('sha256').update(buffer).digest('hex');
-    const existing = await db.mt5AccountProof.findUnique({
-      where: { memberId_fileHash: { memberId: userId, fileHash: proofFileHash } },
-      select: { id: true },
-    });
-    if (existing) {
-      return NextResponse.json({ error: 'duplicate_proof', proofId: existing.id }, { status: 409 });
+  // Normalise to a canonical EXIF-oriented, down-scaled JPEG BEFORE storage +
+  // hashing. Everything downstream (dedup hash, stored file, vision read) sees
+  // the SAME normalised bytes.
+  const normalized = await normalizeProofImage(rawBytes);
+  if (!normalized.ok) {
+    if (normalized.reason === 'heic_unsupported') {
+      // Defense in depth: a HEIC that slipped past the magic-byte check.
+      return NextResponse.json(
+        {
+          error: 'heic_unsupported',
+          message:
+            'Format HEIC non pris en charge. Sur iPhone : Réglages > Appareil photo > Formats > Le plus compatible, ou exporte en JPEG.',
+        },
+        { status: 415 },
+      );
     }
+    return NextResponse.json(
+      {
+        error: 'invalid_bytes',
+        message: 'Cette image est illisible. Reprends la capture puis renvoie-la.',
+      },
+      { status: 415 },
+    );
+  }
+  const bytes = new Uint8Array(normalized.buffer);
+
+  // S3 — anti-double-upload: the SHA-256 is computed on the NORMALISED bytes
+  // (the canonical JPEG we actually store), NOT the raw upload. Two captures of
+  // the same screen that differ only by EXIF/metadata or by a re-save collapse
+  // to the SAME hash once normalised, so the `@@unique([memberId, fileHash])`
+  // dedup catches them. Checked BEFORE storing so a duplicate never costs disk;
+  // re-checked via P2002 after the create (race-safe).
+  const proofFileHash = createHash('sha256').update(bytes).digest('hex');
+  const existing = await db.mt5AccountProof.findUnique({
+    where: { memberId_fileHash: { memberId: userId, fileHash: proofFileHash } },
+    select: { id: true },
+  });
+  if (existing) {
+    return NextResponse.json({ error: 'duplicate_proof', proofId: existing.id }, { status: 409 });
   }
 
   const storage = selectStorage();
@@ -228,8 +221,9 @@ export async function POST(req: Request): Promise<Response> {
     const result = await storage.put({
       kind,
       pathOwner,
-      contentType: declared,
-      bytes: buffer,
+      // The normalised output is always JPEG → the stored extension is .jpg.
+      contentType: normalized.mime,
+      bytes,
       originalFilename: file.name,
     });
     key = result.key;
@@ -241,53 +235,48 @@ export async function POST(req: Request): Promise<Response> {
 
   // S3 — create the proof row in the same request (server-derived hash).
   let proofId: string | null = null;
-  if (isProofUploadKind(kind) && proofFileHash !== null) {
-    try {
-      const proof = await db.mt5AccountProof.create({
-        data: {
-          memberId: userId,
-          brokerAccountId: proofAccountId,
-          fileKey: key,
-          fileHash: proofFileHash,
-          accountType: proofAccountType,
-        },
-        select: { id: true },
-      });
-      proofId = proof.id;
-    } catch (err) {
-      // Best-effort cleanup of the just-stored file — the row is the source
-      // of truth, an orphaned file is swept by the janitor path later.
-      await storage.delete(key).catch(() => undefined);
-      const isUniqueViolation =
-        typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
-      if (isUniqueViolation) {
-        return NextResponse.json({ error: 'duplicate_proof' }, { status: 409 });
-      }
-      console.error('[uploads] proof row create failed', err);
-      return NextResponse.json({ error: 'storage_failed' }, { status: 500 });
+  try {
+    const proof = await db.mt5AccountProof.create({
+      data: {
+        memberId: userId,
+        brokerAccountId: proofAccountId,
+        fileKey: key,
+        fileHash: proofFileHash,
+        accountType: proofAccountType,
+      },
+      select: { id: true },
+    });
+    proofId = proof.id;
+  } catch (err) {
+    // Best-effort cleanup of the just-stored file — the row is the source of
+    // truth, an orphaned file is swept by the janitor path later.
+    await storage.delete(key).catch(() => undefined);
+    const isUniqueViolation =
+      typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
+    if (isUniqueViolation) {
+      return NextResponse.json({ error: 'duplicate_proof' }, { status: 409 });
     }
+    console.error('[uploads] proof row create failed', err);
+    return NextResponse.json({ error: 'storage_failed' }, { status: 500 });
   }
 
   await logAudit({
-    // §21.5 isolation: backtest uploads emit their own slug — see
-    // `resolveUploadAuditAction` (unit-tested guard).
     action: resolveUploadAuditAction(kind),
     userId,
     metadata: {
       kind,
       key,
-      mime: declared,
-      size: file.size,
+      // The audit records the DETECTED input format (for observability of what
+      // members shoot with) alongside the canonical stored MIME.
+      inputFormat,
+      mime: normalized.mime,
+      size: bytes.length,
       adapter: storage.id,
-      ...(isAnnotationUploadKind(kind) ? { tradeId: pathOwner } : {}),
-      // §21.5 PII-free: only the parent id, never the member's backtest P&L.
-      ...(isTrainingAnnotationUploadKind(kind) ? { trainingTradeId: pathOwner } : {}),
       // S3 PII-free: opaque ids only — never the account label/broker name.
-      ...(isProofUploadKind(kind) ? { proofId, accountId: proofAccountId } : {}),
+      proofId,
+      accountId: proofAccountId,
     },
   });
 
-  return NextResponse.json(proofId !== null ? { key, readUrl, proofId } : { key, readUrl }, {
-    status: 201,
-  });
+  return NextResponse.json({ key, readUrl, proofId }, { status: 201 });
 }

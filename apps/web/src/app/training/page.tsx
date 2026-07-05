@@ -127,7 +127,7 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       <DashboardAmbient tone="cyan" />
-      <div className="dash-stagger relative mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
+      <div className="page-stagger relative mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8">
         {/* Header — MODE ENTRAÎNEMENT identity, non-confusable with the live journal */}
         <header className="flex flex-col gap-4">
           <Link

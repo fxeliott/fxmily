@@ -2,6 +2,7 @@ import 'server-only';
 
 import { db } from '@/lib/db';
 import { isConstancyDip } from '@/lib/admin/attention-logic';
+import { STALE_OPEN_TRADE_HOURS, STALE_OPEN_TRADE_MS } from '@/lib/trades/stale-open-threshold';
 
 /**
  * S7 §33-#2 — admin "à traiter" triage signals for the global members view.
@@ -160,4 +161,334 @@ export async function getCohortAttention(): Promise<CohortAttention> {
   ]);
 
   return { tradesToComment: realToComment + trainingToComment, openDiscrepancies };
+}
+
+// =============================================================================
+// Tour 13 — « À traiter » : cohort-wide work queue for the coach.
+//
+// `getMembersAttention` / `getCohortAttention` above give COUNTS per member and
+// for the cohort. They answer "who needs a look and how much" but never "which
+// exact rows, so I can act on them one after another". The coach was left with a
+// number, then had to open each member, find the tab, and page through to reach
+// the trade — 4 clicks per item. These loaders return the cohort-wide LISTS
+// themselves, oldest-first (the natural work order), each row already carrying
+// the direct link target the page needs. Cursor-paginated so the queue can grow
+// with the cohort without ever loading it whole.
+//
+// Performance: every read is a bounded `findMany` (take = limit + 1 look-ahead)
+// joined to a thin member `select` (id + name parts) — no N+1, no per-row
+// round-trip. Honest caveat: the cohort-wide sorts (`closedAt asc`,
+// `enteredAt asc`, `detectedAt asc`) have NO supporting index — every Trade /
+// Discrepancy index is userId/memberId-prefixed — so Postgres scans then sorts
+// in memory. Bounded and fine at coaching-cohort scale (tens of members); add
+// a cohort-wide index before the cohort outgrows that. `id` is the cursor +
+// the sort tiebreaker so a minute-precision timestamp collision can never make
+// the cursor skip or repeat a row (same contract as `listMemberTradesAsAdmin`).
+// =============================================================================
+
+// Threshold shared with the member-side reminder — single source of truth in
+// `lib/trades/stale-open-threshold.ts` (same number, same strict comparator).
+// Re-exported because the page + tests read it from this module.
+export { STALE_OPEN_TRADE_HOURS };
+
+/** Page size for every triage list — one screenful, "voir plus" for the rest. */
+export const TRIAGE_PAGE_SIZE = 25;
+
+/** Cuids only — a forged `?cursor=` must degrade to page 1, never to a 500
+ *  (mirror of the member-detail page `parseCursor`). */
+function isValidCursor(value: string | undefined): value is string {
+  return typeof value === 'string' && /^[a-z0-9]{20,40}$/i.test(value);
+}
+
+/** Clamp the caller-provided limit into a sane bounded range. */
+function clampLimit(limit: number | undefined): number {
+  return Math.min(TRIAGE_PAGE_SIZE, Math.max(1, limit ?? TRIAGE_PAGE_SIZE));
+}
+
+export interface TriageListOptions {
+  /** Page size (defaults to `TRIAGE_PAGE_SIZE`, clamped to it). */
+  limit?: number | undefined;
+  /** Opaque cursor from a previous page's `nextCursor` (a real row id).
+   *  `| undefined` explicit for `exactOptionalPropertyTypes` — mirror of
+   *  `ListTradesOptions.cursor` so callers can pass a `string | undefined`. */
+  cursor?: string | undefined;
+}
+
+export interface TriagePage<T> {
+  readonly items: readonly T[];
+  /** Id of the next page, or null on the last page. */
+  readonly nextCursor: string | null;
+}
+
+/** Derive the same admin display label as `members-service` (full name, else
+ *  email) from the thin name projection we select on each row. */
+function memberLabel(user: {
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+}): string {
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+  return fullName.length > 0 ? fullName : user.email;
+}
+
+const MEMBER_LABEL_SELECT = {
+  select: { id: true, firstName: true, lastName: true, email: true },
+} as const;
+
+export interface UncommentedTradeItem {
+  /** Trade id — also the cursor and the deep-link target segment. */
+  readonly id: string;
+  readonly memberId: string;
+  readonly memberLabel: string;
+  readonly pair: string;
+  readonly direction: 'long' | 'short';
+  /** When the member closed it (this list is closed-only, so never null). */
+  readonly closedAt: string;
+  /** Realized result in R, or null if the member never filled it. */
+  readonly realizedR: number | null;
+  /** Direct link to the admin trade-review surface where the coach annotates. */
+  readonly href: string;
+}
+
+/**
+ * Cohort-wide closed trades with NO admin annotation yet, oldest close first —
+ * the coach's "comment these" queue. A closed trade is a finished story the
+ * member is waiting for feedback on; ordering by `closedAt asc` means the coach
+ * clears the longest-waiting ones first (SPEC §2 : timely, calm follow-up).
+ *
+ * Scope note (vs `getCohortAttention.tradesToComment`) : the count above is the
+ * RECENT (14 d) uncommented real + training trades — a "what just happened"
+ * teaser. This queue is deliberately different : it lists every CLOSED real
+ * trade still uncommented with no recency floor, because a to-do list must not
+ * hide the oldest item just because two weeks passed. Training backtests are
+ * left out — their annotation surface is a separate tab and the mission scopes
+ * this section to "trades clôturés".
+ */
+export async function listUncommentedClosedTrades(
+  options: TriageListOptions = {},
+): Promise<TriagePage<UncommentedTradeItem>> {
+  const limit = clampLimit(options.limit);
+  const cursor = isValidCursor(options.cursor) ? options.cursor : undefined;
+
+  const rows = await db.trade.findMany({
+    where: {
+      closedAt: { not: null },
+      annotations: { none: {} },
+      user: { status: { not: 'deleted' } },
+    },
+    // Oldest close first; `id` tiebreaks the non-unique minute-precision stamp.
+    orderBy: [{ closedAt: 'asc' }, { id: 'asc' }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      pair: true,
+      direction: true,
+      closedAt: true,
+      realizedR: true,
+      user: MEMBER_LABEL_SELECT,
+    },
+  });
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  return {
+    items: page.map((t) => ({
+      id: t.id,
+      memberId: t.user.id,
+      memberLabel: memberLabel(t.user),
+      pair: t.pair,
+      direction: t.direction,
+      // `closedAt` is guaranteed non-null by the `{ not: null }` filter.
+      closedAt: t.closedAt!.toISOString(),
+      realizedR: t.realizedR === null ? null : Number(t.realizedR),
+      href: `/admin/members/${t.user.id}/trades/${t.id}`,
+    })),
+    nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
+  };
+}
+
+export interface StaleOpenTradeItem {
+  readonly id: string;
+  readonly memberId: string;
+  readonly memberLabel: string;
+  readonly pair: string;
+  readonly direction: 'long' | 'short';
+  /** When the member opened it (this list is open-only, so always set). */
+  readonly enteredAt: string;
+  /** Direct link to the admin trade-review surface. */
+  readonly href: string;
+}
+
+/**
+ * Cohort-wide trades still OPEN more than `STALE_OPEN_TRADE_HOURS` after entry,
+ * oldest entry first. Pure safety-net : with no close the member never answered
+ * `exitReason` / `planRespected`, so the trade vanishes from the scored views in
+ * silence. Surfacing it lets the coach gently prompt a close — never punitive,
+ * a forgotten open position is an oversight, not a fault (SPEC §2).
+ *
+ * Reads only existing timestamps (`enteredAt`, `closedAt`) — zero migration.
+ */
+export async function listStaleOpenTrades(
+  options: TriageListOptions = {},
+): Promise<TriagePage<StaleOpenTradeItem>> {
+  const limit = clampLimit(options.limit);
+  const cursor = isValidCursor(options.cursor) ? options.cursor : undefined;
+  const staleFloor = new Date(Date.now() - STALE_OPEN_TRADE_MS);
+
+  const rows = await db.trade.findMany({
+    where: {
+      closedAt: null,
+      enteredAt: { lt: staleFloor },
+      user: { status: { not: 'deleted' } },
+    },
+    orderBy: [{ enteredAt: 'asc' }, { id: 'asc' }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      pair: true,
+      direction: true,
+      enteredAt: true,
+      user: MEMBER_LABEL_SELECT,
+    },
+  });
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  return {
+    items: page.map((t) => ({
+      id: t.id,
+      memberId: t.user.id,
+      memberLabel: memberLabel(t.user),
+      pair: t.pair,
+      direction: t.direction,
+      enteredAt: t.enteredAt.toISOString(),
+      href: `/admin/members/${t.user.id}/trades/${t.id}`,
+    })),
+    nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
+  };
+}
+
+/** §2-clean labels for each gap type (mirror of the member-verification panel —
+ *  duplicated as plain strings, not imported, to keep this server module free of
+ *  a client-component dependency). */
+const DISCREPANCY_TYPE_LABEL: Record<
+  | 'missing_declared'
+  | 'false_declared'
+  | 'mismatch'
+  | 'unfilled_no_reason'
+  | 'meeting_missed_no_reason'
+  | 'tracking_skipped_no_reason',
+  string
+> = {
+  missing_declared: 'Position réelle non déclarée',
+  false_declared: 'Trade déclaré sans contrepartie',
+  mismatch: 'Écart de taille',
+  unfilled_no_reason: 'Journée sans suivi',
+  meeting_missed_no_reason: 'Réunion manquée',
+  tracking_skipped_no_reason: 'Outil de suivi laissé de côté',
+};
+
+export interface OpenDiscrepancyItem {
+  readonly id: string;
+  readonly memberId: string;
+  readonly memberLabel: string;
+  /** Human §2-clean label for the gap type. */
+  readonly label: string;
+  /** 1 = minor, 2 = notable, 3 = major (display/sort signal only). */
+  readonly severity: number;
+  readonly detectedAt: string;
+  /** Direct link to the member's « réalité vs déclaré » tab where it's handled. */
+  readonly href: string;
+}
+
+/**
+ * Cohort-wide OPEN discrepancies (S3 truth gaps), oldest detection first — the
+ * gaps waiting the longest for the coach's eyes come up first. Reuses the
+ * existing `status: 'open'` signal (never recomputed) and joins the thin member
+ * label. Each row links to the member's verification tab, the real surface where
+ * an écart is acknowledged / resolved.
+ */
+export async function listOpenDiscrepancies(
+  options: TriageListOptions = {},
+): Promise<TriagePage<OpenDiscrepancyItem>> {
+  const limit = clampLimit(options.limit);
+  const cursor = isValidCursor(options.cursor) ? options.cursor : undefined;
+
+  const rows = await db.discrepancy.findMany({
+    where: { status: 'open', member: { status: { not: 'deleted' } } },
+    orderBy: [{ detectedAt: 'asc' }, { id: 'asc' }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      type: true,
+      severity: true,
+      detectedAt: true,
+      member: MEMBER_LABEL_SELECT,
+    },
+  });
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  return {
+    items: page.map((d) => ({
+      id: d.id,
+      memberId: d.member.id,
+      memberLabel: memberLabel(d.member),
+      label: DISCREPANCY_TYPE_LABEL[d.type],
+      severity: d.severity,
+      detectedAt: d.detectedAt.toISOString(),
+      href: `/admin/members/${d.member.id}?tab=verification`,
+    })),
+    nextCursor: hasMore ? (page[page.length - 1]?.id ?? null) : null,
+  };
+}
+
+export interface TriageQueueCounts {
+  /** Cohort closed trades with no admin annotation. */
+  readonly uncommentedClosed: number;
+  /** Cohort trades open longer than `STALE_OPEN_TRADE_HOURS`. */
+  readonly staleOpen: number;
+  /** Cohort open discrepancies. */
+  readonly openDiscrepancies: number;
+  /** Sum — the single number the hub card shows. */
+  readonly total: number;
+}
+
+/**
+ * The three section counts for the « À traiter » page + the hub card total.
+ * Three bounded counts over indexed columns, run in parallel — cheap enough to
+ * call on the hub AND the page without a shared cache (30-member scale).
+ */
+export async function getTriageQueueCounts(): Promise<TriageQueueCounts> {
+  const staleFloor = new Date(Date.now() - STALE_OPEN_TRADE_MS);
+
+  const [uncommentedClosed, staleOpen, openDiscrepancies] = await Promise.all([
+    db.trade.count({
+      where: {
+        closedAt: { not: null },
+        annotations: { none: {} },
+        user: { status: { not: 'deleted' } },
+      },
+    }),
+    db.trade.count({
+      where: {
+        closedAt: null,
+        enteredAt: { lt: staleFloor },
+        user: { status: { not: 'deleted' } },
+      },
+    }),
+    db.discrepancy.count({
+      where: { status: 'open', member: { status: { not: 'deleted' } } },
+    }),
+  ]);
+
+  return {
+    uncommentedClosed,
+    staleOpen,
+    openDiscrepancies,
+    total: uncommentedClosed + staleOpen + openDiscrepancies,
+  };
 }

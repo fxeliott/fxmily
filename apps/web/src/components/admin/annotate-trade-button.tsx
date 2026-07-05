@@ -5,7 +5,6 @@ import { useId, useRef, useState } from 'react';
 import { useActionState } from 'react';
 
 import { CommentPalette } from '@/components/admin/comment-palette';
-import { MediaUploader } from '@/components/media-uploader';
 import { Btn } from '@/components/ui/btn';
 import {
   Sheet,
@@ -15,7 +14,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { ALLOWED_IMAGE_MIME_TYPES, MAX_SCREENSHOT_BYTES } from '@/lib/storage/types';
 import { ANNOTATION_COMMENT_MAX } from '@/lib/schemas/annotation';
 import { TRACKING_AXES } from '@/lib/tracking/axes';
 
@@ -34,7 +32,8 @@ import {
  *
  * Flow:
  *   1. Admin clicks "Annoter ce trade" → Sheet opens.
- *   2. Types a comment + (optional) drops a screenshot.
+ *   2. Types a comment + (optional) pastes a TradingView link (Tour 13 —
+ *      replaces the former screenshot upload).
  *   3. Submits → Server Action runs:
  *        create row → enqueue notif → email best-effort → audit.
  *   4. On success the Sheet closes and the parent page revalidates so the
@@ -54,13 +53,6 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
-  const [mediaKey, setMediaKey] = useState<string | null>(null);
-  /** Tracks the MediaUploader's in-flight upload so we can block submit
-   * between the moment a file is dropped and the moment /api/uploads has
-   * answered with a key. Without this, an admin who clicks Submit while
-   * the upload is mid-flight would create a comment-only annotation and
-   * leave an orphan file in storage. */
-  const [isUploading, setIsUploading] = useState(false);
 
   // Wrap the Server Action so the Sheet closes + form resets on success
   // without touching `useEffect` (React 19 + react-hooks/set-state-in-effect).
@@ -74,8 +66,6 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
     if (result.ok) {
       setOpen(false);
       setComment('');
-      setMediaKey(null);
-      setIsUploading(false);
       formRef.current?.reset();
     }
     return result;
@@ -197,27 +187,43 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
             </span>
           </div>
 
-          {/* Media uploader (image-only at J4) */}
+          {/* Tour 13 — optional TradingView link (replaces the former upload).
+              Type=url + inputMode so mobile keyboards surface the URL layout. */}
           <div className="flex flex-col gap-1.5">
-            <span className="t-eyebrow">Capture annotée (optionnel)</span>
-            <MediaUploader
-              kind="annotation-image"
-              tradeId={tradeId}
-              name="mediaKey"
-              mediaTypeName="mediaType"
-              mediaTypeValue="image"
-              acceptMime={ALLOWED_IMAGE_MIME_TYPES}
-              maxBytes={MAX_SCREENSHOT_BYTES}
-              idleLabel="Glisse une capture annotée"
-              previewAlt="Capture annotée"
-              error={state?.fieldErrors?.mediaKey}
-              onUploaded={({ key }) => setMediaKey(key)}
-              onCleared={() => setMediaKey(null)}
-              onStatusChange={(status) => setIsUploading(status === 'uploading')}
+            <label htmlFor={`${formId}-tvurl`} className="t-eyebrow">
+              Lien TradingView (optionnel)
+            </label>
+            <input
+              id={`${formId}-tvurl`}
+              name="tradingViewUrl"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="https://fr.tradingview.com/x/…"
+              className="rounded-card border border-[var(--b-default)] bg-[var(--bg)] px-3 py-2.5 font-sans text-[14px] leading-relaxed text-[var(--t-1)] placeholder:text-[var(--t-4)] focus-visible:border-[var(--acc)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]"
+              aria-invalid={state?.fieldErrors?.tradingViewUrl ? 'true' : undefined}
+              aria-describedby={
+                [
+                  `${formId}-tvurl-help`,
+                  state?.fieldErrors?.tradingViewUrl ? `${formId}-tvurl-error` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
             />
-            <span className="t-cap text-[var(--t-4)]">
-              Vidéo Zoom (jusqu&apos;à 500 Mo) · prochain jalon, dès que R2 sera configuré.
+            <span id={`${formId}-tvurl-help`} className="t-cap text-[var(--t-4)]">
+              Partage un snapshot ou un layout TradingView pour appuyer ta correction.
             </span>
+            {state?.fieldErrors?.tradingViewUrl ? (
+              <p
+                id={`${formId}-tvurl-error`}
+                role="alert"
+                className="text-[11px] text-[var(--bad)]"
+              >
+                {state.fieldErrors.tradingViewUrl}
+              </p>
+            ) : null}
           </div>
 
           {/* Top-level errors */}
@@ -243,26 +249,11 @@ export function AnnotateTradeButton({ memberId, tradeId }: AnnotateTradeButtonPr
               kind="primary"
               size="m"
               loading={isPending}
-              disabled={isPending || isUploading || comment.trim().length === 0}
-              aria-describedby={isUploading ? `${formId}-upload-blocking` : undefined}
+              disabled={isPending || comment.trim().length === 0}
             >
               <Send className="h-4 w-4" strokeWidth={1.75} />
-              {isUploading
-                ? 'Upload en cours…'
-                : mediaKey
-                  ? 'Envoyer correction + capture'
-                  : 'Envoyer correction'}
+              Envoyer correction
             </Btn>
-            {isUploading ? (
-              <span
-                id={`${formId}-upload-blocking`}
-                role="status"
-                aria-live="polite"
-                className="t-cap text-[var(--t-4)] sm:hidden"
-              >
-                Patiente, la capture s&apos;envoie.
-              </span>
-            ) : null}
           </div>
         </form>
       </SheetContent>

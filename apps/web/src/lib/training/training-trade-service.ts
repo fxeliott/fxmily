@@ -40,6 +40,10 @@ export interface CreateTrainingTradeInput {
    * validated at the Zod edge). Replaces the former mandatory screenshot as the
    * backtest entry artefact. §21.5: process metadata, never a P&L. */
   tradingViewUrl: string;
+  /** Tour 13 — optional member explanation of the analysis screen. Hardened +
+   * length-capped at the Zod edge. `undefined` → NULL in DB. §21.5: still
+   * training-only process metadata, never a P&L. */
+  tradingViewNote?: string | null;
   plannedRR: number;
   outcome: TrainingOutcome | null;
   resultR: number | null;
@@ -74,6 +78,8 @@ export interface SerializedTrainingTrade {
   entryScreenshotKey: string | null;
   /** F1 — optional TradingView analysis link, or null. */
   tradingViewUrl: string | null;
+  /** Tour 13 — member's optional explanation of the analysis screen (null when absent). */
+  tradingViewNote: string | null;
   plannedRR: string;
   outcome: TrainingOutcome | null;
   resultR: string | null;
@@ -104,6 +110,7 @@ export function serializeTrainingTrade(row: TrainingTradeModel): SerializedTrain
     pair: row.pair,
     entryScreenshotKey: row.entryScreenshotKey,
     tradingViewUrl: row.tradingViewUrl,
+    tradingViewNote: row.tradingViewNote,
     plannedRR: row.plannedRR.toString(),
     outcome: row.outcome,
     resultR: row.resultR == null ? null : row.resultR.toString(),
@@ -135,6 +142,7 @@ export async function createTrainingTrade(
       pair: input.pair,
       entryScreenshotKey: input.entryScreenshotKey ?? null,
       tradingViewUrl: input.tradingViewUrl,
+      tradingViewNote: input.tradingViewNote ?? null,
       plannedRR: new Prisma.Decimal(input.plannedRR),
       outcome: input.outcome,
       resultR: input.resultR == null ? null : new Prisma.Decimal(input.resultR),

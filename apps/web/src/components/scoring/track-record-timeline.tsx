@@ -1,6 +1,7 @@
 import { Check, ImageIcon, Minus, ScanSearch, TrendingDown, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import type { TrackRecordTimelineItem } from '@/lib/trades/track-record-timeline';
 import { cn } from '@/lib/utils';
 
@@ -22,7 +23,7 @@ function formatDate(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat('fr-FR', {
     day: 'numeric',
     month: 'short',
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
   }).format(date);
 }
 

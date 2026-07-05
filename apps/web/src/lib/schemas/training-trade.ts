@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { TRAINING_KEY_PATTERN } from '@/lib/storage/keys';
 import { TRADINGVIEW_URL_MAX, tradingViewUrlRequiredSchema } from '@/lib/schemas/tradingview-url';
 import { containsBidiOrZeroWidth, safeFreeText } from '@/lib/text/safe';
 import { TRADING_PAIRS } from '@/lib/trading/pairs';
@@ -64,11 +63,6 @@ const resultRSchema = z.coerce
   .nullable()
   .optional();
 
-/** Entry-analysis screenshot key. Pattern sourced from `lib/storage/keys` so
- * the validation layer and the (J-T2) path-generation layer never drift —
- * same approach as `annotation.ts`. */
-const trainingScreenshotKeySchema = z.string().regex(TRAINING_KEY_PATTERN, 'Clé fichier invalide.');
-
 /** J1 — the training backtest now REQUIRES a TradingView link in place of the
  * former mandatory screenshot (pivot capture → lien, actée par Eliott). The
  * link validation + hardening (length cap, Trojan-Source reject, HTTPS-only +
@@ -88,6 +82,20 @@ const lessonLearnedSchema = z
   .max(TRAINING_LESSON_MAX, `Maximum ${TRAINING_LESSON_MAX} caractères.`)
   .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
   .transform(safeFreeText);
+
+/** Tour 13 — optional member explanation attached to the analysis link: what
+ * they saw on the screen, in their own words. Shorter cap (500) than
+ * `lessonLearned` — a focused caption on the chart, NOT the lesson. Same
+ * Trojan-Source hardening (bidi/zero-width reject then `safeFreeText`); §21.5:
+ * the value stays training-only, never bridged to the real edge. Exact mirror
+ * of `trade.ts` `tradingViewNoteSchema`. */
+const tradingViewNoteSchema = z
+  .string()
+  .trim()
+  .max(500, 'Explication trop longue (500 max).')
+  .refine((s) => !containsBidiOrZeroWidth(s), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText)
+  .optional();
 
 /** Tri-state: true / false / null (= N/A). EXACT mirror of `trade.ts`
  * `hedgeRespected` — the form sends `'na'` for N/A. */
@@ -128,12 +136,14 @@ const enteredAtSchema = z.coerce
 
 export const trainingTradeCreateSchema = z.object({
   pair: pairSchema,
-  // J1 — the TradingView link is now the mandatory entry artefact; the legacy
-  // screenshot key is OPTIONAL (kept nullable in DB for pre-J1 backtests and
-  // administrative repairs, never captured by the wizard anymore).
-  entryScreenshotKey: trainingScreenshotKeySchema.optional(),
-  // J1 — mandatory TradingView link (replaces the former screenshot upload).
+  // J1 — the TradingView link is the mandatory entry artefact (replaces the
+  // former screenshot upload). Tour 13 — no API path accepts an image key
+  // anymore: the legacy `entryScreenshotKey` input is removed (only the
+  // verification flow uploads). The nullable DB column + the display of pre-J1
+  // training captures are untouched (§21.5 preserved).
   tradingViewUrl: tradingViewUrlRequiredSchema,
+  // Tour 13 — optional member explanation of the analysis screen (500 max).
+  tradingViewNote: tradingViewNoteSchema,
   plannedRR: plannedRRSchema,
   outcome: z.enum(OUTCOMES, { message: 'Résultat invalide.' }).nullable().optional(),
   resultR: resultRSchema,

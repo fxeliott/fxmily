@@ -23,6 +23,10 @@ const m = vi.hoisted(() => ({
   logAudit: vi.fn(),
   scanAlertsForMember: vi.fn(),
   reconcileOneMember: vi.fn(),
+  // Tour 13 — the at-analysis file purge deletes the stored screen via the
+  // storage adapter, then stamps filePurgedAt. Mocked so the unit tests stay on
+  // the branching logic (real delete would touch the FS).
+  storageDelete: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => {
@@ -51,6 +55,10 @@ vi.mock('@/lib/db', () => {
 
 vi.mock('@/lib/auth/audit', () => ({
   logAudit: m.logAudit,
+}));
+
+vi.mock('@/lib/storage', () => ({
+  selectStorage: () => ({ id: 'local', delete: m.storageDelete }),
 }));
 
 vi.mock('@/lib/observability', () => ({
@@ -130,6 +138,8 @@ function seedHappyMocks() {
       ocrStatus: 'pending',
       brokerAccountId: null,
       accountType: null,
+      fileKey: `proofs/${MEMBER}/abcdefghijklmnop.jpg`,
+      filePurgedAt: null,
     },
   ]);
   m.accountFindUnique.mockResolvedValue(null);
@@ -139,6 +149,7 @@ function seedHappyMocks() {
   m.positionCreateMany.mockResolvedValue({ count: 2 });
   m.proofUpdate.mockResolvedValue({});
   m.userUpdate.mockResolvedValue({});
+  m.storageDelete.mockResolvedValue(undefined);
 }
 
 beforeEach(() => {
@@ -176,6 +187,52 @@ describe('persistVisionResults — event-driven alert scan (S4 §30 «sans déla
     expect(r.errors).toBe(0);
   });
 
+  it('Tour 13 — purges the stored screen after a successful (done) persist', async () => {
+    seedHappyMocks();
+    const r = await persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER, output: probeOutput() }],
+    });
+
+    expect(r.persisted).toBe(1);
+    // The screen was deleted from storage...
+    expect(m.storageDelete).toHaveBeenCalledTimes(1);
+    expect(m.storageDelete).toHaveBeenCalledWith(`proofs/${MEMBER}/abcdefghijklmnop.jpg`);
+    // ...and filePurgedAt was stamped (a proofUpdate carrying a Date).
+    const purgeStamp = m.proofUpdate.mock.calls.find(
+      (c) => c[0]?.data?.filePurgedAt instanceof Date,
+    );
+    expect(purgeStamp?.[0]?.where).toEqual({ id: PROOF });
+  });
+
+  it('Tour 13 — purge is idempotent: an already-purged proof is not re-deleted', async () => {
+    seedHappyMocks();
+    // Proof already carries filePurgedAt → purge must short-circuit.
+    m.proofFindMany.mockResolvedValue([
+      {
+        id: PROOF,
+        memberId: MEMBER,
+        ocrStatus: 'pending',
+        brokerAccountId: null,
+        accountType: null,
+        fileKey: `proofs/${MEMBER}/abcdefghijklmnop.jpg`,
+        filePurgedAt: new Date('2026-07-01T00:00:00.000Z'),
+      },
+    ]);
+
+    const r = await persistVisionResults({
+      results: [{ proofId: PROOF, userId: MEMBER, output: probeOutput() }],
+    });
+
+    expect(r.persisted).toBe(1);
+    // The analysis still ran, but the file was already gone → no second delete,
+    // no re-stamp.
+    expect(m.storageDelete).not.toHaveBeenCalled();
+    const purgeStamp = m.proofUpdate.mock.calls.find(
+      (c) => c[0]?.data?.filePurgedAt instanceof Date,
+    );
+    expect(purgeStamp).toBeUndefined();
+  });
+
   it('does not scan when nothing persisted (all skipped)', async () => {
     m.userFindMany.mockResolvedValue([]);
     m.proofFindMany.mockResolvedValue([]);
@@ -210,6 +267,8 @@ describe('persistVisionResults — gates', () => {
         ocrStatus: 'pending',
         brokerAccountId: null,
         accountType: null,
+        fileKey: `proofs/someoneelse1/abcdefghijklmnop.jpg`,
+        filePurgedAt: null,
       },
     ]);
 
@@ -230,6 +289,8 @@ describe('persistVisionResults — gates', () => {
         ocrStatus: 'pending',
         brokerAccountId: null,
         accountType: null,
+        fileKey: `proofs/${MEMBER}/abcdefghijklmnop.jpg`,
+        filePurgedAt: null,
       },
       {
         id: 'clxproof00002',
@@ -237,9 +298,12 @@ describe('persistVisionResults — gates', () => {
         ocrStatus: 'pending',
         brokerAccountId: null,
         accountType: null,
+        fileKey: `proofs/${MEMBER}/qrstuvwxyz012345.jpg`,
+        filePurgedAt: null,
       },
     ]);
     m.proofUpdate.mockResolvedValue({});
+    m.storageDelete.mockResolvedValue(undefined);
 
     const r = await persistVisionResults({
       results: [
@@ -249,10 +313,17 @@ describe('persistVisionResults — gates', () => {
     });
 
     expect(r.skipped).toBe(2);
-    // Exactly ONE update — the not_mt5_history one — and it sets `failed`.
-    expect(m.proofUpdate).toHaveBeenCalledTimes(1);
+    // Two updates for the not_mt5_history proof: the `failed` flip, then the
+    // Tour 13 at-analysis purge (`filePurgedAt` stamp). The transient
+    // `claude_exit_1` proof is left pending → no update, no purge.
+    expect(m.proofUpdate).toHaveBeenCalledTimes(2);
     expect(m.proofUpdate.mock.calls[0]?.[0]?.where).toEqual({ id: PROOF });
     expect(m.proofUpdate.mock.calls[0]?.[0]?.data.ocrStatus).toBe('failed');
+    // Purge: file deleted, filePurgedAt stamped for the SAME proof.
+    expect(m.storageDelete).toHaveBeenCalledTimes(1);
+    expect(m.storageDelete).toHaveBeenCalledWith(`proofs/${MEMBER}/abcdefghijklmnop.jpg`);
+    expect(m.proofUpdate.mock.calls[1]?.[0]?.where).toEqual({ id: PROOF });
+    expect(m.proofUpdate.mock.calls[1]?.[0]?.data.filePurgedAt).toBeInstanceOf(Date);
   });
 
   it('🚨 adverse — not_mt5_history on an already-DONE proof never flips it back to failed', () => {

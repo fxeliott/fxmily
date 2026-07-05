@@ -96,10 +96,10 @@ export default async function JournalPage({ searchParams }: JournalPageProps) {
           query. Decorative: aria-hidden + pointer-events:none + reduced-motion. */}
       <DashboardAmbient />
 
-      {/* `dash-stagger` cascades the header / filters / list / footer in on load
+      {/* `page-stagger` cascades the header / filters / list / footer in on load
           (wowRise, compositor-only, reduced-motion-safe) — the hub's "alive
           arrival" pattern, now on the journal too. */}
-      <div className="dash-stagger relative mx-auto flex w-full max-w-[var(--w-app)] flex-1 flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
+      <div className="page-stagger relative mx-auto flex w-full max-w-[var(--w-app)] flex-1 flex-col gap-6 px-4 py-8 lg:px-8 2xl:px-12">
         {/* Header */}
         <header className="flex flex-col gap-4">
           <Link

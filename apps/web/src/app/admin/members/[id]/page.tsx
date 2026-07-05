@@ -478,6 +478,7 @@ export default async function AdminMemberDetailPage({ params, searchParams }: De
           nextCursor={tradesPage.nextCursor}
           cursor={cursor}
           total={detail.tradesCount}
+          annotationCountByTrade={tradesPage.annotationCountByTrade}
         />
       ) : null}
       {tab === 'training' && trainingPage ? (

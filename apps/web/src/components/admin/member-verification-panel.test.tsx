@@ -2,7 +2,11 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { DiscrepancyView, VerificationOverview } from '@/lib/verification/service';
+import type {
+  DiscrepancyView,
+  VerificationAccountView,
+  VerificationOverview,
+} from '@/lib/verification/service';
 
 // The panel renders the `ResolveDiscrepancyButton` client island (Tour 11) which
 // references the server action. Mock it so this presentational test never pulls
@@ -20,6 +24,25 @@ const EMPTY_OVERVIEW: VerificationOverview = {
   proofs: [],
   pendingProofsCount: 0,
 };
+
+function account(over: Partial<VerificationAccountView> = {}): VerificationAccountView {
+  return {
+    id: 'acc-1',
+    label: 'Compte perso',
+    type: 'personal',
+    brokerName: 'IC Markets',
+    detectedByAI: false,
+    confidence: null,
+    createdAt: new Date('2026-06-01T10:00:00.000Z'),
+    proofsCount: 1,
+    positionsCount: 3,
+    ...over,
+  };
+}
+
+function overviewWith(accounts: VerificationAccountView[]): VerificationOverview {
+  return { accounts, proofs: [], pendingProofsCount: 0 };
+}
 
 function discrepancy(over: Partial<DiscrepancyView> = {}): DiscrepancyView {
   return {
@@ -99,5 +122,99 @@ describe('MemberVerificationPanel — face-à-face réalité vs déclaré (S7 §
     expect(screen.getByText('Journée sans suivi')).toBeInTheDocument();
     expect(screen.queryByText('Ce que le membre a déclaré')).toBeNull();
     expect(screen.queryByText('Ce que son historique montre')).toBeNull();
+  });
+});
+
+/**
+ * Tour 13 — the admin « réalité vs déclaré » tally + per-account vision badge.
+ * Factual, neutral, never an accusation (posture §31.2).
+ */
+describe('MemberVerificationPanel — réalité vs déclaré (Tour 13)', () => {
+  it('shows the declared vs detected tally once the vision has run', () => {
+    render(
+      <MemberVerificationPanel
+        memberId="member-1"
+        overview={overviewWith([
+          account({ id: 'a1', detectedByAI: false }),
+          account({ id: 'a2', detectedByAI: true, confidence: 0.92 }),
+        ])}
+        constancy={null}
+        discrepancies={[]}
+        alerts={[]}
+        history={[]}
+      />,
+    );
+    expect(screen.getByText('Réalité vs déclaré')).toBeInTheDocument();
+    expect(screen.getByText('Comptes déclarés')).toBeInTheDocument();
+    expect(screen.getByText('Détectés par la vision')).toBeInTheDocument();
+    // 1 declared + 1 detected → aligned, calm mute pill, no « écart ».
+    expect(screen.getByText('Comptes alignés')).toBeInTheDocument();
+    expect(screen.queryByText('Écart à explorer en séance')).toBeNull();
+  });
+
+  it('flags a NEUTRAL « écart à explorer » when detected ≠ declared (never « incohérence »)', () => {
+    render(
+      <MemberVerificationPanel
+        memberId="member-1"
+        overview={overviewWith([
+          account({ id: 'a1', detectedByAI: false }),
+          account({ id: 'a2', detectedByAI: true, confidence: 0.8 }),
+          account({ id: 'a3', detectedByAI: true, confidence: 0.7 }),
+        ])}
+        constancy={null}
+        discrepancies={[]}
+        alerts={[]}
+        history={[]}
+      />,
+    );
+    // 1 declared vs 2 detected → divergence, neutral wording only.
+    expect(screen.getByText('Écart à explorer en séance')).toBeInTheDocument();
+    expect(screen.queryByText(/incohérence/i)).toBeNull();
+    expect(screen.queryByText(/mensonge/i)).toBeNull();
+  });
+
+  it('does NOT render the tally when the vision has not run (no detected account)', () => {
+    render(
+      <MemberVerificationPanel
+        memberId="member-1"
+        overview={overviewWith([account({ id: 'a1', detectedByAI: false })])}
+        constancy={null}
+        discrepancies={[]}
+        alerts={[]}
+        history={[]}
+      />,
+    );
+    // The tally card self-guards: a lone declared account with no vision pass
+    // would otherwise show a misleading « 0 détectés ».
+    expect(screen.queryByText('Réalité vs déclaré')).toBeNull();
+  });
+
+  it('surfaces the vision confidence next to a detected account', () => {
+    render(
+      <MemberVerificationPanel
+        memberId="member-1"
+        overview={overviewWith([account({ id: 'a2', detectedByAI: true, confidence: 0.92 })])}
+        constancy={null}
+        discrepancies={[]}
+        alerts={[]}
+        history={[]}
+      />,
+    );
+    expect(screen.getByText('Détecté (confiance 92 %)')).toBeInTheDocument();
+  });
+
+  it('omits the percent when a detected account has no recorded confidence', () => {
+    render(
+      <MemberVerificationPanel
+        memberId="member-1"
+        overview={overviewWith([account({ id: 'a2', detectedByAI: true, confidence: null })])}
+        constancy={null}
+        discrepancies={[]}
+        alerts={[]}
+        history={[]}
+      />,
+    );
+    expect(screen.getByText('Détecté par la vision')).toBeInTheDocument();
+    expect(screen.queryByText(/confiance/)).toBeNull();
   });
 });

@@ -154,14 +154,19 @@ const notesSchema = z
   .transform(safeFreeText)
   .optional();
 
-/**
- * Storage key. Server-issued, NEVER trusted from the client without rechecking
- * ownership. Format documented in `lib/storage/keys.ts`.
- *   trades/{userId}/{nanoid32}.{jpg|jpeg|png|webp}
- */
-const storageKey = z
+/// Tour 13 — optional member explanation attached to a TradingView link (entry
+/// or exit): what they saw on the screen, in their own words. Shorter cap than
+/// `notesSchema` (500 vs 2000) — it is a focused caption on ONE chart, not the
+/// full trade débrief. Same Trojan-Source hardening chain as `notesSchema`
+/// (bidi/zero-width reject then `safeFreeText`): the value is rendered to the
+/// coach AND fed to the weekly/monthly IA loaders as untrusted member input.
+const tradingViewNoteSchema = z
   .string()
-  .regex(/^trades\/[a-z0-9]{8,40}\/[a-zA-Z0-9_-]{12,40}\.(jpg|png|webp)$/, 'Clé fichier invalide.');
+  .trim()
+  .max(500, 'Explication trop longue (500 max).')
+  .refine((v) => !containsBidiOrZeroWidth(v), 'Caractères de contrôle interdits.')
+  .transform(safeFreeText)
+  .optional();
 
 /**
  * S26 — tri-state management-adherence answer, answered at close. Verbatim clone
@@ -184,9 +189,11 @@ const managementAdherence = z
  *
  * J1 pivot (capture → lien, actée par Eliott) : the pre-entry PROOF is now a
  * mandatory TradingView link (`tradingViewEntryUrl`), NOT an uploaded
- * screenshot. The legacy `screenshotEntryKey` stays accepted but OPTIONAL —
- * pre-J1 trades keep their stored capture, the wizard no longer uploads one.
- * The link is hardened in the shared `lib/schemas/tradingview-url` module.
+ * screenshot. Tour 13 — the schema no longer accepts ANY image key: no form
+ * has sent `screenshotEntryKey` since J1 and only the verification flow
+ * uploads, so the API surface is closed. The pre-J1 `screenshotEntryKey` DB
+ * column + the display of existing captures are untouched. The link is
+ * hardened in the shared `lib/schemas/tradingview-url` module.
  */
 export const tradeOpenSchema = z
   .object({
@@ -239,9 +246,13 @@ export const tradeOpenSchema = z
       }),
     notes: notesSchema,
     // J1 — mandatory TradingView entry link (replaces the former screenshot
-    // upload). The legacy storage key is kept OPTIONAL for pre-J1 trades.
+    // upload). Tour 13 — no API path accepts an image key anymore: only the
+    // verification flow uploads. The legacy `screenshotEntryKey` column and the
+    // DISPLAY of pre-J1 captures are untouched; the schema just stops accepting
+    // a key that no form has sent since J1.
     tradingViewEntryUrl: tradingViewUrlRequiredSchema,
-    screenshotEntryKey: storageKey.optional(),
+    // Tour 13 — optional member explanation of the entry screen (500 max).
+    tradingViewEntryNote: tradingViewNoteSchema,
   })
   .superRefine((data, ctx) => {
     // Sanity check stopLossPrice direction relative to entry. We don't reject
@@ -320,10 +331,13 @@ export const tradeCloseSchema = z
     tags: tradeTagsSchema.optional().default([]),
     notes: notesSchema,
     // J1 — mandatory TradingView exit link (replaces the former screenshot
-    // upload at close). The legacy storage key is kept OPTIONAL for pre-J1
-    // trades / administrative repairs.
+    // upload at close). Tour 13 — no API path accepts an image key anymore
+    // (mirror of the entry side): only the verification flow uploads. The
+    // legacy `screenshotExitKey` column and the DISPLAY of pre-J1 captures are
+    // untouched; the schema just stops accepting a key no form has sent.
     tradingViewExitUrl: tradingViewUrlRequiredSchema,
-    screenshotExitKey: storageKey.optional(),
+    // Tour 13 — optional member explanation of the exit screen (500 max).
+    tradingViewExitNote: tradingViewNoteSchema,
   })
   .strict(); // invariant #6 — reject unknown keys (raw is hand-built in journal/actions.ts)
 
@@ -369,7 +383,8 @@ export const WIZARD_STEPS = [
   //                                  Steenbarger setup classification before discipline tags)
   ['tradeQuality', 'planRespected', 'hedgeRespected', 'emotionBefore'],
   // 5 — entry proof: TradingView link (J1 pivot, replaces the screenshot upload)
-  ['tradingViewEntryUrl'],
+  //     + Tour 13 optional member explanation of the screen (validated for length).
+  ['tradingViewEntryUrl', 'tradingViewEntryNote'],
   // 6 — outcome fields. NOT rendered by the open wizard (it caps at step 5 /
   // « Étape X sur 6 ») — this entry documents the CLOSE flow's field group
   // (`/journal/[id]/close`) so both flows share one field map (S4 DOD4-F1 :

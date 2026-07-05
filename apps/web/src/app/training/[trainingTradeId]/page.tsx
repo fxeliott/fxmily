@@ -94,7 +94,7 @@ export default async function MemberTrainingTradeDetailPage({
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       <DashboardAmbient tone="cyan" />
-      <div className="dash-stagger relative mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-6 sm:py-10">
+      <div className="page-stagger relative mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 py-6 sm:py-10">
         {/* Hero — J4 TradeDetailView-parity focal point (h1 + identity), on the
             cyan training surface (§21.5 non-confusable). */}
         <header className="flex flex-col gap-3">
@@ -168,6 +168,13 @@ export default async function MemberTrainingTradeDetailPage({
               />
               Ouvrir mon analyse sur TradingView
             </a>
+            {/* Tour 13 — ton explication du screen, en texte brut (jamais de
+                HTML), whitespace-pre-wrap. §21.5 : reste training-only. */}
+            {trade.tradingViewNote ? (
+              <p className="t-body mt-1 leading-relaxed whitespace-pre-wrap text-[var(--t-2)]">
+                {trade.tradingViewNote}
+              </p>
+            ) : null}
           </Card>
         ) : null}
 

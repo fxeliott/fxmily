@@ -24,6 +24,7 @@
 
 import { renderCoachingContextSection } from '@/lib/coaching/engine';
 import { safeFreeText } from '@/lib/text/safe';
+import { EXIT_REASON_LABELS } from '@/lib/trading/exit-reasons';
 
 import { WEEKLY_CONTEXT_MAX, type MonthlySnapshot } from '@/lib/schemas/monthly-debrief';
 
@@ -53,6 +54,43 @@ const MORNING_INTENTIONS_MAX = 10;
 // TASK E — cap on the distinct Douglas card categories surfaced in the
 // usefulness breakdown (the enum has 11 categories — 20 is ample headroom).
 const HELPFUL_BY_CATEGORY_MAX = 20;
+
+type StreakTradeInput = Pick<
+  MonthlyBuilderInput['trades'][number],
+  'outcome' | 'exitedAt' | 'closedAt'
+>;
+
+/**
+ * DELIBERATE local copy of `lib/analytics/streaks.ts#computeMaxConsecutiveLoss`.
+ * The monthly foundation must not import `@/lib/analytics` (§25.7 "no new edge
+ * coupling", pinned by the anti-leak Block G test) — the streak math is ~15
+ * pure lines, so the foundation carries its own copy instead of weakening the
+ * firewall. Same rules as the source: chronological by `exitedAt` (fallback
+ * `closedAt`), win / break-even breaks the streak, open trades are skipped.
+ * Behaviour is locked by `builder.test.ts` (incl. the open-trade case).
+ */
+function computeMaxConsecutiveLoss(trades: readonly StreakTradeInput[]): number {
+  const closed = trades
+    .filter((t) => t.outcome != null && t.closedAt != null)
+    .map((t) => ({
+      outcome: t.outcome,
+      ts: Date.parse(t.exitedAt ?? t.closedAt!),
+    }))
+    .filter((t) => Number.isFinite(t.ts))
+    .sort((a, b) => a.ts - b.ts);
+
+  let max = 0;
+  let cur = 0;
+  for (const t of closed) {
+    if (t.outcome === 'loss') {
+      cur++;
+      if (cur > max) max = cur;
+    } else {
+      cur = 0;
+    }
+  }
+  return max;
+}
 
 export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapshot {
   return {
@@ -100,11 +138,26 @@ export function buildMonthlySnapshot(input: MonthlyBuilderInput): MonthlySnapsho
     // free-text → wrapped untrusted at the prompt boundary; re-hardened here
     // belt-and-suspenders (mirror buildWeeklySummaries). REAL side only (§21.5).
     coachCorrections: buildCoachCorrections(input),
+    // Notes membre attachées à ses liens TradingView (entrée / sortie) sur ses
+    // trades RÉELS du mois — l'explication que le membre écrit à côté de son screen.
+    // MEMBER free-text → wrapped untrusted au prompt boundary + re-hardened
+    // (`safeFreeText`) defense-in-depth. L'IA la relie aux corrections du coach pour
+    // personnaliser le suivi. Empty array when the member attached no note. REAL side
+    // only (§21.5 keeps training notes out entirely).
+    memberScreenNotes: buildMemberScreenNotes(input),
     // S5 §32-C/D — synthèse de coaching psychologique. Le loader fournit le
     // contexte STRUCTURÉ (DB) ; ici (pur) on le rend en bloc Markdown via le
     // moteur (SSOT du format). Absent → slice omis (exactOptionalPropertyTypes).
     // §2-safe : la copie est curée par le moteur (jamais un terme de marché).
     ...(input.coaching ? { coaching: renderCoachingContextSection(input.coaching) } : {}),
+    // Quick win — factual exit-reason distribution over the month's CLOSED trades
+    // (count per `Trade.exitReason`, FR label). Absent → slice omitted (no closed
+    // trade carried an exitReason, feature récente). Posture §2 (factual, never a
+    // market view). exactOptionalPropertyTypes → conditional spread.
+    ...(() => {
+      const exitReasonDistribution = buildExitReasonDistribution(input);
+      return exitReasonDistribution ? { exitReasonDistribution } : {};
+    })(),
   };
 }
 
@@ -237,6 +290,13 @@ function buildRealCounters(input: MonthlyBuilderInput): MonthlySnapshot['real'] 
   const riskPctMedian = median(riskPcts);
   const riskPctOverTwoCount = riskPcts.filter((v) => v > 2).length;
 
+  // Quick win — longest run of consecutive losing closed trades in the month
+  // (`computeMaxConsecutiveLoss` sorts by `exitedAt`, breaks the streak on a win /
+  // break-even / open trade). Mark Douglas grid (5 vérités #1/#3): a loss streak
+  // in a small sample is normal variance, not a broken edge — surfaced so the
+  // debrief names it calmly, never a market view.
+  const maxConsecutiveLoss = computeMaxConsecutiveLoss(input.trades);
+
   return {
     tradesTotal: input.trades.length,
     tradesWin: wins.length,
@@ -285,7 +345,40 @@ function buildRealCounters(input: MonthlyBuilderInput): MonthlySnapshot['real'] 
     tradesQualityCaptured,
     riskPctMedian,
     riskPctOverTwoCount,
+    // Quick win — longest consecutive-loss streak of the month (count-only).
+    maxConsecutiveLoss,
   };
+}
+
+// =============================================================================
+// Quick win — exit-reason distribution over the month's closed trades
+// =============================================================================
+
+/**
+ * Quick win — fold the month's CLOSED trades into a per-`exitReason` distribution
+ * (count per reason, FR label from `EXIT_REASON_LABELS`), frequency-sorted desc.
+ * Only trades with a non-null `exitReason` are counted (the field is optional /
+ * feature récente). Returns `undefined` when nothing qualifies so the aggregator
+ * omits the slice entirely (honest empty state, never a fabricated "0"). Posture
+ * §2 : the exitReason is the factual NATURE of the exit (how the position ended),
+ * never a market judgement. Carbon of the weekly builder's helper.
+ */
+function buildExitReasonDistribution(
+  input: MonthlyBuilderInput,
+): MonthlySnapshot['exitReasonDistribution'] {
+  const counts = new Map<keyof typeof EXIT_REASON_LABELS, number>();
+  for (const trade of input.trades) {
+    if (!trade.isClosed) continue;
+    const slug = trade.exitReason;
+    // Skip trades with no recorded exit reason (null in DB, or undefined when a
+    // caller omits the field) — an untagged exit is not a distribution bucket.
+    if (slug === null || slug === undefined) continue;
+    counts.set(slug, (counts.get(slug) ?? 0) + 1);
+  }
+  if (counts.size === 0) return undefined;
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([slug, count]) => ({ slug, label: EXIT_REASON_LABELS[slug], count }));
 }
 
 // =============================================================================
@@ -319,6 +412,32 @@ function buildCoachCorrections(input: MonthlyBuilderInput): string[] {
         ? trimmed.slice(0, WEEKLY_CONTEXT_ITEM_MAX_CHARS)
         : trimmed;
     return safeFreeText(truncated);
+  });
+}
+
+/// Relay the loader's pre-shaped member screen notes (`{ pair, direction, kind,
+/// note }`) verbatim, capped ≤20 + the `note` re-hardened defense-in-depth (the
+/// loader already truncated to ~350; safeFreeText strips bidi/zero-width even
+/// though the schema also refines). `pair`/`direction`/`kind` are structural (not
+/// member free-text) so they pass through untouched. MEMBER free-text side — the
+/// note is wrapped untrusted at the prompt boundary. Belt-and-suspenders twin of
+/// `buildCoachCorrections`. REAL side only — training notes never reach here.
+function buildMemberScreenNotes(input: MonthlyBuilderInput): MonthlySnapshot['memberScreenNotes'] {
+  // `?? []` mirrors the weekly builder: the field is required on
+  // MonthlyBuilderInput, but an untyped caller / partial fixture omitting it
+  // must degrade to "no notes", never throw.
+  return (input.memberScreenNotes ?? []).slice(0, 20).map((n) => {
+    const trimmed = n.note.trim();
+    const truncated =
+      trimmed.length > WEEKLY_CONTEXT_ITEM_MAX_CHARS
+        ? trimmed.slice(0, WEEKLY_CONTEXT_ITEM_MAX_CHARS)
+        : trimmed;
+    return {
+      pair: n.pair,
+      direction: n.direction,
+      kind: n.kind,
+      note: safeFreeText(truncated),
+    };
   });
 }
 

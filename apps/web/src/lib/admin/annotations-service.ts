@@ -23,8 +23,9 @@ export interface CreateAnnotationInput {
   tradeId: string;
   adminId: string;
   comment: string;
-  mediaKey: string | null;
-  mediaType: AnnotationMediaType | null;
+  /** Tour 13 — optional TradingView screen link supporting the correction, or
+   * null. Replaces the former `mediaKey`/`mediaType` upload pair on create. */
+  tradingViewUrl: string | null;
   /** Optional coaching axis (J-AI corrections echo). Omitted/null = untagged. */
   axis?: TrackingAxis | null;
 }
@@ -38,7 +39,13 @@ export interface SerializedAnnotation {
   tradeId: string;
   adminId: string;
   comment: string;
+  /** Tour 13 — optional TradingView screen link supporting the correction, or
+   * null. New corrections use this instead of an uploaded capture. */
+  tradingViewUrl: string | null;
+  /** LEGACY (read-only) — storage key of a pre-Tour-13 uploaded capture, or
+   * null. New corrections never set this; the file may be purged in prod. */
   mediaKey: string | null;
+  /** LEGACY (read-only) — media type of the legacy uploaded capture, or null. */
   mediaType: AnnotationMediaType | null;
   /** Optional coaching axis (J-AI corrections echo). Null = untagged. */
   axis: TrackingAxis | null;
@@ -68,6 +75,7 @@ export function serializeAnnotation(row: TradeAnnotationModel): SerializedAnnota
     tradeId: row.tradeId,
     adminId: row.adminId,
     comment: row.comment,
+    tradingViewUrl: row.tradingViewUrl,
     mediaKey: row.mediaKey,
     mediaType: row.mediaType,
     axis: row.axis,
@@ -96,8 +104,9 @@ export async function createAnnotation(
       tradeId: input.tradeId,
       adminId: input.adminId,
       comment: input.comment,
-      mediaKey: input.mediaKey,
-      mediaType: input.mediaType,
+      // Tour 13 — new corrections carry an optional TradingView link; the legacy
+      // mediaKey/mediaType stay null (never captured on create anymore).
+      tradingViewUrl: input.tradingViewUrl,
       axis: input.axis ?? null,
     },
   });

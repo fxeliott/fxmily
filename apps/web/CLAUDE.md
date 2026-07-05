@@ -341,19 +341,19 @@ User-scoped uniquement. Pour l'admin (J3+), on créera un `lib/trades/admin-serv
 
 Préfixe ajouté : `annotations/{tradeId}/{nanoid32}.{jpg|png|webp}`. Le path-owner est le **trade id**, pas le user id : ownership member-side se résout via un seul `db.trade.findUnique({ select: { userId } })`. Helpers : `generateAnnotationKey`, `parseAnnotationKey`, `parseStorageKey` (discriminated union sur `kind: 'trade' | 'annotation'`). Le contrat `StorageAdapter.put({ kind, pathOwner, ... })` est generic ; route handler choisit.
 
-`POST /api/uploads` accepte le nouveau `kind: 'annotation-image'` avec gate role=admin + champ `tradeId` requis. `GET /api/uploads/[...key]` dispatch sur le préfixe : trade-key → check userId in path, annotation-key → lookup trade.userId.
+`POST /api/uploads` acceptait le `kind: 'annotation-image'` (gate role=admin + `tradeId` requis). **Obsolète Tour 13** : la route n'accepte plus que `mt5-proof` (vérification) — tout autre kind répond 410 `uploads_closed` ; les corrections passent par un lien TradingView optionnel. `GET /api/uploads/[...key]` reste pour SERVIR les médias legacy déjà stockés : dispatch sur le préfixe, trade-key → check userId in path, annotation-key → lookup trade.userId.
 
 ### Server Actions
 
 - `app/admin/members/[id]/trades/[tradeId]/actions.ts` :
-  - `createAnnotationAction(memberId, tradeId)(prev, formData)` : auth + role admin → Zod re-parse → BOLA check `parseAnnotationKey(mediaKey).tradeId === tradeId` → trade-owner check `trade.userId === memberId` → service create + enqueue + email best-effort + audit + revalidate. Sur échec après upload média, cleanup orphelin via `storage.delete()`.
+  - `createAnnotationAction(memberId, tradeId)(prev, formData)` : auth + role admin → Zod re-parse (commentaire + `tradingViewUrl` optionnel host-allowlisté ; **Tour 13 : plus de `mediaKey` en création**, donc plus de BOLA média ni de cleanup storage) → trade-owner check `trade.userId === memberId` → service create + enqueue + email best-effort + audit + revalidate.
   - `deleteAnnotationAction(annotationId)` : reads first → cleanup média → `deleteMany({ id, adminId })` (refuse si autre admin) → audit + revalidate.
 
 ### UI
 
-- **Admin** : `<AnnotateTradeButton />` ouvre un `<Sheet side="bottom">` mobile-first. Form = textarea (compteur live, max 5000) + `<MediaUploader kind="annotation-image">` générique. Wrapper-action pattern pour reset/close on success (pas de `useEffect` setState — lint react-hooks/set-state-in-effect).
+- **Admin** : `<AnnotateTradeButton />` ouvre un `<Sheet side="bottom">` mobile-first. Form = textarea (compteur live, max 5000) + champ « Lien TradingView (optionnel) » (**Tour 13** : remplace l'ancien `<MediaUploader>`, composant supprimé). Wrapper-action pattern pour reset/close on success (pas de `useEffect` setState — lint react-hooks/set-state-in-effect).
 - **Membre** : `<TradeCard unseenAnnotationsCount>` affiche pill lime "1 nouvelle correction" / "N nouvelles corrections" (live dot). Au render de `/journal/[id]`, `markAnnotationsSeenForTrade(userId, id)` bulk-update les rows non-vues (1 round-trip, index `(tradeId, seenByMemberAt)`) — pas de bouton "Marquer lu" séparé.
-- **Section partagée** : `<AnnotationsSection />` (Server Component) — admin voit "Corrections envoyées" + delete + pill "Non lue" sur les non-vues ; membre voit "Corrections reçues" read-only + pill "Capture jointe" si média.
+- **Section partagée** : `<AnnotationsSection />` (Server Component) — admin voit "Corrections envoyées" + delete + pill "Non lue" sur les non-vues ; membre voit "Corrections reçues" read-only + lien « Voir la correction sur TradingView » quand présent (Tour 13) ; les captures legacy restantes s'affichent via `<LegacyCaptureImage>` (dégradation onError « Capture retirée. »).
 
 ### Email
 

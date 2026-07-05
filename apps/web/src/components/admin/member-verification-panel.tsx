@@ -66,6 +66,13 @@ interface MemberVerificationPanelProps {
   history: readonly ConstancyScoreView[];
 }
 
+/** Format a 0-1 vision confidence as a rounded percent (« 92 % »). Null-safe:
+ *  a detected account with no confidence recorded simply omits the figure. */
+function formatConfidence(confidence: number | null): string | null {
+  if (confidence === null) return null;
+  return `${Math.round(confidence * 100)} %`;
+}
+
 export function MemberVerificationPanel({
   memberId,
   overview,
@@ -75,6 +82,17 @@ export function MemberVerificationPanel({
   history,
 }: MemberVerificationPanelProps) {
   const openCount = discrepancies.filter((d) => d.status === 'open').length;
+
+  // Tour 13 — « réalité vs déclaré » account tally, derived from the SAME source
+  // of truth as the list below (the account rows, not the denormalised
+  // `detectedAccountCount` which stays `—` until the vision pipeline runs).
+  // Declared = member-created rows; detected = rows the vision pipeline added.
+  // Posture §31.2 : a factual signal of honesty FOR THE COACH, never an
+  // accusation — an écart is « à explorer en séance », never « incohérence ».
+  const declaredCount = overview.accounts.filter((a) => !a.detectedByAI).length;
+  const detectedCount = overview.accounts.filter((a) => a.detectedByAI).length;
+  const hasVisionRun = overview.accounts.some((a) => a.detectedByAI);
+  const countsDiverge = hasVisionRun && detectedCount !== declaredCount;
 
   return (
     <div className="flex flex-col gap-4">
@@ -95,6 +113,44 @@ export function MemberVerificationPanel({
       <ConstancyScoreCard score={constancy} />
       <ConstancyTrend history={history} />
 
+      {/* Tour 13 — « réalité vs déclaré » : comptes déclarés vs détectés par la
+          vision. Signal d'honnêteté pour le coach, formulé strictement en faits
+          (posture §31.2) : jamais de rouge, jamais « incohérence » ni « mensonge ».
+          Rendu seulement une fois la vision passée (au moins un compte détecté),
+          sinon le « M » serait un 0 trompeur (vision pas encore lancée). */}
+      {hasVisionRun ? (
+        <Card className="flex flex-col gap-2 p-4" aria-label="Réalité vs déclaré">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="t-h3 text-[var(--t-1)]">Réalité vs déclaré</h3>
+            {countsDiverge ? (
+              <Pill tone="cy">Écart à explorer en séance</Pill>
+            ) : (
+              <Pill tone="mute">Comptes alignés</Pill>
+            )}
+          </div>
+          <p className="t-cap text-[var(--t-3)]">
+            Le membre a déclaré ses comptes, la vision les a lus depuis ses preuves. Deux comptes
+            qui suivent, un simple point de repère.
+          </p>
+          <div className="mt-1 grid grid-cols-2 gap-3">
+            <div className="rounded-card flex flex-col gap-0.5 border border-[var(--b-subtle)] bg-[var(--bg-2)] p-3">
+              <span className="t-eyebrow text-[var(--t-4)]">Comptes déclarés</span>
+              <span className="f-mono text-[20px] font-semibold text-[var(--t-1)] tabular-nums">
+                {declaredCount}
+              </span>
+              <span className="t-cap text-[var(--t-4)]">saisis par le membre</span>
+            </div>
+            <div className="rounded-card flex flex-col gap-0.5 border border-[var(--b-subtle)] bg-[var(--bg-2)] p-3">
+              <span className="t-eyebrow text-[var(--t-4)]">Détectés par la vision</span>
+              <span className="f-mono text-[20px] font-semibold text-[var(--cy)] tabular-nums">
+                {detectedCount}
+              </span>
+              <span className="t-cap text-[var(--t-4)]">lus dans les preuves MT5</span>
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
       {/* Comptes */}
       <section className="flex flex-col gap-2" aria-label="Comptes broker">
         <h3 className="t-h3 text-[var(--t-1)]">Comptes</h3>
@@ -112,7 +168,14 @@ export function MemberVerificationPanel({
                 </span>
               </span>
               {a.detectedByAI ? (
-                <Pill tone="cy">Détecté IA</Pill>
+                <Pill tone="cy">
+                  {/* Tour 13 — surface the vision confidence next to the badge
+                      (the field was loaded but never shown). Neutral cyan, a
+                      read-precision figure, never a verdict. Omitted when null. */}
+                  {formatConfidence(a.confidence)
+                    ? `Détecté (confiance ${formatConfidence(a.confidence)})`
+                    : 'Détecté par la vision'}
+                </Pill>
               ) : (
                 <Pill tone="mute">Déclaré</Pill>
               )}

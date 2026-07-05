@@ -29,6 +29,9 @@ function baseInput(over: Partial<MonthlyBuilderInput> = {}): MonthlyBuilderInput
     // J-AI corrections echo — no tagged coach correction by default; tests that
     // exercise the corpus override with pre-formatted `« Axe » : commentaire` strings.
     coachCorrections: [],
+    // Notes membre TradingView — no attached note by default; tests that exercise
+    // the corpus override with `{ pair, direction, kind, note }` items.
+    memberScreenNotes: [],
     latestScore: null,
     // DoD#3 / §29 — empty history + the local month-start anchor (Paris 2026-05-01).
     scoreHistory: [],
@@ -284,6 +287,83 @@ describe('buildMonthlySnapshot — REAL counter maths (carbon weekly)', () => {
     expect(r.meditationDaysCount).toBe(0);
     expect(r.sportDaysCount).toBe(0);
     expect(r.gratitudeDaysCount).toBe(0);
+  });
+});
+
+// =============================================================================
+// Quick win 1 — max consecutive-loss streak (real.maxConsecutiveLoss)
+// =============================================================================
+
+describe('buildMonthlySnapshot — maxConsecutiveLoss (quick win)', () => {
+  it('empty month → 0 (no loss to streak)', () => {
+    expect(buildMonthlySnapshot(baseInput()).real.maxConsecutiveLoss).toBe(0);
+  });
+
+  it('counts the longest run of consecutive losses, a win/BE breaking the streak', () => {
+    // Chronological by exitedAt: loss, loss, win, loss, loss, loss, break_even.
+    // The longest run is the middle 3 → 3.
+    const r = buildMonthlySnapshot(
+      baseInput({
+        trades: [
+          trade({ outcome: 'loss', closedAt: '2026-05-01T10:00:00.000Z' }),
+          trade({ outcome: 'loss', closedAt: '2026-05-02T10:00:00.000Z' }),
+          trade({ outcome: 'win', closedAt: '2026-05-03T10:00:00.000Z' }),
+          trade({ outcome: 'loss', closedAt: '2026-05-04T10:00:00.000Z' }),
+          trade({ outcome: 'loss', closedAt: '2026-05-05T10:00:00.000Z' }),
+          trade({ outcome: 'loss', closedAt: '2026-05-06T10:00:00.000Z' }),
+          trade({ outcome: 'break_even', closedAt: '2026-05-07T10:00:00.000Z' }),
+        ],
+      }),
+    ).real;
+    expect(r.maxConsecutiveLoss).toBe(3);
+  });
+
+  it('ignores open trades (no closedAt) — they cannot extend a streak', () => {
+    const r = buildMonthlySnapshot(
+      baseInput({
+        trades: [
+          trade({ outcome: 'loss', closedAt: '2026-05-01T10:00:00.000Z' }),
+          // Open trade — no closedAt → skipped by computeMaxConsecutiveLoss.
+          trade({ isClosed: false, outcome: null, closedAt: null }),
+          trade({ outcome: 'loss', closedAt: '2026-05-03T10:00:00.000Z' }),
+        ],
+      }),
+    ).real;
+    expect(r.maxConsecutiveLoss).toBe(2);
+    expect(monthlySnapshotSchema.safeParse(buildMonthlySnapshot(baseInput())).success).toBe(true);
+  });
+});
+
+// =============================================================================
+// Quick win 2 — exit-reason distribution (exitReasonDistribution)
+// =============================================================================
+
+describe('buildMonthlySnapshot — exitReasonDistribution (quick win)', () => {
+  it('omitted when no closed trade carries an exitReason (feature récente)', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({ trades: [trade({ exitReason: null }), trade({ exitReason: null })] }),
+    );
+    expect(snap.exitReasonDistribution).toBeUndefined();
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('folds closed trades per exitReason, FR labels, frequency-sorted desc', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        trades: [
+          trade({ exitReason: 'sl_hit' }),
+          trade({ exitReason: 'sl_hit' }),
+          trade({ exitReason: 'tp_hit' }),
+          // Open trade with an exitReason is not counted (never closed).
+          trade({ isClosed: false, outcome: null, exitReason: 'manual_before_target' }),
+        ],
+      }),
+    );
+    expect(snap.exitReasonDistribution).toEqual([
+      { slug: 'sl_hit', label: 'SL touché', count: 2 },
+      { slug: 'tp_hit', label: 'TP atteint', count: 1 },
+    ]);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });
 
@@ -659,6 +739,42 @@ describe('buildMonthlySnapshot — coach corrections corpus (J-AI corrections ec
     const snap = buildMonthlySnapshot(baseInput({ coachCorrections: many }));
     expect(snap.coachCorrections).toHaveLength(20);
     expect(snap.coachCorrections.join('')).not.toContain('‮');
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});
+
+describe('buildMonthlySnapshot — member screen notes (TradingView entry/exit notes)', () => {
+  it('relays the loader-shaped notes verbatim and validates against the schema', () => {
+    const snap = buildMonthlySnapshot(
+      baseInput({
+        memberScreenNotes: [
+          { pair: 'EURUSD', direction: 'long', kind: 'entree', note: 'Cassure propre du range.' },
+          { pair: 'XAUUSD', direction: 'short', kind: 'sortie', note: 'Sorti au TP comme prévu.' },
+        ],
+      }),
+    );
+    expect(snap.memberScreenNotes).toEqual([
+      { pair: 'EURUSD', direction: 'long', kind: 'entree', note: 'Cassure propre du range.' },
+      { pair: 'XAUUSD', direction: 'short', kind: 'sortie', note: 'Sorti au TP comme prévu.' },
+    ]);
+    expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('defaults to an empty corpus when the member attached no note', () => {
+    expect(buildMonthlySnapshot(baseInput()).memberScreenNotes).toEqual([]);
+  });
+
+  it('caps at 20 notes and strips bidi/zero-width (Trojan Source)', () => {
+    const many = Array.from({ length: 25 }, (_, i) => ({
+      pair: 'EURUSD' as const,
+      direction: 'long' as const,
+      kind: 'entree' as const,
+      note: `Lecture ${i}`,
+    }));
+    many[0] = { pair: 'EURUSD', direction: 'long', kind: 'entree', note: 'stable‮injected' }; // RLO bidi
+    const snap = buildMonthlySnapshot(baseInput({ memberScreenNotes: many }));
+    expect(snap.memberScreenNotes).toHaveLength(20);
+    expect(snap.memberScreenNotes.map((n) => n.note).join('')).not.toContain('‮');
     expect(monthlySnapshotSchema.safeParse(snap).success).toBe(true);
   });
 });

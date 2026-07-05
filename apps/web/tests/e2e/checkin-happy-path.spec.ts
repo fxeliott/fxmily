@@ -30,6 +30,21 @@ import { loginAs } from '@/test/e2e-auth';
 
 let seeded: SeededUser | null = null;
 
+/**
+ * The global `<CookieBanner>` is `position: fixed; bottom; z-40` and, on the
+ * check-in surface, sits ON TOP of the wizard's `sticky bottom-0` navigation
+ * where « Suivant » / « Enregistrer » live — so its subtree intercepts the
+ * button clicks and the flow stalls (a real user just clicks « J'ai compris »).
+ * We pre-seed the dismiss flag before the first navigation, exactly like the
+ * admin-directory e2e (`admin-members-search.spec.ts`), so the banner never
+ * mounts and the wizard CTAs stay clickable. Info-only banner, no consent gate.
+ */
+async function dismissCookieBanner(page: import('@playwright/test').Page): Promise<void> {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('fxmily.cookie.dismissed', '1');
+  });
+}
+
 test.describe('J5 — checkin happy path', () => {
   test.beforeEach(async () => {
     // Idempotent — if a previous run crashed, remnants are cleaned up here.
@@ -50,6 +65,7 @@ test.describe('J5 — checkin happy path', () => {
     if (!seeded) return;
 
     // Log in via the real Auth.js callback.
+    await dismissCookieBanner(page);
     await page.goto('/'); // initialise the browser context against baseURL
     await loginAs(page, request, seeded.email, seeded.password);
 
@@ -130,6 +146,7 @@ test.describe('J5 — checkin happy path', () => {
 
     // Same flow, but submit evening directly to verify streak counter
     // collapses morning + evening into one filled day.
+    await dismissCookieBanner(page);
     await page.goto('/');
     await loginAs(page, request, seeded.email, seeded.password);
 

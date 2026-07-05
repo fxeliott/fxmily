@@ -46,10 +46,18 @@ export async function GET(req: Request): Promise<Response> {
   // must not page through soft-deleted members' history.
   const proof = await db.mt5AccountProof.findFirst({
     where: { id: proofId, member: { status: 'active' } },
-    select: { fileKey: true },
+    select: { fileKey: true, filePurgedAt: true },
   });
   if (!proof) {
     return NextResponse.json({ error: 'proof_not_found' }, { status: 404 });
+  }
+  // Tour 13 — a proof whose screen was purged after analysis has no bytes to
+  // serve. 410 Gone (not 404) tells the caller the image intentionally no
+  // longer exists — the verification screen was « traité à la volée, jamais
+  // conservé ». A terminal proof is never re-pulled, so this path is only hit
+  // by a stale/retried download.
+  if (proof.filePurgedAt !== null) {
+    return NextResponse.json({ error: 'proof_purged' }, { status: 410 });
   }
 
   const storage = selectStorage();

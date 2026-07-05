@@ -16,6 +16,7 @@ import { RealityVsDeclared } from '@/components/verification/reality-vs-declared
 import { ScoreEventsHistory } from '@/components/verification/score-events-history';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { getProcessObjectives } from '@/lib/objectives/service';
 import { listRecentAlertsForMember } from '@/lib/verification/alerts';
 import {
@@ -120,7 +121,7 @@ export default async function VerificationPage() {
     redirect('/login');
   }
 
-  const timezone = session.user.timezone || 'Europe/Paris';
+  const timezone = safeTimeZone(session.user.timezone);
   const [overview, constancy, constancyHistory, discrepancies, scoreEvents, alerts, objectives] =
     await Promise.all([
       getVerificationOverview(session.user.id),

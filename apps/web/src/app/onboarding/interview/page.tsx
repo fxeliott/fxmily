@@ -57,7 +57,7 @@ export default async function OnboardingInterviewLandingPage() {
             'radial-gradient(48% 60% at 50% 0%, oklch(0.62 0.19 254 / 0.18) 0%, transparent 72%)',
         }}
       />
-      <header className="dash-stagger flex flex-col gap-4">
+      <header className="page-stagger flex flex-col gap-4">
         <Link
           href="/dashboard"
           className="inline-flex w-fit items-center gap-1.5 text-[12px] text-[var(--t-3)] transition-colors hover:text-[var(--t-1)]"
@@ -101,7 +101,7 @@ export default async function OnboardingInterviewLandingPage() {
           l&apos;exercice dépend uniquement de ça.
         </p>
 
-        <ul className="dash-stagger t-body flex flex-col gap-2.5 text-[var(--t-2)]">
+        <ul className="page-stagger t-body flex flex-col gap-2.5 text-[var(--t-2)]">
           <li className="rounded-control flex items-start gap-2.5 border border-[var(--b-default)] bg-[var(--bg-1)]/40 p-3 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)]/70">
             <span aria-hidden="true" className="mt-1 text-[var(--acc)]">
               ·

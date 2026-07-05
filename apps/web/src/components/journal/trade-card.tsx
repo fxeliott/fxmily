@@ -14,6 +14,7 @@ import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import { Spotlight } from '@/components/ui/spotlight';
 import { Tilt3D } from '@/components/ui/tilt-3d';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import type { SerializedTrade } from '@/lib/trades/service';
 import { SESSION_LABEL } from '@/lib/trading/sessions';
 import { cn } from '@/lib/utils';
@@ -39,7 +40,7 @@ function formatDateTime(date: Date, timezone: string): string {
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
   }).format(date);
 }
 

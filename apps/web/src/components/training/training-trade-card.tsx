@@ -2,6 +2,7 @@ import { Check, Link2, Minus, X } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { TRAINING_CHECKLIST_ITEMS } from '@/lib/schemas/training-trade';
 import type { SerializedTrainingTrade } from '@/lib/training/training-trade-service';
 
@@ -16,7 +17,7 @@ import type { SerializedTrainingTrade } from '@/lib/training/training-trade-serv
 
 function formatDate(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat('fr-FR', {
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
     day: '2-digit',
     month: 'short',
     year: 'numeric',

@@ -11,7 +11,6 @@ import { linkRecentCheckToTrade } from '@/lib/pre-trade/service';
 import { tradeCloseSchema, tradeOpenSchema } from '@/lib/schemas/trade';
 import { scheduleDouglasDispatch } from '@/lib/cards/scheduler';
 import { scheduleScoreRecompute } from '@/lib/scoring/scheduler';
-import { keyBelongsTo } from '@/lib/storage/local';
 import {
   TradeAlreadyClosedError,
   TradeExitBeforeEntryError,
@@ -32,9 +31,6 @@ import {
  *   - Return a discriminated `ActionState` for `useActionState`.
  *   - Re-throw `NEXT_REDIRECT` errors so navigation isn't swallowed.
  */
-
-/** §31 — server-side cap on additional entry photos (mirror the wizard's UI cap). */
-const MAX_ENTRY_MEDIA = 4;
 
 export interface CreateTradeActionState {
   ok: boolean;
@@ -135,10 +131,13 @@ export async function createTradeAction(
     notes: formData.get('notes') ?? undefined,
     // J1 — mandatory TradingView entry link (replaces the screenshot upload).
     tradingViewEntryUrl: formData.get('tradingViewEntryUrl'),
-    // J1 — legacy screenshot key is now OPTIONAL and no longer sent by the
-    // wizard. Coerce absent/'' → undefined so the optional Zod string passes
-    // (FormData.get returns null when absent, which `.optional()` rejects).
-    screenshotEntryKey: formData.get('screenshotEntryKey') || undefined,
+    // Tour 13 — optional member explanation of the entry screen. Absent → the
+    // optional Zod string short-circuits (FormData.get returns null when absent).
+    tradingViewEntryNote: formData.get('tradingViewEntryNote') ?? undefined,
+    // Tour 13 — the legacy `screenshotEntryKey` / `extraEntryKey` inputs are gone:
+    // no form has sent an image key since J1, and image capture now lives only in
+    // the verification flow. The `.strict()`-free open schema simply no longer
+    // reads them. DB column + display of pre-J1 captures are untouched.
   };
 
   const parsed = tradeOpenSchema.safeParse(raw);
@@ -152,47 +151,11 @@ export async function createTradeAction(
 
   const data = parsed.data;
 
-  // BOLA defence: the key shape was already validated by Zod, but we must
-  // also enforce that the userId segment belongs to the *current session* —
-  // otherwise an authenticated attacker could attach another member's
-  // (or admin-uploaded) screenshot to their own trade. J1 — the screenshot is
-  // now OPTIONAL, so only enforce ownership when a legacy key is present.
-  if (data.screenshotEntryKey && !keyBelongsTo(data.screenshotEntryKey, session.user.id)) {
-    return {
-      ok: false,
-      error: 'invalid_input',
-      fieldErrors: { screenshotEntryKey: 'Capture invalide.' },
-    };
-  }
-
-  // §31 — additional entry analysis photos. These bypass the Zod schema (they
-  // are raw repeated FormData fields), so cap + BOLA them here exactly like the
-  // primary capture. `keyBelongsTo` validates BOTH the `trades/{userId}/…` shape
-  // and ownership (it returns false on any other prefix / forged userId).
-  const extraEntryKeys = [
-    ...new Set(
-      formData
-        .getAll('extraEntryKey')
-        .filter((v): v is string => typeof v === 'string' && v.length > 0),
-    ),
-    // Dedupe + drop the primary key: two TradeMedia rows pointing at the same
-    // file would let deleting one trade sweep the bytes out from under another
-    // (self-inflicted, but cheap to prevent).
-  ].filter((k) => k !== data.screenshotEntryKey);
-  if (extraEntryKeys.length > MAX_ENTRY_MEDIA) {
-    return {
-      ok: false,
-      error: 'invalid_input',
-      fieldErrors: { extraEntryKeys: `Maximum ${MAX_ENTRY_MEDIA} photos additionnelles.` },
-    };
-  }
-  if (extraEntryKeys.some((k) => !keyBelongsTo(k, session.user.id))) {
-    return {
-      ok: false,
-      error: 'invalid_input',
-      fieldErrors: { extraEntryKeys: 'Capture invalide.' },
-    };
-  }
+  // Tour 13 — image capture on trades is retired end-to-end: the schema no
+  // longer accepts `screenshotEntryKey`, and the §31 `extraEntryKey` upload
+  // path (with its BOLA `keyBelongsTo` checks) is gone. No form submits an
+  // image key anymore — only the verification flow uploads. Existing captures
+  // still display; the service defaults the absent keys to null / no media.
 
   let tradeId: string;
   try {
@@ -213,8 +176,7 @@ export async function createTradeAction(
       hedgeRespected: data.hedgeRespected,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
       tradingViewEntryUrl: data.tradingViewEntryUrl,
-      screenshotEntryKey: data.screenshotEntryKey ?? null,
-      extraEntryKeys,
+      tradingViewEntryNote: data.tradingViewEntryNote ?? null,
     });
     tradeId = trade.id;
   } catch (err) {
@@ -301,8 +263,12 @@ export async function closeTradeAction(
     notes: formData.get('notes') ?? undefined,
     // J1 — mandatory TradingView exit link (replaces the exit screenshot).
     tradingViewExitUrl: formData.get('tradingViewExitUrl'),
-    // J1 — legacy exit screenshot key now OPTIONAL, no longer sent by the form.
-    screenshotExitKey: formData.get('screenshotExitKey') || undefined,
+    // Tour 13 — optional member explanation of the exit screen. Absent → the
+    // optional Zod string short-circuits (FormData.get returns null when absent).
+    tradingViewExitNote: formData.get('tradingViewExitNote') ?? undefined,
+    // Tour 13 — the legacy `screenshotExitKey` input is gone (mirror of the
+    // entry side): no form sends an image key, only verification uploads. The
+    // close schema no longer reads it; the DB column + display are untouched.
   };
 
   const parsed = tradeCloseSchema.safeParse(raw);
@@ -316,15 +282,9 @@ export async function closeTradeAction(
 
   const data = parsed.data;
 
-  // BOLA defence — same rationale as createTradeAction. J1 — the exit
-  // screenshot is now OPTIONAL, so only enforce ownership when present.
-  if (data.screenshotExitKey && !keyBelongsTo(data.screenshotExitKey, session.user.id)) {
-    return {
-      ok: false,
-      error: 'invalid_input',
-      fieldErrors: { screenshotExitKey: 'Capture invalide.' },
-    };
-  }
+  // Tour 13 — no exit image key is accepted anymore (mirror of the entry side),
+  // so the former `screenshotExitKey` BOLA `keyBelongsTo` check is gone. Only
+  // the verification flow uploads images. Existing captures still display.
 
   try {
     await closeTrade(session.user.id, tradeId, {
@@ -341,7 +301,10 @@ export async function closeTradeAction(
       tags: data.tags,
       notes: typeof data.notes === 'string' ? data.notes : undefined,
       tradingViewExitUrl: data.tradingViewExitUrl,
-      screenshotExitKey: data.screenshotExitKey ?? null,
+      // Tour 13 — mirror of `tradingViewEntryNote` on the create side; caught
+      // missing by the runtime audit (the form sent the note, the DB stayed
+      // NULL because the action never forwarded it).
+      tradingViewExitNote: data.tradingViewExitNote ?? null,
     });
   } catch (err) {
     if (err instanceof TradeNotFoundError) return { ok: false, error: 'not_found' };

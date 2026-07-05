@@ -39,6 +39,10 @@ interface TradePsychologyTriadProps {
   entryChartUrl?: string | null;
   /** J1 — lien TradingView de sortie (renseigné à la clôture). */
   exitChartUrl?: string | null;
+  /** Tour 13 — explication libre du membre attachée au lien d'entrée. */
+  entryChartNote?: string | null;
+  /** Tour 13 — explication libre du membre attachée au lien de sortie. */
+  exitChartNote?: string | null;
   /** Note d'intention pré-entrée (côté « avant » du débrief scindé). */
   entryNote?: string | null;
   /** Débrief de sortie (côté « après » du débrief scindé). */
@@ -56,6 +60,8 @@ export function TradePsychologyTriad({
   exitPhotoUrl = null,
   entryChartUrl = null,
   exitChartUrl = null,
+  entryChartNote = null,
+  exitChartNote = null,
   entryNote = null,
   debrief = null,
   pair,
@@ -86,6 +92,7 @@ export function TradePsychologyTriad({
       photoAlt: `Capture avant entrée du trade ${pair}`,
       chartUrl: entryChartUrl,
       chartLabel: "Voir l'analyse d'entrée sur TradingView",
+      chartNote: entryChartNote,
     },
     {
       key: 'during',
@@ -96,6 +103,7 @@ export function TradePsychologyTriad({
       photoAlt: '',
       chartUrl: null,
       chartLabel: '',
+      chartNote: null,
     },
     {
       key: 'after',
@@ -106,6 +114,7 @@ export function TradePsychologyTriad({
       photoAlt: `Capture après sortie du trade ${pair}`,
       chartUrl: exitChartUrl,
       chartLabel: "Voir l'analyse de sortie sur TradingView",
+      chartNote: exitChartNote,
     },
   ] as const;
 
@@ -142,6 +151,14 @@ export function TradePsychologyTriad({
                 <span className="min-w-0 flex-1 truncate">Analyse TradingView</span>
                 <ExternalLink className="h-3 w-3 shrink-0 text-[var(--t-4)]" aria-hidden />
               </a>
+            ) : null}
+            {/* Tour 13 — explication libre du membre attachée à ce lien : ce
+                qu'il voyait sur l'écran, avec ses mots. Texte brut (jamais de
+                HTML), whitespace-pre-wrap. §33.2 : descriptif, jamais jugé. */}
+            {phase.chartNote ? (
+              <p className="t-cap leading-relaxed whitespace-pre-wrap text-[var(--t-3)]">
+                {phase.chartNote}
+              </p>
             ) : null}
             {phase.photoUrl ? (
               <a

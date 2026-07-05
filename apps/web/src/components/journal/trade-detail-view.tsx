@@ -9,6 +9,7 @@ import { btnVariants } from '@/components/ui/btn';
 import { Card } from '@/components/ui/card';
 import { Pill } from '@/components/ui/pill';
 import type { SerializedAnnotation } from '@/lib/admin/annotations-service';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { selectStorage } from '@/lib/storage';
 import { splitNotes } from '@/lib/trades/notes';
 import type { SerializedTrade } from '@/lib/trades/service';
@@ -30,7 +31,7 @@ function formatDateTime(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat('fr-FR', {
     dateStyle: 'medium',
     timeStyle: 'short',
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
   }).format(date);
 }
 
@@ -93,7 +94,7 @@ export function TradeDetailView({
   const isAdmin = !!contextBadge;
 
   return (
-    <main className="dash-stagger mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-5 px-4 py-6 sm:py-10">
+    <main className="page-stagger mx-auto flex min-h-dvh w-full max-w-2xl flex-col gap-5 px-4 py-6 sm:py-10">
       {/* Header */}
       <header className="flex flex-col gap-3">
         <Link
@@ -281,6 +282,8 @@ export function TradeDetailView({
         exitPhotoUrl={exitUrl}
         entryChartUrl={trade.tradingViewEntryUrl}
         exitChartUrl={trade.tradingViewExitUrl}
+        entryChartNote={trade.tradingViewEntryNote}
+        exitChartNote={trade.tradingViewExitNote}
         entryNote={entryNote}
         debrief={debrief}
         pair={trade.pair}

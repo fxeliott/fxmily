@@ -48,6 +48,17 @@ export interface ListMembersForAdminOptions {
   query?: string | undefined;
   limit?: number;
   cursor?: string | undefined;
+  /**
+   * Tour 13 — restrict the list to members who currently need the admin's
+   * attention: a recent uncommented trade/backtest OR an open truth gap. This
+   * mirrors the two cohort-wide signals already surfaced by `getCohortAttention`
+   * / the per-member badges (`attention-service`), so `/admin/members?attention=1`
+   * (a shareable URL, no client state) lands on exactly the rows that call for
+   * work. When set, the page's `[joinedAt desc]` order is kept WITHIN the
+   * flagged subset (attention rows first, then chronological — the whole list is
+   * already "attention", so no cross-bucket reshuffle is needed).
+   */
+  attentionOnly?: boolean;
 }
 
 export interface ListMembersForAdminResult {
@@ -89,6 +100,61 @@ export async function getMemberDirectoryStats(): Promise<MemberDirectoryStats> {
   return { total, active, suspended, totalTrades };
 }
 
+/** Window for "recent" uncommented trades — mirror of `ATTENTION_RECENT_DAYS`
+ *  in `attention-service` (kept local so this module stays independent of the
+ *  attention loader while sharing the same 14-day meaning). */
+const ATTENTION_RECENT_DAYS = 14;
+const DAY_MS = 86_400_000;
+
+/**
+ * Tour 13 — the set of member ids that currently need the admin's attention:
+ * a recent (≤14d) uncommented real OR training trade, OR an open truth gap.
+ * Cohort-wide, computed with three bounded `groupBy` over indexed columns
+ * (`@@index([userId, enteredAt])`, `@@index([memberId, status])`) — the same
+ * anti-joins `attention-service` already runs per page, rolled up to a flat id
+ * set so the members list can filter on it. Never a full member scan.
+ *
+ * The `constancyDeclining` signal is deliberately EXCLUDED here: it is a soft
+ * per-member snapshot comparison (last two rows) that has no cheap set-level
+ * SQL form, and the two hard signals below are the ones the /admin/health links
+ * point at. The per-member badges still show the dip on the row itself.
+ */
+export async function getAttentionMemberIds(): Promise<Set<string>> {
+  const recentFloor = new Date(Date.now() - ATTENTION_RECENT_DAYS * DAY_MS);
+
+  const [uncommentedReal, uncommentedTraining, openGaps] = await Promise.all([
+    db.trade.groupBy({
+      by: ['userId'],
+      where: {
+        enteredAt: { gte: recentFloor },
+        annotations: { none: {} },
+        user: { status: { not: 'deleted' } },
+      },
+      _count: { _all: true },
+    }),
+    db.trainingTrade.groupBy({
+      by: ['userId'],
+      where: {
+        enteredAt: { gte: recentFloor },
+        annotations: { none: {} },
+        user: { status: { not: 'deleted' } },
+      },
+      _count: { _all: true },
+    }),
+    db.discrepancy.groupBy({
+      by: ['memberId'],
+      where: { status: 'open', member: { status: { not: 'deleted' } } },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const ids = new Set<string>();
+  for (const r of uncommentedReal) ids.add(r.userId);
+  for (const r of uncommentedTraining) ids.add(r.userId);
+  for (const r of openGaps) ids.add(r.memberId);
+  return ids;
+}
+
 /**
  * List members for the admin dashboard — cursor-paginated + searchable (S7
  * optimization). Includes admins so the admin sees their own row. Sort order
@@ -96,6 +162,11 @@ export async function getMemberDirectoryStats(): Promise<MemberDirectoryStats> {
  * cursor stable when two members share a `joinedAt`). An optional `query`
  * filters case-insensitively across first name / last name / email so the admin
  * can find a member instantly at cohort scale (30 -> 1000, SPEC §13/§30).
+ *
+ * Tour 13 — an optional `attentionOnly` restricts the list to the members
+ * flagged by `getAttentionMemberIds` (uncommented trades / open gaps), so
+ * `?attention=1` is a shareable, back-button-friendly triage view. An empty
+ * flagged set short-circuits to an empty page (nobody needs attention).
  *
  * The open/closed trade counts are scoped to the CURRENT page's member ids, so
  * the per-page work stays O(page size) regardless of cohort size.
@@ -106,10 +177,22 @@ export async function listMembersForAdmin(
   const limit = Math.min(50, Math.max(1, options.limit ?? 50));
   const query = options.query?.trim();
 
+  // Tour 13 — resolve the attention subset BEFORE the page query so it feeds the
+  // WHERE as an `id: { in }` filter (kept in the same [joinedAt desc] order +
+  // cursor as the unfiltered list). An empty set means "nobody to triage" →
+  // return an empty page without touching the users table.
+  let attentionIds: string[] | undefined;
+  if (options.attentionOnly) {
+    const set = await getAttentionMemberIds();
+    if (set.size === 0) return { items: [], nextCursor: null };
+    attentionIds = [...set];
+  }
+
   // Soft-deleted users are hidden by default. Reactivating one is a manual DB
   // op for now (no admin UI for it).
   const where: Prisma.UserWhereInput = {
     status: { not: 'deleted' },
+    ...(attentionIds ? { id: { in: attentionIds } } : {}),
     ...(query
       ? {
           OR: [

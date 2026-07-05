@@ -16,6 +16,26 @@ import type { CoachingReportContext } from '@/lib/coaching/engine';
 import type { MomentumHistoryPoint } from '@/lib/scoring/momentum';
 import type { SerializedTrade } from '@/lib/trades/service';
 
+/**
+ * Notes membre attachées à ses liens TradingView (`Trade.tradingViewEntryNote` /
+ * `tradingViewExitNote`) — l'explication que le membre écrit À CÔTÉ de son screen
+ * d'entrée / de sortie ("ce que je vois / ce que je fais"). REFERENCE CONTEXT pour
+ * le prompt TEXT uniquement (l'IA relie ces lectures aux corrections du coach pour
+ * personnaliser le suivi), NEVER scoring/edge — posture §2. `pair`/`direction`
+ * situent la note ; `kind` distingue l'entrée de la sortie. Le loader tronque
+ * chaque `note` (~350 chars) et cap ≤20 (newest-first) ; le builder re-harden
+ * (`safeFreeText` + le schéma refine bidi) defense-in-depth. Le comment est du
+ * free-text MEMBRE → wrapped untrusted au prompt.
+ * 🚨 §21.5 — REAL side ONLY : les notes d'entraînement (`TrainingTrade.
+ * tradingViewNote`) sont isolées et n'entrent JAMAIS dans ce pipeline.
+ */
+export interface MemberScreenNote {
+  pair: string;
+  direction: 'long' | 'short';
+  kind: 'entree' | 'sortie';
+  note: string;
+}
+
 /// Behavioral score snapshot mirror — pure type, decoupled from Prisma.
 /// Service layer (Phase B) will translate `BehavioralScore` Prisma rows into
 /// this shape before passing them to the builder. Null fields = `insufficient_data`.
@@ -45,6 +65,34 @@ export interface BuilderInput {
   deliveries: SerializedDelivery[];
   annotationsReceived: number;
   annotationsViewed: number;
+  /**
+   * Quick win — the coach's TAGGED corrections on this member's REAL trades over
+   * the report week, pre-formatted by the loader as `« Axe » : commentaire` (only
+   * corrections the admin tagged with a `TrackingAxis` — the label prefixes the
+   * comment so the report can theme them). REAL side only: training corrections
+   * are §21.5-isolated and never enter this pipeline. Newest-first, loader-capped
+   * ≤20 + truncated; the builder relays verbatim (belt-and-suspenders re-harden at
+   * the snapshot boundary). Optional: absent → the builder defaults to `[]`
+   * (existing fixtures + pre-quick-win callers stay valid). The comment is ADMIN
+   * free-text → wrapped untrusted at the prompt boundary. Twin of the monthly
+   * debrief's `coachCorrections` (this is THE report the coach reads, so his own
+   * corrections belong in it).
+   */
+  coachCorrections?: string[];
+  /**
+   * Notes membre attachées à ses liens TradingView (`Trade.tradingViewEntryNote`
+   * / `tradingViewExitNote`) sur ses trades RÉELS de la semaine — l'explication
+   * libre que le membre écrit à côté de son screen. Pré-shapé par le loader en
+   * `{ pair, direction, kind, note }` (note tronquée ~350 chars, cap ≤20,
+   * newest-first). REAL side only : les notes d'entraînement (`TrainingTrade.
+   * tradingViewNote`) sont §21.5-isolées et n'entrent jamais ici. Optional :
+   * absent → le builder défaut à `[]` (fixtures + pré-feature callers restent
+   * valides). Le `note` est du free-text MEMBRE → wrapped untrusted au prompt
+   * (le builder re-harden safeFreeText au snapshot boundary). L'IA s'en sert pour
+   * relier ce que le membre VOIT à ce que le coach CORRIGE (twin des
+   * `coachCorrections`), jamais un avis marché.
+   */
+  memberScreenNotes?: MemberScreenNote[];
   /**
    * SPEC §21 J-T4 — number of the member's backtests in the report week
    * ("volume de pratique"). Optional: absent → the builder defaults it to 0

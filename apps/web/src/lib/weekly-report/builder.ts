@@ -25,6 +25,7 @@ import { createHash } from 'node:crypto';
 
 import type { TradeSession } from '@/generated/prisma/client.js';
 
+import { computeMaxConsecutiveLoss } from '@/lib/analytics/streaks';
 import { renderCoachingContextSection } from '@/lib/coaching/engine';
 import { detectMomentum } from '@/lib/scoring/momentum';
 import {
@@ -36,6 +37,7 @@ import {
 } from '@/lib/scoring/pattern-rhythms';
 import type { SerializedTrade } from '@/lib/trades/service';
 import { safeFreeText } from '@/lib/text/safe';
+import { EXIT_REASON_LABELS } from '@/lib/trading/exit-reasons';
 
 import type { BuilderInput, WeeklySnapshot } from './types';
 
@@ -54,6 +56,18 @@ const EMOTION_TAGS_MAX = 20;
 const BEHAVIOR_TAGS_MAX = 12;
 const PAIRS_MAX = 10;
 const SESSIONS_ALL: readonly TradeSession[] = ['asia', 'london', 'newyork', 'overlap'];
+// Quick win — cap + per-item truncation for the coach-corrections corpus, twin
+// of the monthly loader's `WEEKLY_CONTEXT_ITEM_MAX_CHARS` re-harden. The loader
+// already caps/truncates; the builder re-hardens defense-in-depth (belt-and-
+// suspenders, mirror the monthly `buildCoachCorrections`).
+const COACH_CORRECTIONS_MAX = 20;
+const COACH_CORRECTION_ITEM_MAX_CHARS = 900;
+// Notes membre TradingView — cap + per-note re-harden truncation, twin of the
+// coach-corrections re-harden. The loader already caps/truncates (~350); the
+// builder re-hardens defense-in-depth (belt-and-suspenders, mirror the
+// coach-corrections path). 900 is the schema's per-string ceiling.
+const MEMBER_SCREEN_NOTES_MAX = 20;
+const MEMBER_SCREEN_NOTE_ITEM_MAX_CHARS = 900;
 
 // =============================================================================
 // Pseudonymization (V1.5 — prompt boundary defense)
@@ -158,7 +172,104 @@ export function buildWeeklySnapshot(input: BuilderInput): WeeklySnapshot {
     // moteur (SSOT du format). Absent → slice omis (exactOptionalPropertyTypes).
     // §2-safe : la copie est curée par le moteur (jamais un terme de marché).
     ...(input.coaching ? { coaching: renderCoachingContextSection(input.coaching) } : {}),
+    // Quick win — the coach's TAGGED corrections on this member's REAL trades this
+    // week, relayed verbatim from the loader (`« Axe » : commentaire`), capped ≤20 +
+    // re-hardened defense-in-depth. ADMIN free-text → wrapped untrusted at the prompt
+    // boundary; this is THE report the coach reads, so his corrections belong in it
+    // (parity with the monthly debrief). Empty array when the coach tagged none.
+    coachCorrections: buildCoachCorrections(input),
+    // Notes membre attachées à ses liens TradingView (entrée / sortie) sur ses
+    // trades RÉELS de la semaine — l'explication que le membre écrit à côté de son
+    // screen. MEMBER free-text → wrapped untrusted au prompt boundary + re-hardened
+    // (`safeFreeText`) defense-in-depth. L'IA la relie aux corrections du coach pour
+    // personnaliser le suivi. Empty array when the member attached no note. REAL side
+    // only (§21.5 keeps training notes out entirely).
+    memberScreenNotes: buildMemberScreenNotes(input),
+    // Quick win — factual exit-reason distribution over the week's CLOSED trades
+    // (count per `Trade.exitReason`, FR label). Absent → slice omitted (no closed
+    // trade carried an exitReason, feature récente). Posture §2 (factual, never a
+    // market view). exactOptionalPropertyTypes → conditional spread.
+    ...(() => {
+      const exitReasonDistribution = buildExitReasonDistribution(input);
+      return exitReasonDistribution ? { exitReasonDistribution } : {};
+    })(),
   };
+}
+
+// =============================================================================
+// Quick win — coach corrections relay (twin of monthly `buildCoachCorrections`)
+// =============================================================================
+
+/// Relay the loader's pre-formatted coach corrections (`« Axe » : commentaire`)
+/// verbatim, capped ≤20 + re-hardened defense-in-depth (the loader already
+/// truncated each comment; safeFreeText strips bidi/zero-width even though the
+/// schema also refines). REAL side only — training corrections never reach here.
+/// `input.coachCorrections` defaults to `[]` when the loader did not wire it
+/// (pre-quick-win callers / fixtures stay valid).
+function buildCoachCorrections(input: BuilderInput): string[] {
+  return (input.coachCorrections ?? []).slice(0, COACH_CORRECTIONS_MAX).map((s) => {
+    const trimmed = s.trim();
+    const truncated =
+      trimmed.length > COACH_CORRECTION_ITEM_MAX_CHARS
+        ? trimmed.slice(0, COACH_CORRECTION_ITEM_MAX_CHARS)
+        : trimmed;
+    return safeFreeText(truncated);
+  });
+}
+
+/// Relay the loader's pre-shaped member screen notes (`{ pair, direction, kind,
+/// note }`) verbatim, capped ≤20 + the `note` re-hardened defense-in-depth (the
+/// loader already truncated to ~350; safeFreeText strips bidi/zero-width even
+/// though the schema also refines). `pair`/`direction`/`kind` are structural
+/// (not member free-text) so they pass through untouched. MEMBER free-text side —
+/// the note is wrapped untrusted at the prompt boundary. `input.memberScreenNotes`
+/// defaults to `[]` when the loader did not wire it (pre-feature callers / fixtures
+/// stay valid).
+function buildMemberScreenNotes(input: BuilderInput): WeeklySnapshot['memberScreenNotes'] {
+  return (input.memberScreenNotes ?? []).slice(0, MEMBER_SCREEN_NOTES_MAX).map((n) => {
+    const trimmed = n.note.trim();
+    const truncated =
+      trimmed.length > MEMBER_SCREEN_NOTE_ITEM_MAX_CHARS
+        ? trimmed.slice(0, MEMBER_SCREEN_NOTE_ITEM_MAX_CHARS)
+        : trimmed;
+    return {
+      pair: n.pair,
+      direction: n.direction,
+      kind: n.kind,
+      note: safeFreeText(truncated),
+    };
+  });
+}
+
+// =============================================================================
+// Quick win — exit-reason distribution over the week's closed trades
+// =============================================================================
+
+/**
+ * Quick win — fold the week's CLOSED trades into a per-`exitReason` distribution
+ * (count per reason, FR label from `EXIT_REASON_LABELS`), frequency-sorted desc.
+ * Only trades with a non-null `exitReason` are counted (the field is optional /
+ * feature récente). Returns `undefined` when nothing qualifies so the builder
+ * omits the slice entirely (honest empty state, never a fabricated "0"). Posture
+ * §2 : the exitReason is the factual NATURE of the exit (how the position ended),
+ * never a market judgement.
+ */
+function buildExitReasonDistribution(
+  input: BuilderInput,
+): WeeklySnapshot['exitReasonDistribution'] {
+  const counts = new Map<keyof typeof EXIT_REASON_LABELS, number>();
+  for (const trade of input.trades) {
+    if (!trade.isClosed) continue;
+    const slug = trade.exitReason;
+    // Skip trades with no recorded exit reason (null in DB, or undefined when a
+    // caller omits the field) — an untagged exit is not a distribution bucket.
+    if (slug === null || slug === undefined) continue;
+    counts.set(slug, (counts.get(slug) ?? 0) + 1);
+  }
+  if (counts.size === 0) return undefined;
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([slug, count]) => ({ slug, label: EXIT_REASON_LABELS[slug], count }));
 }
 
 // =============================================================================
@@ -388,6 +499,13 @@ function buildCounters(input: BuilderInput): WeeklySnapshot['counters'] {
   const riskPctMedian = median(riskPcts);
   const riskPctOverTwoCount = riskPcts.filter((v) => v > 2).length;
 
+  // Quick win — longest run of consecutive losing closed trades in the window
+  // (`computeMaxConsecutiveLoss` sorts by `exitedAt` and breaks the streak on a
+  // win / break-even / open trade). Mark Douglas grid (5 vérités #1/#3): a loss
+  // streak in a small sample is normal variance, not a broken edge — surfaced so
+  // Claude names it calmly, never a market view.
+  const maxConsecutiveLoss = computeMaxConsecutiveLoss(input.trades);
+
   return {
     tradesTotal: input.trades.length,
     tradesWin: wins.length,
@@ -440,6 +558,8 @@ function buildCounters(input: BuilderInput): WeeklySnapshot['counters'] {
     tradesQualityCaptured,
     riskPctMedian,
     riskPctOverTwoCount,
+    // Quick win — longest consecutive-loss streak of the window (count-only).
+    maxConsecutiveLoss,
   };
 }
 

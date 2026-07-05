@@ -73,6 +73,7 @@ function makeTrade(partial: Partial<TradeFixture> = {}): TradeFixture {
     notes: null,
     screenshotEntryKey: null,
     tradingViewEntryUrl: 'https://www.tradingview.com/x/entry123/',
+    tradingViewEntryNote: null,
     exitedAt: null,
     exitPrice: null,
     outcome: null,
@@ -83,6 +84,7 @@ function makeTrade(partial: Partial<TradeFixture> = {}): TradeFixture {
     emotionAfter: [],
     screenshotExitKey: null,
     tradingViewExitUrl: null,
+    tradingViewExitNote: null,
     closedAt: null,
     createdAt: '2026-05-05T08:00:00.000Z',
     updatedAt: '2026-05-05T08:00:00.000Z',
@@ -874,6 +876,193 @@ describe('DOD3-01 / DoD#2 S6 — Session-3 verification counters', () => {
     const snap = buildWeeklySnapshot(emptyInput());
     expect(snap.verification.constancy).toBeNull();
     expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+});
+
+// =============================================================================
+// Quick win 1 — maxConsecutiveLoss (computeMaxConsecutiveLoss injected)
+// =============================================================================
+
+describe('buildWeeklySnapshot — maxConsecutiveLoss (quick win)', () => {
+  it('empty week → 0 (no closed trade, no streak)', () => {
+    expect(buildWeeklySnapshot(emptyInput()).counters.maxConsecutiveLoss).toBe(0);
+  });
+
+  it('counts the longest run of consecutive losses in chronological order', () => {
+    const input = emptyInput();
+    // Chronological (exitedAt asc): loss, loss, win, loss, loss, loss → max streak 3.
+    input.trades = [
+      closedTrade('loss', -1, { id: 'a', exitedAt: '2026-05-05T09:00:00.000Z' }),
+      closedTrade('loss', -1, { id: 'b', exitedAt: '2026-05-05T10:00:00.000Z' }),
+      closedTrade('win', 1, { id: 'c', exitedAt: '2026-05-05T11:00:00.000Z' }),
+      closedTrade('loss', -1, { id: 'd', exitedAt: '2026-05-05T12:00:00.000Z' }),
+      closedTrade('loss', -1, { id: 'e', exitedAt: '2026-05-05T13:00:00.000Z' }),
+      closedTrade('loss', -1, { id: 'f', exitedAt: '2026-05-05T14:00:00.000Z' }),
+    ];
+    expect(buildWeeklySnapshot(input).counters.maxConsecutiveLoss).toBe(3);
+  });
+
+  it('a break-even breaks the loss streak (flat exit is not a loss)', () => {
+    const input = emptyInput();
+    input.trades = [
+      closedTrade('loss', -1, { id: 'a', exitedAt: '2026-05-05T09:00:00.000Z' }),
+      closedTrade('break_even', 0, { id: 'b', exitedAt: '2026-05-05T10:00:00.000Z' }),
+      closedTrade('loss', -1, { id: 'c', exitedAt: '2026-05-05T11:00:00.000Z' }),
+    ];
+    expect(buildWeeklySnapshot(input).counters.maxConsecutiveLoss).toBe(1);
+  });
+
+  it('open trades are ignored (only closed trades count toward the streak)', () => {
+    const input = emptyInput();
+    input.trades = [
+      closedTrade('loss', -1, { id: 'a', exitedAt: '2026-05-05T09:00:00.000Z' }),
+      makeTrade({ id: 'open', isClosed: false }),
+      closedTrade('loss', -1, { id: 'c', exitedAt: '2026-05-05T11:00:00.000Z' }),
+    ];
+    // The open trade carries no outcome/exitedAt → skipped; the two losses are
+    // consecutive among the closed ones → streak 2.
+    expect(buildWeeklySnapshot(input).counters.maxConsecutiveLoss).toBe(2);
+  });
+
+  it('keeps the snapshot schema-valid', () => {
+    const input = emptyInput();
+    input.trades = [closedTrade('loss', -1, { id: 'a' }), closedTrade('loss', -1, { id: 'b' })];
+    expect(weeklySnapshotSchema.safeParse(buildWeeklySnapshot(input)).success).toBe(true);
+  });
+});
+
+// =============================================================================
+// Quick win 2 — exitReasonDistribution (Trade.exitReason folded, FR labels)
+// =============================================================================
+
+describe('buildWeeklySnapshot — exitReasonDistribution (quick win)', () => {
+  it('omits the slice entirely when no closed trade carries an exitReason', () => {
+    const input = emptyInput();
+    // Closed trades, but exitReason null (feature récente) → slice omitted.
+    input.trades = [closedTrade('win', 1, { id: 'a', exitReason: null })];
+    const snap = buildWeeklySnapshot(input);
+    expect(snap.exitReasonDistribution).toBeUndefined();
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('folds closed-trade exit reasons into FR-labelled counts, frequency-sorted', () => {
+    const input = emptyInput();
+    input.trades = [
+      closedTrade('loss', -1, { id: 'a', exitReason: 'sl_hit' }),
+      closedTrade('loss', -1, { id: 'b', exitReason: 'sl_hit' }),
+      closedTrade('win', 1, { id: 'c', exitReason: 'tp_hit' }),
+      closedTrade('break_even', 0, { id: 'd', exitReason: 'manual_before_target' }),
+      // open trade with an exitReason set defensively → excluded (not closed).
+      makeTrade({ id: 'e', isClosed: false, exitReason: 'time_exit' }),
+    ];
+    const dist = buildWeeklySnapshot(input).exitReasonDistribution;
+    expect(dist).toBeDefined();
+    expect(dist![0]).toEqual({ slug: 'sl_hit', label: 'SL touché', count: 2 });
+    expect(dist).toEqual(
+      expect.arrayContaining([
+        { slug: 'tp_hit', label: 'TP atteint', count: 1 },
+        { slug: 'manual_before_target', label: "Sortie avant l'objectif", count: 1 },
+      ]),
+    );
+    // The open trade's time_exit must NOT appear.
+    expect(dist!.find((e) => e.slug === 'time_exit')).toBeUndefined();
+  });
+
+  it('keeps the snapshot schema-valid when the distribution is present', () => {
+    const input = emptyInput();
+    input.trades = [closedTrade('win', 1, { id: 'a', exitReason: 'tp_hit' })];
+    expect(weeklySnapshotSchema.safeParse(buildWeeklySnapshot(input)).success).toBe(true);
+  });
+});
+
+// =============================================================================
+// Quick win 3 — coachCorrections relayed into the snapshot (weekly parity)
+// =============================================================================
+
+describe('buildWeeklySnapshot — coachCorrections (quick win, weekly parity)', () => {
+  it('defaults to an empty array when the loader did not wire corrections', () => {
+    expect(buildWeeklySnapshot(emptyInput()).coachCorrections).toEqual([]);
+  });
+
+  it('relays the loader-formatted corrections verbatim (re-hardened, capped ≤20)', () => {
+    const input = emptyInput();
+    input.coachCorrections = [
+      '« Exécution » : entrée avant confirmation',
+      '« Gestion du risque » : stop non défini',
+    ];
+    const snap = buildWeeklySnapshot(input);
+    expect(snap.coachCorrections).toEqual([
+      '« Exécution » : entrée avant confirmation',
+      '« Gestion du risque » : stop non défini',
+    ]);
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('caps the relayed corrections at 20 (belt-and-suspenders over the loader cap)', () => {
+    const input = emptyInput();
+    input.coachCorrections = Array.from(
+      { length: 25 },
+      (_, i) => `« Exécution » : correction ${i}`,
+    );
+    expect(buildWeeklySnapshot(input).coachCorrections).toHaveLength(20);
+  });
+
+  it('strips bidi / zero-width control chars from a correction (defense-in-depth)', () => {
+    const input = emptyInput();
+    // U+202E bidi override + U+200B zero-width space smuggled into an admin comment.
+    input.coachCorrections = ['« Exécution » : note‮INJECT​'];
+    const relayed = buildWeeklySnapshot(input).coachCorrections[0];
+    expect(relayed).toBeDefined();
+    expect(relayed).not.toContain('‮');
+    expect(relayed).not.toContain('​');
+  });
+});
+
+// =============================================================================
+// Member screen notes relayed into the snapshot (TradingView entry/exit notes)
+// =============================================================================
+
+describe('buildWeeklySnapshot — memberScreenNotes', () => {
+  it('defaults to an empty array when the loader did not wire notes', () => {
+    expect(buildWeeklySnapshot(emptyInput()).memberScreenNotes).toEqual([]);
+  });
+
+  it('relays the loader-shaped notes verbatim (pair/direction/kind kept, note re-hardened)', () => {
+    const input = emptyInput();
+    input.memberScreenNotes = [
+      { pair: 'EURUSD', direction: 'long', kind: 'entree', note: 'Cassure propre du range.' },
+      { pair: 'XAUUSD', direction: 'short', kind: 'sortie', note: 'Sorti au TP comme prévu.' },
+    ];
+    const snap = buildWeeklySnapshot(input);
+    expect(snap.memberScreenNotes).toEqual([
+      { pair: 'EURUSD', direction: 'long', kind: 'entree', note: 'Cassure propre du range.' },
+      { pair: 'XAUUSD', direction: 'short', kind: 'sortie', note: 'Sorti au TP comme prévu.' },
+    ]);
+    expect(weeklySnapshotSchema.safeParse(snap).success).toBe(true);
+  });
+
+  it('caps the relayed notes at 20 (belt-and-suspenders over the loader cap)', () => {
+    const input = emptyInput();
+    input.memberScreenNotes = Array.from({ length: 25 }, (_, i) => ({
+      pair: 'EURUSD' as const,
+      direction: 'long' as const,
+      kind: 'entree' as const,
+      note: `Lecture ${i}`,
+    }));
+    expect(buildWeeklySnapshot(input).memberScreenNotes).toHaveLength(20);
+  });
+
+  it('strips bidi / zero-width control chars from a note (defense-in-depth)', () => {
+    const input = emptyInput();
+    // U+202E bidi override + U+200B zero-width space smuggled into a member note.
+    input.memberScreenNotes = [
+      { pair: 'EURUSD', direction: 'long', kind: 'entree', note: 'note‮INJECT​' },
+    ];
+    const relayed = buildWeeklySnapshot(input).memberScreenNotes[0];
+    expect(relayed).toBeDefined();
+    expect(relayed!.note).not.toContain('‮');
+    expect(relayed!.note).not.toContain('​');
+    expect(weeklySnapshotSchema.safeParse(buildWeeklySnapshot(input)).success).toBe(true);
   });
 });
 

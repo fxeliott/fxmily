@@ -1,4 +1,5 @@
 import { RecentRowCard } from '@/components/ui/recent-row-card';
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { formatMonthLabelFr } from '@/lib/monthly-debrief/format';
 import type { SerializedMonthlyDebrief } from '@/lib/monthly-debrief/types';
 
@@ -32,7 +33,7 @@ export function MonthlyDebriefTimeline({
     day: '2-digit',
     month: 'short',
     year: 'numeric',
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
   });
   if (debriefs.length === 0) {
     return (

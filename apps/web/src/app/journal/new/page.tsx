@@ -43,7 +43,7 @@ export default async function NewTradePage() {
       {/* S20 — max-w-xl (was 2xl) so the pre-trade banner shares the wizard's
           gutter (TradeFormWizard is internally max-w-xl); the banner was wider
           than the form below it = desktop misalignment. */}
-      <div className="relative mx-auto w-full max-w-xl px-4 py-6 sm:py-10">
+      <div className="page-stagger relative mx-auto w-full max-w-xl px-4 py-6 sm:py-10">
         {/* P3 fix — reflect the day's pre-trade state ABOVE the trade form
           (replaces the V2.3 ADR-003 static "Pause 30s" banner, which never
           told the member whether the pre-trade was already done — they could

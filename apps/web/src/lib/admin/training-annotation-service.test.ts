@@ -27,6 +27,7 @@ function makeRow(overrides: Record<string, unknown> = {}) {
     trainingTradeId: 'tt-1',
     adminId: 'admin-1',
     comment: 'Bonne lecture, mais SL trop serré.',
+    tradingViewUrl: null,
     mediaKey: null,
     mediaType: null,
     seenByMemberAt: null,
@@ -45,15 +46,17 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('createTrainingAnnotation', () => {
-  it('inserts trainingTrade + admin + comment and serializes dates to ISO', async () => {
-    vi.mocked(db.trainingAnnotation.create).mockResolvedValue(makeRow() as never);
+  it('inserts trainingTrade + admin + comment + tradingViewUrl and serializes dates to ISO', async () => {
+    const tvUrl = `https://fr.tradingview.com/x/${'a'.repeat(12)}/`;
+    vi.mocked(db.trainingAnnotation.create).mockResolvedValue(
+      makeRow({ tradingViewUrl: tvUrl }) as never,
+    );
 
     const result = await createTrainingAnnotation({
       trainingTradeId: 'tt-1',
       adminId: 'admin-1',
       comment: 'Bonne lecture, mais SL trop serré.',
-      mediaKey: null,
-      mediaType: null,
+      tradingViewUrl: tvUrl,
     });
 
     const call = vi.mocked(db.trainingAnnotation.create).mock.calls[0];
@@ -63,20 +66,21 @@ describe('createTrainingAnnotation', () => {
         trainingTradeId: string;
         adminId: string;
         comment: string;
-        mediaKey: string | null;
-        mediaType: string | null;
+        tradingViewUrl: string | null;
         axis: string | null;
       };
     };
+    // Tour 13 — the optional TradingView link is persisted; legacy mediaKey/
+    // mediaType are never written on create anymore (§21.5-safe: chart link).
     expect(arg.data).toEqual({
       trainingTradeId: 'tt-1',
       adminId: 'admin-1',
       comment: 'Bonne lecture, mais SL trop serré.',
-      mediaKey: null,
-      mediaType: null,
+      tradingViewUrl: tvUrl,
       axis: null,
     });
     expect(result.id).toBe('ta-1');
+    expect(result.tradingViewUrl).toBe(tvUrl);
     expect(result.createdAt).toBe('2026-05-17T10:00:00.000Z');
     expect(result.isUnseenByMember).toBe(true);
     expect(result.seenByMemberAt).toBe(null);
@@ -91,8 +95,7 @@ describe('createTrainingAnnotation', () => {
       trainingTradeId: 'tt-1',
       adminId: 'admin-1',
       comment: 'x',
-      mediaKey: null,
-      mediaType: null,
+      tradingViewUrl: null,
     });
 
     expect(result.seenByMemberAt).toBe('2026-05-18T08:00:00.000Z');

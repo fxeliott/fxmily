@@ -5,16 +5,50 @@ const auditFindManyMock = vi.fn<(...args: unknown[]) => unknown>();
 const userCountMock = vi.fn<(...args: unknown[]) => unknown>();
 const pushCountMock = vi.fn<(...args: unknown[]) => unknown>();
 const auditCountMock = vi.fn<(...args: unknown[]) => unknown>();
+// Tour 13 — disk probe. `getDiskHealth` calls `node:fs` statfsSync; mock it so
+// the thresholds/error path are deterministic and platform-independent (the CI
+// runner and Windows dev both give real-but-irrelevant free space otherwise).
+const statfsSyncMock = vi.fn<(...args: unknown[]) => unknown>();
+// Tour 13 — verification backlog probe reads mt5AccountProof.count + findFirst.
+const proofCountMock = vi.fn<(...args: unknown[]) => unknown>();
+const proofFindFirstMock = vi.fn<(...args: unknown[]) => unknown>();
 
 vi.mock('@/lib/db', () => ({
   db: {
     auditLog: { groupBy: auditGroupByMock, findMany: auditFindManyMock, count: auditCountMock },
     user: { count: userCountMock },
     pushSubscription: { count: pushCountMock },
+    mt5AccountProof: { count: proofCountMock, findFirst: proofFindFirstMock },
   },
 }));
 
-const { getCronHealthReport, getSystemSnapshot, getWorkerHealthReport } = await import('./health');
+vi.mock('node:fs', () => ({
+  statfsSync: (...args: unknown[]) => statfsSyncMock(...args),
+}));
+
+const {
+  getCronHealthReport,
+  getDiskHealth,
+  getSystemSnapshot,
+  getWorkerHealthReport,
+  getVerificationBacklogHealth,
+} = await import('./health');
+
+const GIB = 1024 * 1024 * 1024;
+/** Build a `statfsSync`-shaped result with `bsize`=4096 and the given free/total GiB. */
+function statfs(freeGiB: number, totalGiB: number) {
+  const bsize = 4096;
+  return {
+    bsize,
+    blocks: Math.round((totalGiB * GIB) / bsize),
+    bavail: Math.round((freeGiB * GIB) / bsize),
+    bfree: Math.round((freeGiB * GIB) / bsize),
+    b_free: 0,
+    files: 0,
+    ffree: 0,
+    type: 0,
+  };
+}
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -29,6 +63,9 @@ beforeEach(() => {
   userCountMock.mockReset();
   pushCountMock.mockReset();
   auditCountMock.mockReset();
+  statfsSyncMock.mockReset();
+  proofCountMock.mockReset();
+  proofFindFirstMock.mockReset();
 });
 
 describe('getCronHealthReport', () => {
@@ -182,22 +219,30 @@ describe('getCronHealthReport', () => {
   });
 
   /**
-   * Tour 12 — window-bounded classification. check-in reminders fire every
-   * 15 min ONLY inside 05-07h + 18-20h UTC. Raw-age classification flagged
-   * the cron amber every single day between windows (age 4h at noon >> 1.5 ×
-   * 15 min) — a structural false positive the operator learns to ignore.
-   * With `windowedScheduleUtc`, status = missed expected ticks:
-   *  - last tick of the morning window + now=noon → 0 missed → green
-   *  - 2 ticks missed inside a window → amber (jitter/deploy, watch it)
-   *  - a whole window missed → red (the cron is genuinely broken)
+   * Tour 12 / Tour 13 — window-bounded classification. Check-in reminders fire
+   * every 15 min ONLY inside the Paris windows 07-09h + 20-22h. The prod host
+   * runs Europe/Paris and crond reads the crontab in LOCAL time, so the model
+   * expects Paris WALL-CLOCK ticks converted to UTC (DST-correct). Raw-age
+   * classification flagged the cron amber all day between windows — a structural
+   * false positive. With `windowedScheduleParis`, status = missed expected
+   * ticks.
+   *
+   * Tour 13 regression pin: the OLD `windowedScheduleUtc: hours [5,6,7,18,19,20]`
+   * generated UTC ticks that no longer match the crontab, so every evening past
+   * ~19:15 UTC the model waited for ticks crond never fires → nightly false red
+   * (the 2026-07-04 19:37Z cron-watch 503). These cases build their instants
+   * from Paris wall-clock in BOTH DST seasons and must stay green off-window.
    */
-  it('keeps a window-bounded cron green between windows (0 missed ticks)', async () => {
-    // Last morning tick (07:45Z) ran; it is now noon — between windows.
-    const now = new Date('2026-07-04T12:00:00.000Z');
+  it('keeps the cron green between the Paris windows in SUMMER (CEST) — 0 missed', async () => {
+    // The Paris evening window is 20:00-22:45 (hours 20,21,22 × :00/:15/:30/:45),
+    // so the LAST scheduled tick is 22:45 Paris. Summer: 22:45 Paris = 20:45Z.
+    // Now 23:30 Paris (21:30Z) — past the last tick, before tomorrow's 07:00
+    // Paris morning window → 0 missed → green.
+    const now = new Date('2026-07-04T21:30:00.000Z');
     auditGroupByMock.mockResolvedValueOnce([
       {
         action: 'cron.checkin_reminders.scan',
-        _max: { createdAt: new Date('2026-07-04T07:45:00.000Z') },
+        _max: { createdAt: new Date('2026-07-04T20:45:00.000Z') }, // 22:45 Paris
       },
     ]);
 
@@ -208,33 +253,72 @@ describe('getCronHealthReport', () => {
     expect(checkin?.windowed).toBe(true);
   });
 
-  it('classifies a window-bounded cron amber at 2 missed ticks and red past a whole window', async () => {
-    // 07:15Z ran, now 07:50Z → 07:30 + 07:45 missed (2) → amber.
-    const midWindow = new Date('2026-07-04T07:50:00.000Z');
+  it('keeps the cron green between the Paris windows in WINTER (CET) — 0 missed', async () => {
+    // Winter: 22:45 Paris (last evening tick) = 21:45Z. Now 23:30 Paris
+    // (22:30Z) — past the last tick, between windows. This is the exact
+    // scenario the OLD UTC model got wrong: at 22:30Z it expected UTC ticks at
+    // 18/19/20h that crond never fires in winter → false red.
+    const now = new Date('2026-01-15T22:30:00.000Z');
     auditGroupByMock.mockResolvedValueOnce([
       {
         action: 'cron.checkin_reminders.scan',
-        _max: { createdAt: new Date('2026-07-04T07:15:00.000Z') },
+        _max: { createdAt: new Date('2026-01-15T21:45:00.000Z') }, // 22:45 Paris
+      },
+    ]);
+
+    const report = await getCronHealthReport(now);
+    const checkin = report.entries.find((e) => e.action === 'cron.checkin_reminders.scan');
+
+    expect(checkin?.status).toBe('green');
+  });
+
+  it('classifies 2 missed ticks INSIDE a Paris window as amber (summer)', async () => {
+    // Summer morning window. 07:15 Paris (05:15Z) ran; now 07:50 Paris (05:50Z)
+    // → 07:30 + 07:45 Paris ticks missed (2) → amber.
+    const midWindow = new Date('2026-07-04T05:50:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.checkin_reminders.scan',
+        _max: { createdAt: new Date('2026-07-04T05:15:00.000Z') }, // 07:15 Paris
       },
     ]);
     const amberReport = await getCronHealthReport(midWindow);
     expect(
       amberReport.entries.find((e) => e.action === 'cron.checkin_reminders.scan')?.status,
     ).toBe('amber');
+  });
 
-    // Last ran yesterday evening; the whole morning window (12 ticks) has
-    // passed with nothing → red.
-    const morningAfter = new Date('2026-07-04T09:00:00.000Z');
+  it('classifies a whole missed Paris window as red (winter)', async () => {
+    // Winter. Last ran yesterday evening (21:45 Paris = 20:45Z on the 14th).
+    // Now 09:00 Paris on the 15th (08:00Z) → the entire morning window
+    // (07:00-09:00 Paris) has passed with nothing → red.
+    const morningAfter = new Date('2026-01-15T08:00:00.000Z');
     auditGroupByMock.mockResolvedValueOnce([
       {
         action: 'cron.checkin_reminders.scan',
-        _max: { createdAt: new Date('2026-07-03T20:45:00.000Z') },
+        _max: { createdAt: new Date('2026-01-14T20:45:00.000Z') }, // 21:45 Paris (14th)
       },
     ]);
     const redReport = await getCronHealthReport(morningAfter);
     expect(redReport.entries.find((e) => e.action === 'cron.checkin_reminders.scan')?.status).toBe(
       'red',
     );
+  });
+
+  it('does NOT fabricate missed ticks the evening the OLD UTC model went red (regression)', async () => {
+    // The prod incident: 2026-07-04 19:37Z, checkin_reminders flagged red under
+    // the UTC model. In Paris that is 21:37 — mid evening-window. A tick fired
+    // at 21:30 Paris (19:30Z, 7 min before) → 0 missed within jitter → green.
+    const now = new Date('2026-07-04T19:37:00.000Z');
+    auditGroupByMock.mockResolvedValueOnce([
+      {
+        action: 'cron.checkin_reminders.scan',
+        _max: { createdAt: new Date('2026-07-04T19:30:00.000Z') }, // 21:30 Paris
+      },
+    ]);
+    const report = await getCronHealthReport(now);
+    const checkin = report.entries.find((e) => e.action === 'cron.checkin_reminders.scan');
+    expect(checkin?.status).toBe('green');
   });
 
   /**
@@ -450,8 +534,10 @@ describe('getWorkerHealthReport', () => {
         _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
       },
       {
+        // Tour 13 — verification now ticks every 20 min (was daily), so a
+        // healthy fixture pulls within minutes, like onboarding.
         action: 'verification.batch.pulled',
-        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+        _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
       },
       { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
       {
@@ -525,8 +611,10 @@ describe('getWorkerHealthReport', () => {
         _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
       },
       {
+        // Tour 13 — verification now ticks every 20 min (was daily), so a
+        // healthy fixture pulls within minutes, like onboarding.
         action: 'verification.batch.pulled',
-        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+        _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
       },
       { action: 'calendar.batch.pulled', _max: { createdAt: new Date(now.getTime() - 2 * DAY) } },
       {
@@ -580,8 +668,10 @@ describe('getWorkerHealthReport', () => {
     const now = new Date('2026-07-10T12:00:00.000Z');
     auditGroupByMock.mockResolvedValueOnce([
       {
+        // Tour 13 — verification now ticks every 20 min (was daily), so a
+        // healthy fixture pulls within minutes, like onboarding.
         action: 'verification.batch.pulled',
-        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+        _max: { createdAt: new Date(now.getTime() - 10 * MIN) },
       },
     ]);
     auditFindManyMock.mockResolvedValueOnce([
@@ -637,5 +727,163 @@ describe('getSystemSnapshot', () => {
     expect(auditCall.where.createdAt.gte.toISOString()).toBe(
       new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
     );
+  });
+});
+
+describe('getDiskHealth', () => {
+  /**
+   * Why this matters : the whole point of the probe is to reach RED before the
+   * disk is actually full — Postgres and the backups stop together on a full
+   * shared 40 GB volume. Pin the three buckets against the exact thresholds
+   * (warn 5 GB, critical 2 GB) so a future threshold edit is a conscious change.
+   */
+  it('classifies ample free space as green (> 5 GB free)', () => {
+    statfsSyncMock.mockReturnValueOnce(statfs(12, 40));
+    const disk = getDiskHealth('/');
+
+    expect(disk.status).toBe('green');
+    expect(disk.freeBytes).toBe(12 * GIB);
+    expect(disk.totalBytes).toBe(40 * GIB);
+    // Probed the container root, not the injectable test default.
+    expect(statfsSyncMock).toHaveBeenCalledWith('/');
+  });
+
+  it('classifies free space between 2 GB and 5 GB as amber', () => {
+    statfsSyncMock.mockReturnValueOnce(statfs(3, 40));
+    expect(getDiskHealth('/').status).toBe('amber');
+  });
+
+  it('classifies free space below the 2 GB critical floor as red', () => {
+    statfsSyncMock.mockReturnValueOnce(statfs(1, 40));
+    const disk = getDiskHealth('/');
+
+    expect(disk.status).toBe('red');
+    expect(disk.freeBytes).toBe(1 * GIB);
+  });
+
+  /**
+   * Boundary pin: exactly 5 GB free is NOT below the warn threshold, so it
+   * stays green — the classification uses strict `<`, matching preflight's
+   * `-lt` comparison.
+   */
+  it('treats exactly 5 GB free as green (boundary is strict <)', () => {
+    statfsSyncMock.mockReturnValueOnce(statfs(5, 40));
+    expect(getDiskHealth('/').status).toBe('green');
+  });
+
+  /**
+   * Why this matters : on an exotic platform (or a sandbox) statfsSync throws.
+   * That is NOT an incident — it must degrade to `unknown` with null bytes so
+   * the admin page renders a neutral note instead of red or a crashed render.
+   */
+  it("returns 'unknown' with null bytes when statfsSync throws", () => {
+    statfsSyncMock.mockImplementationOnce(() => {
+      throw new Error('ENOSYS: function not implemented, statfs');
+    });
+    const disk = getDiskHealth('/');
+
+    expect(disk.status).toBe('unknown');
+    expect(disk.freeBytes).toBeNull();
+    expect(disk.totalBytes).toBeNull();
+    // Thresholds are still echoed so the UI can explain the (absent) buckets.
+    expect(disk.warnBytes).toBe(5 * GIB);
+    expect(disk.criticalBytes).toBe(2 * GIB);
+  });
+
+  /**
+   * Free space is `bavail × bsize` (blocks available to a non-root user), not
+   * `bfree` — pin the exact arithmetic so a refactor can't silently swap the
+   * field and over-report headroom that root-reserved blocks don't give us.
+   */
+  it('computes free/total bytes from bavail/blocks × bsize', () => {
+    statfsSyncMock.mockReturnValueOnce({ bsize: 4096, blocks: 1000, bavail: 250, bfree: 300 });
+    const disk = getDiskHealth('/');
+
+    expect(disk.freeBytes).toBe(250 * 4096);
+    expect(disk.totalBytes).toBe(1000 * 4096);
+  });
+});
+
+describe('getVerificationBacklogHealth', () => {
+  /**
+   * Why this matters : with the 20-min worker, an uploaded proof should turn
+   * done/failed within minutes. An EMPTY queue is the healthy steady state and
+   * must read `idle` (calm), never an alarm — and never hit findFirst's data.
+   */
+  it("returns 'idle' with null age when nothing is pending", async () => {
+    proofCountMock.mockResolvedValueOnce(0);
+    proofFindFirstMock.mockResolvedValueOnce(null);
+
+    const backlog = await getVerificationBacklogHealth(new Date('2026-07-10T12:00:00.000Z'));
+
+    expect(backlog.status).toBe('idle');
+    expect(backlog.pendingCount).toBe(0);
+    expect(backlog.oldestPendingAgeMs).toBeNull();
+    expect(backlog.oldestPendingAt).toBeNull();
+  });
+
+  /**
+   * A fresh in-flight queue (oldest pending < 1h) is normal — the worker will
+   * catch it on the next 20-min tick. Green, with the honest pending count.
+   */
+  it("returns 'green' when the oldest pending proof is younger than 1h", async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z');
+    proofCountMock.mockResolvedValueOnce(3);
+    proofFindFirstMock.mockResolvedValueOnce({
+      uploadedAt: new Date(now.getTime() - 20 * MIN),
+    });
+
+    const backlog = await getVerificationBacklogHealth(now);
+
+    expect(backlog.status).toBe('green');
+    expect(backlog.pendingCount).toBe(3);
+    expect(backlog.oldestPendingAgeMs).toBe(20 * MIN);
+    expect(backlog.oldestPendingAt).toBe(new Date(now.getTime() - 20 * MIN).toISOString());
+  });
+
+  /** Between 1h and 6h → amber (running late, worth an eye). */
+  it("returns 'amber' when the oldest pending proof is between 1h and 6h old", async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z');
+    proofCountMock.mockResolvedValueOnce(1);
+    proofFindFirstMock.mockResolvedValueOnce({ uploadedAt: new Date(now.getTime() - 2 * HOUR) });
+
+    const backlog = await getVerificationBacklogHealth(now);
+    expect(backlog.status).toBe('amber');
+  });
+
+  /**
+   * Past 6h the 20-min worker would have caught it — the pipeline or the local
+   * PC is stuck. Red, honestly (this is the signal the operator must act on).
+   */
+  it("returns 'red' when the oldest pending proof is older than 6h", async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z');
+    proofCountMock.mockResolvedValueOnce(2);
+    proofFindFirstMock.mockResolvedValueOnce({ uploadedAt: new Date(now.getTime() - 7 * HOUR) });
+
+    const backlog = await getVerificationBacklogHealth(now);
+    expect(backlog.status).toBe('red');
+    expect(backlog.oldestPendingAgeMs).toBe(7 * HOUR);
+  });
+
+  /**
+   * Both queries are scoped to ACTIVE members (mirror the pull's own predicate)
+   * and `pending` proofs only — a soft-deleted member's proof is never analysed
+   * and must not redden the board. Pin the WHERE clauses.
+   */
+  it('scopes both queries to pending proofs of active members, oldest first', async () => {
+    const now = new Date('2026-07-10T12:00:00.000Z');
+    proofCountMock.mockResolvedValueOnce(1);
+    proofFindFirstMock.mockResolvedValueOnce({ uploadedAt: new Date(now.getTime() - 30 * MIN) });
+
+    await getVerificationBacklogHealth(now);
+
+    expect(proofCountMock.mock.calls[0]?.[0]).toEqual({
+      where: { ocrStatus: 'pending', member: { status: 'active' } },
+    });
+    expect(proofFindFirstMock.mock.calls[0]?.[0]).toEqual({
+      where: { ocrStatus: 'pending', member: { status: 'active' } },
+      orderBy: { uploadedAt: 'asc' },
+      select: { uploadedAt: true },
+    });
   });
 });

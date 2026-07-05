@@ -1,3 +1,4 @@
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import type {
   DiscrepancyDeclaredSide,
   DiscrepancyRealitySide,
@@ -26,7 +27,7 @@ function formatInstant(date: Date, timezone: string): string {
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: timezone,
+    timeZone: safeTimeZone(timezone),
   }).format(date);
 }
 

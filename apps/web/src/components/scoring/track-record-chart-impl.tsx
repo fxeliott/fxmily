@@ -14,6 +14,7 @@ import {
   YAxis,
 } from 'recharts';
 
+import { safeTimeZone } from '@/lib/checkin/timezone';
 import { useChartColors } from '@/lib/use-chart-colors';
 import { cn } from '@/lib/utils';
 
@@ -78,7 +79,7 @@ export function TrackRecordChart({ data, estimatedExcluded, range, timezone }: E
         date: new Date(p.ts).toLocaleDateString('fr-FR', {
           day: 'numeric',
           month: 'short',
-          timeZone: timezone,
+          timeZone: safeTimeZone(timezone),
         }),
         cumR: Number(p.cumR.toFixed(2)),
         // S4 DOD4-F1 — the unplotted `dd` field was removed (no series nor

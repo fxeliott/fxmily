@@ -28,6 +28,10 @@ import { getBehavioralScoreHistory, getLatestBehavioralScore } from '@/lib/scori
 // 🚨 §21.5 — the ONLY symbol the weekly-report loader may import from the
 // training module: the count-only primitive. Anything else is a breach.
 import { countRecentTrainingActivity } from '@/lib/training/training-trade-service';
+// Quick win (coach corrections echo, weekly) — the axis FR label prefixes each
+// coach correction so the report can theme them. Pure data module (no DB/edge),
+// §2-safe (process axes). Mirror the monthly loader.
+import { getAxisLabel } from '@/lib/tracking/axes';
 // DOD3-01 / DoD#2 S6 — Session-3 constancy & honesty counters (count-only,
 // posture §2). `listConstancyScoresInRange` is a PERIOD-SCOPED read (the score OF
 // the reported week, never `getLatestConstancyScore` = current ISO week).
@@ -38,7 +42,7 @@ import { countAlertsInRange } from '@/lib/verification/alerts';
 import { countOpenDiscrepancies } from '@/lib/verification/service';
 
 import type { MemberToneRef } from './prompt';
-import type { BehavioralScoreSnapshot, BuilderInput } from './types';
+import type { BehavioralScoreSnapshot, BuilderInput, MemberScreenNote } from './types';
 import {
   computePreviousFullWeekWindow,
   computeReportingWeek,
@@ -134,6 +138,8 @@ export async function loadWeeklySliceForUser(
     checkins,
     deliveries,
     annotations,
+    coachCorrections,
+    memberScreenNotes,
     latestScore,
     scoreHistory,
     trainingActivity,
@@ -148,6 +154,15 @@ export async function loadWeeklySliceForUser(
     loadCheckins(userId, window),
     loadDeliveries(userId, window),
     loadAnnotationStats(userId, window),
+    // Quick win — the coach's TAGGED corrections on this member's REAL trades this
+    // week, pre-formatted `« Axe » : commentaire` for the report corpus (parity with
+    // the monthly debrief). REAL side only (training corrections are §21.5-isolated).
+    loadCoachCorrections(userId, window),
+    // Notes membre attachées à ses liens TradingView (entrée / sortie) sur ses
+    // trades RÉELS de la semaine — l'explication que le membre écrit à côté de son
+    // screen. REAL side only : les notes d'entraînement (`TrainingTrade.
+    // tradingViewNote`) sont §21.5-isolées et jamais lues ici.
+    loadMemberScreenNotes(userId, window),
     getLatestBehavioralScore(userId),
     // S15 #6/#7 — 90d daily score history for the snapshot's momentum signal
     // (sustained multi-week declines). User-scoped, count-only (0–100, no P&L).
@@ -241,6 +256,13 @@ export async function loadWeeklySliceForUser(
     deliveries,
     annotationsReceived: annotations.received,
     annotationsViewed: annotations.viewed,
+    // Quick win — the coach's TAGGED corrections on REAL trades this week,
+    // pre-formatted `« Axe » : commentaire` (REAL side only, §21.5-clean).
+    coachCorrections,
+    // Notes membre attachées à ses liens TradingView (entrée / sortie) sur ses
+    // trades RÉELS de la semaine (REAL side only, §21.5-clean). L'IA relie ces
+    // lectures de screens aux corrections du coach pour personnaliser le suivi.
+    memberScreenNotes,
     // 🚨 §21.5 — effort COUNT only (volume de pratique). Recency is handled
     // by the no_training_activity_in_window trigger, not the report.
     trainingActivityCount: trainingActivity.count,
@@ -316,6 +338,11 @@ async function loadTrades(userId: string, window: WeekWindow): Promise<BuilderIn
     notes: trade.notes,
     screenshotEntryKey: trade.screenshotEntryKey,
     tradingViewEntryUrl: trade.tradingViewEntryUrl,
+    // Tour 13 — carried on the shape so it stays SerializedTrade-compatible.
+    // The note DOES reach the weekly IA prompt, but via `loadMemberScreenNotes`
+    // below (hardened: safeFreeText + cap + wrapUntrustedMemberInput) — never
+    // read raw from this serialization.
+    tradingViewEntryNote: trade.tradingViewEntryNote,
     exitedAt: trade.exitedAt ? trade.exitedAt.toISOString() : null,
     exitPrice: trade.exitPrice == null ? null : trade.exitPrice.toString(),
     outcome: trade.outcome,
@@ -330,6 +357,9 @@ async function loadTrades(userId: string, window: WeekWindow): Promise<BuilderIn
     emotionAfter: [...trade.emotionAfter],
     screenshotExitKey: trade.screenshotExitKey,
     tradingViewExitUrl: trade.tradingViewExitUrl,
+    // Tour 13 — shape parity (see tradingViewEntryNote above): the prompt reads
+    // this note only through the hardened `loadMemberScreenNotes` path.
+    tradingViewExitNote: trade.tradingViewExitNote,
     closedAt: trade.closedAt ? trade.closedAt.toISOString() : null,
     createdAt: trade.createdAt.toISOString(),
     updatedAt: trade.updatedAt.toISOString(),
@@ -427,6 +457,121 @@ async function loadAnnotationStats(
   });
   const viewed = rows.filter((r) => r.seenByMemberAt !== null).length;
   return { received: rows.length, viewed };
+}
+
+/// Quick win — cap + per-item truncation for the coach-corrections corpus. ≤20
+/// corrections (newest-first) keeps the prompt bounded; each comment is clamped so
+/// a long paste can't balloon the payload (the axis-label prefix is short and
+/// always kept). Mirror of the monthly loader's `loadCoachCorrections` caps.
+const COACH_CORRECTIONS_MAX = 20;
+const COACH_CORRECTION_COMMENT_MAX_CHARS = 350;
+
+/**
+ * Quick win — load the coach's TAGGED corrections on THIS member's REAL trades
+ * over the report week, pre-formatted `« Axe » : commentaire` for the report corpus.
+ * Only corrections the admin tagged with a `TrackingAxis` are loaded (`axis: { not:
+ * null }`) — an untagged correction carries no machine theme. Newest-first, capped
+ * ≤20, each comment truncated so the payload stays bounded; the builder relays
+ * verbatim + re-hardens. Carbon of the monthly loader's `loadCoachCorrections`,
+ * scoped to the WEEK window.
+ *
+ * 🚨 §21.5 — REAL side ONLY. This reads `db.tradeAnnotation` (real-edge coaching,
+ * legitimate — real annotations are the product, mirror `loadAnnotationStats`).
+ * Training corrections (`TrainingAnnotation`) are §21.5-isolated and DELIBERATELY
+ * not read here: the weekly loader may touch training exclusively through
+ * `countRecentTrainingActivity`. So a backtest correction never leaks into the
+ * real-trading report.
+ */
+async function loadCoachCorrections(userId: string, window: WeekWindow): Promise<string[]> {
+  const rows = await db.tradeAnnotation.findMany({
+    where: {
+      createdAt: { gte: window.weekStartUtc, lte: window.weekEndUtc },
+      axis: { not: null },
+      trade: { userId },
+    },
+    select: { axis: true, comment: true },
+    orderBy: { createdAt: 'desc' },
+    take: COACH_CORRECTIONS_MAX,
+  });
+  return rows.map((r) => {
+    // `axis: { not: null }` guarantees a value at runtime; the select type stays
+    // `TrackingAxis | null`, so getAxisLabel receives the narrowed value.
+    const label = getAxisLabel(r.axis!);
+    const comment = r.comment.trim().slice(0, COACH_CORRECTION_COMMENT_MAX_CHARS);
+    return `« ${label} » : ${comment}`;
+  });
+}
+
+/// Cap + per-item truncation for the member-screen-notes corpus. ≤20 notes
+/// (newest-first) keeps the prompt bounded; each note is clamped so a long paste
+/// can't balloon the payload. Mirror of the coach-corrections caps.
+const MEMBER_SCREEN_NOTES_MAX = 20;
+const MEMBER_SCREEN_NOTE_MAX_CHARS = 350;
+
+/**
+ * Load the member's own explanatory notes attached to their TradingView links
+ * (`Trade.tradingViewEntryNote` / `tradingViewExitNote`) on their REAL trades of
+ * the report week, shaped `{ pair, direction, kind, note }` so the report can
+ * situate each note (which trade, entry or exit). One entry per non-empty note
+ * (an entry note and an exit note on the same trade yield TWO entries). The trade
+ * is ordered newest-first (`enteredAt desc`); within a trade the entry note comes
+ * before the exit note. Capped ≤20 total, each note truncated so the payload stays
+ * bounded; the builder relays verbatim + re-hardens (`safeFreeText` + the schema's
+ * bidi refine). This is member free-text → wrapped untrusted at the prompt boundary.
+ *
+ * 🚨 §21.5 — REAL side ONLY. This reads `db.trade` (real trades — the product,
+ * mirror `loadTrades`). Training notes (`TrainingTrade.tradingViewNote`) are
+ * §21.5-isolated and DELIBERATELY not read here: the weekly loader may touch
+ * training exclusively through `countRecentTrainingActivity`. So a backtest note
+ * never leaks into the real-trading report.
+ */
+async function loadMemberScreenNotes(
+  userId: string,
+  window: WeekWindow,
+): Promise<MemberScreenNote[]> {
+  // Targeted select — only the columns needed to situate + relay a note. We pull
+  // trades of the window that carry AT LEAST ONE non-empty TradingView note
+  // (entry or exit); the per-trade emptiness of each field is re-checked below.
+  const rows = await db.trade.findMany({
+    where: {
+      userId,
+      enteredAt: { gte: window.weekStartUtc, lte: window.weekEndUtc },
+      OR: [{ tradingViewEntryNote: { not: null } }, { tradingViewExitNote: { not: null } }],
+    },
+    select: {
+      pair: true,
+      direction: true,
+      tradingViewEntryNote: true,
+      tradingViewExitNote: true,
+    },
+    orderBy: { enteredAt: 'desc' },
+  });
+
+  const notes: MemberScreenNote[] = [];
+  for (const row of rows) {
+    if (notes.length >= MEMBER_SCREEN_NOTES_MAX) break;
+    // Entry note first (chronological within the trade), then the exit note.
+    const entry = row.tradingViewEntryNote?.trim() ?? '';
+    if (entry.length > 0) {
+      notes.push({
+        pair: row.pair,
+        direction: row.direction,
+        kind: 'entree',
+        note: entry.slice(0, MEMBER_SCREEN_NOTE_MAX_CHARS),
+      });
+    }
+    if (notes.length >= MEMBER_SCREEN_NOTES_MAX) break;
+    const exit = row.tradingViewExitNote?.trim() ?? '';
+    if (exit.length > 0) {
+      notes.push({
+        pair: row.pair,
+        direction: row.direction,
+        kind: 'sortie',
+        note: exit.slice(0, MEMBER_SCREEN_NOTE_MAX_CHARS),
+      });
+    }
+  }
+  return notes;
 }
 
 // =============================================================================

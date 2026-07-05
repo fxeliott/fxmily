@@ -54,6 +54,25 @@ export function localDateOf(instant: Date, timezone: string): LocalDateString {
 }
 
 /**
+ * Sanitize a member `User.timezone` for a **display** formatter. Returns the tz
+ * unchanged when it is a valid IANA name, else the app default `'Europe/Paris'`
+ * (the V1 cohort tz). Use this for EVERY `Intl.DateTimeFormat`/`toLocaleString`
+ * that receives a member timezone: a non-IANA legacy value (e.g. "Europe/Pariss")
+ * makes `Intl` throw a `RangeError` on construction, which would take the whole
+ * page down through the segment error boundary. The internal date CALCULATIONS
+ * above keep their own UTC fallback — this helper is display-only.
+ */
+export function safeTimeZone(tz: string | null | undefined): string {
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: tz ?? undefined });
+    // A nullish tz makes Intl use the host tz without throwing, so reject it here.
+    return tz ? tz : 'Europe/Paris';
+  } catch {
+    return 'Europe/Paris';
+  }
+}
+
+/**
  * Convert a local wall-clock moment (local-date YYYY-MM-DD + h/m/s/ms) to a
  * UTC instant, given an IANA timezone. This is the **inverse** of
  * {@link localDateOf} for a fixed wall-clock time.

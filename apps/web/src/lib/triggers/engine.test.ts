@@ -19,6 +19,8 @@ vi.mock('@/lib/db', () => ({
     markDouglasDelivery: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
     // T1 — `getBehavioralScoreHistory` (score_drift) reads this in the engine.
     behavioralScore: { findMany: vi.fn() },
+    // Tour 15 — off-aware no_checkin_streak reads the member's declared off days.
+    memberOffDay: { findMany: vi.fn() },
   },
 }));
 vi.mock('@/lib/auth/audit', () => ({ logAudit: vi.fn() }));
@@ -54,6 +56,9 @@ const USER = {
   status: 'active',
   // Old enough for the no_checkin_streak account-age guard (M4).
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  // Tour 15 — default off (weekends count as active) so the existing streak
+  // assertions (which use weekday-agnostic empty check-in lists) are unchanged.
+  weekendsOff: false,
 };
 
 // Always-matching rule for this harness: zero check-ins seeded + account
@@ -90,6 +95,7 @@ function arm(options: {
   vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue((options.history ?? []) as never);
   vi.mocked(db.markDouglasDelivery.create).mockResolvedValue({ id: 'delivery-new' } as never);
   vi.mocked(db.behavioralScore.findMany).mockResolvedValue([] as never);
+  vi.mocked(db.memberOffDay.findMany).mockResolvedValue([] as never);
 }
 
 describe('evaluateAndDispatchForUser — member-day cap (S4 DOD2-T2-1)', () => {
@@ -256,6 +262,7 @@ describe('dispatchForAllActiveMembers — S10 perf: member-independent cards fet
     vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([] as never);
     vi.mocked(db.markDouglasDelivery.create).mockResolvedValue({ id: 'delivery-new' } as never);
     vi.mocked(db.behavioralScore.findMany).mockResolvedValue([] as never);
+    vi.mocked(db.memberOffDay.findMany).mockResolvedValue([] as never);
 
     const r = await dispatchForAllActiveMembers(NOW);
 
@@ -328,6 +335,7 @@ describe('evaluateAndDispatchForUser — score_drift end-to-end (T1)', () => {
     vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([] as never);
     vi.mocked(db.markDouglasDelivery.create).mockResolvedValue({ id: 'delivery-drift' } as never);
     vi.mocked(db.behavioralScore.findMany).mockResolvedValue(DECLINING_HISTORY as never);
+    vi.mocked(db.memberOffDay.findMany).mockResolvedValue([] as never);
 
     const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
 
@@ -356,6 +364,7 @@ describe('evaluateAndDispatchForUser — score_drift end-to-end (T1)', () => {
     vi.mocked(db.behavioralScore.findMany).mockResolvedValue(
       DECLINING_HISTORY.map((p) => ({ ...p, emotionalStabilityScore: 70 })) as never,
     );
+    vi.mocked(db.memberOffDay.findMany).mockResolvedValue([] as never);
 
     const r = await evaluateAndDispatchForUser('user-1', { now: NOW });
 

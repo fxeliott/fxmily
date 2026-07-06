@@ -161,7 +161,10 @@ export async function evaluateAndDispatchForUser(
   // --- 1. Fetch user (need timezone) -----------------------------------------
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, timezone: true, status: true, createdAt: true },
+    // Tour 15 — `weekendsOff` feeds the off-aware `no_checkin_streak` (an off day
+    // is not a missed ritual). Read here (already fetching the user) so the
+    // per-member path adds no extra round-trip for the flag itself.
+    select: { id: true, timezone: true, status: true, createdAt: true, weekendsOff: true },
   });
   if (!user || user.status !== 'active') {
     return emptyResult();
@@ -202,63 +205,79 @@ export async function evaluateAndDispatchForUser(
     ? Promise.resolve(options.preparsedCards)
     : loadPublishedTriggerCards();
 
-  const [trades, checkins, activeCards, deliveries, trainingActivity, scoreHistory, dominantAxis] =
-    await Promise.all([
-      db.trade.findMany({
-        where: {
-          userId,
-          OR: [
-            { closedAt: { gte: tradesWindowStart } },
-            { closedAt: null, enteredAt: { gte: tradesWindowStart } },
-          ],
-        },
-        select: {
-          closedAt: true,
-          exitedAt: true,
-          enteredAt: true,
-          outcome: true,
-          session: true,
-          planRespected: true,
-          hedgeRespected: true,
-          emotionBefore: true,
-          emotionDuring: true,
-          emotionAfter: true,
-        },
-      }),
-      db.dailyCheckin.findMany({
-        where: { userId, date: { gte: checkinsWindowStart } },
-        select: {
-          date: true,
-          slot: true,
-          moodScore: true,
-          sleepHours: true,
-          planRespectedToday: true,
-          emotionTags: true,
-        },
-      }),
-      cardsPromise,
-      db.markDouglasDelivery.findMany({
-        where: { userId, createdAt: { gte: historyCutoff } },
-        // TASK C (§26) — `seenAt` + `sourceAlertId` added (additive) so the
-        // routine-saturation check can read engagement. `sourceAlertId` separates
-        // ROUTINE deliveries (null = classic evaluators) from ALERTE ones (S3
-        // constancy engine) — the latter are NEVER spaced. `cardId` + `createdAt`
-        // remain for the unchanged hatClass-cooldown path.
-        select: { cardId: true, createdAt: true, seenAt: true, sourceAlertId: true },
-      }),
-      // 🚨 §21.5 — sanctioned training→real-edge touchpoint #2 (trigger
-      // engine). Count-only primitive; the inactivity trigger is recency-only
-      // so only `.lastEnteredAt` is consumed. NEVER a backtest P&L. Reuses the
-      // 30d trade window start as the (unused-for-recency) count bound.
-      countRecentTrainingActivity(userId, tradesWindowStart),
-      // T1 — behavioral-score trend (ascending, 90d default) for `score_drift`.
-      // detectMomentum needs ≥6 points over a 42d window; 90d covers it with slack.
-      getBehavioralScoreHistory(userId),
-      // Tour 12 (action 3) — member's dominant mental axis (profile S2), read in
-      // parallel so it adds no wall-clock. `null` for un-profiled members → the
-      // picker keeps its historical `priority DESC, id ASC` order (no regression).
-      getDominantMentalAxis(userId),
-    ]);
+  const [
+    trades,
+    checkins,
+    activeCards,
+    deliveries,
+    trainingActivity,
+    scoreHistory,
+    dominantAxis,
+    offDayRows,
+  ] = await Promise.all([
+    db.trade.findMany({
+      where: {
+        userId,
+        OR: [
+          { closedAt: { gte: tradesWindowStart } },
+          { closedAt: null, enteredAt: { gte: tradesWindowStart } },
+        ],
+      },
+      select: {
+        closedAt: true,
+        exitedAt: true,
+        enteredAt: true,
+        outcome: true,
+        session: true,
+        planRespected: true,
+        hedgeRespected: true,
+        emotionBefore: true,
+        emotionDuring: true,
+        emotionAfter: true,
+      },
+    }),
+    db.dailyCheckin.findMany({
+      where: { userId, date: { gte: checkinsWindowStart } },
+      select: {
+        date: true,
+        slot: true,
+        moodScore: true,
+        sleepHours: true,
+        planRespectedToday: true,
+        emotionTags: true,
+      },
+    }),
+    cardsPromise,
+    db.markDouglasDelivery.findMany({
+      where: { userId, createdAt: { gte: historyCutoff } },
+      // TASK C (§26) — `seenAt` + `sourceAlertId` added (additive) so the
+      // routine-saturation check can read engagement. `sourceAlertId` separates
+      // ROUTINE deliveries (null = classic evaluators) from ALERTE ones (S3
+      // constancy engine) — the latter are NEVER spaced. `cardId` + `createdAt`
+      // remain for the unchanged hatClass-cooldown path.
+      select: { cardId: true, createdAt: true, seenAt: true, sourceAlertId: true },
+    }),
+    // 🚨 §21.5 — sanctioned training→real-edge touchpoint #2 (trigger
+    // engine). Count-only primitive; the inactivity trigger is recency-only
+    // so only `.lastEnteredAt` is consumed. NEVER a backtest P&L. Reuses the
+    // 30d trade window start as the (unused-for-recency) count bound.
+    countRecentTrainingActivity(userId, tradesWindowStart),
+    // T1 — behavioral-score trend (ascending, 90d default) for `score_drift`.
+    // detectMomentum needs ≥6 points over a 42d window; 90d covers it with slack.
+    getBehavioralScoreHistory(userId),
+    // Tour 12 (action 3) — member's dominant mental axis (profile S2), read in
+    // parallel so it adds no wall-clock. `null` for un-profiled members → the
+    // picker keeps its historical `priority DESC, id ASC` order (no regression).
+    getDominantMentalAxis(userId),
+    // Tour 15 — explicit off days over the same check-in lookback window, so the
+    // off-aware `no_checkin_streak` skips them. One indexed range query, run in
+    // parallel (no added wall-clock). Weekends are covered by the `weekendsOff`
+    // flag already on `user`, not this table.
+    db.memberOffDay.findMany({
+      where: { userId, date: { gte: checkinsWindowStart } },
+      select: { date: true },
+    }),
+  ]);
 
   // --- 3. Build TriggerContext -----------------------------------------------
   const closedTrades = trades.filter((t) => t.closedAt !== null);
@@ -310,6 +329,12 @@ export async function evaluateAndDispatchForUser(
       planRespectedToday: c.planRespectedToday,
       emotionTags: c.emotionTags,
     })),
+    // Tour 15 — off-day inputs for the off-aware `no_checkin_streak`. Weekend
+    // preference from the user row + the explicit declared dates in the window.
+    offContext: {
+      weekendsOff: user.weekendsOff,
+      explicitDates: new Set(offDayRows.map((r) => r.date.toISOString().slice(0, 10))),
+    },
   };
 
   // --- 4. Evaluate each card's rule ------------------------------------------

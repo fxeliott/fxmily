@@ -29,6 +29,11 @@ import type {
   TriggerRule,
   TriggerTradeInput,
 } from './types';
+// Type-only — erased at compile, so this pure module never pulls the off-days
+// runtime (which imports `@/lib/db`). The off-day PREDICATE is re-stated inline
+// below (`isOffDayLocal`) for the same reason `labelForTag` is inlined: keeping
+// this module dependency-free so its unit tests run in bare node.
+import type { OffDayContext } from '@/lib/checkin/off-days';
 
 // =============================================================================
 // Public API — one entry per kind + a dispatch helper
@@ -357,11 +362,20 @@ export function evalNoCheckinStreak(
   const last = sorted[0];
   if (!last) return { matched: false };
 
-  const daysSince = daysBetweenLocal(last.date, ctx.todayLocal);
+  // Tour 15 — count only the EXPECTED days since the last check-in: an off day (a
+  // weekend while `weekendsOff` is on, or a declared `MemberOffDay`) is a "pont",
+  // not a missed ritual, so a member who keeps weekends off is never nagged on
+  // Monday for a quiet Saturday/Sunday. Falls back to raw calendar days when the
+  // engine did not load off-day data (byte-identical to pre-Tour-15).
+  const daysSince = ctx.offContext
+    ? countExpectedDaysBetween(last.date, ctx.todayLocal, ctx.offContext)
+    : daysBetweenLocal(last.date, ctx.todayLocal);
   if (daysSince >= rule.days) {
     return {
       matched: true,
-      triggeredBy: `Aucun check-in depuis ${daysSince} jours`,
+      // The member-facing count is the EXPECTED-day count (off days excluded), so
+      // the copy never claims « 3 jours » when 2 of them were the member's own off.
+      triggeredBy: `Aucun check-in depuis ${daysSince} jour${daysSince > 1 ? 's' : ''}`,
       snapshot: {
         kind: rule.kind,
         rule,
@@ -551,6 +565,43 @@ export function daysBetweenLocal(a: LocalDateString, b: LocalDateString): number
 function parseDateUtc(s: LocalDateString): Date {
   const [y, m, d] = s.split('-').map(Number);
   return new Date(Date.UTC(y!, m! - 1, d!));
+}
+
+/**
+ * Pure off-day predicate, re-stated inline to keep this module dependency-free
+ * (see the `OffDayContext` import note). Byte-identical semantics to
+ * `lib/checkin/off-days.ts:isOffDay`: a day is off when the member declared it
+ * explicitly OR it is a weekend and they keep weekends off. `getUTCDay()` on the
+ * UTC-midnight-anchored parse gives a timezone-agnostic weekday (0=Sun..6=Sat).
+ */
+function isOffDayLocal(localDate: LocalDateString, offContext: OffDayContext): boolean {
+  if (offContext.explicitDates.has(localDate)) return true;
+  if (!offContext.weekendsOff) return false;
+  const dow = parseDateUtc(localDate).getUTCDay();
+  return dow === 0 || dow === 6;
+}
+
+/**
+ * Tour 15 — number of EXPECTED (non-off) days in the interval `(from, to]`
+ * (exclusive of the last check-in day, inclusive of today). This is the
+ * off-aware replacement for `daysBetweenLocal` in the check-in-streak rule: a
+ * weekend the member keeps off, or a declared `MemberOffDay`, is skipped so it
+ * never counts as a missed ritual. Returns 0 when `to <= from`.
+ */
+export function countExpectedDaysBetween(
+  from: LocalDateString,
+  to: LocalDateString,
+  offContext: OffDayContext,
+): number {
+  let count = 0;
+  let cursor = shiftLocalDate(from, 1);
+  // Walk day by day up to and including `to`. The window is bounded by the
+  // caller's check-in lookback (≤ 60 days), so this is a tiny, cheap loop.
+  while (cursor <= to) {
+    if (!isOffDayLocal(cursor, offContext)) count += 1;
+    cursor = shiftLocalDate(cursor, 1);
+  }
+  return count;
 }
 
 /** Re-export of TriggerCheckinInput shape for callers wiring tests. */

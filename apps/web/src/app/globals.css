@@ -642,6 +642,15 @@
   color: oklch(0.4 0.1 78);
 }
 
+/* Tour 15 — the « Je ne trade pas aujourd'hui » declare button (/checkin) is
+   12px --cy text on its own --cy-dim tint INSIDE a premium card gradient: the
+   worst gradient stop measured 4.28:1 in LIGHT (runtime sweep T15; < WCAG
+   1.4.3 AA). Same root cause + remedy as the pill/zone-label cy fixes above:
+   the dedicated darker teal. DARK (bright cyan on deep tint) already passes. */
+.light [data-slot='today-off-declare'] {
+  color: oklch(0.44 0.12 222);
+}
+
 /* Selection en clair — teinte bleue douce, texte accent assombri lisible */
 .light ::selection {
   background: oklch(0.49 0.2 260 / 0.16);
@@ -2241,6 +2250,18 @@
   }
 }
 
+/* Tour 15 — cookie-banner ⇄ a2hs-hint collision (§243 "aucun chevauchement").
+   Both pin to the SAME bottom slot (`fixed inset-x-3 bottom-… z-40`), so a
+   brand-new member (cookies not yet acknowledged AND `beforeinstallprompt`
+   fired) would see them stacked pixel-on-pixel. Consent wins: while the
+   cookie-banner is mounted, the install hint stays hidden. The banner returns
+   `null` once dismissed (its `data-slot` leaves the DOM), so `:has()` stops
+   matching and the hint is free to appear on the next paint. No JS coupling
+   between the two islands — this is a pure CSS precedence rule. */
+body:has([data-slot='cookie-banner']) [data-slot='a2hs-hint'] {
+  display: none;
+}
+
 /* Cookie banner vs Log-Express FAB (§243 "aucun chevauchement — ni module sur
    module"). Both are `fixed` bottom elements at `z-40`. The banner is
    `inset-x-3 mx-auto max-w-2xl` (672px): full-width below ~696px, centred above.
@@ -2252,7 +2273,8 @@
    so the two never collide. ≥816px the centred banner never reaches the FAB →
    no rule, no layout shift. */
 @media (max-width: 815px) {
-  body:has([data-slot='log-express-fab']) [data-slot='cookie-banner'] {
+  body:has([data-slot='log-express-fab']) [data-slot='cookie-banner'],
+  body:has([data-slot='log-express-fab']) [data-slot='a2hs-hint'] {
     /* Lift above the FAB. FAB top ≈ max(1.25rem, safe-area) + 3.5rem (h-14).
        `max(5.5rem, safe-area + 4.75rem)` clears it on every device: 5.5rem
        (88px) on non-notch (FAB top 76px), and safe-area+4.75rem on notched
@@ -2274,7 +2296,8 @@
    only: below lg the sidebar is `display:none` and the mobile clearances apply,
    so this never shifts the mobile layout. */
 @media (min-width: 1024px) {
-  body:has([data-slot='app-sidebar']) [data-slot='cookie-banner'] {
+  body:has([data-slot='app-sidebar']) [data-slot='cookie-banner'],
+  body:has([data-slot='app-sidebar']) [data-slot='a2hs-hint'] {
     left: calc(16rem + 0.75rem); /* clear the 16rem sidebar, keep the inset-x-3 gutter */
   }
   body:has([data-slot='app-sidebar']) [data-slot='legal-footer'] {
@@ -2900,7 +2923,8 @@
   body:has([data-slot='app-bottom-nav']) [data-slot='log-express-fab'] {
     bottom: calc(4.75rem + env(safe-area-inset-bottom));
   }
-  body:has([data-slot='app-bottom-nav']) [data-slot='cookie-banner'] {
+  body:has([data-slot='app-bottom-nav']) [data-slot='cookie-banner'],
+  body:has([data-slot='app-bottom-nav']) [data-slot='a2hs-hint'] {
     bottom: calc(4.25rem + env(safe-area-inset-bottom));
   }
 }
@@ -2917,7 +2941,7 @@
    the FAB's raised top, with safe-area folded in for notched devices. */
 @media (max-width: 815px) {
   body:has([data-slot='app-bottom-nav']):has([data-slot='log-express-fab'])
-    [data-slot='cookie-banner'] {
+    :is([data-slot='cookie-banner'], [data-slot='a2hs-hint']) {
     bottom: calc(env(safe-area-inset-bottom) + 8.5rem); /* ≈136px > FAB top ≈132px */
   }
 }

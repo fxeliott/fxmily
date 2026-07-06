@@ -5,11 +5,14 @@ import { pickDominantSignals } from './dominant-signals';
 
 let seq = 0;
 function ev(reason: ScoreEventView['reason'], opts: { excused?: boolean } = {}): ScoreEventView {
+  const excused = opts.excused ?? false;
   return {
     id: `e${seq++}`,
     delta: reason === 'filled' ? 1 : -1,
     reason,
-    excused: opts.excused ?? false,
+    excused,
+    // `pickDominantSignals` only reads `excused`; keep the reason consistent with it.
+    excusedReason: excused ? 'member_reason' : null,
     createdAt: new Date('2026-06-01T00:00:00Z'),
   };
 }

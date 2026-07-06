@@ -135,14 +135,16 @@ export default async function AccountNotificationsPage(): Promise<React.ReactEle
           </h2>
           <div className="rounded-card space-y-2 border border-[var(--b-default)] bg-[var(--bg-1)] p-4 text-sm text-[var(--t-2)] transition-[border-color,box-shadow] duration-200 hover:border-[var(--b-acc)] hover:shadow-[var(--sh-card)]">
             <p>
+              {/* Literal U+2019 (not &apos;) — the SWC compiler eats the leading
+                  space of a JSXText holding an HTML entity (Tour 15 proof). */}
               <strong className="text-[var(--t-1)]">Pas de cloches inutiles.</strong> Fxmily
-              n&apos;envoie jamais de promo, jamais de FOMO, jamais d&apos;analyse de marché.
-              Uniquement ce qui sert ta discipline.
+              n’envoie jamais de promo, jamais de FOMO, jamais d’analyse de marché. Uniquement ce
+              qui sert ta discipline.
             </p>
             <p>
               <strong className="text-[var(--t-1)]">Ton choix prime.</strong> Si tu désactives une
-              catégorie, le serveur vérifie systématiquement avant d&apos;envoyer, aucun message ne
-              te parvient en contradiction avec tes réglages.
+              catégorie, le serveur vérifie systématiquement avant d’envoyer, aucun message ne te
+              parvient en contradiction avec tes réglages.
             </p>
             <p>
               <strong className="text-[var(--t-1)]">Aucun audio.</strong> Les notifications restent

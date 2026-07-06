@@ -123,9 +123,9 @@ export const EXPORTED_USER_RELATIONS = [
 export const EXCLUDED_USER_RELATIONS: Readonly<Record<string, string>> = {
   // Auth plumbing — OAuth tokens are secrets; not member-generated content.
   accounts: 'OAuth account rows hold access/refresh tokens (secrets).',
-  sessions: 'Ephemeral auth sessions — not portable member content.',
+  sessions: 'Ephemeral auth sessions; not portable member content.',
   passwordResetTokens:
-    'Single-use password-reset secrets (SHA-256 hashed, ≤1 row/user, ~30-min TTL). Auth secret like verificationToken — not portable member content.',
+    'Single-use password-reset secrets (SHA-256 hashed, ≤1 row/user, ~30-min TTL). Auth secret like verificationToken; not portable member content.',
   // Admin-authored data — the member is the SUBJECT, not the author.
   invitationsSent: 'Invitations are authored by the admin, never by a member.',
   annotationsAuthored:
@@ -133,18 +133,18 @@ export const EXCLUDED_USER_RELATIONS: Readonly<Record<string, string>> = {
   trainingAnnotationsAuthored:
     'Admin-authored training corrections. Received ones are exported as the derived `trainingAnnotations` bucket.',
   adminNotesAbout:
-    'Admin private coaching notes (SPEC §7.7) — controller-internal, not member self-service portability.',
-  adminNotesAuthored: 'Admin-authored private notes — only the admin user owns these.',
-  reviewedAccessRequests: 'Admin review actions on public access requests — not member data.',
+    'Admin private coaching notes (SPEC §7.7): controller-internal, not member self-service portability.',
+  adminNotesAuthored: 'Admin-authored private notes: only the admin user owns these.',
+  reviewedAccessRequests: 'Admin review actions on public access requests, not member data.',
   // F5 (overhaul) — moderation events are controller-internal admin decisions
   // (suspend / reinstate) with a subjective free-text motif + the acting admin's
   // identity, exactly like `adminNotesAbout`. Out of scope for the automated
   // art.20 self-service export (a member may still request them via a manual
   // art.15 access request to the controller).
   moderationEvents:
-    'Admin moderation decisions about the member (suspend/reinstate + motif) — controller-internal, not member self-service portability.',
+    'Admin moderation decisions about the member (suspend/reinstate + motif): controller-internal, not member self-service portability.',
   moderationActionsTaken:
-    'Moderation actions AUTHORED by an admin — only an admin is ever the actor, never a member.',
+    'Moderation actions AUTHORED by an admin: only an admin is ever the actor, never a member.',
 } as const;
 
 export interface UserDataExport {
@@ -219,6 +219,11 @@ type SafeUser = {
   role: string;
   status: string;
   timezone: string;
+  // Tour 14 — the member's weekend rhythm preference (drives the off-day pont
+  // over the streak/constancy). A member-owned setting, no secret → exported so
+  // the download reflects the actual scoring rhythm the member declared. The
+  // per-date `MemberOffDay` overrides ship as the `offDays` relation.
+  weekendsOff: boolean;
   consentRgpdAt: Date | null;
   joinedAt: Date;
   lastSeenAt: Date | null;
@@ -372,6 +377,7 @@ export async function buildUserDataExport(userId: string): Promise<UserDataExpor
         role: true,
         status: true,
         timezone: true,
+        weekendsOff: true,
         consentRgpdAt: true,
         joinedAt: true,
         lastSeenAt: true,

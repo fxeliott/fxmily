@@ -11,6 +11,7 @@ import type {
 } from '@/generated/prisma/enums';
 import type { TradeModel } from '@/generated/prisma/models/Trade';
 
+import { localDateOf, localInstantToUtc, shiftLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import { selectStorage } from '@/lib/storage';
 import { computeRealizedR } from '@/lib/trading/calculations';
@@ -575,4 +576,47 @@ export async function getStaleOpenTradesSummary(
   ]);
 
   return { count, oldestTradeId: oldest?.id ?? null };
+}
+
+/**
+ * Tour 15 — how many trades the member ENTERED today (their local calendar day)
+ * are still open (never closed). Powers the evening wizard's gentle "pense à les
+ * clôturer" reminder: a position opened this morning is normally still running
+ * at the evening bilan, so this is a soft nudge to close it in the journal once
+ * it is done — NOT a stale-open safety net (that's `getStaleOpenTradesSummary`,
+ * keyed on the 72 h threshold). Distinct window (today), distinct intent.
+ *
+ * "Entered today" is the member's LOCAL day, not UTC: `enteredAt` is stored in
+ * UTC, so we bound the query to `[localMidnightToday, localMidnightTomorrow)`
+ * converted back to UTC via `localInstantToUtc` (DST-correct). A trade is open
+ * iff `closedAt` is null (schema §"A trade is 'open' iff this is null").
+ *
+ * Read-only, ownership-scoped, one indexed `count` on
+ * `(userId, enteredAt)` / `(userId, closedAt)`. Returns 0 when nothing matches
+ * so the reminder renders nothing (no pressure, §31.2).
+ */
+export interface OpenTradesEnteredTodaySummary {
+  count: number;
+}
+
+export async function getOpenTradesEnteredToday(
+  userId: string,
+  timezone: string,
+  now: Date = new Date(),
+): Promise<OpenTradesEnteredTodaySummary> {
+  const today = localDateOf(now, timezone);
+  const tomorrow = shiftLocalDate(today, 1);
+  // Local civil day → UTC half-open interval [00:00 today, 00:00 tomorrow).
+  const startUtc = localInstantToUtc(today, 0, 0, 0, 0, timezone);
+  const endUtc = localInstantToUtc(tomorrow, 0, 0, 0, 0, timezone);
+
+  const count = await db.trade.count({
+    where: {
+      userId,
+      closedAt: null,
+      enteredAt: { gte: startUtc, lt: endUtc },
+    },
+  });
+
+  return { count };
 }

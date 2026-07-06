@@ -51,6 +51,28 @@ mkdir -p /home/fxmily/cron-sync && chown fxmily:fxmily /home/fxmily/cron-sync
 Bootstrapped on the host 2026-07-04 (validated end to end: converge no-op,
 malicious-line rejection, idempotence).
 
+**Tour 15 — the deployed validator can be OLDER than the repo.** Because the
+validator never self-converges, the 2026-07-04 bootstrap froze the tour-12
+copy on the host; the tour-14 direct `fxmily-restore-drill` crontab line was
+outside that copy's allowlist and failed the 2026-07-06 deploy (app itself was
+healthy — the sync step exits non-zero AFTER the health gate). Two consequences:
+
+1. **Evolution rule**: a crontab line may only use shapes the OLDEST deployed
+   validator accepts. New local tasks ride `fxmily-cron <task>` (the runner IS
+   converged on every deploy) — never a new direct-binary regex. restore-drill
+   now does exactly that.
+2. **Operator action (one-time, root)**: refresh the host validator so the
+   drill BINARY gets installed again (the tour-12 copy only installs
+   `fxmily-cron` + the crontab). The deploy now stages a fresh copy, so:
+
+   ```sh
+   install -o root -g root -m 0755 /home/fxmily/cron-sync/fxmily-sync-cron /usr/local/bin/fxmily-sync-cron
+   sudo -u fxmily sudo /usr/local/bin/fxmily-sync-cron   # re-converge with the new copy
+   ```
+
+   Until then the weekly drill logs an actionable FAIL (`restore-drill FAIL:
+… missing`) in cron.log instead of dying silently.
+
 ## Operator action — remove the legacy user-space autoheal (P0-3)
 
 Until tour 14 the autoheal watchdog was installed only in the **`fxmily` user
@@ -170,7 +192,9 @@ GREEN (persistent volume). Verify no DB-referenced proof 404s: pick a known
 
 - `cron-watch.yml` polls `/api/cron/health` hourly, self-heals the
   detection-only crons (re-fires the 5 overdue-alert nudges +
-  verification-scan when stale), and fails loudly only if still red.
+  verification-scan + the Tour-15 `admin-daily-brief` when stale — all pure
+  reads whose worst duplicate effect is a repeated admin email), and fails
+  loudly only if still red.
 - `/usr/local/bin/fxmily-autoheal` (root, every minute) restarts the
   `fxmily-web` / `fxmily-postgres` container when its Docker HEALTHCHECK goes
   unhealthy, holds a machine-wide lock against double instances, and POSTs an

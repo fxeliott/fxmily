@@ -163,7 +163,10 @@ jobs:
           username: fxmily
           key: ${{ secrets.HETZNER_SSH_KEY }}
           port: 22
-          source: 'ops/cron/crontab.fxmily,ops/cron/fxmily-cron,ops/cron/fxmily-backup,ops/cron/fxmily-caddy-backup,ops/cron/fxmily-uploads-backup,ops/cron/fxmily-restore-drill,ops/scripts/fxmily-autoheal'
+          # fxmily-sync-cron is staged for CONVENIENCE only (a root operator
+          # can `install` it from the staging dir, ops/cron/README.md §update):
+          # the validator never installs itself — root-pinned by design.
+          source: 'ops/cron/crontab.fxmily,ops/cron/fxmily-cron,ops/cron/fxmily-backup,ops/cron/fxmily-caddy-backup,ops/cron/fxmily-uploads-backup,ops/cron/fxmily-restore-drill,ops/cron/fxmily-sync-cron,ops/scripts/fxmily-autoheal'
           target: /home/fxmily/cron-sync
           strip_components: 2
           overwrite: true

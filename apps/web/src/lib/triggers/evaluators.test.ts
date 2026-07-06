@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  countExpectedDaysBetween,
   daysBetweenLocal,
   evalAfterNConsecutiveLosses,
   evalEmotionLogged,
@@ -13,6 +14,7 @@ import {
   evalWinStreak,
   evaluateTrigger,
 } from './evaluators';
+import type { OffDayContext } from '@/lib/checkin/off-days';
 import type { MomentumHistoryPoint } from '@/lib/scoring/momentum';
 import type { TriggerCheckinInput, TriggerContext, TriggerTradeInput } from './types';
 
@@ -404,6 +406,94 @@ describe('evalNoCheckinStreak', () => {
     const r = evalNoCheckinStreak({ kind: 'no_checkin_streak', days: 7 }, ctx);
     expect(r.matched).toBe(true);
     if (r.matched) expect(r.snapshot.details.lastCheckinDate).toBe(null);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Tour 15 — off-aware streak: off days (weekend + declared) are not misses.
+  // ---------------------------------------------------------------------------
+
+  const weekendsOff: OffDayContext = { weekendsOff: true, explicitDates: new Set() };
+
+  it('🚨 OFF-AWARE — a weekend member is NOT nagged on Monday for a quiet Fri→Mon', () => {
+    // Last check-in Fri 2026-05-01; today Mon 2026-05-04. Raw calendar gap = 3
+    // (Sat, Sun, Mon), but Sat+Sun are off → only 1 EXPECTED day (Monday).
+    const ctx = ctxAt(now, '2026-05-04');
+    ctx.recentCheckins = [checkin({ date: '2026-05-01' })];
+    ctx.offContext = weekendsOff;
+    const r = evalNoCheckinStreak({ kind: 'no_checkin_streak', days: 3 }, ctx);
+    // 1 expected day < 3 → no nag. Without off-awareness this WOULD have matched.
+    expect(r.matched).toBe(false);
+  });
+
+  it('OFF-AWARE — the SAME gap DOES nag a member who does not keep weekends off', () => {
+    const ctx = ctxAt(now, '2026-05-04');
+    ctx.recentCheckins = [checkin({ date: '2026-05-01' })];
+    ctx.offContext = { weekendsOff: false, explicitDates: new Set() };
+    const r = evalNoCheckinStreak({ kind: 'no_checkin_streak', days: 3 }, ctx);
+    // 3 raw active days ≥ 3 → matches, and the count reflects the raw days.
+    expect(r.matched).toBe(true);
+    if (r.matched) expect(r.snapshot.details.daysSince).toBe(3);
+  });
+
+  it('OFF-AWARE — the member-facing count excludes off days', () => {
+    // Last check-in Fri 2026-05-01; today Fri 2026-05-08. Raw = 7, but one full
+    // weekend (Sat 05-02 + Sun 05-03) is off → 5 expected days.
+    const ctx = ctxAt(now, '2026-05-08');
+    ctx.recentCheckins = [checkin({ date: '2026-05-01' })];
+    ctx.offContext = weekendsOff;
+    const r = evalNoCheckinStreak({ kind: 'no_checkin_streak', days: 5 }, ctx);
+    expect(r.matched).toBe(true);
+    if (r.matched) {
+      expect(r.snapshot.details.daysSince).toBe(5);
+      expect(r.triggeredBy).toBe('Aucun check-in depuis 5 jours');
+    }
+  });
+
+  it('OFF-AWARE — a declared MemberOffDay in the gap does not count as a miss', () => {
+    // Mon→Thu, but the member declared Tuesday 2026-05-05 off explicitly.
+    const ctx = ctxAt(now, '2026-05-07'); // Thursday
+    ctx.recentCheckins = [checkin({ date: '2026-05-04' })];
+    ctx.offContext = { weekendsOff: false, explicitDates: new Set(['2026-05-05']) };
+    const r = evalNoCheckinStreak({ kind: 'no_checkin_streak', days: 3 }, ctx);
+    // Days after 05-04 up to 05-07: 05-05 (off), 05-06, 05-07 → 2 expected < 3.
+    expect(r.matched).toBe(false);
+  });
+
+  it('no offContext → falls back to raw calendar days (pre-Tour-15 behaviour)', () => {
+    const ctx = ctxAt(now, '2026-05-07');
+    ctx.recentCheckins = [checkin({ date: '2026-04-30' })];
+    // offContext left undefined → daysBetweenLocal = 7 ≥ 7 → matches as before.
+    const r = evalNoCheckinStreak({ kind: 'no_checkin_streak', days: 7 }, ctx);
+    expect(r.matched).toBe(true);
+  });
+});
+
+describe('countExpectedDaysBetween — off days are skipped', () => {
+  const weekendsOff: OffDayContext = { weekendsOff: true, explicitDates: new Set() };
+
+  it('counts every day when nothing is off', () => {
+    const ctx: OffDayContext = { weekendsOff: false, explicitDates: new Set() };
+    expect(countExpectedDaysBetween('2026-05-01', '2026-05-08', ctx)).toBe(7);
+  });
+
+  it('skips a weekend when weekendsOff is on (Fri→Fri = 5 expected, not 7)', () => {
+    expect(countExpectedDaysBetween('2026-05-01', '2026-05-08', weekendsOff)).toBe(5);
+  });
+
+  it('is exclusive of `from`, inclusive of `to`', () => {
+    // Fri 05-01 → Mon 05-04: 05-02 (Sat off), 05-03 (Sun off), 05-04 (Mon) → 1.
+    expect(countExpectedDaysBetween('2026-05-01', '2026-05-04', weekendsOff)).toBe(1);
+  });
+
+  it('skips an explicitly declared off day', () => {
+    const ctx: OffDayContext = { weekendsOff: false, explicitDates: new Set(['2026-05-05']) };
+    // 05-04 → 05-07: 05-05 (off), 05-06, 05-07 → 2.
+    expect(countExpectedDaysBetween('2026-05-04', '2026-05-07', ctx)).toBe(2);
+  });
+
+  it('returns 0 when `to` is not after `from`', () => {
+    expect(countExpectedDaysBetween('2026-05-07', '2026-05-07', weekendsOff)).toBe(0);
+    expect(countExpectedDaysBetween('2026-05-07', '2026-05-01', weekendsOff)).toBe(0);
   });
 });
 

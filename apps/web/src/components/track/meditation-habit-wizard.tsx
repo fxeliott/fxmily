@@ -216,7 +216,7 @@ function HofmannAnchor({ durationMin }: { durationMin: number | null }) {
       <p className="t-cap text-[var(--t-3)]">
         Hofmann 2010 (méta-analyse) :{' '}
         <span className="font-mono text-[var(--t-2)] tabular-nums">10 min/jour</span> suffisent à
-        réduire l&apos;anxiété et stabiliser ta régulation émotionnelle. La régularité prime sur la
+        réduire l’anxiété et stabiliser ta régulation émotionnelle. La régularité prime sur la
         durée.
       </p>
     </div>

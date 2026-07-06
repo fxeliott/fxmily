@@ -33,13 +33,25 @@
  * (clients claim or skip waiting). Browsers re-fetch sw.js on each navigation
  * (`updateViaCache: 'none'` in the registration), so updates propagate.
  *
+ * Tour 15 — 4th responsibility: an OFFLINE navigation fallback. We pre-cache
+ * `/offline` at install into a versioned Cache Storage bucket, drop stale
+ * buckets at activate, and — for NAVIGATION requests only — serve the cached
+ * `/offline` page when the network is unreachable (network-first). We do NOT
+ * intercept any other request (assets, API, push): a bug there could break the
+ * whole app or the push path, so the fetch handler is deliberately narrow.
+ *
  * NEVER log push payload content — RGPD data minimization (SPEC §16).
  */
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* global self, clients, fetch */
+/* global self, clients, fetch, caches, Request */
 
-const VERSION = 'fxmily-sw-v1-j9';
+const VERSION = 'fxmily-sw-v3-t15';
+
+// Versioned Cache Storage bucket. Bumping VERSION rotates the bucket name, so
+// `activate` can delete every bucket that isn't the current one.
+const CACHE_NAME = `fxmily-offline-${VERSION}`;
+const OFFLINE_URL = '/offline';
 
 // ── Install / activate ──────────────────────────────────────────────────────
 
@@ -47,11 +59,96 @@ self.addEventListener('install', (event) => {
   // Activate the new SW immediately on install — no "waiting" phase. Pairs
   // with `clients.claim()` in `activate` so a freshly opened PWA gets the
   // new SW without an extra page reload.
-  event.waitUntil(self.skipWaiting());
+  //
+  // Tour 15 — also pre-cache the offline fallback. `{ cache: 'reload' }`
+  // bypasses the HTTP cache so we store a fresh copy. If the fetch fails
+  // (e.g. installed on a flaky connection), we still `skipWaiting()` — the
+  // fetch handler degrades to a plain network passthrough when the cache
+  // miss happens, so a failed pre-cache never blocks activation.
+  event.waitUntil(
+    (async () => {
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.add(new Request(OFFLINE_URL, { cache: 'reload' }));
+      } catch (_err) {
+        /* offline page not cached this time — non-fatal, see fetch handler */
+      }
+      await self.skipWaiting();
+    })(),
+  );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  // Drop stale offline caches from previous SW versions, then take control.
+  event.waitUntil(
+    (async () => {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter((key) => key.startsWith('fxmily-offline-') && key !== CACHE_NAME)
+            .map((key) => caches.delete(key)),
+        );
+      } catch (_err) {
+        /* cache enumeration failed — non-fatal, old buckets are harmless */
+      }
+      // Navigation preload: the browser issues the navigation request itself,
+      // NATIVELY (same streaming/redirect semantics as no-SW), in parallel
+      // with SW startup; the fetch handler then just hands that response
+      // through. Without it, `fetch(request)` REPLAYS the navigation from
+      // inside the SW — measurably different timing on streamed dev/HMR
+      // responses (flaked twice on CI shard 2, 2026-07-06: page transiently
+      // duplicated/hidden mid-hydration). Not supported everywhere → guarded.
+      try {
+        await self.registration.navigationPreload?.enable();
+      } catch (_err) {
+        /* preload unsupported — fetch handler falls back to fetch(request) */
+      }
+      await self.clients.claim();
+    })(),
+  );
+});
+
+// ── Fetch — offline navigation fallback ONLY ────────────────────────────────
+
+/**
+ * Network-first for top-level NAVIGATIONS only. On success we pass the network
+ * response straight through (no runtime caching of pages — content is dynamic
+ * and per-user; we never want to serve a stale/cross-account page). On a
+ * network failure (offline, DNS, timeout) we serve the pre-cached `/offline`.
+ *
+ * Everything else — assets, `_next`, images, API calls, the push path — is
+ * intentionally NOT intercepted: no `respondWith`, so the browser handles those
+ * requests exactly as if this handler didn't exist. This keeps the SW's blast
+ * radius to a single, well-understood case.
+ */
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+
+  // Only handle real page navigations. `mode: 'navigate'` covers link clicks,
+  // address-bar loads, and reloads; it excludes fetch()/XHR/asset subrequests.
+  if (request.mode !== 'navigate') return;
+
+  event.respondWith(
+    (async () => {
+      try {
+        // Network-first: always try the live page (auth, fresh data) first.
+        // Prefer the navigation-preload response — the BROWSER's own native
+        // request, streamed exactly as if no SW existed. `fetch(request)` is
+        // only the fallback for engines without preload support.
+        const preloaded = await event.preloadResponse;
+        if (preloaded) return preloaded;
+        return await fetch(request);
+      } catch (_err) {
+        // Offline / unreachable — fall back to the cached offline page. If it
+        // isn't cached (pre-cache failed at install), re-throw so the browser
+        // shows its native offline error rather than a broken empty response.
+        const cached = await caches.match(OFFLINE_URL);
+        if (cached) return cached;
+        throw _err;
+      }
+    })(),
+  );
 });
 
 // ── Push handler — DUAL Apple declarative + classic ─────────────────────────
@@ -88,7 +185,8 @@ function parsePayload(eventData) {
       // path runs. On the SW path we attempt to set it via the Badging API
       // when supported (Chrome desktop + recent Edge). On Safari this is
       // already handled by the declarative branch — we won't reach here.
-      appBadge: typeof json.notification.app_badge === 'number' ? json.notification.app_badge : null,
+      appBadge:
+        typeof json.notification.app_badge === 'number' ? json.notification.app_badge : null,
     };
   }
 

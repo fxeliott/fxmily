@@ -117,8 +117,8 @@ export default async function ReunionsPage() {
             </div>
           ) : (
             <p className="t-cap mt-1.5 text-[var(--t-3)]">
-              Aucune réunion sur les {MEETING_WINDOW_DAYS} derniers jours pour l&apos;instant. Dès
-              qu&apos;une réunion aura eu lieu, tu pourras déclarer ta présence ici.
+              Aucune réunion sur les {MEETING_WINDOW_DAYS} derniers jours pour l’instant. Dès qu’une
+              réunion aura eu lieu, tu pourras déclarer ta présence ici.
             </p>
           )}
           {/* S10 §30.8 — explicit bridge: assiduité → engagement. Links the rate

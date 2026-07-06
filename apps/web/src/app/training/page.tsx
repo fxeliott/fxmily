@@ -172,10 +172,12 @@ export default async function TrainingPage({ searchParams }: TrainingPageProps) 
           {/* Isolation banner — pedagogical (Mark Douglas) + honest: practice is
             separate from the real edge, by design. */}
           <p className="rounded-control border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] px-3 py-2 text-[12px] leading-[1.5] text-[var(--t-2)]">
+            {/* Literal U+2019 and bare & (no HTML entity) — the SWC compiler
+                eats the leading space of a JSXText holding ANY entity (Tour 15
+                proof: &apos;, &amp; and numeric entities all trigger it). */}
             Ton entraînement est <strong className="text-[var(--t-1)]">totalement isolé</strong> de
             ton trading réel : aucun résultat de backtest ne touche ton track-record, ton score ou
-            tes statistiques. Ici, c&apos;est la régularité de la pratique qui compte, pas le
-            P&amp;L.
+            tes statistiques. Ici, c’est la régularité de la pratique qui compte, pas le P&L.
           </p>
 
           {/* Entry point to the weekly training debrief (SPEC §23). The page is

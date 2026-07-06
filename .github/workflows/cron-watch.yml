@@ -78,6 +78,7 @@ jobs:
             ["cron.weekly_report_overdue.scan"]="weekly-report-overdue-alert"
             ["cron.verification_overdue.scan"]="verification-batch-overdue-alert"
             ["cron.verification_scan.scan"]="verification-scan"
+            ["cron.admin_daily_brief.scan"]="admin-daily-brief"
           )
 
           STALE_ACTIONS=$(echo "$BODY_ONLY" | jq -r \

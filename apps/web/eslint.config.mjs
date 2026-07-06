@@ -21,6 +21,49 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // Tour 15 guardrail: em/en dashes are banned from anything a member can
+  // read (UI copy, notification/email strings). French copy here uses simple
+  // punctuation (commas, colons, « à » for ranges). Code COMMENTS are exempt
+  // on purpose — the repo's comment style uses em dashes heavily and they are
+  // never member-facing. Scope: string/template literals + JSX text only.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    // Scoped exemptions (measured 2026-07-06: 1148 hits, 1063 of them here):
+    //  - tests + src/test fixtures simulate RAW model output and feed the
+    //    typography sanitizer — em dashes there are the point, not a leak;
+    //  - AI prompt files + claude-client fallbacks are model-facing, never
+    //    member-facing, and their wording is calibrated (golden-tested);
+    //  - normalize-typography.ts IS the sanitizer that strips these chars
+    //    from real model output before a member ever sees it.
+    ignores: [
+      'src/**/*.test.{ts,tsx}',
+      'src/test/**',
+      'src/lib/**/prompt.ts',
+      'src/lib/**/claude-client.ts',
+      'src/lib/ai/prompt-builder.ts',
+      'src/lib/text/normalize-typography.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'JSXText[value=/[\\u2013\\u2014]/]',
+          message:
+            'Pas de tiret cadratin/demi-cadratin dans la copie UI : ponctuation simple (virgule, deux-points, « à » pour les plages).',
+        },
+        {
+          selector: 'Literal[value=/[\\u2013\\u2014]/]',
+          message:
+            'Pas de tiret cadratin/demi-cadratin dans les chaînes lisibles par un membre : ponctuation simple.',
+        },
+        {
+          selector: 'TemplateElement[value.raw=/[\\u2013\\u2014]/]',
+          message:
+            'Pas de tiret cadratin/demi-cadratin dans les template strings lisibles par un membre : ponctuation simple.',
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

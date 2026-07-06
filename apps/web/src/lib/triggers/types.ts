@@ -29,6 +29,7 @@
  */
 
 import type { TradeOutcome, TradeSession } from '@/generated/prisma/enums';
+import type { OffDayContext } from '@/lib/checkin/off-days';
 import type { MomentumHistoryPoint } from '@/lib/scoring/momentum';
 
 // =============================================================================
@@ -208,6 +209,16 @@ export interface TriggerContext {
    * unchanged. Structurally `MomentumHistoryPoint[]` (date + 4 nullable dims).
    */
   scoreHistory?: MomentumHistoryPoint[];
+  /**
+   * Tour 15 — the member's off-day inputs (weekend preference + explicitly
+   * declared off dates), consumed by `no_checkin_streak` so an off day (a weekend
+   * while `weekendsOff` is on, or a `MemberOffDay`) does NOT count as a missed
+   * check-in — a member who keeps weekends off is never nagged on Monday for a
+   * quiet Saturday/Sunday. `undefined` when the engine did not load it (the
+   * evaluator then falls back to raw calendar days, byte-identical to pre-Tour-15
+   * behaviour); optional so every existing test fixture compiles unchanged.
+   */
+  offContext?: OffDayContext;
 }
 
 // =============================================================================

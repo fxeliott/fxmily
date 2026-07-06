@@ -123,8 +123,8 @@ export function HabitCorrelationCard({ result, discipline }: HabitCorrelationCar
           </p>
           <p className="text-[13px] leading-relaxed text-[var(--t-3)]">
             Il faut un trade clôturé (R précis) ET un log {KIND_NOUN_FR[habitKind]} le même jour. La
-            carte s&apos;active à {correlation.minRequired} jours appariés, chaque trade loggué
-            t&apos;en rapproche.
+            carte s’active à {correlation.minRequired} jours appariés, chaque trade loggué t’en
+            rapproche.
           </p>
         </div>
       ) : (

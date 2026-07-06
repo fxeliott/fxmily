@@ -4,8 +4,10 @@ import {
   formatLocalDate,
   isMorningReminderDue,
   isEveningReminderDue,
+  isWithinQuietHours,
   localDateOf,
   localWallClockToUtc,
+  nextQuietHoursEnd,
   parseLocalDate,
   shiftLocalDate,
 } from './timezone';
@@ -180,6 +182,95 @@ describe('localWallClockToUtc (F2 — trade entry/exit in the member SET timezon
   it('trims surrounding whitespace before parsing', () => {
     expect(localWallClockToUtc('  2026-05-06T14:30  ', 'Europe/Paris')?.toISOString()).toBe(
       '2026-05-06T12:30:00.000Z',
+    );
+  });
+});
+
+describe('isWithinQuietHours (Tour 15 — nightly silence window [22:00, 08:00) local)', () => {
+  // Explicit UTC instants → the local wall-clock is pinned by the offset comment,
+  // so these assertions stay stable regardless of the host machine timezone.
+  describe('Europe/Paris (May = CEST, UTC+2)', () => {
+    it.each([
+      // [utcIso, expectedInside, localWallClock]
+      ['2026-05-06T19:59:00Z', false, '21:59 — just before silence, still delivering'],
+      ['2026-05-06T20:00:00Z', true, '22:00 — silence begins (inclusive)'],
+      ['2026-05-07T05:59:00Z', true, '07:59 — still silent (before 08:00)'],
+      ['2026-05-07T06:00:00Z', false, '08:00 — delivery resumes (exclusive)'],
+      ['2026-05-07T01:00:00Z', true, '03:00 — deep night, the 3am-buzz case'],
+      ['2026-05-06T10:00:00Z', false, '12:00 — midday, wide awake'],
+    ] as const)('%s → %s (%s)', (iso, expected, _label) => {
+      expect(isWithinQuietHours('Europe/Paris', new Date(iso))).toBe(expected);
+    });
+  });
+
+  describe('Pacific/Auckland (May = NZST, UTC+12)', () => {
+    it.each([
+      ['2026-05-06T09:59:00Z', false, '21:59 local — still delivering'],
+      ['2026-05-06T10:00:00Z', true, '22:00 local — silence begins'],
+      ['2026-05-06T19:59:00Z', true, '07:59 local — still silent'],
+      ['2026-05-06T20:00:00Z', false, '08:00 local — delivery resumes'],
+      ['2026-05-06T15:00:00Z', true, '03:00 local — deep night'],
+    ] as const)('%s → %s (%s)', (iso, expected, _label) => {
+      expect(isWithinQuietHours('Pacific/Auckland', new Date(iso))).toBe(expected);
+    });
+  });
+
+  it('falls back to UTC for an invalid timezone (total, never throws)', () => {
+    // 03:00 UTC — inside the window when the tz collapses to UTC.
+    expect(isWithinQuietHours('Europe/Pariss', new Date('2026-05-06T03:00:00Z'))).toBe(true);
+    // 12:00 UTC — outside.
+    expect(isWithinQuietHours('Europe/Pariss', new Date('2026-05-06T12:00:00Z'))).toBe(false);
+  });
+});
+
+describe('nextQuietHoursEnd (Tour 15 — next local 08:00 as a UTC instant)', () => {
+  // The caller only defers when isWithinQuietHours is true, so the two reachable
+  // branches are: local time in [00:00, 08:00) → today's 08:00; local time in
+  // [22:00, 24:00) → tomorrow's 08:00.
+  it('after midnight (local < 08:00) → today’s local 08:00', () => {
+    // 03:00 Paris (CEST) = 01:00 UTC on 2026-05-07 → next 08:00 = 06:00 UTC same day.
+    expect(nextQuietHoursEnd('Europe/Paris', new Date('2026-05-07T01:00:00Z')).toISOString()).toBe(
+      '2026-05-07T06:00:00.000Z',
+    );
+  });
+
+  it('before midnight (local >= 22:00) → tomorrow’s local 08:00', () => {
+    // 22:30 Paris (CEST) = 20:30 UTC on 2026-05-06 → next 08:00 = 06:00 UTC on the 7th.
+    expect(nextQuietHoursEnd('Europe/Paris', new Date('2026-05-06T20:30:00Z')).toISOString()).toBe(
+      '2026-05-07T06:00:00.000Z',
+    );
+  });
+
+  it('exactly at 22:00 local → next day 08:00 local', () => {
+    // 22:00 Paris = 20:00 UTC on 2026-05-06 → 06:00 UTC on the 7th.
+    expect(nextQuietHoursEnd('Europe/Paris', new Date('2026-05-06T20:00:00Z')).toISOString()).toBe(
+      '2026-05-07T06:00:00.000Z',
+    );
+  });
+
+  it('Pacific/Auckland after midnight → same local day 08:00 (offset-correct)', () => {
+    // 03:00 Auckland (NZST UTC+12) = 15:00 UTC on 2026-05-05 → 08:00 Auckland on the
+    // 6th = 20:00 UTC on the 5th.
+    expect(
+      nextQuietHoursEnd('Pacific/Auckland', new Date('2026-05-05T15:00:00Z')).toISOString(),
+    ).toBe('2026-05-05T20:00:00.000Z');
+  });
+
+  it('is DST-correct across the European spring-forward night (08:00 always exists)', () => {
+    // Europe DST 2026: clocks jump 02:00→03:00 on Sun 2026-03-29. A member awake at
+    // 03:30 local that morning (= 01:30 UTC, already CEST UTC+2) → next 08:00 local
+    // is 06:00 UTC the SAME day. 08:00 is never a skipped hour (the gap is 02:00–03:00).
+    expect(nextQuietHoursEnd('Europe/Paris', new Date('2026-03-29T01:30:00Z')).toISOString()).toBe(
+      '2026-03-29T06:00:00.000Z',
+    );
+  });
+
+  it('is DST-correct across the European fall-back night', () => {
+    // Europe DST ends Sun 2026-10-25, clocks 03:00→02:00. At 03:00 local that day the
+    // zone is back to CET (UTC+1). Member at 03:00 local = 02:00 UTC → next 08:00
+    // local = 07:00 UTC (CET offset), NOT 06:00. Proves the offset is read at 08:00.
+    expect(nextQuietHoursEnd('Europe/Paris', new Date('2026-10-25T02:00:00Z')).toISOString()).toBe(
+      '2026-10-25T07:00:00.000Z',
     );
   });
 });

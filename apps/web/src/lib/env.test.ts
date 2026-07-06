@@ -130,6 +130,17 @@ describe('envSchemaWithRefines — VAPID cross-var refines (J9 E2)', () => {
  */
 const VALID_CRON_SECRET = 'a'.repeat(24); // 24 chars exactement (borne min)
 
+/** The 6 batch AI tokens a valid PROD env now also requires (Tour 15). A prod
+ *  "happy path" must set them all, else the batch-token refines below reject. */
+const PROD_BATCH_TOKENS = {
+  ADMIN_BATCH_TOKEN: 'b'.repeat(32),
+  MONTHLY_ADMIN_BATCH_TOKEN: 'b'.repeat(32),
+  CALENDAR_ADMIN_BATCH_TOKEN: 'b'.repeat(32),
+  VERIFICATION_ADMIN_BATCH_TOKEN: 'b'.repeat(32),
+  SEANCES_ADMIN_BATCH_TOKEN: 'b'.repeat(32),
+  PROFILE_ADMIN_BATCH_TOKEN: 'b'.repeat(32),
+} as const;
+
 describe('envSchemaWithRefines — CRON_SECRET prod requirement (J5 hardening)', () => {
   it('rejects prod (NODE_ENV=production) without CRON_SECRET', () => {
     const r = envSchemaWithRefines.safeParse({
@@ -158,12 +169,14 @@ describe('envSchemaWithRefines — CRON_SECRET prod requirement (J5 hardening)',
     }
   });
 
-  it('accepts prod with CRON_SECRET ≥ 24 chars', () => {
+  it('accepts prod with CRON_SECRET ≥ 24 chars (+ the required batch tokens)', () => {
     const r = envSchemaWithRefines.safeParse({
       ...BASE_VALID_ENV,
       NODE_ENV: 'production',
       AUTH_URL: 'https://app.fxmilyapp.com',
       CRON_SECRET: VALID_CRON_SECRET,
+      // Tour 15 : a valid prod env now also requires the 6 batch AI tokens.
+      ...PROD_BATCH_TOKENS,
     });
     expect(r.success).toBe(true);
   });
@@ -187,6 +200,82 @@ describe('envSchemaWithRefines — CRON_SECRET prod requirement (J5 hardening)',
       // NODE_ENV=development + AUTH_URL=http://localhost:3000 (BASE_VALID_ENV)
       // → pas de signal prod → CRON_SECRET non requis
     });
+    expect(r.success).toBe(true);
+  });
+});
+
+/**
+ * Tour 15 hardening — les 6 tokens des pipelines batch IA requis en production.
+ *
+ * Sans un `*_ADMIN_BATCH_TOKEN` en prod, la route `/api/admin/<pipeline>-batch/*`
+ * répond 503 `<pipeline>_batch_disabled` en silence : le worker local ne peut plus
+ * pull et le pipeline IA devient muet (incident « IA muette »). Chaque refine
+ * miroir bloque le boot exactement comme `CRON_SECRET`, avec une issue de path
+ * ciblée sur le token manquant. On exerce les deux signaux de prod et on garde
+ * dev/test non bloqués. Un `openssl rand -hex 32` (64 chars) satisfait le
+ * `.min(32)` de chaque champ.
+ */
+/** Les 6 tokens batch IA + un secret cron valide, pour isoler le refine d'un
+ *  seul token en le retirant d'un jeu complet par ailleurs. */
+const ALL_BATCH_TOKENS = {
+  CRON_SECRET: VALID_CRON_SECRET,
+  ...PROD_BATCH_TOKENS,
+} as const;
+
+const PROD_SIGNAL_ENV = {
+  ...BASE_VALID_ENV,
+  NODE_ENV: 'production',
+  AUTH_URL: 'https://app.fxmilyapp.com',
+} as const;
+
+const BATCH_TOKEN_NAMES = [
+  'ADMIN_BATCH_TOKEN',
+  'MONTHLY_ADMIN_BATCH_TOKEN',
+  'CALENDAR_ADMIN_BATCH_TOKEN',
+  'VERIFICATION_ADMIN_BATCH_TOKEN',
+  'SEANCES_ADMIN_BATCH_TOKEN',
+  'PROFILE_ADMIN_BATCH_TOKEN',
+] as const;
+
+describe('envSchemaWithRefines — batch AI tokens prod requirement (Tour 15 hardening)', () => {
+  it('accepts prod with all 6 batch tokens set', () => {
+    const r = envSchemaWithRefines.safeParse({ ...PROD_SIGNAL_ENV, ...ALL_BATCH_TOKENS });
+    expect(r.success).toBe(true);
+  });
+
+  it.each(BATCH_TOKEN_NAMES)('rejects prod (NODE_ENV=production) when %s is missing', (missing) => {
+    const tokens: Record<string, string> = { ...ALL_BATCH_TOKENS };
+    delete tokens[missing];
+    const r = envSchemaWithRefines.safeParse({ ...PROD_SIGNAL_ENV, ...tokens });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      // The issue path must name the EXACT missing token so the boot error is
+      // actionable (which token to provision), not a generic "config invalid".
+      const paths = r.error.issues.flatMap((i) => i.path);
+      expect(paths).toContain(missing);
+    }
+  });
+
+  it.each(BATCH_TOKEN_NAMES)(
+    'rejects prod (AUTH_URL HTTPS, NODE_ENV non-prod) when %s is missing',
+    (missing) => {
+      const tokens: Record<string, string> = { ...ALL_BATCH_TOKENS };
+      delete tokens[missing];
+      // HTTPS signal alone must require the token, even when NODE_ENV is not prod.
+      const r = envSchemaWithRefines.safeParse({
+        ...BASE_VALID_ENV,
+        AUTH_URL: 'https://app.fxmilyapp.com',
+        ...tokens,
+      });
+      expect(r.success).toBe(false);
+      if (!r.success) {
+        expect(r.error.issues.flatMap((i) => i.path)).toContain(missing);
+      }
+    },
+  );
+
+  it('accepts dev (http localhost) without any batch token — reste optional hors prod', () => {
+    const r = envSchemaWithRefines.safeParse({ ...BASE_VALID_ENV });
     expect(r.success).toBe(true);
   });
 });

@@ -117,7 +117,7 @@ export default async function OnboardingInterviewLandingPage() {
             </span>
             <span>
               <span className="font-semibold text-[var(--acc)]">3 phases</span> : échauffement, cœur
-              de l&apos;entretien, clôture réflexive.
+              de l’entretien, clôture réflexive.
             </span>
           </li>
           <li className="rounded-control flex items-start gap-2.5 border border-[var(--b-default)] bg-[var(--bg-1)]/40 p-3 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--b-acc)] hover:bg-[var(--bg-1)]/70">
@@ -126,7 +126,7 @@ export default async function OnboardingInterviewLandingPage() {
             </span>
             <span>
               <span className="font-semibold text-[var(--acc)]">Confidentiel</span> : analyse IA
-              locale (pas d&apos;API tierce), profil descriptif pour Eliott uniquement.
+              locale (pas d’API tierce), profil descriptif pour Eliott uniquement.
             </span>
           </li>
         </ul>

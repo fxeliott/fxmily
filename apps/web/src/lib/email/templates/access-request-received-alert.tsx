@@ -57,8 +57,8 @@ export function AccessRequestReceivedAlertEmail({
 
           <Text style={paragraph}>
             {pendingCount} demande{plural ? 's' : ''} {plural ? 'sont' : 'est'} en attente de
-            validation dans ta file d&apos;accès. Tu peux les accepter ou les refuser depuis ton
-            espace admin.
+            validation dans ta file d’accès. Tu peux les accepter ou les refuser depuis ton espace
+            admin.
           </Text>
 
           <Section style={ctaSection}>

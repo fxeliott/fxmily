@@ -59,7 +59,7 @@ export function OnboardingProfileOverdueAlertEmail({
 
           <Heading style={heading}>
             {overdueCount} membre{plural ? 's' : ''} {plural ? 'attendent' : 'attend'} leur profil
-            d&apos;onboarding.
+            d’onboarding.
           </Heading>
 
           <Text style={paragraph}>

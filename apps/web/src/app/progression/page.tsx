@@ -38,6 +38,7 @@ import { getPostLossReaction } from '@/lib/scoring/post-loss-reaction-data';
 import {
   getBehavioralScoreHistory,
   getLatestBehavioralScore,
+  getMemberRampUp,
   type BehavioralScoreTrendPoint,
 } from '@/lib/scoring/service';
 import type { SerializedBehavioralScore } from '@/lib/scoring';
@@ -80,10 +81,13 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
   // Scores du jour + trajectoire lus au top (légers) ; le track record (analytics
   // lourdes) stream via Suspense pour garder le shell rapide (pas de N+1 : 1 fetch
   // analytics dans TrackRecordSection).
-  const [latestScore, scoreHistory, yearHeatmap] = await Promise.all([
+  const [latestScore, scoreHistory, yearHeatmap, rampUp] = await Promise.all([
     getLatestBehavioralScore(userId),
     getBehavioralScoreHistory(userId, { sinceDays: 90 }),
     getDisciplineYearHeatmap(userId, timezone),
+    // Tour 15 — onboarding floor: a low score reads "En rodage", not "Critique",
+    // while the member is in their first 30 days (their own view only).
+    getMemberRampUp(userId),
   ]);
 
   return (
@@ -161,7 +165,7 @@ export default async function ProgressionPage({ searchParams }: ProgressionPageP
           <h2 id="progression-scores-heading" className="sr-only">
             Scores comportementaux
           </h2>
-          <ScoreGaugeGrid score={latestScore} history={scoreHistory} />
+          <ScoreGaugeGrid score={latestScore} history={scoreHistory} rampUp={rampUp} />
         </section>
 
         {/* Régularité année — heatmap calendaire des check-ins (GitHub-style,

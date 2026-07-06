@@ -4,9 +4,11 @@ import { auth } from '@/auth';
 import { CheckinResumeNotice } from '@/components/checkin/checkin-resume-notice';
 import { EveningCheckinWizard } from '@/components/checkin/evening-checkin-wizard';
 import { MorningIntentionRecall } from '@/components/checkin/morning-intention-recall';
+import { OpenTradesTodayReminder } from '@/components/checkin/open-trades-today-reminder';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { getCheckin, resolveBackfillDateParam, todayFor } from '@/lib/checkin/service';
 import { toEveningPrefill } from '@/lib/checkin/prefill';
+import { getOpenTradesEnteredToday } from '@/lib/trades/service';
 
 export const metadata = {
   title: 'Check-in soir',
@@ -42,6 +44,14 @@ export default async function EveningCheckinPage({ searchParams }: EveningChecki
   const existingEvening = backfillDate ? null : await getCheckin(session.user.id, today, 'evening');
   const prefill = existingEvening ? toEveningPrefill(existingEvening) : undefined;
 
+  // Tour 15 — during the normal (non-rattrapage) evening wrap, gently remind the
+  // member of trades they entered TODAY that are still open, so they think to
+  // close them in the journal once done. Skipped on a backfill (that flow logs a
+  // PAST day; "today's open trades" is irrelevant to it).
+  const openTradesToday = backfillDate
+    ? { count: 0 }
+    : await getOpenTradesEnteredToday(session.user.id, timezone);
+
   return (
     <main className="relative flex min-h-dvh w-full flex-col bg-[var(--bg)]">
       {/* Tour 13 — ambiance de marque calme derrière le wizard du soir. */}
@@ -49,6 +59,10 @@ export default async function EveningCheckinPage({ searchParams }: EveningChecki
       <div className="page-stagger relative mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 lg:py-10">
         {prefill ? <CheckinResumeNotice slot="evening" /> : null}
         <MorningIntentionRecall intention={morning?.intention} context="evening" />
+        {/* Tour 15 — rappel doux « trades encore ouverts aujourd'hui » avant le
+            bilan du soir. Ton process (bleu), jamais rouge ni bloquant. Rend rien
+            sans trade concerné (garde interne). */}
+        <OpenTradesTodayReminder count={openTradesToday.count} />
         <EveningCheckinWizard
           today={today}
           {...(backfillDate ? { backfillDate } : {})}

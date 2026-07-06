@@ -269,10 +269,11 @@ export function PushToggle({ vapidPublicKey, initialSubscriptionCount }: Props):
           Notifications bloquées au niveau du système
         </div>
         <p className="mt-2 text-sm text-[var(--t-2)]">
-          Sur iOS, désinstalle Fxmily depuis ton écran d&apos;accueil puis réinstalle-le pour
-          réautoriser les notifications. Sur Android et desktop, ouvre les{' '}
-          <strong>réglages du site</strong> (icône cadenas dans la barre d&apos;adresse) et réactive
-          « Notifications ».
+          {/* Literal U+2019 (not &apos;) — the SWC compiler eats the leading
+              space of a JSXText holding an HTML entity (Tour 15 proof). */}
+          Sur iOS, désinstalle Fxmily depuis ton écran d’accueil puis réinstalle-le pour réautoriser
+          les notifications. Sur Android et desktop, ouvre les <strong>réglages du site</strong>{' '}
+          (icône cadenas dans la barre d’adresse) et réactive « Notifications ».
         </p>
       </div>
     );

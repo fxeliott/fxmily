@@ -24,8 +24,8 @@ export default function MentionsPage(): React.ReactElement {
       lastUpdatedIso="2026-05-08"
       summary={
         <>
-          Informations exigées par l&apos;<strong>article 6 de la LCEN</strong> (loi n° 2004-575 du
-          21 juin 2004 pour la confiance dans l&apos;économie numérique).
+          Informations exigées par l’<strong>article 6 de la LCEN</strong> (loi n° 2004-575 du 21
+          juin 2004 pour la confiance dans l’économie numérique).
         </>
       }
     >
@@ -34,14 +34,14 @@ export default function MentionsPage(): React.ReactElement {
         <strong>Eliott Pena</strong>, éditeur du service Fxmily.
         <br />
         Adresse postale communiquée sur demande à{' '}
-        <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>, conformément à l&apos;article 6
-        III 2° de la LCEN (particulier non-professionnel).
+        <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>, conformément à l’article 6 III
+        2° de la LCEN (particulier non-professionnel).
         <br />
         Contact : <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>
       </p>
 
       <h2>Directeur de la publication</h2>
-      <p>Eliott Pena, en sa qualité d&apos;éditeur.</p>
+      <p>Eliott Pena, en sa qualité d’éditeur.</p>
 
       <h2>Hébergeur</h2>
       <p>
@@ -62,17 +62,17 @@ export default function MentionsPage(): React.ReactElement {
       <h2>Propriété intellectuelle</h2>
       <p>
         Le code source, le design DS v2, les paraphrases issues du framework Mark Douglas, le nom
-        Fxmily et son logo sont la propriété exclusive de l&apos;éditeur. Toute reproduction,
-        adaptation ou diffusion non autorisée est interdite (articles L122-4 et L335-2 du Code de la
-        propriété intellectuelle).
+        Fxmily et son logo sont la propriété exclusive de l’éditeur. Toute reproduction, adaptation
+        ou diffusion non autorisée est interdite (articles L122-4 et L335-2 du Code de la propriété
+        intellectuelle).
       </p>
 
       <h2>Signalement</h2>
       <p>
         Tout contenu illicite hébergé sur Fxmily peut être signalé par email à{' '}
-        <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>. Conformément à l&apos;article 6
-        I 2° de la LCEN, l&apos;éditeur retirera ou rendra inaccessible le contenu manifestement
-        illicite dès qu&apos;il en aura connaissance.
+        <a href="mailto:fxeliott@fxmily.fr">fxeliott@fxmily.fr</a>. Conformément à l’article 6 I 2°
+        de la LCEN, l’éditeur retirera ou rendra inaccessible le contenu manifestement illicite dès
+        qu’il en aura connaissance.
       </p>
 
       <h2>Documents associés</h2>
@@ -81,7 +81,7 @@ export default function MentionsPage(): React.ReactElement {
           <a href="/legal/privacy">Politique de confidentialité (RGPD)</a>
         </li>
         <li>
-          <a href="/legal/terms">Conditions générales d&apos;utilisation</a>
+          <a href="/legal/terms">Conditions générales d’utilisation</a>
         </li>
       </ul>
     </LegalLayout>

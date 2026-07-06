@@ -414,10 +414,12 @@ export default async function VerificationPage() {
             Tes preuves MT5
           </h2>
           <p className="t-body max-w-prose leading-[1.6] text-[var(--t-2)]">
-            Téléverse une capture de l&apos;onglet « Historique » de MT5 pour{' '}
+            {/* Literal U+2019 (not &apos;) — the SWC compiler eats the leading
+                space of a JSXText holding an HTML entity (Tour 15 proof). */}
+            Téléverse une capture de l’onglet « Historique » de MT5 pour{' '}
             <strong className="font-semibold text-[var(--t-1)]">chacun</strong> de tes comptes.
-            L&apos;analyse lit les positions affichées et les confronte à ton journal. Une capture
-            reste une capture, c&apos;est la régularité de tes preuves qui construit la confiance.
+            L’analyse lit les positions affichées et les confronte à ton journal. Une capture reste
+            une capture, c’est la régularité de tes preuves qui construit la confiance.
           </p>
           <Card className="flex w-full max-w-xl flex-col gap-3 p-4">
             <ProofUploader
@@ -431,12 +433,27 @@ export default async function VerificationPage() {
           <ProofAnalysisPoller pendingCount={overview.pendingProofsCount} />
 
           {overview.pendingProofsCount > 0 ? (
-            <p className="t-cap inline-flex items-center gap-1.5 text-[var(--t-3)]" role="status">
-              <ScanSearch className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-              {overview.pendingProofsCount > 1
-                ? `${overview.pendingProofsCount} captures sont en cours d’analyse en arrière-plan. Le résultat s’affichera ici tout seul, tu peux quitter la page.`
-                : 'Une capture est en cours d’analyse en arrière-plan. Le résultat s’affichera ici tout seul, tu peux quitter la page.'}
-            </p>
+            <div
+              className="rounded-card flex items-start gap-2.5 border border-[var(--cy-edge)] bg-[var(--bg-1)] px-4 py-3"
+              role="status"
+            >
+              <ScanSearch
+                className="mt-0.5 h-4 w-4 shrink-0 text-[var(--cy)]"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <div className="flex flex-col gap-0.5">
+                <span className="t-body font-medium text-[var(--t-1)]">
+                  {overview.pendingProofsCount > 1
+                    ? `${overview.pendingProofsCount} captures sont en cours d’analyse, en général sous 5 minutes.`
+                    : 'Ta capture est en cours d’analyse, en général sous 5 minutes.'}
+                </span>
+                <span className="t-cap text-[var(--t-3)]">
+                  Tu peux quitter cette page : on te prévient dès que c’est vérifié, et le résultat
+                  s’affiche ici tout seul.
+                </span>
+              </div>
+            </div>
           ) : null}
 
           {overview.proofs.length > 0 ? (

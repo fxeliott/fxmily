@@ -293,8 +293,8 @@ export function ProofUploader({ accounts }: ProofUploaderProps) {
         >
           <ImageIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
           <span>
-            Capture reçue. L’analyse tourne en arrière-plan, en général sous 20 minutes. Tu peux
-            quitter cette page, le résultat s’affichera ici dès qu’il est prêt.
+            Capture reçue. L’analyse tourne en arrière-plan, en général sous 5 minutes. Tu peux
+            quitter cette page, on te prévient dès que c’est vérifié.
           </span>
         </p>
       ) : null}

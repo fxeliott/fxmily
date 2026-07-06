@@ -6,6 +6,7 @@ vi.mock('@/lib/db', () => ({
     trainingTrade: { findMany: vi.fn(), groupBy: vi.fn(), count: vi.fn() },
     discrepancy: { groupBy: vi.fn(), count: vi.fn(), findMany: vi.fn() },
     constancyScore: { findMany: vi.fn() },
+    markDouglasDelivery: { findMany: vi.fn(), groupBy: vi.fn() },
   },
 }));
 
@@ -16,8 +17,10 @@ import {
   getMembersAttention,
   getTriageQueueCounts,
   listOpenDiscrepancies,
+  listRecentBehavioralSignals,
   listStaleOpenTrades,
   listUncommentedClosedTrades,
+  BEHAVIORAL_SIGNAL_RECENT_DAYS,
   STALE_OPEN_TRADE_HOURS,
   TRIAGE_PAGE_SIZE,
 } from './attention-service';
@@ -403,18 +406,26 @@ describe('listOpenDiscrepancies', () => {
 });
 
 describe('getTriageQueueCounts', () => {
-  it('sums the three section counts and excludes deleted members from each', async () => {
+  it('sums the four section counts and excludes deleted members from each', async () => {
     vi.mocked(db.trade.count)
       .mockResolvedValueOnce(4 as never) // uncommented closed
       .mockResolvedValueOnce(2 as never); // stale open
     vi.mocked(db.discrepancy.count).mockResolvedValue(3 as never);
+    // Tour 15 — the behavioral-signal count is the NUMBER of distinct members
+    // with a recent delivery: groupBy(['userId']) returns one row per member, so
+    // `.length` (here 2 members) is the badge count, not a raw delivery total.
+    vi.mocked(db.markDouglasDelivery.groupBy).mockResolvedValue([
+      { userId: 'm1' },
+      { userId: 'm2' },
+    ] as never);
 
     const counts = await getTriageQueueCounts();
     expect(counts).toEqual({
       uncommentedClosed: 4,
       staleOpen: 2,
       openDiscrepancies: 3,
-      total: 9,
+      behavioralSignals: 2,
+      total: 11,
     });
 
     // Every count excludes soft-deleted members (the queue must never point the
@@ -429,5 +440,141 @@ describe('getTriageQueueCounts', () => {
     const staleWhere = calls[1]?.[0]?.where as Record<string, unknown>;
     expect(staleWhere).toMatchObject({ closedAt: null, user: { status: { not: 'deleted' } } });
     expect((staleWhere.enteredAt as { lt: Date }).lt).toBeInstanceOf(Date);
+
+    // The signal count groups by member over the 7-day window, non-deleted only.
+    const signalArg = firstArg(db.markDouglasDelivery.groupBy);
+    expect(signalArg.by).toEqual(['userId']);
+    const signalWhere = signalArg.where as Record<string, unknown>;
+    expect(signalWhere.user).toEqual({ status: { not: 'deleted' } });
+    expect((signalWhere.createdAt as { gte: Date }).gte).toBeInstanceOf(Date);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tour 15 — « Signaux comportementaux » cohort loader (grouped per member).
+// ---------------------------------------------------------------------------
+
+/** A delivery row as the loader selects it (triggeredBy + createdAt + thin member). */
+function deliveryRow(
+  triggeredBy: string,
+  createdAt: string,
+  user: { id: string; firstName: string | null; lastName: string | null; email: string },
+) {
+  return { triggeredBy, createdAt: new Date(createdAt), user };
+}
+
+const MEMBER_A = { id: 'a', firstName: 'Ada', lastName: 'Lovelace', email: 'a@x.io' };
+const MEMBER_B = { id: 'b', firstName: 'Bo', lastName: null, email: 'b@x.io' };
+
+describe('listRecentBehavioralSignals', () => {
+  it('groups deliveries per member, most-recent signal first, deduped', async () => {
+    // MEMBER_A: two distinct signals (one repeated) → deduped to 2 labels,
+    // signalCount 3, latestAt = the newest row. Rows arrive DESC (newest first).
+    vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([
+      deliveryRow('Sur-trading détecté', '2026-07-05T10:00:00Z', MEMBER_A),
+      deliveryRow('3 trades perdants consécutifs sur 24h', '2026-07-04T09:00:00Z', MEMBER_A),
+      deliveryRow('Sur-trading détecté', '2026-07-03T08:00:00Z', MEMBER_A), // repeat → deduped
+      deliveryRow('Constance en baisse', '2026-07-02T07:00:00Z', MEMBER_B),
+    ] as never);
+
+    const { items, nextCursor } = await listRecentBehavioralSignals();
+
+    expect(items).toHaveLength(2);
+    expect(items[0]).toEqual({
+      id: 'a',
+      memberLabel: 'Ada Lovelace',
+      signals: ['Sur-trading détecté', '3 trades perdants consécutifs sur 24h'],
+      latestAt: '2026-07-05T10:00:00.000Z',
+      signalCount: 3,
+      href: '/admin/members/a',
+    });
+    expect(items[1]).toEqual({
+      id: 'b',
+      memberLabel: 'Bo',
+      signals: ['Constance en baisse'],
+      latestAt: '2026-07-02T07:00:00.000Z',
+      signalCount: 1,
+      href: '/admin/members/b',
+    });
+    expect(nextCursor).toBeNull();
+  });
+
+  it('orders members by their most-recent signal, not by arrival', async () => {
+    // B has the newest signal overall, even though A's rows come first in the
+    // (arbitrary) mock order → B must sort ahead of A.
+    vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([
+      deliveryRow('Ancien signal', '2026-07-01T10:00:00Z', MEMBER_A),
+      deliveryRow('Signal frais', '2026-07-06T10:00:00Z', MEMBER_B),
+    ] as never);
+
+    const { items } = await listRecentBehavioralSignals();
+    expect(items.map((i) => i.id)).toEqual(['b', 'a']);
+  });
+
+  it('reads only the 7-day window of non-deleted members, newest first', async () => {
+    vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([] as never);
+
+    const before = Date.now();
+    await listRecentBehavioralSignals();
+    const after = Date.now();
+
+    const arg = firstArg(db.markDouglasDelivery.findMany);
+    const where = arg.where as Record<string, unknown>;
+    expect(where.user).toEqual({ status: { not: 'deleted' } });
+    const floor = (where.createdAt as { gte: Date }).gte;
+    expect(floor).toBeInstanceOf(Date);
+    const windowMs = BEHAVIORAL_SIGNAL_RECENT_DAYS * 24 * 60 * 60 * 1000;
+    expect(floor.getTime()).toBeGreaterThanOrEqual(before - windowMs);
+    expect(floor.getTime()).toBeLessThanOrEqual(after - windowMs);
+    expect(arg.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+  });
+
+  it('paginates members with a look-ahead cursor and resumes after it', async () => {
+    // One distinct member per delivery → TRIAGE_PAGE_SIZE + 1 members. Member ids
+    // MUST be valid cuids (20-40 alnum) so the cursor round-trips through
+    // `isValidCursor` (a forged/short id degrades to page 1). Strictly-decreasing
+    // timestamps make the sort order equal the insertion order.
+    const rows = Array.from({ length: TRIAGE_PAGE_SIZE + 1 }, (_, i) => {
+      const mm = String(i).padStart(2, '0');
+      // 25-char cuid-shaped id, unique + sortable by the trailing index.
+      const id = `clh0000000000000000000${mm}`;
+      return deliveryRow(`signal ${i}`, `2026-07-06T10:${mm}:00Z`, {
+        id,
+        firstName: `M${i}`,
+        lastName: null,
+        email: `m${i}@x.io`,
+      });
+    });
+    // Newest first: index 0 (…:00) is oldest, so reverse for DESC order.
+    vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([...rows].reverse() as never);
+
+    const first = await listRecentBehavioralSignals();
+    expect(first.items).toHaveLength(TRIAGE_PAGE_SIZE);
+    // Newest member is first; the page's last item id is the next cursor.
+    const lastId = first.items[first.items.length - 1]?.id ?? '';
+    expect(first.nextCursor).toBe(lastId);
+
+    // Feeding the cursor back resumes strictly AFTER it (skip-1 seek semantics).
+    const second = await listRecentBehavioralSignals({ cursor: lastId });
+    expect(second.items).toHaveLength(1);
+    expect(second.items[0]?.id).not.toBe(lastId);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('ignores a forged cursor and returns page 1', async () => {
+    vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([
+      deliveryRow('Signal', '2026-07-06T10:00:00Z', MEMBER_A),
+    ] as never);
+
+    const { items } = await listRecentBehavioralSignals({ cursor: 'not-a-cuid!' });
+    expect(items).toHaveLength(1);
+    expect(items[0]?.id).toBe('a');
+  });
+
+  it('returns an empty page when no signals fired in the window', async () => {
+    vi.mocked(db.markDouglasDelivery.findMany).mockResolvedValue([] as never);
+    const { items, nextCursor } = await listRecentBehavioralSignals();
+    expect(items).toHaveLength(0);
+    expect(nextCursor).toBeNull();
   });
 });

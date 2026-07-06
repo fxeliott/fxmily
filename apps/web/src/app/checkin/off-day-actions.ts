@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { auth } from '@/auth';
 import { logAudit } from '@/lib/auth/audit';
+import { formatOffDayLabel } from '@/lib/checkin/off-day-label';
 import { localDateOf, parseLocalDate, shiftLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 import { reportWarning } from '@/lib/observability';
@@ -176,7 +177,19 @@ export async function cancelOffDayAction(date: string): Promise<OffDayActionStat
 
 /** Result of a range declaration — the inclusive bounds that were written. */
 export type OffDayRangeActionState =
-  | { ok: true; from: string; to: string; days: number }
+  | {
+      ok: true;
+      from: string;
+      to: string;
+      days: number;
+      /**
+       * The written days with their server-formatted labels (Tour 15), so the
+       * client list can update immediately — a member who posts an absence must
+       * SEE it appear without reloading (prod-proven gap: the row only showed on
+       * the next navigation). Same formatter as the `/account/rythme` SSR pass.
+       */
+      upcoming: Array<{ date: string; label: string; reason: string | null }>;
+    }
   | { ok: false; error: 'unauthorized' | 'invalid_input' | 'unknown' };
 
 export async function declareOffDayRangeAction(
@@ -248,7 +261,17 @@ export async function declareOffDayRangeAction(
   revalidatePath('/dashboard');
   revalidatePath('/account');
 
-  return { ok: true, from: parsed.data.from, to: parsed.data.to, days: dates.length };
+  return {
+    ok: true,
+    from: parsed.data.from,
+    to: parsed.data.to,
+    days: dates.length,
+    upcoming: dates.map((d) => ({
+      date: d,
+      label: formatOffDayLabel(parseLocalDate(d)),
+      reason: parsed.data.reason,
+    })),
+  };
 }
 
 /** Result of the weekends-off toggle — the value that is now persisted. */

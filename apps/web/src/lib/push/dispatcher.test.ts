@@ -5,7 +5,12 @@ import {
   classifyError,
   EMAIL_FALLBACK_CAP_PER_24H,
   EMAIL_FALLBACK_SKIP_TYPES,
+  isQuietHoursExempt,
+  isQuietHoursExpireOnHold,
   nextAttemptDelay,
+  QUIET_HOURS_EXEMPT_TYPES,
+  QUIET_HOURS_EXPIRE_TYPES,
+  quietHoursDisposition,
   shouldSendFallbackEmail,
   shouldSkipFallbackEmailForType,
   TTL_BY_TYPE,
@@ -436,5 +441,216 @@ describe('shouldSkipFallbackEmailForType + EMAIL_FALLBACK_SKIP_TYPES (V1.5.1 §2
     // S3 §33 — the gentle reminder is the 3rd push-only slug (no email harassment).
     expect(EMAIL_FALLBACK_SKIP_TYPES.has('verification_gentle_reminder')).toBe(true);
     expect(EMAIL_FALLBACK_SKIP_TYPES.size).toBe(3);
+  });
+});
+
+describe('quiet-hours classification (Tour 15 — [22:00, 08:00) member-local silence)', () => {
+  // Anchor instants: 03:00 and 12:00 local in Europe/Paris (May = CEST, UTC+2).
+  const NIGHT_PARIS = new Date('2026-05-07T01:00:00Z'); // 03:00 Paris
+  const NOON_PARIS = new Date('2026-05-06T10:00:00Z'); // 12:00 Paris
+
+  describe('isQuietHoursExempt / QUIET_HOURS_EXEMPT_TYPES', () => {
+    it('exempts the four one-to-one / response / operational slugs', () => {
+      // Eliott's personal corrections — a direct message, not a scheduled nudge.
+      expect(isQuietHoursExempt('annotation_received')).toBe(true);
+      expect(isQuietHoursExempt('training_annotation_received')).toBe(true);
+      // The MT5-proof verdict answers a proof the member JUST uploaded (the
+      // brief's canonical night-pass case).
+      expect(isQuietHoursExempt('verification_proof_analyzed')).toBe(true);
+      // Admin-facing loop-close signal for the single operator.
+      expect(isQuietHoursExempt('training_reply_received')).toBe(true);
+    });
+
+    it('does NOT exempt the deferred / expired slugs', () => {
+      expect(isQuietHoursExempt('checkin_morning_reminder')).toBe(false);
+      expect(isQuietHoursExempt('checkin_evening_reminder')).toBe(false);
+      expect(isQuietHoursExempt('douglas_card_delivered')).toBe(false);
+      expect(isQuietHoursExempt('weekly_report_ready')).toBe(false);
+      expect(isQuietHoursExempt('monthly_debrief_ready')).toBe(false);
+      expect(isQuietHoursExempt('mindset_check_ready')).toBe(false);
+      expect(isQuietHoursExempt('verification_gentle_reminder')).toBe(false);
+    });
+
+    it('QUIET_HOURS_EXEMPT_TYPES contains exactly the four documented slugs', () => {
+      expect(QUIET_HOURS_EXEMPT_TYPES.size).toBe(4);
+      expect([...QUIET_HOURS_EXEMPT_TYPES].sort()).toEqual([
+        'annotation_received',
+        'training_annotation_received',
+        'training_reply_received',
+        'verification_proof_analyzed',
+      ]);
+    });
+  });
+
+  describe('isQuietHoursExpireOnHold / QUIET_HOURS_EXPIRE_TYPES (P1 fix — dated reminders)', () => {
+    it('marks the two dated check-in reminders as expire-on-hold', () => {
+      expect(isQuietHoursExpireOnHold('checkin_morning_reminder')).toBe(true);
+      expect(isQuietHoursExpireOnHold('checkin_evening_reminder')).toBe(true);
+    });
+
+    it('does NOT mark undated / exempt slugs as expire-on-hold', () => {
+      expect(isQuietHoursExpireOnHold('douglas_card_delivered')).toBe(false);
+      expect(isQuietHoursExpireOnHold('weekly_report_ready')).toBe(false);
+      expect(isQuietHoursExpireOnHold('mindset_check_ready')).toBe(false);
+      expect(isQuietHoursExpireOnHold('verification_gentle_reminder')).toBe(false);
+      expect(isQuietHoursExpireOnHold('verification_proof_analyzed')).toBe(false);
+    });
+
+    it('QUIET_HOURS_EXPIRE_TYPES contains exactly the two dated reminders', () => {
+      expect(QUIET_HOURS_EXPIRE_TYPES.size).toBe(2);
+      expect([...QUIET_HOURS_EXPIRE_TYPES].sort()).toEqual([
+        'checkin_evening_reminder',
+        'checkin_morning_reminder',
+      ]);
+    });
+  });
+
+  describe('quietHoursDisposition', () => {
+    it('defers an undated nudge that lands at 03:00 local → next local 08:00', () => {
+      const d = quietHoursDisposition('weekly_report_ready', 'Europe/Paris', NIGHT_PARIS);
+      expect(d.action).toBe('defer');
+      if (d.action === 'defer') {
+        // 08:00 Paris (CEST) = 06:00 UTC, same local day (2026-05-07).
+        expect(d.nextAttemptAt.toISOString()).toBe('2026-05-07T06:00:00.000Z');
+      }
+    });
+
+    it('EXPIRES a dated check-in reminder caught by quiet hours (P1 fix — never deferred)', () => {
+      // The exact P1 scenario: an evening reminder at 03:00 local must be DROPPED,
+      // not held to 08:00 where it would deliver yesterday's prompt.
+      expect(
+        quietHoursDisposition('checkin_evening_reminder', 'Europe/Paris', NIGHT_PARIS),
+      ).toEqual({ action: 'expire' });
+      expect(
+        quietHoursDisposition('checkin_morning_reminder', 'Europe/Paris', NIGHT_PARIS),
+      ).toEqual({ action: 'expire' });
+    });
+
+    it('sends an undated nudge during the day (outside the window)', () => {
+      expect(quietHoursDisposition('weekly_report_ready', 'Europe/Paris', NOON_PARIS)).toEqual({
+        action: 'send',
+      });
+    });
+
+    it('sends a dated reminder during the day (expire only applies inside the window)', () => {
+      expect(quietHoursDisposition('checkin_evening_reminder', 'Europe/Paris', NOON_PARIS)).toEqual(
+        {
+          action: 'send',
+        },
+      );
+    });
+
+    it('sends an EXEMPT slug even at 03:00 local (transactional passes)', () => {
+      // The MT5 verdict fires the instant it is ready, night or not.
+      expect(
+        quietHoursDisposition('verification_proof_analyzed', 'Europe/Paris', NIGHT_PARIS),
+      ).toEqual({ action: 'send' });
+      expect(quietHoursDisposition('annotation_received', 'Europe/Paris', NIGHT_PARIS)).toEqual({
+        action: 'send',
+      });
+    });
+
+    it('defers an undated nudge at 03:00 local in Pacific/Auckland (multi-tz)', () => {
+      // 03:00 Auckland (NZST UTC+12) = 15:00 UTC prev day → 08:00 Auckland = 20:00 UTC.
+      const d = quietHoursDisposition(
+        'weekly_report_ready',
+        'Pacific/Auckland',
+        new Date('2026-05-05T15:00:00Z'),
+      );
+      expect(d.action).toBe('defer');
+      if (d.action === 'defer') {
+        expect(d.nextAttemptAt.toISOString()).toBe('2026-05-05T20:00:00.000Z');
+      }
+    });
+
+    it('sends exactly at 08:00 local (window end is exclusive)', () => {
+      // 08:00 Paris (CEST) = 06:00 UTC.
+      expect(
+        quietHoursDisposition(
+          'weekly_report_ready',
+          'Europe/Paris',
+          new Date('2026-05-06T06:00:00Z'),
+        ),
+      ).toEqual({ action: 'send' });
+    });
+
+    it('defers exactly at 22:00 local (window start is inclusive)', () => {
+      // 22:00 Paris (CEST) = 20:00 UTC.
+      const d = quietHoursDisposition(
+        'douglas_card_delivered',
+        'Europe/Paris',
+        new Date('2026-05-06T20:00:00Z'),
+      );
+      expect(d.action).toBe('defer');
+      if (d.action === 'defer') {
+        // Held to the next day's 08:00 local = 06:00 UTC on the 7th.
+        expect(d.nextAttemptAt.toISOString()).toBe('2026-05-07T06:00:00.000Z');
+      }
+    });
+
+    it('expires a dated reminder exactly at 22:00 local (start inclusive, expire wins over defer)', () => {
+      expect(
+        quietHoursDisposition(
+          'checkin_evening_reminder',
+          'Europe/Paris',
+          new Date('2026-05-06T20:00:00Z'),
+        ),
+      ).toEqual({ action: 'expire' });
+    });
+
+    it('falls back to a safe timezone rather than throwing on an invalid tz', () => {
+      // safeTimeZone is applied in the dispatcher; the pure decision uses the raw
+      // helper which collapses an invalid tz to UTC. 03:00 UTC → inside the window.
+      const d = quietHoursDisposition(
+        'weekly_report_ready',
+        'Not/AZone',
+        new Date('2026-05-06T03:00:00Z'),
+      );
+      expect(d.action).toBe('defer');
+    });
+  });
+
+  // P2-B — exhaustiveness guard. Every registered slug MUST be classified into
+  // exactly ONE of the three quiet-hours buckets (exempt ∪ expire ∪ defer), on
+  // the model of the TTL/URGENCY parity tests. Without this, a slug added to
+  // NOTIFICATION_TYPES tomorrow would silently inherit the `defer` fallback in
+  // `quietHoursDisposition` — the very trap the P1 fix closed for check-ins.
+  describe('exhaustive quiet-hours classification (no silent inheritance)', () => {
+    it('classifies every NOTIFICATION_TYPES slug into exactly one bucket', () => {
+      for (const slug of NOTIFICATION_TYPES) {
+        const exempt = isQuietHoursExempt(slug);
+        const expire = isQuietHoursExpireOnHold(slug);
+        // The two explicit sets must be disjoint; anything in neither is a
+        // deliberate "defer" (the safe undated-nudge default).
+        expect(
+          Number(exempt) + Number(expire),
+          `${slug} in ≤1 explicit bucket`,
+        ).toBeLessThanOrEqual(1);
+
+        // Prove the disposition matches the bucket at a fixed night instant so a
+        // future slug can't be added without an author consciously placing it.
+        const disposition = quietHoursDisposition(slug, 'Europe/Paris', NIGHT_PARIS);
+        if (exempt) {
+          expect(disposition.action, `${slug} exempt → send`).toBe('send');
+        } else if (expire) {
+          expect(disposition.action, `${slug} dated → expire`).toBe('expire');
+        } else {
+          expect(disposition.action, `${slug} undated → defer`).toBe('defer');
+        }
+      }
+    });
+
+    it('the three buckets partition all 11 slugs (exempt + expire + defer = total)', () => {
+      const exemptCount = NOTIFICATION_TYPES.filter((s) => isQuietHoursExempt(s)).length;
+      const expireCount = NOTIFICATION_TYPES.filter((s) => isQuietHoursExpireOnHold(s)).length;
+      const deferCount = NOTIFICATION_TYPES.filter(
+        (s) => !isQuietHoursExempt(s) && !isQuietHoursExpireOnHold(s),
+      ).length;
+      expect(exemptCount + expireCount + deferCount).toBe(NOTIFICATION_TYPES.length);
+      // Pin the current split so a reclassification is a conscious test edit.
+      expect(exemptCount).toBe(4);
+      expect(expireCount).toBe(2);
+      expect(deferCount).toBe(5);
+    });
   });
 });

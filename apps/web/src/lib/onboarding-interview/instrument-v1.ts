@@ -150,13 +150,13 @@ const DIMENSIONS_V1: readonly OnboardingDimension[] = [
     label: 'Respect du système formation',
     description: 'Adhérence aux règles du système enseigné dans la formation Fxmily.',
     primarySource:
-      'Onboarding-specific (distinct from personal plan — captures teaching alignment)',
+      'Onboarding-specific (distinct from personal plan : captures teaching alignment)',
   },
   {
     id: 'patience_anti_fomo',
     label: 'Patience & anti-FOMO',
     description: 'Attendre ses conditions ; ne pas poursuivre le marché par peur de rater.',
-    primarySource: 'Douglas Trading in the Zone ch.7 (4 fears #3 — FOMO)',
+    primarySource: 'Douglas Trading in the Zone ch.7 (4 fears #3 : FOMO)',
   },
   {
     id: 'confidence_calibration',
@@ -477,7 +477,7 @@ const METADATA_V1: OnboardingInstrumentMetadata = {
       title: 'The Daily Trading Coach',
       author: 'Brett Steenbarger',
       year: 2009,
-      chapters: '101 lessons — referenced for body-located probes + process-vs-outcome',
+      chapters: '101 lessons : referenced for body-located probes + process-vs-outcome',
     },
     {
       title: 'Psychophysiology of Real-Time Financial Risk Processing',

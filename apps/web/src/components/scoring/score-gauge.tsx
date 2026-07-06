@@ -47,7 +47,18 @@ interface ScoreGaugeProps {
   describedById?: string;
   /** Optional 30-day micro-trend (nulls pre-filtered) for an inline sparkline. */
   trend?: number[];
+  /**
+   * Tour 15 — the member joined less than 30 days ago (see `lib/scoring/ramp-up`,
+   * `RAMP_UP_DAYS`). When true, a
+   * low score (< 50) is framed "En rodage" (calm accent) instead of "Critique"
+   * (red), with an encouraging caption. Presentation-only; the score is unchanged.
+   * Defaults to false so admin / non-member surfaces keep the true diagnostic tone.
+   */
+  rampUp?: boolean;
 }
+
+/** Tour 15 — encouraging caption shown under a gauge in its onboarding floor. */
+const RAMP_UP_HINT = 'Ta constance se construit. Les 30 premiers jours posent la base.';
 
 const REASON_TEXT: Record<NonNullable<ScoreGaugeProps['reason']>, string> = {
   no_trades: 'Pas encore de trades clôturés',
@@ -57,14 +68,21 @@ const REASON_TEXT: Record<NonNullable<ScoreGaugeProps['reason']>, string> = {
 };
 
 interface Tone {
-  key: 'acc' | 'cy' | 'warn' | 'bad' | 'mute';
+  key: 'acc' | 'cy' | 'warn' | 'bad' | 'mute' | 'ramp';
   stroke: string;
   glow: string;
   text: string;
   band: string;
 }
 
-function toneFor(score: number | null): Tone {
+/**
+ * Map a score to a display tone. `rampUp` (member joined < 30 days
+ * ago) FLOORS the lowest band: a sub-50 score reads "En rodage" (neutral accent,
+ * encouraging) rather than "Critique" (red). Only the bottom band changes — a
+ * member already at "À renforcer"/"Solide"/"Excellent" keeps that tone, and the
+ * numeric score is untouched (SPEC §2: we never punish, and never fake a level).
+ */
+function toneFor(score: number | null, rampUp = false): Tone {
   if (score === null)
     return {
       key: 'mute',
@@ -73,7 +91,17 @@ function toneFor(score: number | null): Tone {
       text: 'text-[var(--t-3)]',
       band: 'En attente',
     };
-  if (score < 50)
+  if (score < 50) {
+    if (rampUp)
+      // Onboarding floor — calm accent, never the red "Critique". The copy under
+      // the gauge (see `RAMP_UP_HINT`) explains the first 30 days build the base.
+      return {
+        key: 'ramp',
+        stroke: 'var(--acc)',
+        glow: 'var(--acc)',
+        text: 'text-[var(--acc)]',
+        band: 'En rodage',
+      };
     return {
       key: 'bad',
       stroke: 'var(--bad)',
@@ -81,6 +109,7 @@ function toneFor(score: number | null): Tone {
       text: 'text-[var(--bad)]',
       band: 'Critique',
     };
+  }
   if (score < 70)
     return {
       key: 'warn',
@@ -122,8 +151,11 @@ export function ScoreGauge({
   onClick,
   describedById,
   trend,
+  rampUp = false,
 }: ScoreGaugeProps) {
-  const tone = toneFor(score);
+  const tone = toneFor(score, rampUp);
+  // The onboarding floor is only visible when it actually replaces a low band.
+  const isRampUpFloor = tone.key === 'ramp';
   const prefersReducedMotion = useReducedMotion();
 
   // Premium count-up via Framer `useMotionValue` (J6.6 M3 fix). No setState
@@ -261,6 +293,13 @@ export function ScoreGauge({
           <span className="t-cap mt-1 inline-flex items-center gap-1 text-[var(--t-3)]">
             <Info className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
             {REASON_TEXT[reason]}
+          </span>
+        ) : null}
+        {/* Tour 15 — onboarding floor caption. Calm, encouraging, never punitive:
+            the first 30 days are for building the base, not for a red verdict. */}
+        {isRampUpFloor ? (
+          <span className="t-cap mt-1 max-w-[15rem] text-balance text-[var(--t-3)]">
+            {RAMP_UP_HINT}
           </span>
         ) : null}
       </div>

@@ -49,11 +49,13 @@ export function V18CbtDisclaimerBanner() {
           <p className="t-body mt-1 text-[var(--t-2)]">
             Inspiré du modèle <strong className="text-[var(--t-1)]">Ellis ABC + Disputation</strong>{' '}
             (REBT, 1955), adapté ici au contexte trader. Ce wizard est une{' '}
-            <em>structure de journaling</em>. Il n&apos;est{' '}
+            {/* Literal U+2019 and {'>'} expression (no HTML entity) — the SWC
+                compiler eats the leading space of a JSXText holding ANY entity
+                (Tour 15 proof: &apos;, &amp;, &gt; and numeric all trigger). */}
+            <em>structure de journaling</em>. Il n’est{' '}
             <strong className="text-[var(--t-1)]">pas validé cliniquement</strong> pour la
-            population trader et n&apos;est pas un substitut à un accompagnement
-            psychothérapeutique. Pour la posture process &gt; outcome, voir Mark Douglas{' '}
-            <em>Trading In The Zone</em>.
+            population trader et n’est pas un substitut à un accompagnement psychothérapeutique.
+            Pour la posture process {'>'} outcome, voir Mark Douglas <em>Trading In The Zone</em>.
           </p>
         </div>
       </div>

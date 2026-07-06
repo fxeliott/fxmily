@@ -301,7 +301,7 @@ export function DisciplineLoop({ className }: { className?: string }) {
           24% { opacity: 0; }
         }
 
-        /* Travelling spark — runs the orbit via motion-path. The path is the
+        /* Travelling spark - runs the orbit via motion-path. The path is the
            same circle (r = ${R}) centred at the viewBox centre. */
         .dl-spark-orbit {
           offset-path: path('M ${C} ${C - R} A ${R} ${R} 0 1 1 ${(C - 0.01).toFixed(2)} ${C - R} Z');
@@ -320,7 +320,7 @@ export function DisciplineLoop({ className }: { className?: string }) {
           50% { opacity: 0.65; }
         }
 
-        /* Core breathes very gently — the steady anchor of the loop. */
+        /* Core breathes very gently - the steady anchor of the loop. */
         .dl-core { transform-box: fill-box; transform-origin: center; animation: dlCoreBreathe 6s var(--e-smooth) infinite; will-change: opacity; }
         @keyframes dlCoreBreathe {
           0%, 100% { opacity: 0.92; }

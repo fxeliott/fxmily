@@ -355,6 +355,87 @@ export const envSchemaWithRefines = envSchema
     },
   )
   /**
+   * Tour 15 hardening — les 6 tokens des pipelines batch IA sont REQUIS en prod.
+   *
+   * Chaque `*_ADMIN_BATCH_TOKEN` reste `optional()` (dev/test n'authentifient pas
+   * les pulls locaux), mais sans lui en prod la route `/api/admin/<pipeline>-batch/*`
+   * répond 503 `<pipeline>_batch_disabled` (refuse-by-default,
+   * `lib/auth/admin-token.ts`) : le worker local ne peut plus pull, et le pipeline
+   * IA devient silencieusement MUET (incident passé « IA muette » — un token oublié
+   * au deploy coupe la génération sans erreur visible). On préfère bloquer le boot,
+   * exactement comme le refine `CRON_SECRET` ci-dessus. Même signal prod
+   * (`NODE_ENV === 'production'` OU `AUTH_URL` en HTTPS) dérivé de l'objet parsé,
+   * même contrainte de PRÉSENCE (la longueur `≥ 32 chars` est déjà portée par le
+   * `.min(32)` de chaque champ). Un refine par token → une issue de path ciblée,
+   * pour que le message d'erreur au boot nomme exactement le token manquant.
+   */
+  .refine(
+    (e) => {
+      const inProd = e.NODE_ENV === 'production' || e.AUTH_URL.startsWith('https://');
+      return !inProd || e.ADMIN_BATCH_TOKEN !== undefined;
+    },
+    {
+      message:
+        'ADMIN_BATCH_TOKEN est requis en production (sinon /api/admin/weekly-batch/* répond 503 admin_batch_disabled et le digest hebdo IA devient muet en silence).',
+      path: ['ADMIN_BATCH_TOKEN'],
+    },
+  )
+  .refine(
+    (e) => {
+      const inProd = e.NODE_ENV === 'production' || e.AUTH_URL.startsWith('https://');
+      return !inProd || e.MONTHLY_ADMIN_BATCH_TOKEN !== undefined;
+    },
+    {
+      message:
+        'MONTHLY_ADMIN_BATCH_TOKEN est requis en production (sinon /api/admin/monthly-batch/* répond 503 monthly_batch_disabled et le débrief mensuel IA devient muet en silence).',
+      path: ['MONTHLY_ADMIN_BATCH_TOKEN'],
+    },
+  )
+  .refine(
+    (e) => {
+      const inProd = e.NODE_ENV === 'production' || e.AUTH_URL.startsWith('https://');
+      return !inProd || e.CALENDAR_ADMIN_BATCH_TOKEN !== undefined;
+    },
+    {
+      message:
+        'CALENDAR_ADMIN_BATCH_TOKEN est requis en production (sinon /api/admin/calendar-batch/* répond 503 calendar_batch_disabled et le calendrier adaptatif IA devient muet en silence).',
+      path: ['CALENDAR_ADMIN_BATCH_TOKEN'],
+    },
+  )
+  .refine(
+    (e) => {
+      const inProd = e.NODE_ENV === 'production' || e.AUTH_URL.startsWith('https://');
+      return !inProd || e.VERIFICATION_ADMIN_BATCH_TOKEN !== undefined;
+    },
+    {
+      message:
+        'VERIFICATION_ADMIN_BATCH_TOKEN est requis en production (sinon /api/admin/verification-batch/* répond 503 verification_batch_disabled et la vision MT5 IA devient muette en silence).',
+      path: ['VERIFICATION_ADMIN_BATCH_TOKEN'],
+    },
+  )
+  .refine(
+    (e) => {
+      const inProd = e.NODE_ENV === 'production' || e.AUTH_URL.startsWith('https://');
+      return !inProd || e.SEANCES_ADMIN_BATCH_TOKEN !== undefined;
+    },
+    {
+      message:
+        'SEANCES_ADMIN_BATCH_TOKEN est requis en production (sinon /api/admin/seances-batch/* répond 503 seances_batch_disabled et le pipeline séances IA devient muet en silence).',
+      path: ['SEANCES_ADMIN_BATCH_TOKEN'],
+    },
+  )
+  .refine(
+    (e) => {
+      const inProd = e.NODE_ENV === 'production' || e.AUTH_URL.startsWith('https://');
+      return !inProd || e.PROFILE_ADMIN_BATCH_TOKEN !== undefined;
+    },
+    {
+      message:
+        'PROFILE_ADMIN_BATCH_TOKEN est requis en production (sinon /api/admin/member-profile-batch/* répond 503 profile_batch_disabled et le re-profilage mensuel IA devient muet en silence).',
+      path: ['PROFILE_ADMIN_BATCH_TOKEN'],
+    },
+  )
+  /**
    * RC#7 (2026-06-29 A-Z audit) — plancher du pool vs concurrence batch fixe.
    *
    * Les scans de vérification tournent à une concurrence codée en dur de 5

@@ -15,6 +15,7 @@ const m = vi.hoisted(() => ({
   proofFindMany: vi.fn(),
   proofFindUnique: vi.fn(),
   proofDelete: vi.fn(),
+  proofCount: vi.fn(),
   positionGroupBy: vi.fn(),
   discrepancyFindUnique: vi.fn(),
   discrepancyUpdateMany: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('@/lib/db', () => ({
       findMany: m.proofFindMany,
       findUnique: m.proofFindUnique,
       delete: m.proofDelete,
+      count: m.proofCount,
     },
     extractedPosition: {
       groupBy: m.positionGroupBy,
@@ -58,6 +60,7 @@ import {
   DiscrepancyNotFoundError,
   MAX_BROKER_ACCOUNTS_PER_MEMBER,
   ProofNotFoundError,
+  countPendingProofs,
   createBrokerAccount,
   deleteProof,
   getVerificationOverview,
@@ -167,6 +170,29 @@ describe('createBrokerAccount', () => {
     m.brokerAccountCreate.mockResolvedValue({ id: 'acc2' });
     await createBrokerAccount('member1', { label: 'Perso IC', type: 'personal' });
     expect(m.brokerAccountCreate.mock.calls[0]?.[0]?.data.brokerName).toBeNull();
+  });
+});
+
+describe('countPendingProofs — light poll counter (Tour 15)', () => {
+  it('counts only the member’s pending proofs via a single scoped count', async () => {
+    m.proofCount.mockResolvedValue(2);
+
+    const pending = await countPendingProofs('member1');
+
+    expect(pending).toBe(2);
+    // Single indexed count, scoped to the member + the exact `pending`
+    // predicate that VerificationOverview.pendingProofsCount uses, so the
+    // client can compare the two. No joins, no findMany.
+    expect(m.proofCount).toHaveBeenCalledTimes(1);
+    expect(m.proofCount.mock.calls[0]?.[0]).toEqual({
+      where: { memberId: 'member1', ocrStatus: 'pending' },
+    });
+    expect(m.proofFindMany).not.toHaveBeenCalled();
+  });
+
+  it('returns 0 when nothing is pending', async () => {
+    m.proofCount.mockResolvedValue(0);
+    await expect(countPendingProofs('member1')).resolves.toBe(0);
   });
 });
 

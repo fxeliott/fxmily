@@ -116,9 +116,16 @@ export function OffDaysManager({
         setFrom('');
         setTo('');
         setReason('');
-        // The upcoming list is NOT appended optimistically: the server owns the
-        // label format, so the fresh rows appear on the next navigation
-        // (revalidatePath refetches the page data).
+        // Merge the freshly-written rows into the visible list (Tour 15). The
+        // labels come from the SERVER response (same formatter as the SSR pass),
+        // so the member sees the absence appear immediately — a saved day that
+        // only shows after a reload reads as a failed save. Dedupe on date
+        // (re-declaring updates the reason), keep chronological order.
+        setUpcoming((prev) => {
+          const byDate = new Map(prev.map((d) => [d.date, d]));
+          for (const day of res.upcoming) byDate.set(day.date, day);
+          return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+        });
       } else {
         setMessage(
           res.error === 'invalid_input'

@@ -30,8 +30,8 @@ export default function TermsPage(): React.ReactElement {
       summary={
         <>
           Fxmily est un outil pédagogique de <strong>suivi comportemental</strong> pour les membres
-          de la formation Fxmily. Ce n&apos;est ni un signal service, ni un conseil en
-          investissement, ni une promesse de gains.
+          de la formation Fxmily. Ce n’est ni un signal service, ni un conseil en investissement, ni
+          une promesse de gains.
         </>
       }
     >
@@ -43,70 +43,69 @@ export default function TermsPage(): React.ReactElement {
         trading inspirées du framework Mark Douglas.
       </p>
 
-      <h2>2. Posture éducative · ce que Fxmily n&apos;est pas</h2>
+      <h2>2. Posture éducative · ce que Fxmily n’est pas</h2>
       <p>
         <strong>Fxmily ne donne aucun conseil de trade.</strong> Aucun setup, aucune prévision de
-        marché, aucun appel d&apos;achat ou de vente, aucune recommandation de paire. Les contenus
+        marché, aucun appel d’achat ou de vente, aucune recommandation de paire. Les contenus
         diffusés portent <strong>uniquement</strong> sur :
       </p>
       <ul>
         <li>
-          l&apos;<strong>exécution</strong> : sessions, hedge, plan, sizing, discipline ;
+          l’<strong>exécution</strong> : sessions, hedge, plan, sizing, discipline ;
         </li>
         <li>
           la <strong>psychologie</strong> : acceptation du risque, probabilités, gestion de la peur,
-          du tilt, de l&apos;ego (citations courtes attribuées + paraphrases originales).
+          du tilt, de l’ego (citations courtes attribuées + paraphrases originales).
         </li>
       </ul>
       <p>
         Le trading est risqué. Tu peux perdre tout ou partie de ton capital. Fxmily ne garantit
-        aucun résultat, ne mesure pas la performance financière, et n&apos;est pas un service de
-        conseil en investissement au sens du Code monétaire et financier. Tu restes seul responsable
-        de tes décisions de trade.
+        aucun résultat, ne mesure pas la performance financière, et n’est pas un service de conseil
+        en investissement au sens du Code monétaire et financier. Tu restes seul responsable de tes
+        décisions de trade.
       </p>
 
       <h2>3. Accès</h2>
       <p>
-        L&apos;accès est <strong>sur invitation uniquement</strong>, émise par Eliott ou un admin
-        autorisé. Le compte est strictement personnel et non transférable. Tu t&apos;engages à
-        garder ton mot de passe confidentiel et à signaler tout accès suspect.
+        L’accès est <strong>sur invitation uniquement</strong>, émise par Eliott ou un admin
+        autorisé. Le compte est strictement personnel et non transférable. Tu t’engages à garder ton
+        mot de passe confidentiel et à signaler tout accès suspect.
       </p>
 
       <h2>4. Tes engagements</h2>
       <ul>
         <li>
-          ne pas tenter d&apos;accéder à un autre compte que le tien (réservé : sanctions pénales,
+          ne pas tenter d’accéder à un autre compte que le tien (réservé : sanctions pénales,
           article 323-1 du Code pénal) ;
         </li>
         <li>
-          ne pas uploader de contenu illégal, diffamatoire, ou portant atteinte aux droits
-          d&apos;autrui ;
+          ne pas uploader de contenu illégal, diffamatoire, ou portant atteinte aux droits d’autrui
+          ;
         </li>
         <li>
           ne pas redistribuer publiquement les fiches Mark Douglas reçues (citations sous fair use
           FR L122-5, paraphrases écrites par Eliott) ;
         </li>
-        <li>ne pas tenter d&apos;extraire la base de données ou de la rétro-ingénier ;</li>
+        <li>ne pas tenter d’extraire la base de données ou de la rétro-ingénier ;</li>
         <li>
-          ne pas utiliser Fxmily comme d&apos;un signal service ou d&apos;un outil de copy-trade
-          partagé.
+          ne pas utiliser Fxmily comme d’un signal service ou d’un outil de copy-trade partagé.
         </li>
       </ul>
 
       <h2>5. Propriété intellectuelle</h2>
       <p>
         Le code, le design DS v2, les paraphrases Mark Douglas et les marques Fxmily sont la
-        propriété d&apos;Eliott Pena. Tes données personnelles (trades, check-ins, journal) restent
-        ta propriété, tu peux les exporter ou les effacer à tout moment depuis{' '}
+        propriété d’Eliott Pena. Tes données personnelles (trades, check-ins, journal) restent ta
+        propriété, tu peux les exporter ou les effacer à tout moment depuis{' '}
         <a href="/account/data">/account/data</a> et <a href="/account/delete">/account/delete</a>.
       </p>
 
       <h2>6. Disponibilité</h2>
       <p>
         Fxmily V1 tourne sur un serveur unique Hetzner CX22 (Falkenstein, UE). Aucune garantie de
-        disponibilité n&apos;est promise. Un incident peut entraîner une indisponibilité temporaire.
-        Une maintenance planifiée est annoncée par email avec ≥ 24h de préavis quand c&apos;est
-        possible. Sauvegardes quotidiennes chiffrées (cf.{' '}
+        disponibilité n’est promise. Un incident peut entraîner une indisponibilité temporaire. Une
+        maintenance planifiée est annoncée par email avec ≥ 24h de préavis quand c’est possible.
+        Sauvegardes quotidiennes chiffrées (cf.{' '}
         <a href="/legal/privacy">politique de confidentialité §4</a>).
       </p>
 
@@ -121,7 +120,7 @@ export default function TermsPage(): React.ReactElement {
 
       <h2>8. Responsabilité</h2>
       <p>
-        Eliott s&apos;engage à fournir Fxmily avec un soin raisonnable. Sa responsabilité ne peut
+        Eliott s’engage à fournir Fxmily avec un soin raisonnable. Sa responsabilité ne peut
         toutefois être engagée pour les pertes financières liées à tes décisions de trade, les
         indisponibilités liées à un sous-traitant (Hetzner, Cloudflare, Resend), ou un cas de force
         majeure. Si une clause des présentes CGU était jugée nulle, les autres resteraient
@@ -131,8 +130,8 @@ export default function TermsPage(): React.ReactElement {
       <h2>9. Droit applicable</h2>
       <p>
         Les présentes CGU sont régies par le droit français. Tout litige relève de la compétence
-        exclusive des tribunaux du ressort du siège de l&apos;éditeur, sauf disposition légale
-        impérative contraire (notamment droit de la consommation).
+        exclusive des tribunaux du ressort du siège de l’éditeur, sauf disposition légale impérative
+        contraire (notamment droit de la consommation).
       </p>
 
       <h2>10. Modifications</h2>

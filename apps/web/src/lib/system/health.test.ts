@@ -174,12 +174,19 @@ describe('getCronHealthReport', () => {
         action: 'cron.autoheal.heartbeat',
         _max: { createdAt: new Date(now.getTime() - 30 * MIN) },
       },
+      {
+        // Tour 15 — daily admin brief (period DAY, age 12h → green). With a
+        // real heartbeat row, classification is age-based and `expectedSince`
+        // (in the future relative to this May-dated `now`) is irrelevant.
+        action: 'cron.admin_daily_brief.scan',
+        _max: { createdAt: new Date(now.getTime() - 12 * HOUR) },
+      },
     ]);
 
     const report = await getCronHealthReport(now);
 
     expect(report.overall).toBe('green');
-    expect(report.entries).toHaveLength(19);
+    expect(report.entries).toHaveLength(20);
     expect(report.entries.every((e) => e.status === 'green')).toBe(true);
     expect(report.ranAt).toBe(now.toISOString());
   });
@@ -371,13 +378,16 @@ describe('getCronHealthReport', () => {
     // Tour 14 — the autoheal watchdog DOES carry `expectedSince` (2026-07-05),
     // which is in the FUTURE relative to this May-dated `now`, so its absence is
     // `pending` ("premier run à venir"), not `never_ran` — by design (same
-    // pattern as the worker member_profile_monthly pipeline). Assert the split.
-    const dated = report.entries.filter((e) => e.action !== 'cron.autoheal.heartbeat');
+    // pattern as the worker member_profile_monthly pipeline). Tour 15 — the
+    // daily admin brief carries `expectedSince` (2026-07-06) too. Assert the split.
+    const PENDING_BY_DESIGN = ['cron.autoheal.heartbeat', 'cron.admin_daily_brief.scan'];
+    const dated = report.entries.filter((e) => !PENDING_BY_DESIGN.includes(e.action));
     expect(dated.every((e) => e.status === 'never_ran')).toBe(true);
     expect(report.entries.every((e) => e.lastRanAt === null)).toBe(true);
     expect(report.entries.every((e) => e.ageMs === null)).toBe(true);
-    const autoheal = report.entries.find((e) => e.action === 'cron.autoheal.heartbeat');
-    expect(autoheal?.status).toBe('pending');
+    for (const action of PENDING_BY_DESIGN) {
+      expect(report.entries.find((e) => e.action === action)?.status).toBe('pending');
+    }
     // `pending` is healthy and never escalates the masthead, but a genuine
     // `never_ran` on every other cron still surfaces the overall as never_ran.
     expect(report.overall).toBe('never_ran');
@@ -496,11 +506,13 @@ describe('getCronHealthReport', () => {
    * the last AI pipeline that had no anti-forget net — §33).
    * Tour 14 raised it 18 → 19 (the host autoheal watchdog heartbeat, P1-4 —
    * a self-healer nobody watches is the blind spot the worker layer had).
+   * Tour 15 raised it 19 → 20 (the daily admin brief — a STANDING report that
+   * heartbeats every run, so a silently broken brief cron surfaces red).
    */
-  it('always returns exactly 19 entries (Tour 14 — added the autoheal watchdog heartbeat)', async () => {
+  it('always returns exactly 20 entries (Tour 15 — added the daily admin brief)', async () => {
     auditGroupByMock.mockResolvedValueOnce([]);
     const report = await getCronHealthReport();
-    expect(report.entries).toHaveLength(19);
+    expect(report.entries).toHaveLength(20);
     // self-monitoring of the watcher (cron-watch.yml).
     expect(report.entries.map((e) => e.action)).toContain('cron.health.scan');
     // audit_log retention purge (V2-roadmap reclassed).
@@ -523,6 +535,8 @@ describe('getCronHealthReport', () => {
     expect(report.entries.map((e) => e.action)).toContain('cron.purge_access_requests.scan');
     // Tour 14 — host autoheal watchdog heartbeat (P1-4).
     expect(report.entries.map((e) => e.action)).toContain('cron.autoheal.heartbeat');
+    // Tour 15 — daily admin brief heartbeat (standing report, 07:05 Paris).
+    expect(report.entries.map((e) => e.action)).toContain('cron.admin_daily_brief.scan');
   });
 
   /**

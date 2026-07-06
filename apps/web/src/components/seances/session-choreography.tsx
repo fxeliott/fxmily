@@ -25,11 +25,11 @@ interface SessionWindow {
 
 /** Eliott's NY-session windows, Europe/Paris (mirror keyTakeaway "fenêtres horaires"). */
 const WINDOWS: readonly SessionWindow[] = [
-  { time: '13h–14h', label: 'Calme', hint: 'Peu d’activité attendue avant la séance.' },
-  { time: '14h–15h', label: 'Manipulation', hint: 'Une première manipulation peut se former.' },
-  { time: '15h–15h30', label: 'Pré-session', hint: 'Mise en place avant l’ouverture américaine.' },
+  { time: '13h-14h', label: 'Calme', hint: 'Peu d’activité attendue avant la séance.' },
+  { time: '14h-15h', label: 'Manipulation', hint: 'Une première manipulation peut se former.' },
+  { time: '15h-15h30', label: 'Pré-session', hint: 'Mise en place avant l’ouverture américaine.' },
   { time: '15h30', label: 'Ouverture US', hint: 'La session américaine démarre.' },
-  { time: '15h30–16h', label: 'Open', hint: 'L’ouverture peut encore manipuler.' },
+  { time: '15h30-16h', label: 'Open', hint: 'L’ouverture peut encore manipuler.' },
 ];
 
 export function SessionChoreography() {

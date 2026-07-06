@@ -7,6 +7,7 @@ import { auth } from '@/auth';
 import { OffDaysManager, type UpcomingOffDay } from '@/components/account/off-days-manager';
 import { DashboardAmbient } from '@/components/dashboard/dashboard-ambient';
 import { btnVariants } from '@/components/ui/btn';
+import { formatOffDayLabel } from '@/lib/checkin/off-day-label';
 import { localDateOf, parseLocalDate } from '@/lib/checkin/timezone';
 import { db } from '@/lib/db';
 
@@ -52,18 +53,11 @@ export default async function AccountRythmePage(): Promise<React.ReactElement> {
     }),
   ]);
 
-  // Format each day label in French from the UTC-midnight civil date (no tz
-  // shift: the pinned date IS the civil day). `timeZone: 'UTC'` keeps the label
-  // on the stored calendar day.
-  const dateLabelFmt = new Intl.DateTimeFormat('fr-FR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  });
+  // Labels via the shared formatter (Tour 15) — the range action returns rows
+  // formatted by the SAME helper, so the optimistic list update matches SSR.
   const initialUpcoming: UpcomingOffDay[] = offRows.map((row) => {
     const iso = row.date.toISOString().slice(0, 10);
-    return { date: iso, label: dateLabelFmt.format(row.date), reason: row.reason };
+    return { date: iso, label: formatOffDayLabel(row.date), reason: row.reason };
   });
 
   return (

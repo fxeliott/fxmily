@@ -94,6 +94,8 @@ export async function POST(req: NextRequest) {
         scanned: result.scanned,
         sent: result.sent,
         retried: result.retried,
+        deferred: result.deferred,
+        expired: result.expired,
         failed: result.failed,
         skipped: result.skipped,
         recoveredStuck: result.recoveredStuck,

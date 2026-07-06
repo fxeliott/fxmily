@@ -33,7 +33,7 @@ fi
 # Next.js side ALSO refuses unknown cron routes (404) but defense-in-depth
 # starts here, before the secret leaves the host.
 case "$ROUTE" in
-  checkin-reminders|recompute-scores|dispatch-douglas|weekly-reports|dispatch-notifications|purge-deleted|purge-push-subscriptions|purge-audit-log|mindset-check-reminders|generate-meetings|purge-access-requests|calendar-overdue-alert|monthly-debrief-overdue-alert|onboarding-profile-overdue-alert|verification-scan|weekly-report-overdue-alert|verification-batch-overdue-alert) ;;
+  checkin-reminders|recompute-scores|dispatch-douglas|weekly-reports|dispatch-notifications|purge-deleted|purge-push-subscriptions|purge-audit-log|mindset-check-reminders|generate-meetings|purge-access-requests|calendar-overdue-alert|monthly-debrief-overdue-alert|onboarding-profile-overdue-alert|verification-scan|weekly-report-overdue-alert|verification-batch-overdue-alert|admin-daily-brief|restore-drill) ;;
   *)
     echo "[fxmily-cron] route '$ROUTE' is not in the allowlist" >&2
     exit 2
@@ -55,6 +55,29 @@ ts() { date -u +'%Y-%m-%dT%H:%M:%SZ'; }
 mkdir -p "$(dirname "$CRON_LOG")"
 
 START_TS="$(ts)"
+
+# Tour 15 — `restore-drill` is a LOCAL host binary, not an /api/cron route.
+# It routes through this wrapper so the host crontab only ever uses the ONE
+# line shape every deployed generation of the root validator accepts
+# (`fxmily /usr/local/bin/fxmily-cron <task>`). The validator is root-pinned
+# and never self-converges from the fxmily-writable staging dir (by design:
+# that path would be a root escalation), so a crontab line must NEVER depend
+# on a newer validator regex — the tour-14 direct `fxmily-restore-drill`
+# line proved it by failing the 2026-07-06 deploy against the still-installed
+# tour-12 validator. THIS runner, by contrast, IS converged on every deploy.
+if [[ "$ROUTE" == "restore-drill" ]]; then
+  DRILL_BIN=/usr/local/bin/fxmily-restore-drill
+  if [[ ! -x "$DRILL_BIN" ]]; then
+    echo "[$(ts)] [fxmily-cron] restore-drill FAIL: $DRILL_BIN missing — reinstall the up-to-date fxmily-sync-cron (it installs the drill binary), see ops/cron/README.md" >> "$CRON_LOG"
+    exit 22
+  fi
+  if "$DRILL_BIN" >> "$CRON_LOG" 2>&1; then
+    echo "[$(ts)] [fxmily-cron] restore-drill OK ($START_TS → $(ts))" >> "$CRON_LOG"
+    exit 0
+  fi
+  echo "[$(ts)] [fxmily-cron] restore-drill FAIL non-zero exit ($START_TS → $(ts))" >> "$CRON_LOG"
+  exit 22
+fi
 
 # `--max-time 600` — most cron tasks return < 60s. The 10-minute ceiling
 # protects against a stuck weekly-reports run from blocking the next run.

@@ -1,14 +1,21 @@
 import 'server-only';
 
+import type { DiscrepancyStatus } from '@/generated/prisma/enums';
 import { db } from '@/lib/db';
 import { logAudit } from '@/lib/auth/audit';
 import { reportError } from '@/lib/observability';
-import { isWeekendLocalDate } from '@/lib/checkin/off-days';
+import {
+  getOffDaySet,
+  isOffDay,
+  isWeekendLocalDate,
+  type OffDayContext,
+} from '@/lib/checkin/off-days';
 import {
   localDateOf,
   localInstantToUtc,
   parseLocalDate,
   shiftLocalDate,
+  type LocalDateString,
 } from '@/lib/checkin/timezone';
 import { MEETING_WINDOW_DAYS, meetingJoinFloor } from '@/lib/meeting/window';
 import { listClosedOccurrences, localDateToUtcMidnight } from '@/lib/tracking/cadence';
@@ -710,6 +717,42 @@ export interface FoldInputEvent {
 }
 
 /**
+ * THE single excusal rule of the constancy engine — used by the daily fold
+ * (`recomputeConstancyForAllMembers`), the member-facing feed
+ * (`listRecentScoreEvents`) and the backfill script, so the three surfaces
+ * can never drift apart. A negative event is neutralized (zero penalty, treated
+ * as excused in the fold) when ANY of:
+ *   1. the member gave a valid reason on the linked discrepancy (`memberReason`);
+ *   2. the accusation was RETRACTED by reality itself (the linked discrepancy
+ *      resolved — reconcile confirmed the trade after the fact, so the member
+ *      must not self-excuse our own premature verdict);
+ *   3. Tour 15 — the event's civil day was an OFF day for the member (a weekend
+ *      while `weekendsOff` is on, or an explicitly declared `MemberOffDay`). An
+ *      off day is a "pont": the member owed nothing, so a forgot/blank-day
+ *      penalty on it must vanish. The CURRENT `weekendsOff` flag applies to PAST
+ *      days too — it is the member's declared rhythm, so declaring a day off
+ *      retroactively (or flipping the weekend preference) neutralizes penalties
+ *      the scan already created.
+ *
+ * `offContext` is `null` when the caller has no off-day data (e.g. an event with
+ * no meaningful civil day) — then only rules 1 & 2 apply, byte-identical to the
+ * pre-Tour-15 rule.
+ */
+export function isEventExcused(input: {
+  memberReason: string | null | undefined;
+  status: DiscrepancyStatus | string | null | undefined;
+  /** Event's civil day (member timezone, YYYY-MM-DD) — the off-day probe key. */
+  eventLocalDate?: LocalDateString | null;
+  offContext?: OffDayContext | null;
+}): boolean {
+  if (input.memberReason != null || input.status === 'resolved') return true;
+  if (input.offContext && input.eventLocalDate) {
+    return isOffDay(input.eventLocalDate, input.offContext);
+  }
+  return false;
+}
+
+/**
  * Pure fold — unit-testable (DoD §31 #3 « le score monte et descend »).
  * `everConfronted` gates the honesty axis (§33.6: no proof ⇒ no honesty
  * verdict, never a fake 100).
@@ -786,8 +829,37 @@ export async function recomputeConstancyForAllMembers(
 
   const members = await db.user.findMany({
     where: { status: 'active', role: 'member' },
-    select: { id: true },
+    // Tour 15 — `weekendsOff` drives the off-day neutralization of the fold: a
+    // forgot/blank-day event on an off day is treated as excused (zero penalty),
+    // and a blank-day discrepancy on an off day drops out of the discipline
+    // denominator. The CURRENT flag applies to past days too (the member's
+    // declared rhythm), so flipping it — or declaring a day off retroactively —
+    // heals scores the scan already dinged.
+    select: { id: true, weekendsOff: true },
   });
+
+  // Tour 15 — bulk-load the EXPLICIT off days in the widest fold window (the 28 j
+  // discipline span ⊇ the 7 j regularity week) in ONE query for every member,
+  // mirroring the daily scan's constant-round-trip batch (no N+1). Grouped into a
+  // Map<userId, Set<YYYY-MM-DD>>; each member's `OffDayContext` is assembled from
+  // this set + their own `weekendsOff` flag below.
+  const memberIds = members.map((m) => m.id);
+  const offWindowStart = parseLocalDate(
+    shiftLocalDate(periodStartLocal, -(DISCIPLINE_WINDOW_DAYS - 1)),
+  );
+  const explicitOffRows = await db.memberOffDay.findMany({
+    where: { userId: { in: memberIds }, date: { gte: offWindowStart, lt: windowEnd } },
+    select: { userId: true, date: true },
+  });
+  const explicitOffByMember = new Map<string, Set<LocalDateString>>();
+  for (const row of explicitOffRows) {
+    let set = explicitOffByMember.get(row.userId);
+    if (!set) {
+      set = new Set<LocalDateString>();
+      explicitOffByMember.set(row.userId, set);
+    }
+    set.add(row.date.toISOString().slice(0, 10));
+  }
 
   let scoresUpserted = 0;
   let errors = 0;
@@ -798,11 +870,20 @@ export async function recomputeConstancyForAllMembers(
   // sequential loop. Synchronous `+=` between awaits is atomic under JS's
   // cooperative scheduling. Only error handling moves to the settled zip.
   const settled = await mapMembersChunked(members, async (member) => {
+    const offContext: OffDayContext = {
+      weekendsOff: member.weekendsOff,
+      explicitDates: explicitOffByMember.get(member.id) ?? new Set<LocalDateString>(),
+    };
+
     const [events, confrontedCount, discrepancies] = await Promise.all([
       db.scoreEvent.findMany({
         where: { memberId: member.id, createdAt: { gte: windowStart, lt: windowEnd } },
         select: {
           reason: true,
+          // Tour 15 — the ritual day is stamped on `createdAt` (Paris midnight
+          // pin), so `localDateOf(...,'Europe/Paris')` recovers the event's civil
+          // day for the off-day probe.
+          createdAt: true,
           relatedDiscrepancy: { select: { memberReason: true, status: true } },
         },
       }),
@@ -812,26 +893,39 @@ export async function recomputeConstancyForAllMembers(
           memberId: member.id,
           detectedAt: { gte: new Date(now.getTime() - DISCIPLINE_WINDOW_DAYS * 86_400_000) },
         },
-        select: { status: true, memberReason: true },
+        // Tour 15 — `type` + `detectedAt` added: a blank-day (`unfilled_no_reason`)
+        // gap whose civil day is an off day is neutralized (excused) in the
+        // discipline denominator too — the member owed nothing that day.
+        select: { status: true, memberReason: true, type: true, detectedAt: true },
       }),
     ]);
 
     const folded = foldConstancy(
       events.map((e) => ({
         reason: e.reason,
-        // Excused = member gave a valid reason OR the accusation was
-        // RETRACTED by reality itself (reconcile resolved it — the proof
-        // arrived later and confirmed the trade; the member must not have
-        // to self-excuse for our own premature verdict).
-        excused:
-          e.relatedDiscrepancy?.memberReason != null || e.relatedDiscrepancy?.status === 'resolved',
+        // Excused = member reason OR reality-retracted (resolved) OR the event's
+        // civil day was an off day (Tour 15). Shared rule via `isEventExcused`.
+        excused: isEventExcused({
+          memberReason: e.relatedDiscrepancy?.memberReason,
+          status: e.relatedDiscrepancy?.status,
+          eventLocalDate: localDateOf(e.createdAt, 'Europe/Paris'),
+          offContext,
+        }),
       })),
       {
         everConfronted: confrontedCount > 0,
         discrepancies28d: {
           total: discrepancies.length,
-          addressed: discrepancies.filter((d) => d.status !== 'open' || d.memberReason !== null)
-            .length,
+          addressed: discrepancies.filter(
+            (d) =>
+              d.status !== 'open' ||
+              d.memberReason !== null ||
+              // Tour 15 — a blank-day gap on an off day counts as faced (the
+              // member had nothing to answer for). Only `unfilled_no_reason` is
+              // date-anchored to a member off day; meeting/tracking gaps are not.
+              (d.type === 'unfilled_no_reason' &&
+                isOffDay(localDateOf(d.detectedAt, 'Europe/Paris'), offContext)),
+          ).length,
         },
       },
     );
@@ -896,13 +990,20 @@ export interface ConstancyScoreView {
   readonly computedAt: Date;
 }
 
+/** Why an event was neutralized — drives the member-facing motif label. */
+export type ScoreEventExcusalReason = 'member_reason' | 'resolved' | 'off_day';
+
 export interface ScoreEventView {
   readonly id: string;
   readonly delta: number;
   readonly reason: 'filled' | 'forgot_no_reason' | 'reality_gap' | 'false_declaration';
-  /** Mirror of the weekly fold's excusal rule — member reason given OR the
-   *  accusation was retracted by reality (`resolved`). */
+  /** Mirror of the weekly fold's excusal rule — member reason given, accusation
+   *  retracted by reality (`resolved`), OR the event's civil day was an off day
+   *  (Tour 15). */
   readonly excused: boolean;
+  /** WHY it was excused, so the feed can show a clear motif (« jour off » vs
+   *  « motif donné »). `null` when the event is not excused. */
+  readonly excusedReason: ScoreEventExcusalReason | null;
   readonly createdAt: Date;
 }
 
@@ -910,7 +1011,9 @@ export interface ScoreEventView {
  * S4 (DOD3-T3-02) — the schema's promise « keeps the score explainable to
  * the member » made real: the most recent events feeding « Pourquoi ton
  * score bouge » on /verification. Applies the SAME excusal rule as the
- * weekly fold (constancy stays one single story).
+ * weekly fold (`isEventExcused`) so constancy stays one single story — Tour 15
+ * added off-day neutralization: an event on an off day reads « jour off », not
+ * a manque.
  */
 export async function listRecentScoreEvents(
   memberId: string,
@@ -928,14 +1031,42 @@ export async function listRecentScoreEvents(
       relatedDiscrepancy: { select: { memberReason: true, status: true } },
     },
   });
-  return rows.map((r) => ({
-    id: r.id,
-    delta: r.delta,
-    reason: r.reason,
-    excused:
-      r.relatedDiscrepancy?.memberReason != null || r.relatedDiscrepancy?.status === 'resolved',
-    createdAt: r.createdAt,
-  }));
+
+  // Tour 15 — resolve the member's off-day context over exactly the span the
+  // returned events cover (min→max civil day), so a forgot/blank-day event that
+  // fell on an off day reads as neutralized. ONE range query via the shared,
+  // request-memoised `getOffDaySet`.
+  let offContext: OffDayContext | null = null;
+  if (rows.length > 0) {
+    const days = rows.map((r) => localDateOf(r.createdAt, 'Europe/Paris'));
+    const fromLocal = days.reduce((min, d) => (d < min ? d : min), days[0]!);
+    const toLocal = days.reduce((max, d) => (d > max ? d : max), days[0]!);
+    offContext = await getOffDaySet(memberId, fromLocal, toLocal);
+  }
+
+  return rows.map((r) => {
+    const eventLocalDate = localDateOf(r.createdAt, 'Europe/Paris');
+    const memberReason = r.relatedDiscrepancy?.memberReason;
+    const status = r.relatedDiscrepancy?.status;
+    const excused = isEventExcused({ memberReason, status, eventLocalDate, offContext });
+    // Precedence mirrors `isEventExcused`: a real motif/resolution wins the label
+    // over the off-day pont (an event can be both, the motif is the truer story).
+    const excusedReason: ScoreEventExcusalReason | null = !excused
+      ? null
+      : memberReason != null
+        ? 'member_reason'
+        : status === 'resolved'
+          ? 'resolved'
+          : 'off_day';
+    return {
+      id: r.id,
+      delta: r.delta,
+      reason: r.reason,
+      excused,
+      excusedReason,
+      createdAt: r.createdAt,
+    };
+  });
 }
 
 /** Map a `ConstancyScore` row (Json `breakdown`) to the count-only view. */

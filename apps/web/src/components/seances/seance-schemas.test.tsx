@@ -129,9 +129,9 @@ describe('SessionChoreography', () => {
     expect(screen.getByText(/Phase 1/)).toBeInTheDocument();
     expect(screen.getByText(/Phase 2/)).toBeInTheDocument();
     // The NY session windows (Europe/Paris).
-    expect(screen.getByText('13h–14h')).toBeInTheDocument();
+    expect(screen.getByText('13h-14h')).toBeInTheDocument();
     expect(screen.getByText('15h30')).toBeInTheDocument();
-    expect(screen.getByText('15h30–16h')).toBeInTheDocument();
+    expect(screen.getByText('15h30-16h')).toBeInTheDocument();
   });
 });
 

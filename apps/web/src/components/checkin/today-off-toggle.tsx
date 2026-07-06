@@ -131,6 +131,7 @@ export function TodayOffToggle({
         ) : (
           <button
             type="button"
+            data-slot="today-off-declare"
             onClick={declare}
             disabled={isPending}
             className="rounded-control inline-flex w-fit items-center gap-1.5 border border-[var(--cy-edge-soft)] bg-[var(--cy-dim)] px-3 py-1.5 text-[12px] font-medium text-[var(--cy)] transition-colors hover:border-[var(--cy-edge)] focus-visible:ring-2 focus-visible:ring-[var(--b-acc)] focus-visible:outline-none disabled:opacity-50"

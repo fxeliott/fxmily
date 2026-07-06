@@ -73,7 +73,13 @@ ENV SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN} \
     DATABASE_URL=postgresql://placeholder:placeholder@build-time-only:5432/placeholder \
     AUTH_SECRET=build_time_only_placeholder_must_be_at_least_32_chars \
     AUTH_URL=https://build.fxmily.invalid \
-    CRON_SECRET=build_time_only_placeholder_cron_secret_min_24
+    CRON_SECRET=build_time_only_placeholder_cron_secret_min_24 \
+    ADMIN_BATCH_TOKEN=build_time_only_placeholder_admin_batch_token_32c \
+    MONTHLY_ADMIN_BATCH_TOKEN=build_time_only_placeholder_monthly_batch_32c \
+    CALENDAR_ADMIN_BATCH_TOKEN=build_time_only_placeholder_calendar_batch_32 \
+    VERIFICATION_ADMIN_BATCH_TOKEN=build_time_only_placeholder_verif_batch_32 \
+    SEANCES_ADMIN_BATCH_TOKEN=build_time_only_placeholder_seances_batch_32c \
+    PROFILE_ADMIN_BATCH_TOKEN=build_time_only_placeholder_profile_batch_32c
 
 # Prisma client (Rust-free, driver adapter — generated under
 # `apps/web/src/generated/prisma/`).

@@ -110,7 +110,7 @@ const pauseRingCss = `
   0%, 100% { transform: scale(0.92); }
   50% { transform: scale(1.08); }
 }
-/* DOUBLE-GUARD reduced-motion — freeze at a calm resting pose, not mid-pulse. */
+/* DOUBLE-GUARD reduced-motion - freeze at a calm resting pose, not mid-pulse. */
 @media (prefers-reduced-motion: reduce) {
   [data-slot='pause-ring'] .pr-ring,
   [data-slot='pause-ring'] .pr-glow,
@@ -123,7 +123,7 @@ const pauseRingCss = `
   [data-slot='pause-ring'] .pr-ring-3 { opacity: 0.4; }
   [data-slot='pause-ring'] .pr-glow { opacity: 0.1; }
 }
-/* forced-colors — drop the decorative soft bloom (no broken halo). */
+/* forced-colors - drop the decorative soft bloom (no broken halo). */
 @media (forced-colors: active) {
   [data-slot='pause-ring'] .pr-glow { display: none; }
 }

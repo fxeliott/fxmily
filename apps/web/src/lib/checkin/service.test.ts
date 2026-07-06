@@ -27,6 +27,7 @@ import { db } from '@/lib/db';
 
 import {
   CheckinBackfillJustificationRequiredError,
+  getRecentBackfillDays,
   getStreak,
   getYesterdayBackfill,
   listMemberCheckinsAsAdmin,
@@ -407,5 +408,118 @@ describe('getStreak — off-day pont', () => {
 
     // The empty Sat/Sun are working days for this member → today only.
     expect(out.current).toBe(1);
+  });
+});
+
+/**
+ * Tour 15 — `getRecentBackfillDays` lists the last few EXPECTED (non-off) days
+ * the member never fully filled, newest first, capped at 3, off-aware and
+ * bounded to the 60-day backfill horizon. Today is excluded (normal same-day
+ * flow, not a rattrapage).
+ */
+describe('getRecentBackfillDays — multi-day rattrapage cue (Tour 15)', () => {
+  const TZ = 'Europe/Paris';
+  // Paris-local today at NOW = Wednesday 2026-06-10 (UTC+2, 11:00 local).
+  const NOW = new Date('2026-06-10T09:00:00.000Z');
+  const d = (s: string) => new Date(`${s}T00:00:00.000Z`);
+
+  beforeEach(() => {
+    // Default off-day context: weekends off, no explicit declarations.
+    vi.mocked(db.user.findUnique).mockResolvedValue({ weekendsOff: true } as never);
+    vi.mocked(db.memberOffDay.findMany).mockResolvedValue([] as never);
+  });
+
+  it('lists up to 3 recent expected days that are missing a slot, newest first', async () => {
+    // Yesterday 06-09 (Tue) fully empty, 06-08 (Mon) evening only, 06-05 (Fri)
+    // morning only. 06-06/06-07 are the weekend (off → skipped). 06-04 exists
+    // but the cap stops us at 3 incomplete days.
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([
+      { date: d('2026-06-08'), slot: 'evening' },
+      { date: d('2026-06-05'), slot: 'morning' },
+      { date: d('2026-06-04'), slot: 'morning' },
+    ] as never);
+
+    const out = await getRecentBackfillDays('rb-1', TZ, NOW);
+
+    expect(out).toEqual([
+      { date: '2026-06-09', morningMissing: true, eveningMissing: true },
+      { date: '2026-06-08', morningMissing: true, eveningMissing: false },
+      { date: '2026-06-05', morningMissing: false, eveningMissing: true },
+    ]);
+  });
+
+  it('steps over the off weekend (weekendsOff=true) — a rest is never a rattrapage', async () => {
+    // Everything empty; only the two weekdays 06-09 (Tue) and 06-08 (Mon) count.
+    // The Sat 06-06 / Sun 06-07 are off and must not appear.
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([] as never);
+
+    const out = await getRecentBackfillDays('rb-2', TZ, NOW, 3);
+
+    expect(out.map((r) => r.date)).toEqual(['2026-06-09', '2026-06-08', '2026-06-05']);
+    // 06-06 and 06-07 (the weekend) never surface.
+    expect(out.some((r) => r.date === '2026-06-06' || r.date === '2026-06-07')).toBe(false);
+  });
+
+  it('skips an explicitly declared off day even on a weekday', async () => {
+    // Member declared 06-09 (Tue) off → it must not be offered, so the walk
+    // moves to 06-08 (Mon) then the Fri 06-05.
+    vi.mocked(db.memberOffDay.findMany).mockResolvedValue([{ date: d('2026-06-09') }] as never);
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([] as never);
+
+    const out = await getRecentBackfillDays('rb-3', TZ, NOW, 3);
+
+    expect(out.some((r) => r.date === '2026-06-09')).toBe(false);
+    expect(out.map((r) => r.date)).toEqual(['2026-06-08', '2026-06-05', '2026-06-04']);
+  });
+
+  it('skips fully covered recent days and surfaces the next incomplete one', async () => {
+    // 06-09 and 06-08 both fully filled → not offered; the walk continues to the
+    // Fri 06-05 (empty) which becomes the first incomplete expected day.
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([
+      { date: d('2026-06-09'), slot: 'morning' },
+      { date: d('2026-06-09'), slot: 'evening' },
+      { date: d('2026-06-08'), slot: 'morning' },
+      { date: d('2026-06-08'), slot: 'evening' },
+    ] as never);
+
+    const out = await getRecentBackfillDays('rb-4', TZ, NOW, 1);
+
+    // Both recent days covered → they never appear ; first offered is the Fri.
+    expect(out).toEqual([{ date: '2026-06-05', morningMissing: true, eveningMissing: true }]);
+  });
+
+  it('returns [] only when the whole horizon has no incomplete expected day', async () => {
+    // A short custom cap AND a member whose weekdays in-window are all covered:
+    // we fill the two most recent weekdays and cap at ... impossible to fully
+    // cover 60 days, so we assert the realistic contract: with maxDays=0 the walk
+    // never collects anything.
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([] as never);
+
+    const out = await getRecentBackfillDays('rb-4b', TZ, NOW, 0);
+
+    expect(out).toEqual([]);
+  });
+
+  it('bounds the check-in query to the 60-day horizon and excludes today', async () => {
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([] as never);
+
+    await getRecentBackfillDays('rb-5', TZ, NOW, 3);
+
+    const call = vi.mocked(db.dailyCheckin.findMany).mock.calls[0]?.[0] as {
+      where?: { userId?: string; date?: { gte?: Date; lte?: Date } };
+    };
+    // Upper bound is yesterday (today excluded), lower bound today − 60 days.
+    expect(call.where?.userId).toBe('rb-5');
+    expect(call.where?.date?.lte).toEqual(d('2026-06-09'));
+    expect(call.where?.date?.gte).toEqual(d('2026-04-11'));
+  });
+
+  it('honours a smaller maxDays cap', async () => {
+    vi.mocked(db.dailyCheckin.findMany).mockResolvedValueOnce([] as never);
+
+    const out = await getRecentBackfillDays('rb-6', TZ, NOW, 1);
+
+    expect(out).toHaveLength(1);
+    expect(out[0]?.date).toBe('2026-06-09');
   });
 });

@@ -127,6 +127,14 @@ export type AuditAction =
   | 'notification.dispatched'
   | 'notification.dispatch.failed'
   | 'notification.dispatch.skipped'
+  // Tour 15 — a non-exempt notification was held for the member's local
+  // quiet-hours window [22:00, 08:00) and re-queued for the next local 08:00
+  // (no retry counted). Distinct from `.failed`/`.skipped` for SLO clarity.
+  | 'notification.dispatch.deferred'
+  // Tour 15 (P1 fix) — a DATED reminder (check-in) caught by quiet hours was
+  // DROPPED rather than deferred: delivering yesterday's prompt next morning is
+  // stale. The daily cron re-enqueues a fresh one. No retry counted.
+  | 'notification.dispatch.expired_quiet_hours'
   | 'notification.fallback.emailed'
   // V1.6 — SPEC §18.2 email frequency cap. Emitted when a non-transactional
   // notification's fallback email is skipped because the user has already
@@ -474,6 +482,12 @@ export type AuditAction =
   // §26 calendar / §25 monthly / S2 onboarding nets). Heartbeat on EVERY run;
   // counts + weekStart + emailOutcome only, PII-free.
   | 'cron.weekly_report_overdue.scan'
+  // Tour 15 — daily ADMIN brief (« point du matin »). Standing report, not an
+  // alert: emitted on EVERY run (sent daily even when calm). PII-FREE metadata —
+  // triage counts + newSignalMembers + disengagedMembers + emailOutcome only,
+  // NEVER a member id/name/email nor any signal free-text. Monitored in
+  // EXPECTATIONS (lib/system/health.ts) so a broken brief cron surfaces red.
+  | 'cron.admin_daily_brief.scan'
   // S3 — Vérification & Honnêteté radicale (SPEC §33). Member-facing surface:
   // broker accounts + MT5 proof uploads + member reasons on discrepancies.
   // PII-FREE metadata invariant: rows carry opaque ids + enum-ish fields only

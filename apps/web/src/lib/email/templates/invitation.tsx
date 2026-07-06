@@ -51,8 +51,11 @@ export function InvitationEmail({ inviteUrl, invitedByName, expiresInDays }: Inv
           <Heading style={heading}>Bienvenue.</Heading>
 
           <Text style={paragraph}>
-            <strong style={strong}>{inviter}</strong> t&apos;a invité·e à rejoindre l&apos;espace de
-            suivi comportemental réservé aux membres de la formation.
+            {/* Literal U+2019 (not &apos;) — the SWC compiler eats the leading
+                space of a JSXText holding an HTML entity (Tour 15 proof), which
+                would render « {inviter}t'a invité·e » in the email. */}
+            <strong style={strong}>{inviter}</strong> t’a invité·e à rejoindre l’espace de suivi
+            comportemental réservé aux membres de la formation.
           </Text>
 
           <Text style={paragraph}>
@@ -110,8 +113,8 @@ export function InvitationEmail({ inviteUrl, invitedByName, expiresInDays }: Inv
 
           <Text style={footer}>
             Ce lien expire dans {expiresInDays} jour{expiresInDays > 1 ? 's' : ''} et ne peut servir
-            qu&apos;une seule fois. Si tu n&apos;as pas demandé cette invitation, tu peux ignorer
-            cet email, aucun compte ne sera créé.
+            qu’une seule fois. Si tu n’as pas demandé cette invitation, tu peux ignorer cet email,
+            aucun compte ne sera créé.
           </Text>
 
           <Text style={footerSign}>L&apos;équipe Fxmily</Text>

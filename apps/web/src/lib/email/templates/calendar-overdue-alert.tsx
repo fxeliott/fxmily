@@ -65,8 +65,8 @@ export function CalendarOverdueAlertEmail({
           </Heading>
 
           <Text style={paragraph}>
-            {plural ? 'Ils ont' : 'Il a'} rempli le questionnaire d&apos;organisation de la semaine,
-            mais leur calendrier adaptatif n&apos;a pas encore été généré
+            {plural ? 'Ils ont' : 'Il a'} rempli le questionnaire d’organisation de la semaine, mais
+            leur calendrier adaptatif n’a pas encore été généré
             {questionnaireCount > overdueCount
               ? ` (${overdueCount} en attente sur ${questionnaireCount} organisés cette semaine).`
               : '.'}
